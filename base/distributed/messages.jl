@@ -2,10 +2,8 @@
 
 abstract type AbstractMsg end
 
-let REF_ID::Int = 1
-    global next_ref_id
-    next_ref_id() = (id = REF_ID; REF_ID += 1; id)
-end
+const REF_ID = Ref(1)
+next_ref_id() = (id = REF_ID[]; REF_ID[] = id+1; id)
 
 struct RRID
     whence::Int
@@ -80,34 +78,32 @@ end
 # of approximately 10%. Can be removed once module Serializer
 # has been suitably improved.
 
-# replace  CallMsg{Mode} with specific invocations
-const msgtypes = filter!(x->x!=CallMsg, subtypes(AbstractMsg))
-push!(msgtypes, CallMsg{:call}, CallMsg{:call_fetch})
+const msgtypes = Any[CallWaitMsg, IdentifySocketAckMsg, IdentifySocketMsg,
+                     JoinCompleteMsg, JoinPGRPMsg, RemoteDoMsg, ResultMsg,
+                     CallMsg{:call}, CallMsg{:call_fetch}]
 
 for (idx, tname) in enumerate(msgtypes)
-    nflds = length(fieldnames(tname))
-    @eval begin
-        function serialize(s::AbstractSerializer, o::$tname)
-            write(s.io, UInt8($idx))
-            for fld in fieldnames($tname)
-                serialize(s, getfield(o, fld))
-            end
-        end
-
-        function deserialize_msg(s::AbstractSerializer, ::Type{$tname})
-            data=Array{Any,1}($nflds)
-            for i in 1:$nflds
-                data[i] = deserialize(s)
-            end
-            return $tname(data...)
-        end
+    exprs = Any[ :(serialize(s, o.$fld)) for fld in fieldnames(tname) ]
+    @eval function serialize_msg(s::AbstractSerializer, o::$tname)
+        write(s.io, UInt8($idx))
+        $(exprs...)
+        return nothing
     end
 end
 
-function deserialize_msg(s::AbstractSerializer)
-    idx = read(s.io, UInt8)
-    t = msgtypes[idx]
-    return eval(current_module(), Expr(:body, Expr(:return, Expr(:call, deserialize_msg, QuoteNode(s), QuoteNode(t)))))
+let msg_cases = :(assert(false))
+    for i = length(msgtypes):-1:1
+        mti = msgtypes[i]
+        msg_cases = :(if idx == $i
+                          return $(Expr(:call, QuoteNode(mti), fill(:(deserialize(s)), nfields(mti))...))
+                      else
+                          $msg_cases
+                      end)
+    end
+    @eval function deserialize_msg(s::AbstractSerializer)
+        idx = read(s.io, UInt8)
+        $msg_cases
+    end
 end
 
 function send_msg_unknown(s::IO, header, msg)
@@ -171,8 +167,7 @@ function serialize_hdr_raw(io, hdr)
 end
 
 function deserialize_hdr_raw(io)
-    data = Array{Int,1}(4)
-    read!(io, data)
+    data = read(io, Ref{NTuple{4,Int}}())[]
     return MsgHeader(RRID(data[1], data[2]), RRID(data[3], data[4]))
 end
 
@@ -183,7 +178,7 @@ function send_msg_(w::Worker, header, msg, now::Bool)
     try
         reset_state(w.w_serializer)
         serialize_hdr_raw(io, header)
-        eval(current_module(), Expr(:body, Expr(:return, Expr(:call, serialize, QuoteNode(w.w_serializer), QuoteNode(msg)))))  # io is wrapped in w_serializer
+        invokelatest(serialize_msg, w.w_serializer, msg)  # io is wrapped in w_serializer
         write(io, MSG_BOUNDARY)
 
         if !now && w.gcflag
