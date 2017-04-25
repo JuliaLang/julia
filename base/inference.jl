@@ -5075,6 +5075,7 @@ function meta_elim_pass!(code::Array{Any,1}, propagate_inbounds::Bool, do_covera
                 code[push_loc] = nothing
                 code[i] = nothing
             else
+                prev_dbg_stack[end] = 0
                 push_loc_pos_stack[end] = 0
             end
         else
