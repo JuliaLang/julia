@@ -407,6 +407,39 @@ let dir = mktempdir(),
     end
 end
 
+# test loading a package with conflicting namespace
+let dir = mktempdir()
+    Test_module = :Test6c92f26
+    try
+        write(joinpath(dir, "Iterators.jl"),
+              """
+              module Iterators
+                   __precompile__(true)
+              end
+              """)
+
+        write(joinpath(dir, "$Test_module.jl"),
+              """
+              module $Test_module
+                   __precompile__(true)
+                   using Iterators
+              end
+              """)
+
+        testcode = """
+            insert!(LOAD_PATH, 1, $(repr(dir)))
+            insert!(Base.LOAD_CACHE_PATH, 1, $(repr(dir)))
+            using $Test_module
+        """
+
+        exename = `$(Base.julia_cmd()) --startup-file=no`
+        @test readchomp(`$exename -E $(testcode)`) == "nothing"
+        @test readchomp(`$exename -E $(testcode)`) == "nothing"
+    finally
+        rm(dir, recursive=true)
+    end
+end
+
 let module_name = string("a",randstring())
     insert!(LOAD_PATH, 1, pwd())
     file_name = string(module_name, ".jl")
