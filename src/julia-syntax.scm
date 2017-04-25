@@ -1850,6 +1850,7 @@
    'const  expand-const-decl
    'local  expand-local-or-global-decl
    'global expand-local-or-global-decl
+   'local-def expand-local-or-global-decl
 
    '=
    (lambda (e)
