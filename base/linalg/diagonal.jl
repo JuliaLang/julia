@@ -136,7 +136,7 @@ function tril!(D::Diagonal,k::Integer=0)
 end
 
 (==)(Da::Diagonal, Db::Diagonal) = Da.diag == Db.diag
-(-)(A::Diagonal)=Diagonal(-A.diag)
+(-)(A::Diagonal) = Diagonal(-A.diag)
 (+)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag + Db.diag)
 (-)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag - Db.diag)
 
