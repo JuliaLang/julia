@@ -17,18 +17,19 @@ shcmd = `sh`
 sleepcmd = `sleep`
 lscmd = `ls`
 if Sys.iswindows()
+    busybox = joinpath(JULIA_HOME, "busybox.exe")
     try # use busybox-w32 on windows
-        success(`busybox`)
-        yescmd = `busybox yes`
-        echocmd = `busybox echo`
-        sortcmd = `busybox sort`
-        printfcmd = `busybox printf`
-        truecmd = `busybox true`
-        falsecmd = `busybox false`
-        catcmd = `busybox cat`
-        shcmd = `busybox sh`
-        sleepcmd = `busybox sleep`
-        lscmd = `busybox ls`
+        success(`$busybox`)
+        yescmd = `$busybox yes`
+        echocmd = `$busybox echo`
+        sortcmd = `$busybox sort`
+        printfcmd = `$busybox printf`
+        truecmd = `$busybox true`
+        falsecmd = `$busybox false`
+        catcmd = `$busybox cat`
+        shcmd = `$busybox sh`
+        sleepcmd = `$busybox sleep`
+        lscmd = `$busybox ls`
     end
 end
 
@@ -343,8 +344,9 @@ let fname = tempname()
     cmd = pipeline(`echo asdf`,`cat`)
     if Sys.iswindows()
         try
-            success(`busybox`)
-            cmd = pipeline(`busybox echo asdf`,`busybox cat`)
+            busybox = joinpath(JULIA_HOME, "busybox.exe")
+            success(`\$busybox`)
+            cmd = pipeline(`\$busybox echo asdf`,`\$busybox cat`)
         end
     end
     for line in eachline(STDIN)

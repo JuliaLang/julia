@@ -214,6 +214,9 @@ Deprecated or removed
   * The function `showall` is deprecated. Showing entire values is the default, unless an
     `IOContext` specifying `:limit=>true` is in use ([#22847]).
 
+  * The default `juliarc.jl` file on Windows has been removed. Now must explicitly include the
+    full path if you need access to executables or libraries in the `JULIA_HOME` directory, e.g.
+    `joinpath(JULIA_HOME, "7z.exe")` for `7z.exe` ([#21540]).
 
 Julia v0.6.0 Release Notes
 ==========================
