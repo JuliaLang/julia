@@ -237,8 +237,8 @@ function char_uplo(uplo::Symbol)
     end
 end
 
-copy_oftype{T}(A::AbstractArray{T}, ::Type{T}) = copy(A)
-copy_oftype{T,N,S}(A::AbstractArray{T,N}, ::Type{S}) = convert(AbstractArray{S,N}, A)
+copy_oftype(A::AbstractArray{T}, ::Type{T}) where {T} = copy(A)
+copy_oftype(A::AbstractArray{T,N}, ::Type{S}) where {T,N,S} = convert(AbstractArray{S,N}, A)
 
 include("conjarray.jl")
 include("transpose.jl")

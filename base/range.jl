@@ -233,10 +233,10 @@ julia> linspace(1.3,2.9,9)
 linspace(start, stop, len::Real=50) = linspace(promote_noncircular(start, stop)..., Int(len))
 
 linspace(start::Real, stop::Real, len::Integer) = linspace(promote(start, stop)..., len)
-linspace{T<:Integer}(start::T, stop::T, len::Integer) = linspace(Float64, start, stop, len, 1)
+linspace(start::T, stop::T, len::Integer) where {T<:Integer} = linspace(Float64, start, stop, len, 1)
 # for Float16, Float32, and Float64 see twiceprecision.jl
-linspace{T<:Real}(start::T, stop::T, len::Integer) = LinSpace{T}(start, stop, len)
-linspace{T}(start::T, stop::T, len::Integer) = LinSpace{T}(start, stop, len)
+linspace(start::T, stop::T, len::Integer) where {T<:Real} = LinSpace{T}(start, stop, len)
+linspace(start::T, stop::T, len::Integer) where {T} = LinSpace{T}(start, stop, len)
 
 function show(io::IO, r::LinSpace)
     print(io, "linspace(")

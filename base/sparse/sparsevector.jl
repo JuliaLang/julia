@@ -789,7 +789,7 @@ function convert(::Type{SparseMatrixCSC{Tv,Ti}}, x::AbstractSparseVector) where 
     SparseMatrixCSC(n, 1, colptr, rowval, nzval)
 end
 
-convert{Tv,Ti}(::Type{SparseMatrixCSC{Tv}}, x::AbstractSparseVector{<:Any,Ti}) =
+convert(::Type{SparseMatrixCSC{Tv}}, x::AbstractSparseVector{<:Any,Ti}) where {Tv,Ti} =
     convert(SparseMatrixCSC{Tv,Ti}, x)
 
 convert(::Type{SparseMatrixCSC}, x::AbstractSparseVector{Tv,Ti}) where {Tv,Ti} =

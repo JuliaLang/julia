@@ -63,8 +63,8 @@ Atomic operations use an `atomic_` prefix, such as `atomic_add!`,
 """
 mutable struct Atomic{T<:AtomicTypes}
     value::T
-    Atomic{T}() where T<:AtomicTypes = new(zero(T))
-    Atomic{T}(value) where T<:AtomicTypes = new(value)
+    Atomic{T}() where {T<:AtomicTypes} = new(zero(T))
+    Atomic{T}(value) where {T<:AtomicTypes} = new(value)
 end
 
 Atomic() = Atomic{Int}()

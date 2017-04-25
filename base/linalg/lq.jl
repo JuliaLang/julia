@@ -122,7 +122,7 @@ size(A::LQPackedQ) = size(A.factors)
 A_mul_B!(A::LQ{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} = A[:L]*LAPACK.ormlq!('L','N',A.factors,A.τ,B)
 A_mul_B!(A::LQ{T}, B::QR{T}) where {T<:BlasFloat} = A[:L]*LAPACK.ormlq!('L','N',A.factors,A.τ,full(B))
 A_mul_B!(A::QR{T}, B::LQ{T}) where {T<:BlasFloat} = A_mul_B!(zeros(full(A)), full(A), full(B))
-function *(A::LQ{TA},B::StridedVecOrMat{TB}) where {TA,TB}
+function *(A::LQ{TA}, B::StridedVecOrMat{TB}) where {TA,TB}
     TAB = promote_type(TA, TB)
     A_mul_B!(convert(Factorization{TAB},A), copy_oftype(B, TAB))
 end
@@ -138,7 +138,7 @@ end
 ## Multiplication by Q
 ### QB
 A_mul_B!(A::LQPackedQ{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} = LAPACK.ormlq!('L','N',A.factors,A.τ,B)
-function (*)(A::LQPackedQ,B::StridedVecOrMat)
+function (*)(A::LQPackedQ, B::StridedVecOrMat)
     TAB = promote_type(eltype(A), eltype(B))
     A_mul_B!(convert(AbstractMatrix{TAB}, A), copy_oftype(B, TAB))
 end
@@ -172,7 +172,7 @@ end
 
 ### AQ
 A_mul_B!(A::StridedMatrix{T}, B::LQPackedQ{T}) where {T<:BlasFloat} = LAPACK.ormlq!('R', 'N', B.factors, B.τ, A)
-function *(A::StridedMatrix{TA},B::LQPackedQ{TB}) where {TA,TB}
+function *(A::StridedMatrix{TA}, B::LQPackedQ{TB}) where {TA,TB}
     TAB = promote_type(TA,TB)
     if size(B.factors,2) == size(A,2)
         A_mul_B!(copy_oftype(A, TAB),convert(AbstractMatrix{TAB},B))
@@ -186,7 +186,7 @@ end
 ### AQc
 A_mul_Bc!(A::StridedMatrix{T}, B::LQPackedQ{T}) where {T<:BlasReal}    = LAPACK.ormlq!('R','T',B.factors,B.τ,A)
 A_mul_Bc!(A::StridedMatrix{T}, B::LQPackedQ{T}) where {T<:BlasComplex} = LAPACK.ormlq!('R','C',B.factors,B.τ,A)
-function A_mul_Bc( A::StridedVecOrMat{TA}, B::LQPackedQ{TB}) where {TA<:Number,TB<:Number}
+function A_mul_Bc(A::StridedVecOrMat{TA}, B::LQPackedQ{TB}) where {TA<:Number,TB<:Number}
     TAB = promote_type(TA,TB)
     A_mul_Bc!(copy_oftype(A, TAB), convert(AbstractMatrix{TAB},(B)))
 end
@@ -230,7 +230,7 @@ function (\)(F::LQ{T}, B::VecOrMat{Complex{T}}) where T<:BlasReal
 end
 
 
-function A_ldiv_B!{T}(A::LQ{T}, B::StridedVecOrMat{T})
+function A_ldiv_B!(A::LQ{T}, B::StridedVecOrMat{T}) where T
     Ac_mul_B!(A[:Q], A_ldiv_B!(LowerTriangular(A[:L]),B))
     return B
 end
