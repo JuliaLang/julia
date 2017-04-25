@@ -457,8 +457,8 @@ end
 colval(sbuff::String, startpos::Int, endpos::Int, cells::Array, row::Int, col::Int) = true
 
 function dlm_parse(dbuff::String, eol::D, dlm::D, qchar::D, cchar::D,
-                      ign_adj_dlm::Bool, allow_quote::Bool, allow_comments::Bool,
-                      skipstart::Int, skipblanks::Bool, dh::DLMHandler) where D
+                   ign_adj_dlm::Bool, allow_quote::Bool, allow_comments::Bool,
+                   skipstart::Int, skipblanks::Bool, dh::DLMHandler) where D
     ncols = nrows = col = 0
     is_default_dlm = (dlm == invalid_dlm(D))
     error_str = ""

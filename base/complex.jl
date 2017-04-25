@@ -158,7 +158,7 @@ end
 show(io::IO, z::Complex{Bool}) =
     print(io, z == im ? "im" : "Complex($(z.re),$(z.im))")
 
-function read{T<:Real}(s::IO, ::Type{Complex{T}})
+function read(s::IO, ::Type{Complex{T}}) where T<:Real
     r = read(s,T)
     i = read(s,T)
     Complex{T}(r,i)
@@ -440,7 +440,7 @@ Compute the phase angle in radians of a complex number `z`.
 """
 angle(z::Complex) = atan2(imag(z), real(z))
 
-function log{T<:AbstractFloat}(z::Complex{T})
+function log(z::Complex{T}) where T<:AbstractFloat
     const T1::T  = 1.25
     const T2::T  = 3
     const ln2::T = log(convert(T,2))  #0.6931471805599453
