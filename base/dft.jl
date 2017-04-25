@@ -394,7 +394,7 @@ end
 ##############################################################################
 
 # FFTW module (may move to an external package at some point):
-if Base.USE_GPL_LIBS
+if Base.USE_GPL_LIBS || Base.fftw_vendor() == :mkl
     @doc """
         fft(A [, dims])
 
