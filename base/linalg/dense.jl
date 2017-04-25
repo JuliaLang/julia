@@ -53,9 +53,10 @@ julia> A
 """
 isposdef!(A::StridedMatrix) = ishermitian(A) && isposdef!(A, :U)
 
-isposdef(A::AbstractMatrix{T}, UL::Symbol) where {T} =
-    (S = typeof(sqrt(one(T))); isposdef!(S == T ? copy(A) : convert(AbstractMatrix{S}, A), UL))
-
+function isposdef(A::AbstractMatrix{T}, UL::Symbol) where T
+    S = typeof(sqrt(one(T)))
+    isposdef!(S == T ? copy(A) : convert(AbstractMatrix{S}, A), UL)
+end
 """
     isposdef(A) -> Bool
 
@@ -73,8 +74,10 @@ julia> isposdef(A)
 true
 ```
 """
-isposdef(A::AbstractMatrix{T}) where {T} =
-    (S = typeof(sqrt(one(T))); isposdef!(S == T ? copy(A) : convert(AbstractMatrix{S}, A)))
+function isposdef(A::AbstractMatrix{T}) where T
+    S = typeof(sqrt(one(T)))
+    isposdef!(S == T ? copy(A) : convert(AbstractMatrix{S}, A))
+end
 isposdef(x::Number) = imag(x)==0 && real(x) > 0
 
 stride1(x::Array) = 1
