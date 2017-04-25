@@ -53,7 +53,8 @@ julia> A
 """
 isposdef!(A::StridedMatrix) = ishermitian(A) && isposdef!(A, :U)
 
-isposdef(A::AbstractMatrix{T}, UL::Symbol) where {T} = (S = typeof(sqrt(one(T))); isposdef!(S == T ? copy(A) : convert(AbstractMatrix{S}, A), UL))
+isposdef(A::AbstractMatrix{T}, UL::Symbol) where {T} =
+    (S = typeof(sqrt(one(T))); isposdef!(S == T ? copy(A) : convert(AbstractMatrix{S}, A), UL))
 
 """
     isposdef(A) -> Bool
@@ -72,7 +73,8 @@ julia> isposdef(A)
 true
 ```
 """
-isposdef(A::AbstractMatrix{T}) where {T} = (S = typeof(sqrt(one(T))); isposdef!(S == T ? copy(A) : convert(AbstractMatrix{S}, A)))
+isposdef(A::AbstractMatrix{T}) where {T} =
+    (S = typeof(sqrt(one(T))); isposdef!(S == T ? copy(A) : convert(AbstractMatrix{S}, A)))
 isposdef(x::Number) = imag(x)==0 && real(x) > 0
 
 stride1(x::Array) = 1
@@ -319,9 +321,9 @@ end
 
 kron(a::Number, b::Union{Number, AbstractVecOrMat}) = a * b
 kron(a::AbstractVecOrMat, b::Number) = a * b
-kron(a::AbstractVector, b::AbstractVector)=vec(kron(reshape(a,length(a),1),reshape(b,length(b),1)))
-kron(a::AbstractMatrix, b::AbstractVector)=kron(a,reshape(b,length(b),1))
-kron(a::AbstractVector, b::AbstractMatrix)=kron(reshape(a,length(a),1),b)
+kron(a::AbstractVector, b::AbstractVector) = vec(kron(reshape(a ,length(a), 1), reshape(b, length(b), 1)))
+kron(a::AbstractMatrix, b::AbstractVector) = kron(a, reshape(b, length(b), 1))
+kron(a::AbstractVector, b::AbstractMatrix) = kron(reshape(a, length(a), 1), b)
 
 # Matrix power
 (^)(A::AbstractMatrix{T}, p::Integer) where {T} = p < 0 ? Base.power_by_squaring(inv(A), -p) : Base.power_by_squaring(A, p)
@@ -383,7 +385,7 @@ function (^)(A::AbstractMatrix{T}, p::Real) where T
         return retmat
     end
 end
-^(A::AbstractMatrix, p::Number) = expm(p*logm(A))
+(^)(A::AbstractMatrix, p::Number) = expm(p*logm(A))
 
 # Matrix exponential
 
@@ -546,7 +548,7 @@ julia> logm(A)
  0.0  1.0
 ```
 """
-function logm{T}(A::StridedMatrix{T})
+function logm(A::StridedMatrix{T}) where T
     # If possible, use diagonalization
     if issymmetric(A) && T <: Real
         return full(logm(Symmetric(A)))
@@ -835,7 +837,7 @@ function pinv(A::StridedMatrix{T}, tol::Real) where T
     m, n = size(A)
     Tout = typeof(zero(T)/sqrt(one(T) + one(T)))
     if m == 0 || n == 0
-        return Array{Tout}(n, m)
+        return Matrix{Tout}(n, m)
     end
     if istril(A)
         if istriu(A)
