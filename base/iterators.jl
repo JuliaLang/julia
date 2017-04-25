@@ -248,10 +248,10 @@ struct Filter{F,I}
 end
 
 """
-    filter(flt, itr)
+    Iterators.filter(flt, itr)
 
 Given a predicate function `flt` and an iterable object `itr`, return an
-iterable object which upon iteration yields that elements `x` of `itr` that
+iterable object which upon iteration yields the elements `x` of `itr` that
 satisfy `flt(x)`. The order of the original iterator is preserved.
 
 This function is *lazy*; that is, it is guaranteed to return in ``Θ(1)`` time
