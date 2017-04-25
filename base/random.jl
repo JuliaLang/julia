@@ -1506,7 +1506,7 @@ To randomly permute a arbitrary vector, see [`shuffle`](@ref)
 or [`shuffle!`](@ref).
 """
 function randperm(r::AbstractRNG, n::Integer)
-    a = Array{typeof(n)}(n)
+    a = Vector{typeof(n)}(n)
     @assert n <= Int64(2)^52
     if n == 0
        return a
@@ -1532,7 +1532,7 @@ Construct a random cyclic permutation of length `n`. The optional `rng`
 argument specifies a random number generator, see [Random Numbers](@ref).
 """
 function randcycle(r::AbstractRNG, n::Integer)
-    a = Array{typeof(n)}(n)
+    a = Vector{typeof(n)}(n)
     n == 0 && return a
     @assert n <= Int64(2)^52
     a[1] = 1

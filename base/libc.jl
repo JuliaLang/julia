@@ -284,7 +284,7 @@ if is_windows()
                     C_NULL, e, 0, lpMsgBuf, 0, C_NULL)
         p = lpMsgBuf[]
         len == 0 && return ""
-        buf = Array{UInt16}(len)
+        buf = Vector{UInt16}(len)
         unsafe_copy!(pointer(buf), p, len)
         ccall(:LocalFree, stdcall, Ptr{Void}, (Ptr{Void},), p)
         return transcode(String, buf)
