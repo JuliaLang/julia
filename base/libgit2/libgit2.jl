@@ -559,6 +559,12 @@ The keyword arguments are:
     options for the checkout step.
 
 Equivalent to `git merge [--ff-only] [<committish> | <branch>]`.
+
+!!! note
+    If you specify a `branch`, this must be done in reference format, since
+    the string will be turned into a `GitReference`. For example, if you
+    wanted to merge branch `branch_a`, you would call
+    `merge!(repo, branch="refs/heads/branch_a")`.
 """
 function merge!(repo::GitRepo;
                 committish::AbstractString = "",
