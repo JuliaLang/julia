@@ -277,10 +277,11 @@ f21510(; a::ANY = 2) = a
 @test f21510() == 2
 
 # issue #21518
-a = 0
-f21518(;kw=nothing) = kw
-g21518() = (global a; a+=1; f21518)
-g21518()(kw=1)
-@test a == 1
-g21518()(; :kw=>1)
-@test a == 2
+let a = 0
+    f21518(;kw=nothing) = kw
+    g21518() = (a+=1; f21518)
+    g21518()(kw=1)
+    @test a == 1
+    g21518()(; :kw=>1)
+    @test a == 2
+end

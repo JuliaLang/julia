@@ -1434,7 +1434,7 @@
       (if (null? kw)
         (let ((f (if (sym-ref? fexpr) fexpr (make-ssavalue))))
           `(block
-            ,(if (eq? f fexpr) () `(= ,f, fexpr))
+            ,@(if (eq? f fexpr) '() `((= ,f, fexpr)))
             ,(if (null? stmts)
               `(call (call (core kwfunc) ,f) (call (top vector_any) ,@(reverse initial-kw)) ,f ,@pa)
               `(block
