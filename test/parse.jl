@@ -1107,3 +1107,10 @@ end
 # issue #21440
 @test parse("+(x::T,y::T) where {T} = 0") == parse("(+)(x::T,y::T) where {T} = 0")
 @test parse("a::b::c") == Expr(:(::), Expr(:(::), :a, :b), :c)
+
+# issue #21545
+f21545(::Type{<: AbstractArray{T,N} where N}) where T = T
+@test f21545(Array{Int8}) === Int8
+@test parse("<:{T} where T") == Expr(:where, Expr(:curly, :(<:), :T), :T)
+@test parse("<:(T) where T") == Expr(:where, Expr(:(<:), :T), :T)
+@test parse("<:{T}(T) where T") == Expr(:where, Expr(:call, Expr(:curly, :(<:), :T), :T), :T)
