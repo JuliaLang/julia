@@ -272,7 +272,7 @@ function eigfact(A::RealHermSymComplexHerm)
     eigfact!(S != T ? convert(AbstractMatrix{S}, A) : copy(A))
 end
 
-eigfact!(A::RealHermSymComplexHerm, irange::UnitRange) = Eigen(LAPACK.syevr!('V', 'I', A.uplo, A.data, 0.0, 0.0, irange.start, irange.stop, -1.0)...)
+eigfact!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}, irange::UnitRange) = Eigen(LAPACK.syevr!('V', 'I', A.uplo, A.data, 0.0, 0.0, irange.start, irange.stop, -1.0)...)
 
 """
     eigfact(A::Union{SymTridiagonal, Hermitian, Symmetric}, irange::UnitRange) -> Eigen
