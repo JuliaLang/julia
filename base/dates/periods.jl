@@ -211,7 +211,7 @@ julia> Dates.CompoundPeriod(Dates.Minute(50000))
 50000 minutes
 ```
 """
-CompoundPeriod(p::Vector{<:Period}) = CompoundPeriod(Array{Period}(p))
+CompoundPeriod(p::Vector{<:Period}) = CompoundPeriod(Vector{Period}(p))
 
 CompoundPeriod(t::Time) = CompoundPeriod(Period[Hour(t), Minute(t), Second(t), Millisecond(t),
                                                 Microsecond(t), Nanosecond(t)])

@@ -102,7 +102,7 @@ function splitrange(N::Int, np::Int)
     each = div(N,np)
     extras = rem(N,np)
     nchunks = each > 0 ? np : extras
-    chunks = Array{UnitRange{Int}}(nchunks)
+    chunks = Vector{UnitRange{Int}}(nchunks)
     lo = 1
     for i in 1:nchunks
         hi = lo + each - 1
@@ -203,4 +203,3 @@ macro parallel(args...)
     end
     thecall
 end
-
