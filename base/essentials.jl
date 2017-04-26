@@ -343,9 +343,8 @@ isempty(itr) = done(itr, start(itr))
 
 Calls `f(args...)`, but guarantees that the most recent method of `f`
 will be executed.   This is useful in specialized circumstances,
-especially `cfunction` callbacks that may extract a Julia `Function`
-from a pointer, or Julia functions that call `eval` or similar,
-in which case obsolete versions of `f` may otherwise be called.
+e.g. long-running event loops or callback functions that may
+call obsolete versions of a function `f`.
 (The drawback is that `invokelatest` is somewhat slower than calling
 `f` directly, and the type of the result cannot be inferred by the compiler.)
 """
