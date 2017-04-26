@@ -104,9 +104,10 @@ true
 """
 function Channel(func::Function; ctype=Any, csize=0, taskref=nothing)
     chnl = Channel{ctype}(csize)
-    task = Task(() -> func(chnl))
-    bind(chnl, task)
-    yield(task) # immediately start it
+    task = Task(()->func(chnl))
+    bind(chnl,task)
+    schedule(task)
+    yield()
 
     isa(taskref, Ref{Task}) && (taskref[] = task)
     return chnl
@@ -214,13 +215,14 @@ function channeled_tasks(n::Int, funcs...; ctypes=fill(Any,n), csizes=fill(0,n))
     @assert length(csizes) == n
     @assert length(ctypes) == n
 
-    chnls = map(i -> Channel{ctypes[i]}(csizes[i]), 1:n)
-    tasks = Task[ Task(() -> f(chnls...)) for f in funcs ]
+    chnls = map(i->Channel{ctypes[i]}(csizes[i]), 1:n)
+    tasks=Task[Task(()->f(chnls...)) for f in funcs]
 
     # bind all tasks to all channels and schedule them
-    foreach(t -> foreach(c -> bind(c, t), chnls), tasks)
+    foreach(t -> foreach(c -> bind(c,t), chnls), tasks)
     foreach(schedule, tasks)
-    yield() # Allow scheduled tasks to run
+
+    yield()  # Allow scheduled tasks to run
 
     return (chnls, tasks)
 end
@@ -281,8 +283,9 @@ function put_unbuffered(c::Channel, v)
         end
     end
     taker = shift!(c.takers)
-    yield(taker, v) # immediately give taker a chance to run, but don't block the current task
-    return v
+    schedule(current_task())
+    yieldto(taker, v)
+    v
 end
 
 push!(c::Channel, v) = put!(c, v)
@@ -325,12 +328,8 @@ function take_unbuffered(c::Channel{T}) where T
     push!(c.takers, current_task())
     try
         if length(c.putters) > 0
-            let putter = shift!(c.putters)
-                return Base.try_yieldto(putter) do
-                    # if we fail to start putter, put it back in the queue
-                    unshift!(c.putters, putter)
-                end::T
-            end
+            putter = shift!(c.putters)
+            return yieldto(putter)::T
         else
             return wait()::T
         end

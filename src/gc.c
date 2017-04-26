@@ -1710,6 +1710,7 @@ static void jl_gc_mark_thread_local(jl_ptls_t ptls, jl_ptls_t ptls2)
     gc_push_root(ptls, ptls2->current_task, 0);
     gc_push_root(ptls, ptls2->root_task, 0);
     gc_push_root(ptls, ptls2->exception_in_transit, 0);
+    gc_push_root(ptls, ptls2->task_arg_in_transit, 0);
 }
 
 // mark the initial root set
@@ -1733,9 +1734,7 @@ static void mark_roots(jl_ptls_t ptls)
     if (jl_all_methods != NULL)
         gc_push_root(ptls, jl_all_methods, 0);
 
-#ifndef COPY_STACKS
-    gc_push_root(ptls, jl_unprotect_stack_func, 0);
-#endif
+    // gc_push_root(ptls, jl_unprotect_stack_func, 0);
 
     // constants
     gc_push_root(ptls, jl_typetype_type, 0);
