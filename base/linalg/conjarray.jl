@@ -43,7 +43,7 @@ const ConjMatrix{T,M<:AbstractMatrix} = ConjArray{T,2,M}
 
 @inline size(a::ConjArray) = size(a.parent)
 IndexStyle(::CA) where {CA<:ConjArray} = IndexStyle(parent_type(CA))
-IndexStyle(::Type{CA}) where  {CA<:ConjArray} = IndexStyle(parent_type(CA))
+IndexStyle(::Type{CA}) where {CA<:ConjArray} = IndexStyle(parent_type(CA))
 
 @propagate_inbounds getindex(a::ConjArray{T,N}, i::Int) where {T,N} = conj(getindex(a.parent, i))
 @propagate_inbounds getindex(a::ConjArray{T,N}, i::Vararg{Int,N}) where {T,N} = conj(getindex(a.parent, i...))

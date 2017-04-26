@@ -1055,7 +1055,7 @@ function convert(::Type{Vector{T}}, D::Dense{T}) where T
     if size(D, 2) > 1
         throw(DimensionMismatch("input must be a vector but had $(size(D, 2)) columns"))
     end
-    copy!(Array{T}(size(D, 1)), D)
+    copy!(Vector{T}(size(D, 1)), D)
 end
 convert(::Type{Vector}, D::Dense{T}) where {T} = convert(Vector{T}, D)
 
