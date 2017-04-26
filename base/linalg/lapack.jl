@@ -385,7 +385,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             lwork = BlasInt(-1)
             cmplx = eltype(A)<:Complex
             if cmplx
-                rwork = Array{$relty}(2n)
+                rwork = Vector{$relty}(2n)
             end
             info = Ref{BlasInt}()
             for i = 1:2
@@ -1043,7 +1043,7 @@ for (gesvx, elty) in
             rcond = Vector{$elty}(1)
             ferr  = similar(A, $elty, nrhs)
             berr  = similar(A, $elty, nrhs)
-            work  = Array{$elty}(4n)
+            work  = Vector{$elty}(4n)
             iwork = Array{BlasInt}(n)
             info  = Ref{BlasInt}()
             X = similar(A, $elty, n, nrhs)
@@ -1112,8 +1112,8 @@ for (gesvx, elty, relty) in
             rcond = Vector{$relty}(1)
             ferr  = similar(A, $relty, nrhs)
             berr  = similar(A, $relty, nrhs)
-            work  = Array{$elty}(2n)
-            rwork = Array{$relty}(2n)
+            work  = Vector{$elty}(2n)
+            rwork = Vector{$relty}(2n)
             info  = Ref{BlasInt}()
             X = similar(A, $elty, n, nrhs)
             ccall((@blasfunc($gesvx), liblapack), Void,
@@ -1549,7 +1549,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
                 rwork = Array{$relty}(job == 'N' ? 7*minmn :
                               minmn*max(5*minmn+7, 2*max(m,n)+2*minmn+1))
             end
-            iwork  = Array{BlasInt}(8*minmn)
+            iwork  = Vector{BlasInt}(8*minmn)
             info   = Ref{BlasInt}()
             for i = 1:2
                 if cmplx
@@ -1615,7 +1615,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
             work   = Vector{$elty}(1)
             cmplx  = eltype(A) <: Complex
             if cmplx
-                rwork = Array{$relty}(5minmn)
+                rwork = Vector{$relty}(5minmn)
             end
             lwork  = BlasInt(-1)
             info   = Ref{BlasInt}()
@@ -2126,7 +2126,7 @@ for (geevx, ggev, elty, relty) in
             rcondv = similar(A, $relty, n)
             work = Vector{$elty}(1)
             lwork = BlasInt(-1)
-            rwork = Array{$relty}(2n)
+            rwork = Vector{$relty}(2n)
             info = Ref{BlasInt}()
             for i = 1:2
                 ccall((@blasfunc($geevx), liblapack), Void,
@@ -2192,7 +2192,7 @@ for (geevx, ggev, elty, relty) in
             vr = similar(A, $elty, ldvr, n)
             work = Vector{$elty}(1)
             lwork = BlasInt(-1)
-            rwork = Array{$relty}(8n)
+            rwork = Vector{$relty}(8n)
             info = Ref{BlasInt}()
             for i = 1:2
                 ccall((@blasfunc($ggev), liblapack), Void,
@@ -3030,7 +3030,7 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
             chkuplo(uplo)
             piv  = similar(A, BlasInt, n)
             rank = Vector{BlasInt}(1)
-            work = Array{$rtyp}(2n)
+            work = Vector{$rtyp}(2n)
             info = Ref{BlasInt}()
             ccall((@blasfunc($pstrf), liblapack), Void,
                   (Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
@@ -3335,7 +3335,7 @@ for (trcon, trevc, trrfs, elty) in
             n = checksquare(A)
             chkuplo(uplo)
             rcond = Vector{$elty}(1)
-            work  = Array{$elty}(3n)
+            work  = Vector{$elty}(3n)
             iwork = Array{BlasInt}(n)
             info  = Ref{BlasInt}()
             ccall((@blasfunc($trcon), liblapack), Void,
@@ -3373,7 +3373,7 @@ for (trcon, trevc, trrfs, elty) in
 
             # Allocate
             m = Ref{BlasInt}()
-            work = Array{$elty}(3n)
+            work = Vector{$elty}(3n)
             info = Ref{BlasInt}()
 
             ccall((@blasfunc($trevc), liblapack), Void,
@@ -3428,7 +3428,7 @@ for (trcon, trevc, trrfs, elty) in
             if nrhs != size(X,2)
                 throw(DimensionMismatch("second dimensions of B, $nrhs, and X, $(size(X,2)), must match"))
             end
-            work = Array{$elty}(3n)
+            work = Vector{$elty}(3n)
             iwork = Array{BlasInt}(n)
             info = Ref{BlasInt}()
             ccall((@blasfunc($trrfs), liblapack), Void,
@@ -3463,7 +3463,7 @@ for (trcon, trevc, trrfs, elty, relty) in
             chkuplo(uplo)
             chkdiag(diag)
             rcond = Vector{$relty}(1)
-            work  = Array{$elty}(2n)
+            work  = Vector{$elty}(2n)
             rwork = Array{$relty}(n)
             info  = Ref{BlasInt}()
             ccall((@blasfunc($trcon), liblapack), Void,
@@ -3502,7 +3502,7 @@ for (trcon, trevc, trrfs, elty, relty) in
 
             # Allocate
             m = Ref{BlasInt}()
-            work = Array{$elty}(2n)
+            work = Vector{$elty}(2n)
             rwork = Array{$relty}(n)
             info = Ref{BlasInt}()
             ccall((@blasfunc($trevc), liblapack), Void,
@@ -3557,7 +3557,7 @@ for (trcon, trevc, trrfs, elty, relty) in
             if nrhs != size(X,2)
                 throw(DimensionMismatch("second dimensions of B, $nrhs, and X, $(size(X,2)), must match"))
             end
-            work  = Array{$elty}(2n)
+            work  = Vector{$elty}(2n)
             rwork = Array{$relty}(n)
             info  = Ref{BlasInt}()
             ccall((@blasfunc($trrfs), liblapack), Void,
@@ -3654,8 +3654,8 @@ for (stev, stebz, stegr, stein, elty) in
             tmp = 0.0
             iblock = similar(dv, BlasInt,n)
             isplit = similar(dv, BlasInt,n)
-            work = Array{$elty}(4*n)
-            iwork = Array{BlasInt}(3*n)
+            work = Vector{$elty}(4*n)
+            iwork = Vector{BlasInt}(3*n)
             info = Ref{BlasInt}()
             ccall((@blasfunc($stebz), liblapack), Void,
                 (Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty},
@@ -3744,7 +3744,7 @@ for (stev, stebz, stegr, stein, elty) in
                 isplit[1:length(isplit_in)] = isplit_in
             end
             z = similar(dv, $elty,(n,m))
-            work  = Array{$elty}(5*n)
+            work  = Vector{$elty}(5*n)
             iwork = Array{BlasInt}(n)
             ifail = Array{BlasInt}(m)
             info  = Ref{BlasInt}()
@@ -5140,7 +5140,7 @@ for (bdsqr, relty, elty) in
                 throw(DimensionMismatch("leading dimension of C, $ldc, must be at least $n"))
             end
             # Allocate
-            work = Array{$relty}(4n)
+            work = Vector{$relty}(4n)
             info = Ref{BlasInt}()
             ccall((@blasfunc($bdsqr), liblapack), Void,
                 (Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
@@ -5210,7 +5210,7 @@ for (bdsdc, elty) in
             q  = similar(d, $elty, ldq)
             iq = similar(d, BlasInt, ldiq)
             work  = Array{$elty}(lwork)
-            iwork = Array{BlasInt}(8n)
+            iwork = Vector{BlasInt}(8n)
             info  = Ref{BlasInt}()
             ccall((@blasfunc($bdsdc), liblapack), Void,
                (Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty},
@@ -5259,7 +5259,7 @@ for (gecon, elty) in
             n = checksquare(A)
             lda = max(1, stride(A, 2))
             rcond = Vector{$elty}(1)
-            work = Array{$elty}(4n)
+            work = Vector{$elty}(4n)
             iwork = Array{BlasInt}(n)
             info = Ref{BlasInt}()
             ccall((@blasfunc($gecon), liblapack), Void,
@@ -5293,8 +5293,8 @@ for (gecon, elty, relty) in
             n = checksquare(A)
             lda = max(1, stride(A, 2))
             rcond = Vector{$relty}(1)
-            work = Array{$elty}(2n)
-            rwork = Array{$relty}(2n)
+            work = Vector{$elty}(2n)
+            rwork = Vector{$relty}(2n)
             info = Ref{BlasInt}()
             ccall((@blasfunc($gecon), liblapack), Void,
                   (Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
@@ -5626,7 +5626,7 @@ for (gees, gges, elty, relty) in
             vsr = similar(A, $elty, ldvsr, n)
             work = Vector{$elty}(1)
             lwork = BlasInt(-1)
-            rwork = Array{$relty}(8n)
+            rwork = Vector{$relty}(8n)
             info = Ref{BlasInt}()
             for i = 1:2
                 ccall((@blasfunc($gges), liblapack), Void,
