@@ -194,7 +194,7 @@ end
 promote_to_arrays_(n::Int, ::Type{Matrix}, J::UniformScaling{T}) where {T} = copy!(Matrix{T}(n,n), J)
 promote_to_arrays_(n::Int, ::Type, A::AbstractVecOrMat) = A
 promote_to_arrays(n,k, ::Type) = ()
-promote_to_arrays(n,k, ::Type{T}, A) where {T}= (promote_to_arrays_(n[k], T, A),)
+promote_to_arrays(n,k, ::Type{T}, A) where {T} = (promote_to_arrays_(n[k], T, A),)
 promote_to_arrays(n,k, ::Type{T}, A, B) where {T} =
     (promote_to_arrays_(n[k], T, A), promote_to_arrays_(n[k+1], T, B))
 promote_to_arrays(n,k, ::Type{T}, A, B, C) where {T} =
