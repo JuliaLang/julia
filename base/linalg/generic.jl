@@ -387,9 +387,9 @@ function generic_vecnormp(x, p)
     else
         T = typeof(float(norm(v)))
     end
-    spp::promote_type(Float64,T) = p
+    spp::promote_type(Float64, T) = p
     if -1 <= p <= 1 || (isfinite(_length(x)*maxabs^spp) && maxabs^spp != 0) # scaling not necessary
-        sum::promote_type(Float64,T) = norm(v)^spp
+        sum::promote_type(Float64, T) = norm(v)^spp
         while !done(x, s)
             (v, s) = next(x, s)
             sum += norm(v)^spp
@@ -454,7 +454,7 @@ norm(x::AbstractVector, p::Real=2) = vecnorm(x, p)
 function norm1(A::AbstractMatrix{T}) where T
     m, n = size(A)
     Tnorm = typeof(float(real(zero(T))))
-    Tsum = promote_type(Float64,Tnorm)
+    Tsum = promote_type(Float64, Tnorm)
     nrm::Tsum = 0
     @inbounds begin
         for j = 1:n
@@ -476,7 +476,7 @@ end
 function normInf(A::AbstractMatrix{T}) where T
     m,n = size(A)
     Tnorm = typeof(float(real(zero(T))))
-    Tsum = promote_type(Float64,Tnorm)
+    Tsum = promote_type(Float64, Tnorm)
     nrm::Tsum = 0
     @inbounds begin
         for i = 1:m
