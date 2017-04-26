@@ -399,7 +399,7 @@ function _collect(cont, itr, ::HasEltype, isz::SizeUnknown)
     return a
 end
 
-_collect_indices(::Tuple{}, A) = copy!(Array{eltype(A)}(), A)
+_collect_indices(::Tuple{}, A) = copy!(Vector{eltype(A)}(), A)
 _collect_indices(indsA::Tuple{Vararg{OneTo}}, A) =
     copy!(Array{eltype(A)}(length.(indsA)), A)
 function _collect_indices(indsA, A)
@@ -1826,7 +1826,7 @@ function filter!(f, a::AbstractVector)
 end
 
 function filter(f, a::Vector)
-    r = Array{eltype(a)}(0)
+    r = Vector{eltype(a)}(0)
     for ai in a
         if f(ai)
             push!(r, ai)
@@ -1839,7 +1839,7 @@ end
 # These are moderately efficient, preserve order, and remove dupes.
 
 function intersect(v1, vs...)
-    ret = Array{promote_eltype(v1, vs...)}(0)
+    ret = Vector{promote_eltype(v1, vs...)}(0)
     for v_elem in v1
         inall = true
         for vsi in vs
