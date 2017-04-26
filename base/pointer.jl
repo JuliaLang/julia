@@ -57,17 +57,17 @@ calling `free` on the pointer when the array is no longer referenced.
 This function is labelled "unsafe" because it will crash if `pointer` is not
 a valid memory address to data of the requested length.
 """
-function unsafe_wrap{T,N}(::Union{Type{Array},Type{Array{T}},Type{Array{T,N}}},
-                          p::Ptr{T}, dims::NTuple{N,Int}, own::Bool=false)
+function unsafe_wrap(::Union{Type{Array},Type{Array{T}},Type{Array{T,N}}},
+                     p::Ptr{T}, dims::NTuple{N,Int}, own::Bool=false) where {T,N}
     ccall(:jl_ptr_to_array, Array{T,N}, (Any, Ptr{Void}, Any, Int32),
           Array{T,N}, p, dims, own)
 end
-function unsafe_wrap{T}(::Union{Type{Array},Type{Array{T}},Type{Array{T,1}}},
-                        p::Ptr{T}, d::Integer, own::Bool=false)
+function unsafe_wrap(::Union{Type{Array},Type{Array{T}},Type{Array{T,1}}},
+                     p::Ptr{T}, d::Integer, own::Bool=false) where {T}
     ccall(:jl_ptr_to_array_1d, Array{T,1},
           (Any, Ptr{Void}, Csize_t, Cint), Array{T,1}, p, d, own)
 end
-unsafe_wrap{N}(Atype::Type, p::Ptr, dims::NTuple{N,<:Integer}, own::Bool=false) =
+unsafe_wrap(Atype::Type, p::Ptr, dims::NTuple{N,<:Integer}, own::Bool=false) where {N} =
     unsafe_wrap(Atype, p, convert(Tuple{Vararg{Int}}, dims), own)
 
 """
@@ -93,7 +93,7 @@ pointer `p` to ensure that it is valid. Incorrect usage may corrupt or segfault 
 program, in the same manner as C.
 """
 unsafe_store!(p::Ptr{Any}, x::ANY, i::Integer=1) = pointerset(p, x, Int(i), 1)
-unsafe_store!{T}(p::Ptr{T}, x, i::Integer=1) = pointerset(p, convert(T,x), Int(i), 1)
+unsafe_store!(p::Ptr{T}, x, i::Integer=1) where {T} = pointerset(p, convert(T,x), Int(i), 1)
 
 # convert a raw Ptr to an object reference, and vice-versa
 """

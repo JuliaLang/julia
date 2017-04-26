@@ -313,8 +313,9 @@ fields if the function is type stable.
 
 ## Customizing Colors
 
-The colors used by Julia and the REPL can be customized, as well. To change the color of the Julia
-prompt you can add something like the following to your `juliarc.jl` file:
+The colors used by Julia and the REPL can be customized, as well. To change the
+color of the Julia prompt you can add something like the following to your
+`.juliarc.jl` file, which is to be placed inside your home directory:
 
 ```julia
 function customize_colors(repl)
@@ -333,9 +334,22 @@ input and answer text by setting the appropriate field of `repl` in the `customi
 above (respectively, `help_color`, `shell_color`, `input_color`, and `answer_color`). For the
 latter two, be sure that the `envcolors` field is also set to false.
 
+It is also possible to apply boldface formatting by using
+`Base.text_colors[:bold]` as a color. For instance, to print answers in
+boldface font, one can use the following as a `.juliarc.jl`:
+
+```julia
+function customize_colors(repl)
+    repl.envcolors = false
+    repl.answer_color = Base.text_colors[:bold]
+end
+
+atreplinit(customize_colors)
+```
+
 You can also customize the color used to render warning and informational messages by
 setting the appropriate environment variables. For instance, to render error, warning, and informational
-messages respectively in magenta, yellow, and cyan you can add the following to your `juliarc.jl` file:
+messages respectively in magenta, yellow, and cyan you can add the following to your `.juliarc.jl` file:
 
 ```julia
 ENV["JULIA_ERROR_COLOR"] = :magenta

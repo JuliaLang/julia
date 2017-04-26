@@ -74,13 +74,13 @@ end
 @inline min_width(d::DatePart) = d.fixed ? d.width : 1
 @inline max_width(d::DatePart) = d.fixed ? d.width : 0
 
-function _show_content{c}(io::IO, d::DatePart{c})
+function _show_content(io::IO, d::DatePart{c}) where c
     for i = 1:d.width
         write(io, c)
     end
 end
 
-function Base.show{c}(io::IO, d::DatePart{c})
+function Base.show(io::IO, d::DatePart{c}) where c
     write(io, "DatePart(")
     _show_content(io, d)
     write(io, ")")
@@ -174,7 +174,7 @@ end
 Delim(d::Char) = Delim{Char, 1}(d)
 Delim(d::String) = Delim{String, length(d)}(d)
 
-@inline function tryparsenext{N}(d::Delim{Char, N}, str, i::Int, len)
+@inline function tryparsenext(d::Delim{Char, N}, str, i::Int, len) where N
     R = Nullable{Bool}
     for j=1:N
         i > len && return (R(), i)
@@ -184,7 +184,7 @@ Delim(d::String) = Delim{String, length(d)}(d)
     return R(true), i
 end
 
-@inline function tryparsenext{N}(d::Delim{String, N}, str, i::Int, len)
+@inline function tryparsenext(d::Delim{String, N}, str, i::Int, len) where N
     R = Nullable{Bool}
     i1 = i
     i2 = start(d.d)
@@ -205,7 +205,7 @@ end
     write(io, d.d)
 end
 
-function _show_content{N}(io::IO, d::Delim{Char, N})
+function _show_content(io::IO, d::Delim{Char, N}) where N
     if d.d in keys(CONVERSION_SPECIFIERS)
         for i = 1:N
             write(io, '\\', d.d)
@@ -534,6 +534,6 @@ end
 function format(Y::AbstractArray{<:TimeType}, f::AbstractString; locale::Locale=ENGLISH)
     format(Y, DateFormat(f, locale))
 end
-function format{T<:TimeType}(Y::AbstractArray{T}, df::DateFormat=default_format(T))
+function format(Y::AbstractArray{T}, df::DateFormat=default_format(T)) where T<:TimeType
     return reshape([format(y, df) for y in Y], size(Y))
 end

@@ -223,6 +223,7 @@ end
 @noinline garbage_finalizer(f) = finalizer("gar" * "bage", f)
 let t, run = Ref(0)
     gc_enable(false)
+    # test for finalizers trying to yield leading to failed attempts to context switch
     garbage_finalizer((x) -> (run[] += 1; sleep(1)))
     garbage_finalizer((x) -> (run[] += 1; yield()))
     garbage_finalizer((x) -> (run[] += 1; yieldto(@task () -> ())))
@@ -247,4 +248,104 @@ let t, run = Ref(0)
         error in running finalizer: ErrorException("task switch not allowed from inside gc finalizer")
         error in running finalizer: ErrorException("task switch not allowed from inside gc finalizer")
         """
+    # test for invalid state in Workqueue during yield
+    t = @schedule nothing
+    t.state = :invalid
+    try
+        newstderr = redirect_stderr()
+        errstream = @async readstring(newstderr[1])
+        yield()
+    finally
+        redirect_stderr(oldstderr)
+        close(newstderr[2])
+    end
+    @test wait(errstream) == "\nWARNING: Workqueue inconsistency detected: shift!(Workqueue).state != :queued\n"
+end
+
+# schedule_and_wait tests
+let t = @schedule(nothing),
+    ct = current_task(),
+    testobject = "testobject"
+    @test length(Base.Workqueue) == 1
+    @test Base.schedule_and_wait(ct, 8) == 8
+    @test isempty(Base.Workqueue)
+    @test Base.schedule_and_wait(ct, testobject) === testobject
+end
+
+# throwto tests
+let t = @task(nothing),
+    ct = current_task(),
+    testerr = ErrorException("expected")
+    @async Base.throwto(t, testerr)
+    @test try
+        wait(t)
+        false
+    catch ex
+        ex
+    end === testerr
+end
+
+# Timer / AsyncCondition triggering and race #12719
+let tc = Ref(0),
+    t = Timer(0) do t
+        tc[] += 1
+    end
+    @test isopen(t)
+    Base.process_events(false)
+    @test !isopen(t)
+    @test tc[] == 0
+    yield()
+    @test tc[] == 1
+end
+let tc = Ref(0),
+    t = Timer(0) do t
+        tc[] += 1
+    end
+    @test isopen(t)
+    close(t)
+    @test !isopen(t)
+    sleep(0.1)
+    @test tc[] == 0
+end
+let tc = Ref(0),
+    async = Base.AsyncCondition() do async
+        tc[] += 1
+    end
+    @test isopen(async)
+    ccall(:uv_async_send, Void, (Ptr{Void},), async)
+    Base.process_events(false) # schedule event
+    ccall(:uv_async_send, Void, (Ptr{Void},), async)
+    is_windows() && Base.process_events(false) # schedule event (windows?)
+    @test tc[] == 0
+    yield() # consume event
+    @test tc[] == 1
+    sleep(0.1) # no further events
+    @test tc[] == 1
+    ccall(:uv_async_send, Void, (Ptr{Void},), async)
+    ccall(:uv_async_send, Void, (Ptr{Void},), async)
+    close(async)
+    @test !isopen(async)
+    @test tc[] == 1
+    Base.process_events(false) # schedule event & then close
+    is_windows() && Base.process_events(false) # schedule event (windows?)
+    yield() # consume event & then close
+    @test tc[] == 2
+    sleep(0.1) # no further events
+    @test tc[] == 2
+end
+let tc = Ref(0),
+    async = Base.AsyncCondition() do async
+        tc[] += 1
+    end
+    @test isopen(async)
+    ccall(:uv_async_send, Void, (Ptr{Void},), async)
+    close(async)
+    @test !isopen(async)
+    Base.process_events(false) # schedule event & then close
+    is_windows() && Base.process_events(false) # schedule event (windows)
+    @test tc[] == 0
+    yield() # consume event & then close
+    @test tc[] == 1
+    sleep(0.1)
+    @test tc[] == 1
 end

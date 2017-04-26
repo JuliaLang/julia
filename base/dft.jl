@@ -337,7 +337,7 @@ function brfft_output_size(x::AbstractArray, d::Integer, region)
     return osize
 end
 
-plan_irfft{T}(x::AbstractArray{Complex{T}}, d::Integer, region; kws...) =
+plan_irfft(x::AbstractArray{Complex{T}}, d::Integer, region; kws...) where {T} =
     ScaledPlan(plan_brfft(x, d, region; kws...),
                normalization(T, brfft_output_size(x, d, region), region))
 

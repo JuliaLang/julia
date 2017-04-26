@@ -506,9 +506,20 @@
                                                   (not (any (lambda (s)
                                                               (expr-contains-eq (car s) (caddr k)))
                                                             keyword-sparams)))
-                                             `(call (core typeassert)
-                                                    ,rval0
-                                                    ,(caddr k))
+                                             (let ((T (caddr k)))
+                                               `(call (core typeassert)
+                                                      ,rval0
+                                                      ;; work around `ANY` not being a type. if arg type
+                                                      ;; looks like `ANY`, test whether it is `ANY` at run
+                                                      ;; time and if so, substitute `Any`. issue #21510
+                                                      ,(if (or (eq? T 'ANY)
+                                                               (and (globalref? T)
+                                                                    (eq? (caddr T) 'ANY)))
+                                                           `(call (|.| (core Intrinsics) 'select_value)
+                                                                  (call (core ===) ,T (core ANY))
+                                                                  (core Any)
+                                                                  ,T)
+                                                           T)))
                                              rval0)))
                               ;; if kw[ii] == 'k; k = kw[ii+1]::Type; end
                               `(if (comparison ,elt === (quote ,(decl-var k)))
@@ -1839,6 +1850,7 @@
    'const  expand-const-decl
    'local  expand-local-or-global-decl
    'global expand-local-or-global-decl
+   'local-def expand-local-or-global-decl
 
    '=
    (lambda (e)

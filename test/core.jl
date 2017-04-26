@@ -4865,3 +4865,9 @@ struct T21516
     T21516(x::Vector{T}, y::Vector{T}) where {T<:Real} = new(float.(x), float.(y))
 end
 @test isa(T21516([1],[2]).x, Vector{Float64})
+
+# let with type declaration
+let letvar::Int = 2
+    letvar = 3.0
+    @test letvar === 3
+end

@@ -144,7 +144,7 @@ function chol(A::Hermitian)
     end
     chol!(Hermitian(AA, :U))
 end
-function chol{T<:Real}(A::Symmetric{T,<:AbstractMatrix})
+function chol(A::Symmetric{T,<:AbstractMatrix}) where T<:Real
     TT = promote_type(typeof(chol(one(T))), Float32)
     AA = similar(A, TT, size(A))
     if A.uplo == 'U'
@@ -443,7 +443,7 @@ end
 show(io::IO, C::Cholesky{<:Any,<:AbstractMatrix}) =
     (println(io, "$(typeof(C)) with factor:");show(io,C[:UL]))
 
-A_ldiv_B!{T<:BlasFloat}(C::Cholesky{T,<:AbstractMatrix}, B::StridedVecOrMat{T}) =
+A_ldiv_B!(C::Cholesky{T,<:AbstractMatrix}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
     LAPACK.potrs!(C.uplo, C.factors, B)
 
 function A_ldiv_B!(C::Cholesky{<:Any,<:AbstractMatrix}, B::StridedVecOrMat)
@@ -454,11 +454,11 @@ function A_ldiv_B!(C::Cholesky{<:Any,<:AbstractMatrix}, B::StridedVecOrMat)
     end
 end
 
-function A_ldiv_B!{T<:BlasFloat}(C::CholeskyPivoted{T}, B::StridedVector{T})
+function A_ldiv_B!(C::CholeskyPivoted{T}, B::StridedVector{T}) where T<:BlasFloat
     chkfullrank(C)
     ipermute!(LAPACK.potrs!(C.uplo, C.factors, permute!(B, C.piv)), C.piv)
 end
-function A_ldiv_B!{T<:BlasFloat}(C::CholeskyPivoted{T}, B::StridedMatrix{T})
+function A_ldiv_B!(C::CholeskyPivoted{T}, B::StridedMatrix{T}) where T<:BlasFloat
     chkfullrank(C)
     n = size(C, 1)
     for i=1:size(B, 2)

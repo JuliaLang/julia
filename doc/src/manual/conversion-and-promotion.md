@@ -143,7 +143,7 @@ ERROR: InexactError()
 
 ### [Case Study: Rational Conversions](@id man-rational-conversion)
 
-To continue our case study of Julia's `Rational` type, here are the conversions declared in [rational.jl](https://github.com/JuliaLang/julia/blob/master/base/rational.jl),
+To continue our case study of Julia's `Rational` type, here are the conversions declared in [`rational.jl`](https://github.com/JuliaLang/julia/blob/master/base/rational.jl),
 right after the declaration of the type and its constructors:
 
 ```julia
@@ -231,7 +231,7 @@ promoted to the appropriate kind of complex value.
 That is really all there is to using promotions. The rest is just a matter of clever application,
 the most typical "clever" application being the definition of catch-all methods for numeric operations
 like the arithmetic operators `+`, `-`, `*` and `/`. Here are some of the catch-all method definitions
-given in [promotion.jl](https://github.com/JuliaLang/julia/blob/master/base/promotion.jl):
+given in [`promotion.jl`](https://github.com/JuliaLang/julia/blob/master/base/promotion.jl):
 
 ```julia
 +(x::Number, y::Number) = +(promote(x,y)...)
@@ -245,11 +245,11 @@ multiplying and dividing pairs of numeric values, promote the values to a common
 try again. That's all there is to it: nowhere else does one ever need to worry about promotion
 to a common numeric type for arithmetic operations -- it just happens automatically. There are
 definitions of catch-all promotion methods for a number of other arithmetic and mathematical functions
-in [promotion.jl](https://github.com/JuliaLang/julia/blob/master/base/promotion.jl), but beyond
+in [`promotion.jl`](https://github.com/JuliaLang/julia/blob/master/base/promotion.jl), but beyond
 that, there are hardly any calls to `promote` required in the Julia standard library. The most
 common usages of `promote` occur in outer constructors methods, provided for convenience, to allow
 constructor calls with mixed types to delegate to an inner type with fields promoted to an appropriate
-common type. For example, recall that [rational.jl](https://github.com/JuliaLang/julia/blob/master/base/rational.jl)
+common type. For example, recall that [`rational.jl`](https://github.com/JuliaLang/julia/blob/master/base/rational.jl)
 provides the following outer constructor method:
 
 ```julia
@@ -309,7 +309,7 @@ Int64
 
 Internally, `promote_type` is used inside of `promote` to determine what type argument values
 should be converted to for promotion. It can, however, be useful in its own right. The curious
-reader can read the code in [promotion.jl](https://github.com/JuliaLang/julia/blob/master/base/promotion.jl),
+reader can read the code in [`promotion.jl`](https://github.com/JuliaLang/julia/blob/master/base/promotion.jl),
 which defines the complete promotion mechanism in about 35 lines.
 
 ### Case Study: Rational Promotions

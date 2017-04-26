@@ -29,7 +29,7 @@ const CHOLMOD_MIN_VERSION = v"2.1.1"
 ### These offsets are defined in SuiteSparse_wrapper.c
 const common_size = ccall((:jl_cholmod_common_size,:libsuitesparse_wrapper),Int,())
 
-const cholmod_com_offsets = Array{Csize_t}(19)
+const cholmod_com_offsets = Vector{Csize_t}(19)
 ccall((:jl_cholmod_common_offsets, :libsuitesparse_wrapper),
     Void, (Ptr{Csize_t},), cholmod_com_offsets)
 
@@ -58,7 +58,7 @@ end
 
 common() = commonStruct
 
-const build_version_array = Array{Cint}(3)
+const build_version_array = Vector{Cint}(3)
 ccall((:jl_cholmod_version, :libsuitesparse_wrapper), Cint, (Ptr{Cint},), build_version_array)
 const build_version = VersionNumber(build_version_array...)
 
@@ -66,7 +66,7 @@ function __init__()
     try
         ### Check if the linked library is compatible with the Julia code
         if Libdl.dlsym_e(Libdl.dlopen("libcholmod"), :cholmod_version) != C_NULL
-            current_version_array = Array{Cint}(3)
+            current_version_array = Vector{Cint}(3)
             ccall((:cholmod_version, :libcholmod), Cint, (Ptr{Cint},), current_version_array)
             current_version = VersionNumber(current_version_array...)
         else # CHOLMOD < 2.1.1 does not include cholmod_version()
@@ -1546,36 +1546,36 @@ ldltfact(A::Union{SparseMatrixCSC{T},SparseMatrixCSC{Complex{T}},
 for (T, f) in ((:Dense, :solve), (:Sparse, :spsolve))
     @eval begin
         # Solve Lx = b and L'x=b where A = L*L'
-        function (\){T}(L::FactorComponent{T,:L}, B::$T)
+        function (\)(L::FactorComponent{T,:L}, B::$T) where T
             ($f)(CHOLMOD_L, Factor(L), B)
         end
-        function (\){T}(L::FactorComponent{T,:U}, B::$T)
+        function (\)(L::FactorComponent{T,:U}, B::$T) where T
             ($f)(CHOLMOD_Lt, Factor(L), B)
         end
         # Solve PLx = b and L'P'x=b where A = P*L*L'*P'
-        function (\){T}(L::FactorComponent{T,:PtL}, B::$T)
+        function (\)(L::FactorComponent{T,:PtL}, B::$T) where T
             F = Factor(L)
             ($f)(CHOLMOD_L, F, ($f)(CHOLMOD_P, F, B)) # Confusingly, CHOLMOD_P solves P'x = b
         end
-        function (\){T}(L::FactorComponent{T,:UP}, B::$T)
+        function (\)(L::FactorComponent{T,:UP}, B::$T) where T
             F = Factor(L)
             ($f)(CHOLMOD_Pt, F, ($f)(CHOLMOD_Lt, F, B))
         end
         # Solve various equations for A = L*D*L' and A = P*L*D*L'*P'
-        function (\){T}(L::FactorComponent{T,:D}, B::$T)
+        function (\)(L::FactorComponent{T,:D}, B::$T) where T
             ($f)(CHOLMOD_D, Factor(L), B)
         end
-        function (\){T}(L::FactorComponent{T,:LD}, B::$T)
+        function (\)(L::FactorComponent{T,:LD}, B::$T) where T
             ($f)(CHOLMOD_LD, Factor(L), B)
         end
-        function (\){T}(L::FactorComponent{T,:DU}, B::$T)
+        function (\)(L::FactorComponent{T,:DU}, B::$T) where T
             ($f)(CHOLMOD_DLt, Factor(L), B)
         end
-        function (\){T}(L::FactorComponent{T,:PtLD}, B::$T)
+        function (\)(L::FactorComponent{T,:PtLD}, B::$T) where T
             F = Factor(L)
             ($f)(CHOLMOD_LD, F, ($f)(CHOLMOD_P, F, B))
         end
-        function (\){T}(L::FactorComponent{T,:DUP}, B::$T)
+        function (\)(L::FactorComponent{T,:DUP}, B::$T) where T
             F = Factor(L)
             ($f)(CHOLMOD_Pt, F, ($f)(CHOLMOD_DLt, F, B))
         end
@@ -1597,7 +1597,7 @@ end
 Ac_ldiv_B(L::FactorComponent, B) = ctranspose(L)\B
 Ac_ldiv_B(L::FactorComponent, B::RowVector) = ctranspose(L)\B # ambiguity
 
-(\){T<:VTypes}(L::Factor{T}, B::Dense{T}) = solve(CHOLMOD_A, L, B)
+(\)(L::Factor{T}, B::Dense{T}) where {T<:VTypes} = solve(CHOLMOD_A, L, B)
 # Explicit typevars are necessary to avoid ambiguities with defs in linalg/factorizations.jl
 # Likewise the two following explicit Vector and Matrix defs (rather than a single VecOrMat)
 (\)(L::Factor{T}, B::Vector{Complex{T}}) where {T<:Float64} = complex.(L\real(B), L\imag(B))

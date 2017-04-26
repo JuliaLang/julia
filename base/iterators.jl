@@ -247,6 +247,21 @@ struct Filter{F,I}
     itr::I
 end
 
+"""
+    Iterators.filter(flt, itr)
+
+Given a predicate function `flt` and an iterable object `itr`, return an
+iterable object which upon iteration yields the elements `x` of `itr` that
+satisfy `flt(x)`. The order of the original iterator is preserved.
+
+This function is *lazy*; that is, it is guaranteed to return in ``Θ(1)`` time
+and use ``Θ(1)`` additional space, and `flt` will not be called by an
+invocation of `filter`. Calls to `flt` will be made when iterating over the
+returned iterable object. These calls are not cached and repeated calls will be
+made when reiterating.
+
+See [`Base.filter`](@ref) for an eager implementation of filtering for arrays.
+"""
 filter(flt, itr) = Filter(flt, itr)
 
 start(f::Filter) = start_filter(f.flt, f.itr)

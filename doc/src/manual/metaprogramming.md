@@ -609,7 +609,7 @@ Expr
 
 So now instead of getting a plain string in `msg_body`, the macro is receiving a full expression
 that will need to be evaluated in order to display as expected. This can be spliced directly into
-the returned expression as an argument to the [`string()`](@ref) call; see [error.jl](https://github.com/JuliaLang/julia/blob/master/base/error.jl)
+the returned expression as an argument to the [`string()`](@ref) call; see [`error.jl`](https://github.com/JuliaLang/julia/blob/master/base/error.jl)
 for the complete implementation.
 
 The `@assert` macro makes great use of splicing into quoted expressions to simplify the manipulation

@@ -463,8 +463,8 @@ function walkdir(root; topdown=true, follow_symlinks=false, onerror=throw)
         close(chnl)
         return chnl
     end
-    dirs = Array{eltype(content)}(0)
-    files = Array{eltype(content)}(0)
+    dirs = Vector{eltype(content)}(0)
+    files = Vector{eltype(content)}(0)
     for name in content
         if isdir(joinpath(root, name))
             push!(dirs, name)

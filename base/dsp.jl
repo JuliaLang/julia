@@ -14,8 +14,8 @@ _zerosi(b,a,T) = zeros(promote_type(eltype(b), eltype(a), T), max(length(a), len
 Apply filter described by vectors `a` and `b` to vector `x`, with an optional initial filter
 state vector `si` (defaults to zeros).
 """
-function filt{T,S}(b::Union{AbstractVector, Number}, a::Union{AbstractVector, Number},
-                   x::AbstractArray{T}, si::AbstractArray{S}=_zerosi(b,a,T))
+function filt(b::Union{AbstractVector, Number}, a::Union{AbstractVector, Number},
+              x::AbstractArray{T}, si::AbstractArray{S} = _zerosi(b,a,T)) where {T,S}
     filt!(Array{promote_type(eltype(b), eltype(a), T, S)}(size(x)), b, a, x, si)
 end
 
@@ -28,8 +28,8 @@ end
 Same as [`filt`](@ref) but writes the result into the `out` argument, which may
 alias the input `x` to modify it in-place.
 """
-function filt!{T,S,N}(out::AbstractArray, b::Union{AbstractVector, Number}, a::Union{AbstractVector, Number},
-                      x::AbstractArray{T}, si::AbstractArray{S,N}=_zerosi(b,a,T))
+function filt!(out::AbstractArray, b::Union{AbstractVector, Number}, a::Union{AbstractVector, Number},
+               x::AbstractArray{T}, si::AbstractArray{S,N} = _zerosi(b,a,T)) where {T,S,N}
     isempty(b) && throw(ArgumentError("filter vector b must be non-empty"))
     isempty(a) && throw(ArgumentError("filter vector a must be non-empty"))
     a[1] == 0  && throw(ArgumentError("filter vector a[1] must be nonzero"))
@@ -108,7 +108,7 @@ end
 Construct vector `c` such that `b = conv(a,c) + r`.
 Equivalent to polynomial division.
 """
-function deconv{T}(b::StridedVector{T}, a::StridedVector{T})
+function deconv(b::StridedVector{T}, a::StridedVector{T}) where T
     lb = size(b,1)
     la = size(a,1)
     if lb < la
@@ -125,7 +125,7 @@ end
 
 Convolution of two vectors. Uses FFT algorithm.
 """
-function conv{T<:Base.LinAlg.BlasFloat}(u::StridedVector{T}, v::StridedVector{T})
+function conv(u::StridedVector{T}, v::StridedVector{T}) where T<:Base.LinAlg.BlasFloat
     nu = length(u)
     nv = length(v)
     n = nu + nv - 1
@@ -141,7 +141,7 @@ function conv{T<:Base.LinAlg.BlasFloat}(u::StridedVector{T}, v::StridedVector{T}
     end
     return y[1:n]
 end
-conv{T<:Integer}(u::StridedVector{T}, v::StridedVector{T}) = round.(Int,conv(float(u), float(v)))
+conv(u::StridedVector{T}, v::StridedVector{T}) where {T<:Integer} = round.(Int, conv(float(u), float(v)))
 conv(u::StridedVector{<:Integer}, v::StridedVector{<:Base.LinAlg.BlasFloat}) = conv(float(u), v)
 conv(u::StridedVector{<:Base.LinAlg.BlasFloat}, v::StridedVector{<:Integer}) = conv(u, float(v))
 
@@ -152,7 +152,7 @@ conv(u::StridedVector{<:Base.LinAlg.BlasFloat}, v::StridedVector{<:Integer}) = c
 the vectors `u` and `v`.
 Uses 2-D FFT algorithm.
 """
-function conv2{T}(u::StridedVector{T}, v::StridedVector{T}, A::StridedMatrix{T})
+function conv2(u::StridedVector{T}, v::StridedVector{T}, A::StridedMatrix{T}) where T
     m = length(u)+size(A,1)-1
     n = length(v)+size(A,2)-1
     B = zeros(T, m, n)
@@ -171,7 +171,7 @@ end
 
 2-D convolution of the matrix `B` with the matrix `A`. Uses 2-D FFT algorithm.
 """
-function conv2{T}(A::StridedMatrix{T}, B::StridedMatrix{T})
+function conv2(A::StridedMatrix{T}, B::StridedMatrix{T}) where T
     sa, sb = size(A), size(B)
     At = zeros(T, sa[1]+sb[1]-1, sa[2]+sb[2]-1)
     Bt = zeros(T, sa[1]+sb[1]-1, sa[2]+sb[2]-1)
@@ -184,8 +184,10 @@ function conv2{T}(A::StridedMatrix{T}, B::StridedMatrix{T})
     end
     return C
 end
-conv2{T<:Integer}(A::StridedMatrix{T}, B::StridedMatrix{T}) = round.(Int,conv2(float(A), float(B)))
-conv2{T<:Integer}(u::StridedVector{T}, v::StridedVector{T}, A::StridedMatrix{T}) = round.(Int,conv2(float(u), float(v), float(A)))
+conv2(A::StridedMatrix{T}, B::StridedMatrix{T}) where {T<:Integer} =
+    round.(Int, conv2(float(A), float(B)))
+conv2(u::StridedVector{T}, v::StridedVector{T}, A::StridedMatrix{T}) where {T<:Integer} =
+    round.(Int, conv2(float(u), float(v), float(A)))
 
 """
     xcorr(u,v)

@@ -131,8 +131,8 @@ function lgamma(z::Complex{Float64})
     end
     return lgamma_asymptotic(Complex(x,y)) - shift
 end
-lgamma{T<:Union{Integer,Rational}}(z::Complex{T}) = lgamma(float(z))
-lgamma{T<:Union{Float32,Float16}}(z::Complex{T}) = Complex{T}(lgamma(Complex{Float64}(z)))
+lgamma(z::Complex{T}) where {T<:Union{Integer,Rational}} = lgamma(float(z))
+lgamma(z::Complex{T}) where {T<:Union{Float32,Float16}} = Complex{T}(lgamma(Complex{Float64}(z)))
 
 gamma(z::Complex) = exp(lgamma(z))
 
