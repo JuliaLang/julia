@@ -59,7 +59,7 @@ const MM_HERMITIAN_POSDIAG  = 7
 # check the size of SuiteSparse_long
 if Int(ccall((:jl_cholmod_sizeof_long, :libsuitesparse_wrapper),Csize_t,())) == 4
     const SuiteSparse_long = Int32
-    const IndexTypes = (:Int32, )
+    const IndexTypes = (:Int32,)
     const ITypes = Union{Int32}
 else
     const SuiteSparse_long = Int64

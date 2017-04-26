@@ -55,7 +55,7 @@ end
 Get the URL of a remote git repository.
 """
 function url(rmt::GitRemote)
-    url_ptr = ccall((:git_remote_url, :libgit2), Cstring, (Ptr{Void}, ), rmt.ptr)
+    url_ptr = ccall((:git_remote_url, :libgit2), Cstring, (Ptr{Void},), rmt.ptr)
     url_ptr == C_NULL && return ""
     return unsafe_string(url_ptr)
 end
@@ -68,7 +68,7 @@ If the remote is anonymous (see [`GitRemoteAnon`](@ref))
 the name will be an empty string `""`.
 """
 function name(rmt::GitRemote)
-    name_ptr = ccall((:git_remote_name, :libgit2), Cstring, (Ptr{Void}, ), rmt.ptr)
+    name_ptr = ccall((:git_remote_name, :libgit2), Cstring, (Ptr{Void},), rmt.ptr)
     name_ptr == C_NULL && return ""
     return unsafe_string(name_ptr)
 end

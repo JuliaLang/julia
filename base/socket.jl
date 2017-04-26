@@ -325,7 +325,7 @@ iswritable(io::TCPSocket) = isopen(io) && io.status != StatusClosing
 _jl_connect_raw(sock::TCPSocket, sockaddr::Ptr{Void}) =
     ccall(:jl_connect_raw, Int32, (Ptr{Void}, Ptr{Void}, Ptr{Void}), sock.handle, sockaddr, uv_jl_connectcb::Ptr{Void})
 _jl_sockaddr_from_addrinfo(addrinfo::Ptr{Void}) =
-    ccall(:jl_sockaddr_from_addrinfo, Ptr{Void}, (Ptr{Void}, ), addrinfo)
+    ccall(:jl_sockaddr_from_addrinfo, Ptr{Void}, (Ptr{Void},), addrinfo)
 _jl_sockaddr_set_port(ptr::Ptr{Void}, port::UInt16) =
     ccall(:jl_sockaddr_set_port, Void, (Ptr{Void}, UInt16), ptr, port)
 

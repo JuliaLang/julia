@@ -540,7 +540,7 @@ ndims(p::AbstractProdIterator) = length(indices(p))
 
 # generic methods to handle size of Prod* types
 _prod_size(a, ::HasShape)  = size(a)
-_prod_size(a, ::HasLength) = (length(a), )
+_prod_size(a, ::HasLength) = (length(a),)
 _prod_size(a, A) =
     throw(ArgumentError("Cannot compute size for object of type $(typeof(a))"))
 _prod_size(a, b, ::HasLength, ::HasLength)  = (length(a),  length(b))
@@ -551,7 +551,7 @@ _prod_size(a, b, A, B) =
     throw(ArgumentError("Cannot construct size for objects of types $(typeof(a)) and $(typeof(b))"))
 
 _prod_indices(a, ::HasShape)  = indices(a)
-_prod_indices(a, ::HasLength) = (OneTo(length(a)), )
+_prod_indices(a, ::HasLength) = (OneTo(length(a)),)
 _prod_indices(a, A) =
     throw(ArgumentError("Cannot compute indices for object of type $(typeof(a))"))
 _prod_indices(a, b, ::HasLength, ::HasLength)  = (OneTo(length(a)),  OneTo(length(b)))
@@ -574,7 +574,7 @@ indices(p::Prod1) = _prod_indices(p.a, iteratorsize(p.a))
 @inline start(p::Prod1) = start(p.a)
 @inline function next(p::Prod1, st)
     n, st = next(p.a, st)
-    (n, ), st
+    (n,), st
 end
 @inline done(p::Prod1, st) = done(p.a, st)
 
