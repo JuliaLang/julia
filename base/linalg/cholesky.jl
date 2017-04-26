@@ -260,7 +260,7 @@ end
 ## With pivoting
 ### BLAS/LAPACK element types
 function cholfact!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix},
-        ::Type{Val{true}}; tol = 0.0)
+                   ::Type{Val{true}}; tol = 0.0)
     AA, piv, rank, info = LAPACK.pstrf!(A.uplo, A.data, tol)
     return CholeskyPivoted{eltype(AA),typeof(AA)}(AA, A.uplo, piv, rank, tol, info)
 end
