@@ -142,9 +142,9 @@ map(f, t::Tuple{Any, Any})      = (f(t[1]), f(t[2]))
 map(f, t::Tuple{Any, Any, Any}) = (f(t[1]), f(t[2]), f(t[3]))
 map(f, t::Tuple)                = (@_inline_meta; (f(t[1]), map(f,tail(t))...))
 # stop inlining after some number of arguments to avoid code blowup
-Any16{N}   = Tuple{Any,Any,Any,Any,Any,Any,Any,Any,
+const Any16{N}   = Tuple{Any,Any,Any,Any,Any,Any,Any,Any,
                    Any,Any,Any,Any,Any,Any,Any,Any,Vararg{Any,N}}
-All16{T,N} = Tuple{T,T,T,T,T,T,T,T,
+const All16{T,N} = Tuple{T,T,T,T,T,T,T,T,
                    T,T,T,T,T,T,T,T,Vararg{T,N}}
 function map(f, t::Any16)
     n = length(t)
@@ -214,7 +214,7 @@ if isdefined(Main, :Base)
 # resolve ambiguity between preceding and following methods
 All16{E,N}(x::Tuple) where {E,N} = convert(All16{E,N}, x)
 
-function (T::Type{All16{E,N}})(itr) where {E,N}
+function (T::All16{E,N})(itr) where {E,N}
     len = N+16
     elts = collect(E, Iterators.take(itr,len))
     if length(elts) != len

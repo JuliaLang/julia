@@ -233,13 +233,19 @@ end
 (-)(A::Symmetric{Tv,S}) where {Tv,S<:AbstractMatrix} = Symmetric{Tv,S}(-A.data, A.uplo)
 
 ## Matvec
-A_mul_B!(y::StridedVector{T}, A::Symmetric{T,<:StridedMatrix}, x::StridedVector{T}) where {T<:BlasFloat} = BLAS.symv!(A.uplo, one(T), A.data, x, zero(T), y)
-A_mul_B!(y::StridedVector{T}, A::Hermitian{T,<:StridedMatrix}, x::StridedVector{T}) where {T<:BlasComplex} = BLAS.hemv!(A.uplo, one(T), A.data, x, zero(T), y)
+A_mul_B!(y::StridedVector{T}, A::Symmetric{T,<:StridedMatrix}, x::StridedVector{T}) where {T<:BlasFloat} =
+    BLAS.symv!(A.uplo, one(T), A.data, x, zero(T), y)
+A_mul_B!(y::StridedVector{T}, A::Hermitian{T,<:StridedMatrix}, x::StridedVector{T}) where {T<:BlasComplex} =
+    BLAS.hemv!(A.uplo, one(T), A.data, x, zero(T), y)
 ## Matmat
-A_mul_B!(C::StridedMatrix{T}, A::Symmetric{T,<:StridedMatrix}, B::StridedMatrix{T}) where {T<:BlasFloat} = BLAS.symm!('L', A.uplo, one(T), A.data, B, zero(T), C)
-A_mul_B!(C::StridedMatrix{T}, A::StridedMatrix{T}, B::Symmetric{T,<:StridedMatrix}) where {T<:BlasFloat} = BLAS.symm!('R', B.uplo, one(T), B.data, A, zero(T), C)
-A_mul_B!(C::StridedMatrix{T}, A::Hermitian{T,<:StridedMatrix}, B::StridedMatrix{T}) where {T<:BlasComplex} = BLAS.hemm!('L', A.uplo, one(T), A.data, B, zero(T), C)
-A_mul_B!(C::StridedMatrix{T}, A::StridedMatrix{T}, B::Hermitian{T,<:StridedMatrix}) where {T<:BlasComplex} = BLAS.hemm!('R', B.uplo, one(T), B.data, A, zero(T), C)
+A_mul_B!(C::StridedMatrix{T}, A::Symmetric{T,<:StridedMatrix}, B::StridedMatrix{T}) where {T<:BlasFloat} =
+    BLAS.symm!('L', A.uplo, one(T), A.data, B, zero(T), C)
+A_mul_B!(C::StridedMatrix{T}, A::StridedMatrix{T}, B::Symmetric{T,<:StridedMatrix}) where {T<:BlasFloat} =
+    BLAS.symm!('R', B.uplo, one(T), B.data, A, zero(T), C)
+A_mul_B!(C::StridedMatrix{T}, A::Hermitian{T,<:StridedMatrix}, B::StridedMatrix{T}) where {T<:BlasComplex} =
+    BLAS.hemm!('L', A.uplo, one(T), A.data, B, zero(T), C)
+A_mul_B!(C::StridedMatrix{T}, A::StridedMatrix{T}, B::Hermitian{T,<:StridedMatrix}) where {T<:BlasComplex} =
+    BLAS.hemm!('R', B.uplo, one(T), B.data, A, zero(T), C)
 
 *(A::HermOrSym, B::HermOrSym) = full(A)*full(B)
 *(A::StridedMatrix, B::HermOrSym) = A*full(B)
@@ -254,8 +260,7 @@ end
 bkfact(A::HermOrSym) = bkfact(A.data, Symbol(A.uplo), issymmetric(A))
 factorize(A::HermOrSym) = bkfact(A)
 
-# Is just RealHermSymComplexHerm, but type alias seems to be broken
-det(A::Union{Hermitian{T,S}, Symmetric{T,S}, Hermitian{Complex{T},S}}) where {T<:Real,S} = real(det(bkfact(A)))
+det(A::RealHermSymComplexHerm) = real(det(bkfact(A)))
 det(A::Symmetric{<:Real}) = det(bkfact(A))
 det(A::Symmetric) = det(bkfact(A))
 
@@ -399,7 +404,7 @@ end
 eigvals!(A::HermOrSym{T,S}, B::HermOrSym{T,S}) where {T<:BlasReal,S<:StridedMatrix} = LAPACK.sygvd!(1, 'N', A.uplo, A.data, B.uplo == A.uplo ? B.data : B.data')[1]
 eigvals!(A::Hermitian{T,S}, B::Hermitian{T,S}) where {T<:BlasComplex,S<:StridedMatrix} = LAPACK.sygvd!(1, 'N', A.uplo, A.data, B.uplo == A.uplo ? B.data : B.data')[1]
 
-function svdvals!(A::Union{Hermitian{T,S}, Symmetric{T,S}, Hermitian{Complex{T},S}}) where {T<:Real,S} #  the union is the same as RealHermSymComplexHerm, but right now parametric typealiases are broken
+function svdvals!(A::RealHermSymComplexHerm)
     vals = eigvals!(A)
     for i = 1:length(vals)
         vals[i] = abs(vals[i])
