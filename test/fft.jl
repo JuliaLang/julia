@@ -8,8 +8,10 @@ let a = randn(10^5,1), p1 = plan_rfft(a, flags=FFTW.ESTIMATE)
     @test p1*a ≈ p2*a
     # make sure threads are actually being used for p2
     # (tests #21163).
-    @test !contains(string(p1), "dft-thr")
-    @test contains(string(p2), "dft-thr")
+    if FFTW.version >= v"3.3.4"
+        @test !contains(string(p1), "dft-thr")
+        @test contains(string(p2), "dft-thr")
+    end
 end
 
 # fft
