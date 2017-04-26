@@ -473,7 +473,7 @@ for (funm, func) in ([:logm,:log], [:sqrtm,:sqrt])
     @eval begin
         function ($funm){T<:Real}(A::Symmetric{T})
             F = eigfact(A)
-            if isposdef(F)
+            if all(λ -> λ ≥ 0, F.values)
                 retmat = (F.vectors * Diagonal(($func).(F.values))) * F.vectors'
             else
                 retmat = (F.vectors * Diagonal(($func).(complex.(F.values)))) * F.vectors'
@@ -484,7 +484,7 @@ for (funm, func) in ([:logm,:log], [:sqrtm,:sqrt])
         function ($funm){T}(A::Hermitian{T})
             n = checksquare(A)
             F = eigfact(A)
-            if isposdef(F)
+            if all(λ -> λ ≥ 0, F.values)
                 retmat = (F.vectors * Diagonal(($func).(F.values))) * F.vectors'
                 if T <: Real
                     return Hermitian(retmat)

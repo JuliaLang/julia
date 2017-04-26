@@ -549,33 +549,32 @@ julia> logm(A)
 function logm{T}(A::StridedMatrix{T})
     # If possible, use diagonalization
     if issymmetric(A) && T <: Real
-        return full(logm(Symmetric(A)))
+        return logm(Symmetric(A))
     end
     if ishermitian(A)
-        return full(logm(Hermitian(A)))
+        return logm(Hermitian(A))
+    end
+
+    # Quicker return if A is diagonal
+    if isdiag(A)
+        retmat = copy(A)
+        for i in 1:n
+            retmat[i, i] = log(retmat[i, i])
+        end
+        return retmat
     end
 
     # Use Schur decomposition
     n = checksquare(A)
     if istriu(A)
-        retmat = full(logm(UpperTriangular(complex(A))))
-        d = diag(A)
+        retmat = logm(UpperTriangular(float.(A)))
     else
         S,Q,d = schur(complex(A))
-        R = logm(UpperTriangular(S))
+        R = logm(UpperTriangular(float.(S)))
         retmat = Q * R * Q'
     end
 
-    # Check whether the matrix has nonpositive real eigs
-    np_real_eigs = false
-    for i = 1:n
-        if imag(d[i]) < eps() && real(d[i]) <= 0
-            np_real_eigs = true
-            break
-        end
-    end
-
-    if isreal(A) && !np_real_eigs
+    if isreal(A)
         return real(retmat)
     else
         return retmat
