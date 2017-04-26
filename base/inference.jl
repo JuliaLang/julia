@@ -297,7 +297,7 @@ end
 #### current global inference state ####
 
 const active = Vector{Any}() # set of all InferenceState objects being processed
-const nactive = Array{Int}(())
+const nactive = Array{Int,0}()
 nactive[] = 0
 const workq = Vector{InferenceState}() # set of InferenceState objects that can make immediate progress
 
