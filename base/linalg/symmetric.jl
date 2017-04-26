@@ -83,8 +83,8 @@ function Hermitian(A::AbstractMatrix, uplo::Symbol=:U)
     Hermitian{eltype(A),typeof(A)}(A, char_uplo(uplo))
 end
 
-HermOrSym{T,S} = Union{Hermitian{T,S}, Symmetric{T,S}}
-RealHermSymComplexHerm{T<:Real,S} = Union{Hermitian{T,S}, Symmetric{T,S}, Hermitian{Complex{T},S}}
+const HermOrSym{T,S} = Union{Hermitian{T,S}, Symmetric{T,S}}
+const RealHermSymComplexHerm{T<:Real,S} = Union{Hermitian{T,S}, Symmetric{T,S}, Hermitian{Complex{T},S}}
 
 size(A::HermOrSym, d) = size(A.data, d)
 size(A::HermOrSym) = size(A.data)
@@ -265,11 +265,14 @@ inv{T<:BlasFloat,S<:StridedMatrix}(A::Hermitian{T,S}) = Hermitian{T,S}(inv(bkfac
 inv{T<:BlasFloat,S<:StridedMatrix}(A::Symmetric{T,S}) = Symmetric{T,S}(inv(bkfact(A)), A.uplo)
 
 eigfact!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}) = Eigen(LAPACK.syevr!('V', 'A', A.uplo, A.data, 0.0, 0.0, 0, 0, -1.0)...)
-# Because of #6721 it is necessary to specify the parameters explicitly here.
-eigfact(A::RealHermSymComplexHerm{<:Real}) = (T = eltype(A); S = promote_type(Float32, typeof(zero(T)/norm(one(T)))); eigfact!(S != T ? convert(AbstractMatrix{S}, A) : copy(A)))
 
-eigfact!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}, irange::UnitRange) = Eigen(LAPACK.syevr!('V', 'I', A.uplo, A.data, 0.0, 0.0, irange.start, irange.stop, -1.0)...)
-# Because of #6721 it is necessary to specify the parameters explicitly here.
+function eigfact(A::RealHermSymComplexHerm)
+    T = eltype(A)
+    S = promote_type(Float32, typeof(zero(T)/norm(one(T))))
+    eigfact!(S != T ? convert(AbstractMatrix{S}, A) : copy(A))
+end
+
+eigfact!(A::RealHermSymComplexHerm, irange::UnitRange) = Eigen(LAPACK.syevr!('V', 'I', A.uplo, A.data, 0.0, 0.0, irange.start, irange.stop, -1.0)...)
 
 """
     eigfact(A::Union{SymTridiagonal, Hermitian, Symmetric}, irange::UnitRange) -> Eigen
@@ -286,10 +289,14 @@ The `UnitRange` `irange` specifies indices of the sorted eigenvalues to search f
     If `irange` is not `1:n`, where `n` is the dimension of `A`, then the returned factorization
     will be a *truncated* factorization.
 """
-eigfact(A::RealHermSymComplexHerm{<:Real}, irange::UnitRange) = (T = eltype(A); S = promote_type(Float32, typeof(zero(T)/norm(one(T)))); eigfact!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), irange))
+function eigfact(A::RealHermSymComplexHerm, irange::UnitRange)
+    T = eltype(A)
+    S = promote_type(Float32, typeof(zero(T)/norm(one(T))))
+    eigfact!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), irange)
+end
 
 eigfact!{T<:BlasReal}(A::RealHermSymComplexHerm{T,<:StridedMatrix}, vl::Real, vh::Real) = Eigen(LAPACK.syevr!('V', 'V', A.uplo, A.data, convert(T, vl), convert(T, vh), 0, 0, -1.0)...)
-# Because of #6721 it is necessary to specify the parameters explicitly here.
+
 """
     eigfact(A::Union{SymTridiagonal, Hermitian, Symmetric}, vl::Real, vu::Real) -> Eigen
 
@@ -305,11 +312,19 @@ The following functions are available for `Eigen` objects: [`inv`](@ref), [`det`
     If [`vl`, `vu`] does not contain all eigenvalues of `A`, then the returned factorization
     will be a *truncated* factorization.
 """
-eigfact(A::RealHermSymComplexHerm{<:Real}, vl::Real, vh::Real) = (T = eltype(A); S = promote_type(Float32, typeof(zero(T)/norm(one(T)))); eigfact!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), vl, vh))
+function eigfact(A::RealHermSymComplexHerm, vl::Real, vh::Real)
+    T = eltype(A)
+    S = promote_type(Float32, typeof(zero(T)/norm(one(T))))
+    eigfact!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), vl, vh)
+end
 
 eigvals!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}) = LAPACK.syevr!('N', 'A', A.uplo, A.data, 0.0, 0.0, 0, 0, -1.0)[1]
-# Because of #6721 it is necessary to specify the parameters explicitly here.
-eigvals(A::RealHermSymComplexHerm{<:Real}) = (T = eltype(A); S = promote_type(Float32, typeof(zero(T)/norm(one(T)))); eigvals!(S != T ? convert(AbstractMatrix{S}, A) : copy(A)))
+
+function eigvals(A::RealHermSymComplexHerm)
+    T = eltype(A)
+    S = promote_type(Float32, typeof(zero(T)/norm(one(T))))
+    eigvals!(S != T ? convert(AbstractMatrix{S}, A) : copy(A))
+end
 
 """
     eigvals!(A::Union{SymTridiagonal, Hermitian, Symmetric}, irange::UnitRange) -> values
@@ -318,7 +333,7 @@ Same as [`eigvals`](@ref), but saves space by overwriting the input `A`, instead
 `irange` is a range of eigenvalue *indices* to search for - for instance, the 2nd to 8th eigenvalues.
 """
 eigvals!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}, irange::UnitRange) = LAPACK.syevr!('N', 'I', A.uplo, A.data, 0.0, 0.0, irange.start, irange.stop, -1.0)[1]
-# Because of #6721 it is necessary to specify the parameters explicitly here.
+
 """
     eigvals(A::Union{SymTridiagonal, Hermitian, Symmetric}, irange::UnitRange) -> values
 
@@ -344,7 +359,11 @@ julia> eigvals(A)
   5.14005
 ```
 """
-eigvals(A::RealHermSymComplexHerm{<:Real}, irange::UnitRange) = (T = eltype(A); S = promote_type(Float32, typeof(zero(T)/norm(one(T)))); eigvals!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), irange))
+function eigvals(A::RealHermSymComplexHerm, irange::UnitRange)
+    T = eltype(A)
+    S = promote_type(Float32, typeof(zero(T)/norm(one(T))))
+    eigvals!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), irange)
+end
 
 """
     eigvals!(A::Union{SymTridiagonal, Hermitian, Symmetric}, vl::Real, vu::Real) -> values
@@ -353,7 +372,7 @@ Same as [`eigvals`](@ref), but saves space by overwriting the input `A`, instead
 `vl` is the lower bound of the interval to search for eigenvalues, and `vu` is the upper bound.
 """
 eigvals!{T<:BlasReal}(A::RealHermSymComplexHerm{T,<:StridedMatrix}, vl::Real, vh::Real) = LAPACK.syevr!('N', 'V', A.uplo, A.data, convert(T, vl), convert(T, vh), 0, 0, -1.0)[1]
-# Because of #6721 it is necessary to specify the parameters explicitly here.
+
 """
     eigvals(A::Union{SymTridiagonal, Hermitian, Symmetric}, vl::Real, vu::Real) -> values
 
@@ -378,7 +397,11 @@ julia> eigvals(A)
   5.14005
 ```
 """
-eigvals(A::RealHermSymComplexHerm{<:Real}, vl::Real, vh::Real) = (T = eltype(A); S = promote_type(Float32, typeof(zero(T)/norm(one(T)))); eigvals!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), vl, vh))
+function eigvals(A::RealHermSymComplexHerm, vl::Real, vh::Real)
+    T = eltype(A)
+    S = promote_type(Float32, typeof(zero(T)/norm(one(T))))
+    eigvals!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), vl, vh)
+end
 
 eigmax(A::RealHermSymComplexHerm{<:Real,<:StridedMatrix}) = eigvals(A, size(A, 1):size(A, 1))[1]
 eigmin(A::RealHermSymComplexHerm{<:Real,<:StridedMatrix}) = eigvals(A, 1:1)[1]
@@ -395,7 +418,7 @@ end
 eigvals!{T<:BlasReal,S<:StridedMatrix}(A::HermOrSym{T,S}, B::HermOrSym{T,S}) = LAPACK.sygvd!(1, 'N', A.uplo, A.data, B.uplo == A.uplo ? B.data : B.data')[1]
 eigvals!{T<:BlasComplex,S<:StridedMatrix}(A::Hermitian{T,S}, B::Hermitian{T,S}) = LAPACK.sygvd!(1, 'N', A.uplo, A.data, B.uplo == A.uplo ? B.data : B.data')[1]
 
-function svdvals!{T<:Real,S}(A::Union{Hermitian{T,S}, Symmetric{T,S}, Hermitian{Complex{T},S}}) #  the union is the same as RealHermSymComplexHerm, but right now parametric typealiases are broken
+function svdvals!(A::RealHermSymComplexHerm)
     vals = eigvals!(A)
     for i = 1:length(vals)
         vals[i] = abs(vals[i])
