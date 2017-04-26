@@ -1773,7 +1773,7 @@ function logm{T<:Union{Float64,Complex{Float64}}}(A0::UpperTriangular{T})
     d3 = cbrt(norm(AmI^3, 1))
     alpha2 = max(d2, d3)
     if alpha2 <= theta[2]
-        m = 0; m += (alpha2 <= theta[1] ? 1 : 2)
+        m = (alpha2 <= theta[1] ? 1 : 2)
     end
 
     while flag != 2
