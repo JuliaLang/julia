@@ -104,7 +104,7 @@ julia> ntuple(i -> 2*i, 4)
 (2, 4, 6, 8)
 ```
 """
-function ntuple{F}(f::F, n::Integer)
+function ntuple(f::F, n::Integer) where F
     t = n <= 0  ? () :
         n == 1  ? (f(1),) :
         n == 2  ? (f(1), f(2)) :
@@ -123,14 +123,14 @@ end
 _ntuple(f, n) = (@_noinline_meta; ([f(i) for i = 1:n]...))
 
 # inferrable ntuple
-function ntuple{F,N}(f::F, ::Type{Val{N}})
+function ntuple(f::F, ::Type{Val{N}}) where {F,N}
     Core.typeassert(N, Int)
     _ntuple((), f, Val{N})
 end
 
 # Build up the output until it has length N
-_ntuple{F,N}(out::NTuple{N,Any}, f::F, ::Type{Val{N}}) = out
-function _ntuple{F,N,M}(out::NTuple{M,Any}, f::F, ::Type{Val{N}})
+_ntuple(out::NTuple{N,Any}, f::F, ::Type{Val{N}}) where {F,N} = out
+function _ntuple(out::NTuple{M,Any}, f::F, ::Type{Val{N}}) where {F,N,M}
     @_inline_meta
     _ntuple((out..., f(M+1)), f, Val{N})
 end
@@ -190,16 +190,16 @@ end
 
 # type-stable padding
 fill_to_length{N}(t::Tuple, val, ::Type{Val{N}}) = _ftl((), val, Val{N}, t...)
-_ftl{N}(out::NTuple{N,Any}, val, ::Type{Val{N}}) = out
+_ftl(out::NTuple{N,Any}, val, ::Type{Val{N}}) where {N} = out
 function _ftl{N}(out::NTuple{N,Any}, val, ::Type{Val{N}}, t...)
     @_inline_meta
     throw(ArgumentError("input tuple of length $(N+length(t)), requested $N"))
 end
-function _ftl{N}(out, val, ::Type{Val{N}}, t1, t...)
+function _ftl(out, val, ::Type{Val{N}}, t1, t...) where N
     @_inline_meta
     _ftl((out..., t1), val, Val{N}, t...)
 end
-function _ftl{N}(out, val, ::Type{Val{N}})
+function _ftl(out, val, ::Type{Val{N}}) where N
     @_inline_meta
     _ftl((out..., val), val, Val{N})
 end
@@ -212,9 +212,9 @@ if isdefined(Main, :Base)
 (::Type{T})(x::Tuple) where {T<:Tuple} = convert(T, x)  # still use `convert` for tuples
 
 # resolve ambiguity between preceding and following methods
-(::Type{All16{E,N}})(x::Tuple) where {E,N} = convert(All16{E,N}, x)
+All16{E,N}(x::Tuple) where {E,N} = convert(All16{E,N}, x)
 
-function (T::Type{All16{E,N}}){E,N}(itr)
+function (T::Type{All16{E,N}})(itr) where {E,N}
     len = N+16
     elts = collect(E, Iterators.take(itr,len))
     if length(elts) != len
