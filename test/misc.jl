@@ -674,7 +674,7 @@ end
 issue19774(x) = 1
 let foo() = begin
         eval(:(issue19774(x::Int) = 2))
-        return invokelatest(issue19774, 0)
+        return Base.invokelatest(issue19774, 0)
     end
     @test foo() == 2
 end
