@@ -53,8 +53,10 @@ julia> A
 """
 isposdef!(A::StridedMatrix) = ishermitian(A) && isposdef!(A, :U)
 
-isposdef{T}(A::AbstractMatrix{T}, UL::Symbol) = (S = typeof(sqrt(one(T))); isposdef!(S == T ? copy(A) : convert(AbstractMatrix{S}, A), UL))
-
+function isposdef(A::AbstractMatrix{T}, UL::Symbol) where T
+    S = typeof(sqrt(one(T)))
+    isposdef!(S == T ? copy(A) : convert(AbstractMatrix{S}, A), UL)
+end
 """
     isposdef(A) -> Bool
 
@@ -72,23 +74,26 @@ julia> isposdef(A)
 true
 ```
 """
-isposdef{T}(A::AbstractMatrix{T}) = (S = typeof(sqrt(one(T))); isposdef!(S == T ? copy(A) : convert(AbstractMatrix{S}, A)))
+function isposdef(A::AbstractMatrix{T}) where T
+    S = typeof(sqrt(one(T)))
+    isposdef!(S == T ? copy(A) : convert(AbstractMatrix{S}, A))
+end
 isposdef(x::Number) = imag(x)==0 && real(x) > 0
 
 stride1(x::Array) = 1
 stride1(x::StridedVector) = stride(x, 1)::Int
 
-function norm{T<:BlasFloat, TI<:Integer}(x::StridedVector{T}, rx::Union{UnitRange{TI},Range{TI}})
+function norm(x::StridedVector{T}, rx::Union{UnitRange{TI},Range{TI}}) where {T<:BlasFloat,TI<:Integer}
     if minimum(rx) < 1 || maximum(rx) > length(x)
         throw(BoundsError(x, rx))
     end
     BLAS.nrm2(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx))
 end
 
-vecnorm1{T<:BlasReal}(x::Union{Array{T},StridedVector{T}}) =
+vecnorm1(x::Union{Array{T},StridedVector{T}}) where {T<:BlasReal} =
     length(x) < ASUM_CUTOFF ? generic_vecnorm1(x) : BLAS.asum(x)
 
-vecnorm2{T<:BlasFloat}(x::Union{Array{T},StridedVector{T}}) =
+vecnorm2(x::Union{Array{T},StridedVector{T}}) where {T<:BlasFloat} =
     length(x) < NRM2_CUTOFF ? generic_vecnorm2(x) : BLAS.nrm2(x)
 
 """
@@ -260,16 +265,16 @@ julia> diagm([1,2,3],1)
  0  0  0  0
 ```
 """
-function diagm{T}(v::AbstractVector{T}, k::Integer=0)
+function diagm(v::AbstractVector{T}, k::Integer=0) where T
     n = length(v) + abs(k)
     A = zeros(T,n,n)
     A[diagind(A,k)] = v
     A
 end
 
-diagm(x::Number) = (X = Array{typeof(x)}(1,1); X[1,1] = x; X)
+diagm(x::Number) = (X = Matrix{typeof(x)}(1,1); X[1,1] = x; X)
 
-function trace{T}(A::Matrix{T})
+function trace(A::Matrix{T}) where T
     n = checksquare(A)
     t = zero(T)
     for i=1:n
@@ -304,8 +309,8 @@ julia> kron(A, B)
  3+0im  0-3im  4+0im  0-4im
 ```
 """
-function kron{T,S}(a::AbstractMatrix{T}, b::AbstractMatrix{S})
-    R = Array{promote_op(*,T,S)}(size(a,1)*size(b,1), size(a,2)*size(b,2))
+function kron(a::AbstractMatrix{T}, b::AbstractMatrix{S}) where {T,S}
+    R = Matrix{promote_op(*,T,S)}(size(a,1)*size(b,1), size(a,2)*size(b,2))
     m = 1
     for j = 1:size(a,2), l = 1:size(b,2), i = 1:size(a,1)
         aij = a[i,j]
@@ -319,13 +324,13 @@ end
 
 kron(a::Number, b::Union{Number, AbstractVecOrMat}) = a * b
 kron(a::AbstractVecOrMat, b::Number) = a * b
-kron(a::AbstractVector, b::AbstractVector)=vec(kron(reshape(a,length(a),1),reshape(b,length(b),1)))
-kron(a::AbstractMatrix, b::AbstractVector)=kron(a,reshape(b,length(b),1))
-kron(a::AbstractVector, b::AbstractMatrix)=kron(reshape(a,length(a),1),b)
+kron(a::AbstractVector, b::AbstractVector) = vec(kron(reshape(a ,length(a), 1), reshape(b, length(b), 1)))
+kron(a::AbstractMatrix, b::AbstractVector) = kron(a, reshape(b, length(b), 1))
+kron(a::AbstractVector, b::AbstractMatrix) = kron(reshape(a, length(a), 1), b)
 
 # Matrix power
-^{T}(A::AbstractMatrix{T}, p::Integer) = p < 0 ? Base.power_by_squaring(inv(A), -p) : Base.power_by_squaring(A, p)
-function ^{T}(A::AbstractMatrix{T}, p::Real)
+(^)(A::AbstractMatrix{T}, p::Integer) where {T} = p < 0 ? Base.power_by_squaring(inv(A), -p) : Base.power_by_squaring(A, p)
+function (^)(A::AbstractMatrix{T}, p::Real) where T
     # For integer powers, use repeated squaring
     if isinteger(p)
         TT = Base.promote_op(^, eltype(A), typeof(p))
@@ -383,7 +388,7 @@ function ^{T}(A::AbstractMatrix{T}, p::Real)
         return retmat
     end
 end
-^(A::AbstractMatrix, p::Number) = expm(p*logm(A))
+(^)(A::AbstractMatrix, p::Number) = expm(p*logm(A))
 
 # Matrix exponential
 
@@ -546,7 +551,7 @@ julia> logm(A)
  0.0  1.0
 ```
 """
-function logm{T}(A::StridedMatrix{T})
+function logm(A::StridedMatrix{T}) where T
     # If possible, use diagonalization
     if issymmetric(A) && T <: Real
         return full(logm(Symmetric(A)))
@@ -648,7 +653,7 @@ end
 sqrtm(a::Number) = (b = sqrt(complex(a)); imag(b) == 0 ? real(b) : b)
 sqrtm(a::Complex) = sqrt(a)
 
-function inv{T}(A::StridedMatrix{T})
+function inv(A::StridedMatrix{T}) where T
     checksquare(A)
     S = typeof((one(T)*zero(T) + one(T)*zero(T))/one(T))
     AA = convert(AbstractArray{S}, A)
@@ -710,7 +715,7 @@ julia> factorize(A) # factorize will check to see that A is already factorized
 This returns a `5×5 Bidiagonal{Float64}`, which can now be passed to other linear algebra functions
 (e.g. eigensolvers) which will use specialized methods for `Bidiagonal` types.
 """
-function factorize{T}(A::StridedMatrix{T})
+function factorize(A::StridedMatrix{T}) where T
     m, n = size(A)
     if m == n
         if m == 1 return A[1] end
@@ -831,11 +836,11 @@ julia> M * N
 
 [^KY88]: Konstantinos Konstantinides and Kung Yao, "Statistical analysis of effective singular values in matrix rank determination", IEEE Transactions on Acoustics, Speech and Signal Processing, 36(5), 1988, 757-763. [doi:10.1109/29.1585](http://dx.doi.org/10.1109/29.1585)
 """
-function pinv{T}(A::StridedMatrix{T}, tol::Real)
+function pinv(A::StridedMatrix{T}, tol::Real) where T
     m, n = size(A)
     Tout = typeof(zero(T)/sqrt(one(T) + one(T)))
     if m == 0 || n == 0
-        return Array{Tout}(n, m)
+        return Matrix{Tout}(n, m)
     end
     if istril(A)
         if istriu(A)
@@ -860,7 +865,7 @@ function pinv{T}(A::StridedMatrix{T}, tol::Real)
     Sinv[find(.!isfinite.(Sinv))] = zero(Stype)
     return SVD.Vt' * (Diagonal(Sinv) * SVD.U')
 end
-function pinv{T}(A::StridedMatrix{T})
+function pinv(A::StridedMatrix{T}) where T
     tol = eps(real(float(one(T))))*maximum(size(A))
     return pinv(A, tol)
 end
@@ -893,7 +898,7 @@ julia> nullspace(M)
  1.0
 ```
 """
-function nullspace{T}(A::StridedMatrix{T})
+function nullspace(A::StridedMatrix{T}) where T
     m, n = size(A)
     (m == 0 || n == 0) && return eye(T, n)
     SVD = svdfact(A, thin = false)
@@ -930,7 +935,7 @@ end
 Computes the solution `X` to the Sylvester equation `AX + XB + C = 0`, where `A`, `B` and
 `C` have compatible dimensions and `A` and `-B` have no eigenvalues with equal real part.
 """
-function sylvester{T<:BlasFloat}(A::StridedMatrix{T},B::StridedMatrix{T},C::StridedMatrix{T})
+function sylvester(A::StridedMatrix{T},B::StridedMatrix{T},C::StridedMatrix{T}) where T<:BlasFloat
     RA, QA = schur(A)
     RB, QB = schur(B)
 
@@ -938,9 +943,9 @@ function sylvester{T<:BlasFloat}(A::StridedMatrix{T},B::StridedMatrix{T},C::Stri
     Y, scale = LAPACK.trsyl!('N','N', RA, RB, D)
     scale!(QA*A_mul_Bc(Y,QB), inv(scale))
 end
-sylvester{T<:Integer}(A::StridedMatrix{T},B::StridedMatrix{T},C::StridedMatrix{T}) = sylvester(float(A), float(B), float(C))
+sylvester(A::StridedMatrix{T}, B::StridedMatrix{T}, C::StridedMatrix{T}) where {T<:Integer} = sylvester(float(A), float(B), float(C))
 
-sylvester(a::Union{Real,Complex},b::Union{Real,Complex},c::Union{Real,Complex}) = -c / (a + b)
+sylvester(a::Union{Real,Complex}, b::Union{Real,Complex}, c::Union{Real,Complex}) = -c / (a + b)
 
 # AX + XA' + C = 0
 
@@ -951,12 +956,12 @@ Computes the solution `X` to the continuous Lyapunov equation `AX + XA' + C = 0`
 eigenvalue of `A` has a zero real part and no two eigenvalues are negative complex
 conjugates of each other.
 """
-function lyap{T<:BlasFloat}(A::StridedMatrix{T},C::StridedMatrix{T})
+function lyap(A::StridedMatrix{T}, C::StridedMatrix{T}) where {T<:BlasFloat}
     R, Q = schur(A)
 
     D = -Ac_mul_B(Q,C*Q)
     Y, scale = LAPACK.trsyl!('N', T <: Complex ? 'C' : 'T', R, R, D)
     scale!(Q*A_mul_Bc(Y,Q), inv(scale))
 end
-lyap{T<:Integer}(A::StridedMatrix{T},C::StridedMatrix{T}) = lyap(float(A), float(C))
-lyap{T<:Number}(a::T, c::T) = -c/(2a)
+lyap(A::StridedMatrix{T}, C::StridedMatrix{T}) where {T<:Integer} = lyap(float(A), float(C))
+lyap(a::T, c::T) where {T<:Number} = -c/(2a)
