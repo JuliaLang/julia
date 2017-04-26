@@ -460,6 +460,8 @@ JL_CALLABLE(jl_f__apply_latest)
     jl_ptls_t ptls = jl_get_ptls_states();
     size_t last_age = ptls->world_age;
     ptls->world_age = jl_world_counter;
+    if (ptls->in_pure_callback)
+        jl_error("invokelatest cannot be used in generated or pure functions");
     jl_value_t *ret = jl_f__apply(NULL, args, nargs);
     ptls->world_age = last_age;
     return ret;
