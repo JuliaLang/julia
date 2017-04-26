@@ -1208,9 +1208,9 @@ for (gelsd, gelsy, elty) in
             rcond = convert($elty, rcond)
             rnk   = Vector{BlasInt}(1)
             info  = Ref{BlasInt}()
-            work  = Array{$elty}(1)
+            work  = Vector{$elty}(1)
             lwork = BlasInt(-1)
-            iwork = Array{BlasInt}(1)
+            iwork = Vector{BlasInt}(1)
             for i = 1:2
                 ccall((@blasfunc($gelsd), liblapack), Void,
                       (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
@@ -1252,7 +1252,7 @@ for (gelsd, gelsy, elty) in
             jpvt = zeros(BlasInt, n)
             rcond = convert($elty, rcond)
             rnk = Vector{BlasInt}(1)
-            work = Array{$elty}(1)
+            work = Vector{$elty}(1)
             lwork = BlasInt(-1)
             info = Ref{BlasInt}()
             for i = 1:2
@@ -1301,10 +1301,10 @@ for (gelsd, gelsy, elty, relty) in
             rcond = convert($relty, rcond)
             rnk   = Vector{BlasInt}(1)
             info  = Ref{BlasInt}()
-            work  = Array{$elty}(1)
+            work  = Vector{$elty}(1)
             lwork = BlasInt(-1)
-            rwork = Array{$relty}(1)
-            iwork = Array{BlasInt}(1)
+            rwork = Vector{$relty}(1)
+            iwork = Vector{BlasInt}(1)
             for i = 1:2
                 ccall((@blasfunc($gelsd), liblapack), Void,
                       (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
@@ -1347,9 +1347,9 @@ for (gelsd, gelsy, elty, relty) in
             jpvt = zeros(BlasInt, n)
             rcond = convert($relty, rcond)
             rnk = Vector{BlasInt}(1)
-            work = Array{$elty}(1)
+            work = Vector{$elty}(1)
             lwork = BlasInt(-1)
-            rwork = Array{$relty}(2n)
+            rwork = Vector{$relty}(2n)
             info = Ref{BlasInt}()
             for i = 1:2
                 ccall((@blasfunc($gelsy), liblapack), Void,
@@ -1364,7 +1364,7 @@ for (gelsd, gelsy, elty, relty) in
                 chklapackerror(info[])
                 if i == 1
                     lwork = BlasInt(real(work[1]))
-                    work = Array{$elty}(lwork)
+                    work = Vector{$elty}(lwork)
                 end
             end
             subsetrows(B, newB, n), rnk[1]
@@ -1681,7 +1681,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
             end
             p = size(B, 1)
             k = Vector{BlasInt}(1)
-            l = Array{BlasInt}(1)
+            l = Vector{BlasInt}(1)
             lda = max(1,stride(A, 2))
             ldb = max(1,stride(B, 2))
             alpha = similar(A, $relty, n)
@@ -1692,12 +1692,12 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
             V = jobv == 'V' ? similar(A, $elty, ldv, p) : similar(A, $elty, 0)
             ldq = max(1, n)
             Q = jobq == 'Q' ? similar(A, $elty, ldq, n) : similar(A, $elty, 0)
-            work = Array{$elty}(max(3n, m, p) + n)
+            work = Vector{$elty}(max(3n, m, p) + n)
             cmplx = eltype(A) <: Complex
             if cmplx
-                rwork = Array{$relty}(2n)
+                rwork = Vector{$relty}(2n)
             end
-            iwork = Array{BlasInt}(n)
+            iwork = Vector{BlasInt}(n)
             info = Ref{BlasInt}()
             if cmplx
                 ccall((@blasfunc($ggsvd), liblapack), Void,
@@ -1859,7 +1859,7 @@ for (f, elty, relty) in ((:zggsvd3_, :Complex128, :Float64),
             end
             p = size(B, 1)
             k = Vector{BlasInt}(1)
-            l = Array{BlasInt}(1)
+            l = Vector{BlasInt}(1)
             lda = max(1,stride(A, 2))
             ldb = max(1,stride(B, 2))
             alpha = similar(A, $relty, n)
@@ -1872,8 +1872,8 @@ for (f, elty, relty) in ((:zggsvd3_, :Complex128, :Float64),
             Q = jobq == 'Q' ? similar(A, $elty, ldq, n) : similar(A, $elty, 0)
             work = Vector{$elty}(1)
             lwork = BlasInt(-1)
-            rwork = Array{$relty}(2n)
-            iwork = Array{BlasInt}(n)
+            rwork = Vector{$relty}(2n)
+            iwork = Vector{BlasInt}(n)
             info = Ref{BlasInt}()
             for i = 1:2
                 ccall((@blasfunc($f), liblapack), Void,
@@ -1894,7 +1894,7 @@ for (f, elty, relty) in ((:zggsvd3_, :Complex128, :Float64),
                 chklapackerror(info[])
                 if i == 1
                     lwork = BlasInt(work[1])
-                    work = Array{$elty}(lwork)
+                    work = Vector{$elty}(lwork)
                 end
             end
             if m - k[1] - l[1] >= 0
@@ -2266,8 +2266,8 @@ for (laic1, elty) in
                 throw(DimensionMismatch("vectors must have same length, but length of x is $j and length of w is $(length(w))"))
             end
             sestpr = Vector{$elty}(1)
-            s = Array{$elty}(1)
-            c = Array{$elty}(1)
+            s = Vector{$elty}(1)
+            c = Vector{$elty}(1)
             ccall((@blasfunc($laic1), liblapack), Void,
                 (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty},
                  Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
@@ -2299,8 +2299,8 @@ for (laic1, elty, relty) in
                 throw(DimensionMismatch("vectors must have same length, but length of x is $j and length of w is $(length(w))"))
             end
             sestpr = Vector{$relty}(1)
-            s = Array{$elty}(1)
-            c = Array{$elty}(1)
+            s = Vector{$elty}(1)
+            c = Vector{$elty}(1)
             ccall((@blasfunc($laic1), liblapack), Void,
                 (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$relty},
                  Ptr{$elty}, Ptr{$elty}, Ptr{$relty}, Ptr{$elty},
@@ -3687,7 +3687,7 @@ for (stev, stebz, stegr, stein, elty) in
             isuppz = similar(dv, BlasInt, 2*size(Z, 2))
             work = Vector{$elty}(1)
             lwork = BlasInt(-1)
-            iwork = Array{BlasInt}(1)
+            iwork = Vector{BlasInt}(1)
             liwork = BlasInt(-1)
             info = Ref{BlasInt}()
             for i = 1:2
@@ -3705,9 +3705,9 @@ for (stev, stebz, stegr, stein, elty) in
                 chklapackerror(info[])
                 if i == 1
                     lwork = BlasInt(work[1])
-                    work = Array{$elty}(lwork)
+                    work = Vector{$elty}(lwork)
                     liwork = iwork[1]
-                    iwork = Array{BlasInt}(liwork)
+                    iwork = Vector{BlasInt}(liwork)
                 end
             end
             m[] == length(w) ? w : w[1:m[]], m[] == size(Z, 2) ? Z : Z[:,1:m[]]
@@ -4835,7 +4835,7 @@ for (syev, syevr, sygvd, elty) in
             isuppz = similar(A, BlasInt, 2*n)
             work   = Vector{$elty}(1)
             lwork  = BlasInt(-1)
-            iwork  = Array{BlasInt}(1)
+            iwork  = Vector{BlasInt}(1)
             liwork = BlasInt(-1)
             info   = Ref{BlasInt}()
             for i = 1:2
@@ -4886,7 +4886,7 @@ for (syev, syevr, sygvd, elty) in
             w = similar(A, $elty, n)
             work = Vector{$elty}(1)
             lwork = BlasInt(-1)
-            iwork = Array{BlasInt}(1)
+            iwork = Vector{BlasInt}(1)
             liwork = BlasInt(-1)
             info = Ref{BlasInt}()
             for i = 1:2
@@ -4902,9 +4902,9 @@ for (syev, syevr, sygvd, elty) in
                 chkargsok(info[])
                 if i == 1
                     lwork = BlasInt(work[1])
-                    work = Array{$elty}(lwork)
+                    work = Vector{$elty}(lwork)
                     liwork = iwork[1]
-                    iwork = Array{BlasInt}(liwork)
+                    iwork = Vector{BlasInt}(liwork)
                 end
             end
             chkposdef(info[])
@@ -4983,9 +4983,9 @@ for (syev, syevr, sygvd, elty, relty) in
             isuppz = similar(A, BlasInt, 2*n)
             work   = Vector{$elty}(1)
             lwork  = BlasInt(-1)
-            rwork  = Array{$relty}(1)
+            rwork  = Vector{$relty}(1)
             lrwork = BlasInt(-1)
-            iwork  = Array{BlasInt}(1)
+            iwork  = Vector{BlasInt}(1)
             liwork = BlasInt(-1)
             info   = Ref{BlasInt}()
             for i = 1:2
@@ -5038,7 +5038,7 @@ for (syev, syevr, sygvd, elty, relty) in
             w = similar(A, $relty, n)
             work = Vector{$elty}(1)
             lwork = BlasInt(-1)
-            iwork = Array{BlasInt}(1)
+            iwork = Vector{BlasInt}(1)
             liwork = BlasInt(-1)
             rwork = Array{$relty}()
             lrwork = BlasInt(-1)
@@ -5729,7 +5729,7 @@ for (trexc, trsen, tgsen, elty) in
             m = sum(select)
             work = Vector{$elty}(1)
             lwork = BlasInt(-1)
-            iwork = Array{BlasInt}(1)
+            iwork = Vector{BlasInt}(1)
             liwork = BlasInt(-1)
             info = Ref{BlasInt}()
             select = convert(Array{BlasInt}, select)
@@ -5749,8 +5749,8 @@ for (trexc, trsen, tgsen, elty) in
                 if i == 1 # only estimated optimal lwork, liwork
                     lwork  = BlasInt(real(work[1]))
                     liwork = BlasInt(real(iwork[1]))
-                    work   = Array{$elty}(lwork)
-                    iwork  = Array{BlasInt}(liwork)
+                    work   = Vector{$elty}(lwork)
+                    iwork  = Vector{BlasInt}(liwork)
                 end
             end
             T, Q, iszero(wi) ? wr : complex.(wr, wi)
@@ -5795,7 +5795,7 @@ for (trexc, trsen, tgsen, elty) in
             lwork = BlasInt(-1)
             work = Vector{$elty}(1)
             liwork = BlasInt(-1)
-            iwork = Array{BlasInt}(1)
+            iwork = Vector{BlasInt}(1)
             info = Ref{BlasInt}()
             select = convert(Array{BlasInt}, select)
             for i = 1:2
@@ -5817,9 +5817,9 @@ for (trexc, trsen, tgsen, elty) in
                 chklapackerror(info[])
                 if i == 1 # only estimated optimal lwork, liwork
                     lwork  = BlasInt(real(work[1]))
-                    work   = Array{$elty}(lwork)
+                    work   = Vector{$elty}(lwork)
                     liwork = BlasInt(real(iwork[1]))
-                    iwork = Array{BlasInt}(liwork)
+                    iwork = Vector{BlasInt}(liwork)
                 end
             end
             S, T, complex.(alphar, alphai), beta, Q, Z
@@ -5937,7 +5937,7 @@ for (trexc, trsen, tgsen, elty) in
             lwork = BlasInt(-1)
             work = Vector{$elty}(1)
             liwork = BlasInt(-1)
-            iwork = Array{BlasInt}(1)
+            iwork = Vector{BlasInt}(1)
             info = Ref{BlasInt}()
             select = convert(Array{BlasInt}, select)
             for i = 1:2
@@ -5959,9 +5959,9 @@ for (trexc, trsen, tgsen, elty) in
                 chklapackerror(info[])
                 if i == 1 # only estimated optimal lwork, liwork
                     lwork  = BlasInt(real(work[1]))
-                    work   = Array{$elty}(lwork)
+                    work   = Vector{$elty}(lwork)
                     liwork = BlasInt(real(iwork[1]))
-                    iwork = Array{BlasInt}(liwork)
+                    iwork = Vector{BlasInt}(liwork)
                 end
             end
             S, T, alpha, beta, Q, Z

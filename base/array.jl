@@ -1855,7 +1855,7 @@ function intersect(v1, vs...)
 end
 
 function union(vs...)
-    ret = Array{promote_eltype(vs...)}(0)
+    ret = Vector{promote_eltype(vs...)}(0)
     seen = Set()
     for v in vs
         for v_elem in v
