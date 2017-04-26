@@ -6,7 +6,7 @@ let
     @noinline child() = stacktrace()
     @noinline parent() = child()
     @noinline grandparent() = parent()
-    line_numbers = @__LINE__ - [3, 2, 1]
+    line_numbers = @__LINE__() - [3, 2, 1]
     stack = grandparent()
 
     # Basic tests.
@@ -68,7 +68,7 @@ let ct = current_task()
             return catch_stacktrace()
         end
     end
-    line_numbers = @__LINE__ .- [15, 10, 5]
+    line_numbers = @__LINE__() .- [15, 10, 5]
 
     # Test try...catch with stacktrace
     @test try_stacktrace()[1] == StackFrame(:try_stacktrace, @__FILE__, line_numbers[2])

@@ -514,8 +514,8 @@ let b = IOBuffer("""
                  end
                  f()
                  """)
-    @test Base.parse_input_line(b) == Expr(:let, Expr(:block, Expr(:line, 2, :none), :x), Expr(:(=), :x, :x))
-    @test Base.parse_input_line(b) == Expr(:call, :f)
+    @test Base.parse_input_line(b) == Expr(:toplevel, Expr(:line, 1, :none), Expr(:let, Expr(:block, Expr(:line, 2, :none), :x), Expr(:(=), :x, :x)))
+    @test Base.parse_input_line(b) == Expr(:toplevel, Expr(:line, 1, :none), Expr(:call, :f))
     @test Base.parse_input_line(b) === nothing
 end
 
@@ -584,9 +584,9 @@ isline(x) = isa(x,Expr) && x.head === :line
 
 # issue #16736
 let
-    local lineoffset0 = @__LINE__ + 1
+    local lineoffset0 = @__LINE__() + 1
     local lineoffset1 = @__LINE__
-    local lineoffset2 = @__LINE__ - 1
+    local lineoffset2 = @__LINE__() - 1
     @test lineoffset0 == lineoffset1 == lineoffset2
 end
 

@@ -189,7 +189,7 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
     JL_TRY {
         if (std_imports) {
             // add `eval` function
-            defaultdefs = jl_call_scm_on_ast("module-default-defs", (jl_value_t*)ex);
+            defaultdefs = jl_call_scm_on_ast("module-default-defs", (jl_value_t*)ex, jl_lineno);
             ptls->world_age = jl_world_counter;
             jl_toplevel_eval_flex(defaultdefs, 0, 1);
             defaultdefs = NULL;

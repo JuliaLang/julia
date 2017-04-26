@@ -164,6 +164,14 @@
       (cadr e)
       e))
 
+(define (linemacro? e)
+  (if (eq? (cadr e) '@__LINE__)
+      (let ((nargs (- (length e) 2)))
+        (if (eq? nargs 0)
+            #t
+            (error (string "macro \"@__LINE__\" should have zero arguments, found " nargs))))
+      #f))
+
 (define (typevar-expr-name e) (car (analyze-typevar e)))
 
 (define (new-expansion-env-for x env (outermost #f))
@@ -226,10 +234,14 @@
                               `(global ,(resolve-expansion-vars-with-new-env arg env m inarg))))))
            ((using import importall export meta line inbounds boundscheck simdloop) (map unescape e))
            ((macrocall)
-            (if (or (eq? (cadr e) '@label) (eq? (cadr e) '@goto)) e
-                `(macrocall ,.(map (lambda (x)
-                                     (resolve-expansion-vars-with-new-env x env m inarg))
-                                   (cdr e)))))
+            (cond ((or (eq? (cadr e) '@label) (eq? (cadr e) '@goto))
+                   e)
+                  ((linemacro? e)
+                   current-lineno)
+                  (else
+                   `(macrocall ,.(map (lambda (x)
+                                        (resolve-expansion-vars-with-new-env x env m inarg))
+                                      (cdr e))))))
            ((symboliclabel) e)
            ((symbolicgoto) e)
            ((type)
@@ -392,17 +404,28 @@
          (relabel (pair-with-gensyms labels)))
     (rename-symbolic-labels- e relabel)))
 
-;; macro expander entry point
+;; Map julia-expand-macros across `exs`, tracking line number
+(define (map-expand-with-lineno exs lineno)
+  (let loop ((exs exs) (lineno lineno) (out '()))
+    (if (not (pair? exs))
+        (reverse! out)
+        (let ((e (car exs)))
+          (if (and (pair? e) (eq? (car e) 'line))
+              (loop (cdr exs) (cadr e) (cons e out))
+              (loop (cdr exs) lineno (cons (julia-expand-macros e lineno) out)))))))
 
-(define (julia-expand-macros e)
+;; macro expander entry point
+(define (julia-expand-macros e lineno)
   (cond ((not (pair? e))     e)
         ((eq? (car e) 'quote)
          ;; backquote is essentially a built-in macro at the moment
-         (julia-expand-macros (julia-bq-expand (cadr e) 0)))
+         (julia-expand-macros (julia-bq-expand (cadr e) 0) lineno))
         ((eq? (car e) 'inert) e)
         ((eq? (car e) 'macrocall)
          ;; expand macro
-         (let ((form (apply invoke-julia-macro (cadr e) (cddr e))))
+         (let ((form (if (linemacro? e)
+                         `(,lineno)
+                         (apply invoke-julia-macro lineno (cadr e) (cddr e)))))
            (if (not form)
                (error (string "macro \"" (cadr e) "\" not defined")))
            (if (and (pair? form) (eq? (car form) 'error))
@@ -412,7 +435,9 @@
              ;; m is the macro's def module
              (rename-symbolic-labels
               (julia-expand-macros
-               (resolve-expansion-vars form m))))))
+               (with-bindings ((current-lineno lineno)) (resolve-expansion-vars form m))
+               lineno)))))
         ((eq? (car e) 'module) e)
         (else
-         (map julia-expand-macros e))))
+         (map-expand-with-lineno e lineno))))
+

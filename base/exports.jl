@@ -1002,6 +1002,7 @@ export
 # help and reflection
     apropos,
     current_module,
+    current_location,
     edit,
     code_typed,
     code_warntype,
