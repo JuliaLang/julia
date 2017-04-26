@@ -26,7 +26,7 @@ end
 QRPivoted(factors::AbstractMatrix{T}, τ::Vector{T}, jpvt::Vector{BlasInt}) where {T} =
     QRPivoted{T,typeof(factors)}(factors, τ, jpvt)
 
-function qrfactUnblocked!{T}(A::AbstractMatrix{T})
+function qrfactUnblocked!(A::AbstractMatrix{T}) where {T}
     m, n = size(A)
     τ = zeros(T, min(m,n))
     for k = 1:min(m - 1 + !(T<:Real), n)
@@ -55,7 +55,7 @@ end
 function qrfactPivotedUnblocked!(A::StridedMatrix)
     m, n = size(A)
     piv = collect(UnitRange{BlasInt}(1,n))
-    τ = Array{eltype(A)}(min(m,n))
+    τ = Vector{eltype(A)}(min(m,n))
     for j = 1:min(m,n)
 
         # Find column with maximum norm in trailing submatrix
@@ -187,12 +187,12 @@ true
 
     [^Schreiber1989]: R Schreiber and C Van Loan, "A storage-efficient WY representation for products of Householder transformations", SIAM J Sci Stat Comput 10 (1989), 53-57. [doi:10.1137/0910005](http://dx.doi.org/10.1137/0910005)
 """
-function qrfact{T}(A::AbstractMatrix{T}, arg)
+function qrfact(A::AbstractMatrix{T}, arg) where T
     AA = similar(A, typeof(zero(T)/norm(one(T))), size(A))
     copy!(AA, A)
     return qrfact!(AA, arg)
 end
-function qrfact{T}(A::AbstractMatrix{T})
+function qrfact(A::AbstractMatrix{T}) where T
     AA = similar(A, typeof(zero(T)/norm(one(T))), size(A))
     copy!(AA, A)
     return qrfact!(AA)
@@ -591,11 +591,11 @@ for (f1, f2) in ((:Ac_mul_B, :A_mul_B!),
     end
 end
 
-A_ldiv_B!{T<:BlasFloat}(A::QRCompactWY{T}, b::StridedVector{T}) = (A_ldiv_B!(UpperTriangular(A[:R]), view(Ac_mul_B!(A[:Q], b), 1:size(A, 2))); b)
-A_ldiv_B!{T<:BlasFloat}(A::QRCompactWY{T}, B::StridedMatrix{T}) = (A_ldiv_B!(UpperTriangular(A[:R]), view(Ac_mul_B!(A[:Q], B), 1:size(A, 2), 1:size(B, 2))); B)
+A_ldiv_B!(A::QRCompactWY{T}, b::StridedVector{T}) where {T<:BlasFloat} = (A_ldiv_B!(UpperTriangular(A[:R]), view(Ac_mul_B!(A[:Q], b), 1:size(A, 2))); b)
+A_ldiv_B!(A::QRCompactWY{T}, B::StridedMatrix{T}) where {T<:BlasFloat} = (A_ldiv_B!(UpperTriangular(A[:R]), view(Ac_mul_B!(A[:Q], B), 1:size(A, 2), 1:size(B, 2))); B)
 
 # Julia implementation similarly to xgelsy
-function A_ldiv_B!{T<:BlasFloat}(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Real)
+function A_ldiv_B!(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Real) where T<:BlasFloat
     mA, nA = size(A.factors)
     nr = min(mA,nA)
     nrhs = size(B, 2)
@@ -625,9 +625,9 @@ function A_ldiv_B!{T<:BlasFloat}(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Re
     B[1:nA,:] = view(B, 1:nA, :)[invperm(A[:p]::Vector{BlasInt}),:]
     return B, rnk
 end
-A_ldiv_B!{T<:BlasFloat}(A::QRPivoted{T}, B::StridedVector{T}) = vec(A_ldiv_B!(A,reshape(B,length(B),1)))
-A_ldiv_B!{T<:BlasFloat}(A::QRPivoted{T}, B::StridedVecOrMat{T}) = A_ldiv_B!(A, B, maximum(size(A))*eps(real(float(one(eltype(B))))))[1]
-function A_ldiv_B!{T}(A::QR{T}, B::StridedMatrix{T})
+A_ldiv_B!(A::QRPivoted{T}, B::StridedVector{T}) where {T<:BlasFloat} = vec(A_ldiv_B!(A,reshape(B,length(B),1)))
+A_ldiv_B!(A::QRPivoted{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} = A_ldiv_B!(A, B, maximum(size(A))*eps(real(float(one(eltype(B))))))[1]
+function A_ldiv_B!(A::QR{T}, B::StridedMatrix{T}) where T
     m, n = size(A)
     minmn = min(m,n)
     mB, nB = size(B)
@@ -710,7 +710,7 @@ function _append_zeros(B::AbstractMatrix, T::Type, n)
     end
 end
 
-function (\){TA,TB}(A::Union{QR{TA},QRCompactWY{TA},QRPivoted{TA}}, B::AbstractVecOrMat{TB})
+function (\)(A::Union{QR{TA},QRCompactWY{TA},QRPivoted{TA}}, B::AbstractVecOrMat{TB}) where {TA,TB}
     S = promote_type(TA,TB)
     m, n = size(A)
     m == size(B,1) || throw(DimensionMismatch("left hand side has $m rows, but right hand side has $(size(B,1)) rows"))
@@ -729,7 +729,7 @@ end
 _ret_size(A::Factorization, b::AbstractVector) = (max(size(A, 2), length(b)),)
 _ret_size(A::Factorization, B::AbstractMatrix) = (max(size(A, 2), size(B, 1)), size(B, 2))
 
-function (\){T<:BlasReal}(A::Union{QR{T},QRCompactWY{T},QRPivoted{T}}, BIn::VecOrMat{Complex{T}})
+function (\)(A::Union{QR{T},QRCompactWY{T},QRPivoted{T}}, BIn::VecOrMat{Complex{T}}) where T<:BlasReal
     m, n = size(A)
     m == size(BIn, 1) || throw(DimensionMismatch("left hand side has $m rows, but right hand side has $(size(BIn,1)) rows"))
 

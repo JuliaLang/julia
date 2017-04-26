@@ -12,7 +12,7 @@ end
 LU(factors::AbstractMatrix{T}, ipiv::Vector{BlasInt}, info::BlasInt) where {T} = LU{T,typeof(factors)}(factors, ipiv, info)
 
 # StridedMatrix
-function lufact!{T<:BlasFloat}(A::StridedMatrix{T}, pivot::Union{Type{Val{false}}, Type{Val{true}}} = Val{true})
+function lufact!(A::StridedMatrix{T}, pivot::Union{Type{Val{false}}, Type{Val{true}}} = Val{true}) where T<:BlasFloat
     if pivot === Val{false}
         return generic_lufact!(A, pivot)
     end

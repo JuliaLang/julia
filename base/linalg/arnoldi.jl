@@ -90,10 +90,10 @@ julia> λ
 eigs(A; kwargs...) = eigs(A, I; kwargs...)
 eigs(A::AbstractMatrix{<:BlasFloat}, ::UniformScaling; kwargs...) = _eigs(A, I; kwargs...)
 
-eigs{T<:BlasFloat}(A::AbstractMatrix{T}, B::AbstractMatrix{T}; kwargs...) = _eigs(A, B; kwargs...)
+eigs(A::AbstractMatrix{T}, B::AbstractMatrix{T}; kwargs...) where {T<:BlasFloat} = _eigs(A, B; kwargs...)
 eigs(A::AbstractMatrix{BigFloat}, B::AbstractMatrix...; kwargs...) = throw(MethodError(eigs, Any[A,B,kwargs...]))
 eigs(A::AbstractMatrix{BigFloat}, B::UniformScaling; kwargs...) = throw(MethodError(eigs, Any[A,B,kwargs...]))
-function eigs{T}(A::AbstractMatrix{T}, ::UniformScaling; kwargs...)
+function eigs(A::AbstractMatrix{T}, ::UniformScaling; kwargs...) where T
     Tnew = typeof(zero(T)/sqrt(one(T)))
     eigs(convert(AbstractMatrix{Tnew}, A), I; kwargs...)
 end
@@ -325,7 +325,7 @@ issymmetric(s::SVDOperator) = true
 
 svds(A::AbstractMatrix{<:BlasFloat}; kwargs...) = _svds(A; kwargs...)
 svds(A::AbstractMatrix{BigFloat}; kwargs...) = throw(MethodError(svds, Any[A, kwargs...]))
-function svds{T}(A::AbstractMatrix{T}; kwargs...)
+function svds(A::AbstractMatrix{T}; kwargs...) where T
     Tnew = typeof(zero(T)/sqrt(one(T)))
     svds(convert(AbstractMatrix{Tnew}, A); kwargs...)
 end

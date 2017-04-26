@@ -25,13 +25,13 @@ struct ConjArray{T,N,A<:AbstractArray} <: AbstractArray{T,N}
     parent::A
 end
 
-@inline ConjArray{T,N}(a::AbstractArray{T,N}) = ConjArray{conj_type(T),N,typeof(a)}(a)
+@inline ConjArray(a::AbstractArray{T,N}) where {T,N} = ConjArray{conj_type(T),N,typeof(a)}(a)
 
 const ConjVector{T,V<:AbstractVector} = ConjArray{T,1,V}
-@inline ConjVector{T}(v::AbstractVector{T}) = ConjArray{conj_type(T),1,typeof(v)}(v)
+@inline ConjVector(v::AbstractVector{T}) where {T} = ConjArray{conj_type(T),1,typeof(v)}(v)
 
 const ConjMatrix{T,M<:AbstractMatrix} = ConjArray{T,2,M}
-@inline ConjMatrix{T}(m::AbstractMatrix{T}) = ConjArray{conj_type(T),2,typeof(m)}(m)
+@inline ConjMatrix(m::AbstractMatrix{T}) where {T} = ConjArray{conj_type(T),2,typeof(m)}(m)
 
 # This type can cause the element type to change under conjugation - e.g. an array of complex arrays.
 @inline conj_type(x) = conj_type(typeof(x))
@@ -42,8 +42,8 @@ const ConjMatrix{T,M<:AbstractMatrix} = ConjArray{T,2,M}
 @inline parent_type(::Type{ConjArray{T,N,A}}) where {T,N,A} = A
 
 @inline size(a::ConjArray) = size(a.parent)
-IndexStyle{CA<:ConjArray}(::CA) = IndexStyle(parent_type(CA))
-IndexStyle{CA<:ConjArray}(::Type{CA}) = IndexStyle(parent_type(CA))
+IndexStyle(::CA) where {CA<:ConjArray} = IndexStyle(parent_type(CA))
+IndexStyle(::Type{CA}) where  {CA<:ConjArray} = IndexStyle(parent_type(CA))
 
 @propagate_inbounds getindex(a::ConjArray{T,N}, i::Int) where {T,N} = conj(getindex(a.parent, i))
 @propagate_inbounds getindex(a::ConjArray{T,N}, i::Vararg{Int,N}) where {T,N} = conj(getindex(a.parent, i...))
