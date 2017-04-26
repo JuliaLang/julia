@@ -298,7 +298,7 @@ static void ti_init_master_thread(void)
 #ifdef _OS_WINDOWS_
     if (!DuplicateHandle(GetCurrentProcess(), GetCurrentThread(),
                          GetCurrentProcess(), &hMainThread, 0,
-                         TRUE, DUPLICATE_SAME_ACCESS)) {
+                         FALSE, DUPLICATE_SAME_ACCESS)) {
         jl_printf(JL_STDERR, "WARNING: failed to access handle to main thread\n");
         hMainThread = INVALID_HANDLE_VALUE;
     }

@@ -1007,25 +1007,26 @@ for (x, writable, unix_fd, c_symbol) in
     @eval begin
         function ($_f)(stream)
             global $x
+            posix_fd = _fd(stream)
             @static if is_windows()
-                ccall(:SetStdHandle,stdcall,Int32,(Int32,Ptr{Void}),
-                    $(-10 - unix_fd), Libc._get_osfhandle(_fd(stream)).handle)
-            else
-                dup(_fd(stream),  RawFD($unix_fd))
+                ccall(:SetStdHandle, stdcall, Int32, (Int32, Ptr{Void}),
+                    $(-10 - unix_fd), Libc._get_osfhandle(posix_fd).handle)
             end
+            dup(posix_fd,  RawFD($unix_fd))
             $x = stream
+            nothing
         end
         function ($f)(handle::Union{LibuvStream,IOStream})
             $(_f)(handle)
             unsafe_store!(cglobal($(Expr(:quote,c_symbol)),Ptr{Void}),
                 handle.handle)
-            handle
+            return handle
         end
         function ($f)()
-            read,write = (PipeEndpoint(), PipeEndpoint())
-            link_pipe(read,$(writable),write,$(!writable))
-            ($f)($(writable? :write : :read))
-            (read,write)
+            read, write = (PipeEndpoint(), PipeEndpoint())
+            link_pipe(read, $(writable), write, $(!writable))
+            ($f)($(writable ? :write : :read))
+            return (read, write)
         end
     end
 end
