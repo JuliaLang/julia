@@ -287,7 +287,7 @@ macro timed(ex)
 end
 
 function fftw_vendor()
-    if Base.libfftw_name == "libmkl_rt"
+    if Base.libfftw_name == "libmkl_rt" || (is_windows() && Base.libfftw_name == "mkl_rt")
         return :mkl
     else
         return :fftw
