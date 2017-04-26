@@ -1831,7 +1831,7 @@ function logm{T<:Union{Float64,Complex{Float64}}}(A0::UpperTriangular{T})
         if flag != 2
             A, mm, its = sqrtm_dbp(A)
             if any(isnan.(A))
-                return UpperTriangular(A)
+                return A
             end
             AmI = A - I
             s += 1
@@ -1875,7 +1875,7 @@ function logm{T<:Union{Float64,Complex{Float64}}}(A0::UpperTriangular{T})
     # Scale back
     scale!(2^s, Y)
 
-    return UpperTriangular(Y)
+    return Y
 end
 logm(A::LowerTriangular) = logm(A.').'
 
