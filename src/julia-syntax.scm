@@ -3084,10 +3084,10 @@ f(x) = yt(x)
                                (newlam    (renumber-slots-and-labels (linearize (car exprs)))))
                           `(toplevel-butlast
                             ,@top-stmts
-                            ,@sp-inits
-                            (method ,name ,(cl-convert sig fname lam namemap toplevel interp)
-                                    ,(julia-expand-macros `(quote ,newlam))
-                                    ,(last e))))))
+                            (block ,@sp-inits
+                                   (method ,name ,(cl-convert sig fname lam namemap toplevel interp)
+                                           ,(julia-expand-macros `(quote ,newlam))
+                                           ,(last e)))))))
                  ;; local case - lift to a new type at top level
                  (let* ((exists (get namemap name #f))
                         (type-name  (or exists

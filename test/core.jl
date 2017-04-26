@@ -4871,3 +4871,13 @@ let letvar::Int = 2
     letvar = 3.0
     @test letvar === 3
 end
+
+# issue #21568
+f21568() = 0
+function foo21568()
+    y = 1
+    global f21568
+    f21568{T<:Real}(x::AbstractArray{T,1}) = y
+end
+foo21568()
+@test f21568([0]) == 1
