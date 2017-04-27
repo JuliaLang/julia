@@ -2318,9 +2318,9 @@ end
 
 function merge_call_chain!(child::InferenceState, ancestor::InferenceState)
     intermediate = child
-    while intermediate !=== ancestor
+    while intermediate !== ancestor
         parent = intermediate.parent
-        add_backedge!(intermediate.backedges, parent, parent.currpc)
+        add_backedge!(intermediate, parent, parent.currpc)
         union_callers!(intermediate, parent)
         intermediate = parent
     end
@@ -2482,8 +2482,8 @@ function typeinf_ext(linfo::MethodInstance, world::UInt)
         linfo.inInference = true
         ccall(:jl_typeinf_begin, Void, ())
         frame = InferenceState(linfo, linfo.inferred::CodeInfo,
-                               true, true, InferenceParams(world))
-        typeinf_loop(frame)
+                               true, true, InferenceParams(world), nothing)
+        typeinf(frame)
         ccall(:jl_typeinf_end, Void, ())
         @assert frame.inferred # TODO: deal with this better
         @assert frame.linfo === linfo
@@ -3732,9 +3732,9 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
         # as we'll be able to fix that up at the end of inlinable when we verify the return type.
         # But `next` and `indexed_next` make tuples which would end up burying some of that information in the AST
         # where we can't easily correct it afterwards.
-        frame = InferenceState(linfo, get_source(linfo), #=optimize=#true, #=cache=#false, sv.params)
+        frame = InferenceState(linfo, get_source(linfo), #=optimize=#true, #=cache=#false, sv.params, nothing)
         frame.stmt_types[1][3] = VarState(atypes[3], false)
-        typeinf_loop(frame)
+        typeinf(frame)
     else
         if isdefined(linfo, :inferred) && linfo.inferred !== nothing
             # use cache
@@ -5275,7 +5275,7 @@ end
 # especially try to make sure any recursive and leaf functions have concrete signatures,
 # since we won't be able to specialize & infer them at runtime
 
-let fs = Any[typeinf_ext, typeinf_loop, typeinf_edge, occurs_outside_getfield, pure_eval_call]
+let fs = Any[typeinf_ext, typeinf, typeinf_edge, occurs_outside_getfield, pure_eval_call]
     for x in t_ffunc_val
         push!(fs, x[3])
     end
