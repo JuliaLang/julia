@@ -848,6 +848,9 @@ function testset_beginend(args, tests)
     # action (such as reporting the results)
     quote
         ts = $(testsettype)($desc; $options...)
+        # this empty loop is here to force the block to be compiled,
+        # which is needed for backtrace scrubbing to work correctly.
+        while false; end
         push_testset(ts)
         try
             $(esc(tests))
