@@ -562,7 +562,6 @@ end
     @test Ab^(-17/8) ≈ inv(Ab^2 * sqrtm(sqrtm(sqrtm(Ab))))
     @test (Ab^0.2)^5 ≈ Ab
     @test (Ab^(2/3))*(Ab^(1/3)) ≈ Ab
-    @test (Ab^im)^(-im) ≈ Ab
 
     #Ac : complex eigenvalues
     Ac = convert(Matrix{elty}, [5 4 2 1;0 1 -1 -1;-1 -1 3 6;1 1 -1 5])
