@@ -380,13 +380,16 @@ export $
 
 @deprecate_binding Filter    Iterators.Filter
 @deprecate_binding Zip       Iterators.Zip
-@deprecate filter(flt, itr)  Iterators.filter(flt, itr)
-@deprecate_binding rest      Iterators.rest
-@deprecate_binding countfrom Iterators.countfrom
-@deprecate_binding take      Iterators.take
-@deprecate_binding drop      Iterators.drop
-@deprecate_binding cycle     Iterators.cycle
-@deprecate_binding repeated  Iterators.repeated
+@deprecate take(iter, n)        Iterators.take(iter, n)
+@deprecate drop(iter, n)        Iterators.drop(iter, n)
+@deprecate cycle(iter)          Iterators.cycle(iter)
+@deprecate rest(iter, state)    Iterators.rest(iter, state)
+@deprecate filter(flt, itr)     Iterators.filter(flt, itr)
+@deprecate repeated(x)          Iterators.repeated(x)
+@deprecate repeated(x, n)       Iterators.repeated(x, n)
+@deprecate countfrom()              Iterators.countfrom()
+@deprecate countfrom(start)         Iterators.countfrom(start)
+@deprecate countfrom(start, step)   Iterators.countfrom(start, step)
 
 # promote_op method where the operator is also a type
 function promote_op(op::Type, Ts::Type...)
