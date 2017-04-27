@@ -156,7 +156,8 @@ invmod(n::Integer, m::Integer) = invmod(promote(n,m)...)
 # ^ for any x supporting *
 to_power_type(x::Number) = oftype(x*x, x)
 to_power_type(x) = x
-function power_by_squaring(x_, p::Integer)
+@inline unchecked_mul(x, y) = (x * y, false)
+function power_by_squaring(x_, p::Integer, mul_with_overflow::T=unchecked_mul) where T
     x = to_power_type(x_)
     if p == 1
         return copy(x)
@@ -171,18 +172,23 @@ function power_by_squaring(x_, p::Integer)
     end
     t = trailing_zeros(p) + 1
     p >>= t
+    o = false
     while (t -= 1) > 0
-        x *= x
+        x, o′ = mul_with_overflow(x, x)
+        o |= o′
     end
     y = x
     while p > 0
         t = trailing_zeros(p) + 1
         p >>= t
         while (t -= 1) >= 0
-            x *= x
+            x, o′ = mul_with_overflow(x, x)
+            o |= o′
         end
-        y *= x
+        y, o′ = mul_with_overflow(y, x)
+        o |= o′
     end
+    o && throw(OverflowError)
     return y
 end
 power_by_squaring(x::Bool, p::Unsigned) = ((p==0) | x)
@@ -191,8 +197,9 @@ function power_by_squaring(x::Bool, p::Integer)
     return (p==0) | x
 end
 
-^{T<:Integer}(x::T, p::T) = power_by_squaring(x,p)
+^{T<:Integer}(x::T, p::T) = power_by_squaring(x,p,mul_with_overflow)
 ^(x::Number, p::Integer)  = power_by_squaring(x,p)
+^(x::Integer, p::Integer) = power_by_squaring(x,p,mul_with_overflow)
 ^(x, p::Integer)          = power_by_squaring(x,p)
 
 # x^p for any literal integer p is lowered to Base.literal_pow(^, x, Val{p})
