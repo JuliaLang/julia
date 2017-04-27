@@ -10,7 +10,7 @@ import Base: getindex, wait, put!, take!, fetch, isready, push!, length,
 using Base: Process, Semaphore, JLOptions, AnyDict, buffer_writes, wait_connected,
             VERSION_STRING, sync_begin, sync_add, sync_end, async_run_thunk,
             binding_module, notify_error, atexit, julia_exename, julia_cmd,
-            AsyncGenerator, display_error, acquire, release
+            AsyncGenerator, display_error, acquire, release, invokelatest
 
 # NOTE: clusterserialize.jl imports additional symbols from Base.Serializer for use
 
