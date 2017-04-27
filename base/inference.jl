@@ -145,7 +145,7 @@ mutable struct InferenceState
 
     inferred::Bool
 
-    undergoing_typeinf_work::Bool
+    dont_work_on_me::Bool
 
     # src is assumed to be a newly-allocated CodeInfo, that can be modified in-place to contain intermediate results
     function InferenceState(linfo::MethodInstance, src::CodeInfo,
@@ -270,8 +270,6 @@ mutable struct InferenceState
             Vector{InferenceState}(), # callers
             parent,
             false, false, optimize, cached, false, false)
-        push!(active, frame)
-        nactive[] += 1
         return frame
     end
 end
@@ -297,10 +295,7 @@ end
 
 #### current global inference state ####
 
-const active = Vector{Any}() # set of all InferenceState objects being processed
-const nactive = Array{Int,0}()
-nactive[] = 0
-const workq = Vector{InferenceState}() # set of InferenceState objects that can make immediate progress
+# None! There is none! :)
 
 #### helper functions ####
 
@@ -2317,13 +2312,9 @@ function code_for_method(method::Method, atypes::ANY, sparams::SimpleVector, wor
     return ccall(:jl_specializations_get_linfo, Ref{MethodInstance}, (Any, Any, Any, UInt), method, atypes, sparams, world)
 end
 
-function typeinf_active(linfo::MethodInstance)
-    for infstate in active
-        infstate === nothing && continue
-        infstate = infstate::InferenceState
-        if linfo === infstate.linfo
-            return infstate
-        end
+function typeinf_active(linfo::MethodInstance, sv::InferenceState)
+    for infstate in sv.callers
+        linfo === infstate.linfo && return infstate
     end
     return nothing
 end
@@ -2529,7 +2520,7 @@ end
 
 function typeinf_work(frame::InferenceState)
     @assert !frame.inferred
-    frame.undergoing_typeinf_work = true # mark that this function is currently on the stack
+    frame.dont_work_on_me = true # mark that this function is currently on the stack
     W = frame.ip
     s = frame.stmt_types
     n = frame.nstmts
@@ -2671,7 +2662,7 @@ function typeinf_work(frame::InferenceState)
             end
         end
     end
-    frame.undergoing_typeinf_work = false
+    frame.dont_work_on_me = false
 end
 
 function typeinf(frame::InferenceState)
@@ -2683,7 +2674,7 @@ function typeinf(frame::InferenceState)
     while !no_active_ips_in_callers
         no_active_ips_in_callers = true
         for caller in frame.callers
-            caller.undergoing_typeinf_work && return
+            caller.dont_work_on_me && return
             if caller.pc´´ <= caller.nstmts # equivalent to `isempty(caller.ip)`
                 # Note that `typeinf_work(caller)` can potentially modify the other frames
                 # `frame.callers`, which is why making incremental progress requires the
@@ -2695,13 +2686,18 @@ function typeinf(frame::InferenceState)
     end
 
     # with no active ip's, type inference on frame is done
-    @assert !frame.inferred # assert
 
     if isempty(frame.callers)
+        @assert !(frame.dont_work_on_me)
+        frame.dont_work_on_me = true
         optimize(frame)
         finish(frame)
         finalize_backedges(frame)
     else # frame is in frame.callers
+        for caller in frame.callers
+            @assert !(caller.dont_work_on_me)
+            caller.dont_work_on_me = true
+        end
         for caller in frame.callers
             optimize(caller)
         end
@@ -2762,16 +2758,6 @@ end
 # inference completed on `me`
 # now converge the optimization work
 function optimize(me::InferenceState)
-    for (i, _) in me.edges
-        i = i::InferenceState
-        @assert i.fixedpoint
-    end
-    # below may call back into inference and
-    # see this InferenceState is in an incomplete state
-    # set `inworkq` to prevent it from trying to look
-    # at the object in any detail
-    @assert me.inworkq
-
     # annotate fulltree with type information
     type_annotate!(me)
 
@@ -2915,19 +2901,8 @@ function finish(me::InferenceState)
         end
     end
 
-    # lazy-delete the item from active for several reasons:
-    # efficiency, correctness, and recursion-safety
-    nactive[] -= 1
-    active[findlast(active, me)] = nothing
-
     # update all of the callers by traversing the backedges
     for (i, _) in me.backedges
-        if !me.fixedpoint || !i.fixedpoint
-            # wake up each backedge, unless both me and it already reached a fixed-point (cycle resolution stage)
-            delete!(i.edges, me)
-            i.inworkq || push!(workq, i)
-            i.inworkq = true
-        end
         add_backedge!(me.linfo, i)
     end
 
@@ -3776,7 +3751,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
             inferred = linfo.inferred
         elseif linfo.inInference
             # use WIP
-            frame = typeinf_active(linfo)
+            frame = typeinf_active(linfo, sv)
         elseif force_infer
             # create inferred code on-demand
             # but if we decided in the past not to try to infer this particular signature
