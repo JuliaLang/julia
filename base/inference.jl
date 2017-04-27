@@ -145,6 +145,8 @@ mutable struct InferenceState
 
     inferred::Bool
 
+    undergoing_typeinf_work::Bool
+
     # src is assumed to be a newly-allocated CodeInfo, that can be modified in-place to contain intermediate results
     function InferenceState(linfo::MethodInstance, src::CodeInfo,
                             optimize::Bool, cached::Bool, params::InferenceParams,
@@ -267,7 +269,7 @@ mutable struct InferenceState
             Vector{Tuple{InferenceState,LineNum}}(), # backedges
             Vector{InferenceState}(), # callers
             parent,
-            false, false, optimize, cached, false)
+            false, false, optimize, cached, false, false)
         push!(active, frame)
         nactive[] += 1
         return frame
@@ -2527,6 +2529,7 @@ end
 
 function typeinf_work(frame::InferenceState)
     @assert !frame.inferred
+    frame.undergoing_typeinf_work = true # mark that this function is currently on the stack
     W = frame.ip
     s = frame.stmt_types
     n = frame.nstmts
@@ -2668,24 +2671,51 @@ function typeinf_work(frame::InferenceState)
             end
         end
     end
+    frame.undergoing_typeinf_work = false
 end
 
 function typeinf(frame::InferenceState)
-    while have_next_callee(frame)
-        typeinf_work(frame)
-    end
-    # with no active ip's, type inference on frame is done if there are no outstanding (unfinished) edges
-    #@assert isempty(W)
-    @assert !frame.inferred
-    finished = isempty(frame.edges)
 
-    if finished
+    typeinf_work(frame)
+
+    # If the current frame is part of a cycle, solve the cycle before finishing
+    no_active_ips_in_callers = false
+    while !no_active_ips_in_callers
+        no_active_ips_in_callers = true
+        for caller in frame.callers
+            caller.undergoing_typeinf_work && return
+            if caller.pc´´ <= caller.nstmts # equivalent to `isempty(caller.ip)`
+                # Note that `typeinf_work(caller)` can potentially modify the other frames
+                # `frame.callers`, which is why making incremental progress requires the
+                # outer while loop.
+                typeinf_work(caller)
+                no_active_ips_in_callers = false
+            end
+        end
+    end
+
+    # with no active ip's, type inference on frame is done
+    @assert !frame.inferred # assert
+
+    if isempty(frame.callers)
         optimize(frame)
         finish(frame)
         finalize_backedges(frame)
+    else # frame is in frame.callers
+        for caller in frame.callers
+            optimize(caller)
+        end
+        for caller in frame.callers
+            finish(caller)
+        end
+        for caller in frame.callers
+            finalize_backedges(caller)
+        end
     end
+
     nothing
 end
+
 
 function record_ssa_assign(ssa_id::Int, new::ANY, frame::InferenceState)
     old = frame.src.ssavaluetypes[ssa_id]
