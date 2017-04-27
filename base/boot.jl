@@ -264,7 +264,7 @@ UnionAll(v::TypeVar, t::ANY) = ccall(:jl_type_unionall, Any, (Any, Any), v, t)
 
 Void() = nothing
 
-Tuple{}() where {} = ()
+(::Type{Tuple{}})() = () # Tuple{}()
 
 struct VecElement{T}
     value::T
@@ -303,16 +303,16 @@ const NTuple{N,T} = Tuple{Vararg{T,N}}
 
 # primitive array constructors
 Array{T,N}(d::NTuple{N,Int}) where {T,N} =
-    ccall(:jl_new_array, Array{T,N}, (Any,Any), Array{T,N}, d)
+    ccall(:jl_new_array, Array{T,N}, (Any, Any), Array{T,N}, d)
 Array{T,1}(d::NTuple{1,Int}) where {T} = Array{T,1}(getfield(d,1))
 Array{T,2}(d::NTuple{2,Int}) where {T} = Array{T,2}(getfield(d,1), getfield(d,2))
 Array{T,3}(d::NTuple{3,Int}) where {T} = Array{T,3}(getfield(d,1), getfield(d,2), getfield(d,3))
-Array{T,N}(d::Vararg{Int,N}) where {T,N} = ccall(:jl_new_array, Array{T,N}, (Any,Any), Array{T,N}, d)
-Array{T,1}(m::Int) where {T} = ccall(:jl_alloc_array_1d, Array{T,1}, (Any,Int), Array{T,1}, m)
-Array{T,2}(m::Int, n::Int) where {T} = 
-    ccall(:jl_alloc_array_2d, Array{T,2}, (Any,Int,Int), Array{T,2}, m, n)
+Array{T,N}(d::Vararg{Int,N}) where {T,N} = ccall(:jl_new_array, Array{T,N}, (Any, Any), Array{T,N}, d)
+Array{T,1}(m::Int) where {T} = ccall(:jl_alloc_array_1d, Array{T,1}, (Any, Int), Array{T,1}, m)
+Array{T,2}(m::Int, n::Int) where {T} =
+    ccall(:jl_alloc_array_2d, Array{T,2}, (Any, Int, Int), Array{T,2}, m, n)
 Array{T,3}(m::Int, n::Int, o::Int) where {T} =
-    ccall(:jl_alloc_array_3d, Array{T,3}, (Any,Int,Int,Int), Array{T,3}, m, n, o)
+    ccall(:jl_alloc_array_3d, Array{T,3}, (Any, Int, Int, Int), Array{T,3}, m, n, o)
 
 Array{T}(d::NTuple{N,Int}) where {T,N} = Array{T,N}(d)
 Array{T}(m::Int) where {T} = Array{T,1}(m)
