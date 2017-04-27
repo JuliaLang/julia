@@ -2316,13 +2316,16 @@ function union_callers!(a::InferenceState, b::InferenceState)
     return nothing
 end
 
-function merge_call_chain!(child::InferenceState, ancestor::InferenceState)
-    intermediate = child
-    while intermediate !== ancestor
-        parent = intermediate.parent
-        add_backedge!(intermediate, parent, parent.currpc)
-        union_callers!(intermediate, parent)
-        intermediate = parent
+function merge_call_chain!(parent::InferenceState, ancestor::InferenceState, child::InferenceState)
+    # add backedge of parent <- child
+    # then add all backeges of parent <- parent.parent
+    # and merge all of the callers into ancestor.callers
+    while true
+        add_backedge!(child, parent, parent.currpc)
+        parent === ancestor && break
+        union_callers!(ancestor, parent)
+        child = parent
+        parent = child.parent
     end
     return nothing
 end
@@ -2331,17 +2334,16 @@ function resolve_call_cycle!(linfo::MethodInstance, parent::InferenceState)
     frame = parent
     while isa(frame, InferenceState)
         if frame.linfo === linfo
-            merge_call_chain!(parent, frame)
+            merge_call_chain!(parent, frame, frame)
             return frame
-        else
-            for caller in frame.callers
-                if caller.linfo === linfo
-                    merge_call_chain!(parent, caller)
-                    return caller
-                end
-            end
-            frame = frame.parent
         end
+        for caller in frame.callers
+            if caller.linfo === linfo
+                merge_call_chain!(parent, frame, caller)
+                return caller
+            end
+        end
+        frame = frame.parent
     end
     return nothing
 end
