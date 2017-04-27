@@ -969,8 +969,13 @@
                       (list* g (if isamp `(& ,ca) ca) C))))))))
 
 (define (expand-function-def e)   ;; handle function or stagedfunction
+  (define (just-arglist? ex)
+    (and (pair? ex)
+         (or (memq (car ex) '(tuple block))
+             (and (eq? (car ex) 'where)
+                  (just-arglist? (cadr ex))))))
   (let ((name (cadr e)))
-    (if (and (pair? name) (memq (car name) '(tuple block)))
+    (if (just-arglist? name)
         (expand-forms (cons '-> (cdr e)))
         (expand-function-def- e))))
 
