@@ -209,7 +209,7 @@ function task_done_hook(t::Task)
 
     if isa(t.donenotify, Condition) && !isempty(t.donenotify.waitq)
         handled = true
-        notify(t.donenotify, result, error=err)
+        notify(t.donenotify, result, true, err)
     end
 
     # Execute any other hooks registered in the TLS
