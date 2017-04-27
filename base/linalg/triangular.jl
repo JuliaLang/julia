@@ -207,7 +207,7 @@ function tril!(A::UpperTriangular, k::Integer=0)
 end
 triu!(A::UpperTriangular, k::Integer=0) = UpperTriangular(triu!(A.data,k))
 
-function tril!{T}(A::UnitUpperTriangular{T}, k::Integer=0)
+function tril!(A::UnitUpperTriangular{T}, k::Integer=0) where T
     n = size(A,1)
     if abs(k) > n
         throw(ArgumentError("requested diagonal, $k, out of bounds in matrix of size ($n,$n)"))

@@ -7,7 +7,7 @@ struct Schur{Ty,S<:AbstractMatrix} <: Factorization{Ty}
     values::Vector
     Schur{Ty,S}(T::AbstractMatrix{Ty}, Z::AbstractMatrix{Ty}, values::Vector) where {Ty,S} = new(T, Z, values)
 end
-Schur(T::AbstractMatrix{Ty}, Z::AbstractMatrix{Ty}, values::Vector) where Ty = Schur{Ty, typeof(T)}(T, Z, values)
+Schur(T::AbstractMatrix{Ty}, Z::AbstractMatrix{Ty}, values::Vector) where {Ty} = Schur{Ty, typeof(T)}(T, Z, values)
 
 """
     schurfact!(A::StridedMatrix) -> F::Schur

@@ -21,7 +21,7 @@ Remove the git tag `tag` from the repository `repo`.
 """
 function tag_delete(repo::GitRepo, tag::AbstractString)
     @check ccall((:git_tag_delete, :libgit2), Cint,
-                  (Ptr{Void}, Cstring, ), repo.ptr, tag)
+                  (Ptr{Void}, Cstring), repo.ptr, tag)
 end
 
 """
@@ -57,7 +57,7 @@ end
 The name of `tag` (e.g. `"v0.5"`).
 """
 function name(tag::GitTag)
-    str_ptr = ccall((:git_tag_name, :libgit2), Cstring, (Ptr{Void}, ), tag.ptr)
+    str_ptr = ccall((:git_tag_name, :libgit2), Cstring, (Ptr{Void},), tag.ptr)
     str_ptr == C_NULL && throw(Error.GitError(Error.ERROR))
     return unsafe_string(str_ptr)
 end
@@ -69,7 +69,7 @@ end
 The `GitHash` of the target object of `tag`.
 """
 function target(tag::GitTag)
-    oid_ptr = ccall((:git_tag_target_id, :libgit2), Ptr{GitHash}, (Ptr{Void}, ), tag.ptr)
+    oid_ptr = ccall((:git_tag_target_id, :libgit2), Ptr{GitHash}, (Ptr{Void},), tag.ptr)
     oid_ptr == C_NULL && throw(Error.GitError(Error.ERROR))
     return unsafe_load(oid_ptr)
 end

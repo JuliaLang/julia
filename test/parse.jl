@@ -1018,6 +1018,19 @@ end
 short_where_call = :(f(x::T) where T = T)
 @test short_where_call.args[2].head == :block
 
+# `where` with multi-line anonymous functions
+let f = function (x::T) where T
+            T
+        end
+    @test f(:x) === Symbol
+end
+
+let f = function (x::T, y::S) where T<:S where S
+            (T,S)
+        end
+    @test f(0,1) === (Int,Int)
+end
+
 # issue #20541
 @test parse("[a .!b]") == Expr(:hcat, :a, Expr(:call, :(.!), :b))
 
@@ -1107,3 +1120,18 @@ end
 # issue #21440
 @test parse("+(x::T,y::T) where {T} = 0") == parse("(+)(x::T,y::T) where {T} = 0")
 @test parse("a::b::c") == Expr(:(::), Expr(:(::), :a, :b), :c)
+
+# issue #21545
+f21545(::Type{<: AbstractArray{T,N} where N}) where T = T
+@test f21545(Array{Int8}) === Int8
+@test parse("<:{T} where T") == Expr(:where, Expr(:curly, :(<:), :T), :T)
+@test parse("<:(T) where T") == Expr(:where, Expr(:(<:), :T), :T)
+@test parse("<:{T}(T) where T") == Expr(:where, Expr(:call, Expr(:curly, :(<:), :T), :T), :T)
+
+# issue #21586
+macro m21586(x)
+    Expr(:kw, esc(x), 42)
+end
+
+f21586(; @m21586(a), @m21586(b)) = a + b
+@test f21586(a=10) == 52

@@ -322,6 +322,10 @@ Library improvements
   * `logging` can now be used to redirect `info`, `warn`, and `error` messages
     either universally or on a per-module/function basis ([#16213]).
 
+  * New function `Base.invokelatest(f, args...)` to call the latest version
+    of a function in circumstances where an older version may be called
+    instead (e.g. in a function calling `eval`) ([#19784]).
+
   * A new `iszero(x)` function was added, to quickly check whether `x` is zero
     (or is all zeros, for an array) ([#19950]).
 

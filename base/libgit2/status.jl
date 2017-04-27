@@ -19,7 +19,7 @@ end
 
 function Base.length(status::GitStatus)
     return Int(ccall((:git_status_list_entrycount, :libgit2), Csize_t,
-                      (Ptr{Ptr{Void}}, ), status.ptr))
+                      (Ptr{Ptr{Void}},), status.ptr))
 end
 
 function Base.getindex(status::GitStatus, i::Integer)

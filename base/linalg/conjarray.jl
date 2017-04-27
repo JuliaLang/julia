@@ -21,42 +21,42 @@ julia> ConjArray([1+im 0; 0 1-im])
  0+0im  1+1im
 ```
 """
-struct ConjArray{T, N, A <: AbstractArray} <: AbstractArray{T, N}
+struct ConjArray{T,N,A<:AbstractArray} <: AbstractArray{T,N}
     parent::A
 end
 
-@inline ConjArray{T,N}(a::AbstractArray{T,N}) = ConjArray{conj_type(T), N, typeof(a)}(a)
+@inline ConjArray(a::AbstractArray{T,N}) where {T,N} = ConjArray{conj_type(T),N,typeof(a)}(a)
 
-ConjVector{T, V <: AbstractVector} = ConjArray{T, 1, V}
-@inline ConjVector{T}(v::AbstractVector{T}) = ConjArray{conj_type(T), 1, typeof(v)}(v)
+const ConjVector{T,V<:AbstractVector} = ConjArray{T,1,V}
+@inline ConjVector(v::AbstractVector{T}) where {T} = ConjArray{conj_type(T),1,typeof(v)}(v)
 
-ConjMatrix{T, M <: AbstractMatrix} = ConjArray{T, 2, M}
-@inline ConjMatrix{T}(m::AbstractMatrix{T}) = ConjArray{conj_type(T), 2, typeof(m)}(m)
+const ConjMatrix{T,M<:AbstractMatrix} = ConjArray{T,2,M}
+@inline ConjMatrix(m::AbstractMatrix{T}) where {T} = ConjArray{conj_type(T),2,typeof(m)}(m)
 
 # This type can cause the element type to change under conjugation - e.g. an array of complex arrays.
 @inline conj_type(x) = conj_type(typeof(x))
-@inline conj_type{T}(::Type{T}) = promote_op(conj, T)
+@inline conj_type(::Type{T}) where {T} = promote_op(conj, T)
 
 @inline parent(c::ConjArray) = c.parent
 @inline parent_type(c::ConjArray) = parent_type(typeof(c))
-@inline parent_type{T,N,A}(::Type{ConjArray{T,N,A}}) = A
+@inline parent_type(::Type{ConjArray{T,N,A}}) where {T,N,A} = A
 
 @inline size(a::ConjArray) = size(a.parent)
-IndexStyle{CA <: ConjArray}(::CA) = IndexStyle(parent_type(CA))
-IndexStyle{CA <: ConjArray}(::Type{CA}) = IndexStyle(parent_type(CA))
+IndexStyle(::CA) where {CA<:ConjArray} = IndexStyle(parent_type(CA))
+IndexStyle(::Type{CA}) where {CA<:ConjArray} = IndexStyle(parent_type(CA))
 
-@propagate_inbounds getindex{T,N}(a::ConjArray{T,N}, i::Int) = conj(getindex(a.parent, i))
-@propagate_inbounds getindex{T,N}(a::ConjArray{T,N}, i::Vararg{Int,N}) = conj(getindex(a.parent, i...))
-@propagate_inbounds setindex!{T,N}(a::ConjArray{T,N}, v, i::Int) = setindex!(a.parent, conj(v), i)
-@propagate_inbounds setindex!{T,N}(a::ConjArray{T,N}, v, i::Vararg{Int,N}) = setindex!(a.parent, conj(v), i...)
+@propagate_inbounds getindex(a::ConjArray{T,N}, i::Int) where {T,N} = conj(getindex(a.parent, i))
+@propagate_inbounds getindex(a::ConjArray{T,N}, i::Vararg{Int,N}) where {T,N} = conj(getindex(a.parent, i...))
+@propagate_inbounds setindex!(a::ConjArray{T,N}, v, i::Int) where {T,N} = setindex!(a.parent, conj(v), i)
+@propagate_inbounds setindex!(a::ConjArray{T,N}, v, i::Vararg{Int,N}) where {T,N} = setindex!(a.parent, conj(v), i...)
 
-@inline similar{T,N}(a::ConjArray, ::Type{T}, dims::Dims{N}) = similar(parent(a), T, dims)
+@inline similar(a::ConjArray, ::Type{T}, dims::Dims{N}) where {T,N} = similar(parent(a), T, dims)
 
 # Currently, this is default behavior for RowVector only
 @inline conj(a::ConjArray) = parent(a)
 
 # Helper functions, currently used by RowVector
 @inline _conj(a::AbstractArray) = ConjArray(a)
-@inline _conj{T<:Real}(a::AbstractArray{T}) = a
+@inline _conj(a::AbstractArray{T}) where {T<:Real} = a
 @inline _conj(a::ConjArray) = parent(a)
-@inline _conj{T<:Real}(a::ConjArray{T}) = parent(a)
+@inline _conj(a::ConjArray{T}) where {T<:Real} = parent(a)

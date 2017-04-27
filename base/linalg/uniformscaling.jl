@@ -191,15 +191,15 @@ end
 # in A to matrices of type T and sizes given by n[k:end].  n is an array
 # so that the same promotion code can be used for hvcat.  We pass the type T
 # so that we can re-use this code for sparse-matrix hcat etcetera.
-promote_to_arrays_{T}(n::Int, ::Type{Matrix}, J::UniformScaling{T}) = copy!(Matrix{T}(n,n), J)
+promote_to_arrays_(n::Int, ::Type{Matrix}, J::UniformScaling{T}) where {T} = copy!(Matrix{T}(n,n), J)
 promote_to_arrays_(n::Int, ::Type, A::AbstractVecOrMat) = A
 promote_to_arrays(n,k, ::Type) = ()
-promote_to_arrays{T}(n,k, ::Type{T}, A) = (promote_to_arrays_(n[k], T, A),)
-promote_to_arrays{T}(n,k, ::Type{T}, A, B) =
+promote_to_arrays(n,k, ::Type{T}, A) where {T} = (promote_to_arrays_(n[k], T, A),)
+promote_to_arrays(n,k, ::Type{T}, A, B) where {T} =
     (promote_to_arrays_(n[k], T, A), promote_to_arrays_(n[k+1], T, B))
-promote_to_arrays{T}(n,k, ::Type{T}, A, B, C) =
+promote_to_arrays(n,k, ::Type{T}, A, B, C) where {T} =
     (promote_to_arrays_(n[k], T, A), promote_to_arrays_(n[k+1], T, B), promote_to_arrays_(n[k+2], T, C))
-promote_to_arrays{T}(n,k, ::Type{T}, A, B, Cs...) =
+promote_to_arrays(n,k, ::Type{T}, A, B, Cs...) where {T} =
     (promote_to_arrays_(n[k], T, A), promote_to_arrays_(n[k+1], T, B), promote_to_arrays(n,k+2, T, Cs...)...)
 promote_to_array_type(A::Tuple{Vararg{Union{AbstractVecOrMat,UniformScaling}}}) = (@_pure_meta; Matrix)
 

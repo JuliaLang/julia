@@ -685,6 +685,46 @@ mktempdir() do dir
             # ff merge them
             @test LibGit2.merge!(repo, [upst_ann], true)
             @test LibGit2.is_ancestor_of(string(oldhead), string(LibGit2.head_oid(repo)), repo)
+
+            oldhead = LibGit2.head_oid(repo)
+            LibGit2.branch!(repo, "branch/ff_b")
+            open(joinpath(LibGit2.path(repo),"ff_file3"),"w") do f
+                write(f, "333\n")
+            end
+            LibGit2.add!(repo, "ff_file3")
+            LibGit2.commit(repo, "add ff_file3")
+
+            open(joinpath(LibGit2.path(repo),"ff_file4"),"w") do f
+                write(f, "444\n")
+            end
+            LibGit2.add!(repo, "ff_file4")
+            LibGit2.commit(repo, "add ff_file4")
+            branchhead = LibGit2.head_oid(repo)
+            LibGit2.branch!(repo, "master")
+            # switch back, now try to ff-merge the changes
+            # from branch/a using committish
+            @test LibGit2.merge!(repo, committish=string(branchhead))
+            @test LibGit2.is_ancestor_of(string(oldhead), string(LibGit2.head_oid(repo)), repo)
+
+            oldhead = LibGit2.head_oid(repo)
+            LibGit2.branch!(repo, "branch/ff_c")
+            open(joinpath(LibGit2.path(repo),"ff_file5"),"w") do f
+                write(f, "555\n")
+            end
+            LibGit2.add!(repo, "ff_file5")
+            LibGit2.commit(repo, "add ff_file5")
+
+            open(joinpath(LibGit2.path(repo),"ff_file6"),"w") do f
+                write(f, "666\n")
+            end
+            LibGit2.add!(repo, "ff_file6")
+            LibGit2.commit(repo, "add ff_file6")
+            branchhead = LibGit2.head_oid(repo)
+            LibGit2.branch!(repo, "master")
+            # switch back, now try to ff-merge the changes
+            # from branch/ff_c using branch name
+            @test LibGit2.merge!(repo, branch="refs/heads/branch/ff_c")
+            @test LibGit2.is_ancestor_of(string(oldhead), string(LibGit2.head_oid(repo)), repo)
         finally
             close(repo)
         end
@@ -729,9 +769,9 @@ mktempdir() do dir
             head_ann = LibGit2.GitAnnotated(repo, "master")
 
             # (fail to) merge them because we can't fastforward
-            @test !LibGit2.merge!(repo, [upst_ann], true)
+            @test_warn "WARNING: Cannot perform fast-forward merge." !LibGit2.merge!(repo, [upst_ann], true)
             # merge them now that we allow non-ff
-            @test LibGit2.merge!(repo, [upst_ann], false)
+            @test_warn "INFO: Review and commit merged changes." LibGit2.merge!(repo, [upst_ann], false)
             @test LibGit2.is_ancestor_of(string(oldhead), string(LibGit2.head_oid(repo)), repo)
 
             # go back to merge_a and rename a file
@@ -744,7 +784,7 @@ mktempdir() do dir
             rename_flag = 0
             rename_flag = LibGit2.toggle(rename_flag, 0) # turns on the find renames opt
             mos = LibGit2.MergeOptions(flags=rename_flag)
-            @test LibGit2.merge!(repo, [upst_ann], merge_opts=mos)
+            @test_warn "INFO: Review and commit merged changes." LibGit2.merge!(repo, [upst_ann], merge_opts=mos)
         finally
             close(repo)
         end
@@ -779,6 +819,10 @@ mktempdir() do dir
             LibGit2.set!(cfg, "user.name", "AAAA")
             LibGit2.set!(cfg, "user.email", "BBBB@BBBB.COM")
 
+            # If upstream argument is empty, libgit2 will look for tracking
+            # information. If the current branch isn't tracking any upstream
+            # the rebase should fail.
+            @test_throws LibGit2.GitError LibGit2.rebase!(repo)
             # Try rebasing on master instead
             newhead = LibGit2.rebase!(repo, master_branch)
             @test newhead == head_oid
@@ -1053,7 +1097,7 @@ mktempdir() do dir
             LibGit2.commit(repo, "add merge_file1")
             LibGit2.branch!(repo, "master")
             a_head_ann = LibGit2.GitAnnotated(repo, "branch/merge_a")
-            @test LibGit2.merge!(repo, [a_head_ann]) #merge returns true if successful
+            @test_warn "INFO: Review and commit merged changes." LibGit2.merge!(repo, [a_head_ann]) #merge returns true if successful
         finally
             close(repo)
         end

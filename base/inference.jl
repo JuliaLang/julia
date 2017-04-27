@@ -297,7 +297,7 @@ end
 #### current global inference state ####
 
 const active = Vector{Any}() # set of all InferenceState objects being processed
-const nactive = Array{Int}(())
+const nactive = Array{Int,0}()
 nactive[] = 0
 const workq = Vector{InferenceState}() # set of InferenceState objects that can make immediate progress
 
@@ -5075,6 +5075,7 @@ function meta_elim_pass!(code::Array{Any,1}, propagate_inbounds::Bool, do_covera
                 code[push_loc] = nothing
                 code[i] = nothing
             else
+                prev_dbg_stack[end] = 0
                 push_loc_pos_stack[end] = 0
             end
         else

@@ -217,7 +217,7 @@ let (a, b, c) = (1:2, 1.0:10.0, Int32(1):Int32(0))
     @test length(product(a, b, c)) == 0
 
     # size
-    @test size(product(a))         == (2, )
+    @test size(product(a))         == (2,)
     @test size(product(a, b))      == (2, 10)
     @test size(product(a, b, c))   == (2, 10, 0)
 

@@ -197,7 +197,7 @@ for itype in UmfpackIndexTypes
     @eval begin
         function umfpack_symbolic!(U::UmfpackLU{Float64,$itype})
             if U.symbolic != C_NULL return U end
-            tmp = Array{Ptr{Void}}(1)
+            tmp = Vector{Ptr{Void}}(1)
             @isok ccall(($sym_r, :libumfpack), $itype,
                         ($itype, $itype, Ptr{$itype}, Ptr{$itype}, Ptr{Float64}, Ptr{Void},
                          Ptr{Float64}, Ptr{Float64}),
@@ -208,7 +208,7 @@ for itype in UmfpackIndexTypes
         end
         function umfpack_symbolic!(U::UmfpackLU{Complex128,$itype})
             if U.symbolic != C_NULL return U end
-            tmp = Array{Ptr{Void}}(1)
+            tmp = Vector{Ptr{Void}}(1)
             @isok ccall(($sym_c, :libumfpack), $itype,
                         ($itype, $itype, Ptr{$itype}, Ptr{$itype}, Ptr{Float64}, Ptr{Float64}, Ptr{Void},
                          Ptr{Float64}, Ptr{Float64}),
@@ -220,7 +220,7 @@ for itype in UmfpackIndexTypes
         function umfpack_numeric!(U::UmfpackLU{Float64,$itype})
             if U.numeric != C_NULL return U end
             if U.symbolic == C_NULL umfpack_symbolic!(U) end
-            tmp = Array{Ptr{Void}}(1)
+            tmp = Vector{Ptr{Void}}(1)
             status = ccall(($num_r, :libumfpack), $itype,
                            (Ptr{$itype}, Ptr{$itype}, Ptr{Float64}, Ptr{Void}, Ptr{Void},
                             Ptr{Float64}, Ptr{Float64}),
@@ -235,7 +235,7 @@ for itype in UmfpackIndexTypes
         function umfpack_numeric!(U::UmfpackLU{Complex128,$itype})
             if U.numeric != C_NULL return U end
             if U.symbolic == C_NULL umfpack_symbolic!(U) end
-            tmp = Array{Ptr{Void}}(1)
+            tmp = Vector{Ptr{Void}}(1)
             status = ccall(($num_c, :libumfpack), $itype,
                            (Ptr{$itype}, Ptr{$itype}, Ptr{Float64}, Ptr{Float64}, Ptr{Void}, Ptr{Void},
                             Ptr{Float64}, Ptr{Float64}),

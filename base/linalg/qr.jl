@@ -1,14 +1,90 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # QR and Hessenberg Factorizations
+"""
+    QR <: Factorization
 
+A QR matrix factorization stored in a packed format, typically obtained from
+[`qrfact`](@ref). If ``A`` is an `m`×`n` matrix, then
+
+```math
+A = Q R
+```
+
+where ``Q`` is an orthogonal/unitary matrix and ``R`` is upper triangular.
+The matrix ``Q`` is stored as a sequence of Householder reflectors ``v_i``
+and coefficients ``\\tau_i`` where:
+
+```math
+Q = \\prod_{i=1}^{\\min(m,n)} (I - \\tau_i v_i v_i^T).
+```
+
+The object has two fields:
+
+* `factors` is an `m`×`n` matrix.
+
+  - The upper triangular part contains the elements of ``R``, that is `R =
+    triu(F.factors)` for a `QR` object `F`.
+
+  - The subdiagonal part contains the reflectors ``v_i`` stored in a packed format where
+    ``v_i`` is the ``i``th column of the matrix `V = eye(m,n) + tril(F.factors,-1)`.
+
+* `τ` is a vector  of length `min(m,n)` containing the coefficients ``\tau_i``.
+
+"""
 struct QR{T,S<:AbstractMatrix} <: Factorization{T}
     factors::S
     τ::Vector{T}
     QR{T,S}(factors::AbstractMatrix{T}, τ::Vector{T}) where {T,S<:AbstractMatrix} = new(factors, τ)
 end
 QR(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = QR{T,typeof(factors)}(factors, τ)
+
 # Note. For QRCompactWY factorization without pivoting, the WY representation based method introduced in LAPACK 3.4
+"""
+    QRCompactWY <: Factorization
+
+A QR matrix factorization stored in a compact blocked format, typically obtained from
+[`qrfact`](@ref). If ``A`` is an `m`×`n` matrix, then
+
+```math
+A = Q R
+```
+
+where ``Q`` is an orthogonal/unitary matrix and ``R`` is upper triangular. It is similar
+to the [`QR`](@ref) format except that the orthogonal/unitary matrix ``Q`` is stored in
+*Compact WY* format [^Schreiber1989], as a lower trapezoidal matrix ``V`` and an upper
+triangular matrix ``T`` where
+
+```math
+Q = \\prod_{i=1}^{\\min(m,n)} (I - \\tau_i v_i v_i^T) = I - V T V^T
+```
+
+such that ``v_i`` is the ``i``th column of ``V``, and ``\tau_i`` is the ``i``th diagonal
+element of ``T``.
+
+The object has two fields:
+
+* `factors`, as in the [`QR`](@ref) type, is an `m`×`n` matrix.
+
+  - The upper triangular part contains the elements of ``R``, that is `R =
+    triu(F.factors)` for a `QR` object `F`.
+
+  - The subdiagonal part contains the reflectors ``v_i`` stored in a packed format such
+    that `V = eye(m,n) + tril(F.factors,-1)`.
+
+* `T` is a square matrix with `min(m,n)` columns, whose upper triangular part gives the
+  matrix ``T`` above (the subdiagonal elements are ignored).
+
+!!! note
+
+    This format should not to be confused with the older *WY* representation
+    [^Bischof1987].
+
+
+[^Bischof1987]: C Bischof and C Van Loan, "The WY representation for products of Householder matrices", SIAM J Sci Stat Comput 8 (1987), s2-s13. [doi:10.1137/0908009](http://dx.doi.org/10.1137/0908009)
+
+[^Schreiber1989]: R Schreiber and C Van Loan, "A storage-efficient WY representation for products of Householder transformations", SIAM J Sci Stat Comput 10 (1989), 53-57. [doi:10.1137/0910005](http://dx.doi.org/10.1137/0910005)
+"""
 struct QRCompactWY{S,M<:AbstractMatrix} <: Factorization{S}
     factors::M
     T::Matrix{S}
@@ -16,6 +92,37 @@ struct QRCompactWY{S,M<:AbstractMatrix} <: Factorization{S}
 end
 QRCompactWY(factors::AbstractMatrix{S}, T::AbstractMatrix{S}) where {S} = QRCompactWY{S,typeof(factors)}(factors, T)
 
+"""
+    QRPivoted <: Factorization
+
+A QR matrix factorization with column pivoting in a packed format, typically obtained from
+[`qrfact`](@ref). If ``A`` is an `m`×`n` matrix, then
+
+```math
+A P = Q R
+```
+
+where ``P`` is a permutation matrix, ``Q`` is an orthogonal/unitary matrix and ``R`` is
+upper triangular. The matrix ``Q`` is stored as a sequence of Householder reflectors:
+
+```math
+Q = \\prod_{i=1}^{\\min(m,n)} (I - \\tau_i v_i v_i^T).
+```
+
+The object has three fields:
+
+* `factors` is an `m`×`n` matrix.
+
+  - The upper triangular part contains the elements of ``R``, that is `R =
+    triu(F.factors)` for a `QR` object `F`.
+
+  - The subdiagonal part contains the reflectors ``v_i`` stored in a packed format where
+    ``v_i`` is the ``i``th column of the matrix `V = eye(m,n) + tril(F.factors,-1)`.
+
+* `τ` is a vector of length `min(m,n)` containing the coefficients ``\tau_i``.
+
+* `jpvt` is an integer vector of length `n` corresponding to the permutation ``P``.
+"""
 struct QRPivoted{T,S<:AbstractMatrix} <: Factorization{T}
     factors::S
     τ::Vector{T}
@@ -26,7 +133,7 @@ end
 QRPivoted(factors::AbstractMatrix{T}, τ::Vector{T}, jpvt::Vector{BlasInt}) where {T} =
     QRPivoted{T,typeof(factors)}(factors, τ, jpvt)
 
-function qrfactUnblocked!{T}(A::AbstractMatrix{T})
+function qrfactUnblocked!(A::AbstractMatrix{T}) where {T}
     m, n = size(A)
     τ = zeros(T, min(m,n))
     for k = 1:min(m - 1 + !(T<:Real), n)
@@ -55,7 +162,7 @@ end
 function qrfactPivotedUnblocked!(A::StridedMatrix)
     m, n = size(A)
     piv = collect(UnitRange{BlasInt}(1,n))
-    τ = Array{eltype(A)}(min(m,n))
+    τ = Vector{eltype(A)}(min(m,n))
     for j = 1:min(m,n)
 
         # Find column with maximum norm in trailing submatrix
@@ -108,25 +215,28 @@ qrfact!(A::StridedMatrix) = qrfact!(A, Val{false})
 """
     qrfact(A, pivot=Val{false}) -> F
 
-Computes the QR factorization of `A`. The return type of `F` depends on the element type of
-`A` and whether pivoting is specified (with `pivot==Val{true}`).
+Compute the QR factorization of the matrix `A`: an orthogonal (or unitary if `A` is
+complex-valued) matrix `Q`, and an upper triangular matrix `R` such that
 
-| Return type   | `eltype(A)`     | `pivot`      | Relationship between `F` and `A` |
-|:--------------|:----------------|:-------------|:---------------------------------|
-| `QR`          | not `BlasFloat` | either       | `A==F[:Q]*F[:R]`                 |
-| `QRCompactWY` | `BlasFloat`     | `Val{false}` | `A==F[:Q]*F[:R]`                 |
-| `QRPivoted`   | `BlasFloat`     | `Val{true}`  | `A[:,F[:p]]==F[:Q]*F[:R]`        |
+```math
+A = Q R
+```
 
-`BlasFloat` refers to any of: `Float32`, `Float64`, `Complex64` or `Complex128`.
+The returned object `F` stores the factorization in a packed format:
 
-The individual components of the factorization `F` can be accessed by indexing:
+ - if `pivot == Val{true}` then `F` is a [`QRPivoted`](@ref) object,
 
-| Component | Description                               | `QR`            | `QRCompactWY`      | `QRPivoted`     |
-|:----------|:------------------------------------------|:----------------|:-------------------|:----------------|
-| `F[:Q]`   | `Q` (orthogonal/unitary) part of `QR`     | ✓ (`QRPackedQ`) | ✓ (`QRCompactWYQ`) | ✓ (`QRPackedQ`) |
-| `F[:R]`   | `R` (upper right triangular) part of `QR` | ✓               | ✓                  | ✓               |
-| `F[:p]`   | pivot `Vector`                            |                 |                    | ✓               |
-| `F[:P]`   | (pivot) permutation `Matrix`              |                 |                    | ✓               |
+ - otherwise if the element type of `A` is a BLAS type (`Float32`, `Float64`, `Complex64`
+   or `Complex128`), then `F` is a [`QRCompactWY`](@ref) object,
+
+ - otherwise `F` is a [`QR`](@ref) object.
+
+The individual components of the factorization `F` can be accessed by indexing with a symbol:
+
+ - `F[:Q]`: the orthogonal/unitary matrix `Q`
+ - `F[:R]`: the upper triangular matrix `R`
+ - `F[:p]`: the permutation vector of the pivot ([`QRPivoted`](@ref) only)
+ - `F[:P]`: the permutation matrix of the pivot ([`QRPivoted`](@ref) only)
 
 The following functions are available for the `QR` objects: [`size`](@ref)
 and [`\\`](@ref). When `A` is rectangular, `\\` will return a least squares
@@ -159,40 +269,13 @@ true
     that minimize the memory storage requirements of products of Householder
     elementary reflectors, so that the `Q` and `R` matrices can be stored
     compactly rather as two separate dense matrices.
-
-    The data contained in `QR` or `QRPivoted` can be used to construct the
-    `QRPackedQ` type, which is a compact representation of the rotation matrix:
-
-    ```math
-    Q = \\prod_{i=1}^{\\min(m,n)} (I - \\tau_i v_i v_i^T)
-    ```
-
-    where ``\\tau_i`` is the scale factor and ``v_i`` is the projection vector
-    associated with the ``i^{th}`` Householder elementary reflector.
-
-    The data contained in `QRCompactWY` can be used to construct the
-    `QRCompactWYQ` type, which is a compact representation of the rotation
-    matrix
-
-    ```math
-    Q = I + Y T Y^T
-    ```
-
-    where `Y` is ``m \\times r`` lower trapezoidal and `T` is ``r \\times r``
-    upper triangular. The *compact WY* representation [^Schreiber1989] is not
-    to be confused with the older, *WY* representation [^Bischof1987]. (The
-    LAPACK documentation uses `V` in lieu of `Y`.)
-
-    [^Bischof1987]: C Bischof and C Van Loan, "The WY representation for products of Householder matrices", SIAM J Sci Stat Comput 8 (1987), s2-s13. [doi:10.1137/0908009](http://dx.doi.org/10.1137/0908009)
-
-    [^Schreiber1989]: R Schreiber and C Van Loan, "A storage-efficient WY representation for products of Householder transformations", SIAM J Sci Stat Comput 10 (1989), 53-57. [doi:10.1137/0910005](http://dx.doi.org/10.1137/0910005)
 """
-function qrfact{T}(A::AbstractMatrix{T}, arg)
+function qrfact(A::AbstractMatrix{T}, arg) where T
     AA = similar(A, typeof(zero(T)/norm(one(T))), size(A))
     copy!(AA, A)
     return qrfact!(AA, arg)
 end
-function qrfact{T}(A::AbstractMatrix{T})
+function qrfact(A::AbstractMatrix{T}) where T
     AA = similar(A, typeof(zero(T)/norm(one(T))), size(A))
     copy!(AA, A)
     return qrfact!(AA)
@@ -343,6 +426,12 @@ end
 getq(A::QRCompactWY) = QRCompactWYQ(A.factors,A.T)
 getq(A::Union{QR, QRPivoted}) = QRPackedQ(A.factors,A.τ)
 
+"""
+    QRPackedQ <: AbstractMatrix
+
+The orthogonal/unitary ``Q`` matrix of a QR factorization stored in [`QR`](@ref) or
+[`QRPivoted`](@ref) format.
+"""
 struct QRPackedQ{T,S<:AbstractMatrix} <: AbstractMatrix{T}
     factors::S
     τ::Vector{T}
@@ -350,6 +439,12 @@ struct QRPackedQ{T,S<:AbstractMatrix} <: AbstractMatrix{T}
 end
 QRPackedQ(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = QRPackedQ{T,typeof(factors)}(factors, τ)
 
+"""
+    QRCompactWYQ <: AbstractMatrix
+
+The orthogonal/unitary ``Q`` matrix of a QR factorization stored in [`QRCompactWY`](@ref)
+format.
+"""
 struct QRCompactWYQ{S, M<:AbstractMatrix} <: AbstractMatrix{S}
     factors::M
     T::Matrix{S}
@@ -591,11 +686,11 @@ for (f1, f2) in ((:Ac_mul_B, :A_mul_B!),
     end
 end
 
-A_ldiv_B!{T<:BlasFloat}(A::QRCompactWY{T}, b::StridedVector{T}) = (A_ldiv_B!(UpperTriangular(A[:R]), view(Ac_mul_B!(A[:Q], b), 1:size(A, 2))); b)
-A_ldiv_B!{T<:BlasFloat}(A::QRCompactWY{T}, B::StridedMatrix{T}) = (A_ldiv_B!(UpperTriangular(A[:R]), view(Ac_mul_B!(A[:Q], B), 1:size(A, 2), 1:size(B, 2))); B)
+A_ldiv_B!(A::QRCompactWY{T}, b::StridedVector{T}) where {T<:BlasFloat} = (A_ldiv_B!(UpperTriangular(A[:R]), view(Ac_mul_B!(A[:Q], b), 1:size(A, 2))); b)
+A_ldiv_B!(A::QRCompactWY{T}, B::StridedMatrix{T}) where {T<:BlasFloat} = (A_ldiv_B!(UpperTriangular(A[:R]), view(Ac_mul_B!(A[:Q], B), 1:size(A, 2), 1:size(B, 2))); B)
 
 # Julia implementation similarly to xgelsy
-function A_ldiv_B!{T<:BlasFloat}(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Real)
+function A_ldiv_B!(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Real) where T<:BlasFloat
     mA, nA = size(A.factors)
     nr = min(mA,nA)
     nrhs = size(B, 2)
@@ -625,9 +720,9 @@ function A_ldiv_B!{T<:BlasFloat}(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Re
     B[1:nA,:] = view(B, 1:nA, :)[invperm(A[:p]::Vector{BlasInt}),:]
     return B, rnk
 end
-A_ldiv_B!{T<:BlasFloat}(A::QRPivoted{T}, B::StridedVector{T}) = vec(A_ldiv_B!(A,reshape(B,length(B),1)))
-A_ldiv_B!{T<:BlasFloat}(A::QRPivoted{T}, B::StridedVecOrMat{T}) = A_ldiv_B!(A, B, maximum(size(A))*eps(real(float(one(eltype(B))))))[1]
-function A_ldiv_B!{T}(A::QR{T}, B::StridedMatrix{T})
+A_ldiv_B!(A::QRPivoted{T}, B::StridedVector{T}) where {T<:BlasFloat} = vec(A_ldiv_B!(A,reshape(B,length(B),1)))
+A_ldiv_B!(A::QRPivoted{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} = A_ldiv_B!(A, B, maximum(size(A))*eps(real(float(one(eltype(B))))))[1]
+function A_ldiv_B!(A::QR{T}, B::StridedMatrix{T}) where T
     m, n = size(A)
     minmn = min(m,n)
     mB, nB = size(B)
@@ -710,7 +805,7 @@ function _append_zeros(B::AbstractMatrix, T::Type, n)
     end
 end
 
-function (\){TA,TB}(A::Union{QR{TA},QRCompactWY{TA},QRPivoted{TA}}, B::AbstractVecOrMat{TB})
+function (\)(A::Union{QR{TA},QRCompactWY{TA},QRPivoted{TA}}, B::AbstractVecOrMat{TB}) where {TA,TB}
     S = promote_type(TA,TB)
     m, n = size(A)
     m == size(B,1) || throw(DimensionMismatch("left hand side has $m rows, but right hand side has $(size(B,1)) rows"))
@@ -729,7 +824,7 @@ end
 _ret_size(A::Factorization, b::AbstractVector) = (max(size(A, 2), length(b)),)
 _ret_size(A::Factorization, B::AbstractMatrix) = (max(size(A, 2), size(B, 1)), size(B, 2))
 
-function (\){T<:BlasReal}(A::Union{QR{T},QRCompactWY{T},QRPivoted{T}}, BIn::VecOrMat{Complex{T}})
+function (\)(A::Union{QR{T},QRCompactWY{T},QRPivoted{T}}, BIn::VecOrMat{Complex{T}}) where T<:BlasReal
     m, n = size(A)
     m == size(BIn, 1) || throw(DimensionMismatch("left hand side has $m rows, but right hand side has $(size(BIn,1)) rows"))
 

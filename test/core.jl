@@ -4689,11 +4689,11 @@ end # module SOE
 @test_nowarn begin
     local p15240
     p15240 = ccall(:jl_realloc, Ptr{Void}, (Ptr{Void}, Csize_t), C_NULL, 10)
-    ccall(:jl_free, Void, (Ptr{Void}, ), p15240)
+    ccall(:jl_free, Void, (Ptr{Void},), p15240)
 end
 
 # issue #19963
-@test_nowarn ccall(:jl_free, Void, (Ptr{Void}, ), C_NULL)
+@test_nowarn ccall(:jl_free, Void, (Ptr{Void},), C_NULL)
 
 # Wrong string size on 64bits for large string.
 if Sys.WORD_SIZE == 64
@@ -4871,3 +4871,13 @@ let letvar::Int = 2
     letvar = 3.0
     @test letvar === 3
 end
+
+# issue #21568
+f21568() = 0
+function foo21568()
+    y = 1
+    global f21568
+    f21568{T<:Real}(x::AbstractArray{T,1}) = y
+end
+foo21568()
+@test f21568([0]) == 1

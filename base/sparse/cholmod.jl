@@ -392,7 +392,7 @@ end
 free_dense!(p::Ptr{C_Dense{T}}) where {T} = ccall((:cholmod_l_free_dense, :libcholmod),
     Cint, (Ref{Ptr{C_Dense{T}}}, Ptr{Void}), p, common())
 
-function zeros{T<:VTypes}(m::Integer, n::Integer, ::Type{T})
+function zeros(m::Integer, n::Integer, ::Type{T}) where T<:VTypes
     d = Dense(ccall((:cholmod_l_zeros, :libcholmod), Ptr{C_Dense{T}},
         (Csize_t, Csize_t, Cint, Ptr{UInt8}),
          m, n, xtyp(T), common()))
@@ -401,7 +401,7 @@ function zeros{T<:VTypes}(m::Integer, n::Integer, ::Type{T})
 end
 zeros(m::Integer, n::Integer) = zeros(m, n, Float64)
 
-function ones{T<:VTypes}(m::Integer, n::Integer, ::Type{T})
+function ones(m::Integer, n::Integer, ::Type{T}) where T<:VTypes
     d = Dense(ccall((:cholmod_l_ones, :libcholmod), Ptr{C_Dense{T}},
         (Csize_t, Csize_t, Cint, Ptr{UInt8}),
          m, n, xtyp(T), common()))
@@ -857,7 +857,7 @@ end
 convert(::Type{Dense}, A::Sparse) = sparse_to_dense(A)
 
 # This constructior assumes zero based colptr and rowval
-function (::Type{Sparse})(m::Integer, n::Integer,
+function Sparse(m::Integer, n::Integer,
         colptr0::Vector{SuiteSparse_long}, rowval0::Vector{SuiteSparse_long},
         nzval::Vector{Tv}, stype) where Tv<:VTypes
     # checks
@@ -892,7 +892,7 @@ function (::Type{Sparse})(m::Integer, n::Integer,
     return o
 end
 
-function (::Type{Sparse})(m::Integer, n::Integer,
+function Sparse(m::Integer, n::Integer,
         colptr0::Vector{SuiteSparse_long},
         rowval0::Vector{SuiteSparse_long},
         nzval::Vector{<:VTypes})
@@ -908,7 +908,7 @@ function (::Type{Sparse})(m::Integer, n::Integer,
     o
 end
 
-function (::Type{Sparse})(A::SparseMatrixCSC{Tv,SuiteSparse_long}, stype::Integer) where Tv<:VTypes
+function Sparse(A::SparseMatrixCSC{Tv,SuiteSparse_long}, stype::Integer) where Tv<:VTypes
     ## Check length of input. This should never fail but see #20024
     if length(A.colptr) <= A.n
         throw(ArgumentError("length of colptr must be at least size(A,2) + 1 = $(A.n + 1) but was $(length(A.colptr))"))
@@ -1055,7 +1055,7 @@ function convert(::Type{Vector{T}}, D::Dense{T}) where T
     if size(D, 2) > 1
         throw(DimensionMismatch("input must be a vector but had $(size(D, 2)) columns"))
     end
-    copy!(Array{T}(size(D, 1)), D)
+    copy!(Vector{T}(size(D, 1)), D)
 end
 convert(::Type{Vector}, D::Dense{T}) where {T} = convert(Vector{T}, D)
 

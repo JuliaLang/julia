@@ -247,6 +247,21 @@ struct Filter{F,I}
     itr::I
 end
 
+"""
+    Iterators.filter(flt, itr)
+
+Given a predicate function `flt` and an iterable object `itr`, return an
+iterable object which upon iteration yields the elements `x` of `itr` that
+satisfy `flt(x)`. The order of the original iterator is preserved.
+
+This function is *lazy*; that is, it is guaranteed to return in ``Θ(1)`` time
+and use ``Θ(1)`` additional space, and `flt` will not be called by an
+invocation of `filter`. Calls to `flt` will be made when iterating over the
+returned iterable object. These calls are not cached and repeated calls will be
+made when reiterating.
+
+See [`Base.filter`](@ref) for an eager implementation of filtering for arrays.
+"""
 filter(flt, itr) = Filter(flt, itr)
 
 start(f::Filter) = start_filter(f.flt, f.itr)
@@ -525,7 +540,7 @@ ndims(p::AbstractProdIterator) = length(indices(p))
 
 # generic methods to handle size of Prod* types
 _prod_size(a, ::HasShape)  = size(a)
-_prod_size(a, ::HasLength) = (length(a), )
+_prod_size(a, ::HasLength) = (length(a),)
 _prod_size(a, A) =
     throw(ArgumentError("Cannot compute size for object of type $(typeof(a))"))
 _prod_size(a, b, ::HasLength, ::HasLength)  = (length(a),  length(b))
@@ -536,7 +551,7 @@ _prod_size(a, b, A, B) =
     throw(ArgumentError("Cannot construct size for objects of types $(typeof(a)) and $(typeof(b))"))
 
 _prod_indices(a, ::HasShape)  = indices(a)
-_prod_indices(a, ::HasLength) = (OneTo(length(a)), )
+_prod_indices(a, ::HasLength) = (OneTo(length(a)),)
 _prod_indices(a, A) =
     throw(ArgumentError("Cannot compute indices for object of type $(typeof(a))"))
 _prod_indices(a, b, ::HasLength, ::HasLength)  = (OneTo(length(a)),  OneTo(length(b)))
@@ -559,7 +574,7 @@ indices(p::Prod1) = _prod_indices(p.a, iteratorsize(p.a))
 @inline start(p::Prod1) = start(p.a)
 @inline function next(p::Prod1, st)
     n, st = next(p.a, st)
-    (n, ), st
+    (n,), st
 end
 @inline done(p::Prod1, st) = done(p.a, st)
 
