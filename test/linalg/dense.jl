@@ -489,7 +489,7 @@ end
     @test any(isnan.(logm(A12)))
 
     A1  = convert(Matrix{elty}, [4 2 0; 1 4 1; 1 1 4])
-    logmA1 = convert(Matrix{elty}, [1.329661349 0.5302876358 -0.06818951543; 
+    logmA1 = convert(Matrix{elty}, [1.329661349 0.5302876358 -0.06818951543;
                                     0.2310490602 1.295566591 0.2651438179;
                                     0.2310490602 0.1969543025 1.363756107])
     @test logm(A1) ≈ logmA1
