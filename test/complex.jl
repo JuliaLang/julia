@@ -943,3 +943,10 @@ end
 
 # issue #19240
 @test big(1)/(10+10im) ≈ (5-5im)/big(100) ≈ big"0.05" - big"0.05"*im
+
+@testset "Complex Irrationals, issue #21204" begin
+    for x in (pi, e, catalan) # No need to test all of them
+        @test typeof(Complex(x, x)) == Complex{typeof(x)}
+        @test exp(complex(x, x)) ≈ exp(x) * cis(x)
+    end
+end
