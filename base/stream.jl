@@ -863,7 +863,15 @@ buffer_writes(s::LibuvStream, bufsize) = (s.sendbuf=PipeBuffer(bufsize); s)
 
 ## low-level calls to libuv ##
 
-write(s::LibuvStream, b::UInt8) = write(s, Ref{UInt8}(b))
+function write(s::LibuvStream, b::UInt8)
+    if !isnull(s.sendbuf)
+        buf = get(s.sendbuf)
+        if nb_available(buf) + 1 < buf.maxsize
+            return write(buf, b)
+        end
+    end
+    return write(s, Ref{UInt8}(b))
+end
 
 function uv_writecb_task(req::Ptr{Void}, status::Cint)
     d = uv_req_data(req)
