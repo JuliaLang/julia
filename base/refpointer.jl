@@ -97,8 +97,8 @@ function Ref{P}(a::Array{T}) where P<:Union{Ptr,Cwstring,Cstring} where T
         # this Array already has the right memory layout for the requested Ref
         return RefArray(a,1,false) # root something, so that this function is type-stable
     else
-        ptrs = Array{P,1}(length(a)+1)
-        roots = Array{Any,1}(length(a))
+        ptrs = Vector{P}(length(a)+1)
+        roots = Vector{Any}(length(a))
         for i = 1:length(a)
             root = cconvert(P, a[i])
             ptrs[i] = unsafe_convert(P, root)::P

@@ -969,8 +969,13 @@
                       (list* g (if isamp `(& ,ca) ca) C))))))))
 
 (define (expand-function-def e)   ;; handle function or stagedfunction
+  (define (just-arglist? ex)
+    (and (pair? ex)
+         (or (memq (car ex) '(tuple block))
+             (and (eq? (car ex) 'where)
+                  (just-arglist? (cadr ex))))))
   (let ((name (cadr e)))
-    (if (and (pair? name) (memq (car name) '(tuple block)))
+    (if (just-arglist? name)
         (expand-forms (cons '-> (cdr e)))
         (expand-function-def- e))))
 
@@ -1425,14 +1430,17 @@
             (reverse a))))))
 
 ;; lower function call containing keyword arguments
-(define (lower-kw-call f kw pa)
+(define (lower-kw-call fexpr kw pa)
   (let ((container (make-ssavalue)))
     (let loop ((kw kw)
                (initial-kw '()) ;; keyword args before any splats
                (stmts '())
                (has-kw #f))     ;; whether there are definitely >0 kwargs
       (if (null? kw)
-          (if (null? stmts)
+        (let ((f (if (sym-ref? fexpr) fexpr (make-ssavalue))))
+          `(block
+            ,@(if (eq? f fexpr) '() `((= ,f, fexpr)))
+            ,(if (null? stmts)
               `(call (call (core kwfunc) ,f) (call (top vector_any) ,@(reverse initial-kw)) ,f ,@pa)
               `(block
                 (= ,container (call (top vector_any) ,@(reverse initial-kw)))
@@ -1446,8 +1454,8 @@
                          ,@stmts
                          (if (call (top isempty) ,container)
                              (call ,f ,@pa)
-                             (call (call (core kwfunc) ,f) ,container ,f ,@pa)))))))
-          (let ((arg (car kw)))
+                             (call (call (core kwfunc) ,f) ,container ,f ,@pa)))))))))
+        (let ((arg (car kw)))
             (cond ((and (pair? arg) (eq? (car arg) 'parameters))
                    (error "more than one semicolon in argument list"))
                   ((kwarg? arg)
@@ -3084,10 +3092,10 @@ f(x) = yt(x)
                                (newlam    (renumber-slots-and-labels (linearize (car exprs)))))
                           `(toplevel-butlast
                             ,@top-stmts
-                            ,@sp-inits
-                            (method ,name ,(cl-convert sig fname lam namemap toplevel interp)
-                                    ,(julia-expand-macros `(quote ,newlam))
-                                    ,(last e))))))
+                            (block ,@sp-inits
+                                   (method ,name ,(cl-convert sig fname lam namemap toplevel interp)
+                                           ,(julia-expand-macros `(quote ,newlam))
+                                           ,(last e)))))))
                  ;; local case - lift to a new type at top level
                  (let* ((exists (get namemap name #f))
                         (type-name  (or exists

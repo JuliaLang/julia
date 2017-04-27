@@ -131,9 +131,9 @@ end
 function schedule_and_wait(t::Task, arg=nothing)
     t.state == :runnable || error("schedule: Task not runnable")
     if isempty(Workqueue)
-        return yieldto(t, v)
+        return yieldto(t, arg)
     else
-        t.result = v
+        t.result = arg
         push!(Workqueue, t)
         t.state = :queued
     end
@@ -244,7 +244,7 @@ function wait()
             end
         end
     end
-    assert(false)
+    # unreachable
 end
 
 if is_windows()
