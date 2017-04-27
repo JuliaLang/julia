@@ -1127,3 +1127,11 @@ f21545(::Type{<: AbstractArray{T,N} where N}) where T = T
 @test parse("<:{T} where T") == Expr(:where, Expr(:curly, :(<:), :T), :T)
 @test parse("<:(T) where T") == Expr(:where, Expr(:(<:), :T), :T)
 @test parse("<:{T}(T) where T") == Expr(:where, Expr(:call, Expr(:curly, :(<:), :T), :T), :T)
+
+# issue #21586
+macro m21586(x)
+    Expr(:kw, esc(x), 42)
+end
+
+f21586(; @m21586(a), @m21586(b)) = a + b
+@test f21586(a=10) == 52
