@@ -799,6 +799,10 @@ mktempdir() do dir
             LibGit2.set!(cfg, "user.name", "AAAA")
             LibGit2.set!(cfg, "user.email", "BBBB@BBBB.COM")
 
+            # If upstream argument is empty, libgit2 will look for tracking
+            # information. If the current branch isn't tracking any upstream
+            # the rebase should fail.
+            @test_throws LibGit2.GitError LibGit2.rebase!(repo)
             # Try rebasing on master instead
             newhead = LibGit2.rebase!(repo, master_branch)
             @test newhead == head_oid
