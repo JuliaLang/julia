@@ -2210,31 +2210,6 @@ end
 inlining_enabled() = (JLOptions().can_inline == 1)
 coverage_enabled() = (JLOptions().code_coverage != 0)
 
-# TODO: track the worlds for which this InferenceState
-# is being used, and split it if the WIP requires it?
-# function converge_valid_age!(sv::InferenceState)
-#     # push the validity range of sv into its fixedpoint callers
-#     # recursing as needed to cover the graph
-#     for (i, _) in sv.backedges
-#         if i.fixedpoint
-#             updated = false
-#             if i.min_valid < sv.min_valid
-#                 i.min_valid = sv.min_valid
-#                 updated = true
-#             end
-#             if i.max_valid > sv.max_valid
-#                 i.max_valid = sv.max_valid
-#                 updated = true
-#             end
-#             @assert !isdefined(i.linfo, :def) || !i.cached || i.min_valid <= i.params.world <= i.max_valid "invalid age range update"
-#             if updated
-#                 converge_valid_age!(i)
-#             end
-#         end
-#     end
-#     nothing
-# end
-
 # work towards converging the valid age range for sv
 function update_valid_age!(min_valid::UInt, max_valid::UInt, sv::InferenceState)
     sv.min_valid = max(sv.min_valid, min_valid)
@@ -2682,6 +2657,12 @@ function typeinf(frame::InferenceState)
                 typeinf_work(caller)
                 no_active_ips_in_callers = false
             end
+            if caller.min_valid < frame.min_valid
+                caller.min_valid = frame.min_valid
+            end
+            if caller.max_valid > frame.max_valid
+                caller.max_valid = frame.max_valid
+            end
         end
     end
 
@@ -2700,6 +2681,15 @@ function typeinf(frame::InferenceState)
         end
         for caller in frame.callers
             optimize(caller)
+            if frame.min_valid < caller.min_valid
+                frame.min_valid = caller.min_valid
+            end
+            if frame.max_valid > caller.max_valid
+                frame.max_valid = caller.max_valid
+            end
+        end
+        for caller in frame.callers
+            caller.min_valid = frame.min_valid
         end
         for caller in frame.callers
             finish(caller)
