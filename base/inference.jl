@@ -2249,7 +2249,7 @@ update_valid_age!(edge::InferenceState, sv::InferenceState) = update_valid_age!(
 update_valid_age!(li::MethodInstance, sv::InferenceState) = update_valid_age!(min_world(li), max_world(li), sv)
 
 # temporarily accumulate our edges to later add as backedges in the callee
-function add_backedge(li::MethodInstance, caller::InferenceState)
+function add_backedge!(li::MethodInstance, caller::InferenceState)
     isdefined(caller.linfo, :def) || return # don't add backedges to toplevel exprs
     if caller.stmt_edges[caller.currpc] === ()
         caller.stmt_edges[caller.currpc] = []
@@ -2326,18 +2326,11 @@ function typeinf_active(linfo::MethodInstance)
     return nothing
 end
 
-function add_backedge(frame::InferenceState, caller::InferenceState, currpc::Int)
+function add_backedge!(frame::InferenceState, caller::InferenceState, currpc::Int)
     update_valid_age!(frame, caller)
-    if haskey(caller.edges, frame)
-        Ws = caller.edges[frame]::Vector{Int}
-        if !(currpc in Ws)
-            push!(Ws, currpc)
-        end
-    else
-        Ws = Int[currpc]
-        caller.edges[frame] = Ws
-        push!(frame.backedges, (caller, Ws))
-    end
+    backedge = (caller, currpc)
+    in_egal(backedge, frame.backedges) || push!(frame.backedges, backedge)
+    return frame
 end
 
 function in_egal(item, collection)
@@ -2359,8 +2352,7 @@ function merge_call_chain!(child::InferenceState, ancestor::InferenceState)
     intermediate = child
     while intermediate !=== ancestor
         parent = intermediate.parent
-        # TODO: use `add_backedge` here instead of `push!`?
-        push!(intermediate.backedges, (parent, parent.currpc))
+        add_backedge!(intermediate.backedges, parent, parent.currpc)
         union_callers!(intermediate, parent)
         intermediate = parent
     end
@@ -2422,7 +2414,7 @@ function typeinf_edge(method::Method, atypes::ANY, sparams::SimpleVector, caller
         # so need to check whether the code itself is also inferred
         inf = code.inferred
         if !isa(inf, CodeInfo) || (inf::CodeInfo).inferred
-            add_backedge(code, caller)
+            add_backedge!(code, caller)
             if isdefined(code, :inferred_const)
                 return abstract_eval_constant(code.inferred_const)
             else
@@ -2912,7 +2904,7 @@ function finish(me::InferenceState)
             i.inworkq || push!(workq, i)
             i.inworkq = true
         end
-        add_backedge(me.linfo, i)
+        add_backedge!(me.linfo, i)
     end
 
     # finalize and record the linfo result
@@ -3425,7 +3417,7 @@ function invoke_NF(argexprs, etype::ANY, atypes, sv, atype_unlimited::ANY,
                 local sig = argtypes_to_type(atypes)
                 local li = get_spec_lambda(sig, sv, invoke_data)
                 li === nothing && return false
-                add_backedge(li, sv)
+                add_backedge!(li, sv)
                 local stmt = []
                 push!(stmt, Expr(:(=), linfo_var, li))
                 spec_hit === nothing && (spec_hit = genlabel(sv))
@@ -3496,7 +3488,7 @@ function invoke_NF(argexprs, etype::ANY, atypes, sv, atype_unlimited::ANY,
     else
         local cache_linfo = get_spec_lambda(atype_unlimited, sv, invoke_data)
         cache_linfo === nothing && return NF
-        add_backedge(cache_linfo, sv)
+        add_backedge!(cache_linfo, sv)
         unshift!(argexprs, cache_linfo)
         ex = Expr(:invoke)
         ex.args = argexprs
@@ -3734,7 +3726,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
     linfo = linfo::MethodInstance
     if linfo.jlcall_api == 2
         # in this case function can be inlined to a constant
-        add_backedge(linfo, sv)
+        add_backedge!(linfo, sv)
         return inline_as_constant(linfo.inferred_const, argexprs, sv, invoke_data)
     end
 
@@ -3777,9 +3769,9 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
         inferred = frame.src
         if frame.const_api # handle like jlcall_api == 2
             if frame.inferred || !frame.cached
-                add_backedge(frame.linfo, sv)
+                add_backedge!(frame.linfo, sv)
             else
-                add_backedge(frame, sv, 0)
+                add_backedge!(frame, sv, 0)
             end
             if isa(frame.bestguess, Const)
                 inferred_const = (frame.bestguess::Const).val
@@ -3840,9 +3832,9 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
     if isa(frame, InferenceState) && !frame.inferred && frame.cached
         # in this case, the actual backedge linfo hasn't been computed
         # yet, but will be when inference on the frame finishes
-        add_backedge(frame, sv, 0)
+        add_backedge!(frame, sv, 0)
     else
-        add_backedge(linfo, sv)
+        add_backedge!(linfo, sv)
     end
 
     spvals = Any[]
