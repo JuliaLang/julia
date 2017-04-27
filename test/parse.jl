@@ -1018,6 +1018,19 @@ end
 short_where_call = :(f(x::T) where T = T)
 @test short_where_call.args[2].head == :block
 
+# `where` with multi-line anonymous functions
+let f = function (x::T) where T
+            T
+        end
+    @test f(:x) === Symbol
+end
+
+let f = function (x::T, y::S) where T<:S where S
+            (T,S)
+        end
+    @test f(0,1) === (Int,Int)
+end
+
 # issue #20541
 @test parse("[a .!b]") == Expr(:hcat, :a, Expr(:call, :(.!), :b))
 
