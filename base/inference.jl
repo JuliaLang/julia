@@ -2309,6 +2309,8 @@ function in_egal(item, collection)
 end
 
 function union_callers!(a::InferenceState, b::InferenceState)
+    in_egal(b, a.callers) || push!(a.callers, b)
+    b.callers === a.callers && return
     for caller in b.callers
         in_egal(caller, a.callers) || push!(a.callers, caller)
     end
@@ -2322,10 +2324,10 @@ function merge_call_chain!(parent::InferenceState, ancestor::InferenceState, chi
     # and merge all of the callers into ancestor.callers
     while true
         add_backedge!(child, parent, parent.currpc)
-        parent === ancestor && break
-        union_callers!(ancestor, parent)
+        union_callers!(ancestor, child)
         child = parent
         parent = child.parent
+        child === ancestor && break
     end
     return nothing
 end
