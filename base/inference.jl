@@ -133,7 +133,7 @@ mutable struct InferenceState
     ssavalue_init::Vector{Any}
 
     backedges::Vector{Tuple{InferenceState, LineNum}} # call-graph backedges connecting from callee to caller
-    callers::Vector{InferenceState}
+    callers_in_cycle::Vector{InferenceState}
     parent::Union{Void, InferenceState}
 
     const_api::Bool
@@ -267,7 +267,7 @@ mutable struct InferenceState
             cur_hand, handler_at, n_handlers,
             ssavalue_uses, ssavalue_init,
             Vector{Tuple{InferenceState,LineNum}}(), # backedges
-            Vector{InferenceState}(), # callers
+            Vector{InferenceState}(), # callers_in_cycle
             parent,
             false, false, optimize, cached, false, false)
         return frame
@@ -2288,7 +2288,7 @@ function code_for_method(method::Method, atypes::ANY, sparams::SimpleVector, wor
 end
 
 function typeinf_active(linfo::MethodInstance, sv::InferenceState)
-    for infstate in sv.callers
+    for infstate in sv.callers_in_cycle
         linfo === infstate.linfo && return infstate
     end
     return nothing
@@ -2308,23 +2308,23 @@ function in_egal(item, collection)
     return false
 end
 
-function union_callers!(a::InferenceState, b::InferenceState)
-    in_egal(b, a.callers) || push!(a.callers, b)
-    b.callers === a.callers && return
-    for caller in b.callers
-        in_egal(caller, a.callers) || push!(a.callers, caller)
+function union_caller_cycle!(a::InferenceState, b::InferenceState)
+    in_egal(b, a.callers_in_cycle) || push!(a.callers_in_cycle, b)
+    b.callers_in_cycle === a.callers_in_cycle && return
+    for caller in b.callers_in_cycle
+        in_egal(caller, a.callers_in_cycle) || push!(a.callers_in_cycle, caller)
     end
-    b.callers = a.callers
+    b.callers_in_cycle = a.callers_in_cycle
     return nothing
 end
 
 function merge_call_chain!(parent::InferenceState, ancestor::InferenceState, child::InferenceState)
     # add backedge of parent <- child
     # then add all backeges of parent <- parent.parent
-    # and merge all of the callers into ancestor.callers
+    # and merge all of the callers into ancestor.callers_in_cycle
     while true
         add_backedge!(child, parent, parent.currpc)
-        union_callers!(ancestor, child)
+        union_caller_cycle!(ancestor, child)
         child = parent
         parent = child.parent
         child === ancestor && break
@@ -2339,7 +2339,7 @@ function resolve_call_cycle!(linfo::MethodInstance, parent::InferenceState)
             merge_call_chain!(parent, frame, frame)
             return frame
         end
-        for caller in frame.callers
+        for caller in frame.callers_in_cycle
             if caller.linfo === linfo
                 merge_call_chain!(parent, frame, caller)
                 return caller
@@ -2652,11 +2652,11 @@ function typeinf(frame::InferenceState)
     no_active_ips_in_callers = false
     while !no_active_ips_in_callers
         no_active_ips_in_callers = true
-        for caller in frame.callers
+        for caller in frame.callers_in_cycle
             caller.dont_work_on_me && return
             if caller.pc´´ <= caller.nstmts # equivalent to `isempty(caller.ip)`
                 # Note that `typeinf_work(caller)` can potentially modify the other frames
-                # `frame.callers`, which is why making incremental progress requires the
+                # `frame.callers_in_cycle`, which is why making incremental progress requires the
                 # outer while loop.
                 typeinf_work(caller)
                 no_active_ips_in_callers = false
@@ -2672,18 +2672,18 @@ function typeinf(frame::InferenceState)
 
     # with no active ip's, type inference on frame is done
 
-    if isempty(frame.callers)
+    if isempty(frame.callers_in_cycle)
         @assert !(frame.dont_work_on_me)
         frame.dont_work_on_me = true
         optimize(frame)
         finish(frame)
         finalize_backedges(frame)
-    else # frame is in frame.callers
-        for caller in frame.callers
+    else # frame is in frame.callers_in_cycle
+        for caller in frame.callers_in_cycle
             @assert !(caller.dont_work_on_me)
             caller.dont_work_on_me = true
         end
-        for caller in frame.callers
+        for caller in frame.callers_in_cycle
             optimize(caller)
             if frame.min_valid < caller.min_valid
                 frame.min_valid = caller.min_valid
@@ -2692,13 +2692,13 @@ function typeinf(frame::InferenceState)
                 frame.max_valid = caller.max_valid
             end
         end
-        for caller in frame.callers
+        for caller in frame.callers_in_cycle
             caller.min_valid = frame.min_valid
         end
-        for caller in frame.callers
+        for caller in frame.callers_in_cycle
             finish(caller)
         end
-        for caller in frame.callers
+        for caller in frame.callers_in_cycle
             finalize_backedges(caller)
         end
     end
