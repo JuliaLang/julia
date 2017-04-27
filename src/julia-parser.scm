@@ -1137,6 +1137,16 @@
            (and (eq? (car sig) 'where)
                 (valid-func-sig? paren (cadr sig))))))
 
+(define (unwrap-where x)
+  (if (and (pair? x) (eq? (car x) 'where))
+      (unwrap-where (cadr x))
+      x))
+
+(define (rewrap-where x w)
+  (if (and (pair? w) (eq? (car w) 'where))
+      (list 'where (rewrap-where x (cadr w)) (caddr w))
+      x))
+
 (define (parse-struct-def s mut? word)
   (if (reserved-word? (peek-token s))
       (error (string "invalid type name \"" (take-token s) "\"")))
@@ -1258,18 +1268,19 @@
                          (error (string "expected \"end\" in definition of function \"" sig "\"")))
                      (take-token s)
                      `(function ,sig))
-              (let* ((def   (if (or (symbol? sig)
-                                    (and (pair? sig) (eq? (car sig) '|::|)
-                                         (symbol? (cadr sig))))
-                                (if paren
-                                    ;; in "function (x)" the (x) is a tuple
-                                    `(tuple ,sig)
-                                    ;; function foo  =>  syntax error
-                                    (error (string "expected \"(\" in " word " definition")))
-                                (if (not (valid-func-sig? paren sig))
-                                    (error (string "expected \"(\" in " word " definition"))
-                                    sig)))
-                     (body  (parse-block s)))
+              (let* ((usig (unwrap-where sig))
+                     (def  (if (or (symbol? usig)
+                                   (and (pair? usig) (eq? (car usig) '|::|)
+                                        (symbol? (cadr usig))))
+                               (if paren
+                                   ;; in "function (x)" the (x) is a tuple
+                                   (rewrap-where `(tuple ,usig) sig)
+                                   ;; function foo  =>  syntax error
+                                   (error (string "expected \"(\" in " word " definition")))
+                               (if (not (valid-func-sig? paren sig))
+                                   (error (string "expected \"(\" in " word " definition"))
+                                   sig)))
+                     (body (parse-block s)))
                 (expect-end s word)
                 (list word def body)))))
 
