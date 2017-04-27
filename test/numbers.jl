@@ -2956,6 +2956,9 @@ end
         end
     end
     @test !iszero(nextfloat(BigFloat(0)))
+    for x in (π, e, γ, catalan, φ)
+        @test !iszero(x)
+    end
 
     # Array reduction
     @test !iszero([0, 1, 2, 3])

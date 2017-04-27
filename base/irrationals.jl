@@ -95,6 +95,7 @@ end
 <=(x::Rational, y::Irrational) = x < y
 
 isfinite(::Irrational) = true
+iszero(::Irrational) = false
 
 hash(x::Irrational, h::UInt) = 3*object_id(x) - h
 
