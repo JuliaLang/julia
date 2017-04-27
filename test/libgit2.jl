@@ -705,6 +705,26 @@ mktempdir() do dir
             # from branch/a using committish
             @test LibGit2.merge!(repo, committish=string(branchhead))
             @test LibGit2.is_ancestor_of(string(oldhead), string(LibGit2.head_oid(repo)), repo)
+
+            oldhead = LibGit2.head_oid(repo)
+            LibGit2.branch!(repo, "branch/ff_c")
+            open(joinpath(LibGit2.path(repo),"ff_file5"),"w") do f
+                write(f, "555\n")
+            end
+            LibGit2.add!(repo, "ff_file5")
+            LibGit2.commit(repo, "add ff_file5")
+
+            open(joinpath(LibGit2.path(repo),"ff_file6"),"w") do f
+                write(f, "666\n")
+            end
+            LibGit2.add!(repo, "ff_file6")
+            LibGit2.commit(repo, "add ff_file6")
+            branchhead = LibGit2.head_oid(repo)
+            LibGit2.branch!(repo, "master")
+            # switch back, now try to ff-merge the changes
+            # from branch/ff_c using branch name
+            @test LibGit2.merge!(repo, branch="refs/heads/branch/ff_c")
+            @test LibGit2.is_ancestor_of(string(oldhead), string(LibGit2.head_oid(repo)), repo)
         finally
             close(repo)
         end
