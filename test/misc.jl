@@ -638,7 +638,7 @@ end
 
 @testset "test this does not segfault #19281" begin
     @test Foo_19281().f[1] == ()
-    @test Foo_19281().f[2] == (1, )
+    @test Foo_19281().f[2] == (1,)
 end
 
 let

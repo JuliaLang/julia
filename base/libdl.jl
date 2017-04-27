@@ -240,7 +240,7 @@ function dllist()
     end
 
     @static if is_apple()
-        numImages = ccall(:_dyld_image_count, Cint, (), )
+        numImages = ccall(:_dyld_image_count, Cint, ())
 
         # start at 1 instead of 0 to skip self
         for i in 1:numImages-1
