@@ -462,6 +462,56 @@ let dir = mktempdir()
     end
 end
 
+let dir = mktempdir()
+    try
+        insert!(LOAD_PATH, 1, dir)
+        insert!(Base.LOAD_CACHE_PATH, 1, dir)
+
+        loaded_modules = Channel{Symbol}(32)
+        callback = (mod::Symbol) -> put!(loaded_modules, mod)
+        push!(Base.package_callbacks, callback)
+
+        Test1_module = :Teste4095a81
+        Test2_module = :Teste4095a82
+        Test3_module = :Teste4095a83
+
+        write(joinpath(dir, "$(Test1_module).jl"),
+              """
+              module $(Test1_module)
+                  __precompile__(true)
+              end
+              """)
+
+        Base.compilecache("$(Test1_module)")
+        write(joinpath(dir, "$(Test2_module).jl"),
+              """
+              module $(Test2_module)
+                  __precompile__(true)
+                  using $(Test1_module)
+              end
+              """)
+        Base.compilecache("$(Test2_module)")
+        @test !Base.isbindingresolved(Main, Test2_module)
+        Base.require(Test2_module)
+        @test Base.isbindingresolved(Main, Test2_module)
+        @test take!(loaded_modules) == Test1_module
+        @test take!(loaded_modules) == Test2_module
+        write(joinpath(dir, "$(Test3_module).jl"),
+              """
+              module $(Test3_module)
+                  using $(Test3_module)
+              end
+              """)
+        Base.require(Test3_module)
+        @test take!(loaded_modules) == Test3_module
+    finally
+        pop!(Base.package_callbacks)
+        splice!(Base.LOAD_CACHE_PATH, 1)
+        splice!(LOAD_PATH, 1)
+        rm(dir, recursive=true)
+    end
+end
+
 let module_name = string("a",randstring())
     insert!(LOAD_PATH, 1, pwd())
     file_name = string(module_name, ".jl")
