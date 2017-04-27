@@ -31,10 +31,10 @@ Base.length(r::StepRange{<:Period}) = length(StepRange(value(r.start), value(r.s
 
 # Used to calculate the last valid date in the range given the start, stop, and step
 # last = stop - steprem(start, stop, step)
-Base.steprem{T<:TimeType}(a::T, b::T, c) = b - (a + c * len(a, b, c))
+Base.steprem(a::T, b::T, c) where {T<:TimeType} = b - (a + c * len(a, b, c))
 
 import Base.in
-function in{T<:TimeType}(x::T, r::StepRange{T})
+function in(x::T, r::StepRange{T}) where T<:TimeType
     n = len(first(r), x, step(r)) + 1
     n >= 1 && n <= length(r) && r[n] == x
 end
