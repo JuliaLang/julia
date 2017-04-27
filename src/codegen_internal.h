@@ -1,5 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
+#include "codegen_shared.h"
+
 #if defined(USE_ORCJIT) && JL_LLVM_VERSION <= 30800
 #  include <llvm/ExecutionEngine/Orc/ObjectLinkingLayer.h>
 void notifyObjectLoaded(RTDyldMemoryManager *memmgr,

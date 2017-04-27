@@ -128,19 +128,19 @@ static void tbaa_decorate_gcframe(Instruction *inst, MDNode *tbaa_gcframe)
 class JuliaGCAllocator {
 public:
     JuliaGCAllocator(Function &F, CallInst *ptlsStates,
-                     Type *T_pjlvalue, MDNode *tbaa) :
+                     Type *T_prjlvalue, MDNode *tbaa) :
         F(F),
         M(*F.getParent()),
         T_int1(Type::getInt1Ty(F.getContext())),
         T_int8(Type::getInt8Ty(F.getContext())),
         T_int32(Type::getInt32Ty(F.getContext())),
         T_int64(Type::getInt64Ty(F.getContext())),
-        V_null(T_pjlvalue ? Constant::getNullValue(T_pjlvalue) : nullptr),
+        V_null(T_prjlvalue ? Constant::getNullValue(T_prjlvalue) : nullptr),
         ptlsStates(ptlsStates),
 #if JL_LLVM_VERSION >= 50000
-        gcframe(ptlsStates ? new AllocaInst(T_pjlvalue, 0, ConstantInt::get(T_int32, 0)) : nullptr),
+        gcframe(ptlsStates ? new AllocaInst(T_prjlvalue, 0, ConstantInt::get(T_int32, 0)) : nullptr),
 #else
-        gcframe(ptlsStates ? new AllocaInst(T_pjlvalue, ConstantInt::get(T_int32, 0)) : nullptr),
+        gcframe(ptlsStates ? new AllocaInst(T_prjlvalue, ConstantInt::get(T_int32, 0)) : nullptr),
 #endif
         gcroot_func(M.getFunction("julia.gc_root_decl")),
         gckill_func(M.getFunction("julia.gc_root_kill")),

@@ -12,22 +12,22 @@ static bool float_func[num_intrinsics];
 static void jl_init_intrinsic_functions_codegen(Module *m)
 {
     std::vector<Type *> args1(0); \
-    args1.push_back(T_pjlvalue); \
+    args1.push_back(T_prjlvalue); \
     std::vector<Type *> args2(0); \
-    args2.push_back(T_pjlvalue); \
-    args2.push_back(T_pjlvalue); \
+    args2.push_back(T_prjlvalue); \
+    args2.push_back(T_prjlvalue); \
     std::vector<Type *> args3(0); \
-    args3.push_back(T_pjlvalue); \
-    args3.push_back(T_pjlvalue); \
-    args3.push_back(T_pjlvalue); \
+    args3.push_back(T_prjlvalue); \
+    args3.push_back(T_prjlvalue); \
+    args3.push_back(T_prjlvalue); \
     std::vector<Type *> args4(0); \
-    args4.push_back(T_pjlvalue); \
-    args4.push_back(T_pjlvalue); \
-    args4.push_back(T_pjlvalue); \
-    args4.push_back(T_pjlvalue);
+    args4.push_back(T_prjlvalue); \
+    args4.push_back(T_prjlvalue); \
+    args4.push_back(T_prjlvalue); \
+    args4.push_back(T_prjlvalue);
 
 #define ADD_I(name, nargs) do { \
-        Function *func = Function::Create(FunctionType::get(T_pjlvalue, args##nargs, false), \
+        Function *func = Function::Create(FunctionType::get(T_prjlvalue, args##nargs, false), \
                                           Function::ExternalLinkage, "jl_"#name, m); \
         runtime_func[name] = func; \
         add_named_global(func, &jl_##name); \
@@ -601,7 +601,7 @@ static jl_cgval_t emit_pointerref(jl_cgval_t *argv, jl_codectx_t *ctx)
 
     if (!jl_isbits(ety)) {
         if (ety == (jl_value_t*)jl_any_type) {
-            Value *thePtr = emit_unbox(T_ppjlvalue, e, e.typ);
+            Value *thePtr = emit_unbox(T_pprjlvalue, e, e.typ);
             return mark_julia_type(
                     builder.CreateAlignedLoad(builder.CreateGEP(thePtr, im1), align_nb),
                     true,
@@ -682,7 +682,15 @@ static jl_cgval_t emit_pointerset(jl_cgval_t *argv, jl_codectx_t *ctx)
         Type *ptrty = julia_type_to_llvm(e.typ, &isboxed);
         assert(!isboxed);
         thePtr = emit_unbox(ptrty, e, e.typ);
-        typed_store(thePtr, im1, x, ety, ctx, tbaa_data, NULL, align_nb);
+        if (ety == (jl_value_t*)jl_any_type) {
+            // unsafe_store to Ptr{Any} is allowed to implicitly drop GC roots.
+            Instruction *store = builder.CreateAlignedStore(
+              emit_pointer_from_objref(boxed(x, ctx, false)),
+                builder.CreateGEP(thePtr, im1), align_nb);
+            tbaa_decorate(tbaa_data, store);
+        } else {
+            typed_store(thePtr, im1, x, ety, ctx, tbaa_data, NULL, align_nb);
+        }
     }
     return mark_julia_type(thePtr, false, aty, ctx);
 }
@@ -1212,8 +1220,8 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value **argvalues, size_t narg
     assert(0 && "unreachable");
 }
 
-#define BOX_F(ct,jl_ct)                                                 \
-    box_##ct##_func = boxfunc_llvm(ft1arg(T_pjlvalue, T_##jl_ct),       \
+#define BOX_F(ct,jl_ct)                                                  \
+    box_##ct##_func = boxfunc_llvm(ft1arg(T_prjlvalue, T_##jl_ct),       \
                                    "jl_box_"#ct, &jl_box_##ct, m);
 
 #define SBOX_F(ct,jl_ct) BOX_F(ct,jl_ct); box_##ct##_func->addAttribute(1, Attribute::SExt);

@@ -61,9 +61,9 @@ extern size_t jltls_offset_idx;
 typedef struct {Value *gv; int32_t index;} jl_value_llvm; // uses 1-based indexing
 
 #if JL_LLVM_VERSION >= 30700
-void addOptimizationPasses(legacy::PassManager *PM);
+void addOptimizationPasses(legacy::PassManager *PM, int opt_level);
 #else
-void addOptimizationPasses(PassManager *PM);
+void addOptimizationPasses(PassManager *PM, int opt_level);
 #endif
 void* jl_emit_and_add_to_shadow(GlobalVariable *gv, void *gvarinit = NULL);
 GlobalVariable *jl_emit_sysimg_slot(Module *m, Type *typ, const char *name,
@@ -248,7 +248,9 @@ JL_DLLEXPORT extern LLVMContext &jl_LLVMContext;
 
 Pass *createLowerPTLSPass(bool imaging_mode);
 Pass *createLowerGCFramePass();
+Pass *createLateLowerGCFramePass();
 Pass *createLowerExcHandlersPass();
+Pass *createGCInvariantVerifierPass(bool Strong);
 // Whether the Function is an llvm or julia intrinsic.
 static inline bool isIntrinsicFunction(Function *F)
 {
