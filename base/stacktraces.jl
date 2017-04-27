@@ -37,7 +37,7 @@ Stack information representing execution context, with the following fields:
 
   True if the code is from an inlined frame.
 
-- `pointer::Int64`
+- `pointer::UInt64`
 
   Representation of the pointer to the execution context as returned by `backtrace`.
 
@@ -109,7 +109,7 @@ function deserialize(s::AbstractSerializer, ::Type{StackFrame})
     line = read(s.io, Int)
     from_c = read(s.io, Bool)
     inlined = read(s.io, Bool)
-    pointer = read(s.io, Int64)
+    pointer = read(s.io, UInt64)
     return StackFrame(func, file, line, Nullable{LambdaInfo}(), from_c, inlined, pointer)
 end
 
