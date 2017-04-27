@@ -822,7 +822,7 @@
 
 (define (parse-term s) (parse-with-chains s parse-rational is-prec-times? '(*)))
 
-(define (parse-rational s) (parse-LtoR s (lambda (s) (parse-where s parse-unary)) is-prec-rational?))
+(define (parse-rational s) (parse-LtoR s (lambda (s) (parse-unary-subtype s)) is-prec-rational?))
 
 (define (parse-pipes s)    (parse-LtoR s parse-range is-prec-pipe?))
 
@@ -899,6 +899,25 @@
 
 (define (invalid-identifier-name? ex)
   (or (syntactic-op? ex) (eq? ex '....)))
+
+;; parse `<: A where B` as `<: (A where B)` (issue #21545)
+(define (parse-unary-subtype s)
+  (let ((op (require-token s)))
+    (if (or (eq? op '|<:|) (eq? op '|>:|))
+        (begin (take-token s)
+               (let ((next (peek-token s)))
+                 (cond ((or (closing-token? next) (newline? next) (eq? next '=))
+                        op)  ; return operator by itself, as in (<:)
+                       ;; parse <:{T}(x::T) or <:(x::T) like other unary operators
+                       ((or (eqv? next #\{) (eqv? next #\( ))
+                        (ts:put-back! s op)
+                        (parse-where s parse-unary))
+                       (else
+                        (let ((arg (parse-where s parse-unary)))
+                          (if (and (pair? arg) (eq? (car arg) 'tuple))
+                              (cons op (cdr arg))
+                              (list op arg)))))))
+        (parse-where s parse-unary))))
 
 (define (parse-unary s)
   (let ((t (require-token s)))
