@@ -454,39 +454,37 @@ end
         A5  = convert(Matrix{elty}, [1 1 0 1; 0 1 1 0; 0 0 1 1; 1 0 0 1])
         @test expm(logm(A5)) ≈ A5
 
-        A6  = convert(Matrix{elty}, [-5 2 0 0 ; 1/2 -7 3 0; 0 1/3 -9 4; 0 0 1/4 -11])
-        @test expm(logm(A6)) ≈ A6
 
-        A7  = convert(Matrix{elty}, [1 0 0 1e-8; 0 1 0 0; 0 0 1 0; 0 0 0 1])
-        @test expm(logm(A7)) ≈ A7
+        A6  = convert(Matrix{elty}, [1 0 0 1e-8; 0 1 0 0; 0 0 1 0; 0 0 0 1])
+        @test expm(logm(A6)) ≈ A6
     end
 
-    A8 = 100 * [-1+1im 0 0 1e-8; 0 1 0 0; 0 0 1 0; 0 0 0 1]
-    @test expm(logm(A8)) ≈ A8
+    A7 = 100 * [-1+1im 0 0 1e-8; 0 1 0 0; 0 0 1 0; 0 0 0 1]
+    @test expm(logm(A7)) ≈ A7
 end
 
 @testset "issue 5116" begin
-    A9  = [0 10 0 0; -1 0 0 0; 0 0 0 0; -2 0 0 0]
-    eA9 = [-0.999786072879326  -0.065407069689389   0.0   0.0
+    A8  = [0 10 0 0; -1 0 0 0; 0 0 0 0; -2 0 0 0]
+    eA8 = [-0.999786072879326  -0.065407069689389   0.0   0.0
            0.006540706968939  -0.999786072879326   0.0   0.0
            0.0                 0.0                 1.0   0.0
            0.013081413937878  -3.999572145758650   0.0   1.0]
-    @test expm(A9) ≈ eA9
+    @test expm(A8) ≈ eA8
 
-    A10  = [ 0. 0. 0. 0. ; 0. 0. -im 0.; 0. im 0. 0.; 0. 0. 0. 0.]
-    eA10 = [ 1.0+0.0im   0.0+0.0im                 0.0+0.0im                0.0+0.0im
+    A9  = [ 0. 0. 0. 0. ; 0. 0. -im 0.; 0. im 0. 0.; 0. 0. 0. 0.]
+    eA9 = [ 1.0+0.0im   0.0+0.0im                 0.0+0.0im                0.0+0.0im
             0.0+0.0im   1.543080634815244+0.0im   0.0-1.175201193643801im  0.0+0.0im
             0.0+0.0im   0.0+1.175201193643801im   1.543080634815243+0.0im  0.0+0.0im
             0.0+0.0im   0.0+0.0im                 0.0+0.0im                1.0+0.0im]
-    @test expm(A10) ≈ eA10
+    @test expm(A9) ≈ eA9
 end
 
 @testset "Additional matrix logarithm tests" for elty in (Float64, Complex{Float64})
-    A11 = convert(Matrix{elty}, [3 2; -5 -3])
-    @test expm(logm(A11)) ≈ A11
+    A10 = convert(Matrix{elty}, [3 2; -5 -3])
+    @test expm(logm(A10)) ≈ A10
 
-    A12 = convert(Matrix{elty}, [1 -1; 1 -1])
-    @test any(isnan.(logm(A12)))
+    A11 = convert(Matrix{elty}, [1 -1; 1 -1])
+    @test any(isnan.(logm(A11)))
 
     A1  = convert(Matrix{elty}, [4 2 0; 1 4 1; 1 1 4])
     logmA1 = convert(Matrix{elty}, [1.329661349 0.5302876358 -0.06818951543;

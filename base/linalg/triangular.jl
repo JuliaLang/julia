@@ -1758,12 +1758,12 @@ function logm{T<:Union{Float64,Complex{Float64}}}(A0::UpperTriangular{T})
          6.888477797186464e-001
          7.208340678820352e-001
          7.485977242539218e-001]
-
     tmax = size(theta, 1)
     n = size(A0, 1)
     A = copy(A0)
 
     s = 0
+    maxs = 100
     its = 5
     k = 0
     flag = 0
@@ -1830,7 +1830,7 @@ function logm{T<:Union{Float64,Complex{Float64}}}(A0::UpperTriangular{T})
 
         if flag != 2
             A, mm, its = sqrtm_dbp(A)
-            if any(isnan.(A))
+            if any(isnan.(A)) || s >= maxs
                 return A
             end
             AmI = A - I
@@ -1857,10 +1857,8 @@ function logm{T<:Union{Float64,Complex{Float64}}}(A0::UpperTriangular{T})
         v[i, i+1] = i / sqrt((2 * i)^2 - 1)
         v[i+1, i] = v[i, i+1]
     end
-
     x, V = eig(v)
     w = Vector(m)
-
     for i = 1:m
         x[i] = (x[i] + 1) / 2
         w[i] = V[1, i]^2

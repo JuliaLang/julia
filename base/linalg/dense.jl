@@ -551,22 +551,13 @@ julia> logm(A)
  0.0  1.0
 ```
 """
-function logm(A::StridedMatrix{T}) where T
+function logm{T}(A::StridedMatrix{T})
     # If possible, use diagonalization
     if issymmetric(A) && T <: Real
         return logm(Symmetric(A))
     end
     if ishermitian(A)
         return logm(Hermitian(A))
-    end
-
-    # Quicker return if A is diagonal
-    if isdiag(A)
-        retmat = copy(A)
-        for i in 1:n
-            retmat[i, i] = log(retmat[i, i])
-        end
-        return retmat
     end
 
     # Use Schur decomposition
@@ -579,11 +570,7 @@ function logm(A::StridedMatrix{T}) where T
         retmat = Q * R * Q'
     end
 
-    if isreal(A)
-        return real(retmat)
-    else
-        return retmat
-    end
+    return retmat
 end
 function logm(a::Number)
     b = log(complex(a))
