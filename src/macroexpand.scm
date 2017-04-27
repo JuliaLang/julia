@@ -270,12 +270,12 @@
                       ,(if inarg
                            (resolve-expansion-vars- (cadr (cadr e)) env m inarg)
                            ;; in keyword arg A=B, don't transform "A"
-                           (cadr (cadr e)))
+                           (unescape (cadr (cadr e))))
                       ,(resolve-expansion-vars- (caddr (cadr e)) env m inarg))
                      ,(resolve-expansion-vars- (caddr e) env m inarg))
                 `(kw ,(if inarg
                           (resolve-expansion-vars- (cadr e) env m inarg)
-                          (cadr e))
+                          (unescape (cadr e)))
                      ,(resolve-expansion-vars- (caddr e) env m inarg))))
 
            ((let)
