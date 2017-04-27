@@ -318,7 +318,7 @@ end
 (\)(D::Diagonal, b::AbstractVector) = D.diag .\ b
 (\)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag .\ Db.diag)
 
-function inv{T}(D::Diagonal{T})
+function inv(D::Diagonal{T}) where T
     Di = similar(D.diag, typeof(inv(zero(T))))
     for i = 1:length(D.diag)
         if D.diag[i] == zero(T)
@@ -329,14 +329,14 @@ function inv{T}(D::Diagonal{T})
     Diagonal(Di)
 end
 
-function pinv{T}(D::Diagonal{T})
+function pinv(D::Diagonal{T}) where T
     Di = similar(D.diag, typeof(inv(zero(T))))
     for i = 1:length(D.diag)
         isfinite(inv(D.diag[i])) ? Di[i]=inv(D.diag[i]) : Di[i]=zero(T)
     end
     Diagonal(Di)
 end
-function pinv{T}(D::Diagonal{T}, tol::Real)
+function pinv(D::Diagonal{T}, tol::Real) where T
     Di = similar(D.diag, typeof(inv(zero(T))))
     if( !isempty(D.diag) ) maxabsD = maximum(abs.(D.diag)) end
     for i = 1:length(D.diag)

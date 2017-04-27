@@ -11,7 +11,8 @@ colon(start::T, stop::T) where {T} = colon(start, oftype(stop-start, 1), stop)
 range(a, len::Integer) = range(a, oftype(a-a, 1), len)
 
 # first promote start and stop, leaving step alone
-colon(start::A, step, stop::C) where {A<:Real,C<:Real} = colon(convert(promote_type(A,C),start), step, convert(promote_type(A,C),stop))
+colon(start::A, step, stop::C) where {A<:Real,C<:Real} =
+    colon(convert(promote_type(A,C),start), step, convert(promote_type(A,C),stop))
 colon(start::T, step::Real, stop::T) where {T<:Real} = colon(promote(start, step, stop)...)
 
 """
@@ -24,12 +25,16 @@ julia> colon(1, 2, 5)
 1:2:5
 ```
 """
-colon(start::T, step::T, stop::T) where {T<:AbstractFloat} = _colon(TypeOrder(T), TypeArithmetic(T), start, step, stop)
-colon(start::T, step::T, stop::T) where {T<:Real} = _colon(TypeOrder(T), TypeArithmetic(T), start, step, stop)
-_colon{T}(::HasOrder, ::Any, start::T, step, stop::T) = StepRange(start, step, stop)
+colon(start::T, step::T, stop::T) where {T<:AbstractFloat} =
+    _colon(TypeOrder(T), TypeArithmetic(T), start, step, stop)
+colon(start::T, step::T, stop::T) where {T<:Real} =
+    _colon(TypeOrder(T), TypeArithmetic(T), start, step, stop)
+_colon(::HasOrder, ::Any, start::T, step, stop::T) where {T} = StepRange(start, step, stop)
 # for T<:Union{Float16,Float32,Float64} see twiceprecision.jl
-_colon{T}(::HasOrder, ::ArithmeticRounds, start::T, step, stop::T) = StepRangeLen(start, step, floor(Int, (stop-start)/step)+1)
-_colon{T}(::Any, ::Any, start::T, step, stop::T) = StepRangeLen(start, step, floor(Int, (stop-start)/step)+1)
+_colon(::HasOrder, ::ArithmeticRounds, start::T, step, stop::T) where {T} =
+    StepRangeLen(start, step, floor(Int, (stop-start)/step)+1)
+_colon(::Any, ::Any, start::T, step, stop::T) where {T} =
+    StepRangeLen(start, step, floor(Int, (stop-start)/step)+1)
 
 """
     :(start, [step], stop)
@@ -42,7 +47,7 @@ colon(start::T, step, stop::T) where {T} = _colon(start, step, stop)
 colon(start::T, step, stop::T) where {T<:Real} = _colon(start, step, stop)
 # without the second method above, the first method above is ambiguous with
 # colon{A<:Real,C<:Real}(start::A, step, stop::C)
-function _colon{T}(start::T, step, stop::T)
+function _colon(start::T, step, stop::T) where T
     T′ = typeof(start+step)
     StepRange(convert(T′,start), step, convert(T′,stop))
 end
@@ -52,9 +57,11 @@ end
 
 Construct a range by length, given a starting value and optional step (defaults to 1).
 """
-range{T}(a::T, step, len::Integer) = _range(TypeOrder(T), TypeArithmetic(T), a, step, len)
-_range{T,S}(::HasOrder, ::ArithmeticOverflows, a::T, step::S, len::Integer) = StepRange{T,S}(a, step, convert(T, a+step*(len-1)))
-_range{T,S}(::Any, ::Any, a::T, step::S, len::Integer) = StepRangeLen{typeof(a+0*step),T,S}(a, step, len)
+range(a::T, step, len::Integer) where {T} = _range(TypeOrder(T), TypeArithmetic(T), a, step, len)
+_range(::HasOrder, ::ArithmeticOverflows, a::T, step::S, len::Integer) where {T,S} =
+    StepRange{T,S}(a, step, convert(T, a+step*(len-1)))
+_range(::Any, ::Any, a::T, step::S, len::Integer) where {T,S} =
+    StepRangeLen{typeof(a+0*step),T,S}(a, step, len)
 
 # AbstractFloat specializations
 colon(a::T, b::T) where {T<:AbstractFloat} = colon(a, T(1), b)
@@ -88,7 +95,7 @@ struct StepRange{T,S} <: OrdinalRange{T,S}
 end
 
 # to make StepRange constructor inlineable, so optimizer can see `step` value
-function steprange_last{T}(start::T, step, stop)
+function steprange_last(start::T, step, stop) where T
     if isa(start,AbstractFloat) || isa(step,AbstractFloat)
         throw(ArgumentError("StepRange should not be used with floating point"))
     end
@@ -145,9 +152,9 @@ end
 UnitRange(start::T, stop::T) where {T<:Real} = UnitRange{T}(start, stop)
 
 unitrange_last(::Bool, stop::Bool) = stop
-unitrange_last{T<:Integer}(start::T, stop::T) =
+unitrange_last(start::T, stop::T) where {T<:Integer} =
     ifelse(stop >= start, stop, convert(T,start-oneunit(stop-start)))
-unitrange_last{T}(start::T, stop::T) =
+unitrange_last(start::T, stop::T) where {T} =
     ifelse(stop >= start, convert(T,start+floor(stop-start)),
                           convert(T,start-oneunit(stop-start)))
 
@@ -404,12 +411,12 @@ let smallint = (Int === Int64 ?
     length(r::OneTo{<:smallint}) = Int(r.stop)
 end
 
-first{T}(r::OrdinalRange{T}) = convert(T, r.start)
-first{T}(r::OneTo{T}) = oneunit(T)
+first(r::OrdinalRange{T}) where {T} = convert(T, r.start)
+first(r::OneTo{T}) where {T} = oneunit(T)
 first(r::StepRangeLen) = unsafe_getindex(r, 1)
 first(r::LinSpace) = r.start
 
-last{T}(r::OrdinalRange{T}) = convert(T, r.stop)
+last(r::OrdinalRange{T}) where {T} = convert(T, r.stop)
 last(r::StepRangeLen) = unsafe_getindex(r, length(r))
 last(r::LinSpace) = r.stop
 
@@ -859,8 +866,12 @@ function in(x, r::Range)
 end
 
 in(x::Integer, r::AbstractUnitRange{<:Integer}) = (first(r) <= x) & (x <= last(r))
-in{T<:Integer}(x, r::Range{T}) = isinteger(x) && !isempty(r) && x>=minimum(r) && x<=maximum(r) && (mod(convert(T,x),step(r))-mod(first(r),step(r)) == 0)
-in(x::Char, r::Range{Char}) = !isempty(r) && x >= minimum(r) && x <= maximum(r) && (mod(Int(x) - Int(first(r)), step(r)) == 0)
+in(x, r::Range{T}) where {T<:Integer} =
+    isinteger(x) && !isempty(r) && x >= minimum(r) && x <= maximum(r) &&
+        (mod(convert(T,x),step(r))-mod(first(r),step(r)) == 0)
+in(x::Char, r::Range{Char}) =
+    !isempty(r) && x >= minimum(r) && x <= maximum(r) &&
+        (mod(Int(x) - Int(first(r)), step(r)) == 0)
 
 # Addition/subtraction of ranges
 
@@ -873,7 +884,7 @@ function _define_range_op(f::ANY)
             range($f(first(r1),first(r2)), $f(step(r1),step(r2)), r1l)
         end
 
-        function $f{T}(r1::LinSpace{T}, r2::LinSpace{T})
+        function $f(r1::LinSpace{T}, r2::LinSpace{T}) where T
             len = r1.len
             (len == r2.len ||
              throw(DimensionMismatch("argument dimensions must match")))

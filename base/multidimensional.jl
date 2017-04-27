@@ -293,7 +293,7 @@ index_ndims() = ()
 @inline index_dimsum(i1, I...) = (index_dimsum(I...)...)
 @inline index_dimsum(::Colon, I...) = (true, index_dimsum(I...)...)
 @inline index_dimsum(::AbstractArray{Bool}, I...) = (true, index_dimsum(I...)...)
-@inline function index_dimsum{_,N}(::AbstractArray{_,N}, I...)
+@inline function index_dimsum(::AbstractArray{<:Any,N}, I...) where N
     (ntuple(x->true, Val{N})..., index_dimsum(I...)...)
 end
 index_dimsum() = ()
