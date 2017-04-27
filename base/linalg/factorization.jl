@@ -28,7 +28,7 @@ end
 
 ### General promotion rules
 convert(::Type{Factorization{T}}, F::Factorization{T}) where {T} = F
-inv{T}(F::Factorization{T}) = A_ldiv_B!(F, eye(T, size(F,1)))
+inv(F::Factorization{T}) where {T} = A_ldiv_B!(F, eye(T, size(F,1)))
 
 # With a real lhs and complex rhs with the same precision, we can reinterpret
 # the complex rhs as a real rhs with twice the number of columns

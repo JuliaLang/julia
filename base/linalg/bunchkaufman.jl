@@ -72,8 +72,8 @@ The following functions are available for
 bkfact(A::StridedMatrix{<:BlasFloat}, uplo::Symbol=:U, symmetric::Bool=issymmetric(A),
     rook::Bool=false) =
         bkfact!(copy(A), uplo, symmetric, rook)
-bkfact{T}(A::StridedMatrix{T}, uplo::Symbol=:U, symmetric::Bool=issymmetric(A),
-    rook::Bool=false) =
+bkfact(A::StridedMatrix{T}, uplo::Symbol=:U, symmetric::Bool=issymmetric(A),
+    rook::Bool=false) where {T} =
         bkfact!(convert(Matrix{promote_type(Float32, typeof(sqrt(one(T))))}, A),
                 uplo, symmetric, rook)
 
@@ -120,7 +120,7 @@ function inv(B::BunchKaufman{<:BlasComplex})
     end
 end
 
-function A_ldiv_B!{T<:BlasReal}(B::BunchKaufman{T}, R::StridedVecOrMat{T})
+function A_ldiv_B!(B::BunchKaufman{T}, R::StridedVecOrMat{T}) where T<:BlasReal
     if B.info > 0
         throw(SingularException(B.info))
     end
@@ -131,7 +131,7 @@ function A_ldiv_B!{T<:BlasReal}(B::BunchKaufman{T}, R::StridedVecOrMat{T})
         LAPACK.sytrs!(B.uplo, B.LD, B.ipiv, R)
     end
 end
-function A_ldiv_B!{T<:BlasComplex}(B::BunchKaufman{T}, R::StridedVecOrMat{T})
+function A_ldiv_B!(B::BunchKaufman{T}, R::StridedVecOrMat{T}) where T<:BlasComplex
     if B.info > 0
         throw(SingularException(B.info))
     end

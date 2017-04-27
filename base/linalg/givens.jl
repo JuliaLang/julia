@@ -46,7 +46,7 @@ ctranspose(R::Rotation{T}) where {T} = Rotation{T}(reverse!([ctranspose(r) for r
 
 realmin2(::Type{Float32}) = reinterpret(Float32, 0x26000000)
 realmin2(::Type{Float64}) = reinterpret(Float64, 0x21a0000000000000)
-realmin2{T}(::Type{T}) = (twopar = 2one(T); twopar^trunc(Integer,log(realmin(T)/eps(T))/log(twopar)/twopar))
+realmin2(::Type{T}) where {T} = (twopar = 2one(T); twopar^trunc(Integer,log(realmin(T)/eps(T))/log(twopar)/twopar))
 
 # derived from LAPACK's dlartg
 # Copyright:
@@ -54,7 +54,7 @@ realmin2{T}(::Type{T}) = (twopar = 2one(T); twopar^trunc(Integer,log(realmin(T)/
 # Univ. of California Berkeley
 # Univ. of Colorado Denver
 # NAG Ltd.
-function givensAlgorithm{T<:AbstractFloat}(f::T, g::T)
+function givensAlgorithm(f::T, g::T) where T<:AbstractFloat
     onepar = one(T)
     twopar = 2one(T)
     T0 = typeof(onepar) # dimensionless
@@ -128,7 +128,7 @@ end
 # Univ. of California Berkeley
 # Univ. of Colorado Denver
 # NAG Ltd.
-function givensAlgorithm{T<:AbstractFloat}(f::Complex{T}, g::Complex{T})
+function givensAlgorithm(f::Complex{T}, g::Complex{T}) where T<:AbstractFloat
     twopar, onepar = 2one(T), one(T)
     T0 = typeof(onepar) # dimensionless
     zeropar = T0(zero(T)) # must be dimensionless
@@ -252,7 +252,7 @@ y[i2] = 0
 
 See also: [`LinAlg.Givens`](@ref)
 """
-function givens{T}(f::T, g::T, i1::Integer, i2::Integer)
+function givens(f::T, g::T, i1::Integer, i2::Integer) where T
     if i1 == i2
         throw(ArgumentError("Indices must be distinct."))
     end

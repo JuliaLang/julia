@@ -21,7 +21,7 @@ convert(::Type{Factorization{T}}, F::LDLt{S,U}) where {T,S,U} = convert(LDLt{T,U
 
 Same as [`ldltfact`](@ref), but saves space by overwriting the input `A`, instead of creating a copy.
 """
-function ldltfact!{T<:Real}(S::SymTridiagonal{T})
+function ldltfact!(S::SymTridiagonal{T}) where T<:Real
     n = size(S,1)
     d = S.dv
     e = S.ev
@@ -39,14 +39,14 @@ Compute an `LDLt` factorization of a real symmetric tridiagonal matrix such that
 where `L` is a unit lower triangular matrix and `d` is a vector. The main use of an `LDLt`
 factorization `F = ldltfact(A)` is to solve the linear system of equations `Ax = b` with `F\\b`.
 """
-function ldltfact{T}(M::SymTridiagonal{T})
+function ldltfact(M::SymTridiagonal{T}) where T
     S = typeof(zero(T)/one(T))
     return S == T ? ldltfact!(copy(M)) : ldltfact!(convert(SymTridiagonal{S}, M))
 end
 
 factorize(S::SymTridiagonal) = ldltfact(S)
 
-function A_ldiv_B!{T}(S::LDLt{T,SymTridiagonal{T}}, B::AbstractVecOrMat{T})
+function A_ldiv_B!(S::LDLt{T,SymTridiagonal{T}}, B::AbstractVecOrMat{T}) where T
     n, nrhs = size(B, 1), size(B, 2)
     if size(S,1) != n
         throw(DimensionMismatch("Matrix has dimensions $(size(S)) but right hand side has first dimension $n"))
