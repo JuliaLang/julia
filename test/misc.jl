@@ -669,3 +669,12 @@ if Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
         @test_throws StackOverflowError f_19433(+, 1, 2)
     end
 end
+
+# invokelatest function for issue #19774
+issue19774(x) = 1
+let foo() = begin
+        eval(:(issue19774(x::Int) = 2))
+        return Base.invokelatest(issue19774, 0)
+    end
+    @test foo() == 2
+end

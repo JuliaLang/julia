@@ -77,7 +77,7 @@ static htable_t fptr_to_id;
 static const jl_fptr_t id_to_fptrs[] = {
   NULL, NULL,
   jl_f_throw, jl_f_is, jl_f_typeof, jl_f_issubtype, jl_f_isa,
-  jl_f_typeassert, jl_f__apply, jl_f__apply_pure, jl_f_isdefined,
+  jl_f_typeassert, jl_f__apply, jl_f__apply_pure, jl_f__apply_latest, jl_f_isdefined,
   jl_f_tuple, jl_f_svec, jl_f_intrinsic_call, jl_f_invoke_kwsorter,
   jl_f_getfield, jl_f_setfield, jl_f_fieldtype, jl_f_nfields,
   jl_f_arrayref, jl_f_arrayset, jl_f_arraysize, jl_f_apply_type,

@@ -454,6 +454,18 @@ JL_CALLABLE(jl_f__apply_pure)
     return ret;
 }
 
+// this is like `_apply`, but always runs in the newest world
+JL_CALLABLE(jl_f__apply_latest)
+{
+    jl_ptls_t ptls = jl_get_ptls_states();
+    size_t last_age = ptls->world_age;
+    if (!ptls->in_pure_callback)
+        ptls->world_age = jl_world_counter;
+    jl_value_t *ret = jl_f__apply(NULL, args, nargs);
+    ptls->world_age = last_age;
+    return ret;
+}
+
 // eval -----------------------------------------------------------------------
 
 JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
@@ -1089,6 +1101,7 @@ void jl_init_primitives(void)
     add_builtin_func("apply_type", jl_f_apply_type);
     add_builtin_func("_apply", jl_f__apply);
     add_builtin_func("_apply_pure", jl_f__apply_pure);
+    add_builtin_func("_apply_latest", jl_f__apply_latest);
     add_builtin_func("_expr", jl_f__expr);
     add_builtin_func("svec", jl_f_svec);
 
