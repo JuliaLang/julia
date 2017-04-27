@@ -264,7 +264,7 @@ UnionAll(v::TypeVar, t::ANY) = ccall(:jl_type_unionall, Any, (Any, Any), v, t)
 
 Void() = nothing
 
-(::Type{Tuple{}})() = ()
+Tuple{}() where {} = ()
 
 struct VecElement{T}
     value::T
