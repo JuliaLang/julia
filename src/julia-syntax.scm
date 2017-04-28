@@ -677,14 +677,20 @@
                      (block
                       ,@locs
                       (call new ,@field-names)))))
-    (if (and (null? params) (any (lambda (t) (not (eq? t 'Any))) field-types))
+    (if (and (null? params) (pair? field-types))
         (list
          ;; definition with field types for all arguments
-         `(function (call ,name
-                          ,@(map make-decl field-names field-types))
-                    (block
-                     ,@locs
-                     (call new ,@field-names)))
+         ;; only if any field type is not Any, checked at runtime
+         `(if ,(foldl (lambda (t u)
+                        `(&& ,u (call (core ===) (core Any) ,t)))
+                      `(call (core ===) (core Any) ,(car field-types))
+                      (cdr field-types))
+            (block)
+            (function (call ,name
+                            ,@(map make-decl field-names field-types))
+                      (block
+                        ,@locs
+                        (call new ,@field-names))))
          any-ctor)
         (list any-ctor))))
 
