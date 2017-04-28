@@ -74,7 +74,7 @@ function complete_symbol(sym, ffunc)
         fields = fieldnames(t)
         for field in fields
             s = string(field)
-            if startswith(s, name)
+            if startswith(s, name) && !contains(s, "#")
                 push!(suggestions, s)
             end
         end
