@@ -441,7 +441,12 @@ function delete!(t::ObjectIdDict, key::ANY)
     t
 end
 
-empty!(t::ObjectIdDict) = (t.ht = Vector{Any}(length(t.ht)); t.ndel = 0; t)
+function empty!(t::ObjectIdDict)
+    resize!(t.ht, 32)
+    ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t), t.ht, 0, sizeof(t.ht))
+    t.ndel = 0
+    return t
+end
 
 _oidd_nextind(a, i) = reinterpret(Int,ccall(:jl_eqtable_nextind, Csize_t, (Any, Csize_t), a, i))
 

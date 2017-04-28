@@ -429,3 +429,6 @@ for (ms, str) in zip([0, 1, 20, 300, 450, 678], ["0", "001", "02", "3", "45", "6
     @test Dates.format(dt, "sss") == rpad(str, 3, '0')
     @test Dates.format(dt, "ssss") == rpad(str, 4, '0')
 end
+
+# Issue #21504
+@test isnull(tryparse(Dates.Date, "0-1000"))

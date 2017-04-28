@@ -790,6 +790,32 @@ mktempdir() do dir
         end
     end
 
+    @testset "push" begin
+        up_path = joinpath(dir, "Example.PushUp")
+        up_repo = LibGit2.clone(cache_repo, up_path)
+        our_path = joinpath(dir, "Example.Push")
+        our_repo = LibGit2.clone(cache_repo, our_path)
+        # need to set this for merges to succeed
+        our_cfg = LibGit2.GitConfig(our_repo)
+        LibGit2.set!(our_cfg, "user.name", "AAAA")
+        LibGit2.set!(our_cfg, "user.email", "BBBB@BBBB.COM")
+        up_cfg = LibGit2.GitConfig(up_repo)
+        LibGit2.set!(up_cfg, "user.name", "AAAA")
+        LibGit2.set!(up_cfg, "user.email", "BBBB@BBBB.COM")
+        try
+            open(joinpath(LibGit2.path(our_repo),"file1"),"w") do f
+                write(f, "111\n")
+            end
+            LibGit2.add!(our_repo, "file1")
+            LibGit2.commit(our_repo, "add file1")
+            # we cannot yet locally push to non-bare repos
+            @test_throws LibGit2.GitError LibGit2.push(our_repo, remoteurl=up_path)
+        finally
+            close(our_repo)
+            close(up_repo)
+        end
+    end
+
     @testset "Fetch from cache repository" begin
         repo = LibGit2.GitRepo(test_repo)
         try
@@ -805,6 +831,10 @@ mktempdir() do dir
             new_head = LibGit2.reset!(repo, head_oid, LibGit2.Consts.RESET_HARD)
             @test isfile(joinpath(test_repo, test_file))
             @test new_head == head_oid
+
+            # GitAnnotated for a fetchhead
+            fh_ann = LibGit2.GitAnnotated(repo, LibGit2.Consts.FETCH_HEAD)
+            @test LibGit2.GitHash(fh_ann) == head_oid
 
             # Detach HEAD - no merge
             LibGit2.checkout!(repo, string(commit_oid3))

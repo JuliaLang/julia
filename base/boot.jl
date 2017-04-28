@@ -264,7 +264,7 @@ UnionAll(v::TypeVar, t::ANY) = ccall(:jl_type_unionall, Any, (Any, Any), v, t)
 
 Void() = nothing
 
-(::Type{Tuple{}})() = ()
+(::Type{Tuple{}})() = () # Tuple{}()
 
 struct VecElement{T}
     value::T
@@ -298,29 +298,28 @@ convert(::Type{T}, x::T) where {T} = x
 cconvert(::Type{T}, x) where {T} = convert(T, x)
 unsafe_convert(::Type{T}, x::T) where {T} = x
 
-NTuple{N,T} = Tuple{Vararg{T,N}}
+const NTuple{N,T} = Tuple{Vararg{T,N}}
 
 
 # primitive array constructors
-(::Type{Array{T,N}})(d::NTuple{N,Int}) where {T,N} =
-    ccall(:jl_new_array, Array{T,N}, (Any,Any), Array{T,N}, d)
-(::Type{Array{T,1}})(d::NTuple{1,Int}) where {T} = Array{T,1}(getfield(d,1))
-(::Type{Array{T,2}})(d::NTuple{2,Int}) where {T} = Array{T,2}(getfield(d,1), getfield(d,2))
-(::Type{Array{T,3}})(d::NTuple{3,Int}) where {T} = Array{T,3}(getfield(d,1), getfield(d,2), getfield(d,3))
-(::Type{Array{T,N}})(d::Vararg{Int, N}) where {T,N} = ccall(:jl_new_array, Array{T,N}, (Any,Any), Array{T,N}, d)
-(::Type{Array{T,1}})(m::Int) where {T} =
-    ccall(:jl_alloc_array_1d, Array{T,1}, (Any,Int), Array{T,1}, m)
-(::Type{Array{T,2}})(m::Int, n::Int) where {T} =
-    ccall(:jl_alloc_array_2d, Array{T,2}, (Any,Int,Int), Array{T,2}, m, n)
-(::Type{Array{T,3}})(m::Int, n::Int, o::Int) where {T} =
-    ccall(:jl_alloc_array_3d, Array{T,3}, (Any,Int,Int,Int), Array{T,3}, m, n, o)
+Array{T,N}(d::NTuple{N,Int}) where {T,N} =
+    ccall(:jl_new_array, Array{T,N}, (Any, Any), Array{T,N}, d)
+Array{T,1}(d::NTuple{1,Int}) where {T} = Array{T,1}(getfield(d,1))
+Array{T,2}(d::NTuple{2,Int}) where {T} = Array{T,2}(getfield(d,1), getfield(d,2))
+Array{T,3}(d::NTuple{3,Int}) where {T} = Array{T,3}(getfield(d,1), getfield(d,2), getfield(d,3))
+Array{T,N}(d::Vararg{Int,N}) where {T,N} = ccall(:jl_new_array, Array{T,N}, (Any, Any), Array{T,N}, d)
+Array{T,1}(m::Int) where {T} = ccall(:jl_alloc_array_1d, Array{T,1}, (Any, Int), Array{T,1}, m)
+Array{T,2}(m::Int, n::Int) where {T} =
+    ccall(:jl_alloc_array_2d, Array{T,2}, (Any, Int, Int), Array{T,2}, m, n)
+Array{T,3}(m::Int, n::Int, o::Int) where {T} =
+    ccall(:jl_alloc_array_3d, Array{T,3}, (Any, Int, Int, Int), Array{T,3}, m, n, o)
 
-(::Type{Array{T}})(d::NTuple{N,Int}) where {T,N} = Array{T,N}(d)
-(::Type{Array{T}})(m::Int) where {T} = Array{T,1}(m)
-(::Type{Array{T}})(m::Int, n::Int) where {T} = Array{T,2}(m, n)
-(::Type{Array{T}})(m::Int, n::Int, o::Int) where {T} = Array{T,3}(m, n, o)
+Array{T}(d::NTuple{N,Int}) where {T,N} = Array{T,N}(d)
+Array{T}(m::Int) where {T} = Array{T,1}(m)
+Array{T}(m::Int, n::Int) where {T} = Array{T,2}(m, n)
+Array{T}(m::Int, n::Int, o::Int) where {T} = Array{T,3}(m, n, o)
 
-(::Type{Array{T,1}})() where {T} = Array{T,1}(0)
+Array{T,1}() where {T} = Array{T,1}(0)
 
 # primitive Symbol constructors
 function Symbol(s::String)

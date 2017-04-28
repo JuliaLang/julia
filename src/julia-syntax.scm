@@ -1865,18 +1865,13 @@
      (define lhs (cadr e))
      (define (function-lhs? lhs)
        (and (pair? lhs)
-            (or (and (eq? (car lhs) 'comparison) (length= lhs 4))
-                (eq? (car lhs) 'call)
+            (or (eq? (car lhs) 'call)
                 (eq? (car lhs) 'where)
                 (and (eq? (car lhs) '|::|)
                      (pair? (cadr lhs))
                      (eq? (car (cadr lhs)) 'call)))))
      (define (assignment-to-function lhs e)  ;; convert '= expr to 'function expr
-       (if (eq? (car lhs) 'comparison)
-           ;; allow defining functions that use comparison syntax
-           (list* 'function
-                  `(call ,(caddr lhs) ,(cadr lhs) ,(cadddr lhs)) (cddr e))
-           (cons 'function (cdr e))))
+       (cons 'function (cdr e)))
      (cond
       ((function-lhs? lhs)
        (expand-forms (assignment-to-function lhs e)))

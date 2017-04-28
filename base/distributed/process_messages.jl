@@ -158,7 +158,7 @@ function message_handler_loop(r_stream::IO, w_stream::IO, incoming::Bool)
             # println("header: ", header)
 
             try
-                msg = deserialize_msg(serializer)
+                msg = invokelatest(deserialize_msg, serializer)
             catch e
                 # Deserialization error; discard bytes in stream until boundary found
                 boundary_idx = 1

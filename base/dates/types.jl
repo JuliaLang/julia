@@ -144,6 +144,30 @@ isleapyear(y) = ((y % 4 == 0) && (y % 100 != 0)) || (y % 400 == 0)
 const DAYSINMONTH = (31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
 daysinmonth(y,m) = DAYSINMONTH[m] + (m == 2 && isleapyear(y))
 
+### UTILITIES ###
+
+# These are necessary because the type constructors for TimeType subtypes can
+# throw, and we want to be able to use tryparse without requiring a try/catch.
+# This is made easier by providing a helper function that checks arguments, so
+# we can validate arguments in tryparse.
+
+"""
+    validargs(::Type{<:TimeType}, args...) -> Nullable{ArgumentError}
+
+Determine whether the given arguments consitute valid inputs for the given type.
+Returns a `Nullable{ArgumentError}` where null signifies success.
+"""
+function validargs end
+
+"""
+    argerror([msg]) -> Nullable{ArgumentError}
+
+Construct a `Nullable{ArgumentError}` with the given message, or null if no message
+is provided. For use by `validargs`.
+"""
+argerror(msg::String) = Nullable(ArgumentError(msg))
+argerror() = Nullable{ArgumentError}()
+
 ### CONSTRUCTORS ###
 # Core constructors
 """
@@ -153,14 +177,21 @@ Construct a `DateTime` type by parts. Arguments must be convertible to `Int64`.
 """
 function DateTime(y::Int64, m::Int64=1, d::Int64=1,
                   h::Int64=0, mi::Int64=0, s::Int64=0, ms::Int64=0)
-    0 < m < 13 || throw(ArgumentError("Month: $m out of range (1:12)"))
-    0 < d < daysinmonth(y, m) + 1 || throw(ArgumentError("Day: $d out of range (1:$(daysinmonth(y, m)))"))
-    -1 < h < 24 || throw(ArgumentError("Hour: $h out of range (0:23)"))
-    -1 < mi < 60 || throw(ArgumentError("Minute: $mi out of range (0:59)"))
-    -1 < s < 60 || throw(ArgumentError("Second: $s out of range (0:59)"))
-    -1 < ms < 1000 || throw(ArgumentError("Millisecond: $ms out of range (0:999)"))
+    err = validargs(DateTime, y, m, d, h, mi, s, ms)
+    isnull(err) || throw(unsafe_get(err))
     rata = ms + 1000 * (s + 60mi + 3600h + 86400 * totaldays(y, m, d))
     return DateTime(UTM(rata))
+end
+
+function validargs(::Type{DateTime}, y::Int64, m::Int64, d::Int64,
+                   h::Int64, mi::Int64, s::Int64, ms::Int64)
+    0 < m < 13 || return argerror("Month: $m out of range (1:12)")
+    0 < d < daysinmonth(y, m) + 1 || return argerror("Day: $d out of range (1:$(daysinmonth(y, m)))")
+    -1 < h < 24 || return argerror("Hour: $h out of range (0:23)")
+    -1 < mi < 60 || return argerror("Minute: $mi out of range (0:59)")
+    -1 < s < 60 || return argerror("Second: $s out of range (0:59)")
+    -1 < ms < 1000 || return argerror("Millisecond: $ms out of range (0:999)")
+    return argerror()
 end
 
 """
@@ -169,9 +200,15 @@ end
 Construct a `Date` type by parts. Arguments must be convertible to `Int64`.
 """
 function Date(y::Int64, m::Int64=1, d::Int64=1)
-    0 < m < 13 || throw(ArgumentError("Month: $m out of range (1:12)"))
-    0 < d < daysinmonth(y, m) + 1 || throw(ArgumentError("Day: $d out of range (1:$(daysinmonth(y, m)))"))
+    err = validargs(Date, y, m, d)
+    isnull(err) || throw(unsafe_get(err))
     return Date(UTD(totaldays(y, m, d)))
+end
+
+function validargs(::Type{Date}, y::Int64, m::Int64, d::Int64)
+    0 < m < 13 || return argerror("Month: $m out of range (1:12)")
+    0 < d < daysinmonth(y, m) + 1 || return argerror("Day: $d out of range (1:$(daysinmonth(y, m)))")
+    return argerror()
 end
 
 """
@@ -180,13 +217,19 @@ end
 Construct a `Time` type by parts. Arguments must be convertible to `Int64`.
 """
 function Time(h::Int64, mi::Int64=0, s::Int64=0, ms::Int64=0, us::Int64=0, ns::Int64=0)
-    -1 < h < 24 || throw(ArgumentError("Hour: $h out of range (0:23)"))
-    -1 < mi < 60 || throw(ArgumentError("Minute: $mi out of range (0:59)"))
-    -1 < s < 60 || throw(ArgumentError("Second: $s out of range (0:59)"))
-    -1 < ms < 1000 || throw(ArgumentError("Millisecond: $ms out of range (0:999)"))
-    -1 < us < 1000 || throw(ArgumentError("Microsecond: $us out of range (0:999)"))
-    -1 < ns < 1000 || throw(ArgumentError("Nanosecond: $ns out of range (0:999)"))
+    err = validargs(Time, h, mi, s, ms, us, ns)
+    isnull(err) || throw(unsafe_get(err))
     return Time(Nanosecond(ns + 1000us + 1000000ms + 1000000000s + 60000000000mi + 3600000000000h))
+end
+
+function validargs(::Type{Time}, h::Int64, mi::Int64, s::Int64, ms::Int64, us::Int64, ns::Int64)
+    -1 < h < 24 || return argerror("Hour: $h out of range (0:23)")
+    -1 < mi < 60 || return argerror("Minute: $mi out of range (0:59)")
+    -1 < s < 60 || return argerror("Second: $s out of range (0:59)")
+    -1 < ms < 1000 || return argerror("Millisecond: $ms out of range (0:999)")
+    -1 < us < 1000 || return argerror("Microsecond: $us out of range (0:999)")
+    -1 < ns < 1000 || return argerror("Nanosecond: $ns out of range (0:999)")
+    return argerror()
 end
 
 # Convenience constructors from Periods
@@ -311,5 +354,5 @@ sleep(time::Period) = sleep(toms(time) / 1000)
 Timer(time::Period, repeat::Period=Second(0)) = Timer(toms(time) / 1000, toms(repeat) / 1000)
 timedwait(testcb::Function, time::Period) = timedwait(testcb, toms(time) / 1000)
 
-(::Type{Base.TypeOrder})(::Type{<:AbstractTime}) = Base.HasOrder()
-(::Type{Base.TypeArithmetic})(::Type{<:AbstractTime}) = Base.ArithmeticOverflows()
+Base.TypeOrder(::Type{<:AbstractTime}) = Base.HasOrder()
+Base.TypeArithmetic(::Type{<:AbstractTime}) = Base.ArithmeticOverflows()

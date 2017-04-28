@@ -343,6 +343,13 @@ Library improvements
     Currently, it is used by default for the new `RowVector` type only, and
     enforces that both `transpose(vec)` and `ctranspose(vec)` are views not copies ([#20047]).
 
+  * `map[!]` and `broadcast[!]` now have dedicated methods for sparse/structured
+    vectors/matrices. Specifically, `map[!]` and `broadcast[!]` over combinations including
+    one or more `SparseVector`, `SparseMatrixCSC`, `Diagonal`, `Bidiagonal`, `Tridiagonal`,
+    or `SymTridiagonal`, and any number of `broadcast` scalars, `Vector`s, or `Matrix`s,
+    now efficiently yield `SparseVector`s or `SparseMatrix`s as appropriate ([#19239],
+    [#19371], [#19518], [#19438], [#19690], [#19724], [#19926], [#19934], [#20009]).
+
 Compiler/Runtime improvements
 -----------------------------
 
@@ -447,12 +454,16 @@ Deprecated or removed
 [#19018]: https://github.com/JuliaLang/julia/issues/19018
 [#19157]: https://github.com/JuliaLang/julia/issues/19157
 [#19233]: https://github.com/JuliaLang/julia/issues/19233
+[#19239]: https://github.com/JuliaLang/julia/issues/19239
 [#19288]: https://github.com/JuliaLang/julia/issues/19288
 [#19305]: https://github.com/JuliaLang/julia/issues/19305
 [#19331]: https://github.com/JuliaLang/julia/issues/19331
+[#19371]: https://github.com/JuliaLang/julia/issues/19371
+[#19438]: https://github.com/JuliaLang/julia/issues/19438
 [#19449]: https://github.com/JuliaLang/julia/issues/19449
 [#19464]: https://github.com/JuliaLang/julia/issues/19464
 [#19469]: https://github.com/JuliaLang/julia/issues/19469
+[#19518]: https://github.com/JuliaLang/julia/issues/19518
 [#19533]: https://github.com/JuliaLang/julia/issues/19533
 [#19543]: https://github.com/JuliaLang/julia/issues/19543
 [#19594]: https://github.com/JuliaLang/julia/issues/19594
@@ -461,13 +472,16 @@ Deprecated or removed
 [#19670]: https://github.com/JuliaLang/julia/issues/19670
 [#19677]: https://github.com/JuliaLang/julia/issues/19677
 [#19680]: https://github.com/JuliaLang/julia/issues/19680
+[#19690]: https://github.com/JuliaLang/julia/issues/19690
 [#19692]: https://github.com/JuliaLang/julia/issues/19692
 [#19711]: https://github.com/JuliaLang/julia/issues/19711
 [#19712]: https://github.com/JuliaLang/julia/issues/19712
 [#19720]: https://github.com/JuliaLang/julia/issues/19720
 [#19721]: https://github.com/JuliaLang/julia/issues/19721
 [#19722]: https://github.com/JuliaLang/julia/issues/19722
+[#19724]: https://github.com/JuliaLang/julia/issues/19724
 [#19741]: https://github.com/JuliaLang/julia/issues/19741
+[#19784]: https://github.com/JuliaLang/julia/issues/19784
 [#19787]: https://github.com/JuliaLang/julia/issues/19787
 [#19791]: https://github.com/JuliaLang/julia/issues/19791
 [#19800]: https://github.com/JuliaLang/julia/issues/19800
@@ -476,10 +490,13 @@ Deprecated or removed
 [#19900]: https://github.com/JuliaLang/julia/issues/19900
 [#19903]: https://github.com/JuliaLang/julia/issues/19903
 [#19919]: https://github.com/JuliaLang/julia/issues/19919
+[#19926]: https://github.com/JuliaLang/julia/issues/19926
 [#19931]: https://github.com/JuliaLang/julia/issues/19931
+[#19934]: https://github.com/JuliaLang/julia/issues/19934
 [#19944]: https://github.com/JuliaLang/julia/issues/19944
 [#19949]: https://github.com/JuliaLang/julia/issues/19949
 [#19950]: https://github.com/JuliaLang/julia/issues/19950
+[#20009]: https://github.com/JuliaLang/julia/issues/20009
 [#20047]: https://github.com/JuliaLang/julia/issues/20047
 [#20079]: https://github.com/JuliaLang/julia/issues/20079
 [#20164]: https://github.com/JuliaLang/julia/issues/20164

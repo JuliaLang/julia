@@ -61,7 +61,7 @@ match the length or number of `dims`.
 Array
 
 vect() = Array{Any,1}(0)
-vect{T}(X::T...) = T[ X[i] for i=1:length(X) ]
+vect(X::T...) where {T} = T[ X[i] for i = 1:length(X) ]
 
 function vect(X...)
     T = promote_typeof(X...)
