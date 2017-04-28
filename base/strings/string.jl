@@ -43,7 +43,6 @@ end
 _string_n(n::Integer) = ccall(:jl_alloc_string, Ref{String}, (Csize_t,), n)
 
 convert(::Type{Vector{UInt8}}, s::String) = ccall(:jl_string_to_array, Ref{Vector{UInt8}}, (Any,), s)
-convert(::Type{String}, s::String) = s
 convert(::Type{String}, v::Vector{UInt8}) = String(v)
 
 ## low-level functions ##

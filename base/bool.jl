@@ -2,7 +2,6 @@
 
 ## boolean conversions ##
 
-convert(::Type{Bool}, x::Bool) = x
 convert(::Type{Bool}, x::Float16) = x==0 ? false : x==1 ? true : throw(InexactError())
 convert(::Type{Bool}, x::Real) = x==0 ? false : x==1 ? true : throw(InexactError())
 

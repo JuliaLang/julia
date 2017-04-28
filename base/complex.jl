@@ -23,7 +23,6 @@ convert(::Type{Complex{T}}, z::Complex) where {T<:Real} = Complex{T}(real(z),ima
 convert(::Type{T}, z::Complex) where {T<:Real} =
     isreal(z) ? convert(T,real(z)) : throw(InexactError())
 
-convert(::Type{Complex}, z::Complex) = z
 convert(::Type{Complex}, x::Real) = Complex(x)
 
 promote_rule(::Type{Complex{T}}, ::Type{S}) where {T<:Real,S<:Real} =
