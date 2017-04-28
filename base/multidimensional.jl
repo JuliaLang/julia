@@ -293,7 +293,7 @@ index_ndims() = ()
 @inline index_dimsum(i1, I...) = (index_dimsum(I...)...)
 @inline index_dimsum(::Colon, I...) = (true, index_dimsum(I...)...)
 @inline index_dimsum(::AbstractArray{Bool}, I...) = (true, index_dimsum(I...)...)
-@inline function index_dimsum{_,N}(::AbstractArray{_,N}, I...)
+@inline function index_dimsum(::AbstractArray{<:Any,N}, I...) where N
     (ntuple(x->true, Val{N})..., index_dimsum(I...)...)
 end
 index_dimsum() = ()
@@ -446,8 +446,8 @@ end
 _maybe_reshape(::IndexLinear, A::AbstractArray, I...) = A
 _maybe_reshape(::IndexCartesian, A::AbstractVector, I...) = A
 @inline _maybe_reshape(::IndexCartesian, A::AbstractArray, I...) = __maybe_reshape(A, index_ndims(I...))
-@inline __maybe_reshape{T,N}(A::AbstractArray{T,N}, ::NTuple{N,Any}) = A
-@inline __maybe_reshape{N}(A::AbstractArray, ::NTuple{N,Any}) = reshape(A, Val{N})
+@inline __maybe_reshape(A::AbstractArray{T,N}, ::NTuple{N,Any}) where {T,N} = A
+@inline __maybe_reshape(A::AbstractArray, ::NTuple{N,Any}) where {N} = reshape(A, Val{N})
 
 @generated function _unsafe_getindex(::IndexStyle, A::AbstractArray, I::Union{Real, AbstractArray}...)
     N = length(I)

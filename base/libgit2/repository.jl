@@ -217,7 +217,7 @@ then `obj` will be peeled until the type changes.
 - A `GitTag` will be peeled to the object it references.
 - A `GitCommit` will be peeled to a `GitTree`.
 """
-function peel{T<:GitObject}(::Type{T}, obj::GitObject)
+function peel(::Type{T}, obj::GitObject) where T<:GitObject
     new_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
 
     @check ccall((:git_object_peel, :libgit2), Cint,

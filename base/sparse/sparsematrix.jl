@@ -1162,7 +1162,7 @@ function find(S::SparseMatrixCSC)
     return sub2ind(sz, I, J)
 end
 
-function findn{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
+function findn(S::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
     numnz = nnz(S)
     I = Vector{Ti}(numnz)
     J = Vector{Ti}(numnz)
@@ -1185,7 +1185,7 @@ function findn{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     return (I, J)
 end
 
-function findnz{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
+function findnz(S::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
     numnz = nnz(S)
     I = Vector{Ti}(numnz)
     J = Vector{Ti}(numnz)
@@ -1768,7 +1768,7 @@ macro _findr(op, A, region, Tv, Ti)
     end) #quote
 end
 
-findmin{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, region) = @_findr(<, A, region, Tv, Ti)
+findmin(A::SparseMatrixCSC{Tv,Ti}, region) where {Tv,Ti} = @_findr(<, A, region, Tv, Ti)
 findmax(A::SparseMatrixCSC{Tv,Ti}, region) where {Tv,Ti} = @_findr(>, A, region, Tv, Ti)
 findmin(A::SparseMatrixCSC) = (r=findmin(A,(1,2)); (r[1][1], r[2][1]))
 findmax(A::SparseMatrixCSC) = (r=findmax(A,(1,2)); (r[1][1], r[2][1]))
@@ -1803,7 +1803,7 @@ getindex(A::SparseMatrixCSC, ::Colon, ::Colon) = copy(A)
 getindex(A::SparseMatrixCSC, i, ::Colon)       = getindex(A, i, 1:size(A, 2))
 getindex(A::SparseMatrixCSC, ::Colon, i)       = getindex(A, 1:size(A, 1), i)
 
-function getindex_cols{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, J::AbstractVector)
+function getindex_cols(A::SparseMatrixCSC{Tv,Ti}, J::AbstractVector) where {Tv,Ti}
     # for indexing whole columns
     (m, n) = size(A)
     nJ = length(J)

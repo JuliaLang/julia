@@ -40,7 +40,7 @@ promote_containertype(::Type{Tuple}, ::ScalarType) = Tuple
 promote_containertype(::ScalarType, ::Type{Tuple}) = Tuple
 promote_containertype(::Type{Any}, ::Type{Nullable}) = Nullable
 promote_containertype(::Type{Nullable}, ::Type{Any}) = Nullable
-promote_containertype{T}(::Type{T}, ::Type{T}) = T
+promote_containertype(::Type{T}, ::Type{T}) where {T} = T
 
 ## Calculate the broadcast indices of the arguments, or error if incompatible
 # array inputs
