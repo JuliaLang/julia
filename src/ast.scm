@@ -154,7 +154,7 @@
            (else (bad-formal-argument v))))))
 
 (define (arg-type v)
-  (cond ((symbol? v)  'Any)
+  (cond ((symbol? v)  '(core Any))
         ((not (pair? v))
          (bad-formal-argument v))
         (else
@@ -273,7 +273,7 @@
 (define (eq-sym? a b)
   (or (eq? a b) (and (ssavalue? a) (ssavalue? b) (eqv? (cdr a) (cdr b)))))
 
-(define (make-var-info name) (list name 'Any 0))
+(define (make-var-info name) (list name '(core Any) 0))
 (define vinfo:name car)
 (define vinfo:type cadr)
 (define (vinfo:set-type! v t) (set-car! (cdr v) t))

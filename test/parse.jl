@@ -1144,3 +1144,42 @@ f21586(; @m21586(a), @m21586(b)) = a + b
     end
 end
 @test Test21604.X(1.0) === Test21604.X(1.0)
+
+# comment 298107224 on pull #21607
+module Test21607
+    using Base.Test
+
+    @test_warn(
+    "WARNING: imported binding for Any overwritten in module Test21607",
+    @eval const Any = Integer)
+
+    # check that X <: Core.Any, not Integer
+    mutable struct X; end
+    @test supertype(X) === Core.Any
+
+    # check that return type is Integer
+    f()::Any = 1.0
+    @test f() === 1
+
+    # check that constructor accepts Any
+    struct Y
+        x
+    end
+    @test Y(1.0) !== Y(1)
+
+    # check that function default argument type is Any
+    g(x) = x
+    @test g(1.0) === 1.0
+
+    # check that asserted variable type is Integer
+    @test let
+        x::Any = 1.0
+        x
+    end === 1
+
+    # check that unasserted variable type is not Integer
+    @test let
+        x = 1.0
+        x
+    end === 1.0
+end
