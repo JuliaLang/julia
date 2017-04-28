@@ -806,6 +806,10 @@ mktempdir() do dir
             @test isfile(joinpath(test_repo, test_file))
             @test new_head == head_oid
 
+            # GitAnnotated for a fetchhead
+            fh_ann = LibGit2.GitAnnotated(repo, LibGit2.Consts.FETCH_HEAD)
+            @test LibGit2.GitHash(fh_ann) == head_oid
+
             # Detach HEAD - no merge
             LibGit2.checkout!(repo, string(commit_oid3))
             @test_throws LibGit2.Error.GitError LibGit2.merge!(repo, fastforward=true)
