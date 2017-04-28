@@ -1135,3 +1135,12 @@ end
 
 f21586(; @m21586(a), @m21586(b)) = a + b
 @test f21586(a=10) == 52
+
+# issue #21604
+@test_nowarn @eval module Test21604
+    const Foo = Any
+    struct X
+        x::Foo
+    end
+end
+@test Test21604.X(1.0) === Test21604.X(1.0)
