@@ -165,6 +165,10 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `bswap` is supported for `Complex` arguments on 0.5 and below. ([#21346])
 
+* `Compat.invokelatest` is equivalent to `Base.invokelatest` in Julia 0.6,
+  but works in Julia 0.4+, and allows you to guarantee that a function call
+  invokes the latest version of a function ([#19784]).
+
 * `Compat.StringVector` is supported on 0.5 and below. On 0.6 and later, it aliases `Base.StringVector`. This function allocates a `Vector{UInt8}` whose data can be made into a `String` in constant time; that is, without copying. On 0.5 and later, use `String(...)` with the vector allocated by `StringVector` as an argument to create a string without copying. Note that if 0.4 support is needed, `Compat.UTF8String(...)` should be used instead. ([#19449])
 
 ## Renamed functions
@@ -343,16 +347,19 @@ includes this fix. Find the minimum version from there.
 [#17323]: https://github.com/JuliaLang/julia/issues/17323
 [#17510]: https://github.com/JuliaLang/julia/issues/17510
 [#17623]: https://github.com/JuliaLang/julia/issues/17623
-[#18086]: https://github.com/JuliaLang/julia/issues/18086
+[#18082]: https://github.com/JuliaLang/julia/issues/18082
 [#18380]: https://github.com/JuliaLang/julia/issues/18380
 [#18484]: https://github.com/JuliaLang/julia/issues/18484
 [#18510]: https://github.com/JuliaLang/julia/issues/18510
+[#18629]: https://github.com/JuliaLang/julia/issues/18629
 [#18727]: https://github.com/JuliaLang/julia/issues/18727
 [#18839]: https://github.com/JuliaLang/julia/issues/18839
 [#18977]: https://github.com/JuliaLang/julia/issues/18977
 [#19088]: https://github.com/JuliaLang/julia/issues/19088
 [#19246]: https://github.com/JuliaLang/julia/issues/19246
+[#19449]: https://github.com/JuliaLang/julia/issues/19449
 [#19635]: https://github.com/JuliaLang/julia/issues/19635
+[#19784]: https://github.com/JuliaLang/julia/issues/19784
 [#19841]: https://github.com/JuliaLang/julia/issues/19841
 [#19950]: https://github.com/JuliaLang/julia/issues/19950
 [#20022]: https://github.com/JuliaLang/julia/issues/20022
@@ -363,6 +370,5 @@ includes this fix. Find the minimum version from there.
 [#20414]: https://github.com/JuliaLang/julia/issues/20414
 [#20418]: https://github.com/JuliaLang/julia/issues/20418
 [#20500]: https://github.com/JuliaLang/julia/issues/20500
-[#18629]: https://github.com/JuliaLang/julia/pull/18629
-[#21346]: https://github.com/JuliaLang/julia/pull/21346
-[#21257]: https://github.com/JuliaLang/julia/pull/21257
+[#21257]: https://github.com/JuliaLang/julia/issues/21257
+[#21346]: https://github.com/JuliaLang/julia/issues/21346

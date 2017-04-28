@@ -1471,6 +1471,13 @@ else
     using Base: StringVector
 end
 
+# https://github.com/JuliaLang/julia/pull/19784
+if isdefined(Base, :invokelatest)
+    import Base.invokelatest
+else
+    invokelatest(f, args...) = eval(Expr(:call, f, map(QuoteNode, args)...))
+end
+
 # https://github.com/JuliaLang/julia/pull/21257
 if v"0.5.0-rc1+46" <= VERSION < v"0.6.0-pre.beta.28"
     collect(A) = collect_indices(indices(A), A)

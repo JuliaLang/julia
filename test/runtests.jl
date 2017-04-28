@@ -1840,6 +1840,15 @@ if VERSION >= v"0.5.0-rc1+46"
     @test b == [1,2,3]
 end
 
+# invokelatest
+issue19774(x) = 1
+let foo() = begin
+        eval(:(issue19774(x::Int) = 2))
+        return Compat.invokelatest(issue19774, 0)
+    end
+    @test foo() == 2
+end
+
 include("to-be-deprecated.jl")
 
 nothing
