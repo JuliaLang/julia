@@ -46,6 +46,14 @@ let n=10
 
         debug && println("\ntype of a: ", eltya, "\n")
 
+        # constructor
+        @test Symmetric(Symmetric(asym, :U))     === Symmetric(asym, :U)
+        @test Hermitian(Hermitian(asym, :U))     === Hermitian(asym, :U)
+        @test Symmetric(Symmetric(asym, :U), :U) === Symmetric(asym, :U)
+        @test Hermitian(Hermitian(asym, :U), :U) === Hermitian(asym, :U)
+        @test_throws ArgumentError Symmetric(Symmetric(asym, :U), :L)
+        @test_throws ArgumentError Hermitian(Hermitian(asym, :U), :L)
+
         # similar
         @test isa(similar(Symmetric(asym)), Symmetric{eltya})
         @test isa(similar(Hermitian(asym)), Hermitian{eltya})
@@ -60,7 +68,6 @@ let n=10
         @test asym == full(Hermitian(asym))
 
         # parent
-
         @test asym == parent(Hermitian(asym))
 
         # getindex
