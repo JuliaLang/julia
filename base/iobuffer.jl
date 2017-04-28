@@ -143,7 +143,7 @@ function peek(from::AbstractIOBuffer)
     return from.data[from.ptr]
 end
 
-read{T}(from::AbstractIOBuffer, ::Type{Ptr{T}}) = convert(Ptr{T}, read(from, UInt))
+read(from::AbstractIOBuffer, ::Type{Ptr{T}}) where {T} = convert(Ptr{T}, read(from, UInt))
 
 isreadable(io::AbstractIOBuffer) = io.readable
 iswritable(io::AbstractIOBuffer) = io.writable
@@ -241,7 +241,7 @@ end
 
 eof(io::AbstractIOBuffer) = (io.ptr-1 == io.size)
 
-@noinline function close{T}(io::AbstractIOBuffer{T})
+@noinline function close(io::AbstractIOBuffer{T}) where T
     io.readable = false
     io.writable = false
     io.seekable = false

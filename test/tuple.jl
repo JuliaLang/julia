@@ -251,3 +251,8 @@ end
     tuple16int = (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
     @test Tuple16Int(tuple16int) isa Tuple16Int
 end
+
+# PR #21446
+for n = 0:15
+    @test ntuple(identity, Val{n}) == ntuple(identity, n)
+end

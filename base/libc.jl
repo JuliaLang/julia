@@ -26,7 +26,7 @@ Base.cconvert(::Type{Int32}, fd::RawFD) = fd.fd
 dup(x::RawFD) = RawFD(ccall((@static is_windows() ? :_dup : :dup), Int32, (Int32,), x.fd))
 dup(src::RawFD, target::RawFD) = systemerror("dup", -1 ==
     ccall((@static is_windows() ? :_dup2 : :dup2), Int32,
-    (Int32, Int32), src.fd, target.fd))
+                (Int32, Int32), src.fd, target.fd))
 
 # Wrapper for an OS file descriptor (for Windows)
 if is_windows()
@@ -34,8 +34,25 @@ if is_windows()
         handle::Ptr{Void}   # On Windows file descriptors are HANDLE's and 64-bit on 64-bit Windows
     end
     Base.cconvert(::Type{Ptr{Void}}, fd::WindowsRawSocket) = fd.handle
-    _get_osfhandle(fd::RawFD) = WindowsRawSocket(ccall(:_get_osfhandle,Ptr{Void},(Cint,),fd.fd))
+    _get_osfhandle(fd::RawFD) = WindowsRawSocket(ccall(:_get_osfhandle, Ptr{Void}, (Cint,), fd.fd))
     _get_osfhandle(fd::WindowsRawSocket) = fd
+    function dup(src::WindowsRawSocket)
+        new_handle = Ref{Ptr{Void}}(-1)
+        my_process = ccall(:GetCurrentProcess, stdcall, Ptr{Void}, ())
+        const DUPLICATE_SAME_ACCESS = 0x2
+        status = ccall(:DuplicateHandle, stdcall, Int32,
+            (Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Ptr{Void}}, UInt32, Int32, UInt32),
+            my_process, src.handle, my_process, new_handle, 0, false, DUPLICATE_SAME_ACCESS)
+        status == 0 && error("dup failed: $(FormatMessage())")
+        return new_handle[]
+    end
+    function dup(src::WindowsRawSocket, target::RawFD)
+        fd = ccall(:_open_osfhandle, Int32, (Ptr{Void}, Int32), dup(src), 0)
+        dup(RawFD(fd), target)
+        ccall(:_close, Int32, (Int32,), fd)
+        nothing
+    end
+
 else
     _get_osfhandle(fd::RawFD) = fd
 end
@@ -284,7 +301,7 @@ if is_windows()
                     C_NULL, e, 0, lpMsgBuf, 0, C_NULL)
         p = lpMsgBuf[]
         len == 0 && return ""
-        buf = Array{UInt16}(len)
+        buf = Vector{UInt16}(len)
         unsafe_copy!(pointer(buf), p, len)
         ccall(:LocalFree, stdcall, Ptr{Void}, (Ptr{Void},), p)
         return transcode(String, buf)

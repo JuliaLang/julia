@@ -10,6 +10,7 @@ mutable struct ClusterSerializer{I<:IO} <: AbstractSerializer
     io::I
     counter::Int
     table::ObjectIdDict
+    pending_refs::Vector{Int}
 
     pid::Int                                     # Worker we are connected to.
     tn_obj_sent::Set{UInt64}                     # TypeName objects sent
@@ -19,7 +20,7 @@ mutable struct ClusterSerializer{I<:IO} <: AbstractSerializer
     anonfunc_id::UInt64
 
     function ClusterSerializer{I}(io::I) where I<:IO
-        new(io, 0, ObjectIdDict(), Base.worker_id_from_socket(io),
+        new(io, 0, ObjectIdDict(), Int[], Base.worker_id_from_socket(io),
             Set{UInt64}(), Dict{UInt64, UInt64}(), Dict{UInt64, Vector{Symbol}}(), 0)
     end
 end

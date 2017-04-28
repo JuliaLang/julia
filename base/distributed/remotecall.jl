@@ -152,7 +152,7 @@ function lookup_ref(pg, rrid, f)
         rv = get(pg.refs, rrid, false)
         if rv === false
             # first we've heard of this ref
-            rv = RemoteValue(eval(Main, Expr(:body, Expr(:return, Expr(:call, f)))))
+            rv = RemoteValue(invokelatest(f))
             pg.refs[rrid] = rv
             push!(rv.clientset, rrid.whence)
         end

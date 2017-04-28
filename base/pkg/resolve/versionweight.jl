@@ -14,12 +14,12 @@ end
 HierarchicalValue{T}(v::Vector{T}) = HierarchicalValue{T}(v, zero(T))
 HierarchicalValue(T::Type) = HierarchicalValue(T[])
 
-Base.zero{T}(::Type{HierarchicalValue{T}}) = HierarchicalValue(T)
+Base.zero(::Type{HierarchicalValue{T}}) where {T} = HierarchicalValue(T)
 
-Base.typemin{T}(::Type{HierarchicalValue{T}}) = HierarchicalValue(T[], typemin(T))
+Base.typemin(::Type{HierarchicalValue{T}}) where {T} = HierarchicalValue(T[], typemin(T))
 
 for f in (:-, :+)
-    @eval function Base.$f{T}(a::HierarchicalValue{T}, b::HierarchicalValue{T})
+    @eval function Base.$f(a::HierarchicalValue{T}, b::HierarchicalValue{T}) where T
         av = a.v
         bv = b.v
         la = length(a.v)
@@ -27,7 +27,7 @@ for f in (:-, :+)
         l0 = min(la, lb)
         l1 = max(la, lb)
         ld = la - lb
-        rv = Array{T}(l1)
+        rv = Vector{T}(l1)
         rf = ($f)(a.rest, b.rest)
         @inbounds for i = 1:l0
             rv[i] = ($f)(av[i], bv[i])
@@ -44,7 +44,7 @@ end
 
 Base.:-(a::HierarchicalValue) = HierarchicalValue(-a.v, -a.rest)
 
-function Base.cmp{T}(a::HierarchicalValue{T}, b::HierarchicalValue{T})
+function Base.cmp(a::HierarchicalValue{T}, b::HierarchicalValue{T}) where T
     av = a.v
     bv = b.v
     la = length(a.v)
@@ -63,12 +63,12 @@ function Base.cmp{T}(a::HierarchicalValue{T}, b::HierarchicalValue{T})
     end
     return cmp(a.rest, b.rest)
 end
-Base.isless{T}(a::HierarchicalValue{T}, b::HierarchicalValue{T}) = cmp(a,b) < 0
-Base.:(==){T}(a::HierarchicalValue{T}, b::HierarchicalValue{T}) = cmp(a,b) == 0
+Base.isless(a::HierarchicalValue{T}, b::HierarchicalValue{T}) where {T} = cmp(a,b) < 0
+Base.:(==)(a::HierarchicalValue{T}, b::HierarchicalValue{T}) where {T} = cmp(a,b) == 0
 
-Base.abs{T}(a::HierarchicalValue{T}) = HierarchicalValue(T[abs(x) for x in a.v], abs(a.rest))
+Base.abs(a::HierarchicalValue{T}) where {T} = HierarchicalValue(T[abs(x) for x in a.v], abs(a.rest))
 
-Base.copy{T}(a::HierarchicalValue{T}) = HierarchicalValue(T[copy(x) for x in a.v], copy(a.rest))
+Base.copy(a::HierarchicalValue{T}) where {T} = HierarchicalValue(T[copy(x) for x in a.v], copy(a.rest))
 
 struct VWPreBuildItem
     nonempty::Int
@@ -111,7 +111,7 @@ function VWPreBuild(ispre::Bool, desc::Tuple{Vararg{Union{Int,String}}})
     isempty(desc) && return _vwprebuild_zero
     desc == ("",) && return VWPreBuild(ispre ? -1 : 1, HierarchicalValue(VWPreBuildItem[]))
     nonempty = ispre ? -1 : 0
-    w = Array{VWPreBuildItem}(length(desc))
+    w = Vector{VWPreBuildItem}(length(desc))
     i = 1
     @inbounds for item in desc
         w[i] = VWPreBuildItem(item)
@@ -126,18 +126,18 @@ Base.zero(::Type{VWPreBuild}) = VWPreBuild()
 const _vwprebuild_min = VWPreBuild(typemin(Int), typemin(HierarchicalValue{VWPreBuildItem}))
 Base.typemin(::Type{VWPreBuild}) = _vwprebuild_min
 
-function Base.:-(a::VWPreBuild, b::VWPreBuild)
+function Base.:(-)(a::VWPreBuild, b::VWPreBuild)
     b === _vwprebuild_zero && return a
     a === _vwprebuild_zero && return -b
     VWPreBuild(a.nonempty-b.nonempty, a.w-b.w)
 end
-function Base.:+(a::VWPreBuild, b::VWPreBuild)
+function Base.:(+)(a::VWPreBuild, b::VWPreBuild)
     b === _vwprebuild_zero && return a
     a === _vwprebuild_zero && return b
     VWPreBuild(a.nonempty+b.nonempty, a.w+b.w)
 end
 
-function Base.:-(a::VWPreBuild)
+function Base.:(-)(a::VWPreBuild)
     a === _vwprebuild_zero && return a
     VWPreBuild(-a.nonempty, -a.w)
 end
@@ -190,15 +190,15 @@ Base.zero(::Type{VersionWeight}) = VersionWeight()
 
 Base.typemin(::Type{VersionWeight}) = (x=typemin(Int); y=typemin(VWPreBuild); VersionWeight(x, x, x, y, y))
 
-Base.:-(a::VersionWeight, b::VersionWeight) =
+Base.:(-)(a::VersionWeight, b::VersionWeight) =
     VersionWeight(a.major-b.major, a.minor-b.minor, a.patch-b.patch,
                   a.prerelease-b.prerelease, a.build-b.build)
 
-Base.:+(a::VersionWeight, b::VersionWeight) =
+Base.:(+)(a::VersionWeight, b::VersionWeight) =
     VersionWeight(a.major+b.major, a.minor+b.minor, a.patch+b.patch,
                   a.prerelease+b.prerelease, a.build+b.build)
 
-Base.:-(a::VersionWeight) =
+Base.:(-)(a::VersionWeight) =
     VersionWeight(-a.major, -a.minor, -a.patch,
                   -a.prerelease, -a.build)
 

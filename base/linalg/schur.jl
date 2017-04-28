@@ -7,7 +7,7 @@ struct Schur{Ty,S<:AbstractMatrix} <: Factorization{Ty}
     values::Vector
     Schur{Ty,S}(T::AbstractMatrix{Ty}, Z::AbstractMatrix{Ty}, values::Vector) where {Ty,S} = new(T, Z, values)
 end
-Schur(T::AbstractMatrix{Ty}, Z::AbstractMatrix{Ty}, values::Vector) where Ty = Schur{Ty, typeof(T)}(T, Z, values)
+Schur(T::AbstractMatrix{Ty}, Z::AbstractMatrix{Ty}, values::Vector) where {Ty} = Schur{Ty, typeof(T)}(T, Z, values)
 
 """
     schurfact!(A::StridedMatrix) -> F::Schur
@@ -143,7 +143,7 @@ ordschur(schur::Schur, select::Union{Vector{Bool},BitVector}) =
 
 Same as [`ordschur`](@ref) but overwrites the input arguments.
 """
-ordschur!{Ty<:BlasFloat}(T::StridedMatrix{Ty}, Z::StridedMatrix{Ty}, select::Union{Vector{Bool},BitVector}) =
+ordschur!(T::StridedMatrix{Ty}, Z::StridedMatrix{Ty}, select::Union{Vector{Bool},BitVector}) where {Ty<:BlasFloat} =
     LinAlg.LAPACK.trsen!(convert(Vector{BlasInt}, select), T, Z)
 
 """
@@ -156,7 +156,7 @@ corresponding leading columns of `Z` form an orthogonal/unitary basis of the cor
 right invariant subspace. In the real case, a complex conjugate pair of eigenvalues must be
 either both included or both excluded via `select`.
 """
-ordschur{Ty<:BlasFloat}(T::StridedMatrix{Ty}, Z::StridedMatrix{Ty}, select::Union{Vector{Bool},BitVector}) =
+ordschur(T::StridedMatrix{Ty}, Z::StridedMatrix{Ty}, select::Union{Vector{Bool},BitVector}) where {Ty<:BlasFloat} =
     ordschur!(copy(T), copy(Z), select)
 
 struct GeneralizedSchur{Ty,M<:AbstractMatrix} <: Factorization{Ty}
@@ -181,7 +181,7 @@ end
 
 Same as [`schurfact`](@ref) but uses the input matrices `A` and `B` as workspace.
 """
-schurfact!{T<:BlasFloat}(A::StridedMatrix{T}, B::StridedMatrix{T}) =
+schurfact!(A::StridedMatrix{T}, B::StridedMatrix{T}) where {T<:BlasFloat} =
     GeneralizedSchur(LinAlg.LAPACK.gges!('V', 'V', A, B)...)
 
 """
@@ -194,8 +194,8 @@ and `F[:T]`, the left unitary/orthogonal Schur vectors can be obtained with `F[:
 `F[:Z]` such that `A=F[:left]*F[:S]*F[:right]'` and `B=F[:left]*F[:T]*F[:right]'`. The
 generalized eigenvalues of `A` and `B` can be obtained with `F[:alpha]./F[:beta]`.
 """
-schurfact{T<:BlasFloat}(A::StridedMatrix{T},B::StridedMatrix{T}) = schurfact!(copy(A),copy(B))
-function schurfact{TA,TB}(A::StridedMatrix{TA}, B::StridedMatrix{TB})
+schurfact(A::StridedMatrix{T},B::StridedMatrix{T}) where {T<:BlasFloat} = schurfact!(copy(A),copy(B))
+function schurfact(A::StridedMatrix{TA}, B::StridedMatrix{TB}) where {TA,TB}
     S = promote_type(Float32, typeof(one(TA)/norm(one(TA))), TB)
     return schurfact!(copy_oftype(A, S), copy_oftype(B, S))
 end
@@ -230,8 +230,8 @@ ordschur(gschur::GeneralizedSchur, select::Union{Vector{Bool},BitVector}) =
 
 Same as [`ordschur`](@ref) but overwrites the factorization the input arguments.
 """
-ordschur!{Ty<:BlasFloat}(S::StridedMatrix{Ty}, T::StridedMatrix{Ty}, Q::StridedMatrix{Ty},
-    Z::StridedMatrix{Ty}, select::Union{Vector{Bool},BitVector}) =
+ordschur!(S::StridedMatrix{Ty}, T::StridedMatrix{Ty}, Q::StridedMatrix{Ty},
+    Z::StridedMatrix{Ty}, select::Union{Vector{Bool},BitVector}) where {Ty<:BlasFloat} =
         LinAlg.LAPACK.tgsen!(convert(Vector{BlasInt}, select), S, T, Q, Z)
 
 """
@@ -244,8 +244,8 @@ and `T`, and the left and right unitary/orthogonal Schur vectors are also reorde
 that `(A, B) = Q*(S, T)*Z'` still holds and the generalized eigenvalues of `A` and `B` can
 still be obtained with `α./β`.
 """
-ordschur{Ty<:BlasFloat}(S::StridedMatrix{Ty}, T::StridedMatrix{Ty}, Q::StridedMatrix{Ty},
-    Z::StridedMatrix{Ty}, select::Union{Vector{Bool},BitVector}) =
+ordschur(S::StridedMatrix{Ty}, T::StridedMatrix{Ty}, Q::StridedMatrix{Ty},
+    Z::StridedMatrix{Ty}, select::Union{Vector{Bool},BitVector}) where {Ty<:BlasFloat} =
         ordschur!(copy(S), copy(T), copy(Q), copy(Z), select)
 
 function getindex(F::GeneralizedSchur, d::Symbol)

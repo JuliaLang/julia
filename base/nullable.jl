@@ -54,8 +54,8 @@ convert(::Type{Nullable   }, ::Void) = Nullable{Union{}}()
 
 promote_rule(::Type{Nullable{S}}, ::Type{T}) where {S,T} = Nullable{promote_type(S, T)}
 promote_rule(::Type{Nullable{S}}, ::Type{Nullable{T}}) where {S,T} = Nullable{promote_type(S, T)}
-promote_op{S,T}(op::Any, ::Type{Nullable{S}}, ::Type{Nullable{T}}) = Nullable{promote_op(op, S, T)}
-promote_op{S,T}(op::Type, ::Type{Nullable{S}}, ::Type{Nullable{T}}) = Nullable{promote_op(op, S, T)}
+promote_op(op::Any, ::Type{Nullable{S}}, ::Type{Nullable{T}}) where {S,T} = Nullable{promote_op(op, S, T)}
+promote_op(op::Type, ::Type{Nullable{S}}, ::Type{Nullable{T}}) where {S,T} = Nullable{promote_op(op, S, T)}
 
 function show(io::IO, x::Nullable)
     if get(io, :compact, false)
@@ -81,7 +81,7 @@ end
 Attempt to access the value of `x`. Returns the value if it is present;
 otherwise, returns `y` if provided, or throws a `NullException` if not.
 """
-@inline function get{T}(x::Nullable{T}, y)
+@inline function get(x::Nullable{T}, y) where T
     if isbits(T)
         ifelse(isnull(x), y, x.value)
     else
@@ -186,13 +186,13 @@ const NullSafeFloats = Union{Type{Float16}, Type{Float32}, Type{Float64}}
 const NullSafeTypes = Union{NullSafeInts, NullSafeFloats}
 const EqualOrLess = Union{typeof(isequal), typeof(isless)}
 
-null_safe_op{T}(::typeof(identity), ::Type{T}) = isbits(T)
+null_safe_op(::typeof(identity), ::Type{T}) where {T} = isbits(T)
 
 null_safe_op(f::EqualOrLess, ::NullSafeTypes, ::NullSafeTypes) = true
-null_safe_op{S,T}(f::EqualOrLess, ::Type{Rational{S}}, ::Type{T}) =
+null_safe_op(f::EqualOrLess, ::Type{Rational{S}}, ::Type{T}) where {S,T} =
     null_safe_op(f, T, S)
 # complex numbers can be compared for equality but not in general ordered
-null_safe_op{S,T}(::typeof(isequal), ::Type{Complex{S}}, ::Type{T}) =
+null_safe_op(::typeof(isequal), ::Type{Complex{S}}, ::Type{T}) where {S,T} =
     null_safe_op(isequal, T, S)
 
 """
@@ -202,7 +202,7 @@ If neither `x` nor `y` is null, compare them according to their values
 (i.e. `isequal(get(x), get(y))`). Else, return `true` if both arguments are null,
 and `false` if one is null but not the other: nulls are considered equal.
 """
-@inline function isequal{S,T}(x::Nullable{S}, y::Nullable{T})
+@inline function isequal(x::Nullable{S}, y::Nullable{T}) where {S,T}
     if null_safe_op(isequal, S, T)
         (isnull(x) & isnull(y)) | (!isnull(x) & !isnull(y) & isequal(x.value, y.value))
     else
@@ -222,7 +222,7 @@ If neither `x` nor `y` is null, compare them according to their values
 otherwise: nulls are always considered greater than non-nulls, but not greater than
 another null.
 """
-@inline function isless{S,T}(x::Nullable{S}, y::Nullable{T})
+@inline function isless(x::Nullable{S}, y::Nullable{T}) where {S,T}
     # NULL values are sorted last
     if null_safe_op(isless, S, T)
         (!isnull(x) & isnull(y)) | (!isnull(x) & !isnull(y) & isless(x.value, y.value))
@@ -253,7 +253,7 @@ end
 
 Return null if either `x` is null or `p(get(x))` is false, and `x` otherwise.
 """
-function filter{T}(p, x::Nullable{T})
+function filter(p, x::Nullable{T}) where T
     if isbits(T)
         val = unsafe_get(x)
         Nullable{T}(val, !isnull(x) && p(val))
@@ -265,7 +265,7 @@ end
 """
 Return the given type if it is concrete, and `Union{}` otherwise.
 """
-nullable_returntype{T}(::Type{T}) = isleaftype(T) ? T : Union{}
+nullable_returntype(::Type{T}) where {T} = isleaftype(T) ? T : Union{}
 
 """
     map(f, x::Nullable)
@@ -303,8 +303,8 @@ all(f::typeof(hasvalue), t::Tuple{}) = true
 # Note this list does not include sqrt since it can raise a DomainError
 for op in (+, -, abs, abs2)
     null_safe_op(::typeof(op), ::NullSafeTypes) = true
-    null_safe_op{S}(::typeof(op), ::Type{Complex{S}}) = null_safe_op(op, S)
-    null_safe_op{S}(::typeof(op), ::Type{Rational{S}}) = null_safe_op(op, S)
+    null_safe_op(::typeof(op), ::Type{Complex{S}}) where {S} = null_safe_op(op, S)
+    null_safe_op(::typeof(op), ::Type{Rational{S}}) where {S} = null_safe_op(op, S)
 end
 
 null_safe_op(::typeof(~), ::NullSafeInts) = true
@@ -323,8 +323,8 @@ for op in (+, -, *, /, &, |, <<, >>, >>>,
     null_safe_op(::typeof(op), ::NullSafeUnsignedInts, ::NullSafeUnsignedInts) = true
 end
 for op in (+, -, *, /)
-    null_safe_op{S,T}(::typeof(op), ::Type{Complex{S}}, ::Type{T}) =
+    null_safe_op(::typeof(op), ::Type{Complex{S}}, ::Type{T}) where {S,T} =
         null_safe_op(op, T, S)
-    null_safe_op{S,T}(::typeof(op), ::Type{Rational{S}}, ::Type{T}) =
+    null_safe_op(::typeof(op), ::Type{Rational{S}}, ::Type{T}) where {S,T} =
         null_safe_op(op, T, S)
 end

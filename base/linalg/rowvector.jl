@@ -21,11 +21,11 @@ struct RowVector{T,V<:AbstractVector} <: AbstractMatrix{T}
     end
 end
 
-@inline check_types{T1,T2}(::Type{T1},::AbstractVector{T2}) = check_types(T1, T2)
-@pure check_types{T1,T2}(::Type{T1},::Type{T2}) = T1 === transpose_type(T2) ? nothing :
+@inline check_types(::Type{T1}, ::AbstractVector{T2}) where {T1,T2} = check_types(T1, T2)
+@pure check_types(::Type{T1}, ::Type{T2}) where {T1,T2} = T1 === transpose_type(T2) ? nothing :
     error("Element type mismatch. Tried to create a `RowVector{$T1}` from an `AbstractVector{$T2}`")
 
-ConjRowVector{T, CV <: ConjVector} = RowVector{T, CV}
+const ConjRowVector{T,CV<:ConjVector} = RowVector{T,CV}
 
 # The element type may be transformed as transpose is recursive
 @inline transpose_type{T}(::Type{T}) = promote_op(transpose, T)
@@ -50,10 +50,10 @@ convert(::Type{RowVector{T,V}}, rowvec::RowVector) where {T,V<:AbstractVector} =
 
 # similar tries to maintain the RowVector wrapper and the parent type
 @inline similar(rowvec::RowVector) = RowVector(similar(parent(rowvec)))
-@inline similar{T}(rowvec::RowVector, ::Type{T}) = RowVector(similar(parent(rowvec), transpose_type(T)))
+@inline similar(rowvec::RowVector, ::Type{T}) where {T} = RowVector(similar(parent(rowvec), transpose_type(T)))
 
 # Resizing similar currently loses its RowVector property.
-@inline similar{T,N}(rowvec::RowVector, ::Type{T}, dims::Dims{N}) = similar(parent(rowvec), T, dims)
+@inline similar(rowvec::RowVector, ::Type{T}, dims::Dims{N}) where {T,N} = similar(parent(rowvec), T, dims)
 
 # Basic methods
 """
@@ -159,16 +159,16 @@ end
 @inline hcat(X::RowVector...) = transpose(vcat(map(transpose, X)...))
 @inline hcat(X::Union{RowVector,Number}...) = transpose(vcat(map(transpose, X)...))
 
-@inline typed_hcat{T}(::Type{T}, X::RowVector...) =
+@inline typed_hcat(::Type{T}, X::RowVector...) where {T} =
     transpose(typed_vcat(T, map(transpose, X)...))
-@inline typed_hcat{T}(::Type{T}, X::Union{RowVector,Number}...) =
+@inline typed_hcat(::Type{T}, X::Union{RowVector,Number}...) where {T} =
     transpose(typed_vcat(T, map(transpose, X)...))
 
 # Multiplication #
 
 # inner product -> dot product specializations
-@inline *{T<:Real}(rowvec::RowVector{T}, vec::AbstractVector{T}) = dot(parent(rowvec), vec)
-@inline *{T<:Real}(rowvec::ConjRowVector{T}, vec::AbstractVector{T}) = dot(rowvec', vec)
+@inline *(rowvec::RowVector{T}, vec::AbstractVector{T}) where {T<:Real} = dot(parent(rowvec), vec)
+@inline *(rowvec::ConjRowVector{T}, vec::AbstractVector{T}) where {T<:Real} = dot(rowvec', vec)
 @inline *(rowvec::ConjRowVector, vec::AbstractVector) = dot(rowvec', vec)
 
 # Generic behavior

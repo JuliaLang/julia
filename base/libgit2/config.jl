@@ -26,7 +26,7 @@ end
 function GitConfig(level::Consts.GIT_CONFIG = Consts.CONFIG_LEVEL_DEFAULT)
     cfg_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_config_open_default, :libgit2), Cint,
-                  (Ptr{Ptr{Void}}, ), cfg_ptr_ptr)
+                  (Ptr{Ptr{Void}},), cfg_ptr_ptr)
     cfg = GitConfig(cfg_ptr_ptr[])
     if level != Consts.CONFIG_LEVEL_DEFAULT
         glb_cfg_ptr_ptr = Ref{Ptr{Void}}(C_NULL)

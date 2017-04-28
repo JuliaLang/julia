@@ -240,7 +240,7 @@ function getsolution(msgs::Messages)
 
     fld = msgs.fld
     np = length(fld)
-    sol = Array{Int}(np)
+    sol = Vector{Int}(np)
     for p0 = 1:np
         fld0 = fld[p0]
         s0 = indmax(fld0)

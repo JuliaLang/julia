@@ -33,8 +33,8 @@ function SubArray(::IndexLinear, parent::P, indexes::I, ::NTuple{N,Any}) where {
 end
 
 check_parent_index_match(parent, indexes) = check_parent_index_match(parent, index_ndims(indexes...))
-check_parent_index_match{T,N}(parent::AbstractArray{T,N}, ::NTuple{N, Bool}) = nothing
-check_parent_index_match{N}(parent, ::NTuple{N, Bool}) =
+check_parent_index_match(parent::AbstractArray{T,N}, ::NTuple{N, Bool}) where {T,N} = nothing
+check_parent_index_match(parent, ::NTuple{N, Bool}) where {N} =
     throw(ArgumentError("number of indices ($N) must match the parent dimensionality ($(ndims(parent)))"))
 
 # This computes the linear indexing compatability for a given tuple of indices
@@ -74,9 +74,9 @@ parentindexes(a::AbstractArray) = ntuple(i->OneTo(size(a,i)), ndims(a))
 # ReshapedArray view if necessary. The trouble is that arrays of `CartesianIndex`
 # can make the number of effective indices not equal to length(I).
 _maybe_reshape_parent(A::AbstractArray, ::NTuple{1, Bool}) = reshape(A, Val{1})
-_maybe_reshape_parent{_}(A::AbstractArray{_,1}, ::NTuple{1, Bool}) = reshape(A, Val{1})
-_maybe_reshape_parent{_,N}(A::AbstractArray{_,N}, ::NTuple{N, Bool}) = A
-_maybe_reshape_parent{N}(A::AbstractArray, ::NTuple{N, Bool}) = reshape(A, Val{N}) # TODO: DEPRECATE FOR #14770
+_maybe_reshape_parent(A::AbstractArray{<:Any,1}, ::NTuple{1, Bool}) = reshape(A, Val{1})
+_maybe_reshape_parent(A::AbstractArray{<:Any,N}, ::NTuple{N, Bool}) where {N} = A
+_maybe_reshape_parent(A::AbstractArray, ::NTuple{N, Bool}) where {N} = reshape(A, Val{N}) # TODO: DEPRECATE FOR #14770
 """
     view(A, inds...)
 
@@ -167,7 +167,7 @@ reindex(V, idxs::Tuple{AbstractMatrix, Vararg{Any}}, subidxs::Tuple{Any, Any, Va
     (@_propagate_inbounds_meta; (idxs[1][subidxs[1], subidxs[2]], reindex(V, tail(idxs), tail(tail(subidxs)))...))
 
 # In general, we index N-dimensional parent arrays with N indices
-@generated function reindex{T,N}(V, idxs::Tuple{AbstractArray{T,N}, Vararg{Any}}, subidxs::Tuple{Vararg{Any}})
+@generated function reindex(V, idxs::Tuple{AbstractArray{T,N}, Vararg{Any}}, subidxs::Tuple{Vararg{Any}}) where {T,N}
     if length(subidxs.parameters) >= N
         subs = [:(subidxs[$d]) for d in 1:N]
         tail = [:(subidxs[$d]) for d in N+1:length(subidxs.parameters)]
@@ -237,7 +237,7 @@ substrides(s, parent, dim, I::Tuple{Any, Vararg{Any}}) = throw(ArgumentError("st
 
 stride(V::SubArray, d::Integer) = d <= ndims(V) ? strides(V)[d] : strides(V)[end] * size(V)[end]
 
-compute_stride1{N}(parent::AbstractArray, I::NTuple{N,Any}) =
+compute_stride1(parent::AbstractArray, I::NTuple{N,Any}) where {N} =
     (@_inline_meta; compute_stride1(1, fill_to_length(indices(parent), OneTo(1), Val{N}), I))
 compute_stride1(s, inds, I::Tuple{}) = s
 compute_stride1(s, inds, I::Tuple{ScalarIndex, Vararg{Any}}) =
@@ -294,7 +294,7 @@ _find_extended_dims(dims, inds, dim, ::ScalarIndex, I...) =
 _find_extended_dims(dims, inds, dim, i1, I...) =
     (@_inline_meta; _find_extended_dims((dims..., dim), (inds..., i1), dim+1, I...))
 
-unsafe_convert{T,N,P}(::Type{Ptr{T}}, V::SubArray{T,N,P,<:Tuple{Vararg{RangeIndex}}}) =
+unsafe_convert(::Type{Ptr{T}}, V::SubArray{T,N,P,<:Tuple{Vararg{RangeIndex}}}) where {T,N,P} =
     unsafe_convert(Ptr{T}, V.parent) + (first_index(V)-1)*sizeof(T)
 
 pointer(V::FastSubArray, i::Int) = pointer(V.parent, V.offset1 + V.stride1*i)
@@ -327,7 +327,7 @@ end
 # deprecate?
 function parentdims(s::SubArray)
     nd = ndims(s)
-    dimindex = Array{Int}(nd)
+    dimindex = Vector{Int}(nd)
     sp = strides(s.parent)
     sv = strides(s)
     j = 1

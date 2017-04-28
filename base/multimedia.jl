@@ -19,7 +19,7 @@ import Base: MIME, @MIME_str
 import Base: show, print, string, convert
 MIME(s) = MIME{Symbol(s)}()
 show(io::IO, ::MIME{mime}) where {mime} = print(io, "MIME type ", string(mime))
-print{mime}(io::IO, ::MIME{mime}) = print(io, mime)
+print(io::IO, ::MIME{mime}) where {mime} = print(io, mime)
 
 ###########################################################################
 # For any type T one can define show(io, ::MIME"type", x::T) = ...
@@ -32,8 +32,8 @@ Returns a boolean value indicating whether or not the object `x` can be written 
 `mime` type. (By default, this is determined automatically by the existence of the
 corresponding [`show`](@ref) method for `typeof(x)`.)
 """
-mimewritable{mime}(::MIME{mime}, x) =
-  method_exists(show, Tuple{IO, MIME{mime}, typeof(x)})
+mimewritable(::MIME{mime}, x) where {mime} =
+    method_exists(show, Tuple{IO, MIME{mime}, typeof(x)})
 
 # it is convenient to accept strings instead of ::MIME
 show(io::IO, m::AbstractString, x) = show(io, MIME(m), x)
@@ -215,8 +215,8 @@ function display(m::MIME, x)
     throw(MethodError(display, (m, x)))
 end
 
-displayable{D<:Display,mime}(d::D, ::MIME{mime}) =
-  method_exists(display, Tuple{D, MIME{mime}, Any})
+displayable(d::D, ::MIME{mime}) where {D<:Display,mime} =
+    method_exists(display, Tuple{D,MIME{mime},Any})
 
 function displayable(m::MIME)
     for d in displays

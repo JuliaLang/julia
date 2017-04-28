@@ -26,12 +26,15 @@ end
 
 # same-file inline
 eval(Expr(:function, Expr(:call, :test_inline_1),
-          Expr(:block, Expr(:line, 42, Symbol("backtrace.jl")),
-                       Expr(:block, Expr(:meta, :push_loc, Symbol("backtrace.jl"), :inlfunc),
+          Expr(:block, Expr(:line, 99, Symbol("backtrace.jl")),
+                       Expr(:block, Expr(:line, 42),
+                                    Expr(:meta, :push_loc, Symbol("backtrace.jl"), :inlfunc),
                                     Expr(:line, 37),
                                     Expr(:call, :throw, "foo"),
-                                    Expr(:meta, :pop_loc)))))
+                                    Expr(:meta, :pop_loc),
+                                    Expr(:line, 99)))))
 
+@test functionloc(test_inline_1) == ("backtrace.jl", 99)
 try
     test_inline_1()
     error("unexpected")
@@ -48,12 +51,14 @@ end
 # different-file inline
 const absfilepath = is_windows() ? "C:\\foo\\bar\\baz.jl" : "/foo/bar/baz.jl"
 eval(Expr(:function, Expr(:call, :test_inline_2),
-          Expr(:block, Expr(:line, 99, Symbol("backtrace.jl")),
+          Expr(:block, Expr(:line, 81, Symbol("backtrace.jl")),
                        Expr(:block, Expr(:meta, :push_loc, Symbol(absfilepath)),
                                     Expr(:line, 111),
                                     Expr(:call, :throw, "foo"),
-                                    Expr(:meta, :pop_loc)))))
+                                    Expr(:meta, :pop_loc),
+                                    Expr(:line, 99)))))
 
+@test functionloc(test_inline_2) == ("backtrace.jl", 81)
 try
     test_inline_2()
     error("unexpected")
@@ -61,7 +66,7 @@ catch err
     lkup = get_bt_frames(:test_inline_2, catch_backtrace())
     @test length(lkup) == 2
     @test endswith(string(lkup[2].file), "backtrace.jl")
-    @test lkup[2].line == 99
+    @test lkup[2].line == 81
     @test string(lkup[1].file) == absfilepath
     @test lkup[1].line == 111
 end

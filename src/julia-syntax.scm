@@ -506,9 +506,20 @@
                                                   (not (any (lambda (s)
                                                               (expr-contains-eq (car s) (caddr k)))
                                                             keyword-sparams)))
-                                             `(call (core typeassert)
-                                                    ,rval0
-                                                    ,(caddr k))
+                                             (let ((T (caddr k)))
+                                               `(call (core typeassert)
+                                                      ,rval0
+                                                      ;; work around `ANY` not being a type. if arg type
+                                                      ;; looks like `ANY`, test whether it is `ANY` at run
+                                                      ;; time and if so, substitute `Any`. issue #21510
+                                                      ,(if (or (eq? T 'ANY)
+                                                               (and (globalref? T)
+                                                                    (eq? (caddr T) 'ANY)))
+                                                           `(call (|.| (core Intrinsics) 'select_value)
+                                                                  (call (core ===) ,T (core ANY))
+                                                                  (core Any)
+                                                                  ,T)
+                                                           T)))
                                              rval0)))
                               ;; if kw[ii] == 'k; k = kw[ii+1]::Type; end
                               `(if (comparison ,elt === (quote ,(decl-var k)))
@@ -958,8 +969,13 @@
                       (list* g (if isamp `(& ,ca) ca) C))))))))
 
 (define (expand-function-def e)   ;; handle function or stagedfunction
+  (define (just-arglist? ex)
+    (and (pair? ex)
+         (or (memq (car ex) '(tuple block))
+             (and (eq? (car ex) 'where)
+                  (just-arglist? (cadr ex))))))
   (let ((name (cadr e)))
-    (if (and (pair? name) (memq (car name) '(tuple block)))
+    (if (just-arglist? name)
         (expand-forms (cons '-> (cdr e)))
         (expand-function-def- e))))
 
@@ -1414,14 +1430,17 @@
             (reverse a))))))
 
 ;; lower function call containing keyword arguments
-(define (lower-kw-call f kw pa)
+(define (lower-kw-call fexpr kw pa)
   (let ((container (make-ssavalue)))
     (let loop ((kw kw)
                (initial-kw '()) ;; keyword args before any splats
                (stmts '())
                (has-kw #f))     ;; whether there are definitely >0 kwargs
       (if (null? kw)
-          (if (null? stmts)
+        (let ((f (if (sym-ref? fexpr) fexpr (make-ssavalue))))
+          `(block
+            ,@(if (eq? f fexpr) '() `((= ,f, fexpr)))
+            ,(if (null? stmts)
               `(call (call (core kwfunc) ,f) (call (top vector_any) ,@(reverse initial-kw)) ,f ,@pa)
               `(block
                 (= ,container (call (top vector_any) ,@(reverse initial-kw)))
@@ -1435,8 +1454,8 @@
                          ,@stmts
                          (if (call (top isempty) ,container)
                              (call ,f ,@pa)
-                             (call (call (core kwfunc) ,f) ,container ,f ,@pa)))))))
-          (let ((arg (car kw)))
+                             (call (call (core kwfunc) ,f) ,container ,f ,@pa)))))))))
+        (let ((arg (car kw)))
             (cond ((and (pair? arg) (eq? (car arg) 'parameters))
                    (error "more than one semicolon in argument list"))
                   ((kwarg? arg)
@@ -1839,24 +1858,20 @@
    'const  expand-const-decl
    'local  expand-local-or-global-decl
    'global expand-local-or-global-decl
+   'local-def expand-local-or-global-decl
 
    '=
    (lambda (e)
      (define lhs (cadr e))
      (define (function-lhs? lhs)
        (and (pair? lhs)
-            (or (and (eq? (car lhs) 'comparison) (length= lhs 4))
-                (eq? (car lhs) 'call)
+            (or (eq? (car lhs) 'call)
                 (eq? (car lhs) 'where)
                 (and (eq? (car lhs) '|::|)
                      (pair? (cadr lhs))
                      (eq? (car (cadr lhs)) 'call)))))
      (define (assignment-to-function lhs e)  ;; convert '= expr to 'function expr
-       (if (eq? (car lhs) 'comparison)
-           ;; allow defining functions that use comparison syntax
-           (list* 'function
-                  `(call ,(caddr lhs) ,(cadr lhs) ,(cadddr lhs)) (cddr e))
-           (cons 'function (cdr e))))
+       (cons 'function (cdr e)))
      (cond
       ((function-lhs? lhs)
        (expand-forms (assignment-to-function lhs e)))
@@ -3072,10 +3087,10 @@ f(x) = yt(x)
                                (newlam    (renumber-slots-and-labels (linearize (car exprs)))))
                           `(toplevel-butlast
                             ,@top-stmts
-                            ,@sp-inits
-                            (method ,name ,(cl-convert sig fname lam namemap toplevel interp)
-                                    ,(julia-expand-macros `(quote ,newlam))
-                                    ,(last e))))))
+                            (block ,@sp-inits
+                                   (method ,name ,(cl-convert sig fname lam namemap toplevel interp)
+                                           ,(julia-expand-macros `(quote ,newlam))
+                                           ,(last e)))))))
                  ;; local case - lift to a new type at top level
                  (let* ((exists (get namemap name #f))
                         (type-name  (or exists

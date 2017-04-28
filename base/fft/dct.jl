@@ -30,7 +30,7 @@ for (pf, pfr, K, inplace) in ((:plan_dct, :plan_r2r, REDFT10, false),
                               (:plan_dct!, :plan_r2r!, REDFT10, true),
                               (:plan_idct, :plan_r2r, REDFT01, false),
                               (:plan_idct!, :plan_r2r!, REDFT01, true))
-    @eval function $pf{T<:fftwNumber}(X::StridedArray{T}, region; kws...)
+    @eval function $pf(X::StridedArray{T}, region; kws...) where T<:fftwNumber
         r = [1:n for n in size(X)]
         nrm = sqrt(0.5^length(region) * normalization(X,region))
         DCTPlan{T,$K,$inplace}($pfr(X, $K, region; kws...), r, nrm,
@@ -38,7 +38,7 @@ for (pf, pfr, K, inplace) in ((:plan_dct, :plan_r2r, REDFT10, false),
     end
 end
 
-function plan_inv{T,K,inplace}(p::DCTPlan{T,K,inplace})
+function plan_inv(p::DCTPlan{T,K,inplace}) where {T,K,inplace}
     X = Array{T}(p.plan.sz)
     iK = inv_kind[K]
     DCTPlan{T,iK,inplace}(inplace ?
@@ -63,8 +63,8 @@ const sqrthalf = sqrt(0.5)
 const sqrt2 = sqrt(2.0)
 const onerange = 1:1
 
-function A_mul_B!{T}(y::StridedArray{T}, p::DCTPlan{T,REDFT10},
-                     x::StridedArray{T})
+function A_mul_B!(y::StridedArray{T}, p::DCTPlan{T,REDFT10},
+                  x::StridedArray{T}) where T
     assert_applicable(p.plan, x, y)
     unsafe_execute!(p.plan, x, y)
     scale!(y, p.nrm)
@@ -79,8 +79,8 @@ function A_mul_B!{T}(y::StridedArray{T}, p::DCTPlan{T,REDFT10},
 end
 
 # note: idct changes input data
-function A_mul_B!{T}(y::StridedArray{T}, p::DCTPlan{T,REDFT01},
-                     x::StridedArray{T})
+function A_mul_B!(y::StridedArray{T}, p::DCTPlan{T,REDFT01},
+                  x::StridedArray{T}) where T
     assert_applicable(p.plan, x, y)
     scale!(x, p.nrm)
     r = p.r

@@ -463,8 +463,8 @@ function walkdir(root; topdown=true, follow_symlinks=false, onerror=throw)
         close(chnl)
         return chnl
     end
-    dirs = Array{eltype(content)}(0)
-    files = Array{eltype(content)}(0)
+    dirs = Vector{eltype(content)}(0)
+    files = Vector{eltype(content)}(0)
     for name in content
         if isdir(joinpath(root, name))
             push!(dirs, name)
@@ -581,12 +581,12 @@ function readlink(path::AbstractString)
             (Ptr{Void}, Ptr{Void}, Cstring, Ptr{Void}),
             eventloop(), req, path, C_NULL)
         if ret < 0
-            ccall(:uv_fs_req_cleanup, Void, (Ptr{Void}, ), req)
+            ccall(:uv_fs_req_cleanup, Void, (Ptr{Void},), req)
             uv_error("readlink", ret)
             assert(false)
         end
-        tgt = unsafe_string(ccall(:jl_uv_fs_t_ptr, Ptr{Cchar}, (Ptr{Void}, ), req))
-        ccall(:uv_fs_req_cleanup, Void, (Ptr{Void}, ), req)
+        tgt = unsafe_string(ccall(:jl_uv_fs_t_ptr, Ptr{Cchar}, (Ptr{Void},), req))
+        ccall(:uv_fs_req_cleanup, Void, (Ptr{Void},), req)
         return tgt
     finally
         Libc.free(req)

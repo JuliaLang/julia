@@ -41,15 +41,15 @@ mutable struct RefValue{T} <: Ref{T}
     RefValue{T}() where {T} = new()
     RefValue{T}(x) where {T} = new(x)
 end
-RefValue{T}(x::T) = RefValue{T}(x)
+RefValue(x::T) where {T} = RefValue{T}(x)
 isassigned(x::RefValue) = isdefined(x, :x)
 
 Ref(x::Ref) = x
 Ref(x::Any) = RefValue(x)
-Ref{T}(x::Ptr{T}, i::Integer=1) = x + (i-1)*Core.sizeof(T)
+Ref(x::Ptr{T}, i::Integer=1) where {T} = x + (i-1)*Core.sizeof(T)
 Ref(x, i::Integer) = (i != 1 && error("Object only has one element"); Ref(x))
-(::Type{Ref{T}})() where {T} = RefValue{T}() # Ref{T}()
-(::Type{Ref{T}})(x) where {T} = RefValue{T}(x) # Ref{T}(x)
+Ref{T}() where {T} = RefValue{T}() # Ref{T}()
+Ref{T}(x) where {T} = RefValue{T}(x) # Ref{T}(x)
 convert(::Type{Ref{T}}, x) where {T} = RefValue{T}(x)
 
 function unsafe_convert(P::Type{Ptr{T}}, b::RefValue{T}) where T
@@ -65,14 +65,14 @@ end
 unsafe_convert(::Type{Ptr{Void}}, b::RefValue{T}) where {T} = convert(Ptr{Void}, unsafe_convert(Ptr{T}, b))
 
 ### Methods for a Ref object that is backed by an array at index i
-struct RefArray{T, A<:AbstractArray{T}, R} <: Ref{T}
+struct RefArray{T,A<:AbstractArray{T},R} <: Ref{T}
     x::A
     i::Int
     roots::R # should be either ::Void or ::Any
     RefArray{T,A,R}(x,i,roots=nothing) where {T,A<:AbstractArray{T},R} = new(x,i,roots)
 end
-RefArray{T}(x::AbstractArray{T},i::Int,roots::Any) = RefArray{T,typeof(x),Any}(x, i, roots)
-RefArray{T}(x::AbstractArray{T},i::Int=1,roots::Void=nothing) = RefArray{T,typeof(x),Void}(x, i, nothing)
+RefArray(x::AbstractArray{T}, i::Int, roots::Any) where {T} = RefArray{T,typeof(x),Any}(x, i, roots)
+RefArray(x::AbstractArray{T}, i::Int=1, roots::Void=nothing) where {T} = RefArray{T,typeof(x),Void}(x, i, nothing)
 convert(::Type{Ref{T}}, x::AbstractArray{T}) where {T} = RefArray(x, 1)
 Ref(x::AbstractArray, i::Integer=1) = RefArray(x, i)
 
@@ -89,16 +89,16 @@ end
 unsafe_convert(::Type{Ptr{Void}}, b::RefArray{T}) where {T} = convert(Ptr{Void}, unsafe_convert(Ptr{T}, b))
 
 # convert Arrays to pointer arrays for ccall
-function (::Type{Ref{<:Union{Ptr,Cwstring,Cstring}}})(a::Array{<:Union{Ptr,Cwstring,Cstring}}) # Ref{P<:Ptr}(a::Array{T<:Ptr})
+function Ref{P}(a::Array{<:Union{Ptr,Cwstring,Cstring}}) where P<:Union{Ptr,Cwstring,Cstring}
     return RefArray(a) # effectively a no-op
 end
-function (::Type{Ref{P}}){P<:Union{Ptr,Cwstring,Cstring},T}(a::Array{T}) # Ref{P<:Ptr}(a::Array)
+function Ref{P}(a::Array{T}) where P<:Union{Ptr,Cwstring,Cstring} where T
     if (!isbits(T) && T <: eltype(P))
         # this Array already has the right memory layout for the requested Ref
         return RefArray(a,1,false) # root something, so that this function is type-stable
     else
-        ptrs = Array{P}(length(a)+1)
-        roots = Array{Any}(length(a))
+        ptrs = Vector{P}(length(a)+1)
+        roots = Vector{Any}(length(a))
         for i = 1:length(a)
             root = cconvert(P, a[i])
             ptrs[i] = unsafe_convert(P, root)::P

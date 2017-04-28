@@ -112,7 +112,7 @@ broadcast(::typeof(ceil), ::Type{T}, M::SymTridiagonal) where {T<:Integer} = Sym
 transpose(M::SymTridiagonal) = M #Identity operation
 ctranspose(M::SymTridiagonal) = conj(M)
 
-function diag{T}(M::SymTridiagonal{T}, n::Integer=0)
+function diag(M::SymTridiagonal{T}, n::Integer=0) where T
     absn = abs(n)
     if absn == 0
         return M.dv
@@ -163,41 +163,41 @@ end
 (\)(T::SymTridiagonal, B::StridedVecOrMat) = ldltfact(T)\B
 
 eigfact!(A::SymTridiagonal{<:BlasReal}) = Eigen(LAPACK.stegr!('V', A.dv, A.ev)...)
-function eigfact{T}(A::SymTridiagonal{T})
+function eigfact(A::SymTridiagonal{T}) where T
     S = promote_type(Float32, typeof(zero(T)/norm(one(T))))
     eigfact!(copy_oftype(A, S))
 end
 
 eigfact!(A::SymTridiagonal{<:BlasReal}, irange::UnitRange) =
     Eigen(LAPACK.stegr!('V', 'I', A.dv, A.ev, 0.0, 0.0, irange.start, irange.stop)...)
-function eigfact{T}(A::SymTridiagonal{T}, irange::UnitRange)
+function eigfact(A::SymTridiagonal{T}, irange::UnitRange) where T
     S = promote_type(Float32, typeof(zero(T)/norm(one(T))))
     return eigfact!(copy_oftype(A, S), irange)
 end
 
 eigfact!(A::SymTridiagonal{<:BlasReal}, vl::Real, vu::Real) =
     Eigen(LAPACK.stegr!('V', 'V', A.dv, A.ev, vl, vu, 0, 0)...)
-function eigfact{T}(A::SymTridiagonal{T}, vl::Real, vu::Real)
+function eigfact(A::SymTridiagonal{T}, vl::Real, vu::Real) where T
     S = promote_type(Float32, typeof(zero(T)/norm(one(T))))
     return eigfact!(copy_oftype(A, S), vl, vu)
 end
 
 eigvals!(A::SymTridiagonal{<:BlasReal}) = LAPACK.stev!('N', A.dv, A.ev)[1]
-function eigvals{T}(A::SymTridiagonal{T})
+function eigvals(A::SymTridiagonal{T}) where T
     S = promote_type(Float32, typeof(zero(T)/norm(one(T))))
     return eigvals!(copy_oftype(A, S))
 end
 
 eigvals!(A::SymTridiagonal{<:BlasReal}, irange::UnitRange) =
     LAPACK.stegr!('N', 'I', A.dv, A.ev, 0.0, 0.0, irange.start, irange.stop)[1]
-function eigvals{T}(A::SymTridiagonal{T}, irange::UnitRange)
+function eigvals(A::SymTridiagonal{T}, irange::UnitRange) where T
     S = promote_type(Float32, typeof(zero(T)/norm(one(T))))
     return eigvals!(copy_oftype(A, S), irange)
 end
 
 eigvals!(A::SymTridiagonal{<:BlasReal}, vl::Real, vu::Real) =
     LAPACK.stegr!('N', 'V', A.dv, A.ev, vl, vu, 0, 0)[1]
-function eigvals{T}(A::SymTridiagonal{T}, vl::Real, vu::Real)
+function eigvals(A::SymTridiagonal{T}, vl::Real, vu::Real) where T
     S = promote_type(Float32, typeof(zero(T)/norm(one(T))))
     return eigvals!(copy_oftype(A, S), vl, vu)
 end
@@ -297,12 +297,12 @@ end
 mutable struct ZeroOffsetVector
     data::Vector
 end
-getindex( a::ZeroOffsetVector, i) = a.data[i+1]
+getindex(a::ZeroOffsetVector, i) = a.data[i+1]
 setindex!(a::ZeroOffsetVector, x, i) = a.data[i+1]=x
 
 
 ## structured matrix methods ##
-function Base.replace_in_print_matrix(A::SymTridiagonal,i::Integer,j::Integer,s::AbstractString)
+function Base.replace_in_print_matrix(A::SymTridiagonal, i::Integer, j::Integer, s::AbstractString)
     i==j-1||i==j||i==j+1 ? s : Base.replace_with_centered_mark(s)
 end
 
@@ -313,7 +313,7 @@ end
 #    R. Usmani, "Inversion of a tridiagonal Jacobi matrix",
 #    Linear Algebra and its Applications 212-213 (1994), pp.413-414
 #    doi:10.1016/0024-3795(94)90414-6
-function inv_usmani{T}(a::Vector{T}, b::Vector{T}, c::Vector{T})
+function inv_usmani(a::Vector{T}, b::Vector{T}, c::Vector{T}) where T
     n = length(b)
     θ = ZeroOffsetVector(zeros(T, n+1)) #principal minors of A
     θ[0] = 1
@@ -343,7 +343,7 @@ end
 
 #Implements the determinant using principal minors
 #Inputs and reference are as above for inv_usmani()
-function det_usmani{T}(a::Vector{T}, b::Vector{T}, c::Vector{T})
+function det_usmani(a::Vector{T}, b::Vector{T}, c::Vector{T}) where T
     n = length(b)
     θa = one(T)
     if n == 0
@@ -432,7 +432,7 @@ julia> Tridiagonal(dl, d, du)
 ```
 """
 # Basic constructor takes in three dense vectors of same type
-function Tridiagonal{T}(dl::Vector{T}, d::Vector{T}, du::Vector{T})
+function Tridiagonal(dl::Vector{T}, d::Vector{T}, du::Vector{T}) where T
     n = length(d)
     if (length(dl) != n-1 || length(du) != n-1)
         throw(ArgumentError("cannot make Tridiagonal from incompatible lengths of subdiagonal, diagonal and superdiagonal: ($(length(dl)), $(length(d)), $(length(du))"))
@@ -441,7 +441,7 @@ function Tridiagonal{T}(dl::Vector{T}, d::Vector{T}, du::Vector{T})
 end
 
 # Construct from diagonals of any abstract vector, any eltype
-function Tridiagonal{Tl, Td, Tu}(dl::AbstractVector{Tl}, d::AbstractVector{Td}, du::AbstractVector{Tu})
+function Tridiagonal(dl::AbstractVector{Tl}, d::AbstractVector{Td}, du::AbstractVector{Tu}) where {Tl,Td,Tu}
     Tridiagonal(map(v->convert(Vector{promote_type(Tl,Td,Tu)}, v), (dl, d, du))...)
 end
 
@@ -529,7 +529,7 @@ broadcast(::typeof(ceil), ::Type{T}, M::Tridiagonal) where {T<:Integer} =
 transpose(M::Tridiagonal) = Tridiagonal(M.du, M.d, M.dl)
 ctranspose(M::Tridiagonal) = conj(transpose(M))
 
-function diag{T}(M::Tridiagonal{T}, n::Integer=0)
+function diag(M::Tridiagonal{T}, n::Integer=0) where T
     if n == 0
         return M.d
     elseif n == -1

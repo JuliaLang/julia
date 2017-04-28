@@ -399,7 +399,7 @@ function _collect(cont, itr, ::HasEltype, isz::SizeUnknown)
     return a
 end
 
-_collect_indices(::Tuple{}, A) = copy!(Array{eltype(A)}(), A)
+_collect_indices(::Tuple{}, A) = copy!(Vector{eltype(A)}(), A)
 _collect_indices(indsA::Tuple{Vararg{OneTo}}, A) =
     copy!(Array{eltype(A)}(length.(indsA)), A)
 function _collect_indices(indsA, A)
@@ -1806,20 +1806,27 @@ julia> filter(isodd, a)
 """
 filter(f, As::AbstractArray) = As[map(f, As)::AbstractArray{Bool}]
 
-function filter!(f, a::Vector)
-    insrt = 1
+function filter!(f, a::AbstractVector)
+    isempty(a) && return a
+
+    idx = eachindex(a)
+    state = start(idx)
+    i, state = next(idx, state)
+
     for acurr in a
         if f(acurr)
-            a[insrt] = acurr
-            insrt += 1
+            a[i] = acurr
+            i, state = next(idx, state)
         end
     end
-    deleteat!(a, insrt:length(a))
+
+    deleteat!(a, i:last(idx))
+
     return a
 end
 
 function filter(f, a::Vector)
-    r = Array{eltype(a)}(0)
+    r = Vector{eltype(a)}(0)
     for ai in a
         if f(ai)
             push!(r, ai)
@@ -1832,7 +1839,7 @@ end
 # These are moderately efficient, preserve order, and remove dupes.
 
 function intersect(v1, vs...)
-    ret = Array{promote_eltype(v1, vs...)}(0)
+    ret = Vector{promote_eltype(v1, vs...)}(0)
     for v_elem in v1
         inall = true
         for vsi in vs
@@ -1848,7 +1855,7 @@ function intersect(v1, vs...)
 end
 
 function union(vs...)
-    ret = Array{promote_eltype(vs...)}(0)
+    ret = Vector{promote_eltype(vs...)}(0)
     seen = Set()
     for v in vs
         for v_elem in v

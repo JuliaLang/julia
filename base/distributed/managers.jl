@@ -468,7 +468,7 @@ function socket_reuse_port()
 
     @static if is_linux()
         try
-            rc = ccall(:jl_tcp_reuseport, Int32, (Ptr{Void}, ), s.handle)
+            rc = ccall(:jl_tcp_reuseport, Int32, (Ptr{Void},), s.handle)
             if rc > 0  # SO_REUSEPORT is unsupported, just return the ephemerally bound socket
                 return s
             elseif rc < 0

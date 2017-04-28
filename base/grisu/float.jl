@@ -109,7 +109,7 @@ function _exponent(d::T) where T<:AbstractFloat
   biased_e::Int32 = Int32((uint_t(d) & ExponentMask(T)) >> PhysicalSignificandSize(T))
   return Int32(biased_e - ExponentBias(T))
 end
-function _significand{T<:AbstractFloat}(d::T)
+function _significand(d::T) where T<:AbstractFloat
   s = uint_t(d) & SignificandMask(T)
   return !isdenormal(d) ? s + HiddenBit(T) : s
 end
@@ -125,7 +125,7 @@ function normalizedbound(f::AbstractFloat)
     end
     return Float(m_minus.s << (m_minus.e - m_plus.e), m_plus.e), m_plus
 end
-function lowerboundaryiscloser{T<:AbstractFloat}(f::T)
+function lowerboundaryiscloser(f::T) where T<:AbstractFloat
     physical_significand_is_zero = (uint_t(f) & SignificandMask(T)) == 0
     return physical_significand_is_zero && (_exponent(f) != DenormalExponent(T))
 end
