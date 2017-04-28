@@ -207,7 +207,7 @@
   (if (decl? v) (cadr v) v))
 
 (define (decl-type v)
-  (if (decl? v) (caddr v) 'Any))
+  (if (decl? v) (caddr v) '(core Any)))
 
 (define (sym-dot? e)
   (and (length= e 3) (eq? (car e) '|.|)

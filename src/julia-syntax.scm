@@ -677,7 +677,8 @@
                      (block
                       ,@locs
                       (call new ,@field-names)))))
-    (if (and (null? params) (pair? field-types))
+    (if (and (null? params) (any (lambda (t) (not (equal? t '(core Any))))
+                                 field-types))
         (list
          ;; definition with field types for all arguments
          ;; only if any field type is not Any, checked at runtime
