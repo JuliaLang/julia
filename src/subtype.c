@@ -1402,8 +1402,14 @@ static jl_value_t *finish_unionall(jl_value_t *res, jl_varbinding_t *vb, jl_sten
                 JL_GC_POP();
                 return jl_bottom_type;
             }
-            if (varval)
-                btemp->lb = jl_substitute_var(btemp->lb, vb->var, varval);
+            if (varval) {
+                JL_TRY {
+                    btemp->lb = jl_substitute_var(btemp->lb, vb->var, varval);
+                }
+                JL_CATCH {
+                    res = jl_bottom_type;
+                }
+            }
             else if (btemp->lb == (jl_value_t*)vb->var)
                 btemp->lb = vb->lb;
             else if (btemp->depth0 == vb->depth0 && !jl_has_typevar(vb->lb, btemp->var) &&
@@ -1430,8 +1436,14 @@ static jl_value_t *finish_unionall(jl_value_t *res, jl_varbinding_t *vb, jl_sten
                 JL_GC_POP();
                 return jl_bottom_type;
             }
-            if (varval)
-                btemp->ub = jl_substitute_var(btemp->ub, vb->var, varval);
+            if (varval) {
+                JL_TRY {
+                    btemp->ub = jl_substitute_var(btemp->ub, vb->var, varval);
+                }
+                JL_CATCH {
+                    res = jl_bottom_type;
+                }
+            }
             else if (btemp->ub == (jl_value_t*)vb->var)
                 btemp->ub = vb->ub;
             else
