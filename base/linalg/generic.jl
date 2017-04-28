@@ -412,13 +412,22 @@ vecnorm2(x) = generic_vecnorm2(x)
 vecnormp(x, p) = generic_vecnormp(x, p)
 
 """
-    vecnorm(A, [p::Real=2])
+    vecnorm(A, p::Real=2)
 
 For any iterable container `A` (including arrays of any dimension) of numbers (or any
 element type for which `norm` is defined), compute the `p`-norm (defaulting to `p=2`) as if
 `A` were a vector of the corresponding length.
 
-For example, if `A` is a matrix and `p=2`, then this is equivalent to the Frobenius norm.
+The `p`-norm is defined as:
+```math
+\\|A\\|_p = \\left( \\sum_{i=1}^n | a_i | ^p \\right)^{1/p}
+```
+with ``a_i`` the entries of ``A`` and ``n`` its length.
+
+`p` can assume any numeric value (even though not all values produce a
+mathematically valid vector norm). In particular, `vecnorm(A, Inf)` returns the largest value
+in `abs(A)`, whereas `vecnorm(A, -Inf)` returns the smallest. If `A` is a matrix and `p=2`,
+then this is equivalent to the Frobenius norm.
 
 # Example
 
@@ -447,9 +456,13 @@ function vecnorm(itr, p::Real=2)
         vecnormp(itr,p)
     end
 end
-@inline vecnorm(x::Number, p::Real=2) = p == 0 ? (x==0 ? zero(abs(x)) : oneunit(abs(x))) : abs(x)
 
-norm(x::AbstractVector, p::Real=2) = vecnorm(x, p)
+"""
+    vecnorm(x::Number, p::Real=2)
+
+For numbers, return ``\\left( |x|^p \\right) ^{1/p}``.
+"""
+@inline vecnorm(x::Number, p::Real=2) = p == 0 ? (x==0 ? zero(abs(x)) : oneunit(abs(x))) : abs(x)
 
 function norm1(A::AbstractMatrix{T}) where T
     m, n = size(A)
@@ -491,18 +504,30 @@ function normInf(A::AbstractMatrix{T}) where T
 end
 
 """
-    norm(A, [p::Real=2])
+    norm(A::AbstractArray, p::Real=2)
 
-Compute the `p`-norm of a vector or the operator norm of a matrix `A`, defaulting to the `p=2`-norm.
+Compute the `p`-norm of a vector or the operator norm of a matrix `A`,
+defaulting to the 2-norm.
+"""
+function norm end
 
-For vectors, `p` can assume any numeric value (even though not all values produce a
+"""
+    norm(A::AbstractVector, p::Real=2)
+
+For vectors, this is equivalent to [`vecnorm`](@ref) and equal to:
+```math
+\\|A\\|_p = \\left( \\sum_{i=1}^n | a_i | ^p \\right)^{1/p}
+```
+with ``a_i`` the entries of ``A`` and ``n`` its length.
+
+`p` can assume any numeric value (even though not all values produce a
 mathematically valid vector norm). In particular, `norm(A, Inf)` returns the largest value
 in `abs(A)`, whereas `norm(A, -Inf)` returns the smallest.
 
 # Example
 
 ```jldoctest
-julia> v = [3;-2;6]
+julia> v = [3, -2, 6]
 3-element Array{Int64,1}:
   3
  -2
@@ -514,10 +539,29 @@ julia> norm(v)
 julia> norm(v, Inf)
 6.0
 ```
+"""
+norm(x::AbstractVector, p::Real=2) = vecnorm(x, p)
+
+"""
+    norm(A::AbstractMatrix, p::Real=2)
 
 For matrices, the matrix norm induced by the vector `p`-norm is used, where valid values of
 `p` are `1`, `2`, or `Inf`. (Note that for sparse matrices, `p=2` is currently not
 implemented.) Use [`vecnorm`](@ref) to compute the Frobenius norm.
+
+When `p=1`, the matrix norm is the maximum absolute column sum of `A`:
+```math
+\\|A\\|_1 = \\max_{1 ≤ j ≤ n} \\sum_{i=1}^m | a_{ij} |
+```
+with ``a_{ij}`` the entries of ``A``, and ``m`` and ``n`` its dimensions.
+
+When `p=2`, the matrix norm is the spectral norm, equal to the largest
+singular value of `A`.
+
+When `p=Inf`, the matrix norm is the maximum absolute row sum of `A`:
+```math
+\\|A\\|_\\infty = \\max_{1 ≤ i ≤ m} \\sum _{j=1}^n | a_{ij} |
+```
 
 # Example
 
@@ -543,14 +587,20 @@ function norm(A::AbstractMatrix, p::Real=2)
     end
 end
 
+"""
+    norm(x::Number, p::Real=2)
+
+For numbers, return ``\\left( |x|^p \\right)^{1/p}``.
+This is equivalent to [`vecnorm`](@ref).
+"""
 @inline norm(x::Number, p::Real=2) = vecnorm(x, p)
 
 @inline norm(tv::RowVector) = norm(transpose(tv))
 
 """
-    norm(rowvector, [q = 2])
+    norm(A::RowVector, q::Real=2)
 
-Takes the q-norm of a `RowVector`, which is equivalent to the p-norm with
+For row vectors, return the ``q``-norm of `A`, which is equivalent to the p-norm with
 value `p = q/(q-1)`. They coincide at `p = q = 2`.
 
 The difference in norm between a vector space and its dual arises to preserve
@@ -1240,10 +1290,11 @@ function isapprox(x::AbstractArray, y::AbstractArray;
 end
 
 """
-    normalize!(v, [p::Real=2])
+    normalize!(v::AbstractVector, p::Real=2)
 
-Normalize the vector `v` in-place with respect to the `p`-norm.
-See also [`vecnorm`](@ref) and [`normalize`](@ref).
+Normalize the vector `v` in-place so that its `p`-norm equals unity,
+i.e. `norm(v, p) == 1`.
+See also [`normalize`](@ref) and [`vecnorm`](@ref).
 """
 function normalize!(v::AbstractVector, p::Real=2)
     nrm = norm(v, p)
@@ -1268,9 +1319,10 @@ end
 end
 
 """
-    normalize(v, [p::Real=2])
+    normalize(v::AbstractVector, p::Real=2)
 
-Normalize the vector `v` with respect to the `p`-norm.
+Normalize the vector `v` so that its `p`-norm equals unity,
+i.e. `norm(v, p) == vecnorm(v, p) == 1`.
 See also [`normalize!`](@ref) and [`vecnorm`](@ref).
 
 # Example
@@ -1278,17 +1330,23 @@ See also [`normalize!`](@ref) and [`vecnorm`](@ref).
 ```jldoctest
 julia> a = [1,2,4];
 
-julia> normalize(a)
+julia> b = normalize(a)
 3-element Array{Float64,1}:
  0.218218
  0.436436
  0.872872
 
-julia> normalize(a,1)
+julia> norm(b)
+1.0
+
+julia> c = normalize(a, 1)
 3-element Array{Float64,1}:
  0.142857
  0.285714
  0.571429
+
+julia> norm(c, 1)
+1.0
 ```
 """
 function normalize(v::AbstractVector, p::Real = 2)
