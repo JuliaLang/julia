@@ -354,5 +354,5 @@ sleep(time::Period) = sleep(toms(time) / 1000)
 Timer(time::Period, repeat::Period=Second(0)) = Timer(toms(time) / 1000, toms(repeat) / 1000)
 timedwait(testcb::Function, time::Period) = timedwait(testcb, toms(time) / 1000)
 
-(::Type{Base.TypeOrder})(::Type{<:AbstractTime}) = Base.HasOrder()
-(::Type{Base.TypeArithmetic})(::Type{<:AbstractTime}) = Base.ArithmeticOverflows()
+Base.TypeOrder(::Type{<:AbstractTime}) = Base.HasOrder()
+Base.TypeArithmetic(::Type{<:AbstractTime}) = Base.ArithmeticOverflows()

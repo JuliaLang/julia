@@ -158,9 +158,9 @@ Only conversion to/from UTF-8 is currently supported.
 """
 function transcode end
 
-transcode{T<:Union{UInt8,UInt16,UInt32,Int32}}(::Type{T}, src::Vector{T}) = src
-transcode{T<:Union{Int32,UInt32}}(::Type{T}, src::String) = T[T(c) for c in src]
-transcode{T<:Union{Int32,UInt32}}(::Type{T}, src::Vector{UInt8}) = transcode(T, String(src))
+transcode(::Type{T}, src::Vector{T}) where {T<:Union{UInt8,UInt16,UInt32,Int32}} = src
+transcode(::Type{T}, src::String) where {T<:Union{Int32,UInt32}} = T[T(c) for c in src]
+transcode(::Type{T}, src::Vector{UInt8}) where {T<:Union{Int32,UInt32}} = transcode(T, String(src))
 function transcode(::Type{UInt8}, src::Vector{<:Union{Int32,UInt32}})
     buf = IOBuffer()
     for c in src; print(buf, Char(c)); end

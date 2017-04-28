@@ -87,8 +87,8 @@ Float64
 ```
 """
 real(T::Type) = typeof(real(zero(T)))
-real{T<:Real}(::Type{T}) = T
-real{T<:Real}(::Type{Complex{T}}) = T
+real(::Type{T}) where {T<:Real} = T
+real(::Type{Complex{T}}) where {T<:Real} = T
 
 """
     isreal(x) -> Bool
@@ -366,7 +366,7 @@ function inv(w::Complex128)
     return Complex128(p*s,q*s) # undo scaling
 end
 
-function ssqs{T<:AbstractFloat}(x::T, y::T)
+function ssqs(x::T, y::T) where T<:AbstractFloat
     k::Int = 0
     ρ = x*x + y*y
     if !isfinite(ρ) && (isinf(x) || isinf(y))
@@ -536,7 +536,7 @@ function expm1(z::Complex)
     end
 end
 
-function log1p{T}(z::Complex{T})
+function log1p(z::Complex{T}) where T
     zr,zi = reim(z)
     if isfinite(zr)
         isinf(zi) && return log(z)

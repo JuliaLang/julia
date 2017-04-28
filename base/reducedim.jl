@@ -20,7 +20,7 @@ function reduced_indices(inds::Indices{N}, d::Int, rd::AbstractUnitRange) where 
 end
 reduced_indices(inds::Indices, d::Int) = reduced_indices(inds, d, OneTo(1))
 
-function reduced_indices0{N}(inds::Indices{N}, d::Int)
+function reduced_indices0(inds::Indices{N}, d::Int) where N
     d < 1 && throw(ArgumentError("dimension must be ≥ 1, got $d"))
     if d <= N
         return reduced_indices(inds, d, (inds[d] == OneTo(0) ? OneTo(0) : OneTo(1)))
@@ -43,7 +43,7 @@ function reduced_indices(inds::Indices{N}, region) where N
     tuple(rinds...)::typeof(inds)
 end
 
-function reduced_indices0{N}(inds::Indices{N}, region)
+function reduced_indices0(inds::Indices{N}, region) where N
     rinds = [inds...]
     for i in region
         isa(i, Integer) || throw(ArgumentError("reduced dimension(s) must be integers"))
@@ -70,11 +70,11 @@ for (Op, initval) in ((:(typeof(&)), true), (:(typeof(|)), false))
     @eval initarray!(a::AbstractArray, ::$(Op), init::Bool) = (init && fill!(a, $initval); a)
 end
 
-reducedim_initarray{R}(A::AbstractArray, region, v0, ::Type{R}) = fill!(similar(A,R,reduced_indices(A,region)), v0)
-reducedim_initarray{T}(A::AbstractArray, region, v0::T) = reducedim_initarray(A, region, v0, T)
+reducedim_initarray(A::AbstractArray, region, v0, ::Type{R}) where {R} = fill!(similar(A,R,reduced_indices(A,region)), v0)
+reducedim_initarray(A::AbstractArray, region, v0::T) where {T} = reducedim_initarray(A, region, v0, T)
 
-reducedim_initarray0{R}(A::AbstractArray, region, v0, ::Type{R}) = fill!(similar(A,R,reduced_indices0(A,region)), v0)
-reducedim_initarray0{T}(A::AbstractArray, region, v0::T) = reducedim_initarray0(A, region, v0, T)
+reducedim_initarray0(A::AbstractArray, region, v0, ::Type{R}) where {R} = fill!(similar(A,R,reduced_indices0(A,region)), v0)
+reducedim_initarray0(A::AbstractArray, region, v0::T) where {T} = reducedim_initarray0(A, region, v0, T)
 
 # TODO: better way to handle reducedim initialization
 #
@@ -106,9 +106,9 @@ reducedim_init(f, op::typeof(max), A::AbstractArray, region) = reducedim_init(f,
 reducedim_init(f, op::typeof(min), A::AbstractArray, region) = reducedim_init(f, scalarmin, A, region)
 reducedim_init(f::Union{typeof(abs),typeof(abs2)}, op::typeof(max), A::AbstractArray, region) = reducedim_init(f, scalarmax, A, region)
 
-reducedim_init{T}(f, op::typeof(scalarmax), A::AbstractArray{T}, region) = reducedim_initarray0(A, region, typemin(f(zero(T))))
-reducedim_init{T}(f, op::typeof(scalarmin), A::AbstractArray{T}, region) = reducedim_initarray0(A, region, typemax(f(zero(T))))
-reducedim_init{T}(f::Union{typeof(abs),typeof(abs2)}, op::typeof(scalarmax), A::AbstractArray{T}, region) =
+reducedim_init(f, op::typeof(scalarmax), A::AbstractArray{T}, region) where {T} = reducedim_initarray0(A, region, typemin(f(zero(T))))
+reducedim_init(f, op::typeof(scalarmin), A::AbstractArray{T}, region) where {T} = reducedim_initarray0(A, region, typemax(f(zero(T))))
+reducedim_init(f::Union{typeof(abs),typeof(abs2)}, op::typeof(scalarmax), A::AbstractArray{T}, region) where {T} =
     reducedim_initarray(A, region, zero(f(zero(T))))
 
 reducedim_init(f, op::typeof(&), A::AbstractArray, region) = reducedim_initarray(A, region, true)
