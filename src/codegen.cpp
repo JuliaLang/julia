@@ -2455,8 +2455,8 @@ static jl_cgval_t emit_getfield(jl_value_t *expr, jl_sym_t *name, jl_codectx_t *
     JL_GC_PUSH1(&sty);
     if (jl_is_type_type((jl_value_t*)sty) && jl_is_leaf_type(jl_tparam0(sty)))
         sty = (jl_datatype_t*)jl_typeof(jl_tparam0(sty));
-    if (jl_is_structtype(sty) && sty != jl_module_type && sty->uid != 0 &&
-        jl_is_leaf_type((jl_value_t*)sty)) {
+    sty = (jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)sty);
+    if (jl_is_structtype(sty) && sty != jl_module_type && sty->layout) {
         unsigned idx = jl_field_index(sty, name, 0);
         if (idx != (unsigned)-1) {
             jl_cgval_t strct = emit_expr(expr, ctx);
@@ -2971,8 +2971,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
             JL_GC_POP();
             return true;
         }
-        jl_datatype_t *stt = (jl_datatype_t*)expr_type(args[1], ctx);
-        jl_value_t *fldt   = expr_type(args[2], ctx);
+        jl_value_t *fldt = expr_type(args[2], ctx);
 
         // VA tuple
         if (ctx->vaStack && slot_eq(args[1], ctx->vaSlot)) {
@@ -2989,22 +2988,25 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
             return true;
         }
 
-        if (fldt == (jl_value_t*)jl_long_type && jl_is_leaf_type((jl_value_t*)stt)) {
-            if ((jl_is_structtype(stt) || jl_is_tuple_type(stt)) && !jl_subtype((jl_value_t*)jl_module_type, (jl_value_t*)stt)) {
-                size_t nfields = jl_datatype_nfields(stt);
+        jl_datatype_t *stt = (jl_datatype_t*)expr_type(args[1], ctx);
+        jl_value_t *utt = jl_unwrap_unionall((jl_value_t*)stt);
+
+        if (fldt == (jl_value_t*)jl_long_type && jl_is_datatype(utt) && ((jl_datatype_t*)utt)->layout) {
+            if ((jl_is_structtype(utt) || jl_is_tuple_type(utt)) && !jl_subtype((jl_value_t*)jl_module_type, (jl_value_t*)stt)) {
+                size_t nfields = jl_datatype_nfields(utt);
                 jl_cgval_t strct = emit_expr(args[1], ctx);
                 // integer index
                 size_t idx;
                 if (jl_is_long(args[2]) && (idx=jl_unbox_long(args[2])-1) < nfields) {
                     // known index
-                    *ret = emit_getfield_knownidx(strct, idx, stt, ctx);
+                    *ret = emit_getfield_knownidx(strct, idx, (jl_datatype_t*)utt, ctx);
                     JL_GC_POP();
                     return true;
                 }
                 else {
                     // unknown index
                     Value *vidx = emit_unbox(T_size, emit_expr(args[2], ctx), (jl_value_t*)jl_long_type);
-                    if (emit_getfield_unknownidx(ret, strct, vidx, stt, ctx)) {
+                    if (emit_getfield_unknownidx(ret, strct, vidx, (jl_datatype_t*)utt, ctx)) {
                         if (ret->typ == (jl_value_t*)jl_any_type) // improve the type, if known from the expr
                             ret->typ = expr_type(expr, ctx);
                         JL_GC_POP();
@@ -3012,8 +3014,8 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
                     }
                 }
             }
-        } else {
-            jl_value_t *utt = jl_unwrap_unionall((jl_value_t*)stt);
+        }
+        else {
             if (jl_is_tuple_type(utt) && is_tupletype_homogeneous(((jl_datatype_t*)utt)->types, true)) {
                 // For tuples, we can emit code even if we don't know the exact
                 // type (e.g. because we don't know the length). This is possible
@@ -3045,10 +3047,11 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
     else if (f==jl_builtin_setfield && nargs==3) {
         jl_datatype_t *sty = (jl_datatype_t*)expr_type(args[1], ctx);
         rt1 = (jl_value_t*)sty;
-        if (jl_is_structtype(sty) && sty != jl_module_type) {
+        jl_datatype_t *uty = (jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)sty);
+        if (jl_is_structtype(uty) && uty != jl_module_type) {
             size_t idx = (size_t)-1;
             if (jl_is_quotenode(args[2]) && jl_is_symbol(jl_fieldref(args[2],0))) {
-                idx = jl_field_index(sty, (jl_sym_t*)jl_fieldref(args[2],0), 0);
+                idx = jl_field_index(uty, (jl_sym_t*)jl_fieldref(args[2],0), 0);
             }
             else if (jl_is_long(args[2]) || (jl_is_quotenode(args[2]) && jl_is_long(jl_fieldref(args[2],0)))) {
                 ssize_t i;
@@ -3056,14 +3059,14 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
                     i = jl_unbox_long(args[2]);
                 else
                     i = jl_unbox_long(jl_fieldref(args[2],0));
-                if (i > 0 && i <= jl_datatype_nfields(sty))
+                if (i > 0 && i <= jl_datatype_nfields(uty))
                     idx = i-1;
             }
             if (idx != (size_t)-1) {
-                jl_value_t *ft = jl_svecref(sty->types, idx);
+                jl_value_t *ft = jl_svecref(uty->types, idx);
                 jl_value_t *rhst = expr_type(args[3], ctx);
                 rt2 = rhst;
-                if (jl_is_leaf_type((jl_value_t*)sty) && jl_subtype(rhst, ft)) {
+                if (uty->layout && jl_subtype(rhst, ft)) {
                     // TODO: attempt better codegen for approximate types
                     jl_cgval_t strct = emit_expr(args[1], ctx); // emit lhs
                     *ret = emit_expr(args[3], ctx);
