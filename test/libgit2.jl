@@ -6,6 +6,37 @@ import TestHelpers: challenge_prompt
 const LIBGIT2_MIN_VER = v"0.23.0"
 const LIBGIT2_HELPER_PATH = joinpath(dirname(@__FILE__), "libgit2-helpers.jl")
 
+function get_global_dir()
+    buf = Ref(LibGit2.Buffer())
+    LibGit2.@check ccall((:git_libgit2_opts, :libgit2), Cint,
+                         (Cint, Cint, Ptr{LibGit2.Buffer}),
+                         LibGit2.Consts.GET_SEARCH_PATH, LibGit2.Consts.CONFIG_LEVEL_GLOBAL, buf)
+    path = unsafe_string(buf[].ptr)
+    LibGit2.free(buf)
+    return path
+end
+
+function set_global_dir(dir)
+    LibGit2.@check ccall((:git_libgit2_opts, :libgit2), Cint,
+                         (Cint, Cint, Cstring),
+                         LibGit2.Consts.SET_SEARCH_PATH, LibGit2.Consts.CONFIG_LEVEL_GLOBAL, dir)
+    return
+end
+
+function with_libgit2_temp_home(f)
+    mktempdir() do tmphome
+        oldpath = get_global_dir()
+        set_global_dir(tmphome)
+        try
+            @test get_global_dir() == tmphome
+            f(tmphome)
+        finally
+            set_global_dir(oldpath)
+        end
+        return
+    end
+end
+
 #########
 # TESTS #
 #########
@@ -59,11 +90,26 @@ end
 end
 
 @testset "Default config" begin
-    #for now just see that this works
-    cfg = LibGit2.GitConfig()
-    @test isa(cfg, LibGit2.GitConfig)
-    LibGit2.set!(cfg, "fake.property", "AAAA")
-    LibGit2.getconfig("fake.property", "") == "AAAA"
+    with_libgit2_temp_home() do tmphome
+        cfg = LibGit2.GitConfig()
+        @test isa(cfg, LibGit2.GitConfig)
+        @test LibGit2.getconfig("fake.property", "") == ""
+        LibGit2.set!(cfg, "fake.property", "AAAA")
+        @test LibGit2.getconfig("fake.property", "") == "AAAA"
+    end
+end
+
+is_unix() && @testset "Default config with symlink" begin
+    with_libgit2_temp_home() do tmphome
+        write(joinpath(tmphome, "real_gitconfig"), "[fake]\n\tproperty = BBB")
+        symlink(joinpath(tmphome, "real_gitconfig"),
+                joinpath(tmphome, ".gitconfig"))
+        cfg = LibGit2.GitConfig()
+        @test isa(cfg, LibGit2.GitConfig)
+        LibGit2.getconfig("fake.property", "") == "BBB"
+        LibGit2.set!(cfg, "fake.property", "AAAA")
+        LibGit2.getconfig("fake.property", "") == "AAAA"
+    end
 end
 
 @testset "Git URL parsing" begin
