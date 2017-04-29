@@ -72,10 +72,6 @@ end
 parseinline(s::AbstractString, md::MD, c::Config) =
     parseinline(IOBuffer(s), md, c)
 
-# TODO remove once GH #9888 is fixed
-parseinline(s::SubString{T}, md::MD, c::Config) where {T} =
-    parseinline(convert(T, s), md, c)
-
 parseinline(s, md::MD) = parseinline(s, md, config(md))
 
 # Block parsing
