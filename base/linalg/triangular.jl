@@ -1757,19 +1757,12 @@ function logm(A0::UpperTriangular{T}) where T<:Union{Float64,Complex{Float64}}
     m = 0
 
     # Compute repeated roots
-    d = diag(A)
-    dm1 = Vector{T}(n)
+    d = complex(diag(A))
+    dm1 = d .- 1
     s = 0
-    for i = 1:n
-        dm1[i] = d[i] - 1.
-    end
-    while norm(dm1, Inf) > theta[tmax]
-        for i = 1:n
-            d[i] = sqrt(d[i])
-        end
-        for i = 1:n
-            dm1[i] = d[i] - 1
-        end
+    while norm(dm1, Inf) > theta[tmax] && s < maxsqrt
+        d .= sqrt.(d)
+        dm1 .= d .- 1
         s = s + 1
     end
     s0 = s
@@ -1783,7 +1776,7 @@ function logm(A0::UpperTriangular{T}) where T<:Union{Float64,Complex{Float64}}
     alpha2 = max(d2, d3)
     foundm = false
     if alpha2 <= theta[2]
-        m = alpha2<=theta[1]?1:2
+        m = alpha2 <= theta[1] ? 1 : 2
         foundm = true
     end
 
@@ -1964,16 +1957,11 @@ function invsquaring(A0::UpperTriangular, theta)
 
     # Compute repeated roots
     d = complex(diag(A))
-    dm1 = similar(d, n)
+    dm1 = d .- 1
     s = 0
-    for i = 1:n
-        dm1[i] = d[i] - 1
-    end
-    while norm(dm1, Inf) > theta[tmax]
-        for i = 1:n
-            d[i] = sqrt(d[i])
-            dm1[i] = d[i] - 1
-        end
+    while norm(dm1, Inf) > theta[tmax] && s < maxsqrt
+        d .= sqrt.(d)
+        dm1 .= d .- 1
         s = s + 1
     end
     s0 = s
