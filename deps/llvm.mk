@@ -553,13 +553,10 @@ endif
 $(build_prefix)/manifest/llvm: | $(llvm_python_workaround)
 
 ifeq ($(LLVM_USE_CMAKE),1)
-ifeq ($(OS), WINNT)
-LLVM_INSTALL = \
-	cd $1 && $$(CMAKE) -DCMAKE_INSTALL_PREFIX="$2$$(build_prefix)" -P cmake_install.cmake && \
-	cp $2$$(build_shlibdir)/LLVM.dll $2$$(build_depsbindir)
-else
 LLVM_INSTALL = \
 	cd $1 && $$(CMAKE) -DCMAKE_INSTALL_PREFIX="$2$$(build_prefix)" -P cmake_install.cmake
+ifeq ($(OS), WINNT)
+LLVM_INSTALL += && cp $2$$(build_shlibdir)/LLVM.dll $2$$(build_depsbindir)
 endif
 else
 LLVM_INSTALL = \
