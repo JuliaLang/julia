@@ -504,7 +504,7 @@ function exp(z::Complex)
         end
     else
         er = exp(zr)
-        if zi == zero(zi)
+        if iszero(zi)
             Complex(er, zi)
         else
             Complex(er*cos(zi), er*sin(zi))
