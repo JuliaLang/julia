@@ -489,10 +489,21 @@ void jl_binding_deprecation_warning(jl_binding_t *b)
         else
             jl_printf(JL_STDERR, "%s is deprecated", jl_symbol_name(b->name));
         jl_value_t *v = b->value;
-        if (v && (jl_is_type(v) || jl_is_module(v)/* || (jl_is_function(v) && jl_is_gf(v))*/)) {
-            jl_printf(JL_STDERR, ", use ");
-            jl_static_show(JL_STDERR, v);
-            jl_printf(JL_STDERR, " instead");
+        if (v) {
+            if (jl_is_type(v) || jl_is_module(v)) {
+                jl_printf(JL_STDERR, ", use ");
+                jl_static_show(JL_STDERR, v);
+                jl_printf(JL_STDERR, " instead");
+            }
+            else {
+                jl_methtable_t *mt = jl_gf_mtable(v);
+                if (mt != NULL && mt->defs.unknown != jl_nothing) {
+                    jl_printf(JL_STDERR, ", use ");
+                    jl_static_show(JL_STDERR, (jl_value_t*)mt->module);
+                    jl_printf(JL_STDERR, ".%s", jl_symbol_name(mt->name));
+                    jl_printf(JL_STDERR, " instead");
+                }
+            }
         }
         jl_printf(JL_STDERR, ".\n");
 
