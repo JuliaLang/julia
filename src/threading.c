@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: https://julialang.org/license
+// This file is a part of Julia. License is MIT: http://julialang.org/license
 
 /*
   threading infrastructure
@@ -298,7 +298,7 @@ static void ti_init_master_thread(void)
 #ifdef _OS_WINDOWS_
     if (!DuplicateHandle(GetCurrentProcess(), GetCurrentThread(),
                          GetCurrentProcess(), &hMainThread, 0,
-                         FALSE, DUPLICATE_SAME_ACCESS)) {
+                         TRUE, DUPLICATE_SAME_ACCESS)) {
         jl_printf(JL_STDERR, "WARNING: failed to access handle to main thread\n");
         hMainThread = INVALID_HANDLE_VALUE;
     }
@@ -316,20 +316,7 @@ static jl_value_t *ti_run_fun(const jl_generic_fptr_t *fptr, jl_method_instance_
         jl_call_fptr_internal(fptr, mfunc, args, nargs);
     }
     JL_CATCH {
-        // Lock this output since we know it'll likely happen on multiple threads
-        static jl_mutex_t lock;
-        JL_LOCK_NOGC(&lock);
-        jl_jmp_buf *old_buf = ptls->safe_restore;
-        jl_jmp_buf buf;
-        if (!jl_setjmp(buf, 0)) {
-            // Set up the safe_restore context so that the printing uses the thread safe version
-            ptls->safe_restore = &buf;
-            jl_printf(JL_STDERR, "\nError thrown in threaded loop on thread %d: ",
-                      (int)ptls->tid);
-            jl_static_show(JL_STDERR, ptls->exception_in_transit);
-        }
-        ptls->safe_restore = old_buf;
-        JL_UNLOCK_NOGC(&lock);
+        return ptls->exception_in_transit;
     }
     return jl_nothing;
 }
@@ -391,16 +378,13 @@ void ti_threadfun(void *arg)
     // free the thread argument here
     free(ta);
 
-    int init = 1;
-
     // work loop
     for (; ;) {
 #if PROFILE_JL_THREADING
         uint64_t tstart = uv_hrtime();
 #endif
 
-        ti_threadgroup_fork(tg, ptls->tid, (void **)&work, init);
-        init = 0;
+        ti_threadgroup_fork(tg, ptls->tid, (void **)&work);
 
 #if PROFILE_JL_THREADING
         uint64_t tfork = uv_hrtime();
@@ -648,7 +632,7 @@ void jl_shutdown_threading(void)
     ti_threadwork_t *work = &threadwork;
 
     work->command = TI_THREADWORK_DONE;
-    ti_threadgroup_fork(tgworld, ptls->tid, (void **)&work, 0);
+    ti_threadgroup_fork(tgworld, ptls->tid, (void **)&work);
 
     sleep(1);
 
@@ -707,7 +691,7 @@ JL_DLLEXPORT jl_value_t *jl_threading_run(jl_value_t *_args)
 
     // fork the world thread group
     ti_threadwork_t *tw = &threadwork;
-    ti_threadgroup_fork(tgworld, ptls->tid, (void **)&tw, 0);
+    ti_threadgroup_fork(tgworld, ptls->tid, (void **)&tw);
 
 #if PROFILE_JL_THREADING
     uint64_t tfork = uv_hrtime();

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: https://julialang.org/license
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
  ## Basic functions ##
 
@@ -210,7 +210,7 @@ function circshift(a::AbstractArray, shiftamt)
 end
 
 # Uses K-B-N summation
-function cumsum_kbn(v::AbstractVector{T}) where T<:AbstractFloat
+function cumsum_kbn{T<:AbstractFloat}(v::AbstractVector{T})
     r = similar(v)
     if isempty(v); return r; end
 
@@ -241,7 +241,7 @@ end
 Cumulative sum along a dimension, using the Kahan-Babuska-Neumaier compensated summation
 algorithm for additional accuracy. The dimension defaults to 1.
 """
-function cumsum_kbn(A::AbstractArray{T}, axis::Integer=1) where T<:AbstractFloat
+function cumsum_kbn{T<:AbstractFloat}(A::AbstractArray{T}, axis::Integer=1)
     dimsA = size(A)
     ndimsA = ndims(A)
     axis_size = dimsA[axis]

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: https://julialang.org/license
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 catcmd = `cat`
 if is_windows()
@@ -62,8 +62,8 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes --startup-file=no`
     @test !success(`$exename --load`)
 
     # --cpu-target
-    # NOTE: this test only holds true if image_file is a shared library.
-    if Libdl.dlopen_e(unsafe_string(Base.JLOptions().image_file)) != C_NULL
+    # NOTE: this test only holds true when there is a sys.{dll,dylib,so} shared library present.
+    if Libdl.dlopen_e(splitext(unsafe_string(Base.JLOptions().image_file))[1]) != C_NULL
         @test !success(`$exename -C invalidtarget --precompiled=yes`)
         @test !success(`$exename --cpu-target=invalidtarget --precompiled=yes`)
     else
@@ -328,43 +328,6 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes --startup-file=no`
             rm(testdir)
             @test success(`$exename -e "exit(0)"`)
         end
-    end
-end
-
-
-# Find the path of libjulia (or libjulia-debug, as the case may be)
-# to use as a dummy shlib to open
-libjulia = abspath(Libdl.dlpath((ccall(:jl_is_debugbuild, Cint, ()) != 0) ? "libjulia-debug" : "libjulia"))
-
-# test error handling code paths of running --sysimage
-let exename = joinpath(JULIA_HOME, Base.julia_exename()),
-    sysname = unsafe_string(Base.JLOptions().image_file)
-    for nonexist_image in (
-            joinpath(@__DIR__, "nonexistent"),
-            "$sysname.nonexistent",
-            )
-        let stderr = Pipe(),
-            p = spawn(pipeline(`$exename --sysimage=$nonexist_image`, stderr=stderr))
-            close(stderr.in)
-            let s = readstring(stderr)
-                @test contains(s, "ERROR: could not load library \"$nonexist_image\"\n")
-                @test !contains(s, "Segmentation fault")
-                @test !contains(s, "EXCEPTION_ACCESS_VIOLATION")
-            end
-            @test !success(p)
-            @test !Base.process_signaled(p)
-            @test p.exitcode == 1
-        end
-    end
-    let stderr = Pipe(),
-        p = spawn(pipeline(`$exename --sysimage=$libjulia`, stderr=stderr))
-        close(stderr.in)
-        let s = readstring(stderr)
-            @test s == "ERROR: System image file failed consistency check: maybe opened the wrong version?\n"
-        end
-        @test !success(p)
-        @test !Base.process_signaled(p)
-        @test p.exitcode == 1
     end
 end
 

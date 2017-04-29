@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: https://julialang.org/license
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 const curmod = current_module()
 const curmod_name = fullname(curmod)
@@ -125,14 +125,6 @@ if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
               startswith(s, "\e[0m\e[1m\e[91mERROR: \e[39m\e[22m\e[91munterminated single quote\e[39m\nStacktrace:\n [1] ")
     end
 
-    # Issue #7001
-    # Test ignoring '\0'
-    let
-        write(stdin_write, "\0\n")
-        s = readuntil(stdout_read, "\n\n")
-        @test !contains(s, "invalid character")
-    end
-
     # Test that accepting a REPL result immediately shows up, not
     # just on the next keystroke
     write(stdin_write, "1+1\n") # populate history with a trivial input
@@ -145,7 +137,6 @@ if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     # yield make sure this got processed
     readuntil(stdout_read, "1+1")
     close(t)
-    readuntil(stdout_read, "\n\n")
 
     # Issue #10222
     # Test ignoring insert key in standard and prefix search modes

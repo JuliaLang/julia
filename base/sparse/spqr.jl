@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: https://julialang.org/license
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 module SPQR
 
@@ -76,13 +76,13 @@ function size(F::Factorization, i::Integer)
     return 1
 end
 
-function free!(F::Factorization{Tv}) where Tv<:VTypes
+function free!{Tv<:VTypes}(F::Factorization{Tv})
     ccall((:SuiteSparseQR_C_free, :libspqr), Cint,
         (Ptr{Ptr{C_Factorization{Tv}}}, Ptr{Void}),
             &F.p, common()) == 1
 end
 
-function backslash(ordering::Integer, tol::Real, A::Sparse{Tv}, B::Dense{Tv}) where Tv<:VTypes
+function backslash{Tv<:VTypes}(ordering::Integer, tol::Real, A::Sparse{Tv}, B::Dense{Tv})
     m, n  = size(A)
     if m != size(B, 1)
         throw(DimensionMismatch("left hand side and right hand side must have same number of rows"))
@@ -94,7 +94,7 @@ function backslash(ordering::Integer, tol::Real, A::Sparse{Tv}, B::Dense{Tv}) wh
     d
 end
 
-function factorize(ordering::Integer, tol::Real, A::Sparse{Tv}) where Tv<:VTypes
+function factorize{Tv<:VTypes}(ordering::Integer, tol::Real, A::Sparse{Tv})
     s = unsafe_load(A.p)
     if s.stype != 0
         throw(ArgumentError("stype must be zero"))
@@ -106,7 +106,7 @@ function factorize(ordering::Integer, tol::Real, A::Sparse{Tv}) where Tv<:VTypes
     f
 end
 
-function solve(system::Integer, QR::Factorization{Tv}, B::Dense{Tv}) where Tv<:VTypes
+function solve{Tv<:VTypes}(system::Integer, QR::Factorization{Tv}, B::Dense{Tv})
     m, n = size(QR)
     mB = size(B, 1)
     if (system == RX_EQUALS_B || system == RETX_EQUALS_B) && m != mB
@@ -121,7 +121,7 @@ function solve(system::Integer, QR::Factorization{Tv}, B::Dense{Tv}) where Tv<:V
     d
 end
 
-function qmult(method::Integer, QR::Factorization{Tv}, X::Dense{Tv}) where Tv<:VTypes
+function qmult{Tv<:VTypes}(method::Integer, QR::Factorization{Tv}, X::Dense{Tv})
     mQR, nQR = size(QR)
     mX, nX = size(X)
     if (method == QTX || method == QX) && mQR != mX
@@ -174,7 +174,7 @@ function (\)(F::Factorization{Float64}, B::VecOrMat{Complex{Float64}})
     return reinterpret(Complex{Float64}, transpose(reshape(x, (length(x) >> 1), 2)), _ret_size(F, B))
 end
 
-function (\)(F::Factorization{T}, B::StridedVecOrMat{T}) where T<:VTypes
+function (\){T<:VTypes}(F::Factorization{T}, B::StridedVecOrMat{T})
     QtB = qmult(QTX, F, Dense(B))
     convert(typeof(B), solve(RETX_EQUALS_B, F, QtB))
 end

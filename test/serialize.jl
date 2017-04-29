@@ -1,11 +1,11 @@
-# This file is a part of Julia. License is MIT: https://julialang.org/license
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 using Base.Test
 
 # Check that serializer hasn't gone out-of-frame
-@test Serializer.sertag(Symbol) == 1
-@test Serializer.sertag(()) == 55
-@test Serializer.sertag(false) == 63
+@test Serializer.sertag(Symbol) == 2
+@test Serializer.sertag(()) == 45
+@test Serializer.sertag(false) == 121
 
 function create_serialization_stream(f::Function)
     s = IOBuffer()
@@ -294,12 +294,11 @@ main_ex = quote
         serialize(s, g)
 
         seekstart(s)
-        ds = SerializationState(s)
-        local g2 = deserialize(ds)
+        local g2 = deserialize(s)
         $Test.@test g2 !== g
         $Test.@test g2() == :magic_token_anon_fun_test
         $Test.@test g2() == :magic_token_anon_fun_test
-        $Test.@test deserialize(ds) === g2
+        $Test.@test deserialize(s) === g2
     end
 end
 # This needs to be run on `Main` since the serializer treats it differently.
@@ -368,17 +367,6 @@ create_serialization_stream() do s
     @test b[end] == 5
     @test length(b) == length(A)
     @test isa(b,Vector{Any})
-end
-
-# shared references
-create_serialization_stream() do s
-    A = [1,2]
-    B = [A,A]
-    serialize(s, B)
-    seekstart(s)
-    C = deserialize(s)
-    @test C == B
-    @test C[1] === C[2]
 end
 
 # Regex

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: https://julialang.org/license
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 ## shell-like command parsing ##
 
@@ -8,8 +8,11 @@ const shell_special = "#{}()[]<>|&*?~;"
 @noinline warn_shell_special(special) =
     depwarn("special characters \"$special\" should now be quoted in commands", :warn_shell_special)
 
-function shell_parse(str::AbstractString, interpolate::Bool=true;
-                     special::AbstractString="")
+function shell_parse(
+        str::AbstractString,
+        interpolate::Bool=true;
+        special::AbstractString=""
+    )
     s = lstrip(str)
     # strips the end but respects the space when the string ends with "\\ "
     r = RevString(s)
@@ -161,8 +164,10 @@ function print_shell_word(io::IO, word::AbstractString, special::AbstractString 
     end
 end
 
-function print_shell_escaped(io::IO, cmd::AbstractString, args::AbstractString...;
-                             special::AbstractString="")
+function print_shell_escaped(
+        io::IO, cmd::AbstractString, args::AbstractString...;
+        special::AbstractString=""
+    )
     print_shell_word(io, cmd, special)
     for arg in args
         print(io, ' ')

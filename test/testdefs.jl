@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: https://julialang.org/license
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 function runtests(name, isolate=true)
     old_print_setting = Base.Test.TESTSET_PRINT_ENABLE[]

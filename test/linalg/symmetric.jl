@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: https://julialang.org/license
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 using Base.Test
 
@@ -128,14 +128,6 @@ let n=10
         end
         @test det(a + a.') ≈ det(Symmetric(a + a.', :U))
         @test det(a + a.') ≈ det(Symmetric(a + a.', :L))
-
-        # isposdef[!]
-        @test isposdef(Symmetric(asym)) == isposdef(full(Symmetric(asym)))
-        @test isposdef(Hermitian(asym)) == isposdef(full(Hermitian(asym)))
-        if eltya != Int
-            @test isposdef!(Symmetric(copy(asym))) == isposdef(full(Symmetric(asym)))
-            @test isposdef!(Hermitian(copy(asym))) == isposdef(full(Hermitian(asym)))
-        end
 
         # rank
         let A = a[:,1:5]*a[:,1:5]'

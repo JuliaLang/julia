@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: https://julialang.org/license
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 @generated function staged_t1(a,b)
     if a == Int
@@ -213,15 +213,3 @@ end
 
 # issue #19897
 @test code_lowered(staged_t1, (Int,Int)) isa Array  # check no error thrown
-
-# issue #10178
-@generated function f10178(x::X) where X
-    :(x)
-end
-g10178(x) = f10178(x)
-@test g10178(5) == 5
-@generated function f10178(x::X) where X
-    :(2x)
-end
-g10178(x) = f10178(x)
-@test g10178(5) == 10

@@ -507,7 +507,7 @@ parses as:
 Type definition:
 
 ```julia
-mutable struct Foo{T<:S}
+type Foo{T<:S}
     x::T
 end
 ```

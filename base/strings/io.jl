@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: https://julialang.org/license
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 ## core text I/O ##
 
@@ -299,8 +299,7 @@ function unescape_string(io, s::AbstractString)
                     i = j
                 end
                 if k == 1
-                    throw(ArgumentError("invalid $(m == 2 ? "hex (\\x)" :
-                                            "unicode (\\u)") escape sequence used in $(repr(s))"))
+                    throw(ArgumentError("\\x used with no following hex digits in $(repr(s))"))
                 end
                 if m == 2 # \x escape sequence
                     write(io, UInt8(n))

@@ -1,5 +1,5 @@
 #!/bin/sh
-# This file is a part of Julia. License is MIT: https://julialang.org/license
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # Script to compile Windows Julia, using binary dependencies from nightlies.
 # Should work in MSYS assuming 7zip is installed and on the path,
@@ -203,7 +203,6 @@ fi
 echo 'FORCE_ASSERTIONS = 1' >> Make.user
 
 cat Make.user
-make -j3 VERBOSE=1 install
-make VERBOSE=1 -C examples
-cp usr/bin/busybox.exe julia-*/bin
+make -j3 VERBOSE=1
 make build-stats
+#make debug

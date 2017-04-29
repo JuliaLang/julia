@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: https://julialang.org/license
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 mutable struct Table
     rows::Vector{Vector{Any}}
@@ -10,9 +10,9 @@ function parserow(stream::IO)
         line = readline(stream)
         row = split(line, r"(?<!\\)\|")
         length(row) == 1 && return
-        isempty(row[1]) && shift!(row)
+        row[1] == "" && shift!(row)
         map!(x -> strip(replace(x, "\\|", "|")), row, row)
-        isempty(row[end]) && pop!(row)
+        row[end] == "" && pop!(row)
         return row
     end
 end
@@ -45,7 +45,7 @@ function github_table(stream::IO, md::MD)
         align = nothing
         while (row = parserow(stream)) !== nothing
             if length(rows) == 0
-                isempty(row[1]) && return false
+                row[1] == "" && return false
                 cols = length(row)
             end
             if align === nothing && length(rows) == 1 # Must have a --- row

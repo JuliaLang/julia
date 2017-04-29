@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: https://julialang.org/license
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 abstract type AbstractChannel end
 
@@ -23,12 +23,12 @@ mutable struct Channel{T} <: AbstractChannel
     state::Symbol
     excp::Nullable{Exception} # Exception to be thrown when state != :open
 
-    data::Vector{T}
+    data::Array{T,1}
     sz_max::Int            # maximum size of channel
 
     # Used when sz_max == 0, i.e., an unbuffered channel.
-    takers::Vector{Task}
-    putters::Vector{Task}
+    takers::Array{Task}
+    putters::Array{Task}
     waiters::Int
 
     function Channel{T}(sz::Float64) where T
@@ -42,7 +42,7 @@ mutable struct Channel{T} <: AbstractChannel
         if sz < 0
             throw(ArgumentError("Channel size must be either 0, a positive integer or Inf"))
         end
-        new(Condition(), Condition(), :open, Nullable{Exception}(), Vector{T}(0), sz, Vector{Task}(0), Vector{Task}(0), 0)
+        new(Condition(), Condition(), :open, Nullable{Exception}(), Array{T}(0), sz, Array{Task}(0), Array{Task}(0), 0)
     end
 
     # deprecated empty constructor
@@ -104,9 +104,10 @@ true
 """
 function Channel(func::Function; ctype=Any, csize=0, taskref=nothing)
     chnl = Channel{ctype}(csize)
-    task = Task(() -> func(chnl))
-    bind(chnl, task)
-    yield(task) # immediately start it
+    task = Task(()->func(chnl))
+    bind(chnl,task)
+    schedule(task)
+    yield()
 
     isa(taskref, Ref{Task}) && (taskref[] = task)
     return chnl
@@ -189,8 +190,8 @@ julia> take!(c)
 julia> put!(c,1);
 ERROR: foo
 Stacktrace:
- [1] check_channel_state(::Channel{Any}) at ./channels.jl:126
- [2] put!(::Channel{Any}, ::Int64) at ./channels.jl:256
+ [1] check_channel_state(::Channel{Any}) at ./channels.jl:127
+ [2] put!(::Channel{Any}, ::Int64) at ./channels.jl:258
 ```
 """
 function bind(c::Channel, task::Task)
@@ -214,13 +215,14 @@ function channeled_tasks(n::Int, funcs...; ctypes=fill(Any,n), csizes=fill(0,n))
     @assert length(csizes) == n
     @assert length(ctypes) == n
 
-    chnls = map(i -> Channel{ctypes[i]}(csizes[i]), 1:n)
-    tasks = Task[ Task(() -> f(chnls...)) for f in funcs ]
+    chnls = map(i->Channel{ctypes[i]}(csizes[i]), 1:n)
+    tasks=Task[Task(()->f(chnls...)) for f in funcs]
 
     # bind all tasks to all channels and schedule them
-    foreach(t -> foreach(c -> bind(c, t), chnls), tasks)
+    foreach(t -> foreach(c -> bind(c,t), chnls), tasks)
     foreach(schedule, tasks)
-    yield() # Allow scheduled tasks to run
+
+    yield()  # Allow scheduled tasks to run
 
     return (chnls, tasks)
 end
@@ -281,8 +283,9 @@ function put_unbuffered(c::Channel, v)
         end
     end
     taker = shift!(c.takers)
-    yield(taker, v) # immediately give taker a chance to run, but don't block the current task
-    return v
+    schedule(current_task())
+    yieldto(taker, v)
+    v
 end
 
 push!(c::Channel, v) = put!(c, v)
@@ -325,12 +328,8 @@ function take_unbuffered(c::Channel{T}) where T
     push!(c.takers, current_task())
     try
         if length(c.putters) > 0
-            let putter = shift!(c.putters)
-                return Base.try_yieldto(putter) do
-                    # if we fail to start putter, put it back in the queue
-                    unshift!(c.putters, putter)
-                end::T
-            end
+            putter = shift!(c.putters)
+            return yieldto(putter)::T
         else
             return wait()::T
         end
@@ -381,7 +380,7 @@ function notify_error(c::Channel, err)
 end
 notify_error(c::Channel) = notify_error(c, get(c.excp))
 
-eltype(::Type{Channel{T}}) where {T} = T
+eltype{T}(::Type{Channel{T}}) = T
 
 show(io::IO, c::Channel) = print(io, "$(typeof(c))(sz_max:$(c.sz_max),sz_curr:$(n_avail(c)))")
 
@@ -391,7 +390,7 @@ mutable struct ChannelIterState{T}
     ChannelIterState{T}(has::Bool) where {T} = new(has)
 end
 
-start(c::Channel{T}) where {T} = ChannelIterState{T}(false)
+start{T}(c::Channel{T}) = ChannelIterState{T}(false)
 function done(c::Channel, state::ChannelIterState)
     try
         # we are waiting either for more data or channel to be closed

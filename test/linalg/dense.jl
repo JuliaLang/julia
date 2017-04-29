@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: https://julialang.org/license
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 using Base.Test
 
@@ -510,61 +510,6 @@ end
     @test diag(zeros(0,1),1) == []
     @test_throws ArgumentError diag(zeros(0,1),-1)
     @test_throws ArgumentError diag(zeros(0,1),2)
-end
-
-@testset "Matrix to real power" for elty in (Float64, Complex{Float64})
-# Tests proposed at Higham, Deadman: Testing Matrix Function Algorithms Using Identities, March 2014
-    #Aa : only positive real eigenvalues
-    Aa = convert(Matrix{elty}, [5 4 2 1; 0 1 -1 -1; -1 -1 3 0; 1 1 -1 2])
-
-    @test Aa^(1/2) ≈ sqrtm(Aa)
-    @test Aa^(-1/2) ≈ inv(sqrtm(Aa))
-    @test Aa^(3/4) ≈ sqrtm(Aa) * sqrtm(sqrtm(Aa))
-    @test Aa^(-3/4) ≈ inv(Aa) * sqrtm(sqrtm(Aa))
-    @test Aa^(17/8) ≈ Aa^2 * sqrtm(sqrtm(sqrtm(Aa)))
-    @test Aa^(-17/8) ≈ inv(Aa^2 * sqrtm(sqrtm(sqrtm(Aa))))
-    @test (Aa^0.2)^5 ≈ Aa
-    @test (Aa^(2/3))*(Aa^(1/3)) ≈ Aa
-    @test (Aa^im)^(-im) ≈ Aa
-
-    #Ab : both positive and negative real eigenvalues
-    Ab = convert(Matrix{elty}, [1 2 3; 4 7 1; 2 1 4])
-
-    @test Ab^(1/2) ≈ sqrtm(Ab)
-    @test Ab^(-1/2) ≈ inv(sqrtm(Ab))
-    @test Ab^(3/4) ≈ sqrtm(Ab) * sqrtm(sqrtm(Ab))
-    @test Ab^(-3/4) ≈ inv(Ab) * sqrtm(sqrtm(Ab))
-    @test Ab^(17/8) ≈ Ab^2 * sqrtm(sqrtm(sqrtm(Ab)))
-    @test Ab^(-17/8) ≈ inv(Ab^2 * sqrtm(sqrtm(sqrtm(Ab))))
-    @test (Ab^0.2)^5 ≈ Ab
-    @test (Ab^(2/3))*(Ab^(1/3)) ≈ Ab
-    @test (Ab^im)^(-im) ≈ Ab
-
-    #Ac : complex eigenvalues
-    Ac = convert(Matrix{elty}, [5 4 2 1;0 1 -1 -1;-1 -1 3 6;1 1 -1 5])
-
-    @test Ac^(1/2) ≈ sqrtm(Ac)
-    @test Ac^(-1/2) ≈ inv(sqrtm(Ac))
-    @test Ac^(3/4) ≈ sqrtm(Ac) * sqrtm(sqrtm(Ac))
-    @test Ac^(-3/4) ≈ inv(Ac) * sqrtm(sqrtm(Ac))
-    @test Ac^(17/8) ≈ Ac^2 * sqrtm(sqrtm(sqrtm(Ac)))
-    @test Ac^(-17/8) ≈ inv(Ac^2 * sqrtm(sqrtm(sqrtm(Ac))))
-    @test (Ac^0.2)^5 ≈ Ac
-    @test (Ac^(2/3))*(Ac^(1/3)) ≈ Ac
-    @test (Ac^im)^(-im) ≈ Ac
-
-    #Ad : defective Matrix
-    Ad = convert(Matrix{elty}, [3 1; 0 3])
-
-    @test Ad^(1/2) ≈ sqrtm(Ad)
-    @test Ad^(-1/2) ≈ inv(sqrtm(Ad))
-    @test Ad^(3/4) ≈ sqrtm(Ad) * sqrtm(sqrtm(Ad))
-    @test Ad^(-3/4) ≈ inv(Ad) * sqrtm(sqrtm(Ad))
-    @test Ad^(17/8) ≈ Ad^2 * sqrtm(sqrtm(sqrtm(Ad)))
-    @test Ad^(-17/8) ≈ inv(Ad^2 * sqrtm(sqrtm(sqrtm(Ad))))
-    @test (Ad^0.2)^5 ≈ Ad
-    @test (Ad^(2/3))*(Ad^(1/3)) ≈ Ad
-    @test (Ad^im)^(-im) ≈ Ad
 end
 
 @testset "Least squares solutions" begin

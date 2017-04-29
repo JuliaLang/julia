@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: https://julialang.org/license
+// This file is a part of Julia. License is MIT: http://julialang.org/license
 
 #include "llvm-version.h"
 #include <map>
@@ -140,9 +140,9 @@ void *jl_get_library(const char *f_lib)
 {
     void *hnd;
 #ifdef _OS_WINDOWS_
-    if (f_lib == JL_EXE_LIBNAME)
+    if ((intptr_t)f_lib == 1)
         return jl_exe_handle;
-    if (f_lib == JL_DL_LIBNAME)
+    if ((intptr_t)f_lib == 2)
         return jl_dl_handle;
 #endif
     if (f_lib == NULL)

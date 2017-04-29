@@ -21,7 +21,7 @@ all: debug release
 # sort is used to remove potential duplicates
 DIRS := $(sort $(build_bindir) $(build_depsbindir) $(build_libdir) $(build_private_libdir) $(build_libexecdir) $(build_includedir) $(build_includedir)/julia $(build_sysconfdir)/julia $(build_datarootdir)/julia $(build_man1dir))
 ifneq ($(BUILDROOT),$(JULIAHOME))
-BUILDDIRS := $(BUILDROOT) $(addprefix $(BUILDROOT)/,base src ui doc deps test test/perf examples examples/embedding)
+BUILDDIRS := $(BUILDROOT) $(addprefix $(BUILDROOT)/,base src ui doc deps test test/perf)
 BUILDDIRMAKE := $(addsuffix /Makefile,$(BUILDDIRS))
 DIRS := $(DIRS) $(BUILDDIRS)
 $(BUILDDIRMAKE): | $(BUILDDIRS)
@@ -62,16 +62,12 @@ $(BUILDROOT)/doc/_build/html/en/index.html: $(shell find $(BUILDROOT)/base $(BUI
 CLEAN_TARGETS += clean-docdir
 clean-docdir:
 	@-rm -fr $(abspath $(build_docdir))
-
-$(build_prefix)/.examples: $(wildcard $(JULIAHOME)/examples/*.jl) \
-                           $(shell find $(JULIAHOME)/examples/clustermanager) \
-                           $(shell find $(JULIAHOME)/examples/embedding)
+$(build_prefix)/.examples: $(wildcard $(JULIAHOME)/examples/*.jl) $(shell find $(JULIAHOME)/examples/clustermanager)
 	@echo Copying in usr/share/doc/julia/examples
 	@-rm -fr $(build_docdir)/examples
 	@mkdir -p $(build_docdir)/examples
 	@cp -R $(JULIAHOME)/examples/*.jl $(build_docdir)/examples/
 	@cp -R $(JULIAHOME)/examples/clustermanager $(build_docdir)/examples/
-	@cp -R $(JULIAHOME)/examples/embedding $(build_docdir)/examples
 	@echo 1 > $@
 
 julia-symlink: julia-ui-$(JULIA_BUILD_MODE)
@@ -155,7 +151,7 @@ release-candidate: release testall
 	@echo 6. Clean out old .tar.gz files living in deps/, "\`git clean -fdx\`" seems to work	#"`
 	@echo 7. Replace github release tarball with tarballs created from make light-source-dist and make full-source-dist
 	@echo 8. Follow packaging instructions in DISTRIBUTING.md to create binary packages for all platforms
-	@echo 9. Upload to AWS, update https://julialang.org/downloads and http://status.julialang.org/stable links
+	@echo 9. Upload to AWS, update http://julialang.org/downloads and http://status.julialang.org/stable links
 	@echo 10. Update checksums on AWS for tarball and packaged binaries
 	@echo 11. Announce on mailing lists
 	@echo 12. Change master to release-0.X in base/version.jl and base/version_git.sh as in 4cb1e20
@@ -334,7 +330,7 @@ endef
 
 install: $(build_depsbindir)/stringreplace $(BUILDROOT)/doc/_build/html/en/index.html
 	@$(MAKE) $(QUIET_MAKE) all
-	@for subdir in $(bindir) $(datarootdir)/julia/site/$(VERSDIR) $(docdir) $(man1dir) $(includedir)/julia $(libdir) $(private_libdir) $(sysconfdir); do \
+	@for subdir in $(bindir) $(libexecdir) $(datarootdir)/julia/site/$(VERSDIR) $(docdir) $(man1dir) $(includedir)/julia $(libdir) $(private_libdir) $(sysconfdir); do \
 		mkdir -p $(DESTDIR)$$subdir; \
 	done
 
@@ -345,8 +341,10 @@ ifeq ($(OS),WINNT)
 	-$(INSTALL_M) $(build_libdir)/libjulia-debug.dll.a $(DESTDIR)$(libdir)/
 	-$(INSTALL_M) $(build_bindir)/libopenlibm.dll.a $(DESTDIR)$(libdir)/
 else
-ifeq ($(OS),Darwin)
+	-cp -a $(build_libexecdir) $(DESTDIR)$(prefix)
+
 	# Copy over .dSYM directories directly
+ifeq ($(OS),Darwin)
 	-cp -a $(build_libdir)/*.dSYM $(DESTDIR)$(libdir)
 	-cp -a $(build_private_libdir)/*.dSYM $(DESTDIR)$(private_libdir)
 endif
@@ -524,7 +522,6 @@ clean: | $(CLEAN_TARGETS)
 	@-$(MAKE) -C $(BUILDROOT)/src clean
 	@-$(MAKE) -C $(BUILDROOT)/ui clean
 	@-$(MAKE) -C $(BUILDROOT)/test clean
-	@-$(MAKE) -C $(BUILDROOT)/examples clean
 	-rm -f $(BUILDROOT)/julia
 	-rm -f $(BUILDROOT)/*.tar.gz
 	-rm -f $(build_depsbindir)/stringreplace \
@@ -551,7 +548,7 @@ distcleanall: cleanall
 	test testall testall1 test clean distcleanall cleanall clean-* \
 	run-julia run-julia-debug run-julia-release run \
 	install binary-dist light-source-dist.tmp light-source-dist \
-	dist full-source-dist source-dist examples
+	dist full-source-dist source-dist
 
 test: check-whitespace $(JULIA_BUILD_MODE)
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/test default JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
@@ -607,7 +604,7 @@ else
 endif
 	cd $(JULIAHOME)/dist-extras && \
 	$(JLDOWNLOAD) http://downloads.sourceforge.net/sevenzip/7z920_extra.7z && \
-	$(JLDOWNLOAD) https://storage.googleapis.com/google-code-archive-downloads/v2/code.google.com/unsis/nsis-2.46.5-Unicode-setup.exe && \
+	$(JLDOWNLOAD) https://unsis.googlecode.com/files/nsis-2.46.5-Unicode-setup.exe && \
 	chmod a+x 7z.exe && \
 	chmod a+x 7z.dll && \
 	$(call spawn,./7z.exe) x -y -onsis nsis-2.46.5-Unicode-setup.exe && \

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: https://julialang.org/license
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 let nextidx = 0
     global nextproc
@@ -102,7 +102,7 @@ function splitrange(N::Int, np::Int)
     each = div(N,np)
     extras = rem(N,np)
     nchunks = each > 0 ? np : extras
-    chunks = Vector{UnitRange{Int}}(nchunks)
+    chunks = Array{UnitRange{Int}}(nchunks)
     lo = 1
     for i in 1:nchunks
         hi = lo + each - 1
@@ -203,3 +203,4 @@ macro parallel(args...)
     end
     thecall
 end
+

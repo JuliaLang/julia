@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: https://julialang.org/license
+// This file is a part of Julia. License is MIT: http://julialang.org/license
 
 /*
   Types
@@ -178,42 +178,6 @@ JL_DLLEXPORT int jl_has_free_typevars(jl_value_t *v)
     return has_free_typevars(v, NULL);
 }
 
-static void find_free_typevars(jl_value_t *v, jl_typeenv_t *env, jl_array_t *out)
-{
-    if (jl_typeis(v, jl_tvar_type)) {
-        if (v == jl_ANY_flag) return;
-        if (!typeenv_has(env, (jl_tvar_t*)v))
-            jl_array_ptr_1d_push(out, v);
-    }
-    else if (jl_is_uniontype(v)) {
-        find_free_typevars(((jl_uniontype_t*)v)->a, env, out);
-        find_free_typevars(((jl_uniontype_t*)v)->b, env, out);
-    }
-    else if (jl_is_unionall(v)) {
-        jl_unionall_t *ua = (jl_unionall_t*)v;
-        jl_typeenv_t newenv = { ua->var, NULL, env };
-        find_free_typevars(ua->var->lb, env, out);
-        find_free_typevars(ua->var->ub, env, out);
-        find_free_typevars(ua->body, &newenv, out);
-    }
-    else if (jl_is_datatype(v)) {
-        if (!((jl_datatype_t*)v)->hasfreetypevars)
-            return;
-        size_t i;
-        for (i=0; i < jl_nparams(v); i++)
-            find_free_typevars(jl_tparam(v,i), env, out);
-    }
-}
-
-JL_DLLEXPORT jl_array_t *jl_find_free_typevars(jl_value_t *v)
-{
-    jl_array_t *out = jl_alloc_vec_any(0);
-    JL_GC_PUSH1(&out);
-    find_free_typevars(v, NULL, out);
-    JL_GC_POP();
-    return out;
-}
-
 // test whether a type has vars bound by the given environment
 static int jl_has_bound_typevars(jl_value_t *v, jl_typeenv_t *env)
 {
@@ -341,35 +305,6 @@ static int count_union_components(jl_value_t **types, size_t n)
         }
     }
     return c;
-}
-
-int jl_count_union_components(jl_value_t *v)
-{
-    if (!jl_is_uniontype(v)) return 1;
-    jl_uniontype_t *u = (jl_uniontype_t*)v;
-    return jl_count_union_components(u->a) + jl_count_union_components(u->b);
-}
-
-// Return the `*pi`th element of a nested type union, according to a
-// standard traversal order. Anything that is not itself a `Union` is
-// considered an "element". `*pi` is destroyed in the process.
-static jl_value_t *nth_union_component(jl_value_t *v, int *pi)
-{
-    if (!jl_is_uniontype(v)) {
-        if (*pi == 0)
-            return v;
-        (*pi)--;
-        return NULL;
-    }
-    jl_uniontype_t *u = (jl_uniontype_t*)v;
-    jl_value_t *a = nth_union_component(u->a, pi);
-    if (a) return a;
-    return nth_union_component(u->b, pi);
-}
-
-jl_value_t *jl_nth_union_component(jl_value_t *v, int i)
-{
-    return nth_union_component(v, &i);
 }
 
 static void flatten_type_union(jl_value_t **types, size_t n, jl_value_t **out, size_t *idx)
@@ -1428,14 +1363,12 @@ static jl_value_t *_jl_instantiate_type_in_env(jl_value_t *ty, jl_unionall_t *en
 
 JL_DLLEXPORT jl_value_t *jl_instantiate_type_in_env(jl_value_t *ty, jl_unionall_t *env, jl_value_t **vals)
 {
-    jl_value_t *typ = ty;
-    if (jl_is_unionall(env)) {
-        JL_TRY {
-            typ = _jl_instantiate_type_in_env(ty, env, vals, NULL);
-        }
-        JL_CATCH {
-            typ = jl_bottom_type;
-        }
+    jl_value_t *typ;
+    JL_TRY {
+        typ = _jl_instantiate_type_in_env(ty, env, vals, NULL);
+    }
+    JL_CATCH {
+        typ = jl_bottom_type;
     }
     return typ;
 }
@@ -1918,13 +1851,14 @@ void jl_init_types(void)
     jl_method_type =
         jl_new_datatype(jl_symbol("Method"),
                         jl_any_type, jl_emptysvec,
-                        jl_svec(19,
+                        jl_svec(20,
                                 jl_symbol("name"),
                                 jl_symbol("module"),
                                 jl_symbol("file"),
                                 jl_symbol("line"),
                                 jl_symbol("sig"),
                                 jl_symbol("min_world"),
+                                jl_symbol("max_world"),
                                 jl_symbol("ambig"),
                                 jl_symbol("specializations"),
                                 jl_symbol("sparam_syms"),
@@ -1938,12 +1872,13 @@ void jl_init_types(void)
                                 jl_symbol("isva"),
                                 jl_symbol("isstaged"),
                                 jl_symbol("pure")),
-                        jl_svec(19,
+                        jl_svec(20,
                                 jl_sym_type,
                                 jl_module_type,
                                 jl_sym_type,
                                 jl_int32_type,
                                 jl_type_type,
+                                jl_long_type,
                                 jl_long_type,
                                 jl_any_type, // Union{Array, Void}
                                 jl_any_type, // TypeMap
@@ -1958,7 +1893,7 @@ void jl_init_types(void)
                                 jl_bool_type,
                                 jl_bool_type,
                                 jl_bool_type),
-                        0, 1, 9);
+                        0, 1, 10);
 
     jl_method_instance_type =
         jl_new_datatype(jl_symbol("MethodInstance"),

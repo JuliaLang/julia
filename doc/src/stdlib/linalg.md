@@ -34,9 +34,6 @@ Base.LinAlg.qr
 Base.LinAlg.qr!
 Base.LinAlg.qrfact
 Base.LinAlg.qrfact!
-Base.LinAlg.QR
-Base.LinAlg.QRCompactWY
-Base.LinAlg.QRPivoted
 Base.LinAlg.lqfact!
 Base.LinAlg.lqfact
 Base.LinAlg.lq

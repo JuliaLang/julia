@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: https://julialang.org/license
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 ## basic task functions and TLS
 
@@ -238,7 +238,7 @@ function task_done_hook(t::Task)
         if isa(result,InterruptException) && isdefined(Base,:active_repl_backend) &&
             active_repl_backend.backend_task.state == :runnable && isempty(Workqueue) &&
             active_repl_backend.in_eval
-            throwto(active_repl_backend.backend_task, result) # this terminates the task
+            throwto(active_repl_backend.backend_task, result)
         end
         if !suppress_excp_printing(t)
             let bt = t.backtrace
@@ -253,7 +253,7 @@ function task_done_hook(t::Task)
     end
     # Clear sigatomic before waiting
     sigatomic_end()
-    wait() # this will not return
+    wait()
 end
 
 

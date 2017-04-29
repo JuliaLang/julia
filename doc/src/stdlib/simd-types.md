@@ -4,7 +4,7 @@ Type `VecElement{T}` is intended for building libraries of SIMD operations. Prac
 requires using `llvmcall`. The type is defined as:
 
 ```julia
-struct VecElement{T}
+immutable VecElement{T}
     value::T
 end
 ```

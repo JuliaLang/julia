@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: https://julialang.org/license
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # Base
 
@@ -1945,7 +1945,7 @@ julia> convert(Int, 3.0)
 julia> convert(Int, 3.5)
 ERROR: InexactError()
 Stacktrace:
- [1] convert(::Type{Int64}, ::Float64) at ./float.jl:679
+ [1] convert(::Type{Int64}, ::Float64) at ./float.jl:675
 ```
 
 If `T` is a `AbstractFloat` or `Rational` type,

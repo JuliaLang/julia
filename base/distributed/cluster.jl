@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: https://julialang.org/license
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 abstract type ClusterManager end
 
@@ -232,13 +232,13 @@ function read_worker_host_port(io::IO)
         !istaskdone(readtask) && break
 
         conninfo = wait(readtask)
-        if isempty(conninfo) && !isopen(io)
+        if conninfo == "" && !isopen(io)
             error("Unable to read host:port string from worker. Launch command exited with error?")
         end
 
         ntries -= 1
         bind_addr, port = parse_connection_info(conninfo)
-        if !isempty(bind_addr)
+        if bind_addr != ""
             return bind_addr, port
         end
 
@@ -651,15 +651,7 @@ myid() = LPROC.id
 
 Get the number of available processes.
 """
-function nprocs()
-    n = length(PGRP.workers)
-    for jw in PGRP.workers
-        if !isa(jw, LocalProcess) && (jw.state != W_CONNECTED)
-            n = n - 1
-        end
-    end
-    n
-end
+nprocs() = length(PGRP.workers)
 
 """
     nworkers()
@@ -677,7 +669,7 @@ end
 
 Returns a list of all process identifiers.
 """
-procs() = Int[x.id for x in PGRP.workers if isa(x, LocalProcess) || (x.state == W_CONNECTED)]
+procs() = Int[x.id for x in PGRP.workers]
 
 """
     procs(pid::Integer)
@@ -687,12 +679,11 @@ Specifically all workers bound to the same ip-address as `pid` are returned.
 """
 function procs(pid::Integer)
     if myid() == 1
-        all_workers = [x for x in PGRP.workers if isa(x, LocalProcess) || (x.state == W_CONNECTED)]
         if (pid == 1) || (isa(map_pid_wrkr[pid].manager, LocalManager))
-            Int[x.id for x in filter(w -> (w.id==1) || (isa(w.manager, LocalManager)), all_workers)]
+            Int[x.id for x in filter(w -> (w.id==1) || (isa(w.manager, LocalManager)), PGRP.workers)]
         else
             ipatpid = get_bind_addr(pid)
-            Int[x.id for x in filter(w -> get_bind_addr(w) == ipatpid, all_workers)]
+            Int[x.id for x in filter(w -> get_bind_addr(w) == ipatpid, PGRP.workers)]
         end
     else
         remotecall_fetch(procs, 1, pid)
@@ -706,7 +697,7 @@ Returns a list of all worker process identifiers.
 """
 function workers()
     allp = procs()
-    if length(allp) == 1
+    if nprocs() == 1
        allp
     else
        filter(x -> x != 1, allp)

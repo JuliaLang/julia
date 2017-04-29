@@ -1,13 +1,13 @@
-# This file is a part of Julia. License is MIT: https://julialang.org/license
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # Methods operating on different special matrix types
 
 # Interconversion between special matrix types
-convert(::Type{Bidiagonal}, A::Diagonal{T}) where {T} =
+convert{T}(::Type{Bidiagonal}, A::Diagonal{T}) =
     Bidiagonal(A.diag, zeros(T, size(A.diag,1)-1), true)
-convert(::Type{SymTridiagonal}, A::Diagonal{T}) where {T} =
+convert{T}(::Type{SymTridiagonal}, A::Diagonal{T}) =
     SymTridiagonal(A.diag, zeros(T, size(A.diag,1)-1))
-convert(::Type{Tridiagonal}, A::Diagonal{T}) where {T} =
+convert{T}(::Type{Tridiagonal}, A::Diagonal{T}) =
     Tridiagonal(zeros(T, size(A.diag,1)-1), A.diag, zeros(T, size(A.diag,1)-1))
 
 function convert(::Type{Diagonal}, A::Union{Bidiagonal, SymTridiagonal})
@@ -24,7 +24,7 @@ function convert(::Type{SymTridiagonal}, A::Bidiagonal)
     SymTridiagonal(A.dv, A.ev)
 end
 
-convert(::Type{Tridiagonal}, A::Bidiagonal{T}) where {T} =
+convert{T}(::Type{Tridiagonal}, A::Bidiagonal{T}) =
     Tridiagonal(A.isupper ? zeros(T, size(A.dv,1)-1) : A.ev, A.dv,
                 A.isupper ? A.ev:zeros(T, size(A.dv,1)-1))
 

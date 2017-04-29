@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: https://julialang.org/license
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 """
     SystemError(prefix::AbstractString, [errno::Int32])
@@ -129,7 +129,7 @@ function finalizer(o::ANY, f::ANY)
     ccall(:jl_gc_add_finalizer_th, Void, (Ptr{Void}, Any, Any),
           Core.getptls(), o, f)
 end
-function finalizer(o::T, f::Ptr{Void}) where T
+function finalizer{T}(o::T, f::Ptr{Void})
     @_inline_meta
     if isimmutable(T)
         error("objects of type ", T, " cannot be finalized")

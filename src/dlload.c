@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: https://julialang.org/license
+// This file is a part of Julia. License is MIT: http://julialang.org/license
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -139,10 +139,7 @@ static void *jl_load_dynamic_library_(const char *modname, unsigned flags, int t
             jl_error("could not load base module");
         }
 #else
-        Dl_info info;
-        if (!dladdr(&jl_load_dynamic_library, &info) || !info.dli_fname)
-            jl_error("could not load base module");
-        handle = dlopen(info.dli_fname, RTLD_NOW);
+        handle = dlopen(NULL, RTLD_NOW);
 #endif
         goto done;
     }
@@ -243,9 +240,9 @@ JL_DLLEXPORT void *jl_dlsym(void *handle, const char *symbol)
 const char *jl_dlfind_win32(const char *f_name)
 {
     if (jl_dlsym_e(jl_exe_handle, f_name))
-        return JL_EXE_LIBNAME;
+        return (const char*)1;
     if (jl_dlsym_e(jl_dl_handle, f_name))
-        return JL_DL_LIBNAME;
+        return (const char*)2;
     if (jl_dlsym_e(jl_kernel32_handle, f_name))
         return "kernel32";
     if (jl_dlsym_e(jl_ntdll_handle, f_name))

@@ -42,7 +42,7 @@ endif
 SRCS := \
 	jltypes gf typemap ast builtins module interpreter symbol \
 	dlload sys init task array dump toplevel jl_uv datatype \
-	simplevector APInt-C runtime_intrinsics runtime_ccall precompile \
+	simplevector APInt-C runtime_intrinsics runtime_ccall \
 	threadgroup threading stackwalk gc gc-debug gc-pages method \
 	jlapi signal-handling safepoint jloptions timing subtype rtutils
 

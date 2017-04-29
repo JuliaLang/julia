@@ -1,10 +1,10 @@
-# This file is a part of Julia. License is MIT: https://julialang.org/license
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 ## work with AbstractVector{UInt8} via I/O primitives ##
 
 # Stateful string
 mutable struct AbstractIOBuffer{T<:AbstractVector{UInt8}} <: IO
-    data::T # T should support: getindex, setindex!, length, copy!, and resize!
+    data::T # T should support: getindex, setindex!, length, copy!, resize!, and T()
     readable::Bool
     writable::Bool
     seekable::Bool # if not seekable, implementation is free to destroy (compact) past read data
@@ -75,7 +75,7 @@ optionally specifying a size beyond which the underlying `Array` may not be grow
 """
 PipeBuffer(data::Vector{UInt8}=UInt8[], maxsize::Int=typemax(Int)) =
     AbstractIOBuffer(data,true,true,false,true,maxsize)
-PipeBuffer(maxsize::Int) = (x = PipeBuffer(StringVector(maxsize),maxsize); x.size=0; x)
+PipeBuffer(maxsize::Int) = (x = PipeBuffer(Vector{UInt8}(maxsize),maxsize); x.size=0; x)
 
 function copy(b::AbstractIOBuffer)
     ret = typeof(b)(b.writable ? copy(b.data) : b.data,
@@ -107,7 +107,7 @@ function unsafe_read(from::AbstractIOBuffer, p::Ptr{UInt8}, nb::UInt)
     nothing
 end
 
-function read_sub(from::AbstractIOBuffer, a::AbstractArray{T}, offs, nel) where T
+function read_sub{T}(from::AbstractIOBuffer, a::AbstractArray{T}, offs, nel)
     from.readable || throw(ArgumentError("read failed, IOBuffer is not readable"))
     if offs+nel-1 > length(a) || offs < 1 || nel < 0
         throw(BoundsError())
@@ -143,7 +143,7 @@ function peek(from::AbstractIOBuffer)
     return from.data[from.ptr]
 end
 
-read(from::AbstractIOBuffer, ::Type{Ptr{T}}) where {T} = convert(Ptr{T}, read(from, UInt))
+read{T}(from::AbstractIOBuffer, ::Type{Ptr{T}}) = convert(Ptr{T}, read(from, UInt))
 
 isreadable(io::AbstractIOBuffer) = io.readable
 iswritable(io::AbstractIOBuffer) = io.writable
@@ -241,7 +241,7 @@ end
 
 eof(io::AbstractIOBuffer) = (io.ptr-1 == io.size)
 
-@noinline function close(io::AbstractIOBuffer{T}) where T
+@noinline function close{T}(io::AbstractIOBuffer{T})
     io.readable = false
     io.writable = false
     io.seekable = false
@@ -251,6 +251,8 @@ eof(io::AbstractIOBuffer) = (io.ptr-1 == io.size)
     io.mark = -1
     if io.writable
         resize!(io.data, 0)
+    else
+        io.data = T()
     end
     nothing
 end

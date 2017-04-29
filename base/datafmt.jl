@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: https://julialang.org/license
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 ## file formats ##
 
@@ -27,7 +27,7 @@ passing them as the second argument.
 function countlines(io::IO, eol::Char='\n')
     isascii(eol) || throw(ArgumentError("only ASCII line terminators are supported"))
     aeol = UInt8(eol)
-    a = Vector{UInt8}(8192)
+    a = Array{UInt8}(8192)
     nl = 0
     while !eof(io)
         nb = readbytes!(io, a)
@@ -150,8 +150,8 @@ mutable struct DLMOffsets <: DLMHandler
     bufflen::Int
 
     function DLMOffsets(sbuff::String)
-        offsets = Vector{Vector{Int}}(1)
-        offsets[1] = Vector{Int}(offs_chunk_size)
+        offsets = Array{Array{Int,1}}(1)
+        offsets[1] = Array{Int}(offs_chunk_size)
         thresh = ceil(min(typemax(UInt), Base.Sys.total_memory()) / sizeof(Int) / 5)
         new(offsets, 1, thresh, sizeof(sbuff))
     end
@@ -175,7 +175,7 @@ function store_cell(dlmoffsets::DLMOffsets, row::Int, col::Int,
                 return
             end
         end
-        offsets = Vector{Int}(offs_chunk_size)
+        offsets = Array{Int}(offs_chunk_size)
         push!(oarr, offsets)
         offidx = 1
     end
@@ -214,7 +214,7 @@ function DLMStore{T}(::Type{T}, dims::NTuple{2,Integer},
     nrows <= 0 && throw(ArgumentError("number of rows in dims must be > 0, got $nrows"))
     ncols <= 0 && throw(ArgumentError("number of columns in dims must be > 0, got $ncols"))
     hdr_offset = has_header ? 1 : 0
-    DLMStore{T}(fill(SubString(sbuff,1,0), 1, ncols), Matrix{T}(nrows-hdr_offset, ncols),
+    DLMStore{T}(fill(SubString(sbuff,1,0), 1, ncols), Array{T}(nrows-hdr_offset, ncols),
         nrows, ncols, 0, 0, hdr_offset, sbuff, auto, eol)
 end
 
@@ -222,14 +222,14 @@ _chrinstr(sbuff::String, chr::UInt8, startpos::Int, endpos::Int) =
     (endpos >= startpos) && (C_NULL != ccall(:memchr, Ptr{UInt8},
     (Ptr{UInt8}, Int32, Csize_t), pointer(sbuff)+startpos-1, chr, endpos-startpos+1))
 
-function store_cell(dlmstore::DLMStore{T}, row::Int, col::Int,
-        quoted::Bool, startpos::Int, endpos::Int) where T
+function store_cell{T}(dlmstore::DLMStore{T}, row::Int, col::Int,
+        quoted::Bool, startpos::Int, endpos::Int)
     drow = row - dlmstore.hdr_offset
 
     ncols = dlmstore.ncols
     lastcol = dlmstore.lastcol
     lastrow = dlmstore.lastrow
-    cells::Matrix{T} = dlmstore.data
+    cells::Array{T,2} = dlmstore.data
     sbuff = dlmstore.sbuff
 
     endpos = prevind(sbuff, nextind(sbuff,endpos))
@@ -291,7 +291,7 @@ function store_cell(dlmstore::DLMStore{T}, row::Int, col::Int,
     nothing
 end
 
-function result(dlmstore::DLMStore{T}) where T
+function result{T}(dlmstore::DLMStore{T})
     nrows = dlmstore.nrows - dlmstore.hdr_offset
     ncols = dlmstore.ncols
     lastcol = dlmstore.lastcol
@@ -456,9 +456,9 @@ function colval(sbuff::String, startpos::Int, endpos::Int, cells::Array{<:Char,2
 end
 colval(sbuff::String, startpos::Int, endpos::Int, cells::Array, row::Int, col::Int) = true
 
-function dlm_parse(dbuff::String, eol::D, dlm::D, qchar::D, cchar::D,
-                   ign_adj_dlm::Bool, allow_quote::Bool, allow_comments::Bool,
-                   skipstart::Int, skipblanks::Bool, dh::DLMHandler) where D
+function dlm_parse{D}(dbuff::String, eol::D, dlm::D, qchar::D, cchar::D,
+                      ign_adj_dlm::Bool, allow_quote::Bool, allow_comments::Bool,
+                      skipstart::Int, skipblanks::Bool, dh::DLMHandler)
     ncols = nrows = col = 0
     is_default_dlm = (dlm == invalid_dlm(D))
     error_str = ""

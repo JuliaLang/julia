@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: https://julialang.org/license
+// This file is a part of Julia. License is MIT: http://julialang.org/license
 
 /*
   Defining and adding methods
@@ -362,7 +362,7 @@ jl_method_instance_t *jl_get_specialized(jl_method_t *m, jl_value_t *types, jl_s
     new_linfo->specTypes = types;
     new_linfo->sparam_vals = sp;
     new_linfo->min_world = m->min_world;
-    new_linfo->max_world = ~(size_t)0;
+    new_linfo->max_world = m->max_world;
     return new_linfo;
 }
 
@@ -435,6 +435,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(void)
     m->nargs = 0;
     m->traced = 0;
     m->min_world = 1;
+    m->max_world = ~(size_t)0;
     JL_MUTEX_INIT(&m->writelock);
     return m;
 }

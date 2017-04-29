@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: https://julialang.org/license
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 @testset "clamp" begin
     @test clamp(0, 1, 3) == 1
@@ -424,11 +424,8 @@ relerrc(z, x) = max(relerr(real(z),real(x)), relerr(imag(z),imag(x)))
         for x in (3.2, 2+1im, 3//2, 3.2+0.1im)
             @test factorial(x) == gamma(1+x)
         end
-        @test lfact(0) == lfact(1) == 0
+        @test lfact(1) == 0
         @test lfact(2) == lgamma(3)
-        # Ensure that the domain of lfact matches that of factorial (issue #21318)
-        @test_throws DomainError lfact(-3)
-        @test_throws MethodError lfact(1.0)
     end
 
     # lgamma test cases (from Wolfram Alpha)
