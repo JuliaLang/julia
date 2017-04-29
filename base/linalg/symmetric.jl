@@ -41,6 +41,15 @@ julia> Slower = Symmetric(A, :L)
 Note that `Supper` will not be equal to `Slower` unless `A` is itself symmetric (e.g. if `A == A.'`).
 """
 Symmetric(A::AbstractMatrix, uplo::Symbol=:U) = (checksquare(A); Symmetric{eltype(A),typeof(A)}(A, char_uplo(uplo)))
+Symmetric(A::Symmetric) = A
+function Symmetric(A::Symmetric, uplo::Symbol)
+    if A.uplo == char_uplo(uplo)
+        return A
+    else
+        throw(ArgumentError("Cannot construct Symmetric; uplo doesn't match"))
+    end
+end
+
 struct Hermitian{T,S<:AbstractMatrix} <: AbstractMatrix{T}
     data::S
     uplo::Char
@@ -81,6 +90,14 @@ function Hermitian(A::AbstractMatrix, uplo::Symbol=:U)
             "Cannot construct Hermitian from matrix with nonreal diagonals"))
     end
     Hermitian{eltype(A),typeof(A)}(A, char_uplo(uplo))
+end
+Hermitian(A::Hermitian) = A
+function Hermitian(A::Hermitian, uplo::Symbol)
+    if A.uplo == char_uplo(uplo)
+        return A
+    else
+        throw(ArgumentError("Cannot construct Hermitian; uplo doesn't match"))
+    end
 end
 
 const HermOrSym{T,S} = Union{Hermitian{T,S}, Symmetric{T,S}}
