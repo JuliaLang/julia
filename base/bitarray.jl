@@ -1375,10 +1375,89 @@ function (>>>)(B::BitVector, i::UInt)
     return A
 end
 
+"""
+    >>(B::BitVector, n) -> BitVector
+
+Right bit shift operator, `B >> n`. For `n >= 0`, the result is `B`
+with elements shifted `n` positions forward, filling with `false`
+values. If `n < 0`, elements are shifted backwards. Equivalent to
+`B << -n`.
+
+## Example
+
+```jldoctest
+julia> B = BitVector([true, false, true, false, false])
+5-element BitArray{1}:
+  true
+ false
+  true
+ false
+ false
+
+julia> B >> 1
+5-element BitArray{1}:
+ false
+  true
+ false
+  true
+ false
+
+julia> B >> -1
+5-element BitArray{1}:
+ false
+  true
+ false
+ false
+ false
+```
+"""
 (>>)(B::BitVector, i::Union{Int, UInt}) = B >>> i
 
 # signed integer version of shift operators with handling of negative values
+"""
+    <<(B::BitVector, n) -> BitVector
+
+Left bit shift operator, `B << n`. For `n >= 0`, the result is `B`
+with elements shifted `n` positions backwards, filling with `false`
+values. If `n < 0`, elements are shifted forwards. Equivalent to
+`B >> -n`.
+
+## Examples
+
+```jldoctest
+julia> B = BitVector([true, false, true, false, false])
+5-element BitArray{1}:
+  true
+ false
+  true
+ false
+ false
+
+julia> B << 1
+5-element BitArray{1}:
+ false
+  true
+ false
+ false
+ false
+
+julia> B << -1
+5-element BitArray{1}:
+ false
+  true
+ false
+  true
+ false
+```
+"""
 (<<)(B::BitVector, i::Int) = (i >=0 ? B << unsigned(i) : B >> unsigned(-i))
+
+"""
+    >>>(B::BitVector, n) -> BitVector
+
+Unsigned right bitshift operator, `B >>> n`. Equivalent to `B >> n`. See [`>>`](@ref) for
+details and examples.
+"""
 (>>>)(B::BitVector, i::Int) = (i >=0 ? B >> unsigned(i) : B << unsigned(-i))
 
 """
