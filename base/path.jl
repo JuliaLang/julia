@@ -258,6 +258,13 @@ normpath(a::AbstractString, b::AbstractString...) = normpath(joinpath(a,b...))
 Convert a path to an absolute path by adding the current directory if necessary.
 """
 abspath(a::String) = normpath(isabspath(a) ? a : joinpath(pwd(),a))
+
+"""
+	abspath(path::AbstractString, paths::AbstractString...) -> AbstractString
+
+Convert a set of paths to an absolute path by joining them together and adding the
+current directory if neccessary. Equivalent to `abspath(joinpath(path, paths...))`.
+"""
 abspath(a::AbstractString, b::AbstractString...) = abspath(joinpath(a,b...))
 
 if is_windows()
