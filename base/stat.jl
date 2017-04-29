@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # filesystem operations
 
@@ -61,7 +61,7 @@ show(io::IO, st::StatStruct) = print(io, "StatStruct(mode=0o$(oct(filemode(st),6
 
 # stat & lstat functions
 
-const stat_buf = Array{UInt8}(ccall(:jl_sizeof_stat, Int32, ()))
+const stat_buf = Vector{UInt8}(ccall(:jl_sizeof_stat, Int32, ()))
 macro stat_call(sym, arg1type, arg)
     quote
         fill!(stat_buf,0)

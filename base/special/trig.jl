@@ -1,5 +1,5 @@
 # This file is a part of Julia. Except for the *_kernel functions (see below),
-# license is MIT: http://julialang.org/license
+# license is MIT: https://julialang.org/license
 
 struct DoubleFloat64
     hi::Float64
@@ -103,7 +103,7 @@ mulpi_ext(x::Real) = pi*x # Fallback
 
 Compute ``\\sin(\\pi x)`` more accurately than `sin(pi*x)`, especially for large `x`.
 """
-function sinpi{T<:AbstractFloat}(x::T)
+function sinpi(x::T) where T<:AbstractFloat
     if !isfinite(x)
         isnan(x) && return x
         throw(DomainError())
@@ -133,7 +133,7 @@ function sinpi{T<:AbstractFloat}(x::T)
 end
 
 # Rationals and other Real types
-function sinpi{T<:Real}(x::T)
+function sinpi(x::T) where T<:Real
     Tf = typeof(float(x))
     if !isfinite(x)
         throw(DomainError())
@@ -166,7 +166,7 @@ end
 
 Compute ``\\cos(\\pi x)`` more accurately than `cos(pi*x)`, especially for large `x`.
 """
-function cospi{T<:AbstractFloat}(x::T)
+function cospi(x::T) where T<:AbstractFloat
     if !isfinite(x)
         isnan(x) && return x
         throw(DomainError())
@@ -192,7 +192,7 @@ function cospi{T<:AbstractFloat}(x::T)
 end
 
 # Rationals and other Real types
-function cospi{T<:Real}(x::T)
+function cospi(x::T) where T<:Real
     if !isfinite(x)
         throw(DomainError())
     end
@@ -218,7 +218,7 @@ end
 sinpi(x::Integer) = x >= 0 ? zero(float(x)) : -zero(float(x))
 cospi(x::Integer) = isodd(x) ? -one(float(x)) : one(float(x))
 
-function sinpi{T}(z::Complex{T})
+function sinpi(z::Complex{T}) where T
     F = float(T)
     zr, zi = reim(z)
     if isinteger(zr)
@@ -250,7 +250,7 @@ function sinpi{T}(z::Complex{T})
     end
 end
 
-function cospi{T}(z::Complex{T})
+function cospi(z::Complex{T}) where T
     F = float(T)
     zr, zi = reim(z)
     if isinteger(zr)
@@ -292,7 +292,7 @@ Compute ``\\sin(\\pi x) / (\\pi x)`` if ``x \\neq 0``, and ``1`` if ``x = 0``.
 """
 sinc(x::Number) = x==0 ? one(x)  : oftype(x,sinpi(x)/(pi*x))
 sinc(x::Integer) = x==0 ? one(x) : zero(x)
-sinc{T<:Integer}(x::Complex{T}) = sinc(float(x))
+sinc(x::Complex{T}) where {T<:Integer} = sinc(float(x))
 sinc(x::Real) = x==0 ? one(x) : isinf(x) ? zero(x) : sinpi(x)/(pi*x)
 
 """
@@ -303,7 +303,7 @@ Compute ``\\cos(\\pi x) / x - \\sin(\\pi x) / (\\pi x^2)`` if ``x \\neq 0``, and
 """
 cosc(x::Number) = x==0 ? zero(x) : oftype(x,(cospi(x)-sinpi(x)/(pi*x))/x)
 cosc(x::Integer) = cosc(float(x))
-cosc{T<:Integer}(x::Complex{T}) = cosc(float(x))
+cosc(x::Complex{T}) where {T<:Integer} = cosc(float(x))
 cosc(x::Real) = x==0 || isinf(x) ? zero(x) : (cospi(x)-sinpi(x)/(pi*x))/x
 
 for (finv, f) in ((:sec, :cos), (:csc, :sin), (:cot, :tan),

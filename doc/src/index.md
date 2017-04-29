@@ -28,6 +28,7 @@
   * [Running External Programs](@ref)
   * [Calling C and Fortran Code](@ref)
   * [Handling Operating System Variation](@ref)
+  * [Environment Variables](@ref)
   * [Interacting With Julia](@ref)
   * [Embedding Julia](@ref)
   * [Packages](@ref)
@@ -87,6 +88,7 @@
       * [Bounds checking](@ref)
       * [Proper maintenance and care of multi-threading locks](@ref)
       * [Arrays with custom indices](@ref)
+      * [Base.LibGit2](@ref)
   * Developing/debugging Julia's C code
       * [Reporting and analyzing crashes (segfaults)](@ref)
       * [gdb debugging tips](@ref)

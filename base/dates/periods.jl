@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #Period types
 value(x::Period) = x.value
@@ -41,10 +41,10 @@ end
 #Print/show/traits
 Base.string(x::Period) = string(value(x), _units(x))
 Base.show(io::IO,x::Period) = print(io, string(x))
-Base.zero{P<:Period}(::Union{Type{P},P}) = P(0)
-Base.one{P<:Period}(::Union{Type{P},P}) = 1  # see #16116
-Base.typemin{P<:Period}(::Type{P}) = P(typemin(Int64))
-Base.typemax{P<:Period}(::Type{P}) = P(typemax(Int64))
+Base.zero(::Union{Type{P},P}) where {P<:Period} = P(0)
+Base.one(::Union{Type{P},P}) where {P<:Period} = 1  # see #16116
+Base.typemin(::Type{P}) where {P<:Period} = P(typemin(Int64))
+Base.typemax(::Type{P}) where {P<:Period} = P(typemax(Int64))
 
 # Default values (as used by TimeTypes)
 """
@@ -55,35 +55,35 @@ Month, and Day, and `T(0)` for Hour, Minute, Second, and Millisecond.
 """
 function default end
 
-default{T<:DatePeriod}(p::Union{T,Type{T}}) = T(1)
-default{T<:TimePeriod}(p::Union{T,Type{T}}) = T(0)
+default(p::Union{T,Type{T}}) where {T<:DatePeriod} = T(1)
+default(p::Union{T,Type{T}}) where {T<:TimePeriod} = T(0)
 
-(-){P<:Period}(x::P) = P(-value(x))
-Base.isless{P<:Period}(x::P, y::P) = isless(value(x), value(y))
-=={P<:Period}(x::P, y::P) = value(x) == value(y)
+(-)(x::P) where {P<:Period} = P(-value(x))
+Base.isless(x::P, y::P) where {P<:Period} = isless(value(x), value(y))
+(==)(x::P, y::P) where {P<:Period} = value(x) == value(y)
 
 # Period Arithmetic, grouped by dimensionality:
 import Base: div, fld, mod, rem, gcd, lcm, +, -, *, /, %
 for op in (:+, :-, :lcm, :gcd)
-    @eval ($op){P<:Period}(x::P, y::P) = P(($op)(value(x), value(y)))
+    @eval ($op)(x::P, y::P) where {P<:Period} = P(($op)(value(x), value(y)))
 end
 
 for op in (:/, :div, :fld)
     @eval begin
-        ($op){P<:Period}(x::P, y::P) = ($op)(value(x), value(y))
-        ($op){P<:Period}(x::P, y::Real) = P(($op)(value(x), Int64(y)))
+        ($op)(x::P, y::P) where {P<:Period} = ($op)(value(x), value(y))
+        ($op)(x::P, y::Real) where {P<:Period} = P(($op)(value(x), Int64(y)))
     end
 end
 
 for op in (:rem, :mod)
     @eval begin
-        ($op){P<:Period}(x::P, y::P) = P(($op)(value(x), value(y)))
-        ($op){P<:Period}(x::P, y::Real) = P(($op)(value(x), Int64(y)))
+        ($op)(x::P, y::P) where {P<:Period} = P(($op)(value(x), value(y)))
+        ($op)(x::P, y::Real) where {P<:Period} = P(($op)(value(x), Int64(y)))
     end
 end
 
-*{P<:Period}(x::P, y::Real) = P(value(x) * Int64(y))
-*(y::Real, x::Period) = x * y
+(*)(x::P, y::Real) where {P<:Period} = P(value(x) * Int64(y))
+(*)(y::Real, x::Period) = x * y
 for (op, Ty, Tz) in ((:*, Real, :P),
                    (:/, :P, Float64), (:/, Real, :P))
     @eval begin
@@ -211,7 +211,7 @@ julia> Dates.CompoundPeriod(Dates.Minute(50000))
 50000 minutes
 ```
 """
-CompoundPeriod(p::Vector{<:Period}) = CompoundPeriod(Array{Period}(p))
+CompoundPeriod(p::Vector{<:Period}) = CompoundPeriod(Vector{Period}(p))
 
 CompoundPeriod(t::Time) = CompoundPeriod(Period[Hour(t), Minute(t), Second(t), Millisecond(t),
                                                 Microsecond(t), Nanosecond(t)])
@@ -426,8 +426,8 @@ for i = 1:length(fixedperiod_conversions)
     end
 end
 # have to declare thusly so that diagonal dispatch above takes precedence:
-(==){T<:FixedPeriod, S<:FixedPeriod}(x::T, y::S) = (==)(promote(x, y)...)
-Base.isless{T<:FixedPeriod, S<:FixedPeriod}(x::T, y::S) = isless(promote(x, y)...)
+(==)(x::T, y::S) where {T<:FixedPeriod,S<:FixedPeriod} = (==)(promote(x, y)...)
+Base.isless(x::T, y::S) where {T<:FixedPeriod,S<:FixedPeriod} = isless(promote(x, y)...)
 
 # other periods with fixed conversions but which aren't fixed time periods
 const OtherPeriod = Union{Month, Year}
@@ -439,8 +439,8 @@ let vmax = typemax(Int64) ÷ 12, vmin = typemin(Int64) ÷ 12
 end
 Base.convert(::Type{Year}, x::Month) = Year(divexact(value(x), 12))
 Base.promote_rule(::Type{Year}, ::Type{Month}) = Month
-(==){T<:OtherPeriod, S<:OtherPeriod}(x::T, y::S) = (==)(promote(x, y)...)
-Base.isless{T<:OtherPeriod, S<:OtherPeriod}(x::T, y::S) = isless(promote(x, y)...)
+(==)(x::T, y::S) where {T<:OtherPeriod,S<:OtherPeriod} = (==)(promote(x, y)...)
+Base.isless(x::T, y::S) where {T<:OtherPeriod,S<:OtherPeriod} = isless(promote(x, y)...)
 
 # truncating conversions to milliseconds and days:
 toms(c::Nanosecond)  = div(value(c), 1000000)

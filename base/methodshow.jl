@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Method and method table pretty-printing
 
@@ -68,7 +68,7 @@ end
 
 function kwarg_decl(m::Method, kwtype::DataType)
     sig = rewrap_unionall(Tuple{kwtype, Core.AnyVector, unwrap_unionall(m.sig).parameters...}, m.sig)
-    kwli = ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), kwtype.name.mt, sig, max_world(m))
+    kwli = ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), kwtype.name.mt, sig, typemax(UInt))
     if kwli !== nothing
         kwli = kwli::Method
         src = uncompressed_ast(kwli, kwli.source)

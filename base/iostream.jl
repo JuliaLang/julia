@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## IOStream
 
@@ -287,7 +287,7 @@ function read(s::IOStream)
             sz -= pos
         end
     end
-    b = Array{UInt8,1}(sz<=0 ? 1024 : sz)
+    b = StringVector(sz<=0 ? 1024 : sz)
     nr = readbytes_all!(s, b, typemax(Int))
     resize!(b, nr)
 end
@@ -309,12 +309,12 @@ function read(s::IOStream, nb::Integer; all::Bool=true)
 end
 
 ## Character streams ##
-const _chtmp = Array{Char}(1)
+const _chtmp = Ref{Char}()
 function peekchar(s::IOStream)
     if ccall(:ios_peekutf8, Cint, (Ptr{Void}, Ptr{Char}), s, _chtmp) < 0
         return typemax(Char)
     end
-    return _chtmp[1]
+    return _chtmp[]
 end
 
 function peek(s::IOStream)
@@ -333,4 +333,3 @@ function skipchars(io::IOStream, pred; linecomment=nothing)
     end
     return io
 end
-

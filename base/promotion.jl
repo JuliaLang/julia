@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## type join (closest common ancestor, or least upper bound) ##
 
@@ -127,9 +127,9 @@ promote_type(T) = (@_pure_meta; T)
 promote_type(T, S, U, V...) = (@_pure_meta; promote_type(T, promote_type(S, U, V...)))
 
 promote_type(::Type{Bottom}, ::Type{Bottom}) = (@_pure_meta; Bottom)
-promote_type{T}(::Type{T}, ::Type{T}) = (@_pure_meta; T)
-promote_type{T}(::Type{T}, ::Type{Bottom}) = (@_pure_meta; T)
-promote_type{T}(::Type{Bottom}, ::Type{T}) = (@_pure_meta; T)
+promote_type(::Type{T}, ::Type{T}) where {T} = (@_pure_meta; T)
+promote_type(::Type{T}, ::Type{Bottom}) where {T} = (@_pure_meta; T)
+promote_type(::Type{Bottom}, ::Type{T}) where {T} = (@_pure_meta; T)
 
 """
     promote_type(type1, type2)
@@ -151,7 +151,7 @@ julia> promote_type(Float32, BigInt)
 BigFloat
 ```
 """
-function promote_type{T,S}(::Type{T}, ::Type{S})
+function promote_type(::Type{T}, ::Type{S}) where {T,S}
     @_pure_meta
     # Try promote_rule in both orders. Typically only one is defined,
     # and there is a fallback returning Bottom below, so the common case is
@@ -166,11 +166,11 @@ promote_rule(T, S) = (@_pure_meta; Bottom)
 promote_result(t,s,T,S) = (@_pure_meta; promote_type(T,S))
 # If no promote_rule is defined, both directions give Bottom. In that
 # case use typejoin on the original types instead.
-promote_result{T,S}(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) = (@_pure_meta; typejoin(T, S))
+promote_result(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) where {T,S} = (@_pure_meta; typejoin(T, S))
 
 promote() = ()
 promote(x) = (x,)
-function promote{T,S}(x::T, y::S)
+function promote(x::T, y::S) where {T,S}
     (convert(promote_type(T,S),x), convert(promote_type(T,S),y))
 end
 promote_typeof(x) = (@_pure_meta; typeof(x))
@@ -194,7 +194,7 @@ end
 # Otherwise, typejoin(T,S) is called (returning Number) so no conversion
 # happens, and +(promote(x,y)...) is called again, causing a stack
 # overflow.
-function promote_result{T<:Number,S<:Number}(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom})
+function promote_result(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) where {T<:Number,S<:Number}
     @_pure_meta
     promote_to_supertype(T, S, typejoin(T,S))
 end
@@ -202,10 +202,10 @@ end
 # promote numeric types T and S to typejoin(T,S) if T<:S or S<:T
 # for example this makes promote_type(Integer,Real) == Real without
 # promoting arbitrary pairs of numeric types to Number.
-promote_to_supertype{T<:Number          }(::Type{T}, ::Type{T}, ::Type{T}) = (@_pure_meta; T)
-promote_to_supertype{T<:Number,S<:Number}(::Type{T}, ::Type{S}, ::Type{T}) = (@_pure_meta; T)
-promote_to_supertype{T<:Number,S<:Number}(::Type{T}, ::Type{S}, ::Type{S}) = (@_pure_meta; S)
-promote_to_supertype{T<:Number,S<:Number}(::Type{T}, ::Type{S}, ::Type) =
+promote_to_supertype(::Type{T}, ::Type{T}, ::Type{T}) where {T<:Number}           = (@_pure_meta; T)
+promote_to_supertype(::Type{T}, ::Type{S}, ::Type{T}) where {T<:Number,S<:Number} = (@_pure_meta; T)
+promote_to_supertype(::Type{T}, ::Type{S}, ::Type{S}) where {T<:Number,S<:Number} = (@_pure_meta; S)
+promote_to_supertype(::Type{T}, ::Type{S}, ::Type) where {T<:Number,S<:Number} =
     error("no promotion exists for ", T, " and ", S)
 
 # promotion with a check for circularity. Can be used to catch what
@@ -229,9 +229,9 @@ function promote_noncircular(x, y, z, a...)
 end
 not_all_sametype(x, y) = nothing
 not_all_sametype(x, y, z) = nothing
-not_all_sametype{S,T}(x::Tuple{S,S}, y::Tuple{T,T}) = sametype_error(x[1], y[1])
-not_all_sametype{R,S,T}(x::Tuple{R,R}, y::Tuple{S,S}, z::Tuple{T,T}) = sametype_error(x[1], y[1], z[1])
-function not_all_sametype{R,S,T}(::Tuple{R,R}, y::Tuple{S,S}, z::Tuple{T,T}, args...)
+not_all_sametype(x::Tuple{S,S}, y::Tuple{T,T}) where {S,T} = sametype_error(x[1], y[1])
+not_all_sametype(x::Tuple{R,R}, y::Tuple{S,S}, z::Tuple{T,T}) where {R,S,T} = sametype_error(x[1], y[1], z[1])
+function not_all_sametype(::Tuple{R,R}, y::Tuple{S,S}, z::Tuple{T,T}, args...) where {R,S,T}
     @_inline_meta
     not_all_sametype(y, z, args...)
 end
@@ -329,31 +329,31 @@ end
 ## catch-alls to prevent infinite recursion when definitions are missing ##
 
 no_op_err(name, T) = error(name," not defined for ",T)
-+{T<:Number}(x::T, y::T) = no_op_err("+", T)
-*{T<:Number}(x::T, y::T) = no_op_err("*", T)
--{T<:Number}(x::T, y::T) = no_op_err("-", T)
-/{T<:Number}(x::T, y::T) = no_op_err("/", T)
-^{T<:Number}(x::T, y::T) = no_op_err("^", T)
+(+)(x::T, y::T) where {T<:Number} = no_op_err("+", T)
+(*)(x::T, y::T) where {T<:Number} = no_op_err("*", T)
+(-)(x::T, y::T) where {T<:Number} = no_op_err("-", T)
+(/)(x::T, y::T) where {T<:Number} = no_op_err("/", T)
+(^)(x::T, y::T) where {T<:Number} = no_op_err("^", T)
 
-fma{T<:Number}(x::T, y::T, z::T) = no_op_err("fma", T)
+fma(x::T, y::T, z::T) where {T<:Number} = no_op_err("fma", T)
 fma(x::Integer, y::Integer, z::Integer) = x*y+z
-muladd{T<:Number}(x::T, y::T, z::T) = x*y+z
+muladd(x::T, y::T, z::T) where {T<:Number} = x*y+z
 
-(&){T<:Integer}(x::T, y::T) = no_op_err("&", T)
-(|){T<:Integer}(x::T, y::T) = no_op_err("|", T)
-xor{T<:Integer}(x::T, y::T) = no_op_err("xor", T)
+(&)(x::T, y::T) where {T<:Integer} = no_op_err("&", T)
+(|)(x::T, y::T) where {T<:Integer} = no_op_err("|", T)
+xor(x::T, y::T) where {T<:Integer} = no_op_err("xor", T)
 
-=={T<:Number}(x::T, y::T) = x === y
- <{T<:Real}(x::T, y::T) = no_op_err("<" , T)
-<={T<:Real}(x::T, y::T) = no_op_err("<=", T)
+(==)(x::T, y::T) where {T<:Number} = x === y
+(< )(x::T, y::T) where {T<:Real} = no_op_err("<" , T)
+(<=)(x::T, y::T) where {T<:Real} = no_op_err("<=", T)
 
-rem{T<:Real}(x::T, y::T) = no_op_err("rem", T)
-mod{T<:Real}(x::T, y::T) = no_op_err("mod", T)
+rem(x::T, y::T) where {T<:Real} = no_op_err("rem", T)
+mod(x::T, y::T) where {T<:Real} = no_op_err("mod", T)
 
 min(x::Real) = x
 max(x::Real) = x
 minmax(x::Real) = (x, x)
 
-max{T<:Real}(x::T, y::T) = select_value(y < x, x, y)
-min{T<:Real}(x::T, y::T) = select_value(y < x, y, x)
-minmax{T<:Real}(x::T, y::T) = y < x ? (y, x) : (x, y)
+max(x::T, y::T) where {T<:Real} = select_value(y < x, x, y)
+min(x::T, y::T) where {T<:Real} = select_value(y < x, y, x)
+minmax(x::T, y::T) where {T<:Real} = y < x ? (y, x) : (x, y)

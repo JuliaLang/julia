@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # DO NOT ALTER ORDER OR SPACING OF METHODS BELOW
 const lineoffset = @__LINE__ + 0 # XXX: __LINE__ at the end of a line is off-by-one
@@ -60,6 +60,8 @@ let err = try
                            startswith(str, "  ambig(x::Integer, y) in $curmod_str at")
     @test ambig_checkline(lines[2])
     @test ambig_checkline(lines[3])
+    @test lines[4] == "Possible fix, define"
+    @test lines[5] == "  ambig(::Integer, ::Integer)"
 end
 
 ## Other ways of accessing functions

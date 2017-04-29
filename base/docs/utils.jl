@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Text / HTML objects
 
@@ -72,8 +72,8 @@ print(io::IO, t::Text) = print(io, t.content)
 print(io::IO, t::Text{<:Function}) = t.content(io)
 show(io::IO, t::Text) = print(io, t)
 
-=={T<:Union{HTML, Text}}(t1::T, t2::T) = t1.content == t2.content
-hash{T<:Union{HTML, Text}}(t::T, h::UInt) = hash(T, hash(t.content, h))
+==(t1::T, t2::T) where {T<:Union{HTML,Text}} = t1.content == t2.content
+hash(t::T, h::UInt) where {T<:Union{HTML,Text}} = hash(T, hash(t.content, h))
 
 """
     @text_str -> Docs.Text
@@ -269,7 +269,7 @@ function levenshtein(s1, s2)
     a, b = collect(s1), collect(s2)
     m = length(a)
     n = length(b)
-    d = Array{Int}(m+1, n+1)
+    d = Matrix{Int}(m+1, n+1)
 
     d[1:m+1, 1] = 0:m
     d[1, 1:n+1] = 0:n

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.Bottom
 using Base.Test
@@ -622,7 +622,7 @@ abstract type AbstractTriangular{T,S<:AbstractMatrix} <: AbstractMatrix{T} end
 struct UpperTriangular{T,S<:AbstractMatrix} <: AbstractTriangular{T,S} end
 struct UnitUpperTriangular{T,S<:AbstractMatrix} <: AbstractTriangular{T,S} end
 
-immutable SIQ20671{T<:Number,m,kg,s,A,K,mol,cd,rad,sr} <: Number
+struct SIQ20671{T<:Number,m,kg,s,A,K,mol,cd,rad,sr} <: Number
     val::T
 end
 
@@ -827,14 +827,13 @@ function test_intersection()
                    Tuple{Array{Ref{T}, 1}, Array{Pair{M, T}, 1}, SS} where T where M where SS,
                    Union{})
 
-    # TODO: these test cases currently hang
-    @test_skip typeintersect(Tuple{Array{Ref{T}, 1}, Array{Pair{M, V}, 1}, Int} where V where T where M,
-                             Tuple{Array{Ref{T}, 1}, Array{Pair{M, T}, 1}, Any} where T where M) ==
-                                 Tuple{Array{Ref{T}, 1}, Array{Pair{M, T}, 1}, Int}
+    @testintersect(Tuple{Array{Ref{T}, 1}, Array{Pair{M, V}, 1}, Int} where V where T where M,
+                   Tuple{Array{Ref{T}, 1}, Array{Pair{M, T}, 1}, Any} where T where M,
+                   Tuple{Array{Ref{T}, 1}, Array{Pair{M, T}, 1}, Int} where T where M)
 
-    @test_skip typeintersect(Tuple{Int, Ref{Pair{K,V}}} where V where K,
-                             Tuple{Any, Ref{Pair{T,T}} where T }) ==
-                                 Tuple{Int, Ref{Pair{T,T}} where T }
+    @testintersect(Tuple{Int, Ref{Pair{K,V}}} where V where K,
+                   Tuple{Any, Ref{Pair{T,T}} where T },
+                   Tuple{Int, Ref{Pair{T,T}} where T })
 
     @test_broken isequal_type(_type_intersect(Tuple{T,T} where T,
                                               Union{Tuple{S,Array{Int64,1}},Tuple{S,Array{S,1}}} where S),
@@ -899,6 +898,11 @@ function test_intersection()
                    Tuple{Type{T}, T} where T,
                    Tuple{Type{SIQ20671{T,mS,kgS,sS,AS,KS,molS,cdS,radS,srS}},
                          SIQ20671{T,mS,kgS,sS,AS,KS,molS,cdS,radS,srS}} where {T,mS,kgS,sS,AS,KS,molS,cdS,radS,srS})
+
+    # issue #21243
+    @testintersect(Tuple{Ref{Ref{T}} where T, Ref},
+                   Tuple{Ref{T}, Ref{T}} where T,
+                   Tuple{Ref{Ref{T}}, Ref{Ref{T}}} where T)
 end
 
 function test_intersection_properties()
@@ -995,6 +999,69 @@ ftwoparams(::TwoParams{<:Real,<:Real}) = 3
 @testintersect(Tuple{Val{Val{0}}, Val{N}} where N, Tuple{Val{Val{N}}, Val{N}} where N, Tuple{Val{Val{0}},Val{0}})
 @testintersect(Tuple{Val{Val{N}}, Val{0}} where N, Tuple{Val{Val{N}}, Val{N}} where N, Tuple{Val{Val{0}},Val{0}})
 
+# a bunch of cases found by fuzzing
+let a = Tuple{Float64,T7} where T7,
+    b = Tuple{S5,Tuple{S5}} where S5
+    @test_broken typeintersect(a, b) <: b
+end
+let a = Tuple{T1,T1} where T1,
+    b = Tuple{Val{S2},S6} where S2 where S6
+    @test_broken typeintersect(a, b) == typeintersect(b, a)
+end
+let a = Val{Tuple{T1,T1}} where T1,
+    b = Val{Tuple{Val{S2},S6}} where S2 where S6
+    @testintersect(a, b, Val{Tuple{Val{T},Val{T}}} where T)
+end
+let a = Tuple{Float64,T3,T4} where T4 where T3,
+    b = Tuple{S2,Tuple{S3},S3} where S2 where S3
+    @test_broken typeintersect(a, b) == typeintersect(b, a)
+end
+let a = Tuple{T1,Tuple{T1}} where T1,
+    b = Tuple{Float64,S3} where S3
+    @test_broken typeintersect(a, b) <: a
+end
+let a = Tuple{5,T4,T5} where T4 where T5,
+    b = Tuple{S2,S3,Tuple{S3}} where S2 where S3
+    @test_broken typeintersect(a, b) == typeintersect(b, a)
+end
+let a = Tuple{T2,Tuple{T4,T2}} where T4 where T2,
+    b = Tuple{Float64,Tuple{Tuple{S3},S3}} where S3
+    @test_broken typeintersect(a, b) <: b
+end
+let a = Tuple{Tuple{T2,4},T6} where T2 where T6,
+    b = Tuple{Tuple{S2,S3},Tuple{S2}} where S2 where S3
+    @test_broken typeintersect(a, b) == typeintersect(b, a)
+end
+let a = Tuple{T3,Int64,Tuple{T3}} where T3,
+    b = Tuple{S3,S3,S4} where S4 where S3
+    @test_broken typeintersect(a, b) <: a
+end
+let a = Tuple{T1,Val{T2},T2} where T2 where T1,
+    b = Tuple{Float64,S1,S2} where S2 where S1
+    @test_broken typeintersect(a, b) == typeintersect(b, a)
+end
+let a = Tuple{T1,Val{T2},T2} where T2 where T1,
+    b = Tuple{Float64,S1,S2} where S2 where S1
+    @test_broken typeintersect(a, b) <: a
+end
+let a = Tuple{Float64,T1} where T1,
+    b = Tuple{S1,Tuple{S1}} where S1
+    @test_broken typeintersect(a, b) <: b
+end
+let a = Tuple{Val{T1},T2,T2} where T2 where T1,
+    b = Tuple{Val{Tuple{S2}},S3,Float64} where S2 where S3
+    @testintersect(a, b, Tuple{Val{Tuple{S2}},Float64,Float64} where S2)
+end
+let a = Tuple{T1,T2,T2} where T1 where T2,
+    b = Tuple{Val{S2},S2,Float64} where S2,
+    x = Tuple{Val{Float64},Float64,Float64}
+    @test_broken x <: typeintersect(a, b)
+end
+let a = Val{Tuple{T1,Val{T2},Val{Int64},Tuple{Tuple{T3,5,Float64},T4,T2,T5}}} where T1 where T5 where T4 where T3 where T2,
+    b = Val{Tuple{Tuple{S1,5,Float64},Val{S2},S3,Tuple{Tuple{Val{Float64},5,Float64},2,Float64,S4}}} where S2 where S3 where S1 where S4
+    @test_skip typeintersect(b, a)
+end
+
 # issue #20992
 abstract type A20992{T,D,d} end
 abstract type B20992{SV,T,D,d} <: A20992{T,D,d} end
@@ -1003,3 +1070,41 @@ end
 @testintersect(Tuple{A20992{R, D, d} where d where D, Int} where R,
                Tuple{C20992{S, n, T, D, d} where d where D where T where n where S, Any},
                Tuple{C20992, Int})
+
+# Issue #19414
+let ex = try struct A19414 <: Base.AbstractSet end catch e; e end
+    @test isa(ex, ErrorException) && ex.msg == "invalid subtyping in definition of A19414"
+end
+
+# issue #20103, OP and comments
+struct TT20103{X,Y} end
+f20103{X,Y}(::Type{TT20103{X,Y}},x::X,y::Y) = 1
+f20103{X}(::Type{TT20103{X,X}},x::X) = 100
+@test_broken typeintersect(Type{NTuple{N,E}} where E where N, Type{NTuple{N,E} where N} where E) == Union{} # use @testintersect once fixed
+let ints = (Int, Int32, UInt, UInt32)
+    const Ints = Union{ints...}
+    vecs = []
+    for i = 2:4, t in ints
+        push!(vecs, NTuple{i, t})
+    end
+    const Vecs = Union{vecs...}
+    T = Type{Tuple{V, I}} where V <: Vecs where I <: Ints
+    @testintersect(T, T, T)
+    test{V <: Vecs, I <: Ints}(a::Type{Tuple{V, I}}) = I
+    test{V <: Vecs, I <: Ints}(a::Type{Tuple{V, I}}) = I
+end
+
+# issue #21191
+let T1 = Val{Val{Val{Union{Int8,Int16,Int32,Int64,UInt8,UInt16}}}},
+    T2 = Val{Val{Val{Union{Int8,Int16,Int32,Int64,UInt8, S}}}} where S
+    @test T1 <: T2
+end
+
+# issue #21613
+abstract type A21613{S <: Tuple} end
+immutable B21613{S <: Tuple, L} <: A21613{S}
+    data::NTuple{L,Float64}
+end
+@testintersect(Tuple{Type{B21613{Tuple{L},L}} where L, Any},
+               Tuple{Type{SA}, Tuple} where SA<:(A21613{S} where S<:Tuple),
+               Tuple{Type{B21613{Tuple{L},L}} where L, Tuple})

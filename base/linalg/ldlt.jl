@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 struct LDLt{T,S<:AbstractMatrix} <: Factorization{T}
     data::S
@@ -7,13 +7,13 @@ end
 size(S::LDLt) = size(S.data)
 size(S::LDLt, i::Integer) = size(S.data, i)
 
-convert{T,S}(::Type{LDLt{T,S}}, F::LDLt) = LDLt{T,S}(convert(S, F.data))
+convert(::Type{LDLt{T,S}}, F::LDLt) where {T,S} = LDLt{T,S}(convert(S, F.data))
 # NOTE: the annotaion <:AbstractMatrix shouldn't be necessary, it is introduced
 #       to avoid an ambiguity warning (see issue #6383)
-convert{T,S,U<:AbstractMatrix}(::Type{LDLt{T}}, F::LDLt{S,U}) = convert(LDLt{T,U}, F)
+convert(::Type{LDLt{T}}, F::LDLt{S,U}) where {T,S,U<:AbstractMatrix} = convert(LDLt{T,U}, F)
 
-convert{T}(::Type{Factorization{T}}, F::LDLt{T}) = F
-convert{T,S,U}(::Type{Factorization{T}}, F::LDLt{S,U}) = convert(LDLt{T,U}, F)
+convert(::Type{Factorization{T}}, F::LDLt{T}) where {T} = F
+convert(::Type{Factorization{T}}, F::LDLt{S,U}) where {T,S,U} = convert(LDLt{T,U}, F)
 
 # SymTridiagonal
 """
@@ -21,7 +21,7 @@ convert{T,S,U}(::Type{Factorization{T}}, F::LDLt{S,U}) = convert(LDLt{T,U}, F)
 
 Same as [`ldltfact`](@ref), but saves space by overwriting the input `A`, instead of creating a copy.
 """
-function ldltfact!{T<:Real}(S::SymTridiagonal{T})
+function ldltfact!(S::SymTridiagonal{T}) where T<:Real
     n = size(S,1)
     d = S.dv
     e = S.ev
@@ -39,14 +39,14 @@ Compute an `LDLt` factorization of a real symmetric tridiagonal matrix such that
 where `L` is a unit lower triangular matrix and `d` is a vector. The main use of an `LDLt`
 factorization `F = ldltfact(A)` is to solve the linear system of equations `Ax = b` with `F\\b`.
 """
-function ldltfact{T}(M::SymTridiagonal{T})
+function ldltfact(M::SymTridiagonal{T}) where T
     S = typeof(zero(T)/one(T))
     return S == T ? ldltfact!(copy(M)) : ldltfact!(convert(SymTridiagonal{S}, M))
 end
 
 factorize(S::SymTridiagonal) = ldltfact(S)
 
-function A_ldiv_B!{T}(S::LDLt{T,SymTridiagonal{T}}, B::AbstractVecOrMat{T})
+function A_ldiv_B!(S::LDLt{T,SymTridiagonal{T}}, B::AbstractVecOrMat{T}) where T
     n, nrhs = size(B, 1), size(B, 2)
     if size(S,1) != n
         throw(DimensionMismatch("Matrix has dimensions $(size(S)) but right hand side has first dimension $n"))

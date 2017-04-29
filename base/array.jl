@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## array.jl: Dense arrays
 
@@ -61,7 +61,7 @@ match the length or number of `dims`.
 Array
 
 vect() = Array{Any,1}(0)
-vect{T}(X::T...) = T[ X[i] for i=1:length(X) ]
+vect(X::T...) where {T} = T[ X[i] for i = 1:length(X) ]
 
 function vect(X...)
     T = promote_typeof(X...)
@@ -74,8 +74,8 @@ size(a::Array, d) = arraysize(a, d)
 size(a::Vector) = (arraysize(a,1),)
 size(a::Matrix) = (arraysize(a,1), arraysize(a,2))
 size(a::Array) = (@_inline_meta; _size((), a))
-_size{_,N}(out::NTuple{N}, A::Array{_,N}) = out
-function _size{_,M,N}(out::NTuple{M}, A::Array{_,N})
+_size(out::NTuple{N}, A::Array{_,N}) where {_,N} = out
+function _size(out::NTuple{M}, A::Array{_,N}) where _ where M where N
     @_inline_meta
     _size((out..., size(A,M+1)), A)
 end
@@ -83,18 +83,19 @@ end
 asize_from(a::Array, n) = n > ndims(a) ? () : (arraysize(a,n), asize_from(a, n+1)...)
 
 length(a::Array) = arraylen(a)
-elsize{T}(a::Array{T}) = isbits(T) ? sizeof(T) : sizeof(Ptr)
+elsize(a::Array{T}) where {T} = isbits(T) ? sizeof(T) : sizeof(Ptr)
 sizeof(a::Array) = elsize(a) * length(a)
 
 function isassigned(a::Array, i::Int...)
-    ii = sub2ind(size(a), i...)
-    1 <= ii <= length(a) || return false
-    ccall(:jl_array_isassigned, Cint, (Any, UInt), a, ii-1) == 1
+    @_inline_meta
+    ii = (sub2ind(size(a), i...) % UInt) - 1
+    ii < length(a) % UInt || return false
+    ccall(:jl_array_isassigned, Cint, (Any, UInt), a, ii) == 1
 end
 
 ## copy ##
 
-function unsafe_copy!{T}(dest::Ptr{T}, src::Ptr{T}, n)
+function unsafe_copy!(dest::Ptr{T}, src::Ptr{T}, n) where T
     # Do not use this to copy data between pointer arrays.
     # It can't be made safe no matter how carefully you checked.
     ccall(:memmove, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
@@ -102,7 +103,7 @@ function unsafe_copy!{T}(dest::Ptr{T}, src::Ptr{T}, n)
     return dest
 end
 
-function unsafe_copy!{T}(dest::Array{T}, doffs, src::Array{T}, soffs, n)
+function unsafe_copy!(dest::Array{T}, doffs, src::Array{T}, soffs, n) where T
     if isbits(T)
         unsafe_copy!(pointer(dest, doffs), pointer(src, soffs), n)
     else
@@ -112,7 +113,7 @@ function unsafe_copy!{T}(dest::Array{T}, doffs, src::Array{T}, soffs, n)
     return dest
 end
 
-function copy!{T}(dest::Array{T}, doffs::Integer, src::Array{T}, soffs::Integer, n::Integer)
+function copy!(dest::Array{T}, doffs::Integer, src::Array{T}, soffs::Integer, n::Integer) where T
     n == 0 && return dest
     n > 0 || throw(ArgumentError(string("tried to copy n=", n, " elements, but n should be nonnegative")))
     if soffs < 1 || doffs < 1 || soffs+n-1 > length(src) || doffs+n-1 > length(dest)
@@ -121,24 +122,24 @@ function copy!{T}(dest::Array{T}, doffs::Integer, src::Array{T}, soffs::Integer,
     unsafe_copy!(dest, doffs, src, soffs, n)
 end
 
-copy!{T}(dest::Array{T}, src::Array{T}) = copy!(dest, 1, src, 1, length(src))
+copy!(dest::Array{T}, src::Array{T}) where {T} = copy!(dest, 1, src, 1, length(src))
 
-copy{T<:Array}(a::T) = ccall(:jl_array_copy, Ref{T}, (Any,), a)
+copy(a::T) where {T<:Array} = ccall(:jl_array_copy, Ref{T}, (Any,), a)
 
-function reinterpret{T,S}(::Type{T}, a::Array{S,1})
+function reinterpret(::Type{T}, a::Array{S,1}) where T where S
     nel = Int(div(length(a)*sizeof(S),sizeof(T)))
     # TODO: maybe check that remainder is zero?
     return reinterpret(T, a, (nel,))
 end
 
-function reinterpret{T,S}(::Type{T}, a::Array{S})
+function reinterpret(::Type{T}, a::Array{S}) where T where S
     if sizeof(S) != sizeof(T)
         throw(ArgumentError("result shape not specified"))
     end
     reinterpret(T, a, size(a))
 end
 
-function reinterpret{T,S,N}(::Type{T}, a::Array{S}, dims::NTuple{N,Int})
+function reinterpret(::Type{T}, a::Array{S}, dims::NTuple{N,Int}) where T where S where N
     if !isbits(T)
         throw(ArgumentError("cannot reinterpret Array{$(S)} to ::Type{Array{$(T)}}, type $(T) is not a bits type"))
     end
@@ -153,7 +154,7 @@ function reinterpret{T,S,N}(::Type{T}, a::Array{S}, dims::NTuple{N,Int})
 end
 
 # reshaping to same # of dimensions
-function reshape{T,N}(a::Array{T,N}, dims::NTuple{N,Int})
+function reshape(a::Array{T,N}, dims::NTuple{N,Int}) where T where N
     if prod(dims) != length(a)
         throw(DimensionMismatch("new dimensions $(dims) must be consistent with array size $(length(a))"))
     end
@@ -164,7 +165,7 @@ function reshape{T,N}(a::Array{T,N}, dims::NTuple{N,Int})
 end
 
 # reshaping to different # of dimensions
-function reshape{T,N}(a::Array{T}, dims::NTuple{N,Int})
+function reshape(a::Array{T}, dims::NTuple{N,Int}) where T where N
     if prod(dims) != length(a)
         throw(DimensionMismatch("new dimensions $(dims) must be consistent with array size $(length(a))"))
     end
@@ -173,16 +174,16 @@ end
 
 ## Constructors ##
 
-similar{T}(a::Array{T,1})                    = Array{T,1}(size(a,1))
-similar{T}(a::Array{T,2})                    = Array{T,2}(size(a,1), size(a,2))
-similar{T}(a::Array{T,1}, S::Type)           = Array{S,1}(size(a,1))
-similar{T}(a::Array{T,2}, S::Type)           = Array{S,2}(size(a,1), size(a,2))
-similar{T}(a::Array{T}, m::Int)              = Array{T,1}(m)
-similar{N}(a::Array, T::Type, dims::Dims{N}) = Array{T,N}(dims)
-similar{T,N}(a::Array{T}, dims::Dims{N})     = Array{T,N}(dims)
+similar(a::Array{T,1}) where {T}                    = Array{T,1}(size(a,1))
+similar(a::Array{T,2}) where {T}                    = Array{T,2}(size(a,1), size(a,2))
+similar(a::Array{T,1}, S::Type) where {T}           = Array{S,1}(size(a,1))
+similar(a::Array{T,2}, S::Type) where {T}           = Array{S,2}(size(a,1), size(a,2))
+similar(a::Array{T}, m::Int) where {T}              = Array{T,1}(m)
+similar(a::Array, T::Type, dims::Dims{N}) where {N} = Array{T,N}(dims)
+similar(a::Array{T}, dims::Dims{N}) where {T,N}     = Array{T,N}(dims)
 
 # T[x...] constructs Array{T,1}
-function getindex{T}(::Type{T}, vals...)
+function getindex(::Type{T}, vals...) where T
     a = Array{T,1}(length(vals))
     @inbounds for i = 1:length(vals)
         a[i] = vals[i]
@@ -190,10 +191,10 @@ function getindex{T}(::Type{T}, vals...)
     return a
 end
 
-getindex{T}(::Type{T}) = (@_inline_meta; Array{T,1}(0))
-getindex{T}(::Type{T}, x) = (@_inline_meta; a = Array{T,1}(1); @inbounds a[1] = x; a)
-getindex{T}(::Type{T}, x, y) = (@_inline_meta; a = Array{T,1}(2); @inbounds (a[1] = x; a[2] = y); a)
-getindex{T}(::Type{T}, x, y, z) = (@_inline_meta; a = Array{T,1}(3); @inbounds (a[1] = x; a[2] = y; a[3] = z); a)
+getindex(::Type{T}) where {T} = (@_inline_meta; Array{T,1}(0))
+getindex(::Type{T}, x) where {T} = (@_inline_meta; a = Array{T,1}(1); @inbounds a[1] = x; a)
+getindex(::Type{T}, x, y) where {T} = (@_inline_meta; a = Array{T,1}(2); @inbounds (a[1] = x; a[2] = y); a)
+getindex(::Type{T}, x, y, z) where {T} = (@_inline_meta; a = Array{T,1}(3); @inbounds (a[1] = x; a[2] = y; a[3] = z); a)
 
 function getindex(::Type{Any}, vals::ANY...)
     a = Array{Any,1}(length(vals))
@@ -209,7 +210,7 @@ function fill!(a::Union{Array{UInt8}, Array{Int8}}, x::Integer)
     return a
 end
 
-function fill!{T<:Union{Integer,AbstractFloat}}(a::Array{T}, x)
+function fill!(a::Array{T}, x) where T<:Union{Integer,AbstractFloat}
     xT = convert(T, x)
     for i in eachindex(a)
         @inbounds a[i] = xT
@@ -260,7 +261,7 @@ end
 `m`-by-`n` identity matrix.
 The default element type is `Float64`.
 """
-function eye{T}(::Type{T}, m::Integer, n::Integer)
+function eye(::Type{T}, m::Integer, n::Integer) where T
     a = zeros(T,m,n)
     for i = 1:min(m,n)
         a[i,i] = oneunit(T)
@@ -274,7 +275,7 @@ end
 `m`-by-`n` identity matrix.
 """
 eye(m::Integer, n::Integer) = eye(Float64, m, n)
-eye{T}(::Type{T}, n::Integer) = eye(T, n, n)
+eye(::Type{T}, n::Integer) where {T} = eye(T, n, n)
 """
     eye([T::Type=Float64,] n::Integer)
 
@@ -304,29 +305,29 @@ julia> eye(A)
 
 Note the difference from [`ones`](@ref).
 """
-eye{T}(x::AbstractMatrix{T}) = eye(typeof(one(T)), size(x, 1), size(x, 2))
+eye(x::AbstractMatrix{T}) where {T} = eye(typeof(one(T)), size(x, 1), size(x, 2))
 
-function _one{T}(unit::T, x::AbstractMatrix)
+function _one(unit::T, x::AbstractMatrix) where T
     m,n = size(x)
     m==n || throw(DimensionMismatch("multiplicative identity defined only for square matrices"))
     eye(T, m)
 end
 
-one{T}(x::AbstractMatrix{T}) = _one(one(T), x)
-oneunit{T}(x::AbstractMatrix{T}) = _one(oneunit(T), x)
+one(x::AbstractMatrix{T}) where {T} = _one(one(T), x)
+oneunit(x::AbstractMatrix{T}) where {T} = _one(oneunit(T), x)
 
 ## Conversions ##
 
-convert{T}(::Type{Vector}, x::AbstractVector{T}) = convert(Vector{T}, x)
-convert{T}(::Type{Matrix}, x::AbstractMatrix{T}) = convert(Matrix{T}, x)
+convert(::Type{Vector}, x::AbstractVector{T}) where {T} = convert(Vector{T}, x)
+convert(::Type{Matrix}, x::AbstractMatrix{T}) where {T} = convert(Matrix{T}, x)
 
-convert{T,n}(::Type{Array{T}}, x::Array{T,n}) = x
-convert{T,n}(::Type{Array{T,n}}, x::Array{T,n}) = x
+convert(::Type{Array{T}}, x::Array{T,n}) where {T,n} = x
+convert(::Type{Array{T,n}}, x::Array{T,n}) where {T,n} = x
 
-convert{T,n,S}(::Type{Array{T}}, x::AbstractArray{S, n}) = convert(Array{T, n}, x)
-convert{T,n,S}(::Type{Array{T,n}}, x::AbstractArray{S,n}) = copy!(Array{T,n}(size(x)), x)
+convert(::Type{Array{T}}, x::AbstractArray{S,n}) where {T,n,S} = convert(Array{T,n}, x)
+convert(::Type{Array{T,n}}, x::AbstractArray{S,n}) where {T,n,S} = copy!(Array{T,n}(size(x)), x)
 
-promote_rule{T,n,S}(::Type{Array{T,n}}, ::Type{Array{S,n}}) = Array{promote_type(T,S),n}
+promote_rule(::Type{Array{T,n}}, ::Type{Array{S,n}}) where {T,n,S} = Array{promote_type(T,S),n}
 
 ## copying iterators to containers
 
@@ -344,11 +345,11 @@ julia> collect(Float64, 1:2:5)
  5.0
 ```
 """
-collect{T}(::Type{T}, itr) = _collect(T, itr, iteratorsize(itr))
+collect(::Type{T}, itr) where {T} = _collect(T, itr, iteratorsize(itr))
 
-_collect{T}(::Type{T}, itr, isz::HasLength) = copy!(Array{T,1}(Int(length(itr)::Integer)), itr)
-_collect{T}(::Type{T}, itr, isz::HasShape)  = copy!(similar(Array{T}, indices(itr)), itr)
-function _collect{T}(::Type{T}, itr, isz::SizeUnknown)
+_collect(::Type{T}, itr, isz::HasLength) where {T} = copy!(Array{T,1}(Int(length(itr)::Integer)), itr)
+_collect(::Type{T}, itr, isz::HasShape) where {T}  = copy!(similar(Array{T}, indices(itr)), itr)
+function _collect(::Type{T}, itr, isz::SizeUnknown) where T
     a = Array{T,1}(0)
     for x in itr
         push!(a,x)
@@ -398,7 +399,7 @@ function _collect(cont, itr, ::HasEltype, isz::SizeUnknown)
     return a
 end
 
-_collect_indices(::Tuple{}, A) = copy!(Array{eltype(A)}(), A)
+_collect_indices(::Tuple{}, A) = copy!(Vector{eltype(A)}(), A)
 _collect_indices(indsA::Tuple{Vararg{OneTo}}, A) =
     copy!(Array{eltype(A)}(length.(indsA)), A)
 function _collect_indices(indsA, A)
@@ -412,8 +413,8 @@ else
     _default_eltype(itr::ANY) = Any
 end
 
-_array_for{T}(::Type{T}, itr, ::HasLength) = Array{T,1}(Int(length(itr)::Integer))
-_array_for{T}(::Type{T}, itr, ::HasShape) = similar(Array{T}, indices(itr))
+_array_for(::Type{T}, itr, ::HasLength) where {T} = Array{T,1}(Int(length(itr)::Integer))
+_array_for(::Type{T}, itr, ::HasShape) where {T} = similar(Array{T}, indices(itr))
 
 function collect(itr::Generator)
     isz = iteratorsize(itr.iter)
@@ -453,7 +454,7 @@ function collect_to_with_first!(dest, v1, itr, st)
     return grow_to!(dest, itr, st)
 end
 
-function collect_to!{T}(dest::AbstractArray{T}, itr, offs, st)
+function collect_to!(dest::AbstractArray{T}, itr, offs, st) where T
     # collect to dest array, checking the type of each result. if a result does not
     # match, widen the result type and re-dispatch.
     i = offs
@@ -528,13 +529,13 @@ function getindex(A::Array, c::Colon)
 end
 
 # This is redundant with the abstract fallbacks, but needed for bootstrap
-function getindex{S}(A::Array{S}, I::Range{Int})
+function getindex(A::Array{S}, I::Range{Int}) where S
     return S[ A[i] for i in I ]
 end
 
 ## Indexing: setindex! ##
-setindex!{T}(A::Array{T}, x, i1::Int) = arrayset(A, convert(T,x)::T, i1)
-setindex!{T}(A::Array{T}, x, i1::Int, i2::Int, I::Int...) = (@_inline_meta; arrayset(A, convert(T,x)::T, i1, i2, I...)) # TODO: REMOVE FOR #14770
+setindex!(A::Array{T}, x, i1::Int) where {T} = arrayset(A, convert(T,x)::T, i1)
+setindex!(A::Array{T}, x, i1::Int, i2::Int, I::Int...) where {T} = (@_inline_meta; arrayset(A, convert(T,x)::T, i1, i2, I...)) # TODO: REMOVE FOR #14770
 
 # These are redundant with the abstract fallbacks but needed for bootstrap
 function setindex!(A::Array, x, I::AbstractVector{Int})
@@ -564,7 +565,7 @@ function setindex!(A::Array, X::AbstractArray, I::AbstractVector{Int})
 end
 
 # Faster contiguous setindex! with copy!
-function setindex!{T}(A::Array{T}, X::Array{T}, I::UnitRange{Int})
+function setindex!(A::Array{T}, X::Array{T}, I::UnitRange{Int}) where T
     @_inline_meta
     @boundscheck checkbounds(A, I)
     lI = length(I)
@@ -574,7 +575,7 @@ function setindex!{T}(A::Array{T}, X::Array{T}, I::UnitRange{Int})
     end
     return A
 end
-function setindex!{T}(A::Array{T}, X::Array{T}, c::Colon)
+function setindex!(A::Array{T}, X::Array{T}, c::Colon) where T
     @_inline_meta
     lI = length(A)
     @boundscheck setindex_shape_check(X, lI)
@@ -585,7 +586,7 @@ function setindex!{T}(A::Array{T}, X::Array{T}, c::Colon)
 end
 
 setindex!(A::Array, x::Number, ::Colon) = fill!(A, x)
-setindex!{T, N}(A::Array{T, N}, x::Number, ::Vararg{Colon, N}) = fill!(A, x)
+setindex!(A::Array{T, N}, x::Number, ::Vararg{Colon, N}) where {T, N} = fill!(A, x)
 
 # efficiently grow an array
 
@@ -599,7 +600,7 @@ _deleteat!(a::Vector, i::Integer, delta::Integer) =
 
 ## Dequeue functionality ##
 
-function push!{T}(a::Array{T,1}, item)
+function push!(a::Array{T,1}, item) where T
     # convert first so we don't grow the array if the assignment won't work
     itemT = convert(T, item)
     ccall(:jl_array_grow_end, Void, (Any, UInt), a, 1)
@@ -761,7 +762,7 @@ julia> unshift!([1, 2, 3, 4], 5, 6)
  4
 ```
 """
-function unshift!{T}(a::Array{T,1}, item)
+function unshift!(a::Array{T,1}, item) where T
     item = convert(T, item)
     ccall(:jl_array_grow_beg, Void, (Any, UInt), a, 1)
     a[1] = item
@@ -794,7 +795,7 @@ julia> insert!([6, 5, 4, 2, 1], 4, 3)
  1
 ```
 """
-function insert!{T}(a::Array{T,1}, i::Integer, item)
+function insert!(a::Array{T,1}, i::Integer, item) where T
     # Throw convert error before changing the shape of the array
     _item = convert(T, item)
     _growat!(a, i, 1)
@@ -852,8 +853,8 @@ julia> deleteat!([6, 5, 4, 3, 2, 1], [true, false, true, false, true, false])
 julia> deleteat!([6, 5, 4, 3, 2, 1], (2, 2))
 ERROR: ArgumentError: indices must be unique and sorted
 Stacktrace:
- [1] _deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:862
- [2] deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:849
+ [1] _deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:873
+ [2] deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:860
 ```
 """
 deleteat!(a::Vector, inds) = _deleteat!(a, inds)
@@ -1038,13 +1039,13 @@ function lexcmp(a::Array{UInt8,1}, b::Array{UInt8,1})
 end
 
 # use memcmp for == on bit integer types
-function =={T<:BitInteger,N}(a::Array{T,N}, b::Array{T,N})
+function ==(a::Array{T,N}, b::Array{T,N}) where T<:BitInteger where N
     size(a) == size(b) && 0 == ccall(
         :memcmp, Int32, (Ptr{T}, Ptr{T}, UInt), a, b, sizeof(T) * length(a))
 end
 
 # this is ~20% faster than the generic implementation above for very small arrays
-function =={T<:BitInteger}(a::Array{T,1}, b::Array{T,1})
+function ==(a::Array{T,1}, b::Array{T,1}) where T<:BitInteger
     len = length(a)
     len == length(b) && 0 == ccall(
         :memcmp, Int32, (Ptr{T}, Ptr{T}, UInt), a, b, sizeof(T) * len)
@@ -1090,7 +1091,7 @@ end
 vcat() = Array{Any,1}(0)
 hcat() = Array{Any,1}(0)
 
-function hcat{T}(V::Vector{T}...)
+function hcat(V::Vector{T}...) where T
     height = length(V[1])
     for j = 2:length(V)
         if length(V[j]) != height
@@ -1100,7 +1101,7 @@ function hcat{T}(V::Vector{T}...)
     return [ V[j][i]::T for i=1:length(V[1]), j=1:length(V) ]
 end
 
-function vcat{T}(arrays::Vector{T}...)
+function vcat(arrays::Vector{T}...) where T
     n = 0
     for a in arrays
         n += length(a)
@@ -1550,7 +1551,7 @@ julia> findnz(A)
 ([1, 1, 3, 2], [1, 2, 2, 3], [1, 2, 4, 3])
 ```
 """
-function findnz{T}(A::AbstractMatrix{T})
+function findnz(A::AbstractMatrix{T}) where T
     nnzA = countnz(A)
     I = zeros(Int, nnzA)
     J = zeros(Int, nnzA)
@@ -1805,20 +1806,27 @@ julia> filter(isodd, a)
 """
 filter(f, As::AbstractArray) = As[map(f, As)::AbstractArray{Bool}]
 
-function filter!(f, a::Vector)
-    insrt = 1
+function filter!(f, a::AbstractVector)
+    isempty(a) && return a
+
+    idx = eachindex(a)
+    state = start(idx)
+    i, state = next(idx, state)
+
     for acurr in a
         if f(acurr)
-            a[insrt] = acurr
-            insrt += 1
+            a[i] = acurr
+            i, state = next(idx, state)
         end
     end
-    deleteat!(a, insrt:length(a))
+
+    deleteat!(a, i:last(idx))
+
     return a
 end
 
 function filter(f, a::Vector)
-    r = Array{eltype(a)}(0)
+    r = Vector{eltype(a)}(0)
     for ai in a
         if f(ai)
             push!(r, ai)
@@ -1831,7 +1839,7 @@ end
 # These are moderately efficient, preserve order, and remove dupes.
 
 function intersect(v1, vs...)
-    ret = Array{promote_eltype(v1, vs...)}(0)
+    ret = Vector{promote_eltype(v1, vs...)}(0)
     for v_elem in v1
         inall = true
         for vsi in vs
@@ -1847,7 +1855,7 @@ function intersect(v1, vs...)
 end
 
 function union(vs...)
-    ret = Array{promote_eltype(vs...)}(0)
+    ret = Vector{promote_eltype(vs...)}(0)
     seen = Set()
     for v in vs
         for v_elem in v

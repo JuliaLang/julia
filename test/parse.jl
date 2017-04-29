@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # tests for parser and syntax lowering
 
@@ -574,13 +574,13 @@ f16517() = try error(); catch 0; end
 # issue #16671
 @test parse("1.") === 1.0
 
+isline(x) = isa(x,Expr) && x.head === :line
+
 # issue #16672
-let isline(x) = isa(x,Expr) && x.head === :line
-    @test count(isline, parse("begin end").args) == 1
-    @test count(isline, parse("begin; end").args) == 1
-    @test count(isline, parse("begin; x+2; end").args) == 1
-    @test count(isline, parse("begin; x+2; y+1; end").args) == 2
-end
+@test count(isline, parse("begin end").args) == 1
+@test count(isline, parse("begin; end").args) == 1
+@test count(isline, parse("begin; x+2; end").args) == 1
+@test count(isline, parse("begin; x+2; y+1; end").args) == 2
 
 # issue #16736
 let
@@ -1018,6 +1018,19 @@ end
 short_where_call = :(f(x::T) where T = T)
 @test short_where_call.args[2].head == :block
 
+# `where` with multi-line anonymous functions
+let f = function (x::T) where T
+            T
+        end
+    @test f(:x) === Symbol
+end
+
+let f = function (x::T, y::S) where T<:S where S
+            (T,S)
+        end
+    @test f(0,1) === (Int,Int)
+end
+
 # issue #20541
 @test parse("[a .!b]") == Expr(:hcat, :a, Expr(:call, :(.!), :b))
 
@@ -1084,3 +1097,41 @@ let prim = parse("primitive type X 8 end")
     @test parse("primitive type X 8\nend") == prim
     @test parse(string("primitive type X 8", "\n"^5, "end")) == prim
 end
+
+# issue #21155
+@test filter(!isline,
+             parse("module B
+                        using ..x,
+                              ..y
+                    end").args[3].args)[1] ==
+      Expr(:toplevel,
+           Expr(:using, Symbol("."), Symbol("."), :x),
+           Expr(:using, Symbol("."), Symbol("."), :y))
+
+@test filter(!isline,
+             parse("module A
+                        using .B,
+                              .C
+                    end").args[3].args)[1] ==
+      Expr(:toplevel,
+           Expr(:using, Symbol("."), :B),
+           Expr(:using, Symbol("."), :C))
+
+# issue #21440
+@test parse("+(x::T,y::T) where {T} = 0") == parse("(+)(x::T,y::T) where {T} = 0")
+@test parse("a::b::c") == Expr(:(::), Expr(:(::), :a, :b), :c)
+
+# issue #21545
+f21545(::Type{<: AbstractArray{T,N} where N}) where T = T
+@test f21545(Array{Int8}) === Int8
+@test parse("<:{T} where T") == Expr(:where, Expr(:curly, :(<:), :T), :T)
+@test parse("<:(T) where T") == Expr(:where, Expr(:(<:), :T), :T)
+@test parse("<:{T}(T) where T") == Expr(:where, Expr(:call, Expr(:curly, :(<:), :T), :T), :T)
+
+# issue #21586
+macro m21586(x)
+    Expr(:kw, esc(x), 42)
+end
+
+f21586(; @m21586(a), @m21586(b)) = a + b
+@test f21586(a=10) == 52

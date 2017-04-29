@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.Test
 
@@ -87,9 +87,27 @@ end
 @inline Base.getindex(v::s21074, i::Integer) = v.x[i]
 @eval f21074() = $(s21074((1,2))).x[1]
 let (src, _) = code_typed(f21074, ())[1]
-    @test src.code[1] == Expr(:return, 1)
+    @test src.code[end] == Expr(:return, 1)
 end
 @eval g21074() = $(s21074((1,2)))[1]
 let (src, _) = code_typed(g21074, ())[1]
-    @test src.code[1] == Expr(:return, 1)
+    @test src.code[end] == Expr(:return, 1)
+end
+
+# issue #21311
+counter21311 = Ref(0)
+@noinline function update21311!(x)
+    counter21311[] += 1
+    x[] = counter21311[]
+    return x
+end
+@noinline map21311(t::Tuple{Any}) = (update21311!(t[1]),)
+@inline map21311(t::Tuple) = (update21311!(t[1]), map21311(Base.tail(t))...)
+function read21311()
+    xs = Ref(1), Ref(1)
+    map21311(xs)
+    return xs[1]
+end
+let a = read21311()
+    @test a[] == 1
 end

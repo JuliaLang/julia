@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## core string functions ##
 
@@ -69,7 +69,7 @@ julia> "Hello " * "world"
 """
 (*)(s1::AbstractString, ss::AbstractString...) = string(s1, ss...)
 
-one{T<:AbstractString}(::Union{T,Type{T}}) = convert(T, "")
+one(::Union{T,Type{T}}) where {T<:AbstractString} = convert(T, "")
 
 length(s::DirectIndexString) = endof(s)
 

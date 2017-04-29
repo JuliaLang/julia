@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## types ##
 
@@ -641,7 +641,7 @@ julia> mod1(4, 3)
 """
 mod1{T<:Real}(x::T, y::T) = (m = mod(x, y); ifelse(m == 0, y, m))
 # efficient version for integers
-mod1{T<:Integer}(x::T, y::T) = mod(x + y - T(1), y) + T(1)
+mod1{T<:Integer}(x::T, y::T) = (@_inline_meta; mod(x + y - T(1), y) + T(1))
 
 
 """
@@ -664,9 +664,9 @@ julia> x == (fld1(x, y) - 1) * y + mod1(x, y)
 true
 ```
 """
-fld1{T<:Real}(x::T, y::T) = (m=mod(x,y); fld(x-m,y))
+fld1(x::T, y::T) where {T<:Real} = (m=mod(x,y); fld(x-m,y))
 # efficient version for integers
-fld1{T<:Integer}(x::T, y::T) = fld(x+y-T(1),y)
+fld1(x::T, y::T) where {T<:Integer} = fld(x+y-T(1),y)
 
 """
     fldmod1(x, y)
@@ -675,9 +675,9 @@ Return `(fld1(x,y), mod1(x,y))`.
 
 See also: [`fld1`](@ref), [`mod1`](@ref).
 """
-fldmod1{T<:Real}(x::T, y::T) = (fld1(x,y), mod1(x,y))
+fldmod1(x::T, y::T) where {T<:Real} = (fld1(x,y), mod1(x,y))
 # efficient version for integers
-fldmod1{T<:Integer}(x::T, y::T) = (fld1(x,y), mod1(x,y))
+fldmod1(x::T, y::T) where {T<:Integer} = (fld1(x,y), mod1(x,y))
 
 # transpose
 
@@ -840,7 +840,7 @@ For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ`` \\ ``Bᵀ``.
 """
 Ac_ldiv_Bt(a,b) = Ac_ldiv_B(a,transpose(b))
 
-widen{T<:Number}(x::T) = convert(widen(T), x)
+widen(x::T) where {T<:Number} = convert(widen(T), x)
 
 # function pipelining
 

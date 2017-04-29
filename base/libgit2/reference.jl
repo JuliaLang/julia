@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 function GitReference(repo::GitRepo, refname::AbstractString)
     ref_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
@@ -334,7 +334,7 @@ function Base.map(f::Function, bi::GitBranchIter)
     while !done(bi, s)
         val = f(s[1:2])
         if res === nothing
-            res = Array{typeof(val)}(0)
+            res = Vector{typeof(val)}(0)
         end
         push!(res, val)
         val, s = next(bi, s)

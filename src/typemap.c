@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include <stdlib.h>
 #include <string.h>
@@ -65,8 +65,7 @@ static int sig_match_by_type_simple(jl_value_t **types, size_t n, jl_tupletype_t
             }
             else if (!jl_is_kind(a) || !jl_is_typevar(tp0) || ((jl_tvar_t*)tp0)->ub != (jl_value_t*)jl_any_type) {
                 // manually unroll jl_subtype(a, decl)
-                // where `a` can be a subtype like TypeConstructor
-                // and decl is Type{T}
+                // where `a` can be a subtype and decl is Type{T}
                 return 0;
             }
         }
@@ -142,8 +141,18 @@ static inline int sig_match_simple(jl_value_t **args, size_t n, jl_value_t **sig
                     return 0;
             }
             else {
-                if (a!=tp0 && !(jl_typeof(a) == jl_typeof(tp0) && jl_types_equal(a,tp0)))
-                    return 0;
+                if (a != tp0) {
+                    if (jl_typeof(a) != jl_typeof(tp0))
+                        return 0;
+                    jl_datatype_t *da = (jl_datatype_t*)a;
+                    jl_datatype_t *dt = (jl_datatype_t*)tp0;
+                    while (jl_is_unionall(da)) da = (jl_datatype_t*)((jl_unionall_t*)da)->body;
+                    while (jl_is_unionall(dt)) dt = (jl_datatype_t*)((jl_unionall_t*)dt)->body;
+                    if (jl_is_datatype(da) && jl_is_datatype(dt) && da->name != dt->name)
+                        return 0;
+                    if (!jl_types_equal(a, tp0))
+                        return 0;
+                }
             }
         }
         else {
@@ -326,7 +335,7 @@ static union jl_typemap_t *mtcache_hash_bp(struct jl_ordereddict_t *pa, jl_value
     if (jl_is_datatype(ty)) {
         uintptr_t uid = ((jl_datatype_t*)ty)->uid;
         if (!uid || jl_is_kind(ty) || jl_has_free_typevars(ty))
-            // be careful not to put non-leaf types or DataType/TypeConstructor in the cache here,
+            // be careful not to put non-leaf types or DataType/UnionAll in the cache here,
             // since they should have a lower priority and need to go into the sorted list
             return NULL;
         if (pa->values == (void*)jl_nothing) {
@@ -515,7 +524,7 @@ int jl_typemap_intersection_visitor(union jl_typemap_t map, int offs,
                 else {
                     // else an array scan is required to check subtypes
                     // first, fast-path: optimized pre-intersection test to see if `ty` could intersect with any Type
-                    if (typetype || jl_type_intersection((jl_value_t*)jl_type_type, ty) != jl_bottom_type)
+                    if (typetype || !jl_has_empty_intersection((jl_value_t*)jl_type_type, ty))
                         if (!jl_typemap_intersection_array_visitor(&cache->targ, ty, 1, offs, closure)) return 0;
                 }
             }
@@ -641,15 +650,34 @@ static jl_typemap_entry_t *jl_typemap_assoc_by_type_(jl_typemap_entry_t *ml, jl_
     return NULL;
 }
 
+int jl_obviously_unequal(jl_value_t *a, jl_value_t *b);
+
 static jl_typemap_entry_t *jl_typemap_lookup_by_type_(jl_typemap_entry_t *ml, jl_tupletype_t *types, size_t world)
 {
     for (; ml != (void*)jl_nothing; ml = ml->next) {
         if (world < ml->min_world || world > ml->max_world)
             continue;
         // TODO: more efficient
-        if (jl_types_equal((jl_value_t*)types, (jl_value_t*)ml->sig)) {
-            return ml;
+        jl_value_t *a = (jl_value_t*)types;
+        jl_value_t *b = (jl_value_t*)ml->sig;
+        while (jl_is_unionall(a)) a = ((jl_unionall_t*)a)->body;
+        while (jl_is_unionall(b)) b = ((jl_unionall_t*)b)->body;
+        size_t na = jl_nparams(a), nb = jl_nparams(b);
+        assert(na > 0 && nb > 0);
+        if (!jl_is_vararg_type(jl_tparam(a,na-1)) && !jl_is_vararg_type(jl_tparam(b,nb-1))) {
+            if (na != nb)
+                continue;
         }
+        if (na > 1 && nb > 1) {
+            if (jl_obviously_unequal(jl_tparam(a,1), jl_tparam(b,1)))
+                continue;
+            if (na > 2 && nb > 2) {
+                if (jl_obviously_unequal(jl_tparam(a,2), jl_tparam(b,2)))
+                    continue;
+            }
+        }
+        if (jl_types_equal((jl_value_t*)types, (jl_value_t*)ml->sig))
+            return ml;
     }
     return NULL;
 }

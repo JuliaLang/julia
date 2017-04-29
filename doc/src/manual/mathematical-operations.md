@@ -331,7 +331,18 @@ comparison is undefined. It is strongly recommended not to use expressions with 
 as printing) in chained comparisons. If side effects are required, the short-circuit `&&` operator
 should be used explicitly (see [Short-Circuit Evaluation](@ref)).
 
-### Operator Precedence
+### Elementary Functions
+
+Julia provides a comprehensive collection of mathematical functions and operators. These mathematical
+operations are defined over as broad a class of numerical values as permit sensible definitions,
+including integers, floating-point numbers, rationals, and complex numbers,
+wherever such definitions make sense.
+
+Moreover, these functions (like any Julia function) can be applied in "vectorized" fashion to
+arrays and other collections with the [dot syntax](@ref man-vectorized) `f.(A)`,
+e.g. `sin.(A)` will compute the sine of each element of an array `A`.
+
+## Operator Precedence
 
 Julia applies the following order of operations, from highest precedence to lowest:
 
@@ -348,16 +359,18 @@ Julia applies the following order of operations, from highest precedence to lowe
 | Control flow   | `&&` followed by `\|\|` followed by `?`                                                           |
 | Assignments    | `= += -= *= /= //= \= ^= ÷= %= \|= &= ⊻= <<= >>= >>>=`                                            |
 
-### Elementary Functions
+For a complete list of *every* Julia operator's precedence, see the top of this file:
+[`src/julia-parser.scm`](https://github.com/JuliaLang/julia/blob/master/src/julia-parser.scm)
 
-Julia provides a comprehensive collection of mathematical functions and operators. These mathematical
-operations are defined over as broad a class of numerical values as permit sensible definitions,
-including integers, floating-point numbers, rationals, and complexes, wherever such definitions
-make sense.
+You can also find the numerical precedence for any given operator via the built-in function `Base.operator_precedence`, where higher numbers take precedence:
 
-Moreover, these functions (like any Julia function) can be applied in "vectorized" fashion to
-arrays and other collections with the [dot syntax](@ref man-vectorized) `f.(A)`,
-e.g. `sin.(A)` will compute the elementwise sine of each element of an array `A`.
+```jldoctest
+julia> Base.operator_precedence(:+), Base.operator_precedence(:*), Base.operator_precedence(:.)
+(9, 11, 15)
+
+julia> Base.operator_precedence(:+=), Base.operator_precedence(:(=))  # (Note the necessary parens on `:(=)`)
+(1, 1)
+```
 
 ## Numerical Conversions
 
@@ -392,13 +405,13 @@ julia> Int8(127.0)
 julia> Int8(3.14)
 ERROR: InexactError()
 Stacktrace:
- [1] convert(::Type{Int8}, ::Float64) at ./float.jl:654
+ [1] convert(::Type{Int8}, ::Float64) at ./float.jl:658
  [2] Int8(::Float64) at ./sysimg.jl:24
 
 julia> Int8(128.0)
 ERROR: InexactError()
 Stacktrace:
- [1] convert(::Type{Int8}, ::Float64) at ./float.jl:654
+ [1] convert(::Type{Int8}, ::Float64) at ./float.jl:658
  [2] Int8(::Float64) at ./sysimg.jl:24
 
 julia> 127 % Int8
@@ -413,8 +426,8 @@ julia> round(Int8,127.4)
 julia> round(Int8,127.6)
 ERROR: InexactError()
 Stacktrace:
- [1] trunc(::Type{Int8}, ::Float64) at ./float.jl:647
- [2] round(::Type{Int8}, ::Float64) at ./float.jl:333
+ [1] trunc(::Type{Int8}, ::Float64) at ./float.jl:651
+ [2] round(::Type{Int8}, ::Float64) at ./float.jl:337
 ```
 
 See [Conversion and Promotion](@ref conversion-and-promotion) for how to define your own conversions and promotions.

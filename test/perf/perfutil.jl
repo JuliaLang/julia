@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 const mintrials = 5
 const mintime = 2000.0
@@ -96,7 +96,7 @@ macro timeit_init(ex,init,name,desc,group...)
                 t[i] = e
             end
         end
-        @output_timings t $name $desc $group
+        @output_timings t $(esc(name)) $(esc(desc)) $(esc(group))
     end
 end
 

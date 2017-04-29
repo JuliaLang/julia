@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Libdl
 
@@ -231,7 +231,7 @@ if is_bsd() && !is_apple()
 end # bsd family
 
 function dllist()
-    dynamic_libraries = Array{AbstractString}(0)
+    dynamic_libraries = Vector{AbstractString}(0)
 
     @static if is_linux()
         const callback = cfunction(dl_phdr_info_callback, Cint,
@@ -240,7 +240,7 @@ function dllist()
     end
 
     @static if is_apple()
-        numImages = ccall(:_dyld_image_count, Cint, (), )
+        numImages = ccall(:_dyld_image_count, Cint, ())
 
         # start at 1 instead of 0 to skip self
         for i in 1:numImages-1

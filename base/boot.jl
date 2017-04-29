@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # commented-out definitions are implemented in C
 
@@ -264,7 +264,7 @@ UnionAll(v::TypeVar, t::ANY) = ccall(:jl_type_unionall, Any, (Any, Any), v, t)
 
 Void() = nothing
 
-(::Type{Tuple{}})() = ()
+(::Type{Tuple{}})() = () # Tuple{}()
 
 struct VecElement{T}
     value::T
@@ -294,33 +294,32 @@ Task(f::ANY) = ccall(:jl_new_task, Ref{Task}, (Any, Int), f, 0)
 # note that there is no actual conversion defined here,
 # so the methods and ccall's in Core aren't permitted to use convert
 convert(::Type{Any}, x::ANY) = x
-convert{T}(::Type{T}, x::T) = x
-cconvert{T}(::Type{T}, x) = convert(T, x)
-unsafe_convert{T}(::Type{T}, x::T) = x
+convert(::Type{T}, x::T) where {T} = x
+cconvert(::Type{T}, x) where {T} = convert(T, x)
+unsafe_convert(::Type{T}, x::T) where {T} = x
 
-NTuple{N,T} = Tuple{Vararg{T,N}}
+const NTuple{N,T} = Tuple{Vararg{T,N}}
 
 
 # primitive array constructors
-(::Type{Array{T,N}}){T,N}(d::NTuple{N,Int}) =
-    ccall(:jl_new_array, Array{T,N}, (Any,Any), Array{T,N}, d)
-(::Type{Array{T,1}}){T}(d::NTuple{1,Int}) = Array{T,1}(getfield(d,1))
-(::Type{Array{T,2}}){T}(d::NTuple{2,Int}) = Array{T,2}(getfield(d,1), getfield(d,2))
-(::Type{Array{T,3}}){T}(d::NTuple{3,Int}) = Array{T,3}(getfield(d,1), getfield(d,2), getfield(d,3))
-(::Type{Array{T,N}}){T,N}(d::Vararg{Int, N}) = ccall(:jl_new_array, Array{T,N}, (Any,Any), Array{T,N}, d)
-(::Type{Array{T,1}}){T}(m::Int) =
-    ccall(:jl_alloc_array_1d, Array{T,1}, (Any,Int), Array{T,1}, m)
-(::Type{Array{T,2}}){T}(m::Int, n::Int) =
-    ccall(:jl_alloc_array_2d, Array{T,2}, (Any,Int,Int), Array{T,2}, m, n)
-(::Type{Array{T,3}}){T}(m::Int, n::Int, o::Int) =
-    ccall(:jl_alloc_array_3d, Array{T,3}, (Any,Int,Int,Int), Array{T,3}, m, n, o)
+Array{T,N}(d::NTuple{N,Int}) where {T,N} =
+    ccall(:jl_new_array, Array{T,N}, (Any, Any), Array{T,N}, d)
+Array{T,1}(d::NTuple{1,Int}) where {T} = Array{T,1}(getfield(d,1))
+Array{T,2}(d::NTuple{2,Int}) where {T} = Array{T,2}(getfield(d,1), getfield(d,2))
+Array{T,3}(d::NTuple{3,Int}) where {T} = Array{T,3}(getfield(d,1), getfield(d,2), getfield(d,3))
+Array{T,N}(d::Vararg{Int,N}) where {T,N} = ccall(:jl_new_array, Array{T,N}, (Any, Any), Array{T,N}, d)
+Array{T,1}(m::Int) where {T} = ccall(:jl_alloc_array_1d, Array{T,1}, (Any, Int), Array{T,1}, m)
+Array{T,2}(m::Int, n::Int) where {T} =
+    ccall(:jl_alloc_array_2d, Array{T,2}, (Any, Int, Int), Array{T,2}, m, n)
+Array{T,3}(m::Int, n::Int, o::Int) where {T} =
+    ccall(:jl_alloc_array_3d, Array{T,3}, (Any, Int, Int, Int), Array{T,3}, m, n, o)
 
-(::Type{Array{T}}){T,N}(d::NTuple{N,Int}) = Array{T,N}(d)
-(::Type{Array{T}}){T}(m::Int) = Array{T,1}(m)
-(::Type{Array{T}}){T}(m::Int, n::Int) = Array{T,2}(m, n)
-(::Type{Array{T}}){T}(m::Int, n::Int, o::Int) = Array{T,3}(m, n, o)
+Array{T}(d::NTuple{N,Int}) where {T,N} = Array{T,N}(d)
+Array{T}(m::Int) where {T} = Array{T,1}(m)
+Array{T}(m::Int, n::Int) where {T} = Array{T,2}(m, n)
+Array{T}(m::Int, n::Int, o::Int) where {T} = Array{T,3}(m, n, o)
 
-(::Type{Array{T,1}}){T}() = Array{T,1}(0)
+Array{T,1}() where {T} = Array{T,1}(0)
 
 # primitive Symbol constructors
 function Symbol(s::String)

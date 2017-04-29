@@ -1,8 +1,7 @@
 #!/usr/bin/env julia
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
-const options =
-[
+const options = [
     "--cflags",
     "--ldflags",
     "--ldlibs"
@@ -10,9 +9,14 @@ const options =
 
 threadingOn() = ccall(:jl_threading_enabled, Cint, ()) != 0
 
+function shell_escape(str)
+    str = replace(str, "'", "'\''")
+    return "'$str'"
+end
+
 function imagePath()
     opts = Base.JLOptions()
-    unsafe_string(opts.image_file)
+    return unsafe_string(opts.image_file)
 end
 
 function libDir()
@@ -23,33 +27,20 @@ function libDir()
     end
 end
 
+private_libDir() = abspath(JULIA_HOME, Base.PRIVATE_LIBDIR)
+
 function includeDir()
-    joinpath(match(r"(.*)(bin)",JULIA_HOME).captures[1],"include","julia")
-end
-
-function unixInitDir()
-    filePart = split(imagePath(),"/")[end]
-    return match(Regex("(.*)(/julia/$filePart)"),imagePath()).captures[1]
-end
-
-function windowsInitDir()
-    if imagePath()[end-1:end] == "ji"
-        return match(r"(.*)(\\julia\\sys.ji)",imagePath()).captures[1]
-    else
-        return match(r"(.*)(\\julia\\sys.dll)",imagePath()).captures[1]
-    end
-end
-
-function initDir()
-    if is_unix()
-        return unixInitDir()
-    else
-        return windowsInitDir()
-    end
+    return abspath(JULIA_HOME, Base.INCLUDEDIR, "julia")
 end
 
 function ldflags()
-    replace("""-L$(libDir())""","\\","\\\\")
+    fl = "-L$(shell_escape(libDir()))"
+    if is_windows()
+        fl = fl * " -Wl,--stack,8388608"
+    elseif is_linux()
+        fl = fl * " -Wl,--export-dynamic"
+    end
+    return fl
 end
 
 function ldlibs()
@@ -59,27 +50,30 @@ function ldlibs()
         "julia"
     end
     if is_unix()
-        return replace("""-Wl,-rpath,$(libDir()) -l$libname""","\\","\\\\")
+        return "-Wl,-rpath,$(shell_escape(libDir())) -Wl,-rpath,$(shell_escape(private_libDir())) -l$libname"
     else
         return "-l$libname -lopenlibm"
     end
 end
 
 function cflags()
-    arg1 = replace(initDir(),"\\","\\\\\\\\")
-    arg2 = replace(includeDir(),"\\","\\\\")
-    threading_def = threadingOn() ? "-DJULIA_ENABLE_THREADING=1 " : ""
-    if is_unix()
-        return """$(threading_def)-fPIC -DJULIA_INIT_DIR=\\"$arg1\\" -I$arg2"""
-    else
-        return """$(threading_def)-DJULIA_INIT_DIR=\\"$arg1\\" -I$arg2"""
+    flags = IOBuffer()
+    print(flags, "-std=gnu99")
+    include = shell_escape(includeDir())
+    print(flags, " -I", include)
+    if threadingOn()
+        print(flags, " -DJULIA_ENABLE_THREADING=1")
     end
+    if is_unix()
+        print(flags, " -fPIC")
+    end
+    return String(take!(flags))
 end
 
 function check_args(args)
-    checked = intersect(args,options)
+    checked = intersect(args, options)
     if length(checked) == 0 || length(checked) != length(args)
-        println(STDERR,"Usage: julia-config [",reduce((x,y)->"$x|$y",options),"]")
+        println(STDERR, "Usage: julia-config [", join(options, " | "), "]")
         exit(1)
     end
 end

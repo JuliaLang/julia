@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # constructors
 @test String([0x61,0x62,0x63,0x21]) == "abc!"

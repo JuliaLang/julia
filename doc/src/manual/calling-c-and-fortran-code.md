@@ -95,7 +95,7 @@ uses in Julia functions that set up arguments and then check for errors in whate
 C or Fortran function indicates them, propagating to the Julia caller as exceptions. This is especially
 important since C and Fortran APIs are notoriously inconsistent about how they indicate error
 conditions. For example, the `getenv` C library function is wrapped in the following Julia function,
-which is a simplified version of the actual definition from [env.jl](https://github.com/JuliaLang/julia/blob/master/base/env.jl):
+which is a simplified version of the actual definition from [`env.jl`](https://github.com/JuliaLang/julia/blob/master/base/env.jl):
 
 ```julia
 function getenv(var::AbstractString)
@@ -149,7 +149,7 @@ throw a conversion error.
 It is possible to pass Julia functions to native C functions that accept function pointer arguments.
 For example, to match C prototypes of the form:
 
-```
+```c
 typedef returntype (*functiontype)(argumenttype,...)
 ```
 
@@ -162,7 +162,7 @@ Julia library function. Arguments to [`cfunction()`](@ref) are as follows:
 
 A classic example is the standard C library `qsort` function, declared as:
 
-```
+```c
 void qsort(void *base, size_t nmemb, size_t size,
            int(*compare)(const void *a, const void *b));
 ```
@@ -176,7 +176,7 @@ calling `qsort` and passing arguments, we need to write a comparison function th
 arbitrary type T:
 
 ```jldoctest mycompare
-julia> function mycompare{T}(a::T, b::T)
+julia> function mycompare(a::T, b::T) where T
            return convert(Cint, a < b ? -1 : a > b ? +1 : 0)::Cint
        end
 mycompare (generic function with 1 method)
@@ -409,7 +409,7 @@ checks and is only meant to improve readability of the call.
     C functions that take an argument of the type `char**` can be called by using a `Ptr{Ptr{UInt8}}`
     type within Julia. For example, C functions of the form:
 
-    ```
+    ```c
     int main(int argc, char **argv);
     ```
 
@@ -451,17 +451,17 @@ struct B {
 b_a_2 = B.A[2];
 
 in Julia:
-type B
+struct B
     A::NTuple{3, CInt}
 end
-b_a_2 = B.A[2]
+b_a_2 = B.A[3]  # note the difference in indexing (1-based in Julia, 0-based in C)
 ```
 
 Arrays of unknown size (C99-compliant variable length structs specified by `[]` or `[0]`) are not directly supported.
 Often the best way to deal with these is to deal with the byte offsets directly.
-For example, if a c-library declared a proper string type and returned a pointer to it:
+For example, if a C library declared a proper string type and returned a pointer to it:
 
-```
+```c
 struct String {
     int strlen;
     char data[];
@@ -470,7 +470,7 @@ struct String {
 
 In Julia, we can access the parts independently to make a copy of that string:
 
-```
+```julia
 str = from_c::Ptr{Void}
 len = unsafe_load(Ptr{Cint}(str))
 unsafe_string(str + Core.sizeof(Cint), len)
@@ -489,9 +489,9 @@ However, while the type layout must be known statically to compute the `ccall` A
 the static parameters of the function are considered to be part of this static environment.
 The static parameters of the function may be used as type parameters in the `ccall` signature,
 as long as they don't affect the layout of the type.
-For example, `f{T}(x::T) = ccall(:valid, Ptr{T}, (Ptr{T},), x)`
+For example, `f(x::T) where {T} = ccall(:valid, Ptr{T}, (Ptr{T},), x)`
 is valid, since `Ptr` is always a word-size primitive type.
-But, `g{T}(x::T) = ccall(:notvalid, T, (T,), x)`
+But, `g(x::T) where {T} = ccall(:notvalid, T, (T,), x)`
 is not valid, since the type layout of `T` is not known statically.
 
 ### SIMD Values
@@ -508,7 +508,7 @@ Julia type is a homogeneous tuple of `VecElement` that naturally maps to the SIM
 
 For instance, consider this C routine that uses AVX intrinsics:
 
-```
+```c
 #include <immintrin.h>
 
 __m256 dist( __m256 a, __m256 b ) {
@@ -677,14 +677,14 @@ arguments, as noted above). The following example computes a dot product using a
 
 ```julia
 function compute_dot(DX::Vector{Float64}, DY::Vector{Float64})
-  assert(length(DX) == length(DY))
-  n = length(DX)
-  incx = incy = 1
-  product = ccall((:ddot_, "libLAPACK"),
-                  Float64,
-                  (Ptr{Int32}, Ptr{Float64}, Ptr{Int32}, Ptr{Float64}, Ptr{Int32}),
-                  &n, DX, &incx, DY, &incy)
-  return product
+    @assert length(DX) == length(DY)
+    n = length(DX)
+    incx = incy = 1
+    product = ccall((:ddot_, "libLAPACK"),
+                    Float64,
+                    (Ptr{Int32}, Ptr{Float64}, Ptr{Int32}, Ptr{Float64}, Ptr{Int32}),
+                    &n, DX, &incx, DY, &incy)
+    return product
 end
 ```
 
@@ -702,7 +702,7 @@ converted to type `T`.
 Here is a simple example of a C wrapper that returns a `Ptr` type:
 
 ```julia
-type gsl_permutation
+mutable struct gsl_permutation
 end
 
 # The corresponding C signature is
@@ -965,7 +965,7 @@ wait(cond)
 ```
 
 The callback you pass to C should only execute a [`ccall`](@ref) to `:uv_async_send`, passing
-`cb.handle` as the argument, taking care to avoid any allocations or other interactions with the
+`cond.handle` as the argument, taking care to avoid any allocations or other interactions with the
 Julia runtime.
 
 Note that events may be coalesced, so multiple calls to `uv_async_send` may result in a single wakeup
@@ -973,8 +973,9 @@ notification to the condition.
 
 ## More About Callbacks
 
-For more details on how to pass callbacks to C libraries, see this [blog post](http://julialang.org/blog/2013/05/callback).
+For more details on how to pass callbacks to C libraries, see this [blog post](https://julialang.org/blog/2013/05/callback).
 
 ## C++
 
-For direct C++ interfacing, see the [Cxx](https://github.com/Keno/Cxx.jl) package. For tools to create C++ bindings, see the [CxxWrap](https://github.com/JuliaInterop/CxxWrap.jl) package.
+For direct C++ interfacing, see the [Cxx](https://github.com/Keno/Cxx.jl) package. For tools to create C++
+bindings, see the [CxxWrap](https://github.com/JuliaInterop/CxxWrap.jl) package.

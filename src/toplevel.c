@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 /*
   evaluating top-level expressions, loading source files
@@ -461,8 +461,6 @@ static jl_method_instance_t *jl_new_thunk(jl_code_info_t *src, jl_module_t *modu
 jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast, int expanded)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    //jl_show(ex);
-    //jl_printf(JL_STDOUT, "\n");
     if (!jl_is_expr(e)) {
         if (jl_is_linenode(e)) {
             jl_lineno = jl_linenode_line(e);

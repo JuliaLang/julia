@@ -1,5 +1,5 @@
 #!/bin/sh
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # download mingw-w64 compilers from opensuse build service, usage:
 # ./get_toolchain.sh 64

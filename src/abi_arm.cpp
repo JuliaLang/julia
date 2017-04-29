@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 //===----------------------------------------------------------------------===//
 //
@@ -27,6 +27,8 @@ bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab) override
 {
     return false;
 }
+
+#define jl_is_floattype(v)   jl_subtype(v,(jl_value_t*)jl_floatingpoint_type)
 
 Type *get_llvm_fptype(jl_datatype_t *dt) const
 {

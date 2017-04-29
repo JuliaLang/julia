@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Compute y += a*x using @simd for vectors x and y
 function simd_axpy( a, x, y )

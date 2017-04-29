@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # TODO: make this a general purpose solution
 function Base.cconvert(::Type{Ptr{DiffOptionsStruct}}, pathspecs::AbstractString)

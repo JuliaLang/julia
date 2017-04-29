@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Test string/show representation of Date
 @test string(Dates.Date(1, 1, 1)) == "0001-01-01" # January 1st, 1 AD/CE
@@ -429,3 +429,6 @@ for (ms, str) in zip([0, 1, 20, 300, 450, 678], ["0", "001", "02", "3", "45", "6
     @test Dates.format(dt, "sss") == rpad(str, 3, '0')
     @test Dates.format(dt, "ssss") == rpad(str, 4, '0')
 end
+
+# Issue #21504
+@test isnull(tryparse(Dates.Date, "0-1000"))

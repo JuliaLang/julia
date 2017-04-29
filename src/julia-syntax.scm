@@ -506,9 +506,20 @@
                                                   (not (any (lambda (s)
                                                               (expr-contains-eq (car s) (caddr k)))
                                                             keyword-sparams)))
-                                             `(call (core typeassert)
-                                                    ,rval0
-                                                    ,(caddr k))
+                                             (let ((T (caddr k)))
+                                               `(call (core typeassert)
+                                                      ,rval0
+                                                      ;; work around `ANY` not being a type. if arg type
+                                                      ;; looks like `ANY`, test whether it is `ANY` at run
+                                                      ;; time and if so, substitute `Any`. issue #21510
+                                                      ,(if (or (eq? T 'ANY)
+                                                               (and (globalref? T)
+                                                                    (eq? (caddr T) 'ANY)))
+                                                           `(call (|.| (core Intrinsics) 'select_value)
+                                                                  (call (core ===) ,T (core ANY))
+                                                                  (core Any)
+                                                                  ,T)
+                                                           T)))
                                              rval0)))
                               ;; if kw[ii] == 'k; k = kw[ii+1]::Type; end
                               `(if (comparison ,elt === (quote ,(decl-var k)))
@@ -730,6 +741,11 @@
       `(,(car sig) ,item ,@(cdr sig))
       `(,item ,@sig)))
 
+(define (linenode-string lno)
+  (cond ((length= lno 2) (string " around line " (cadr lno)))
+        ((length= lno 3) (string " around " (caddr lno) ":" (cadr lno)))
+        (else "")))
+
 (define (ctor-signature name params bounds method-params sig)
   (if (null? params)
       (if (null? method-params)
@@ -758,12 +774,20 @@
          (curlyargs  (if curly? (cddr name) '()))
          (name       (if curly? (cadr name) name)))
     (cond ((not (eq? name Tname))
-           `(,keyword ,(with-wheres `(call (curly ,name ,@curlyargs) ,@sig) wheres)
+           `(,keyword ,(with-wheres `(call ,(if curly?
+                                                `(curly ,name ,@curlyargs)
+                                                name)
+                                           ,@sig)
+                                    wheres)
                       ;; pass '() in order to require user-specified parameters with
                       ;; new{...} inside a non-ctor inner definition.
                       ,(ctor-body body '())))
           (wheres
-           `(,keyword (where (call (curly ,name ,@curlyargs) ,@sig) ,@wheres)
+           `(,keyword ,(with-wheres `(call ,(if curly?
+                                                `(curly ,name ,@curlyargs)
+                                                name)
+                                           ,@sig)
+                                    wheres)
                       ,(ctor-body body curlyargs)))
           (else
            (let* ((temp   (ctor-signature name params bounds curlyargs sig))
@@ -774,10 +798,7 @@
                                       body))
                         (lno (if (null? lnos) '() (car lnos))))
                    (syntax-deprecation #f
-                                       (string "inner constructor " name "(...)"
-                                               (cond ((length= lno 2) (string " around line " (cadr lno)))
-                                                     ((length= lno 3) (string " around " (caddr lno) ":" (cadr lno)))
-                                                     (else "")))
+                                       (string "inner constructor " name "(...)" (linenode-string lno))
                                        (deparse `(where (call (curly ,name ,@params) ...) ,@params)))))
              `(,keyword ,sig ,(ctor-body body params)))))))
 
@@ -948,8 +969,13 @@
                       (list* g (if isamp `(& ,ca) ca) C))))))))
 
 (define (expand-function-def e)   ;; handle function or stagedfunction
+  (define (just-arglist? ex)
+    (and (pair? ex)
+         (or (memq (car ex) '(tuple block))
+             (and (eq? (car ex) 'where)
+                  (just-arglist? (cadr ex))))))
   (let ((name (cadr e)))
-    (if (and (pair? name) (memq (car name) '(tuple block)))
+    (if (just-arglist? name)
         (expand-forms (cons '-> (cdr e)))
         (expand-function-def- e))))
 
@@ -1404,14 +1430,17 @@
             (reverse a))))))
 
 ;; lower function call containing keyword arguments
-(define (lower-kw-call f kw pa)
+(define (lower-kw-call fexpr kw pa)
   (let ((container (make-ssavalue)))
     (let loop ((kw kw)
                (initial-kw '()) ;; keyword args before any splats
                (stmts '())
                (has-kw #f))     ;; whether there are definitely >0 kwargs
       (if (null? kw)
-          (if (null? stmts)
+        (let ((f (if (sym-ref? fexpr) fexpr (make-ssavalue))))
+          `(block
+            ,@(if (eq? f fexpr) '() `((= ,f, fexpr)))
+            ,(if (null? stmts)
               `(call (call (core kwfunc) ,f) (call (top vector_any) ,@(reverse initial-kw)) ,f ,@pa)
               `(block
                 (= ,container (call (top vector_any) ,@(reverse initial-kw)))
@@ -1425,8 +1454,8 @@
                          ,@stmts
                          (if (call (top isempty) ,container)
                              (call ,f ,@pa)
-                             (call (call (core kwfunc) ,f) ,container ,f ,@pa)))))))
-          (let ((arg (car kw)))
+                             (call (call (core kwfunc) ,f) ,container ,f ,@pa)))))))))
+        (let ((arg (car kw)))
             (cond ((and (pair? arg) (eq? (car arg) 'parameters))
                    (error "more than one semicolon in argument list"))
                   ((kwarg? arg)
@@ -1829,24 +1858,20 @@
    'const  expand-const-decl
    'local  expand-local-or-global-decl
    'global expand-local-or-global-decl
+   'local-def expand-local-or-global-decl
 
    '=
    (lambda (e)
      (define lhs (cadr e))
      (define (function-lhs? lhs)
        (and (pair? lhs)
-            (or (and (eq? (car lhs) 'comparison) (length= lhs 4))
-                (eq? (car lhs) 'call)
+            (or (eq? (car lhs) 'call)
                 (eq? (car lhs) 'where)
                 (and (eq? (car lhs) '|::|)
                      (pair? (cadr lhs))
                      (eq? (car (cadr lhs)) 'call)))))
      (define (assignment-to-function lhs e)  ;; convert '= expr to 'function expr
-       (if (eq? (car lhs) 'comparison)
-           ;; allow defining functions that use comparison syntax
-           (list* 'function
-                  `(call ,(caddr lhs) ,(cadr lhs) ,(cadddr lhs)) (cddr e))
-           (cons 'function (cdr e))))
+       (cons 'function (cdr e)))
      (cond
       ((function-lhs? lhs)
        (expand-forms (assignment-to-function lhs e)))
@@ -3062,10 +3087,10 @@ f(x) = yt(x)
                                (newlam    (renumber-slots-and-labels (linearize (car exprs)))))
                           `(toplevel-butlast
                             ,@top-stmts
-                            ,@sp-inits
-                            (method ,name ,(cl-convert sig fname lam namemap toplevel interp)
-                                    ,(julia-expand-macros `(quote ,newlam))
-                                    ,(last e))))))
+                            (block ,@sp-inits
+                                   (method ,name ,(cl-convert sig fname lam namemap toplevel interp)
+                                           ,(julia-expand-macros `(quote ,newlam))
+                                           ,(last e)))))))
                  ;; local case - lift to a new type at top level
                  (let* ((exists (get namemap name #f))
                         (type-name  (or exists
@@ -3228,6 +3253,7 @@ f(x) = yt(x)
   (let ((code '())
         (filename 'none)
         (first-line #t)
+        (current-loc #f)
         (rett #f)
         (arg-map #f)          ;; map arguments to new names if they are assigned
         (label-counter 0)     ;; counter for generating label addresses
@@ -3320,7 +3346,8 @@ f(x) = yt(x)
                                (and (pair? e) (or (eq? (car e) 'outerref)
                                                   (eq? (car e) 'globalref))
                                     (eq? (cadr e) '_))))
-                (syntax-deprecation #f "_ as an rvalue" ""))
+                (syntax-deprecation #f (string "_ as an rvalue" (linenode-string current-loc))
+                                    ""))
             (cond (tail  (emit-return e1))
                   (value e1)
                   ((or (eq? e1 'true) (eq? e1 'false)) #f)
@@ -3561,6 +3588,7 @@ f(x) = yt(x)
             ((import importall using export line meta inbounds boundscheck simdloop)
              (let ((have-ret? (and (pair? code) (pair? (car code)) (eq? (caar code) 'return))))
                (cond ((eq? (car e) 'line)
+                      (set! current-loc e)
                       (if first-line
                           (begin (set! first-line #f)
                                  (emit e))

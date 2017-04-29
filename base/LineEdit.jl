@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module LineEdit
 
@@ -725,6 +725,9 @@ function match_input(k::Dict, s, term=terminal(s), cs=Char[], keymap = k)
     # return an empty keymap function
     eof(term) && return keymap_fcn(nothing, "")
     c = read(term, Char)
+    # Ignore any '\0' (eg, CTRL-space in xterm), as this is used as a
+    # placeholder for the wildcard (see normalize_key("*"))
+    c != '\0' || return keymap_fcn(nothing, "")
     push!(cs, c)
     key = haskey(k, c) ? c : '\0'
     # if we don't match on the key, look for a default action then fallback on 'nothing' to ignore
@@ -864,7 +867,7 @@ function keymap_merge(target,source)
     for key in setdiff(keys(source), keys(direct_keys))
         # We first resolve redirects in the source
         value = source[key]
-        visited = Array{Any}(0)
+        visited = Vector{Any}(0)
         while isa(value, Union{Char,AbstractString})
             value = normalize_key(value)
             if value in visited

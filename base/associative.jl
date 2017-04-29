@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # generic operations on associative collections
 
@@ -39,10 +39,10 @@ show(io::IO, iter::Union{KeyIterator,ValueIterator}) = show(io, collect(iter))
 
 length(v::Union{KeyIterator,ValueIterator}) = length(v.dict)
 isempty(v::Union{KeyIterator,ValueIterator}) = isempty(v.dict)
-_tt1{A,B}(::Type{Pair{A,B}}) = A
-_tt2{A,B}(::Type{Pair{A,B}}) = B
-eltype{D}(::Type{KeyIterator{D}}) = _tt1(eltype(D))
-eltype{D}(::Type{ValueIterator{D}}) = _tt2(eltype(D))
+_tt1(::Type{Pair{A,B}}) where {A,B} = A
+_tt2(::Type{Pair{A,B}}) where {A,B} = B
+eltype(::Type{KeyIterator{D}}) where {D} = _tt1(eltype(D))
+eltype(::Type{ValueIterator{D}}) where {D} = _tt2(eltype(D))
 
 start(v::Union{KeyIterator,ValueIterator}) = start(v.dict)
 done(v::Union{KeyIterator,ValueIterator}, state) = done(v.dict, state)
@@ -203,9 +203,9 @@ julia> keytype(Dict(Int32(1) => "foo"))
 Int32
 ```
 """
-keytype{K,V}(::Type{Associative{K,V}}) = K
+keytype(::Type{Associative{K,V}}) where {K,V} = K
 keytype(a::Associative) = keytype(typeof(a))
-keytype{A<:Associative}(::Type{A}) = keytype(supertype(A))
+keytype(::Type{A}) where {A<:Associative} = keytype(supertype(A))
 
 """
     valtype(type)
@@ -217,7 +217,7 @@ julia> valtype(Dict(Int32(1) => "foo"))
 String
 ```
 """
-valtype{K,V}(::Type{Associative{K,V}}) = V
+valtype(::Type{Associative{K,V}}) where {K,V} = V
 valtype{A<:Associative}(::Type{A}) = valtype(supertype(A))
 valtype(a::Associative) = valtype(typeof(a))
 
@@ -296,7 +296,7 @@ function emptymergedict(d::Associative, others::Associative...)
 end
 
 function filter!(f, d::Associative)
-    badkeys = Array{keytype(d)}(0)
+    badkeys = Vector{keytype(d)}(0)
     for (k,v) in d
         # don't delete!(d, k) here, since associative types
         # may not support mutation during iteration
@@ -318,7 +318,7 @@ function filter(f, d::Associative)
     return df
 end
 
-eltype{K,V}(::Type{Associative{K,V}}) = Pair{K,V}
+eltype(::Type{Associative{K,V}}) where {K,V} = Pair{K,V}
 
 function isequal(l::Associative, r::Associative)
     l === r && return true
@@ -441,7 +441,12 @@ function delete!(t::ObjectIdDict, key::ANY)
     t
 end
 
-empty!(t::ObjectIdDict) = (t.ht = Vector{Any}(length(t.ht)); t.ndel = 0; t)
+function empty!(t::ObjectIdDict)
+    resize!(t.ht, 32)
+    ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t), t.ht, 0, sizeof(t.ht))
+    t.ndel = 0
+    return t
+end
 
 _oidd_nextind(a, i) = reinterpret(Int,ccall(:jl_eqtable_nextind, Csize_t, (Any, Csize_t), a, i))
 

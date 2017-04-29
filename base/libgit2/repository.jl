@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
     LibGit2.GitRepo(path::AbstractString)
@@ -111,7 +111,7 @@ Return a `$T` object from `repo` specified by `hash`/`spec`.
 """ $T
 end
 
-function (::Type{T}){T<:GitObject}(repo::GitRepo, spec::AbstractString)
+function (::Type{T})(repo::GitRepo, spec::AbstractString) where T<:GitObject
     obj_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_revparse_single, :libgit2), Cint,
                  (Ptr{Ptr{Void}}, Ptr{Void}, Cstring), obj_ptr_ptr, repo.ptr, spec)
@@ -123,7 +123,7 @@ function (::Type{T}){T<:GitObject}(repo::GitRepo, spec::AbstractString)
     return T(repo, obj_ptr_ptr[])
 end
 
-function (::Type{T}){T<:GitObject}(repo::GitRepo, oid::GitHash)
+function (::Type{T})(repo::GitRepo, oid::GitHash) where T<:GitObject
     oid_ptr  = Ref(oid)
     obj_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
 
@@ -133,7 +133,7 @@ function (::Type{T}){T<:GitObject}(repo::GitRepo, oid::GitHash)
 
     return T(repo, obj_ptr_ptr[])
 end
-function (::Type{T}){T<:GitObject}(repo::GitRepo, oid::GitShortHash)
+function (::Type{T})(repo::GitRepo, oid::GitShortHash) where T<:GitObject
     oid_ptr  = Ref(oid.hash)
     obj_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
 
@@ -217,7 +217,7 @@ then `obj` will be peeled until the type changes.
 - A `GitTag` will be peeled to the object it references.
 - A `GitCommit` will be peeled to a `GitTree`.
 """
-function peel{T<:GitObject}(::Type{T}, obj::GitObject)
+function peel(::Type{T}, obj::GitObject) where T<:GitObject
     new_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
 
     @check ccall((:git_object_peel, :libgit2), Cint,

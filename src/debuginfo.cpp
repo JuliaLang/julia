@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "platform.h"
 
@@ -761,6 +761,7 @@ static int lookup_pointer(DIContext *context, jl_frame_t **frames,
         }
         return 1;
     }
+    jl_mutex_lock_maybe_nogc(&codegen_lock);
 #if JL_LLVM_VERSION >= 30500
     DILineInfoSpecifier infoSpec(DILineInfoSpecifier::FileLineInfoKind::AbsoluteFilePath,
                                  DILineInfoSpecifier::FunctionNameKind::ShortName);
@@ -774,9 +775,11 @@ static int lookup_pointer(DIContext *context, jl_frame_t **frames,
 
     int fromC = (*frames)[0].fromC;
     int n_frames = inlineInfo.getNumberOfFrames();
-    if (n_frames == 0)
+    if (n_frames == 0) {
+        jl_mutex_unlock_maybe_nogc(&codegen_lock);
         // no line number info available in the context, return without the context
         return lookup_pointer(NULL, frames, pointer, demangle, noInline);
+    }
     if (noInline)
         n_frames = 1;
     if (n_frames > 1) {
@@ -834,6 +837,7 @@ static int lookup_pointer(DIContext *context, jl_frame_t **frames,
         else
             jl_copy_str(&frame->file_name, file_name.c_str());
     }
+    jl_mutex_unlock_maybe_nogc(&codegen_lock);
     return n_frames;
 }
 

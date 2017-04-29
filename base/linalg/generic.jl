@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## linalg.jl: Some generic Linear Algebra definitions
 
@@ -350,7 +350,7 @@ end
 # faster computation of norm(x)^2, avoiding overflow for integers
 norm_sqr(x) = norm(x)^2
 norm_sqr(x::Number) = abs2(x)
-norm_sqr{T<:Integer}(x::Union{T,Complex{T},Rational{T}}) = abs2(float(x))
+norm_sqr(x::Union{T,Complex{T},Rational{T}}) where {T<:Integer} = abs2(float(x))
 
 function generic_vecnorm2(x)
     maxabs = vecnormInf(x)
@@ -451,10 +451,10 @@ end
 
 norm(x::AbstractVector, p::Real=2) = vecnorm(x, p)
 
-function norm1{T}(A::AbstractMatrix{T})
+function norm1(A::AbstractMatrix{T}) where T
     m, n = size(A)
     Tnorm = typeof(float(real(zero(T))))
-    Tsum = promote_type(Float64,Tnorm)
+    Tsum = promote_type(Float64, Tnorm)
     nrm::Tsum = 0
     @inbounds begin
         for j = 1:n
@@ -467,16 +467,16 @@ function norm1{T}(A::AbstractMatrix{T})
     end
     return convert(Tnorm, nrm)
 end
-function norm2{T}(A::AbstractMatrix{T})
+function norm2(A::AbstractMatrix{T}) where T
     m,n = size(A)
     if m == 1 || n == 1 return vecnorm2(A) end
     Tnorm = typeof(float(real(zero(T))))
     (m == 0 || n == 0) ? zero(Tnorm) : convert(Tnorm, svdvals(A)[1])
 end
-function normInf{T}(A::AbstractMatrix{T})
+function normInf(A::AbstractMatrix{T}) where T
     m,n = size(A)
     Tnorm = typeof(float(real(zero(T))))
-    Tsum = promote_type(Float64,Tnorm)
+    Tsum = promote_type(Float64, Tnorm)
     nrm::Tsum = 0
     @inbounds begin
         for i = 1:m
@@ -718,7 +718,7 @@ julia> M*N == N*M == eye(2)
 true
 ```
 """
-function inv{T}(A::AbstractMatrix{T})
+function inv(A::AbstractMatrix{T}) where T
     S = typeof(zero(T)/one(T))      # dimensionful
     S0 = typeof(zero(T)/oneunit(T)) # dimensionless
     A_ldiv_B!(factorize(convert(AbstractMatrix{S}, A)), eye(S0, checksquare(A)))
@@ -1154,7 +1154,7 @@ julia> det(M)
 2.0
 ```
 """
-function det{T}(A::AbstractMatrix{T})
+function det(A::AbstractMatrix{T}) where T
     if istriu(A) || istril(A)
         S = typeof((one(T)*zero(T) + zero(T))/one(T))
         return convert(S, det(UpperTriangular(A)))
@@ -1166,7 +1166,7 @@ det(x::Number) = x
 """
     logabsdet(M)
 
-Log of absolute value of determinant of real matrix. Equivalent to
+Log of absolute value of matrix determinant. Equivalent to
 `(log(abs(det(M))), sign(det(M)))`, but may provide increased accuracy and/or speed.
 """
 logabsdet(A::AbstractMatrix) = logabsdet(lufact(A))
@@ -1197,7 +1197,7 @@ function logdet(A::AbstractMatrix)
     return d + log(s)
 end
 
-NumberArray{T<:Number} = AbstractArray{T}
+const NumberArray{T<:Number} = AbstractArray{T}
 
 """
     promote_leaf_eltypes(itr)
@@ -1219,9 +1219,9 @@ julia> promote_leaf_eltypes(a)
 Complex{Float64}
 ```
 """
-promote_leaf_eltypes{T<:Number}(x::Union{AbstractArray{T},Tuple{Vararg{T}}}) = T
-promote_leaf_eltypes{T<:NumberArray}(x::Union{AbstractArray{T},Tuple{Vararg{T}}}) = eltype(T)
-promote_leaf_eltypes{T}(x::T) = T
+promote_leaf_eltypes(x::Union{AbstractArray{T},Tuple{Vararg{T}}}) where {T<:Number} = T
+promote_leaf_eltypes(x::Union{AbstractArray{T},Tuple{Vararg{T}}}) where {T<:NumberArray} = eltype(T)
+promote_leaf_eltypes(x::T) where {T} = T
 promote_leaf_eltypes(x::Union{AbstractArray,Tuple}) = mapreduce(promote_leaf_eltypes, promote_type, Bool, x)
 
 # isapprox: approximate equality of arrays [like isapprox(Number,Number)]

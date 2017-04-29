@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # timing
 
@@ -383,7 +383,7 @@ macro timed(ex)
 end
 
 function fftw_vendor()
-    if Base.libfftw_name == "libmkl_rt"
+    if Base.libfftw_name in ("libmkl_rt", "mkl_rt")
         return :mkl
     else
         return :fftw
@@ -619,7 +619,13 @@ function julia_cmd(julia=joinpath(JULIA_HOME, julia_exename()))
     `$julia -C$cpu_target -J$image_file --compile=$compile --depwarn=$depwarn`
 end
 
-julia_exename() = ccall(:jl_is_debugbuild,Cint,())==0 ? "julia" : "julia-debug"
+function julia_exename()
+    if ccall(:jl_is_debugbuild, Cint, ()) == 0
+        return @static is_windows() ? "julia.exe" : "julia"
+    else
+        return @static is_windows() ? "julia-debug.exe" : "julia-debug"
+    end
+end
 
 """
     securezero!(o)
@@ -640,7 +646,7 @@ if is_windows()
 function getpass(prompt::AbstractString)
     print(prompt)
     flush(STDOUT)
-    p = Array{UInt8}(128) # mimic Unix getpass in ignoring more than 128-char passwords
+    p = Vector{UInt8}(128) # mimic Unix getpass in ignoring more than 128-char passwords
                           # (also avoids any potential memory copies arising from push!)
     try
         plen = 0
@@ -838,10 +844,10 @@ The default value for a type for use with the `@kwdef` macro. Returns:
 """
 function kwdef_val end
 
-kwdef_val{T}(::Type{Ptr{T}}) = Ptr{T}(C_NULL)
+kwdef_val(::Type{Ptr{T}}) where {T} = Ptr{T}(C_NULL)
 kwdef_val(::Type{Cstring}) = Cstring(C_NULL)
 kwdef_val(::Type{Cwstring}) = Cwstring(C_NULL)
 
-kwdef_val{T<:Integer}(::Type{T}) = zero(T)
+kwdef_val(::Type{T}) where {T<:Integer} = zero(T)
 
-kwdef_val{T}(::Type{T}) = T()
+kwdef_val(::Type{T}) where {T} = T()

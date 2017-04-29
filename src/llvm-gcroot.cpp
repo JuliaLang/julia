@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #define DEBUG_TYPE "lower_gcroot"
 #undef DEBUG
@@ -137,7 +137,11 @@ public:
         T_int64(Type::getInt64Ty(F.getContext())),
         V_null(T_pjlvalue ? Constant::getNullValue(T_pjlvalue) : nullptr),
         ptlsStates(ptlsStates),
+#if JL_LLVM_VERSION >= 50000
+        gcframe(ptlsStates ? new AllocaInst(T_pjlvalue, 0, ConstantInt::get(T_int32, 0)) : nullptr),
+#else
         gcframe(ptlsStates ? new AllocaInst(T_pjlvalue, ConstantInt::get(T_int32, 0)) : nullptr),
+#endif
         gcroot_func(M.getFunction("julia.gc_root_decl")),
         gckill_func(M.getFunction("julia.gc_root_kill")),
         jlcall_frame_func(M.getFunction("julia.jlcall_frame_decl")),
@@ -344,7 +348,11 @@ void JuliaGCAllocator::lowerHandlers()
     Instruction *firstInst = &F.getEntryBlock().front();
     while (!handlers.empty()) {
         processing.clear();
+#if JL_LLVM_VERSION >= 50000
+        auto buff = new AllocaInst(T_int8, 0, handler_sz, "", firstInst);
+#else
         auto buff = new AllocaInst(T_int8, handler_sz, "", firstInst);
+#endif
         buff->setAlignment(16);
         // Collect the list of frames to process.
         for (auto &hdlr: handlers) {

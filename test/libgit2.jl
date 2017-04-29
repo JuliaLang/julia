@@ -1,9 +1,10 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
-using TestHelpers
+import TestHelpers: challenge_prompt
 
 const LIBGIT2_MIN_VER = v"0.23.0"
+const LIBGIT2_HELPER_PATH = joinpath(dirname(@__FILE__), "libgit2-helpers.jl")
 
 #########
 # TESTS #
@@ -392,6 +393,8 @@ mktempdir() do dir
                     @test contains(showstr[4], "SHA:")
                     @test showstr[5] == "Message:"
                     @test showstr[6] == commit_msg1
+
+                    @test LibGit2.revcount(repo, string(commit_oid1), string(commit_oid3)) == (-1,0)
                 finally
                     close(cmt)
                 end
@@ -682,6 +685,46 @@ mktempdir() do dir
             # ff merge them
             @test LibGit2.merge!(repo, [upst_ann], true)
             @test LibGit2.is_ancestor_of(string(oldhead), string(LibGit2.head_oid(repo)), repo)
+
+            oldhead = LibGit2.head_oid(repo)
+            LibGit2.branch!(repo, "branch/ff_b")
+            open(joinpath(LibGit2.path(repo),"ff_file3"),"w") do f
+                write(f, "333\n")
+            end
+            LibGit2.add!(repo, "ff_file3")
+            LibGit2.commit(repo, "add ff_file3")
+
+            open(joinpath(LibGit2.path(repo),"ff_file4"),"w") do f
+                write(f, "444\n")
+            end
+            LibGit2.add!(repo, "ff_file4")
+            LibGit2.commit(repo, "add ff_file4")
+            branchhead = LibGit2.head_oid(repo)
+            LibGit2.branch!(repo, "master")
+            # switch back, now try to ff-merge the changes
+            # from branch/a using committish
+            @test LibGit2.merge!(repo, committish=string(branchhead))
+            @test LibGit2.is_ancestor_of(string(oldhead), string(LibGit2.head_oid(repo)), repo)
+
+            oldhead = LibGit2.head_oid(repo)
+            LibGit2.branch!(repo, "branch/ff_c")
+            open(joinpath(LibGit2.path(repo),"ff_file5"),"w") do f
+                write(f, "555\n")
+            end
+            LibGit2.add!(repo, "ff_file5")
+            LibGit2.commit(repo, "add ff_file5")
+
+            open(joinpath(LibGit2.path(repo),"ff_file6"),"w") do f
+                write(f, "666\n")
+            end
+            LibGit2.add!(repo, "ff_file6")
+            LibGit2.commit(repo, "add ff_file6")
+            branchhead = LibGit2.head_oid(repo)
+            LibGit2.branch!(repo, "master")
+            # switch back, now try to ff-merge the changes
+            # from branch/ff_c using branch name
+            @test LibGit2.merge!(repo, branch="refs/heads/branch/ff_c")
+            @test LibGit2.is_ancestor_of(string(oldhead), string(LibGit2.head_oid(repo)), repo)
         finally
             close(repo)
         end
@@ -707,6 +750,15 @@ mktempdir() do dir
             # from branch/merge_a
             LibGit2.branch!(repo, "master")
 
+            # test for showing a Reference to a non-HEAD branch
+            brref = LibGit2.GitReference(repo, "refs/heads/branch/merge_a")
+            @test LibGit2.name(brref) == "refs/heads/branch/merge_a"
+            @test !LibGit2.ishead(brref)
+            show_strs = split(sprint(show, brref), "\n")
+            @test show_strs[1] == "GitReference:"
+            @test show_strs[2] == "Branch with name refs/heads/branch/merge_a"
+            @test show_strs[3] == "Branch is not HEAD."
+
             open(joinpath(LibGit2.path(repo), "file2"), "w") do f
                 write(f, "222\n")
             end
@@ -717,12 +769,50 @@ mktempdir() do dir
             head_ann = LibGit2.GitAnnotated(repo, "master")
 
             # (fail to) merge them because we can't fastforward
-            @test !LibGit2.merge!(repo, [upst_ann], true)
+            @test_warn "WARNING: Cannot perform fast-forward merge." !LibGit2.merge!(repo, [upst_ann], true)
             # merge them now that we allow non-ff
-            @test LibGit2.merge!(repo, [upst_ann], false)
+            @test_warn "INFO: Review and commit merged changes." LibGit2.merge!(repo, [upst_ann], false)
             @test LibGit2.is_ancestor_of(string(oldhead), string(LibGit2.head_oid(repo)), repo)
+
+            # go back to merge_a and rename a file
+            LibGit2.branch!(repo, "branch/merge_b")
+            mv(joinpath(LibGit2.path(repo),"file1"),joinpath(LibGit2.path(repo),"mvfile1"))
+            LibGit2.add!(repo, "mvfile1")
+            LibGit2.commit(repo, "move file1")
+            LibGit2.branch!(repo, "master")
+            upst_ann = LibGit2.GitAnnotated(repo, "branch/merge_b")
+            rename_flag = 0
+            rename_flag = LibGit2.toggle(rename_flag, 0) # turns on the find renames opt
+            mos = LibGit2.MergeOptions(flags=rename_flag)
+            @test_warn "INFO: Review and commit merged changes." LibGit2.merge!(repo, [upst_ann], merge_opts=mos)
         finally
             close(repo)
+        end
+    end
+
+    @testset "push" begin
+        up_path = joinpath(dir, "Example.PushUp")
+        up_repo = LibGit2.clone(cache_repo, up_path)
+        our_path = joinpath(dir, "Example.Push")
+        our_repo = LibGit2.clone(cache_repo, our_path)
+        # need to set this for merges to succeed
+        our_cfg = LibGit2.GitConfig(our_repo)
+        LibGit2.set!(our_cfg, "user.name", "AAAA")
+        LibGit2.set!(our_cfg, "user.email", "BBBB@BBBB.COM")
+        up_cfg = LibGit2.GitConfig(up_repo)
+        LibGit2.set!(up_cfg, "user.name", "AAAA")
+        LibGit2.set!(up_cfg, "user.email", "BBBB@BBBB.COM")
+        try
+            open(joinpath(LibGit2.path(our_repo),"file1"),"w") do f
+                write(f, "111\n")
+            end
+            LibGit2.add!(our_repo, "file1")
+            LibGit2.commit(our_repo, "add file1")
+            # we cannot yet locally push to non-bare repos
+            @test_throws LibGit2.GitError LibGit2.push(our_repo, remoteurl=up_path)
+        finally
+            close(our_repo)
+            close(up_repo)
         end
     end
 
@@ -742,6 +832,10 @@ mktempdir() do dir
             @test isfile(joinpath(test_repo, test_file))
             @test new_head == head_oid
 
+            # GitAnnotated for a fetchhead
+            fh_ann = LibGit2.GitAnnotated(repo, LibGit2.Consts.FETCH_HEAD)
+            @test LibGit2.GitHash(fh_ann) == head_oid
+
             # Detach HEAD - no merge
             LibGit2.checkout!(repo, string(commit_oid3))
             @test_throws LibGit2.Error.GitError LibGit2.merge!(repo, fastforward=true)
@@ -755,6 +849,10 @@ mktempdir() do dir
             LibGit2.set!(cfg, "user.name", "AAAA")
             LibGit2.set!(cfg, "user.email", "BBBB@BBBB.COM")
 
+            # If upstream argument is empty, libgit2 will look for tracking
+            # information. If the current branch isn't tracking any upstream
+            # the rebase should fail.
+            @test_throws LibGit2.GitError LibGit2.rebase!(repo)
             # Try rebasing on master instead
             newhead = LibGit2.rebase!(repo, master_branch)
             @test newhead == head_oid
@@ -830,6 +928,9 @@ mktempdir() do dir
                 end
                 for i in eachindex(oids)
                     @test cache_oids[i] == test_oids[i]
+                end
+                LibGit2.with(LibGit2.GitRevWalker(repo)) do walker
+                    @test count((oid,repo)->(oid == commit_oid1), walker, oid=commit_oid1, by=LibGit2.Consts.SORT_TIME) == 1
                 end
             finally
                 close(repo)
@@ -997,6 +1098,9 @@ mktempdir() do dir
             @test rbo_str == "RebaseOperation($(string(rbo.id)))\nOperation type: REBASE_OPERATION_PICK\n"
             rb_str = sprint(show, rb)
             @test rb_str == "GitRebase:\nNumber: 2\nCurrently performing operation: 1\n"
+            rbo = rb[2]
+            rbo_str = sprint(show, rbo)
+            @test rbo_str == "RebaseOperation($(string(rbo.id)))\nOperation type: REBASE_OPERATION_PICK\n"
 
             # test rebase abort
             LibGit2.abort(rb)
@@ -1023,7 +1127,7 @@ mktempdir() do dir
             LibGit2.commit(repo, "add merge_file1")
             LibGit2.branch!(repo, "master")
             a_head_ann = LibGit2.GitAnnotated(repo, "branch/merge_a")
-            @test LibGit2.merge!(repo, [a_head_ann]) #merge returns true if successful
+            @test_warn "INFO: Review and commit merged changes." LibGit2.merge!(repo, [a_head_ann]) #merge returns true if successful
         finally
             close(repo)
         end
@@ -1099,6 +1203,167 @@ mktempdir() do dir
         @test LibGit2.checkused!(creds)
         @test creds.user == creds_user
         @test creds.pass == creds_pass
+    end
+
+    # The following tests require that we can fake a TTY so that we can provide passwords
+    # which use the `getpass` function. At the moment we can only fake this on UNIX based
+    # systems.
+    if is_unix()
+        @testset "SSH credential prompt" begin
+            url = "git@github.com/test/package.jl"
+
+            key_dir = joinpath(dirname(@__FILE__), "libgit2")
+            valid_key = joinpath(key_dir, "valid")
+            invalid_key = joinpath(key_dir, "invalid")
+            valid_p_key = joinpath(key_dir, "valid-passphrase")
+            passphrase = "secret"
+
+            ssh_cmd = """
+            include("$LIBGIT2_HELPER_PATH")
+            valid_cred = LibGit2.SSHCredentials("git", "", "$valid_key", "$valid_key.pub")
+            err, auth_attempts = credential_loop(valid_cred, "$url", "git")
+            (err < 0 ? LibGit2.GitError(err) : err, auth_attempts)
+            """
+
+            ssh_p_cmd = """
+            include("$LIBGIT2_HELPER_PATH")
+            valid_cred = LibGit2.SSHCredentials("git", "$passphrase", "$valid_p_key", "$valid_p_key.pub")
+            err, auth_attempts = credential_loop(valid_cred, "$url", "git")
+            (err < 0 ? LibGit2.GitError(err) : err, auth_attempts)
+            """
+
+            # Note: We cannot use the default ~/.ssh/id_rsa for tests since we cannot be
+            # sure a users will actually have these files. Instead we will use the ENV
+            # variables to set the default values.
+
+            # Default credentials are valid
+            withenv("SSH_KEY_PATH" => valid_key) do
+                err, auth_attempts = challenge_prompt(ssh_cmd, [])
+                @test err == 0
+                @test auth_attempts == 1
+            end
+
+            # Default credentials are valid but requires a passphrase
+            withenv("SSH_KEY_PATH" => valid_p_key) do
+                challenges = [
+                    "Passphrase for $valid_p_key:" => "$passphrase\n",
+                ]
+                err, auth_attempts = challenge_prompt(ssh_p_cmd, challenges)
+                @test err == 0
+                @test auth_attempts == 1
+
+                # User mistypes passphrase.
+                # Note: In reality LibGit2 will raise an error upon using the invalid SSH
+                # credentials. Since we don't control the internals of LibGit2 though they
+                # could also just re-call the credential callback like they do for HTTP.
+                challenges = [
+                    "Passphrase for $valid_p_key:" => "foo\n",
+                    # "Private key location for 'git@github.com' [$valid_p_key]:" => "\n",
+                    "Passphrase for $valid_p_key:" => "$passphrase\n",
+                ]
+                err, auth_attempts = challenge_prompt(ssh_p_cmd, challenges)
+                @test err == 0
+                @test auth_attempts == 5
+            end
+
+            withenv("SSH_KEY_PATH" => valid_p_key, "SSH_KEY_PASS" => passphrase) do
+                err, auth_attempts = challenge_prompt(ssh_p_cmd, [])
+                @test err == 0
+                @test auth_attempts == 1
+            end
+
+            # TODO: Tests are currently broken. Credential callback prompts for:
+            # "Passphrase for :"
+            #=
+            # Explicitly setting these env variables to be empty means the user will be
+            # given a prompt with no defaults set.
+            withenv("SSH_KEY_PATH" => "", "SSH_PUB_KEY_PATH" => "") do
+                # User provides valid credentials
+                challenges = [
+                    "Private key location for 'git@github.com':" => "$valid_key\n",
+                ]
+                err, auth_attempts = challenge_prompt(ssh_cmd, challenges)
+                @test err == 0
+                @test auth_attempts == 2
+
+                # User provides valid credentials that requires a passphrase
+                challenges = [
+                    "Private key location for 'git@github.com':" => "$valid_p_key\n",
+                    "Passphrase for $valid_p_key:" => "$passphrase\n",
+                ]
+                err, auth_attempts = challenge_prompt(ssh_p_cmd, challenges)
+                @test err == 0
+                @test auth_attempts == 2
+            end
+            =#
+
+            # TODO: Tests are currently broken. Credential callback currently infinite loops
+            # and never prompts user to change private keys.
+            #=
+            # Explicitly setting these env variables to an existing but invalid key pair
+            # means the user will be given a prompt with that defaults to the given values.
+            withenv("SSH_KEY_PATH" => invalid_key, "SSH_PUB_KEY_PATH" => invalid_key * ".pub") do
+                challenges = [
+                    "Private key location for 'git@github.com' [$invalid_key]:" => "$valid_key\n",
+                ]
+                err, auth_attempts = challenge_prompt(ssh_cmd, challenges)
+                @test err == 0
+                @test auth_attempts == 2
+            end
+            =#
+
+            # TODO: Tests are currently broken. Credential callback currently infinite loops
+            # and never prompts user to change private keys.
+            #=
+            withenv("SSH_KEY_PATH" => valid_key, "SSH_PUB_KEY_PATH" => valid_key * ".public") do
+                @test !isfile(ENV["SSH_PUB_KEY_PATH"])
+
+                # User explicitly sets the SSH_PUB_KEY_PATH incorrectly.
+                challenges = [
+                    "Private key location for 'git@github.com' [$valid_key]:" => "\n"
+                    "Public key location for 'git@github.com':" => "$valid_key.pub\n"
+                ]
+                err, auth_attempts = challenge_prompt(ssh_cmd, challenges)
+                @test err == 0
+                @test auth_attempts == 2
+            end
+            =#
+        end
+
+        @testset "HTTPS credential prompt" begin
+            url = "https://github.com/test/package.jl"
+
+            valid_username = "julia"
+            valid_password = randstring(16)
+
+            https_cmd = """
+            include("$LIBGIT2_HELPER_PATH")
+            valid_cred = LibGit2.UserPasswordCredentials("$valid_username", "$valid_password")
+            err, auth_attempts = credential_loop(valid_cred, "$url")
+            (err < 0 ? LibGit2.GitError(err) : err, auth_attempts)
+            """
+
+            # User provides a valid username and password
+            challenges = [
+                "Username for 'https://github.com':" => "$valid_username\n",
+                "Password for 'https://$valid_username@github.com':" => "$valid_password\n",
+            ]
+            err, auth_attempts = challenge_prompt(https_cmd, challenges)
+            @test err == 0
+            @test auth_attempts == 1
+
+            # User repeatedly chooses invalid username/password until the prompt limit is
+            # reached
+            challenges = [
+                "Username for 'https://github.com':" => "foo\n",
+                "Password for 'https://foo@github.com':" => "bar\n",
+                "Username for 'https://github.com' [foo]:" => "$valid_username\n",
+                "Password for 'https://$valid_username@github.com':" => "$valid_password\n",
+            ]
+            err, auth_attempts = challenge_prompt(https_cmd, challenges)
+            @test err == 0
+            @test auth_attempts == 5
+        end
     end
 
     #= temporarily disabled until working on the buildbots, ref https://github.com/JuliaLang/julia/pull/17651#issuecomment-238211150

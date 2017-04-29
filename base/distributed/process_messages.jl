@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # data stored by the owner of a remote reference
 def_rv_channel() = Channel(1)
@@ -158,7 +158,7 @@ function message_handler_loop(r_stream::IO, w_stream::IO, incoming::Bool)
             # println("header: ", header)
 
             try
-                msg = deserialize_msg(serializer)
+                msg = invokelatest(deserialize_msg, serializer)
             catch e
                 # Deserialization error; discard bytes in stream until boundary found
                 boundary_idx = 1

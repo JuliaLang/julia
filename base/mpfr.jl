@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module MPFR
 
@@ -168,10 +168,10 @@ function unsafe_cast(::Type{UInt64}, x::BigFloat, ri::Cint)
           (Ptr{BigFloat}, Cint), &x, ri)
 end
 
-function unsafe_cast{T<:Signed}(::Type{T}, x::BigFloat, ri::Cint)
+function unsafe_cast(::Type{T}, x::BigFloat, ri::Cint) where T<:Signed
     unsafe_cast(Int64, x, ri) % T
 end
-function unsafe_cast{T<:Unsigned}(::Type{T}, x::BigFloat, ri::Cint)
+function unsafe_cast(::Type{T}, x::BigFloat, ri::Cint) where T<:Unsigned
     unsafe_cast(UInt64, x, ri) % T
 end
 
@@ -184,24 +184,24 @@ function unsafe_cast(::Type{BigInt}, x::BigFloat, ri::Cint)
 end
 unsafe_cast(::Type{Int128}, x::BigFloat, ri::Cint) = Int128(unsafe_cast(BigInt,x,ri))
 unsafe_cast(::Type{UInt128}, x::BigFloat, ri::Cint) = UInt128(unsafe_cast(BigInt,x,ri))
-unsafe_cast{T<:Integer}(::Type{T}, x::BigFloat, r::RoundingMode) = unsafe_cast(T,x,to_mpfr(r))
+unsafe_cast(::Type{T}, x::BigFloat, r::RoundingMode) where {T<:Integer} = unsafe_cast(T,x,to_mpfr(r))
 
-unsafe_trunc{T<:Integer}(::Type{T}, x::BigFloat) = unsafe_cast(T,x,RoundToZero)
+unsafe_trunc(::Type{T}, x::BigFloat) where {T<:Integer} = unsafe_cast(T,x,RoundToZero)
 
 function trunc{T<:Union{Signed,Unsigned}}(::Type{T}, x::BigFloat)
     (typemin(T) <= x <= typemax(T)) || throw(InexactError())
     unsafe_cast(T,x,RoundToZero)
 end
-function floor{T<:Union{Signed,Unsigned}}(::Type{T}, x::BigFloat)
+function floor(::Type{T}, x::BigFloat) where T<:Union{Signed,Unsigned}
     (typemin(T) <= x <= typemax(T)) || throw(InexactError())
     unsafe_cast(T,x,RoundDown)
 end
-function ceil{T<:Union{Signed,Unsigned}}(::Type{T}, x::BigFloat)
+function ceil(::Type{T}, x::BigFloat) where T<:Union{Signed,Unsigned}
     (typemin(T) <= x <= typemax(T)) || throw(InexactError())
     unsafe_cast(T,x,RoundUp)
 end
 
-function round{T<:Union{Signed,Unsigned}}(::Type{T}, x::BigFloat)
+function round(::Type{T}, x::BigFloat) where T<:Union{Signed,Unsigned}
     (typemin(T) <= x <= typemax(T)) || throw(InexactError())
     unsafe_cast(T,x,ROUNDING_MODE[])
 end
@@ -223,34 +223,34 @@ function convert(::Type{BigInt},x::BigFloat)
     trunc(BigInt,x)
 end
 
-function convert(::Type{Integer},x::BigFloat)
+function convert(::Type{Integer}, x::BigFloat)
     isinteger(x) || throw(InexactError())
     trunc(Integer,x)
 end
-function convert{T<:Integer}(::Type{T},x::BigFloat)
+function convert(::Type{T},x::BigFloat) where T<:Integer
     isinteger(x) || throw(InexactError())
     trunc(T,x)
 end
 
 ## BigFloat -> AbstractFloat
 convert(::Type{Float64}, x::BigFloat) =
-    ccall((:mpfr_get_d,:libmpfr), Float64, (Ptr{BigFloat},Int32), &x, ROUNDING_MODE[])
+    ccall((:mpfr_get_d,:libmpfr), Float64, (Ptr{BigFloat}, Int32), &x, ROUNDING_MODE[])
 convert(::Type{Float32}, x::BigFloat) =
-    ccall((:mpfr_get_flt,:libmpfr), Float32, (Ptr{BigFloat},Int32), &x, ROUNDING_MODE[])
+    ccall((:mpfr_get_flt,:libmpfr), Float32, (Ptr{BigFloat}, Int32), &x, ROUNDING_MODE[])
 # TODO: avoid double rounding
 convert(::Type{Float16}, x::BigFloat) = convert(Float16, convert(Float32, x))
 
-(::Type{Float64})(x::BigFloat, r::RoundingMode) =
-    ccall((:mpfr_get_d,:libmpfr), Float64, (Ptr{BigFloat},Int32), &x, to_mpfr(r))
-(::Type{Float32})(x::BigFloat, r::RoundingMode) =
-    ccall((:mpfr_get_flt,:libmpfr), Float32, (Ptr{BigFloat},Int32), &x, to_mpfr(r))
+Float64(x::BigFloat, r::RoundingMode) =
+    ccall((:mpfr_get_d,:libmpfr), Float64, (Ptr{BigFloat}, Int32), &x, to_mpfr(r))
+Float32(x::BigFloat, r::RoundingMode) =
+    ccall((:mpfr_get_flt,:libmpfr), Float32, (Ptr{BigFloat}, Int32), &x, to_mpfr(r))
 # TODO: avoid double rounding
-(::Type{Float16})(x::BigFloat, r::RoundingMode) =
+Float16(x::BigFloat, r::RoundingMode) =
     convert(Float16, Float32(x, r))
 
 promote_rule(::Type{BigFloat}, ::Type{<:Real}) = BigFloat
-promote_rule(::Type{BigInt},::Type{<:AbstractFloat}) = BigFloat
-promote_rule(::Type{BigFloat},::Type{<:AbstractFloat}) = BigFloat
+promote_rule(::Type{BigInt}, ::Type{<:AbstractFloat}) = BigFloat
+promote_rule(::Type{BigFloat}, ::Type{<:AbstractFloat}) = BigFloat
 
 function convert(::Type{Rational{BigInt}}, x::AbstractFloat)
     if isnan(x); return zero(BigInt)//zero(BigInt); end
@@ -639,14 +639,14 @@ for f in (:sin,:cos,:tan,:sec,:csc,
 end
 
 # log of absolute value of gamma function
-const lgamma_signp = Array{Cint}(1)
+const lgamma_signp = Ref{Cint}()
 function lgamma(x::BigFloat)
     z = BigFloat()
     ccall((:mpfr_lgamma,:libmpfr), Cint, (Ptr{BigFloat}, Ptr{Cint}, Ptr{BigFloat}, Int32), &z, lgamma_signp, &x, ROUNDING_MODE[])
     return z
 end
 
-lgamma_r(x::BigFloat) = (lgamma(x), lgamma_signp[1])
+lgamma_r(x::BigFloat) = (lgamma(x), lgamma_signp[])
 
 function atan2(y::BigFloat, x::BigFloat)
     z = BigFloat()
@@ -860,7 +860,7 @@ It is logically equivalent to:
 
 Often used as `setprecision(T, precision) do ... end`
 """
-function setprecision{T}(f::Function, ::Type{T}, prec::Integer)
+function setprecision(f::Function, ::Type{T}, prec::Integer) where T
     old_prec = precision(T)
     setprecision(T, prec)
     try

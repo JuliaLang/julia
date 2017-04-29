@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # editing files
 
@@ -49,6 +49,8 @@ function edit(path::AbstractString, line::Integer=0)
         cmd = line != 0 ? `$command $path -l $line` : `$command $path`
     elseif startswith(name, "subl") || startswith(name, "atom")
         cmd = line != 0 ? `$command $path:$line` : `$command $path`
+    elseif name == "code" || (is_windows() && uppercase(name) == "CODE.EXE")
+        cmd = line != 0 ? `$command -g $path:$line` : `$command -g $path`
     elseif startswith(name, "notepad++")
         cmd = line != 0 ? `$command $path -n$line` : `$command $path`
     elseif is_apple() && name == "open"
@@ -271,7 +273,7 @@ function versioninfo(io::IO=STDOUT, verbose::Bool=false)
         if is_windows()
             try lsb = strip(readstring(`$(ENV["COMSPEC"]) /c ver`)) end
         end
-        if lsb != ""
+        if !isempty(lsb)
             println(io,     "           ", lsb)
         end
         if is_unix()

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ##########################
 # Cholesky Factorization #
@@ -144,7 +144,7 @@ function chol(A::Hermitian)
     end
     chol!(Hermitian(AA, :U))
 end
-function chol{T<:Real}(A::Symmetric{T,<:AbstractMatrix})
+function chol(A::Symmetric{T,<:AbstractMatrix}) where T<:Real
     TT = promote_type(typeof(chol(one(T))), Float32)
     AA = similar(A, TT, size(A))
     if A.uplo == 'U'
@@ -260,7 +260,7 @@ end
 ## With pivoting
 ### BLAS/LAPACK element types
 function cholfact!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix},
-        ::Type{Val{true}}; tol = 0.0)
+                   ::Type{Val{true}}; tol = 0.0)
     AA, piv, rank, info = LAPACK.pstrf!(A.uplo, A.data, tol)
     return CholeskyPivoted{eltype(AA),typeof(AA)}(AA, A.uplo, piv, rank, tol, info)
 end
@@ -386,17 +386,17 @@ function cholfact(x::Number, uplo::Symbol=:U)
 end
 
 
-function convert{T}(::Type{Cholesky{T}}, C::Cholesky)
+function convert(::Type{Cholesky{T}}, C::Cholesky) where T
     Cnew = convert(AbstractMatrix{T}, C.factors)
     Cholesky{T, typeof(Cnew)}(Cnew, C.uplo)
 end
-convert{T}(::Type{Factorization{T}}, C::Cholesky{T}) = C
-convert{T}(::Type{Factorization{T}}, C::Cholesky) = convert(Cholesky{T}, C)
-convert{T}(::Type{CholeskyPivoted{T}},C::CholeskyPivoted{T}) = C
-convert{T}(::Type{CholeskyPivoted{T}},C::CholeskyPivoted) =
+convert(::Type{Factorization{T}}, C::Cholesky{T}) where {T} = C
+convert(::Type{Factorization{T}}, C::Cholesky) where {T} = convert(Cholesky{T}, C)
+convert(::Type{CholeskyPivoted{T}},C::CholeskyPivoted{T}) where {T} = C
+convert(::Type{CholeskyPivoted{T}},C::CholeskyPivoted) where {T} =
     CholeskyPivoted(AbstractMatrix{T}(C.factors),C.uplo,C.piv,C.rank,C.tol,C.info)
-convert{T}(::Type{Factorization{T}}, C::CholeskyPivoted{T}) = C
-convert{T}(::Type{Factorization{T}}, C::CholeskyPivoted) = convert(CholeskyPivoted{T}, C)
+convert(::Type{Factorization{T}}, C::CholeskyPivoted{T}) where {T} = C
+convert(::Type{Factorization{T}}, C::CholeskyPivoted) where {T} = convert(CholeskyPivoted{T}, C)
 
 convert(::Type{AbstractMatrix}, C::Cholesky) = C.uplo == 'U' ? C[:U]'C[:U] : C[:L]*C[:L]'
 convert(::Type{AbstractArray}, C::Cholesky) = convert(AbstractMatrix, C)
@@ -425,7 +425,7 @@ function getindex(C::Cholesky, d::Symbol)
     d == :UL && return Symbol(C.uplo) == :U ? UpperTriangular(C.factors) : LowerTriangular(C.factors)
     throw(KeyError(d))
 end
-function getindex{T<:BlasFloat}(C::CholeskyPivoted{T}, d::Symbol)
+function getindex(C::CholeskyPivoted{T}, d::Symbol) where T<:BlasFloat
     d == :U && return UpperTriangular(Symbol(C.uplo) == d ? C.factors : C.factors')
     d == :L && return LowerTriangular(Symbol(C.uplo) == d ? C.factors : C.factors')
     d == :p && return C.piv
@@ -443,7 +443,7 @@ end
 show(io::IO, C::Cholesky{<:Any,<:AbstractMatrix}) =
     (println(io, "$(typeof(C)) with factor:");show(io,C[:UL]))
 
-A_ldiv_B!{T<:BlasFloat}(C::Cholesky{T,<:AbstractMatrix}, B::StridedVecOrMat{T}) =
+A_ldiv_B!(C::Cholesky{T,<:AbstractMatrix}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
     LAPACK.potrs!(C.uplo, C.factors, B)
 
 function A_ldiv_B!(C::Cholesky{<:Any,<:AbstractMatrix}, B::StridedVecOrMat)
@@ -454,11 +454,11 @@ function A_ldiv_B!(C::Cholesky{<:Any,<:AbstractMatrix}, B::StridedVecOrMat)
     end
 end
 
-function A_ldiv_B!{T<:BlasFloat}(C::CholeskyPivoted{T}, B::StridedVector{T})
+function A_ldiv_B!(C::CholeskyPivoted{T}, B::StridedVector{T}) where T<:BlasFloat
     chkfullrank(C)
     ipermute!(LAPACK.potrs!(C.uplo, C.factors, permute!(B, C.piv)), C.piv)
 end
-function A_ldiv_B!{T<:BlasFloat}(C::CholeskyPivoted{T}, B::StridedMatrix{T})
+function A_ldiv_B!(C::CholeskyPivoted{T}, B::StridedMatrix{T}) where T<:BlasFloat
     chkfullrank(C)
     n = size(C, 1)
     for i=1:size(B, 2)

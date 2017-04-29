@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.Test
 import Base.LinAlg: BlasFloat, BlasComplex, SingularException
@@ -137,6 +137,17 @@ srand(1)
         #division of two Diagonals
         @test D/D2 ≈ Diagonal(D.diag./D2.diag)
         @test D\D2 ≈ Diagonal(D2.diag./D.diag)
+
+        # Performance specialisations for A*_mul_B!
+        vv = similar(v)
+        @test (r = full(D) * v   ; A_mul_B!(vv, D, v)  ≈ r ≈ vv)
+        @test (r = full(D)' * v  ; Ac_mul_B!(vv, D, v) ≈ r ≈ vv)
+        @test (r = full(D).' * v ; At_mul_B!(vv, D, v) ≈ r ≈ vv)
+
+        UU = similar(U)
+        @test (r = full(D) * U   ; A_mul_B!(UU, D, U) ≈ r ≈ UU)
+        @test (r = full(D)' * U  ; Ac_mul_B!(UU, D, U) ≈ r ≈ UU)
+        @test (r = full(D).' * U ; At_mul_B!(UU, D, U) ≈ r ≈ UU)
     end
     @testset "triu/tril" begin
         @test istriu(D)
@@ -177,6 +188,9 @@ srand(1)
             @test Array(conj(D)) ≈ conj(DM)
             @test ctranspose(D) == conj(D)
         end
+        # Translates to Ac/t_mul_B, which is specialized after issue 21286
+        @test(D' * v == conj(D) * v)
+        @test(D.' * v == D * v)
     end
 
     #logdet
@@ -315,6 +329,10 @@ end
     @test Dherm.' == Diagonal([[1 1-im; 1+im 1], [1 1-im; 1+im 1]])
     @test Dsym' == Diagonal([[1 1-im; 1-im 1], [1 1-im; 1-im 1]])
     @test Dsym.' == Dsym
+
+    v = [[1, 2], [3, 4]]
+    @test Dherm' * v == Dherm * v
+    @test D.' * v == [[7, 10], [15, 22]]
 
     @test issymmetric(D) == false
     @test issymmetric(Dherm) == false

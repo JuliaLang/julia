@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # simple keyword args case
 kwf1(ones; tens=0, hundreds=0) = ones + 10*tens + 100*hundreds
@@ -270,3 +270,18 @@ function g21147(f::Tuple{A}, k = 2) where {B,A<:Tuple{B}}
 end
 @test g21147(((1,),)) === Int
 @test g21147(((1,),), 2) === Int
+
+# issue #21510
+f21510(; a::ANY = 2) = a
+@test f21510(a=:b) == :b
+@test f21510() == 2
+
+# issue #21518
+let a = 0
+    f21518(;kw=nothing) = kw
+    g21518() = (a+=1; f21518)
+    g21518()(kw=1)
+    @test a == 1
+    g21518()(; :kw=>1)
+    @test a == 2
+end

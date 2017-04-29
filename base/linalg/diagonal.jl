@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## Diagonal matrices
 
@@ -48,14 +48,14 @@ julia> Diagonal(V)
 """
 Diagonal(V::AbstractVector) = Diagonal(collect(V))
 
-convert{T}(::Type{Diagonal{T}}, D::Diagonal{T}) = D
-convert{T}(::Type{Diagonal{T}}, D::Diagonal) = Diagonal{T}(convert(Vector{T}, D.diag))
-convert{T}(::Type{AbstractMatrix{T}}, D::Diagonal) = convert(Diagonal{T}, D)
+convert(::Type{Diagonal{T}}, D::Diagonal{T}) where {T} = D
+convert(::Type{Diagonal{T}}, D::Diagonal) where {T} = Diagonal{T}(convert(Vector{T}, D.diag))
+convert(::Type{AbstractMatrix{T}}, D::Diagonal) where {T} = convert(Diagonal{T}, D)
 convert(::Type{Matrix}, D::Diagonal) = diagm(D.diag)
 convert(::Type{Array}, D::Diagonal) = convert(Matrix, D)
 full(D::Diagonal) = convert(Array, D)
 
-function similar{T}(D::Diagonal, ::Type{T})
+function similar(D::Diagonal, ::Type{T}) where T
     return Diagonal{T}(similar(D.diag, T))
 end
 
@@ -79,8 +79,8 @@ end
     end
     r
 end
-diagzero{T}(::Diagonal{T},i,j) = zero(T)
-diagzero{T}(D::Diagonal{Matrix{T}},i,j) = zeros(T, size(D.diag[i], 1), size(D.diag[j], 2))
+diagzero(::Diagonal{T},i,j) where {T} = zero(T)
+diagzero(D::Diagonal{Matrix{T}},i,j) where {T} = zeros(T, size(D.diag[i], 1), size(D.diag[j], 2))
 
 function setindex!(D::Diagonal, v, i::Int, j::Int)
     @boundscheck checkbounds(D, i, j)
@@ -135,16 +135,16 @@ function tril!(D::Diagonal,k::Integer=0)
     return D
 end
 
-==(Da::Diagonal, Db::Diagonal) = Da.diag == Db.diag
--(A::Diagonal)=Diagonal(-A.diag)
-+(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag + Db.diag)
--(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag - Db.diag)
+(==)(Da::Diagonal, Db::Diagonal) = Da.diag == Db.diag
+(-)(A::Diagonal) = Diagonal(-A.diag)
+(+)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag + Db.diag)
+(-)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag - Db.diag)
 
-*(x::Number, D::Diagonal) = Diagonal(x * D.diag)
-*(D::Diagonal, x::Number) = Diagonal(D.diag * x)
-/(D::Diagonal, x::Number) = Diagonal(D.diag / x)
-*(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag .* Db.diag)
-*(D::Diagonal, V::AbstractVector) = D.diag .* V
+(*)(x::Number, D::Diagonal) = Diagonal(x * D.diag)
+(*)(D::Diagonal, x::Number) = Diagonal(D.diag * x)
+(/)(D::Diagonal, x::Number) = Diagonal(D.diag / x)
+(*)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag .* Db.diag)
+(*)(D::Diagonal, V::AbstractVector) = D.diag .* V
 
 (*)(A::AbstractTriangular, D::Diagonal) = A_mul_B!(copy(A), D)
 (*)(D::Diagonal, B::AbstractTriangular) = A_mul_B!(D, copy(B))
@@ -225,8 +225,18 @@ A_mul_B!(A::AbstractMatrix,B::Diagonal)  = scale!(A,B.diag)
 A_mul_Bt!(A::AbstractMatrix,B::Diagonal) = scale!(A,B.diag)
 A_mul_Bc!(A::AbstractMatrix,B::Diagonal) = scale!(A,conj(B.diag))
 
-/(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag ./ Db.diag)
-function A_ldiv_B!{T}(D::Diagonal{T}, v::AbstractVector{T})
+# Get ambiguous method if try to unify AbstractVector/AbstractMatrix here using AbstractVecOrMat
+A_mul_B!(out::AbstractVector, A::Diagonal, in::AbstractVector) = out .= A.diag .* in
+Ac_mul_B!(out::AbstractVector, A::Diagonal, in::AbstractVector) = out .= ctranspose.(A.diag) .* in
+At_mul_B!(out::AbstractVector, A::Diagonal, in::AbstractVector) = out .= transpose.(A.diag) .* in
+
+A_mul_B!(out::AbstractMatrix, A::Diagonal, in::AbstractMatrix) = out .= A.diag .* in
+Ac_mul_B!(out::AbstractMatrix, A::Diagonal, in::AbstractMatrix) = out .= ctranspose.(A.diag) .* in
+At_mul_B!(out::AbstractMatrix, A::Diagonal, in::AbstractMatrix) = out .= transpose.(A.diag) .* in
+
+
+(/)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag ./ Db.diag)
+function A_ldiv_B!(D::Diagonal{T}, v::AbstractVector{T}) where T
     if length(v) != length(D.diag)
         throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $(length(v)) rows"))
     end
@@ -239,7 +249,7 @@ function A_ldiv_B!{T}(D::Diagonal{T}, v::AbstractVector{T})
     end
     v
 end
-function A_ldiv_B!{T}(D::Diagonal{T}, V::AbstractMatrix{T})
+function A_ldiv_B!(D::Diagonal{T}, V::AbstractMatrix{T}) where T
     if size(V,1) != length(D.diag)
         throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $(size(V,1)) rows"))
     end
@@ -276,8 +286,9 @@ function logdet(D::Diagonal{<:Complex}) # make sure branch cut is correct
     complex(real(z), rem2pi(imag(z), RoundNearest))
 end
 # identity matrices via eye(Diagonal{type},n)
-eye{T}(::Type{Diagonal{T}}, n::Int) = Diagonal(ones(T,n))
+eye(::Type{Diagonal{T}}, n::Int) where {T} = Diagonal(ones(T,n))
 
+# Matrix functions
 expm(D::Diagonal) = Diagonal(exp.(D.diag))
 expm(D::Diagonal{<:AbstractMatrix}) = Diagonal(expm.(D.diag))
 logm(D::Diagonal) = Diagonal(log.(D.diag))
@@ -307,7 +318,7 @@ end
 (\)(D::Diagonal, b::AbstractVector) = D.diag .\ b
 (\)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag .\ Db.diag)
 
-function inv{T}(D::Diagonal{T})
+function inv(D::Diagonal{T}) where T
     Di = similar(D.diag, typeof(inv(zero(T))))
     for i = 1:length(D.diag)
         if D.diag[i] == zero(T)
@@ -318,14 +329,14 @@ function inv{T}(D::Diagonal{T})
     Diagonal(Di)
 end
 
-function pinv{T}(D::Diagonal{T})
+function pinv(D::Diagonal{T}) where T
     Di = similar(D.diag, typeof(inv(zero(T))))
     for i = 1:length(D.diag)
         isfinite(inv(D.diag[i])) ? Di[i]=inv(D.diag[i]) : Di[i]=zero(T)
     end
     Diagonal(Di)
 end
-function pinv{T}(D::Diagonal{T}, tol::Real)
+function pinv(D::Diagonal{T}, tol::Real) where T
     Di = similar(D.diag, typeof(inv(zero(T))))
     if( !isempty(D.diag) ) maxabsD = maximum(abs.(D.diag)) end
     for i = 1:length(D.diag)

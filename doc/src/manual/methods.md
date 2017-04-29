@@ -194,27 +194,27 @@ most powerful and central feature of the Julia language. Core operations typical
 of methods:
 
 ```julia
- julia> methods(+)
- # 166 methods for generic function "+":
- +(a::Float16, b::Float16) at float16.jl:136
- +(x::Float32, y::Float32) at float.jl:206
- +(x::Float64, y::Float64) at float.jl:207
- +(x::Bool, z::Complex{Bool}) at complex.jl:126
- +(x::Bool, y::Bool) at bool.jl:48
- +(x::Bool) at bool.jl:45
- +{T<:AbstractFloat}(x::Bool, y::T) at bool.jl:55
- +(x::Bool, z::Complex) at complex.jl:133
- +(x::Bool, A::AbstractArray{Bool,N<:Any}) at arraymath.jl:105
- +(x::Char, y::Integer) at char.jl:40
- +{T<:Union{Int128,Int16,Int32,Int64,Int8,UInt128,UInt16,UInt32,UInt64,UInt8}}(x::T, y::T) at int.jl:32
- +(z::Complex, w::Complex) at complex.jl:115
- +(z::Complex, x::Bool) at complex.jl:134
- +(x::Real, z::Complex{Bool}) at complex.jl:140
- +(x::Real, z::Complex) at complex.jl:152
- +(z::Complex, x::Real) at complex.jl:153
- +(x::Rational, y::Rational) at rational.jl:179
- ...
- +(a, b, c, xs...) at operators.jl:119
+julia> methods(+)
+# 180 methods for generic function "+":
++(x::Bool, z::Complex{Bool}) in Base at complex.jl:224
++(x::Bool, y::Bool) in Base at bool.jl:89
++(x::Bool) in Base at bool.jl:86
++(x::Bool, y::T) where T<:AbstractFloat in Base at bool.jl:96
++(x::Bool, z::Complex) in Base at complex.jl:231
++(a::Float16, b::Float16) in Base at float.jl:372
++(x::Float32, y::Float32) in Base at float.jl:374
++(x::Float64, y::Float64) in Base at float.jl:375
++(z::Complex{Bool}, x::Bool) in Base at complex.jl:225
++(z::Complex{Bool}, x::Real) in Base at complex.jl:239
++(x::Char, y::Integer) in Base at char.jl:40
++(c::BigInt, x::BigFloat) in Base.MPFR at mpfr.jl:303
++(a::BigInt, b::BigInt, c::BigInt, d::BigInt, e::BigInt) in Base.GMP at gmp.jl:303
++(a::BigInt, b::BigInt, c::BigInt, d::BigInt) in Base.GMP at gmp.jl:296
++(a::BigInt, b::BigInt, c::BigInt) in Base.GMP at gmp.jl:290
++(x::BigInt, y::BigInt) in Base.GMP at gmp.jl:258
++(x::BigInt, c::Union{UInt16, UInt32, UInt64, UInt8}) in Base.GMP at gmp.jl:315
+...
++(a, b, c, xs...) at operators.jl:119
 ```
 
 Multiple dispatch together with the flexible parametric type system give Julia its ability to
@@ -455,17 +455,12 @@ In the example above, we see that the "current world" (in which the method `newf
 is one greater than the task-local "runtime world" that was fixed when the execution of `tryeval` started.
 
 Sometimes it is necessary to get around this (for example, if you are implementing the above REPL).
-Well, don't despair, since there's an easy solution: just call `eval` a second time.
-For example, here we create a zero-argument closure over `ans` and `eval` a call to it:
+Fortunately, there is an easy solution: call the function using [`Base.invokelatest`](@ref):
 
 ```jldoctest
 julia> function tryeval2()
-           ans = (@eval newfun2() = 1)
-           res = eval(Expr(:call,
-               function()
-                   return ans() + 1
-               end))
-           return res
+           @eval newfun2() = 2
+           Base.invokelatest(newfun2)
        end
 tryeval2 (generic function with 1 method)
 
@@ -545,7 +540,7 @@ Closest candidates are:
 More usefully, it is possible to constrain varargs methods by a parameter. For example:
 
 ```julia
-function getindex{T,N}(A::AbstractArray{T,N}, indexes::Vararg{Number,N})
+function getindex(A::AbstractArray{T,N}, indexes::Vararg{Number,N}) where {T,N}
 ```
 
 would be called only when the number of `indexes` matches the dimensionality of the array.
@@ -666,8 +661,8 @@ Below we discuss particular challenges and some alternative ways to resolve such
 `Tuple` (and `NTuple`) arguments present special challenges. For example,
 
 ```julia
-f{N}(x::NTuple{N,Int}) = 1
-f{N}(x::NTuple{N,Float64}) = 2
+f(x::NTuple{N,Int}) where {N} = 1
+f(x::NTuple{N,Float64}) where {N} = 2
 ```
 
 are ambiguous because of the possibility that `N == 0`: there are no
@@ -683,7 +678,7 @@ Alternatively, for all methods but one you can insist that there is at
 least one element in the tuple:
 
 ```julia
-f{N}(x::NTuple{N,Int}) = 1                  # this is the fallback
+f(x::NTuple{N,Int}) where {N} = 1           # this is the fallback
 f(x::Tuple{Float64, Vararg{Float64}}) = 2   # this requires at least one Float64
 ```
 
@@ -721,7 +716,7 @@ A related strategy exploits `promote` to bring `x` and `y` to a common
 type:
 
 ```julia
-f{T}(x::T, y::T) = ...
+f(x::T, y::T) where {T} = ...
 f(x, y) = f(promote(x, y)...)
 ```
 
@@ -761,13 +756,13 @@ Where possible, try to avoid defining methods that dispatch on
 specific element types of abstract containers. For example,
 
 ```julia
--{T<:Date}(A::AbstractArray{T}, b::Date)
+-(A::AbstractArray{T}, b::Date) where {T<:Date}
 ```
 
 generates ambiguities for anyone who defines a method
 
 ```julia
--{T}(A::MyArrayType{T}, b::T)
+-(A::MyArrayType{T}, b::T) where {T}
 ```
 
 The best approach is to avoid defining *either* of these methods:
@@ -784,7 +779,7 @@ can't be modified or eliminated.  As a last resort, one developer can
 define the "band-aid" method
 
 ```julia
--{T<:Date}(A::MyArrayType{T}, b::Date) = ...
+-(A::MyArrayType{T}, b::Date) where {T<:Date} = ...
 ```
 
 that resolves the ambiguity by brute force.

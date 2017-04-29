@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ctranspose(a::AbstractArray) = error("ctranspose not defined for $(typeof(a)). Consider using `permutedims` for higher-dimensional arrays.")
 transpose(a::AbstractArray) = error("transpose not defined for $(typeof(a)). Consider using `permutedims` for higher-dimensional arrays.")
@@ -42,7 +42,7 @@ function ctranspose!(B::AbstractMatrix, A::AbstractVector)
 end
 
 const transposebaselength=64
-function transpose_f!(f,B::AbstractMatrix,A::AbstractMatrix)
+function transpose_f!(f, B::AbstractMatrix, A::AbstractMatrix)
     inds = indices(A)
     indices(B,1) == inds[2] && indices(B,2) == inds[1] || throw(DimensionMismatch(string(f)))
 
@@ -60,7 +60,7 @@ function transpose_f!(f,B::AbstractMatrix,A::AbstractMatrix)
     end
     return B
 end
-function transposeblock!(f,B::AbstractMatrix,A::AbstractMatrix,m::Int,n::Int,offseti::Int,offsetj::Int)
+function transposeblock!(f, B::AbstractMatrix, A::AbstractMatrix, m::Int, n::Int, offseti::Int, offsetj::Int)
     if m*n<=transposebaselength
         @inbounds begin
             for j = offsetj+(1:n)

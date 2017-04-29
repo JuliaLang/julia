@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Test integer conversion routines from int.jl
 
@@ -201,3 +201,9 @@ end
 @test unsafe_trunc(Int8, -127) === Int8(-127)
 @test unsafe_trunc(Int8, -128) === Int8(-128)
 @test unsafe_trunc(Int8, -129) === Int8(127)
+
+# Test x % T returns a T
+for T in [Base.BitInteger_types..., BigInt],
+    U in [Base.BitInteger_types..., BigInt]
+    @test typeof(rand(U(0):U(127)) % T) === T
+end

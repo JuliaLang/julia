@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Core definitions for interacting with the libuv library from Julia
 
@@ -49,7 +49,6 @@ disassociate_julia_struct(handle::Ptr{Void}) =
 # and should thus not be garbage collected
 const uvhandles = ObjectIdDict()
 preserve_handle(x) = uvhandles[x] = get(uvhandles,x,0)::Int+1
-preserve_handle_new(x) = uvhandles[x] = 1
 unpreserve_handle(x) = (v = uvhandles[x]::Int; v == 1 ? pop!(uvhandles,x) : (uvhandles[x] = v-1); nothing)
 
 ## Libuv error handling ##

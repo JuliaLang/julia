@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Random
 
@@ -33,7 +33,7 @@ if is_windows()
     struct RandomDevice <: AbstractRNG
         buffer::Vector{UInt128}
 
-        RandomDevice() = new(Array{UInt128}(1))
+        RandomDevice() = new(Vector{UInt128}(1))
     end
 
     function rand{T<:Union{Bool, Base.BitInteger}}(rd::RandomDevice, ::Type{T})
@@ -89,12 +89,12 @@ MersenneTwister(seed::Vector{UInt32}, state::DSFMT_state) =
     MersenneTwister(seed, state, zeros(Float64, MTCacheLength), MTCacheLength)
 
 """
-    MersenneTwister(seed=0)
+    MersenneTwister(seed)
 
 Create a `MersenneTwister` RNG object. Different RNG objects can have their own seeds, which
 may be useful for generating different streams of random numbers.
 """
-MersenneTwister(seed=0) = srand(MersenneTwister(Vector{UInt32}(), DSFMT_state()), seed)
+MersenneTwister(seed) = srand(MersenneTwister(Vector{UInt32}(), DSFMT_state()), seed)
 
 function copy!(dst::MersenneTwister, src::MersenneTwister)
     copy!(resize!(dst.seed, length(src.seed)), src.seed)
@@ -214,19 +214,20 @@ function make_seed(n::Integer)
 end
 
 function make_seed(filename::AbstractString, n::Integer)
-    read!(filename, Array{UInt32}(Int(n)))
+    read!(filename, Vector{UInt32}(Int(n)))
 end
 
 ## srand()
 
 """
-    srand([rng=GLOBAL_RNG], [seed])
+    srand([rng=GLOBAL_RNG], [seed]) -> rng
+    srand([rng=GLOBAL_RNG], filename, n=4) -> rng
 
 Reseed the random number generator. If a `seed` is provided, the RNG will give a
 reproducible sequence of numbers, otherwise Julia will get entropy from the system. For
 `MersenneTwister`, the `seed` may be a non-negative integer, a vector of `UInt32` integers
-or a filename, in which case the seed is read from a file. `RandomDevice` does not support
-seeding.
+or a filename, in which case the seed is read from a file (`4n` bytes are read from the file,
+where `n` is an optional argument). `RandomDevice` does not support seeding.
 """
 srand(r::MersenneTwister) = srand(r, make_seed())
 srand(r::MersenneTwister, n::Integer) = srand(r, make_seed(n))
@@ -256,7 +257,7 @@ end
 
 ## Global RNG
 
-const GLOBAL_RNG = MersenneTwister()
+const GLOBAL_RNG = MersenneTwister(0)
 globalRNG() = GLOBAL_RNG
 
 # rand: a non-specified RNG defaults to GLOBAL_RNG
@@ -1380,7 +1381,7 @@ end
 
 function Base.repr(u::UUID)
     u = u.value
-    a = Array{UInt8}(36)
+    a = Vector{UInt8}(36)
     for i = [36:-1:25; 23:-1:20; 18:-1:15; 13:-1:10; 8:-1:1]
         d = u & 0xf
         a[i] = '0'+d+39*(d>9)
@@ -1505,7 +1506,7 @@ To randomly permute a arbitrary vector, see [`shuffle`](@ref)
 or [`shuffle!`](@ref).
 """
 function randperm(r::AbstractRNG, n::Integer)
-    a = Array{typeof(n)}(n)
+    a = Vector{typeof(n)}(n)
     @assert n <= Int64(2)^52
     if n == 0
        return a
@@ -1531,7 +1532,7 @@ Construct a random cyclic permutation of length `n`. The optional `rng`
 argument specifies a random number generator, see [Random Numbers](@ref).
 """
 function randcycle(r::AbstractRNG, n::Integer)
-    a = Array{typeof(n)}(n)
+    a = Vector{typeof(n)}(n)
     n == 0 && return a
     @assert n <= Int64(2)^52
     a[1] = 1

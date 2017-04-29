@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Generic IO stubs -- all subtypes should implement these (if meaningful)
 
@@ -354,20 +354,20 @@ function write(to::IO, from::IO)
     end
 end
 
-@noinline unsafe_read{T}(s::IO, p::Ref{T}, n::Integer) = unsafe_read(s, unsafe_convert(Ref{T}, p)::Ptr, n) # mark noinline to ensure ref is gc-rooted somewhere (by the caller)
+@noinline unsafe_read(s::IO, p::Ref{T}, n::Integer) where {T} = unsafe_read(s, unsafe_convert(Ref{T}, p)::Ptr, n) # mark noinline to ensure ref is gc-rooted somewhere (by the caller)
 unsafe_read(s::IO, p::Ptr, n::Integer) = unsafe_read(s, convert(Ptr{UInt8}, p), convert(UInt, n))
-read{T}(s::IO, x::Ref{T}) = (unsafe_read(s, x, Core.sizeof(T)); x)
+read(s::IO, x::Ref{T}) where {T} = (unsafe_read(s, x, Core.sizeof(T)); x)
 
 read(s::IO, ::Type{Int8}) = reinterpret(Int8, read(s, UInt8))
 function read(s::IO, T::Union{Type{Int16},Type{UInt16},Type{Int32},Type{UInt32},Type{Int64},Type{UInt64},Type{Int128},Type{UInt128},Type{Float16},Type{Float32},Type{Float64}})
     return read(s, Ref{T}(0))[]::T
 end
 
-read(s::IO, ::Type{Bool})    = (read(s,UInt8)!=0)
-read{T}(s::IO, ::Type{Ptr{T}}) = convert(Ptr{T}, read(s, UInt))
+read(s::IO, ::Type{Bool}) = (read(s, UInt8) != 0)
+read(s::IO, ::Type{Ptr{T}}) where {T} = convert(Ptr{T}, read(s, UInt))
 
-read{T}(s::IO, t::Type{T}, d1::Int, dims::Int...) = read(s, t, tuple(d1,dims...))
-read{T}(s::IO, t::Type{T}, d1::Integer, dims::Integer...) =
+read(s::IO, t::Type{T}, d1::Int, dims::Int...) where {T} = read(s, t, tuple(d1,dims...))
+read(s::IO, t::Type{T}, d1::Integer, dims::Integer...) where {T} =
     read(s, t, convert(Tuple{Vararg{Int}},tuple(d1,dims...)))
 
 """
@@ -377,14 +377,14 @@ Read a series of values of type `T` from `stream`, in canonical binary represent
 `dims` is either a tuple or a series of integer arguments specifying the size of the `Array{T}`
 to return.
 """
-read{T}(s::IO, ::Type{T}, dims::Dims) = read!(s, Array{T}(dims))
+read(s::IO, ::Type{T}, dims::Dims) where {T} = read!(s, Array{T}(dims))
 
 @noinline function read!(s::IO, a::Array{UInt8}) # mark noinline to ensure the array is gc-rooted somewhere (by the caller)
     unsafe_read(s, pointer(a), sizeof(a))
     return a
 end
 
-@noinline function read!{T}(s::IO, a::Array{T}) # mark noinline to ensure the array is gc-rooted somewhere (by the caller)
+@noinline function read!(s::IO, a::Array{T}) where T # mark noinline to ensure the array is gc-rooted somewhere (by the caller)
     if isbits(T)
         unsafe_read(s, pointer(a), sizeof(a))
     else
@@ -455,7 +455,7 @@ function readuntil(s::IO, t::AbstractString)
         warn("readuntil(IO,AbstractString) will perform poorly with a long string")
     end
     out = IOBuffer()
-    m = Array{Char}(l)  # last part of stream to match
+    m = Vector{Char}(l)  # last part of stream to match
     t = collect(t)
     i = 0
     while !eof(s)
@@ -614,7 +614,7 @@ previously marked position. Throws an error if the stream is not marked.
 
 See also [`mark`](@ref), [`unmark`](@ref), [`ismarked`](@ref).
 """
-function reset{T<:IO}(io::T)
+function reset(io::T) where T<:IO
     ismarked(io) || throw(ArgumentError("$(T) not marked"))
     m = io.mark
     seek(io, m)

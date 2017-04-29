@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #if defined(USE_ORCJIT) && JL_LLVM_VERSION <= 30800
 #  include <llvm/ExecutionEngine/Orc/ObjectLinkingLayer.h>

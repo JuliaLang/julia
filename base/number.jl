@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## generic operations on numbers ##
 """
@@ -25,7 +25,7 @@ size(x::Number) = ()
 size(x::Number,d) = convert(Int,d)<1 ? throw(BoundsError()) : 1
 indices(x::Number) = ()
 indices(x::Number,d) = convert(Int,d)<1 ? throw(BoundsError()) : OneTo(1)
-eltype{T<:Number}(::Type{T}) = T
+eltype(::Type{T}) where {T<:Number} = T
 ndims(x::Number) = 0
 ndims(::Type{<:Number}) = 0
 length(x::Number) = 1
@@ -128,7 +128,7 @@ map(f, x::Number, ys::Number...) = f(x, ys...)
 Get the additive identity element for the type of `x` (`x` can also specify the type itself).
 """
 zero(x::Number) = oftype(x,0)
-zero{T<:Number}(::Type{T}) = convert(T,0)
+zero(::Type{T}) where {T<:Number} = convert(T,0)
 
 """
     one(x)
@@ -160,8 +160,8 @@ julia> one(Dates.Day(1))
 1
 ```
 """
-one{T<:Number}(::Type{T}) = convert(T,1)
-one{T<:Number}(x::T) = one(T)
+one(::Type{T}) where {T<:Number} = convert(T,1)
+one(x::T) where {T<:Number} = one(T)
 # note that convert(T, 1) should throw an error if T is dimensionful,
 # so this fallback definition should be okay.
 
@@ -182,8 +182,8 @@ julia> oneunit(Dates.Day)
 1 day
 ```
 """
-oneunit{T}(x::T) = T(one(x))
-oneunit{T}(::Type{T}) = T(one(T))
+oneunit(x::T) where {T} = T(one(x))
+oneunit(::Type{T}) where {T} = T(one(T))
 
 _default_type(::Type{Number}) = Int
 

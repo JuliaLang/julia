@@ -175,7 +175,7 @@ anonymous function on the fly:
 
 ```julia
 julia> open("hello.txt") do f
-          uppercase(readstring(f))
+           uppercase(readstring(f))
        end
 "HELLO AGAIN."
 ```
@@ -186,11 +186,11 @@ Let's jump right in with a simple example involving TCP sockets. Let's first cre
 
 ```julia
 julia> @async begin
-         server = listen(2000)
-         while true
-           sock = accept(server)
-           println("Hello World\n")
-         end
+           server = listen(2000)
+           while true
+               sock = accept(server)
+               println("Hello World\n")
+           end
        end
 Task (runnable) @0x00007fd31dc11ae0
 ```
@@ -252,13 +252,13 @@ To see this, consider the following simple echo server:
 
 ```julia
 julia> @async begin
-         server = listen(2001)
-         while true
-           sock = accept(server)
-           @async while isopen(sock)
-             write(sock,readline(sock))
+           server = listen(2001)
+           while true
+               sock = accept(server)
+               @async while isopen(sock)
+                   write(sock,readline(sock))
+               end
            end
-         end
        end
 Task (runnable) @0x00007fd31dc12e60
 
@@ -266,7 +266,7 @@ julia> clientside = connect(2001)
 TCPSocket(RawFD(28) open, 0 bytes waiting)
 
 julia> @async while true
-          write(STDOUT,readline(clientside))
+           write(STDOUT,readline(clientside))
        end
 Task (runnable) @0x00007fd31dc11870
 

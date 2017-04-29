@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using  Base.MultiplicativeInverses: SignedMultiplicativeInverse
 
@@ -18,7 +18,7 @@ struct ReshapedArrayIterator{I,M}
     mi::NTuple{M,SignedMultiplicativeInverse{Int}}
 end
 ReshapedArrayIterator(A::ReshapedArray) = _rs_iterator(parent(A), A.mi)
-function _rs_iterator{M}(P, mi::NTuple{M})
+function _rs_iterator(P, mi::NTuple{M}) where M
     iter = eachindex(P)
     ReshapedArrayIterator{typeof(iter),M}(iter, mi)
 end
@@ -109,20 +109,20 @@ end
 _throw_reshape_colon_dimmismatch(A, dims) =
     throw(DimensionMismatch("array size $(length(A)) must be divisible by the product of the new dimensions $dims"))
 
-reshape{T,N}(parent::AbstractArray{T,N}, ndims::Type{Val{N}}) = parent
-function reshape{N}(parent::AbstractArray, ndims::Type{Val{N}})
+reshape(parent::AbstractArray{T,N}, ndims::Type{Val{N}}) where {T,N} = parent
+function reshape(parent::AbstractArray, ndims::Type{Val{N}}) where N
     reshape(parent, rdims((), indices(parent), Val{N}))
 end
 # Move elements from inds to out until out reaches the desired
 # dimensionality N, either filling with OneTo(1) or collapsing the
 # product of trailing dims into the last element
-@pure rdims{N}(out::NTuple{N,Any}, inds::Tuple{}, ::Type{Val{N}}) = out
-@pure function rdims{N}(out::NTuple{N,Any}, inds::Tuple{Any, Vararg{Any}}, ::Type{Val{N}})
+@pure rdims(out::NTuple{N,Any}, inds::Tuple{}, ::Type{Val{N}}) where {N} = out
+@pure function rdims(out::NTuple{N,Any}, inds::Tuple{Any, Vararg{Any}}, ::Type{Val{N}}) where N
     l = length(last(out)) * prod(map(length, inds))
     (front(out)..., OneTo(l))
 end
-@pure rdims{N}(out::Tuple, inds::Tuple{}, ::Type{Val{N}}) = rdims((out..., OneTo(1)), (), Val{N})
-@pure rdims{N}(out::Tuple, inds::Tuple{Any, Vararg{Any}}, ::Type{Val{N}}) = rdims((out..., first(inds)), tail(inds), Val{N})
+@pure rdims(out::Tuple, inds::Tuple{}, ::Type{Val{N}}) where {N} = rdims((out..., OneTo(1)), (), Val{N})
+@pure rdims(out::Tuple, inds::Tuple{Any, Vararg{Any}}, ::Type{Val{N}}) where {N} = rdims((out..., first(inds)), tail(inds), Val{N})
 
 # _reshape on Array returns an Array
 _reshape(parent::Vector, dims::Dims{1}) = parent
@@ -168,7 +168,7 @@ similar(A::ReshapedArray, eltype::Type, dims::Dims) = similar(parent(A), eltype,
 IndexStyle(::Type{<:ReshapedArrayLF}) = IndexLinear()
 parent(A::ReshapedArray) = A.parent
 parentindexes(A::ReshapedArray) = map(s->1:s, size(parent(A)))
-reinterpret{T}(::Type{T}, A::ReshapedArray, dims::Dims) = reinterpret(T, parent(A), dims)
+reinterpret(::Type{T}, A::ReshapedArray, dims::Dims) where {T} = reinterpret(T, parent(A), dims)
 
 @inline ind2sub_rs(::Tuple{}, i::Int) = i
 @inline ind2sub_rs(strds, i) = ind2sub_rs((), strds, i-1)
@@ -234,4 +234,4 @@ setindex!(A::ReshapedRange, val, index::ReshapedIndex) = _rs_setindex!_err()
 
 _rs_setindex!_err() = error("indexed assignment fails for a reshaped range; consider calling collect")
 
-unsafe_convert{T}(::Type{Ptr{T}}, a::ReshapedArray{T}) = unsafe_convert(Ptr{T}, parent(a))
+unsafe_convert(::Type{Ptr{T}}, a::ReshapedArray{T}) where {T} = unsafe_convert(Ptr{T}, parent(a))

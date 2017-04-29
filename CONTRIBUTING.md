@@ -1,10 +1,10 @@
 # Notes for Julia Contributors
 
-Hi! If you are new to the Julia community: welcome, and thanks for trying Julia. Please be sure to respect our [community standards](http://julialang.org/community/standards/) in all interactions.
+Hi! If you are new to the Julia community: welcome, and thanks for trying Julia. Please be sure to respect our [community standards](https://julialang.org/community/standards/) in all interactions.
 
 ## Learning Julia
 
-[The learning page](http://julialang.org/learning/) has a great list of resources for new and experienced users alike. [This tutorial video](https://www.youtube.com/watch?v=vWkgEddb4-A) is one recommended starting point, as is the "[Invitation to Julia](https://www.youtube.com/watch?v=gQ1y5NUD_RI)" workshop video from JuliaCon 2015  ([slide materials here](https://github.com/dpsanders/invitation_to_julia)). The [Julia documentation](http://docs.Julialang.org/en/latest/) covers the language and core library features, and is [searchable](http://docs.Julialang.org/en/latest/search/). (note: Javascript required).
+[The learning page](https://julialang.org/learning/) has a great list of resources for new and experienced users alike. [This tutorial video](https://www.youtube.com/watch?v=vWkgEddb4-A) is one recommended starting point, as is the "[Invitation to Julia](https://www.youtube.com/watch?v=gQ1y5NUD_RI)" workshop video from JuliaCon 2015  ([slide materials here](https://github.com/dpsanders/invitation_to_julia)). The [Julia documentation](https://docs.julialang.org/en/latest/) covers the language and core library features, and is searchable.
 
 ## Before filing an issue
 
@@ -12,7 +12,7 @@ Hi! If you are new to the Julia community: welcome, and thanks for trying Julia.
 
 - Contributing code? Be sure to review the [contributor checklist](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md#contributor-checklist) for helpful tips on the tools we use to build Julia.
 
-- Library feature requests are generally not accepted on this issue tracker. New libraries should be developed as [packages](http://docs.julialang.org/en/release-0.4/manual/packages/#package-development). Discuss ideas for libraries at the [Julia Discourse forum](https://discourse.julialang.org/). Doing so will often lead to pointers to existing projects and bring together collaborators with common interests.
+- Library feature requests are generally not accepted on this issue tracker. New libraries should be developed as [packages](https://docs.julialang.org/en/release-0.4/manual/packages/#package-development). Discuss ideas for libraries at the [Julia Discourse forum](https://discourse.julialang.org/). Doing so will often lead to pointers to existing projects and bring together collaborators with common interests.
 
 ## Contributor Checklist
 
@@ -56,7 +56,7 @@ A useful bug report filed as a GitHub issue provides information about how to re
 
 ### Contributing a Julia package
 
-Julia has a built-in [package manager](https://github.com/JuliaLang/METADATA.jl) based on `git`. A number of [packages](http://pkg.julialang.org/) across many domains are already available for Julia. Developers are encouraged to provide their libraries as a Julia package. The Julia manual provides instructions on [creating Julia packages](http://docs.julialang.org/en/latest/manual/packages/).
+Julia has a built-in [package manager](https://github.com/JuliaLang/METADATA.jl) based on `git`. A number of [packages](http://pkg.julialang.org/) across many domains are already available for Julia. Developers are encouraged to provide their libraries as a Julia package. The Julia manual provides instructions on [creating Julia packages](https://docs.julialang.org/en/latest/manual/packages/).
 
 For developers who need to wrap C libraries so that they can be called from Julia, the [Clang.jl](https://github.com/ihnorton/Clang.jl) package can help generate the wrappers automatically from the C header files.
 
@@ -262,19 +262,19 @@ Make sure that [Travis](http://www.travis-ci.org) greenlights the pull request w
 ## Resources
 
 * Julia
-  - **Homepage:** <http://julialang.org>
-  - **Community:** <http://julialang.org/community/>
+  - **Homepage:** <https://julialang.org>
+  - **Community:** <https://julialang.org/community/>
   - **IRC:** <http://webchat.freenode.net/?channels=Julia>
   - **Source code:** <https://github.com/JuliaLang/julia>
   - **Git clone URL:** <git://github.com/JuliaLang/julia.git>
-  - **Documentation:** <http://julialang.org/manual/>
+  - **Documentation:** <https://julialang.org/manual/>
   - **Status:** <http://status.julialang.org/>
   - **Code coverage:** <https://coveralls.io/r/JuliaLang/julia>
 
 * Design of Julia
   - [Julia: A Fresh Approach to Numerical Computing](http://arxiv.org/pdf/1411.1607v3.pdf)
-  - [Julia: A Fast Dynamic Language for Technical Computing](http://julialang.org/images/julia-dynamic-2012-tr.pdf)
-  - [All Julia Publications](http://julialang.org/publications/)
+  - [Julia: A Fast Dynamic Language for Technical Computing](https://julialang.org/images/julia-dynamic-2012-tr.pdf)
+  - [All Julia Publications](https://julialang.org/publications/)
 
 * Using GitHub
   - [Using Julia with GitHub (video)](http://www.youtube.com/watch?v=wnFYV3ZKtOg&feature=youtu.be)

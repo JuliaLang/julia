@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #ifndef JULIA_INTERNAL_H
 #define JULIA_INTERNAL_H
@@ -47,9 +47,14 @@
 #endif
 
 #if jl_has_builtin(__builtin_assume)
-#define jl_assume(cond) (__extension__ ({       \
-                __builtin_assume(!!(cond));     \
-                cond;                           \
+static inline void jl_assume_(int cond)
+{
+    __builtin_assume(cond);
+}
+#define jl_assume(cond) (__extension__ ({               \
+                __typeof__(cond) cond_ = (cond);        \
+                jl_assume_(!!(cond_));                  \
+                cond;                                   \
             }))
 #elif defined(_COMPILER_GCC_)
 static inline void jl_assume_(int cond)
@@ -127,8 +132,8 @@ JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc(jl_ptls_t ptls, int pool_offset,
 JL_DLLEXPORT jl_value_t *jl_gc_big_alloc(jl_ptls_t ptls, size_t allocsz);
 int jl_gc_classify_pools(size_t sz, int *osize);
 extern jl_mutex_t gc_perm_lock;
-void *jl_gc_perm_alloc_nolock(size_t sz);
-void *jl_gc_perm_alloc(size_t sz);
+void *jl_gc_perm_alloc_nolock(size_t sz, int zero);
+void *jl_gc_perm_alloc(size_t sz, int zero);
 
 // pools are 16376 bytes large (GC_POOL_SZ - GC_PAGE_OFFSET)
 static const int jl_gc_sizeclasses[JL_GC_N_POOLS] = {
@@ -263,6 +268,12 @@ STATIC_INLINE void *jl_gc_alloc_buf(jl_ptls_t ptls, size_t sz)
     return jl_gc_alloc(ptls, sz, (void*)jl_buff_tag);
 }
 
+// Returns a int32 where the high 16 bits are a lower bound of the number of non-pointer fields
+// at the beginning of the type and the low 16 bits are a lower bound on the number of non-pointer
+// fields at the end of the type. This field only exists for a layout that has at least one
+// pointer fields.
+#define jl_datatype_layout_n_nonptr(layout) ((uint32_t*)(layout))[-1]
+
 jl_value_t *jl_gc_realloc_string(jl_value_t *s, size_t sz);
 
 jl_code_info_t *jl_type_infer(jl_method_instance_t **li, size_t world, int force);
@@ -395,7 +406,6 @@ JL_DLLEXPORT void jl_typeassert(jl_value_t *x, jl_value_t *t);
 #define JL_CALLABLE(name)                                               \
     JL_DLLEXPORT jl_value_t *name(jl_value_t *F, jl_value_t **args, uint32_t nargs)
 
-JL_CALLABLE(jl_unprotect_stack);
 JL_CALLABLE(jl_f_tuple);
 JL_CALLABLE(jl_f_intrinsic_call);
 extern jl_function_t *jl_unprotect_stack_func;
@@ -421,18 +431,20 @@ int jl_tuple_isa(jl_value_t **child, size_t cl, jl_datatype_t *pdt);
 
 int jl_has_intersect_type_not_kind(jl_value_t *t);
 int jl_subtype_invariant(jl_value_t *a, jl_value_t *b, int ta);
-jl_value_t *jl_type_match(jl_value_t *a, jl_value_t *b);
-jl_value_t *jl_type_match_morespecific(jl_value_t *a, jl_value_t *b);
 jl_datatype_t *jl_inst_concrete_tupletype_v(jl_value_t **p, size_t np);
 jl_datatype_t *jl_inst_concrete_tupletype(jl_svec_t *p);
 JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method, jl_tupletype_t *simpletype);
 void jl_mk_builtin_func(jl_datatype_t *dt, const char *name, jl_fptr_t fptr);
 jl_value_t *jl_type_intersection_env_s(jl_value_t *a, jl_value_t *b, jl_svec_t **penv, int *issubty);
 jl_value_t *jl_type_intersection_env(jl_value_t *a, jl_value_t *b, jl_svec_t **penv);
+// specificity comparison assuming !(a <: b) and !(b <: a)
+JL_DLLEXPORT int jl_type_morespecific_no_subtype(jl_value_t *a, jl_value_t *b);
 jl_value_t *jl_instantiate_type_with(jl_value_t *t, jl_value_t **env, size_t n);
 JL_DLLEXPORT jl_value_t *jl_instantiate_type_in_env(jl_value_t *ty, jl_unionall_t *env, jl_value_t **vals);
 jl_value_t *jl_substitute_var(jl_value_t *t, jl_tvar_t *var, jl_value_t *val);
 jl_svec_t *jl_outer_unionall_vars(jl_value_t *u);
+int jl_count_union_components(jl_value_t *v);
+jl_value_t *jl_nth_union_component(jl_value_t *v, int i);
 jl_datatype_t *jl_new_uninitialized_datatype(void);
 jl_datatype_t *jl_new_abstracttype(jl_value_t *name, jl_datatype_t *super,
                                    jl_svec_t *parameters);
@@ -581,6 +593,7 @@ JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *mo
 jl_method_instance_t *jl_get_specialization1(jl_tupletype_t *types, size_t world);
 JL_DLLEXPORT int jl_has_call_ambiguities(jl_tupletype_t *types, jl_method_t *m);
 jl_method_instance_t *jl_get_specialized(jl_method_t *m, jl_value_t *types, jl_svec_t *sp);
+int jl_is_rettype_inferred(jl_method_instance_t *li);
 JL_DLLEXPORT jl_value_t *jl_methtable_lookup(jl_methtable_t *mt, jl_tupletype_t *type, size_t world);
 JL_DLLEXPORT jl_method_instance_t *jl_specializations_get_linfo(jl_method_t *m, jl_value_t *type, jl_svec_t *sparams, size_t world);
 JL_DLLEXPORT void jl_method_instance_add_backedge(jl_method_instance_t *callee, jl_method_instance_t *caller);
@@ -637,6 +650,8 @@ size_t rec_backtrace_ctx(uintptr_t *data, size_t maxsize, bt_context_t *ctx);
 #ifdef LIBOSXUNWIND
 size_t rec_backtrace_ctx_dwarf(uintptr_t *data, size_t maxsize, bt_context_t *ctx);
 #endif
+JL_DLLEXPORT jl_value_t *jl_get_backtrace(void);
+JL_DLLEXPORT jl_value_t *jl_apply_with_saved_exception_state(jl_value_t **args, uint32_t nargs, int catch_exceptions);
 void jl_critical_error(int sig, bt_context_t *context, uintptr_t *bt_data, size_t *bt_size);
 JL_DLLEXPORT void jl_raise_debugger(void);
 int jl_getFunctionInfo(jl_frame_t **frames, uintptr_t pointer, int skipC, int noInline);
@@ -673,6 +688,9 @@ extern void *jl_winsock_handle;
 void *jl_get_library(const char *f_lib);
 JL_DLLEXPORT void *jl_load_and_lookup(const char *f_lib, const char *f_name,
                                       void **hnd);
+// Windows only
+#define JL_EXE_LIBNAME ((const char*)1)
+#define JL_DL_LIBNAME ((const char*)2)
 const char *jl_dlfind_win32(const char *name);
 void *jl_dlopen_soname(const char *pfx, size_t n, unsigned flags);
 
@@ -781,6 +799,7 @@ JL_DLLEXPORT jl_value_t *jl_arraylen(jl_value_t *a);
 int jl_array_store_unboxed(jl_value_t *el_type);
 int jl_array_isdefined(jl_value_t **args, int nargs);
 JL_DLLEXPORT jl_value_t *(jl_array_data_owner)(jl_array_t *a);
+JL_DLLEXPORT int jl_array_isassigned(jl_array_t *a, size_t i);
 
 // -- synchronization utilities -- //
 

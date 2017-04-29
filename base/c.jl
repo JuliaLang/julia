@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # definitions related to C interface
 
@@ -63,11 +63,11 @@ end
 # construction from typed pointers
 convert(::Type{Cstring}, p::Ptr{<:Union{Int8,UInt8}}) = bitcast(Cstring, p)
 convert(::Type{Cwstring}, p::Ptr{Cwchar_t}) = bitcast(Cwstring, p)
-convert{T<:Union{Int8,UInt8}}(::Type{Ptr{T}}, p::Cstring) = bitcast(Ptr{T}, p)
+convert(::Type{Ptr{T}}, p::Cstring) where {T<:Union{Int8,UInt8}} = bitcast(Ptr{T}, p)
 convert(::Type{Ptr{Cwchar_t}}, p::Cwstring) = bitcast(Ptr{Cwchar_t}, p)
 
 # construction from untyped pointers
-convert{T<:Union{Cstring,Cwstring}}(::Type{T}, p::Ptr{Void}) = bitcast(T, p)
+convert(::Type{T}, p::Ptr{Void}) where {T<:Union{Cstring,Cwstring}} = bitcast(T, p)
 
 pointer(p::Cstring) = convert(Ptr{UInt8}, p)
 pointer(p::Cwstring) = convert(Ptr{Cwchar_t}, p)
@@ -158,9 +158,9 @@ Only conversion to/from UTF-8 is currently supported.
 """
 function transcode end
 
-transcode{T<:Union{UInt8,UInt16,UInt32,Int32}}(::Type{T}, src::Vector{T}) = src
-transcode{T<:Union{Int32,UInt32}}(::Type{T}, src::String) = T[T(c) for c in src]
-transcode{T<:Union{Int32,UInt32}}(::Type{T}, src::Vector{UInt8}) = transcode(T, String(src))
+transcode(::Type{T}, src::Vector{T}) where {T<:Union{UInt8,UInt16,UInt32,Int32}} = src
+transcode(::Type{T}, src::String) where {T<:Union{Int32,UInt32}} = T[T(c) for c in src]
+transcode(::Type{T}, src::Vector{UInt8}) where {T<:Union{Int32,UInt32}} = transcode(T, String(src))
 function transcode(::Type{UInt8}, src::Vector{<:Union{Int32,UInt32}})
     buf = IOBuffer()
     for c in src; print(buf, Char(c)); end

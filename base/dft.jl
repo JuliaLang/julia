@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module DFT
 
@@ -8,7 +8,7 @@ abstract type Plan{T} end
 import Base: show, summary, size, ndims, length, eltype,
              *, A_mul_B!, inv, \, A_ldiv_B!
 
-eltype{T}(::Type{Plan{T}}) = T
+eltype(::Type{Plan{T}}) where {T} = T
 
 # size(p) should return the size of the input array for p
 size(p::Plan, d) = size(p)[d]
@@ -22,24 +22,24 @@ export fft, ifft, bfft, fft!, ifft!, bfft!,
 
 const FFTWFloat = Union{Float32,Float64}
 fftwfloat(x) = _fftwfloat(float(x))
-_fftwfloat{T<:FFTWFloat}(::Type{T}) = T
+_fftwfloat(::Type{T}) where {T<:FFTWFloat} = T
 _fftwfloat(::Type{Float16}) = Float32
-_fftwfloat{T}(::Type{Complex{T}}) = Complex{_fftwfloat(T)}
-_fftwfloat{T}(::Type{T}) = error("type $T not supported")
-_fftwfloat{T}(x::T) = _fftwfloat(T)(x)
+_fftwfloat(::Type{Complex{T}}) where {T} = Complex{_fftwfloat(T)}
+_fftwfloat(::Type{T}) where {T} = error("type $T not supported")
+_fftwfloat(x::T) where {T} = _fftwfloat(T)(x)
 
 complexfloat(x::StridedArray{Complex{<:FFTWFloat}}) = x
 realfloat(x::StridedArray{<:FFTWFloat}) = x
 
 # return an Array, rather than similar(x), to avoid an extra copy for FFTW
 # (which only works on StridedArray types).
-complexfloat{T<:Complex}(x::AbstractArray{T}) = copy1(typeof(fftwfloat(zero(T))), x)
-complexfloat{T<:Real}(x::AbstractArray{T}) = copy1(typeof(complex(fftwfloat(zero(T)))), x)
+complexfloat(x::AbstractArray{T}) where {T<:Complex} = copy1(typeof(fftwfloat(zero(T))), x)
+complexfloat(x::AbstractArray{T}) where {T<:Real} = copy1(typeof(complex(fftwfloat(zero(T)))), x)
 
-realfloat{T<:Real}(x::AbstractArray{T}) = copy1(typeof(fftwfloat(zero(T))), x)
+realfloat(x::AbstractArray{T}) where {T<:Real} = copy1(typeof(fftwfloat(zero(T))), x)
 
 # copy to a 1-based array, using circular permutation
-function copy1{T}(::Type{T}, x)
+function copy1(::Type{T}, x) where T
     y = Array{T}(map(length, indices(x)))
     Base.circcopy!(y, x)
 end
@@ -211,7 +211,7 @@ rfft(x::AbstractArray{<:Union{Integer,Rational}}, region=1:ndims(x)) = rfft(real
 plan_rfft(x::AbstractArray, region; kws...) = plan_rfft(realfloat(x), region; kws...)
 
 # only require implementation to provide *(::Plan{T}, ::Array{T})
-*{T}(p::Plan{T}, x::AbstractArray) = p * copy1(T, x)
+*(p::Plan{T}, x::AbstractArray) where {T} = p * copy1(T, x)
 
 # Implementations should also implement A_mul_B!(Y, plan, X) so as to support
 # pre-allocated output arrays.  We don't define * in terms of A_mul_B!
@@ -337,7 +337,7 @@ function brfft_output_size(x::AbstractArray, d::Integer, region)
     return osize
 end
 
-plan_irfft{T}(x::AbstractArray{Complex{T}}, d::Integer, region; kws...) =
+plan_irfft(x::AbstractArray{Complex{T}}, d::Integer, region; kws...) where {T} =
     ScaledPlan(plan_brfft(x, d, region; kws...),
                normalization(T, brfft_output_size(x, d, region), region))
 
@@ -580,7 +580,7 @@ module FFTW
     """
     function plan_r2r end
 
-    Base.USE_GPL_LIBS && include("fft/FFTW.jl")
+    (Base.USE_GPL_LIBS || Base.fftw_vendor() == :mkl) && include(joinpath("fft", "FFTW.jl"))
 end
 
 importall .FFTW

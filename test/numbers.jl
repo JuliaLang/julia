@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 const ≣ = isequal # convenient for comparing NaNs
 
@@ -2491,6 +2491,13 @@ end
 @test reinterpret(Float32,bswap(0x0000c03f)) === 1.5f0
 @test bswap(reinterpret(Float64,0x000000000000f03f)) === 1.0
 @test bswap(reinterpret(Float32,0x0000c03f)) === 1.5f0
+zbuf = IOBuffer([0xbf, 0xc0, 0x00, 0x00, 0x40, 0x20, 0x00, 0x00,
+                 0x40, 0x0c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                 0xc0, 0x12, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+z1 = read(zbuf, Complex64)
+z2 = read(zbuf, Complex128)
+@test bswap(z1) === -1.5f0 + 2.5f0im
+@test bswap(z2) ===  3.5 - 4.5im
 
 #isreal(x::Real) = true
 for x in [1.23, 7, e, 4//5] #[FP, Int, Irrational, Rat]
@@ -2949,6 +2956,9 @@ end
         end
     end
     @test !iszero(nextfloat(BigFloat(0)))
+    for x in (π, e, γ, catalan, φ)
+        @test !iszero(x)
+    end
 
     # Array reduction
     @test !iszero([0, 1, 2, 3])

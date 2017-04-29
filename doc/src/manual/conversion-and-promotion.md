@@ -132,8 +132,8 @@ especially for parametric types. The example above is meant to be pedagogical, a
 actual Julia behaviour. This is the actual implementation in Julia:
 
 ```julia
-convert{T<:Real}(::Type{T}, z::Complex) = (imag(z)==0 ? convert(T,real(z)) :
-                                           throw(InexactError()))
+convert(::Type{T}, z::Complex) where {T<:Real} =
+    (imag(z) == 0 ? convert(T, real(z)) : throw(InexactError()))
 
 julia> convert(Bool, 1im)
 ERROR: InexactError()
@@ -143,14 +143,14 @@ ERROR: InexactError()
 
 ### [Case Study: Rational Conversions](@id man-rational-conversion)
 
-To continue our case study of Julia's `Rational` type, here are the conversions declared in [rational.jl](https://github.com/JuliaLang/julia/blob/master/base/rational.jl),
+To continue our case study of Julia's `Rational` type, here are the conversions declared in [`rational.jl`](https://github.com/JuliaLang/julia/blob/master/base/rational.jl),
 right after the declaration of the type and its constructors:
 
 ```julia
-convert{T<:Integer}(::Type{Rational{T}}, x::Rational) = Rational(convert(T,x.num),convert(T,x.den))
-convert{T<:Integer}(::Type{Rational{T}}, x::Integer) = Rational(convert(T,x), convert(T,1))
+convert(::Type{Rational{T}}, x::Rational) where {T<:Integer} = Rational(convert(T,x.num),convert(T,x.den))
+convert(::Type{Rational{T}}, x::Integer) where {T<:Integer} = Rational(convert(T,x), convert(T,1))
 
-function convert{T<:Integer}(::Type{Rational{T}}, x::AbstractFloat, tol::Real)
+function convert(::Type{Rational{T}}, x::AbstractFloat, tol::Real) where T<:Integer
     if isnan(x); return zero(T)//zero(T); end
     if isinf(x); return sign(x)//zero(T); end
     y = x
@@ -165,10 +165,10 @@ function convert{T<:Integer}(::Type{Rational{T}}, x::AbstractFloat, tol::Real)
         y = 1/y
     end
 end
-convert{T<:Integer}(rt::Type{Rational{T}}, x::AbstractFloat) = convert(rt,x,eps(x))
+convert(rt::Type{Rational{T}}, x::AbstractFloat) where {T<:Integer} = convert(rt,x,eps(x))
 
-convert{T<:AbstractFloat}(::Type{T}, x::Rational) = convert(T,x.num)/convert(T,x.den)
-convert{T<:Integer}(::Type{T}, x::Rational) = div(convert(T,x.num),convert(T,x.den))
+convert(::Type{T}, x::Rational) where {T<:AbstractFloat} = convert(T,x.num)/convert(T,x.den)
+convert(::Type{T}, x::Rational) where {T<:Integer} = div(convert(T,x.num),convert(T,x.den))
 ```
 
 The initial four convert methods provide conversions to rational types. The first method converts
@@ -231,7 +231,7 @@ promoted to the appropriate kind of complex value.
 That is really all there is to using promotions. The rest is just a matter of clever application,
 the most typical "clever" application being the definition of catch-all methods for numeric operations
 like the arithmetic operators `+`, `-`, `*` and `/`. Here are some of the catch-all method definitions
-given in [promotion.jl](https://github.com/JuliaLang/julia/blob/master/base/promotion.jl):
+given in [`promotion.jl`](https://github.com/JuliaLang/julia/blob/master/base/promotion.jl):
 
 ```julia
 +(x::Number, y::Number) = +(promote(x,y)...)
@@ -245,11 +245,11 @@ multiplying and dividing pairs of numeric values, promote the values to a common
 try again. That's all there is to it: nowhere else does one ever need to worry about promotion
 to a common numeric type for arithmetic operations -- it just happens automatically. There are
 definitions of catch-all promotion methods for a number of other arithmetic and mathematical functions
-in [promotion.jl](https://github.com/JuliaLang/julia/blob/master/base/promotion.jl), but beyond
+in [`promotion.jl`](https://github.com/JuliaLang/julia/blob/master/base/promotion.jl), but beyond
 that, there are hardly any calls to `promote` required in the Julia standard library. The most
 common usages of `promote` occur in outer constructors methods, provided for convenience, to allow
 constructor calls with mixed types to delegate to an inner type with fields promoted to an appropriate
-common type. For example, recall that [rational.jl](https://github.com/JuliaLang/julia/blob/master/base/rational.jl)
+common type. For example, recall that [`rational.jl`](https://github.com/JuliaLang/julia/blob/master/base/rational.jl)
 provides the following outer constructor method:
 
 ```julia
@@ -280,7 +280,7 @@ another type object, such that instances of the argument types will be promoted 
 type. Thus, by defining the rule:
 
 ```julia
-promote_rule(::Type{Float64}, ::Type{Float32} ) = Float64
+promote_rule(::Type{Float64}, ::Type{Float32}) = Float64
 ```
 
 one declares that when 64-bit and 32-bit floating-point values are promoted together, they should
@@ -309,7 +309,7 @@ Int64
 
 Internally, `promote_type` is used inside of `promote` to determine what type argument values
 should be converted to for promotion. It can, however, be useful in its own right. The curious
-reader can read the code in [promotion.jl](https://github.com/JuliaLang/julia/blob/master/base/promotion.jl),
+reader can read the code in [`promotion.jl`](https://github.com/JuliaLang/julia/blob/master/base/promotion.jl),
 which defines the complete promotion mechanism in about 35 lines.
 
 ### Case Study: Rational Promotions
@@ -318,9 +318,9 @@ Finally, we finish off our ongoing case study of Julia's rational number type, w
 sophisticated use of the promotion mechanism with the following promotion rules:
 
 ```julia
-promote_rule{T<:Integer,S<:Integer}(::Type{Rational{T}}, ::Type{S}) = Rational{promote_type(T,S)}
-promote_rule{T<:Integer,S<:Integer}(::Type{Rational{T}}, ::Type{Rational{S}}) = Rational{promote_type(T,S)}
-promote_rule{T<:Integer,S<:AbstractFloat}(::Type{Rational{T}}, ::Type{S}) = promote_type(T,S)
+promote_rule(::Type{Rational{T}}, ::Type{S}) where {T<:Integer,S<:Integer} = Rational{promote_type(T,S)}
+promote_rule(::Type{Rational{T}}, ::Type{Rational{S}}) where {T<:Integer,S<:Integer} = Rational{promote_type(T,S)}
+promote_rule(::Type{Rational{T}}, ::Type{S}) where {T<:Integer,S<:AbstractFloat} = promote_type(T,S)
 ```
 
 The first rule says that promoting a rational number with any other integer type promotes to a

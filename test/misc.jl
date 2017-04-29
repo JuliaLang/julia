@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Tests that do not really go anywhere else
 
@@ -514,9 +514,19 @@ if is_windows()
     end
 end
 
-optstring = sprint(show, Base.JLOptions())
-@test startswith(optstring, "JLOptions(")
-@test endswith(optstring, ")")
+let optstring = stringmime(MIME("text/plain"), Base.JLOptions())
+    @test startswith(optstring, "JLOptions(\n")
+    @test !contains(optstring, "Ptr")
+    @test endswith(optstring, "\n)")
+    @test contains(optstring, " = \"")
+end
+let optstring = repr(Base.JLOptions())
+    @test startswith(optstring, "JLOptions(")
+    @test endswith(optstring, ")")
+    @test !contains(optstring, "\n")
+    @test !contains(optstring, "Ptr")
+    @test contains(optstring, " = \"")
+end
 
 # Base.securezero! functions (#17579)
 import Base: securezero!, unsafe_securezero!
@@ -628,7 +638,7 @@ end
 
 @testset "test this does not segfault #19281" begin
     @test Foo_19281().f[1] == ()
-    @test Foo_19281().f[2] == (1, )
+    @test Foo_19281().f[2] == (1,)
 end
 
 let
@@ -658,4 +668,13 @@ if Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
         @test_throws StackOverflowError Demo_20254()
         @test_throws StackOverflowError f_19433(+, 1, 2)
     end
+end
+
+# invokelatest function for issue #19774
+issue19774(x) = 1
+let foo() = begin
+        eval(:(issue19774(x::Int) = 2))
+        return Base.invokelatest(issue19774, 0)
+    end
+    @test foo() == 2
 end

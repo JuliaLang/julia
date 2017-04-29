@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module TestHelpers
 
@@ -20,6 +20,10 @@ Base.Terminals.raw!(t::FakeTerminal, raw::Bool) = t.raw = raw
 Base.Terminals.size(t::FakeTerminal) = (24, 80)
 
 function open_fake_pty()
+    @static if is_windows()
+        error("Unable to create a fake PTY in Windows")
+    end
+
     const O_RDWR = Base.Filesystem.JL_O_RDWR
     const O_NOCTTY = Base.Filesystem.JL_O_NOCTTY
 
@@ -41,9 +45,68 @@ end
 
 function with_fake_pty(f)
     slave, master = open_fake_pty()
-    f(slave, master)
-    ccall(:close,Cint,(Cint,),slave) # XXX: this causes the kernel to throw away all unread data on the pty
-    close(master)
+    try
+        f(slave, master)
+    finally
+        ccall(:close,Cint,(Cint,),slave) # XXX: this causes the kernel to throw away all unread data on the pty
+        close(master)
+    end
+end
+
+function challenge_prompt(code::AbstractString, challenges; timeout::Integer=10, debug::Bool=true)
+    output_file = tempname()
+    wrapped_code = """
+    result = let
+        $code
+    end
+    open("$output_file", "w") do fp
+        serialize(fp, result)
+    end
+    """
+    cmd = `$(Base.julia_cmd()) --startup-file=no -e $wrapped_code`
+    try
+        challenge_prompt(cmd, challenges, timeout=timeout, debug=debug)
+        return open(output_file, "r") do fp
+            deserialize(fp)
+        end
+    finally
+        isfile(output_file) && rm(output_file)
+    end
+    return nothing
+end
+
+function challenge_prompt(cmd::Cmd, challenges; timeout::Integer=10, debug::Bool=true)
+    function format_output(output)
+        debug ? "Process output found:\n\"\"\"\n$(readstring(seekstart(out)))\n\"\"\"" : ""
+    end
+    out = IOBuffer()
+    with_fake_pty() do slave, master
+        p = spawn(detach(cmd), slave, slave, slave)
+        # Kill the process if it takes too long. Typically occurs when process is waiting for input
+        @async begin
+            sleep(timeout)
+            kill(p)
+            close(master)
+        end
+        try
+            for (challenge, response) in challenges
+                process_exited(p) && error("Too few prompts. $(format_output(out))")
+
+                write(out, readuntil(master, challenge))
+                if !isopen(master)
+                    error("Could not locate challenge: \"$challenge\". $(format_output(out))")
+                end
+                write(master, response)
+            end
+            wait(p)
+        finally
+            kill(p)
+        end
+        # Determine if the process was explicitly killed
+        killed = process_exited(p) && (p.exitcode != 0 || p.termsignal != 0)
+        killed && error("Too many prompts. $(format_output(out))")
+    end
+    nothing
 end
 
 # OffsetArrays (arrays with indexing that doesn't start at 1)
@@ -75,7 +138,7 @@ parenttype(A::OffsetArray) = parenttype(typeof(A))
 
 Base.parent(A::OffsetArray) = A.parent
 
-errmsg(A) = error("size not supported for arrays with indices $(indices(A)); see http://docs.julialang.org/en/latest/devdocs/offset-arrays/")
+errmsg(A) = error("size not supported for arrays with indices $(indices(A)); see https://docs.julialang.org/en/latest/devdocs/offset-arrays/")
 Base.size(A::OffsetArray) = errmsg(A)
 Base.size(A::OffsetArray, d) = errmsg(A)
 Base.eachindex(::IndexCartesian, A::OffsetArray) = CartesianRange(indices(A))
@@ -133,6 +196,24 @@ end
     checkbounds(A, i)
     @inbounds parent(A)[i] = val
     val
+end
+
+@inline function Base.deleteat!(A::OffsetArray, i::Int)
+    checkbounds(A, i)
+    @inbounds deleteat!(parent(A), offset(A.offsets, (i,))[1])
+end
+
+@inline function Base.deleteat!{T,N}(A::OffsetArray{T,N}, I::Vararg{Int, N})
+    checkbounds(A, I...)
+    @inbounds deleteat!(parent(A), offset(A.offsets, I)...)
+end
+
+@inline function Base.deleteat!(A::OffsetArray, i::UnitRange{Int})
+    checkbounds(A, first(i))
+    checkbounds(A, last(i))
+    first_idx = offset(A.offsets, (first(i),))[1]
+    last_idx = offset(A.offsets, (last(i),))[1]
+    @inbounds deleteat!(parent(A), first_idx:last_idx)
 end
 
 # Computing a shifted index (subtracting the offset)

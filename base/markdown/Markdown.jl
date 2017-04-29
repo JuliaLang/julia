@@ -1,25 +1,25 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Markdown
 
 import Base: show, ==
 import Core: @doc_str
 
-include("parse/config.jl")
-include("parse/util.jl")
-include("parse/parse.jl")
+include(joinpath("parse", "config.jl"))
+include(joinpath("parse", "util.jl"))
+include(joinpath("parse", "parse.jl"))
 
-include("Common/Common.jl")
-include("GitHub/GitHub.jl")
-include("IPython/IPython.jl")
-include("Julia/Julia.jl")
+include(joinpath("Common", "Common.jl"))
+include(joinpath("GitHub", "GitHub.jl"))
+include(joinpath("IPython", "IPython.jl"))
+include(joinpath("Julia", "Julia.jl"))
 
-include("render/plain.jl")
-include("render/html.jl")
-include("render/latex.jl")
-include("render/rst.jl")
+include(joinpath("render", "plain.jl"))
+include(joinpath("render", "html.jl"))
+include(joinpath("render", "latex.jl"))
+include(joinpath("render", "rst.jl"))
 
-include("render/terminal/render.jl")
+include(joinpath("render", "terminal", "render.jl"))
 
 export readme, license, @md_str, @doc_str
 

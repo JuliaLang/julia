@@ -1,8 +1,12 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-The Docs module provides the `@doc` macro which can be used to set and retrieve
-documentation metadata for Julia objects. Please see docs for the `@doc` macro for more
+    Docs
+
+The `Docs` module provides the `@doc` macro which can be used to set and retrieve
+documentation metadata for Julia objects.
+
+Please see the manual section on documentation for more
 information.
 """
 module Docs
@@ -409,7 +413,7 @@ function summarize(io::IO, m::Module, binding)
         println(io, "---\n")
         println(io, readstring(readme))
     else
-        println(io, "No `README.md` found for module `", m, "`.\n")
+        println(io, "No docstring or `README.md` found for module `", m, "`.\n")
     end
 end
 

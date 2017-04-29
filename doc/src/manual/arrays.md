@@ -376,7 +376,7 @@ multidimensional index. When combined with other indexing forms and iterators
 that yield `CartesianIndex`es, however, this can lead directly to very elegant
 and efficient code. See [Iteration](@ref) below, and for some more advanced
 examples, see [this blog post on multidimensional algorithms and
-iteration](http://julialang.org/blog/2016/02/iteration).
+iteration](https://julialang.org/blog/2016/02/iteration).
 
 Arrays of `CartesianIndex{N}` are also supported. They represent a collection
 of scalar indices that each span `N` dimensions, enabling a form of indexing
@@ -513,7 +513,7 @@ iterate over any array type.
 If you write a custom `AbstractArray` type, you can specify that it has fast linear indexing using
 
 ```julia
-Base.IndexStyle{T<:MyArray}(::Type{T}) = IndexLinear()
+Base.IndexStyle(::Type{<:MyArray}) = IndexLinear()
 ```
 
 This setting will cause `eachindex` iteration over a `MyArray` to use integers. If you don't
@@ -716,7 +716,7 @@ Julia sparse matrices have the type `SparseMatrixCSC{Tv,Ti}`, where `Tv` is the 
 values, and `Ti` is the integer type for storing column pointers and row indices.:
 
 ```julia
-type SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}
+struct SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}
     m::Int                  # Number of rows
     n::Int                  # Number of columns
     colptr::Vector{Ti}      # Column i is in colptr[i]:(colptr[i+1]-1)

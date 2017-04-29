@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 // This is in implementation of the Julia intrinsic functions against boxed types
 // excluding the native function call interface (ccall, llvmcall)

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## IP ADDRESS HANDLING ##
 abstract type IPAddr end
@@ -199,7 +199,7 @@ function parseipv6fields(fields,num_fields)
     cf = 7
     ret = UInt128(0)
     for f in fields
-        if f == ""
+        if isempty(f)
             # ::abc:... and ..:abc::
             if cf != 7 && cf != 0
                 cf -= num_fields-length(fields)
@@ -325,7 +325,7 @@ iswritable(io::TCPSocket) = isopen(io) && io.status != StatusClosing
 _jl_connect_raw(sock::TCPSocket, sockaddr::Ptr{Void}) =
     ccall(:jl_connect_raw, Int32, (Ptr{Void}, Ptr{Void}, Ptr{Void}), sock.handle, sockaddr, uv_jl_connectcb::Ptr{Void})
 _jl_sockaddr_from_addrinfo(addrinfo::Ptr{Void}) =
-    ccall(:jl_sockaddr_from_addrinfo, Ptr{Void}, (Ptr{Void}, ), addrinfo)
+    ccall(:jl_sockaddr_from_addrinfo, Ptr{Void}, (Ptr{Void},), addrinfo)
 _jl_sockaddr_set_port(ptr::Ptr{Void}, port::UInt16) =
     ccall(:jl_sockaddr_set_port, Void, (Ptr{Void}, UInt16), ptr, port)
 
@@ -589,18 +589,18 @@ function uv_getaddrinfocb(req::Ptr{Void}, status::Cint, addrinfo::Ptr{Void})
     cb = unsafe_pointer_to_objref(data)::Function
     pop!(callback_dict,cb) # using pop forces an error if cb not in callback_dict
     if status != 0 || addrinfo == C_NULL
-        cb(UVError("uv_getaddrinfocb received an unexpected status code", status))
+        invokelatest(cb, UVError("uv_getaddrinfocb received an unexpected status code", status))
     else
         freeaddrinfo = addrinfo
         while addrinfo != C_NULL
             sockaddr = ccall(:jl_sockaddr_from_addrinfo, Ptr{Void}, (Ptr{Void},), addrinfo)
             if ccall(:jl_sockaddr_is_ip4, Int32, (Ptr{Void},), sockaddr) == 1
-                cb(IPv4(ntoh(ccall(:jl_sockaddr_host4, UInt32, (Ptr{Void},), sockaddr))))
+                invokelatest(cb, IPv4(ntoh(ccall(:jl_sockaddr_host4, UInt32, (Ptr{Void},), sockaddr))))
                 break
             #elseif ccall(:jl_sockaddr_is_ip6, Int32, (Ptr{Void},), sockaddr) == 1
-            #    host = Array{UInt128}(1)
+            #    host = Vector{UInt128}(1)
             #    scope_id = ccall(:jl_sockaddr_host6, UInt32, (Ptr{Void}, Ptr{UInt128}), sockaddr, host)
-            #    cb(IPv6(ntoh(host[1])))
+            #    invokelatest(cb, IPv6(ntoh(host[1])))
             #    break
             end
             addrinfo = ccall(:jl_next_from_addrinfo, Ptr{Void}, (Ptr{Void},), addrinfo)
@@ -684,7 +684,7 @@ function getipaddr()
             return rv
         # Uncomment to enbable IPv6
         #elseif ccall(:jl_sockaddr_in_is_ip6, Int32, (Ptr{Void},), sockaddr) == 1
-        #   host = Array{UInt128}(1)
+        #   host = Vector{UInt128}(1)
         #   ccall(:jl_sockaddr_host6, UInt32, (Ptr{Void}, Ptr{UInt128}), sockaddrr, host)
         #   return IPv6(ntoh(host[1]))
         end

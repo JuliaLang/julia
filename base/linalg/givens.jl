@@ -1,15 +1,15 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 # givensAlgorithm functions are derived from LAPACK, see below
 
 abstract type AbstractRotation{T} end
 
 transpose(R::AbstractRotation) = error("transpose not implemented for $(typeof(R)). Consider using conjugate transpose (') instead of transpose (.').")
 
-function *{T,S}(R::AbstractRotation{T}, A::AbstractVecOrMat{S})
+function *(R::AbstractRotation{T}, A::AbstractVecOrMat{S}) where {T,S}
     TS = typeof(zero(T)*zero(S) + zero(T)*zero(S))
     A_mul_B!(convert(AbstractRotation{TS}, R), TS == S ? copy(A) : convert(AbstractArray{TS}, A))
 end
-function A_mul_Bc{T,S}(A::AbstractVecOrMat{T}, R::AbstractRotation{S})
+function A_mul_Bc(A::AbstractVecOrMat{T}, R::AbstractRotation{S}) where {T,S}
     TS = typeof(zero(T)*zero(S) + zero(T)*zero(S))
     A_mul_Bc!(TS == T ? copy(A) : convert(AbstractArray{TS}, A), convert(AbstractRotation{TS}, R))
 end
@@ -34,19 +34,19 @@ mutable struct Rotation{T} <: AbstractRotation{T}
     rotations::Vector{Givens{T}}
 end
 
-convert{T}(::Type{Givens{T}}, G::Givens{T}) = G
-convert{T}(::Type{Givens{T}}, G::Givens) = Givens(G.i1, G.i2, convert(T, G.c), convert(T, G.s))
-convert{T}(::Type{Rotation{T}}, R::Rotation{T}) = R
-convert{T}(::Type{Rotation{T}}, R::Rotation) = Rotation{T}([convert(Givens{T}, g) for g in R.rotations])
-convert{T}(::Type{AbstractRotation{T}}, G::Givens) = convert(Givens{T}, G)
-convert{T}(::Type{AbstractRotation{T}}, R::Rotation) = convert(Rotation{T}, R)
+convert(::Type{Givens{T}}, G::Givens{T}) where {T} = G
+convert(::Type{Givens{T}}, G::Givens) where {T} = Givens(G.i1, G.i2, convert(T, G.c), convert(T, G.s))
+convert(::Type{Rotation{T}}, R::Rotation{T}) where {T} = R
+convert(::Type{Rotation{T}}, R::Rotation) where {T} = Rotation{T}([convert(Givens{T}, g) for g in R.rotations])
+convert(::Type{AbstractRotation{T}}, G::Givens) where {T} = convert(Givens{T}, G)
+convert(::Type{AbstractRotation{T}}, R::Rotation) where {T} = convert(Rotation{T}, R)
 
 ctranspose(G::Givens) = Givens(G.i1, G.i2, conj(G.c), -G.s)
-ctranspose{T}(R::Rotation{T}) = Rotation{T}(reverse!([ctranspose(r) for r in R.rotations]))
+ctranspose(R::Rotation{T}) where {T} = Rotation{T}(reverse!([ctranspose(r) for r in R.rotations]))
 
 realmin2(::Type{Float32}) = reinterpret(Float32, 0x26000000)
 realmin2(::Type{Float64}) = reinterpret(Float64, 0x21a0000000000000)
-realmin2{T}(::Type{T}) = (twopar = 2one(T); twopar^trunc(Integer,log(realmin(T)/eps(T))/log(twopar)/twopar))
+realmin2(::Type{T}) where {T} = (twopar = 2one(T); twopar^trunc(Integer,log(realmin(T)/eps(T))/log(twopar)/twopar))
 
 # derived from LAPACK's dlartg
 # Copyright:
@@ -54,7 +54,7 @@ realmin2{T}(::Type{T}) = (twopar = 2one(T); twopar^trunc(Integer,log(realmin(T)/
 # Univ. of California Berkeley
 # Univ. of Colorado Denver
 # NAG Ltd.
-function givensAlgorithm{T<:AbstractFloat}(f::T, g::T)
+function givensAlgorithm(f::T, g::T) where T<:AbstractFloat
     onepar = one(T)
     twopar = 2one(T)
     T0 = typeof(onepar) # dimensionless
@@ -128,7 +128,7 @@ end
 # Univ. of California Berkeley
 # Univ. of Colorado Denver
 # NAG Ltd.
-function givensAlgorithm{T<:AbstractFloat}(f::Complex{T}, g::Complex{T})
+function givensAlgorithm(f::Complex{T}, g::Complex{T}) where T<:AbstractFloat
     twopar, onepar = 2one(T), one(T)
     T0 = typeof(onepar) # dimensionless
     zeropar = T0(zero(T)) # must be dimensionless
@@ -252,7 +252,7 @@ y[i2] = 0
 
 See also: [`LinAlg.Givens`](@ref)
 """
-function givens{T}(f::T, g::T, i1::Integer, i2::Integer)
+function givens(f::T, g::T, i1::Integer, i2::Integer) where T
     if i1 == i2
         throw(ArgumentError("Indices must be distinct."))
     end
@@ -360,4 +360,4 @@ function A_mul_Bc!(A::AbstractMatrix, R::Rotation)
     end
     return A
 end
-*{T}(G1::Givens{T}, G2::Givens{T}) = Rotation(push!(push!(Givens{T}[], G2), G1))
+*(G1::Givens{T}, G2::Givens{T}) where {T} = Rotation(push!(push!(Givens{T}[], G2), G1))
