@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: https://julialang.org/license
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 function Base.length(blob::GitBlob)
     return ccall((:git_blob_rawsize, :libgit2), Int64, (Ptr{Void},), blob.ptr)

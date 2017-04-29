@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: https://julialang.org/license
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # test core language features
 const Bottom = Union{}
@@ -74,32 +74,12 @@ _z_z_z_(::Int, c...) = 3
 # issue #21016
 @test args_morespecific(Tuple{IO, Core.TypeofBottom}, Tuple{IO, Type{T}} where T<:Number)
 
-# issue #21382
-@test args_morespecific(Tuple{Type{Pair{A,B} where B}} where A, Tuple{DataType})
-@test args_morespecific(Tuple{Union{Int,String},Type{Pair{A,B} where B}} where A, Tuple{Integer,UnionAll})
-
 # with bound varargs
 
 _bound_vararg_specificity_1{T,N}(::Type{Array{T,N}}, d::Vararg{Int, N}) = 0
 _bound_vararg_specificity_1{T}(::Type{Array{T,1}}, d::Int) = 1
 @test _bound_vararg_specificity_1(Array{Int,1}, 1) == 1
 @test _bound_vararg_specificity_1(Array{Int,2}, 1, 1) == 0
-
-# issue #12939
-module Issue12939
-abstract type Abs; end
-struct Foo <: Abs; end
-struct Bar; val::Int64; end
-struct Baz; val::Int64; end
-f{T}(::Type{T}, x::T) = T(3)
-f{T <: Abs}(::Type{Bar}, x::T) = Bar(2)
-f(::Type{Bar}, x) = Bar(1)
-f(::Type{Baz}, x) = Baz(1)
-f{T <: Abs}(::Type{Baz}, x::T) = Baz(2)
-end
-
-@test Issue12939.f(Issue12939.Baz,Issue12939.Foo()) === Issue12939.Baz(2)
-@test Issue12939.f(Issue12939.Bar,Issue12939.Foo()) === Issue12939.Bar(2)
 
 # issue #11840
 TT11840{T} = Tuple{T,T}
@@ -4689,11 +4669,11 @@ end # module SOE
 @test_nowarn begin
     local p15240
     p15240 = ccall(:jl_realloc, Ptr{Void}, (Ptr{Void}, Csize_t), C_NULL, 10)
-    ccall(:jl_free, Void, (Ptr{Void},), p15240)
+    ccall(:jl_free, Void, (Ptr{Void}, ), p15240)
 end
 
 # issue #19963
-@test_nowarn ccall(:jl_free, Void, (Ptr{Void},), C_NULL)
+@test_nowarn ccall(:jl_free, Void, (Ptr{Void}, ), C_NULL)
 
 # Wrong string size on 64bits for large string.
 if Sys.WORD_SIZE == 64
@@ -4820,64 +4800,3 @@ f21271() = convert(Tuple{Type{Int}, Type{Float64}}, (Int, Float64))::Tuple{Type{
 f21271(x) = x::Tuple{Type{Int}, Type{Float64}}
 @test_throws TypeError f21271()
 @test_throws TypeError f21271((Int, Float64))
-
-# issue #21397
-bar21397(x::T) where {T} = T
-foo21397(x) = bar21397(x)
-@test foo21397(Tuple) == DataType
-
-# issue 21216
-primitive type FP128test <: AbstractFloat 128 end
-struct FP128align <: AbstractFloat
-    i::Int # cause forced misalignment
-    fp::FP128test
-end
-let ni128 = sizeof(FP128test) ÷ sizeof(Int),
-    ns128 = sizeof(FP128align) ÷ sizeof(Int),
-    nbit = sizeof(Int) * 8,
-    arr = reinterpret(FP128align, collect(Int, 1:(2 * ns128))),
-    offset = Base.datatype_alignment(FP128test) ÷ sizeof(Int),
-    little,
-    expected
-    @test sizeof(FP128test) == 16
-    @test length(arr) == 2
-    @test arr[1].i == 1
-    @test arr[2].i == 1 + ns128
-    expected = UInt128(0)
-    for little in ni128:-1:1
-        little += offset
-        expected = (expected << nbit) + little
-    end
-    @test arr[1].fp == reinterpret(FP128test, expected)
-    expected = UInt128(0)
-    for little in ni128:-1:1
-        little += offset + ns128
-        expected = (expected << nbit) + little
-    end
-    @test reinterpret(UInt128, arr[2].fp) == expected
-end
-
-# issue #21516
-struct T21516
-    x::Vector{Float64}
-    y::Vector{Float64}
-    # check that this definition works
-    T21516(x::Vector{T}, y::Vector{T}) where {T<:Real} = new(float.(x), float.(y))
-end
-@test isa(T21516([1],[2]).x, Vector{Float64})
-
-# let with type declaration
-let letvar::Int = 2
-    letvar = 3.0
-    @test letvar === 3
-end
-
-# issue #21568
-f21568() = 0
-function foo21568()
-    y = 1
-    global f21568
-    f21568{T<:Real}(x::AbstractArray{T,1}) = y
-end
-foo21568()
-@test f21568([0]) == 1

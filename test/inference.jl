@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: https://julialang.org/license
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # tests for Core.Inference correctness and precision
 
@@ -611,7 +611,7 @@ function i20343()
     f20343([1,2,3]..., 4)
 end
 @test Base.return_types(i20343, ()) == [Int8]
-struct Foo20518 <: AbstractVector{Int}; end # issue #20518; inference assumed AbstractArrays
+immutable Foo20518 <: AbstractVector{Int}; end # issue #20518; inference assumed AbstractArrays
 Base.getindex(::Foo20518, ::Int) = "oops"      # not to lie about their element type
 Base.indices(::Foo20518) = (Base.OneTo(4),)
 foo20518(xs::Any...) = -1
@@ -657,7 +657,8 @@ let A = 1:2, z = zip(A, A, A, A, A, A, A, A, A, A, A, A)
 end
 # introduce TypeVars in Unions in invariant position
 let T = Val{Val{Val{Union{Int8,Int16,Int32,Int64,UInt8,UInt16,UInt32,UInt64}}}}
-    @test T <: Core.Inference.limit_type_depth(T, 0)
+    #TODO: this test hits an assertion (see #21191)
+    #@test T <: Core.Inference.limit_type_depth(T, 0)
 end
 
 # issue #20704
@@ -735,44 +736,5 @@ f21175() = 902221
 # call again, so that the AST is built on-demand
 let e = code_typed(f21175, ())[1].first.code[1]::Expr
     @test e.head === :return
-    @test e.args[1] ∈ (902221, Core.QuoteNode(902221))
+    @test e.args[1] == Core.QuoteNode(902221)
 end
-
-# issue #10207
-type T10207{A, B}
-    a::A
-    b::B
-end
-@test code_typed(T10207, (Int,Any))[1].second == T10207{Int,T} where T
-
-# issue #21410
-f21410(::V, ::Pair{V,E}) where {V, E} = E
-@test code_typed(f21410, Tuple{Ref, Pair{Ref{T},Ref{T}} where T<:Number})[1].second == Type{Ref{T}} where T<:Number
-
-# issue #21369
-function inf_error_21369(arg)
-    if arg
-        # invalid instantiation, causing throw during inference
-        Complex{String}
-    end
-end
-function break_21369()
-    try
-        error("uhoh")
-    catch
-        eval(:(inf_error_21369(false)))
-        bt = catch_backtrace()
-        i = 1
-        local fr
-        while true
-            fr = Base.StackTraces.lookup(bt[i])[end]
-            if !fr.from_c
-                break
-            end
-            i += 1
-        end
-        @test fr.func === :break_21369
-        rethrow()
-    end
-end
-@test_throws ErrorException break_21369()  # not TypeError

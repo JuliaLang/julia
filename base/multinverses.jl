@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: https://julialang.org/license
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 module MultiplicativeInverses
 
@@ -134,21 +134,21 @@ struct UnsignedMultiplicativeInverse{T<:Unsigned} <: MultiplicativeInverse{T}
 end
 UnsignedMultiplicativeInverse(x::Unsigned) = UnsignedMultiplicativeInverse{typeof(x)}(x)
 
-function div(a::T, b::SignedMultiplicativeInverse{T}) where T
+function div{T}(a::T, b::SignedMultiplicativeInverse{T})
     x = ((widen(a)*b.multiplier) >>> sizeof(a)*8) % T
     x += (a*b.addmul) % T
     ifelse(abs(b.divisor) == 1, a*b.divisor, (signbit(x) + (x >> b.shift)) % T)
 end
-function div(a::T, b::UnsignedMultiplicativeInverse{T}) where T
+function div{T}(a::T, b::UnsignedMultiplicativeInverse{T})
     x = ((widen(a)*b.multiplier) >>> sizeof(a)*8) % T
     x = ifelse(b.add, convert(T, convert(T, (convert(T, a - x) >>> 1)) + x), x)
     ifelse(b.divisor == 1, a, x >>> b.shift)
 end
 
-rem(a::T, b::MultiplicativeInverse{T}) where {T} =
+rem{T}(a::T, b::MultiplicativeInverse{T}) =
     a - div(a, b)*b.divisor
 
-function divrem(a::T, b::MultiplicativeInverse{T}) where T
+function divrem{T}(a::T, b::MultiplicativeInverse{T})
     d = div(a, b)
     (d, a - d*b.divisor)
 end

@@ -90,7 +90,7 @@ is that declaring more specific types leaves more "space" for future method defi
 Instead of:
 
 ```julia
-function double(a::AbstractArray{<:Number})
+function double{T<:Number}(a::AbstractArray{T})
     for i = 1:endof(a)
         a[i] *= 2
     end
@@ -101,7 +101,7 @@ end
 use:
 
 ```julia
-function double!(a::AbstractArray{<:Number})
+function double!{T<:Number}(a::AbstractArray{T})
     for i = 1:endof(a)
         a[i] *= 2
     end
@@ -123,7 +123,7 @@ Types such as `Union{Function,AbstractString}` are often a sign that some design
 When creating a type such as:
 
 ```julia
-mutable struct MyType
+type MyType
     ...
     x::Union{Void,T}
 end
@@ -194,7 +194,7 @@ is already iterable it is often even better to leave it alone, and not convert i
 A function signature:
 
 ```julia
-foo(x::T) where {T<:Real} = ...
+foo{T<:Real}(x::T) = ...
 ```
 
 should be written as:
@@ -243,7 +243,7 @@ it will naturally have access to the run-time values it needs.
 If you have a type that uses a native pointer:
 
 ```julia
-mutable struct NativeType
+type NativeType
     p::Ptr{UInt8}
     ...
 end

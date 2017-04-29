@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: https://julialang.org/license
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 ## Create an extractor that extracts the modified original matrix, e.g.
 ## LD for BunchKaufman, UL for CholeskyDense, LU for LUDense and
@@ -72,16 +72,16 @@ The following functions are available for
 bkfact(A::StridedMatrix{<:BlasFloat}, uplo::Symbol=:U, symmetric::Bool=issymmetric(A),
     rook::Bool=false) =
         bkfact!(copy(A), uplo, symmetric, rook)
-bkfact(A::StridedMatrix{T}, uplo::Symbol=:U, symmetric::Bool=issymmetric(A),
-    rook::Bool=false) where {T} =
+bkfact{T}(A::StridedMatrix{T}, uplo::Symbol=:U, symmetric::Bool=issymmetric(A),
+    rook::Bool=false) =
         bkfact!(convert(Matrix{promote_type(Float32, typeof(sqrt(one(T))))}, A),
                 uplo, symmetric, rook)
 
-convert(::Type{BunchKaufman{T}}, B::BunchKaufman{T}) where {T} = B
-convert(::Type{BunchKaufman{T}}, B::BunchKaufman) where {T} =
+convert{T}(::Type{BunchKaufman{T}}, B::BunchKaufman{T}) = B
+convert{T}(::Type{BunchKaufman{T}}, B::BunchKaufman) =
     BunchKaufman(convert(Matrix{T}, B.LD), B.ipiv, B.uplo, B.symmetric, B.rook, B.info)
-convert(::Type{Factorization{T}}, B::BunchKaufman{T}) where {T} = B
-convert(::Type{Factorization{T}}, B::BunchKaufman) where {T} = convert(BunchKaufman{T}, B)
+convert{T}(::Type{Factorization{T}}, B::BunchKaufman{T}) = B
+convert{T}(::Type{Factorization{T}}, B::BunchKaufman) = convert(BunchKaufman{T}, B)
 
 size(B::BunchKaufman) = size(B.LD)
 size(B::BunchKaufman, d::Integer) = size(B.LD, d)
@@ -120,7 +120,7 @@ function inv(B::BunchKaufman{<:BlasComplex})
     end
 end
 
-function A_ldiv_B!(B::BunchKaufman{T}, R::StridedVecOrMat{T}) where T<:BlasReal
+function A_ldiv_B!{T<:BlasReal}(B::BunchKaufman{T}, R::StridedVecOrMat{T})
     if B.info > 0
         throw(SingularException(B.info))
     end
@@ -131,7 +131,7 @@ function A_ldiv_B!(B::BunchKaufman{T}, R::StridedVecOrMat{T}) where T<:BlasReal
         LAPACK.sytrs!(B.uplo, B.LD, B.ipiv, R)
     end
 end
-function A_ldiv_B!(B::BunchKaufman{T}, R::StridedVecOrMat{T}) where T<:BlasComplex
+function A_ldiv_B!{T<:BlasComplex}(B::BunchKaufman{T}, R::StridedVecOrMat{T})
     if B.info > 0
         throw(SingularException(B.info))
     end

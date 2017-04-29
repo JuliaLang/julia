@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: https://julialang.org/license
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # Base.require is the implementation for the `import` statement
 
@@ -699,16 +699,7 @@ function parse_cache_header(f::IO)
         push!(files, (String(read(f, n)), ntoh(read(f, Float64))))
     end
     @assert totbytes == 4 "header of cache file appears to be corrupt"
-    # read the list of modules that are required to be present during loading
-    required_modules = Dict{Symbol,UInt64}()
-    while true
-        n = ntoh(read(f, Int32))
-        n == 0 && break
-        sym = Symbol(read(f, n)) # module symbol
-        uuid = ntoh(read(f, UInt64)) # module UUID
-        required_modules[sym] = uuid
-    end
-    return modules, files, required_modules
+    return modules, files
 end
 
 function parse_cache_header(cachefile::String)
@@ -722,7 +713,15 @@ function parse_cache_header(cachefile::String)
 end
 
 function cache_dependencies(f::IO)
-    defs, files, modules = parse_cache_header(f)
+    defs, files = parse_cache_header(f)
+    modules = []
+    while true
+        n = ntoh(read(f, Int32))
+        n == 0 && break
+        sym = Symbol(read(f, n)) # module symbol
+        uuid = ntoh(read(f, UInt64)) # module UUID (mostly just a timestamp)
+        push!(modules, (sym, uuid))
+    end
     return modules, files
 end
 
@@ -743,22 +742,7 @@ function stale_cachefile(modpath::String, cachefile::String)
             DEBUG_LOADING[] && info("JL_DEBUG_LOADING: Rejecting cache file $cachefile due to it containing an invalid cache header.")
             return true # invalid cache file
         end
-        modules, files, required_modules = parse_cache_header(io)
-
-        # Check if transitive dependencies can be fullfilled
-        for mod in keys(required_modules)
-            if mod == :Main || mod == :Core || mod == :Base
-                continue
-            # Module is already loaded
-            elseif isbindingresolved(Main, mod)
-                continue
-            end
-            name = string(mod)
-            path = find_in_node_path(name, nothing, 1)
-            if path === nothing
-                return true # Won't be able to fullfill dependency
-            end
-        end
+        modules, files = parse_cache_header(io)
 
         # check if this file is going to provide one of our concrete dependencies
         # or if it provides a version that conflicts with our concrete dependencies

@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: https://julialang.org/license
+// This file is a part of Julia. License is MIT: http://julialang.org/license
 
 /*
   utility functions used by the runtime system, generated code, and Base library
@@ -236,35 +236,6 @@ JL_DLLEXPORT void jl_pop_handler(int n)
     jl_eh_restore_state(eh);
 }
 
-JL_DLLEXPORT jl_value_t *jl_apply_with_saved_exception_state(jl_value_t **args, uint32_t nargs, int catch_exceptions)
-{
-    jl_ptls_t ptls = jl_get_ptls_states();
-    jl_value_t *exc = ptls->exception_in_transit;
-    jl_array_t *bt = NULL;
-    JL_GC_PUSH2(&exc, &bt);
-    if (ptls->bt_size > 0)
-        bt = (jl_array_t*)jl_get_backtrace();
-    jl_value_t *v;
-    if (catch_exceptions) {
-        JL_TRY {
-            v = jl_apply(args, nargs);
-        }
-        JL_CATCH {
-            v = NULL;
-        }
-    }
-    else {
-        v = jl_apply(args, nargs);
-    }
-    ptls->exception_in_transit = exc;
-    if (bt != NULL) {
-        ptls->bt_size = jl_array_len(bt);
-        memcpy(ptls->bt_data, bt->data, ptls->bt_size * sizeof(void*));
-    }
-    JL_GC_POP();
-    return v;
-}
-
 // misc -----------------------------------------------------------------------
 
 // perform f(args...) on stack
@@ -466,6 +437,24 @@ JL_DLLEXPORT jl_value_t *jl_stderr_obj(void)
     if (jl_base_module == NULL) return NULL;
     jl_value_t *stderr_obj = jl_get_global(jl_base_module, jl_symbol("STDERR"));
     return stderr_obj;
+}
+
+static jl_function_t *jl_show_gf=NULL;
+
+JL_DLLEXPORT void jl_show(jl_value_t *stream, jl_value_t *v)
+{
+    if (jl_base_module) {
+        if (jl_show_gf == NULL) {
+            jl_show_gf = (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("show"));
+        }
+        if (jl_show_gf==NULL || stream==NULL) {
+            jl_printf(JL_STDERR, " could not show value of type %s",
+                      jl_symbol_name(((jl_datatype_t*)jl_typeof(v))->name->name));
+            return;
+        }
+        jl_value_t *args[3] = {jl_show_gf,stream,v};
+        jl_apply(args, 3);
+    }
 }
 
 // toys for debugging ---------------------------------------------------------
@@ -879,7 +868,8 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
 
 static size_t jl_static_show_x(JL_STREAM *out, jl_value_t *v, struct recur_list *depth)
 {
-    // show values without calling a julia method or allocating through the GC
+    // mimic jl_show, but never calling a julia method and
+    // never allocate through julia gc
     if (v == NULL) {
         return jl_printf(out, "#<null>");
     }

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: https://julialang.org/license
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 module Sort
 
@@ -819,13 +819,13 @@ function sortcols(A::AbstractMatrix; kws...)
     A[:,p]
 end
 
-function slicetypeof(A::AbstractArray{T}, i1, i2) where T
+function slicetypeof{T}(A::AbstractArray{T}, i1, i2)
     I = map(slice_dummy, to_indices(A, (i1, i2)))
     fast = isa(IndexStyle(viewindexing(I), IndexStyle(A)), IndexLinear)
     SubArray{T,1,typeof(A),typeof(I),fast}
 end
 slice_dummy(S::Slice) = S
-slice_dummy(::AbstractUnitRange{T}) where {T} = oneunit(T)
+slice_dummy{T}(::AbstractUnitRange{T}) = oneunit(T)
 
 ## fast clever sorting for floats ##
 
@@ -848,8 +848,8 @@ right(::DirectOrdering) = Right()
 left(o::Perm) = Perm(left(o.order), o.data)
 right(o::Perm) = Perm(right(o.order), o.data)
 
-lt(::Left, x::T, y::T) where {T<:Floats} = slt_int(y, x)
-lt(::Right, x::T, y::T) where {T<:Floats} = slt_int(x, y)
+lt{T<:Floats}(::Left, x::T, y::T) = slt_int(y, x)
+lt{T<:Floats}(::Right, x::T, y::T) = slt_int(x, y)
 
 isnan(o::DirectOrdering, x::Floats) = (x!=x)
 isnan(o::Perm, i::Int) = isnan(o.order,o.data[i])

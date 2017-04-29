@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: https://julialang.org/license
+// This file is a part of Julia. License is MIT: http://julialang.org/license
 
 #include "gc.h"
 
@@ -48,7 +48,7 @@ static jl_mutex_t gc_cache_lock;
 jl_gc_num_t gc_num = {0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 static size_t last_long_collect_interval;
 
-pagetable_t memory_map;
+region_t regions[REGION_COUNT];
 
 // List of marked big objects.  Not per-thread.  Accessed only by master thread.
 bigval_t *big_objects_marked = NULL;
@@ -190,20 +190,8 @@ static void jl_gc_run_finalizers_in_list(jl_ptls_t ptls, arraylist_t *list)
     jl_value_t **items = (jl_value_t**)list->items;
     jl_gc_push_arraylist(ptls, list);
     JL_UNLOCK_NOGC(&finalizers_lock);
-    // from jl_apply_with_saved_exception_state; to hoist state saving out of the loop
-    jl_value_t *exc = ptls->exception_in_transit;
-    jl_array_t *bt = NULL;
-    JL_GC_PUSH2(&exc, &bt);
-    if (ptls->bt_size > 0)
-        bt = (jl_array_t*)jl_get_backtrace();
     for (size_t i = 2;i < len;i += 2)
         run_finalizer(ptls, items[i], items[i + 1]);
-    ptls->exception_in_transit = exc;
-    if (bt != NULL) {
-        ptls->bt_size = jl_array_len(bt);
-        memcpy(ptls->bt_data, bt->data, ptls->bt_size * sizeof(void*));
-    }
-    JL_GC_POP();
     JL_GC_POP();
 }
 
@@ -416,7 +404,7 @@ static int mark_reset_age = 0;
 #define PROMOTE_AGE 1
 // this cannot be increased as is without changing :
 // - sweep_page which is specialized for 1bit age
-// - the size of the age storage in jl_gc_pagemeta_t
+// - the size of the age storage in region_t
 
 
 static int64_t scanned_bytes; // young bytes scanned while marking
@@ -602,7 +590,7 @@ STATIC_INLINE void gc_setmark_pool_(jl_ptls_t ptls, jl_taggedvalue_t *o,
 STATIC_INLINE void gc_setmark_pool(jl_ptls_t ptls, jl_taggedvalue_t *o,
                                    uint8_t mark_mode)
 {
-    gc_setmark_pool_(ptls, o, mark_mode, jl_assume(page_metadata(o)));
+    gc_setmark_pool_(ptls, o, mark_mode, page_metadata(o));
 }
 
 STATIC_INLINE void gc_setmark(jl_ptls_t ptls, jl_taggedvalue_t *o,
@@ -632,7 +620,7 @@ void gc_setmark_buf(jl_ptls_t ptls, void *o, uint8_t mark_mode, size_t minsz)
     // sure.
     if (__likely(gc_setmark_tag(buf, mark_mode, tag, &bits)) && !gc_verifying) {
         if (minsz <= GC_MAX_SZCLASS) {
-            jl_gc_pagemeta_t *page = page_metadata(buf);
+            jl_gc_pagemeta_t *page = page_metadata(o);
             if (page) {
                 gc_setmark_pool_(ptls, buf, bits, page);
                 return;
@@ -889,7 +877,11 @@ static NOINLINE jl_taggedvalue_t *add_page(jl_gc_pool_t *p)
     // Do not pass in `ptls` as argument. This slows down the fast path
     // in pool_alloc significantly
     jl_ptls_t ptls = jl_get_ptls_states();
-    jl_gc_pagemeta_t *pg = jl_gc_alloc_page();
+    char *data = (char*)jl_gc_alloc_page();
+    if (data == NULL)
+        jl_throw(jl_memory_exception);
+    jl_gc_pagemeta_t *pg = page_metadata(data + GC_PAGE_OFFSET);
+    pg->data = data;
     pg->osize = p->osize;
     pg->ages = (uint8_t*)malloc(GC_PAGE_SZ / 8 / p->osize + 1);
     pg->thread_n = ptls->tid;
@@ -930,7 +922,7 @@ JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc(jl_ptls_t ptls, int pool_offset,
         if (__unlikely(gc_page_data(v) != gc_page_data(next))) {
             // we only update pg's fields when the freelist changes page
             // since pg's metadata is likely not in cache
-            jl_gc_pagemeta_t *pg = jl_assume(page_metadata(v));
+            jl_gc_pagemeta_t *pg = page_metadata(v);
             assert(pg->osize == p->osize);
             pg->nfree = 0;
             pg->has_young = 1;
@@ -947,7 +939,7 @@ JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc(jl_ptls_t ptls, int pool_offset,
         if (v) {
             // like the freelist case,
             // but only update the page metadata when it is full
-            jl_gc_pagemeta_t *pg = jl_assume(page_metadata((char*)v - 1));
+            jl_gc_pagemeta_t *pg = page_metadata((char*)v - 1);
             assert(pg->osize == p->osize);
             pg->nfree = 0;
             pg->has_young = 1;
@@ -1092,94 +1084,37 @@ done:
     return pfl;
 }
 
-// the actual sweeping over all allocated pages in a memory pool
-static inline void sweep_pool_page(jl_taggedvalue_t ***pfl, jl_gc_pagemeta_t *pg, int sweep_full)
+static void sweep_pool_region(jl_taggedvalue_t ***pfl, int region_i, int sweep_full)
 {
-    int p_n = pg->pool_n;
-    int t_n = pg->thread_n;
-    jl_ptls_t ptls2 = jl_all_tls_states[t_n];
-    jl_gc_pool_t *p = &ptls2->heap.norm_pools[p_n];
-    int osize = pg->osize;
-    pfl[t_n * JL_GC_N_POOLS + p_n] = sweep_page(p, pg, pfl[t_n * JL_GC_N_POOLS + p_n], sweep_full, osize);
-}
+    region_t *region = &regions[region_i];
 
-// sweep over a pagetable0 for all allocated pages
-static inline int sweep_pool_pagetable0(jl_taggedvalue_t ***pfl, pagetable0_t *pagetable0, int sweep_full)
-{
-    unsigned ub = 0;
-    unsigned alloc = 0;
-    for (unsigned pg_i = 0; pg_i <= pagetable0->ub; pg_i++) {
-        uint32_t line = pagetable0->allocmap[pg_i];
-        unsigned j;
-        if (!line)
-            continue;
-        ub = pg_i;
-        alloc = 1;
-        for (j = 0; line; j++, line >>= 1) {
-            unsigned next = ffs_u32(line);
-            j += next;
-            line >>= next;
-            jl_gc_pagemeta_t *pg = pagetable0->meta[pg_i * 32 + j];
-            sweep_pool_page(pfl, pg, sweep_full);
-        }
-    }
-    pagetable0->ub = ub;
-    return alloc;
-}
-
-// sweep over pagetable1 for all pagetable0 that may contain allocated pages
-static inline int sweep_pool_pagetable1(jl_taggedvalue_t ***pfl, pagetable1_t *pagetable1, int sweep_full)
-{
-    unsigned ub = 0;
-    unsigned alloc = 0;
-    for (unsigned pg_i = 0; pg_i <= pagetable1->ub; pg_i++) {
-        uint32_t line = pagetable1->allocmap0[pg_i];
-        unsigned j;
-        for (j = 0; line; j++, line >>= 1) {
-            unsigned next = ffs_u32(line);
-            j += next;
-            line >>= next;
-            pagetable0_t *pagetable0 = pagetable1->meta0[pg_i * 32 + j];
-            if (pagetable0 && !sweep_pool_pagetable0(pfl, pagetable0, sweep_full))
-                pagetable1->allocmap0[pg_i] &= ~(1 << j); // no allocations found, remember that for next time
-        }
-        if (pagetable1->allocmap0[pg_i]) {
+    // the actual sweeping
+    int ub = 0;
+    int lb = region->lb;
+    for (int pg_i = 0; pg_i <= region->ub; pg_i++) {
+        uint32_t line = region->allocmap[pg_i];
+        if (line) {
             ub = pg_i;
-            alloc = 1;
+            for (int j = 0; j < 32; j++) {
+                if ((line >> j) & 1) {
+                    jl_gc_pagemeta_t *pg = &region->meta[pg_i*32 + j];
+                    int p_n = pg->pool_n;
+                    int t_n = pg->thread_n;
+                    jl_ptls_t ptls2 = jl_all_tls_states[t_n];
+                    jl_gc_pool_t *p = &ptls2->heap.norm_pools[p_n];
+                    int osize = pg->osize;
+                    pfl[t_n * JL_GC_N_POOLS + p_n] = sweep_page(p, pg, pfl[t_n * JL_GC_N_POOLS + p_n], sweep_full, osize);
+                }
+            }
+        }
+        else if (pg_i < lb) {
+            lb = pg_i;
         }
     }
-    pagetable1->ub = ub;
-    return alloc;
+    region->ub = ub;
+    region->lb = lb;
 }
 
-// sweep over all memory for all pagetable1 that may contain allocated pages
-static void sweep_pool_pagetable(jl_taggedvalue_t ***pfl, int sweep_full)
-{
-    if (REGION2_PG_COUNT == 1) { // compile-time optimization
-        pagetable1_t *pagetable1 = memory_map.meta1[0];
-        sweep_pool_pagetable1(pfl, pagetable1, sweep_full);
-        return;
-    }
-    unsigned ub = 0;
-    for (unsigned pg_i = 0; pg_i <= memory_map.ub; pg_i++) {
-        uint32_t line = memory_map.allocmap1[pg_i];
-        unsigned j;
-        for (j = 0; line; j++, line >>= 1) {
-            unsigned next = ffs_u32(line);
-            j += next;
-            line >>= next;
-            pagetable1_t *pagetable1 = memory_map.meta1[pg_i * 32 + j];
-            if (pagetable1 && !sweep_pool_pagetable1(pfl, pagetable1, sweep_full))
-                memory_map.allocmap1[pg_i] &= ~(1 << j); // no allocations found, remember that for next time
-        }
-        if (memory_map.allocmap1[pg_i]) {
-            ub = pg_i;
-        }
-    }
-    memory_map.ub = ub;
-}
-
-// sweep over all memory that is being used and not in a pool
 static void gc_sweep_other(jl_ptls_t ptls, int sweep_full)
 {
     sweep_malloced_arrays();
@@ -1202,14 +1137,11 @@ static void gc_pool_sync_nfree(jl_gc_pagemeta_t *pg, jl_taggedvalue_t *last)
     pg->nfree = nfree;
 }
 
-// setup the data-structures for a sweep over all memory pools
 static void gc_sweep_pool(int sweep_full)
 {
     gc_time_pool_start();
     lazy_freed_pages = 0;
 
-    // allocate enough space to hold the end of the free list chain
-    // for every thread and pool size
     jl_taggedvalue_t ***pfl = (jl_taggedvalue_t ***) alloca(jl_n_threads * JL_GC_N_POOLS * sizeof(jl_taggedvalue_t**));
 
     // update metadata of pages that were pointed to by freelist or newpages from a pool
@@ -1220,7 +1152,7 @@ static void gc_sweep_pool(int sweep_full)
             jl_gc_pool_t *p = &ptls2->heap.norm_pools[i];
             jl_taggedvalue_t *last = p->freelist;
             if (last) {
-                jl_gc_pagemeta_t *pg = jl_assume(page_metadata(last));
+                jl_gc_pagemeta_t *pg = page_metadata(last);
                 gc_pool_sync_nfree(pg, last);
                 pg->has_young = 1;
             }
@@ -1230,7 +1162,7 @@ static void gc_sweep_pool(int sweep_full)
             last = p->newpages;
             if (last) {
                 char *last_p = (char*)last;
-                jl_gc_pagemeta_t *pg = jl_assume(page_metadata(last_p - 1));
+                jl_gc_pagemeta_t *pg = page_metadata(last_p - 1);
                 assert(last_p - gc_page_data(last_p - 1) >= GC_PAGE_OFFSET);
                 pg->nfree = (GC_PAGE_SZ - (last_p - gc_page_data(last_p - 1))) / p->osize;
                 pg->has_young = 1;
@@ -1239,8 +1171,12 @@ static void gc_sweep_pool(int sweep_full)
         }
     }
 
-    // the actual sweeping
-    sweep_pool_pagetable(pfl, sweep_full);
+    for (int i = 0; i < REGION_COUNT; i++) {
+        if (!regions[i].pages)
+            break;
+        sweep_pool_region(pfl, i, sweep_full);
+    }
+
 
     // null out terminal pointers of free lists
     for (int t_i = 0; t_i < jl_n_threads; t_i++) {
@@ -1533,8 +1469,7 @@ static void gc_scan_obj_(jl_ptls_t ptls, jl_value_t *v, int d,
     if (vt == jl_weakref_type)
         return;
     // fast path
-    uint32_t npointers = vt->layout->npointers;
-    if (npointers == 0)
+    if (vt->layout->npointers == 0)
         return;
     d++;
     if (d >= MAX_MARK_DEPTH)
@@ -1603,12 +1538,12 @@ static void gc_scan_obj_(jl_ptls_t ptls, jl_value_t *v, int d,
     }
     else {
         int nf = (int)jl_datatype_nfields(vt);
+        uint32_t npointers = vt->layout->npointers;
         nptr += (npointers & 0xff) << (npointers & 0x300);
-        uint32_t offsets = jl_datatype_layout_n_nonptr(vt->layout);
-        nf -= offsets & 0xffff;
-        for (int i = (offsets >> 16); i < nf; i++) {
+        for(int i=0; i < nf; i++) {
             if (jl_field_isptr(vt, i)) {
-                jl_value_t **slot = (jl_value_t**)((char*)v + jl_field_offset(vt, i));
+                jl_value_t **slot = (jl_value_t**)((char*)v +
+                                                   jl_field_offset(vt, i));
                 jl_value_t *fld = *slot;
                 if (fld) {
                     verify_parent2("object", v, slot, "field(%d)", i);
@@ -1710,6 +1645,7 @@ static void jl_gc_mark_thread_local(jl_ptls_t ptls, jl_ptls_t ptls2)
     gc_push_root(ptls, ptls2->current_task, 0);
     gc_push_root(ptls, ptls2->root_task, 0);
     gc_push_root(ptls, ptls2->exception_in_transit, 0);
+    gc_push_root(ptls, ptls2->task_arg_in_transit, 0);
 }
 
 // mark the initial root set
@@ -1733,9 +1669,7 @@ static void mark_roots(jl_ptls_t ptls)
     if (jl_all_methods != NULL)
         gc_push_root(ptls, jl_all_methods, 0);
 
-#ifndef COPY_STACKS
-    gc_push_root(ptls, jl_unprotect_stack_func, 0);
-#endif
+    // gc_push_root(ptls, jl_unprotect_stack_func, 0);
 
     // constants
     gc_push_root(ptls, jl_typetype_type, 0);
@@ -2367,13 +2301,13 @@ static char *gc_perm_pool = NULL;
 static size_t gc_perm_size = 0;
 
 // **NOT** a safepoint
-void *jl_gc_perm_alloc_nolock(size_t sz, int zero)
+void *jl_gc_perm_alloc_nolock(size_t sz)
 {
     // The caller should have acquired `gc_perm_lock`
 #ifndef MEMDEBUG
     if (__unlikely(sz > GC_PERM_POOL_LIMIT))
 #endif
-        return zero ? calloc(1, sz) : malloc(sz);
+        return malloc(sz);
     sz = LLT_ALIGN(sz, JL_SMALL_BYTE_ALIGNMENT);
     if (__unlikely(sz > gc_perm_size)) {
 #ifdef _OS_WINDOWS_
@@ -2400,14 +2334,14 @@ void *jl_gc_perm_alloc_nolock(size_t sz, int zero)
 }
 
 // **NOT** a safepoint
-void *jl_gc_perm_alloc(size_t sz, int zero)
+void *jl_gc_perm_alloc(size_t sz)
 {
 #ifndef MEMDEBUG
     if (__unlikely(sz > GC_PERM_POOL_LIMIT))
 #endif
-        return zero ? calloc(1, sz) : malloc(sz);
+        return malloc(sz);
     JL_LOCK_NOGC(&gc_perm_lock);
-    void *p = jl_gc_perm_alloc_nolock(sz, zero);
+    void *p = jl_gc_perm_alloc_nolock(sz);
     JL_UNLOCK_NOGC(&gc_perm_lock);
     return p;
 }

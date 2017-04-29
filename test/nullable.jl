@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: https://julialang.org/license
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # "is a null with type T", curried on 2nd argument
 isnull_oftype(x::Nullable, T::Type) = eltype(x) == T && isnull(x)
@@ -525,6 +525,3 @@ end
 let f19270{S,T}(x::S, y::T) = Base.promote_op(^, S, T)
     @test f19270(Nullable(0.0f0), Nullable(BigInt(0))) == Nullable{Float32}
 end
-
-# issue #21397
-@test Nullable(Tuple) === Nullable{DataType}(Tuple)

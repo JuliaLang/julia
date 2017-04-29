@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: https://julialang.org/license
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 ## number-theoretic functions ##
 
@@ -15,7 +15,7 @@ julia> gcd(6,-9)
 3
 ```
 """
-function gcd(a::T, b::T) where T<:Integer
+function gcd{T<:Integer}(a::T, b::T)
     while b != 0
         t = b
         b = rem(a, b)
@@ -26,7 +26,7 @@ end
 
 # binary GCD (aka Stein's) algorithm
 # about 1.7x (2.1x) faster for random Int64s (Int128s)
-function gcd(a::T, b::T) where T<:Union{Int64,UInt64,Int128,UInt128}
+function gcd{T<:Union{Int64,UInt64,Int128,UInt128}}(a::T, b::T)
     a == 0 && return abs(b)
     b == 0 && return abs(a)
     za = trailing_zeros(a)
@@ -59,7 +59,7 @@ julia> lcm(-2,3)
 6
 ```
 """
-function lcm(a::T, b::T) where T<:Integer
+function lcm{T<:Integer}(a::T, b::T)
     # explicit a==0 test is to handle case of lcm(0,0) correctly
     if a == 0
         return a
@@ -107,7 +107,7 @@ julia> gcdx(240, 46)
     their `typemax`, and the identity then holds only via the unsigned
     integers' modulo arithmetic.
 """
-function gcdx(a::T, b::T) where T<:Integer
+function gcdx{T<:Integer}(a::T, b::T)
     # a0, b0 = a, b
     s0, s1 = oneunit(T), zero(T)
     t0, t1 = s1, s0
@@ -142,7 +142,7 @@ julia> invmod(5,6)
 5
 ```
 """
-function invmod(n::T, m::T) where T<:Integer
+function invmod{T<:Integer}(n::T, m::T)
     g, x, y = gcdx(n, m)
     (g != 1 || m == 0) && throw(DomainError())
     # Note that m might be negative here.
@@ -191,7 +191,7 @@ function power_by_squaring(x::Bool, p::Integer)
     return (p==0) | x
 end
 
-^(x::T, p::T) where {T<:Integer} = power_by_squaring(x,p)
+^{T<:Integer}(x::T, p::T) = power_by_squaring(x,p)
 ^(x::Number, p::Integer)  = power_by_squaring(x,p)
 ^(x, p::Integer)          = power_by_squaring(x,p)
 
@@ -202,7 +202,7 @@ end
 # We mark these @inline since if the target is marked @inline,
 # we want to make sure that gets propagated,
 # even if it is over the inlining threshold.
-@inline literal_pow(f, x, ::Type{Val{p}}) where {p} = f(x,p)
+@inline literal_pow{p}(f, x, ::Type{Val{p}}) = f(x,p)
 
 # Restrict inlining to hardware-supported arithmetic types, which
 # are fast enough to benefit from inlining.
@@ -225,7 +225,7 @@ const HWNumber = Union{HWReal, Complex{<:HWReal}, Rational{<:HWReal}}
 
 Compute ``x^p \\pmod m``.
 """
-function powermod(x::Integer, p::Integer, m::T) where T<:Integer
+function powermod{T<:Integer}(x::Integer, p::Integer, m::T)
     p < 0 && return powermod(invmod(x, m), -p, m)
     p == 0 && return mod(one(m),m)
     (m == 1 || m == -1) && return zero(m)
@@ -542,9 +542,9 @@ Returns an array with element type `T` (default `Int`) of the digits of `n` in t
 base, optionally padded with zeros to a specified size. More significant digits are at
 higher indexes, such that `n == sum([digits[k]*base^(k-1) for k=1:length(digits)])`.
 """
-digits(n::Integer, base::T=10, pad::Integer=1) where {T<:Integer} = digits(T, n, base, pad)
+digits{T<:Integer}(n::Integer, base::T=10, pad::Integer=1) = digits(T, n, base, pad)
 
-function digits(::Type{T}, n::Integer, base::Integer=10, pad::Integer=1) where T<:Integer
+function digits{T<:Integer}(::Type{T}, n::Integer, base::Integer=10, pad::Integer=1)
     2 <= base || throw(ArgumentError("base must be ≥ 2, got $base"))
     digits!(zeros(T, max(pad, ndigits0z(n,base))), n, base)
 end
@@ -556,7 +556,7 @@ Fills an array of the digits of `n` in the given base. More significant digits a
 indexes. If the array length is insufficient, the least significant digits are filled up to
 the array length. If the array length is excessive, the excess portion is filled with zeros.
 """
-function digits!(a::AbstractArray{T,1}, n::Integer, base::Integer=10) where T<:Integer
+function digits!{T<:Integer}(a::AbstractArray{T,1}, n::Integer, base::Integer=10)
     2 <= base || throw(ArgumentError("base must be ≥ 2, got $base"))
     base - 1 <= typemax(T) || throw(ArgumentError("type $T too small for base $base"))
     for i in eachindex(a)
@@ -602,7 +602,7 @@ end
 
 Number of ways to choose `k` out of `n` items.
 """
-function binomial(n::T, k::T) where T<:Integer
+function binomial{T<:Integer}(n::T, k::T)
     k < 0 && return zero(T)
     sgn = one(T)
     if n < 0

@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: https://julialang.org/license
+// This file is a part of Julia. License is MIT: http://julialang.org/license
 
 /*
   defining DataTypes
@@ -97,23 +97,12 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t nfields,
 {
     // compute the smallest fielddesc type that can hold the layout description
     int fielddesc_type = 0;
-    uint32_t npointers = 0;
-    // First pointer field
-    uint32_t first_ptr = (uint32_t)-1;
-    // Last pointer field
-    uint32_t last_ptr = 0;
     if (nfields > 0) {
         uint32_t max_size = 0;
         uint32_t max_offset = desc[nfields - 1].offset;
         for (size_t i = 0; i < nfields; i++) {
             if (desc[i].size > max_size)
                 max_size = desc[i].size;
-            if (desc[i].isptr) {
-                npointers++;
-                if (first_ptr == (uint32_t)-1)
-                    first_ptr = i;
-                last_ptr = i;
-            }
         }
         jl_fielddesc8_t maxdesc8 = { 0, max_size, max_offset };
         jl_fielddesc16_t maxdesc16 = { 0, max_size, max_offset };
@@ -131,20 +120,8 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t nfields,
 
     // allocate a new descriptor
     uint32_t fielddesc_size = jl_fielddesc_size(fielddesc_type);
-    int has_padding = nfields && npointers;
     jl_datatype_layout_t *flddesc =
-        (jl_datatype_layout_t*)jl_gc_perm_alloc(sizeof(jl_datatype_layout_t) +
-                                                nfields * fielddesc_size +
-                                                (has_padding ? sizeof(uint32_t) : 0), 0);
-    if (has_padding) {
-        if (first_ptr > UINT16_MAX)
-            first_ptr = UINT16_MAX;
-        last_ptr = nfields - last_ptr - 1;
-        if (last_ptr > UINT16_MAX)
-            last_ptr = UINT16_MAX;
-        flddesc = (jl_datatype_layout_t*)(((char*)flddesc) + sizeof(uint32_t));
-        jl_datatype_layout_n_nonptr(flddesc) = (first_ptr << 16) | last_ptr;
-    }
+        (jl_datatype_layout_t*)jl_gc_perm_alloc(sizeof(jl_datatype_layout_t) + nfields * fielddesc_size);
     flddesc->nfields = nfields;
     flddesc->alignment = alignment;
     flddesc->haspadding = haspadding;
@@ -154,6 +131,7 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t nfields,
     jl_fielddesc8_t* desc8 = (jl_fielddesc8_t*)jl_dt_layout_fields(flddesc);
     jl_fielddesc16_t* desc16 = (jl_fielddesc16_t*)jl_dt_layout_fields(flddesc);
     jl_fielddesc32_t* desc32 = (jl_fielddesc32_t*)jl_dt_layout_fields(flddesc);
+    uint32_t npointers = 0;
     for (size_t i = 0; i < nfields; i++) {
         if (fielddesc_type == 0) {
             desc8[i].offset = desc[i].offset;
@@ -169,6 +147,9 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t nfields,
             desc32[i].offset = desc[i].offset;
             desc32[i].size = desc[i].size;
             desc32[i].isptr = desc[i].isptr;
+        }
+        if (desc[i].isptr) {
+            npointers++;
         }
     }
     uint32_t nexp = 0;

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: https://julialang.org/license
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 struct Hessenberg{T,S<:AbstractMatrix} <: Factorization{T}
     factors::S
@@ -48,7 +48,7 @@ julia> F[:Q] * F[:H] * F[:Q]'
  4.0  3.0  2.0
 ```
 """
-function hessfact(A::StridedMatrix{T}) where T
+function hessfact{T}(A::StridedMatrix{T})
     S = promote_type(Float32, typeof(zero(T)/norm(one(T))))
     return hessfact!(copy_oftype(A, S))
 end
@@ -87,29 +87,29 @@ convert(::Type{Matrix}, F::Hessenberg) = convert(Array, convert(AbstractArray, F
 convert(::Type{Array}, F::Hessenberg) = convert(Matrix, F)
 full(F::Hessenberg) = convert(AbstractArray, F)
 
-A_mul_B!(Q::HessenbergQ{T}, X::StridedVecOrMat{T}) where {T<:BlasFloat} =
+A_mul_B!{T<:BlasFloat}(Q::HessenbergQ{T}, X::StridedVecOrMat{T}) =
     LAPACK.ormhr!('L', 'N', 1, size(Q.factors, 1), Q.factors, Q.τ, X)
-A_mul_B!(X::StridedMatrix{T}, Q::HessenbergQ{T}) where {T<:BlasFloat} =
+A_mul_B!{T<:BlasFloat}(X::StridedMatrix{T}, Q::HessenbergQ{T}) =
     LAPACK.ormhr!('R', 'N', 1, size(Q.factors, 1), Q.factors, Q.τ, X)
-Ac_mul_B!(Q::HessenbergQ{T}, X::StridedVecOrMat{T}) where {T<:BlasFloat} =
+Ac_mul_B!{T<:BlasFloat}(Q::HessenbergQ{T}, X::StridedVecOrMat{T}) =
     LAPACK.ormhr!('L', ifelse(T<:Real, 'T', 'C'), 1, size(Q.factors, 1), Q.factors, Q.τ, X)
-A_mul_Bc!(X::StridedMatrix{T}, Q::HessenbergQ{T}) where {T<:BlasFloat} =
+A_mul_Bc!{T<:BlasFloat}(X::StridedMatrix{T}, Q::HessenbergQ{T}) =
     LAPACK.ormhr!('R', ifelse(T<:Real, 'T', 'C'), 1, size(Q.factors, 1), Q.factors, Q.τ, X)
 
 
-function (*)(Q::HessenbergQ{T}, X::StridedVecOrMat{S}) where {T,S}
+function (*){T,S}(Q::HessenbergQ{T}, X::StridedVecOrMat{S})
     TT = typeof(zero(T)*zero(S) + zero(T)*zero(S))
     return A_mul_B!(Q, copy_oftype(X, TT))
 end
-function (*)(X::StridedVecOrMat{S}, Q::HessenbergQ{T}) where {T,S}
+function (*){T,S}(X::StridedVecOrMat{S}, Q::HessenbergQ{T})
     TT = typeof(zero(T)*zero(S) + zero(T)*zero(S))
     return A_mul_B!(copy_oftype(X, TT), Q)
 end
-function Ac_mul_B(Q::HessenbergQ{T}, X::StridedVecOrMat{S}) where {T,S}
+function Ac_mul_B{T,S}(Q::HessenbergQ{T}, X::StridedVecOrMat{S})
     TT = typeof(zero(T)*zero(S) + zero(T)*zero(S))
     return Ac_mul_B!(Q, copy_oftype(X, TT))
 end
-function A_mul_Bc(X::StridedVecOrMat{S}, Q::HessenbergQ{T}) where {T,S}
+function A_mul_Bc{T,S}(X::StridedVecOrMat{S}, Q::HessenbergQ{T})
     TT = typeof(zero(T)*zero(S) + zero(T)*zero(S))
     return A_mul_Bc!(copy_oftype(X, TT), Q)
 end

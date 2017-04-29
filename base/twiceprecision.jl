@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: https://julialang.org/license
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # Twice-precision arithmetic.
 
@@ -60,19 +60,19 @@ nbitslen(::Type{Float32}, len, offset) = min(12, nbitslen(len, offset))
 nbitslen(::Type{Float16}, len, offset) = min(5,  nbitslen(len, offset))
 nbitslen(len, offset) = len < 2 ? 0 : ceil(Int, log2(max(offset-1, len-offset)))
 
-eltype(::Type{TwicePrecision{T}}) where {T} = T
+eltype{T}(::Type{TwicePrecision{T}}) = T
 
-promote_rule(::Type{TwicePrecision{R}}, ::Type{TwicePrecision{S}}) where {R,S} =
+promote_rule{R,S}(::Type{TwicePrecision{R}}, ::Type{TwicePrecision{S}}) =
     TwicePrecision{promote_type(R,S)}
-promote_rule(::Type{TwicePrecision{R}}, ::Type{S}) where {R,S} =
+promote_rule{R,S}(::Type{TwicePrecision{R}}, ::Type{S}) =
     TwicePrecision{promote_type(R,S)}
 
-convert(::Type{TwicePrecision{T}}, x::TwicePrecision{T}) where {T} = x
-convert(::Type{TwicePrecision{T}}, x::TwicePrecision) where {T} =
+convert{T}(::Type{TwicePrecision{T}}, x::TwicePrecision{T}) = x
+convert{T}(::Type{TwicePrecision{T}}, x::TwicePrecision) =
     TwicePrecision{T}(convert(T, x.hi), convert(T, x.lo))
 
-convert(::Type{T}, x::TwicePrecision{T}) where {T<:Number} = convert(T, x.hi + x.lo)
-convert(::Type{TwicePrecision{T}}, x::Number) where {T} = TwicePrecision{T}(convert(T, x), zero(T))
+convert{T<:Number}(::Type{T}, x::TwicePrecision{T}) = convert(T, x.hi + x.lo)
+convert{T}(::Type{TwicePrecision{T}}, x::Number) = TwicePrecision{T}(convert(T, x), zero(T))
 
 float(x::TwicePrecision{<:AbstractFloat}) = x
 float(x::TwicePrecision) = TwicePrecision(float(x.hi), float(x.lo))
@@ -81,7 +81,7 @@ big(x::TwicePrecision) = big(x.hi) + big(x.lo)
 
 -(x::TwicePrecision) = TwicePrecision(-x.hi, -x.lo)
 
-zero(::Type{TwicePrecision{T}}) where {T} = TwicePrecision{T}(0, 0)
+zero{T}(::Type{TwicePrecision{T}}) = TwicePrecision{T}(0, 0)
 
 ## StepRangeLen
 
@@ -90,7 +90,7 @@ StepRangeLen{T}(ref::TwicePrecision{T}, step::TwicePrecision{T}, len::Integer, o
     StepRangeLen{T,TwicePrecision{T},TwicePrecision{T}}(ref, step, len, offset)
 
 # Construct range for rational start=start_n/den, step=step_n/den
-function floatrange(::Type{T}, start_n::Integer, step_n::Integer, len::Integer, den::Integer) where T
+function floatrange{T}(::Type{T}, start_n::Integer, step_n::Integer, len::Integer, den::Integer)
     if len < 2
         return StepRangeLen(TwicePrecision{T}((start_n, den)),
                             TwicePrecision{T}((step_n, den)), Int(len), 1)
@@ -120,7 +120,7 @@ function floatrange(a::AbstractFloat, st::AbstractFloat, len::Real, divisor::Abs
                  TwicePrecision{T}((st,divisor), nbitslen(T, len, 1)), Int(len), 1)
 end
 
-function colon(start::T, step::T, stop::T) where T<:Union{Float16,Float32,Float64}
+function colon{T<:Union{Float16,Float32,Float64}}(start::T, step::T, stop::T)
     step == 0 && throw(ArgumentError("range step cannot be zero"))
     # see if the inputs have exact rational approximations (and if so,
     # perform all computations in terms of the rationals)
@@ -161,7 +161,7 @@ function colon(start::T, step::T, stop::T) where T<:Union{Float16,Float32,Float6
     StepRangeLen(TwicePrecision(start, zero(T)), twiceprecision(step, nbitslen(T, len, 1)), len)
 end
 
-function range(a::T, st::T, len::Integer) where T<:Union{Float16,Float32,Float64}
+function range{T<:Union{Float16,Float32,Float64}}(a::T, st::T, len::Integer)
     start_n, start_d = rat(a)
     step_n, step_d = rat(st)
     if start_d != 0 && step_d != 0 &&
@@ -178,7 +178,7 @@ function range(a::T, st::T, len::Integer) where T<:Union{Float16,Float32,Float64
     StepRangeLen(TwicePrecision(a, zero(T)), TwicePrecision(st, zero(T)), len)
 end
 
-step(r::StepRangeLen{T,R,S}) where {T,R,S<:TwicePrecision} = convert(eltype(S), r.step)
+step{T,R,S<:TwicePrecision}(r::StepRangeLen{T,R,S}) = convert(eltype(S), r.step)
 
 start(r::StepRangeLen{<:Any,<:TwicePrecision,<:TwicePrecision}) = 1
 done(r::StepRangeLen{<:Any,<:TwicePrecision,<:TwicePrecision}, i::Int) = length(r) < i
@@ -188,7 +188,7 @@ function next(r::StepRangeLen{<:Any,<:TwicePrecision,<:TwicePrecision}, i::Int)
 end
 
 # This assumes that r.step has already been split so that (0:len-1)*r.step.hi is exact
-function unsafe_getindex(r::StepRangeLen{T,<:TwicePrecision,<:TwicePrecision}, i::Integer) where T
+function unsafe_getindex{T}(r::StepRangeLen{T,<:TwicePrecision,<:TwicePrecision}, i::Integer)
     # Very similar to _getindex_hiprec, but optimized to avoid a 2nd call to add2
     @_inline_meta
     u = i - r.offset
@@ -205,7 +205,7 @@ function _getindex_hiprec(r::StepRangeLen{<:Any,<:TwicePrecision,<:TwicePrecisio
     TwicePrecision(x_hi, x_lo)
 end
 
-function getindex(r::StepRangeLen{T,<:TwicePrecision,<:TwicePrecision}, s::OrdinalRange{<:Integer}) where T
+function getindex{T}(r::StepRangeLen{T,<:TwicePrecision,<:TwicePrecision}, s::OrdinalRange{<:Integer})
     @_inline_meta
     @boundscheck checkbounds(r, s)
     soffset = 1 + round(Int, (r.offset - first(s))/step(s))
@@ -229,26 +229,26 @@ end
 /(r::StepRangeLen{<:Real,<:TwicePrecision}, x::Real) =
     StepRangeLen(r.ref/x, twiceprecision(r.step/x, nbitslen(r)), length(r), r.offset)
 
-convert(::Type{StepRangeLen{T,R,S}}, r::StepRangeLen{T,R,S}) where {T<:AbstractFloat,R<:TwicePrecision,S<:TwicePrecision} = r
+convert{T<:AbstractFloat,R<:TwicePrecision,S<:TwicePrecision}(::Type{StepRangeLen{T,R,S}}, r::StepRangeLen{T,R,S}) = r
 
-convert(::Type{StepRangeLen{T,R,S}}, r::StepRangeLen) where {T<:AbstractFloat,R<:TwicePrecision,S<:TwicePrecision} =
+convert{T<:AbstractFloat,R<:TwicePrecision,S<:TwicePrecision}(::Type{StepRangeLen{T,R,S}}, r::StepRangeLen) =
     _convertSRL(StepRangeLen{T,R,S}, r)
 
-convert(::Type{StepRangeLen{T}}, r::StepRangeLen) where {T<:Union{Float16,Float32,Float64}} =
+convert{T<:Union{Float16,Float32,Float64}}(::Type{StepRangeLen{T}}, r::StepRangeLen) =
     _convertSRL(StepRangeLen{T,TwicePrecision{T},TwicePrecision{T}}, r)
 
-convert(::Type{StepRangeLen{T}}, r::Range) where {T<:Union{Float16,Float32,Float64}} =
+convert{T<:Union{Float16,Float32,Float64}}(::Type{StepRangeLen{T}}, r::Range) =
     _convertSRL(StepRangeLen{T,TwicePrecision{T},TwicePrecision{T}}, r)
 
-function _convertSRL(::Type{StepRangeLen{T,R,S}}, r::StepRangeLen{<:Integer}) where {T,R,S}
+function _convertSRL{T,R,S}(::Type{StepRangeLen{T,R,S}}, r::StepRangeLen{<:Integer})
     StepRangeLen{T,R,S}(R(r.ref), S(r.step), length(r), r.offset)
 end
 
-function _convertSRL(::Type{StepRangeLen{T,R,S}}, r::Range{<:Integer}) where {T,R,S}
+function _convertSRL{T,R,S}(::Type{StepRangeLen{T,R,S}}, r::Range{<:Integer})
     StepRangeLen{T,R,S}(R(first(r)), S(step(r)), length(r))
 end
 
-function _convertSRL(::Type{StepRangeLen{T,R,S}}, r::Range{U}) where {T,R,S,U}
+function _convertSRL{T,R,S,U}(::Type{StepRangeLen{T,R,S}}, r::Range{U})
     # if start and step have a rational approximation in the old type,
     # then we transfer that rational approximation to the new type
     f, s = first(r), step(r)
@@ -268,10 +268,10 @@ function _convertSRL(::Type{StepRangeLen{T,R,S}}, r::Range{U}) where {T,R,S,U}
     __convertSRL(StepRangeLen{T,R,S}, r)
 end
 
-function __convertSRL(::Type{StepRangeLen{T,R,S}}, r::StepRangeLen{U}) where {T,R,S,U}
+function __convertSRL{T,R,S,U}(::Type{StepRangeLen{T,R,S}}, r::StepRangeLen{U})
     StepRangeLen{T,R,S}(R(r.ref), S(r.step), length(r), r.offset)
 end
-function __convertSRL(::Type{StepRangeLen{T,R,S}}, r::Range{U}) where {T,R,S,U}
+function __convertSRL{T,R,S,U}(::Type{StepRangeLen{T,R,S}}, r::Range{U})
     StepRangeLen{T,R,S}(R(first(r)), S(step(r)), length(r))
 end
 
@@ -296,7 +296,7 @@ end
 # sum(1:n) as a product of two integers
 sumpair(n::Integer) = iseven(n) ? (n+1, n>>1) : (n, (n+1)>>1)
 
-function +(r1::StepRangeLen{T,R}, r2::StepRangeLen{T,R}) where T where R<:TwicePrecision
+function +{T,R<:TwicePrecision}(r1::StepRangeLen{T,R}, r2::StepRangeLen{T,R})
     len = length(r1)
     (len == length(r2) ||
         throw(DimensionMismatch("argument dimensions must match")))
@@ -316,7 +316,7 @@ end
 ## LinSpace
 
 # For Float16, Float32, and Float64, linspace returns a StepRangeLen
-function linspace(start::T, stop::T, len::Integer) where T<:Union{Float16,Float32,Float64}
+function linspace{T<:Union{Float16,Float32,Float64}}(start::T, stop::T, len::Integer)
     len < 2 && return _linspace1(T, start, stop, len)
     if start == stop
         return StepRangeLen(TwicePrecision(start,zero(T)), TwicePrecision(zero(T),zero(T)), len)
@@ -338,7 +338,7 @@ function linspace(start::T, stop::T, len::Integer) where T<:Union{Float16,Float3
     _linspace(start, stop, len)
 end
 
-function _linspace(start::T, stop::T, len::Integer) where T<:Union{Float16,Float32,Float64}
+function _linspace{T<:Union{Float16,Float32,Float64}}(start::T, stop::T, len::Integer)
     (isfinite(start) && isfinite(stop)) || throw(ArgumentError("start and stop must be finite, got $start and $stop"))
     # Find the index that returns the smallest-magnitude element
     Δ, Δfac = stop-start, 1
@@ -383,7 +383,7 @@ end
 
 # linspace for rational numbers, start = start_n/den, stop = stop_n/den
 # Note this returns a StepRangeLen
-function linspace(::Type{T}, start_n::Integer, stop_n::Integer, len::Integer, den::Integer) where T
+function linspace{T}(::Type{T}, start_n::Integer, stop_n::Integer, len::Integer, den::Integer)
     len < 2 && return _linspace1(T, start_n/den, stop_n/den, len)
     start_n == stop_n && return StepRangeLen(TwicePrecision{T}((start_n, den)), zero(TwicePrecision{T}), len)
     tmin = -start_n/(Float64(stop_n) - Float64(start_n))
@@ -403,7 +403,7 @@ function linspace(::Type{T}, start_n::Integer, stop_n::Integer, len::Integer, de
 end
 
 # For len < 2
-function _linspace1(::Type{T}, start, stop, len::Integer) where T
+function _linspace1{T}(::Type{T}, start, stop, len::Integer)
     len >= 0 || throw(ArgumentError("linspace($start, $stop, $len): negative length"))
     if len <= 1
         len == 1 && (start == stop || throw(ArgumentError("linspace($start, $stop, $len): endpoints differ")))
@@ -447,7 +447,7 @@ function add2{T<:Number}(u::T, v::T)
 end
 
 add2(u, v) = _add2(promote(u, v)...)
-_add2(u::T, v::T) where {T<:Number} = add2(u, v)
+_add2{T<:Number}(u::T, v::T) = add2(u, v)
 _add2(u, v) = error("$u::$(typeof(u)) and $v::$(typeof(v)) cannot be promoted to a common type")
 
 function +(x::TwicePrecision, y::Number)
@@ -456,7 +456,7 @@ function +(x::TwicePrecision, y::Number)
 end
 +(x::Number, y::TwicePrecision) = y+x
 
-function +(x::TwicePrecision{T}, y::TwicePrecision{T}) where T
+function +{T}(x::TwicePrecision{T}, y::TwicePrecision{T})
     r = x.hi + y.hi
     s = abs(x.hi) > abs(y.hi) ? (((x.hi - r) + y.hi) + y.lo) + x.lo : (((y.hi - r) + x.hi) + x.lo) + y.lo
     TwicePrecision(r, s)
@@ -483,7 +483,7 @@ end
 
 _mul2(x::TwicePrecision, v::Number) = TwicePrecision(x.hi*v, x.lo*v)
 
-function *(x::TwicePrecision{R}, v::S) where R where S<:Number
+function *{R,S<:Number}(x::TwicePrecision{R}, v::S)
     T = promote_type(R, S)
     _mul2(convert(TwicePrecision{T}, x), convert(T, v))
 end

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: https://julialang.org/license
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 ## boolean conversions ##
 
@@ -7,7 +7,7 @@ convert(::Type{Bool}, x::Float16) = x==0 ? false : x==1 ? true : throw(InexactEr
 convert(::Type{Bool}, x::Real) = x==0 ? false : x==1 ? true : throw(InexactError())
 
 # promote Bool to any other numeric type
-promote_rule(::Type{Bool}, ::Type{T}) where {T<:Number} = T
+promote_rule{T<:Number}(::Type{Bool}, ::Type{T}) = T
 
 typemin(::Type{Bool}) = false
 typemax(::Type{Bool}) = true
@@ -92,15 +92,15 @@ iszero(x::Bool) = !x
 ^(x::Bool, y::Bool) = x | !y
 ^(x::Integer, y::Bool) = ifelse(y, x, one(x))
 
-function +(x::Bool, y::T)::promote_type(Bool,T) where T<:AbstractFloat
+function +{T<:AbstractFloat}(x::Bool, y::T)::promote_type(Bool,T)
     return ifelse(x, oneunit(y) + y, y)
 end
 +(y::AbstractFloat, x::Bool) = x + y
 
-function *(x::Bool, y::T)::promote_type(Bool,T) where T<:Number
+function *{T<:Number}(x::Bool, y::T)::promote_type(Bool,T)
     return ifelse(x, y, copysign(zero(y), y))
 end
-function *(x::Bool, y::T)::promote_type(Bool,T) where T<:Unsigned
+function *{T<:Unsigned}(x::Bool, y::T)::promote_type(Bool,T)
     return ifelse(x, y, zero(y))
 end
 *(y::Number, x::Bool) = x * y

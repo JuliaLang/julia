@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: https://julialang.org/license
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 ## reductions ##
 
@@ -17,19 +17,19 @@ const WidenReduceResult = Union{SmallSigned, SmallUnsigned, Float16}
 
 # r_promote_type: promote T to the type of reduce(op, ::Array{T})
 # (some "extra" methods are required here to avoid ambiguity warnings)
-r_promote_type(op, ::Type{T}) where {T} = T
-r_promote_type(op, ::Type{T}) where {T<:WidenReduceResult} = widen(T)
-r_promote_type(::typeof(+), ::Type{T}) where {T<:WidenReduceResult} = widen(T)
-r_promote_type(::typeof(*), ::Type{T}) where {T<:WidenReduceResult} = widen(T)
-r_promote_type(::typeof(+), ::Type{T}) where {T<:Number} = typeof(zero(T)+zero(T))
-r_promote_type(::typeof(*), ::Type{T}) where {T<:Number} = typeof(one(T)*one(T))
-r_promote_type(::typeof(scalarmax), ::Type{T}) where {T<:WidenReduceResult} = T
-r_promote_type(::typeof(scalarmin), ::Type{T}) where {T<:WidenReduceResult} = T
-r_promote_type(::typeof(max), ::Type{T}) where {T<:WidenReduceResult} = T
-r_promote_type(::typeof(min), ::Type{T}) where {T<:WidenReduceResult} = T
+r_promote_type{T}(op, ::Type{T}) = T
+r_promote_type{T<:WidenReduceResult}(op, ::Type{T}) = widen(T)
+r_promote_type{T<:WidenReduceResult}(::typeof(+), ::Type{T}) = widen(T)
+r_promote_type{T<:WidenReduceResult}(::typeof(*), ::Type{T}) = widen(T)
+r_promote_type{T<:Number}(::typeof(+), ::Type{T}) = typeof(zero(T)+zero(T))
+r_promote_type{T<:Number}(::typeof(*), ::Type{T}) = typeof(one(T)*one(T))
+r_promote_type{T<:WidenReduceResult}(::typeof(scalarmax), ::Type{T}) = T
+r_promote_type{T<:WidenReduceResult}(::typeof(scalarmin), ::Type{T}) = T
+r_promote_type{T<:WidenReduceResult}(::typeof(max), ::Type{T}) = T
+r_promote_type{T<:WidenReduceResult}(::typeof(min), ::Type{T}) = T
 
 # r_promote: promote x to the type of reduce(op, [x])
-r_promote(op, x::T) where {T} = convert(r_promote_type(op, T), x)
+r_promote{T}(op, x::T) = convert(r_promote_type(op, T), x)
 
 ## foldl && mapfoldl
 
@@ -104,7 +104,7 @@ foldl(op, itr) = mapfoldl(identity, op, itr)
 function mapfoldr_impl(f, op, v0, itr, i::Integer)
     # Unroll the while loop once; if v0 is known, the call to op may
     # be evaluated at compile time
-    if isempty(itr) || i == 0
+    if isempty(itr)
         return r_promote(op, v0)
     else
         x = itr[i]
@@ -258,7 +258,7 @@ mr_empty_iter(f, op, itr, ::EltypeUnknown) = _empty_reduce_error()
 
 _mapreduce(f, op, A::AbstractArray) = _mapreduce(f, op, IndexStyle(A), A)
 
-function _mapreduce(f, op, ::IndexLinear, A::AbstractArray{T}) where T
+function _mapreduce{T}(f, op, ::IndexLinear, A::AbstractArray{T})
     inds = linearindices(A)
     n = length(inds)
     if n == 0

@@ -1,8 +1,6 @@
-# This file is a part of Julia. License is MIT: https://julialang.org/license
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # Array test
-isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
-using TestHelpers.OAs
 
 @testset "basics" begin
     @test length([1, 2, 3]) == 3
@@ -1083,35 +1081,6 @@ end
     end
 end
 
-@testset "filter!" begin
-    # base case w/ Vector
-    a = collect(1:10)
-    filter!(x -> x > 5, a)
-    @test a == collect(6:10)
-
-    # different subtype of AbstractVector
-    ba = rand(10) .> 0.5
-    @test isa(ba, BitArray)
-    filter!(x -> x, ba)
-    @test all(ba)
-
-    # empty array
-    ea = []
-    filter!(x -> x > 5, ea)
-    @test isempty(ea)
-
-    # non-1-indexed array
-    oa = OffsetArray(collect(1:10), -5)
-    filter!(x -> x > 5, oa)
-    @test oa == OffsetArray(collect(6:10), -5)
-
-    # empty non-1-indexed array
-    eoa = OffsetArray([], -5)
-    filter!(x -> x > 5, eoa)
-    @test isempty(eoa)
-end
-
-
 @testset "deleteat!" begin
     for idx in Any[1, 2, 5, 9, 10, 1:0, 2:1, 1:1, 2:2, 1:2, 2:4, 9:8, 10:9, 9:9, 10:10,
                    8:9, 9:10, 6:9, 7:10]
@@ -1222,6 +1191,9 @@ end
 A = [[i i; i i] for i=1:2]
 @test cumsum(A) == Any[[1 1; 1 1], [3 3; 3 3]]
 @test cumprod(A) == Any[[1 1; 1 1], [4 4; 4 4]]
+
+isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
+using TestHelpers.OAs
 
 @testset "prepend/append" begin
     # PR #4627

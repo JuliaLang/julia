@@ -41,13 +41,6 @@ function unicode_data()
     return names
 end
 
-# Prepend a dotted circle ('◌' i.e. '\u25CC') to combining characters
-function fix_combining_chars(char)
-    cat = Base.UTF8proc.category_code(char)
-    return string(cat == 6 || cat == 8 ? "◌" : "", char)
-end
-
-
 function table_entries(completions, unicode_dict)
     entries = [[
         "Code point(s)", "Character(s)",
@@ -58,10 +51,10 @@ function table_entries(completions, unicode_dict)
         for char in chars
             push!(code_points, "U+$(uppercase(hex(char, 5)))")
             push!(unicode_names, get(unicode_dict, UInt32(char), "(No Unicode name)"))
-            push!(characters, isempty(characters) ? fix_combining_chars(char) : "$char")
+            push!(characters, Base.UTF8proc.category_code(char) == 6 ? "◌$char" : "$char")
         end
         push!(entries, [
-            join(code_points, " + "), join(characters),
+            join(code_points, " + "), join(chars),
             join(inputs, ", "), join(unicode_names, " + ")
         ])
     end

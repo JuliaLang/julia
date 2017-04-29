@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: https://julialang.org/license
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 # Document NTuple here where we have everything needed for the doc system
 """
@@ -20,7 +20,7 @@ endof(t::Tuple) = length(t)
 size(t::Tuple, d) = d==1 ? length(t) : throw(ArgumentError("invalid tuple dimension $d"))
 getindex(t::Tuple, i::Int) = getfield(t, i)
 getindex(t::Tuple, i::Real) = getfield(t, convert(Int, i))
-getindex(t::Tuple, r::AbstractArray{<:Any,1}) = ([t[ri] for ri in r]...)
+getindex(t::Tuple, r::AbstractArray{<:Any,1}) = tuple([t[ri] for ri in r]...)
 getindex(t::Tuple, b::AbstractArray{Bool,1}) = length(b) == length(t) ? getindex(t,find(b)) : throw(BoundsError(t, b))
 
 # returns new tuple; N.B.: becomes no-op if i is out-of-bounds
@@ -104,50 +104,27 @@ julia> ntuple(i -> 2*i, 4)
 (2, 4, 6, 8)
 ```
 """
-function ntuple(f::F, n::Integer) where F
-    t = n <= 0  ? () :
-        n == 1  ? (f(1),) :
-        n == 2  ? (f(1), f(2)) :
-        n == 3  ? (f(1), f(2), f(3)) :
-        n == 4  ? (f(1), f(2), f(3), f(4)) :
-        n == 5  ? (f(1), f(2), f(3), f(4), f(5)) :
-        n == 6  ? (f(1), f(2), f(3), f(4), f(5), f(6)) :
-        n == 7  ? (f(1), f(2), f(3), f(4), f(5), f(6), f(7)) :
-        n == 8  ? (f(1), f(2), f(3), f(4), f(5), f(6), f(7), f(8)) :
-        n == 9  ? (f(1), f(2), f(3), f(4), f(5), f(6), f(7), f(8), f(9)) :
-        n == 10 ? (f(1), f(2), f(3), f(4), f(5), f(6), f(7), f(8), f(9), f(10)) :
-        _ntuple(f, n)
-    return t
-end
+ntuple(f::Function, n::Integer) =
+    n <= 0 ? () :
+    n == 1 ? (f(1),) :
+    n == 2 ? (f(1),f(2),) :
+    n == 3 ? (f(1),f(2),f(3),) :
+    n == 4 ? (f(1),f(2),f(3),f(4),) :
+    n == 5 ? (f(1),f(2),f(3),f(4),f(5),) :
+    n < 16 ? (ntuple(f,n-5)..., f(n-4), f(n-3), f(n-2), f(n-1), f(n)) :
+    _ntuple(f, n)
 
-_ntuple(f, n) = (@_noinline_meta; ([f(i) for i = 1:n]...))
+_ntuple(f::Function, n::Integer) = (@_noinline_meta; ((f(i) for i = 1:n)...))
 
 # inferrable ntuple
-ntuple(f, ::Type{Val{0}}) = (@_inline_meta; ())
-ntuple(f, ::Type{Val{1}}) = (@_inline_meta; (f(1),))
-ntuple(f, ::Type{Val{2}}) = (@_inline_meta; (f(1), f(2)))
-ntuple(f, ::Type{Val{3}}) = (@_inline_meta; (f(1), f(2), f(3)))
-ntuple(f, ::Type{Val{4}}) = (@_inline_meta; (f(1), f(2), f(3), f(4)))
-ntuple(f, ::Type{Val{5}}) = (@_inline_meta; (f(1), f(2), f(3), f(4), f(5)))
-ntuple(f, ::Type{Val{6}}) = (@_inline_meta; (f(1), f(2), f(3), f(4), f(5), f(6)))
-ntuple(f, ::Type{Val{7}}) = (@_inline_meta; (f(1), f(2), f(3), f(4), f(5), f(6), f(7)))
-ntuple(f, ::Type{Val{8}}) = (@_inline_meta; (f(1), f(2), f(3), f(4), f(5), f(6), f(7), f(8)))
-ntuple(f, ::Type{Val{9}}) = (@_inline_meta; (f(1), f(2), f(3), f(4), f(5), f(6), f(7), f(8), f(9)))
-ntuple(f, ::Type{Val{10}}) = (@_inline_meta; (f(1), f(2), f(3), f(4), f(5), f(6), f(7), f(8), f(9), f(10)))
-ntuple(f, ::Type{Val{11}}) = (@_inline_meta; (f(1), f(2), f(3), f(4), f(5), f(6), f(7), f(8), f(9), f(10), f(11)))
-ntuple(f, ::Type{Val{12}}) = (@_inline_meta; (f(1), f(2), f(3), f(4), f(5), f(6), f(7), f(8), f(9), f(10), f(11), f(12)))
-ntuple(f, ::Type{Val{13}}) = (@_inline_meta; (f(1), f(2), f(3), f(4), f(5), f(6), f(7), f(8), f(9), f(10), f(11), f(12), f(13)))
-ntuple(f, ::Type{Val{14}}) = (@_inline_meta; (f(1), f(2), f(3), f(4), f(5), f(6), f(7), f(8), f(9), f(10), f(11), f(12), f(13), f(14)))
-ntuple(f, ::Type{Val{15}}) = (@_inline_meta; (f(1), f(2), f(3), f(4), f(5), f(6), f(7), f(8), f(9), f(10), f(11), f(12), f(13), f(14), f(15)))
-
-function ntuple(f::F, ::Type{Val{N}}) where {F,N}
+function ntuple{F,N}(f::F, ::Type{Val{N}})
     Core.typeassert(N, Int)
     _ntuple((), f, Val{N})
 end
 
 # Build up the output until it has length N
-_ntuple(out::NTuple{N,Any}, f::F, ::Type{Val{N}}) where {F,N} = out
-function _ntuple(out::NTuple{M,Any}, f::F, ::Type{Val{N}}) where {F,N,M}
+_ntuple{F,N}(out::NTuple{N,Any}, f::F, ::Type{Val{N}}) = out
+function _ntuple{F,N,M}(out::NTuple{M,Any}, f::F, ::Type{Val{N}})
     @_inline_meta
     _ntuple((out..., f(M+1)), f, Val{N})
 end
@@ -159,17 +136,17 @@ map(f, t::Tuple{Any, Any})      = (f(t[1]), f(t[2]))
 map(f, t::Tuple{Any, Any, Any}) = (f(t[1]), f(t[2]), f(t[3]))
 map(f, t::Tuple)                = (@_inline_meta; (f(t[1]), map(f,tail(t))...))
 # stop inlining after some number of arguments to avoid code blowup
-const Any16{N} = Tuple{Any,Any,Any,Any,Any,Any,Any,Any,
-                       Any,Any,Any,Any,Any,Any,Any,Any,Vararg{Any,N}}
-const All16{T,N} = Tuple{T,T,T,T,T,T,T,T,
-                         T,T,T,T,T,T,T,T,Vararg{T,N}}
+Any16{N}   = Tuple{Any,Any,Any,Any,Any,Any,Any,Any,
+                   Any,Any,Any,Any,Any,Any,Any,Any,Vararg{Any,N}}
+All16{T,N} = Tuple{T,T,T,T,T,T,T,T,
+                   T,T,T,T,T,T,T,T,Vararg{T,N}}
 function map(f, t::Any16)
     n = length(t)
-    A = Array{Any,1}(n)
+    A = Array{Any}(n)
     for i=1:n
         A[i] = f(t[i])
     end
-    (A...)
+    (A...,)
 end
 # 2 argument function
 map(f, t::Tuple{},        s::Tuple{})        = ()
@@ -181,42 +158,33 @@ function map(f, t::Tuple, s::Tuple)
 end
 function map(f, t::Any16, s::Any16)
     n = length(t)
-    A = Array{Any,1}(n)
+    A = Array{Any}(n)
     for i = 1:n
         A[i] = f(t[i], s[i])
     end
-    (A...)
+    (A...,)
 end
 # n argument function
-heads(ts::Tuple...) = map(t -> t[1], ts)
-tails(ts::Tuple...) = map(tail, ts)
-map(f, ::Tuple{}...) = ()
-function map(f, t1::Tuple, t2::Tuple, ts::Tuple...)
-    @_inline_meta
-    (f(heads(t1, t2, ts...)...), map(f, tails(t1, t2, ts...)...)...)
-end
-function map(f, t1::Any16, t2::Any16, ts::Any16...)
-    n = length(t1)
-    A = Array{Any,1}(n)
-    for i = 1:n
-        A[i] = f(t1[i], t2[i], map(t -> t[i], ts)...)
-    end
-    (A...)
-end
+heads() = ()
+heads(t::Tuple, ts::Tuple...) = (t[1], heads(ts...)...)
+tails() = ()
+tails(t::Tuple, ts::Tuple...) = (tail(t), tails(ts...)...)
+map(f, ::Tuple{}, ts::Tuple...) = ()
+map(f, t1::Tuple, t2::Tuple, ts::Tuple...) = (f(heads(t1, t2, ts...)...), map(f, tails(t1, t2, ts...)...)...)
 
 
 # type-stable padding
 fill_to_length{N}(t::Tuple, val, ::Type{Val{N}}) = _ftl((), val, Val{N}, t...)
-_ftl(out::NTuple{N,Any}, val, ::Type{Val{N}}) where {N} = out
+_ftl{N}(out::NTuple{N,Any}, val, ::Type{Val{N}}) = out
 function _ftl{N}(out::NTuple{N,Any}, val, ::Type{Val{N}}, t...)
     @_inline_meta
     throw(ArgumentError("input tuple of length $(N+length(t)), requested $N"))
 end
-function _ftl(out, val, ::Type{Val{N}}, t1, t...) where N
+function _ftl{N}(out, val, ::Type{Val{N}}, t1, t...)
     @_inline_meta
     _ftl((out..., t1), val, Val{N}, t...)
 end
-function _ftl(out, val, ::Type{Val{N}}) where N
+function _ftl{N}(out, val, ::Type{Val{N}})
     @_inline_meta
     _ftl((out..., val), val, Val{N})
 end
@@ -226,12 +194,12 @@ end
 # only define these in Base, to avoid overwriting the constructors
 if isdefined(Main, :Base)
 
-(::Type{T})(x::Tuple) where {T<:Tuple} = convert(T, x)  # still use `convert` for tuples
+(::Type{T}){T<:Tuple}(x::Tuple) = convert(T, x)  # still use `convert` for tuples
 
 # resolve ambiguity between preceding and following methods
-All16{E,N}(x::Tuple) where {E,N} = convert(All16{E,N}, x)
+(::Type{All16{E,N}}){E,N}(x::Tuple) = convert(All16{E,N}, x)
 
-function (T::All16{E,N})(itr) where {E,N}
+function (T::Type{All16{E,N}}){E,N}(itr)
     len = N+16
     elts = collect(E, Iterators.take(itr,len))
     if length(elts) != len
@@ -240,7 +208,7 @@ function (T::All16{E,N})(itr) where {E,N}
     (elts...,)
 end
 
-(::Type{T})(itr) where {T<:Tuple} = _totuple(T, itr, start(itr))
+(::Type{T}){T<:Tuple}(itr) = _totuple(T, itr, start(itr))
 
 _totuple(::Type{Tuple{}}, itr, s) = ()
 
@@ -256,7 +224,7 @@ function _totuple(T, itr, s)
     (convert(tuple_type_head(T), v), _totuple(tuple_type_tail(T), itr, s)...)
 end
 
-_totuple(::Type{Tuple{Vararg{E}}}, itr, s) where {E} = (collect(E, Iterators.rest(itr,s))...,)
+_totuple{E}(::Type{Tuple{Vararg{E}}}, itr, s) = (collect(E, Iterators.rest(itr,s))...,)
 
 _totuple(::Type{Tuple}, itr, s) = (collect(Iterators.rest(itr,s))...,)
 

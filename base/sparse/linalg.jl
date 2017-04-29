@@ -1,18 +1,18 @@
-# This file is a part of Julia. License is MIT: https://julialang.org/license
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 import Base.LinAlg: checksquare
 
 ## Functions to switch to 0-based indexing to call external sparse solvers
 
 # Convert from 1-based to 0-based indices
-function decrement!(A::AbstractArray{T}) where T<:Integer
+function decrement!{T<:Integer}(A::AbstractArray{T})
     for i in 1:length(A); A[i] -= oneunit(T) end
     A
 end
 decrement(A::AbstractArray{<:Integer}) = decrement!(copy(A))
 
 # Convert from 0-based to 1-based indices
-function increment!(A::AbstractArray{T}) where T<:Integer
+function increment!{T<:Integer}(A::AbstractArray{T})
     for i in 1:length(A); A[i] += oneunit(T) end
     A
 end
@@ -20,20 +20,20 @@ increment(A::AbstractArray{<:Integer}) = increment!(copy(A))
 
 ## sparse matrix multiplication
 
-function (*)(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{TvB,TiB}) where {TvA,TiA,TvB,TiB}
+function (*){TvA,TiA,TvB,TiB}(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{TvB,TiB})
     (*)(sppromote(A, B)...)
 end
 for f in (:A_mul_Bt, :A_mul_Bc,
           :At_mul_B, :Ac_mul_B,
           :At_mul_Bt, :Ac_mul_Bc)
     @eval begin
-        function ($f)(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{TvB,TiB}) where {TvA,TiA,TvB,TiB}
+        function ($f){TvA,TiA,TvB,TiB}(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{TvB,TiB})
             ($f)(sppromote(A, B)...)
         end
     end
 end
 
-function sppromote(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{TvB,TiB}) where {TvA,TiA,TvB,TiB}
+function sppromote{TvA,TiA,TvB,TiB}(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{TvB,TiB})
     Tv = promote_type(TvA, TvB)
     Ti = promote_type(TiA, TiB)
     A  = convert(SparseMatrixCSC{Tv,Ti}, A)
@@ -80,11 +80,11 @@ for (f, op, transp) in ((:A_mul_B, :identity, false),
             C
         end
 
-        function $(f)(A::SparseMatrixCSC{TA,S}, x::StridedVector{Tx}) where {TA,S,Tx}
+        function $(f){TA,S,Tx}(A::SparseMatrixCSC{TA,S}, x::StridedVector{Tx})
             T = promote_type(TA, Tx)
             $(Symbol(f,:!))(one(T), A, x, zero(T), similar(x, T, A.n))
         end
-        function $(f)(A::SparseMatrixCSC{TA,S}, B::StridedMatrix{Tx}) where {TA,S,Tx}
+        function $(f){TA,S,Tx}(A::SparseMatrixCSC{TA,S}, B::StridedMatrix{Tx})
             T = promote_type(TA, Tx)
             $(Symbol(f,:!))(one(T), A, B, zero(T), similar(B, T, (A.n, size(B, 2))))
         end
@@ -98,7 +98,7 @@ Ac_mul_B!(C::StridedVecOrMat, A::SparseMatrixCSC, B::StridedVecOrMat) = Ac_mul_B
 At_mul_B!(C::StridedVecOrMat, A::SparseMatrixCSC, B::StridedVecOrMat) = At_mul_B!(one(eltype(B)), A, B, zero(eltype(C)), C)
 
 
-function (*)(X::StridedMatrix{TX}, A::SparseMatrixCSC{TvA,TiA}) where {TX,TvA,TiA}
+function (*){TX,TvA,TiA}(X::StridedMatrix{TX}, A::SparseMatrixCSC{TvA,TiA})
     mX, nX = size(X)
     nX == A.m || throw(DimensionMismatch())
     Y = zeros(promote_type(TX,TvA), mX, A.n)
@@ -122,7 +122,7 @@ end
 # Sparse matrix multiplication as described in [Gustavson, 1978]:
 # http://dl.acm.org/citation.cfm?id=355796
 
-(*)(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} = spmatmul(A,B)
+(*){Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}) = spmatmul(A,B)
 for (f, opA, opB) in ((:A_mul_Bt, :identity, :transpose),
                       (:A_mul_Bc, :identity, :ctranspose),
                       (:At_mul_B, :transpose, :identity),
@@ -130,14 +130,14 @@ for (f, opA, opB) in ((:A_mul_Bt, :identity, :transpose),
                       (:At_mul_Bt, :transpose, :transpose),
                       (:Ac_mul_Bc, :ctranspose, :ctranspose))
     @eval begin
-        function ($f)(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
+        function ($f){Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti})
             spmatmul(($opA)(A), ($opB)(B))
         end
     end
 end
 
-function spmatmul(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti};
-                  sortindices::Symbol = :sortcols) where {Tv,Ti}
+function spmatmul{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti};
+                         sortindices::Symbol = :sortcols)
     mA, nA = size(A)
     mB, nB = size(B)
     nA==mB || throw(DimensionMismatch())
@@ -146,9 +146,9 @@ function spmatmul(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti};
     colptrB = B.colptr; rowvalB = B.rowval; nzvalB = B.nzval
     # TODO: Need better estimation of result space
     nnzC = min(mA*nB, length(nzvalA) + length(nzvalB))
-    colptrC = Vector{Ti}(nB+1)
-    rowvalC = Vector{Ti}(nnzC)
-    nzvalC = Vector{Tv}(nnzC)
+    colptrC = Array{Ti}(nB+1)
+    rowvalC = Array{Ti}(nnzC)
+    nzvalC = Array{Tv}(nnzC)
 
     @inbounds begin
         ip = 1
@@ -284,20 +284,20 @@ function bwdTriSolve!(A::SparseMatrixCSC, B::AbstractVecOrMat)
     B
 end
 
-A_ldiv_B!(L::LowerTriangular{T,<:SparseMatrixCSC{T}}, B::StridedVecOrMat) where {T} = fwdTriSolve!(L.data, B)
-A_ldiv_B!(U::UpperTriangular{T,<:SparseMatrixCSC{T}}, B::StridedVecOrMat) where {T} = bwdTriSolve!(U.data, B)
+A_ldiv_B!{T}(L::LowerTriangular{T,<:SparseMatrixCSC{T}}, B::StridedVecOrMat) = fwdTriSolve!(L.data, B)
+A_ldiv_B!{T}(U::UpperTriangular{T,<:SparseMatrixCSC{T}}, B::StridedVecOrMat) = bwdTriSolve!(U.data, B)
 
-(\)(L::LowerTriangular{T,<:SparseMatrixCSC{T}}, B::SparseMatrixCSC) where {T} = A_ldiv_B!(L, Array(B))
-(\)(U::UpperTriangular{T,<:SparseMatrixCSC{T}}, B::SparseMatrixCSC) where {T} = A_ldiv_B!(U, Array(B))
+(\){T}(L::LowerTriangular{T,<:SparseMatrixCSC{T}}, B::SparseMatrixCSC) = A_ldiv_B!(L, Array(B))
+(\){T}(U::UpperTriangular{T,<:SparseMatrixCSC{T}}, B::SparseMatrixCSC) = A_ldiv_B!(U, Array(B))
 
 ## triu, tril
 
-function triu(S::SparseMatrixCSC{Tv,Ti}, k::Integer=0) where {Tv,Ti}
+function triu{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, k::Integer=0)
     m,n = size(S)
     if (k > 0 && k > n) || (k < 0 && -k > m)
         throw(BoundsError())
     end
-    colptr = Vector{Ti}(n+1)
+    colptr = Array{Ti}(n+1)
     nnz = 0
     for col = 1 : min(max(k+1,1), n+1)
         colptr[col] = 1
@@ -309,8 +309,8 @@ function triu(S::SparseMatrixCSC{Tv,Ti}, k::Integer=0) where {Tv,Ti}
         end
         colptr[col+1] = nnz+1
     end
-    rowval = Vector{Ti}(nnz)
-    nzval = Vector{Tv}(nnz)
+    rowval = Array{Ti}(nnz)
+    nzval = Array{Tv}(nnz)
     A = SparseMatrixCSC(m, n, colptr, rowval, nzval)
     for col = max(k+1,1) : n
         c1 = S.colptr[col]
@@ -323,12 +323,12 @@ function triu(S::SparseMatrixCSC{Tv,Ti}, k::Integer=0) where {Tv,Ti}
     A
 end
 
-function tril(S::SparseMatrixCSC{Tv,Ti}, k::Integer=0) where {Tv,Ti}
+function tril{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, k::Integer=0)
     m,n = size(S)
     if (k > 0 && k > n) || (k < 0 && -k > m)
         throw(BoundsError())
     end
-    colptr = Vector{Ti}(n+1)
+    colptr = Array{Ti}(n+1)
     nnz = 0
     colptr[1] = 1
     for col = 1 : min(n, m+k)
@@ -342,8 +342,8 @@ function tril(S::SparseMatrixCSC{Tv,Ti}, k::Integer=0) where {Tv,Ti}
     for col = max(min(n, m+k)+2,1) : n+1
         colptr[col] = nnz+1
     end
-    rowval = Vector{Ti}(nnz)
-    nzval = Vector{Tv}(nnz)
+    rowval = Array{Ti}(nnz)
+    nzval = Array{Tv}(nnz)
     A = SparseMatrixCSC(m, n, colptr, rowval, nzval)
     for col = 1 : min(n, m+k)
         c1 = S.colptr[col+1]-1
@@ -359,13 +359,13 @@ end
 
 ## diff
 
-function sparse_diff1(S::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
+function sparse_diff1{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     m,n = size(S)
     m > 1 || return SparseMatrixCSC(0, n, ones(Ti,n+1), Ti[], Tv[])
-    colptr = Vector{Ti}(n+1)
+    colptr = Array{Ti}(n+1)
     numnz = 2 * nnz(S) # upper bound; will shrink later
-    rowval = Vector{Ti}(numnz)
-    nzval = Vector{Tv}(numnz)
+    rowval = Array{Ti}(numnz)
+    nzval = Array{Tv}(numnz)
     numnz = 0
     colptr[1] = 1
     for col = 1 : n
@@ -399,12 +399,12 @@ function sparse_diff1(S::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
     return SparseMatrixCSC(m-1, n, colptr, rowval, nzval)
 end
 
-function sparse_diff2(a::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
+function sparse_diff2{Tv,Ti}(a::SparseMatrixCSC{Tv,Ti})
     m,n = size(a)
-    colptr = Vector{Ti}(max(n,1))
+    colptr = Array{Ti}(max(n,1))
     numnz = 2 * nnz(a) # upper bound; will shrink later
-    rowval = Vector{Ti}(numnz)
-    nzval = Vector{Tv}(numnz)
+    rowval = Array{Ti}(numnz)
+    nzval = Array{Tv}(numnz)
 
     z = zero(Tv)
 
@@ -545,7 +545,7 @@ function cond(A::SparseMatrixCSC, p::Real=2)
     end
 end
 
-function normestinv(A::SparseMatrixCSC{T}, t::Integer = min(2,maximum(size(A)))) where T
+function normestinv{T}(A::SparseMatrixCSC{T}, t::Integer = min(2,maximum(size(A))))
     maxiter = 5
     # Check the input
     n = checksquare(A)
@@ -556,8 +556,8 @@ function normestinv(A::SparseMatrixCSC{T}, t::Integer = min(2,maximum(size(A))))
     if t > n
         throw(ArgumentError("number of blocks must not be greater than $n"))
     end
-    ind = Vector{Int64}(n)
-    ind_hist = Vector{Int64}(maxiter * t)
+    ind = Array{Int64}(n)
+    ind_hist = Array{Int64}(maxiter * t)
 
     Ti = typeof(float(zero(T)))
 
@@ -579,7 +579,7 @@ function normestinv(A::SparseMatrixCSC{T}, t::Integer = min(2,maximum(size(A))))
     end
 
     # Generate the block matrix
-    X = Matrix{Ti}(n, t)
+    X = Array{Ti}(n, t)
     X[1:n,1] = 1
     for j = 2:t
         while true
@@ -718,7 +718,7 @@ end
 
 # kron
 
-function kron(a::SparseMatrixCSC{Tv,Ti}, b::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
+function kron{Tv,Ti}(a::SparseMatrixCSC{Tv,Ti}, b::SparseMatrixCSC{Tv,Ti})
     numnzA = nnz(a)
     numnzB = nnz(b)
 
@@ -729,9 +729,9 @@ function kron(a::SparseMatrixCSC{Tv,Ti}, b::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti
 
     m,n = mA*mB, nA*nB
 
-    colptr = Vector{Ti}(n+1)
-    rowval = Vector{Ti}(numnz)
-    nzval = Vector{Tv}(numnz)
+    colptr = Array{Ti}(n+1)
+    rowval = Array{Ti}(numnz)
+    nzval = Array{Tv}(numnz)
 
     colptr[1] = 1
 
@@ -773,7 +773,7 @@ function kron(a::SparseMatrixCSC{Tv,Ti}, b::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti
     SparseMatrixCSC(m, n, colptr, rowval, nzval)
 end
 
-function kron(A::SparseMatrixCSC{Tv1,Ti1}, B::SparseMatrixCSC{Tv2,Ti2}) where {Tv1,Ti1,Tv2,Ti2}
+function kron{Tv1,Ti1,Tv2,Ti2}(A::SparseMatrixCSC{Tv1,Ti1}, B::SparseMatrixCSC{Tv2,Ti2})
     Tv_res = promote_type(Tv1, Tv2)
     Ti_res = promote_type(Ti1, Ti2)
     A = convert(SparseMatrixCSC{Tv_res,Ti_res}, A)

@@ -229,7 +229,7 @@ field, it's helpful to pick a type that is less heavily used than Array. Let's f
 own type:
 
 ```jldoctest
-julia> struct MyType{T,N} end
+julia> type MyType{T,N} end
 
 julia> MyType{Int,2}
 MyType{Int64,2}
@@ -486,10 +486,10 @@ mysubtype(Tuple{Array{Int,2}, Int8}, Tuple{Array{T}, T} where T)
 ## Subtyping and method sorting
 
 The `type_morespecific` functions are used for imposing a partial order on functions in method
-tables (from most-to-least specific). Specificity is strict; if `a` is more specific than `b`,
-then `a` does not equal `b` and `b` is not more specific than `a`.
+tables (from most-to-least specific). Note that `jl_type_morespecific(a,b)` really means "is `a`
+at least as specific as `b`?" and not "is `a` strictly more specific than `b`?"
 
-If `a` is a strict subtype of `b`, then it is automatically considered more specific.
+If `a` is a subtype of `b`, then it is automatically considered more specific.
 From there, `type_morespecific` employs some less formal rules.
 For example, `subtype` is sensitive to the number of arguments, but `type_morespecific` may not be.
 In particular, `Tuple{Int,AbstractFloat}` is more specific than `Tuple{Integer}`, even though it is

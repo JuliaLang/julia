@@ -1,10 +1,10 @@
-# This file is a part of Julia. License is MIT: https://julialang.org/license
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 ## Matrix factorizations and decompositions
 
 abstract type Factorization{T} end
 
-eltype(::Type{Factorization{T}}) where {T} = T
+eltype{T}(::Type{Factorization{T}}) = T
 transpose(F::Factorization) = error("transpose not implemented for $(typeof(F))")
 ctranspose(F::Factorization) = error("ctranspose not implemented for $(typeof(F))")
 
@@ -27,8 +27,8 @@ function det(F::Factorization)
 end
 
 ### General promotion rules
-convert(::Type{Factorization{T}}, F::Factorization{T}) where {T} = F
-inv(F::Factorization{T}) where {T} = A_ldiv_B!(F, eye(T, size(F,1)))
+convert{T}(::Type{Factorization{T}}, F::Factorization{T}) = F
+inv{T}(F::Factorization{T}) = A_ldiv_B!(F, eye(T, size(F,1)))
 
 # With a real lhs and complex rhs with the same precision, we can reinterpret
 # the complex rhs as a real rhs with twice the number of columns

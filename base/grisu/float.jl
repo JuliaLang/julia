@@ -104,12 +104,12 @@ SignificandMask(::Type{Float16}) = 0x03ff
 HiddenBit(::Type{Float16}) = 0x0400
 uint_t(d::Float16) = reinterpret(UInt16,d)
 
-function _exponent(d::T) where T<:AbstractFloat
+function _exponent{T<:AbstractFloat}(d::T)
   isdenormal(d) && return DenormalExponent(T)
   biased_e::Int32 = Int32((uint_t(d) & ExponentMask(T)) >> PhysicalSignificandSize(T))
   return Int32(biased_e - ExponentBias(T))
 end
-function _significand(d::T) where T<:AbstractFloat
+function _significand{T<:AbstractFloat}(d::T)
   s = uint_t(d) & SignificandMask(T)
   return !isdenormal(d) ? s + HiddenBit(T) : s
 end
@@ -125,7 +125,7 @@ function normalizedbound(f::AbstractFloat)
     end
     return Float(m_minus.s << (m_minus.e - m_plus.e), m_plus.e), m_plus
 end
-function lowerboundaryiscloser(f::T) where T<:AbstractFloat
+function lowerboundaryiscloser{T<:AbstractFloat}(f::T)
     physical_significand_is_zero = (uint_t(f) & SignificandMask(T)) == 0
     return physical_significand_is_zero && (_exponent(f) != DenormalExponent(T))
 end

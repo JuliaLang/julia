@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: https://julialang.org/license
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 using .ARPACK
 
@@ -90,10 +90,10 @@ julia> λ
 eigs(A; kwargs...) = eigs(A, I; kwargs...)
 eigs(A::AbstractMatrix{<:BlasFloat}, ::UniformScaling; kwargs...) = _eigs(A, I; kwargs...)
 
-eigs(A::AbstractMatrix{T}, B::AbstractMatrix{T}; kwargs...) where {T<:BlasFloat} = _eigs(A, B; kwargs...)
+eigs{T<:BlasFloat}(A::AbstractMatrix{T}, B::AbstractMatrix{T}; kwargs...) = _eigs(A, B; kwargs...)
 eigs(A::AbstractMatrix{BigFloat}, B::AbstractMatrix...; kwargs...) = throw(MethodError(eigs, Any[A,B,kwargs...]))
 eigs(A::AbstractMatrix{BigFloat}, B::UniformScaling; kwargs...) = throw(MethodError(eigs, Any[A,B,kwargs...]))
-function eigs(A::AbstractMatrix{T}, ::UniformScaling; kwargs...) where T
+function eigs{T}(A::AbstractMatrix{T}, ::UniformScaling; kwargs...)
     Tnew = typeof(zero(T)/sqrt(one(T)))
     eigs(convert(AbstractMatrix{Tnew}, A), I; kwargs...)
 end
@@ -169,9 +169,10 @@ julia> λ
 """
 eigs(A, B; kwargs...) = _eigs(A, B; kwargs...)
 function _eigs(A, B;
-               nev::Integer=6, ncv::Integer=max(20,2*nev+1), which=:LM,
-               tol=0.0, maxiter::Integer=300, sigma=nothing, v0::Vector=zeros(eltype(A),(0,)),
-               ritzvec::Bool=true)
+              nev::Integer=6, ncv::Integer=max(20,2*nev+1), which=:LM,
+              tol=0.0, maxiter::Integer=300, sigma=nothing, v0::Vector=zeros(eltype(A),(0,)),
+              ritzvec::Bool=true)
+
     n = checksquare(A)
 
     T = eltype(A)
@@ -314,7 +315,7 @@ function SVDOperator(A::AbstractMatrix{T}) where T
     SVDOperator{Tnew,typeof(Anew)}(Anew)
 end
 
-function A_mul_B!(u::StridedVector{T}, s::SVDOperator{T}, v::StridedVector{T}) where T
+function A_mul_B!{T}(u::StridedVector{T}, s::SVDOperator{T}, v::StridedVector{T})
     a, b = s.m, length(v)
     A_mul_B!(view(u,1:a), s.X, view(v,a+1:b)) # left singular vector
     Ac_mul_B!(view(u,a+1:b), s.X, view(v,1:a)) # right singular vector
@@ -325,7 +326,7 @@ issymmetric(s::SVDOperator) = true
 
 svds(A::AbstractMatrix{<:BlasFloat}; kwargs...) = _svds(A; kwargs...)
 svds(A::AbstractMatrix{BigFloat}; kwargs...) = throw(MethodError(svds, Any[A, kwargs...]))
-function svds(A::AbstractMatrix{T}; kwargs...) where T
+function svds{T}(A::AbstractMatrix{T}; kwargs...)
     Tnew = typeof(zero(T)/sqrt(one(T)))
     svds(convert(AbstractMatrix{Tnew}, A); kwargs...)
 end

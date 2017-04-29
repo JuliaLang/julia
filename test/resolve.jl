@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: https://julialang.org/license
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 using Base.Pkg.Types
 using Base.Pkg.Query
@@ -100,7 +100,7 @@ function sanity_tst(deps_data, expected_result; pkgs=[])
 end
 sanity_tst(deps_data; kw...) = sanity_tst(deps_data, []; kw...)
 
-function resolve_tst(deps_data, reqs_data, want_data = nothing)
+function resolve_tst(deps_data, reqs_data)
     deps = deps_from_data(deps_data)
     reqs = reqs_from_data(reqs_data)
 
@@ -109,7 +109,6 @@ function resolve_tst(deps_data, reqs_data, want_data = nothing)
     #println("reqs=$reqs")
     deps = Query.prune_dependencies(reqs, deps)
     want = resolve(reqs, deps)
-    return want == want_data
 end
 
 ## DEPENDENCY SCHEME 1: TWO PACKAGES, DAG
@@ -130,15 +129,15 @@ reqs_data = Any[
     ["B"]
 ]
 
-want_data = Dict("B"=>v"2")
-@test resolve_tst(deps_data, reqs_data, want_data)
+want = resolve_tst(deps_data, reqs_data)
+@test want == Dict("B"=>v"2")
 
 # require just A: must bring in B
 reqs_data = Any[
     ["A"]
 ]
-want_data = Dict("A"=>v"2", "B"=>v"2")
-@test resolve_tst(deps_data, reqs_data, want_data)
+want = resolve_tst(deps_data, reqs_data)
+@test want == Dict("A"=>v"2", "B"=>v"2")
 
 
 ## DEPENDENCY SCHEME 2: TWO PACKAGES, CYCLIC
@@ -155,22 +154,22 @@ deps_data = Any[
 reqs_data = Any[
     ["A"]
 ]
-want_data = Dict("A"=>v"2", "B"=>v"2")
-@test resolve_tst(deps_data, reqs_data, want_data)
+want = resolve_tst(deps_data, reqs_data)
+@test want == Dict("A"=>v"2", "B"=>v"2")
 
 # require just B, force lower version
 reqs_data = Any[
     ["B", v"1", v"2"]
 ]
-want_data = Dict("A"=>v"2", "B"=>v"1")
-@test resolve_tst(deps_data, reqs_data, want_data)
+want = resolve_tst(deps_data, reqs_data)
+@test want == Dict("A"=>v"2", "B"=>v"1")
 
 # require just A, force lower version
 reqs_data = Any[
     ["A", v"1", v"2"]
 ]
-want_data = Dict("A"=>v"1", "B"=>v"2")
-@test resolve_tst(deps_data, reqs_data, want_data)
+want = resolve_tst(deps_data, reqs_data)
+@test want == Dict("A"=>v"1", "B"=>v"2")
 
 
 ## DEPENDENCY SCHEME 3: THREE PACKAGES, CYCLIC, TWO MUTUALLY EXCLUSIVE SOLUTIONS
@@ -189,22 +188,22 @@ deps_data = Any[
 reqs_data = Any[
     ["A"]
 ]
-want_data = Dict("A"=>v"2", "B"=>v"1", "C"=>v"2")
-@test resolve_tst(deps_data, reqs_data, want_data)
+want = resolve_tst(deps_data, reqs_data)
+@test want == Dict("A"=>v"2", "B"=>v"1", "C"=>v"2")
 
 # require just B (must choose solution which has the highest version for B)
 reqs_data = Any[
     ["B"]
 ]
-want_data = Dict("A"=>v"1", "B"=>v"2", "C"=>v"1")
-@test resolve_tst(deps_data, reqs_data, want_data)
+want = resolve_tst(deps_data, reqs_data)
+@test want == Dict("A"=>v"1", "B"=>v"2", "C"=>v"1")
 
 # require just A, force lower version
 reqs_data = Any[
     ["A", v"1", v"2"]
 ]
-want_data = Dict("A"=>v"1", "B"=>v"2", "C"=>v"1")
-@test resolve_tst(deps_data, reqs_data, want_data)
+want = resolve_tst(deps_data, reqs_data)
+@test want == Dict("A"=>v"1", "B"=>v"2", "C"=>v"1")
 
 # require A and C, incompatible versions
 reqs_data = Any[
@@ -227,8 +226,8 @@ deps_data = Any[
 reqs_data = Any[
     ["B"]
 ]
-want_data = Dict("B"=>v"1")
-@test resolve_tst(deps_data, reqs_data, want_data)
+want = resolve_tst(deps_data, reqs_data)
+@test want == Dict("B"=>v"1")
 
 
 ## DEPENDENCY SCHEME 5: THREE PACKAGES, DAG, WITH IMPLICIT INCONSISTENCY
@@ -251,8 +250,8 @@ deps_data = Any[
 reqs_data = Any[
     ["A"]
 ]
-want_data = Dict("A"=>v"1", "B"=>v"2", "C"=>v"2")
-@test resolve_tst(deps_data, reqs_data, want_data)
+want = resolve_tst(deps_data, reqs_data)
+@test want == Dict("A"=>v"1", "B"=>v"2", "C"=>v"2")
 
 # require A, force highest version (impossible)
 reqs_data = Any[
@@ -302,15 +301,15 @@ deps_data = Any[
 reqs_data = Any[
     ["A"]
 ]
-want_data = Dict("A"=>v"2", "B"=>v"2", "C"=>v"2")
-@test resolve_tst(deps_data, reqs_data, want_data)
+want = resolve_tst(deps_data, reqs_data)
+@test want == Dict("A"=>v"2", "B"=>v"2", "C"=>v"2")
 
 # require C
 reqs_data = Any[
     ["C"]
 ]
-want_data = Dict("A"=>v"2", "B"=>v"2", "C"=>v"2")
-@test resolve_tst(deps_data, reqs_data, want_data)
+want = resolve_tst(deps_data, reqs_data)
+@test want == Dict("A"=>v"2", "B"=>v"2", "C"=>v"2")
 
 # require C, lowest version (impossible)
 reqs_data = Any[
@@ -375,44 +374,44 @@ deps_data = Any[
 reqs_data = Any[
     ["F"]
 ]
-want_data = Dict("A"=>v"3", "B"=>v"2", "C"=>v"2",
-                 "D"=>v"2", "E"=>v"1", "F"=>v"2")
-@test resolve_tst(deps_data, reqs_data, want_data)
+want = resolve_tst(deps_data, reqs_data)
+@test want == Dict("A"=>v"3", "B"=>v"2", "C"=>v"2",
+                   "D"=>v"2", "E"=>v"1", "F"=>v"2")
 
 # require just F, lower version
 reqs_data = Any[
     ["F", v"1", v"2"]
 ]
-want_data = Dict("A"=>v"2", "B"=>v"2", "D"=>v"2",
-                 "E"=>v"1", "F"=>v"1")
-@test resolve_tst(deps_data, reqs_data, want_data)
+want = resolve_tst(deps_data, reqs_data)
+@test want == Dict("A"=>v"2", "B"=>v"2", "D"=>v"2",
+                   "E"=>v"1", "F"=>v"1")
 
 # require F and B; force lower B version -> must bring down F, A, and D versions too
 reqs_data = Any[
     ["F"],
     ["B", v"1", v"2"]
 ]
-want_data = Dict("A"=>v"1", "B"=>v"1", "D"=>v"1",
-                 "E"=>v"1", "F"=>v"1")
-@test resolve_tst(deps_data, reqs_data, want_data)
+want = resolve_tst(deps_data, reqs_data)
+@test want == Dict("A"=>v"1", "B"=>v"1", "D"=>v"1",
+                   "E"=>v"1", "F"=>v"1")
 
 # require F and D; force lower D version -> must not bring down F version
 reqs_data = Any[
     ["F"],
     ["D", v"1", v"2"]
 ]
-want_data = Dict("A"=>v"3", "B"=>v"2", "C"=>v"2",
-                 "D"=>v"1", "E"=>v"1", "F"=>v"2")
-@test resolve_tst(deps_data, reqs_data, want_data)
+want = resolve_tst(deps_data, reqs_data)
+@test want == Dict("A"=>v"3", "B"=>v"2", "C"=>v"2",
+                   "D"=>v"1", "E"=>v"1", "F"=>v"2")
 
 # require F and C; force lower C version -> must bring down F and A versions
 reqs_data = Any[
     ["F"],
     ["C", v"1", v"2"]
 ]
-want_data = Dict("A"=>v"2", "B"=>v"2", "C"=>v"1",
-                 "D"=>v"2", "E"=>v"1", "F"=>v"1")
-@test resolve_tst(deps_data, reqs_data, want_data)
+want = resolve_tst(deps_data, reqs_data)
+@test want == Dict("A"=>v"2", "B"=>v"2", "C"=>v"1",
+                   "D"=>v"2", "E"=>v"1", "F"=>v"1")
 
 ## DEPENDENCY SCHEME 10: SIX PACKAGES, DAG, WITH PRERELEASE/BUILD VERSIONS
 deps_data = Any[
@@ -449,44 +448,44 @@ deps_data = Any[
 reqs_data = Any[
     ["F"]
 ]
-want_data = Dict("A"=>v"2.1", "B"=>v"1.0.1", "C"=>v"2",
-                 "D"=>v"2", "E"=>v"1", "F"=>v"2")
-@test resolve_tst(deps_data, reqs_data, want_data)
+want = resolve_tst(deps_data, reqs_data)
+@test want == Dict("A"=>v"2.1", "B"=>v"1.0.1", "C"=>v"2",
+                   "D"=>v"2", "E"=>v"1", "F"=>v"2")
 
 # require just F, lower version
 reqs_data = Any[
     ["F", v"1", v"2-"]
 ]
-want_data = Dict("A"=>v"2", "B"=>v"1.0.1", "D"=>v"2",
-                 "E"=>v"1", "F"=>v"1.1")
-@test resolve_tst(deps_data, reqs_data, want_data)
+want = resolve_tst(deps_data, reqs_data)
+@test want == Dict("A"=>v"2", "B"=>v"1.0.1", "D"=>v"2",
+                   "E"=>v"1", "F"=>v"1.1")
 
 # require F and B; force lower B version -> must bring down F, A, and D versions too
 reqs_data = Any[
     ["F"],
     ["B", v"1", v"1.0.1-"]
 ]
-want_data = Dict("A"=>v"1", "B"=>v"1", "D"=>v"1",
-                 "E"=>v"1", "F"=>v"1.1")
-@test resolve_tst(deps_data, reqs_data, want_data)
+want = resolve_tst(deps_data, reqs_data)
+@test want == Dict("A"=>v"1", "B"=>v"1", "D"=>v"1",
+                   "E"=>v"1", "F"=>v"1.1")
 
 # require F and D; force lower D version -> must not bring down F version
 reqs_data = Any[
     ["F"],
     ["D", v"1", v"2"]
 ]
-want_data = Dict("A"=>v"2.1", "B"=>v"1.0.1", "C"=>v"2",
-                 "D"=>v"1", "E"=>v"1", "F"=>v"2")
-@test resolve_tst(deps_data, reqs_data, want_data)
+want = resolve_tst(deps_data, reqs_data)
+@test want == Dict("A"=>v"2.1", "B"=>v"1.0.1", "C"=>v"2",
+                   "D"=>v"1", "E"=>v"1", "F"=>v"2")
 
 # require F and C; force lower C version -> must bring down F and A versions
 reqs_data = Any[
     ["F"],
     ["C", v"1", v"2"]
 ]
-want_data = Dict("A"=>v"2", "B"=>v"1.0.1", "C"=>v"1+BLD",
-                 "D"=>v"2", "E"=>v"1", "F"=>v"2-rc.1")
-@test resolve_tst(deps_data, reqs_data, want_data)
+want = resolve_tst(deps_data, reqs_data)
+@test want == Dict("A"=>v"2", "B"=>v"1.0.1", "C"=>v"1+BLD",
+                   "D"=>v"2", "E"=>v"1", "F"=>v"2-rc.1")
 
 ## DEPENDENCY SCHEME 11: FIVE PACKAGES, SAME AS SCHEMES 5 + 1, UNCONNECTED
 deps_data = Any[
@@ -514,15 +513,15 @@ deps_data = Any[
 reqs_data = Any[
     ["A"]
 ]
-want_data = Dict("A"=>v"1", "B"=>v"2", "C"=>v"2")
-@test resolve_tst(deps_data, reqs_data, want_data)
+want = resolve_tst(deps_data, reqs_data)
+@test want == Dict("A"=>v"1", "B"=>v"2", "C"=>v"2")
 
 # require just D: must bring in E
 reqs_data = Any[
     ["D"]
 ]
-want_data = Dict("D"=>v"2", "E"=>v"2")
-@test resolve_tst(deps_data, reqs_data, want_data)
+want = resolve_tst(deps_data, reqs_data)
+@test want == Dict("D"=>v"2", "E"=>v"2")
 
 
 # require A and D, must be the merge of the previous two cases
@@ -530,13 +529,5 @@ reqs_data = Any[
     ["A"],
     ["D"]
 ]
-want_data = Dict("A"=>v"1", "B"=>v"2", "C"=>v"2", "D"=>v"2", "E"=>v"2")
-@test resolve_tst(deps_data, reqs_data, want_data)
-
-## DEPENDENCY SCHEME 12: A REALISTIC EXAMPLE
-## ref issue #21485
-
-include("resolvedata1.jl")
-
-@test sanity_tst(deps_data, problematic_data)
-@test resolve_tst(deps_data, reqs_data, want_data)
+want = resolve_tst(deps_data, reqs_data)
+@test want == Dict("A"=>v"1", "B"=>v"2", "C"=>v"2", "D"=>v"2", "E"=>v"2")
