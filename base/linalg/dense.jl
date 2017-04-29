@@ -551,40 +551,26 @@ julia> logm(A)
  0.0  1.0
 ```
 """
-function logm(A::StridedMatrix{T}) where T
+function logm{T}(A::StridedMatrix{T})
     # If possible, use diagonalization
     if issymmetric(A) && T <: Real
-        return full(logm(Symmetric(A)))
+        return logm(Symmetric(A))
     end
     if ishermitian(A)
-        return full(logm(Hermitian(A)))
+        return logm(Hermitian(A))
     end
 
     # Use Schur decomposition
     n = checksquare(A)
     if istriu(A)
-        retmat = full(logm(UpperTriangular(complex(A))))
-        d = diag(A)
+        retmat = logm(UpperTriangular(float.(A)))
     else
         S,Q,d = schur(complex(A))
-        R = logm(UpperTriangular(S))
+        R = logm(UpperTriangular(float.(S)))
         retmat = Q * R * Q'
     end
 
-    # Check whether the matrix has nonpositive real eigs
-    np_real_eigs = false
-    for i = 1:n
-        if imag(d[i]) < eps() && real(d[i]) <= 0
-            np_real_eigs = true
-            break
-        end
-    end
-
-    if isreal(A) && !np_real_eigs
-        return real(retmat)
-    else
-        return retmat
-    end
+    return retmat
 end
 function logm(a::Number)
     b = log(complex(a))

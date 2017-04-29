@@ -1741,187 +1741,184 @@ powm(A::LowerTriangular, p::Real) = powm(A.', p::Real).'
 # Based on the code available at http://eprints.ma.man.ac.uk/1851/02/logm.zip,
 # Copyright (c) 2011, Awad H. Al-Mohy and Nicholas J. Higham
 # Julia version relicensed with permission from original authors
-function logm(A0::UpperTriangular{T}) where T<:Union{Float64,Complex{Float64}}
-    maxsqrt = 100
-    theta = [1.586970738772063e-005,
-         2.313807884242979e-003,
-         1.938179313533253e-002,
-         6.209171588994762e-002,
-         1.276404810806775e-001,
-         2.060962623452836e-001,
-         2.879093714241194e-001]
+function logm{T<:Union{Float64,Complex{Float64}}}(A0::UpperTriangular{T})
+    theta = [1.586970738772063e-005
+         2.313807884242979e-003
+         1.938179313533253e-002
+         6.209171588994762e-002
+         1.276404810806775e-001
+         2.060962623452836e-001
+         2.879093714241194e-001
+         3.666532675959788e-001
+         4.389227326152340e-001
+         5.034050432047666e-001
+         5.600071293013720e-001
+         6.092525642521717e-001
+         6.519202543720032e-001
+         6.888477797186464e-001
+         7.208340678820352e-001
+         7.485977242539218e-001]
     tmax = size(theta, 1)
     n = size(A0, 1)
     A = copy(A0)
-    p = 0
-    m = 0
 
-    # Compute repeated roots
-    d = diag(A)
-    dm1 = Vector{T}(n)
     s = 0
-    for i = 1:n
-        dm1[i] = d[i] - 1.
-    end
-    while norm(dm1, Inf) > theta[tmax]
-        for i = 1:n
-            d[i] = sqrt(d[i])
-        end
-        for i = 1:n
-            dm1[i] = d[i] - 1
-        end
-        s = s + 1
-    end
-    s0 = s
-    for k = 1:min(s, maxsqrt)
-        A = sqrtm(A)
-    end
+    maxs = 100
+    its = 5
+    k = 0
+    flag = 0
 
     AmI = A - I
     d2 = sqrt(norm(AmI^2, 1))
     d3 = cbrt(norm(AmI^3, 1))
     alpha2 = max(d2, d3)
-    foundm = false
     if alpha2 <= theta[2]
-        m = alpha2<=theta[1]?1:2
-        foundm = true
+        m = (alpha2 <= theta[1] ? 1 : 2)
     end
 
-    while !foundm
-        more = false
-        if s > s0
-            d3 = cbrt(norm(AmI^3, 1))
+    while flag != 2
+        d = zeros(6)
+        alpha = zeros(5)
+        flag = 0
+        if s > 0
+            d[3] = cbrt(norm(AmI^3, 1))
         end
-        d4 = norm(AmI^4, 1)^(1/4)
-        alpha3 = max(d3, d4)
-        if alpha3 <= theta[tmax]
-            for j = 3:tmax
-                if alpha3 <= theta[j]
-                    break
-                end
-            end
-            if j <= 6
-                m = j
-                break
-            elseif alpha3 / 2 <= theta[5] && p < 2
-                more = true
-                p = p + 1
-           end
-        end
-
-        if !more
-            d5 = norm(AmI^5, 1)^(1/5)
-            alpha4 = max(d4, d5)
-            eta = min(alpha3, alpha4)
-            if eta <= theta[tmax]
-                j = 0
-                for j = 6:tmax
-                    if eta <= theta[j]
-                        m = j
+        alpha[2] = Inf
+        for p = 3:5
+            d[p+1] = norm(AmI^(p+1), 1)^(1/(p+1))
+            alpha[p] = max(d[p], d[p+1])
+            etaa = min(alpha[p-1], alpha[p])
+            if etaa <= theta[tmax]
+                kp = Integer(ceil((p*(p-1)-1)/2))
+                j1 = kp - 1
+                j2 = kp - 1
+                for i = kp:tmax
+                    if etaa <= theta[i]
+                        j1 += i + 1 - kp
                         break
                     end
                 end
-                break
+                for i = kp:tmax
+                    if etaa/2 <= theta[i]
+                        j2 += i + 1 - kp
+                        break
+                    end
+                end
+                kp = Integer(ceil((p*(p+1)-1)/2))
+                if (2*(j1-j2)/3 < its) && (j1 <= kp)
+                    m = j1
+                    flag = 2
+                    break
+                elseif (2*(j1-j2)/3 >= its) && (k < 2)
+                    k += 1
+                    flag = 1
+                    break
+                end
+            end
+        end
+        d6 = d[6]
+        alpha5 = alpha[5]
+
+        if flag == 0
+            d7 = norm(AmI^7, 1)^(1/7)
+            alpha6 = max(d6, d7)
+            eta6 = min(alpha5, alpha6)
+            if eta6 <= theta[tmax]
+                m = 14; m += (eta6 <= theta[15] ? 1 : 2)
             end
         end
 
-        if s == maxsqrt
-            m = tmax
-            break
-        end
-        A = sqrtm(A)
-        AmI = A - I
-        s = s + 1
-    end
-
-    # Compute accurate superdiagonal of T
-    p = 1 / 2^s
-    for k = 1:n-1
-        Ak = A0[k,k]
-        Akp1 = A0[k+1,k+1]
-        Akp = Ak^p
-        Akp1p = Akp1^p
-        A[k,k] = Akp
-        A[k+1,k+1] = Akp1p
-        if Ak == Akp1
-            A[k,k+1] = p * A0[k,k+1] * Ak^(p-1)
-        elseif 2 * abs(Ak) < abs(Akp1) || 2 * abs(Akp1) < abs(Ak)
-            A[k,k+1] = A0[k,k+1] * (Akp1p - Akp) / (Akp1 - Ak)
-        else
-            logAk = log(Ak)
-            logAkp1 = log(Akp1)
-            w = atanh((Akp1 - Ak)/(Akp1 + Ak)) + im*pi*ceil((imag(logAkp1-logAk)-pi)/(2*pi))
-            dd = 2 * exp(p*(logAk+logAkp1)/2) * sinh(p*w) / (Akp1 - Ak)
-            A[k,k+1] = A0[k,k+1] * dd
+        if flag != 2
+            A, mm, its = sqrtm_dbp(A)
+            if any(isnan.(A)) || s >= maxs
+                return A
+            end
+            AmI = A - I
+            s += 1
+            if s == 1
+                z0 = AmI
+            elseif s == 2
+                R = I + A
+            else
+                R = R * (I + A)
+            end
         end
     end
 
-    # Compute accurate diagonal of T
-    for i = 1:n
-        a = A0[i,i]
-        if s == 0
-            r = a - 1
-        end
-        s0 = s
-        if angle(a) >= pi / 2
-            a = sqrt(a)
-            s0 = s - 1
-        end
-        z0 = a - 1
-        a = sqrt(a)
-        r = 1 + a
-        for j = 1:s0-1
-            a = sqrt(a)
-            r = r * (1 + a)
-        end
-        A[i,i] = z0 / r
+    if s >= 2
+        R = z0 / R
+    else
+        R = AmI
     end
 
     # Get the Gauss-Legendre quadrature points and weights
-    R = zeros(Float64, m, m)
+    v = zeros(Float64, m, m)
     for i = 1:m - 1
-        R[i,i+1] = i / sqrt((2 * i)^2 - 1)
-        R[i+1,i] = R[i,i+1]
+        v[i, i+1] = i / sqrt((2 * i)^2 - 1)
+        v[i+1, i] = v[i, i+1]
     end
-    x,V = eig(R)
-    w = Vector{Float64}(m)
+    x, V = eig(v)
+    w = Vector(m)
     for i = 1:m
         x[i] = (x[i] + 1) / 2
-        w[i] = V[1,i]^2
+        w[i] = V[1, i]^2
     end
 
-    # Compute the Padé approximation
-    Y = zeros(T, n, n)
+    # Compute the Padé approximation to matrix logarithm
+    Y = zeros(n, n)
     for k = 1:m
-        Y = Y + w[k] * (A / (x[k] * A + I))
+        Y = Y + w[k] * (R / (x[k] * R + I))
     end
 
     # Scale back
     scale!(2^s, Y)
 
-    # Compute accurate diagonal and superdiagonal of log(T)
-    for k = 1:n-1
-        Ak = A0[k,k]
-        Akp1 = A0[k+1,k+1]
-        logAk = log(Ak)
-        logAkp1 = log(Akp1)
-        Y[k,k] = logAk
-        Y[k+1,k+1] = logAkp1
-        if Ak == Akp1
-            Y[k,k+1] = A0[k,k+1] / Ak
-        elseif 2 * abs(Ak) < abs(Akp1) || 2 * abs(Akp1) < abs(Ak)
-            Y[k,k+1] = A0[k,k+1] * (logAkp1 - logAk) / (Akp1 - Ak)
-        else
-            w = atanh((Akp1 - Ak)/(Akp1 + Ak) + im*pi*(ceil((imag(logAkp1-logAk) - pi)/(2*pi))))
-            Y[k,k+1] = 2 * A0[k,k+1] * w / (Akp1 - Ak)
-        end
-    end
-
-    return UpperTriangular(Y)
+    return Y
 end
 logm(A::LowerTriangular) = logm(A.').'
 
 # Auxiliary functions for logm and matrix power
+
+# Matrix square root by product form of Denman-Beavers iteration.
+#   computes the principal square root X
+#   of the matrix A using the product form of the Denman-Beavers
+#   iteration. The matrix M tends to I.
+#       Copyright (c) 2008 by N. J. Higham
+function sqrtm_dbp(A::AbstractMatrix)
+    n = size(A, 1)
+    tol = sqrt(n)*eps(Float64)/2
+    X = A
+    M = A
+    maxit = 100
+    scaling = 1
+
+    for kk = 1:maxit
+        if scaling == 1
+            g = (abs(det(M)))^(-1/(2*n))
+            X = g*X
+            M = g^2*M
+        end
+
+        Xold = X
+        invM = inv(M)
+
+        X = X*(I + invM)/2
+        M = 0.5*(I + (M + invM)/2)
+
+        Mres = vecnorm(M - I)
+
+        reldiff = vecnorm(X - Xold) / vecnorm(X)
+        if reldiff < 1e-005
+            scaling = 0
+        end
+
+        if Mres <= tol
+            return X, M, kk
+        end
+    end
+
+    return X, M, kk
+end
 
 # Compute accurate diagonal of A = A0^s - I
 #   Al-Mohy, "A more accurate Briggs method for the logarithm",
@@ -1975,6 +1972,9 @@ function invsquaring(A0::UpperTriangular, theta)
             dm1[i] = d[i] - 1
         end
         s = s + 1
+        if s == maxsqrt
+            break
+        end
     end
     s0 = s
     for k = 1:min(s, maxsqrt)
