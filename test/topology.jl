@@ -1,7 +1,15 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 include("testdefs.jl")
-addprocs(4; topology="master_slave")
+inline_flag = Base.JLOptions().can_inline == 1 ? `` : `--inline=no`
+cov_flag = ``
+if Base.JLOptions().code_coverage == 1
+    cov_flag = `--code-coverage=user`
+elseif Base.JLOptions().code_coverage == 2
+    cov_flag = `--code-coverage=all`
+end
+cov_in_exeflags = `$cov_flag $inline_flag --check-bounds=yes --startup-file=no --depwarn=error`
+addprocs(4; exeflags=cov_in_exeflags, topology="master_slave")
 using Base.Test
 
 @test_throws RemoteException remotecall_fetch(()->remotecall_fetch(myid, 3), 2)
@@ -64,7 +72,7 @@ function Base.manage(manager::TopoTestManager, id::Integer, config::WorkerConfig
     end
 end
 
-addprocs(TopoTestManager(8); topology="custom")
+addprocs(TopoTestManager(8); exeflags=cov_in_exeflags, topology="custom")
 
 while true
     if any(x->get(map_pid_ident, x, 0)==0, workers())
