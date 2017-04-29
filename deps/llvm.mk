@@ -553,8 +553,14 @@ endif
 $(build_prefix)/manifest/llvm: | $(llvm_python_workaround)
 
 ifeq ($(LLVM_USE_CMAKE),1)
+ifeq ($(OS), WINNT)
+LLVM_INSTALL = \
+	cd $1 && $$(CMAKE) -DCMAKE_INSTALL_PREFIX="$2$$(build_prefix)" -P cmake_install.cmake && \
+	cp $2$$(build_shlibdir)/LLVM.dll $2$$(build_depsbindir)
+else
 LLVM_INSTALL = \
 	cd $1 && $$(CMAKE) -DCMAKE_INSTALL_PREFIX="$2$$(build_prefix)" -P cmake_install.cmake
+endif
 else
 LLVM_INSTALL = \
 	$(call MAKE_INSTALL,$1,$2,$3 $$(LLVM_MFLAGS) PATH="$$(llvm_python_workaround):$$$$PATH" DestSharedLibDir="$2$$(build_shlibdir)")
