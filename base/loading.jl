@@ -218,8 +218,14 @@ function _require_search_from_serialized(node::Int, mod::Symbol, sourcepath::Str
     end
 
     for path_to_try in paths::Vector{String}
-        if stale_cachefile(sourcepath, path_to_try)
-            continue
+        if node == myid()
+            if stale_cachefile(sourcepath, path_to_try)
+                continue
+            end
+        else
+            if @fetchfrom node stale_cachefile(sourcepath, path_to_try)
+                continue
+            end
         end
         restored = _require_from_serialized(node, mod, path_to_try, toplevel_load)
         if isa(restored, Exception)
