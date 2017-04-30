@@ -58,7 +58,7 @@ struct HessenbergQ{T,S<:AbstractMatrix} <: AbstractMatrix{T}
     τ::Vector{T}
     HessenbergQ{T,S}(factors::AbstractMatrix{T}, τ::Vector{T}) where {T,S<:AbstractMatrix} = new(factors, τ)
 end
-HessenbergQ{T}(factors::AbstractMatrix{T}, τ::Vector{T}) = HessenbergQ{T,typeof(factors)}(factors, τ)
+HessenbergQ(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = HessenbergQ{T,typeof(factors)}(factors, τ)
 HessenbergQ(A::Hessenberg) = HessenbergQ(A.factors, A.τ)
 size(A::HessenbergQ, d) = size(A.factors, d)
 size(A::HessenbergQ) = size(A.factors)
