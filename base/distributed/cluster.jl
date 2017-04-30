@@ -10,7 +10,7 @@ mutable struct WorkerConfig
 
     # Used when launching additional workers at a host
     count::Nullable{Union{Int, Symbol}}
-    exename::Nullable{AbstractString}
+    exename::Nullable{Union{AbstractString, Cmd}}
     exeflags::Nullable{Cmd}
 
     # External cluster managers can use this to store information at a per-worker level
