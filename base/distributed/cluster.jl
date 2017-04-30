@@ -652,13 +652,17 @@ myid() = LPROC.id
 Get the number of available processes.
 """
 function nprocs()
-    n = length(PGRP.workers)
-    for jw in PGRP.workers
-        if !isa(jw, LocalProcess) && (jw.state != W_CONNECTED)
-            n = n - 1
+    if myid() == 1 || PGRP.topology == :all_to_all
+        n = length(PGRP.workers)
+        for jw in PGRP.workers
+            if !isa(jw, LocalProcess) && (jw.state != W_CONNECTED)
+                n = n - 1
+            end
         end
+        return n
+    else
+        return remotecall_fetch(nprocs, 1)
     end
-    n
 end
 
 """
@@ -677,7 +681,13 @@ end
 
 Returns a list of all process identifiers.
 """
-procs() = Int[x.id for x in PGRP.workers if isa(x, LocalProcess) || (x.state == W_CONNECTED)]
+function procs()
+    if myid() == 1 || PGRP.topology == :all_to_all
+        return Int[x.id for x in PGRP.workers if isa(x, LocalProcess) || (x.state == W_CONNECTED)]
+    else
+        return remotecall_fetch(procs, 1)
+    end
+end
 
 """
     procs(pid::Integer)
