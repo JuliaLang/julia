@@ -996,6 +996,18 @@ if is_unix() # aka have ssh
     @test length(new_pids) == 5
     test_n_remove_pids(new_pids)
 
+    print("\nkeyword arg exename\n")
+
+    for exename in [`$(joinpath(JULIA_HOME, Base.julia_exename()))`, "$(joinpath(JULIA_HOME, Base.julia_exename()))"]
+        for addp_func in [()->addprocs(["localhost"]; exename=exename, exeflags=cov_in_exeflags, sshflags=sshflags),
+                          ()->addprocs(1; exename=exename, exeflags=cov_in_exeflags)]
+
+            new_pids = addp_func()
+            @test length(new_pids) == 1
+            test_n_remove_pids(new_pids)
+        end
+    end
+
 end # unix-only
 end # full-test
 
