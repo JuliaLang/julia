@@ -481,6 +481,32 @@ end
     @test expm(A10) ≈ eA10
 end
 
+@testset "Additional matrix logarithm tests" for elty in (Float64, Complex{Float64})
+    A11 = convert(Matrix{elty}, [3 2; -5 -3])
+    @test expm(logm(A11)) ≈ A11
+
+    A12 = convert(Matrix{elty}, [1 -1; 1 -1])
+    @test typeof(logm(A12)) == Array{Complex{Float64}, 2}
+
+    A1  = convert(Matrix{elty}, [4 2 0; 1 4 1; 1 1 4])
+    logmA1 = convert(Matrix{elty}, [1.329661349 0.5302876358 -0.06818951543;
+                                    0.2310490602 1.295566591 0.2651438179;
+                                    0.2310490602 0.1969543025 1.363756107])
+    @test logm(A1) ≈ logmA1
+    @test expm(logm(A1)) ≈ A1
+
+    A4  = convert(Matrix{elty}, [1/2 1/3 1/4 1/5+eps();
+                                 1/3 1/4 1/5 1/6;
+                                 1/4 1/5 1/6 1/7;
+                                 1/5 1/6 1/7 1/8])
+    logmA4 = convert(Matrix{elty}, [-1.73297159 1.857349738 0.4462766564 0.2414170219;
+                                    1.857349738 -5.335033737 2.994142974 0.5865285289;
+                                    0.4462766564 2.994142974 -7.351095988 3.318413247;
+                                    0.2414170219 0.5865285289 3.318413247 -5.444632124])
+    @test logm(A4) ≈ logmA4
+    @test expm(logm(A4)) ≈ A4
+end
+
 @testset "issue #7181" begin
     A = [ 1  5  9
           2  6 10
