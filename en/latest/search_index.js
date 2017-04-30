@@ -9813,7 +9813,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.ascii",
     "category": "Function",
-    "text": "ascii(s::AbstractString)\n\nConvert a string to String type and check that it contains only ASCII data, otherwise throwing an ArgumentError indicating the position of the first non-ASCII byte.\n\njulia> ascii(\"abcdeγfgh\")\nERROR: ArgumentError: invalid ASCII at index 6 in \"abcdeγfgh\"\nStacktrace:\n [1] ascii(::String) at ./strings/util.jl:475\n\njulia> ascii(\"abcdefgh\")\n\"abcdefgh\"\n\n\n\n"
+    "text": "ascii(s::AbstractString)\n\nConvert a string to String type and check that it contains only ASCII data, otherwise throwing an ArgumentError indicating the position of the first non-ASCII byte.\n\njulia> ascii(\"abcdeγfgh\")\nERROR: ArgumentError: invalid ASCII at index 6 in \"abcdeγfgh\"\nStacktrace:\n [1] ascii(::String) at ./strings/util.jl:479\n\njulia> ascii(\"abcdefgh\")\n\"abcdefgh\"\n\n\n\n"
 },
 
 {
