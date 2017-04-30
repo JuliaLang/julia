@@ -164,7 +164,7 @@
                   `(block ,body))))
     `(lambda ,argl ()
              (scope-block
-              ,(if (eq? rett 'Any)
+              ,(if (equal? rett '(core Any))
                    body
                    (let ((meta (take-while (lambda (x) (and (pair? x)
                                                             (memq (car x) '(line meta))))
@@ -300,7 +300,7 @@
 
 ;; construct the (method ...) expression for one primitive method definition,
 ;; assuming optional and keyword args are already handled
-(define (method-def-expr- name sparams argl body isstaged (rett 'Any))
+(define (method-def-expr- name sparams argl body isstaged (rett '(core Any)))
   (if
    (any kwarg? argl)
    ;; has optional positional args
@@ -677,14 +677,21 @@
                      (block
                       ,@locs
                       (call new ,@field-names)))))
-    (if (and (null? params) (any (lambda (t) (not (eq? t 'Any))) field-types))
+    (if (and (null? params) (any (lambda (t) (not (equal? t '(core Any))))
+                                 field-types))
         (list
          ;; definition with field types for all arguments
-         `(function (call ,name
-                          ,@(map make-decl field-names field-types))
-                    (block
-                     ,@locs
-                     (call new ,@field-names)))
+         ;; only if any field type is not Any, checked at runtime
+         `(if ,(foldl (lambda (t u)
+                        `(&& ,u (call (core ===) (core Any) ,t)))
+                      `(call (core ===) (core Any) ,(car field-types))
+                      (cdr field-types))
+            (block)
+            (function (call ,name
+                            ,@(map make-decl field-names field-types))
+                      (block
+                        ,@locs
+                        (call new ,@field-names))))
          any-ctor)
         (list any-ctor))))
 
@@ -933,9 +940,9 @@
 ;; take apart a type signature, e.g. T{X} <: S{Y}
 (define (analyze-type-sig ex)
   (or ((pattern-lambda (-- name (-s))
-                       (values name '() 'Any)) ex)
+                       (values name '() '(core Any))) ex)
       ((pattern-lambda (curly (-- name (-s)) . params)
-                       (values name params 'Any)) ex)
+                       (values name params '(core Any))) ex)
       ((pattern-lambda (|<:| (-- name (-s)) super)
                        (values name '() super)) ex)
       ((pattern-lambda (|<:| (curly (-- name (-s)) . params) super)
@@ -997,7 +1004,7 @@
                               (set! name (cadr w))))
                     #f))
          (dcl   (and (pair? name) (eq? (car name) '|::|)))
-         (rett  (if dcl (caddr name) 'Any))
+         (rett  (if dcl (caddr name) '(core Any)))
          (name  (if dcl (cadr name) name)))
     (cond ((and (length= e 2) (symbol? name))
            (if (or (eq? name 'true) (eq? name 'false))
@@ -2679,7 +2686,7 @@
          ;; record. for non-symbols or globals, emit a type assertion.
          (let ((vi (var-info-for (cadr e) env)))
            (if vi
-               (begin (if (not (eq? (vinfo:type vi) 'Any))
+               (begin (if (not (equal? (vinfo:type vi) '(core Any)))
                           (error (string "multiple type declarations for \""
                                          (cadr e) "\"")))
                       (if (assq (cadr e) captvars)
@@ -2746,7 +2753,7 @@ f(x) = yt(x)
                   (composite_type ,name (call (core svec))
                                   (call (core svec) ,@(map (lambda (v) `',v) fields))
                                   ,super
-                                  (call (core svec) ,@(map (lambda (v) 'Any) fields))
+                                  (call (core svec) ,@(map (lambda (v) '(core Any)) fields))
                                   false ,(length fields))
                   (return (null)))))))
 
@@ -2793,7 +2800,7 @@ f(x) = yt(x)
        (cl-convert (cadddr lam) fname lam (table) #f interp))))
 
 (define (convert-for-type-decl rhs t)
-  (if (eq? t 'Any)
+  (if (equal? t '(core Any))
       rhs
       `(call (core typeassert)
              (call (top convert) ,t ,rhs)
@@ -2809,16 +2816,16 @@ f(x) = yt(x)
          (cv (assq var (cadr (lam:vinfo lam))))
          (vt  (or (and vi (vinfo:type vi))
                   (and cv (vinfo:type cv))
-                  'Any))
+                  '(core Any)))
          (closed (and cv (vinfo:asgn cv) (vinfo:capt cv)))
          (capt   (and vi (vinfo:asgn vi) (vinfo:capt vi))))
-    (if (and (not closed) (not capt) (eq? vt 'Any))
+    (if (and (not closed) (not capt) (equal? vt '(core Any)))
         `(= ,var ,rhs0)
         (let* ((rhs1 (if (or (ssavalue? rhs0) (simple-atom? rhs0)
                              (equal? rhs0 '(the_exception)))
                          rhs0
                          (make-ssavalue)))
-               (rhs  (if (eq? vt 'Any)
+               (rhs  (if (equal? vt '(core Any))
                          rhs1
                          (convert-for-type-decl rhs1 (cl-convert vt fname lam #f #f interp))))
                (ex (cond (closed `(call (core setfield!)
@@ -2997,7 +3004,7 @@ f(x) = yt(x)
                                    `(call (core getfield) ,fname (inert ,e)))))
                    (if (and (vinfo:asgn cv) (vinfo:capt cv))
                        (let ((val `(call (core getfield) ,access (inert contents))))
-                         (if (eq? (vinfo:type cv) 'Any)
+                         (if (equal? (vinfo:type cv) '(core Any))
                              val
                              `(call (core typeassert) ,val
                                     ,(cl-convert (vinfo:type cv) fname lam namemap toplevel interp))))
@@ -3005,7 +3012,7 @@ f(x) = yt(x)
                 (vi
                  (if (and (vinfo:asgn vi) (vinfo:capt vi))
                      (let ((val `(call (core getfield) ,e (inert contents))))
-                       (if (eq? (vinfo:type vi) 'Any)
+                       (if (equal? (vinfo:type vi) '(core Any))
                            val
                            `(call (core typeassert) ,val
                                   ,(cl-convert (vinfo:type vi) fname lam namemap toplevel interp))))
