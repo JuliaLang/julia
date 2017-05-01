@@ -693,4 +693,22 @@ run(pipeline(`cat test.txt`, DevNull))
 """
 DevNull
 
+"""
+    Function
+
+Abstract type of all functions.
+
+```jldoctest
+julia> isa(+, Function)
+true
+
+julia> typeof(sin)
+Base.#sin
+
+julia> ans <: Function
+true
+```
+"""
+Function
+
 end
