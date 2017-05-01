@@ -574,12 +574,13 @@ function accumulate_pairwise(op, v::AbstractVector{T}) where T
 end
 
 function cumsum!(out, v::AbstractVector, axis::Integer=1)
-    # for types prone to numerical stability issues, we want
-    # accumulate_pairwise.
-    axis == 1 ? accumulate_pairwise!(+, out, v) : copy!(out,v)
+    _cumsum!(out, v, axis, TypeArithmetic(eltype(out)))
 end
 
-function cumsum!(out, v::AbstractVector{<:Integer}, axis::Integer=1)
+function _cumsum!(out, v, axis, ::ArithmeticRounds)
+    axis == 1 ? accumulate_pairwise!(+, out, v) : copy!(out,v)
+end
+function _cumsum!(out, v, axis, ::TypeArithmetic)
     axis == 1 ? accumulate!(+, out, v) : copy!(out,v)
 end
 
