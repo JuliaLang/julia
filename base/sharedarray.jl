@@ -148,7 +148,7 @@ SharedArray{T}(m::Integer, n::Integer, o::Integer; kwargs...) where {T} =
     SharedArray{T,3}(m, n, o; kwargs...)
 
 function SharedArray{T,N}(filename::AbstractString, dims::NTuple{N,Int}, offset::Integer=0;
-                                    mode=nothing, init=false, pids::Vector{Int}=Int[]) where T where N
+                          mode=nothing, init=false, pids::Vector{Int}=Int[]) where T where N
     if !isabspath(filename)
         throw(ArgumentError("$filename is not an absolute path; try abspath(filename)?"))
     end
