@@ -44,11 +44,10 @@
         TYPE,
         TYPEALIAS,
         USING,
-        WHERE,
         WHILE,
     end_keywords,
 
-    begin_invisble_keywords,
+    begin_invisible_keywords,
         BLOCK,
         CALL,
         CCALL,
@@ -75,7 +74,7 @@
         VECT,
         x_STR,
         x_CMD,
-    end_invisble_keywords,
+    end_invisible_keywords,
 
     begin_literal,
         LITERAL, # general
@@ -746,13 +745,18 @@
             HALFWIDTH_UPWARDS_ARROW, # ￪
             HALFWIDTH_DOWNWARDS_ARROW, # ￬
         end_power,
-        
+
         # Level 14
         begin_decl,
             DECLARATION, # ::
         end_decl,
 
         # Level 15
+        begin_where,
+            WHERE,
+        end_where,
+
+        # Level 16
         begin_dot,
             DOT,# .
         end_dot,

@@ -271,7 +271,6 @@ end
                     "type",
                     "typealias",
                     "using",
-                    "where",
                     "while"]
 
         @test T.kind(tok(kw)) == T.KEYWORD
@@ -417,4 +416,8 @@ end
     @test tok("```cmd```", 2).kind == T.ENDMARKER
     @test tok("```cmd````cmd`", 1).kind == T.TRIPLE_CMD
     @test tok("```cmd````cmd`", 2).kind == T.CMD
+end
+
+@testset "where" begin
+    @test tok("a where b", 3).kind == T.WHERE
 end
