@@ -77,7 +77,7 @@ beginning of the file.
 """
 SharedArray
 
-function SharedArray{T,N}(dims::Dims{N}; init=false, pids=Int[]) where T where N
+function SharedArray{T,N}(dims::Dims{N}; init=false, pids=Int[]) where {T,N}
     isbits(T) || throw(ArgumentError("type of SharedArray elements must be bits types, got $(T)"))
 
     pids, onlocalhost = shared_pids(pids)
@@ -148,7 +148,7 @@ SharedArray{T}(m::Integer, n::Integer, o::Integer; kwargs...) where {T} =
     SharedArray{T,3}(m, n, o; kwargs...)
 
 function SharedArray{T,N}(filename::AbstractString, dims::NTuple{N,Int}, offset::Integer=0;
-                          mode=nothing, init=false, pids::Vector{Int}=Int[]) where T where N
+                          mode=nothing, init=false, pids::Vector{Int}=Int[]) where {T,N}
     if !isabspath(filename)
         throw(ArgumentError("$filename is not an absolute path; try abspath(filename)?"))
     end
@@ -258,7 +258,7 @@ size(S::SharedArray) = S.dims
 ndims(S::SharedArray) = length(S.dims)
 IndexStyle(::Type{<:SharedArray}) = IndexLinear()
 
-function reshape(a::SharedArray{T}, dims::NTuple{N,Int}) where T where N
+function reshape(a::SharedArray{T}, dims::NTuple{N,Int}) where {T,N}
     if length(a) != prod(dims)
         throw(DimensionMismatch("dimensions must be consistent with array size"))
     end
@@ -325,7 +325,7 @@ function convert(::Type{SharedArray{T}}, A::Array) where T
     S = SharedArray{T,ndims(A)}(size(A))
     copy!(S, A)
 end
-function convert(::Type{SharedArray{TS,N}}, A::Array{TA,N}) where TS where TA where N
+function convert(::Type{SharedArray{TS,N}}, A::Array{TA,N}) where {TS,TA,N}
     S = SharedArray{TS,ndims(A)}(size(A))
     copy!(S, A)
 end
