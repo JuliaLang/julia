@@ -10,7 +10,7 @@ end
 ReshapedArray{T,N}(parent::AbstractArray{T}, dims::NTuple{N,Int}, mi) = ReshapedArray{T,N,typeof(parent),typeof(mi)}(parent, dims, mi)
 
 # IndexLinear ReshapedArray
-ReshapedArrayLF{T,N,P<:AbstractArray} = ReshapedArray{T,N,P,Tuple{}}
+const ReshapedArrayLF{T,N,P<:AbstractArray} = ReshapedArray{T,N,P,Tuple{}}
 
 # Fast iteration on ReshapedArrays: use the parent iterator
 struct ReshapedArrayIterator{I,M}
@@ -227,7 +227,7 @@ end
 end
 
 # helpful error message for a common failure case
-ReshapedRange{T,N,A<:Range} = ReshapedArray{T,N,A,Tuple{}}
+const ReshapedRange{T,N,A<:Range} = ReshapedArray{T,N,A,Tuple{}}
 setindex!(A::ReshapedRange, val, index::Int) = _rs_setindex!_err()
 setindex!(A::ReshapedRange, val, indexes::Int...) = _rs_setindex!_err()
 setindex!(A::ReshapedRange, val, index::ReshapedIndex) = _rs_setindex!_err()
