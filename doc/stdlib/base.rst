@@ -662,6 +662,23 @@ Types
 Generic Functions
 -----------------
 
+.. data:: Function
+
+   .. Docstring generated from Julia source
+
+   Abstract type of all functions.
+
+   .. doctest::
+
+       julia> isa(+, Function)
+       true
+
+       julia> typeof(sin)
+       Base.#sin
+
+       julia> ans <: Function
+       true
+
 .. function:: method_exists(f, Tuple type) -> Bool
 
    .. Docstring generated from Julia source
