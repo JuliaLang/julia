@@ -493,6 +493,31 @@ let
     @test (@macroexpand @seven_dollar 1+$x) == :(1 + $(Expr(:$, :x)))
 end
 
+macro nest1(code)
+    code
+end
+
+macro nest2(code)
+    :(@nest1 $code)
+end
+
+macro nest2b(code)
+    :(@nest1($code); @nest1($code))
+end
+
+@testset "macroexpand1, @macroexpand1" begin
+    M = @__MODULE__
+    ex = :(@nest1 42)
+    @test macroexpand1(M,ex) == macroexpand(M,ex)
+    ex = :(@nest2 42)
+    @test macroexpand1(M,ex) != macroexpand(M,ex)
+    @test macroexpand1(M,macroexpand1(M,ex)) == macroexpand(M,ex)
+    ex = :(@nest2b 42)
+    @test macroexpand1(M,ex) != macroexpand(M,ex)
+    @test macroexpand1(M,macroexpand1(M,ex)) == macroexpand(M,ex)
+    @test (@macroexpand1 @nest2b 42) == macroexpand1(M,ex)
+end
+
 foo_9965(x::Float64; w=false) = x
 foo_9965(x::Int) = 2x
 

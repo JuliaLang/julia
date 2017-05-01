@@ -987,6 +987,12 @@ JL_DLLEXPORT jl_value_t *jl_macroexpand(jl_value_t *expr, jl_module_t *inmodule)
     return jl_call_scm_on_ast("jl-macroexpand", expr, inmodule);
 }
 
+JL_DLLEXPORT jl_value_t *jl_macroexpand1(jl_value_t *expr, jl_module_t *inmodule)
+{
+    JL_TIMING(LOWERING);
+    return jl_call_scm_on_ast("jl-macroexpand-1", expr, inmodule);
+}
+
 // wrap expr in a thunk AST
 jl_code_info_t *jl_wrap_expr(jl_value_t *expr)
 {

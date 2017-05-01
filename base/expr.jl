@@ -59,8 +59,18 @@ expand(m::Module, x::ANY) = ccall(:jl_expand, Any, (Any, Any), x, m)
 
 Takes the expression `x` and returns an equivalent expression with all macros removed (expanded)
 for executing in module `m`.
+For non recursive expansion, see [`macroexpand1`](@ref).
+For more convenient interfaces, see [`@macroexpand`](@ref) and [`@macroexpand1`](@ref).
 """
 macroexpand(m::Module, x::ANY) = ccall(:jl_macroexpand, Any, (Any, Any), x, m)
+
+"""
+    macroexpand1(m, x)
+
+Like `macroexpand(m, x)`, but only macros that are directly
+called in `x` are expanded. Deeper levels of nested macrocalls are not expanded.
+"""
+macroexpand1(m::Module, x::ANY) = ccall(:jl_macroexpand1, Any, (Any, Any), x, m)
 
 """
     @macroexpand
@@ -98,6 +108,16 @@ With `@macroexpand` the expression expands where `@macroexpand` appears in the c
 """
 macro macroexpand(code)
     return :(macroexpand($__module__, $(QuoteNode(code))))
+end
+
+
+"""
+    @macroexpand1
+
+Macro version of [`macroexpand1`](@ref). See also [`@macroexpand`](@ref).
+"""
+macro macroexpand1(code)
+    return :(macroexpand1($__module__, $(QuoteNode(code))))
 end
 
 ## misc syntax ##

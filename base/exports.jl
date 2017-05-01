@@ -964,6 +964,8 @@ export
     expand,
     gensym,
     macroexpand,
+    macroexpand1,
+    @macroexpand1,
     @macroexpand,
     parse,
 

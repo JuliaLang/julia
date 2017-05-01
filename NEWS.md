@@ -100,6 +100,8 @@ Library improvements
     `ntuple`, `Base.literal_pow`, `sqrtm`, `lufact`, `lufact!`, `qrfact`, `qrfact!`,
     `cholfact`, `cholfact!`, `_broadcast!`, `reshape`, `cat` and `cat_t`.
 
+  * A new `macroexpand1` function and `@macroexpand1` macro for non recursive macro expansion ([#21662]).
+
 Compiler/Runtime improvements
 -----------------------------
 
