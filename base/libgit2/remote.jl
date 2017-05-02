@@ -4,6 +4,13 @@
     GitRemote(repo::GitRepo, rmt_name::AbstractString, rmt_url::AbstractString) -> GitRemote
 
 Look up a remote git repository using its name and URL. Uses the default fetch refspec.
+
+# Example
+
+```julia
+repo = LibGit2.init(repo_path)
+remote = LibGit2.GitRemote(repo, "upstream", repo_url)
+```
 """
 function GitRemote(repo::GitRepo, rmt_name::AbstractString, rmt_url::AbstractString)
     rmt_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
@@ -19,6 +26,14 @@ end
 Look up a remote git repository using the repository's name and URL,
 as well as specifications for how to fetch from the remote
 (e.g. which remote branch to fetch from).
+
+# Example
+
+```julia
+repo = LibGit2.init(repo_path)
+refspec = "+refs/heads/mybranch:refs/remotes/origin/mybranch"
+remote = LibGit2.GitRemote(repo, "upstream", repo_url, refspec)
+```
 """
 function GitRemote(repo::GitRepo, rmt_name::AbstractString, rmt_url::AbstractString, fetch_spec::AbstractString)
     rmt_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
@@ -32,6 +47,13 @@ end
     GitRemoteAnon(repo::GitRepo, url::AbstractString) -> GitRemote
 
 Look up a remote git repository using only its URL, not its name.
+
+# Example
+
+```julia
+repo = LibGit2.init(repo_path)
+remote = LibGit2.GitRemoteAnon(repo, repo_url)
+```
 """
 function GitRemoteAnon(repo::GitRepo, url::AbstractString)
     rmt_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
