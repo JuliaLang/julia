@@ -227,11 +227,37 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     size_t sz = 0, alignm = 1;
     int homogeneous = 1;
     jl_value_t *lastty = NULL;
-
     uint64_t max_offset = (((uint64_t)1) << 32) - 1;
     uint64_t max_size = max_offset >> 1;
 
+    if (st->name->wrapper) {
+        // If layout doesn't depend on type parameters, it's stored in st->name->wrapper
+        // and reused by all subtypes.
+        jl_datatype_t *w = (jl_datatype_t*)jl_unwrap_unionall(st->name->wrapper);
+        if (st != w &&  // this check allows us to re-compute layout for some types during init
+            w->layout) {
+            st->layout = w->layout;
+            st->size = w->size;
+            return;
+        }
+    }
+    if (st->types == NULL)
+        return;
     uint32_t nfields = jl_svec_len(st->types);
+    if (nfields == 0 && st != jl_sym_type && st != jl_simplevector_type) {
+        // reuse the same layout for all singletons
+        static const jl_datatype_layout_t singleton_layout = {0, 1, 0, 0, 0};
+        st->layout = &singleton_layout;
+        return;
+    }
+    if (!jl_is_leaf_type((jl_value_t*)st)) {
+        // compute layout whenever field types have no free variables
+        for (size_t i = 0; i < nfields; i++) {
+            if (jl_has_free_typevars(jl_field_type(st, i)))
+                return;
+        }
+    }
+
     size_t descsz = nfields * sizeof(jl_fielddesc32_t);
     jl_fielddesc32_t *desc;
     if (descsz < jl_page_size)
@@ -372,18 +398,11 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super
     }
     jl_precompute_memoized_dt(t);
 
-    if (abstract || jl_svec_len(parameters) > 0) {
-        t->uid = 0;
-    }
-    else {
-        t->uid = jl_assign_type_uid();
-        if (t->types != NULL && t->isleaftype) {
-            static const jl_datatype_layout_t singleton_layout = {0, 1, 0, 0, 0};
-            if (fnames == jl_emptysvec)
-                t->layout = &singleton_layout;
-            else
-                jl_compute_field_offsets(t);
-        }
+    t->uid = 0;
+    if (!abstract) {
+        if (jl_svec_len(parameters) == 0)
+            t->uid = jl_assign_type_uid();
+        jl_compute_field_offsets(t);
     }
     JL_GC_POP();
     return t;
