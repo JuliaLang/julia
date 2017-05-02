@@ -199,7 +199,7 @@ Construct a `CompoundPeriod` from a `Vector` of `Period`s. All `Period`s of the 
 will be added together.
 
 # Examples
-```julia
+```jldoctest
 julia> Dates.CompoundPeriod(Dates.Hour(12), Dates.Hour(13))
 25 hours
 
@@ -232,7 +232,7 @@ Reduces the `CompoundPeriod` into its canonical form by applying the following r
   (eg. `Hour(1) - Day(1)` becomes `-Hour(23)`)
 
 # Examples
-```julia
+```jldoctest
 julia> Dates.canonicalize(Dates.CompoundPeriod(Dates.Hour(12), Dates.Hour(13)))
 1 day, 1 hour
 
