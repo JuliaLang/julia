@@ -328,9 +328,9 @@ _topmod(sv::InferenceState) = _topmod(sv.mod)
 _topmod(m::Module) = ccall(:jl_base_relative_to, Any, (Any,), m)::Module
 
 function istopfunction(topmod, f::ANY, sym)
-    if isdefined(Main, :Base) && isdefined(Main.Base, sym) && f === getfield(Main.Base, sym)
+    if isdefined(Main, :Base) && isdefined(Main.Base, sym) && isconst(Main.Base, sym) && f === getfield(Main.Base, sym)
         return true
-    elseif isdefined(topmod, sym) && f === getfield(topmod, sym)
+    elseif isdefined(topmod, sym) && isconst(topmod, sym) && f === getfield(topmod, sym)
         return true
     end
     return false
@@ -1451,21 +1451,26 @@ function precise_container_type(arg, typ, vtypes::VarTable, sv)
     elseif tti0 <: Array
         return Any[Vararg{eltype(tti0)}]
     else
-        return Any[Vararg{abstract_iteration(tti0, vtypes, sv)}]
+        return Any[abstract_iteration(tti0, vtypes, sv)]
     end
 end
 
 # simulate iteration protocol on container type up to fixpoint
 function abstract_iteration(itertype, vtypes::VarTable, sv)
-    if !isdefined(Main, :Base) || !isdefined(Main.Base, :start) || !isdefined(Main.Base, :next)
-        return Any
+    tm = _topmod(sv)
+    if !isdefined(tm, :start) || !isdefined(tm, :next) || !isconst(tm, :start) || !isconst(tm, :next)
+        return Vararg{Any}
     end
-    statetype = abstract_call(Main.Base.start, (), Any[Const(Main.Base.start), itertype], vtypes, sv)
+    startf = getfield(tm, :start)
+    nextf = getfield(tm, :next)
+    statetype = abstract_call(startf, (), Any[Const(startf), itertype], vtypes, sv)
+    statetype === Bottom && return Bottom
     valtype = Bottom
     while valtype !== Any
-        nt = abstract_call(Main.Base.next, (), Any[Const(Main.Base.next), itertype, statetype], vtypes, sv)
+        nt = abstract_call(nextf, (), Any[Const(nextf), itertype, statetype], vtypes, sv)
+        nt = widenconst(nt)
         if !isa(nt, DataType) || !(nt <: Tuple) || isvatuple(nt) || length(nt.parameters) != 2
-            return Any
+            return Vararg{Any}
         end
         if nt.parameters[1] <: valtype && nt.parameters[2] <: statetype
             break
@@ -1473,7 +1478,7 @@ function abstract_iteration(itertype, vtypes::VarTable, sv)
         valtype = tmerge(valtype, nt.parameters[1])
         statetype = tmerge(statetype, nt.parameters[2])
     end
-    return valtype
+    return Vararg{valtype}
 end
 
 # do apply(af, fargs...), where af is a function value
