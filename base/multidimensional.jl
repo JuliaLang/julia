@@ -581,6 +581,9 @@ end
 function _cumsum!(out, v, axis, ::ArithmeticRounds)
     axis == 1 ? accumulate_pairwise!(+, out, v) : copy!(out, v)
 end
+function _cumsum(out, v, axis, ::ArithmeticUnknown)
+    _cumsum(out, v, axis, ArithmeticRounds())
+end
 function _cumsum!(out, v, axis, ::TypeArithmetic)
     axis == 1 ? accumulate!(+, out, v) : copy!(out, v)
 end
