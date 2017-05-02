@@ -147,7 +147,7 @@ function print_shell_word(io::IO, word::AbstractString, special::AbstractString 
     end
     if !has_special
         print(io, word)
-    elseif !has_single
+    elseif !has_single && is_unix()
         print(io, '\'', word, '\'')
     else
         print(io, '"')
