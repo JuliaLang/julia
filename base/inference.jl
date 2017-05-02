@@ -2386,22 +2386,15 @@ end
 function add_backedge!(frame::InferenceState, caller::InferenceState, currpc::Int)
     update_valid_age!(frame, caller)
     backedge = (caller, currpc)
-    in_egal(backedge, frame.backedges) || push!(frame.backedges, backedge)
+    contains_is(frame.backedges, backedge) || push!(frame.backedges, backedge)
     return frame
 end
 
-function in_egal(item, collection)
-    for x in collection
-        x === item && return true
-    end
-    return false
-end
-
 function union_caller_cycle!(a::InferenceState, b::InferenceState)
-    in_egal(b, a.callers_in_cycle) || push!(a.callers_in_cycle, b)
+    contains_is(a.callers_in_cycle, b) || push!(a.callers_in_cycle, b)
     b.callers_in_cycle === a.callers_in_cycle && return
     for caller in b.callers_in_cycle
-        in_egal(caller, a.callers_in_cycle) || push!(a.callers_in_cycle, caller)
+        contains_is(a.callers_in_cycle, caller) || push!(a.callers_in_cycle, caller)
     end
     b.callers_in_cycle = a.callers_in_cycle
     return nothing
