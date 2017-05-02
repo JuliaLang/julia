@@ -1404,7 +1404,7 @@ function abstract_call_gf_by_type(f::ANY, atype::ANY, sv::InferenceState)
 end
 
 # determine whether `ex` abstractly evals to constant `c`
-function abstract_evals_to_constant(ex, c::ANY, vtypes, sv)
+function abstract_evals_to_constant(ex::ANY, c::ANY, vtypes::VarTable, sv::InferenceState)
     av = abstract_eval(ex, vtypes, sv)
     return isa(av,Const) && av.val === c
 end
@@ -1413,14 +1413,19 @@ end
 # if the expression constructs a container (e.g. `svec(x,y,z)`),
 # refine its type to an array of element types.
 # Union of Tuples of the same length is converted to Tuple of Unions.
-# returns an array of types, or `nothing`.
-function precise_container_type(arg, typ, vtypes::VarTable, sv)
+# returns an array of types
+function precise_container_type(arg::ANY, typ::ANY, vtypes::VarTable, sv::InferenceState)
+    if isa(typ, Const)
+        val = typ.val
+        if isa(val, SimpleVector) || isa(val, Tuple)
+            return Any[ abstract_eval_constant(x) for x in val ]
+        end
+    end
+
     tti0 = widenconst(typ)
     tti = unwrap_unionall(tti0)
-    if isa(typ, Const) && (isa(typ.val, SimpleVector) || isa(typ.val, Tuple))
-        return Any[ abstract_eval_constant(x) for x in typ.val ]
-    elseif isa(arg, Expr) && arg.head === :call && (abstract_evals_to_constant(arg.args[1], svec, vtypes, sv) ||
-                                                    abstract_evals_to_constant(arg.args[1], tuple, vtypes, sv))
+    if isa(arg, Expr) && arg.head === :call && (abstract_evals_to_constant(arg.args[1], svec, vtypes, sv) ||
+                                                abstract_evals_to_constant(arg.args[1], tuple, vtypes, sv))
         aa = arg.args
         result = Any[ (isa(aa[j],Expr) ? aa[j].typ : abstract_eval(aa[j],vtypes,sv)) for j=2:length(aa) ]
         if _any(isvarargtype, result)
@@ -1451,12 +1456,12 @@ function precise_container_type(arg, typ, vtypes::VarTable, sv)
     elseif tti0 <: Array
         return Any[Vararg{eltype(tti0)}]
     else
-        return Any[abstract_iteration(tti0, vtypes, sv)]
+        return Any[abstract_iteration(typ, vtypes, sv)]
     end
 end
 
 # simulate iteration protocol on container type up to fixpoint
-function abstract_iteration(itertype, vtypes::VarTable, sv)
+function abstract_iteration(itertype::ANY, vtypes::VarTable, sv::InferenceState)
     tm = _topmod(sv)
     if !isdefined(tm, :start) || !isdefined(tm, :next) || !isconst(tm, :start) || !isconst(tm, :next)
         return Vararg{Any}
@@ -1482,7 +1487,7 @@ function abstract_iteration(itertype, vtypes::VarTable, sv)
 end
 
 # do apply(af, fargs...), where af is a function value
-function abstract_apply(af::ANY, fargs, aargtypes::Vector{Any}, vtypes::VarTable, sv)
+function abstract_apply(af::ANY, fargs::Vector{Any}, aargtypes::Vector{Any}, vtypes::VarTable, sv::InferenceState)
     res = Union{}
     nargs = length(fargs)
     assert(nargs == length(aargtypes))
@@ -1625,14 +1630,10 @@ function _typename(a::Union)
     ta === tb ? tb : (ta === Any || tb === Any) ? Any : Union{}
 end
 _typename(union::UnionAll) = _typename(union.body)
-function typename_static(t)
-    # N.B.: typename maps type equivalence classes to a single value
-    if isa(t, Const) || isType(t)
-        return _typename(isa(t, Const) ? t.val : t.parameters[1])
-    else
-        return Any
-    end
-end
+
+# N.B.: typename maps type equivalence classes to a single value
+typename_static(t::Const) = _typename(t.val)
+typename_static(t::ANY) = isType(t) ? _typename(t.parameters[1]) : Any
 
 function abstract_call(f::ANY, fargs::Union{Tuple{},Vector{Any}}, argtypes::Vector{Any}, vtypes::VarTable, sv::InferenceState)
     if f === _apply
@@ -1842,11 +1843,7 @@ function abstract_call(f::ANY, fargs::Union{Tuple{},Vector{Any}}, argtypes::Vect
     if istopfunction(tm, f, :promote_type) || istopfunction(tm, f, :typejoin)
         return Type
     elseif length(argtypes) == 2 && istopfunction(tm, f, :typename)
-        t = argtypes[2]
-        if isa(t, Const) || isType(t)
-            return typename_static(t)
-        end
-        return Any
+        return typename_static(argtypes[2])
     end
 
     if sv.params.inlining
