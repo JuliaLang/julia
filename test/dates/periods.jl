@@ -234,6 +234,26 @@ test = ((((((((dt + y) - m) + w) - d) + h) - mi) + s) - ms)
 @test !(Dates.Millisecond(-1) > Dates.Millisecond(1))
 @test Dates.Millisecond(1) == Dates.Millisecond(1)
 @test_throws MethodError Dates.Year(1) < Dates.Millisecond(1)
+@test_throws MethodError Dates.Millisecond(1) < Dates.Year(1)
+@test_throws MethodError Dates.Year(1) == Dates.Millisecond(1)
+@test_throws MethodError Dates.Millisecond(1) == Dates.Year(1)
+
+# Allow comparisons with new Period subtypes
+let
+    # https://en.wikipedia.org/wiki/Swatch_Internet_Time
+    struct Beat <: Dates.Period
+        value::Int64
+    end
+
+    Dates.value(b::Beat) = b.value
+    Dates.toms(b::Beat) = Dates.value(b) * 86400
+    Dates._units(b::Beat) = " beat" * (abs(Dates.value(b)) == 1 ? "" : "s")
+    Base.promote_rule(::Type{Dates.Day}, ::Type{Beat}) = Dates.Millisecond
+    Base.convert{T<:Dates.Millisecond}(::Type{T}, b::Beat) = T(Dates.toms(b))
+
+    @test Beat(1000) == Dates.Day(1)
+    @test Beat(1) < Dates.Day(1)
+end
 
 @test Dates.Year("1") == y
 @test Dates.Month("1") == m
