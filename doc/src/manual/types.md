@@ -1198,7 +1198,7 @@ format for displaying an object by overloading a three-argument form of `show` t
 `text/plain` MIME type as its second argument (see [Multimedia I/O](@ref)), for example:
 
 ```jldoctest polartype
-julia> Base.show{T}(io::IO, ::MIME"text/plain", z::Polar{T}) =
+julia> Base.show(io::IO, ::MIME"text/plain", z::Polar{T}) where{T} =
            print(io, "Polar{$T} complex number:\n   ", z)
 ```
 
@@ -1225,7 +1225,7 @@ Moreover, you can also define `show` methods for other MIME types in order to en
 we can define formatted HTML display of `Polar` objects, with superscripts and italics, via:
 
 ```jldoctest polartype
-julia> Base.show{T}(io::IO, ::MIME"text/html", z::Polar{T}) =
+julia> Base.show(io::IO, ::MIME"text/html", z::Polar{T}) where {T} =
            println(io, "<code>Polar{$T}</code> complex number: ",
                    z.r, " <i>e</i><sup>", z.Θ, " <i>i</i></sup>")
 ```
