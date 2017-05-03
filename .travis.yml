@@ -12,6 +12,7 @@ matrix:
             - kalakris-cmake
           packages:
             - cmake
+            - libssl1.0.0
             - bar
             - time
             - binutils
@@ -33,6 +34,7 @@ matrix:
             - kalakris-cmake
           packages:
             - cmake
+            - libssl1.0.0
             - bar
             - time
             - g++-5
