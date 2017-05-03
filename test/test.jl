@@ -227,6 +227,18 @@ end
 @test counter_17462_pre == 3
 @test counter_17462_post == 1
 
+# Issue #21008
+ts = try
+    @testset "@test_broken and @test_skip should not give an exception" begin
+        @test_broken false
+        @test_skip true
+        @test_skip false
+    end
+catch
+    nothing # Shouldn't get here
+end
+@test typeof(ts) == Base.Test.DefaultTestSet
+
 # now we're done running tests with DefaultTestSet so we can go back to STDOUT
 redirect_stdout(OLD_STDOUT)
 
