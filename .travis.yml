@@ -10,6 +10,7 @@ matrix:
           sources:
             - ubuntu-toolchain-r-test
           packages:
+            - libssl1.0.0
             - bar
             - time
             - binutils
@@ -29,6 +30,7 @@ matrix:
           sources:
             - ubuntu-toolchain-r-test
           packages:
+            - libssl1.0.0
             - bar
             - time
             - g++-5
