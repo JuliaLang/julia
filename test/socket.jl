@@ -1,12 +1,14 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 @test ip"127.0.0.1" == IPv4(127,0,0,1)
 @test ip"192.0" == IPv4(192,0,0,0)
-@test ip"192.0xFFF" == IPv4(192,0,15,255)
-@test ip"192.0xFFFF" == IPv4(192,0,255,255)
-@test ip"192.0xFFFFF" == IPv4(192,15,255,255)
-@test ip"192.0xFFFFFF" == IPv4(192,255,255,255)
-@test ip"022.0.0.1" == IPv4(18,0,0,1)
+
+# These used to work, but are now disallowed. Check that they error
+@test_throws ArgumentError parse(IPv4, "192.0xFFF") # IPv4(192,0,15,255)
+@test_throws ArgumentError parse(IPv4, "192.0xFFFF") # IPv4(192,0,255,255)
+@test_throws ArgumentError parse(IPv4, "192.0xFFFFF") # IPv4(192,15,255,255)
+@test_throws ArgumentError parse(IPv4, "192.0xFFFFFF") # IPv4(192,255,255,255)
+@test_throws ArgumentError parse(IPv4, "022.0.0.1") # IPv4(18,0,0,1)
 
 @test UInt(IPv4(0x01020304)) == 0x01020304
 @test Int(IPv4("1.2.3.4")) == Int(0x01020304) == Int32(0x01020304)
@@ -251,12 +253,27 @@ let
         bind(s, ip"0.0.0.0", 2000, reuseaddr = true, enable_broadcast = true)
         s
     end
+
+    function wait_with_timeout(recvs)
+        TIMEOUT_VAL = 3  # seconds
+        t0 = time()
+        recvs_check = copy(recvs)
+        while ((length(filter!(t->!istaskdone(t), recvs_check)) > 0)
+              && (time() - t0 < TIMEOUT_VAL))
+            sleep(0.05)
+        end
+        length(recvs_check) > 0 && error("timeout")
+        map(wait, recvs)
+    end
+
     a, b, c = [create_socket() for i = 1:3]
     try
-        @sync begin
+        # bsd family do not allow broadcasting to ip"255.255.255.255"
+        # or ip"127.255.255.255"
+        @static if !is_bsd() || is_apple()
             send(c, bcastdst, 2000, "hello")
             recvs = [@async @test String(recv(s)) == "hello" for s in (a, b)]
-            map(wait, recvs)
+            wait_with_timeout(recvs)
         end
     catch e
         if isa(e, Base.UVError) && Base.uverrorname(e) == "EPERM"

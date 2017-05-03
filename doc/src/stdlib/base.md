@@ -89,6 +89,7 @@ Base.identity
 Base.supertype
 Core.issubtype
 Base.:(<:)
+Base.:(>:)
 Base.subtypes
 Base.typemin
 Base.typemax
@@ -96,8 +97,7 @@ Base.realmin
 Base.realmax
 Base.maxintfloat
 Base.sizeof(::Type)
-Base.eps(::Union{Type{BigFloat},Type{Float64},Type{Float32},Type{Float16}})
-Base.eps()
+Base.eps(::Type{<:AbstractFloat})
 Base.eps(::AbstractFloat)
 Base.promote_type
 Base.promote_rule
@@ -118,9 +118,11 @@ Base.instances
 ## Generic Functions
 
 ```@docs
+Core.Function
 Base.method_exists
 Core.applicable
 Core.invoke
+Base.invokelatest
 Base.:(|>)
 Base.:(∘)
 ```
@@ -231,6 +233,7 @@ Core.UndefRefError
 Core.UndefVarError
 Base.InitError
 Base.retry
+Base.ExponentialBackOff
 ```
 
 ## Events

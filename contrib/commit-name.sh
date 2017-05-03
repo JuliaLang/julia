@@ -1,5 +1,5 @@
 #!/bin/sh
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Needs to be run from a julia repo clone
 # First argument (optional) is a ref to the commit

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.Test
 
@@ -47,7 +47,7 @@ X = [2 3 1 -1; 7 4 5 -4]
 @test median!([1 2; 3 4]) == 2.5
 
 
-@test invoke(median, (AbstractVector,), 1:10) == median(1:10) == 5.5
+@test invoke(median, Tuple{AbstractVector}, 1:10) == median(1:10) == 5.5
 
 # mean
 @test_throws ArgumentError mean(())
@@ -317,11 +317,6 @@ let tmp = linspace(1, 85, 100)
     @test cor(tmp, tmp2) <= 1.0
 end
 
-
-@test midpoints(1.0:1.0:10.0) == 1.5:1.0:9.5
-@test midpoints(1:10) == 1.5:9.5
-@test midpoints(Float64[1.0:1.0:10.0;]) == Float64[1.5:1.0:9.5;]
-
 @test quantile([1,2,3,4],0.5) == 2.5
 @test quantile([1,2,3,4],[0.5]) == [2.5]
 @test quantile([1., 3],[.25,.5,.75])[2] == median([1., 3])
@@ -331,6 +326,10 @@ end
 @test quantile([Inf,Inf],0.5) == Inf
 @test quantile([-Inf,1],0.5) == -Inf
 @test quantile([0,1],1e-18) == 1e-18
+@test quantile([1, 2, 3, 4],[]) == []
+@test quantile([1, 2, 3, 4], (0.5,)) == (2.5,)
+@test quantile([4, 9, 1, 5, 7, 8, 2, 3, 5, 17, 11], (0.1, 0.2, 0.4, 0.9)) == (2.0, 3.0, 5.0, 11.0)
+@test quantile([1, 2, 3, 4], ()) == ()
 
 # StatsBase issue 164
 y = [0.40003674665581906,0.4085630862624367,0.41662034698690303,0.41662034698690303,0.42189053966652057,0.42189053966652057,0.42553514344518345,0.43985732442991354]
@@ -338,20 +337,38 @@ y = [0.40003674665581906,0.4085630862624367,0.41662034698690303,0.41662034698690
 
 # variance of complex arrays (#13309)
 let z = rand(Complex128, 10)
-    @test var(z) ≈ invoke(var, (Any,), z) ≈ cov(z) ≈ var(z,1)[1] ≈ sum(abs2, z - mean(z))/9
+    @test var(z) ≈ invoke(var, Tuple{Any}, z) ≈ cov(z) ≈ var(z,1)[1] ≈ sum(abs2, z - mean(z))/9
     @test isa(var(z), Float64)
-    @test isa(invoke(var, (Any,), z), Float64)
+    @test isa(invoke(var, Tuple{Any}, z), Float64)
     @test isa(cov(z), Float64)
     @test isa(var(z,1), Vector{Float64})
-    @test varm(z, 0.0) ≈ invoke(varm, (Any,Float64), z, 0.0) ≈ sum(abs2, z)/9
+    @test varm(z, 0.0) ≈ invoke(varm, Tuple{Any,Float64}, z, 0.0) ≈ sum(abs2, z)/9
     @test isa(varm(z, 0.0), Float64)
-    @test isa(invoke(varm, (Any,Float64), z, 0.0), Float64)
+    @test isa(invoke(varm, Tuple{Any,Float64}, z, 0.0), Float64)
     @test cor(z) === 1.0
 end
 let v = varm([1.0+2.0im], 0; corrected = false)
     @test v ≈ 5
     @test isa(v, Float64)
 end
+
+# cov and cor of complex arrays (issue #21093)
+x = [2.7 - 3.3im, 0.9 + 5.4im, 0.1 + 0.2im, -1.7 - 5.8im, 1.1 + 1.9im]
+y = [-1.7 - 1.6im, -0.2 + 6.5im, 0.8 - 10.0im, 9.1 - 3.4im, 2.7 - 5.5im]
+@test cov(x, y) ≈ 4.8365 - 12.119im
+@test cov(y, x) ≈ 4.8365 + 12.119im
+@test cov(x, reshape(y, :, 1)) ≈ reshape([4.8365 - 12.119im], 1, 1)
+@test cov(reshape(x, :, 1), y) ≈ reshape([4.8365 - 12.119im], 1, 1)
+@test cov(reshape(x, :, 1), reshape(y, :, 1)) ≈ reshape([4.8365 - 12.119im], 1, 1)
+@test cov([x y]) ≈ [21.779 4.8365-12.119im;
+                    4.8365+12.119im 54.548]
+@test cor(x, y) ≈ 0.14032104449218274 - 0.35160772008699703im
+@test cor(y, x) ≈ 0.14032104449218274 + 0.35160772008699703im
+@test cor(x, reshape(y, :, 1)) ≈ reshape([0.14032104449218274 - 0.35160772008699703im], 1, 1)
+@test cor(reshape(x, :, 1), y) ≈ reshape([0.14032104449218274 - 0.35160772008699703im], 1, 1)
+@test cor(reshape(x, :, 1), reshape(y, :, 1)) ≈ reshape([0.14032104449218274 - 0.35160772008699703im], 1, 1)
+@test cor([x y]) ≈ [1.0                                          0.14032104449218274-0.35160772008699703im
+                    0.14032104449218274+0.35160772008699703im  1.0]
 
 # Issue #17153 and PR #17154
 let a = rand(10,10)
@@ -372,4 +389,15 @@ let a = rand(10,10)
     @test b == a
     x = std(a, 2)
     @test b == a
+end
+
+# dimensional correctness
+isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
+using TestHelpers.Furlong
+let r = Furlong(1):Furlong(1):Furlong(2), a = collect(r)
+    @test sum(r) == sum(a) == Furlong(3)
+    @test cumsum(r) == Furlong.([1,3])
+    @test mean(r) == mean(a) == median(a) == median(r) == Furlong(1.5)
+    @test var(r) == var(a) == Furlong{2}(0.5)
+    @test std(r) == std(a) == Furlong{1}(sqrt(0.5))
 end

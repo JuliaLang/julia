@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Issue #6573
 srand(0); rand(); x = rand(384)
@@ -15,7 +15,6 @@ srand(0); rand(); x = rand(384)
 @test length(randn(4, 5)) == 20
 @test length(bitrand(4, 5)) == 20
 
-@test rand(MersenneTwister()) == 0.8236475079774124
 @test rand(MersenneTwister(0)) == 0.8236475079774124
 @test rand(MersenneTwister(42)) == 0.5331830160438613
 # Try a seed larger than 2^32
@@ -38,7 +37,7 @@ A = zeros(UInt128, 2, 2)
 @test_throws BoundsError rand!(MersenneTwister(0), A, 5)
 
 # rand from AbstractArray
-let mt = MersenneTwister()
+let mt = MersenneTwister(0)
     srand(mt)
     @test rand(mt, 0:3:1000) in 0:3:1000
     @test issubset(rand!(mt, Array{Int}(100), 0:3:1000), 0:3:1000)
@@ -120,7 +119,8 @@ end
 ziggurat_table_size = 256
 nmantissa           = Int64(2)^51 # one bit for the sign
 ziggurat_nor_r      = parse(BigFloat,"3.65415288536100879635194725185604664812733315920964488827246397029393565706474")
-nor_section_area    = ziggurat_nor_r*exp(-ziggurat_nor_r^2/2) + erfc(ziggurat_nor_r/sqrt(BigFloat(2)))*sqrt(big(π)/2)
+erfc_zigg_root2     = parse(BigFloat,"2.580324876539008898343885504487203185398584536409033046076029509351995983934371e-04")
+nor_section_area    = ziggurat_nor_r*exp(-ziggurat_nor_r^2/2) + erfc_zigg_root2*sqrt(big(π)/2)
 emantissa           = Int64(2)^52
 ziggurat_exp_r      = parse(BigFloat,"7.69711747013104971404462804811408952334296818528283253278834867283241051210533")
 exp_section_area    = (ziggurat_exp_r + 1)*exp(-ziggurat_exp_r)
@@ -226,7 +226,7 @@ u4 = uuid4()
 @test u4 == UUID(string(u4)) == UUID(GenericString(string(u4)))
 @test u1 == UUID(UInt128(u1))
 @test u4 == UUID(UInt128(u4))
-@test uuid4(MersenneTwister()) == uuid4(MersenneTwister())
+@test uuid4(MersenneTwister(0)) == uuid4(MersenneTwister(0))
 @test_throws ArgumentError UUID("550e8400e29b-41d4-a716-446655440000")
 @test_throws ArgumentError UUID("550e8400e29b-41d4-a716-44665544000098")
 @test_throws ArgumentError UUID("z50e8400-e29b-41d4-a716-446655440000")
@@ -277,7 +277,7 @@ let mt = MersenneTwister(0)
 end
 
 # Issue #9037
-let mt = MersenneTwister()
+let mt = MersenneTwister(0)
     a = Array{Float64}(0)
     resize!(a, 1000) # could be 8-byte aligned
     b = Array{Float64}(1000) # should be 16-byte aligned
@@ -305,7 +305,7 @@ let a = [rand(RandomDevice(), UInt128) for i=1:10]
 end
 
 # test all rand APIs
-for rng in ([], [MersenneTwister()], [RandomDevice()])
+for rng in ([], [MersenneTwister(0)], [RandomDevice()])
     types = [Base.BitInteger_types..., Bool, Float16, Float32, Float64, Char]
     ftypes = [Float16, Float32, Float64]
     b2 = big(2)
@@ -377,7 +377,7 @@ function hist(X,n)
 end
 
 # test uniform distribution of floats
-for rng in [srand(MersenneTwister()), RandomDevice()]
+for rng in [srand(MersenneTwister(0)), RandomDevice()]
     for T in [Float16,Float32,Float64]
         # array version
         counts = hist(rand(rng, T, 2000), 4)
@@ -477,4 +477,19 @@ let seed = rand(UInt32, 10)
     @test r.seed == seed && r.seed !== seed
     resize!(seed, 4)
     @test r.seed != seed
+end
+
+# srand(rng, ...) returns rng (#21248)
+let g = Base.Random.GLOBAL_RNG,
+    m = MersenneTwister(0)
+    @test srand() === g
+    @test srand(rand(UInt)) === g
+    @test srand(rand(UInt32, rand(1:10))) === g
+    @test srand(@__FILE__) === g
+    @test srand(@__FILE__, rand(1:10)) === g
+    @test srand(m) === m
+    @test srand(m, rand(UInt)) === m
+    @test srand(m, rand(UInt32, rand(1:10))) === m
+    @test srand(m, rand(1:10)) === m
+    @test srand(m, @__FILE__, rand(1:10)) === m
 end

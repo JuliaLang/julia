@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 @testset "issparse" begin
     @test issparse(sparse(ones(5,5)))
@@ -45,14 +45,18 @@ do33 = ones(3)
 end
 
 @testset "concatenation tests" begin
+    sp33 = speye(3, 3)
+
     @testset "horizontal concatenation" begin
         @test all([se33 se33] == sparse([1, 2, 3, 1, 2, 3], [1, 2, 3, 4, 5, 6], ones(6)))
+        @test length(([sp33 0I]).nzval) == 3
     end
 
     @testset "vertical concatenation" begin
         @test all([se33; se33] == sparse([1, 4, 2, 5, 3, 6], [1, 1, 2, 2, 3, 3], ones(6)))
         se33_32bit = convert(SparseMatrixCSC{Float32,Int32}, se33)
         @test all([se33; se33_32bit] == sparse([1, 4, 2, 5, 3, 6], [1, 1, 2, 2, 3, 3], ones(6)))
+        @test length(([sp33; 0I]).nzval) == 3
     end
 
     se44 = speye(4)
@@ -62,6 +66,7 @@ end
     se77 = speye(7)
     @testset "h+v concatenation" begin
         @test all([se44 sz42 sz41; sz34 se33] == se77)
+        @test length(([sp33 0I; 1I 0I]).nzval) == 6
     end
 
     @testset "blkdiag concatenation" begin
@@ -494,7 +499,7 @@ end
 end
 
 @testset "issue #5853, sparse diff" begin
-    for i=1:2, a=Any[[1 2 3], [1 2 3]', eye(3)]
+    for i=1:2, a=Any[[1 2 3], reshape([1, 2, 3],(3,1)), eye(3)]
         @test all(diff(sparse(a),i) == diff(a,i))
     end
 end
@@ -805,7 +810,8 @@ end
     FS = Array(S)
     FI = Array(I)
     @test sparse(FS[FI]) == S[I] == S[FI]
-    @test sum(S[FI]) + sum(S[!FI]) == sum(S)
+    @test sum(S[FI]) + sum(S[.!FI]) == sum(S)
+    @test countnz(I) == count(I)
 
     sumS1 = sum(S)
     sumFI = sum(S[FI])
@@ -1489,9 +1495,9 @@ end
     Ar = sprandn(20,20,.5)
     Ari = ceil.(Int64, 100*Ar)
     if Base.USE_GPL_LIBS
-        @test_approx_eq_eps Base.SparseArrays.normestinv(Ac,3) norm(inv(Array(Ac)),1) 1e-4
-        @test_approx_eq_eps Base.SparseArrays.normestinv(Aci,3) norm(inv(Array(Aci)),1) 1e-4
-        @test_approx_eq_eps Base.SparseArrays.normestinv(Ar) norm(inv(Array(Ar)),1) 1e-4
+        @test Base.SparseArrays.normestinv(Ac,3) ≈ norm(inv(Array(Ac)),1) atol=1e-4
+        @test Base.SparseArrays.normestinv(Aci,3) ≈ norm(inv(Array(Aci)),1) atol=1e-4
+        @test Base.SparseArrays.normestinv(Ar) ≈ norm(inv(Array(Ar)),1) atol=1e-4
         @test_throws ArgumentError Base.SparseArrays.normestinv(Ac,0)
         @test_throws ArgumentError Base.SparseArrays.normestinv(Ac,21)
     end
@@ -1637,12 +1643,13 @@ end
     m = 5
     intmat = fill(1, m, m)
     ltintmat = LowerTriangular(rand(1:5, m, m))
-    @test isapprox(At_ldiv_B(ltintmat, sparse(intmat)), At_ldiv_B(ltintmat, intmat))
+    @test At_ldiv_B(ltintmat, sparse(intmat)) ≈ At_ldiv_B(ltintmat, intmat)
 end
 
-# Test temporary fix for issue #16548 in PR #16979. Brittle. Expect to remove with `\` revisions.
+# Test temporary fix for issue #16548 in PR #16979. Somewhat brittle. Expect to remove with `\` revisions.
 @testset "issue #16548" begin
-    @test which(\, (SparseMatrixCSC, AbstractVecOrMat)).module == Base.SparseArrays
+    ms = methods(\, (SparseMatrixCSC, AbstractVecOrMat)).ms
+    @test all(m -> m.module == Base.SparseArrays, ms)
 end
 
 @testset "row indexing a SparseMatrixCSC with non-Int integer type" begin
@@ -1698,4 +1705,65 @@ end
 # Check calling of unary minus method specialized for SparseMatrixCSCs
 @testset "issue #19503" begin
     @test which(-, (SparseMatrixCSC,)).module == Base.SparseArrays
+end
+
+@testset "issue #14398" begin
+    @test transpose(view(speye(10), 1:5, 1:5)) ≈ eye(5,5)
+end
+
+@testset "dropstored issue #20513" begin
+    x = sparse(rand(3,3))
+    Base.SparseArrays.dropstored!(x, 1, 1)
+    @test x[1, 1] == 0.0
+    @test x.colptr == [1, 3, 6, 9]
+    Base.SparseArrays.dropstored!(x, 2, 1)
+    @test x.colptr == [1, 2, 5, 8]
+    @test x[2, 1] == 0.0
+    Base.SparseArrays.dropstored!(x, 2, 2)
+    @test x.colptr == [1, 2, 4, 7]
+    @test x[2, 2] == 0.0
+    Base.SparseArrays.dropstored!(x, 2, 3)
+    @test x.colptr == [1, 2, 4, 6]
+    @test x[2, 3] == 0.0
+end
+
+@testset "setindex issue #20657" begin
+    A = spzeros(3, 3)
+    I = [1, 1, 1]; J = [1, 1, 1]
+    A[I, 1] = 1
+    @test nnz(A) == 1
+    A[1, J] = 1
+    @test nnz(A) == 1
+    A[I, J] = 1
+    @test nnz(A) == 1
+end
+
+@testset "show" begin
+    io = IOBuffer()
+    show(io, MIME"text/plain"(), sparse(Int64[1], Int64[1], [1.0]))
+    @test String(take!(io)) == "1×1 SparseMatrixCSC{Float64,Int64} with 1 stored entry:\n  [1, 1]  =  1.0"
+    show(io, MIME"text/plain"(), spzeros(Float32, Int64, 2, 2))
+    @test String(take!(io)) == "2×2 SparseMatrixCSC{Float32,Int64} with 0 stored entries"
+end
+
+@testset "similar aliasing" begin
+    a = sparse(rand(3,3) .+ 0.1)
+    b = similar(a, Float32, Int32)
+    c = similar(b, Float32, Int32)
+    Base.SparseArrays.dropstored!(b, 1, 1)
+    @test length(c.rowval) == 9
+    @test length(c.nzval) == 9
+end
+
+@testset "check buffers" for n in 1:3
+    colptr = [1,2,3,4]
+    rowval = [1,2,3]
+    nzval1  = ones(0)
+    nzval2  = ones(3)
+    A = SparseMatrixCSC(n, n, colptr, rowval, nzval1)
+    @test nnz(A) == n
+    @test_throws BoundsError A[n,n]
+    A = SparseMatrixCSC(n, n, colptr, rowval, nzval2)
+    @test nnz(A) == n
+    @test A      == eye(n)
 end

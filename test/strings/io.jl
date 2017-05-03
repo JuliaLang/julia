@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # string escaping & unescaping
 cx = Any[
@@ -144,7 +144,7 @@ end
 @test join(["apples", "bananas", "pineapples"], ", ", " and ") == "apples, bananas and pineapples"
 
 # issue #9178 `join` calls `done()` twice on the iterables
-type i9178
+mutable struct i9178
     nnext::Int64
     ndone::Int64
 end
@@ -183,3 +183,20 @@ join(myio, "", "", 1)
 @test Base.unindent("\n    \tfoo",4) == "\n    foo"
 @test Base.unindent("\n\t\n    \tfoo",4) == "\n    \n    foo"
 @test Base.unindent("\n\tfoo\tbar",4) == "\n    foo     bar"
+
+# Tests of raw_str macro
+@test raw"$" == "\$"
+@test raw"\n" == "\\n"
+@test raw"\t" == "\\t"
+
+s1 = raw"""
+     lorem ipsum\n
+     $x = 1$
+     """
+
+s2 = """
+     lorem ipsum\\n
+     \$x = 1\$
+     """
+
+@test s1 == s2

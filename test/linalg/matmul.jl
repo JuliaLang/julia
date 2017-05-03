@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.Test
 
@@ -71,7 +71,7 @@ end
 # Generic AbstractArrays
 module MyArray15367
     using Base.Test
-    immutable MyArray{T,N} <: AbstractArray{T,N}
+    struct MyArray{T,N} <: AbstractArray{T,N}
         data::Array{T,N}
     end
 
@@ -256,10 +256,10 @@ for elty in (Float32,Float64,Complex64,Complex128)
     @test_throws BoundsError dot(x, 1:4, y, 1:4)
     @test_throws BoundsError dot(x, 1:3, y, 2:4)
     @test dot(x,1:2,y,1:2) == convert(elty,12.5)
-    @test x.'*y == convert(Vector{elty},[29.0])
+    @test x.'*y == convert(elty,29.0)
 end
 
-vecdot_(x,y) = invoke(vecdot, (Any,Any), x,y) # generic vecdot
+vecdot_(x,y) = invoke(vecdot, Tuple{Any,Any}, x,y) # generic vecdot
 let AA = [1+2im 3+4im; 5+6im 7+8im], BB = [2+7im 4+1im; 3+8im 6+5im]
     for Atype = ["Array", "SubArray"],  Btype = ["Array", "SubArray"]
         A = Atype == "Array" ? AA : view(AA, 1:2, 1:2)
@@ -321,7 +321,7 @@ let
 end
 
 # Number types that lack conversion to the destination type (#14293)
-immutable RootInt
+struct RootInt
     i::Int
 end
 import Base: *, transpose
@@ -398,14 +398,14 @@ end
 module TestPR18218
     using Base.Test
     import Base.*, Base.+, Base.zero
-    immutable TypeA
+    struct TypeA
         x::Int
     end
     Base.convert(::Type{TypeA}, x::Int) = TypeA(x)
-    immutable TypeB
+    struct TypeB
         x::Int
     end
-    immutable TypeC
+    struct TypeC
         x::Int
     end
     Base.convert(::Type{TypeC}, x::Int) = TypeC(x)

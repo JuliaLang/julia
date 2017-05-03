@@ -1,8 +1,11 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module TestHelpers
 
-type FakeTerminal <: Base.Terminals.UnixTerminal
+include("dimensionful.jl")
+export Furlong
+
+mutable struct FakeTerminal <: Base.Terminals.UnixTerminal
     in_stream::Base.IO
     out_stream::Base.IO
     err_stream::Base.IO
@@ -17,6 +20,10 @@ Base.Terminals.raw!(t::FakeTerminal, raw::Bool) = t.raw = raw
 Base.Terminals.size(t::FakeTerminal) = (24, 80)
 
 function open_fake_pty()
+    @static if is_windows()
+        error("Unable to create a fake PTY in Windows")
+    end
+
     const O_RDWR = Base.Filesystem.JL_O_RDWR
     const O_NOCTTY = Base.Filesystem.JL_O_NOCTTY
 
@@ -38,9 +45,68 @@ end
 
 function with_fake_pty(f)
     slave, master = open_fake_pty()
-    f(slave, master)
-    ccall(:close,Cint,(Cint,),slave) # XXX: this causes the kernel to throw away all unread data on the pty
-    close(master)
+    try
+        f(slave, master)
+    finally
+        ccall(:close,Cint,(Cint,),slave) # XXX: this causes the kernel to throw away all unread data on the pty
+        close(master)
+    end
+end
+
+function challenge_prompt(code::AbstractString, challenges; timeout::Integer=10, debug::Bool=true)
+    output_file = tempname()
+    wrapped_code = """
+    result = let
+        $code
+    end
+    open("$output_file", "w") do fp
+        serialize(fp, result)
+    end
+    """
+    cmd = `$(Base.julia_cmd()) --startup-file=no -e $wrapped_code`
+    try
+        challenge_prompt(cmd, challenges, timeout=timeout, debug=debug)
+        return open(output_file, "r") do fp
+            deserialize(fp)
+        end
+    finally
+        isfile(output_file) && rm(output_file)
+    end
+    return nothing
+end
+
+function challenge_prompt(cmd::Cmd, challenges; timeout::Integer=10, debug::Bool=true)
+    function format_output(output)
+        debug ? "Process output found:\n\"\"\"\n$(readstring(seekstart(out)))\n\"\"\"" : ""
+    end
+    out = IOBuffer()
+    with_fake_pty() do slave, master
+        p = spawn(detach(cmd), slave, slave, slave)
+        # Kill the process if it takes too long. Typically occurs when process is waiting for input
+        @async begin
+            sleep(timeout)
+            kill(p)
+            close(master)
+        end
+        try
+            for (challenge, response) in challenges
+                process_exited(p) && error("Too few prompts. $(format_output(out))")
+
+                write(out, readuntil(master, challenge))
+                if !isopen(master)
+                    error("Could not locate challenge: \"$challenge\". $(format_output(out))")
+                end
+                write(master, response)
+            end
+            wait(p)
+        finally
+            kill(p)
+        end
+        # Determine if the process was explicitly killed
+        killed = process_exited(p) && (p.exitcode != 0 || p.termsignal != 0)
+        killed && error("Too many prompts. $(format_output(out))")
+    end
+    nothing
 end
 
 # OffsetArrays (arrays with indexing that doesn't start at 1)
@@ -50,15 +116,15 @@ end
 
 module OAs
 
-using Base: Indices, LinearSlow, LinearFast, tail
+using Base: Indices, IndexCartesian, IndexLinear, tail
 
 export OffsetArray
 
-immutable OffsetArray{T,N,AA<:AbstractArray} <: AbstractArray{T,N}
+struct OffsetArray{T,N,AA<:AbstractArray} <: AbstractArray{T,N}
     parent::AA
     offsets::NTuple{N,Int}
 end
-typealias OffsetVector{T,AA<:AbstractArray} OffsetArray{T,1,AA}
+OffsetVector{T,AA<:AbstractArray} = OffsetArray{T,1,AA}
 
 OffsetArray{T,N}(A::AbstractArray{T,N}, offsets::NTuple{N,Int}) = OffsetArray{T,N,typeof(A)}(A, offsets)
 OffsetArray{T,N}(A::AbstractArray{T,N}, offsets::Vararg{Int,N}) = OffsetArray(A, offsets)
@@ -66,17 +132,17 @@ OffsetArray{T,N}(A::AbstractArray{T,N}, offsets::Vararg{Int,N}) = OffsetArray(A,
 (::Type{OffsetArray{T,N}}){T,N}(inds::Indices{N}) = OffsetArray{T,N,Array{T,N}}(Array{T,N}(map(length, inds)), map(indsoffset, inds))
 (::Type{OffsetArray{T}}){T,N}(inds::Indices{N}) = OffsetArray{T,N}(inds)
 
-Base.linearindexing{T<:OffsetArray}(::Type{T}) = Base.linearindexing(parenttype(T))
+Base.IndexStyle{T<:OffsetArray}(::Type{T}) = Base.IndexStyle(parenttype(T))
 parenttype{T,N,AA}(::Type{OffsetArray{T,N,AA}}) = AA
 parenttype(A::OffsetArray) = parenttype(typeof(A))
 
 Base.parent(A::OffsetArray) = A.parent
 
-errmsg(A) = error("size not supported for arrays with indices $(indices(A)); see http://docs.julialang.org/en/latest/devdocs/offset-arrays/")
+errmsg(A) = error("size not supported for arrays with indices $(indices(A)); see https://docs.julialang.org/en/latest/devdocs/offset-arrays/")
 Base.size(A::OffsetArray) = errmsg(A)
 Base.size(A::OffsetArray, d) = errmsg(A)
-Base.eachindex(::LinearSlow, A::OffsetArray) = CartesianRange(indices(A))
-Base.eachindex(::LinearFast, A::OffsetVector) = indices(A, 1)
+Base.eachindex(::IndexCartesian, A::OffsetArray) = CartesianRange(indices(A))
+Base.eachindex(::IndexLinear, A::OffsetVector) = indices(A, 1)
 
 # Implementations of indices and indices1. Since bounds-checking is
 # performance-critical and relies on indices, these are usually worth
@@ -95,7 +161,7 @@ function Base.similar(A::AbstractArray, T::Type, inds::Tuple{UnitRange,Vararg{Un
     OffsetArray(B, map(indsoffset, inds))
 end
 
-Base.similar(f::Union{Function,DataType}, shape::Tuple{UnitRange,Vararg{UnitRange}}) = OffsetArray(f(map(length, shape)), map(indsoffset, shape))
+Base.similar(f::Union{Function,Type}, shape::Tuple{UnitRange,Vararg{UnitRange}}) = OffsetArray(f(map(length, shape)), map(indsoffset, shape))
 
 Base.reshape(A::AbstractArray, inds::Tuple{UnitRange,Vararg{UnitRange}}) = OffsetArray(reshape(A, map(length, inds)), map(indsoffset, inds))
 
@@ -104,12 +170,14 @@ Base.reshape(A::AbstractArray, inds::Tuple{UnitRange,Vararg{UnitRange}}) = Offse
     @inbounds ret = parent(A)[offset(A.offsets, I)...]
     ret
 end
-@inline function Base._getindex(::LinearFast, A::OffsetVector, i::Int)
+# Vectors don't support one-based linear indexing; they always use the offsets
+@inline function Base.getindex(A::OffsetVector, i::Int)
     checkbounds(A, i)
     @inbounds ret = parent(A)[offset(A.offsets, (i,))[1]]
     ret
 end
-@inline function Base._getindex(::LinearFast, A::OffsetArray, i::Int)
+# But multidimensional arrays allow one-based linear indexing
+@inline function Base.getindex(A::OffsetArray, i::Int)
     checkbounds(A, i)
     @inbounds ret = parent(A)[i]
     ret
@@ -119,15 +187,33 @@ end
     @inbounds parent(A)[offset(A.offsets, I)...] = val
     val
 end
-@inline function Base._setindex!(::LinearFast, A::OffsetVector, val, i::Int)
+@inline function Base.setindex!(A::OffsetVector, val, i::Int)
     checkbounds(A, i)
     @inbounds parent(A)[offset(A.offsets, (i,))[1]] = val
     val
 end
-@inline function Base._setindex!(::LinearFast, A::OffsetArray, val, i::Int)
+@inline function Base.setindex!(A::OffsetArray, val, i::Int)
     checkbounds(A, i)
     @inbounds parent(A)[i] = val
     val
+end
+
+@inline function Base.deleteat!(A::OffsetArray, i::Int)
+    checkbounds(A, i)
+    @inbounds deleteat!(parent(A), offset(A.offsets, (i,))[1])
+end
+
+@inline function Base.deleteat!{T,N}(A::OffsetArray{T,N}, I::Vararg{Int, N})
+    checkbounds(A, I...)
+    @inbounds deleteat!(parent(A), offset(A.offsets, I)...)
+end
+
+@inline function Base.deleteat!(A::OffsetArray, i::UnitRange{Int})
+    checkbounds(A, first(i))
+    checkbounds(A, last(i))
+    first_idx = offset(A.offsets, (first(i),))[1]
+    last_idx = offset(A.offsets, (last(i),))[1]
+    @inbounds deleteat!(parent(A), first_idx:last_idx)
 end
 
 # Computing a shifted index (subtracting the offset)

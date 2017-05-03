@@ -1,15 +1,15 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 # givensAlgorithm functions are derived from LAPACK, see below
 
-abstract AbstractRotation{T}
+abstract type AbstractRotation{T} end
 
 transpose(R::AbstractRotation) = error("transpose not implemented for $(typeof(R)). Consider using conjugate transpose (') instead of transpose (.').")
 
-function *{T,S}(R::AbstractRotation{T}, A::AbstractVecOrMat{S})
+function *(R::AbstractRotation{T}, A::AbstractVecOrMat{S}) where {T,S}
     TS = typeof(zero(T)*zero(S) + zero(T)*zero(S))
     A_mul_B!(convert(AbstractRotation{TS}, R), TS == S ? copy(A) : convert(AbstractArray{TS}, A))
 end
-function A_mul_Bc{T,S}(A::AbstractVecOrMat{T}, R::AbstractRotation{S})
+function A_mul_Bc(A::AbstractVecOrMat{T}, R::AbstractRotation{S}) where {T,S}
     TS = typeof(zero(T)*zero(S) + zero(T)*zero(S))
     A_mul_Bc!(TS == T ? copy(A) : convert(AbstractArray{TS}, A), convert(AbstractRotation{TS}, R))
 end
@@ -24,29 +24,29 @@ therefore be multiplied with matrices of arbitrary size as long as `i2<=size(A,2
 
 See also: [`givens`](@ref)
 """
-immutable Givens{T} <: AbstractRotation{T}
+struct Givens{T} <: AbstractRotation{T}
     i1::Int
     i2::Int
     c::T
     s::T
 end
-type Rotation{T} <: AbstractRotation{T}
+mutable struct Rotation{T} <: AbstractRotation{T}
     rotations::Vector{Givens{T}}
 end
 
-convert{T}(::Type{Givens{T}}, G::Givens{T}) = G
-convert{T}(::Type{Givens{T}}, G::Givens) = Givens(G.i1, G.i2, convert(T, G.c), convert(T, G.s))
-convert{T}(::Type{Rotation{T}}, R::Rotation{T}) = R
-convert{T}(::Type{Rotation{T}}, R::Rotation) = Rotation{T}([convert(Givens{T}, g) for g in R.rotations])
-convert{T}(::Type{AbstractRotation{T}}, G::Givens) = convert(Givens{T}, G)
-convert{T}(::Type{AbstractRotation{T}}, R::Rotation) = convert(Rotation{T}, R)
+convert(::Type{Givens{T}}, G::Givens{T}) where {T} = G
+convert(::Type{Givens{T}}, G::Givens) where {T} = Givens(G.i1, G.i2, convert(T, G.c), convert(T, G.s))
+convert(::Type{Rotation{T}}, R::Rotation{T}) where {T} = R
+convert(::Type{Rotation{T}}, R::Rotation) where {T} = Rotation{T}([convert(Givens{T}, g) for g in R.rotations])
+convert(::Type{AbstractRotation{T}}, G::Givens) where {T} = convert(Givens{T}, G)
+convert(::Type{AbstractRotation{T}}, R::Rotation) where {T} = convert(Rotation{T}, R)
 
 ctranspose(G::Givens) = Givens(G.i1, G.i2, conj(G.c), -G.s)
-ctranspose{T}(R::Rotation{T}) = Rotation{T}(reverse!([ctranspose(r) for r in R.rotations]))
+ctranspose(R::Rotation{T}) where {T} = Rotation{T}(reverse!([ctranspose(r) for r in R.rotations]))
 
 realmin2(::Type{Float32}) = reinterpret(Float32, 0x26000000)
 realmin2(::Type{Float64}) = reinterpret(Float64, 0x21a0000000000000)
-realmin2{T}(::Type{T}) = (twopar = 2one(T); twopar^trunc(Integer,log(realmin(T)/eps(T))/log(twopar)/twopar))
+realmin2(::Type{T}) where {T} = (twopar = 2one(T); twopar^trunc(Integer,log(realmin(T)/eps(T))/log(twopar)/twopar))
 
 # derived from LAPACK's dlartg
 # Copyright:
@@ -54,15 +54,17 @@ realmin2{T}(::Type{T}) = (twopar = 2one(T); twopar^trunc(Integer,log(realmin(T)/
 # Univ. of California Berkeley
 # Univ. of Colorado Denver
 # NAG Ltd.
-function givensAlgorithm{T<:AbstractFloat}(f::T, g::T)
-    zeropar = zero(T)
+function givensAlgorithm(f::T, g::T) where T<:AbstractFloat
     onepar = one(T)
     twopar = 2one(T)
+    T0 = typeof(onepar) # dimensionless
+    zeropar = T0(zero(T)) # must be dimensionless
 
-    safmin = realmin(T)
-    epspar = eps(T)
-    safmn2 = realmin2(T)
-    safmx2 = onepar/safmn2
+    # need both dimensionful and dimensionless versions of these:
+    safmn2 = realmin2(T0)
+    safmn2u = realmin2(T)
+    safmx2 = one(T)/safmn2
+    safmx2u = oneunit(T)/safmn2
 
     if g == 0
         cs = onepar
@@ -76,14 +78,14 @@ function givensAlgorithm{T<:AbstractFloat}(f::T, g::T)
         f1 = f
         g1 = g
         scalepar = max(abs(f1), abs(g1))
-        if scalepar >= safmx2
+        if scalepar >= safmx2u
             count = 0
             while true
                 count += 1
                 f1 *= safmn2
                 g1 *= safmn2
                 scalepar = max(abs(f1), abs(g1))
-                if scalepar < safmx2 break end
+                if scalepar < safmx2u break end
             end
             r = sqrt(f1*f1 + g1*g1)
             cs = f1/r
@@ -91,14 +93,14 @@ function givensAlgorithm{T<:AbstractFloat}(f::T, g::T)
             for i = 1:count
                 r *= safmx2
             end
-        elseif scalepar <= safmn2
+        elseif scalepar <= safmn2u
             count = 0
             while true
                 count += 1
                 f1 *= safmx2
                 g1 *= safmx2
                 scalepar = max(abs(f1), abs(g1))
-                if scalepar > safmn2 break end
+                if scalepar > safmn2u break end
             end
             r = sqrt(f1*f1 + g1*g1)
             cs = f1/r
@@ -126,28 +128,31 @@ end
 # Univ. of California Berkeley
 # Univ. of Colorado Denver
 # NAG Ltd.
-function givensAlgorithm{T<:AbstractFloat}(f::Complex{T}, g::Complex{T})
-    twopar, onepar, zeropar = 2one(T), one(T), zero(T)
-    czero = zero(Complex{T})
+function givensAlgorithm(f::Complex{T}, g::Complex{T}) where T<:AbstractFloat
+    twopar, onepar = 2one(T), one(T)
+    T0 = typeof(onepar) # dimensionless
+    zeropar = T0(zero(T)) # must be dimensionless
+    czero = complex(zeropar)
 
     abs1(ff) = max(abs(real(ff)), abs(imag(ff)))
-    safmin = realmin(T)
-    epspar = eps(T)
-    safmn2 = realmin2(T)
-    safmx2 = onepar/safmn2
+    safmin = realmin(T0)
+    safmn2 = realmin2(T0)
+    safmn2u = realmin2(T)
+    safmx2 = one(T)/safmn2
+    safmx2u = oneunit(T)/safmn2
     scalepar = max(abs1(f), abs1(g))
     fs = f
     gs = g
     count = 0
-    if scalepar >= safmx2
+    if scalepar >= safmx2u
         while true
             count += 1
             fs *= safmn2
             gs *= safmn2
             scalepar *= safmn2
-            if scalepar < safmx2 break end
+            if scalepar < safmx2u break end
         end
-    elseif scalepar <= safmn2
+    elseif scalepar <= safmn2u
         if g == 0
             cs = onepar
             sn = czero
@@ -159,37 +164,35 @@ function givensAlgorithm{T<:AbstractFloat}(f::Complex{T}, g::Complex{T})
             fs *= safmx2
             gs *= safmx2
             scalepar *= safmx2
-            if scalepar > safmn2 break end
+            if scalepar > safmn2u break end
         end
     end
     f2 = abs2(fs)
     g2 = abs2(gs)
-    if f2 <= max(g2, onepar)*safmin
-
-     # This is a rare case: F is very small.
-
+    if f2 <= max(g2, oneunit(T))*safmin
+        # This is a rare case: F is very small.
         if f == 0
             cs = zero(T)
             r = complex(hypot(real(g), imag(g)))
-        # do complex/real division explicitly with two real divisions
+            # do complex/real division explicitly with two real divisions
             d = hypot(real(gs), imag(gs))
             sn = complex(real(gs)/d, -imag(gs)/d)
             return cs, sn, r
         end
         f2s = hypot(real(fs), imag(fs))
-     # g2 and g2s are accurate
-     # g2 is at least safmin, and g2s is at least safmn2
+        # g2 and g2s are accurate
+        # g2 is at least safmin, and g2s is at least safmn2
         g2s = sqrt(g2)
-     # error in cs from underflow in f2s is at most
-     # unfl / safmn2 .lt. sqrt(unfl*eps) .lt. eps
-     # if max(g2,one)=g2, then f2 .lt. g2*safmin,
-     # and so cs .lt. sqrt(safmin)
-     # if max(g2,one)=one, then f2 .lt. safmin
-     # and so cs .lt. sqrt(safmin)/safmn2 = sqrt(eps)
-     # therefore, cs = f2s/g2s / sqrt( 1 + (f2s/g2s)**2 ) = f2s/g2s
+        # error in cs from underflow in f2s is at most
+        # unfl / safmn2 .lt. sqrt(unfl*eps) .lt. eps
+        # if max(g2,one)=g2, then f2 .lt. g2*safmin,
+        # and so cs .lt. sqrt(safmin)
+        # if max(g2,one)=one, then f2 .lt. safmin
+        # and so cs .lt. sqrt(safmin)/safmn2 = sqrt(eps)
+        # therefore, cs = f2s/g2s / sqrt( 1 + (f2s/g2s)**2 ) = f2s/g2s
         cs = f2s/g2s
-     # make sure abs(ff) = 1
-     # do complex/real division explicitly with 2 real divisions
+        # make sure abs(ff) = 1
+        # do complex/real division explicitly with 2 real divisions
         if abs1(f) > 1
             d = hypot(real(f), imag(f))
             ff = complex(real(f)/d, imag(f)/d)
@@ -202,17 +205,15 @@ function givensAlgorithm{T<:AbstractFloat}(f::Complex{T}, g::Complex{T})
         sn = ff*complex(real(gs)/g2s, -imag(gs)/g2s)
         r = cs*f + sn*g
     else
-
-     # This is the most common case.
-     # Neither F2 nor F2/G2 are less than SAFMIN
-     # F2S cannot overflow, and it is accurate
-
+        # This is the most common case.
+        # Neither F2 nor F2/G2 are less than SAFMIN
+        # F2S cannot overflow, and it is accurate
         f2s = sqrt(onepar + g2/f2)
-     # do the f2s(real)*fs(complex) multiply with two real multiplies
+        # do the f2s(real)*fs(complex) multiply with two real multiplies
         r = complex(f2s*real(fs), f2s*imag(fs))
         cs = onepar/f2s
         d = f2 + g2
-     # do complex/real division explicitly with two real divisions
+        # do complex/real division explicitly with two real divisions
         sn = complex(real(r)/d, imag(r)/d)
         sn *= conj(gs)
         if count != 0
@@ -251,7 +252,7 @@ y[i2] = 0
 
 See also: [`LinAlg.Givens`](@ref)
 """
-function givens{T}(f::T, g::T, i1::Integer, i2::Integer)
+function givens(f::T, g::T, i1::Integer, i2::Integer) where T
     if i1 == i2
         throw(ArgumentError("Indices must be distinct."))
     end
@@ -305,7 +306,7 @@ function getindex(G::Givens, i::Integer, j::Integer)
         if i == G.i1 || i == G.i2
             G.c
         else
-            one(G.c)
+            oneunit(G.c)
         end
     elseif i == G.i1 && j == G.i2
         G.s
@@ -359,4 +360,4 @@ function A_mul_Bc!(A::AbstractMatrix, R::Rotation)
     end
     return A
 end
-*{T}(G1::Givens{T}, G2::Givens{T}) = Rotation(push!(push!(Givens{T}[], G2), G1))
+*(G1::Givens{T}, G2::Givens{T}) where {T} = Rotation(push!(push!(Givens{T}[], G2), G1))

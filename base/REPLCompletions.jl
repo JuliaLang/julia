@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module REPLCompletions
 
@@ -84,11 +84,12 @@ end
 
 function complete_keyword(s::String)
     const sorted_keywords = [
-        "abstract", "baremodule", "begin", "bitstype", "break", "catch", "ccall",
+        "abstract type", "baremodule", "begin", "break", "catch", "ccall",
         "const", "continue", "do", "else", "elseif", "end", "export", "false",
-        "finally", "for", "function", "global", "if", "immutable", "import",
-        "importall", "let", "local", "macro", "module", "quote", "return",
-        "true", "try", "type", "typealias", "using", "while"]
+        "finally", "for", "function", "global", "if", "import",
+        "importall", "let", "local", "macro", "module", "mutable struct",
+        "primitive type", "quote", "return", "struct",
+        "true", "try", "using", "while"]
     r = searchsorted(sorted_keywords, s)
     i = first(r)
     n = length(sorted_keywords)
@@ -315,7 +316,7 @@ function get_type(sym, fn)
 end
 # Method completion on function call expression that look like :(max(1))
 function complete_methods(ex_org::Expr)
-    args_ex = DataType[]
+    args_ex = Any[]
     func, found = get_value(ex_org.args[1], Main)
     !found && return String[]
     for ex in ex_org.args[2:end]
@@ -329,8 +330,15 @@ function complete_methods(ex_org::Expr)
     kwtype = isdefined(ml.mt, :kwsorter) ? Nullable{DataType}(typeof(ml.mt.kwsorter)) : Nullable{DataType}()
     io = IOBuffer()
     for method in ml
+        ms = method.sig
+
+        # Do not suggest the default method from sysimg.jl.
+        if Base.is_default_method(method)
+            continue
+        end
+
         # Check if the method's type signature intersects the input types
-        if typeintersect(Tuple{method.sig.parameters[1 : min(na, end)]...}, t_in) != Union{}
+        if typeintersect(Base.rewrap_unionall(Tuple{Base.unwrap_unionall(ms).parameters[1 : min(na, end)]...}, ms), t_in) != Union{}
             show(io, method, kwtype=kwtype)
             push!(out, String(take!(io)))
         end
@@ -438,7 +446,7 @@ function completions(string, pos)
         if partial_key !== nothing
             matches = find_dict_matches(identifier, partial_key)
             length(matches)==1 && (length(string) <= pos || string[pos+1] != ']') && (matches[1]*="]")
-            length(matches)>0 && return sort(matches), loc:pos, true
+            length(matches)>0 && return sort!(matches), loc:pos, true
         else
             return String[], 0:-1, false
         end
@@ -457,7 +465,7 @@ function completions(string, pos)
             paths[1] *= "\""
         end
         #Latex symbols can be completed for strings
-        (success || inc_tag==:cmd) && return sort(paths), r, success
+        (success || inc_tag==:cmd) && return sort!(paths), r, success
     end
 
     ok, ret = bslash_completions(string, pos)
@@ -493,7 +501,7 @@ function completions(string, pos)
         s = string[startpos:pos]
         if dotpos <= startpos
             for dir in [Pkg.dir(); LOAD_PATH; pwd()]
-                isdir(dir) || continue
+                dir isa AbstractString && isdir(dir) || continue
                 for pname in readdir(dir)
                     if pname[1] != '.' && pname != "METADATA" &&
                         pname != "REQUIRE" && startswith(pname, s)
@@ -550,7 +558,7 @@ function completions(string, pos)
         end
     end
     append!(suggestions, complete_symbol(s, ffunc))
-    return sort(unique(suggestions)), (dotpos+1):pos, true
+    return sort!(unique(suggestions)), (dotpos+1):pos, true
 end
 
 function shell_completions(string, pos)

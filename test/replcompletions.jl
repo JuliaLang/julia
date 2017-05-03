@@ -1,13 +1,13 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.REPLCompletions
 
 ex = quote
     module CompletionFoo
-    type Test_y
+    mutable struct Test_y
         yy
     end
-    type Test_x
+    mutable struct Test_x
         xx :: Test_y
     end
     type_test = Test_x(Test_y(1))
@@ -22,7 +22,7 @@ ex = quote
     end
 
     # Support non-Dict Associatives, #19441
-    type CustomDict{K, V} <: Associative{K, V}
+    mutable struct CustomDict{K, V} <: Associative{K, V}
         mydict::Dict{K, V}
     end
 
@@ -316,11 +316,14 @@ c, r, res = test_complete(s)
 @test length(c) == 1
 @test s[r] == "CompletionFoo.test4"
 
+# (As discussed in #19829, the Base.REPLCompletions.get_type function isn't
+#  powerful enough to analyze general dot calls because it can't handle
+#  anonymous-function evaluation.)
 s = "CompletionFoo.test5(push!(Base.split(\"\",' '),\"\",\"\").==\"\","
 c, r, res = test_complete(s)
 @test !res
-@test length(c) == 1
-@test c[1] == string(first(methods(Main.CompletionFoo.test5, Tuple{BitArray{1}})))
+@test_broken length(c) == 1
+@test_broken c[1] == string(first(methods(Main.CompletionFoo.test5, Tuple{BitArray{1}})))
 
 s = "CompletionFoo.test4(CompletionFoo.test_y_array[1]()[1], CompletionFoo.test_y_array[1]()[2], "
 c, r, res = test_complete(s)
@@ -360,13 +363,13 @@ s = "\"\"."
 c,r = test_complete(s)
 @test length(c)==1
 @test r == (endof(s)+1):endof(s)
-@test c[1] == "data"
+@test c[1] == "len"
 
 s = "(\"\"*\"\")."
 c,r = test_complete(s)
 @test length(c)==1
 @test r == (endof(s)+1):endof(s)
-@test c[1] == "data"
+@test c[1] == "len"
 
 s = "CompletionFoo.test_y_array[1]."
 c,r = test_complete(s)
@@ -721,7 +724,7 @@ function test_dict_completion(dict_name)
     @test c == Any["66]"]
     s = "$dict_name[("
     c, r = test_complete(s)
-    @test c == Any["(\"q\",3)]"]
+    @test c == Any["(\"q\", 3)]"]
     s = "$dict_name[\"\\alp"
     c, r = test_complete(s)
     @test c == String["\\alpha"]

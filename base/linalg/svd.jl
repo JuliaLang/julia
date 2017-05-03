@@ -1,13 +1,14 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Singular Value Decomposition
-immutable SVD{T,Tr,M<:AbstractArray} <: Factorization{T}
+struct SVD{T,Tr,M<:AbstractArray} <: Factorization{T}
     U::M
     S::Vector{Tr}
     Vt::M
-    SVD(U::AbstractArray{T}, S::Vector{Tr}, Vt::AbstractArray{T}) = new(U, S, Vt)
+    SVD{T,Tr,M}(U::AbstractArray{T}, S::Vector{Tr}, Vt::AbstractArray{T}) where {T,Tr,M} =
+        new(U, S, Vt)
 end
-SVD{T,Tr}(U::AbstractArray{T}, S::Vector{Tr}, Vt::AbstractArray{T}) = SVD{T,Tr,typeof(U)}(U, S, Vt)
+SVD(U::AbstractArray{T}, S::Vector{Tr}, Vt::AbstractArray{T}) where {T,Tr} = SVD{T,Tr,typeof(U)}(U, S, Vt)
 
 """
     svdfact!(A, thin::Bool=true) -> SVD
@@ -19,7 +20,7 @@ If `thin=true` (default), a thin SVD is returned. For a ``M \\times N`` matrix
 `A`, `U` is ``M \\times M`` for a full SVD (`thin=false`) and
 ``M \\times \\min(M, N)`` for a thin SVD.
 """
-function svdfact!{T<:BlasFloat}(A::StridedMatrix{T}; thin::Bool=true)
+function svdfact!(A::StridedMatrix{T}; thin::Bool=true) where T<:BlasFloat
     m,n = size(A)
     if m == 0 || n == 0
         u,s,vt = (eye(T, m, thin ? n : m), real(zeros(T,0)), eye(T,n,n))
@@ -52,7 +53,7 @@ julia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]
  0.0  2.0  0.0  0.0  0.0
 
 julia> F = svdfact(A)
-Base.LinAlg.SVD{Float64,Float64,Array{Float64,2}}([0.0 1.0 0.0 0.0; 1.0 0.0 0.0 0.0; 0.0 0.0 0.0 -1.0; 0.0 0.0 1.0 0.0],[3.0,2.23607,2.0,0.0],[-0.0 0.0 … -0.0 0.0; 0.447214 0.0 … 0.0 0.894427; -0.0 1.0 … -0.0 0.0; 0.0 0.0 … 1.0 0.0])
+Base.LinAlg.SVD{Float64,Float64,Array{Float64,2}}([0.0 1.0 0.0 0.0; 1.0 0.0 0.0 0.0; 0.0 0.0 0.0 -1.0; 0.0 0.0 1.0 0.0], [3.0, 2.23607, 2.0, 0.0], [-0.0 0.0 … -0.0 0.0; 0.447214 0.0 … 0.0 0.894427; -0.0 1.0 … -0.0 0.0; 0.0 0.0 … 1.0 0.0])
 
 julia> F[:U] * diagm(F[:S]) * F[:Vt]
 4×5 Array{Float64,2}:
@@ -62,7 +63,7 @@ julia> F[:U] * diagm(F[:S]) * F[:Vt]
  0.0  2.0  0.0  0.0  0.0
 ```
 """
-function svdfact{T}(A::StridedVecOrMat{T}; thin::Bool = true)
+function svdfact(A::StridedVecOrMat{T}; thin::Bool = true) where T
     S = promote_type(Float32, typeof(one(T)/norm(one(T))))
     svdfact!(copy_oftype(A, S), thin = thin)
 end
@@ -94,11 +95,7 @@ julia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]
  0.0  2.0  0.0  0.0  0.0
 
 julia> U, S, V = svd(A)
-(
-[0.0 1.0 0.0 0.0; 1.0 0.0 0.0 0.0; 0.0 0.0 0.0 -1.0; 0.0 0.0 1.0 0.0],
-
-[3.0,2.23607,2.0,0.0],
-[-0.0 0.447214 -0.0 0.0; 0.0 0.0 1.0 0.0; … ; -0.0 0.0 -0.0 1.0; 0.0 0.894427 0.0 0.0])
+([0.0 1.0 0.0 0.0; 1.0 0.0 0.0 0.0; 0.0 0.0 0.0 -1.0; 0.0 0.0 1.0 0.0], [3.0, 2.23607, 2.0, 0.0], [-0.0 0.447214 -0.0 0.0; 0.0 0.0 1.0 0.0; … ; -0.0 0.0 -0.0 1.0; 0.0 0.894427 0.0 0.0])
 
 julia> U*diagm(S)*V'
 4×5 Array{Float64,2}:
@@ -133,8 +130,8 @@ end
 Returns the singular values of `A`, saving space by overwriting the input.
 See also [`svdvals`](@ref).
 """
-svdvals!{T<:BlasFloat}(A::StridedMatrix{T}) = findfirst(size(A), 0) > 0 ? zeros(T, 0) : LAPACK.gesdd!('N', A)[2]
-svdvals{T<:BlasFloat}(A::AbstractMatrix{T}) = svdvals!(copy(A))
+svdvals!(A::StridedMatrix{T}) where {T<:BlasFloat} = findfirst(size(A), 0) > 0 ? zeros(T, 0) : LAPACK.gesdd!('N', A)[2]
+svdvals(A::AbstractMatrix{<:BlasFloat}) = svdvals!(copy(A))
 
 """
     svdvals(A)
@@ -159,21 +156,21 @@ julia> svdvals(A)
  0.0
 ```
 """
-function svdvals{T}(A::AbstractMatrix{T})
+function svdvals(A::AbstractMatrix{T}) where T
     S = promote_type(Float32, typeof(one(T)/norm(one(T))))
     svdvals!(copy_oftype(A, S))
 end
 svdvals(x::Number) = abs(x)
-svdvals{T, Tr}(S::SVD{T, Tr}) = (S[:S])::Vector{Tr}
+svdvals(S::SVD{<:Any,T}) where {T} = (S[:S])::Vector{T}
 
 # SVD least squares
-function A_ldiv_B!{Ta,Tb}(A::SVD{Ta}, B::StridedVecOrMat{Tb})
-    k = searchsortedlast(A.S, eps(real(Ta))*A.S[1], rev=true)
+function A_ldiv_B!{T}(A::SVD{T}, B::StridedVecOrMat)
+    k = searchsortedlast(A.S, eps(real(T))*A.S[1], rev=true)
     view(A.Vt,1:k,:)' * (view(A.S,1:k) .\ (view(A.U,:,1:k)' * B))
 end
 
 # Generalized svd
-immutable GeneralizedSVD{T,S} <: Factorization{T}
+struct GeneralizedSVD{T,S} <: Factorization{T}
     U::S
     V::S
     Q::S
@@ -182,9 +179,15 @@ immutable GeneralizedSVD{T,S} <: Factorization{T}
     k::Int
     l::Int
     R::S
-    GeneralizedSVD(U::AbstractMatrix{T}, V::AbstractMatrix{T}, Q::AbstractMatrix{T}, a::Vector, b::Vector, k::Int, l::Int, R::AbstractMatrix{T}) = new(U, V, Q, a, b, k, l, R)
+    function GeneralizedSVD{T,S}(U::AbstractMatrix{T}, V::AbstractMatrix{T}, Q::AbstractMatrix{T},
+                                 a::Vector, b::Vector, k::Int, l::Int, R::AbstractMatrix{T}) where {T,S}
+        new(U, V, Q, a, b, k, l, R)
+    end
 end
-GeneralizedSVD{T}(U::AbstractMatrix{T}, V::AbstractMatrix{T}, Q::AbstractMatrix{T}, a::Vector, b::Vector, k::Int, l::Int, R::AbstractMatrix{T}) = GeneralizedSVD{T,typeof(U)}(U, V, Q, a, b, k, l, R)
+function GeneralizedSVD(U::AbstractMatrix{T}, V::AbstractMatrix{T}, Q::AbstractMatrix{T},
+                        a::Vector, b::Vector, k::Int, l::Int, R::AbstractMatrix{T}) where T
+    GeneralizedSVD{T,typeof(U)}(U, V, Q, a, b, k, l, R)
+end
 
 """
     svdfact!(A, B) -> GeneralizedSVD
@@ -192,7 +195,7 @@ GeneralizedSVD{T}(U::AbstractMatrix{T}, V::AbstractMatrix{T}, Q::AbstractMatrix{
 `svdfact!` is the same as [`svdfact`](@ref), but modifies the arguments
 `A` and `B` in-place, instead of making copies.
 """
-function svdfact!{T<:BlasFloat}(A::StridedMatrix{T}, B::StridedMatrix{T})
+function svdfact!(A::StridedMatrix{T}, B::StridedMatrix{T}) where T<:BlasFloat
     # xggsvd3 replaced xggsvd in LAPACK 3.6.0
     if LAPACK.laver() < (3, 6, 0)
         U, V, Q, a, b, k, l, R = LAPACK.ggsvd!('U', 'V', 'Q', A, B)
@@ -201,7 +204,7 @@ function svdfact!{T<:BlasFloat}(A::StridedMatrix{T}, B::StridedMatrix{T})
     end
     GeneralizedSVD(U, V, Q, a, b, Int(k), Int(l), R)
 end
-svdfact{T<:BlasFloat}(A::StridedMatrix{T}, B::StridedMatrix{T}) = svdfact!(copy(A),copy(B))
+svdfact(A::StridedMatrix{T}, B::StridedMatrix{T}) where {T<:BlasFloat} = svdfact!(copy(A),copy(B))
 
 """
     svdfact(A, B) -> GeneralizedSVD
@@ -227,7 +230,7 @@ documentation for the
 [xGGSVD3](http://www.netlib.org/lapack/explore-html/d6/db3/dggsvd3_8f.html)
 routine which is called underneath (in LAPACK 3.6.0 and newer).
 """
-function svdfact{TA,TB}(A::StridedMatrix{TA}, B::StridedMatrix{TB})
+function svdfact(A::StridedMatrix{TA}, B::StridedMatrix{TB}) where {TA,TB}
     S = promote_type(Float32, typeof(one(TA)/norm(one(TA))),TB)
     return svdfact!(copy_oftype(A, S), copy_oftype(B, S))
 end
@@ -246,7 +249,7 @@ function svd(A::AbstractMatrix, B::AbstractMatrix)
     F[:U], F[:V], F[:Q], F[:D1], F[:D2], F[:R0]
 end
 
-function getindex{T}(obj::GeneralizedSVD{T}, d::Symbol)
+function getindex(obj::GeneralizedSVD{T}, d::Symbol) where T
     if d == :U
         return obj.U
     elseif d == :V
@@ -284,7 +287,7 @@ function getindex{T}(obj::GeneralizedSVD{T}, d::Symbol)
     end
 end
 
-function svdvals!{T<:BlasFloat}(A::StridedMatrix{T}, B::StridedMatrix{T})
+function svdvals!(A::StridedMatrix{T}, B::StridedMatrix{T}) where T<:BlasFloat
     # xggsvd3 replaced xggsvd in LAPACK 3.6.0
     if LAPACK.laver() < (3, 6, 0)
         _, _, _, a, b, k, l, _ = LAPACK.ggsvd!('N', 'N', 'N', A, B)
@@ -293,7 +296,7 @@ function svdvals!{T<:BlasFloat}(A::StridedMatrix{T}, B::StridedMatrix{T})
     end
     a[1:k + l] ./ b[1:k + l]
 end
-svdvals{T<:BlasFloat}(A::StridedMatrix{T},B::StridedMatrix{T}) = svdvals!(copy(A),copy(B))
+svdvals(A::StridedMatrix{T},B::StridedMatrix{T}) where {T<:BlasFloat} = svdvals!(copy(A),copy(B))
 
 """
     svdvals(A, B)
@@ -301,7 +304,7 @@ svdvals{T<:BlasFloat}(A::StridedMatrix{T},B::StridedMatrix{T}) = svdvals!(copy(A
 Return the generalized singular values from the generalized singular value
 decomposition of `A` and `B`. See also [`svdfact`](@ref).
 """
-function svdvals{TA,TB}(A::StridedMatrix{TA}, B::StridedMatrix{TB})
+function svdvals(A::StridedMatrix{TA}, B::StridedMatrix{TB}) where {TA,TB}
     S = promote_type(Float32, typeof(one(TA)/norm(one(TA))), TB)
     return svdvals!(copy_oftype(A, S), copy_oftype(B, S))
 end

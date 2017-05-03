@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 import Base.Docs: meta, @var, DocStr, parsedoc
 
@@ -26,7 +26,7 @@ end
 docstring_startswith(d1::DocStr, d2) = docstring_startswith(parsedoc(d1), d2)
 
 @doc "Doc abstract type" ->
-abstract C74685 <: AbstractArray
+abstract type C74685{T,N} <: AbstractArray{T,N} end
 @test stringmime("text/plain", Docs.doc(C74685))=="Doc abstract type\n"
 
 macro macro_doctest() end
@@ -73,16 +73,16 @@ end
 function g end
 
 "AT"
-abstract AT
+abstract type AT end
 
 "BT"
-bitstype 8 BT
+primitive type BT 8 end
 
 "BT2"
-bitstype 8 BT2 <: Integer
+primitive type BT2 <: Integer 8 end
 
 "T"
-type T <: AT
+mutable struct T <: AT
     "T.x"
     x
     "T.y"
@@ -90,7 +90,7 @@ type T <: AT
 end
 
 "IT"
-immutable IT
+struct IT
     "IT.x"
     x :: Int
     "IT.y"
@@ -98,7 +98,7 @@ immutable IT
 end
 
 "TA"
-typealias TA Union{T, IT}
+const TA = Union{T, IT}
 
 "@mac()"
 macro mac() end
@@ -132,7 +132,7 @@ t(::Int, ::Any)
 t{S <: Integer}(::S)
 
 "FieldDocs"
-type FieldDocs
+mutable struct FieldDocs
     "one"
     one
     doc"two"
@@ -152,7 +152,7 @@ import .Inner.@m
 "Inner.@m"
 :@m
 
-type Foo
+mutable struct Foo
     x
 end
 
@@ -316,10 +316,10 @@ macro m() end
 const C = 1
 
 "A"
-abstract A
+abstract type A end
 
 "T"
-type T
+mutable struct T
     "x"
     x
     "y"
@@ -415,7 +415,7 @@ end
 
 module DocVars
 
-immutable __FIELDS__ end
+struct __FIELDS__ end
 
 function Docs.formatdoc(buffer, docstr, ::Type{__FIELDS__})
     fields = get(docstr.data, :fields, Dict())
@@ -432,7 +432,7 @@ end
 
 $__FIELDS__
 """
-type T
+mutable struct T
     "x"
     x
     "y"
@@ -445,7 +445,7 @@ end
 
 $__FIELDS__
 """
-type S
+mutable struct S
     x
     y
     z
@@ -506,7 +506,7 @@ end
 
 module I15424
 
-immutable LazyHelp
+struct LazyHelp
     text
 end
 
@@ -594,7 +594,7 @@ end
 
 module I12515
 
-immutable EmptyType{T} end
+struct EmptyType{T} end
 
 "A new method"
 Base.collect{T}(::Type{EmptyType{T}}) = "borked"
@@ -602,7 +602,7 @@ Base.collect{T}(::Type{EmptyType{T}}) = "borked"
 end
 
 let fd = meta(I12515)[@var(Base.collect)]
-    @test fd.order[1] == Tuple{Type{I12515.EmptyType{TypeVar(:T, Any, true)}}}
+    @test fd.order[1] == (Union{Tuple{Type{I12515.EmptyType{T}}}, Tuple{T}} where T)
 end
 
 # PR #12593
@@ -696,12 +696,12 @@ end
 
 module Undocumented
 
-abstract A
-abstract B <: A
+abstract type A end
+abstract type B <: A end
 
-type C <: A end
+mutable struct C <: A end
 
-immutable D <: B
+struct D <: B
     one
     two::String
     three::Float64
@@ -727,7 +727,7 @@ No documentation found.
 
 **Summary:**
 ```
-abstract $(curmod_prefix)Undocumented.A <: Any
+abstract type $(curmod_prefix)Undocumented.A <: Any
 ```
 
 **Subtypes:**
@@ -743,7 +743,7 @@ No documentation found.
 
 **Summary:**
 ```
-abstract $(curmod_prefix)Undocumented.B <: $(curmod_prefix)Undocumented.A
+abstract type $(curmod_prefix)Undocumented.B <: $(curmod_prefix)Undocumented.A
 ```
 
 **Subtypes:**
@@ -758,7 +758,7 @@ No documentation found.
 
 **Summary:**
 ```
-type $(curmod_prefix)Undocumented.C <: $(curmod_prefix)Undocumented.A
+mutable struct $(curmod_prefix)Undocumented.C <: $(curmod_prefix)Undocumented.A
 ```
 """)
 @test docstrings_equal(@doc(Undocumented.C), doc"$doc_str")
@@ -768,7 +768,7 @@ No documentation found.
 
 **Summary:**
 ```
-immutable $(curmod_prefix)Undocumented.D <: $(curmod_prefix)Undocumented.B
+struct $(curmod_prefix)Undocumented.D <: $(curmod_prefix)Undocumented.B
 ```
 
 **Fields:**
@@ -915,10 +915,85 @@ end
 
 let save_color = Base.have_color
     try
-        eval(Base, :(have_color = false))
+        @eval Base have_color = false
         @test sprint(Base.Docs.repl_latex, "√") == "\"√\" can be typed by \\sqrt<tab>\n\n"
         @test sprint(Base.Docs.repl_latex, "x̂₂") == "\"x̂₂\" can be typed by x\\hat<tab>\\_2<tab>\n\n"
     finally
-        eval(Base, :(have_color = $save_color))
+        @eval Base have_color = $save_color
     end
 end
+
+# issue #15684
+begin
+    """
+    abc
+    """
+    f15684(x) = 1
+end
+
+@test string(@doc f15684) == "abc\n"
+
+# Dynamic docstrings
+
+mutable struct DynamicDocType
+    x
+end
+
+Base.Docs.getdoc(d::DynamicDocType, sig) = "$(d.x) $(sig)"
+
+dynamic_test = DynamicDocType("test 1")
+@test @doc(dynamic_test) == "test 1 Union{}"
+dynamic_test.x = "test 2"
+@test @doc(dynamic_test) == "test 2 Union{}"
+@test @doc(dynamic_test(::String)) == "test 2 Tuple{String}"
+
+@test Docs._repl(:(dynamic_test(1.0))) == :(@doc $(Expr(:escape, :(dynamic_test(::typeof(1.0))))))
+@test Docs._repl(:(dynamic_test(::String))) == :(@doc $(Expr(:escape, :(dynamic_test(::String)))))
+
+
+# Equality testing
+
+@test Text("docstring") == Text("docstring")
+@test hash(Text("docstring")) == hash(Text("docstring"))
+@test HTML("<b>docstring</b>") == HTML("<b>docstring</b>")
+@test Text("docstring1") ≠ Text("docstring2")
+@test hash(Text("docstring1")) ≠ hash(Text("docstring2"))
+@test hash(Text("docstring")) ≠ hash(HTML("docstring"))
+
+# issue 21016
+module I21016
+
+struct Struct{T}
+end
+
+"String 1"
+function Struct{T}(arg1) where T<:Float64
+end
+
+"String 2"
+function Struct{T}(arg1) where T
+end
+
+"String 3"
+function Struct{T}(arg1) where Integer <: T <: Real
+end
+
+"String 4"
+function Struct{T}(arg1) where T >: Int
+end
+
+end
+
+@test docstrings_equal(
+    @doc(I21016.Struct),
+    doc"""
+    String 1
+
+    String 2
+
+    String 3
+
+    String 4
+    """
+)
+

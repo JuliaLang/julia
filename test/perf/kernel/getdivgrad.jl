@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # https://github.com/JuliaLang/julia/issues/4707
 
@@ -17,7 +17,7 @@ end
 #----------------- 1D finite difference on staggered grid
 function ddx(n)
 # generate 1D derivatives
-    return d = spdiags(ones(n)*[-1 1],[0,1],n,n+1)
+    return d = spdiags(ones(n)*[-1, 1]',[0,1],n,n+1)
 end
 
 #------------- Build a diagonal matrix

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # The Computer Language Benchmarks Game
 # http://shootout.alioth.debian.org/
@@ -43,7 +43,7 @@ function revcomp(infile="revcomp-input.txt")
     input = open(infile, "r")
     buff = UInt8[]
     while true
-        line = readline(input).data
+        line = readuntil(input, UInt8('\n'))
         if isempty(line)
 #            print_buff(buff)
             return

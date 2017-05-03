@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module LineEdit
 
@@ -9,16 +9,16 @@ import ..Terminals: raw!, width, height, cmove, getX,
 
 import Base: ensureroom, peek, show, AnyDict
 
-abstract TextInterface
-abstract ModeState
+abstract type TextInterface end
+abstract type ModeState end
 
 export run_interface, Prompt, ModalInterface, transition, reset_state, edit_insert, keymap
 
-immutable ModalInterface <: TextInterface
+struct ModalInterface <: TextInterface
     modes
 end
 
-type MIState
+mutable struct MIState
     interface::ModalInterface
     current_mode
     aborted::Bool
@@ -33,7 +33,7 @@ function show(io::IO, s::MIState)
     print(io, "MI State (", s.current_mode, " active)")
 end
 
-type Prompt <: TextInterface
+mutable struct Prompt <: TextInterface
     prompt
     # A string or function to be printed before the prompt. May not change the length of the prompt.
     # This may be used for changing the color, issuing other terminal escape codes, etc.
@@ -51,12 +51,12 @@ end
 
 show(io::IO, x::Prompt) = show(io, string("Prompt(\"", x.prompt, "\",...)"))
 
-immutable InputAreaState
+struct InputAreaState
     num_rows::Int64
     curs_row::Int64
 end
 
-type PromptState <: ModeState
+mutable struct PromptState <: ModeState
     terminal
     p::Prompt
     input_buffer::IOBuffer
@@ -74,13 +74,13 @@ function input_string_newlines_aftercursor(s::PromptState)
     return count(c->(c == '\n'), rest)
 end
 
-abstract HistoryProvider
-abstract CompletionProvider
+abstract type HistoryProvider end
+abstract type CompletionProvider end
 
-type EmptyCompletionProvider <: CompletionProvider
+mutable struct EmptyCompletionProvider <: CompletionProvider
 end
 
-type EmptyHistoryProvider <: HistoryProvider
+mutable struct EmptyHistoryProvider <: HistoryProvider
 end
 
 reset_state(::EmptyHistoryProvider) = nothing
@@ -211,7 +211,7 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
     seek(buf, 0)
     moreinput = true # add a blank line if there is a trailing newline on the last line
     while moreinput
-        l = readline(buf)
+        l = readline(buf, chomp=false)
         moreinput = endswith(l, "\n")
         # We need to deal with on-screen characters, so use strwidth to compute occupied columns
         llength = strwidth(l)
@@ -430,14 +430,14 @@ end
 
 # splice! for IOBuffer: convert from 0-indexed positions, update the size,
 # and keep the cursor position stable with the text
-function splice_buffer!{T<:Integer}(buf::IOBuffer, r::UnitRange{T}, ins::AbstractString = "")
+function splice_buffer!(buf::IOBuffer, r::UnitRange{<:Integer}, ins::AbstractString = "")
     pos = position(buf)
     if !isempty(r) && pos in r
         seek(buf, first(r))
     elseif pos > last(r)
         seek(buf, pos - length(r))
     end
-    splice!(buf.data, r + 1, ins.data) # position(), etc, are 0-indexed
+    splice!(buf.data, r + 1, Vector{UInt8}(ins)) # position(), etc, are 0-indexed
     buf.size = buf.size + sizeof(ins) - length(r)
     seek(buf, position(buf) + sizeof(ins))
 end
@@ -549,7 +549,7 @@ end
 function edit_kill_line(s::MIState)
     buf = buffer(s)
     pos = position(buf)
-    killbuf = readline(buf)
+    killbuf = readline(buf, chomp=false)
     if length(killbuf) > 1 && killbuf[end] == '\n'
         killbuf = killbuf[1:end-1]
         char_move_left(buf)
@@ -626,8 +626,8 @@ default_enter_cb(_) = true
 
 write_prompt(terminal, s::PromptState) = write_prompt(terminal, s.p)
 function write_prompt(terminal, p::Prompt)
-    prefix = isa(p.prompt_prefix,Function) ? p.prompt_prefix() : p.prompt_prefix
-    suffix = isa(p.prompt_suffix,Function) ? p.prompt_suffix() : p.prompt_suffix
+    prefix = isa(p.prompt_prefix,Function) ? eval(Expr(:call, p.prompt_prefix)) : p.prompt_prefix
+    suffix = isa(p.prompt_suffix,Function) ? eval(Expr(:call, p.prompt_suffix)) : p.prompt_suffix
     write(terminal, prefix)
     write(terminal, Base.text_colors[:bold])
     write(terminal, p.prompt)
@@ -712,7 +712,7 @@ end
 # Redirect a key as if `seq` had been the keysequence instead in a lazy fashion.
 # This is different from the default eager redirect, which only looks at the current and lower
 # layers of the stack.
-immutable KeyAlias
+struct KeyAlias
     seq::String
     KeyAlias(seq) = new(normalize_key(seq))
 end
@@ -725,6 +725,9 @@ function match_input(k::Dict, s, term=terminal(s), cs=Char[], keymap = k)
     # return an empty keymap function
     eof(term) && return keymap_fcn(nothing, "")
     c = read(term, Char)
+    # Ignore any '\0' (eg, CTRL-space in xterm), as this is used as a
+    # placeholder for the wildcard (see normalize_key("*"))
+    c != '\0' || return keymap_fcn(nothing, "")
     push!(cs, c)
     key = haskey(k, c) ? c : '\0'
     # if we don't match on the key, look for a default action then fallback on 'nothing' to ignore
@@ -734,7 +737,7 @@ end
 keymap_fcn(f::Void, c) = (s, p) -> return :ok
 function keymap_fcn(f::Function, c)
     return function (s, p)
-        r = f(s, p, c)
+        r = eval(Expr(:call,f,s, p, c))
         if isa(r, Symbol)
             return r
         else
@@ -864,7 +867,7 @@ function keymap_merge(target,source)
     for key in setdiff(keys(source), keys(direct_keys))
         # We first resolve redirects in the source
         value = source[key]
-        visited = Array{Any}(0)
+        visited = Vector{Any}(0)
         while isa(value, Union{Char,AbstractString})
             value = normalize_key(value)
             if value in visited
@@ -911,7 +914,7 @@ function validate_keymap(keymap)
     end
 end
 
-function keymap{D<:Dict}(keymaps::Array{D})
+function keymap(keymaps::Array{<:Dict})
     # keymaps is a vector of prioritized keymaps, with highest priority first
     ret = keymap_unify(map(normalize_keys, reverse(keymaps)))
     validate_keymap(ret)
@@ -966,7 +969,7 @@ function write_response_buffer(s::PromptState, data)
     refresh_line(s)
 end
 
-type SearchState <: ModeState
+mutable struct SearchState <: ModeState
     terminal
     histprompt
     #rsearch (true) or ssearch (false)
@@ -1010,17 +1013,17 @@ function reset_state(s::SearchState)
     reset_state(s.histprompt.hp)
 end
 
-type HistoryPrompt{T<:HistoryProvider} <: TextInterface
+mutable struct HistoryPrompt{T<:HistoryProvider} <: TextInterface
     hp::T
     complete
     keymap_dict::Dict{Char,Any}
-    HistoryPrompt(hp) = new(hp, EmptyCompletionProvider())
+    HistoryPrompt{T}(hp) where T<:HistoryProvider = new(hp, EmptyCompletionProvider())
 end
 
-HistoryPrompt{T<:HistoryProvider}(hp::T) = HistoryPrompt{T}(hp)
+HistoryPrompt(hp::T) where T<:HistoryProvider = HistoryPrompt{T}(hp)
 init_state(terminal, p::HistoryPrompt) = SearchState(terminal, p, true, IOBuffer(), IOBuffer())
 
-type PrefixSearchState <: ModeState
+mutable struct PrefixSearchState <: ModeState
     terminal
     histprompt
     prefix::String
@@ -1049,15 +1052,16 @@ input_string(s::PrefixSearchState) = String(s.response_buffer)
 
 # a meta-prompt that presents itself as parent_prompt, but which has an independent keymap
 # for prefix searching
-type PrefixHistoryPrompt{T<:HistoryProvider} <: TextInterface
+mutable struct PrefixHistoryPrompt{T<:HistoryProvider} <: TextInterface
     hp::T
     parent_prompt::Prompt
     complete
     keymap_dict::Dict{Char,Any}
-    PrefixHistoryPrompt(hp, parent_prompt) = new(hp, parent_prompt, EmptyCompletionProvider())
+    PrefixHistoryPrompt{T}(hp, parent_prompt) where T<:HistoryProvider =
+        new(hp, parent_prompt, EmptyCompletionProvider())
 end
 
-PrefixHistoryPrompt{T<:HistoryProvider}(hp::T, parent_prompt) = PrefixHistoryPrompt{T}(hp, parent_prompt)
+PrefixHistoryPrompt(hp::T, parent_prompt) where T<:HistoryProvider = PrefixHistoryPrompt{T}(hp, parent_prompt)
 init_state(terminal, p::PrefixHistoryPrompt) = PrefixSearchState(terminal, p, "", IOBuffer())
 
 write_prompt(terminal, s::PrefixSearchState) = write_prompt(terminal, s.histprompt.parent_prompt)
@@ -1306,7 +1310,7 @@ end
 """
 `Base.LineEdit.tabwidth` controls the presumed tab width of code pasted into the REPL.
 
-You can modify it by doing `eval(Base.LineEdit, :(tabwidth = 4))`, for example.
+You can modify it by doing `@eval Base.LineEdit tabwidth = 4`, for example.
 
 Must satisfy `0 < tabwidth <= 16`.
 """
@@ -1571,13 +1575,19 @@ end
 function run_interface(terminal, m::ModalInterface)
     s::MIState = init_state(terminal, m)
     while !s.aborted
-        p = s.current_mode
         buf, ok, suspend = prompt!(terminal, m, s)
         while suspend
             @static if is_unix(); ccall(:jl_repl_raise_sigtstp, Cint, ()); end
             buf, ok, suspend = prompt!(terminal, m, s)
         end
-        mode(state(s, s.current_mode)).on_done(s, buf, ok)
+        eval(Main,
+            Expr(:body,
+                Expr(:return,
+                     Expr(:call,
+                          QuoteNode(mode(state(s, s.current_mode)).on_done),
+                          QuoteNode(s),
+                          QuoteNode(buf),
+                          QuoteNode(ok)))))
     end
 end
 
@@ -1596,17 +1606,22 @@ function prompt!(term, prompt, s = init_state(term, prompt))
     enable_bracketed_paste(term)
     try
         activate(prompt, s, term, term)
+        old_state = mode(s)
         while true
-            map = keymap(s, prompt)
-            fcn = match_input(map, s)
+            kmap = keymap(s, prompt)
+            fcn = match_input(kmap, s)
+            kdata = keymap_data(s, prompt)
             # errors in keymaps shouldn't cause the REPL to fail, so wrap in a
             # try/catch block
             local state
             try
-                state = fcn(s, keymap_data(s, prompt))
+                state = fcn(s, kdata)
             catch e
-                warn("Caught an exception in the keymap:")
-                warn(e)
+                bt = catch_backtrace()
+                warn(e, bt = bt, prefix = "ERROR (in the keymap): ")
+                # try to cleanup and get `s` back to its original state before returning
+                transition(s, :reset)
+                transition(s, old_state)
                 state = :done
             end
             if state === :abort

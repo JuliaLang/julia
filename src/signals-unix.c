@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include <signal.h>
 #include <sys/types.h>
@@ -117,7 +117,7 @@ static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), void *_ctx)
     ucontext_t *ctx = (ucontext_t*)_ctx;
     uintptr_t target = (uintptr_t)fptr;
     // Apparently some glibc's sigreturn target is running in thumb state.
-    // Mimic a `bx` instruction by settting the T(5) bit of CPSR
+    // Mimic a `bx` instruction by setting the T(5) bit of CPSR
     // depending on the target address.
     uintptr_t cpsr = ctx->uc_mcontext.arm_cpsr;
     // Thumb mode function pointer should have the lowest bit set
@@ -482,7 +482,7 @@ void jl_install_thread_signal_handler(jl_ptls_t ptls)
     void *signal_stack = alloc_sigstack(sig_stack_size);
     stack_t ss;
     ss.ss_flags = 0;
-    ss.ss_size = sig_stack_size;
+    ss.ss_size = sig_stack_size - 16;
     ss.ss_sp = signal_stack;
     if (sigaltstack(&ss, NULL) < 0) {
         jl_errorf("fatal error: sigaltstack: %s", strerror(errno));
@@ -530,7 +530,23 @@ static void *signal_listener(void *arg)
     jl_sigsetset(&sset);
     while (1) {
         profile = 0;
-        sigwait(&sset, &sig);
+        sig = 0;
+        errno = 0;
+        if (sigwait(&sset, &sig)) {
+            sig = SIGABRT; // this branch can't occur, unless we had stack memory corruption of sset
+        }
+        if (!sig || errno == EINTR) {
+            // This should never happen, but it has been observed to occur
+            // when this thread gets used to handle run a signal handler (without SA_RESTART).
+            // It would be nice to prohibit the kernel from doing that, by blocking signals on this thread,
+            // (so that we aren't temporarily unable to handle the signals that this thread exists to handle)
+            // but that sometimes results in the signals never getting delivered at all.
+            // Apparently the only consistent way to handle signals with sigwait is all-or-nothing :(
+            // And while sigwait handles per-process signals more sanely,
+            // it can't really handle thread-targeted signals at all.
+            // So signals really do seem to always just be lose-lose.
+            continue;
+        }
 #ifndef HAVE_MACH
 #  ifdef HAVE_ITIMER
         profile = (sig == SIGPROF);

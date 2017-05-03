@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.Test
 
@@ -7,7 +7,6 @@ debug = false
 
 # Test givens rotations
 for elty in (Float32, Float64, Complex64, Complex128)
-
     debug && println("elty is $elty")
 
     if elty <: Real

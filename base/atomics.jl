@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Core.Intrinsics: llvmcall
 
@@ -28,9 +28,9 @@ end
 const floattypes = (Float16, Float32, Float64)
 # TODO: Support Bool, Ptr
 const atomictypes = (inttypes..., floattypes...)
-typealias IntTypes Union{inttypes...}
-typealias FloatTypes Union{floattypes...}
-typealias AtomicTypes Union{atomictypes...}
+const IntTypes = Union{inttypes...}
+const FloatTypes = Union{floattypes...}
+const AtomicTypes = Union{atomictypes...}
 
 """
     Threads.Atomic{T}
@@ -39,7 +39,7 @@ Holds a reference to an object of type `T`, ensuring that it is only
 accessed atomically, i.e. in a thread-safe manner.
 
 Only certain "simple" types can be used atomically, namely the
-bitstypes integer and float-point types. These are `Int8`...`Int128`,
+primitive integer and float-point types. These are `Int8`...`Int128`,
 `UInt8`...`UInt128`, and `Float16`...`Float64`.
 
 New atomic objects can be created from a non-atomic values; if none is
@@ -47,19 +47,24 @@ specified, the atomic object is initialized with zero.
 
 Atomic objects can be accessed using the `[]` notation:
 
-```Julia
-x::Atomic{Int}
-x[] = 1
-val = x[]
+```jldoctest
+julia> x = Threads.Atomic{Int}(3)
+Base.Threads.Atomic{Int64}(3)
+
+julia> x[] = 1
+1
+
+julia> x[]
+1
 ```
 
 Atomic operations use an `atomic_` prefix, such as `atomic_add!`,
 `atomic_xchg!`, etc.
 """
-type Atomic{T<:AtomicTypes}
+mutable struct Atomic{T<:AtomicTypes}
     value::T
-    Atomic() = new(zero(T))
-    Atomic(value) = new(value)
+    Atomic{T}() where {T<:AtomicTypes} = new(zero(T))
+    Atomic{T}(value) where {T<:AtomicTypes} = new(value)
 end
 
 Atomic() = Atomic{Int}()
@@ -80,6 +85,21 @@ This function can be used to implement transactional semantics. Before
 the transaction, one records the value in `x`. After the transaction,
 the new value is stored only if `x` has not been modified in the mean
 time.
+
+```jldoctest
+julia> x = Threads.Atomic{Int}(3)
+Base.Threads.Atomic{Int64}(3)
+
+julia> Threads.atomic_cas!(x, 4, 2);
+
+julia> x
+Base.Threads.Atomic{Int64}(3)
+
+julia> Threads.atomic_cas!(x, 3, 2);
+
+julia> x
+Base.Threads.Atomic{Int64}(2)
+```
 """
 function atomic_cas! end
 
@@ -88,10 +108,21 @@ function atomic_cas! end
 
 Atomically exchange the value in `x`
 
-Atomically exchanges the value in `x` with `newval`. Returns the old
+Atomically exchanges the value in `x` with `newval`. Returns the **old**
 value.
 
 For further details, see LLVM's `atomicrmw xchg` instruction.
+
+```jldoctest
+julia> x = Threads.Atomic{Int}(3)
+Base.Threads.Atomic{Int64}(3)
+
+julia> Threads.atomic_xchg!(x, 2)
+3
+
+julia> x[]
+2
+```
 """
 function atomic_xchg! end
 
@@ -100,9 +131,20 @@ function atomic_xchg! end
 
 Atomically add `val` to `x`
 
-Performs `x[] += val` atomically. Returns the old (!) value.
+Performs `x[] += val` atomically. Returns the **old** value.
 
 For further details, see LLVM's `atomicrmw add` instruction.
+
+```jldoctest
+julia> x = Threads.Atomic{Int}(3)
+Base.Threads.Atomic{Int64}(3)
+
+julia> Threads.atomic_add!(x, 2)
+3
+
+julia> x[]
+5
+```
 """
 function atomic_add! end
 
@@ -111,9 +153,20 @@ function atomic_add! end
 
 Atomically subtract `val` from `x`
 
-Performs `x[] -= val` atomically. Returns the old (!) value.
+Performs `x[] -= val` atomically. Returns the **old** value.
 
 For further details, see LLVM's `atomicrmw sub` instruction.
+
+```jldoctest
+julia> x = Threads.Atomic{Int}(3)
+Base.Threads.Atomic{Int64}(3)
+
+julia> Threads.atomic_sub!(x, 2)
+3
+
+julia> x[]
+1
+```
 """
 function atomic_sub! end
 
@@ -122,9 +175,20 @@ function atomic_sub! end
 
 Atomically bitwise-and `x` with `val`
 
-Performs `x[] &= val` atomically. Returns the old (!) value.
+Performs `x[] &= val` atomically. Returns the **old** value.
 
 For further details, see LLVM's `atomicrmw and` instruction.
+
+```jldoctest
+julia> x = Threads.Atomic{Int}(3)
+Base.Threads.Atomic{Int64}(3)
+
+julia> Threads.atomic_and!(x, 2)
+3
+
+julia> x[]
+2
+```
 """
 function atomic_and! end
 
@@ -133,9 +197,20 @@ function atomic_and! end
 
 Atomically bitwise-nand (not-and) `x` with `val`
 
-Performs `x[] = ~(x[] & val)` atomically. Returns the old (!) value.
+Performs `x[] = ~(x[] & val)` atomically. Returns the **old** value.
 
 For further details, see LLVM's `atomicrmw nand` instruction.
+
+```jldoctest
+julia> x = Threads.Atomic{Int}(3)
+Base.Threads.Atomic{Int64}(3)
+
+julia> Threads.atomic_nand!(x, 2)
+3
+
+julia> x[]
+-3
+```
 """
 function atomic_nand! end
 
@@ -144,9 +219,20 @@ function atomic_nand! end
 
 Atomically bitwise-or `x` with `val`
 
-Performs `x[] |= val` atomically. Returns the old (!) value.
+Performs `x[] |= val` atomically. Returns the **old** value.
 
 For further details, see LLVM's `atomicrmw or` instruction.
+
+```jldoctest
+julia> x = Threads.Atomic{Int}(5)
+Base.Threads.Atomic{Int64}(5)
+
+julia> Threads.atomic_or!(x, 7)
+5
+
+julia> x[]
+7
+```
 """
 function atomic_or! end
 
@@ -155,9 +241,20 @@ function atomic_or! end
 
 Atomically bitwise-xor (exclusive-or) `x` with `val`
 
-Performs `x[] \$= val` atomically. Returns the old (!) value.
+Performs `x[] \$= val` atomically. Returns the **old** value.
 
 For further details, see LLVM's `atomicrmw xor` instruction.
+
+```jldoctest
+julia> x = Threads.Atomic{Int}(5)
+Base.Threads.Atomic{Int64}(5)
+
+julia> Threads.atomic_xor!(x, 7)
+5
+
+julia> x[]
+2
+```
 """
 function atomic_xor! end
 
@@ -166,9 +263,20 @@ function atomic_xor! end
 
 Atomically store the maximum of `x` and `val` in `x`
 
-Performs `x[] = max(x[], val)` atomically. Returns the old (!) value.
+Performs `x[] = max(x[], val)` atomically. Returns the **old** value.
 
-For further details, see LLVM's `atomicrmw min` instruction.
+For further details, see LLVM's `atomicrmw max` instruction.
+
+```jldoctest
+julia> x = Threads.Atomic{Int}(5)
+Base.Threads.Atomic{Int64}(5)
+
+julia> Threads.atomic_max!(x, 7)
+5
+
+julia> x[]
+7
+```
 """
 function atomic_max! end
 
@@ -177,14 +285,25 @@ function atomic_max! end
 
 Atomically store the minimum of `x` and `val` in `x`
 
-Performs `x[] = min(x[], val)` atomically. Returns the old (!) value.
+Performs `x[] = min(x[], val)` atomically. Returns the **old** value.
 
-For further details, see LLVM's `atomicrmw max` instruction.
+For further details, see LLVM's `atomicrmw min` instruction.
+
+```jldoctest
+julia> x = Threads.Atomic{Int}(7)
+Base.Threads.Atomic{Int64}(7)
+
+julia> Threads.atomic_min!(x, 5)
+7
+
+julia> x[]
+5
+```
 """
 function atomic_min! end
 
-unsafe_convert{T}(::Type{Ptr{T}}, x::Atomic{T}) = convert(Ptr{T}, pointer_from_objref(x))
-setindex!{T}(x::Atomic{T}, v) = setindex!(x, convert(T, v))
+unsafe_convert(::Type{Ptr{T}}, x::Atomic{T}) where {T} = convert(Ptr{T}, pointer_from_objref(x))
+setindex!(x::Atomic{T}, v) where {T} = setindex!(x, convert(T, v))
 
 const llvmtypes = Dict(
     Bool => "i1",
@@ -197,13 +316,13 @@ const llvmtypes = Dict(
     Float32 => "float",
     Float64 => "double",
 )
-inttype{T<:Integer}(::Type{T}) = T
+inttype(::Type{T}) where {T<:Integer} = T
 inttype(::Type{Float16}) = Int16
 inttype(::Type{Float32}) = Int32
 inttype(::Type{Float64}) = Int64
 
 
-alignment{T}(::Type{T}) = ccall(:jl_alignment, Cint, (Csize_t,), sizeof(T))
+alignment(::Type{T}) where {T} = ccall(:jl_alignment, Cint, (Csize_t,), sizeof(T))
 
 # All atomic operations have acquire and/or release semantics, depending on
 # whether the load or store values. Most of the time, this is what one wants
@@ -328,7 +447,7 @@ end
 const opnames = Dict{Symbol, Symbol}(:+ => :add, :- => :sub)
 for op in [:+, :-, :max, :min]
     opname = get(opnames, op, op)
-    @eval function $(Symbol("atomic_", opname, "!")){T<:FloatTypes}(var::Atomic{T}, val::T)
+    @eval function $(Symbol("atomic_", opname, "!"))(var::Atomic{T}, val::T) where T<:FloatTypes
         IT = inttype(T)
         old = var[]
         while true

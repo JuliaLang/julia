@@ -1,21 +1,21 @@
 # Interacting With Julia
 
 Julia comes with a full-featured interactive command-line REPL (read-eval-print loop) built into
-the `julia` executable.  In addition to allowing quick and easy evaluation of Julia statements,
+the `julia` executable. In addition to allowing quick and easy evaluation of Julia statements,
 it has a searchable history, tab-completion, many helpful keybindings, and dedicated help and
-shell modes.  The REPL can be started by simply calling `julia` with no arguments or double-clicking
+shell modes. The REPL can be started by simply calling `julia` with no arguments or double-clicking
 on the executable:
 
 ```
 $ julia
                _
    _       _ _(_)_     |  A fresh approach to technical computing
-  (_)     | (_) (_)    |  Documentation: http://docs.julialang.org
-   _ _   _| |_  __ _   |  Type "help()" to list help topics
+  (_)     | (_) (_)    |  Documentation: https://docs.julialang.org
+   _ _   _| |_  __ _   |  Type "?help" for help.
   | | | | | | |/ _` |  |
-  | | |_| | | | (_| |  |  Version 0.3.0-prerelease+2834 (2014-04-30 03:13 UTC)
- _/ |\__'_|_|_|\__'_|  |  Commit 64f437b (0 days old master)
-|__/                   |  x86_64-apple-darwin13.1.0
+  | | |_| | | | (_| |  |  Version 0.6.0-dev.2493 (2017-01-31 18:53 UTC)
+ _/ |\__'_|_|_|\__'_|  |  Commit c99e12c* (0 days old master)
+|__/                   |  x86_64-linux-gnu
 
 julia>
 ```
@@ -28,21 +28,21 @@ and a `julia>` prompt.
 
 ### The Julian mode
 
-The REPL has four main modes of operation.  The first and most common is the Julian prompt.  It
-is the default mode of operation; each new line initially starts with `julia>`.  It is here that
-you can enter Julia expressions.  Hitting return or enter after a complete expression has been
+The REPL has four main modes of operation. The first and most common is the Julian prompt. It
+is the default mode of operation; each new line initially starts with `julia>`. It is here that
+you can enter Julia expressions. Hitting return or enter after a complete expression has been
 entered will evaluate the entry and show the result of the last expression.
 
-```julia
+```jldoctest
 julia> string(1 + 2)
 "3"
 ```
 
 There are a number useful features unique to interactive work. In addition to showing the result,
-the REPL also binds the result to the variable `ans`.  A trailing semicolon on the line can be
+the REPL also binds the result to the variable `ans`. A trailing semicolon on the line can be
 used as a flag to suppress showing the result.
 
-```julia
+```jldoctest
 julia> string(3 * 4);
 
 julia> ans
@@ -61,35 +61,45 @@ at detecting when a paste occurs.
 ### Help mode
 
 When the cursor is at the beginning of the line, the prompt can be changed to a help mode by typing
-`?`.  Julia will attempt to print help or documentation for anything entered in help mode:
+`?`. Julia will attempt to print help or documentation for anything entered in help mode:
 
 ```julia
-julia> ? # upon typing ?, the prompt changes (in place) to: help>
+julia> ? # upon typing ?, the prompt changes (in place) to: help?>
 
-help> string
-Base.string(xs...)
+help?> string
+search: string String stringmime Cstring Cwstring RevString readstring randstring bytestring SubString
 
-   Create a string from any values using the "print" function.
+  string(xs...)
+
+  Create a string from any values using the print function.
 ```
 
-In addition to function names, complete function calls may be entered to see which method is called
-for the given argument(s).  Macros, types and variables can also be queried:
+Macros, types and variables can also be queried:
 
 ```
-help> string(1)
-string(x::Union{Int16,Int128,Int8,Int32,Int64}) at string.jl:1553
+help?> @time
+  @time
 
-help> @printf
-Base.@printf([io::IOStream], "%Fmt", args...)
+  A macro to execute an expression, printing the time it took to execute, the number of allocations,
+  and the total number of bytes its execution caused to be allocated, before returning the value of the
+  expression.
 
-   Print arg(s) using C "printf()" style format specification
-   string. Optionally, an IOStream may be passed as the first argument
-   to redirect output.
+  See also @timev, @timed, @elapsed, and @allocated.
 
-help> AbstractString
-DataType   : AbstractString
-  supertype: Any
-  subtypes : Any[DirectIndexString,RevString{T<:AbstractString},SubString{T<:AbstractString},String]
+help?> AbstractString
+search: AbstractString AbstractSparseMatrix AbstractSparseVector AbstractSet
+
+  No documentation found.
+
+  Summary:
+
+  abstract AbstractString <: Any
+
+  Subtypes:
+
+  Base.Test.GenericString
+  DirectIndexString
+  String
 ```
 
 Help mode can be exited by pressing backspace at the beginning of the line.
@@ -97,8 +107,8 @@ Help mode can be exited by pressing backspace at the beginning of the line.
 ### [Shell mode](@id man-shell-mode)
 
 Just as help mode is useful for quick access to documentation, another common task is to use the
-system shell to execute system commands.  Just as `?` entered help mode when at the beginning
-of the line, a semicolon (`;`) will enter the shell mode.  And it can be exited by pressing backspace
+system shell to execute system commands. Just as `?` entered help mode when at the beginning
+of the line, a semicolon (`;`) will enter the shell mode. And it can be exited by pressing backspace
 at the beginning of the line.
 
 ```julia
@@ -112,9 +122,9 @@ hello
 
 In all of the above modes, the executed lines get saved to a history file, which can be searched.
  To initiate an incremental search through the previous history, type `^R` -- the control key
-together with the `r` key.  The prompt will change to ```(reverse-i-search)`':```, and as you
-type the search query will appear in the quotes.  The most recent result that matches the query
-will dynamically update to the right of the colon as more is typed.  To find an older result using
+together with the `r` key. The prompt will change to ```(reverse-i-search)`':```, and as you
+type the search query will appear in the quotes. The most recent result that matches the query
+will dynamically update to the right of the colon as more is typed. To find an older result using
 the same query, simply type `^R` again.
 
 Just as `^R` is a reverse search, `^S` is a forward search, with the prompt ```(i-search)`':```.
@@ -123,10 +133,10 @@ results, respectively.
 
 ## Key bindings
 
-The Julia REPL makes great use of key bindings.  Several control-key bindings were already introduced
-above (`^D` to exit, `^R` and `^S` for searching), but there are many more.  In addition to the
-control-key, there are also meta-key bindings.  These vary more by platform, but most terminals
- default to using alt- or option- held down with a key to send the meta-key (or can be configured
+The Julia REPL makes great use of key bindings. Several control-key bindings were already introduced
+above (`^D` to exit, `^R` and `^S` for searching), but there are many more. In addition to the
+control-key, there are also meta-key bindings. These vary more by platform, but most terminals
+default to using alt- or option- held down with a key to send the meta-key (or can be configured
 to do so).
 
 | Keybinding          | Description                                                                      |
@@ -179,14 +189,14 @@ history without prefix search, one could put the following code in `.juliarc.jl`
 import Base: LineEdit, REPL
 
 const mykeys = Dict{Any,Any}(
-  # Up Arrow
-  "\e[A" => (s,o...)->(LineEdit.edit_move_up(s) || LineEdit.history_prev(s, LineEdit.mode(s).hist)),
-  # Down Arrow
-  "\e[B" => (s,o...)->(LineEdit.edit_move_up(s) || LineEdit.history_next(s, LineEdit.mode(s).hist))
+    # Up Arrow
+    "\e[A" => (s,o...)->(LineEdit.edit_move_up(s) || LineEdit.history_prev(s, LineEdit.mode(s).hist)),
+    # Down Arrow
+    "\e[B" => (s,o...)->(LineEdit.edit_move_up(s) || LineEdit.history_next(s, LineEdit.mode(s).hist))
 )
 
 function customize_keys(repl)
-  repl.interface = REPL.setup_interface(repl; extra_repl_keymap = mykeys)
+    repl.interface = REPL.setup_interface(repl; extra_repl_keymap = mykeys)
 end
 
 atreplinit(customize_keys)
@@ -200,12 +210,11 @@ In both the Julian and help modes of the REPL, one can enter the first few chara
 or type and then press the tab key to get a list all matches:
 
 ```julia
-julia> stri
+julia> stri[TAB]
 stride     strides     string      stringmime  strip
 
-julia> Stri
-StridedArray    StridedVecOrMat  AbstractString
-StridedMatrix   StridedVector
+julia> Stri[TAB]
+StridedArray    StridedMatrix    StridedVecOrMat  StridedVector    String
 ```
 
 The tab key can also be used to substitute LaTeX math symbols with their Unicode equivalents,
@@ -236,8 +245,10 @@ julia> ħ(h) = h / 2π
 ħ (generic function with 1 method)
 
 julia> \h[TAB]
-\hat              \heartsuit         \hksearow          \hookleftarrow     \hslash
-\hbar             \hermitconjmatrix  \hkswarow          \hookrightarrow    \hspace
+\hat              \hermitconjmatrix  \hkswarow          \hrectangle
+\hatapprox        \hexagon           \hookleftarrow     \hrectangleblack
+\hbar             \hexagonblack      \hookrightarrow    \hslash
+\heartsuit        \hksearow          \house             \hspace
 
 julia> α="\alpha[TAB]"   # LaTeX completion also works in strings
 julia> α="α"
@@ -261,21 +272,22 @@ Tab completion can help with investigation of the available methods matching the
 ```julia
 julia> max([TAB] # All methods are displayed, not shown here due to size of the list
 
-julia> max([1,2],[TAB] # All methods where `Vector{Int}` matches as first argument
-max{T1<:Real,T2<:Real}(x::AbstractArray{T1,N<:Any}, y::T2) at operators.jl:544
-max{Tx<:Real,Ty<:Real}(x::Union{Base.ReshapedArray{Tx,1,A<:DenseArray,MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N<:Any}}},DenseArray{Tx,1},SubArray{Tx,1,A<:Union{Base.ReshapedArray{T<:Any,N<:Any,A<:DenseArray,MI<:Tuple{Vararg{Base.MultiplicativeInverses.SignedMultiplicativeInverse{Int64},N<:Any}}},DenseArray},I<:Tuple{Vararg{Union{Base.AbstractCartesianIndex,Colon,Int64,Range{Int64}},N<:Any}},L<:Any}}, y::AbstractSparseArray{Ty,Ti<:Any,1}) at sparse\sparsevector.jl:1127
-max{T1<:Real,T2<:Real}(x::AbstractArray{T1,N<:Any}, y::AbstractArray{T2,N<:Any}) at operators.jl:548
-max(x, y) at operators.jl:78
-max(a, b, c, xs...) at operators.jl:119
+julia> max([1, 2], [TAB] # All methods where `Vector{Int}` matches as first argument
+max(x, y) in Base at operators.jl:215
+max(a, b, c, xs...) in Base at operators.jl:281
 
-julia> max([1,2], max(1,2),[TAB] # All methods matching the arguments.
-max{T1<:Real,T2<:Real}(x::AbstractArray{T1,N<:Any}, y::T2) at operators.jl:544
-max(x, y) at operators.jl:78
-max(a, b, c, xs...) at operators.jl:119
+julia> max([1, 2], max(1, 2), [TAB] # All methods matching the arguments.
+max(x, y) in Base at operators.jl:215
+max(a, b, c, xs...) in Base at operators.jl:281
+```
 
-julia> split("1 1 1", # Keywords are also displayed in the suggested methods, see second line after `;` where `limit` and `keep` are keyword arguments
-split(str::AbstractString) at strings/util.jl:151
-split{T<:AbstractString}(str::T, splitter; limit, keep) at strings/util.jl:127
+Keywords are also displayed in the suggested methods, see second line after `;` where `limit`
+and `keep` are keyword arguments:
+
+```julia
+julia> split("1 1 1", [TAB]
+split(str::AbstractString) in Base at strings/util.jl:278
+split{T<:AbstractString}(str::T, splitter; limit, keep) in Base at strings/util.jl:254
 ```
 
 The completion of the methods uses type inference and can therefore see if the arguments match
@@ -285,7 +297,7 @@ completion to be able to remove non-matching methods.
 Tab completion can also help completing fields:
 
 ```julia
-julia> Pkg.a
+julia> Pkg.a[TAB]
 add       available
 ```
 
@@ -301,8 +313,9 @@ fields if the function is type stable.
 
 ## Customizing Colors
 
-The colors used by Julia and the REPL can be customized, as well. To change the color of the Julia
-prompt you can add something like the following to your `juliarc.jl` file:
+The colors used by Julia and the REPL can be customized, as well. To change the
+color of the Julia prompt you can add something like the following to your
+`.juliarc.jl` file, which is to be placed inside your home directory:
 
 ```julia
 function customize_colors(repl)
@@ -321,9 +334,22 @@ input and answer text by setting the appropriate field of `repl` in the `customi
 above (respectively, `help_color`, `shell_color`, `input_color`, and `answer_color`). For the
 latter two, be sure that the `envcolors` field is also set to false.
 
+It is also possible to apply boldface formatting by using
+`Base.text_colors[:bold]` as a color. For instance, to print answers in
+boldface font, one can use the following as a `.juliarc.jl`:
+
+```julia
+function customize_colors(repl)
+    repl.envcolors = false
+    repl.answer_color = Base.text_colors[:bold]
+end
+
+atreplinit(customize_colors)
+```
+
 You can also customize the color used to render warning and informational messages by
 setting the appropriate environment variables. For instance, to render error, warning, and informational
-messages respectively in magenta, yellow, and cyan you can add the following to your `juliarc.jl` file:
+messages respectively in magenta, yellow, and cyan you can add the following to your `.juliarc.jl` file:
 
 ```julia
 ENV["JULIA_ERROR_COLOR"] = :magenta

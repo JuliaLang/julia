@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.Test
 debug = false
@@ -126,8 +126,7 @@ for typ in [UpperTriangular,LowerTriangular,Base.LinAlg.UnitUpperTriangular,Base
 end
 
 # Test that concatenations of combinations of special and other matrix types yield sparse arrays
-let
-    N = 4
+let N = 4
     # Test concatenating pairwise combinations of special matrices
     diagmat = Diagonal(ones(N))
     bidiagmat = Bidiagonal(ones(N), ones(N-1), true)

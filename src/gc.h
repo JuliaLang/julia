@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 /*
   allocation and garbage collection
@@ -33,10 +33,6 @@ extern "C" {
 #define GC_PAGE_LG2 14 // log2(size of a page)
 #define GC_PAGE_SZ (1 << GC_PAGE_LG2) // 16k
 #define GC_PAGE_OFFSET (JL_SMALL_BYTE_ALIGNMENT - (sizeof(jl_taggedvalue_t) % JL_SMALL_BYTE_ALIGNMENT))
-
-// 8G * 32768 = 2^48
-// It's really unlikely that we'll actually allocate that much though...
-#define REGION_COUNT 32768
 
 #define jl_malloc_tag ((void*)0xdeadaa01)
 #define jl_singleton_tag ((void*)0xdeadaa02)
@@ -113,27 +109,25 @@ typedef struct _mallocarray_t {
 
 // pool page metadata
 typedef struct {
-    struct {
-        // index of pool that owns this page
-        uint16_t pool_n : 8;
-        // Whether any cell in the page is marked
-        // This bit is set before sweeping iff there's live cells in the page.
-        // Note that before marking or after sweeping there can be live
-        // (and young) cells in the page for `!has_marked`.
-        uint16_t has_marked: 1;
-        // Whether any cell was live and young **before sweeping**.
-        // For a normal sweep (quick sweep that is NOT preceded by a
-        // full sweep) this bit is set iff there are young or newly dead
-        // objects in the page and the page needs to be swept.
-        //
-        // For a full sweep, this bit should be ignored.
-        //
-        // For a quick sweep preceded by a full sweep. If this bit is set,
-        // the page needs to be swept. If this bit is not set, there could
-        // still be old dead objects in the page and `nold` and `prev_nold`
-        // should be used to determine if the page needs to be swept.
-        uint16_t has_young: 1;
-    };
+    // index of pool that owns this page
+    uint8_t pool_n;
+    // Whether any cell in the page is marked
+    // This bit is set before sweeping iff there are live cells in the page.
+    // Note that before marking or after sweeping there can be live
+    // (and young) cells in the page for `!has_marked`.
+    uint8_t has_marked;
+    // Whether any cell was live and young **before sweeping**.
+    // For a normal sweep (quick sweep that is NOT preceded by a
+    // full sweep) this bit is set iff there are young or newly dead
+    // objects in the page and the page needs to be swept.
+    //
+    // For a full sweep, this bit should be ignored.
+    //
+    // For a quick sweep preceded by a full sweep. If this bit is set,
+    // the page needs to be swept. If this bit is not set, there could
+    // still be old dead objects in the page and `nold` and `prev_nold`
+    // should be used to determine if the page needs to be swept.
+    uint8_t has_young;
     // number of old objects in this page
     uint16_t nold;
     // number of old objects in this page during the previous full sweep
@@ -149,33 +143,90 @@ typedef struct {
     uint8_t *ages;
 } jl_gc_pagemeta_t;
 
-typedef struct {
-    char data[GC_PAGE_SZ];
-} jl_gc_page_t
-#if !defined(_COMPILER_MICROSOFT_) && !(defined(_COMPILER_MINGW_) && defined(_COMPILER_CLANG_))
-__attribute__((aligned(GC_PAGE_SZ)))
-#endif
-;
+// Page layout:
+//  Newpage freelist: sizeof(void*)
+//  Padding: GC_PAGE_OFFSET - sizeof(void*)
+//  Blocks: osize * n
+//    Tag: sizeof(jl_taggedvalue_t)
+//    Data: <= osize - sizeof(jl_taggedvalue_t)
 
+// Memory map:
+//  The complete address space is divided up into a multi-level page table.
+//  The three levels have similar but slightly different structures:
+//    - pagetable0_t: the bottom/leaf level (covers the contiguous addresses)
+//    - pagetable1_t: the middle level
+//    - pagetable2_t: the top/leaf level (covers the entire virtual address space)
+//  Corresponding to these similar structures is a large amount of repetitive
+//  code that is nearly the same but not identical. It could be made less
+//  repetitive with C macros, but only at the cost of debuggability. The specialized
+//  structure of this representation allows us to partially unroll and optimize
+//  various conditions at each level.
+
+//  The following constants define the branching factors at each level.
+//  The constants and GC_PAGE_LG2 must therefore sum to sizeof(void*).
+//  They should all be multiples of 32 (sizeof(uint32_t)) except that REGION2_PG_COUNT may also be 1.
+#ifdef _P64
+#define REGION0_PG_COUNT (1 << 16)
+#define REGION1_PG_COUNT (1 << 16)
+#define REGION2_PG_COUNT (1 << 18)
+#define REGION0_INDEX(p) (((uintptr_t)(p) >> 14) & 0xFFFF) // shift by GC_PAGE_LG2
+#define REGION1_INDEX(p) (((uintptr_t)(p) >> 30) & 0xFFFF)
+#define REGION_INDEX(p)  (((uintptr_t)(p) >> 46) & 0x3FFFF)
+#else
+#define REGION0_PG_COUNT (1 << 8)
+#define REGION1_PG_COUNT (1 << 10)
+#define REGION2_PG_COUNT (1 << 0)
+#define REGION0_INDEX(p) (((uintptr_t)(p) >> 14) & 0xFF) // shift by GC_PAGE_LG2
+#define REGION1_INDEX(p) (((uintptr_t)(p) >> 22) & 0x3FF)
+#define REGION_INDEX(p)  (0)
+#endif
+
+// define the representation of the levels of the page-table (0 to 2)
 typedef struct {
-    // Page layout:
-    //  Newpage freelist: sizeof(void*)
-    //  Padding: GC_PAGE_OFFSET - sizeof(void*)
-    //  Blocks: osize * n
-    //    Tag: sizeof(jl_taggedvalue_t)
-    //    Data: <= osize - sizeof(jl_taggedvalue_t)
-    jl_gc_page_t *pages; // [pg_cnt]; must be first, to preserve page alignment
-    uint32_t *allocmap; // [pg_cnt / 32]
-    jl_gc_pagemeta_t *meta; // [pg_cnt]
-    int pg_cnt;
+    jl_gc_pagemeta_t *meta[REGION0_PG_COUNT];
+    uint32_t allocmap[REGION0_PG_COUNT / 32];
+    uint32_t freemap[REGION0_PG_COUNT / 32];
     // store a lower bound of the first free page in each region
     int lb;
     // an upper bound of the last non-free page
     int ub;
-} region_t;
+} pagetable0_t;
+
+typedef struct {
+    pagetable0_t *meta0[REGION1_PG_COUNT];
+    uint32_t allocmap0[REGION1_PG_COUNT / 32];
+    uint32_t freemap0[REGION1_PG_COUNT / 32];
+    // store a lower bound of the first free page in each region
+    int lb;
+    // an upper bound of the last non-free page
+    int ub;
+} pagetable1_t;
+
+typedef struct {
+    pagetable1_t *meta1[REGION2_PG_COUNT];
+    uint32_t allocmap1[(REGION2_PG_COUNT + 31) / 32];
+    uint32_t freemap1[(REGION2_PG_COUNT + 31) / 32];
+    // store a lower bound of the first free page in each region
+    int lb;
+    // an upper bound of the last non-free page
+    int ub;
+} pagetable_t;
+
+STATIC_INLINE unsigned ffs_u32(uint32_t bitvec)
+{
+#if defined(_COMPILER_MINGW_)
+    return __builtin_ffs(bitvec) - 1;
+#elif defined(_COMPILER_MICROSOFT_)
+    unsigned long j;
+    _BitScanForward(&j, bitvec);
+    return j;
+#else
+    return ffs(bitvec) - 1;
+#endif
+}
 
 extern jl_gc_num_t gc_num;
-extern region_t regions[REGION_COUNT];
+extern pagetable_t memory_map;
 extern bigval_t *big_objects_marked;
 extern arraylist_t finalizer_list_marked;
 extern arraylist_t to_finalize;
@@ -202,19 +253,19 @@ STATIC_INLINE jl_taggedvalue_t *page_pfl_end(jl_gc_pagemeta_t *p)
     return (jl_taggedvalue_t*)(p->data + p->fl_end_offset);
 }
 
-STATIC_INLINE int page_index(region_t *region, void *data)
-{
-    return (gc_page_data(data) - region->pages->data) / GC_PAGE_SZ;
-}
-
-STATIC_INLINE int gc_marked(int bits)
+STATIC_INLINE int gc_marked(uintptr_t bits)
 {
     return (bits & GC_MARKED) != 0;
 }
 
-STATIC_INLINE int gc_old(int bits)
+STATIC_INLINE int gc_old(uintptr_t bits)
 {
     return (bits & GC_OLD) != 0;
+}
+
+STATIC_INLINE uintptr_t gc_set_bits(uintptr_t tag, int bits)
+{
+    return (tag & ~(uintptr_t)3) | bits;
 }
 
 STATIC_INLINE uintptr_t gc_ptr_tag(void *v, uintptr_t mask)
@@ -229,30 +280,50 @@ STATIC_INLINE void *gc_ptr_clear_tag(void *v, uintptr_t mask)
 
 NOINLINE uintptr_t gc_get_stack_ptr(void);
 
-STATIC_INLINE region_t *find_region(void *ptr)
+STATIC_INLINE jl_gc_pagemeta_t *page_metadata(void *_data)
 {
-    // on 64bit systems we could probably use a single region and remove this loop
-    for (int i = 0; i < REGION_COUNT && regions[i].pages; i++) {
-        region_t *region = &regions[i];
-        char *begin = region->pages->data;
-        char *end = begin + region->pg_cnt * sizeof(jl_gc_page_t);
-        if ((char*)ptr >= begin && (char*)ptr <= end) {
-            return region;
-        }
-    }
-    return NULL;
+    uintptr_t data = ((uintptr_t)_data);
+    unsigned i;
+    i = REGION_INDEX(data);
+    pagetable1_t *r1 = memory_map.meta1[i];
+    if (!r1)
+        return NULL;
+    i = REGION1_INDEX(data);
+    pagetable0_t *r0 = r1->meta0[i];
+    if (!r0)
+        return NULL;
+    i = REGION0_INDEX(data);
+    return r0->meta[i];
 }
 
-STATIC_INLINE jl_gc_pagemeta_t *page_metadata_(void *data, region_t *r)
-{
-    assert(r != NULL);
-    int pg_idx = page_index(r, (char*)data - GC_PAGE_OFFSET);
-    return &r->meta[pg_idx];
-}
+struct jl_gc_metadata_ext {
+    pagetable1_t *pagetable1;
+    pagetable0_t *pagetable0;
+    jl_gc_pagemeta_t *meta;
+    unsigned pagetable_i32, pagetable_i;
+    unsigned pagetable1_i32, pagetable1_i;
+    unsigned pagetable0_i32, pagetable0_i;
+};
 
-STATIC_INLINE jl_gc_pagemeta_t *page_metadata(void *data)
+STATIC_INLINE struct jl_gc_metadata_ext page_metadata_ext(void *_data)
 {
-    return page_metadata_(data, find_region(data));
+    uintptr_t data = (uintptr_t)_data;
+    struct jl_gc_metadata_ext info;
+    unsigned i;
+    i = REGION_INDEX(data);
+    info.pagetable_i = i % 32;
+    info.pagetable_i32 = i / 32;
+    info.pagetable1 = memory_map.meta1[i];
+    i = REGION1_INDEX(data);
+    info.pagetable1_i = i % 32;
+    info.pagetable1_i32 = i / 32;
+    info.pagetable0 = info.pagetable1->meta0[i];
+    i = REGION0_INDEX(data);
+    info.pagetable0_i = i % 32;
+    info.pagetable0_i32 = i / 32;
+    info.meta = info.pagetable0->meta[i];
+    assert(info.meta);
+    return info;
 }
 
 STATIC_INLINE void gc_big_object_unlink(const bigval_t *hdr)
@@ -272,7 +343,7 @@ STATIC_INLINE void gc_big_object_link(bigval_t *hdr, bigval_t **list)
     *list = hdr;
 }
 
-void pre_mark(jl_ptls_t ptls);
+void mark_all_roots(jl_ptls_t ptls);
 void gc_mark_object_list(jl_ptls_t ptls, arraylist_t *list, size_t start);
 void visit_mark_stack(jl_ptls_t ptls);
 void gc_debug_init(void);
@@ -281,7 +352,7 @@ void jl_mark_box_caches(jl_ptls_t ptls);
 // GC pages
 
 void jl_gc_init_page(void);
-NOINLINE void *jl_gc_alloc_page(void);
+NOINLINE jl_gc_pagemeta_t *jl_gc_alloc_page(void);
 void jl_gc_free_page(void *p);
 
 // GC debug

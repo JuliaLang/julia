@@ -83,7 +83,7 @@ $(BUILDDIR)/$(EXENAME): $(OBJS) $(LIBFILES_release) $(BUILDDIR)/$(LIBTARGET).a $
 	@$(call PRINT_LINK, $(CCLD) $(SHIPFLAGS) $(LDFLAGS) $(OBJS) $(BUILDDIR)/flmain.o -o $@ $(BUILDDIR)/$(LIBTARGET).a $(LIBFILES_release) $(LIBS) $(OSLIBS))
 
 ifneq ($(BUILDDIR),.)
-$(BUILDDIR)/flisp.boot: flisp.boot
+$(BUILDDIR)/flisp.boot: flisp.boot | $(BUILDDIR)
 	cp $< $@
 endif
 

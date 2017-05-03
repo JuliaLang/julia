@@ -10,7 +10,7 @@ Base.indices(::AbstractArray, ::Any)
 Base.length(::AbstractArray)
 Base.eachindex
 Base.linearindices
-Base.linearindexing
+Base.IndexStyle
 Base.countnz
 Base.conj!
 Base.stride
@@ -32,37 +32,63 @@ Base.trues
 Base.falses
 Base.fill
 Base.fill!
-Base.reshape
 Base.similar(::AbstractArray)
 Base.similar(::Any, ::Tuple)
-Base.reinterpret
 Base.eye
 Base.linspace
 Base.logspace
+Base.Random.randsubseq
+Base.Random.randsubseq!
 ```
 
-## Mathematical operators and functions
+## Broadcast and vectorization
 
-All mathematical operations and functions are supported for arrays
+See also the [dot syntax for vectorizing functions](@ref man-vectorized);
+for example, `f.(args...)` implicitly calls `broadcast(f, args...)`.
+Rather than relying on "vectorized" methods of functions like `sin`
+to operate on arrays, you should use `sin.(a)` to vectorize via `broadcast`.
 
 ```@docs
 Base.broadcast
 Base.Broadcast.broadcast!
+Base.@__dot__
+Base.Broadcast.broadcast_getindex
+Base.Broadcast.broadcast_setindex!
 ```
 
-## Indexing, Assignment, and Concatenation
+## Indexing and assignment
 
 ```@docs
 Base.getindex(::AbstractArray, ::Any...)
+Base.setindex!(::AbstractArray, ::Any, ::Any...)
+Base.copy!(::AbstractArray, ::CartesianRange, ::AbstractArray, ::CartesianRange)
+Base.isassigned
+Base.Colon
+Base.CartesianIndex
+Base.CartesianRange
+Base.to_indices
+Base.checkbounds
+Base.checkindex
+```
+
+## Views (SubArrays and other view types)
+
+```@docs
 Base.view
 Base.@view
+Base.@views
 Base.parent
 Base.parentindexes
 Base.slicedim
-Base.setindex!(::AbstractArray, ::Any, ::Any...)
-Base.Broadcast.broadcast_getindex
-Base.Broadcast.broadcast_setindex!
-Base.isassigned
+Base.reinterpret
+Base.reshape
+Base.squeeze
+Base.vec
+```
+
+## Concatenation and permutation
+
+```@docs
 Base.cat
 Base.vcat
 Base.hcat
@@ -71,6 +97,7 @@ Base.flipdim
 Base.circshift
 Base.circshift!
 Base.circcopy!
+Base.contains(::Function, ::Any, ::Any)
 Base.find(::Any)
 Base.find(::Function, ::Any)
 Base.findn
@@ -89,13 +116,8 @@ Base.findprev(::Function, ::Any, ::Integer)
 Base.findprev(::Any, ::Any, ::Integer)
 Base.permutedims
 Base.permutedims!
-Base.squeeze
-Base.vec
+Base.PermutedDimsArray
 Base.promote_shape
-Base.checkbounds
-Base.checkindex
-Base.Random.randsubseq
-Base.Random.randsubseq!
 ```
 
 ## Array functions
@@ -125,7 +147,7 @@ Base.sum_kbn
 Base.Random.randperm
 Base.invperm
 Base.isperm
-Base.permute!{T}(::Any, ::AbstractArray{T, 1})
+Base.permute!(::Any, ::AbstractVector)
 Base.ipermute!
 Base.Random.randcycle
 Base.Random.shuffle

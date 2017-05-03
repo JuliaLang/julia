@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # these could fail on an embedded installation
 # but for now, we don't handle that case
@@ -159,6 +159,12 @@ end
 
 # opening a library that does not exist throws an ErrorException
 @test_throws ErrorException Libdl.dlopen("./foo")
+
+# opening a versioned library that does not exist does not result in adding extension twice
+err = @test_throws ErrorException Libdl.dlopen("./foo.$(Libdl.dlext).0")
+@test !contains(err.value.msg, "foo.$(Libdl.dlext).0.$(Libdl.dlext)")
+err = @test_throws ErrorException Libdl.dlopen("./foo.$(Libdl.dlext).0.22.1")
+@test !contains(err.value.msg, "foo.$(Libdl.dlext).0.22.1.$(Libdl.dlext)")
 
 # test dlsym
 let dl = C_NULL

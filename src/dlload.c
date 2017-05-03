@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -40,7 +40,14 @@ static int endswith_extension(const char *path)
     for (size_t i = 1;i < N_EXTENSIONS;i++) {
         const char *ext = extensions[i];
         size_t extlen = strlen(ext);
-        if (len >= extlen && memcmp(ext, path + len - extlen, extlen) == 0) {
+        if (len < extlen) return 0;
+        // Skip version extensions if present
+        size_t j = len-1;
+        while (j > 0) {
+            if (path[j] == '.' || (path[j] >= '0' && path[j] <= '9')) j--;
+            else break;
+        }
+        if ((j == len-1 || path[j+1] == '.') && memcmp(ext, path + j - extlen + 1, extlen) == 0) {
             return 1;
         }
     }
@@ -132,7 +139,10 @@ static void *jl_load_dynamic_library_(const char *modname, unsigned flags, int t
             jl_error("could not load base module");
         }
 #else
-        handle = dlopen(NULL, RTLD_NOW);
+        Dl_info info;
+        if (!dladdr(&jl_load_dynamic_library, &info) || !info.dli_fname)
+            jl_error("could not load base module");
+        handle = dlopen(info.dli_fname, RTLD_NOW);
 #endif
         goto done;
     }
@@ -233,9 +243,9 @@ JL_DLLEXPORT void *jl_dlsym(void *handle, const char *symbol)
 const char *jl_dlfind_win32(const char *f_name)
 {
     if (jl_dlsym_e(jl_exe_handle, f_name))
-        return (const char*)1;
+        return JL_EXE_LIBNAME;
     if (jl_dlsym_e(jl_dl_handle, f_name))
-        return (const char*)2;
+        return JL_DL_LIBNAME;
     if (jl_dlsym_e(jl_kernel32_handle, f_name))
         return "kernel32";
     if (jl_dlsym_e(jl_ntdll_handle, f_name))

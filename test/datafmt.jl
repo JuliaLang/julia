@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # countlines
 @test countlines(IOBuffer("\n")) == 1
@@ -245,10 +245,10 @@ let data = "1 2 3"
 end
 
 # test show with MIME types
-@test sprint(io -> show(io, "text/csv", [1 2; 3 4])) == "1,2\n3,4\n"
+@test sprint(show, "text/csv", [1 2; 3 4]) == "1,2\n3,4\n"
 
 for writefunc in ((io,x) -> show(io, "text/csv", x),
-                  (io,x) -> invoke(writedlm, (IO, Any, Any), io, x, ","))
+                  (io,x) -> invoke(writedlm, Tuple{IO,Any,Any}, io, x, ","))
     # iterable collections of iterable rows:
     let x = [(1,2), (3,4)], io = IOBuffer()
         writefunc(io, x)
@@ -271,4 +271,14 @@ let fn = tempname()
     chmod(fn, 0o444)
     readdlm(fn)[] == "Julia"
     rm(fn)
+end
+
+# issue #21180
+let data = "\"721\",\"1438\",\"1439\",\"…\",\"1\""
+    @test readcsv(IOBuffer(data)) == Any[721  1438  1439  "…"  1]
+end
+
+# issue #21207
+let data = "\"1\",\"灣\"\"灣灣灣灣\",\"3\""
+    @test readcsv(IOBuffer(data)) == Any[1 "灣\"灣灣灣灣" 3]
 end

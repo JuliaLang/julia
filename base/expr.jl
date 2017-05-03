@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## symbols ##
 
@@ -9,9 +9,8 @@ Generates a symbol which will not conflict with other variable names.
 """
 gensym() = ccall(:jl_gensym, Ref{Symbol}, ())
 
-gensym(s::String) = gensym(s.data)
-gensym(a::Array{UInt8,1}) =
-    ccall(:jl_tagged_gensym, Ref{Symbol}, (Ptr{UInt8}, Int32), a, length(a))
+gensym(s::String) = ccall(:jl_tagged_gensym, Ref{Symbol}, (Ptr{UInt8}, Int32), s, sizeof(s))
+
 gensym(ss::String...) = map(gensym, ss)
 gensym(s::Symbol) =
     ccall(:jl_tagged_gensym, Ref{Symbol}, (Ptr{UInt8}, Int32), s, ccall(:strlen, Csize_t, (Ptr{UInt8},), s))
@@ -86,7 +85,7 @@ julia> macro m()
 @m (macro with 1 method)
 
 julia> M.f()
-(1,2)
+(1, 2)
 ```
 With `@macroexpand` the expression expands where `@macroexpand` appears in the code (module
 `M` in the example). With `macroexpand` the expression expands in the current module where
@@ -110,15 +109,6 @@ evaluates expressions in that module.
 Core.eval
 
 """
-    @eval
-
-Evaluate an expression and return the value.
-"""
-macro eval(x)
-    :($(esc(:eval))($(Expr(:quote,x))))
-end
-
-"""
     @inline
 
 Give a hint to the compiler that this function is worth inlining.
@@ -127,6 +117,7 @@ Small functions typically do not need the `@inline` annotation,
 as the compiler does it automatically. By using `@inline` on bigger functions,
 an extra nudge can be given to the compiler to inline it.
 This is shown in the following example:
+
 ```julia
 @inline function bigfunction(x)
     #=
@@ -147,6 +138,7 @@ Prevents the compiler from inlining a function.
 Small functions are typically inlined automatically.
 By using `@noinline` on small functions, auto-inlining can be
 prevented. This is shown in the following example:
+
 ```julia
 @noinline function smallfunction(x)
     #=
@@ -188,37 +180,6 @@ macro polly(ex)
 end
 
 ## some macro utilities ##
-
-find_vars(e) = find_vars(e, [])
-function find_vars(e, lst)
-    if isa(e,Symbol)
-        if current_module()===Main && isdefined(e)
-            # Main runs on process 1, so send globals from there, excluding
-            # things defined in Base.
-            if !isdefined(Base,e) || eval(Base,e)!==eval(current_module(),e)
-                push!(lst, e)
-            end
-        end
-    elseif isa(e,Expr) && e.head !== :quote && e.head !== :top && e.head !== :core
-        for x in e.args
-            find_vars(x,lst)
-        end
-    end
-    lst
-end
-
-# wrap an expression in "let a=a,b=b,..." for each var it references
-localize_vars(expr) = localize_vars(expr, true)
-function localize_vars(expr, esca)
-    v = find_vars(expr)
-    # requires a special feature of the front end that knows how to insert
-    # the correct variables. the list of free variables cannot be computed
-    # from a macro.
-    if esca
-        v = map(esc,v)
-    end
-    Expr(:localize, expr, v...)
-end
 
 function pushmeta!(ex::Expr, sym::Symbol, args::Any...)
     if isempty(args)
@@ -275,8 +236,18 @@ function findmetaarg(metaargs, sym)
     return 0
 end
 
+function is_short_function_def(ex)
+    ex.head == :(=) || return false
+    while length(ex.args) >= 1 && isa(ex.args[1], Expr)
+        (ex.args[1].head == :call) && return true
+        (ex.args[1].head == :where) || return false
+        ex = ex.args[1]
+    end
+    return false
+end
+
 function findmeta(ex::Expr)
-    if ex.head == :function || (ex.head == :(=) && typeof(ex.args[1]) == Expr && ex.args[1].head == :call)
+    if ex.head == :function || is_short_function_def(ex)
         body::Expr = ex.args[2]
         body.head == :block || error(body, " is not a block expression")
         return findmeta_block(ex.args)

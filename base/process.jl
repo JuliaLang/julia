@@ -1,13 +1,13 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
-abstract AbstractCmd
+abstract type AbstractCmd end
 
 # libuv process option flags
 const UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS = UInt8(1 << 2)
 const UV_PROCESS_DETACHED = UInt8(1 << 3)
 const UV_PROCESS_WINDOWS_HIDE = UInt8(1 << 4)
 
-immutable Cmd <: AbstractCmd
+struct Cmd <: AbstractCmd
     exec::Vector{String}
     ignorestatus::Bool
     flags::UInt32 # libuv process flags
@@ -76,19 +76,19 @@ hash(x::Cmd, h::UInt) = hash(x.exec, hash(x.env, hash(x.ignorestatus, hash(x.dir
 ==(x::Cmd, y::Cmd) = x.exec == y.exec && x.env == y.env && x.ignorestatus == y.ignorestatus &&
                      x.dir == y.dir && isequal(x.flags, y.flags)
 
-immutable OrCmds <: AbstractCmd
+struct OrCmds <: AbstractCmd
     a::AbstractCmd
     b::AbstractCmd
     OrCmds(a::AbstractCmd, b::AbstractCmd) = new(a, b)
 end
 
-immutable ErrOrCmds <: AbstractCmd
+struct ErrOrCmds <: AbstractCmd
     a::AbstractCmd
     b::AbstractCmd
     ErrOrCmds(a::AbstractCmd, b::AbstractCmd) = new(a, b)
 end
 
-immutable AndCmds <: AbstractCmd
+struct AndCmds <: AbstractCmd
     a::AbstractCmd
     b::AbstractCmd
     AndCmds(a::AbstractCmd, b::AbstractCmd) = new(a, b)
@@ -97,14 +97,14 @@ end
 hash(x::AndCmds, h::UInt) = hash(x.a, hash(x.b, h))
 ==(x::AndCmds, y::AndCmds) = x.a == y.a && x.b == y.b
 
-shell_escape(cmd::Cmd; special::AbstractString=shell_special) =
+shell_escape(cmd::Cmd; special::AbstractString="") =
     shell_escape(cmd.exec..., special=special)
 
 function show(io::IO, cmd::Cmd)
     print_env = cmd.env !== nothing
     print_dir = !isempty(cmd.dir)
     (print_env || print_dir) && print(io, "setenv(")
-    esc = shell_escape(cmd)
+    esc = shell_escape(cmd, special=shell_special)
     print(io, '`')
     for c in esc
         if c == '`'
@@ -137,7 +137,7 @@ const STDIN_NO  = 0
 const STDOUT_NO = 1
 const STDERR_NO = 2
 
-immutable FileRedirect
+struct FileRedirect
     filename::AbstractString
     append::Bool
     function FileRedirect(filename, append)
@@ -158,10 +158,10 @@ uvtype(::Ptr) = UV_STREAM
 uvhandle(x::RawFD) = convert(Ptr{Void}, x.fd % UInt)
 uvtype(x::RawFD) = UV_RAW_FD
 
-typealias Redirectable Union{IO, FileRedirect, RawFD}
-typealias StdIOSet NTuple{3, Union{Redirectable, Ptr{Void}}} # XXX: remove Ptr{Void} once libuv is refactored to use upstream release
+const Redirectable = Union{IO, FileRedirect, RawFD}
+const StdIOSet = NTuple{3, Union{Redirectable, Ptr{Void}}} # XXX: remove Ptr{Void} once libuv is refactored to use upstream release
 
-immutable CmdRedirect <: AbstractCmd
+struct CmdRedirect <: AbstractCmd
     cmd::AbstractCmd
     handle::Redirectable
     stream_no::Int
@@ -208,7 +208,7 @@ function cstr(s)
 end
 
 # convert various env representations into an array of "key=val" strings
-byteenv{S<:AbstractString}(env::AbstractArray{S}) =
+byteenv(env::AbstractArray{<:AbstractString}) =
     String[cstr(x) for x in env]
 byteenv(env::Associative) =
     String[cstr(string(k)*"="*string(v)) for (k,v) in env]
@@ -228,15 +228,15 @@ use `withenv`.
 The `dir` keyword argument can be used to specify a working directory for the command.
 """
 setenv(cmd::Cmd, env; dir="") = Cmd(cmd; env=byteenv(env), dir=dir)
-setenv{T<:AbstractString}(cmd::Cmd, env::Pair{T}...; dir="") =
+setenv(cmd::Cmd, env::Pair{<:AbstractString}...; dir="") =
     setenv(cmd, env; dir=dir)
 setenv(cmd::Cmd; dir="") = Cmd(cmd; dir=dir)
 
 (&)(left::AbstractCmd, right::AbstractCmd) = AndCmds(left, right)
 redir_out(src::AbstractCmd, dest::AbstractCmd) = OrCmds(src, dest)
 redir_err(src::AbstractCmd, dest::AbstractCmd) = ErrOrCmds(src, dest)
-Base.mr_empty{T2<:Base.AbstractCmd}(f, op::typeof(&), T1::Type{T2}) =
-    throw(ArgumentError("reducing over an empty collection of type $T1 with operator & is not allowed"))
+Base.mr_empty(f, op::typeof(&), T::Type{<:Base.AbstractCmd}) =
+    throw(ArgumentError("reducing over an empty collection of type $T with operator & is not allowed"))
 
 # Stream Redirects
 redir_out(dest::Redirectable, src::AbstractCmd) = CmdRedirect(src, dest, STDIN_NO)
@@ -305,7 +305,7 @@ run(pipeline("out.txt", `grep xyz`))
 """
 pipeline(a, b, c, d...) = pipeline(pipeline(a,b), c, d...)
 
-type Process <: AbstractPipe
+mutable struct Process <: AbstractPipe
     cmd::Cmd
     handle::Ptr{Void}
     in::IO
@@ -339,7 +339,7 @@ end
 pipe_reader(p::Process) = p.out
 pipe_writer(p::Process) = p.in
 
-immutable ProcessChain <: AbstractPipe
+struct ProcessChain <: AbstractPipe
     processes::Vector{Process}
     in::Redirectable
     out::Redirectable
@@ -555,15 +555,16 @@ spawn_opts_inherit(in::Redirectable=RawFD(0), out::Redirectable=RawFD(1), err::R
 spawn(cmds::AbstractCmd, args...; chain::Nullable{ProcessChain}=Nullable{ProcessChain}()) =
     spawn(cmds, spawn_opts_swallow(args...)...; chain=chain)
 
-function eachline(cmd::AbstractCmd, stdin)
+function eachline(cmd::AbstractCmd, stdin; chomp::Bool=true)
     stdout = Pipe()
     processes = spawn(cmd, (stdin,stdout,STDERR))
     close(stdout.in)
     out = stdout.out
     # implicitly close after reading lines, since we opened
-    return EachLine(out, ()->(close(out); success(processes) || pipeline_error(processes)))
+    return EachLine(out, chomp=chomp,
+        ondone=()->(close(out); success(processes) || pipeline_error(processes)))::EachLine
 end
-eachline(cmd::AbstractCmd) = eachline(cmd, DevNull)
+eachline(cmd::AbstractCmd; chomp::Bool=true) = eachline(cmd, DevNull, chomp=chomp)
 
 # return a Process object to read-to/write-from the pipeline
 """
@@ -797,7 +798,7 @@ function cmd_gen(parsed)
 end
 
 macro cmd(str)
-    return :(cmd_gen($(shell_parse(str)[1])))
+    return :(cmd_gen($(shell_parse(str, special=shell_special)[1])))
 end
 
 wait(x::Process)      = if !process_exited(x); stream_wait(x, x.exitnotify); end

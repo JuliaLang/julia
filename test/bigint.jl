@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 a = parse(BigInt,"123456789012345678901234567890")
 b = parse(BigInt,"123456789012345678901234567891")
@@ -257,8 +257,7 @@ s = string(n)
 @test startswith(s, "316047687386689")
 
 # serialization (#5133)
-let
-    n = parse(BigInt,"359334085968622831041960188598043661065388726959079837")
+let n = parse(BigInt,"359334085968622831041960188598043661065388726959079837")
     b = IOBuffer()
     serialize(b,n)
     seek(b,0)
@@ -346,8 +345,6 @@ end
 @test typeof(exp2(a)) == BigFloat
 @test typeof(exp10(a)) == BigFloat
 @test typeof(expm1(a)) == BigFloat
-@test typeof(erf(a)) == BigFloat
-@test typeof(erfc(a)) == BigFloat
 @test typeof(cosh(a)) == BigFloat
 @test typeof(sinh(a)) == BigFloat
 @test typeof(tanh(a)) == BigFloat

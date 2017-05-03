@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module GMP
 
@@ -12,13 +12,13 @@ import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor,
              iszero
 
 if Clong == Int32
-    typealias ClongMax Union{Int8, Int16, Int32}
-    typealias CulongMax Union{UInt8, UInt16, UInt32}
+    const ClongMax = Union{Int8, Int16, Int32}
+    const CulongMax = Union{UInt8, UInt16, UInt32}
 else
-    typealias ClongMax Union{Int8, Int16, Int32, Int64}
-    typealias CulongMax Union{UInt8, UInt16, UInt32, UInt64}
+    const ClongMax = Union{Int8, Int16, Int32, Int64}
+    const CulongMax = Union{UInt8, UInt16, UInt32, UInt64}
 end
-typealias CdoubleMax Union{Float16, Float32, Float64}
+const CdoubleMax = Union{Float16, Float32, Float64}
 
 gmp_version() = VersionNumber(unsafe_string(unsafe_load(cglobal((:__gmp_version, :libgmp), Ptr{Cchar}))))
 gmp_bits_per_limb() = Int(unsafe_load(cglobal((:__gmp_bits_per_limb, :libgmp), Cint)))
@@ -30,15 +30,15 @@ const GMP_BITS_PER_LIMB = gmp_bits_per_limb()
 # `unsigned int` or `unsigned long long int`. The correct unsigned type is here named Limb, and must
 # be used whenever mp_limb_t is in the signature of ccall'ed GMP functions.
 if GMP_BITS_PER_LIMB == 32
-    typealias Limb UInt32
+    const Limb = UInt32
 elseif GMP_BITS_PER_LIMB == 64
-    typealias Limb UInt64
+    const Limb = UInt64
 else
     error("GMP: cannot determine the type mp_limb_t (__gmp_bits_per_limb == $GMP_BITS_PER_LIMB)")
 end
 
 
-type BigInt <: Integer
+mutable struct BigInt <: Integer
     alloc::Cint
     size::Cint
     d::Ptr{Limb}
@@ -178,7 +178,9 @@ function rem{T<:Union{Unsigned,Signed}}(x::BigInt, ::Type{T})
     x.size < 0 ? -u : u
 end
 
-function convert{T<:Unsigned}(::Type{T}, x::BigInt)
+rem(x::Integer, ::Type{BigInt}) = convert(BigInt, x)
+
+function convert(::Type{T}, x::BigInt) where T<:Unsigned
     if sizeof(T) < sizeof(Limb)
         convert(T, convert(Limb,x))
     else
@@ -187,7 +189,7 @@ function convert{T<:Unsigned}(::Type{T}, x::BigInt)
     end
 end
 
-function convert{T<:Signed}(::Type{T}, x::BigInt)
+function convert(::Type{T}, x::BigInt) where T<:Signed
     n = abs(x.size)
     if sizeof(T) < sizeof(Limb)
         SLimb = typeof(Signed(one(Limb)))
@@ -205,20 +207,20 @@ function (::Type{Float64})(n::BigInt, ::RoundingMode{:ToZero})
     ccall((:__gmpz_get_d, :libgmp), Float64, (Ptr{BigInt},), &n)
 end
 
-function (::Type{T}){T<:Union{Float16,Float32}}(n::BigInt, ::RoundingMode{:ToZero})
+function (::Type{T})(n::BigInt, ::RoundingMode{:ToZero}) where T<:Union{Float16,Float32}
     T(Float64(n,RoundToZero),RoundToZero)
 end
 
-function (::Type{T}){T<:CdoubleMax}(n::BigInt, ::RoundingMode{:Down})
+function (::Type{T})(n::BigInt, ::RoundingMode{:Down}) where T<:CdoubleMax
     x = T(n,RoundToZero)
     x > n ? prevfloat(x) : x
 end
-function (::Type{T}){T<:CdoubleMax}(n::BigInt, ::RoundingMode{:Up})
+function (::Type{T})(n::BigInt, ::RoundingMode{:Up}) where T<:CdoubleMax
     x = T(n,RoundToZero)
     x < n ? nextfloat(x) : x
 end
 
-function (::Type{T}){T<:CdoubleMax}(n::BigInt, ::RoundingMode{:Nearest})
+function (::Type{T})(n::BigInt, ::RoundingMode{:Nearest}) where T<:CdoubleMax
     x = T(n,RoundToZero)
     if maxintfloat(T) <= abs(x) < T(Inf)
         r = n-BigInt(x)
@@ -244,7 +246,7 @@ convert(::Type{Float64}, n::BigInt) = Float64(n,RoundNearest)
 convert(::Type{Float32}, n::BigInt) = Float32(n,RoundNearest)
 convert(::Type{Float16}, n::BigInt) = Float16(n,RoundNearest)
 
-promote_rule{T<:Integer}(::Type{BigInt}, ::Type{T}) = BigInt
+promote_rule(::Type{BigInt}, ::Type{<:Integer}) = BigInt
 
 # Binary ops
 for (fJ, fC) in ((:+, :add), (:-,:sub), (:*, :mul),
@@ -532,8 +534,10 @@ hex(n::BigInt, pad::Int) = base(16, n, pad)
 
 function base(b::Integer, n::BigInt)
     2 <= b <= 62 || throw(ArgumentError("base must be 2 ≤ base ≤ 62, got $b"))
-    p = ccall((:__gmpz_get_str,:libgmp), Ptr{UInt8}, (Ptr{UInt8}, Cint, Ptr{BigInt}), C_NULL, b, &n)
-    unsafe_wrap(String, p, true)
+    nd = ndigits(n, b)
+    str = Base._string_n(n < 0 ? nd+1 : nd)
+    ccall((:__gmpz_get_str,:libgmp), Ptr{UInt8}, (Ptr{UInt8}, Cint, Ptr{BigInt}), str, b, &n)
+    return str
 end
 
 function base(b::Integer, n::BigInt, pad::Integer)

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Base
 
@@ -22,9 +22,9 @@ julia> fill!(A, 2.)
 
 julia> a = [1, 1, 1]; A = fill!(Vector{Vector{Int}}(3), a); a[1] = 2; A
 3-element Array{Array{Int64,1},1}:
- [2,1,1]
- [2,1,1]
- [2,1,1]
+ [2, 1, 1]
+ [2, 1, 1]
+ [2, 1, 1]
 
 julia> x = 0; f() = (global x += 1; x); fill!(Vector{Int}(3), f())
 3-element Array{Int64,1}:
@@ -96,6 +96,20 @@ bits
 
 Construct a 1-d array of the specified type. This is usually called with the syntax
 `Type[]`. Element values can be specified using `Type[a,b,c,...]`.
+
+```jldoctest
+julia> Int8[1, 2, 3]
+3-element Array{Int8,1}:
+ 1
+ 2
+ 3
+
+julia> getindex(Int8, 1, 2, 3)
+3-element Array{Int8,1}:
+ 1
+ 2
+ 3
+```
 """
 getindex(::Type, elements...)
 
@@ -291,13 +305,6 @@ This would create a 25-by-30000 `BitArray`, linked to the file associated with s
 Mmap.mmap(io, ::BitArray, dims = ?, offset = ?)
 
 """
-    bessely0(x)
-
-Bessel function of the second kind of order 0, ``Y_0(x)``.
-"""
-bessely0
-
-"""
     filter!(function, collection)
 
 Update `collection`, removing elements for which `function` is `false`.
@@ -328,13 +335,13 @@ julia> sizeof(Complex128)
 16
 ```
 
-If `T` is not a bitstype, an error is thrown.
+If `T` does not have a specific size, an error is thrown.
 
 ```jldoctest
 julia> sizeof(Base.LinAlg.LU)
 ERROR: argument is an abstract type; size is indeterminate
 Stacktrace:
- [1] sizeof(::Type{T}) at ./essentials.jl:99
+ [1] sizeof(::Type{T} where T) at ./essentials.jl:160
 ```
 """
 sizeof(::Type)
@@ -447,39 +454,6 @@ See also [`zeros`](@ref), [`similar`](@ref).
 ones
 
 """
-    reshape(A, dims)
-
-Create an array with the same data as the given array, but with different dimensions.
-
-```jldoctest
-julia> A = collect(1:16)
-16-element Array{Int64,1}:
-  1
-  2
-  3
-  4
-  5
-  6
-  7
-  8
-  9
- 10
- 11
- 12
- 13
- 14
- 15
- 16
-
-julia> reshape(A, (2, 8))
-2×8 Array{Int64,2}:
- 1  3  5  7   9  11  13  15
- 2  4  6  8  10  12  14  16
-```
-"""
-reshape
-
-"""
     randsubseq!(S, A, p)
 
 Like [`randsubseq`](@ref), but the results are stored in `S`
@@ -505,10 +479,10 @@ redisplay
 """
     searchsorted(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
-Returns the range of indices of `a` which compare as equal to `x` according to the order
-specified by the `by`, `lt` and `rev` keywords, assuming that `a` is already sorted in that
-order. Returns an empty range located at the insertion point if `a` does not contain values
-equal to `x`.
+Returns the range of indices of `a` which compare as equal to `x` (using binary search)
+according to the order specified by the `by`, `lt` and `rev` keywords, assuming that `a`
+is already sorted in that order. Returns an empty range located at the insertion point
+if `a` does not contain values equal to `x`.
 """
 searchsorted
 
@@ -526,14 +500,6 @@ Base.:(/)
 Show every part of the representation of a value.
 """
 dump
-
-"""
-    consume(task, values...)
-
-Receive the next value passed to `produce` by the specified task. Additional arguments may
-be passed, to be returned from the last `produce` call in the producer.
-"""
-consume
 
 """
     isinteractive() -> Bool
@@ -582,6 +548,11 @@ print_shortest
     tuple(xs...)
 
 Construct a tuple of the given objects.
+
+```jldoctest
+julia> tuple(1, 'a', pi)
+(1, 'a', π = 3.1415926535897...)
+```
 """
 tuple
 
@@ -670,13 +641,6 @@ for use in `Mmap.mmap`. Used by `SharedArray` for creating shared memory arrays.
 Mmap.Anonymous
 
 """
-    erfi(x)
-
-Compute the imaginary error function of `x`, defined by ``-i \\operatorname{erf}(ix)``.
-"""
-erfi
-
-"""
     floor([T,] x, [digits, [base]])
 
 `floor(x)` returns the nearest integral value of the same type as `x` that is less than or
@@ -716,13 +680,6 @@ reverse!
 The item or field is not defined for the given object.
 """
 UndefRefError
-
-"""
-    bessely1(x)
-
-Bessel function of the second kind of order 1, ``Y_1(x)``.
-"""
-bessely1
 
 """
     append!(collection, collection2) -> collection.
@@ -809,15 +766,16 @@ showcompact
 
 Extract a named field from a `value` of composite type. The syntax `a.b` calls
 `getfield(a, :b)`.
+
+```jldoctest
+julia> a = 1//2
+1//2
+
+julia> getfield(a, :num)
+1
+```
 """
 getfield
-
-"""
-    besselj1(x)
-
-Bessel function of the first kind of order 1, ``J_1(x)``.
-"""
-besselj1
 
 """
     select!(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])
@@ -870,6 +828,14 @@ union
     realmax(T)
 
 The highest finite value representable by the given floating-point DataType `T`.
+
+```jldoctest
+julia> realmax(Float16)
+Float16(6.55e4)
+
+julia> realmax(Float32)
+3.4028235f38
+```
 """
 realmax
 
@@ -888,6 +854,14 @@ serialize
     typemin(T)
 
 The lowest value representable by the given (real) numeric DataType `T`.
+
+```jldoctest
+julia> typemin(Float16)
+-Inf16
+
+julia> typemin(Float32)
+-Inf32
+```
 """
 typemin
 
@@ -932,33 +906,11 @@ behavior, including program corruption or segfaults, at any later time.
 unsafe_convert
 
 """
-    erfinv(x)
-
-Compute the inverse error function of a real `x`, defined by ``\\operatorname{erf}(\\operatorname{erfinv}(x)) = x``.
-"""
-erfinv
-
-"""
     seek(s, pos)
 
 Seek a stream to the given position.
 """
 seek
-
-"""
-    besselj0(x)
-
-Bessel function of the first kind of order 0, ``J_0(x)``.
-"""
-besselj0
-
-"""
-    erfcinv(x)
-
-Compute the inverse error complementary function of a real `x`, defined by
-``\\operatorname{erfc}(\\operatorname{erfcinv}(x)) = x``.
-"""
-erfcinv
 
 """
     popdisplay()
@@ -1000,10 +952,10 @@ For a given iterable object and iteration state, return the current item and the
 
 ```jldoctest
 julia> next(1:5, 3)
-(3,4)
+(3, 4)
 
 julia> next(1:5, 5)
-(5,6)
+(5, 6)
 ```
 """
 next
@@ -1038,9 +990,9 @@ An indexing operation into an array, `a`, tried to access an out-of-bounds eleme
 BoundsError
 
 """
-    invoke(f, (types...), args...)
+    invoke(f, types <: Tuple, args...)
 
-Invoke a method for the given generic function matching the specified types (as a tuple), on
+Invoke a method for the given generic function matching the specified types, on
 the specified arguments. The arguments must be compatible with the specified types. This
 allows invoking a method other than the most specific matching method, which is useful when
 the behavior of a more general definition is explicitly needed (often as part of the
@@ -1143,7 +1095,21 @@ false
 """
     bswap(n)
 
-Byte-swap an integer.
+Byte-swap an integer. Flip the bits of its binary representation.
+
+```jldoctest
+julia> a = bswap(4)
+288230376151711744
+
+julia> bswap(a)
+4
+
+julia> bin(1)
+"1"
+
+julia> bin(bswap(1))
+"100000000000000000000000000000000000000000000000000000000"
+```
 """
 bswap
 
@@ -1161,28 +1127,6 @@ Delete the mapping for the given key in a collection, and return the collection.
 """
 delete!
 
-"""
-    eps(T)
-
-The distance between 1.0 and the next larger representable floating-point value of
-`DataType` `T`. Only floating-point types are sensible arguments.
-"""
-eps(::Union{Type{BigFloat},Type{Float64},Type{Float32},Type{Float16}})
-
-"""
-    eps()
-
-The distance between 1.0 and the next larger representable floating-point value of `Float64`.
-"""
-eps()
-
-"""
-    eps(x)
-
-The distance between `x` and the next larger representable floating-point value of the same
-`DataType` as `x`.
-"""
-eps(::AbstractFloat)
 
 """
     searchsortedfirst(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
@@ -1340,7 +1284,7 @@ spawn
 
 Tests whether an assignable location is defined. The arguments can be a module and a symbol
 or a composite object and field name (as a symbol) or index. With a single symbol argument,
-tests whether a global variable with that name is defined in `current_module()`.
+tests whether a global variable with that name is defined in [`current_module()`](@ref).
 """
 isdefined
 
@@ -1469,14 +1413,6 @@ the topmost backend that does not throw a `MethodError`).
 pushdisplay
 
 """
-    produce(value)
-
-Send the given value to the last `consume` call, switching to the consumer task. If the next
-`consume` call passes any values, they are returned by `produce`.
-"""
-produce
-
-"""
     StackOverflowError()
 
 The function call grew beyond the size of the call stack. This usually happens when a call
@@ -1598,14 +1534,6 @@ Equivalent to [`readdlm`](@ref) with `delim` set to comma, and type optionally d
 readcsv
 
 """
-    erfcx(x)
-
-Compute the scaled complementary error function of `x`, defined by ``e^{x^2} \\operatorname{erfc}(x)``.
-Note also that ``\\operatorname{erfcx}(-ix)`` computes the Faddeeva function ``w(x)``.
-"""
-erfcx
-
-"""
     UndefVarError(var::Symbol)
 
 A symbol in the current scope is not defined.
@@ -1691,15 +1619,6 @@ should overload `show(io, x)` where the first argument is a stream. The represen
 by `show` generally includes Julia-specific formatting and type information.
 """
 show(x)
-
-"""
-    Array(dims)
-
-`Array{T}(dims)` constructs an uninitialized dense array with element type `T`. `dims` may
-be a tuple or a series of integer arguments. The syntax `Array(T, dims)` is also available,
-but deprecated.
-"""
-Array
 
 """
     issubtype(type1, type2)
@@ -1789,6 +1708,23 @@ matchall
 
 Return the value stored for the given key, or if no mapping for the key is present, store
 `key => default`, and return `default`.
+
+```jldoctest
+julia> d = Dict("a"=>1, "b"=>2, "c"=>3);
+
+julia> get!(d, "a", 5)
+1
+
+julia> get!(d, "d", 4)
+4
+
+julia> d
+Dict{String,Int64} with 4 entries:
+  "c" => 3
+  "b" => 2
+  "a" => 1
+  "d" => 4
+```
 """
 get!(collection,key,default)
 
@@ -2009,7 +1945,7 @@ julia> convert(Int, 3.0)
 julia> convert(Int, 3.5)
 ERROR: InexactError()
 Stacktrace:
- [1] convert(::Type{Int64}, ::Float64) at ./float.jl:656
+ [1] convert(::Type{Int64}, ::Float64) at ./float.jl:679
 ```
 
 If `T` is a `AbstractFloat` or `Rational` type,
@@ -2090,13 +2026,6 @@ significantly more expensive than `x*y+z`. `fma` is used to improve accuracy in 
 algorithms. See [`muladd`](@ref).
 """
 fma
-
-"""
-    copy!(dest, src)
-
-Copy all elements from collection `src` to array `dest`. Returns `dest`.
-"""
-copy!(dest,src)
 
 """
     copy!(dest, do, src, so, N)
@@ -2243,14 +2172,6 @@ Convert a number to an unsigned integer. If the argument is signed, it is reinte
 unsigned without checking for negative values.
 """
 unsigned
-
-"""
-    midpoints(e)
-
-Compute the midpoints of the bins with edges `e`. The result is a vector/range of length
-`length(e) - 1`. Note: Julia does not ignore `NaN` values in the computation.
-"""
-midpoints
 
 """
     reverseind(v, i)
@@ -2413,7 +2334,22 @@ Base.:(|)
     pop!(collection, key[, default])
 
 Delete and return the mapping for `key` if it exists in `collection`, otherwise return
-`default`, or throw an error if default is not specified.
+`default`, or throw an error if `default` is not specified.
+
+```jldoctest
+julia> d = Dict("a"=>1, "b"=>2, "c"=>3);
+
+julia> pop!(d, "a")
+1
+
+julia> pop!(d, "d")
+ERROR: KeyError: key "d" not found
+Stacktrace:
+ [1] pop!(::Dict{String,Int64}, ::String) at ./dict.jl:539
+
+julia> pop!(d, "e", 4)
+4
+```
 """
 pop!(collection,key,?)
 
@@ -2459,11 +2395,3 @@ seekend
 Integer division was attempted with a denominator value of 0.
 """
 DivideError
-
-"""
-    dawson(x)
-
-Compute the Dawson function (scaled imaginary error function) of `x`, defined by
-``\\frac{\\sqrt{\\pi}}{2} e^{-x^2} \\operatorname{erfi}(x)``.
-"""
-dawson

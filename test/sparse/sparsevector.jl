@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ### Data
 
@@ -25,6 +25,8 @@ let x = spv_x1
     @test SparseArrays.nonzeroinds(x) == [2, 5, 6]
     @test nonzeros(x) == [1.25, -0.75, 3.5]
 end
+
+@test count(SparseVector(8, [2, 5, 6], [true,false,true])) == 2
 
 # full
 
@@ -157,10 +159,10 @@ let xr = sprand(Bool, 1000, 0.9)
     @test all(nonzeros(xr))
 end
 
-let r1 = MersenneTwister(), r2 = MersenneTwister()
+let r1 = MersenneTwister(0), r2 = MersenneTwister(0)
     @test sprand(r1, 100, .9) == sprand(r2, 100, .9)
     @test sprandn(r1, 100, .9) == sprandn(r2, 100, .9)
-    @test sprand(r1, Bool, 100, .9, ) == sprand(r2,  Bool, 100, .9)
+    @test sprand(r1, Bool, 100, .9) == sprand(r2,  Bool, 100, .9)
 end
 
 ### Element access
@@ -441,8 +443,7 @@ end
 
 # Test that concatenations of combinations of sparse vectors with various other
 # matrix/vector types yield sparse arrays
-let
-    N = 4
+let N = 4
     spvec = spzeros(N)
     spmat = spzeros(N, 1)
     densevec = ones(N)
@@ -948,18 +949,18 @@ let m = 10
                 fspvec = convert(Array, spvec)
                 # test out-of-place left-division methods
                 for mat in (trimats..., unittrimats...), func in (\, At_ldiv_B, Ac_ldiv_B)
-                    @test isapprox((func)(mat, spvec), (func)(mat, fspvec))
+                    @test func(mat, spvec) ≈ func(mat, fspvec)
                 end
                 # test in-place left-division methods not involving quotients
                 if eltypevec == typeof(zero(eltypemat)*zero(eltypevec) + zero(eltypemat)*zero(eltypevec))
                     for mat in unittrimats, func in (A_ldiv_B!, Base.LinAlg.At_ldiv_B!, Base.LinAlg.Ac_ldiv_B!)
-                        @test isapprox((func)(mat, copy(spvec)), (func)(mat, copy(fspvec)))
+                        @test func(mat, copy(spvec)) ≈ func(mat, copy(fspvec))
                     end
                 end
                 # test in-place left-division methods involving quotients
                 if eltypevec == typeof((zero(eltypemat)*zero(eltypevec) + zero(eltypemat)*zero(eltypevec))/one(eltypemat))
                     for mat in trimats, func in (A_ldiv_B!, Base.LinAlg.At_ldiv_B!, Base.LinAlg.Ac_ldiv_B!)
-                        @test isapprox((func)(mat, copy(spvec)), (func)(mat, copy(fspvec)))
+                        @test func(mat, copy(spvec)) ≈ func(mat, copy(fspvec))
                     end
                 end
             end
@@ -967,8 +968,7 @@ let m = 10
     end
 end
 # The preceding tests miss the edge case where the sparse vector is empty (#16716)
-let
-    origmat = [-1.5 -0.7; 0.0 1.0]
+let origmat = [-1.5 -0.7; 0.0 1.0]
     transmat = transpose(origmat)
     utmat = UpperTriangular(origmat)
     ltmat = LowerTriangular(transmat)
@@ -1080,13 +1080,13 @@ s14046 = sprand(5, 1.0)
 @test 2*s14046 == s14046 + s14046
 
 # Issue 14589
-#test vectors with no zero elements
+# test vectors with no zero elements
 x = sparsevec(1:7, [3., 2., -1., 1., -2., -3., 3.], 7)
 @test collect(sort(x)) == sort(collect(x))
-#test vectors with all zero elements
+# test vectors with all zero elements
 x = sparsevec(Int64[], Float64[], 7)
 @test collect(sort(x)) == sort(collect(x))
-#test vector with sparsity approx 1/2
+# test vector with sparsity approx 1/2
 x = sparsevec(1:7, [3., 2., -1., 1., -2., -3., 3.], 15)
 @test collect(sort(x)) == sort(collect(x))
 # apply three distinct tranformations where zeros sort into start/middle/end
@@ -1094,7 +1094,7 @@ x = sparsevec(1:7, [3., 2., -1., 1., -2., -3., 3.], 15)
 @test collect(sort(x, by=sign)) == sort(collect(x), by=sign)
 @test collect(sort(x, by=inv)) == sort(collect(x), by=inv)
 
-#fill!
+# fill!
 for Tv in [Float32, Float64, Int64, Int32, Complex128]
     for Ti in [Int16, Int32, Int64, BigInt]
         sptypes = (SparseMatrixCSC{Tv, Ti}, SparseVector{Tv, Ti})
@@ -1122,3 +1122,27 @@ end
 
 @test issparse([sprand(10,.1)  rand(10)])
 @test issparse([sprand(10,.1); rand(10)])
+
+
+type t20488 end
+
+@testset "similar" begin
+    x = sparsevec(rand(3) .+ 0.1)
+    @test length(similar(x, t20488).nzval) == 3
+    @test typeof(similar(x, Float32, Int32)) == SparseVector{Float32, Int32}
+    @test typeof(similar(x, Float32)) == SparseVector{Float32, Int}
+end
+
+@testset "show" begin
+    io = IOBuffer()
+    show(io, MIME"text/plain"(), sparsevec(Int64[1], [1.0]))
+    @test String(take!(io)) == "1-element SparseVector{Float64,Int64} with 1 stored entry:\n  [1]  =  1.0"
+    show(io, MIME"text/plain"(),  spzeros(Float64, Int64, 2))
+    @test String(take!(io)) == "2-element SparseVector{Float64,Int64} with 0 stored entries"
+    show(io, similar(sparsevec(rand(3) .+ 0.1), t20488))
+    @test String(take!(io)) == "  [1]  =  #undef\n  [2]  =  #undef\n  [3]  =  #undef"
+end
+
+@testset "spzeros with index type" begin
+    @test typeof(spzeros(Float32, Int16, 3)) == SparseVector{Float32,Int16}
+end

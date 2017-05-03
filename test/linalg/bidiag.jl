@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.Test
 import Base.LinAlg: BlasReal, BlasFloat
@@ -30,23 +30,46 @@ srand(1)
         @test_throws ArgumentError Bidiagonal(dv,ev)
     end
 
-    BD = Bidiagonal(dv, ev, true)
     @testset "getindex, setindex!, size, and similar" begin
-        @test_throws BoundsError BD[n+1,1]
-        @test BD[2,2] == dv[2]
-        @test BD[2,3] == ev[2]
-        @test_throws ArgumentError BD[2,1] = 1
-        @test_throws ArgumentError BD[3,1] = 1
-        cBD = copy(BD)
-        cBD[2,2] = BD[2,2]
-        @test BD == cBD
-        @test_throws ArgumentError size(BD,0)
-        @test size(BD,3) == 1
-        @test isa(similar(BD), Bidiagonal{elty})
-        @test isa(similar(BD, Int), Bidiagonal{Int})
-        @test isa(similar(BD, Int, (3,2)), Matrix{Int})
+        ubd = Bidiagonal(dv, ev, true)
+        lbd = Bidiagonal(dv, ev, false)
+        # bidiagonal getindex / upper & lower
+        @test_throws BoundsError ubd[n + 1, 1]
+        @test_throws BoundsError ubd[1, n + 1]
+        @test ubd[2, 2] == dv[2]
+        # bidiagonal getindex / upper
+        @test ubd[2, 3] == ev[2]
+        @test iszero(ubd[3, 2])
+        # bidiagonal getindex / lower
+        @test lbd[3, 2] == ev[2]
+        @test iszero(lbd[2, 3])
+        # bidiagonal setindex! / upper
+        cubd = copy(ubd)
+        @test_throws ArgumentError ubd[2, 1] = 1
+        @test_throws ArgumentError ubd[3, 1] = 1
+        @test (cubd[2, 1] = 0; cubd == ubd)
+        @test ((cubd[1, 2] = 10) == 10; cubd[1, 2] == 10)
+        # bidiagonal setindex! / lower
+        clbd = copy(lbd)
+        @test_throws ArgumentError lbd[1, 2] = 1
+        @test_throws ArgumentError lbd[1, 3] = 1
+        @test (clbd[1, 2] = 0; clbd == lbd)
+        @test ((clbd[2, 1] = 10) == 10; clbd[2, 1] == 10)
+        # bidiagonal setindex! / upper & lower
+        @test_throws BoundsError ubd[n + 1, 1] = 1
+        @test_throws BoundsError ubd[1, n + 1] = 1
+        @test ((cubd[2, 2] = 10) == 10; cubd[2, 2] == 10)
+        # bidiagonal size
+        @test_throws ArgumentError size(ubd, 0)
+        @test size(ubd, 1) == size(ubd, 2) == n
+        @test size(ubd, 3) == 1
+        # bidiagonal similar
+        @test isa(similar(ubd), Bidiagonal{elty})
+        @test isa(similar(ubd, Int), Bidiagonal{Int})
+        @test isa(similar(ubd, Int, (3, 2)), Matrix{Int})
     end
 
+    BD = Bidiagonal(dv, ev, true)
     @testset "show" begin
         dstring = sprint(Base.print_matrix,BD.dv')
         estring = sprint(Base.print_matrix,BD.ev')
@@ -134,6 +157,12 @@ srand(1)
             @test_throws DimensionMismatch T \ ones(elty,n+1,2)
             @test_throws DimensionMismatch T.' \ ones(elty,n+1,2)
             @test_throws DimensionMismatch T' \ ones(elty,n+1,2)
+
+            @test_throws DimensionMismatch T \ RowVector(ones(elty,n+1))
+            @test_throws DimensionMismatch T.' \ RowVector(ones(elty,n+1))
+            @test_throws DimensionMismatch T' \ RowVector(ones(elty,n+1))
+            @test_throws DimensionMismatch Base.LinAlg.At_ldiv_B(T, RowVector(ones(elty,n+1)))
+            @test_throws DimensionMismatch Base.LinAlg.Ac_ldiv_B(T, RowVector(ones(elty,n+1)))
             let bb = b, cc = c
                 for atype in ("Array", "SubArray")
                     if atype == "Array"
@@ -168,6 +197,14 @@ srand(1)
                 @test isa(round.(Int, T), Bidiagonal)
                 @test ceil.(Int,T) == Bidiagonal(ceil.(Int,T.dv), ceil.(Int,T.ev), T.isupper)
                 @test isa(ceil.(Int,T), Bidiagonal)
+                @test floor.(T) == Bidiagonal(floor.(T.dv), floor.(T.ev), T.isupper)
+                @test isa(floor.(T), Bidiagonal)
+                @test trunc.(T) == Bidiagonal(trunc.(T.dv), trunc.(T.ev), T.isupper)
+                @test isa(trunc.(T), Bidiagonal)
+                @test round.(T) == Bidiagonal(round.(T.dv), round.(T.ev), T.isupper)
+                @test isa(round.(T), Bidiagonal)
+                @test ceil.(T) == Bidiagonal(ceil.(T.dv), ceil.(T.ev), T.isupper)
+                @test isa(ceil.(T), Bidiagonal)
             end
         end
 
@@ -198,7 +235,7 @@ srand(1)
                     Test.test_approx_eq_modphase(u1, u2)
                     Test.test_approx_eq_modphase(v1, v2)
                 end
-                @test_approx_eq_eps 0 vecnorm(u2*diagm(d2)*v2'-Tfull) n*max(n^2*eps(relty), vecnorm(u1*diagm(d1)*v1' - Tfull))
+                @test 0 ≈ vecnorm(u2*diagm(d2)*v2'-Tfull) atol=n*max(n^2*eps(relty),vecnorm(u1*diagm(d1)*v1'-Tfull))
                 @inferred svdvals(T)
                 @inferred svd(T)
             end

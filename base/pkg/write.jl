@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Write
 
@@ -43,7 +43,7 @@ function install(pkg::AbstractString, sha1::AbstractString)
         fetch(repo, pkg, sha1)
         checkout(repo, pkg, sha1)
     finally
-        finalize(repo)
+        close(repo)
     end
 end
 

@@ -11,7 +11,7 @@ using Documenter
 
 baremodule GenStdLib end
 isdefined(:build_sysimg) || @eval module BuildSysImg
-    include(joinpath(JULIA_HOME, "..", "..", "contrib", "build_sysimg.jl"))
+    include(joinpath(@__DIR__, "..", "contrib", "build_sysimg.jl"))
 end
 
 # Documenter Setup.
@@ -46,6 +46,7 @@ const PAGES = [
         "manual/running-external-programs.md",
         "manual/calling-c-and-fortran-code.md",
         "manual/handling-operating-system-variation.md",
+        "manual/environment-variables.md",
         "manual/interacting-with-julia.md",
         "manual/embedding.md",
         "manual/packages.md",
@@ -87,12 +88,13 @@ const PAGES = [
         "devdocs/reflection.md",
         "Documentation of Julia's Internals" => [
             "devdocs/init.md",
-            "devdocs/eval.md",
             "devdocs/ast.md",
             "devdocs/types.md",
             "devdocs/object.md",
-            "devdocs/functions.md",
+            "devdocs/eval.md",
             "devdocs/callconv.md",
+            "devdocs/compiler.md",
+            "devdocs/functions.md",
             "devdocs/cartesian.md",
             "devdocs/meta.md",
             "devdocs/subarrays.md",
@@ -102,6 +104,8 @@ const PAGES = [
             "devdocs/boundscheck.md",
             "devdocs/locks.md",
             "devdocs/offset-arrays.md",
+            "devdocs/libgit2.md",
+            "devdocs/require.md",
         ],
         "Developing/debugging Julia's C code" => [
             "devdocs/backtraces.md",
@@ -113,11 +117,12 @@ const PAGES = [
 ]
 
 makedocs(
-    build     = "_build/html/en",
+    build     = joinpath(pwd(), "_build/html/en"),
     modules   = [Base, Core, BuildSysImg],
     clean     = false,
     doctest   = "doctest" in ARGS,
     linkcheck = "linkcheck" in ARGS,
+    linkcheck_ignore = ["https://bugs.kde.org/show_bug.cgi?id=136779"], # fails to load from nanosoldier?
     strict    = true,
     checkdocs = :none,
     format    = "pdf" in ARGS ? :latex : :html,

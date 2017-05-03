@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 /*
   array constructors and primitives
@@ -25,7 +25,8 @@ extern "C" {
 static inline int store_unboxed(jl_value_t *el_type) // jl_isbits
 {
     return jl_is_leaf_type(el_type) && jl_is_immutable(el_type) &&
-        ((jl_datatype_t*)el_type)->layout && ((jl_datatype_t*)el_type)->layout->pointerfree;
+        ((jl_datatype_t*)el_type)->layout &&
+        ((jl_datatype_t*)el_type)->layout->npointers == 0;
 }
 
 int jl_array_store_unboxed(jl_value_t *el_type)
@@ -37,7 +38,7 @@ STATIC_INLINE jl_value_t *jl_array_owner(jl_array_t *a)
 {
     if (a->flags.how == 3) {
         a = (jl_array_t*)jl_array_data_owner(a);
-        assert(a->flags.how != 3);
+        assert(jl_is_string(a) || a->flags.how != 3);
     }
     return (jl_value_t*)a;
 }
@@ -96,9 +97,8 @@ static jl_array_t *_new_array_(jl_value_t *atype, uint32_t ndims, size_t *dims,
         // No allocation or safepoint allowed after this
         a->flags.how = 0;
         data = (char*)a + doffs;
-        if (tot > 0 && !isunboxed) {
+        if (tot > 0 && !isunboxed)
             memset(data, 0, tot);
-        }
     }
     else {
         tsz = JL_ARRAY_ALIGN(tsz, JL_CACHE_BYTE_ALIGNMENT); // align whole object
@@ -232,6 +232,32 @@ JL_DLLEXPORT jl_array_t *jl_reshape_array(jl_value_t *atype, jl_array_t *data,
 #endif
     }
 
+    return a;
+}
+
+JL_DLLEXPORT jl_array_t *jl_string_to_array(jl_value_t *str)
+{
+    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_array_t *a;
+
+    int ndimwords = jl_array_ndimwords(1);
+    int tsz = JL_ARRAY_ALIGN(sizeof(jl_array_t) + ndimwords*sizeof(size_t) + sizeof(void*), JL_SMALL_BYTE_ALIGNMENT);
+    a = (jl_array_t*)jl_gc_alloc(ptls, tsz, jl_array_uint8_type);
+    a->flags.pooled = tsz <= GC_MAX_SZCLASS;
+    a->flags.ndims = 1;
+    a->offset = 0;
+    a->data = jl_string_data(str);
+    a->flags.isaligned = 0;
+    a->elsize = 1;
+    a->flags.ptrarray = 0;
+    jl_array_data_owner(a) = str;
+    a->flags.how = 3;
+    a->flags.isshared = 1;
+    size_t l = jl_string_len(str);
+#ifdef STORE_ARRAY_LEN
+    a->length = l;
+#endif
+    a->nrows = a->maxsize = l;
     return a;
 }
 
@@ -369,20 +395,33 @@ JL_DLLEXPORT jl_array_t *jl_pchar_to_array(const char *str, size_t len)
 
 JL_DLLEXPORT jl_value_t *jl_array_to_string(jl_array_t *a)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
-    if (!jl_typeis(a, jl_array_uint8_type))
-        jl_type_error("jl_array_to_string", (jl_value_t*)jl_array_uint8_type, (jl_value_t*)a);
-    jl_value_t *s = jl_gc_alloc(ptls, sizeof(void*), jl_string_type);
-    jl_set_nth_field(s, 0, (jl_value_t*)a);
-    return s;
+    if (a->flags.how == 3 && a->offset == 0 && a->elsize == 1 &&
+        (jl_array_ndims(a) != 1 ||
+         !(a->maxsize+sizeof(void*)+1 > GC_MAX_SZCLASS && jl_array_nrows(a)+sizeof(void*)+1 <= GC_MAX_SZCLASS))) {
+        jl_value_t *o = jl_array_data_owner(a);
+        if (jl_is_string(o)) {
+            a->flags.isshared = 1;
+            *(size_t*)o = jl_array_len(a);
+            return o;
+        }
+    }
+    return jl_pchar_to_string((const char*)jl_array_data(a), jl_array_len(a));
 }
 
 JL_DLLEXPORT jl_value_t *jl_pchar_to_string(const char *str, size_t len)
 {
-    jl_array_t *a = jl_pchar_to_array(str, len);
-    JL_GC_PUSH1(&a);
-    jl_value_t *s = jl_array_to_string(a);
-    JL_GC_POP();
+    jl_value_t *s = jl_gc_alloc(jl_get_ptls_states(), sizeof(size_t)+len+1, jl_string_type);
+    *(size_t*)s = len;
+    memcpy((char*)s + sizeof(size_t), str, len);
+    ((char*)s + sizeof(size_t))[len] = 0;
+    return s;
+}
+
+JL_DLLEXPORT jl_value_t *jl_alloc_string(size_t len)
+{
+    jl_value_t *s = jl_gc_alloc(jl_get_ptls_states(), sizeof(size_t)+len+1, jl_string_type);
+    *(size_t*)s = len;
+    ((char*)s + sizeof(size_t))[len] = 0;
     return s;
 }
 
@@ -396,11 +435,11 @@ JL_DLLEXPORT jl_array_t *jl_alloc_vec_any(size_t n)
     return jl_alloc_array_1d(jl_array_any_type, n);
 }
 
-JL_DLLEXPORT jl_value_t *jl_apply_array_type(jl_datatype_t *type, size_t dim)
+JL_DLLEXPORT jl_value_t *jl_apply_array_type(jl_value_t *type, size_t dim)
 {
     jl_value_t *boxed_dim = jl_box_long(dim);
     JL_GC_PUSH1(&boxed_dim);
-    jl_value_t *ret = jl_apply_type((jl_value_t*)jl_array_type, jl_svec2(type, boxed_dim));
+    jl_value_t *ret = jl_apply_type2((jl_value_t*)jl_array_type, type, boxed_dim);
     JL_GC_POP();
     return ret;
 }
@@ -416,21 +455,6 @@ JL_DLLEXPORT size_t jl_array_len_(jl_array_t *a)
     return l;
 }
 #endif
-
-JL_CALLABLE(jl_f_arraysize)
-{
-    JL_NARGS(arraysize, 2, 2);
-    JL_TYPECHK(arraysize, array, args[0]);
-    jl_array_t *a = (jl_array_t*)args[0];
-    size_t nd = jl_array_ndims(a);
-    JL_TYPECHK(arraysize, long, args[1]);
-    int dno = jl_unbox_long(args[1]);
-    if (dno < 1)
-        jl_error("arraysize: dimension out of range");
-    if (dno > nd)
-        return jl_box_long(1);
-    return jl_box_long((&a->nrows)[dno-1]);
-}
 
 JL_DLLEXPORT jl_value_t *jl_arrayref(jl_array_t *a, size_t i)
 {
@@ -449,38 +473,6 @@ JL_DLLEXPORT jl_value_t *jl_arrayref(jl_array_t *a, size_t i)
     return elt;
 }
 
-static size_t array_nd_index(jl_array_t *a, jl_value_t **args, size_t nidxs,
-                             const char *fname)
-{
-    size_t i=0;
-    size_t k, stride=1;
-    size_t nd = jl_array_ndims(a);
-    for(k=0; k < nidxs; k++) {
-        if (!jl_is_long(args[k]))
-            jl_type_error(fname, (jl_value_t*)jl_long_type, args[k]);
-        size_t ii = jl_unbox_long(args[k])-1;
-        i += ii * stride;
-        size_t d = k>=nd ? 1 : jl_array_dim(a, k);
-        if (k < nidxs-1 && ii >= d)
-            jl_bounds_error_v((jl_value_t*)a, args, nidxs);
-        stride *= d;
-    }
-    for(; k < nd; k++)
-        stride *= jl_array_dim(a, k);
-    if (i >= stride)
-        jl_bounds_error_v((jl_value_t*)a, args, nidxs);
-    return i;
-}
-
-JL_CALLABLE(jl_f_arrayref)
-{
-    JL_NARGSV(arrayref, 2);
-    JL_TYPECHK(arrayref, array, args[0]);
-    jl_array_t *a = (jl_array_t*)args[0];
-    size_t i = array_nd_index(a, &args[1], nargs-1, "arrayref");
-    return jl_arrayref(a, i);
-}
-
 JL_DLLEXPORT int jl_array_isassigned(jl_array_t *a, size_t i)
 {
     if (a->flags.ptrarray)
@@ -491,13 +483,8 @@ JL_DLLEXPORT int jl_array_isassigned(jl_array_t *a, size_t i)
 int jl_array_isdefined(jl_value_t **args0, int nargs)
 {
     assert(jl_is_array(args0[0]));
-    jl_value_t **depwarn_args;
-    JL_GC_PUSHARGS(depwarn_args, 3);
-    depwarn_args[0] = jl_get_global(jl_base_module, jl_symbol("depwarn"));
-    depwarn_args[1] = jl_cstr_to_string("isdefined(a::Array, i::Int) is deprecated, use isassigned(a, i) instead");
-    depwarn_args[2] = (jl_value_t*) jl_symbol("isdefined");
-    jl_apply(depwarn_args, 3);
-    JL_GC_POP();
+    jl_depwarn("`isdefined(a::Array, i::Int)` is deprecated, "
+               "use `isassigned(a, i)` instead", (jl_value_t*)jl_symbol("isdefined"));
 
     jl_array_t *a = (jl_array_t*)args0[0];
     jl_value_t **args = &args0[1];
@@ -530,7 +517,7 @@ JL_DLLEXPORT void jl_arrayset(jl_array_t *a, jl_value_t *rhs, size_t i)
     assert(i < jl_array_len(a));
     jl_value_t *el_type = jl_tparam0(jl_typeof(a));
     if (el_type != (jl_value_t*)jl_any_type) {
-        if (!jl_subtype(rhs, el_type, 1))
+        if (!jl_isa(rhs, el_type))
             jl_type_error("arrayset", el_type, rhs);
     }
     if (!a->flags.ptrarray) {
@@ -540,16 +527,6 @@ JL_DLLEXPORT void jl_arrayset(jl_array_t *a, jl_value_t *rhs, size_t i)
         ((jl_value_t**)a->data)[i] = rhs;
         jl_gc_wb(jl_array_owner(a), rhs);
     }
-}
-
-JL_CALLABLE(jl_f_arrayset)
-{
-    JL_NARGSV(arrayset, 3);
-    JL_TYPECHK(arrayset, array, args[0]);
-    jl_array_t *a = (jl_array_t*)args[0];
-    size_t i = array_nd_index(a, &args[2], nargs-2, "arrayset");
-    jl_arrayset(a, args[1], i);
-    return args[0];
 }
 
 JL_DLLEXPORT void jl_arrayunset(jl_array_t *a, size_t i)
@@ -592,6 +569,20 @@ static int NOINLINE array_resize_buffer(jl_array_t *a, size_t newlen)
         a->data = jl_gc_managed_realloc(olddata, nbytes, oldnbytes,
                                         a->flags.isaligned, (jl_value_t*)a);
     }
+    else if (a->flags.how == 3 && jl_is_string(jl_array_data_owner(a))) {
+        // if data is in a String, keep it that way
+        jl_value_t *s;
+        if (a->flags.isshared) {
+            s = jl_alloc_string(nbytes);
+            newbuf = 1;
+        }
+        else {
+            s = jl_gc_realloc_string(jl_array_data_owner(a), nbytes);
+        }
+        jl_array_data_owner(a) = s;
+        jl_gc_wb(a, s);
+        a->data = jl_string_data(s);
+    }
     else {
         newbuf = 1;
         if (
@@ -627,6 +618,9 @@ static void NOINLINE array_try_unshare(jl_array_t *a)
     if (a->flags.isshared) {
         if (a->flags.how != 3)
             jl_error("cannot resize array with shared data");
+        // allow resizing when data is shared with a String
+        if (jl_is_string(jl_array_data_owner(a)))
+            return;
         assert(a->offset == 0);
         size_t len = jl_array_nrows(a);
         size_t es = a->elsize;
@@ -671,7 +665,6 @@ STATIC_INLINE void jl_array_grow_at_beg(jl_array_t *a, size_t idx, size_t inc,
     char *data = (char*)a->data;
     char *newdata;
     if (a->offset >= inc) {
-        assert(!a->flags.isshared);
         newdata = data - nbinc;
         a->offset -= inc;
         if (idx > 0) {
@@ -700,7 +693,6 @@ STATIC_INLINE void jl_array_grow_at_beg(jl_array_t *a, size_t idx, size_t inc,
             a->offset = newoffset;
         }
         else {
-            assert(!a->flags.isshared);
             a->offset = (a->maxsize - newnrows) / 2;
             newdata = data - oldoffsnb + a->offset * elsz;
             // We could use memcpy if resizing allocates a new buffer,
@@ -819,7 +811,6 @@ STATIC_INLINE void jl_array_del_at_beg(jl_array_t *a, size_t idx, size_t dec,
 {
     // no error checking
     // assume inbounds, assume unshared
-    assert(!a->flags.isshared);
     size_t elsz = a->elsize;
     size_t offset = a->offset;
     offset += dec;
@@ -854,7 +845,6 @@ STATIC_INLINE void jl_array_del_at_end(jl_array_t *a, size_t idx, size_t dec,
 {
     // no error checking
     // assume inbounds, assume unshared
-    assert(!a->flags.isshared);
     char *data = (char*)a->data;
     size_t elsz = a->elsize;
     size_t last = idx + dec;
@@ -1038,6 +1028,7 @@ STATIC_INLINE int jl_has_implicit_byte(jl_array_t *a)
     //     We should check the owner.
     if (a->flags.how == 3) {
         a = (jl_array_t*)jl_array_data_owner(a);
+        if (jl_is_string(a)) return 1;
         return a->elsize == 1 && jl_has_implicit_byte_owned(a);
     }
     return jl_has_implicit_byte_owned(a);

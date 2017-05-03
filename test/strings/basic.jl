@@ -1,10 +1,7 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # constructors
-let d = [0x61,0x62,0x63,0x21]
-    @test String(d) == "abc!"
-    @test String(d).data === d # String(d) should not make a copy
-end
+@test String([0x61,0x62,0x63,0x21]) == "abc!"
 @test String("abc!") == "abc!"
 
 @test isempty(string())
@@ -161,7 +158,7 @@ end
 @test lcfirst("*")=="*"
 
 # test AbstractString functions at beginning of string.jl
-immutable tstStringType <: AbstractString
+struct tstStringType <: AbstractString
     data::Array{UInt8,1}
 end
 tstr = tstStringType("12")
@@ -175,9 +172,9 @@ gstr = GenericString("12")
 @test convert(Array{Char,1}, gstr) ==['1';'2']
 @test convert(Symbol, gstr)==Symbol("12")
 
-@test getindex(gstr, Bool(1))=='1'
-@test getindex(gstr,Bool(1):Bool(1))=="1"
-@test getindex(gstr,AbstractVector([Bool(1):Bool(1);]))=="1"
+@test gstr[1] == '1'
+@test gstr[1:1] == "1"
+@test gstr[[1]] == "1"
 
 @test done(eachindex("foobar"),7)
 @test eltype(Base.EachStringIndex) == Int
@@ -190,9 +187,8 @@ gstr = GenericString("12")
 
 @test length(GenericString(""))==0
 
-@test getindex(gstr,AbstractVector([Bool(1):Bool(1);]))=="1"
-
-@test nextind(AbstractArray([Bool(1):Bool(1);]),1)==2
+@test nextind(1:1, 1) == 2
+@test nextind([1], 1) == 2
 
 @test ind2chr(gstr,2)==2
 
@@ -248,7 +244,7 @@ end
 
 cstrdup(s) = @static is_windows() ? ccall(:_strdup, Cstring, (Cstring,), s) : ccall(:strdup, Cstring, (Cstring,), s)
 let p = cstrdup("hello")
-    @test unsafe_string(p) == "hello" == unsafe_wrap(String, cstrdup(p), true)
+    @test unsafe_string(p) == "hello"
     Libc.free(p)
 end
 
@@ -441,14 +437,14 @@ foobaz(ch) = reinterpret(Char, typemax(UInt32))
 
 # issue #18280: next/nextind must return past String's underlying data
 for s in ("Hello", "Σ", "こんにちは", "😊😁")
-    @test next(s, endof(s))[2] > endof(s.data)
-    @test nextind(s, endof(s)) > endof(s.data)
+    @test next(s, endof(s))[2] > sizeof(s)
+    @test nextind(s, endof(s)) > sizeof(s)
 end
 
 # Test cmp with AbstractStrings that don't index the same as UTF-8, which would include
 # (LegacyString.)UTF16String and (LegacyString.)UTF32String, among others.
 
-type CharStr <: AbstractString
+mutable struct CharStr <: AbstractString
     chars::Vector{Char}
     CharStr(x) = new(collect(x))
 end
@@ -464,3 +460,7 @@ Base.endof(x::CharStr) = endof(x.chars)
 # Case with Unicode characters
 @test cmp("\U1f596\U1f596", CharStr("\U1f596")) == 1   # Gives BoundsError with bug
 @test cmp(CharStr("\U1f596"), "\U1f596\U1f596") == -1
+
+# issue #12495: check that logical indexing attempt raises ArgumentError
+@test_throws ArgumentError "abc"[[true, false, true]]
+@test_throws ArgumentError "abc"[BitArray([true, false, true])]

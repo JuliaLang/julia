@@ -1,6 +1,9 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 using Base.Test
 include("choosetests.jl")
+include("testdefs.jl")
+
 tests, net_on = choosetests(ARGS)
 tests = unique(tests)
 
@@ -8,18 +11,6 @@ const max_worker_rss = if haskey(ENV, "JULIA_TEST_MAXRSS_MB")
     parse(Int, ENV["JULIA_TEST_MAXRSS_MB"]) * 2^20
 else
     typemax(Csize_t)
-end
-
-if haskey(ENV, "JULIA_TEST_EXEFLAGS")
-    const test_exeflags = `$(Base.shell_split(ENV["JULIA_TEST_EXEFLAGS"]))`
-else
-    const test_exeflags = `--check-bounds=yes --startup-file=no --depwarn=error`
-end
-
-if haskey(ENV, "JULIA_TEST_EXENAME")
-    const test_exename = `$(Base.shell_split(ENV["JULIA_TEST_EXENAME"]))`
-else
-    const test_exename = `$(joinpath(JULIA_HOME, Base.julia_exename()))`
 end
 
 const node1_tests = String[]
@@ -31,19 +22,22 @@ function move_to_node1(t)
 end
 # Base.compile only works from node 1, so compile test is handled specially
 move_to_node1("compile")
-# In a constrained memory environment, run the parallel test after all other tests
+# In a constrained memory environment, run the "distributed" test after all other tests
 # since it starts a lot of workers and can easily exceed the maximum memory
-max_worker_rss != typemax(Csize_t) && move_to_node1("parallel")
+max_worker_rss != typemax(Csize_t) && move_to_node1("distributed")
 
 cd(dirname(@__FILE__)) do
     n = 1
     if net_on
         n = min(Sys.CPU_CORES, length(tests))
-        n > 1 && addprocs(n; exename=test_exename, exeflags=test_exeflags)
+        if n > 1
+            addprocs_with_testenv(n)
+            @sync for p in workers()
+                @async remotecall_fetch(include, p, "testdefs.jl")
+            end
+        end
         BLAS.set_num_threads(1)
     end
-
-    @everywhere include("testdefs.jl")
 
     #pretty print the information about gc and mem usage
     name_align    = maximum([length("Test (Worker)"); map(x -> length(x) + 3 + ndigits(nworkers()), tests)])
@@ -61,24 +55,25 @@ cd(dirname(@__FILE__)) do
                 while length(tests) > 0
                     test = shift!(tests)
                     local resp
+                    wrkr = p
                     try
-                        resp = remotecall_fetch(runtests, p, test)
+                        resp = remotecall_fetch(runtests, wrkr, test)
                     catch e
                         resp = [e]
                     end
                     push!(results, (test, resp))
                     if (isa(resp[end], Integer) && (resp[end] > max_worker_rss)) || isa(resp, Exception)
                         if n > 1
-                            rmprocs(p, waitfor=5.0)
-                            p = addprocs(1; exename=test_exename, exeflags=test_exeflags)[1]
-                            remotecall_fetch(()->include("testdefs.jl"), p)
+                            rmprocs(wrkr, waitfor=30)
+                            p = addprocs_with_testenv(1)[1]
+                            remotecall_fetch(include, p, "testdefs.jl")
                         else
                             # single process testing, bail if mem limit reached, or, on an exception.
                             isa(resp, Exception) ? rethrow(resp) : error("Halting tests. Memory limit reached : $resp > $max_worker_rss")
                         end
                     end
                     if !isa(resp[1], Exception)
-                        print_with_color(:white, rpad(test*" ($p)", name_align, " "), " | ")
+                        print_with_color(:white, rpad(test*" ($wrkr)", name_align, " "), " | ")
                         time_str = @sprintf("%7.2f",resp[2])
                         print_with_color(:white, rpad(time_str,elapsed_align," "), " | ")
                         gc_str = @sprintf("%5.2f",resp[5].total_time/10^9)
@@ -98,7 +93,7 @@ cd(dirname(@__FILE__)) do
         end
     end
     # Free up memory =)
-    n > 1 && rmprocs(workers(), waitfor=5.0)
+    n > 1 && rmprocs(workers(), waitfor=30)
     for t in node1_tests
         # As above, try to run each test
         # which must run on node 1. If
@@ -154,35 +149,34 @@ cd(dirname(@__FILE__)) do
             Base.Test.push_testset(fake)
             Base.Test.record(o_ts, fake)
             Base.Test.pop_testset()
-        elseif isa(res[2][1], RemoteException)
+        elseif isa(res[2][1], RemoteException) && isa(res[2][1].captured.ex, Base.Test.TestSetException)
             println("Worker $(res[2][1].pid) failed running test $(res[1]):")
             Base.showerror(STDOUT,res[2][1].captured)
-            o_ts.anynonpass = true
-            if isa(res[2][1].captured.ex, Base.Test.TestSetException)
-                fake = Base.Test.DefaultTestSet(res[1])
-                for i in 1:res[2][1].captured.ex.pass
-                    Base.Test.record(fake, Base.Test.Pass(:test, nothing, nothing, nothing))
-                end
-                for i in 1:res[2][1].captured.ex.broken
-                    Base.Test.record(fake, Base.Test.Broken(:test, nothing))
-                end
-                for t in res[2][1].captured.ex.errors_and_fails
-                    Base.Test.record(fake, t)
-                end
-                Base.Test.push_testset(fake)
-                Base.Test.record(o_ts, fake)
-                Base.Test.pop_testset()
+            fake = Base.Test.DefaultTestSet(res[1])
+            for i in 1:res[2][1].captured.ex.pass
+                Base.Test.record(fake, Base.Test.Pass(:test, nothing, nothing, nothing))
             end
+            for i in 1:res[2][1].captured.ex.broken
+                Base.Test.record(fake, Base.Test.Broken(:test, nothing))
+            end
+            for t in res[2][1].captured.ex.errors_and_fails
+                Base.Test.record(fake, t)
+            end
+            Base.Test.push_testset(fake)
+            Base.Test.record(o_ts, fake)
+            Base.Test.pop_testset()
         elseif isa(res[2][1], Exception)
-            # If this test raised an exception that is not a RemoteException, that means
-            # the test runner itself had some problem, so we may have hit a segfault
-            # or something similar.  Record this testset as Errored.
-            o_ts.anynonpass = true
+            # If this test raised an exception that is not a remote testset exception,
+            # i.e. not a RemoteException capturing a TestSetException that means
+            # the test runner itself had some problem, so we may have hit a segfault,
+            # deserialization errors or something similar.  Record this testset as Errored.
             fake = Base.Test.DefaultTestSet(res[1])
             Base.Test.record(fake, Base.Test.Error(:test_error, res[1], res[2][1], []))
             Base.Test.push_testset(fake)
             Base.Test.record(o_ts, fake)
             Base.Test.pop_testset()
+        else
+            error(string("Unknown result type : ", typeof(res)))
         end
     end
     println()
@@ -192,6 +186,6 @@ cd(dirname(@__FILE__)) do
     else
         println("    \033[31;1mFAILURE\033[0m")
         Base.Test.print_test_errors(o_ts)
-        error()
+        throw(Test.FallbackTestSetException("Test run finished with errors"))
     end
 end

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## Unary operators ##
 
@@ -8,14 +8,27 @@
 Transform an array to its complex conjugate in-place.
 
 See also [`conj`](@ref).
-"""
-conj!{T<:Number}(A::AbstractArray{T}) = (@inbounds broadcast!(conj, A, A); A)
 
-for f in (:-, :~, :conj, :sign, :real, :imag)
+```jldoctest
+julia> A = [1+im 2-im; 2+2im 3+im]
+2×2 Array{Complex{Int64},2}:
+ 1+1im  2-1im
+ 2+2im  3+1im
+
+julia> conj!(A);
+
+julia> A
+2×2 Array{Complex{Int64},2}:
+ 1-1im  2+1im
+ 2-2im  3-1im
+```
+"""
+conj!(A::AbstractArray{<:Number}) = (@inbounds broadcast!(conj, A, A); A)
+
+for f in (:-, :conj, :real, :imag)
     @eval ($f)(A::AbstractArray) = broadcast($f, A)
 end
 
-!(A::AbstractArray{Bool}) = broadcast(!, A)
 
 ## Binary arithmetic operators ##
 
@@ -28,16 +41,16 @@ end
 
 for f in (:/, :\, :*, :+, :-)
     if f != :/
-        @eval ($f){T}(A::Number, B::AbstractArray{T}) = broadcast($f, A, B)
+        @eval ($f)(A::Number, B::AbstractArray) = broadcast($f, A, B)
     end
     if f != :\
-        @eval ($f){T}(A::AbstractArray{T}, B::Number) = broadcast($f, A, B)
+        @eval ($f)(A::AbstractArray, B::Number) = broadcast($f, A, B)
     end
 end
 
 ## data movement ##
 
-function flipdim{T}(A::Array{T}, d::Integer)
+function flipdim(A::Array{T}, d::Integer) where T
     nd = ndims(A)
     1 ≤ d ≤ nd || throw(ArgumentError("dimension $d is not 1 ≤ $d ≤ $nd"))
     sd = size(A, d)
@@ -274,130 +287,3 @@ julia> rot180(a,2)
 ```
 """
 rot180(A::AbstractMatrix, k::Integer) = mod(k, 2) == 1 ? rot180(A) : copy(A)
-
-## Transpose ##
-
-"""
-    transpose!(dest,src)
-
-Transpose array `src` and store the result in the preallocated array `dest`, which should
-have a size corresponding to `(size(src,2),size(src,1))`. No in-place transposition is
-supported and unexpected results will happen if `src` and `dest` have overlapping memory
-regions.
-"""
-transpose!(B::AbstractMatrix, A::AbstractMatrix) = transpose_f!(transpose, B, A)
-
-"""
-    ctranspose!(dest,src)
-
-Conjugate transpose array `src` and store the result in the preallocated array `dest`, which
-should have a size corresponding to `(size(src,2),size(src,1))`. No in-place transposition
-is supported and unexpected results will happen if `src` and `dest` have overlapping memory
-regions.
-"""
-ctranspose!(B::AbstractMatrix, A::AbstractMatrix) = transpose_f!(ctranspose, B, A)
-function transpose!(B::AbstractVector, A::AbstractMatrix)
-    indices(B,1) == indices(A,2) && indices(A,1) == 1:1 || throw(DimensionMismatch("transpose"))
-    copy!(B, A)
-end
-function transpose!(B::AbstractMatrix, A::AbstractVector)
-    indices(B,2) == indices(A,1) && indices(B,1) == 1:1 || throw(DimensionMismatch("transpose"))
-    copy!(B, A)
-end
-function ctranspose!(B::AbstractVector, A::AbstractMatrix)
-    indices(B,1) == indices(A,2) && indices(A,1) == 1:1 || throw(DimensionMismatch("transpose"))
-    ccopy!(B, A)
-end
-function ctranspose!(B::AbstractMatrix, A::AbstractVector)
-    indices(B,2) == indices(A,1) && indices(B,1) == 1:1 || throw(DimensionMismatch("transpose"))
-    ccopy!(B, A)
-end
-
-const transposebaselength=64
-function transpose_f!(f,B::AbstractMatrix,A::AbstractMatrix)
-    inds = indices(A)
-    indices(B,1) == inds[2] && indices(B,2) == inds[1] || throw(DimensionMismatch(string(f)))
-
-    m, n = length(inds[1]), length(inds[2])
-    if m*n<=4*transposebaselength
-        @inbounds begin
-            for j = inds[2]
-                for i = inds[1]
-                    B[j,i] = f(A[i,j])
-                end
-            end
-        end
-    else
-        transposeblock!(f,B,A,m,n,first(inds[1])-1,first(inds[2])-1)
-    end
-    return B
-end
-function transposeblock!(f,B::AbstractMatrix,A::AbstractMatrix,m::Int,n::Int,offseti::Int,offsetj::Int)
-    if m*n<=transposebaselength
-        @inbounds begin
-            for j = offsetj+(1:n)
-                for i = offseti+(1:m)
-                    B[j,i] = f(A[i,j])
-                end
-            end
-        end
-    elseif m>n
-        newm=m>>1
-        transposeblock!(f,B,A,newm,n,offseti,offsetj)
-        transposeblock!(f,B,A,m-newm,n,offseti+newm,offsetj)
-    else
-        newn=n>>1
-        transposeblock!(f,B,A,m,newn,offseti,offsetj)
-        transposeblock!(f,B,A,m,n-newn,offseti,offsetj+newn)
-    end
-    return B
-end
-
-function ccopy!(B, A)
-    RB, RA = eachindex(B), eachindex(A)
-    if RB == RA
-        for i = RB
-            B[i] = ctranspose(A[i])
-        end
-    else
-        for (i,j) = zip(RB, RA)
-            B[i] = ctranspose(A[j])
-        end
-    end
-end
-
-"""
-    transpose(A)
-
-The transposition operator (`.'`).
-
-# Example
-
-```jldoctest
-julia> A = [1 2 3; 4 5 6; 7 8 9]
-3×3 Array{Int64,2}:
- 1  2  3
- 4  5  6
- 7  8  9
-
-julia> transpose(A)
-3×3 Array{Int64,2}:
- 1  4  7
- 2  5  8
- 3  6  9
-```
-"""
-function transpose(A::AbstractMatrix)
-    ind1, ind2 = indices(A)
-    B = similar(A, (ind2, ind1))
-    transpose!(B, A)
-end
-function ctranspose(A::AbstractMatrix)
-    ind1, ind2 = indices(A)
-    B = similar(A, (ind2, ind1))
-    ctranspose!(B, A)
-end
-ctranspose{T<:Real}(A::AbstractVecOrMat{T}) = transpose(A)
-
-transpose(x::AbstractVector) = [ transpose(v) for i=of_indices(x, OneTo(1)), v in x ]
-ctranspose{T}(x::AbstractVector{T}) = T[ ctranspose(v) for i=of_indices(x, OneTo(1)), v in x ]

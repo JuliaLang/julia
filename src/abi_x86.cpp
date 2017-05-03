@@ -42,14 +42,14 @@ struct ABI_x86Layout : AbiLayout {
 inline bool is_complex64(jl_datatype_t *dt) const
 {
     return jl_complex_type != NULL && jl_is_datatype(dt) &&
-        ((jl_datatype_t*)dt)->name == jl_complex_type->name &&
+        ((jl_datatype_t*)dt)->name == ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_complex_type))->name &&
         jl_tparam0(dt) == (jl_value_t*)jl_float32_type;
 }
 
 inline bool is_complex128(jl_datatype_t *dt) const
 {
     return jl_complex_type != NULL && jl_is_datatype(dt) &&
-        ((jl_datatype_t*)dt)->name == jl_complex_type->name &&
+        ((jl_datatype_t*)dt)->name == ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_complex_type))->name &&
         jl_tparam0(dt) == (jl_value_t*)jl_float64_type;
 }
 
@@ -58,7 +58,7 @@ bool use_sret(jl_datatype_t *dt) override
     size_t size = jl_datatype_size(dt);
     if (size == 0)
         return false;
-    if (is_complex64(dt) || (jl_is_bitstype(dt) && size <= 8))
+    if (is_complex64(dt) || (jl_is_primitivetype(dt) && size <= 8))
         return false;
     return true;
 }
@@ -66,7 +66,7 @@ bool use_sret(jl_datatype_t *dt) override
 bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab) override
 {
     size_t size = jl_datatype_size(dt);
-    if (is_complex64(dt) || is_complex128(dt) || (jl_is_bitstype(dt) && size <= 8))
+    if (is_complex64(dt) || is_complex128(dt) || (jl_is_primitivetype(dt) && size <= 8))
         return false;
     ab.addAttribute(Attribute::ByVal);
     return true;

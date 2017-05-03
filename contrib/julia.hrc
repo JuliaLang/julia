@@ -34,8 +34,8 @@
          <block start="/(\bfor\b)/" end="/(\bend\b)/" scheme="julia" region00="mlKeyWord" region01="PairStart" region10="mlKeyWord" region11="PairEnd"/>
          <block start="/(\bif\b)/" end="/(\bend\b)/" scheme="julia" region00="mlKeyWord" region01="PairStart" region10="mlKeyWord" region11="PairEnd"/>
          <block start="/(\bwhile\b)/" end="/(\bend\b)/" scheme="julia" region00="mlKeyWord" region01="PairStart" region10="mlKeyWord" region11="PairEnd"/>
-         <block start="/(\btype\b)/" end="/(\bend\b)/" scheme="julia" region00="mlKeyWord" region01="PairStart" region10="mlKeyWord" region11="PairEnd"/>
-         <block start="/(\bimmutable\b)/" end="/(\bend\b)/" scheme="julia" region00="mlKeyWord" region01="PairStart" region10="mlKeyWord" region11="PairEnd"/>
+         <block start="/(\bmutable struct\b)/" end="/(\bend\b)/" scheme="julia" region00="mlKeyWord" region01="PairStart" region10="mlKeyWord" region11="PairEnd"/>
+         <block start="/(\bstruct\b)/" end="/(\bend\b)/" scheme="julia" region00="mlKeyWord" region01="PairStart" region10="mlKeyWord" region11="PairEnd"/>
          <block start="/(\bmacro\b)/" end="/(\bend\b)/" scheme="julia" region00="mlKeyWord" region01="PairStart" region10="mlKeyWord" region11="PairEnd"/>
          <block start="/(\bquote\b)/" end="/(\bend\b)/" scheme="julia" region00="mlKeyWord" region01="PairStart" region10="mlKeyWord" region11="PairEnd"/>
          <block start="/(\bmodule\b)/" end="/(\bend\b)/" scheme="julia" region00="mlKeyWord" region01="PairStart" region10="mlKeyWord" region11="PairEnd"/>
@@ -85,11 +85,11 @@
             <word name="catch"/>
             <word name="finally"/>
             <word name="const"/>
-            <word name="immutable"/>
+            <word name="struct"/>
             <word name="import"/>
             <word name="importall"/>
             <word name="export"/>
-            <word name="type"/>
+            <word name="mutable struct"/>
             <word name="typealias"/>
             <word name="return"/>
             <word name="true"/>
@@ -97,7 +97,7 @@
             <word name="macro"/>
             <word name="quote"/>
             <word name="in"/>
-            <word name="abstract"/>
+            <word name="abstract type"/>
             <word name="module"/>
             <word name="using"/>
             <word name="continue"/>
@@ -105,7 +105,7 @@
             <word name="let"/>
             <word name="begin"/>
             <word name="local"/>
-            <word name="bitstype"/>
+            <word name="primitive type"/>
             <word name="baremodule"/>
          </keywords>
 <!-- General types -->

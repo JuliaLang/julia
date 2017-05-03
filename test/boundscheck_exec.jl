@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module TestBoundsCheck
 
@@ -193,5 +193,20 @@ a19554 = Ref{Array{Float64}}([1 2; 3 4])
 @test f19554(a19554) === 2.0
 @test f19554_2(a19554, 1) === a19554
 @test a19554[][3] === f19554(a19554) === 1.0
+
+# Ensure unsafe_view doesn't check bounds
+function V1()
+    A = rand(10,10)
+    B = view(A, 4:7, 4:7)
+    C = Base.unsafe_view(B, -2:7, -2:7)
+    @test C == A
+    nothing
+end
+
+if bc_opt == bc_default || bc_opt == bc_off
+    @test V1() === nothing
+else
+    @test_throws BoundsError V1()
+end
 
 end

@@ -1,6 +1,6 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
-isdefined(Main, :TestHelpers) || eval(Main, :(include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))))
+isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
 using TestHelpers.OAs
 
 const OAs_name = join(fullname(OAs), ".")
@@ -15,19 +15,27 @@ h = OffsetArray([-1,1,-2,2,0], (-3,))
 @test_throws ErrorException size(v, 1)
 
 A0 = [1 3; 2 4]
-A = OffsetArray(A0, (-1,2))                   # LinearFast
-S = OffsetArray(view(A0, 1:2, 1:2), (-1,2))   # LinearSlow
+A = OffsetArray(A0, (-1,2))                   # IndexLinear
+S = OffsetArray(view(A0, 1:2, 1:2), (-1,2))   # IndexCartesian
 @test indices(A) == indices(S) == (0:1, 3:4)
 @test_throws ErrorException size(A)
 @test_throws ErrorException size(A, 1)
 
 # Scalar indexing
-@test A[0,3] == A[1] == S[0,3] == S[1] == 1
-@test A[1,3] == A[2] == S[1,3] == S[2] == 2
-@test A[0,4] == A[3] == S[0,4] == S[3] == 3
-@test A[1,4] == A[4] == S[1,4] == S[4] == 4
+@test A[0,3] == A[1] == A[0,3,1] == S[0,3] == S[1] == S[0,3,1] == 1
+@test A[1,3] == A[2] == A[1,3,1] == S[1,3] == S[2] == S[1,3,1] == 2
+@test A[0,4] == A[3] == A[0,4,1] == S[0,4] == S[3] == S[0,4,1] == 3
+@test A[1,4] == A[4] == A[1,4,1] == S[1,4] == S[4] == S[1,4,1] == 4
 @test_throws BoundsError A[1,1]
 @test_throws BoundsError S[1,1]
+@test_throws BoundsError A[0,3,2]
+@test_throws BoundsError S[0,3,2]
+# partial indexing
+S3 = OffsetArray(view(reshape(collect(1:4*3*2), 4, 3, 2), 1:3, 1:2, :), (-1,-2,1))
+@test S3[1,-1] == 2
+@test S3[1,0] == 6
+@test_throws BoundsError S3[1,1]
+@test_throws BoundsError S3[1,-2]
 
 # Vector indexing
 @test A[:, 3] == S[:, 3] == OffsetArray([1,2], (A.offsets[1],))
@@ -139,7 +147,7 @@ smry = summary(v)
 @test contains(smry, "OffsetArray{Float64,1")
 @test contains(smry, "with indices -1:1")
 function cmp_showf(printfunc, io, A)
-    ioc = IOContext(io, limit=true, compact=true)
+    ioc = IOContext(IOContext(io, :limit => true), :compact => true)
     printfunc(ioc, A)
     str1 = String(take!(io))
     printfunc(ioc, parent(A))
@@ -155,18 +163,21 @@ targets1 = ["0-dimensional $OAs_name.OffsetArray{Float64,0,Array{Float64,0}}:\n1
             "$OAs_name.OffsetArray{Float64,2,Array{Float64,2}} with indices 2:2×3:3:\n 1.0",
             "$OAs_name.OffsetArray{Float64,3,Array{Float64,3}} with indices 2:2×3:3×4:4:\n[:, :, 4] =\n 1.0",
             "$OAs_name.OffsetArray{Float64,4,Array{Float64,4}} with indices 2:2×3:3×4:4×5:5:\n[:, :, 4, 5] =\n 1.0"]
-targets2 = ["(1.0,1.0)",
-            "([1.0],[1.0])",
-            "(\n[1.0],\n\n[1.0])",
-            "(\n[1.0],\n\n[1.0])",
-            "(\n[1.0],\n\n[1.0])"]
+targets2 = ["(1.0, 1.0)",
+            "([1.0], [1.0])",
+            "([1.0], [1.0])",
+            "([1.0], [1.0])",
+            "([1.0], [1.0])"]
 for n = 0:4
     a = OffsetArray(ones(Float64,ntuple(d->1,n)), ntuple(identity,n))
-    show(IOContext(io, limit=true), MIME("text/plain"), a)
+    show(IOContext(io, :limit => true), MIME("text/plain"), a)
     @test String(take!(io)) == targets1[n+1]
-    show(IOContext(io, limit=true), MIME("text/plain"), (a,a))
+    show(IOContext(io, :limit => true), MIME("text/plain"), (a,a))
     @test String(take!(io)) == targets2[n+1]
 end
+P = OffsetArray(rand(8,8), (1,1))
+PV = view(P, 2:3, :)
+@test endswith(summary(PV), "with indices Base.OneTo(2)×2:9")
 
 # Similar
 B = similar(A, Float32)
@@ -267,11 +278,24 @@ am = map(identity, a)
 
 # other functions
 v = OffsetArray(v0, (-3,))
+@test endof(v) == 1
 @test v ≈ v
-@test parent(v') == v0'
-@test indices(v') === (1:1,-2:1)
+@test indices(v') === (Base.OneTo(1),-2:1)
+@test parent(v) == collect(v)
+rv = reverse(v)
+@test indices(rv) == indices(v)
+@test rv[1] == v[-2]
+@test rv[0] == v[-1]
+@test rv[-1] == v[0]
+@test rv[-2] == v[1]
+cv = copy(v)
+@test reverse!(cv) == rv
+
 A = OffsetArray(rand(4,4), (-3,5))
 @test A ≈ A
+@test indices(A') === (6:9, -2:1)
+@test parent(A') == parent(A)'
+@test collect(A) == parent(A)
 @test maximum(A) == maximum(parent(A))
 @test minimum(A) == minimum(parent(A))
 @test extrema(A) == extrema(parent(A))
@@ -315,10 +339,10 @@ I,J,N = findnz(z)
 @test mean(A_3_3) == median(A_3_3) == 5
 @test mean(x->2x, A_3_3) == 10
 @test mean(A_3_3, 1) == median(A_3_3, 1) == OffsetArray([2 5 8], (0,A_3_3.offsets[2]))
-@test mean(A_3_3, 2) == median(A_3_3, 2) == OffsetArray([4,5,6]'', (A_3_3.offsets[1],0))
+@test mean(A_3_3, 2) == median(A_3_3, 2) == OffsetArray(reshape([4,5,6],(3,1)), (A_3_3.offsets[1],0))
 @test var(A_3_3) == 7.5
 @test std(A_3_3, 1) == OffsetArray([1 1 1], (0,A_3_3.offsets[2]))
-@test std(A_3_3, 2) == OffsetArray([3,3,3]'', (A_3_3.offsets[1],0))
+@test std(A_3_3, 2) == OffsetArray(reshape([3,3,3], (3,1)), (A_3_3.offsets[1],0))
 @test sum(OffsetArray(ones(Int,3000), -1000)) == 3000
 
 @test vecnorm(v) ≈ vecnorm(parent(v))
@@ -384,14 +408,16 @@ for s = -5:5
     for i = 1:5
         thisa = OffsetArray(a[i], (s,))
         thisc = c[mod1(i+s+5,5)]
-        @test fft(thisa) ≈ thisc
-        @test fft(thisa, 1) ≈ thisc
-        @test ifft(fft(thisa)) ≈ circcopy!(a1, thisa)
-        @test ifft(fft(thisa, 1), 1) ≈ circcopy!(a1, thisa)
-        @test rfft(thisa) ≈ thisc[1:3]
-        @test rfft(thisa, 1) ≈ thisc[1:3]
-        @test irfft(rfft(thisa, 1), 5, 1) ≈ a1
-        @test irfft(rfft(thisa, 1), 5, 1) ≈ a1
+        if Base.USE_GPL_LIBS
+            @test fft(thisa) ≈ thisc
+            @test fft(thisa, 1) ≈ thisc
+            @test ifft(fft(thisa)) ≈ circcopy!(a1, thisa)
+            @test ifft(fft(thisa, 1), 1) ≈ circcopy!(a1, thisa)
+            @test rfft(thisa) ≈ thisc[1:3]
+            @test rfft(thisa, 1) ≈ thisc[1:3]
+            @test irfft(rfft(thisa, 1), 5, 1) ≈ a1
+            @test irfft(rfft(thisa, 1), 5, 1) ≈ a1
+        end
     end
 end
 
@@ -402,7 +428,7 @@ end # let
 # (#18107)
 module SimilarUR
     using Base.Test
-    immutable MyURange <: AbstractUnitRange{Int}
+    struct MyURange <: AbstractUnitRange{Int}
         start::Int
         stop::Int
     end

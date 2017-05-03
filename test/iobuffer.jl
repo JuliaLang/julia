@@ -1,11 +1,11 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ioslength(io::IOBuffer) = (io.seekable ? io.size : nb_available(io))
 
 let io = IOBuffer()
 @test eof(io)
 @test_throws EOFError read(io,UInt8)
-@test write(io,"abc") == 3
+@test write(io,"abc") === 3
 @test isreadable(io)
 @test iswritable(io)
 @test isopen(io)
@@ -29,7 +29,7 @@ truncate(io, 0)
 truncate(io, 10)
 @test position(io) == 0
 @test all(io.data .== 0)
-@test write(io,Int16[1,2,3,4,5,6]) == 12
+@test write(io,Int16[1,2,3,4,5,6]) === 12
 seek(io, 2)
 truncate(io, 10)
 @test ioslength(io) == 10
@@ -39,8 +39,8 @@ truncate(io, 0)
 @test write(io,"boston\ncambridge\n") > 0
 @test String(take!(io)) == "boston\ncambridge\n"
 @test String(take!(io)) == ""
-@test write(io, Complex{Float64}(0)) == 16
-@test write(io, Rational{Int64}(1//2)) == 16
+@test write(io, Complex{Float64}(0)) === 16
+@test write(io, Rational{Int64}(1//2)) === 16
 close(io)
 @test_throws ArgumentError write(io,UInt8[0])
 @test_throws ArgumentError seek(io,0)
@@ -49,7 +49,7 @@ end
 
 let io = IOBuffer("hamster\nguinea pig\nturtle")
 @test position(io) == 0
-@test readline(io) == "hamster\n"
+@test readline(io) == "hamster"
 @test readstring(io) == "guinea pig\nturtle"
 @test_throws EOFError read(io,UInt8)
 seek(io,0)
@@ -66,14 +66,28 @@ let io = PipeBuffer()
 @test_throws EOFError read(io,UInt8)
 @test write(io,"pancakes\nwaffles\nblueberries\n") > 0
 @test position(io) == 0
-@test readline(io) == "pancakes\n"
+@test readline(io) == "pancakes"
 Base.compact(io)
-@test readline(io) == "waffles\n"
+@test readline(io) == "waffles"
 @test write(io,"whipped cream\n") > 0
-@test readline(io) == "blueberries\n"
+@test readline(io) == "blueberries"
 @test_throws ArgumentError seek(io,0)
 @test_throws ArgumentError truncate(io,0)
-@test readline(io) == "whipped cream\n"
+@test readline(io) == "whipped cream"
+@test write(io,"pancakes\nwaffles\nblueberries\n") > 0
+@test readlines(io) == String["pancakes", "waffles", "blueberries"]
+write(io,"\n\r\n\n\r \n") > 0
+@test readlines(io, chomp=false) == String["\n", "\r\n", "\n", "\r \n"]
+write(io,"\n\r\n\n\r \n") > 0
+@test readlines(io, chomp=true) == String["", "", "", "\r "]
+@test write(io,"α\nβ\nγ\nδ") > 0
+@test readlines(io, chomp=false) == String["α\n","β\n","γ\n","δ"]
+@test write(io,"α\nβ\nγ\nδ") > 0
+@test readlines(io, chomp=true) == String["α", "β", "γ", "δ"]
+@test readlines(IOBuffer(""), chomp=false) == []
+@test readlines(IOBuffer(""), chomp=true) == []
+@test readlines(IOBuffer("first\nsecond"), chomp=false) == String["first\n", "second"]
+@test readlines(IOBuffer("first\nsecond"), chomp=true) == String["first", "second"]
 Base.compact(io)
 @test position(io) == 0
 @test ioslength(io) == 0
@@ -101,11 +115,11 @@ write(io,[1,2,3])
 @test ioslength(io) == 75
 @test length(io.data) == 75
 skip(io,1)
-@test write(io,UInt8(104)) == 1
+@test write(io,UInt8(104)) === 1
 skip(io,3)
-@test write(io,"apples".data) == 3
+@test write(io,b"apples") === 3
 skip(io,71)
-@test write(io,'y') == 1
+@test write(io,'y') === 1
 @test readstring(io) == "happy"
 @test eof(io)
 write(io,zeros(UInt8,73))
@@ -133,7 +147,7 @@ a = Array{UInt8}(1024)
 @test eof(io)
 end
 
-@test isempty(readlines(IOBuffer()))
+@test isempty(readlines(IOBuffer(), chomp=false))
 
 # issue #8193
 let io=IOBuffer("asdf")
@@ -193,7 +207,7 @@ let bstream = BufferStream()
     @test isreadable(bstream)
     @test iswritable(bstream)
     @test nb_available(bstream) == 0
-    @test sprint(io -> show(io,bstream)) == "BufferStream() bytes waiting:$(nb_available(bstream.buffer)), isopen:true"
+    @test sprint(show, bstream) == "BufferStream() bytes waiting:$(nb_available(bstream.buffer)), isopen:true"
     a = rand(UInt8,10)
     write(bstream,a)
     @test !eof(bstream)

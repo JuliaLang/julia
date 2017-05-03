@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.Test
 
@@ -57,23 +57,36 @@ bimg  = randn(n,2)/2
                     @test l*q ≈ a
                     @test full(lqa) ≈ a
                     @test full(copy(lqa)) ≈ a
+                    lstring = sprint(show,l)
+                    qstring = sprint(show,q)
+                    @test sprint(show,lqa) == "$(typeof(lqa)) with factors L and Q:\n$lstring\n$qstring"
                 end
                 @testset "Binary ops" begin
-                    @test_approx_eq_eps a*(lqa\b) b 3000ε
-                    @test_approx_eq_eps lqa*b qra[:Q]*qra[:R]*b 3000ε
-                    @test_approx_eq_eps A_mul_Bc(eye(eltyb,size(q.factors,2)),q)*full(q, thin=false) eye(n) 5000ε
+                    @test a*(lqa\b) ≈ b atol=3000ε
+                    @test lqa*b ≈ qra[:Q]*qra[:R]*b atol=3000ε
+                    @test A_mul_Bc(eye(eltyb,size(q.factors,2)),q)*full(q,thin=false) ≈ eye(n) atol=5000ε
                     if eltya != Int
                         @test eye(eltyb,n)*q ≈ convert(AbstractMatrix{tab},q)
                     end
-                    @test_approx_eq_eps q*b full(q, thin=false)*b 100ε
-                    @test_approx_eq_eps q.'*b full(q, thin=false).'*b 100ε
-                    @test_approx_eq_eps q'*b full(q, thin=false)'*b 100ε
-                    @test_approx_eq_eps a*q a*full(q, thin=false) 100ε
-                    @test_approx_eq_eps a*q.' a*full(q, thin=false).' 100ε
-                    @test_approx_eq_eps a*q' a*full(q, thin=false)' 100ε
+                    @test q*b ≈ full(q,thin=false)*b atol=100ε
+                    @test q.'*b ≈ full(q,thin=false).'*b atol=100ε
+                    @test q'*b ≈ full(q,thin=false)'*b atol=100ε
+                    @test a*q ≈ a*full(q,thin=false) atol=100ε
+                    @test a*q.' ≈ a*full(q,thin=false).' atol=100ε
+                    @test a*q' ≈ a*full(q,thin=false)' atol=100ε
+                    @test a'*q ≈ a'*full(q,thin=false) atol=100ε
+                    @test a'*q' ≈ a'*full(q,thin=false)' atol=100ε
                     @test_throws DimensionMismatch q*b[1:n1 + 1]
                     @test_throws DimensionMismatch Ac_mul_B(q,ones(eltya,n+2,n+2))
                     @test_throws DimensionMismatch ones(eltyb,n+2,n+2)*q
+                    if isa(a, DenseArray) && isa(b, DenseArray)
+                        # use this to test 2nd branch in mult code
+                        pad_a = vcat(eye(a), a)
+                        pad_b = hcat(eye(b), b)
+                        @test pad_a*q ≈ pad_a*full(q,thin=false) atol=100ε
+                        @test q.'*pad_b ≈ full(q,thin=false).'*pad_b atol=100ε
+                        @test q'*pad_b ≈ full(q,thin=false)'*pad_b atol=100ε
+                    end
                 end
             end
         end

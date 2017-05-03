@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.Iterators.Enumerate
 
@@ -206,7 +206,7 @@ function setup_chnl_and_tasks(exec_func, ntasks, batch_size=nothing)
     chnl = Channel(0)
     worker_tasks = []
     foreach(_ -> start_worker_task!(worker_tasks, exec_func, chnl, batch_size), 1:nt)
-
+    yield()
     return (chnl, worker_tasks)
 end
 
@@ -246,7 +246,7 @@ end
 
 # Special handling for some types.
 function asyncmap(f, s::AbstractString; kwargs...)
-    s2=Array(Char, length(s))
+    s2 = Array{Char,1}(length(s))
     asyncmap!(f, s2, s; kwargs...)
     return convert(String, s2)
 end
@@ -267,7 +267,7 @@ function asyncmap(f, s::AbstractSparseArray...; kwargs...)
     return sparse(asyncmap(f, sa...; kwargs...))
 end
 
-type AsyncCollector
+mutable struct AsyncCollector
     f
     results
     enumerator::Enumerate
@@ -302,7 +302,7 @@ function AsyncCollector(f, results, c...; ntasks=0, batch_size=nothing)
     AsyncCollector(f, results, enumerate(zip(c...)), ntasks, batch_size)
 end
 
-type AsyncCollectorState
+mutable struct AsyncCollectorState
     chnl::Channel
     worker_tasks::Array{Task,1}
     enum_state      # enumerator state
@@ -367,7 +367,7 @@ be a function which operates on an array of argument tuples.
     `collect(AsyncGenerator(f, c...; ntasks=1))` is equivalent to
     `map(f, c...)`.
 """
-type AsyncGenerator
+mutable struct AsyncGenerator
     collector::AsyncCollector
 end
 
@@ -375,7 +375,7 @@ function AsyncGenerator(f, c...; ntasks=0)
     AsyncGenerator(AsyncCollector(f, Dict{Int,Any}(), c...; ntasks=ntasks))
 end
 
-type AsyncGeneratorState
+mutable struct AsyncGeneratorState
     i::Int
     collector_state::AsyncCollectorState
 end

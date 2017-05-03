@@ -34,6 +34,9 @@ Base.LinAlg.qr
 Base.LinAlg.qr!
 Base.LinAlg.qrfact
 Base.LinAlg.qrfact!
+Base.LinAlg.QR
+Base.LinAlg.QRCompactWY
+Base.LinAlg.QRPivoted
 Base.LinAlg.lqfact!
 Base.LinAlg.lqfact
 Base.LinAlg.lq
@@ -99,6 +102,8 @@ Base.LinAlg.istril
 Base.LinAlg.istriu
 Base.LinAlg.isdiag
 Base.LinAlg.ishermitian
+Base.LinAlg.RowVector
+Base.LinAlg.ConjArray
 Base.transpose
 Base.transpose!
 Base.ctranspose

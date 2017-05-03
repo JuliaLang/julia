@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "julia.h"
 #include "julia_internal.h"
@@ -48,4 +48,9 @@ void jl_generate_fptr(jl_method_instance_t *li)
 {
     li->fptr = (jl_fptr_t)&jl_interpret_call;
     li->jlcall_api = 4;
+}
+
+JL_DLLEXPORT uint32_t jl_get_LLVM_VERSION(void)
+{
+    return 0;
 }

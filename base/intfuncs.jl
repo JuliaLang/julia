@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## number-theoretic functions ##
 
@@ -15,7 +15,7 @@ julia> gcd(6,-9)
 3
 ```
 """
-function gcd{T<:Integer}(a::T, b::T)
+function gcd(a::T, b::T) where T<:Integer
     while b != 0
         t = b
         b = rem(a, b)
@@ -26,7 +26,7 @@ end
 
 # binary GCD (aka Stein's) algorithm
 # about 1.7x (2.1x) faster for random Int64s (Int128s)
-function gcd{T<:Union{Int64,UInt64,Int128,UInt128}}(a::T, b::T)
+function gcd(a::T, b::T) where T<:Union{Int64,UInt64,Int128,UInt128}
     a == 0 && return abs(b)
     b == 0 && return abs(a)
     za = trailing_zeros(a)
@@ -59,7 +59,7 @@ julia> lcm(-2,3)
 6
 ```
 """
-function lcm{T<:Integer}(a::T, b::T)
+function lcm(a::T, b::T) where T<:Integer
     # explicit a==0 test is to handle case of lcm(0,0) correctly
     if a == 0
         return a
@@ -75,8 +75,8 @@ lcm(a::Integer, b::Integer) = lcm(promote(a,b)...)
 gcd(a::Integer, b::Integer...) = gcd(a, gcd(b...))
 lcm(a::Integer, b::Integer...) = lcm(a, lcm(b...))
 
-gcd{T<:Integer}(abc::AbstractArray{T}) = reduce(gcd,abc)
-lcm{T<:Integer}(abc::AbstractArray{T}) = reduce(lcm,abc)
+gcd(abc::AbstractArray{<:Integer}) = reduce(gcd,abc)
+lcm(abc::AbstractArray{<:Integer}) = reduce(lcm,abc)
 
 # return (gcd(a,b),x,y) such that ax+by == gcd(a,b)
 """
@@ -88,12 +88,12 @@ coefficients, i.e. the integer coefficients `u` and `v` that satisfy
 
 ```jldoctest
 julia> gcdx(12, 42)
-(6,-3,1)
+(6, -3, 1)
 ```
 
 ```jldoctest
 julia> gcdx(240, 46)
-(2,-9,47)
+(2, -9, 47)
 ```
 
 !!! note
@@ -107,9 +107,9 @@ julia> gcdx(240, 46)
     their `typemax`, and the identity then holds only via the unsigned
     integers' modulo arithmetic.
 """
-function gcdx{T<:Integer}(a::T, b::T)
+function gcdx(a::T, b::T) where T<:Integer
     # a0, b0 = a, b
-    s0, s1 = one(T), zero(T)
+    s0, s1 = oneunit(T), zero(T)
     t0, t1 = s1, s0
     # The loop invariant is: s0*a0 + t0*b0 == a
     while b != 0
@@ -142,7 +142,7 @@ julia> invmod(5,6)
 5
 ```
 """
-function invmod{T<:Integer}(n::T, m::T)
+function invmod(n::T, m::T) where T<:Integer
     g, x, y = gcdx(n, m)
     (g != 1 || m == 0) && throw(DomainError())
     # Note that m might be negative here.
@@ -191,9 +191,32 @@ function power_by_squaring(x::Bool, p::Integer)
     return (p==0) | x
 end
 
-^{T<:Integer}(x::T, p::T) = power_by_squaring(x,p)
+^(x::T, p::T) where {T<:Integer} = power_by_squaring(x,p)
 ^(x::Number, p::Integer)  = power_by_squaring(x,p)
 ^(x, p::Integer)          = power_by_squaring(x,p)
+
+# x^p for any literal integer p is lowered to Base.literal_pow(^, x, Val{p})
+# to enable compile-time optimizations specialized to p.
+# However, we still need a fallback that calls the function ^ which may either
+# mean Base.^ or something else, depending on context.
+# We mark these @inline since if the target is marked @inline,
+# we want to make sure that gets propagated,
+# even if it is over the inlining threshold.
+@inline literal_pow(f, x, ::Type{Val{p}}) where {p} = f(x,p)
+
+# Restrict inlining to hardware-supported arithmetic types, which
+# are fast enough to benefit from inlining.
+const HWReal = Union{Int8,Int16,Int32,Int64,UInt8,UInt16,UInt32,UInt64,Float32,Float64}
+const HWNumber = Union{HWReal, Complex{<:HWReal}, Rational{<:HWReal}}
+
+# inference.jl has complicated logic to inline x^2 and x^3 for
+# numeric types.  In terms of Val we can do it much more simply.
+# (The first argument prevents unexpected behavior if a function ^
+# is defined that is not equal to Base.^)
+@inline literal_pow(::typeof(^), x::HWNumber, ::Type{Val{0}}) = one(x)
+@inline literal_pow(::typeof(^), x::HWNumber, ::Type{Val{1}}) = x
+@inline literal_pow(::typeof(^), x::HWNumber, ::Type{Val{2}}) = x*x
+@inline literal_pow(::typeof(^), x::HWNumber, ::Type{Val{3}}) = x*x*x
 
 # b^p mod m
 
@@ -202,7 +225,7 @@ end
 
 Compute ``x^p \\pmod m``.
 """
-function powermod{T<:Integer}(x::Integer, p::Integer, m::T)
+function powermod(x::Integer, p::Integer, m::T) where T<:Integer
     p < 0 && return powermod(invmod(x, m), -p, m)
     p == 0 && return mod(one(m),m)
     (m == 1 || m == -1) && return zero(m)
@@ -242,7 +265,7 @@ julia> nextpow2(17)
 32
 ```
 """
-nextpow2(x::Unsigned) = one(x)<<((sizeof(x)<<3)-leading_zeros(x-one(x)))
+nextpow2(x::Unsigned) = oneunit(x)<<((sizeof(x)<<3)-leading_zeros(x-oneunit(x)))
 nextpow2(x::Integer) = reinterpret(typeof(x),x < 0 ? -nextpow2(unsigned(-x)) : nextpow2(unsigned(x)))
 
 """
@@ -377,7 +400,7 @@ string(x::Union{Int8,Int16,Int32,Int64,Int128}) = dec(x)
 
 function bin(x::Unsigned, pad::Int, neg::Bool)
     i = neg + max(pad,sizeof(x)<<3-leading_zeros(x))
-    a = Array{UInt8}(i)
+    a = StringVector(i)
     while i > neg
         a[i] = '0'+(x&0x1)
         x >>= 1
@@ -389,7 +412,7 @@ end
 
 function oct(x::Unsigned, pad::Int, neg::Bool)
     i = neg + max(pad,div((sizeof(x)<<3)-leading_zeros(x)+2,3))
-    a = Array{UInt8}(i)
+    a = StringVector(i)
     while i > neg
         a[i] = '0'+(x&0x7)
         x >>= 3
@@ -401,7 +424,7 @@ end
 
 function dec(x::Unsigned, pad::Int, neg::Bool)
     i = neg + max(pad,ndigits0z(x))
-    a = Array{UInt8}(i)
+    a = StringVector(i)
     while i > neg
         a[i] = '0'+rem(x,10)
         x = oftype(x,div(x,10))
@@ -413,7 +436,7 @@ end
 
 function hex(x::Unsigned, pad::Int, neg::Bool)
     i = neg + max(pad,(sizeof(x)<<1)-(leading_zeros(x)>>2))
-    a = Array{UInt8}(i)
+    a = StringVector(i)
     while i > neg
         d = x & 0xf
         a[i] = '0'+d+39*(d>9)
@@ -433,7 +456,7 @@ function base(b::Int, x::Unsigned, pad::Int, neg::Bool)
     2 <= b <= 62 || throw(ArgumentError("base must be 2 ≤ base ≤ 62, got $b"))
     digits = b <= 36 ? base36digits : base62digits
     i = neg + max(pad,ndigits0z(x,b))
-    a = Array{UInt8}(i)
+    a = StringVector(i)
     while i > neg
         a[i] = digits[1+rem(x,b)]
         x = div(x,b)
@@ -519,9 +542,9 @@ Returns an array with element type `T` (default `Int`) of the digits of `n` in t
 base, optionally padded with zeros to a specified size. More significant digits are at
 higher indexes, such that `n == sum([digits[k]*base^(k-1) for k=1:length(digits)])`.
 """
-digits{T<:Integer}(n::Integer, base::T=10, pad::Integer=1) = digits(T, n, base, pad)
+digits(n::Integer, base::T=10, pad::Integer=1) where {T<:Integer} = digits(T, n, base, pad)
 
-function digits{T<:Integer}(::Type{T}, n::Integer, base::Integer=10, pad::Integer=1)
+function digits(::Type{T}, n::Integer, base::Integer=10, pad::Integer=1) where T<:Integer
     2 <= base || throw(ArgumentError("base must be ≥ 2, got $base"))
     digits!(zeros(T, max(pad, ndigits0z(n,base))), n, base)
 end
@@ -533,7 +556,7 @@ Fills an array of the digits of `n` in the given base. More significant digits a
 indexes. If the array length is insufficient, the least significant digits are filled up to
 the array length. If the array length is excessive, the excess portion is filled with zeros.
 """
-function digits!{T<:Integer}(a::AbstractArray{T,1}, n::Integer, base::Integer=10)
+function digits!(a::AbstractArray{T,1}, n::Integer, base::Integer=10) where T<:Integer
     2 <= base || throw(ArgumentError("base must be ≥ 2, got $base"))
     base - 1 <= typemax(T) || throw(ArgumentError("type $T too small for base $base"))
     for i in eachindex(a)
@@ -579,7 +602,7 @@ end
 
 Number of ways to choose `k` out of `n` items.
 """
-function binomial{T<:Integer}(n::T, k::T)
+function binomial(n::T, k::T) where T<:Integer
     k < 0 && return zero(T)
     sgn = one(T)
     if n < 0

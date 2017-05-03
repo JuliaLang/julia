@@ -12,7 +12,7 @@ If memory usage is your concern, you can always replace objects with ones that c
 with `A = 0`.  The memory will be released the next time the garbage collector runs; you can force
 this to happen with [`gc()`](@ref).
 
-### How can I modify the declaration of a type/immutable in my session?
+### How can I modify the declaration of a type in my session?
 
 Perhaps you've defined a type and then realize you need to add a new field.  If you try this at
 the REPL, you get the error:
@@ -29,7 +29,7 @@ you can redefine types and constants.  You can't import the type names into `Mai
 to be able to redefine them there, but you can use the module name to resolve the scope.  In other
 words, while developing you might use a workflow something like this:
 
-```
+```julia
 include("mynewcode.jl")              # this defines a module MyModule
 obj1 = MyModule.ObjConstructor(a, b)
 obj2 = MyModule.somefunction(obj1)
@@ -48,7 +48,7 @@ the variable `x` is still unchanged. Why?
 
 Suppose you call a function like this:
 
-```julia
+```jldoctest
 julia> x = 10
 10
 
@@ -73,12 +73,12 @@ But here is a thing you should pay attention to: suppose `x` is bound to an obje
 (or any other *mutable* type). From within the function, you cannot "unbind" `x` from this Array,
 but you can change its content. For example:
 
-```julia
+```jldoctest
 julia> x = [1,2,3]
 3-element Array{Int64,1}:
-1
-2
-3
+ 1
+ 2
+ 3
 
 julia> function change_array!(A)
            A[1] = 5
@@ -90,9 +90,9 @@ julia> change_array!(x)
 
 julia> x
 3-element Array{Int64,1}:
-5
-2
-3
+ 5
+ 2
+ 3
 ```
 
 Here we created a function `change_array!()`, that assigns `5` to the first element of the passed
@@ -108,10 +108,10 @@ have two options:
 
 1. Use `import`:
 
-   ```
+   ```julia
    import Foo
    function bar(...)
-       ... refer to Foo symbols via Foo.baz ...
+       # ... refer to Foo symbols via Foo.baz ...
    end
    ```
 
@@ -120,12 +120,12 @@ have two options:
    `Foo` symbols by their qualified names `Foo.bar` etc.
 2. Wrap your function in a module:
 
-   ```
+   ```julia
    module Bar
    export bar
    using Foo
    function bar(...)
-       ... refer to Foo.baz as simply baz ....
+       # ... refer to Foo.baz as simply baz ....
    end
    end
    using Bar
@@ -146,7 +146,7 @@ In the context of function definitions, the `...` operator is used to combine ma
 into a single argument. This use of `...` for combining many different arguments into a single
 argument is called slurping:
 
-```julia
+```jldoctest
 julia> function printargs(args...)
            @printf("%s\n", typeof(args))
            for (i, arg) in enumerate(args)
@@ -156,7 +156,7 @@ julia> function printargs(args...)
 printargs (generic function with 1 method)
 
 julia> printargs(1, 2, 3)
-(Int64,Int64,Int64)
+Tuple{Int64,Int64,Int64}
 Arg 1 = 1
 Arg 2 = 2
 Arg 3 = 3
@@ -172,7 +172,7 @@ one argument when defining a function, the `...` operator is also used to cause 
 argument to be split apart into many different arguments when used in the context of a function
 call. This use of `...` is called splatting:
 
-```julia
+```jldoctest
 julia> function threeargs(a, b, c)
            @printf("a = %s::%s\n", a, typeof(a))
            @printf("b = %s::%s\n", b, typeof(b))
@@ -203,14 +203,15 @@ It means that the type of the output is predictable from the types of the inputs
 it means that the type of the output cannot vary depending on the *values* of the inputs. The
 following code is *not* type-stable:
 
-```julia
-function unstable(flag::Bool)
-    if flag
-        return 1
-    else
-        return 1.0
-    end
-end
+```jldoctest
+julia> function unstable(flag::Bool)
+           if flag
+               return 1
+           else
+               return 1.0
+           end
+       end
+unstable (generic function with 1 method)
 ```
 
 It returns either an `Int` or a `Float64` depending on the value of its argument. Since Julia
@@ -221,15 +222,20 @@ have to guard against both types possibly occurring, making generation of fast m
 
 Certain operations make mathematical sense but result in errors:
 
-```julia
+```jldoctest
 julia> sqrt(-2.0)
-ERROR: DomainError
- in sqrt at math.jl:128
+ERROR: DomainError:
+sqrt will only return a complex result if called with a complex argument. Try sqrt(complex(x)).
+Stacktrace:
+ [1] sqrt(::Float64) at ./math.jl:422
 
 julia> 2^-5
-ERROR: DomainError
- in power_by_squaring at intfuncs.jl:70
- in ^ at intfuncs.jl:84
+ERROR: DomainError:
+Cannot raise an integer x to a negative power -n.
+Make x a float by adding a zero decimal (e.g. 2.0^-n instead of 2^-n), or write 1/x^n, float(x)^-n, or (x//1)^-n.
+Stacktrace:
+ [1] power_by_squaring(::Int64, ::Int64) at ./intfuncs.jl:170
+ [2] literal_pow(::Base.#^, ::Int64, ::Type{Val{-5}}) at ./intfuncs.jl:205
 ```
 
 This behavior is an inconvenient consequence of the requirement for type-stability.  In the case
@@ -242,7 +248,7 @@ and the [`sqrt()`](@ref) function would have poor performance.
 In these and other cases, you can get the result you want by choosing an *input type* that conveys
 your willingness to accept an *output type* in which the result can be represented:
 
-```julia
+```jldoctest
 julia> sqrt(-2.0+0im)
 0.0 + 1.4142135623730951im
 
@@ -256,7 +262,7 @@ Julia uses machine arithmetic for integer computations. This means that the rang
 is bounded and wraps around at either end so that adding, subtracting and multiplying integers
 can overflow or underflow, leading to some results that can be unsettling at first:
 
-```julia
+```jldoctest
 julia> typemax(Int)
 9223372036854775807
 
@@ -357,7 +363,7 @@ This makes it hard to write many basic integer algorithms since a lot of common 
 on the fact that machine addition with overflow *is* associative. Consider finding the midpoint
 between integer values `lo` and `hi` in Julia using the expression `(lo + hi) >>> 1`:
 
-```julia
+```jldoctest
 julia> n = 2^62
 4611686018427387904
 
@@ -386,75 +392,77 @@ to aggressively optimize simple little functions like `f(k) = 5k-1`. The machine
 function is just this:
 
 ```julia
-julia> code_native(f,(Int,))
-    .section    __TEXT,__text,regular,pure_instructions
+julia> code_native(f, Tuple{Int})
+  .text
 Filename: none
+  pushq %rbp
+  movq  %rsp, %rbp
 Source line: 1
-    push    RBP
-    mov RBP, RSP
-Source line: 1
-    lea RAX, QWORD PTR [RDI + 4*RDI - 1]
-    pop RBP
-    ret
+  leaq  -1(%rdi,%rdi,4), %rax
+  popq  %rbp
+  retq
+  nopl  (%rax,%rax)
 ```
 
-The actual body of the function is a single `lea` instruction, which computes the integer multiply
+The actual body of the function is a single `leaq` instruction, which computes the integer multiply
 and add at once. This is even more beneficial when `f` gets inlined into another function:
 
 ```julia
-julia> function g(k,n)
-         for i = 1:n
-           k = f(k)
-         end
-         return k
+julia> function g(k, n)
+           for i = 1:n
+               k = f(k)
+           end
+           return k
        end
-g (generic function with 2 methods)
+g (generic function with 1 methods)
 
-julia> code_native(g,(Int,Int))
-    .section    __TEXT,__text,regular,pure_instructions
+julia> code_native(g, Tuple{Int,Int})
+  .text
 Filename: none
-Source line: 3
-    push    RBP
-    mov RBP, RSP
-    test    RSI, RSI
-    jle 22
-    mov EAX, 1
-Source line: 3
-    lea RDI, QWORD PTR [RDI + 4*RDI - 1]
-    inc RAX
-    cmp RAX, RSI
+  pushq %rbp
+  movq  %rsp, %rbp
 Source line: 2
-    jle -17
+  testq %rsi, %rsi
+  jle L26
+  nopl  (%rax)
+Source line: 3
+L16:
+  leaq  -1(%rdi,%rdi,4), %rdi
+Source line: 2
+  decq  %rsi
+  jne L16
 Source line: 5
-    mov RAX, RDI
-    pop RBP
-    ret
+L26:
+  movq  %rdi, %rax
+  popq  %rbp
+  retq
+  nop
 ```
 
-Since the call to `f` gets inlined, the loop body ends up being just a single `lea` instruction.
+Since the call to `f` gets inlined, the loop body ends up being just a single `leaq` instruction.
 Next, consider what happens if we make the number of loop iterations fixed:
 
 ```julia
 julia> function g(k)
-         for i = 1:10
-           k = f(k)
-         end
-         return k
+           for i = 1:10
+               k = f(k)
+           end
+           return k
        end
 g (generic function with 2 methods)
 
 julia> code_native(g,(Int,))
-    .section    __TEXT,__text,regular,pure_instructions
+  .text
 Filename: none
+  pushq %rbp
+  movq  %rsp, %rbp
 Source line: 3
-    push    RBP
-    mov RBP, RSP
-Source line: 3
-    imul    RAX, RDI, 9765625
-    add RAX, -2441406
+  imulq $9765625, %rdi, %rax    # imm = 0x9502F9
+  addq  $-2441406, %rax         # imm = 0xFFDABF42
 Source line: 5
-    pop RBP
-    ret
+  popq  %rbp
+  retq
+  nopw  %cs:(%rax,%rax)
 ```
 
 Because the compiler knows that integer addition and multiplication are associative and that multiplication
@@ -466,11 +474,87 @@ the loop, but it cannot algebraically reduce multiple operations into fewer equi
 
 The most reasonable alternative to having integer arithmetic silently overflow is to do checked
 arithmetic everywhere, raising errors when adds, subtracts, and multiplies overflow, producing
-values that are not value-correct. In this [blog post](http://danluu.com/integer-overflow), Dan
+values that are not value-correct. In this [blog post](http://danluu.com/integer-overflow/), Dan
 Luu analyzes this and finds that rather than the trivial cost that this approach should in theory
 have, it ends up having a substantial cost due to compilers (LLVM and GCC) not gracefully optimizing
 around the added overflow checks. If this improves in the future, we could consider defaulting
 to checked integer arithmetic in Julia, but for now, we have to live with the possibility of overflow.
+
+### What are the possible causes of an `UndefVarError` during remote execution?
+
+As the error states, an immediate cause of an `UndefVarError` on a remote node is that a binding
+by that name does not exist. Let us explore some of the possible causes.
+
+```julia
+julia> module Foo
+           foo() = remotecall_fetch(x->x, 2, "Hello")
+       end
+
+julia> Foo.foo()
+ERROR: On worker 2:
+UndefVarError: Foo not defined
+[...]
+```
+
+The closure `x->x` carries a reference to `Foo`, and since `Foo` is unavailable on node 2,
+an `UndefVarError` is thrown.
+
+Globals under modules other than `Main` are not serialized by value to the remote node. Only a reference is sent.
+Functions which create global bindings (except under `Main`) may cause an `UndefVarError` to be thrown later.
+
+```julia
+julia> @everywhere module Foo
+           function foo()
+               global gvar = "Hello"
+               remotecall_fetch(()->gvar, 2)
+           end
+       end
+
+julia> Foo.foo()
+ERROR: On worker 2:
+UndefVarError: gvar not defined
+[...]
+```
+
+In the above example, `@everywhere module Foo` defined `Foo` on all nodes. However the call to `Foo.foo()` created
+a new global binding `gvar` on the local node, but this was not found on node 2 resulting in an `UndefVarError` error.
+
+Note that this does not apply to globals created under module `Main`. Globals under module `Main` are serialized
+and new bindings created under `Main` on the remote node.
+
+```julia
+julia> gvar_self = "Node1"
+"Node1"
+
+julia> remotecall_fetch(()->gvar_self, 2)
+"Node1"
+
+julia> remotecall_fetch(whos, 2)
+	From worker 2:	                          Base  41762 KB     Module
+	From worker 2:	                          Core  27337 KB     Module
+	From worker 2:	                           Foo   2477 bytes  Module
+	From worker 2:	                          Main  46191 KB     Module
+	From worker 2:	                     gvar_self     13 bytes  String
+```
+
+This does not apply to `function` or `type` declarations. However, anonymous functions bound to global
+variables are serialized as can be seen below.
+
+```julia
+julia> bar() = 1
+bar (generic function with 1 method)
+
+julia> remotecall_fetch(bar, 2)
+ERROR: On worker 2:
+UndefVarError: #bar not defined
+[...]
+
+julia> anon_bar  = ()->1
+(::#21) (generic function with 1 method)
+
+julia> remotecall_fetch(anon_bar, 2)
+1
+```
 
 ## Packages and Modules
 
@@ -526,7 +610,7 @@ that, rather than storing the result in the same location in memory as `x`, it a
 array to store the result.
 
 While this behavior might surprise some, the choice is deliberate. The main reason is the presence
-of `immutable` objects within Julia, which cannot change their value once created.  Indeed, a
+of immutable objects within Julia, which cannot change their value once created.  Indeed, a
 number is an immutable object; the statements `x = 5; x += 1` do not modify the meaning of `5`,
 they modify the value bound to `x`. For an immutable, the only way to change the value is to reassign
 it.
@@ -565,17 +649,12 @@ work by rebinding new values.
 
 While the streaming I/O API is synchronous, the underlying implementation is fully asynchronous.
 
-The following:
+Consider the printed output from the following:
 
-```julia
-@sync for i in 1:3
-    @async write(STDOUT, string(i), " Foo ", " Bar ")
-end
-```
-
-results in:
-
-```
+```jldoctest
+julia> @sync for i in 1:3
+           @async write(STDOUT, string(i), " Foo ", " Bar ")
+       end
 123 Foo  Foo  Foo  Bar  Bar  Bar
 ```
 
@@ -585,7 +664,10 @@ yields to other tasks while waiting for that part of the I/O to complete.
 `print` and `println` "lock" the stream during a call. Consequently changing `write` to `println`
 in the above example results in:
 
-```
+```jldoctest
+julia> @sync for i in 1:3
+           @async println(STDOUT, string(i), " Foo ", " Bar ")
+       end
 1 Foo  Bar
 2 Foo  Bar
 3 Foo  Bar
@@ -593,18 +675,21 @@ in the above example results in:
 
 You can lock your writes with a `ReentrantLock` like this:
 
-```julia
-l = ReentrantLock()
-@sync for i in 1:3
-    @async begin
-        lock(l)
-        try
-            write(STDOUT, string(i), " Foo ", " Bar ")
-        finally
-            unlock(l)
-        end
-    end
-end
+```jldoctest
+julia> l = ReentrantLock()
+ReentrantLock(Nullable{Task}(), Condition(Any[]), 0)
+
+julia> @sync for i in 1:3
+           @async begin
+               lock(l)
+               try
+                   write(STDOUT, string(i), " Foo ", " Bar ")
+               finally
+                   unlock(l)
+               end
+           end
+       end
+1 Foo  Bar 2 Foo  Bar 3 Foo  Bar
 ```
 
 ## Julia Releases
@@ -625,7 +710,7 @@ Finally, you may also consider building Julia from source for yourself. This opt
 for those individuals who are comfortable at the command line, or interested in learning. If this
 describes you, you may also be interested in reading our [guidelines for contributing](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md).
 
-Links to each of these download types can be found on the download page at [http://julialang.org/downloads/](http://julialang.org/downloads/).
+Links to each of these download types can be found on the download page at [https://julialang.org/downloads/](https://julialang.org/downloads/).
 Note that not all versions of Julia are available for all platforms.
 
 ### When are deprecated functions removed?

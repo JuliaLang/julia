@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Sys
 
@@ -67,7 +67,7 @@ function __init__()
     global JIT = ccall(:jl_get_JIT, Ref{String}, ())
 end
 
-type UV_cpu_info_t
+mutable struct UV_cpu_info_t
     model::Ptr{UInt8}
     speed::Int32
     cpu_times!user::UInt64
@@ -76,7 +76,7 @@ type UV_cpu_info_t
     cpu_times!idle::UInt64
     cpu_times!irq::UInt64
 end
-type CPUinfo
+mutable struct CPUinfo
     model::String
     speed::Int32
     cpu_times!user::UInt64
@@ -117,7 +117,7 @@ function _cpu_summary(io::IO, cpu::Array{CPUinfo}, i, j)
     println(io)
 end
 
-function cpu_summary(io::IO=STDOUT, cpu::Array{CPUinfo}=cpu_info())
+function cpu_summary(io::IO=STDOUT, cpu::AbstractVector{CPUinfo} = cpu_info())
     model = cpu[1].model
     first = 1
     for i = 2:length(cpu)
@@ -130,25 +130,25 @@ function cpu_summary(io::IO=STDOUT, cpu::Array{CPUinfo}=cpu_info())
 end
 
 function cpu_info()
-    UVcpus = Array{Ptr{UV_cpu_info_t}}(1)
-    count = Array{Int32}(1)
+    UVcpus = Ref{Ptr{UV_cpu_info_t}}()
+    count = Ref{Int32}()
     Base.uv_error("uv_cpu_info",ccall(:uv_cpu_info, Int32, (Ptr{Ptr{UV_cpu_info_t}}, Ptr{Int32}), UVcpus, count))
-    cpus = Array{CPUinfo}(count[1])
+    cpus = Vector{CPUinfo}(count[])
     for i = 1:length(cpus)
-        cpus[i] = CPUinfo(unsafe_load(UVcpus[1],i))
+        cpus[i] = CPUinfo(unsafe_load(UVcpus[], i))
     end
-    ccall(:uv_free_cpu_info, Void, (Ptr{UV_cpu_info_t}, Int32), UVcpus[1], count[1])
+    ccall(:uv_free_cpu_info, Void, (Ptr{UV_cpu_info_t}, Int32), UVcpus[], count[])
     return cpus
 end
 
 function uptime()
-    uptime_ = Array{Float64}(1)
+    uptime_ = Ref{Float64}()
     Base.uv_error("uv_uptime",ccall(:uv_uptime, Int32, (Ptr{Float64},), uptime_))
-    return uptime_[1]
+    return uptime_[]
 end
 
 function loadavg()
-    loadavg_ = Array{Float64}(3)
+    loadavg_ = Vector{Float64}(3)
     ccall(:uv_loadavg, Void, (Ptr{Float64},), loadavg_)
     return loadavg_
 end

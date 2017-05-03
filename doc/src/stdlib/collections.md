@@ -47,7 +47,6 @@ Fully implemented by:
   * `EachLine`
   * `AbstractString`
   * [`Set`](@ref)
-  * [`Task`](@ref)
 
 ## General Collections
 

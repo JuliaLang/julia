@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # The Computer Language Benchmarks Game
 # http://shootout.alioth.debian.org/
@@ -26,7 +26,7 @@ function count_one(data::AbstractString, s::AbstractString)
     count(data, length(s))[s]
 end
 
-type KNuc
+mutable struct KNuc
     name::AbstractString
     count::Int
 end
@@ -62,12 +62,8 @@ end
 
 function k_nucleotide(infile="knucleotide-input.txt")
     input = open(infile, "r")
-    three = ">THREE "
-    while true
-        line = readline(input)
-        if length(line) >= length(three) && line[1:length(three)] == three
-            break
-        end
+    for line in eachline(input)
+        startswith(line, ">THREE ") && break
     end
     data = collect(readstring(input))
     # delete the newlines and convert to upper case

@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 // Meant to be included in <julia.h>
 #ifndef JULIA_THREADS_H
@@ -64,6 +64,26 @@ typedef struct {
     jl_gc_pool_t norm_pools[JL_GC_N_POOLS];
 } jl_thread_heap_t;
 
+// Cache of thread local change to global metadata during GC
+// This is sync'd after marking.
+typedef struct {
+    // thread local increment of `perm_scanned_bytes`
+    size_t perm_scanned_bytes;
+    // thread local increment of `scanned_bytes`
+    size_t scanned_bytes;
+    // Number of queued big objects (<= 1024)
+    size_t nbig_obj;
+    // Array of queued big objects to be moved between the young list
+    // and the old list.
+    // A set low bit means that the object should be moved from the old list
+    // to the young list (`mark_reset_age`).
+    // Objects can only be put into this list when the mark bit is flipped to
+    // `1` (atomically). Combining with the sync after marking,
+    // this makes sure that a single objects can only appear once in
+    // the lists (the mark bit cannot be flipped to `0` without sweeping)
+    void *big_obj[1024];
+} jl_gc_mark_cache_t;
+
 // This includes all the thread local states we care about for a thread.
 #define JL_MAX_BT_SIZE 80000
 typedef struct _jl_tls_states_t {
@@ -85,7 +105,6 @@ typedef struct _jl_tls_states_t {
     struct _jl_module_t *current_module;
     struct _jl_task_t *volatile current_task;
     struct _jl_task_t *root_task;
-    struct _jl_value_t *volatile task_arg_in_transit;
     void *stackbase;
     char *stack_lo;
     char *stack_hi;
@@ -116,9 +135,11 @@ typedef struct _jl_tls_states_t {
     // Counter to disable finalizer **on the current thread**
     int finalizers_inhibited;
     arraylist_t finalizers;
+    jl_gc_mark_cache_t gc_cache;
 } jl_tls_states_t;
 typedef jl_tls_states_t *jl_ptls_t;
 
+// Update codegen version in `ccall.cpp` after changing either `pause` or `wake`
 #ifdef __MIC__
 #  define jl_cpu_pause() _mm_delay_64(100)
 #  define jl_cpu_wake() ((void)0)
@@ -173,8 +194,18 @@ static inline unsigned long JL_CONST_FUNC jl_thread_self(void)
  */
 #if defined(__GNUC__)
 #  define jl_signal_fence() __atomic_signal_fence(__ATOMIC_SEQ_CST)
+#  define jl_atomic_fetch_add_relaxed(obj, arg)         \
+    __atomic_fetch_add(obj, arg, __ATOMIC_RELAXED)
 #  define jl_atomic_fetch_add(obj, arg)                 \
     __atomic_fetch_add(obj, arg, __ATOMIC_SEQ_CST)
+#  define jl_atomic_fetch_and_relaxed(obj, arg)         \
+    __atomic_fetch_and(obj, arg, __ATOMIC_RELAXED)
+#  define jl_atomic_fetch_and(obj, arg)                 \
+    __atomic_fetch_and(obj, arg, __ATOMIC_SEQ_CST)
+#  define jl_atomic_fetch_or_relaxed(obj, arg)          \
+    __atomic_fetch_or(obj, arg, __ATOMIC_RELAXED)
+#  define jl_atomic_fetch_or(obj, arg)                  \
+    __atomic_fetch_or(obj, arg, __ATOMIC_SEQ_CST)
 // Returns the original value of `obj`
 // Use the legacy __sync builtins for now, this can also be written using
 // the __atomic builtins or c11 atomics with GNU extension or c11 _Generic
@@ -182,6 +213,8 @@ static inline unsigned long JL_CONST_FUNC jl_thread_self(void)
     __sync_val_compare_and_swap(obj, expected, desired)
 #  define jl_atomic_exchange(obj, desired)              \
     __atomic_exchange_n(obj, desired, __ATOMIC_SEQ_CST)
+#  define jl_atomic_exchange_relaxed(obj, desired)      \
+    __atomic_exchange_n(obj, desired, __ATOMIC_RELAXED)
 // TODO: Maybe add jl_atomic_compare_exchange_weak for spin lock
 #  define jl_atomic_store(obj, val)                     \
     __atomic_store_n(obj, val, __ATOMIC_SEQ_CST)
@@ -205,6 +238,8 @@ static inline unsigned long JL_CONST_FUNC jl_thread_self(void)
     __atomic_load_n(obj, __ATOMIC_ACQUIRE)
 #elif defined(_COMPILER_MICROSOFT_)
 #  define jl_signal_fence() _ReadWriteBarrier()
+
+// add
 template<typename T, typename T2>
 static inline typename std::enable_if<sizeof(T) == 1, T>::type
 jl_atomic_fetch_add(T *obj, T2 arg)
@@ -229,6 +264,62 @@ jl_atomic_fetch_add(T *obj, T2 arg)
 {
     return (T)_InterlockedExchangeAdd64((volatile __int64*)obj, (__int64)arg);
 }
+#define jl_atomic_fetch_add_relaxed(obj, arg) jl_atomic_fetch_add(obj, arg)
+
+// and
+template<typename T, typename T2>
+static inline typename std::enable_if<sizeof(T) == 1, T>::type
+jl_atomic_fetch_and(T *obj, T2 arg)
+{
+    return (T)_InterlockedAnd8((volatile char*)obj, (char)arg);
+}
+template<typename T, typename T2>
+static inline typename std::enable_if<sizeof(T) == 2, T>::type
+jl_atomic_fetch_and(T *obj, T2 arg)
+{
+    return (T)_InterlockedAnd16((volatile short*)obj, (short)arg);
+}
+template<typename T, typename T2>
+static inline typename std::enable_if<sizeof(T) == 4, T>::type
+jl_atomic_fetch_and(T *obj, T2 arg)
+{
+    return (T)_InterlockedAnd((volatile LONG*)obj, (LONG)arg);
+}
+template<typename T, typename T2>
+static inline typename std::enable_if<sizeof(T) == 8, T>::type
+jl_atomic_fetch_and(T *obj, T2 arg)
+{
+    return (T)_InterlockedAnd64((volatile __int64*)obj, (__int64)arg);
+}
+#define jl_atomic_fetch_and_relaxed(obj, arg) jl_atomic_fetch_and(obj, arg)
+
+// or
+template<typename T, typename T2>
+static inline typename std::enable_if<sizeof(T) == 1, T>::type
+jl_atomic_fetch_or(T *obj, T2 arg)
+{
+    return (T)_InterlockedOr8((volatile char*)obj, (char)arg);
+}
+template<typename T, typename T2>
+static inline typename std::enable_if<sizeof(T) == 2, T>::type
+jl_atomic_fetch_or(T *obj, T2 arg)
+{
+    return (T)_InterlockedOr16((volatile short*)obj, (short)arg);
+}
+template<typename T, typename T2>
+static inline typename std::enable_if<sizeof(T) == 4, T>::type
+jl_atomic_fetch_or(T *obj, T2 arg)
+{
+    return (T)_InterlockedOr((volatile LONG*)obj, (LONG)arg);
+}
+template<typename T, typename T2>
+static inline typename std::enable_if<sizeof(T) == 8, T>::type
+jl_atomic_fetch_or(T *obj, T2 arg)
+{
+    return (T)_InterlockedOr64((volatile __int64*)obj, (__int64)arg);
+}
+#define jl_atomic_fetch_or_relaxed(obj, arg) jl_atomic_fetch_or(obj, arg)
+
 // Returns the original value of `obj`
 template<typename T, typename T2, typename T3>
 static inline typename std::enable_if<sizeof(T) == 1, T>::type
@@ -283,6 +374,7 @@ jl_atomic_exchange(volatile T *obj, T2 val)
 {
     return _InterlockedExchange64((volatile __int64*)obj, (__int64)val);
 }
+#define jl_atomic_exchange_relaxed(obj, val) jl_atomic_exchange(obj, val)
 // atomic stores
 template<typename T, typename T2>
 static inline typename std::enable_if<sizeof(T) == 1>::type
@@ -465,6 +557,18 @@ static inline void jl_mutex_lock(jl_mutex_t *lock)
     jl_gc_enable_finalizers(ptls, 0);
 }
 
+/* Call this function for code that could be called from either a managed
+   or an unmanaged thread */
+static inline void jl_mutex_lock_maybe_nogc(jl_mutex_t *lock)
+{
+    jl_ptls_t ptls = jl_get_ptls_states();
+    if (ptls->safepoint) {
+        jl_mutex_lock(lock);
+    } else {
+        jl_mutex_lock_nogc(lock);
+    }
+}
+
 static inline void jl_mutex_unlock_nogc(jl_mutex_t *lock)
 {
     assert(lock->owner == jl_thread_self() &&
@@ -482,6 +586,15 @@ static inline void jl_mutex_unlock(jl_mutex_t *lock)
     jl_gc_enable_finalizers(ptls, 1);
     jl_lock_frame_pop();
     JL_SIGATOMIC_END();
+}
+
+static inline void jl_mutex_unlock_maybe_nogc(jl_mutex_t *lock) {
+    jl_ptls_t ptls = jl_get_ptls_states();
+    if (ptls->safepoint) {
+        jl_mutex_unlock(lock);
+    } else {
+        jl_mutex_unlock_nogc(lock);
+    }
 }
 
 static inline void jl_mutex_init(jl_mutex_t *lock)

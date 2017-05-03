@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """Mirror callback function
 
@@ -14,11 +14,11 @@ function mirror_callback(remote::Ptr{Ptr{Void}}, repo_ptr::Ptr{Void},
     err != 0 && return Cint(err)
 
     # And set the configuration option to true for the push command
-    config = GitConfig(GitRepo(repo_ptr))
+    config = GitConfig(GitRepo(repo_ptr,false))
     name_str = unsafe_string(name)
     err= try set!(config, "remote.$name_str.mirror", true)
          catch -1
-         finally finalize(config)
+         finally close(config)
          end
     err != 0 && return Cint(err)
     return Cint(0)
@@ -28,6 +28,8 @@ function authenticate_ssh(creds::SSHCredentials, libgit2credptr::Ptr{Ptr{Void}},
         username_ptr, schema, host)
     isusedcreds = checkused!(creds)
 
+    # Note: The same SSHCredentials can be used to authenticate separate requests using the
+    # same credential cache. e.g. using Pkg.update when there are two private packages.
     errcls, errmsg = Error.last_error()
     if errcls != Error.None
         # Check if we used ssh-agent
@@ -37,7 +39,7 @@ function authenticate_ssh(creds::SSHCredentials, libgit2credptr::Ptr{Ptr{Void}},
     end
 
     # first try ssh-agent if credentials support its usage
-    if creds.usesshagent === nothing || creds.usesshagent == "Y" || creds.usesshagent == "U"
+    if creds.usesshagent == "Y" || creds.usesshagent == "U"
         err = ccall((:git_cred_ssh_key_from_agent, :libgit2), Cint,
                      (Ptr{Ptr{Void}}, Cstring), libgit2credptr, username_ptr)
         creds.usesshagent = "U" # used ssh-agent only one time
@@ -59,7 +61,6 @@ function authenticate_ssh(creds::SSHCredentials, libgit2credptr::Ptr{Ptr{Void}},
             ENV["SSH_KEY_PATH"]
         else
             keydefpath = creds.prvkey # check if credentials were already used
-            keydefpath === nothing && (keydefpath = "")
             if isempty(keydefpath) || isusedcreds
                 defaultkeydefpath = joinpath(homedir(),".ssh","id_rsa")
                 if isempty(keydefpath) && isfile(defaultkeydefpath)
@@ -81,7 +82,6 @@ function authenticate_ssh(creds::SSHCredentials, libgit2credptr::Ptr{Ptr{Void}},
             ENV["SSH_PUB_KEY_PATH"]
         else
             keydefpath = creds.pubkey # check if credentials were already used
-            keydefpath === nothing && (keydefpath = "")
             if isempty(keydefpath) || isusedcreds
                 if isempty(keydefpath)
                     keydefpath = privatekey*".pub"
@@ -99,7 +99,8 @@ function authenticate_ssh(creds::SSHCredentials, libgit2credptr::Ptr{Ptr{Void}},
         else
             # In encrypted private keys, the second line is "Proc-Type: 4,ENCRYPTED"
             open(privatekey) do f
-                passphrase_required = (readline(f); chomp(readline(f)) == "Proc-Type: 4,ENCRYPTED")
+                readline(f)
+                passphrase_required = readline(f) == "Proc-Type: 4,ENCRYPTED"
             end
         end
 
@@ -107,7 +108,6 @@ function authenticate_ssh(creds::SSHCredentials, libgit2credptr::Ptr{Ptr{Void}},
             ENV["SSH_KEY_PASS"]
         else
             passdef = creds.pass # check if credentials were already used
-            passdef === nothing && (passdef = "")
             if passphrase_required && (isempty(passdef) || isusedcreds)
                 if is_windows()
                     passdef = Base.winprompt(
@@ -132,10 +132,9 @@ function authenticate_ssh(creds::SSHCredentials, libgit2credptr::Ptr{Ptr{Void}},
         isusedcreds && return Cint(Error.EAUTH)
     end
 
-    err = ccall((:git_cred_ssh_key_new, :libgit2), Cint,
+    return ccall((:git_cred_ssh_key_new, :libgit2), Cint,
                  (Ptr{Ptr{Void}}, Cstring, Cstring, Cstring, Cstring),
                  libgit2credptr, creds.user, creds.pubkey, creds.prvkey, creds.pass)
-    return err
 end
 
 function authenticate_userpass(creds::UserPasswordCredentials, libgit2credptr::Ptr{Ptr{Void}},
@@ -145,19 +144,16 @@ function authenticate_userpass(creds::UserPasswordCredentials, libgit2credptr::P
     if creds.prompt_if_incorrect
         username = creds.user
         userpass = creds.pass
-        (username === nothing) && (username = "")
-        (userpass === nothing) && (userpass = "")
         if is_windows()
             if isempty(username) || isempty(userpass) || isusedcreds
                 res = Base.winprompt("Please enter your credentials for '$schema$host'", "Credentials required",
-                        username === nothing || isempty(username) ?
-                        urlusername : username; prompt_username = true)
+                        isempty(username) ? urlusername : username; prompt_username = true)
                 isnull(res) && return Cint(Error.EAUTH)
                 username, userpass = Base.get(res)
             end
         elseif isusedcreds
-            username = prompt("Username for '$schema$host'", default = isempty(username) ?
-                urlusername : username)
+            username = prompt("Username for '$schema$host'",
+                default=isempty(username) ? urlusername : username)
             userpass = prompt("Password for '$schema$username@$host'", password=true)
         end
         ((creds.user != username) || (creds.pass != userpass)) && reset!(creds)
@@ -169,10 +165,9 @@ function authenticate_userpass(creds::UserPasswordCredentials, libgit2credptr::P
         isusedcreds && return Cint(Error.EAUTH)
     end
 
-    err = ccall((:git_cred_userpass_plaintext_new, :libgit2), Cint,
+    return ccall((:git_cred_userpass_plaintext_new, :libgit2), Cint,
                  (Ptr{Ptr{Void}}, Cstring, Cstring),
                  libgit2credptr, creds.user, creds.pass)
-    err == 0 && return Cint(0)
 end
 
 
@@ -205,7 +200,7 @@ counting strategy that prevents repeated usage of faulty credentials.
 function credentials_callback(libgit2credptr::Ptr{Ptr{Void}}, url_ptr::Cstring,
                               username_ptr::Cstring,
                               allowed_types::Cuint, payload_ptr::Ptr{Void})
-    err = 0
+    err = Cint(0)
     url = unsafe_string(url_ptr)
 
     # parse url for schema and host
@@ -251,13 +246,14 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Void}}, url_ptr::Cstring,
         end
         err = Cint(Error.EAUTH)
     end
-    return Cint(err)
+    return err
 end
 
 function fetchhead_foreach_callback(ref_name::Cstring, remote_url::Cstring,
-                        oid::Ptr{Oid}, is_merge::Cuint, payload::Ptr{Void})
+                        oid_ptr::Ptr{GitHash}, is_merge::Cuint, payload::Ptr{Void})
     fhead_vec = unsafe_pointer_to_objref(payload)::Vector{FetchHead}
-    push!(fhead_vec, FetchHead(unsafe_string(ref_name), unsafe_string(remote_url), Oid(oid), is_merge == 1))
+    push!(fhead_vec, FetchHead(unsafe_string(ref_name), unsafe_string(remote_url),
+        unsafe_load(oid_ptr), is_merge == 1))
     return Cint(0)
 end
 
@@ -266,4 +262,4 @@ mirror_cb() = cfunction(mirror_callback, Cint, (Ptr{Ptr{Void}}, Ptr{Void}, Cstri
 "C function pointer for `credentials_callback`"
 credentials_cb() = cfunction(credentials_callback, Cint, (Ptr{Ptr{Void}}, Cstring, Cstring, Cuint, Ptr{Void}))
 "C function pointer for `fetchhead_foreach_callback`"
-fetchhead_foreach_cb() = cfunction(fetchhead_foreach_callback, Cint, (Cstring, Cstring, Ptr{Oid}, Cuint, Ptr{Void}))
+fetchhead_foreach_cb() = cfunction(fetchhead_foreach_callback, Cint, (Cstring, Cstring, Ptr{GitHash}, Cuint, Ptr{Void}))

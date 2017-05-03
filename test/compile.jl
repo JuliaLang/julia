@@ -1,22 +1,9 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.Test
 
-function redirected_stderr(expected)
-    rd, wr = redirect_stderr()
-    t = @async begin
-        read = readstring(rd) # also makes sure the kernel isn't being forced to buffer the output
-        if !contains(read, expected)
-            @show expected
-            @show read
-            @test false
-        end
-        nothing
-    end
-    return t
-end
-
 Foo_module = :Foo4b3a94a1a081a8cb
+Foo2_module = :F2oo4b3a94a1a081a8cb
 FooBase_module = :FooBase4b3a94a1a081a8cb
 @eval module ConflictingBindings
     export $Foo_module, $FooBase_module
@@ -29,13 +16,13 @@ using .ConflictingBindings
 # so we disable it for the tests below
 withenv( "JULIA_DEBUG_LOADING" => nothing ) do
 
-olderr = STDERR
 dir = mktempdir()
 dir2 = mktempdir()
 insert!(LOAD_PATH, 1, dir)
 insert!(Base.LOAD_CACHE_PATH, 1, dir)
 try
     Foo_file = joinpath(dir, "$Foo_module.jl")
+    Foo2_file = joinpath(dir, "$Foo2_module.jl")
     FooBase_file = joinpath(dir, "$FooBase_module.jl")
 
     write(FooBase_file,
@@ -45,12 +32,23 @@ try
           module $FooBase_module
           end
           """)
+    write(Foo2_file,
+          """
+          __precompile__(true)
+
+          module $Foo2_module
+              export override
+              override(x::Integer) = 2
+              override(x::AbstractFloat) = Float64(override(1))
+          end
+          """)
     write(Foo_file,
           """
           __precompile__(true)
 
           module $Foo_module
               using $FooBase_module
+              import $Foo2_module: $Foo2_module, override
 
               # test that docs get reconnected
               @doc "foo function" foo(x) = x + 1
@@ -62,7 +60,7 @@ try
               end
 
               # test for creation of some reasonably complicated type
-              immutable MyType{T} end
+              struct MyType{T} end
               const t17809s = Any[
                     Tuple{
                         Type{Ptr{MyType{i}}},
@@ -82,20 +80,20 @@ try
               const nothingkw = Core.kwfunc(Base.nothing)
 
               # issue 16908 (some complicated types and external method definitions)
-              abstract CategoricalPool{T, R <: Integer, V}
-              abstract CategoricalValue{T, R <: Integer}
-              immutable NominalPool{T, R <: Integer, V} <: CategoricalPool{T, R, V}
+              abstract type CategoricalPool{T, R <: Integer, V} end
+              abstract type CategoricalValue{T, R <: Integer} end
+              struct NominalPool{T, R <: Integer, V} <: CategoricalPool{T, R, V}
                   index::Vector{T}
                   invindex::Dict{T, R}
                   order::Vector{R}
                   ordered::Vector{T}
                   valindex::Vector{V}
               end
-              immutable NominalValue{T, R <: Integer} <: CategoricalValue{T, R}
+              struct NominalValue{T, R <: Integer} <: CategoricalValue{T, R}
                   level::R
                   pool::NominalPool{T, R, NominalValue{T, R}}
               end
-              immutable OrdinalValue{T, R <: Integer} <: CategoricalValue{T, R}
+              struct OrdinalValue{T, R <: Integer} <: CategoricalValue{T, R}
                   level::R
                   pool::NominalPool{T, R, NominalValue{T, R}}
               end
@@ -107,10 +105,10 @@ try
 
               # more tests for method signature involving a complicated type
               # issue 18343
-              immutable Pool18343{R, V}
+              struct Pool18343{R, V}
                   valindex::Vector{V}
               end
-              immutable Value18343{T, R}
+              struct Value18343{T, R}
                   pool::Pool18343{R, Value18343{T, R}}
               end
               Base.convert{S}(::Type{Nullable{S}}, ::Value18343{Nullable}) = 2
@@ -121,9 +119,12 @@ try
               let some_method = @which Base.include("string")
                     # global const some_method // FIXME: support for serializing a direct reference to an external Method not implemented
                   global const some_linfo =
-                      ccall(:jl_specializations_get_linfo, Ref{MethodInstance}, (Any, Any, Any, UInt),
+                      ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance}, (Any, Any, Any, UInt),
                           some_method, Tuple{typeof(Base.include), String}, Core.svec(), typemax(UInt))
               end
+
+              g() = override(1.0)
+              Base.Test.@test g() === 2.0 # compile this
           end
           """)
     @test_throws ErrorException Core.kwfunc(Base.nothing) # make sure `nothing` didn't have a kwfunc (which would invalidate the attempted test)
@@ -131,24 +132,40 @@ try
     # Issue #12623
     @test __precompile__(true) === nothing
 
-    Base.require(Foo_module)
-    cachefile = joinpath(dir, "$Foo_module.ji")
+    # Issue #21307
+    Base.require(Foo2_module)
+    @eval let Foo2_module = $(QuoteNode(Foo2_module)), # use @eval to see the results of loading the compile
+              Foo = getfield(Main, Foo2_module)
+        Foo.override(::Int) = 'a'
+        Foo.override(::Float32) = 'b'
+    end
 
+    Base.require(Foo_module)
+
+    @eval let Foo_module = $(QuoteNode(Foo_module)), # use @eval to see the results of loading the compile
+              Foo = getfield(Main, Foo_module)
+        @test Foo.foo(17) == 18
+        @test Foo.Bar.bar(17) == 19
+
+        # Issue #21307
+        @test Foo.g() === 97.0
+        @test Foo.override(1.0e0) == Float64('a')
+        @test Foo.override(1.0f0) == 'b'
+        @test Foo.override(UInt(1)) == 2
+    end
+
+    cachefile = joinpath(dir, "$Foo_module.ji")
     # use _require_from_serialized to ensure that the test fails if
     # the module doesn't reload from the image:
-    t = redirected_stderr("WARNING: replacing module Foo4b3a94a1a081a8cb.\nWARNING: Method definition ")
-    try
+    @test_warn "WARNING: replacing module Foo4b3a94a1a081a8cb.\nWARNING: Method definition " begin
         @test isa(Base._require_from_serialized(myid(), Foo_module, cachefile, #=broadcast-load=#false), Array{Any,1})
-    finally
-        close(STDERR)
-        redirect_stderr(olderr)
     end
-    wait(t)
 
     let Foo = getfield(Main, Foo_module)
         @test_throws MethodError Foo.foo(17) # world shouldn't be visible yet
     end
     @eval let Foo_module = $(QuoteNode(Foo_module)), # use @eval to see the results of loading the compile
+              Foo2_module = $(QuoteNode(Foo2_module)),
               FooBase_module = $(QuoteNode(FooBase_module)),
               Foo = getfield(Main, Foo_module),
               dir = $(QuoteNode(dir)),
@@ -157,17 +174,23 @@ try
         @test Foo.foo(17) == 18
         @test Foo.Bar.bar(17) == 19
 
+        # Issue #21307
+        @test Foo.g() === 97.0
+        @test Foo.override(1.0e0) == Float64('a')
+        @test Foo.override(1.0f0) == 'b'
+        @test Foo.override(UInt(1)) == 2
+
         # issue #12284:
         @test stringmime("text/plain", Base.Docs.doc(Foo.foo)) == "foo function\n"
         @test stringmime("text/plain", Base.Docs.doc(Foo.Bar.bar)) == "bar function\n"
 
-        modules, deps = Base.parse_cache_header(cachefile)
+        modules, deps, required_modules = Base.parse_cache_header(cachefile)
         @test modules == Dict(Foo_module => Base.module_uuid(Foo))
         @test map(x -> x[1],  sort(deps)) == [Foo_file, joinpath(dir, "bar.jl"), joinpath(dir, "foo.jl")]
 
         modules, deps1 = Base.cache_dependencies(cachefile)
-        @test sort(modules) == Any[(s, Base.module_uuid(getfield(Foo, s))) for s in
-                                   [:Base, :Core, FooBase_module, :Main]]
+        @test modules == Dict(s => Base.module_uuid(getfield(Foo, s)) for s in
+                                    [:Base, :Core, Foo2_module, FooBase_module, :Main])
         @test deps == deps1
 
         @test current_task()(0x01, 0x4000, 0x30031234) == 2
@@ -195,18 +218,17 @@ try
             0:25)
         some_method = @which Base.include("string")
         some_linfo =
-                ccall(:jl_specializations_get_linfo, Ref{MethodInstance}, (Any, Any, Any, UInt),
+                ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance}, (Any, Any, Any, UInt),
                     some_method, Tuple{typeof(Base.include), String}, Core.svec(), typemax(UInt))
         @test Foo.some_linfo::Core.MethodInstance === some_linfo
 
-        PV = Foo.Value18343{Nullable}.types[1]
+        PV = Foo.Value18343{Nullable}.body.types[1]
         VR = PV.types[1].parameters[1]
         @test PV.types[1] === Array{VR,1}
         @test pointer_from_objref(PV.types[1]) ===
-              pointer_from_objref(PV.types[1].parameters[1].types[1].types[1]) ===
-              pointer_from_objref(Array{VR,1})
+              pointer_from_objref(PV.types[1].parameters[1].types[1].types[1])
         @test PV === PV.types[1].parameters[1].types[1]
-        @test pointer_from_objref(PV) !== pointer_from_objref(PV.types[1].parameters[1].types[1])
+        @test pointer_from_objref(PV) === pointer_from_objref(PV.types[1].parameters[1].types[1])
     end
 
     Baz_file = joinpath(dir, "Baz.jl")
@@ -217,17 +239,13 @@ try
           end
           """)
 
-    t = redirected_stderr("ERROR: LoadError: Declaring __precompile__(false) is not allowed in files that are being precompiled.\nStacktrace:\n [1] __precompile__")
-    try
+    @test_warn "ERROR: LoadError: Declaring __precompile__(false) is not allowed in files that are being precompiled.\nStacktrace:\n [1] __precompile__" try
         Base.compilecache("Baz") # from __precompile__(false)
         error("__precompile__ disabled test failed")
     catch exc
-        close(STDERR)
-        redirect_stderr(olderr)
         isa(exc, ErrorException) || rethrow(exc)
         !isempty(search(exc.msg, "__precompile__(false)")) && rethrow(exc)
     end
-    wait(t)
 
     # Issue #12720
     FooBar1_file = joinpath(dir, "FooBar1.jl")
@@ -273,14 +291,7 @@ try
     fb_uuid1 = Base.module_uuid(Main.FooBar1)
     @test fb_uuid != fb_uuid1
 
-    t = redirected_stderr("WARNING: replacing module FooBar.")
-    try
-        reload("FooBar")
-    finally
-        close(STDERR)
-        redirect_stderr(olderr)
-    end
-    wait(t)
+    @test_warn "WARNING: replacing module FooBar." reload("FooBar")
     @test fb_uuid != Base.module_uuid(Main.FooBar)
     @test fb_uuid1 == Base.module_uuid(Main.FooBar1)
     fb_uuid = Base.module_uuid(Main.FooBar)
@@ -289,14 +300,7 @@ try
     @test !Base.stale_cachefile(FooBar1_file, joinpath(dir2, "FooBar1.ji"))
     @test !Base.stale_cachefile(FooBar_file, joinpath(dir2, "FooBar.ji"))
 
-    t = redirected_stderr("WARNING: replacing module FooBar1.")
-    try
-        reload("FooBar1")
-    finally
-        close(STDERR)
-        redirect_stderr(olderr)
-    end
-    wait(t)
+    @test_warn "WARNING: replacing module FooBar1." reload("FooBar1")
     @test fb_uuid == Base.module_uuid(Main.FooBar)
     @test fb_uuid1 != Base.module_uuid(Main.FooBar1)
 
@@ -314,22 +318,49 @@ try
           error("break me")
           end
           """)
-    t = redirected_stderr("ERROR: LoadError: break me\nStacktrace:\n [1] error")
-    try
+    @test_warn "ERROR: LoadError: break me\nStacktrace:\n [1] error" try
         Base.require(:FooBar)
         error("\"LoadError: break me\" test failed")
     catch exc
-        close(STDERR)
-        redirect_stderr(olderr)
         isa(exc, ErrorException) || rethrow(exc)
         !isempty(search(exc.msg, "ERROR: LoadError: break me")) && rethrow(exc)
     end
-    wait(t)
+
+    # Test transitive dependency for #21266
+    FooBarT_file = joinpath(dir, "FooBarT.jl")
+    write(FooBarT_file,
+          """
+          __precompile__(true)
+          module FooBarT
+          end
+          """)
+    FooBarT1_file = joinpath(dir, "FooBarT1.jl")
+    write(FooBarT1_file,
+          """
+          __precompile__(true)
+          module FooBarT1
+              using FooBarT
+          end
+          """)
+    FooBarT2_file = joinpath(dir, "FooBarT2.jl")
+    write(FooBarT2_file,
+          """
+          __precompile__(true)
+          module FooBarT2
+              using FooBarT1
+          end
+          """)
+    Base.compilecache("FooBarT2")
+    write(FooBarT1_file,
+          """
+          __precompile__(true)
+          module FooBarT1
+          end
+          """)
+    rm(FooBarT_file)
+    @test Base.stale_cachefile(FooBarT2_file, joinpath(dir2, "FooBarT2.ji"))
+    @test Base.require(:FooBarT2) === nothing
 finally
-    if STDERR != olderr
-        close(STDERR)
-        redirect_stderr(olderr)
-    end
     splice!(Base.LOAD_CACHE_PATH, 1:2)
     splice!(LOAD_PATH, 1)
     rm(dir, recursive=true)
@@ -374,6 +405,107 @@ let dir = mktempdir(),
         @test parse(Float64, t1_no) < parse(Float64, t2_no)
 
     finally
+        splice!(Base.LOAD_CACHE_PATH, 1)
+        splice!(LOAD_PATH, 1)
+        rm(dir, recursive=true)
+    end
+end
+
+# test loading a package with conflicting namespace
+let dir = mktempdir()
+    Test_module = :Test6c92f26
+    try
+        write(joinpath(dir, "Iterators.jl"),
+              """
+              module Iterators
+                   __precompile__(true)
+              end
+              """)
+
+        write(joinpath(dir, "$Test_module.jl"),
+              """
+              module $Test_module
+                   __precompile__(true)
+                   using Iterators
+              end
+              """)
+
+        testcode = """
+            insert!(LOAD_PATH, 1, $(repr(dir)))
+            insert!(Base.LOAD_CACHE_PATH, 1, $(repr(dir)))
+            using $Test_module
+        """
+
+        exename = `$(Base.julia_cmd()) --startup-file=no`
+        let fname = tempname()
+            try
+                @test readchomp(pipeline(`$exename -E $(testcode)`, stderr=fname)) == "nothing"
+                @test Test.ismatch_warn("WARNING: replacing module $Test_module.\n", readstring(fname))
+            finally
+                rm(fname, force=true)
+            end
+        end
+        # Loading $Test_module from the cache should not bring `Base.Iterators`
+        # into `Main`, since that would lead to a namespace conflict with
+        # the module `Iterators` defined above.
+        let fname = tempname()
+            try
+                @test readchomp(pipeline(`$exename -E $(testcode)`, stderr=fname)) == "nothing"
+                # e.g `@test_nowarn`
+                @test Test.ismatch_warn(r"^(?!.)"s, readstring(fname))
+            finally
+                rm(fname, force=true)
+            end
+        end
+    finally
+        rm(dir, recursive=true)
+    end
+end
+
+let dir = mktempdir()
+    try
+        insert!(LOAD_PATH, 1, dir)
+        insert!(Base.LOAD_CACHE_PATH, 1, dir)
+
+        loaded_modules = Channel{Symbol}(32)
+        callback = (mod::Symbol) -> put!(loaded_modules, mod)
+        push!(Base.package_callbacks, callback)
+
+        Test1_module = :Teste4095a81
+        Test2_module = :Teste4095a82
+        Test3_module = :Teste4095a83
+
+        write(joinpath(dir, "$(Test1_module).jl"),
+              """
+              module $(Test1_module)
+                  __precompile__(true)
+              end
+              """)
+
+        Base.compilecache("$(Test1_module)")
+        write(joinpath(dir, "$(Test2_module).jl"),
+              """
+              module $(Test2_module)
+                  __precompile__(true)
+                  using $(Test1_module)
+              end
+              """)
+        Base.compilecache("$(Test2_module)")
+        @test !Base.isbindingresolved(Main, Test2_module)
+        Base.require(Test2_module)
+        @test Base.isbindingresolved(Main, Test2_module)
+        @test take!(loaded_modules) == Test1_module
+        @test take!(loaded_modules) == Test2_module
+        write(joinpath(dir, "$(Test3_module).jl"),
+              """
+              module $(Test3_module)
+                  using $(Test3_module)
+              end
+              """)
+        Base.require(Test3_module)
+        @test take!(loaded_modules) == Test3_module
+    finally
+        pop!(Base.package_callbacks)
         splice!(Base.LOAD_CACHE_PATH, 1)
         splice!(LOAD_PATH, 1)
         rm(dir, recursive=true)

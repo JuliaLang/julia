@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.llvmcall
 
@@ -64,10 +64,10 @@ baremodule PlusTest
 end
 
 # issue #11800
-@test eval(Expr(:call,Core.Intrinsics.llvmcall,
+@test_throws ErrorException eval(Expr(:call,Core.Intrinsics.llvmcall,
     """%3 = add i32 %1, %0
        ret i32 %3""", Int32, Tuple{Int32, Int32},
-        Int32(1), Int32(2))) == 3
+        Int32(1), Int32(2))) # llvmcall must be compiled to be called
 
 # Test whether declarations work properly
 function undeclared_ceil(x::Float64)
@@ -85,7 +85,7 @@ function declared_floor(x::Float64)
     Float64, Tuple{Float64}, x)
 end
 @test declared_floor(4.2) ≈ 4.
-ir = sprint(io->code_llvm(io, declared_floor, Tuple{Float64}))
+ir = sprint(code_llvm, declared_floor, Tuple{Float64})
 @test contains(ir, "call double @llvm.floor.f64") # should be inlined
 
 function doubly_declared_floor(x::Float64)

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 debug = false
 
@@ -29,8 +29,16 @@ dreal = randn(n)/2
 dimg  = randn(n)/2
 
 for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
-    a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
-    d = eltya == Int ? Tridiagonal(rand(1:7, n-1), rand(1:7, n), rand(1:7, n-1)) : convert(Tridiagonal{eltya}, eltya <: Complex ? Tridiagonal(complex.(dlreal, dlimg), complex.(dreal, dimg), complex.(dureal, duimg)) : Tridiagonal(dlreal, dreal, dureal))
+    a = eltya == Int ? rand(1:7, n, n) :
+        convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
+    d = if eltya == Int
+        Tridiagonal(rand(1:7, n-1), rand(1:7, n), rand(1:7, n-1))
+    elseif eltya <: Complex
+        convert(Tridiagonal{eltya}, Tridiagonal(
+            complex.(dlreal, dlimg), complex.(dreal, dimg), complex.(dureal, duimg)))
+    else
+        convert(Tridiagonal{eltya}, Tridiagonal(dlreal, dreal, dureal))
+    end
     ε = εa = eps(abs(float(one(eltya))))
 
     if eltya <: BlasFloat
@@ -39,8 +47,10 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
         @test AbstractArray(lufact(num)) ≈ eltya[num]
     end
     for eltyb in (Float32, Float64, Complex64, Complex128, Int)
-        b = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex.(breal, bimg) : breal)
-        c = eltyb == Int ? rand(1:5, n) : convert(Vector{eltyb}, eltyb <: Complex ? complex.(creal, cimg) : creal)
+        b = eltyb == Int ? rand(1:5, n, 2) :
+            convert(Matrix{eltyb}, eltyb <: Complex ? complex.(breal, bimg) : breal)
+        c = eltyb == Int ? rand(1:5, n) :
+            convert(Vector{eltyb}, eltyb <: Complex ? complex.(creal, cimg) : creal)
         εb = eps(abs(float(one(eltyb))))
         ε = max(εa,εb)
 
@@ -54,6 +64,10 @@ debug && println("(Automatic) Square LU decomposition. eltya: $eltya, eltyb: $el
         @test l*u ≈ a[p,:]
         @test (l*u)[invperm(p),:] ≈ a
         @test a * inv(lua) ≈ eye(n)
+
+        lstring = sprint(show,l)
+        ustring = sprint(show,u)
+        @test sprint(show,lua) == "$(typeof(lua)) with factors L and U:\n$lstring\n$ustring"
         let Bs = b, Cs = c
             for atype in ("Array", "SubArray")
                 if atype == "Array"
@@ -92,6 +106,7 @@ debug && println("Tridiagonal LU")
         @test_throws DimensionMismatch lud\f
         @test_throws DimensionMismatch lud.'\f
         @test_throws DimensionMismatch lud'\f
+        @test_throws DimensionMismatch Base.LinAlg.At_ldiv_B!(lud, f)
         let Bs = b
             for atype in ("Array", "SubArray")
                 if atype == "Array"
@@ -103,6 +118,9 @@ debug && println("Tridiagonal LU")
                 @test norm(d*(lud\b) - b, 1) < ε*κd*n*2 # Two because the right hand side has two columns
                 if eltya <: Real
                     @test norm((lud.'\b) - Array(d.')\b, 1) < ε*κd*n*2 # Two because the right hand side has two columns
+                    if eltya != Int && eltyb != Int
+                        @test norm(Base.LinAlg.At_ldiv_B!(lud, copy(b)) - Array(d.')\b, 1) < ε*κd*n*2
+                    end
                 end
                 if eltya <: Complex
                     @test norm((lud'\b) - Array(d')\b, 1) < ε*κd*n*2 # Two because the right hand side has two columns
@@ -167,7 +185,9 @@ end
 ## Testing Rational{BigInt} and BigFloat version
 nHilbert = 50
 H = Rational{BigInt}[1//(i+j-1) for i = 1:nHilbert,j = 1:nHilbert]
-Hinv = Rational{BigInt}[(-1)^(i+j)*(i+j-1)*binomial(nHilbert+i-1,nHilbert-j)*binomial(nHilbert+j-1,nHilbert-i)*binomial(i+j-2,i-1)^2 for i = big(1):nHilbert,j=big(1):nHilbert]
+Hinv = Rational{BigInt}[(-1)^(i+j)*(i+j-1)*binomial(nHilbert+i-1,nHilbert-j)*
+    binomial(nHilbert+j-1,nHilbert-i)*binomial(i+j-2,i-1)^2
+    for i = big(1):nHilbert,j=big(1):nHilbert]
 @test inv(H) == Hinv
 setprecision(2^10) do
     @test norm(Array{Float64}(inv(float(H)) - float(Hinv))) < 1e-100

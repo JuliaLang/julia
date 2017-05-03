@@ -62,7 +62,7 @@ unsigned isHFA(jl_datatype_t *ty, jl_datatype_t **ty0, bool *hva) const
     if (!jl_is_datatype(fld0) || ty->name == jl_vecelement_typename)
         return 9;
     if (fld0->name == jl_vecelement_typename) {
-        if (!jl_is_bitstype(jl_tparam0(fld0)) || jl_datatype_size(ty) > 16)
+        if (!jl_is_primitivetype(jl_tparam0(fld0)) || jl_datatype_size(ty) > 16)
             return 9;
         if (l != 1 && l != 2 && l != 4 && l != 8 && l != 16)
             return 9;
@@ -134,7 +134,7 @@ Type *preferred_llvm_type(jl_datatype_t *dt, bool isret) const override
             jl_datatype_t *vecty = (jl_datatype_t*)jl_field_type(ty0, 0);
             assert(jl_is_datatype(vecty) && vecty->name == jl_vecelement_typename);
             jl_value_t *elemty = jl_tparam0(vecty);
-            assert(jl_is_bitstype(elemty));
+            assert(jl_is_primitivetype(elemty));
 
             Type *ety = julia_type_to_llvm(elemty);
             Type *vty = VectorType::get(ety, jl_datatype_nfields(ty0));

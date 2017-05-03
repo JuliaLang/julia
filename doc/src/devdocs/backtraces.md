@@ -8,7 +8,7 @@ to figure out why your script is running slower than expected.
 If you've been directed to this page, find the symptom that best matches what you're experiencing
 and follow the instructions to generate the debugging information requested.  Table of symptoms:
 
-  * [Segfaults during bootstrap (sysimg.jl)](@ref)
+  * [Segfaults during bootstrap (`sysimg.jl`)](@ref)
   * [Segfaults when running a script](@ref)
   * [Errors during Julia startup](@ref)
 
@@ -32,7 +32,7 @@ Platform Info:
   LLVM: libLLVM-3.3
 ```
 
-## Segfaults during bootstrap (sysimg.jl)
+## Segfaults during bootstrap (`sysimg.jl`)
 
 Segfaults toward the end of the `make` process of building Julia are a common symptom of something
 going wrong while Julia is preparsing the corpus of code in the `base/` folder.  Many factors
@@ -64,7 +64,7 @@ on Github with a link to the gist.
 
 ## Segfaults when running a script
 
-The procedure is very similar to [Segfaults during bootstrap (sysimg.jl)](@ref).  Create a debug
+The procedure is very similar to [Segfaults during bootstrap (`sysimg.jl`)](@ref).  Create a debug
 build of Julia, and run your script inside of a debugged Julia process:
 
 ```

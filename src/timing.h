@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #ifndef ENABLE_TIMINGS
 #define JL_TIMING(owner)
@@ -8,6 +8,9 @@
 extern "C" {
 #endif
 void jl_print_timings(void);
+void jl_init_timing(void);
+jl_timing_block_t *jl_pop_timing_block(jl_timing_block_t *cur_block);
+void jl_destroy_timing(void);
 extern jl_timing_block_t *jl_root_timing;
 void jl_timing_block_start(jl_timing_block_t *cur_block);
 void jl_timing_block_stop(jl_timing_block_t *cur_block);

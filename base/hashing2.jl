@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## efficient value-based hashing of integers ##
 
@@ -143,7 +143,7 @@ end
 
 ## streamlined hashing for smallish rational types ##
 
-function hash{T<:BitInteger64}(x::Rational{T}, h::UInt)
+function hash(x::Rational{<:BitInteger64}, h::UInt)
     num, den = Base.numerator(x), Base.denominator(x)
     den == 1 && return hash(num, h)
     den == 0 && return hash(ifelse(num > 0, Inf, -Inf), h)

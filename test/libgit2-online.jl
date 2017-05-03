@@ -1,6 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
-
-@testset "libgit2-online" begin
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #########
 # TESTS #
@@ -16,7 +14,7 @@ mktempdir() do dir
                 @test isdir(repo_path)
                 @test isdir(joinpath(repo_path, ".git"))
             finally
-                finalize(repo)
+                close(repo)
             end
         end
 
@@ -33,6 +31,4 @@ mktempdir() do dir
             end
         end
     end
-end
-
 end

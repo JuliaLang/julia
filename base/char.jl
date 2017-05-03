@@ -1,9 +1,9 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 convert(::Type{Char}, x::UInt32) = reinterpret(Char, x)
 convert(::Type{Char}, x::Number) = Char(UInt32(x))
 convert(::Type{UInt32}, x::Char) = reinterpret(UInt32, x)
-convert{T<:Number}(::Type{T}, x::Char) = convert(T, UInt32(x))
+convert(::Type{T}, x::Char) where {T<:Number} = convert(T, UInt32(x))
 
 rem{T<:Number}(x::Char, ::Type{T}) = rem(UInt32(x), T)
 

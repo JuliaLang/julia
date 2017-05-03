@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Base.require is the implementation for the `import` statement
 
@@ -47,7 +47,7 @@ elseif is_apple()
         path_basename = String(basename(path))
         local casepreserved_basename
         const header_size = 12
-        buf = Array{UInt8}(length(path_basename) + header_size + 1)
+        buf = Vector{UInt8}(length(path_basename) + header_size + 1)
         while true
             ret = ccall(:getattrlist, Cint,
                         (Cstring, Ptr{Void}, Ptr{Void}, Csize_t, Culong),
@@ -64,12 +64,12 @@ elseif is_apple()
             break
         end
         # Hack to compensate for inability to create a string from a subarray with no allocations.
-        path_basename.data == casepreserved_basename && return true
+        Vector{UInt8}(path_basename) == casepreserved_basename && return true
 
         # If there is no match, it's possible that the file does exist but HFS+
         # performed unicode normalization. See  https://developer.apple.com/library/mac/qa/qa1235/_index.html.
         isascii(path_basename) && return false
-        normalize_string(path_basename, :NFD).data == casepreserved_basename
+        Vector{UInt8}(normalize_string(path_basename, :NFD)) == casepreserved_basename
     end
 else
     # Generic fallback that performs a slow directory listing.
@@ -80,19 +80,26 @@ else
     end
 end
 
-function try_path(prefix::String, base::String, name::String)
-    path = joinpath(prefix, name)
+function load_hook(prefix::String, name::String, ::Void)
+    name_jl = "$name.jl"
+    path = joinpath(prefix, name_jl)
     isfile_casesensitive(path) && return abspath(path)
-    path = joinpath(prefix, base, "src", name)
+    path = joinpath(prefix, name_jl, "src", name_jl)
     isfile_casesensitive(path) && return abspath(path)
-    path = joinpath(prefix, name, "src", name)
+    path = joinpath(prefix, name, "src", name_jl)
     isfile_casesensitive(path) && return abspath(path)
     return nothing
 end
+load_hook(prefix::String, name::String, path::String) = path
+load_hook(prefix, name::String, ::Any) =
+    throw(ArgumentError("unrecognized custom loader in LOAD_PATH: $prefix"))
+
+_str(x::AbstractString) = String(x)
+_str(x) = x
 
 # `wd` is a working directory to search. defaults to current working directory.
 # if `wd === nothing`, no extra path is searched.
-function find_in_path(name::String, wd)
+function find_in_path(name::String, wd::Union{Void,String})
     isabspath(name) && return name
     base = name
     if endswith(name,".jl")
@@ -103,15 +110,15 @@ function find_in_path(name::String, wd)
     if wd !== nothing
         isfile_casesensitive(joinpath(wd,name)) && return joinpath(wd,name)
     end
-    p = try_path(Pkg.dir(), base, name)
-    p !== nothing && return p
-    for prefix in LOAD_PATH
-        p = try_path(prefix, base, name)
-        p !== nothing && return p
+    path = nothing
+    path = _str(load_hook(_str(Pkg.dir()), base, path))
+    for dir in LOAD_PATH
+        path = _str(load_hook(_str(dir), base, path))
     end
-    return nothing
+    return path
 end
-find_in_path(name::AbstractString, wd = pwd()) = find_in_path(String(name), wd)
+find_in_path(name::AbstractString, wd::AbstractString = pwd()) =
+    find_in_path(String(name), String(wd))
 
 function find_in_node_path(name::String, srcpath, node::Int=1)
     if myid() == node
@@ -239,6 +246,11 @@ const DEBUG_LOADING = Ref(false)
 # to synchronize multiple tasks trying to import/using something
 const package_locks = Dict{Symbol,Condition}()
 
+# to notify downstream consumers that a module was successfully loaded
+# Callbacks take the form (mod::Symbol) -> nothing.
+# WARNING: This is an experimental feature and might change later, without deprecation.
+const package_callbacks = Any[]
+
 # used to optionally track dependencies when requiring a module:
 const _concrete_dependencies = Any[] # these dependency versions are "set in stone", and the process should try to avoid invalidating them
 const _require_dependencies = Any[] # a list of (path, mtime) tuples that are the file dependencies of the module currently being precompiled
@@ -270,7 +282,7 @@ end
 
 # We throw PrecompilableError(true) when a module wants to be precompiled but isn't,
 # and PrecompilableError(false) when a module doesn't want to be precompiled but is
-immutable PrecompilableError <: Exception
+struct PrecompilableError <: Exception
     isprecompilable::Bool
 end
 function show(io::IO, ex::PrecompilableError)
@@ -371,6 +383,14 @@ all platforms, including those with case-insensitive filesystems like macOS and
 Windows.
 """
 function require(mod::Symbol)
+    _require(mod::Symbol)
+    # After successfully loading notify downstream consumers
+    for callback in package_callbacks
+        invokelatest(callback, mod)
+    end
+end
+
+function _require(mod::Symbol)
     # dependency-tracking is only used for one top-level include(path),
     # and is not applied recursively to imported modules:
     old_track_dependencies = _track_dependencies[]
@@ -545,22 +565,16 @@ function include_from_node1(_path::String)
 end
 
 """
-    include(path::AbstractString...)
+    include(path::AbstractString)
 
-Evaluate the contents of the input source file(s) in the current context. Returns the result
-of the last evaluated argument (of the last input file). During including, a
-task-local include path is set to the directory containing the file. Nested calls to
-`include` will search relative to that path. All paths refer to files on node 1 when running
-in parallel, and files will be fetched from node 1. This function is typically used to load
-source interactively, or to combine files in packages that are broken into multiple source files.
+Evaluate the contents of the input source file in the current context. Returns the result
+of the last evaluated expression of the input file. During including, a task-local include
+path is set to the directory containing the file. Nested calls to `include` will search
+relative to that path. All paths refer to files on node 1 when running in parallel, and
+files will be fetched from node 1. This function is typically used to load source
+interactively, or to combine files in packages that are broken into multiple source files.
 """
-function include(_path::AbstractString...)
-    local result
-    for path in _path
-        result = include(path)
-    end
-    result
-end
+include # defined in sysimg.jl
 
 """
     evalfile(path::AbstractString, args::Vector{String}=String[])
@@ -698,7 +712,16 @@ function parse_cache_header(f::IO)
         push!(files, (String(read(f, n)), ntoh(read(f, Float64))))
     end
     @assert totbytes == 4 "header of cache file appears to be corrupt"
-    return modules, files
+    # read the list of modules that are required to be present during loading
+    required_modules = Dict{Symbol,UInt64}()
+    while true
+        n = ntoh(read(f, Int32))
+        n == 0 && break
+        sym = Symbol(read(f, n)) # module symbol
+        uuid = ntoh(read(f, UInt64)) # module UUID
+        required_modules[sym] = uuid
+    end
+    return modules, files, required_modules
 end
 
 function parse_cache_header(cachefile::String)
@@ -712,15 +735,7 @@ function parse_cache_header(cachefile::String)
 end
 
 function cache_dependencies(f::IO)
-    defs, files = parse_cache_header(f)
-    modules = []
-    while true
-        n = ntoh(read(f, Int32))
-        n == 0 && break
-        sym = Symbol(read(f, n)) # module symbol
-        uuid = ntoh(read(f, UInt64)) # module UUID (mostly just a timestamp)
-        push!(modules, (sym, uuid))
-    end
+    defs, files, modules = parse_cache_header(f)
     return modules, files
 end
 
@@ -741,7 +756,22 @@ function stale_cachefile(modpath::String, cachefile::String)
             DEBUG_LOADING[] && info("JL_DEBUG_LOADING: Rejecting cache file $cachefile due to it containing an invalid cache header.")
             return true # invalid cache file
         end
-        modules, files = parse_cache_header(io)
+        modules, files, required_modules = parse_cache_header(io)
+
+        # Check if transitive dependencies can be fullfilled
+        for mod in keys(required_modules)
+            if mod == :Main || mod == :Core || mod == :Base
+                continue
+            # Module is already loaded
+            elseif isbindingresolved(Main, mod)
+                continue
+            end
+            name = string(mod)
+            path = find_in_node_path(name, nothing, 1)
+            if path === nothing
+                return true # Won't be able to fullfill dependency
+            end
+        end
 
         # check if this file is going to provide one of our concrete dependencies
         # or if it provides a version that conflicts with our concrete dependencies
@@ -764,8 +794,9 @@ function stale_cachefile(modpath::String, cachefile::String)
         end
         for (f, ftime_req) in files
             # Issue #13606: compensate for Docker images rounding mtimes
+            # Issue #20837: compensate for GlusterFS truncating mtimes to microseconds
             ftime = mtime(f)
-            if ftime != ftime_req && ftime != floor(ftime_req)
+            if ftime != ftime_req && ftime != floor(ftime_req) && ftime != trunc(ftime_req, 6)
                 DEBUG_LOADING[] && info("JL_DEBUG_LOADING: Rejecting stale cache file $cachefile (mtime $ftime_req) because file $f (mtime $ftime) has changed.")
                 return true
             end

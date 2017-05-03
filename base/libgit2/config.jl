@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 function GitConfig(path::AbstractString,
                    level::Consts.GIT_CONFIG = Consts.CONFIG_LEVEL_APP,
@@ -10,23 +10,23 @@ function GitConfig(path::AbstractString,
     try
         addfile(cfg, path, level, force)
     catch ex
-        finalize(cfg)
-        throw(ex)
+        close(cfg)
+        rethrow(ex)
     end
     return cfg
 end
 
-function GitConfig(r::GitRepo)
+function GitConfig(repo::GitRepo)
     cfg_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_repository_config, :libgit2), Cint,
-                  (Ptr{Ptr{Void}}, Ptr{Void}), cfg_ptr_ptr, r.ptr)
-    return GitConfig(cfg_ptr_ptr[])
+                  (Ptr{Ptr{Void}}, Ptr{Void}), cfg_ptr_ptr, repo.ptr)
+    return GitConfig(repo, cfg_ptr_ptr[])
 end
 
 function GitConfig(level::Consts.GIT_CONFIG = Consts.CONFIG_LEVEL_DEFAULT)
     cfg_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_config_open_default, :libgit2), Cint,
-                  (Ptr{Ptr{Void}}, ), cfg_ptr_ptr)
+                  (Ptr{Ptr{Void}},), cfg_ptr_ptr)
     cfg = GitConfig(cfg_ptr_ptr[])
     if level != Consts.CONFIG_LEVEL_DEFAULT
         glb_cfg_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
@@ -37,7 +37,7 @@ function GitConfig(level::Consts.GIT_CONFIG = Consts.CONFIG_LEVEL_DEFAULT)
                           glb_cfg_ptr_ptr, cfg.ptr, Cint(level))
             cfg = GitConfig(glb_cfg_ptr_ptr[])
         finally
-            finalize(tmpcfg)
+            close(tmpcfg)
         end
     end
     return cfg
@@ -51,13 +51,14 @@ function addfile(cfg::GitConfig, path::AbstractString,
                    cfg.ptr, path, Cint(level), Cint(force))
 end
 
-function get{T<:AbstractString}(::Type{T}, c::GitConfig, name::AbstractString)
-    buf_ptr = Ref(Buffer())
+function get(::Type{<:AbstractString}, c::GitConfig, name::AbstractString)
+    buf_ref = Ref(Buffer())
     @check ccall((:git_config_get_string_buf, :libgit2), Cint,
-                (Ptr{Buffer}, Ptr{Void}, Cstring), buf_ptr, c.ptr, name)
-    return with(buf_ptr[]) do buf
-        unsafe_string(buf.ptr, buf.size)
-    end
+                 (Ptr{Buffer}, Ptr{Void}, Cstring), buf_ref, c.ptr, name)
+    buf = buf_ref[]
+    str = unsafe_string(buf.ptr, buf.size)
+    free(buf_ref)
+    str
 end
 
 function get(::Type{Bool}, c::GitConfig, name::AbstractString)
@@ -81,19 +82,19 @@ function get(::Type{Int64}, c::GitConfig, name::AbstractString)
     return val_ptr[]
 end
 
-function get{T}(c::GitConfig, name::AbstractString, default::T)
+function get(c::GitConfig, name::AbstractString, default::T) where T
     res = default
     try res = get(T,c,name) end
     return res
 end
 
-function getconfig{T}(r::GitRepo, name::AbstractString, default::T)
+function getconfig(r::GitRepo, name::AbstractString, default)
     with(GitConfig, r) do cfg
         get(cfg, name, default)
     end
 end
 
-function getconfig{T}(rname::AbstractString, name::AbstractString, default::T)
+function getconfig(rname::AbstractString, name::AbstractString, default)
     with(GitRepo, rname) do r
         with(GitConfig, r) do cfg
             get(cfg, name, default)
@@ -101,13 +102,13 @@ function getconfig{T}(rname::AbstractString, name::AbstractString, default::T)
     end
 end
 
-function getconfig{T}(name::AbstractString, default::T)
+function getconfig(name::AbstractString, default)
     with(GitConfig) do cfg
         get(cfg, name, default)
     end
 end
 
-function set!{T <: AbstractString}(c::GitConfig, name::AbstractString, value::T)
+function set!(c::GitConfig, name::AbstractString, value::AbstractString)
     @check ccall((:git_config_set_string, :libgit2), Cint,
                   (Ptr{Void}, Cstring, Cstring), c.ptr, name, value)
 end

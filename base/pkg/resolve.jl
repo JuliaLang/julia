@@ -1,10 +1,10 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Resolve
 
-include("resolve/versionweight.jl")
-include("resolve/interface.jl")
-include("resolve/maxsum.jl")
+include(joinpath("resolve", "versionweight.jl"))
+include(joinpath("resolve", "interface.jl"))
+include(joinpath("resolve", "maxsum.jl"))
 
 using ..Types, ..Query, .PkgToMaxSumInterface, .MaxSum
 import ...Pkg.PkgError
@@ -26,22 +26,32 @@ function resolve(reqs::Requires, deps::Dict{String,Dict{VersionNumber,Available}
         try
             sol = maxsum(graph, msgs)
         catch err
-            if isa(err, UnsatError)
-                p = interface.pkgs[err.info]
-                msg = "unsatisfiable package requirements detected: " *
-                      "no feasible version could be found for package: $p"
-                if msgs.num_nondecimated != graph.np
-                    msg *= "\n  (you may try increasing the value of the" *
-                           "\n   JULIA_PKGRESOLVE_ACCURACY environment variable)"
-                end
-                throw(PkgError(msg))
+            isa(err, UnsatError) || rethrow(err)
+            p = interface.pkgs[err.info]
+            # TODO: build tools to analyze the problem, and suggest to use them here.
+            msg =
+                """
+                resolve is unable to satisfy package requirements.
+                  The problem was detected when trying to find a feasible version
+                  for package $p.
+                  However, this only means that package $p is involved in an
+                  unsatisfiable or difficult dependency relation, and the root of
+                  the problem may be elsewhere.
+                """
+            if msgs.num_nondecimated != graph.np
+                msg *= """
+                         (you may try increasing the value of the JULIA_PKGRESOLVE_ACCURACY
+                          environment variable)
+                       """
             end
-            rethrow(err)
+            ## info("ERROR MESSAGE:\n" * msg)
+            throw(PkgError(msg))
         end
 
         # verify solution (debug code) and enforce its optimality
         @assert verify_solution(sol, interface)
         enforce_optimality!(sol, interface)
+        @assert verify_solution(sol, interface)
     end
 
     # return the solution as a Dict mapping package_name => sha1
@@ -64,7 +74,7 @@ function sanity_check(deps::Dict{String,Dict{VersionNumber,Available}},
         end
     end
 
-    vers = Array{Tuple{String,VersionNumber,VersionNumber}}(0)
+    vers = Vector{Tuple{String,VersionNumber,VersionNumber}}(0)
     for (p,d) in deps, vn in keys(d)
         lvns = VersionNumber[Iterators.filter(vn2->(vn2>vn), keys(d))...]
         nvn = isempty(lvns) ? typemax(VersionNumber) : minimum(lvns)
@@ -78,20 +88,26 @@ function sanity_check(deps::Dict{String,Dict{VersionNumber,Available}},
 
     checked = falses(nv)
 
-    problematic = Array{Tuple{String,VersionNumber,String}}(0)
+    problematic = Vector{Tuple{String,VersionNumber,String}}(0)
     i = 1
     psl = 0
     for (p,vn,nvn) in vers
-        if ndeps[p][vn] == 0
-            break
-        end
-        if checked[i]
+        ndeps[p][vn] == 0 && break
+        checked[i] && (i += 1; continue)
+
+        sub_reqs = Dict{String,VersionSet}(p=>VersionSet([vn, nvn]))
+        local sub_deps::Dict{String,Dict{VersionNumber,Available}}
+        try
+            sub_deps = Query.prune_dependencies(sub_reqs, deps)
+        catch err
+            isa(err, PkgError) || rethrow(err)
+            ## info("ERROR MESSAGE:\n" * err.msg)
+            for vneq in eq_classes[p][vn]
+                push!(problematic, (p, vneq, ""))
+            end
             i += 1
             continue
         end
-
-        sub_reqs = Dict{String,VersionSet}(p=>VersionSet([vn, nvn]))
-        sub_deps = Query.prune_dependencies(sub_reqs, deps)
         interface = Interface(sub_reqs, sub_deps)
 
         red_pkgs = interface.pkgs
@@ -117,8 +133,7 @@ function sanity_check(deps::Dict{String,Dict{VersionNumber,Available}},
             end
         end
         if ok
-            let
-                p0 = interface.pdict[p]
+            let p0 = interface.pdict[p]
                 svn = red_pvers[p0][sol[p0]]
                 @assert svn == vn
             end

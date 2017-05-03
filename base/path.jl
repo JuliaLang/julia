@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 export
     abspath,
@@ -19,7 +19,6 @@ export
 if is_unix()
     const path_separator    = "/"
     const path_separator_re = r"/+"
-    const path_absolute_re  = r"^/"
     const path_directory_re = r"(?:^|/)\.{0,2}$"
     const path_dir_splitter = r"^(.*?)(/+)([^/]*)$"
     const path_ext_splitter = r"^((?:.*/)?(?:\.|[^/\.])[^/]*?)(\.[^/\.]*|)$"
@@ -73,6 +72,12 @@ function homedir()
 end
 
 
+if is_windows()
+    isabspath(path::String) = ismatch(path_absolute_re, path)
+else
+    isabspath(path::String) = startswith(path, '/')
+end
+
 """
     isabspath(path::AbstractString) -> Bool
 
@@ -86,7 +91,7 @@ julia> isabspath("home")
 false
 ```
 """
-isabspath(path::String) = ismatch(path_absolute_re, path)
+isabspath(path::AbstractString)
 
 """
     isdirpath(path::AbstractString) -> Bool
@@ -110,7 +115,7 @@ Split a path into a tuple of the directory name and file name.
 
 ```jldoctest
 julia> splitdir("/home/myuser")
-("/home","myuser")
+("/home", "myuser")
 ```
 """
 function splitdir(path::String)
@@ -154,10 +159,10 @@ unmodified and the empty string.
 
 ```jldoctest
 julia> splitext("/home/myuser/example.jl")
-("/home/myuser/example",".jl")
+("/home/myuser/example", ".jl")
 
 julia> splitext("/home/myuser/example")
-("/home/myuser/example","")
+("/home/myuser/example", "")
 ```
 """
 function splitext(path::String)
@@ -253,6 +258,13 @@ normpath(a::AbstractString, b::AbstractString...) = normpath(joinpath(a,b...))
 Convert a path to an absolute path by adding the current directory if necessary.
 """
 abspath(a::String) = normpath(isabspath(a) ? a : joinpath(pwd(),a))
+
+"""
+    abspath(path::AbstractString, paths::AbstractString...) -> AbstractString
+
+Convert a set of paths to an absolute path by joining them together and adding the
+current directory if necessary. Equivalent to `abspath(joinpath(path, paths...))`.
+"""
 abspath(a::AbstractString, b::AbstractString...) = abspath(joinpath(a,b...))
 
 if is_windows()
@@ -288,7 +300,9 @@ else # !windows
 function realpath(path::AbstractString)
     p = ccall(:realpath, Ptr{UInt8}, (Cstring, Ptr{UInt8}), path, C_NULL)
     systemerror(:realpath, p == C_NULL)
-    return unsafe_wrap(String, p, true)
+    str = unsafe_string(p)
+    Libc.free(p)
+    return str
 end
 end # os-test
 

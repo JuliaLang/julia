@@ -55,7 +55,7 @@ any runtime overhead.
 The strategy adopted is first and foremost expressed in the definition of the type:
 
 ```
-immutable SubArray{T,N,P,I,L} <: AbstractArray{T,N}
+struct SubArray{T,N,P,I,L} <: AbstractArray{T,N}
     parent::P
     indexes::I
     offset1::Int       # for linear indexing and pointer, only valid when L==true
@@ -139,10 +139,10 @@ a given set of indices supports fast linear indexing with the internal `Base.vie
 
 ```julia
 julia> Base.viewindexing(S1.indexes)
-Base.LinearSlow()
+IndexCartesian()
 
 julia> Base.viewindexing(S2.indexes)
-Base.LinearFast()
+IndexLinear()
 ```
 
 This is computed during construction of the `SubArray` and stored in the `L` type parameter as

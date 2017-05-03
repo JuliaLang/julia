@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 using Base.Iterators
 
 # zip and filter iterators
@@ -25,16 +27,27 @@ end
 # typed `collect`
 @test collect(Float64, Iterators.filter(isodd, [1,2,3,4]))[1] === 1.0
 
+# check direct EachLine constructor
+let b = IOBuffer("foo\n")
+    @test collect(EachLine(b)) == ["foo"]
+    seek(b, 0)
+    @test collect(EachLine(b, chomp=false)) == ["foo\n"]
+    seek(b, 0)
+    @test collect(EachLine(b, ondone=()->0)) == ["foo"]
+    seek(b, 0)
+    @test collect(EachLine(b, chomp=false, ondone=()->0)) == ["foo\n"]
+end
+
 # enumerate (issue #6284)
 let b = IOBuffer("1\n2\n3\n"), a = []
     for (i,x) in enumerate(eachline(b))
         push!(a, (i,x))
     end
-    @test a == [(1,"1\n"),(2,"2\n"),(3,"3\n")]
+    @test a == [(1,"1"),(2,"2"),(3,"3")]
 end
 
 # zip eachline (issue #7369)
-let zeb     = IOBuffer("1\n2\n3\n4\n5\n"),
+let zeb = IOBuffer("1\n2\n3\n4\n5\n"),
     letters = ['a', 'b', 'c', 'd', 'e'],
     res     = []
     for (number, letter) in zip(eachline(zeb), letters)
@@ -59,7 +72,6 @@ end
 
 # countfrom
 # ---------
-
 let i = 0
     for j = countfrom(0, 2)
         @test j == i*2
@@ -70,7 +82,6 @@ end
 
 # take
 # ----
-
 let t = take(0:2:8, 10), i = 0
     @test length(collect(t)) == 5
 
@@ -95,7 +106,6 @@ end
 
 # drop
 # ----
-
 let i = 0
     for j = drop(0:2:10, 2)
         @test j == (i+2)*2
@@ -111,7 +121,6 @@ end
 # double take
 # and take/drop canonicalization
 # -----------
-
 for xs in Any["abc", [1, 2, 3]]
     @test take(take(xs, 2), 3) === take(xs, 2)
     @test take(take(xs, 4), 2) === take(xs, 2)
@@ -125,7 +134,6 @@ end
 
 # cycle
 # -----
-
 let i = 0
     for j = cycle(0:3)
         @test j == i % 4
@@ -136,7 +144,6 @@ end
 
 # repeated
 # --------
-
 let i = 0
     for j = repeated(1, 10)
         @test j == 1
@@ -180,8 +187,7 @@ end
 @test collect(product(1:2, 3:4, 5:6)) == [(i, j, k) for i=1:2, j=3:4, k=5:6]
 
 # iteration order
-let
-    expected = [(1,3,5), (2,3,5), (1,4,5), (2,4,5), (1,3,6), (2,3,6), (1,4,6), (2,4,6)]
+let expected = [(1,3,5), (2,3,5), (1,4,5), (2,4,5), (1,3,6), (2,3,6), (1,4,6), (2,4,6)]
     actual = product(1:2, 3:4, 5:6)
     for (exp, act) in zip(expected, actual)
         @test exp == act
@@ -189,9 +195,8 @@ let
 end
 
 # collect multidimensional array
-let
-    a, b = 1:3, [4 6;
-                 5 7]
+let (a, b) = (1:3, [4 6;
+                    5 7])
     p = product(a, b)
     @test size(p)    == (3, 2, 2)
     @test length(p)  == 12
@@ -205,16 +210,14 @@ let
 end
 
 # with 1D inputs
-let
-    a, b, c = 1:2, 1.0:10.0, Int32(1):Int32(0)
-
+let (a, b, c) = (1:2, 1.0:10.0, Int32(1):Int32(0))
     # length
     @test length(product(a))       == 2
     @test length(product(a, b))    == 20
     @test length(product(a, b, c)) == 0
 
     # size
-    @test size(product(a))         == (2, )
+    @test size(product(a))         == (2,)
     @test size(product(a, b))      == (2, 10)
     @test size(product(a, b, c))   == (2, 10, 0)
 
@@ -230,8 +233,7 @@ let
 end
 
 # with multidimensional inputs
-let
-    a, b, c = randn(4, 4), randn(3, 3, 3), randn(2, 2, 2, 2)
+let (a, b, c) = (randn(4, 4), randn(3, 3, 3), randn(2, 2, 2, 2))
     args = Any[(a,),
                (a, a),
                (a, b),
@@ -250,8 +252,7 @@ let
 end
 
 # more tests on product with iterators of various type
-let
-    iters = (1:2,
+let iters = (1:2,
              rand(2, 2, 2),
              take(1:4, 2),
              product(1:2, 1:3),
@@ -274,8 +275,7 @@ let
 end
 
 # product of finite length and infinite length iterators
-let
-    a = 1:2
+let a = 1:2
     b = countfrom(1)
     ab = product(a, b)
     ba = product(b, a)
@@ -341,7 +341,6 @@ end
 
 # flatten
 # -------
-
 @test collect(flatten(Any[1:2, 4:5])) == Any[1,2,4,5]
 @test collect(flatten(Any[flatten(Any[1:2, 6:5]), flatten(Any[10:7, 10:9])])) == Any[1,2]
 @test collect(flatten(Any[flatten(Any[1:2, 4:5]), flatten(Any[6:7, 8:9])])) == Any[1,2,4,5,6,7,8,9]
@@ -398,4 +397,12 @@ for T in (UInt8, UInt16, UInt32, UInt64, UInt128, Int8, Int16, Int128, BigInt)
     @test length(drop(1:6, T(3))) == 3
     @test length(repeated(1, T(5))) == 5
     @test collect(partition(1:5, T(5)))[1] == collect(1:5)
+end
+
+@testset "collect finite iterators issue #12009" begin
+    @test eltype(collect(enumerate(Iterators.Filter(x -> x>0, randn(10))))) == Tuple{Int, Float64}
+end
+
+@testset "product iterator infinite loop" begin
+    @test collect(product(1:1, (1, "2"))) == [(1, 1) (1, "2")]
 end

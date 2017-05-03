@@ -177,7 +177,7 @@ endif
 USE_GPL_LIBS ?= 1
 
 # Directories where said libraries get installed to
-prefix ?= $(abspath julia-$(JULIA_COMMIT))
+prefix ?= $(BUILDROOT)/julia-$(JULIA_COMMIT)
 bindir := $(prefix)/bin
 libdir := $(prefix)/lib
 libexecdir := $(prefix)/libexec
@@ -237,6 +237,7 @@ BUILD_LLVM_CLANG := 0
 # see http://lldb.llvm.org/build.html for dependencies
 BUILD_LLDB := 0
 USE_POLLY := 0
+USE_POLLY_OPENMP := 0
 
 # Cross-compile
 #XC_HOST := i686-w64-mingw32
@@ -315,9 +316,13 @@ JULIACODEGEN := LLVM
 
 # flag for disabling assertions
 ifeq ($(FORCE_ASSERTIONS), 1)
+# C++ code needs to include LLVM header with the same assertion flag as LLVM
+# Use this flag to re-enable assertion in our code after all the LLVM headers are included
+CXX_DISABLE_ASSERTION :=
 DISABLE_ASSERTIONS :=
 else
-DISABLE_ASSERTIONS := -DNDEBUG
+CXX_DISABLE_ASSERTION := -DJL_NDEBUG
+DISABLE_ASSERTIONS := -DNDEBUG -DJL_NDEBUG
 endif
 
 # Compiler specific stuff
@@ -501,6 +506,12 @@ else
 build_shlibdir := $(build_libdir)
 endif
 
+ifeq ($(OS), FreeBSD)
+LOCALBASE ?= /usr/local
+else
+LOCALBASE ?= /usr
+endif
+
 ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
 include $(JULIAHOME)/Make.user
 endif
@@ -649,6 +660,7 @@ ifneq (,$(filter $(ARCH), powerpc64le ppc64le))
 JCFLAGS += -fsigned-char
 OPENBLAS_DYNAMIC_ARCH:=0
 OPENBLAS_TARGET_ARCH:=POWER8
+BINARY:=64
 # GCC doesn't do -march= on ppc64le
 MARCH=
 endif
@@ -837,8 +849,8 @@ LIBMNAME := libopenlibm
 endif
 
 ifeq ($(USE_SYSTEM_LIBUV), 1)
-  LIBUV := /usr/lib/libuv-julia.a
-  LIBUV_INC := /usr/include
+  LIBUV := $(LOCALBASE)/lib/libuv-julia.a
+  LIBUV_INC := $(LOCALBASE)/include
 else
   LIBUV := $(build_libdir)/libuv.a
   LIBUV_INC := $(build_includedir)
@@ -846,7 +858,7 @@ endif
 
 ifeq ($(USE_SYSTEM_UTF8PROC), 1)
   LIBUTF8PROC := -lutf8proc
-  UTF8PROC_INC := /usr/include
+  UTF8PROC_INC := $(LOCALBASE)/include
 else
   LIBUTF8PROC := $(build_libdir)/libutf8proc.a
   UTF8PROC_INC := $(build_includedir)
@@ -990,9 +1002,16 @@ MKLLIB := $(MKLROOT)/lib/ia32
 endif
 USE_SYSTEM_BLAS:=1
 USE_SYSTEM_LAPACK:=1
+ifeq ($(OS), WINNT)
+LIBBLASNAME := mkl_rt
+LIBLAPACKNAME := mkl_rt
+# work around libtool issue with arpack
+MKL_LDFLAGS := -L$(MKLLIB) -Wl,-lmkl_rt
+else
 LIBBLASNAME := libmkl_rt
 LIBLAPACKNAME := libmkl_rt
 MKL_LDFLAGS := -L$(MKLLIB) -lmkl_rt
+endif
 ifneq ($(strip $(MKLLIB)),)
   ifeq ($(OS), Linux)
     RPATH_MKL := -Wl,-rpath,$(MKLLIB)

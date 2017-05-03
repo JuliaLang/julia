@@ -1,17 +1,31 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## types ##
-
-typealias Dims{N} NTuple{N,Int}
-typealias DimsInteger{N} NTuple{N,Integer}
-typealias Indices{N} NTuple{N,AbstractUnitRange}
 
 """
     <:(T1, T2)
 
-Subtype operator, equivalent to `issubtype(T1,T2)`.
+Subtype operator, equivalent to `issubtype(T1, T2)`.
+
+```jldoctest
+julia> Float64 <: AbstractFloat
+true
+
+julia> Vector{Int} <: AbstractArray
+true
+
+julia> Matrix{Float64} <: Matrix{AbstractFloat}
+false
+```
 """
 const (<:) = issubtype
+
+"""
+    >:(T1, T2)
+
+Supertype operator, equivalent to `issubtype(T2, T1)`.
+"""
+const (>:)(a::ANY, b::ANY) = issubtype(b, a)
 
 """
     supertype(T::DataType)
@@ -23,7 +37,15 @@ julia> supertype(Int32)
 Signed
 ```
 """
-supertype(T::DataType) = T.super
+function supertype(T::DataType)
+    @_pure_meta
+    T.super
+end
+
+function supertype(T::UnionAll)
+    @_pure_meta
+    UnionAll(T.var, supertype(T.body))
+end
 
 ## generic comparison ##
 
@@ -47,34 +69,34 @@ corresponding `hash` (and vice versa). Collections typically implement `isequal`
 Scalar types generally do not need to implement `isequal` separate from `==`, unless they
 represent floating-point numbers amenable to a more efficient implementation than that
 provided as a generic fallback (based on `isnan`, `signbit`, and `==`).
+
+```jldoctest
+julia> isequal([1., NaN], [1., NaN])
+true
+
+julia> [1., NaN] == [1., NaN]
+false
+
+julia> 0.0 == -0.0
+true
+
+julia> isequal(0.0, -0.0)
+false
+```
 """
 isequal(x, y) = x == y
 
-# TODO: these can be deleted once the deprecations of ==(x::Char, y::Integer) and
-# ==(x::Integer, y::Char) are gone and the above returns false anyway
-isequal(x::Char, y::Integer) = false
-isequal(x::Integer, y::Char) = false
+signequal(x, y) = signbit(x)::Bool == signbit(y)::Bool
+signless(x, y) = signbit(x)::Bool & !signbit(y)::Bool
 
-## minimally-invasive changes to test == causing NotComparableError
-# export NotComparableError
-# =={T}(x::T, y::T) = x === y
-# immutable NotComparableError <: Exception end
-# const NotComparable = NotComparableError()
-# ==(x::ANY, y::ANY) = NotComparable
-# !(e::NotComparableError) = throw(e)
-# isequal(x, y) = (x == y) === true
+isequal(x::AbstractFloat, y::AbstractFloat) = (isnan(x) & isnan(y)) | signequal(x, y) & (x == y)
+isequal(x::Real,          y::AbstractFloat) = (isnan(x) & isnan(y)) | signequal(x, y) & (x == y)
+isequal(x::AbstractFloat, y::Real         ) = (isnan(x) & isnan(y)) | signequal(x, y) & (x == y)
 
-## alternative NotComparableError which captures context
-# immutable NotComparableError; a; b; end
-# ==(x::ANY, y::ANY) = NotComparableError(x, y)
+isless(x::AbstractFloat, y::AbstractFloat) = (!isnan(x) & isnan(y)) | signless(x, y) | (x < y)
+isless(x::Real,          y::AbstractFloat) = (!isnan(x) & isnan(y)) | signless(x, y) | (x < y)
+isless(x::AbstractFloat, y::Real         ) = (!isnan(x) & isnan(y)) | signless(x, y) | (x < y)
 
-isequal(x::AbstractFloat, y::AbstractFloat) = (isnan(x) & isnan(y)) | (signbit(x) == signbit(y)) & (x == y)
-isequal(x::Real,          y::AbstractFloat) = (isnan(x) & isnan(y)) | (signbit(x) == signbit(y)) & (x == y)
-isequal(x::AbstractFloat, y::Real         ) = (isnan(x) & isnan(y)) | (signbit(x) == signbit(y)) & (x == y)
-
-isless(x::AbstractFloat, y::AbstractFloat) = (!isnan(x) & isnan(y)) | (signbit(x) & !signbit(y)) | (x < y)
-isless(x::Real,          y::AbstractFloat) = (!isnan(x) & isnan(y)) | (signbit(x) & !signbit(y)) | (x < y)
-isless(x::AbstractFloat, y::Real         ) = (!isnan(x) & isnan(y)) | (signbit(x) & !signbit(y)) | (x < y)
 
 function ==(T::Type, S::Type)
     @_pure_meta
@@ -95,8 +117,16 @@ end
 
 Not-equals comparison operator. Always gives the opposite answer as `==`. New types should
 generally not implement this, and rely on the fallback definition `!=(x,y) = !(x==y)` instead.
+
+```jldoctest
+julia> 3 != 2
+true
+
+julia> "foo" ≠ "foo"
+false
+```
 """
-!=(x,y) = !(x==y)
+!=(x, y) = !(x == y)::Bool
 const ≠ = !=
 
 """
@@ -106,6 +136,19 @@ const ≠ = !=
 Determine whether `x` and `y` are identical, in the sense that no program could distinguish
 them. Compares mutable objects by address in memory, and compares immutable objects (such as
 numbers) by contents at the bit level. This function is sometimes called `egal`.
+
+```jldoctest
+julia> a = [1, 2]; b = [1, 2];
+
+julia> a == b
+true
+
+julia> a === b
+false
+
+julia> a === a
+true
+```
 """
 ===
 const ≡ = ===
@@ -115,8 +158,18 @@ const ≡ = ===
     ≢(x,y)
 
 Equivalent to `!(x === y)`.
+
+```jldoctest
+julia> a = [1, 2]; b = [1, 2];
+
+julia> a ≢ b
+true
+
+julia> a ≢ a
+false
+```
 """
-!==(x,y) = !(x===y)
+!==(x, y) = !(x === y)
 const ≢ = !==
 
 """
@@ -126,24 +179,63 @@ Less-than comparison operator. New numeric types should implement this function 
 arguments of the new type. Because of the behavior of floating-point NaN values, `<`
 implements a partial order. Types with a canonical partial order should implement `<`, and
 types with a canonical total order should implement `isless`.
+
+```jldoctest
+julia> 'a' < 'b'
+true
+
+julia> "abc" < "abd"
+true
+
+julia> 5 < 3
+false
+```
 """
-<(x,y) = isless(x,y)
+<(x, y) = isless(x, y)
 
 """
     >(x, y)
 
 Greater-than comparison operator. Generally, new types should implement `<` instead of this
-function, and rely on the fallback definition `>(x,y) = y<x`.
+function, and rely on the fallback definition `>(x, y) = y < x`.
+
+```jldoctest
+julia> 'a' > 'b'
+false
+
+julia> 7 > 3 > 1
+true
+
+julia> "abc" > "abd"
+false
+
+julia> 5 > 3
+true
+```
 """
->(x,y) = y < x
+>(x, y) = y < x
 
 """
     <=(x, y)
     ≤(x,y)
 
 Less-than-or-equals comparison operator.
+
+```jldoctest
+julia> 'a' <= 'b'
+true
+
+julia> 7 ≤ 7 ≤ 9
+true
+
+julia> "abc" ≤ "abc"
+true
+
+julia> 5 <= 3
+false
+```
 """
-<=(x,y) = !(y < x)
+<=(x, y) = !(y < x)
 const ≤ = <=
 
 """
@@ -151,8 +243,22 @@ const ≤ = <=
     ≥(x,y)
 
 Greater-than-or-equals comparison operator.
+
+```jldoctest
+julia> 'a' >= 'b'
+false
+
+julia> 7 ≥ 7 ≥ 3
+true
+
+julia> "abc" ≥ "abc"
+true
+
+julia> 5 >= 3
+true
+```
 """
->=(x,y) = (y <= x)
+>=(x, y) = (y <= x)
 const ≥ = >=
 
 # this definition allows Number types to implement < instead of isless,
@@ -167,6 +273,11 @@ Return `x` if `condition` is `true`, otherwise return `y`. This differs from `?`
 that it is an ordinary function, so all the arguments are evaluated first. In some cases,
 using `ifelse` instead of an `if` statement can eliminate the branch in generated code and
 provide higher performance in tight loops.
+
+```jldoctest
+julia> ifelse(1 > 2, 1, 2)
+2
+```
 """
 ifelse(c::Bool, x, y) = select_value(c, x, y)
 
@@ -176,8 +287,20 @@ ifelse(c::Bool, x, y) = select_value(c, x, y)
 Return -1, 0, or 1 depending on whether `x` is less than, equal to, or greater than `y`,
 respectively. Uses the total order implemented by `isless`. For floating-point numbers, uses `<`
 but throws an error for unordered arguments.
+
+```jldoctest
+julia> cmp(1, 2)
+-1
+
+julia> cmp(2, 1)
+1
+
+julia> cmp(2+im, 3-im)
+ERROR: MethodError: no method matching isless(::Complex{Int64}, ::Complex{Int64})
+[...]
+```
 """
-cmp(x,y) = isless(x,y) ? -1 : ifelse(isless(y,x), 1, 0)
+cmp(x, y) = isless(x, y) ? -1 : ifelse(isless(y, x), 1, 0)
 
 """
     lexcmp(x, y)
@@ -185,32 +308,55 @@ cmp(x,y) = isless(x,y) ? -1 : ifelse(isless(y,x), 1, 0)
 Compare `x` and `y` lexicographically and return -1, 0, or 1 depending on whether `x` is
 less than, equal to, or greater than `y`, respectively. This function should be defined for
 lexicographically comparable types, and `lexless` will call `lexcmp` by default.
+
+```jldoctest
+julia> lexcmp("abc", "abd")
+-1
+
+julia> lexcmp("abc", "abc")
+0
+```
 """
-lexcmp(x,y) = cmp(x,y)
+lexcmp(x, y) = cmp(x, y)
 
 """
     lexless(x, y)
 
 Determine whether `x` is lexicographically less than `y`.
+
+```jldoctest
+julia> lexless("abc", "abd")
+true
+```
 """
-lexless(x,y) = lexcmp(x,y)<0
+lexless(x, y) = lexcmp(x,y) < 0
 
 # cmp returns -1, 0, +1 indicating ordering
-cmp(x::Integer, y::Integer) = ifelse(isless(x,y), -1, ifelse(isless(y,x), 1, 0))
+cmp(x::Integer, y::Integer) = ifelse(isless(x, y), -1, ifelse(isless(y, x), 1, 0))
 
 """
     max(x, y, ...)
 
 Return the maximum of the arguments. See also the [`maximum`](@ref) function
 to take the maximum element from a collection.
+
+```jldoctest
+julia> max(2, 5, 1)
+5
+```
 """
-max(x,y) = ifelse(y < x, x, y)
+max(x, y) = ifelse(y < x, x, y)
 
 """
     min(x, y, ...)
 
 Return the minimum of the arguments. See also the [`minimum`](@ref) function
 to take the minimum element from a collection.
+
+```jldoctest
+julia> min(2, 5, 1)
+1
+```
 """
 min(x,y) = ifelse(y < x, y, x)
 
@@ -221,7 +367,7 @@ Return `(min(x,y), max(x,y))`. See also: [`extrema`](@ref) that returns `(minimu
 
 ```jldoctest
 julia> minmax('c','b')
-('b','c')
+('b', 'c')
 ```
 """
 minmax(x,y) = y < x ? (y, x) : (x, y)
@@ -242,6 +388,11 @@ scalarmin(x::AbstractArray, y               ) = throw(ArgumentError("ordering is
     identity(x)
 
 The identity function. Returns its argument.
+
+```jldoctest
+julia> identity("Well, what did you expect?")
+"Well, what did you expect?"
+```
 """
 identity(x) = x
 
@@ -282,6 +433,26 @@ end
 
 Left division operator: multiplication of `y` by the inverse of `x` on the left. Gives
 floating-point results for integer arguments.
+
+```jldoctest
+julia> 3 \\ 6
+2.0
+
+julia> inv(3) * 6
+2.0
+
+julia> A = [1 2; 3 4]; x = [5, 6];
+
+julia> A \\ x
+2-element Array{Float64,1}:
+ -4.0
+  4.5
+
+julia> inv(A) * x
+2-element Array{Float64,1}:
+ -4.0
+  4.5
+```
 """
 \(x,y) = (y'/x')'
 
@@ -424,8 +595,14 @@ modCeil{T<:Real}(x::T, y::T) = convert(T,x-y*ceil(x/y))
 Remainder from Euclidean division, returning a value of the same sign as `x`, and smaller in
 magnitude than `y`. This value is always exact.
 
-```julia
-x == div(x,y)*y + rem(x,y)
+```jldoctest
+julia> x = 15; y = 4;
+
+julia> x % y
+3
+
+julia> x == div(x, y) * y + rem(x, y)
+true
 ```
 """
 rem
@@ -436,6 +613,14 @@ const % = rem
     ÷(x, y)
 
 The quotient from Euclidean division. Computes `x/y`, truncated to an integer.
+
+```jldoctest
+julia> 9 ÷ 4
+2
+
+julia> -5 ÷ 3
+-1
+```
 """
 div
 const ÷ = div
@@ -444,11 +629,19 @@ const ÷ = div
     mod1(x, y)
 
 Modulus after flooring division, returning a value `r` such that `mod(r, y) == mod(x, y)`
- in the range ``(0, y]`` for positive `y` and in the range ``[y,0)`` for negative `y`.
+in the range ``(0, y]`` for positive `y` and in the range ``[y,0)`` for negative `y`.
+
+```jldoctest
+julia> mod1(4, 2)
+2
+
+julia> mod1(4, 3)
+1
+```
 """
-mod1{T<:Real}(x::T, y::T) = (m=mod(x,y); ifelse(m==0, y, m))
+mod1{T<:Real}(x::T, y::T) = (m = mod(x, y); ifelse(m == 0, y, m))
 # efficient version for integers
-mod1{T<:Integer}(x::T, y::T) = mod(x+y-T(1),y)+T(1)
+mod1{T<:Integer}(x::T, y::T) = (@_inline_meta; mod(x + y - T(1), y) + T(1))
 
 
 """
@@ -456,23 +649,35 @@ mod1{T<:Integer}(x::T, y::T) = mod(x+y-T(1),y)+T(1)
 
 Flooring division, returning a value consistent with `mod1(x,y)`
 
-```julia
-x == fld(x,y)*y + mod(x,y)
-x == (fld1(x,y)-1)*y + mod1(x,y)
+See also: [`mod1`](@ref).
+
+```jldoctest
+julia> x = 15; y = 4;
+
+julia> fld1(x, y)
+4
+
+julia> x == fld(x, y) * y + mod(x, y)
+true
+
+julia> x == (fld1(x, y) - 1) * y + mod1(x, y)
+true
 ```
 """
-fld1{T<:Real}(x::T, y::T) = (m=mod(x,y); fld(x-m,y))
+fld1(x::T, y::T) where {T<:Real} = (m=mod(x,y); fld(x-m,y))
 # efficient version for integers
-fld1{T<:Integer}(x::T, y::T) = fld(x+y-T(1),y)
+fld1(x::T, y::T) where {T<:Integer} = fld(x+y-T(1),y)
 
 """
     fldmod1(x, y)
 
 Return `(fld1(x,y), mod1(x,y))`.
+
+See also: [`fld1`](@ref), [`mod1`](@ref).
 """
-fldmod1{T<:Real}(x::T, y::T) = (fld1(x,y), mod1(x,y))
+fldmod1(x::T, y::T) where {T<:Real} = (fld1(x,y), mod1(x,y))
 # efficient version for integers
-fldmod1{T<:Integer}(x::T, y::T) = (fld1(x,y), mod1(x,y))
+fldmod1(x::T, y::T) where {T<:Integer} = (fld1(x,y), mod1(x,y))
 
 # transpose
 
@@ -635,29 +840,7 @@ For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ`` \\ ``Bᵀ``.
 """
 Ac_ldiv_Bt(a,b) = Ac_ldiv_B(a,transpose(b))
 
-widen{T<:Number}(x::T) = convert(widen(T), x)
-
-"""
-    eltype(type)
-
-Determine the type of the elements generated by iterating a collection of the given `type`.
-For associative collection types, this will be a `Pair{KeyType,ValType}`. The definition
-`eltype(x) = eltype(typeof(x))` is provided for convenience so that instances can be passed
-instead of types. However the form that accepts a type argument should be defined for new
-types.
-
-```jldoctest
-julia> eltype(ones(Float32,2,2))
-Float32
-
-julia> eltype(ones(Int8,2,2))
-Int8
-```
-"""
-eltype(::Type) = Any
-eltype(::Type{Any}) = Any
-eltype(t::DataType) = eltype(supertype(t))
-eltype(x) = eltype(typeof(x))
+widen(x::T) where {T<:Number} = convert(widen(T), x)
 
 # function pipelining
 
@@ -679,7 +862,7 @@ julia> [1:5;] |> x->x.^2 |> sum |> inv
     f ∘ g
 
 Compose functions: i.e. `(f ∘ g)(args...)` means `f(g(args...))`. The `∘` symbol can be
-entered in the Julia REPL (and most editors, appropriately configured) by typing `\circ<tab>`.
+entered in the Julia REPL (and most editors, appropriately configured) by typing `\\circ<tab>`.
 Example:
 
 ```jldoctest
@@ -714,277 +897,6 @@ julia> filter(!isalpha, str)
 ```
 """
 !(f::Function) = (x...)->!f(x...)
-
-# array shape rules
-
-promote_shape(::Tuple{}, ::Tuple{}) = ()
-
-function promote_shape(a::Tuple{Int,}, b::Tuple{Int,})
-    if a[1] != b[1]
-        throw(DimensionMismatch("dimensions must match"))
-    end
-    return a
-end
-
-function promote_shape(a::Tuple{Int,Int}, b::Tuple{Int,})
-    if a[1] != b[1] || a[2] != 1
-        throw(DimensionMismatch("dimensions must match"))
-    end
-    return a
-end
-
-promote_shape(a::Tuple{Int,}, b::Tuple{Int,Int}) = promote_shape(b, a)
-
-function promote_shape(a::Tuple{Int, Int}, b::Tuple{Int, Int})
-    if a[1] != b[1] || a[2] != b[2]
-        throw(DimensionMismatch("dimensions must match"))
-    end
-    return a
-end
-
-"""
-    promote_shape(s1, s2)
-
-Check two array shapes for compatibility, allowing trailing singleton dimensions, and return
-whichever shape has more dimensions.
-
-```jldoctest
-julia> a = ones(3,4,1,1,1);
-
-julia> b = ones(3,4);
-
-julia> promote_shape(a,b)
-(Base.OneTo(3),Base.OneTo(4),Base.OneTo(1),Base.OneTo(1),Base.OneTo(1))
-
-julia> promote_shape((2,3,1,4), (2,3,1,4,1))
-(2,3,1,4,1)
-```
-"""
-function promote_shape(a::Dims, b::Dims)
-    if length(a) < length(b)
-        return promote_shape(b, a)
-    end
-    for i=1:length(b)
-        if a[i] != b[i]
-            throw(DimensionMismatch("dimensions must match"))
-        end
-    end
-    for i=length(b)+1:length(a)
-        if a[i] != 1
-            throw(DimensionMismatch("dimensions must match"))
-        end
-    end
-    return a
-end
-
-function promote_shape(a::AbstractArray, b::AbstractArray)
-    promote_shape(indices(a), indices(b))
-end
-
-function promote_shape(a::Indices, b::Indices)
-    if length(a) < length(b)
-        return promote_shape(b, a)
-    end
-    for i=1:length(b)
-        if a[i] != b[i]
-            throw(DimensionMismatch("dimensions must match"))
-        end
-    end
-    for i=length(b)+1:length(a)
-        if a[i] != 1:1
-            throw(DimensionMismatch("dimensions must match"))
-        end
-    end
-    return a
-end
-
-function throw_setindex_mismatch(X, I)
-    if length(I) == 1
-        throw(DimensionMismatch("tried to assign $(length(X)) elements to $(I[1]) destinations"))
-    else
-        throw(DimensionMismatch("tried to assign $(dims2string(size(X))) array to $(dims2string(I)) destination"))
-    end
-end
-
-# check for valid sizes in A[I...] = X where X <: AbstractArray
-# we want to allow dimensions that are equal up to permutation, but only
-# for permutations that leave array elements in the same linear order.
-# those are the permutations that preserve the order of the non-singleton
-# dimensions.
-function setindex_shape_check(X::AbstractArray, I::Integer...)
-    li = ndims(X)
-    lj = length(I)
-    i = j = 1
-    while true
-        ii = length(indices(X,i))
-        jj = I[j]
-        if i == li || j == lj
-            while i < li
-                i += 1
-                ii *= length(indices(X,i))
-            end
-            while j < lj
-                j += 1
-                jj *= I[j]
-            end
-            if ii != jj
-                throw_setindex_mismatch(X, I)
-            end
-            return
-        end
-        if ii == jj
-            i += 1
-            j += 1
-        elseif ii == 1
-            i += 1
-        elseif jj == 1
-            j += 1
-        else
-            throw_setindex_mismatch(X, I)
-        end
-    end
-end
-
-setindex_shape_check(X::AbstractArray) =
-    (_length(X)==1 || throw_setindex_mismatch(X,()))
-
-setindex_shape_check(X::AbstractArray, i::Integer) =
-    (_length(X)==i || throw_setindex_mismatch(X, (i,)))
-
-setindex_shape_check{T}(X::AbstractArray{T,1}, i::Integer) =
-    (_length(X)==i || throw_setindex_mismatch(X, (i,)))
-
-setindex_shape_check{T}(X::AbstractArray{T,1}, i::Integer, j::Integer) =
-    (_length(X)==i*j || throw_setindex_mismatch(X, (i,j)))
-
-function setindex_shape_check{T}(X::AbstractArray{T,2}, i::Integer, j::Integer)
-    if length(X) != i*j
-        throw_setindex_mismatch(X, (i,j))
-    end
-    sx1 = length(indices(X,1))
-    if !(i == 1 || i == sx1 || sx1 == 1)
-        throw_setindex_mismatch(X, (i,j))
-    end
-end
-setindex_shape_check(X, I...) = nothing # Non-arrays broadcast to all idxs
-
-# convert to a supported index type (Array, Colon, or Int)
-to_index(i::Int) = i
-to_index(i::Integer) = convert(Int,i)::Int
-to_index(c::Colon) = c
-to_index(I::AbstractArray{Bool}) = find(I)
-to_index(A::AbstractArray) = A
-to_index{T<:AbstractArray}(A::AbstractArray{T}) = throw(ArgumentError("invalid index: $A"))
-to_index(A::AbstractArray{Colon}) = throw(ArgumentError("invalid index: $A"))
-to_index(i) = throw(ArgumentError("invalid index: $i"))
-
-to_indexes() = ()
-to_indexes(i1) = (to_index(i1),)
-to_indexes(i1, I...) = (@_inline_meta; (to_index(i1), to_indexes(I...)...))
-
-# Addition/subtraction of ranges
-for f in (:+, :-)
-    @eval begin
-        function $f(r1::OrdinalRange, r2::OrdinalRange)
-            r1l = length(r1)
-            (r1l == length(r2) ||
-             throw(DimensionMismatch("argument dimensions must match")))
-            range($f(first(r1),first(r2)), $f(step(r1),step(r2)), r1l)
-        end
-
-        function $f{T<:AbstractFloat}(r1::FloatRange{T}, r2::FloatRange{T})
-            len = r1.len
-            (len == r2.len ||
-             throw(DimensionMismatch("argument dimensions must match")))
-            divisor1, divisor2 = r1.divisor, r2.divisor
-            if divisor1 == divisor2
-                FloatRange{T}($f(r1.start,r2.start), $f(r1.step,r2.step),
-                              len, divisor1)
-            else
-                d1 = Int(divisor1)
-                d2 = Int(divisor2)
-                d = lcm(d1,d2)
-                s1 = div(d,d1)
-                s2 = div(d,d2)
-                FloatRange{T}($f(r1.start*s1, r2.start*s2),
-                              $f(r1.step*s1, r2.step*s2),  len, d)
-            end
-        end
-
-        function $f{T<:AbstractFloat}(r1::LinSpace{T}, r2::LinSpace{T})
-            len = r1.len
-            (len == r2.len ||
-             throw(DimensionMismatch("argument dimensions must match")))
-            divisor1, divisor2 = r1.divisor, r2.divisor
-            if divisor1 == divisor2
-                LinSpace{T}($f(r1.start, r2.start), $f(r1.stop, r2.stop),
-                            len, divisor1)
-            else
-                linspace(convert(T, $f(first(r1), first(r2))),
-                         convert(T, $f(last(r1), last(r2))), len)
-            end
-        end
-
-        $f(r1::Union{FloatRange, OrdinalRange, LinSpace},
-           r2::Union{FloatRange, OrdinalRange, LinSpace}) =
-               $f(promote(r1, r2)...)
-    end
-end
-
-# vectorized ifelse
-
-function ifelse(c::AbstractArray{Bool}, x, y)
-    [ifelse(ci, x, y) for ci in c]
-end
-
-function ifelse(c::AbstractArray{Bool}, x::AbstractArray, y::AbstractArray)
-    [ifelse(c_elem, x_elem, y_elem) for (c_elem, x_elem, y_elem) in zip(c, x, y)]
-end
-
-function ifelse(c::AbstractArray{Bool}, x::AbstractArray, y)
-    [ifelse(c_elem, x_elem, y) for (c_elem, x_elem) in zip(c, x)]
-end
-
-function ifelse(c::AbstractArray{Bool}, x, y::AbstractArray)
-    [ifelse(c_elem, x, y_elem) for (c_elem, y_elem) in zip(c, y)]
-end
-
-# Pair
-
-immutable Pair{A,B}
-    first::A
-    second::B
-end
-
-const => = Pair
-
-start(p::Pair) = 1
-done(p::Pair, i) = i>2
-next(p::Pair, i) = (getfield(p,i), i+1)
-
-indexed_next(p::Pair, i::Int, state) = (getfield(p,i), i+1)
-
-hash(p::Pair, h::UInt) = hash(p.second, hash(p.first, h))
-
-==(p::Pair, q::Pair) = (p.first==q.first) & (p.second==q.second)
-isequal(p::Pair, q::Pair) = isequal(p.first,q.first) & isequal(p.second,q.second)
-
-isless(p::Pair, q::Pair) = ifelse(!isequal(p.first,q.first), isless(p.first,q.first),
-                                                             isless(p.second,q.second))
-getindex(p::Pair,i::Int) = getfield(p,i)
-getindex(p::Pair,i::Real) = getfield(p, convert(Int, i))
-reverse{A,B}(p::Pair{A,B}) = Pair{B,A}(p.second, p.first)
-
-endof(p::Pair) = 2
-length(p::Pair) = 2
-
-convert{A,B}(::Type{Pair{A,B}}, x::Pair{A,B}) = x
-function convert{A,B}(::Type{Pair{A,B}}, x::Pair)
-    Pair{A, B}(convert(A, x[1]), convert(B, x[2]))
-end
-
-promote_rule{A1, B1, A2, B2}(::Type{Pair{A1, B1}}, ::Type{Pair{A2, B2}}) =
-    Pair{promote_type(A1, A2), promote_type(B1, B2)}
 
 # some operators not defined yet
 global //, >:, <|, hcat, hvcat, ⋅, ×, ∈, ∉, ∋, ∌, ⊆, ⊈, ⊊, ∩, ∪, √, ∛

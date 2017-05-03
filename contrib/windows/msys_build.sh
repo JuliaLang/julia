@@ -1,5 +1,5 @@
 #!/bin/sh
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Script to compile Windows Julia, using binary dependencies from nightlies.
 # Should work in MSYS assuming 7zip is installed and on the path,
@@ -160,7 +160,7 @@ if [ -z "`which make 2>/dev/null`" ]; then
 fi
 
 if ! [ -e usr/bin/busybox.exe ]; then
-  f=busybox-w32-FRP-483-g31277ab.exe
+  f=busybox-w32-FRP-875-gc6ec14a.exe
   echo "Downloading $f"
   $curlflags -o usr/bin/busybox.exe http://frippery.org/files/busybox/$f
 fi
@@ -203,6 +203,7 @@ fi
 echo 'FORCE_ASSERTIONS = 1' >> Make.user
 
 cat Make.user
-make -j3 VERBOSE=1
+make -j3 VERBOSE=1 install
+make VERBOSE=1 -C examples
+cp usr/bin/busybox.exe julia-*/bin
 make build-stats
-#make debug

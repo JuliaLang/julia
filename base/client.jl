@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## client.jl - frontend handling command line options, environment setup,
 ##             and REPL
@@ -40,8 +40,8 @@ const disable_text_style = AnyDict(
 available_text_colors = collect(Iterators.filter(x -> !isa(x, Integer), keys(text_colors)))
 const possible_formatting_symbols = [:normal, :bold, :default]
 available_text_colors = cat(1,
-    sort(intersect(available_text_colors, possible_formatting_symbols), rev=true),
-    sort(setdiff(  available_text_colors, possible_formatting_symbols)))
+    sort!(intersect(available_text_colors, possible_formatting_symbols), rev=true),
+    sort!(setdiff(  available_text_colors, possible_formatting_symbols)))
 
 const available_text_colors_docstring =
     string(join([string("`:", key,"`")
@@ -61,13 +61,8 @@ have_color = false
 default_color_warn = :yellow
 default_color_error = :light_red
 default_color_info = :cyan
-if is_windows()
-    default_color_input = :normal
-    default_color_answer = :normal
-else
-    default_color_input = :bold
-    default_color_answer = :bold
-end
+default_color_input = :normal
+default_color_answer = :normal
 color_normal = text_colors[:normal]
 
 function repl_color(key, default)
@@ -81,22 +76,15 @@ error_color() = repl_color("JULIA_ERROR_COLOR", default_color_error)
 warn_color()  = repl_color("JULIA_WARN_COLOR" , default_color_warn)
 info_color()  = repl_color("JULIA_INFO_COLOR" , default_color_info)
 
-# Print input and answer in bold.
-input_color()  = text_colors[:bold] * text_colors[repl_color("JULIA_INPUT_COLOR", default_color_input)]
-answer_color() = text_colors[:bold] * text_colors[repl_color("JULIA_ANSWER_COLOR", default_color_answer)]
+input_color()  = text_colors[repl_color("JULIA_INPUT_COLOR", default_color_input)]
+answer_color() = text_colors[repl_color("JULIA_ANSWER_COLOR", default_color_answer)]
 
 stackframe_lineinfo_color() = repl_color("JULIA_STACKFRAME_LINEINFO_COLOR", :bold)
 stackframe_function_color() = repl_color("JULIA_STACKFRAME_FUNCTION_COLOR", :bold)
 
 function repl_cmd(cmd, out)
     shell = shell_split(get(ENV,"JULIA_SHELL",get(ENV,"SHELL","/bin/sh")))
-    # Note that we can't support the fish shell due to its lack of subshells
-    #   See this for details: https://github.com/JuliaLang/julia/issues/4918
-    if Base.basename(shell[1]) == "fish"
-        warn_once("cannot use the fish shell, defaulting to /bin/sh\
-         set the JULIA_SHELL environment variable to silence this warning")
-        shell = "/bin/sh"
-    end
+    shell_name = Base.basename(shell[1])
 
     if isempty(cmd.exec)
         throw(ArgumentError("no cmd to execute"))
@@ -120,9 +108,17 @@ function repl_cmd(cmd, out)
         ENV["OLDPWD"] = new_oldpwd
         println(out, pwd())
     else
-        run(ignorestatus(@static is_windows() ? cmd : (isa(STDIN, TTY) ? `$shell -i -c "($(shell_escape(cmd))) && true"` : `$shell -c "($(shell_escape(cmd))) && true"`)))
+        run(ignorestatus(@static is_windows() ? cmd : (isa(STDIN, TTY) ? `$shell -i -c "$(shell_wrap_true(shell_name, cmd))"` : `$shell -c "$(shell_wrap_true(shell_name, cmd))"`)))
     end
     nothing
+end
+
+function shell_wrap_true(shell_name, cmd)
+    if shell_name == "fish"
+        "begin; $(shell_escape(cmd)); and true; end"
+    else
+        "($(shell_escape(cmd))) && true"
+    end
 end
 
 function display_error(io::IO, er, bt)
@@ -208,15 +204,20 @@ function parse_input_line(s::String; filename::String="none")
     #     throw(ParseError("extra input after end of expression"))
     # end
     # expr
-    ccall(:jl_parse_input_line, Any, (Ptr{UInt8}, Csize_t, Ptr{UInt8}, Csize_t),
-        s, sizeof(s), filename, sizeof(filename))
+    ex = ccall(:jl_parse_input_line, Any, (Ptr{UInt8}, Csize_t, Ptr{UInt8}, Csize_t),
+               s, sizeof(s), filename, sizeof(filename))
+    if ex === :_
+        # remove with 0.6 deprecation
+        expand(ex)  # to get possible warning about using _ as an rvalue
+    end
+    return ex
 end
 parse_input_line(s::AbstractString) = parse_input_line(String(s))
 
 function parse_input_line(io::IO)
     s = ""
     while !eof(io)
-        s = s*readline(io)
+        s *= readline(io, chomp=false)
         e = parse_input_line(s)
         if !(isa(e,Expr) && e.head === :incomplete)
             return e
@@ -292,10 +293,6 @@ function process_options(opts::JLOptions)
             println()
             break
         end
-        # eval expression but don't disable interactive mode
-        if opts.postboot != C_NULL
-            eval(Main, parse_input_line(unsafe_string(opts.postboot)))
-        end
         # load file
         if !isempty(ARGS) && !isempty(ARGS[1])
             # program
@@ -364,7 +361,7 @@ function __atreplinit(repl)
         end
     end
 end
-_atreplinit(repl) = eval(Main, :($__atreplinit($repl)))
+_atreplinit(repl) = @eval Main $__atreplinit($repl)
 
 function _start()
     empty!(ARGS)
@@ -417,7 +414,8 @@ function _start()
             end
         end
     catch err
-        display_error(err,catch_backtrace())
+        eval(Main, Expr(:body, Expr(:return, Expr(:call, Base.display_error,
+                                                  QuoteNode(err), catch_backtrace()))))
         exit(1)
     end
     if is_interactive && have_color

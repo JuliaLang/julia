@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 @doc """
 
@@ -16,8 +16,8 @@ Upon return, `tests` is a vector of fully-expanded test names, and
 function choosetests(choices = [])
     testnames = [
         "linalg", "subarray", "core", "inference", "worlds",
-        "keywordargs", "numbers",
-        "printf", "char", "strings", "triplequote", "unicode",
+        "keywordargs", "numbers", "subtype",
+        "printf", "char", "strings", "triplequote", "unicode", "intrinsics",
         "dates", "dict", "hashing", "iobuffer", "staged", "offsetarray",
         "arrayops", "tuple", "reduce", "reducedim", "random", "abstractarray",
         "intfuncs", "simdloop", "vecelement", "blas", "sparse",
@@ -29,13 +29,13 @@ function choosetests(choices = [])
         "floatapprox", "datafmt", "reflection", "regex", "float16",
         "combinatorics", "sysinfo", "env", "rounding", "ranges", "mod2pi",
         "euler", "show", "lineedit", "replcompletions", "repl",
-        "replutil", "sets", "test", "goto", "llvmcall", "grisu",
+        "replutil", "sets", "test", "goto", "llvmcall", "llvmcall2", "grisu",
         "nullable", "meta", "stacktraces", "profile", "libgit2", "docs",
         "markdown", "base64", "serialize", "misc", "threads",
         "enums", "cmdlineargs", "i18n", "workspace", "libdl", "int",
-        "checked", "intset", "floatfuncs", "compile", "parallel", "inline",
+        "checked", "intset", "floatfuncs", "compile", "distributed", "inline",
         "boundscheck", "error", "ambiguous", "cartesian", "asmvariant", "osutils",
-        "channels"
+        "channels", "iostream"
     ]
     profile_skipped = false
     if startswith(string(Sys.ARCH), "arm")
@@ -46,7 +46,7 @@ function choosetests(choices = [])
     end
 
     if Base.USE_GPL_LIBS
-        testnames = [testnames, "fft", "dsp"; ]
+        append!(testnames, ["fft", "dsp"])
     end
 
     if isdir(joinpath(JULIA_HOME, Base.DOCDIR, "examples"))
@@ -115,7 +115,7 @@ function choosetests(choices = [])
         prepend!(tests, sparsetests)
     end
 
-    #do subarray before sparse but after linalg
+    # do subarray before sparse but after linalg
     if "subarray" in skip_tests
         filter!(x -> x != "subarray", tests)
     elseif "subarray" in tests
@@ -130,7 +130,7 @@ function choosetests(choices = [])
                    "linalg/diagonal", "linalg/pinv", "linalg/givens",
                    "linalg/cholesky", "linalg/lu", "linalg/symmetric",
                    "linalg/generic", "linalg/uniformscaling", "linalg/lq",
-                   "linalg/hessenberg"]
+                   "linalg/hessenberg", "linalg/rowvector", "linalg/conjarray"]
     if Base.USE_GPL_LIBS
         push!(linalgtests, "linalg/arnoldi")
     end
@@ -143,7 +143,15 @@ function choosetests(choices = [])
         prepend!(tests, linalgtests)
     end
 
-    net_required_for = ["socket", "parallel", "libgit2"]
+    # do ambiguous first to avoid failing if ambiguities are introduced by other tests
+    if "ambiguous" in skip_tests
+        filter!(x -> x != "ambiguous", tests)
+    elseif "ambiguous" in tests
+        filter!(x -> x != "ambiguous", tests)
+        prepend!(tests, ["ambiguous"])
+    end
+
+    net_required_for = ["socket", "distributed", "libgit2"]
     net_on = true
     try
         ipa = getipaddr()

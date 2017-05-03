@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## linalg.jl: Some generic Linear Algebra definitions
 
@@ -350,7 +350,7 @@ end
 # faster computation of norm(x)^2, avoiding overflow for integers
 norm_sqr(x) = norm(x)^2
 norm_sqr(x::Number) = abs2(x)
-norm_sqr{T<:Integer}(x::Union{T,Complex{T},Rational{T}}) = abs2(float(x))
+norm_sqr(x::Union{T,Complex{T},Rational{T}}) where {T<:Integer} = abs2(float(x))
 
 function generic_vecnorm2(x)
     maxabs = vecnormInf(x)
@@ -447,14 +447,14 @@ function vecnorm(itr, p::Real=2)
         vecnormp(itr,p)
     end
 end
-@inline vecnorm(x::Number, p::Real=2) = p == 0 ? (x==0 ? zero(abs(x)) : one(abs(x))) : abs(x)
+@inline vecnorm(x::Number, p::Real=2) = p == 0 ? (x==0 ? zero(abs(x)) : oneunit(abs(x))) : abs(x)
 
 norm(x::AbstractVector, p::Real=2) = vecnorm(x, p)
 
-function norm1{T}(A::AbstractMatrix{T})
+function norm1(A::AbstractMatrix{T}) where T
     m, n = size(A)
     Tnorm = typeof(float(real(zero(T))))
-    Tsum = promote_type(Float64,Tnorm)
+    Tsum = promote_type(Float64, Tnorm)
     nrm::Tsum = 0
     @inbounds begin
         for j = 1:n
@@ -467,16 +467,16 @@ function norm1{T}(A::AbstractMatrix{T})
     end
     return convert(Tnorm, nrm)
 end
-function norm2{T}(A::AbstractMatrix{T})
+function norm2(A::AbstractMatrix{T}) where T
     m,n = size(A)
     if m == 1 || n == 1 return vecnorm2(A) end
     Tnorm = typeof(float(real(zero(T))))
     (m == 0 || n == 0) ? zero(Tnorm) : convert(Tnorm, svdvals(A)[1])
 end
-function normInf{T}(A::AbstractMatrix{T})
+function normInf(A::AbstractMatrix{T}) where T
     m,n = size(A)
     Tnorm = typeof(float(real(zero(T))))
-    Tsum = promote_type(Float64,Tnorm)
+    Tsum = promote_type(Float64, Tnorm)
     nrm::Tsum = 0
     @inbounds begin
         for i = 1:m
@@ -531,7 +531,7 @@ julia> norm(A, Inf)
 6.0
 ```
 """
-function norm{T}(A::AbstractMatrix{T}, p::Real=2)
+function norm(A::AbstractMatrix, p::Real=2)
     if p == 2
         return norm2(A)
     elseif p == 1
@@ -544,6 +544,20 @@ function norm{T}(A::AbstractMatrix{T}, p::Real=2)
 end
 
 @inline norm(x::Number, p::Real=2) = vecnorm(x, p)
+
+@inline norm(tv::RowVector) = norm(transpose(tv))
+
+"""
+    norm(rowvector, [q = 2])
+
+Takes the q-norm of a `RowVector`, which is equivalent to the p-norm with
+value `p = q/(q-1)`. They coincide at `p = q = 2`.
+
+The difference in norm between a vector space and its dual arises to preserve
+the relationship between duality and the inner product, and the result is
+consistent with the p-norm of `1 × n` matrix.
+"""
+@inline norm(tv::RowVector, q::Real) = q == Inf ? norm(transpose(tv), 1) : norm(transpose(tv), q/(q-1))
 
 function vecdot(x::AbstractArray, y::AbstractArray)
     lx = _length(x)
@@ -679,8 +693,6 @@ trace(x::Number) = x
 
 #det(a::AbstractMatrix)
 
-inv(a::StridedMatrix) = throw(ArgumentError("argument must be a square matrix"))
-
 """
     inv(M)
 
@@ -706,9 +718,10 @@ julia> M*N == N*M == eye(2)
 true
 ```
 """
-function inv{T}(A::AbstractMatrix{T})
-    S = typeof(zero(T)/one(T))
-    A_ldiv_B!(factorize(convert(AbstractMatrix{S}, A)), eye(S, checksquare(A)))
+function inv(A::AbstractMatrix{T}) where T
+    S = typeof(zero(T)/one(T))      # dimensionful
+    S0 = typeof(zero(T)/oneunit(T)) # dimensionless
+    A_ldiv_B!(factorize(convert(AbstractMatrix{S}, A)), eye(S0, checksquare(A)))
 end
 
 """
@@ -1059,7 +1072,7 @@ function axpy!(α, x::AbstractArray, y::AbstractArray)
     y
 end
 
-function axpy!{Ti<:Integer,Tj<:Integer}(α, x::AbstractArray, rx::AbstractArray{Ti}, y::AbstractArray, ry::AbstractArray{Tj})
+function axpy!(α, x::AbstractArray, rx::AbstractArray{<:Integer}, y::AbstractArray, ry::AbstractArray{<:Integer})
     if _length(rx) != _length(ry)
         throw(DimensionMismatch("rx has length $(_length(rx)), but ry has length $(_length(ry))"))
     elseif !checkindex(Bool, linearindices(x), rx)
@@ -1141,7 +1154,7 @@ julia> det(M)
 2.0
 ```
 """
-function det{T}(A::AbstractMatrix{T})
+function det(A::AbstractMatrix{T}) where T
     if istriu(A) || istril(A)
         S = typeof((one(T)*zero(T) + zero(T))/one(T))
         return convert(S, det(UpperTriangular(A)))
@@ -1153,7 +1166,7 @@ det(x::Number) = x
 """
     logabsdet(M)
 
-Log of absolute value of determinant of real matrix. Equivalent to
+Log of absolute value of matrix determinant. Equivalent to
 `(log(abs(det(M))), sign(det(M)))`, but may provide increased accuracy and/or speed.
 """
 logabsdet(A::AbstractMatrix) = logabsdet(lufact(A))
@@ -1184,7 +1197,7 @@ function logdet(A::AbstractMatrix)
     return d + log(s)
 end
 
-typealias NumberArray{T<:Number} AbstractArray{T}
+const NumberArray{T<:Number} = AbstractArray{T}
 
 """
     promote_leaf_eltypes(itr)
@@ -1206,9 +1219,9 @@ julia> promote_leaf_eltypes(a)
 Complex{Float64}
 ```
 """
-promote_leaf_eltypes{T<:Number}(x::Union{AbstractArray{T},Tuple{Vararg{T}}}) = T
-promote_leaf_eltypes{T<:NumberArray}(x::Union{AbstractArray{T},Tuple{Vararg{T}}}) = eltype(T)
-promote_leaf_eltypes{T}(x::T) = T
+promote_leaf_eltypes(x::Union{AbstractArray{T},Tuple{Vararg{T}}}) where {T<:Number} = T
+promote_leaf_eltypes(x::Union{AbstractArray{T},Tuple{Vararg{T}}}) where {T<:NumberArray} = eltype(T)
+promote_leaf_eltypes(x::T) where {T} = T
 promote_leaf_eltypes(x::Union{AbstractArray,Tuple}) = mapreduce(promote_leaf_eltypes, promote_type, Bool, x)
 
 # isapprox: approximate equality of arrays [like isapprox(Number,Number)]
@@ -1216,13 +1229,13 @@ promote_leaf_eltypes(x::Union{AbstractArray,Tuple}) = mapreduce(promote_leaf_elt
 # `a ≈ a` is `true`.
 function isapprox(x::AbstractArray, y::AbstractArray;
     rtol::Real=Base.rtoldefault(promote_leaf_eltypes(x),promote_leaf_eltypes(y)),
-    atol::Real=0, norm::Function=vecnorm)
+    atol::Real=0, nans::Bool=false, norm::Function=vecnorm)
     d = norm(x - y)
     if isfinite(d)
         return d <= atol + rtol*max(norm(x), norm(y))
     else
         # Fall back to a component-wise approximate comparison
-        return all(ab -> isapprox(ab[1], ab[2]; rtol=rtol, atol=atol), zip(x, y))
+        return all(ab -> isapprox(ab[1], ab[2]; rtol=rtol, atol=atol, nans=nans), zip(x, y))
     end
 end
 

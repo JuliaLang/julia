@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## file formats ##
 
@@ -27,7 +27,7 @@ passing them as the second argument.
 function countlines(io::IO, eol::Char='\n')
     isascii(eol) || throw(ArgumentError("only ASCII line terminators are supported"))
     aeol = UInt8(eol)
-    a = Array{UInt8}(8192)
+    a = Vector{UInt8}(8192)
     nl = 0
     while !eof(io)
         nb = readbytes!(io, a)
@@ -129,7 +129,7 @@ function readdlm_auto(input::AbstractString, dlm::Char, T::Type, eol::Char, auto
         # TODO: It would be nicer to use String(a) without making a copy,
         # but because the mmap'ed array is not NUL-terminated this causes
         # jl_try_substrtod to segfault below.
-        return readdlm_string(String(copy(a)), dlm, T, eol, auto, optsd)
+        return readdlm_string(unsafe_string(pointer(a),length(a)), dlm, T, eol, auto, optsd)
     else
         return readdlm_string(readstring(input), dlm, T, eol, auto, optsd)
     end
@@ -141,19 +141,19 @@ end
 #
 # DLMOffsets: Keep offsets (when result dimensions are not known)
 # DLMStore: Store values directly into a result store (when result dimensions are known)
-abstract DLMHandler
+abstract type DLMHandler end
 
-type DLMOffsets <: DLMHandler
+mutable struct DLMOffsets <: DLMHandler
     oarr::Vector{Vector{Int}}
     offidx::Int
     thresh::Int
     bufflen::Int
 
     function DLMOffsets(sbuff::String)
-        offsets = Array{Array{Int,1}}(1)
-        offsets[1] = Array{Int}(offs_chunk_size)
+        offsets = Vector{Vector{Int}}(1)
+        offsets[1] = Vector{Int}(offs_chunk_size)
         thresh = ceil(min(typemax(UInt), Base.Sys.total_memory()) / sizeof(Int) / 5)
-        new(offsets, 1, thresh, length(sbuff.data))
+        new(offsets, 1, thresh, sizeof(sbuff))
     end
 end
 
@@ -175,7 +175,7 @@ function store_cell(dlmoffsets::DLMOffsets, row::Int, col::Int,
                 return
             end
         end
-        offsets = Array{Int}(offs_chunk_size)
+        offsets = Vector{Int}(offs_chunk_size)
         push!(oarr, offsets)
         offidx = 1
     end
@@ -194,7 +194,7 @@ function result(dlmoffsets::DLMOffsets)
     dlmoffsets.oarr
 end
 
-type DLMStore{T} <: DLMHandler
+mutable struct DLMStore{T} <: DLMHandler
     hdr::Array{AbstractString, 2}
     data::Array{T, 2}
 
@@ -214,22 +214,22 @@ function DLMStore{T}(::Type{T}, dims::NTuple{2,Integer},
     nrows <= 0 && throw(ArgumentError("number of rows in dims must be > 0, got $nrows"))
     ncols <= 0 && throw(ArgumentError("number of columns in dims must be > 0, got $ncols"))
     hdr_offset = has_header ? 1 : 0
-    DLMStore{T}(fill(SubString(sbuff,1,0), 1, ncols), Array{T}(nrows-hdr_offset, ncols),
+    DLMStore{T}(fill(SubString(sbuff,1,0), 1, ncols), Matrix{T}(nrows-hdr_offset, ncols),
         nrows, ncols, 0, 0, hdr_offset, sbuff, auto, eol)
 end
 
 _chrinstr(sbuff::String, chr::UInt8, startpos::Int, endpos::Int) =
     (endpos >= startpos) && (C_NULL != ccall(:memchr, Ptr{UInt8},
-    (Ptr{UInt8}, Int32, Csize_t), pointer(sbuff.data)+startpos-1, chr, endpos-startpos+1))
+    (Ptr{UInt8}, Int32, Csize_t), pointer(sbuff)+startpos-1, chr, endpos-startpos+1))
 
-function store_cell{T}(dlmstore::DLMStore{T}, row::Int, col::Int,
-        quoted::Bool, startpos::Int, endpos::Int)
+function store_cell(dlmstore::DLMStore{T}, row::Int, col::Int,
+        quoted::Bool, startpos::Int, endpos::Int) where T
     drow = row - dlmstore.hdr_offset
 
     ncols = dlmstore.ncols
     lastcol = dlmstore.lastcol
     lastrow = dlmstore.lastrow
-    cells::Array{T,2} = dlmstore.data
+    cells::Matrix{T} = dlmstore.data
     sbuff = dlmstore.sbuff
 
     endpos = prevind(sbuff, nextind(sbuff,endpos))
@@ -238,7 +238,7 @@ function store_cell{T}(dlmstore::DLMStore{T}, row::Int, col::Int,
     end
     if quoted
         startpos += 1
-        endpos -= 1
+        endpos = prevind(sbuff, endpos)
     end
 
     if drow > 0
@@ -263,7 +263,7 @@ function store_cell{T}(dlmstore::DLMStore{T}, row::Int, col::Int,
         # fill data
         if quoted && _chrinstr(sbuff, UInt8('"'), startpos, endpos)
             unescaped = replace(SubString(sbuff, startpos, endpos), r"\"\"", "\"")
-            fail = colval(unescaped, 1, length(unescaped), cells, drow, col)
+            fail = colval(unescaped, 1, endof(unescaped), cells, drow, col)
         else
             fail = colval(sbuff, startpos, endpos, cells, drow, col)
         end
@@ -282,7 +282,7 @@ function store_cell{T}(dlmstore::DLMStore{T}, row::Int, col::Int,
         # fill header
         if quoted && _chrinstr(sbuff, UInt8('"'), startpos, endpos)
             unescaped = replace(SubString(sbuff, startpos, endpos), r"\"\"", "\"")
-            colval(unescaped, 1, length(unescaped), dlmstore.hdr, 1, col)
+            colval(unescaped, 1, endof(unescaped), dlmstore.hdr, 1, col)
         else
             colval(sbuff, startpos, endpos, dlmstore.hdr, 1, col)
         end
@@ -291,7 +291,7 @@ function store_cell{T}(dlmstore::DLMStore{T}, row::Int, col::Int,
     nothing
 end
 
-function result{T}(dlmstore::DLMStore{T})
+function result(dlmstore::DLMStore{T}) where T
     nrows = dlmstore.nrows - dlmstore.hdr_offset
     ncols = dlmstore.ncols
     lastcol = dlmstore.lastcol
@@ -363,23 +363,16 @@ end
 
 const valid_opts = [:header, :has_header, :use_mmap, :quotes, :comments, :dims, :comment_char, :skipstart, :skipblanks]
 const valid_opt_types = [Bool, Bool, Bool, Bool, Bool, NTuple{2,Integer}, Char, Integer, Bool]
-const deprecated_opts = Dict(:has_header => :header)
 
 function val_opts(opts)
     d = Dict{Symbol,Union{Bool,NTuple{2,Integer},Char,Integer}}()
     for (opt_name, opt_val) in opts
-        if opt_name == :ignore_invalid_chars
-            Base.depwarn("the ignore_invalid_chars option is no longer supported and will be ignored", :val_opts)
-            continue
-        end
         in(opt_name, valid_opts) ||
             throw(ArgumentError("unknown option $opt_name"))
         opt_typ = valid_opt_types[findfirst(valid_opts, opt_name)]
         isa(opt_val, opt_typ) ||
             throw(ArgumentError("$opt_name should be of type $opt_typ, got $(typeof(opt_val))"))
         d[opt_name] = opt_val
-        haskey(deprecated_opts, opt_name) &&
-            Base.depwarn("$opt_name is deprecated, use $(deprecated_opts[opt_name]) instead", :val_opts)
     end
     return d
 end
@@ -430,7 +423,7 @@ function colval(sbuff::String, startpos::Int, endpos::Int, cells::Array{Float32,
     isnull(n) || (cells[row, col] = get(n))
     isnull(n)
 end
-function colval{T<:AbstractString}(sbuff::String, startpos::Int, endpos::Int, cells::Array{T,2}, row::Int, col::Int)
+function colval(sbuff::String, startpos::Int, endpos::Int, cells::Array{<:AbstractString,2}, row::Int, col::Int)
     cells[row, col] = SubString(sbuff, startpos, endpos)
     return false
 end
@@ -453,7 +446,7 @@ function colval(sbuff::String, startpos::Int, endpos::Int, cells::Array{Any,2}, 
     cells[row, col] = SubString(sbuff, startpos, endpos)
     false
 end
-function colval{T<:Char}(sbuff::String, startpos::Int, endpos::Int, cells::Array{T,2}, row::Int, col::Int)
+function colval(sbuff::String, startpos::Int, endpos::Int, cells::Array{<:Char,2}, row::Int, col::Int)
     if startpos == endpos
         cells[row, col] = next(sbuff, startpos)[1]
         return false
@@ -463,17 +456,9 @@ function colval{T<:Char}(sbuff::String, startpos::Int, endpos::Int, cells::Array
 end
 colval(sbuff::String, startpos::Int, endpos::Int, cells::Array, row::Int, col::Int) = true
 
-function dlm_parse{T,D}(dbuff::T, eol::D, dlm::D, qchar::D, cchar::D,
-                        ign_adj_dlm::Bool, allow_quote::Bool, allow_comments::Bool,
-                        skipstart::Int, skipblanks::Bool, dh::DLMHandler)
-    all_ascii = (D <: UInt8) || (isascii(eol) &&
-                                 isascii(dlm) &&
-                                 (!allow_quote || isascii(qchar)) &&
-                                 (!allow_comments || isascii(cchar)))
-    if T === String && all_ascii
-        return dlm_parse(dbuff.data, eol % UInt8, dlm % UInt8, qchar % UInt8, cchar % UInt8,
-                         ign_adj_dlm, allow_quote, allow_comments, skipstart, skipblanks, dh)
-    end
+function dlm_parse(dbuff::String, eol::D, dlm::D, qchar::D, cchar::D,
+                   ign_adj_dlm::Bool, allow_quote::Bool, allow_comments::Bool,
+                   skipstart::Int, skipblanks::Bool, dh::DLMHandler) where D
     ncols = nrows = col = 0
     is_default_dlm = (dlm == invalid_dlm(D))
     error_str = ""
@@ -659,7 +644,7 @@ function writedlm(io::IO, a::AbstractMatrix, dlm; opts...)
     nothing
 end
 
-writedlm{T}(io::IO, a::AbstractArray{T,0}, dlm; opts...) = writedlm(io, reshape(a,1), dlm; opts...)
+writedlm(io::IO, a::AbstractArray{<:Any,0}, dlm; opts...) = writedlm(io, reshape(a,1), dlm; opts...)
 
 # write an iterable row as dlm-separated items
 function writedlm_row(io::IO, row, dlm, quotes)

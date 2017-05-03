@@ -1,15 +1,15 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # definitions related to C interface
 
-import Core.Intrinsics: cglobal, box
+import Core.Intrinsics: cglobal, bitcast
 
-cfunction(f::Function, r, a) = ccall(:jl_function_ptr, Ptr{Void}, (Any, Any, Any), f, r, a)
+cfunction(f, r, a) = ccall(:jl_function_ptr, Ptr{Void}, (Any, Any, Any), f, r, a)
 
 if ccall(:jl_is_char_signed, Ref{Bool}, ())
-    typealias Cchar Int8
+    const Cchar = Int8
 else
-    typealias Cchar UInt8
+    const Cchar = UInt8
 end
 """
     Cchar
@@ -19,26 +19,29 @@ Equivalent to the native `char` c-type.
 Cchar
 
 if is_windows()
-    typealias Clong Int32
-    typealias Culong UInt32
-    typealias Cwchar_t UInt16
+    const Clong = Int32
+    const Culong = UInt32
+    const Cwchar_t = UInt16
 else
-    typealias Clong Int
-    typealias Culong UInt
-    typealias Cwchar_t Int32
+    const Clong = Int
+    const Culong = UInt
+    const Cwchar_t = Int32
 end
+
 """
     Clong
 
 Equivalent to the native `signed long` c-type.
 """
 Clong
+
 """
     Culong
 
 Equivalent to the native `unsigned long` c-type.
 """
 Culong
+
 """
     Cwchar_t
 
@@ -49,22 +52,22 @@ Cwchar_t
 if !is_windows()
     const sizeof_mode_t = ccall(:jl_sizeof_mode_t, Cint, ())
     if sizeof_mode_t == 2
-        typealias Cmode_t Int16
+        const Cmode_t = Int16
     elseif sizeof_mode_t == 4
-        typealias Cmode_t Int32
+        const Cmode_t = Int32
     elseif sizeof_mode_t == 8
-        typealias Cmode_t Int64
+        const Cmode_t = Int64
     end
 end
 
 # construction from typed pointers
-convert{T<:Union{Int8,UInt8}}(::Type{Cstring}, p::Ptr{T}) = box(Cstring, p)
-convert(::Type{Cwstring}, p::Ptr{Cwchar_t}) = box(Cwstring, p)
-convert{T<:Union{Int8,UInt8}}(::Type{Ptr{T}}, p::Cstring) = box(Ptr{T}, p)
-convert(::Type{Ptr{Cwchar_t}}, p::Cwstring) = box(Ptr{Cwchar_t}, p)
+convert(::Type{Cstring}, p::Ptr{<:Union{Int8,UInt8}}) = bitcast(Cstring, p)
+convert(::Type{Cwstring}, p::Ptr{Cwchar_t}) = bitcast(Cwstring, p)
+convert(::Type{Ptr{T}}, p::Cstring) where {T<:Union{Int8,UInt8}} = bitcast(Ptr{T}, p)
+convert(::Type{Ptr{Cwchar_t}}, p::Cwstring) = bitcast(Ptr{Cwchar_t}, p)
 
 # construction from untyped pointers
-convert{T<:Union{Cstring,Cwstring}}(::Type{T}, p::Ptr{Void}) = box(T, p)
+convert(::Type{T}, p::Ptr{Void}) where {T<:Union{Cstring,Cwstring}} = bitcast(T, p)
 
 pointer(p::Cstring) = convert(Ptr{UInt8}, p)
 pointer(p::Cwstring) = convert(Ptr{Cwchar_t}, p)
@@ -73,21 +76,15 @@ pointer(p::Cwstring) = convert(Ptr{Cwchar_t}, p)
 ==(x::Union{Cstring,Cwstring}, y::Ptr) = pointer(x) == y
 ==(x::Ptr, y::Union{Cstring,Cwstring}) = x == pointer(y)
 
-# here, not in pointer.jl, to avoid bootstrapping problems in coreimg.jl
-unsafe_wrap(::Type{String}, p::Cstring, own::Bool=false) = unsafe_wrap(String, convert(Ptr{UInt8}, p), own)
-unsafe_wrap(::Type{String}, p::Cstring, len::Integer, own::Bool=false) =
-    unsafe_wrap(String, convert(Ptr{UInt8}, p), len, own)
 unsafe_string(s::Cstring) = unsafe_string(convert(Ptr{UInt8}, s))
 
 # convert strings to String etc. to pass as pointers
-cconvert(::Type{Cstring}, s::String) =
-    ccall(:jl_array_cconvert_cstring, Ref{Vector{UInt8}},
-          (Vector{UInt8},), s.data)
+cconvert(::Type{Cstring}, s::String) = s
 cconvert(::Type{Cstring}, s::AbstractString) =
     cconvert(Cstring, String(s)::String)
 
 function cconvert(::Type{Cwstring}, s::AbstractString)
-    v = transcode(Cwchar_t, String(s).data)
+    v = transcode(Cwchar_t, Vector{UInt8}(String(s)))
     !isempty(v) && v[end] == 0 || push!(v, 0)
     return v
 end
@@ -100,7 +97,7 @@ containsnul(p::Ptr, len) =
 containsnul(s::String) = containsnul(unsafe_convert(Ptr{Cchar}, s), sizeof(s))
 containsnul(s::AbstractString) = '\0' in s
 
-function unsafe_convert(::Type{Cstring}, s::Vector{UInt8})
+function unsafe_convert(::Type{Cstring}, s::Union{String,Vector{UInt8}})
     p = unsafe_convert(Ptr{Cchar}, s)
     containsnul(p, sizeof(s)) &&
         throw(ArgumentError("embedded NULs are not allowed in C strings: $(repr(s))"))
@@ -133,7 +130,7 @@ same argument.
 This is only available on Windows.
 """
 function cwstring(s::AbstractString)
-    bytes = String(s).data
+    bytes = Vector{UInt8}(String(s))
     0 in bytes && throw(ArgumentError("embedded NULs are not allowed in C strings: $(repr(s))"))
     return push!(transcode(UInt16, bytes), 0)
 end
@@ -161,16 +158,16 @@ Only conversion to/from UTF-8 is currently supported.
 """
 function transcode end
 
-transcode{T<:Union{UInt8,UInt16,UInt32,Int32}}(::Type{T}, src::Vector{T}) = src
-transcode{T<:Union{Int32,UInt32}}(::Type{T}, src::String) = T[T(c) for c in src]
-transcode{T<:Union{Int32,UInt32}}(::Type{T}, src::Vector{UInt8}) = transcode(T, String(src))
-function transcode{S<:Union{Int32,UInt32}}(::Type{UInt8}, src::Vector{S})
+transcode(::Type{T}, src::Vector{T}) where {T<:Union{UInt8,UInt16,UInt32,Int32}} = src
+transcode(::Type{T}, src::String) where {T<:Union{Int32,UInt32}} = T[T(c) for c in src]
+transcode(::Type{T}, src::Vector{UInt8}) where {T<:Union{Int32,UInt32}} = transcode(T, String(src))
+function transcode(::Type{UInt8}, src::Vector{<:Union{Int32,UInt32}})
     buf = IOBuffer()
     for c in src; print(buf, Char(c)); end
     take!(buf)
 end
 transcode(::Type{String}, src::String) = src
-transcode(T, src::String) = transcode(T, src.data)
+transcode(T, src::String) = transcode(T, Vector{UInt8}(src))
 transcode(::Type{String}, src) = String(transcode(UInt8, src))
 
 function transcode(::Type{UInt16}, src::Vector{UInt8})
@@ -257,7 +254,7 @@ function transcode(::Type{UInt8}, src::Vector{UInt16})
         a = src[i += 1]
     end
 
-    dst = Array{UInt8}(m)
+    dst = StringVector(m)
     a = src[1]
     i, j = 1, 0
     while true

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 debug = false
 using Base.Test
@@ -44,6 +44,11 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
         @test eltype(similar(A1, Int)) == Int
         @test isa(similar(A1, (3,2)), Matrix{elty1})
         @test isa(similar(A1, Int, (3,2)), Matrix{Int})
+
+        #copy!
+        simA1 = similar(A1)
+        copy!(simA1, A1)
+        @test simA1 == A1
 
         # getindex
         ## Linear indexing
@@ -224,8 +229,12 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
         end
 
         # Determinant
-        @test_approx_eq_eps det(A1) det(lufact(full(A1))) sqrt(eps(real(float(one(elty1)))))*n*n
-        @test_approx_eq_eps logdet(A1) logdet(lufact(full(A1))) sqrt(eps(real(float(one(elty1)))))*n*n
+        @test det(A1) ≈ det(lufact(full(A1))) atol=sqrt(eps(real(float(one(elty1)))))*n*n
+        @test logdet(A1) ≈ logdet(lufact(full(A1))) atol=sqrt(eps(real(float(one(elty1)))))*n*n
+        lada, ladb = logabsdet(A1)
+        flada, fladb = logabsdet(lufact(full(A1)))
+        @test lada ≈ flada atol=sqrt(eps(real(float(one(elty1)))))*n*n
+        @test ladb ≈ fladb atol=sqrt(eps(real(float(one(elty1)))))*n*n
 
         # Matrix square root
         @test sqrtm(A1) |> t -> t*t ≈ A1
@@ -237,14 +246,14 @@ for elty1 in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloa
         if !(elty1 in (BigFloat, Complex{BigFloat})) # Not handled yet
             vals, vecs = eig(A1)
             if (t1 == UpperTriangular || t1 == LowerTriangular) && elty1 != Int # Cannot really handle degenerate eigen space and Int matrices will probably have repeated eigenvalues.
-                @test_approx_eq_eps vecs*diagm(vals)/vecs full(A1) sqrt(eps(float(real(one(vals[1])))))*(norm(A1, Inf)*n)^2
+                @test vecs*diagm(vals)/vecs ≈ full(A1) atol=sqrt(eps(float(real(one(vals[1])))))*(norm(A1,Inf)*n)^2
             end
         end
 
         # Condition number tests - can be VERY approximate
         if elty1 <:BlasFloat
             for p in (1.0, Inf)
-                @test_approx_eq_eps cond(A1, p) cond(A1, p) (cond(A1, p) + cond(A1, p))
+                @test cond(A1,p) ≈ cond(A1,p) atol=(cond(A1,p)+cond(A1,p))
             end
             @test cond(A1,2) == cond(full(A1),2)
         end
@@ -495,3 +504,10 @@ end
 
 # Issue 16196
 @test UpperTriangular(eye(3)) \ view(ones(3), [1,2,3]) == ones(3)
+
+# dimensional correctness:
+isdefined(Main, :TestHelpers) || @eval Main include("../TestHelpers.jl")
+using TestHelpers.Furlong
+let A = UpperTriangular([Furlong(1) Furlong(4); Furlong(0) Furlong(1)])
+    @test sqrtm(A) == Furlong{1//2}.(UpperTriangular([1 2; 0 1]))
+end

@@ -1,6 +1,8 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # fold(l|r) & mapfold(l|r)
+@test foldl(+, Int64[]) === Int64(0) # In reference to issues #7465/#20144 (PR #20160)
+@test foldl(+, Int16[]) === Int32(0)
 @test foldl(-, 1:5) == -13
 @test foldl(-, 10, 1:5) == -5
 
@@ -16,20 +18,48 @@
 @test Base.mapfoldl((x)-> x ⊻ true, |, [true false true false false]) == true
 @test Base.mapfoldl((x)-> x ⊻ true, |, false, [true false true false false]) == true
 
+@test foldr(+, Int64[]) === Int64(0) # In reference to issue #20144 (PR #20160)
+@test foldr(+, Int16[]) === Int32(0)
 @test foldr(-, 1:5) == 3
 @test foldr(-, 10, 1:5) == -7
+@test foldr(+, [1]) == 1 # Issue #21493
 
 @test Base.mapfoldr(abs2, -, 2:5) == -14
 @test Base.mapfoldr(abs2, -, 10, 2:5) == -4
 
-# reduce & mapreduce
+# reduce
+@test reduce(+, Int64[]) === Int64(0) # In reference to issue #20144 (PR #20160)
+@test reduce(+, Int16[]) === Int32(0)
 @test reduce((x,y)->"($x+$y)", 9:11) == "((9+10)+11)"
 @test reduce(max, [8 6 7 5 3 0 9]) == 9
 @test reduce(+, 1000, 1:5) == (1000 + 1 + 2 + 3 + 4 + 5)
 @test reduce(+,1) == 1
 
+# mapreduce
 @test mapreduce(-, +, [-10 -9 -3]) == ((10 + 9) + 3)
 @test mapreduce((x)->x[1:3], (x,y)->"($x+$y)", ["abcd", "efgh", "01234"]) == "((abc+efg)+012)"
+
+# mapreduce() for 1- 2- and n-sized blocks (PR #19325)
+@test mapreduce(-, +, [-10]) == 10
+@test mapreduce(abs2, +, [-9, -3]) == 81 + 9
+@test mapreduce(-, +, [-9, -3, -4, 8, -2]) == (9 + 3 + 4 - 8 + 2)
+@test mapreduce(-, +, collect(linspace(1.0, 10000.0, 10000))) == -50005000.0
+# mapreduce() type stability
+@test typeof(mapreduce(*, +, Int8[10])) ===
+      typeof(mapreduce(*, +, Int8[10, 11])) ===
+      typeof(mapreduce(*, +, Int8[10, 11, 12, 13]))
+@test typeof(mapreduce(*, +, Float32[10.0])) ===
+      typeof(mapreduce(*, +, Float32[10, 11])) ===
+      typeof(mapreduce(*, +, Float32[10, 11, 12, 13]))
+# mapreduce() type stability when f supports empty collections
+@test typeof(mapreduce(abs, +, Int8[])) ===
+      typeof(mapreduce(abs, +, Int8[10])) ===
+      typeof(mapreduce(abs, +, Int8[10, 11])) ===
+      typeof(mapreduce(abs, +, Int8[10, 11, 12, 13]))
+@test typeof(mapreduce(abs, +, Float32[])) ===
+      typeof(mapreduce(abs, +, Float32[10])) ===
+      typeof(mapreduce(abs, +, Float32[10, 11])) ===
+      typeof(mapreduce(abs, +, Float32[10, 11, 12, 13]))
 
 # sum
 
@@ -86,8 +116,17 @@ for f in (sum3, sum4, sum7, sum8)
 end
 @test typeof(sum(Int8[])) == typeof(sum(Int8[1])) == typeof(sum(Int8[1 7]))
 
-@test sum_kbn([1,1e100,1,-1e100]) == 2
-@test sum_kbn(Float64[]) == 0.0
+@test sum_kbn([1,1e100,1,-1e100]) === 2.0
+@test sum_kbn(Float64[]) === 0.0
+@test sum_kbn(i for i=1.0:1.0:10.0) === 55.0
+@test sum_kbn(i for i=1:1:10) === 55
+@test sum_kbn([1 2 3]) === 6
+@test sum_kbn([2+im 3-im]) === 5+0im
+@test sum_kbn([1+im 2+3im]) === 3+4im
+@test sum_kbn([7 8 9]) === sum_kbn([8 9 7])
+@test sum_kbn(i for i=1:1:10) === sum_kbn(i for i=10:-1:1)
+@test sum_kbn([-0.0]) === -0.0
+@test sum_kbn([-0.0,-0.0]) === -0.0
 
 # prod
 
@@ -131,6 +170,10 @@ prod2(itr) = invoke(prod, Tuple{Any}, itr)
 @test isnan(minimum([NaN]))
 @test isequal(extrema([NaN]), (NaN, NaN))
 
+@test isnan(maximum([NaN, 2.]))
+@test isnan(minimum([NaN, 2.]))
+@test isequal(extrema([NaN, 2.]), (NaN,NaN))
+
 @test isnan(maximum([NaN, 2., 3.]))
 @test isnan(minimum([NaN, 2., 3.]))
 @test isequal(extrema([NaN, 2., 3.]), (NaN,NaN))
@@ -138,6 +181,14 @@ prod2(itr) = invoke(prod, Tuple{Any}, itr)
 @test isnan(maximum([4., 3., NaN, 5., 2.]))
 @test isnan(minimum([4., 3., NaN, 5., 2.]))
 @test isequal(extrema([4., 3., NaN, 5., 2.]), (NaN,NaN))
+
+ # test long arrays
+@test isnan(maximum([NaN; 1.:10000.]))
+@test isnan(maximum([1.:10000.; NaN]))
+@test isnan(minimum([NaN; 1.:10000.]))
+@test isnan(minimum([1.:10000.; NaN]))
+@test isequal(extrema([1.:10000.; NaN]), (NaN,NaN))
+@test isequal(extrema([NaN; 1.:10000.]), (NaN,NaN))
 
 @test maximum(abs2, 3:7) == 49
 @test minimum(abs2, 3:7) == 9
@@ -231,7 +282,7 @@ end
 
 # any and all with functors
 
-immutable SomeFunctor end
+struct SomeFunctor end
 (::SomeFunctor)(x) = true
 
 @test any(SomeFunctor(), 1:10)
@@ -254,8 +305,18 @@ immutable SomeFunctor end
 
 # count & countnz
 
-@test count(x->x>0, Int[]) == 0
-@test count(x->x>0, -3:5) == 5
+@test count(x->x>0, Int[]) == count(Bool[]) == 0
+@test count(x->x>0, -3:5) == count((-3:5) .> 0) == 5
+@test count([true, true, false, true]) == count(BitVector([true, true, false, true])) == 3
+@test_throws TypeError count(sqrt, [1])
+@test_throws TypeError count([1])
+let itr = (x for x in 1:10 if x < 7)
+    @test count(iseven, itr) == 3
+    @test_throws TypeError count(itr)
+    @test_throws TypeError count(sqrt, itr)
+end
+@test count(iseven(x) for x in 1:10 if x < 7) == 3
+@test count(iseven(x) for x in 1:10 if x < -7) == 0
 
 @test countnz(Int[]) == 0
 @test countnz(Int[0]) == 0

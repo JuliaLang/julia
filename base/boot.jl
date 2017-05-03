@@ -1,22 +1,21 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # commented-out definitions are implemented in C
 
-#abstract Any <: Any
-#abstract Type{T}
+#abstract type Any <: Any end
+#abstract type Type{T} end
 
-#abstract Vararg{T}
-#Tuple = (Any...)
+#abstract type Vararg{T} end
 
-#type Symbol
+#mutable struct Symbol
 #    #opaque
 #end
 
-#type TypeName
+#mutable struct TypeName
 #    name::Symbol
 #end
 
-#type DataType <: Type
+#mutable struct DataType <: Type
 #    name::TypeName
 #    super::Type
 #    parameters::Tuple
@@ -30,97 +29,96 @@
 #    pointerfree::Bool
 #end
 
-#type Union <: Type
-#    types::Tuple
+#struct Union <: Type
+#    a
+#    b
 #end
 
-#type TypeVar
+#mutable struct TypeVar
 #    name::Symbol
 #    lb::Type
 #    ub::Type
 #end
 
-#type TypeConstructor
-#    parameters::Tuple
+#struct UnionAll
+#    var::TypeVar
 #    body
 #end
 
-#immutable Void
+#struct Void
 #end
 #const nothing = Void()
 
-#abstract AbstractArray{T,N}
-#abstract DenseArray{T,N} <: AbstractArray{T,N}
+#abstract type AbstractArray{T,N} end
+#abstract type DenseArray{T,N} <: AbstractArray{T,N} end
 
-#type Array{T,N} <: DenseArray{T,N}
+#mutable struct Array{T,N} <: DenseArray{T,N}
 #end
 
-#type Module
+#mutable struct Module
 #    name::Symbol
 #end
 
-#type Method
+#mutable struct Method
 #end
 
-#type MethodInstance
+#mutable struct MethodInstance
 #end
 
-#type CodeInfo
+#mutable struct CodeInfo
 #end
 
-#type TypeMapLevel
+#mutable struct TypeMapLevel
 #end
 
-#type TypeMapEntry
+#mutable struct TypeMapEntry
 #end
 
-#abstract Ref{T}
-#bitstype {32|64} Ptr{T} <: Ref{T}
+#abstract type Ref{T} end
+#primitive type Ptr{T} <: Ref{T} {32|64} end
 
 # types for the front end
 
-#type Expr
+#mutable struct Expr
 #    head::Symbol
 #    args::Array{Any,1}
 #    typ::Any
 #end
 
-#immutable LineNumberNode
+#struct LineNumberNode
 #    line::Int
 #end
 
-#immutable LabelNode
+#struct LabelNode
 #    label::Int
 #end
 
-#immutable GotoNode
+#struct GotoNode
 #    label::Int
 #end
 
-#immutable QuoteNode
+#struct QuoteNode
 #    value
 #end
 
-#immutable GlobalRef
+#struct GlobalRef
 #    mod::Module
 #    name::Symbol
 #end
 
-# type Task
-#     parent::Task
-#     storage::Any
-#     consumers
-#     started::Bool
-#     done::Bool
-#     runnable::Bool
-# end
-
-import Core.Intrinsics.ccall
+#mutable struct Task
+#    parent::Task
+#    storage::Any
+#    consumers
+#    started::Bool
+#    done::Bool
+#    runnable::Bool
+#end
 
 export
     # key types
     Any, DataType, Vararg, ANY, NTuple,
-    Tuple, Type, TypeConstructor, TypeName, TypeVar, Union, Void,
+    Tuple, Type, UnionAll, TypeName, TypeVar, Union, Void,
     SimpleVector, AbstractArray, DenseArray,
     # special objects
     Function, CodeInfo, Method, MethodTable, TypeMapEntry, TypeMapLevel,
@@ -149,83 +147,84 @@ export
     # constants
     nothing, Main
 
-typealias AnyVector Array{Any,1}
+const AnyVector = Array{Any,1}
 
-abstract Number
-abstract Real     <: Number
-abstract AbstractFloat <: Real
-abstract Integer  <: Real
-abstract Signed   <: Integer
-abstract Unsigned <: Integer
+abstract type Number end
+abstract type Real     <: Number end
+abstract type AbstractFloat <: Real end
+abstract type Integer  <: Real end
+abstract type Signed   <: Integer end
+abstract type Unsigned <: Integer end
 
-bitstype 16 Float16 <: AbstractFloat
-bitstype 32 Float32 <: AbstractFloat
-bitstype 64 Float64 <: AbstractFloat
+primitive type Float16 <: AbstractFloat 16 end
+primitive type Float32 <: AbstractFloat 32 end
+primitive type Float64 <: AbstractFloat 64 end
 
-bitstype 8  Bool <: Integer
-bitstype 32 Char
+primitive type Bool <: Integer 8 end
+primitive type Char 32 end
 
-bitstype 8   Int8    <: Signed
-bitstype 8   UInt8   <: Unsigned
-bitstype 16  Int16   <: Signed
-bitstype 16  UInt16  <: Unsigned
-bitstype 32  Int32   <: Signed
-bitstype 32  UInt32  <: Unsigned
-bitstype 64  Int64   <: Signed
-bitstype 64  UInt64  <: Unsigned
-bitstype 128 Int128  <: Signed
-bitstype 128 UInt128 <: Unsigned
+primitive type Int8    <: Signed   8 end
+primitive type UInt8   <: Unsigned 8 end
+primitive type Int16   <: Signed   16 end
+primitive type UInt16  <: Unsigned 16 end
+primitive type Int32   <: Signed   32 end
+primitive type UInt32  <: Unsigned 32 end
+primitive type Int64   <: Signed   64 end
+primitive type UInt64  <: Unsigned 64 end
+primitive type Int128  <: Signed   128 end
+primitive type UInt128 <: Unsigned 128 end
 
 if Int === Int64
-    typealias UInt UInt64
+    const UInt = UInt64
 else
-    typealias UInt UInt32
+    const UInt = UInt32
 end
-
-abstract AbstractString
 
 function Typeof end
 (f::typeof(Typeof))(x::ANY) = isa(x,Type) ? Type{x} : typeof(x)
 
-abstract Exception
-type ErrorException <: Exception
+abstract type Exception end
+mutable struct ErrorException <: Exception
     msg::AbstractString
     ErrorException(msg::AbstractString) = new(msg)
 end
-immutable BoundsError        <: Exception
+
+Expr(args::ANY...) = _expr(args...)
+
+macro _noinline_meta()
+    Expr(:meta, :noinline)
+end
+
+struct BoundsError        <: Exception
     a::Any
     i::Any
     BoundsError() = new()
-    BoundsError(a::ANY) = new(a)
-    BoundsError(a::ANY, i::ANY) = new(a,i)
+    BoundsError(a::ANY) = (@_noinline_meta; new(a))
+    BoundsError(a::ANY, i) = (@_noinline_meta; new(a,i))
 end
-immutable DivideError        <: Exception end
-immutable DomainError        <: Exception end
-immutable OverflowError      <: Exception end
-immutable InexactError       <: Exception end
-immutable OutOfMemoryError   <: Exception end
-immutable ReadOnlyMemoryError<: Exception end
-immutable SegmentationFault  <: Exception end
-immutable StackOverflowError <: Exception end
-immutable UndefRefError      <: Exception end
-immutable UndefVarError      <: Exception
+struct DivideError        <: Exception end
+struct DomainError        <: Exception end
+struct OverflowError      <: Exception end
+struct InexactError       <: Exception end
+struct OutOfMemoryError   <: Exception end
+struct ReadOnlyMemoryError<: Exception end
+struct SegmentationFault  <: Exception end
+struct StackOverflowError <: Exception end
+struct UndefRefError      <: Exception end
+struct UndefVarError      <: Exception
     var::Symbol
 end
-immutable InterruptException <: Exception end
-type TypeError <: Exception
+struct InterruptException <: Exception end
+mutable struct TypeError <: Exception
     func::Symbol
     context::AbstractString
     expected::Type
     got
 end
 
-abstract DirectIndexString <: AbstractString
+abstract type DirectIndexString <: AbstractString end
 
-immutable String <: AbstractString
-    data::Array{UInt8,1}
-    # required to make String("foo") work (#15120):
-    String(d::Array{UInt8,1}) = new(d)
-end
+String(s::String) = s  # no constructor yet
 
 # This should always be inlined
 getptls() = ccall(:jl_get_ptls_states, Ptr{Void}, ())
@@ -237,9 +236,9 @@ eval(m::Module, e::ANY) = ccall(:jl_toplevel_eval_in, Any, (Any, Any), m, e)
 
 kwfunc(f::ANY) = ccall(:jl_get_keyword_sorter, Any, (Any,), f)
 
-kwftype(t::ANY) = typeof(ccall(:jl_get_kwsorter, Any, (Any,), t.name))
+kwftype(t::ANY) = typeof(ccall(:jl_get_kwsorter, Any, (Any,), t))
 
-type Box
+mutable struct Box
     contents::Any
     Box(x::ANY) = new(x)
     Box() = new()
@@ -247,7 +246,7 @@ end
 
 # constructors for built-in types
 
-type WeakRef
+mutable struct WeakRef
     value
     WeakRef() = WeakRef(nothing)
     WeakRef(v::ANY) = ccall(:jl_gc_new_weakref_th, Ref{WeakRef},
@@ -257,28 +256,21 @@ end
 TypeVar(n::Symbol) =
     ccall(:jl_new_typevar, Ref{TypeVar}, (Any, Any, Any), n, Union{}, Any)
 TypeVar(n::Symbol, ub::ANY) =
-    (isa(ub,Bool) ?
-     ccall(:jl_new_typevar_, Ref{TypeVar}, (Any, Any, Any, Any), n, Union{}, Any, ub) :
-     ccall(:jl_new_typevar, Ref{TypeVar}, (Any, Any, Any), n, Union{}, ub::Type))
+    ccall(:jl_new_typevar, Ref{TypeVar}, (Any, Any, Any), n, Union{}, ub)
 TypeVar(n::Symbol, lb::ANY, ub::ANY) =
-    (isa(ub,Bool) ?
-     ccall(:jl_new_typevar_, Ref{TypeVar}, (Any, Any, Any, Any), n, Union{}, lb::Type, ub) :
-     ccall(:jl_new_typevar, Ref{TypeVar}, (Any, Any, Any), n, lb::Type, ub::Type))
-TypeVar(n::Symbol, lb::ANY, ub::ANY, b::Bool) =
-    ccall(:jl_new_typevar_, Ref{TypeVar}, (Any, Any, Any, Any), n, lb::Type, ub::Type, b)
+    ccall(:jl_new_typevar, Ref{TypeVar}, (Any, Any, Any), n, lb, ub)
 
-TypeConstructor(p::ANY, t::ANY) =
-    ccall(:jl_new_type_constructor, Ref{TypeConstructor}, (Any, Any), p::SimpleVector, t::Type)
+UnionAll(v::TypeVar, t::ANY) = ccall(:jl_type_unionall, Any, (Any, Any), v, t)
 
 Void() = nothing
 
-immutable VecElement{T}
-    value::T
-    VecElement(value::T) = new(value) # disable converting constructor in Core
-end
-VecElement{T}(arg::T) = VecElement{T}(arg)
+(::Type{Tuple{}})() = () # Tuple{}()
 
-Expr(args::ANY...) = _expr(args...)
+struct VecElement{T}
+    value::T
+    VecElement{T}(value::T) where {T} = new(value) # disable converting constructor in Core
+end
+VecElement(arg::T) where {T} = VecElement{T}(arg)
 
 # used by lowering of splicing unquote
 splicedexpr(hd::Symbol, args::Array{Any,1}) = (e=Expr(hd); e.args=args; e)
@@ -302,51 +294,44 @@ Task(f::ANY) = ccall(:jl_new_task, Ref{Task}, (Any, Int), f, 0)
 # note that there is no actual conversion defined here,
 # so the methods and ccall's in Core aren't permitted to use convert
 convert(::Type{Any}, x::ANY) = x
-convert{T}(::Type{T}, x::T) = x
-cconvert{T}(::Type{T}, x) = convert(T, x)
-unsafe_convert{T}(::Type{T}, x::T) = x
+convert(::Type{T}, x::T) where {T} = x
+cconvert(::Type{T}, x) where {T} = convert(T, x)
+unsafe_convert(::Type{T}, x::T) where {T} = x
 
-typealias NTuple{N,T} Tuple{Vararg{T,N}}
+const NTuple{N,T} = Tuple{Vararg{T,N}}
 
 
 # primitive array constructors
-(::Type{Array{T,N}}){T,N}(d::NTuple{N,Int}) =
-    ccall(:jl_new_array, Array{T,N}, (Any,Any), Array{T,N}, d)
-(::Type{Array{T,1}}){T}(d::NTuple{1,Int}) = Array{T,1}(getfield(d,1))
-(::Type{Array{T,2}}){T}(d::NTuple{2,Int}) = Array{T,2}(getfield(d,1), getfield(d,2))
-(::Type{Array{T,3}}){T}(d::NTuple{3,Int}) = Array{T,3}(getfield(d,1), getfield(d,2), getfield(d,3))
-(::Type{Array{T,N}}){T,N}(d::Vararg{Int, N}) = ccall(:jl_new_array, Array{T,N}, (Any,Any), Array{T,N}, d)
-(::Type{Array{T,1}}){T}(m::Int) =
-    ccall(:jl_alloc_array_1d, Array{T,1}, (Any,Int), Array{T,1}, m)
-(::Type{Array{T,2}}){T}(m::Int, n::Int) =
-    ccall(:jl_alloc_array_2d, Array{T,2}, (Any,Int,Int), Array{T,2}, m, n)
-(::Type{Array{T,3}}){T}(m::Int, n::Int, o::Int) =
-    ccall(:jl_alloc_array_3d, Array{T,3}, (Any,Int,Int,Int), Array{T,3}, m, n, o)
+Array{T,N}(d::NTuple{N,Int}) where {T,N} =
+    ccall(:jl_new_array, Array{T,N}, (Any, Any), Array{T,N}, d)
+Array{T,1}(d::NTuple{1,Int}) where {T} = Array{T,1}(getfield(d,1))
+Array{T,2}(d::NTuple{2,Int}) where {T} = Array{T,2}(getfield(d,1), getfield(d,2))
+Array{T,3}(d::NTuple{3,Int}) where {T} = Array{T,3}(getfield(d,1), getfield(d,2), getfield(d,3))
+Array{T,N}(d::Vararg{Int,N}) where {T,N} = ccall(:jl_new_array, Array{T,N}, (Any, Any), Array{T,N}, d)
+Array{T,1}(m::Int) where {T} = ccall(:jl_alloc_array_1d, Array{T,1}, (Any, Int), Array{T,1}, m)
+Array{T,2}(m::Int, n::Int) where {T} =
+    ccall(:jl_alloc_array_2d, Array{T,2}, (Any, Int, Int), Array{T,2}, m, n)
+Array{T,3}(m::Int, n::Int, o::Int) where {T} =
+    ccall(:jl_alloc_array_3d, Array{T,3}, (Any, Int, Int, Int), Array{T,3}, m, n, o)
 
-(::Type{Array{T}}){T,N}(d::NTuple{N,Int}) = Array{T,N}(d)
-(::Type{Array{T}}){T}(m::Int) = Array{T,1}(m)
-(::Type{Array{T}}){T}(m::Int, n::Int) = Array{T,2}(m, n)
-(::Type{Array{T}}){T}(m::Int, n::Int, o::Int) = Array{T,3}(m, n, o)
+Array{T}(d::NTuple{N,Int}) where {T,N} = Array{T,N}(d)
+Array{T}(m::Int) where {T} = Array{T,1}(m)
+Array{T}(m::Int, n::Int) where {T} = Array{T,2}(m, n)
+Array{T}(m::Int, n::Int, o::Int) where {T} = Array{T,3}(m, n, o)
 
-(::Type{Array{T,1}}){T}() = Array{T,1}(0)
-(::Type{Array{T,2}}){T}() = Array{T,2}(0, 0)
-
-# TODO: possibly turn these into deprecations
-Array{T,N}(::Type{T}, d::NTuple{N,Int})   = Array{T,N}(d)
-Array{T}(::Type{T}, d::Int...)            = Array(T, d)
-Array{T}(::Type{T}, m::Int)               = Array{T,1}(m)
-Array{T}(::Type{T}, m::Int,n::Int)        = Array{T,2}(m,n)
-Array{T}(::Type{T}, m::Int,n::Int,o::Int) = Array{T,3}(m,n,o)
-
+Array{T,1}() where {T} = Array{T,1}(0)
 
 # primitive Symbol constructors
-Symbol(s::String) = Symbol(s.data)
+function Symbol(s::String)
+    return ccall(:jl_symbol_n, Ref{Symbol}, (Ptr{UInt8}, Int),
+                 ccall(:jl_string_ptr, Ptr{UInt8}, (Any,), s),
+                 sizeof(s))
+end
 function Symbol(a::Array{UInt8,1})
     return ccall(:jl_symbol_n, Ref{Symbol}, (Ptr{UInt8}, Int),
-          ccall(:jl_array_ptr, Ptr{UInt8}, (Any,), a),
-          Intrinsics.arraylen(a))
+                 ccall(:jl_array_ptr, Ptr{UInt8}, (Any,), a),
+                 Intrinsics.arraylen(a))
 end
-
 
 # docsystem basics
 macro doc(x...)
@@ -363,9 +348,9 @@ atdoc!(λ) = global atdoc = λ
 
 
 # simple stand-alone print definitions for debugging
-abstract IO
-type CoreSTDOUT <: IO end
-type CoreSTDERR <: IO end
+abstract type IO end
+mutable struct CoreSTDOUT <: IO end
+mutable struct CoreSTDERR <: IO end
 const STDOUT = CoreSTDOUT()
 const STDERR = CoreSTDERR()
 io_pointer(::CoreSTDOUT) = Intrinsics.pointerref(Intrinsics.cglobal(:jl_uv_stdout, Ptr{Void}), 1, 1)
@@ -378,8 +363,8 @@ unsafe_write(io::IO, x::Ptr{UInt8}, nb::Int) =
 write(io::IO, x::UInt8) =
     (ccall(:jl_uv_putb, Void, (Ptr{Void}, UInt8), io_pointer(io), x); 1)
 function write(io::IO, x::String)
-    nb = sizeof(x.data)
-    unsafe_write(io, ccall(:jl_array_ptr, Ptr{UInt8}, (Any,), x.data), nb)
+    nb = sizeof(x)
+    unsafe_write(io, ccall(:jl_string_ptr, Ptr{UInt8}, (Any,), x), nb)
     return nb
 end
 

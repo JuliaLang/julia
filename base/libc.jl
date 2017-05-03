@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Libc
 
@@ -15,7 +15,7 @@ include(string(length(Core.ARGS)>=2?Core.ARGS[2]:"","errno_h.jl"))  # include($B
 ## RawFD ##
 
 # Wrapper for an OS file descriptor (on both Unix and Windows)
-immutable RawFD
+struct RawFD
     fd::Int32
     RawFD(fd::Integer) = new(fd)
     RawFD(fd::RawFD) = fd
@@ -26,23 +26,40 @@ Base.cconvert(::Type{Int32}, fd::RawFD) = fd.fd
 dup(x::RawFD) = RawFD(ccall((@static is_windows() ? :_dup : :dup), Int32, (Int32,), x.fd))
 dup(src::RawFD, target::RawFD) = systemerror("dup", -1 ==
     ccall((@static is_windows() ? :_dup2 : :dup2), Int32,
-    (Int32, Int32), src.fd, target.fd))
+                (Int32, Int32), src.fd, target.fd))
 
 # Wrapper for an OS file descriptor (for Windows)
 if is_windows()
-    immutable WindowsRawSocket
+    struct WindowsRawSocket
         handle::Ptr{Void}   # On Windows file descriptors are HANDLE's and 64-bit on 64-bit Windows
     end
     Base.cconvert(::Type{Ptr{Void}}, fd::WindowsRawSocket) = fd.handle
-    _get_osfhandle(fd::RawFD) = WindowsRawSocket(ccall(:_get_osfhandle,Ptr{Void},(Cint,),fd.fd))
+    _get_osfhandle(fd::RawFD) = WindowsRawSocket(ccall(:_get_osfhandle, Ptr{Void}, (Cint,), fd.fd))
     _get_osfhandle(fd::WindowsRawSocket) = fd
+    function dup(src::WindowsRawSocket)
+        new_handle = Ref{Ptr{Void}}(-1)
+        my_process = ccall(:GetCurrentProcess, stdcall, Ptr{Void}, ())
+        const DUPLICATE_SAME_ACCESS = 0x2
+        status = ccall(:DuplicateHandle, stdcall, Int32,
+            (Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Ptr{Void}}, UInt32, Int32, UInt32),
+            my_process, src.handle, my_process, new_handle, 0, false, DUPLICATE_SAME_ACCESS)
+        status == 0 && error("dup failed: $(FormatMessage())")
+        return new_handle[]
+    end
+    function dup(src::WindowsRawSocket, target::RawFD)
+        fd = ccall(:_open_osfhandle, Int32, (Ptr{Void}, Int32), dup(src), 0)
+        dup(RawFD(fd), target)
+        ccall(:_close, Int32, (Int32,), fd)
+        nothing
+    end
+
 else
     _get_osfhandle(fd::RawFD) = fd
 end
 
 ## FILE (not auto-finalized) ##
 
-immutable FILE
+struct FILE
     ptr::Ptr{Void}
 end
 
@@ -96,7 +113,7 @@ else
     error("systemsleep undefined for this OS")
 end
 
-immutable TimeVal
+struct TimeVal
    sec::Int64
    usec::Int64
 end
@@ -114,7 +131,7 @@ end
 Convert a number of seconds since the epoch to broken-down format, with fields `sec`, `min`,
 `hour`, `mday`, `month`, `year`, `wday`, `yday`, and `isdst`.
 """
-type TmStruct
+mutable struct TmStruct
     sec::Int32
     min::Int32
     hour::Int32
@@ -153,7 +170,7 @@ library.
 strftime(t) = strftime("%c", t)
 strftime(fmt::AbstractString, t::Real) = strftime(fmt, TmStruct(t))
 function strftime(fmt::AbstractString, tm::TmStruct)
-    timestr = Array{UInt8}(128)
+    timestr = Vector{UInt8}(128)
     n = ccall(:strftime, Int, (Ptr{UInt8}, Int, Cstring, Ptr{TmStruct}),
               timestr, length(timestr), fmt, &tm)
     if n == 0
@@ -222,7 +239,7 @@ getpid() = ccall(:jl_getpid, Int32, ())
 Get the local machine's host name.
 """
 function gethostname()
-    hn = Array{UInt8}(256)
+    hn = Vector{UInt8}(256)
     err = @static if is_windows()
         ccall(:gethostname, stdcall, Int32, (Ptr{UInt8}, UInt32), hn, length(hn))
     else
@@ -270,23 +287,23 @@ Convert a Win32 system call error code to a descriptive string [only available o
 function FormatMessage end
 
 if is_windows()
-    GetLastError() = ccall(:GetLastError,stdcall,UInt32,())
+    GetLastError() = ccall(:GetLastError, stdcall, UInt32, ())
 
     function FormatMessage(e=GetLastError())
         const FORMAT_MESSAGE_ALLOCATE_BUFFER = UInt32(0x100)
         const FORMAT_MESSAGE_FROM_SYSTEM = UInt32(0x1000)
         const FORMAT_MESSAGE_IGNORE_INSERTS = UInt32(0x200)
         const FORMAT_MESSAGE_MAX_WIDTH_MASK = UInt32(0xFF)
-        lpMsgBuf = Array(Ptr{UInt16})
-        lpMsgBuf[1] = 0
-        len = ccall(:FormatMessageW,stdcall,UInt32,(Cint, Ptr{Void}, Cint, Cint, Ptr{Ptr{UInt16}}, Cint, Ptr{Void}),
+        lpMsgBuf = Ref{Ptr{UInt16}}()
+        lpMsgBuf[] = 0
+        len = ccall(:FormatMessageW, stdcall, UInt32, (Cint, Ptr{Void}, Cint, Cint, Ptr{Ptr{UInt16}}, Cint, Ptr{Void}),
                     FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS | FORMAT_MESSAGE_MAX_WIDTH_MASK,
                     C_NULL, e, 0, lpMsgBuf, 0, C_NULL)
-        p = lpMsgBuf[1]
+        p = lpMsgBuf[]
         len == 0 && return ""
-        buf = Array{UInt16}(len)
+        buf = Vector{UInt16}(len)
         unsafe_copy!(pointer(buf), p, len)
-        ccall(:LocalFree,stdcall,Ptr{Void},(Ptr{Void},),p)
+        ccall(:LocalFree, stdcall, Ptr{Void}, (Ptr{Void},), p)
         return transcode(String, buf)
     end
 end
