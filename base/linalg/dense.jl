@@ -546,7 +546,7 @@ julia> A = 2.7182818 * eye(2)
  0.0      2.71828
 
 julia> logm(A)
-2×2 Array{Float64,2}:
+2×2 Symmetric{Float64,Array{Float64,2}}:
  1.0  0.0
  0.0  1.0
 ```
