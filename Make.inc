@@ -1,4 +1,5 @@
 # -*- mode: makefile-gmake -*-
+# vi:syntax=make
 
 ## Note:
 ##   It is generally preferable to change these options, for
