@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Deprecated functions and objects
 #
@@ -723,11 +723,11 @@ function checkbounds{N,T}(::Type{Bool}, sz::NTuple{N,Integer}, I1::T, I...)
 end
 
 function first(::Colon)
-    depwarn("first(:) is deprecated, see http://docs.julialang.org/en/release-0.5/devdocs/offset-arrays/", :first)
+    depwarn("first(:) is deprecated, see https://docs.julialang.org/en/release-0.5/devdocs/offset-arrays/", :first)
     1
 end
 function _first(i, A, d)
-    depwarn("_first is deprecated, see http://docs.julialang.org/en/release-0.5/devdocs/offset-arrays/", :_first)
+    depwarn("_first is deprecated, see https://docs.julialang.org/en/release-0.5/devdocs/offset-arrays/", :_first)
     __first(i, A, d)
 end
 __first(::Colon, P, ::Colon) = first(linearindices(P))

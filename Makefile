@@ -158,7 +158,7 @@ release-candidate: release testall
 	@echo 6. Clean out old .tar.gz files living in deps/, "\`git clean -fdx\`" seems to work	#"`
 	@echo 7. Replace github release tarball with tarballs created from make light-source-dist and make full-source-dist
 	@echo 8. Follow packaging instructions in DISTRIBUTING.md to create binary packages for all platforms
-	@echo 9. Upload to AWS, update http://julialang.org/downloads and http://status.julialang.org/stable links
+	@echo 9. Upload to AWS, update https://julialang.org/downloads and http://status.julialang.org/stable links
 	@echo 10. Update checksums on AWS for tarball and packaged binaries
 	@echo 11. Announce on mailing lists
 	@echo 12. Change master to release-0.X in base/version.jl and base/version_git.sh as in 4cb1e20

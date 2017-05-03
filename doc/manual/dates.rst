@@ -389,7 +389,7 @@ default, the :class:`TimeType` :func:`round` method uses the ``RoundNearestTiesU
 rounding mode. (It's difficult to guess what breaking ties to nearest "even"
 :class:`TimeType` would entail.) Further details on the available ``RoundingMode`` s can
 be found in the
-`API reference <http://docs.julialang.org/en/release-0.5/stdlib/dates/>`_.
+`API reference <https://docs.julialang.org/en/release-0.5/stdlib/dates/>`_.
 
 Rounding should generally behave as expected, but there are a few cases in which the
 expected behaviour is not obvious.
@@ -458,4 +458,4 @@ both months and years may contain an irregular number of days, whether rounding 
 number of days will result in an even value in the days field is uncertain.
 
 
-See the `API reference <http://docs.julialang.org/en/release-0.5/stdlib/dates/>`_ for additional information on methods exported from the :mod:`Dates` module.
+See the `API reference <https://docs.julialang.org/en/release-0.5/stdlib/dates/>`_ for additional information on methods exported from the :mod:`Dates` module.

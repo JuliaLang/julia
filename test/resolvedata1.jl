@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 deps_data = Any[
     ["ASTInterpreter", v"0.0.1", "AbstractTrees", v"0.0.1", v"0.1.0"],
     ["ASTInterpreter", v"0.0.1", "JuliaParser", v"0.7.1"],

@@ -642,7 +642,7 @@ Finally, you may also consider building Julia from source for yourself. This opt
 
 __ https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md
 
-Links to each of these download types can be found on the download page at http://julialang.org/downloads/. Note that not all versions of Julia are available for all platforms.
+Links to each of these download types can be found on the download page at https://julialang.org/downloads/. Note that not all versions of Julia are available for all platforms.
 
 When are deprecated functions removed?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

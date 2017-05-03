@@ -1,5 +1,5 @@
 #!/bin/sh
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Script to compile Windows Julia, using binary dependencies from nightlies.
 # Should work in MSYS assuming 7zip is installed and on the path,

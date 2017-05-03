@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # name and module reflection
 module_name(m::Module) = ccall(:jl_module_name, Ref{Symbol}, (Any,), m)

@@ -51,7 +51,7 @@ Experimental language features
 ------------------------------
 
   * Support for
-    [multi-threading](http://docs.julialang.org/en/release-0.5/manual/parallel-computing/#multi-threading-experimental).
+    [multi-threading](https://docs.julialang.org/en/release-0.5/manual/parallel-computing/#multi-threading-experimental).
     Loops with independent iterations can be easily parallelized with the
     `Threads.@threads` macro.
 
@@ -453,7 +453,7 @@ Deprecated or removed
     * `@unix_only` is deprecated in favor of `if is_unix()`
     * `@osx_only` is deprecated in favor of `if is_apple()`
     * `@linux_only` is deprecated in favor of `if is_linux()`
-    * NOTE: Using `@static` could be useful/necessary when used in a function's local scope. See details at the section entitled [Handling Operating System Variation](http://docs.julialang.org/en/release-0.5/manual/handling-operating-system-variation/#man-handling-operating-system-variation) in the manual.
+    * NOTE: Using `@static` could be useful/necessary when used in a function's local scope. See details at the section entitled [Handling Operating System Variation](https://docs.julialang.org/en/release-0.5/manual/handling-operating-system-variation/#man-handling-operating-system-variation) in the manual.
 
 Command-line option changes
 ---------------------------
