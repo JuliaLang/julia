@@ -372,6 +372,22 @@ jl_value_t *jl_nth_union_component(jl_value_t *v, int i)
     return nth_union_component(v, &i);
 }
 
+// inverse of jl_nth_union_component
+int jl_find_union_component(jl_value_t *haystack, jl_value_t *needle, unsigned *nth)
+{
+    if (jl_is_uniontype(haystack)) {
+        if (jl_find_union_component(((jl_uniontype_t*)haystack)->a, needle, nth))
+            return 1;
+        if (jl_find_union_component(((jl_uniontype_t*)haystack)->b, needle, nth))
+            return 1;
+        return 0;
+    }
+    if (needle == haystack)
+        return 1;
+    (*nth)++;
+    return 0;
+}
+
 static void flatten_type_union(jl_value_t **types, size_t n, jl_value_t **out, size_t *idx)
 {
     size_t i;

@@ -445,6 +445,7 @@ jl_value_t *jl_substitute_var(jl_value_t *t, jl_tvar_t *var, jl_value_t *val);
 jl_svec_t *jl_outer_unionall_vars(jl_value_t *u);
 int jl_count_union_components(jl_value_t *v);
 jl_value_t *jl_nth_union_component(jl_value_t *v, int i);
+int jl_find_union_component(jl_value_t *haystack, jl_value_t *needle, unsigned *nth);
 jl_datatype_t *jl_new_uninitialized_datatype(void);
 jl_datatype_t *jl_new_abstracttype(jl_value_t *name, jl_datatype_t *super,
                                    jl_svec_t *parameters);

@@ -1157,6 +1157,33 @@ static Value *emit_bounds_check(const jl_cgval_t &ainfo, jl_value_t *ty, Value *
 
 // --- loading and storing ---
 
+static Value *compute_box_tindex(Value *datatype, jl_value_t *supertype, jl_value_t *ut, jl_codectx_t *ctx)
+{
+    Value *tindex = ConstantInt::get(T_int8, 0);
+    unsigned counter = 0;
+    for_each_uniontype_small(
+            [&](unsigned idx, jl_datatype_t *jt) {
+                if (jl_subtype((jl_value_t*)jt, supertype)) {
+                    Value *cmp = builder.CreateICmpEQ(literal_pointer_val((jl_value_t*)jt), datatype);
+                    tindex = builder.CreateSelect(cmp, ConstantInt::get(T_int8, idx), tindex);
+                }
+            },
+            ut,
+            counter);
+    return tindex;
+}
+
+// get the runtime tindex value
+static Value *compute_tindex_unboxed(const jl_cgval_t &val, jl_value_t *typ, jl_codectx_t *ctx)
+{
+    if (val.constant)
+        return ConstantInt::get(T_int8, get_box_tindex((jl_datatype_t*)jl_typeof(val.constant), typ));
+    if (val.isboxed)
+        return compute_box_tindex(emit_typeof_boxed(val, ctx), val.typ, typ, ctx);
+    assert(val.TIndex);
+    return builder.CreateAnd(val.TIndex, ConstantInt::get(T_int8, 0x7f));
+}
+
 // If given alignment is 0 and LLVM's assumed alignment for a load/store via ptr
 // might be stricter than the Julia alignment for jltype, return the alignment of jltype.
 // Otherwise return the given alignment.
@@ -1455,16 +1482,42 @@ static jl_cgval_t emit_getfield_knownidx(const jl_cgval_t &strct, unsigned idx, 
                 addr = builder.CreateStructGEP(LLVM37_param(lt) ptr, idx);
             }
         }
+        int align = jl_field_offset(jt, idx);
+        align |= 16;
+        align &= -align;
         if (jl_field_isptr(jt, idx)) {
             bool maybe_null = idx >= (unsigned)jt->ninitialized;
             Instruction *Load = maybe_mark_load_dereferenceable(
                 builder.CreateLoad(emit_bitcast(addr, T_ppjlvalue)),
-                maybe_null, jl_field_type(jt, idx)
+                maybe_null, jfty
             );
             Value *fldv = tbaa_decorate(strct.tbaa, Load);
             if (maybe_null)
                 null_pointer_check(fldv, ctx);
             return mark_julia_type(fldv, true, jfty, ctx, strct.gcroot || !strct.isimmutable);
+        }
+        else if (jl_is_uniontype(jfty)) {
+            int fsz = jl_field_size(jt, idx);
+            Value *ptindex = builder.CreateGEP(LLVM37_param(T_int8) emit_bitcast(addr, T_pint8), ConstantInt::get(T_size, fsz - 1));
+            Value *tindex = builder.CreateNUWAdd(ConstantInt::get(T_int8, 1), builder.CreateLoad(ptindex));
+            bool isimmutable = strct.isimmutable;
+            Value *gcroot = strct.gcroot;
+            if (jt->mutabl) {
+                // move value to an immutable stack slot
+                Type *AT = ArrayType::get(IntegerType::get(jl_LLVMContext, 8 * align), (fsz + align - 2) / align);
+                AllocaInst *lv = emit_static_alloca(AT, ctx);
+                if (align > 1)
+                    lv->setAlignment(align);
+                Value *nbytes = ConstantInt::get(T_size, fsz - 1);
+                builder.CreateMemCpy(lv, addr, nbytes, align);
+                addr = lv;
+                isimmutable = true;
+                gcroot = NULL;
+            }
+            jl_cgval_t fieldval = mark_julia_slot(addr, jfty, tindex, strct.tbaa);
+            fieldval.isimmutable = isimmutable;
+            fieldval.gcroot = gcroot;
+            return fieldval;
         }
         else if (!jt->mutabl) {
             // just compute the pointer and let user load it when necessary
@@ -1473,9 +1526,6 @@ static jl_cgval_t emit_getfield_knownidx(const jl_cgval_t &strct, unsigned idx, 
             fieldval.gcroot = strct.gcroot;
             return fieldval;
         }
-        int align = jl_field_offset(jt, idx);
-        align |= 16;
-        align &= -align;
         return typed_load(addr, ConstantInt::get(T_size, 0), jfty, ctx, strct.tbaa, true, align);
     }
     else if (isa<UndefValue>(strct.V)) {
@@ -2069,7 +2119,7 @@ static void emit_unionmove(Value *dest, const jl_cgval_t &src, Value *skip, bool
         jl_value_t *typ = src.constant ? jl_typeof(src.constant) : src.typ;
         Type *store_ty = julia_type_to_llvm(typ);
         assert(skip || jl_isbits(typ));
-        if (jl_isbits(typ)) {
+        if (jl_isbits(typ) && jl_datatype_size(typ) > 0) {
             if (!src.ispointer() || src.constant) {
                 emit_unbox(store_ty, src, typ, dest, isVolatile);
             }
@@ -2238,15 +2288,29 @@ static void emit_setfield(jl_datatype_t *sty, const jl_cgval_t &strct, size_t id
         if (jl_field_isptr(sty, idx0)) {
             Value *r = boxed(rhs, ctx, false); // don't need a temporary gcroot since it'll be rooted by strct (but should ensure strct is rooted via mark_gc_use)
             tbaa_decorate(strct.tbaa, builder.CreateStore(r, emit_bitcast(addr, T_ppjlvalue)));
-            if (wb && strct.isboxed) emit_checked_write_barrier(ctx, boxed(strct, ctx), r);
+            if (wb && strct.isboxed)
+                emit_checked_write_barrier(ctx, boxed(strct, ctx), r);
             mark_gc_use(strct);
         }
         else {
-            int align = jl_field_offset(sty, idx0);
-            align |= 16;
-            align &= -align;
-            typed_store(addr, ConstantInt::get(T_size, 0), rhs, jfty, ctx,
-                strct.tbaa, data_pointer(strct, ctx, T_pjlvalue), align);
+            if (jl_is_uniontype(jfty)) {
+                int fsz = jl_field_size(sty, idx0);
+                // compute tindex from rhs
+                jl_cgval_t rhs_union = convert_julia_type(rhs, jfty, ctx);
+                Value *ptindex = builder.CreateGEP(LLVM37_param(T_int8) emit_bitcast(addr, T_pint8), ConstantInt::get(T_size, fsz - 1));
+                Value *tindex = compute_tindex_unboxed(rhs_union, jfty, ctx);
+                tindex = builder.CreateNUWSub(tindex, ConstantInt::get(T_int8, 1));
+                builder.CreateStore(tindex, ptindex);
+                // copy data
+                emit_unionmove(addr, rhs, NULL, false, NULL, ctx);
+            }
+            else {
+                int align = jl_field_offset(sty, idx0);
+                align |= 16;
+                align &= -align;
+                typed_store(addr, ConstantInt::get(T_size, 0), rhs, jfty, ctx,
+                            strct.tbaa, data_pointer(strct, ctx, T_pjlvalue), align);
+            }
         }
     }
     else {
