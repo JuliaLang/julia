@@ -230,6 +230,38 @@ STATIC_INLINE void jl_allocate_singleton_instance(jl_datatype_t *st)
     }
 }
 
+static int jl_layout_isbits(jl_value_t *ty)
+{
+    if (jl_isbits(ty) && jl_is_leaf_type(ty)) {
+        if (((jl_datatype_t*)ty)->layout) // layout check handles possible layout recursion
+            return 1;
+    }
+    return 0;
+}
+
+static unsigned jl_union_isbits(jl_value_t *ty, size_t *nbytes, size_t *align)
+{
+    if (jl_is_uniontype(ty)) {
+        unsigned na = jl_union_isbits(((jl_uniontype_t*)ty)->a, nbytes, align);
+        if (na == 0)
+            return 0;
+        unsigned nb = jl_union_isbits(((jl_uniontype_t*)ty)->b, nbytes, align);
+        if (nb == 0)
+            return 0;
+        return na + nb;
+    }
+    if (jl_layout_isbits(ty)) {
+        size_t sz = jl_datatype_size(ty);
+        size_t al = ((jl_datatype_t*)ty)->layout->alignment;
+        if (*nbytes < sz)
+            *nbytes = sz;
+        if (*align < al)
+            *align = al;
+        return 1;
+    }
+    return 0;
+}
+
 void jl_compute_field_offsets(jl_datatype_t *st)
 {
     size_t sz = 0, alignm = 1;
@@ -293,16 +325,22 @@ void jl_compute_field_offsets(jl_datatype_t *st)
 
     for (size_t i = 0; i < nfields; i++) {
         jl_value_t *ty = jl_field_type(st, i);
-        size_t fsz, al;
-        if (jl_isbits(ty) && jl_is_leaf_type(ty) && ((jl_datatype_t*)ty)->layout) {
-            fsz = jl_datatype_size(ty);
+        size_t fsz = 0, al = 0;
+        unsigned countbits = jl_union_isbits(ty, &fsz, &al);
+        if (countbits > 0 && countbits < 127) {
             // Should never happen
             if (__unlikely(fsz > max_size))
                 goto throw_ovf;
             al = jl_datatype_align(ty);
             desc[i].isptr = 0;
-            if (((jl_datatype_t*)ty)->layout->haspadding)
+            if (jl_is_uniontype(ty)) {
                 haspadding = 1;
+                fsz += 1; // selector byte
+            }
+            else { // isbits struct
+                if (((jl_datatype_t*)ty)->layout->haspadding)
+                    haspadding = 1;
+            }
         }
         else {
             fsz = sizeof(void*);
@@ -328,7 +366,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             goto throw_ovf;
         sz += fsz;
     }
-    if (homogeneous && lastty!=NULL && jl_is_tuple_type(st)) {
+    if (homogeneous && lastty != NULL && jl_is_tuple_type(st)) {
         // Some tuples become LLVM vectors with stronger alignment than what was calculated above.
         unsigned al = jl_special_vector_alignment(nfields, lastty);
         assert(al % alignm == 0);
@@ -731,37 +769,60 @@ JL_DLLEXPORT jl_value_t *jl_get_nth_field(jl_value_t *v, size_t i)
 {
     jl_datatype_t *st = (jl_datatype_t*)jl_typeof(v);
     assert(i < jl_datatype_nfields(st));
-    size_t offs = jl_field_offset(st,i);
-    if (jl_field_isptr(st,i)) {
+    size_t offs = jl_field_offset(st, i);
+    if (jl_field_isptr(st, i)) {
         return *(jl_value_t**)((char*)v + offs);
     }
-    return jl_new_bits(jl_field_type(st,i), (char*)v + offs);
+    jl_value_t *ty = jl_field_type(st, i);
+    if (jl_is_uniontype(ty)) {
+        uint8_t sel = ((uint8_t*)v)[offs + jl_field_size(st, i) - 1];
+        ty = jl_nth_union_component(ty, sel);
+    }
+    return jl_new_bits(ty, (char*)v + offs);
 }
 
 JL_DLLEXPORT jl_value_t *jl_get_nth_field_checked(jl_value_t *v, size_t i)
 {
     jl_datatype_t *st = (jl_datatype_t*)jl_typeof(v);
     if (i >= jl_datatype_nfields(st))
-        jl_bounds_error_int(v, i+1);
-    size_t offs = jl_field_offset(st,i);
-    if (jl_field_isptr(st,i)) {
+        jl_bounds_error_int(v, i + 1);
+    size_t offs = jl_field_offset(st, i);
+    if (jl_field_isptr(st, i)) {
         jl_value_t *fval = *(jl_value_t**)((char*)v + offs);
         if (fval == NULL)
             jl_throw(jl_undefref_exception);
         return fval;
     }
-    return jl_new_bits(jl_field_type(st,i), (char*)v + offs);
+    jl_value_t *ty = jl_field_type(st, i);
+    if (jl_is_uniontype(ty)) {
+        size_t fsz = jl_field_size(st, i);
+        uint8_t sel = ((uint8_t*)v)[offs + fsz - 1];
+        ty = jl_nth_union_component(ty, sel);
+        if (jl_is_datatype_singleton((jl_datatype_t*)ty))
+            return ((jl_datatype_t*)ty)->instance;
+    }
+    return jl_new_bits(ty, (char*)v + offs);
 }
 
 JL_DLLEXPORT void jl_set_nth_field(jl_value_t *v, size_t i, jl_value_t *rhs)
 {
     jl_datatype_t *st = (jl_datatype_t*)jl_typeof(v);
-    size_t offs = jl_field_offset(st,i);
-    if (jl_field_isptr(st,i)) {
+    size_t offs = jl_field_offset(st, i);
+    if (jl_field_isptr(st, i)) {
         *(jl_value_t**)((char*)v + offs) = rhs;
         if (rhs != NULL) jl_gc_wb(v, rhs);
     }
     else {
+        jl_value_t *ty = jl_field_type(st, i);
+        if (jl_is_uniontype(ty)) {
+            uint8_t *psel = &((uint8_t*)v)[offs + jl_field_size(st, i) - 1];
+            unsigned nth = 0;
+            if (!jl_find_union_component(ty, jl_typeof(rhs), &nth))
+                assert(0 && "invalid field assignment to isbits union");
+            *psel = nth;
+            if (jl_is_datatype_singleton((jl_datatype_t*)ty))
+                return;
+        }
         jl_assign_bits((char*)v + offs, rhs);
     }
 }
@@ -769,8 +830,8 @@ JL_DLLEXPORT void jl_set_nth_field(jl_value_t *v, size_t i, jl_value_t *rhs)
 JL_DLLEXPORT int jl_field_isdefined(jl_value_t *v, size_t i)
 {
     jl_datatype_t *st = (jl_datatype_t*)jl_typeof(v);
-    size_t offs = jl_field_offset(st,i);
-    if (jl_field_isptr(st,i)) {
+    size_t offs = jl_field_offset(st, i);
+    if (jl_field_isptr(st, i)) {
         return *(jl_value_t**)((char*)v + offs) != NULL;
     }
     return 1;

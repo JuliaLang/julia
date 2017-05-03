@@ -721,8 +721,11 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         size_t i, nf = jl_datatype_nfields(jl_typemap_entry_type);
         while ((jl_value_t*)te != jl_nothing) {
             for (i = 1; i < nf; i++) {
-                if (jl_field_size(jl_typemap_entry_type, i) > 0)
+                if (jl_field_size(jl_typemap_entry_type, i) > 0) {
                     jl_serialize_value(s, jl_get_nth_field((jl_value_t*)te, i));
+                    if (!jl_field_isptr(jl_typemap_entry_type, i))
+                        write_int8(s->s, 0);
+                }
             }
             te = te->next;
         }
@@ -808,7 +811,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
                 return;
             }
             size_t nf = jl_datatype_nfields(t);
-            if (nf == 0 && jl_datatype_size(t)>0) {
+            if (nf == 0 && jl_datatype_size(t) > 0) {
                 if (t->name == jl_pointer_typename && jl_unbox_voidpointer(v) != (void*)-1) {
                     // normalize most pointers to NULL, to help catch memory errors
                     // but permit MAP_FAILED / INVALID_HANDLE to be stored unchanged
@@ -824,8 +827,17 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
             else {
                 size_t i;
                 for (i = 0; i < nf; i++) {
-                    if (jl_field_size(t, i) > 0) {
+                    size_t offs = jl_field_offset(t, i);
+                    size_t fsz = jl_field_size(t, i);
+                    if (fsz > 0) {
                         jl_serialize_value(s, jl_get_nth_field(v, i));
+                        if (!jl_field_isptr(t, i)) {
+                            uint8_t sel = 0;
+                            if (jl_is_uniontype(jl_field_type(t, i))) {
+                                sel = ((uint8_t*)v)[offs + fsz - 1];
+                            }
+                            write_int8(s->s, sel);
+                        }
                     }
                 }
             }
@@ -1589,13 +1601,21 @@ static void jl_deserialize_struct(jl_serializer_state *s, jl_value_t *v, size_t 
     size_t i, nf = jl_datatype_nfields(dt);
     char *data = (char*)jl_data_ptr(v);
     for (i = startfield; i < nf; i++) {
-        if (jl_field_size(dt, i) > 0) {
+        size_t offs = jl_field_offset(dt, i);
+        size_t fsz = jl_field_size(dt, i);
+        jl_value_t **fld = (jl_value_t**)(data + offs);
+        if (fsz > 0) {
             if (jl_field_isptr(dt, i)) {
-                jl_value_t **fld = (jl_value_t**)(data+jl_field_offset(dt, i));
                 *fld = jl_deserialize_value(s, fld);
             }
             else {
-                jl_set_nth_field(v, i, jl_deserialize_value(s, NULL));
+                jl_value_t *fldval = jl_deserialize_value(s, NULL);
+                jl_assign_bits((char*)fld, fldval);
+                uint8_t union_selector = read_uint8(s->s);
+                if (union_selector) {
+                    uint8_t *psel = (uint8_t*)fld + fsz - 1;
+                    *psel = union_selector - 1;
+                }
             }
         }
     }
@@ -1674,7 +1694,7 @@ static jl_value_t *jl_deserialize_value_any(jl_serializer_state *s, jl_value_t *
         }
     }
     jl_set_typeof(v, dt);
-    if (jl_datatype_nfields(dt) == 0 && jl_datatype_size(dt)>0) {
+    if (jl_datatype_nfields(dt) == 0 && jl_datatype_size(dt) > 0) {
         int nby = jl_datatype_size(dt);
         ios_read(s->s, (char*)jl_data_ptr(v), nby);
     }
