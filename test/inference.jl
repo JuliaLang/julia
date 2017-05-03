@@ -376,3 +376,18 @@ test_fast_le(a, b) = @fastmath a <= b
 @inferred test_fast_ne(1.0, 1.0)
 @inferred test_fast_lt(1.0, 1.0)
 @inferred test_fast_le(1.0, 1.0)
+
+#issue #21065, elision of _apply when splatted expression is not effect_free
+function f21065(x,y)
+    println("x=$x, y=$y")
+    return x, y
+end
+g21065(x,y) = +(f21065(x,y)...)
+function test_no_apply(expr::Expr)
+    return all(test_no_apply, expr.args)
+end
+function test_no_apply(ref::GlobalRef)
+    return ref.mod != Core || ref.name !== :_apply
+end
+test_no_apply(::Any) = true
+@test all(test_no_apply, Base.uncompressed_ast(code_typed(g21065, Tuple{Int,Int})[1]))
