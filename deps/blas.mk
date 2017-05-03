@@ -4,7 +4,7 @@ OPENBLAS_GIT_URL := git://github.com/xianyi/OpenBLAS.git
 OPENBLAS_TAR_URL = https://api.github.com/repos/xianyi/OpenBLAS/tarball/$1
 $(eval $(call git-external,openblas,OPENBLAS,,,$(BUILDDIR)))
 
-OPENBLAS_BUILD_OPTS := CC="$(CC)" FC="$(FC)" RANLIB="$(RANLIB)" FFLAGS="$(FFLAGS) $(JFFLAGS)" TARGET=$(OPENBLAS_TARGET_ARCH) BINARY=$(BINARY)
+OPENBLAS_BUILD_OPTS := CC="$(CC)" FC="$(FC)" RANLIB="$(RANLIB)" TARGET=$(OPENBLAS_TARGET_ARCH) BINARY=$(BINARY)
 
 # Thread support
 ifeq ($(OPENBLAS_USE_THREAD), 1)
@@ -46,8 +46,8 @@ $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/build-compiled: | $(BUILDDIR)/objconv/build-comp
 endif
 endif
 
-OPENBLAS_FFLAGS :=
-OPENBLAS_CFLAGS :=
+OPENBLAS_FFLAGS := $(JFFLAGS)
+OPENBLAS_CFLAGS := -O2
 
 # Decide whether to build for 32-bit or 64-bit arch
 ifneq ($(BUILD_OS),$(OS))
@@ -56,14 +56,14 @@ endif
 ifeq ($(OS),WINNT)
 ifneq ($(ARCH),x86_64)
 ifneq ($(USECLANG),1)
-OPENBLAS_CFLAGS += $(CFLAGS) -mincoming-stack-boundary=2
+OPENBLAS_CFLAGS += -mincoming-stack-boundary=2
 endif
-OPENBLAS_FFLAGS += $(FFLAGS) -mincoming-stack-boundary=2
+OPENBLAS_FFLAGS += -mincoming-stack-boundary=2
 endif
 endif
 
-OPENBLAS_BUILD_OPTS += CFLAGS="$(OPENBLAS_CFLAGS)"
-OPENBLAS_BUILD_OPTS += FFLAGS="$(OPENBLAS_FFLAGS)"
+OPENBLAS_BUILD_OPTS += CFLAGS="$(CFLAGS) $(OPENBLAS_CFLAGS)"
+OPENBLAS_BUILD_OPTS += FFLAGS="$(FFLAGS) $(OPENBLAS_FFLAGS)"
 
 # Debug OpenBLAS
 ifeq ($(OPENBLAS_DEBUG), 1)
