@@ -259,7 +259,8 @@ Returns a port number `localport` such that `localhost:localport` connects to `h
 """
 function ssh_tunnel(user, host, bind_addr, port, sshflags)
     port = Int(port)
-    cnt = ntries = 100
+    cnt  = 100
+    localport = next_tunnel_port()
     # if we cannot do port forwarding, bail immediately
     # the connection is forwarded to `port` on the remote server over the local port `localport`
     # the -f option backgrounds the ssh session
@@ -268,16 +269,15 @@ function ssh_tunnel(user, host, bind_addr, port, sshflags)
     # If no connections are made within 60 seconds, ssh will exit and an error will be printed on the
     # process that launched the remote process.
     ssh = `ssh -T -a -x -o ExitOnForwardFailure=yes`
-    while cnt > 0
+    while !success(detach(`$ssh -f $sshflags $user@$host -L $localport:$bind_addr:$port sleep 60`)) && cnt > 0
         localport = next_tunnel_port()
-        if success(detach(`$ssh -f $sshflags $user@$host -L $localport:$bind_addr:$port sleep 60`))
-            return localport
-        end
         cnt -= 1
     end
-
-    throw(ErrorException(
-        string("unable to create SSH tunnel after ", ntries, " tries. No free port?")))
+    if cnt == 0
+        throw(ErrorException(
+            "unable to create SSH tunnel after $cnt tries. No free port?"))
+    end
+    return localport
 end
 
 
