@@ -576,7 +576,7 @@ else
         limbs::Vector{Limb}   # buffer to be copied into generated BigInt's
         mask::Limb            # applied to the highest limb
 
-        RangeGeneratorBigInt(a, m, nlimbs, mask) = new(a, m, Vector{Limb}(nlimbs), mask)
+        RangeGeneratorBigInt(a, m, nlimbs, mask) = new(a, m, Array{Limb}(nlimbs), mask)
     end
 end
 

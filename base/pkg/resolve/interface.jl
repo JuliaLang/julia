@@ -240,7 +240,7 @@ function enforce_optimality!(sol::Vector{Int}, interface::Interface)
 
     # prepare some useful structures
     # pdeps[p0][v0] has all dependencies of package p0 version v0
-    pdeps = [Vector{Requires}(spp[p0]-1) for p0 = 1:np]
+    pdeps = [Array{Requires}(spp[p0]-1) for p0 = 1:np]
     # prevdeps[p1][p0][v0] is the VersionSet of package p1 which package p0 version v0
     # depends upon
     prevdeps = [Dict{Int,Dict{Int,VersionSet}}() for p0 = 1:np]

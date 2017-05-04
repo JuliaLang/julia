@@ -327,7 +327,7 @@ end
 # convert'ing from SparseMatrixCSC to other matrix types
 function convert(::Type{Matrix}, S::SparseMatrixCSC{Tv}) where Tv
     # Handle cases where zero(Tv) is not defined but the array is dense.
-    A = length(S) == nnz(S) ? Matrix{Tv}(S.m, S.n) : zeros(Tv, S.m, S.n)
+    A = length(S) == nnz(S) ? Array{Tv}(S.m, S.n) : zeros(Tv, S.m, S.n)
     for Sj in 1:S.n
         for Sk in nzrange(S, Sj)
             Si = S.rowval[Sk]
