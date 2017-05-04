@@ -472,13 +472,10 @@ function copy!(dest::BitArray, src::Array)
     return unsafe_copy!(dest, 1, src, 1, length(src))
 end
 
-function reshape(B::BitArray{N}, dims::NTuple{N,Int}) where N
-    return dims == size(B) ? B : _bitreshape(B, dims)
-end
-reshape(B::BitArray, dims::Tuple{Vararg{Int}}) = _bitreshape(B, dims)
-function _bitreshape(B::BitArray, dims::NTuple{N,Int}) where N
+function reshape(B::BitArray, dims::NTuple{N,Int}) where N
     prod(dims) == length(B) ||
         throw(DimensionMismatch("new dimensions $(dims) must be consistent with array size $(length(B))"))
+    dims == size(B) && return B
     Br = BitArray{N}(ntuple(i->0,Val{N})...)
     Br.chunks = B.chunks
     Br.len = prod(dims)
