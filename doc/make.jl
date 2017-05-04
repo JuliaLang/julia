@@ -105,7 +105,6 @@ const PAGES = [
             "devdocs/locks.md",
             "devdocs/offset-arrays.md",
             "devdocs/libgit2.md",
-            "devdocs/require.md",
         ],
         "Developing/debugging Julia's C code" => [
             "devdocs/backtraces.md",
