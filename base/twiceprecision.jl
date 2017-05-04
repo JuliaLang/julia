@@ -35,21 +35,21 @@ struct TwicePrecision{T}
     lo::T    # least significant bits
 end
 
-function TwicePrecision{T}(nd::Tuple{I,I}) where {T,I}
+function (::Type{TwicePrecision{T}}){T,I}(nd::Tuple{I,I})
     n, d = nd
     TwicePrecision{T}(n, zero(T)) / d
 end
 
-function TwicePrecision{T}(nd::Tuple{I,I}, nb::Integer) where {T,I}
+function (::Type{TwicePrecision{T}}){T,I}(nd::Tuple{I,I}, nb::Integer)
     twiceprecision(TwicePrecision{T}(nd), nb)
 end
 
-function twiceprecision(val::T, nb::Integer) where T<:Number
+function twiceprecision{T<:Number}(val::T, nb::Integer)
     hi = truncbits(val, nb)
     TwicePrecision{T}(hi, val - hi)
 end
 
-function twiceprecision(val::TwicePrecision{T}, nb::Integer) where T<:Number
+function twiceprecision{T<:Number}(val::TwicePrecision{T}, nb::Integer)
     hi = truncbits(val.hi, nb)
     TwicePrecision{T}(hi, (val.hi - hi) + val.lo)
 end
@@ -86,7 +86,7 @@ zero(::Type{TwicePrecision{T}}) where {T} = TwicePrecision{T}(0, 0)
 ## StepRangeLen
 
 # If using TwicePrecision numbers, deliberately force user to specify offset
-StepRangeLen(ref::TwicePrecision{T}, step::TwicePrecision{T}, len::Integer, offset::Integer) where {T} =
+StepRangeLen{T}(ref::TwicePrecision{T}, step::TwicePrecision{T}, len::Integer, offset::Integer) =
     StepRangeLen{T,TwicePrecision{T},TwicePrecision{T}}(ref, step, len, offset)
 
 # Construct range for rational start=start_n/den, step=step_n/den
@@ -439,7 +439,7 @@ narrow(::Type{Float64}) = Float32
 narrow(::Type{Float32}) = Float16
 narrow(::Type{Float16}) = Float16
 
-function add2(u::T, v::T) where T<:Number
+function add2{T<:Number}(u::T, v::T)
     @_inline_meta
     u, v = ifelse(abs(v) > abs(u), (v, u), (u, v))
     w = u + v
@@ -473,7 +473,7 @@ function *(x::TwicePrecision, v::Integer)
     TwicePrecision(y_hi, y_lo)
 end
 
-function _mul2(x::TwicePrecision{T}, v::T) where T<:Union{Float16,Float32,Float64}
+function _mul2{T<:Union{Float16,Float32,Float64}}(x::TwicePrecision{T}, v::T)
     v == 0 && return TwicePrecision(T(0), T(0))
     xhh, xhl = splitprec(x.hi)
     vh, vl = splitprec(v)

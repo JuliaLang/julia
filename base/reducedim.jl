@@ -210,7 +210,7 @@ end
 mapreducedim!(f, op, R::AbstractArray, A::AbstractArray) =
     (_mapreducedim!(f, op, R, A); R)
 
-reducedim!(op, R::AbstractArray{RT}, A::AbstractArray) where {RT} =
+reducedim!{RT}(op, R::AbstractArray{RT}, A::AbstractArray) =
     mapreducedim!(identity, op, R, A, zero(RT))
 
 """

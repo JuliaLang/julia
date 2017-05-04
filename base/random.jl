@@ -519,29 +519,29 @@ end
 
 # remainder function according to Knuth, where rem_knuth(a, 0) = a
 rem_knuth(a::UInt, b::UInt) = a % (b + (b == 0)) + a * (b == 0)
-rem_knuth(a::T, b::T) where {T<:Unsigned} = b != 0 ? a % b : a
+rem_knuth{T<:Unsigned}(a::T, b::T) = b != 0 ? a % b : a
 
 # maximum multiple of k <= 2^bits(T) decremented by one,
 # that is 0xFFFF...FFFF if k = typemax(T) - typemin(T) with intentional underflow
 # see http://stackoverflow.com/questions/29182036/integer-arithmetic-add-1-to-uint-max-and-divide-by-n-without-overflow
-maxmultiple(k::T) where {T<:Unsigned} = (div(typemax(T) - k + oneunit(k), k + (k == 0))*k + k - oneunit(k))::T
+maxmultiple{T<:Unsigned}(k::T) = (div(typemax(T) - k + oneunit(k), k + (k == 0))*k + k - oneunit(k))::T
 
 # maximum multiple of k within 1:2^32 or 1:2^64 decremented by one, depending on size
 maxmultiplemix(k::UInt64) = if k >> 32 != 0; maxmultiple(k); else (div(0x0000000100000000, k + (k == 0))*k - oneunit(k))::UInt64; end
 
 abstract type RangeGenerator end
 
-struct RangeGeneratorInt{T<:Integer,U<:Unsigned} <: RangeGenerator
+struct RangeGeneratorInt{T<:Integer, U<:Unsigned} <: RangeGenerator
     a::T   # first element of the range
     k::U   # range length or zero for full range
     u::U   # rejection threshold
 end
 # generators with 32, 128 bits entropy
-RangeGeneratorInt(a::T, k::U) where {T,U<:Union{UInt32,UInt128}} = RangeGeneratorInt{T,U}(a, k, maxmultiple(k))
+RangeGeneratorInt{T, U<:Union{UInt32, UInt128}}(a::T, k::U) = RangeGeneratorInt{T, U}(a, k, maxmultiple(k))
 # mixed 32/64 bits entropy generator
-RangeGeneratorInt(a::T, k::UInt64) where {T} = RangeGeneratorInt{T,UInt64}(a, k, maxmultiplemix(k))
+RangeGeneratorInt{T}(a::T, k::UInt64) = RangeGeneratorInt{T,UInt64}(a, k, maxmultiplemix(k))
 # generator for ranges
-function RangeGenerator(r::UnitRange{T}) where T<:Unsigned
+RangeGenerator{T<:Unsigned}(r::UnitRange{T}) = begin
     if isempty(r)
         throw(ArgumentError("range must be non-empty"))
     end
@@ -1274,11 +1274,11 @@ let Floats = Union{Float16,Float32,Float64}
         randfun! = Symbol(randfun, :!)
         @eval begin
             # scalars
-            $randfun(rng::AbstractRNG, ::Type{T}) where {T<:$Floats} = convert(T, $randfun(rng))
-            $randfun(::Type{T}) where {T} = $randfun(GLOBAL_RNG, T)
+            $randfun{T<:$Floats}(rng::AbstractRNG, ::Type{T}) = convert(T, $randfun(rng))
+            $randfun{T}(::Type{T}) = $randfun(GLOBAL_RNG, T)
 
             # filling arrays
-            function $randfun!(rng::AbstractRNG, A::AbstractArray{T}) where T
+            function $randfun!{T}(rng::AbstractRNG, A::AbstractArray{T})
                 for i in eachindex(A)
                     @inbounds A[i] = $randfun(rng, T)
                 end
@@ -1288,15 +1288,15 @@ let Floats = Union{Float16,Float32,Float64}
             $randfun!(A::AbstractArray) = $randfun!(GLOBAL_RNG, A)
 
             # generating arrays
-            $randfun(rng::AbstractRNG, ::Type{T}, dims::Dims                     ) where {T} = $randfun!(rng, Array{T}(dims))
+            $randfun{T}(rng::AbstractRNG, ::Type{T}, dims::Dims                     ) = $randfun!(rng, Array{T}(dims))
             # Note that this method explicitly does not define $randfun(rng, T), in order to prevent an infinite recursion.
-            $randfun(rng::AbstractRNG, ::Type{T}, dim1::Integer, dims::Integer...) where {T} = $randfun!(rng, Array{T}(dim1, dims...))
-            $randfun(                  ::Type{T}, dims::Dims                     ) where {T} = $randfun(GLOBAL_RNG, T, dims)
-            $randfun(                  ::Type{T}, dims::Integer...               ) where {T} = $randfun(GLOBAL_RNG, T, dims...)
-            $randfun(rng::AbstractRNG,            dims::Dims                     )           = $randfun(rng, Float64, dims)
-            $randfun(rng::AbstractRNG,            dims::Integer...               )           = $randfun(rng, Float64, dims...)
-            $randfun(                             dims::Dims                     )           = $randfun(GLOBAL_RNG, Float64, dims)
-            $randfun(                             dims::Integer...               )           = $randfun(GLOBAL_RNG, Float64, dims...)
+            $randfun{T}(rng::AbstractRNG, ::Type{T}, dim1::Integer, dims::Integer...) = $randfun!(rng, Array{T}(dim1, dims...))
+            $randfun{T}(                  ::Type{T}, dims::Dims                     ) = $randfun(GLOBAL_RNG, T, dims)
+            $randfun{T}(                  ::Type{T}, dims::Integer...               ) = $randfun(GLOBAL_RNG, T, dims...)
+            $randfun(   rng::AbstractRNG,            dims::Dims                     ) = $randfun(rng, Float64, dims)
+            $randfun(   rng::AbstractRNG,            dims::Integer...               ) = $randfun(rng, Float64, dims...)
+            $randfun(                                dims::Dims                     ) = $randfun(GLOBAL_RNG, Float64, dims)
+            $randfun(                                dims::Integer...               ) = $randfun(GLOBAL_RNG, Float64, dims...)
         end
     end
 end
@@ -1444,7 +1444,7 @@ function randsubseq!(r::AbstractRNG, S::AbstractArray, A::AbstractArray, p::Real
 end
 randsubseq!(S::AbstractArray, A::AbstractArray, p::Real) = randsubseq!(GLOBAL_RNG, S, A, p)
 
-randsubseq(r::AbstractRNG, A::AbstractArray{T}, p::Real) where {T} = randsubseq!(r, T[], A, p)
+randsubseq{T}(r::AbstractRNG, A::AbstractArray{T}, p::Real) = randsubseq!(r, T[], A, p)
 
 """
     randsubseq(A, p) -> Vector

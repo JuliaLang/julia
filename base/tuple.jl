@@ -206,9 +206,9 @@ end
 
 
 # type-stable padding
-fill_to_length(t::Tuple, val, ::Type{Val{N}}) where {N} = _ftl((), val, Val{N}, t...)
+fill_to_length{N}(t::Tuple, val, ::Type{Val{N}}) = _ftl((), val, Val{N}, t...)
 _ftl(out::NTuple{N,Any}, val, ::Type{Val{N}}) where {N} = out
-function _ftl(out::NTuple{N,Any}, val, ::Type{Val{N}}, t...) where N
+function _ftl{N}(out::NTuple{N,Any}, val, ::Type{Val{N}}, t...)
     @_inline_meta
     throw(ArgumentError("input tuple of length $(N+length(t)), requested $N"))
 end
