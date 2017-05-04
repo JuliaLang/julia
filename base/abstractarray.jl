@@ -125,7 +125,7 @@ julia> length(A)
 length(t::AbstractArray) = prod(size(t))
 _length(A::AbstractArray) = prod(map(unsafe_length, indices(A))) # circumvent missing size
 _length(A) = length(A)
-endof(a::AbstractArray) = last(linearindices(a))
+endof(a::AbstractArray) = length(a)
 first(a::AbstractArray) = a[first(eachindex(a))]
 
 function first(itr)
