@@ -71,9 +71,9 @@ const UMFVTypes = Union{Float64,Complex128}
 ## UMFPACK
 
 # the control and info arrays
-const umf_ctrl = Vector{Float64}(UMFPACK_CONTROL)
+const umf_ctrl = Array{Float64}(UMFPACK_CONTROL)
 ccall((:umfpack_dl_defaults,:libumfpack), Void, (Ptr{Float64},), umf_ctrl)
-const umf_info = Vector{Float64}(UMFPACK_INFO)
+const umf_info = Array{Float64}(UMFPACK_INFO)
 
 function show_umf_ctrl(level::Real = 2.0)
     old_prt::Float64 = umf_ctrl[1]
@@ -324,15 +324,15 @@ for itype in UmfpackIndexTypes
         function umf_extract(lu::UmfpackLU{Float64,$itype})
             umfpack_numeric!(lu)        # ensure the numeric decomposition exists
             (lnz, unz, n_row, n_col, nz_diag) = umf_lunz(lu)
-            Lp = Vector{$itype}(n_row + 1)
-            Lj = Vector{$itype}(lnz) # L is returned in CSR (compressed sparse row) format
-            Lx = Vector{Float64}(lnz)
-            Up = Vector{$itype}(n_col + 1)
-            Ui = Vector{$itype}(unz)
-            Ux = Vector{Float64}(unz)
-            P  = Vector{$itype}(n_row)
-            Q  = Vector{$itype}(n_col)
-            Rs = Vector{Float64}(n_row)
+            Lp = Array{$itype}(n_row + 1)
+            Lj = Array{$itype}(lnz) # L is returned in CSR (compressed sparse row) format
+            Lx = Array{Float64}(lnz)
+            Up = Array{$itype}(n_col + 1)
+            Ui = Array{$itype}(unz)
+            Ux = Array{Float64}(unz)
+            P  = Array{$itype}(n_row)
+            Q  = Array{$itype}(n_col)
+            Rs = Array{Float64}(n_row)
             @isok ccall(($get_num_r,:libumfpack), $itype,
                         (Ptr{$itype},Ptr{$itype},Ptr{Float64},
                          Ptr{$itype},Ptr{$itype},Ptr{Float64},
@@ -349,17 +349,17 @@ for itype in UmfpackIndexTypes
         function umf_extract(lu::UmfpackLU{Complex128,$itype})
             umfpack_numeric!(lu)        # ensure the numeric decomposition exists
             (lnz, unz, n_row, n_col, nz_diag) = umf_lunz(lu)
-            Lp = Vector{$itype}(n_row + 1)
-            Lj = Vector{$itype}(lnz) # L is returned in CSR (compressed sparse row) format
-            Lx = Vector{Float64}(lnz)
-            Lz = Vector{Float64}(lnz)
-            Up = Vector{$itype}(n_col + 1)
-            Ui = Vector{$itype}(unz)
-            Ux = Vector{Float64}(unz)
-            Uz = Vector{Float64}(unz)
-            P  = Vector{$itype}(n_row)
-            Q  = Vector{$itype}(n_col)
-            Rs = Vector{Float64}(n_row)
+            Lp = Array{$itype}(n_row + 1)
+            Lj = Array{$itype}(lnz) # L is returned in CSR (compressed sparse row) format
+            Lx = Array{Float64}(lnz)
+            Lz = Array{Float64}(lnz)
+            Up = Array{$itype}(n_col + 1)
+            Ui = Array{$itype}(unz)
+            Ux = Array{Float64}(unz)
+            Uz = Array{Float64}(unz)
+            P  = Array{$itype}(n_row)
+            Q  = Array{$itype}(n_col)
+            Rs = Array{Float64}(n_row)
             @isok ccall(($get_num_z,:libumfpack), $itype,
                         (Ptr{$itype},Ptr{$itype},Ptr{Float64},Ptr{Float64},
                          Ptr{$itype},Ptr{$itype},Ptr{Float64},Ptr{Float64},
