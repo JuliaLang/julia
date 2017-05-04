@@ -92,11 +92,11 @@ end
     GitObject(repo::GitRepo, hash::AbstractGitHash)
     GitObject(repo::GitRepo, spec::AbstractString)
 
-Return the specified object ([`GitCommit`](@ref), [`GitBlob`](@ref), [`GitTree`](@ref) or [`GitTag`](@ref)) from `repo`
+Return the specified object (`GitCommit`, `GitBlob`, `GitTree` or `GitTag`) from `repo`
 specified by `hash`/`spec`.
 
 - `hash` is a full (`GitHash`) or partial (`GitShortHash`) hash.
-- `spec` is a textual specification: see [the git docs](https://git-scm.com/docs/git-rev-parse.html#_specifying_revisions) for a full list.
+- `spec` is a textual specification: see https://git-scm.com/docs/git-rev-parse.html#_specifying_revisions for a full list.
 """ GitObject
 
 for T in (:GitCommit, :GitBlob, :GitTree, :GitTag)
@@ -107,7 +107,7 @@ for T in (:GitCommit, :GitBlob, :GitTree, :GitTag)
 Return a `$T` object from `repo` specified by `hash`/`spec`.
 
 - `hash` is a full (`GitHash`) or partial (`GitShortHash`) hash.
-- `spec` is a textual specification: see [the git docs](https://git-scm.com/docs/git-rev-parse.html#_specifying_revisions) for a full list.
+- `spec` is a textual specification: see https://git-scm.com/docs/git-rev-parse.html#_specifying_revisions for a full list.
 """ $T
 end
 
@@ -155,7 +155,7 @@ Returns the location of the "git" files of `repo`:
  - for normal repositories, this is the location of the `.git` folder.
  - for bare repositories, this is the location of the repository itself.
 
-See also [`workdir`](@ref), [`path`](@ref).
+See also `workdir`, `path`
 """
 function gitdir(repo::GitRepo)
     return unsafe_string(ccall((:git_repository_path, :libgit2), Cstring,
@@ -174,7 +174,7 @@ repositories.
     some cases: e.g. if either the `core.worktree` configuration variable or the
     `GIT_WORK_TREE` environment variable is set.
 
-See also [`gitdir`](@ref), [`path`](@ref).
+See also `gitdir`, `path`
 """
 function workdir(repo::GitRepo)
     sptr = ccall((:git_repository_workdir, :libgit2), Cstring,
@@ -193,7 +193,7 @@ The base file path of the repository `repo`.
    more details).
  - for bare repositories, this is the location of the "git" files.
 
-See also [`gitdir`](@ref), [`workdir`](@ref).
+See also `gitdir`, `workdir`.
 """
 function path(repo::GitRepo)
     d = gitdir(repo)
