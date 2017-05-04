@@ -1430,9 +1430,6 @@ speye_scaled(diag, m::Integer, n::Integer) = speye_scaled(typeof(diag), diag, m,
 
 function speye_scaled(T, diag, m::Integer, n::Integer)
     ((m < 0) || (n < 0)) && throw(ArgumentError("invalid array dimensions"))
-    if iszero(diag)
-        return SparseMatrixCSC(m, n, ones(Int, n+1), Vector{Int}(0), Vector{T}(0))
-    end
     nnz = min(m,n)
     colptr = Vector{Int}(1+n)
     colptr[1:nnz+1] = 1:nnz+1
