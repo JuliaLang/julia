@@ -167,7 +167,7 @@ function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, 
     portopt = ``
     if length(machine_def) == 2
         portstr = machine_def[2]
-        if !all(isdigit, portstr) || (p = parse(Int,portstr); p < 1 || p > 65535)
+        if !isinteger(portstr) || (p = parse(Int,portstr); p < 1 || p > 65535)
             msg = "invalid machine definition format string: invalid port format \"$machine_def\""
             throw(ArgumentError(msg))
         end

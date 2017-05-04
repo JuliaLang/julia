@@ -887,6 +887,7 @@ wp = CachingPool(workers())
 clear!(wp)
 @test length(wp.map_obj2ref) == 0
 
+
 # The below block of tests are usually run only on local development systems, since:
 # - tests which print errors
 # - addprocs tests are memory intensive
@@ -949,10 +950,7 @@ if is_unix() # aka have ssh
     end
 
     print("\n\nTesting SSHManager. A minimum of 4GB of RAM is recommended.\n")
-    print("Please ensure: \n")
-    print("1) sshd is running locally with passwordless login enabled.\n")
-    print("2) Env variable USER is defined and is the ssh user.\n")
-    print("3) Port 9300 is not in use.\n")
+    print("Please ensure sshd is running locally with passwordless login enabled.\n")
 
     sshflags = `-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o LogLevel=ERROR `
     #Issue #9951
@@ -965,37 +963,32 @@ if is_unix() # aka have ssh
     end
 
     print("\nTesting SSH addprocs with $(length(hosts)) workers...\n")
-    new_pids = addprocs(hosts; exeflags=cov_in_exeflags, sshflags=sshflags)
+    new_pids = remotecall_fetch(1, hosts, sshflags) do h, sf
+        addprocs(h; exeflags=cov_in_exeflags, sshflags=sf)
+    end
     @test length(new_pids) == length(hosts)
     test_n_remove_pids(new_pids)
 
     print("\nMixed ssh addprocs with :auto\n")
-    new_pids = addprocs(["localhost", ("127.0.0.1", :auto), "localhost"]; sshflags=sshflags)
+    new_pids = sort(remotecall_fetch(1, ["localhost", ("127.0.0.1", :auto), "localhost"], sshflags) do h, sf
+        addprocs(h; exeflags=cov_in_exeflags, sshflags=sf)
+    end)
     @test length(new_pids) == (2 + Sys.CPU_CORES)
     test_n_remove_pids(new_pids)
 
     print("\nMixed ssh addprocs with numeric counts\n")
-    new_pids = addprocs([("localhost", 2), ("127.0.0.1", 2), "localhost"]; exeflags=cov_in_exeflags, sshflags=sshflags)
+    new_pids = sort(remotecall_fetch(1, [("localhost", 2), ("127.0.0.1", 2), "localhost"], sshflags) do h, sf
+        addprocs(h; exeflags=cov_in_exeflags, sshflags=sf)
+    end)
     @test length(new_pids) == 5
     test_n_remove_pids(new_pids)
 
     print("\nssh addprocs with tunnel\n")
-    new_pids = addprocs([("localhost", num_workers)]; tunnel=true, exeflags=cov_in_exeflags, sshflags=sshflags)
+    new_pids = sort(remotecall_fetch(1, [("localhost", num_workers)], sshflags) do h, sf
+        addprocs(h; tunnel=true, sshflags=sf, exeflags=cov_in_exeflags)
+    end)
     @test length(new_pids) == num_workers
     test_n_remove_pids(new_pids)
-
-    print("\nAll supported formats for hostname\n")
-    h1 = "localhost"
-    user = ENV["USER"]
-    h2 = "$user@$h1"
-    h3 = "$h2:22"
-    h4 = "$h3 $(string(getipaddr()))"
-    h5 = "$h4:9300"
-
-    new_pids = addprocs([h1, h2, h3, h4, h5]; exeflags=cov_in_exeflags, sshflags=sshflags)
-    @test length(new_pids) == 5
-    test_n_remove_pids(new_pids)
-
 end # unix-only
 end # full-test
 
