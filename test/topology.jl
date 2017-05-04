@@ -1,10 +1,18 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-pids = addprocs_with_testenv(4; topology="master_slave")
-p1 = pids[1]
-p2 = pids[2]
+include("testdefs.jl")
+inline_flag = Base.JLOptions().can_inline == 1 ? `` : `--inline=no`
+cov_flag = ``
+if Base.JLOptions().code_coverage == 1
+    cov_flag = `--code-coverage=user`
+elseif Base.JLOptions().code_coverage == 2
+    cov_flag = `--code-coverage=all`
+end
+cov_in_exeflags = `$cov_flag $inline_flag --check-bounds=yes --startup-file=no --depwarn=error`
+addprocs(4; exeflags=cov_in_exeflags, topology="master_slave")
+using Base.Test
 
-@test_throws RemoteException remotecall_fetch(()->remotecall_fetch(myid, p2), p1)
+@test_throws RemoteException remotecall_fetch(()->remotecall_fetch(myid, 3), 2)
 
 function test_worker_counts()
     # check if the nprocs/nworkers/workers are the same on the remaining workers
@@ -43,7 +51,7 @@ function Base.launch(manager::TopoTestManager, params::Dict, launched::Array, c:
 
     for i in 1:manager.np
         io, pobj = open(pipeline(detach(
-            setenv(`$exename $exeflags --bind-to $(Base.Distributed.LPROC.bind_addr) --worker $(Base.cluster_cookie())`, dir=dir)); stderr=STDERR), "r")
+            setenv(`$(Base.julia_cmd(exename)) $exeflags --bind-to $(Base.Distributed.LPROC.bind_addr) --worker $(Base.cluster_cookie())`, dir=dir)); stderr=STDERR), "r")
         wconfig = WorkerConfig()
         wconfig.process = pobj
         wconfig.io = io
@@ -64,7 +72,7 @@ function Base.manage(manager::TopoTestManager, id::Integer, config::WorkerConfig
     end
 end
 
-addprocs_with_testenv(TopoTestManager(8); topology="custom")
+addprocs(TopoTestManager(8); exeflags=cov_in_exeflags, topology="custom")
 
 while true
     if any(x->get(map_pid_ident, x, 0)==0, workers())
