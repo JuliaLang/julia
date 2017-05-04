@@ -58,48 +58,47 @@ location on each node, or to be available via a shared file system.
 
 A machine specification is either a string `machine_spec` or a tuple - `(machine_spec, count)`.
 
-`machine_spec` is a string of the form `[user@]host[:port] [bind_addr[:port]]`. `user` defaults
-to current user, `port` to the standard ssh port. If `[bind_addr[:port]]` is specified, other
-workers will connect to this worker at the specified `bind_addr` and `port`.
+`machine_spec` is a string of the form `[user@]host[:port] [bind_addr[:port]]`. `user`
+defaults to current user, `port` to the standard ssh port. If `[bind_addr[:port]]` is
+specified, other workers will connect to this worker at the specified `bind_addr` and
+`port`.
 
-`count` is the number of workers to be launched on the specified host. If specified as `:auto`
-it will launch as many workers as the number of cores on the specific host.
+`count` is the number of workers to be launched on the specified host. If specified as
+`:auto` it will launch as many workers as the number of cores on the specific host.
 
 Keyword arguments:
 
 * `tunnel`: if `true` then SSH tunneling will be used to connect to the worker from the
-            master process. Default is `false`.
+  master process. Default is `false`.
 
-* `sshflags`: specifies additional ssh options, e.g.
-  ```sshflags=\`-i /home/foo/bar.pem\` ```
+* `sshflags`: specifies additional ssh options, e.g. ```sshflags=\`-i /home/foo/bar.pem\````
 
-* `max_parallel`: specifies the maximum number of workers connected to in parallel at a host.
-                  Defaults to 10.
+* `max_parallel`: specifies the maximum number of workers connected to in parallel at a
+  host. Defaults to 10.
 
 * `dir`: specifies the working directory on the workers. Defaults to the host's current
-         directory (as found by `pwd()`)
+  directory (as found by `pwd()`)
 
- * `enable_threaded_blas`: if `true` then  BLAS will run on multiple threads in added
-                           processes. Default is `false`.
+* `enable_threaded_blas`: if `true` then  BLAS will run on multiple threads in added
+  processes. Default is `false`.
 
 * `exename`: name of the `julia` executable. Defaults to `"\$JULIA_HOME/julia"` or
-             `"\$JULIA_HOME/julia-debug"` as the case may be.
+  `"\$JULIA_HOME/julia-debug"` as the case may be.
 
 * `exeflags`: additional flags passed to the worker processes.
 
-* `topology`: Specifies how the workers connect to each other. Sending a message
-            between unconnected workers results in an error.
+* `topology`: Specifies how the workers connect to each other. Sending a message between
+  unconnected workers results in an error.
 
-  + `topology=:all_to_all`  :  All processes are connected to each other.
-                      This is the default.
+    + `topology=:all_to_all`: All processes are connected to each other. The default.
 
-  + `topology=:master_slave`  :  Only the driver process, i.e. `pid` 1 connects to the
-                        workers. The workers do not connect to each other.
+    + `topology=:master_slave`: Only the driver process, i.e. `pid` 1 connects to the
+      workers. The workers do not connect to each other.
 
-  + `topology=:custom`  :  The `launch` method of the cluster manager specifies the
-                  connection topology via fields `ident` and `connect_idents` in
-                  `WorkerConfig`. A worker with a cluster manager identity `ident`
-                  will connect to all workers specified in `connect_idents`.
+    + `topology=:custom`: The `launch` method of the cluster manager specifies the
+      connection topology via fields `ident` and `connect_idents` in `WorkerConfig`.
+      A worker with a cluster manager identity `ident` will connect to all workers specified
+      in `connect_idents`.
 
 
 Environment variables :
