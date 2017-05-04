@@ -181,6 +181,8 @@ for n = 0:20
         @test t[i] == i
     end
 end
+# issue #21697
+@test_throws ArgumentError ntuple(identity, -1)
 
 # issue #19719
 @test_throws BoundsError (1,2,3)[falses(4)]
