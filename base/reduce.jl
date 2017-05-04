@@ -93,15 +93,25 @@ foldr(op, itr) = mapfoldr(identity, op, itr)
 
 ## reduce & mapreduce
 
+# `mapreduce_impl()` is called by `mapreduce()` (via `_mapreduce()`, when `A`
+# supports linear indexing) and does actual calculations (for `A[ifirst:ilast]` subset).
+# For efficiency, no parameter validity checks are done, it's the caller responsibility.
+# `ifirst:ilast` range is assumed to be a valid non-empty subset of `A` indices.
+
+# This is a generic implementation of `mapreduce_impl()`,
+# certain `op` (e.g. `min` and `max`) may have their own specialized versions.
 function mapreduce_impl(f, op, A::AbstractArray, ifirst::Integer, ilast::Integer, blksize::Int=pairwise_blocksize(f, op))
-    if ifirst + blksize > ilast
+    if ifirst == ilast
+        @inbounds a1 = A[ifirst]
+        return r_promote(op, f(a1))
+    elseif ifirst + blksize > ilast
         # sequential portion
-        fx1 = r_promote(op, f(A[ifirst]))
-        fx2 = r_promote(op, f(A[ifirst + 1]))
-        v = op(fx1, fx2)
+        @inbounds a1 = A[ifirst]
+        @inbounds a2 = A[ifirst+1]
+        v = op(r_promote(op, f(a1)), r_promote(op, f(a2)))
         @simd for i = ifirst + 2 : ilast
-            @inbounds Ai = A[i]
-            v = op(v, f(Ai))
+            @inbounds ai = A[i]
+            v = op(v, f(ai))
         end
         return v
     else
@@ -149,24 +159,23 @@ _mapreduce(f, op, A::AbstractArray) = _mapreduce(f, op, linearindexing(A), A)
 function _mapreduce{T}(f, op, ::LinearFast, A::AbstractArray{T})
     inds = linearindices(A)
     n = length(inds)
-    @inbounds begin
-        if n == 0
-            return mr_empty(f, op, T)
-        elseif n == 1
-            return r_promote(op, f(A[inds[1]]))
-        elseif n < 16
-            fx1 = r_promote(op, f(A[inds[1]]))
-            fx2 = r_promote(op, f(A[inds[2]]))
-            s = op(fx1, fx2)
-            i = inds[2]
-            while i < last(inds)
-                Ai = A[i+=1]
-                s = op(s, f(Ai))
-            end
-            return s
-        else
-            return mapreduce_impl(f, op, A, first(inds), last(inds))
+    if n == 0
+        return mr_empty(f, op, T)
+    elseif n == 1
+        @inbounds a1 = A[inds[1]]
+        return r_promote(op, f(a1))
+    elseif n < 16 # process short array here
+        @inbounds i = inds[1]
+        @inbounds a1 = A[i]
+        @inbounds a2 = A[i+=1]
+        s = op(r_promote(op, f(a1)), r_promote(op, f(a2)))
+        while i < last(inds)
+            @inbounds Ai = A[i+=1]
+            s = op(s, f(Ai))
         end
+        return s
+    else
+        return mapreduce_impl(f, op, A, first(inds), last(inds))
     end
 end
 
@@ -273,17 +282,17 @@ function mapreduce_impl(f, op::Union{typeof(scalarmax),
                                      typeof(min)},
                         A::AbstractArray, first::Int, last::Int)
     # locate the first non NaN number
-    v = f(A[first])
+    @inbounds a1 = A[first]
+    v = f(a1)
     i = first + 1
     while v != v && i <= last
-        @inbounds Ai = A[i]
-        v = f(Ai)
+        @inbounds ai = A[i]
+        v = f(ai)
         i += 1
     end
     while i <= last
-        @inbounds Ai = A[i]
-        x = f(Ai)
-        v = op(v, x)
+        @inbounds ai = A[i]
+        v = op(v, f(ai))
         i += 1
     end
     v
