@@ -114,7 +114,7 @@ function syms_2b_sent(s::ClusterSerializer, identifier)
             oid = object_id(v)
             if haskey(s.glbs_sent, oid)
                 # We have sent this object before, see if it has changed.
-                s.glbs_sent[oid] != hash(v) && push!(lst, sym)
+                s.glbs_sent[oid] != hash(sym, hash(v)) && push!(lst, sym)
             else
                 push!(lst, sym)
             end
