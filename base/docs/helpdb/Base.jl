@@ -1637,10 +1637,11 @@ true
 issubtype(type1, type2)
 
 """
-    finalizer(x, function)
+    finalizer(x, f)
 
 Register a function `f(x)` to be called when there are no program-accessible references to
-`x`. The behavior of this function is unpredictable if `x` is of a bits type.
+`x`. The type of `x` must be a `mutable struct`, otherwise the behavior of this function is
+unpredictable.
 """
 finalizer
 
