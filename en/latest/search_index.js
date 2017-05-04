@@ -8389,7 +8389,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.conj",
     "category": "Function",
-    "text": "conj(v::RowVector)\n\nReturns a ConjArray lazy view of the input, where each element is conjugated.\n\nExample\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\nconj(z)\n\nCompute the complex conjugate of a complex number z.\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\n"
+    "text": "conj(z)\n\nCompute the complex conjugate of a complex number z.\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\nconj(v::RowVector)\n\nReturns a ConjArray lazy view of the input, where each element is conjugated.\n\nExample\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\n"
 },
 
 {
@@ -12605,7 +12605,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.lufact",
     "category": "Function",
-    "text": "lufact(A [,pivot=Val{true}]) -> F::LU\n\nCompute the LU factorization of A.\n\nIn most cases, if A is a subtype S of AbstractMatrix{T} with an element type T supporting +, -, * and /, the return type is LU{T,S{T}}. If pivoting is chosen (default) the element type should also support abs and <.\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] (right) permutation Vector\nF[:P] (right) permutation Matrix\n\nThe relationship between F and A is\n\nF[:L]*F[:U] == A[F[:p], :]\n\nF further supports the following functions:\n\nSupported function LU LU{T,Tridiagonal{T}}\n/ ✓ \n\\ ✓ ✓\ncond ✓ \ndet ✓ ✓\nlogdet ✓ ✓\nlogabsdet ✓ ✓\nsize ✓ ✓\n\nExample\n\njulia> A = [4 3; 6 3]\n2×2 Array{Int64,2}:\n 4  3\n 6  3\n\njulia> F = lufact(A)\nBase.LinAlg.LU{Float64,Array{Float64,2}} with factors L and U:\n[1.0 0.0; 1.5 1.0]\n[4.0 3.0; 0.0 -1.5]\n\njulia> F[:L] * F[:U] == A[F[:p], :]\ntrue\n\n\n\nlufact(A::SparseMatrixCSC) -> F::UmfpackLU\n\nCompute the LU factorization of a sparse matrix A.\n\nFor sparse A with real or complex element type, the return type of F is UmfpackLU{Tv, Ti}, with Tv = Float64 or Complex128 respectively and Ti is an integer type (Int32 or Int64).\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] right permutation Vector\nF[:q] left permutation Vector\nF[:Rs] Vector of scaling factors\nF[:(:)] (L,U,p,q,Rs) components\n\nThe relation between F and A is\n\nF[:L]*F[:U] == (F[:Rs] .* A)[F[:p], F[:q]]\n\nF further supports the following functions:\n\n\\\ncond\ndet\n\nnote: Note\nlufact(A::SparseMatrixCSC) uses the UMFPACK library that is part of SuiteSparse. As this library only supports sparse matrices with Float64 or Complex128 elements, lufact converts A into a copy that is of type SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\n"
+    "text": "lufact(A::SparseMatrixCSC) -> F::UmfpackLU\n\nCompute the LU factorization of a sparse matrix A.\n\nFor sparse A with real or complex element type, the return type of F is UmfpackLU{Tv, Ti}, with Tv = Float64 or Complex128 respectively and Ti is an integer type (Int32 or Int64).\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] right permutation Vector\nF[:q] left permutation Vector\nF[:Rs] Vector of scaling factors\nF[:(:)] (L,U,p,q,Rs) components\n\nThe relation between F and A is\n\nF[:L]*F[:U] == (F[:Rs] .* A)[F[:p], F[:q]]\n\nF further supports the following functions:\n\n\\\ncond\ndet\n\nnote: Note\nlufact(A::SparseMatrixCSC) uses the UMFPACK library that is part of SuiteSparse. As this library only supports sparse matrices with Float64 or Complex128 elements, lufact converts A into a copy that is of type SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\nlufact(A [,pivot=Val{true}]) -> F::LU\n\nCompute the LU factorization of A.\n\nIn most cases, if A is a subtype S of AbstractMatrix{T} with an element type T supporting +, -, * and /, the return type is LU{T,S{T}}. If pivoting is chosen (default) the element type should also support abs and <.\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] (right) permutation Vector\nF[:P] (right) permutation Matrix\n\nThe relationship between F and A is\n\nF[:L]*F[:U] == A[F[:p], :]\n\nF further supports the following functions:\n\nSupported function LU LU{T,Tridiagonal{T}}\n/ ✓ \n\\ ✓ ✓\ncond ✓ \ndet ✓ ✓\nlogdet ✓ ✓\nlogabsdet ✓ ✓\nsize ✓ ✓\n\nExample\n\njulia> A = [4 3; 6 3]\n2×2 Array{Int64,2}:\n 4  3\n 6  3\n\njulia> F = lufact(A)\nBase.LinAlg.LU{Float64,Array{Float64,2}} with factors L and U:\n[1.0 0.0; 1.5 1.0]\n[4.0 3.0; 0.0 -1.5]\n\njulia> F[:L] * F[:U] == A[F[:p], :]\ntrue\n\n\n\n"
 },
 
 {
@@ -19725,7 +19725,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Base.LibGit2",
     "title": "Base.LibGit2.GitBlob",
     "category": "Type",
-    "text": "GitBlob(repo::GitRepo, hash::AbstractGitHash)\nGitBlob(repo::GitRepo, spec::AbstractString)\n\nReturn a GitBlob object from repo specified by hash/spec.\n\nhash is a full (GitHash) or partial (GitShortHash) hash.\nspec is a textual specification: see https://git-scm.com/docs/git-rev-parse.html#_specifying_revisions for a full list.\n\n\n\n"
+    "text": "GitBlob(repo::GitRepo, hash::AbstractGitHash)\nGitBlob(repo::GitRepo, spec::AbstractString)\n\nReturn a GitBlob object from repo specified by hash/spec.\n\nhash is a full (GitHash) or partial (GitShortHash) hash.\nspec is a textual specification: see the git docs for a full list.\n\n\n\n"
 },
 
 {
@@ -19733,7 +19733,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Base.LibGit2",
     "title": "Base.LibGit2.GitCommit",
     "category": "Type",
-    "text": "GitCommit(repo::GitRepo, hash::AbstractGitHash)\nGitCommit(repo::GitRepo, spec::AbstractString)\n\nReturn a GitCommit object from repo specified by hash/spec.\n\nhash is a full (GitHash) or partial (GitShortHash) hash.\nspec is a textual specification: see https://git-scm.com/docs/git-rev-parse.html#_specifying_revisions for a full list.\n\n\n\n"
+    "text": "GitCommit(repo::GitRepo, hash::AbstractGitHash)\nGitCommit(repo::GitRepo, spec::AbstractString)\n\nReturn a GitCommit object from repo specified by hash/spec.\n\nhash is a full (GitHash) or partial (GitShortHash) hash.\nspec is a textual specification: see the git docs for a full list.\n\n\n\n"
 },
 
 {
@@ -19749,7 +19749,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Base.LibGit2",
     "title": "Base.LibGit2.GitObject",
     "category": "Type",
-    "text": "GitObject(repo::GitRepo, hash::AbstractGitHash)\nGitObject(repo::GitRepo, spec::AbstractString)\n\nReturn the specified object (GitCommit, GitBlob, GitTree or GitTag) from repo specified by hash/spec.\n\nhash is a full (GitHash) or partial (GitShortHash) hash.\nspec is a textual specification: see https://git-scm.com/docs/git-rev-parse.html#_specifying_revisions for a full list.\n\n\n\n"
+    "text": "GitObject(repo::GitRepo, hash::AbstractGitHash)\nGitObject(repo::GitRepo, spec::AbstractString)\n\nReturn the specified object (GitCommit, GitBlob, GitTree or GitTag) from repo specified by hash/spec.\n\nhash is a full (GitHash) or partial (GitShortHash) hash.\nspec is a textual specification: see the git docs for a full list.\n\n\n\n"
 },
 
 {
@@ -19813,7 +19813,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Base.LibGit2",
     "title": "Base.LibGit2.GitTag",
     "category": "Type",
-    "text": "GitTag(repo::GitRepo, hash::AbstractGitHash)\nGitTag(repo::GitRepo, spec::AbstractString)\n\nReturn a GitTag object from repo specified by hash/spec.\n\nhash is a full (GitHash) or partial (GitShortHash) hash.\nspec is a textual specification: see https://git-scm.com/docs/git-rev-parse.html#_specifying_revisions for a full list.\n\n\n\n"
+    "text": "GitTag(repo::GitRepo, hash::AbstractGitHash)\nGitTag(repo::GitRepo, spec::AbstractString)\n\nReturn a GitTag object from repo specified by hash/spec.\n\nhash is a full (GitHash) or partial (GitShortHash) hash.\nspec is a textual specification: see the git docs for a full list.\n\n\n\n"
 },
 
 {
@@ -19821,7 +19821,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Base.LibGit2",
     "title": "Base.LibGit2.GitTree",
     "category": "Type",
-    "text": "GitTree(repo::GitRepo, hash::AbstractGitHash)\nGitTree(repo::GitRepo, spec::AbstractString)\n\nReturn a GitTree object from repo specified by hash/spec.\n\nhash is a full (GitHash) or partial (GitShortHash) hash.\nspec is a textual specification: see https://git-scm.com/docs/git-rev-parse.html#_specifying_revisions for a full list.\n\n\n\n"
+    "text": "GitTree(repo::GitRepo, hash::AbstractGitHash)\nGitTree(repo::GitRepo, spec::AbstractString)\n\nReturn a GitTree object from repo specified by hash/spec.\n\nhash is a full (GitHash) or partial (GitShortHash) hash.\nspec is a textual specification: see the git docs for a full list.\n\n\n\n"
 },
 
 {
@@ -20125,7 +20125,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Base.LibGit2",
     "title": "Base.LibGit2.gitdir",
     "category": "Function",
-    "text": "LibGit2.gitdir(repo::GitRepo)\n\nReturns the location of the \"git\" files of repo:\n\nfor normal repositories, this is the location of the .git folder.\nfor bare repositories, this is the location of the repository itself.\n\nSee also workdir, path\n\n\n\n"
+    "text": "LibGit2.gitdir(repo::GitRepo)\n\nReturns the location of the \"git\" files of repo:\n\nfor normal repositories, this is the location of the .git folder.\nfor bare repositories, this is the location of the repository itself.\n\nSee also workdir, path.\n\n\n\n"
 },
 
 {
@@ -20373,7 +20373,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Base.LibGit2",
     "title": "Base.LibGit2.set_remote_url",
     "category": "Function",
-    "text": "set_remote_url(repo::GitRepo, url::AbstractString; remote::AbstractString=\"origin\")\n\nSet the url for remote for the git repository repo. The default name of the remote is \"origin\".\n\n\n\nset_remote_url(path::AbstractString, url::AbstractString; remote::AbstractString=\"origin\")\n\nSet the url for remote for the git repository located at path. The default name of the remote is \"origin\".\n\n\n\n"
+    "text": "set_remote_url(repo::GitRepo, url::AbstractString; remote::AbstractString=\"origin\")\n\nSet the url for remote for the git repository repo. The default name of the remote is \"origin\".\n\nExamples\n\nrepo_path = joinpath(\"test_directory\", \"Example\")\nrepo = LibGit2.init(repo_path)\nurl1 = \"https://github.com/JuliaLang/Example.jl\"\nLibGit2.set_remote_url(repo, url1, remote=\"upstream\")\nurl2 = \"https://github.com/JuliaLang/Example2.jl\"\nLibGit2.set_remote_url(repo_path, url2, remote=\"upstream2\")\n\n\n\nset_remote_url(path::AbstractString, url::AbstractString; remote::AbstractString=\"origin\")\n\nSet the url for remote for the git repository located at path. The default name of the remote is \"origin\".\n\n\n\n"
 },
 
 {
@@ -20469,7 +20469,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Base.LibGit2",
     "title": "Base.LibGit2.workdir",
     "category": "Function",
-    "text": "LibGit2.workdir(repo::GitRepo)\n\nThe location of the working directory of repo. This will throw an error for bare repositories.\n\nnote: Note\nThis will typically be the parent directory of gitdir(repo), but can be different in some cases: e.g. if either the core.worktree configuration variable or the GIT_WORK_TREE environment variable is set.\n\nSee also gitdir, path\n\n\n\n"
+    "text": "LibGit2.workdir(repo::GitRepo)\n\nThe location of the working directory of repo. This will throw an error for bare repositories.\n\nnote: Note\nThis will typically be the parent directory of gitdir(repo), but can be different in some cases: e.g. if either the core.worktree configuration variable or the GIT_WORK_TREE environment variable is set.\n\nSee also gitdir, path.\n\n\n\n"
 },
 
 {
