@@ -97,7 +97,7 @@ function wp_local_take!(pool::AbstractWorkerPool)
         end
 
         worker = take!(pool.channel)
-        if id_in_procs(worker)
+        if worker in procs()
             break
         else
             delete!(pool.workers, worker) # Remove invalid worker from pool

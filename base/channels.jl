@@ -27,9 +27,9 @@ mutable struct Channel{T} <: AbstractChannel
     sz_max::Int            # maximum size of channel
 
     # Used when sz_max == 0, i.e., an unbuffered channel.
-    waiters::Int
     takers::Vector{Task}
     putters::Vector{Task}
+    waiters::Int
 
     function Channel{T}(sz::Float64) where T
         if sz == Inf
@@ -42,12 +42,7 @@ mutable struct Channel{T} <: AbstractChannel
         if sz < 0
             throw(ArgumentError("Channel size must be either 0, a positive integer or Inf"))
         end
-        ch = new(Condition(), Condition(), :open, Nullable{Exception}(), Vector{T}(0), sz, 0)
-        if sz == 0
-            ch.takers = Vector{Task}(0)
-            ch.putters = Vector{Task}(0)
-        end
-        return ch
+        new(Condition(), Condition(), :open, Nullable{Exception}(), Vector{T}(0), sz, Vector{Task}(0), Vector{Task}(0), 0)
     end
 
     # deprecated empty constructor
@@ -381,10 +376,8 @@ function notify_error(c::Channel, err)
     notify_error(c.cond_put, err)
 
     # release tasks on a `wait()/yieldto()` call (on unbuffered channels)
-    if !isbuffered(c)
-        waiters = filter!(t->(t.state == :runnable), vcat(c.takers, c.putters))
-        foreach(t->schedule(t, err; error=true), waiters)
-    end
+    waiters = filter!(t->(t.state == :runnable), vcat(c.takers, c.putters))
+    foreach(t->schedule(t, err; error=true), waiters)
 end
 notify_error(c::Channel) = notify_error(c, get(c.excp))
 

@@ -691,23 +691,6 @@ function procs()
     end
 end
 
-function id_in_procs(id)  # faster version of `id in procs()`
-    if myid() == 1 || PGRP.topology == :all_to_all
-        for x in PGRP.workers
-            if (x.id::Int) == id && (isa(x, LocalProcess) || (x::Worker).state == W_CONNECTED)
-                return true
-            end
-        end
-    else
-        for x in PGRP.workers
-            if (x.id::Int) == id
-                return true
-            end
-        end
-    end
-    return false
-end
-
 """
     procs(pid::Integer)
 
@@ -823,18 +806,17 @@ mutable struct ProcessExitedException <: Exception end
 
 worker_from_id(i) = worker_from_id(PGRP, i)
 function worker_from_id(pg::ProcessGroup, i)
-    if !isempty(map_del_wrkr) && in(i, map_del_wrkr)
+    if in(i, map_del_wrkr)
         throw(ProcessExitedException())
     end
-    w = get(map_pid_wrkr, i, nothing)
-    if w === nothing
+    if !haskey(map_pid_wrkr,i)
         if myid() == 1
             error("no process with id $i exists")
         end
         w = Worker(i)
         map_pid_wrkr[i] = w
     else
-        w = w::Union{Worker, LocalProcess}
+        w = map_pid_wrkr[i]
     end
     w
 end
