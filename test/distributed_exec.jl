@@ -896,6 +896,19 @@ clear!(wp)
 DoFullTest = Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
 
 if DoFullTest
+    # Topology tests need to run externally since a given cluster at any
+    # time can only support a single topology and the current session
+    # is already running in parallel under the default topology.
+    script = joinpath(dirname(@__FILE__), "topology.jl")
+    cmd = `$(Base.julia_cmd()) $script`
+
+    (strm, proc) = open(pipeline(cmd, stderr=STDERR))
+    wait(proc)
+    if !success(proc) && ccall(:jl_running_on_valgrind,Cint,()) == 0
+        println(readstring(strm))
+        error("Topology tests failed : $cmd")
+    end
+
     println("Testing exception printing on remote worker from a `remote_do` call")
     println("Please ensure the remote error and backtrace is displayed on screen")
 
@@ -1558,17 +1571,4 @@ catch ex
     @test isa(ex.captured.ex.exceptions[1].ex, ErrorException)
     @test contains(ex.captured.ex.exceptions[1].ex.msg, "BoundsError")
     @test ex.captured.ex.exceptions[2].ex == UndefVarError(:DontExistOn1)
-end
-
-# Topology tests need to run externally since a given cluster at any
-# time can only support a single topology and the current session
-# is already running in parallel under the default topology.
-script = joinpath(dirname(@__FILE__), "topology.jl")
-cmd = `$(Base.julia_cmd()) $cov_in_exeflags $script`
-
-(strm, proc) = open(pipeline(cmd, stderr=STDERR))
-wait(proc)
-if !success(proc) && ccall(:jl_running_on_valgrind,Cint,()) == 0
-    println(readstring(strm))
-    error("Topology tests failed : $cmd")
 end
