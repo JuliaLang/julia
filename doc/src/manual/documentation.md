@@ -69,15 +69,15 @@ As in the example above, we recommend following some simple conventions when wri
    description of the function's purpose. An argument list would only repeat information already
    provided elsewhere. However, providing an argument list can be a good idea for complex functions
    with many arguments (in particular keyword arguments). In that case, insert it after the general
-   description of the function, under an `# Arguments` header, with one `*` bullet for each argument.
+   description of the function, under an `# Arguments` header, with one `-` bullet for each argument.
    The list should mention the types and default values (if any) of the arguments:
 
    ```julia
    """
    ...
    # Arguments
-   * `n::Integer`: the number of elements to compute.
-   * `dim::Integer=1`: the dimensions along which to perform the computation.
+   - `n::Integer`: the number of elements to compute.
+   - `dim::Integer=1`: the dimensions along which to perform the computation.
    ...
    """
    ```
