@@ -186,50 +186,50 @@ for vd in [1, 2], zm in [true, false], cr in [true, false]
         y1 = vec(Y[1,:])
     end
 
-    c = zm ? Base.covm(x1, 0, cr) :
-             cov(x1, cr)
+    c = zm ? Base.covm(x1, 0, corrected=cr) :
+             cov(x1, corrected=cr)
     @test isa(c, Float64)
     @test c ≈ Cxx[1,1]
-    @inferred cov(x1, cr)
+    @inferred cov(x1, corrected=cr)
 
     @test cov(X) == Base.covm(X, mean(X, 1))
-    C = zm ? Base.covm(X, 0, vd, cr) :
-             cov(X, vd, cr)
+    C = zm ? Base.covm(X, 0, vd, corrected=cr) :
+             cov(X, vd, corrected=cr)
     @test size(C) == (k, k)
     @test C ≈ Cxx
-    @inferred cov(X, vd, cr)
+    @inferred cov(X, vd, corrected=cr)
 
     @test cov(x1, y1) == Base.covm(x1, mean(x1), y1, mean(y1))
-    c = zm ? Base.covm(x1, 0, y1, 0, cr) :
-             cov(x1, y1, cr)
+    c = zm ? Base.covm(x1, 0, y1, 0, corrected=cr) :
+             cov(x1, y1, corrected=cr)
     @test isa(c, Float64)
     @test c ≈ Cxy[1,1]
-    @inferred cov(x1, y1, cr)
+    @inferred cov(x1, y1, corrected=cr)
 
     if vd == 1
         @test cov(x1, Y) == Base.covm(x1, mean(x1), Y, mean(Y, 1))
     end
-    C = zm ? Base.covm(x1, 0, Y, 0, vd, cr) :
-             cov(x1, Y, vd, cr)
+    C = zm ? Base.covm(x1, 0, Y, 0, vd, corrected=cr) :
+             cov(x1, Y, vd, corrected=cr)
     @test size(C) == (1, k)
     @test vec(C) ≈ Cxy[1,:]
-    @inferred cov(x1, Y, vd, cr)
+    @inferred cov(x1, Y, vd, corrected=cr)
 
     if vd == 1
         @test cov(X, y1) == Base.covm(X, mean(X, 1), y1, mean(y1))
     end
-    C = zm ? Base.covm(X, 0, y1, 0, vd, cr) :
-             cov(X, y1, vd, cr)
+    C = zm ? Base.covm(X, 0, y1, 0, vd, corrected=cr) :
+             cov(X, y1, vd, corrected=cr)
     @test size(C) == (k, 1)
     @test vec(C) ≈ Cxy[:,1]
-    @inferred cov(X, y1, vd, cr)
+    @inferred cov(X, y1, vd, corrected=cr)
 
     @test cov(X, Y) == Base.covm(X, mean(X, 1), Y, mean(Y, 1))
-    C = zm ? Base.covm(X, 0, Y, 0, vd, cr) :
-             cov(X, Y, vd, cr)
+    C = zm ? Base.covm(X, 0, Y, 0, vd, corrected=cr) :
+             cov(X, Y, vd, corrected=cr)
     @test size(C) == (k, k)
     @test C ≈ Cxy
-    @inferred cov(X, Y, vd, cr)
+    @inferred cov(X, Y, vd, corrected=cr)
 end
 
 # test correlation
