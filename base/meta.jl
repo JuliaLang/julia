@@ -12,8 +12,7 @@ export quot,
 quot(ex) = Expr(:quote, ex)
 
 isexpr(ex::Expr, head)          = ex.head === head
-isexpr(ex::Expr, heads::Set)    = in(ex.head, heads)
-isexpr(ex::Expr, heads::Vector) = in(ex.head, heads)
+isexpr(ex::Expr, heads::Union{Set,Vector,Tuple}) = in(ex.head, heads)
 isexpr(ex,       head)          = false
 
 isexpr(ex,       head, n::Int)  = isexpr(ex, head) && length(ex.args) == n

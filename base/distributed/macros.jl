@@ -48,6 +48,22 @@ macro fetchfrom(p, expr)
     :(remotecall_fetch($thunk, $(esc(p))))
 end
 
+# extract a list of modules to import from an expression
+extract_imports!(imports, x) = imports
+function extract_imports!(imports, ex::Expr)
+    if Meta.isexpr(ex, (:import, :using))
+        return push!(imports, ex.args[1])
+    elseif Meta.isexpr(ex, :let)
+        return extract_imports!(imports, ex.args[1])
+    elseif Meta.isexpr(ex, (:toplevel, :block))
+        for i in eachindex(ex.args)
+            extract_imports!(imports, ex.args[i])
+        end
+    end
+    return imports
+end
+extract_imports(x) = extract_imports!(Symbol[], x)
+
 """
     @everywhere expr
 
@@ -78,7 +94,9 @@ For example :
 will result in `Main.bar` being defined on all processes and not `FooBar.bar`.
 """
 macro everywhere(ex)
+    imps = [Expr(:import, m) for m in extract_imports(ex)]
     quote
+        $(isempty(imps) ? nothing : Expr(:toplevel, imps...))
         sync_begin()
         for pid in workers()
             async_run_thunk(()->remotecall_fetch(eval_ew_expr, pid, $(Expr(:quote,ex))))
