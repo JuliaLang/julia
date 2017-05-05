@@ -505,10 +505,6 @@ const prec_decl = operator_precedence(:(::))
 is_expr(ex, head::Symbol)         = (isa(ex, Expr) && (ex.head == head))
 is_expr(ex, head::Symbol, n::Int) = is_expr(ex, head) && length(ex.args) == n
 
-is_linenumber(ex::LineNumberNode) = true
-is_linenumber(ex::Expr)           = (ex.head == :line)
-is_linenumber(ex)                 = false
-
 is_quoted(ex)            = false
 is_quoted(ex::QuoteNode) = true
 is_quoted(ex::Expr)      = is_expr(ex, :quote, 1) || is_expr(ex, :inert, 1)
@@ -538,18 +534,22 @@ end
 
 emphasize(io, str::AbstractString) = have_color ? print_with_color(Base.error_color(), io, str; bold = true) : print(io, uppercase(str))
 
-show_linenumber(io::IO, line)       = print(io," # line ",line,':')
-show_linenumber(io::IO, line, file) = print(io," # ", file,", line ",line,':')
+show_linenumber(io::IO, line)       = print(io, "#= line ", line, " =#")
+show_linenumber(io::IO, line, file) = print(io, "#= ", file, ":", line, " =#")
+show_linenumber(io::IO, line, file::Void) = show_linenumber(io, line)
 
 # show a block, e g if/for/etc
 function show_block(io::IO, head, args::Vector, body, indent::Int)
-    print(io, head, ' ')
-    show_list(io, args, ", ", indent)
+    print(io, head)
+    if !isempty(args)
+        print(io, ' ')
+        show_list(io, args, ", ", indent)
+    end
 
     ind = head === :module || head === :baremodule ? indent : indent + indent_width
     exs = (is_expr(body, :block) || is_expr(body, :body)) ? body.args : Any[body]
     for ex in exs
-        if !is_linenumber(ex); print(io, '\n', " "^ind); end
+        print(io, '\n', " "^ind)
         show_unquoted(io, ex, ind, -1)
     end
     print(io, '\n', " "^indent)
@@ -566,7 +566,7 @@ end
 # show an indented list
 function show_list(io::IO, items, sep, indent::Int, prec::Int=0, enclose_operators::Bool=false)
     n = length(items)
-    if n == 0; return end
+    n == 0 && return
     indent += indent_width
     first = true
     for item in items
@@ -613,7 +613,7 @@ end
 ## AST printing ##
 
 show_unquoted(io::IO, sym::Symbol, ::Int, ::Int)        = print(io, sym)
-show_unquoted(io::IO, ex::LineNumberNode, ::Int, ::Int) = show_linenumber(io, ex.line)
+show_unquoted(io::IO, ex::LineNumberNode, ::Int, ::Int) = show_linenumber(io, ex.line, ex.file)
 show_unquoted(io::IO, ex::LabelNode, ::Int, ::Int)      = print(io, ex.label, ": ")
 show_unquoted(io::IO, ex::GotoNode, ::Int, ::Int)       = print(io, "goto ", ex.label)
 show_unquoted(io::IO, ex::GlobalRef, ::Int, ::Int)      = print(io, ex.mod, '.', ex.name)
@@ -913,12 +913,20 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         print(io, head, ' ')
         show_list(io, args, ", ", indent)
 
-    elseif head === :macrocall && nargs >= 1
+    elseif head === :macrocall && nargs >= 2
+        # first show the line number argument as a comment
+        if isa(args[2], LineNumberNode) || is_expr(args[2], :line)
+            print(io, args[2], ' ')
+        end
         # Use the functional syntax unless specifically designated with prec=-1
+        # and hide the line number argument from the argument list
         if prec >= 0
-            show_call(io, :call, ex.args[1], ex.args[2:end], indent)
+            show_call(io, :call, args[1], args[3:end], indent)
         else
-            show_list(io, args, ' ', indent)
+            show_args = Vector{Any}(length(args) - 1)
+            show_args[1] = args[1]
+            show_args[2:end] = args[3:end]
+            show_list(io, show_args, ' ', indent)
         end
 
     elseif head === :line && 1 <= nargs <= 2

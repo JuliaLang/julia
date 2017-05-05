@@ -1162,6 +1162,7 @@
                (error "macros cannot accept keyword arguments"))
            (expand-forms
             `(function (call ,(symbol (string #\@ (cadr (cadr e))))
+                             (|::| __source__ (core LineNumberNode))
                              ,@(map (lambda (v)
                                       (if (symbol? v)
                                           `(|::| ,v (core ANY))

@@ -2,22 +2,24 @@
 
 using Base.Test
 
-@test @__LINE__ == 5
+@test @__LINE__() == 5
 
 include("test_sourcepath.jl")
 thefname = "the fname!//\\&\1*"
 include_string_test_func = include_string("include_string_test() = @__FILE__", thefname)
-@test include_string_test_func() == Base.source_path()
+@test include_string_test_func() == thefname
 @test include_string("Base.source_path()", thefname) == Base.source_path()
 @test basename(@__FILE__) == "loading.jl"
 @test isabspath(@__FILE__)
 
 @test isdir(@__DIR__)
 @test @__DIR__() == dirname(@__FILE__)
-let exename = `$(Base.julia_cmd()) --precompiled=yes --startup-file=no`
-    wd = sprint(show, pwd())
+let exename = `$(Base.julia_cmd()) --precompiled=yes --startup-file=no`,
+    wd = sprint(show, abspath(pwd(), "")),
+    s_dir = sprint(show, joinpath(realpath(tempdir()), ""))
+    @test wd != s_dir
     @test readchomp(`$exename -E "@__DIR__" -i`) == wd
-    @test readchomp(`$exename -E "cd(()->eval(:(@__DIR__)), tempdir())" -i`) != wd
+    @test readchomp(`$exename -E "cd(()->eval(:(@__DIR__)), $s_dir)" -i`) == s_dir
     @test readchomp(`$exename -E "@__DIR__"`) == wd # non-interactive
 end
 

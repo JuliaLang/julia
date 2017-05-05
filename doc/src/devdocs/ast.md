@@ -407,21 +407,21 @@ call. Finally, chains of comparisons have their own special expression structure
 
 ### Macros
 
-| Input         | AST                                   |
-|:------------- |:------------------------------------- |
-| `@m x y`      | `(macrocall @m x y)`                  |
-| `Base.@m x y` | `(macrocall (. Base (quote @m)) x y)` |
-| `@Base.m x y` | `(macrocall (. Base (quote @m)) x y)` |
+| Input         | AST                                          |
+|:------------- |:-------------------------------------------- |
+| `@m x y`      | `(macrocall @m (line) x y)`                  |
+| `Base.@m x y` | `(macrocall (. Base (quote @m)) (line) x y)` |
+| `@Base.m x y` | `(macrocall (. Base (quote @m)) (line) x y)` |
 
 ### Strings
 
-| Input           | AST                          |
-|:--------------- |:---------------------------- |
-| `"a"`           | `"a"`                        |
-| `x"y"`          | `(macrocall @x_str "y")`     |
-| `x"y"z`         | `(macrocall @x_str "y" "z")` |
-| `"x = $x"`      | `(string "x = " x)`          |
-| ``` `a b c` ``` | `(macrocall @cmd "a b c")`   |
+| Input           | AST                                 |
+|:--------------- |:----------------------------------- |
+| `"a"`           | `"a"`                               |
+| `x"y"`          | `(macrocall @x_str (line) "y")`     |
+| `x"y"z`         | `(macrocall @x_str (line) "y" "z")` |
+| `"x = $x"`      | `(string "x = " x)`                 |
+| ``` `a b c` ``` | `(macrocall @cmd (line) "a b c")`   |
 
 Doc string syntax:
 
@@ -430,7 +430,7 @@ Doc string syntax:
 f(x) = x
 ```
 
-parses as `(macrocall (|.| Core '@doc) "some docs" (= (call f x) (block x)))`.
+parses as `(macrocall (|.| Core '@doc) (line) "some docs" (= (call f x) (block x)))`.
 
 ### Imports and such
 
@@ -449,11 +449,11 @@ parses as `(macrocall (|.| Core '@doc) "some docs" (= (call f x) (block x)))`.
 Julia supports more number types than many scheme implementations, so not all numbers are represented
 directly as scheme numbers in the AST.
 
-| Input                   | AST                                              |
-|:----------------------- |:------------------------------------------------ |
-| `11111111111111111111`  | `(macrocall @int128_str "11111111111111111111")` |
-| `0xfffffffffffffffff`   | `(macrocall @uint128_str "0xfffffffffffffffff")` |
-| `1111...many digits...` | `(macrocall @big_str "1111....")`                |
+| Input                   | AST                                                     |
+|:----------------------- |:------------------------------------------------------- |
+| `11111111111111111111`  | `(macrocall @int128_str (null) "11111111111111111111")` |
+| `0xfffffffffffffffff`   | `(macrocall @uint128_str (null) "0xfffffffffffffffff")` |
+| `1111...many digits...` | `(macrocall @big_str (null) "1111....")`                |
 
 ### Block forms
 
