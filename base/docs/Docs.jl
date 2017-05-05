@@ -83,9 +83,11 @@ function initmeta(m::Module = current_module())
 end
 
 function signature!(tv, expr::Expr)
-    if isexpr(expr, (:call, :macrocall))
+    is_macrocall = isexpr(expr, :macrocall)
+    if is_macrocall || isexpr(expr, :call)
         sig = :(Union{Tuple{}})
-        for arg in expr.args[2:end]
+        first_arg = is_macrocall ? 3 : 2 # skip function arguments
+        for arg in expr.args[first_arg:end]
             isexpr(arg, :parameters) && continue
             if isexpr(arg, :kw) # optional arg
                 push!(sig.args, :(Tuple{$(sig.args[end].args[2:end]...)}))
@@ -599,7 +601,7 @@ function __doc__!(meta, def, define)
         # the Base image). We just need to convert each `@__doc__` marker to an `@doc`.
         finddoc(def) do each
             each.head = :macrocall
-            each.args = [Symbol("@doc"), meta, each.args[end], define]
+            each.args = [Symbol("@doc"), nothing, meta, each.args[end], define] # TODO: forward line number info
         end
     else
         # `def` has already been defined during Base image gen so we just need to find and
@@ -642,7 +644,7 @@ const BINDING_HEADS = [:typealias, :const, :global, :(=)]  # deprecation: remove
 isquotedmacrocall(x) =
     isexpr(x, :copyast, 1) &&
     isa(x.args[1], QuoteNode) &&
-    isexpr(x.args[1].value, :macrocall, 1)
+    isexpr(x.args[1].value, :macrocall, 2)
 # Simple expressions / atoms the may be documented.
 isbasicdoc(x) = isexpr(x, :.) || isa(x, Union{QuoteNode, Symbol})
 is_signature(x) = isexpr(x, :call) || (isexpr(x, :(::), 2) && isexpr(x.args[1], :call)) || isexpr(x, :where)
@@ -730,7 +732,7 @@ function docm(ex)
         parsedoc(keywords[ex])
     elseif isa(ex, Union{Expr, Symbol})
         binding = esc(bindingexpr(namify(ex)))
-        if isexpr(ex, [:call, :macrocall])
+        if isexpr(ex, :call) || isexpr(ex, :macrocall)
             sig = esc(signature(ex))
             :($(doc)($binding, $sig))
         else

@@ -4140,39 +4140,38 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
     end
 
     do_coverage = coverage_enabled()
-    if do_coverage
-        line = method.line
-        if !isempty(stmts) && isa(stmts[1], LineNumberNode)
-            line = (shift!(stmts)::LineNumberNode).line
+    line::Int = method.line
+    file = method.file
+    if !isempty(stmts)
+        if !do_coverage && all(inlining_ignore, stmts)
+            empty!(stmts)
+        elseif isa(stmts[1], LineNumberNode)
+            linenode = shift!(stmts)::LineNumberNode
+            line = linenode.line
+            isa(linenode.file, Symbol) && (file = linenode.file)
         end
+    end
+    if do_coverage
         # Check if we are switching module, which is necessary to catch user
         # code inlined into `Base` with `--code-coverage=user`.
         # Assume we are inlining directly into `enclosing` instead of another
         # function inlined in it
         mod = method.module
         if mod === sv.mod
-            unshift!(stmts, Expr(:meta, :push_loc, method.file,
+            unshift!(stmts, Expr(:meta, :push_loc, file,
                                  method.name, line))
         else
-            unshift!(stmts, Expr(:meta, :push_loc, method.file,
+            unshift!(stmts, Expr(:meta, :push_loc, file,
                                  method.name, line, mod))
         end
         push!(stmts, Expr(:meta, :pop_loc))
     elseif !isempty(stmts)
-        if all(inlining_ignore, stmts)
-            empty!(stmts)
+        unshift!(stmts, Expr(:meta, :push_loc, file,
+                             method.name, line))
+        if isa(stmts[end], LineNumberNode)
+            stmts[end] = Expr(:meta, :pop_loc)
         else
-            line::Int = method.line
-            if isa(stmts[1], LineNumberNode)
-                line = (shift!(stmts)::LineNumberNode).line
-            end
-            unshift!(stmts, Expr(:meta, :push_loc, method.file,
-                                 method.name, line))
-            if isa(stmts[end], LineNumberNode)
-                stmts[end] = Expr(:meta, :pop_loc)
-            else
-                push!(stmts, Expr(:meta, :pop_loc))
-            end
+            push!(stmts, Expr(:meta, :pop_loc))
         end
     end
     if !isempty(stmts) && !propagate_inbounds
