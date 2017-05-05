@@ -168,6 +168,8 @@ end
 @test @inferred(ntuple(abs2, Val{4})) == (1, 4, 9, 16)
 @test @inferred(ntuple(abs2, Val{5})) == (1, 4, 9, 16, 25)
 @test @inferred(ntuple(abs2, Val{6})) == (1, 4, 9, 16, 25, 36)
+# issue #21697
+@test_throws ArgumentError ntuple(abs2, Val{-1})
 
 # issue #12854
 @test_throws TypeError ntuple(identity, Val{1:2})
