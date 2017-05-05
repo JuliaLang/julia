@@ -143,7 +143,7 @@ function serialize_global_from_main(s::ClusterSerializer, sym)
             end
         end
     end
-    record_v && (s.glbs_sent[oid] = hash(v))
+    record_v && (s.glbs_sent[oid] = hash(sym, hash(v)))
 
     serialize(s, isconst(Main, sym))
     serialize(s, v)

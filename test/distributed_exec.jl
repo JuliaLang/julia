@@ -1361,9 +1361,9 @@ end
 # Different global bindings to the same object
 global v3 = ones(10)
 global v4 = v3
-@test remotecall_fetch(isdefined, id_other, :v3) == true
-@test remotecall_fetch(isdefined, id_other, :v4) == true
 @test remotecall_fetch(()->v3, id_other) == remotecall_fetch(()->v4, id_other)
+@test remotecall_fetch(()->isdefined(Main, :v3), id_other)
+@test remotecall_fetch(()->isdefined(Main, :v4), id_other)
 
 # Test that a global is not being repeatedly serialized when
 # a) referenced multiple times in the closure
