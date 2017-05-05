@@ -111,6 +111,7 @@ void addOptimizationPasses(legacy::PassManager *PM)
 void addOptimizationPasses(PassManager *PM)
 #endif
 {
+    PM->add(createLowerExcHandlersPass());
     PM->add(createLowerGCFramePass());
 #ifdef JL_DEBUG_BUILD
     PM->add(createVerifierPass());
@@ -489,6 +490,7 @@ JuliaOJIT::JuliaOJIT(TargetMachine &TM)
         addOptimizationPasses(&PM);
     }
     else {
+        PM.add(createLowerExcHandlersPass());
         PM.add(createLowerGCFramePass());
         PM.add(createLowerPTLSPass(imaging_mode));
     }
