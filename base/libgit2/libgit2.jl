@@ -458,6 +458,23 @@ Equivalent to `git checkout [-f] --detach <commit>`.
 Checkout the git commit `commit` (a [`GitHash`](@ref) in string form)
 in `repo`. If `force` is `true`, force the checkout and discard any
 current changes. Note that this detaches the current HEAD.
+
+# Example
+
+```julia
+repo = LibGit2.init(repo_path)
+open(joinpath(LibGit2.path(repo), "file1"), "w") do f
+    write(f, "111\n")
+end
+LibGit2.add!(repo, "file1")
+commit_oid = LibGit2.commit(repo, "add file1")
+open(joinpath(LibGit2.path(repo), "file1"), "w") do f
+    write(f, "112\n")
+end
+# would fail without the force=true
+# since there are modifications to the file
+LibGit2.checkout!(repo, string(commit_oid), force=true)
+```
 """
 function checkout!(repo::GitRepo, commit::AbstractString = "";
                   force::Bool = true)
