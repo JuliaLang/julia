@@ -749,11 +749,21 @@ include("utils.jl")
 # Swap out the bootstrap macro with the real one.
 Core.atdoc!(docm)
 
+macro local_hygiene(expr)
+    # removes `esc` Exprs relative to the module argument to expand
+    # and resolves everything else relative to this (Doc) module
+    # this allows us to get good errors and backtraces
+    # from calling docm (by not using macros),
+    # while also getting macro-expansion correct (by using the macro-expander)
+    return expr
+end
 function loaddocs(docs)
+    unescape = GlobalRef(Docs, Symbol("@local_hygiene"))
     for (mod, ex, str, file, line) in docs
         data = Dict(:path => string(file), :linenumber => line)
         doc = docstr(str, data)
-        eval(mod, :(@doc($doc, $ex, false)))
+        docstring = eval(mod, Expr(:body, Expr(:return, Expr(:call, QuoteNode(docm), QuoteNode(doc), QuoteNode(ex), false)))) # expand the real @doc macro now (using a hack because macroexpand takes current-module as an implicit argument)
+        eval(mod, Expr(:macrocall, unescape, nothing, docstring))
     end
     empty!(docs)
 end
