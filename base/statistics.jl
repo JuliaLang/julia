@@ -479,41 +479,33 @@ corm(x::AbstractVecOrMat, xmean, y::AbstractVecOrMat, ymean, vardim::Int=1) =
 
 # cor
 """
-    cor(x)
+    cor(x::AbstractVector)
 
 Return the number one.
 """
 cor(x::AbstractVector) = one(real(eltype(x)))
-# This ugly hack is necessary to make the method below considered more specific than the deprecated method. When the old keyword version has been completely deprecated, these two methods can be merged
 
 """
-    cor(X[, vardim=1])
+    cor(X::AbstractMatrix[, vardim::Int=1])
 
 Compute the Pearson correlation matrix of the matrix `X` along the dimension `vardim`.
 """
-cor(X::AbstractMatrix, vardim::Int) = corm(X, _vmean(X, vardim), vardim)
-# This ugly hack is necessary to make the method below considered more specific than the deprecated method. When the old keyword version has been completely deprecated, these two methods can be merged
-cor(X::AbstractMatrix) = cor(X, 1)
+cor(X::AbstractMatrix, vardim::Int=1) = corm(X, _vmean(X, vardim), vardim)
 
 """
-    cor(x, y)
+    cor(x::AbstractVector, y::AbstractVector)
 
 Compute the Pearson correlation between the vectors `x` and `y`.
 """
 cor(x::AbstractVector, y::AbstractVector) = corm(x, Base.mean(x), y, Base.mean(y))
-# This ugly hack is necessary to make the method below considered more specific than the deprecated method. When the old keyword version has been completely deprecated, these two methods can be merged
 
 """
-    cor(X, Y[, vardim=1])
+    cor(X::AbstractVecOrMat, Y::AbstractVecOrMat[, vardim=1])
 
 Compute the Pearson correlation between the vectors or matrices `X` and `Y` along the dimension `vardim`.
 """
-cor(x::AbstractVecOrMat, y::AbstractVecOrMat, vardim::Int) =
+cor(x::AbstractVecOrMat, y::AbstractVecOrMat, vardim::Int=1) =
     corm(x, _vmean(x, vardim), y, _vmean(y, vardim), vardim)
-# This ugly hack is necessary to make the method below considered more specific than the deprecated method. When the old keyword version has been completely deprecated, these methods can be merged
-cor(x::AbstractVector, Y::AbstractMatrix) = cor(x, Y, 1)
-cor(X::AbstractMatrix, y::AbstractVector) = cor(X, y, 1)
-cor(X::AbstractMatrix, Y::AbstractMatrix) = cor(X, Y, 1)
 
 ##### median & quantiles #####
 
