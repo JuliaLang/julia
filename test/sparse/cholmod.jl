@@ -191,30 +191,21 @@ ACSC = sprandn(10, 10, 0.3) + I
 @test ishermitian(Sparse(Hermitian(complex(ACSC), :U)))
 
 # test Sparse constructor for c_SparseVoid (and read_sparse)
-let testfile = joinpath(tempdir(), "tmp.mtx")
-    try
-        writedlm(testfile, ["%%MatrixMarket matrix coordinate real symmetric","3 3 4","1 1 1","2 2 1","3 2 0.5","3 3 1"])
-        @test sparse(CHOLMOD.Sparse(testfile)) == [1 0 0;0 1 0.5;0 0.5 1]
-    finally
-        rm(testfile)
-    end
-end
-let testfile = joinpath(tempdir(), "tmp.mtx")
-    try
-        writedlm(testfile, ["%%MatrixMarket matrix coordinate complex Hermitian",
-                 "3 3 4","1 1 1.0 0.0","2 2 1.0 0.0","3 2 0.5 0.5","3 3 1.0 0.0"])
-        @test sparse(CHOLMOD.Sparse(testfile)) == [1 0 0;0 1 0.5-0.5im;0 0.5+0.5im 1]
-    finally
-        rm(testfile)
-    end
-end
-let testfile = joinpath(tempdir(), "tmp.mtx")
-    try
-        writedlm(testfile, ["%%MatrixMarket matrix coordinate real symmetric","%3 3 4","1 1 1","2 2 1","3 2 0.5","3 3 1"])
-        @test_throws ArgumentError sparse(CHOLMOD.Sparse(testfile))
-    finally
-        rm(testfile)
-    end
+mktempdir() do temp_dir
+    testfile = joinpath(temp_dir, "tmp.mtx")
+
+    writedlm(testfile, ["%%MatrixMarket matrix coordinate real symmetric","3 3 4","1 1 1","2 2 1","3 2 0.5","3 3 1"])
+    @test sparse(CHOLMOD.Sparse(testfile)) == [1 0 0;0 1 0.5;0 0.5 1]
+    rm(testfile)
+
+    writedlm(testfile, ["%%MatrixMarket matrix coordinate complex Hermitian",
+                        "3 3 4","1 1 1.0 0.0","2 2 1.0 0.0","3 2 0.5 0.5","3 3 1.0 0.0"])
+    @test sparse(CHOLMOD.Sparse(testfile)) == [1 0 0;0 1 0.5-0.5im;0 0.5+0.5im 1]
+    rm(testfile)
+
+    writedlm(testfile, ["%%MatrixMarket matrix coordinate real symmetric","%3 3 4","1 1 1","2 2 1","3 2 0.5","3 3 1"])
+    @test_throws ArgumentError sparse(CHOLMOD.Sparse(testfile))
+    rm(testfile)
 end
 
 # test that Sparse(Ptr) constructor throws the right places
