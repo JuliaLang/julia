@@ -424,7 +424,10 @@ sqrt(z::Complex) = sqrt(float(z))
 # end
 
 # compute exp(im*theta)
-cis(theta::Real) = Complex(cos(theta),sin(theta))
+function cis(theta::Real)
+    s, c = sincos(theta)
+    Complex(c, s)
+end
 
 """
     cis(z)
@@ -433,7 +436,8 @@ Return ``\\exp(iz)``.
 """
 function cis(z::Complex)
     v = exp(-imag(z))
-    Complex(v*cos(real(z)), v*sin(real(z)))
+    s, c = sincos(real(z))
+    Complex(v * c, v * s)
 end
 
 """
@@ -510,7 +514,8 @@ function exp(z::Complex)
         if iszero(zi)
             Complex(er, zi)
         else
-            Complex(er*cos(zi), er*sin(zi))
+            s, c = sincos(zi)
+            Complex(er * c, er * s)
         end
     end
 end
@@ -538,7 +543,8 @@ function expm1(z::Complex{T}) where T<:Real
                 wr = erm1 - 2 * er * (sin(convert(Tf, 0.5) * zi))^2
                 return Complex(wr, er * sin(zi))
             else
-                return Complex(er * cos(zi), er * sin(zi))
+                s, c = sincos(zi)
+                return Complex(er * c, er * s)
             end
         end
     end
@@ -600,13 +606,15 @@ end
 function exp2(z::Complex{T}) where T
     er = exp2(real(z))
     theta = imag(z) * log(convert(T, 2))
-    Complex(er*cos(theta), er*sin(theta))
+    s, c = sincos(theta)
+    Complex(er * c, er * s)
 end
 
 function exp10(z::Complex{T}) where T
     er = exp10(real(z))
     theta = imag(z) * log(convert(T, 10))
-    Complex(er*cos(theta), er*sin(theta))
+    s, c = sincos(theta)
+    Complex(er * c, er * s)
 end
 
 function ^(z::T, p::T) where T<:Complex
@@ -628,8 +636,7 @@ function ^(z::T, p::T) where T<:Complex
         rp = rp*exp(-pim*theta)
         ntheta = ntheta + pim*log(r)
     end
-    cosntheta = cos(ntheta)
-    sinntheta = sin(ntheta)
+    sinntheta, cosntheta = sincos(ntheta)
     re, im = rp*cosntheta, rp*sinntheta
     if isinf(rp)
         if isnan(re)
@@ -689,7 +696,8 @@ function sin(z::Complex{T}) where T
             Complex(F(NaN), F(NaN))
         end
     else
-        Complex(sin(zr)*cosh(zi), cos(zr)*sinh(zi))
+        s, c = sincos(zr)
+        Complex(s * cosh(zi), c * sinh(zi))
     end
 end
 
@@ -708,7 +716,8 @@ function cos(z::Complex{T}) where T
             Complex(F(NaN), F(NaN))
         end
     else
-        Complex(cos(zr)*cosh(zi), -sin(zr)*sinh(zi))
+        s, c = sincos(zr)
+        Complex(c * cosh(zi), -s * sinh(zi))
     end
 end
 
