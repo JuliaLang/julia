@@ -329,6 +329,9 @@ end
 
 ## nrm2
 
+stride1(x) = stride(x,1)
+stride1(x::Array) = 1
+
 """
     nrm2(n, X, incx)
 
@@ -358,8 +361,7 @@ for (fname, elty, ret_type) in ((:dnrm2_,:Float64,:Float64),
         end
     end
 end
-nrm2(x::StridedVector) = nrm2(length(x), pointer(x), stride(x,1))
-nrm2(x::Array) = nrm2(length(x), pointer(x), 1)
+nrm2(x::Union{StridedVector,Array}) = nrm2(length(x), pointer(x), stride1(x))
 
 ## asum
 
@@ -392,8 +394,7 @@ for (fname, elty, ret_type) in ((:dasum_,:Float64,:Float64),
         end
     end
 end
-asum(x::StridedVector) = asum(length(x), pointer(x), stride(x,1))
-asum(x::Array) = asum(length(x), pointer(x), 1)
+asum(x::Union{StridedVector,Array}) = asum(length(x), pointer(x), stride1(x))
 
 ## axpy
 
@@ -473,8 +474,7 @@ for (fname, elty) in ((:idamax_,:Float64),
         end
     end
 end
-iamax(dx::StridedVector) = iamax(length(dx), pointer(dx), stride(dx,1))
-iamax(dx::Array) = iamax(length(dx), pointer(dx), 1)
+iamax(dx::Union{StridedVector,Array}) = iamax(length(dx), pointer(dx), stride1(dx))
 
 # Level 2
 ## mv
