@@ -510,6 +510,16 @@ The keyword arguments are:
     repository.
 
 Equivalent to `git clone [-b <branch>] [--bare] <repo_url> <repo_path>`.
+
+# Examples
+
+```julia
+repo_url = "https://github.com/JuliaLang/Example.jl"
+repo1 = LibGit2.clone(repo_url, "test_path")
+repo2 = LibGit2.clone(repo_url, "test_path", isbare=true)
+julia_url = "https://github.com/JuliaLang/julia"
+julia_repo = LibGit2.clone(julia_url, "julia_path", branch="release-0.6")
+```
 """
 function clone(repo_url::AbstractString, repo_path::AbstractString;
                branch::AbstractString="",
