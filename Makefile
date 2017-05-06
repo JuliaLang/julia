@@ -158,7 +158,7 @@ release-candidate: release testall
 	@echo 6. Clean out old .tar.gz files living in deps/, "\`git clean -fdx\`" seems to work	#"`
 	@echo 7. Replace github release tarball with tarballs created from make light-source-dist and make full-source-dist
 	@echo 8. Follow packaging instructions in DISTRIBUTING.md to create binary packages for all platforms
-	@echo 9. Upload to AWS, update http://julialang.org/downloads and http://status.julialang.org/stable links
+	@echo 9. Upload to AWS, update https://julialang.org/downloads and http://status.julialang.org/stable links
 	@echo 10. Update checksums on AWS for tarball and packaged binaries
 	@echo 11. Announce on mailing lists
 	@echo 12. Change master to release-0.X in base/version.jl and base/version_git.sh as in 4cb1e20
@@ -416,7 +416,7 @@ ifneq ($(private_libdir_rel),$(build_private_libdir_rel))
 ifeq ($(OS), Darwin)
 	for julia in $(DESTDIR)$(bindir)/julia* ; do \
 		install_name_tool -rpath @executable_path/$(build_private_libdir_rel) @executable_path/$(private_libdir_rel) $$julia; \
-		install_name_tool -rpath @executable_path/$(build_libdir_rel) @executable_path/$(libdir_rel) $$julia; \
+		install_name_tool -add_rpath @executable_path/$(build_libdir_rel) @executable_path/$(libdir_rel) $$julia; \
 	done
 else ifeq ($(OS), Linux)
 	for julia in $(DESTDIR)$(bindir)/julia* ; do \
@@ -512,7 +512,7 @@ light-source-dist: light-source-dist.tmp
 	# Prefix everything with the current directory name (usually "julia"), then create tarball
 	DIRNAME=$$(basename $$(pwd)); \
 	sed -e "s_.*_$$DIRNAME/&_" light-source-dist.tmp > light-source-dist.tmp1; \
-	cd ../ && tar -cz -T $$DIRNAME/light-source-dist.tmp1 --no-recursion -f $$DIRNAME/julia-$(JULIA_VERSION)_$(JULIA_COMMIT).tar.gz
+	cd ../ && tar -cz --no-recursion -T $$DIRNAME/light-source-dist.tmp1 -f $$DIRNAME/julia-$(JULIA_VERSION)_$(JULIA_COMMIT).tar.gz
 
 source-dist:
 	@echo \'source-dist\' target is deprecated: use \'full-source-dist\' instead.
@@ -530,7 +530,7 @@ full-source-dist: light-source-dist.tmp
 	# Prefix everything with the current directory name (usually "julia"), then create tarball
 	DIRNAME=$$(basename $$(pwd)); \
 	sed -e "s_.*_$$DIRNAME/&_" full-source-dist.tmp > full-source-dist.tmp1; \
-	cd ../ && tar -cz -T $$DIRNAME/full-source-dist.tmp1 --no-recursion -f $$DIRNAME/julia-$(JULIA_VERSION)_$(JULIA_COMMIT)-full.tar.gz
+	cd ../ && tar -cz --no-recursion -T $$DIRNAME/full-source-dist.tmp1 -f $$DIRNAME/julia-$(JULIA_VERSION)_$(JULIA_COMMIT)-full.tar.gz
 
 clean: | $(CLEAN_TARGETS)
 	@-$(MAKE) -C $(BUILDROOT)/base clean
@@ -619,7 +619,7 @@ else
 endif
 	cd $(JULIAHOME)/dist-extras && \
 	$(JLDOWNLOAD) http://downloads.sourceforge.net/sevenzip/7z920_extra.7z && \
-	$(JLDOWNLOAD) https://unsis.googlecode.com/files/nsis-2.46.5-Unicode-setup.exe && \
+	$(JLDOWNLOAD) https://storage.googleapis.com/google-code-archive-downloads/v2/code.google.com/unsis/nsis-2.46.5-Unicode-setup.exe && \
 	chmod a+x 7z.exe && \
 	chmod a+x 7z.dll && \
 	$(call spawn,./7z.exe) x -y -onsis nsis-2.46.5-Unicode-setup.exe && \

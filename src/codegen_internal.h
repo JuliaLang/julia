@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #if defined(LLVM38) && !defined(LLVM37)
 #  include <llvm/ExecutionEngine/Orc/ObjectLinkingLayer.h>

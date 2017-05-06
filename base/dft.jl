@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module DFT
 
@@ -394,7 +394,7 @@ end
 ##############################################################################
 
 # FFTW module (may move to an external package at some point):
-if Base.USE_GPL_LIBS
+if Base.USE_GPL_LIBS || Base.fftw_vendor() == :mkl
     @doc """
         fft(A [, dims])
 

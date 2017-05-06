@@ -641,6 +641,7 @@ JCFLAGS += -fsigned-char
 LLVM_VER:=3.9.0
 OPENBLAS_DYNAMIC_ARCH:=0
 OPENBLAS_TARGET_ARCH:=POWER8
+BINARY:=64
 # GCC doesn't do -march= on ppc64le
 MARCH=
 endif
@@ -976,9 +977,16 @@ MKLLIB := $(MKLROOT)/lib/ia32
 endif
 USE_SYSTEM_BLAS:=1
 USE_SYSTEM_LAPACK:=1
+ifeq ($(OS), WINNT)
+LIBBLASNAME := mkl_rt
+LIBLAPACKNAME := mkl_rt
+# work around libtool issue with arpack
+MKL_LDFLAGS := -L$(MKLLIB) -Wl,-lmkl_rt
+else
 LIBBLASNAME := libmkl_rt
 LIBLAPACKNAME := libmkl_rt
 MKL_LDFLAGS := -L$(MKLLIB) -lmkl_rt
+endif
 ifneq ($(strip $(MKLLIB)),)
   ifeq ($(OS), Linux)
     RPATH_MKL := -Wl,-rpath,$(MKLLIB)

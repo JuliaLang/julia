@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 import Base.LinAlg, Base.LinAlg.BlasReal, Base.LinAlg.BlasComplex
 
@@ -116,31 +116,32 @@ for elty in [Float32, Float64, Complex64, Complex128]
 
         # trsv
         A = triu(rand(elty,n,n))
-        x = rand(elty,n)
-        @test A\x ≈ BLAS.trsv('U','N','N',A,x)
-        @test_throws DimensionMismatch BLAS.trsv('U','N','N',A,ones(elty,n+1))
-
+        for x in (rand(elty, n), view(rand(elty,2n),1:2:2n))
+            @test A\x ≈ BLAS.trsv('U','N','N',A,x)
+            @test_throws DimensionMismatch BLAS.trsv('U','N','N',A,ones(elty,n+1))
+        end
         # ger, her, syr
-        A = rand(elty,n,n)
-        α = rand(elty)
-        x = rand(elty,n)
-        y = rand(elty,n)
-
-        @test BLAS.ger!(α,x,y,copy(A)) ≈ A + α*x*y'
-        @test_throws DimensionMismatch BLAS.ger!(α,ones(elty,n+1),y,copy(A))
-
-        A = rand(elty,n,n)
-        A = A + A.'
-        @test issymmetric(A)
-        @test triu(BLAS.syr!('U',α,x,copy(A))) ≈ triu(A + α*x*x.')
-        @test_throws DimensionMismatch BLAS.syr!('U',α,ones(elty,n+1),copy(A))
-
-        if elty <: Complex
+        for x in (rand(elty, n), view(rand(elty,2n), 1:2:2n)),
+                y in (rand(elty,n), view(rand(elty,3n), 1:3:3n))
             A = rand(elty,n,n)
-            A = A + A'
-            α = real(α)
-            @test triu(BLAS.her!('U',α,x,copy(A))) ≈ triu(A + α*x*x')
-            @test_throws DimensionMismatch BLAS.her!('U',α,ones(elty,n+1),copy(A))
+            α = rand(elty)
+
+            @test BLAS.ger!(α,x,y,copy(A)) ≈ A + α*x*y'
+            @test_throws DimensionMismatch BLAS.ger!(α,ones(elty,n+1),y,copy(A))
+
+            A = rand(elty,n,n)
+            A = A + A.'
+            @test issymmetric(A)
+            @test triu(BLAS.syr!('U',α,x,copy(A))) ≈ triu(A + α*x*x.')
+            @test_throws DimensionMismatch BLAS.syr!('U',α,ones(elty,n+1),copy(A))
+
+            if elty <: Complex
+                A = rand(elty,n,n)
+                A = A + A'
+                α = real(α)
+                @test triu(BLAS.her!('U',α,x,copy(A))) ≈ triu(A + α*x*x')
+                @test_throws DimensionMismatch BLAS.her!('U',α,ones(elty,n+1),copy(A))
+            end
         end
 
         # copy

@@ -1,7 +1,7 @@
 <a name="logo"/>
 <div align="center">
-<a href="http://julialang.org/" target="_blank">
-<img src="http://julialang.org/images/logo_hires.png" alt="Julia Logo" width="210" height="142"></img>
+<a href="https://julialang.org/" target="_blank">
+<img src="https://julialang.org/images/logo_hires.png" alt="Julia Logo" width="210" height="142"></img>
 </a>
 </div>
 
@@ -15,19 +15,19 @@ Code Coverage: [![Coverage Status](https://coveralls.io/repos/JuliaLang/julia/ba
 ## The Julia Language
 
 Julia is a high-level, high-performance dynamic language for technical computing.
-The main homepage for Julia can be found at [julialang.org](http://julialang.org/).
+The main homepage for Julia can be found at [julialang.org](https://julialang.org/).
 This is the GitHub repository of Julia source code, including instructions for compiling and installing Julia, below.
 
 <a name="Resources"/>
 ## Resources
 
-- **Homepage:** <http://julialang.org>
-- **Binaries:** <http://julialang.org/downloads/>
-- **Documentation:** <http://docs.julialang.org/>
+- **Homepage:** <https://julialang.org>
+- **Binaries:** <https://julialang.org/downloads/>
+- **Documentation:** <https://docs.julialang.org/>
 - **Packages:** <http://pkg.julialang.org/>
 - **Source code:** <https://github.com/JuliaLang/julia>
 - **Git clone URL:** <git://github.com/JuliaLang/julia.git>
-- **Mailing lists:** <http://julialang.org/community/>
+- **Mailing lists:** <https://julialang.org/community/>
 - **Gitter:** <https://gitter.im/JuliaLang/julia>
 - **IRC:** <http://webchat.freenode.net/?channels=julia>
 - **Code coverage:** <https://coveralls.io/r/JuliaLang/julia>
@@ -106,7 +106,7 @@ the `julia` source directory, type `make testall`. You should see output
 that lists a series of tests being run; if they complete without
 error, you should be in good shape to start using Julia.
 
-You can read about [getting started](http://julialang.org/manual/getting-started) in the manual.
+You can read about [getting started](https://julialang.org/manual/getting-started) in the manual.
 
 If you are building a Julia package for distribution on Linux, OS X,
 or Windows, take a look at the detailed notes in
@@ -334,7 +334,7 @@ For a longer overview of Julia's dependencies, see these [slides](https://github
 [double-conversion]: http://double-conversion.googlecode.com
 [libuv]:        https://github.com/JuliaLang/libuv
 [libgit2]:      https://libgit2.github.com/
-[utf8proc]:     http://julialang.org/utf8proc/
+[utf8proc]:     https://julialang.org/utf8proc/
 [libosxunwind]: https://github.com/JuliaLang/libosxunwind
 [libunwind]:    http://www.nongnu.org/libunwind
 [openssl]:      https://www.openssl.org
@@ -394,7 +394,7 @@ The Julia source code is organized as follows:
 <a name="Binary-Installation"/>
 ## Binary Installation
 
-Because of the rapid pace of development at this point, we recommend installing the latest Julia from source, but platform-specific tarballs with pre-compiled binaries are also [available for download](http://julialang.org/downloads/).
+Because of the rapid pace of development at this point, we recommend installing the latest Julia from source, but platform-specific tarballs with pre-compiled binaries are also [available for download](https://julialang.org/downloads/).
 
 You can either run the `julia` executable using its full path in the directory created above, or add that directory to your executable path so that you can run the Julia program from anywhere (in the current shell session):
 
@@ -407,7 +407,7 @@ Now you should be able to run Julia like this:
 On Windows, double-click `usr/bin/julia.exe`.
 
 If everything works correctly, you will see a Julia banner and an interactive prompt into which you can enter expressions for evaluation.
-You can read about [getting started](http://julialang.org/manual/getting-started) in the manual.
+You can read about [getting started](https://julialang.org/manual/getting-started) in the manual.
 
 The following distributions include julia, but the versions may be out of date due to rapid development:
 
@@ -449,4 +449,4 @@ is available through
 [Sublime-IJulia](https://github.com/quinnj/Sublime-IJulia) plugin
 enables interaction between IJulia and Sublime Text.
 
-In the terminal, Julia makes great use of both control-key and meta-key bindings. To make the meta-key bindings more accessible, many terminal emulator programs (e.g., `Terminal`, `iTerm`, `xterm`, etc.) allow you to use the alt or option key as meta.  See the section in the manual on [interacting with Julia](http://docs.julialang.org/en/release-0.5/manual/interacting-with-julia/) for more details.
+In the terminal, Julia makes great use of both control-key and meta-key bindings. To make the meta-key bindings more accessible, many terminal emulator programs (e.g., `Terminal`, `iTerm`, `xterm`, etc.) allow you to use the alt or option key as meta.  See the section in the manual on [interacting with Julia](https://docs.julialang.org/en/release-0.5/manual/interacting-with-julia/) for more details.

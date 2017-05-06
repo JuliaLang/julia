@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Test getindex for skinny sparse matrix
 function sparse_getindex_skinny_perf()

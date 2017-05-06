@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.Test
 
@@ -151,13 +151,13 @@ try
         @test stringmime("text/plain", Base.Docs.doc(Foo.foo)) == "foo function\n"
         @test stringmime("text/plain", Base.Docs.doc(Foo.Bar.bar)) == "bar function\n"
 
-        modules, deps = Base.parse_cache_header(cachefile)
+        modules, deps, required_modules = Base.parse_cache_header(cachefile)
         @test modules == Dict(Foo_module => Base.module_uuid(Foo))
         @test map(x -> x[1],  sort(deps)) == [Foo_file, joinpath(dir, "bar.jl"), joinpath(dir, "foo.jl")]
 
         modules, deps1 = Base.cache_dependencies(cachefile)
-        @test sort(modules) == Any[(s, Base.module_uuid(getfield(Foo, s))) for s in
-                                   [:Base, :Core, FooBase_module, :Main]]
+        @test modules == Dict(s => Base.module_uuid(getfield(Foo, s)) for s in
+                                    [:Base, :Core, FooBase_module, :Main])
         @test deps == deps1
 
         @test current_task()(0x01, 0x4000, 0x30031234) == 2
@@ -317,6 +317,41 @@ try
         !isempty(search(exc.msg, "ERROR: LoadError: break me")) && rethrow(exc)
     end
     wait(t)
+
+    # Test transitive dependency for #21266
+    FooBarT_file = joinpath(dir, "FooBarT.jl")
+    write(FooBarT_file,
+          """
+          __precompile__(true)
+          module FooBarT
+          end
+          """)
+    FooBarT1_file = joinpath(dir, "FooBarT1.jl")
+    write(FooBarT1_file,
+          """
+          __precompile__(true)
+          module FooBarT1
+              using FooBarT
+          end
+          """)
+    FooBarT2_file = joinpath(dir, "FooBarT2.jl")
+    write(FooBarT2_file,
+          """
+          __precompile__(true)
+          module FooBarT2
+              using FooBarT1
+          end
+          """)
+    Base.compilecache("FooBarT2")
+    write(FooBarT1_file,
+          """
+          __precompile__(true)
+          module FooBarT1
+          end
+          """)
+    rm(FooBarT_file)
+    @test Base.stale_cachefile(FooBarT2_file, joinpath(dir2, "FooBarT2.ji"))
+    @test Base.require(:FooBarT2) === nothing
 finally
     if STDERR != olderr
         close(STDERR)
@@ -368,6 +403,39 @@ let dir = mktempdir(),
     finally
         splice!(Base.LOAD_CACHE_PATH, 1)
         splice!(LOAD_PATH, 1)
+        rm(dir, recursive=true)
+    end
+end
+
+# test loading a package with conflicting namespace
+let dir = mktempdir()
+    Test_module = :Test6c92f26
+    try
+        write(joinpath(dir, "Iterators.jl"),
+              """
+              module Iterators
+                   __precompile__(true)
+              end
+              """)
+
+        write(joinpath(dir, "$Test_module.jl"),
+              """
+              module $Test_module
+                   __precompile__(true)
+                   using Iterators
+              end
+              """)
+
+        testcode = """
+            insert!(LOAD_PATH, 1, $(repr(dir)))
+            insert!(Base.LOAD_CACHE_PATH, 1, $(repr(dir)))
+            using $Test_module
+        """
+
+        exename = `$(Base.julia_cmd()) --startup-file=no`
+        @test readchomp(`$exename -E $(testcode)`) == "nothing"
+        @test readchomp(`$exename -E $(testcode)`) == "nothing"
+    finally
         rm(dir, recursive=true)
     end
 end

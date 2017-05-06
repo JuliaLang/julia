@@ -22,7 +22,7 @@ New language features
     types instead of to their values. The function then returns an expression forming the
     body of the function to be called at run time ([#7311]).
 
-  * [Documentation system](http://docs.julialang.org/en/release-0.5/manual/documentation/)
+  * [Documentation system](https://docs.julialang.org/en/release-0.5/manual/documentation/)
     for functions, methods, types and macros in packages and user code ([#8791]).
 
   * The syntax `function foo end` can be used to introduce a generic function without
@@ -52,11 +52,11 @@ New language features
   * `++` is now parsed as an infix operator, but does not yet have a default definition ([#11030], [#11686]).
 
   * Support for inter-task communication using `Channels` ([#12264]).
-    See http://docs.julialang.org/en/release-0.5/manual/parallel-computing/#channels for details.
+    See https://docs.julialang.org/en/release-0.5/manual/parallel-computing/#channels for details.
 
   * `RemoteRef`s now point to remote channels. The remote channels can be of length greater than 1.
     Default continues to be of length 1 ([#12385]).
-    See http://docs.julialang.org/en/release-0.5/manual/parallel-computing/#remoterefs-and-abstractchannels for details.
+    See https://docs.julialang.org/en/release-0.5/manual/parallel-computing/#remoterefs-and-abstractchannels for details.
 
   * `@__LINE__` special macro now available to reflect invocation source line number ([#12727]).
 
@@ -1257,8 +1257,8 @@ Bugfixes and performance updates
 
 Too numerous to mention.
 
-[packages chapter]: http://docs.julialang.org/en/release-0.5/manual/packages/
-[sorting functions]: http://docs.julialang.org/en/release-0.5/stdlib/sort/
+[packages chapter]: https://docs.julialang.org/en/release-0.5/manual/packages/
+[sorting functions]: https://docs.julialang.org/en/release-0.5/stdlib/sort/
 [pairwise summation]: https://en.wikipedia.org/wiki/Pairwise_summation
 [a448e080]: https://github.com/JuliaLang/julia/commit/a448e080dc736c7fb326426dfcb2528be36973d3
 [5e3f074b]: https://github.com/JuliaLang/julia/commit/5e3f074b9173044a0a4219f9b285879ff7cec041

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 let io = IOBuffer()
     show(io, UnicodeError(Base.UTF_ERR_SHORT, 1, 10))

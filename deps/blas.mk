@@ -74,9 +74,16 @@ endif
 # Do not overwrite the "-j" flag
 OPENBLAS_BUILD_OPTS += MAKE_NB_JOBS=0
 
-$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/config.status: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/Makefile
-	perl -i -ple 's/^\s*(EXTRALIB\s*\+=\s*-lSystemStubs)\s*$$/# $$1/g' $<.system
+# Power inline assembly fixes from https://github.com/xianyi/OpenBLAS/pull/1098
+# Remove this when we upgrade beyond OpenBLAS v0.2.19
+$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-power-assembly-fixes.patch-applied: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/Makefile
+	cd $(BUILDDIR)/$(OPENBLAS_SRC_DIR) && patch -p1 -f < $(SRCDIR)/patches/openblas-power-assembly-fixes.patch
+	echo 1 > $@
+
+$(BUILDDIR)/$(OPENBLAS_SRC_DIR)/config.status: $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/openblas-power-assembly-fixes.patch-applied
+	perl -i -ple 's/^\s*(EXTRALIB\s*\+=\s*-lSystemStubs)\s*$$/# $$1/g' $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/Makefile.system
 	touch $@
+
 $(OPENBLAS_OBJ_SOURCE): $(BUILDDIR)/$(OPENBLAS_SRC_DIR)/config.status
 	echo $(MAKE) -C $(dir $<) $(OPENBLAS_BUILD_OPTS) # echo first, so we only print the error message below in a failure case
 	@$(MAKE) -C $(dir $<) $(OPENBLAS_BUILD_OPTS) || (echo $(WARNCOLOR)"*** Clean the OpenBLAS build with 'make -C deps clean-openblas'. Rebuild with 'make OPENBLAS_USE_THREAD=0' if OpenBLAS had trouble linking libpthread.so, and with 'make OPENBLAS_TARGET_ARCH=NEHALEM' if there were errors building SandyBridge support. Both these options can also be used simultaneously. ***"$(ENDCOLOR) && false)

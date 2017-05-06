@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # fold(l|r) & mapfold(l|r)
 @test foldl(-, 1:5) == -13
@@ -22,14 +22,37 @@
 @test Base.mapfoldr(abs2, -, 2:5) == -14
 @test Base.mapfoldr(abs2, -, 10, 2:5) == -4
 
-# reduce & mapreduce
+# reduce
 @test reduce((x,y)->"($x+$y)", 9:11) == "((9+10)+11)"
 @test reduce(max, [8 6 7 5 3 0 9]) == 9
 @test reduce(+, 1000, 1:5) == (1000 + 1 + 2 + 3 + 4 + 5)
 @test reduce(+,1) == 1
 
+# mapreduce
 @test mapreduce(-, +, [-10 -9 -3]) == ((10 + 9) + 3)
 @test mapreduce((x)->x[1:3], (x,y)->"($x+$y)", ["abcd", "efgh", "01234"]) == "((abc+efg)+012)"
+
+# mapreduce() for 1- 2- and n-sized blocks (PR #19325)
+@test mapreduce(-, +, [-10]) == 10
+@test mapreduce(abs2, +, [-9, -3]) == 81 + 9
+@test mapreduce(-, +, [-9, -3, -4, 8, -2]) == (9 + 3 + 4 - 8 + 2)
+@test mapreduce(-, +, collect(linspace(1.0, 10000.0, 10000))) == -50005000.0
+# mapreduce() type stability
+@test typeof(mapreduce(*, +, Int8[10])) ===
+      typeof(mapreduce(*, +, Int8[10, 11])) ===
+      typeof(mapreduce(*, +, Int8[10, 11, 12, 13]))
+@test typeof(mapreduce(*, +, Float32[10.0])) ===
+      typeof(mapreduce(*, +, Float32[10, 11])) ===
+      typeof(mapreduce(*, +, Float32[10, 11, 12, 13]))
+# mapreduce() type stability when f supports empty collections
+@test typeof(mapreduce(abs, +, Int8[])) ===
+      typeof(mapreduce(abs, +, Int8[10])) ===
+      typeof(mapreduce(abs, +, Int8[10, 11])) ===
+      typeof(mapreduce(abs, +, Int8[10, 11, 12, 13]))
+@test typeof(mapreduce(abs, +, Float32[])) ===
+      typeof(mapreduce(abs, +, Float32[10])) ===
+      typeof(mapreduce(abs, +, Float32[10, 11])) ===
+      typeof(mapreduce(abs, +, Float32[10, 11, 12, 13]))
 
 # sum
 

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 function GitStatus(repo::GitRepo; status_opts=StatusOptions())
     stat_ptr_ptr = Ref{Ptr{Void}}(C_NULL)

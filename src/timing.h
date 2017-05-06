@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #ifndef ENABLE_TIMINGS
 #define JL_TIMING(owner)

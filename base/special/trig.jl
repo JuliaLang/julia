@@ -1,5 +1,5 @@
 # This file is a part of Julia. Except for the *_kernel functions (see below),
-# license is MIT: http://julialang.org/license
+# license is MIT: https://julialang.org/license
 
 immutable DoubleFloat64
     hi::Float64

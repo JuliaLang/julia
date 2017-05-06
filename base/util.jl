@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # timing
 
@@ -287,7 +287,7 @@ macro timed(ex)
 end
 
 function fftw_vendor()
-    if Base.libfftw_name == "libmkl_rt"
+    if Base.libfftw_name in ("libmkl_rt", "mkl_rt")
         return :mkl
     else
         return :fftw

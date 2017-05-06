@@ -1094,7 +1094,7 @@ More About Callbacks
 --------------------
 
 For more details on how to pass callbacks to C libraries, see this
-`blog post <http://julialang.org/blog/2013/05/callback>`_.
+`blog post <https://julialang.org/blog/2013/05/callback>`_.
 
 C++
 ---

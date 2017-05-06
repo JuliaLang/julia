@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 import Base.Pkg.PkgError
 
@@ -459,6 +459,24 @@ temp_pkg_dir() do
         msg = readstring(ignorestatus(`$(Base.julia_cmd()) --startup-file=no -e "redirect_stderr(STDOUT); Pkg.build(\"$package\")"`))
         @test contains(msg, "$package is not an installed package")
         @test !contains(msg, "signal (15)")
+    end
+
+    # issue #20695
+    Pkg.cd() do
+        @test Pkg.Entry.url_and_pkg("Example") == ("git://github.com/JuliaLang/Example.jl.git", "Example")
+        for url = [
+            "https://github.com/Org/Nonsense",
+            "git@github.com:Org/Nonsense",
+            "file:///home/user/Nonsense",
+            "/home/user/Nonsense",
+        ]
+            @test Pkg.Entry.url_and_pkg(url) == (url, "Nonsense")
+            @test Pkg.Entry.url_and_pkg("$url.jl") == ("$url.jl", "Nonsense")
+            @test Pkg.Entry.url_and_pkg("$url.git") == ("$url.git", "Nonsense")
+            @test Pkg.Entry.url_and_pkg("$url.jl.git") == ("$url.jl.git", "Nonsense")
+        end
+        pkg = randstring(20)
+        @test Pkg.Entry.url_and_pkg(pkg) == (pkg, pkg)
     end
 
     # partial Pkg.update

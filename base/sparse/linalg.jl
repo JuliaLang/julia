@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 import Base.LinAlg: checksquare
 
@@ -864,7 +864,7 @@ function (\)(A::SparseMatrixCSC, B::AbstractVecOrMat)
             return UpperTriangular(A) \ B
         end
         if ishermitian(A)
-            Hermitian(A) \ B
+            return Hermitian(A) \ B
         end
         return lufact(A) \ B
     else

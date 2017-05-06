@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module LibGit2
 
@@ -292,14 +292,14 @@ function checkout!(repo::GitRepo, commit::AbstractString = "";
         opts = force ? CheckoutOptions(checkout_strategy = Consts.CHECKOUT_FORCE) :
                        CheckoutOptions()
         try
+            # checkout commit
+            checkout_tree(repo, peeled, options = opts)
+
             # detach commit
             obj_oid = Oid(peeled)
             ref = GitReference(repo, obj_oid, force=force,
                 msg="libgit2.checkout: moving from $head_name to $(string(obj_oid))")
             finalize(ref)
-
-            # checkout commit
-            checkout_tree(repo, peeled, options = opts)
         finally
             finalize(peeled)
         end

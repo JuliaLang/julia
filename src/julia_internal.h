@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #ifndef JULIA_INTERNAL_H
 #define JULIA_INTERNAL_H
@@ -116,6 +116,7 @@ STATIC_INLINE int jl_gc_alignment(size_t sz)
     return 16;
 #endif
 }
+JL_DLLEXPORT int jl_alignment(size_t sz);
 
 STATIC_INLINE int JL_CONST_FUNC jl_gc_szclass(size_t sz)
 {

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## array.jl: Dense arrays
 
@@ -413,7 +413,7 @@ end
 
 ## Indexing: setindex! ##
 setindex!{T}(A::Array{T}, x, i1::Real) = arrayset(A, convert(T,x)::T, to_index(i1))
-setindex!{T}(A::Array{T}, x, i1::Real, i2::Real, I::Real...) = arrayset(A, convert(T,x)::T, to_index(i1), to_index(i2), to_indexes(I...)...) # TODO: REMOVE FOR #14770
+setindex!{T}(A::Array{T}, x, i1::Real, i2::Real, I::Real...) = (@_inline_meta; arrayset(A, convert(T,x)::T, to_index(i1), to_index(i2), to_indexes(I...)...)) # TODO: REMOVE FOR #14770
 
 # These are redundant with the abstract fallbacks but needed for bootstrap
 function setindex!(A::Array, x, I::AbstractVector{Int})

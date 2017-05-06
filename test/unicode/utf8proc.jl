@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # normalize_string (Unicode normalization etc.):
 @test normalize_string("\u006e\u0303", :NFC) == "\u00f1"

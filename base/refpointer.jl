@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # C NUL-terminated string pointers; these can be used in ccall
 # instead of Ptr{Cchar} and Ptr{Cwchar_t}, respectively, to enforce

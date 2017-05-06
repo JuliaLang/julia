@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # parsing tests
 @test v"2" == VersionNumber(2)
@@ -241,3 +241,30 @@ io = IOBuffer()
 @test VersionNumber(true, 0x2, Int128(3), (GenericString("rc"), 0x1)) == v"1.2.3-rc.1"
 @test VersionNumber(true, 0x2, Int128(3), (GenericString("rc"), 0x1)) == v"1.2.3-rc.1"
 @test VersionNumber(true, 0x2, Int128(3), (), (GenericString("sp"), 0x2)) == v"1.2.3+sp.2"
+
+# VersionSet tests
+
+import Base.Pkg.Types: VersionInterval, VersionSet
+
+function chkint(a::VersionSet)
+    ints = a.intervals
+    for k = 1:length(ints)
+        ints[k].lower < ints[k].upper || return false
+        k < length(ints) && (ints[k].upper < ints[k+1].lower || return false)
+    end
+    return true
+end
+
+# VersionSet unions
+for t = 1:1_000
+    a = VersionSet(map(x->VersionNumber(x, rand(0:3)), sort!(unique(rand(0:8, rand(0:10)))))...)
+    b = VersionSet(map(x->VersionNumber(x, rand(0:3)), sort!(unique(rand(0:8, rand(0:10)))))...)
+    @assert chkint(a)
+    @assert chkint(b)
+    u = union(a, b)
+    @test chkint(u)
+    for vM = 0:9, vm = 0:5
+        v = VersionNumber(vM, vm)
+        @test (v ∈ a || v ∈ b) ? (v ∈ u) : (v ∉ u)
+    end
+end

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.Test
 using Base.Threads
@@ -273,7 +273,8 @@ let atomic_types = [Int8, Int16, Int32, Int64, Int128,
                     Float16, Float32, Float64]
     # Temporarily omit 128-bit types on 32bit x86
     # 128-bit atomics do not exist on AArch32.
-    # And we don't support them yet on power.
+    # And we don't support them yet on power, because they are lowered
+    # to `__sync_lock_test_and_set_16`.
     if Sys.ARCH === :i686 || startswith(string(Sys.ARCH), "arm") ||
        Sys.ARCH === :powerpc64le || Sys.ARCH === :ppc64le
         filter!(T -> sizeof(T)<=8, atomic_types)

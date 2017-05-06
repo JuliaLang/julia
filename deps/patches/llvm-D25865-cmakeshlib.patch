@@ -1,0 +1,83 @@
+From 417001588d232151050db2d32df443e2d073ebbf Mon Sep 17 00:00:00 2001
+From: Valentin Churavy <v.churavy@gmail.com>
+Date: Fri, 21 Oct 2016 17:25:04 +0900
+Subject: [PATCH] Fix llvm-shlib cmake build
+
+Summary:
+This fixes a few things that used to work with a Makefile build, but were broken in cmake.
+
+1. Treat MINGW like a Linux system.
+2. The shlib should never contain other shared libraries.
+
+Subscribers: beanz, mgorny
+
+Differential Revision: https://reviews.llvm.org/D25865
+---
+ tools/llvm-shlib/CMakeLists.txt | 42 ++++++++++++++++++++---------------------
+ 1 file changed, 20 insertions(+), 22 deletions(-)
+
+diff --git a/tools/llvm-shlib/CMakeLists.txt b/tools/llvm-shlib/CMakeLists.txt
+index 3fe672d..edadb82 100644
+--- a/tools/llvm-shlib/CMakeLists.txt
++++ b/tools/llvm-shlib/CMakeLists.txt
+@@ -8,29 +8,27 @@ set(SOURCES
+ 
+ llvm_map_components_to_libnames(LIB_NAMES ${LLVM_DYLIB_COMPONENTS})
+ 
+-if(LLVM_LINK_LLVM_DYLIB)
+-  if(LLVM_DYLIB_EXPORTED_SYMBOL_FILE)
+-    message(WARNING "Using LLVM_LINK_LLVM_DYLIB with LLVM_DYLIB_EXPORTED_SYMBOL_FILE may not work. Use at your own risk.")
+-  endif()
+-
+-  # libLLVM.so should not have any dependencies on any other LLVM
+-  # shared libraries. When using the "all" pseudo-component,
+-  # LLVM_AVAILABLE_LIBS is added to the dependencies, which may
+-  # contain shared libraries (e.g. libLTO).
+-  #
+-  # Also exclude libLLVMTableGen for the following reasons:
+-  #  - it is only used by internal *-tblgen utilities;
+-  #  - it pollutes the global options space.
+-  foreach(lib ${LIB_NAMES})
+-    get_target_property(t ${lib} TYPE)
+-    if("${lib}" STREQUAL "LLVMTableGen")
+-    elseif("x${t}" STREQUAL "xSTATIC_LIBRARY")
+-      list(APPEND FILTERED_LIB_NAMES ${lib})
+-    endif()
+-  endforeach()
+-  set(LIB_NAMES ${FILTERED_LIB_NAMES})
++if(LLVM_LINK_LLVM_DYLIB AND LLVM_DYLIB_EXPORTED_SYMBOL_FILE)
++  message(WARNING "Using LLVM_LINK_LLVM_DYLIB with LLVM_DYLIB_EXPORTED_SYMBOL_FILE may not work. Use at your own risk.")
+ endif()
+ 
++# libLLVM.so should not have any dependencies on any other LLVM
++# shared libraries. When using the "all" pseudo-component,
++# LLVM_AVAILABLE_LIBS is added to the dependencies, which may
++# contain shared libraries (e.g. libLTO).
++#
++# Also exclude libLLVMTableGen for the following reasons:
++#  - it is only used by internal *-tblgen utilities;
++#  - it pollutes the global options space.
++foreach(lib ${LIB_NAMES})
++  get_target_property(t ${lib} TYPE)
++  if("${lib}" STREQUAL "LLVMTableGen")
++  elseif("x${t}" STREQUAL "xSTATIC_LIBRARY")
++    list(APPEND FILTERED_LIB_NAMES ${lib})
++  endif()
++endforeach()
++set(LIB_NAMES ${FILTERED_LIB_NAMES})
++
+ if(LLVM_DYLIB_EXPORTED_SYMBOL_FILE)
+   set(LLVM_EXPORTED_SYMBOL_FILE ${LLVM_DYLIB_EXPORTED_SYMBOL_FILE})
+   add_custom_target(libLLVMExports DEPENDS ${LLVM_EXPORTED_SYMBOL_FILE})
+@@ -39,7 +37,7 @@ endif()
+ add_llvm_library(LLVM SHARED DISABLE_LLVM_LINK_LLVM_DYLIB SONAME ${SOURCES})
+ 
+ list(REMOVE_DUPLICATES LIB_NAMES)
+-if("${CMAKE_SYSTEM_NAME}" STREQUAL "Linux") # FIXME: It should be "GNU ld for elf"
++if("${CMAKE_SYSTEM_NAME}" STREQUAL "Linux" OR MINGW) # FIXME: It should be "GNU ld for elf"
+   # GNU ld doesn't resolve symbols in the version script.
+   set(LIB_NAMES -Wl,--whole-archive ${LIB_NAMES} -Wl,--no-whole-archive)
+ elseif("${CMAKE_SYSTEM_NAME}" STREQUAL "Darwin")
+-- 
+2.10.1
+

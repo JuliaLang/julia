@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #ifndef JULIA_H
 #define JULIA_H
@@ -854,10 +854,6 @@ static inline uint32_t jl_fielddesc_size(int8_t fielddesc_type)
 #define jl_is_uint16(v)      jl_typeis(v,jl_uint16_type)
 #define jl_is_uint32(v)      jl_typeis(v,jl_uint32_type)
 #define jl_is_uint64(v)      jl_typeis(v,jl_uint64_type)
-#define jl_is_float(v)       jl_subtype(v,(jl_value_t*)jl_floatingpoint_type,1)
-#define jl_is_floattype(v)   jl_subtype(v,(jl_value_t*)jl_floatingpoint_type,0)
-#define jl_is_float32(v)     jl_typeis(v,jl_float32_type)
-#define jl_is_float64(v)     jl_typeis(v,jl_float64_type)
 #define jl_is_bool(v)        jl_typeis(v,jl_bool_type)
 #define jl_is_symbol(v)      jl_typeis(v,jl_sym_type)
 #define jl_is_ssavalue(v)    jl_typeis(v,jl_ssavalue_type)

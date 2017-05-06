@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 /*
   threading infrastructure
@@ -779,6 +779,13 @@ void jl_init_threading(void)
 void jl_start_threads(void) { }
 
 #endif // !JULIA_ENABLE_THREADING
+
+// Make gc alignment available for threading
+// see threads.jl alignment
+JL_DLLEXPORT int jl_alignment(size_t sz)
+{
+    return jl_gc_alignment(sz);
+}
 
 #ifdef __cplusplus
 }

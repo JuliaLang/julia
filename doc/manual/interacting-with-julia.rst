@@ -9,7 +9,7 @@ Julia comes with a full-featured interactive command-line REPL (read-eval-print 
     $ julia
                    _
        _       _ _(_)_     |  A fresh approach to technical computing
-      (_)     | (_) (_)    |  Documentation: http://docs.julialang.org
+      (_)     | (_) (_)    |  Documentation: https://docs.julialang.org
        _ _   _| |_  __ _   |  Type "help()" to list help topics
       | | | | | | |/ _` |  |
       | | |_| | | | (_| |  |  Version 0.3.0-prerelease+2834 (2014-04-30 03:13 UTC)

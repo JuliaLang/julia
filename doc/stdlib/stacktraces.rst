@@ -32,7 +32,7 @@
    * ``inlined::Bool``
 
      True if the code is from an inlined frame.
-   * ``pointer::Int64``
+   * ``pointer::UInt64``
 
      Representation of the pointer to the execution context as returned by ``backtrace``\ .
 
