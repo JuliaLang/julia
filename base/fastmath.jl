@@ -327,7 +327,10 @@ sincos_fast(v) = (sin_fast(v), cos_fast(v))
 
     # complex numbers
 
-    cis_fast(x::T) where {T<:FloatTypes} = Complex{T}(cos(x), sin(x))
+    function cis_fast(x::T) where {T<:FloatTypes}
+        s, c = sincos_fast(x)
+        Complex{T}(c, s)
+    end
 
     # See <http://en.cppreference.com/w/cpp/numeric/complex>
     pow_fast(x::T, y::T) where {T<:ComplexTypes} = exp(y*log(x))
