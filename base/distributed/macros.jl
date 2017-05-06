@@ -96,8 +96,9 @@ For example :
 will result in `Main.bar` being defined on all processes and not `FooBar.bar`.
 """
 macro everywhere(ex)
+    imps = [Expr(:import, m) for m in extract_imports(ex)]
     quote
-        $(Expr(:toplevel, [Expr(:import, m) for m in extract_imports(ex)]...))
+        $(isempty(imps) ? nothing : Expr(:toplevel, imps...))
         sync_begin()
         for pid in workers()
             async_run_thunk(()->remotecall_fetch(eval_ew_expr, pid, $(Expr(:quote,ex))))
