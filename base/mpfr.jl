@@ -13,7 +13,7 @@ import
         nextfloat, prevfloat, promote_rule, rem, rem2pi, round, show, float,
         sum, sqrt, string, print, trunc, precision, exp10, expm1,
         gamma, lgamma, log1p,
-        eps, signbit, sin, cos, tan, sec, csc, cot, acos, asin, atan,
+        eps, signbit, sin, cos, sincos, tan, sec, csc, cot, acos, asin, atan,
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, atan2,
         cbrt, typemax, typemin, unsafe_trunc, realmin, realmax, rounding,
         setrounding, maxintfloat, widen, significand, frexp, tryparse, iszero, big
@@ -23,6 +23,8 @@ import Base.Rounding: rounding_raw, setrounding_raw
 import Base.GMP: ClongMax, CulongMax, CdoubleMax, Limb
 
 import Base.Math.lgamma_r
+
+import Base.FastMath.sincos_fast
 
 function __init__()
     try
@@ -514,6 +516,15 @@ for f in (:exp, :exp2, :exp10, :expm1, :cosh, :sinh, :tanh, :sech, :csch, :coth,
         return z
     end
 end
+
+function sincos_fast(v::BigFloat)
+    s = BigFloat()
+    c = BigFloat()
+    ccall((:mpfr_sin_cos, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{BigFloat}, Int32),
+          &s, &c, &v, ROUNDING_MODE[])
+    return (s, c)
+end
+sincos(v::BigFloat) = sincos_fast(v)
 
 # return log(2)
 function big_ln2()
