@@ -73,10 +73,6 @@ Base.LinAlg.diagm
 Base.LinAlg.scale!
 Base.LinAlg.rank
 Base.LinAlg.norm
-Base.LinAlg.norm(::AbstractVector, ::Real)
-Base.LinAlg.norm(::AbstractMatrix, ::Real)
-Base.LinAlg.norm(::Number, ::Real)
-Base.LinAlg.norm(::RowVector, ::Real)
 Base.LinAlg.vecnorm
 Base.LinAlg.normalize!
 Base.LinAlg.normalize

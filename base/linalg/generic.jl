@@ -508,10 +508,7 @@ end
 
 Compute the `p`-norm of a vector or the operator norm of a matrix `A`,
 defaulting to the 2-norm.
-"""
-function norm end
 
-"""
     norm(A::AbstractVector, p::Real=2)
 
 For vectors, this is equivalent to [`vecnorm`](@ref) and equal to:
