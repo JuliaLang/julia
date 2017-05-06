@@ -4885,3 +4885,12 @@ function foo21568()
 end
 foo21568()
 @test f21568([0]) == 1
+
+# issue #21719
+type T21719{V}
+    f
+    tol::Float64
+    goal::V
+end
+g21719(f, goal; tol = 1e-6) = T21719(f, tol, goal)
+@test isa(g21719(identity, 1.0; tol=0.1), T21719)
