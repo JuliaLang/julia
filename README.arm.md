@@ -129,3 +129,43 @@ finding appropriate `crouton` help.
 
 On the current [Scaleway](http://scaleway.com) ARM servers, the Julia
 build works out of the box.
+
+## nVidia Jetson TX2
+
+Julia builds and runs on the [nVidia Jetson TX2](http://www.nvidia.com/object/embedded-systems-dev-kits-modules.html) platform with minimal configuration changes. A full multi-threaded build, including LLVM, will complete in around two hours. All tests pass and CUDA functionality is available through, e.g., [CUDAdrv](https://github.com/JuliaGPU/CUDAdrv.jl). 
+
+Starting from the default configuration flashed by [Jetpack 3.0](https://developer.nvidia.com/embedded/jetpack):
+
+```
+sudo apt-get install libssl-dev
+```
+
+### Julia 0.5.1
+
+The easiest method to build Julia 0.5.1 is to use system provided versions of BLAS and LAPACK:
+
+```
+sudo apt-get install libopenblas-dev liblapack-dev
+```
+
+Configure Make.user as follows:
+
+```
+MARCH=armv8-a
+JULIA_CPU_TARGET=cortex-a57
+override USE_SYSTEM_BLAS=1
+override USE_SYSTEM_LAPACK=1
+```
+
+Note that package manager functions fail with an error regarding SSL certificates. This can be overcome by following the instructions in [this comment](https://github.com/JuliaLang/julia/issues/13399#issuecomment-182018321).
+
+### Julia 0.6 beta
+
+Configure Make.user as follows:
+
+```
+MARCH=armv8-a
+JULIA_CPU_TARGET=cortex-a57
+```
+
+No further changes are required.
