@@ -295,4 +295,4 @@ function transpose(B::BitMatrix)
     return Bt
 end
 
-ctranspose(B::BitArray) = transpose(B)
+ctranspose(B::Union{BitMatrix,BitVector}) = transpose(B)
