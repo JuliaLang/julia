@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.Test
-include("testdefs.jl")
+include("testenv.jl")
 
 # Test a few "remote" invocations when no workers are present
 @test remote(myid)() == 1
