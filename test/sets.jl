@@ -199,6 +199,7 @@ for (l,r) in ((Set([1,2]),     Set([3,4])),
     @test issubset(r, union(l,r))
     @test isequal(union(intersect(l,r),symdiff(l,r)), union(l,r))
 end
+using Base: ⊇, ⊉, ⊋
 @test ⊆(Set([1]), Set([1,2]))
 @test ⊊(Set([1]), Set([1,2]))
 @test !⊊(Set([1]), Set([1]))

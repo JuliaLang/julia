@@ -235,7 +235,7 @@ end
 function send_del_client(rr)
     if rr.where == myid()
         del_client(rr)
-    elseif rr.where in procs() # process only if a valid worker
+    elseif id_in_procs(rr.where) # process only if a valid worker
         w = worker_from_id(rr.where)
         push!(w.del_msgs, (remoteref_id(rr), myid()))
         w.gcflag = true
@@ -260,7 +260,7 @@ end
 function send_add_client(rr::AbstractRemoteRef, i)
     if rr.where == myid()
         add_client(remoteref_id(rr), i)
-    elseif (i != rr.where) && (rr.where in procs())
+    elseif (i != rr.where) && id_in_procs(rr.where)
         # don't need to send add_client if the message is already going
         # to the processor that owns the remote ref. it will add_client
         # itself inside deserialize().
