@@ -85,6 +85,10 @@ _bound_vararg_specificity_1{T}(::Type{Array{T,1}}, d::Int) = 1
 @test _bound_vararg_specificity_1(Array{Int,1}, 1) == 1
 @test _bound_vararg_specificity_1(Array{Int,2}, 1, 1) == 0
 
+# issue #21710
+@test args_morespecific(Tuple{Array}, Tuple{AbstractVector})
+@test args_morespecific(Tuple{Matrix}, Tuple{AbstractVector})
+
 # issue #12939
 module Issue12939
 abstract type Abs; end
