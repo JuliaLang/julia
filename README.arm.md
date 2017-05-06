@@ -132,7 +132,7 @@ build works out of the box.
 
 ## nVidia Jetson TX2
 
-Julia builds and runs on the [nVidia Jetson TX2](http://www.nvidia.com/object/embedded-systems-dev-kits-modules.html) platform with minimal configuration changes. A full multi-threaded build, including LLVM, will complete in around two hours. All tests pass and CUDA functionality is available through, e.g., [CUDAdrv](https://github.com/JuliaGPU/CUDAdrv.jl). 
+Julia builds and runs on the [nVidia Jetson TX2](http://www.nvidia.com/object/embedded-systems-dev-kits-modules.html) platform with minimal configuration changes. A full multi-threaded build, including LLVM, will complete in around two hours. All tests pass and CUDA functionality is available through, e.g., [CUDAdrv](https://github.com/JuliaGPU/CUDAdrv.jl).
 
 Starting from the default configuration flashed by [Jetpack 3.0](https://developer.nvidia.com/embedded/jetpack):
 
