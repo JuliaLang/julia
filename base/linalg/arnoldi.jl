@@ -403,19 +403,17 @@ function _svds(X; nsv::Int = 6, ritzvec::Bool = true, tol::Float64 = 0.0, maxite
     elseif length(v0) == 0 && length(u0) == m
         padv0 = [u0; zeros(otype,n) ]
     end
-    ex    = eigs(SVDOperator(X), I; ritzvec = ritzvec, nev = ncv, tol = tol, maxiter = maxiter, v0=padv0)
-    ind   = [1:2:ncv;]
-    sval  = abs.(ex[1][ind])
+    ex    = eigs(SVDOperator(X), I; which = :LR, ritzvec = ritzvec, nev = nsv, ncv = ncv, tol = tol, maxiter = maxiter, v0=padv0)
+    sval = real.(ex[1])
 
     if ritzvec
         # calculating singular vectors
-        left_sv  = sqrt(2) * ex[2][ 1:size(X,1),     ind ] .* sign.(ex[1][ind]')
-        right_sv = sqrt(2) * ex[2][ size(X,1)+1:end, ind ]
+        left_sv  = sqrt(2) * ex[2][ 1:size(X,1),     : ] .* sign.(ex[1]')
+        right_sv = sqrt(2) * ex[2][ size(X,1)+1:end, : ]
         return (SVD(left_sv, sval, right_sv'), ex[3], ex[4], ex[5], ex[6])
     else
-        #The sort is necessary to work around #10329
         return (SVD(zeros(eltype(sval), n, 0),
-                    sort!(sval, by=real, rev=true),
+                    sort!(sval, rev = true),
                     zeros(eltype(sval), 0, m)),
                     ex[2], ex[3], ex[4], ex[5])
     end
