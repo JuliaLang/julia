@@ -1019,7 +1019,7 @@ void* jl_emit_and_add_to_shadow(GlobalVariable *gv, void *gvarinit)
 // Use as an optimization for runtime constant addresses to have one less
 // load. (Used only by threading).
 GlobalVariable *jl_emit_sysimg_slot(Module *m, Type *typ, const char *name,
-                                           uintptr_t init, size_t &idx)
+                                    uintptr_t init, size_t &idx)
 {
     assert(imaging_mode);
     // This is **NOT** a external variable or a normal global variable
@@ -1027,7 +1027,7 @@ GlobalVariable *jl_emit_sysimg_slot(Module *m, Type *typ, const char *name,
     // in the global variable table.
     GlobalVariable *gv = new GlobalVariable(*m, typ, false,
                                             GlobalVariable::InternalLinkage,
-                                            ConstantPointerNull::get((PointerType*)typ), name);
+                                            Constant::getNullValue(typ), name);
     addComdat(gv);
     // make the pointer valid for this session
 #if defined(USE_MCJIT) || defined(USE_ORCJIT)
@@ -1111,6 +1111,12 @@ static void jl_gen_llvm_globaldata(llvm::Module *mod, ValueToValueMapTy &VMap,
                                  GlobalVariable::ExternalLinkage,
                                  ConstantInt::get(T_size, jltls_states_func_idx),
                                  "jl_ptls_states_getter_idx"));
+    addComdat(new GlobalVariable(*mod,
+                                 T_size,
+                                 true,
+                                 GlobalVariable::ExternalLinkage,
+                                 ConstantInt::get(T_size, jltls_offset_idx),
+                                 "jl_tls_offset_idx"));
 #endif
 
     Constant *feature_string = ConstantDataArray::getString(jl_LLVMContext, jl_options.cpu_target);
