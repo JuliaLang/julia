@@ -215,8 +215,8 @@ factorial(x::Number) = gamma(x + 1) # fallback for x not Integer
 """
     big(T::Type)
 
-Returns an appropriate type to represent a value of type `T` as an arbitrary precision number.
-Falls back to `typeof(big(zero(T)))`.
+Compute the type that represents the numeric type `T` with arbitrary precision.
+Equivalent to `typeof(big(zero(T)))`.
 
 ```jldoctest
 julia> big(Rational)
