@@ -847,6 +847,8 @@ condition number, or componentwise relative condition number.
 """
 condskeel(A::AbstractMatrix, x::AbstractVector, p::Real=Inf) = norm(abs.(inv(A))*(abs.(A)*abs.(x)), p)
 
+issymmetric(A::AbstractMatrix{<:Real}) = ishermitian(A)
+
 """
     issymmetric(A) -> Bool
 
