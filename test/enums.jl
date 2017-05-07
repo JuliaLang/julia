@@ -1,8 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-const curmod = current_module()
-const curmod_name = fullname(curmod)
-const curmod_prefix = "$(["$m." for m in curmod_name]...)"
+# For curmod_*
+include("testenv.jl")
 
 using Base.Test
 
