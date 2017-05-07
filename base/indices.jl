@@ -211,6 +211,7 @@ given tuple of indices and the dimensional indices of `A` in tandem. As such,
 not all index types are guaranteed to propagate to `Base.to_index`.
 """
 to_indices(A, I::Tuple) = (@_inline_meta; to_indices(A, indices(A), I))
+to_indices(A, I::Tuple{Any}) = (@_inline_meta; to_indices(A, (linearindices(A),), I))
 to_indices(A, inds, ::Tuple{}) = ()
 to_indices(A, inds, I::Tuple{Any, Vararg{Any}}) =
     (@_inline_meta; (to_index(A, I[1]), to_indices(A, _maybetail(inds), tail(I))...))

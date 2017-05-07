@@ -90,20 +90,16 @@
 ;; the array `a` in the `n`th index.
 ;; `tuples` are a list of the splatted arguments that precede index `n`
 ;; `last` = is this last index?
-;; returns a call to endof(a), trailingsize(a,n), or size(a,n)
+;; returns a call to endof(a) or size(a,n)
 (define (end-val a n tuples last)
   (if (null? tuples)
-      (if last
-          (if (= n 1)
-              `(call (top endof) ,a)
-              `(call (top trailingsize) ,a ,n))
+      (if (and last (= n 1))
+          `(call (top endof) ,a)
           `(call (top size) ,a ,n))
       (let ((dimno `(call (top +) ,(- n (length tuples))
                           ,.(map (lambda (t) `(call (top length) ,t))
                                  tuples))))
-        (if last
-            `(call (top trailingsize) ,a ,dimno)
-            `(call (top size) ,a ,dimno)))))
+            `(call (top size) ,a ,dimno))))
 
 ;; replace `end` for the closest ref expression, so doesn't go inside nested refs
 (define (replace-end ex a n tuples last)

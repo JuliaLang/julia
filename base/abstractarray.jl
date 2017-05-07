@@ -418,47 +418,12 @@ function checkbounds_indices(::Type{Bool}, IA::Tuple, I::Tuple)
     @_inline_meta
     checkindex(Bool, IA[1], I[1]) & checkbounds_indices(Bool, tail(IA), tail(I))
 end
-checkbounds_indices(::Type{Bool}, ::Tuple{},  ::Tuple{})    = true
-function checkbounds_indices(::Type{Bool}, ::Tuple{}, I::Tuple{Any})
-    @_inline_meta
-    checkindex(Bool, 1:1, I[1])
-end
 function checkbounds_indices(::Type{Bool}, ::Tuple{}, I::Tuple)
     @_inline_meta
-    checkindex(Bool, 1:1, I[1]) & checkbounds_indices(Bool, (), tail(I))
+    checkindex(Bool, OneTo(1), I[1]) & checkbounds_indices(Bool, (), tail(I))
 end
-function checkbounds_indices(::Type{Bool}, IA::Tuple{Any}, I::Tuple{Any})
-    @_inline_meta
-    checkindex(Bool, IA[1], I[1])
-end
-function checkbounds_indices(::Type{Bool}, IA::Tuple, I::Tuple{Any})
-    @_inline_meta
-    checkbounds_linear_indices(Bool, IA, I[1])
-end
-function checkbounds_linear_indices(::Type{Bool}, IA::Tuple{Vararg{OneTo}}, i)
-    @_inline_meta
-    if checkindex(Bool, IA[1], i)
-        return true
-    elseif checkindex(Bool, OneTo(trailingsize(IA)), i)  # partial linear indexing
-        partial_linear_indexing_warning_lookup(length(IA))
-        return true # TODO: Return false after the above function is removed in deprecated.jl
-    end
-    return false
-end
-function checkbounds_linear_indices(::Type{Bool}, IA::Tuple{AbstractUnitRange,Vararg{AbstractUnitRange}}, i)
-    @_inline_meta
-    checkindex(Bool, IA[1], i)
-end
-function checkbounds_linear_indices(::Type{Bool}, IA::Tuple{Vararg{OneTo}}, i::Union{Slice,Colon})
-    partial_linear_indexing_warning_lookup(length(IA))
-    true
-end
-function checkbounds_linear_indices(::Type{Bool},
-        IA::Tuple{AbstractUnitRange,Vararg{AbstractUnitRange}}, i::Union{Slice,Colon})
-    partial_linear_indexing_warning_lookup(length(IA))
-    true
-end
-checkbounds_indices(::Type{Bool}, ::Tuple, ::Tuple{}) = true
+checkbounds_indices(::Type{Bool}, ::Tuple,   ::Tuple{}) = true
+checkbounds_indices(::Type{Bool}, ::Tuple{}, ::Tuple{}) = true
 
 throw_boundserror(A, I) = (@_noinline_meta; throw(BoundsError(A, I)))
 
@@ -1005,14 +970,6 @@ function _to_subscript_indices(A::AbstractArray{T,N}, I::Int...) where {T,N} # T
 end
 _to_subscript_indices(A::AbstractArray, J::Tuple, Jrem::Tuple{}) =
     __to_subscript_indices(A, indices(A), J, Jrem)
-# We allow partial linear indexing deprecation for OneTo arrays
-function __to_subscript_indices(A::AbstractArray, ::Tuple{Vararg{OneTo}}, J::Tuple, Jrem::Tuple{})
-    @_inline_meta
-    sz = _remaining_size(J, indices(A))    # compute trailing size (overlapping the final index)
-    (front(J)..., _unsafe_ind2sub(sz, last(J))...) # (maybe) extend the last index
-end
-# After the partial linear indexing deprecation is removed, this next method can
-# become the new normal. For now, it's limited to non-OneTo arrays.
 function __to_subscript_indices(A::AbstractArray,
         ::Tuple{AbstractUnitRange,Vararg{AbstractUnitRange}}, J::Tuple, Jrem::Tuple{})
     @_inline_meta

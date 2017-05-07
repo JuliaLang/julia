@@ -370,7 +370,7 @@ end
     replace_ref_end!(ex)
 
 Recursively replace occurrences of the symbol :end in a "ref" expression (i.e. A[...]) `ex`
-with the appropriate function calls (`endof`, `size` or `trailingsize`). Replacement uses
+with the appropriate function calls (`endof` or `size`). Replacement uses
 the closest enclosing ref, so
 
     A[B[end]]
@@ -402,7 +402,7 @@ function replace_ref_end_!(ex, withex)
             else
                 n = 1
                 J = endof(ex.args)
-                for j = 2:J-1
+                for j = 2:J
                     exj, used = replace_ref_end_!(ex.args[j],:($size($S,$n)))
                     used_S |= used
                     ex.args[j] = exj
@@ -418,8 +418,6 @@ function replace_ref_end_!(ex, withex)
                         n += 1
                     end
                 end
-                ex.args[J], used = replace_ref_end_!(ex.args[J],:($trailingsize($S,$n)))
-                used_S |= used
             end
             if used_S && S !== ex.args[1]
                 S0 = ex.args[1]

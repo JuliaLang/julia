@@ -1016,26 +1016,6 @@ void jl_depwarn(const char *msg, jl_value_t *sym)
     JL_GC_POP();
 }
 
-JL_DLLEXPORT void jl_depwarn_partial_indexing(size_t n)
-{
-    static jl_value_t *depwarn_func = NULL;
-    if (!depwarn_func && jl_base_module) {
-        depwarn_func = jl_get_global(jl_base_module, jl_symbol("partial_linear_indexing_warning"));
-    }
-    if (!depwarn_func) {
-        jl_safe_printf("WARNING: Partial linear indexing is deprecated. Use "
-            "`reshape(A, Val(%zd))` to make the dimensionality of the array match "
-            "the number of indices\n", n);
-        return;
-    }
-    jl_value_t **depwarn_args;
-    JL_GC_PUSHARGS(depwarn_args, 2);
-    depwarn_args[0] = depwarn_func;
-    depwarn_args[1] = jl_box_long(n);
-    jl_apply(depwarn_args, 2);
-    JL_GC_POP();
-}
-
 #ifdef __cplusplus
 }
 #endif

@@ -34,11 +34,10 @@ _Agen(A, i1, i2, i3, i4) = [A[j1,j2,j3,j4] for j1 in i1, j2 in i2, j3 in i3, j4 
 
 function replace_colon(A::AbstractArray, I)
     Iout = Array{Any}(length(I))
-    for d = 1:length(I)-1
+    I == (:,) && return (1:length(A),)
+    for d = 1:length(I)
         Iout[d] = isa(I[d], Colon) ? (1:size(A,d)) : I[d]
     end
-    d = length(I)
-    Iout[d] = isa(I[d], Colon) ? (1:prod(size(A)[d:end])) : I[d]
     (Iout...,)
 end
 
@@ -226,11 +225,9 @@ end
 function runviews(SB::AbstractArray, indexN, indexNN, indexNNN)
     @assert ndims(SB) > 2
     for i3 in indexN, i2 in indexN, i1 in indexN
-        ndims(SB) > 3 && i3 isa Colon && continue # TODO: Re-enable once Colon no longer spans partial trailing dimensions
         runsubarraytests(SB, i1, i2, i3)
     end
     for i2 in indexN, i1 in indexN
-        i2 isa Colon && continue # TODO: Re-enable once Colon no longer spans partial trailing dimensions
         runsubarraytests(SB, i1, i2)
     end
     for i1 in indexNNN
@@ -282,9 +279,6 @@ _ndims(x) = 1
 if testfull
     let B = copy(reshape(1:13^3, 13, 13, 13))
         for o3 in oindex, o2 in oindex, o1 in oindex
-            if (o3 isa Colon && (_ndims(o1) + _ndims(o2) != 2))
-                continue # TODO: remove once Colon no longer spans partial trailing dimensions
-            end
             viewB = view(B, o1, o2, o3)
             runviews(viewB, index5, index25, index125)
         end
@@ -482,7 +476,7 @@ Y = 4:-1:1
 @test X[1:end] == @.(@view X[1:end]) # test compatibility of @. and @view
 @test X[1:end-3] == @view X[1:end-3]
 @test X[1:end,2,2] == @view X[1:end,2,2]
-# @test X[1,1:end-2] == @view X[1,1:end-2] # TODO: Re-enable after partial linear indexing deprecation
+@test X[1,1:end-2] == @view X[1,1:end-2]
 @test X[1,2,1:end-2] == @view X[1,2,1:end-2]
 @test X[1,2,Y[2:end]] == @view X[1,2,Y[2:end]]
 @test X[1:end,2,Y[2:end]] == @view X[1:end,2,Y[2:end]]
@@ -533,7 +527,7 @@ end
 @test X[1:end] == @views X[1:end]
 @test X[1:end-3] == @views X[1:end-3]
 @test X[1:end,2,2] == @views X[1:end,2,2]
-# @test X[1,1:end-2] == @views X[1,1:end-2] # TODO: Re-enable after partial linear indexing deprecation
+@test X[1,1:end-2] == @views X[1,1:end-2]
 @test X[1,2,1:end-2] == @views X[1,2,1:end-2]
 @test X[1,2,Y[2:end]] == @views X[1,2,Y[2:end]]
 @test X[1:end,2,Y[2:end]] == @views X[1:end,2,Y[2:end]]
