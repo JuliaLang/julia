@@ -266,9 +266,6 @@ static void ti_initthread(int16_t tid)
     ptls->tid = tid;
     ptls->pgcstack = NULL;
     ptls->gc_state = 0; // GC unsafe
-    ptls->gc_cache.perm_scanned_bytes = 0;
-    ptls->gc_cache.scanned_bytes = 0;
-    ptls->gc_cache.nbig_obj = 0;
     // Conditionally initialize the safepoint address. See comment in
     // `safepoint.c`
     if (tid == 0) {
@@ -287,7 +284,7 @@ static void ti_initthread(int16_t tid)
         abort();
     }
     ptls->bt_data = (uintptr_t*)bt_data;
-    jl_mk_thread_heap(ptls);
+    jl_init_thread_heap(ptls);
     jl_install_thread_signal_handler(ptls);
 
     jl_all_tls_states[tid] = ptls;

@@ -512,7 +512,7 @@ void jl_gc_init(void);
 void jl_init_signal_async(void);
 void jl_init_debuginfo(void);
 void jl_init_runtime_ccall(void);
-void jl_mk_thread_heap(jl_ptls_t ptls);
+void jl_init_thread_heap(jl_ptls_t ptls);
 
 void _julia_init(JL_IMAGE_SEARCH rel);
 
