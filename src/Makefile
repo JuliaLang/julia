@@ -64,7 +64,7 @@ FLAGS += -DUSE_POLLY
 ifeq ($(USE_POLLY_OPENMP),1)
 FLAGS += -fopenmp
 endif
-ifeq($(USE_POLLY_ACC,1),1)
+ifeq ($(USE_POLLY_ACC),1)
 LLVMLINK += -lPollyPPCG -Wl,-rpath=$(shell $(LLVM_CONFIG_HOST) --libdir),--no-as-needed -lGPURuntime -Wl,--as-needed
 endif
 endif
