@@ -1,37 +1,22 @@
 # Julia on ARM (Linux)
 
-Julia support for ARM is work-in-progress, though good results have been
-reported for a number of commercially available devices. This file provides
-general guidelines for compilation on 32- and 64-bit variants of ARM
-processors, in addition to instructions for specific devices.
+Julia fully supports ARMv8 (AArch64) processors, and supports ARMv7 and ARMv6
+(AArch32) with some caveats. This file provides general guidelines for compilation,
+in addition to instructions for specific devices.
 
-A list of [known issues](https://github.com/JuliaLang/julia/labels/arm) on
-ARM is available.
+A list of [known issues](https://github.com/JuliaLang/julia/labels/arm) for ARM is
+available. If you encounter difficulties, please create an issue including the output
+of `/proc/cpuinfo`.
 
-## 32-bit (ARMv6, ARMv7)
 
-Julia requires at least `armv6` and `vfpv2` instruction sets. It's recommended
-to use at least `armv7-a`. `armv5` or soft float are not supported.
+## Building Julia
 
-### Binaries
+Julia has been successfully compiled on several ARMv7 / Cortex A15 Samsung Chromebooks
+running Ubuntu Linux under Crouton, a number of Raspberry Pi variants, Odroid boards,
+and the nVidia Jetson TX2.
 
-[Nightly builds](https://status.julialang.org/download/linux-arm) are
-available for ARMv7-A.
-
-### Building Julia
-
-Julia has been compiled on several ARMv7 / Cortex A15 Samsung
-Chromebooks running Ubuntu Linux under Crouton, Raspberry Pi systems
-and Odroid boards. This is a work in progress - several tests are
-known to fail, and backtraces are not available.
-
-Julia on ARM can be built by simply typing `make`, which will download all
-the relevant libraries. This is the *recommended* way, and it will take a
-few hours.
-
-If you get SIGILL during sysimg.o creation, it is likely that your cpu
-does not support VFP.  File an issue on the Julia issue tracker with
-the contents of /proc/cpuinfo.
+In most cases, Julia can be successfully built by following the platform independent
+[build instructions](https://github.com/JuliaLang/julia/blob/master/README.md).
 
 ### Build dependencies
 
@@ -52,7 +37,7 @@ override USE_SYSTEM_MPFR=1
 override USE_SYSTEM_ARPACK=1
 ````
 
-The following command will install all the necessary libraries on Ubuntu.
+The following command will install all the necessary libraries on Ubuntu:
 
 ````
 sudo apt-get install libblas3gf liblapack3gf libarpack2 libfftw3-dev libgmp3-dev \
@@ -60,48 +45,53 @@ sudo apt-get install libblas3gf liblapack3gf libarpack2 libfftw3-dev libgmp3-dev
                      g++-4.8 gfortran libgfortran3 m4 libedit-dev
 ````
 
-Note that OpenBLAS only supports ARMv7. For older ARM variants, using the reference BLAS
-may be the simplest thing to do.
+If you run into issues building LLVM, see [these notes](http://llvm.org/docs/HowToBuildOnARM.html).
 
-If you run into issues building LLVM, see these notes:
-[http://llvm.org/docs/HowToBuildOnARM.html](http://llvm.org/docs/HowToBuildOnARM.html)
+
+## 32-bit (ARMv6, ARMv7)
+
+Julia requires at least the `armv6` and `vfpv2` instruction sets. It's recommended to use  `armv7-a`.
+`armv5` or soft float are not supported.
+
+### Binaries
+
+[Nightly builds](https://status.julialang.org/download/linux-arm) are
+available for ARMv7-A.
 
 ### Device specific instructions
 
 #### Raspberry Pi 1 / Raspberry Pi Zero
 
-Note: These chips use ARMv6, which is not well supported at the moment. However it is
-possible to get a working Julia build.
-
-The Raspberry Pi ARM CPU type is not detected by LLVM.  Before starting the
-build, it is recommended to explicitly set the CPU target by adding the
-following to `Make.user`:
+The type of ARM CPU used in the Raspberry Pi is not detected by LLVM. Explicitly set the
+CPU target by adding the following to `Make.user`:
 
 ````
 JULIA_CPU_TARGET=arm1176jzf-s
 ````
 
-It is also preferable to use various system provided dependencies on
-ARMv6 as described in [Build Dependencies](#build-dependencies).
+It is preferable to use various system provided dependencies on ARMv6 as described in
+[Build Dependencies](#build-dependencies).
 
-You may need to increase the swap file size: edit the `/etc/dphys-swapfile`, changing the line
+To complete the build, you may need to increase the swap file size. To do so, edit
+`/etc/dphys-swapfile`, changing the line:
 
     CONF_SWAPSIZE=100
 
-to
+to:
 
     CONF_SWAPSIZE=512
 
-Then restart the swapfile service:
+before restarting the swapfile service:
 
     sudo /etc/init.d/dphys-swapfile stop
     sudo /etc/init.d/dphys-swapfile start
 
 #### Raspberry Pi 2
 
-For Raspberry Pi 2, which is ARMv7, the default build should work. However, the
-CPU type is also not detected by LLVM. Fix this by adding
-`JULIA_CPU_TARGET=cortex-a7` to `Make.user`.
+The type of ARM CPU used in the Raspberry Pi 2 is not detected by LLVM. Explicitly set the
+CPU target by adding the following to `Make.user`:
+
+```JULIA_CPU_TARGET=cortex-a7```
 
 Depending on the exact compiler and distribution, there might be a build failure
 due to unsupported inline assembly. In that case, add `MARCH=armv7-a` to
@@ -109,7 +99,7 @@ due to unsupported inline assembly. In that case, add `MARCH=armv7-a` to
 
 If building LLVM fails, you can download binaries from the LLVM website:
 
-1.  Download the [LLVM 3.7.0 binaries for ARMv7a] (http://llvm.org/releases/3.7.0/clang+llvm-3.7.0-armv7a-linux-gnueabihf.tar.xz) and extract them in a local directory.
+1.  Download the [LLVM 3.9.0 binaries for ARMv7a] (http://llvm.org/releases/3.9.0/clang+llvm-3.9.0-armv7a-linux-gnueabihf.tar.xz) and extract them in a local directory.
 2. Add the following to `Make.user` (adjusting the path to the `llvm-config` binary):
 
     ```
@@ -139,6 +129,12 @@ build works out of the box.
 
 ## AArch64 (ARMv8)
 
+Configure Make.user as follows:
+
+```
+MARCH=armv8-a
+```
+
 ### Device specific instructions
 
 #### nVidia Jetson TX2
@@ -152,12 +148,6 @@ Starting from the default configuration flashed by [Jetpack 3.0](https://develop
 
 ```
 sudo apt-get install libssl-dev
-```
-
-Configure Make.user as follows:
-
-```
-MARCH=armv8-a
 ```
 
 No further changes are required.
