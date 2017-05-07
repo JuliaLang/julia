@@ -241,6 +241,10 @@ static void jl_load_sysimg_so(void)
                                                    "jl_ptls_states_getter_idx");
         *sysimg_gvars[tls_getter_idx - 1] =
             (jl_value_t*)jl_get_ptls_states_getter();
+        size_t tls_offset_idx = *(size_t*)jl_dlsym(jl_sysimg_handle,
+                                                   "jl_tls_offset_idx");
+        *sysimg_gvars[tls_offset_idx - 1] =
+            (jl_value_t*)(uintptr_t)(jl_tls_offset == -1 ? 0 : jl_tls_offset);
 #endif
         const char *cpu_target = (const char*)jl_dlsym(jl_sysimg_handle, "jl_sysimg_cpu_target");
         if (strcmp(cpu_target,jl_options.cpu_target) != 0)
