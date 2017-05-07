@@ -1,14 +1,24 @@
-# Julia binaries for ARM
+# Julia on ARM (Linux)
 
-[Nightly builds](https://status.julialang.org/download/linux-arm) are
-available for ARMv7-A.
+Julia support for ARM is work-in-progress, though good results have been
+reported for a number of commercially available devices. This file provides
+general guidelines for compilation on 32- and 64-bit variants of ARM
+processors, in addition to instructions for specific devices.
 
-# Hardware requirements
+A list of [known issues](https://github.com/JuliaLang/julia/labels/arm) on
+ARM is available.
+
+## 32-bit (ARMv6, ARMv7)
 
 Julia requires at least `armv6` and `vfpv2` instruction sets. It's recommended
 to use at least `armv7-a`. `armv5` or soft float are not supported.
 
-# Building Julia on ARM
+### Binaries
+
+[Nightly builds](https://status.julialang.org/download/linux-arm) are
+available for ARMv7-A.
+
+### Building Julia
 
 Julia has been compiled on several ARMv7 / Cortex A15 Samsung
 Chromebooks running Ubuntu Linux under Crouton, Raspberry Pi systems
@@ -23,10 +33,7 @@ If you get SIGILL during sysimg.o creation, it is likely that your cpu
 does not support VFP.  File an issue on the Julia issue tracker with
 the contents of /proc/cpuinfo.
 
-This is the list of known issues on ARM:
- [https://github.com/JuliaLang/julia/labels/arm](https://github.com/JuliaLang/julia/labels/arm)
-
-# Build dependencies
+### Build dependencies
 
 We recommend using at least Ubuntu 14.04 and gcc 4.8, which is part of the
 standard `build-essentials`.
@@ -56,12 +63,12 @@ sudo apt-get install libblas3gf liblapack3gf libarpack2 libfftw3-dev libgmp3-dev
 Note that OpenBLAS only supports ARMv7. For older ARM variants, using the reference BLAS
 may be the simplest thing to do.
 
-# ARM specific build problems
-
 If you run into issues building LLVM, see these notes:
 [http://llvm.org/docs/HowToBuildOnARM.html](http://llvm.org/docs/HowToBuildOnARM.html)
 
-## Raspberry Pi 1 / Raspberry Pi Zero
+### Device specific instructions
+
+#### Raspberry Pi 1 / Raspberry Pi Zero
 
 Note: These chips use ARMv6, which is not well supported at the moment. However it is
 possible to get a working Julia build.
@@ -90,7 +97,7 @@ Then restart the swapfile service:
     sudo /etc/init.d/dphys-swapfile stop
     sudo /etc/init.d/dphys-swapfile start
 
-## Raspberry Pi 2
+#### Raspberry Pi 2
 
 For Raspberry Pi 2, which is ARMv7, the default build should work. However, the
 CPU type is also not detected by LLVM. Fix this by adding
@@ -112,9 +119,9 @@ If building LLVM fails, you can download binaries from the LLVM website:
 
 Please do let us know if you had to download a pre-built LLVM in [#10235](https://github.com/JuliaLang/julia/issues/10235).
 
-## Chromebook
+#### Chromebook
 
-On Chromebooks, you have to first install Crouton.  If you do not have
+On Chromebooks, you have to first install Crouton. If you do not have
 an Ubuntu chroot running on your Chromebook using Crouton, you can do
 so by following these tutorials.
 
@@ -125,14 +132,21 @@ These tutorials will end up installing Ubuntu 12.04, and you have to
 upgrade to Ubuntu 14.04, or install Ubuntu 14.04 from scratch by
 finding appropriate `crouton` help.
 
-## Scaleway cloud hosted ARM servers
+#### Scaleway cloud hosted ARM servers
 
 On the current [Scaleway](http://scaleway.com) ARM servers, the Julia
 build works out of the box.
 
-## nVidia Jetson TX2
+## AArch64 (ARMv8)
 
-Julia builds and runs on the [nVidia Jetson TX2](http://www.nvidia.com/object/embedded-systems-dev-kits-modules.html) platform with minimal configuration changes. A full multi-threaded build, including LLVM, will complete in around two hours. All tests pass and CUDA functionality is available through, e.g., [CUDAdrv](https://github.com/JuliaGPU/CUDAdrv.jl).
+### Device specific instructions
+
+#### nVidia Jetson TX2
+
+Julia builds and runs on the [nVidia Jetson TX2](http://www.nvidia.com/object/embedded-systems-dev-kits-modules.html)
+platform with minimal configuration changes. A full multi-threaded build, including LLVM,
+will complete in around two hours. All tests pass and CUDA functionality is available
+through, e.g., [CUDAdrv](https://github.com/JuliaGPU/CUDAdrv.jl).
 
 Starting from the default configuration flashed by [Jetpack 3.0](https://developer.nvidia.com/embedded/jetpack):
 
@@ -140,32 +154,10 @@ Starting from the default configuration flashed by [Jetpack 3.0](https://develop
 sudo apt-get install libssl-dev
 ```
 
-### Julia 0.5.1
-
-The easiest method to build Julia 0.5.1 is to use system provided versions of BLAS and LAPACK:
-
-```
-sudo apt-get install libopenblas-dev liblapack-dev
-```
-
 Configure Make.user as follows:
 
 ```
 MARCH=armv8-a
-JULIA_CPU_TARGET=cortex-a57
-override USE_SYSTEM_BLAS=1
-override USE_SYSTEM_LAPACK=1
-```
-
-Note that package manager functions fail with an error regarding SSL certificates. This can be overcome by following the instructions in [this comment](https://github.com/JuliaLang/julia/issues/13399#issuecomment-182018321).
-
-### Julia 0.6 beta
-
-Configure Make.user as follows:
-
-```
-MARCH=armv8-a
-JULIA_CPU_TARGET=cortex-a57
 ```
 
 No further changes are required.
