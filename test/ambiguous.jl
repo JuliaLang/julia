@@ -9,9 +9,8 @@ ambig(x::Int, y::Int) = 4
 ambig(x::Number, y) = 5
 # END OF LINE NUMBER SENSITIVITY
 
-const curmod = current_module()
-const curmod_name = fullname(curmod)
-const curmod_str = curmod === Main ? "Main" : join(curmod_name, ".")
+# For curmod_*
+include("testenv.jl")
 
 ambigs = Any[[], [3], [2,5], [], [3]]
 

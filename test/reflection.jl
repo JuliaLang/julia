@@ -163,8 +163,8 @@ not_const = 1
 ## find bindings tests
 @test ccall(:jl_get_module_of_binding, Any, (Any, Any), Base, :sin)==Base
 
-const curmod = current_module()
-const curmod_name = fullname(curmod)
+# For curmod_*
+include("testenv.jl")
 
 module TestMod7648
 using Base.Test

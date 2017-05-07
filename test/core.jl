@@ -2,9 +2,9 @@
 
 # test core language features
 const Bottom = Union{}
-const curmod = current_module()
-const curmod_name = fullname(curmod)
-const curmod_prefix = "$(["$m." for m in curmod_name]...)"
+
+# For curmod_*
+include("testenv.jl")
 
 f47{T}(x::Vector{Vector{T}}) = 0
 @test_throws MethodError f47(Array{Vector}(0))
