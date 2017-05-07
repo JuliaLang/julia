@@ -6,7 +6,7 @@ in addition to instructions for specific devices.
 
 A list of [known issues](https://github.com/JuliaLang/julia/labels/arm) for ARM is
 available. If you encounter difficulties, please create an issue including the output
-of `/proc/cpuinfo`.
+from `cat /proc/cpuinfo`.
 
 
 ## Building Julia
