@@ -762,7 +762,7 @@ if is_windows()
 
 end
 
-# compute sizeof correctly for, strings, arrays, and subarrays of bytes
+# compute sizeof correctly for strings, arrays, and subarrays of bytes
 _sizeof(a) = sizeof(a)
 _sizeof(a::FastContiguousSubArray{UInt8,N,<:Array{UInt8}} where N) = length(a)
 
