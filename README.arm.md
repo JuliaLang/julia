@@ -129,7 +129,7 @@ build works out of the box.
 
 ## AArch64 (ARMv8)
 
-Configure Make.user as follows:
+Configure `Make.user` as follows:
 
 ```
 MARCH=armv8-a
@@ -140,14 +140,17 @@ MARCH=armv8-a
 #### nVidia Jetson TX2
 
 Julia builds and runs on the [nVidia Jetson TX2](http://www.nvidia.com/object/embedded-systems-dev-kits-modules.html)
-platform with minimal configuration changes. A full multi-threaded build, including LLVM,
+platform with minimal configuration changes.
+
+After configuring `Make.user` as per the `AArch64` instructions in this document,
+follow the general [build instructions](https://github.com/JuliaLang/julia/blob/master/README.md).
+The majority of the build dependencies specified in the instructions are installed by
+the default configuration flashed by [Jetpack 3.0](https://developer.nvidia.com/embedded/jetpack). The remaining tools can be installed by issuing the following command:
+
+```
+sudo apt-get install gfortran wget cmake
+```
+
+A full multi-threaded build, including LLVM,
 will complete in around two hours. All tests pass and CUDA functionality is available
 through, e.g., [CUDAdrv](https://github.com/JuliaGPU/CUDAdrv.jl).
-
-Starting from the default configuration flashed by [Jetpack 3.0](https://developer.nvidia.com/embedded/jetpack):
-
-```
-sudo apt-get install libssl-dev
-```
-
-No further changes are required.
