@@ -11,10 +11,6 @@ from `cat /proc/cpuinfo`.
 
 ## Building Julia
 
-Julia has been successfully compiled on several ARMv7 / Cortex A15 Samsung Chromebooks
-running Ubuntu Linux under Crouton, a number of Raspberry Pi variants, Odroid boards,
-and the nVidia Jetson TX2.
-
 In most cases, Julia can be successfully built by following the platform independent
 [build instructions](https://github.com/JuliaLang/julia/blob/master/README.md).
 
@@ -49,6 +45,13 @@ If you run into issues building LLVM, see [these notes](http://llvm.org/docs/How
 
 
 ## 32-bit (ARMv6, ARMv7)
+
+Julia has been successfully compiled on several variants of the following ARMv6 & ARMv7 devices:
+
+* ARMv7 / Cortex A15 Samsung Chromebooks running Ubuntu Linux under Crouton;
+* [Raspberry Pi](https://www.raspberrypi.org).
+* [Odroid](http://www.hardkernel.com/main/main.php).
+
 
 Julia requires at least the `armv6` and `vfpv2` instruction sets. It's recommended to use  `armv7-a`.
 `armv5` or soft float are not supported.
@@ -129,7 +132,14 @@ build works out of the box.
 
 ## AArch64 (ARMv8)
 
-Configure `Make.user` as follows:
+Julia has been successfully built on the following ARMv8 devices:
+
+* [nVidia Jetson TX1 & TX2](http://www.nvidia.com/object/embedded-systems-dev-kits-modules.html);
+* [X-Gene 1](https://www.apm.com/products/data-center/x-gene-family/x-gene/);
+* [Overdrive 3000](https://softiron.com/products/overdrive-3000/);
+* [Cavium ThunderX](http://www.cavium.com/ThunderX_ARM_Processors.html) on [packet.net](https://www.packet.net).
+
+Compilation on `ARMv8-A` requires that `Make.user` is configured as follows:
 
 ```
 MARCH=armv8-a
