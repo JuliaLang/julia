@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: https://julialang.org/license
+# This file is a part of Julia. License is MIT: http://julialang.org/license
 
 using Base.Test
 
@@ -147,21 +147,6 @@ function _test_mixed(A::ANY, B::ANY)
     nothing
 end
 
-function test_bounds(A::ANY)
-    @test_throws BoundsError A[0]
-    @test_throws BoundsError A[end+1]
-    @test_throws BoundsError A[1, 0]
-    @test_throws BoundsError A[1, end+1]
-    @test_throws BoundsError A[1, 1, 0]
-    @test_throws BoundsError A[1, 1, end+1]
-    @test_throws BoundsError A[0, 1]
-    @test_throws BoundsError A[end+1, 1]
-    @test_throws BoundsError A[0, 1, 1]
-    @test_throws BoundsError A[end+1, 1, 1]
-    @test_throws BoundsError A[1, 0, 1]
-    @test_throws BoundsError A[1, end+1, 1]
-end
-
 function dim_break_linindex(I)
     i = 1
     while i <= length(I) && !isa(I[i], Vector{Int})
@@ -264,21 +249,40 @@ index5 = (1, :, 2:5, [4,1,5], reshape([2]), view(1:5,[2 3 4 1]))  # all work wit
 index25 = (3, :, 2:11, [19,9,7], reshape([10]), view(1:25,[19 15; 4 24]))
 index125 = (113, :, 85:121, [99,14,103], reshape([72]), view(1:125,reshape([25,4,102,67], 1, 2, 2)))
 
+
+### Views from views ###
+
+# "outer" indexes create snips that have at least size 5 along each dimension,
+# with the exception of Int-slicing
+oindex = (:, 6, 3:7, reshape([12]), [8,4,6,12,5,7], [3:7 1:5 2:6 4:8 5:9])
+
+_ndims{T,N}(::AbstractArray{T,N}) = N
+_ndims(x) = 1
+
 if testfull
-    let A = copy(reshape(1:5*7*11, 11, 7, 5))
-        runviews(A, index5, index25, index125)
+    let B = copy(reshape(1:13^3, 13, 13, 13))
+        for o3 in oindex, o2 in oindex, o1 in oindex
+            if (o3 isa Colon && (_ndims(o1) + _ndims(o2) != 2))
+                continue # TODO: remove once Colon no longer spans partial trailing dimensions
+            end
+            viewB = view(B, o1, o2, o3)
+            runviews(viewB, index5, index25, index125)
+        end
     end
 end
 
-
 if !testfull
     let B = copy(reshape(1:13^3, 13, 13, 13))
-        for oind in (([8,4,6,12,5,7],:,3:7),
-                     (6,CartesianIndex.(6,[8,4,6,12,5,7])),
-                     (CartesianIndex(13,6),[8,4,6,12,5,7]),
-                     (1,:,view(1:13,[9,12,4,13,1])),
-                     (view(1:13,[9,12,4,13,1]),2:6,4),
-                     ([1:5 2:6 3:7 4:8 5:9], :, 3))
+        for oind in ((:,:,:),
+                     (:,:,6),
+                     (:,6,:),
+                     (6,:,:),
+                     (:,3:7,:),
+                     (3:7,:,:),
+                     (3:7,6,:),
+                     (3:7,6,0x6),
+                     (6,UInt(3):UInt(7),3:7),
+                     (13:-2:1,:,:))
             runsubarraytests(B, oind...)
             viewB = view(B, oind...)
             runviews(viewB, index5, index25, index125)

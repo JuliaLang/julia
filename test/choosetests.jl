@@ -15,13 +15,13 @@ Upon return, `tests` is a vector of fully-expanded test names, and
 """ ->
 function choosetests(choices = [])
     testnames = [
-        "linalg", "subarray", "core", "inference", "worlds",
+        "linalg", "subarray", "subarray2", "subarray3", "core", "inference", "worlds",
         "keywordargs", "numbers", "subtype",
         "printf", "char", "strings", "triplequote", "unicode", "intrinsics",
         "dates", "dict", "hashing", "iobuffer", "staged", "offsetarray",
         "arrayops", "tuple", "reduce", "reducedim", "random", "abstractarray",
         "intfuncs", "simdloop", "vecelement", "blas", "sparse",
-        "bitarray", "copy", "math", "fastmath", "functional", "iterators",
+        "bitarray", "bitarray2", "copy", "math", "fastmath", "functional", "iterators",
         "operators", "path", "ccall", "parse", "loading", "bigint",
         "bigfloat", "sorting", "statistics", "spawn", "backtrace",
         "file", "read", "mmap", "version", "resolve",
