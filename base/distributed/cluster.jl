@@ -525,8 +525,8 @@ function launch_additional(np::Integer, cmd::Cmd)
     addresses = Vector{Any}(np)
 
     for i in 1:np
-        io, pobj = open(pipeline(detach(cmd), stderr=STDERR), "r")
-        io_objs[i] = io
+        io = open(detach(cmd))
+        io_objs[i] = io.out
     end
 
     for (i,io) in enumerate(io_objs)

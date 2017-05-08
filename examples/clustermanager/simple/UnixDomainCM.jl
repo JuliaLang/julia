@@ -13,10 +13,10 @@ function launch(manager::UnixDomainCM, params::Dict, launched::Array, c::Conditi
         sockname = tempname()
         try
             cmd = `$(params[:exename]) --startup-file=no $(@__FILE__) udwrkr $sockname $cookie`
-            io, pobj = open(cmd, "r")
+            pobj = open(cmd)
 
             wconfig = WorkerConfig()
-            wconfig.userdata = Dict(:sockname=>sockname, :io=>io, :process=>pobj)
+            wconfig.userdata = Dict(:sockname=>sockname, :io=>pobj.out, :process=>pobj)
             push!(launched, wconfig)
             notify(c)
         catch e
