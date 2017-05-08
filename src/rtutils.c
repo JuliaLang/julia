@@ -841,14 +841,16 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         if (nb > 0 && tlen == 0) {
             uint8_t *data = (uint8_t*)v;
             n += jl_printf(out, "0x");
-            for(int i=nb-1; i >= 0; --i)
+            for(int i = nb - 1; i >= 0; --i)
                 n += jl_printf(out, "%02" PRIx8, data[i]);
         }
         else {
-            for (size_t i = 0; i < tlen; i++) {
+            size_t i = 0;
+            if (vt == jl_typemap_entry_type)
+                i = 1;
+            for (; i < tlen; i++) {
                 if (!istuple) {
                     n += jl_printf(out, "%s", jl_symbol_name((jl_sym_t*)jl_svecref(vt->name->names, i)));
-                    //jl_fielddesc_t f = t->fields[i];
                     n += jl_printf(out, "=");
                 }
                 size_t offs = jl_field_offset(vt, i);
@@ -861,10 +863,14 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
                                            (jl_datatype_t*)jl_field_type(vt, i),
                                            depth);
                 }
-                if (istuple && tlen==1)
+                if (istuple && tlen == 1)
                     n += jl_printf(out, ",");
-                else if (i != tlen-1)
+                else if (i != tlen - 1)
                     n += jl_printf(out, ", ");
+            }
+            if (vt == jl_typemap_entry_type) {
+                n += jl_printf(out, ", next=↩︎\n  ");
+                n += jl_static_show_x(out, jl_fieldref(v, 0), depth);
             }
         }
         n += jl_printf(out, ")");
