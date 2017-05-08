@@ -2565,7 +2565,6 @@ function typeinf_ext(linfo::MethodInstance, world::UInt)
         return typeinf_code(linfo, true, true, InferenceParams(world))
     else
         # toplevel lambda - infer directly
-        linfo.inInference = true
         ccall(:jl_typeinf_begin, Void, ())
         frame = InferenceState(linfo, linfo.inferred::CodeInfo,
                                true, true, InferenceParams(world), nothing)
@@ -2926,7 +2925,7 @@ function finish(me::InferenceState)
 
         # check if the existing me.linfo metadata is also sufficient to describe the current inference result
         # to decide if it is worth caching it again (which would also clear any generated code)
-        already_inferred = false
+        already_inferred = !me.linfo.inInference
         if isdefined(me.linfo, :inferred)
             inf = me.linfo.inferred
             if !isa(inf, CodeInfo) || (inf::CodeInfo).inferred
@@ -3825,9 +3824,6 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
         if isdefined(linfo, :inferred) && linfo.inferred !== nothing
             # use cache
             inferred = linfo.inferred
-        elseif linfo.inInference
-            # use WIP
-            frame = typeinf_active(linfo, sv)
         elseif force_infer
             # create inferred code on-demand
             # but if we decided in the past not to try to infer this particular signature
