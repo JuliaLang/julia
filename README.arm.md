@@ -151,6 +151,6 @@ the default configuration flashed by [Jetpack 3.0](https://developer.nvidia.com/
 sudo apt-get install gfortran wget cmake
 ```
 
-A full multi-threaded build, including LLVM,
+A full parallel build, including LLVM,
 will complete in around two hours. All tests pass and CUDA functionality is available
 through, e.g., [CUDAdrv](https://github.com/JuliaGPU/CUDAdrv.jl).
