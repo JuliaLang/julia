@@ -47,16 +47,26 @@
 #endif
 
 #if jl_has_builtin(__builtin_assume)
-static inline void jl_assume_(int cond)
-{
-    __builtin_assume(cond);
-}
 #define jl_assume(cond) (__extension__ ({               \
                 __typeof__(cond) cond_ = (cond);        \
-                jl_assume_(!!(cond_));                  \
-                cond;                                   \
+                __builtin_assume(!!(cond_));            \
+                cond_;                                  \
             }))
-#elif defined(_COMPILER_GCC_)
+#elif defined(_COMPILER_MICROSOFT_) && defined(__cplusplus)
+template<typename T>
+static inline T
+jl_assume(T v)
+{
+    __assume(!!v);
+    return v;
+}
+#elif defined(_COMPILER_INTEL_)
+#define jl_assume(cond) (__extension__ ({               \
+                __typeof__(cond) cond_ = (cond);        \
+                __assume(!!(cond_));                    \
+                cond_;                                  \
+            }))
+#elif defined(__GNUC__)
 static inline void jl_assume_(int cond)
 {
     if (!cond) {
@@ -68,19 +78,6 @@ static inline void jl_assume_(int cond)
                 jl_assume_(!!(cond_));                  \
                 cond_;                                  \
             }))
-#elif defined(_COMPILER_INTEL_)
-#define jl_assume(cond) (__extension__ ({       \
-                __assume(!!(cond));             \
-                cond;                           \
-            }))
-#elif defined(_COMPILER_MICROSOFT_) && defined(__cplusplus)
-template<typename T>
-static inline T
-jl_assume(T v)
-{
-    __assume(!!v);
-    return v;
-}
 #else
 #define jl_assume(cond) (cond)
 #endif
@@ -352,7 +349,7 @@ STATIC_INLINE jl_value_t *jl_call_method_internal(jl_method_instance_t *meth, jl
     jl_value_t *v = jl_compile_method_internal(&fptr, meth);
     if (v)
         return v;
-    jl_assume(fptr.jlcall_api != 2);
+    (void)jl_assume(fptr.jlcall_api != 2);
     return jl_call_fptr_internal(&fptr, meth, args, nargs);
 }
 
