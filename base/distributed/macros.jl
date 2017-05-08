@@ -49,22 +49,20 @@ macro fetchfrom(p, expr)
 end
 
 # extract a list of modules to import from an expression
-extract_imports(x) = Symbol[]
-function extract_imports(ex::Expr)
-    if Meta.isexpr(ex, [:import, :using])
-        return Symbol[ex.args[1]]
+extract_imports!(imports, x) = imports
+function extract_imports!(imports, ex::Expr)
+    if Meta.isexpr(ex, (:import, :using))
+        return push!(imports, ex.args[1])
     elseif Meta.isexpr(ex, :let)
-        return extract_imports(ex.args[1])
-    elseif Meta.isexpr(ex, [:toplevel, :block])
-        imports = Symbol[]
+        return extract_imports!(imports, ex.args[1])
+    elseif Meta.isexpr(ex, (:toplevel, :block))
         for i in eachindex(ex.args)
-            append!(imports, extract_imports(ex.args[i]))
+            extract_imports!(imports, ex.args[i])
         end
-        return imports
-    else
-        return Symbol[]
     end
+    return imports
 end
+extract_imports(x) = extract_imports!(Symbol[], x)
 
 """
     @everywhere expr
