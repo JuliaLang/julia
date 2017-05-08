@@ -149,8 +149,7 @@ mutable struct InferenceState
 
     # src is assumed to be a newly-allocated CodeInfo, that can be modified in-place to contain intermediate results
     function InferenceState(linfo::MethodInstance, src::CodeInfo,
-                            optimize::Bool, cached::Bool, params::InferenceParams,
-                            parent::Union{Void, InferenceState})
+                            optimize::Bool, cached::Bool, params::InferenceParams)
         code = src.code::Array{Any,1}
         nl = label_counter(code) + 1
         toplevel = !isdefined(linfo, :def)
@@ -268,24 +267,35 @@ mutable struct InferenceState
             ssavalue_uses, ssavalue_init,
             Vector{Tuple{InferenceState,LineNum}}(), # backedges
             Vector{InferenceState}(), # callers_in_cycle
-            parent,
+            #=parent=#nothing,
             false, false, optimize, cached, false, false)
         return frame
     end
 end
 
-# create copies of the CodeInfo definition, and any fields that type-inference might modify
-# TODO: post-inference see if we can swap back to the original arrays
-function get_source(li::MethodInstance)
-    if isa(li.def.source, Array{UInt8,1})
-        src = ccall(:jl_uncompress_ast, Any, (Any, Any), li.def, li.def.source)
+function InferenceState(linfo::MethodInstance,
+                        optimize::Bool, cached::Bool, params::InferenceParams)
+    # prepare an InferenceState object for infering lambda
+    # create copies of the CodeInfo definition, and any fields that type-inference might modify
+    if linfo.def.isstaged
+        try
+            # user code might throw errors – ignore them
+            src = get_staged(linfo)
+        catch
+            return nothing
+        end
     else
-        src = ccall(:jl_copy_code_info, Ref{CodeInfo}, (Any,), li.def.source)
-        src.code = copy_exprargs(src.code)
-        src.slotnames = copy(src.slotnames)
-        src.slotflags = copy(src.slotflags)
+        # TODO: post-inference see if we can swap back to the original arrays?
+        if isa(linfo.def.source, Array{UInt8,1})
+            src = ccall(:jl_uncompress_ast, Any, (Any, Any), linfo.def, linfo.def.source)
+        else
+            src = ccall(:jl_copy_code_info, Ref{CodeInfo}, (Any,), linfo.def.source)
+            src.code = copy_exprargs(src.code)
+            src.slotnames = copy(src.slotnames)
+            src.slotflags = copy(src.slotflags)
+        end
     end
-    return src
+    return InferenceState(linfo, src, optimize, cached, params)
 end
 
 function get_staged(li::MethodInstance)
@@ -1071,7 +1081,9 @@ function invoke_tfunc(f::ANY, types::ANY, argtype::ANY, sv::InferenceState)
     meth = entry.func
     (ti, env) = ccall(:jl_match_method, Ref{SimpleVector}, (Any, Any),
                       argtype, meth.sig)
-    return typeinf_edge(meth::Method, ti, env, sv)
+    rt, edge = typeinf_edge(meth::Method, ti, env, sv)
+    edge !== nothing && add_backedge!(edge::MethodInstance, sv)
+    return rt
 end
 
 function tuple_tfunc(argtype::ANY)
@@ -1266,20 +1278,20 @@ function abstract_call_gf_by_type(f::ANY, atype::ANY, sv::InferenceState)
         # this means too many methods matched
         return Any
     end
-    x::Array{Any,1} = applicable
+    applicable = applicable::Array{Any,1}
     fullmatch = false
-    for (m::SimpleVector) in x
+    for (m::SimpleVector) in applicable
         sig = m[1]
         sigtuple = unwrap_unionall(sig)::DataType
         method = m[3]::Method
         sparams = m[2]::SimpleVector
         recomputesvec = false
-        if !fullmatch && typeseq(sig, argtype)
+        if !fullmatch && (argtype <: method.sig)
             fullmatch = true
         end
 
         # limit argument type tuple growth
-        msig = unwrap_unionall(m[3].sig)
+        msig = unwrap_unionall(method.sig)
         lsig = length(msig.parameters)
         ls = length(sigtuple.parameters)
         td = type_depth(sig)
@@ -1367,7 +1379,8 @@ function abstract_call_gf_by_type(f::ANY, atype::ANY, sv::InferenceState)
             end
             sparams = recomputed[2]::SimpleVector
         end
-        rt = typeinf_edge(method, sig, sparams, sv)
+        rt, edge = typeinf_edge(method, sig, sparams, sv)
+        edge !== nothing && add_backedge!(edge::MethodInstance, sv)
         rettype = tmerge(rettype, rt)
         if rettype === Any
             break
@@ -1379,7 +1392,7 @@ function abstract_call_gf_by_type(f::ANY, atype::ANY, sv::InferenceState)
         add_mt_backedge(ftname.mt, argtype, sv)
         update_valid_age!(min_valid[1], max_valid[1], sv)
     end
-    if isempty(x)
+    if isempty(applicable)
         # TODO: this is needed because type intersection is wrong in some cases
         return Any
     end
@@ -2432,35 +2445,20 @@ function resolve_call_cycle!(linfo::MethodInstance, parent::InferenceState)
     return nothing
 end
 
-resolve_call_cycle!(linfo::MethodInstance, parent::Void) = nothing
-
 # build (and start inferring) the inference frame for the linfo
-function typeinf_frame(linfo::MethodInstance, parent::Union{Void,InferenceState},
+function typeinf_frame(linfo::MethodInstance,
                        optimize::Bool, cached::Bool, params::InferenceParams)
-    frame = resolve_call_cycle!(linfo, parent)
-    if isa(frame, Void)
-        # inference not started yet, make a new frame for a new lambda
-        if linfo.def.isstaged
-            try
-                # user code might throw errors – ignore them
-                src = get_staged(linfo)
-            catch
-                return nothing
-            end
-        else
-            src = get_source(linfo)
-        end
-        cached && (linfo.inInference = true)
-        frame = InferenceState(linfo, src, optimize, cached, params, parent)
-        typeinf(frame)
-    end
+    frame = InferenceState(linfo, optimize, cached, params)
+    frame === nothing && return nothing
+    cached && (linfo.inInference = true)
+    typeinf(frame)
     return frame
 end
 
 # compute (and cache) an inferred AST and return the current best estimate of the result type
 function typeinf_edge(method::Method, atypes::ANY, sparams::SimpleVector, caller::InferenceState)
     code = code_for_method(method, atypes, sparams, caller.params.world)
-    code === nothing && return Any
+    code === nothing && return Any, nothing
     code = code::MethodInstance
     if isdefined(code, :inferred)
         # return rettype if the code is already inferred
@@ -2468,18 +2466,27 @@ function typeinf_edge(method::Method, atypes::ANY, sparams::SimpleVector, caller
         # so need to check whether the code itself is also inferred
         inf = code.inferred
         if !isa(inf, CodeInfo) || (inf::CodeInfo).inferred
-            add_backedge!(code, caller)
             if isdefined(code, :inferred_const)
-                return abstract_eval_constant(code.inferred_const)
+                return abstract_eval_constant(code.inferred_const), code
             else
-                return code.rettype
+                return code.rettype, code
             end
         end
     end
-    frame = typeinf_frame(code, caller, true, true, caller.params)
-    frame === nothing && return Any
+    frame = resolve_call_cycle!(code, caller)
+    if frame === nothing
+        code.inInference = true
+        frame = InferenceState(code, true, true, caller.params) # always optimize and cache edge targets
+        if frame === nothing
+            code.inInference = false
+            return Any, nothing
+        end
+        frame.parent = caller
+        typeinf(frame)
+        return frame.bestguess, frame.inferred ? frame.linfo : nothing
+    end
     frame = frame::InferenceState
-    return frame.bestguess
+    return frame.bestguess, nothing
 end
 
 #### entry points for inferring a MethodInstance given a type signature ####
@@ -2523,7 +2530,7 @@ function typeinf_code(linfo::MethodInstance, optimize::Bool, cached::Bool,
             end
         end
     end
-    frame = typeinf_frame(linfo, nothing, optimize, cached, params)
+    frame = typeinf_frame(linfo, optimize, cached, params)
     ccall(:jl_typeinf_end, Void, ())
     frame === nothing && return svec(nothing, nothing, Any)
     frame = frame::InferenceState
@@ -2551,7 +2558,7 @@ function typeinf_type(method::Method, atypes::ANY, sparams::SimpleVector,
             end
         end
     end
-    frame = typeinf_frame(code, nothing, cached, cached, params)
+    frame = typeinf_frame(code, cached, cached, params)
     ccall(:jl_typeinf_end, Void, ())
     frame === nothing && return nothing
     frame = frame::InferenceState
@@ -2567,7 +2574,7 @@ function typeinf_ext(linfo::MethodInstance, world::UInt)
         # toplevel lambda - infer directly
         ccall(:jl_typeinf_begin, Void, ())
         frame = InferenceState(linfo, linfo.inferred::CodeInfo,
-                               true, true, InferenceParams(world), nothing)
+                               true, true, InferenceParams(world))
         typeinf(frame)
         ccall(:jl_typeinf_end, Void, ())
         @assert frame.inferred # TODO: deal with this better
@@ -2976,7 +2983,7 @@ function finish(me::InferenceState)
         end
     end
 
-    # update all of the callers by traversing the backedges
+    # update all of the callers with real backedges by traversing the temporary list of backedges
     for (i, _) in me.backedges
         add_backedge!(me.linfo, i)
     end
@@ -3817,7 +3824,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
         # as we'll be able to fix that up at the end of inlinable when we verify the return type.
         # But `next` and `indexed_next` make tuples which would end up burying some of that information in the AST
         # where we can't easily correct it afterwards.
-        frame = InferenceState(linfo, get_source(linfo), #=optimize=#true, #=cache=#false, sv.params, nothing)
+        frame = InferenceState(linfo, #=optimize=#true, #=cache=#false, sv.params)
         frame.stmt_types[1][3] = VarState(atypes[3], false)
         typeinf(frame)
     else
@@ -3829,7 +3836,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
             # but if we decided in the past not to try to infer this particular signature
             # (due to signature coarsening in abstract_call_gf_by_type)
             # don't infer it now, as attempting to force it now would be a bad idea (non terminating)
-            frame = typeinf_frame(linfo, nothing, #=optimize=#true, #=cache=#true, sv.params)
+            frame = typeinf_frame(linfo, #=optimize=#true, #=cache=#true, sv.params)
         end
     end
 
