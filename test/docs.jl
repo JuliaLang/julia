@@ -2,9 +2,8 @@
 
 import Base.Docs: meta, @var, DocStr, parsedoc
 
-const curmod = current_module()
-const curmod_name = fullname(curmod)
-const curmod_prefix = "$(["$m." for m in curmod_name]...)"
+# For curmod_*
+include("testenv.jl")
 
 # Test helpers.
 function docstrings_equal(d1, d2)
@@ -875,7 +874,7 @@ let x = Binding(Base, :bindingdoesnotexist)
     @test @var(Base.bindingdoesnotexist) == x
 end
 
-let x = Binding(current_module(), :bindingdoesnotexist)
+let x = Binding(curmod, :bindingdoesnotexist)
     @test defined(x) == false
     @test @var(bindingdoesnotexist) == x
 end
