@@ -16,7 +16,7 @@ import
         eps, signbit, sin, cos, tan, sec, csc, cot, acos, asin, atan,
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, atan2,
         cbrt, typemax, typemin, unsafe_trunc, realmin, realmax, rounding,
-        setrounding, maxintfloat, widen, significand, frexp, tryparse, iszero
+        setrounding, maxintfloat, widen, significand, frexp, tryparse, iszero, big
 
 import Base.Rounding: rounding_raw, setrounding_raw
 
@@ -251,6 +251,8 @@ Float16(x::BigFloat, r::RoundingMode) =
 promote_rule(::Type{BigFloat}, ::Type{<:Real}) = BigFloat
 promote_rule(::Type{BigInt}, ::Type{<:AbstractFloat}) = BigFloat
 promote_rule(::Type{BigFloat}, ::Type{<:AbstractFloat}) = BigFloat
+
+big(::Type{<:AbstractFloat}) = BigFloat
 
 function convert(::Type{Rational{BigInt}}, x::AbstractFloat)
     if isnan(x); return zero(BigInt)//zero(BigInt); end

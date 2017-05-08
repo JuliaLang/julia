@@ -57,6 +57,10 @@ end
 
 @test typeof(BigInt(BigInt(1))) == BigInt
 
+for x in (Int16(0), 1, 3//4, big(5//6), big(9))
+    @test big(typeof(x)) == typeof(big(x))
+    @test big(typeof(complex(x, x))) == typeof(big(complex(x, x)))
+end
 
 # Signed addition
 @test a+Int8(1) == b
