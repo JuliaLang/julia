@@ -128,7 +128,8 @@ function _diffshape_broadcast(f::Tf, A::SparseVecOrMat, Bs::Vararg{SparseVecOrMa
     indextypeC = _promote_indtype(A, Bs...)
     entrytypeC = Base.Broadcast._broadcast_eltype(f, A, Bs...)
     shapeC = to_shape(Base.Broadcast.broadcast_indices(A, Bs...))
-    maxnnzC = fpreszeros ? _checked_maxnnzbcres(shapeC, A, Bs...) : _densennz(shapeC)
+    #TODO do a smarter estimate than dense when !fpreszeros
+    maxnnzC = _checked_maxnnzbcres(shapeC, A, Bs...)
     C = _allocres(shapeC, indextypeC, entrytypeC, maxnnzC)
     return fpreszeros ? _broadcast_zeropres!(f, C, A, Bs...) :
                         _broadcast_notzeropres!(f, fofzeros, C, A, Bs...)
@@ -679,36 +680,82 @@ function _broadcast_zeropres!(f::Tf, C::SparseVecOrMat, A::SparseVecOrMat, B::Sp
     trimstorage!(C, Ck - 1)
     return C
 end
+
+@inline _fillfromto!(A::SparseVecOrMat, from, to, fillvalue) = storedvals(A)[from:to] = fillvalue
+
+# Expand and fill storage of A with to accomodate at least `currentidx+needed` values
+@inline function _extendfill(A::SparseVecOrMat, currentidx, needed, currentsize, fillvalue)
+    if currentidx + needed > currentsize
+        newsize = expandstorage!(A, min(currentidx + needed + currentsize, _densennz(size(A))))
+        _fillfromto!(A, currentidx+1, newsize, fillvalue)
+        return newsize
+    end
+    return currentsize
+end
+
+# Assume the next nskip elemets in A have right values, and update indices
+@inline function _skipn(A::SparseVecOrMat, Ak, Ai, nskip)
+  if nskip != 0
+      storedinds(A)[(Ak):(Ak+nskip-1)] = (Ai+1):(Ai+nskip)
+      return Ak + nskip
+  end
+  return Ak
+end
+
 function _broadcast_notzeropres!(f::Tf, fillvalue, C::SparseVecOrMat, A::SparseVecOrMat, B::SparseVecOrMat) where Tf
     # For information on this code, see comments in similar code in _broadcast_zeropres! above
     # Build dense matrix structure in C, expanding storage if necessary
-    _densestructure!(C)
+    # TODO fix cases !(numrows(A) == numrows(B) == numrows(C))
+    # TODO fix text, and maybe fill only when nskip != 0?
+    spaceC::Int = min(length(storedinds(C)), length(storedvals(C)))
     # Populate values
     fill!(storedvals(C), fillvalue)
     rowsentinelA = convert(indtype(A), numrows(C) + 1)
     rowsentinelB = convert(indtype(B), numrows(C) + 1)
     # Cases without vertical expansion
     if numrows(A) == numrows(B) == numrows(C)
-        @inbounds for (j, jo) in zip(columns(C), _densecoloffsets(C))
+        Ck = 1
+        nskip = 0
+        @inbounds for j = columns(C)
+            setcolptr!(C, j, Ck)
             Ak, stopAk = numcols(A) == 1 ? (colstartind(A, 1), colboundind(A, 1)) : (colstartind(A, j), colboundind(A, j))
             Bk, stopBk = numcols(B) == 1 ? (colstartind(B, 1), colboundind(B, 1)) : (colstartind(B, j), colboundind(B, j))
             Ai = Ak < stopAk ? storedinds(A)[Ak] : rowsentinelA
             Bi = Bk < stopBk ? storedinds(B)[Bk] : rowsentinelB
+            nskip = min(Ai, Bi) - 1
+            # If needed, extend and fill with fillvalue
+            spaceC = _extendfill(C, Ck, nskip, spaceC, fillvalue)
+            # Set pointers for fillvalue for each 0/0
+            Ck = _skipn(C, Ck, 0, nskip)
             while true
+                nskip = 0 # number of 0/0 skipped
+                Biold = Bi
+                Aiold = Ai
                 if Ai < Bi
                     Cx, Ci = f(storedvals(A)[Ak], zero(eltype(B))), Ai
                     Ak += oneunit(Ak); Ai = Ak < stopAk ? storedinds(A)[Ak] : rowsentinelA
+                    nskip = min(Ai,Bi) - Aiold - 1
                 elseif Ai > Bi
                     Cx, Ci = f(zero(eltype(A)), storedvals(B)[Bk]), Bi
                     Bk += oneunit(Bk); Bi = Bk < stopBk ? storedinds(B)[Bk] : rowsentinelB
+                    nskip = min(Ai,Bi) - Biold - 1
                 elseif #= Ai == Bi && =# Ai == rowsentinelA
                     break # column complete
                 else #= Ai == Bi != rowsentinel =#
                     Cx, Ci::indtype(C) = f(storedvals(A)[Ak], storedvals(B)[Bk]), Ai
                     Ak += oneunit(Ak); Ai = Ak < stopAk ? storedinds(A)[Ak] : rowsentinelA
                     Bk += oneunit(Bk); Bi = Bk < stopBk ? storedinds(B)[Bk] : rowsentinelB
+                    nskip = min(Ai - Aiold, Bi - Biold) - 1
                 end
-                Cx != fillvalue && (storedvals(C)[jo + Ci] = Cx)
+                # If needed, extend and fill with fillvalue
+                spaceC = _extendfill(C, Ck, nskip+1, spaceC, fillvalue)
+                if !_iszero(Cx)
+                    storedinds(C)[Ck] = Ci
+                    storedvals(C)[Ck] = Cx
+                    Ck += 1
+                end
+                # Set pointers for fillvalue for each 0/0
+                Ck = _skipn(C, Ck, Ci, nskip)
             end
         end
     # Cases with vertical expansion
@@ -776,6 +823,8 @@ function _broadcast_notzeropres!(f::Tf, fillvalue, C::SparseVecOrMat, A::SparseV
             end
         end
     end
+    @inbounds setcolptr!(C, numcols(C) + 1, Ck)
+    trimstorage!(C, Ck - 1)
     return C
 end
 _finishempty!(C::SparseVector) = C
