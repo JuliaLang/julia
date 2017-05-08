@@ -599,14 +599,15 @@ function create_expr_cache(input::String, output::String, concrete_deps::Vector{
             eval(Main, deserialize(STDIN))
         end
         """
-    io, pobj = open(pipeline(detach(`$(julia_cmd()) -O0
-                                    --output-ji $output --output-incremental=yes
-                                    --startup-file=no --history-file=no
-                                    --color=$(have_color ? "yes" : "no")
-                                    --eval $code_object`), stderr=STDERR),
-                    "w", STDOUT)
+    io = open(pipeline(detach(`$(julia_cmd()) -O0
+                              --output-ji $output --output-incremental=yes
+                              --startup-file=no --history-file=no
+                              --color=$(have_color ? "yes" : "no")
+                              --eval $code_object`), stderr=STDERR),
+              "w", STDOUT)
+    in = io.in
     try
-        serialize(io, quote
+        serialize(in, quote
                   empty!(Base.LOAD_PATH)
                   append!(Base.LOAD_PATH, $LOAD_PATH)
                   empty!(Base.LOAD_CACHE_PATH)
@@ -619,22 +620,21 @@ function create_expr_cache(input::String, output::String, concrete_deps::Vector{
                   end)
         source = source_path(nothing)
         if source !== nothing
-            serialize(io, quote
+            serialize(in, quote
                       task_local_storage()[:SOURCE_PATH] = $(source)
                       end)
         end
-        serialize(io, :(Base.include($(abspath(input)))))
+        serialize(in, :(Base.include($(abspath(input)))))
         if source !== nothing
-            serialize(io, :(delete!(task_local_storage(), :SOURCE_PATH)))
+            serialize(in, :(delete!(task_local_storage(), :SOURCE_PATH)))
         end
-        close(io)
-        wait(pobj)
-        return pobj
-    catch
-        kill(pobj)
-        close(io)
-        rethrow()
+        close(in)
+    catch ex
+        close(in)
+        process_running(io) && Timer(t -> kill(io), 5.0) # wait a short time before killing the process to give it a chance to clean up on its own first
+        rethrow(ex)
     end
+    return io
 end
 
 compilecache(mod::Symbol) = compilecache(string(mod))

@@ -201,10 +201,10 @@ function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, 
     # detach launches the command in a new process group, allowing it to outlive
     # the initial julia process (Ctrl-C and teardown methods are handled through messages)
     # for the launched processes.
-    io, pobj = open(pipeline(detach(cmd), stderr=STDERR), "r")
+    io = open(detach(cmd))
 
     wconfig = WorkerConfig()
-    wconfig.io = io
+    wconfig.io = io.out
     wconfig.host = host
     wconfig.tunnel = params[:tunnel]
     wconfig.sshflags = sshflags
@@ -320,12 +320,11 @@ function launch(manager::LocalManager, params::Dict, launched::Array, c::Conditi
     bind_to = manager.restrict ? `127.0.0.1` : `$(LPROC.bind_addr)`
 
     for i in 1:manager.np
-        io, pobj = open(pipeline(detach(
-                setenv(`$(julia_cmd(exename)) $exeflags --bind-to $bind_to --worker $(cluster_cookie())`, dir=dir)),
-            stderr=STDERR), "r")
+        cmd = `$(julia_cmd(exename)) $exeflags --bind-to $bind_to --worker $(cluster_cookie())`
+        io = open(detach(setenv(cmd, dir=dir)))
         wconfig = WorkerConfig()
-        wconfig.process = pobj
-        wconfig.io = io
+        wconfig.process = io
+        wconfig.io = io.out
         wconfig.enable_threaded_blas = params[:enable_threaded_blas]
         push!(launched, wconfig)
     end
