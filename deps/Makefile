@@ -58,7 +58,7 @@ DEP_LIBS += osxunwind
 endif
 endif
 
-ifeq ($(OS), Linux)
+ifneq (,$(findstring $(OS),Linux FreeBSD))
 ifeq ($(USE_SYSTEM_PATCHELF), 0)
 DEP_LIBS += patchelf
 PATCHELF:=$(build_depsbindir)/patchelf
