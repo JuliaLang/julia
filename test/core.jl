@@ -78,6 +78,15 @@ _z_z_z_(::Int, c...) = 3
 @test args_morespecific(Tuple{Type{Pair{A,B} where B}} where A, Tuple{DataType})
 @test args_morespecific(Tuple{Union{Int,String},Type{Pair{A,B} where B}} where A, Tuple{Integer,UnionAll})
 
+# PR #21750
+let A = Tuple{Any, Tuple{Vararg{Integer,N} where N}},
+    B = Tuple{Any, Tuple{Any}},
+    C = Tuple{Any, Tuple{}}
+    @test args_morespecific(A, B)
+    @test args_morespecific(C, A)
+    @test args_morespecific(C, B)
+end
+
 # with bound varargs
 
 _bound_vararg_specificity_1{T,N}(::Type{Array{T,N}}, d::Vararg{Int, N}) = 0
