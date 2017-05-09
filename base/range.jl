@@ -238,6 +238,7 @@ julia> linspace(1.3,2.9,9)
 ```
 """
 linspace(start, stop, len::Real=50) = linspace(promote_noncircular(start, stop)..., Int(len))
+linspace(start::T, stop::T, len::Real=50) where {T} = linspace(start, stop, Int(len))
 
 linspace(start::Real, stop::Real, len::Integer) = linspace(promote(start, stop)..., len)
 linspace(start::T, stop::T, len::Integer) where {T<:Integer} = linspace(Float64, start, stop, len, 1)
