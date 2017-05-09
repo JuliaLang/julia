@@ -2055,6 +2055,28 @@ end
     @test accumulate(op, [10 20 30], 2) == [10 op(10, 20) op(op(10, 20), 30)] == [10 40 110]
 end
 
+struct F21666{T <: Base.TypeArithmetic}
+    x::Float32
+end
+
+@testset "Exactness of cumsum # 21666" begin
+    # test that cumsum uses more stable algorithm
+    # for types with unknown/rounding arithmetic
+    Base.TypeArithmetic(::Type{F21666{T}}) where {T} = T
+    Base.:+(x::F, y::F) where {F <: F21666} = F(x.x + y.x)
+    Base.convert(::Type{Float64}, x::F21666) = Float64(x.x)
+    # we make v pretty large, because stable algorithm may have a large base case
+    v = zeros(300); v[1] = 2; v[200:end] = eps(Float32)
+
+    f_rounds = Float64.(cumsum(F21666{Base.ArithmeticRounds}.(v)))
+    f_unknown = Float64.(cumsum(F21666{Base.ArithmeticUnknown}.(v)))
+    f_truth = cumsum(v)
+    f_inexact = Float64.(accumulate(+, Float32.(v)))
+    @test f_rounds == f_unknown
+    @test f_rounds != f_inexact
+    @test norm(f_truth - f_rounds) < norm(f_truth - f_inexact)
+end
+
 @testset "zeros and ones" begin
     @test ones([1,2], Float64, (2,3)) == ones(2,3)
     @test ones(2) == ones(Int, 2) == ones([2,3], Float32, 2) ==  [1,1]
