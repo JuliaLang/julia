@@ -32,7 +32,7 @@ end
     SharedArray{T}(dims::NTuple; init=false, pids=Int[])
     SharedArray{T,N}(...)
 
-Construct a `SharedArray` of a bits type `T` and size `dims` across the
+Construct a `SharedArray` of a primitive type `T` and size `dims` across the
 processes specified by `pids` - all of which have to be on the same
 host.  If `N` is specified by calling `SharedArray{T,N}(dims)`, then
 `N` must match the length of `dims`.
@@ -49,7 +49,7 @@ the participating workers.
     SharedArray{T,N}(...)
 
 Construct a `SharedArray` backed by the file `filename`, with element
-type `T` (must be a bits type) and size `dims`, across the processes
+type `T` (must be a primitive type) and size `dims`, across the processes
 specified by `pids` - all of which have to be on the same host. This
 file is mmapped into the host memory, with the following consequences:
 
@@ -78,7 +78,7 @@ beginning of the file.
 SharedArray
 
 function SharedArray{T,N}(dims::Dims{N}; init=false, pids=Int[]) where {T,N}
-    isbits(T) || throw(ArgumentError("type of SharedArray elements must be bits types, got $(T)"))
+    isbits(T) || throw(ArgumentError("type of SharedArray elements must be primitive types, got $(T)"))
 
     pids, onlocalhost = shared_pids(pids)
 
@@ -153,7 +153,7 @@ function SharedArray{T,N}(filename::AbstractString, dims::NTuple{N,Int}, offset:
         throw(ArgumentError("$filename is not an absolute path; try abspath(filename)?"))
     end
     if !isbits(T)
-        throw(ArgumentError("type of SharedArray elements must be bits types, got $(T)"))
+        throw(ArgumentError("type of SharedArray elements must be primitive types, got $(T)"))
     end
 
     pids, onlocalhost = shared_pids(pids)
