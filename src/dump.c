@@ -687,16 +687,11 @@ static void jl_serialize_module(jl_serializer_state *s, jl_module_t *m)
     if (m == jl_main_module) {
         write_int32(s->s, 1);
         jl_serialize_value(s, (jl_value_t*)jl_core_module);
-        write_int32(s->s, 0);
     }
     else {
         write_int32(s->s, m->usings.len);
         for(i=0; i < m->usings.len; i++) {
             jl_serialize_value(s, (jl_value_t*)m->usings.items[i]);
-        }
-        write_int32(s->s, m->optional.len);
-        for(i=0; i < m->optional.len; i++) {
-            jl_serialize_value(s, (jl_value_t*)m->optional.items[i]);
         }
     }
     write_uint8(s->s, m->istopmod);
@@ -1349,8 +1344,23 @@ static void write_work_list(ios_t *s)
     write_int32(s, 0);
 }
 
-// serialize the global _require_dependencies array of pathnames that
-// are include depenencies
+static jl_array_t *unique_array(jl_array_t *arr)
+{
+    // unique(arr) to eliminate duplicates while preserving order:
+    static jl_value_t *unique_func = NULL;
+    if (!unique_func)
+        unique_func = jl_get_global(jl_base_module, jl_symbol("unique"));
+    jl_value_t *uniqargs[2] = {unique_func, (jl_value_t*)arr};
+    size_t last_age = jl_get_ptls_states()->world_age;
+    jl_get_ptls_states()->world_age = jl_world_counter;
+    jl_array_t *uarr = arr && unique_func ? (jl_array_t*)jl_apply(uniqargs, 2) : NULL;
+    jl_get_ptls_states()->world_age = last_age;
+
+    return uarr;
+}
+
+// serialize the global `_require_dependencies` array of pathnames that
+// are include dependencies
 static void write_dependency_list(ios_t *s)
 {
     size_t total_size = 0;
@@ -1360,14 +1370,7 @@ static void write_dependency_list(ios_t *s)
 
     // unique(deps) to eliminate duplicates while preserving order:
     // we preserve order so that the topmost included .jl file comes first
-    static jl_value_t *unique_func = NULL;
-    if (!unique_func)
-        unique_func = jl_get_global(jl_base_module, jl_symbol("unique"));
-    jl_value_t *uniqargs[2] = {unique_func, (jl_value_t*)deps};
-    size_t last_age = jl_get_ptls_states()->world_age;
-    jl_get_ptls_states()->world_age = jl_world_counter;
-    jl_array_t *udeps = deps && unique_func ? (jl_array_t*)jl_apply(uniqargs, 2) : NULL;
-    jl_get_ptls_states()->world_age = last_age;
+    jl_array_t *udeps = unique_array(deps);
 
     JL_GC_PUSH1(&udeps);
     if (udeps) {
@@ -1397,23 +1400,41 @@ static void write_dependency_list(ios_t *s)
     JL_GC_POP();
 }
 
-// serialize information about the optional dependencies
+// serialize the global `_optional_dependencies` array of optional modules
 static void write_optional_list(ios_t *s)
 {
-    int i, l = jl_array_len(serializer_worklist);
-    for (i = 0; i < l; i++) {
-        jl_module_t *workmod = (jl_module_t*)jl_array_ptr_ref(serializer_worklist, i);
-        if (workmod->parent == jl_main_module) {
-            // Write list of optional requires
-            for (i=0; i< workmod->optional.len; ++i) {
-                jl_sym_t *optional = (jl_sym_t*) workmod->optional.items[i];
-                size_t l = strlen(jl_symbol_name(optional));
-                write_int32(s, l);
-                ios_write(s, jl_symbol_name(optional), l);
-            }
+    size_t total_size = 0;
+    static jl_array_t *deps = NULL;
+    if (!deps)
+        deps = (jl_array_t*)jl_get_global(jl_base_module, jl_symbol("_optional_dependencies"));
+
+    // unique(deps) to eliminate duplicates while preserving order:
+    jl_array_t *udeps = unique_array(deps);
+
+    JL_GC_PUSH1(&udeps);
+    if (udeps) {
+        size_t l = jl_array_len(udeps);
+        for (size_t i=0; i < l; i++) {
+            jl_value_t *dep = jl_array_ptr_ref(udeps, i);
+            size_t slen = jl_string_len(dep);
+            total_size += 4 + slen;
         }
+        total_size += 4;
     }
-    write_int32(s, 0);
+    // write the total size so that we can quickly seek past all of the
+    // dependencies if we don't need them
+    write_uint64(s, total_size);
+    if (udeps) {
+        size_t l = jl_array_len(udeps);
+        for (size_t i=0; i < l; i++) {
+            jl_value_t *dep = jl_array_ptr_ref(udeps, i);
+            size_t slen = jl_string_len(dep);
+            write_int32(s, slen);
+            ios_write(s, jl_string_data(dep), slen);
+        }
+        write_int32(s, 0); // terminator, for ease of reading
+    }
+    JL_GC_POP();
 }
 
 // --- deserialize ---
@@ -1915,14 +1936,6 @@ static jl_value_t *jl_deserialize_value_module(jl_serializer_state *s)
     ni += i;
     while (i < ni) {
         m->usings.items[i] = jl_deserialize_value(s, (jl_value_t**)&m->usings.items[i]);
-        i++;
-    }
-    i = m->optional.len;
-    ni = read_int32(s->s);
-    arraylist_grow(&m->optional, ni);
-    ni += i;
-    while (i < ni) {
-        m->optional.items[i] = jl_deserialize_value(s, (jl_value_t**)&m->optional.items[i]);
         i++;
     }
     m->istopmod = read_uint8(s->s);
@@ -3267,9 +3280,8 @@ static jl_value_t *_jl_restore_incremental(ios_t *f)
     }
 
     { // skip past the optional modules list
-        size_t len;
-        while ((len = read_int32(f)))
-            ios_skip(f, len);
+        size_t deplen = read_uint64(f);
+        ios_skip(f, deplen);
     }
 
     // list of world counters of incremental dependencies

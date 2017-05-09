@@ -292,6 +292,26 @@ function include_dependency(path::AbstractString)
     return nothing
 end
 
+# used to track optional dependencies during precompilation
+const _optional_dependencies = String[]
+
+"""
+    register_optional_dependency(mod::String)
+
+In a module, declare that the module with the name `mod` is a dependency
+for precompilation; that is, the module will need to be recompiled if this
+optional module becomes available in the future.
+
+This is only needed if your module depends on a module that is not used via
+`require`, `using`, `import`, or `importall`. It has no effect outside
+pre-compilation.
+"""
+function register_optional_dependency(mod::String)
+    if myid() == 1 && _track_dependencies[]
+        push!(_optional_dependencies, mod)
+    end
+end
+
 # We throw PrecompilableError(true) when a module wants to be precompiled but isn't,
 # and PrecompilableError(false) when a module doesn't want to be precompiled but is
 struct PrecompilableError <: Exception
@@ -724,6 +744,20 @@ function parse_cache_header(f::IO)
         push!(files, (String(read(f, n)), ntoh(read(f, Float64))))
     end
     @assert totbytes == 4 "header of cache file appears to be corrupt"
+
+    # read the list of optional modules
+    totbytes = ntoh(read(f, Int64)) # total bytes for optional dependencies
+    optional_deps = Symbol[]
+    while true
+        n = ntoh(read(f, Int32))
+        n == 0 && break
+        totbytes -= 4 + n
+        @assert n >= 0 "EOF while reading cache header" # probably means this wasn't a valid file to be read by Base.parse_cache_header
+        sym = Symbol(read(f, n)) # module symbol
+        push!(optional_deps, sym)
+    end
+    @assert totbytes == 4 "header of cache file appears to be corrupt"
+
     # read the list of modules that are required to be present during loading
     required_modules = Dict{Symbol,UInt64}()
     while true
@@ -732,13 +766,6 @@ function parse_cache_header(f::IO)
         sym = Symbol(read(f, n)) # module symbol
         uuid = ntoh(read(f, UInt64)) # module UUID
         required_modules[sym] = uuid
-    end
-    optional_deps = Symbol[]
-    while true
-        n = ntoh(read(f, Int32))
-        n == 0 && break
-        sym = Symbol(read(f, n)) # module symbol
-        push!(optional_deps, sym)
     end
 
     return modules, files, required_modules, optional_deps
@@ -807,7 +834,7 @@ function stale_cachefile(modpath::String, cachefile::String)
             end
         end
 
-        for mod in optional
+        for mod in optional_deps
             name = string(mod)
             if is_optional_module_available(name)
                 DEBUG_LOADING[] && info("JL_DEBUG_LOADING: Rejecting cache file $cachefile because optional dependency $name became available.")
