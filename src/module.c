@@ -35,6 +35,7 @@ JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name)
     m->counter = 0;
     htable_new(&m->bindings, 0);
     arraylist_new(&m->usings, 0);
+    arraylist_new(&m->optional, 0);
     if (jl_core_module) {
         jl_module_using(m, jl_core_module);
     }
@@ -600,6 +601,10 @@ JL_DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m, int all, int imported)
 JL_DLLEXPORT jl_sym_t *jl_module_name(jl_module_t *m) { return m->name; }
 JL_DLLEXPORT jl_module_t *jl_module_parent(jl_module_t *m) { return m->parent; }
 JL_DLLEXPORT uint64_t jl_module_uuid(jl_module_t *m) { return m->uuid; }
+JL_DLLEXPORT void jl_module_register_optional(jl_sym_t *name) {
+    jl_module_t* m = (jl_module_t*) jl_get_current_module();
+    arraylist_push(&m->optional, name);
+}
 
 int jl_is_submodule(jl_module_t *child, jl_module_t *parent)
 {

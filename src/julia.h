@@ -403,6 +403,7 @@ typedef struct _jl_module_t {
     struct _jl_module_t *parent;
     htable_t bindings;
     arraylist_t usings;  // modules with all bindings potentially imported
+    arraylist_t optional; // all optional modules
     uint8_t istopmod;
     uint64_t uuid;
     size_t primary_world;

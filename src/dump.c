@@ -687,11 +687,16 @@ static void jl_serialize_module(jl_serializer_state *s, jl_module_t *m)
     if (m == jl_main_module) {
         write_int32(s->s, 1);
         jl_serialize_value(s, (jl_value_t*)jl_core_module);
+        write_int32(s->s, 0);
     }
     else {
         write_int32(s->s, m->usings.len);
         for(i=0; i < m->usings.len; i++) {
             jl_serialize_value(s, (jl_value_t*)m->usings.items[i]);
+        }
+        write_int32(s->s, m->optional.len);
+        for(i=0; i < m->optional.len; i++) {
+            jl_serialize_value(s, (jl_value_t*)m->optional.items[i]);
         }
     }
     write_uint8(s->s, m->istopmod);
@@ -1392,6 +1397,25 @@ static void write_dependency_list(ios_t *s)
     JL_GC_POP();
 }
 
+// serialize information about the optional dependencies
+static void write_optional_list(ios_t *s)
+{
+    int i, l = jl_array_len(serializer_worklist);
+    for (i = 0; i < l; i++) {
+        jl_module_t *workmod = (jl_module_t*)jl_array_ptr_ref(serializer_worklist, i);
+        if (workmod->parent == jl_main_module) {
+            // Write list of optional requires
+            for (i=0; i< workmod->optional.len; ++i) {
+                jl_sym_t *optional = (jl_sym_t*) workmod->optional.items[i];
+                size_t l = strlen(jl_symbol_name(optional));
+                write_int32(s, l);
+                ios_write(s, jl_symbol_name(optional), l);
+            }
+        }
+    }
+    write_int32(s, 0);
+}
+
 // --- deserialize ---
 
 static jl_fptr_t jl_deserialize_fptr(jl_serializer_state *s)
@@ -1891,6 +1915,14 @@ static jl_value_t *jl_deserialize_value_module(jl_serializer_state *s)
     ni += i;
     while (i < ni) {
         m->usings.items[i] = jl_deserialize_value(s, (jl_value_t**)&m->usings.items[i]);
+        i++;
+    }
+    i = m->optional.len;
+    ni = read_int32(s->s);
+    arraylist_grow(&m->optional, ni);
+    ni += i;
+    while (i < ni) {
+        m->optional.items[i] = jl_deserialize_value(s, (jl_value_t**)&m->optional.items[i]);
         i++;
     }
     m->istopmod = read_uint8(s->s);
@@ -2891,6 +2923,7 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
     write_header(&f);
     write_work_list(&f);
     write_dependency_list(&f);
+    write_optional_list(&f);
     write_mod_list(&f); // this can return errors during deserialize,
                         // best to keep it early (before any actual initialization)
 
@@ -3231,6 +3264,12 @@ static jl_value_t *_jl_restore_incremental(ios_t *f)
     { // skip past the dependency list
         size_t deplen = read_uint64(f);
         ios_skip(f, deplen);
+    }
+
+    { // skip past the optional modules list
+        size_t len;
+        while ((len = read_int32(f)))
+            ios_skip(f, len);
     }
 
     // list of world counters of incremental dependencies

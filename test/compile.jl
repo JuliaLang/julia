@@ -184,11 +184,11 @@ try
         @test stringmime("text/plain", Base.Docs.doc(Foo.foo)) == "foo function\n"
         @test stringmime("text/plain", Base.Docs.doc(Foo.Bar.bar)) == "bar function\n"
 
-        modules, deps, required_modules = Base.parse_cache_header(cachefile)
+        modules, deps, required_deps, optional_deps = Base.parse_cache_header(cachefile)
         @test modules == Dict(Foo_module => Base.module_uuid(Foo))
         @test map(x -> x[1],  sort(deps)) == [Foo_file, joinpath(dir, "bar.jl"), joinpath(dir, "foo.jl")]
 
-        modules, deps1 = Base.cache_dependencies(cachefile)
+        modules, deps1, optional_deps = Base.cache_dependencies(cachefile)
         @test modules == Dict(s => Base.module_uuid(getfield(Foo, s)) for s in
                                     [:Base, :Core, Foo2_module, FooBase_module, :Main])
         @test deps == deps1
