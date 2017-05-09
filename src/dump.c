@@ -2001,8 +2001,7 @@ static void jl_reinit_item(jl_value_t *v, int how, arraylist_t *tracee_list)
             case 3: { // rehash MethodTable
                 jl_methtable_t *mt = (jl_methtable_t*)v;
                 jl_typemap_rehash(mt->defs, 0);
-                // TODO: consider reverting this when we can split on Type{...} better
-                jl_typemap_rehash(mt->cache, 1); //(mt == jl_type_typename->mt) ? 0 : 1);
+                jl_typemap_rehash(mt->cache, mt->offs);
                 if (tracee_list)
                     arraylist_push(tracee_list, mt);
                 break;
@@ -2672,7 +2671,7 @@ void jl_init_serializer(void)
 
                      jl_emptysvec, jl_emptytuple, jl_false, jl_true, jl_nothing, jl_any_type,
                      call_sym, invoke_sym, goto_ifnot_sym, return_sym, body_sym, line_sym,
-                     lambda_sym, jl_symbol("tuple"), assign_sym, isdefined_sym,
+                     lambda_sym, jl_symbol("tuple"), assign_sym, isdefined_sym, jl_box_uint8(0), jl_box_uint8(1),
 
                      // empirical list of very common symbols
                      #include "common_symbols1.inc"
@@ -2690,7 +2689,6 @@ void jl_init_serializer(void)
                      jl_box_int32(30), jl_box_int32(31), jl_box_int32(32),
 #ifndef _P64
                      jl_box_int32(33), jl_box_int32(34), jl_box_int32(35),
-                     jl_box_int32(36), jl_box_int32(37),
 #endif
                      jl_box_int64(0), jl_box_int64(1), jl_box_int64(2),
                      jl_box_int64(3), jl_box_int64(4), jl_box_int64(5),
@@ -2705,7 +2703,6 @@ void jl_init_serializer(void)
                      jl_box_int64(30), jl_box_int64(31), jl_box_int64(32),
 #ifdef _P64
                      jl_box_int64(33), jl_box_int64(34), jl_box_int64(35),
-                     jl_box_int64(36), jl_box_int64(37),
 #endif
                      jl_labelnode_type, jl_linenumbernode_type, jl_gotonode_type,
                      jl_quotenode_type, jl_type_type, jl_bottom_type, jl_ref_type,
