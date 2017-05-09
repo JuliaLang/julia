@@ -291,8 +291,9 @@ let g() = Int <: Real ? 1 : ""
     @test Base.return_types(g, Tuple{}) == [Int]
 end
 
-NInt{N} = Tuple{Vararg{Int, N}}
+const NInt{N} = Tuple{Vararg{Int, N}}
 @test Base.eltype(NInt) === Int
+@test Base.return_types(eltype, (NInt,)) == Any[Union{Type{Int}, Type{Union{}}}] # issue 21763
 fNInt(x::NInt) = (x...)
 gNInt() = fNInt(x)
 @test Base.return_types(gNInt, ()) == Any[NInt]
