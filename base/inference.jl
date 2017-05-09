@@ -1300,7 +1300,8 @@ function abstract_call_gf_by_type(f::ANY, atype::ANY, sv::InferenceState)
         limitlength = false
         if mightlimitlength || mightlimitdepth
             # TODO: FIXME: this heuristic depends on non-local state making type-inference unpredictable
-            infstate = sv.parent
+            cyclei = 0
+            infstate = sv
             while infstate !== nothing
                 infstate = infstate::InferenceState
                 if isdefined(infstate.linfo, :def) && method === infstate.linfo.def
@@ -1341,7 +1342,14 @@ function abstract_call_gf_by_type(f::ANY, atype::ANY, sv::InferenceState)
                         end
                     end
                 end
-                infstate = infstate.parent
+                # iterate through the cycle before walking to the parent
+                if cyclei < length(infstate.callers_in_cycle)
+                    cyclei += 1
+                    infstate = infstate.callers_in_cycle[cyclei]
+                else
+                    cyclei = 0
+                    infstate = infstate.parent
+                end
             end
         end
 
@@ -2403,20 +2411,30 @@ function add_backedge!(frame::InferenceState, caller::InferenceState, currpc::In
     return frame
 end
 
+# at the end, all items in b's cycle
+# will now be added to a's cycle
 function union_caller_cycle!(a::InferenceState, b::InferenceState)
-    contains_is(a.callers_in_cycle, b) || push!(a.callers_in_cycle, b)
-    b.callers_in_cycle === a.callers_in_cycle && return
-    for caller in b.callers_in_cycle
-        contains_is(a.callers_in_cycle, caller) || push!(a.callers_in_cycle, caller)
-    end
+    callers_in_cycle = b.callers_in_cycle
+    b.parent = a.parent
     b.callers_in_cycle = a.callers_in_cycle
-    return nothing
+    contains_is(a.callers_in_cycle, b) || push!(a.callers_in_cycle, b)
+    if callers_in_cycle !== a.callers_in_cycle
+        for caller in callers_in_cycle
+            if caller !== b
+                caller.parent = a.parent
+                caller.callers_in_cycle = a.callers_in_cycle
+                push!(a.callers_in_cycle, caller)
+            end
+        end
+    end
+    return
 end
 
 function merge_call_chain!(parent::InferenceState, ancestor::InferenceState, child::InferenceState)
     # add backedge of parent <- child
     # then add all backeges of parent <- parent.parent
     # and merge all of the callers into ancestor.callers_in_cycle
+    # and ensure that walking the parent list will get the same result (DAG) from everywhere
     while true
         add_backedge!(child, parent, parent.currpc)
         union_caller_cycle!(ancestor, child)
@@ -2424,7 +2442,6 @@ function merge_call_chain!(parent::InferenceState, ancestor::InferenceState, chi
         parent = child.parent
         child === ancestor && break
     end
-    return nothing
 end
 
 function resolve_call_cycle!(linfo::MethodInstance, parent::InferenceState)
