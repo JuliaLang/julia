@@ -1633,6 +1633,7 @@ void jl_init_types(void)
     jl_typename_type->name = jl_new_typename_in(jl_symbol("TypeName"), core);
     jl_typename_type->name->wrapper = (jl_value_t*)jl_typename_type;
     jl_typename_type->name->mt = jl_new_method_table(jl_typename_type->name->name, core);
+    jl_typename_type->name->mt->offs = 1;
     jl_typename_type->super = jl_any_type;
     jl_typename_type->parameters = jl_emptysvec;
     jl_typename_type->name->names = jl_perm_symsvec(8, "name", "module",
@@ -1653,15 +1654,17 @@ void jl_init_types(void)
     jl_methtable_type->name = jl_new_typename_in(jl_symbol("MethodTable"), core);
     jl_methtable_type->name->wrapper = (jl_value_t*)jl_methtable_type;
     jl_methtable_type->name->mt = jl_new_method_table(jl_methtable_type->name->name, core);
+    jl_methtable_type->name->mt->offs = 1;
     jl_methtable_type->super = jl_any_type;
     jl_methtable_type->parameters = jl_emptysvec;
-    jl_methtable_type->name->names = jl_perm_symsvec(9, "name", "defs",
+    jl_methtable_type->name->names = jl_perm_symsvec(10, "name", "defs",
                                                      "cache", "max_args",
                                                      "kwsorter", "module",
-                                                     "backedges", "", "");
-    jl_methtable_type->types = jl_svec(9, jl_sym_type, jl_any_type, jl_any_type, jl_any_type/*jl_long*/,
+                                                     "backedges", "", "", "offs");
+    jl_methtable_type->types = jl_svec(10, jl_sym_type, jl_any_type, jl_any_type, jl_any_type/*jl_long*/,
                                        jl_any_type, jl_any_type/*module*/,
-                                       jl_any_type/*any vector*/, jl_any_type/*long*/, jl_any_type/*int32*/);
+                                       jl_any_type/*any vector*/, jl_any_type/*long*/, jl_any_type/*int32*/,
+                                       jl_any_type/*uint8*/);
     jl_methtable_type->uid = jl_assign_type_uid();
     jl_methtable_type->instance = NULL;
     jl_methtable_type->struct_decl = NULL;
@@ -1673,6 +1676,7 @@ void jl_init_types(void)
     jl_sym_type->name = jl_new_typename_in(jl_symbol("Symbol"), core);
     jl_sym_type->name->wrapper = (jl_value_t*)jl_sym_type;
     jl_sym_type->name->mt = jl_new_method_table(jl_sym_type->name->name, core);
+    jl_sym_type->name->mt->offs = 1;
     jl_sym_type->super = jl_any_type;
     jl_sym_type->parameters = jl_emptysvec;
     jl_sym_type->name->names = jl_emptysvec;
@@ -1689,6 +1693,7 @@ void jl_init_types(void)
     jl_simplevector_type->name = jl_new_typename_in(jl_symbol("SimpleVector"), core);
     jl_simplevector_type->name->wrapper = (jl_value_t*)jl_simplevector_type;
     jl_simplevector_type->name->mt = jl_new_method_table(jl_simplevector_type->name->name, core);
+    jl_simplevector_type->name->mt->offs = 1;
     jl_simplevector_type->super = jl_any_type;
     jl_simplevector_type->parameters = jl_emptysvec;
     jl_simplevector_type->name->names = jl_emptysvec;
@@ -2078,10 +2083,12 @@ void jl_init_types(void)
     jl_svecset(jl_methtable_type->types, 6, jl_array_any_type);
 #ifdef __LP64__
     jl_svecset(jl_methtable_type->types, 7, jl_int64_type); // unsigned long
+    jl_svecset(jl_methtable_type->types, 8, jl_int64_type); // uint32_t plus alignment
 #else
     jl_svecset(jl_methtable_type->types, 7, jl_int32_type); // DWORD
-#endif
     jl_svecset(jl_methtable_type->types, 8, jl_int32_type); // uint32_t
+#endif
+    jl_svecset(jl_methtable_type->types, 9, jl_uint8_type);
     jl_svecset(jl_method_type->types, 11, jl_method_instance_type);
     jl_svecset(jl_method_type->types, 12, jl_method_instance_type);
     jl_svecset(jl_method_instance_type->types, 12, jl_voidpointer_type);
