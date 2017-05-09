@@ -166,13 +166,13 @@ timeit[sortperf[5000], "quicksort"];
 (* slow pi series  *)
 
 ClearAll[pisum];
-pisum = Compile[ {},
-	Module[
-		{sum = 0.`},
-		Do[sum = Sum[1/(k*k), {k, 1, 10000}],
-			{500}];
-		sum
-	]
+pisum = Compile[ {}, 
+        Module[
+            {sum = 0.0}, 
+             Do[sum = 0.0; 
+                         Do[sum += 1.0/(k*k), {k, 1, 1000}],
+                         {500}];
+          sum]
 ];
 
 
