@@ -962,6 +962,9 @@ export
     @dateformat_str,
     now,
 
+# docstrings
+    Docstrings,
+
 # errors
     assert,
     backtrace,

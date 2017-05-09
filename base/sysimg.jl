@@ -387,6 +387,9 @@ include("docs/Docs.jl")
 using .Docs, .Markdown
 isdefined(Core, :Inference) && Docs.loaddocs(Core.Inference.CoreDocs.DOCS)
 
+# docstrings
+include("docstrings.jl")
+
 function __init__()
     # Base library init
     reinit_stdio()
