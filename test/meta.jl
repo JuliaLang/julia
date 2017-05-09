@@ -122,7 +122,7 @@ using Base.Meta
 
 @test isexpr(:(1+1),Set([:call]))
 @test isexpr(:(1+1),Vector([:call]))
-@test isexpr(:(1+1),(:call))
+@test isexpr(:(1+1),(:call,))
 @test isexpr(1,:call)==false
 @test isexpr(:(1+1),:call,3)
 ioB = IOBuffer()
@@ -130,7 +130,7 @@ show_sexpr(ioB,:(1+1))
 
 show_sexpr(ioB,QuoteNode(1),1)
 
-@test Base.Meta.extract_imports(:(begin; import Foo, Bar; let; using Baz; end; end)) ==
+@test Base.Distributed.extract_imports(:(begin; import Foo, Bar; let; using Baz; end; end)) ==
       [:Foo, :Bar, :Baz]
 
 # test base/expr.jl
