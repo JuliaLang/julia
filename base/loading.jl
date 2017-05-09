@@ -172,21 +172,22 @@ function _require_from_serialized(node::Int, mod::Symbol, path_to_try::String, t
         end
         restored = _include_from_serialized(content)
         isa(restored, Exception) && return restored
-        others = filter(x -> x != myid(), procs())
 
-        results = Any[]
-        @sync for p in others
-            @async begin
-                result = remotecall_fetch(p) do
-                    let m = try
-                                _include_from_serialized(content)
-                            catch ex
-                                isa(ex, Exception) ? ex : ErrorException(string(ex))
-                            end
-                        isa(m, Exception) ? m : nothing
+        results = sizehint!(Vector{Tuple{Int,Any}}(), nprocs())
+        @sync for p in procs()
+            if p != myid()
+                @async begin
+                    result = remotecall_fetch(p) do
+                        let m = try
+                                    _include_from_serialized(content)
+                                catch ex
+                                    isa(ex, Exception) ? ex : ErrorException(string(ex))
+                                end
+                            isa(m, Exception) ? m : nothing
+                        end
                     end
+                    push!(results, (p, result))
                 end
-                push!(results, (p, result))
             end
         end
         for (id, m) in results
