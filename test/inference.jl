@@ -959,3 +959,6 @@ for i in 1:3
     ir = sprint(io->code_llvm(io, f22290, Tuple{}))
     @test contains(ir, "julia_f22290")
 end
+
+# missing method should be inferred as Union{}, ref https://github.com/JuliaLang/julia/issues/20033#issuecomment-282228948
+@test Base.return_types(f -> f(1), (typeof((x::String) -> x),)) == Any[Union{}]
