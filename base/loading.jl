@@ -213,9 +213,10 @@ end
 Check that optional module with `name` is available.
 """
 function is_optional_module_available(name::String)
-    # In the future this would be the right place to check
-    # if the module is available wrt to the loading module
-    # for versioned dependencies.
+    # TODO:
+    # - Doesn't take into account Base and child modules
+    # - Make depend on module called from
+    # - Make extendable for version checks (Pkg3)
     return find_in_node_path(name, nothing, 1) !== nothing
 end
 
@@ -305,10 +306,30 @@ optional module becomes available in the future.
 This is only needed if your module depends on a module that is not used via
 `require`, `using`, `import`, or `importall`. It has no effect outside
 pre-compilation.
+
+Most users will want to use instead `@dependson`
 """
 function register_optional_dependency(mod::String)
     if myid() == 1 && _track_dependencies[]
         push!(_optional_dependencies, mod)
+    end
+end
+
+"""
+    dependson(mod, expr)
+
+Marks a expression to be dependent on the availability of a module by name `mod`.
+This only affects precompilation.
+
+See `register_optional_dependency` for more information.
+"""
+macro dependson(mod, expr)
+    name = string(mod)
+    if Base.is_optional_module_available(name)
+        return esc(expr)
+    else
+        Base.register_optional_dependency(name)
+        return nothing
     end
 end
 
