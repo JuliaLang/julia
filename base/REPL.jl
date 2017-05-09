@@ -939,6 +939,9 @@ function run_frontend(repl::LineEditREPL, backend)
         interface = repl.interface
     end
     repl.backendref = backend
+    if length(Base.pre_run_repl_hooks) > 0
+        Base._atreplrun(repl)
+    end
     run_interface(repl.t, interface)
     dopushdisplay && popdisplay(d)
 end
