@@ -899,6 +899,7 @@ STATIC_INLINE void jl_free_aligned(void *p)
 // passed around as self-documentation of the parameters of the type
 struct jl_typemap_info {
     int8_t unsorted; // whether this should be unsorted
+    int8_t simplekeys; // whether keys are restricted to simple kinds of types used in method caches
     jl_datatype_t **jl_contains; // the type that is being put in this
 };
 

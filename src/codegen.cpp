@@ -4652,7 +4652,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
 }
 
 const struct jl_typemap_info cfunction_cache = {
-    1, &jl_voidpointer_type
+    1, 0, &jl_voidpointer_type
 };
 
 // Get the LLVM Function* for the C-callable entry point for a certain function

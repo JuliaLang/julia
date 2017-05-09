@@ -448,7 +448,7 @@ typedef struct _jl_typemap_level_t {
     struct jl_ordereddict_t arg1;
     struct jl_ordereddict_t targ;
     jl_typemap_entry_t *linear; // union jl_typemap_t (but no more levels)
-    union jl_typemap_t any; // type at offs is Any
+    union jl_typemap_t any; // type at offs is skipped; will be split later
     jl_value_t *key; // [nullable]
 } jl_typemap_level_t;
 
