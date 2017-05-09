@@ -2320,6 +2320,8 @@ static int tuple_morespecific(jl_datatype_t *cdt, jl_datatype_t *pdt, int invari
 
         if (ci >= clenf && !cseq) {
             if (pseq && plenr <= clenr+1) return 1;
+            // shorter tuples are more specific, to ensure transitivity with varargs
+            if (!pseq && clenr < plenr) return 1;
             break;
         }
         if (pi >= plenf && !pseq) {
