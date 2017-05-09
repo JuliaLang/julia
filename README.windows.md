@@ -391,6 +391,9 @@ If you need these components, the easiest way to get them is to build the instal
 yourself using ```make win-extras``` followed by ```make binary-dist```, and then
 running the resulting installer.
 
+## After compiling
+
+Compiling using one of the options above creates a minimal Julia installation, but not some extra components (like a built-in git installation) that are included if you use install from the binary installer.  If you need these, the easiest way to get them is to build the installer yourself using ```make win-extras``` followed by ```make binary-dist```, and then running the resulting installer.
 
 ## Windows Build Debugging
 
