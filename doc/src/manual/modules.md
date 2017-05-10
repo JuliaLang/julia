@@ -21,7 +21,7 @@ importall OtherLib
 
 export MyType, foo
 
-type MyType
+struct MyType
     x
 end
 
