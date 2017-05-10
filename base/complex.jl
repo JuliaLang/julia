@@ -33,6 +33,9 @@ promote_rule(::Type{Complex{T}}, ::Type{Complex{S}}) where {T<:Real,S<:Real} =
 
 widen(::Type{Complex{T}}) where {T} = Complex{widen(T)}
 
+float(::Type{Complex{T}}) where {T<:AbstractFloat} = Complex{T}
+float(::Type{Complex{T}}) where {T} = Complex{float(T)}
+
 """
     real(z)
 
