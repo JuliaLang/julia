@@ -221,6 +221,15 @@ end
 log(::Irrational{:e}) = 1 # use 1 to correctly promote expressions like log(x)/log(e)
 log(::Irrational{:e}, x::Number) = log(x)
 
+# These methods should go to special/trig.jl, but Irrational is not yet defined when the
+# file is loaded.
+sinpi(x::Irrational) = sinpi(float(x))
+cospi(x::Irrational) = cospi(float(x))
+sinc(x::Irrational) = sinc(float(x))
+cosc(x::Irrational) = cosc(float(x))
+sinc(z::Complex{<:Irrational}) = sinc(float(z))
+cosc(z::Complex{<:Irrational}) = cosc(float(z))
+
 # align along = for nice Array printing
 function alignment(io::IO, x::Irrational)
     m = match(r"^(.*?)(=.*)$", sprint(0, showcompact, x, env=io))

@@ -134,7 +134,7 @@ end
 
 # Rationals and other Real types
 function sinpi(x::T) where T<:Real
-    Tf = typeof(float(x))
+    Tf = float(T)
     if !isfinite(x)
         throw(DomainError())
     end
