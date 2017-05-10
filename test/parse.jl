@@ -1149,6 +1149,10 @@ f21586(; @m21586(a), @m21586(b)) = a + b
 end
 @test Test21604.X(1.0) === Test21604.X(1.0)
 
+# issue #20575
+@test_throws ParseError parse("\"a\"x")
+@test_throws ParseError parse("\"a\"begin end")
+
 # comment 298107224 on pull #21607
 module Test21607
     using Base.Test
