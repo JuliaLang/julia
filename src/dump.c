@@ -1992,6 +1992,15 @@ static jl_value_t *jl_deserialize_typemap_entry(jl_serializer_state *s)
     return te;
 }
 
+static jl_value_t *checked_get_global(jl_module_t *m, jl_sym_t *sym)
+{
+    jl_value_t *v = jl_get_global(m, sym);
+    if (v == NULL)
+        jl_errorf("Precompiled module expected %s.%s to be defined, but it is not available.",
+                  jl_symbol_name(m->name), jl_symbol_name(sym));
+    return v;
+}
+
 static jl_value_t *jl_deserialize_value_any(jl_serializer_state *s, jl_value_t *vtag, jl_value_t **loc)
 {
     int usetable = (s->mode != MODE_AST);
@@ -2011,7 +2020,7 @@ static jl_value_t *jl_deserialize_value_any(jl_serializer_state *s, jl_value_t *
         if (ref_only) {
             jl_module_t *m = (jl_module_t*)jl_deserialize_value(s, NULL);
             jl_sym_t *sym = (jl_sym_t*)jl_deserialize_value(s, NULL);
-            jl_datatype_t *dt = (jl_datatype_t*)jl_unwrap_unionall(jl_get_global(m, sym));
+            jl_datatype_t *dt = (jl_datatype_t*)jl_unwrap_unionall(checked_get_global(m, sym));
             assert(jl_is_datatype(dt));
             jl_value_t *v = (jl_value_t*)dt->name;
             if (usetable)
@@ -2024,7 +2033,7 @@ static jl_value_t *jl_deserialize_value_any(jl_serializer_state *s, jl_value_t *
         if (ref_only) {
             jl_module_t *m = (jl_module_t*)jl_deserialize_value(s, NULL);
             jl_sym_t *sym = (jl_sym_t*)jl_deserialize_value(s, NULL);
-            jl_value_t *v = jl_get_global(m, sym);
+            jl_value_t *v = checked_get_global(m, sym);
             assert(jl_is_unionall(v));
             if (usetable)
                 backref_list.items[pos] = v;
@@ -3260,7 +3269,16 @@ static jl_value_t *_jl_restore_incremental(ios_t *f)
     };
     jl_array_t *restored = NULL;
     jl_array_t *init_order = NULL;
-    restored = (jl_array_t*)jl_deserialize_value(&s, (jl_value_t**)&restored);
+    JL_TRY {
+        restored = (jl_array_t*)jl_deserialize_value(&s, (jl_value_t**)&restored);
+    }
+    JL_CATCH {
+        arraylist_free(&flagref_list);
+        arraylist_free(&backref_list);
+        arraylist_free(&dependent_worlds);
+        ios_close(f);
+        return jl_exception_in_transit;
+    }
     serializer_worklist = restored;
 
     // get list of external generic functions
