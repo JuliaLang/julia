@@ -25,6 +25,7 @@ L64 = @inferred(linspace(Int64(1), Int64(4), 4))
 @test L32[2] == 2 && L64[2] == 2
 @test L32[3] == 3 && L64[3] == 3
 @test L32[4] == 4 && L64[4] == 4
+@test @inferred(linspace(1.0, 2.0, 2.0f0)) === linspace(1.0, 2.0, 2)
 
 r = 5:-1:1
 @test r[1]==5
