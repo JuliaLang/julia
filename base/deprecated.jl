@@ -1335,6 +1335,7 @@ next(p::Union{Process, ProcessChain}, i::Int) = (getindex(p, i), i + 1)
     return i == 1 ? getfield(p, p.openstream) : p
 end
 
+@deprecate cond(F::LinAlg.LU, p::Integer) cond(full(F), p)
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

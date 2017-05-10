@@ -208,3 +208,6 @@ end
 
 @test @inferred(logdet(Complex64[1.0f0 0.5f0; 0.5f0 -1.0f0])) === 0.22314355f0 + 3.1415927f0im
 @test_throws DomainError logdet([1 1; 1 -1])
+
+# Issue 21453.
+@test_throws ArgumentError LinAlg._cond1Inf(lufact(randn(5,5)), 2, 2.0)
