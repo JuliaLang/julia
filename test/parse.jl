@@ -1187,3 +1187,7 @@ module Test21607
         x
     end === 1.0
 end
+
+# issue #16937
+@test expand(:(f(2, a=1, w=3, c=3, w=4, b=2))) == Expr(:error,
+                                                       "keyword argument \"w\" repeated in call to \"f\"")

@@ -20,6 +20,8 @@ This section lists changes that do not have deprecation warnings.
   * `@__DIR__` returns the current working directory rather than `nothing` when not run
     from a file ([#21759]).
 
+  * Passing the same keyword argument multiple times is now a syntax error ([#16937]).
+
 
 Library improvements
 --------------------
