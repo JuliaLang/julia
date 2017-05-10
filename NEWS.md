@@ -32,6 +32,9 @@ Compiler/Runtime improvements
 Deprecated or removed
 ---------------------
 
+  * The keyword `immutable` is fully deprecated to `struct`, and
+    `type` is fully deprecated to `mutable struct` ([#19157], [#20418]).
+
   * The method `srand(rng, filename, n=4)` has been deprecated ([#21359]).
 
 
