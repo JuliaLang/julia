@@ -72,18 +72,29 @@ jl_value_t *jl_resolve_globals(jl_value_t *expr, jl_module_t *module, jl_svec_t 
                 JL_NARGSV(ccall method definition, 3); // (fptr, rt, at)
                 jl_value_t *rt = jl_exprarg(e, 1);
                 jl_value_t *at = jl_exprarg(e, 2);
-                JL_TRY {
-                    if (!jl_is_type(rt)) {
+                if (!jl_is_type(rt)) {
+                    JL_TRY {
                         rt = jl_interpret_toplevel_expr_in(module, rt, NULL, sparam_vals);
-                        jl_exprargset(e, 1, rt);
                     }
-                    if (!jl_is_svec(at)) {
-                        at = jl_interpret_toplevel_expr_in(module, at, NULL, sparam_vals);
-                        jl_exprargset(e, 2, at);
+                    JL_CATCH {
+                        if (jl_typeis(jl_exception_in_transit, jl_errorexception_type))
+                            jl_error("could not evaluate ccall return type (it might depend on a local variable)");
+                        else
+                            jl_rethrow();
                     }
+                    jl_exprargset(e, 1, rt);
                 }
-                JL_CATCH {
-                    jl_error("invalid return type or argument type in ccall");
+                if (!jl_is_svec(at)) {
+                    JL_TRY {
+                        at = jl_interpret_toplevel_expr_in(module, at, NULL, sparam_vals);
+                    }
+                    JL_CATCH {
+                        if (jl_typeis(jl_exception_in_transit, jl_errorexception_type))
+                            jl_error("could not evaluate ccall argument type (it might depend on a local variable)");
+                        else
+                            jl_rethrow();
+                    }
+                    jl_exprargset(e, 2, at);
                 }
                 if (jl_is_svec(rt))
                     jl_error("ccall: missing return type");
