@@ -1498,6 +1498,18 @@ if true
 end
 @test x == map(_->sin(2), 1:2)
 
+let thrown = false
+    try
+        remotecall_fetch(sqrt, 2, -1)
+    catch e
+        thrown = true
+        b = IOBuffer()
+        showerror(b, e)
+        @test contains(String(take!(b)), "sqrt will only return")
+    end
+    @test thrown
+end
+
 # Testing clear!
 function setup_syms(n, pids)
     syms = []
