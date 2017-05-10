@@ -914,10 +914,12 @@ function cond(A::AbstractMatrix, p::Real=2)
         return maxv == 0.0 ? oftype(real(A[1,1]),Inf) : maxv / minimum(v)
     elseif p == 1 || p == Inf
         checksquare(A)
-        return cond(lufact(A), p)
+        return _cond1Inf(A, p)
     end
     throw(ArgumentError("p-norm must be 1, 2 or Inf, got $p"))
 end
+_cond1Inf(A::StridedMatrix{<:BlasFloat}, p::Real) = _cond1Inf(lufact(A), p, norm(A, p))
+_cond1Inf(A::AbstractMatrix, p::Real)             = norm(A, p)*norm(inv(A), p)
 
 ## Lyapunov and Sylvester equation
 
