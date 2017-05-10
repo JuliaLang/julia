@@ -1291,19 +1291,6 @@ void gc_queue_binding(jl_binding_t *bnd)
 static void *volatile gc_findval; // for usage from gdb, for finding the gc-root for a value
 #endif
 
-// TODO rename this as it is misleading now
-void jl_gc_setmark(jl_ptls_t ptls, jl_value_t *v)
-{
-    jl_taggedvalue_t *o = jl_astaggedvalue(v);
-    uintptr_t tag = o->header;
-    if (!gc_marked(tag)) {
-        uint8_t bits;
-        if (__likely(gc_setmark_tag(o, GC_MARKED, tag, &bits)) && !gc_verifying) {
-            gc_setmark_pool(ptls, o, bits);
-        }
-    }
-}
-
 // Handle the case where the stack is only partially copied.
 STATIC_INLINE uintptr_t gc_get_stack_addr(void *_addr, uintptr_t offset,
                                           uintptr_t lb, uintptr_t ub)
@@ -2362,16 +2349,6 @@ static void jl_gc_queue_remset(jl_gc_mark_cache_t *gc_cache, gc_mark_sp_t *sp, j
     ptls2->heap.rem_bindings.len = n_bnd_refyoung;
 }
 
-static void jl_gc_mark_ptrfree(jl_ptls_t ptls)
-{
-    // Pointer-free objects, can be marked concurrently
-    jl_mark_box_caches(ptls);
-    jl_gc_setmark(ptls, (jl_value_t*)jl_emptysvec);
-    jl_gc_setmark(ptls, jl_emptytuple);
-    jl_gc_setmark(ptls, jl_true);
-    jl_gc_setmark(ptls, jl_false);
-}
-
 // Only one thread should be running in this function
 static int _jl_gc_collect(jl_ptls_t ptls, int full)
 {
@@ -2553,14 +2530,13 @@ JL_DLLEXPORT void jl_gc_collect(int full)
     JL_TIMING(GC);
     // Now we are ready to wait for other threads to hit the safepoint,
     // we can do a few things that doesn't require synchronization.
-    jl_gc_mark_ptrfree(ptls);
+    // TODO (concurrently queue objects)
     // no-op for non-threading
     jl_gc_wait_for_the_world();
 
     if (!jl_gc_disable_counter) {
         JL_LOCK_NOGC(&finalizers_lock);
         if (_jl_gc_collect(ptls, full)) {
-            jl_gc_mark_ptrfree(ptls);
             int ret = _jl_gc_collect(ptls, 0);
             (void)ret;
             assert(!ret);
@@ -2589,7 +2565,6 @@ void gc_mark_queue_all_roots(jl_ptls_t ptls, gc_mark_sp_t *sp)
     for (size_t i = 0; i < jl_n_threads; i++)
         jl_gc_queue_thread_local(gc_cache, sp, jl_all_tls_states[i]);
     mark_roots(gc_cache, sp);
-    jl_gc_mark_ptrfree(ptls);
 }
 
 // allocator entry points
