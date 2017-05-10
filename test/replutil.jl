@@ -375,8 +375,8 @@ let err_str,
         "(::Type{$(curmod_prefix)EightBitTypeT{T}})() where T in $curmod_str at $sp:$(method_defs_lineno + 5)"
     @test sprint(show, which(reinterpret(EightBitTypeT{Int32}, 0x54), Tuple{})) ==
         "(::$(curmod_prefix)EightBitTypeT)() in $curmod_str at $sp:$(method_defs_lineno + 6)"
-    @test startswith(sprint(show, which(getfield(Base, Symbol("@doc")), Tuple{LineNumberNode, Vararg{Any}})),
-                     "@doc(__source__::LineNumberNode, x...) in Core at boot.jl:")
+    @test startswith(sprint(show, which(getfield(Base, Symbol("@doc")), Tuple{LineNumberNode, Module, Vararg{Any}})),
+                     "@doc(__source__::LineNumberNode, __module__::Module, x...) in Core at boot.jl:")
     @test startswith(sprint(show, which(FunctionLike(), Tuple{})),
                      "(::$(curmod_prefix)FunctionLike)() in $curmod_str at $sp:$(method_defs_lineno + 7)")
     @test stringmime("text/plain", FunctionLike()) == "(::FunctionLike) (generic function with 1 method)"
@@ -476,8 +476,8 @@ macro seven_dollar(ex)
 end
 
 let
-    @test (@macroexpand @macroexpand x) == macroexpand(:(@macroexpand x))
-    @test (@macroexpand  :(1+$y) ) == macroexpand(:( :(1+ $y)))
+    @test (@macroexpand @macroexpand x) == macroexpand(@__MODULE__, :(@macroexpand x))
+    @test (@macroexpand  :(1+$y) ) == macroexpand(@__MODULE__, :( :(1+ $y) ))
     @test (@macroexpand @fastmath 1+2    ) == :(Base.FastMath.add_fast(1,2))
     @test (@macroexpand @fastmath +      ) == :(Base.FastMath.add_fast)
     @test (@macroexpand @fastmath min(1) ) == :(Base.FastMath.min_fast(1))

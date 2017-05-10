@@ -376,7 +376,7 @@ begin
     function f7234_b()
         global f7234_cnt += 1
         glob_x2 += 1
-        global f7235_cnt += -10000
+        global f7234_cnt += -10000
     end
 end
 @test_throws UndefVarError f7234_b()
@@ -499,8 +499,8 @@ end
         bar21900 = foo21900 + 1
     end
 end
-@test !isdefined(:foo21900)
-@test !isdefined(:bar21900)
+@test !@isdefined(foo21900)
+@test !@isdefined(bar21900)
 bar21900 = 0
 @test_throws UndefVarError @eval begin
     for i21900 = 1:10
@@ -512,7 +512,7 @@ bar21900 = 0
     end
 end
 @test bar21900 == -1
-@test !isdefined(:foo21900)
+@test !@isdefined foo21900
 foo21900 = 0
 @test nothing === @eval begin
     for i21900 = 1:10
@@ -739,6 +739,7 @@ end
 let didthrow =
     try
         include_string(
+            @__MODULE__,
             """
             module TestInitError
                 __init__() = error()
@@ -1413,7 +1414,8 @@ let
     g4505{X}(::X) = 0
     @test g4505(0) == 0
 end
-@test !isdefined(:g4505)
+@test !@isdefined g4505
+@test !isdefined(@__MODULE__, :g4505)
 
 # issue #4681
 # ccall should error if convert() returns something of the wrong type
@@ -1711,9 +1713,15 @@ test5536(a::Union{Real, AbstractArray}) = "Non-splatting"
 @test test5536(5) == "Non-splatting"
 
 # multiline comments (#6139 and others raised in #6128) and embedded NUL chars (#10994)
-@test 3 == include_string("1 + 2") == include_string("1 + #==# 2") == include_string("1 + #===# 2") == include_string("1 + #= #= blah =# =# 2") == include_string("1 + #= #= #= nested =# =# =# 2") == include_string("1 + #= \0 =# 2")
-@test_throws LoadError include_string("#=")
-@test_throws LoadError include_string("#= #= #= =# =# =")
+@test 3 ==
+    include_string(@__MODULE__, "1 + 2") ==
+    include_string(@__MODULE__, "1 + #==# 2") ==
+    include_string(@__MODULE__, "1 + #===# 2") ==
+    include_string(@__MODULE__, "1 + #= #= blah =# =# 2") ==
+    include_string(@__MODULE__, "1 + #= #= #= nested =# =# =# 2") ==
+    include_string(@__MODULE__, "1 + #= \0 =# 2")
+@test_throws LoadError include_string(@__MODULE__, "#=")
+@test_throws LoadError include_string(@__MODULE__, "#= #= #= =# =# =")
 
 # issue #6142
 import Base: +
@@ -1829,7 +1837,7 @@ macro m20524(ex)
 end
 @m20524 ((a,(b20524,c)) = (8,(1,5)); (a,b20524,c))
 @test f20524() === (8,1,5)
-@test !isdefined(:b20524)  # should not assign to a global
+@test !@isdefined b20524 # should not assign to a global
 
 # issue #6387
 primitive type Date6387{C} 64 end
@@ -3734,7 +3742,7 @@ let
     k15283 = j15283+=1
 end
 @test j15283 == 1
-@test !isdefined(:k15283)
+@test !@isdefined k15283
 
 # issue #15264
 module Test15264

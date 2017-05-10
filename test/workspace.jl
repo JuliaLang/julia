@@ -6,26 +6,34 @@ script = """
 # Issue #11948
 f(x) = x+1
 workspace()
-@assert !isdefined(:f)
-LastMain.f(2)
+@assert @__MODULE__() === Main
+@assert isdefined(Main, :f)
+@assert !@isdefined LastMain
+@eval Core.Main begin
+    @assert @__MODULE__() === Main
+    @assert !isdefined(Main, :f)
+    LastMain.f(2)
 
-# PR #12990
-io = IOBuffer()
-show(io, Pair)
-@assert String(take!(io)) == "Pair"
-@assert !Base.inbase(LastMain)
+    # PR #12990
+    io = IOBuffer()
+    show(io, Pair)
+    @assert String(take!(io)) == "Pair"
+    @assert !Base.inbase(LastMain)
+end
 """
 exename = Base.julia_cmd()
-run(`$exename --startup-file=no -e $script`)
+@test success(pipeline(`$exename --startup-file=no -e $script`, stdout=STDOUT, stderr=STDERR))
 
 # issue #17764
 script2 = """
 mutable struct Foo end
 workspace()
-mutable struct Foo end
-@assert Tuple{Type{LastMain.Foo}} !== Tuple{Type{Main.Foo}}
+@eval Core.Main begin
+    mutable struct Foo end
+    @assert Tuple{Type{LastMain.Foo}} !== Tuple{Type{Main.Foo}}
+end
 """
-run(`$exename --startup-file=no -e $script2`)
+@test success(pipeline(`$exename --startup-file=no -e $script2`, stdout=STDOUT, stderr=STDERR))
 
 # Issue #22101
 mktempdir() do dir

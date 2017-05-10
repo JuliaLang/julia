@@ -61,7 +61,7 @@ such as a `ccall` to a non-existent function.
 macro static(ex)
     if isa(ex, Expr)
         if ex.head === :if || ex.head === :&& || ex.head === :||
-            cond = eval(current_module(), ex.args[1])
+            cond = eval(__module__, ex.args[1])
             if xor(cond, ex.head === :||)
                 return esc(ex.args[2])
             elseif length(ex.args) == 3
@@ -76,11 +76,12 @@ macro static(ex)
     throw(ArgumentError("invalid @static macro"))
 end
 
-let KERNEL = ccall(:jl_get_UNAME, Any, ())
+let KERNEL = ccall(:jl_get_UNAME, Any, ()),
+    __module__ = @__MODULE__
     # evaluate the zero-argument form of each of these functions
     # as a function returning a static constant based on the build-time
     # operating-system kernel
     for f in (:is_unix, :is_linux, :is_bsd, :is_apple, :is_windows)
-        @eval $f() = $(getfield(current_module(),f)(KERNEL))
+        @eval $f() = $(getfield(__module__, f)(KERNEL))
     end
 end

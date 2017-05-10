@@ -299,8 +299,8 @@ static Value *literal_pointer_val_slot(jl_value_t *p)
     if (jl_is_method_instance(p)) {
         jl_method_instance_t *linfo = (jl_method_instance_t*)p;
         // Type-inferred functions are also prefixed with a -
-        if (linfo->def)
-            return julia_pgv("-", linfo->def->name, linfo->def->module, p);
+        if (jl_is_method(linfo->def.method))
+            return julia_pgv("-", linfo->def.method->name, linfo->def.method->module, p);
     }
     if (jl_is_symbol(p)) {
         jl_sym_t *addr = (jl_sym_t*)p;
@@ -1896,7 +1896,7 @@ static Value *_boxed_special(const jl_cgval_t &vinfo, Type *t, jl_codectx_t *ctx
     if (t == T_int1)
         return julia_bool(as_value(t, vinfo));
 
-    if (ctx->linfo && ctx->linfo->def && !vinfo.ispointer()) { // don't bother codegen pre-boxing for toplevel
+    if (ctx->linfo && jl_is_method(ctx->linfo->def.method) && !vinfo.ispointer()) { // don't bother codegen pre-boxing for toplevel
         if (Constant *c = dyn_cast<Constant>(vinfo.V)) {
             jl_value_t *s = static_constant_instance(c, jt);
             if (s) {

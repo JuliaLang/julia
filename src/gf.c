@@ -214,14 +214,15 @@ void jl_mk_builtin_func(jl_datatype_t *dt, const char *name, jl_fptr_t fptr)
     li->max_world = ~(size_t)0;
 
     JL_GC_PUSH1(&li);
-    li->def = jl_new_method_uninit();
-    jl_gc_wb(li, li->def);
-    li->def->name = sname;
-    li->def->module = jl_core_module;
-    li->def->isva = 1;
-    li->def->nargs = 2;
-    li->def->sig = (jl_value_t*)jl_anytuple_type;
-    li->def->sparam_syms = jl_emptysvec;
+    jl_method_t *m = jl_new_method_uninit();
+    li->def.method = m;
+    jl_gc_wb(li, m);
+    m->name = sname;
+    m->module = jl_core_module;
+    m->isva = 1;
+    m->nargs = 2;
+    m->sig = (jl_value_t*)jl_anytuple_type;
+    m->sparam_syms = jl_emptysvec;
 
     jl_methtable_t *mt = dt->name->mt;
     jl_typemap_insert(&mt->cache, (jl_value_t*)mt, jl_anytuple_type,
@@ -261,7 +262,7 @@ jl_code_info_t *jl_type_infer(jl_method_instance_t **pli, size_t world, int forc
     li->inInference = 1;
     jl_svec_t *linfo_src_rettype = (jl_svec_t*)jl_apply_with_saved_exception_state(fargs, 3, 0);
     ptls->world_age = last_age;
-    assert((li->def || li->inInference == 0) && "inference failed on a toplevel expr");
+    assert((jl_is_method(li->def.method) || li->inInference == 0) && "inference failed on a toplevel expr");
 
     jl_code_info_t *src = NULL;
     if (jl_is_svec(linfo_src_rettype) && jl_svec_len(linfo_src_rettype) == 3 &&
@@ -315,7 +316,7 @@ static void update_world_bound(jl_method_instance_t *replaced, jl_typemap_visito
     update.replaced = replaced;
     update.world = world;
 
-    jl_method_t *m = replaced->def;
+    jl_method_t *m = replaced->def.method;
     // update the world-valid in the specializations caches
     jl_typemap_visitor(m->specializations, fptr, (void*)&update);
     // update the world-valid in the invoke cache
@@ -336,14 +337,14 @@ JL_DLLEXPORT jl_method_instance_t* jl_set_method_inferred(
     assert(min_world <= max_world && "attempting to set invalid world constraints");
     assert(li->inInference && "shouldn't be caching an inference result for a MethodInstance that wasn't being inferred");
     if (min_world != li->min_world || max_world != li->max_world) {
-        if (li->def == NULL) {
+        if (!jl_is_method(li->def.method)) {
             // thunks don't have multiple references, so just update in-place
             li->min_world = min_world;
             li->max_world = max_world;
         }
         else {
-            JL_LOCK(&li->def->writelock);
-            assert(min_world >= li->def->min_world);
+            JL_LOCK(&li->def.method->writelock);
+            assert(min_world >= li->def.method->min_world);
             int isinferred =  jl_is_rettype_inferred(li);
             if (!isinferred && li->min_world >= min_world && li->max_world <= max_world) {
                 // expand the current (uninferred) entry to cover the full inferred range
@@ -354,12 +355,12 @@ JL_DLLEXPORT jl_method_instance_t* jl_set_method_inferred(
                 if (li->min_world != min_world) {
                     li->min_world = min_world;
                     update.world = min_world;
-                    jl_typemap_visitor(li->def->specializations, set_min_world2, (void*)&update);
+                    jl_typemap_visitor(li->def.method->specializations, set_min_world2, (void*)&update);
                 }
                 if (li->max_world != max_world) {
                     li->max_world = max_world;
                     update.world = max_world;
-                    jl_typemap_visitor(li->def->specializations, set_max_world2, (void*)&update);
+                    jl_typemap_visitor(li->def.method->specializations, set_max_world2, (void*)&update);
                 }
             }
             else {
@@ -370,7 +371,7 @@ JL_DLLEXPORT jl_method_instance_t* jl_set_method_inferred(
                 if (li->max_world >= min_world && li->min_world <= max_world) {
                     // there is a non-zero overlap between [li->min, li->max] and [min, max]
                     // there are now 4 regions left to consider
-                    // TODO: also take into account li->def->world range when computing preferred division
+                    // TODO: also take into account li->def.method->world range when computing preferred division
                     if (li->max_world > max_world) {
                         // prefer making it applicable to future ages,
                         // as those are more likely to be useful
@@ -388,15 +389,15 @@ JL_DLLEXPORT jl_method_instance_t* jl_set_method_inferred(
                 }
 
                 // build a new entry to describe the new (inferred) applicability
-                li = jl_get_specialized(li->def, li->specTypes, li->sparam_vals);
+                li = jl_get_specialized(li->def.method, li->specTypes, li->sparam_vals);
                 li->min_world = min_world;
                 li->max_world = max_world;
-                jl_typemap_insert(&li->def->specializations, (jl_value_t*)li->def,
+                jl_typemap_insert(&li->def.method->specializations, li->def.value,
                         (jl_tupletype_t*)li->specTypes, NULL, jl_emptysvec,
                         (jl_value_t*)li, 0, &tfunc_cache,
                         li->min_world, li->max_world, NULL);
             }
-            JL_UNLOCK(&li->def->writelock);
+            JL_UNLOCK(&li->def.method->writelock);
         }
     }
 
@@ -1247,7 +1248,7 @@ static int JL_DEBUG_METHOD_INVALIDATION = 0;
 // invalidate cached methods that had an edge to a replaced method
 static void invalidate_method_instance(jl_method_instance_t *replaced, size_t max_world, int depth)
 {
-    JL_LOCK_NOGC(&replaced->def->writelock);
+    JL_LOCK_NOGC(&replaced->def.method->writelock);
     jl_array_t *backedges = replaced->backedges;
     if (replaced->max_world > max_world) {
         // recurse to all backedges to update their valid range also
@@ -1270,7 +1271,7 @@ static void invalidate_method_instance(jl_method_instance_t *replaced, size_t ma
         }
     }
     replaced->backedges = NULL;
-    JL_UNLOCK_NOGC(&replaced->def->writelock);
+    JL_UNLOCK_NOGC(&replaced->def.method->writelock);
 }
 
 // invalidate cached methods that overlap this definition
@@ -1286,7 +1287,7 @@ static int invalidate_backedges(jl_typemap_entry_t *oldentry, struct typemap_int
         struct set_world def;
         def.replaced = oldentry->func.linfo;
         def.world = closure->max_world;
-        jl_method_t *m = def.replaced->def;
+        jl_method_t *m = def.replaced->def.method;
 
         // truncate the max-valid in the invoke cache
         if (m->invokes.unknown != NULL)
@@ -1297,7 +1298,7 @@ static int invalidate_backedges(jl_typemap_entry_t *oldentry, struct typemap_int
         jl_typemap_visitor(gf->name->mt->cache, set_max_world2, (void*)&def);
 
         // invalidate backedges
-        JL_LOCK_NOGC(&def.replaced->def->writelock);
+        JL_LOCK_NOGC(&def.replaced->def.method->writelock);
         jl_array_t *backedges = def.replaced->backedges;
         if (backedges) {
             size_t i, l = jl_array_len(backedges);
@@ -1308,7 +1309,7 @@ static int invalidate_backedges(jl_typemap_entry_t *oldentry, struct typemap_int
         }
         closure->invalidated = 1;
         def.replaced->backedges = NULL;
-        JL_UNLOCK_NOGC(&def.replaced->def->writelock);
+        JL_UNLOCK_NOGC(&def.replaced->def.method->writelock);
     }
     return 1;
 }
@@ -1317,7 +1318,7 @@ static int invalidate_backedges(jl_typemap_entry_t *oldentry, struct typemap_int
 JL_DLLEXPORT void jl_method_instance_add_backedge(jl_method_instance_t *callee, jl_method_instance_t *caller)
 {
     assert(callee->min_world <= caller->min_world && callee->max_world >= caller->max_world);
-    JL_LOCK(&callee->def->writelock);
+    JL_LOCK(&callee->def.method->writelock);
     if (!callee->backedges) {
         // lazy-init the backedges array
         callee->backedges = jl_alloc_vec_any(1);
@@ -1334,7 +1335,7 @@ JL_DLLEXPORT void jl_method_instance_add_backedge(jl_method_instance_t *callee, 
             jl_array_ptr_1d_push(callee->backedges, (jl_value_t*)caller);
         }
     }
-    JL_UNLOCK(&callee->def->writelock);
+    JL_UNLOCK(&callee->def.method->writelock);
 }
 
 // add a backedge from a non-existent signature to caller
@@ -1619,8 +1620,8 @@ jl_llvm_functions_t jl_compile_for_dispatch(jl_method_instance_t **pli, size_t w
     if (jl_options.compile_enabled == JL_OPTIONS_COMPILE_OFF ||
         jl_options.compile_enabled == JL_OPTIONS_COMPILE_MIN) {
         // copy fptr from the template method definition
-        jl_method_t *def = li->def;
-        if (def && !def->isstaged && def->unspecialized) {
+        jl_method_t *def = li->def.method;
+        if (jl_is_method(def) && !def->isstaged && def->unspecialized) {
             if (def->unspecialized->jlcall_api == 2) {
                 li->functionObjectsDecls.functionObject = NULL;
                 li->functionObjectsDecls.specFunctionObject = NULL;
@@ -1651,8 +1652,8 @@ jl_llvm_functions_t jl_compile_for_dispatch(jl_method_instance_t **pli, size_t w
         return decls;
 
     jl_code_info_t *src = NULL;
-    if (li->def && !jl_is_rettype_inferred(li) &&
-             jl_symbol_name(li->def->name)[0] != '@') {
+    if (jl_is_method(li->def.method) && !jl_is_rettype_inferred(li) &&
+             jl_symbol_name(li->def.method->name)[0] != '@') {
         // don't bother with typeinf on macros or toplevel thunks
         // but try to infer everything else
         src = jl_type_infer(pli, world, 0);
@@ -1701,7 +1702,7 @@ jl_method_instance_t *jl_get_specialization1(jl_tupletype_t *types, size_t world
     jl_method_instance_t *sf = jl_method_lookup_by_type(mt, types, 1, 1, 1, world);
     assert(sf == NULL || (sf->min_world <= world && sf->max_world >= world));
     JL_GC_PUSH1(&sf);
-    if (sf != NULL && jl_has_call_ambiguities(types, sf->def)) {
+    if (sf != NULL && jl_has_call_ambiguities(types, sf->def.method)) {
         sf = NULL;
     }
     JL_GC_POP();
@@ -1904,7 +1905,7 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t **args, uint32
 
 #ifdef JL_TRACE
     if (traceen)
-        jl_printf(JL_STDOUT, " at %s:%d\n", jl_symbol_name(mfunc->def->file), mfunc->def->line);
+        jl_printf(JL_STDOUT, " at %s:%d\n", jl_symbol_name(mfunc->def.method->file), mfunc->def.method->line);
 #endif
     return mfunc;
 }
@@ -2100,12 +2101,12 @@ jl_function_t *jl_new_generic_function_with_supertype(jl_sym_t *name, jl_module_
     }
     jl_sym_t *tname = jl_symbol(prefixed);
     free(prefixed);
-    jl_datatype_t *ftype = (jl_datatype_t*)jl_new_datatype(tname, st, jl_emptysvec, jl_emptysvec, jl_emptysvec, 0, 0, 0);
+    jl_datatype_t *ftype = (jl_datatype_t*)jl_new_datatype(
+            tname, module, st, jl_emptysvec, jl_emptysvec, jl_emptysvec, 0, 0, 0);
     assert(jl_is_datatype(ftype));
     JL_GC_PUSH1(&ftype);
-    ftype->name->mt->name = name; jl_gc_wb(ftype->name->mt, name);
-    ftype->name->module = module; jl_gc_wb(ftype->name, module);
-    ftype->name->mt->module = module; jl_gc_wb(ftype->name->mt, module);
+    ftype->name->mt->name = name;
+    jl_gc_wb(ftype->name->mt, name);
     jl_set_const(module, tname, (jl_value_t*)ftype);
     jl_value_t *f = jl_new_struct(ftype);
     ftype->instance = f; jl_gc_wb(ftype, f);

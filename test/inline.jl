@@ -113,8 +113,8 @@ let a = read21311()
 end
 
 @testset "issue #19122: [no]inline of short func. def. with return type annotation" begin
-    exf19122 = macroexpand(:(@inline f19122()::Bool = true))
-    exg19122 = macroexpand(:(@noinline g19122()::Bool = true))
+    exf19122 = @macroexpand(@inline f19122()::Bool = true)
+    exg19122 = @macroexpand(@noinline g19122()::Bool = true)
     @test exf19122.args[2].args[1].args[1] == :inline
     @test exg19122.args[2].args[1].args[1] == :noinline
 
