@@ -740,7 +740,7 @@ let e = code_typed(f21175, ())[1].first.code[1]::Expr
 end
 
 # issue #10207
-type T10207{A, B}
+mutable struct T10207{A, B}
     a::A
     b::B
 end
