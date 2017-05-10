@@ -429,3 +429,5 @@ iszero(x::Rational) = iszero(numerator(x))
 function lerpi(j::Integer, d::Integer, a::Rational, b::Rational)
     ((d-j)*a)/d + (j*b)/d
 end
+
+float{T<:Integer}(::Type{Rational{T}}) = float(T)
