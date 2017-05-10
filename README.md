@@ -262,6 +262,8 @@ for `HermOrSym` such that using the new methods are backward compatible.
 
 * Single-argument `min`, `max` and `minmax` are defined on 0.4.
 
+* The `Expr(:macrocall)` has an extra initial argument `__source__`, which can be tested for with `Compat.macros_have_sourceloc`.
+
 ## New types
 
 Currently, no new exported types are introduced by Compat.

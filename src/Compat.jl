@@ -1494,4 +1494,7 @@ end
 
 include("to-be-deprecated.jl")
 
+# https://github.com/JuliaLang/julia/pull/21746
+const macros_have_sourceloc = VERSION >= v"0.7-" && length(:(@test).args) == 2
+
 end # module Compat
