@@ -343,6 +343,12 @@ Library improvements
     Currently, it is used by default for the new `RowVector` type only, and
     enforces that both `transpose(vec)` and `ctranspose(vec)` are views not copies ([#20047]).
 
+  * `rem` now accepts a `RoundingMode` argument via `rem(x, y, r::RoundingMode)`. Such calls
+    yield `x - y*round(x/y, r)` (without intermediate rounding, and so always in the
+    interval `[-abs(y)/2, abs(y)/2]`). This form of `rem` corresponds to the IEE754
+    `remainder` function. A related function `rem2pi(x, r::RoundingMode)` now exists as
+    well, yielding `rem(x, 2pi, r::RoundingMode)` but with greater accuracy ([#10946]).
+
   * `map[!]` and `broadcast[!]` now have dedicated methods for sparse/structured
     vectors/matrices. Specifically, `map[!]` and `broadcast[!]` over combinations including
     one or more `SparseVector`, `SparseMatrixCSC`, `Diagonal`, `Bidiagonal`, `Tridiagonal`,
@@ -415,6 +421,7 @@ Deprecated or removed
 [#7669]: https://github.com/JuliaLang/julia/issues/7669
 [#8974]: https://github.com/JuliaLang/julia/issues/8974
 [#9343]: https://github.com/JuliaLang/julia/issues/9343
+[#10946]: https://github.com/JuliaLang/julia/issues/10946
 [#11250]: https://github.com/JuliaLang/julia/issues/11250
 [#11310]: https://github.com/JuliaLang/julia/issues/11310
 [#12274]: https://github.com/JuliaLang/julia/issues/12274
