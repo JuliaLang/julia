@@ -694,13 +694,16 @@ mutable struct SSHCredentials <: AbstractCredentials
     usesshagent::String  # used for ssh-agent authentication
     prompt_if_incorrect::Bool    # Whether to allow interactive prompting if the credentials are incorrect
     count::Int
-    function SSHCredentials(u::AbstractString,p::AbstractString,prvkey::AbstractString,pubkey::AbstractString,prompt_if_incorrect::Bool=false)
-        c = new(u,p,prvkey,pubkey,"Y",prompt_if_incorrect,3)
+    function SSHCredentials(user::AbstractString,pass::AbstractString,
+                            prvkey::AbstractString,pubkey::AbstractString,
+                            prompt_if_incorrect::Bool=false)
+        c = new(user,pass,prvkey,pubkey,"Y",prompt_if_incorrect,3)
         finalizer(c, securezero!)
         return c
     end
-    SSHCredentials(u::AbstractString,p::AbstractString,prompt_if_incorrect::Bool=false) = SSHCredentials(u,p,prompt_if_incorrect)
-    SSHCredentials(prompt_if_incorrect::Bool=false) = SSHCredentials("","","","",prompt_if_incorrect)
+    SSHCredentials(user::AbstractString="",pass::AbstractString="",
+                   prompt_if_incorrect::Bool=false) =
+        SSHCredentials(user,pass,"","",prompt_if_incorrect)
 end
 
 function securezero!(cred::SSHCredentials)
