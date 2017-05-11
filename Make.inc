@@ -520,6 +520,36 @@ ifeq (exists, $(shell [ -e $(BUILDROOT)/Make.user ] && echo exists ))
 include $(BUILDROOT)/Make.user
 endif
 
+# A bit of a kludge to work around libraries linking to FreeBSD's outdated system libgcc_s
+# Instead, let's link to the libgcc_s corresponding to the installation of gfortran
+ifeq ($(OS),FreeBSD)
+ifneq (,$(findstring gfortran,$(FC)))
+
+# First let's figure out what version of GCC we're dealing with
+_GCCMAJOR := $(shell $(FC) -dumpversion | cut -d'.' -f1)
+_GCCMINOR := $(shell $(FC) -dumpversion | cut -d'.' -f2)
+
+# The ports system uses major and minor for GCC < 5 (e.g. gcc49 for GCC 4.9), otherwise major only
+ifeq ($(_GCCMAJOR),4)
+  _GCCVER := $(_GCCMAJOR)$(_GCCMINOR)
+else
+  _GCCVER := $(_GCCMAJOR)
+endif
+
+# Allow the user to specify this in Make.user
+GCCPATH ?= $(LOCALBASE)/lib/gcc$(_GCCVER)
+
+LDFLAGS += -L$(build_libdir) -L$(GCCPATH) -Wl,-rpath,$(build_libdir) -Wl,-rpath,$(GCCPATH)
+
+# This ensures we get the right RPATH even if we're missing FFLAGS somewhere
+FC += -Wl,-rpath=$(GCCPATH)
+
+# Build our own libc++ and libc++abi because otherwise /usr/lib/libc++.so and /lib/libcxxrt.so will
+# be linked in when building LLVM, and those link to /lib/libgcc_s.so
+BUILD_CUSTOM_LIBCXX ?= 1
+endif # gfortran
+endif # FreeBSD
+
 ifneq ($(CC_BASE)$(CXX_BASE),$(shell echo $(CC) | cut -d' ' -f1)$(shell echo $(CXX) | cut -d' ' -f1))
     $(error Forgot override directive on CC or CXX in Make.user? Cowardly refusing to build)
 endif
