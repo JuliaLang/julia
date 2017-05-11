@@ -20,7 +20,10 @@ MBEDTLS_OPTS += -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
 endif
 
 ifeq ($(OS),FreeBSD)
+# We're getting this from CMAKE_COMMON when GCCPATH is nonempty
+ifeq ($(GCCPATH),)
 MBEDTLS_OPTS += -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
+endif
 endif
 
 $(SRCDIR)/srccache/$(MBEDTLS_SRC).tgz: | $(SRCDIR)/srccache
