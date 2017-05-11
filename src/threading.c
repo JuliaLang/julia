@@ -453,6 +453,7 @@ void ti_reset_timings(void);
 ssize_t jl_tls_offset = -1;
 
 #ifdef JL_ELF_TLS_VARIANT
+const int jl_tls_elf_support = 1;
 // Optimize TLS access in codegen if the TLS buffer is using a IE or LE model.
 // To detect such case, we find the size of the TLS segment in the main
 // executable and the TIB pointer and then see if the TLS pointer on the
@@ -540,6 +541,8 @@ static void jl_check_tls(void)
         return;
     jl_tls_offset = offset;
 }
+#else
+const int jl_tls_elf_support = 0;
 #endif
 
 // interface to Julia; sets up to make the runtime thread-safe
