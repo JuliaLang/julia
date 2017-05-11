@@ -22,6 +22,9 @@ TODO:
 #include "julia.h"
 #include "julia_internal.h"
 
+// Ref https://www.uclibc.org/docs/tls.pdf
+// For variant 1 JL_ELF_TLS_INIT_SIZE is the size of the thread control block (TCB)
+// For variant 2 JL_ELF_TLS_INIT_SIZE is 0
 #ifdef _OS_LINUX_
 #  if defined(_CPU_X86_64_) || defined(_CPU_X86_)
 #    define JL_ELF_TLS_VARIANT 2
@@ -30,6 +33,10 @@ TODO:
 #  if defined(_CPU_AARCH64_)
 #    define JL_ELF_TLS_VARIANT 1
 #    define JL_ELF_TLS_INIT_SIZE 16
+#  endif
+#  if defined(__ARM_ARCH) && __ARM_ARCH >= 7
+#    define JL_ELF_TLS_VARIANT 1
+#    define JL_ELF_TLS_INIT_SIZE 8
 #  endif
 #endif
 
@@ -456,13 +463,13 @@ ssize_t jl_tls_offset = -1;
 const int jl_tls_elf_support = 1;
 // Optimize TLS access in codegen if the TLS buffer is using a IE or LE model.
 // To detect such case, we find the size of the TLS segment in the main
-// executable and the TIB pointer and then see if the TLS pointer on the
+// executable and the thread pointer (TP) and then see if the TLS pointer on the
 // current thread is in the right range.
 // This can in principle be extended to the case where the TLS buffer is
 // in the shared library but is part of the static buffer but that seems harder
 // to detect.
 #  if JL_ELF_TLS_VARIANT == 1
-// In Variant 1, the static TLS buffer comes after a fixed size TIB.
+// In Variant 1, the static TLS buffer comes after a fixed size TCB.
 // The alignment needs to be applied to the original size.
 static inline size_t jl_add_tls_size(size_t orig_size, size_t size, size_t align)
 {
@@ -477,7 +484,7 @@ static inline ssize_t jl_check_tls_bound(void *tp, void *ptls, size_t tls_size)
     return offset;
 }
 #  elif JL_ELF_TLS_VARIANT == 2
-// In Variant 2, the static TLS buffer comes before a unknown size TIB.
+// In Variant 2, the static TLS buffer comes before a unknown size TCB.
 // The alignment needs to be applied to the new size.
 static inline size_t jl_add_tls_size(size_t orig_size, size_t size, size_t align)
 {
@@ -533,6 +540,8 @@ static void jl_check_tls(void)
     asm("movl %%gs:0, %0" : "=r"(tp));
 #elif defined(_CPU_AARCH64_)
     asm("mrs %0, tpidr_el0" : "=r"(tp));
+#elif defined(__ARM_ARCH) && __ARM_ARCH >= 7
+    asm("mrc p15, 0, %0, c13, c0, 3" : "=r"(tp));
 #else
 #  error "Cannot emit thread pointer for this architecture."
 #endif
