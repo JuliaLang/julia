@@ -456,31 +456,34 @@ end
 const client_port = Ref{Cushort}(0)
 
 function socket_reuse_port()
-    s = TCPSocket()
-    client_host = Ref{Cuint}(0)
-    ccall(:jl_tcp_bind, Int32,
-            (Ptr{Void}, UInt16, UInt32, Cuint),
-            s.handle, hton(client_port.x), hton(UInt32(0)), 0) < 0 && throw(SystemError("bind() : "))
+    @static if is_linux() || is_apple()
+        s = TCPSocket(delay = false)
 
-    # TODO: Support OSX and change the above code to call setsockopt before bind once libuv provides
-    # early access to a socket fd, i.e., before a bind call.
-
-    @static if is_linux()
-        try
-            rc = ccall(:jl_tcp_reuseport, Int32, (Ptr{Void},), s.handle)
-            if rc > 0  # SO_REUSEPORT is unsupported, just return the ephemerally bound socket
-                return s
-            elseif rc < 0
-                throw(SystemError("setsockopt() SO_REUSEPORT : "))
-            end
-            getsockname(s)
-        catch e
+        # Linux requires the port to be bound before setting REUSEPORT, OSX after.
+        is_linux() && bind_client_port(s)
+        rc = ccall(:jl_tcp_reuseport, Int32, (Ptr{Void},), s.handle)
+        if rc > 0  # SO_REUSEPORT is unsupported, just return the ephemerally bound socket
+            return s
+        elseif rc < 0
             # This is an issue only on systems with lots of client connections, hence delay the warning
-            nworkers() > 128 && warn_once("Error trying to reuse client port number, falling back to plain socket : ", e)
+            nworkers() > 128 && warn_once("Error trying to reuse client port number, falling back to regular socket.")
+
             # provide a clean new socket
             return TCPSocket()
         end
+        is_apple() && bind_client_port(s)
+    else
+        return TCPSocket()
     end
+end
+
+function bind_client_port(s)
+    err = ccall(:jl_tcp_bind, Int32, (Ptr{Void}, UInt16, UInt32, Cuint),
+                            s.handle, hton(client_port[]), hton(UInt32(0)), 0)
+    Base.uv_error("bind() failed", err)
+
+    _addr, port = Base._sockname(s, true)
+    client_port[] = port
     return s
 end
 
