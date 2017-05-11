@@ -406,6 +406,10 @@ Deprecated or removed
   * `convert` methods from `Diagonal` and `Bidiagonal` to subtypes of
     `AbstractTriangular` have been deprecated ([#17723]).
 
+  * Special characters (`#{}()[]<>|&*?~;`) should now be quoted in commands. For example,
+    ``` `export FOO=1\;` ``` should replace ``` `export FOO=1;` ``` and
+    ``` `cd $dir '&&' $thingie` ``` should replace ``` `cd $dir && $thingie` ``` ([#19786]).
+
   * The zero-argument constructor `MersenneTwister()` has been
     deprecated in favor of the explicit `MersenneTwister(0)` ([#16984]).
 
@@ -482,6 +486,7 @@ Deprecated or removed
 [#19724]: https://github.com/JuliaLang/julia/issues/19724
 [#19741]: https://github.com/JuliaLang/julia/issues/19741
 [#19784]: https://github.com/JuliaLang/julia/issues/19784
+[#19786]: https://github.com/JuliaLang/julia/issues/19786
 [#19787]: https://github.com/JuliaLang/julia/issues/19787
 [#19791]: https://github.com/JuliaLang/julia/issues/19791
 [#19800]: https://github.com/JuliaLang/julia/issues/19800
