@@ -41,7 +41,10 @@ LIBGIT2_OPTS += -DUSE_OPENSSL=OFF -DUSE_MBEDTLS=ON -DCMAKE_INSTALL_RPATH="\$$ORI
 endif
 
 ifeq ($(OS),FreeBSD)
+# We're getting this from CMAKE_COMMON when GCCPATH is nonempty
+ifeq ($(GCCPATH),)
 LIBGIT2_OPTS += -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
+endif
 endif
 
 # We need to bundle ca certs on linux now that we're using libgit2 with ssl

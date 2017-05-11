@@ -135,6 +135,14 @@ LLVM_CMAKE += -DLLDB_DISABLE_PYTHON=ON
 endif # LLDB_DISABLE_PYTHON
 endif # BUILD_LLDB
 
+# Part of the FreeBSD libgcc_s kludge
+ifeq ($(OS),FreeBSD)
+ifneq ($(GCCPATH),)
+LLVM_CMAKE += -DCMAKE_INSTALL_RPATH="\$$ORIGIN:$(GCCPATH)"
+LLVM_LDFLAGS += -Wl,-rpath,'\$$ORIGIN',-rpath,$(GCCPATH)
+endif
+endif
+
 ifneq (,$(filter $(ARCH), powerpc64le ppc64le))
 LLVM_CXXFLAGS += -mminimal-toc
 endif
