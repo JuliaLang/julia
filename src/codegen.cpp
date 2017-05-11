@@ -340,8 +340,8 @@ static Function *jltls_states_func;
 static GlobalVariable *jltls_states_var;
 #else
 // Imaging mode only
-static GlobalVariable *jltls_states_func_ptr = NULL;
 size_t jltls_states_func_idx = 0;
+size_t jltls_offset_idx = 0;
 #endif
 
 // important functions
@@ -6621,10 +6621,12 @@ static void init_julia_llvm_env(Module *m)
     add_named_global(jltls_states_func, jl_get_ptls_states_getter());
     if (imaging_mode) {
         PointerType *pfunctype = jltls_states_func->getFunctionType()->getPointerTo();
-        jltls_states_func_ptr =
-            jl_emit_sysimg_slot(m, pfunctype, "jl_get_ptls_states.ptr",
-                                (uintptr_t)jl_get_ptls_states_getter(),
-                                jltls_states_func_idx);
+        jl_emit_sysimg_slot(m, pfunctype, "jl_get_ptls_states.ptr",
+                            (uintptr_t)jl_get_ptls_states_getter(),
+                            jltls_states_func_idx);
+        jl_emit_sysimg_slot(m, T_size, "jl_tls_offset.val",
+                            (uintptr_t)(jl_tls_offset == -1 ? 0 : jl_tls_offset),
+                            jltls_offset_idx);
     }
 #endif
 
