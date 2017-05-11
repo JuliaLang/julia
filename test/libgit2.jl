@@ -1249,6 +1249,11 @@ mktempdir() do dir
         @test LibGit2.checkused!(creds)
         @test creds.user == creds_user
         @test creds.pass == creds_pass
+        sshcreds = LibGit2.SSHCredentials(creds_user, creds_pass)
+        @test sshcreds.user == creds_user
+        @test sshcreds.pass == creds_pass
+        @test isempty(sshcreds.prvkey)
+        @test isempty(sshcreds.pubkey)
     end
 
     # The following tests require that we can fake a TTY so that we can provide passwords
