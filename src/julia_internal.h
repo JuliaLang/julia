@@ -265,6 +265,20 @@ STATIC_INLINE void *jl_gc_alloc_buf(jl_ptls_t ptls, size_t sz)
     return jl_gc_alloc(ptls, sz, (void*)jl_buff_tag);
 }
 
+STATIC_INLINE jl_value_t *jl_gc_permobj(size_t sz, void *ty)
+{
+    const size_t allocsz = sz + sizeof(jl_taggedvalue_t);
+    jl_taggedvalue_t *o = (jl_taggedvalue_t*)jl_gc_perm_alloc(allocsz, 0);
+    uintptr_t tag = (uintptr_t)ty;
+    o->header = tag | GC_OLD_MARKED;
+    return jl_valueof(o);
+}
+jl_value_t *jl_permbox8(jl_datatype_t *t, int8_t x);
+jl_value_t *jl_permbox16(jl_datatype_t *t, int16_t x);
+jl_value_t *jl_permbox32(jl_datatype_t *t, int32_t x);
+jl_value_t *jl_permbox64(jl_datatype_t *t, int64_t x);
+jl_svec_t *jl_perm_symsvec(size_t n, ...);
+
 // Returns a int32 where the high 16 bits are a lower bound of the number of non-pointer fields
 // at the beginning of the type and the low 16 bits are a lower bound on the number of non-pointer
 // fields at the end of the type. This field only exists for a layout that has at least one
@@ -357,7 +371,6 @@ jl_tupletype_t *jl_argtype_with_function(jl_function_t *f, jl_tupletype_t *types
 
 JL_DLLEXPORT jl_value_t *jl_apply_2va(jl_value_t *f, jl_value_t **args, uint32_t nargs);
 
-void jl_gc_setmark(jl_ptls_t ptls, jl_value_t *v);
 void jl_gc_sync_total_bytes(void);
 void jl_gc_track_malloced_array(jl_ptls_t ptls, jl_array_t *a);
 void jl_gc_count_allocd(size_t sz);

@@ -488,6 +488,14 @@ void jl_assign_bits(void *dest, jl_value_t *bits)
         jl_value_t *v = jl_gc_alloc(ptls, nw * sizeof(void*), t);       \
         *(int##nb##_t*)jl_data_ptr(v) = x;                              \
         return v;                                                       \
+    }                                                                   \
+    jl_value_t *jl_permbox##nb(jl_datatype_t *t, int##nb##_t x)         \
+    {                                                                   \
+        assert(jl_isbits(t));                                           \
+        assert(jl_datatype_size(t) == sizeof(x));                       \
+        jl_value_t *v = jl_gc_permobj(nw * sizeof(void*), t);           \
+        *(int##nb##_t*)jl_data_ptr(v) = x;                              \
+        return v;                                                       \
     }
 BOXN_FUNC(8,  1)
 BOXN_FUNC(16, 1)
@@ -592,18 +600,18 @@ void jl_init_int32_int64_cache(void)
 {
     int64_t i;
     for(i=0; i < NBOX_C; i++) {
-        boxed_int32_cache[i]  = jl_box32(jl_int32_type, i-NBOX_C/2);
-        boxed_int64_cache[i]  = jl_box64(jl_int64_type, i-NBOX_C/2);
+        boxed_int32_cache[i]  = jl_permbox32(jl_int32_type, i-NBOX_C/2);
+        boxed_int64_cache[i]  = jl_permbox64(jl_int64_type, i-NBOX_C/2);
 #ifdef _P64
-        boxed_ssavalue_cache[i] = jl_box64(jl_ssavalue_type, i);
-        boxed_slotnumber_cache[i] = jl_box64(jl_slotnumber_type, i);
+        boxed_ssavalue_cache[i] = jl_permbox64(jl_ssavalue_type, i);
+        boxed_slotnumber_cache[i] = jl_permbox64(jl_slotnumber_type, i);
 #else
-        boxed_ssavalue_cache[i] = jl_box32(jl_ssavalue_type, i);
-        boxed_slotnumber_cache[i] = jl_box32(jl_slotnumber_type, i);
+        boxed_ssavalue_cache[i] = jl_permbox32(jl_ssavalue_type, i);
+        boxed_slotnumber_cache[i] = jl_permbox32(jl_slotnumber_type, i);
 #endif
     }
     for(i=0; i < 256; i++) {
-        boxed_uint8_cache[i] = jl_box8(jl_uint8_type, i);
+        boxed_uint8_cache[i] = jl_permbox8(jl_uint8_type, i);
     }
 }
 
@@ -611,34 +619,14 @@ void jl_init_box_caches(void)
 {
     int64_t i;
     for(i=0; i < 256; i++) {
-        boxed_int8_cache[i]  = jl_box8(jl_int8_type, i);
+        boxed_int8_cache[i]  = jl_permbox8(jl_int8_type, i);
     }
     for(i=0; i < NBOX_C; i++) {
-        boxed_int16_cache[i]  = jl_box16(jl_int16_type, i-NBOX_C/2);
-        boxed_uint16_cache[i] = jl_box16(jl_uint16_type, i);
-        boxed_uint32_cache[i] = jl_box32(jl_uint32_type, i);
-        boxed_char_cache[i]   = jl_box32(jl_char_type, i);
-        boxed_uint64_cache[i] = jl_box64(jl_uint64_type, i);
-    }
-}
-
-void jl_mark_box_caches(jl_ptls_t ptls)
-{
-    int64_t i;
-    for(i=0; i < 256; i++) {
-        jl_gc_setmark(ptls, boxed_int8_cache[i]);
-        jl_gc_setmark(ptls, boxed_uint8_cache[i]);
-    }
-    for(i=0; i < NBOX_C; i++) {
-        jl_gc_setmark(ptls, boxed_int16_cache[i]);
-        jl_gc_setmark(ptls, boxed_int32_cache[i]);
-        jl_gc_setmark(ptls, boxed_int64_cache[i]);
-        jl_gc_setmark(ptls, boxed_uint16_cache[i]);
-        jl_gc_setmark(ptls, boxed_uint32_cache[i]);
-        jl_gc_setmark(ptls, boxed_char_cache[i]);
-        jl_gc_setmark(ptls, boxed_uint64_cache[i]);
-        jl_gc_setmark(ptls, boxed_ssavalue_cache[i]);
-        jl_gc_setmark(ptls, boxed_slotnumber_cache[i]);
+        boxed_int16_cache[i]  = jl_permbox16(jl_int16_type, i-NBOX_C/2);
+        boxed_uint16_cache[i] = jl_permbox16(jl_uint16_type, i);
+        boxed_uint32_cache[i] = jl_permbox32(jl_uint32_type, i);
+        boxed_char_cache[i]   = jl_permbox32(jl_char_type, i);
+        boxed_uint64_cache[i] = jl_permbox64(jl_uint64_type, i);
     }
 }
 
