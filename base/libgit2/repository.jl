@@ -235,7 +235,7 @@ contains detailed information about it based on the keyword argument:
 
   * `options::DescribeOptions=DescribeOptions()`
 
-Equivalent to `git-describe <commitish>`.
+Equivalent to `git describe <commitish>`.
 """
 function GitDescribeResult(commitish::GitObject;
                            options::DescribeOptions=DescribeOptions())
