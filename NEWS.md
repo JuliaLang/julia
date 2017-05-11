@@ -231,6 +231,8 @@ This section lists changes that do not have deprecation warnings.
     serialize globals defined under Main. For details, please refer to the paragraph
     on "Global variables" under the "Parallel computing" chapter in the manual ([#19594]).
 
+  * `homedir` now determines the user's home directory via `libuv`'s `uv_os_homedir`,
+    rather than from environment variables ([#19636]).
 
 Library improvements
 --------------------
@@ -469,6 +471,7 @@ Deprecated or removed
 [#19594]: https://github.com/JuliaLang/julia/issues/19594
 [#19598]: https://github.com/JuliaLang/julia/issues/19598
 [#19635]: https://github.com/JuliaLang/julia/issues/19635
+[#19636]: https://github.com/JuliaLang/julia/issues/19636
 [#19670]: https://github.com/JuliaLang/julia/issues/19670
 [#19677]: https://github.com/JuliaLang/julia/issues/19677
 [#19680]: https://github.com/JuliaLang/julia/issues/19680
