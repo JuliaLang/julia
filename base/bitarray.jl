@@ -542,7 +542,7 @@ reinterpret(B::BitArray, dims::NTuple{N,Int}) where {N} = reshape(B, dims)
 
 ## Constructors from generic iterables ##
 
-BitArray(A::AbstractArray{T,N}) where {T,N} = convert(BitArray{N}, A)
+BitArray(A::AbstractArray{<:Any,N}) where {N} = convert(BitArray{N}, A)
 
 """
     BitArray(itr)
