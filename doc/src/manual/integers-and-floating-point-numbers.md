@@ -612,6 +612,12 @@ julia> 2(x-1)^2 - 3(x-1) + 1
 3
 ```
 
+!!! warning
+    Notice that, in this case, the precedence of numeric literal coefficient is
+    still the same as that of the unary operators. Hence, the expression
+    `6/2(2+1)` leads to `1` instead of the conventional result `9`, which is
+    obtained by `6/2*(2+1)`.
+
 Additionally, parenthesized expressions can be used as coefficients to variables, implying multiplication
 of the expression by the variable:
 
