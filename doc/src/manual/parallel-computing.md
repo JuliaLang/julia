@@ -1231,8 +1231,8 @@ as local laptops, departmental clusters, or even the cloud. This section covers 
 requirements for the inbuilt `LocalManager` and `SSHManager`:
 
   * The master process does not listen on any port. It only connects out to the workers.
-  * Each worker binds to only one of the local interfaces and listens on the first free port starting
-    from `9009`.
+  * Each worker binds to only one of the local interfaces and listens on an ephemeral port number
+    assigned by the OS.
   * `LocalManager`, used by `addprocs(N)`, by default binds only to the loopback interface. This means
     that workers started later on remote hosts (or by anyone with malicious intentions) are unable
     to connect to the cluster. An `addprocs(4)` followed by an `addprocs(["remote_host"])` will fail.
@@ -1250,8 +1250,9 @@ requirements for the inbuilt `LocalManager` and `SSHManager`:
     authenticated via public key infrastructure (PKI). Authentication credentials can be supplied
     via `sshflags`, for example ```sshflags=`-e <keyfile>` ```.
 
-    Note that worker-worker connections are still plain TCP and the local security policy on the remote
-    cluster must allow for free connections between worker nodes, at least for ports 9009 and above.
+    In an all-to-all topology (the default), all workers connect to each other via plain TCP sockets.
+    The security policy on the cluster nodes must thus ensure free connectivity between workers for
+    the ephemeral port range (varies by OS).
 
     Securing and encrypting all worker-worker traffic (via SSH) or encrypting individual messages
     can be done via a custom ClusterManager.
