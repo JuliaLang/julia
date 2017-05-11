@@ -172,19 +172,25 @@ function _require_from_serialized(node::Int, mod::Symbol, path_to_try::String, t
         end
         restored = _include_from_serialized(content)
         isa(restored, Exception) && return restored
-        others = filter(x -> x != myid(), procs())
-        refs = Any[
-            (p, @spawnat(p,
-                let m = try
-                            _include_from_serialized(content)
-                        catch ex
-                            isa(ex, Exception) ? ex : ErrorException(string(ex))
+
+        results = sizehint!(Vector{Tuple{Int,Any}}(), nprocs())
+        @sync for p in procs()
+            if p != myid()
+                @async begin
+                    result = remotecall_fetch(p) do
+                        let m = try
+                                    _include_from_serialized(content)
+                                catch ex
+                                    isa(ex, Exception) ? ex : ErrorException(string(ex))
+                                end
+                            isa(m, Exception) ? m : nothing
                         end
-                    isa(m, Exception) ? m : nothing
-                end))
-            for p in others ]
-        for (id, ref) in refs
-            m = fetch(ref)
+                    end
+                    push!(results, (p, result))
+                end
+            end
+        end
+        for (id, m) in results
             if m !== nothing
                 warn("Node state is inconsistent: node $id failed to load cache from $path_to_try. Got:")
                 warn(m, prefix="WARNING: ")
@@ -460,8 +466,13 @@ function _require(mod::Symbol)
                 eval(Main, :(Base.include_from_node1($path)))
 
                 # broadcast top-level import/using from node 1 (only)
-                refs = Any[ @spawnat p eval(Main, :(Base.include_from_node1($path))) for p in filter(x -> x != 1, procs()) ]
-                for r in refs; wait(r); end
+                @sync begin
+                    for p in filter(x -> x != 1, procs())
+                        @async remotecall_fetch(p) do
+                            eval(Main, :(Base.include_from_node1($path); nothing))
+                        end
+                    end
+                end
             else
                 eval(Main, :(Base.include_from_node1($path)))
             end
