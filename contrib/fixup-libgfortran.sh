@@ -115,7 +115,7 @@ cd $private_libdir
 for soname in libopenblas libarpack libcholmod liblapack libopenspecfun $SONAMES; do
     # Grab every incarnation of that library that exists within $private_libdir
     # (e.g. "libopenspecfun.so", and "libopenspecfun.so.0", etc...)
-    for lib in $private_libdir/$soname*.$SHLIB_EXT*; do
+    for lib in $private_libdir/$soname*; do
         # Look for links to any of the our three musketeers within ANY of the
         # potential LIBGFORTRAN_DIRS we've discovered so far
         for dir in $LIBGFORTRAN_DIRS; do
