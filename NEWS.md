@@ -3,6 +3,8 @@ Julia v0.7.0 Release Notes
 
 New language features
 ---------------------
+  * `getpeername` on a `TCPSocket` returns the address and port of the remote
+    endpoint of the TCP connection ([#21825]).
 
 
 Language changes
@@ -24,6 +26,9 @@ This section lists changes that do not have deprecation warnings.
 
   * Passing the same keyword argument multiple times is now a syntax error ([#16937]).
 
+  * `getsockname` on a `TCPSocket` now returns the locally bound address and port
+    of the socket. Previously the address of the remote endpoint was being
+    returned ([#21825]).
 
 Library improvements
 --------------------
