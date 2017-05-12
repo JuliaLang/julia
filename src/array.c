@@ -188,10 +188,19 @@ JL_DLLEXPORT jl_array_t *jl_reshape_array(jl_value_t *atype, jl_array_t *data,
     a->offset = 0;
     a->data = NULL;
     a->flags.isaligned = data->flags.isaligned;
+    jl_array_t *owner = (jl_array_t*)jl_array_owner(data);
     jl_value_t *el_type = jl_tparam0(atype);
     assert(store_unboxed(el_type) == !data->flags.ptrarray);
     if (!data->flags.ptrarray) {
         a->elsize = jl_datatype_size(el_type);
+        unsigned align = ((jl_datatype_t*)el_type)->layout->alignment;
+        jl_value_t *ownerty = jl_typeof(owner);
+        unsigned oldalign = (ownerty == (jl_value_t*)jl_string_type ? 1 :
+                             ((jl_datatype_t*)jl_tparam0(ownerty))->layout->alignment);
+        if (oldalign < align)
+            jl_exceptionf(jl_argumenterror_type,
+                          "reinterpret from alignment %u bytes to alignment %u bytes not allowed",
+                          oldalign, align);
         a->flags.ptrarray = 0;
     }
     else {
@@ -201,7 +210,7 @@ JL_DLLEXPORT jl_array_t *jl_reshape_array(jl_value_t *atype, jl_array_t *data,
 
     // if data is itself a shared wrapper,
     // owner should point back to the original array
-    jl_array_data_owner(a) = jl_array_owner(data);
+    jl_array_data_owner(a) = (jl_value_t*)owner;
 
     a->flags.how = 3;
     a->data = data->data;
@@ -266,15 +275,22 @@ JL_DLLEXPORT jl_array_t *jl_ptr_to_array_1d(jl_value_t *atype, void *data,
                                             size_t nel, int own_buffer)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    size_t elsz;
     jl_array_t *a;
     jl_value_t *el_type = jl_tparam0(atype);
 
     int isunboxed = store_unboxed(el_type);
-    if (isunboxed)
+    size_t elsz;
+    unsigned align;
+    if (isunboxed) {
         elsz = jl_datatype_size(el_type);
-    else
-        elsz = sizeof(void*);
+        align = ((jl_datatype_t*)el_type)->layout->alignment;
+    }
+    else {
+        align = elsz = sizeof(void*);
+    }
+    if (((uintptr_t)data) & (align - 1))
+        jl_exceptionf(jl_argumenterror_type,
+                      "unsafe_wrap: pointer %p is not properly aligned to %u bytes", data, align);
 
     int ndimwords = jl_array_ndimwords(1);
     int tsz = JL_ARRAY_ALIGN(sizeof(jl_array_t) + ndimwords*sizeof(size_t), JL_CACHE_BYTE_ALIGNMENT);
@@ -309,7 +325,7 @@ JL_DLLEXPORT jl_array_t *jl_ptr_to_array(jl_value_t *atype, void *data,
                                          jl_value_t *_dims, int own_buffer)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    size_t elsz, nel = 1;
+    size_t nel = 1;
     jl_array_t *a;
     size_t ndims = jl_nfields(_dims);
     wideint_t prod;
@@ -326,10 +342,18 @@ JL_DLLEXPORT jl_array_t *jl_ptr_to_array(jl_value_t *atype, void *data,
     jl_value_t *el_type = jl_tparam0(atype);
 
     int isunboxed = store_unboxed(el_type);
-    if (isunboxed)
+    size_t elsz;
+    unsigned align;
+    if (isunboxed) {
         elsz = jl_datatype_size(el_type);
-    else
-        elsz = sizeof(void*);
+        align = ((jl_datatype_t*)el_type)->layout->alignment;
+    }
+    else {
+        align = elsz = sizeof(void*);
+    }
+    if (((uintptr_t)data) & (align - 1))
+        jl_exceptionf(jl_argumenterror_type,
+                      "unsafe_wrap: pointer %p is not properly aligned to %u bytes", data, align);
 
     int ndimwords = jl_array_ndimwords(ndims);
     int tsz = JL_ARRAY_ALIGN(sizeof(jl_array_t) + ndimwords*sizeof(size_t), JL_CACHE_BYTE_ALIGNMENT);
