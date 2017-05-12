@@ -406,6 +406,14 @@ Deprecated or removed
 
   * `broadcast_zpreserving` has been deprecated ([#19533], [#19720]).
 
+  * `@test_approx_eq a b` has been deprecated in favor of `@test a ≈ b` (or,
+    equivalently, `@test ≈(a, b)` or `@test isapprox(a, b)`).
+    `@test_approx_eq_eps` has been deprecated in favor of new `@test` syntax:
+    `@test` now supports the syntax `@test f(args...) key=val ...` for
+    `@test f(args..., key=val...)`. This syntax allows, for example, writing
+    `@test a ≈ b atol=c` in place of `@test ≈(a, b, atol=c)` (and hence
+    `@test_approx_eq_eps a b c`) ([#19901]).
+
   * `convert` methods from `Diagonal` and `Bidiagonal` to subtypes of
     `AbstractTriangular` have been deprecated ([#17723]).
 
@@ -492,6 +500,7 @@ Deprecated or removed
 [#19802]: https://github.com/JuliaLang/julia/issues/19802
 [#19841]: https://github.com/JuliaLang/julia/issues/19841
 [#19900]: https://github.com/JuliaLang/julia/issues/19900
+[#19901]: https://github.com/JuliaLang/julia/issues/19901
 [#19903]: https://github.com/JuliaLang/julia/issues/19903
 [#19919]: https://github.com/JuliaLang/julia/issues/19919
 [#19926]: https://github.com/JuliaLang/julia/issues/19926
