@@ -159,7 +159,6 @@ include(string((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "version_git.jl")) # 
 
 include("osutils.jl")
 include("c.jl")
-include("sysinfo.jl")
 
 if !isdefined(Core, :Inference)
     include("docs/core.jl")
@@ -200,6 +199,7 @@ importall .Base64
 include("version.jl")
 
 # system & environment
+include("sysinfo.jl")
 include("libc.jl")
 using .Libc: getpid, gethostname, time
 include("libdl.jl")

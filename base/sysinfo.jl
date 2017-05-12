@@ -183,19 +183,19 @@ maxrss() = ccall(:jl_maxrss, Csize_t, ())
 if is_windows()
     function windows_version()
         verinfo = ccall(:GetVersion, UInt32, ())
-        (Int(verinfo & 0xFF), Int((verinfo >> 8) & 0xFF))
+        VersionNumber(verinfo & 0xFF, (verinfo >> 8) & 0xFF, verinfo >> 16)
     end
 else
-    windows_version() = (0, 0)
+    windows_version() = v"0.0"
 end
 """
     windows_version()
 
-Returns the version number for the Windows NT Kernel as a (major, minor) pair,
-or `(0, 0)` if this is not running on Windows.
+Returns the version number for the Windows NT Kernel as a VersionNumber,
+i.e. v"major.minor.build", or `v"0.0.0` if this is not running on Windows.
 """
 windows_version
 
-const WINDOWS_VISTA_VER = (6, 0)
+const WINDOWS_VISTA_VER = v"6.0"
 
 end # module Sys
