@@ -292,7 +292,7 @@ Compute ``\\sin(\\pi x) / (\\pi x)`` if ``x \\neq 0``, and ``1`` if ``x = 0``.
 """
 sinc(x::Number) = x==0 ? one(x)  : oftype(x,sinpi(x)/(pi*x))
 sinc(x::Integer) = x==0 ? one(x) : zero(x)
-sinc(x::Complex{T}) where {T<:Integer} = sinc(float(x))
+sinc(x::Complex{<:Integer}) = sinc(float(x))
 sinc(x::Real) = x==0 ? one(x) : isinf(x) ? zero(x) : sinpi(x)/(pi*x)
 
 """
@@ -303,14 +303,14 @@ Compute ``\\cos(\\pi x) / x - \\sin(\\pi x) / (\\pi x^2)`` if ``x \\neq 0``, and
 """
 cosc(x::Number) = x==0 ? zero(x) : oftype(x,(cospi(x)-sinpi(x)/(pi*x))/x)
 cosc(x::Integer) = cosc(float(x))
-cosc(x::Complex{T}) where {T<:Integer} = cosc(float(x))
+cosc(x::Complex{<:Integer}) = cosc(float(x))
 cosc(x::Real) = x==0 || isinf(x) ? zero(x) : (cospi(x)-sinpi(x)/(pi*x))/x
 
 for (finv, f) in ((:sec, :cos), (:csc, :sin), (:cot, :tan),
                   (:sech, :cosh), (:csch, :sinh), (:coth, :tanh),
                   (:secd, :cosd), (:cscd, :sind), (:cotd, :tand))
     @eval begin
-        ($finv){T<:Number}(z::T) = one(T) / (($f)(z))
+        ($finv)(z::T) where {T<:Number} = one(T) / (($f)(z))
     end
 end
 
