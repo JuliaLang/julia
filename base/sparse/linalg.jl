@@ -61,8 +61,8 @@ for (f, op, transp) in ((:A_mul_B, :identity, false),
             if β != 1
                 β != 0 ? scale!(C, β) : fill!(C, zero(eltype(C)))
             end
-            for col = 1:A.n
-                for k = 1:size(C, 2)
+            for k = 1:size(C, 2)
+                for col = 1:A.n
                     if $transp
                         tmp = zero(eltype(C))
                         @inbounds for j = A.colptr[col]:(A.colptr[col + 1] - 1)
