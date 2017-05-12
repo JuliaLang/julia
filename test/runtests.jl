@@ -1849,6 +1849,27 @@ let foo() = begin
     @test foo() == 2
 end
 
+# PR 21378
+let
+    # https://en.wikipedia.org/wiki/Swatch_Internet_Time
+    immutable Beat <: Dates.Period
+        value::Int64
+    end
+
+    Dates.value(b::Beat) = b.value
+    Dates.toms(b::Beat) = Dates.value(b) * 86400
+    Dates._units(b::Beat) = " beat" * (abs(Dates.value(b)) == 1 ? "" : "s")
+    Base.promote_rule(::Type{Dates.Day}, ::Type{Beat}) = Dates.Millisecond
+    Base.convert{T<:Dates.Millisecond}(::Type{T}, b::Beat) = T(Dates.toms(b))
+
+    @test Beat(1000) == Dates.Day(1)
+    @test Beat(1) < Dates.Day(1)
+    @test_throws MethodError Dates.Day(30) == Dates.Month(1)
+    @test_throws MethodError Dates.Month(1) == Dates.Day(30)
+    @test_throws MethodError Dates.Day(1) < Dates.Month(1)
+    @test_throws MethodError Dates.Month(1) < Dates.Day(1)
+end
+
 include("to-be-deprecated.jl")
 
 nothing

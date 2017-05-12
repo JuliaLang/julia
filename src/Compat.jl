@@ -1492,6 +1492,20 @@ else
     const collect = Base.collect
 end
 
+# https://github.com/JuliaLang/julia/pull/21378
+if VERSION < v"0.6.0-pre.beta.455"
+    import Base: ==, isless
+
+    ==(x::Dates.Period, y::Dates.Period) = (==)(promote(x, y)...)
+    isless(x::Dates.Period, y::Dates.Period) = isless(promote(x,y)...)
+
+    # disallow comparing fixed to other periods
+    ==(x::Dates.FixedPeriod, y::Dates.OtherPeriod) = throw(MethodError(==, (x, y)))
+    ==(x::Dates.OtherPeriod, y::Dates.FixedPeriod) = throw(MethodError(==, (x, y)))
+    isless(x::Dates.FixedPeriod, y::Dates.OtherPeriod) = throw(MethodError(isless, (x, y)))
+    isless(x::Dates.OtherPeriod, y::Dates.FixedPeriod) = throw(MethodError(isless, (x, y)))
+end
+
 include("to-be-deprecated.jl")
 
 # https://github.com/JuliaLang/julia/pull/21746
