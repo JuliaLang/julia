@@ -162,7 +162,7 @@ total_memory() = ccall(:uv_get_total_memory, UInt64, ())
 Get the process title. On some systems, will always return empty string. (not exported)
 """
 function get_process_title()
-    buf = zeros(UInt8, 512)
+    buf = Vector{UInt8}(512)
     err = ccall(:uv_get_process_title, Cint, (Ptr{UInt8}, Cint), buf, 512)
     Base.uv_error("get_process_title", err)
     return unsafe_string(pointer(buf))
