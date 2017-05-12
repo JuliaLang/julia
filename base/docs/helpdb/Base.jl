@@ -1063,6 +1063,14 @@ For example,
 `reinterpret(Float32, UInt32(7))` interprets the 4 bytes corresponding to `UInt32(7)` as a
 `Float32`.
 
+!!! warning
+
+    It is not allowed to `reinterpret` an array to an element type with a larger alignment then
+    the alignment of the array. For a normal `Array`, this is the alignment of its element type.
+    For a reinterpreted array, this is the alignment of the `Array` it was reinterpreted from.
+    For example, `reinterpret(UInt32, UInt8[0, 0, 0, 0])` is not allowed but
+    `reinterpret(UInt32, reinterpret(UInt8, Float32[1.0]))` is allowed.
+
 ```jldoctest
 julia> reinterpret(Float32, UInt32(7))
 1.0f-44
