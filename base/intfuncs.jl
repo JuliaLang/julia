@@ -325,6 +325,8 @@ function prevpow(a::Real, x::Real)
     p <= x ? p : a^n
 end
 
+## ndigits (number of digits) in base 10 ##
+
 # decimal digits in an unsigned integer
 const powers_of_ten = [
     0x0000000000000001, 0x000000000000000a, 0x0000000000000064, 0x00000000000003e8,
@@ -333,7 +335,7 @@ const powers_of_ten = [
     0x000000e8d4a51000, 0x000009184e72a000, 0x00005af3107a4000, 0x00038d7ea4c68000,
     0x002386f26fc10000, 0x016345785d8a0000, 0x0de0b6b3a7640000, 0x8ac7230489e80000,
 ]
-function ndigits0z(x::Union{UInt8,UInt16,UInt32,UInt64})
+function ndigits0z(x::Base.BitUnsigned64)
     lz = (sizeof(x)<<3)-leading_zeros(x)
     nd = (1233*lz)>>12+1
     nd -= x < powers_of_ten[nd]
@@ -346,9 +348,20 @@ function ndigits0z(x::UInt128)
     end
     return n + ndigits0z(UInt64(x))
 end
-ndigits0z(x::Integer) = ndigits0z(unsigned(abs(x)))
 
-function ndigits0znb(n::Signed, b::Int)
+ndigits0z(x::Signed) = ndigits0z(unsigned(abs(x)))
+
+ndigits0z(x::Integer) = ndigits0zpb(x, 10)
+
+# TODO (when keywords args are fast): rename to ndigits and make pad a keyword
+ndigits10(x::Integer, pad::Int=1) = max(pad, ndigits0z(x))
+ndigits(x::Integer) = iszero(x) ? 1 : ndigits0z(x)
+
+## ndigits with specified base ##
+
+# The suffix "nb" stands for "negative base"
+function ndigits0znb(n::Integer, b::Integer)
+    # precondition: b < -1 && !(typeof(n) <: Unsigned)
     d = 0
     while n != 0
         n = cld(n,b)
@@ -357,7 +370,12 @@ function ndigits0znb(n::Signed, b::Int)
     return d
 end
 
-function ndigits0z(n::Unsigned, b::Int)
+ndigits0znb(n::Unsigned, b::Integer) = ndigits0znb(signed(n), b)
+
+# The suffix "pb" stands for "positive base"
+# TODO: allow b::Integer
+function ndigits0zpb(n::Base.BitUnsigned, b::Int)
+    # precondition: b > 1
     b < 0   && return ndigits0znb(signed(n), b)
     b == 2  && return sizeof(n)<<3 - leading_zeros(n)
     b == 8  && return (sizeof(n)<<3 - leading_zeros(n) + 2) ÷ 3
@@ -379,20 +397,36 @@ function ndigits0z(n::Unsigned, b::Int)
     end
     return d
 end
-ndigits0z(x::Integer, b::Integer) = ndigits0z(unsigned(abs(x)),Int(b))
 
-ndigitsnb(x::Integer, b::Integer) = x==0 ? 1 : ndigits0znb(x, b)
+ndigits0zpb(x::Base.BitSigned, b::Integer) = ndigits0zpb(unsigned(abs(x)), Int(b))
+ndigits0zpb(x::Base.BitUnsigned, b::Integer) = ndigits0zpb(x, Int(b))
 
-ndigits(x::Unsigned, b::Integer) = x==0 ? 1 : ndigits0z(x,Int(b))
-ndigits(x::Unsigned)             = x==0 ? 1 : ndigits0z(x)
+# The suffix "0z" means that the output is 0 on input zero (cf. #16841)
+"""
+    ndigits0z(n::Integer, b::Integer=10)
+
+Return 0 if `n == 0`, otherwise compute the number of digits in
+integer `n` written in base `b` (i.e. equal to `ndigits(n, b)`
+in this case).
+The base `b` must not be in `[-1, 0, 1]`.
+"""
+function ndigits0z(x::Integer, b::Integer)
+    if b < -1
+        ndigits0znb(x, b)
+    elseif b > 1
+        ndigits0zpb(x, b)
+    else
+        throw(DomainError())
+    end
+end
 
 """
     ndigits(n::Integer, b::Integer=10)
 
 Compute the number of digits in integer `n` written in base `b`.
+The base `b` must not be in `[-1, 0, 1]`.
 """
-ndigits(x::Integer, b::Integer) = b >= 0 ? ndigits(unsigned(abs(x)),Int(b)) : ndigitsnb(x, b)
-ndigits(x::Integer) = ndigits(unsigned(abs(x)))
+ndigits(x::Integer, b::Integer, pad::Int=1) = max(pad, ndigits0z(x, b))
 
 ## integer to string functions ##
 
@@ -423,7 +457,7 @@ function oct(x::Unsigned, pad::Int, neg::Bool)
 end
 
 function dec(x::Unsigned, pad::Int, neg::Bool)
-    i = neg + max(pad,ndigits0z(x))
+    i = neg + ndigits10(x, pad)
     a = StringVector(i)
     while i > neg
         a[i] = '0'+rem(x,10)
@@ -455,7 +489,7 @@ const base62digits = ['0':'9';'A':'Z';'a':'z']
 function base(b::Int, x::Unsigned, pad::Int, neg::Bool)
     2 <= b <= 62 || throw(ArgumentError("base must be 2 ≤ base ≤ 62, got $b"))
     digits = b <= 36 ? base36digits : base62digits
-    i = neg + max(pad,ndigits0z(x,b))
+    i = neg + ndigits(x, b, pad)
     a = StringVector(i)
     while i > neg
         a[i] = digits[1+rem(x,b)]
@@ -544,9 +578,8 @@ higher indexes, such that `n == sum([digits[k]*base^(k-1) for k=1:length(digits)
 """
 digits(n::Integer, base::T=10, pad::Integer=1) where {T<:Integer} = digits(T, n, base, pad)
 
-function digits(::Type{T}, n::Integer, base::Integer=10, pad::Integer=1) where T<:Integer
-    2 <= base || throw(ArgumentError("base must be ≥ 2, got $base"))
-    digits!(zeros(T, max(pad, ndigits0z(n,base))), n, base)
+function digits(T::Type{<:Integer}, n::Integer, base::Integer=10, pad::Integer=1)
+    digits!(zeros(T, ndigits(n, base, pad)), n, base)
 end
 
 """
