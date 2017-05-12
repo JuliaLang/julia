@@ -703,7 +703,8 @@ function handle_deserialize(s::AbstractSerializer, b::Int32)
         return GlobalRef(deserialize(s)::Module, deserialize(s)::Symbol)
     elseif b == FULL_GLOBALREF_TAG
         ty = deserialize(s)
-        return GlobalRef(ty.name.module, ty.name.name)
+        tn = unwrap_unionall(ty).name
+        return GlobalRef(tn.module, tn.name)
     elseif b == LONGTUPLE_TAG
         return deserialize_tuple(s, Int(read(s.io, Int32)::Int32))
     elseif b == LONGEXPR_TAG
