@@ -387,6 +387,12 @@ Library improvements
     now efficiently yield `SparseVector`s or `SparseMatrix`s as appropriate ([#19239],
     [#19371], [#19518], [#19438], [#19690], [#19724], [#19926], [#19934], [#20009]).
 
+  * The operators `!` and `∘` (`\circ<tab>` at the REPL and in most code editors) now
+    respectively perform predicate function negation and function composition. For example,
+    `map(!iszero, (0, 1))` is now equivalent to `map(x -> !iszero(x), (0, 1))` and
+    `map(uppercase ∘ hex, 250:255)` is now equivalent to
+    `map(x -> uppercase(hex(x)), 250:255)` ([#17155]).
+
 Compiler/Runtime improvements
 -----------------------------
 
@@ -464,6 +470,7 @@ Deprecated or removed
 [#16984]: https://github.com/JuliaLang/julia/issues/16984
 [#16986]: https://github.com/JuliaLang/julia/issues/16986
 [#17057]: https://github.com/JuliaLang/julia/issues/17057
+[#17155]: https://github.com/JuliaLang/julia/issues/17155
 [#17261]: https://github.com/JuliaLang/julia/issues/17261
 [#17265]: https://github.com/JuliaLang/julia/issues/17265
 [#17302]: https://github.com/JuliaLang/julia/issues/17302
