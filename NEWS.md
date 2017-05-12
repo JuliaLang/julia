@@ -337,6 +337,12 @@ Library improvements
   * A new `Dates.Time` type was added that supports representing the time of day
     with up to nanosecond resolution ([#12274]).
 
+  * Raising one or negative one to a negative integer power formerly threw a `DomainError`.
+    One raised to any negative integer power now yields one, negative one raised to any
+    negative even integer power now yields one, and negative one raised to any negative
+    odd integer power now yields negative one. Similarly, raising `true` to any negative
+    integer power now yields `true` rather than throwing a `DomainError` ([#18342]).
+
   * A new `@macroexpand` macro was added as a convenient alternative to the `macroexpand` function ([#18660]).
 
   * A new `ConjArray` type was added, as a wrapper type for lazy complex conjugation of arrays.
@@ -436,6 +442,7 @@ Deprecated or removed
 [#18251]: https://github.com/JuliaLang/julia/issues/18251
 [#18330]: https://github.com/JuliaLang/julia/issues/18330
 [#18339]: https://github.com/JuliaLang/julia/issues/18339
+[#18342]: https://github.com/JuliaLang/julia/issues/18342
 [#18346]: https://github.com/JuliaLang/julia/issues/18346
 [#18442]: https://github.com/JuliaLang/julia/issues/18442
 [#18453]: https://github.com/JuliaLang/julia/issues/18453
