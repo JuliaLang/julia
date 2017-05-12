@@ -1,3 +1,34 @@
+Julia v0.7.0 Release Notes
+==========================
+
+New language features
+---------------------
+
+
+Language changes
+----------------
+
+
+Breaking changes
+----------------
+
+This section lists changes that do not have deprecation warnings.
+
+
+Library improvements
+--------------------
+
+
+Compiler/Runtime improvements
+-----------------------------
+
+
+Deprecated or removed
+---------------------
+
+  * The method `srand(rng, filename, n=4)` has been deprecated ([#21359]).
+
+
 Julia v0.6.0 Release Notes
 ==========================
 
