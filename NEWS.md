@@ -220,6 +220,12 @@ This section lists changes that do not have deprecation warnings.
     `airybiprimex`, `airyaix`, `airybix`, `airyaiprimex`, `airybiprimex`)
     ([#18050]).
 
+  * When a macro is called in the module in which that macro is defined, global variables
+    in the macro are now correctly resolved in the macro definition environment. Breakage
+    from this change commonly manifests as undefined variable errors that do not occur
+    under 0.5. Fixing such breakage typically requires sprinkling additional `esc`s in
+    the offending macro ([#15850]).
+
   * `write` on an `IOBuffer` now returns a signed integer in order to be
     consistent with other buffers ([#20609]).
 
@@ -419,6 +425,7 @@ Deprecated or removed
 [#11310]: https://github.com/JuliaLang/julia/issues/11310
 [#12274]: https://github.com/JuliaLang/julia/issues/12274
 [#12563]: https://github.com/JuliaLang/julia/issues/12563
+[#15850]: https://github.com/JuliaLang/julia/issues/15850
 [#16213]: https://github.com/JuliaLang/julia/issues/16213
 [#16961]: https://github.com/JuliaLang/julia/issues/16961
 [#16984]: https://github.com/JuliaLang/julia/issues/16984
