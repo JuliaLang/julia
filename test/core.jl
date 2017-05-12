@@ -4848,12 +4848,15 @@ end
 let ni128 = sizeof(FP128test) ÷ sizeof(Int),
     ns128 = sizeof(FP128align) ÷ sizeof(Int),
     nbit = sizeof(Int) * 8,
-    arr = reinterpret(FP128align, collect(Int, 1:(2 * ns128))),
+    arr = Vector{FP128align}(2),
     offset = Base.datatype_alignment(FP128test) ÷ sizeof(Int),
     little,
-    expected
+    expected,
+    arrint = reinterpret(Int, arr)
+
+    @test length(arrint) == 2 * ns128
+    arrint .= 1:(2 * ns128)
     @test sizeof(FP128test) == 16
-    @test length(arr) == 2
     @test arr[1].i == 1
     @test arr[2].i == 1 + ns128
     expected = UInt128(0)
