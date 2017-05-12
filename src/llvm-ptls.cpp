@@ -127,14 +127,18 @@ static Instruction *emit_ptls_tp(LLVMContext &ctx, Value *offset, Type *T_ppjlva
         tls = CallInst::Create(tp, "ptls_i8", insertBefore);
     }
     return new BitCastInst(tls, PointerType::get(T_ppjlvalue, 0), "ptls", insertBefore);
-#  elif defined(_CPU_AARCH64_)
-    // AArch64 doesn't seem to have this issue.
+#  elif defined(_CPU_AARCH64_) || (defined(__ARM_ARCH) && __ARM_ARCH >= 7)
+    // AArch64/ARM doesn't seem to have this issue.
     // (Possibly because there are many more registers and the offset is
     // positive and small)
-    // It's also harder to emit the offset in a generic way on AArch64
+    // It's also harder to emit the offset in a generic way on ARM/AArch64
     // (need to generate one or two `add` with shift) so let llvm emit
     // the add for now.
+#if defined(_CPU_AARCH64_)
     const char *asm_str = "mrs $0, tpidr_el0";
+#else
+    const char *asm_str = "mrc p15, 0, $0, c13, c0, 3";
+#endif
     if (!offset) {
         auto T_size = (sizeof(size_t) == 8 ? Type::getInt64Ty(ctx) : Type::getInt32Ty(ctx));
         offset = ConstantInt::getSigned(T_size, jl_tls_offset);
