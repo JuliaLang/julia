@@ -227,6 +227,10 @@ This section lists changes that do not have deprecation warnings.
     localize variables. Previously, the expression would be wrapped in an implicit
     `let` block  ([#19594]).
 
+  * `parse` no longer accepts IPv4 addresses including leading zeros, octal, or hexadecimal.
+    Convert IPv4 addresses including octal or hexadecimal to decimal, and remove leading
+    zeros in decimal addresses ([#19811]).
+
   * Closures shipped for remote execution via `@spawn` or `remotecall` now automatically
     serialize globals defined under Main. For details, please refer to the paragraph
     on "Global variables" under the "Parallel computing" chapter in the manual ([#19594]).
@@ -510,6 +514,7 @@ Deprecated or removed
 [#19791]: https://github.com/JuliaLang/julia/issues/19791
 [#19800]: https://github.com/JuliaLang/julia/issues/19800
 [#19802]: https://github.com/JuliaLang/julia/issues/19802
+[#19811]: https://github.com/JuliaLang/julia/issues/19811
 [#19841]: https://github.com/JuliaLang/julia/issues/19841
 [#19900]: https://github.com/JuliaLang/julia/issues/19900
 [#19901]: https://github.com/JuliaLang/julia/issues/19901
