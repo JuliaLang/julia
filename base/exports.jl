@@ -1071,6 +1071,7 @@ export
     getaddrinfo,
     gethostname,
     getipaddr,
+    getpeername,
     getsockname,
     htol,
     hton,

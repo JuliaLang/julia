@@ -193,56 +193,35 @@ if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
 end
 
 begin
-    default_port = UInt16(11011)
-    default_addr = IPv4("127.0.0.1")
+    for (addr, porthint) in [(IPv4("127.0.0.1"), UInt16(11011)),
+                        (IPv6("::1"), UInt16(11012)), (getipaddr(), UInt16(11013))]
+        port, listen_sock = listenany(addr, porthint)
+        gsn_addr, gsn_port = getsockname(listen_sock)
 
-    sock = Base.TCPServer()
-    bind(sock,Base.InetAddr(default_addr,default_port))
-    listen(sock)
+        @test addr == gsn_addr
+        @test port == gsn_port
 
-    new_addr, new_port = getsockname(sock)
+        @test_throws MethodError getpeername(listen_sock)
 
-    @test default_addr == new_addr
-    @test default_port == new_port
-    close(sock)
-end
+        # connect to it
+        client_sock = connect(addr, port)
+        server_sock = accept(listen_sock)
 
-begin
-    default_port = UInt16(21011)
-    default_addr = IPv6("::1")
+        self_client_addr, self_client_port = getsockname(client_sock)
+        peer_client_addr, peer_client_port = getpeername(client_sock)
+        self_srvr_addr, self_srvr_port = getsockname(server_sock)
+        peer_srvr_addr, peer_srvr_port = getpeername(server_sock)
 
-    sock = Base.TCPServer()
-    addr = Base.InetAddr(default_addr,default_port)
-    bind(sock,addr)
-    listen(sock)
+        @test self_client_addr == peer_client_addr == self_srvr_addr == peer_srvr_addr
 
-    new_addr, new_port = getsockname(sock)
+        @test peer_client_port == self_srvr_port
+        @test peer_srvr_port == self_client_port
+        @test self_srvr_port != self_client_port
 
-    @test default_addr == new_addr
-    @test default_port == new_port
-    close(sock)
-end
-
-begin
-    default_port = UInt16(11011)
-    default_addr = getipaddr()
-
-    sock = Base.TCPServer()
-    bind(sock,Base.InetAddr(default_addr,default_port))
-    listen(sock)
-
-    @async begin
-        sleep(1)
-        ssock = connect(default_addr, default_port)
+        close(listen_sock)
+        close(client_sock)
+        close(server_sock)
     end
-
-    csock = accept(sock)
-    new_addr, new_port = getsockname(csock)
-
-    @test default_addr == new_addr
-    @test new_port > 0
-    close(csock)
-    close(sock)
 end
 
 # Local-machine broadcast

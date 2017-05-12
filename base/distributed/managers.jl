@@ -481,7 +481,7 @@ function bind_client_port(s)
                             s.handle, hton(client_port[]), hton(UInt32(0)), 0)
     Base.uv_error("bind() failed", err)
 
-    _addr, port = Base._sockname(s, true)
+    _addr, port = getsockname(s)
     client_port[] = port
     return s
 end
