@@ -80,7 +80,7 @@ const _msk64 = ~UInt64(0)
 @inline _msk_end(B::BitArray) = _msk_end(length(B))
 num_bit_chunks(n::Int) = _div64(n+63)
 
-function _check_bitarray_consistency{N}(B::BitArray{N})
+function _check_bitarray_consistency(B::BitArray{N}) where N
     n = length(B)
     if N ≠ 1
         all(d ≥ 0 for d in B.dims) || (warn("negative d in dims: $(B.dims)"); return false)
@@ -542,7 +542,7 @@ reinterpret(B::BitArray, dims::NTuple{N,Int}) where {N} = reshape(B, dims)
 
 ## Constructors from generic iterables ##
 
-BitArray{T,N}(A::AbstractArray{T,N}) = convert(BitArray{N}, A)
+BitArray(A::AbstractArray{<:Any,N}) where {N} = convert(BitArray{N}, A)
 
 """
     BitArray(itr)
@@ -1880,7 +1880,7 @@ end
 # If we were able to specialize the function to a known bitwise operation,
 # map across the chunks. Otherwise, fall-back to the AbstractArray method that
 # iterates bit-by-bit.
-function bit_map!{F}(f::F, dest::BitArray, A::BitArray)
+function bit_map!(f::F, dest::BitArray, A::BitArray) where F
     size(A) == size(dest) || throw(DimensionMismatch("sizes of dest and A must match"))
     isempty(A) && return dest
     destc = dest.chunks
@@ -1891,7 +1891,7 @@ function bit_map!{F}(f::F, dest::BitArray, A::BitArray)
     destc[end] = f(Ac[end]) & _msk_end(A)
     dest
 end
-function bit_map!{F}(f::F, dest::BitArray, A::BitArray, B::BitArray)
+function bit_map!(f::F, dest::BitArray, A::BitArray, B::BitArray) where F
     size(A) == size(B) == size(dest) || throw(DimensionMismatch("sizes of dest, A, and B must all match"))
     isempty(A) && return dest
     destc = dest.chunks
