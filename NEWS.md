@@ -401,6 +401,9 @@ Deprecated or removed
 
   * `isimag` has been deprecated ([#19949]).
 
+  * The tuple-of-types form of `invoke`, `invoke(f, (types...), ...)`, has been deprecated
+    in favor of the tuple-type form `invoke(f, Tuple{types...}, ...)` ([#18444]).
+
   * `broadcast_zpreserving` has been deprecated ([#19533], [#19720]).
 
   * `convert` methods from `Diagonal` and `Bidiagonal` to subtypes of
@@ -438,6 +441,7 @@ Deprecated or removed
 [#18339]: https://github.com/JuliaLang/julia/issues/18339
 [#18346]: https://github.com/JuliaLang/julia/issues/18346
 [#18442]: https://github.com/JuliaLang/julia/issues/18442
+[#18444]: https://github.com/JuliaLang/julia/issues/18444
 [#18453]: https://github.com/JuliaLang/julia/issues/18453
 [#18457]: https://github.com/JuliaLang/julia/issues/18457
 [#18473]: https://github.com/JuliaLang/julia/issues/18473
