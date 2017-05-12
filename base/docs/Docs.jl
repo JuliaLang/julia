@@ -83,7 +83,7 @@ function initmeta(m::Module = current_module())
 end
 
 function signature!(tv, expr::Expr)
-    if isexpr(expr, [:call, :macrocall])
+    if isexpr(expr, (:call, :macrocall))
         sig = :(Union{Tuple{}})
         for arg in expr.args[2:end]
             isexpr(arg, :parameters) && continue
@@ -454,7 +454,7 @@ function nameof(x::Expr, ismacro)
     if isexpr(x, :.)
         ismacro ? macroname(x) : x
     else
-        n = isexpr(x, [:module, :type, :bitstype]) ? 2 : 1
+        n = isexpr(x, (:module, :type, :bitstype)) ? 2 : 1
         nameof(x.args[n], ismacro)
     end
 end
@@ -531,7 +531,7 @@ function calldoc(str, def)
         docerror(def)
     end
 end
-validcall(x) = isa(x, Symbol) || isexpr(x, [:(::), :..., :kw, :parameters])
+validcall(x) = isa(x, Symbol) || isexpr(x, (:(::), :..., :kw, :parameters))
 
 function moduledoc(meta, def, def′)
     name  = namify(def′)
