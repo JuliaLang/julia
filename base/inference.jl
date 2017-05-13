@@ -275,7 +275,7 @@ end
 
 function InferenceState(linfo::MethodInstance,
                         optimize::Bool, cached::Bool, params::InferenceParams)
-    # prepare an InferenceState object for infering lambda
+    # prepare an InferenceState object for inferring lambda
     # create copies of the CodeInfo definition, and any fields that type-inference might modify
     if linfo.def.isstaged
         try
@@ -2427,7 +2427,7 @@ end
 
 function merge_call_chain!(parent::InferenceState, ancestor::InferenceState, child::InferenceState)
     # add backedge of parent <- child
-    # then add all backeges of parent <- parent.parent
+    # then add all backedges of parent <- parent.parent
     # and merge all of the callers into ancestor.callers_in_cycle
     # and ensure that walking the parent list will get the same result (DAG) from everywhere
     while true
