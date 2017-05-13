@@ -2439,6 +2439,13 @@ function merge_call_chain!(parent::InferenceState, ancestor::InferenceState, chi
     end
 end
 
+# Walk through `linfo`'s upstream call chain, starting at `parent`. If a parent
+# frame matching `linfo` is encountered, then there is a cycle in the call graph
+# (i.e. `linfo` is a descendant callee of itself). Upon encountering this cycle,
+# we "resolve" it by merging the call chain, which entails unioning each intermediary
+# frame's `callers_in_cycle` field and adding the appropriate backedges. Finally,
+# we return `linfo`'s pre-existing frame. If no cycles are found, `nothing` is
+# returned instead.
 function resolve_call_cycle!(linfo::MethodInstance, parent::InferenceState)
     frame = parent
     while isa(frame, InferenceState)
