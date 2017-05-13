@@ -369,6 +369,8 @@ Library improvements
 
   * A new `@macroexpand` macro was added as a convenient alternative to the `macroexpand` function ([#18660]).
 
+  * `invoke` now supports keyword arguments ([#20345]).
+
   * A new `ConjArray` type was added, as a wrapper type for lazy complex conjugation of arrays.
     Currently, it is used by default for the new `RowVector` type only, and
     enforces that both `transpose(vec)` and `ctranspose(vec)` are views not copies ([#20047]).
@@ -570,6 +572,7 @@ Deprecated or removed
 [#20268]: https://github.com/JuliaLang/julia/issues/20268
 [#20321]: https://github.com/JuliaLang/julia/issues/20321
 [#20327]: https://github.com/JuliaLang/julia/issues/20327
+[#20345]: https://github.com/JuliaLang/julia/issues/20345
 [#20403]: https://github.com/JuliaLang/julia/issues/20403
 [#20404]: https://github.com/JuliaLang/julia/issues/20404
 [#20406]: https://github.com/JuliaLang/julia/issues/20406
