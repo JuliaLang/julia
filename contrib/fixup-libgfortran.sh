@@ -61,7 +61,7 @@ for lib in arpack openspecfun lapack; do
         LIBQUADMATH_PATH=$(find_shlib "$(private_libname $lib)" libquadmath)
 
         # Take the directories, add them onto LIBGFORTRAN_DIRS, which we use to
-        # search for these libraries with in the future.
+        # search for these libraries in the future.
         LIBGFORTRAN_DIRS="$LIBGFORTRAN_DIRS $(dirname $LIBGFORTRAN_PATH)"
         LIBGFORTRAN_DIRS="$LIBGFORTRAN_DIRS $(dirname $LIBGCC_PATH)"
         LIBGFORTRAN_DIRS="$LIBGFORTRAN_DIRS $(dirname $LIBQUADMATH_PATH)"
