@@ -439,6 +439,11 @@ Deprecated or removed
 
   * `cummin` and `cummax` have been deprecated in favor of `accumulate`.
 
+  * The `Array` constructor syntax `Array(T, dims...)` has been deprecated
+    in favor of the forms `Array{T,N}(dims...)` (where `N` is known, or
+    particularly `Vector{T}(dims...)` for `N = 1` and `Matrix{T}(dims...)` for `N = 2`),
+    and `Array{T}(dims...)` (where `N` is not known) ([#19989]).
+
   * `sumabs` and `sumabs2` have been deprecated in favor of `sum(abs, x)` and `sum(abs2, x)`, respectively.
     `maxabs` and `minabs` have similarly been deprecated in favor of `maximum(abs, x)` and `minimum(abs, x)`.
     Likewise for the in-place counterparts of these functions ([#19598]).
@@ -578,6 +583,7 @@ Deprecated or removed
 [#19944]: https://github.com/JuliaLang/julia/issues/19944
 [#19949]: https://github.com/JuliaLang/julia/issues/19949
 [#19950]: https://github.com/JuliaLang/julia/issues/19950
+[#19989]: https://github.com/JuliaLang/julia/issues/19989
 [#20009]: https://github.com/JuliaLang/julia/issues/20009
 [#20047]: https://github.com/JuliaLang/julia/issues/20047
 [#20079]: https://github.com/JuliaLang/julia/issues/20079
