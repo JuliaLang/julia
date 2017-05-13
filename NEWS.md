@@ -69,7 +69,8 @@ Language changes
     ```
     the syntax `Foo(x) = new(x)` actually defined a constructor for `Foo{T,S}`,
     i.e. the case where the type parameters are specified. For clarity, this
-    definition now must be written as `Foo{T,S}(x) where {T,S<:Real} = new(x)` ([#11310]).
+    definition now must be written as `Foo{T,S}(x) where {T,S<:Real} = new(x)`
+    ([#11310], [#20308]).
 
   * The keywords used to define types have changed ([#19157], [#20418]).
 
@@ -585,6 +586,7 @@ Deprecated or removed
 [#20228]: https://github.com/JuliaLang/julia/issues/20228
 [#20249]: https://github.com/JuliaLang/julia/issues/20249
 [#20268]: https://github.com/JuliaLang/julia/issues/20268
+[#20308]: https://github.com/JuliaLang/julia/issues/20308
 [#20321]: https://github.com/JuliaLang/julia/issues/20321
 [#20327]: https://github.com/JuliaLang/julia/issues/20327
 [#20403]: https://github.com/JuliaLang/julia/issues/20403
