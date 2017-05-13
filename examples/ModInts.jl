@@ -9,7 +9,6 @@ struct ModInt{n} <: Integer
     k::Int
     ModInt{n}(k) where {n} = new(mod(k,n))
 end
-ModInt{n}(k) where {n} = new(mod(k,n))
 
 Base.show(io::IO, k::ModInt{n}) where {n} =
     print(io, get(io, :compact, false) ? k.k : "$(k.k) mod $n")
