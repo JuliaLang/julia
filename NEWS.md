@@ -254,6 +254,10 @@ This section lists changes that do not have deprecation warnings.
   * `write` on an `IOBuffer` now returns a signed integer in order to be
     consistent with other buffers ([#20609]).
 
+  * The `<:Integer` division fallback `/(::Integer, ::Integer)`, which formerly
+    inappropriately took precedence over other division methods for some
+    mixed-integer-type division calls, has been removed ([#19779]).
+
   * `@async`, `@spawn`, `@spawnat`, `@fetch` and `@fetchfrom` no longer implicitly
     localize variables. Previously, the expression would be wrapped in an implicit
     `let` block  ([#19594]).
@@ -546,6 +550,7 @@ Deprecated or removed
 [#19724]: https://github.com/JuliaLang/julia/issues/19724
 [#19741]: https://github.com/JuliaLang/julia/issues/19741
 [#19771]: https://github.com/JuliaLang/julia/issues/19771
+[#19779]: https://github.com/JuliaLang/julia/issues/19779
 [#19784]: https://github.com/JuliaLang/julia/issues/19784
 [#19786]: https://github.com/JuliaLang/julia/issues/19786
 [#19787]: https://github.com/JuliaLang/julia/issues/19787
