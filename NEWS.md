@@ -437,6 +437,14 @@ Deprecated or removed
 
   * `Dates.recur` has been deprecated in favor of `filter` ([#19288])
 
+  * A number of ambiguous `convert` operations between `Number`s (especially `Real`s)
+    and `Date`, `DateTime`, and `Period` types have been deprecated in favor of
+    unambiguous `convert` and explicit constructor calls. Additionally, ambiguous colon
+    construction of `<:Period` ranges without step specification, for example
+    `Dates.Hour(1):Dates.Hour(2)`, has been deprecated in favor of such construction
+    including step specification, for example `Dates.Hour(1):Dates.Hour(1):Dates.Hour(2)`
+    ([#19920]).
+
   * `cummin` and `cummax` have been deprecated in favor of `accumulate`.
 
   * `sumabs` and `sumabs2` have been deprecated in favor of `sum(abs, x)` and `sum(abs2, x)`, respectively.
@@ -572,6 +580,7 @@ Deprecated or removed
 [#19901]: https://github.com/JuliaLang/julia/issues/19901
 [#19903]: https://github.com/JuliaLang/julia/issues/19903
 [#19919]: https://github.com/JuliaLang/julia/issues/19919
+[#19920]: https://github.com/JuliaLang/julia/issues/19920
 [#19926]: https://github.com/JuliaLang/julia/issues/19926
 [#19931]: https://github.com/JuliaLang/julia/issues/19931
 [#19934]: https://github.com/JuliaLang/julia/issues/19934
