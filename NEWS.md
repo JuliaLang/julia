@@ -244,6 +244,14 @@ This section lists changes that do not have deprecation warnings.
 
   * The `count` function no longer sums non-boolean values ([#20404])
 
+  * The generic `getindex(::AbstractString, ::AbstractVector)` method's signature has been
+    tightened to `getindex(::AbstractString, ::AbstractVector{<:Integer})`. Consequently,
+    indexing into `AbstractString`s with non-`AbstractVector{<:Integer}` `AbstractVector`s
+    now throws a `MethodError` in the absence of an appropriate specialization.
+    (Previously such cases failed less explicitly with the exception of
+    `AbstractVector{Bool}`, which now throws an `ArgumentError` noting that
+    logical indexing into strings is not supported.)  ([#20248])
+
   * Bessel, Hankel, Airy, error, Dawson, eta, zeta, digamma, inverse digamma,
     trigamma, and polygamma special functions have been moved from Base to
     the
@@ -585,6 +593,7 @@ Deprecated or removed
 [#20079]: https://github.com/JuliaLang/julia/issues/20079
 [#20164]: https://github.com/JuliaLang/julia/issues/20164
 [#20228]: https://github.com/JuliaLang/julia/issues/20228
+[#20248]: https://github.com/JuliaLang/julia/issues/20248
 [#20249]: https://github.com/JuliaLang/julia/issues/20249
 [#20268]: https://github.com/JuliaLang/julia/issues/20268
 [#20321]: https://github.com/JuliaLang/julia/issues/20321
