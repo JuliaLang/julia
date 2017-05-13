@@ -14,6 +14,8 @@ Breaking changes
 
 This section lists changes that do not have deprecation warnings.
 
+  * `ntuple(f, n::Integer)` throws `ArgumentError` if `n` is negative.
+    Previously an empty tuple was returned ([#21697]).
 
 Library improvements
 --------------------

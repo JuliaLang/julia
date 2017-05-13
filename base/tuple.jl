@@ -105,7 +105,7 @@ julia> ntuple(i -> 2*i, 4)
 ```
 """
 function ntuple(f::F, n::Integer) where F
-    t = n <= 0  ? () :
+    t = n == 0  ? () :
         n == 1  ? (f(1),) :
         n == 2  ? (f(1), f(2)) :
         n == 3  ? (f(1), f(2), f(3)) :
@@ -120,7 +120,11 @@ function ntuple(f::F, n::Integer) where F
     return t
 end
 
-_ntuple(f, n) = (@_noinline_meta; ([f(i) for i = 1:n]...))
+function _ntuple(f, n)
+    @_noinline_meta
+    (n >= 0) || throw(ArgumentError(string("tuple length should be ≥0, got ", n)))
+    ([f(i) for i = 1:n]...)
+end
 
 # inferrable ntuple
 ntuple(f, ::Type{Val{0}}) = (@_inline_meta; ())
@@ -142,6 +146,7 @@ ntuple(f, ::Type{Val{15}}) = (@_inline_meta; (f(1), f(2), f(3), f(4), f(5), f(6)
 
 function ntuple(f::F, ::Type{Val{N}}) where {F,N}
     Core.typeassert(N, Int)
+    (N >= 0) || throw(ArgumentError(string("tuple length should be ≥0, got ", N)))
     _ntuple((), f, Val{N})
 end
 
