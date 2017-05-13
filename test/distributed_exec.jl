@@ -1571,7 +1571,9 @@ end
 
 @test let
     # creates a new worker in the same folder and tries to include file
-    tmp_file = relpath(mktemp()[1])
+    tmp_file, temp_file_stream = mktemp()
+    close(temp_file_stream)
+    tmp_file = relpath(tmp_file)
     try
         proc = addprocs_with_testenv(1)
         include(tmp_file)
@@ -1588,7 +1590,9 @@ end == true
 
 @test let
     # creates a new worker in the different folder and tries to include file
-    tmp_file = relpath(mktemp()[1])
+    tmp_file, temp_file_stream = mktemp()
+    close(temp_file_stream)
+    tmp_file = relpath(tmp_file)
     tmp_dir = relpath(mktempdir())
     try
         proc = addprocs_with_testenv(1, dir=tmp_dir)
