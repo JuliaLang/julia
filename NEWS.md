@@ -110,7 +110,8 @@ Language changes
     every function call, operator, and assignment in an expression ([#20321]).
 
   * The identifier `_` can be assigned, but accessing its value is deprecated,
-    allowing this syntax to be used in the future for discarding values ([#9343], [#18251]).
+    allowing this syntax to be used in the future for discarding values ([#9343],
+    [#18251], [#20328]).
 
   * The `typealias` keyword is deprecated, and should be replaced with
     `Vector{T} = Array{T,1}` or a `const` assignment ([#20500]).
@@ -587,6 +588,7 @@ Deprecated or removed
 [#20268]: https://github.com/JuliaLang/julia/issues/20268
 [#20321]: https://github.com/JuliaLang/julia/issues/20321
 [#20327]: https://github.com/JuliaLang/julia/issues/20327
+[#20328]: https://github.com/JuliaLang/julia/issues/20328
 [#20403]: https://github.com/JuliaLang/julia/issues/20403
 [#20404]: https://github.com/JuliaLang/julia/issues/20404
 [#20406]: https://github.com/JuliaLang/julia/issues/20406
