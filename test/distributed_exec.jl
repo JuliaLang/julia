@@ -1569,6 +1569,41 @@ catch ex
     @test ex.captured.ex.exceptions[2].ex == UndefVarError(:DontExistOn1)
 end
 
+@test let
+    # creates a new worker in the same folder and tries to include file on both procs
+    try
+        touch("temp.jl")
+        proc = addprocs_with_testenv(1)
+        include("temp.jl")
+        remotecall_fetch(include, proc[1], "temp.jl")
+        rmprocs(proc)
+        rm("temp.jl")
+        return true
+    catch e
+        try rm("temp.jl") end
+        return false
+    end
+end == true
+
+@test let
+    # creates a new worker in the different folder and tries to include file on both procs
+    try
+        mkdir("temp_folder")
+        touch("temp.jl")
+        proc = addprocs_with_testenv(1, dir="temp_folder")
+        include("temp.jl")
+        remotecall_fetch(include, proc[1], "temp.jl")
+        rmprocs(proc)
+        rm("temp_folder")
+        rm("temp.jl")
+        return true
+    catch e
+        try rm("temp_folder") end
+        try rm("temp.jl") end
+        return false
+    end
+end == true
+
 # Run topology tests last after removing all workers, since a given
 # cluster at any time only supports a single topology.
 rmprocs(workers())
