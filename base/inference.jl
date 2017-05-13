@@ -302,11 +302,6 @@ function get_staged(li::MethodInstance)
     return ccall(:jl_code_for_staged, Any, (Any,), li)::CodeInfo
 end
 
-
-#### current global inference state ####
-
-# None! There is none! :)
-
 #### helper functions ####
 
 @inline slot_id(s) = isa(s, SlotNumber) ? (s::SlotNumber).id : (s::TypedSlot).id # using a function to ensure we can infer this
