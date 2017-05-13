@@ -734,6 +734,11 @@ void *jl_dlopen_soname(const char *pfx, size_t n, unsigned flags);
 // libuv wrappers:
 JL_DLLEXPORT int jl_fs_rename(const char *src_path, const char *dst_path);
 
+#if defined(_CPU_X86_) || defined(_CPU_X86_64_)
+JL_DLLEXPORT void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType);
+JL_DLLEXPORT void jl_cpuidex(int32_t CPUInfo[4], int32_t InfoType, int32_t subInfoType);
+#endif
+
 #ifdef SEGV_EXCEPTION
 extern JL_DLLEXPORT jl_value_t *jl_segv_exception;
 #endif
