@@ -485,11 +485,8 @@ let g = Base.Random.GLOBAL_RNG,
     @test srand() === g
     @test srand(rand(UInt)) === g
     @test srand(rand(UInt32, rand(1:10))) === g
-    @test srand(@__FILE__) === g
-    @test srand(@__FILE__, rand(1:10)) === g
     @test srand(m) === m
     @test srand(m, rand(UInt)) === m
     @test srand(m, rand(UInt32, rand(1:10))) === m
     @test srand(m, rand(1:10)) === m
-    @test srand(m, @__FILE__, rand(1:10)) === m
 end

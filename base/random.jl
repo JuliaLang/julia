@@ -213,25 +213,19 @@ function make_seed(n::Integer)
     end
 end
 
-function make_seed(filename::AbstractString, n::Integer)
-    read!(filename, Vector{UInt32}(Int(n)))
-end
-
 ## srand()
 
 """
-    srand([rng=GLOBAL_RNG], [seed]) -> rng
-    srand([rng=GLOBAL_RNG], filename, n=4) -> rng
+    srand([rng=GLOBAL_RNG], seed) -> rng
+    srand([rng=GLOBAL_RNG]) -> rng
 
 Reseed the random number generator. If a `seed` is provided, the RNG will give a
 reproducible sequence of numbers, otherwise Julia will get entropy from the system. For
-`MersenneTwister`, the `seed` may be a non-negative integer, a vector of `UInt32` integers
-or a filename, in which case the seed is read from a file (`4n` bytes are read from the file,
-where `n` is an optional argument). `RandomDevice` does not support seeding.
+`MersenneTwister`, the `seed` may be a non-negative integer or a vector of `UInt32` integers.
+`RandomDevice` does not support seeding.
 """
 srand(r::MersenneTwister) = srand(r, make_seed())
 srand(r::MersenneTwister, n::Integer) = srand(r, make_seed(n))
-srand(r::MersenneTwister, filename::AbstractString, n::Integer=4) = srand(r, make_seed(filename, n))
 
 
 function dsfmt_gv_srand()
@@ -247,11 +241,6 @@ end
 
 function srand(seed::Union{Integer, Vector{UInt32}})
     srand(GLOBAL_RNG, seed)
-    dsfmt_gv_srand()
-end
-
-function srand(filename::AbstractString, n::Integer=4)
-    srand(GLOBAL_RNG, filename, n)
     dsfmt_gv_srand()
 end
 

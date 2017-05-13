@@ -674,6 +674,10 @@ end
 # error throwing branch from #10560
 @test_throws ArgumentError Base.tryparse_internal(Bool, "foo", 1, 2, 10, true)
 
+@test tryparse(Float64, "1.23") === Nullable(1.23)
+@test tryparse(Float32, "1.23") === Nullable(1.23f0)
+@test tryparse(Float16, "1.23") === Nullable(Float16(1.23))
+
 # PR #17393
 for op in (:.==, :.&, :.|, :.≤)
     @test parse("a $op b") == Expr(:call, op, :a, :b)
