@@ -155,7 +155,7 @@ end
 """
     loadavg()
 
-Gets the load average; see: https://en.wikipedia.org/wiki/Load_(computing).
+Get the load average. See: https://en.wikipedia.org/wiki/Load_(computing).
 """
 function loadavg()
     loadavg_ = Vector{Float64}(3)
@@ -169,7 +169,7 @@ total_memory() = ccall(:uv_get_total_memory, UInt64, ())
 """
     Sys.get_process_title()
 
-Get the process title. On some systems, will always return empty string.
+Get the process title. On some systems, will always return an empty string.
 """
 function get_process_title()
     buf = zeros(UInt8, 512)
