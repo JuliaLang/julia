@@ -144,7 +144,7 @@ end
 """
     uptime()
 
-Gets the current system uptime.
+Gets the current system uptime in seconds.
 """
 function uptime()
     uptime_ = Ref{Float64}()
