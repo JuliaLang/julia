@@ -72,6 +72,10 @@
 #include <llvm/DIBuilder.h>
 #endif
 
+#if JL_LLVM_VERSION >= 30800
+#include <llvm/Object/COFF.h>
+#endif
+
 // support
 #include <llvm/ADT/SmallBitVector.h>
 #include <llvm/ADT/Optional.h>
@@ -1799,15 +1803,24 @@ static uint64_t compute_obj_symsize(const object::ObjectFile *obj, uint64_t offs
             !err && I != E; I.increment(err)) {
         object::SectionRef Section = *I;
 #endif
-        uint64_t SAddr, SSize;
+        uint64_t SAddr, SSize, SAddrBase;
 #if JL_LLVM_VERSION >= 30500
         if (!Section.isText()) continue;
 #else
         bool isText;
         if (Section.isText(isText) || !isText) continue;
 #endif
+#if JL_LLVM_VERSION >= 30800
+        if (auto *OF = dyn_cast<const object::COFFObjectFile>(Section.getObject())) {
+            SAddrBase = OF->getImageBase();
+        } else {
+            SAddrBase = 0;
+        }
+#else
+        SAddrBase = 0;
+#endif
 #if JL_LLVM_VERSION >= 30600
-        SAddr = Section.getAddress();
+        SAddr = Section.getAddress() - SAddrBase;
         SSize = Section.getSize();
 #else
         Section.getAddress(SAddr);
@@ -1842,7 +1855,7 @@ static uint64_t compute_obj_symsize(const object::ObjectFile *obj, uint64_t offs
 #if JL_LLVM_VERSION >= 30700
             auto AddrOrError = Sym.getAddress();
             assert(AddrOrError);
-            Addr = AddrOrError.get();
+            Addr = AddrOrError.get() - SAddrBase;
 #else
             if (Sym.getAddress(Addr)) continue;
 #endif
