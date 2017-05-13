@@ -6848,8 +6848,28 @@ extern "C" void *jl_init_llvm(void)
 #if defined(FORCE_ELF)
     TheTriple.setObjectFormat(Triple::ELF);
 #endif
+    bool help = false;
+    if (jl_options.cpu_target && strcmp(jl_options.cpu_target, "help") == 0) {
+        help = true;
+        jl_options.cpu_target = "native";
+    }
     std::string TheCPU;
     SmallVector<std::string, 10> targetFeatures = getTargetFeatures(TheCPU);
+    {
+        std::string errorstr;
+        const Target *target = TargetRegistry::lookupTarget("", TheTriple, errorstr);
+        assert(target);
+        std::unique_ptr<MCSubtargetInfo> MSTI(
+            target->createMCSubtargetInfo(TheTriple.str(), "", ""));
+        if (!MSTI->isCPUStringValid(TheCPU))
+            jl_errorf("Invalid CPU name %s.", TheCPU.c_str());
+        if (help) {
+            // This is the only way I can find to print the help message once.
+            // It'll be nice if we can iterate through the features and print our own help
+            // message...
+            MSTI->setDefaultFeatures("help", "");
+        }
+    }
     jl_TargetMachine = eb.selectTarget(
             TheTriple,
             "",

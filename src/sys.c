@@ -455,7 +455,7 @@ JL_DLLEXPORT JL_STREAM *jl_stderr_stream(void) { return JL_STDERR; }
 
 // CPUID
 
-#ifdef HAVE_CPUID
+#if defined(_CPU_X86_) || defined(_CPU_X86_64_)
 JL_DLLEXPORT void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType)
 {
 #if defined _MSC_VER
@@ -478,30 +478,7 @@ JL_DLLEXPORT void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType)
     );
 #endif
 }
-JL_DLLEXPORT uint64_t jl_cpuid_tag(void)
-{
-    uint32_t info[4];
-    jl_cpuid((int32_t *)info, 1);
-    return (((uint64_t)info[2]) | (((uint64_t)info[3]) << 32));
-}
-#elif defined(CPUID_SPECIFIC_BINARIES)
-#error "CPUID not available on this CPU. Turn off CPUID_SPECIFIC_BINARIES"
-#else
-// For architectures that don't have CPUID
-JL_DLLEXPORT uint64_t jl_cpuid_tag(void)
-{
-    return 0;
-}
 #endif
-
-JL_DLLEXPORT int jl_uses_cpuid_tag(void)
-{
-#ifdef CPUID_SPECIFIC_BINARIES
-    return 1;
-#else
-    return 0;
-#endif
-}
 
 // -- set/clear the FZ/DAZ flags on x86 & x86-64 --
 #ifdef __SSE__

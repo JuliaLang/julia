@@ -129,10 +129,6 @@ static uint32_t read_uint32(ios_t *s)
 
 // --- Static Compile ---
 
-#ifdef HAVE_CPUID
-extern void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType);
-#endif
-
 extern int globalUnique;
 static void *jl_sysimg_handle = NULL;
 static uint64_t sysimage_base = 0;
@@ -158,9 +154,6 @@ JL_DLLEXPORT int jl_running_on_valgrind(void)
 
 static void jl_load_sysimg_so(void)
 {
-#ifndef _OS_WINDOWS_
-    Dl_info dlinfo;
-#endif
     int imaging_mode = jl_generating_output() && !jl_options.incremental;
     // in --build mode only use sysimg data, not precompiled native code
     if (!imaging_mode && jl_options.use_sysimage_native_code==JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_YES) {
@@ -181,31 +174,11 @@ static void jl_load_sysimg_so(void)
         *sysimg_gvars(sysimg_gvars_base, tls_offset_idx - 1) =
             (uintptr_t)(jl_tls_offset == -1 ? 0 : jl_tls_offset);
 #endif
-        const char *cpu_target = (const char*)jl_dlsym(jl_sysimg_handle, "jl_sysimg_cpu_target");
-        if (strcmp(cpu_target,jl_options.cpu_target) != 0)
-            jl_error("Julia and the system image were compiled for different architectures.\n"
-                     "Please delete or regenerate sys.{so,dll,dylib}.");
-#ifdef HAVE_CPUID
-        uint32_t info[4];
-        jl_cpuid((int32_t*)info, 1);
-        if (strcmp(cpu_target, "native") == 0) {
-            if (!RUNNING_ON_VALGRIND) {
-                uint64_t saved_cpuid = *(uint64_t*)jl_dlsym(jl_sysimg_handle, "jl_sysimg_cpu_cpuid");
-                if (saved_cpuid != (((uint64_t)info[2])|(((uint64_t)info[3])<<32)))
-                    jl_error("Target architecture mismatch. Please delete or regenerate sys.{so,dll,dylib}.");
-            }
-        }
-        else if (strcmp(cpu_target,"core2") == 0) {
-            int HasSSSE3 = (info[2] & 1<<9);
-            if (!HasSSSE3)
-                jl_error("The current host does not support SSSE3, but the system image was compiled for Core2.\n"
-                         "Please delete or regenerate sys.{so,dll,dylib}.");
-        }
-#endif
 
 #ifdef _OS_WINDOWS_
         sysimage_base = (intptr_t)jl_sysimg_handle;
 #else
+        Dl_info dlinfo;
         if (dladdr((void*)sysimg_gvars_base, &dlinfo) != 0) {
             sysimage_base = (intptr_t)dlinfo.dli_fbase;
         }
@@ -1360,13 +1333,16 @@ JL_DLLEXPORT void jl_preload_sysimg_so(const char *fname)
 // Allow passing in a module handle directly, rather than a path
 JL_DLLEXPORT void jl_set_sysimg_so(void *handle)
 {
-    // set cpu target if unspecified by user and available from sysimg
-    // otherwise default to native.
     void* *jl_RTLD_DEFAULT_handle_pointer = (void**)jl_dlsym_e(handle, "jl_RTLD_DEFAULT_handle_pointer");
     if (!jl_RTLD_DEFAULT_handle_pointer || (void*)&jl_RTLD_DEFAULT_handle != *jl_RTLD_DEFAULT_handle_pointer)
         jl_error("System image file failed consistency check: maybe opened the wrong version?");
+    // TODO make sure the sysimg and the JIT agrees on the ABI.
+    // This shouldn't be a problem for any required C types on any platforms we support
+    // but could be a problem from optional types. In particular, we need to make sure
+    // the two agrees on the usable register sizes so that functions that take
+    // a vector as input can use consistent calling convention.
     if (jl_options.cpu_target == NULL)
-        jl_options.cpu_target = (const char *)jl_dlsym(handle, "jl_sysimg_cpu_target");
+        jl_options.cpu_target = "native";
     jl_sysimg_handle = handle;
 }
 
