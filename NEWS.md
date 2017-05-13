@@ -451,6 +451,12 @@ Deprecated or removed
   * Vectorized functions have been deprecated in favor of dot syntax ([#17302], [#17265],
     [#18558], [#19711], [#19712], [#19791], [#19802], [#19931], [#20543], [#20228]).
 
+  *  All methods of character predicates (`isalnum`, `isalpha`, `iscntrl`, `isdigit`,
+     `isnumber`, `isgraph`, `islower`, `isprint`, `ispunct`, `isspace`, `isupper`,
+     `isxdigit`) that accept `AbstractStrings` have been deprecated in favor of `all`.
+     For example, `isnumber("123")` should now be expressed `all(isnumber, "123")`
+     ([#20342]).
+
   * The two-argument forms of `map` (`map!(f, A)`) and `asyncmap!` (`asyncmap!(f, A)`)
     have been deprecated in anticipation of future semantic changes ([#19721]).
 
@@ -587,6 +593,7 @@ Deprecated or removed
 [#20268]: https://github.com/JuliaLang/julia/issues/20268
 [#20321]: https://github.com/JuliaLang/julia/issues/20321
 [#20327]: https://github.com/JuliaLang/julia/issues/20327
+[#20342]: https://github.com/JuliaLang/julia/issues/20342
 [#20403]: https://github.com/JuliaLang/julia/issues/20403
 [#20404]: https://github.com/JuliaLang/julia/issues/20404
 [#20406]: https://github.com/JuliaLang/julia/issues/20406
