@@ -139,6 +139,8 @@ Get the directory part of a path.
 ```jldoctest
 julia> dirname("/home/myuser")
 "/home"
+
+See also: [`basename`](@ref)
 ```
 """
  dirname(path::AbstractString) = splitdir(path)[1]
@@ -152,6 +154,8 @@ Get the file name part of a path.
 julia> basename("/home/myuser/example.jl")
 "example.jl"
 ```
+
+See also: [`dirname`](@ref)
 """
 basename(path::AbstractString) = splitdir(path)[2]
 
