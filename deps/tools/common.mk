@@ -37,12 +37,16 @@ CMAKE_COMMON += -DCMAKE_RC_COMPILER="$$(which $(CROSS_COMPILE)windres)"
 endif
 endif
 
+ifneq (,$(findstring $(OS),Linux FreeBSD))
+INSTALL_RPATH := "\$$ORIGIN"
 # Part of the FreeBSD libgcc_s kludge
 ifeq ($(OS),FreeBSD)
 ifneq ($(GCCPATH),)
-CMAKE_COMMON += -DCMAKE_INSTALL_RPATH="\$$ORIGIN:$(GCCPATH)"
+INSTALL_RPATH := "\$$ORIGIN:$(GCCPATH)"
 endif
 endif
+CMAKE_COMMON += -DCMAKE_INSTALL_RPATH=$(INSTALL_RPATH)
+endif # Linux or FreeBSD
 
 # For now this is LLVM specific, but I expect it won't be in the future
 ifeq ($(LLVM_USE_CMAKE),1)
