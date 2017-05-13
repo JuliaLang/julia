@@ -138,7 +138,6 @@ endif # BUILD_LLDB
 # Part of the FreeBSD libgcc_s kludge
 ifeq ($(OS),FreeBSD)
 ifneq ($(GCCPATH),)
-LLVM_CMAKE += -DCMAKE_INSTALL_RPATH="\$$ORIGIN:$(GCCPATH)"
 LLVM_LDFLAGS += -Wl,-rpath,'\$$ORIGIN',-rpath,$(GCCPATH)
 endif
 endif
