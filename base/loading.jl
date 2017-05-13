@@ -820,4 +820,3 @@ function stale_cachefile(modpath::String, cachefile::String)
         close(io)
     end
 end
-
