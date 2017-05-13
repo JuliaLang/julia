@@ -142,7 +142,7 @@ function cpu_info()
 end
 
 """
-    uptime()
+    Sys.uptime()
 
 Gets the current system uptime in seconds.
 """
@@ -153,7 +153,7 @@ function uptime()
 end
 
 """
-    loadavg()
+    Sys.loadavg()
 
 Get the load average. See: https://en.wikipedia.org/wiki/Load_(computing).
 """
