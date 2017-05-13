@@ -1570,44 +1570,38 @@ catch ex
 end
 
 @test let
-    # creates a new worker in the same folder and tries to include file on both procs
-    working_directory = pwd()
-    cd(tempdir())
+    # creates a new worker in the same folder and tries to include file
+    tmp_file = relpath(mktemp()[1])
     try
-        tmp_file = relpath(mktemp()[1])
         proc = addprocs_with_testenv(1)
         include(tmp_file)
         remotecall_fetch(include, proc[1], tmp_file)
         rmprocs(proc)
         rm(tmp_file)
-        cd(working_directory)
         return true
     catch e
-        try rm(tmp_file) end
-        cd(working_directory)
+        println(e)
+        rm(tmp_file, force=true)
         return false
     end
 end == true
 
 @test let
-    # creates a new worker in the different folder and tries to include file on both procs
-    working_directory = pwd()
-    cd(tempdir())
+    # creates a new worker in the different folder and tries to include file
+    tmp_file = relpath(mktemp()[1])
+    tmp_dir = relpath(mktempdir())
     try
-        tmp_file = relpath(mktemp()[1])
-        tmp_dir = relpath(mktempdir())
         proc = addprocs_with_testenv(1, dir=tmp_dir)
         include(tmp_file)
         remotecall_fetch(include, proc[1], tmp_file)
         rmprocs(proc)
         rm(tmp_dir)
         rm(tmp_file)
-        cd(working_directory)
         return true
     catch e
-        try rm(tmp_dir) end
-        try rm(tmp_file) end
-        cd(working_directory)
+        println(e)
+        rm(tmp_dir, force=true)
+        rm(tmp_file, force=true)
         return false
     end
 end == true
