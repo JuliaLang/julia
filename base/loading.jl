@@ -263,6 +263,9 @@ const _require_dependencies = Any[] # a list of (path, mtime) tuples that are th
 const _track_dependencies = Ref(false) # set this to true to track the list of file dependencies
 function _include_dependency(_path::AbstractString)
     prev = source_path(nothing)
+    if myid() != 1 && prev === nothing
+        prev = remotecall_fetch(abspath, 1, ".")
+    end
     path = (prev === nothing) ? abspath(_path) : joinpath(dirname(prev), _path)
     if myid() == 1 && _track_dependencies[]
         apath = abspath(path)
@@ -817,3 +820,4 @@ function stale_cachefile(modpath::String, cachefile::String)
         close(io)
     end
 end
+
