@@ -379,6 +379,19 @@ end
     @test cosc(Inf) == 0
 end
 
+@testset "Irrational args to sinpi/cospi/sinc/cosc" begin
+    for x in (pi, e, golden)
+        @test sinpi(x) ≈ Float64(sinpi(big(x)))
+        @test cospi(x) ≈ Float64(cospi(big(x)))
+        @test sinc(x)  ≈ Float64(sinc(big(x)))
+        @test cosc(x)  ≈ Float64(cosc(big(x)))
+        @test sinpi(complex(x, x)) ≈ Complex{Float64}(sinpi(complex(big(x), big(x))))
+        @test cospi(complex(x, x)) ≈ Complex{Float64}(cospi(complex(big(x), big(x))))
+        @test sinc(complex(x, x))  ≈ Complex{Float64}(sinc(complex(big(x),  big(x))))
+        @test cosc(complex(x, x))  ≈ Complex{Float64}(cosc(complex(big(x),  big(x))))
+    end
+end
+
 @testset "trig function type stability" begin
     @testset "$T $f" for T = (Float32,Float64,BigFloat), f = (sind,cosd,sinpi,cospi)
         @test Base.return_types(f,Tuple{T}) == [T]
