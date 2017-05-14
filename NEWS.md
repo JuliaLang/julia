@@ -451,6 +451,10 @@ Deprecated or removed
 
   * `isdefined(a::Array, i::Int)` has been deprecated in favor of `isassigned` ([#18346]).
 
+  * The three-argument `SubArray` constructor (which accepts `dims::Tuple` as its third
+    argument) has been deprecated in favor of the two-argument equivalent (the
+    `dims::Tuple` argument being superfluous) ([#19259]).
+
   * `is` has been deprecated in favor of `===` (which used to be an alias for `is`) ([#17758]).
 
   * `num` and `den` have been deprecated in favor of `numerator` and `denominator` respectively ([#19233]).
@@ -585,6 +589,7 @@ Command-line option changes
 [#19157]: https://github.com/JuliaLang/julia/issues/19157
 [#19233]: https://github.com/JuliaLang/julia/issues/19233
 [#19239]: https://github.com/JuliaLang/julia/issues/19239
+[#19259]: https://github.com/JuliaLang/julia/issues/19259
 [#19288]: https://github.com/JuliaLang/julia/issues/19288
 [#19305]: https://github.com/JuliaLang/julia/issues/19305
 [#19331]: https://github.com/JuliaLang/julia/issues/19331
