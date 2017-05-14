@@ -1,7 +1,15 @@
 #!/bin/sh
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# Run as: fixup-libgfortran.sh <$private_libdir>
+# Run as: fixup-libgfortran.sh [--verbose] <$private_libdir>
+
+# If we're invoked with "--verbose", create a `debug` function that prints stuff out
+if [ "$1" == "--verbose" ] || [ "$1" == "-v" ]; then
+shift 1
+debug() { echo "$*"; }
+else
+debug() { :; }
+fi
 
 if [ -z "$1" ]; then
     echo "Usage: $0 <private_libdir>"
@@ -14,7 +22,7 @@ if [ "$UNAME" = "Linux" ]; then
 elif [ "$UNAME" = "Darwin" ]; then
     SHLIB_EXT="dylib"
 else
-    echo "WARNING: Could not autodetect platform type ('uname -s' == $UNAME); assuming Linux"
+    echo "WARNING: Could not autodetect platform type ('uname -s' == $UNAME); assuming Linux" >&2
     UNAME="Linux"
     SHLIB_EXT="so"
 fi
@@ -26,15 +34,21 @@ if [ ! -f "$private_libdir/libarpack.$SHLIB_EXT" ]; then
     exit 2
 fi
 
-find_shlib ()
+find_shlib()
 {
-    if [ -f "$private_libdir/lib$1.$SHLIB_EXT" ]; then
+    lib_path="$1"
+    if [ -f "$lib_path" ]; then
         if [ "$UNAME" = "Linux" ]; then
-            ldd "$private_libdir/lib$1.$SHLIB_EXT" | grep $2 | cut -d' ' -f3 | xargs
+            ldd "$lib_path" | grep $2 | cut -d' ' -f3 | xargs
         else # $UNAME is "Darwin", we only have two options, see above
-            otool -L "$private_libdir/lib$1.$SHLIB_EXT" | grep $2 | cut -d' ' -f1 | xargs
+            otool -L "$lib_path" | grep $2 | cut -d' ' -f1 | xargs
         fi
     fi
+}
+
+private_libname()
+{
+    echo "$private_libdir/lib$1.$SHLIB_EXT"
 }
 
 # First, discover all the places where libgfortran/libgcc is, as well as their true SONAMES
@@ -42,11 +56,12 @@ for lib in arpack openspecfun lapack; do
     if [ -f "$private_libdir/lib$lib.$SHLIB_EXT" ]; then
         # Find the paths to the libraries we're interested in.  These are almost
         # always within the same directory, but we like to be general.
-        LIBGFORTRAN_PATH=$(find_shlib $lib libgfortran)
-        LIBGCC_PATH=$(find_shlib $lib libgcc_s)
-        LIBQUADMATH_PATH=$(find_shlib $lib libquadmath)
+        LIBGFORTRAN_PATH=$(find_shlib "$(private_libname $lib)" libgfortran)
+        LIBGCC_PATH=$(find_shlib "$(private_libname $lib)" libgcc_s)
+        LIBQUADMATH_PATH=$(find_shlib "$(private_libname $lib)" libquadmath)
 
-        # Take the directories, add them onto LIBGFORTRAN_DIRS to search for things later
+        # Take the directories, add them onto LIBGFORTRAN_DIRS, which we use to
+        # search for these libraries in the future.
         LIBGFORTRAN_DIRS="$LIBGFORTRAN_DIRS $(dirname $LIBGFORTRAN_PATH)"
         LIBGFORTRAN_DIRS="$LIBGFORTRAN_DIRS $(dirname $LIBGCC_PATH)"
         LIBGFORTRAN_DIRS="$LIBGFORTRAN_DIRS $(dirname $LIBQUADMATH_PATH)"
@@ -66,6 +81,8 @@ uniquify()
 
 LIBGFORTRAN_DIRS=$(uniquify "$LIBGFORTRAN_DIRS")
 SONAMES="$(uniquify "$LIBGFORTRAN_SONAMES $LIBGCC_SONAMES $LIBQUADMATH_SONAMES")"
+debug "Discovered traces of libgfortran within $LIBGFORTRAN_DIRS"
+debug "Got SONAMES of $SONAMES"
 
 # Copy the SONAMEs we identified above into our private_libdir
 for soname in $SONAMES; do
@@ -78,48 +95,48 @@ for soname in $SONAMES; do
             fi
         fi
     done
-
-    # Add possible internal directories to LIBGFORTRAN_DIRS so that we can find all possible ways
-    # That any of our libraries or these libraries we just copied in link to themselves later.
-    if [ -f "$private_libdir/$soname" ]; then
-        LIBGFORTRAN_DIRS="$LIBGFORTRAN_DIRS $(dirname $(find_shlib $lib libgfortran))"
-        LIBGFORTRAN_DIRS="$LIBGFORTRAN_DIRS $(dirname $(find_shlib $lib libgcc_s))"
-        LIBGFORTRAN_DIRS="$LIBGFORTRAN_DIRS $(dirname $(find_shlib $lib libquadmath))"
-    fi
 done
 
-
+# On OSX, we need to change the old link (which is usually a full path)
+# to point to `@rpath/${soname}` explicitly, so we use `find_shlib()`
+# to dynamically find the full path we want to change.  On Linux, we
+# don't care about full paths, we just set the rpath to `$ORIGIN`.
 change_linkage()
 {
-    shlib_path="$1"
-    old_link="$2"
-    new_link="$3"
+    # This is the path of the library we want to edit
+    lib_path="$1"
+
+    # If it doesn't exist, exit quietly
+    if [ ! -f "$lib_path" ]; then
+        debug "  $lib_path doesn't exist, skipping"
+        return
+    fi
+
+    # This is the soname of the dependency we want to swap out
+    soname="$2"
+
     if [ "$UNAME" = "Darwin" ]; then
-        install_name_tool -change "$old_link" "$new_link" "$shlib_path"
+        old_link=$(find_shlib "$lib_path" "$soname")
+        echo " $old_link"
+        install_name_tool -change "$old_link" "@rpath/$soname" "$lib_path"
     else # $UNAME is "Linux", we only have two options, see above
-        patchelf --set-rpath \$ORIGIN "$shlib_path"
+        patchelf --set-rpath \$ORIGIN "$lib_path"
     fi
 }
 
-LIBGFORTRAN_DIRS=$(uniquify "$LIBGFORTRAN_DIRS")
-echo "Found traces of libgfortran/libgcc in $LIBGFORTRAN_DIRS"
-
-# For every library that remotely touches libgfortran stuff (so the libraries
-# we have copied in ourselves as well as arpack, openspecfun, etc...) we must
+# For every library that remotely touches libgfortran stuff (the libraries we
+# have copied in ourselves as well as arpack, openspecfun, etc...) we must
 # update the linkage to point to @rpath (on OSX) or $ORIGIN (on Linux) so
 # that direct links to the old libgfortran directories are instead directed
 # to the proper location, which is our $private_libdir.
-cd $private_libdir
-
-# Iterate over possible library names
-for soname in libopenblas libarpack libcholmod liblapack libopenspecfun $SONAMES; do
+for lib in libopenblas libarpack libcholmod liblapack libopenspecfun $SONAMES; do
     # Grab every incarnation of that library that exists within $private_libdir
     # (e.g. "libopenspecfun.so", and "libopenspecfun.so.0", etc...)
-    for lib in $private_libdir/$soname*.$SHLIB_EXT*; do
-        # Look for links to any of the our three musketeers within ANY of the
-        # potential LIBGFORTRAN_DIRS we've discovered so far
-        for dir in $LIBGFORTRAN_DIRS; do
-            change_linkage "$lib" "$dir/$soname" "@rpath/$soname"
+    for lib_path in $private_libdir/$lib*; do
+        # Iterate over dependency names that need to be changed
+        for soname in $SONAMES; do
+            debug "changing linkage of $lib_path to $soname"
+            change_linkage "$lib_path" "$soname"
         done
     done
 done

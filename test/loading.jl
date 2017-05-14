@@ -14,6 +14,12 @@ include_string_test_func = include_string("include_string_test() = @__FILE__", t
 
 @test isdir(@__DIR__)
 @test @__DIR__() == dirname(@__FILE__)
+let exename = `$(Base.julia_cmd()) --precompiled=yes --startup-file=no`
+    wd = sprint(show, pwd())
+    @test readchomp(`$exename -E "@__DIR__" -i`) == wd
+    @test readchomp(`$exename -E "cd(()->eval(:(@__DIR__)), tempdir())" -i`) != wd
+    @test readchomp(`$exename -E "@__DIR__"`) == wd # non-interactive
+end
 
 # Issue #5789 and PR #13542:
 mktempdir() do dir
