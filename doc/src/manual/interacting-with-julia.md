@@ -63,7 +63,7 @@ at detecting when a paste occurs.
 When the cursor is at the beginning of the line, the prompt can be changed to a help mode by typing
 `?`. Julia will attempt to print help or documentation for anything entered in help mode:
 
-```julia
+```julia-repl
 julia> ? # upon typing ?, the prompt changes (in place) to: help?>
 
 help?> string
@@ -111,7 +111,7 @@ system shell to execute system commands. Just as `?` entered help mode when at t
 of the line, a semicolon (`;`) will enter the shell mode. And it can be exited by pressing backspace
 at the beginning of the line.
 
-```julia
+```julia-repl
 julia> ; # upon typing ;, the prompt changes (in place) to: shell>
 
 shell> echo hello
@@ -209,7 +209,7 @@ Users should refer to `base/LineEdit.jl` to discover the available actions on ke
 In both the Julian and help modes of the REPL, one can enter the first few characters of a function
 or type and then press the tab key to get a list all matches:
 
-```julia
+```julia-repl
 julia> stri[TAB]
 stride     strides     string      stringmime  strip
 
@@ -220,7 +220,7 @@ StridedArray    StridedMatrix    StridedVecOrMat  StridedVector    String
 The tab key can also be used to substitute LaTeX math symbols with their Unicode equivalents,
 and get a list of LaTeX matches as well:
 
-```julia
+```julia-repl
 julia> \pi[TAB]
 julia> π
 π = 3.1415926535897...
@@ -258,7 +258,7 @@ A full list of tab-completions can be found in the [Unicode Input](@ref) section
 
 Completion of paths works for strings and julia's shell mode:
 
-```julia
+```julia-repl
 julia> path="/[TAB]"
 .dockerenv  .juliabox/   boot/        etc/         lib/         media/       opt/         root/        sbin/        sys/         usr/
 .dockerinit bin/         dev/         home/        lib64/       mnt/         proc/        run/         srv/         tmp/         var/
@@ -269,7 +269,7 @@ shell> /[TAB]
 
 Tab completion can help with investigation of the available methods matching the input arguments:
 
-```julia
+```julia-repl
 julia> max([TAB] # All methods are displayed, not shown here due to size of the list
 
 julia> max([1, 2], [TAB] # All methods where `Vector{Int}` matches as first argument
@@ -284,7 +284,7 @@ max(a, b, c, xs...) in Base at operators.jl:281
 Keywords are also displayed in the suggested methods, see second line after `;` where `limit`
 and `keep` are keyword arguments:
 
-```julia
+```julia-repl
 julia> split("1 1 1", [TAB]
 split(str::AbstractString) in Base at strings/util.jl:278
 split{T<:AbstractString}(str::T, splitter; limit, keep) in Base at strings/util.jl:254
@@ -296,14 +296,14 @@ completion to be able to remove non-matching methods.
 
 Tab completion can also help completing fields:
 
-```julia
+```julia-repl
 julia> Pkg.a[TAB]
 add       available
 ```
 
 Fields for output from functions can also be completed:
 
-```julia
+```julia-repl
 julia> split("","")[1].[TAB]
 endof  offset  string
 ```

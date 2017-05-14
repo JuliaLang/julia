@@ -1949,7 +1949,7 @@ julia> convert(Int, 3.0)
 julia> convert(Int, 3.5)
 ERROR: InexactError()
 Stacktrace:
- [1] convert(::Type{Int64}, ::Float64) at ./float.jl:679
+ [1] convert(::Type{Int64}, ::Float64) at ./float.jl:680
 ```
 
 If `T` is a `AbstractFloat` or `Rational` type,

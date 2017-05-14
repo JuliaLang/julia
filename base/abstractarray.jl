@@ -489,7 +489,7 @@ default is an `Array{element_type}(dims...)`.
 For example, `similar(1:10, 1, 4)` returns an uninitialized `Array{Int,2}` since ranges are
 neither mutable nor support 2 dimensions:
 
-```julia
+```julia-repl
 julia> similar(1:10, 1, 4)
 1×4 Array{Int64,2}:
  4419743872  4374413872  4419743888  0
@@ -498,7 +498,7 @@ julia> similar(1:10, 1, 4)
 Conversely, `similar(trues(10,10), 2)` returns an uninitialized `BitVector` with two
 elements since `BitArray`s are both mutable and can support 1-dimensional arrays:
 
-```julia
+```julia-repl
 julia> similar(trues(10,10), 2)
 2-element BitArray{1}:
  false
@@ -508,7 +508,7 @@ julia> similar(trues(10,10), 2)
 Since `BitArray`s can only store elements of type `Bool`, however, if you request a
 different element type it will create a regular `Array` instead:
 
-```julia
+```julia-repl
 julia> similar(falses(10), Float64, 2, 4)
 2×4 Array{Float64,2}:
  2.18425e-314  2.18425e-314  2.18425e-314  2.18425e-314

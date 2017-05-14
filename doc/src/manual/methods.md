@@ -163,7 +163,7 @@ f (generic function with 2 methods)
 This output tells us that `f` is a function object with two methods. To find out what the signatures
 of those methods are, use the [`methods()`](@ref) function:
 
-```julia
+```julia-repl
 julia> methods(f)
 # 2 methods for generic function "f":
 f(x::Float64, y::Float64) in Main at none:1
@@ -193,7 +193,7 @@ Although it seems a simple concept, multiple dispatch on the types of values is 
 most powerful and central feature of the Julia language. Core operations typically have dozens
 of methods:
 
-```julia
+```julia-repl
 julia> methods(+)
 # 180 methods for generic function "+":
 +(x::Bool, z::Complex{Bool}) in Base at complex.jl:224
@@ -412,7 +412,7 @@ Indeed, any new method definition won't be visible to the current runtime enviro
 including Tasks and Threads (and any previously defined `@generated` functions).
 Let's start with an example to see what this means:
 
-```julia
+```julia-repl
 julia> function tryeval()
            @eval newfun() = 1
            newfun()

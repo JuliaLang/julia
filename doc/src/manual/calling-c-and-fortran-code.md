@@ -55,7 +55,7 @@ to [`ccall`](@ref) are as follows:
 As a complete but simple example, the following calls the `clock` function from the standard C
 library:
 
-```julia
+```julia-repl
 julia> t = ccall((:clock, "libc"), Int32, ())
 2292761
 
@@ -70,7 +70,7 @@ Int32
 written with a trailing comma. For example, to call the `getenv` function to get a pointer to
 the value of an environment variable, one makes a call like this:
 
-```julia
+```julia-repl
 julia> path = ccall((:getenv, "libc"), Cstring, (Cstring,), "SHELL")
 Cstring(@0x00007fff5fbffc45)
 
@@ -113,7 +113,7 @@ indicate errors in various different ways, including by returning -1, 0, 1 and o
 This wrapper throws an exception clearly indicating the problem if the caller tries to get a non-existent
 environment variable:
 
-```julia
+```julia-repl
 julia> getenv("SHELL")
 "/bin/bash"
 
@@ -905,7 +905,7 @@ Global variables exported by native libraries can be accessed by name using the 
 function. The arguments to [`cglobal()`](@ref) are a symbol specification identical to that used
 by [`ccall`](@ref), and a type describing the value stored in the variable:
 
-```julia
+```julia-repl
 julia> cglobal((:errno, :libc), Int32)
 Ptr{Int32} @0x00007f418d0816b8
 ```

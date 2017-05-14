@@ -35,7 +35,7 @@ end
 Construct an uninitialized `BitArray` with the given dimensions.
 Behaves identically to the [`Array`](@ref) constructor.
 
-```julia
+```julia-repl
 julia> BitArray(2, 2)
 2×2 BitArray{2}:
  false  false
