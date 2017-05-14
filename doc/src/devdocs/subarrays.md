@@ -54,7 +54,7 @@ any runtime overhead.
 
 The strategy adopted is first and foremost expressed in the definition of the type:
 
-```
+```julia
 struct SubArray{T,N,P,I,L} <: AbstractArray{T,N}
     parent::P
     indexes::I
@@ -89,7 +89,7 @@ types.  For example, for `S1`, one needs to apply the `i,j` indices to the first
 of the parent array, whereas for `S2` one needs to apply them to the second and third.  The simplest
 approach to indexing would be to do the type-analysis at runtime:
 
-```
+```julia
 parentindexes = Array{Any}(0)
 for thisindex in S.indexes
     ...

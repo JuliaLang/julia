@@ -465,7 +465,7 @@ It is often convenient to work with data structures that may contain values of a
 of type `Array{Any}`). But, if you're using one of these structures and happen to know the type
 of an element, it helps to share this knowledge with the compiler:
 
-```
+```julia
 function foo(a::Array{Any,1})
     x = a[1]::Int32
     b = x+1
@@ -481,7 +481,7 @@ expected type, potentially catching certain bugs earlier.
 
 Keyword arguments can have declared types:
 
-```
+```julia
 function with_keyword(x; name::Int = 1)
     ...
 end
