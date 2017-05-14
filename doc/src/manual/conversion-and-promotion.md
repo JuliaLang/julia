@@ -134,11 +134,6 @@ actual Julia behaviour. This is the actual implementation in Julia:
 ```julia
 convert(::Type{T}, z::Complex) where {T<:Real} =
     (imag(z) == 0 ? convert(T, real(z)) : throw(InexactError()))
-
-julia> convert(Bool, 1im)
-ERROR: InexactError()
- in convert(::Type{Bool}, ::Complex{Int64}) at ./complex.jl:18
- ...
 ```
 
 ### [Case Study: Rational Conversions](@id man-rational-conversion)
