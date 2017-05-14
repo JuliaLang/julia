@@ -1308,7 +1308,7 @@ julia> Threads.nthreads()
 The number of threads Julia starts up with is controlled by an environment variable called `JULIA_NUM_THREADS`.
 Now, let's start up Julia with 4 threads:
 
-```
+```bash
 export JULIA_NUM_THREADS=4
 ```
 
@@ -1415,4 +1415,3 @@ It is very important that the called function does not call back into Julia.
     introduced a new set of communication mechanisms, collectively referred to as Remote Memory Access
     (RMA). The motivation for adding RMA to the MPI standard was to facilitate one-sided communication
     patterns. For additional information on the latest MPI standard, see [http://mpi-forum.org/docs](http://mpi-forum.org/docs/).
-
