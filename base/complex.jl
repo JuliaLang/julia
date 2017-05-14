@@ -546,7 +546,7 @@ function log1p(z::Complex{T}) where T
         # This is based on a well-known trick for log1p of real z,
         # allegedly due to Kahan, only modified to handle real(u) <= 0
         # differently to avoid inaccuracy near z==-2 and for correct branch cut
-        u = float(one(T)) + z
+        u = one(float(T)) + z
         u == 1 ? convert(typeof(u), z) : real(u) <= 0 ? log(u) : log(u)*z/(u-1)
     elseif isnan(zr)
         Complex(zr, zr)
