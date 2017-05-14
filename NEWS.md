@@ -469,6 +469,9 @@ Deprecated or removed
 
   * `@test_approx_eq x y` has been deprecated in favor of `@test isapprox(x,y)` or `@test x ≈ y` ([#4615]).
 
+  * `Matrix()` and `Matrix{T}()` have been deprecated in favor of the explicit forms
+    `Matrix(0, 0)` and `Matrix{T}(0, 0)` ([#20330]).
+
   * Vectorized functions have been deprecated in favor of dot syntax ([#17302], [#17265],
     [#18558], [#19711], [#19712], [#19791], [#19802], [#19931], [#20543], [#20228]).
 
@@ -625,6 +628,7 @@ Command-line option changes
 [#20321]: https://github.com/JuliaLang/julia/issues/20321
 [#20327]: https://github.com/JuliaLang/julia/issues/20327
 [#20328]: https://github.com/JuliaLang/julia/issues/20328
+[#20330]: https://github.com/JuliaLang/julia/issues/20330
 [#20345]: https://github.com/JuliaLang/julia/issues/20345
 [#20403]: https://github.com/JuliaLang/julia/issues/20403
 [#20404]: https://github.com/JuliaLang/julia/issues/20404
