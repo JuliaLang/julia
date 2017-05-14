@@ -166,7 +166,7 @@ function randjump(mt::MersenneTwister, jumps::Integer, jumppoly::AbstractString)
     push!(mts, mt)
     for i in 1:jumps-1
         cmt = mts[end]
-        push!(mts, MersenneTwister(cmt.seed, dSFMT.dsfmt_jump(cmt.state, jumppoly)))
+        push!(mts, MersenneTwister(copy(cmt.seed), dSFMT.dsfmt_jump(cmt.state, jumppoly)))
     end
     return mts
 end
