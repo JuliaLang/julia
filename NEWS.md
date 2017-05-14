@@ -17,6 +17,10 @@ This section lists changes that do not have deprecation warnings.
   * `ntuple(f, n::Integer)` throws `ArgumentError` if `n` is negative.
     Previously an empty tuple was returned ([#21697]).
 
+  * `@__DIR__` returns the current working directory rather than `nothing` when not run
+    from a file ([#21759]).
+
+
 Library improvements
 --------------------
 
