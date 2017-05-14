@@ -464,6 +464,9 @@ Deprecated or removed
     `maxabs` and `minabs` have similarly been deprecated in favor of `maximum(abs, x)` and `minimum(abs, x)`.
     Likewise for the in-place counterparts of these functions ([#19598]).
 
+  * The array-reducing form of `isinteger` (`isinteger(x::AbstractArray)`) has been
+    deprecated in favor of `all(isinteger, x)` ([#19925]).
+
   * `produce`, `consume` and iteration over a Task object have been deprecated in favor of
     using Channels for inter-task communication  ([#19841]).
 
@@ -611,6 +614,7 @@ Command-line option changes
 [#19901]: https://github.com/JuliaLang/julia/issues/19901
 [#19903]: https://github.com/JuliaLang/julia/issues/19903
 [#19919]: https://github.com/JuliaLang/julia/issues/19919
+[#19925]: https://github.com/JuliaLang/julia/issues/19925
 [#19926]: https://github.com/JuliaLang/julia/issues/19926
 [#19931]: https://github.com/JuliaLang/julia/issues/19931
 [#19934]: https://github.com/JuliaLang/julia/issues/19934
