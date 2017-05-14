@@ -1059,7 +1059,7 @@ This can be done with a simple assignment statement.
 For example, `UInt` is aliased to either `UInt32` or `UInt64` as is appropriate
 for the size of pointers on the system:
 
-```julia
+```julia-repl
 # 32-bit system:
 julia> UInt
 UInt32

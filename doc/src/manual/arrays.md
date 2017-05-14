@@ -137,7 +137,7 @@ of the variable ranges `rx`, `ry`, etc. and each `F(x,y,...)` evaluation returns
 The following example computes a weighted average of the current element and its left and right
 neighbor along a 1-d grid. :
 
-```julia
+```julia-repl
 julia> x = rand(8)
 8-element Array{Float64,1}:
  0.843025
@@ -182,7 +182,7 @@ julia> sum(1/n^2 for n=1:1000)
 When writing a generator expression with multiple dimensions inside an argument list, parentheses
 are needed to separate the generator from subsequent arguments:
 
-```julia
+```julia-repl
 julia> map(tuple, 1/(i+j) for i=1:2, j=1:2, [1:4;])
 ERROR: syntax: invalid iteration specification
 ```
@@ -556,7 +556,7 @@ It is sometimes useful to perform element-by-element binary operations on arrays
 sizes, such as adding a vector to each column of a matrix. An inefficient way to do this would
 be to replicate the vector to the size of the matrix:
 
-```julia
+```julia-repl
 julia> a = rand(2,1); A = rand(2,3);
 
 julia> repmat(a,1,3)+A
@@ -569,7 +569,7 @@ This is wasteful when dimensions get large, so Julia offers [`broadcast()`](@ref
 singleton dimensions in array arguments to match the corresponding dimension in the other array
 without using extra memory, and applies the given function elementwise:
 
-```julia
+```julia-repl
 julia> broadcast(+, a, A)
 2×3 Array{Float64,2}:
  1.20813  1.82068  1.25387
@@ -666,7 +666,7 @@ The following example computes the QR decomposition of a small section of a larg
 creating any temporaries, and by calling the appropriate LAPACK function with the right leading
 dimension size and stride parameters.
 
-```julia
+```julia-repl
 julia> a = rand(10,10)
 10×10 Array{Float64,2}:
  0.561255   0.226678   0.203391  0.308912   …  0.750307  0.235023   0.217964
@@ -768,7 +768,7 @@ The [`sparse()`](@ref) function is often a handy way to construct sparse matrice
 its input a vector `I` of row indices, a vector `J` of column indices, and a vector `V` of nonzero
 values. `sparse(I,J,V)` constructs a sparse matrix such that `S[I[k], J[k]] = V[k]`.
 
-```jldoctest
+```julia-repl
 julia> I = [1, 4, 3, 5]; J = [4, 7, 18, 9]; V = [1, 2, -5, 3];
 
 julia> S = sparse(I,J,V)
@@ -782,7 +782,7 @@ julia> S = sparse(I,J,V)
 The inverse of the [`sparse()`](@ref) function is [`findn()`](@ref), which retrieves the inputs
 used to create the sparse matrix.
 
-```julia
+```julia-repl
 julia> findn(S)
 ([1,4,5,3],[4,7,9,18])
 

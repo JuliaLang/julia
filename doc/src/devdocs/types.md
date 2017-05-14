@@ -169,7 +169,7 @@ Array{T,N}
 These can be distinguished by examining the `name` field of the type, which is an object of type
 `TypeName`:
 
-```julia
+```julia-repl
 julia> dump(Array{Int,1}.name)
 TypeName
   name: Symbol Array
@@ -207,7 +207,7 @@ TypeName
 In this case, the relevant field is `wrapper`, which holds a reference to the top-level type used
 to make new `Array` types.
 
-```julia
+```julia-repl
 julia> pointer_from_objref(Array)
 Ptr{Void} @0x00007fcc7de64850
 
@@ -299,7 +299,7 @@ Union{}
 
 What is the "primary" tuple-type?
 
-```julia
+```julia-repl
 julia> pointer_from_objref(Tuple)
 Ptr{Void} @0x00007f5998a04370
 
@@ -461,7 +461,7 @@ Build Julia with `make debug` and fire up Julia within a debugger.
 Because the subtyping code is used heavily in the REPL itself--and hence breakpoints in this
 code get triggered often--it will be easiest if you make the following definition:
 
-```julia
+```julia-repl
 julia> function mysubtype(a,b)
            ccall(:jl_breakpoint, Void, (Any,), nothing)
            issubtype(a, b)

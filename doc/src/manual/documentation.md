@@ -27,7 +27,7 @@ Compute the Bar index between `x` and `y`. If `y` is missing, compute
 the Bar index between all pairs of columns of `x`.
 
 # Examples
-```julia
+```julia-repl
 julia> bar([1, 2], [1, 2])
 1
 ```
