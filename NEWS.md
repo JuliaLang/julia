@@ -434,6 +434,11 @@ Deprecated or removed
   * `produce`, `consume` and iteration over a Task object have been deprecated in favor of
     using Channels for inter-task communication  ([#19841]).
 
+  * The `negate` keyword has been deprecated from all functions in the `Dates` adjuster
+    API (`adjust`, `tonext`, `toprev`, `Date`, `Time`, and `DateTime`). Instead use
+    predicate function negation via the `!` operator
+    (see [Library Improvements](#library-improvements)) ([#20213]).
+
   * `@test_approx_eq x y` has been deprecated in favor of `@test isapprox(x,y)` or `@test x ≈ y` ([#4615]).
 
   * `Matrix()` and `Matrix{T}()` have been deprecated in favor of the explicit forms
@@ -595,6 +600,7 @@ Command-line option changes
 [#20047]: https://github.com/JuliaLang/julia/issues/20047
 [#20079]: https://github.com/JuliaLang/julia/issues/20079
 [#20164]: https://github.com/JuliaLang/julia/issues/20164
+[#20213]: https://github.com/JuliaLang/julia/issues/20213
 [#20228]: https://github.com/JuliaLang/julia/issues/20228
 [#20248]: https://github.com/JuliaLang/julia/issues/20248
 [#20249]: https://github.com/JuliaLang/julia/issues/20249
