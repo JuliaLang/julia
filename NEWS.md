@@ -437,6 +437,11 @@ Deprecated or removed
   * The two-argument forms of `map` (`map!(f, A)`) and `asyncmap!` (`asyncmap!(f, A)`)
     have been deprecated in anticipation of future semantic changes ([#19721]).
 
+  * `zeros` and `ones` methods accepting an element type as the first argument and an
+    array as the second argument, for example `zeros(Float64, [1, 2, 3])`, have been
+    deprecated in favor of equivalent methods with the second argument instead the
+    size of the array, for example `zeros(Float64, size([1, 2, 3]))` ([#21183]).
+
   * `isimag` has been deprecated ([#19949]).
 
   * The tuple-of-types form of `invoke`, `invoke(f, (types...), ...)`, has been deprecated
@@ -593,3 +598,4 @@ Command-line option changes
 [#20543]: https://github.com/JuliaLang/julia/issues/20543
 [#20609]: https://github.com/JuliaLang/julia/issues/20609
 [#20889]: https://github.com/JuliaLang/julia/issues/20889
+[#21183]: https://github.com/JuliaLang/julia/issues/21183
