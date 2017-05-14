@@ -49,14 +49,14 @@ immutable Token
     # Offsets into a string or buffer
     startpos::Tuple{Int, Int} # row, col where token starts /end, col is a string index
     endpos::Tuple{Int, Int}
-    startbyte::Int64 # The byte where the token start in the buffer
-    endbyte::Int64 # The byte where the token ended in the buffer
+    startbyte::Int # The byte where the token start in the buffer
+    endbyte::Int # The byte where the token ended in the buffer
     val::Compat.UTF8String # The actual string of the token
     token_error::TokenError
 end
 
 function Token(kind::Kind, startposition::Tuple{Int, Int}, endposition::Tuple{Int, Int},
-               startbyte::Int64, endbyte::Int64, val::String)
+               startbyte::Int, endbyte::Int, val::String)
     Token(kind, startposition, endposition, startbyte, endbyte, val, NO_ERR)
 end
 Token() = Token(ERROR, (0,0), (0,0), 0, 0, "", UNKNOWN)

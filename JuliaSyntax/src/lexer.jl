@@ -29,17 +29,17 @@ type Lexer{IO_t <: IO}
     token_start_row::Int
     token_start_col::Int
 
-    prevpos::Int64
-    token_startpos::Int64
+    prevpos::Int
+    token_startpos::Int
 
     current_row::Int
     current_col::Int
-    current_pos::Int64
+    current_pos::Int
 
     last_token::Tokens.Kind
 end
 
-Lexer(io) = Lexer(io, 1, 1, Int64(-1), Int64(0), 1, 1, Int64(1), Tokens.ERROR)
+Lexer(io) = Lexer(io, 1, 1, -1, 0, 1, 1, 1, Tokens.ERROR)
 Lexer(str::AbstractString) = Lexer(IOBuffer(str))
 
 """
