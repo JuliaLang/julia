@@ -529,7 +529,7 @@ end
 
 function source_dir()
     p = source_path(nothing)
-    p === nothing ? p : dirname(p)
+    p === nothing ? pwd() : dirname(p)
 end
 
 """
@@ -545,7 +545,7 @@ macro __FILE__() source_path() end
     @__DIR__ -> AbstractString
 
 `@__DIR__` expands to a string with the directory part of the absolute path of the file
-containing the macro. Returns `nothing` if run from a REPL or an empty string if
+containing the macro. Returns the current working directory if run from a REPL or if
 evaluated by `julia -e <expr>`.
 """
 macro __DIR__() source_dir() end
