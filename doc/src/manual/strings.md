@@ -692,7 +692,7 @@ julia> m.offsets
 It is convenient to have captures returned as an array so that one can use destructuring syntax
 to bind them to local variables:
 
-```julia
+```julia-repl
 julia> first, second, third = m.captures; first
 "a"
 ```
@@ -808,7 +808,7 @@ The Unicode escape `\u2200` is encoded in UTF-8 as the three bytes 226, 136, 128
 resulting byte array does not correspond to a valid UTF-8 string -- if you try to use this as
 a regular string literal, you will get a syntax error:
 
-```julia
+```julia-repl
 julia> "DATA\xff\u2200"
 ERROR: syntax: invalid UTF-8 sequence
 ```

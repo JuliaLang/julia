@@ -34,13 +34,13 @@ being done, and what their inputs and outputs are.
 
 In the following REPL session:
 
-```julia
+```julia-repl
 julia> x = 1.0
 ```
 
 is equivalent to:
 
-```julia
+```julia-repl
 julia> global x = 1.0
 ```
 
@@ -51,7 +51,7 @@ so all the performance issues discussed previously apply.
 A useful tool for measuring performance is the [`@time`](@ref) macro. The following example
 illustrates good working style:
 
-```julia
+```julia-repl
 julia> function f(n)
            s = 0
            for i = 1:n
@@ -88,7 +88,7 @@ As a teaser, an improved version of this function allocates no memory
 (the allocation reported below is due to running the `@time` macro in global scope)
 and has an order of magnitude faster execution after the first call:
 
-```julia
+```julia-repl
 julia> @time f_improved(1)
   0.007008 seconds (1.32 k allocations: 63.640 KiB)
 0.5
@@ -257,7 +257,7 @@ like `m` but not for objects like `t`.
 Of course, all of this is true only if we construct `m` with a concrete type.  We can break this
 by explicitly constructing it with an abstract type:
 
-```julia myambig2
+```julia-repl myambig2
 julia> m = MyType{AbstractFloat}(3.2)
 MyType{AbstractFloat}(3.2)
 
@@ -429,7 +429,7 @@ the array type `A`.
 However, there's one remaining hole: we haven't enforced that `A` has element type `T`, so it's
 perfectly possible to construct an object like this:
 
-```julia
+```julia-repl
 julia> b = MyContainer{Int64, UnitRange{Float64}}(UnitRange(1.3, 5.0));
 
 julia> typeof(b)
@@ -843,7 +843,7 @@ end
 
 Now we will time each of these functions using the same random `10000` by `1` input vector:
 
-```julia
+```julia-repl
 julia> x = randn(10000);
 
 julia> fmt(f) = println(rpad(string(f)*": ", 14, ' '), @elapsed f(x))
@@ -906,7 +906,7 @@ end
 
 Timing results:
 
-```julia
+```julia-repl
 julia> @time loopinc()
   0.529894 seconds (40.00 M allocations: 1.490 GiB, 12.14% gc time)
 50000015000000
@@ -951,7 +951,7 @@ Both `f` and `fdot` compute the same thing.  However, `fdot`
 (defined with the help of the [`@.`](@ref @__dot__) macro) is
 significantly faster when applied to an array:
 
-```julia
+```julia-repl
 julia> x = rand(10^6);
 
 julia> @time f(x);
@@ -992,7 +992,7 @@ This can be done for individual slices by calling [`view()`](@ref),
 or more simply for a whole expression or block of code by putting
 [`@views`](@ref) in front of that expression.  For example:
 
-```julia
+```julia-repl
 julia> fcopy(x) = sum(x[2:end-1])
 
 julia> @views fview(x) = sum(x[2:end-1])

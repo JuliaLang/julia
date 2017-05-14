@@ -75,7 +75,7 @@ after the ending quote, to change its behaviour:
 
 For example, this regex has all three flags enabled:
 
-```julia
+```julia-repl
 julia> match(r"a+.*b+.*?d\$"ism, "Goodbye,\\nOh, angry,\\nBad world\\n")
 RegexMatch("angry,\\nBad world")
 ```

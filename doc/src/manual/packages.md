@@ -16,7 +16,7 @@ add your code to the curated METADATA repository.
 The [`Pkg.status()`](@ref) function prints out a summary of the state of packages you have installed.
 Initially, you'll have no packages installed:
 
-```julia
+```julia-repl
 julia> Pkg.status()
 INFO: Initializing package repository /Users/stefan/.julia/v0.6
 INFO: Cloning METADATA from git://github.com/JuliaLang/METADATA.jl
@@ -27,7 +27,7 @@ Your package directory is automatically initialized the first time you run a `Pk
 that expects it to exist – which includes [`Pkg.status()`](@ref). Here's an example non-trivial
 set of required and additional packages:
 
-```julia
+```julia-repl
 julia> Pkg.status()
 Required packages:
  - Distributions                 0.2.8
@@ -43,7 +43,7 @@ will explain these states and annotations as we encounter them. For programmatic
 returns a dictionary, mapping installed package names to the version of that package which is
 installed:
 
-```julia
+```julia-repl
 julia> Pkg.installed()
 Dict{String,VersionNumber} with 4 entries:
 "Distributions"     => v"0.2.8"
@@ -73,7 +73,7 @@ commands, which add or remove a single requirement to `REQUIRE` and then call [`
 You can add a package to the list of requirements with the [`Pkg.add()`](@ref) function, and the
 package and all the packages that it depends on will be installed:
 
-```julia
+```julia-repl
 julia> Pkg.status()
 No packages installed.
 
@@ -106,7 +106,7 @@ that the `Distributions` package should be installed since it is required but no
 stated before, you can accomplish the same thing by editing your `~/.julia/v0.6/REQUIRE` file
 by hand and then running [`Pkg.resolve()`](@ref) yourself:
 
-```julia
+```julia-repl
 $ echo UTF16 >> ~/.julia/v0.6/REQUIRE
 
 julia> Pkg.resolve()
@@ -131,7 +131,7 @@ specific ranges of versions of packages.
 When you decide that you don't want to have a package around any more, you can use [`Pkg.rm()`](@ref)
 to remove the requirement for it from the `REQUIRE` file:
 
-```julia
+```julia-repl
 julia> Pkg.rm("Distributions")
 INFO: Removing Distributions v0.2.7
 INFO: Removing Stats v0.2.6
@@ -207,7 +207,7 @@ in the previous section interact with registered packages, but the package manag
 and work with unregistered packages too. To install an unregistered package, use [`Pkg.clone(url)`](@ref),
 where `url` is a git URL from which the package can be cloned:
 
-```julia
+```julia-repl
 julia> Pkg.clone("git://example.com/path/to/Package.jl.git")
 INFO: Cloning Package from git://example.com/path/to/Package.jl.git
 Cloning into 'Package'...
@@ -242,7 +242,7 @@ When package developers publish new registered versions of packages that you're 
 of course, want the new shiny versions. To get the latest and greatest versions of all your packages,
 just do [`Pkg.update()`](@ref):
 
-```julia
+```julia-repl
 julia> Pkg.update()
 INFO: Updating METADATA...
 INFO: Computing changes...
@@ -276,7 +276,7 @@ You can also update only a subset of the installed packages, by providing argume
 function. In that case, only the packages provided as arguments and their dependencies will be
 updated:
 
-```julia
+```julia-repl
 julia> Pkg.update("Example")
 INFO: Updating METADATA...
 INFO: Computing changes...
@@ -295,7 +295,7 @@ registered versions, or you may be a developer of the package and need to make c
 or some other development branch. In such cases, you can do [`Pkg.checkout(pkg)`](@ref) to checkout
 the `master` branch of `pkg` or [`Pkg.checkout(pkg,branch)`](@ref) to checkout some other branch:
 
-```julia
+```julia-repl
 julia> Pkg.add("Distributions")
 INFO: Installing Distributions v0.2.9
 INFO: Installing NumericExtensions v0.2.17
@@ -337,7 +337,7 @@ for this (described below).
 When you decide that you no longer want to have a package checked out on a branch, you can "free"
 it back to the control of the package manager with [`Pkg.free(pkg)`](@ref):
 
-```julia
+```julia-repl
 julia> Pkg.free("Distributions")
 INFO: Freeing Distributions...
 INFO: No packages to install, update or remove.
@@ -356,7 +356,7 @@ be updated as new registered versions of the package are published.
 If you want to pin a package at a specific version so that calling [`Pkg.update()`](@ref) won't
 change the version the package is on, you can use the [`Pkg.pin()`](@ref) function:
 
-```julia
+```julia-repl
 julia> Pkg.pin("Stats")
 INFO: Creating Stats branch pinned.47c198b1.tmp
 
@@ -374,7 +374,7 @@ the same thing. [`Pkg.pin()`](@ref) works by creating a throw-away branch for th
 to pin the package at and then checking that branch out. By default, it pins a package at the
 current commit, but you can choose a different version by passing a second argument:
 
-```julia
+```julia-repl
 julia> Pkg.pin("Stats",v"0.2.5")
 INFO: Creating Stats branch pinned.1fd0983b.tmp
 INFO: No packages to install, update or remove.
@@ -391,7 +391,7 @@ Now the `Stats` package is pinned at commit `1fd0983b`, which corresponds to ver
 When you decide to "unpin" a package and let the package manager update it again, you can use
 [`Pkg.free()`](@ref) like you would to move off of any branch:
 
-```julia
+```julia-repl
 julia> Pkg.free("Stats")
 INFO: Freeing Stats...
 INFO: No packages to install, update or remove.
@@ -424,7 +424,7 @@ local metadata repository using that custom location and branch and then periodi
 custom branch with the official `metadata-v2` branch. In order to use a custom repository and
 branch, issue the following command:
 
-```julia
+```julia-repl
 julia> Pkg.init("https://me.example.com/METADATA.jl.git", "branch")
 ```
 
@@ -525,7 +525,7 @@ starting with `Pkg.` or `PkgDev.` is meant to be typed at the Julia prompt; anyt
 with `git` is meant to be typed in [julia's shell mode](@ref man-shell-mode) (or using the shell that comes with
 your operating system). Within Julia, you can combine these two modes:
 
-```julia
+```julia-repl
 julia> cd(Pkg.dir("Foo"))          # go to Foo's folder
 
 shell> git command arguments...    # command will apply to Foo
@@ -743,7 +743,7 @@ Suppose you want to create a new Julia package called `FooBar`. To get started, 
 where `pkg` is the new package name and `license` is the name of a license that the package generator
 knows about:
 
-```julia
+```julia-repl
 julia> PkgDev.generate("FooBar","MIT")
 INFO: Initializing FooBar repo: /Users/stefan/.julia/v0.6/FooBar
 INFO: Origin: git://github.com/StefanKarpinski/FooBar.jl.git
@@ -830,7 +830,7 @@ For your package, it will be your GitHub user name and the name of your package,
 idea. People you send this URL to can use [`Pkg.clone()`](@ref) to install the package and try
 it out:
 
-```julia
+```julia-repl
 julia> Pkg.clone("git://github.com/StefanKarpinski/FooBar.jl.git")
 INFO: Cloning FooBar from git@github.com:StefanKarpinski/FooBar.jl.git
 ```
@@ -849,7 +849,7 @@ INFO: Cloning FooBar from git@github.com:StefanKarpinski/FooBar.jl.git
 Once you've decided that `FooBar` is ready to be registered as an official package, you can add
 it to your local copy of `METADATA` using `PkgDev.register()`:
 
-```julia
+```julia-repl
 julia> PkgDev.register("FooBar")
 INFO: Registering FooBar at git://github.com/StefanKarpinski/FooBar.jl.git
 INFO: Committing METADATA for FooBar
@@ -880,7 +880,7 @@ need to merge your local `METADATA` upstream into the official repo. The `PkgDev
 will fork the `METADATA` repository on GitHub, push your changes to your fork, and open a pull
 request:
 
-```julia
+```julia-repl
 julia> PkgDev.publish()
 INFO: Validating METADATA
 INFO: No new package versions to publish
@@ -910,7 +910,7 @@ Once the package URL for `FooBar` is registered in the official `METADATA` repo,
 to clone the package from, but there still aren't any registered versions available. You can tag
 and register it with the `PkgDev.tag()` command:
 
-```julia
+```julia-repl
 julia> PkgDev.tag("FooBar")
 INFO: Tagging FooBar v0.0.1
 INFO: Committing METADATA for FooBar
@@ -958,7 +958,7 @@ they've been included upstream. Again, use the `PkgDev.publish()` command, which
 that individual package repos have been tagged, pushes them if they haven't already been, and
 then opens a pull request to `METADATA`:
 
-```julia
+```julia-repl
 julia> PkgDev.publish()
 INFO: Validating METADATA
 INFO: Pushing FooBar permanent tags: v0.0.1

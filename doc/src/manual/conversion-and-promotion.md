@@ -46,7 +46,7 @@ generally takes two arguments: the first is a type object while the second is a 
 to that type; the returned value is the value converted to an instance of given type. The simplest
 way to understand this function is to see it in action:
 
-```julia
+```julia-repl
 julia> x = 12
 12
 
@@ -79,7 +79,7 @@ julia> convert(Array{Float64}, a)
 Conversion isn't always possible, in which case a no method error is thrown indicating that `convert`
 doesn't know how to perform the requested conversion:
 
-```julia
+```julia-repl
 julia> convert(AbstractFloat, "foo")
 ERROR: MethodError: Cannot `convert` an object of type String to an object of type AbstractFloat
 This may have arisen from a call to the constructor AbstractFloat(...),
@@ -111,7 +111,7 @@ example, since the type is a singleton, there would never be any reason to use i
 the body. When invoked, the method determines whether a numeric value is true or false as a boolean,
 by comparing it to one and zero:
 
-```julia
+```julia-repl
 julia> convert(Bool, 1)
 true
 
@@ -201,7 +201,7 @@ any number of arguments, and returns a tuple of the same number of values, conve
 type, or throws an exception if promotion is not possible. The most common use case for promotion
 is to convert numeric arguments to a common type:
 
-```julia
+```julia-repl
 julia> promote(1, 2.5)
 (1.0,2.5)
 
@@ -258,7 +258,7 @@ Rational(n::Integer, d::Integer) = Rational(promote(n,d)...)
 
 This allows calls like the following to work:
 
-```julia
+```julia-repl
 julia> Rational(Int8(15),Int32(-5))
 -3//1
 
@@ -302,7 +302,7 @@ which, given any number of type objects, returns the common type to which those 
 to `promote` should be promoted. Thus, if one wants to know, in absence of actual values, what
 type a collection of values of certain types would promote to, one can use `promote_type`:
 
-```julia
+```julia-repl
 julia> promote_type(Int8, UInt16)
 Int64
 ```

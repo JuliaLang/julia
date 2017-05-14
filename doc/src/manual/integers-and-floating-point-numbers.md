@@ -59,7 +59,7 @@ julia> 1234
 The default type for an integer literal depends on whether the target system has a 32-bit architecture
 or a 64-bit architecture:
 
-```julia
+```julia-repl
 # 32-bit system:
 julia> typeof(1)
 Int32
@@ -72,7 +72,7 @@ Int64
 The Julia internal variable [`Sys.WORD_SIZE`](@ref) indicates whether the target system is 32-bit
 or 64-bit:
 
-```julia
+```julia-repl
 # 32-bit system:
 julia> Sys.WORD_SIZE
 32
@@ -85,7 +85,7 @@ julia> Sys.WORD_SIZE
 Julia also defines the types `Int` and `UInt`, which are aliases for the system's signed and unsigned
 native integer types respectively:
 
-```julia
+```julia-repl
 # 32-bit system:
 julia> Int
 Int32
@@ -597,7 +597,7 @@ julia> 1.5x^2 - .5x + 1
 
 It also makes writing exponential functions more elegant:
 
-```julia
+```julia-repl
 julia> 2^2x
 64
 ```
@@ -607,7 +607,7 @@ negation. So `2^3x` is parsed as `2^(3x)`, and `2x^3` is parsed as `2*(x^3)`.
 
 Numeric literals also work as coefficients to parenthesized expressions:
 
-```julia
+```julia-repl
 julia> 2(x-1)^2 - 3(x-1) + 1
 3
 ```
@@ -615,7 +615,7 @@ julia> 2(x-1)^2 - 3(x-1) + 1
 Additionally, parenthesized expressions can be used as coefficients to variables, implying multiplication
 of the expression by the variable:
 
-```julia
+```julia-repl
 julia> (x-1)x
 6
 ```
@@ -623,7 +623,7 @@ julia> (x-1)x
 Neither juxtaposition of two parenthesized expressions, nor placing a variable before a parenthesized
 expression, however, can be used to imply multiplication:
 
-```julia
+```julia-repl
 julia> (x-1)(x+1)
 ERROR: MethodError: objects of type Int64 are not callable
 

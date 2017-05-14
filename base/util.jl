@@ -82,7 +82,7 @@ gc_bytes() = ccall(:jl_gc_total_bytes, Int64, ())
 Set a timer to be read by the next call to [`toc`](@ref) or [`toq`](@ref). The
 macro call `@time expr` can also be used to time evaluation.
 
-```julia
+```julia-repl
 julia> tic()
 0x0000c45bc7abac95
 
@@ -105,7 +105,7 @@ end
 Return, but do not print, the time elapsed since the last [`tic`](@ref). The
 macro calls `@timed expr` and `@elapsed expr` also return evaluation time.
 
-```julia
+```julia-repl
 julia> tic()
 0x0000c46477a9675d
 
@@ -132,7 +132,7 @@ end
 Print and return the time elapsed since the last [`tic`](@ref). The macro call
 `@time expr` can also be used to time evaluation.
 
-```julia
+```julia-repl
 julia> tic()
 0x0000c45bc7abac95
 
@@ -219,7 +219,7 @@ returning the value of the expression.
 See also [`@timev`](@ref), [`@timed`](@ref), [`@elapsed`](@ref), and
 [`@allocated`](@ref).
 
-```julia
+```julia-repl
 julia> @time rand(10^6);
   0.001525 seconds (7 allocations: 7.630 MiB)
 
@@ -253,7 +253,7 @@ expression.
 See also [`@time`](@ref), [`@timed`](@ref), [`@elapsed`](@ref), and
 [`@allocated`](@ref).
 
-```julia
+```julia-repl
 julia> @timev rand(10^6);
   0.001006 seconds (7 allocations: 7.630 MiB)
 elapsed time (ns): 1005567
@@ -282,7 +282,7 @@ number of seconds it took to execute as a floating-point number.
 See also [`@time`](@ref), [`@timev`](@ref), [`@timed`](@ref),
 and [`@allocated`](@ref).
 
-```julia
+```julia-repl
 julia> @elapsed sleep(0.3)
 0.301391426
 ```
@@ -314,7 +314,7 @@ for the effects of compilation.
 See also [`@time`](@ref), [`@timev`](@ref), [`@timed`](@ref),
 and [`@elapsed`](@ref).
 
-```julia
+```julia-repl
 julia> @allocated rand(10^6)
 8000080
 ```
@@ -343,7 +343,7 @@ counters.
 See also [`@time`](@ref), [`@timev`](@ref), [`@elapsed`](@ref), and
 [`@allocated`](@ref).
 
-```julia
+```julia-repl
 julia> val, t, bytes, gctime, memallocs = @timed rand(10^6);
 
 julia> t

@@ -74,7 +74,7 @@ If in our example above `A` is a `Array{Float64, 3}`, our `S1` case above would 
 Note in particular the tuple parameter, which stores the types of the indices used to create
 `S1`.  Likewise,
 
-```julia
+```julia-repl
 julia> S1.indexes
 (Colon(),5,2:6)
 ```
@@ -137,7 +137,7 @@ For `SubArray` types, the availability of efficient linear indexing is based pur
 of the indices, and does not depend on values like the size of the parent array. You can ask whether
 a given set of indices supports fast linear indexing with the internal `Base.viewindexing` function:
 
-```julia
+```julia-repl
 julia> Base.viewindexing(S1.indexes)
 IndexCartesian()
 
@@ -152,7 +152,7 @@ we can define dispatch directly on `SubArray{T,N,A,I,true}` without any intermed
 Since this computation doesn't depend on runtime values, it can miss some cases in which the stride
 happens to be uniform:
 
-```julia
+```julia-repl
 julia> A = reshape(1:4*2, 4, 2)
 4×2 Base.ReshapedArray{Int64,2,UnitRange{Int64},Tuple{}}:
  1  5
@@ -171,7 +171,7 @@ A view constructed as `view(A, 2:2:4, :)` happens to have uniform stride, and th
 indexing indeed could be performed efficiently.  However, success in this case depends on the
 size of the array: if the first dimension instead were odd,
 
-```julia
+```julia-repl
 julia> A = reshape(1:5*2, 5, 2)
 5×2 Base.ReshapedArray{Int64,2,UnitRange{Int64},Tuple{}}:
  1   6
