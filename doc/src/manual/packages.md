@@ -1080,7 +1080,7 @@ If a requirement line has leading words that begin with `@`, it is a system-depe
 If your system matches these system conditionals, the requirement is included, if not, the requirement
 is ignored. For example:
 
-```julia
+```
 @osx Homebrew
 ```
 
@@ -1098,7 +1098,7 @@ conditions that are currently supported are (hierarchically):
 The `@unix` condition is satisfied on all UNIX systems, including Linux and BSD. Negated system
 conditionals are also supported by adding a `!` after the leading `@`. Examples:
 
-```julia
+```
 @!windows
 @unix @!osx
 ```
