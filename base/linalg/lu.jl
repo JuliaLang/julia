@@ -113,6 +113,7 @@ The relationship between `F` and `A` is
 | [`/`](@ref)                      | ✓    |                        |
 | [`\\`](@ref)                     | ✓    | ✓                      |
 | [`cond`](@ref)                   | ✓    |                        |
+| [`inv`](@ref)                    | ✓    | ✓                      |
 | [`det`](@ref)                    | ✓    | ✓                      |
 | [`logdet`](@ref)                 | ✓    | ✓                      |
 | [`logabsdet`](@ref)              | ✓    | ✓                      |
