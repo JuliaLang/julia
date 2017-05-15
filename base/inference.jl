@@ -1431,7 +1431,7 @@ function precise_container_type(arg::ANY, typ::ANY, vtypes::VarTable, sv::Infere
     if isa(typ, Const)
         val = typ.val
         if isa(val, SimpleVector) || isa(val, Tuple)
-            return Any[ abstract_eval_constant(x) for x in val ]
+            return Any[ Const(val[i]) for i in 1:length(val) ] # avoid making a tuple Generator here!
         end
     end
 
@@ -2508,12 +2508,14 @@ function typeinf_edge(method::Method, atypes::ANY, sparams::SimpleVector, caller
     frame = resolve_call_cycle!(code, caller)
     if frame === nothing
         code.inInference = true
-        frame = InferenceState(code, true, true, caller.params) # always optimize and cache edge targets
+        frame = InferenceState(code, #=optimize=#true, #=cached=#true, caller.params) # always optimize and cache edge targets
         if frame === nothing
             code.inInference = false
             return Any, nothing
         end
-        frame.parent = caller
+        if caller.cached # don't involve uncached functions in cycle resolution
+            frame.parent = caller
+        end
         typeinf(frame)
         return frame.bestguess, frame.inferred ? frame.linfo : nothing
     end
