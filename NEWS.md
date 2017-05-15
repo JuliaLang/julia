@@ -670,3 +670,6 @@ Command-line option changes
 [#20609]: https://github.com/JuliaLang/julia/issues/20609
 [#20889]: https://github.com/JuliaLang/julia/issues/20889
 [#21183]: https://github.com/JuliaLang/julia/issues/21183
+[#21359]: https://github.com/JuliaLang/julia/issues/21359
+[#21697]: https://github.com/JuliaLang/julia/issues/21697
+[#21759]: https://github.com/JuliaLang/julia/issues/21759
