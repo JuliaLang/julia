@@ -53,6 +53,11 @@
 #endif
 
 // IR building
+#if JL_LLVM_VERSION >= 40000
+#include <llvm/Bitcode/BitcodeWriter.h>
+#else
+#include <llvm/Bitcode/ReaderWriter.h>
+#endif
 #include <llvm/IR/IntrinsicInst.h>
 #if JL_LLVM_VERSION >= 30500
 #include <llvm/Object/ObjectFile.h>
@@ -7466,6 +7471,15 @@ extern "C" void jl_dump_llvm_value(void *v)
     ((Value*)v)->dump();
 #endif
 }
+
+extern "C" void jl_dump_llvm_to_file(char *fname, llvm::Function *F) {
+  auto M = CloneModule(F->getParent());
+  std::error_code EC;
+  llvm::raw_fd_ostream OS(fname, EC, llvm::sys::fs::F_None);
+  WriteBitcodeToFile(M.get(), OS);
+  OS.flush();
+}
+
 extern "C" void jl_dump_llvm_type(void *v)
 {
 #if JL_LLVM_VERSION >= 50000
