@@ -2497,12 +2497,14 @@ function typeinf_edge(method::Method, atypes::ANY, sparams::SimpleVector, caller
     frame = resolve_call_cycle!(code, caller)
     if frame === nothing
         code.inInference = true
-        frame = InferenceState(code, true, true, caller.params) # always optimize and cache edge targets
+        frame = InferenceState(code, #=optimize=#true, #=cached=#true, caller.params) # always optimize and cache edge targets
         if frame === nothing
             code.inInference = false
             return Any, nothing
         end
-        frame.parent = caller
+        if caller.cached # don't involved uncached functions in cycle resolution
+            frame.parent = caller
+        end
         typeinf(frame)
         return frame.bestguess, frame.inferred ? frame.linfo : nothing
     end
