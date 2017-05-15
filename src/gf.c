@@ -238,46 +238,39 @@ jl_code_info_t *jl_type_infer(jl_method_instance_t **pli, size_t world, int forc
     JL_TIMING(INFERENCE);
     if (jl_typeinf_func == NULL)
         return NULL;
-    jl_code_info_t *src = NULL;
 #ifdef ENABLE_INFERENCE
     jl_method_instance_t *li = *pli;
-    jl_module_t *mod = NULL;
-    if (li->def != NULL)
-        mod = li->def->module;
-    static int inInference = 0;
-    int lastIn = inInference;
-    size_t last_age = jl_get_ptls_states()->world_age;
-    inInference = 1;
-    if (force ||
-        (last_age != jl_typeinf_world &&
-         mod != jl_gf_mtable(jl_typeinf_func)->module &&
-         (mod != jl_core_module || !lastIn))) { // avoid any potential recursion in calling jl_typeinf_func on itself
-        assert(li->inInference == 0 && "unexpectedly asked to infer a method that is already being inferred");
-        jl_value_t **fargs;
-        JL_GC_PUSHARGS(fargs, 3);
-        fargs[0] = (jl_value_t*)jl_typeinf_func;
-        fargs[1] = (jl_value_t*)li;
-        fargs[2] = jl_box_ulong(world);
+    if (li->inInference && !force)
+        return NULL;
+
+    jl_value_t **fargs;
+    JL_GC_PUSHARGS(fargs, 3);
+    fargs[0] = (jl_value_t*)jl_typeinf_func;
+    fargs[1] = (jl_value_t*)li;
+    fargs[2] = jl_box_ulong(world);
 #ifdef TRACE_INFERENCE
-        if (li->specTypes != (jl_value_t*)jl_emptytuple_type) {
-            jl_printf(JL_STDERR,"inference on ");
-            jl_static_show_func_sig(JL_STDERR, (jl_value_t*)li->specTypes);
-            jl_printf(JL_STDERR, "\n");
-        }
-#endif
-        jl_get_ptls_states()->world_age = jl_typeinf_world;
-        jl_svec_t *linfo_src_rettype = (jl_svec_t*)jl_apply_with_saved_exception_state(fargs, 3, 0);
-        jl_get_ptls_states()->world_age = last_age;
-        assert((li->def || li->inInference == 0) && "inference failed on a toplevel expr");
-        if (jl_is_svec(linfo_src_rettype) && jl_svec_len(linfo_src_rettype) == 3 &&
-            jl_is_method_instance(jl_svecref(linfo_src_rettype, 0)) &&
-            jl_is_code_info(jl_svecref(linfo_src_rettype, 1))) {
-            *pli = (jl_method_instance_t*)jl_svecref(linfo_src_rettype, 0);
-            src = (jl_code_info_t*)jl_svecref(linfo_src_rettype, 1);
-        }
-        JL_GC_POP();
+    if (li->specTypes != (jl_value_t*)jl_emptytuple_type) {
+        jl_printf(JL_STDERR,"inference on ");
+        jl_static_show_func_sig(JL_STDERR, (jl_value_t*)li->specTypes);
+        jl_printf(JL_STDERR, "\n");
     }
-    inInference = lastIn;
+#endif
+    jl_ptls_t ptls = jl_get_ptls_states();
+    size_t last_age = ptls->world_age;
+    ptls->world_age = jl_typeinf_world;
+    li->inInference = 1;
+    jl_svec_t *linfo_src_rettype = (jl_svec_t*)jl_apply_with_saved_exception_state(fargs, 3, 0);
+    ptls->world_age = last_age;
+    assert((li->def || li->inInference == 0) && "inference failed on a toplevel expr");
+
+    jl_code_info_t *src = NULL;
+    if (jl_is_svec(linfo_src_rettype) && jl_svec_len(linfo_src_rettype) == 3 &&
+        jl_is_method_instance(jl_svecref(linfo_src_rettype, 0)) &&
+        jl_is_code_info(jl_svecref(linfo_src_rettype, 1))) {
+        *pli = (jl_method_instance_t*)jl_svecref(linfo_src_rettype, 0);
+        src = (jl_code_info_t*)jl_svecref(linfo_src_rettype, 1);
+    }
+    JL_GC_POP();
 #endif
     return src;
 }
@@ -1661,7 +1654,7 @@ jl_llvm_functions_t jl_compile_for_dispatch(jl_method_instance_t **pli, size_t w
         return decls;
 
     jl_code_info_t *src = NULL;
-    if (li->def && !jl_is_rettype_inferred(li) && !li->inInference &&
+    if (li->def && !jl_is_rettype_inferred(li) &&
              jl_symbol_name(li->def->name)[0] != '@') {
         // don't bother with typeinf on macros or toplevel thunks
         // but try to infer everything else

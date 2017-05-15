@@ -147,7 +147,6 @@ module TestGeneratedThrow
     foo() = (bar(rand() > 0.5 ? 1 : 1.0); error("foo"))
     function __init__()
         code_typed(foo,(); optimize = false)
-        @test Core.Inference.isempty(Core.Inference.active) && Core.Inference.isempty(Core.Inference.workq)
         cfunction(foo,Void,())
     end
 end
@@ -175,7 +174,7 @@ let gf_err, tsk = @async nothing # create a Task for yield to try to run
     end
     @test_throws ErrorException gf_err()
     @test_throws ErrorException gf_err()
-    @test gf_err_ref[] == 4
+    @test gf_err_ref[] == 3
 end
 
 gf_err_ref[] = 0
