@@ -247,7 +247,6 @@ JL_DLLEXPORT extern LLVMContext &jl_LLVMContext;
 #endif
 
 Pass *createLowerPTLSPass(bool imaging_mode);
-Pass *createLowerGCFramePass();
 Pass *createLateLowerGCFramePass();
 Pass *createLowerExcHandlersPass();
 Pass *createGCInvariantVerifierPass(bool Strong);
