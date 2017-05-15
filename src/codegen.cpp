@@ -105,8 +105,9 @@
 #if defined(USE_POLLY)
 #include <polly/RegisterPasses.h>
 #include <polly/ScopDetection.h>
-#if define(USE_POLLY_ACC)
+#if defined(USE_POLLY_ACC)
 #include <polly/Support/LinkGPURuntime.h>
+#endif
 #endif
 #include "fix_llvm_assert.h"
 
@@ -7307,6 +7308,7 @@ extern "C" void jl_init_codegen(void)
     polly::initializePollyPasses(Registry);
     initializeAnalysis(Registry);
 #ifdef USE_POLLY_ACC
+#pragma message "ForceGPURuntimeLinking!!\n"
     polly::ForceGPURuntimeLinking();
 #endif
 #endif
