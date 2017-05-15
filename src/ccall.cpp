@@ -1275,7 +1275,7 @@ std::string generate_func_sig()
     assert(rt && !jl_is_abstract_ref_type(rt));
 
 #if JL_LLVM_VERSION >= 50000
-    std::vector<AttributeList> paramattrs;
+    std::vector<AttrBuilder> paramattrs;
 #else
     std::vector<AttributeSet> paramattrs;
 #endif
@@ -1302,7 +1302,7 @@ std::string generate_func_sig()
 #endif
             retattrs.addAttribute(Attribute::NoAlias);
 #if JL_LLVM_VERSION >= 50000
-            paramattrs.push_back(AttributeList::get(jl_LLVMContext, 1, retattrs));
+            paramattrs.push_back(std::move(retattrs));
 #else
             paramattrs.push_back(AttributeSet::get(jl_LLVMContext, 1, retattrs));
 #endif
@@ -1388,24 +1388,26 @@ std::string generate_func_sig()
         do { // for each arg for which this type applies, add the appropriate LLVM parameter attributes
             if (i < nargs) { // if vararg, the last declared arg type may not have a corresponding arg value
 #if JL_LLVM_VERSION >= 50000
-                AttributeList params = AttributeList::get(jl_LLVMContext, i + sret + 1, ab);
+                paramattrs.push_back(std::move(ab));
 #else
                 AttributeSet params = AttributeSet::get(jl_LLVMContext, i + sret + 1, ab);
-#endif
                 paramattrs.push_back(params);
+#endif
             }
             i++;
         } while (current_isVa && i < nargs); // if is this is the vararg, loop to the end
     }
 
     for (i = 0; i < nargs + sret; ++i) {
+        const auto &as = paramattrs.at(i);
 #if JL_LLVM_VERSION >= 50000
-        const AttributeList &as = paramattrs.at(i);
+        if (!as.hasAttributes())
+            continue;
 #else
-        const AttributeSet &as = paramattrs.at(i);
+        if (as.isEmpty())
+            continue;
 #endif
-        if (!as.isEmpty())
-            attributes = attributes.addAttributes(jl_LLVMContext, i + 1, as);
+        attributes = attributes.addAttributes(jl_LLVMContext, i + 1, as);
     }
     if (rt == jl_bottom_type) {
         attributes = attributes.addAttribute(jl_LLVMContext,
