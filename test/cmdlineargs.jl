@@ -322,7 +322,7 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes --startup-file=no`
     # issue #12671, starting from a non-directory
     # rm(dir) fails on windows with Permission denied
     # and was an upstream bug in llvm <= v3.3
-    if !is_windows() && VersionNumber(Base.libllvm_version) > v"3.3"
+    if !is_windows() && Base.libllvm_version > v"3.3"
         testdir = mktempdir()
         cd(testdir) do
             rm(testdir)
