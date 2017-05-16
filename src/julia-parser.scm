@@ -30,6 +30,7 @@
 (define prec-power       (add-dots '(^ ↑ ↓ ⇵ ⟰ ⟱ ⤈ ⤉ ⤊ ⤋ ⤒ ⤓ ⥉ ⥌ ⥍ ⥏ ⥑ ⥔ ⥕ ⥘ ⥙ ⥜ ⥝ ⥠ ⥡ ⥣ ⥥ ⥮ ⥯ ￪ ￬)))
 (define prec-decl        '(|::|))
 ;; `where` occurring after `::`
+;; '@' after here if used in `a.b@c = ` syntax
 (define prec-dot         '(|.|))
 
 (define prec-names '(prec-assignment
@@ -972,10 +973,19 @@
            (list 'call
                  (take-token s) ex (parse-factor-h s parse-unary ops))))))
 
-;; -2^3 is parsed as -(2^3), so call parse-decl for the first argument,
+;; -2^3 is parsed as -(2^3), so call parse-at for the first argument,
 ;; and parse-unary from then on (to handle 2^-3)
 (define (parse-factor s)
-  (parse-factor-h s parse-decl is-prec-power?))
+  (parse-factor-h s parse-at is-prec-power?))
+
+(define (parse-at s)
+  (let loop ((ex (parse-decl s)))
+    (let ((t (peek-token s)))
+      (case t
+        ((#\@) (take-token s)
+          (loop (list '@ ex (parse-decl s))))
+        (else
+          ex)))))
 
 (define (parse-decl s)
   (let loop ((ex (parse-call s)))
