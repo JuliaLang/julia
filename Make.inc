@@ -240,6 +240,7 @@ BUILD_LLDB := 0
 USE_POLLY := 0
 USE_POLLY_OPENMP := 0
 USE_POLLY_ACC := 0
+CUDALIB_INCLUDE_DIR := /usr/local/cuda/include
 
 # Cross-compile
 #XC_HOST := i686-w64-mingw32

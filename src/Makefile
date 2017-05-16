@@ -67,7 +67,7 @@ endif
 ifeq ($(USE_POLLY_ACC),1)
 LLVMLINK += -lPollyPPCG -lGPURuntime
 FLAGS += -DUSE_POLLY_ACC
-FLAGS += -I/usr/local/cuda/include
+FLAGS += -I$(CUDALIB_INCLUDE_DIR)
 FLAGS += -I$(shell $(LLVM_CONFIG_HOST) --src-root)/tools/polly/tools
 endif
 endif
