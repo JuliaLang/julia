@@ -534,7 +534,7 @@ SANITIZE_LDFLAGS := -fsanitize=address
 endif
 JCXXFLAGS += $(SANITIZE_OPTS)
 JCFLAGS += $(SANITIZE_OPTS)
-LDFLAGS += $(SANITIZE_LDFLAGS)
+JLDFLAGS += $(SANITIZE_LDFLAGS)
 endif
 
 TAR := $(shell which gtar 2>/dev/null || which tar 2>/dev/null)
