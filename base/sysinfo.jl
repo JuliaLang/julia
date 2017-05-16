@@ -92,7 +92,7 @@ CPUinfo(info::UV_cpu_info_t) = CPUinfo(unsafe_string(info.model), info.speed,
 
 show(io::IO, info::CPUinfo) = Base._show_cpuinfo(io, info, true, "    ")
 
-function _cpu_summary(io::IO, cpu::Array{CPUinfo}, i, j)
+function _cpu_summary(io::IO, cpu::AbstractVector{CPUinfo}, i, j)
     if j-i < 9
         header = true
         for x = i:j

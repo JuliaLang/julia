@@ -851,28 +851,31 @@ end
 scale!(A::SparseMatrixCSC, b::Number) = (scale!(A.nzval, b); A)
 scale!(b::Number, A::SparseMatrixCSC) = (scale!(b, A.nzval); A)
 
-function (\)(A::SparseMatrixCSC, B::AbstractVecOrMat)
-    m, n = size(A)
-    if m == n
-        if istril(A)
-            if istriu(A)
-                return Diagonal(A) \ B
+for f in (:\, :Ac_ldiv_B, :At_ldiv_B)
+    @eval begin
+        function ($f)(A::SparseMatrixCSC, B::AbstractVecOrMat)
+            m, n = size(A)
+            if m == n
+                if istril(A)
+                    if istriu(A)
+                        return ($f)(Diagonal(A), B)
+                    else
+                        return ($f)(LowerTriangular(A), B)
+                    end
+                elseif istriu(A)
+                    return ($f)(UpperTriangular(A), B)
+                end
+                if ishermitian(A)
+                    return ($f)(Hermitian(A), B)
+                end
+                return ($f)(lufact(A), B)
             else
-                return LowerTriangular(A) \ B
+                return ($f)(qrfact(A), B)
             end
-        elseif istriu(A)
-            return UpperTriangular(A) \ B
         end
-        if ishermitian(A)
-            return Hermitian(A) \ B
-        end
-        return lufact(A) \ B
-    else
-        return qrfact(A) \ B
+        ($f)(::SparseMatrixCSC, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
     end
 end
-
-(\)(::SparseMatrixCSC, ::RowVector) = throw(DimensionMismatch("Cannot left-divide matrix by transposed vector"))
 
 function factorize(A::SparseMatrixCSC)
     m, n = size(A)

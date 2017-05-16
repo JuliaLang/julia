@@ -732,8 +732,11 @@ public:
     }
     void registerEHFrames(uint8_t *Addr, uint64_t LoadAddr,
                           size_t Size) override;
+#if 0
+    // Disable for now since we are not actually using this.
     void deregisterEHFrames(uint8_t *Addr, uint64_t LoadAddr,
                             size_t Size) override;
+#endif
     uint8_t *allocateCodeSection(uintptr_t Size, unsigned Alignment,
                                  unsigned SectionID,
                                  StringRef SectionName) override;
@@ -860,12 +863,14 @@ void RTDyldMemoryManagerJL::registerEHFrames(uint8_t *Addr,
     }
 }
 
+#if 0
 void RTDyldMemoryManagerJL::deregisterEHFrames(uint8_t *Addr,
                                                uint64_t LoadAddr,
                                                size_t Size)
 {
     deregister_eh_frames((uint8_t*)LoadAddr, Size);
 }
+#endif
 
 }
 
