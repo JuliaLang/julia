@@ -405,6 +405,9 @@ Compiler/Runtime improvements
 Deprecated or removed
 ---------------------
 
+  * `ipermutedims(A::AbstractArray, p)` has been deprecated in favor of
+    `permutedims(A, invperm(p))` ([#18891]).
+
   * Linear indexing is now only supported when there is exactly one
     non-cartesian index provided. Allowing a trailing index at dimension `d` to
     linearly access the higher dimensions from array `A` (beyond `size(A, d)`)
@@ -567,6 +570,7 @@ Command-line option changes
 [#18690]: https://github.com/JuliaLang/julia/issues/18690
 [#18777]: https://github.com/JuliaLang/julia/issues/18777
 [#18839]: https://github.com/JuliaLang/julia/issues/18839
+[#18891]: https://github.com/JuliaLang/julia/issues/18891
 [#18931]: https://github.com/JuliaLang/julia/issues/18931
 [#18965]: https://github.com/JuliaLang/julia/issues/18965
 [#18977]: https://github.com/JuliaLang/julia/issues/18977
