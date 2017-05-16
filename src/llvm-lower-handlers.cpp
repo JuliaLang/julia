@@ -116,6 +116,7 @@ bool LowerExcHandlers::doInitialization(Module &M) {
     setjmp_func = M.getFunction(jl_setjmp_name);
     lifetime_start = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_start);
     lifetime_end = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_end);
+    return true;
 }
 
 bool LowerExcHandlers::runOnFunction(Function &F) {
