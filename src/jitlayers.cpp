@@ -25,6 +25,9 @@
 #include <polly/RegisterPasses.h>
 #include <polly/LinkAllPasses.h>
 #include <polly/CodeGen/CodegenCleanup.h>
+#if defined(USE_POLLY_ACC)
+#include <polly/Support/LinkGPURuntime.h>
+#endif
 #endif
 
 #include <llvm/Transforms/IPO.h>
@@ -202,6 +205,10 @@ void addOptimizationPasses(PassManager *PM)
     PM->add(polly::createCodePreparationPass());
     polly::registerPollyPasses(*PM);
     PM->add(polly::createCodegenCleanupPass());
+#ifdef USE_POLLY_ACC
+#pragma message "ForceGPURuntimeLinking!!\n"
+    polly::ForceGPURuntimeLinking();
+#endif
 #endif
     // LoopRotate strips metadata from terminator, so run LowerSIMD afterwards
     PM->add(createLowerSimdLoopPass());        // Annotate loop marked with "simdloop" as LLVM parallel loop
