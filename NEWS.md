@@ -455,6 +455,10 @@ Deprecated or removed
 
   * `num` and `den` have been deprecated in favor of `numerator` and `denominator` respectively ([#19233]).
 
+  * `delete!(ENV::EnvHash, k::AbstractString, def)` has been deprecated in favor of
+    `pop!(ENV, k, def)`. Be aware that `pop!` returns `k` or `def`, whereas `delete!`
+    returns `ENV` or `def` ([#18012]).
+
   * infix operator `$` has been deprecated in favor of infix `⊻` or function `xor()` ([#18977]).
 
   * The single-argument form of `write` (`write(x)`, with implicit `STDOUT` output stream),
@@ -576,6 +580,7 @@ Command-line option changes
 [#17723]: https://github.com/JuliaLang/julia/issues/17723
 [#17758]: https://github.com/JuliaLang/julia/issues/17758
 [#17785]: https://github.com/JuliaLang/julia/issues/17785
+[#18012]: https://github.com/JuliaLang/julia/issues/18012
 [#18050]: https://github.com/JuliaLang/julia/issues/18050
 [#18159]: https://github.com/JuliaLang/julia/issues/18159
 [#18251]: https://github.com/JuliaLang/julia/issues/18251
