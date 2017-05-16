@@ -1848,6 +1848,7 @@ let foo() = begin
     end
     @test foo() == 2
 end
+@test Compat.invokelatest(current_module) === current_module()
 
 # PR 21378
 let

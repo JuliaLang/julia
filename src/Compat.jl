@@ -1475,7 +1475,7 @@ end
 if isdefined(Base, :invokelatest)
     import Base.invokelatest
 else
-    invokelatest(f, args...) = eval(Expr(:call, f, map(QuoteNode, args)...))
+    invokelatest(f, args...) = eval(current_module(), Expr(:call, f, map(QuoteNode, args)...))
 end
 
 # https://github.com/JuliaLang/julia/pull/21257
