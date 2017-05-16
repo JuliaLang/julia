@@ -355,7 +355,7 @@ JL_DLLEXPORT int jl_fs_write(int handle, const char *data, size_t len,
                              int64_t offset)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    if (ptls->safe_restore)
+    if (ptls->safe_restore || ptls->tid != 0)
         return write(handle, data, len);
     uv_fs_t req;
     uv_buf_t buf[1];
@@ -432,7 +432,7 @@ JL_DLLEXPORT void jl_uv_puts(uv_stream_t *stream, const char *str, size_t n)
         sizeof(((uv_stream_t*)0)->type) == sizeof(((ios_t*)0)->bm),
             "UV and ios layout mismatch");
 
-    uv_file fd = 0;
+    uv_file fd = -1;
 
     // Fallback for output during early initialisation...
     if (stream == (void*)STDOUT_FILENO || stream == (void*)STDERR_FILENO) {
@@ -443,7 +443,18 @@ JL_DLLEXPORT void jl_uv_puts(uv_stream_t *stream, const char *str, size_t n)
         fd = ((jl_uv_file_t*)stream)->file;
     }
 
-    if (fd) {
+    // Hack to make CoreIO thread-safer
+    jl_ptls_t ptls = jl_get_ptls_states();
+    if (ptls->tid != 0) {
+        if (stream == JL_STDOUT) {
+            fd = STDOUT_FILENO;
+        }
+        else if (stream == JL_STDERR) {
+            fd = STDERR_FILENO;
+        }
+    }
+
+    if (fd != -1) {
         // Write to file descriptor...
         jl_fs_write(fd, str, n, -1);
     }
