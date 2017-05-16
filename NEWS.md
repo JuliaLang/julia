@@ -463,6 +463,10 @@ Deprecated or removed
 
   * `is` has been deprecated in favor of `===` (which used to be an alias for `is`) ([#17758]).
 
+  * Ambiguous methods for addition and subtraction between `UniformScaling`s and `Number`s,
+    for example `(+)(J::UniformScaling, x::Number)`, have been deprecated in favor of
+    unambiguous, explicit equivalents, for example `J.λ + x` ([#17607]).
+
   * `num` and `den` have been deprecated in favor of `numerator` and `denominator` respectively ([#19233]).
 
   * `delete!(ENV::EnvHash, k::AbstractString, def)` has been deprecated in favor of
@@ -585,6 +589,7 @@ Command-line option changes
 [#17265]: https://github.com/JuliaLang/julia/issues/17265
 [#17302]: https://github.com/JuliaLang/julia/issues/17302
 [#17599]: https://github.com/JuliaLang/julia/issues/17599
+[#17607]: https://github.com/JuliaLang/julia/issues/17607
 [#17623]: https://github.com/JuliaLang/julia/issues/17623
 [#17654]: https://github.com/JuliaLang/julia/issues/17654
 [#17723]: https://github.com/JuliaLang/julia/issues/17723
