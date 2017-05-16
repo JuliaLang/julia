@@ -777,3 +777,14 @@ function break_21369()
     end
 end
 @test_throws ErrorException break_21369()  # not TypeError
+
+# issue #21848
+@test Core.Inference.limit_type_depth(Ref{Complex{T} where T}, Core.Inference.MAX_TYPE_DEPTH) == Ref
+let T = Tuple{Tuple{Int64, Void},
+              Tuple{Tuple{Int64, Void},
+                    Tuple{Int64, Tuple{Tuple{Int64, Void},
+                                       Tuple{Tuple{Int64, Void}, Tuple{Int64, Tuple{Tuple{Int64, Void}, Tuple{Tuple, Tuple}}}}}}}}
+    @test Core.Inference.limit_type_depth(T, 0) >: T
+    @test Core.Inference.limit_type_depth(T, 1) >: T
+    @test Core.Inference.limit_type_depth(T, 2) >: T
+end

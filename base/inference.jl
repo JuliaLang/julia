@@ -706,8 +706,19 @@ function limit_type_depth(t::ANY, d::Int, cov::Bool, vars::Vector{TypeVar}=TypeV
     P = t.parameters
     isempty(P) && return t
     if d > MAX_TYPE_DEPTH
-        cov && return t.name.wrapper
-        var = TypeVar(:_, t.name.wrapper)
+        if isvarargtype(t)
+            # never replace Vararg with non-Vararg
+            return Vararg{limit_type_depth(P[1], d, cov, vars), P[2]}
+        end
+        widert = t.name.wrapper
+        if !(t <: widert)
+            # This can happen when a typevar has bounds too wide for its context, e.g.
+            # `Complex{T} where T` is not a subtype of `Complex`. In that case widen even
+            # faster to something safe to ensure the result is a supertype of the input.
+            widert = Any
+        end
+        cov && return widert
+        var = TypeVar(:_, widert)
         push!(vars, var)
         return var
     end
