@@ -2638,6 +2638,23 @@ static Value *emit_f_is(const jl_cgval_t &arg1, const jl_cgval_t &arg2, jl_codec
 #endif
 }
 
+static size_t compute_setfield_index(jl_datatype_t *uty, jl_value_t **args, jl_codectx_t *ctx) {
+    size_t idx = (size_t)-1;
+    if (jl_is_quotenode(args[2]) && jl_is_symbol(jl_fieldref(args[2],0))) {
+        idx = jl_field_index(uty, (jl_sym_t*)jl_fieldref(args[2],0), 0);
+    }
+    else if (jl_is_long(args[2]) || (jl_is_quotenode(args[2]) && jl_is_long(jl_fieldref(args[2],0)))) {
+        ssize_t i;
+        if (jl_is_long(args[2]))
+            i = jl_unbox_long(args[2]);
+        else
+            i = jl_unbox_long(jl_fieldref(args[2],0));
+        if (i > 0 && i <= jl_datatype_nfields(uty))
+            idx = i-1;
+    }
+    return idx;
+}
+
 static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args, size_t nargs,
                               jl_codectx_t *ctx, jl_value_t *expr)
 // returns true if the call has been handled
@@ -3044,24 +3061,44 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
         }
     }
 
+    else if (f==jl_builtin_setfield && nargs==3) {
+        jl_datatype_t *sty = (jl_datatype_t*)expr_type(args[1], ctx);
+        rt1 = (jl_value_t*)sty;
+        jl_datatype_t *uty = (jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)sty);
+        if (jl_is_structtype(uty) && uty != jl_module_type && uty->layout) {
+            size_t idx = compute_setfield_index(uty, args, ctx);
+            if (idx != (size_t)-1) {
+                jl_value_t *ft = jl_svecref(uty->types, idx);
+                jl_value_t *rhst = expr_type(args[3], ctx);
+                rt2 = rhst;
+                if (uty->layout && jl_subtype(rhst, ft)) {
+                    // TODO: attempt better codegen for approximate types
+                    jl_cgval_t strct = emit_expr(args[1], ctx); // emit lhs
+                    jl_cgval_t rhs = emit_expr(args[3], ctx); // emit rhs
+                    *ret = emit_object_copy(strct, ctx);
+                    emit_setfield_knownindex(sty, *ret, idx, rhs, ctx, false, true);
+                    JL_GC_POP();
+                    return true;
+                }
+            } else if (expr_type(args[2], ctx) == (jl_value_t*)jl_long_type) {
+                Value *vidx = emit_unbox(T_size, emit_expr(args[2], ctx), (jl_value_t*)jl_long_type);
+                jl_cgval_t strct = emit_expr(args[1], ctx); // emit lhs
+                jl_cgval_t rhs = emit_expr(args[3], ctx); // emit rhs
+                *ret = emit_object_copy(strct, ctx);
+                if (emit_setfield_unknownidx(*ret, vidx, sty, rhs, ctx)) {
+                    JL_GC_POP();
+                    return true;
+                }
+            }
+        }
+    }
+
     else if (f==jl_builtin_setfield_bang && nargs==3) {
         jl_datatype_t *sty = (jl_datatype_t*)expr_type(args[1], ctx);
         rt1 = (jl_value_t*)sty;
         jl_datatype_t *uty = (jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)sty);
-        if (jl_is_structtype(uty) && uty != jl_module_type) {
-            size_t idx = (size_t)-1;
-            if (jl_is_quotenode(args[2]) && jl_is_symbol(jl_fieldref(args[2],0))) {
-                idx = jl_field_index(uty, (jl_sym_t*)jl_fieldref(args[2],0), 0);
-            }
-            else if (jl_is_long(args[2]) || (jl_is_quotenode(args[2]) && jl_is_long(jl_fieldref(args[2],0)))) {
-                ssize_t i;
-                if (jl_is_long(args[2]))
-                    i = jl_unbox_long(args[2]);
-                else
-                    i = jl_unbox_long(jl_fieldref(args[2],0));
-                if (i > 0 && i <= jl_datatype_nfields(uty))
-                    idx = i-1;
-            }
+        if (jl_is_structtype(uty) && uty != jl_module_type && uty->layout) {
+            size_t idx = compute_setfield_index(uty, args, ctx);
             if (idx != (size_t)-1) {
                 jl_value_t *ft = jl_svecref(uty->types, idx);
                 jl_value_t *rhst = expr_type(args[3], ctx);
@@ -3070,7 +3107,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
                     // TODO: attempt better codegen for approximate types
                     jl_cgval_t strct = emit_expr(args[1], ctx); // emit lhs
                     *ret = emit_expr(args[3], ctx);
-                    emit_setfield(sty, strct, idx, *ret, ctx, true, true);
+                    emit_setfield_knownindex(sty, strct, idx, *ret, ctx, true, true);
                     JL_GC_POP();
                     return true;
                 }

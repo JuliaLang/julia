@@ -875,6 +875,7 @@ function getfield_tfunc(s00::ANY, name)
     return rewrap_unionall(limit_type_depth(R, 0), s00)
 end
 add_tfunc(getfield, 2, 2, (s::ANY, name::ANY) -> getfield_tfunc(s, name))
+add_tfunc(setfield, 3, 3, (o::ANY, f::ANY, v::ANY) -> o)
 add_tfunc(setfield!, 3, 3, (o::ANY, f::ANY, v::ANY) -> v)
 function fieldtype_tfunc(s0::ANY, name::ANY)
     if s0 === Any || s0 === Type || DataType ⊑ s0 || UnionAll ⊑ s0
