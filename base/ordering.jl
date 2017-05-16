@@ -65,11 +65,13 @@ ordtype(o::By,              vs::AbstractArray) = try typeof(o.by(vs[1])) catch; 
 ordtype(o::Ordering,        vs::AbstractArray) = eltype(vs)
 
 function ord(lt, by, rev::Bool, order::Ordering=Forward)
-    o = (lt===isless) & (by===identity) ? order  :
-        (lt===isless) & (by!==identity) ? By(by) :
-        (lt!==isless) & (by===identity) ? Lt(lt) :
-                                          Lt((x,y)->lt(by(x),by(y)))
+    o = ordcore(lt, by, order)
     rev ? ReverseOrdering(o) : o
 end
+
+ordcore(::typeof(isless), ::typeof(identity), order) = order
+ordcore(::typeof(isless), by,                 order) = By(by)
+ordcore(lt,               ::typeof(identity), order) = Lt(lt)
+ordcore(lt,               by,                 order) = Lt((x,y)->lt(by(x),by(y)))
 
 end
