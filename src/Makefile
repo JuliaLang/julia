@@ -65,7 +65,7 @@ ifeq ($(USE_POLLY_OPENMP),1)
 FLAGS += -fopenmp
 endif
 ifeq ($(USE_POLLY_ACC),1)
-LLVMLINK += -lPollyPPCG -lGPURuntime
+LLVMLINK += -lPollyPPCG
 FLAGS += -DUSE_POLLY_ACC
 FLAGS += -I$(CUDALIB_INCLUDE_DIR)
 FLAGS += -I$(shell $(LLVM_CONFIG_HOST) --src-root)/tools/polly/tools
