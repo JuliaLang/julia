@@ -38,17 +38,17 @@ null_id(id) =  id == RRID(0, 0)
 struct CallMsg{Mode} <: AbstractMsg
     f::Function
     args::Tuple
-    kwargs::Array
+    kwargs::Base.KWDict
 end
 struct CallWaitMsg <: AbstractMsg
     f::Function
     args::Tuple
-    kwargs::Array
+    kwargs::Base.KWDict
 end
 struct RemoteDoMsg <: AbstractMsg
     f::Function
     args::Tuple
-    kwargs::Array
+    kwargs::Base.KWDict
 end
 struct ResultMsg <: AbstractMsg
     value::Any

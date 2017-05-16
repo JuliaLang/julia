@@ -45,6 +45,7 @@ if false
 end
 
 ## Load essential files and libraries
+include("pair.jl")
 include("essentials.jl")
 include("ctypes.jl")
 include("base.jl")
@@ -55,7 +56,6 @@ include("options.jl")
 # core operations & types
 include("promotion.jl")
 include("tuple.jl")
-include("pair.jl")
 include("traits.jl")
 include("range.jl")
 include("twiceprecision.jl")

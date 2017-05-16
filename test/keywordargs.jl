@@ -188,7 +188,7 @@ function test4974(;kwargs...)
     end
 end
 
-@test test4974(a=1) == (2, [(:a, 1)])
+@test test4974(a=1) == (2, Base.KWDict(:a, 1))
 
 # issue #7704, computed keywords
 @test kwf1(1; (:tens, 2)) == 21
@@ -284,4 +284,18 @@ let a = 0
     @test a == 1
     g21518()(; :kw=>1)
     @test a == 2
+end
+
+# issue #4916 - rest keywords as a dict
+let ks(;xs...) = xs
+    d = ks(a=1, b=2)
+    @test d[:a] == 1
+    @test d[:b] == 2
+    # preserving order
+    @test collect(ks(a=1, b=2)) == [:a=>1, :b=>2]
+    @test collect(ks(b=2, a=1)) == [:b=>2, :a=>1]
+    # deduplication
+    @test collect(ks(b=2, a=1; :b=>3)) == [:a=>1, :b=>3]
+    @test isempty(ks())
+    @test eltype(ks()) <: Pair
 end

@@ -16,6 +16,7 @@ isdefined(Main, :Base) || ((::Type{T})(arg) where {T} = convert(T, arg)::T)
 function return_type end
 
 ## Load essential files and libraries
+include("pair.jl")
 include("essentials.jl")
 include("ctypes.jl")
 include("generator.jl")
@@ -25,7 +26,6 @@ include("options.jl")
 # core operations & types
 include("promotion.jl")
 include("tuple.jl")
-include("pair.jl")
 include("traits.jl")
 include("range.jl")
 include("expr.jl")
