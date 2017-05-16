@@ -620,7 +620,7 @@ JL_CALLABLE(jl_f_getfield)
     return fval;
 }
 
-JL_CALLABLE(jl_f_setfield)
+JL_CALLABLE(jl_f_setfield_bang)
 {
     JL_NARGS(setfield!, 3, 3);
     jl_value_t *v = args[0];
@@ -648,6 +648,34 @@ JL_CALLABLE(jl_f_setfield)
     }
     jl_set_nth_field(v, idx, args[2]);
     return args[2];
+}
+
+JL_CALLABLE(jl_f_setfield)
+{
+    JL_NARGS(setfield, 3, 3);
+    jl_value_t *v = args[0];
+    jl_value_t *vt = (jl_value_t*)jl_typeof(v);
+    if (vt == (jl_value_t*)jl_module_type || !jl_is_datatype(vt))
+        jl_type_error("setfield", (jl_value_t*)jl_datatype_type, v);
+    jl_datatype_t *st = (jl_datatype_t*)vt;
+    size_t idx;
+    if (jl_is_long(args[1])) {
+        idx = jl_unbox_long(args[1])-1;
+        if (idx >= jl_datatype_nfields(st))
+            jl_bounds_error(args[0], args[1]);
+    }
+    else {
+        JL_TYPECHK(setfield!, symbol, args[1]);
+        idx = jl_field_index(st, (jl_sym_t*)args[1], 1);
+    }
+    jl_value_t *ft = jl_field_type(st,idx);
+    if (!jl_isa(args[2], ft)) {
+        jl_type_error("setfield", ft, args[2]);
+    }
+    jl_value_t *newv = jl_new_struct_uninit(vt);
+    memcpy(newv, v, st->size);
+    jl_set_nth_field(newv, idx, args[2]);
+    return newv;
 }
 
 static jl_value_t *get_fieldtype(jl_value_t *t, jl_value_t *f)
@@ -1077,7 +1105,8 @@ void jl_init_primitives(void)
 
     // field access
     add_builtin_func("getfield",  jl_f_getfield);
-    add_builtin_func("setfield!",  jl_f_setfield);
+    add_builtin_func("setfield",  jl_f_setfield);
+    add_builtin_func("setfield!",  jl_f_setfield_bang);
     add_builtin_func("fieldtype", jl_f_fieldtype);
     add_builtin_func("nfields", jl_f_nfields);
     add_builtin_func("isdefined", jl_f_isdefined);

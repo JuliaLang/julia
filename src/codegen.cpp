@@ -3044,7 +3044,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
         }
     }
 
-    else if (f==jl_builtin_setfield && nargs==3) {
+    else if (f==jl_builtin_setfield_bang && nargs==3) {
         jl_datatype_t *sty = (jl_datatype_t*)expr_type(args[1], ctx);
         rt1 = (jl_value_t*)sty;
         jl_datatype_t *uty = (jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)sty);
@@ -6776,6 +6776,7 @@ static void init_julia_llvm_env(Module *m)
     builtin_func_map[jl_f_isdefined] = jlcall_func_to_llvm("jl_f_isdefined", &jl_f_isdefined, m);
     builtin_func_map[jl_f_getfield] = jlcall_func_to_llvm("jl_f_getfield", &jl_f_getfield, m);
     builtin_func_map[jl_f_setfield] = jlcall_func_to_llvm("jl_f_setfield", &jl_f_setfield, m);
+    builtin_func_map[jl_f_setfield_bang] = jlcall_func_to_llvm("jl_f_setfield_bang", &jl_f_setfield_bang, m);
     builtin_func_map[jl_f_fieldtype] = jlcall_func_to_llvm("jl_f_fieldtype", &jl_f_fieldtype, m);
     builtin_func_map[jl_f_nfields] = jlcall_func_to_llvm("jl_f_nfields", &jl_f_nfields, m);
     builtin_func_map[jl_f__expr] = jlcall_func_to_llvm("jl_f__expr", &jl_f__expr, m);

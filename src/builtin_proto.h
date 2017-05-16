@@ -27,6 +27,7 @@ DECLARE_BUILTIN(_apply_latest);
 DECLARE_BUILTIN(isdefined);  DECLARE_BUILTIN(nfields);
 DECLARE_BUILTIN(tuple);      DECLARE_BUILTIN(svec);
 DECLARE_BUILTIN(getfield);   DECLARE_BUILTIN(setfield);
+DECLARE_BUILTIN(setfield_bang);
 DECLARE_BUILTIN(fieldtype);  DECLARE_BUILTIN(arrayref);
 DECLARE_BUILTIN(arrayset);   DECLARE_BUILTIN(arraysize);
 DECLARE_BUILTIN(apply_type); DECLARE_BUILTIN(applicable);
