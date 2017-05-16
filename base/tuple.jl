@@ -24,12 +24,13 @@ getindex(t::Tuple, r::AbstractArray{<:Any,1}) = ([t[ri] for ri in r]...)
 getindex(t::Tuple, b::AbstractArray{Bool,1}) = length(b) == length(t) ? getindex(t,find(b)) : throw(BoundsError(t, b))
 
 # returns new tuple; N.B.: becomes no-op if i is out-of-bounds
-setindex(x::Tuple, v, i::Integer) = _setindex((), x, v, i::Integer)
-function _setindex(y::Tuple, r::Tuple, v, i::Integer)
+setindex(x::Tuple, v, i::Integer) = (@_inline_meta; _setindex(v, i, x...))
+function _setindex(v, i::Integer, first, tail...)
     @_inline_meta
-    _setindex((y..., ifelse(length(y) + 1 == i, v, first(r))), tail(r), v, i)
+    return (ifelse(i == 1, v, first), _setindex(v, i - 1, tail...)...)
 end
-_setindex(y::Tuple, r::Tuple{}, v, i::Integer) = y
+_setindex(v, i::Integer) = ()
+
 
 ## iterating ##
 
@@ -126,36 +127,11 @@ function _ntuple(f, n)
     ([f(i) for i = 1:n]...)
 end
 
-# inferrable ntuple
-ntuple(f, ::Type{Val{0}}) = (@_inline_meta; ())
+# inferrable ntuple (enough for bootstrapping)
+ntuple(f, ::Type{Val{0}}) = ()
 ntuple(f, ::Type{Val{1}}) = (@_inline_meta; (f(1),))
 ntuple(f, ::Type{Val{2}}) = (@_inline_meta; (f(1), f(2)))
 ntuple(f, ::Type{Val{3}}) = (@_inline_meta; (f(1), f(2), f(3)))
-ntuple(f, ::Type{Val{4}}) = (@_inline_meta; (f(1), f(2), f(3), f(4)))
-ntuple(f, ::Type{Val{5}}) = (@_inline_meta; (f(1), f(2), f(3), f(4), f(5)))
-ntuple(f, ::Type{Val{6}}) = (@_inline_meta; (f(1), f(2), f(3), f(4), f(5), f(6)))
-ntuple(f, ::Type{Val{7}}) = (@_inline_meta; (f(1), f(2), f(3), f(4), f(5), f(6), f(7)))
-ntuple(f, ::Type{Val{8}}) = (@_inline_meta; (f(1), f(2), f(3), f(4), f(5), f(6), f(7), f(8)))
-ntuple(f, ::Type{Val{9}}) = (@_inline_meta; (f(1), f(2), f(3), f(4), f(5), f(6), f(7), f(8), f(9)))
-ntuple(f, ::Type{Val{10}}) = (@_inline_meta; (f(1), f(2), f(3), f(4), f(5), f(6), f(7), f(8), f(9), f(10)))
-ntuple(f, ::Type{Val{11}}) = (@_inline_meta; (f(1), f(2), f(3), f(4), f(5), f(6), f(7), f(8), f(9), f(10), f(11)))
-ntuple(f, ::Type{Val{12}}) = (@_inline_meta; (f(1), f(2), f(3), f(4), f(5), f(6), f(7), f(8), f(9), f(10), f(11), f(12)))
-ntuple(f, ::Type{Val{13}}) = (@_inline_meta; (f(1), f(2), f(3), f(4), f(5), f(6), f(7), f(8), f(9), f(10), f(11), f(12), f(13)))
-ntuple(f, ::Type{Val{14}}) = (@_inline_meta; (f(1), f(2), f(3), f(4), f(5), f(6), f(7), f(8), f(9), f(10), f(11), f(12), f(13), f(14)))
-ntuple(f, ::Type{Val{15}}) = (@_inline_meta; (f(1), f(2), f(3), f(4), f(5), f(6), f(7), f(8), f(9), f(10), f(11), f(12), f(13), f(14), f(15)))
-
-function ntuple(f::F, ::Type{Val{N}}) where {F,N}
-    Core.typeassert(N, Int)
-    (N >= 0) || throw(ArgumentError(string("tuple length should be ≥0, got ", N)))
-    _ntuple((), f, Val{N})
-end
-
-# Build up the output until it has length N
-_ntuple(out::NTuple{N,Any}, f::F, ::Type{Val{N}}) where {F,N} = out
-function _ntuple(out::NTuple{M,Any}, f::F, ::Type{Val{N}}) where {F,N,M}
-    @_inline_meta
-    _ntuple((out..., f(M+1)), f, Val{N})
-end
 
 # 1 argument function
 map(f, t::Tuple{})              = ()
@@ -211,20 +187,14 @@ end
 
 
 # type-stable padding
-fill_to_length(t::Tuple, val, ::Type{Val{N}}) where {N} = _ftl((), val, Val{N}, t...)
-_ftl(out::NTuple{N,Any}, val, ::Type{Val{N}}) where {N} = out
-function _ftl(out::NTuple{N,Any}, val, ::Type{Val{N}}, t...) where N
-    @_inline_meta
-    throw(ArgumentError("input tuple of length $(N+length(t)), requested $N"))
-end
-function _ftl(out, val, ::Type{Val{N}}, t1, t...) where N
-    @_inline_meta
-    _ftl((out..., t1), val, Val{N}, t...)
-end
-function _ftl(out, val, ::Type{Val{N}}) where N
-    @_inline_meta
-    _ftl((out..., val), val, Val{N})
-end
+fill_to_length(t::NTuple{N,Any}, val, ::Type{Val{N}}) where {N} = t
+fill_to_length(t::Tuple{}, val, ::Type{Val{1}}) = (val,)
+fill_to_length(t::Tuple{Any}, val, ::Type{Val{2}}) = (t..., val)
+fill_to_length(t::Tuple{}, val, ::Type{Val{2}}) = (val, val)
+#function fill_to_length(t::Tuple, val, ::Type{Val{N}}) where {N}
+#    @_inline_meta
+#    return (t..., ntuple(i -> val, N - length(t))...)
+#end
 
 # constructing from an iterator
 
