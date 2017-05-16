@@ -412,6 +412,9 @@ Deprecated or removed
     Instead, `reshape` the array such that its dimensionality matches the
     number of indices ([#20079]).
 
+  * `Multimedia.@textmime "mime"` has been deprecated. Instead define
+    `Multimedia.istextmime(::MIME"mime") = true` ([#18441]).
+
   * `isdefined(a::Array, i::Int)` has been deprecated in favor of `isassigned` ([#18346]).
 
   * `is` has been deprecated in favor of `===` (which used to be an alias for `is`) ([#17758]).
@@ -551,6 +554,7 @@ Command-line option changes
 [#18339]: https://github.com/JuliaLang/julia/issues/18339
 [#18342]: https://github.com/JuliaLang/julia/issues/18342
 [#18346]: https://github.com/JuliaLang/julia/issues/18346
+[#18441]: https://github.com/JuliaLang/julia/issues/18441
 [#18442]: https://github.com/JuliaLang/julia/issues/18442
 [#18444]: https://github.com/JuliaLang/julia/issues/18444
 [#18453]: https://github.com/JuliaLang/julia/issues/18453
