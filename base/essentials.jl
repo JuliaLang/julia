@@ -336,7 +336,9 @@ function vector_any(xs::ANY...)
     a
 end
 
-function as_kwargs(xs::Union{AbstractArray,Associative})
+as_kwargs(xs::Union{AbstractArray,Associative}) = collect_as_kwargs(xs)
+
+function collect_as_kwargs(xs::Union{AbstractArray,Associative})
     n = length(xs)
     to = Vector{Any}(n*2)
     i = 1
@@ -381,6 +383,8 @@ end
 
 const KWDict = ImmutableDict{Symbol,Any}
 const EmptyKWDict = KWDict()
+
+as_kwargs(xs::KWDict) = xs
 
 """
     ImmutableDict

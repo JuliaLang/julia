@@ -147,8 +147,6 @@ export
     # constants
     nothing, Main
 
-const AnyVector = Array{Any,1}
-
 abstract type Number end
 abstract type Real     <: Number end
 abstract type AbstractFloat <: Real end

@@ -472,7 +472,7 @@
           `((|::|
              ;; if there are optional positional args, we need to be able to reference the function name
              ,(if (any kwarg? pargl) (gensy) UNUSED)
-             (call (core kwftype) ,ftype)) (:: ,kw (core AnyVector)) ,@pargl ,@vararg)
+             (call (core kwftype) ,ftype)) ,kw ,@pargl ,@vararg)
           `(block
             ;; initialize keyword args to their defaults, or set a flag telling
             ;; whether this keyword needs to be set.
@@ -486,6 +486,13 @@
                    flags)
             ,@(if (null? restkw) '()
                   `((= ,rkw (top EmptyKWDict))))
+            ,(if (and (not (null? restkw)) (null? keynames))
+                 `(if (call (core isa) ,kw (top KWDict))
+                      (block
+                       (= ,rkw ,kw)  ;; reuse kwarg list for delegation if possible
+                       (symbolicgoto do_call)))
+                 `(if (call (core isa) ,kw (top KWDict))
+                      (= ,kw (call (top collect_as_kwargs) ,kw))))
             ;; for i = 1:(length(kw)>>1)
             (for (= ,i (: (call (top >>) (call (top length) ,kw) 1) -1 1))
                  (block
@@ -546,6 +553,7 @@
                                 '()
                                 `((if ,flag (= ,name ,dflt)))))
                           keynames vals flags))
+            (symboliclabel do_call)
             ;; finally, call the core function
             (return (call ,mangled
                           ,@keynames
