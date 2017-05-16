@@ -45,7 +45,7 @@ for (f1, f2) in ((:\, :A_ldiv_B!),
             TFB = typeof(oneunit(eltype(B)) / oneunit(eltype(F)))
             BB = similar(B, TFB, size(B))
             copy!(BB, B)
-            $f2(convert(Factorization{TFB}, F), BB)
+            $f2(F, BB)
         end
     end
 end

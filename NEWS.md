@@ -442,6 +442,9 @@ Compiler/Runtime improvements
 Deprecated or removed
 ---------------------
 
+  * `ipermutedims(A::AbstractArray, p)` has been deprecated in favor of
+    `permutedims(A, invperm(p))` ([#18891]).
+
   * Linear indexing is now only supported when there is exactly one
     non-cartesian index provided. Allowing a trailing index at dimension `d` to
     linearly access the higher dimensions from array `A` (beyond `size(A, d)`)
@@ -449,13 +452,31 @@ Deprecated or removed
     Instead, `reshape` the array such that its dimensionality matches the
     number of indices ([#20079]).
 
+  * `Multimedia.@textmime "mime"` has been deprecated. Instead define
+    `Multimedia.istextmime(::MIME"mime") = true` ([#18441]).
+
   * `isdefined(a::Array, i::Int)` has been deprecated in favor of `isassigned` ([#18346]).
+
+  * The three-argument `SubArray` constructor (which accepts `dims::Tuple` as its third
+    argument) has been deprecated in favor of the two-argument equivalent (the
+    `dims::Tuple` argument being superfluous) ([#19259]).
 
   * `is` has been deprecated in favor of `===` (which used to be an alias for `is`) ([#17758]).
 
+  * Ambiguous methods for addition and subtraction between `UniformScaling`s and `Number`s,
+    for example `(+)(J::UniformScaling, x::Number)`, have been deprecated in favor of
+    unambiguous, explicit equivalents, for example `J.λ + x` ([#17607]).
+
   * `num` and `den` have been deprecated in favor of `numerator` and `denominator` respectively ([#19233]).
 
+  * `delete!(ENV::EnvHash, k::AbstractString, def)` has been deprecated in favor of
+    `pop!(ENV, k, def)`. Be aware that `pop!` returns `k` or `def`, whereas `delete!`
+    returns `ENV` or `def` ([#18012]).
+
   * infix operator `$` has been deprecated in favor of infix `⊻` or function `xor()` ([#18977]).
+
+  * The single-argument form of `write` (`write(x)`, with implicit `STDOUT` output stream),
+    has been deprecated in favor of the explicit equivalent `write(STDOUT, x)` ([#17654]).
 
   * `Dates.recur` has been deprecated in favor of `filter` ([#19288])
 
@@ -568,10 +589,13 @@ Command-line option changes
 [#17265]: https://github.com/JuliaLang/julia/issues/17265
 [#17302]: https://github.com/JuliaLang/julia/issues/17302
 [#17599]: https://github.com/JuliaLang/julia/issues/17599
+[#17607]: https://github.com/JuliaLang/julia/issues/17607
 [#17623]: https://github.com/JuliaLang/julia/issues/17623
+[#17654]: https://github.com/JuliaLang/julia/issues/17654
 [#17723]: https://github.com/JuliaLang/julia/issues/17723
 [#17758]: https://github.com/JuliaLang/julia/issues/17758
 [#17785]: https://github.com/JuliaLang/julia/issues/17785
+[#18012]: https://github.com/JuliaLang/julia/issues/18012
 [#18050]: https://github.com/JuliaLang/julia/issues/18050
 [#18159]: https://github.com/JuliaLang/julia/issues/18159
 [#18251]: https://github.com/JuliaLang/julia/issues/18251
@@ -579,6 +603,7 @@ Command-line option changes
 [#18339]: https://github.com/JuliaLang/julia/issues/18339
 [#18342]: https://github.com/JuliaLang/julia/issues/18342
 [#18346]: https://github.com/JuliaLang/julia/issues/18346
+[#18441]: https://github.com/JuliaLang/julia/issues/18441
 [#18442]: https://github.com/JuliaLang/julia/issues/18442
 [#18444]: https://github.com/JuliaLang/julia/issues/18444
 [#18453]: https://github.com/JuliaLang/julia/issues/18453
@@ -591,6 +616,7 @@ Command-line option changes
 [#18690]: https://github.com/JuliaLang/julia/issues/18690
 [#18777]: https://github.com/JuliaLang/julia/issues/18777
 [#18839]: https://github.com/JuliaLang/julia/issues/18839
+[#18891]: https://github.com/JuliaLang/julia/issues/18891
 [#18931]: https://github.com/JuliaLang/julia/issues/18931
 [#18965]: https://github.com/JuliaLang/julia/issues/18965
 [#18977]: https://github.com/JuliaLang/julia/issues/18977
@@ -598,6 +624,7 @@ Command-line option changes
 [#19157]: https://github.com/JuliaLang/julia/issues/19157
 [#19233]: https://github.com/JuliaLang/julia/issues/19233
 [#19239]: https://github.com/JuliaLang/julia/issues/19239
+[#19259]: https://github.com/JuliaLang/julia/issues/19259
 [#19288]: https://github.com/JuliaLang/julia/issues/19288
 [#19305]: https://github.com/JuliaLang/julia/issues/19305
 [#19331]: https://github.com/JuliaLang/julia/issues/19331
