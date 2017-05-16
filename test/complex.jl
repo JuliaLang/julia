@@ -951,3 +951,10 @@ end
         @test log1p(complex(x, x)) ≈ log(1 + complex(x, x))
     end
 end
+
+@testset "expm1 type stability" begin
+    x = @inferred expm1(0.1im)
+    @test x isa Complex128
+    x = @inferred expm1(0.1f0im)
+    @test x isa Complex64
+end
