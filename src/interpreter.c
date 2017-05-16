@@ -93,6 +93,8 @@ static jl_value_t *do_invoke(jl_value_t **args, size_t nargs, interpreter_state 
 
 jl_value_t *jl_eval_global_var(jl_module_t *m, jl_sym_t *e)
 {
+    if (e == underscore_sym)
+        jl_depwarn("deprecated syntax \"_ as an rvalue\".", (jl_value_t*)jl_symbol("eval"));
     jl_value_t *v = jl_get_global(m, e);
     if (v == NULL)
         jl_undefined_var_error(e);
