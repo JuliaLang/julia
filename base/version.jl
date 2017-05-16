@@ -223,6 +223,8 @@ catch e
     VersionNumber(0)
 end
 
+libllvm_version = convert(VersionNumber, libllvm_version_string)
+
 function banner(io::IO = STDOUT)
     if GIT_VERSION_INFO.tagged_commit
         commit_string = TAGGED_RELEASE_BANNER
