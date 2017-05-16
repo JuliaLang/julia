@@ -56,6 +56,18 @@
             (eval `(define ,(symbol (string "is-" name "?")) (Set ,name))))
           prec-names)
 
+(define (augment-prec-with-infix prec-list . extra-infix)
+  (let ((compare-ops (Set prec-list)))
+    (lambda (t)
+      (or (compare-ops t) (member t extra-infix)))))
+
+(define is-prec-comparison?
+  (augment-prec-with-infix prec-comparison 'in 'isa))
+(define is-prec-lazy-and?
+  (augment-prec-with-infix prec-lazy-and 'and))
+(define is-prec-lazy-or?
+  (augment-prec-with-infix prec-lazy-or 'or))
+
 ;; hash table of binary operators -> precedence
 (define prec-table (let ((t (table)))
                      (define (pushprec L prec)
@@ -65,6 +77,12 @@
                              (pushprec (cdr L) (+ prec 1)))))
                      (pushprec (map eval prec-names) 1)
                      t))
+
+(put! prec-table 'in  (get prec-table '== 0)) ; add `in` to the prec-table
+(put! prec-table 'isa (get prec-table '== 0)) ; add `isa` to the prec-table
+(put! prec-table 'and (get prec-table '&& 0)) ; add `and` to the prec-table
+(put! prec-table 'or (get prec-table '|\|\|| 0)) ; add `and` to the prec-table
+
 (define (operator-precedence op) (get prec-table op 0))
 
 (define unary-ops (append! '(|<:| |>:|)
@@ -76,7 +94,7 @@
 ; operators that are special forms, not function names
 (define syntactic-operators
   (append! (add-dots '(= += -= *= /= //= |\\=| ^= ÷= %= <<= >>= >>>= |\|=| &= ⊻=))
-           '(:= --> $= && |\|\|| |.| ... ->)))
+           '(:= --> $= && 'and |\|\|| 'or |.| ... ->)))
 (define syntactic-unary-operators '($ & |::|))
 
 (define syntactic-op? (Set syntactic-operators))
@@ -774,8 +792,17 @@
 ; parse-comma is needed for commas outside parens, for example a = b,c
 (define (parse-comma s) (parse-Nary s parse-cond  '(#\,) 'tuple (lambda (x) #f) #f #f))
 (define (parse-arrow s) (parse-RtoL s parse-or    is-prec-arrow? (eq? t '-->) parse-arrow))
-(define (parse-or s)    (parse-RtoL s parse-and   is-prec-lazy-or? #t parse-or))
-(define (parse-and s)   (parse-RtoL s parse-comparison is-prec-lazy-and? #t parse-and))
+(define (normalize-or ex)
+  (if (and (list? ex) (eq? (car ex) 'or))
+    (cons '|\|\|| (cdr ex))
+    ex))
+(define (normalize-and ex)
+  (if (and (list? ex) (eq? (car ex) 'and))
+    (cons '&& (cdr ex))
+    ex))
+
+(define (parse-or s)    (normalize-or (parse-RtoL s parse-and   is-prec-lazy-or? #t parse-or)))
+(define (parse-and s)   (normalize-and (parse-RtoL s parse-comparison is-prec-lazy-and? #t parse-and)))
 
 ;; parse left to right chains of a certain binary operator
 ;; returns a list of arguments
