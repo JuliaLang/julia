@@ -457,6 +457,9 @@ Deprecated or removed
 
   * infix operator `$` has been deprecated in favor of infix `⊻` or function `xor()` ([#18977]).
 
+  * The single-argument form of `write` (`write(x)`, with implicit `STDOUT` output stream),
+    has been deprecated in favor of the explicit equivalent `write(STDOUT, x)` ([#17654]).
+
   * `Dates.recur` has been deprecated in favor of `filter` ([#19288])
 
   * A number of ambiguous `convert` operations between `Number`s (especially `Real`s)
@@ -569,6 +572,7 @@ Command-line option changes
 [#17302]: https://github.com/JuliaLang/julia/issues/17302
 [#17599]: https://github.com/JuliaLang/julia/issues/17599
 [#17623]: https://github.com/JuliaLang/julia/issues/17623
+[#17654]: https://github.com/JuliaLang/julia/issues/17654
 [#17723]: https://github.com/JuliaLang/julia/issues/17723
 [#17758]: https://github.com/JuliaLang/julia/issues/17758
 [#17785]: https://github.com/JuliaLang/julia/issues/17785
