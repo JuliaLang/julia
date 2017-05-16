@@ -72,9 +72,16 @@ end
 Ac0 = complex.(A0,A0)
 for Ti in Base.uniontypes(Base.SparseArrays.UMFPACK.UMFITypes)
     Ac = convert(SparseMatrixCSC{Complex128,Ti}, Ac0)
+    x  = complex.(ones(size(Ac, 1)), ones(size(Ac,1)))
     lua = lufact(Ac)
     L,U,p,q,Rs = lua[:(:)]
     @test (Diagonal(Rs) * Ac)[p,q] ≈ L * U
+    b  = Ac*x
+    @test Ac\b ≈ x
+    b  = Ac'*x
+    @test Ac'\b ≈ x
+    b  = Ac.'*x
+    @test Ac.'\b ≈ x
 end
 
 for elty in (Float64, Complex128)
