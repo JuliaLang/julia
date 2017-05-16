@@ -475,6 +475,12 @@ end
 let seed = rand(UInt32, 10)
     r = MersenneTwister(seed)
     @test r.seed == seed && r.seed !== seed
+    # RNGs do not share their seed in randjump
+    let rs = randjump(r, 2)
+        @test  rs[1].seed !== rs[2].seed
+        srand(rs[2])
+        @test seed == rs[1].seed != rs[2].seed
+    end
     resize!(seed, 4)
     @test r.seed != seed
 end
