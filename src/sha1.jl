@@ -13,9 +13,9 @@ end
 
 function transform!(context::SHA1_CTX)
     # Buffer is 16 elements long, we expand to 80
-    buffer = reinterpret(eltype(context.state), context.buffer)
+    pbuf = Ptr{eltype(context.state)}(pointer(context.buffer))
     for i in 1:16
-        context.W[i] = bswap(buffer[i])
+        context.W[i] = bswap(unsafe_load(pbuf, i))
     end
 
     # First round of expansions
