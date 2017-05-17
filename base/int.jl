@@ -362,22 +362,24 @@ end
 # @doc isn't available when running in Core at this point.
 # Tuple syntax for documention two function signatures at the same time
 # doesn't work either at this point.
-isdefined(Main, :Base) && for fname in (:mod, :rem)
-    @eval @doc """
-        rem(x::Integer, T::Type{<:Integer}) -> T
-        mod(x::Integer, T::Type{<:Integer}) -> T
-        %(x::Integer, T::Type{<:Integer}) -> T
+if module_name(current_module()) === :Base
+    for fname in (:mod, :rem)
+        @eval @doc ("""
+            rem(x::Integer, T::Type{<:Integer}) -> T
+            mod(x::Integer, T::Type{<:Integer}) -> T
+            %(x::Integer, T::Type{<:Integer}) -> T
 
-    Find `y::T` such that `x` ≡ `y` (mod n), where n is the number of integers representable
-    in `T`, and `y` is an integer in `[typemin(T),typemax(T)]`.
-    If `T` can represent any integer (e.g. `T == BigInt`), then this operation corresponds to
-    a conversion to `T`.
+        Find `y::T` such that `x` ≡ `y` (mod n), where n is the number of integers representable
+        in `T`, and `y` is an integer in `[typemin(T),typemax(T)]`.
+        If `T` can represent any integer (e.g. `T == BigInt`), then this operation corresponds to
+        a conversion to `T`.
 
-    ```jldoctest
-    julia> 129 % Int8
-    -127
-    ```
-    """ -> $fname(x::Integer, T::Type{<:Integer})
+        ```jldoctest
+        julia> 129 % Int8
+        -127
+        ```
+        """ -> $fname(x::Integer, T::Type{<:Integer}))
+    end
 end
 
 rem(x::T, ::Type{T}) where {T<:Integer} = x
