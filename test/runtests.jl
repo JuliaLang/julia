@@ -7,7 +7,7 @@ using Base.Test
 v = 1
 @test_throws AssertionError @assert(v < 1)
 
-type TestCustomShowType end
+eval(Expr(:type, true, :TestCustomShowType, quote end))
 @compat function show(io::IO, ::MIME"text/plain", ::TestCustomShowType)
     print(io, "MyTestCustomShowType")
 end
@@ -15,21 +15,21 @@ myio = IOBuffer()
 display(TextDisplay(myio), MIME"text/plain"(), TestCustomShowType())
 @test @compat String(myio) == "MyTestCustomShowType"
 
-type TestCustomShowType2 end
+eval(Expr(:type, true, :TestCustomShowType2, quote end))
 @compat Base.show(io::IO, ::MIME"text/plain", ::TestCustomShowType2) = print(io, "MyTestCustomShowType2")
 myio = IOBuffer()
 display(TextDisplay(myio), MIME"text/plain"(), TestCustomShowType2())
 @test @compat String(myio) == "MyTestCustomShowType2"
 
-type TestCustomShowType3 end
+eval(Expr(:type, true, :TestCustomShowType3, quote end))
 @compat show(io::IO, ::TestCustomShowType3) = print(io, "2-Argument-show")
 myio = IOBuffer()
 display(TextDisplay(myio), TestCustomShowType3())
 @test @compat String(myio) == "2-Argument-show"
 
-immutable ParameterizedShowType{T}
+eval(Expr(:type, false, :(ParameterizedShowType{T}), quote
     _::T
-end
+end))
 myio = IOBuffer()
 @compat show{T}(io::IO, ::MIME"text/html", ::ParameterizedShowType{T}) =
     print(io, "<code>::", T, "</code>")
@@ -202,10 +202,10 @@ let convert_funcs_and_types =
     @test c.im == 2
 end
 
-type Test3609
+eval(Expr(:type, true, :Test3609, quote
     a
     b
-end
+end))
 
 if VERSION < v"0.4.0-dev+3609"
     let v = Test3609(1,2)
@@ -249,7 +249,7 @@ for x in [:RTLD_LOCAL,:RTLD_GLOBAL,:find_library,:dlsym,:RTLD_LAZY,:RTLD_NODELET
 end
 
 # Test unsafe_convert
-type Au_c; end
+eval(Expr(:type, true, :Au_c, quote end))
 x = "abc"
 @test @compat String(unsafe_string(Compat.unsafe_convert(Ptr{UInt8}, x))) == x
 Compat.unsafe_convert(::Ptr{Au_c}, x) = x
@@ -868,13 +868,13 @@ module CallTest
 
 using Base.Test, Compat
 
-immutable A
+eval(Expr(:type, false, :A, quote
     a
-end
+end))
 
-immutable B{T}
+eval(Expr(:type, false, :(B{T}), quote
     b::T
-end
+end))
 
 if VERSION >= v"0.4"
     @compat (::Type{A})() = A(1)
