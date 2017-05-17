@@ -65,9 +65,9 @@ function digest!{T<:Union{SHA1_CTX,SHA2_CTX}}(context::T)
     end
 
     # Store the length of the input data (in bits) at the end of the padding
-    bitcount_buffer = reinterpret(typeof(context.bytecount), context.buffer)
-    bitcount_idx = div(short_blocklen(T), sizeof(context.bytecount))+1
-    bitcount_buffer[bitcount_idx] = bswap(context.bytecount*8)
+    bitcount_idx = div(short_blocklen(T), sizeof(context.bytecount)) + 1
+    pbuf = Ptr{typeof(context.bytecount)}(pointer(context.buffer))
+    unsafe_store!(pbuf, bswap(context.bytecount * 8), bitcount_idx)
 
     # Final transform:
     transform!(context)
