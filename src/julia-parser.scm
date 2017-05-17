@@ -1331,11 +1331,10 @@
                              (expect-end (take-lineendings s) "primitive type"))))))
        ;; deprecated type keywords
        ((type)
-        ;; TODO fully deprecate post-0.6
-        ;;(syntax-deprecation s "type" "mutable struct")
+        (syntax-deprecation s "type" "mutable struct")  ;; retain in 0.7
         (parse-struct-def s #t word))
        ((immutable)
-        ;;(syntax-deprecation s "immutable" "struct")
+        (syntax-deprecation s "immutable" "struct")  ;; retain in 0.7
         (parse-struct-def s #f word))
        ((bitstype)
         (let* ((nb   (with-space-sensitive (parse-cond s)))

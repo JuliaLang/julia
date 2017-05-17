@@ -4896,7 +4896,7 @@ foo21568()
 @test f21568([0]) == 1
 
 # issue #21719
-type T21719{V}
+mutable struct T21719{V}
     f
     tol::Float64
     goal::V
