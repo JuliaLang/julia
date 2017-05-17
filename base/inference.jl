@@ -2851,6 +2851,7 @@ end
 #### finalize and record the result of running type inference ####
 
 function isinlineable(m::Method, src::CodeInfo)
+    # compute the cost (size) of inlining this code
     inlineable = false
     cost = 1000
     if m.module === _topmod(m.module)
@@ -2943,7 +2944,25 @@ function optimize(me::InferenceState)
     end
 
     # determine and cache inlineability
-    if !me.src.inlineable && !force_noinline && isdefined(me.linfo, :def)
+    if !force_noinline
+        # don't keep ASTs for functions specialized on a Union argument
+        # TODO: this helps avoid a type-system bug mis-computing sparams during intersection
+        sig = unwrap_unionall(me.linfo.specTypes)
+        if isa(sig, DataType) && sig.name === Tuple.name
+            for P in sig.parameters
+                P = unwrap_unionall(P)
+                if isa(P, Union)
+                    force_noinline = true
+                    break
+                end
+            end
+        else
+            force_noinline = true
+        end
+    end
+    if force_noinline
+        me.src.inlineable = false
+    elseif !me.src.inlineable && isdefined(me.linfo, :def)
         me.src.inlineable = isinlineable(me.linfo.def, me.src)
     end
     me.src.inferred = true
