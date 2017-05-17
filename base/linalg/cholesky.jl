@@ -18,6 +18,11 @@
 # through the Hermitian and Symmetric views or exact symmetric or Hermitian elements which
 # is checked for and an error is thrown if the check fails.
 
+# The internal structure is as follows
+# - _chol! return the factor and info without checking positive definiteness
+# - chol/chol! return the factor and checks for positive definiteness
+# - cholfact/cholfact! return Cholesky with checking positive definiteness
+
 # FixMe? The dispatch below seems overly complicated. One simplification could be to
 # merge the two Cholesky types into one. It would remove the need for Val completely but
 # the cost would be extra unnecessary/unused fields for the unpivoted Cholesky and runtime
@@ -27,9 +32,12 @@
 struct Cholesky{T,S<:AbstractMatrix} <: Factorization{T}
     factors::S
     uplo::Char
+    info::BlasInt
 end
-Cholesky{T}(A::AbstractMatrix{T}, uplo::Symbol) = Cholesky{T,typeof(A)}(A, char_uplo(uplo))
-Cholesky{T}(A::AbstractMatrix{T}, uplo::Char) = Cholesky{T,typeof(A)}(A, uplo)
+Cholesky{T}(A::AbstractMatrix{T}, uplo::Symbol, info::BlasInt) =
+    Cholesky{T,typeof(A)}(A, char_uplo(uplo), info)
+Cholesky{T}(A::AbstractMatrix{T}, uplo::Char, info::BlasInt) =
+    Cholesky{T,typeof(A)}(A, uplo, info)
 
 struct CholeskyPivoted{T,S<:AbstractMatrix} <: Factorization{T}
     factors::S
@@ -49,11 +57,11 @@ end
 ## BLAS/LAPACK element types
 function _chol!(A::StridedMatrix{<:BlasFloat}, ::Type{UpperTriangular})
     C, info = LAPACK.potrf!('U', A)
-    return @assertposdef UpperTriangular(C) info
+    return UpperTriangular(C), info
 end
 function _chol!(A::StridedMatrix{<:BlasFloat}, ::Type{LowerTriangular})
     C, info = LAPACK.potrf!('L', A)
-    return @assertposdef LowerTriangular(C) info
+    return LowerTriangular(C), info
 end
 
 ## Non BLAS/LAPACK element types (generic)
@@ -64,7 +72,10 @@ function _chol!(A::AbstractMatrix, ::Type{UpperTriangular})
             for i = 1:k - 1
                 A[k,k] -= A[i,k]'A[i,k]
             end
-            Akk = _chol!(A[k,k], UpperTriangular)
+            Akk, info = _chol!(A[k,k], UpperTriangular)
+            if info != 0
+                return UpperTriangular(A), info
+            end
             A[k,k] = Akk
             AkkInv = inv(Akk')
             for j = k + 1:n
@@ -75,7 +86,7 @@ function _chol!(A::AbstractMatrix, ::Type{UpperTriangular})
             end
         end
     end
-    return UpperTriangular(A)
+    return UpperTriangular(A), convert(BlasInt, 0) # TODO: If we get here, do we know A is pos. def?
 end
 function _chol!(A::AbstractMatrix, ::Type{LowerTriangular})
     n = checksquare(A)
@@ -84,7 +95,10 @@ function _chol!(A::AbstractMatrix, ::Type{LowerTriangular})
             for i = 1:k - 1
                 A[k,k] -= A[k,i]*A[k,i]'
             end
-            Akk = _chol!(A[k,k], LowerTriangular)
+            Akk, info = _chol!(A[k,k], LowerTriangular)
+            if info != 0
+                return LowerTriangular(A), info
+            end
             A[k,k] = Akk
             AkkInv = inv(Akk)
             for j = 1:k
@@ -99,18 +113,18 @@ function _chol!(A::AbstractMatrix, ::Type{LowerTriangular})
             end
         end
      end
-    return LowerTriangular(A)
+    return LowerTriangular(A), convert(BlasInt, 0) # TODO: If we get here, do we know A is pos. def?
 end
 
 ## Numbers
 function _chol!(x::Number, uplo)
     rx = real(x)
-    if rx != abs(x)
-        throw(ArgumentError("x must be positive semidefinite"))
-    end
-    rxr = sqrt(rx)
-    convert(promote_type(typeof(x), typeof(rxr)), rxr)
+    rxr = sqrt(abs(rx))
+    rval =  convert(promote_type(typeof(x), typeof(rxr)), rxr)
+    rx == abs(x) ? (rval, convert(BlasInt, 0)) : (rval, convert(BlasInt, 1))
 end
+
+chol!(x::Number, uplo) = ((C, info) = _chol!(x, uplo); @assertposdef C info)
 
 non_hermitian_error(f) = throw(ArgumentError("matrix is not symmetric/" *
     "Hermitian. This error can be avoided by calling $f(Hermitian(A)) " *
@@ -118,11 +132,14 @@ non_hermitian_error(f) = throw(ArgumentError("matrix is not symmetric/" *
 
 # chol!. Destructive methods for computing Cholesky factor of real symmetric or Hermitian
 # matrix
-chol!(A::RealHermSymComplexHerm{<:Real,<:StridedMatrix}) =
-    _chol!(A.uplo == 'U' ? A.data : LinAlg.copytri!(A.data, 'L', true), UpperTriangular)
+function chol!(A::RealHermSymComplexHerm{<:Real,<:StridedMatrix})
+    C, info = _chol!(A.uplo == 'U' ? A.data : LinAlg.copytri!(A.data, 'L', true), UpperTriangular)
+    @assertposdef C info
+end
 function chol!(A::StridedMatrix)
     ishermitian(A) || non_hermitian_error("chol!")
-    return _chol!(A, UpperTriangular)
+    C, info = _chol!(A, UpperTriangular)
+    @assertposdef C info
 end
 
 
@@ -184,7 +201,7 @@ julia> chol(16)
 4.0
 ```
 """
-chol(x::Number, args...) = _chol!(x, nothing)
+chol(x::Number, args...) = ((C, info) = _chol!(x, nothing); @assertposdef C info)
 
 
 
@@ -193,9 +210,11 @@ chol(x::Number, args...) = _chol!(x, nothing)
 ## No pivoting
 function cholfact!(A::RealHermSymComplexHerm, ::Type{Val{false}})
     if A.uplo == 'U'
-        Cholesky(_chol!(A.data, UpperTriangular).data, 'U')
+        CU, info = _chol!(A.data, UpperTriangular)
+        Cholesky(CU.data, 'U', info)
     else
-        Cholesky(_chol!(A.data, LowerTriangular).data, 'L')
+        CL, info = _chol!(A.data, LowerTriangular)
+        Cholesky(CL.data, 'L', info)
     end
 end
 
@@ -354,14 +373,15 @@ end
 
 ## Number
 function cholfact(x::Number, uplo::Symbol=:U)
-    xf = fill(chol(x), 1, 1)
-    Cholesky(xf, uplo)
+    C, info = _chol!(x, uplo)
+    xf = fill(C, 1, 1)
+    Cholesky(xf, uplo, info)
 end
 
 
 function convert(::Type{Cholesky{T}}, C::Cholesky) where T
     Cnew = convert(AbstractMatrix{T}, C.factors)
-    Cholesky{T, typeof(Cnew)}(Cnew, C.uplo)
+    Cholesky{T, typeof(Cnew)}(Cnew, C.uplo, C.info)
 end
 convert(::Type{Factorization{T}}, C::Cholesky{T}) where {T} = C
 convert(::Type{Factorization{T}}, C::Cholesky) where {T} = convert(Cholesky{T}, C)
@@ -386,7 +406,7 @@ convert(::Type{Matrix}, F::CholeskyPivoted) = convert(Array, convert(AbstractArr
 convert(::Type{Array}, F::CholeskyPivoted) = convert(Matrix, F)
 full(F::CholeskyPivoted) = convert(AbstractArray, F)
 
-copy(C::Cholesky) = Cholesky(copy(C.factors), C.uplo)
+copy(C::Cholesky) = Cholesky(copy(C.factors), C.uplo, C.info)
 copy(C::CholeskyPivoted) = CholeskyPivoted(copy(C.factors), C.uplo, C.piv, C.rank, C.tol, C.info)
 
 size(C::Union{Cholesky, CholeskyPivoted}) = size(C.factors)
@@ -417,7 +437,7 @@ show(io::IO, C::Cholesky{<:Any,<:AbstractMatrix}) =
     (println(io, "$(typeof(C)) with factor:");show(io,C[:UL]))
 
 A_ldiv_B!(C::Cholesky{T,<:AbstractMatrix}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
-    LAPACK.potrs!(C.uplo, C.factors, B)
+    @assertposdef LAPACK.potrs!(C.uplo, C.factors, B) C.info
 
 function A_ldiv_B!(C::Cholesky{<:Any,<:AbstractMatrix}, B::StridedVecOrMat)
     if C.uplo == 'L'
@@ -465,16 +485,18 @@ function A_ldiv_B!(C::CholeskyPivoted, B::StridedMatrix)
 end
 
 function det(C::Cholesky)
+    C.info == 0 || throw(PosDefException(C.info))
     dd = one(real(eltype(C)))
-    for i in 1:size(C.factors,1)
+    @inbounds for i in 1:size(C.factors,1)
         dd *= real(C.factors[i,i])^2
     end
     dd
 end
 
 function logdet(C::Cholesky)
+    C.info == 0 || throw(PosDefException(C.info))
     dd = zero(real(eltype(C)))
-    for i in 1:size(C.factors,1)
+    @inbounds for i in 1:size(C.factors,1)
         dd += log(real(C.factors[i,i]))
     end
     dd + dd # instead of 2.0dd which can change the type
@@ -505,10 +527,9 @@ function logdet(C::CholeskyPivoted)
 end
 
 inv!(C::Cholesky{<:BlasFloat,<:StridedMatrix}) =
-    copytri!(LAPACK.potri!(C.uplo, C.factors), C.uplo, true)
+    @assertposdef copytri!(LAPACK.potri!(C.uplo, C.factors), C.uplo, true) C.info
 
-inv(C::Cholesky{<:BlasFloat,<:StridedMatrix}) =
-    inv!(copy(C))
+inv(C::Cholesky{<:BlasFloat,<:StridedMatrix}) = inv!(copy(C))
 
 function inv(C::CholeskyPivoted)
     chkfullrank(C)
