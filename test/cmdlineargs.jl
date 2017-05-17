@@ -404,8 +404,8 @@ for precomp in ("yes", "no")
     bt = readstring(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --precompiled=$precomp
         -E 'include("____nonexistent_file")'`), stderr=catcmd))
     @test contains(bt, "include_from_node1")
-    if is_windows() && Sys.WORD_SIZE == 32 && precomp == "yes"
-        # fixme, issue #17251
+    if ((is_windows() && Sys.WORD_SIZE == 32) || (is_bsd() && !is_apple())) && precomp == "yes"
+        # FIXME: Issue #17251 (Windows), #20798 (FreeBSD)
         @test_broken contains(bt, "include_from_node1(::String) at $(joinpath(".","loading.jl"))")
     else
         @test contains(bt, "include_from_node1(::String) at $(joinpath(".","loading.jl"))")
