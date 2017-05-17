@@ -31,7 +31,7 @@ set of required and additional packages:
 julia> Pkg.status()
 Required packages:
  - Distributions                 0.2.8
- - UTF16                         0.2.0
+ - SHA                           0.3.2
 Additional packages:
  - NumericExtensions             0.2.17
  - Stats                         0.2.6
@@ -48,7 +48,7 @@ julia> Pkg.installed()
 Dict{String,VersionNumber} with 4 entries:
 "Distributions"     => v"0.2.8"
 "Stats"             => v"0.2.6"
-"UTF16"             => v"0.2.0"
+"SHA"               => v"0.3.2"
 "NumericExtensions" => v"0.2.17"
 ```
 
@@ -107,22 +107,22 @@ stated before, you can accomplish the same thing by editing your `~/.julia/v0.6/
 by hand and then running [`Pkg.resolve()`](@ref) yourself:
 
 ```julia-repl
-$ echo UTF16 >> ~/.julia/v0.6/REQUIRE
+$ echo SHA >> ~/.julia/v0.6/REQUIRE
 
 julia> Pkg.resolve()
-INFO: Cloning cache of UTF16 from git://github.com/nolta/UTF16.jl.git
-INFO: Installing UTF16 v0.2.0
+INFO: Cloning cache of SHA from git://github.com/staticfloat/SHA.jl.git
+INFO: Installing SHA v0.3.2
 
 julia> Pkg.status()
 Required packages:
  - Distributions                 0.2.7
- - UTF16                         0.2.0
+ - SHA                           0.3.2
 Additional packages:
  - NumericExtensions             0.2.17
  - Stats                         0.2.6
 ```
 
-This is functionally equivalent to calling [`Pkg.add("UTF16")`](@ref), except that [`Pkg.add()`](@ref)
+This is functionally equivalent to calling [`Pkg.add("SHA")`](@ref), except that [`Pkg.add()`](@ref)
 doesn't change `REQUIRE` until *after* installation has completed, so if there are problems,
 `REQUIRE` will be left as it was before calling [`Pkg.add()`](@ref). The format of the `REQUIRE`
 file is described in [Requirements Specification](@ref); it allows, among other things, requiring
@@ -140,10 +140,10 @@ INFO: REQUIRE updated.
 
 julia> Pkg.status()
 Required packages:
- - UTF16                         0.2.0
+ - SHA                           0.3.2
 
-julia> Pkg.rm("UTF16")
-INFO: Removing UTF16 v0.2.0
+julia> Pkg.rm("SHA")
+INFO: Removing SHA v0.3.2
 INFO: REQUIRE updated.
 
 julia> Pkg.status()
