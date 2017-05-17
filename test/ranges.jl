@@ -4,15 +4,15 @@
 @test size(10:1:0) == (0,)
 @test length(1:.2:2) == 6
 @test length(1.:.2:2.) == 6
-@test length(2:-.2:1) == 6
-@test length(2.:-.2:1.) == 6
+@test length(2:-0.2:1) == 6
+@test length(2.:-0.2:1.) == 6
 @test length(2:.2:1) == 0
 @test length(2.:.2:1.) == 0
 
 @inferred(colon(10, 1, 0))
 @inferred(colon(1, .2, 2))
 @inferred(colon(1., .2, 2.))
-@inferred(colon(2, -.2, 1))
+@inferred(colon(2, -0.2, 1))
 @inferred(colon(1, 0))
 @inferred(colon(0.0, -0.5))
 

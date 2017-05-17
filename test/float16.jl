@@ -128,7 +128,7 @@ end
 
 # rounding in conversions
 let
-    for f in [.3325f0, -.3325f0]
+    for f in [0.3325f0, -0.3325f0]
         f16 = Float16(f)
         # need to round away from 0. make sure we picked closest number.
         @test abs(f-f16) < abs(f-nextfloat(f16))
