@@ -245,6 +245,16 @@ abstract type Sup2a_ end
 abstract type Sup2b_{A <: Sup2a_, B} <: Sup2a_ end
 @test_throws ErrorException @eval abstract type Qux2_{T} <: Sup2b_{Qux2_{Int}, T} end # wrapped in eval to avoid #16793
 
+# issue #21923
+struct A21923{T,N}; v::Vector{A21923{T}}; end
+@test fieldtype(A21923,1) == Vector{A21923{T}} where T
+struct B21923{T,N}; v::Vector{B21923{T,M} where M}; end
+@test fieldtype(B21923, 1) == Vector{B21923{T,M} where M} where T
+struct C21923{T,N}; v::C21923{T,M} where M; end
+@test fieldtype(C21923, 1) == C21923
+struct D21923{T,N}; v::D21923{T}; end
+@test fieldtype(D21923, 1) == D21923
+
 # issue #3890
 mutable struct A3890{T1}
     x::Matrix{Complex{T1}}

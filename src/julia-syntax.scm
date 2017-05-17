@@ -3310,7 +3310,7 @@ f(x) = yt(x)
         (set-car! (lam:vinfo lam) (append (car (lam:vinfo lam)) `((,g Any 2))))
         g))
     ;; evaluate the arguments of a call, creating temporary locations as needed
-    (define (compile-args lst break-labels)
+    (define (compile-args lst break-labels (linearize #t))
       (if (null? lst) '()
           (let ((temps? (or *very-linear-mode*
                             (any (lambda (e)
@@ -3327,9 +3327,9 @@ f(x) = yt(x)
               (if (null? lst)
                   (reverse! vals)
                   (let* ((arg (car lst))
-                         (aval (compile arg break-labels #t #f)))
+                         (aval (compile arg break-labels #t #f linearize)))
                     (loop (cdr lst)
-                          (cons (if (and temps? (not simple?)
+                          (cons (if (and temps? linearize (not simple?)
                                          (not (simple-atom? arg))  (not (ssavalue? arg))
                                          (not (simple-atom? aval)) (not (ssavalue? aval))
                                          (not (and (pair? arg)
@@ -3356,7 +3356,7 @@ f(x) = yt(x)
     ;; value must be returned.
     ;; `tail` means we are in tail position, where a value needs to be `return`ed
     ;; from the current function.
-    (define (compile e break-labels value tail)
+    (define (compile e break-labels value tail (linearize-args #t))
       (if (or (not (pair? e)) (memq (car e) '(null ssavalue quote inert top core copyast the_exception $
                                                    globalref outerref cdecl stdcall fastcall thiscall llvmcall)))
           (let ((e1 (if (and arg-map (symbol? e))
@@ -3381,11 +3381,11 @@ f(x) = yt(x)
                               ;; NOTE: 2nd and 3rd arguments of ccall must be left in place
                               ;;       the 1st should be compiled if an atom.
                               (append (list)
-                                      (cond (atom? (cadr e) (compile-args (list (cadr e)) break-labels))
+                                      (cond (atom? (cadr e) (compile-args (list (cadr e)) break-labels linearize-args))
                                             (else (cadr e)))
                                       (list-head (cddr e) 2)
-                                      (compile-args (list-tail e 4) break-labels))
-                              (compile-args (cdr e) break-labels)))
+                                      (compile-args (list-tail e 4) break-labels linearize-args))
+                              (compile-args (cdr e) break-labels linearize-args)))
                     (callex (cons (car e) args)))
                (cond (tail (emit-return callex))
                      (value callex)
@@ -3597,7 +3597,11 @@ f(x) = yt(x)
                ((composite_type)
                 (let* ((para (compile (caddr e) break-labels #t #f))
                        (supe (compile (list-ref e 4) break-labels #t #f))
-                       (ftys (compile (list-ref e 5) break-labels #t #f)))
+                       ;; composite_type has an unconventional evaluation rule that
+                       ;; needs to do work around the evaluation of the field types,
+                       ;; so the field type expressions need to be kept in place as
+                       ;; much as possible. (part of issue #21923)
+                       (ftys (compile (list-ref e 5) break-labels #t #f #f)))
                   (emit `(composite_type ,(cadr e) ,para ,(cadddr e) ,supe ,ftys ,@(list-tail e 6)))))
                (else
                 (emit e)))

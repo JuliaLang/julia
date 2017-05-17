@@ -1343,10 +1343,7 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_t
         }
         jl_typeenv_t newenv = { ua->var, (jl_value_t*)((jl_unionall_t*)res)->var, env };
         jl_value_t *newbody = inst_type_w_(ua->body, &newenv, &top, check);
-        if (newbody == ua->body) {
-            res = t;
-        }
-        else if (newbody == (jl_value_t*)jl_emptytuple_type) {
+        if (newbody == (jl_value_t*)jl_emptytuple_type) {
             // NTuple{0} => Tuple{} can make a typevar disappear
             res = (jl_value_t*)jl_emptytuple_type;
         }
