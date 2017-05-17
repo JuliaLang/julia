@@ -89,7 +89,7 @@ esac
 if ! [ -e julia-installer.exe ]; then
   f=julia-latest-win$bits.exe
   echo "Downloading $f"
-  $curlflags -O https://s3.amazonaws.com/julianightlies/bin/winnt/x$archsuffix/$f
+  $curlflags -O https://julialangnightlies-s3.julialang.org/bin/winnt/x$archsuffix/$f
   echo "Extracting $f"
   $SEVENZIP x -y $f >> get-deps.log
 fi
