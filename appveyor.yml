@@ -1,13 +1,13 @@
 environment:
   matrix:
-  - JULIAVERSION: "julialang/bin/winnt/x86/0.4/julia-0.4-latest-win32.exe"
-  - JULIAVERSION: "julialang/bin/winnt/x64/0.4/julia-0.4-latest-win64.exe"
-  - JULIAVERSION: "julialang/bin/winnt/x86/0.5/julia-0.5-latest-win32.exe"
-  - JULIAVERSION: "julialang/bin/winnt/x64/0.5/julia-0.5-latest-win64.exe"
-  - JULIAVERSION: "julialang/bin/winnt/x86/0.6/julia-0.6-latest-win32.exe"
-  - JULIAVERSION: "julialang/bin/winnt/x64/0.6/julia-0.6-latest-win64.exe"
-  - JULIAVERSION: "julianightlies/bin/winnt/x86/julia-latest-win32.exe"
-  - JULIAVERSION: "julianightlies/bin/winnt/x64/julia-latest-win64.exe"
+  - JULIA_URL: "https://julialang-s3.julialang.org/bin/winnt/x86/0.4/julia-0.4-latest-win32.exe"
+  - JULIA_URL: "https://julialang-s3.julialang.org/bin/winnt/x64/0.4/julia-0.4-latest-win64.exe"
+  - JULIA_URL: "https://julialang-s3.julialang.org/bin/winnt/x86/0.5/julia-0.5-latest-win32.exe"
+  - JULIA_URL: "https://julialang-s3.julialang.org/bin/winnt/x64/0.5/julia-0.5-latest-win64.exe"
+  - JULIA_URL: "https://julialang-s3.julialang.org/bin/winnt/x86/0.6/julia-0.6-latest-win32.exe"
+  - JULIA_URL: "https://julialang-s3.julialang.org/bin/winnt/x64/0.6/julia-0.6-latest-win64.exe"
+  - JULIA_URL: "https://julialangnightlies-s3.julialang.org/bin/winnt/x86/julia-latest-win32.exe"
+  - JULIA_URL: "https://julialangnightlies-s3.julialang.org/bin/winnt/x64/julia-latest-win64.exe"
 
 branches:
   only:
@@ -21,6 +21,7 @@ notifications:
     on_build_status_changed: false
 
 install:
+  - ps: "[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12"
 # if there's a newer build queued for the same PR, cancel this one
   - ps: if ($env:APPVEYOR_PULL_REQUEST_NUMBER -and $env:APPVEYOR_BUILD_NUMBER -ne ((Invoke-RestMethod `
         https://ci.appveyor.com/api/projects/$env:APPVEYOR_ACCOUNT_NAME/$env:APPVEYOR_PROJECT_SLUG/history?recordsNumber=50).builds | `
@@ -28,7 +29,7 @@ install:
         throw "There are newer queued builds for this pull request, failing early." }
 # Download most recent Julia Windows binary
   - ps: (new-object net.webclient).DownloadFile(
-        $("http://s3.amazonaws.com/"+$env:JULIAVERSION),
+        $env:JULIA_URL,
         "C:\projects\julia-binary.exe")
 # Run installer silently, output to C:\projects\julia
   - C:\projects\julia-binary.exe /S /D=C:\projects\julia
