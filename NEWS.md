@@ -573,6 +573,11 @@ Deprecated or removed
   * `bitbroadcast` has been deprecated in favor of `broadcast`, which now produces a
     `BitArray` instead of `Array{Bool}` for functions yielding a boolean result ([#19771]).
 
+  * To complete the deprecation of histogram-related functions, `midpoints` has been
+    deprecated. Instead use the
+    [StatsBase.jl package](https://github.com/JuliaStats/StatsBase.jl)'s
+    `midpoint` function ([#20058]).
+
 Command-line option changes
 ---------------------------
 
@@ -691,6 +696,7 @@ Command-line option changes
 [#19989]: https://github.com/JuliaLang/julia/issues/19989
 [#20009]: https://github.com/JuliaLang/julia/issues/20009
 [#20047]: https://github.com/JuliaLang/julia/issues/20047
+[#20058]: https://github.com/JuliaLang/julia/issues/20058
 [#20079]: https://github.com/JuliaLang/julia/issues/20079
 [#20164]: https://github.com/JuliaLang/julia/issues/20164
 [#20213]: https://github.com/JuliaLang/julia/issues/20213
