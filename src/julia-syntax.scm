@@ -2965,7 +2965,7 @@ f(x) = yt(x)
                                (memq (car e) '(quote top core line inert local local-def unnecessary
                                                meta inbounds boundscheck simdloop decl
                                                implicit-global global globalref outerref
-                                               const = null method call ssavalue))))
+                                               const = null method call foreigncall ssavalue))))
                          (lam:body lam))))
                (unused (map cadr (filter (lambda (x) (memq (car x) '(method =)))
                                          leading))))
