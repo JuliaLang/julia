@@ -15,6 +15,7 @@ struct InferenceParams
     inlining::Bool
 
     # parameters limiting potentially-infinite types (configurable)
+    MAX_METHODS::Int
     MAX_TUPLETYPE_LEN::Int
     MAX_TUPLE_DEPTH::Int
     MAX_TUPLE_SPLAT::Int
@@ -24,12 +25,13 @@ struct InferenceParams
     # reasonable defaults
     function InferenceParams(world::UInt;
                     inlining::Bool = inlining_enabled(),
+                    max_methods::Int = 4,
                     tupletype_len::Int = 15,
                     tuple_depth::Int = 4,
                     tuple_splat::Int = 16,
                     union_splitting::Int = 4,
                     apply_union_enum::Int = 8)
-        return new(world, inlining, tupletype_len,
+        return new(world, inlining, max_methods, tupletype_len,
             tuple_depth, tuple_splat, union_splitting, apply_union_enum)
     end
 end
@@ -1280,7 +1282,7 @@ function abstract_call_gf_by_type(f::ANY, atype::ANY, sv::InferenceState)
     end
     min_valid = UInt[typemin(UInt)]
     max_valid = UInt[typemax(UInt)]
-    applicable = _methods_by_ftype(argtype, 4, sv.params.world, min_valid, max_valid)
+    applicable = _methods_by_ftype(argtype, sv.params.MAX_METHODS, sv.params.world, min_valid, max_valid)
     rettype = Bottom
     if applicable === false
         # this means too many methods matched
