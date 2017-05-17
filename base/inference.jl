@@ -1499,44 +1499,64 @@ function abstract_iteration(itertype::ANY, vtypes::VarTable, sv::InferenceState)
     return Vararg{valtype}
 end
 
+function tuple_tail_elem(init::ANY, ct)
+    return Vararg{widenconst(foldl((a, b) -> tmerge(a, unwrapva(b)), init, ct))}
+end
+
 # do apply(af, fargs...), where af is a function value
-function abstract_apply(af::ANY, fargs::Vector{Any}, aargtypes::Vector{Any}, vtypes::VarTable, sv::InferenceState)
+function abstract_apply(aft::ANY, fargs::Vector{Any}, aargtypes::Vector{Any}, vtypes::VarTable, sv::InferenceState)
+    if !isa(aft, Const) && !isconstType(aft)
+        if !(isleaftype(aft) || aft <: Type) || (aft <: Builtin) || (aft <: IntrinsicFunction)
+            return Any
+        end
+        # non-constant function, but type is known
+    end
     res = Union{}
     nargs = length(fargs)
     assert(nargs == length(aargtypes))
-    splitunions = countunionsplit(aargtypes) <= sv.params.MAX_APPLY_UNION_ENUM
-    ctypes = Any[Any[]]
+    splitunions = 1 < countunionsplit(aargtypes) <= sv.params.MAX_APPLY_UNION_ENUM
+    ctypes = Any[Any[aft]]
     for i = 1:nargs
         if aargtypes[i] === Any
             # bail out completely and infer as f(::Any...)
-            # instead could keep what we got so far and just append a Vararg{Any} (by just
-            # using the normal logic from below), but that makes the time of the subarray
-            # test explode
-            ctypes = Any[Any[Vararg{Any}]]
+            # instead could infer the precise types for the types up to this point and just append a Vararg{Any}
+            # (by just using the normal logic from below), but that makes the time of the subarray test explode
+            push!(ctypes[1], Vararg{Any})
             break
         end
-        ctypes´ = []
-        for ti in (splitunions ? uniontypes(aargtypes[i]) : Any[aargtypes[i]])
-            cti = precise_container_type(fargs[i], ti, vtypes, sv)
-            for ct in ctypes
-                if !isempty(ct) && isvarargtype(ct[end])
-                    tail = foldl((a,b)->tmerge(a,unwrapva(b)), unwrapva(ct[end]), cti)
-                    push!(ctypes´, push!(ct[1:end-1], Vararg{widenconst(tail)}))
-                else
-                    push!(ctypes´, append_any(ct, cti))
+    end
+    if length(ctypes[1]) == 1
+        for i = 1:nargs
+            ctypes´ = []
+            for ti in (splitunions ? uniontypes(aargtypes[i]) : Any[aargtypes[i]])
+                cti = precise_container_type(fargs[i], ti, vtypes, sv)
+                for ct in ctypes
+                    if !isempty(ct) && isvarargtype(ct[end])
+                        tail = tuple_tail_elem(unwrapva(ct[end]), cti)
+                        push!(ctypes´, push!(ct[1:(end - 1)], tail))
+                    else
+                        push!(ctypes´, append_any(ct, cti))
+                    end
                 end
             end
+            ctypes = ctypes´
         end
-        ctypes = ctypes´
     end
     for ct in ctypes
         if length(ct) > sv.params.MAX_TUPLETYPE_LEN
-            tail = foldl((a,b)->tmerge(a,unwrapva(b)), Bottom, ct[sv.params.MAX_TUPLETYPE_LEN:end])
+            tail = tuple_tail_elem(Bottom, ct[sv.params.MAX_TUPLETYPE_LEN:end])
             resize!(ct, sv.params.MAX_TUPLETYPE_LEN)
-            ct[end] = Vararg{widenconst(tail)}
+            ct[end] = tail
         end
-        at = append_any(Any[Const(af)], ct)
-        res = tmerge(res, abstract_call(af, (), at, vtypes, sv))
+        if isa(aft, Const)
+            rt = abstract_call(aft.val, (), ct, vtypes, sv)
+        elseif isconstType(aft)
+            rt = abstract_call(aft.parameters[1], (), ct, vtypes, sv)
+        else
+            astype = argtypes_to_type(ct)
+            rt = abstract_call_gf_by_type(nothing, astype, sv)
+        end
+        res = tmerge(res, rt)
         if res === Any
             break
         end
@@ -1651,20 +1671,7 @@ typename_static(t::ANY) = isType(t) ? _typename(t.parameters[1]) : Any
 function abstract_call(f::ANY, fargs::Union{Tuple{},Vector{Any}}, argtypes::Vector{Any}, vtypes::VarTable, sv::InferenceState)
     if f === _apply
         length(fargs) > 1 || return Any
-        aft = argtypes[2]
-        if isa(aft, Const)
-            af = aft.val
-        else
-            if isType(aft) && isleaftype(aft.parameters[1])
-                af = aft.parameters[1]
-            elseif isleaftype(aft) && isdefined(aft, :instance)
-                af = aft.instance
-            else
-                # TODO jb/functions: take advantage of case where non-constant `af`'s type is known
-                return Any
-            end
-        end
-        return abstract_apply(af, fargs[3:end], argtypes[3:end], vtypes, sv)
+        return abstract_apply(argtypes[2], fargs[3:end], argtypes[3:end], vtypes, sv)
     end
 
     la = length(argtypes)
