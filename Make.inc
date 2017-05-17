@@ -534,12 +534,7 @@ SANITIZE_LDFLAGS := -fsanitize=address
 endif
 JCXXFLAGS += $(SANITIZE_OPTS)
 JCFLAGS += $(SANITIZE_OPTS)
-LDFLAGS += $(SANITIZE_LDFLAGS)
-# FIXME: sanitizing all dependencies doesn't work because of -Wl,--no-undefined
-#        https://github.com/JuliaLang/julia/issues/13858
-#        use LLVM_SANITIZE to sanitize LLVM
-#DEPS_CFLAGS += $(SANITIZE_OPTS)
-#DEPS_CXXFLAGS += $(SANITIZE_OPTS)
+JLDFLAGS += $(SANITIZE_LDFLAGS)
 endif
 
 TAR := $(shell which gtar 2>/dev/null || which tar 2>/dev/null)
