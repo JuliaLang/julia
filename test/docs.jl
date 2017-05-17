@@ -749,6 +749,11 @@ abstract type $(curmod_prefix)Undocumented.B <: $(curmod_prefix)Undocumented.A
 ```
 $(curmod_prefix)Undocumented.D
 ```
+
+**Supertype Hierarchy:**
+```
+$(curmod_prefix)Undocumented.B <: $(curmod_prefix)Undocumented.A <: Any
+```
 """)
 @test docstrings_equal(@doc(Undocumented.B), doc"$doc_str")
 
@@ -758,6 +763,11 @@ No documentation found.
 **Summary:**
 ```
 mutable struct $(curmod_prefix)Undocumented.C <: $(curmod_prefix)Undocumented.A
+```
+
+**Supertype Hierarchy:**
+```
+$(curmod_prefix)Undocumented.C <: $(curmod_prefix)Undocumented.A <: Any
 ```
 """)
 @test docstrings_equal(@doc(Undocumented.C), doc"$doc_str")
@@ -775,6 +785,11 @@ struct $(curmod_prefix)Undocumented.D <: $(curmod_prefix)Undocumented.B
 one   :: Any
 two   :: String
 three :: Float64
+```
+
+**Supertype Hierarchy:**
+```
+$(curmod_prefix)Undocumented.D <: $(curmod_prefix)Undocumented.B <: $(curmod_prefix)Undocumented.A <: Any
 ```
 """)
 @test docstrings_equal(@doc(Undocumented.D), doc"$doc_str")
