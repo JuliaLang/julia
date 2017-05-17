@@ -273,8 +273,7 @@ function _include_dependency(_path::AbstractString)
         path = joinpath(dirname(prev), _path)
     end
     if myid() == 1 && _track_dependencies[]
-        apath = abspath(path)
-        push!(_require_dependencies, (apath, mtime(apath)))
+        push!(_require_dependencies, (path, mtime(path)))
     end
     return path, prev
 end
