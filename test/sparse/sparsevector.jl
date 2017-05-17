@@ -1124,7 +1124,7 @@ end
 @test issparse([sprand(10,.1); rand(10)])
 
 
-type t20488 end
+mutable struct t20488 end
 
 @testset "similar" begin
     x = sparsevec(rand(3) .+ 0.1)
