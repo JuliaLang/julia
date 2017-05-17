@@ -37,7 +37,7 @@ JL_DLLEXPORT jl_taggedvalue_t *jl_gc_find_taggedvalue_pool(char *p, size_t *osiz
         return NULL;
     size_t ofs = p - page_begin;
     // Check if this is a free page
-    if (!(info.pagetable0->allocmap[info.pagetable0_i32 / 32] & (uint32_t)(1 << info.pagetable0_i)))
+    if (!(info.pagetable0->allocmap[info.pagetable0_i32] & (uint32_t)(1 << info.pagetable0_i)))
         return NULL;
     int osize = info.meta->osize;
     // Shouldn't be needed, just in case
