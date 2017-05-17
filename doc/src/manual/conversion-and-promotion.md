@@ -120,8 +120,8 @@ false
 
 julia> convert(Bool, 1im)
 ERROR: InexactError()
- in convert(::Type{Bool}, ::Complex{Int64}) at ./complex.jl:23
- ...
+Stacktrace:
+ [1] convert(::Type{Bool}, ::Complex{Int64}) at ./complex.jl:23
 
 julia> convert(Bool, 0im)
 false
