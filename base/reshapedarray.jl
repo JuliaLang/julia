@@ -111,18 +111,25 @@ _throw_reshape_colon_dimmismatch(A, dims) =
 
 reshape(parent::AbstractArray{T,N}, ndims::Type{Val{N}}) where {T,N} = parent
 function reshape(parent::AbstractArray, ndims::Type{Val{N}}) where N
-    reshape(parent, rdims((), indices(parent), Val{N}))
+    reshape(parent, rdims(Val{N}, indices(parent)))
 end
+
 # Move elements from inds to out until out reaches the desired
 # dimensionality N, either filling with OneTo(1) or collapsing the
 # product of trailing dims into the last element
-@pure rdims(out::NTuple{N,Any}, inds::Tuple{}, ::Type{Val{N}}) where {N} = out
-@pure function rdims(out::NTuple{N,Any}, inds::Tuple{Any, Vararg{Any}}, ::Type{Val{N}}) where N
-    l = length(last(out)) * prod(map(length, inds))
-    (front(out)..., OneTo(l))
-end
-@pure rdims(out::Tuple, inds::Tuple{}, ::Type{Val{N}}) where {N} = rdims((out..., OneTo(1)), (), Val{N})
-@pure rdims(out::Tuple, inds::Tuple{Any, Vararg{Any}}, ::Type{Val{N}}) where {N} = rdims((out..., first(inds)), tail(inds), Val{N})
+rdims_trailing(l, inds...) = length(l) * rdims_trailing(inds...)
+rdims_trailing(l) = length(l)
+rdims(out::Type{Val{N}}, inds::Tuple) where {N} = rdims(ntuple(i -> OneTo(1), Val{N}), inds)
+rdims(out::Tuple{}, inds::Tuple{}) = () # N == 0, M == 0
+rdims(out::Tuple{}, inds::Tuple{Any}) = throw(ArgumentError("new dimensions cannot be empty")) # N == 0
+rdims(out::Tuple{}, inds::NTuple{M,Any}) where {M} = throw(ArgumentError("new dimensions cannot be empty")) # N == 0
+rdims(out::Tuple{Any}, inds::Tuple{}) = out # N == 1, M == 0
+rdims(out::NTuple{N,Any}, inds::Tuple{}) where {N} = out # N > 1, M == 0
+rdims(out::Tuple{Any}, inds::Tuple{Any}) = inds # N == 1, M == 1
+rdims(out::Tuple{Any}, inds::NTuple{M,Any}) where {M} = (OneTo(rdims_trailing(inds...)),) # N == 1, M > 1
+rdims(out::NTuple{N,Any}, inds::NTuple{N,Any}) where {N} = inds # N > 1, M == N
+rdims(out::NTuple{N,Any}, inds::NTuple{M,Any}) where {N,M} = (first(inds), rdims(tail(out), tail(inds))...) # N > 1, M > 1, M != N
+
 
 # _reshape on Array returns an Array
 _reshape(parent::Vector, dims::Dims{1}) = parent
