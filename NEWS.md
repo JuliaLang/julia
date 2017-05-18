@@ -482,7 +482,7 @@ Deprecated or removed
     for example `(+)(J::UniformScaling, x::Number)`, have been deprecated in favor of
     unambiguous, explicit equivalents, for example `J.λ + x` ([#17607]).
 
-  * `num` and `den` have been deprecated in favor of `numerator` and `denominator` respectively ([#19233]).
+  * `num` and `den` have been deprecated in favor of `numerator` and `denominator` respectively ([#19233],[#19246]).
 
   * `delete!(ENV::EnvHash, k::AbstractString, def)` has been deprecated in favor of
     `pop!(ENV, k, def)`. Be aware that `pop!` returns `k` or `def`, whereas `delete!`
@@ -640,6 +640,7 @@ Command-line option changes
 [#19157]: https://github.com/JuliaLang/julia/issues/19157
 [#19233]: https://github.com/JuliaLang/julia/issues/19233
 [#19239]: https://github.com/JuliaLang/julia/issues/19239
+[#19246]: https://github.com/JuliaLang/julia/issues/19246
 [#19259]: https://github.com/JuliaLang/julia/issues/19259
 [#19288]: https://github.com/JuliaLang/julia/issues/19288
 [#19305]: https://github.com/JuliaLang/julia/issues/19305
