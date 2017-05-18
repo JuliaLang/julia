@@ -1585,8 +1585,14 @@ end
 
 # julia#20006
 @compat abstract type AbstractFoo20006 end
-immutable ConcreteFoo20006{T<:Int} <: AbstractFoo20006 end
-immutable ConcreteFoo20006N{T<:Int,N} <: AbstractFoo20006 end
+eval(Expr(
+    :type, false,
+    Expr(:(<:), :(ConcreteFoo20006{T<:Int}), :AbstractFoo20006),
+    quote end))
+eval(Expr(
+    :type, false,
+    Expr(:(<:), :(ConcreteFoo20006N{T<:Int,N}), :AbstractFoo20006),
+    quote end))
 @compat ConcreteFoo200061{T<:Int} = ConcreteFoo20006N{T,1}
 @test Compat.TypeUtils.isabstract(AbstractFoo20006)
 @test !Compat.TypeUtils.isabstract(ConcreteFoo20006)
@@ -1757,12 +1763,18 @@ f20500_2() = A20500_2
 
 module CompatArray
 using Compat
-immutable CartesianArray{T,N} <: AbstractArray{T,N}
-    parent::Array{T,N}
-end
-immutable LinearArray{T,N} <: AbstractArray{T,N}
-    parent::Array{T,N}
-end
+eval(Expr(
+    :type, false,
+    Expr(:(<:), :(CartesianArray{T,N}), :(AbstractArray{T,N})),
+    quote
+        parent::Array{T,N}
+    end))
+eval(Expr(
+    :type, false,
+    Expr(:(<:), :(LinearArray{T,N}), :(AbstractArray{T,N})),
+    quote
+        parent::Array{T,N}
+    end))
 @compat Base.IndexStyle(::Type{<:LinearArray}) = IndexLinear()
 end
 @test IndexStyle(Array{Float32,2}) === IndexLinear()
@@ -1853,9 +1865,12 @@ end
 # PR 21378
 let
     # https://en.wikipedia.org/wiki/Swatch_Internet_Time
-    immutable Beat <: Dates.Period
-        value::Int64
-    end
+    eval(Expr(
+        :type, false,
+        Expr(:(<:), :Beat, :(Dates.Period)),
+        quote
+            value::Int64
+        end))
 
     Dates.value(b::Beat) = b.value
     Dates.toms(b::Beat) = Dates.value(b) * 86400
