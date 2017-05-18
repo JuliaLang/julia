@@ -408,4 +408,9 @@ end # baremodule Base
 using Base
 importall Base.Operators
 
+# stdlib packages
+# Numerical integration
+Base.include("../stdlib/QuadGK.jl")
+using QuadGK
+
 Base.isfile("userimg.jl") && Base.include("userimg.jl")
