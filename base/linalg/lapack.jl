@@ -5040,7 +5040,7 @@ for (syev, syevr, sygvd, elty, relty) in
             lwork = BlasInt(-1)
             iwork = Vector{BlasInt}(1)
             liwork = BlasInt(-1)
-            rwork = Array{$relty,0}()
+            rwork = Vector{$relty}(1)
             lrwork = BlasInt(-1)
             info = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1], lrwork as rwork[1] and liwork as iwork[1]
