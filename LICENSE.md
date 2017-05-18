@@ -56,7 +56,6 @@ their own licenses:
 - [OPENLIBM](https://github.com/JuliaLang/openlibm/blob/master/LICENSE.md) [MIT, BSD-2, ISC]
 - [OPENSPECFUN](https://github.com/JuliaLang/openspecfun) [MIT, public domain]
 - [FADDEEVA](http://ab-initio.mit.edu/Faddeeva) [MIT]
-- [FFTW](http://fftw.org/doc/License-and-Copyright.html) [GPL2+]
 - [GMP](http://gmplib.org/manual/Copying.html#Copying) [LGPL3+ or GPL2+]
 - [LIBGIT2](https://github.com/libgit2/libgit2/blob/development/COPYING) [GPL2+ with unlimited linking exception]
 - [CURL](https://curl.haxx.se/docs/copyright.html) [MIT/X derivative]

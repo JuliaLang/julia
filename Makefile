@@ -246,11 +246,6 @@ JL_PRIVATE_LIBS := ccalltest
 ifeq ($(USE_GPL_LIBS), 1)
 JL_PRIVATE_LIBS += suitesparse_wrapper
 endif
-ifeq ($(USE_SYSTEM_FFTW),0)
-ifeq ($(USE_GPL_LIBS), 1)
-JL_PRIVATE_LIBS += fftw3 fftw3f fftw3_threads fftw3f_threads
-endif
-endif
 ifeq ($(USE_SYSTEM_PCRE),0)
 JL_PRIVATE_LIBS += pcre
 endif

@@ -17,7 +17,7 @@ as well many great tutorials and learning resources:
     https://julialang.org/learning/
 
 For help on a specific function or macro, type `?` followed
-by its name, e.g. `?fft`, or `?@time`, and press enter.
+by its name, e.g. `?cos`, or `?@time`, and press enter.
 """
 kw"help", kw"?", kw"julia"
 

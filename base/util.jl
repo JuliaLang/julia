@@ -382,14 +382,6 @@ macro timed(ex)
     end
 end
 
-function fftw_vendor()
-    if Base.libfftw_name in ("libmkl_rt", "mkl_rt")
-        return :mkl
-    else
-        return :fftw
-    end
-end
-
 
 ## printing with color ##
 

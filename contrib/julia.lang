@@ -219,7 +219,6 @@
       <keyword>Core</keyword>
       <keyword>Main</keyword>
       <!-- exports.jl -->
-      <keyword>FFTW</keyword>
       <keyword>Collections</keyword>
       <keyword>Test</keyword>
       <keyword>Pkg</keyword>

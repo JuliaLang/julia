@@ -53,8 +53,6 @@ ifeq ($(USE_GPL_LIBS), 1)
 else
 	@echo "const USE_GPL_LIBS = false" >> $@
 endif
-	@echo "const libfftw_name = \"$(LIBFFTWNAME)\"" >> $@
-	@echo "const libfftwf_name = \"$(LIBFFTWFNAME)\"" >> $@
 	@echo "const libllvm_version_string = \"$$($(LLVM_CONFIG_HOST) --version)\"" >> $@
 	@echo "const VERSION_STRING = \"$(JULIA_VERSION)\"" >> $@
 	@echo "const TAGGED_RELEASE_BANNER = \"$(TAGGED_RELEASE_BANNER)\"" >> $@

@@ -45,10 +45,6 @@ function choosetests(choices = [])
         profile_skipped = true
     end
 
-    if Base.USE_GPL_LIBS
-        append!(testnames, ["fft", "dsp"])
-    end
-
     if isdir(joinpath(JULIA_HOME, Base.DOCDIR, "examples"))
         push!(testnames, "examples")
     end
