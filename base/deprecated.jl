@@ -459,7 +459,7 @@ end
 @deprecate den denominator
 @deprecate num numerator
 
-Filesystem.stop_watching(stream::Filesystem._FDWatcher) = depwarn("stop_watching(::_FDWatcher) should not be used", :stop_watching)
+Filesystem.stop_watching(stream::Filesystem._FDWatcher) = depwarn("stop_watching(::_FDWatcher) should not be used (see PR #19152 for more)", :stop_watching)
 
 # #19088
 @deprecate takebuf_array take!
