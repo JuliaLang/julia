@@ -338,10 +338,9 @@ iterations derived from [`eigs`](@ref).
 
 **Inputs**
 
-* `A`: Linear operator whose singular values are desired. `A` may be represented
-  as a subtype of `AbstractArray`, e.g., a sparse matrix, or any other type
-  supporting the four methods `size(A)`, `eltype(A)`, `A * vector`, and
-  `A' * vector`.
+* `A`: Linear operator whose singular values are desired. `A` may be represented as a
+  subtype of `AbstractArray`, e.g., a sparse matrix, or any other type supporting the four
+  methods `size(A)`, `eltype(A)`, `A * vector`, and `A' * vector`.
 * `nsv`: Number of singular values. Default: 6.
 * `ritzvec`: If `true`, return the left and right singular vectors `left_sv` and `right_sv`.
    If `false`, omit the singular vectors. Default: `true`.
@@ -353,7 +352,9 @@ iterations derived from [`eigs`](@ref).
 
 **Outputs**
 
-* `svd`: An `SVD` object containing the left singular vectors, the requested values, and the right singular vectors. If `ritzvec = false`, the left and right singular vectors will be empty.
+* `svd`: An `SVD` object containing the left singular vectors, the requested values, and the
+  right singular vectors. If `ritzvec = false`, the left and right singular vectors will be
+  empty.
 * `nconv`: Number of converged singular values.
 * `niter`: Number of iterations.
 * `nmult`: Number of matrix--vector products used.

@@ -392,15 +392,15 @@ Ac_ldiv_B!(lu::UmfpackLU{Float64}, B::StridedVecOrMat{<:Complex}) = Ac_ldiv_B!(B
 A_ldiv_B!{T<:UMFVTypes}(X::StridedVecOrMat{T}, lu::UmfpackLU{T}, B::StridedVecOrMat{T}) =
     _Aq_ldiv_B!(X, lu, B, UMFPACK_A)
 At_ldiv_B!{T<:UMFVTypes}(X::StridedVecOrMat{T}, lu::UmfpackLU{T}, B::StridedVecOrMat{T}) =
-    _Aq_ldiv_B!(X, lu, B, UMFPACK_At)
-Ac_ldiv_B!{T<:UMFVTypes}(X::StridedVecOrMat{T}, lu::UmfpackLU{T}, B::StridedVecOrMat{T}) =
     _Aq_ldiv_B!(X, lu, B, UMFPACK_Aat)
+Ac_ldiv_B!{T<:UMFVTypes}(X::StridedVecOrMat{T}, lu::UmfpackLU{T}, B::StridedVecOrMat{T}) =
+    _Aq_ldiv_B!(X, lu, B, UMFPACK_At)
 A_ldiv_B!{Tb<:Complex}(X::StridedVecOrMat{Tb}, lu::UmfpackLU{Float64}, B::StridedVecOrMat{Tb}) =
     _Aq_ldiv_B!(X, lu, B, UMFPACK_A)
 At_ldiv_B!{Tb<:Complex}(X::StridedVecOrMat{Tb}, lu::UmfpackLU{Float64}, B::StridedVecOrMat{Tb}) =
-    _Aq_ldiv_B!(X, lu, B, UMFPACK_At)
-Ac_ldiv_B!{Tb<:Complex}(X::StridedVecOrMat{Tb}, lu::UmfpackLU{Float64}, B::StridedVecOrMat{Tb}) =
     _Aq_ldiv_B!(X, lu, B, UMFPACK_Aat)
+Ac_ldiv_B!{Tb<:Complex}(X::StridedVecOrMat{Tb}, lu::UmfpackLU{Float64}, B::StridedVecOrMat{Tb}) =
+    _Aq_ldiv_B!(X, lu, B, UMFPACK_At)
 
 function _Aq_ldiv_B!(X::StridedVecOrMat, lu::UmfpackLU, B::StridedVecOrMat, transposeoptype)
     if size(X, 2) != size(B, 2)

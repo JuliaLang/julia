@@ -2,19 +2,19 @@
 
 module Sys
 
-export  CPU_CORES,
-        WORD_SIZE,
-        ARCH,
-        MACHINE,
-        KERNEL,
-        JIT,
-        cpu_info,
-        cpu_name,
-        cpu_summary,
-        uptime,
-        loadavg,
-        free_memory,
-        total_memory
+export CPU_CORES,
+       WORD_SIZE,
+       ARCH,
+       MACHINE,
+       KERNEL,
+       JIT,
+       cpu_info,
+       cpu_name,
+       cpu_summary,
+       uptime,
+       loadavg,
+       free_memory,
+       total_memory
 
 import ..Base: show
 
@@ -92,7 +92,7 @@ CPUinfo(info::UV_cpu_info_t) = CPUinfo(unsafe_string(info.model), info.speed,
 
 show(io::IO, info::CPUinfo) = Base._show_cpuinfo(io, info, true, "    ")
 
-function _cpu_summary(io::IO, cpu::Array{CPUinfo}, i, j)
+function _cpu_summary(io::IO, cpu::AbstractVector{CPUinfo}, i, j)
     if j-i < 9
         header = true
         for x = i:j
@@ -141,12 +141,22 @@ function cpu_info()
     return cpus
 end
 
+"""
+    Sys.uptime()
+
+Gets the current system uptime in seconds.
+"""
 function uptime()
     uptime_ = Ref{Float64}()
     Base.uv_error("uv_uptime",ccall(:uv_uptime, Int32, (Ptr{Float64},), uptime_))
     return uptime_[]
 end
 
+"""
+    Sys.loadavg()
+
+Get the load average. See: https://en.wikipedia.org/wiki/Load_(computing).
+"""
 function loadavg()
     loadavg_ = Vector{Float64}(3)
     ccall(:uv_loadavg, Void, (Ptr{Float64},), loadavg_)
@@ -159,7 +169,7 @@ total_memory() = ccall(:uv_get_total_memory, UInt64, ())
 """
     Sys.get_process_title()
 
-Get the process title. On some systems, will always return empty string. (not exported)
+Get the process title. On some systems, will always return an empty string.
 """
 function get_process_title()
     buf = zeros(UInt8, 512)
@@ -171,7 +181,7 @@ end
 """
     Sys.set_process_title(title::AbstractString)
 
-Set the process title. No-op on some operating systems. (not exported)
+Set the process title. No-op on some operating systems.
 """
 function set_process_title(title::AbstractString)
     err = ccall(:uv_set_process_title, Cint, (Cstring,), title)
@@ -189,7 +199,7 @@ else
     windows_version() = (0, 0)
 end
 """
-    windows_version()
+    Sys.windows_version()
 
 Returns the version number for the Windows NT Kernel as a (major, minor) pair,
 or `(0, 0)` if this is not running on Windows.

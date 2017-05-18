@@ -512,7 +512,8 @@ function exp(z::Complex)
     end
 end
 
-function expm1(z::Complex)
+function expm1(z::Complex{T}) where T<:Real
+    Tf = float(T)
     zr,zi = reim(z)
     if isnan(zr)
         Complex(zr, zi==0 ? zi : zr)
@@ -530,8 +531,12 @@ function expm1(z::Complex)
             Complex(erm1, zi)
         else
             er = erm1+one(erm1)
-            wr = isfinite(er) ? erm1 - 2.0*er*(sin(0.5*zi))^2 : er*cos(zi)
-            Complex(wr, er*sin(zi))
+            if isfinite(er)
+                wr = erm1 - 2 * er * (sin(convert(Tf, 0.5) * zi))^2
+                return Complex(wr, er * sin(zi))
+            else
+                return Complex(er * cos(zi), er * sin(zi))
+            end
         end
     end
 end

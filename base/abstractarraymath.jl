@@ -120,11 +120,6 @@ function slicedim(A::AbstractArray, d::Integer, i)
     A[setindex(indices(A), i, d)...]
 end
 
-function flipdim(A::AbstractVector, d::Integer)
-    d == 1 || throw(ArgumentError("dimension to flip must be 1"))
-    reverse(A)
-end
-
 """
     flipdim(A, d::Integer)
 
@@ -147,6 +142,8 @@ function flipdim(A::AbstractArray, d::Integer)
     1 ≤ d ≤ nd || throw(ArgumentError("dimension $d is not 1 ≤ $d ≤ $nd"))
     if isempty(A)
         return copy(A)
+    elseif nd == 1
+        return reverse(A)
     end
     inds = indices(A)
     B = similar(A)

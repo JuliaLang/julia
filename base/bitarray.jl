@@ -1188,7 +1188,7 @@ end
 
 for f in (:/, :\)
     @eval begin
-        ($f)(A::BitArray, B::BitArray) = ($f)(Array(A), Array(B))
+        ($f)(A::Union{BitMatrix,BitVector}, B::Union{BitMatrix,BitVector}) = ($f)(Array(A), Array(B))
     end
 end
 (/)(B::BitArray, x::Number) = (/)(Array(B), x)

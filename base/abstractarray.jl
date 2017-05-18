@@ -190,7 +190,6 @@ function stride(a::AbstractArray, i::Integer)
     return s
 end
 
-strides(A::AbstractArray{<:Any,0}) = ()
 """
     strides(A)
 
@@ -204,8 +203,9 @@ julia> strides(A)
 ```
 """
 strides(A::AbstractArray) = _strides((1,), A)
-_strides(out::NTuple{N,Any}, A::AbstractArray{T,N}) where {T,N} = out
-function _strides(out::NTuple{M,Any}, A::AbstractArray) where M
+_strides(out::Tuple{Int}, A::AbstractArray{<:Any,0}) = ()
+_strides(out::NTuple{N,Int}, A::AbstractArray{<:Any,N}) where {N} = out
+function _strides(out::NTuple{M,Int}, A::AbstractArray) where M
     @_inline_meta
     _strides((out..., out[M]*size(A, M)), A)
 end

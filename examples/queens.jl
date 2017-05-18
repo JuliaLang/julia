@@ -2,7 +2,7 @@
 
 # n-queens (nqueens) solver, for nsquaresx-by-nsquaresy board
 
-immutable Queen
+struct Queen
     x::Int
     y::Int
 end

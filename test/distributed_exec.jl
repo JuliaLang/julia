@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.Test
-include("testdefs.jl")
+include("testenv.jl")
 
 # Test a few "remote" invocations when no workers are present
 @test remote(myid)() == 1
@@ -1358,6 +1358,13 @@ for i in 1:5
     @test remotecall_fetch(()->v2, id_other) == v2
 end
 
+# Different global bindings to the same object
+global v3 = ones(10)
+global v4 = v3
+@test remotecall_fetch(()->v3, id_other) == remotecall_fetch(()->v4, id_other)
+@test remotecall_fetch(()->isdefined(Main, :v3), id_other)
+@test remotecall_fetch(()->isdefined(Main, :v4), id_other)
+
 # Test that a global is not being repeatedly serialized when
 # a) referenced multiple times in the closure
 # b) hash value has not changed.
@@ -1490,6 +1497,18 @@ if true
     end
 end
 @test x == map(_->sin(2), 1:2)
+
+let thrown = false
+    try
+        remotecall_fetch(sqrt, 2, -1)
+    catch e
+        thrown = true
+        b = IOBuffer()
+        showerror(b, e)
+        @test contains(String(take!(b)), "sqrt will only return")
+    end
+    @test thrown
+end
 
 # Testing clear!
 function setup_syms(n, pids)

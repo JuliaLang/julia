@@ -291,8 +291,9 @@ let g() = Int <: Real ? 1 : ""
     @test Base.return_types(g, Tuple{}) == [Int]
 end
 
-NInt{N} = Tuple{Vararg{Int, N}}
+const NInt{N} = Tuple{Vararg{Int, N}}
 @test Base.eltype(NInt) === Int
+@test Base.return_types(eltype, (NInt,)) == Any[Union{Type{Int}, Type{Union{}}}] # issue 21763
 fNInt(x::NInt) = (x...)
 gNInt() = fNInt(x)
 @test Base.return_types(gNInt, ()) == Any[NInt]
@@ -739,7 +740,7 @@ let e = code_typed(f21175, ())[1].first.code[1]::Expr
 end
 
 # issue #10207
-type T10207{A, B}
+mutable struct T10207{A, B}
     a::A
     b::B
 end
@@ -776,3 +777,14 @@ function break_21369()
     end
 end
 @test_throws ErrorException break_21369()  # not TypeError
+
+# issue #21848
+@test Core.Inference.limit_type_depth(Ref{Complex{T} where T}, Core.Inference.MAX_TYPE_DEPTH) == Ref
+let T = Tuple{Tuple{Int64, Void},
+              Tuple{Tuple{Int64, Void},
+                    Tuple{Int64, Tuple{Tuple{Int64, Void},
+                                       Tuple{Tuple{Int64, Void}, Tuple{Int64, Tuple{Tuple{Int64, Void}, Tuple{Tuple, Tuple}}}}}}}}
+    @test Core.Inference.limit_type_depth(T, 0) >: T
+    @test Core.Inference.limit_type_depth(T, 1) >: T
+    @test Core.Inference.limit_type_depth(T, 2) >: T
+end

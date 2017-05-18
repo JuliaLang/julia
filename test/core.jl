@@ -2,9 +2,9 @@
 
 # test core language features
 const Bottom = Union{}
-const curmod = current_module()
-const curmod_name = fullname(curmod)
-const curmod_prefix = "$(["$m." for m in curmod_name]...)"
+
+# For curmod_*
+include("testenv.jl")
 
 f47{T}(x::Vector{Vector{T}}) = 0
 @test_throws MethodError f47(Array{Vector}(0))
@@ -78,12 +78,25 @@ _z_z_z_(::Int, c...) = 3
 @test args_morespecific(Tuple{Type{Pair{A,B} where B}} where A, Tuple{DataType})
 @test args_morespecific(Tuple{Union{Int,String},Type{Pair{A,B} where B}} where A, Tuple{Integer,UnionAll})
 
+# PR #21750
+let A = Tuple{Any, Tuple{Vararg{Integer,N} where N}},
+    B = Tuple{Any, Tuple{Any}},
+    C = Tuple{Any, Tuple{}}
+    @test args_morespecific(A, B)
+    @test args_morespecific(C, A)
+    @test args_morespecific(C, B)
+end
+
 # with bound varargs
 
 _bound_vararg_specificity_1{T,N}(::Type{Array{T,N}}, d::Vararg{Int, N}) = 0
 _bound_vararg_specificity_1{T}(::Type{Array{T,1}}, d::Int) = 1
 @test _bound_vararg_specificity_1(Array{Int,1}, 1) == 1
 @test _bound_vararg_specificity_1(Array{Int,2}, 1, 1) == 0
+
+# issue #21710
+@test args_morespecific(Tuple{Array}, Tuple{AbstractVector})
+@test args_morespecific(Tuple{Matrix}, Tuple{AbstractVector})
 
 # issue #12939
 module Issue12939
@@ -4881,3 +4894,12 @@ function foo21568()
 end
 foo21568()
 @test f21568([0]) == 1
+
+# issue #21719
+mutable struct T21719{V}
+    f
+    tol::Float64
+    goal::V
+end
+g21719(f, goal; tol = 1e-6) = T21719(f, tol, goal)
+@test isa(g21719(identity, 1.0; tol=0.1), T21719)

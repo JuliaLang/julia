@@ -950,3 +950,10 @@ end
         @test exp(complex(x, x)) ≈ exp(x) * cis(x)
     end
 end
+
+@testset "expm1 type stability" begin
+    x = @inferred expm1(0.1im)
+    @test x isa Complex128
+    x = @inferred expm1(0.1f0im)
+    @test x isa Complex64
+end

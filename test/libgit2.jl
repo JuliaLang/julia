@@ -99,7 +99,8 @@ end
     end
 end
 
-is_unix() && @testset "Default config with symlink" begin
+# See #21872 and #21636
+LibGit2.version() >= v"0.26.0" && is_unix() && @testset "Default config with symlink" begin
     with_libgit2_temp_home() do tmphome
         write(joinpath(tmphome, "real_gitconfig"), "[fake]\n\tproperty = BBB")
         symlink(joinpath(tmphome, "real_gitconfig"),
@@ -854,8 +855,10 @@ mktempdir() do dir
             end
             LibGit2.add!(our_repo, "file1")
             LibGit2.commit(our_repo, "add file1")
-            # we cannot yet locally push to non-bare repos
-            @test_throws LibGit2.GitError LibGit2.push(our_repo, remoteurl=up_path)
+            if LibGit2.version() >= v"0.26.0" # See #21872, #21639 and #21597
+                # we cannot yet locally push to non-bare repos
+                @test_throws LibGit2.GitError LibGit2.push(our_repo, remoteurl=up_path)
+            end
         finally
             close(our_repo)
             close(up_repo)
@@ -1249,6 +1252,11 @@ mktempdir() do dir
         @test LibGit2.checkused!(creds)
         @test creds.user == creds_user
         @test creds.pass == creds_pass
+        sshcreds = LibGit2.SSHCredentials(creds_user, creds_pass)
+        @test sshcreds.user == creds_user
+        @test sshcreds.pass == creds_pass
+        @test isempty(sshcreds.prvkey)
+        @test isempty(sshcreds.pubkey)
     end
 
     # The following tests require that we can fake a TTY so that we can provide passwords

@@ -142,6 +142,7 @@ ntuple(f, ::Type{Val{15}}) = (@_inline_meta; (f(1), f(2), f(3), f(4), f(5), f(6)
 
 function ntuple(f::F, ::Type{Val{N}}) where {F,N}
     Core.typeassert(N, Int)
+    (N >= 0) || throw(ArgumentError(string("tuple length should be ≥0, got ", N)))
     _ntuple((), f, Val{N})
 end
 

@@ -533,7 +533,7 @@ SANITIZE_LDFLAGS := -fsanitize=address
 endif
 JCXXFLAGS += $(SANITIZE_OPTS)
 JCFLAGS += $(SANITIZE_OPTS)
-LDFLAGS += $(SANITIZE_LDFLAGS)
+JLDFLAGS += $(SANITIZE_LDFLAGS)
 # FIXME: sanitizing all dependencies doesn't work because of -Wl,--no-undefined
 #        https://github.com/JuliaLang/julia/issues/13858
 #        use LLVM_SANITIZE to sanitize LLVM
