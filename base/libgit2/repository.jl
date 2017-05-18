@@ -256,7 +256,7 @@ on the keyword argument:
 
   * `options::DescribeOptions=DescribeOptions()`
 
-Equivalent to `git-describe`.
+Equivalent to `git describe`.
 """
 function GitDescribeResult(repo::GitRepo; options::DescribeOptions=DescribeOptions())
     result_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
