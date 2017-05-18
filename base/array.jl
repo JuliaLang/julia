@@ -1791,13 +1791,16 @@ julia> findin(a,b) # 10 is the only common element
  4
 ```
 """
-function findin(a, b)
+function findin(a::Array{<:Real}, b::Union{Array{<:Real},Real})
     if issorted(a, Sort.Forward) && issorted(b, Sort.Forward)
         return _sortedfindin(a, b)
     else
         return _findin(a, b)
     end
 end
+# issorted fails for some element types so the method above has to be restricted
+# to element with isless/< defined.
+findin(a, b) = _findin(a, b)
 
 # Copying subregions
 # TODO: DEPRECATE FOR #14770

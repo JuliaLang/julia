@@ -273,6 +273,12 @@ end
     @test findin(a, Int[]) == Int[]
     @test findin(Int[], a) == Int[]
 
+    @testset "findin for uncomparable element types" begin
+        a = [1 + 1im, 1 - 1im]
+        @test findin(a, 1 + 1im) == [1]
+        @test findin(a, a)       == [1,2]
+    end
+
     rt = Base.return_types(setindex!, Tuple{Array{Int32, 3}, UInt8, Vector{Int}, Int16, UnitRange{Int}})
     @test length(rt) == 1 && rt[1] == Array{Int32, 3}
 end
