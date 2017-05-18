@@ -360,38 +360,39 @@ ndigits(x::Integer) = iszero(x) ? 1 : ndigits0z(x)
 ## ndigits with specified base ##
 
 # The suffix "nb" stands for "negative base"
-function ndigits0znb(n::Integer, b::Integer)
-    # precondition: b < -1 && !(typeof(n) <: Unsigned)
+function ndigits0znb(x::Integer, b::Integer)
+    # precondition: b < -1 && !(typeof(x) <: Unsigned)
     d = 0
-    while n != 0
-        n = cld(n,b)
+    while x != 0
+        x = cld(x,b)
         d += 1
     end
     return d
 end
 
-ndigits0znb(n::Unsigned, b::Integer) = ndigits0znb(signed(n), b)
+ndigits0znb(x::Unsigned, b::Integer) = ndigits0znb(signed(x), b)
+ndigits0znb(x::Bool, b::Integer) = x % Int
 
 # The suffix "pb" stands for "positive base"
 # TODO: allow b::Integer
-function ndigits0zpb(n::Base.BitUnsigned, b::Int)
+function ndigits0zpb(x::Base.BitUnsigned, b::Int)
     # precondition: b > 1
-    b < 0   && return ndigits0znb(signed(n), b)
-    b == 2  && return sizeof(n)<<3 - leading_zeros(n)
-    b == 8  && return (sizeof(n)<<3 - leading_zeros(n) + 2) ÷ 3
-    b == 16 && return sizeof(n)<<1 - leading_zeros(n)>>2
-    b == 10 && return ndigits0z(n)
+    b < 0   && return ndigits0znb(signed(x), b)
+    b == 2  && return sizeof(x)<<3 - leading_zeros(x)
+    b == 8  && return (sizeof(x)<<3 - leading_zeros(x) + 2) ÷ 3
+    b == 16 && return sizeof(x)<<1 - leading_zeros(x)>>2
+    b == 10 && return ndigits0z(x)
 
     d = 0
-    while n > typemax(Int)
-        n = div(n,b)
+    while x > typemax(Int)
+        x = div(x,b)
         d += 1
     end
-    n = div(n,b)
+    x = div(x,b)
     d += 1
 
     m = 1
-    while m <= n
+    while m <= x
         m *= b
         d += 1
     end
@@ -400,6 +401,7 @@ end
 
 ndigits0zpb(x::Base.BitSigned, b::Integer) = ndigits0zpb(unsigned(abs(x)), Int(b))
 ndigits0zpb(x::Base.BitUnsigned, b::Integer) = ndigits0zpb(x, Int(b))
+ndigits0zpb(x::Bool, b::Integer) = x % Int
 
 # The suffix "0z" means that the output is 0 on input zero (cf. #16841)
 """
