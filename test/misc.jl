@@ -678,3 +678,26 @@ let foo() = begin
     end
     @test foo() == 2
 end
+
+# Endian tests
+# For now, we only support little endian.
+# Add an `Sys.ARCH` test for big endian when/if we add support for that.
+# Do **NOT** use `ENDIAN_BOM` to figure out the endianess
+# since that's exactly what we want to test.
+@test ENDIAN_BOM == 0x04030201
+@test ntoh(0x1) == 0x1
+@test hton(0x1) == 0x1
+@test ltoh(0x1) == 0x1
+@test htol(0x1) == 0x1
+@test ntoh(0x102) == 0x201
+@test hton(0x102) == 0x201
+@test ltoh(0x102) == 0x102
+@test htol(0x102) == 0x102
+@test ntoh(0x1020304) == 0x4030201
+@test hton(0x1020304) == 0x4030201
+@test ltoh(0x1020304) == 0x1020304
+@test htol(0x1020304) == 0x1020304
+@test ntoh(0x102030405060708) == 0x807060504030201
+@test hton(0x102030405060708) == 0x807060504030201
+@test ltoh(0x102030405060708) == 0x102030405060708
+@test htol(0x102030405060708) == 0x102030405060708

@@ -962,7 +962,15 @@ let
     @test aa == a
     aa = unsafe_wrap(Array, pointer(a), UInt16(length(a)))
     @test aa == a
+    aaa = unsafe_wrap(Array, pointer(a), (1, 1))
+    @test size(aaa) == (1, 1)
+    @test aaa[1] == a[1]
     @test_throws InexactError unsafe_wrap(Array, pointer(a), -3)
+    # Misaligned pointer
+    res = @test_throws ArgumentError unsafe_wrap(Array, pointer(a) + 1, length(a))
+    @test contains(res.value.msg, "is not properly aligned to $(sizeof(Int)) bytes")
+    res = @test_throws ArgumentError unsafe_wrap(Array, pointer(a) + 1, (1, 1))
+    @test contains(res.value.msg, "is not properly aligned to $(sizeof(Int)) bytes")
 end
 
 struct FooBar2515
@@ -4858,12 +4866,15 @@ end
 let ni128 = sizeof(FP128test) ÷ sizeof(Int),
     ns128 = sizeof(FP128align) ÷ sizeof(Int),
     nbit = sizeof(Int) * 8,
-    arr = reinterpret(FP128align, collect(Int, 1:(2 * ns128))),
+    arr = Vector{FP128align}(2),
     offset = Base.datatype_alignment(FP128test) ÷ sizeof(Int),
     little,
-    expected
+    expected,
+    arrint = reinterpret(Int, arr)
+
+    @test length(arrint) == 2 * ns128
+    arrint .= 1:(2 * ns128)
     @test sizeof(FP128test) == 16
-    @test length(arr) == 2
     @test arr[1].i == 1
     @test arr[2].i == 1 + ns128
     expected = UInt128(0)
@@ -4913,3 +4924,20 @@ mutable struct T21719{V}
 end
 g21719(f, goal; tol = 1e-6) = T21719(f, tol, goal)
 @test isa(g21719(identity, 1.0; tol=0.1), T21719)
+
+# reinterpret alignment requirement
+let arr8 = zeros(UInt8, 16),
+    arr64 = zeros(UInt64, 2),
+    arr64_8 = reinterpret(UInt8, arr64),
+    arr64_i
+
+    # Not allowed to reinterpret arrays allocated as UInt8 array to a Int32 array
+    res = @test_throws ArgumentError reinterpret(Int32, arr8)
+    @test res.value.msg == "reinterpret from alignment 1 bytes to alignment 4 bytes not allowed"
+    # OK to reinterpret arrays allocated as UInt64 array to a Int64 array even though
+    # it is passed as a UInt8 array
+    arr64_i = reinterpret(Int64, arr64_8)
+    @test arr8 == arr64_8
+    arr64_i[2] = 1234
+    @test arr64[2] == 1234
+end
