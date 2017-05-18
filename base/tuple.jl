@@ -83,13 +83,13 @@ safe_tail(t::Tuple{}) = ()
 
 function front(t::Tuple)
     @_inline_meta
-    _front((), t...)
+    _front(t...)
 end
-front(::Tuple{}) = throw(ArgumentError("Cannot call front on an empty tuple"))
-_front(out, v) = out
-function _front(out, v, t...)
+_front() = throw(ArgumentError("Cannot call front on an empty tuple"))
+_front(v) = ()
+function _front(v, t...)
     @_inline_meta
-    _front((out..., v), t...)
+    (v, _front(t...)...)
 end
 
 ## mapping ##
