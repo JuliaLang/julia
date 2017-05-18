@@ -565,6 +565,10 @@ Deprecated or removed
   * `convert` methods from `Diagonal` and `Bidiagonal` to subtypes of
     `AbstractTriangular` have been deprecated ([#17723]).
 
+  * `Base.LinAlg.arithtype` has been deprecated. If you were using `arithtype` within a
+    `promote_op` call, instead use `promote_op(Base.LinAlg.matprod, Ts...)`. Otherwise,
+    consider defining equivalent functionality locally ([#18218]).
+
   * Special characters (`#{}()[]<>|&*?~;`) should now be quoted in commands. For example,
     ``` `export FOO=1\;` ``` should replace ``` `export FOO=1;` ``` and
     ``` `cd $dir '&&' $thingie` ``` should replace ``` `cd $dir && $thingie` ``` ([#19786]).
@@ -615,6 +619,7 @@ Command-line option changes
 [#18012]: https://github.com/JuliaLang/julia/issues/18012
 [#18050]: https://github.com/JuliaLang/julia/issues/18050
 [#18159]: https://github.com/JuliaLang/julia/issues/18159
+[#18218]: https://github.com/JuliaLang/julia/issues/18218
 [#18251]: https://github.com/JuliaLang/julia/issues/18251
 [#18330]: https://github.com/JuliaLang/julia/issues/18330
 [#18339]: https://github.com/JuliaLang/julia/issues/18339
