@@ -40,7 +40,7 @@ function edit(path::AbstractString, line::Integer=0)
     end
     background = true
     line_unsupported = false
-    if startswith(name, "emacs") || name == "gedit"
+    if startswith(name, "emacs") || name == "gedit" || startswith(name, "gvim")
         cmd = line != 0 ? `$command +$line $path` : `$command $path`
     elseif startswith(name, "vim.") || name == "vi" || name == "vim" || name == "nvim" || name == "mvim" || name == "nano"
         cmd = line != 0 ? `$command +$line $path` : `$command $path`
