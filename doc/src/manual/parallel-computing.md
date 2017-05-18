@@ -951,7 +951,8 @@ one that uses [`@parallel`](@ref):
 
 ```julia
 julia> function advection_parallel!(q, u)
-           for t = 1:size(q,3)-1
+           #Type assertion, see #15276 
+           for t::Int = 1:size(q,3)-1
                @sync @parallel for j = 1:size(q,2)
                    for i = 1:size(q,1)
                        q[i,j,t+1]= q[i,j,t] + u[i,j,t]
