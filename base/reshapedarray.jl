@@ -148,7 +148,7 @@ _reshape(R::ReshapedArray, dims::Dims) = _reshape(R.parent, dims)
 
 function __reshape(p::Tuple{AbstractArray,IndexCartesian}, dims::Dims)
     parent = p[1]
-    strds = front(size_strides(parent))
+    strds = front(size_to_strides(size(parent)..., 1))
     strds1 = map(s->max(1,s), strds)  # for resizing empty arrays
     mi = map(SignedMultiplicativeInverse, strds1)
     ReshapedArray(parent, dims, reverse(mi))
@@ -158,10 +158,6 @@ function __reshape(p::Tuple{AbstractArray,IndexLinear}, dims::Dims)
     parent = p[1]
     ReshapedArray(parent, dims, ())
 end
-
-@inline size_strides(A::AbstractArray) = tail(size_strides((1,), size(A)...))
-size_strides(out::Tuple) = out
-@inline size_strides(out, s, sz...) = size_strides((out..., out[end]*s), sz...)
 
 size(A::ReshapedArray) = A.dims
 similar(A::ReshapedArray, eltype::Type, dims::Dims) = similar(parent(A), eltype, dims)

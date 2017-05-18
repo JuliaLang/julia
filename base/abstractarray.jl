@@ -202,13 +202,11 @@ julia> strides(A)
 (1, 3, 12)
 ```
 """
-strides(A::AbstractArray) = _strides((1,), A)
-_strides(out::Tuple{Int}, A::AbstractArray{<:Any,0}) = ()
-_strides(out::NTuple{N,Int}, A::AbstractArray{<:Any,N}) where {N} = out
-function _strides(out::NTuple{M,Int}, A::AbstractArray) where M
-    @_inline_meta
-    _strides((out..., out[M]*size(A, M)), A)
-end
+strides(A::AbstractArray) = size_to_strides(1, size(A)...)
+@inline size_to_strides(s, d, sz...) = (s, size_to_strides(s * d, sz...)...)
+size_to_strides(s, d) = (s,)
+size_to_strides(s) = ()
+
 
 function isassigned(a::AbstractArray, i::Int...)
     try
