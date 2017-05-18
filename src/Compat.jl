@@ -816,6 +816,7 @@ if !isdefined(Base, :normalize)
 end
 
 if !isdefined(Base, :AsyncCondition)
+    include_string("""
     type AsyncCondition
         cond::Condition
         handle::Ptr{Void}
@@ -844,6 +845,7 @@ if !isdefined(Base, :AsyncCondition)
             this
         end
     end
+    """)
 
     Base.wait(c::AsyncCondition) = wait(c.cond)
 else
@@ -1272,9 +1274,11 @@ if VERSION < v"0.6.0-dev.1024"
 
         # julia #14805
         if VERSION < v"0.5.0-dev+3256"
+            include_string("""
             immutable Flatten{I}
                 it::I
             end
+            """)
 
             flatten(itr) = Flatten(itr)
 
@@ -1318,10 +1322,12 @@ if VERSION < v"0.6.0-dev.1024"
             # Product -- cartesian product of iterators
             @compat abstract type AbstractProdIterator end
 
+            include_string("""
             immutable Prod2{I1, I2} <: AbstractProdIterator
                 a::I1
                 b::I2
             end
+            """)
 
             product(a) = Zip1(a)
             product(a, b) = Prod2(a, b)
@@ -1353,10 +1359,12 @@ if VERSION < v"0.6.0-dev.1024"
             @inline next(p::Prod2, st) = prod_next(p, st)
             @inline done(p::AbstractProdIterator, st) = st[4]
 
+            include_string("""
             immutable Prod{I1, I2<:AbstractProdIterator} <: AbstractProdIterator
                 a::I1
                 b::I2
             end
+            """)
 
             product(a, b, c...) = Prod(a, product(b, c...))
             eltype{I1,I2}(::Type{Prod{I1,I2}}) = tuple_type_cons(eltype(I1), eltype(I2))
@@ -1373,10 +1381,12 @@ if VERSION < v"0.6.0-dev.1024"
         if VERSION < v"0.5.0-dev+3510"
             partition{T}(c::T, n::Int) = PartitionIterator{T}(c, n)
 
+            include_string("""
             type PartitionIterator{T}
                 c::T
                 n::Int
             end
+            """)
 
             eltype{T}(::Type{PartitionIterator{T}}) = Vector{eltype(T)}
 
