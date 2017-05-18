@@ -558,6 +558,7 @@ dec(n::BigInt, pad::Int) = base(10, n, pad)
 hex(n::BigInt, pad::Int) = base(16, n, pad)
 
 function base(b::Integer, n::BigInt)
+    b < 0 && return base(Int(b), n, 1, (b>0) & (n.size<0))
     2 <= b <= 62 || throw(ArgumentError("base must be 2 ≤ base ≤ 62, got $b"))
     nd = ndigits(n, b)
     str = Base._string_n(n < 0 ? nd+1 : nd)
@@ -566,6 +567,7 @@ function base(b::Integer, n::BigInt)
 end
 
 function base(b::Integer, n::BigInt, pad::Integer)
+    b < 0 && return base(Int(b), n, pad, (b>0) & (n.size<0))
     s = base(b, n)
     buf = IOBuffer()
     if n < 0
