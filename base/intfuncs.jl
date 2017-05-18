@@ -371,6 +371,7 @@ function ndigits0znb(n::Integer, b::Integer)
 end
 
 ndigits0znb(n::Unsigned, b::Integer) = ndigits0znb(signed(n), b)
+ndigits0znb(n::Bool, b::Integer) = n % Int
 
 # The suffix "pb" stands for "positive base"
 # TODO: allow b::Integer
@@ -400,6 +401,7 @@ end
 
 ndigits0zpb(x::Base.BitSigned, b::Integer) = ndigits0zpb(unsigned(abs(x)), Int(b))
 ndigits0zpb(x::Base.BitUnsigned, b::Integer) = ndigits0zpb(x, Int(b))
+ndigits0zpb(x::Bool, b::Integer) = x % Int
 
 # The suffix "0z" means that the output is 0 on input zero (cf. #16841)
 """

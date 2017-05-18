@@ -103,6 +103,11 @@ end
 @test ndigits(9, 0x2) == 4
 @test ndigits(0x9, 0x2) == 4
 
+# ndigits is defined for Bool
+@test iszero([Base.ndigits0z(false, b) for b in [-20:-2;2:20]])
+@test all(n -> n == 1, Base.ndigits0z(true, b) for b in [-20:-2;2:20])
+@test all(n -> n == 1, ndigits(x, b) for b in [-20:-2;2:20] for x in [true, false])
+
 @test bin('3') == "110011"
 @test bin('3',7) == "0110011"
 @test bin(3) == "11"
