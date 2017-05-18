@@ -221,6 +221,10 @@ u = unique([1,1,2])
     u = [1,1,3,2,1]
     unique!(u)
     @test u == [1,3,2]
+    @test unique!([]) == []
+    u = [1,2,2,3,5,5]
+    unique!(u)
+    @test u == [1,2,3,5]
 end
 
 # allunique

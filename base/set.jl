@@ -212,18 +212,21 @@ julia> A
  5
 ```
 """
-function unique!(c)
-    if issorted(c) || issorted(c, rev=true)
-        done(c, 1) ? count = 0 : count = 1
+function unique!(c::AbstractVector)
+    if (issorted(c) || issorted(c, rev=true)) && !isempty(c)
+        # If c is sorted, then we only need to keep track of one element and add that to c
+        # everytime that we see a new element.
+        count = 1
         for i in indices(c, 1)
             x = c[i]
-            currentitem = c[count]
-            if x != currentitem
+            if x != c[count]
                 count += 1
                 c[count] = x
             end
         end
     else
+        # If c is not sorted, then we will need to keep track of all of the elements that
+        # we have seen so far.
         seen = Set{eltype(c)}()
         idxs = eachindex(c)
         m = n = start(idxs)
