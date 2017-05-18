@@ -752,7 +752,7 @@ julia> n = 12;
 julia> @schedule make_jobs(n); # feed the jobs channel with "n" jobs
 
 julia> for p in workers() # start tasks on the workers to process requests in parallel
-           @async remote_do(do_work, p, jobs, results)
+           remote_do(do_work, p, jobs, results)
        end
 
 julia> @elapsed while n > 0 # print out results
