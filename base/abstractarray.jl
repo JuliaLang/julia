@@ -1668,15 +1668,15 @@ end
 function _sub2ind!(Iout, inds, Iinds, I)
     @_noinline_meta
     for i in Iinds
-        # Iout[i] = sub2ind(inds, map(Ij->Ij[i], I)...)
+        # Iout[i] = sub2ind(inds, map(Ij -> Ij[i], I)...)
         Iout[i] = sub2ind_vec(inds, i, I)
     end
     Iout
 end
 
-sub2ind_vec(inds, i, I) = (@_inline_meta; _sub2ind_vec(inds, (), i, I...))
-_sub2ind_vec(inds, out, i, I1, I...) = (@_inline_meta; _sub2ind_vec(inds, (out..., I1[i]), i, I...))
-_sub2ind_vec(inds, out, i) = (@_inline_meta; sub2ind(inds, out...))
+sub2ind_vec(inds, i, I) = (@_inline_meta; sub2ind(inds, _sub2ind_vec(i, I...)...))
+_sub2ind_vec(i, I1, I...) = (@_inline_meta; (I1[i], _sub2ind_vec(i, I...)...))
+_sub2ind_vec(i) = ()
 
 function ind2sub(inds::Union{DimsInteger{N},Indices{N}}, ind::AbstractVector{<:Integer}) where N
     M = length(ind)

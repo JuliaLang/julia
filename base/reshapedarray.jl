@@ -167,11 +167,11 @@ parentindexes(A::ReshapedArray) = map(s->1:s, size(parent(A)))
 reinterpret(::Type{T}, A::ReshapedArray, dims::Dims) where {T} = reinterpret(T, parent(A), dims)
 
 @inline ind2sub_rs(::Tuple{}, i::Int) = i
-@inline ind2sub_rs(strds, i) = ind2sub_rs((), strds, i-1)
-@inline ind2sub_rs(out, ::Tuple{}, ind) = (ind+1, out...)
-@inline function ind2sub_rs(out, strds, ind)
+@inline ind2sub_rs(strds, i) = _ind2sub_rs(strds, i - 1)
+@inline _ind2sub_rs(::Tuple{}, ind) = (ind + 1,)
+@inline function _ind2sub_rs(strds, ind)
     d, r = divrem(ind, strds[1])
-    ind2sub_rs((d+1, out...), tail(strds), r)
+    (_ind2sub_rs(tail(strds), r)..., d + 1)
 end
 
 @inline function getindex(A::ReshapedArrayLF, index::Int)
