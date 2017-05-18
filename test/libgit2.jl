@@ -440,7 +440,6 @@ mktempdir() do dir
                     @test contains(showstr[4], "SHA:")
                     @test showstr[5] == "Message:"
                     @test showstr[6] == commit_msg1
-
                     @test LibGit2.revcount(repo, string(commit_oid1), string(commit_oid3)) == (-1,0)
                 finally
                     close(cmt)
@@ -560,6 +559,15 @@ mktempdir() do dir
                 @test length(tags) == 1
                 @test tag2 ∈ tags
                 @test tag1 ∉ tags
+
+                description = LibGit2.GitDescribeResult(repo)
+                fmtted_description = LibGit2.format(description)
+                @test sprint(show, description) == "GitDescribeResult:\n$fmtted_description\n"
+                @test fmtted_description == "tag2"
+                description = LibGit2.GitDescribeResult(LibGit2.GitObject(repo, "HEAD"))
+                fmtted_description = LibGit2.format(description)
+                @test sprint(show, description) == "GitDescribeResult:\n$fmtted_description\n"
+                @test fmtted_description == "tag2"
             finally
                 close(repo)
             end
