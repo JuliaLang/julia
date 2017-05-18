@@ -89,9 +89,13 @@ end
 
 # dSFMT jump
 function dsfmt_jump(s::DSFMT_state, jp::AbstractString)
-    index = s.val[end-1]
-    work = zeros(UInt64, JN32>>1)
-    dsfmt = reinterpret(UInt64, copy(s.val))
+    val = s.val
+    nval = length(val)
+    index = val[nval - 1]
+    work = zeros(UInt64, JN32 >> 1)
+    dsfmt = Vector{UInt64}(nval >> 1)
+    ccall(:memcpy, Ptr{Void}, (Ptr{UInt64}, Ptr{Int32}, Csize_t),
+          dsfmt, val, (nval - 1) * sizeof(Int32))
     dsfmt[end] = UInt64(N*2)
 
     for c in jp

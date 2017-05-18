@@ -283,11 +283,12 @@ function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::Array{Bool}
     nc8 = (nc >>> 3) << 3
     if nc8 > 0
         ind8 = 1
-        C8 = reinterpret(UInt64, unsafe_wrap(Array, pointer(C, ind), nc8 << 6))
+        P8 = Ptr{UInt64}(pointer(C, ind)) # unaligned i64 pointer
         @inbounds for i = 1:nc8
             c = UInt64(0)
             for j = 0:7
-                c |= (pack8bools(C8[ind8]) << (j<<3))
+                # unaligned load
+                c |= (pack8bools(unsafe_load(P8, ind8)) << (j<<3))
                 ind8 += 1
             end
             Bc[bind] = c
