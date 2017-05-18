@@ -29,7 +29,7 @@ Library improvements
 --------------------
 
   * the functions `base` and `digits` digits now accept a negative
-    base (like `ndigits` did).
+    base (like `ndigits` did) ([#21692]).
 
 Compiler/Runtime improvements
 -----------------------------
@@ -596,6 +596,7 @@ Command-line option changes
 [#12563]: https://github.com/JuliaLang/julia/issues/12563
 [#15850]: https://github.com/JuliaLang/julia/issues/15850
 [#16213]: https://github.com/JuliaLang/julia/issues/16213
+[#16937]: https://github.com/JuliaLang/julia/issues/16937
 [#16961]: https://github.com/JuliaLang/julia/issues/16961
 [#16984]: https://github.com/JuliaLang/julia/issues/16984
 [#16986]: https://github.com/JuliaLang/julia/issues/16986
@@ -716,9 +717,11 @@ Command-line option changes
 [#20500]: https://github.com/JuliaLang/julia/issues/20500
 [#20530]: https://github.com/JuliaLang/julia/issues/20530
 [#20543]: https://github.com/JuliaLang/julia/issues/20543
+[#20575]: https://github.com/JuliaLang/julia/issues/20575
 [#20609]: https://github.com/JuliaLang/julia/issues/20609
 [#20889]: https://github.com/JuliaLang/julia/issues/20889
 [#21183]: https://github.com/JuliaLang/julia/issues/21183
 [#21359]: https://github.com/JuliaLang/julia/issues/21359
+[#21692]: https://github.com/JuliaLang/julia/issues/21692
 [#21697]: https://github.com/JuliaLang/julia/issues/21697
 [#21759]: https://github.com/JuliaLang/julia/issues/21759
