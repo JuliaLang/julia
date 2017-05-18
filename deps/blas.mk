@@ -4,7 +4,7 @@ OPENBLAS_GIT_URL := git://github.com/xianyi/OpenBLAS.git
 OPENBLAS_TAR_URL = https://api.github.com/repos/xianyi/OpenBLAS/tarball/$1
 $(eval $(call git-external,openblas,OPENBLAS,,,$(BUILDDIR)))
 
-OPENBLAS_BUILD_OPTS := CC="$(CC)" FC="$(FC)" RANLIB="$(RANLIB)" TARGET=$(OPENBLAS_TARGET_ARCH) BINARY=$(BINARY)
+OPENBLAS_BUILD_OPTS := CC="$(CC)" FC="$(FC)" LD="$(LD)" RANLIB="$(RANLIB)" TARGET=$(OPENBLAS_TARGET_ARCH) BINARY=$(BINARY)
 
 # Thread support
 ifeq ($(OPENBLAS_USE_THREAD), 1)
