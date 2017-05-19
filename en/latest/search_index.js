@@ -7101,7 +7101,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.pop!",
     "category": "Method",
-    "text": "pop!(collection) -> item\n\nRemove an item in collection and return it. If collection is an ordered container, the last item is returned.\n\njulia> A=[1, 2, 3]\n6-element Array{Int64,1}:\n 1\n 2\n 3\n\njulia> pop!(A)\n3\n\njulia> A\n5-element Array{Int64,1}:\n 1\n 2\n\njulia> S = Set([1, 2])\nSet([2, 1])\n\njulia> pop!(S)\n2\n\njulia> S\nSet([1])\n\njulia> pop!(Dict(1=>2))\n1=>2\n\n\n\n"
+    "text": "pop!(collection) -> item\n\nRemove an item in collection and return it. If collection is an ordered container, the last item is returned.\n\njulia> A=[1, 2, 3]\n3-element Array{Int64,1}:\n 1\n 2\n 3\n\njulia> pop!(A)\n3\n\njulia> A\n2-element Array{Int64,1}:\n 1\n 2\n\njulia> S = Set([1, 2])\nSet([2, 1])\n\njulia> pop!(S)\n2\n\njulia> S\nSet([1])\n\njulia> pop!(Dict(1=>2))\n1=>2\n\n\n\n"
 },
 
 {
@@ -8389,7 +8389,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.conj",
     "category": "Function",
-    "text": "conj(v::RowVector)\n\nReturns a ConjArray lazy view of the input, where each element is conjugated.\n\nExample\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\nconj(z)\n\nCompute the complex conjugate of a complex number z.\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\n"
+    "text": "conj(z)\n\nCompute the complex conjugate of a complex number z.\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\nconj(v::RowVector)\n\nReturns a ConjArray lazy view of the input, where each element is conjugated.\n\nExample\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\n"
 },
 
 {
