@@ -494,6 +494,8 @@ $(eval $(call LLVM_PATCH,llvm-D28759-loopclearance))
 $(eval $(call LLVM_PATCH,llvm-D28786-callclearance))
 $(eval $(call LLVM_PATCH,llvm-rL293230-icc17-cmake)) # Remove for 4.0
 $(eval $(call LLVM_PATCH,llvm-PR29010-i386-xmm)) # Remove for 4.0
+$(eval $(call LLVM_PATCH,llvm-D32593))
+$(eval $(call LLVM_PATCH,llvm-D33179))
 endif # LLVM_VER
 
 ifeq ($(LLVM_VER),3.7.1)
