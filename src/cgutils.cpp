@@ -1781,7 +1781,7 @@ static Value *emit_array_nd_index(const jl_cgval_t &ainfo, jl_value_t *ex, ssize
 
 // --- boxing ---
 
-static Value *emit_allocobj(jl_codectx_t *ctx, size_t static_size, Value *jt);
+static Value *emit_allocobj(jl_codectx_t *ctx, size_t static_size, size_t alignment, Value *jt);
 
 static void init_bits_value(Value *newv, Value *v, MDNode *tbaa, unsigned alignment = sizeof(void*)) // min alignment in julia's gc is pointer-aligned
 {
@@ -1989,7 +1989,7 @@ static Value *box_union(const jl_cgval_t &vinfo, jl_codectx_t *ctx, const SmallB
                     jl_cgval_t vinfo_r = jl_cgval_t(vinfo, (jl_value_t*)jt, NULL);
                     box = _boxed_special(vinfo_r, t, ctx);
                     if (!box) {
-                        box = emit_allocobj(ctx, jl_datatype_size(jt), literal_pointer_val((jl_value_t*)jt));
+                        box = emit_allocobj(ctx, jl_datatype_size(jt), jl_datatype_align(jt), literal_pointer_val((jl_value_t*)jt));
                         init_bits_cgval(box, vinfo_r, jl_is_mutable(jt) ? tbaa_mutab : tbaa_immut, ctx);
                     }
                 }
@@ -2052,7 +2052,7 @@ static Value *boxed(const jl_cgval_t &vinfo, jl_codectx_t *ctx, bool gcrooted)
         assert(!type_is_ghost(t)); // ghost values should have been handled by vinfo.constant above!
         box = _boxed_special(vinfo, t, ctx);
         if (!box) {
-            box = emit_allocobj(ctx, jl_datatype_size(jt), literal_pointer_val((jl_value_t*)jt));
+            box = emit_allocobj(ctx, jl_datatype_size(jt), jl_datatype_align(jt), literal_pointer_val((jl_value_t*)jt));
             init_bits_cgval(box, vinfo, jl_is_mutable(jt) ? tbaa_mutab : tbaa_immut, ctx);
         }
     }
@@ -2165,13 +2165,13 @@ static void emit_cpointercheck(const jl_cgval_t &x, const std::string &msg, jl_c
 }
 
 // allocation for known size object
-static Value *emit_allocobj(jl_codectx_t *ctx, size_t static_size, Value *jt)
+static Value *emit_allocobj(jl_codectx_t *ctx, size_t static_size, size_t alignment, Value *jt)
 {
     JL_FEAT_REQUIRE(ctx, dynamic_alloc);
     JL_FEAT_REQUIRE(ctx, runtime);
 
     int osize;
-    int offset = jl_gc_classify_pools(static_size, &osize);
+    int offset = jl_gc_classify_pools(static_size, alignment, &osize);
     Value *ptls_ptr = emit_bitcast(ctx->ptlsStates, T_pint8);
     Value *v;
     if (offset < 0) {
@@ -2325,7 +2325,7 @@ static jl_cgval_t emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **arg
             else
                 return mark_julia_slot(strct, ty, NULL, tbaa_stack);
         }
-        Value *strct = emit_allocobj(ctx, jl_datatype_size(sty),
+        Value *strct = emit_allocobj(ctx, jl_datatype_size(sty), jl_datatype_align(sty),
                                      literal_pointer_val((jl_value_t*)ty));
         jl_cgval_t strctinfo = mark_julia_type(strct, true, ty, ctx);
         for (size_t i = 0; i < nf; i++) {

@@ -580,7 +580,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     size_t pagesz = jl_page_size;
-    jl_task_t *t = (jl_task_t*)jl_gc_alloc(ptls, sizeof(jl_task_t),
+    jl_task_t *t = (jl_task_t*)jl_gc_alloc(ptls, sizeof(jl_task_t), /*align*/ 0,
                                            jl_task_type);
 #ifndef COPY_STACKS
     if (ssize == 0) // unspecified -- pick some default size
@@ -696,7 +696,7 @@ void jl_init_tasks(void)
 void jl_init_root_task(void *stack, size_t ssize)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    ptls->current_task = (jl_task_t*)jl_gc_alloc(ptls, sizeof(jl_task_t),
+    ptls->current_task = (jl_task_t*)jl_gc_alloc(ptls, sizeof(jl_task_t), 0,
                                                  jl_task_type);
 #ifdef COPY_STACKS
     ptls->current_task->ssize = 0;  // size of saved piece

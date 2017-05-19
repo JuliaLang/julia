@@ -882,7 +882,7 @@ static jl_typemap_level_t *jl_new_typemap_level(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_typemap_level_t *cache =
-        (jl_typemap_level_t*)jl_gc_alloc(ptls, sizeof(jl_typemap_level_t),
+        (jl_typemap_level_t*)jl_gc_alloc(ptls, sizeof(jl_typemap_level_t), 0,
                                          jl_typemap_level_type);
     cache->key = NULL;
     cache->linear = (jl_typemap_entry_t*)jl_nothing;
@@ -1025,7 +1025,7 @@ jl_typemap_entry_t *jl_typemap_insert(union jl_typemap_t *cache, jl_value_t *par
     }
 
     jl_typemap_entry_t *newrec =
-        (jl_typemap_entry_t*)jl_gc_alloc(ptls, sizeof(jl_typemap_entry_t),
+        (jl_typemap_entry_t*)jl_gc_alloc(ptls, sizeof(jl_typemap_entry_t), 0,
                                          jl_typemap_entry_type);
     newrec->sig = type;
     newrec->simplesig = simpletype;

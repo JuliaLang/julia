@@ -4523,7 +4523,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
                 (void)julia_type_to_llvm(jargty, &isboxed);
                 if (isboxed) {
                     // passed an unboxed T, but want something boxed
-                    Value *mem = emit_allocobj(&ctx, jl_datatype_size(jargty),
+                    Value *mem = emit_allocobj(&ctx, jl_datatype_size(jargty), jl_datatype_align(jargty),
                                                literal_pointer_val((jl_value_t*)jargty));
                     tbaa_decorate(jl_is_mutable(jargty) ? tbaa_mutab : tbaa_immut,
                                   builder.CreateAlignedStore(val,
@@ -4785,7 +4785,8 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
         }
         case jl_returninfo_t::SRet: {
             unsigned sret_nbytes = jl_datatype_size(astrt);
-            builder.CreateMemCpy(&*gf_thunk->arg_begin(), gf_ret, sret_nbytes, jl_alignment(sret_nbytes));
+            unsigned alignment   = jl_datatype_align(astrt);
+            builder.CreateMemCpy(&*gf_thunk->arg_begin(), gf_ret, sret_nbytes, alignment);
             builder.CreateRetVoid();
             break;
         }

@@ -859,7 +859,7 @@ jl_expr_t *jl_exprn(jl_sym_t *head, size_t n)
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_array_t *ar = n==0 ? (jl_array_t*)jl_an_empty_vec_any : jl_alloc_vec_any(n);
     JL_GC_PUSH1(&ar);
-    jl_expr_t *ex = (jl_expr_t*)jl_gc_alloc(ptls, sizeof(jl_expr_t),
+    jl_expr_t *ex = (jl_expr_t*)jl_gc_alloc(ptls, sizeof(jl_expr_t), /*align*/ 0,
                                             jl_expr_type);
     ex->head = head;
     ex->args = ar;
@@ -877,7 +877,7 @@ JL_CALLABLE(jl_f__expr)
     JL_GC_PUSH1(&ar);
     for(size_t i=0; i < nargs-1; i++)
         jl_array_ptr_set(ar, i, args[i+1]);
-    jl_expr_t *ex = (jl_expr_t*)jl_gc_alloc(ptls, sizeof(jl_expr_t),
+    jl_expr_t *ex = (jl_expr_t*)jl_gc_alloc(ptls, sizeof(jl_expr_t), /*align*/ 0,
                                             jl_expr_type);
     ex->head = (jl_sym_t*)args[0];
     ex->args = ar;

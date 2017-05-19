@@ -1703,7 +1703,7 @@ static jl_value_t *jl_deserialize_value_method(jl_serializer_state *s, jl_value_
 {
     int usetable = (s->mode != MODE_AST);
     jl_method_t *m =
-        (jl_method_t*)jl_gc_alloc(s->ptls, sizeof(jl_method_t),
+        (jl_method_t*)jl_gc_alloc(s->ptls, sizeof(jl_method_t), /*align*/ 0,
                                   jl_method_type);
     memset(m, 0, sizeof(jl_method_type));
     uintptr_t pos = backref_list.len;
@@ -1766,7 +1766,7 @@ static jl_value_t *jl_deserialize_value_method_instance(jl_serializer_state *s, 
 {
     int usetable = (s->mode != MODE_AST);
     jl_method_instance_t *li =
-        (jl_method_instance_t*)jl_gc_alloc(s->ptls, sizeof(jl_method_instance_t),
+        (jl_method_instance_t*)jl_gc_alloc(s->ptls, sizeof(jl_method_instance_t), /*align*/ 0,
                                        jl_method_instance_type);
     memset(li, 0, sizeof(jl_method_instance_t));
     uintptr_t pos = backref_list.len;
@@ -1928,7 +1928,7 @@ static jl_value_t *jl_deserialize_value_singleton(jl_serializer_state *s, jl_val
         jl_datatype_t *dt = (jl_datatype_t*)jl_deserialize_value(s, NULL);
         return dt->instance;
     }
-    jl_value_t *v = (jl_value_t*)jl_gc_alloc(s->ptls, 0, NULL);
+    jl_value_t *v = (jl_value_t*)jl_gc_alloc(s->ptls, 0, 0, NULL);
     uintptr_t pos = backref_list.len;
     arraylist_push(&backref_list, (void*)v);
     if (s->mode == MODE_MODULE) {
@@ -1984,7 +1984,9 @@ static jl_value_t *jl_deserialize_typemap_entry(jl_serializer_state *s)
     jl_value_t *te = jl_nothing;
     jl_value_t **pn = &te;
     while (n > 0) {
-        jl_value_t *v = jl_gc_alloc(s->ptls, jl_datatype_size(jl_typemap_entry_type), jl_typemap_entry_type);
+        jl_value_t *v = jl_gc_alloc(s->ptls, jl_datatype_size(jl_typemap_entry_type),
+                                    jl_datatype_align(jl_typemap_entry_type),
+                                    jl_typemap_entry_type);
         if (n == N && s->mode != MODE_AST)
             arraylist_push(&backref_list, v);
         jl_deserialize_struct(s, v, 1);
@@ -2000,7 +2002,7 @@ static jl_value_t *jl_deserialize_value_any(jl_serializer_state *s, jl_value_t *
 {
     int usetable = (s->mode != MODE_AST);
     int32_t sz = (vtag == (jl_value_t*)SmallDataType_tag ? read_uint8(s->s) : read_int32(s->s));
-    jl_value_t *v = jl_gc_alloc(s->ptls, sz, NULL);
+    jl_value_t *v = jl_gc_alloc(s->ptls, sz, 0, NULL);
     jl_set_typeof(v, (void*)(intptr_t)0x50);
     uintptr_t pos = backref_list.len;
     if (usetable)
@@ -2081,7 +2083,7 @@ static jl_value_t *jl_deserialize_value_(jl_serializer_state *s, jl_value_t *vta
         return jl_deserialize_value_expr(s, vtag);
     }
     else if (vtag == (jl_value_t*)jl_tvar_type) {
-        jl_tvar_t *tv = (jl_tvar_t*)jl_gc_alloc(s->ptls, sizeof(jl_tvar_t), jl_tvar_type);
+        jl_tvar_t *tv = (jl_tvar_t*)jl_gc_alloc(s->ptls, sizeof(jl_tvar_t), 0, jl_tvar_type);
         if (usetable)
             arraylist_push(&backref_list, tv);
         tv->name = (jl_sym_t*)jl_deserialize_value(s, NULL);
@@ -2786,7 +2788,7 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ast(jl_method_t *m, jl_array_t *data)
     };
 
     jl_code_info_t *code =
-        (jl_code_info_t*)jl_gc_alloc(ptls, sizeof(jl_code_info_t),
+        (jl_code_info_t*)jl_gc_alloc(ptls, sizeof(jl_code_info_t), 0,
                                        jl_code_info_type);
     uint8_t flags = read_uint8(s.s);
     code->inferred = !!(flags & (1 << 3));

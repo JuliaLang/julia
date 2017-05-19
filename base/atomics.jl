@@ -2,7 +2,7 @@
 
 using Core.Intrinsics: llvmcall
 
-import Base: setindex!, getindex, unsafe_convert
+import Base: setindex!, getindex, unsafe_convert, datatype_alignment
 import Base.Sys: ARCH, WORD_SIZE
 
 export
@@ -321,9 +321,6 @@ inttype(::Type{Float16}) = Int16
 inttype(::Type{Float32}) = Int32
 inttype(::Type{Float64}) = Int64
 
-
-alignment(::Type{T}) where {T} = ccall(:jl_alignment, Cint, (Csize_t,), sizeof(T))
-
 # All atomic operations have acquire and/or release semantics, depending on
 # whether the load or store values. Most of the time, this is what one wants
 # anyway, and it's only moderately expensive on most hardware.
@@ -335,31 +332,31 @@ for typ in atomictypes
     if VersionNumber(Base.libllvm_version) >= v"3.8"
         @eval getindex(x::Atomic{$typ}) =
             llvmcall($"""
-                     %rv = load atomic $rt %0 acquire, align $(alignment(typ))
+                     %rv = load atomic $rt %0 acquire, align $(datatype_alignment(typ))
                      ret $lt %rv
                      """, $typ, Tuple{Ptr{$typ}}, unsafe_convert(Ptr{$typ}, x))
         @eval setindex!(x::Atomic{$typ}, v::$typ) =
             llvmcall($"""
-                     store atomic $lt %1, $lt* %0 release, align $(alignment(typ))
+                     store atomic $lt %1, $lt* %0 release, align $(datatype_alignment(typ))
                      ret void
                      """, Void, Tuple{Ptr{$typ},$typ}, unsafe_convert(Ptr{$typ}, x), v)
     else
         if typ <: Integer
             @eval getindex(x::Atomic{$typ}) =
                 llvmcall($"""
-                         %rv = load atomic $rt %0 acquire, align $(alignment(typ))
+                         %rv = load atomic $rt %0 acquire, align $(datatype_alignment(typ))
                          ret $lt %rv
                          """, $typ, Tuple{Ptr{$typ}}, unsafe_convert(Ptr{$typ}, x))
             @eval setindex!(x::Atomic{$typ}, v::$typ) =
                 llvmcall($"""
-                         store atomic $lt %1, $lt* %0 release, align $(alignment(typ))
+                         store atomic $lt %1, $lt* %0 release, align $(datatype_alignment(typ))
                          ret void
                          """, Void, Tuple{Ptr{$typ},$typ}, unsafe_convert(Ptr{$typ}, x), v)
         else
             @eval getindex(x::Atomic{$typ}) =
                 llvmcall($"""
                          %iptr = bitcast $lt* %0 to $ilt*
-                         %irv = load atomic $irt %iptr acquire, align $(alignment(typ))
+                         %irv = load atomic $irt %iptr acquire, align $(datatype_alignment(typ))
                          %rv = bitcast $ilt %irv to $lt
                          ret $lt %rv
                          """, $typ, Tuple{Ptr{$typ}}, unsafe_convert(Ptr{$typ}, x))
@@ -367,7 +364,7 @@ for typ in atomictypes
                 llvmcall($"""
                          %iptr = bitcast $lt* %0 to $ilt*
                          %ival = bitcast $lt %1 to $ilt
-                         store atomic $ilt %ival, $ilt* %iptr release, align $(alignment(typ))
+                         store atomic $ilt %ival, $ilt* %iptr release, align $(datatype_alignment(typ))
                          ret void
                          """, Void, Tuple{Ptr{$typ},$typ}, unsafe_convert(Ptr{$typ}, x), v)
         end

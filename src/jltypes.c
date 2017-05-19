@@ -446,7 +446,7 @@ JL_DLLEXPORT jl_tvar_t *jl_new_typevar(jl_sym_t *name, jl_value_t *lb, jl_value_
     if ((ub != (jl_value_t*)jl_any_type && !jl_is_type(ub) && !jl_is_typevar(ub)) || jl_is_vararg_type(ub))
         jl_type_error_rt("TypeVar", "upper bound", (jl_value_t*)jl_type_type, ub);
     jl_ptls_t ptls = jl_get_ptls_states();
-    jl_tvar_t *tv = (jl_tvar_t*)jl_gc_alloc(ptls, sizeof(jl_tvar_t), jl_tvar_type);
+    jl_tvar_t *tv = (jl_tvar_t*)jl_gc_alloc(ptls, sizeof(jl_tvar_t), /*align*/ 0, jl_tvar_type);
     tv->name = name;
     tv->lb = lb;
     tv->ub = ub;
@@ -1154,7 +1154,7 @@ static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **i
         ndt->layout = dt->layout;
         ndt->types = jl_emptysvec;
         if (jl_is_datatype_make_singleton(ndt)) {
-            ndt->instance = jl_gc_alloc(ptls, 0, ndt);
+            ndt->instance = jl_gc_alloc(ptls, 0, 0, ndt);
             jl_gc_wb(ndt, ndt->instance);
         }
     }
@@ -1175,7 +1175,7 @@ static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **i
             if (cacheable) {
                 jl_compute_field_offsets(ndt);
                 if (jl_is_datatype_make_singleton(ndt)) {
-                    ndt->instance = jl_gc_alloc(ptls, 0, ndt);
+                    ndt->instance = jl_gc_alloc(ptls, 0, 0, ndt);
                     jl_gc_wb(ndt, ndt->instance);
                 }
             }
@@ -1503,7 +1503,7 @@ void jl_reinstantiate_inner_types(jl_datatype_t *t) // can throw!
             if (ndt->uid) { // cacheable
                 jl_compute_field_offsets(ndt);
                 if (jl_is_datatype_make_singleton(ndt)) {
-                    ndt->instance = jl_gc_alloc(ptls, 0, ndt);
+                    ndt->instance = jl_gc_alloc(ptls, 0, 0, ndt);
                     jl_gc_wb(ndt, ndt->instance);
                 }
             }
