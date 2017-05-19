@@ -60,6 +60,18 @@ julia> open(`less`, "w", STDOUT) do io
 3
 ```
 
+The program name and the individual arguments in a command can be accessed
+and iterated over as if the command were an array of strings:
+```jldoctest
+julia> collect(`echo "foo bar"`)
+2-element Array{String,1}:
+ "echo"
+ "foo bar"
+
+julia> `echo "foo bar"`[2]
+"foo bar"
+```
+
 ## [Interpolation](@id command-interpolation)
 
 Suppose you want to do something a bit more complicated and use the name of a file in the variable

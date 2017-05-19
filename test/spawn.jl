@@ -466,3 +466,14 @@ end
             Base.showerror(io::IO, e::Error19864) = print(io, "correct19864")
             throw(Error19864())'`),
     stderr=catcmd)) == "ERROR: correct19864"
+
+# accessing the command elements as an array or iterator:
+let c = `ls -l "foo bar"`
+    @test collect(c) == ["ls", "-l", "foo bar"]
+    @test first(c) == "ls" == c[1]
+    @test last(c) == "foo bar" == c[3] == c[end]
+    @test c[1:2] == ["ls", "-l"]
+    @test eltype(c) == String
+    @test length(c) == 3
+    @test eachindex(c) == 1:3
+end
