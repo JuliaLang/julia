@@ -2373,7 +2373,7 @@ ordered container, the last item is returned.
 
 ```jldoctest
 julia> A=[1, 2, 3]
-6-element Array{Int64,1}:
+3-element Array{Int64,1}:
  1
  2
  3
@@ -2382,7 +2382,7 @@ julia> pop!(A)
 3
 
 julia> A
-5-element Array{Int64,1}:
+2-element Array{Int64,1}:
  1
  2
 
