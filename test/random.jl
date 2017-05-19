@@ -53,11 +53,16 @@ let mt = MersenneTwister(0)
     rand(coll, 2, 3)
 end
 
-# rand using Dict, Set
+# rand using Dict, Set, IntSet
 adict = Dict(1=>2, 3=>4, 5=>6)
 @test rand(adict) in adict
+@test_throws ArgumentError rand(Dict())
 aset = Set(1:10)
 @test rand(aset) in aset
+@test_throws ArgumentError rand(Set())
+anintset = IntSet(1:10)
+@test rand(anintset) in anintset
+@test_throws ArgumentError rand(IntSet())
 
 # randn
 @test randn(MersenneTwister(42)) == -0.5560268761463861
