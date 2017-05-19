@@ -1162,10 +1162,10 @@ static int check_ambiguous_visitor(jl_typemap_entry_t *oldentry, struct typemap_
             jl_static_show_func_sig(s, isect);
             jl_printf(s, "\nbefore the new definition.\n");
         }
-        return 1;  // there may be multiple ambiguities, keep going
     }
-    else if (closure->after) {
+    if (!msp || closure->after) {
         // record that this method definition is being partially replaced
+        // (either with a real definition, or an ambiguity error)
         if (closure->shadowed == NULL) {
             closure->shadowed = oldentry->func.value;
         }
