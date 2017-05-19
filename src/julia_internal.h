@@ -166,7 +166,7 @@ JL_DLLEXPORT extern const char *jl_filename;
 JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc(jl_ptls_t ptls, int pool_offset,
                                           int osize);
 JL_DLLEXPORT jl_value_t *jl_gc_big_alloc(jl_ptls_t ptls, size_t allocsz);
-int jl_gc_classify_pools(size_t sz, int *osize);
+int jl_gc_classify_pools(size_t sz, size_t alignment, int *osize);
 extern jl_mutex_t gc_perm_lock;
 void *jl_gc_perm_alloc_nolock(size_t sz, int zero,
     unsigned align, unsigned offset) JL_NOTSAFEPOINT;
@@ -175,6 +175,12 @@ void *jl_gc_perm_alloc(size_t sz, int zero,
 void jl_gc_force_mark_old(jl_ptls_t ptls, jl_value_t *v);
 void gc_sweep_sysimg(void);
 
+
+#define JL_SMALL_BYTE_ALIGNMENT 16
+#define JL_CACHE_BYTE_ALIGNMENT 64
+// JL_HEAP_ALIGNMENT is the maximum alignment that the GC can provide
+#define JL_HEAP_ALIGNMENT JL_CACHE_BYTE_ALIGNMENT
+#define GC_MAX_SZCLASS (2032-sizeof(void*))
 
 // pools are 16376 bytes large (GC_POOL_SZ - GC_PAGE_OFFSET)
 static const int jl_gc_sizeclasses[] = {
@@ -234,12 +240,22 @@ STATIC_INLINE int jl_gc_alignment(size_t sz)
 }
 JL_DLLEXPORT int jl_alignment(size_t sz);
 
+STATIC_INLINE size_t JL_CONST_FUNC jl_gc_alignsz(size_t sz, size_t alignment)
+{
+    // The pools are aligned with JL_HEAP_ALIGNMENT and no bigger alignment is possible.
+    assert(alignment <= JL_HEAP_ALIGNMENT);
+    // Alignment need to be powers of two
+    assert((alignment & (alignment - 1)) == 0);
+    size_t alsz = LLT_ALIGN(sz, alignment);
+    return alignment ? alsz : sz;
+}
+
 // the following table is computed from jl_gc_sizeclasses via the formula:
 // [searchsortedfirst(TABLE, i) for i = 0:16:table[end]]
 static const uint8_t szclass_table[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 20, 21, 21, 22, 22, 23, 23, 23, 24, 24, 24, 25, 25, 25, 26, 26, 27, 27, 27, 28, 28, 28, 29, 29, 29, 29, 30, 30, 30, 30, 30, 31, 31, 31, 31, 31, 32, 32, 32, 32, 32, 32, 32, 33, 33, 33, 33, 33, 34, 34, 34, 34, 34, 35, 35, 35, 35, 35, 36, 36, 36, 36, 36, 36, 36, 37, 37, 37, 37, 37, 37, 37, 37, 38, 38, 38, 38, 38, 38, 38, 38, 38, 39, 39, 39, 39, 39, 39, 39, 39, 39, 39, 39, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40};
 static_assert(sizeof(szclass_table) == 128, "");
 
-STATIC_INLINE uint8_t JL_CONST_FUNC jl_gc_szclass(unsigned sz)
+STATIC_INLINE uint8_t JL_CONST_FUNC jl_gc_szclass(unsigned sz, unsigned alignment)
 {
     assert(sz <= 2032);
     uint8_t klass = szclass_table[(sz + 15) / 16];
@@ -262,17 +278,19 @@ STATIC_INLINE uint8_t JL_CONST_FUNC jl_gc_szclass(unsigned sz)
 #define JL_SMALL_BYTE_ALIGNMENT 16
 #define JL_CACHE_BYTE_ALIGNMENT 64
 // JL_HEAP_ALIGNMENT is the maximum alignment that the GC can provide
-#define JL_HEAP_ALIGNMENT JL_SMALL_BYTE_ALIGNMENT
+#define JL_HEAP_ALIGNMENT JL_CACHE_BYTE_ALIGNMENT
 #define GC_MAX_SZCLASS (2032-sizeof(void*))
 
-STATIC_INLINE jl_value_t *jl_gc_alloc_(jl_ptls_t ptls, size_t sz, void *ty)
+STATIC_INLINE jl_value_t *jl_gc_alloc_(jl_ptls_t ptls, size_t sz, size_t alignment, void *ty)
 {
     jl_value_t *v;
     const size_t allocsz = sz + sizeof(jl_taggedvalue_t);
     if (sz <= GC_MAX_SZCLASS) {
-        int pool_id = jl_gc_szclass(allocsz);
+        int pool_id = jl_gc_szclass(allocsz, alignment);
         jl_gc_pool_t *p = &ptls->heap.norm_pools[pool_id];
         int osize = jl_gc_sizeclasses[pool_id];
+        assert((size_t)osize >= alignment &&
+                (alignment == 0 || (osize & (alignment - 1)) == 0));
         v = jl_gc_pool_alloc(ptls, (char*)p - (char*)ptls, osize);
     }
     else {
@@ -283,15 +301,15 @@ STATIC_INLINE jl_value_t *jl_gc_alloc_(jl_ptls_t ptls, size_t sz, void *ty)
     jl_set_typeof(v, ty);
     return v;
 }
-JL_DLLEXPORT jl_value_t *jl_gc_alloc(jl_ptls_t ptls, size_t sz, void *ty);
-// On GCC, only inline when sz is constant
+JL_DLLEXPORT jl_value_t *jl_gc_alloc(jl_ptls_t ptls, size_t sz, size_t alignment, void *ty);
+// On GCC, only inline when sz and align is constant
 #ifdef __GNUC__
-#  define jl_gc_alloc(ptls, sz, ty)  \
-    (__builtin_constant_p(sz) ?      \
-     jl_gc_alloc_(ptls, sz, ty) :    \
-     (jl_gc_alloc)(ptls, sz, ty))
+#  define jl_gc_alloc(ptls, sz, align, ty)                     \
+    (__builtin_constant_p(sz) && __builtin_constant_p(align) ? \
+     jl_gc_alloc_(ptls, sz, align, ty) :                       \
+     (jl_gc_alloc)(ptls, sz, align, ty))
 #else
-#  define jl_gc_alloc(ptls, sz, ty) jl_gc_alloc_(ptls, sz, ty)
+#  define jl_gc_alloc(ptls, sz, align, ty) jl_gc_alloc_(ptls, sz, align, ty)
 #endif
 
 // jl_buff_tag must be a multiple of GC_PAGE_SZ so that it can't be
@@ -300,7 +318,7 @@ JL_DLLEXPORT jl_value_t *jl_gc_alloc(jl_ptls_t ptls, size_t sz, void *ty);
 typedef void jl_gc_tracked_buffer_t; // For the benefit of the static analyzer
 STATIC_INLINE jl_gc_tracked_buffer_t *jl_gc_alloc_buf(jl_ptls_t ptls, size_t sz)
 {
-    return jl_gc_alloc(ptls, sz, (void*)jl_buff_tag);
+    return jl_gc_alloc(ptls, sz, 0, (void*)jl_buff_tag);
 }
 
 STATIC_INLINE jl_value_t *jl_gc_permobj(size_t sz, void *ty)
@@ -508,7 +526,7 @@ int jl_pointer_egal(jl_value_t *t);
 jl_value_t *jl_nth_slot_type(jl_value_t *sig JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT;
 void jl_compute_field_offsets(jl_datatype_t *st);
 jl_array_t *jl_new_array_for_deserialization(jl_value_t *atype, uint32_t ndims, size_t *dims,
-                                             int isunboxed, int hasptr, int isunion, int elsz);
+                                             int isunboxed, int hasptr, int isunion, int elsz, int elalign);
 void jl_module_run_initializer(jl_module_t *m);
 jl_binding_t *jl_get_module_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var) JL_NOTSAFEPOINT;
 void jl_binding_deprecation_warning(jl_module_t *m, jl_binding_t *b);

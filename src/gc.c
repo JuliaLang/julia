@@ -837,8 +837,7 @@ static inline void maybe_collect(jl_ptls_t ptls)
 JL_DLLEXPORT jl_weakref_t *jl_gc_new_weakref_th(jl_ptls_t ptls,
                                                 jl_value_t *value)
 {
-    jl_weakref_t *wr = (jl_weakref_t*)jl_gc_alloc(ptls, sizeof(void*),
-                                                  jl_weakref_type);
+    jl_weakref_t *wr = (jl_weakref_t*)jl_gc_alloc(ptls, sizeof(void*), 0, jl_weakref_type);
     wr->value = value;  // NOTE: wb not needed here
     arraylist_push(&ptls->heap.weak_refs, wr);
     return wr;
@@ -1183,12 +1182,14 @@ JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc(jl_ptls_t ptls, int pool_offset,
     return jl_valueof(v);
 }
 
-int jl_gc_classify_pools(size_t sz, int *osize)
+int jl_gc_classify_pools(size_t sz, size_t alignment, int *osize)
 {
     if (sz > GC_MAX_SZCLASS)
         return -1;
     size_t allocsz = sz + sizeof(jl_taggedvalue_t);
-    int klass = jl_gc_szclass(allocsz);
+    size_t alignsz = jl_gc_alignsz(allocsz, alignment);
+    int klass = jl_gc_szclass(alignsz, alignment);
+    assert(klass != -1);
     *osize = jl_gc_sizeclasses[klass];
     return (int)(intptr_t)(&((jl_ptls_t)0)->heap.norm_pools[klass]);
 }
@@ -3216,9 +3217,9 @@ void gc_mark_queue_all_roots(jl_ptls_t ptls, jl_gc_mark_sp_t *sp)
 
 // allocator entry points
 
-JL_DLLEXPORT jl_value_t *(jl_gc_alloc)(jl_ptls_t ptls, size_t sz, void *ty)
+JL_DLLEXPORT jl_value_t *(jl_gc_alloc)(jl_ptls_t ptls, size_t sz, size_t alignment, void *ty)
 {
-    return jl_gc_alloc_(ptls, sz, ty);
+    return jl_gc_alloc_(ptls, sz, alignment, ty);
 }
 
 // Per-thread initialization
@@ -3610,31 +3611,31 @@ JL_DLLEXPORT jl_weakref_t *jl_gc_new_weakref(jl_value_t *value)
 JL_DLLEXPORT jl_value_t *jl_gc_allocobj(size_t sz)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    return jl_gc_alloc(ptls, sz, NULL);
+    return jl_gc_alloc(ptls, sz, /*align*/ 0, NULL);
 }
 
 JL_DLLEXPORT jl_value_t *jl_gc_alloc_0w(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    return jl_gc_alloc(ptls, 0, NULL);
+    return jl_gc_alloc(ptls, 0, 0, NULL);
 }
 
 JL_DLLEXPORT jl_value_t *jl_gc_alloc_1w(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    return jl_gc_alloc(ptls, sizeof(void*), NULL);
+    return jl_gc_alloc(ptls, sizeof(void*), 0, NULL);
 }
 
 JL_DLLEXPORT jl_value_t *jl_gc_alloc_2w(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    return jl_gc_alloc(ptls, sizeof(void*) * 2, NULL);
+    return jl_gc_alloc(ptls, sizeof(void*) * 2, 0, NULL);
 }
 
 JL_DLLEXPORT jl_value_t *jl_gc_alloc_3w(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    return jl_gc_alloc(ptls, sizeof(void*) * 3, NULL);
+    return jl_gc_alloc(ptls, sizeof(void*) * 3, 0, NULL);
 }
 
 JL_DLLEXPORT int jl_gc_enable_conservative_gc_support(void)
@@ -3769,7 +3770,7 @@ JL_DLLEXPORT size_t jl_gc_external_obj_hdr_size(void)
 
 JL_DLLEXPORT void * jl_gc_alloc_typed(jl_ptls_t ptls, size_t sz, void *ty)
 {
-    return jl_gc_alloc(ptls, sz, ty);
+    return jl_gc_alloc(ptls, sz, jl_datatype_align(ty), ty);
 }
 
 JL_DLLEXPORT void jl_gc_schedule_foreign_sweepfunc(jl_ptls_t ptls, jl_value_t *obj)

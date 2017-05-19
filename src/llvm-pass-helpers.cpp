@@ -147,7 +147,7 @@ namespace jl_intrinsics {
             auto intrinsic = Function::Create(
                 FunctionType::get(
                     context.T_prjlvalue,
-                    { context.T_pint8, context.T_size },
+                    { context.T_pint8, context.T_size, context.T_size },
                     false),
                 Function::ExternalLinkage,
                 GC_ALLOC_BYTES_NAME);

@@ -183,11 +183,12 @@ Instruction *FinalLowerGC::getPgcstack(Instruction *ptlsStates)
 
 Value *FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
 {
-    assert(target->getNumArgOperands() == 2);
+    assert(target->getNumArgOperands() == 3);
     auto sz = (size_t)cast<ConstantInt>(target->getArgOperand(1))->getZExtValue();
+    auto al = (size_t)cast<ConstantInt>(target->getArgOperand(2))->getZExtValue();
     // This is strongly architecture and OS dependent
     int osize;
-    int offset = jl_gc_classify_pools(sz, &osize);
+    int offset = jl_gc_classify_pools(sz, al, &osize);
     IRBuilder<> builder(target);
     builder.SetCurrentDebugLocation(target->getDebugLoc());
     auto ptls = target->getArgOperand(0);

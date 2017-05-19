@@ -611,7 +611,7 @@ static const auto jlegal_func = new JuliaFunction{
 static const auto jl_alloc_obj_func = new JuliaFunction{
     "julia.gc_alloc_obj",
     [](LLVMContext &C) { return FunctionType::get(T_prjlvalue,
-                {T_pint8, T_size, T_prjlvalue}, false); },
+                {T_pint8, T_size, T_size, T_prjlvalue}, false); },
     [](LLVMContext &C) { return AttributeList::get(C,
             AttributeSet::get(C, makeArrayRef({Attribute::getWithAllocSizeArgs(C, 1, None)})), // returns %1 bytes
             Attributes(C, {Attribute::NoAlias, Attribute::NonNull}),
@@ -5368,7 +5368,7 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
         outboxed = (output_type != (jl_value_t*)jl_voidpointer_type);
         if (outboxed) {
             assert(jl_datatype_size(output_type) == sizeof(void*) * 4);
-            Value *strct = emit_allocobj(ctx, jl_datatype_size(output_type),
+            Value *strct = emit_allocobj(ctx, jl_datatype_size(output_type), jl_datatype_align(output_type),
                                          literal_pointer_val(ctx, (jl_value_t*)output_type));
             Value *derived_strct = emit_bitcast(ctx, decay_derived(ctx, strct), T_psize);
             MDNode *tbaa = best_tbaa(output_type);

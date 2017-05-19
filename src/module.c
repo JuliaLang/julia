@@ -20,8 +20,7 @@ JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     const jl_uuid_t uuid_zero = {0, 0};
-    jl_module_t *m = (jl_module_t*)jl_gc_alloc(ptls, sizeof(jl_module_t),
-                                               jl_module_type);
+    jl_module_t *m = (jl_module_t*)jl_gc_alloc(ptls, sizeof(jl_module_t), 0, jl_module_type);
     JL_GC_PUSH1(&m);
     assert(jl_is_symbol(name));
     m->name = name;

@@ -2250,7 +2250,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
                 CI->replaceAllUsesWith(ASCI);
                 UpdatePtrNumbering(CI, ASCI, S);
             } else if (alloc_obj_func && callee == alloc_obj_func) {
-                assert(CI->getNumArgOperands() == 3);
+                assert(CI->getNumArgOperands() == 4);
 
                 // Initialize an IR builder.
                 IRBuilder<> builder(CI);
@@ -2266,6 +2266,10 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
                         builder.CreateIntCast(
                             CI->getArgOperand(1),
                             allocBytesIntrinsic->getFunctionType()->getParamType(1),
+                            false),
+                        builder.CreateIntCast(
+                            CI->getArgOperand(2),
+                            allocBytesIntrinsic->getFunctionType()->getParamType(2),
                             false)
                     });
                 newI->takeName(CI);
@@ -2275,9 +2279,9 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S) {
                 // We pretty much only load using `T_size` so try our best to strip
                 // as many cast as possible.
 #if JL_LLVM_VERSION >= 100000
-                auto tag = CI->getArgOperand(2)->stripPointerCastsAndAliases();
+                auto tag = CI->getArgOperand(3)->stripPointerCastsAndAliases();
 #else
-                auto tag = CI->getArgOperand(2)->stripPointerCasts();
+                auto tag = CI->getArgOperand(3)->stripPointerCasts();
 #endif
                 if (auto C = dyn_cast<ConstantExpr>(tag)) {
                     if (C->getOpcode() == Instruction::IntToPtr) {

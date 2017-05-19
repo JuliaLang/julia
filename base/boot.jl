@@ -475,6 +475,7 @@ Array{T}(A::AbstractArray{S,N}) where {T,N,S} = Array{T,N}(A)
 AbstractArray{T}(A::AbstractArray{S,N}) where {T,S,N} = AbstractArray{T,N}(A)
 
 # primitive Symbol constructors
+# XXX: these use unrooted, invalid GC pointers
 eval(Core, :(function Symbol(s::String)
     $(Expr(:meta, :pure))
     return ccall(:jl_symbol_n, Ref{Symbol}, (Ptr{UInt8}, Int),

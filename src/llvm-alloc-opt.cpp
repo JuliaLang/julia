@@ -145,7 +145,7 @@ struct Optimizer {
 private:
     bool isSafepoint(Instruction *inst);
     Instruction *getFirstSafepoint(BasicBlock *bb);
-    ssize_t getGCAllocSize(Instruction *I);
+    std::pair<ssize_t,ssize_t> getGCAllocSize(Instruction *I);
     void pushInstruction(Instruction *I);
 
     void insertLifetimeEnd(Value *ptr, Constant *sz, Instruction *insert);
@@ -157,7 +157,7 @@ private:
     void replaceIntrinsicUseWith(IntrinsicInst *call, Intrinsic::ID ID,
                                  Instruction *orig_i, Instruction *new_i);
     void removeAlloc(CallInst *orig_inst);
-    void moveToStack(CallInst *orig_inst, size_t sz, bool has_ref);
+    void moveToStack(CallInst *orig_inst, size_t sz, size_t al, bool has_ref);
     void splitOnStack(CallInst *orig_inst);
     void optimizeTag(CallInst *orig_inst);
 
@@ -297,7 +297,7 @@ private:
         }
     };
 
-    SetVector<std::pair<CallInst*,size_t>> worklist;
+    SetVector<std::pair<CallInst*,std::pair<ssize_t,ssize_t>>> worklist;
     SmallVector<CallInst*,6> removed;
     AllocUseInfo use_info;
     CheckInst::Stack check_stack;
@@ -308,8 +308,8 @@ private:
 
 void Optimizer::pushInstruction(Instruction *I)
 {
-    ssize_t sz = getGCAllocSize(I);
-    if (sz != -1) {
+    auto sz = getGCAllocSize(I);
+    if (sz.first != -1) {
         worklist.insert(std::make_pair(cast<CallInst>(I), sz));
     }
 }
@@ -328,7 +328,8 @@ void Optimizer::optimizeAll()
     while (!worklist.empty()) {
         auto item = worklist.pop_back_val();
         auto orig = item.first;
-        size_t sz = item.second;
+        size_t sz, al;
+        std::tie(sz, al) = item.second;
         checkInst(orig);
         if (use_info.escaped) {
             if (use_info.hastypeof)
@@ -370,7 +371,7 @@ void Optimizer::optimizeAll()
             }
             // The object only has a single field that's a reference with only one kind of access.
         }
-        moveToStack(orig, sz, has_ref);
+        moveToStack(orig, sz, al, has_ref);
     }
 }
 
@@ -418,18 +419,19 @@ Instruction *Optimizer::getFirstSafepoint(BasicBlock *bb)
     return first;
 }
 
-ssize_t Optimizer::getGCAllocSize(Instruction *I)
+std::pair<ssize_t,ssize_t> Optimizer::getGCAllocSize(Instruction *I)
 {
     auto call = dyn_cast<CallInst>(I);
     if (!call)
-        return -1;
+        return std::make_pair(-1, -1);
     if (call->getCalledOperand() != pass.alloc_obj_func)
-        return -1;
-    assert(call->getNumArgOperands() == 3);
+        return std::make_pair(-1, -1);
+    assert(call->getNumArgOperands() == 4);
     size_t sz = (size_t)cast<ConstantInt>(call->getArgOperand(1))->getZExtValue();
+    size_t al = (size_t)cast<ConstantInt>(call->getArgOperand(2))->getZExtValue();
     if (sz < IntegerType::MAX_INT_BITS / 8 && sz < INT32_MAX)
-        return sz;
-    return -1;
+        return std::make_pair(sz, al);
+    return std::make_pair(-1, -1);
 }
 
 std::pair<const uint32_t,Optimizer::Field>&
@@ -906,18 +908,14 @@ void Optimizer::replaceIntrinsicUseWith(IntrinsicInst *call, Intrinsic::ID ID,
 
 // This function should not erase any safepoint so that the lifetime marker can find and cache
 // all the original safepoints.
-void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
+void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, size_t al, bool has_ref)
 {
     auto tag = orig_inst->getArgOperand(2);
     removed.push_back(orig_inst);
     // The allocation does not escape or get used in a phi node so none of the derived
     // SSA from it are live when we run the allocation again.
     // It is now safe to promote the allocation to an entry block alloca.
-    size_t align = 1;
-    // TODO: This is overly conservative. May want to instead pass this as a
-    //       parameter to the allocation function directly.
-    if (sz > 1)
-        align = MinAlign(JL_SMALL_BYTE_ALIGNMENT, NextPowerOf2(sz));
+    size_t align = MinAlign(JL_SMALL_BYTE_ALIGNMENT, al);
     // No debug info for prolog instructions
     IRBuilder<> prolog_builder(&F.getEntryBlock().front());
     AllocaInst *buff;

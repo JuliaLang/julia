@@ -617,8 +617,11 @@ static void jl_write_values(jl_serializer_state *s)
         uintptr_t item = (uintptr_t)objects_list.items[i + 1];
         jl_datatype_t *t = (jl_datatype_t*)jl_typeof(v);
         assert((t->instance == NULL || t->instance == v) && "detected singleton construction corruption");
-        // realign stream to expected gc alignment (16 bytes)
+        // realign stream to expected gc alignment
         uintptr_t skip_header_pos = ios_pos(s->s) + sizeof(jl_taggedvalue_t);
+        unsigned align = jl_datatype_align(t);
+        if (align < sizeof(void*))
+            align = sizeof(void*);
         write_padding(s->s, LLT_ALIGN(skip_header_pos, 16) - skip_header_pos);
         // write header
         write_gctaggedfield(s, backref_id(s, t));
@@ -1410,7 +1413,7 @@ static void jl_save_system_image_to_stream(ios_t *f)
 
     write_uint32(f, const_data.size);
     // realign stream to max-alignment for data
-    write_padding(f, LLT_ALIGN(ios_pos(f), 16) - ios_pos(f));
+    write_padding(f, LLT_ALIGN(ios_pos(f), 64) - ios_pos(f));
     ios_seek(&const_data, 0);
     ios_copyall(f, &const_data);
     ios_close(&const_data);
@@ -1534,7 +1537,7 @@ static void jl_restore_system_image_from_stream(ios_t *f)
 
     size_t sizeof_constdata = read_uint32(f);
     // realign stream to max-alignment for data
-    ios_seek(f, LLT_ALIGN(ios_pos(f), 16));
+    ios_seek(f, LLT_ALIGN(ios_pos(f), 64));
     ios_static_buffer(&const_data, f->buf + f->bpos, sizeof_constdata);
     ios_skip(f, sizeof_constdata);
 
@@ -1564,7 +1567,7 @@ static void jl_restore_system_image_from_stream(ios_t *f)
         jl_value_t **tag = tags[i];
         *tag = jl_read_value(&s);
     }
-    s.ptls->root_task = (jl_task_t*)jl_gc_alloc(s.ptls, sizeof(jl_task_t), jl_task_type);
+    s.ptls->root_task = (jl_task_t*)jl_gc_alloc(s.ptls, sizeof(jl_task_t), /*align*/ 0, jl_task_type);
     memset(s.ptls->root_task, 0, sizeof(jl_task_t));
     s.ptls->root_task->tls = jl_read_value(&s);
     jl_init_int32_int64_cache();

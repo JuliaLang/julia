@@ -497,7 +497,7 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, const jl_cgval_t *argv)
         return mark_julia_type(ctx, vx, false, bt);
     }
     else {
-        Value *box = emit_allocobj(ctx, nb, boxed(ctx, bt_value));
+        Value *box = emit_allocobj(ctx, nb, jl_datatype_align(bt), boxed(ctx, bt_value));
         init_bits_value(ctx, box, vx, tbaa_immut);
         return mark_julia_type(ctx, box, true, bt);
     }
@@ -589,7 +589,8 @@ static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
         }
         assert(jl_is_datatype(ety));
         uint64_t size = jl_datatype_size(ety);
-        Value *strct = emit_allocobj(ctx, size,
+        size_t alignment = jl_datatype_align(ety);
+        Value *strct = emit_allocobj(ctx, size, alignment,
                                      literal_pointer_val(ctx, ety));
         im1 = ctx.builder.CreateMul(im1, ConstantInt::get(T_size,
                     LLT_ALIGN(size, jl_datatype_align(ety))));
