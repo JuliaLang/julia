@@ -274,6 +274,9 @@ include("combinatorics.jl")
 # more hashing definitions
 include("hashing2.jl")
 
+# irrational mathematical constants
+include("irrationals.jl")
+
 # random number generation
 include("dSFMT.jl")
 include("random.jl")
@@ -333,9 +336,6 @@ const × = cross
 
 # statistics
 include("statistics.jl")
-
-# irrational mathematical constants
-include("irrationals.jl")
 
 # signal processing
 include("dft.jl")
