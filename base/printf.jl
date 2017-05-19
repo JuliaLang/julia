@@ -881,8 +881,7 @@ function decode(b::Int, x::BigInt)
     pt = Base.ndigits(x, abs(b))
     length(DIGITS) < pt+1 && resize!(DIGITS, pt+1)
     neg && (x.size = -x.size)
-    ccall((:__gmpz_get_str, :libgmp), Cstring,
-          (Ptr{UInt8}, Cint, Ptr{BigInt}), DIGITS, b, &x)
+    GMP.MPZ.get_str!(DIGITS, b, x)
     neg && (x.size = -x.size)
     return Int32(pt), Int32(pt), neg
 end
@@ -901,8 +900,7 @@ function decode_0ct(x::BigInt)
     length(DIGITS) < pt+1 && resize!(DIGITS, pt+1)
     neg && (x.size = -x.size)
     p = convert(Ptr{UInt8}, DIGITS) + 1
-    ccall((:__gmpz_get_str, :libgmp), Cstring,
-          (Ptr{UInt8}, Cint, Ptr{BigInt}), p, 8, &x)
+    GMP.MPZ.get_str!(p, 8, x)
     neg && (x.size = -x.size)
     return neg, Int32(pt), Int32(pt)
 end
