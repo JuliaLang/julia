@@ -14,7 +14,7 @@ time, and leap seconds are unnecessary and avoided.
 
 Both [`Date`](@ref) and [`DateTime`](@ref) are basically immutable `Int64` wrappers. The single
 `instant` field of either type is actually a `UTInstant{P}` type, which represents a continuously
-increasing machine timeline based on the UT second [^1]. The [`DateTime`](@ref)
+increasing machine timeline based on the UTC [^1]. The [`DateTime`](@ref)
 type is not aware of time zones (*naive*, in Python parlance),
 analogous to a *LocalDateTime* in Java 8. Additional time zone functionality
 can be added through the [TimeZones.jl package](https://github.com/JuliaTime/TimeZones.jl/), which
@@ -27,15 +27,7 @@ The ISO standard, however, states that 1 BC/BCE is year zero, so `0000-12-31` is
 BC/BCE, etc.
 
 [^1]:
-    The notion of the UT second is actually quite fundamental. There are basically two different notions
-    of time generally accepted, one based on the physical rotation of the earth (one full rotation
-    = 1 day), the other based on the SI second (a fixed, constant value). These are radically different!
-    Think about it, a "UT second", as defined relative to the rotation of the earth, may have a different
-    absolute length depending on the day! Anyway, the fact that [`Date`](@ref) and [`DateTime`](@ref)
-    are based on UT seconds is a simplifying, yet honest assumption so that things like leap seconds
-    and all their complexity can be avoided. This basis of time is formally called [UT](https://en.wikipedia.org/wiki/Universal_Time)
-    or UT1. Basing types on the UT second basically means that every minute has 60 seconds and every
-    day has 24 hours and leads to more natural calculations when working with calendar dates.
+    Since 1972 UTC is the worldwide time standard. UTC advances at the same rate as TAI (Temps Atomique International) which itself is based on coordinated multiple measurements of the SI second. Time stamping systems have become increasingly accurate in syncing to UTC. Thanks to the NTP protocol in combination with modern OS kernels the system time of computers and internet connected devices remains synchronized to UTC within to a few ms, often better. GPS/GNSS and radio broadcasts (LORAN, DCF77 etc) provide high precision timing for numerous data acquisition . The vast majority of absolute time stamps in the world are UTC, and DateTime is normally used in order to handle UTC time stamps.
 
 ## Constructors
 
@@ -627,3 +619,11 @@ value in the days field is uncertain.
 
 See the [API reference](https://docs.julialang.org/en/latest/stdlib/dates.html) for additional information
 on methods exported from the `Dates` module.
+
+## Leap Seconds
+
+The ITU, a UN organisation, decides when to insert leap seconds into UTC. The leap seconds have been difficult to handle in technical computing (including Julia). The reason for having them is that UTC is so prevented from drifting too far away from a time based on the Earth's rotation, nowadays called UT1. The need to insert leap seconds arises roughly about every 18 months. There have been suggestions how to take care of UTC drift with respect to the Earth rotation differently, but the ITU has for now decided to continue with the insertion of leap seconds as needed at least until 2023.
+
+In ISO 8601 a time stamp within a leap seconds would for example be "2016-12-31T23:59:60.4". On computers where the NTP protocal is configured and whose OS is not too old, system calls for a time stamp within a leap second would not result in such time stamps. Rather time stamps just outside the leap second are returned, preserving the order in which the calls occurred. Thus using the `now()` function should be safe even in leap seconds on the majority of systems in use. Other clocks (separate oscillators, GPS, radio broadcasts) could in principle produce leap second time stamps, they could be generated in software for some reason, or the user could just type them. Time stamps in leap seconds, such as the example above, are not accepted by DateTime constructors, an error is thrown. The user would need to filter out data with such time stamps, or restamp them before a constructor is called.
+
+DateTime operations involving UTC time differences, or UTC time and a period, assume that every day has 86400 seconds. This does of course not exactly correspond to physcially elapsed nr of seconds whenever leap seconds get into the way.
