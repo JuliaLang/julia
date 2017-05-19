@@ -85,6 +85,16 @@ cfunction(ambig, Int, (UInt8, Int))  # test for a crash (doesn't throw an error)
 ambig(x, y::Integer) = 3
 @test_throws MethodError ambig(2, 0x03)
 
+# Method overwriting by an ambiguity should also invalidate the method cache (#21963)
+ambig(x::Union{Char, Int8}) = 'r'
+@test ambig('c') == 'r'
+@test ambig(Int8(1)) == 'r'
+@test_throws MethodError ambig(Int16(1))
+ambig(x::Union{Char, Int16}) = 's'
+@test_throws MethodError ambig('c')
+@test ambig(Int8(1)) == 'r'
+@test ambig(Int16(1)) == 's'
+
 # Automatic detection of ambiguities
 module Ambig1
 ambig(x, y) = 1
