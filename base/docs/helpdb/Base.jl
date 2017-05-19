@@ -2368,28 +2368,35 @@ pop!(collection,key,?)
 """
     pop!(collection) -> item
 
-Remove the last item in `collection` and return it.
+Remove an item in `collection` and return it. If `collection` is an
+ordered container, the last item is returned.
 
 ```jldoctest
-julia> A=[1, 2, 3, 4, 5, 6]
+julia> A=[1, 2, 3]
 6-element Array{Int64,1}:
  1
  2
  3
- 4
- 5
- 6
 
 julia> pop!(A)
-6
+3
 
 julia> A
 5-element Array{Int64,1}:
  1
  2
- 3
- 4
- 5
+
+julia> S = Set([1, 2])
+Set([2, 1])
+
+julia> pop!(S)
+2
+
+julia> S
+Set([1])
+
+julia> pop!(Dict(1=>2))
+1=>2
 ```
 """
 pop!(collection)
