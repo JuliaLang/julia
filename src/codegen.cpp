@@ -3048,7 +3048,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
         jl_datatype_t *sty = (jl_datatype_t*)expr_type(args[1], ctx);
         rt1 = (jl_value_t*)sty;
         jl_datatype_t *uty = (jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)sty);
-        if (jl_is_structtype(uty) && uty != jl_module_type) {
+        if (jl_is_structtype(uty) && uty != jl_module_type && ((jl_datatype_t*)uty)->layout) {
             size_t idx = (size_t)-1;
             if (jl_is_quotenode(args[2]) && jl_is_symbol(jl_fieldref(args[2],0))) {
                 idx = jl_field_index(uty, (jl_sym_t*)jl_fieldref(args[2],0), 0);
