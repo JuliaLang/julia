@@ -22,6 +22,7 @@ const text_colors = AnyDict(
     :normal        => "\033[0m",
     :default       => "\033[39m",
     :bold          => "\033[1m",
+    :underline     => "\033[4m",
     :nothing       => "",
 )
 
@@ -31,6 +32,7 @@ end
 
 const disable_text_style = AnyDict(
     :bold => "\033[22m",
+    :underline => "\033[24m",
     :normal => "",
     :default => "",
 )
