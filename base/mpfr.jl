@@ -191,20 +191,22 @@ unsafe_cast(::Type{T}, x::BigFloat, r::RoundingMode) where {T<:Integer} = unsafe
 unsafe_trunc(::Type{T}, x::BigFloat) where {T<:Integer} = unsafe_cast(T,x,RoundToZero)
 
 function trunc{T<:Union{Signed,Unsigned}}(::Type{T}, x::BigFloat)
-    (typemin(T) <= x <= typemax(T)) || throw(InexactError())
+    signed(widen(typemin(T))) - 1 < x < signed(widen(typemax(T))) + 1 || throw(InexactError())
     unsafe_cast(T,x,RoundToZero)
 end
 function floor(::Type{T}, x::BigFloat) where T<:Union{Signed,Unsigned}
-    (typemin(T) <= x <= typemax(T)) || throw(InexactError())
+    typemin(T) <= x < signed(widen(typemax(T))) + 1 || throw(InexactError())
     unsafe_cast(T,x,RoundDown)
 end
 function ceil(::Type{T}, x::BigFloat) where T<:Union{Signed,Unsigned}
-    (typemin(T) <= x <= typemax(T)) || throw(InexactError())
+    signed(widen(typemin(T))) - 1 < x <= typemax(T) || throw(InexactError())
     unsafe_cast(T,x,RoundUp)
 end
 
 function round(::Type{T}, x::BigFloat) where T<:Union{Signed,Unsigned}
-    (typemin(T) <= x <= typemax(T)) || throw(InexactError())
+    # Note: rounding range could be slightly increased but the limits are dependent on the
+    # rounding mode used.
+    typemin(T) <= x <= typemax(T) || throw(InexactError())
     unsafe_cast(T,x,ROUNDING_MODE[])
 end
 

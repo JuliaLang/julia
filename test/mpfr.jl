@@ -563,6 +563,32 @@ c = parse(BigInt,"123456789012345678901234567891")
 @test trunc(UInt128,a) == b
 @test typeof(trunc(UInt128,a)) == UInt128
 
+# Test `InexactError` limits
+for T in (Int, UInt)
+    @test trunc(T, BigFloat(typemin(T)) - 0.1) == typemin(T)
+    @test trunc(T, BigFloat(typemax(T)) + 0.1) == typemax(T)
+    @test_throws InexactError trunc(T, BigFloat(typemin(T)) - 1)
+    @test_throws InexactError trunc(T, BigFloat(typemax(T)) + 1)
+
+    @test_throws InexactError floor(T, BigFloat(typemin(T)) - 0.1)
+    @test floor(T, BigFloat(typemax(T)) + 0.1) == typemax(T)
+    @test_throws InexactError floor(T, BigFloat(typemin(T)) - 1)
+    @test_throws InexactError floor(T, BigFloat(typemax(T)) + 1)
+
+    @test ceil(T, BigFloat(typemin(T)) - 0.1) == typemin(T)
+    @test_throws InexactError ceil(T, BigFloat(typemax(T)) + 0.1)
+    @test_throws InexactError ceil(T, BigFloat(typemin(T)) - 1)
+    @test_throws InexactError ceil(T, BigFloat(typemax(T)) + 1)
+
+    # Rounding has a more limited range of allowed values since the rounding mode will
+    # change the accepted range.
+    @test round(T, BigFloat(typemin(T))) == typemin(T)
+    @test round(T, BigFloat(typemax(T))) == typemax(T)
+    @test_throws InexactError round(T, BigFloat(typemin(T)) - 0.1)
+    @test_throws InexactError round(T, BigFloat(typemax(T)) + 0.1)
+    @test_throws InexactError round(T, BigFloat(typemin(T)) - 1)
+    @test_throws InexactError round(T, BigFloat(typemax(T)) + 1)
+end
 
 # basic arithmetic
 # Signed addition
