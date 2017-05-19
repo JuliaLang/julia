@@ -153,15 +153,8 @@ function start_worker(out::IO, cookie::AbstractString)
     init_worker(cookie)
     interface = IPv4(LPROC.bind_addr)
     if LPROC.bind_port == 0
-        addr = Base.InetAddr(interface, 0)
-        sock = Base.TCPServer()
-        if bind(sock, addr) && Base.trylisten(sock) == 0
-            _addr, port = Base._sockname(sock, true)
-            LPROC.bind_port = port
-        else
-            close(sock)
-            error("no ports available")
-        end
+        (port, sock) = listenany(interface, UInt16(0))
+        LPROC.bind_port = port
     else
         sock = listen(interface, LPROC.bind_port)
     end

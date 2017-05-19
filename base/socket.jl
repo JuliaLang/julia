@@ -826,6 +826,10 @@ function listenany(host::IPAddr, default_port)
     while true
         sock = TCPServer()
         if bind(sock, addr) && trylisten(sock) == 0
+            if default_port == 0
+                _addr, port = _sockname(sock, true)
+                return (port, sock)
+            end
             return (addr.port, sock)
         end
         close(sock)
