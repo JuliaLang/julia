@@ -573,6 +573,10 @@ Deprecated or removed
     ``` `export FOO=1\;` ``` should replace ``` `export FOO=1;` ``` and
     ``` `cd $dir '&&' $thingie` ``` should replace ``` `cd $dir && $thingie` ``` ([#19786]).
 
+  * Zero-argument `Channel` constructors (`Channel()`, `Channel{T}()`) have been deprecated
+    in favor of equivalents accepting an explicit `Channel` size
+    (`Channel(2)`, `Channel{T}(2)`) ([#18832]).
+
   * The zero-argument constructor `MersenneTwister()` has been
     deprecated in favor of the explicit `MersenneTwister(0)` ([#16984]).
 
@@ -637,6 +641,7 @@ Command-line option changes
 [#18660]: https://github.com/JuliaLang/julia/issues/18660
 [#18690]: https://github.com/JuliaLang/julia/issues/18690
 [#18777]: https://github.com/JuliaLang/julia/issues/18777
+[#18832]: https://github.com/JuliaLang/julia/issues/18832
 [#18839]: https://github.com/JuliaLang/julia/issues/18839
 [#18891]: https://github.com/JuliaLang/julia/issues/18891
 [#18931]: https://github.com/JuliaLang/julia/issues/18931
