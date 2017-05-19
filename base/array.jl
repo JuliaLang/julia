@@ -1725,6 +1725,47 @@ function indexin(a::AbstractArray, b::AbstractArray)
     [get(bdict, i, 0) for i in a]
 end
 
+function _findin(a, b)
+    ind  = Int[]
+    bset = Set(b)
+    @inbounds for (i,ai) in enumerate(a)
+        ai in bset && push!(ind, i)
+    end
+    ind
+end
+
+function _sortedfindin(v, w)
+    viter, witer = eachindex(v), eachindex(w)
+    out  = eltype(viter)[]
+    i, j = start(viter), start(witer)
+    if done(viter, i) || done(witer, j)
+        return out
+    end
+    viteri, i = next(viter, i)
+    witerj, j = next(witer, j)
+    @inbounds begin
+        vi, wj = v[viteri], w[witerj]
+        while !(done(viter, i) || done(witer, j))
+            if vi < wj
+                viteri, i = next(viter, i)
+                vi        = v[viteri]
+            elseif vi > wj
+                witerj, j = next(witer, j)
+                wj        = w[witerj]
+            else
+                push!(out, viteri)
+                viteri, i = next(viter, i)
+                witerj, j = next(witer, j)
+                vi, wj    = v[viteri], w[witerj]
+            end
+        end
+        if vi == wj
+            push!(out, viteri)
+        end
+    end
+    return out
+end
+
 """
     findin(a, b)
 
@@ -1751,12 +1792,11 @@ julia> findin(a,b) # 10 is the only common element
 ```
 """
 function findin(a, b)
-    ind = Array{Int,1}(0)
-    bset = Set(b)
-    @inbounds for (i,ai) in enumerate(a)
-        ai in bset && push!(ind, i)
+    if issorted(a, Sort.Forward) && issorted(b, Sort.Forward)
+        return _sortedfindin(a, b)
+    else
+        return _findin(a, b)
     end
-    ind
 end
 
 # Copying subregions
