@@ -339,7 +339,7 @@ function rand(r::AbstractRNG, ::Type{Char})
     (c < 0xd800) ? Char(c) : Char(c+0x800)
 end
 
-# random values from Dict or Set (for efficiency)
+# random values from Dict, Set, IntSet (for efficiency)
 function rand(r::AbstractRNG, t::Dict)
     isempty(t) && throw(ArgumentError("dict must be non-empty"))
     n = length(t.slots)
@@ -351,6 +351,20 @@ end
 rand(t::Dict) = rand(GLOBAL_RNG, t)
 rand(r::AbstractRNG, s::Set) = rand(r, s.dict).first
 rand(s::Set) = rand(GLOBAL_RNG, s)
+
+function rand(r::AbstractRNG, s::IntSet)
+    isempty(s) && throw(ArgumentError("collection must be non-empty"))
+    # s can be empty while s.bits is not, so we cannot rely on the
+    # length check in RangeGenerator below
+    rg = RangeGenerator(1:length(s.bits))
+    while true
+        n = rand(r, rg)
+        @inbounds b = s.bits[n]
+        b && return n
+    end
+end
+
+rand(s::IntSet) = rand(GLOBAL_RNG, s)
 
 ## Arrays of random numbers
 
