@@ -263,6 +263,15 @@ end
     b = [4, 6, 2, -7, 1]
     ind = findin(a, b)
     @test ind == [3,4]
+    @test findin(a, Int[]) == Int[]
+    @test findin(Int[], a) == Int[]
+
+    a = [1,2,3,4,5]
+    b = [2,3,4,6]
+    @test findin(a, b) == [2,3,4]
+    @test findin(b, a) == [1,2,3]
+    @test findin(a, Int[]) == Int[]
+    @test findin(Int[], a) == Int[]
 
     rt = Base.return_types(setindex!, Tuple{Array{Int32, 3}, UInt8, Vector{Int}, Int16, UnitRange{Int}})
     @test length(rt) == 1 && rt[1] == Array{Int32, 3}
