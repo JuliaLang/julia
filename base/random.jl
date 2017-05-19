@@ -341,11 +341,11 @@ end
 
 # random values from Dict, Set, IntSet (for efficiency)
 function rand(r::AbstractRNG, t::Dict)
-    isempty(t) && throw(ArgumentError("dict must be non-empty"))
-    n = length(t.slots)
+    isempty(t) && throw(ArgumentError("collection must be non-empty"))
+    rg = RangeGenerator(1:length(t.slots))
     while true
-        i = rand(r, 1:n)
-        Base.isslotfilled(t, i) && return (t.keys[i] => t.vals[i])
+        i = rand(r, rg)
+        Base.isslotfilled(t, i) && @inbounds return (t.keys[i] => t.vals[i])
     end
 end
 rand(t::Dict) = rand(GLOBAL_RNG, t)
