@@ -534,6 +534,11 @@ Deprecated or removed
   * The zero-argument constructor `MersenneTwister()` has been
     deprecated in favor of the explicit `MersenneTwister(0)` ([#16984]).
 
+  * `Base.promote_type(op::Type, Ts::Type...)` has been removed as part of an overhaul
+    of `broadcast`'s promotion mechanism. If you need the functionality of that
+    `Base.promote_type` method, consider defining it locally via
+    `Core.Inference.return_type(op, Tuple{Ts...})` ([#18642]).
+
   * `bitbroadcast` has been deprecated in favor of `broadcast`, which now produces a
     `BitArray` instead of `Array{Bool}` for functions yielding a boolean result ([#19771]).
 
@@ -590,6 +595,7 @@ Command-line option changes
 [#18473]: https://github.com/JuliaLang/julia/issues/18473
 [#18558]: https://github.com/JuliaLang/julia/issues/18558
 [#18628]: https://github.com/JuliaLang/julia/issues/18628
+[#18642]: https://github.com/JuliaLang/julia/issues/18642
 [#18644]: https://github.com/JuliaLang/julia/issues/18644
 [#18660]: https://github.com/JuliaLang/julia/issues/18660
 [#18690]: https://github.com/JuliaLang/julia/issues/18690
