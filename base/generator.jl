@@ -116,3 +116,5 @@ indices(g::Generator) = indices(g.iter)
 ndims(g::Generator) = ndims(g.iter)
 
 iteratoreltype(::Type{Generator{I,T}}) where {I,T} = EltypeUnknown()
+
+haslength(iter) = iteratorsize(iter) isa Union{HasShape, HasLength}
