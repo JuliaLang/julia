@@ -489,6 +489,16 @@ temp_pkg_dir() do
         @test isempty(Pkg.dependents("Example"))
         @test isempty(Pkg.dependents("Example.jl"))
 
+        @test_warn s -> !contains(s, "updated but were already imported") begin
+            Pkg.add("Iterators")
+            Pkg.update("Iterators")
+        end
+
+        # Do it again, because the above Iterators test will update things prematurely
+        LibGit2.with(LibGit2.GitRepo, metadata_dir) do repo
+            LibGit2.reset!(repo, LibGit2.GitHash(old_commit), LibGit2.Consts.RESET_HARD)
+        end
+
         @test_warn ("INFO: Installing Colors v0.6.4",
                     "INFO: Installing ColorTypes v0.2.2",
                     "INFO: Installing FixedPointNumbers v0.1.3",
