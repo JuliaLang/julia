@@ -1196,9 +1196,6 @@ complex normal distribution.
     end
 end
 
-Base.@irrational SQRT_HALF 0.7071067811865475244008  sqrt(big(0.5))
-randn{T}(rng::AbstractRNG, ::Type{Complex{T}}) = Complex{T}(SQRT_HALF * randn(rng, T), SQRT_HALF*randn(rng, T))
-
 # this unlikely branch is put in a separate function for better efficiency
 function randn_unlikely(rng, idx, rabs, x)
     @inbounds if idx == 0
@@ -1287,6 +1284,10 @@ let Floats = Union{Float16,Float32,Float64}
             $randfun(                             dims::Integer...               )           = $randfun(GLOBAL_RNG, Float64, dims...)
         end
     end
+	
+	# complex randn
+	Base.@irrational SQRT_HALF 0.7071067811865475244008  sqrt(big(0.5))
+	randn(rng::AbstractRNG, ::Type{Complex{T}}) where {T <: Floats} = Complex{T}(SQRT_HALF * randn(rng, T), SQRT_HALF*randn(rng, T))
 end
 
 ## random UUID generation
