@@ -552,6 +552,8 @@ Deprecated or removed
   * The tuple-of-types form of `invoke`, `invoke(f, (types...), ...)`, has been deprecated
     in favor of the tuple-type form `invoke(f, Tuple{types...}, ...)` ([#18444]).
 
+  * `Base._promote_array_type` has been deprecated ([#19766]).
+
   * `broadcast_zpreserving` has been deprecated ([#19533], [#19720]).
 
   * `@test_approx_eq a b` has been deprecated in favor of `@test a ≈ b` (or,
@@ -686,6 +688,7 @@ Command-line option changes
 [#19722]: https://github.com/JuliaLang/julia/issues/19722
 [#19724]: https://github.com/JuliaLang/julia/issues/19724
 [#19741]: https://github.com/JuliaLang/julia/issues/19741
+[#19766]: https://github.com/JuliaLang/julia/issues/19766
 [#19771]: https://github.com/JuliaLang/julia/issues/19771
 [#19779]: https://github.com/JuliaLang/julia/issues/19779
 [#19784]: https://github.com/JuliaLang/julia/issues/19784
