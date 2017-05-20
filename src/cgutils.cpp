@@ -524,7 +524,11 @@ static Type *julia_struct_to_llvm(jl_value_t *jt, jl_unionall_t *ua, bool *isbox
 #endif
                 unsigned llvm_alignment = DL.getABITypeAlignment((Type*)jst->struct_decl);
                 unsigned julia_alignment = jst->layout->alignment;
-                assert(llvm_alignment == julia_alignment);
+                // Check that the alignment adheres to the heap alignment.
+                assert(julia_alignment <= JL_SMALL_BYTE_ALIGNMENT);
+                // TODO: Fix alignment calculation in LLVM, as well as in the GC and the struct declaration
+                if (llvm_alignment  <= JL_SMALL_BYTE_ALIGNMENT)
+                    assert(julia_alignment == llvm_alignment);
             }
 #endif
         }
