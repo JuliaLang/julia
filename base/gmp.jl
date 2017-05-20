@@ -52,9 +52,8 @@ mutable struct BigInt <: Signed
     size::Cint
     d::Ptr{Limb}
 
-    function BigInt()
-        b = new(zero(Cint), zero(Cint), C_NULL)
-        MPZ.init!(b)
+    function BigInt(; nbits::Integer=0)
+        b = MPZ.init2!(new(), nbits)
         finalizer(cglobal((:__gmpz_clear, :libgmp)), b)
         return b
     end
