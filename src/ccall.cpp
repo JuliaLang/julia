@@ -618,7 +618,7 @@ static Value *julia_to_address(Type *to, jl_value_t *jlto, jl_unionall_t *jlto_e
         builder.CreateMemCpy(slot,
                              data_pointer(jvinfo, ctx, slot->getType()),
                              (uint64_t)jl_datatype_size(ety),
-                             (uint64_t)((jl_datatype_t*)ety)->layout->alignment);
+                             (uint64_t)jl_datatype_align(ety));
         mark_gc_use(jvinfo);
     }
     if (slot->getType() != to)
@@ -657,7 +657,7 @@ static Value *julia_to_native(Type *to, bool toboxed, jl_value_t *jlto, jl_union
         builder.CreateMemCpy(slot,
                              data_pointer(jvinfo, ctx, slot->getType()),
                              (uint64_t)jl_datatype_size(jlto),
-                             (uint64_t)((jl_datatype_t*)jlto)->layout->alignment);
+                             (uint64_t)jl_datatype_align(jlto));
         mark_gc_use(jvinfo);
     }
     return slot;
