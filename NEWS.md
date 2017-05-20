@@ -542,6 +542,8 @@ Deprecated or removed
   * The two-argument forms of `map` (`map!(f, A)`) and `asyncmap!` (`asyncmap!(f, A)`)
     have been deprecated in anticipation of future semantic changes ([#19721]).
 
+  * `unsafe_wrap(String, ...)` has been deprecated in favor of `unsafe_string` ([#19449]).
+
   * `zeros` and `ones` methods accepting an element type as the first argument and an
     array as the second argument, for example `zeros(Float64, [1, 2, 3])`, have been
     deprecated in favor of equivalent methods with the second argument instead the
