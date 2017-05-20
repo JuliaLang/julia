@@ -3,24 +3,22 @@
 using Base.Test
 
 srand(101)
-debug = false #Turn on for more debugging info
 
-#Pauli σ-matrices
-for σ in map(Hermitian, Any[ eye(2), [0 1; 1 0], [0 -im; im 0], [1 0; 0 -1] ])
+@testset "Pauli σ-matrices: $σ" for σ in map(Hermitian,
+        Any[ eye(2), [0 1; 1 0], [0 -im; im 0], [1 0; 0 -1] ])
     @test ishermitian(σ)
 end
 
-# Hermitian matrix exponential/log
-let A1 = randn(4,4) + im*randn(4,4)
+@testset "Hermitian matrix exponential/log" begin
+    A1 = randn(4,4) + im*randn(4,4)
     A2 = A1 + A1'
     @test expm(A2) ≈ expm(Hermitian(A2))
     @test logm(A2) ≈ logm(Hermitian(A2))
     A3 = A1 * A1' # posdef
     @test expm(A3) ≈ expm(Hermitian(A3))
     @test logm(A3) ≈ logm(Hermitian(A3))
-end
 
-let A1 = randn(4,4)
+    A1 = randn(4,4)
     A3 = A1 * A1'
     A4 = A1 + A1.'
     @test expm(A4) ≈ expm(Symmetric(A4))
@@ -28,11 +26,12 @@ let A1 = randn(4,4)
     @test logm(A3) ≈ logm(Hermitian(A3))
 end
 
-let n=10
+@testset "Core functionality" begin
+    n = 10
     areal = randn(n,n)/2
     aimg  = randn(n,n)/2
-    debug && println("symmetric eigendecomposition")
-    for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
+    @testset "symmetric eigendecomposition with element type $(eltya)" for eltya in
+            (Float32, Float64, Complex64, Complex128, BigFloat, Int)
         a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
         asym = a'+a                 # symmetric indefinite
         ε = εa = eps(abs(float(one(eltya))))
@@ -43,8 +42,6 @@ let n=10
         x = eltya == Int ? rand(1:7, n) : convert(Vector{eltya}, eltya <: Complex ? complex.(x, zeros(n)) : x)
         y = eltya == Int ? rand(1:7, n) : convert(Vector{eltya}, eltya <: Complex ? complex.(y, zeros(n)) : y)
         b = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(b, zeros(n,n)) : b)
-
-        debug && println("\ntype of a: ", eltya, "\n")
 
         # constructor
         @test Symmetric(Symmetric(asym, :U))     === Symmetric(asym, :U)
@@ -229,48 +226,48 @@ let n=10
     end
 end
 
-#Issue #7647: test xsyevr, xheevr, xstevr drivers
-for Mi7647 in (Symmetric(diagm(1.0:3.0)),
-               Hermitian(diagm(1.0:3.0)),
-               Hermitian(diagm(complex(1.0:3.0))),
-               SymTridiagonal([1.0:3.0;], zeros(2)))
-    debug && println("Eigenvalues in interval for $(typeof(Mi7647))")
+#Issue #7647: test xsyevr, xheevr, xstevr drivers.
+@testset "Eigenvalues in interval for $(typeof(Mi7647))" for Mi7647 in
+        (Symmetric(diagm(1.0:3.0)),
+         Hermitian(diagm(1.0:3.0)),
+         Hermitian(diagm(complex(1.0:3.0))),
+         SymTridiagonal([1.0:3.0;], zeros(2)))
     @test eigmin(Mi7647)  == eigvals(Mi7647, 0.5, 1.5)[1] == 1.0
     @test eigmax(Mi7647)  == eigvals(Mi7647, 2.5, 3.5)[1] == 3.0
     @test eigvals(Mi7647) == eigvals(Mi7647, 0.5, 3.5) == [1.0:3.0;]
 end
 
-#Issue #7933
-let A7933 = [1 2; 3 4]
+@testset "Issue #7933" begin
+    A7933 = [1 2; 3 4]
     B7933 = copy(A7933)
     C7933 = full(Symmetric(A7933))
     @test A7933 == B7933
 end
 
-# Issues #8057 and #8058
-for f in (eigfact, eigvals, eig)
-    for A in (Symmetric([0 1; 1 0]), Hermitian([0 im; -im 0]))
-        @test_throws ArgumentError f(A, 3, 2)
-        @test_throws ArgumentError f(A, 1:4)
-    end
+@testset "Issues #8057 and #8058. f=$f, A=$A" for f in
+        (eigfact, eigvals, eig),
+            A in (Symmetric([0 1; 1 0]), Hermitian([0 im; -im 0]))
+    @test_throws ArgumentError f(A, 3, 2)
+    @test_throws ArgumentError f(A, 1:4)
 end
 
-#Issue 10671
-let A = [1.0+im 2.0; 2.0 0.0]
+@testset "Issue #10671" begin
+    A = [1.0+im 2.0; 2.0 0.0]
     @test !ishermitian(A)
     @test_throws ArgumentError Hermitian(A)
 end
 
 # Unary minus for Symmetric/Hermitian matrices
-let A = randn(5, 5)
+@testset "Unary minus for Symmetric/Hermitian matrices" begin
+    A = randn(5, 5)
     for SH in (Symmetric(A), Hermitian(A))
         F = Matrix(SH)
         @test (-SH)::typeof(SH) == -F
     end
 end
 
-# 17780
-let a = randn(2,2)
+@testset "Issue #17780" begin
+    a = randn(2,2)
     a = a'a
     b = complex.(a,a)
     c = Symmetric(b)
@@ -283,8 +280,8 @@ let a = randn(2,2)
     @test conj!(c) == conj(Array(c))
 end
 
-# 19225
-let X = [1 -1; -1 1]
+@testset "Issue # 19225" begin
+    X = [1 -1; -1 1]
     for T in (Symmetric, Hermitian)
         Y = T(copy(X))
         _Y = similar(Y)
