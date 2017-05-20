@@ -442,6 +442,11 @@ Library improvements
     `map(uppercase ∘ hex, 250:255)` is now equivalent to
     `map(x -> uppercase(hex(x)), 250:255)` ([#17155]).
 
+  * `enumerate` now supports the two-argument form `enumerate(::IndexStyle, iterable)`.
+    This form allows specification of the returned indices' style. For example,
+    `enumerate(IndexLinear, iterable)` yields linear indices and
+    `enumerate(IndexCartesian, iterable)` yields cartesian indices ([#16378]).
+
 Compiler/Runtime improvements
 -----------------------------
 
@@ -539,6 +544,11 @@ Deprecated or removed
      For example, `isnumber("123")` should now be expressed `all(isnumber, "123")`
      ([#20342]).
 
+  * A few names related to indexing traits have been changed: `LinearIndexing` and
+    `linearindexing` have been deprecated in favor of `IndexStyle`. `LinearFast` has
+    been deprecated in favor of `IndexLinear`, and `LinearSlow` has been deprecated in
+    favor of `IndexCartesian` ([#16378]).
+
   * The two-argument forms of `map` (`map!(f, A)`) and `asyncmap!` (`asyncmap!(f, A)`)
     have been deprecated in anticipation of future semantic changes ([#19721]).
 
@@ -614,6 +624,7 @@ Command-line option changes
 [#12563]: https://github.com/JuliaLang/julia/issues/12563
 [#15850]: https://github.com/JuliaLang/julia/issues/15850
 [#16213]: https://github.com/JuliaLang/julia/issues/16213
+[#16378]: https://github.com/JuliaLang/julia/issues/16378
 [#16937]: https://github.com/JuliaLang/julia/issues/16937
 [#16961]: https://github.com/JuliaLang/julia/issues/16961
 [#16984]: https://github.com/JuliaLang/julia/issues/16984
