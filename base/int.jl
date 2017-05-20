@@ -426,6 +426,10 @@ macro big_str(s)
 end
 
 ## integer promotions ##
+promote(x::SmallSigned) = (int(x),)
+promote(x::SmallUnsigned) = (uint(x),)
+promote_typeof(x::SmallSigned) = Int
+promote_typeof(x::SmallUnsigned) = Uint
 
 promote_rule(::Type{Int8}, ::Type{Int16})   = Int16
 promote_rule(::Type{UInt8}, ::Type{UInt16}) = UInt16
