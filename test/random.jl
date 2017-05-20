@@ -53,17 +53,6 @@ let mt = MersenneTwister(0)
     rand(coll, 2, 3)
 end
 
-# rand using Dict, Set, IntSet
-adict = Dict(1=>2, 3=>4, 5=>6)
-@test rand(adict) in adict
-@test_throws ArgumentError rand(Dict())
-aset = Set(1:10)
-@test rand(aset) in aset
-@test_throws ArgumentError rand(Set())
-anintset = IntSet(1:10)
-@test rand(anintset) in anintset
-@test_throws ArgumentError rand(IntSet())
-
 # randn
 @test randn(MersenneTwister(42)) == -0.5560268761463861
 A = zeros(2, 2)
@@ -320,6 +309,11 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()])
     ftypes = [Float16, Float32, Float64]
     cftypes = [Complex32, Complex64, Complex128, ftypes...]
     types = [Bool, Char, Base.BitInteger_types..., ftypes...]
+    collections = [(IntSet(rand(1:100, 20)), Int),
+                   (Set(rand(Int, 20)), Int),
+                   (Dict(zip(rand(Int,10), rand(Int, 10))), Pair{Int,Int}),
+                   (1:100, Int),
+                   (rand(Int, 100), Int)]
     b2 = big(2)
     u3 = UInt(3)
     for f in [rand, randn, randexp]
@@ -340,6 +334,20 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()])
                 end
             end
         end
+    end
+    for (C, T) in collections
+        a0 = rand(rng..., C)                  ::T
+        a1 = rand(rng..., C, 5)               ::Vector{T}
+        a2 = rand(rng..., C, 2, 3)            ::Array{T, 2}
+        a3 = rand!(rng..., Array{T}(5), C)    ::Vector{T}
+        a4 = rand!(rng..., Array{T}(2, 3), C) ::Array{T, 2}
+        for a in [a0, a1..., a2..., a3..., a4...]
+            @test a in C
+        end
+    end
+    for C in [1:0, Dict(), Set(), IntSet(), Int[]]
+        @test_throws ArgumentError rand(rng..., C)
+        @test_throws ArgumentError rand(rng..., C, 5)
     end
     for f! in [rand!, randn!, randexp!]
         for T in (f! === rand! ? types : f! === randn! ? cftypes : ftypes)
