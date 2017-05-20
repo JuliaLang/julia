@@ -96,7 +96,9 @@ isequal(x::AbstractFloat, y::Real         ) = (isnan(x) & isnan(y)) | signequal(
 isless(x::AbstractFloat, y::AbstractFloat) = (!isnan(x) & isnan(y)) | signless(x, y) | (x < y)
 isless(x::Real,          y::AbstractFloat) = (!isnan(x) & isnan(y)) | signless(x, y) | (x < y)
 isless(x::AbstractFloat, y::Real         ) = (!isnan(x) & isnan(y)) | signless(x, y) | (x < y)
+isless(x, y) = false
 
+isnan(x)     = false
 
 function ==(T::Type, S::Type)
     @_pure_meta
@@ -235,7 +237,7 @@ julia> 5 <= 3
 false
 ```
 """
-<=(x, y) = !(y < x)
+<=(x, y) = (x < y) | (x == y)
 const ≤ = <=
 
 """
@@ -345,7 +347,7 @@ julia> max(2, 5, 1)
 5
 ```
 """
-max(x, y) = ifelse(y < x, x, y)
+max(x, y) = y < x ? x : (x <= y ? y : error("elements not comparable"))
 
 """
     min(x, y, ...)
@@ -358,7 +360,7 @@ julia> min(2, 5, 1)
 1
 ```
 """
-min(x,y) = ifelse(y < x, y, x)
+min(x,y) = y < x ? y : (x <= y ? x : error("elements not comparable"))
 
 """
     minmax(x, y)
@@ -370,7 +372,7 @@ julia> minmax('c','b')
 ('b', 'c')
 ```
 """
-minmax(x,y) = y < x ? (y, x) : (x, y)
+minmax(x,y) = y < x ? (y, x) : (x <= y ? (x, y) : error("elements not comparable"))
 
 scalarmax(x,y) = max(x,y)
 scalarmax(x::AbstractArray, y::AbstractArray) = throw(ArgumentError("ordering is not well-defined for arrays"))

@@ -342,6 +342,7 @@ mutable struct Twain
     b :: Int
 end
 Base.isless(x :: Twain, y :: Twain) = x.a < y.a
+Base.:(==)(x :: Twain, y :: Twain) = !isless(x, y) && !isless(y, x)
 let x = Twain(2,3), y = Twain(2,4)
     @test (min(x,y), max(x,y)) == (x,y) == minmax(x,y)
 end
