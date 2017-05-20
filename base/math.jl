@@ -716,7 +716,10 @@ end
 ## rem2pi-related calculations ##
 
 function add22condh(xh::Float64, xl::Float64, yh::Float64, yl::Float64)
-    # as above, but only compute and return high double
+    # This algorithm, due to Dekker, computes the sum of
+    # two double-double numbers and return high double.  References:
+    # [1] http://www.digizeitschriften.de/en/dms/img/?PID=GDZPPN001170007
+    # [2] https://dx.doi.org/10.1007/BF01397083
     r = xh+yh
     s = (abs(xh) > abs(yh)) ? (xh-r+yh+yl+xl) : (yh-r+xh+xl+yl)
     zh = r+s
