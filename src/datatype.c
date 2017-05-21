@@ -278,7 +278,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             // Should never happen
             if (__unlikely(fsz > max_size))
                 goto throw_ovf;
-            al = ((jl_datatype_t*)ty)->layout->alignment;
+            al = jl_datatype_align(ty);
             desc[i].isptr = 0;
             if (((jl_datatype_t*)ty)->layout->haspadding)
                 haspadding = 1;
@@ -441,7 +441,7 @@ static jl_value_t *jl_new_bits_internal(jl_value_t *dt, void *data, size_t *len)
     size_t nb = jl_datatype_size(bt);
     if (nb == 0)
         return jl_new_struct_uninit(bt);
-    *len = LLT_ALIGN(*len, bt->layout->alignment);
+    *len = LLT_ALIGN(*len, jl_datatype_align(bt));
     data = (char*)data + (*len);
     *len += nb;
     if (bt == jl_uint8_type)   return jl_box_uint8(*(uint8_t*)data);
@@ -762,7 +762,7 @@ JL_DLLEXPORT size_t jl_get_alignment(jl_datatype_t *ty)
 {
     if (ty->layout == NULL)
         jl_error("non-leaf type doesn't have an alignment");
-    return ty->layout->alignment;
+    return jl_datatype_align(ty);
 }
 
 #ifdef __cplusplus
