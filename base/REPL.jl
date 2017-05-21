@@ -891,11 +891,11 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
             end
         end,
 
-        # Open the editor at the location of a stackframe
+        # Open the editor at the location of a stackframe or method
         # This is accessing a global variable that gets set in
-        # the show_backtrace function.
+        # the show_backtrace and show_method_table functions.
         "^Q" => (s, o...) -> begin
-            linfos = Base.LAST_BACKTRACE_LINE_INFOS
+            linfos = Base.LAST_SHOWN_LINE_INFOS
             str = String(take!(LineEdit.buffer(s)))
             n = tryparse(Int, str)
             isnull(n) && @goto writeback

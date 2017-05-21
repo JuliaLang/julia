@@ -31,6 +31,10 @@ Library improvements
   * the functions `base` and `digits` digits now accept a negative
     base (like `ndigits` did) ([#21692]).
 
+  * Method lists are now printed as a numbered list. In addition, the source code of a
+    method can be opened in an editor by entering the corresponding number in the REPL
+    and pressing `^Q` ([#22007]).
+
 Compiler/Runtime improvements
 -----------------------------
 
