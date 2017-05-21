@@ -977,8 +977,10 @@ static void jl_typemap_level_insert_(jl_typemap_level_t *cache, jl_typemap_entry
         t1 = jl_tparam(ttypes, offs);
     }
     // If the type at `offs` is Any, put it in the Any list
-    if (t1 && jl_is_any(t1))
-        return jl_typemap_insert_generic(&cache->any, (jl_value_t*)cache, newrec, (jl_value_t*)jl_any_type, offs+1, tparams);
+    if (t1 && jl_is_any(t1)) {
+        jl_typemap_insert_generic(&cache->any, (jl_value_t*)cache, newrec, (jl_value_t*)jl_any_type, offs+1, tparams);
+        return;
+    }
     // Don't put Varargs in the optimized caches (too hard to handle in lookup and bp)
     if (t1 && !isva) {
         // if t1 != jl_typetype_type and the argument is Type{...}, this

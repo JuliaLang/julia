@@ -74,7 +74,7 @@ struct _jl_taggedvalue_bits {
     uintptr_t gc:2;
 };
 
-struct _jl_taggedvalue_t {
+JL_EXTENSION struct _jl_taggedvalue_t {
     union {
         uintptr_t header;
         jl_taggedvalue_t *next;
@@ -140,7 +140,7 @@ typedef struct {
     uint16_t isaligned:1; // data allocated with memalign
 } jl_array_flags_t;
 
-typedef struct {
+JL_EXTENSION typedef struct {
     JL_DATA_TYPE
     void *data;
 #ifdef STORE_ARRAY_LEN
@@ -190,7 +190,7 @@ typedef jl_value_t *(*jl_fptr_t)(jl_value_t*, jl_value_t**, uint32_t);
 typedef jl_value_t *(*jl_fptr_sparam_t)(jl_svec_t*, jl_value_t*, jl_value_t**, uint32_t);
 typedef jl_value_t *(*jl_fptr_linfo_t)(struct _jl_method_instance_t*, jl_value_t**, uint32_t, jl_svec_t*);
 
-typedef struct {
+JL_EXTENSION typedef struct {
     union {
         jl_fptr_t fptr;
         jl_fptr_t fptr1;

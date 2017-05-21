@@ -405,13 +405,13 @@ JL_DLLEXPORT int jl_fs_close(int handle)
 }
 
 JL_DLLEXPORT int jl_uv_write(uv_stream_t *stream, const char *data, size_t n,
-                             uv_write_t *uvw, void *writecb)
+                             uv_write_t *uvw, uv_write_cb writecb)
 {
     uv_buf_t buf[1];
     buf[0].base = (char*)data;
     buf[0].len = n;
     JL_SIGATOMIC_BEGIN();
-    int err = uv_write(uvw,stream,buf,1,(uv_write_cb)writecb);
+    int err = uv_write(uvw, stream, buf, 1, writecb);
     JL_SIGATOMIC_END();
     return err;
 }
@@ -941,15 +941,15 @@ void jl_work_notifier(uv_work_t *req, int status)
     free(baton);
 }
 
-JL_DLLEXPORT int jl_queue_work(void *work_func, void *work_args, void *work_retval,
-                               void *notify_func, int notify_idx)
+JL_DLLEXPORT int jl_queue_work(work_cb_t work_func, void *work_args, void *work_retval,
+                               notify_cb_t notify_func, int notify_idx)
 {
     struct work_baton *baton = (struct work_baton*) malloc(sizeof(struct work_baton));
     baton->req.data = (void*) baton;
-    baton->work_func = (work_cb_t)work_func;
+    baton->work_func = work_func;
     baton->work_args = work_args;
     baton->work_retval = work_retval;
-    baton->notify_func = (notify_cb_t)notify_func;
+    baton->notify_func = notify_func;
     baton->notify_idx = notify_idx;
 
     uv_queue_work(jl_io_loop, &baton->req, jl_work_wrapper, jl_work_notifier);
