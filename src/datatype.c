@@ -290,6 +290,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             al = fsz;
             desc[i].isptr = 1;
         }
+        assert(al <= JL_HEAP_ALIGNMENT && (JL_HEAP_ALIGNMENT % al) == 0);
         if (al != 0) {
             size_t alsz = LLT_ALIGN(sz, al);
             if (sz & (al - 1))
@@ -310,9 +311,9 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         // Some tuples become LLVM vectors with stronger alignment than what was calculated above.
         unsigned al = jl_special_vector_alignment(nfields, lastty);
         assert(al % alignm == 0);
-        // JL_SMALL_BYTE_ALIGNMENT is the smallest alignment we can guarantee on the heap.
-        if (al > JL_SMALL_BYTE_ALIGNMENT)
-            alignm = JL_SMALL_BYTE_ALIGNMENT;
+        // JL_HEAP_ALIGNMENT is the biggest alignment we can guarantee on the heap.
+        if (al > JL_HEAP_ALIGNMENT)
+            alignm = JL_HEAP_ALIGNMENT;
         else if (al)
             alignm = al;
     }
