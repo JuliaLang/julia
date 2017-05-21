@@ -151,6 +151,7 @@ end
 @test ucfirst("hola")=="Hola"
 @test ucfirst("")==""
 @test ucfirst("*")=="*"
+@test ucfirst("Ǆxx") == ucfirst("ǆxx") == "ǅxx"
 
 @test lcfirst("Hola")=="hola"
 @test lcfirst("hola")=="hola"
