@@ -51,6 +51,7 @@ Ref(x, i::Integer) = (i != 1 && error("Object only has one element"); Ref(x))
 Ref{T}() where {T} = RefValue{T}() # Ref{T}()
 Ref{T}(x) where {T} = RefValue{T}(x) # Ref{T}(x)
 convert(::Type{Ref{T}}, x) where {T} = RefValue{T}(x)
+copy(x::RefValue{T}) where {T} = RefValue{T}(x.x)
 
 function unsafe_convert(P::Type{Ptr{T}}, b::RefValue{T}) where T
     if isbits(T)
@@ -112,6 +113,110 @@ cconvert(::Type{Ptr{P}}, a::Array{<:Ptr}) where {P<:Ptr} = a
 cconvert(::Type{Ref{P}}, a::Array{<:Ptr}) where {P<:Ptr} = a
 cconvert(::Type{Ptr{P}}, a::Array) where {P<:Union{Ptr,Cwstring,Cstring}} = Ref{P}(a)
 cconvert(::Type{Ref{P}}, a::Array) where {P<:Union{Ptr,Cwstring,Cstring}} = Ref{P}(a)
+
+
+## RefField
+struct RefField{T} <: Ref{T}
+    base
+    offset::UInt
+    # Basic constructors
+    global gepfield
+    function gepfield(x::ANY, idx::Integer)
+        typeof(x).mutable || error("Tried to take reference to immutable type $(typeof(x))")
+        new{fieldtype(typeof(x), idx)}(x, fieldoffset(typeof(x), idx))
+    end
+    function gepfield(x::RefField{T}, idx::Integer) where {T}
+        !fieldisptr(T, idx) || error("Can only take interior references that are inline (e.g. immutable). Tried to access field \"$(fieldname(T, idx))\" of type $T")
+        new{fieldtype(T, idx)}(x.base, x.offset + fieldoffset(T, idx))
+    end
+end
+
+function gepfield(x::ANY, sym::Symbol)
+    gepfield(x, Base.fieldindex(typeof(x), sym))
+end
+function gepfield(x::RefField{T}, sym::Symbol) where T
+    gepfield(x, Base.fieldindex(T, sym))
+end
+gepindex(x::Ref) = gepfield(x, 1)
+
+# Tuple is defined before us in bootstrap, so it can't refer to RefField
+gepindex(x::RefField{<:Tuple}, idx) = gepfield(x, idx)
+
+function setindex!(x::RefField{T}, v::T) where T
+    unsafe_store!(Ptr{T}(pointer_from_objref(x.base)+x.offset), v)
+    v
+end
+
+function getindex(x::RefField{T}, v::T) where T
+    unsafe_load(Ptr{T}(pointer_from_objref(x.base)+x.offset), v)
+end
+
+function setfield(x, sym, v)
+    if typeof(x).mutable
+        y = copy(x)
+        setfield!(y, sym, v)
+        y
+    else
+        y = Ref{typeof(x)}(x)
+        (gepfield(y@[], sym))[] = v
+        y[]
+    end
+end
+
+function setindex(x, v, idxs...)
+    if typeof(x).mutable
+        y = copy(x)
+        setindex!(y, v, idxs...)
+        y
+    else
+        y = Ref{typeof(x)}(x)
+        (gepindex(y@[], idxs...))[] = v
+        y[]
+    end
+end
+
+macro setfield(base, idx)
+    if idx.head != :(=)
+        error("Expected assignment as second argument")
+    end
+    idx, rhs = idx.args
+    x, v = ntuple(i->gensym(), 2)
+    setupexprs = Expr[:($x = $base), :($v = $rhs)]
+    getfieldexprs, setfieldexprs = Expr[], Expr[]
+    res = nothing
+    while true
+        y, nv = ntuple(i->gensym(), 2)
+        if isa(idx, Symbol)
+            idx = Expr(:quote, idx)
+            (res !== nothing) && push!(getfieldexprs, :($res = getfield($x, $idx)))
+            push!(setfieldexprs, :($nv = setfield($x, $idx, $v)))
+            break
+        elseif idx.head == :vect
+            t = gensym()
+            (res !== nothing) && push!(getfieldexprs, :($res = getindex($x, $t...)))
+            push!(getfieldexprs, :($t = tuple($(idx.args...))))
+            push!(setfieldexprs, :($nv = setindex($x, $v, $t...)))
+            break
+        elseif idx.head == :(.)
+            (res !== nothing) && push!(getfieldexprs, :($res = getfield($y, $(idx.args[2]))))
+            push!(setfieldexprs, :($nv = setfield($y, $(idx.args[2]), $v)))
+            res, v, idx = y, nv, idx.args[1]
+        elseif idx.head == :ref
+            t = gensym()
+            (res !== nothing) && push!(getfieldexprs, :($res = getindex($y, $t...)))
+            push!(getfieldexprs, :($t = tuple($(idx.args[2:end]...))))
+            push!(setfieldexprs, :($nv = setindex($y, $v, $t...)))
+            res, v, idx = y, nv, idx.args[1]
+        else
+            error("Unknown field ref syntax")
+        end
+    end
+    push!(getfieldexprs, :($y = $x))
+    esc(Expr(:block,
+      setupexprs...,
+      reverse(getfieldexprs)...,
+      setfieldexprs...))
+end
 
 ###
 

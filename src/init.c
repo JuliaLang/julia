@@ -817,7 +817,7 @@ void jl_get_builtins(void)
     jl_builtin_isdefined = core("isdefined");   jl_builtin_nfields = core("nfields");
     jl_builtin_tuple = core("tuple");           jl_builtin_svec = core("svec");
     jl_builtin_getfield = core("getfield");     jl_builtin_setfield_bang = core("setfield!");
-    jl_builtin_setfield = core("setfield");
+    jl_builtin_setfield = NULL; //core("setfield");
     jl_builtin_fieldtype = core("fieldtype");   jl_builtin_arrayref = core("arrayref");
     jl_builtin_arrayset = core("arrayset");     jl_builtin_arraysize = core("arraysize");
     jl_builtin_apply_type = core("apply_type"); jl_builtin_applicable = core("applicable");

@@ -1836,55 +1836,23 @@
               (extract (cdr params) (cons p newparams) whereparams)))))
   (extract (cddr e) '() '()))
 
-(define (expand-at-assign expr base rr)
-  (let ((ssas `(,base))
-        (code '())
-        (idxs '()))
-  (define (emit c)
-      (set! code (cons c code)))
-  (define (add-level ssa sym)
-      (set! ssas (cons ssa ssas))
-      (set! idxs (cons sym idxs)))
-  (define (visit expr)
-    (let* ((ssa (make-ssavalue))
-           (primitive (or (symbol-like? expr) (eq? (car expr) 'vect)))
-           (prevval (if primitive base (visit (cadr expr))))
-           (refidx (and (not (symbol-like? expr)) (eq? (car expr) 'ref)))
-           (indexing (and (not (symbol-like? expr))
-                          (or (eq? (car expr) 'vect) refidx)))
-           (sym (if (symbol-like? expr) `',expr
-                  (if indexing (if refidx (cddr expr) (cdr expr)) (caddr expr)))))
-        (if indexing
-            (receive
-              (new-idxs stuff) (process-indexes prevval sym)
-              (add-level ssa new-idxs)
-              (emit `(block ,@stuff (= ,ssa (call getindex ,prevval ,@new-idxs)))))
-            (let ((ssym (if (or (symbol-like? sym) (quoted? sym)) sym
-                      (let ((nssa (make-ssavalue)))
-                          (emit `(= ,nssa ,sym))
-                          nssa))))
-              (add-level ssa ssym)
-              (emit `(= ,ssa (call (core getfield) ,prevval ,ssym)))))
-        ssa))
-    (define (build-assign expr ssas idxs v)
-        (let ((prevssa (if (symbol-like? ssas) ssas (car ssas)))
-              (sym (if (symbol-like? idxs) idxs (car idxs))))
-            (let ((new-expr
-               (if (symbol-like? expr)
-                  `(call (top setfield) ,prevssa ,sym ,v)
-                  (case (car expr)
-                    ((|.|)
-                        `(call (top setfield) ,prevssa ,sym ,v))
-                    ((vect)
-                        `(call (top setindex) ,prevssa ,v ,@sym))
-                    ((ref)
-                        `(call (top setindex) ,prevssa ,v ,@sym))))))
-                (if (null? (cdr idxs)) new-expr
-                    (build-assign (cadr expr) (cdr ssas) (cdr idxs) new-expr)))))
-    (visit expr)
-    (let ((res (build-assign expr (cdr ssas) idxs rr)))
-      (cons (reverse code) res))))
+(define (expand-at-ref-b base b)
+  (if (or (symbol-like? b) (quoted? b))
+    `(call gepfield ,base ,`',b)
+    (case (car b)
+      ((|.|)  `(call gepfield ,(expand-at-ref-b base (cadr b)) ,(caddr b)))
+      ((ref)  `(call gepindex ,(expand-at-ref-b base (cadr b)) ,@(cddr b)))
+      ((vect)  `(call gepindex ,base ,@(cdr b)))
+      (else   `(call gepfield ,base ,b)))))
 
+(define (expand-at-ref e)
+  ;; a@b
+  (let ((a    (cadr e))
+        (b    (caddr e)))
+    (let ((aa (if (symbol-like? a) a (make-ssavalue))))
+      (if (eq? aa a) (expand-at-ref-b aa b)
+          `(block (= ,aa ,(expand-forms a))
+                  ,(expand-at-ref-b aa b))))))
 
 ;; table mapping expression head to a function expanding that form
 (define expand-table
@@ -1934,6 +1902,8 @@
    'local  expand-local-or-global-decl
    'global expand-local-or-global-decl
    'local-def expand-local-or-global-decl
+
+   '@ expand-at-ref
 
    '=
    (lambda (e)
@@ -2008,39 +1978,8 @@
                 (unnecessary ,rr)))))
          ((@)
           ;; x@c =
-          (let ((x (cadr lhs))
-                 (c  (caddr lhs))
-                 (rhs (caddr e)))
-           (let* ((xx (if (or (symbol-like? x) (atom? x)) x (make-ssavalue)))
-                  (rr (if (or (symbol-like? rhs) (atom? rhs)) rhs (make-ssavalue)))
-                  (lowered (expand-at-assign c xx rr))
-                  (pre-assign (if (eq? rr rhs) '() `((= ,rr ,(expand-forms rhs))))))
-            `(block ,.pre-assign
-              ,.(if (symbol-like? x) `(,@(car lowered) (= ,x ,(cdr lowered)))
-                 (case (car x)
-                  ;; a.b@c =
-                  ((|.|)
-                    (let*  ((a   (cadr x))
-                            (b  (caddr x))
-                            (aa (if (symbol-like? a) a (make-ssavalue))))
-                      `(
-                         ,.(if (eq? aa a)   '() `((= ,aa ,(expand-forms a))))
-                         (= ,xx (call (core getfield) ,aa ,b))
-                         ,@(car lowered)
-                         (call (core setfield!) ,aa ,b ,(cdr lowered))
-                       )))
-                  ;; a[b]@c =
-                  ((ref)
-                    (let*  ((a   (cadr x))
-                            (b  (caddr x))
-                            (aa (if (symbol-like? a) a (make-ssavalue))))
-                      `(
-                         ,.(if (eq? aa a)   '() `((= ,aa ,(expand-forms a))))
-                         (= ,xx (call getindex ,aa ,b))
-                         ,@(car lowered)
-                         (call (core setindex!) ,aa ,(cdr lowered) ,b)
-                       )))
-                  ))))))
+          (let ((expanded-ref (expand-at-ref lhs)))
+            `(call setindex! ,expanded-ref ,(caddr e))))
          ((tuple)
           ;; multiple assignment
           (let ((lhss (cdr lhs))

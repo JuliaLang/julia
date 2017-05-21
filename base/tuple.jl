@@ -22,6 +22,7 @@ getindex(t::Tuple, i::Int) = getfield(t, i)
 getindex(t::Tuple, i::Real) = getfield(t, convert(Int, i))
 getindex(t::Tuple, r::AbstractArray{<:Any,1}) = ([t[ri] for ri in r]...)
 getindex(t::Tuple, b::AbstractArray{Bool,1}) = length(b) == length(t) ? getindex(t,find(b)) : throw(BoundsError(t, b))
+gepindex(x::Tuple, i) = gepfield(x, i)
 
 # returns new tuple
 setindex(x::Tuple, v, i::Integer) = setfield(x, i, v)

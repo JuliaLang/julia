@@ -978,6 +978,11 @@ export
     catch_stacktrace,
 
 # types
+    gepfield,
+    gepindex,
+    setfield,
+    setindex,
+    @setfield,
     convert,
     fieldoffset,
     fieldname,

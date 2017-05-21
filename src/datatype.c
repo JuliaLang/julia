@@ -755,6 +755,13 @@ JL_DLLEXPORT size_t jl_get_field_offset(jl_datatype_t *ty, int field)
     return jl_field_offset(ty, field - 1);
 }
 
+JL_DLLEXPORT int jl_get_field_isptr(jl_datatype_t *ty, int field)
+{
+    if (ty->layout == NULL || field > jl_datatype_nfields(ty) || field < 1)
+        jl_bounds_error_int((jl_value_t*)ty, field);
+    return jl_field_isptr(ty, field - 1);
+}
+
 JL_DLLEXPORT size_t jl_get_alignment(jl_datatype_t *ty)
 {
     if (ty->layout == NULL)

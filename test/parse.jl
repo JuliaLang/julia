@@ -1196,13 +1196,25 @@ end
 @test expand(:(f(2, a=1, w=3, c=3, w=4, b=2))) == Expr(:error,
                                                        "keyword argument \"w\" repeated in call to \"f\"")
 
-# Basic parsing for in place assign
-@test parse("a@b = 1") == :(a@b = 1)
-@test parse("a.b@c = 1") == :(a.b@c = 1)
-@test parse("a.b@c.d = 1") == :(a.b@c.d = 1)
-@test parse("a.b@c.d[e] = 1") == :(a.b@c.d[e] = 1)
-@test parse("a.b@c[d] = 1") == :(a.b@c[d] = 1)
-@test parse("a.b@c[d,e] = 1") == :(a.b@c[d,e] = 1)
-@test parse("a.b@[c] = 1") == :(a.b@[c] = 1)
-@test parse("a.b@[c,d] = 1") == :(a.b@[c,d] = 1)
-@test parse("a.b[c]@[d] = 1") == :(a.b[c]@[d] = 1)
+# Basic parsing of reference syntax
+@test expand(parse("a@b")) == :(gepfield(a, :b))
+@test expand(parse("a@c")) == :(gepfield(a, :c))
+@test expand(parse("a@c.d")) == :(gepfield(gepfield(a, :c), :d))
+@test expand(parse("a@c.d[e]")) == :(gepindex(gepfield(gepfield(a, :c), :d), e))
+@test expand(parse("a@c[d]")) == :(gepindex(gepfield(a, :c), d))
+@test expand(parse("a@c[d,e]")) == :(gepindex(gepfield(a, :c), d, e))
+@test expand(parse("a@[c]")) == :(gepindex(a, c))
+@test expand(parse("a@[c,d]")) == :(gepindex(a, c, d))
+@test expand(parse("a@[c].d")) == :(gepfield(gepindex(a, c),:d))
+
+@test expand(parse("a@b = 1")) == :(setindex!(gepfield(a, :b), 1))
+@test expand(parse("a@c = 1")) == :(setindex!(gepfield(a, :c), 1))
+@test expand(parse("a@c.d = 1")) == :(setindex!(gepfield(gepfield(a, :c), :d), 1))
+@test expand(parse("a@c.d[e] = 1")) == :(setindex!(gepindex(gepfield(gepfield(a, :c), :d), e), 1))
+@test expand(parse("a@c[d] = 1")) == :(setindex!(gepindex(gepfield(a, :c), d), 1))
+@test expand(parse("a@c[d,e] = 1")) == :(setindex!(gepindex(gepfield(a, :c), d, e), 1))
+@test expand(parse("a@[c] = 1")) == :(setindex!(gepindex(a, c), 1))
+@test expand(parse("a@[c,d] = 1")) == :(setindex!(gepindex(a, c, d), 1))
+@test expand(parse("a@[c].d = 1")) == :(setindex!(gepfield(gepindex(a, c),:d), 1))
+
+expand(:(foo(1)@a))
