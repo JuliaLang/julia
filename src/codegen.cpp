@@ -3688,7 +3688,7 @@ static void union_alloca_type(jl_uniontype_t *ut,
             [&](unsigned idx, jl_datatype_t *jt) {
                 if (!jl_is_datatype_singleton(jt)) {
                     size_t nb1 = jl_datatype_size(jt);
-                    size_t align1 = jt->layout->alignment;
+                    size_t align1 = jl_datatype_align(jt);
                     if (nb1 > nbytes)
                         nbytes = nb1;
                     if (align1 > align)
@@ -3959,7 +3959,7 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
                     builder.CreateMemCpy(vi.value.V,
                                          data_pointer(rval_info, ctx, T_pint8),
                                          copy_bytes,
-                                         ((jl_datatype_t*)rval_info.typ)->layout->alignment,
+                                         jl_datatype_align(rval_info.typ),
                                          vi.isVolatile,
                                          tbaa);
                 }
