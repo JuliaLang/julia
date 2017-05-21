@@ -81,6 +81,29 @@ end
 
 squeeze(A::AbstractArray, dim::Integer) = squeeze(A, (Int(dim),))
 
+"""
+    squeeze(A)
+
+Remove all singleton dimensions from array `A`.
+
+```jldoctest
+julia> a = reshape(collect(1:4),(2,2,1,1))
+2×2×1×1 Array{Int64,4}:
+[:, :, 1, 1] =
+ 1  3
+ 2  4
+
+julia> squeeze(a)
+2×2 Array{Int64,2}:
+ 1  3
+ 2  4
+```
+"""
+function squeeze(A::AbstractArray)
+    singleton_dims = tuple((d for d in 1:ndims(A) if size(A, d) == 1)...)
+    return squeeze(A, singleton_dims)
+end
+
 
 ## Unary operators ##
 

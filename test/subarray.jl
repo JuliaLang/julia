@@ -555,3 +555,11 @@ let
     @test Base.IndexStyle(view(a, :, :)) == Base.IndexLinear()
     @test isbits(view(a, :, :))
 end
+
+# issue
+# Ensure that we can auto-squeeze out all singleton dimensions of an array
+let
+    @test ndims(squeeze(ones(10, 1, 1))) == 1
+    @test ndims(squeeze(ones(1, 10))) == 1
+    @test ndims(squeeze(ones(10, 10))) == 2
+end
