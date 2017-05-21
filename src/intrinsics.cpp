@@ -331,7 +331,7 @@ static Value *emit_unbox(Type *to, const jl_cgval_t &x, jl_value_t *jt, Value *d
 
     int alignment;
     if (x.isboxed) {
-         // julia's gc gives 16-byte aligned addresses
+        // julia's gc gives 16-byte aligned addresses
         alignment = 16;
     }
     else if (jt) {
