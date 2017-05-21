@@ -1169,9 +1169,10 @@ static Value *emit_bounds_check(const jl_cgval_t &ainfo, jl_value_t *ty, Value *
 // It is currently unused, but might be used in the future for a more precise answer.
 static unsigned julia_alignment(Value* /*ptr*/, jl_value_t *jltype, unsigned alignment)
 {
-    if (!alignment && jl_datatype_align(jltype) > JL_HEAP_ALIGNMENT) {
-        // Type's natural alignment exceeds strictest alignment promised in heap, so return the heap alignment.
-        return JL_HEAP_ALIGNMENT;
+    if (!alignment) {
+        alignment = jl_datatype_align(jltype);
+        assert(alignment <= JL_HEAP_ALIGNMENT);
+        assert(JL_HEAP_ALIGNMENT % alignment == 0);
     }
     return alignment;
 }
