@@ -1001,7 +1001,7 @@ function apply_type_tfunc(headtypetype::ANY, args::ANY...)
         ai = args[i]
         if isType(ai)
             aip1 = ai.parameters[1]
-            canconst &= (isleaftype(aip1) || aip1 === Union{})
+            canconst &= !has_free_typevars(aip1)
             push!(tparams, aip1)
         elseif isa(ai, Const) && (isa(ai.val, Type) || isa(ai.val, TypeVar) || valid_tparam(ai.val))
             push!(tparams, ai.val)
@@ -1784,6 +1784,10 @@ function abstract_call(f::ANY, fargs::Union{Tuple{},Vector{Any}}, argtypes::Vect
             else
                 return Any
             end
+            if !isa(body, Type) && !isa(body, TypeVar)
+                return Any
+            end
+            has_free_typevars(body) || return body
             if isa(argtypes[2], Const)
                 tv = argtypes[2].val
             elseif isa(argtypes[2], PartialTypeVar)
@@ -1794,9 +1798,6 @@ function abstract_call(f::ANY, fargs::Union{Tuple{},Vector{Any}}, argtypes::Vect
                 return Any
             end
             !isa(tv, TypeVar) && return Any
-            if !isa(body, Type) && !isa(body, TypeVar)
-                return Any
-            end
             theunion = UnionAll(tv, body)
             ret = canconst ? abstract_eval_constant(theunion) : Type{theunion}
             return ret
