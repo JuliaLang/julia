@@ -1745,22 +1745,27 @@ function _sortedfindin(v, w)
     witerj, j = next(witer, j)
     @inbounds begin
         vi, wj = v[viteri], w[witerj]
-        while !(done(viter, i) || done(witer, j))
-            if vi < wj
+        while true
+            if isless(vi, wj)
+                if done(viter, i)
+                    break
+                end
                 viteri, i = next(viter, i)
                 vi        = v[viteri]
-            elseif vi > wj
+            elseif isless(wj, vi)
+                if done(witer, j)
+                    break
+                end
                 witerj, j = next(witer, j)
                 wj        = w[witerj]
             else
                 push!(out, viteri)
+                if done(viter, i)
+                    break
+                end
                 viteri, i = next(viter, i)
-                witerj, j = next(witer, j)
-                vi, wj    = v[viteri], w[witerj]
+                vi        = v[viteri]
             end
-        end
-        if vi == wj
-            push!(out, viteri)
         end
     end
     return out

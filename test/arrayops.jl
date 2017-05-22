@@ -273,6 +273,14 @@ end
     @test findin(a, Int[]) == Int[]
     @test findin(Int[], a) == Int[]
 
+    a = collect(1:3:15)
+    b = collect(2:4:10)
+    @test findin(a, b) == [4]
+    @test findin([a[1:4]; a[4:end]], b) == [4,5]
+
+    @test findin([1.0, NaN, 2.0], NaN) == [2]
+    @test findin([1.0, 2.0, NaN], NaN) == [3]
+
     @testset "findin for uncomparable element types" begin
         a = [1 + 1im, 1 - 1im]
         @test findin(a, 1 + 1im) == [1]
