@@ -11,6 +11,7 @@ include("testenv.jl")
     end
 
 addprocs_with_testenv(4)
+@test nprocs() == 5
 
 function reuseport_tests()
     # Run the test on all processes.
