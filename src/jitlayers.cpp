@@ -25,6 +25,9 @@
 #include <polly/RegisterPasses.h>
 #include <polly/LinkAllPasses.h>
 #include <polly/CodeGen/CodegenCleanup.h>
+#if defined(USE_POLLY_ACC)
+#include <polly/Support/LinkGPURuntime.h>
+#endif
 #endif
 
 #include <llvm/Transforms/IPO.h>
