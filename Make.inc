@@ -239,6 +239,7 @@ BUILD_LLVM_CLANG := 0
 BUILD_LLDB := 0
 USE_POLLY := 0
 USE_POLLY_OPENMP := 0
+USE_POLLY_ACC := 0
 
 # Cross-compile
 #XC_HOST := i686-w64-mingw32
