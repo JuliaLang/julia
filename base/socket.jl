@@ -827,7 +827,7 @@ function listenany(host::IPAddr, default_port)
         sock = TCPServer()
         if bind(sock, addr) && trylisten(sock) == 0
             if default_port == 0
-                _addr, port = _sockname(sock, true)
+                _addr, port = getsockname(sock)
                 return (port, sock)
             end
             return (addr.port, sock)
@@ -845,15 +845,24 @@ listenany(default_port) = listenany(IPv4(UInt32(0)), default_port)
 """
     getsockname(sock::Union{TCPServer, TCPSocket}) -> (IPAddr, UInt16)
 
-Get the IP address and the port that the given `TCPSocket` is connected to
-(or bound to, in the case of `TCPServer`).
+Get the IP address and port that the given socket is bound to.
 """
-getsockname(sock::Union{TCPServer, TCPSocket}) = _sockname(sock, isa(sock, TCPServer))
+getsockname(sock::Union{TCPSocket, TCPServer}) = _sockname(sock, true)
 
-function _sockname(sock, self)
+
+"""
+    getpeername(sock::TCPSocket) -> (IPAddr, UInt16)
+
+Get the IP address and port of the remote endpoint that the given
+socket is connected to. Valid only for connected TCP sockets.
+"""
+getpeername(sock::TCPSocket) = _sockname(sock, false)
+
+function _sockname(sock, self=true)
     rport = Ref{Cushort}(0)
     raddress = zeros(UInt8, 16)
     rfamily = Ref{Cuint}(0)
+
     if self
         r = ccall(:jl_tcp_getsockname, Int32,
                 (Ptr{Void}, Ref{Cushort}, Ptr{Void}, Ref{Cuint}),
@@ -886,7 +895,7 @@ function _sockname(sock, self)
             naddr = ntoh(unsafe_load(Ptr{UInt128}(pointer(raddress)), 1))
             addr = IPv6(naddr)
         else
-            error("unsupported address family: $(getindex(rfamily))")
+            error(string("unsupported address family: ", getindex(rfamily)))
         end
     else
         error("cannot obtain socket name")
