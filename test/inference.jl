@@ -828,3 +828,10 @@ end
 end
 @test length(code_typed(test_20902, (), optimize = false)) == 1
 @test length(code_typed(test_20902, (), optimize = false)) == 1
+
+# normalization of arguments with constant Types as parameters
+g21771(T) = T
+f21771(::Val{U}) where {U} = Tuple{g21771(U)}
+@test @inferred(f21771(Val{Int}())) === Tuple{Int}
+@test @inferred(f21771(Val{Union{}}())) === Tuple{Union{}}
+@test Base.return_types(f21771, typeof((Val{Integer}(),))) == Any[Type{<:Tuple{Integer}}] # apply_type might be overly conservative here
