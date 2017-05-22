@@ -1,0 +1,8 @@
+#--------------------------------------
+#Tabla 1-3 (p. 37).
+#Ejercicio - señales y sus parámetros
+#--------------------------------------
+
+
+# 1. Generar N = 1000 muestras de la señal sinusoidal x (t) = Asin (2pfxt) con una amplitud A = 5 y la frecuencia de
+ # Fx = 10 Hz, de la muestreado frecuencia fp = 1000 Hz. Dibujar la señal.
