@@ -211,7 +211,7 @@ typedef union {
 
 // layout for big (>2k) objects
 
-typedef struct _bigval_t {
+JL_EXTENSION typedef struct _bigval_t {
     struct _bigval_t *next;
     struct _bigval_t **prev; // pointer to the next field of the prev entry
     union {

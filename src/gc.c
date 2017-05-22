@@ -140,7 +140,7 @@ static void finalize_object(arraylist_t *list, jl_value_t *o,
             void *f = items[i + 1];
             move = 1;
             if (gc_ptr_tag(v, 1)) {
-                ((void (*)(void*))f)(o);
+                ((void (*)(void*))(uintptr_t)f)(o);
             }
             else {
                 arraylist_push(copied_list, o);
@@ -260,7 +260,7 @@ static void schedule_all_finalizers(arraylist_t *flist)
             schedule_finalization(v, f);
         }
         else {
-            ((void (*)(void*))f)(gc_ptr_clear_tag(v, 1));
+            ((void (*)(void*))(uintptr_t)f)(gc_ptr_clear_tag(v, 1));
         }
     }
     flist->len = 0;
@@ -1683,7 +1683,7 @@ STATIC_INLINE int gc_mark_scan_obj32(jl_ptls_t ptls, gc_mark_sp_t *sp, gc_mark_o
 // Additional optimizations are done for some of the common cases by skipping
 // the unnecessary data stack pointer increment and the load from the stack
 // (i.e. store to load forwaring). See `objary_loaded`, `obj8_loaded` and `obj16_loaded`.
-NOINLINE void gc_mark_loop(jl_ptls_t ptls, gc_mark_sp_t sp)
+JL_EXTENSION NOINLINE void gc_mark_loop(jl_ptls_t ptls, gc_mark_sp_t sp)
 {
     if (__unlikely(ptls == NULL)) {
         gc_mark_label_addrs[GC_MARK_L_marked_obj] = gc_mark_laddr(marked_obj);
@@ -2234,7 +2234,7 @@ static void sweep_finalizer_list(arraylist_t *list)
         if (isfreed) {
             // schedule finalizer or execute right away if it is not julia code
             if (is_cptr) {
-                ((void (*)(void*))fin)(jl_data_ptr(v));
+                ((void (*)(void*))(uintptr_t)fin)(jl_data_ptr(v));
                 continue;
             }
             schedule_finalization(v, fin);

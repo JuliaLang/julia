@@ -826,7 +826,7 @@ JL_DLLEXPORT jl_value_t *jl_tupletype_fill(size_t n, jl_value_t *v)
     return p;
 }
 
-typedef struct _jl_typestack_t {
+JL_EXTENSION typedef struct _jl_typestack_t {
     union {
         jl_value_t *ua;
         jl_datatype_t *tt;
