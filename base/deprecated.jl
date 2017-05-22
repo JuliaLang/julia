@@ -1350,6 +1350,10 @@ end
 @deprecate srand(filename::AbstractString, n::Integer=4) srand(read!(filename, Array{UInt32}(Int(n))))
 @deprecate MersenneTwister(filename::AbstractString)  srand(MersenneTwister(0), read!(filename, Array{UInt32}(Int(4))))
 
+# PR #21974
+@deprecate versioninfo(verbose::Bool) versioninfo(verbose=verbose)
+@deprecate versioninfo(io::IO, verbose::Bool) versioninfo(io, verbose=verbose)
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations
