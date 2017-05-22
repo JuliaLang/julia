@@ -11,10 +11,9 @@ include("testenv.jl")
     end
 
 addprocs_with_testenv(4)
+@test nprocs() == 5
 
-# Test that the client port is reused. SO_REUSEPORT may not be supported on
-# all UNIX platforms, Linux kernels prior to 3.9 and older versions of OSX
-if is_unix()
+function reuseport_tests()
     # Run the test on all processes.
     results = asyncmap(procs()) do p
         remotecall_fetch(p) do
@@ -45,6 +44,19 @@ if is_unix()
 
     # Ensure that the code has indeed been successfully executed everywhere
     @test all(p -> p in results, procs())
+end
+
+# Test that the client port is reused. SO_REUSEPORT may not be supported on
+# all UNIX platforms, Linux kernels prior to 3.9 and older versions of OSX
+if is_unix()
+    # Run reuse client port tests only if SO_REUSEPORT is supported.
+    s = TCPSocket(delay = false)
+    is_linux() && Base.Distributed.bind_client_port(s)
+    if ccall(:jl_tcp_reuseport, Int32, (Ptr{Void},), s.handle) == 0
+        reuseport_tests()
+    else
+        info("SO_REUSEPORT is unsupported, skipping reuseport tests.")
+    end
 end
 
 id_me = myid()
