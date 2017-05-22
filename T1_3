@@ -5,4 +5,10 @@
 
 
 # 1. Generar N = 1000 muestras de la señal sinusoidal x (t) = Asin (2pfxt) con una amplitud A = 5 y la frecuencia de
- # Fx = 10 Hz, de la muestreado frecuencia fp = 1000 Hz. Dibujar la señal.
+# Fx = 10 Hz, de la muestreado frecuencia fp = 1000 Hz. Dibujar la señal.
+
+ N=1000;A=5; fx=10; fp=1000;	    # parámetros de la señal
+	dt=1/fp;				                    # periodo de muestreo
+	t=dt*(0:N-1);			                # momentos de muestreo Vector
+	x=A*sin(2*pi*fx*t);		           # señal
+	#plot(t,x); grid; title('Sygna³ x(t)'); xlabel('czas [s]'); pause
