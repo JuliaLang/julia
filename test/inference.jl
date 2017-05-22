@@ -834,4 +834,4 @@ g21771(T) = T
 f21771(::Val{U}) where {U} = Tuple{g21771(U)}
 @test @inferred(f21771(Val{Int}())) === Tuple{Int}
 @test @inferred(f21771(Val{Union{}}())) === Tuple{Union{}}
-@test Base.return_types(f21771, typeof((Val{Integer}(),))) == Any[Type{<:Tuple{Integer}}] # apply_type might be overly conservative here
+@test @inferred(f21771(Val{Integer}())) === Tuple{Integer}
