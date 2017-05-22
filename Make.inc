@@ -237,8 +237,12 @@ BUILD_LLVM_CLANG := 0
 # set to 1 to get lldb (often does not work, no chance with llvm3.2 and earlier)
 # see http://lldb.llvm.org/build.html for dependencies
 BUILD_LLDB := 0
+
+# Options to enable Polly and its code-generation options
 USE_POLLY := 0
-USE_POLLY_OPENMP := 0
+USE_POLLY_OPENMP := 0  # Enable OpenMP code-generation
+USE_POLLY_ACC := 0     # Enable GPU code-generation
+CUDALIB_INCLUDE_DIR := # Path to CUDA header files
 
 # Cross-compile
 #XC_HOST := i686-w64-mingw32
