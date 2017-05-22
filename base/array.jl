@@ -1734,6 +1734,9 @@ function _findin(a, b)
     ind
 end
 
+# If two collections are already sorted, findin can be computed with
+# a single traversal of the two collections. This is much faster than
+# using a hash table (although it has the same complexity).
 function _sortedfindin(v, w)
     viter, witer = eachindex(v), eachindex(w)
     out  = eltype(viter)[]
@@ -1763,6 +1766,8 @@ function _sortedfindin(v, w)
                 if done(viter, i)
                     break
                 end
+                # We only increment the v iterator because v can have
+                # repeated matches to a single value in w
                 viteri, i = next(viter, i)
                 vi        = v[viteri]
             end
