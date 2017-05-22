@@ -504,10 +504,10 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
 {
     size_t n = 0;
     if ((uintptr_t)vt < 4096U) {
-        n += jl_printf(out, "<?#%p::%p>", v, vt);
+        n += jl_printf(out, "<?#%p::%p>", (void*)v, (void*)vt);
     }
     else if ((uintptr_t)v < 4096U) {
-        n += jl_printf(out, "<?#%p::", v);
+        n += jl_printf(out, "<?#%p::", (void*)v);
         n += jl_static_show_x(out, (jl_value_t*)vt, depth);
         n += jl_printf(out, ">");
     }
@@ -876,7 +876,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         n += jl_printf(out, ")");
     }
     else {
-        n += jl_printf(out, "<?#%p::", v);
+        n += jl_printf(out, "<?#%p::", (void*)v);
         n += jl_static_show_x(out, (jl_value_t*)vt, depth);
         n += jl_printf(out, ">");
     }

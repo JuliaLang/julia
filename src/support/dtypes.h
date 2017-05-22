@@ -166,9 +166,11 @@ STATIC_INLINE unsigned int next_power_of_two(unsigned int val)
 #ifdef __GNUC__
 #define __unlikely(x) __builtin_expect(!!(x), 0)
 #define __likely(x)   __builtin_expect(!!(x), 1)
+#define JL_EXTENSION __extension__
 #else
 #define __unlikely(x) (x)
 #define __likely(x)   (x)
+#define JL_EXTENSION
 #endif
 
 #define DBL_MAXINT 9007199254740992LL
