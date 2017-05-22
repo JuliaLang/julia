@@ -220,6 +220,8 @@ mutable struct InferenceState
                 if isa(atyp, DataType) && isdefined(atyp, :instance)
                     # replace singleton types with their equivalent Const object
                     atyp = Const(atyp.instance)
+                elseif isconstType(atyp)
+                    atype = Const(atyp.parameters[1])
                 else
                     atyp = rewrap_unionall(atyp, linfo.specTypes)
                 end
@@ -999,7 +1001,7 @@ function apply_type_tfunc(headtypetype::ANY, args::ANY...)
         ai = args[i]
         if isType(ai)
             aip1 = ai.parameters[1]
-            canconst &= isleaftype(aip1)
+            canconst &= (isleaftype(aip1) || aip1 === Union{})
             push!(tparams, aip1)
         elseif isa(ai, Const) && (isa(ai.val, Type) || isa(ai.val, TypeVar) || valid_tparam(ai.val))
             push!(tparams, ai.val)
