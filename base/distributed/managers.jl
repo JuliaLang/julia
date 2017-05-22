@@ -472,6 +472,7 @@ function socket_reuse_port()
             return TCPSocket()
         end
         is_apple() && bind_client_port(s)
+        return s
     else
         return TCPSocket()
     end
