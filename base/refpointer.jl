@@ -44,6 +44,13 @@ end
 RefValue(x::T) where {T} = RefValue{T}(x)
 isassigned(x::RefValue) = isdefined(x, :x)
 
+global _gepvalue
+# Special for r::RefValue, r@a means r@x.a
+gepfield(r::RefValue, sym::Symbol) = gepfield(let gepfield=_gepfield; r@x; end, sym)
+gepfield(r::RefValue, idx::Integer) = gepfield(let gepfield=_gepfield; r@x; end, idx)
+gepindex(r::RefValue, idxs...) = gepindex(r@x, idxs...)
+
+
 Ref(x::Ref) = x
 Ref(x::Any) = RefValue(x)
 Ref(x::Ptr{T}, i::Integer=1) where {T} = x + (i-1)*Core.sizeof(T)
@@ -120,24 +127,28 @@ struct RefField{T} <: Ref{T}
     base
     offset::UInt
     # Basic constructors
-    global gepfield
-    function gepfield(x::ANY, idx::Integer)
+    global _gepfield
+    function _gepfield(x::ANY, idx::Integer)
         typeof(x).mutable || error("Tried to take reference to immutable type $(typeof(x))")
         new{fieldtype(typeof(x), idx)}(x, fieldoffset(typeof(x), idx))
     end
-    function gepfield(x::RefField{T}, idx::Integer) where {T}
+    function _gepfield(x::RefField{T}, idx::Integer) where {T}
         !fieldisptr(T, idx) || error("Can only take interior references that are inline (e.g. immutable). Tried to access field \"$(fieldname(T, idx))\" of type $T")
         new{fieldtype(T, idx)}(x.base, x.offset + fieldoffset(T, idx))
     end
 end
 
-function gepfield(x::ANY, sym::Symbol)
-    gepfield(x, Base.fieldindex(typeof(x), sym))
+function _gepfield(x::ANY, sym::Symbol)
+    _gepfield(x, Base.fieldindex(typeof(x), sym))
 end
-function gepfield(x::RefField{T}, sym::Symbol) where T
-    gepfield(x, Base.fieldindex(T, sym))
+function _gepfield(x::RefField{T}, sym::Symbol) where T
+    _gepfield(x, Base.fieldindex(T, sym))
 end
-gepindex(x::Ref) = gepfield(x, 1)
+
+gepfield(x::ANY, idx::Integer) = _gepfield(x, idx)
+gepfield(x::RefField{T}, idx::Integer) where {T} = _gepfield(x, idx)
+gepfield(x::ANY, idx::Symbol) = _gepfield(x, idx)
+gepfield(x::RefField{T}, idx::Symbol) where {T} = _gepfield(x, idx)
 
 # Tuple is defined before us in bootstrap, so it can't refer to RefField
 gepindex(x::RefField{<:Tuple}, idx) = gepfield(x, idx)
@@ -146,6 +157,7 @@ function setindex!(x::RefField{T}, v::T) where T
     unsafe_store!(Ptr{T}(pointer_from_objref(x.base)+x.offset), v)
     v
 end
+setindex!(x::RefField{T}, v::S) where {T,S} = setindex!(x, convert(T, v)::T)
 
 function getindex(x::RefField{T}, v::T) where T
     unsafe_load(Ptr{T}(pointer_from_objref(x.base)+x.offset), v)

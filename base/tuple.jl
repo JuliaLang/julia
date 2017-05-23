@@ -101,19 +101,29 @@ julia> ntuple(i -> 2*i, 4)
 ```
 """
 function ntuple(f::F, n::Integer) where F
-    t = n == 0  ? () :
-        n == 1  ? (f(1),) :
-        n == 2  ? (f(1), f(2)) :
-        n == 3  ? (f(1), f(2), f(3)) :
-        n == 4  ? (f(1), f(2), f(3), f(4)) :
-        n == 5  ? (f(1), f(2), f(3), f(4), f(5)) :
-        n == 6  ? (f(1), f(2), f(3), f(4), f(5), f(6)) :
-        n == 7  ? (f(1), f(2), f(3), f(4), f(5), f(6), f(7)) :
-        n == 8  ? (f(1), f(2), f(3), f(4), f(5), f(6), f(7), f(8)) :
-        n == 9  ? (f(1), f(2), f(3), f(4), f(5), f(6), f(7), f(8), f(9)) :
-        n == 10 ? (f(1), f(2), f(3), f(4), f(5), f(6), f(7), f(8), f(9), f(10)) :
-        _ntuple(f, n)
-    return t
+    RT = Core.Inference.return_type(f, Tuple{Int})
+    TT = NTuple{RT, n}
+    if isbits(RT)
+        r = Ref{TT}()
+        for i = 1:n
+            r@[i] = f(i)
+        end
+        return r[]
+    else
+        t = n == 0  ? () :
+            n == 1  ? (f(1),) :
+            n == 2  ? (f(1), f(2)) :
+            n == 3  ? (f(1), f(2), f(3)) :
+            n == 4  ? (f(1), f(2), f(3), f(4)) :
+            n == 5  ? (f(1), f(2), f(3), f(4), f(5)) :
+            n == 6  ? (f(1), f(2), f(3), f(4), f(5), f(6)) :
+            n == 7  ? (f(1), f(2), f(3), f(4), f(5), f(6), f(7)) :
+            n == 8  ? (f(1), f(2), f(3), f(4), f(5), f(6), f(7), f(8)) :
+            n == 9  ? (f(1), f(2), f(3), f(4), f(5), f(6), f(7), f(8), f(9)) :
+            n == 10 ? (f(1), f(2), f(3), f(4), f(5), f(6), f(7), f(8), f(9), f(10)) :
+            _ntuple(f, n)
+        return t::TT
+    end
 end
 
 function _ntuple(f, n)
@@ -121,6 +131,7 @@ function _ntuple(f, n)
     (n >= 0) || throw(ArgumentError(string("tuple length should be ≥0, got ", n)))
     ([f(i) for i = 1:n]...)
 end
+
 
 # inferrable ntuple
 ntuple(f, ::Type{Val{0}}) = (@_inline_meta; ())
@@ -152,6 +163,7 @@ function _ntuple(out::NTuple{M,Any}, f::F, ::Type{Val{N}}) where {F,N,M}
     @_inline_meta
     _ntuple((out..., f(M+1)), f, Val{N})
 end
+
 
 # 1 argument function
 map(f, t::Tuple{})              = ()

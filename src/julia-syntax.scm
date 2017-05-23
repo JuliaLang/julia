@@ -1978,8 +1978,12 @@
                 (unnecessary ,rr)))))
          ((@)
           ;; x@c =
-          (let ((expanded-ref (expand-at-ref lhs)))
-            `(call setindex! ,expanded-ref ,(caddr e))))
+          (let ((rhs (caddr e)))
+            (let ((expanded-ref (expand-at-ref lhs))
+                  (rr (if (or (symbol-like? rhs) (atom? rhs)) rhs (make-ssavalue))))
+              `(block
+                ,.(if (eq? rr rhs) '() `((= ,rr ,(expand-forms rhs))))
+                (call setindex! ,expanded-ref ,rr)))))
          ((tuple)
           ;; multiple assignment
           (let ((lhss (cdr lhs))

@@ -1217,4 +1217,11 @@ end
 @test expand(parse("a@[c,d] = 1")) == :(setindex!(gepindex(a, c, d), 1))
 @test expand(parse("a@[c].d = 1")) == :(setindex!(gepfield(gepindex(a, c),:d), 1))
 
-expand(:(foo(1)@a))
+struct reftuplefoo
+    t::NTuple{2, Int}
+end
+let x = Ref{reftuplefoo}()
+    # Check that the RHS gets expanded
+    x@t = ntuple(identity, 2)
+    @test x[] == (1,2)
+end
