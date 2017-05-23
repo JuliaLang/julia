@@ -1332,6 +1332,42 @@ function findnz(S::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
     return (I, J, V)
 end
 
+function _sparse_findnext(m::SparseMatrixCSC, i::Int)
+   if i > length(m)
+       return 0
+   end
+   row, col = ind2sub(m, i)
+   lo, hi = m.colptr[col], m.colptr[col+1]
+   n = searchsortedfirst(@view(m.rowval[lo:hi-1]), row)
+   if 1 <= n <= hi-lo
+       return sub2ind(m, m.rowval[lo+n-1], col)
+   end
+   nextcol = findnext(c->(c>hi), m.colptr, col+1)
+   if nextcol == 0
+       return 0
+   end
+   nextlo = m.colptr[nextcol-1]
+   return sub2ind(m, m.rowval[nextlo], nextcol-1)
+end
+
+function _sparse_findprev(m::SparseMatrixCSC, i::Int)
+   if i < 1
+       return 0
+   end
+   row, col = ind2sub(m, i)
+   lo, hi = m.colptr[col], m.colptr[col+1]
+   n = searchsortedlast(@view(m.rowval[lo:hi-1]), row)
+   if 1 <= n <= hi-lo
+       return sub2ind(m, m.rowval[lo+n-1], col)
+   end
+   prevcol = findprev(c->(c<lo), m.colptr, col-1)
+   if prevcol == 0
+       return 0
+   end
+   prevhi = m.colptr[prevcol+1]
+   return sub2ind(m, m.rowval[prevhi-1], prevcol)
+end
+
 
 import Base.Random.GLOBAL_RNG
 function sprand_IJ(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat)

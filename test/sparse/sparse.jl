@@ -1899,3 +1899,26 @@ end
         @test isfinite.(cov_sparse) == isfinite.(cov_dense)
     end
 end
+
+@testset "sparse findprev/findnext operations" begin
+
+    x = [0,0,0,0,1,0,1,0,1,1,0]
+    x_sp = sparse(x)
+
+    for i=1:length(x)
+        @test findnext(x,i) == findnext(x_sp,i)
+        @test findprev(x,i) == findprev(x_sp,i)
+    end
+
+    y = [0 0 0 0 0;
+         1 0 1 0 0;
+         1 0 0 0 1;
+         0 0 1 0 0;
+         1 0 1 1 0]
+    y_sp = sparse(y)
+
+    for i=1:length(y)
+        @test findnext(y,i) == findnext(y_sp,i)
+        @test findprev(y,i) == findprev(y_sp,i)
+    end
+end
