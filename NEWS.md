@@ -28,8 +28,12 @@ This section lists changes that do not have deprecation warnings.
 Library improvements
 --------------------
 
-  * the functions `base` and `digits` digits now accept a negative
+  * The functions `base` and `digits` digits now accept a negative
     base (like `ndigits` did) ([#21692]).
+
+  * The function `randn` now accepts complex arguments (`Complex{T <: AbstractFloat}`)
+    ([#21973]).
+
 
 Compiler/Runtime improvements
 -----------------------------
