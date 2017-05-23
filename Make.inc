@@ -242,7 +242,6 @@ BUILD_LLDB := 0
 USE_POLLY := 0
 USE_POLLY_OPENMP := 0  # Enable OpenMP code-generation
 USE_POLLY_ACC := 0     # Enable GPU code-generation
-CUDALIB_INCLUDE_DIR := # Path to CUDA header files
 
 # Cross-compile
 #XC_HOST := i686-w64-mingw32
