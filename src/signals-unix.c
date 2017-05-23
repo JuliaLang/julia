@@ -22,10 +22,16 @@
 // Figure out the best signals/timers to use for this platform
 #ifdef __APPLE__ // Darwin's mach ports allow signal-free thread management
 #define HAVE_MACH
+#define HAVE_KEVENT
 #elif defined(__FreeBSD__) // generic bsd
 #define HAVE_ITIMER
+#define HAVE_KEVENT
 #else // generic linux
 #define HAVE_TIMER
+#endif
+
+#ifdef HAVE_KEVENT
+#include <sys/event.h>
 #endif
 
 // 8M signal stack, same as default stack size and enough
@@ -174,7 +180,7 @@ static int is_addr_on_stack(jl_ptls_t ptls, void *addr)
 #endif
 }
 
-void sigdie_handler(int sig, siginfo_t *info, void *context)
+static void sigdie_handler(int sig, siginfo_t *info, void *context)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     sigset_t sset;
@@ -511,7 +517,7 @@ void jl_install_thread_signal_handler(jl_ptls_t ptls)
     ptls->signal_stack = signal_stack;
 }
 
-void jl_sigsetset(sigset_t *sset)
+static void jl_sigsetset(sigset_t *sset)
 {
     sigemptyset(sset);
     sigaddset(sset, SIGINT);
@@ -528,6 +534,23 @@ void jl_sigsetset(sigset_t *sset)
 #endif
 }
 
+#ifdef HAVE_KEVENT
+static void kqueue_signal(int *sigqueue, struct kevent *ev, int sig)
+{
+    if (*sigqueue == -1)
+        return;
+    EV_SET(ev, sig, EVFILT_SIGNAL, EV_ADD, 0, 0, 0);
+    if (kevent(*sigqueue, ev, 1, NULL, 0, NULL)) {
+        perror("signal kevent");
+        close(*sigqueue);
+        *sigqueue = -1;
+    }
+    else {
+        signal(sig, SIG_IGN);
+    }
+}
+#endif
+
 static void *signal_listener(void *arg)
 {
     static uintptr_t bt_data[JL_MAX_BT_SIZE + 1];
@@ -535,14 +558,52 @@ static void *signal_listener(void *arg)
     sigset_t sset;
     int sig, critical, profile;
     jl_sigsetset(&sset);
+#ifdef HAVE_KEVENT
+    struct kevent ev;
+    int sigqueue = kqueue();
+    if (sigqueue == -1) {
+        perror("signal kqueue");
+    }
+    else {
+        kqueue_signal(&sigqueue, &ev, SIGINT);
+        kqueue_signal(&sigqueue, &ev, SIGTERM);
+        kqueue_signal(&sigqueue, &ev, SIGABRT);
+        kqueue_signal(&sigqueue, &ev, SIGQUIT);
+#ifdef SIGINFO
+        kqueue_signal(&sigqueue, &ev, SIGINFO);
+#else
+        kqueue_signal(&sigqueue, &ev, SIGUSR1);
+#endif
+#ifdef HAVE_ITIMER
+        kqueue_signal(&sigqueue, &ev, SIGPROF);
+#endif
+    }
+#endif
     while (1) {
         profile = 0;
         sig = 0;
         errno = 0;
+#ifdef HAVE_KEVENT
+        if (sigqueue != -1) {
+            int nevents =  kevent(sigqueue, NULL, 0, &ev, 1, NULL);
+            if (nevents == -1) {
+                if (errno == EINTR)
+                    continue;
+                perror("signal kevent");
+            }
+            if (nevents != 1) {
+                close(sigqueue);
+                sigqueue = -1;
+                continue;
+            }
+            sig = ev.ident;
+        }
+        else
+#endif
         if (sigwait(&sset, &sig)) {
             sig = SIGABRT; // this branch can't occur, unless we had stack memory corruption of sset
         }
-        if (!sig || errno == EINTR) {
+        else if (!sig || errno == EINTR) {
             // This should never happen, but it has been observed to occur
             // when this thread gets used to handle run a signal handler (without SA_RESTART).
             // It would be nice to prohibit the kernel from doing that, by blocking signals on this thread,
@@ -668,7 +729,7 @@ void restore_signals(void)
     }
 }
 
-void fpe_handler(int sig, siginfo_t *info, void *context)
+static void fpe_handler(int sig, siginfo_t *info, void *context)
 {
     (void)info;
     jl_ptls_t ptls = jl_get_ptls_states();
@@ -676,7 +737,7 @@ void fpe_handler(int sig, siginfo_t *info, void *context)
     jl_throw_in_ctx(ptls, jl_diverror_exception, context);
 }
 
-void sigint_handler(int sig)
+static void sigint_handler(int sig)
 {
     jl_sigint_passed = 1;
 }
