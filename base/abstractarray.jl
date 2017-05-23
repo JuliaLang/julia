@@ -753,7 +753,7 @@ next(A::AbstractArray, i) = (@_propagate_inbounds_meta; (idx, s) = next(i[1], i[
 done(A::AbstractArray, i) = (@_propagate_inbounds_meta; done(i[1], i[2]))
 
 # eachindex iterates over all indices. IndexCartesian definitions are later.
-eachindex(A::AbstractVector) = (@_inline_meta(); indices1(A))
+eachindex(A::Union{Number,AbstractVector}) = (@_inline_meta(); indices1(A))
 
 """
     eachindex(A...)
