@@ -32,7 +32,7 @@ static jl_sym_t *mk_symbol(const char *str, size_t len)
     jl_sym_t *sym;
     size_t nb = symbol_nbytes(len);
 
-    jl_taggedvalue_t *tag = (jl_taggedvalue_t*)jl_gc_perm_alloc_nolock(nb, 0);
+    jl_taggedvalue_t *tag = (jl_taggedvalue_t*)jl_gc_perm_alloc_nolock(nb, 0, sizeof(void*), 0);
     sym = (jl_sym_t*)jl_valueof(tag);
     // set to old marked so that we won't look at it in the GC or write barrier.
     tag->header = ((uintptr_t)jl_sym_type) | GC_OLD_MARKED;
