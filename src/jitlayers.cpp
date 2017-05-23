@@ -158,6 +158,7 @@ void addOptimizationPasses(PassManager *PM)
     // list of passes from vmkit
     PM->add(createCFGSimplificationPass()); // Clean up disgusting code
     PM->add(createPromoteMemoryToRegisterPass()); // Kill useless allocas
+    PM->add(createMemCpyOptPass());
 
     // hopefully these functions (from llvmcall) don't try to interact with the Julia runtime
     // or have anything that might corrupt the createLowerPTLSPass pass
