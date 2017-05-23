@@ -11,7 +11,10 @@ unsigned(::Type{Int16}) = UInt16
 unsigned(::Type{Int32}) = UInt32
 unsigned(::Type{Int64}) = UInt64
 unsigned(::Type{Int128}) = UInt128
-unsigned{T<:Unsigned}(::Type{T}) = T
+unsigned(::Type{T}) where {T<:Unsigned} = T
+unsigned(::Type{Float16}) = UInt16
+unsigned(::Type{Float32}) = UInt32
+unsigned(::Type{Float64}) = UInt64
 
 abstract type  MultiplicativeInverse{T} end
 

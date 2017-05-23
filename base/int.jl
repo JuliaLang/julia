@@ -23,6 +23,14 @@ const BitInteger     = Union{BitInteger_types...}
 const BitSigned64T   = Union{Type{Int8}, Type{Int16}, Type{Int32}, Type{Int64}}
 const BitUnsigned64T = Union{Type{UInt8}, Type{UInt16}, Type{UInt32}, Type{UInt64}}
 
+const BitFloat_types = (Float16, Float32, Float64)
+const BitFloat       = Union{BitFloat_types...}
+const BitReal_types  = (BitInteger_types..., BitFloat_types...)
+const BitReal        = Union{BitReal_types...}
+
+reinterpret(::Type{Unsigned}, x::BitInteger) = unsigned(x)
+
+
 ## integer comparisons ##
 
 (<)(x::T, y::T) where {T<:BitSigned}  = slt_int(x, y)

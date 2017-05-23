@@ -77,21 +77,6 @@ Subtraction operator.
 -(x, y)
 
 """
-    bits(n)
-
-A string giving the literal bit representation of a number.
-
-```jldoctest
-julia> bits(4)
-"0000000000000000000000000000000000000000000000000000000000000100"
-
-julia> bits(2.2)
-"0100000000000001100110011001100110011001100110011001100110011010"
-```
-"""
-bits
-
-"""
     getindex(type[, elements...])
 
 Construct a 1-d array of the specified type. This is usually called with the syntax
@@ -564,18 +549,6 @@ matches. If overlap is `true`, the matching sequences are allowed to overlap ind
 original string, otherwise they must be from distinct character ranges.
 """
 eachmatch
-
-"""
-    num2hex(f)
-
-Get a hexadecimal string of the binary representation of a floating point number.
-
-```jldoctest
-julia> num2hex(2.2)
-"400199999999999a"
-```
-"""
-num2hex
 
 """
     truncate(file,n)
@@ -1122,13 +1095,6 @@ julia> bin(bswap(1))
 bswap
 
 """
-    maxintfloat(T)
-
-The largest integer losslessly representable by the given floating-point DataType `T`.
-"""
-maxintfloat
-
-"""
     delete!(collection, key)
 
 Delete the mapping for the given key in a collection, and return the collection.
@@ -1359,13 +1325,6 @@ false
 ```
 """
 isempty
-
-"""
-    hex2num(str)
-
-Convert a hexadecimal string to the floating point number it represents.
-"""
-hex2num
 
 """
     InexactError()
@@ -2164,14 +2123,6 @@ be either `Char` or `String`. Values for `Char` can be of type `Char` or [`UInt3
 Values for `String` can be of that type, or `Vector{UInt8}`.
 """
 isvalid(T,value)
-
-"""
-    unsigned(x) -> Unsigned
-
-Convert a number to an unsigned integer. If the argument is signed, it is reinterpreted as
-unsigned without checking for negative values.
-"""
-unsigned
 
 """
     reverseind(v, i)

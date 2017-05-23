@@ -483,7 +483,48 @@ function hex(x::Unsigned, pad::Int, neg::Bool)
     String(a)
 end
 
-num2hex(n::Integer) = hex(n, sizeof(n)*2)
+"""
+    num2hex(f)
+
+An hexadecimal string of the binary representation of a number.
+See also the [`bits`](@ref) function, which is similar but gives
+a binary string.
+
+```jldoctest
+julia> num2hex(Int64(4))
+"0000000000000004"
+
+julia> num2hex(2.2)
+"400199999999999a"
+
+```
+"""
+num2hex(n::BitReal) = hex(reinterpret(Unsigned, n), sizeof(n)*2)
+num2hex(n::Bool) = hex(n)
+
+"""
+    hex2num(T::Type, str)
+
+Interprets a hexadecimal string as the bit representation of a
+number of type `T`. See also [`num2hex`](@ref).
+
+```jldoctest
+julia> hex2num(Float64, "400199999999999a")
+2.2
+
+julia> hex2num(Int32, "fffffffe")
+-2
+```
+
+    hex2num(str)
+
+Convert a hexadecimal string to the floating point number it represents.
+This function, which is inherently type-unstable, returns a `Float16`,
+a `Float32`, or a `Float64` depending on the length of the string `str`
+(note that this length must hence be no greater than 16).
+"""
+hex2num(::Type{T}, s::AbstractString) where {T<:BitReal} =
+    reinterpret(T, parse(unsigned(T), s, 16))
 
 const base36digits = ['0':'9';'a':'z']
 const base62digits = ['0':'9';'A':'Z';'a':'z']
@@ -573,6 +614,21 @@ Convert an integer to a decimal string, optionally specifying a number of digits
 """
 dec
 
+"""
+    bits(n)
+
+A string giving the literal bit representation of a number.
+See also the [`num2hex`](@ref) function, which is similar but
+gives an hexadecimal string.
+
+```jldoctest
+julia> bits(4)
+"0000000000000000000000000000000000000000000000000000000000000100"
+
+julia> bits(2.2)
+"0100000000000001100110011001100110011001100110011001100110011010"
+```
+"""
 bits(x::Union{Bool,Int8,UInt8})           = bin(reinterpret(UInt8,x),8)
 bits(x::Union{Int16,UInt16,Float16})      = bin(reinterpret(UInt16,x),16)
 bits(x::Union{Char,Int32,UInt32,Float32}) = bin(reinterpret(UInt32,x),32)

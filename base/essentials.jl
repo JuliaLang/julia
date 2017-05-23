@@ -138,6 +138,24 @@ convert(::Type{T}, x::T) where {T<:Tuple{Any,Vararg{Any}}} = x
 
 oftype(x,c) = convert(typeof(x),c)
 
+"""
+    unsigned(x) -> Unsigned
+
+Convert a number to an unsigned integer. If the argument is signed, it is reinterpreted as
+unsigned without checking for negative values.
+
+    unsigned(T::Type) -> UnsignedType
+
+Return the return-type of unsigned(x::T).
+
+```jldoctest
+julia> unsigned(12)
+0x000000000000000c
+
+julia> unsigned(Int)
+UInt64
+```
+"""
 unsigned(x::Int) = reinterpret(UInt, x)
 signed(x::UInt) = reinterpret(Int, x)
 
