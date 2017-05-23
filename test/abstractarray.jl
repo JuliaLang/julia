@@ -388,8 +388,8 @@ function test_vector_indexing(::Type{T}, shape, ::Type{TestAbstractArray}) where
         idxs = rand(1:N, 3, 3, 3)
         @test B[idxs] == A[idxs] == idxs
         @test B[vec(idxs)] == A[vec(idxs)] == vec(idxs)
-        @test B[:] == A[:] == collect(1:N)
-        @test B[1:end] == A[1:end] == collect(1:N)
+        @test B[:] == A[:] == 1:N
+        @test B[1:end] == A[1:end] == 1:N
         @test B[:,:,trailing2] == A[:,:,trailing2] == B[:,:,1,trailing3] == A[:,:,1,trailing3]
             B[1:end,1:end,trailing2] == A[1:end,1:end,trailing2] == B[1:end,1:end,1,trailing3] == A[1:end,1:end,1,trailing3]
 

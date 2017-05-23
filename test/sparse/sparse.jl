@@ -862,7 +862,7 @@ end
     X=reshape([trues(10); falses(15)],5,5)
     @test A[lininds] == A[X] == [1,0,0,0,0,0,1,0,0,0]
     A[lininds] = [1:10;]
-    @test A[lininds] == A[X] == collect(1:10)
+    @test A[lininds] == A[X] == 1:10
     A[lininds] = zeros(Int, 10)
     @test nnz(A) == 13
     @test count(!iszero, A) == 3
@@ -1488,7 +1488,7 @@ end
 
 @testset "expandptr" begin
     local A = sparse(1.0I, 5, 5)
-    @test Base.SparseArrays.expandptr(A.colptr) == collect(1:5)
+    @test Base.SparseArrays.expandptr(A.colptr) == 1:5
     A[1,2] = 1
     @test Base.SparseArrays.expandptr(A.colptr) == [1; 2; 2; 3; 4; 5]
     @test_throws ArgumentError Base.SparseArrays.expandptr([2; 3])

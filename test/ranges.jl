@@ -324,7 +324,7 @@ end
     @testset "sort/sort!/partialsort" begin
         @test sort(UnitRange(1,2)) == UnitRange(1,2)
         @test sort!(UnitRange(1,2)) == UnitRange(1,2)
-        @test sort(1:10, rev=true) == collect(10:-1:1)
+        @test sort(1:10, rev=true) == 10:-1:1
         @test sort(-3:3, by=abs) == [0,-1,1,-2,2,-3,3]
         @test partialsort(1:10, 4) == 4
     end
