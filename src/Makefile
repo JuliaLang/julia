@@ -65,13 +65,13 @@ ifeq ($(USE_POLLY_OPENMP),1)
 FLAGS += -fopenmp
 endif
 ifeq ($(USE_POLLY_ACC),1)
-LLVMLINK += -lPollyPPCG
+LLVMLINK += -lPollyPPCG -lGPURuntime
 FLAGS += -DUSE_POLLY_ACC
-ifeq ($(CUDALIB_INCLUDE_DIR),)
-$(error CUDALIB_INCLUDE_DIR not set: If compiling with USE_POLLY_ACC, user must provide the path to CUDA header files)
-endif
-FLAGS += -I$(CUDALIB_INCLUDE_DIR)
-FLAGS += -I$(shell $(LLVM_CONFIG_HOST) --src-root)/tools/polly/tools
+#ifeq ($(CUDALIB_INCLUDE_DIR),)
+#$(error CUDALIB_INCLUDE_DIR not set: If compiling with USE_POLLY_ACC, user must provide the path to CUDA header files)
+#endif
+#FLAGS += -I$(CUDALIB_INCLUDE_DIR)
+FLAGS += -I$(shell $(LLVM_CONFIG_HOST) --src-root)/tools/polly/tools # Required to find GPURuntime/GPUJIT.h
 endif
 endif
 else
@@ -277,6 +277,13 @@ $(build_shlibdir)/libjulia-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(SRCDIR)/julia.ex
 ifneq ($(OS), WINNT)
 	@ln -sf libjulia-debug.$(JL_MAJOR_MINOR_SHLIB_EXT) $(build_shlibdir)/libjulia-debug.$(JL_MAJOR_SHLIB_EXT)
 	@ln -sf libjulia-debug.$(JL_MAJOR_MINOR_SHLIB_EXT) $(build_shlibdir)/libjulia-debug.$(SHLIB_EXT)
+endif
+ifeq ($(USE_POLLY_ACC), 1)
+ifeq ($(OS), WINNT)
+	@cp $(shell $(LLVM_CONFIG_HOST) --libdir)/libGPURuntime.dll $(build_shlibdir)
+else
+	@cp $(shell $(LLVM_CONFIG_HOST) --libdir)/libGPURuntime.$(SHLIB_EXT) $(build_shlibdir)
+endif
 endif
 	$(DSYMUTIL) $@
 
