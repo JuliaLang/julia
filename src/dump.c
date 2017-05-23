@@ -1506,7 +1506,7 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
             size_t fielddesc_size = nf > 0 ? jl_fielddesc_size(fielddesc_type) : 0;
             jl_datatype_layout_t *layout = (jl_datatype_layout_t*)jl_gc_perm_alloc(
                     sizeof(jl_datatype_layout_t) + nf * fielddesc_size +
-                    (has_padding ? sizeof(uint32_t) : 0), 0);
+                    (has_padding ? sizeof(uint32_t) : 0), 0, 4, 0);
             if (has_padding) {
                 layout = (jl_datatype_layout_t*)(((char*)layout) + sizeof(uint32_t));
                 jl_datatype_layout_n_nonptr(layout) = read_int32(s->s);

@@ -129,8 +129,8 @@ JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc(jl_ptls_t ptls, int pool_offset,
 JL_DLLEXPORT jl_value_t *jl_gc_big_alloc(jl_ptls_t ptls, size_t allocsz);
 int jl_gc_classify_pools(size_t sz, int *osize);
 extern jl_mutex_t gc_perm_lock;
-void *jl_gc_perm_alloc_nolock(size_t sz, int zero);
-void *jl_gc_perm_alloc(size_t sz, int zero);
+void *jl_gc_perm_alloc_nolock(size_t sz, int zero, unsigned align, unsigned offset);
+void *jl_gc_perm_alloc(size_t sz, int zero, unsigned align, unsigned offset);
 
 // pools are 16376 bytes large (GC_POOL_SZ - GC_PAGE_OFFSET)
 static const int jl_gc_sizeclasses[JL_GC_N_POOLS] = {
@@ -268,7 +268,10 @@ STATIC_INLINE void *jl_gc_alloc_buf(jl_ptls_t ptls, size_t sz)
 STATIC_INLINE jl_value_t *jl_gc_permobj(size_t sz, void *ty)
 {
     const size_t allocsz = sz + sizeof(jl_taggedvalue_t);
-    jl_taggedvalue_t *o = (jl_taggedvalue_t*)jl_gc_perm_alloc(allocsz, 0);
+    unsigned align = (sz == 0 ? sizeof(void*) : (allocsz <= sizeof(void*) * 2 ?
+                                                 sizeof(void*) * 2 : 16));
+    jl_taggedvalue_t *o = (jl_taggedvalue_t*)jl_gc_perm_alloc(allocsz, 0, align,
+                                                              sizeof(void*) % align);
     uintptr_t tag = (uintptr_t)ty;
     o->header = tag | GC_OLD_MARKED;
     return jl_valueof(o);

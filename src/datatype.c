@@ -135,7 +135,7 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t nfields,
     jl_datatype_layout_t *flddesc =
         (jl_datatype_layout_t*)jl_gc_perm_alloc(sizeof(jl_datatype_layout_t) +
                                                 nfields * fielddesc_size +
-                                                (has_padding ? sizeof(uint32_t) : 0), 0);
+                                                (has_padding ? sizeof(uint32_t) : 0), 0, 4, 0);
     if (has_padding) {
         if (first_ptr > UINT16_MAX)
             first_ptr = UINT16_MAX;
