@@ -107,7 +107,6 @@ static void ensure_enter_function(Module &M)
 }
 
 bool LowerExcHandlers::doInitialization(Module &M) {
-	auto T_pint8 = Type::getInt8PtrTy(M.getContext(), 0)
     except_enter_func = M.getFunction("julia.except_enter");
     if (!except_enter_func)
         return false;
@@ -117,11 +116,12 @@ bool LowerExcHandlers::doInitialization(Module &M) {
     setjmp_func = M.getFunction(jl_setjmp_name);
 
 #if JL_LLVM_VERSION >= 50000
-    auto lifetime_start = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_start, { T_pint8 });
-    auto lifetime_end = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_end, { T_pint8 });
+    auto T_pint8 = Type::getInt8PtrTy(M.getContext(), 0);
+    lifetime_start = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_start, { T_pint8 });
+    lifetime_end = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_end, { T_pint8 });
 #else
-    auto lifetime_start = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_start);
-    auto lifetime_end = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_end);
+    lifetime_start = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_start);
+    lifetime_end = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_end);
 #endif
     return true;
 }
