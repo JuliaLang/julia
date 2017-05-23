@@ -563,6 +563,11 @@ Deprecated or removed
 
   * `broadcast_zpreserving` has been deprecated ([#19533], [#19720]).
 
+  * Methods allowing indexing of tuples by `AbstractArray`s with more than one dimension
+    have been deprecated. (Indexing a tuple by such a higher-dimensional `AbstractArray`
+    should yield a tuple with more than one dimension, but tuples are one-dimensional.)
+    ([#19737]).
+
   * `@test_approx_eq a b` has been deprecated in favor of `@test a ≈ b` (or,
     equivalently, `@test ≈(a, b)` or `@test isapprox(a, b)`).
     `@test_approx_eq_eps` has been deprecated in favor of new `@test` syntax:
@@ -699,6 +704,7 @@ Command-line option changes
 [#19721]: https://github.com/JuliaLang/julia/issues/19721
 [#19722]: https://github.com/JuliaLang/julia/issues/19722
 [#19724]: https://github.com/JuliaLang/julia/issues/19724
+[#19737]: https://github.com/JuliaLang/julia/issues/19737
 [#19741]: https://github.com/JuliaLang/julia/issues/19741
 [#19771]: https://github.com/JuliaLang/julia/issues/19771
 [#19779]: https://github.com/JuliaLang/julia/issues/19779
