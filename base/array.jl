@@ -1734,6 +1734,9 @@ function _findin(a, b)
     ind
 end
 
+# If two collections are already sorted, findin can be computed with
+# a single traversal of the two collections. This is much faster than
+# using a hash table (although it has the same complexity).
 function _sortedfindin(v, w)
     viter, witer = eachindex(v), eachindex(w)
     out  = eltype(viter)[]
@@ -1745,22 +1748,29 @@ function _sortedfindin(v, w)
     witerj, j = next(witer, j)
     @inbounds begin
         vi, wj = v[viteri], w[witerj]
-        while !(done(viter, i) || done(witer, j))
-            if vi < wj
+        while true
+            if isless(vi, wj)
+                if done(viter, i)
+                    break
+                end
                 viteri, i = next(viter, i)
                 vi        = v[viteri]
-            elseif vi > wj
+            elseif isless(wj, vi)
+                if done(witer, j)
+                    break
+                end
                 witerj, j = next(witer, j)
                 wj        = w[witerj]
             else
                 push!(out, viteri)
+                if done(viter, i)
+                    break
+                end
+                # We only increment the v iterator because v can have
+                # repeated matches to a single value in w
                 viteri, i = next(viter, i)
-                witerj, j = next(witer, j)
-                vi, wj    = v[viteri], w[witerj]
+                vi        = v[viteri]
             end
-        end
-        if vi == wj
-            push!(out, viteri)
         end
     end
     return out
@@ -1791,13 +1801,16 @@ julia> findin(a,b) # 10 is the only common element
  4
 ```
 """
-function findin(a, b)
+function findin(a::Array{<:Real}, b::Union{Array{<:Real},Real})
     if issorted(a, Sort.Forward) && issorted(b, Sort.Forward)
         return _sortedfindin(a, b)
     else
         return _findin(a, b)
     end
 end
+# issorted fails for some element types so the method above has to be restricted
+# to element with isless/< defined.
+findin(a, b) = _findin(a, b)
 
 # Copying subregions
 # TODO: DEPRECATE FOR #14770
