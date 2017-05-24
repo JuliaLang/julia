@@ -462,7 +462,7 @@ Deprecated or removed
     including step specification, for example `Dates.Hour(1):Dates.Hour(1):Dates.Hour(2)`
     ([#19920]).
 
-  * `cummin` and `cummax` have been deprecated in favor of `accumulate`.
+  * `cummin` and `cummax` have been deprecated in favor of `accumulate` ([#18931]).
 
   * The `Array` constructor syntax `Array(T, dims...)` has been deprecated
     in favor of the forms `Array{T,N}(dims...)` (where `N` is known, or
