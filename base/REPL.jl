@@ -633,6 +633,7 @@ function respond(f, repl, main; pass_empty = false)
         line = String(take!(buf))
         if !isempty(line) || pass_empty
             reset(repl)
+            local val, bt
             try
                 # note: value wrapped carefully here to ensure it doesn't get passed through expand
                 response = eval(Main, Expr(:body, Expr(:return, Expr(:call, QuoteNode(f), QuoteNode(line)))))
