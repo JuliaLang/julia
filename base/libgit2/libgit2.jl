@@ -149,10 +149,10 @@ function isdiff(repo::GitRepo, treeish::AbstractString, paths::AbstractString=""
         diff = diff_tree(repo, tree, paths, cached=cached)
         result = count(diff) > 0
         close(diff)
+        return result
     finally
         close(tree)
     end
-    return result
 end
 
 """
