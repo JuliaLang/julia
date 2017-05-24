@@ -3,6 +3,13 @@
 ## Basic functions ##
 
 """
+    AbstractArray{T, N}
+
+Abstract array supertype which arrays inherit from.
+"""
+AbstractArray
+
+"""
     size(A::AbstractArray, [dim...])
 
 Returns a tuple containing the dimensions of `A`. Optionally you can specify the
