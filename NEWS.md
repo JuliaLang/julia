@@ -537,6 +537,9 @@ Deprecated or removed
     `@test a ≈ b atol=c` in place of `@test ≈(a, b, atol=c)` (and hence
     `@test_approx_eq_eps a b c`) ([#19901]).
 
+  * `takebuf_array` has been deprecated in favor of `take!`, and `takebuf_string(x)`
+    has been deprecated in favor of `String(take!(x))` ([#19088]).
+
   * `convert` methods from `Diagonal` and `Bidiagonal` to subtypes of
     `AbstractTriangular` have been deprecated ([#17723]).
 
@@ -635,6 +638,7 @@ Command-line option changes
 [#18965]: https://github.com/JuliaLang/julia/issues/18965
 [#18977]: https://github.com/JuliaLang/julia/issues/18977
 [#19018]: https://github.com/JuliaLang/julia/issues/19018
+[#19088]: https://github.com/JuliaLang/julia/issues/19088
 [#19157]: https://github.com/JuliaLang/julia/issues/19157
 [#19233]: https://github.com/JuliaLang/julia/issues/19233
 [#19239]: https://github.com/JuliaLang/julia/issues/19239
