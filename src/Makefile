@@ -75,7 +75,7 @@ SRCS += anticodegen
 LLVM_LIBS := support
 endif
 
-$(build_shlibdir)/libGPURuntime.so : 
+$(build_shlibdir)/libGPURuntime.so:
 ifeq ($(USE_POLLY_ACC), 1)
 # Place libGPURuntime such that it's accessible under libjulia's RPATH
 	@cp $(shell $(LLVM_CONFIG_HOST) --libdir)/libGPURuntime.$(SHLIB_EXT) $(build_shlibdir)
