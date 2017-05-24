@@ -193,10 +193,10 @@ JL_DLLEXPORT jl_array_t *jl_reshape_array(jl_value_t *atype, jl_array_t *data,
     assert(store_unboxed(el_type) == !data->flags.ptrarray);
     if (!data->flags.ptrarray) {
         a->elsize = jl_datatype_size(el_type);
-        unsigned align = ((jl_datatype_t*)el_type)->layout->alignment;
+        unsigned align = jl_datatype_align(el_type);
         jl_value_t *ownerty = jl_typeof(owner);
         unsigned oldalign = (ownerty == (jl_value_t*)jl_string_type ? 1 :
-                             ((jl_datatype_t*)jl_tparam0(ownerty))->layout->alignment);
+                             jl_datatype_align(jl_tparam0(ownerty)));
         if (oldalign < align)
             jl_exceptionf(jl_argumenterror_type,
                           "reinterpret from alignment %u bytes to alignment %u bytes not allowed",
@@ -283,7 +283,7 @@ JL_DLLEXPORT jl_array_t *jl_ptr_to_array_1d(jl_value_t *atype, void *data,
     unsigned align;
     if (isunboxed) {
         elsz = jl_datatype_size(el_type);
-        align = ((jl_datatype_t*)el_type)->layout->alignment;
+        align = jl_datatype_align(el_type);
     }
     else {
         align = elsz = sizeof(void*);
@@ -346,7 +346,7 @@ JL_DLLEXPORT jl_array_t *jl_ptr_to_array(jl_value_t *atype, void *data,
     unsigned align;
     if (isunboxed) {
         elsz = jl_datatype_size(el_type);
-        align = ((jl_datatype_t*)el_type)->layout->alignment;
+        align = jl_datatype_align(el_type);
     }
     else {
         align = elsz = sizeof(void*);
