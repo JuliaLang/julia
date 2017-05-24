@@ -829,7 +829,8 @@ function stale_cachefile(modpath::String, cachefile::String)
 
         # finally, verify that the cache file has a valid checksum
         data = Mmap.mmap(io, Vector{UInt8}, filesize(io), 0)
-        checksum = ntoh(reinterpret(UInt32, data[end-3:end])[1])
+        # checksum = UInt32 read in bigendian format from the last 4 bytes:
+        checksum = UInt32(data[end]) + UInt32(data[end-1])<<8 + UInt32(data[end-2])<<16 + UInt32(data[end-3])<<24
         crc = crc32c(@view(data[1:end-4]))
         finalize(data)
         if checksum != crc
