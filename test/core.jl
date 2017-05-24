@@ -4941,3 +4941,12 @@ let arr8 = zeros(UInt8, 16),
     arr64_i[2] = 1234
     @test arr64[2] == 1234
 end
+
+# Alignment of perm boxes
+for i in 1:10
+    # Int64 box should be 16bytes aligned even on 32bits
+    ptr1 = ccall(:jl_box_int64, UInt, (Int64,), i)
+    ptr2 = ccall(:jl_box_int64, UInt, (Int64,), i)
+    @test ptr1 === ptr2
+    @test ptr1 % 16 == 0
+end
