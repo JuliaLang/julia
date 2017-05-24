@@ -455,13 +455,13 @@ Compiler/Runtime improvements
 -----------------------------
 
   * `ccall` is now implemented as a macro,
-    removing the need for special code-generator support for Intrinsics.
+    removing the need for special code-generator support for `Intrinsics` ([#18754]).
 
   * `ccall` gained limited support for a `llvmcall` calling-convention.
-    This can replace many uses of `llvmcall` with a simpler, shorter declaration.
+    This can replace many uses of `llvmcall` with a simpler, shorter declaration ([#18754]).
 
-  * All Intrinsics are now Builtin functions instead and have proper error checking
-    and fall-back static compilation support.
+  * All `Intrinsics` are now `Builtin` functions instead and have proper error checking
+    and fall-back static compilation support ([#18754]).
 
 Deprecated or removed
 ---------------------
@@ -668,6 +668,7 @@ Command-line option changes
 [#18644]: https://github.com/JuliaLang/julia/issues/18644
 [#18660]: https://github.com/JuliaLang/julia/issues/18660
 [#18690]: https://github.com/JuliaLang/julia/issues/18690
+[#18754]: https://github.com/JuliaLang/julia/issues/18754
 [#18777]: https://github.com/JuliaLang/julia/issues/18777
 [#18832]: https://github.com/JuliaLang/julia/issues/18832
 [#18839]: https://github.com/JuliaLang/julia/issues/18839
