@@ -1284,12 +1284,12 @@ let Floats = Union{Float16,Float32,Float64}
             $randfun(                             dims::Integer...               )           = $randfun(GLOBAL_RNG, Float64, dims...)
         end
     end
-	
 end
 
 # complex randn
 Base.@irrational SQRT_HALF 0.7071067811865475244008  sqrt(big(0.5))
-randn(rng::AbstractRNG, ::Type{Complex{T}}) where {T <: AbstractFloat} = Complex{T}(SQRT_HALF * randn(rng, T), SQRT_HALF*randn(rng, T))
+randn(rng::AbstractRNG, ::Type{Complex{T}}) where {T <: AbstractFloat} =
+    Complex{T}(SQRT_HALF * randn(rng, T), SQRT_HALF * randn(rng, T))
 
 ## random UUID generation
 
