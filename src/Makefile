@@ -275,12 +275,8 @@ ifneq ($(OS), WINNT)
 	@ln -sf libjulia-debug.$(JL_MAJOR_MINOR_SHLIB_EXT) $(build_shlibdir)/libjulia-debug.$(SHLIB_EXT)
 endif
 ifeq ($(USE_POLLY_ACC), 1)
-# Place libGPURuntime to be accessible under libjulia's RPATH
-ifeq ($(OS), WINNT)
-	@cp $(shell $(LLVM_CONFIG_HOST) --libdir)/libGPURuntime.dll $(build_shlibdir)
-else
+# Place libGPURuntime such that it's accessible under libjulia's RPATH
 	@cp $(shell $(LLVM_CONFIG_HOST) --libdir)/libGPURuntime.$(SHLIB_EXT) $(build_shlibdir)
-endif
 endif
 	$(DSYMUTIL) $@
 
