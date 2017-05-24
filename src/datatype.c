@@ -278,7 +278,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             // Should never happen
             if (__unlikely(fsz > max_size))
                 goto throw_ovf;
-            al = ((jl_datatype_t*)ty)->layout->alignment;
+            al = jl_datatype_align(ty);
             desc[i].isptr = 0;
             if (((jl_datatype_t*)ty)->layout->haspadding)
                 haspadding = 1;
@@ -290,6 +290,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             al = fsz;
             desc[i].isptr = 1;
         }
+        assert(al <= JL_HEAP_ALIGNMENT && (JL_HEAP_ALIGNMENT % al) == 0);
         if (al != 0) {
             size_t alsz = LLT_ALIGN(sz, al);
             if (sz & (al - 1))
@@ -310,7 +311,10 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         // Some tuples become LLVM vectors with stronger alignment than what was calculated above.
         unsigned al = jl_special_vector_alignment(nfields, lastty);
         assert(al % alignm == 0);
-        if (al)
+        // JL_HEAP_ALIGNMENT is the biggest alignment we can guarantee on the heap.
+        if (al > JL_HEAP_ALIGNMENT)
+            alignm = JL_HEAP_ALIGNMENT;
+        else if (al)
             alignm = al;
     }
     st->size = LLT_ALIGN(sz, alignm);
@@ -438,7 +442,7 @@ static jl_value_t *jl_new_bits_internal(jl_value_t *dt, void *data, size_t *len)
     size_t nb = jl_datatype_size(bt);
     if (nb == 0)
         return jl_new_struct_uninit(bt);
-    *len = LLT_ALIGN(*len, bt->layout->alignment);
+    *len = LLT_ALIGN(*len, jl_datatype_align(bt));
     data = (char*)data + (*len);
     *len += nb;
     if (bt == jl_uint8_type)   return jl_box_uint8(*(uint8_t*)data);
@@ -759,7 +763,7 @@ JL_DLLEXPORT size_t jl_get_alignment(jl_datatype_t *ty)
 {
     if (ty->layout == NULL)
         jl_error("non-leaf type doesn't have an alignment");
-    return ty->layout->alignment;
+    return jl_datatype_align(ty);
 }
 
 #ifdef __cplusplus

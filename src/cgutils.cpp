@@ -157,7 +157,7 @@ static DIType julia_type_to_di(jl_value_t *jt, DIBuilder *dbuilder, bool isboxed
         llvm::DIType *t = dbuilder->createBasicType(
                 jl_symbol_name(jdt->name->name),
                 SizeInBits,
-                8 * jdt->layout->alignment,
+                8 * jl_datatype_align(jdt),
                 llvm::dwarf::DW_ATE_unsigned);
         jdt->ditype = t;
         return t;
@@ -165,7 +165,7 @@ static DIType julia_type_to_di(jl_value_t *jt, DIBuilder *dbuilder, bool isboxed
         DIType t = dbuilder->createBasicType(
                 jl_symbol_name(jdt->name->name),
                 SizeInBits,
-                8 * jdt->layout->alignment,
+                8 * jl_datatype_align(jdt),
                 llvm::dwarf::DW_ATE_unsigned);
         MDNode *M = t;
         jdt->ditype = M;
@@ -189,7 +189,7 @@ static DIType julia_type_to_di(jl_value_t *jt, DIBuilder *dbuilder, bool isboxed
             NULL,                       // File
             0,                          // LineNumber
             jl_datatype_nbits(jdt),     // SizeInBits
-            8 * jdt->layout->alignment, // AlignInBits
+            8 * jl_datatype_align(jdt), // AlignInBits
             DIFlagZero,                 // Flags
             NULL,                       // DerivedFrom
             DINodeArray(),              // Elements
@@ -523,8 +523,12 @@ static Type *julia_struct_to_llvm(jl_value_t *jt, jl_unionall_t *ua, bool *isbox
                     *jl_ExecutionEngine->getDataLayout();
 #endif
                 unsigned llvm_alignment = DL.getABITypeAlignment((Type*)jst->struct_decl);
-                unsigned julia_alignment = jst->layout->alignment;
-                assert(llvm_alignment == julia_alignment);
+                unsigned julia_alignment = jl_datatype_align(jst);
+                // Check that the alignment adheres to the heap alignment.
+                assert(julia_alignment <= JL_HEAP_ALIGNMENT);
+                // TODO: Fix alignment calculation in LLVM, as well as in the GC and the struct declaration
+                if (llvm_alignment  <= JL_HEAP_ALIGNMENT)
+                    assert(julia_alignment == llvm_alignment);
             }
 #endif
         }
@@ -1165,9 +1169,10 @@ static Value *emit_bounds_check(const jl_cgval_t &ainfo, jl_value_t *ty, Value *
 // It is currently unused, but might be used in the future for a more precise answer.
 static unsigned julia_alignment(Value* /*ptr*/, jl_value_t *jltype, unsigned alignment)
 {
-    if (!alignment && ((jl_datatype_t*)jltype)->layout->alignment > MAX_ALIGN) {
-        // Type's natural alignment exceeds strictest alignment promised in heap, so return the heap alignment.
-        return MAX_ALIGN;
+    if (!alignment) {
+        alignment = jl_datatype_align(jltype);
+        assert(alignment <= JL_HEAP_ALIGNMENT);
+        assert(JL_HEAP_ALIGNMENT % alignment == 0);
     }
     return alignment;
 }

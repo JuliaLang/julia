@@ -331,7 +331,7 @@ static Value *emit_unbox(Type *to, const jl_cgval_t &x, jl_value_t *jt, Value *d
 
     int alignment;
     if (x.isboxed) {
-         // julia's gc gives 16-byte aligned addresses
+        // julia's gc gives 16-byte aligned addresses
         alignment = 16;
     }
     else if (jt) {
@@ -616,7 +616,7 @@ static jl_cgval_t emit_pointerref(jl_cgval_t *argv, jl_codectx_t *ctx)
         Value *strct = emit_allocobj(ctx, size,
                                      literal_pointer_val((jl_value_t*)ety));
         im1 = builder.CreateMul(im1, ConstantInt::get(T_size,
-                    LLT_ALIGN(size, ((jl_datatype_t*)ety)->layout->alignment)));
+                    LLT_ALIGN(size, jl_datatype_align(ety))));
         Value *thePtr = emit_unbox(T_pint8, e, e.typ);
         thePtr = builder.CreateGEP(emit_bitcast(thePtr, T_pint8), im1);
         builder.CreateMemCpy(emit_bitcast(strct, T_pint8), thePtr, size, 1);
@@ -673,7 +673,7 @@ static jl_cgval_t emit_pointerset(jl_cgval_t *argv, jl_codectx_t *ctx)
         thePtr = emit_unbox(T_pint8, e, e.typ);
         uint64_t size = jl_datatype_size(ety);
         im1 = builder.CreateMul(im1, ConstantInt::get(T_size,
-                    LLT_ALIGN(size, ((jl_datatype_t*)ety)->layout->alignment)));
+                    LLT_ALIGN(size, jl_datatype_align(ety))));
         builder.CreateMemCpy(builder.CreateGEP(thePtr, im1),
                              data_pointer(x, ctx, T_pint8), size, align_nb);
     }
