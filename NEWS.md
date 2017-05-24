@@ -562,7 +562,7 @@ Deprecated or removed
   * To complete the deprecation of histogram-related functions, `midpoints` has been
     deprecated. Instead use the
     [StatsBase.jl package](https://github.com/JuliaStats/StatsBase.jl)'s
-    `midpoint` function ([#20058]).
+    `midpoints` function ([#20058]).
 
 Command-line option changes
 ---------------------------
