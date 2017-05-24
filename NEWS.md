@@ -501,6 +501,8 @@ Deprecated or removed
     deprecated in favor of equivalent methods with the second argument instead the
     size of the array, for example `zeros(Float64, size([1, 2, 3]))` ([#21183]).
 
+  * `Base.promote_eltype_op` has been deprecated ([#19669], [#19814], [#19937]).
+
   * `isimag` has been deprecated ([#19949]).
 
   * The tuple-of-types form of `invoke`, `invoke(f, (types...), ...)`, has been deprecated
@@ -638,6 +640,7 @@ Command-line option changes
 [#19598]: https://github.com/JuliaLang/julia/issues/19598
 [#19635]: https://github.com/JuliaLang/julia/issues/19635
 [#19636]: https://github.com/JuliaLang/julia/issues/19636
+[#19669]: https://github.com/JuliaLang/julia/issues/19669
 [#19670]: https://github.com/JuliaLang/julia/issues/19670
 [#19677]: https://github.com/JuliaLang/julia/issues/19677
 [#19680]: https://github.com/JuliaLang/julia/issues/19680
@@ -660,6 +663,7 @@ Command-line option changes
 [#19800]: https://github.com/JuliaLang/julia/issues/19800
 [#19802]: https://github.com/JuliaLang/julia/issues/19802
 [#19811]: https://github.com/JuliaLang/julia/issues/19811
+[#19814]: https://github.com/JuliaLang/julia/issues/19814
 [#19841]: https://github.com/JuliaLang/julia/issues/19841
 [#19900]: https://github.com/JuliaLang/julia/issues/19900
 [#19901]: https://github.com/JuliaLang/julia/issues/19901
@@ -670,6 +674,7 @@ Command-line option changes
 [#19926]: https://github.com/JuliaLang/julia/issues/19926
 [#19931]: https://github.com/JuliaLang/julia/issues/19931
 [#19934]: https://github.com/JuliaLang/julia/issues/19934
+[#19937]: https://github.com/JuliaLang/julia/issues/19937
 [#19944]: https://github.com/JuliaLang/julia/issues/19944
 [#19949]: https://github.com/JuliaLang/julia/issues/19949
 [#19950]: https://github.com/JuliaLang/julia/issues/19950
