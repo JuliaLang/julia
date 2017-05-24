@@ -1036,7 +1036,9 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         show_type = false
     # print anything else as "Expr(head, args...)"
     else
-        show_type = false
+        if head !== :invoke
+            show_type = false
+        end
         if emphstate && ex.head !== :lambda && ex.head !== :method
             io = IOContext(io, :TYPEEMPHASIZE => false)
             emphstate = false

@@ -202,13 +202,11 @@ julia> strides(A)
 (1, 3, 12)
 ```
 """
-strides(A::AbstractArray) = _strides((1,), A)
-_strides(out::Tuple{Int}, A::AbstractArray{<:Any,0}) = ()
-_strides(out::NTuple{N,Int}, A::AbstractArray{<:Any,N}) where {N} = out
-function _strides(out::NTuple{M,Int}, A::AbstractArray) where M
-    @_inline_meta
-    _strides((out..., out[M]*size(A, M)), A)
-end
+strides(A::AbstractArray) = size_to_strides(1, size(A)...)
+@inline size_to_strides(s, d, sz...) = (s, size_to_strides(s * d, sz...)...)
+size_to_strides(s, d) = (s,)
+size_to_strides(s) = ()
+
 
 function isassigned(a::AbstractArray, i::Int...)
     try
@@ -1160,30 +1158,32 @@ cat_similar(A::AbstractArray, T, shape) = similar(A, T, shape)
 
 cat_shape(dims, shape::Tuple) = shape
 @inline cat_shape(dims, shape::Tuple, nshape::Tuple, shapes::Tuple...) =
-    cat_shape(dims, _cshp(dims, (), shape, nshape), shapes...)
+    cat_shape(dims, _cshp(1, dims, shape, nshape), shapes...)
 
-_cshp(::Tuple{}, out, ::Tuple{}, ::Tuple{}) = out
-_cshp(::Tuple{}, out, ::Tuple{}, nshape) = (out..., nshape...)
-_cshp(dims, out, ::Tuple{}, ::Tuple{}) = (out..., map(b -> 1, dims)...)
-@inline _cshp(dims, out, shape, ::Tuple{}) =
-    _cshp(tail(dims), (out..., shape[1] + dims[1]), tail(shape), ())
-@inline _cshp(dims, out, ::Tuple{}, nshape) =
-    _cshp(tail(dims), (out..., nshape[1]), (), tail(nshape))
-@inline function _cshp(::Tuple{}, out, shape, ::Tuple{})
-    _cs(length(out) + 1, false, shape[1], 1)
-    _cshp((), (out..., 1), tail(shape), ())
+_cshp(ndim::Int, ::Tuple{}, ::Tuple{}, ::Tuple{}) = ()
+_cshp(ndim::Int, ::Tuple{}, ::Tuple{}, nshape) = nshape
+_cshp(ndim::Int, dims, ::Tuple{}, ::Tuple{}) = ntuple(b -> 1, Val{length(dims)})
+@inline _cshp(ndim::Int, dims, shape, ::Tuple{}) =
+    (shape[1] + dims[1], _cshp(ndim + 1, tail(dims), tail(shape), ())...)
+@inline _cshp(ndim::Int, dims, ::Tuple{}, nshape) =
+    (nshape[1], _cshp(ndim + 1, tail(dims), (), tail(nshape))...)
+@inline function _cshp(ndim::Int, ::Tuple{}, shape, ::Tuple{})
+    _cs(ndim, shape[1], 1)
+    (1, _cshp(ndim + 1, (), tail(shape), ())...)
 end
-@inline function _cshp(::Tuple{}, out, shape, nshape)
-    next = _cs(length(out) + 1, false, shape[1], nshape[1])
-    _cshp((), (out..., next), tail(shape), tail(nshape))
+@inline function _cshp(ndim::Int, ::Tuple{}, shape, nshape)
+    next = _cs(ndim, shape[1], nshape[1])
+    (next, _cshp(ndim + 1, (), tail(shape), tail(nshape))...)
 end
-@inline function _cshp(dims, out, shape, nshape)
-    next = _cs(length(out) + 1, dims[1], shape[1], nshape[1])
-    _cshp(tail(dims), (out..., next), tail(shape), tail(nshape))
+@inline function _cshp(ndim::Int, dims, shape, nshape)
+    a = shape[1]
+    b = nshape[1]
+    next = dims[1] ? a + b : _cs(ndim, a, b)
+    (next, _cshp(ndim + 1, tail(dims), tail(shape), tail(nshape))...)
 end
 
-_cs(d, concat, a, b) = concat ? (a + b) : (a == b ? a : throw(DimensionMismatch(string(
-    "mismatch in dimension ", d, " (expected ", a, " got ", b, ")"))))
+_cs(d, a, b) = (a == b ? a : throw(DimensionMismatch(
+    "mismatch in dimension $d (expected $a got $b)")))
 
 dims2cat{n}(::Type{Val{n}}) = ntuple(i -> (i == n), Val{n})
 dims2cat(dims) = ntuple(i -> (i in dims), maximum(dims))
@@ -1668,15 +1668,15 @@ end
 function _sub2ind!(Iout, inds, Iinds, I)
     @_noinline_meta
     for i in Iinds
-        # Iout[i] = sub2ind(inds, map(Ij->Ij[i], I)...)
+        # Iout[i] = sub2ind(inds, map(Ij -> Ij[i], I)...)
         Iout[i] = sub2ind_vec(inds, i, I)
     end
     Iout
 end
 
-sub2ind_vec(inds, i, I) = (@_inline_meta; _sub2ind_vec(inds, (), i, I...))
-_sub2ind_vec(inds, out, i, I1, I...) = (@_inline_meta; _sub2ind_vec(inds, (out..., I1[i]), i, I...))
-_sub2ind_vec(inds, out, i) = (@_inline_meta; sub2ind(inds, out...))
+sub2ind_vec(inds, i, I) = (@_inline_meta; sub2ind(inds, _sub2ind_vec(i, I...)...))
+_sub2ind_vec(i, I1, I...) = (@_inline_meta; (I1[i], _sub2ind_vec(i, I...)...))
+_sub2ind_vec(i) = ()
 
 function ind2sub(inds::Union{DimsInteger{N},Indices{N}}, ind::AbstractVector{<:Integer}) where N
     M = length(ind)

@@ -3,21 +3,21 @@
 module TestBroadcastInternals
 
 using Base.Broadcast: broadcast_indices, check_broadcast_indices,
-                      check_broadcast_shape, newindex, _bcs, _bcsm
+                      check_broadcast_shape, newindex, _bcs
 using Base: Test, OneTo
 
-@test @inferred(_bcs((), (3,5), (3,5))) == (3,5)
-@test @inferred(_bcs((), (3,1), (3,5))) == (3,5)
-@test @inferred(_bcs((), (3,),  (3,5))) == (3,5)
-@test @inferred(_bcs((), (3,5), (3,)))  == (3,5)
-@test_throws DimensionMismatch _bcs((), (3,5), (4,5))
-@test_throws DimensionMismatch _bcs((), (3,5), (3,4))
-@test @inferred(_bcs((), (-1:1, 2:5), (-1:1, 2:5))) == (-1:1, 2:5)
-@test @inferred(_bcs((), (-1:1, 2:5), (1, 2:5)))    == (-1:1, 2:5)
-@test @inferred(_bcs((), (-1:1, 1),   (1, 2:5)))    == (-1:1, 2:5)
-@test @inferred(_bcs((), (-1:1,),     (-1:1, 2:5))) == (-1:1, 2:5)
-@test_throws DimensionMismatch _bcs((), (-1:1, 2:6), (-1:1, 2:5))
-@test_throws DimensionMismatch _bcs((), (-1:1, 2:5), (2, 2:5))
+@test @inferred(_bcs((3,5), (3,5))) == (3,5)
+@test @inferred(_bcs((3,1), (3,5))) == (3,5)
+@test @inferred(_bcs((3,),  (3,5))) == (3,5)
+@test @inferred(_bcs((3,5), (3,)))  == (3,5)
+@test_throws DimensionMismatch _bcs((3,5), (4,5))
+@test_throws DimensionMismatch _bcs((3,5), (3,4))
+@test @inferred(_bcs((-1:1, 2:5), (-1:1, 2:5))) == (-1:1, 2:5)
+@test @inferred(_bcs((-1:1, 2:5), (1, 2:5)))    == (-1:1, 2:5)
+@test @inferred(_bcs((-1:1, 1),   (1, 2:5)))    == (-1:1, 2:5)
+@test @inferred(_bcs((-1:1,),     (-1:1, 2:5))) == (-1:1, 2:5)
+@test_throws DimensionMismatch _bcs((-1:1, 2:6), (-1:1, 2:5))
+@test_throws DimensionMismatch _bcs((-1:1, 2:5), (2, 2:5))
 
 @test @inferred(broadcast_indices(zeros(3,4), zeros(3,4))) == (OneTo(3),OneTo(4))
 @test @inferred(broadcast_indices(zeros(3,4), zeros(3)))   == (OneTo(3),OneTo(4))
