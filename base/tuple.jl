@@ -102,7 +102,7 @@ julia> ntuple(i -> 2*i, 4)
 """
 function ntuple(f::F, n::Integer) where F
     RT = Core.Inference.return_type(f, Tuple{Int})
-    TT = NTuple{RT, n}
+    TT = NTuple{n, RT}
     if isbits(RT)
         r = Ref{TT}()
         for i = 1:n
@@ -316,6 +316,18 @@ function isless(t1::Tuple, t2::Tuple)
         end
     end
     return n1 < n2
+end
+
+function convert(::Type{NTuple{N, S}}, x::NTuple{N, T} where T) where {N, S}
+    if isbits(S)
+        r = Ref{NTuple{N, S}}()
+        for i = 1:N
+            r@[i] = convert(S, x[i])
+        end
+        return r[]
+    else
+        return tuple([convert(S, x[i]) for i = 1:N]...)
+    end
 end
 
 ## functions ##

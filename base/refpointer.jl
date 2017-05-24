@@ -46,9 +46,9 @@ isassigned(x::RefValue) = isdefined(x, :x)
 
 global _gepvalue
 # Special for r::RefValue, r@a means r@x.a
-gepfield(r::RefValue, sym::Symbol) = gepfield(let gepfield=_gepfield; r@x; end, sym)
-gepfield(r::RefValue, idx::Integer) = gepfield(let gepfield=_gepfield; r@x; end, idx)
-gepindex(r::RefValue, idxs...) = gepindex(r@x, idxs...)
+gepfield(r::RefValue, sym::Symbol) = (@_inline_meta; gepfield(_gepfield(r, 1), sym))
+gepfield(r::RefValue, idx::Integer) = (@_inline_meta; gepfield(_gepfield(r, 1), idx))
+gepindex(r::RefValue, idxs...) = (@_inline_meta; gepindex(_gepfield(r, 1), idxs...))
 
 
 Ref(x::Ref) = x
@@ -129,41 +129,48 @@ struct RefField{T} <: Ref{T}
     # Basic constructors
     global _gepfield
     function _gepfield(x::ANY, idx::Integer)
+        @_inline_meta
         typeof(x).mutable || error("Tried to take reference to immutable type $(typeof(x))")
         new{fieldtype(typeof(x), idx)}(x, fieldoffset(typeof(x), idx))
     end
     function _gepfield(x::RefField{T}, idx::Integer) where {T}
+        @_inline_meta
         !fieldisptr(T, idx) || error("Can only take interior references that are inline (e.g. immutable). Tried to access field \"$(fieldname(T, idx))\" of type $T")
         new{fieldtype(T, idx)}(x.base, x.offset + fieldoffset(T, idx))
     end
 end
 
 function _gepfield(x::ANY, sym::Symbol)
+    @_inline_meta
     _gepfield(x, Base.fieldindex(typeof(x), sym))
 end
 function _gepfield(x::RefField{T}, sym::Symbol) where T
+    @_inline_meta
     _gepfield(x, Base.fieldindex(T, sym))
 end
 
-gepfield(x::ANY, idx::Integer) = _gepfield(x, idx)
-gepfield(x::RefField{T}, idx::Integer) where {T} = _gepfield(x, idx)
-gepfield(x::ANY, idx::Symbol) = _gepfield(x, idx)
-gepfield(x::RefField{T}, idx::Symbol) where {T} = _gepfield(x, idx)
+gepfield(x::ANY, idx::Integer) = (@_inline_meta; _gepfield(x, idx))
+gepfield(x::RefField{T}, idx::Integer) where {T} = (@_inline_meta; _gepfield(x, idx))
+gepfield(x::ANY, idx::Symbol) = (@_inline_meta; _gepfield(x, idx))
+gepfield(x::RefField{T}, idx::Symbol) where {T} = (@_inline_meta; _gepfield(x, idx))
 
 # Tuple is defined before us in bootstrap, so it can't refer to RefField
-gepindex(x::RefField{<:Tuple}, idx) = gepfield(x, idx)
+gepindex(x::RefField{<:Tuple}, idx) = (@_inline_meta; gepfield(x, idx))
 
 function setindex!(x::RefField{T}, v::T) where T
+    @_inline_meta
     unsafe_store!(Ptr{T}(pointer_from_objref(x.base)+x.offset), v)
     v
 end
-setindex!(x::RefField{T}, v::S) where {T,S} = setindex!(x, convert(T, v)::T)
+setindex!(x::RefField{T}, v::S) where {T,S} = (@_inline_meta; setindex!(x, convert(T, v)::T))
 
-function getindex(x::RefField{T}, v::T) where T
-    unsafe_load(Ptr{T}(pointer_from_objref(x.base)+x.offset), v)
+function getindex(x::RefField{T}) where T
+    @_inline_meta
+    unsafe_load(Ptr{T}(pointer_from_objref(x.base)+x.offset))
 end
 
 function setfield(x, sym, v)
+    @_inline_meta
     if typeof(x).mutable
         y = copy(x)
         setfield!(y, sym, v)
@@ -176,6 +183,7 @@ function setfield(x, sym, v)
 end
 
 function setindex(x, v, idxs...)
+    @_inline_meta
     if typeof(x).mutable
         y = copy(x)
         setindex!(y, v, idxs...)

@@ -1580,6 +1580,12 @@
                (T (caddr lhs)))
            `(block ,@(cdr e)
                    ,(expand-update-operator op op= (car e) rhs T))))
+        ((and (pair? lhs) (eq? (car lhs) '@))
+          (let* ((ref (make-ssavalue))
+                 (nlhs `(ref ,ref)))
+            `(block
+                (= ,ref ,(expand-forms lhs))
+                ,(expand-update-operator- op op= nlhs rhs declT))))
         (else
          (if (and (pair? lhs)
                   (not (memq (car lhs) '(|.| tuple vcat typed_hcat typed_vcat))))

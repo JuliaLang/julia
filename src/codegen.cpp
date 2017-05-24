@@ -4721,12 +4721,15 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
         if (sig.sret)
             prt = sig.fargt_sig[0]->getContainedType(0); // sret is a PointerType
         bool issigned = jl_signed_type && jl_subtype(declrt, (jl_value_t*)jl_signed_type);
-        Value *v = julia_to_native(sig.lrt, toboxed, declrt, NULL, retval,
-                                   false, 0, &ctx, NULL);
-        r = llvm_type_rewrite(v, prt, issigned, &ctx);
+
+        typeassert_input(retval, declrt, NULL, 0, false, &ctx);
+
+        Value *dest = sig.sret ? sretPtr : NULL;
+        r = emit_unbox(sig.lrt, retval, declrt, dest);
         if (sig.sret) {
-            builder.CreateStore(r, sretPtr);
             r = NULL;
+        } else {
+            r = llvm_type_rewrite(r, prt, issigned, &ctx);
         }
     }
     else {

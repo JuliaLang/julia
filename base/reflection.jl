@@ -376,10 +376,17 @@ julia> Base.fieldindex(Foo, :z, false)
 ```
 """
 function fieldindex(T::DataType, name::Symbol, err::Bool=true)
-    return Int(ccall(:jl_field_index, Cint, (Any, Any, Cint), T, name, err)+1)
+    @_pure_meta
+    i = 1
+    for fld in T.name.names
+        name == fld && return i
+        i += 1
+    end
+    err && error("type $T has no field $name")
+    return -1
 end
 
-fieldisptr(T::DataType, idx::Integer) = 1 == ccall(:jl_get_field_isptr, Cint, (Any, Cint), T, idx)
+fieldisptr(T::DataType, idx::Integer) = 1 == (@_pure_meta; ccall(:jl_get_field_isptr, Cint, (Any, Cint), T, idx))
 
 type_alignment(x::DataType) = (@_pure_meta; ccall(:jl_get_alignment, Csize_t, (Any,), x))
 
