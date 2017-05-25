@@ -156,7 +156,7 @@ julia> pi
 π = 3.1415926535897...
 ```
 """
-const pi = π
+π, const pi = π
 
 """
     e
@@ -169,7 +169,7 @@ julia> e
 e = 2.7182818284590...
 ```
 """
-const eu = e
+e, const eu = e
 
 """
     γ
@@ -182,7 +182,7 @@ julia> eulergamma
 γ = 0.5772156649015...
 ```
 """
-const eulergamma = γ
+γ, const eulergamma = γ
 
 """
     φ
@@ -195,7 +195,7 @@ julia> golden
 φ = 1.6180339887498...
 ```
 """
-const golden = φ
+φ, const golden = φ
 
 """
     catalan
