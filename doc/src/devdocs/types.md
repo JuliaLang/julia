@@ -433,7 +433,7 @@ When we are done evaluating the body of a `UnionAll` type whose variable is diag
 we look at the final values of the bounds.
 Since the variable must be concrete, a contradiction occurs if its lower bound
 could not be a subtype of a concrete type.
-For example, an abstract type like `AbstractArray` cannot be a subtype of a concrete
+For example, an abstract type like [`AbstractArray`](@ref) cannot be a subtype of a concrete
 type, but a concrete type like `Int` can be, and the empty type `Bottom` can be as well.
 If a lower bound fails this test the algorithm stops with the answer `false`.
 

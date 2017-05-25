@@ -510,7 +510,7 @@ iterate over any array type.
 
 ### Array traits
 
-If you write a custom `AbstractArray` type, you can specify that it has fast linear indexing using
+If you write a custom [`AbstractArray`](@ref) type, you can specify that it has fast linear indexing using
 
 ```julia
 Base.IndexStyle(::Type{<:MyArray}) = IndexLinear()
