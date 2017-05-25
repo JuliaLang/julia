@@ -2,6 +2,11 @@
 
 ## general machinery for irrational mathematical constants
 
+"""
+    Irrational
+
+Abstract supertype for irrational numbers.
+"""
 struct Irrational{sym} <: Real end
 
 show(io::IO, x::Irrational{sym}) where {sym} = print(io, "$sym = $(string(float(x))[1:15])...")

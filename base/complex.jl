@@ -1,5 +1,13 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+    Complex{T<:Real}
+
+Complex number type with real and imaginary part of type `T`.
+
+`Complex32`, `Complex64` and `Complex128` are aliases for
+`Complex{Float16}`, `Complex{Float32}` and `Complex{Float64}` respectively.
+"""
 struct Complex{T<:Real} <: Number
     re::T
     im::T

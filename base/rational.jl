@@ -1,5 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+    Rational{T<:Integer}
+
+Rational number type, with numerator and denominator of type `T`.
+"""
 struct Rational{T<:Integer} <: Real
     num::T
     den::T
