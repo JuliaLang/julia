@@ -150,11 +150,15 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
     kwtype = isdefined(mt, :kwsorter) ? Nullable{DataType}(typeof(mt.kwsorter)) : Nullable{DataType}()
     n = rest = 0
     local last
+
+    resize!(LAST_SHOWN_LINE_INFOS, 0)
     for meth in ms
        if max==-1 || n<max
-            println(io)
-            show(io, meth; kwtype=kwtype)
             n += 1
+            println(io)
+            print(io, "[$(n)] ")
+            show(io, meth; kwtype=kwtype)
+            push!(LAST_SHOWN_LINE_INFOS, (string(meth.file), meth.line))
         else
             rest += 1
             last = meth

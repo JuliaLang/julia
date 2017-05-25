@@ -166,8 +166,8 @@ of those methods are, use the [`methods()`](@ref) function:
 ```julia
 julia> methods(f)
 # 2 methods for generic function "f":
-f(x::Float64, y::Float64) in Main at none:1
-f(x::Number, y::Number) in Main at none:1
+[1] f(x::Float64, y::Float64) in Main at none:1
+[2] f(x::Number, y::Number) in Main at none:1
 ```
 
 which shows that `f` has two methods, one taking two `Float64` arguments and one taking arguments
@@ -196,25 +196,25 @@ of methods:
 ```julia
 julia> methods(+)
 # 180 methods for generic function "+":
-+(x::Bool, z::Complex{Bool}) in Base at complex.jl:224
-+(x::Bool, y::Bool) in Base at bool.jl:89
-+(x::Bool) in Base at bool.jl:86
-+(x::Bool, y::T) where T<:AbstractFloat in Base at bool.jl:96
-+(x::Bool, z::Complex) in Base at complex.jl:231
-+(a::Float16, b::Float16) in Base at float.jl:372
-+(x::Float32, y::Float32) in Base at float.jl:374
-+(x::Float64, y::Float64) in Base at float.jl:375
-+(z::Complex{Bool}, x::Bool) in Base at complex.jl:225
-+(z::Complex{Bool}, x::Real) in Base at complex.jl:239
-+(x::Char, y::Integer) in Base at char.jl:40
-+(c::BigInt, x::BigFloat) in Base.MPFR at mpfr.jl:303
-+(a::BigInt, b::BigInt, c::BigInt, d::BigInt, e::BigInt) in Base.GMP at gmp.jl:303
-+(a::BigInt, b::BigInt, c::BigInt, d::BigInt) in Base.GMP at gmp.jl:296
-+(a::BigInt, b::BigInt, c::BigInt) in Base.GMP at gmp.jl:290
-+(x::BigInt, y::BigInt) in Base.GMP at gmp.jl:258
-+(x::BigInt, c::Union{UInt16, UInt32, UInt64, UInt8}) in Base.GMP at gmp.jl:315
+[1] +(x::Bool, z::Complex{Bool}) in Base at complex.jl:227
+[2] +(x::Bool, y::Bool) in Base at bool.jl:89
+[3] +(x::Bool) in Base at bool.jl:86
+[4] +(x::Bool, y::T) where T<:AbstractFloat in Base at bool.jl:96
+[5] +(x::Bool, z::Complex) in Base at complex.jl:234
+[6] +(a::Float16, b::Float16) in Base at float.jl:373
+[7] +(x::Float32, y::Float32) in Base at float.jl:375
+[8] +(x::Float64, y::Float64) in Base at float.jl:376
+[9] +(z::Complex{Bool}, x::Bool) in Base at complex.jl:228
+[10] +(z::Complex{Bool}, x::Real) in Base at complex.jl:242
+[11] +(x::Char, y::Integer) in Base at char.jl:40
+[12] +(c::BigInt, x::BigFloat) in Base.MPFR at mpfr.jl:307
+[13] +(a::BigInt, b::BigInt, c::BigInt, d::BigInt, e::BigInt) in Base.GMP at gmp.jl:392
+[14] +(a::BigInt, b::BigInt, c::BigInt, d::BigInt) in Base.GMP at gmp.jl:391
+[15] +(a::BigInt, b::BigInt, c::BigInt) in Base.GMP at gmp.jl:390
+[16] +(x::BigInt, y::BigInt) in Base.GMP at gmp.jl:361
+[17] +(x::BigInt, c::Union{UInt16, UInt32, UInt64, UInt8}) in Base.GMP at gmp.jl:398
 ...
-+(a, b, c, xs...) at operators.jl:119
+[180] +(a, b, c, xs...) in Base at operators.jl:424
 ```
 
 Multiple dispatch together with the flexible parametric type system give Julia its ability to

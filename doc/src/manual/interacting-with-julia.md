@@ -171,7 +171,7 @@ to do so).
 | `^K`                | "Kill" to end of line, placing the text in a buffer                              |
 | `^Y`                | "Yank" insert the text from the kill buffer                                      |
 | `^T`                | Transpose the characters about the cursor                                        |
-| `^Q`                | Write a number in REPL and press `^Q` to open editor at corresponding stackframe |
+| `^Q`                | Write a number in REPL and press `^Q` to open editor at corresponding stackframe or method |
 
 
 ### Customizing keybindings
