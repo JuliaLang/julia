@@ -300,19 +300,27 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
         jl_array_ptr_set(ex->args, 0, argnames);
         jl_fill_argnames((jl_array_t*)linfo->def->source, argnames);
 
+        // build the rest of the body to pass to expand
         jl_expr_t *scopeblock = jl_exprn(jl_symbol("scope-block"), 1);
         jl_array_ptr_set(ex->args, 1, scopeblock);
-        jl_expr_t *body = jl_exprn(jl_symbol("block"), 2);
-        jl_array_ptr_set(((jl_expr_t*)jl_exprarg(ex,1))->args, 0, body);
+        jl_expr_t *body = jl_exprn(jl_symbol("block"), 3);
+        jl_array_ptr_set(((jl_expr_t*)jl_exprarg(ex, 1))->args, 0, body);
+
+        // add location meta
         linenum = jl_box_long(linfo->def->line);
-        jl_value_t *linenode = jl_new_struct(jl_linenumbernode_type, linenum);
+        jl_value_t *linenode = jl_new_struct(jl_linenumbernode_type, linenum, linfo->def->file);
         jl_array_ptr_set(body->args, 0, linenode);
+        jl_expr_t *pushloc = jl_exprn(meta_sym, 3);
+        jl_array_ptr_set(body->args, 1, pushloc);
+        jl_array_ptr_set(pushloc->args, 0, jl_symbol("push_loc"));
+        jl_array_ptr_set(pushloc->args, 1, linfo->def->file); // file
+        jl_array_ptr_set(pushloc->args, 2, jl_symbol("@generated body")); // function
 
         // invoke code generator
         assert(jl_nparams(tt) == jl_array_len(argnames) ||
                (linfo->def->isva && (jl_nparams(tt) >= jl_array_len(argnames) - 1)));
-        jl_array_ptr_set(body->args, 1,
-                jl_call_staged(sparam_vals, generator, jl_svec_data(tt->parameters), jl_nparams(tt)));
+        jl_value_t *generated_body = jl_call_staged(sparam_vals, generator, jl_svec_data(tt->parameters), jl_nparams(tt));
+        jl_array_ptr_set(body->args, 2, generated_body);
 
         if (linfo->def->sparam_syms != jl_emptysvec) {
             // mark this function as having the same static parameters as the generator
@@ -335,8 +343,17 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
         jl_array_t *stmts = (jl_array_t*)func->code;
         size_t i, l;
         for (i = 0, l = jl_array_len(stmts); i < l; i++) {
-            jl_array_ptr_set(stmts, i, jl_resolve_globals(jl_array_ptr_ref(stmts, i), linfo->def->module, env));
+            jl_value_t *stmt = jl_array_ptr_ref(stmts, i);
+            stmt = jl_resolve_globals(stmt, linfo->def->module, env);
+            jl_array_ptr_set(stmts, i, stmt);
         }
+
+        // add pop_loc meta
+        jl_array_ptr_1d_push(stmts, jl_nothing);
+        jl_expr_t *poploc = jl_exprn(meta_sym, 1);
+        jl_array_ptr_set(stmts, jl_array_len(stmts) - 1, poploc);
+        jl_array_ptr_set(poploc->args, 0, jl_symbol("pop_loc"));
+
         ptls->in_pure_callback = last_in;
         jl_lineno = last_lineno;
         ptls->current_module = last_m;
@@ -401,10 +418,25 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
     int set_lineno = 0;
     for (i = 0; i < n; i++) {
         jl_value_t *st = jl_array_ptr_ref(stmts, i);
-        if (jl_is_expr(st) && ((jl_expr_t*)st)->head == line_sym) {
+        if (jl_is_linenode(st)) {
             if (!set_lineno) {
-                m->line = jl_unbox_long(jl_exprarg(st, 0));
-                m->file = (jl_sym_t*)jl_exprarg(st, 1);
+                m->line = jl_linenode_line(st);
+                jl_value_t *file = jl_linenode_file(st);
+                if (jl_is_symbol(file))
+                    m->file = (jl_sym_t*)file;
+                st = jl_nothing;
+                set_lineno = 1;
+            }
+        }
+        else if (jl_is_expr(st) && ((jl_expr_t*)st)->head == line_sym) {
+            if (!set_lineno) {
+                switch (jl_expr_nargs(st)) { // fall-through is intentional
+                case 2:
+                    m->file = (jl_sym_t*)jl_exprarg(st, 1);
+                case 1:
+                    m->line = jl_unbox_long(jl_exprarg(st, 0));
+                default: ;
+                }
                 st = jl_nothing;
                 set_lineno = 1;
             }

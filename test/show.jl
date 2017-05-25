@@ -15,8 +15,8 @@ struct T5589
 end
 @test replstr(T5589(Array{String,1}(100))) == "$(curmod_prefix)T5589(String[#undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef  …  #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef, #undef])"
 
-@test replstr(parse("mutable struct X end")) == ":(mutable struct X # none, line 1:\n    end)"
-@test replstr(parse("struct X end")) == ":(struct X # none, line 1:\n    end)"
+@test replstr(parse("mutable struct X end")) == ":(mutable struct X\n        #= none:1 =#\n    end)"
+@test replstr(parse("struct X end")) == ":(struct X\n        #= none:1 =#\n    end)"
 s = "ccall(:f, Int, (Ptr{Void},), &x)"
 @test replstr(parse(s)) == ":($s)"
 
@@ -42,12 +42,14 @@ macro test_repr(x)
             local x1 = parse($x)
             local x2 = eval(parse(repr(x1)))
             local x3 = eval(parse(repr(x2)))
-            x3 == x1 ? nothing : error(string(
-                "repr test failed:",
-                "\noriginal: ", $x,
-                "\n\nparsed: ", x2, "\n", sprint(dump, x2),
-                "\n\nreparsed: ", x3, "\n", sprint(dump, x3)
-                ))
+            if x3 != x1
+                error(string(
+                    "repr test failed:",
+                    "\noriginal: ", $x,
+                    "\n\nparsed: ", x2, "\n", sprint(dump, x2),
+                    "\n\nreparsed: ", x3, "\n", sprint(dump, x3)
+                    ))
+            end
         end
     end
 end
@@ -94,76 +96,128 @@ end
 
 # control structures (shamelessly stolen from base/bitarray.jl)
 @test_repr """mutable struct BitArray{N} <: AbstractArray{Bool, N}
+    # line meta
     chunks::Vector{UInt64}
+    # line meta
     len::Int
+    # line meta
     dims::NTuple{N,Int}
+    # line meta
     function BitArray(dims::Int...)
+        # line meta
         if length(dims) != N
+            # line meta
             error(\"number of dimensions must be \$N (got \$(length(dims)))\")
         end
+        # line meta
         n = 1
+        # line meta
         for d in dims
+            # line meta
             if d < 0
+                # line meta
                 error(\"dimension size must be nonnegative (got \$d)\")
             end
+            # line meta
             n *= d
         end
+        # line meta
         nc = num_bit_chunks(n)
+        # line meta
         chunks = Array{UInt64,1}(nc)
+        # line meta
         if nc > 0
+            # line meta
             chunks[end] = UInt64(0)
         end
+        # line meta
         b = new(chunks, n)
+        # line meta
         if N != 1
+            # line meta
             b.dims = dims
         end
+        # line meta
         return b
     end
 end"""
 
 @test_repr """function copy_chunks(dest::Vector{UInt64}, pos_d::Integer, src::Vector{UInt64}, pos_s::Integer, numbits::Integer)
+    # line meta
     if numbits == 0
+        # line meta
         return
     end
+    # line meta
     if dest === src && pos_d > pos_s
+        # line meta
         return copy_chunks_rtol(dest, pos_d, pos_s, numbits)
     end
+    # line meta
     kd0, ld0 = get_chunks_id(pos_d)
+    # line meta
     kd1, ld1 = get_chunks_id(pos_d + numbits - 1)
+    # line meta
     ks0, ls0 = get_chunks_id(pos_s)
+    # line meta
     ks1, ls1 = get_chunks_id(pos_s + numbits - 1)
+    # line meta
     delta_kd = kd1 - kd0
+    # line meta
     delta_ks = ks1 - ks0
+    # line meta
     u = _msk64
+    # line meta
     if delta_kd == 0
+        # line meta
         msk_d0 = ~(u << ld0) | (u << ld1 << 1)
     else
+        # line meta
         msk_d0 = ~(u << ld0)
+        # line meta
         msk_d1 = (u << ld1 << 1)
     end
+    # line meta
     if delta_ks == 0
+        # line meta
         msk_s0 = (u << ls0) & ~(u << ls1 << 1)
     else
+        # line meta
         msk_s0 = (u << ls0)
     end
+    # line meta
     chunk_s0 = glue_src_bitchunks(src, ks0, ks1, msk_s0, ls0)
+    # line meta
     dest[kd0] = (dest[kd0] & msk_d0) | ((chunk_s0 << ld0) & ~msk_d0)
+    # line meta
     if delta_kd == 0
+        # line meta
         return
     end
+    # line meta
     for i = 1 : kd1 - kd0 - 1
+        # line meta
         chunk_s1 = glue_src_bitchunks(src, ks0 + i, ks1, msk_s0, ls0)
+        # line meta
         chunk_s = (chunk_s0 >>> (63 - ld0) >>> 1) | (chunk_s1 << ld0)
+        # line meta
         dest[kd0 + i] = chunk_s
+        # line meta
         chunk_s0 = chunk_s1
     end
+    # line meta
     if ks1 >= ks0 + delta_kd
+        # line meta
         chunk_s1 = glue_src_bitchunks(src, ks0 + delta_kd, ks1, msk_s0, ls0)
     else
+        # line meta
         chunk_s1 = UInt64(0)
     end
+    # line meta
     chunk_s = (chunk_s0 >>> (63 - ld0) >>> 1) | (chunk_s1 << ld0)
+    # line meta
     dest[kd1] = (dest[kd1] & msk_d1) | (chunk_s & ~msk_d1)
+    # line meta
     return
 end"""
 
@@ -201,13 +255,21 @@ end"""
 @test_repr "[1 2 3; 4 5 6; 7 8 9]'"
 
 @test_repr "baremodule X
+# line meta
+# line meta
 importall ..A.b
+# line meta
 import ...B.c
+# line meta
 import D
+# line meta
 import B.C.D.E.F.g
 end"
 @test_repr "baremodule Y
+# line meta
+# line meta
 export A, B, C
+# line meta
 export D, E, F
 end"
 
@@ -261,22 +323,22 @@ end
 @test string(:(-{x}))   == "-{x}"
 
 # issue #11393
-@test_repr "@m(x,y) + z"
-@test_repr "(@m(x,y),z)"
-@test_repr "[@m(x,y),z]"
-@test_repr "A[@m(x,y),z]"
-@test_repr "T{@m(x,y),z}"
+@test_repr "@m(x, y) + z"
+@test_repr "(@m(x, y), z)"
+@test_repr "[@m(x, y), z]"
+@test_repr "A[@m(x, y), z]"
+@test_repr "T{@m(x, y), z}"
 @test_repr "@m x @n(y) z"
-@test_repr "f(@m(x,y);z=@n(a))"
-@test_repr "@m(x,y).z"
-@test_repr "::@m(x,y)+z"
+@test_repr "f(@m(x, y); z=@n(a))"
+@test_repr "@m(x, y).z"
+@test_repr "::@m(x, y) + z"
 @test_repr "[@m(x) y z]"
 @test_repr "[@m(x) y; z]"
 @test_repr "let @m(x), y=z; end"
 
-@test repr(:(@m x y))    == ":(@m x y)"
-@test string(:(@m x y))  ==   "@m x y"
-@test string(:(@m x y;)) == "begin \n    @m x y\nend"
+@test repr(:(@m x y))    == ":(#= $(@__FILE__):$(@__LINE__) =# @m x y)"
+@test string(:(@m x y))  ==   "#= $(@__FILE__):$(@__LINE__) =# @m x y"
+@test string(:(@m x y;)) == "begin\n    #= $(@__FILE__):$(@__LINE__) =# @m x y\nend"
 
 # issue #11436
 @test_repr "1 => 2 => 3"
@@ -447,25 +509,33 @@ end
 
 
 # issue #15309
-l1, l2, l2n = Expr(:line,42), Expr(:line,42,:myfile), LineNumberNode(42)
-@test string(l2n) == " # line 42:"
-@test string(l2)  == " # myfile, line 42:"
-@test string(l1)  == string(l2n)
-ex = Expr(:block, l1, :x, l2, :y, l2n, :z)
-@test replace(string(ex)," ","") == replace("""
-begin  # line 42:
-    x # myfile, line 42:
-    y # line 42:
-    z
-end""", " ", "")
+let ex,
+    l1 = Expr(:line, 42),
+    l2 = Expr(:line, 42, :myfile),
+    l2n = LineNumberNode(42)
+    @test string(l2n) == "#= line 42 =#"
+    @test string(l2)  == "#= myfile:42 =#"
+    @test string(l1)  == string(l2n)
+    ex = Expr(:block, l1, :x, l2, :y, l2n, :z)
+    @test replace(string(ex)," ","") == replace("""
+    begin
+        #= line 42 =#
+        x
+        #= myfile:42 =#
+        y
+        #= line 42 =#
+        z
+    end""", " ", "")
+end
 # Test the printing of whatever form of line number representation
 # that is used in the arguments to a macro looks the same as for
 # regular quoting
 macro strquote(ex)
-    QuoteNode(string(ex))
+    return QuoteNode(string(ex))
 end
-str_ex2a, str_ex2b = @strquote(begin x end), string(quote x end)
-@test str_ex2a == str_ex2b
+let str_ex2a = @strquote(begin x end), str_ex2b = string(quote x end)
+    @test str_ex2a == str_ex2b
+end
 
 
 # test structured zero matrix printing for select structured types

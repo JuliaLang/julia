@@ -24,6 +24,16 @@ This section lists changes that do not have deprecation warnings.
   * `@__DIR__` returns the current working directory rather than `nothing` when not run
     from a file ([#21759]).
 
+  * `@__FILE__` and `@__DIR__` return information relative to the file that it was parsed from,
+    rather than from the task-local `SOURCE_PATH` global when it was expanded.
+
+  * All macros receive an extra argument `__source__::LineNumberNode` which describes the
+    parser location in the source file for the `@` of the macro call.
+    It can be accessed as a normal argument variable in the body of the macro.
+    This is implemented by inserting an extra leading argument into the
+    `Expr(:macrocall, :@name, LineNumberNode(...), args...)`
+    surface syntax. ([#21746])
+
   * Passing the same keyword argument multiple times is now a syntax error ([#16937]).
 
   * `getsockname` on a `TCPSocket` now returns the locally bound address and port

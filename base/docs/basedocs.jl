@@ -645,13 +645,6 @@ to be set after construction. See `struct` and the manual for more information.
 kw"mutable struct"
 
 """
-    @__LINE__ -> Int
-
-`@__LINE__` expands to the line number of the call-site.
-"""
-kw"@__LINE__"
-
-"""
     ans
 
 A variable referring to the last computed value, automatically set at the interactive prompt.

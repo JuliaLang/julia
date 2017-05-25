@@ -538,24 +538,6 @@ function source_dir()
     p === nothing ? pwd() : dirname(p)
 end
 
-"""
-    @__FILE__ -> AbstractString
-
-`@__FILE__` expands to a string with the absolute file path of the file containing the
-macro. Returns `nothing` if run from a REPL or an empty string if evaluated by
-`julia -e <expr>`. Alternatively see [`PROGRAM_FILE`](@ref).
-"""
-macro __FILE__() source_path() end
-
-"""
-    @__DIR__ -> AbstractString
-
-`@__DIR__` expands to a string with the directory part of the absolute path of the file
-containing the macro. Returns the current working directory if run from a REPL or if
-evaluated by `julia -e <expr>`.
-"""
-macro __DIR__() source_dir() end
-
 include_from_node1(path::AbstractString) = include_from_node1(String(path))
 function include_from_node1(_path::String)
     path, prev = _include_dependency(_path)
@@ -822,4 +804,39 @@ function stale_cachefile(modpath::String, cachefile::String)
     finally
         close(io)
     end
+end
+
+"""
+    @__LINE__ -> Int
+
+`@__LINE__` expands to the line number of the location of the macrocall.
+Returns `0` if the line number could not be determined.
+"""
+macro __LINE__()
+    return __source__.line
+end
+
+"""
+    @__FILE__ -> AbstractString
+
+`@__FILE__` expands to a string with the path to the file containing the
+macrocall, or an empty string if evaluated by `julia -e <expr>`.
+Returns `nothing` if the macro was missing parser source information.
+Alternatively see [`PROGRAM_FILE`](@ref).
+"""
+macro __FILE__()
+    __source__.file === nothing && return nothing
+    return String(__source__.file)
+end
+
+"""
+    @__DIR__ -> AbstractString
+
+`@__DIR__` expands to a string with the absolute path to the directory of the file
+containing the macrocall.
+Returns the current working directory if run from a REPL or if evaluated by `julia -e <expr>`.
+"""
+macro __DIR__()
+    __source__.file === nothing && return nothing
+    return abspath(dirname(String(__source__.file)))
 end

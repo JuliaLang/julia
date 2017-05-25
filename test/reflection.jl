@@ -337,7 +337,7 @@ end
         return true
     end
 end
-@test functionloc(f14346)[2] == @__LINE__-4
+@test functionloc(f14346)[2] == @__LINE__() - 4
 
 # test jl_get_llvm_fptr. We test functions both in and definitely not in the system image
 definitely_not_in_sysimg() = nothing
@@ -366,10 +366,10 @@ let
     using .MacroTest
     a = 1
     m = getfield(current_module(), Symbol("@macrotest"))
-    @test which(m, Tuple{Int,Symbol})==@which @macrotest 1 a
-    @test which(m, Tuple{Int,Int})==@which @macrotest 1 1
+    @test which(m, Tuple{LineNumberNode, Int, Symbol}) == @which @macrotest 1 a
+    @test which(m, Tuple{LineNumberNode, Int, Int}) == @which @macrotest 1 1
 
-    @test first(methods(m,Tuple{Int, Int}))==@which MacroTest.@macrotest 1 1
+    @test first(methods(m, Tuple{LineNumberNode, Int, Int})) == @which MacroTest.@macrotest 1 1
     @test functionloc(@which @macrotest 1 1) == @functionloc @macrotest 1 1
 end
 

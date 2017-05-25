@@ -4083,13 +4083,13 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
         return emit_getfield((jl_value_t*)jl_globalref_mod(expr), jl_globalref_name(expr), ctx);
     }
     if (jl_is_labelnode(expr)) {
-        jl_error("Labelnode in value position");
+        jl_error("LabelNode in value position");
     }
     if (jl_is_linenode(expr)) {
-        jl_error("Linenode in value position");
+        jl_error("LineNumberNode in value position");
     }
     if (jl_is_gotonode(expr)) {
-        jl_error("Gotonode in value position");
+        jl_error("GotoNode in value position");
     }
     if (!jl_is_expr(expr)) {
         int needroot = true;

@@ -509,6 +509,27 @@ julia> @showarg(println("Yo!"))
 :(println("Yo!"))
 ```
 
+In addition to the given argument list, every macro is passed an extra argument named `__source__`
+providing information (in the form of a `LineNumberNode` object) about the parser location
+of the `@` sign from the macro invocation.
+
+This allows macros to include better error diagnostic information,
+and is commonly used by logging, string-parser macros, and docs, for example,
+as well as to implement the `@__LINE__`, `@__FILE__`, and `@__DIR__` macros.
+
+The location information can be accessed by referencing `__source__.line` and `__source__.file`:
+
+```jldoctest
+julia> macro __LOCATION__(); return QuoteNode(__source__); end
+
+julia> dump(
+            @__LOCATION__(
+       ))
+LineNumberNode
+  line: Int64 2
+  file: Symbol REPL[2]
+```
+
 ### Building an advanced macro
 
 Here is a simplified definition of Julia's `@assert` macro:
@@ -707,6 +728,32 @@ julia> foo()
 ```
 
 This kind of manipulation of variables should be used judiciously, but is occasionally quite handy.
+
+Getting the hygiene rules correct can be a formidable challenge.
+Before using a macro, you might want to consider whether a function closure
+would be sufficient. Another useful strategy is to defer as much work as possible to runtime.
+For example, many macros simply wrap their arguments in a QuoteNode or other similar Expr.
+Some examples of this include `@task body` which simply returns `schedule(Task(() -> $body))`,
+and `@eval expr`, which simply returns `eval(QuoteNode(expr))`.
+
+To demonstrate, we might rewrite the `@time` example above as:
+
+```julia
+macro time(expr)
+    return :(timeit(() -> $(esc(expr))))
+end
+function timeit(f)
+    t0 = time()
+    val = f()
+    t1 = time()
+    println("elapsed time: ", t1-t0, " seconds")
+    return val
+end
+```
+
+However, we don't do this for a good reason: wrapping the `expr` in a new scope block (the anonymous function)
+also slightly changes the meaning of the expression (the scope of any variables in it),
+while we want `@time` to be usable with minimum impact on the wrapped code.
 
 ## Code Generation
 
