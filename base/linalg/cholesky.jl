@@ -19,9 +19,9 @@
 # is checked for and an error is thrown if the check fails.
 
 # The internal structure is as follows
-# - _chol! return the factor and info without checking positive definiteness
-# - chol/chol! return the factor and checks for positive definiteness
-# - cholfact/cholfact! return Cholesky with checking positive definiteness
+# - _chol! returns the factor and info without checking positive definiteness
+# - chol/chol! returns the factor and checks for positive definiteness
+# - cholfact/cholfact! returns Cholesky with checking positive definiteness
 
 # FixMe? The dispatch below seems overly complicated. One simplification could be to
 # merge the two Cholesky types into one. It would remove the need for Val completely but
