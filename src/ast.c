@@ -176,19 +176,40 @@ value_t fl_invoke_julia_macro(fl_context_t *fl_ctx, value_t *args, uint32_t narg
 {
     JL_TIMING(MACRO_INVOCATION);
     jl_ptls_t ptls = jl_get_ptls_states();
-    if (nargs < 1)
-        argcount(fl_ctx, "invoke-julia-macro", nargs, 1);
+    if (nargs < 2) // macro name and location
+        argcount(fl_ctx, "invoke-julia-macro", nargs, 2);
     jl_method_instance_t *mfunc = NULL;
     jl_value_t **margs;
     // Reserve one more slot for the result
     JL_GC_PUSHARGS(margs, nargs + 1);
     int i;
-    for(i=1; i < nargs; i++) margs[i] = scm_to_julia(fl_ctx, args[i], 1);
+    margs[0] = scm_to_julia(fl_ctx, args[0], 1);
+    // __source__ argument
+    jl_value_t *lno = scm_to_julia(fl_ctx, args[1], 1);
+    margs[1] = lno;
+    if (jl_is_expr(lno) && ((jl_expr_t*)lno)->head == line_sym) {
+        jl_value_t *file = jl_nothing;
+        jl_value_t *line = NULL;
+        switch (jl_expr_nargs(lno)) { // fall-through is intentional
+        case 2:
+            file = jl_exprarg(lno, 1); // file
+        case 1:
+            line = jl_exprarg(lno, 0); // line
+        default: ;
+        }
+        if (line == NULL)
+            line = jl_box_long(0);
+        margs[1] = jl_new_struct(jl_linenumbernode_type, line, file);
+    }
+    else if (!jl_typeis(lno, jl_linenumbernode_type)) {
+        margs[1] = jl_new_struct(jl_linenumbernode_type, jl_box_long(0), jl_nothing);
+    }
+    for (i = 2; i < nargs; i++)
+        margs[i] = scm_to_julia(fl_ctx, args[i], 1);
     jl_value_t *result = NULL;
     size_t world = jl_get_ptls_states()->world_age;
 
     JL_TRY {
-        margs[0] = scm_to_julia(fl_ctx, args[0], 1);
         margs[0] = jl_toplevel_eval(margs[0]);
         mfunc = jl_method_lookup(jl_gf_mtable(margs[0]), margs, nargs, 1, world);
         if (mfunc == NULL) {
@@ -560,10 +581,13 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, int eo)
         else
             n++;
         if (!eo) {
-            if (sym == line_sym && n==1) {
+            if (sym == line_sym && (n == 1 || n == 2)) {
                 jl_value_t *linenum = scm_to_julia_(fl_ctx, car_(e), 0);
-                JL_GC_PUSH1(&linenum);
-                jl_value_t *temp = jl_new_struct(jl_linenumbernode_type, linenum);
+                jl_value_t *file = jl_nothing;
+                JL_GC_PUSH2(&linenum, &file);
+                if (n == 2)
+                    file = scm_to_julia_(fl_ctx, car_(cdr_(e)), 0);
+                jl_value_t *temp = jl_new_struct(jl_linenumbernode_type, linenum, file);
                 JL_GC_POP();
                 return temp;
             }
@@ -724,8 +748,16 @@ static value_t julia_to_scm_(fl_context_t *fl_ctx, jl_value_t *v)
     //          shouldn't allocate in this case.
     if (jl_typeis(v, jl_labelnode_type))
         return julia_to_list2(fl_ctx, (jl_value_t*)label_sym, jl_fieldref(v,0));
-    if (jl_typeis(v, jl_linenumbernode_type))
-        return julia_to_list2(fl_ctx, (jl_value_t*)line_sym, jl_fieldref(v,0));
+    if (jl_typeis(v, jl_linenumbernode_type)) {
+        jl_value_t *file = jl_fieldref(v,1); // non-allocating
+        jl_value_t *line = jl_fieldref(v,0); // allocating
+        value_t args = julia_to_list2(fl_ctx, line, file);
+        fl_gc_handle(fl_ctx, &args);
+        value_t hd = julia_to_scm_(fl_ctx, (jl_value_t*)line_sym);
+        value_t scmv = fl_cons(fl_ctx, hd, args);
+        fl_free_gc_handles(fl_ctx, 1);
+        return scmv;
+    }
     if (jl_typeis(v, jl_gotonode_type))
         return julia_to_list2(fl_ctx, (jl_value_t*)goto_sym, jl_fieldref(v,0));
     if (jl_typeis(v, jl_quotenode_type))

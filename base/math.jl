@@ -124,7 +124,7 @@ macro evalpoly(z, p...)
              :(s = muladd(x, x, y*y)),
              as...,
              :(muladd($ai, tt, $b)))
-    R = Expr(:macrocall, Symbol("@horner"), :tt, map(esc, p)...)
+    R = Expr(:macrocall, Symbol("@horner"), (), :tt, map(esc, p)...)
     :(let tt = $(esc(z))
           isa(tt, Complex) ? $C : $R
       end)

@@ -347,10 +347,10 @@
             ((eq? pred char-bin?) (fix-uint-neg neg (sized-uint-literal n s 1)))
             (is-float32-literal   (numchk n s) (float n))
             (n (if (and (integer? n) (> n 9223372036854775807))
-                   `(macrocall @int128_str ,s)
+                   `(macrocall @int128_str (null) ,s)
                    n))
-            ((within-int128? s) `(macrocall @int128_str ,s))
-            (else `(macrocall @big_str ,s))))))
+            ((within-int128? s) `(macrocall @int128_str (null) ,s))
+            (else `(macrocall @big_str (null) ,s))))))
 
 (define (fix-uint-neg neg n)
   (if neg
@@ -366,7 +366,7 @@
           ((<= l 16)  (numchk n s) (uint16 n))
           ((<= l 32)  (numchk n s) (uint32 n))
           ((<= l 64)  (numchk n s) (uint64 n))
-          ((<= l 128) `(macrocall @uint128_str ,s))
+          ((<= l 128) `(macrocall @uint128_str (null) ,s))
           (else       (error "Hex or binary literal too large for UInt128")))))
 
 (define (sized-uint-oct-literal n s)
@@ -379,7 +379,7 @@
                 (else             (uint64 n)))
           (begin (if (equal? s "0o") (numchk n s))
                  (if (oct-within-uint128? s)
-                     `(macrocall @uint128_str ,s)
+                     `(macrocall @uint128_str (null) ,s)
                      (error "Octal literal too large for UInt128"))))))
 
 (define (strip-leading-0s s)
@@ -856,11 +856,11 @@
 (define (maybe-negate op num)
   (if (eq? op '-)
       (if (large-number? num)
-          (if (eqv? (caddr num) "-170141183460469231731687303715884105728")
-              `(macrocall @big_str "170141183460469231731687303715884105728")
-              `(,(car num) ,(cadr num) ,(string.tail (caddr num) 1)))
+          (if (eqv? (cadddr num) "-170141183460469231731687303715884105728")
+              `(macrocall @big_str (null) "170141183460469231731687303715884105728")
+              `(,(car num) ,(cadr num) ,(caddr num) ,(string.tail (cadddr num) 1)))
           (if (= num -9223372036854775808)
-              `(macrocall @int128_str "9223372036854775808")
+              `(macrocall @int128_str (null) "9223372036854775808")
               (- num)))
       num))
 
@@ -1100,7 +1100,7 @@
                     (else
                      (let ((name (parse-atom s)))
                        (if (and (pair? name) (eq? (car name) 'macrocall))
-                           `(macrocall (|.| ,ex (quote ,(cadr name)))
+                           `(macrocall (|.| ,ex (quote ,(cadr name))) ; move macrocall outside by rewriting A.@B as @A.B
                                        ,@(cddr name))
                            `(|.| ,ex (quote ,name))))))))
             ((|.'| |'|)
@@ -1117,16 +1117,17 @@
                       (not (operator? ex))
                       (not (ts:space? s)))
                  ;; custom string and command literals; x"s" => @x_str "s"
-                 (let* ((macstr (begin (take-token s)
+                 (let* ((startloc  (line-number-node s))
+                        (macstr (begin (take-token s)
                                        (parse-raw-literal s t)))
                         (nxt (peek-token s))
                         (macname (macroify-name ex (macsuffix t))))
                    (if (and (symbol? nxt) (not (operator? nxt))
                             (not (ts:space? s)))
                        ;; string literal suffix, "s"x
-                       (loop `(macrocall ,macname ,macstr
+                       (loop `(macrocall ,macname ,startloc ,macstr
                                          ,(string (take-token s))))
-                       (loop `(macrocall ,macname ,macstr))))
+                       (loop `(macrocall ,macname ,startloc ,macstr))))
                  ex))
             (else ex))))))
 
@@ -2122,26 +2123,27 @@
           ((eqv? t #\@)
            (take-token s)
            (with-space-sensitive
-            (let ((head (if (eq? (peek-token s) '|.|)
+            (let ((startloc  (line-number-node s))
+                  (head (if (eq? (peek-token s) '|.|)
                             (begin (take-token s) '__dot__)
                             (parse-unary-prefix s))))
-              (if (eq? head '__LINE__)
-                  (input-port-line (ts:port s))
-                  (begin
-                    (peek-token s)
-                    (if (ts:space? s)
-                        `(macrocall ,(macroify-name head)
-                                    ,@(parse-space-separated-exprs s))
-                        (let ((call (parse-call-chain s head #t)))
-                          (if (and (pair? call) (eq? (car call) 'call))
-                              `(macrocall ,(macroify-name (cadr call)) ,@(cddr call))
-                              `(macrocall ,(macroify-name call)
-                                          ,@(parse-space-separated-exprs s))))))))))
-
+              (peek-token s)
+              (if (ts:space? s)
+                  `(macrocall ,(macroify-name head)
+                              ,startloc
+                              ,@(parse-space-separated-exprs s))
+                  (let ((call (parse-call-chain s head #t)))
+                    (if (and (pair? call) (eq? (car call) 'call))
+                        `(macrocall ,(macroify-name (cadr call))
+                                    ,startloc
+                                    ,@(cddr call))
+                        `(macrocall ,(macroify-name call)
+                                    ,startloc
+                                    ,@(parse-space-separated-exprs s))))))))
           ;; command syntax
           ((eqv? t #\`)
            (take-token s)
-           `(macrocall @cmd ,(parse-raw-literal s #\`)))
+           `(macrocall @cmd ,(line-number-node s) ,(parse-raw-literal s #\`)))
 
           ((or (string? t) (number? t) (large-number? t)) (take-token s))
 
@@ -2167,16 +2169,20 @@
       (and (pair? e) (eq? 'string (car e))) ; string interpolation
       (and (length= e 3) (eq? (car e) 'macrocall)
            (simple-string-literal? (caddr e))
+           (eq? (cadr e) '@doc_str))
+      (and (length= e 4) (eq? (car e) 'macrocall)
+           (simple-string-literal? (cadddr e))
            (eq? (cadr e) '@doc_str))))
 
 (define (parse-docstring s production)
-  (let* ((ex (production s)))
+  (let ((startloc (line-number-node s)) ; be sure to use the line number from the head of the docstring
+        (ex (production s)))
     (if (and (doc-string-literal? ex)
              (let loop ((t (peek-token s)))
                (cond ((closing-token? t) #f)
                      ((newline? t) (take-token s) (loop (peek-token s)))
                      (else #t))))
-        `(macrocall (core @doc) ,ex ,(production s))
+        `(macrocall (core @doc) ,startloc ,ex ,(production s))
         ex)))
 
 ;; --- main entry point ---
