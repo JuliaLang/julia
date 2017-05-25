@@ -312,7 +312,7 @@ end
 
 # make sure scalars are inlined, which causes f.(x,scalar) to lower to a "thunk"
 import Base.Meta: isexpr
-@test isexpr(expand(:(f.(x,y))), :call)
+@test isexpr(expand(:(f.(x,y))), :body)
 @test isexpr(expand(:(f.(x,1))), :thunk)
 @test isexpr(expand(:(f.(x,1.0))), :thunk)
 @test isexpr(expand(:(f.(x,$π))), :thunk)

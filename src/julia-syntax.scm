@@ -1727,7 +1727,9 @@
                                                  oldarg))
                                  fargs args)))
         (let ,fbody ,@(reverse (fuse-lets fargs args '()))))))
-  (define (dot-to-fuse e) ; convert e == (. f (tuple args)) to (fuse f args)
+  ; convert e == (. f (tuple args)) to (fuse f args),
+  ; recursively for nested calls, fusing if fuse? is true.
+  (define (dot-to-fuse e fuse?)
     (define (make-fuse f args) ; check for nested (fuse f args) exprs and combine
       (define (split-kwargs args) ; return (cons keyword-args positional-args) extracted from args
         (define (sk args kwargs pargs)
@@ -1742,8 +1744,8 @@
       (let* ((kws.args (split-kwargs args))
              (kws (car kws.args))
              (args (cdr kws.args)) ; fusing occurs on positional args only
-             (args_ (map dot-to-fuse args)))
-        (if (anyfuse? args_)
+             (args_ (map (lambda (e) (dot-to-fuse e fuse?)) args)))
+        (if (and fuse? (anyfuse? args_))
             `(fuse ,(fuse-funcs (to-lambda f args kws) args_) ,(fuse-args args_))
             `(fuse ,(to-lambda f args kws) ,args_))))
     (if (and (pair? e) (eq? (car e) '|.|))
@@ -1801,15 +1803,22 @@
                         (cons farg new-fargs) (cons arg new-args) renames varfarg vararg))))))
           (cf (cdadr f) args '() '() '() '() '()))
         e)) ; (not (fuse? e))
-  (let ((e (compress-fuse (dot-to-fuse rhs))) ; an expression '(fuse func args) if expr is a dot call
-        (lhs-view (ref-to-view lhs))) ; x[...] expressions on lhs turn in to view(x, ...) to update x in-place
+  ; convert fuse expressions to ordinary broadcast calls, or broadcast! if lhs != null:
+  (define (to-broadcast lhs e)
     (if (fuse? e)
+        (let ((bargs (map (lambda (e) (to-broadcast '() e)) (caddr e))))
+          (if (null? lhs)
+              `(call (top broadcast) ,(from-lambda (cadr e)) ,@bargs)
+              `(call (top broadcast!) ,(from-lambda (cadr e)) ,(ref-to-view lhs) ,@bargs)))
         (if (null? lhs)
-            (expand-forms `(call (top broadcast) ,(from-lambda (cadr e)) ,@(caddr e)))
-            (expand-forms `(call (top broadcast!) ,(from-lambda (cadr e)) ,lhs-view ,@(caddr e))))
-        (if (null? lhs)
-            (expand-forms e)
-            (expand-forms `(call (top broadcast!) (top identity) ,lhs-view ,e))))))
+            e
+            `(call (top broadcast!) (top identity) ,(ref-to-view lhs) ,e))))
+  (let ((e (compress-fuse (dot-to-fuse rhs #t))) ; an expression '(fuse func args) if expr is a dot call
+        (e0 (dot-to-fuse rhs #f))) ; e without fusion
+    (if (fuse? e)
+        (expand-forms `(if (call (top isfusing) ,@(caddr e))
+                           ,(to-broadcast lhs e) ,(to-broadcast lhs e0)))
+        (expand-forms (to-broadcast lhs e)))))
 
 (define (expand-where body var)
   (let* ((bounds (analyze-typevar var))
