@@ -645,7 +645,7 @@ For when a capture doesn't match, instead of a substring, `m.captures` contains 
 position, and `m.offsets` has a zero offset (recall that indices in Julia are 1-based, so a zero
 offset into a string is invalid). Here is a pair of somewhat contrived examples:
 
-```jldoctest
+```jldoctest acdmatch
 julia> m = match(r"(a|b)(c)?(d)", "acd")
 RegexMatch("acd", 1="a", 2="c", 3="d")
 
@@ -692,7 +692,7 @@ julia> m.offsets
 It is convenient to have captures returned as an array so that one can use destructuring syntax
 to bind them to local variables:
 
-```julia-repl
+```jldoctest acdmatch
 julia> first, second, third = m.captures; first
 "a"
 ```

@@ -768,7 +768,7 @@ The [`sparse()`](@ref) function is often a handy way to construct sparse matrice
 its input a vector `I` of row indices, a vector `J` of column indices, and a vector `V` of nonzero
 values. `sparse(I,J,V)` constructs a sparse matrix such that `S[I[k], J[k]] = V[k]`.
 
-```julia-repl
+```jldoctest sparse_function
 julia> I = [1, 4, 3, 5]; J = [4, 7, 18, 9]; V = [1, 2, -5, 3];
 
 julia> S = sparse(I,J,V)
@@ -782,12 +782,12 @@ julia> S = sparse(I,J,V)
 The inverse of the [`sparse()`](@ref) function is [`findn()`](@ref), which retrieves the inputs
 used to create the sparse matrix.
 
-```julia-repl
+```jldoctest sparse_function
 julia> findn(S)
-([1,4,5,3],[4,7,9,18])
+([1, 4, 5, 3], [4, 7, 9, 18])
 
 julia> findnz(S)
-([1,4,5,3],[4,7,9,18],[1,2,3,-5])
+([1, 4, 5, 3], [4, 7, 9, 18], [1, 2, 3, -5])
 ```
 
 Another way to create sparse matrices is to convert a dense matrix into a sparse matrix using

@@ -3,7 +3,7 @@
 Julia has an extensive, flexible API for sorting and interacting with already-sorted arrays of
 values. By default, Julia picks reasonable algorithms and sorts in standard ascending order:
 
-```julia-repl
+```jldoctest
 julia> sort([2,3,1])
 3-element Array{Int64,1}:
  1
@@ -13,7 +13,7 @@ julia> sort([2,3,1])
 
 You can easily sort in reverse order as well:
 
-```julia-repl
+```jldoctest
 julia> sort([2,3,1], rev=true)
 3-element Array{Int64,1}:
  3
@@ -23,7 +23,7 @@ julia> sort([2,3,1], rev=true)
 
 To sort an array in-place, use the "bang" version of the sort function:
 
-```julia-repl
+```jldoctest
 julia> a = [2,3,1];
 
 julia> sort!(a);
