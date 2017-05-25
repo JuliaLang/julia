@@ -61,7 +61,7 @@ text_colors
 
 have_color = false
 default_color_warn = :yellow
-default_color_error = :light_red
+default_color_error = :red
 default_color_info = :cyan
 default_color_input = :normal
 default_color_answer = :normal
