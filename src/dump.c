@@ -240,7 +240,7 @@ static void jl_load_sysimg_so(void)
         size_t tls_getter_idx = *(size_t*)jl_dlsym(jl_sysimg_handle,
                                                    "jl_ptls_states_getter_idx");
         *sysimg_gvars[tls_getter_idx - 1] =
-            (jl_value_t*)jl_get_ptls_states_getter();
+            (jl_value_t*)(uintptr_t)jl_get_ptls_states_getter();
         size_t tls_offset_idx = *(size_t*)jl_dlsym(jl_sysimg_handle,
                                                    "jl_tls_offset_idx");
         *sysimg_gvars[tls_offset_idx - 1] =
@@ -445,12 +445,12 @@ static void jl_update_all_fptrs(void)
         assert(li->def && li->jlcall_api && li->jlcall_api != 2);
         int32_t cfunc = delayed_fptrs[i].cfunc - 1;
         if (cfunc >= 0) {
-            jl_fptr_to_llvm((jl_fptr_t)fvars[cfunc], li, 1);
+            jl_fptr_to_llvm((jl_fptr_t)(uintptr_t)fvars[cfunc], li, 1);
             linfos[cfunc] = li;
         }
         int32_t func = delayed_fptrs[i].func - 1;
         if (func >= 0) {
-            jl_fptr_to_llvm((jl_fptr_t)fvars[func], li, 0);
+            jl_fptr_to_llvm((jl_fptr_t)(uintptr_t)fvars[func], li, 0);
             linfos[func] = li;
         }
     }
@@ -1506,7 +1506,7 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
             size_t fielddesc_size = nf > 0 ? jl_fielddesc_size(fielddesc_type) : 0;
             jl_datatype_layout_t *layout = (jl_datatype_layout_t*)jl_gc_perm_alloc(
                     sizeof(jl_datatype_layout_t) + nf * fielddesc_size +
-                    (has_padding ? sizeof(uint32_t) : 0), 0);
+                    (has_padding ? sizeof(uint32_t) : 0), 0, 4, 0);
             if (has_padding) {
                 layout = (jl_datatype_layout_t*)(((char*)layout) + sizeof(uint32_t));
                 jl_datatype_layout_n_nonptr(layout) = read_int32(s->s);
@@ -2141,7 +2141,7 @@ static jl_value_t *jl_deserialize_value_(jl_serializer_state *s, jl_value_t *vta
     }
 }
 
-typedef struct _linkedlist_t {
+JL_EXTENSION typedef struct _linkedlist_t {
     struct _linkedlist_t *next;
     union {
         struct {
@@ -3429,7 +3429,7 @@ void jl_init_serializer(void)
 
     i=2;
     while (id_to_fptrs[i] != NULL) {
-        ptrhash_put(&fptr_to_id, (void*)id_to_fptrs[i], (void*)i);
+        ptrhash_put(&fptr_to_id, (void*)(uintptr_t)id_to_fptrs[i], (void*)i);
         i += 1;
     }
 

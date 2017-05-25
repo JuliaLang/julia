@@ -477,7 +477,7 @@ end
 
 function powermod(x::BigInt, p::BigInt, m::BigInt)
     r = MPZ.powm(x, p, m)
-    return m < 0 && r > 0 ? MPZ.add!(r, m) : r # choose sign conistent with mod(x^p, m)
+    return m < 0 && r > 0 ? MPZ.add!(r, m) : r # choose sign consistent with mod(x^p, m)
 end
 
 powermod(x::Integer, p::Integer, m::BigInt) = powermod(big(x), big(p), m)
@@ -501,6 +501,12 @@ function gcdx(a::BigInt, b::BigInt)
 end
 
 sum(arr::AbstractArray{BigInt}) = foldl(MPZ.add!, BigInt(0), arr)
+# note: a similar implementation for `prod` won't be efficient:
+# 1) the time complexity of the allocations is negligible compared to the multiplications
+# 2) assuming arr contains similarly sized BigInts, the multiplications are much more
+# performant when doing e.g. ((a1*a2)*(a2*a3))*(...) rather than a1*(a2*(a3*(...))),
+# which is exactly what the default implementation of `prod` does, via mapreduce
+# (which maybe could be slightly optimized for BigInt)
 
 factorial(x::BigInt) = isneg(x) ? BigInt(0) : MPZ.fac_ui(x)
 

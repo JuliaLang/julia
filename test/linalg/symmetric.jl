@@ -300,3 +300,14 @@ let X = [1 -1; -1 1]
     @test_throws ArgumentError Hermitian(X) + 2im*I
     @test_throws ArgumentError Hermitian(X) - 2im*I
 end
+
+@testset "Issue #21981" begin
+    B = complex(rand(4,4))
+    B[4,1] += 1im;
+    @test ishermitian(Symmetric(B, :U))
+    @test issymmetric(Hermitian(B, :U))
+    B[4,1]  = real(B[4,1])
+    B[1,4] += 1im
+    @test ishermitian(Symmetric(B, :L))
+    @test issymmetric(Hermitian(B, :L))
+end
