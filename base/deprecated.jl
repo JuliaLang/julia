@@ -18,37 +18,43 @@
 # the name of the function, which is used to ensure that the deprecation warning
 # is only printed the first time for each call place.
 
-macro deprecate(old,new,ex=true)
+macro deprecate(old, new, ex=true)
     meta = Expr(:meta, :noinline)
     @gensym oldmtname
-    if isa(old,Symbol)
-        oldname = Expr(:quote,old)
-        newname = Expr(:quote,new)
+    if isa(old, Symbol)
+        oldname = Expr(:quote, old)
+        newname = Expr(:quote, new)
         Expr(:toplevel,
-            ex ? Expr(:export,esc(old)) : nothing,
+            ex ? Expr(:export, esc(old)) : nothing,
             :(function $(esc(old))(args...)
                   $meta
-                  depwarn(string($oldname," is deprecated, use ",$newname," instead."),
+                  depwarn(string($oldname, " is deprecated, use ", $newname, " instead."),
                           $oldmtname)
                   $(esc(new))(args...)
               end),
             :(const $oldmtname = Core.Typeof($(esc(old))).name.mt.name))
-    elseif isa(old,Expr) && old.head == :call
+    elseif isa(old, Expr) && (old.head == :call || old.head == :where)
         remove_linenums!(new)
         oldcall = sprint(show_unquoted, old)
         newcall = sprint(show_unquoted, new)
-        oldsym = if isa(old.args[1],Symbol)
-            old.args[1]::Symbol
-        elseif isa(old.args[1],Expr) && old.args[1].head == :curly
-            old.args[1].args[1]::Symbol
+        # if old.head is a :where, step down one level to the :call to avoid code duplication below
+        callexpr = old.head == :call ? old : old.args[1]
+        if callexpr.head == :call
+            if isa(callexpr.args[1], Symbol)
+                oldsym = callexpr.args[1]::Symbol
+            elseif isa(callexpr.args[1], Expr) && callexpr.args[1].head == :curly
+                oldsym = callexpr.args[1].args[1]::Symbol
+            else
+                error("invalid usage of @deprecate")
+            end
         else
             error("invalid usage of @deprecate")
         end
         Expr(:toplevel,
-            ex ? Expr(:export,esc(oldsym)) : nothing,
+            ex ? Expr(:export, esc(oldsym)) : nothing,
             :($(esc(old)) = begin
                   $meta
-                  depwarn(string($oldcall," is deprecated, use ",$newcall," instead."),
+                  depwarn(string($oldcall, " is deprecated, use ", $newcall, " instead."),
                           $oldmtname)
                   $(esc(new))
               end),
