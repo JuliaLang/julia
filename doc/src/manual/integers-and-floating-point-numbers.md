@@ -584,7 +584,7 @@ To make common numeric formulas and expressions clearer, Julia allows variables 
 preceded by a numeric literal, implying multiplication. This makes writing polynomial expressions
 much cleaner:
 
-```jldoctest
+```jldoctest numeric-coefficients
 julia> x = 3
 3
 
@@ -597,7 +597,7 @@ julia> 1.5x^2 - .5x + 1
 
 It also makes writing exponential functions more elegant:
 
-```julia-repl
+```jldoctest numeric-coefficients
 julia> 2^2x
 64
 ```
@@ -607,7 +607,7 @@ negation. So `2^3x` is parsed as `2^(3x)`, and `2x^3` is parsed as `2*(x^3)`.
 
 Numeric literals also work as coefficients to parenthesized expressions:
 
-```julia-repl
+```jldoctest numeric-coefficients
 julia> 2(x-1)^2 - 3(x-1) + 1
 3
 ```
@@ -615,7 +615,7 @@ julia> 2(x-1)^2 - 3(x-1) + 1
 Additionally, parenthesized expressions can be used as coefficients to variables, implying multiplication
 of the expression by the variable:
 
-```julia-repl
+```jldoctest numeric-coefficients
 julia> (x-1)x
 6
 ```
@@ -623,7 +623,7 @@ julia> (x-1)x
 Neither juxtaposition of two parenthesized expressions, nor placing a variable before a parenthesized
 expression, however, can be used to imply multiplication:
 
-```julia-repl
+```jldoctest numeric-coefficients
 julia> (x-1)(x+1)
 ERROR: MethodError: objects of type Int64 are not callable
 

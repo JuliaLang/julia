@@ -152,7 +152,7 @@ we can define dispatch directly on `SubArray{T,N,A,I,true}` without any intermed
 Since this computation doesn't depend on runtime values, it can miss some cases in which the stride
 happens to be uniform:
 
-```julia-repl
+```jldoctest
 julia> A = reshape(1:4*2, 4, 2)
 4×2 Base.ReshapedArray{Int64,2,UnitRange{Int64},Tuple{}}:
  1  5
@@ -171,7 +171,7 @@ A view constructed as `view(A, 2:2:4, :)` happens to have uniform stride, and th
 indexing indeed could be performed efficiently.  However, success in this case depends on the
 size of the array: if the first dimension instead were odd,
 
-```julia-repl
+```jldoctest
 julia> A = reshape(1:5*2, 5, 2)
 5×2 Base.ReshapedArray{Int64,2,UnitRange{Int64},Tuple{}}:
  1   6

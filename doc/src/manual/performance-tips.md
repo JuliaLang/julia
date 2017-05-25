@@ -257,7 +257,7 @@ like `m` but not for objects like `t`.
 Of course, all of this is true only if we construct `m` with a concrete type.  We can break this
 by explicitly constructing it with an abstract type:
 
-```julia-repl myambig2
+```jldoctest myambig2
 julia> m = MyType{AbstractFloat}(3.2)
 MyType{AbstractFloat}(3.2)
 
@@ -429,7 +429,7 @@ the array type `A`.
 However, there's one remaining hole: we haven't enforced that `A` has element type `T`, so it's
 perfectly possible to construct an object like this:
 
-```julia-repl
+```jldoctest containers2
 julia> b = MyContainer{Int64, UnitRange{Float64}}(UnitRange(1.3, 5.0));
 
 julia> typeof(b)

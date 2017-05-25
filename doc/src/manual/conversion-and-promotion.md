@@ -46,7 +46,7 @@ generally takes two arguments: the first is a type object while the second is a 
 to that type; the returned value is the value converted to an instance of given type. The simplest
 way to understand this function is to see it in action:
 
-```julia-repl
+```jldoctest
 julia> x = 12
 12
 
@@ -66,12 +66,12 @@ julia> typeof(ans)
 Float64
 
 julia> a = Any[1 2 3; 4 5 6]
-2x3 Array{Any,2}:
+2×3 Array{Any,2}:
  1  2  3
  4  5  6
 
 julia> convert(Array{Float64}, a)
-2x3 Array{Float64,2}:
+2×3 Array{Float64,2}:
  1.0  2.0  3.0
  4.0  5.0  6.0
 ```
@@ -79,12 +79,11 @@ julia> convert(Array{Float64}, a)
 Conversion isn't always possible, in which case a no method error is thrown indicating that `convert`
 doesn't know how to perform the requested conversion:
 
-```julia-repl
+```jldoctest
 julia> convert(AbstractFloat, "foo")
 ERROR: MethodError: Cannot `convert` an object of type String to an object of type AbstractFloat
 This may have arisen from a call to the constructor AbstractFloat(...),
 since type constructors fall back to convert methods.
- ...
 ```
 
 Some languages consider parsing strings as numbers or formatting numbers as strings to be conversions
@@ -111,7 +110,7 @@ example, since the type is a singleton, there would never be any reason to use i
 the body. When invoked, the method determines whether a numeric value is true or false as a boolean,
 by comparing it to one and zero:
 
-```julia-repl
+```jldoctest
 julia> convert(Bool, 1)
 true
 
@@ -196,24 +195,24 @@ any number of arguments, and returns a tuple of the same number of values, conve
 type, or throws an exception if promotion is not possible. The most common use case for promotion
 is to convert numeric arguments to a common type:
 
-```julia-repl
+```jldoctest
 julia> promote(1, 2.5)
-(1.0,2.5)
+(1.0, 2.5)
 
 julia> promote(1, 2.5, 3)
-(1.0,2.5,3.0)
+(1.0, 2.5, 3.0)
 
 julia> promote(2, 3//4)
-(2//1,3//4)
+(2//1, 3//4)
 
 julia> promote(1, 2.5, 3, 3//4)
-(1.0,2.5,3.0,0.75)
+(1.0, 2.5, 3.0, 0.75)
 
 julia> promote(1.5, im)
-(1.5 + 0.0im,0.0 + 1.0im)
+(1.5 + 0.0im, 0.0 + 1.0im)
 
 julia> promote(1 + 2im, 3//4)
-(1//1 + 2//1*im,3//4 + 0//1*im)
+(1//1 + 2//1*im, 3//4 + 0//1*im)
 ```
 
 Floating-point values are promoted to the largest of the floating-point argument types. Integer
@@ -253,7 +252,7 @@ Rational(n::Integer, d::Integer) = Rational(promote(n,d)...)
 
 This allows calls like the following to work:
 
-```julia-repl
+```jldoctest
 julia> Rational(Int8(15),Int32(-5))
 -3//1
 
@@ -297,7 +296,7 @@ which, given any number of type objects, returns the common type to which those 
 to `promote` should be promoted. Thus, if one wants to know, in absence of actual values, what
 type a collection of values of certain types would promote to, one can use `promote_type`:
 
-```julia-repl
+```jldoctest
 julia> promote_type(Int8, UInt16)
 Int64
 ```

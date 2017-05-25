@@ -49,7 +49,7 @@ true
 
 More generally, you can use [`open()`](@ref) to read from or write to an external command.
 
-```julia-repl
+```jldoctest
 julia> open(`less`, "w", STDOUT) do io
            for i = 1:3
                println(io, i)

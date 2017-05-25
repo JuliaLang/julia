@@ -920,7 +920,7 @@ we returned from the definition, now with the *value* of `x`.
 
 What happens if we evaluate `foo` again with a type that we have already used?
 
-```julia-repl generated
+```jldoctest generated
 julia> foo(4)
 16
 ```
