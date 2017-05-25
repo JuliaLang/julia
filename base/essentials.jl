@@ -143,20 +143,54 @@ oftype(x,c) = convert(typeof(x),c)
 
 Convert a number to an unsigned integer. If the argument is signed, it is reinterpreted as
 unsigned without checking for negative values.
+See also [`signed`](@ref).
 
     unsigned(T::Type) -> UnsignedType
 
-Return the return-type of unsigned(x::T).
+Return the return-type of `unsigned(x::T)`, so that `unsigned(x)::unsigned(typeof(x))`.
 
 ```jldoctest
 julia> unsigned(12)
 0x000000000000000c
 
-julia> unsigned(Int)
+julia> unsigned(Int64)
 UInt64
+
+julia> unsigned(2.0)
+0x0000000000000002
+
+julia> unsigned(2.2)
+ERROR: InexactError()
+[...]
 ```
 """
 unsigned(x::Int) = reinterpret(UInt, x)
+
+"""
+    signed(x)
+
+Convert a number to a signed integer. If the argument is unsigned, it is reinterpreted as
+signed without checking for overflow.
+See also [`unsigned`](@ref).
+
+    signed(T::Type) -> SignedType
+
+Return the return-type of `signed(x::T)`, so that `signed(x)::signed(typeof(x))`.
+
+```jldoctest
+julia> signed(0xc)
+12
+
+julia> signed(UInt64)
+Int64
+
+julia> signed(2.0)
+2
+
+julia> signed(2.2)
+ERROR: InexactError()
+[...]
+"""
 signed(x::UInt) = reinterpret(Int, x)
 
 # conversions used by ccall

@@ -41,7 +41,7 @@ for elty in (Float16,Float32,Float64), _ = 1:10
     @test hex2num(num2hex(x)) ≈ x
     @test hex2num(elty, num2hex(x)) ≈ x
 end
-@test_throws ArgumentError hex2num(String(rand('a':'f', rand(17:100))))
+@test_throws ArgumentError hex2num(String(rand(['a':'f';'0':'1'], rand(17:100))))
 
 # round
 for elty in (Float32,Float64)

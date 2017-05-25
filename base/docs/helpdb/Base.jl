@@ -2249,14 +2249,6 @@ for sets of arbitrary objects.
 Set
 
 """
-    signed(x)
-
-Convert a number to a signed integer. If the argument is unsigned, it is reinterpreted as
-signed without checking for overflow.
-"""
-signed
-
-"""
     Val{c}
 
 Create a "value type" out of `c`, which must be an `isbits` value. The intent of this

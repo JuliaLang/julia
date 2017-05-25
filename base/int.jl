@@ -29,7 +29,13 @@ const BitReal_types  = (BitInteger_types..., BitFloat_types...)
 const BitReal        = Union{BitReal_types...}
 
 reinterpret(::Type{Unsigned}, x::BitInteger) = unsigned(x)
+reinterpret(::Type{  Signed}, x::BitInteger) = signed(x)
 
+unsigned(::Type{T}) where {T<:Unsigned} = T
+signed(  ::Type{T}) where {T<:Signed}   = T
+
+unsigned(::Type{<:Union{Bool,BitFloat}}) = UInt
+signed(  ::Type{<:Union{Bool,BitFloat}}) = Int
 
 ## integer comparisons ##
 

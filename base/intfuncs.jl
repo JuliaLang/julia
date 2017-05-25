@@ -1,5 +1,25 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# this construction is not available when put in int.jl and running in Core
+for (S,U,F) in zip(BitSigned_types, BitUnsigned_types,
+                       (nothing, Float16, Float32, Float64, nothing))
+        @eval begin
+            unsigned(::Type{$S}) = $U
+            unsigned(::Type{$U}) = $U
+            signed(  ::Type{$S}) = $S
+            signed(  ::Type{$U}) = $S
+            reinterpret(::Type{Unsigned}, ::Type{$S}) = $U
+            reinterpret(::Type{Unsigned}, ::Type{$U}) = $U
+            reinterpret(::Type{Signed}, ::Type{$S}) = $S
+            reinterpret(::Type{Signed}, ::Type{$U}) = $S
+        end
+        F === nothing && continue
+        @eval begin
+            reinterpret(::Type{Unsigned}, ::Type{$F}) = $U
+            reinterpret(::Type{Signed}, ::Type{$F}) = $S
+        end
+    end
+
 ## number-theoretic functions ##
 
 """
@@ -488,7 +508,7 @@ end
 
 An hexadecimal string of the binary representation of a number.
 See also the [`bits`](@ref) function, which is similar but gives
-a binary string.
+a binary string, and [`hex2num`] which does the opposite conversion.
 
 ```jldoctest
 julia> num2hex(Int64(4))
@@ -515,16 +535,9 @@ julia> hex2num(Float64, "400199999999999a")
 julia> hex2num(Int32, "fffffffe")
 -2
 ```
-
-    hex2num(str)
-
-Convert a hexadecimal string to the floating point number it represents.
-This function, which is inherently type-unstable, returns a `Float16`,
-a `Float32`, or a `Float64` depending on the length of the string `str`
-(note that this length must hence be no greater than 16).
 """
 hex2num(::Type{T}, s::AbstractString) where {T<:BitReal} =
-    reinterpret(T, parse(unsigned(T), s, 16))
+    reinterpret(T, parse(reinterpret(Unsigned, T), s, 16))
 
 const base36digits = ['0':'9';'a':'z']
 const base62digits = ['0':'9';'A':'Z';'a':'z']
