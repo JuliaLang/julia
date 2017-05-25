@@ -1181,7 +1181,9 @@ const ziggurat_exp_r      = 7.6971174701310497140446280481
 Generate a normally-distributed random number of type `T` with mean 0 and standard deviation 1.
 Optionally generate an array of normally-distributed random numbers.
 The `Base` module currently provides an implementation for the types
-`Float16`, `Float32`, and `Float64` (the default).
+`Float16`, `Float32`, and `Float64` (the default), and their `Complex` counterparts.
+When the type argument is complex, the values are drawn from the circularly symmetric
+complex normal distribution.
 """
 @inline function randn(rng::AbstractRNG=GLOBAL_RNG)
     @inbounds begin
@@ -1283,6 +1285,11 @@ let Floats = Union{Float16,Float32,Float64}
         end
     end
 end
+
+# complex randn
+Base.@irrational SQRT_HALF 0.7071067811865475244008  sqrt(big(0.5))
+randn(rng::AbstractRNG, ::Type{Complex{T}}) where {T <: AbstractFloat} =
+    Complex{T}(SQRT_HALF * randn(rng, T), SQRT_HALF * randn(rng, T))
 
 ## random UUID generation
 
