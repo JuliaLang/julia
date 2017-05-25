@@ -63,6 +63,27 @@ function GitRemoteAnon(repo::GitRepo, url::AbstractString)
     return GitRemote(repo, rmt_ptr_ptr[])
 end
 
+"""
+    lookup_remote(repo::GitRepo, remote_name::AbstractString) -> Nullable{GitRemote}
+
+Determine if the `remote_name` specified exists within the `repo`. Returns a
+[`Nullable`](@ref), which will be null if the requested remote does not exist. If the remote
+does exist, the `Nullable` contains a `GitRemote` to the remote name.
+"""
+function lookup_remote(repo::GitRepo, remote_name::AbstractString)
+    rmt_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
+    err = ccall((:git_remote_lookup, :libgit2), Cint,
+                (Ptr{Ptr{Void}}, Ptr{Void}, Cstring),
+                rmt_ptr_ptr, repo.ptr, remote_name)
+    if err == Int(Error.GIT_OK)
+        return Nullable{GitRemote}(GitRemote(repo, rmt_ptr_ptr[]))
+    elseif err == Int(Error.ENOTFOUND)
+        return Nullable{GitRemote}()
+    else
+        throw(Error.GitError(err))
+    end
+end
+
 function get(::Type{GitRemote}, repo::GitRepo, rmt_name::AbstractString)
     rmt_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_remote_lookup, :libgit2), Cint,
@@ -99,6 +120,19 @@ end
     push_url(rmt::GitRemote)
 
 Get the push URL of a remote git repository.
+
+# Example
+
+```julia-repl
+julia> repo_url = "https://github.com/JuliaLang/Example.jl";
+
+julia> repo = LibGit2.init(mktempdir());
+
+julia> LibGit2.set_remote_push_url(repo, "origin", repo_url);
+
+julia> LibGit2.push_url(LibGit2.get(LibGit2.GitRemote, repo, "origin"))
+"https://github.com/JuliaLang/Example.jl"
+```
 """
 function push_url(rmt::GitRemote)
     url_ptr = ccall((:git_remote_pushurl, :libgit2), Cstring, (Ptr{Void},), rmt.ptr)
@@ -251,4 +285,89 @@ function push(rmt::GitRemote, refspecs::Vector{<:AbstractString};
                  rmt.ptr, isempty(refspecs) ? C_NULL : refspecs, Ref(options))
 end
 
+"""
+    remote_delete(repo::GitRepo, remote_name::AbstractString) -> Void
+
+Delete the `remote_name` from the git `repo`.
+"""
+function remote_delete(repo::GitRepo, remote_name::AbstractString)
+    @check ccall((:git_remote_delete, :libgit2), Cint,
+                 (Ptr{Void}, Cstring),
+                 repo.ptr, remote_name)
+end
+
 Base.show(io::IO, rmt::GitRemote) = print(io, "GitRemote:\nRemote name: ", name(rmt), " url: ", url(rmt))
+
+
+"""
+    set_remote_fetch_url(repo::GitRepo, remote_name, url)
+    set_remote_fetch_url(path::String, remote_name, url)
+
+Set the fetch `url` for the specified `remote_name` for the GitRepo or the git repository
+located at `path`. Typically git repos use "origin" as the remote name.
+"""
+function set_remote_fetch_url end
+
+function set_remote_fetch_url(repo::GitRepo, remote_name::AbstractString, url::AbstractString)
+    @check ccall((:git_remote_set_url, :libgit2), Cint,
+                 (Ptr{Void}, Cstring, Cstring),
+                 repo.ptr, remote_name, url)
+end
+
+function set_remote_fetch_url(path::AbstractString, remote_name::AbstractString, url::AbstractString)
+    with(GitRepo, path) do repo
+        set_remote_fetch_url(repo, remote_name, url)
+    end
+end
+
+
+"""
+    set_remote_push_url(repo::GitRepo, remote_name, url)
+    set_remote_push_url(path::String, remote_name, url)
+
+Set the push `url` for the specified `remote_name` for the GitRepo or the git repository
+located at `path`. Typically git repos use "origin" as the remote name.
+"""
+function set_remote_push_url end
+
+function set_remote_push_url(repo::GitRepo, remote_name::AbstractString, url::AbstractString)
+    @check ccall((:git_remote_set_pushurl, :libgit2), Cint,
+                 (Ptr{Void}, Cstring, Cstring),
+                 repo.ptr, remote_name, url)
+end
+
+function set_remote_push_url(path::AbstractString, remote_name::AbstractString, url::AbstractString)
+    with(GitRepo, path) do repo
+        set_remote_push_url(repo, remote_name, url)
+    end
+end
+
+
+"""
+    set_remote_url(repo::GitRepo, remote_name, url)
+    set_remote_url(repo::String, remote_name, url)
+
+Set both the fetch and push `url` for `remote_name` for the GitRepo or the git repository
+located at `path`. Typically git repos use "origin" as the remote name.
+
+# Examples
+
+```julia
+repo_path = joinpath(tempdir(), "Example")
+repo = LibGit2.init(repo_path)
+LibGit2.set_remote_url(repo, "upstream", "https://github.com/JuliaLang/Example.jl")
+LibGit2.set_remote_url(repo_path, "upstream2", "https://github.com/JuliaLang/Example2.jl")
+```
+"""
+function set_remote_url end
+
+function set_remote_url(repo::GitRepo, remote_name::AbstractString, url::AbstractString)
+    set_remote_fetch_url(repo, remote_name, url)
+    set_remote_push_url(repo, remote_name, url)
+end
+
+function set_remote_url(path::AbstractString, remote_name::AbstractString, url::AbstractString)
+    with(GitRepo, path) do repo
+        set_remote_url(repo, remote_name, url)
+    end
+end

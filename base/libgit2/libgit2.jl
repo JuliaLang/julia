@@ -240,42 +240,6 @@ function is_ancestor_of(a::AbstractString, b::AbstractString, repo::GitRepo)
     merge_base(repo, a, b) == A
 end
 
-"""
-    set_remote_url(repo::GitRepo, url::AbstractString; remote::AbstractString="origin")
-
-Set the `url` for `remote` for the git repository `repo`.
-The default name of the remote is `"origin"`.
-
-# Examples
-
-```julia
-repo_path = joinpath("test_directory", "Example")
-repo = LibGit2.init(repo_path)
-url1 = "https://github.com/JuliaLang/Example.jl"
-LibGit2.set_remote_url(repo, url1, remote="upstream")
-url2 = "https://github.com/JuliaLang/Example2.jl"
-LibGit2.set_remote_url(repo_path, url2, remote="upstream2")
-```
-"""
-function set_remote_url(repo::GitRepo, url::AbstractString; remote::AbstractString="origin")
-    with(GitConfig, repo) do cfg
-        set!(cfg, "remote.$remote.url", url)
-        set!(cfg, "remote.$remote.pushurl", url)
-    end
-end
-
-"""
-    set_remote_url(path::AbstractString, url::AbstractString; remote::AbstractString="origin")
-
-Set the `url` for `remote` for the git repository located at `path`.
-The default name of the remote is `"origin"`.
-"""
-function set_remote_url(path::AbstractString, url::AbstractString; remote::AbstractString="origin")
-    with(GitRepo, path) do repo
-        set_remote_url(repo, url, remote=remote)
-    end
-end
-
 function make_payload(payload::Nullable{<:AbstractCredentials})
     Ref{Nullable{AbstractCredentials}}(payload)
 end

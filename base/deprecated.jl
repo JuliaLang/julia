@@ -1403,6 +1403,20 @@ DEPRECATED: use @__MODULE__ instead
 end
 export current_module
 
+# PR #22062
+function LibGit2.set_remote_url(repo::LibGit2.GitRepo, url::AbstractString; remote::AbstractString="origin")
+    Base.depwarn(string(
+        "`LibGit2.set_remote_url(repo, url; remote=remote)` is deprecated, use ",
+        "`LibGit2.set_remote_url(repo, remote, url)` instead."), :set_remote_url)
+    LibGit2.set_remote_url(repo, remote, url)
+end
+function LibGit2.set_remote_url(path::AbstractString, url::AbstractString; remote::AbstractString="origin")
+    Base.depwarn(string(
+        "`LibGit2.set_remote_url(path, url; remote=remote)` is deprecated, use ",
+        "`LibGit2.set_remote_url(path, remote, url)` instead."), :set_remote_url)
+    LibGit2.set_remote_url(path, remote, url)
+end
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

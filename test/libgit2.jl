@@ -257,13 +257,13 @@ mktempdir() do dir
                 @test isa(remote, LibGit2.GitRemote)
                 @test sprint(show, remote) == "GitRemote:\nRemote name: upstream url: $repo_url"
                 @test LibGit2.isattached(repo)
-                LibGit2.set_remote_url(repo, "", remote="upstream")
+                LibGit2.set_remote_url(repo, "upstream", "unknown")
                 remote = LibGit2.get(LibGit2.GitRemote, repo, branch)
-                @test LibGit2.url(remote) == ""
-                @test LibGit2.push_url(remote) == ""
-                @test sprint(show, remote) == "GitRemote:\nRemote name: upstream url: "
+                @test LibGit2.url(remote) == "unknown"
+                @test LibGit2.push_url(remote) == "unknown"
+                @test sprint(show, remote) == "GitRemote:\nRemote name: upstream url: unknown"
                 close(remote)
-                LibGit2.set_remote_url(cache_repo, repo_url, remote="upstream")
+                LibGit2.set_remote_url(cache_repo, "upstream", repo_url)
                 remote = LibGit2.get(LibGit2.GitRemote, repo, branch)
                 @test LibGit2.url(remote) == repo_url
                 @test LibGit2.push_url(remote) == repo_url
@@ -1074,6 +1074,55 @@ mktempdir() do dir
             open(joinpath(test_repo, test_file), "r") do io
                 @test read(io)[end] != 0x41
             end
+        finally
+            close(repo)
+        end
+    end
+
+    @testset "Modify remote" begin
+        path = test_repo
+        repo = LibGit2.GitRepo(path)
+        try
+            remote_name = "test"
+            url = "https://test.com/repo"
+
+            @test isnull(LibGit2.lookup_remote(repo, remote_name))
+
+            for r in (repo, path)
+                # Set just the fetch URL
+                LibGit2.set_remote_fetch_url(r, remote_name, url)
+                remote = get(LibGit2.lookup_remote(repo, remote_name))
+                @test LibGit2.name(remote) == remote_name
+                @test LibGit2.url(remote) == url
+                @test LibGit2.push_url(remote) == ""
+
+                LibGit2.remote_delete(repo, remote_name)
+                @test isnull(LibGit2.lookup_remote(repo, remote_name))
+
+                # Set just the push URL
+                LibGit2.set_remote_push_url(r, remote_name, url)
+                remote = get(LibGit2.lookup_remote(repo, remote_name))
+                @test LibGit2.name(remote) == remote_name
+                @test LibGit2.url(remote) == ""
+                @test LibGit2.push_url(remote) == url
+
+                LibGit2.remote_delete(repo, remote_name)
+                @test isnull(LibGit2.lookup_remote(repo, remote_name))
+
+                # Set the fetch and push URL
+                LibGit2.set_remote_url(r, remote_name, url)
+                remote = get(LibGit2.lookup_remote(repo, remote_name))
+                @test LibGit2.name(remote) == remote_name
+                @test LibGit2.url(remote) ==  url
+                @test LibGit2.push_url(remote) == url
+
+                LibGit2.remote_delete(repo, remote_name)
+                @test isnull(LibGit2.lookup_remote(repo, remote_name))
+            end
+
+            # Invalid remote name
+            @test_throws LibGit2.GitError LibGit2.set_remote_url(repo, "", url)
+            @test_throws LibGit2.GitError LibGit2.set_remote_url(repo, remote_name, "")
         finally
             close(repo)
         end
