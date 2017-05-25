@@ -174,7 +174,7 @@ julia> x
 Within soft scopes, the *global* keyword is never necessary, although allowed. The only case
 when it would change the semantics is (currently) a syntax error:
 
-```julia
+```jldoctest
 julia> let
            local j = 2
            let
@@ -332,7 +332,7 @@ The reason to allow *modifying local* variables of parent scopes in nested funct
 constructing [closures](https://en.wikipedia.org/wiki/Closure_%28computer_programming%29) which
 have a private state, for instance the `state` variable in the following example:
 
-```julia
+```jldoctest
 julia> let
            state = 0
            global counter
@@ -411,7 +411,7 @@ julia> Fs[2]()
 Since the `begin` construct does not introduce a new scope, it can be useful to use a zero-argument
 `let` to just introduce a new scope block without creating any new bindings:
 
-```julia
+```jldoctest
 julia> let
            local x = 1
            let
