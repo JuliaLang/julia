@@ -405,6 +405,7 @@ export
     significand,
     sin,
     sinc,
+    sincos,
     sind,
     sinh,
     sinpi,

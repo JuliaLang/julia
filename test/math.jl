@@ -627,3 +627,12 @@ end
 @testset "promote Float16 irrational #15359" begin
     @test typeof(Float16(.5) * pi) == Float16
 end
+
+@testset "sincos" begin
+    @test sincos(1.0) === (sin(1.0), cos(1.0))
+    @test sincos(1f0) === (sin(1f0), cos(1f0))
+    @test sincos(Float16(1)) === (sin(Float16(1)), cos(Float16(1)))
+    @test sincos(1) === (sin(1), cos(1))
+    @test sincos(big(1)) == (sin(big(1)), cos(big(1)))
+    @test sincos(big(1.0)) == (sin(big(1.0)), cos(big(1.0)))
+end
