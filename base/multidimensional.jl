@@ -909,7 +909,7 @@ their indices; any offset results in a (circular) wraparound. If the
 arrays have overlapping indices, then on the domain of the overlap
 `dest` agrees with `src`.
 
-```julia
+```julia-repl
 julia> src = reshape(collect(1:16), (4,4))
 4×4 Array{Int64,2}:
  1  5   9  13

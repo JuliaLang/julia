@@ -713,7 +713,7 @@ julia> resize!([6, 5, 4, 3, 2, 1], 3)
  4
 ```
 
-```julia
+```julia-repl
 julia> resize!([6, 5, 4, 3, 2, 1], 8)
 8-element Array{Int64,1}:
  6
