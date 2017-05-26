@@ -50,22 +50,22 @@ end
 
 # Block elements
 
-function html(io::IO, content::Vector)
+function html(io::IO, content::Vector, parent = nothing)
     for md in content
-        html(io, md)
+        html(io, md, parent)
         println(io)
     end
 end
 
-html(io::IO, md::MD) = html(io, md.content)
+html(io::IO, md::MD, parent = nothing) = html(io, md.content, md)
 
-function html{l}(io::IO, header::Header{l})
+function html{l}(io::IO, header::Header{l}, parent = nothing)
     withtag(io, "h$l") do
         htmlinline(io, header.text)
     end
 end
 
-function html(io::IO, code::Code)
+function html(io::IO, code::Code, parent = nothing)
     withtag(io, :pre) do
         maybe_lang = !isempty(code.language) ? Any[:class=>"language-$(code.language)"] : []
         withtag(io, :code, maybe_lang...) do
@@ -75,8 +75,8 @@ function html(io::IO, code::Code)
     end
 end
 
-function html(io::IO, md::Paragraph)
-    if md.intightlist
+function html(io::IO, md::Paragraph, parent = nothing)
+    if isa(parent, List) && !parent.isloose
         htmlinline(io, md.content)
     else
         withtag(io, :p) do
@@ -85,49 +85,49 @@ function html(io::IO, md::Paragraph)
     end
 end
 
-function html(io::IO, md::BlockQuote)
+function html(io::IO, md::BlockQuote, parent = nothing)
     withtag(io, :blockquote) do
         println(io)
-        html(io, md.content)
+        html(io, md.content, md)
     end
 end
 
-function html(io::IO, f::Footnote)
+function html(io::IO, f::Footnote, parent = nothing)
     withtag(io, :div, :class => "footnote", :id => "footnote-$(f.id)") do
         withtag(io, :p, :class => "footnote-title") do
             print(io, f.id)
         end
-        html(io, f.text)
+        html(io, f.text, f)
     end
 end
 
-function html(io::IO, md::Admonition)
+function html(io::IO, md::Admonition, parent = nothing)
     withtag(io, :div, :class => "admonition $(md.category)") do
         withtag(io, :p, :class => "admonition-title") do
             print(io, md.title)
         end
-        html(io, md.content)
+        html(io, md.content, md)
     end
 end
 
-function html(io::IO, md::List)
+function html(io::IO, md::List, parent = nothing)
     maybe_attr = md.ordered > 1 ? Any[:start => string(md.ordered)] : []
     withtag(io, isordered(md) ? :ol : :ul, maybe_attr...) do
         for item in md.items
             println(io)
             withtag(io, :li) do
-                html(io, item)
+                html(io, item, md)
             end
         end
         println(io)
     end
 end
 
-function html(io::IO, md::HorizontalRule)
+function html(io::IO, md::HorizontalRule, parent = nothing)
     tag(io, :hr)
 end
 
-html(io::IO, x) = tohtml(io, x)
+html(io::IO, x, parent = nothing) = tohtml(io, x)
 
 # Inline elements
 

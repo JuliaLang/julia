@@ -2,24 +2,24 @@
 
 plain(x) = sprint(plain, x)
 
-function plain(io::IO, content::Vector)
+function plain(io::IO, content::Vector, parent = nothing)
     isempty(content) && return
     for md in content[1:end-1]
-        plain(io, md)
+        plain(io, md, parent)
         println(io)
     end
     plain(io, content[end])
 end
 
-plain(io::IO, md::MD) = plain(io, md.content)
+plain(io::IO, md::MD, parent = nothing) = plain(io, md.content, md)
 
-function plain(io::IO, header::Header{l}) where l
+function plain(io::IO, header::Header{l}, parent = nothing) where l
     print(io, "#"^l*" ")
     plaininline(io, header.text)
     println(io)
 end
 
-function plain(io::IO, code::Code)
+function plain(io::IO, code::Code, parent = nothing)
     # If the code includes a fenced block this will break parsing,
     # so it must be enclosed by a longer ````-sequence.
     n = mapreduce(length, max, 2, matchall(r"^`+"m, code.code)) + 1
@@ -28,12 +28,12 @@ function plain(io::IO, code::Code)
     println(io, "`" ^ n)
 end
 
-function plain(io::IO, p::Paragraph)
+function plain(io::IO, p::Paragraph, parent = nothing)
     plaininline(io, p.content)
     println(io)
 end
 
-function plain(io::IO, list::List)
+function plain(io::IO, list::List, parent = nothing)
     for (i, item) in enumerate(list.items)
         print(io, isordered(list) ? "$(i + list.ordered - 1). " : "  * ")
         lines = split(rstrip(sprint(plain, item)), "\n")
@@ -45,7 +45,7 @@ function plain(io::IO, list::List)
     end
 end
 
-function plain(io::IO, q::BlockQuote)
+function plain(io::IO, q::BlockQuote, parent = nothing)
     s = sprint(plain, q.content)
     for line in split(rstrip(s), "\n")
         println(io, isempty(line) ? ">" : "> ", line)
@@ -53,7 +53,7 @@ function plain(io::IO, q::BlockQuote)
     println(io)
 end
 
-function plain(io::IO, f::Footnote)
+function plain(io::IO, f::Footnote, parent = nothing)
     print(io, "[^", f.id, "]:")
     s = sprint(plain, f.text)
     lines = split(rstrip(s), "\n")
@@ -70,7 +70,7 @@ function plain(io::IO, f::Footnote)
     end
 end
 
-function plain(io::IO, md::Admonition)
+function plain(io::IO, md::Admonition, parent = nothing)
     s = sprint(plain, md.content)
     title = md.title == ucfirst(md.category) ? "" : " \"$(md.title)\""
     println(io, "!!! ", md.category, title)
@@ -80,11 +80,11 @@ function plain(io::IO, md::Admonition)
     println(io)
 end
 
-function plain(io::IO, md::HorizontalRule)
+function plain(io::IO, md::HorizontalRule, parent = nothing)
     println(io, "-" ^ 3)
 end
 
-function plain(io::IO, l::LaTeX)
+function plain(io::IO, l::LaTeX, parent = nothing)
     println(io, '$', '$')
     println(io, l.formula)
     println(io, '$', '$')

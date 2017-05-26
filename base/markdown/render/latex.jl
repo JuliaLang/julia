@@ -16,15 +16,15 @@ end
 
 # Block elements
 
-latex(io::IO, md::MD) = latex(io, md.content)
+latex(io::IO, md::MD) = latex(io, md.content, md)
 
-function latex(io::IO, content::Vector)
+function latex(io::IO, content::Vector, parent = nothing)
     for c in content
-        latex(io, c)
+        latex(io, c, parent)
     end
 end
 
-function latex{l}(io::IO, header::Header{l})
+function latex{l}(io::IO, header::Header{l}, parent = nothing)
     tag = l < 4 ? "sub"^(l-1) * "section" : "sub"^(l-4) * "paragraph"
     wrapinline(io, tag) do
         latexinline(io, header.text)
@@ -32,7 +32,7 @@ function latex{l}(io::IO, header::Header{l})
     println(io)
 end
 
-function latex(io::IO, code::Code)
+function latex(io::IO, code::Code, parent = nothing)
     wrapblock(io, "verbatim") do
         # TODO latex escape
         println(io, code.code)
@@ -45,38 +45,38 @@ function latexinline(io::IO, code::Code)
     end
 end
 
-function latex(io::IO, md::Paragraph)
-    for content in md.content
-        latexinline(io, content)
+function latex(io::IO, md::Paragraph, parent = nothing)
+    for md in md.content
+        latexinline(io, md)
     end
     println(io)
     println(io)
 end
 
-function latex(io::IO, md::BlockQuote)
+function latex(io::IO, md::BlockQuote, parent = nothing)
     wrapblock(io, "quote") do
-        latex(io, md.content)
+        latex(io, md.content, md)
     end
 end
 
 
-function latex(io::IO, f::Footnote)
+function latex(io::IO, f::Footnote, parent = nothing)
     print(io, "\\footnotetext[", f.id, "]{")
-    latex(io, f.text)
+    latex(io, f.text, f)
     println(io, "}")
 end
 
-function latex(io::IO, md::Admonition)
+function latex(io::IO, md::Admonition, parent = nothing)
     wrapblock(io, "quote") do
         wrapinline(io, "textbf") do
             print(io, md.category)
         end
         println(io, "\n\n", md.title, "\n")
-        latex(io, md.content)
+        latex(io, md.content, md)
     end
 end
 
-function latex(io::IO, md::List)
+function latex(io::IO, md::List, parent = nothing)
     # `\begin{itemize}` is used here for both ordered and unordered lists since providing
     # custom starting numbers for enumerated lists is simpler to do by manually assigning
     # each number to `\item` ourselves rather than using `\setcounter{enumi}{<start>}`.
@@ -94,7 +94,7 @@ function latex(io::IO, md::List)
     wrapblock(io, "itemize") do
         for (n, item) in enumerate(md.items)
             print(io, "\\item$(fmt(n)) ")
-            latex(io, item)
+            latex(io, item, md)
             n < length(md.items) && println(io)
         end
     end

@@ -6,11 +6,9 @@
 
 mutable struct Paragraph
     content
-    intightlist::Bool
 end
 
-Paragraph(content) = Paragraph(content, false)
-Paragraph() = Paragraph([], false)
+Paragraph() = Paragraph([])
 
 function paragraph(stream::IO, md::MD)
     buffer = IOBuffer()
@@ -252,8 +250,10 @@ end
 mutable struct List
     items::Vector{Any}
     ordered::Int # `-1` is unordered, `>= 0` is ordered.
+    isloose::Bool
 
-    List(x::AbstractVector, b::Integer) = new(x, b)
+    List(x::AbstractVector, b::Integer, isloose::Bool) = new(x, b, isloose)
+    List(x::AbstractVector, b::Integer) = new(x, b, false)
     List(x::AbstractVector) = new(x, -1)
     List(b::Integer) = new(Any[], b)
 end
@@ -293,7 +293,6 @@ function list(stream::IO, block::MD)
         newline = false     # For checking if we have two consecutive newlines: end of list.
         count = 0           # Count of list items. Used to check if we need to push remaining
                             # content in `buffer` after leaving the `while` loop.
-        maybe_isloose = false
         isloose = false
         while !eof(stream)
             if startswith(stream, "\n")
@@ -302,7 +301,7 @@ function list(stream::IO, block::MD)
                     pushitem!(list, buffer)
                     break
                 else
-                    maybe_isloose = true
+                    isloose = true
                     newline = true
                     println(buffer)
                 end
@@ -324,15 +323,10 @@ function list(stream::IO, block::MD)
                         print(buffer, readline(stream, chomp=false))
                     end
                 end
-                isloose = maybe_isloose
+                list.isloose = isloose
             end
         end
         count == length(list.items) || pushitem!(list, buffer)
-        if !isloose
-            for items in list.items
-                foreach(x -> isa(x, Paragraph) ? (x.intightlist = true) : nothing,  items)
-            end
-        end
         push!(block, list)
         return true
     end
