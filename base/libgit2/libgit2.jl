@@ -260,14 +260,7 @@ LibGit2.set_remote_url(repo_path, url2, remote="upstream2")
 function set_remote_url(repo::GitRepo, url::AbstractString; remote::AbstractString="origin")
     with(GitConfig, repo) do cfg
         set!(cfg, "remote.$remote.url", url)
-
-        m = match(GITHUB_REGEX,url)
-        if m !== nothing
-            push = "git@github.com:$(m.captures[1]).git"
-            if push != url
-                set!(cfg, "remote.$remote.pushurl", push)
-            end
-        end
+        set!(cfg, "remote.$remote.pushurl", url)
     end
 end
 
