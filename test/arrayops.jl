@@ -2146,3 +2146,6 @@ end
 Base.:*(a::T11053, b::Real) = T11053(a.a*b)
 Base.:(==)(a::T11053, b::T11053) = a.a == b.a
 @test [T11053(1)] * 5 == [T11053(1)] .* 5 == [T11053(5.0)]
+
+#15907
+@test typeof(Array{Int,0}()) == Array{Int,0}
