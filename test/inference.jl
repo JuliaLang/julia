@@ -800,3 +800,12 @@ let T = Tuple{Tuple{Int64, Void},
     @test Core.Inference.limit_type_depth(T, 1) >: T
     @test Core.Inference.limit_type_depth(T, 2) >: T
 end
+
+# Issue #20902, check that this doesn't error.
+@generated function test_20902()
+    quote
+        10 + 11
+    end
+end
+@test length(code_typed(test_20902, (), optimize = false)) == 1
+@test length(code_typed(test_20902, (), optimize = false)) == 1
