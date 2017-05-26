@@ -46,8 +46,8 @@ function latexinline(io::IO, code::Code)
 end
 
 function latex(io::IO, md::Paragraph)
-    for md in md.content
-        latexinline(io, md)
+    for content in md.content
+        latexinline(io, content)
     end
     println(io)
     println(io)

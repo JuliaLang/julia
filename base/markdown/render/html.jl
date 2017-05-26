@@ -76,8 +76,12 @@ function html(io::IO, code::Code)
 end
 
 function html(io::IO, md::Paragraph)
-    withtag(io, :p) do
+    if md.intightlist
         htmlinline(io, md.content)
+    else
+        withtag(io, :p) do
+            htmlinline(io, md.content)
+        end
     end
 end
 

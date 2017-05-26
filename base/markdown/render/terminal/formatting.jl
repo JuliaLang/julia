@@ -81,11 +81,11 @@ end
 wrapped_lines(f::Function, args...; width = 80, i = 0) =
     wrapped_lines(sprint(f, args...), width = width, i = 0)
 
-function print_wrapped(io::IO, s...; width = 80, pre = "", i = 0)
+function print_wrapped(io::IO, s...; width = 80, pre = "", i = 0, newline = true)
     lines = wrapped_lines(s..., width = width, i = i)
-    println(io, lines[1])
+    print(io, lines[1], newline ? "\n" : "")
     for line in lines[2:end]
-        println(io, pre, line)
+        print(io, pre, line, newline ? "\n" : "")
     end
     length(lines), length(pre) + ansi_length(lines[end])
 end
