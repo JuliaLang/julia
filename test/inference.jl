@@ -776,3 +776,22 @@ function break_21369()
     end
 end
 @test_throws ErrorException break_21369()  # not TypeError
+
+# issue #17003
+abstract type AArray_17003{T,N} end
+AVector_17003{T} = AArray_17003{T,1}
+
+struct Nable_17003{T}
+end
+
+struct NArray_17003{T,N} <: AArray_17003{Nable_17003{T},N}
+end
+
+(::Type{NArray_17003}){T,N}(::Array{T,N}) = NArray_17003{T,N}()
+
+gl_17003 = [1, 2, 3]
+
+f2_17003(item::AVector_17003) = nothing
+f2_17003(::Any) = f2_17003(NArray_17003(gl_17003))
+
+@test f2_17003(1) == nothing
