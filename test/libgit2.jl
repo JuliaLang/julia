@@ -252,16 +252,21 @@ mktempdir() do dir
 
                 remote = LibGit2.get(LibGit2.GitRemote, repo, branch)
                 @test LibGit2.url(remote) == repo_url
+                @test LibGit2.push_url(remote) == ""
                 @test LibGit2.name(remote) == "upstream"
                 @test isa(remote, LibGit2.GitRemote)
                 @test sprint(show, remote) == "GitRemote:\nRemote name: upstream url: $repo_url"
                 @test LibGit2.isattached(repo)
                 LibGit2.set_remote_url(repo, "", remote="upstream")
                 remote = LibGit2.get(LibGit2.GitRemote, repo, branch)
+                @test LibGit2.url(remote) == ""
+                @test LibGit2.push_url(remote) == ""
                 @test sprint(show, remote) == "GitRemote:\nRemote name: upstream url: "
                 close(remote)
                 LibGit2.set_remote_url(cache_repo, repo_url, remote="upstream")
                 remote = LibGit2.get(LibGit2.GitRemote, repo, branch)
+                @test LibGit2.url(remote) == repo_url
+                @test LibGit2.push_url(remote) == repo_url
                 @test sprint(show, remote) == "GitRemote:\nRemote name: upstream url: $repo_url"
                 LibGit2.add_fetch!(repo, remote, "upstream")
                 @test LibGit2.fetch_refspecs(remote) == String["+refs/heads/*:refs/remotes/upstream/*"]
@@ -278,6 +283,7 @@ mktempdir() do dir
 
                 remote = LibGit2.GitRemoteAnon(repo, repo_url)
                 @test LibGit2.url(remote) == repo_url
+                @test LibGit2.push_url(remote) == ""
                 @test LibGit2.name(remote) == ""
                 @test isa(remote, LibGit2.GitRemote)
                 close(remote)
