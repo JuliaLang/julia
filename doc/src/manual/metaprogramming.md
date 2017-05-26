@@ -194,9 +194,12 @@ julia> ex = quote
            y = 2
            x + y
        end
-quote  # none, line 2:
-    x = 1 # none, line 3:
-    y = 2 # none, line 4:
+quote
+    #= none:2 =#
+    x = 1
+    #= none:3 =#
+    y = 2
+    #= none:4 =#
     x + y
 end
 
@@ -520,14 +523,14 @@ as well as to implement the `@__LINE__`, `@__FILE__`, and `@__DIR__` macros.
 The location information can be accessed by referencing `__source__.line` and `__source__.file`:
 
 ```jldoctest
-julia> macro __LOCATION__(); return QuoteNode(__source__); end
+julia> macro __LOCATION__(); return QuoteNode(__source__); end;
 
 julia> dump(
             @__LOCATION__(
        ))
 LineNumberNode
   line: Int64 2
-  file: Symbol REPL[2]
+  file: Symbol none
 ```
 
 ### Building an advanced macro

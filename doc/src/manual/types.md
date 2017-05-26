@@ -340,9 +340,7 @@ must be convertible to `Int`:
 ```jldoctest footype
 julia> Foo((), 23.5, 1)
 ERROR: InexactError()
-Stacktrace:
- [1] convert(::Type{Int64}, ::Float64) at ./float.jl:680
- [2] Foo(::Tuple{}, ::Float64, ::Int64) at ./none:2
+[...]
 ```
 
 You may find a list of field names using the `fieldnames` function.
@@ -644,8 +642,7 @@ julia> Point{Float64}(1.0)
 ERROR: MethodError: Cannot `convert` an object of type Float64 to an object of type Point{Float64}
 This may have arisen from a call to the constructor Point{Float64}(...),
 since type constructors fall back to convert methods.
-Stacktrace:
- [1] Point{Float64}(::Float64) at ./sysimg.jl:77
+[...]
 
 julia> Point{Float64}(1.0,2.0,3.0)
 ERROR: MethodError: no method matching Point{Float64}(::Float64, ::Float64, ::Float64)
@@ -1360,8 +1357,7 @@ You can safely access the value of a `Nullable` object using [`get()`](@ref):
 ```jldoctest
 julia> get(Nullable{Float64}())
 ERROR: NullException()
-Stacktrace:
- [1] get(::Nullable{Float64}) at ./nullable.jl:92
+[...]
 
 julia> get(Nullable(1.0))
 1.0

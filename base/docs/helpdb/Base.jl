@@ -340,8 +340,7 @@ If `T` does not have a specific size, an error is thrown.
 ```jldoctest
 julia> sizeof(Base.LinAlg.LU)
 ERROR: argument is an abstract type; size is indeterminate
-Stacktrace:
- [1] sizeof(::Type{T} where T) at ./essentials.jl:160
+[...]
 ```
 """
 sizeof(::Type)
@@ -1956,8 +1955,7 @@ julia> convert(Int, 3.0)
 
 julia> convert(Int, 3.5)
 ERROR: InexactError()
-Stacktrace:
- [1] convert(::Type{Int64}, ::Float64) at ./float.jl:680
+[...]
 ```
 
 If `T` is a `AbstractFloat` or `Rational` type,
@@ -2356,8 +2354,7 @@ julia> pop!(d, "a")
 
 julia> pop!(d, "d")
 ERROR: KeyError: key "d" not found
-Stacktrace:
- [1] pop!(::Dict{String,Int64}, ::String) at ./dict.jl:539
+[...]
 
 julia> pop!(d, "e", 4)
 4

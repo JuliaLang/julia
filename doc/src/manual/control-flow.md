@@ -570,8 +570,7 @@ real value:
 julia> sqrt(-1)
 ERROR: DomainError:
 sqrt will only return a complex result if called with a complex argument. Try sqrt(complex(x)).
-Stacktrace:
- [1] sqrt(::Int64) at ./math.jl:431
+[...]
 ```
 
 You may define your own exceptions in the following way:
@@ -703,8 +702,7 @@ WARNING: Hi
 
 julia> error("Hi"); 1+1
 ERROR: Hi
-Stacktrace:
- [1] error(::String) at ./error.jl:21
+[...]
 ```
 
 ### The `try/catch` statement

@@ -490,8 +490,7 @@ throwing an `ArgumentError` indicating the position of the first non-ASCII byte.
 ```jldoctest
 julia> ascii("abcdeγfgh")
 ERROR: ArgumentError: invalid ASCII at index 6 in "abcdeγfgh"
-Stacktrace:
- [1] ascii(::String) at ./strings/util.jl:479
+[...]
 
 julia> ascii("abcdefgh")
 "abcdefgh"

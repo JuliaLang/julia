@@ -1052,8 +1052,7 @@ Body:
 
 julia> @inferred f(1,2,3)
 ERROR: return type Int64 does not match inferred return type Union{Float64, Int64}
-Stacktrace:
- [1] error(::String) at ./error.jl:21
+[...]
 
 julia> @inferred max(1,2)
 2

@@ -99,7 +99,8 @@ and variable assignments:
 julia> expand( :(f() = 1) )
 :(begin
         $(Expr(:method, :f))
-        $(Expr(:method, :f, :((Core.svec)((Core.svec)((Core.Typeof)(f)), (Core.svec)())), CodeInfo(:(begin  # none, line 1:
+        $(Expr(:method, :f, :((Core.svec)((Core.svec)((Core.Typeof)(f)), (Core.svec)())), CodeInfo(:(begin
+        #= none:1 =#
         return 1
     end)), false))
         return f
