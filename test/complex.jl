@@ -883,6 +883,7 @@ end
     @test exp2(1.0+0.0im) == 2.0+0.0im
     #wolframalpha
     @test exp2(1.0+3.0im) ≈ -0.9739888359315627962096198412+1.74681016354974281701922im
+    @test exp2(im) ≈ 0.7692389013639721 + 0.6389612763136348im
 end
 
 @testset "exp10" begin
@@ -890,6 +891,7 @@ end
     @test exp10(1.0+0.0im) == 10.0+0.0im
     #wolframalpha
     @test exp10(1.0+2.0im) ≈ -1.0701348355877020772086517528518239460495529361-9.9425756941378968736161937190915602112878340717im
+    @test exp10(im) ≈ -0.6682015101903132 + 0.7439803369574931im
 end
 
 @testset "round and float, PR #8291" begin
@@ -946,8 +948,11 @@ end
 
 @testset "Complex Irrationals, issue #21204" begin
     for x in (pi, e, catalan) # No need to test all of them
-        @test typeof(Complex(x, x)) == Complex{typeof(x)}
-        @test exp(complex(x, x)) ≈ exp(x) * cis(x)
+        z = Complex(x, x)
+        @test typeof(z) == Complex{typeof(x)}
+        @test exp(z) ≈ exp(x) * cis(x)
+        @test exp2(z) ≈ exp(z * log(2))
+        @test exp10(z) ≈ exp(z * log(10))
     end
 end
 
