@@ -8,7 +8,7 @@ JULIAHOME        := $(abspath $(SRCDIR)/..)
 include $(JULIAHOME)/Make.inc
 JULIA_EXECUTABLE := $(call spawn,$(build_bindir)/julia)
 
-.PHONY: help clean cleanall html pdf linkcheck doctest check
+.PHONY: help clean cleanall html pdf linkcheck doctest check deps
 
 help:
 	@echo "Please use 'make <target>' where <target> is one of"
@@ -59,5 +59,3 @@ check: deps
 	@echo "Running all embedded 'doctests' and checking external links."
 	$(JULIA_EXECUTABLE) --color=yes $(call cygpath_w,$(SRCDIR)/make.jl) -- doctest linkcheck
 	@echo "Checks finished."
-
-.PHONY: deps
