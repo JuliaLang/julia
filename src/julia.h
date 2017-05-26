@@ -74,7 +74,7 @@ struct _jl_taggedvalue_bits {
     uintptr_t gc:2;
 };
 
-struct _jl_taggedvalue_t {
+JL_EXTENSION struct _jl_taggedvalue_t {
     union {
         uintptr_t header;
         jl_taggedvalue_t *next;
@@ -140,7 +140,7 @@ typedef struct {
     uint16_t isaligned:1; // data allocated with memalign
 } jl_array_flags_t;
 
-typedef struct {
+JL_EXTENSION typedef struct {
     JL_DATA_TYPE
     void *data;
 #ifdef STORE_ARRAY_LEN
@@ -190,7 +190,7 @@ typedef jl_value_t *(*jl_fptr_t)(jl_value_t*, jl_value_t**, uint32_t);
 typedef jl_value_t *(*jl_fptr_sparam_t)(jl_svec_t*, jl_value_t*, jl_value_t**, uint32_t);
 typedef jl_value_t *(*jl_fptr_linfo_t)(struct _jl_method_instance_t*, jl_value_t**, uint32_t, jl_svec_t*);
 
-typedef struct {
+JL_EXTENSION typedef struct {
     union {
         jl_fptr_t fptr;
         jl_fptr_t fptr1;
@@ -741,17 +741,18 @@ STATIC_INLINE void jl_array_uint8_set(void *a, size_t i, uint8_t x)
 #define jl_exprargset(e, n, v) jl_array_ptr_set(((jl_expr_t*)(e))->args, n, v)
 #define jl_expr_nargs(e) jl_array_len(((jl_expr_t*)(e))->args)
 
-#define jl_fieldref(s,i) jl_get_nth_field(((jl_value_t*)s),i)
+#define jl_fieldref(s,i) jl_get_nth_field(((jl_value_t*)(s)),i)
 #define jl_nfields(v)    jl_datatype_nfields(jl_typeof(v))
 
 // Not using jl_fieldref to avoid allocations
-#define jl_linenode_line(x) (((intptr_t*)x)[0])
-#define jl_labelnode_label(x) (((intptr_t*)x)[0])
-#define jl_slot_number(x) (((intptr_t*)x)[0])
-#define jl_typedslot_get_type(x) (((jl_value_t**)x)[1])
-#define jl_gotonode_label(x) (((intptr_t*)x)[0])
-#define jl_globalref_mod(s) (*(jl_module_t**)s)
-#define jl_globalref_name(s) (((jl_sym_t**)s)[1])
+#define jl_linenode_line(x) (((intptr_t*)(x))[0])
+#define jl_linenode_file(x) (((jl_value_t**)(x))[1])
+#define jl_labelnode_label(x) (((intptr_t*)(x))[0])
+#define jl_slot_number(x) (((intptr_t*)(x))[0])
+#define jl_typedslot_get_type(x) (((jl_value_t**)(x))[1])
+#define jl_gotonode_label(x) (((intptr_t*)(x))[0])
+#define jl_globalref_mod(s) (*(jl_module_t**)(s))
+#define jl_globalref_name(s) (((jl_sym_t**)(s))[1])
 
 #define jl_nparams(t)  jl_svec_len(((jl_datatype_t*)(t))->parameters)
 #define jl_tparam0(t)  jl_svecref(((jl_datatype_t*)(t))->parameters, 0)
@@ -773,6 +774,7 @@ STATIC_INLINE void jl_array_uint8_set(void *a, size_t i, uint8_t x)
 #define jl_field_type(st,i)    jl_svecref(((jl_datatype_t*)st)->types, (i))
 #define jl_field_count(st)     jl_svec_len(((jl_datatype_t*)st)->types)
 #define jl_datatype_size(t)    (((jl_datatype_t*)t)->size)
+#define jl_datatype_align(t)   (((jl_datatype_t*)t)->layout->alignment)
 #define jl_datatype_nbits(t)   ((((jl_datatype_t*)t)->size)*8)
 #define jl_datatype_nfields(t) (((jl_datatype_t*)(t))->layout->nfields)
 

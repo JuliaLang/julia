@@ -35,7 +35,15 @@ in(x, s::Set) = haskey(s.dict, x)
 push!(s::Set, x) = (s.dict[x] = nothing; s)
 pop!(s::Set, x) = (pop!(s.dict, x); x)
 pop!(s::Set, x, deflt) = x in s ? pop!(s, x) : deflt
-pop!(s::Set) = (idx = start(s.dict); val = s.dict.keys[idx]; _delete!(s.dict, idx); val)
+
+function pop!(s::Set)
+    isempty(s) && throw(ArgumentError("set must be non-empty"))
+    idx = start(s.dict)
+    val = s.dict.keys[idx]
+    _delete!(s.dict, idx)
+    val
+end
+
 delete!(s::Set, x) = (delete!(s.dict, x); s)
 
 copy(s::Set) = union!(similar(s), s)

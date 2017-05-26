@@ -397,7 +397,7 @@ julia> Int8(127)
 julia> Int8(128)
 ERROR: InexactError()
 Stacktrace:
- [1] Int8(::Int64) at ./sysimg.jl:24
+ [1] Int8(::Int64) at ./sysimg.jl:77
 
 julia> Int8(127.0)
 127
@@ -405,14 +405,14 @@ julia> Int8(127.0)
 julia> Int8(3.14)
 ERROR: InexactError()
 Stacktrace:
- [1] convert(::Type{Int8}, ::Float64) at ./float.jl:658
- [2] Int8(::Float64) at ./sysimg.jl:24
+ [1] convert(::Type{Int8}, ::Float64) at ./float.jl:659
+ [2] Int8(::Float64) at ./sysimg.jl:77
 
 julia> Int8(128.0)
 ERROR: InexactError()
 Stacktrace:
- [1] convert(::Type{Int8}, ::Float64) at ./float.jl:658
- [2] Int8(::Float64) at ./sysimg.jl:24
+ [1] convert(::Type{Int8}, ::Float64) at ./float.jl:659
+ [2] Int8(::Float64) at ./sysimg.jl:77
 
 julia> 127 % Int8
 127
@@ -426,8 +426,8 @@ julia> round(Int8,127.4)
 julia> round(Int8,127.6)
 ERROR: InexactError()
 Stacktrace:
- [1] trunc(::Type{Int8}, ::Float64) at ./float.jl:651
- [2] round(::Type{Int8}, ::Float64) at ./float.jl:337
+ [1] trunc(::Type{Int8}, ::Float64) at ./float.jl:652
+ [2] round(::Type{Int8}, ::Float64) at ./float.jl:338
 ```
 
 See [Conversion and Promotion](@ref conversion-and-promotion) for how to define your own conversions and promotions.

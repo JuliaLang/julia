@@ -1102,7 +1102,7 @@ end
 
 # issue #21613
 abstract type A21613{S <: Tuple} end
-immutable B21613{S <: Tuple, L} <: A21613{S}
+struct B21613{S <: Tuple, L} <: A21613{S}
     data::NTuple{L,Float64}
 end
 @testintersect(Tuple{Type{B21613{Tuple{L},L}} where L, Any},

@@ -53,6 +53,11 @@ splitdrive(path::AbstractString)
     homedir() -> AbstractString
 
 Return the current user's home directory.
+
+!!! note
+    `homedir` determines the home directory via `libuv`'s `uv_os_homedir`. For details
+    (for example on how to specify the home directory via environment variables), see the
+    [`uv_os_homedir` documentation](http://docs.libuv.org/en/v1.x/misc.html#c.uv_os_homedir).
 """
 function homedir()
     path_max = 1024
@@ -135,6 +140,8 @@ Get the directory part of a path.
 julia> dirname("/home/myuser")
 "/home"
 ```
+
+See also: [`basename`](@ref)
 """
  dirname(path::AbstractString) = splitdir(path)[1]
 
@@ -147,6 +154,8 @@ Get the file name part of a path.
 julia> basename("/home/myuser/example.jl")
 "example.jl"
 ```
+
+See also: [`dirname`](@ref)
 """
 basename(path::AbstractString) = splitdir(path)[2]
 

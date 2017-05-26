@@ -99,14 +99,14 @@ function show(io::IO, cmd::Cmd)
     print_env = cmd.env !== nothing
     print_dir = !isempty(cmd.dir)
     (print_env || print_dir) && print(io, "setenv(")
-    esc = shell_escape(cmd, special=shell_special)
     print(io, '`')
-    for c in esc
-        if c == '`'
-            print(io, '\\')
-        end
-        print(io, c)
-    end
+    print(io, join(map(cmd.exec) do arg
+        replace(sprint() do io
+            with_output_color(:underline, io) do io
+                print_shell_word(io, arg, shell_special)
+            end
+        end, '`', "\\`")
+    end, ' '))
     print(io, '`')
     print_env && (print(io, ","); show(io, cmd.env))
     print_dir && (print(io, "; dir="); show(io, cmd.dir))
@@ -310,6 +310,7 @@ mutable struct Process <: AbstractPipe
     termsignal::Int32
     exitnotify::Condition
     closenotify::Condition
+    openstream::Symbol # for open(cmd) deprecation
     function Process(cmd::Cmd, handle::Ptr{Void},
                      in::Union{Redirectable, Ptr{Void}},
                      out::Union{Redirectable, Ptr{Void}},
@@ -339,7 +340,9 @@ struct ProcessChain <: AbstractPipe
     in::Redirectable
     out::Redirectable
     err::Redirectable
+    openstream::Symbol # for open(cmd) deprecation
     ProcessChain(stdios::StdIOSet) = new(Process[], stdios[1], stdios[2], stdios[3])
+    ProcessChain(chain::ProcessChain, openstream::Symbol) = new(chain.processes, chain.in, chain.out, chain.err, openstream) # for open(cmd) deprecation
 end
 pipe_reader(p::ProcessChain) = p.out
 pipe_writer(p::ProcessChain) = p.in
@@ -572,38 +575,55 @@ the process's standard input and `stdio` optionally specifies the process's stan
 stream.
 """
 function open(cmds::AbstractCmd, mode::AbstractString="r", other::Redirectable=DevNull)
-    if mode == "r"
+    if mode == "r+" || mode == "w+"
+        other === DevNull || throw(ArgumentError("no other stream for mode rw+"))
+        in = Pipe()
+        out = Pipe()
+        processes = spawn(cmds, (in,out,STDERR))
+        close(in.out)
+        close(out.in)
+    elseif mode == "r"
         in = other
-        out = io = Pipe()
+        out = Pipe()
         processes = spawn(cmds, (in,out,STDERR))
         close(out.in)
+        if isa(processes, ProcessChain) # for open(cmd) deprecation
+            processes = ProcessChain(processes, :out)
+        else
+            processes.openstream = :out
+        end
     elseif mode == "w"
-        in = io = Pipe()
+        in = Pipe()
         out = other
         processes = spawn(cmds, (in,out,STDERR))
         close(in.out)
+        if isa(processes, ProcessChain) # for open(cmd) deprecation
+            processes = ProcessChain(processes, :in)
+        else
+            processes.openstream = :in
+        end
     else
         throw(ArgumentError("mode must be \"r\" or \"w\", not \"$mode\""))
     end
-    return (io, processes)
+    return processes
 end
 
 """
     open(f::Function, command, mode::AbstractString="r", stdio=DevNull)
 
-Similar to `open(command, mode, stdio)`, but calls `f(stream)` on the resulting read or
-write stream, then closes the stream and waits for the process to complete.  Returns the
-value returned by `f`.
+Similar to `open(command, mode, stdio)`, but calls `f(stream)` on the resulting process
+stream, then closes the input stream and waits for the process to complete.
+Returns the value returned by `f`.
 """
 function open(f::Function, cmds::AbstractCmd, args...)
-    io, P = open(cmds, args...)
+    P = open(cmds, args...)
     ret = try
-        f(io)
-    catch
+        f(P)
+    catch e
         kill(P)
-        rethrow()
+        rethrow(e)
     finally
-        close(io)
+        close(P.in)
     end
     success(P) || pipeline_error(P)
     return ret
@@ -618,15 +638,14 @@ Starts running a command asynchronously, and returns a tuple (stdout,stdin,proce
 output stream and input stream of the process, and the process object itself.
 """
 function readandwrite(cmds::AbstractCmd)
-    in = Pipe()
-    out, processes = open(cmds, "r", in)
-    (out, in, processes)
+    processes = open(cmds, "r+")
+    return (processes.out, processes.in, processes)
 end
 
 function read(cmd::AbstractCmd, stdin::Redirectable=DevNull)
-    out, procs = open(cmd, "r", stdin)
-    bytes = read(out)
-    !success(procs) && pipeline_error(procs)
+    procs = open(cmd, "r", stdin)
+    bytes = read(procs.out)
+    success(procs) || pipeline_error(procs)
     return bytes
 end
 
@@ -651,9 +670,17 @@ function run(cmds::AbstractCmd, args...)
     success(ps) ? nothing : pipeline_error(ps)
 end
 
-const SIGPIPE = 13
+# some common signal numbers that are usually available on all platforms
+# and might be useful as arguments to `kill` or testing against `Process.termsignal`
+const SIGHUP  = 1
+const SIGINT  = 2
+const SIGQUIT = 3 # !windows
+const SIGKILL = 9
+const SIGPIPE = 13 # !windows
+const SIGTERM = 15
+
 function test_success(proc::Process)
-    assert(process_exited(proc))
+    @assert process_exited(proc)
     if proc.exitcode < 0
         #TODO: this codepath is not currently tested
         throw(UVError("could not start process $(string(proc.cmd))", proc.exitcode))
@@ -663,8 +690,7 @@ end
 
 function success(x::Process)
     wait(x)
-    kill(x)
-    test_success(x)
+    return test_success(x)
 end
 success(procs::Vector{Process}) = mapreduce(success, &, procs)
 success(procs::ProcessChain) = success(procs.processes)
@@ -700,8 +726,6 @@ function pipeline_error(procs::ProcessChain)
     error(msg)
 end
 
-_jl_kill(p::Process, signum::Integer) = ccall(:uv_process_kill, Int32, (Ptr{Void},Int32), p.handle, signum)
-
 """
     kill(p::Process, signum=SIGTERM)
 
@@ -710,14 +734,14 @@ Send a signal to a process. The default is to terminate the process.
 function kill(p::Process, signum::Integer)
     if process_running(p)
         @assert p.handle != C_NULL
-        _jl_kill(p, signum)
+        ccall(:uv_process_kill, Int32, (Ptr{Void}, Int32), p.handle, signum)
     else
         Int32(-1)
     end
 end
 kill(ps::Vector{Process}) = map(kill, ps)
 kill(ps::ProcessChain) = map(kill, ps.processes)
-kill(p::Process) = kill(p, 15) #SIGTERM
+kill(p::Process) = kill(p, SIGTERM)
 
 function _contains_newline(bufptr::Ptr{Void}, len::Int32)
     return (ccall(:memchr, Ptr{Void}, (Ptr{Void},Int32,Csize_t), bufptr, '\n', len) != C_NULL)
@@ -800,3 +824,11 @@ wait(x::Process)      = if !process_exited(x); stream_wait(x, x.exitnotify); end
 wait(x::ProcessChain) = for p in x.processes; wait(p); end
 
 show(io::IO, p::Process) = print(io, "Process(", p.cmd, ", ", process_status(p), ")")
+
+# allow the elements of the Cmd to be accessed as an array or iterator
+for f in (:length, :endof, :start, :eachindex, :eltype, :first, :last)
+    @eval $f(cmd::Cmd) = $f(cmd.exec)
+end
+for f in (:next, :done, :getindex)
+    @eval $f(cmd::Cmd, i) = $f(cmd.exec, i)
+end

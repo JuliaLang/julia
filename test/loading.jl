@@ -2,18 +2,53 @@
 
 using Base.Test
 
-@test @__LINE__ == 5
+# Tests for @__LINE__ inside and outside of macros
+@test (@__LINE__) == 6
+
+macro macro_caller_lineno()
+    @test 9 == (@__LINE__) != __source__.line > 12
+    return __source__.line
+end
+
+@test @macro_caller_lineno() == (@__LINE__) > 12
+
+# @__LINE__ in a macro expands to the location of the macrocall in the source
+# while __source__.line is the location of the macro caller
+macro nested_LINE_expansion()
+    return quote
+        return (@emit_LINE, $(__source__.line))
+    end
+end
+macro nested_LINE_expansion2()
+    return :((@emit_LINE, $(__source__.line)))
+end
+macro emit_LINE()
+    return quote
+        (@__LINE__, $(__source__.line))
+    end
+end
+@test (@emit_LINE) == ((@__LINE__) - 3, @__LINE__)
+@test @nested_LINE_expansion() == ((@__LINE__() - 4, @__LINE__() - 12), @__LINE__())
+@test @nested_LINE_expansion2() == ((@__LINE__() - 5, @__LINE__() - 9), @__LINE__())
 
 include("test_sourcepath.jl")
 thefname = "the fname!//\\&\1*"
 include_string_test_func = include_string("include_string_test() = @__FILE__", thefname)
-@test include_string_test_func() == Base.source_path()
+@test include_string_test_func() == thefname
 @test include_string("Base.source_path()", thefname) == Base.source_path()
 @test basename(@__FILE__) == "loading.jl"
 @test isabspath(@__FILE__)
 
 @test isdir(@__DIR__)
 @test @__DIR__() == dirname(@__FILE__)
+let exename = `$(Base.julia_cmd()) --precompiled=yes --startup-file=no`,
+    wd = sprint(show, abspath(pwd(), "")),
+    s_dir = sprint(show, joinpath(realpath(tempdir()), ""))
+    @test wd != s_dir
+    @test readchomp(`$exename -E "@__DIR__" -i`) == wd
+    @test readchomp(`$exename -E "cd(()->eval(:(@__DIR__)), $s_dir)" -i`) == s_dir
+    @test readchomp(`$exename -E "@__DIR__"`) == wd # non-interactive
+end
 
 # Issue #5789 and PR #13542:
 mktempdir() do dir

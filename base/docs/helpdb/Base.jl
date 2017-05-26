@@ -1063,6 +1063,14 @@ For example,
 `reinterpret(Float32, UInt32(7))` interprets the 4 bytes corresponding to `UInt32(7)` as a
 `Float32`.
 
+!!! warning
+
+    It is not allowed to `reinterpret` an array to an element type with a larger alignment then
+    the alignment of the array. For a normal `Array`, this is the alignment of its element type.
+    For a reinterpreted array, this is the alignment of the `Array` it was reinterpreted from.
+    For example, `reinterpret(UInt32, UInt8[0, 0, 0, 0])` is not allowed but
+    `reinterpret(UInt32, reinterpret(UInt8, Float32[1.0]))` is allowed.
+
 ```jldoctest
 julia> reinterpret(Float32, UInt32(7))
 1.0f-44
@@ -1949,7 +1957,7 @@ julia> convert(Int, 3.0)
 julia> convert(Int, 3.5)
 ERROR: InexactError()
 Stacktrace:
- [1] convert(::Type{Int64}, ::Float64) at ./float.jl:679
+ [1] convert(::Type{Int64}, ::Float64) at ./float.jl:680
 ```
 
 If `T` is a `AbstractFloat` or `Rational` type,
@@ -2360,28 +2368,35 @@ pop!(collection,key,?)
 """
     pop!(collection) -> item
 
-Remove the last item in `collection` and return it.
+Remove an item in `collection` and return it. If `collection` is an
+ordered container, the last item is returned.
 
 ```jldoctest
-julia> A=[1, 2, 3, 4, 5, 6]
-6-element Array{Int64,1}:
+julia> A=[1, 2, 3]
+3-element Array{Int64,1}:
  1
  2
  3
- 4
- 5
- 6
 
 julia> pop!(A)
-6
+3
 
 julia> A
-5-element Array{Int64,1}:
+2-element Array{Int64,1}:
  1
  2
- 3
- 4
- 5
+
+julia> S = Set([1, 2])
+Set([2, 1])
+
+julia> pop!(S)
+2
+
+julia> S
+Set([1])
+
+julia> pop!(Dict(1=>2))
+1=>2
 ```
 """
 pop!(collection)

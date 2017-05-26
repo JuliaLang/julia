@@ -176,11 +176,33 @@ function copy!(dest::Hermitian, src::Hermitian)
     return dest
 end
 
+function Base.isreal(A::HermOrSym)
+    n = size(A, 1)
+    @inbounds if A.uplo == 'U'
+        for j in 1:n
+            for i in 1:(j - (A isa Hermitian))
+                if !isreal(A.data[i,j])
+                    return false
+                end
+            end
+        end
+    else
+        for j in 1:n
+            for i in (j + (A isa Hermitian)):n
+                if !isreal(A.data[i,j])
+                    return false
+                end
+            end
+        end
+    end
+    return true
+end
+
 ishermitian(A::Hermitian) = true
 ishermitian(A::Symmetric{<:Real}) = true
-ishermitian(A::Symmetric{<:Complex}) = isreal(A.data)
+ishermitian(A::Symmetric{<:Complex}) = isreal(A)
 issymmetric(A::Hermitian{<:Real}) = true
-issymmetric(A::Hermitian{<:Complex}) = isreal(A.data)
+issymmetric(A::Hermitian{<:Complex}) = isreal(A)
 issymmetric(A::Symmetric) = true
 transpose(A::Symmetric) = A
 ctranspose(A::Symmetric{<:Real}) = A

@@ -33,7 +33,7 @@ cd ..
 rm -rf julia-$version
 
 # download and rename binaries, with -latest copies
-julianightlies="https://s3.amazonaws.com/julianightlies/bin"
+julianightlies="https://julialangnightlies-s3.julialang.org/bin"
 curl -L -o julia-$version-linux-x86_64.tar.gz \
   $julianightlies/linux/x64/$majmin/julia-$majminpatch-$shashort-linux64.tar.gz
 cp julia-$version-linux-x86_64.tar.gz julia-$majmin-latest-linux-x86_64.tar.gz

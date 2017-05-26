@@ -78,6 +78,7 @@ push!(s,1); push!(s,2); push!(s,3)
 @test pop!(s) == 3
 @test length(s) == 0
 @test isempty(s)
+@test_throws ArgumentError pop!(s)
 
 # copy
 data_in = (1,2,9,8,4)

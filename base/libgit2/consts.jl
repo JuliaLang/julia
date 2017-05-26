@@ -201,6 +201,11 @@ module Consts
     const CLONE_NO_LOCAL       = Cint(2)
     const CLONE_LOCAL_NO_LINKS = Cint(3)
 
+    # describe
+    const DESCRIBE_DEFAULT = Cuint(0)
+    const DESCRIBE_TAGS    = Cuint(1 << 0)
+    const DESCRIBE_ALL     = Cuint(1 << 1)
+
     # status
     const STATUS_CURRENT          = Cuint(0)
     const STATUS_INDEX_NEW        = Cuint(1 << 0)

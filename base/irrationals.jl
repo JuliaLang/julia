@@ -37,6 +37,8 @@ convert(::Type{Rational{BigInt}}, x::Irrational) = throw(ArgumentError("Cannot c
     end
 end
 
+float(::Type{<:Irrational}) = Float64
+
 ==(::Irrational{s}, ::Irrational{s}) where {s} = true
 ==(::Irrational, ::Irrational) = false
 
@@ -95,6 +97,7 @@ end
 <=(x::Rational, y::Irrational) = x < y
 
 isfinite(::Irrational) = true
+isinteger(::Irrational) = false
 iszero(::Irrational) = false
 
 hash(x::Irrational, h::UInt) = 3*object_id(x) - h
@@ -131,6 +134,7 @@ macro irrational(sym, val, def)
 end
 
 big(x::Irrational) = convert(BigFloat,x)
+big(::Type{<:Irrational}) = BigFloat
 
 ## specific irrational mathematical constants
 

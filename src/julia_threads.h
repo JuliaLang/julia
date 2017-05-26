@@ -34,6 +34,12 @@ typedef struct {
     uint16_t osize;      // size of objects in this pool
 } jl_gc_pool_t;
 
+// Recursive spin lock
+typedef struct {
+    volatile unsigned long owner;
+    uint32_t count;
+} jl_mutex_t;
+
 typedef struct {
     // variable for tracking weak references
     arraylist_t weak_refs;
@@ -82,6 +88,10 @@ typedef struct {
     // this makes sure that a single objects can only appear once in
     // the lists (the mark bit cannot be flipped to `0` without sweeping)
     void *big_obj[1024];
+    jl_mutex_t stack_lock;
+    void **pc_stack;
+    void **pc_stack_end;
+    char *data_stack;
 } jl_gc_mark_cache_t;
 
 // This includes all the thread local states we care about for a thread.
@@ -502,12 +512,6 @@ JL_DLLEXPORT void (jl_gc_safepoint)(void);
             jl_sigint_safepoint(jl_get_ptls_states());          \
         }                                                       \
     } while (0)
-
-// Recursive spin lock
-typedef struct {
-    volatile unsigned long owner;
-    uint32_t count;
-} jl_mutex_t;
 
 JL_DLLEXPORT void jl_gc_enable_finalizers(jl_ptls_t ptls, int on);
 static inline void jl_lock_frame_push(jl_mutex_t *lock);

@@ -49,7 +49,7 @@ Base.Filesystem.dirname
 Base.Filesystem.basename
 Base.@__FILE__
 Base.@__DIR__
-@__LINE__
+Base.@__LINE__
 Base.Filesystem.isabspath
 Base.Filesystem.isdirpath
 Base.Filesystem.joinpath

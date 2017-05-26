@@ -9,10 +9,10 @@ function basetype end
 
 abstract type Enum{T<:Integer} end
 
-Base.convert{T<:Integer}(::Type{Integer}, x::Enum{T}) = bitcast(T, x)
-Base.convert{T<:Integer,T2<:Integer}(::Type{T}, x::Enum{T2}) = convert(T, bitcast(T2, x))
-Base.write{T<:Integer}(io::IO, x::Enum{T}) = write(io, T(x))
-Base.read{T<:Enum}(io::IO, ::Type{T}) = T(read(io, Enums.basetype(T)))
+Base.convert(::Type{Integer}, x::Enum{T}) where {T<:Integer} = bitcast(T, x)
+Base.convert(::Type{T}, x::Enum{T2}) where {T<:Integer,T2<:Integer} = convert(T, bitcast(T2, x))
+Base.write(io::IO, x::Enum{T}) where {T<:Integer} = write(io, T(x))
+Base.read(io::IO, ::Type{T}) where {T<:Enum} = T(read(io, Enums.basetype(T)))
 
 # generate code to test whether expr is in the given set of values
 function membershiptest(expr, values)
