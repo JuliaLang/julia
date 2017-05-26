@@ -41,12 +41,13 @@ function Base.launch(manager::TopoTestManager, params::Dict, launched::Array, c:
     exename = params[:exename]
     exeflags = params[:exeflags]
 
+    cmd = `$exename $exeflags --bind-to $(Base.Distributed.LPROC.bind_addr) --worker $(Base.cluster_cookie())`
+    cmd = pipeline(detach(setenv(cmd, dir=dir)))
     for i in 1:manager.np
-        io, pobj = open(pipeline(detach(
-            setenv(`$exename $exeflags --bind-to $(Base.Distributed.LPROC.bind_addr) --worker $(Base.cluster_cookie())`, dir=dir)); stderr=STDERR), "r")
+        io = open(cmd)
         wconfig = WorkerConfig()
-        wconfig.process = pobj
-        wconfig.io = io
+        wconfig.process = io
+        wconfig.io = io.out
         wconfig.ident = i
         wconfig.connect_idents = collect(i+2:2:manager.np)
         push!(launched, wconfig)

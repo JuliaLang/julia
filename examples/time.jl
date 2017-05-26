@@ -16,7 +16,7 @@ const PREFIXES = [
 const ZERO_INDEX = 9
 const MAX_INDEX = 17
 
-function show{p}(io::IO, x::TimeDelta{p})
+function show(io::IO, x::TimeDelta{p}) where p
     k = max(1,min(MAX_INDEX,fld(p,3)+ZERO_INDEX))
     r = p-3(k-ZERO_INDEX)
     prefix = PREFIXES[k]
@@ -30,16 +30,16 @@ function show{p}(io::IO, x::TimeDelta{p})
     end
 end
 
-convert{p,q}(::Type{TimeDelta{p}}, x::TimeDelta{q}) =
+convert(::Type{TimeDelta{p}}, x::TimeDelta{q}) where {p,q} =
     TimeDelta{p}(p <= q ? x.v*10^(q-p) : div(x.v,10^(p-q)))
 
-promote_rule{p,q}(::Type{TimeDelta{p}}, ::Type{TimeDelta{q}}) = TimeDelta{min(p,q)}
+promote_rule(::Type{TimeDelta{p}}, ::Type{TimeDelta{q}}) where {p,q} = TimeDelta{min(p,q)}
 
--{p}(x::TimeDelta{p}) = TimeDelta{p}(-x.v)
-+{p}(x::TimeDelta{p}, y::TimeDelta{p}) = TimeDelta{p}(x.v+y.v)
--{p}(x::TimeDelta{p}, y::TimeDelta{p}) = TimeDelta{p}(x.v-y.v)
+(-)(x::TimeDelta{p}) where {p} = TimeDelta{p}(-x.v)
+(+)(x::TimeDelta{p}, y::TimeDelta{p}) where {p} = TimeDelta{p}(x.v+y.v)
+(-)(x::TimeDelta{p}, y::TimeDelta{p}) where {p} = TimeDelta{p}(x.v-y.v)
 
-+(x::TimeDelta, y::TimeDelta) = +(promote(x,y)...)
--(x::TimeDelta, y::TimeDelta) = -(promote(x,y)...)
+(+)(x::TimeDelta, y::TimeDelta) = +(promote(x,y)...)
+(-)(x::TimeDelta, y::TimeDelta) = -(promote(x,y)...)
 
 end # module

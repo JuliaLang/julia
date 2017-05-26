@@ -78,7 +78,7 @@ Get the URL of a remote git repository.
 
 # Example
 
-```julia
+```julia-repl
 julia> repo_url = "https://github.com/JuliaLang/Example.jl";
 
 julia> repo = LibGit2.clone(cache_repo, "test_directory");
@@ -104,7 +104,7 @@ the name will be an empty string `""`.
 
 # Example
 
-```julia
+```julia-repl
 julia> repo_url = "https://github.com/JuliaLang/Example.jl";
 
 julia> repo = LibGit2.clone(cache_repo, "test_directory");
@@ -158,7 +158,7 @@ Add a *fetch* refspec for the specified `rmt`. This refspec will contain
 information about which branch(es) to fetch from.
 
 # Example
-```julia
+```julia-repl
 julia> LibGit2.add_fetch!(repo, remote, "upstream");
 
 julia> LibGit2.fetch_refspecs(remote)
@@ -178,7 +178,7 @@ Add a *push* refspec for the specified `rmt`. This refspec will contain
 information about which branch(es) to push to.
 
 # Example
-```julia
+```julia-repl
 julia> LibGit2.add_push!(repo, remote, "refs/heads/master");
 
 julia> remote = LibGit2.get(LibGit2.GitRemote, repo, branch);

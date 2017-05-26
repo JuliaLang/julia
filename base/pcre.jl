@@ -69,10 +69,10 @@ const OPTIONS_MASK = COMPILE_MASK | EXECUTE_MASK
 
 const UNSET = ~Csize_t(0)  # Indicates that an output vector element is unset
 
-function info(regex::Ptr{Void}, what::Integer, T)
-    buf = zeros(UInt8,sizeof(T))
+function info(regex::Ptr{Void}, what::Integer, ::Type{T}) where T
+    buf = Ref{T}()
     ret = ccall((:pcre2_pattern_info_8, PCRE_LIB), Int32,
-                (Ptr{Void}, Int32, Ptr{UInt8}),
+                (Ptr{Void}, Int32, Ptr{Void}),
                 regex, what, buf)
     if ret != 0
         error(ret == ERROR_NULL      ? "NULL regex object" :
@@ -80,7 +80,7 @@ function info(regex::Ptr{Void}, what::Integer, T)
               ret == ERROR_BADOPTION ? "invalid option flags" :
                                        "unknown error $ret")
     end
-    reinterpret(T,buf)[1]
+    buf[]
 end
 
 function get_ovec(match_data)

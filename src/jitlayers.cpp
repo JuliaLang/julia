@@ -25,6 +25,9 @@
 #include <polly/RegisterPasses.h>
 #include <polly/LinkAllPasses.h>
 #include <polly/CodeGen/CodegenCleanup.h>
+#if defined(USE_POLLY_ACC)
+#include <polly/Support/LinkGPURuntime.h>
+#endif
 #endif
 
 #include <llvm/Transforms/IPO.h>
@@ -111,6 +114,7 @@ void addOptimizationPasses(legacy::PassManager *PM)
 void addOptimizationPasses(PassManager *PM)
 #endif
 {
+    PM->add(createLowerExcHandlersPass());
     PM->add(createLowerGCFramePass());
 #ifdef JL_DEBUG_BUILD
     PM->add(createVerifierPass());
@@ -157,6 +161,7 @@ void addOptimizationPasses(PassManager *PM)
     // list of passes from vmkit
     PM->add(createCFGSimplificationPass()); // Clean up disgusting code
     PM->add(createPromoteMemoryToRegisterPass()); // Kill useless allocas
+    PM->add(createMemCpyOptPass());
 
     // hopefully these functions (from llvmcall) don't try to interact with the Julia runtime
     // or have anything that might corrupt the createLowerPTLSPass pass
@@ -489,6 +494,7 @@ JuliaOJIT::JuliaOJIT(TargetMachine &TM)
         addOptimizationPasses(&PM);
     }
     else {
+        PM.add(createLowerExcHandlersPass());
         PM.add(createLowerGCFramePass());
         PM.add(createLowerPTLSPass(imaging_mode));
     }
@@ -1019,7 +1025,7 @@ void* jl_emit_and_add_to_shadow(GlobalVariable *gv, void *gvarinit)
 // Use as an optimization for runtime constant addresses to have one less
 // load. (Used only by threading).
 GlobalVariable *jl_emit_sysimg_slot(Module *m, Type *typ, const char *name,
-                                           uintptr_t init, size_t &idx)
+                                    uintptr_t init, size_t &idx)
 {
     assert(imaging_mode);
     // This is **NOT** a external variable or a normal global variable
@@ -1027,7 +1033,7 @@ GlobalVariable *jl_emit_sysimg_slot(Module *m, Type *typ, const char *name,
     // in the global variable table.
     GlobalVariable *gv = new GlobalVariable(*m, typ, false,
                                             GlobalVariable::InternalLinkage,
-                                            ConstantPointerNull::get((PointerType*)typ), name);
+                                            Constant::getNullValue(typ), name);
     addComdat(gv);
     // make the pointer valid for this session
 #if defined(USE_MCJIT) || defined(USE_ORCJIT)
@@ -1111,6 +1117,12 @@ static void jl_gen_llvm_globaldata(llvm::Module *mod, ValueToValueMapTy &VMap,
                                  GlobalVariable::ExternalLinkage,
                                  ConstantInt::get(T_size, jltls_states_func_idx),
                                  "jl_ptls_states_getter_idx"));
+    addComdat(new GlobalVariable(*mod,
+                                 T_size,
+                                 true,
+                                 GlobalVariable::ExternalLinkage,
+                                 ConstantInt::get(T_size, jltls_offset_idx),
+                                 "jl_tls_offset_idx"));
 #endif
 
     Constant *feature_string = ConstantDataArray::getString(jl_LLVMContext, jl_options.cpu_target);

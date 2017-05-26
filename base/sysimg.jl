@@ -21,7 +21,6 @@ include("coreio.jl")
 
 eval(x) = Core.eval(Base, x)
 eval(m, x) = Core.eval(m, x)
-(::Type{T})(arg) where {T} = convert(T, arg)::T # Hidden from the REPL.
 VecElement{T}(arg) where {T} = VecElement{T}(convert(T, arg))
 convert(::Type{T}, arg)  where {T<:VecElement} = T(arg)
 convert(::Type{T}, arg::T) where {T<:VecElement} = arg
@@ -72,6 +71,10 @@ include("pointer.jl")
 include("refpointer.jl")
 include("checked.jl")
 importall .Checked
+
+# buggy handling of ispure in type-inference means this should be
+# after re-defining the basic operations that they might try to call
+(::Type{T})(arg) where {T} = convert(T, arg)::T # Hidden from the REPL.
 
 # vararg Symbol constructor
 Symbol(x...) = Symbol(string(x...))
@@ -192,6 +195,25 @@ include("nullable.jl")
 include("broadcast.jl")
 importall .Broadcast
 
+# define the real ntuple functions
+@generated function ntuple(f::F, ::Type{Val{N}}) where {F,N}
+    Core.typeassert(N, Int)
+    (N >= 0) || return :(throw($(ArgumentError(string("tuple length should be ≥0, got ", N)))))
+    return quote
+        $(Expr(:meta, :inline))
+        @nexprs $N i -> t_i = f(i)
+        @ncall $N tuple t
+    end
+end
+@generated function fill_to_length(t::Tuple, val, ::Type{Val{N}}) where {N}
+    M = length(t.parameters)
+    M > N  && return :(throw($(ArgumentError("input tuple of length $M, requested $N"))))
+    return quote
+        $(Expr(:meta, :inline))
+        (t..., $(Any[ :val for i = (M + 1):N ]...))
+    end
+end
+
 # base64 conversions (need broadcast)
 include("base64.jl")
 importall .Base64
@@ -255,6 +277,10 @@ importall .Order
 include("sort.jl")
 importall .Sort
 
+# Fast math
+include("fastmath.jl")
+importall .FastMath
+
 function deepcopy_internal end
 
 # BigInts and BigFloats
@@ -270,6 +296,9 @@ include("combinatorics.jl")
 
 # more hashing definitions
 include("hashing2.jl")
+
+# irrational mathematical constants
+include("irrationals.jl")
 
 # random number generation
 include("dSFMT.jl")
@@ -331,18 +360,11 @@ const × = cross
 # statistics
 include("statistics.jl")
 
-# irrational mathematical constants
-include("irrationals.jl")
-
 # signal processing
 include("dft.jl")
 importall .DFT
 include("dsp.jl")
 importall .DSP
-
-# Fast math
-include("fastmath.jl")
-importall .FastMath
 
 # libgit2 support
 include("libgit2/libgit2.jl")

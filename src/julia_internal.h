@@ -47,16 +47,26 @@
 #endif
 
 #if jl_has_builtin(__builtin_assume)
-static inline void jl_assume_(int cond)
-{
-    __builtin_assume(cond);
-}
 #define jl_assume(cond) (__extension__ ({               \
                 __typeof__(cond) cond_ = (cond);        \
-                jl_assume_(!!(cond_));                  \
-                cond;                                   \
+                __builtin_assume(!!(cond_));            \
+                cond_;                                  \
             }))
-#elif defined(_COMPILER_GCC_)
+#elif defined(_COMPILER_MICROSOFT_) && defined(__cplusplus)
+template<typename T>
+static inline T
+jl_assume(T v)
+{
+    __assume(!!v);
+    return v;
+}
+#elif defined(_COMPILER_INTEL_)
+#define jl_assume(cond) (__extension__ ({               \
+                __typeof__(cond) cond_ = (cond);        \
+                __assume(!!(cond_));                    \
+                cond_;                                  \
+            }))
+#elif defined(__GNUC__)
 static inline void jl_assume_(int cond)
 {
     if (!cond) {
@@ -68,19 +78,6 @@ static inline void jl_assume_(int cond)
                 jl_assume_(!!(cond_));                  \
                 cond_;                                  \
             }))
-#elif defined(_COMPILER_INTEL_)
-#define jl_assume(cond) (__extension__ ({       \
-                __assume(!!(cond));             \
-                cond;                           \
-            }))
-#elif defined(_COMPILER_MICROSOFT_) && defined(__cplusplus)
-template<typename T>
-static inline T
-jl_assume(T v)
-{
-    __assume(!!v);
-    return v;
-}
 #else
 #define jl_assume(cond) (cond)
 #endif
@@ -132,8 +129,8 @@ JL_DLLEXPORT jl_value_t *jl_gc_pool_alloc(jl_ptls_t ptls, int pool_offset,
 JL_DLLEXPORT jl_value_t *jl_gc_big_alloc(jl_ptls_t ptls, size_t allocsz);
 int jl_gc_classify_pools(size_t sz, int *osize);
 extern jl_mutex_t gc_perm_lock;
-void *jl_gc_perm_alloc_nolock(size_t sz, int zero);
-void *jl_gc_perm_alloc(size_t sz, int zero);
+void *jl_gc_perm_alloc_nolock(size_t sz, int zero, unsigned align, unsigned offset);
+void *jl_gc_perm_alloc(size_t sz, int zero, unsigned align, unsigned offset);
 
 // pools are 16376 bytes large (GC_POOL_SZ - GC_PAGE_OFFSET)
 static const int jl_gc_sizeclasses[JL_GC_N_POOLS] = {
@@ -226,6 +223,8 @@ STATIC_INLINE int JL_CONST_FUNC jl_gc_szclass(size_t sz)
 #endif
 #define JL_SMALL_BYTE_ALIGNMENT 16
 #define JL_CACHE_BYTE_ALIGNMENT 64
+// JL_HEAP_ALIGNMENT is the maximum alignment that the GC can provide
+#define JL_HEAP_ALIGNMENT JL_SMALL_BYTE_ALIGNMENT
 #define GC_MAX_SZCLASS (2032-sizeof(void*))
 
 STATIC_INLINE jl_value_t *jl_gc_alloc_(jl_ptls_t ptls, size_t sz, void *ty)
@@ -267,6 +266,23 @@ STATIC_INLINE void *jl_gc_alloc_buf(jl_ptls_t ptls, size_t sz)
 {
     return jl_gc_alloc(ptls, sz, (void*)jl_buff_tag);
 }
+
+STATIC_INLINE jl_value_t *jl_gc_permobj(size_t sz, void *ty)
+{
+    const size_t allocsz = sz + sizeof(jl_taggedvalue_t);
+    unsigned align = (sz == 0 ? sizeof(void*) : (allocsz <= sizeof(void*) * 2 ?
+                                                 sizeof(void*) * 2 : 16));
+    jl_taggedvalue_t *o = (jl_taggedvalue_t*)jl_gc_perm_alloc(allocsz, 0, align,
+                                                              sizeof(void*) % align);
+    uintptr_t tag = (uintptr_t)ty;
+    o->header = tag | GC_OLD_MARKED;
+    return jl_valueof(o);
+}
+jl_value_t *jl_permbox8(jl_datatype_t *t, int8_t x);
+jl_value_t *jl_permbox16(jl_datatype_t *t, int16_t x);
+jl_value_t *jl_permbox32(jl_datatype_t *t, int32_t x);
+jl_value_t *jl_permbox64(jl_datatype_t *t, int64_t x);
+jl_svec_t *jl_perm_symsvec(size_t n, ...);
 
 // Returns a int32 where the high 16 bits are a lower bound of the number of non-pointer fields
 // at the beginning of the type and the low 16 bits are a lower bound on the number of non-pointer
@@ -352,7 +368,7 @@ STATIC_INLINE jl_value_t *jl_call_method_internal(jl_method_instance_t *meth, jl
     jl_value_t *v = jl_compile_method_internal(&fptr, meth);
     if (v)
         return v;
-    jl_assume(fptr.jlcall_api != 2);
+    (void)jl_assume(fptr.jlcall_api != 2);
     return jl_call_fptr_internal(&fptr, meth, args, nargs);
 }
 
@@ -360,7 +376,6 @@ jl_tupletype_t *jl_argtype_with_function(jl_function_t *f, jl_tupletype_t *types
 
 JL_DLLEXPORT jl_value_t *jl_apply_2va(jl_value_t *f, jl_value_t **args, uint32_t nargs);
 
-void jl_gc_setmark(jl_ptls_t ptls, jl_value_t *v);
 void jl_gc_sync_total_bytes(void);
 void jl_gc_track_malloced_array(jl_ptls_t ptls, jl_array_t *a);
 void jl_gc_count_allocd(size_t sz);
@@ -512,13 +527,14 @@ void jl_gc_init(void);
 void jl_init_signal_async(void);
 void jl_init_debuginfo(void);
 void jl_init_runtime_ccall(void);
-void jl_mk_thread_heap(jl_ptls_t ptls);
+void jl_init_thread_heap(jl_ptls_t ptls);
 
 void _julia_init(JL_IMAGE_SEARCH rel);
 
 void jl_set_base_ctx(char *__stk);
 
 extern ssize_t jl_tls_offset;
+extern const int jl_tls_elf_support;
 void jl_init_threading(void);
 void jl_start_threads(void);
 void jl_shutdown_threading(void);

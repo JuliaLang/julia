@@ -32,7 +32,7 @@ struct ValueIterator{T<:Associative}
     dict::T
 end
 
-summary{T<:Union{KeyIterator,ValueIterator}}(iter::T) =
+summary(iter::T) where {T<:Union{KeyIterator,ValueIterator}} =
     string(T.name, " for a ", summary(iter.dict))
 
 show(io::IO, iter::Union{KeyIterator,ValueIterator}) = show(io, collect(iter))

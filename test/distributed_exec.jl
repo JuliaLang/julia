@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.Test
-include("testdefs.jl")
+include("testenv.jl")
 
 # Test a few "remote" invocations when no workers are present
 @test remote(myid)() == 1
@@ -11,6 +11,53 @@ include("testdefs.jl")
     end
 
 addprocs_with_testenv(4)
+@test nprocs() == 5
+
+function reuseport_tests()
+    # Run the test on all processes.
+    results = asyncmap(procs()) do p
+        remotecall_fetch(p) do
+            ports_lower = []        # ports of pids lower than myid()
+            ports_higher = []       # ports of pids higher than myid()
+            for w in Base.Distributed.PGRP.workers
+                w.id == myid() && continue
+                port = Base._sockname(w.r_stream, true)[2]
+                if (w.id == 1)
+                    # master connects to workers
+                    push!(ports_higher, port)
+                elseif w.id < myid()
+                    push!(ports_lower, port)
+                elseif w.id > myid()
+                    push!(ports_higher, port)
+                end
+            end
+            @assert (length(ports_lower) + length(ports_higher)) == nworkers()
+            for portset in [ports_lower, ports_higher]
+                if (length(portset) > 0) && (length(unique(portset)) != 1)
+                    warn("SO_REUSEPORT TESTS FAILED. UNSUPPORTED/OLDER UNIX VERSION?")
+                    return 0
+                end
+            end
+            return myid()
+        end
+    end
+
+    # Ensure that the code has indeed been successfully executed everywhere
+    @test all(p -> p in results, procs())
+end
+
+# Test that the client port is reused. SO_REUSEPORT may not be supported on
+# all UNIX platforms, Linux kernels prior to 3.9 and older versions of OSX
+if is_unix()
+    # Run reuse client port tests only if SO_REUSEPORT is supported.
+    s = TCPSocket(delay = false)
+    is_linux() && Base.Distributed.bind_client_port(s)
+    if ccall(:jl_tcp_reuseport, Int32, (Ptr{Void},), s.handle) == 0
+        reuseport_tests()
+    else
+        info("SO_REUSEPORT is unsupported, skipping reuseport tests.")
+    end
+end
 
 id_me = myid()
 id_other = filter(x -> x != id_me, procs())[rand(1:(nprocs()-1))]
@@ -923,7 +970,7 @@ if is_unix() # aka have ssh
             end
         end
 
-        remotecall_fetch(plst->rmprocs(plst; waitfor=5.0), 1, new_pids)
+        remotecall_fetch(rmprocs, 1, new_pids)
     end
 
     print("\n\nTesting SSHManager. A minimum of 4GB of RAM is recommended.\n")
@@ -1307,11 +1354,11 @@ function Base.launch(manager::ErrorSimulator, params::Dict, launched::Array, c::
     else
         error("Unknown mode")
     end
-    io, pobj = open(pipeline(detach(setenv(cmd, dir=dir)); stderr=STDERR), "r")
+    io = open(detach(setenv(cmd, dir=dir)))
 
     wconfig = WorkerConfig()
-    wconfig.process = pobj
-    wconfig.io = io
+    wconfig.process = io
+    wconfig.io = io.out
     push!(launched, wconfig)
     notify(c)
 end
@@ -1497,6 +1544,18 @@ if true
     end
 end
 @test x == map(_->sin(2), 1:2)
+
+let thrown = false
+    try
+        remotecall_fetch(sqrt, 2, -1)
+    catch e
+        thrown = true
+        b = IOBuffer()
+        showerror(b, e)
+        @test contains(String(take!(b)), "sqrt will only return")
+    end
+    @test thrown
+end
 
 # Testing clear!
 function setup_syms(n, pids)

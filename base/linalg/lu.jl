@@ -112,7 +112,7 @@ The relationship between `F` and `A` is
 |:---------------------------------|:-----|:-----------------------|
 | [`/`](@ref)                      | ✓    |                        |
 | [`\\`](@ref)                     | ✓    | ✓                      |
-| [`cond`](@ref)                   | ✓    |                        |
+| [`inv`](@ref)                    | ✓    | ✓                      |
 | [`det`](@ref)                    | ✓    | ✓                      |
 | [`logdet`](@ref)                 | ✓    | ✓                      |
 | [`logabsdet`](@ref)              | ✓    | ✓                      |
@@ -309,9 +309,12 @@ inv!(A::LU{<:BlasFloat,<:StridedMatrix}) =
 inv(A::LU{<:BlasFloat,<:StridedMatrix}) =
     inv!(LU(copy(A.factors), copy(A.ipiv), copy(A.info)))
 
-cond(A::LU{<:BlasFloat,<:StridedMatrix}, p::Number) =
-    inv(LAPACK.gecon!(p == 1 ? '1' : 'I', A.factors, norm((A[:L]*A[:U])[A[:p],:], p)))
-cond(A::LU, p::Number) = norm(A[:L]*A[:U],p)*norm(inv(A),p)
+function _cond1Inf(A::LU{<:BlasFloat,<:StridedMatrix}, p::Number, normA::Real)
+    if p != 1 && p != Inf
+        throw(ArgumentError("p must be either 1 or Inf"))
+    end
+    return inv(LAPACK.gecon!(p == 1 ? '1' : 'I', A.factors, normA))
+end
 
 # Tridiagonal
 

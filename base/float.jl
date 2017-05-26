@@ -272,6 +272,7 @@ Float64
 ```
 """
 float(::Type{T}) where {T<:Number} = typeof(float(zero(T)))
+float(::Type{T}) where {T<:AbstractFloat} = T
 
 for Ti in (Int8, Int16, Int32, Int64)
     @eval begin

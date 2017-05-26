@@ -162,6 +162,7 @@ Base.listen(::Any)
 Base.listen(::AbstractString)
 Base.getaddrinfo
 Base.getsockname
+Base.getpeername
 Base.IPv4
 Base.IPv6
 Base.nb_available
