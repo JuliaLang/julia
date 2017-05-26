@@ -2,23 +2,23 @@
 
 # this construction is not available when put in int.jl and running in Core
 for (S,U,F) in zip(BitSigned_types, BitUnsigned_types,
-                       (nothing, Float16, Float32, Float64, nothing))
-        @eval begin
-            unsigned(::Type{$S}) = $U
-            unsigned(::Type{$U}) = $U
-            signed(  ::Type{$S}) = $S
-            signed(  ::Type{$U}) = $S
-            reinterpret(::Type{Unsigned}, ::Type{$S}) = $U
-            reinterpret(::Type{Unsigned}, ::Type{$U}) = $U
-            reinterpret(::Type{Signed}, ::Type{$S}) = $S
-            reinterpret(::Type{Signed}, ::Type{$U}) = $S
-        end
-        F === nothing && continue
-        @eval begin
-            reinterpret(::Type{Unsigned}, ::Type{$F}) = $U
-            reinterpret(::Type{Signed}, ::Type{$F}) = $S
-        end
+                   (nothing, Float16, Float32, Float64, nothing))
+    @eval begin
+        unsigned(::Type{$S}) = $U
+        unsigned(::Type{$U}) = $U
+        signed(  ::Type{$S}) = $S
+        signed(  ::Type{$U}) = $S
+        reinterpret(::Type{Unsigned}, ::Type{$S}) = $U
+        reinterpret(::Type{Unsigned}, ::Type{$U}) = $U
+        reinterpret(::Type{Signed}, ::Type{$S}) = $S
+        reinterpret(::Type{Signed}, ::Type{$U}) = $S
     end
+    F === nothing && continue
+    @eval begin
+        reinterpret(::Type{Unsigned}, ::Type{$F}) = $U
+        reinterpret(::Type{Signed}, ::Type{$F}) = $S
+    end
+end
 
 ## number-theoretic functions ##
 
@@ -506,9 +506,9 @@ end
 """
     num2hex(f)
 
-An hexadecimal string of the binary representation of a number.
+A hexadecimal string of the binary representation of a number.
 See also the [`bits`](@ref) function, which is similar but gives
-a binary string, and [`hex2num`] which does the opposite conversion.
+a binary string, and [`hex2num`](@ref) which does the opposite conversion.
 
 ```jldoctest
 julia> num2hex(Int64(4))
@@ -516,7 +516,6 @@ julia> num2hex(Int64(4))
 
 julia> num2hex(2.2)
 "400199999999999a"
-
 ```
 """
 num2hex(n::BitReal) = hex(reinterpret(Unsigned, n), sizeof(n)*2)
@@ -632,7 +631,7 @@ dec
 
 A string giving the literal bit representation of a number.
 See also the [`num2hex`](@ref) function, which is similar but
-gives an hexadecimal string.
+gives a hexadecimal string.
 
 ```jldoctest
 julia> bits(4)

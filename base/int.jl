@@ -28,11 +28,34 @@ const BitFloat       = Union{BitFloat_types...}
 const BitReal_types  = (BitInteger_types..., BitFloat_types...)
 const BitReal        = Union{BitReal_types...}
 
+## integer signed-ness conversions
+
 reinterpret(::Type{Unsigned}, x::BitInteger) = unsigned(x)
 reinterpret(::Type{  Signed}, x::BitInteger) = signed(x)
 
+"""
+    unsigned(T::Type) -> UnsignedType
+
+Return the return-type of `unsigned(x::T)`, so that `unsigned(x)::unsigned(typeof(x))`.
+
+```jldoctest
+julia> unsigned(Int64)
+UInt64
+```
+"""
 unsigned(::Type{T}) where {T<:Unsigned} = T
-signed(  ::Type{T}) where {T<:Signed}   = T
+
+"""
+    signed(T::Type) -> SignedType
+
+Return the return-type of `signed(x::T)`, so that `signed(x)::signed(typeof(x))`.
+
+```jldoctest
+julia> signed(UInt64)
+Int64
+```
+"""
+signed(::Type{T}) where {T<:Signed} = T
 
 unsigned(::Type{<:Union{Bool,BitFloat}}) = UInt
 signed(  ::Type{<:Union{Bool,BitFloat}}) = Int
