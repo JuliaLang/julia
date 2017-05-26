@@ -1658,9 +1658,8 @@ function hex2num(s::AbstractString)
     return reinterpret(Float64, parse(UInt64, s, 16))
 end
 
-@deprecate num2hex(x::Union{Float16,Float32,Float64}) =
-    hex(reintepret(Unsigned, x), sizeof(x)*2)
-@deprecate num2hex(n::Integer) = hex(n, sizeof(n)*2)
+@deprecate num2hex(x::Union{Float16,Float32,Float64}) hex(reintepret(Unsigned, x), sizeof(x)*2)
+@deprecate num2hex(n::Integer) hex(n, sizeof(n)*2)
 
 
 # END 0.7 deprecations
