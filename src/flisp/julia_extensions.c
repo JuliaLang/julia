@@ -134,6 +134,17 @@ JL_DLLEXPORT int jl_id_char(uint32_t wc)
     return 0;
 }
 
+// chars that can follow an operator (e.g. +) and be parsed as part of the operator
+JL_DLLEXPORT int jl_op_suffix_char(uint32_t wc)
+{
+    if (wc < 0xA1 || wc > 0x10ffff) return 0;
+    utf8proc_category_t cat = utf8proc_category((utf8proc_int32_t) wc);
+    return (cat == UTF8PROC_CATEGORY_MN || cat == UTF8PROC_CATEGORY_MC ||
+            cat == UTF8PROC_CATEGORY_ME ||
+            // primes (single, double, triple, their reverses, and quadruple)
+            (wc >= 0x2032 && wc <= 0x2037) || (wc == 0x2057));
+}
+
 value_t fl_julia_identifier_char(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
     argcount(fl_ctx, "identifier-char?", nargs, 1);
@@ -150,6 +161,37 @@ value_t fl_julia_identifier_start_char(fl_context_t *fl_ctx, value_t *args, uint
         type_error(fl_ctx, "identifier-start-char?", "wchar", args[0]);
     uint32_t wc = *(uint32_t*)cp_data((cprim_t*)ptr(args[0]));
     return jl_id_start_char(wc) ? fl_ctx->T : fl_ctx->F;
+}
+
+value_t fl_julia_op_suffix_char(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
+{
+    argcount(fl_ctx, "op-suffix-char?", nargs, 1);
+    if (!iscprim(args[0]) || ((cprim_t*)ptr(args[0]))->type != fl_ctx->wchartype)
+        type_error(fl_ctx, "op-suffix-char?", "wchar", args[0]);
+    uint32_t wc = *(uint32_t*)cp_data((cprim_t*)ptr(args[0]));
+    return jl_op_suffix_char(wc) ? fl_ctx->T : fl_ctx->F;
+}
+
+value_t fl_julia_strip_op_suffix(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
+{
+    argcount(fl_ctx, "strip-op-suffix", nargs, 1);
+    if (!issymbol(args[0]))
+        type_error(fl_ctx, "strip-op-suffix", "symbol", args[0]);
+    char *op = symbol_name(fl_ctx, args[0]);
+    size_t i = 0;
+    while (op[i]) {
+        size_t j = i;
+        if (jl_op_suffix_char(u8_nextchar(op, &j)))
+            break;
+        i = j;
+    }
+    if (!op[i]) return args[0]; // no suffix to strip
+    if (!i) lerror(fl_ctx, symbol(fl_ctx, "error"), "invalid operator");
+    char *opnew = strncpy(malloc(i+1), op, i);
+    opnew[i] = 0;
+    value_t *opnew_symbol = symbol(fl_ctx, opnew);
+    free(opnew);
+    return opnew_symbol;
 }
 
 #include "julia_charmap.h"
@@ -245,6 +287,8 @@ static const builtinspec_t julia_flisp_func_info[] = {
     { "accum-julia-symbol", fl_accum_julia_symbol },
     { "identifier-char?", fl_julia_identifier_char },
     { "identifier-start-char?", fl_julia_identifier_start_char },
+    { "op-suffix-char?", fl_julia_op_suffix_char },
+    { "strip-op-suffix", fl_julia_strip_op_suffix },
     { NULL, NULL }
 };
 

@@ -378,6 +378,7 @@ int fl_load_system_image_str(fl_context_t *fl_ctx, char* str, size_t len);
 /* julia extensions */
 JL_DLLEXPORT int jl_id_char(uint32_t wc);
 JL_DLLEXPORT int jl_id_start_char(uint32_t wc);
+JL_DLLEXPORT int jl_op_suffix_char(uint32_t wc);
 
 struct _fl_context_t {
     symbol_t *symtab;

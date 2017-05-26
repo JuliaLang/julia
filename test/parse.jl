@@ -1228,6 +1228,11 @@ end === 2
     f("")
 end === (3, String)
 
+# operator suffixes
+@test parse("3 +̂ 4") == Expr(:call, :+̂, 3, 4)
+@test parse("3 +̂′ 4") == Expr(:call, :+̂′, 3, 4)
+@test Base.operator_precedence(:+̂) == Base.operator_precedence(:+)
+
 # issue #19351
 # adding return type decl should not affect parse of function body
 @test :(t(abc) = 3).args[2] == :(t(abc)::Int = 3).args[2]

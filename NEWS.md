@@ -7,6 +7,10 @@ New language features
   * Local variables can be tested for being defined
     using the new `@isdefined variable` macro ([#TBD]).
 
+ * Custom infix operators can now be defined by appending Unicode
+   combining marks and primes to other operators.  For example, `+̂″` is parsed
+   as an infix operator with the same precedence as `+` ([#22089]).
+
 Language changes
 ----------------
 
