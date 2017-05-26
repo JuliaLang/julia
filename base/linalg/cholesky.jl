@@ -86,7 +86,7 @@ function _chol!(A::AbstractMatrix, ::Type{UpperTriangular})
             end
         end
     end
-    return UpperTriangular(A), convert(BlasInt, 0) # TODO: If we get here, do we know A is pos. def?
+    return UpperTriangular(A), convert(BlasInt, 0)
 end
 function _chol!(A::AbstractMatrix, ::Type{LowerTriangular})
     n = checksquare(A)
@@ -113,7 +113,7 @@ function _chol!(A::AbstractMatrix, ::Type{LowerTriangular})
             end
         end
      end
-    return LowerTriangular(A), convert(BlasInt, 0) # TODO: If we get here, do we know A is pos. def?
+    return LowerTriangular(A), convert(BlasInt, 0)
 end
 
 ## Numbers
