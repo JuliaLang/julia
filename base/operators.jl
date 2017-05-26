@@ -480,6 +480,7 @@ julia> bits(Int8(12))
 See also [`>>`](@ref), [`>>>`](@ref).
 """
 function <<(x::Integer, c::Integer)
+    @_inline_meta
     typemin(Int) <= c <= typemax(Int) && return x << (c % Int)
     (x >= 0 || c >= 0) && return zero(x)
     oftype(x, -1)
@@ -518,6 +519,7 @@ julia> bits(Int8(-4))
 See also [`>>>`](@ref), [`<<`](@ref).
 """
 function >>(x::Integer, c::Integer)
+    @_inline_meta
     typemin(Int) <= c <= typemax(Int) && return x >> (c % Int)
     (x >= 0 || c < 0) && return zero(x)
     oftype(x, -1)
@@ -550,8 +552,10 @@ is equivalent to [`>>`](@ref).
 
 See also [`>>`](@ref), [`<<`](@ref).
 """
->>>(x::Integer, c::Integer) =
+function >>>(x::Integer, c::Integer)
+    @_inline_meta
     typemin(Int) <= c <= typemax(Int) ? x >>> (c % Int) : zero(x)
+end
 >>>(x::Integer, c::Unsigned) = c <= typemax(UInt) ? x >>> (c % UInt) : zero(x)
 >>>(x::Integer, c::Int) = c >= 0 ? x >>> unsigned(c) : x << unsigned(-c)
 
