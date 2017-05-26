@@ -37,20 +37,6 @@ maxintfloat() = maxintfloat(Float64)
 
 isinteger(x::AbstractFloat) = (x - trunc(x) == 0)
 
-num2hex(x::Float16) = hex(bitcast(UInt16, x), 4)
-num2hex(x::Float32) = hex(bitcast(UInt32, x), 8)
-num2hex(x::Float64) = hex(bitcast(UInt64, x), 16)
-
-function hex2num(s::AbstractString)
-    if length(s) <= 4
-        return bitcast(Float16, parse(UInt16, s, 16))
-    end
-    if length(s) <= 8
-        return bitcast(Float32, parse(UInt32, s, 16))
-    end
-    return bitcast(Float64, parse(UInt64, s, 16))
-end
-
 """
     round([T,] x, [digits, [base]], [r::RoundingMode])
 
