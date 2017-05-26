@@ -264,7 +264,7 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes --startup-file=no`
             @test readchomp(`$exename -L $testfile -e 'exit(0)' -- foo -bar --baz`) ==
                 "String[\"foo\", \"-bar\", \"--baz\"]"
             @test split(readchomp(`$exename -L $testfile $testfile`), '\n') ==
-                ["String[\"$(escape(testfile))\"]", "String[]"]
+                ["String[]", "String[]"]
             @test !success(`$exename --foo $testfile`)
             @test readchomp(`$exename -L $testfile -e 'exit(0)' -- foo -bar -- baz`) == "String[\"foo\", \"-bar\", \"--\", \"baz\"]"
         finally
@@ -273,6 +273,7 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes --startup-file=no`
     end
 
     # test the script name
+    # TODO: Add tests to make sure PROGRAM_FILE is available within the `.juliarc.jl`
     let a = tempname(), b = tempname()
         try
             write(a, """
@@ -291,7 +292,7 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes --startup-file=no`
             @test split(readchomp(`$exename -L $b -e 'exit(0)'`), '\n') ==
                 ["$(realpath(b))", "", "0"]
             @test split(readchomp(`$exename -L $b $a`), '\n') ==
-                ["$(realpath(b))", "", "1", "$a", "$a", "0", "$b", "$a", "0"]
+                ["$(realpath(b))", "$a", "0", "$a", "$a", "0", "$b", "$a", "0"]
         finally
             rm(a)
             rm(b)

@@ -257,6 +257,11 @@ function process_options(opts::JLOptions)
     color_set             = (opts.color != 0)
     global have_color     = (opts.color == 1)
     global is_interactive = (opts.isinteractive != 0)
+
+    # remove filename from ARGS
+    arg_is_program = opts.eval == C_NULL && opts.print == C_NULL && !isempty(ARGS)
+    global const PROGRAM_FILE = arg_is_program ? shift!(ARGS) : ""
+
     while true
         # startup worker.
         # opts.startupfile, opts.load, etc should should not be processed for workers.
@@ -296,11 +301,9 @@ function process_options(opts::JLOptions)
             break
         end
         # load file
-        if !isempty(ARGS) && !isempty(ARGS[1])
+        if !isempty(PROGRAM_FILE)
             # program
             repl = false
-            # remove filename from ARGS
-            global PROGRAM_FILE = shift!(ARGS)
             if !is_interactive
                 ccall(:jl_exit_on_sigint, Void, (Cint,), 1)
             end
