@@ -362,3 +362,6 @@ end
 test18695(r) = sum( t^2 for t in r )
 @test @inferred(test18695([1.0,2.0,3.0,4.0])) == 30.0
 @test_throws ArgumentError test18695(Any[])
+
+# issue #21107
+@test foldr(-,2:2) == 2
