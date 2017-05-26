@@ -776,3 +776,15 @@ function break_21369()
     end
 end
 @test_throws ErrorException break_21369()  # not TypeError
+
+
+function segfaultfunction_20847{N, T}(A::Vector{NTuple{N, T}})
+    B = reinterpret(T, A, (N, length(A)))
+    return nothing
+end
+
+tuplevec_20847 = Tuple{Float64, Float64}[(0.0,0.0), (1.0,0.0)]
+
+for A in (1,)
+    @test segfaultfunction_20847(tuplevec_20847) == nothing
+end
