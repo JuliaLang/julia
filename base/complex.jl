@@ -603,19 +603,21 @@ function ^(z::Complex{T}, p::Complex{T})::Complex{T} where T<:AbstractFloat
     end
 end
 
-function exp2(z::Complex{T}) where T
+function exp2(z::Complex{T}) where T<:AbstractFloat
     er = exp2(real(z))
     theta = imag(z) * log(convert(T, 2))
     s, c = sincos(theta)
     Complex(er * c, er * s)
 end
+exp2(z::Complex) = exp2(float(z))
 
-function exp10(z::Complex{T}) where T
+function exp10(z::Complex{T}) where T<:AbstractFloat
     er = exp10(real(z))
     theta = imag(z) * log(convert(T, 10))
     s, c = sincos(theta)
     Complex(er * c, er * s)
 end
+exp10(z::Complex) = exp10(float(z))
 
 function ^(z::T, p::T) where T<:Complex
     if isinteger(p)
