@@ -778,6 +778,18 @@ function break_21369()
 end
 @test_throws ErrorException break_21369()  # not TypeError
 
+# issue #20847
+function segfaultfunction_20847{N, T}(A::Vector{NTuple{N, T}})
+    B = reinterpret(T, A, (N, length(A)))
+    return nothing
+end
+
+tuplevec_20847 = Tuple{Float64, Float64}[(0.0,0.0), (1.0,0.0)]
+
+for A in (1,)
+    @test segfaultfunction_20847(tuplevec_20847) == nothing
+end
+
 # issue #21848
 @test Core.Inference.limit_type_depth(Ref{Complex{T} where T}, Core.Inference.MAX_TYPE_DEPTH) == Ref
 let T = Tuple{Tuple{Int64, Void},
