@@ -733,7 +733,7 @@ for `k = 1:n` where `n = length(v)`. This corresponds to Definition 7 of Hyndman
     handling of missing data, the `DataArrays.jl` package is recommended. `quantile` will
     throw an `ArgumentError` in the presence of `NaN` values in the data array.
 
-* Hyndman, R.J and Fan, Y. (1996) "Sample Quantiles in Statistical Packages",
+- Hyndman, R.J and Fan, Y. (1996) "Sample Quantiles in Statistical Packages",
   *The American Statistician*, Vol. 50, No. 4, pp. 361-365
 """
 quantile(v::AbstractVector, p; sorted::Bool=false) =

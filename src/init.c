@@ -363,6 +363,7 @@ static void *init_stdio_handle(uv_file fd,int readable)
             }
 #endif
             // ...and continue on as in the UV_FILE case
+            JL_FALLTHROUGH;
         case UV_FILE:
             file = (jl_uv_file_t*)malloc(sizeof(jl_uv_file_t));
             file->loop = jl_io_loop;

@@ -645,7 +645,7 @@ For when a capture doesn't match, instead of a substring, `m.captures` contains 
 position, and `m.offsets` has a zero offset (recall that indices in Julia are 1-based, so a zero
 offset into a string is invalid). Here is a pair of somewhat contrived examples:
 
-```jldoctest
+```jldoctest acdmatch
 julia> m = match(r"(a|b)(c)?(d)", "acd")
 RegexMatch("acd", 1="a", 2="c", 3="d")
 
@@ -692,7 +692,7 @@ julia> m.offsets
 It is convenient to have captures returned as an array so that one can use destructuring syntax
 to bind them to local variables:
 
-```julia
+```jldoctest acdmatch
 julia> first, second, third = m.captures; first
 "a"
 ```
@@ -808,7 +808,7 @@ The Unicode escape `\u2200` is encoded in UTF-8 as the three bytes 226, 136, 128
 resulting byte array does not correspond to a valid UTF-8 string -- if you try to use this as
 a regular string literal, you will get a syntax error:
 
-```julia
+```julia-repl
 julia> "DATA\xff\u2200"
 ERROR: syntax: invalid UTF-8 sequence
 ```

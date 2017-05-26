@@ -718,3 +718,12 @@ end
     @test 'b' ∈ key_str
     @test 'c' ∈ key_str
 end
+
+@testset "Dict pop!" begin
+    d = Dict(1=>2, 3=>4)
+    @test pop!(d, 1) == 2
+    @test_throws KeyError pop!(d, 1)
+    @test pop!(d, 1, 0) == 0
+    @test pop!(d) == (3=>4)
+    @test_throws ArgumentError pop!(d)
+end

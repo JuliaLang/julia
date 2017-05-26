@@ -9,6 +9,14 @@ function rawcontent(blob::GitBlob)
     copy(unsafe_wrap(Array, ptr, (length(blob),), false))
 end
 
+"""
+    content(blob::GitBlob)
+
+Fetch the contents of the `GitBlob` `blob`. If the `blob` contains
+binary data (which can be determined using [`isbinary`](@ref)),
+throw an error. Otherwise, return a `String` containing the contents
+of the `blob`.
+"""
 function content(blob::GitBlob)
     s = String(rawcontent(blob))
     isvalid(s) || error("Blob does not contain valid UTF-8 data")
@@ -30,6 +38,14 @@ end
 
 Reads the file at `path` and adds it to the object database of `repo` as a loose blob.
 Returns the `GitHash` of the resulting blob.
+
+# Example
+
+```julia
+hash_str = hex(commit_oid)
+blob_file = joinpath(repo_path, ".git", "objects", hash_str[1:2], hash_str[3:end])
+id = LibGit2.addblob!(repo, blob_file)
+```
 """
 function addblob!(repo::GitRepo, path::AbstractString)
     id_ref = Ref{GitHash}()

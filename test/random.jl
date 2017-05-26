@@ -13,6 +13,7 @@ srand(0); rand(); x = rand(384)
 @test typeof(rand(false:true)) === Bool
 @test typeof(rand(Char)) === Char
 @test length(randn(4, 5)) == 20
+@test length(randn(Complex128, 4, 5)) == 20
 @test length(bitrand(4, 5)) == 20
 
 @test rand(MersenneTwister(0)) == 0.8236475079774124
@@ -64,6 +65,11 @@ A = zeros(2, 2)
 randn!(MersenneTwister(42), A)
 @test A == [-0.5560268761463861  0.027155338009193845;
             -0.444383357109696  -0.29948409035891055]
+
+B = zeros(Complex128, 2)
+randn!(MersenneTwister(42), B)
+@test B == [Complex128(-0.5560268761463861,-0.444383357109696),
+            Complex128(0.027155338009193845,-0.29948409035891055)] * 0.7071067811865475244008
 
 for T in (Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128, BigInt,
           Float16, Float32, Float64, Rational{Int})
@@ -306,8 +312,9 @@ end
 
 # test all rand APIs
 for rng in ([], [MersenneTwister(0)], [RandomDevice()])
-    types = [Base.BitInteger_types..., Bool, Float16, Float32, Float64, Char]
     ftypes = [Float16, Float32, Float64]
+    cftypes = [Complex32, Complex64, Complex128, ftypes...]
+    types = [Bool, Char, Base.BitInteger_types..., ftypes...]
     b2 = big(2)
     u3 = UInt(3)
     for f in [rand, randn, randexp]
@@ -316,7 +323,7 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()])
         f(rng..., 2, 3)               ::Array{Float64, 2}
         f(rng..., b2, u3)             ::Array{Float64, 2}
         f(rng..., (2, 3))             ::Array{Float64, 2}
-        for T in (f === rand ? types : ftypes)
+        for T in (f === rand ? types : f === randn ? cftypes : ftypes)
             a0 = f(rng..., T)         ::T
             a1 = f(rng..., T, 5)      ::Vector{T}
             a2 = f(rng..., T, 2, 3)   ::Array{T, 2}
@@ -330,7 +337,7 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()])
         end
     end
     for f! in [rand!, randn!, randexp!]
-        for T in (f! === rand! ? types : ftypes)
+        for T in (f! === rand! ? types : f! === randn! ? cftypes : ftypes)
             X = T == Bool ? T[0,1] : T[0,1,2]
             for A in (Array{T}(5), Array{T}(2, 3))
                 f!(rng..., A)                    ::typeof(A)
@@ -475,6 +482,12 @@ end
 let seed = rand(UInt32, 10)
     r = MersenneTwister(seed)
     @test r.seed == seed && r.seed !== seed
+    # RNGs do not share their seed in randjump
+    let rs = randjump(r, 2)
+        @test  rs[1].seed !== rs[2].seed
+        srand(rs[2])
+        @test seed == rs[1].seed != rs[2].seed
+    end
     resize!(seed, 4)
     @test r.seed != seed
 end
@@ -485,11 +498,8 @@ let g = Base.Random.GLOBAL_RNG,
     @test srand() === g
     @test srand(rand(UInt)) === g
     @test srand(rand(UInt32, rand(1:10))) === g
-    @test srand(@__FILE__) === g
-    @test srand(@__FILE__, rand(1:10)) === g
     @test srand(m) === m
     @test srand(m, rand(UInt)) === m
     @test srand(m, rand(UInt32, rand(1:10))) === m
     @test srand(m, rand(1:10)) === m
-    @test srand(m, @__FILE__, rand(1:10)) === m
 end

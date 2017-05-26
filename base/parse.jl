@@ -195,6 +195,8 @@ tryparse(::Type{Float32}, s::SubString{String}) = ccall(:jl_try_substrtof, Nulla
 
 tryparse(::Type{T}, s::AbstractString) where {T<:Union{Float32,Float64}} = tryparse(T, String(s))
 
+tryparse(::Type{Float16}, s::AbstractString) = convert(Nullable{Float16}, tryparse(Float32, s))
+
 function parse(::Type{T}, s::AbstractString) where T<:AbstractFloat
     result = tryparse(T, s)
     if isnull(result)

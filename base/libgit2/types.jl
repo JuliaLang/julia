@@ -271,6 +271,33 @@ Matches the [`git_diff_options`](https://libgit2.github.com/libgit2/#HEAD/type/g
 end
 
 """
+    LibGit2.DescribeOptions
+
+Matches the [`git_describe_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_describe_options) struct.
+"""
+@kwdef struct DescribeOptions
+    version::Cuint             = 1
+    max_candidates_tags::Cuint = 10
+    describe_strategy::Cuint   = Consts.DESCRIBE_DEFAULT
+
+    pattern::Cstring
+    only_follow_first_parent::Cint
+    show_commit_oid_as_fallback::Cint
+end
+
+"""
+    LibGit2.DescribeFormatOptions
+
+Matches the [`git_describe_format_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_describe_format_options) struct.
+"""
+@kwdef struct DescribeFormatOptions
+    version::Cuint          = 1
+    abbreviated_size::Cuint = 7
+    always_use_long_format::Cint
+    dirty_suffix::Cstring
+end
+
+"""
     LibGit2.DiffFile
 
 Description of one side of a delta.
@@ -496,24 +523,25 @@ Base.isempty(obj::AbstractGitObject) = (obj.ptr == C_NULL)
 abstract type GitObject <: AbstractGitObject end
 
 for (typ, owntyp, sup, cname) in [
-    (:GitRepo,          nothing,               :AbstractGitObject, :git_repository),
-    (:GitConfig,        :(Nullable{GitRepo}),  :AbstractGitObject, :git_config),
-    (:GitIndex,         :(Nullable{GitRepo}),  :AbstractGitObject, :git_index),
-    (:GitRemote,        :GitRepo,              :AbstractGitObject, :git_remote),
-    (:GitRevWalker,     :GitRepo,              :AbstractGitObject, :git_revwalk),
-    (:GitReference,     :GitRepo,              :AbstractGitObject, :git_reference),
-    (:GitDiff,          :GitRepo,              :AbstractGitObject, :git_diff),
-    (:GitDiffStats,     :GitRepo,              :AbstractGitObject, :git_diff_stats),
-    (:GitAnnotated,     :GitRepo,              :AbstractGitObject, :git_annotated_commit),
-    (:GitRebase,        :GitRepo,              :AbstractGitObject, :git_rebase),
-    (:GitStatus,        :GitRepo,              :AbstractGitObject, :git_status_list),
-    (:GitBranchIter,    :GitRepo,              :AbstractGitObject, :git_branch_iterator),
-    (:GitUnknownObject, :GitRepo,              :GitObject,         :git_object),
-    (:GitCommit,        :GitRepo,              :GitObject,         :git_commit),
-    (:GitBlob,          :GitRepo,              :GitObject,         :git_blob),
-    (:GitTree,          :GitRepo,              :GitObject,         :git_tree),
-    (:GitTag,           :GitRepo,              :GitObject,         :git_tag),
-    (:GitTreeEntry,     :GitTree,              :AbstractGitObject, :git_tree_entry),
+    (:GitRepo,           nothing,               :AbstractGitObject, :git_repository),
+    (:GitConfig,         :(Nullable{GitRepo}),  :AbstractGitObject, :git_config),
+    (:GitIndex,          :(Nullable{GitRepo}),  :AbstractGitObject, :git_index),
+    (:GitRemote,         :GitRepo,              :AbstractGitObject, :git_remote),
+    (:GitRevWalker,      :GitRepo,              :AbstractGitObject, :git_revwalk),
+    (:GitReference,      :GitRepo,              :AbstractGitObject, :git_reference),
+    (:GitDescribeResult, :GitRepo,              :AbstractGitObject, :git_describe_result),
+    (:GitDiff,           :GitRepo,              :AbstractGitObject, :git_diff),
+    (:GitDiffStats,      :GitRepo,              :AbstractGitObject, :git_diff_stats),
+    (:GitAnnotated,      :GitRepo,              :AbstractGitObject, :git_annotated_commit),
+    (:GitRebase,         :GitRepo,              :AbstractGitObject, :git_rebase),
+    (:GitStatus,         :GitRepo,              :AbstractGitObject, :git_status_list),
+    (:GitBranchIter,     :GitRepo,              :AbstractGitObject, :git_branch_iterator),
+    (:GitUnknownObject,  :GitRepo,              :GitObject,         :git_object),
+    (:GitCommit,         :GitRepo,              :GitObject,         :git_commit),
+    (:GitBlob,           :GitRepo,              :GitObject,         :git_blob),
+    (:GitTree,           :GitRepo,              :GitObject,         :git_tree),
+    (:GitTag,            :GitRepo,              :GitObject,         :git_tag),
+    (:GitTreeEntry,      :GitTree,              :AbstractGitObject, :git_tree_entry),
     ]
 
     if owntyp === nothing
@@ -699,7 +727,7 @@ mutable struct SSHCredentials <: AbstractCredentials
         finalizer(c, securezero!)
         return c
     end
-    SSHCredentials(u::AbstractString,p::AbstractString,prompt_if_incorrect::Bool=false) = SSHCredentials(u,p,prompt_if_incorrect)
+    SSHCredentials(u::AbstractString,p::AbstractString,prompt_if_incorrect::Bool=false) = SSHCredentials(u,p,"","",prompt_if_incorrect)
     SSHCredentials(prompt_if_incorrect::Bool=false) = SSHCredentials("","","","",prompt_if_incorrect)
 end
 

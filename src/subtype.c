@@ -275,6 +275,10 @@ static int obviously_disjoint(jl_value_t *a, jl_value_t *b, int specificity)
             else {
                 ad = temp;
             }
+            if (specificity) {
+                // account for declared subtypes taking priority (issue #21710)
+                return 0;
+            }
         }
         int istuple = (ad->name == jl_tuple_typename);
         size_t np;
@@ -2157,11 +2161,13 @@ jl_value_t *jl_type_intersection_env_s(jl_value_t *a, jl_value_t *b, jl_svec_t *
             // we assume that if the intersection is a leaf type, we have
             // full information in `env`. however the intersection algorithm
             // does not yet provide that in all cases so use subtype.
-            if (szb > 0 && jl_is_leaf_type(*ans) && !jl_types_equal(b, (jl_value_t*)jl_type_type)) {
+            if (szb > 0 && !jl_types_equal(b, (jl_value_t*)jl_type_type)) {
                 if (jl_subtype_env(*ans, b, env, szb)) {
-                    for(i=0; i < sz; i++) {
-                        if (jl_is_typevar(env[i])) {
-                            *ans = jl_bottom_type; goto bot;
+                    if (jl_is_leaf_type(*ans)) {
+                        for(i=0; i < sz; i++) {
+                            if (jl_is_typevar(env[i])) {
+                                *ans = jl_bottom_type; goto bot;
+                            }
                         }
                     }
                 }
@@ -2314,6 +2320,8 @@ static int tuple_morespecific(jl_datatype_t *cdt, jl_datatype_t *pdt, int invari
 
         if (ci >= clenf && !cseq) {
             if (pseq && plenr <= clenr+1) return 1;
+            // shorter tuples are more specific, to ensure transitivity with varargs
+            if (!pseq && clenr < plenr) return 1;
             break;
         }
         if (pi >= plenf && !pseq) {
@@ -2543,10 +2551,8 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, int invariant, jl_ty
         int super=0;
         while (tta != (jl_datatype_t*)jl_any_type) {
             if (tta->name == ttb->name) {
-                if (super) {
-                    if (tta->name != jl_type_typename)
-                        return 1;
-                }
+                if (super && tta->name != jl_type_typename)
+                    return 1;
                 if (super && ttb->name == jl_type_typename && jl_is_typevar(jl_tparam0(b))) {
                     if (type_morespecific_(a, jl_tparam0(b), 1, env))
                         return 1;

@@ -340,7 +340,7 @@ fieldoffset(x::DataType, idx::Integer) = (@_pure_meta; ccall(:jl_get_field_offse
 Determine the declared type of a field (specified by name or index) in a composite DataType `T`.
 
 ```jldoctest
-julia> immutable Foo
+julia> struct Foo
            x::Int64
            y::String
        end
@@ -361,7 +361,7 @@ Get the index of a named field, throwing an error if the field does not exist (w
 or returning 0 (when err==false).
 
 ```jldoctest
-julia> immutable Foo
+julia> struct Foo
            x::Int64
            y::String
        end

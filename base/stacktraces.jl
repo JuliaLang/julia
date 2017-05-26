@@ -136,6 +136,10 @@ end
 
 lookup(pointer::UInt) = lookup(convert(Ptr{Void}, pointer))
 
+# allow lookup on already-looked-up data for easier handling of pre-processed frames
+lookup(s::StackFrame) = StackFrame[s]
+lookup(s::Tuple{StackFrame,Int}) = StackFrame[s[1]]
+
 """
     stacktrace([trace::Vector{Ptr{Void}},] [c_funcs::Bool=false]) -> StackTrace
 

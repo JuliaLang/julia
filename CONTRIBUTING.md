@@ -1,10 +1,10 @@
 # Notes for Julia Contributors
 
-Hi! If you are new to the Julia community: welcome, and thanks for trying Julia. Please be sure to respect our [community standards](https://julialang.org/community/standards/) in all interactions.
+Hi! If you are new to the Julia community: welcome, and thanks for trying Julia. Please be sure to respect our [community standards](https://julialang.org/community/standards) in all interactions.
 
 ## Learning Julia
 
-[The learning page](https://julialang.org/learning/) has a great list of resources for new and experienced users alike. [This tutorial video](https://www.youtube.com/watch?v=vWkgEddb4-A) is one recommended starting point, as is the "[Invitation to Julia](https://www.youtube.com/watch?v=gQ1y5NUD_RI)" workshop video from JuliaCon 2015  ([slide materials here](https://github.com/dpsanders/invitation_to_julia)). The [Julia documentation](https://docs.julialang.org/en/latest/) covers the language and core library features, and is searchable.
+[The learning page](https://julialang.org/learning) has a great list of resources for new and experienced users alike. [This tutorial video](https://www.youtube.com/watch?v=vWkgEddb4-A) is one recommended starting point, as is the "[Invitation to Julia](https://www.youtube.com/watch?v=gQ1y5NUD_RI)" workshop video from JuliaCon 2015  ([slide materials here](https://github.com/dpsanders/invitation_to_julia)). The [Julia documentation](https://docs.julialang.org/en/latest) covers the language and core library features, and is searchable.
 
 ## Before filing an issue
 
@@ -12,7 +12,7 @@ Hi! If you are new to the Julia community: welcome, and thanks for trying Julia.
 
 - Contributing code? Be sure to review the [contributor checklist](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md#contributor-checklist) for helpful tips on the tools we use to build Julia.
 
-- Library feature requests are generally not accepted on this issue tracker. New libraries should be developed as [packages](https://docs.julialang.org/en/release-0.4/manual/packages/#package-development). Discuss ideas for libraries at the [Julia Discourse forum](https://discourse.julialang.org/). Doing so will often lead to pointers to existing projects and bring together collaborators with common interests.
+- Library feature requests are generally not accepted on this issue tracker. New libraries should be developed as [packages](https://docs.julialang.org/en/latest/manual/packages#Package-Development-1). Discuss ideas for libraries at the [Julia Discourse forum](https://discourse.julialang.org). Doing so will often lead to pointers to existing projects and bring together collaborators with common interests.
 
 ## Contributor Checklist
 
@@ -26,7 +26,7 @@ Hi! If you are new to the Julia community: welcome, and thanks for trying Julia.
 
 * Learn to use [git](http://git-scm.com), the version control system used by GitHub and the Julia project. Try a tutorial such as the one [provided by GitHub](http://try.GitHub.io/levels/1/challenges/1).
 
-* Review discussions on the [Julia Discourse forum](https://discourse.julialang.org/).
+* Review discussions on the [Julia Discourse forum](https://discourse.julialang.org).
 
 * For more detailed tips, read the [submission guide](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md#submitting-contributions) below.
 
@@ -37,11 +37,11 @@ Hi! If you are new to the Julia community: welcome, and thanks for trying Julia.
 A useful bug report filed as a GitHub issue provides information about how to reproduce the error.
 
 1. Before opening a new [GitHub issue](https://github.com/JuliaLang/julia/issues):
-  - Try searching the existing issues or the [Julia Discourse forum](https://discourse.julialang.org/) to see if someone else has already noticed the same problem.
+  - Try searching the existing issues or the [Julia Discourse forum](https://discourse.julialang.org) to see if someone else has already noticed the same problem.
   - Try some simple debugging techniques to help isolate the problem.
     - Try running the code with the debug build of Julia with `make debug`, which produces the `usr/bin/julia-debug`.
     - Consider running `julia-debug` with a debugger such as `gdb` or `lldb`. Obtaining even a simple [backtrace](http://www.unknownroad.com/rtfm/gdbtut/gdbsegfault.html) is very useful.
-    - If Julia segfaults, try following [these debugging tips](http://julia.readthedocs.org/en/latest/devdocs/backtraces/#segfaults-during-bootstrap-sysimg-jl) to help track down the specific origin of the bug.
+    - If Julia segfaults, try following [these debugging tips](https://docs.julialang.org/en/latest/devdocs/backtraces.html#Reporting-and-analyzing-crashes-(segfaults)-1) to help track down the specific origin of the bug.
 
 2. If the problem is caused by a Julia package rather than core Julia, file a bug report with the relevant package author rather than here.
 
@@ -50,13 +50,13 @@ A useful bug report filed as a GitHub issue provides information about how to re
   - A minimal working example, i.e. the smallest chunk of code that triggers the error. Ideally, this should be code that can be pasted into a REPL or run from a source file. If the code is larger than (say) 50 lines, consider putting it in a [gist](https://gist.github.com).
   - The version of Julia as provided by the `versioninfo()` command. Occasionally, the longer output produced by `versioninfo(true)` may be useful also, especially if the issue is related to a specific package.
 
-4. When pasting code blocks or output, put triple backquotes (\`\`\`) around the text so GitHub will format it nicely. Code statements should be surrounded by single backquotes (\`). Be aware that the `@` sign tags users on GitHub, so references to macros should always be in single backquotes. See [GitHub's guide on Markdown](https://guides.github.com/features/mastering-markdown/) for more formatting tricks.
+4. When pasting code blocks or output, put triple backquotes (\`\`\`) around the text so GitHub will format it nicely. Code statements should be surrounded by single backquotes (\`). Be aware that the `@` sign tags users on GitHub, so references to macros should always be in single backquotes. See [GitHub's guide on Markdown](https://guides.github.com/features/mastering-markdown) for more formatting tricks.
 
 ## Submitting contributions
 
 ### Contributing a Julia package
 
-Julia has a built-in [package manager](https://github.com/JuliaLang/METADATA.jl) based on `git`. A number of [packages](http://pkg.julialang.org/) across many domains are already available for Julia. Developers are encouraged to provide their libraries as a Julia package. The Julia manual provides instructions on [creating Julia packages](https://docs.julialang.org/en/latest/manual/packages/).
+Julia has a built-in [package manager](https://github.com/JuliaLang/METADATA.jl) based on `git`. A number of [packages](http://pkg.julialang.org) across many domains are already available for Julia. Developers are encouraged to provide their libraries as a Julia package. The Julia manual provides instructions on [creating Julia packages](https://docs.julialang.org/en/latest/manual/packages).
 
 For developers who need to wrap C libraries so that they can be called from Julia, the [Clang.jl](https://github.com/ihnorton/Clang.jl) package can help generate the wrappers automatically from the C header files.
 
@@ -71,7 +71,7 @@ to port your package to latest Julia release.
 
 However, porting a package to the latest release may cause the package to break on
 earlier Julia releases. To maintain compatibility across releases, use
-[`Compat.jl`](https://github.com/JuliaLang/Compat.jl/). Find the fix for your package
+[`Compat.jl`](https://github.com/JuliaLang/Compat.jl). Find the fix for your package
 from the README, and specify the minimum version of Compat that provides the fix
 in your REQUIRE file. To find the correct minimum version, refer to
 [this guide](https://github.com/JuliaLang/Compat.jl/#tagging-the-correct-minimum-version-of-compat).
@@ -84,7 +84,7 @@ There are never enough tests. Track [code coverage at Coveralls](https://coveral
 
 2. Browse through the source files and find some untested functionality (highlighted in red) that you think you might be able to write a test for.
 
-3. Write a test that exercises this functionality---you can add your test to one of the existing files, or start a new one, whichever seems most appropriate to you. If you're adding a new test file, make sure you include it in the list of tests in `test/choosetests.jl`. http://julia.readthedocs.org/en/latest/stdlib/test/ may be helpful in explaining how the testing infrastructure works.
+3. Write a test that exercises this functionality---you can add your test to one of the existing files, or start a new one, whichever seems most appropriate to you. If you're adding a new test file, make sure you include it in the list of tests in `test/choosetests.jl`. https://docs.julialang.org/en/latest/stdlib/test may be helpful in explaining how the testing infrastructure works.
 
 4. Run `make test-all` to rebuild Julia and run your new test(s). If you had to fix a bug or add functionality in `base`, this will ensure that your test passes and that you have not introduced extraneous whitespace.
 
@@ -112,7 +112,7 @@ from Julia's root directory. This will rebuild the Julia system image, then inst
 >
 > When making changes to any of Julia's documentation it is recommended that you run `make docs` to check the your changes are valid and do not produce any errors before opening a pull request.
 
-Below are outlined the three most common types of documentation changes and the steps required to perform them. Please note that the following instructions do not cover the full range of features provided by Documenter.jl. Refer to [Documenter's documentation](https://juliadocs.github.io/Documenter.jl/stable/) if you encounter anything that is not covered by the sections below.
+Below are outlined the three most common types of documentation changes and the steps required to perform them. Please note that the following instructions do not cover the full range of features provided by Documenter.jl. Refer to [Documenter's documentation](https://juliadocs.github.io/Documenter.jl/stable) if you encounter anything that is not covered by the sections below.
 
 #### Modifying files in `doc/src/`
 
@@ -194,7 +194,7 @@ For new functionality and other substantial changes, add a brief summary to `NEW
 
 The Julia community uses [GitHub issues](https://github.com/JuliaLang/julia/issues) to track and discuss problems, feature requests, and pull requests (PR). You can make pull requests for incomplete features to get code review. The convention is to prefix the pull request title with "WIP:" for Work In Progress, or "RFC:" for Request for Comments when work is completed and ready for merging. This will prevent accidental merging of work that is in progress.
 
-Note: These instructions are for adding to or improving functionality in the base library. Before getting started, it can be helpful to discuss the proposed changes or additions on the [Julia Discourse forum](https://discourse.julialang.org/) or in a GitHub issue---it's possible your proposed change belongs in a package rather than the core language. Also, keep in mind that changing stuff in the base can potentially break a lot of things. Finally, because of the time required to build Julia, note that it's usually faster to develop your code in stand-alone files, get it working, and then migrate it into the base libraries.
+Note: These instructions are for adding to or improving functionality in the base library. Before getting started, it can be helpful to discuss the proposed changes or additions on the [Julia Discourse forum](https://discourse.julialang.org) or in a GitHub issue---it's possible your proposed change belongs in a package rather than the core language. Also, keep in mind that changing stuff in the base can potentially break a lot of things. Finally, because of the time required to build Julia, note that it's usually faster to develop your code in stand-alone files, get it working, and then migrate it into the base libraries.
 
 Add new code to Julia's base libraries as follows:
 
@@ -216,7 +216,7 @@ or with the `runtests.jl` script, e.g. to run `test/bitarray.jl` and `test/math.
 
     ./usr/bin/julia test/runtests.jl bitarray math
 
-Make sure that [Travis](http://www.travis-ci.org) greenlights the pull request with a [`Good to merge` message](http://blog.travis-ci.com/2012-09-04-pull-requests-just-got-even-more-awesome/).
+Make sure that [Travis](http://www.travis-ci.org) greenlights the pull request with a [`Good to merge` message](http://blog.travis-ci.com/2012-09-04-pull-requests-just-got-even-more-awesome).
 
 ### Code Formatting Guidelines
 
@@ -274,10 +274,10 @@ Make sure that [Travis](http://www.travis-ci.org) greenlights the pull request w
 * Design of Julia
   - [Julia: A Fresh Approach to Numerical Computing](http://arxiv.org/pdf/1411.1607v3.pdf)
   - [Julia: A Fast Dynamic Language for Technical Computing](https://julialang.org/images/julia-dynamic-2012-tr.pdf)
-  - [All Julia Publications](https://julialang.org/publications/)
+  - [All Julia Publications](https://julialang.org/publications)
 
 * Using GitHub
   - [Using Julia with GitHub (video)](http://www.youtube.com/watch?v=wnFYV3ZKtOg&feature=youtu.be)
   - [Using Julia on GitHub (notes for video)](https://gist.github.com/2712118#file_Julia_git_pull_request.md)
-  - [General GitHub documentation](http://help.github.com/)
-  - [GitHub pull request documentation](http://help.github.com/send-pull-requests/)
+  - [General GitHub documentation](http://help.github.com)
+  - [GitHub pull request documentation](http://help.github.com/send-pull-requests)

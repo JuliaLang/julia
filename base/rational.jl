@@ -32,9 +32,9 @@ julia> (3 // 5) // (2 // 1)
 3//10
 ```
 """
-//(n::Integer,  d::Integer ) = Rational(n,d)
+//(n::Integer,  d::Integer) = Rational(n,d)
 
-function //(x::Rational, y::Integer )
+function //(x::Rational, y::Integer)
     xn,yn = divgcd(x.num,y)
     xn//checked_mul(x.den,yn)
 end
@@ -429,3 +429,5 @@ iszero(x::Rational) = iszero(numerator(x))
 function lerpi(j::Integer, d::Integer, a::Rational, b::Rational)
     ((d-j)*a)/d + (j*b)/d
 end
+
+float(::Type{Rational{T}}) where {T<:Integer} = float(T)

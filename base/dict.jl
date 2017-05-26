@@ -544,6 +544,15 @@ function pop!(h::Dict, key, default)
     return index > 0 ? _pop!(h, index) : default
 end
 
+function pop!(h::Dict)
+    isempty(h) && throw(ArgumentError("dict must be non-empty"))
+    idx = start(h)
+    key = h.keys[idx]
+    val = h.vals[idx]
+    _delete!(h, idx)
+    key => val
+end
+
 function _delete!(h::Dict, index)
     h.slots[index] = 0x2
     ccall(:jl_arrayunset, Void, (Any, UInt), h.keys, index-1)

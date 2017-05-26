@@ -405,7 +405,7 @@ ifeq ($(OS), Darwin)
 		install_name_tool -rpath @executable_path/$(build_private_libdir_rel) @executable_path/$(private_libdir_rel) $$julia; \
 		install_name_tool -add_rpath @executable_path/$(build_libdir_rel) @executable_path/$(libdir_rel) $$julia; \
 	done
-else ifeq ($(OS), Linux)
+else ifneq (,$(findstring $(OS),Linux FreeBSD))
 	for julia in $(DESTDIR)$(bindir)/julia* ; do \
 		patchelf --set-rpath '$$ORIGIN/$(private_libdir_rel):$$ORIGIN/$(libdir_rel)' $$julia; \
 	done
@@ -590,7 +590,7 @@ ifneq (,$(filter $(ARCH), i386 i486 i586 i686))
 	cd $(JULIAHOME)/dist-extras && \
 	$(JLDOWNLOAD) http://downloads.sourceforge.net/sevenzip/7z920.exe && \
 	7z x -y 7z920.exe 7z.exe 7z.dll && \
-	../contrib/windows/winrpm.sh http://download.opensuse.org/repositories/windows:/mingw:/win32/openSUSE_42.2 \
+	../contrib/windows/winrpm.sh http://download.opensuse.org/repositories/windows:/mingw:/win32/openSUSE_Leap_42.2 \
 		"mingw32-libgfortran3 mingw32-libquadmath0 mingw32-libstdc++6 mingw32-libgcc_s_sjlj1 mingw32-libssp0 mingw32-libwinpthread1 mingw32-libexpat1 mingw32-zlib1" && \
 	cp usr/i686-w64-mingw32/sys-root/mingw/bin/*.dll .
 else ifeq ($(ARCH),x86_64)
@@ -599,7 +599,7 @@ else ifeq ($(ARCH),x86_64)
 	7z x -y 7z920-x64.msi _7z.exe _7z.dll && \
 	mv _7z.dll 7z.dll && \
 	mv _7z.exe 7z.exe && \
-	../contrib/windows/winrpm.sh http://download.opensuse.org/repositories/windows:/mingw:/win64/openSUSE_42.2 \
+	../contrib/windows/winrpm.sh http://download.opensuse.org/repositories/windows:/mingw:/win64/openSUSE_Leap_42.2 \
 		"mingw64-libgfortran3 mingw64-libquadmath0 mingw64-libstdc++6 mingw64-libgcc_s_seh1 mingw64-libssp0 mingw64-libwinpthread1 mingw64-libexpat1 mingw64-zlib1" && \
 	cp usr/x86_64-w64-mingw32/sys-root/mingw/bin/*.dll .
 else

@@ -18,18 +18,8 @@ No matter the error, we will always need to know what version of Julia you are r
 first starts up, a header is printed out with a version number and date.  If your version is
 `0.2.0` or higher, please include the output of `versioninfo()` in any report you create:
 
-```julia
-julia> versioninfo()
-Julia Version 0.3.3-pre+25
-Commit 417b50a* (2014-11-03 11:32 UTC)
-Platform Info:
-  OS: Linux (x86_64-linux-gnu)
-  CPU: Intel(R) Core(TM) i7 CPU       L 640  @ 2.13GHz
-  WORD_SIZE: 64
-  BLAS: libopenblas (USE64BITINT DYNAMIC_ARCH NO_AFFINITY Nehalem)
-  LAPACK: libopenblas
-  LIBM: libopenlibm
-  LLVM: libLLVM-3.3
+```@repl
+versioninfo()
 ```
 
 ## Segfaults during bootstrap (`sysimg.jl`)

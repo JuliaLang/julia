@@ -211,3 +211,22 @@ julia> factorial(big(21))
 ```
 """
 factorial(x::Number) = gamma(x + 1) # fallback for x not Integer
+
+"""
+    big(T::Type)
+
+Compute the type that represents the numeric type `T` with arbitrary precision.
+Equivalent to `typeof(big(zero(T)))`.
+
+```jldoctest
+julia> big(Rational)
+Rational{BigInt}
+
+julia> big(Float64)
+BigFloat
+
+julia> big(Complex{Int})
+Complex{BigInt}
+```
+"""
+big(::Type{T}) where {T<:Number} = typeof(big(zero(T)))

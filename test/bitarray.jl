@@ -1,8 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-module BitArrayTests
-
-using Base.Test
 using Base: findprevnot, findnextnot
 
 tc{N}(r1::NTuple{N,Any}, r2::NTuple{N,Any}) = all(x->tc(x...), [zip(r1,r2)...])
@@ -1467,5 +1464,3 @@ end
 end
 
 timesofar("I/O")
-
-end # module

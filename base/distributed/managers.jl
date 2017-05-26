@@ -201,10 +201,10 @@ function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, 
     # detach launches the command in a new process group, allowing it to outlive
     # the initial julia process (Ctrl-C and teardown methods are handled through messages)
     # for the launched processes.
-    io, pobj = open(pipeline(detach(cmd), stderr=STDERR), "r")
+    io = open(detach(cmd))
 
     wconfig = WorkerConfig()
-    wconfig.io = io
+    wconfig.io = io.out
     wconfig.host = host
     wconfig.tunnel = params[:tunnel]
     wconfig.sshflags = sshflags
@@ -320,12 +320,11 @@ function launch(manager::LocalManager, params::Dict, launched::Array, c::Conditi
     bind_to = manager.restrict ? `127.0.0.1` : `$(LPROC.bind_addr)`
 
     for i in 1:manager.np
-        io, pobj = open(pipeline(detach(
-                setenv(`$(julia_cmd(exename)) $exeflags --bind-to $bind_to --worker $(cluster_cookie())`, dir=dir)),
-            stderr=STDERR), "r")
+        cmd = `$(julia_cmd(exename)) $exeflags --bind-to $bind_to --worker $(cluster_cookie())`
+        io = open(detach(setenv(cmd, dir=dir)))
         wconfig = WorkerConfig()
-        wconfig.process = pobj
-        wconfig.io = io
+        wconfig.process = io
+        wconfig.io = io.out
         wconfig.enable_threaded_blas = params[:enable_threaded_blas]
         push!(launched, wconfig)
     end
@@ -456,31 +455,35 @@ end
 const client_port = Ref{Cushort}(0)
 
 function socket_reuse_port()
-    s = TCPSocket()
-    client_host = Ref{Cuint}(0)
-    ccall(:jl_tcp_bind, Int32,
-            (Ptr{Void}, UInt16, UInt32, Cuint),
-            s.handle, hton(client_port.x), hton(UInt32(0)), 0) < 0 && throw(SystemError("bind() : "))
+    @static if is_linux() || is_apple()
+        s = TCPSocket(delay = false)
 
-    # TODO: Support OSX and change the above code to call setsockopt before bind once libuv provides
-    # early access to a socket fd, i.e., before a bind call.
-
-    @static if is_linux()
-        try
-            rc = ccall(:jl_tcp_reuseport, Int32, (Ptr{Void},), s.handle)
-            if rc > 0  # SO_REUSEPORT is unsupported, just return the ephemerally bound socket
-                return s
-            elseif rc < 0
-                throw(SystemError("setsockopt() SO_REUSEPORT : "))
-            end
-            getsockname(s)
-        catch e
+        # Linux requires the port to be bound before setting REUSEPORT, OSX after.
+        is_linux() && bind_client_port(s)
+        rc = ccall(:jl_tcp_reuseport, Int32, (Ptr{Void},), s.handle)
+        if rc > 0  # SO_REUSEPORT is unsupported, just return the ephemerally bound socket
+            return s
+        elseif rc < 0
             # This is an issue only on systems with lots of client connections, hence delay the warning
-            nworkers() > 128 && warn_once("Error trying to reuse client port number, falling back to plain socket : ", e)
+            nworkers() > 128 && warn_once("Error trying to reuse client port number, falling back to regular socket.")
+
             # provide a clean new socket
             return TCPSocket()
         end
+        is_apple() && bind_client_port(s)
+        return s
+    else
+        return TCPSocket()
     end
+end
+
+function bind_client_port(s)
+    err = ccall(:jl_tcp_bind, Int32, (Ptr{Void}, UInt16, UInt32, Cuint),
+                            s.handle, hton(client_port[]), hton(UInt32(0)), 0)
+    Base.uv_error("bind() failed", err)
+
+    _addr, port = getsockname(s)
+    client_port[] = port
     return s
 end
 

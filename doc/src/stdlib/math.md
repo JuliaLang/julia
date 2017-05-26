@@ -58,6 +58,7 @@ Base.:(!)
 Base.isapprox
 Base.sin
 Base.cos
+Base.sincos
 Base.tan
 Base.Math.sind
 Base.Math.cosd

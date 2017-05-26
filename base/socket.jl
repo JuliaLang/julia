@@ -282,10 +282,14 @@ mutable struct TCPSocket <: LibuvStream
         return tcp
     end
 end
-function TCPSocket()
+
+# kw arg "delay": if true, libuv delays creation of the socket fd till the first bind call
+function TCPSocket(; delay=true)
     tcp = TCPSocket(Libc.malloc(_sizeof_uv_tcp), StatusUninit)
-    err = ccall(:uv_tcp_init, Cint, (Ptr{Void}, Ptr{Void}),
-                eventloop(), tcp.handle)
+    af_spec = delay ? 0 : 2   # AF_UNSPEC is 0, AF_INET is 2
+
+    err = ccall(:uv_tcp_init_ex, Cint, (Ptr{Void}, Ptr{Void}, Cuint),
+                eventloop(), tcp.handle, af_spec)
     uv_error("failed to create tcp socket", err)
     tcp.status = StatusInit
     return tcp
@@ -822,6 +826,10 @@ function listenany(host::IPAddr, default_port)
     while true
         sock = TCPServer()
         if bind(sock, addr) && trylisten(sock) == 0
+            if default_port == 0
+                _addr, port = getsockname(sock)
+                return (port, sock)
+            end
             return (addr.port, sock)
         end
         close(sock)
@@ -837,19 +845,30 @@ listenany(default_port) = listenany(IPv4(UInt32(0)), default_port)
 """
     getsockname(sock::Union{TCPServer, TCPSocket}) -> (IPAddr, UInt16)
 
-Get the IP address and the port that the given `TCPSocket` is connected to
-(or bound to, in the case of `TCPServer`).
+Get the IP address and port that the given socket is bound to.
 """
-function getsockname(sock::Union{TCPServer,TCPSocket})
+getsockname(sock::Union{TCPSocket, TCPServer}) = _sockname(sock, true)
+
+
+"""
+    getpeername(sock::TCPSocket) -> (IPAddr, UInt16)
+
+Get the IP address and port of the remote endpoint that the given
+socket is connected to. Valid only for connected TCP sockets.
+"""
+getpeername(sock::TCPSocket) = _sockname(sock, false)
+
+function _sockname(sock, self=true)
     rport = Ref{Cushort}(0)
     raddress = zeros(UInt8, 16)
     rfamily = Ref{Cuint}(0)
-    r = if isa(sock, TCPServer)
-        ccall(:jl_tcp_getsockname, Int32,
+
+    if self
+        r = ccall(:jl_tcp_getsockname, Int32,
                 (Ptr{Void}, Ref{Cushort}, Ptr{Void}, Ref{Cuint}),
                 sock.handle, rport, raddress, rfamily)
     else
-        ccall(:jl_tcp_getpeername, Int32,
+        r = ccall(:jl_tcp_getpeername, Int32,
                 (Ptr{Void}, Ref{Cushort}, Ptr{Void}, Ref{Cuint}),
                 sock.handle, rport, raddress, rfamily)
     end
@@ -876,7 +895,7 @@ function getsockname(sock::Union{TCPServer,TCPSocket})
             naddr = ntoh(unsafe_load(Ptr{UInt128}(pointer(raddress)), 1))
             addr = IPv6(naddr)
         else
-            error("unsupported address family: $(getindex(rfamily))")
+            error(string("unsupported address family: ", getindex(rfamily)))
         end
     else
         error("cannot obtain socket name")

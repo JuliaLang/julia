@@ -40,7 +40,7 @@ function edit(path::AbstractString, line::Integer=0)
     end
     background = true
     line_unsupported = false
-    if startswith(name, "emacs") || name == "gedit"
+    if startswith(name, "emacs") || name == "gedit" || startswith(name, "gvim")
         cmd = line != 0 ? `$command +$line $path` : `$command $path`
     elseif startswith(name, "vim.") || name == "vi" || name == "vim" || name == "nvim" || name == "mvim" || name == "nano"
         cmd = line != 0 ? `$command +$line $path` : `$command $path`
@@ -349,7 +349,7 @@ function code_warntype(io::IO, f, t::ANY)
 end
 code_warntype(f, t::ANY) = code_warntype(STDOUT, f, t)
 
-typesof(args...) = Tuple{map(a->(isa(a,Type) ? Type{a} : typeof(a)), args)...}
+typesof(args...) = Tuple{Any[ Core.Typeof(a) for a in args ]...}
 
 gen_call_with_extracted_types(fcn, ex0::Symbol) = Expr(:call, fcn, Meta.quot(ex0))
 function gen_call_with_extracted_types(fcn, ex0)
@@ -371,9 +371,9 @@ function gen_call_with_extracted_types(fcn, ex0)
     exret = Expr(:none)
     is_macro = false
     ex = expand(ex0)
-    if isa(ex0, Expr) && ex0.head == :macrocall # Make @edit @time 1+2 edit the macro
+    if isa(ex0, Expr) && ex0.head == :macrocall # Make @edit @time 1+2 edit the macro by using the types of the *expressions*
         is_macro = true
-        exret = Expr(:call, fcn,  esc(ex0.args[1]), typesof(ex0.args[2:end]...))
+        exret = Expr(:call, fcn, esc(ex0.args[1]), Tuple{#=__source__=#LineNumberNode, Any[ Core.Typeof(a) for a in ex0.args[3:end] ]...})
     elseif !isa(ex, Expr)
         exret = Expr(:call, :error, "expression is not a function call or symbol")
     elseif ex.head == :call

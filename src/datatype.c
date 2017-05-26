@@ -135,7 +135,7 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t nfields,
     jl_datatype_layout_t *flddesc =
         (jl_datatype_layout_t*)jl_gc_perm_alloc(sizeof(jl_datatype_layout_t) +
                                                 nfields * fielddesc_size +
-                                                (has_padding ? sizeof(uint32_t) : 0), 0);
+                                                (has_padding ? sizeof(uint32_t) : 0), 0, 4, 0);
     if (has_padding) {
         if (first_ptr > UINT16_MAX)
             first_ptr = UINT16_MAX;
@@ -278,7 +278,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             // Should never happen
             if (__unlikely(fsz > max_size))
                 goto throw_ovf;
-            al = ((jl_datatype_t*)ty)->layout->alignment;
+            al = jl_datatype_align(ty);
             desc[i].isptr = 0;
             if (((jl_datatype_t*)ty)->layout->haspadding)
                 haspadding = 1;
@@ -290,6 +290,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             al = fsz;
             desc[i].isptr = 1;
         }
+        assert(al <= JL_HEAP_ALIGNMENT && (JL_HEAP_ALIGNMENT % al) == 0);
         if (al != 0) {
             size_t alsz = LLT_ALIGN(sz, al);
             if (sz & (al - 1))
@@ -310,7 +311,10 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         // Some tuples become LLVM vectors with stronger alignment than what was calculated above.
         unsigned al = jl_special_vector_alignment(nfields, lastty);
         assert(al % alignm == 0);
-        if (al)
+        // JL_HEAP_ALIGNMENT is the biggest alignment we can guarantee on the heap.
+        if (al > JL_HEAP_ALIGNMENT)
+            alignm = JL_HEAP_ALIGNMENT;
+        else if (al)
             alignm = al;
     }
     st->size = LLT_ALIGN(sz, alignm);
@@ -438,7 +442,7 @@ static jl_value_t *jl_new_bits_internal(jl_value_t *dt, void *data, size_t *len)
     size_t nb = jl_datatype_size(bt);
     if (nb == 0)
         return jl_new_struct_uninit(bt);
-    *len = LLT_ALIGN(*len, bt->layout->alignment);
+    *len = LLT_ALIGN(*len, jl_datatype_align(bt));
     data = (char*)data + (*len);
     *len += nb;
     if (bt == jl_uint8_type)   return jl_box_uint8(*(uint8_t*)data);
@@ -486,6 +490,14 @@ void jl_assign_bits(void *dest, jl_value_t *bits)
         assert(jl_isbits(t));                                           \
         assert(jl_datatype_size(t) == sizeof(x));                       \
         jl_value_t *v = jl_gc_alloc(ptls, nw * sizeof(void*), t);       \
+        *(int##nb##_t*)jl_data_ptr(v) = x;                              \
+        return v;                                                       \
+    }                                                                   \
+    jl_value_t *jl_permbox##nb(jl_datatype_t *t, int##nb##_t x)         \
+    {                                                                   \
+        assert(jl_isbits(t));                                           \
+        assert(jl_datatype_size(t) == sizeof(x));                       \
+        jl_value_t *v = jl_gc_permobj(nw * sizeof(void*), t);           \
         *(int##nb##_t*)jl_data_ptr(v) = x;                              \
         return v;                                                       \
     }
@@ -592,18 +604,18 @@ void jl_init_int32_int64_cache(void)
 {
     int64_t i;
     for(i=0; i < NBOX_C; i++) {
-        boxed_int32_cache[i]  = jl_box32(jl_int32_type, i-NBOX_C/2);
-        boxed_int64_cache[i]  = jl_box64(jl_int64_type, i-NBOX_C/2);
+        boxed_int32_cache[i]  = jl_permbox32(jl_int32_type, i-NBOX_C/2);
+        boxed_int64_cache[i]  = jl_permbox64(jl_int64_type, i-NBOX_C/2);
 #ifdef _P64
-        boxed_ssavalue_cache[i] = jl_box64(jl_ssavalue_type, i);
-        boxed_slotnumber_cache[i] = jl_box64(jl_slotnumber_type, i);
+        boxed_ssavalue_cache[i] = jl_permbox64(jl_ssavalue_type, i);
+        boxed_slotnumber_cache[i] = jl_permbox64(jl_slotnumber_type, i);
 #else
-        boxed_ssavalue_cache[i] = jl_box32(jl_ssavalue_type, i);
-        boxed_slotnumber_cache[i] = jl_box32(jl_slotnumber_type, i);
+        boxed_ssavalue_cache[i] = jl_permbox32(jl_ssavalue_type, i);
+        boxed_slotnumber_cache[i] = jl_permbox32(jl_slotnumber_type, i);
 #endif
     }
     for(i=0; i < 256; i++) {
-        boxed_uint8_cache[i] = jl_box8(jl_uint8_type, i);
+        boxed_uint8_cache[i] = jl_permbox8(jl_uint8_type, i);
     }
 }
 
@@ -611,34 +623,14 @@ void jl_init_box_caches(void)
 {
     int64_t i;
     for(i=0; i < 256; i++) {
-        boxed_int8_cache[i]  = jl_box8(jl_int8_type, i);
+        boxed_int8_cache[i]  = jl_permbox8(jl_int8_type, i);
     }
     for(i=0; i < NBOX_C; i++) {
-        boxed_int16_cache[i]  = jl_box16(jl_int16_type, i-NBOX_C/2);
-        boxed_uint16_cache[i] = jl_box16(jl_uint16_type, i);
-        boxed_uint32_cache[i] = jl_box32(jl_uint32_type, i);
-        boxed_char_cache[i]   = jl_box32(jl_char_type, i);
-        boxed_uint64_cache[i] = jl_box64(jl_uint64_type, i);
-    }
-}
-
-void jl_mark_box_caches(jl_ptls_t ptls)
-{
-    int64_t i;
-    for(i=0; i < 256; i++) {
-        jl_gc_setmark(ptls, boxed_int8_cache[i]);
-        jl_gc_setmark(ptls, boxed_uint8_cache[i]);
-    }
-    for(i=0; i < NBOX_C; i++) {
-        jl_gc_setmark(ptls, boxed_int16_cache[i]);
-        jl_gc_setmark(ptls, boxed_int32_cache[i]);
-        jl_gc_setmark(ptls, boxed_int64_cache[i]);
-        jl_gc_setmark(ptls, boxed_uint16_cache[i]);
-        jl_gc_setmark(ptls, boxed_uint32_cache[i]);
-        jl_gc_setmark(ptls, boxed_char_cache[i]);
-        jl_gc_setmark(ptls, boxed_uint64_cache[i]);
-        jl_gc_setmark(ptls, boxed_ssavalue_cache[i]);
-        jl_gc_setmark(ptls, boxed_slotnumber_cache[i]);
+        boxed_int16_cache[i]  = jl_permbox16(jl_int16_type, i-NBOX_C/2);
+        boxed_uint16_cache[i] = jl_permbox16(jl_uint16_type, i);
+        boxed_uint32_cache[i] = jl_permbox32(jl_uint32_type, i);
+        boxed_char_cache[i]   = jl_permbox32(jl_char_type, i);
+        boxed_uint64_cache[i] = jl_permbox64(jl_uint64_type, i);
     }
 }
 
@@ -771,7 +763,7 @@ JL_DLLEXPORT size_t jl_get_alignment(jl_datatype_t *ty)
 {
     if (ty->layout == NULL)
         jl_error("non-leaf type doesn't have an alignment");
-    return ty->layout->alignment;
+    return jl_datatype_align(ty);
 }
 
 #ifdef __cplusplus
