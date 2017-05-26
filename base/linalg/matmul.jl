@@ -7,7 +7,6 @@ matprod(x, y) = x*y + x*y
 # multiply by diagonal matrix as vector
 function scale!(C::AbstractMatrix, A::AbstractMatrix, b::AbstractVector)
     m, n = size(A)
-    p, q = size(C)
     if size(A) != size(C)
         throw(DimensionMismatch("size of A, $(size(A)), does not match size of C, $(size(C))"))
     end
@@ -25,7 +24,6 @@ end
 
 function scale!(C::AbstractMatrix, b::AbstractVector, A::AbstractMatrix)
     m, n = size(A)
-    p, q = size(C)
     if size(A) != size(C)
         throw(DimensionMismatch("size of A, $(size(A)), does not match size of C, $(size(C))"))
     end
