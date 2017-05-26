@@ -359,6 +359,7 @@ mktemp(parent)
     mktempdir(parent=tempdir())
 
 Create a temporary directory in the `parent` directory and return its path.
+If `parent` does not exist, throw an error.
 """
 mktempdir(parent)
 
@@ -366,7 +367,8 @@ mktempdir(parent)
 """
     mktemp(f::Function, parent=tempdir())
 
-Apply the function `f` to the result of `mktemp(parent)` and remove the temporary file upon completion.
+Apply the function `f` to the result of [`mktemp(parent)`](@ref) and remove the
+temporary file upon completion.
 """
 function mktemp(fn::Function, parent=tempdir())
     (tmp_path, tmp_io) = mktemp(parent)
@@ -381,8 +383,8 @@ end
 """
     mktempdir(f::Function, parent=tempdir())
 
-Apply the function `f` to the result of `mktempdir(parent)` and remove the temporary
-directory upon completion.
+Apply the function `f` to the result of [`mktempdir(parent)`](@ref) and remove the
+temporary directory upon completion.
 """
 function mktempdir(fn::Function, parent=tempdir())
     tmpdir = mktempdir(parent)
