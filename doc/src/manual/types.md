@@ -134,7 +134,7 @@ of object implementations.
 
 Recall that in [Integers and Floating-Point Numbers](@ref), we introduced a variety of concrete
 types of numeric values: [`Int8`](@ref), [`UInt8`](@ref), [`Int16`](@ref), [`UInt16`](@ref),
-[`Int32`](@ref), [`UInt32`](@ref), [`Int64`](@ref), `UInt64`, `Int128`, `UInt128`,
+[`Int32`](@ref), [`UInt32`](@ref), [`Int64`](@ref), [`UInt64`](@ref), `Int128`, `UInt128`,
 [`Float16`](@ref), [`Float32`](@ref), and [`Float64`](@ref). Although they have different
 representation sizes, `Int8`, `Int16`, `Int32`, `Int64` and `Int128` all have in common that
 they are signed integer types. Likewise `UInt8`, `UInt16`, `UInt32`, `UInt64` and `UInt128`
@@ -1063,8 +1063,8 @@ element type.
 
 Sometimes it is convenient to introduce a new name for an already expressible type.
 This can be done with a simple assignment statement.
-For example, `UInt` is aliased to either [`UInt32`](@ref) or `UInt64` as is appropriate
-for the size of pointers on the system:
+For example, `UInt` is aliased to either [`UInt32`](@ref) or [`UInt64`](@ref) as is
+appropriate for the size of pointers on the system:
 
 ```julia-repl
 # 32-bit system:
