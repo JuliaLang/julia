@@ -8397,7 +8397,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.conj",
     "category": "Function",
-    "text": "conj(v::RowVector)\n\nReturns a ConjArray lazy view of the input, where each element is conjugated.\n\nExample\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\nconj(z)\n\nCompute the complex conjugate of a complex number z.\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\n"
+    "text": "conj(z)\n\nCompute the complex conjugate of a complex number z.\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\nconj(v::RowVector)\n\nReturns a ConjArray lazy view of the input, where each element is conjugated.\n\nExample\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\n"
 },
 
 {
@@ -10337,131 +10337,11 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/arrays.html#Base.ndims",
+    "location": "stdlib/arrays.html#Core.AbstractArray",
     "page": "Arrays",
-    "title": "Base.ndims",
-    "category": "Function",
-    "text": "ndims(A::AbstractArray) -> Integer\n\nReturns the number of dimensions of A.\n\njulia> A = ones(3,4,5);\n\njulia> ndims(A)\n3\n\n\n\n"
-},
-
-{
-    "location": "stdlib/arrays.html#Base.size",
-    "page": "Arrays",
-    "title": "Base.size",
-    "category": "Function",
-    "text": "size(A::AbstractArray, [dim...])\n\nReturns a tuple containing the dimensions of A. Optionally you can specify the dimension(s) you want the length of, and get the length of that dimension, or a tuple of the lengths of dimensions you asked for.\n\njulia> A = ones(2,3,4);\n\njulia> size(A, 2)\n3\n\njulia> size(A,3,2)\n(4, 3)\n\n\n\n"
-},
-
-{
-    "location": "stdlib/arrays.html#Base.indices-Tuple{Any}",
-    "page": "Arrays",
-    "title": "Base.indices",
-    "category": "Method",
-    "text": "indices(A)\n\nReturns the tuple of valid indices for array A.\n\njulia> A = ones(5,6,7);\n\njulia> indices(A)\n(Base.OneTo(5), Base.OneTo(6), Base.OneTo(7))\n\n\n\n"
-},
-
-{
-    "location": "stdlib/arrays.html#Base.indices-Tuple{AbstractArray,Any}",
-    "page": "Arrays",
-    "title": "Base.indices",
-    "category": "Method",
-    "text": "indices(A, d)\n\nReturns the valid range of indices for array A along dimension d.\n\njulia> A = ones(5,6,7);\n\njulia> indices(A,2)\nBase.OneTo(6)\n\n\n\n"
-},
-
-{
-    "location": "stdlib/arrays.html#Base.length-Tuple{AbstractArray}",
-    "page": "Arrays",
-    "title": "Base.length",
-    "category": "Method",
-    "text": "length(A::AbstractArray) -> Integer\n\nReturns the number of elements in A.\n\njulia> A = ones(3,4,5);\n\njulia> length(A)\n60\n\n\n\n"
-},
-
-{
-    "location": "stdlib/arrays.html#Base.eachindex",
-    "page": "Arrays",
-    "title": "Base.eachindex",
-    "category": "Function",
-    "text": "eachindex(A...)\n\nCreates an iterable object for visiting each index of an AbstractArray A in an efficient manner. For array types that have opted into fast linear indexing (like Array), this is simply the range 1:length(A). For other array types, this returns a specialized Cartesian range to efficiently index into the array with indices specified for every dimension. For other iterables, including strings and dictionaries, this returns an iterator object supporting arbitrary index types (e.g. unevenly spaced or non-integer indices).\n\nExample for a sparse 2-d array:\n\njulia> A = sparse([1, 1, 2], [1, 3, 1], [1, 2, -5])\n2×3 SparseMatrixCSC{Int64,Int64} with 3 stored entries:\n  [1, 1]  =  1\n  [2, 1]  =  -5\n  [1, 3]  =  2\n\njulia> for iter in eachindex(A)\n           @show iter.I[1], iter.I[2]\n           @show A[iter]\n       end\n(iter.I[1], iter.I[2]) = (1, 1)\nA[iter] = 1\n(iter.I[1], iter.I[2]) = (2, 1)\nA[iter] = -5\n(iter.I[1], iter.I[2]) = (1, 2)\nA[iter] = 0\n(iter.I[1], iter.I[2]) = (2, 2)\nA[iter] = 0\n(iter.I[1], iter.I[2]) = (1, 3)\nA[iter] = 2\n(iter.I[1], iter.I[2]) = (2, 3)\nA[iter] = 0\n\nIf you supply more than one AbstractArray argument, eachindex will create an iterable object that is fast for all arguments (a UnitRange if all inputs have fast linear indexing, a CartesianRange otherwise). If the arrays have different sizes and/or dimensionalities, eachindex returns an iterable that spans the largest range along each dimension.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/arrays.html#Base.linearindices",
-    "page": "Arrays",
-    "title": "Base.linearindices",
-    "category": "Function",
-    "text": "linearindices(A)\n\nReturns a UnitRange specifying the valid range of indices for A[i] where i is an Int. For arrays with conventional indexing (indices start at 1), or any multidimensional array, this is 1:length(A); however, for one-dimensional arrays with unconventional indices, this is indices(A, 1).\n\nCalling this function is the \"safe\" way to write algorithms that exploit linear indexing.\n\njulia> A = ones(5,6,7);\n\njulia> b = linearindices(A);\n\njulia> extrema(b)\n(1, 210)\n\n\n\n"
-},
-
-{
-    "location": "stdlib/arrays.html#Base.IndexStyle",
-    "page": "Arrays",
-    "title": "Base.IndexStyle",
+    "title": "Core.AbstractArray",
     "category": "Type",
-    "text": "IndexStyle(A)\nIndexStyle(typeof(A))\n\nIndexStyle specifies the \"native indexing style\" for array A. When you define a new AbstractArray type, you can choose to implement either linear indexing or cartesian indexing.  If you decide to implement linear indexing, then you must set this trait for your array type:\n\nBase.IndexStyle(::Type{<:MyArray}) = IndexLinear()\n\nThe default is IndexCartesian().\n\nJulia's internal indexing machinery will automatically (and invisibly) convert all indexing operations into the preferred style using sub2ind or ind2sub. This allows users to access elements of your array using any indexing style, even when explicit methods have not been provided.\n\nIf you define both styles of indexing for your AbstractArray, this trait can be used to select the most performant indexing style. Some methods check this trait on their inputs, and dispatch to different algorithms depending on the most efficient access pattern. In particular, eachindex creates an iterator whose type depends on the setting of this trait.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/arrays.html#Base.countnz",
-    "page": "Arrays",
-    "title": "Base.countnz",
-    "category": "Function",
-    "text": "countnz(A) -> Integer\n\nCounts the number of nonzero values in array A (dense or sparse). Note that this is not a constant-time operation. For sparse matrices, one should usually use nnz, which returns the number of stored values.\n\njulia> A = [1 2 4; 0 0 1; 1 1 0]\n3×3 Array{Int64,2}:\n 1  2  4\n 0  0  1\n 1  1  0\n\njulia> countnz(A)\n6\n\n\n\n"
-},
-
-{
-    "location": "stdlib/arrays.html#Base.conj!",
-    "page": "Arrays",
-    "title": "Base.conj!",
-    "category": "Function",
-    "text": "conj!(A)\n\nTransform an array to its complex conjugate in-place.\n\nSee also conj.\n\njulia> A = [1+im 2-im; 2+2im 3+im]\n2×2 Array{Complex{Int64},2}:\n 1+1im  2-1im\n 2+2im  3+1im\n\njulia> conj!(A);\n\njulia> A\n2×2 Array{Complex{Int64},2}:\n 1-1im  2+1im\n 2-2im  3-1im\n\n\n\n"
-},
-
-{
-    "location": "stdlib/arrays.html#Base.stride",
-    "page": "Arrays",
-    "title": "Base.stride",
-    "category": "Function",
-    "text": "stride(A, k::Integer)\n\nReturns the distance in memory (in number of elements) between adjacent elements in dimension k.\n\njulia> A = ones(3,4,5);\n\njulia> stride(A,2)\n3\n\njulia> stride(A,3)\n12\n\n\n\n"
-},
-
-{
-    "location": "stdlib/arrays.html#Base.strides",
-    "page": "Arrays",
-    "title": "Base.strides",
-    "category": "Function",
-    "text": "strides(A)\n\nReturns a tuple of the memory strides in each dimension.\n\njulia> A = ones(3,4,5);\n\njulia> strides(A)\n(1, 3, 12)\n\n\n\n"
-},
-
-{
-    "location": "stdlib/arrays.html#Base.ind2sub",
-    "page": "Arrays",
-    "title": "Base.ind2sub",
-    "category": "Function",
-    "text": "ind2sub(a, index) -> subscripts\n\nReturns a tuple of subscripts into array a corresponding to the linear index index.\n\njulia> A = ones(5,6,7);\n\njulia> ind2sub(A,35)\n(5, 1, 2)\n\njulia> ind2sub(A,70)\n(5, 2, 3)\n\n\n\nind2sub(dims, index) -> subscripts\n\nReturns a tuple of subscripts into an array with dimensions dims, corresponding to the linear index index.\n\nExample:\n\ni, j, ... = ind2sub(size(A), indmax(A))\n\nprovides the indices of the maximum element.\n\njulia> ind2sub((3,4),2)\n(2, 1)\n\njulia> ind2sub((3,4),3)\n(3, 1)\n\njulia> ind2sub((3,4),4)\n(1, 2)\n\n\n\n"
-},
-
-{
-    "location": "stdlib/arrays.html#Base.sub2ind",
-    "page": "Arrays",
-    "title": "Base.sub2ind",
-    "category": "Function",
-    "text": "sub2ind(dims, i, j, k...) -> index\n\nThe inverse of ind2sub, returns the linear index corresponding to the provided subscripts.\n\njulia> sub2ind((5,6,7),1,2,3)\n66\n\njulia> sub2ind((5,6,7),1,6,3)\n86\n\n\n\n"
-},
-
-{
-    "location": "stdlib/arrays.html#Base.LinAlg.checksquare",
-    "page": "Arrays",
-    "title": "Base.LinAlg.checksquare",
-    "category": "Function",
-    "text": "LinAlg.checksquare(A)\n\nCheck that a matrix is square, then return its common dimension. For multiple arguments, return a vector.\n\nExample\n\njulia> A = ones(4,4); B = zeros(5,5);\n\njulia> LinAlg.checksquare(A, B)\n2-element Array{Int64,1}:\n 4\n 5\n\n\n\n"
-},
-
-{
-    "location": "stdlib/arrays.html#Basic-functions-1",
-    "page": "Arrays",
-    "title": "Basic functions",
-    "category": "section",
-    "text": "Base.ndims\nBase.size\nBase.indices(::Any)\nBase.indices(::AbstractArray, ::Any)\nBase.length(::AbstractArray)\nBase.eachindex\nBase.linearindices\nBase.IndexStyle\nBase.countnz\nBase.conj!\nBase.stride\nBase.strides\nBase.ind2sub\nBase.sub2ind\nBase.LinAlg.checksquare"
+    "text": "AbstractArray{T, N}\n\nAbstract array supertype which arrays inherit from.\n\n\n\n"
 },
 
 {
@@ -10593,11 +10473,139 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/arrays.html#Constructors-1",
+    "location": "stdlib/arrays.html#Constructors-and-Types-1",
     "page": "Arrays",
-    "title": "Constructors",
+    "title": "Constructors and Types",
     "category": "section",
-    "text": "Core.Array\nBase.getindex(::Type, ::Any...)\nBase.zeros\nBase.ones\nBase.BitArray\nBase.trues\nBase.falses\nBase.fill\nBase.fill!\nBase.similar(::AbstractArray)\nBase.similar(::Any, ::Tuple)\nBase.eye\nBase.linspace\nBase.logspace\nBase.Random.randsubseq\nBase.Random.randsubseq!"
+    "text": "Core.AbstractArray\nCore.Array\nBase.getindex(::Type, ::Any...)\nBase.zeros\nBase.ones\nBase.BitArray\nBase.trues\nBase.falses\nBase.fill\nBase.fill!\nBase.similar(::AbstractArray)\nBase.similar(::Any, ::Tuple)\nBase.eye\nBase.linspace\nBase.logspace\nBase.Random.randsubseq\nBase.Random.randsubseq!"
+},
+
+{
+    "location": "stdlib/arrays.html#Base.ndims",
+    "page": "Arrays",
+    "title": "Base.ndims",
+    "category": "Function",
+    "text": "ndims(A::AbstractArray) -> Integer\n\nReturns the number of dimensions of A.\n\njulia> A = ones(3,4,5);\n\njulia> ndims(A)\n3\n\n\n\n"
+},
+
+{
+    "location": "stdlib/arrays.html#Base.size",
+    "page": "Arrays",
+    "title": "Base.size",
+    "category": "Function",
+    "text": "size(A::AbstractArray, [dim...])\n\nReturns a tuple containing the dimensions of A. Optionally you can specify the dimension(s) you want the length of, and get the length of that dimension, or a tuple of the lengths of dimensions you asked for.\n\njulia> A = ones(2,3,4);\n\njulia> size(A, 2)\n3\n\njulia> size(A,3,2)\n(4, 3)\n\n\n\n"
+},
+
+{
+    "location": "stdlib/arrays.html#Base.indices-Tuple{Any}",
+    "page": "Arrays",
+    "title": "Base.indices",
+    "category": "Method",
+    "text": "indices(A)\n\nReturns the tuple of valid indices for array A.\n\njulia> A = ones(5,6,7);\n\njulia> indices(A)\n(Base.OneTo(5), Base.OneTo(6), Base.OneTo(7))\n\n\n\n"
+},
+
+{
+    "location": "stdlib/arrays.html#Base.indices-Tuple{AbstractArray,Any}",
+    "page": "Arrays",
+    "title": "Base.indices",
+    "category": "Method",
+    "text": "indices(A, d)\n\nReturns the valid range of indices for array A along dimension d.\n\njulia> A = ones(5,6,7);\n\njulia> indices(A,2)\nBase.OneTo(6)\n\n\n\n"
+},
+
+{
+    "location": "stdlib/arrays.html#Base.length-Tuple{AbstractArray}",
+    "page": "Arrays",
+    "title": "Base.length",
+    "category": "Method",
+    "text": "length(A::AbstractArray) -> Integer\n\nReturns the number of elements in A.\n\njulia> A = ones(3,4,5);\n\njulia> length(A)\n60\n\n\n\n"
+},
+
+{
+    "location": "stdlib/arrays.html#Base.eachindex",
+    "page": "Arrays",
+    "title": "Base.eachindex",
+    "category": "Function",
+    "text": "eachindex(A...)\n\nCreates an iterable object for visiting each index of an AbstractArray A in an efficient manner. For array types that have opted into fast linear indexing (like Array), this is simply the range 1:length(A). For other array types, this returns a specialized Cartesian range to efficiently index into the array with indices specified for every dimension. For other iterables, including strings and dictionaries, this returns an iterator object supporting arbitrary index types (e.g. unevenly spaced or non-integer indices).\n\nExample for a sparse 2-d array:\n\njulia> A = sparse([1, 1, 2], [1, 3, 1], [1, 2, -5])\n2×3 SparseMatrixCSC{Int64,Int64} with 3 stored entries:\n  [1, 1]  =  1\n  [2, 1]  =  -5\n  [1, 3]  =  2\n\njulia> for iter in eachindex(A)\n           @show iter.I[1], iter.I[2]\n           @show A[iter]\n       end\n(iter.I[1], iter.I[2]) = (1, 1)\nA[iter] = 1\n(iter.I[1], iter.I[2]) = (2, 1)\nA[iter] = -5\n(iter.I[1], iter.I[2]) = (1, 2)\nA[iter] = 0\n(iter.I[1], iter.I[2]) = (2, 2)\nA[iter] = 0\n(iter.I[1], iter.I[2]) = (1, 3)\nA[iter] = 2\n(iter.I[1], iter.I[2]) = (2, 3)\nA[iter] = 0\n\nIf you supply more than one AbstractArray argument, eachindex will create an iterable object that is fast for all arguments (a UnitRange if all inputs have fast linear indexing, a CartesianRange otherwise). If the arrays have different sizes and/or dimensionalities, eachindex returns an iterable that spans the largest range along each dimension.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/arrays.html#Base.linearindices",
+    "page": "Arrays",
+    "title": "Base.linearindices",
+    "category": "Function",
+    "text": "linearindices(A)\n\nReturns a UnitRange specifying the valid range of indices for A[i] where i is an Int. For arrays with conventional indexing (indices start at 1), or any multidimensional array, this is 1:length(A); however, for one-dimensional arrays with unconventional indices, this is indices(A, 1).\n\nCalling this function is the \"safe\" way to write algorithms that exploit linear indexing.\n\njulia> A = ones(5,6,7);\n\njulia> b = linearindices(A);\n\njulia> extrema(b)\n(1, 210)\n\n\n\n"
+},
+
+{
+    "location": "stdlib/arrays.html#Base.IndexStyle",
+    "page": "Arrays",
+    "title": "Base.IndexStyle",
+    "category": "Type",
+    "text": "IndexStyle(A)\nIndexStyle(typeof(A))\n\nIndexStyle specifies the \"native indexing style\" for array A. When you define a new AbstractArray type, you can choose to implement either linear indexing or cartesian indexing.  If you decide to implement linear indexing, then you must set this trait for your array type:\n\nBase.IndexStyle(::Type{<:MyArray}) = IndexLinear()\n\nThe default is IndexCartesian().\n\nJulia's internal indexing machinery will automatically (and invisibly) convert all indexing operations into the preferred style using sub2ind or ind2sub. This allows users to access elements of your array using any indexing style, even when explicit methods have not been provided.\n\nIf you define both styles of indexing for your AbstractArray, this trait can be used to select the most performant indexing style. Some methods check this trait on their inputs, and dispatch to different algorithms depending on the most efficient access pattern. In particular, eachindex creates an iterator whose type depends on the setting of this trait.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/arrays.html#Base.countnz",
+    "page": "Arrays",
+    "title": "Base.countnz",
+    "category": "Function",
+    "text": "countnz(A) -> Integer\n\nCounts the number of nonzero values in array A (dense or sparse). Note that this is not a constant-time operation. For sparse matrices, one should usually use nnz, which returns the number of stored values.\n\njulia> A = [1 2 4; 0 0 1; 1 1 0]\n3×3 Array{Int64,2}:\n 1  2  4\n 0  0  1\n 1  1  0\n\njulia> countnz(A)\n6\n\n\n\n"
+},
+
+{
+    "location": "stdlib/arrays.html#Base.conj!",
+    "page": "Arrays",
+    "title": "Base.conj!",
+    "category": "Function",
+    "text": "conj!(A)\n\nTransform an array to its complex conjugate in-place.\n\nSee also conj.\n\njulia> A = [1+im 2-im; 2+2im 3+im]\n2×2 Array{Complex{Int64},2}:\n 1+1im  2-1im\n 2+2im  3+1im\n\njulia> conj!(A);\n\njulia> A\n2×2 Array{Complex{Int64},2}:\n 1-1im  2+1im\n 2-2im  3-1im\n\n\n\n"
+},
+
+{
+    "location": "stdlib/arrays.html#Base.stride",
+    "page": "Arrays",
+    "title": "Base.stride",
+    "category": "Function",
+    "text": "stride(A, k::Integer)\n\nReturns the distance in memory (in number of elements) between adjacent elements in dimension k.\n\njulia> A = ones(3,4,5);\n\njulia> stride(A,2)\n3\n\njulia> stride(A,3)\n12\n\n\n\n"
+},
+
+{
+    "location": "stdlib/arrays.html#Base.strides",
+    "page": "Arrays",
+    "title": "Base.strides",
+    "category": "Function",
+    "text": "strides(A)\n\nReturns a tuple of the memory strides in each dimension.\n\njulia> A = ones(3,4,5);\n\njulia> strides(A)\n(1, 3, 12)\n\n\n\n"
+},
+
+{
+    "location": "stdlib/arrays.html#Base.ind2sub",
+    "page": "Arrays",
+    "title": "Base.ind2sub",
+    "category": "Function",
+    "text": "ind2sub(a, index) -> subscripts\n\nReturns a tuple of subscripts into array a corresponding to the linear index index.\n\njulia> A = ones(5,6,7);\n\njulia> ind2sub(A,35)\n(5, 1, 2)\n\njulia> ind2sub(A,70)\n(5, 2, 3)\n\n\n\nind2sub(dims, index) -> subscripts\n\nReturns a tuple of subscripts into an array with dimensions dims, corresponding to the linear index index.\n\nExample:\n\ni, j, ... = ind2sub(size(A), indmax(A))\n\nprovides the indices of the maximum element.\n\njulia> ind2sub((3,4),2)\n(2, 1)\n\njulia> ind2sub((3,4),3)\n(3, 1)\n\njulia> ind2sub((3,4),4)\n(1, 2)\n\n\n\n"
+},
+
+{
+    "location": "stdlib/arrays.html#Base.sub2ind",
+    "page": "Arrays",
+    "title": "Base.sub2ind",
+    "category": "Function",
+    "text": "sub2ind(dims, i, j, k...) -> index\n\nThe inverse of ind2sub, returns the linear index corresponding to the provided subscripts.\n\njulia> sub2ind((5,6,7),1,2,3)\n66\n\njulia> sub2ind((5,6,7),1,6,3)\n86\n\n\n\n"
+},
+
+{
+    "location": "stdlib/arrays.html#Base.LinAlg.checksquare",
+    "page": "Arrays",
+    "title": "Base.LinAlg.checksquare",
+    "category": "Function",
+    "text": "LinAlg.checksquare(A)\n\nCheck that a matrix is square, then return its common dimension. For multiple arguments, return a vector.\n\nExample\n\njulia> A = ones(4,4); B = zeros(5,5);\n\njulia> LinAlg.checksquare(A, B)\n2-element Array{Int64,1}:\n 4\n 5\n\n\n\n"
+},
+
+{
+    "location": "stdlib/arrays.html#Basic-functions-1",
+    "page": "Arrays",
+    "title": "Basic functions",
+    "category": "section",
+    "text": "Base.ndims\nBase.size\nBase.indices(::Any)\nBase.indices(::AbstractArray, ::Any)\nBase.length(::AbstractArray)\nBase.eachindex\nBase.linearindices\nBase.IndexStyle\nBase.countnz\nBase.conj!\nBase.stride\nBase.strides\nBase.ind2sub\nBase.sub2ind\nBase.LinAlg.checksquare"
 },
 
 {
@@ -19549,7 +19557,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays with custom indices",
     "title": "Using indices for bounds checks and loop iteration",
     "category": "section",
-    "text": "indices(A) (reminiscent of size(A)) returns a tuple of AbstractUnitRange objects, specifying the range of valid indices along each dimension of A.  When A has unconventional indexing, the ranges may not start at 1.  If you just want the range for a particular dimension d, there is indices(A, d).Base implements a custom range type, OneTo, where OneTo(n) means the same thing as 1:n but in a form that guarantees (via the type system) that the lower index is 1.  For any new AbstractArray type, this is the default returned by indices, and it indicates that this array type uses \"conventional\" 1-based indexing.  Note that if you don't want to be bothered supporting arrays with non-1 indexing, you can add the following line:@assert all(x->isa(x, Base.OneTo), indices(A))at the top of any function.For bounds checking, note that there are dedicated functions checkbounds and checkindex which can sometimes simplify such tests."
+    "text": "indices(A) (reminiscent of size(A)) returns a tuple of AbstractUnitRange objects, specifying the range of valid indices along each dimension of A.  When A has unconventional indexing, the ranges may not start at 1.  If you just want the range for a particular dimension d, there is indices(A, d).Base implements a custom range type, OneTo, where OneTo(n) means the same thing as 1:n but in a form that guarantees (via the type system) that the lower index is 1. For any new AbstractArray type, this is the default returned by indices, and it indicates that this array type uses \"conventional\" 1-based indexing.  Note that if you don't want to be bothered supporting arrays with non-1 indexing, you can add the following line:@assert all(x->isa(x, Base.OneTo), indices(A))at the top of any function.For bounds checking, note that there are dedicated functions checkbounds and checkindex which can sometimes simplify such tests."
 },
 
 {
