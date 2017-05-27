@@ -39,7 +39,7 @@ Fully implemented by:
   * `UnitRange`
   * `Tuple`
   * `Number`
-  * `AbstractArray`
+  * [`AbstractArray`](@ref)
   * [`IntSet`](@ref)
   * [`ObjectIdDict`](@ref)
   * [`Dict`](@ref)
@@ -63,7 +63,7 @@ Fully implemented by:
   * `UnitRange`
   * `Tuple`
   * `Number`
-  * `AbstractArray`
+  * [`AbstractArray`](@ref)
   * [`IntSet`](@ref)
   * [`ObjectIdDict`](@ref)
   * [`Dict`](@ref)
@@ -145,7 +145,7 @@ Fully implemented by:
 
   * [`Array`](@ref)
   * [`BitArray`](@ref)
-  * `AbstractArray`
+  * [`AbstractArray`](@ref)
   * `SubArray`
   * [`ObjectIdDict`](@ref)
   * [`Dict`](@ref)

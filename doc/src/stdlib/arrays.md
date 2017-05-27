@@ -1,5 +1,27 @@
 # [Arrays](@id lib-arrays)
 
+## Constructors and Types
+
+```@docs
+Core.AbstractArray
+Core.Array
+Base.getindex(::Type, ::Any...)
+Base.zeros
+Base.ones
+Base.BitArray
+Base.trues
+Base.falses
+Base.fill
+Base.fill!
+Base.similar(::AbstractArray)
+Base.similar(::Any, ::Tuple)
+Base.eye
+Base.linspace
+Base.logspace
+Base.Random.randsubseq
+Base.Random.randsubseq!
+```
+
 ## Basic functions
 
 ```@docs
@@ -18,27 +40,6 @@ Base.strides
 Base.ind2sub
 Base.sub2ind
 Base.LinAlg.checksquare
-```
-
-## Constructors
-
-```@docs
-Core.Array
-Base.getindex(::Type, ::Any...)
-Base.zeros
-Base.ones
-Base.BitArray
-Base.trues
-Base.falses
-Base.fill
-Base.fill!
-Base.similar(::AbstractArray)
-Base.similar(::Any, ::Tuple)
-Base.eye
-Base.linspace
-Base.logspace
-Base.Random.randsubseq
-Base.Random.randsubseq!
 ```
 
 ## Broadcast and vectorization
