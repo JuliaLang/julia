@@ -712,7 +712,7 @@ gains in either time or space when compared to performing the same operations on
 ### Compressed Sparse Column (CSC) Storage
 
 In Julia, sparse matrices are stored in the [Compressed Sparse Column (CSC) format](https://en.wikipedia.org/wiki/Sparse_matrix#Compressed_sparse_column_.28CSC_or_CCS.29).
-Julia sparse matrices have the type `SparseMatrixCSC{Tv,Ti}`, where `Tv` is the type of the nonzero
+Julia sparse matrices have the type `SparseMatrixCSC{Tv,Ti}`, where `Tv` is the type of the stored
 values, and `Ti` is the integer type for storing column pointers and row indices.:
 
 ```julia
@@ -720,8 +720,8 @@ struct SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}
     m::Int                  # Number of rows
     n::Int                  # Number of columns
     colptr::Vector{Ti}      # Column i is in colptr[i]:(colptr[i+1]-1)
-    rowval::Vector{Ti}      # Row values of nonzeros
-    nzval::Vector{Tv}       # Nonzero values
+    rowval::Vector{Ti}      # Row indices of stored values
+    nzval::Vector{Tv}       # Stored values, typically nonzeros
 end
 ```
 
@@ -765,7 +765,7 @@ julia> speye(3,5)
 ```
 
 The [`sparse()`](@ref) function is often a handy way to construct sparse matrices. It takes as
-its input a vector `I` of row indices, a vector `J` of column indices, and a vector `V` of nonzero
+its input a vector `I` of row indices, a vector `J` of column indices, and a vector `V` of stored
 values. `sparse(I,J,V)` constructs a sparse matrix such that `S[I[k], J[k]] = V[k]`.
 
 ```jldoctest sparse_function
