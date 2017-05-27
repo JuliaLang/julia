@@ -137,10 +137,10 @@ if (f = rand()) < .8
 end
 ```
 
-Because `a` is a an array of abstract type `Real`, it must be able to hold any `Real` value.  Since
-`Real` objects can be of arbitrary size and structure, `a` must be represented as an array of
-pointers to individually allocated `Real` objects.  Because `f` will always be a [`Float64`](@ref),
-we should instead, use:
+Because `a` is a an array of abstract type [`Real`](@ref), it must be able to hold any
+`Real` value.  Since `Real` objects can be of arbitrary size and structure, `a` must be
+represented as an array of pointers to individually allocated `Real` objects. Because `f`
+will always be a [`Float64`](@ref), we should instead, use:
 
 ```julia
 a = Float64[] # typeof(a) = Array{Float64,1}

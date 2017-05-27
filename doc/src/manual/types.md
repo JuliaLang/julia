@@ -175,13 +175,13 @@ abstract type Signed   <: Integer end
 abstract type Unsigned <: Integer end
 ```
 
-The [`Number`](@ref) type is a direct child type of `Any`, and `Real` is its child. In turn,
-`Real` has two children (it has more, but only two are shown here; we'll get to the others
-later): `Integer` and `AbstractFloat`, separating the world into representations of integers
-and representations of real numbers. Representations of real numbers include, of course,
-floating-point types, but also include other types, such as rationals. Hence, `AbstractFloat`
-is a proper subtype of `Real`, including only floating-point representations of real numbers.
-Integers are further subdivided into `Signed` and `Unsigned` varieties.
+The [`Number`](@ref) type is a direct child type of `Any`, and [`Real`](@ref) is its child.
+In turn, `Real` has two children (it has more, but only two are shown here; we'll get to
+the others later): `Integer` and `AbstractFloat`, separating the world into representations
+of integers and representations of real numbers. Representations of real numbers include,
+of course, floating-point types, but also include other types, such as rationals. Hence,
+`AbstractFloat` is a proper subtype of `Real`, including only floating-point representations
+of real numbers. Integers are further subdivided into `Signed` and `Unsigned` varieties.
 
 The `<:` operator in general means "is a subtype of", and, used in declarations like this, declares
 the right-hand type to be an immediate supertype of the newly declared type. It can also be used
@@ -586,14 +586,16 @@ have different representations in memory:
 
   * An instance of `Point{Float64}` can be represented compactly and efficiently as an immediate pair
     of 64-bit values;
-  * An instance of `Point{Real}` must be able to hold any pair of instances of `Real`. Since objects
-    that are instances of `Real` can be of arbitrary size and structure, in practice an instance of
-    `Point{Real}` must be represented as a pair of pointers to individually allocated `Real` objects.
+  * An instance of `Point{Real}` must be able to hold any pair of instances of [`Real`](@ref).
+    Since objects that are instances of `Real` can be of arbitrary size and structure, in
+    practice an instance of `Point{Real}` must be represented as a pair of pointers to
+    individually allocated `Real` objects.
 
 The efficiency gained by being able to store `Point{Float64}` objects with immediate values is
 magnified enormously in the case of arrays: an `Array{Float64}` can be stored as a contiguous
 memory block of 64-bit floating-point values, whereas an `Array{Real}` must be an array of pointers
-to individually allocated `Real` objects -- which may well be [boxed](https://en.wikipedia.org/wiki/Object_type_%28object-oriented_programming%29#Boxing)
+to individually allocated [`Real`](@ref) objects -- which may well be
+[boxed](https://en.wikipedia.org/wiki/Object_type_%28object-oriented_programming%29#Boxing)
 64-bit floating-point values, but also might be arbitrarily large, complex objects, which are
 declared to be implementations of the `Real` abstract type.
 
@@ -607,7 +609,7 @@ end
 ```
 
 A correct way to define a method that accepts all arguments of type `Point{T}` where `T` is
-a subtype of `Real` is:
+a subtype of [`Real`](@ref) is:
 
 ```julia
 function norm(p::Point{<:Real})
@@ -784,8 +786,8 @@ possible types. In such situations, one can constrain the range of `T` like so:
 julia> abstract type Pointy{T<:Real} end
 ```
 
-With such a declaration, it is acceptable to use any type that is a subtype of `Real` in place
-of `T`, but not types that are not subtypes of `Real`:
+With such a declaration, it is acceptable to use any type that is a subtype of
+[`Real`](@ref) in place of `T`, but not types that are not subtypes of `Real`:
 
 ```jldoctest realpointytype
 julia> Pointy{Float64}
@@ -823,7 +825,7 @@ end
 
 It only makes sense to take ratios of integer values, so the parameter type `T` is restricted
 to being a subtype of `Integer`, and a ratio of integers represents a value on the real number
-line, so any [`Rational`](@ref) is an instance of the `Real` abstraction.
+line, so any [`Rational`](@ref) is an instance of the [`Real`](@ref) abstraction.
 
 ### Tuple Types
 
@@ -1017,12 +1019,12 @@ The syntax `where T>:Int` also works to specify only the lower bound of a type v
 and `Array{>:Int}` is equivalent to `Array{T} where T>:Int`.
 
 Since `where` expressions nest, type variable bounds can refer to outer type variables.
-For example `Tuple{T,Array{S}} where S<:AbstractArray{T} where T<:Real` refers to 2-tuples whose first
-element is some `Real`, and whose second element is an `Array` of any kind of array whose element type
-contains the type of the first tuple element.
+For example `Tuple{T,Array{S}} where S<:AbstractArray{T} where T<:Real` refers to 2-tuples
+whose first element is some [`Real`](@ref), and whose second element is an `Array` of any
+kind of array whose element type contains the type of the first tuple element.
 
-The `where` keyword itself can be nested inside a more complex declaration.  For example, consider the
-two types created by the following declarations:
+The `where` keyword itself can be nested inside a more complex declaration. For example,
+consider the two types created by the following declarations:
 
 ```jldoctest
 julia> const T1 = Array{Array{T,1} where T, 1}
@@ -1175,8 +1177,9 @@ julia> Polar(r::Real,Θ::Real) = Polar(promote(r,Θ)...)
 Polar
 ```
 
-Here, we've added a custom constructor function so that it can take arguments of different `Real`
-types and promote them to a common type (see [Constructors](@ref man-constructors) and [Conversion and Promotion](@ref conversion-and-promotion)).
+Here, we've added a custom constructor function so that it can take arguments of different
+[`Real`](@ref) types and promote them to a common type (see [Constructors](@ref man-constructors)
+and [Conversion and Promotion](@ref conversion-and-promotion)).
 (Of course, we would have to define lots of other methods, too, to make it act like a
 [`Number`](@ref), e.g. `+`, `*`, `one`, `zero`, promotion rules and so on.) By default,
 instances of this type display rather simply, with information about the type name and

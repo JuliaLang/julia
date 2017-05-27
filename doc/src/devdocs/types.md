@@ -330,7 +330,7 @@ However, this interpretation causes some practical problems.
 
 First, a value of `T` needs to be available inside the method definition.
 For a call like `f(1, 1.0)`, it's not clear what `T` should be.
-It could be `Union{Int,Float64}`, or perhaps `Real`.
+It could be `Union{Int,Float64}`, or perhaps [`Real`](@ref).
 Intuitively, we expect the declaration `x::T` to mean `T === typeof(x)`.
 To make sure that invariant holds, we need `typeof(x) === typeof(y) === T` in this method.
 That implies the method should only be called for arguments of the exact same type.

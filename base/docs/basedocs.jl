@@ -81,7 +81,7 @@ Julia’s type system more than just a collection of object implementations. For
     abstract type Number end
     abstract type Real <: Number end
 
-[`Number`](@ref) has no supertype, whereas `Real` is an abstract subtype of `Number`.
+[`Number`](@ref) has no supertype, whereas [`Real`](@ref) is an abstract subtype of `Number`.
 """
 kw"abstract type"
 
