@@ -38,7 +38,7 @@ const Cint = Int32
 """
     Cuint
 
-Equivalent to the native `unsigned int` c-type (`UInt32`).
+Equivalent to the native `unsigned int` c-type ([`UInt32`](@ref)).
 """
 const Cuint = UInt32
 

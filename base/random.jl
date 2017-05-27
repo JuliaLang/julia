@@ -221,8 +221,8 @@ end
 
 Reseed the random number generator. If a `seed` is provided, the RNG will give a
 reproducible sequence of numbers, otherwise Julia will get entropy from the system. For
-`MersenneTwister`, the `seed` may be a non-negative integer or a vector of `UInt32` integers.
-`RandomDevice` does not support seeding.
+`MersenneTwister`, the `seed` may be a non-negative integer or a vector of [`UInt32`](@ref)
+integers. `RandomDevice` does not support seeding.
 """
 srand(r::MersenneTwister) = srand(r, make_seed())
 srand(r::MersenneTwister, n::Integer) = srand(r, make_seed(n))

@@ -2160,7 +2160,7 @@ isvalid(value)
     isvalid(T, value) -> Bool
 
 Returns `true` if the given value is valid for that type. Types currently can
-be either `Char` or `String`. Values for `Char` can be of type `Char` or `UInt32`.
+be either `Char` or `String`. Values for `Char` can be of type `Char` or [`UInt32`](@ref).
 Values for `String` can be of that type, or `Vector{UInt8}`.
 """
 isvalid(T,value)
