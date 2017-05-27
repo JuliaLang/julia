@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-    Rational{T<:Integer}
+    Rational{T<:Integer} <: Real
 
 Rational number type, with numerator and denominator of type `T`.
 """

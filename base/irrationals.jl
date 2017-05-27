@@ -3,7 +3,7 @@
 ## general machinery for irrational mathematical constants
 
 """
-    Irrational
+    Irrational <: Real
 
 Abstract supertype for irrational numbers.
 """

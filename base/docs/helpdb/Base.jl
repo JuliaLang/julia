@@ -2411,42 +2411,42 @@ Abstract supertype for all number types.
 Number
 
 """
-    Real
+    Real <: Number
 
 Abstract supertype for all real numbers.
 """
 Real
 
 """
-    AbstractFloat
+    AbstractFloat <: Real
 
 Abstract supertype for all floating point numbers.
 """
 AbstractFloat
 
 """
-    Integer
+    Integer <: Real
 
 Abstract supertype for all integers.
 """
 Integer
 
 """
-    Signed
+    Signed <: Integer
 
 Abstract supertype for all signed integers.
 """
 Signed
 
 """
-    Unsigned
+    Unsigned <: Integer
 
 Abstract supertype for all unsigned integers.
 """
 Unsigned
 
 """
-    Bool
+    Bool <: Integer
 
 Boolean type.
 """
@@ -2455,7 +2455,7 @@ Bool
 for bit in (16, 32, 64)
     @eval begin
         """
-            Float$($bit)
+            Float$($bit) <: AbstractFloat
 
         $($bit)-bit floating point number type.
         """
@@ -2466,14 +2466,14 @@ end
 for bit in (8, 16, 32, 64, 128)
     @eval begin
         """
-            Int$($bit)
+            Int$($bit) <: Signed
 
         $($bit)-bit signed integer type.
         """
         $(Symbol("Int", bit))
 
         """
-            UInt$($bit)
+            UInt$($bit) <: Unsigned
 
         $($bit)-bit unsigned integer type.
         """

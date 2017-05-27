@@ -43,7 +43,7 @@ const DEFAULT_PRECISION = [256]
 # Basic type and initialization definitions
 
 """
-    BigFloat
+    BigFloat <: AbstractFloat
 
 Arbitrary precision floating point number type.
 """

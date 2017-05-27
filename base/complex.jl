@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-    Complex{T<:Real}
+    Complex{T<:Real} <: Number
 
 Complex number type with real and imaginary part of type `T`.
 

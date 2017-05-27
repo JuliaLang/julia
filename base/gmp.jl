@@ -38,7 +38,7 @@ else
 end
 
 """
-    BigInt
+    BigInt <: Integer
 
 Arbitrary precision integer type.
 """
