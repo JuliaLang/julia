@@ -1264,10 +1264,9 @@ end
 @test ccall(cfunction(CallableSingleton(), Int, Tuple{Int,Int}),
             Int, (Int, Int), 1, 2) === 3
 
-
 # 19805
-type callinfos_19805{FUNC_FT<:Function}
-  f :: FUNC_FT
+mutable struct callinfos_19805{FUNC_FT<:Function}
+    f :: FUNC_FT
 end
 
 evalf_callback_19805{FUNC_FT}(ci::callinfos_19805{FUNC_FT}) = ci.f(0.5)::Float64
