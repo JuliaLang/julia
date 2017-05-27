@@ -1730,7 +1730,8 @@ typedef struct {
     int8_t can_inline;
     int8_t polly;
     int8_t fast_math;
-    const char *worker;
+    int8_t worker;
+    const char *cookie;
     int8_t handle_signals;
     int8_t use_precompiled;
     int8_t use_compilecache;

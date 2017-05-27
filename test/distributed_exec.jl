@@ -1684,6 +1684,45 @@ end == true
         return false
     end
 end == true
+# cookie and comand line option `--worker` tests. remove workers, set cookie and test
+struct WorkerArgTester <: ClusterManager
+    worker_opt
+    write_cookie
+end
+
+function Base.launch(manager::WorkerArgTester, params::Dict, launched::Array, c::Condition)
+    dir = params[:dir]
+    exename = params[:exename]
+    exeflags = params[:exeflags]
+
+    cmd = `$exename $exeflags --bind-to $(Base.Distributed.LPROC.bind_addr) $(manager.worker_opt)`
+    cmd = pipeline(detach(setenv(cmd, dir=dir)))
+    io = open(cmd, "r+")
+    manager.write_cookie && Base.Distributed.write_cookie(io)
+
+    wconfig = WorkerConfig()
+    wconfig.process = io
+    wconfig.io = io.out
+    push!(launched, wconfig)
+
+    notify(c)
+end
+Base.manage(::WorkerArgTester, ::Integer, ::WorkerConfig, ::Symbol) = nothing
+
+nprocs()>1 && rmprocs(workers())
+
+npids = addprocs_with_testenv(WorkerArgTester(`--worker`, true))
+@test remotecall_fetch(myid, npids[1]) == npids[1]
+rmprocs(npids)
+
+Base.cluster_cookie("")  # An empty string is a valid cookie
+npids = addprocs_with_testenv(WorkerArgTester(`--worker=`, false))
+@test remotecall_fetch(myid, npids[1]) == npids[1]
+rmprocs(npids)
+
+Base.cluster_cookie("foobar") # custom cookie
+npids = addprocs_with_testenv(WorkerArgTester(`--worker=foobar`, false))
+@test remotecall_fetch(myid, npids[1]) == npids[1]
 
 # Run topology tests last after removing all workers, since a given
 # cluster at any time only supports a single topology.

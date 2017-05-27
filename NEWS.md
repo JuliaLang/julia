@@ -46,6 +46,9 @@ This section lists changes that do not have deprecation warnings.
     longer contain the script name as the first argument. Instead the script name will be
     assigned to `PROGRAM_FILE`. ([#22092])
 
+  * The format for a `ClusterManager` specifying the cookie on the command line is now
+    `--worker=<cookie>`. `--worker <cookie>` will not work as it is now an optional argument.
+
 Library improvements
 --------------------
 

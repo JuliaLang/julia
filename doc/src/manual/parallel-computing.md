@@ -1103,11 +1103,18 @@ The [`launch()`](@ref) method is called asynchronously in a separate task. The t
 this task signals that all requested workers have been launched. Hence the [`launch()`](@ref)
 function MUST exit as soon as all the requested workers have been launched.
 
-Newly launched workers are connected to each other, and the master process, in an all-to-all manner.
-Specifying the command argument `--worker <cookie>` results in the launched processes initializing
-themselves as workers and connections being set up via TCP/IP sockets. Optionally, `--bind-to bind_addr[:port]`
-may also be specified to enable other workers to connect to it at the specified `bind_addr` and
-`port`. This is useful for multi-homed hosts.
+Newly launched workers are connected to each other and the master process in an all-to-all manner.
+Specifying the command line argument `--worker[=<cookie>]` results in the launched processes
+initializing themselves as workers and connections being set up via TCP/IP sockets.
+
+All workers in a cluster share the same [cookie](#cluster-cookie) as the master. When the cookie is
+unspecified, i.e, with the `--worker` option, the worker tries to read it from its standard input.
+ `LocalManager` and `SSHManager` both pass the cookie to newly launched workers via their
+ standard inputs.
+
+By default a worker will listen on a free port at the address returned by a call to `getipaddr()`.
+A specific address to listen on may be specified by optional argument `--bind-to bind_addr[:port]`.
+This is useful for multi-homed hosts.
 
 As an example of a non-TCP/IP transport, an implementation may choose to use MPI, in which case
 `--worker` must NOT be specified. Instead, newly launched workers should call `init_worker(cookie)`
@@ -1270,10 +1277,12 @@ on the master process:
     it and returns the new cookie.
   * All connections are authenticated on both sides to ensure that only workers started by the master
     are allowed to connect to each other.
-  * The cookie must be passed to the workers at startup via argument `--worker <cookie>`. Custom ClusterManagers
-    can retrieve the cookie on the master by calling [`Base.cluster_cookie()`](@ref). Cluster managers
-    not using the default TCP/IP transport (and hence not specifying `--worker`) must call `init_worker(cookie, manager)`
-    with the same cookie as on the master.
+  * The cookie may be passed to the workers at startup via argument `--worker=<cookie>`. If argument
+    `--worker` is specified without the cookie, the worker tries to read the cookie from its
+    standard input (STDIN). The STDIN is closed immediately after the cookie is retrieved.
+  * ClusterManagers can retrieve the cookie on the master by calling [`Base.cluster_cookie()`](@ref).
+    Cluster managers not using the default TCP/IP transport (and hence not specifying `--worker`)
+    must call `init_worker(cookie, manager)` with the same cookie as on the master.
 
 Note that environments requiring higher levels of security can implement this via a custom `ClusterManager`.
 For example, cookies can be pre-shared and hence not specified as a startup argument.
