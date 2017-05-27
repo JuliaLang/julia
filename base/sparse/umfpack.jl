@@ -108,7 +108,7 @@ Compute the LU factorization of a sparse matrix `A`.
 
 For sparse `A` with real or complex element type, the return type of `F` is
 `UmfpackLU{Tv, Ti}`, with `Tv` = [`Float64`](@ref) or `Complex128` respectively and
-`Ti` is an integer type ([`Int32`](@ref) or `Int64`).
+`Ti` is an integer type ([`Int32`](@ref) or [`Int64`](@ref)).
 
 The individual components of the factorization `F` can be accessed by indexing:
 

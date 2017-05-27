@@ -70,7 +70,7 @@ const Cssize_t = Int
 """
     Cintmax_t
 
-Equivalent to the native `intmax_t` c-type (`Int64`).
+Equivalent to the native `intmax_t` c-type ([`Int64`](@ref)).
 """
 const Cintmax_t = Int64
 
@@ -86,7 +86,7 @@ const Cuintmax_t = UInt64
 """
     Clonglong
 
-Equivalent to the native `signed long long` c-type (`Int64`).
+Equivalent to the native `signed long long` c-type ([`Int64`](@ref)).
 """
 const Clonglong = Int64
 

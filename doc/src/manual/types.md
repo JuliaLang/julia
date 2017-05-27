@@ -134,11 +134,11 @@ of object implementations.
 
 Recall that in [Integers and Floating-Point Numbers](@ref), we introduced a variety of concrete
 types of numeric values: [`Int8`](@ref), [`UInt8`](@ref), [`Int16`](@ref), [`UInt16`](@ref),
-[`Int32`](@ref), [`UInt32`](@ref), `Int64`, `UInt64`, `Int128`, `UInt128`, [`Float16`](@ref),
-[`Float32`](@ref), and [`Float64`](@ref). Although they have different representation
-sizes, `Int8`, `Int16`, `Int32`, `Int64` and `Int128` all have in common that they are
-signed integer types. Likewise `UInt8`, `UInt16`, `UInt32`, `UInt64` and `UInt128` are all
-unsigned integer types, while `Float16`, `Float32` and `Float64` are distinct in
+[`Int32`](@ref), [`UInt32`](@ref), [`Int64`](@ref), `UInt64`, `Int128`, `UInt128`,
+[`Float16`](@ref), [`Float32`](@ref), and [`Float64`](@ref). Although they have different
+representation sizes, `Int8`, `Int16`, `Int32`, `Int64` and `Int128` all have in common that
+they are signed integer types. Likewise `UInt8`, `UInt16`, `UInt32`, `UInt64` and `UInt128`
+are all unsigned integer types, while `Float16`, `Float32` and `Float64` are distinct in
 being floating-point types rather than integers. It is common for a piece of code
 to make sense, for example, only if its arguments are some kind of integer, but not really
 depend on what particular *kind* of integer. For example, the greatest common denominator
@@ -1087,7 +1087,7 @@ end
 ```
 
 Of course, this depends on what `Int` is aliased to -- but that is predefined to be the correct
-type -- either [`Int32`](@ref) or `Int64`.
+type -- either [`Int32`](@ref) or [`Int64`](@ref).
 
 (Note that unlike `Int`, `Float` does not exist as a type alias for a specific sized
 [`AbstractFloat`](@ref). Unlike with integer registers, the floating point register sizes

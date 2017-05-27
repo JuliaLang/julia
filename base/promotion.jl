@@ -137,8 +137,8 @@ promote_type(::Type{Bottom}, ::Type{T}) where {T} = (@_pure_meta; T)
 Determine a type big enough to hold values of each argument type without loss, whenever
 possible. In some cases, where no type exists to which both types can be promoted
 losslessly, some loss is tolerated; for example, `promote_type(Int64, Float64)` returns
-[`Float64`](@ref) even though strictly, not all `Int64` values can be represented exactly
-as `Float64` values.
+[`Float64`](@ref) even though strictly, not all [`Int64`](@ref) values can be represented
+exactly as `Float64` values.
 
 ```jldoctest
 julia> promote_type(Int64, Float64)

@@ -1388,7 +1388,7 @@ code defined in `pos`.
 
 Starting at `2:`, the variable `y` is defined, and again annotated as a `Union` type.  Next, we
 see that the compiler created the temporary variable `_var1` to hold the result of `y*x`. Because
-a [`Float64`](@ref) times *either* an `Int64` or [`Float64`](@ref) yields a [`Float64`](@ref),
+a [`Float64`](@ref) times *either* an [`Int64`](@ref) or `Float64` yields a `Float64`,
 all type-instability ends here. The net result is that `f(x::Float64)` will not be type-unstable
 in its output, even if some of the intermediate computations are type-unstable.
 

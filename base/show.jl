@@ -1570,7 +1570,7 @@ end
     summary(x)
 
 Return a string giving a brief description of a value. By default returns
-`string(typeof(x))`, e.g. `Int64`.
+`string(typeof(x))`, e.g. [`Int64`](@ref).
 
 For arrays, returns a string of size and type info,
 e.g. `10-element Array{Int64,1}`.

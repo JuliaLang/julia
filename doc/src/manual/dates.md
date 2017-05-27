@@ -12,10 +12,10 @@ For example, since the [`Date`](@ref) type only resolves to the precision of a s
 no hours, minutes, or seconds), normal considerations for time zones, daylight savings/summer
 time, and leap seconds are unnecessary and avoided.
 
-Both [`Date`](@ref) and [`DateTime`](@ref) are basically immutable `Int64` wrappers. The single
-`instant` field of either type is actually a `UTInstant{P}` type, which represents a continuously
-increasing machine timeline based on the UT second [^1]. The [`DateTime`](@ref)
-type is not aware of time zones (*naive*, in Python parlance),
+Both [`Date`](@ref) and [`DateTime`](@ref) are basically immutable [`Int64`](@ref) wrappers.
+The single `instant` field of either type is actually a `UTInstant{P}` type, which
+represents a continuously increasing machine timeline based on the UT second [^1]. The
+[`DateTime`](@ref) type is not aware of time zones (*naive*, in Python parlance),
 analogous to a *LocalDateTime* in Java 8. Additional time zone functionality
 can be added through the [TimeZones.jl package](https://github.com/JuliaTime/TimeZones.jl/), which
 compiles the [IANA time zone database](http://www.iana.org/time-zones). Both [`Date`](@ref) and
@@ -133,7 +133,7 @@ Finding the length of time between two [`Date`](@ref) or [`DateTime`](@ref) is s
 given their underlying representation as `UTInstant{Day}` and `UTInstant{Millisecond}`, respectively.
 The difference between [`Date`](@ref) is returned in the number of [`Day`](@ref), and [`DateTime`](@ref)
 in the number of [`Millisecond`](@ref). Similarly, comparing [`TimeType`](@ref) is a simple matter
-of comparing the underlying machine instants (which in turn compares the internal `Int64` values).
+of comparing the underlying machine instants (which in turn compares the internal [`Int64`](@ref) values).
 
 ```jldoctest
 julia> dt = Date(2012,2,29)
@@ -190,7 +190,7 @@ julia> dt - dt2
 
 ## Accessor Functions
 
-Because the [`Date`](@ref) and [`DateTime`](@ref) types are stored as single `Int64` values, date
+Because the [`Date`](@ref) and [`DateTime`](@ref) types are stored as single [`Int64`](@ref) values, date
 parts or fields can be retrieved through accessor functions. The lowercase accessors return the
 field as an integer:
 
@@ -512,7 +512,7 @@ Additional examples and tests are available in [`test/dates/adjusters.jl`](https
 Periods are a human view of discrete, sometimes irregular durations of time. Consider 1 month;
 it could represent, in days, a value of 28, 29, 30, or 31 depending on the year and month context.
 Or a year could represent 365 or 366 days in the case of a leap year. [`Period`](@ref) types are
-simple `Int64` wrappers and are constructed by wrapping any `Int64` convertible type, i.e. `Year(1)`
+simple [`Int64`](@ref) wrappers and are constructed by wrapping any `Int64` convertible type, i.e. `Year(1)`
 or `Month(3.0)`. Arithmetic between [`Period`](@ref) of the same type behave like integers, and
 limited `Period-Real` arithmetic is available.
 

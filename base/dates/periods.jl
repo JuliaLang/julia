@@ -33,7 +33,7 @@ for period in (:Year, :Month, :Week, :Day, :Hour, :Minute, :Second, :Millisecond
             $($period_str)(v)
 
         Construct a `$($period_str)` object with the given `v` value. Input must be
-        losslessly convertible to an `Int64`.
+        losslessly convertible to an [`Int64`](@ref).
         """ $period(v)
     end
 end
