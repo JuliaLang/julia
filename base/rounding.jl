@@ -37,7 +37,7 @@ Currently supported rounding modes are:
 - [`RoundNearestTiesAway`](@ref)
 - [`RoundNearestTiesUp`](@ref)
 - [`RoundToZero`](@ref)
-- `RoundFromZero` (`BigFloat` only)
+- `RoundFromZero` ([`BigFloat`](@ref) only)
 - [`RoundUp`](@ref)
 - [`RoundDown`](@ref)
 """

@@ -117,7 +117,8 @@ Base.iseven
 
 ## BigFloats
 
-The `BigFloat` type implements arbitrary-precision floating-point arithmetic using the [GNU MPFR library](http://www.mpfr.org/).
+The [`BigFloat`](@ref) type implements arbitrary-precision floating-point arithmetic using
+the [GNU MPFR library](http://www.mpfr.org/).
 
 ```@docs
 Base.precision
