@@ -610,6 +610,7 @@ function build(pkg::AbstractString, build_file::AbstractString, errfile::Abstrac
         --color=$(Base.have_color ? "yes" : "no")
         --compilecache=$(Bool(Base.JLOptions().use_compilecache) ? "yes" : "no")
         --history-file=no
+        --startup-file=$(Base.JLOptions().startupfile != 2 ? "yes" : "no")
         --eval $code
         ```
 
@@ -717,6 +718,7 @@ function test!(pkg::AbstractString,
                     --color=$(Base.have_color ? "yes" : "no")
                     --compilecache=$(Bool(Base.JLOptions().use_compilecache) ? "yes" : "no")
                     --check-bounds=yes
+                    --startup-file=$(Base.JLOptions().startupfile != 2 ? "yes" : "no")
                     $test_path
                     ```
                 run(cmd)
