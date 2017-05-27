@@ -473,9 +473,9 @@ function foo(a::Array{Any,1})
 end
 ```
 
-Here, we happened to know that the first element of `a` would be an `Int32`. Making an annotation
-like this has the added benefit that it will raise a run-time error if the value is not of the
-expected type, potentially catching certain bugs earlier.
+Here, we happened to know that the first element of `a` would be an [`Int32`](@ref). Making
+an annotation like this has the added benefit that it will raise a run-time error if the
+value is not of the expected type, potentially catching certain bugs earlier.
 
 ### Declare types of keyword arguments
 

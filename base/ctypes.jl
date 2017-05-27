@@ -30,7 +30,7 @@ const Cushort = UInt16
 """
     Cint
 
-Equivalent to the native `signed int` c-type (`Int32`).
+Equivalent to the native `signed int` c-type ([`Int32`](@ref)).
 """
 const Cint = Int32
 

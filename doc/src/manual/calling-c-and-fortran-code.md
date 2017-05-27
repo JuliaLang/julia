@@ -66,7 +66,7 @@ julia> typeof(ans)
 Int32
 ```
 
-`clock` takes no arguments and returns an `Int32`. One common gotcha is that a 1-tuple must be
+`clock` takes no arguments and returns an [`Int32`](@ref). One common gotcha is that a 1-tuple must be
 written with a trailing comma. For example, to call the `getenv` function to get a pointer to
 the value of an environment variable, one makes a call like this:
 

@@ -64,8 +64,8 @@ julia> typeof(ans)
 Int64
 ```
 
-On 32-bit architectures, [`typeof(ans)`](@ref) will be `Int32`. You can convert an integer value
-back to a `Char` just as easily:
+On 32-bit architectures, [`typeof(ans)`](@ref) will be [`Int32`](@ref). You can convert an
+integer value back to a `Char` just as easily:
 
 ```jldoctest
 julia> Char(120)

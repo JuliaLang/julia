@@ -551,10 +551,11 @@ SummedArray{Int32,Int32}(Int32[1, 2, 3], 6)
 ```
 
 The problem is that we want `S` to be a larger type than `T`, so that we can sum many elements
-with less information loss. For example, when `T` is `Int32`, we would like `S` to be `Int64`.
-Therefore we want to avoid an interface that allows the user to construct instances of the type
-`SummedArray{Int32,Int32}`. One way to do this is to provide a constructor only for `SummedArray`,
-but inside the `type` definition block to suppress generation of default constructors:
+with less information loss. For example, when `T` is [`Int32`](@ref), we would like `S` to
+be `Int64`. Therefore we want to avoid an interface that allows the user to construct
+instances of the type `SummedArray{Int32,Int32}`. One way to do this is to provide a
+constructor only for `SummedArray`, but inside the `type` definition block to suppress
+generation of default constructors:
 
 ```jldoctest
 julia> struct SummedArray{T<:Number,S<:Number}

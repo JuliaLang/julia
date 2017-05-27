@@ -189,7 +189,7 @@ since the values are converted to a "greater" type -- i.e. one which can represe
 input values in a single common type. It is important, however, not to confuse this with object-oriented
 (structural) super-typing, or Julia's notion of abstract super-types: promotion has nothing to
 do with the type hierarchy, and everything to do with converting between alternate representations.
-For instance, although every `Int32` value can also be represented as a [`Float64`](@ref) value,
+For instance, although every [`Int32`](@ref) value can also be represented as a [`Float64`](@ref) value,
 `Int32` is not a subtype of `Float64`.
 
 Promotion to a common "greater" type is performed in Julia by the `promote` function, which takes
