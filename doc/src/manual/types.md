@@ -175,13 +175,13 @@ abstract type Signed   <: Integer end
 abstract type Unsigned <: Integer end
 ```
 
-The `Number` type is a direct child type of `Any`, and `Real` is its child. In turn, `Real` has
-two children (it has more, but only two are shown here; we'll get to the others later): `Integer`
-and `AbstractFloat`, separating the world into representations of integers and representations
-of real numbers. Representations of real numbers include, of course, floating-point types, but
-also include other types, such as rationals. Hence, `AbstractFloat` is a proper subtype of `Real`,
-including only floating-point representations of real numbers. Integers are further subdivided
-into `Signed` and `Unsigned` varieties.
+The [`Number`](@ref) type is a direct child type of `Any`, and `Real` is its child. In turn,
+`Real` has two children (it has more, but only two are shown here; we'll get to the others
+later): `Integer` and `AbstractFloat`, separating the world into representations of integers
+and representations of real numbers. Representations of real numbers include, of course,
+floating-point types, but also include other types, such as rationals. Hence, `AbstractFloat`
+is a proper subtype of `Real`, including only floating-point representations of real numbers.
+Integers are further subdivided into `Signed` and `Unsigned` varieties.
 
 The `<:` operator in general means "is a subtype of", and, used in declarations like this, declares
 the right-hand type to be an immediate supertype of the newly declared type. It can also be used
@@ -1011,8 +1011,8 @@ Type variables can be restricted with subtype relations.
 `Array{T} where T<:Integer` refers to all arrays whose element type is some kind of `Integer`.
 The syntax `Array{<:Integer}` is a convenient shorthand for `Array{T} where T<:Integer`.
 Type variables can have both lower and upper bounds.
-`Array{T} where Int<:T<:Number` refers to all arrays of `Number`s that are able to contain `Int`s
-(since `T` must be at least as big as `Int`).
+`Array{T} where Int<:T<:Number` refers to all arrays of [`Number`](@ref)s that are able to
+contain `Int`s (since `T` must be at least as big as `Int`).
 The syntax `where T>:Int` also works to specify only the lower bound of a type variable,
 and `Array{>:Int}` is equivalent to `Array{T} where T>:Int`.
 
@@ -1177,9 +1177,10 @@ Polar
 
 Here, we've added a custom constructor function so that it can take arguments of different `Real`
 types and promote them to a common type (see [Constructors](@ref man-constructors) and [Conversion and Promotion](@ref conversion-and-promotion)).
-(Of course, we would have to define lots of other methods, too, to make it act like a `Number`,
-e.g. `+`, `*`, `one`, `zero`, promotion rules and so on.) By default, instances of this type display
-rather simply, with information about the type name and the field values, as e.g. `Polar{Float64}(3.0,4.0)`.
+(Of course, we would have to define lots of other methods, too, to make it act like a
+[`Number`](@ref), e.g. `+`, `*`, `one`, `zero`, promotion rules and so on.) By default,
+instances of this type display rather simply, with information about the type name and
+the field values, as e.g. `Polar{Float64}(3.0,4.0)`.
 
 If we want it to display instead as `3.0 * exp(4.0im)`, we would define the following method to
 print the object to a given output object `io` (representing a file, terminal, buffer, etcetera;
