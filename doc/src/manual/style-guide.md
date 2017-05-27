@@ -356,7 +356,7 @@ julia> g(1)
 
 As you can see, the second version, where we used an `Int` literal, preserved the type of the
 input argument, while the first didn't. This is because e.g. `promote_type(Int, Float64) == Float64`,
-and promotion happens with the multiplication. Similarly, `Rational` literals are less type disruptive
+and promotion happens with the multiplication. Similarly, [`Rational`](@ref) literals are less type disruptive
 than [`Float64`](@ref) literals, but more disruptive than `Int`s:
 
 ```jldoctest

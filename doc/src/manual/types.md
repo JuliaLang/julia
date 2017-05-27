@@ -811,8 +811,8 @@ end
 ```
 
 To give a real-world example of how all this parametric type machinery can be useful, here is
-the actual definition of Julia's `Rational` immutable type (except that we omit the constructor
-here for simplicity), representing an exact ratio of integers:
+the actual definition of Julia's [`Rational`](@ref) immutable type (except that we omit the
+constructor here for simplicity), representing an exact ratio of integers:
 
 ```julia
 struct Rational{T<:Integer} <: Real
@@ -823,7 +823,7 @@ end
 
 It only makes sense to take ratios of integer values, so the parameter type `T` is restricted
 to being a subtype of `Integer`, and a ratio of integers represents a value on the real number
-line, so any `Rational` is an instance of the `Real` abstraction.
+line, so any [`Rational`](@ref) is an instance of the `Real` abstraction.
 
 ### Tuple Types
 

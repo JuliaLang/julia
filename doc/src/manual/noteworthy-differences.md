@@ -251,7 +251,7 @@ For users coming to Julia from R, these are some noteworthy differences:
     `"` characters without quoting it like `"\""` String literals can have values of other variables
     or expressions interpolated into them, indicated by `$variablename` or `$(expression)`, which
     evaluates the variable name or the expression in the context of the function.
-  * `//` indicates a `Rational` number, and not a single-line comment (which is `#` in Julia)
+  * `//` indicates a [`Rational`](@ref) number, and not a single-line comment (which is `#` in Julia)
   * `#=` indicates the start of a multiline comment, and `=#` ends it.
   * Functions in Julia return values from their last expression(s) or the `return` keyword.  Multiple
     values can be returned from functions and assigned as tuples, e.g. `(a, b) = myfunction()` or

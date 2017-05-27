@@ -137,7 +137,8 @@ convert(::Type{T}, z::Complex) where {T<:Real} =
 
 ### [Case Study: Rational Conversions](@id man-rational-conversion)
 
-To continue our case study of Julia's `Rational` type, here are the conversions declared in [`rational.jl`](https://github.com/JuliaLang/julia/blob/master/base/rational.jl),
+To continue our case study of Julia's [`Rational`](@ref) type, here are the conversions declared in
+[`rational.jl`](https://github.com/JuliaLang/julia/blob/master/base/rational.jl),
 right after the declaration of the type and its constructors:
 
 ```julia
