@@ -192,8 +192,8 @@ julia> const mycompare_c = cfunction(mycompare, Cint, (Ref{Cdouble}, Ref{Cdouble
 ```
 
 [`cfunction()`](@ref) accepts three arguments: the Julia function (`mycompare`), the return type
-(`Cint`), and a tuple of the argument types, in this case to sort an array of `Cdouble` (`Float64`)
-elements.
+(`Cint`), and a tuple of the argument types, in this case to sort an array of `Cdouble`
+([`Float64`](@ref)) elements.
 
 The final call to `qsort` looks like this:
 

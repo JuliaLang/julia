@@ -78,7 +78,7 @@ julia> round(pi, 3, 2)
 
 !!! note
     Rounding to specified digits in bases other than 2 can be inexact when
-    operating on binary floating point numbers. For example, the `Float64`
+    operating on binary floating point numbers. For example, the [`Float64`](@ref)
     value represented by `1.15` is actually *less* than 1.15, yet will be
     rounded to 1.2.
 

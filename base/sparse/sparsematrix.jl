@@ -1357,7 +1357,7 @@ spones(S::SparseMatrixCSC{T}) where {T} =
 
 Create a sparse vector of length `m` or sparse matrix of size `m x n`. This
 sparse array will not contain any nonzero values. No storage will be allocated
-for nonzero values during construction. The type defaults to `Float64` if not
+for nonzero values during construction. The type defaults to [`Float64`](@ref) if not
 specified.
 
 ```jldoctest
@@ -1411,7 +1411,7 @@ eye(S::SparseMatrixCSC) = speye(S)
     speye([type,]m[,n])
 
 Create a sparse identity matrix of size `m x m`. When `n` is supplied,
-create a sparse identity matrix of size `m x n`. The type defaults to `Float64`
+create a sparse identity matrix of size `m x n`. The type defaults to [`Float64`](@ref)
 if not specified.
 
 `sparse(I, m, n)` is equivalent to `speye(Int, m, n)`, and

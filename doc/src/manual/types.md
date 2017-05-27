@@ -1255,7 +1255,7 @@ julia> show(STDOUT, "text/html", Polar(3.0,4.0))
 In Julia, you can't dispatch on a *value* such as `true` or `false`. However, you can dispatch
 on parametric types, and Julia allows you to include "plain bits" values (Types, Symbols, Integers,
 floating-point numbers, tuples, etc.) as type parameters.  A common example is the dimensionality
-parameter in `Array{T,N}`, where `T` is a type (e.g., `Float64`) but `N` is just an `Int`.
+parameter in `Array{T,N}`, where `T` is a type (e.g., [`Float64`](@ref)) but `N` is just an `Int`.
 
 You can create your own custom types that take values as parameters, and use them to control dispatch
 of custom types. By way of illustration of this idea, let's introduce a parametric type, `Val{T}`,

@@ -226,7 +226,7 @@ The returned object `F` stores the factorization in a packed format:
 
  - if `pivot == Val{true}` then `F` is a [`QRPivoted`](@ref) object,
 
- - otherwise if the element type of `A` is a BLAS type ([`Float32`](@ref), `Float64`,
+ - otherwise if the element type of `A` is a BLAS type ([`Float32`](@ref), [`Float64`](@ref),
    `Complex64` or `Complex128`), then `F` is a [`QRCompactWY`](@ref) object,
 
  - otherwise `F` is a [`QR`](@ref) object.

@@ -214,9 +214,10 @@ julia> function unstable(flag::Bool)
 unstable (generic function with 1 method)
 ```
 
-It returns either an `Int` or a `Float64` depending on the value of its argument. Since Julia
-can't predict the return type of this function at compile-time, any computation that uses it will
-have to guard against both types possibly occurring, making generation of fast machine code difficult.
+It returns either an `Int` or a [`Float64`](@ref) depending on the value of its argument.
+Since Julia can't predict the return type of this function at compile-time, any computation
+that uses it will have to guard against both types possibly occurring, making generation of
+fast machine code difficult.
 
 ### [Why does Julia give a `DomainError` for certain seemingly-sensible operations?](@id faq-domain-errors)
 

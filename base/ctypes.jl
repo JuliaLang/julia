@@ -110,6 +110,6 @@ const Cfloat = Float32
 """
     Cdouble
 
-Equivalent to the native `double` c-type (`Float64`).
+Equivalent to the native `double` c-type ([`Float64`](@ref)).
 """
 const Cdouble = Float64

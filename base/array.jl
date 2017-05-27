@@ -266,7 +266,7 @@ end
     eye([T::Type=Float64,] m::Integer, n::Integer)
 
 `m`-by-`n` identity matrix.
-The default element type is `Float64`.
+The default element type is [`Float64`](@ref).
 """
 function eye(::Type{T}, m::Integer, n::Integer) where T
     a = zeros(T,m,n)
@@ -287,7 +287,7 @@ eye(::Type{T}, n::Integer) where {T} = eye(T, n, n)
     eye([T::Type=Float64,] n::Integer)
 
 `n`-by-`n` identity matrix.
-The default element type is `Float64`.
+The default element type is [`Float64`](@ref).
 """
 eye(n::Integer) = eye(Float64, n)
 

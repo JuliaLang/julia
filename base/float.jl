@@ -32,13 +32,13 @@ const NaN64 = bitcast(Float64, 0x7ff8000000000000)
 """
     Inf
 
-Positive infinity of type `Float64`.
+Positive infinity of type [`Float64`](@ref).
 """
 const Inf = Inf64
 """
     NaN
 
-A not-a-number value of type `Float64`.
+A not-a-number value of type [`Float64`](@ref).
 """
 const NaN = NaN64
 
@@ -750,8 +750,8 @@ of `x` is different, then the larger of the two is taken, that is
     eps(x) == max(x-prevfloat(x), nextfloat(x)-x)
 
 The exceptions to this rule are the smallest and largest finite values
-(e.g. `nextfloat(-Inf)` and `prevfloat(Inf)` for `Float64`), which round to the smaller of
-the values.
+(e.g. `nextfloat(-Inf)` and `prevfloat(Inf)` for [`Float64`](@ref)), which round to the
+smaller of the values.
 
 The rationale for this behavior is that `eps` bounds the floating point rounding
 error. Under the default `RoundNearest` rounding mode, if ``y`` is a real number and ``x``

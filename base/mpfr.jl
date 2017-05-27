@@ -71,8 +71,8 @@ end
     BigFloat(x)
 
 Create an arbitrary precision floating point number. `x` may be an [`Integer`](@ref), a
-`Float64` or a `BigInt`. The usual mathematical operators are defined for this type, and
-results are promoted to a `BigFloat`.
+[`Float64`](@ref) or a `BigInt`. The usual mathematical operators are defined for this
+type, and results are promoted to a `BigFloat`.
 
 Note that because decimal literals are converted to floating point numbers when parsed,
 `BigFloat(2.1)` may not yield what you expect. You may instead prefer to initialize

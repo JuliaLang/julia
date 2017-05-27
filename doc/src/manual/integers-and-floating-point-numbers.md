@@ -243,8 +243,8 @@ julia> 2.5e-4
 0.00025
 ```
 
-The above results are all `Float64` values. Literal [`Float32`](@ref) values can be entered
-by writing an `f` in place of `e`:
+The above results are all [`Float64`](@ref) values. Literal [`Float32`](@ref) values can be
+entered by writing an `f` in place of `e`:
 
 ```jldoctest
 julia> 0.5f0
@@ -267,7 +267,7 @@ julia> typeof(ans)
 Float32
 ```
 
-Hexadecimal floating-point literals are also valid, but only as `Float64` values:
+Hexadecimal floating-point literals are also valid, but only as [`Float64`](@ref) values:
 
 ```jldoctest
 julia> 0x1p0
@@ -404,11 +404,11 @@ julia> eps() # same as eps(Float64)
 2.220446049250313e-16
 ```
 
-These values are `2.0^-23` and `2.0^-52` as [`Float32`](@ref) and `Float64` values, respectively. The
-[`eps()`](@ref) function can also take a floating-point value as an argument, and gives the absolute
-difference between that value and the next representable floating point value. That is, `eps(x)`
-yields a value of the same type as `x` such that `x + eps(x)` is the next representable floating-point
-value larger than `x`:
+These values are `2.0^-23` and `2.0^-52` as [`Float32`](@ref) and [`Float64`](@ref) values,
+respectively. The [`eps()`](@ref) function can also take a floating-point value as an
+argument, and gives the absolute difference between that value and the next representable
+floating point value. That is, `eps(x)` yields a value of the same type as `x` such that
+`x + eps(x)` is the next representable floating-point value larger than `x`:
 
 ```jldoctest
 julia> eps(1.0)

@@ -107,7 +107,7 @@ end
 Compute the LU factorization of a sparse matrix `A`.
 
 For sparse `A` with real or complex element type, the return type of `F` is
-`UmfpackLU{Tv, Ti}`, with `Tv` = `Float64` or `Complex128` respectively and
+`UmfpackLU{Tv, Ti}`, with `Tv` = [`Float64`](@ref) or `Complex128` respectively and
 `Ti` is an integer type (`Int32` or `Int64`).
 
 The individual components of the factorization `F` can be accessed by indexing:
@@ -133,7 +133,7 @@ The relation between `F` and `A` is
 
 !!! note
     `lufact(A::SparseMatrixCSC)` uses the UMFPACK library that is part of
-    SuiteSparse. As this library only supports sparse matrices with `Float64` or
+    SuiteSparse. As this library only supports sparse matrices with [`Float64`](@ref) or
     `Complex128` elements, `lufact` converts `A` into a copy that is of type
     `SparseMatrixCSC{Float64}` or `SparseMatrixCSC{Complex128}` as appropriate.
 """
