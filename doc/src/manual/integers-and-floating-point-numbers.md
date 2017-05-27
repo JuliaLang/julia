@@ -20,7 +20,7 @@ The following are Julia's primitive numeric types:
 
 | Type           | Signed? | Number of bits | Smallest value | Largest value |
 |:-------------- |:------- |:-------------- |:-------------- |:------------- |
-| `Int8`         | ✓       | 8              | -2^7           | 2^7 - 1       |
+| [`Int8`](@ref) | ✓       | 8              | -2^7           | 2^7 - 1       |
 | `UInt8`        |         | 8              | 0              | 2^8 - 1       |
 | `Int16`        | ✓       | 16             | -2^15          | 2^15 - 1      |
 | `UInt16`       |         | 16             | 0              | 2^16 - 1      |
