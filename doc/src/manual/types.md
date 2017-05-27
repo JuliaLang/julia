@@ -177,11 +177,12 @@ abstract type Unsigned <: Integer end
 
 The [`Number`](@ref) type is a direct child type of `Any`, and [`Real`](@ref) is its child.
 In turn, `Real` has two children (it has more, but only two are shown here; we'll get to
-the others later): `Integer` and `AbstractFloat`, separating the world into representations
-of integers and representations of real numbers. Representations of real numbers include,
-of course, floating-point types, but also include other types, such as rationals. Hence,
-`AbstractFloat` is a proper subtype of `Real`, including only floating-point representations
-of real numbers. Integers are further subdivided into `Signed` and `Unsigned` varieties.
+the others later): `Integer` and [`AbstractFloat`](@ref), separating the world into
+representations of integers and representations of real numbers. Representations of real
+numbers include, of course, floating-point types, but also include other types, such as
+rationals. Hence, `AbstractFloat` is a proper subtype of `Real`, including only
+floating-point representations of real numbers. Integers are further subdivided into
+`Signed` and `Unsigned` varieties.
 
 The `<:` operator in general means "is a subtype of", and, used in declarations like this, declares
 the right-hand type to be an immediate supertype of the newly declared type. It can also be used
@@ -1084,9 +1085,10 @@ end
 Of course, this depends on what `Int` is aliased to -- but that is predefined to be the correct
 type -- either `Int32` or `Int64`.
 
-(Note that unlike `Int`, `Float` does not exist as a type alias for a specific sized `AbstractFloat`.
-Unlike with integer registers, the floating point register sizes are specified by the IEEE-754 standard.
-Whereas the size of `Int` reflects the size of a native pointer on that machine.)
+(Note that unlike `Int`, `Float` does not exist as a type alias for a specific sized
+[`AbstractFloat`](@ref). Unlike with integer registers, the floating point register sizes
+are specified by the IEEE-754 standard. Whereas the size of `Int` reflects the size of a
+native pointer on that machine.)
 
 ## Operations on Types
 

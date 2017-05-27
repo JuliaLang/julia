@@ -1948,7 +1948,7 @@ Stacktrace:
  [1] convert(::Type{Int64}, ::Float64) at ./float.jl:680
 ```
 
-If `T` is a `AbstractFloat` or [`Rational`](@ref) type,
+If `T` is a [`AbstractFloat`](@ref) or [`Rational`](@ref) type,
 then it will return the closest value to `x` representable by `T`.
 
 ```jldoctest
