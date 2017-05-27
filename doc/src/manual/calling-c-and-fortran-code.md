@@ -298,7 +298,7 @@ same:
   * `Signed`
 
     Exactly corresponds to the `signed` type annotation in C (or any `INTEGER` type in Fortran).
-    Any Julia type that is not a subtype of `Signed` is assumed to be unsigned.
+    Any Julia type that is not a subtype of [`Signed`](@ref) is assumed to be unsigned.
 
 
   * `Ref{T}`

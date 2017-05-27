@@ -182,7 +182,7 @@ representations of integers and representations of real numbers. Representations
 numbers include, of course, floating-point types, but also include other types, such as
 rationals. Hence, `AbstractFloat` is a proper subtype of `Real`, including only
 floating-point representations of real numbers. Integers are further subdivided into
-`Signed` and `Unsigned` varieties.
+[`Signed`](@ref) and `Unsigned` varieties.
 
 The `<:` operator in general means "is a subtype of", and, used in declarations like this, declares
 the right-hand type to be an immediate supertype of the newly declared type. It can also be used
@@ -277,8 +277,8 @@ cannot be declared to be any smaller than eight bits.
 The types `Bool`, `Int8` and `UInt8` all have identical representations: they are eight-bit chunks
 of memory. Since Julia's type system is nominative, however, they are not interchangeable despite
 having identical structure. A fundamental difference between them is that they have different
-supertypes: `Bool`'s direct supertype is [`Integer`](@ref), `Int8`'s is `Signed`, and
-`UInt8`'s is `Unsigned`. All other differences between `Bool`, `Int8`, and `UInt8` are
+supertypes: `Bool`'s direct supertype is [`Integer`](@ref), `Int8`'s is [`Signed`](@ref),
+and `UInt8`'s is `Unsigned`. All other differences between `Bool`, `Int8`, and `UInt8` are
 matters of behavior -- the way functions are defined to act when given objects of these
 types as arguments. This is why a nominative type system is necessary: if structure
 determined type, which in turn dictates behavior, then it would be impossible to make
@@ -1012,7 +1012,8 @@ Using explicit `where` syntax, any subset of parameters can be fixed. For exampl
 1-dimensional arrays can be written as `Array{T,1} where T`.
 
 Type variables can be restricted with subtype relations.
-`Array{T} where T<:Integer` refers to all arrays whose element type is some kind of [`Integer`](@ref).
+`Array{T} where T<:Integer` refers to all arrays whose element type is some kind of
+[`Integer`](@ref).
 The syntax `Array{<:Integer}` is a convenient shorthand for `Array{T} where T<:Integer`.
 Type variables can have both lower and upper bounds.
 `Array{T} where Int<:T<:Number` refers to all arrays of [`Number`](@ref)s that are able to
