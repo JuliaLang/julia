@@ -133,11 +133,11 @@ system: they form the conceptual hierarchy which makes Julia's type system more 
 of object implementations.
 
 Recall that in [Integers and Floating-Point Numbers](@ref), we introduced a variety of concrete
-types of numeric values: [`Int8`](@ref), `UInt8`, `Int16`, `UInt16`, `Int32`, `UInt32`,
+types of numeric values: [`Int8`](@ref), [`UInt8`](@ref), `Int16`, `UInt16`, `Int32`, `UInt32`,
 `Int64`, `UInt64`, `Int128`, `UInt128`, [`Float16`](@ref), [`Float32`](@ref), and
 [`Float64`](@ref). Although they have different representation sizes, [`Int8`](@ref), `Int16`,
 `Int32`, `Int64` and `Int128` all have in common that they are signed integer types.
-Likewise `UInt8`, `UInt16`, `UInt32`, `UInt64` and `UInt128` are all unsigned integer
+Likewise [`UInt8`](@ref), `UInt16`, `UInt32`, `UInt64` and `UInt128` are all unsigned integer
 types, while [`Float16`](@ref), [`Float32`](@ref) and [`Float64`](@ref) are distinct in
 being floating-point types rather than integers. It is common for a piece of code
 to make sense, for example, only if its arguments are some kind of integer, but not really
@@ -275,16 +275,16 @@ of [`Bool`](@ref) above therefore means that a boolean value takes eight bits to
 8 bits are supported. Therefore, boolean values, although they really need just a single bit,
 cannot be declared to be any smaller than eight bits.
 
-The types [`Bool`](@ref), [`Int8`](@ref) and `UInt8` all have identical representations:
+The types [`Bool`](@ref), [`Int8`](@ref) and [`UInt8`](@ref) all have identical representations:
 they are eight-bit chunks of memory. Since Julia's type system is nominative, however, they
 are not interchangeable despite having identical structure. A fundamental difference between
 them is that they have different supertypes: [`Bool`](@ref)'s direct supertype is [`Integer`](@ref),
-[`Int8`](@ref)'s is [`Signed`](@ref), and `UInt8`'s is [`Unsigned`](@ref). All other differences
-between [`Bool`](@ref), [`Int8`](@ref), and `UInt8` are matters of behavior -- the way
-functions are defined to act when given objects of these types as arguments. This is why a
-nominative type system is necessary: if structure determined type, which in turn dictates
-behavior, then it would be impossible to make [`Bool`](@ref) behave any differently than
-[`Int8`](@ref) or `UInt8`.
+[`Int8`](@ref)'s is [`Signed`](@ref), and [`UInt8`](@ref)'s is [`Unsigned`](@ref). All other
+differences between [`Bool`](@ref), [`Int8`](@ref), and [`UInt8`](@ref) are matters of
+behavior -- the way functions are defined to act when given objects of these types as
+arguments. This is why a nominative type system is necessary: if structure determined type,
+which in turn dictates behavior, then it would be impossible to make [`Bool`](@ref) behave
+any differently than [`Int8`](@ref) or [`UInt8`](@ref).
 
 ## Composite Types
 

@@ -219,7 +219,7 @@ isstructtype(x) = (@_pure_meta; false)
     isbits(T)
 
 Return `true` if `T` is a "plain data" type, meaning it is immutable and contains no
-references to other values. Typical examples are numeric types such as `UInt8`,
+references to other values. Typical examples are numeric types such as [`UInt8`](@ref),
 [`Float64`](@ref), and [`Complex{Float64}`](@ref).
 
 ```jldoctest

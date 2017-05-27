@@ -188,9 +188,9 @@ MyAmbiguousType
 
 `b` and `c` have the same type, yet their underlying representation of data in memory is very
 different. Even if you stored just numeric values in field `a`, the fact that the memory representation
-of a `UInt8` differs from a `Float64` also means that the CPU needs to handle them using two different
-kinds of instructions. Since the required information is not available in the type, such decisions
-have to be made at run-time. This slows performance.
+of a [`UInt8`](@ref) differs from a [`Float64`](@ref) also means that the CPU needs to handle
+them using two different kinds of instructions. Since the required information is not available
+in the type, such decisions have to be made at run-time. This slows performance.
 
 You can do better by declaring the type of `a`. Here, we are focused on the case where `a` might
 be any one of several types, in which case the natural solution is to use parameters. For example:

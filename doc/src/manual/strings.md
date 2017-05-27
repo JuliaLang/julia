@@ -778,8 +778,8 @@ for regular expressions containing quotation marks or newlines).
 ## [Byte Array Literals](@id man-byte-array-literals)
 
 Another useful non-standard string literal is the byte-array string literal: `b"..."`. This form
-lets you use string notation to express literal byte arrays -- i.e. arrays of `UInt8` values.
-The rules for byte array literals are the following:
+lets you use string notation to express literal byte arrays -- i.e. arrays of
+[`UInt8`](@ref) values. The rules for byte array literals are the following:
 
   * ASCII characters and ASCII escapes produce a single byte.
   * `\x` and octal escape sequences produce the *byte* corresponding to the escape value.
