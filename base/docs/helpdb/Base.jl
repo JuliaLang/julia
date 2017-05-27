@@ -1147,8 +1147,8 @@ searchsortedfirst
 """
     big(x)
 
-Convert a number to a maximum precision representation (typically `BigInt` or `BigFloat`).
-See [`BigFloat`](@ref) for information about some pitfalls with floating-point numbers.
+Convert a number to a maximum precision representation (typically [`BigInt`](@ref) or
+`BigFloat`). See [`BigFloat`](@ref) for information about some pitfalls with floating-point numbers.
 """
 big
 

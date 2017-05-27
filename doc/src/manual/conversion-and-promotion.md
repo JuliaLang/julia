@@ -288,10 +288,11 @@ promote_rule(::Type{UInt8}, ::Type{Int8}) = Int
 promote_rule(::Type{BigInt}, ::Type{Int8}) = BigInt
 ```
 
-In the latter case, the result type is `BigInt` since `BigInt` is the only type large enough to
-hold integers for arbitrary-precision integer arithmetic.  Also note that one does not need to
-define both `promote_rule(::Type{A}, ::Type{B})` and `promote_rule(::Type{B}, ::Type{A})` -- the
-symmetry is implied by the way `promote_rule` is used in the promotion process.
+In the latter case, the result type is [`BigInt`](@ref) since `BigInt` is the only type
+large enough to hold integers for arbitrary-precision integer arithmetic. Also note that
+one does not need to define both `promote_rule(::Type{A}, ::Type{B})` and
+`promote_rule(::Type{B}, ::Type{A})` -- the symmetry is implied by the way `promote_rule`
+is used in the promotion process.
 
 The `promote_rule` function is used as a building block to define a second function called `promote_type`,
 which, given any number of type objects, returns the common type to which those values, as arguments

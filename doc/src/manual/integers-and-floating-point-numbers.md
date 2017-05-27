@@ -206,7 +206,7 @@ true
 Thus, arithmetic with Julia integers is actually a form of [modular arithmetic](https://en.wikipedia.org/wiki/Modular_arithmetic).
 This reflects the characteristics of the underlying arithmetic of integers as implemented on modern
 computers. In applications where overflow is possible, explicit checking for wraparound produced
-by overflow is essential; otherwise, the `BigInt` type in [Arbitrary Precision Arithmetic](@ref)
+by overflow is essential; otherwise, the [`BigInt`](@ref) type in [Arbitrary Precision Arithmetic](@ref)
 is recommended instead.
 
 ### Division errors

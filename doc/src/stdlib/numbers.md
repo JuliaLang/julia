@@ -145,9 +145,9 @@ values.
 A `MersenneTwister` or `RandomDevice` RNG can generate random numbers of the following types:
 [`Float16`](@ref), [`Float32`](@ref), [`Float64`](@ref), [`Bool`](@ref), [`Int8`](@ref),
 [`UInt8`](@ref), [`Int16`](@ref), [`UInt16`](@ref), [`Int32`](@ref), [`UInt32`](@ref),
-[`Int64`](@ref), [`UInt64`](@ref), [`Int128`](@ref), [`UInt128`](@ref), `BigInt` (or complex
-numbers of those types). Random floating point numbers are generated uniformly in ``[0, 1)``.
-As `BigInt` represents unbounded integers, the interval must be specified
+[`Int64`](@ref), [`UInt64`](@ref), [`Int128`](@ref), [`UInt128`](@ref), [`BigInt`](@ref)
+(or complex numbers of those types). Random floating point numbers are generated uniformly
+in ``[0, 1)``. As `BigInt` represents unbounded integers, the interval must be specified
 (e.g. `rand(big(1:6))`).
 
 ```@docs

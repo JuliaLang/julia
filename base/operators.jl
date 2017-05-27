@@ -545,7 +545,8 @@ julia> bits(Int8(-14))
 julia> bits(Int8(60))
 "00111100"
 ```
-`BigInt`s are treated as if having infinite size, so no filling is required and this
+
+[`BigInt`](@ref)s are treated as if having infinite size, so no filling is required and this
 is equivalent to [`>>`](@ref).
 
 See also [`>>`](@ref), [`<<`](@ref).
