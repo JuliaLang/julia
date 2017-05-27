@@ -47,7 +47,6 @@ const PAGES = [
         "manual/calling-c-and-fortran-code.md",
         "manual/handling-operating-system-variation.md",
         "manual/environment-variables.md",
-        "manual/interacting-with-julia.md",
         "manual/embedding.md",
         "manual/packages.md",
         "manual/profile.md",
