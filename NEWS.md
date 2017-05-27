@@ -40,6 +40,10 @@ This section lists changes that do not have deprecation warnings.
     of the socket. Previously the address of the remote endpoint was being
     returned ([#21825]).
 
+  * `Pkg.test` now runs package tests inside of an anonymous module instead of `Main`. The
+    change ensures that package developers do not accidentally reference variables defined
+    in their ~/.juliarc.jl file.
+
 Library improvements
 --------------------
 

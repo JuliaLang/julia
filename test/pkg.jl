@@ -573,10 +573,8 @@ temp_pkg_dir() do
             @test contains(msg, "INFO: JULIA_RC_LOADED defined false")
             @test contains(msg, "INFO: Main.JULIA_RC_LOADED defined false")
 
-            # Note: Since both the startup-file and "runtests.jl" are run in the Main
-            # module any global variables created in the .juliarc.jl can be referenced.
             msg = readstring(`$(Base.julia_cmd()) --startup-file=yes -e $code`)
-            @test contains(msg, "INFO: JULIA_RC_LOADED defined true")
+            @test contains(msg, "INFO: JULIA_RC_LOADED defined false")
             @test contains(msg, "INFO: Main.JULIA_RC_LOADED defined true")
         end
     end

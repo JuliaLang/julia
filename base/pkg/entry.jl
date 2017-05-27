@@ -710,6 +710,7 @@ function test!(pkg::AbstractString,
         push!(notests, pkg)
     else
         info("Testing $pkg")
+        code = "evalfile(\"$(escape_string(test_path))\")"
         cd(dirname(test_path)) do
             try
                 cmd = ```
@@ -719,7 +720,7 @@ function test!(pkg::AbstractString,
                     --compilecache=$(Bool(Base.JLOptions().use_compilecache) ? "yes" : "no")
                     --check-bounds=yes
                     --startup-file=$(Base.JLOptions().startupfile != 2 ? "yes" : "no")
-                    $test_path
+                    --eval $code
                     ```
                 run(cmd)
                 info("$pkg tests passed")
