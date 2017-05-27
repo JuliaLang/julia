@@ -28,7 +28,7 @@ The following are Julia's primitive numeric types:
 | [`UInt32`](@ref) |         | 32             | 0              | 2^32 - 1      |
 | [`Int64`](@ref)  | ✓       | 64             | -2^63          | 2^63 - 1      |
 | [`UInt64`](@ref) |         | 64             | 0              | 2^64 - 1      |
-| `Int128`         | ✓       | 128            | -2^127         | 2^127 - 1     |
+| [`Int128`](@ref) | ✓       | 128            | -2^127         | 2^127 - 1     |
 | `UInt128`        |         | 128            | 0              | 2^128 - 1     |
 | [`Bool`](@ref)   | N/A     | 8              | `false` (0)    | `true` (1)    |
 
