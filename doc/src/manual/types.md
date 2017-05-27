@@ -182,7 +182,7 @@ representations of integers and representations of real numbers. Representations
 numbers include, of course, floating-point types, but also include other types, such as
 rationals. Hence, `AbstractFloat` is a proper subtype of `Real`, including only
 floating-point representations of real numbers. Integers are further subdivided into
-[`Signed`](@ref) and `Unsigned` varieties.
+[`Signed`](@ref) and [`Unsigned`](@ref) varieties.
 
 The `<:` operator in general means "is a subtype of", and, used in declarations like this, declares
 the right-hand type to be an immediate supertype of the newly declared type. It can also be used
@@ -278,9 +278,9 @@ The types `Bool`, `Int8` and `UInt8` all have identical representations: they ar
 of memory. Since Julia's type system is nominative, however, they are not interchangeable despite
 having identical structure. A fundamental difference between them is that they have different
 supertypes: `Bool`'s direct supertype is [`Integer`](@ref), `Int8`'s is [`Signed`](@ref),
-and `UInt8`'s is `Unsigned`. All other differences between `Bool`, `Int8`, and `UInt8` are
-matters of behavior -- the way functions are defined to act when given objects of these
-types as arguments. This is why a nominative type system is necessary: if structure
+and `UInt8`'s is [`Unsigned`](@ref). All other differences between `Bool`, `Int8`, and
+`UInt8` are matters of behavior -- the way functions are defined to act when given objects
+of these types as arguments. This is why a nominative type system is necessary: if structure
 determined type, which in turn dictates behavior, then it would be impossible to make
 `Bool` behave any differently than `Int8` or `UInt8`.
 
