@@ -174,7 +174,7 @@ ERROR: TypeError: non-boolean (Int64) used in boolean context
 ```
 
 This error indicates that the conditional was of the wrong type: `Int64` rather than the required
-`Bool`.
+[`Bool`](@ref).
 
 The so-called "ternary operator", `?:`, is closely related to the `if`-`elseif`-`else` syntax,
 but is used where a conditional choice between single expression values is required, as opposed

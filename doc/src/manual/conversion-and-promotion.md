@@ -101,13 +101,14 @@ is to it. For example, the method to convert a real number to a boolean is this:
 convert(::Type{Bool}, x::Real) = x==0 ? false : x==1 ? true : throw(InexactError())
 ```
 
-The type of the first argument of this method is a [singleton type](@ref man-singleton-types), `Type{Bool}`, the only
-instance of which is `Bool`. Thus, this method is only invoked when the first argument is the
-type value `Bool`. Notice the syntax used for the first argument: the argument name is omitted
-prior to the `::` symbol, and only the type is given.  This is the syntax in Julia for a function
-argument whose type is specified but whose value is never used in the function body.  In this
-example, since the type is a singleton, there would never be any reason to use its value within
-the body. When invoked, the method determines whether a numeric value is true or false as a boolean,
+The type of the first argument of this method is a [singleton type](@ref man-singleton-types),
+`Type{Bool}`, the only instance of which is [`Bool`](@ref). Thus, this method is only invoked
+when the first argument is the type value `Bool`. Notice the syntax used for the first
+argument: the argument name is omitted prior to the `::` symbol, and only the type is given.
+This is the syntax in Julia for a function argument whose type is specified but whose value
+is never used in the function body. In this example, since the type is a singleton, there
+would never be any reason to use its value within the body. When invoked, the method
+determines whether a numeric value is true or false as a boolean,
 by comparing it to one and zero:
 
 ```jldoctest

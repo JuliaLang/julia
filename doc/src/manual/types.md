@@ -269,20 +269,20 @@ primitive type «name» <: «supertype» «bits» end
 The number of bits indicates how much storage the type requires and the name gives the new type
 a name. A primitive type can optionally be declared to be a subtype of some supertype. If a supertype
 is omitted, then the type defaults to having `Any` as its immediate supertype. The declaration
-of `Bool` above therefore means that a boolean value takes eight bits to store, and has
+of [`Bool`](@ref) above therefore means that a boolean value takes eight bits to store, and has
 [`Integer`](@ref) as its immediate supertype. Currently, only sizes that are multiples of
 8 bits are supported. Therefore, boolean values, although they really need just a single bit,
 cannot be declared to be any smaller than eight bits.
 
-The types `Bool`, `Int8` and `UInt8` all have identical representations: they are eight-bit chunks
-of memory. Since Julia's type system is nominative, however, they are not interchangeable despite
-having identical structure. A fundamental difference between them is that they have different
-supertypes: `Bool`'s direct supertype is [`Integer`](@ref), `Int8`'s is [`Signed`](@ref),
-and `UInt8`'s is [`Unsigned`](@ref). All other differences between `Bool`, `Int8`, and
-`UInt8` are matters of behavior -- the way functions are defined to act when given objects
-of these types as arguments. This is why a nominative type system is necessary: if structure
-determined type, which in turn dictates behavior, then it would be impossible to make
-`Bool` behave any differently than `Int8` or `UInt8`.
+The types [`Bool`](@ref), `Int8` and `UInt8` all have identical representations: they are
+eight-bit chunks of memory. Since Julia's type system is nominative, however, they are not
+interchangeable despite having identical structure. A fundamental difference between them
+is that they have different supertypes: `Bool`'s direct supertype is [`Integer`](@ref),
+`Int8`'s is [`Signed`](@ref), and `UInt8`'s is [`Unsigned`](@ref). All other differences
+between `Bool`, `Int8`, and `UInt8` are matters of behavior -- the way functions are
+defined to act when given objects of these types as arguments. This is why a nominative
+type system is necessary: if structure determined type, which in turn dictates behavior,
+then it would be impossible to make `Bool` behave any differently than `Int8` or `UInt8`.
 
 ## Composite Types
 

@@ -454,7 +454,8 @@ julia> Dates.lastdayofquarter(Date(2014,7,16)) # Adjusts to the last day of the 
 The next two higher-order methods, [`tonext()`](@ref), and [`toprev()`](@ref), generalize working
 with temporal expressions by taking a `DateFunction` as first argument, along with a starting
 [`TimeType`](@ref). A `DateFunction` is just a function, usually anonymous, that takes a single
-[`TimeType`](@ref) as input and returns a `Bool`, `true` indicating a satisfied adjustment criterion.
+[`TimeType`](@ref) as input and returns a [`Bool`](@ref), `true` indicating a satisfied
+adjustment criterion.
 For example:
 
 ```jldoctest

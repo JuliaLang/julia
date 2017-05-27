@@ -124,7 +124,7 @@ primitive type declarations:
 
 The number after the name indicates how many bits of storage the type requires. Currently,
 only sizes that are multiples of 8 bits are supported.
-The `Bool` declaration shows how a primitive type can be optionally
+The [`Bool`](@ref) declaration shows how a primitive type can be optionally
 declared to be a subtype of some supertype.
 """
 kw"primitive type"
