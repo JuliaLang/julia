@@ -14,7 +14,7 @@ const Cuchar = UInt8
 """
     Cshort
 
-Equivalent to the native `signed short` c-type (`Int16`).
+Equivalent to the native `signed short` c-type ([`Int16`](@ref)).
 """
 const Cshort = Int16
 
