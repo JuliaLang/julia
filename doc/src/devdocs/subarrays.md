@@ -1,6 +1,6 @@
 # SubArrays
 
-Julia's `SubArray` type is a container encoding a "view" of a parent `AbstractArray`.  This page
+Julia's `SubArray` type is a container encoding a "view" of a parent [`AbstractArray`](@ref).  This page
 documents some of the design principles and implementation of `SubArray`s.
 
 ## Indexing: cartesian vs. linear indexing

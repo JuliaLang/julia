@@ -59,7 +59,7 @@ the ranges may not start at 1.  If you just want the range for a particular dime
 is `indices(A, d)`.
 
 Base implements a custom range type, `OneTo`, where `OneTo(n)` means the same thing as `1:n` but
-in a form that guarantees (via the type system) that the lower index is 1.  For any new `AbstractArray`
+in a form that guarantees (via the type system) that the lower index is 1. For any new [`AbstractArray`](@ref)
 type, this is the default returned by `indices`, and it indicates that this array type uses "conventional"
 1-based indexing.  Note that if you don't want to be bothered supporting arrays with non-1 indexing,
 you can add the following line:
