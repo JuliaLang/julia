@@ -22,7 +22,7 @@ const Cshort = Int16
 """
     Cushort
 
-Equivalent to the native `unsigned short` c-type (`UInt16`).
+Equivalent to the native `unsigned short` c-type ([`UInt16`](@ref)).
 """
 const Cushort = UInt16
 
