@@ -135,16 +135,16 @@ of object implementations.
 Recall that in [Integers and Floating-Point Numbers](@ref), we introduced a variety of concrete
 types of numeric values: [`Int8`](@ref), [`UInt8`](@ref), [`Int16`](@ref), [`UInt16`](@ref),
 [`Int32`](@ref), [`UInt32`](@ref), [`Int64`](@ref), [`UInt64`](@ref), [`Int128`](@ref),
-`UInt128`, [`Float16`](@ref), [`Float32`](@ref), and [`Float64`](@ref). Although they have
-different representation sizes, `Int8`, `Int16`, `Int32`, `Int64` and `Int128` all have in
-common that they are signed integer types. Likewise `UInt8`, `UInt16`, `UInt32`, `UInt64`
-and `UInt128` are all unsigned integer types, while `Float16`, `Float32` and `Float64` are
-distinct in being floating-point types rather than integers. It is common for a piece of code
-to make sense, for example, only if its arguments are some kind of integer, but not really
-depend on what particular *kind* of integer. For example, the greatest common denominator
-algorithm works for all kinds of integers, but will not work for floating-point numbers.
-Abstract types allow the construction of a hierarchy of types, providing a context into
-which concrete types can fit. This allows you, for example, to easily program to any type
+[`UInt128`](@ref), [`Float16`](@ref), [`Float32`](@ref), and [`Float64`](@ref). Although
+they have different representation sizes, `Int8`, `Int16`, `Int32`, `Int64` and `Int128`
+all have in common that they are signed integer types. Likewise `UInt8`, `UInt16`, `UInt32`,
+`UInt64` and `UInt128` are all unsigned integer types, while `Float16`, `Float32` and
+`Float64` are distinct in being floating-point types rather than integers. It is common for
+a piece of code to make sense, for example, only if its arguments are some kind of integer,
+but not really depend on what particular *kind* of integer. For example, the greatest common
+denominator algorithm works for all kinds of integers, but will not work for floating-point
+numbers. Abstract types allow the construction of a hierarchy of types, providing a context
+into which concrete types can fit. This allows you, for example, to easily program to any type
 that is an integer, without restricting an algorithm to a specific type of integer.
 
 Abstract types are declared using the `abstract type` keyword. The general syntaxes for declaring an
