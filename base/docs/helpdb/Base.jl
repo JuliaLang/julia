@@ -243,7 +243,7 @@ determines how the bytes of the array are interpreted. Note that the file must b
 binary format, and no format conversions are possible (this is a limitation of operating
 systems, not Julia).
 
-`dims` is a tuple or single `Integer` specifying the size or length of the array.
+`dims` is a tuple or single [`Integer`](@ref) specifying the size or length of the array.
 
 The file is passed via the stream argument, either as an open `IOStream` or filename string.
 When you initialize the stream, use `"r"` for a "read-only" array, and `"w+"` to create a
@@ -1934,7 +1934,7 @@ done
 
 Convert `x` to a value of type `T`.
 
-If `T` is an `Integer` type, an [`InexactError`](@ref) will be raised if `x`
+If `T` is an [`Integer`](@ref) type, an [`InexactError`](@ref) will be raised if `x`
 is not representable by `T`, for example if `x` is not integer-valued, or is outside the
 range supported by `T`.
 

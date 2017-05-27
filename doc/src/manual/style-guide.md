@@ -33,10 +33,11 @@ The second version will convert `x` to an appropriate type, instead of always th
 
 This style point is especially relevant to function arguments. For example, don't declare an argument
 to be of type `Int` or `Int32` if it really could be any integer, expressed with the abstract
-type `Integer`. In fact, in many cases you can omit the argument type altogether, unless it is
-needed to disambiguate from other method definitions, since a [`MethodError`](@ref) will be thrown
-anyway if a type is passed that does not support any of the requisite operations. (This is known
-as [duck typing](https://en.wikipedia.org/wiki/Duck_typing).)
+type [`Integer`](@ref). In fact, in many cases you can omit the argument type altogether,
+unless it is needed to disambiguate from other method definitions, since a
+[`MethodError`](@ref) will be thrown anyway if a type is passed that does not support any
+of the requisite operations. (This is known as
+[duck typing](https://en.wikipedia.org/wiki/Duck_typing).)
 
 For example, consider the following definitions of a function `addone` that returns one plus its
 argument:

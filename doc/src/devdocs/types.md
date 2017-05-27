@@ -14,8 +14,8 @@ have.
 A *concrete* type `T` describes the set of values whose direct tag, as returned by the `typeof`
 function, is `T`. An *abstract* type describes some possibly-larger set of values.
 
-`Any` describes the entire universe of possible values. `Integer` is a subset of `Any` that includes
-`Int`, `Int8`, and other concrete types.
+`Any` describes the entire universe of possible values. [`Integer`](@ref) is a subset of
+`Any` that includes `Int`, `Int8`, and other concrete types.
 Internally, Julia also makes heavy use of another type known as `Bottom`, which can also be written
 as `Union{}`. This corresponds to the empty set.
 

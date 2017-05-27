@@ -177,7 +177,7 @@ abstract type Unsigned <: Integer end
 
 The [`Number`](@ref) type is a direct child type of `Any`, and [`Real`](@ref) is its child.
 In turn, `Real` has two children (it has more, but only two are shown here; we'll get to
-the others later): `Integer` and [`AbstractFloat`](@ref), separating the world into
+the others later): [`Integer`](@ref) and [`AbstractFloat`](@ref), separating the world into
 representations of integers and representations of real numbers. Representations of real
 numbers include, of course, floating-point types, but also include other types, such as
 rationals. Hence, `AbstractFloat` is a proper subtype of `Real`, including only
@@ -269,19 +269,20 @@ primitive type «name» <: «supertype» «bits» end
 The number of bits indicates how much storage the type requires and the name gives the new type
 a name. A primitive type can optionally be declared to be a subtype of some supertype. If a supertype
 is omitted, then the type defaults to having `Any` as its immediate supertype. The declaration
-of `Bool` above therefore means that a boolean value takes eight bits to store, and has `Integer`
-as its immediate supertype. Currently, only sizes that are multiples of 8 bits are supported.
-Therefore, boolean values, although they really need just a single bit, cannot be declared to
-be any smaller than eight bits.
+of `Bool` above therefore means that a boolean value takes eight bits to store, and has
+[`Integer`](@ref) as its immediate supertype. Currently, only sizes that are multiples of
+8 bits are supported. Therefore, boolean values, although they really need just a single bit,
+cannot be declared to be any smaller than eight bits.
 
 The types `Bool`, `Int8` and `UInt8` all have identical representations: they are eight-bit chunks
 of memory. Since Julia's type system is nominative, however, they are not interchangeable despite
 having identical structure. A fundamental difference between them is that they have different
-supertypes: `Bool`'s direct supertype is `Integer`, `Int8`'s is `Signed`, and `UInt8`'s is `Unsigned`.
-All other differences between `Bool`, `Int8`, and `UInt8` are matters of behavior -- the way functions
-are defined to act when given objects of these types as arguments. This is why a nominative type
-system is necessary: if structure determined type, which in turn dictates behavior, then it would
-be impossible to make `Bool` behave any differently than `Int8` or `UInt8`.
+supertypes: `Bool`'s direct supertype is [`Integer`](@ref), `Int8`'s is `Signed`, and
+`UInt8`'s is `Unsigned`. All other differences between `Bool`, `Int8`, and `UInt8` are
+matters of behavior -- the way functions are defined to act when given objects of these
+types as arguments. This is why a nominative type system is necessary: if structure
+determined type, which in turn dictates behavior, then it would be impossible to make
+`Bool` behave any differently than `Int8` or `UInt8`.
 
 ## Composite Types
 
@@ -825,8 +826,8 @@ end
 ```
 
 It only makes sense to take ratios of integer values, so the parameter type `T` is restricted
-to being a subtype of `Integer`, and a ratio of integers represents a value on the real number
-line, so any [`Rational`](@ref) is an instance of the [`Real`](@ref) abstraction.
+to being a subtype of [`Integer`](@ref), and a ratio of integers represents a value on the
+real number line, so any [`Rational`](@ref) is an instance of the [`Real`](@ref) abstraction.
 
 ### Tuple Types
 
@@ -1011,7 +1012,7 @@ Using explicit `where` syntax, any subset of parameters can be fixed. For exampl
 1-dimensional arrays can be written as `Array{T,1} where T`.
 
 Type variables can be restricted with subtype relations.
-`Array{T} where T<:Integer` refers to all arrays whose element type is some kind of `Integer`.
+`Array{T} where T<:Integer` refers to all arrays whose element type is some kind of [`Integer`](@ref).
 The syntax `Array{<:Integer}` is a convenient shorthand for `Array{T} where T<:Integer`.
 Type variables can have both lower and upper bounds.
 `Array{T} where Int<:T<:Number` refers to all arrays of [`Number`](@ref)s that are able to
