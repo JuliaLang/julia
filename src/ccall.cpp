@@ -1787,18 +1787,26 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         jl_value_t *frt = expr_type(args[6], ctx);
         if (f && (jl_is_type_type((jl_value_t*)frt) && !jl_has_free_typevars(jl_tparam0(frt)))) {
             fargt = static_eval(args[8], ctx, true, true);
-            if (fargt) {
-                if (jl_is_tuple(fargt)) {
-                    // TODO: maybe deprecation warning, better checking
-                    fargt = (jl_value_t*)jl_apply_tuple_type_v((jl_value_t**)jl_data_ptr(fargt), jl_nfields(fargt));
+            if (!fargt) {
+                fargt = expr_type(args[8], ctx);
+                if (jl_is_type_type((jl_value_t*)fargt)) {
+                    fargt = jl_tparam0(fargt);
+                    if (jl_has_free_typevars(fargt) || !jl_is_tuple_type(fargt)) {
+                        fargt = nullptr;
+                    }
+                }
+                else {
+                    fargt = nullptr;
                 }
             }
-            else {
-                fargt = expr_type(args[8], ctx);
-                if (jl_is_type_type((jl_value_t*)fargt))
-                    fargt = jl_tparam0(fargt);
+            else if (jl_is_tuple(fargt)) {
+                // TODO: maybe deprecation warning, better checking
+                fargt = (jl_value_t*)jl_apply_tuple_type_v((jl_value_t**)jl_data_ptr(fargt), jl_nfields(fargt));
             }
-            if (jl_is_tuple_type(fargt) && jl_is_leaf_type(fargt)) {
+            else if (!jl_is_tuple_type(fargt)) {
+                fargt = nullptr;
+            }
+            if (fargt) {
                 frt = jl_tparam0(frt);
                 Value *llvmf = NULL;
                 JL_TRY {
