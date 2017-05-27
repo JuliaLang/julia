@@ -1061,7 +1061,7 @@ For arrays, this constructs an array with the same binary data as the given
 array, but with the specified element type.
 For example,
 `reinterpret(Float32, UInt32(7))` interprets the 4 bytes corresponding to `UInt32(7)` as a
-`Float32`.
+[`Float32`](@ref).
 
 !!! warning
 

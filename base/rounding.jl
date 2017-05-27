@@ -119,7 +119,7 @@ functions may give incorrect or invalid values when using rounding modes other t
 default `RoundNearest`.
 
 Note that this may affect other types, for instance changing the rounding mode of `Float64`
-will change the rounding mode of `Float32`. See [`RoundingMode`](@ref) for
+will change the rounding mode of [`Float32`](@ref). See [`RoundingMode`](@ref) for
 available modes.
 
 !!! warning

@@ -102,7 +102,7 @@ const Culonglong = UInt64
 """
     Cfloat
 
-Equivalent to the native `float` c-type (`Float32`).
+Equivalent to the native `float` c-type ([`Float32`](@ref)).
 """
 const Cfloat = Float32
 

@@ -17,13 +17,13 @@ const NaN16 = bitcast(Float16, 0x7e00)
 """
     Inf32
 
-Positive infinity of type `Float32`.
+Positive infinity of type [`Float32`](@ref).
 """
 const Inf32 = bitcast(Float32, 0x7f800000)
 """
     NaN32
 
-A not-a-number value of type `Float32`.
+A not-a-number value of type [`Float32`](@ref).
 """
 const NaN32 = bitcast(Float32, 0x7fc00000)
 const Inf64 = bitcast(Float64, 0x7ff0000000000000)

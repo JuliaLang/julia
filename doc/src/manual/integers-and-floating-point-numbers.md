@@ -243,8 +243,8 @@ julia> 2.5e-4
 0.00025
 ```
 
-The above results are all `Float64` values. Literal `Float32` values can be entered by writing
-an `f` in place of `e`:
+The above results are all `Float64` values. Literal [`Float32`](@ref) values can be entered
+by writing an `f` in place of `e`:
 
 ```jldoctest
 julia> 0.5f0
@@ -257,7 +257,7 @@ julia> 2.5f-4
 0.00025f0
 ```
 
-Values can be converted to `Float32` easily:
+Values can be converted to [`Float32`](@ref) easily:
 
 ```jldoctest
 julia> Float32(-1.5)
@@ -283,8 +283,8 @@ julia> typeof(ans)
 Float64
 ```
 
-Half-precision floating-point numbers are also supported (`Float16`), but they are
-implemented in software and use `Float32` for calculations.
+Half-precision floating-point numbers are also supported ([`Float16`](@ref)), but they are
+implemented in software and use [`Float32`](@ref) for calculations.
 
 ```jldoctest
 julia> sizeof(Float16(4.))
@@ -404,7 +404,7 @@ julia> eps() # same as eps(Float64)
 2.220446049250313e-16
 ```
 
-These values are `2.0^-23` and `2.0^-52` as `Float32` and `Float64` values, respectively. The
+These values are `2.0^-23` and `2.0^-52` as [`Float32`](@ref) and `Float64` values, respectively. The
 [`eps()`](@ref) function can also take a floating-point value as an argument, and gives the absolute
 difference between that value and the next representable floating point value. That is, `eps(x)`
 yields a value of the same type as `x` such that `x + eps(x)` is the next representable floating-point
