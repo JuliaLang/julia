@@ -36,7 +36,7 @@ The following are Julia's primitive numeric types:
 
 | Type              | Precision                                                                      | Number of bits |
 |:----------------- |:------------------------------------------------------------------------------ |:-------------- |
-| `Float16`         | [half](https://en.wikipedia.org/wiki/Half-precision_floating-point_format)     | 16             |
+| [`Float16`](@ref) | [half](https://en.wikipedia.org/wiki/Half-precision_floating-point_format)     | 16             |
 | [`Float32`](@ref) | [single](https://en.wikipedia.org/wiki/Single_precision_floating-point_format) | 32             |
 | [`Float64`](@ref) | [double](https://en.wikipedia.org/wiki/Double_precision_floating-point_format) | 64             |
 

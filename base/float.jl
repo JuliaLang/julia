@@ -5,13 +5,13 @@
 """
     Inf16
 
-Positive infinity of type `Float16`.
+Positive infinity of type [`Float16`](@ref).
 """
 const Inf16 = bitcast(Float16, 0x7c00)
 """
     NaN16
 
-A not-a-number value of type `Float16`.
+A not-a-number value of type [`Float16`](@ref).
 """
 const NaN16 = bitcast(Float16, 0x7e00)
 """

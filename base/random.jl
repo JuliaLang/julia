@@ -1181,9 +1181,9 @@ const ziggurat_exp_r      = 7.6971174701310497140446280481
 Generate a normally-distributed random number of type `T` with mean 0 and standard deviation 1.
 Optionally generate an array of normally-distributed random numbers.
 The `Base` module currently provides an implementation for the types
-`Float16`, `Float32`, and `Float64` (the default), and their [`Complex`](@ref) counterparts.
-When the type argument is complex, the values are drawn from the circularly symmetric
-complex normal distribution.
+[`Float16`](@ref), `Float32`, and `Float64` (the default), and their [`Complex`](@ref)
+counterparts. When the type argument is complex, the values are drawn from the circularly
+symmetric complex normal distribution.
 """
 @inline function randn(rng::AbstractRNG=GLOBAL_RNG)
     @inbounds begin
@@ -1217,7 +1217,7 @@ end
 Generate a random number of type `T` according to the exponential distribution with scale 1.
 Optionally generate an array of such random numbers.
 The `Base` module currently provides an implementation for the types
-`Float16`, `Float32`, and `Float64` (the default).
+[`Float16`](@ref), `Float32`, and `Float64` (the default).
 """
 @inline function randexp(rng::AbstractRNG=GLOBAL_RNG)
     @inbounds begin
