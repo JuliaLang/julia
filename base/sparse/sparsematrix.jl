@@ -292,7 +292,10 @@ function copy!(A::SparseMatrixCSC, B::SparseMatrixCSC)
     return A
 end
 
-similar(S::SparseMatrixCSC, Tv::Type = eltype(S)) = SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), Vector{Tv}(length(S.nzval)))
+function similar(S::SparseMatrixCSC, ::Type{Tv} = eltype(S)) where {Tv}
+    SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), Vector{Tv}(length(S.nzval)))
+end
+
 function similar(S::SparseMatrixCSC, ::Type{Tv}, ::Type{Ti}) where {Tv,Ti}
     new_colptr = copy!(similar(S.colptr, Ti), S.colptr)
     new_rowval = copy!(similar(S.rowval, Ti), S.rowval)
@@ -1369,16 +1372,18 @@ julia> spzeros(Float32, 4)
 ```
 """
 spzeros(m::Integer, n::Integer) = spzeros(Float64, m, n)
-spzeros(Tv::Type, m::Integer, n::Integer) = spzeros(Tv, Int, m, n)
-function spzeros(Tv::Type, Ti::Type, m::Integer, n::Integer)
+spzeros(::Type{Tv}, m::Integer, n::Integer) where {Tv} = spzeros(Tv, Int, m, n)
+function spzeros(::Type{Tv}, ::Type{Ti}, m::Integer, n::Integer) where {Tv, Ti}
     ((m < 0) || (n < 0)) && throw(ArgumentError("invalid Array dimensions"))
     SparseMatrixCSC(m, n, ones(Ti, n+1), Vector{Ti}(0), Vector{Tv}(0))
 end
 # de-splatting variant
-spzeros(Tv::Type, Ti::Type, sz::Tuple{Integer,Integer}) = spzeros(Tv, Ti, sz[1], sz[2])
+function spzeros(::Type{Tv}, ::Type{Ti}, sz::Tuple{Integer,Integer}) where {Tv, Ti}
+    spzeros(Tv, Ti, sz[1], sz[2])
+end
 
 speye(n::Integer) = speye(Float64, n)
-speye(T::Type, n::Integer) = speye(T, n, n)
+speye(::Type{T}, n::Integer) where {T} = speye(T, n, n)
 speye(m::Integer, n::Integer) = speye(Float64, m, n)
 
 """
@@ -1418,7 +1423,7 @@ if not specified.
 `sparse(α*I, m, n)` can be used to efficiently create a sparse
 multiple `α` of the identity matrix.
 """
-speye(T::Type, m::Integer, n::Integer) = speye_scaled(T, oneunit(T), m, n)
+speye(::Type{T}, m::Integer, n::Integer) where {T} = speye_scaled(T, oneunit(T), m, n)
 
 function one(S::SparseMatrixCSC{T}) where T
     m,n = size(S)
@@ -1428,7 +1433,7 @@ end
 
 speye_scaled(diag, m::Integer, n::Integer) = speye_scaled(typeof(diag), diag, m, n)
 
-function speye_scaled(T, diag, m::Integer, n::Integer)
+function speye_scaled(::Type{T}, diag, m::Integer, n::Integer) where {T}
     ((m < 0) || (n < 0)) && throw(ArgumentError("invalid array dimensions"))
     if iszero(diag)
         return SparseMatrixCSC(m, n, ones(Int, n+1), Vector{Int}(0), Vector{T}(0))
@@ -1509,7 +1514,7 @@ Base.reducedim_initarray0{R}(A::SparseMatrixCSC, region, v0, ::Type{R}) =
     fill!(similar(dims->Array{R}(dims), Base.reduced_indices0(A,region)), v0)
 
 # General mapreduce
-function _mapreducezeros(f, op, T::Type, nzeros::Int, v0)
+function _mapreducezeros(f, op, ::Type{T}, nzeros::Int, v0) where {T}
     nzeros == 0 && return v0
 
     # Reduce over first zero
@@ -1543,9 +1548,9 @@ function Base._mapreduce{T}(f, op, ::Base.IndexCartesian, A::SparseMatrixCSC{T})
 end
 
 # Specialized mapreduce for +/*
-_mapreducezeros(f, ::typeof(+), T::Type, nzeros::Int, v0) =
+_mapreducezeros(f, ::typeof(+), ::Type{T}, nzeros::Int, v0) where {T} =
     nzeros == 0 ? v0 : f(zero(T))*nzeros + v0
-_mapreducezeros(f, ::typeof(*), T::Type, nzeros::Int, v0) =
+_mapreducezeros(f, ::typeof(*), ::Type{T}, nzeros::Int, v0) where {T} =
     nzeros == 0 ? v0 : f(zero(T))^nzeros * v0
 
 function Base._mapreduce{T}(f, op::typeof(*), A::SparseMatrixCSC{T})
