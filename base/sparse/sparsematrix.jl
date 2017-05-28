@@ -292,7 +292,7 @@ function copy!(A::SparseMatrixCSC, B::SparseMatrixCSC)
     return A
 end
 
-function similar(S::SparseMatrixCSC, ::Type{Tv} = eltype(S)) where {Tv}
+function similar(S::SparseMatrixCSC, ::Type{Tv} = eltype(S)) where Tv
     SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), Vector{Tv}(length(S.nzval)))
 end
 
@@ -1433,7 +1433,7 @@ end
 
 speye_scaled(diag, m::Integer, n::Integer) = speye_scaled(typeof(diag), diag, m, n)
 
-function speye_scaled(::Type{T}, diag, m::Integer, n::Integer) where {T}
+function speye_scaled(::Type{T}, diag, m::Integer, n::Integer) where T
     ((m < 0) || (n < 0)) && throw(ArgumentError("invalid array dimensions"))
     if iszero(diag)
         return SparseMatrixCSC(m, n, ones(Int, n+1), Vector{Int}(0), Vector{T}(0))
@@ -1514,7 +1514,7 @@ Base.reducedim_initarray0{R}(A::SparseMatrixCSC, region, v0, ::Type{R}) =
     fill!(similar(dims->Array{R}(dims), Base.reduced_indices0(A,region)), v0)
 
 # General mapreduce
-function _mapreducezeros(f, op, ::Type{T}, nzeros::Int, v0) where {T}
+function _mapreducezeros(f, op, ::Type{T}, nzeros::Int, v0) where T
     nzeros == 0 && return v0
 
     # Reduce over first zero
