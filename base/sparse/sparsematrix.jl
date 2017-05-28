@@ -861,8 +861,8 @@ Computes `PAQ`'s column pointers, storing them shifted one position forward in `
 `_distributevals_halfperm!` fixes this shift. Saves some work relative to
 `_computecolptrs_halfperm!` as described in `uncheckednoalias_permute!`'s documentation.
 """
-function _computecolptrs_permute!{Tv,Ti}(X::SparseMatrixCSC{Tv,Ti},
-        A::SparseMatrixCSC{Tv,Ti}, q::AbstractVector{<:Integer}, workcolptr::Vector{Ti})
+function _computecolptrs_permute!(X::SparseMatrixCSC{Tv,Ti},
+        A::SparseMatrixCSC{Tv,Ti}, q::AbstractVector{<:Integer}, workcolptr::Vector{Ti}) where {Tv,Ti}
     # Compute `A[p,q]`'s column counts. Store shifted forward one position in workcolptr.
     @inbounds for k in 1:A.n
         workcolptr[k+1] = A.colptr[q[k] + 1] - A.colptr[q[k]]
@@ -898,9 +898,9 @@ end
 Helper method for `permute` and `permute!` methods operating on `SparseMatrixCSC`s.
 Checks whether row- and column- permutation arguments `p` and `q` are valid permutations.
 """
-function _checkargs_permutationsvalid_permute!{Ti<:Integer}(
+function _checkargs_permutationsvalid_permute!(
         p::AbstractVector{<:Integer}, pcheckspace::Vector{Ti},
-        q::AbstractVector{<:Integer}, qcheckspace::Vector{Ti})
+        q::AbstractVector{<:Integer}, qcheckspace::Vector{Ti}) where Ti<:Integer
     if !_ispermutationvalid_permute!(p, pcheckspace)
         throw(ArgumentError("row-permutation argument `p` must be a valid permutation"))
     elseif !_ispermutationvalid_permute!(q, qcheckspace)
