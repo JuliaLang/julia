@@ -251,7 +251,7 @@ sqrt_fast(x::FloatTypes) = sqrt_llvm_fast(x)
 const libm = Base.libm_name
 
 for f in (:acos, :acosh, :asin, :asinh, :atan, :atanh, :cbrt, :cos,
-          :cosh, :exp2, :exp, :expm1, :lgamma, :log10, :log1p, :log2,
+          :cosh, :exp2, :expm1, :lgamma, :log10, :log1p, :log2,
           :log, :sin, :sinh, :tan, :tanh)
     f_fast = fast_op[f]
     @eval begin
