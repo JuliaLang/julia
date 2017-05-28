@@ -37,7 +37,11 @@ else
     error("GMP: cannot determine the type mp_limb_t (__gmp_bits_per_limb == $GMP_BITS_PER_LIMB)")
 end
 
+"""
+    BigInt <: Integer
 
+Arbitrary precision integer type.
+"""
 mutable struct BigInt <: Integer
     alloc::Cint
     size::Cint
@@ -49,6 +53,26 @@ mutable struct BigInt <: Integer
         return b
     end
 end
+
+"""
+    BigInt(x)
+
+Create an arbitrary precision integer. `x` may be an `Int` (or anything that can be
+converted to an `Int`).  The usual mathematical operators are defined for this type, and
+results are promoted to a `BigInt`.
+
+Instances can be constructed from strings via [`parse`](@ref), or using the `big`
+string literal.
+
+```jldoctest
+julia> parse(BigInt, "42")
+42
+
+julia> big"313"
+313
+```
+"""
+BigInt(x)
 
 function __init__()
     try

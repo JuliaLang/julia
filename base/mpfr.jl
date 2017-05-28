@@ -43,23 +43,9 @@ const DEFAULT_PRECISION = [256]
 # Basic type and initialization definitions
 
 """
-    BigFloat(x)
+    BigFloat <: AbstractFloat
 
-Create an arbitrary precision floating point number. `x` may be an `Integer`, a `Float64` or
-a `BigInt`. The usual mathematical operators are defined for this type, and results are
-promoted to a `BigFloat`.
-
-Note that because decimal literals are converted to floating point numbers when parsed,
-`BigFloat(2.1)` may not yield what you expect. You may instead prefer to initialize
-constants from strings via [`parse`](@ref), or using the `big` string literal.
-
-```jldoctest
-julia> BigFloat(2.1)
-2.100000000000000088817841970012523233890533447265625000000000000000000000000000
-
-julia> big"2.1"
-2.099999999999999999999999999999999999999999999999999999999999999999999999999986
-```
+Arbitrary precision floating point number type.
 """
 mutable struct BigFloat <: AbstractFloat
     prec::Clong
@@ -80,6 +66,27 @@ mutable struct BigFloat <: AbstractFloat
         new(prec, sign, exp, d)
     end
 end
+
+"""
+    BigFloat(x)
+
+Create an arbitrary precision floating point number. `x` may be an `Integer`, a `Float64` or
+a `BigInt`. The usual mathematical operators are defined for this type, and results are
+promoted to a `BigFloat`.
+
+Note that because decimal literals are converted to floating point numbers when parsed,
+`BigFloat(2.1)` may not yield what you expect. You may instead prefer to initialize
+constants from strings via [`parse`](@ref), or using the `big` string literal.
+
+```jldoctest
+julia> BigFloat(2.1)
+2.100000000000000088817841970012523233890533447265625000000000000000000000000000
+
+julia> big"2.1"
+2.099999999999999999999999999999999999999999999999999999999999999999999999999986
+```
+"""
+BigFloat(x)
 
 widen(::Type{Float64}) = BigFloat
 widen(::Type{BigFloat}) = BigFloat

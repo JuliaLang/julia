@@ -2,22 +2,40 @@
 
 ## Standard Numeric Types
 
-  * `Bool`
-  * `Int8`
-  * `UInt8`
-  * `Int16`
-  * `UInt16`
-  * `Int32`
-  * `UInt32`
-  * `Int64`
-  * `UInt64`
-  * `Int128`
-  * `UInt128`
-  * `Float16`
-  * `Float32`
-  * `Float64`
-  * `Complex64`
-  * `Complex128`
+### Abstract number types
+
+```@docs
+Core.Number
+Core.Real
+Core.AbstractFloat
+Core.Integer
+Core.Signed
+Core.Unsigned
+```
+
+### Concrete number types
+
+```@docs
+Core.Float16
+Core.Float32
+Core.Float64
+Base.BigFloat
+Core.Bool
+Core.Int8
+Core.UInt8
+Core.Int16
+Core.UInt16
+Core.Int32
+Core.UInt32
+Core.Int64
+Core.UInt64
+Core.Int128
+Core.UInt128
+Base.BigInt
+Base.Complex
+Base.Rational
+Base.Irrational
+```
 
 ## Data Formats
 
@@ -73,10 +91,10 @@ Base.nextfloat
 Base.prevfloat
 Base.isinteger
 Base.isreal
-Core.Float32
-Core.Float64
-Base.GMP.BigInt
-Base.MPFR.BigFloat
+Core.Float32(::Any)
+Core.Float64(::Any)
+Base.GMP.BigInt(::Any)
+Base.MPFR.BigFloat(::Any)
 Base.Rounding.rounding
 Base.Rounding.setrounding(::Type, ::Any)
 Base.Rounding.setrounding(::Function, ::Type, ::RoundingMode)
