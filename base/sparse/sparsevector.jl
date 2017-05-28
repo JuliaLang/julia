@@ -985,7 +985,6 @@ hvcat(rows::Tuple{Vararg{Int}}, xs::_TypedDenseConcatGroup{T}...) where {T} = Ba
 ### Unary Map
 
 # zero-preserving functions (z->z, nz->nz)
-conj(x::SparseVector) = SparseVector(length(x), copy(nonzeroinds(x)), conj(nonzeros(x)))
 -(x::SparseVector) = SparseVector(length(x), copy(nonzeroinds(x)), -(nonzeros(x)))
 
 # functions f, such that
@@ -1019,9 +1018,9 @@ macro unarymap_nz2z_z2z(op, TF)
     end)
 end
 
-real(x::AbstractSparseVector{<:Real}) = x
+# the rest of real, conj, imag are handled correctly via AbstractArray methods
 @unarymap_nz2z_z2z real Complex
-
+conj(x::SparseVector{<:Complex}) = SparseVector(length(x), copy(nonzeroinds(x)), conj(nonzeros(x)))
 imag(x::AbstractSparseVector{Tv,Ti}) where {Tv<:Real,Ti<:Integer} = SparseVector(length(x), Ti[], Tv[])
 @unarymap_nz2z_z2z imag Complex
 

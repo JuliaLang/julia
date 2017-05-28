@@ -538,10 +538,12 @@ end
     @test tan.(Afull) == Array(tan.(A)) # should be redundant with sin test
     @test ceil.(Afull) == Array(ceil.(A))
     @test floor.(Afull) == Array(floor.(A)) # should be redundant with ceil test
-    @test real.(Afull) == Array(real.(A))
-    @test imag.(Afull) == Array(imag.(A))
-    @test real.(Cfull) == Array(real.(C))
-    @test imag.(Cfull) == Array(imag.(C))
+    @test real.(Afull) == Array(real.(A)) == Array(real(A))
+    @test imag.(Afull) == Array(imag.(A)) == Array(imag(A))
+    @test conj.(Afull) == Array(conj.(A)) == Array(conj(A))
+    @test real.(Cfull) == Array(real.(C)) == Array(real(C))
+    @test imag.(Cfull) == Array(imag.(C)) == Array(imag(C))
+    @test conj.(Cfull) == Array(conj.(C)) == Array(conj(C))
     # Test representatives of [unary functions that map zeros to zeros and nonzeros to nonzeros]
     @test expm1.(Afull) == Array(expm1.(A))
     @test abs.(Afull) == Array(abs.(A))
@@ -559,12 +561,19 @@ end
         I = rand(T[1:100;], 2, 2)
         D = R + I*im
         S = sparse(D)
-        @test R == real.(S)
-        @test I == imag.(S)
-        @test real.(sparse(R)) == R
-        @test nnz(imag.(sparse(R))) == 0
+        spR = sparse(R)
+
+        @test R == real.(S) == real(S)
+        @test I == imag.(S) == imag(S)
+        @test conj(full(S)) == conj.(S) == conj(S)
+        @test real.(spR) == R
+        @test nnz(imag.(spR)) == nnz(imag(spR)) == 0
         @test abs.(S) == abs.(D)
         @test abs2.(S) == abs2.(D)
+
+        # test aliasing of real and conj of real valued matrix
+        @test real(spR) === spR
+        @test conj(spR) === spR
     end
 end
 
