@@ -11,7 +11,6 @@ Core.AbstractFloat
 Core.Integer
 Core.Signed
 Core.Unsigned
-Base.Irrational
 ```
 
 ### Concrete number types
@@ -35,6 +34,7 @@ Core.UInt128
 Base.BigInt
 Base.Complex
 Base.Rational
+Base.Irrational
 ```
 
 ## Data Formats

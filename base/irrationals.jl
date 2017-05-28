@@ -5,7 +5,7 @@
 """
     Irrational <: Real
 
-Abstract supertype for irrational numbers.
+Irrational number type.
 """
 struct Irrational{sym} <: Real end
 
