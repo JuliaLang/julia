@@ -1444,6 +1444,10 @@ sparse(S::UniformScaling, m::Integer, n::Integer=m) = speye_scaled(S.λ, m, n)
 conj!(A::SparseMatrixCSC) = (@inbounds broadcast!(conj, A.nzval, A.nzval); A)
 (-)(A::SparseMatrixCSC) = SparseMatrixCSC(A.m, A.n, copy(A.colptr), copy(A.rowval), map(-, A.nzval))
 
+# the rest of real, conj, imag are handled correctly via AbstractArray methods
+conj(A::SparseMatrixCSC{<:Complex}) =
+    SparseMatrixCSC(A.m, A.n, copy(A.colptr), copy(A.rowval), conj(A.nzval))
+imag(A::SparseMatrixCSC{Tv,Ti}) where {Tv<:Real,Ti} = spzeros(Tv, Ti, A.m, A.n)
 
 ## Binary arithmetic and boolean operators
 (+)(A::SparseMatrixCSC, B::SparseMatrixCSC) = map(+, A, B)
