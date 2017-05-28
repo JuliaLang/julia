@@ -24,6 +24,7 @@
 
 #if JL_LLVM_VERSION >= 30700 && defined(JULIA_ENABLE_THREADING)
 #  include <llvm/IR/InlineAsm.h>
+#  include <llvm/Transforms/Utils/BasicBlockUtils.h>
 #endif
 #include "fix_llvm_assert.h"
 
@@ -74,6 +75,88 @@ static void ensure_global(const char *name, Type *t, Module &M,
 #endif // _OS_WINDOWS_
 }
 
+#ifdef JULIA_ENABLE_THREADING
+static void setCallPtlsAttrs(CallInst *ptlsStates)
+{
+#if JL_LLVM_VERSION >= 50000
+    ptlsStates->addAttribute(AttributeList::FunctionIndex, Attribute::ReadNone);
+    ptlsStates->addAttribute(AttributeList::FunctionIndex, Attribute::NoUnwind);
+#else
+    ptlsStates->addAttribute(AttributeSet::FunctionIndex, Attribute::ReadNone);
+    ptlsStates->addAttribute(AttributeSet::FunctionIndex, Attribute::NoUnwind);
+#endif
+}
+
+#if JL_LLVM_VERSION >= 30700
+static Instruction *emit_ptls_tp(LLVMContext &ctx, Value *offset, Type *T_ppjlvalue,
+                                 Instruction *insertBefore)
+{
+    auto T_int8 = Type::getInt8Ty(ctx);
+    auto T_pint8 = PointerType::get(T_int8, 0);
+#  if defined(_CPU_X86_64_) || defined(_CPU_X86_)
+    // Workaround LLVM bug by hiding the offset computation
+    // (and therefore the optimization opportunity) from LLVM.
+    // Ref https://github.com/JuliaLang/julia/issues/17288
+    static const std::string const_asm_str = [&] () {
+        std::stringstream stm;
+#  if defined(_CPU_X86_64_)
+        stm << "movq %fs:0, $0;\naddq $$" << jl_tls_offset << ", $0";
+#  else
+        stm << "movl %gs:0, $0;\naddl $$" << jl_tls_offset << ", $0";
+#  endif
+        return stm.str();
+    }();
+#  if defined(_CPU_X86_64_)
+    const char *dyn_asm_str = "movq %fs:0, $0;\naddq $1, $0";
+#  else
+    const char *dyn_asm_str = "movl %gs:0, $0;\naddl $1, $0";
+#  endif
+
+    // The add instruction clobbers flags
+    Value *tls;
+    if (offset) {
+        std::vector<Type*> args(0);
+        args.push_back(offset->getType());
+        auto tp = InlineAsm::get(FunctionType::get(T_pint8, args, false),
+                                 dyn_asm_str, "=&r,r,~{dirflag},~{fpsr},~{flags}", false);
+        tls = CallInst::Create(tp, offset, "ptls_i8", insertBefore);
+    }
+    else {
+        auto tp = InlineAsm::get(FunctionType::get(T_pint8, false),
+                                 const_asm_str.c_str(), "=r,~{dirflag},~{fpsr},~{flags}", false);
+        tls = CallInst::Create(tp, "ptls_i8", insertBefore);
+    }
+    return new BitCastInst(tls, PointerType::get(T_ppjlvalue, 0), "ptls", insertBefore);
+#  elif defined(_CPU_AARCH64_) || (defined(__ARM_ARCH) && __ARM_ARCH >= 7)
+    // AArch64/ARM doesn't seem to have this issue.
+    // (Possibly because there are many more registers and the offset is
+    // positive and small)
+    // It's also harder to emit the offset in a generic way on ARM/AArch64
+    // (need to generate one or two `add` with shift) so let llvm emit
+    // the add for now.
+#if defined(_CPU_AARCH64_)
+    const char *asm_str = "mrs $0, tpidr_el0";
+#else
+    const char *asm_str = "mrc p15, 0, $0, c13, c0, 3";
+#endif
+    if (!offset) {
+        auto T_size = (sizeof(size_t) == 8 ? Type::getInt64Ty(ctx) : Type::getInt32Ty(ctx));
+        offset = ConstantInt::getSigned(T_size, jl_tls_offset);
+    }
+    auto tp = InlineAsm::get(FunctionType::get(T_pint8, false), asm_str, "=r", false);
+    Value *tls = CallInst::Create(tp, "thread_ptr", insertBefore);
+    tls = GetElementPtrInst::Create(T_int8, tls, {offset}, "ptls_i8", insertBefore);
+    return new BitCastInst(tls, PointerType::get(T_ppjlvalue, 0), "ptls", insertBefore);
+#  else
+    (void)T_pint8;
+    assert(0 && "Cannot emit thread pointer for this architecture.");
+    return nullptr;
+#  endif
+}
+#endif
+
+#endif
+
 void LowerPTLS::runOnFunction(LLVMContext &ctx, Module &M, Function *F,
                               Function *ptls_getter, Type *T_ppjlvalue, MDNode *tbaa_const)
 {
@@ -99,85 +182,53 @@ void LowerPTLS::runOnFunction(LLVMContext &ctx, Module &M, Function *F,
     if (imaging_mode) {
         GlobalVariable *GV = cast<GlobalVariable>(
             M.getNamedValue("jl_get_ptls_states.ptr"));
-        LoadInst *getter = new LoadInst(GV, "", ptlsStates);
+#if JL_LLVM_VERSION >= 30700
+        if (jl_tls_elf_support) {
+            GlobalVariable *OffsetGV = cast<GlobalVariable>(
+                M.getNamedValue("jl_tls_offset.val"));
+            // if (offset != 0)
+            //     ptls = tp + offset;
+            // else
+            //     ptls = getter();
+            auto offset = new LoadInst(OffsetGV, "", ptlsStates);
+            offset->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
+            auto cmp = new ICmpInst(ptlsStates, CmpInst::ICMP_NE, offset,
+                                    Constant::getNullValue(offset->getType()));
+            MDBuilder MDB(ctx);
+            SmallVector<uint32_t, 2> Weights{9, 1};
+            TerminatorInst *fastTerm;
+            TerminatorInst *slowTerm;
+            SplitBlockAndInsertIfThenElse(cmp, ptlsStates, &fastTerm, &slowTerm,
+                                          MDB.createBranchWeights(Weights));
+
+            auto fastTLS = emit_ptls_tp(ctx, offset, T_ppjlvalue, fastTerm);
+            auto phi = PHINode::Create(PointerType::get(T_ppjlvalue, 0), 2, "", ptlsStates);
+            ptlsStates->replaceAllUsesWith(phi);
+            ptlsStates->moveBefore(slowTerm);
+            auto getter = new LoadInst(GV, "", ptlsStates);
+            getter->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
+            ptlsStates->setCalledFunction(getter);
+            setCallPtlsAttrs(ptlsStates);
+
+            phi->addIncoming(fastTLS, fastTLS->getParent());
+            phi->addIncoming(ptlsStates, ptlsStates->getParent());
+
+            return;
+        }
+#endif
+        auto getter = new LoadInst(GV, "", ptlsStates);
         getter->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
         ptlsStates->setCalledFunction(getter);
-#if JL_LLVM_VERSION >= 50000
-        ptlsStates->addAttribute(AttributeList::FunctionIndex,
-                                 Attribute::ReadNone);
-        ptlsStates->addAttribute(AttributeList::FunctionIndex,
-                                 Attribute::NoUnwind);
-#else
-        ptlsStates->addAttribute(AttributeSet::FunctionIndex,
-                                 Attribute::ReadNone);
-        ptlsStates->addAttribute(AttributeSet::FunctionIndex,
-                                 Attribute::NoUnwind);
-#endif
+        setCallPtlsAttrs(ptlsStates);
     }
 #if JL_LLVM_VERSION >= 30700
     else if (jl_tls_offset != -1) {
-        auto T_int8 = Type::getInt8Ty(ctx);
-        auto T_pint8 = PointerType::get(T_int8, 0);
-        // Replace the function call with inline assembly if we know
-        // how to generate it.
-#  if defined(_CPU_X86_64_) || defined(_CPU_X86_)
-        // Workaround LLVM bug by hiding the offset computation
-        // (and therefore the optimization opportunity) from LLVM.
-        static const std::string asm_str = [&] () {
-            std::stringstream stm;
-#  if defined(_CPU_X86_64_)
-            stm << "movq %fs:0, $0;\naddq $$" << jl_tls_offset << ", $0";
-#  else
-            stm << "movl %gs:0, $0;\naddl $$" << jl_tls_offset << ", $0";
-#  endif
-            return stm.str();
-        }();
-        // The add instruction clobbers flags
-        auto tp = InlineAsm::get(FunctionType::get(T_pint8, false),
-                                 asm_str.c_str(),
-                                 "=r,~{dirflag},~{fpsr},~{flags}", false);
-        Value *tls = CallInst::Create(tp, "ptls_i8", ptlsStates);
-        tls = new BitCastInst(tls, PointerType::get(T_ppjlvalue, 0),
-                              "ptls", ptlsStates);
-#  elif defined(_CPU_AARCH64_)
-        // AArch64 doesn't seem to have this issue.
-        // (Possibly because there are many more registers and the offset is
-        // positive and small)
-        // It's also harder to emit the offset in a generic way on AArch64
-        // (need to generate one or two `add` with shift) so let llvm emit
-        // the add for now.
-        auto T_size = (sizeof(size_t) == 8 ? Type::getInt64Ty(ctx) :
-                       Type::getInt32Ty(ctx));
-        const char *asm_str = "mrs $0, tpidr_el0";
-        auto offset = ConstantInt::getSigned(T_size, jl_tls_offset);
-        auto tp = InlineAsm::get(FunctionType::get(T_pint8, false),
-                                 asm_str, "=r", false);
-        Value *tls = CallInst::Create(tp, "thread_ptr", ptlsStates);
-        tls = GetElementPtrInst::Create(T_int8, tls, {offset},
-                                        "ptls_i8", ptlsStates);
-        tls = new BitCastInst(tls, PointerType::get(T_ppjlvalue, 0),
-                              "ptls", ptlsStates);
-#  else
-        Value *tls = nullptr;
-        assert(0 && "Cannot emit thread pointer for this architecture.");
-#  endif
-        (void)T_pint8;
-        ptlsStates->replaceAllUsesWith(tls);
+        ptlsStates->replaceAllUsesWith(emit_ptls_tp(ctx, nullptr, T_ppjlvalue, ptlsStates));
         ptlsStates->eraseFromParent();
     }
 #endif
     else {
-#if JL_LLVM_VERSION >= 50000
-        ptlsStates->addAttribute(AttributeList::FunctionIndex,
-                                 Attribute::ReadNone);
-        ptlsStates->addAttribute(AttributeList::FunctionIndex,
-                                 Attribute::NoUnwind);
-#else
-        ptlsStates->addAttribute(AttributeSet::FunctionIndex,
-                                 Attribute::ReadNone);
-        ptlsStates->addAttribute(AttributeSet::FunctionIndex,
-                                 Attribute::NoUnwind);
-#endif
+        setCallPtlsAttrs(ptlsStates);
     }
 #else
     ptlsStates->replaceAllUsesWith(M.getNamedValue("jl_tls_states"));
@@ -197,8 +248,11 @@ bool LowerPTLS::runOnModule(Module &M)
     auto T_ppjlvalue =
         cast<PointerType>(functype->getReturnType())->getElementType();
 #ifdef JULIA_ENABLE_THREADING
-    if (imaging_mode)
+    if (imaging_mode) {
         ensure_global("jl_get_ptls_states.ptr", functype->getPointerTo(), M);
+        ensure_global("jl_tls_offset.val",
+                      sizeof(size_t) == 8 ? Type::getInt64Ty(ctx) : Type::getInt32Ty(ctx), M);
+    }
 #else
     ensure_global("jl_tls_states", T_ppjlvalue, M, imaging_mode);
 #endif

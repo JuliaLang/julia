@@ -74,10 +74,7 @@ end
     val
 end
 
-# For some reason this is faster than ntuple(d->I[perm[d]], Val{N}) (#15276?)
-@inline genperm(I::NTuple{N,Any}, perm::Dims{N}) where {N} = _genperm((), I, perm...)
-_genperm(out, I) = out
-@inline _genperm(out, I, p, perm...) = _genperm((out..., I[p]), I, perm...)
+@inline genperm(I::NTuple{N,Any}, perm::Dims{N}) where {N} = ntuple(d -> I[perm[d]], Val{N})
 @inline genperm(I, perm::AbstractVector{Int}) = genperm(I, (perm...,))
 
 """

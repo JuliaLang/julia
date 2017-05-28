@@ -316,6 +316,7 @@ julia> sparsevec([1.0, 2.0, 0.0, 0.0, 3.0, 0.0])
 sparsevec(a::AbstractVector{T}) where {T} = convert(SparseVector{T, Int}, a)
 sparsevec(a::AbstractArray) = sparsevec(vec(a))
 sparsevec(a::AbstractSparseArray) = vec(a)
+sparsevec(a::AbstractSparseVector) = vec(a)
 sparse(a::AbstractVector) = sparsevec(a)
 
 function _dense2sparsevec(s::AbstractArray{Tv}, initcap::Ti) where {Tv,Ti}

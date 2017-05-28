@@ -33,6 +33,9 @@ promote_rule(::Type{Complex{T}}, ::Type{Complex{S}}) where {T<:Real,S<:Real} =
 
 widen(::Type{Complex{T}}) where {T} = Complex{widen(T)}
 
+float(::Type{Complex{T}}) where {T<:AbstractFloat} = Complex{T}
+float(::Type{Complex{T}}) where {T} = Complex{float(T)}
+
 """
     real(z)
 
@@ -421,7 +424,10 @@ sqrt(z::Complex) = sqrt(float(z))
 # end
 
 # compute exp(im*theta)
-cis(theta::Real) = Complex(cos(theta),sin(theta))
+function cis(theta::Real)
+    s, c = sincos(theta)
+    Complex(c, s)
+end
 
 """
     cis(z)
@@ -430,7 +436,8 @@ Return ``\\exp(iz)``.
 """
 function cis(z::Complex)
     v = exp(-imag(z))
-    Complex(v*cos(real(z)), v*sin(real(z)))
+    s, c = sincos(real(z))
+    Complex(v * c, v * s)
 end
 
 """
@@ -507,12 +514,14 @@ function exp(z::Complex)
         if iszero(zi)
             Complex(er, zi)
         else
-            Complex(er*cos(zi), er*sin(zi))
+            s, c = sincos(zi)
+            Complex(er * c, er * s)
         end
     end
 end
 
-function expm1(z::Complex)
+function expm1(z::Complex{T}) where T<:Real
+    Tf = float(T)
     zr,zi = reim(z)
     if isnan(zr)
         Complex(zr, zi==0 ? zi : zr)
@@ -530,8 +539,13 @@ function expm1(z::Complex)
             Complex(erm1, zi)
         else
             er = erm1+one(erm1)
-            wr = isfinite(er) ? erm1 - 2.0*er*(sin(0.5*zi))^2 : er*cos(zi)
-            Complex(wr, er*sin(zi))
+            if isfinite(er)
+                wr = erm1 - 2 * er * (sin(convert(Tf, 0.5) * zi))^2
+                return Complex(wr, er * sin(zi))
+            else
+                s, c = sincos(zi)
+                return Complex(er * c, er * s)
+            end
         end
     end
 end
@@ -543,7 +557,7 @@ function log1p(z::Complex{T}) where T
         # This is based on a well-known trick for log1p of real z,
         # allegedly due to Kahan, only modified to handle real(u) <= 0
         # differently to avoid inaccuracy near z==-2 and for correct branch cut
-        u = float(one(T)) + z
+        u = one(float(T)) + z
         u == 1 ? convert(typeof(u), z) : real(u) <= 0 ? log(u) : log(u)*z/(u-1)
     elseif isnan(zr)
         Complex(zr, zr)
@@ -589,17 +603,21 @@ function ^(z::Complex{T}, p::Complex{T})::Complex{T} where T<:AbstractFloat
     end
 end
 
-function exp2(z::Complex{T}) where T
+function exp2(z::Complex{T}) where T<:AbstractFloat
     er = exp2(real(z))
     theta = imag(z) * log(convert(T, 2))
-    Complex(er*cos(theta), er*sin(theta))
+    s, c = sincos(theta)
+    Complex(er * c, er * s)
 end
+exp2(z::Complex) = exp2(float(z))
 
-function exp10(z::Complex{T}) where T
+function exp10(z::Complex{T}) where T<:AbstractFloat
     er = exp10(real(z))
     theta = imag(z) * log(convert(T, 10))
-    Complex(er*cos(theta), er*sin(theta))
+    s, c = sincos(theta)
+    Complex(er * c, er * s)
 end
+exp10(z::Complex) = exp10(float(z))
 
 function ^(z::T, p::T) where T<:Complex
     if isinteger(p)
@@ -620,8 +638,7 @@ function ^(z::T, p::T) where T<:Complex
         rp = rp*exp(-pim*theta)
         ntheta = ntheta + pim*log(r)
     end
-    cosntheta = cos(ntheta)
-    sinntheta = sin(ntheta)
+    sinntheta, cosntheta = sincos(ntheta)
     re, im = rp*cosntheta, rp*sinntheta
     if isinf(rp)
         if isnan(re)
@@ -681,7 +698,8 @@ function sin(z::Complex{T}) where T
             Complex(F(NaN), F(NaN))
         end
     else
-        Complex(sin(zr)*cosh(zi), cos(zr)*sinh(zi))
+        s, c = sincos(zr)
+        Complex(s * cosh(zi), c * sinh(zi))
     end
 end
 
@@ -700,7 +718,8 @@ function cos(z::Complex{T}) where T
             Complex(F(NaN), F(NaN))
         end
     else
-        Complex(cos(zr)*cosh(zi), -sin(zr)*sinh(zi))
+        s, c = sincos(zr)
+        Complex(c * cosh(zi), -s * sinh(zi))
     end
 end
 
@@ -880,8 +899,8 @@ end
 float(z::Complex{<:AbstractFloat}) = z
 float(z::Complex) = Complex(float(real(z)), float(imag(z)))
 
-big(z::Complex{<:AbstractFloat}) = Complex{BigFloat}(z)
-big(z::Complex{<:Integer}) = Complex{BigInt}(z)
+big(::Type{Complex{T}}) where {T<:Real} = Complex{big(T)}
+big(z::Complex{T}) where {T<:Real} = Complex{big(T)}(z)
 
 ## Array operations on complex numbers ##
 

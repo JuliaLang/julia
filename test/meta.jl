@@ -2,10 +2,6 @@
 
 # test meta-expressions that annotate blocks of code
 
-module MetaTest
-
-using Base.Test
-
 const inlining_on = Base.JLOptions().can_inline != 0
 
 function f(x)
@@ -121,17 +117,12 @@ body.args = ast.code
 @test popmeta!(body, :test) == (true, [42])
 @test popmeta!(body, :nonexistent) == (false, [])
 
-end
-
-
 # tests to fully cover functions in base/meta.jl
-module MetaJLtest
-
-using Base.Test
 using Base.Meta
 
 @test isexpr(:(1+1),Set([:call]))
 @test isexpr(:(1+1),Vector([:call]))
+@test isexpr(:(1+1),(:call,))
 @test isexpr(1,:call)==false
 @test isexpr(:(1+1),:call,3)
 ioB = IOBuffer()
@@ -139,7 +130,8 @@ show_sexpr(ioB,:(1+1))
 
 show_sexpr(ioB,QuoteNode(1),1)
 
-end
+@test Base.Distributed.extract_imports(:(begin; import Foo, Bar; let; using Baz; end; end)) ==
+      [:Foo, :Bar, :Baz]
 
 # test base/expr.jl
 baremodule B

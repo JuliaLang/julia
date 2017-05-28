@@ -618,7 +618,7 @@ static Value *julia_to_address(Type *to, jl_value_t *jlto, jl_unionall_t *jlto_e
         builder.CreateMemCpy(slot,
                              data_pointer(jvinfo, ctx, slot->getType()),
                              (uint64_t)jl_datatype_size(ety),
-                             (uint64_t)((jl_datatype_t*)ety)->layout->alignment);
+                             (uint64_t)jl_datatype_align(ety));
         mark_gc_use(jvinfo);
     }
     if (slot->getType() != to)
@@ -657,7 +657,7 @@ static Value *julia_to_native(Type *to, bool toboxed, jl_value_t *jlto, jl_union
         builder.CreateMemCpy(slot,
                              data_pointer(jvinfo, ctx, slot->getType()),
                              (uint64_t)jl_datatype_size(jlto),
-                             (uint64_t)((jl_datatype_t*)jlto)->layout->alignment);
+                             (uint64_t)jl_datatype_align(jlto));
         mark_gc_use(jvinfo);
     }
     return slot;
@@ -1275,7 +1275,7 @@ std::string generate_func_sig()
     assert(rt && !jl_is_abstract_ref_type(rt));
 
 #if JL_LLVM_VERSION >= 50000
-    std::vector<AttributeList> paramattrs;
+    std::vector<AttrBuilder> paramattrs;
 #else
     std::vector<AttributeSet> paramattrs;
 #endif
@@ -1302,7 +1302,7 @@ std::string generate_func_sig()
 #endif
             retattrs.addAttribute(Attribute::NoAlias);
 #if JL_LLVM_VERSION >= 50000
-            paramattrs.push_back(AttributeList::get(jl_LLVMContext, 1, retattrs));
+            paramattrs.push_back(std::move(retattrs));
 #else
             paramattrs.push_back(AttributeSet::get(jl_LLVMContext, 1, retattrs));
 #endif
@@ -1388,24 +1388,26 @@ std::string generate_func_sig()
         do { // for each arg for which this type applies, add the appropriate LLVM parameter attributes
             if (i < nargs) { // if vararg, the last declared arg type may not have a corresponding arg value
 #if JL_LLVM_VERSION >= 50000
-                AttributeList params = AttributeList::get(jl_LLVMContext, i + sret + 1, ab);
+                paramattrs.push_back(std::move(ab));
 #else
                 AttributeSet params = AttributeSet::get(jl_LLVMContext, i + sret + 1, ab);
-#endif
                 paramattrs.push_back(params);
+#endif
             }
             i++;
         } while (current_isVa && i < nargs); // if is this is the vararg, loop to the end
     }
 
     for (i = 0; i < nargs + sret; ++i) {
+        const auto &as = paramattrs.at(i);
 #if JL_LLVM_VERSION >= 50000
-        const AttributeList &as = paramattrs.at(i);
+        if (!as.hasAttributes())
+            continue;
 #else
-        const AttributeSet &as = paramattrs.at(i);
+        if (as.isEmpty())
+            continue;
 #endif
-        if (!as.isEmpty())
-            attributes = attributes.addAttributes(jl_LLVMContext, i + 1, as);
+        attributes = attributes.addAttributes(jl_LLVMContext, i + 1, as);
     }
     if (rt == jl_bottom_type) {
         attributes = attributes.addAttribute(jl_LLVMContext,
@@ -1785,18 +1787,26 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         jl_value_t *frt = expr_type(args[6], ctx);
         if (f && (jl_is_type_type((jl_value_t*)frt) && !jl_has_free_typevars(jl_tparam0(frt)))) {
             fargt = static_eval(args[8], ctx, true, true);
-            if (fargt) {
-                if (jl_is_tuple(fargt)) {
-                    // TODO: maybe deprecation warning, better checking
-                    fargt = (jl_value_t*)jl_apply_tuple_type_v((jl_value_t**)jl_data_ptr(fargt), jl_nfields(fargt));
+            if (!fargt) {
+                fargt = expr_type(args[8], ctx);
+                if (jl_is_type_type((jl_value_t*)fargt)) {
+                    fargt = jl_tparam0(fargt);
+                    if (jl_has_free_typevars(fargt) || !jl_is_tuple_type(fargt)) {
+                        fargt = nullptr;
+                    }
+                }
+                else {
+                    fargt = nullptr;
                 }
             }
-            else {
-                fargt = expr_type(args[8], ctx);
-                if (jl_is_type_type((jl_value_t*)fargt))
-                    fargt = jl_tparam0(fargt);
+            else if (jl_is_tuple(fargt)) {
+                // TODO: maybe deprecation warning, better checking
+                fargt = (jl_value_t*)jl_apply_tuple_type_v((jl_value_t**)jl_data_ptr(fargt), jl_nfields(fargt));
             }
-            if (jl_is_tuple_type(fargt) && jl_is_leaf_type(fargt)) {
+            else if (!jl_is_tuple_type(fargt)) {
+                fargt = nullptr;
+            }
+            if (fargt) {
                 frt = jl_tparam0(frt);
                 Value *llvmf = NULL;
                 JL_TRY {

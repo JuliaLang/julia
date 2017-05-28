@@ -3,7 +3,7 @@
 module Random
 
 using Base.dSFMT
-using Base.GMP: GMP_VERSION, Limb
+using Base.GMP: GMP_VERSION, Limb, MPZ
 import Base: copymutable, copy, copy!, ==
 
 export srand,
@@ -166,7 +166,7 @@ function randjump(mt::MersenneTwister, jumps::Integer, jumppoly::AbstractString)
     push!(mts, mt)
     for i in 1:jumps-1
         cmt = mts[end]
-        push!(mts, MersenneTwister(cmt.seed, dSFMT.dsfmt_jump(cmt.state, jumppoly)))
+        push!(mts, MersenneTwister(copy(cmt.seed), dSFMT.dsfmt_jump(cmt.state, jumppoly)))
     end
     return mts
 end
@@ -213,25 +213,19 @@ function make_seed(n::Integer)
     end
 end
 
-function make_seed(filename::AbstractString, n::Integer)
-    read!(filename, Vector{UInt32}(Int(n)))
-end
-
 ## srand()
 
 """
-    srand([rng=GLOBAL_RNG], [seed]) -> rng
-    srand([rng=GLOBAL_RNG], filename, n=4) -> rng
+    srand([rng=GLOBAL_RNG], seed) -> rng
+    srand([rng=GLOBAL_RNG]) -> rng
 
 Reseed the random number generator. If a `seed` is provided, the RNG will give a
 reproducible sequence of numbers, otherwise Julia will get entropy from the system. For
-`MersenneTwister`, the `seed` may be a non-negative integer, a vector of `UInt32` integers
-or a filename, in which case the seed is read from a file (`4n` bytes are read from the file,
-where `n` is an optional argument). `RandomDevice` does not support seeding.
+`MersenneTwister`, the `seed` may be a non-negative integer or a vector of `UInt32` integers.
+`RandomDevice` does not support seeding.
 """
 srand(r::MersenneTwister) = srand(r, make_seed())
 srand(r::MersenneTwister, n::Integer) = srand(r, make_seed(n))
-srand(r::MersenneTwister, filename::AbstractString, n::Integer=4) = srand(r, make_seed(filename, n))
 
 
 function dsfmt_gv_srand()
@@ -247,11 +241,6 @@ end
 
 function srand(seed::Union{Integer, Vector{UInt32}})
     srand(GLOBAL_RNG, seed)
-    dsfmt_gv_srand()
-end
-
-function srand(filename::AbstractString, n::Integer=4)
-    srand(GLOBAL_RNG, filename, n)
     dsfmt_gv_srand()
 end
 
@@ -624,15 +613,13 @@ if GMP_VERSION.major >= 6
         x = BigInt()
         while true
             # note: on CRAY computers, the second argument may be of type Cint (48 bits) and not Clong
-            xd = ccall((:__gmpz_limbs_write, :libgmp), Ptr{Limb}, (Ptr{BigInt}, Clong), &x, g.nlimbs)
+            xd = MPZ.limbs_write!(x, g.nlimbs)
             limbs = unsafe_wrap(Array, xd, g.nlimbs)
             rand!(rng, limbs)
             limbs[end] &= g.mask
-            ccall((:__gmpz_limbs_finish, :libgmp), Void, (Ptr{BigInt}, Clong), &x, g.nlimbs)
-            x <= g.m && break
+            MPZ.limbs_finish!(x, g.nlimbs)
+            x <= g.m && return MPZ.add!(x, g.a)
         end
-        ccall((:__gmpz_add, :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}), &x, &x, &g.a)
-        return x
     end
 else
     function rand(rng::AbstractRNG, g::RangeGeneratorBigInt)
@@ -640,13 +627,9 @@ else
         while true
             rand!(rng, g.limbs)
             g.limbs[end] &= g.mask
-            ccall((:__gmpz_import, :libgmp), Void,
-                  (Ptr{BigInt}, Csize_t, Cint, Csize_t, Cint, Csize_t, Ptr{Limb}),
-                  &x, length(g.limbs), -1, sizeof(Limb), 0, 0, g.limbs)
-            x <= g.m && break
+            MPZ.import!(x, length(g.limbs), -1, sizeof(Limb), 0, 0, g.limbs)
+            x <= g.m && return MPZ.add!(x, g.a)
         end
-        ccall((:__gmpz_add, :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}), &x, &x, &g.a)
-        return x
     end
 end
 
@@ -1198,7 +1181,9 @@ const ziggurat_exp_r      = 7.6971174701310497140446280481
 Generate a normally-distributed random number of type `T` with mean 0 and standard deviation 1.
 Optionally generate an array of normally-distributed random numbers.
 The `Base` module currently provides an implementation for the types
-`Float16`, `Float32`, and `Float64` (the default).
+`Float16`, `Float32`, and `Float64` (the default), and their `Complex` counterparts.
+When the type argument is complex, the values are drawn from the circularly symmetric
+complex normal distribution.
 """
 @inline function randn(rng::AbstractRNG=GLOBAL_RNG)
     @inbounds begin
@@ -1300,6 +1285,11 @@ let Floats = Union{Float16,Float32,Float64}
         end
     end
 end
+
+# complex randn
+Base.@irrational SQRT_HALF 0.7071067811865475244008  sqrt(big(0.5))
+randn(rng::AbstractRNG, ::Type{Complex{T}}) where {T <: AbstractFloat} =
+    Complex{T}(SQRT_HALF * randn(rng, T), SQRT_HALF * randn(rng, T))
 
 ## random UUID generation
 

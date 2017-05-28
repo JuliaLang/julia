@@ -263,6 +263,29 @@ end
     b = [4, 6, 2, -7, 1]
     ind = findin(a, b)
     @test ind == [3,4]
+    @test findin(a, Int[]) == Int[]
+    @test findin(Int[], a) == Int[]
+
+    a = [1,2,3,4,5]
+    b = [2,3,4,6]
+    @test findin(a, b) == [2,3,4]
+    @test findin(b, a) == [1,2,3]
+    @test findin(a, Int[]) == Int[]
+    @test findin(Int[], a) == Int[]
+
+    a = collect(1:3:15)
+    b = collect(2:4:10)
+    @test findin(a, b) == [4]
+    @test findin([a[1:4]; a[4:end]], b) == [4,5]
+
+    @test findin([1.0, NaN, 2.0], NaN) == [2]
+    @test findin([1.0, 2.0, NaN], NaN) == [3]
+
+    @testset "findin for uncomparable element types" begin
+        a = [1 + 1im, 1 - 1im]
+        @test findin(a, 1 + 1im) == [1]
+        @test findin(a, a)       == [1,2]
+    end
 
     rt = Base.return_types(setindex!, Tuple{Array{Int32, 3}, UInt8, Vector{Int}, Int16, UnitRange{Int}})
     @test length(rt) == 1 && rt[1] == Array{Int32, 3}
@@ -2055,6 +2078,28 @@ end
     @test accumulate(op, [10 20 30], 2) == [10 op(10, 20) op(op(10, 20), 30)] == [10 40 110]
 end
 
+struct F21666{T <: Base.TypeArithmetic}
+    x::Float32
+end
+
+@testset "Exactness of cumsum # 21666" begin
+    # test that cumsum uses more stable algorithm
+    # for types with unknown/rounding arithmetic
+    Base.TypeArithmetic(::Type{F21666{T}}) where {T} = T
+    Base.:+(x::F, y::F) where {F <: F21666} = F(x.x + y.x)
+    Base.convert(::Type{Float64}, x::F21666) = Float64(x.x)
+    # we make v pretty large, because stable algorithm may have a large base case
+    v = zeros(300); v[1] = 2; v[200:end] = eps(Float32)
+
+    f_rounds = Float64.(cumsum(F21666{Base.ArithmeticRounds}.(v)))
+    f_unknown = Float64.(cumsum(F21666{Base.ArithmeticUnknown}.(v)))
+    f_truth = cumsum(v)
+    f_inexact = Float64.(accumulate(+, Float32.(v)))
+    @test f_rounds == f_unknown
+    @test f_rounds != f_inexact
+    @test norm(f_truth - f_rounds) < norm(f_truth - f_inexact)
+end
+
 @testset "zeros and ones" begin
     @test ones([1,2], Float64, (2,3)) == ones(2,3)
     @test ones(2) == ones(Int, 2) == ones([2,3], Float32, 2) ==  [1,1]
@@ -2101,3 +2146,6 @@ end
 Base.:*(a::T11053, b::Real) = T11053(a.a*b)
 Base.:(==)(a::T11053, b::T11053) = a.a == b.a
 @test [T11053(1)] * 5 == [T11053(1)] .* 5 == [T11053(5.0)]
+
+#15907
+@test typeof(Array{Int,0}()) == Array{Int,0}

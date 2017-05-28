@@ -19,6 +19,19 @@ JL_DLLEXPORT jl_svec_t *jl_svec(size_t n, ...)
     return jv;
 }
 
+jl_svec_t *jl_perm_symsvec(size_t n, ...)
+{
+    if (n == 0) return jl_emptysvec;
+    jl_svec_t *jv = (jl_svec_t*)jl_gc_permobj((n + 1) * sizeof(void*), jl_simplevector_type);
+    jl_svec_set_len_unsafe(jv, n);
+    va_list args;
+    va_start(args, n);
+    for (size_t i = 0; i < n; i++)
+        jl_svecset(jv, i, jl_symbol(va_arg(args, const char*)));
+    va_end(args);
+    return jv;
+}
+
 JL_DLLEXPORT jl_svec_t *jl_svec1(void *a)
 {
     jl_ptls_t ptls = jl_get_ptls_states();

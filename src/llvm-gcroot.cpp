@@ -193,7 +193,6 @@ private:
         std::map<BasicBlock*, std::map<frame_register, liveness::id> > &bb_uses,
         std::map<BasicBlock*, SmallBitVector> &regs_used);
     void rearrangeRoots();
-    void lowerHandlers();
 public:
     void allocate_frame();
 };
@@ -231,176 +230,6 @@ struct HandlerData {
 #endif
 };
 
-void JuliaGCAllocator::lowerHandlers()
-{
-    if (!except_enter_func)
-        return;
-    auto jlenter_func = M.getNamedValue("jl_enter_handler");
-    auto setjmp_func = M.getNamedValue(jl_setjmp_name);
-    // Collect all exception enters
-    std::map<CallInst*,HandlerData> handlers;
-    for (auto &BB: F) {
-        for (auto &I: BB) {
-            auto call = dyn_cast<CallInst>(&I);
-            if (call && call->getCalledValue() == except_enter_func) {
-                handlers[call] = HandlerData();
-            }
-        }
-    }
-
-    if (handlers.empty())
-        return;
-
-    typedef std::map<CallInst*,HandlerData>::iterator hdlr_iter_t;
-    // For each exception enter, compute the life time of the enter, find
-    // the corresponding leaves and collect a list of nested exception frames.
-    // This assumes the exception frames have simple structure. E.g.
-    // there's no recursion and different frames do not share the same leave.
-    std::function<void(hdlr_iter_t)> process_handler = [&] (hdlr_iter_t hdlr) {
-        auto enter = hdlr->first;
-        auto &data = hdlr->second;
-        if (data.processed)
-            return;
-        data.processed = true;
-        std::vector<BasicBlock::iterator> frontier = {
-            ++BasicBlock::iterator(enter)
-        };
-        // Start from the enter, the enter is live until it hits a leave
-        // or the control flow terminates.
-        std::set<Instruction*> visited;
-        auto add_inst = [&] (BasicBlock::iterator it) {
-            if (visited.insert(&*it).second) {
-                frontier.push_back(it);
-            }
-        };
-        while (!frontier.empty()) {
-            BasicBlock::iterator IT = frontier.back();
-            Instruction *I = &*IT;
-            ++IT;
-            frontier.pop_back();
-            if (I->isTerminator()) {
-                BasicBlock *bb = I->getParent();
-                for (auto S = succ_begin(bb), E = succ_end(bb); S != E; S++)
-                    add_inst(S->getFirstInsertionPt());
-                continue;
-            }
-            auto call = dyn_cast<CallInst>(I);
-            if (!call) {
-                add_inst(IT);
-                continue;
-            }
-            auto callee = call->getCalledValue();
-            if (callee == except_enter_func) {
-                // Nested frame, make sure the frame is processed and skip to
-                // its leaves.
-                auto other_it = handlers.find(call);
-                assert(other_it != handlers.end());
-                process_handler(other_it);
-                auto &other_data = other_it->second;
-                data.nested.insert(call);
-                // Record a reference to parent frame, there should be only
-                // one parent in most cases although more than one parent is
-                // also possible if LLVM split the enter call.
-                if (__unlikely(other_data.parent_vec)) {
-                    other_data.parent_vec->push_back(enter);
-                }
-                else if (__unlikely(other_data.parent)) {
-                    other_data.parent_vec.reset(
-                        new std::vector<CallInst*>{other_data.parent, enter});
-                }
-                else {
-                    other_data.parent = enter;
-                }
-                for (auto leave: other_it->second.leaves) {
-                    if (leave.second > 0) {
-                        data.leaves.push_back(std::make_pair(leave.first,
-                                                             leave.second - 1));
-                    }
-                    else {
-                        add_inst(++BasicBlock::iterator(leave.first));
-                    }
-                }
-            }
-            else if (callee == jlleave_func) {
-                // Leave, record how many pops are left on this leave.
-                assert(call->getNumArgOperands() == 1);
-                auto arg = cast<ConstantInt>(call->getArgOperand(0));
-                uint64_t pop_count = arg->getLimitedValue();
-                assert(pop_count >= 1);
-                data.leaves.push_back(std::make_pair(call, pop_count - 1));
-            }
-            else {
-                // Otherwise, go to the next instruction.
-                add_inst(IT);
-            }
-        }
-    };
-
-    // Make sure all frames are processed.
-    for (auto IT = handlers.begin(), E = handlers.end(); IT != E; ++IT)
-        process_handler(IT);
-
-    std::set<CallInst*> processing;
-    Value *handler_sz = ConstantInt::get(T_int32, sizeof(jl_handler_t));
-    // Now allocate the stack slots.
-    // At each iteration, we allocate a new handler and assign all the remaining
-    // frames that don't have a non-processed child to this handler.
-    Instruction *firstInst = &F.getEntryBlock().front();
-    while (!handlers.empty()) {
-        processing.clear();
-#if JL_LLVM_VERSION >= 50000
-        auto buff = new AllocaInst(T_int8, 0, handler_sz, "", firstInst);
-#else
-        auto buff = new AllocaInst(T_int8, handler_sz, "", firstInst);
-#endif
-        buff->setAlignment(16);
-        // Collect the list of frames to process.
-        for (auto &hdlr: handlers) {
-            auto enter = hdlr.first;
-            auto &nested = hdlr.second.nested;
-            if (nested.empty()) {
-                processing.insert(enter);
-            }
-        }
-        // There shouldn't be loops so there has to be leafs
-        assert(!processing.empty());
-        for (auto enter: processing) {
-            // Lower the enter
-            auto new_enter = CallInst::Create(jlenter_func, buff, "", enter);
-#ifndef _OS_WINDOWS_
-            // For LLVM 3.3 compatibility
-            Value *args[] = {buff, ConstantInt::get(T_int32,0)};
-            auto sj = CallInst::Create(setjmp_func, args, "", enter);
-#else
-            auto sj = CallInst::Create(setjmp_func, buff, "", enter);
-#endif
-            // We need to mark this on the call site as well. See issue #6757
-            sj->setCanReturnTwice();
-#if JL_LLVM_VERSION >= 30600
-            if (auto dbg = enter->getMetadata(LLVMContext::MD_dbg)) {
-                new_enter->setMetadata(LLVMContext::MD_dbg, dbg);
-                sj->setMetadata(LLVMContext::MD_dbg, dbg);
-            }
-#else
-            (void)new_enter;
-#endif
-            // Remove it from all the parents.
-            auto it = handlers.find(enter);
-            if (__unlikely(it->second.parent_vec)) {
-                for (auto parent: *it->second.parent_vec) {
-                    handlers.find(parent)->second.nested.erase(enter);
-                }
-            }
-            else if (it->second.parent) {
-                handlers.find(it->second.parent)->second.nested.erase(enter);
-            }
-            // Delete it.
-            handlers.erase(it);
-            enter->replaceAllUsesWith(sj);
-            enter->eraseFromParent();
-        }
-    }
-}
 
 Instruction *JuliaGCAllocator::get_pgcstack(Instruction *ptlsStates)
 {
@@ -755,7 +584,6 @@ void JuliaGCAllocator::rearrangeRoots()
 
 void JuliaGCAllocator::allocate_frame()
 {
-    lowerHandlers();
     if (!ptlsStates)
         return;
     Instruction *last_gcframe_inst = gcframe;
@@ -1165,36 +993,11 @@ static void eraseFunction(Module &M, const char *name)
     }
 }
 
-static void ensure_enter_function(Module &M)
-{
-    auto T_int8  = Type::getInt8Ty(M.getContext());
-    auto T_pint8 = PointerType::get(T_int8, 0);
-    auto T_void = Type::getVoidTy(M.getContext());
-    auto T_int32 = Type::getInt32Ty(M.getContext());
-    if (!M.getNamedValue("jl_enter_handler")) {
-        std::vector<Type*> ehargs(0);
-        ehargs.push_back(T_pint8);
-        Function::Create(FunctionType::get(T_void, ehargs, false),
-                         Function::ExternalLinkage, "jl_enter_handler", &M);
-    }
-    if (!M.getNamedValue(jl_setjmp_name)) {
-        std::vector<Type*> args2(0);
-        args2.push_back(T_pint8);
-#ifndef _OS_WINDOWS_
-        args2.push_back(T_int32);
-#endif
-        Function::Create(FunctionType::get(T_int32, args2, false),
-                         Function::ExternalLinkage, jl_setjmp_name, &M)
-            ->addFnAttr(Attribute::ReturnsTwice);
-    }
-}
-
 bool LowerGCFrame::runOnModule(Module &M)
 {
     MDNode *tbaa_gcframe = tbaa_make_child("jtbaa_gcframe").first;
 
     Function *ptls_getter = M.getFunction("jl_get_ptls_states");
-    ensure_enter_function(M);
     FunctionType *functype = nullptr;
     Type *T_pjlvalue = nullptr;
     if (ptls_getter) {
@@ -1214,7 +1017,6 @@ bool LowerGCFrame::runOnModule(Module &M)
     eraseFunction(M, "julia.gc_root_kill");
     eraseFunction(M, "julia.jlcall_frame_decl");
     eraseFunction(M, "julia.gcroot_flush");
-    eraseFunction(M, "julia.except_enter");
     return true;
 }
 

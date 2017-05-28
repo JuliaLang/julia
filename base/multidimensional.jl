@@ -138,9 +138,10 @@ module IteratorsMD
     eachindex(::IndexCartesian, A::AbstractArray) = CartesianRange(indices(A))
 
     @inline eachindex(::IndexCartesian, A::AbstractArray, B::AbstractArray...) =
-        CartesianRange(maxsize((), A, B...))
-    maxsize(sz) = sz
-    @inline maxsize(sz, A, B...) = maxsize(maxt(sz, size(A)), B...)
+        CartesianRange(maxsize(A, B...))
+    maxsize() = ()
+    @inline maxsize(A) = size(A)
+    @inline maxsize(A, B...) = maxt(size(A), maxsize(B...))
     @inline maxt(a::Tuple{}, b::Tuple{}) = ()
     @inline maxt(a::Tuple{}, b::Tuple)   = b
     @inline maxt(a::Tuple,   b::Tuple{}) = a
@@ -574,13 +575,18 @@ function accumulate_pairwise(op, v::AbstractVector{T}) where T
 end
 
 function cumsum!(out, v::AbstractVector, axis::Integer=1)
-    # for types prone to numerical stability issues, we want
-    # accumulate_pairwise.
-    axis == 1 ? accumulate_pairwise!(+, out, v) : copy!(out,v)
+    # we dispatch on the possibility of numerical stability issues
+    _cumsum!(out, v, axis, TypeArithmetic(eltype(out)))
 end
 
-function cumsum!(out, v::AbstractVector{<:Integer}, axis::Integer=1)
-    axis == 1 ? accumulate!(+, out, v) : copy!(out,v)
+function _cumsum!(out, v, axis, ::ArithmeticRounds)
+    axis == 1 ? accumulate_pairwise!(+, out, v) : copy!(out, v)
+end
+function _cumsum!(out, v, axis, ::ArithmeticUnknown)
+    _cumsum!(out, v, axis, ArithmeticRounds())
+end
+function _cumsum!(out, v, axis, ::TypeArithmetic)
+    axis == 1 ? accumulate!(+, out, v) : copy!(out, v)
 end
 
 """
@@ -903,7 +909,7 @@ their indices; any offset results in a (circular) wraparound. If the
 arrays have overlapping indices, then on the domain of the overlap
 `dest` agrees with `src`.
 
-```julia
+```julia-repl
 julia> src = reshape(collect(1:16), (4,4))
 4×4 Array{Int64,2}:
  1  5   9  13

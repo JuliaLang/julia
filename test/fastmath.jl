@@ -9,6 +9,7 @@
 @test macroexpand(:(@fastmath min(1))) == :(Base.FastMath.min_fast(1))
 @test macroexpand(:(@fastmath min)) == :(Base.FastMath.min_fast)
 @test macroexpand(:(@fastmath x.min)) == :(x.min)
+@test macroexpand(:(@fastmath sincos(x))) == :(Base.FastMath.sincos_fast(x))
 
 # basic arithmetic
 

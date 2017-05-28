@@ -11,7 +11,7 @@ functionality.
 All Julia streams expose at least a [`read()`](@ref) and a [`write()`](@ref) method, taking the
 stream as their first argument, e.g.:
 
-```julia
+```julia-repl
 julia> write(STDOUT,"Hello World");  # suppress return value 11 with ;
 Hello World
 julia> read(STDIN,Char)
@@ -28,7 +28,7 @@ takes the type of the data to be read as the second argument.
 
 For example, to read a simple byte array, we could do:
 
-```julia
+```julia-repl
 julia> x = zeros(UInt8, 4)
 4-element Array{UInt8,1}:
  0x00
@@ -48,7 +48,7 @@ abcd
 However, since this is slightly cumbersome, there are several convenience methods provided. For
 example, we could have written the above as:
 
-```julia
+```julia-repl
 julia> read(STDIN,4)
 abcd
 4-element Array{UInt8,1}:
@@ -60,7 +60,7 @@ abcd
 
 or if we had wanted to read the entire line instead:
 
-```julia
+```julia-repl
 julia> readline(STDIN)
 abcd
 "abcd"
@@ -120,7 +120,7 @@ Like many other environments, Julia has an [`open()`](@ref) function, which take
 returns an `IOStream` object that you can use to read and write things from the file. For example
 if we have a file, `hello.txt`, whose contents are `Hello, World!`:
 
-```julia
+```julia-repl
 julia> f = open("hello.txt")
 IOStream(<file hello.txt>)
 
@@ -131,7 +131,7 @@ julia> readlines(f)
 
 If you want to write to a file, you can open it with the write (`"w"`) flag:
 
-```julia
+```julia-repl
 julia> f = open("hello.txt","w")
 IOStream(<file hello.txt>)
 
@@ -143,7 +143,7 @@ If you examine the contents of `hello.txt` at this point, you will notice that i
 has actually been written to disk yet. This is because the `IOStream` must be closed before the
 write is actually flushed to disk:
 
-```julia
+```julia-repl
 julia> close(f)
 ```
 
@@ -162,7 +162,7 @@ end
 
 You can call:
 
-```julia
+```julia-repl
 julia> open(read_and_capitalize, "hello.txt")
 "HELLO AGAIN."
 ```
@@ -173,7 +173,7 @@ contents.
 To avoid even having to define a named function, you can use the `do` syntax, which creates an
 anonymous function on the fly:
 
-```julia
+```julia-repl
 julia> open("hello.txt") do f
            uppercase(readstring(f))
        end
@@ -184,7 +184,7 @@ julia> open("hello.txt") do f
 
 Let's jump right in with a simple example involving TCP sockets. Let's first create a simple server:
 
-```julia
+```julia-repl
 julia> @async begin
            server = listen(2000)
            while true
@@ -200,7 +200,7 @@ usage is somewhat simpler than the raw Unix socket API. The first call to [`list
 create a server waiting for incoming connections on the specified port (2000) in this case. The
 same function may also be used to create various other kinds of servers:
 
-```julia
+```julia-repl
 julia> listen(2000) # Listens on localhost:2000 (IPv4)
 TCPServer(active)
 
@@ -230,7 +230,7 @@ cwd, etc.) is the same you should be able to pass the same arguments to [`connec
 you did to listen to establish the connection. So let's try that out (after having created the
 server above):
 
-```julia
+```julia-repl
 julia> connect(2000)
 TCPSocket(open, 0 bytes waiting)
 
@@ -250,7 +250,7 @@ task resumed execution (because a connection request was now available), accepte
 printed the message and waited for the next client. Reading and writing works in the same way.
 To see this, consider the following simple echo server:
 
-```julia
+```julia-repl
 julia> @async begin
            server = listen(2001)
            while true
@@ -276,7 +276,7 @@ Hello World from the Echo Server
 
 As with other streams, use [`close()`](@ref) to disconnect the socket:
 
-```julia
+```julia-repl
 julia> close(clientside)
 ```
 
@@ -286,7 +286,7 @@ One of the [`connect()`](@ref) methods that does not follow the [`listen()`](@re
 `connect(host::String,port)`, which will attempt to connect to the host given by the `host` parameter
 on the port given by the port parameter. It allows you to do things like:
 
-```julia
+```julia-repl
 julia> connect("google.com",80)
 TCPSocket(RawFD(30) open, 0 bytes waiting)
 ```
@@ -294,7 +294,7 @@ TCPSocket(RawFD(30) open, 0 bytes waiting)
 At the base of this functionality is [`getaddrinfo()`](@ref), which will do the appropriate address
 resolution:
 
-```julia
+```julia-repl
 julia> getaddrinfo("google.com")
 ip"74.125.226.225"
 ```

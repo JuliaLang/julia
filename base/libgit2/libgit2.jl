@@ -72,6 +72,19 @@ end
 
 Checks if commit `id` (which is a [`GitHash`](@ref) in string form)
 is in the repository.
+
+# Example
+
+```julia-repl
+julia> repo = LibGit2.GitRepo(repo_path);
+
+julia> LibGit2.add!(repo, test_file);
+
+julia> commit_oid = LibGit2.commit(repo, "add test_file");
+
+julia> LibGit2.iscommit(string(commit_oid), repo)
+true
+```
 """
 function iscommit(id::AbstractString, repo::GitRepo)
     res = true
@@ -207,7 +220,7 @@ Returns `true` if `a`, a [`GitHash`](@ref) in string form, is an ancestor of
 
 # Example
 
-```julia
+```julia-repl
 julia> repo = LibGit2.GitRepo(repo_path);
 
 julia> LibGit2.add!(repo, test_file1);
@@ -458,6 +471,23 @@ Equivalent to `git checkout [-f] --detach <commit>`.
 Checkout the git commit `commit` (a [`GitHash`](@ref) in string form)
 in `repo`. If `force` is `true`, force the checkout and discard any
 current changes. Note that this detaches the current HEAD.
+
+# Example
+
+```julia
+repo = LibGit2.init(repo_path)
+open(joinpath(LibGit2.path(repo), "file1"), "w") do f
+    write(f, "111\n")
+end
+LibGit2.add!(repo, "file1")
+commit_oid = LibGit2.commit(repo, "add file1")
+open(joinpath(LibGit2.path(repo), "file1"), "w") do f
+    write(f, "112\n")
+end
+# would fail without the force=true
+# since there are modifications to the file
+LibGit2.checkout!(repo, string(commit_oid), force=true)
+```
 """
 function checkout!(repo::GitRepo, commit::AbstractString = "";
                   force::Bool = true)
@@ -556,6 +586,21 @@ set by `mode`:
   3. `Consts.RESET_HARD` - move HEAD to `id`, reset the index to `id`, and discard all working changes.
 
 Equivalent to `git reset [--soft | --mixed | --hard] <id>`.
+
+# Example
+
+```julia
+repo = LibGit2.GitRepo(repo_path)
+head_oid = LibGit2.head_oid(repo)
+open(joinpath(repo_path, "file1"), "w") do f
+    write(f, "111\n")
+end
+LibGit2.add!(repo, "file1")
+mode = LibGit2.Consts.RESET_HARD
+# will discard the changes to file1
+# and unstage it
+new_head = LibGit2.reset!(repo, head_oid, mode)
+```
 """
 reset!(repo::GitRepo, id::GitHash, mode::Cint = Consts.RESET_MIXED) =
     reset!(repo, GitObject(repo, id), mode)
@@ -909,4 +954,3 @@ end
 
 
 end # module
-

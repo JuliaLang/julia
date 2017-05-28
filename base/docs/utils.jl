@@ -190,7 +190,7 @@ function repl(io::IO, s::Symbol)
         $(_repl(s))
     end
 end
-isregex(x) = isexpr(x, :macrocall, 2) && x.args[1] === Symbol("@r_str") && !isempty(x.args[2])
+isregex(x) = isexpr(x, :macrocall, 3) && x.args[1] === Symbol("@r_str") && !isempty(x.args[3])
 repl(io::IO, ex::Expr) = isregex(ex) ? :(apropos($io, $ex)) : _repl(ex)
 repl(io::IO, str::AbstractString) = :(apropos($io, $str))
 repl(io::IO, other) = :(@doc $(esc(other)))

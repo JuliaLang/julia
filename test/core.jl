@@ -2,9 +2,9 @@
 
 # test core language features
 const Bottom = Union{}
-const curmod = current_module()
-const curmod_name = fullname(curmod)
-const curmod_prefix = "$(["$m." for m in curmod_name]...)"
+
+# For curmod_*
+include("testenv.jl")
 
 f47{T}(x::Vector{Vector{T}}) = 0
 @test_throws MethodError f47(Array{Vector}(0))
@@ -78,12 +78,25 @@ _z_z_z_(::Int, c...) = 3
 @test args_morespecific(Tuple{Type{Pair{A,B} where B}} where A, Tuple{DataType})
 @test args_morespecific(Tuple{Union{Int,String},Type{Pair{A,B} where B}} where A, Tuple{Integer,UnionAll})
 
+# PR #21750
+let A = Tuple{Any, Tuple{Vararg{Integer,N} where N}},
+    B = Tuple{Any, Tuple{Any}},
+    C = Tuple{Any, Tuple{}}
+    @test args_morespecific(A, B)
+    @test args_morespecific(C, A)
+    @test args_morespecific(C, B)
+end
+
 # with bound varargs
 
 _bound_vararg_specificity_1{T,N}(::Type{Array{T,N}}, d::Vararg{Int, N}) = 0
 _bound_vararg_specificity_1{T}(::Type{Array{T,1}}, d::Int) = 1
 @test _bound_vararg_specificity_1(Array{Int,1}, 1) == 1
 @test _bound_vararg_specificity_1(Array{Int,2}, 1, 1) == 0
+
+# issue #21710
+@test args_morespecific(Tuple{Array}, Tuple{AbstractVector})
+@test args_morespecific(Tuple{Matrix}, Tuple{AbstractVector})
 
 # issue #12939
 module Issue12939
@@ -231,6 +244,16 @@ mutable struct Circ_{T} x::Circ_{T} end
 abstract type Sup2a_ end
 abstract type Sup2b_{A <: Sup2a_, B} <: Sup2a_ end
 @test_throws ErrorException @eval abstract type Qux2_{T} <: Sup2b_{Qux2_{Int}, T} end # wrapped in eval to avoid #16793
+
+# issue #21923
+struct A21923{T,N}; v::Vector{A21923{T}}; end
+@test fieldtype(A21923,1) == Vector{A21923{T}} where T
+struct B21923{T,N}; v::Vector{B21923{T,M} where M}; end
+@test fieldtype(B21923, 1) == Vector{B21923{T,M} where M} where T
+struct C21923{T,N}; v::C21923{T,M} where M; end
+@test fieldtype(C21923, 1) == C21923
+struct D21923{T,N}; v::D21923{T}; end
+@test fieldtype(D21923, 1) == D21923
 
 # issue #3890
 mutable struct A3890{T1}
@@ -939,7 +962,15 @@ let
     @test aa == a
     aa = unsafe_wrap(Array, pointer(a), UInt16(length(a)))
     @test aa == a
+    aaa = unsafe_wrap(Array, pointer(a), (1, 1))
+    @test size(aaa) == (1, 1)
+    @test aaa[1] == a[1]
     @test_throws InexactError unsafe_wrap(Array, pointer(a), -3)
+    # Misaligned pointer
+    res = @test_throws ArgumentError unsafe_wrap(Array, pointer(a) + 1, length(a))
+    @test contains(res.value.msg, "is not properly aligned to $(sizeof(Int)) bytes")
+    res = @test_throws ArgumentError unsafe_wrap(Array, pointer(a) + 1, (1, 1))
+    @test contains(res.value.msg, "is not properly aligned to $(sizeof(Int)) bytes")
 end
 
 struct FooBar2515
@@ -4835,12 +4866,15 @@ end
 let ni128 = sizeof(FP128test) ÷ sizeof(Int),
     ns128 = sizeof(FP128align) ÷ sizeof(Int),
     nbit = sizeof(Int) * 8,
-    arr = reinterpret(FP128align, collect(Int, 1:(2 * ns128))),
+    arr = Vector{FP128align}(2),
     offset = Base.datatype_alignment(FP128test) ÷ sizeof(Int),
     little,
-    expected
+    expected,
+    arrint = reinterpret(Int, arr)
+
+    @test length(arrint) == 2 * ns128
+    arrint .= 1:(2 * ns128)
     @test sizeof(FP128test) == 16
-    @test length(arr) == 2
     @test arr[1].i == 1
     @test arr[2].i == 1 + ns128
     expected = UInt128(0)
@@ -4881,3 +4915,38 @@ function foo21568()
 end
 foo21568()
 @test f21568([0]) == 1
+
+# issue #21719
+mutable struct T21719{V}
+    f
+    tol::Float64
+    goal::V
+end
+g21719(f, goal; tol = 1e-6) = T21719(f, tol, goal)
+@test isa(g21719(identity, 1.0; tol=0.1), T21719)
+
+# reinterpret alignment requirement
+let arr8 = zeros(UInt8, 16),
+    arr64 = zeros(UInt64, 2),
+    arr64_8 = reinterpret(UInt8, arr64),
+    arr64_i
+
+    # Not allowed to reinterpret arrays allocated as UInt8 array to a Int32 array
+    res = @test_throws ArgumentError reinterpret(Int32, arr8)
+    @test res.value.msg == "reinterpret from alignment 1 bytes to alignment 4 bytes not allowed"
+    # OK to reinterpret arrays allocated as UInt64 array to a Int64 array even though
+    # it is passed as a UInt8 array
+    arr64_i = reinterpret(Int64, arr64_8)
+    @test arr8 == arr64_8
+    arr64_i[2] = 1234
+    @test arr64[2] == 1234
+end
+
+# Alignment of perm boxes
+for i in 1:10
+    # Int64 box should be 16bytes aligned even on 32bits
+    ptr1 = ccall(:jl_box_int64, UInt, (Int64,), i)
+    ptr2 = ccall(:jl_box_int64, UInt, (Int64,), i)
+    @test ptr1 === ptr2
+    @test ptr1 % 16 == 0
+end

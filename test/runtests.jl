@@ -2,7 +2,7 @@
 
 using Base.Test
 include("choosetests.jl")
-include("testdefs.jl")
+include("testenv.jl")
 
 tests, net_on = choosetests(ARGS)
 tests = unique(tests)
@@ -30,14 +30,11 @@ cd(dirname(@__FILE__)) do
     n = 1
     if net_on
         n = min(Sys.CPU_CORES, length(tests))
-        if n > 1
-            addprocs_with_testenv(n)
-            @sync for p in workers()
-                @async remotecall_fetch(include, p, "testdefs.jl")
-            end
-        end
+        n > 1 && addprocs_with_testenv(n)
         BLAS.set_num_threads(1)
     end
+
+    @everywhere include("testdefs.jl")
 
     #pretty print the information about gc and mem usage
     name_align    = maximum([length("Test (Worker)"); map(x -> length(x) + 3 + ndigits(nworkers()), tests)])

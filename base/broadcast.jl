@@ -45,23 +45,22 @@ promote_containertype(::Type{T}, ::Type{T}) where {T} = T
 ## Calculate the broadcast indices of the arguments, or error if incompatible
 # array inputs
 broadcast_indices() = ()
-broadcast_indices(A) = broadcast_indices(containertype(A), A)
-broadcast_indices(::ScalarType, A) = ()
-broadcast_indices(::Type{Tuple}, A) = (OneTo(length(A)),)
-broadcast_indices(::Type{Array}, A::Ref) = ()
-broadcast_indices(::Type{Array}, A) = indices(A)
-@inline broadcast_indices(A, B...) = broadcast_shape((), broadcast_indices(A), map(broadcast_indices, B)...)
+broadcast_indices(A) = _broadcast_indices(containertype(A), A)
+@inline broadcast_indices(A, B...) = broadcast_shape(broadcast_indices(A), broadcast_indices(B...))
+_broadcast_indices(::Type, A) = ()
+_broadcast_indices(::Type{Tuple}, A) = (OneTo(length(A)),)
+_broadcast_indices(::Type{Array}, A::Ref) = ()
+_broadcast_indices(::Type{Array}, A) = indices(A)
 
 # shape (i.e., tuple-of-indices) inputs
 broadcast_shape(shape::Tuple) = shape
-@inline broadcast_shape(shape::Tuple, shape1::Tuple, shapes::Tuple...) = broadcast_shape(_bcs((), shape, shape1), shapes...)
+@inline broadcast_shape(shape::Tuple, shape1::Tuple, shapes::Tuple...) = broadcast_shape(_bcs(shape, shape1), shapes...)
 # _bcs consolidates two shapes into a single output shape
-_bcs(out, ::Tuple{}, ::Tuple{}) = out
-@inline _bcs(out, ::Tuple{}, newshape) = _bcs((out..., newshape[1]), (), tail(newshape))
-@inline _bcs(out, shape, ::Tuple{}) = _bcs((out..., shape[1]), tail(shape), ())
-@inline function _bcs(out, shape, newshape)
-    newout = _bcs1(shape[1], newshape[1])
-    _bcs((out..., newout), tail(shape), tail(newshape))
+_bcs(::Tuple{}, ::Tuple{}) = ()
+@inline _bcs(::Tuple{}, newshape::Tuple) = (newshape[1], _bcs((), tail(newshape))...)
+@inline _bcs(shape::Tuple, ::Tuple{}) = (shape[1], _bcs(tail(shape), ())...)
+@inline function _bcs(shape::Tuple, newshape::Tuple)
+    return (_bcs1(shape[1], newshape[1]), _bcs(tail(shape), tail(newshape))...)
 end
 # _bcs1 handles the logic for a single dimension
 _bcs1(a::Integer, b::Integer) = a == 1 ? b : (b == 1 ? a : (a == b ? a : throw(DimensionMismatch("arrays could not be broadcast to a common size"))))

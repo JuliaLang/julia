@@ -2,9 +2,8 @@
 
 import Base.Docs: meta, @var, DocStr, parsedoc
 
-const curmod = current_module()
-const curmod_name = fullname(curmod)
-const curmod_prefix = "$(["$m." for m in curmod_name]...)"
+# For curmod_*
+include("testenv.jl")
 
 # Test helpers.
 function docstrings_equal(d1, d2)
@@ -49,7 +48,7 @@ end
 
 # General tests for docstrings.
 
-const LINE_NUMBER = @__LINE__+1
+const LINE_NUMBER = @__LINE__() + 1
 "DocsTest"
 module DocsTest
 
@@ -750,6 +749,11 @@ abstract type $(curmod_prefix)Undocumented.B <: $(curmod_prefix)Undocumented.A
 ```
 $(curmod_prefix)Undocumented.D
 ```
+
+**Supertype Hierarchy:**
+```
+$(curmod_prefix)Undocumented.B <: $(curmod_prefix)Undocumented.A <: Any
+```
 """)
 @test docstrings_equal(@doc(Undocumented.B), doc"$doc_str")
 
@@ -759,6 +763,11 @@ No documentation found.
 **Summary:**
 ```
 mutable struct $(curmod_prefix)Undocumented.C <: $(curmod_prefix)Undocumented.A
+```
+
+**Supertype Hierarchy:**
+```
+$(curmod_prefix)Undocumented.C <: $(curmod_prefix)Undocumented.A <: Any
 ```
 """)
 @test docstrings_equal(@doc(Undocumented.C), doc"$doc_str")
@@ -776,6 +785,11 @@ struct $(curmod_prefix)Undocumented.D <: $(curmod_prefix)Undocumented.B
 one   :: Any
 two   :: String
 three :: Float64
+```
+
+**Supertype Hierarchy:**
+```
+$(curmod_prefix)Undocumented.D <: $(curmod_prefix)Undocumented.B <: $(curmod_prefix)Undocumented.A <: Any
 ```
 """)
 @test docstrings_equal(@doc(Undocumented.D), doc"$doc_str")
@@ -875,7 +889,7 @@ let x = Binding(Base, :bindingdoesnotexist)
     @test @var(Base.bindingdoesnotexist) == x
 end
 
-let x = Binding(current_module(), :bindingdoesnotexist)
+let x = Binding(curmod, :bindingdoesnotexist)
     @test defined(x) == false
     @test @var(bindingdoesnotexist) == x
 end
@@ -892,23 +906,24 @@ let x = Binding(Main, :⊕)
     @test parse(string(x)) == :(⊕)
 end
 
+doc_util_path = Symbol(joinpath("docs", "utils.jl"))
 # Docs.helpmode tests: we test whether the correct expressions are being generated here,
 # rather than complete integration with Julia's REPL mode system.
 for (line, expr) in Pair[
     "sin"          => :sin,
     "Base.sin"     => :(Base.sin),
-    "@time(x)"     => :(@time(x)),
-    "@time"        => :(:@time),
-    ":@time"       => :(:@time),
-    "@time()"      => :(@time),
-    "Base.@time()" => :(Base.@time),
+    "@time(x)"     => Expr(:macrocall, Symbol("@time"), LineNumberNode(1, :none), :x),
+    "@time"        => Expr(:macrocall, Symbol("@time"), LineNumberNode(1, :none)),
+    ":@time"       => Expr(:quote, (Expr(:macrocall, Symbol("@time"), LineNumberNode(1, :none)))),
+    "@time()"      => Expr(:macrocall, Symbol("@time"), LineNumberNode(1, :none)),
+    "Base.@time()" => Expr(:macrocall, Expr(:., :Base, QuoteNode(Symbol("@time"))), LineNumberNode(1, :none)),
     "ccall"        => :ccall, # keyword
     "while       " => :while, # keyword, trailing spaces should be stripped.
     "0"            => 0,
     "\"...\""      => "...",
-    "r\"...\""     => :(r"..."),
+    "r\"...\""     => Expr(:macrocall, Symbol("@r_str"), LineNumberNode(1, :none), "...")
     ]
-    @test Docs.helpmode(line) == :(Base.Docs.@repl($STDOUT, $expr))
+    @test Docs.helpmode(line) == Expr(:macrocall, Expr(:., Expr(:., :Base, QuoteNode(:Docs)), QuoteNode(Symbol("@repl"))), LineNumberNode(117, doc_util_path), STDOUT, expr)
     buf = IOBuffer()
     @test eval(Base, Docs.helpmode(buf, line)) isa Union{Base.Markdown.MD,Void}
 end
@@ -947,8 +962,8 @@ dynamic_test.x = "test 2"
 @test @doc(dynamic_test) == "test 2 Union{}"
 @test @doc(dynamic_test(::String)) == "test 2 Tuple{String}"
 
-@test Docs._repl(:(dynamic_test(1.0))) == :(@doc $(Expr(:escape, :(dynamic_test(::typeof(1.0))))))
-@test Docs._repl(:(dynamic_test(::String))) == :(@doc $(Expr(:escape, :(dynamic_test(::String)))))
+@test Docs._repl(:(dynamic_test(1.0))) == Expr(:macrocall, Symbol("@doc"), LineNumberNode(204, doc_util_path), esc(:(dynamic_test(::typeof(1.0)))))
+@test Docs._repl(:(dynamic_test(::String))) == Expr(:macrocall, Symbol("@doc"), LineNumberNode(204, doc_util_path), esc(:(dynamic_test(::String))))
 
 
 # Equality testing

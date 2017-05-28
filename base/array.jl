@@ -53,10 +53,22 @@ import Core: arraysize, arrayset, arrayref
     Array{T,N}(dims)
 
 Construct an uninitialized `N`-dimensional dense array with element type `T`,
-where `N` is determined from the length or number of `dims`.  `dims` may
+where `N` is determined from the length or number of `dims`. `dims` may
 be a tuple or a series of integer arguments corresponding to the lengths in each dimension.
 If the rank `N` is supplied explicitly as in `Array{T,N}(dims)`, then it must
 match the length or number of `dims`.
+
+# Example
+
+```jldoctest
+julia> A = Array{Float64, 2}(2, 2);
+
+julia> ndims(A)
+2
+
+julia> eltype(A)
+Float64
+```
 """
 Array
 
@@ -73,12 +85,7 @@ end
 size(a::Array, d) = arraysize(a, d)
 size(a::Vector) = (arraysize(a,1),)
 size(a::Matrix) = (arraysize(a,1), arraysize(a,2))
-size(a::Array) = (@_inline_meta; _size((), a))
-_size(out::NTuple{N}, A::Array{_,N}) where {_,N} = out
-function _size(out::NTuple{M}, A::Array{_,N}) where _ where M where N
-    @_inline_meta
-    _size((out..., size(A,M+1)), A)
-end
+size(a::Array{<:Any,N}) where {N} = (@_inline_meta; ntuple(M -> size(a, M), Val{N}))
 
 asize_from(a::Array, n) = n > ndims(a) ? () : (arraysize(a,n), asize_from(a, n+1)...)
 
@@ -706,7 +713,7 @@ julia> resize!([6, 5, 4, 3, 2, 1], 3)
  4
 ```
 
-```julia
+```julia-repl
 julia> resize!([6, 5, 4, 3, 2, 1], 8)
 8-element Array{Int64,1}:
  6
@@ -1725,6 +1732,57 @@ function indexin(a::AbstractArray, b::AbstractArray)
     [get(bdict, i, 0) for i in a]
 end
 
+function _findin(a, b)
+    ind  = Int[]
+    bset = Set(b)
+    @inbounds for (i,ai) in enumerate(a)
+        ai in bset && push!(ind, i)
+    end
+    ind
+end
+
+# If two collections are already sorted, findin can be computed with
+# a single traversal of the two collections. This is much faster than
+# using a hash table (although it has the same complexity).
+function _sortedfindin(v, w)
+    viter, witer = eachindex(v), eachindex(w)
+    out  = eltype(viter)[]
+    i, j = start(viter), start(witer)
+    if done(viter, i) || done(witer, j)
+        return out
+    end
+    viteri, i = next(viter, i)
+    witerj, j = next(witer, j)
+    @inbounds begin
+        vi, wj = v[viteri], w[witerj]
+        while true
+            if isless(vi, wj)
+                if done(viter, i)
+                    break
+                end
+                viteri, i = next(viter, i)
+                vi        = v[viteri]
+            elseif isless(wj, vi)
+                if done(witer, j)
+                    break
+                end
+                witerj, j = next(witer, j)
+                wj        = w[witerj]
+            else
+                push!(out, viteri)
+                if done(viter, i)
+                    break
+                end
+                # We only increment the v iterator because v can have
+                # repeated matches to a single value in w
+                viteri, i = next(viter, i)
+                vi        = v[viteri]
+            end
+        end
+    end
+    return out
+end
+
 """
     findin(a, b)
 
@@ -1750,14 +1808,16 @@ julia> findin(a,b) # 10 is the only common element
  4
 ```
 """
-function findin(a, b)
-    ind = Array{Int,1}(0)
-    bset = Set(b)
-    @inbounds for (i,ai) in enumerate(a)
-        ai in bset && push!(ind, i)
+function findin(a::Array{<:Real}, b::Union{Array{<:Real},Real})
+    if issorted(a, Sort.Forward) && issorted(b, Sort.Forward)
+        return _sortedfindin(a, b)
+    else
+        return _findin(a, b)
     end
-    ind
 end
+# issorted fails for some element types so the method above has to be restricted
+# to element with isless/< defined.
+findin(a, b) = _findin(a, b)
 
 # Copying subregions
 # TODO: DEPRECATE FOR #14770

@@ -66,6 +66,9 @@ LLVM_CXXFLAGS += $(CXXFLAGS)
 LLVM_CPPFLAGS += $(CPPFLAGS)
 LLVM_LDFLAGS += $(LDFLAGS)
 LLVM_CMAKE += -DLLVM_TARGETS_TO_BUILD:STRING="$(LLVM_TARGETS)" -DCMAKE_BUILD_TYPE="$(LLVM_CMAKE_BUILDTYPE)"
+ifeq ($(USE_POLLY_ACC),1)
+LLVM_CMAKE += -DPOLLY_ENABLE_GPGPU_CODEGEN=ON
+endif
 LLVM_CMAKE += -DLLVM_TOOLS_INSTALL_DIR=$(shell $(JULIAHOME)/contrib/relative_path.sh $(build_prefix) $(build_depsbindir))
 LLVM_CMAKE += -DLLVM_BINDINGS_LIST="" -DLLVM_INCLUDE_DOCS=Off -DLLVM_ENABLE_TERMINFO=Off -DHAVE_HISTEDIT_H=Off -DHAVE_LIBEDIT=Off
 LLVM_FLAGS += --disable-profiling --enable-static --enable-targets=$(LLVM_TARGETS)
@@ -73,6 +76,7 @@ LLVM_FLAGS += --disable-bindings --disable-docs --disable-libedit --disable-term
 # LLVM has weird install prefixes (see llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/Makefile.config for the full list)
 # We map them here to the "normal" ones, which means just prefixing "PROJ_" to the variable name.
 LLVM_MFLAGS := PROJ_libdir=$(build_libdir) PROJ_bindir=$(build_depsbindir) PROJ_includedir=$(build_includedir)
+LLVM_MFLAGS += LD="$(LD)"
 ifeq ($(LLVM_ASSERTIONS), 1)
 LLVM_FLAGS += --enable-assertions
 LLVM_CMAKE += -DLLVM_ENABLE_ASSERTIONS:BOOL=ON
@@ -493,6 +497,8 @@ $(eval $(call LLVM_PATCH,llvm-PR278923)) # Issue #19976, Remove for 4.0
 $(eval $(call LLVM_PATCH,llvm-D28759-loopclearance))
 $(eval $(call LLVM_PATCH,llvm-D28786-callclearance))
 $(eval $(call LLVM_PATCH,llvm-rL293230-icc17-cmake)) # Remove for 4.0
+$(eval $(call LLVM_PATCH,llvm-D32593))
+$(eval $(call LLVM_PATCH,llvm-D33179))
 endif # LLVM_VER
 
 ifeq ($(LLVM_VER),3.7.1)

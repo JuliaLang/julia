@@ -5095,7 +5095,7 @@ syevr!(jobz::Char, range::Char, uplo::Char, A::StridedMatrix,
        vl::AbstractFloat, vu::AbstractFloat, il::Integer, iu::Integer, abstol::AbstractFloat)
 
 """
-    sygvd!(jobz, range, uplo, A, vl, vu, il, iu, abstol) -> (w, A, B)
+    sygvd!(itype, jobz, uplo, A, B) -> (w, A, B)
 
 Finds the generalized eigenvalues (`jobz = N`) or eigenvalues and
 eigenvectors (`jobz = V`) of a symmetric matrix `A` and symmetric
