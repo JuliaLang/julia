@@ -229,7 +229,7 @@ julia> Float32(1/3, RoundUp)
 
 See [`RoundingMode`](@ref) for available rounding modes.
 """
-Float32
+Float32(x)
 
 """
     Mmap.mmap(io::Union{IOStream,AbstractString,Mmap.AnonymousMmap}[, type::Type{Array{T,N}}, dims, offset]; grow::Bool=true, shared::Bool=true)
@@ -814,7 +814,7 @@ julia> Float64(pi, RoundUp)
 
 See [`RoundingMode`](@ref) for available rounding modes.
 """
-Float64
+Float64(x)
 
 """
     union(s1,s2...)
@@ -1430,18 +1430,6 @@ The function call grew beyond the size of the call stack. This usually happens w
 recurses infinitely.
 """
 StackOverflowError
-
-"""
-    BigInt(x)
-
-Create an arbitrary precision integer. `x` may be an `Int` (or anything that can be
-converted to an `Int`).  The usual mathematical operators are defined for this type, and
-results are promoted to a `BigInt`.
-
-Instances can be constructed from strings via [`parse`](@ref), or using the `big`
-string literal.
-"""
-BigInt
 
 """
     ==(x, y)
@@ -2414,3 +2402,81 @@ seekend
 Integer division was attempted with a denominator value of 0.
 """
 DivideError
+
+"""
+    Number
+
+Abstract supertype for all number types.
+"""
+Number
+
+"""
+    Real <: Number
+
+Abstract supertype for all real numbers.
+"""
+Real
+
+"""
+    AbstractFloat <: Real
+
+Abstract supertype for all floating point numbers.
+"""
+AbstractFloat
+
+"""
+    Integer <: Real
+
+Abstract supertype for all integers.
+"""
+Integer
+
+"""
+    Signed <: Integer
+
+Abstract supertype for all signed integers.
+"""
+Signed
+
+"""
+    Unsigned <: Integer
+
+Abstract supertype for all unsigned integers.
+"""
+Unsigned
+
+"""
+    Bool <: Integer
+
+Boolean type.
+"""
+Bool
+
+for bit in (16, 32, 64)
+    @eval begin
+        """
+            Float$($bit) <: AbstractFloat
+
+        $($bit)-bit floating point number type.
+        """
+        $(Symbol("Float", bit))
+    end
+end
+
+for bit in (8, 16, 32, 64, 128)
+    @eval begin
+        """
+            Int$($bit) <: Signed
+
+        $($bit)-bit signed integer type.
+        """
+        $(Symbol("Int", bit))
+
+        """
+            UInt$($bit) <: Unsigned
+
+        $($bit)-bit unsigned integer type.
+        """
+        $(Symbol("UInt", bit))
+    end
+end
