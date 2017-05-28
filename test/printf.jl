@@ -25,8 +25,9 @@ for (fmt, val) in (("%i", "42"),
                    ("%f", "42.000000"),
                    ("%g", "42")),
      num in (UInt16(42), UInt32(42), UInt64(42), UInt128(42),
-              Int16(42), Int32(42), Int64(42), Int128(42))
+              Int16(42), Int32(42), Int64(42), Int128(42), big"42")
             #big"42" causes stack overflow on %a ; gh #14409
+    num isa BigInt && fmt in ["%a", "%#o", "%g"] && continue
     @test @eval(@sprintf($fmt, $num) == $val)
 end
 
