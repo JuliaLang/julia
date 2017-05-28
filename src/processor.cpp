@@ -797,41 +797,9 @@ static inline void dump_cpu_spec(uint32_t cpu, const FeatureList<n> &features,
 
 #include "processor_x86.cpp"
 
-#elif defined(_CPU_AARCH64_)
+#elif defined(_CPU_AARCH64_) || defined(_CPU_ARM_)
 
-// TODO
-JL_DLLEXPORT jl_value_t *jl_get_cpu_name(void)
-{
-    return jl_cstr_to_string(jl_get_cpu_name_llvm().c_str());
-}
-
-// FZ, bit [24]
-static const uint32_t fpcr_fz_mask = 1 << 24;
-
-static inline uint32_t get_fpcr_aarch64(void)
-{
-    uint32_t fpcr;
-    asm volatile("mrs %0, fpcr" : "=r"(fpcr));
-    return fpcr;
-}
-
-static inline void set_fpcr_aarch64(uint32_t fpcr)
-{
-    asm volatile("msr fpcr, %0" :: "r"(fpcr));
-}
-
-extern "C" JL_DLLEXPORT int32_t jl_get_zero_subnormals(void)
-{
-    return (get_fpcr_aarch64() & fpcr_fz_mask) != 0;
-}
-
-extern "C" JL_DLLEXPORT int32_t jl_set_zero_subnormals(int8_t isZero)
-{
-    uint32_t fpcr = get_fpcr_aarch64();
-    fpcr = isZero ? (fpcr | fpcr_fz_mask) : (fpcr & ~fpcr_fz_mask);
-    set_fpcr_aarch64(fpcr);
-    return 0;
-}
+#include "processor_arm.cpp"
 
 #else
 
