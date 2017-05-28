@@ -491,7 +491,7 @@ they are parsed as a block: `(for (block (= v1 iter1) (= v2 iter2)) body)`.
 A basic function definition is parsed as `(function (call f x) body)`. A more complex example:
 
 ```julia
-function f{T}(x::T; k = 1)
+function f(x::T; k = 1) where T
     return x+1
 end
 ```
