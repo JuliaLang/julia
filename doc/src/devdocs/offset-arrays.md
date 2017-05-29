@@ -108,8 +108,8 @@ Storage is often allocated with `Array{Int}(dims)` or `similar(A, args...)`. Whe
 to match the indices of some other array, this may not always suffice. The generic replacement
 for such patterns is to use `similar(storagetype, shape)`.  `storagetype` indicates the kind of
 underlying "conventional" behavior you'd like, e.g., `Array{Int}` or `BitArray` or even `dims->zeros(Float32, dims)`
-(which would allocate an all-zeros array). `shape` is a tuple of `Integer` or `AbstractUnitRange`
-values, specifying the indices that you want the result to use.
+(which would allocate an all-zeros array). `shape` is a tuple of [`Integer`](@ref) or
+`AbstractUnitRange` values, specifying the indices that you want the result to use.
 
 Let's walk through a couple of explicit examples. First, if `A` has conventional indices, then
 `similar(Array{Int}, indices(A))` would end up calling `Array{Int}(size(A))`, and thus return

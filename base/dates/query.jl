@@ -101,7 +101,7 @@ dayofyear(y, m, d) = MONTHDAYS[m] + d + (m > 2 && isleapyear(y))
 """
     dayofweek(dt::TimeType) -> Int64
 
-Returns the day of the week as an `Int64` with `1 = Monday, 2 = Tuesday, etc.`.
+Returns the day of the week as an [`Int64`](@ref) with `1 = Monday, 2 = Tuesday, etc.`.
 """
 dayofweek(dt::TimeType) = dayofweek(days(dt))
 

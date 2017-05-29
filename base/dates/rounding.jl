@@ -27,7 +27,7 @@ epochms2datetime(i) = DateTime(UTM(DATETIMEEPOCH + Int64(i)))
     date2epochdays(dt::Date) -> Int64
 
 Takes the given `Date` and returns the number of days since the rounding epoch
-(`0000-01-01T00:00:00`) as an `Int64`.
+(`0000-01-01T00:00:00`) as an [`Int64`](@ref).
 """
 date2epochdays(dt::Date) = value(dt) - DATEEPOCH
 
@@ -35,7 +35,7 @@ date2epochdays(dt::Date) = value(dt) - DATEEPOCH
     datetime2epochms(dt::DateTime) -> Int64
 
 Takes the given `DateTime` and returns the number of milliseconds since the rounding epoch
-(`0000-01-01T00:00:00`) as an `Int64`.
+(`0000-01-01T00:00:00`) as an [`Int64`](@ref).
 """
 datetime2epochms(dt::DateTime) = value(dt) - DATETIMEEPOCH
 

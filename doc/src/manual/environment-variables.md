@@ -175,7 +175,7 @@ logical CPU cores available.
 
 ### `JULIA_WORKER_TIMEOUT`
 
-A `Float64` that sets the value of `Base.worker_timeout()` (default: `60.0`).
+A [`Float64`](@ref) that sets the value of `Base.worker_timeout()` (default: `60.0`).
 This function gives the number of seconds a worker process will wait for
 a master process to establish a connection before dying.
 

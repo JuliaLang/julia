@@ -58,8 +58,8 @@ end
     BigInt(x)
 
 Create an arbitrary precision integer. `x` may be an `Int` (or anything that can be
-converted to an `Int`).  The usual mathematical operators are defined for this type, and
-results are promoted to a `BigInt`.
+converted to an `Int`). The usual mathematical operators are defined for this type, and
+results are promoted to a [`BigInt`](@ref).
 
 Instances can be constructed from strings via [`parse`](@ref), or using the `big`
 string literal.
