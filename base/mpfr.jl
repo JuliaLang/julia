@@ -191,26 +191,25 @@ unsafe_cast(::Type{T}, x::BigFloat, r::RoundingMode) where {T<:Integer} = unsafe
 unsafe_trunc(::Type{T}, x::BigFloat) where {T<:Integer} = unsafe_cast(T,x,RoundToZero)
 
 function round(::Type{T}, x::BigFloat, ::RoundingMode{:ToZero}) where T<:Union{Signed,Unsigned}
-    signed(widen(typemin(T))) - 1 < x < signed(widen(typemax(T))) + 1 || throw(InexactError())
+    BigFloat(typemin(T)) - 1 < x < BigFloat(typemax(T)) + 1 || throw(InexactError())
     unsafe_cast(T,x,RoundToZero)
 end
 
 function round(::Type{T}, x::BigFloat, ::RoundingMode{:Down}) where T<:Union{Signed,Unsigned}
-    typemin(T) <= x < signed(widen(typemax(T))) + 1 || throw(InexactError())
+    BigFloat(typemin(T)) <= x < BigFloat(typemax(T)) + 1 || throw(InexactError())
     unsafe_cast(T,x,RoundDown)
 end
 
 function round(::Type{T}, x::BigFloat, ::RoundingMode{:Up}) where T<:Union{Signed,Unsigned}
-    signed(widen(typemin(T))) - 1 < x <= typemax(T) || throw(InexactError())
+    BigFloat(typemin(T)) - 1 < x <= BigFloat(typemax(T)) || throw(InexactError())
     unsafe_cast(T,x,RoundUp)
 end
 
 function round(::Type{T}, x::BigFloat, ::RoundingMode{:Nearest}) where T<:Union{Signed,Unsigned}
-    tmin = typemin(T)
-    tmax = typemax(T)
-    smaller = iseven(tmin) ? (<=) : (<)
-    larger = iseven(tmax) ? (>=) : (>)
-    smaller(BigFloat(tmin) - 0.5, x) && larger(BigFloat(tmax) + 0.5, x) || throw(InexactError())
+    # Note: Since RoundNearest rounds to the nearest even we need compare with `<=` for an
+    # even typemax/typemin and `<` for odd. Because all values for `typemin(T)` are even and
+    # `typemax(T)` are odd we can just hardcode these comparisons.
+    BigFloat(typemin(T)) - 0.5 <= x < BigFloat(typemax(T)) + 0.5 || throw(InexactError())
     unsafe_cast(T,x,RoundNearest)
 end
 
