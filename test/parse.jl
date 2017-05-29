@@ -1195,3 +1195,8 @@ end
 # issue #16937
 @test expand(:(f(2, a=1, w=3, c=3, w=4, b=2))) == Expr(:error,
                                                        "keyword argument \"w\" repeated in call to \"f\"")
+
+let f(x) =
+      g(x) = 1
+    @test functionloc(f(1))[2] > functionloc(f)[2]
+end
