@@ -220,6 +220,8 @@ mutable struct InferenceState
                 if isa(atyp, DataType) && isdefined(atyp, :instance)
                     # replace singleton types with their equivalent Const object
                     atyp = Const(atyp.instance)
+                elseif isconstType(atyp)
+                    atype = Const(atyp.parameters[1])
                 else
                     atyp = rewrap_unionall(atyp, linfo.specTypes)
                 end
@@ -999,7 +1001,7 @@ function apply_type_tfunc(headtypetype::ANY, args::ANY...)
         ai = args[i]
         if isType(ai)
             aip1 = ai.parameters[1]
-            canconst &= isleaftype(aip1)
+            canconst &= !has_free_typevars(aip1)
             push!(tparams, aip1)
         elseif isa(ai, Const) && (isa(ai.val, Type) || isa(ai.val, TypeVar) || valid_tparam(ai.val))
             push!(tparams, ai.val)
@@ -1782,6 +1784,10 @@ function abstract_call(f::ANY, fargs::Union{Tuple{},Vector{Any}}, argtypes::Vect
             else
                 return Any
             end
+            if !isa(body, Type) && !isa(body, TypeVar)
+                return Any
+            end
+            has_free_typevars(body) || return body
             if isa(argtypes[2], Const)
                 tv = argtypes[2].val
             elseif isa(argtypes[2], PartialTypeVar)
@@ -1792,9 +1798,6 @@ function abstract_call(f::ANY, fargs::Union{Tuple{},Vector{Any}}, argtypes::Vect
                 return Any
             end
             !isa(tv, TypeVar) && return Any
-            if !isa(body, Type) && !isa(body, TypeVar)
-                return Any
-            end
             theunion = UnionAll(tv, body)
             ret = canconst ? abstract_eval_constant(theunion) : Type{theunion}
             return ret
@@ -1862,8 +1865,8 @@ function abstract_call(f::ANY, fargs::Union{Tuple{},Vector{Any}}, argtypes::Vect
     t = pure_eval_call(f, argtypes, atype, sv)
     t !== false && return t
 
-    if istopfunction(tm, f, :promote_type) || istopfunction(tm, f, :typejoin)
-        return Type
+    if istopfunction(tm, f, :typejoin) || f === return_type
+        return Type # don't try to infer these function edges directly -- it won't actually come up with anything useful
     elseif length(argtypes) == 2 && istopfunction(tm, f, :typename)
         return typename_static(argtypes[2])
     end
