@@ -827,9 +827,9 @@ information.
 
 See also: `unchecked_aliasing_permute!`
 """
-function unchecked_noalias_permute!{Tv,Ti}(X::SparseMatrixCSC{Tv,Ti},
+function unchecked_noalias_permute!(X::SparseMatrixCSC{Tv,Ti},
         A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{<:Integer},
-        q::AbstractVector{<:Integer}, C::SparseMatrixCSC{Tv,Ti})
+        q::AbstractVector{<:Integer}, C::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
     halfperm!(C, A, q)
     _computecolptrs_permute!(X, A, q, X.colptr)
     _distributevals_halfperm!(X, C, p, identity)
@@ -847,9 +847,9 @@ for additional information; these methods are identical but for this method's re
 the additional `workcolptr`, `length(workcolptr) >= A.n + 1`, which enables efficient
 handling of the source-destination aliasing.
 """
-function unchecked_aliasing_permute!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti},
+function unchecked_aliasing_permute!(A::SparseMatrixCSC{Tv,Ti},
         p::AbstractVector{<:Integer}, q::AbstractVector{<:Integer},
-        C::SparseMatrixCSC{Tv,Ti}, workcolptr::Vector{Ti})
+        C::SparseMatrixCSC{Tv,Ti}, workcolptr::Vector{Ti}) where {Tv,Ti}
     halfperm!(C, A, q)
     _computecolptrs_permute!(A, A, q, workcolptr)
     _distributevals_halfperm!(A, C, p, identity)
@@ -1000,42 +1000,42 @@ and `unchecked_aliasing_permute!`.
 
 See also: [`permute`](@ref)
 """
-function permute!{Tv,Ti}(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti},
-        p::AbstractVector{<:Integer}, q::AbstractVector{<:Integer})
+function permute!(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti},
+        p::AbstractVector{<:Integer}, q::AbstractVector{<:Integer}) where {Tv,Ti}
     _checkargs_sourcecompatdest_permute!(A, X)
     _checkargs_sourcecompatperms_permute!(A, p, q)
     C = SparseMatrixCSC(A.n, A.m, Vector{Ti}(A.m + 1), Vector{Ti}(nnz(A)), Vector{Tv}(nnz(A)))
     _checkargs_permutationsvalid_permute!(p, C.colptr, q, X.colptr)
     unchecked_noalias_permute!(X, A, p, q, C)
 end
-function permute!{Tv,Ti}(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti},
+function permute!(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti},
         p::AbstractVector{<:Integer}, q::AbstractVector{<:Integer},
-        C::SparseMatrixCSC{Tv,Ti})
+        C::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
     _checkargs_sourcecompatdest_permute!(A, X)
     _checkargs_sourcecompatperms_permute!(A, p, q)
     _checkargs_sourcecompatworkmat_permute!(A, C)
     _checkargs_permutationsvalid_permute!(p, C.colptr, q, X.colptr)
     unchecked_noalias_permute!(X, A, p, q, C)
 end
-function permute!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{<:Integer},
-        q::AbstractVector{<:Integer})
+function permute!(A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{<:Integer},
+        q::AbstractVector{<:Integer}) where {Tv,Ti}
     _checkargs_sourcecompatperms_permute!(A, p, q)
     C = SparseMatrixCSC(A.n, A.m, Vector{Ti}(A.m + 1), Vector{Ti}(nnz(A)), Vector{Tv}(nnz(A)))
     workcolptr = Vector{Ti}(A.n + 1)
     _checkargs_permutationsvalid_permute!(p, C.colptr, q, workcolptr)
     unchecked_aliasing_permute!(A, p, q, C, workcolptr)
 end
-function permute!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{<:Integer},
-        q::AbstractVector{<:Integer}, C::SparseMatrixCSC{Tv,Ti})
+function permute!(A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{<:Integer},
+        q::AbstractVector{<:Integer}, C::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
     _checkargs_sourcecompatperms_permute!(A, p, q)
     _checkargs_sourcecompatworkmat_permute!(A, C)
     workcolptr = Vector{Ti}(A.n + 1)
     _checkargs_permutationsvalid_permute!(p, C.colptr, q, workcolptr)
     unchecked_aliasing_permute!(A, p, q, C, workcolptr)
 end
-function permute!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{<:Integer},
+function permute!(A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{<:Integer},
         q::AbstractVector{<:Integer}, C::SparseMatrixCSC{Tv,Ti},
-        workcolptr::Vector{Ti})
+        workcolptr::Vector{Ti}) where {Tv,Ti}
     _checkargs_sourcecompatperms_permute!(A, p, q)
     _checkargs_sourcecompatworkmat_permute!(A, C)
     _checkargs_sourcecompatworkcolptr_permute!(A, workcolptr)
@@ -1052,8 +1052,8 @@ row count (`length(p) == A.m`).
 
 For expert drivers and additional information, see [`permute!`](@ref).
 """
-function permute{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{<:Integer},
-        q::AbstractVector{<:Integer})
+function permute(A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{<:Integer},
+        q::AbstractVector{<:Integer}) where {Tv,Ti}
     _checkargs_sourcecompatperms_permute!(A, p, q)
     X = SparseMatrixCSC(A.m, A.n, Vector{Ti}(A.n + 1), Vector{Ti}(nnz(A)), Vector{Tv}(nnz(A)))
     C = SparseMatrixCSC(A.n, A.m, Vector{Ti}(A.m + 1), Vector{Ti}(nnz(A)), Vector{Tv}(nnz(A)))
