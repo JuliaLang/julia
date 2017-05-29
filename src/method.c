@@ -430,11 +430,13 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
         }
         else if (jl_is_expr(st) && ((jl_expr_t*)st)->head == line_sym) {
             if (!set_lineno) {
-                switch (jl_expr_nargs(st)) { // fall-through is intentional
+                switch (jl_expr_nargs(st)) {
                 case 2:
                     m->file = (jl_sym_t*)jl_exprarg(st, 1);
+                    JL_FALLTHROUGH;
                 case 1:
                     m->line = jl_unbox_long(jl_exprarg(st, 0));
+                    JL_FALLTHROUGH;
                 default: ;
                 }
                 st = jl_nothing;
