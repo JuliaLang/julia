@@ -47,7 +47,7 @@ end
     Nanosecond(v)
 
 Construct a `Period` type with the given `v` value. Input must be losslessly convertible
-to an `Int64`.
+to an [`Int64`](@ref).
 """
 Period(v)
 
@@ -173,7 +173,7 @@ argerror() = Nullable{ArgumentError}()
 """
     DateTime(y, [m, d, h, mi, s, ms]) -> DateTime
 
-Construct a `DateTime` type by parts. Arguments must be convertible to `Int64`.
+Construct a `DateTime` type by parts. Arguments must be convertible to [`Int64`](@ref).
 """
 function DateTime(y::Int64, m::Int64=1, d::Int64=1,
                   h::Int64=0, mi::Int64=0, s::Int64=0, ms::Int64=0)
@@ -197,7 +197,7 @@ end
 """
     Date(y, [m, d]) -> Date
 
-Construct a `Date` type by parts. Arguments must be convertible to `Int64`.
+Construct a `Date` type by parts. Arguments must be convertible to [`Int64`](@ref).
 """
 function Date(y::Int64, m::Int64=1, d::Int64=1)
     err = validargs(Date, y, m, d)
@@ -214,7 +214,7 @@ end
 """
     Time(h, [mi, s, ms, us, ns]) -> Time
 
-Construct a `Time` type by parts. Arguments must be convertible to `Int64`.
+Construct a `Time` type by parts. Arguments must be convertible to [`Int64`](@ref).
 """
 function Time(h::Int64, mi::Int64=0, s::Int64=0, ms::Int64=0, us::Int64=0, ns::Int64=0)
     err = validargs(Time, h, mi, s, ms, us, ns)

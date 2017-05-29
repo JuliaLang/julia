@@ -505,7 +505,7 @@ julia> similar(trues(10,10), 2)
  false
 ```
 
-Since `BitArray`s can only store elements of type `Bool`, however, if you request a
+Since `BitArray`s can only store elements of type [`Bool`](@ref), however, if you request a
 different element type it will create a regular `Array` instead:
 
 ```julia-repl

@@ -81,7 +81,7 @@ Julia’s type system more than just a collection of object implementations. For
     abstract type Number end
     abstract type Real <: Number end
 
-`Number` has no supertype, whereas `Real` is an abstract subtype of `Number`.
+[`Number`](@ref) has no supertype, whereas [`Real`](@ref) is an abstract subtype of `Number`.
 """
 kw"abstract type"
 
@@ -124,7 +124,7 @@ primitive type declarations:
 
 The number after the name indicates how many bits of storage the type requires. Currently,
 only sizes that are multiples of 8 bits are supported.
-The `Bool` declaration shows how a primitive type can be optionally
+The [`Bool`](@ref) declaration shows how a primitive type can be optionally
 declared to be a subtype of some supertype.
 """
 kw"primitive type"

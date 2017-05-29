@@ -58,7 +58,8 @@ julia> f(x::Float64, y::Float64) = 2x + y
 f (generic function with 1 method)
 ```
 
-This function definition applies only to calls where `x` and `y` are both values of type `Float64`:
+This function definition applies only to calls where `x` and `y` are both values of type
+[`Float64`](@ref):
 
 ```jldoctest fofxy
 julia> f(2.0, 3.0)
@@ -87,12 +88,12 @@ julia> f("2.0", "3.0")
 ERROR: MethodError: no method matching f(::String, ::String)
 ```
 
-As you can see, the arguments must be precisely of type `Float64`. Other numeric types, such as
-integers or 32-bit floating-point values, are not automatically converted to 64-bit floating-point,
-nor are strings parsed as numbers. Because `Float64` is a concrete type and concrete types cannot
-be subclassed in Julia, such a definition can only be applied to arguments that are exactly of
-type `Float64`. It may often be useful, however, to write more general methods where the declared
-parameter types are abstract:
+As you can see, the arguments must be precisely of type [`Float64`](@ref). Other numeric
+types, such as integers or 32-bit floating-point values, are not automatically converted
+to 64-bit floating-point, nor are strings parsed as numbers. Because `Float64` is a concrete
+type and concrete types cannot be subclassed in Julia, such a definition can only be applied
+to arguments that are exactly of type `Float64`. It may often be useful, however, to write
+more general methods where the declared parameter types are abstract:
 
 ```jldoctest fofxy
 julia> f(x::Number, y::Number) = 2x - y
@@ -102,9 +103,10 @@ julia> f(2.0, 3)
 1.0
 ```
 
-This method definition applies to any pair of arguments that are instances of `Number`. They need
-not be of the same type, so long as they are each numeric values. The problem of handling disparate
-numeric types is delegated to the arithmetic operations in the expression `2x - y`.
+This method definition applies to any pair of arguments that are instances of [`Number`](@ref).
+They need not be of the same type, so long as they are each numeric values. The problem of
+handling disparate numeric types is delegated to the arithmetic operations in the
+expression `2x - y`.
 
 To define a function with multiple methods, one simply defines the function multiple times, with
 different numbers and types of arguments. The first method definition for a function creates the
@@ -112,9 +114,9 @@ function object, and subsequent method definitions add new methods to the existi
 The most specific method definition matching the number and types of the arguments will be executed
 when the function is applied. Thus, the two method definitions above, taken together, define the
 behavior for `f` over all pairs of instances of the abstract type `Number` -- but with a different
-behavior specific to pairs of `Float64` values. If one of the arguments is a 64-bit float but
-the other one is not, then the `f(Float64,Float64)` method cannot be called and the more general
-`f(Number,Number)` method must be used:
+behavior specific to pairs of [`Float64`](@ref) values. If one of the arguments is a 64-bit
+float but the other one is not, then the `f(Float64,Float64)` method cannot be called and
+the more general `f(Number,Number)` method must be used:
 
 ```jldoctest fofxy
 julia> f(2.0, 3.0)

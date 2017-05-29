@@ -68,9 +68,9 @@ end
 """
     BigFloat(x)
 
-Create an arbitrary precision floating point number. `x` may be an `Integer`, a `Float64` or
-a `BigInt`. The usual mathematical operators are defined for this type, and results are
-promoted to a `BigFloat`.
+Create an arbitrary precision floating point number. `x` may be an [`Integer`](@ref), a
+[`Float64`](@ref) or a [`BigInt`](@ref). The usual mathematical operators are defined for
+this type, and results are promoted to a [`BigFloat`](@ref).
 
 Note that because decimal literals are converted to floating point numbers when parsed,
 `BigFloat(2.1)` may not yield what you expect. You may instead prefer to initialize
@@ -129,7 +129,7 @@ convert(::Type{AbstractFloat}, x::BigInt) = BigFloat(x)
 """
     BigFloat(x, prec::Int)
 
-Create a representation of `x` as a `BigFloat` with precision `prec`.
+Create a representation of `x` as a [`BigFloat`](@ref) with precision `prec`.
 """
 function BigFloat(x, prec::Int)
     setprecision(BigFloat, prec) do
@@ -140,7 +140,8 @@ end
 """
     BigFloat(x, prec::Int, rounding::RoundingMode)
 
-Create a representation of `x` as a `BigFloat` with precision `prec` and rounding mode `rounding`.
+Create a representation of `x` as a [`BigFloat`](@ref) with precision `prec` and
+rounding mode `rounding`.
 """
 function BigFloat(x, prec::Int, rounding::RoundingMode)
     setrounding(BigFloat, rounding) do
@@ -151,7 +152,8 @@ end
 """
     BigFloat(x, rounding::RoundingMode)
 
-Create a representation of `x` as a `BigFloat` with the current global precision and rounding mode `rounding`.
+Create a representation of `x` as a [`BigFloat`](@ref) with the current global precision
+and rounding mode `rounding`.
 """
 function BigFloat(x::Union{Integer, AbstractFloat, String}, rounding::RoundingMode)
     BigFloat(x, precision(BigFloat), rounding)
@@ -160,7 +162,7 @@ end
 """
     BigFloat(x::String)
 
-Create a representation of the string `x` as a `BigFloat`.
+Create a representation of the string `x` as a [`BigFloat`](@ref).
 """
 BigFloat(x::String) = parse(BigFloat, x)
 
@@ -713,7 +715,7 @@ end
 """
     precision(BigFloat)
 
-Get the precision (in bits) currently used for `BigFloat` arithmetic.
+Get the precision (in bits) currently used for [`BigFloat`](@ref) arithmetic.
 """
 precision(::Type{BigFloat}) = DEFAULT_PRECISION[end]  # precision of the type BigFloat itself
 

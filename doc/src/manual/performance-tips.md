@@ -137,10 +137,10 @@ if (f = rand()) < .8
 end
 ```
 
-Because `a` is a an array of abstract type `Real`, it must be able to hold any `Real` value.  Since
-`Real` objects can be of arbitrary size and structure, `a` must be represented as an array of
-pointers to individually allocated `Real` objects.  Because `f` will always be a [`Float64`](@ref),
-we should instead, use:
+Because `a` is a an array of abstract type [`Real`](@ref), it must be able to hold any
+`Real` value.  Since `Real` objects can be of arbitrary size and structure, `a` must be
+represented as an array of pointers to individually allocated `Real` objects. Because `f`
+will always be a [`Float64`](@ref), we should instead, use:
 
 ```julia
 a = Float64[] # typeof(a) = Array{Float64,1}
@@ -188,9 +188,9 @@ MyAmbiguousType
 
 `b` and `c` have the same type, yet their underlying representation of data in memory is very
 different. Even if you stored just numeric values in field `a`, the fact that the memory representation
-of a `UInt8` differs from a `Float64` also means that the CPU needs to handle them using two different
-kinds of instructions. Since the required information is not available in the type, such decisions
-have to be made at run-time. This slows performance.
+of a [`UInt8`](@ref) differs from a [`Float64`](@ref) also means that the CPU needs to handle
+them using two different kinds of instructions. Since the required information is not available
+in the type, such decisions have to be made at run-time. This slows performance.
 
 You can do better by declaring the type of `a`. Here, we are focused on the case where `a` might
 be any one of several types, in which case the natural solution is to use parameters. For example:
@@ -473,9 +473,9 @@ function foo(a::Array{Any,1})
 end
 ```
 
-Here, we happened to know that the first element of `a` would be an `Int32`. Making an annotation
-like this has the added benefit that it will raise a run-time error if the value is not of the
-expected type, potentially catching certain bugs earlier.
+Here, we happened to know that the first element of `a` would be an [`Int32`](@ref). Making
+an annotation like this has the added benefit that it will raise a run-time error if the
+value is not of the expected type, potentially catching certain bugs earlier.
 
 ### Declare types of keyword arguments
 
@@ -1388,7 +1388,7 @@ code defined in `pos`.
 
 Starting at `2:`, the variable `y` is defined, and again annotated as a `Union` type.  Next, we
 see that the compiler created the temporary variable `_var1` to hold the result of `y*x`. Because
-a [`Float64`](@ref) times *either* an `Int64` or [`Float64`](@ref) yields a [`Float64`](@ref),
+a [`Float64`](@ref) times *either* an [`Int64`](@ref) or `Float64` yields a `Float64`,
 all type-instability ends here. The net result is that `f(x::Float64)` will not be type-unstable
 in its output, even if some of the intermediate computations are type-unstable.
 

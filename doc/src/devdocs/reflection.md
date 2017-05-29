@@ -50,7 +50,7 @@ of these fields is the `types` field observed in the example above.
 ## Subtypes
 
 The *direct* subtypes of any `DataType` may be listed using [`subtypes()`](@ref). For example,
-the abstract `DataType``AbstractFloat` has four (concrete) subtypes:
+the abstract `DataType` [`AbstractFloat`](@ref) has four (concrete) subtypes:
 
 ```jldoctest
 julia> subtypes(AbstractFloat)

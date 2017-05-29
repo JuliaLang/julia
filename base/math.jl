@@ -161,7 +161,8 @@ log(b::T, x::T) where {T<:Number} = log(x)/log(b)
 """
     log(b,x)
 
-Compute the base `b` logarithm of `x`. Throws [`DomainError`](@ref) for negative `Real` arguments.
+Compute the base `b` logarithm of `x`. Throws [`DomainError`](@ref) for negative
+[`Real`](@ref) arguments.
 
 ```jldoctest
 julia> log(4,8)
@@ -351,8 +352,8 @@ atanh(x)
 """
     log(x)
 
-Compute the natural logarithm of `x`. Throws [`DomainError`](@ref) for negative `Real` arguments.
-Use complex negative arguments to obtain complex results.
+Compute the natural logarithm of `x`. Throws [`DomainError`](@ref) for negative
+[`Real`](@ref) arguments. Use complex negative arguments to obtain complex results.
 
 There is an experimental variant in the `Base.Math.JuliaLibm` module, which is typically
 faster and more accurate.
@@ -362,7 +363,8 @@ log(x)
 """
     log2(x)
 
-Compute the logarithm of `x` to base 2. Throws [`DomainError`](@ref) for negative `Real` arguments.
+Compute the logarithm of `x` to base 2. Throws [`DomainError`](@ref) for negative
+[`Real`](@ref) arguments.
 
 # Example
 ```jldoctest
@@ -379,7 +381,7 @@ log2(x)
     log10(x)
 
 Compute the logarithm of `x` to base 10.
-Throws [`DomainError`](@ref) for negative `Real` arguments.
+Throws [`DomainError`](@ref) for negative [`Real`](@ref) arguments.
 
 # Example
 ```jldoctest
@@ -395,7 +397,8 @@ log10(x)
 """
     log1p(x)
 
-Accurate natural logarithm of `1+x`. Throws [`DomainError`](@ref) for `Real` arguments less than -1.
+Accurate natural logarithm of `1+x`. Throws [`DomainError`](@ref) for [`Real`](@ref)
+arguments less than -1.
 
 There is an experimental variant in the `Base.Math.JuliaLibm` module, which is typically
 faster and more accurate.
@@ -425,8 +428,8 @@ sqrt(x::Float32) = sqrt_llvm(x)
 """
     sqrt(x)
 
-Return ``\\sqrt{x}``. Throws [`DomainError`](@ref) for negative `Real` arguments. Use complex
-negative arguments instead.  The prefix operator `√` is equivalent to `sqrt`.
+Return ``\\sqrt{x}``. Throws [`DomainError`](@ref) for negative [`Real`](@ref) arguments.
+Use complex negative arguments instead. The prefix operator `√` is equivalent to `sqrt`.
 """
 sqrt(x::Real) = sqrt(float(x))
 
