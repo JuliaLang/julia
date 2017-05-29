@@ -190,25 +190,34 @@ unsafe_cast(::Type{T}, x::BigFloat, r::RoundingMode) where {T<:Integer} = unsafe
 
 unsafe_trunc(::Type{T}, x::BigFloat) where {T<:Integer} = unsafe_cast(T,x,RoundToZero)
 
-function trunc{T<:Union{Signed,Unsigned}}(::Type{T}, x::BigFloat)
+function round(::Type{T}, x::BigFloat, ::RoundingMode{:ToZero}) where T<:Union{Signed,Unsigned}
     signed(widen(typemin(T))) - 1 < x < signed(widen(typemax(T))) + 1 || throw(InexactError())
     unsafe_cast(T,x,RoundToZero)
 end
-function floor(::Type{T}, x::BigFloat) where T<:Union{Signed,Unsigned}
+
+function round(::Type{T}, x::BigFloat, ::RoundingMode{:Down}) where T<:Union{Signed,Unsigned}
     typemin(T) <= x < signed(widen(typemax(T))) + 1 || throw(InexactError())
     unsafe_cast(T,x,RoundDown)
 end
-function ceil(::Type{T}, x::BigFloat) where T<:Union{Signed,Unsigned}
+
+function round(::Type{T}, x::BigFloat, ::RoundingMode{:Up}) where T<:Union{Signed,Unsigned}
     signed(widen(typemin(T))) - 1 < x <= typemax(T) || throw(InexactError())
     unsafe_cast(T,x,RoundUp)
 end
 
-function round(::Type{T}, x::BigFloat) where T<:Union{Signed,Unsigned}
-    # Note: rounding range could be slightly increased but the limits are dependent on the
-    # rounding mode used.
-    typemin(T) <= x <= typemax(T) || throw(InexactError())
-    unsafe_cast(T,x,ROUNDING_MODE[])
+function round(::Type{T}, x::BigFloat, ::RoundingMode{:Nearest}) where T<:Union{Signed,Unsigned}
+    tmin = typemin(T)
+    tmax = typemax(T)
+    smaller = iseven(tmin) ? (<=) : (<)
+    larger = iseven(tmax) ? (>=) : (>)
+    smaller(BigFloat(tmin) - 0.5, x) && larger(BigFloat(tmax) + 0.5, x) || throw(InexactError())
+    unsafe_cast(T,x,RoundNearest)
 end
+
+trunc(::Type{T}, x::BigFloat) where T<:Union{Signed,Unsigned} = round(T, x, RoundToZero)
+floor(::Type{T}, x::BigFloat) where T<:Union{Signed,Unsigned} = round(T, x, RoundDown)
+ceil(::Type{T}, x::BigFloat) where T<:Union{Signed,Unsigned} = round(T, x, RoundUp)
+round(::Type{T}, x::BigFloat) where T<:Union{Signed,Unsigned} = round(T, x, from_mpfr(ROUNDING_MODE[]))
 
 trunc(::Type{BigInt}, x::BigFloat) = unsafe_cast(BigInt, x, RoundToZero)
 floor(::Type{BigInt}, x::BigFloat) = unsafe_cast(BigInt, x, RoundDown)

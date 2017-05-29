@@ -565,29 +565,42 @@ c = parse(BigInt,"123456789012345678901234567891")
 
 # Test `InexactError` limits
 for T in (Int, UInt)
-    @test trunc(T, BigFloat(typemin(T)) - 0.1) == typemin(T)
-    @test trunc(T, BigFloat(typemax(T)) + 0.1) == typemax(T)
-    @test_throws InexactError trunc(T, BigFloat(typemin(T)) - 1)
-    @test_throws InexactError trunc(T, BigFloat(typemax(T)) + 1)
+    typemin_and_half = BigFloat(typemin(T)) - 0.5
+    typemax_and_half = BigFloat(typemax(T)) + 0.5
+    typemin_and_one = BigFloat(typemin(T)) - 1
+    typemax_and_one = BigFloat(typemax(T)) + 1
 
-    @test_throws InexactError floor(T, BigFloat(typemin(T)) - 0.1)
-    @test floor(T, BigFloat(typemax(T)) + 0.1) == typemax(T)
-    @test_throws InexactError floor(T, BigFloat(typemin(T)) - 1)
-    @test_throws InexactError floor(T, BigFloat(typemax(T)) + 1)
+    @test trunc(T, typemin_and_half) == typemin(T)
+    @test trunc(T, typemax_and_half) == typemax(T)
+    @test_throws InexactError trunc(T, typemin_and_one)
+    @test_throws InexactError trunc(T, typemax_and_one)
 
-    @test ceil(T, BigFloat(typemin(T)) - 0.1) == typemin(T)
-    @test_throws InexactError ceil(T, BigFloat(typemax(T)) + 0.1)
-    @test_throws InexactError ceil(T, BigFloat(typemin(T)) - 1)
-    @test_throws InexactError ceil(T, BigFloat(typemax(T)) + 1)
+    @test_throws InexactError floor(T, typemin_and_half)
+    @test floor(T, typemax_and_half) == typemax(T)
+    @test_throws InexactError floor(T, typemin_and_one)
+    @test_throws InexactError floor(T, typemax_and_one)
 
-    # Rounding has a more limited range of allowed values since the rounding mode will
-    # change the accepted range.
-    @test round(T, BigFloat(typemin(T))) == typemin(T)
-    @test round(T, BigFloat(typemax(T))) == typemax(T)
-    @test_throws InexactError round(T, BigFloat(typemin(T)) - 0.1)
-    @test_throws InexactError round(T, BigFloat(typemax(T)) + 0.1)
-    @test_throws InexactError round(T, BigFloat(typemin(T)) - 1)
-    @test_throws InexactError round(T, BigFloat(typemax(T)) + 1)
+    @test ceil(T, typemin_and_half) == typemin(T)
+    @test_throws InexactError ceil(T, typemax_and_half)
+    @test_throws InexactError ceil(T, typemin_and_one)
+    @test_throws InexactError ceil(T, typemax_and_one)
+
+    if iseven(typemin(T))
+        @test round(T, typemin_and_half) == typemin(T)
+    else
+        @test_throws InexactError round(T, typemin_and_half)
+    end
+
+    if iseven(typemax(T))
+        @test round(T, typemax_and_half) == typemax(T)
+    else
+        @test_throws InexactError round(T, typemax_and_half)
+    end
+
+    @test round(T, BigFloat(typemin(T)) - 0.4) == typemin(T)
+    @test round(T, BigFloat(typemax(T)) + 0.4) == typemax(T)
+    @test_throws InexactError round(T, typemin_and_one)
+    @test_throws InexactError round(T, typemax_and_one)
 end
 
 # basic arithmetic
