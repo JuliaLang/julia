@@ -337,7 +337,7 @@ end
 
 # docsystem basics
 macro doc(x...)
-    atdoc(x...)
+    atdoc(__source__, x...)
 end
 macro __doc__(x)
     Expr(:escape, Expr(:block, Expr(:meta, :doc), x))
@@ -345,7 +345,7 @@ end
 macro doc_str(s)
     Expr(:escape, s)
 end
-atdoc     = (str, expr) -> Expr(:escape, expr)
+atdoc     = (source, str, expr) -> Expr(:escape, expr)
 atdoc!(λ) = global atdoc = λ
 
 
