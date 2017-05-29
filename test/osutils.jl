@@ -15,7 +15,7 @@
 if !is_windows()
     @test Sys.windows_version() == v"0.0.0"
 else
-    @test Sys.windows_version() > v"0.0.0"
+    @test Sys.windows_version() >= v"1.0.0-"
 end
 
 @test (@static true ? 1 : 2) === 1
