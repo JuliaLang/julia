@@ -191,8 +191,8 @@ end
 """
     windows_version()
 
-Returns the version number for the Windows NT Kernel as a VersionNumber,
-i.e. v"major.minor.build", or `v"0.0.0` if this is not running on Windows.
+Returns the version number for the Windows NT Kernel as a `VersionNumber`,
+i.e. `v"major.minor.build"`, or `v"0.0.0"` if this is not running on Windows.
 """
 windows_version
 
