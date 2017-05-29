@@ -861,8 +861,8 @@ void add_named_global(GlobalObject *gv, void *addr, bool dllimport)
     jl_ExecutionEngine->addGlobalMapping(gv, addr);
 }
 
-static std::vector<Constant*> jl_sysimg_gvars;
-static std::vector<Constant*> jl_sysimg_fvars;
+static std::vector<GlobalValue*> jl_sysimg_gvars;
+static std::vector<GlobalValue*> jl_sysimg_fvars;
 static std::map<void*, jl_value_llvm> jl_value_to_llvm;
 
 // global variables to pointers are pretty common,
@@ -889,7 +889,7 @@ void* jl_emit_and_add_to_shadow(GlobalVariable *gv, void *gvarinit)
         addComdat(shadowvar);
         if (imaging_mode && gvarinit) {
             // make the pointer valid for future sessions
-            jl_sysimg_gvars.push_back(ConstantExpr::getBitCast(shadowvar, T_psize));
+            jl_sysimg_gvars.push_back(shadowvar);
             jl_value_llvm gv_struct;
             gv_struct.gv = global_proto(gv);
             gv_struct.index = jl_sysimg_gvars.size();
@@ -921,7 +921,7 @@ GlobalVariable *jl_emit_sysimg_slot(Module *m, Type *typ, const char *name,
     // make the pointer valid for this session
     auto p = new uintptr_t(init);
     jl_ExecutionEngine->addGlobalMapping(gv, (void*)p);
-    jl_sysimg_gvars.push_back(ConstantExpr::getBitCast(gv, T_psize));
+    jl_sysimg_gvars.push_back(gv);
     idx = jl_sysimg_gvars.size();
     return gv;
 }
@@ -958,23 +958,29 @@ extern "C" {
 }
 #endif
 
-static void jl_gen_llvm_globaldata(llvm::Module *mod, ValueToValueMapTy &VMap,
-                                   const char *sysimg_data, size_t sysimg_len)
+static void emit_offset_table(Module *mod, const std::vector<GlobalValue*> &vars, StringRef name)
 {
-    ArrayType *gvars_type = ArrayType::get(T_psize, jl_sysimg_gvars.size());
-    addComdat(new GlobalVariable(*mod,
-                                 gvars_type,
-                                 true,
+    assert(!vars.empty());
+    addComdat(GlobalAlias::create(GlobalVariable::ExternalLinkage, name + "_base", vars[0]));
+    auto vbase = ConstantExpr::getPtrToInt(vars[0], T_size);
+    size_t nvars = vars.size();
+    std::vector<Constant*> offsets(nvars);
+    for (size_t i = 0; i < nvars; i++) {
+        auto ptrdiff = ConstantExpr::getSub(ConstantExpr::getPtrToInt(vars[i], T_size), vbase);
+        offsets[i] = sizeof(void*) == 8 ? ConstantExpr::getTrunc(ptrdiff, T_uint32) : ptrdiff;
+    }
+    ArrayType *vars_type = ArrayType::get(T_uint32, nvars);
+    addComdat(new GlobalVariable(*mod, vars_type, true,
                                  GlobalVariable::ExternalLinkage,
-                                 MapValue(ConstantArray::get(gvars_type, ArrayRef<Constant*>(jl_sysimg_gvars)), VMap),
-                                 "jl_sysimg_gvars"));
-    ArrayType *fvars_type = ArrayType::get(T_pvoidfunc, jl_sysimg_fvars.size());
-    addComdat(new GlobalVariable(*mod,
-                                 fvars_type,
-                                 true,
-                                 GlobalVariable::ExternalLinkage,
-                                 MapValue(ConstantArray::get(fvars_type, ArrayRef<Constant*>(jl_sysimg_fvars)), VMap),
-                                 "jl_sysimg_fvars"));
+                                 ConstantArray::get(vars_type, ArrayRef<Constant*>(offsets)),
+                                 name + "_offsets"));
+}
+
+
+static void jl_gen_llvm_globaldata(Module *mod, const char *sysimg_data, size_t sysimg_len)
+{
+    emit_offset_table(mod, jl_sysimg_gvars, "jl_sysimg_gvars");
+    emit_offset_table(mod, jl_sysimg_fvars, "jl_sysimg_fvars");
     addComdat(new GlobalVariable(*mod,
                                  T_size,
                                  true,
@@ -1070,7 +1076,8 @@ void jl_dump_native(const char *bc_fname, const char *unopt_bc_fname, const char
 #else
         Optional<Reloc::Model>(),
 #endif
-        CodeModel::Default,
+        // Use small model so that we can use signed 32bits offset in the function and GV tables
+        CodeModel::Small,
         CodeGenOpt::Aggressive // -O3 TODO: respect command -O0 flag?
         ));
 
@@ -1132,24 +1139,21 @@ void jl_dump_native(const char *bc_fname, const char *unopt_bc_fname, const char
         }
     }
 
-    ValueToValueMapTy VMap;
-    Module *clone = shadow_output;
-
     // Reset the target triple to make sure it matches the new target machine
-    clone->setTargetTriple(TM->getTargetTriple().str());
+    shadow_output->setTargetTriple(TM->getTargetTriple().str());
 #if JL_LLVM_VERSION >= 40000
     DataLayout DL = TM->createDataLayout();
     DL.reset(DL.getStringRepresentation() + "-ni:10:11:12");
-    clone->setDataLayout(DL);
+    shadow_output->setDataLayout(DL);
 #else
-    clone->setDataLayout(TM->createDataLayout());
+    shadow_output->setDataLayout(TM->createDataLayout());
 #endif
 
     // add metadata information
-    jl_gen_llvm_globaldata(clone, VMap, sysimg_data, sysimg_len);
+    jl_gen_llvm_globaldata(shadow_output, sysimg_data, sysimg_len);
 
     // do the actual work
-    PM.run(*clone);
+    PM.run(*shadow_output);
     imaging_mode = false;
 }
 
@@ -1159,9 +1163,7 @@ extern "C" int32_t jl_assign_functionID(void *function)
     assert(imaging_mode);
     if (function == NULL)
         return 0;
-    jl_sysimg_fvars.push_back(ConstantExpr::getBitCast(
-                shadow_output->getNamedValue(((Function*)function)->getName()),
-                T_pvoidfunc));
+    jl_sysimg_fvars.push_back(shadow_output->getNamedValue(((Function*)function)->getName()));
     return jl_sysimg_fvars.size();
 }
 
