@@ -8397,7 +8397,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.conj",
     "category": "Function",
-    "text": "conj(z)\n\nCompute the complex conjugate of a complex number z.\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\nconj(v::RowVector)\n\nReturns a ConjArray lazy view of the input, where each element is conjugated.\n\nExample\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\n"
+    "text": "conj(v::RowVector)\n\nReturns a ConjArray lazy view of the input, where each element is conjugated.\n\nExample\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\nconj(z)\n\nCompute the complex conjugate of a complex number z.\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\n"
 },
 
 {
@@ -11637,7 +11637,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.SparseArrays.speye",
     "category": "Method",
-    "text": "speye(S)\n\nCreate a sparse identity matrix with the same size as S.\n\njulia> A = sparse([1,2,3,4],[2,4,3,1],[5.,4.,3.,2.])\n4×4 SparseMatrixCSC{Float64,Int64} with 4 stored entries:\n  [4, 1]  =  2.0\n  [1, 2]  =  5.0\n  [3, 3]  =  3.0\n  [2, 4]  =  4.0\n\njulia> speye(A)\n4×4 SparseMatrixCSC{Float64,Int64} with 4 stored entries:\n  [1, 1]  =  1.0\n  [2, 2]  =  1.0\n  [3, 3]  =  1.0\n  [4, 4]  =  1.0\n\nNote the difference from spones.\n\n\n\n"
+    "text": "speye(S)\n\nCreate a sparse identity matrix with the same size as S.\n\njulia> A = sparse([1,2,3,4],[2,4,3,1],[5.,4.,3.,2.])\n4×4 SparseMatrixCSC{Float64,Int64} with 4 stored entries:\n  [4, 1]  =  2.0\n  [1, 2]  =  5.0\n  [3, 3]  =  3.0\n  [2, 4]  =  4.0\n\njulia> speye(A)\n4×4 SparseMatrixCSC{Float64,Int64} with 4 stored entries:\n  [1, 1]  =  1.0\n  [2, 2]  =  1.0\n  [3, 3]  =  1.0\n  [4, 4]  =  1.0\n\nNote the difference from spones.\n\n\n\nspeye([type,]m[,n])\n\nCreate a sparse identity matrix of size m x m. When n is supplied, create a sparse identity matrix of size m x n. The type defaults to Float64 if not specified.\n\nsparse(I, m, n) is equivalent to speye(Int, m, n), and sparse(α*I, m, n) can be used to efficiently create a sparse multiple α of the identity matrix.\n\n\n\n"
 },
 
 {
