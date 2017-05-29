@@ -40,6 +40,10 @@ This section lists changes that do not have deprecation warnings.
     of the socket. Previously the address of the remote endpoint was being
     returned ([#21825]).
 
+  * Using `ARGS` within the ~/.juliarc.jl or within a .jl file loaded with `--load` will no
+    longer contain the script name as the first argument. Instead the script name will be
+    assigned to `PROGRAM_FILE`. ([#22092])
+
 Library improvements
 --------------------
 
