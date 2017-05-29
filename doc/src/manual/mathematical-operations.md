@@ -21,7 +21,7 @@ are supported on all primitive numeric types:
 | `x ^ y`    | power          | raises `x` to the `y`th power          |
 | `x % y`    | remainder      | equivalent to `rem(x,y)`               |
 
-as well as the negation on `Bool` types:
+as well as the negation on [`Bool`](@ref) types:
 
 | Expression | Name     | Description                              |
 |:---------- |:-------- |:---------------------------------------- |

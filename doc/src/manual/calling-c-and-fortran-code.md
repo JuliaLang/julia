@@ -66,7 +66,7 @@ julia> typeof(ans)
 Int32
 ```
 
-`clock` takes no arguments and returns an `Int32`. One common gotcha is that a 1-tuple must be
+`clock` takes no arguments and returns an [`Int32`](@ref). One common gotcha is that a 1-tuple must be
 written with a trailing comma. For example, to call the `getenv` function to get a pointer to
 the value of an environment variable, one makes a call like this:
 
@@ -192,8 +192,8 @@ julia> const mycompare_c = cfunction(mycompare, Cint, (Ref{Cdouble}, Ref{Cdouble
 ```
 
 [`cfunction()`](@ref) accepts three arguments: the Julia function (`mycompare`), the return type
-(`Cint`), and a tuple of the argument types, in this case to sort an array of `Cdouble` (`Float64`)
-elements.
+(`Cint`), and a tuple of the argument types, in this case to sort an array of `Cdouble`
+([`Float64`](@ref)) elements.
 
 The final call to `qsort` looks like this:
 
@@ -298,7 +298,7 @@ same:
   * `Signed`
 
     Exactly corresponds to the `signed` type annotation in C (or any `INTEGER` type in Fortran).
-    Any Julia type that is not a subtype of `Signed` is assumed to be unsigned.
+    Any Julia type that is not a subtype of [`Signed`](@ref) is assumed to be unsigned.
 
 
   * `Ref{T}`

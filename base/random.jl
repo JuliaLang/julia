@@ -221,8 +221,8 @@ end
 
 Reseed the random number generator. If a `seed` is provided, the RNG will give a
 reproducible sequence of numbers, otherwise Julia will get entropy from the system. For
-`MersenneTwister`, the `seed` may be a non-negative integer or a vector of `UInt32` integers.
-`RandomDevice` does not support seeding.
+`MersenneTwister`, the `seed` may be a non-negative integer or a vector of [`UInt32`](@ref)
+integers. `RandomDevice` does not support seeding.
 """
 srand(r::MersenneTwister) = srand(r, make_seed())
 srand(r::MersenneTwister, n::Integer) = srand(r, make_seed(n))
@@ -258,9 +258,10 @@ Pick a random element or array of random elements from the set of values specifi
 
 * an indexable collection (for example `1:n` or `['x','y','z']`), or
 * a type: the set of values to pick from is then equivalent to `typemin(S):typemax(S)` for
-  integers (this is not applicable to `BigInt`), and to ``[0, 1)`` for floating point numbers;
+  integers (this is not applicable to [`BigInt`](@ref)), and to ``[0, 1)`` for floating
+  point numbers;
 
-`S` defaults to `Float64`.
+`S` defaults to [`Float64`](@ref).
 """
 @inline rand() = rand(GLOBAL_RNG, CloseOpen)
 @inline rand(T::Type) = rand(GLOBAL_RNG, T)
@@ -1181,9 +1182,9 @@ const ziggurat_exp_r      = 7.6971174701310497140446280481
 Generate a normally-distributed random number of type `T` with mean 0 and standard deviation 1.
 Optionally generate an array of normally-distributed random numbers.
 The `Base` module currently provides an implementation for the types
-`Float16`, `Float32`, and `Float64` (the default), and their `Complex` counterparts.
-When the type argument is complex, the values are drawn from the circularly symmetric
-complex normal distribution.
+[`Float16`](@ref), [`Float32`](@ref), and [`Float64`](@ref) (the default), and their
+[`Complex`](@ref) counterparts. When the type argument is complex, the values are drawn
+from the circularly symmetric complex normal distribution.
 """
 @inline function randn(rng::AbstractRNG=GLOBAL_RNG)
     @inbounds begin
@@ -1217,7 +1218,7 @@ end
 Generate a random number of type `T` according to the exponential distribution with scale 1.
 Optionally generate an array of such random numbers.
 The `Base` module currently provides an implementation for the types
-`Float16`, `Float32`, and `Float64` (the default).
+[`Float16`](@ref), [`Float32`](@ref), and [`Float64`](@ref) (the default).
 """
 @inline function randexp(rng::AbstractRNG=GLOBAL_RNG)
     @inbounds begin
