@@ -1273,8 +1273,8 @@ julia> sprand(rng, Float64, 3, 0.75)
   [3]  =  0.298614
 ```
 """
-function sprand{T}(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat,
-                rfn::Function, ::Type{T}=eltype(rfn(r,1)))
+function sprand(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloat,
+                rfn::Function, ::Type{T}=eltype(rfn(r,1))) where T
     N = m*n
     N == 0 && return spzeros(T,m,n)
     N == 1 && return rand(r) <= density ? sparse([1], [1], rfn(r,1)) : spzeros(T,1,1)
@@ -1283,8 +1283,8 @@ function sprand{T}(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloa
     sparse_IJ_sorted!(I, J, rfn(r,length(I)), m, n, +)  # it will never need to combine
 end
 
-function sprand{T}(m::Integer, n::Integer, density::AbstractFloat,
-                rfn::Function, ::Type{T}=eltype(rfn(1)))
+function sprand(m::Integer, n::Integer, density::AbstractFloat,
+                rfn::Function, ::Type{T}=eltype(rfn(1))) where T
     N = m*n
     N == 0 && return spzeros(T,m,n)
     N == 1 && return rand() <= density ? sparse([1], [1], rfn(1)) : spzeros(T,1,1)
@@ -1463,7 +1463,7 @@ imag(A::SparseMatrixCSC{Tv,Ti}) where {Tv<:Real,Ti} = spzeros(Tv, Ti, A.m, A.n)
 
 ## full equality
 function ==(A1::SparseMatrixCSC, A2::SparseMatrixCSC)
-    size(A1)!=size(A2) && return false
+    size(A1) != size(A2) && return false
     vals1, vals2 = nonzeros(A1), nonzeros(A2)
     rows1, rows2 = rowvals(A1), rowvals(A2)
     m, n = size(A1)
@@ -1471,7 +1471,7 @@ function ==(A1::SparseMatrixCSC, A2::SparseMatrixCSC)
         nz1,nz2 = nzrange(A1,i), nzrange(A2,i)
         j1,j2 = first(nz1), first(nz2)
         # step through the rows of both matrices at once:
-        while j1<=last(nz1) && j2<=last(nz2)
+        while j1 <= last(nz1) && j2 <= last(nz2)
             r1,r2 = rows1[j1], rows2[j2]
             if r1==r2
                 vals1[j1]!=vals2[j2] && return false
@@ -1503,9 +1503,9 @@ end
 # In general, output of sparse matrix reductions will not be sparse,
 # and computing reductions along columns into SparseMatrixCSC is
 # non-trivial, so use Arrays for output
-Base.reducedim_initarray{R}(A::SparseMatrixCSC, region, v0, ::Type{R}) =
+Base.reducedim_initarray(A::SparseMatrixCSC, region, v0, ::Type{R}) where {R} =
     fill!(similar(dims->Array{R}(dims), Base.reduced_indices(A,region)), v0)
-Base.reducedim_initarray0{R}(A::SparseMatrixCSC, region, v0, ::Type{R}) =
+Base.reducedim_initarray0(A::SparseMatrixCSC, region, v0, ::Type{R}) where {R} =
     fill!(similar(dims->Array{R}(dims), Base.reduced_indices0(A,region)), v0)
 
 # General mapreduce
@@ -1528,7 +1528,7 @@ function _mapreducezeros(f, op, T::Type, nzeros::Int, v0)
     v
 end
 
-function Base._mapreduce{T}(f, op, ::Base.IndexCartesian, A::SparseMatrixCSC{T})
+function Base._mapreduce(f, op, ::Base.IndexCartesian, A::SparseMatrixCSC{T}) where T
     z = nnz(A)
     n = length(A)
     if z == 0
@@ -1548,7 +1548,7 @@ _mapreducezeros(f, ::typeof(+), T::Type, nzeros::Int, v0) =
 _mapreducezeros(f, ::typeof(*), T::Type, nzeros::Int, v0) =
     nzeros == 0 ? v0 : f(zero(T))^nzeros * v0
 
-function Base._mapreduce{T}(f, op::typeof(*), A::SparseMatrixCSC{T})
+function Base._mapreduce(f, op::typeof(*), A::SparseMatrixCSC{T}) where T
     nzeros = length(A)-nnz(A)
     if nzeros == 0
         # No zeros, so don't compute f(0) since it might throw
@@ -1561,7 +1561,7 @@ function Base._mapreduce{T}(f, op::typeof(*), A::SparseMatrixCSC{T})
 end
 
 # General mapreducedim
-function _mapreducerows!{T}(f, op, R::AbstractArray, A::SparseMatrixCSC{T})
+function _mapreducerows!(f, op, R::AbstractArray, A::SparseMatrixCSC{T}) where T
     colptr = A.colptr
     rowval = A.rowval
     nzval = A.nzval
@@ -1576,7 +1576,7 @@ function _mapreducerows!{T}(f, op, R::AbstractArray, A::SparseMatrixCSC{T})
     R
 end
 
-function _mapreducecols!{Tv,Ti}(f, op, R::AbstractArray, A::SparseMatrixCSC{Tv,Ti})
+function _mapreducecols!(f, op, R::AbstractArray, A::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
     colptr = A.colptr
     rowval = A.rowval
     nzval = A.nzval
@@ -1595,7 +1595,7 @@ function _mapreducecols!{Tv,Ti}(f, op, R::AbstractArray, A::SparseMatrixCSC{Tv,T
     R
 end
 
-function Base._mapreducedim!{T}(f, op, R::AbstractArray, A::SparseMatrixCSC{T})
+function Base._mapreducedim!(f, op, R::AbstractArray, A::SparseMatrixCSC{T}) where T
     lsiz = Base.check_reducedims(R,A)
     isempty(A) && return R
 
@@ -1645,7 +1645,7 @@ end
 
 # Specialized mapreducedim for + cols to avoid allocating a
 # temporary array when f(0) == 0
-function _mapreducecols!{Tv,Ti}(f, op::typeof(+), R::AbstractArray, A::SparseMatrixCSC{Tv,Ti})
+function _mapreducecols!(f, op::typeof(+), R::AbstractArray, A::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
     nzval = A.nzval
     m, n = size(A)
     if length(nzval) == m*n
@@ -1685,7 +1685,7 @@ function _mapreducecols!{Tv,Ti}(f, op::typeof(+), R::AbstractArray, A::SparseMat
 end
 
 # findmax/min and indmax/min methods
-function _findz{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, rows=1:A.m, cols=1:A.n)
+function _findz(A::SparseMatrixCSC{Tv,Ti}, rows=1:A.m, cols=1:A.n) where {Tv,Ti}
     colptr = A.colptr; rowval = A.rowval; nzval = A.nzval
     zval = zero(Tv)
     col = cols[1]; row = 0
@@ -1890,7 +1890,7 @@ function getindex(A::SparseMatrixCSC{Tv,Ti}, I::Range, J::AbstractVector) where 
     return SparseMatrixCSC(nI, nJ, colptrS, rowvalS, nzvalS)
 end
 
-function getindex_I_sorted{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVector)
+function getindex_I_sorted(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVector) where {Tv,Ti}
     # Sorted vectors for indexing rows.
     # Similar to getindex_general but without the transpose trick.
     (m, n) = size(A)
@@ -1910,7 +1910,7 @@ function getindex_I_sorted{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, 
     getindex_I_sorted_linear(A, I, J)
 end
 
-function getindex_I_sorted_bsearch_A{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVector)
+function getindex_I_sorted_bsearch_A(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVector) where {Tv,Ti}
     const nI = length(I)
     const nJ = length(J)
 
@@ -3253,7 +3253,7 @@ function next(d::SpDiagIterator{Tv}, j) where Tv
     (((r1 > r2) || (A.rowval[r1] != j)) ? zero(Tv) : A.nzval[r1], j+1)
 end
 
-function trace{Tv}(A::SparseMatrixCSC{Tv})
+function trace(A::SparseMatrixCSC{Tv}) where Tv
     if size(A,1) != size(A,2)
         throw(DimensionMismatch("expected square matrix"))
     end
@@ -3264,10 +3264,10 @@ function trace{Tv}(A::SparseMatrixCSC{Tv})
     s
 end
 
-diag{Tv}(A::SparseMatrixCSC{Tv}) = Tv[d for d in SpDiagIterator(A)]
+diag(A::SparseMatrixCSC{Tv}) where {Tv} = Tv[d for d in SpDiagIterator(A)]
 
-function diagm{Tv,Ti}(v::SparseMatrixCSC{Tv,Ti})
-    if (size(v,1) != 1 && size(v,2) != 1)
+function diagm(v::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
+    if size(v,1) != 1 && size(v,2) != 1
         throw(DimensionMismatch("input should be nx1 or 1xn"))
     end
 
