@@ -300,9 +300,7 @@ Point{Int64}(1, 2)
 
 julia> Point{Int64}(1.0,2.5) ## explicit T ##
 ERROR: InexactError()
-Stacktrace:
- [1] convert(::Type{Int64}, ::Float64) at ./float.jl:680
- [2] Point{Int64}(::Float64, ::Float64) at ./none:2
+[...]
 
 julia> Point{Float64}(1.0, 2.5) ## explicit T ##
 Point{Float64}(1.0, 2.5)
