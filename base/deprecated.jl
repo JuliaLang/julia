@@ -692,17 +692,6 @@ end
 @deprecate xor(A::AbstractArray, b::Number)         xor.(A, b)
 @deprecate xor(A::AbstractArray, B::AbstractArray)  xor.(A, B)
 
-# QuadGK moved to a package (#19741)
-@deprecate_moved quadgk "QuadGK"
-
-# Collections functions moved to a package (#19800)
-module Collections
-    for f in (:PriorityQueue, :enqueue!, :dequeue!, :heapify!, :heapify, :heappop!, :heappush!, :isheap, :peek)
-        @eval Base.@deprecate_moved $f "DataStructures"
-    end
-end
-export Collections
-
 # Broadcast now returns a BitArray when the resulting eltype is Bool (#17623)
 @deprecate bitbroadcast broadcast
 
