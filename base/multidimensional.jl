@@ -1469,3 +1469,193 @@ end
         return B
     end
 end
+
+"""
+    C, ia, ib, ic = uniqueslices(A, dim)
+
+A function that operates similiarly to `unique(A,dim)` but returns multiple
+output arguments having the following properties:
+
+C - the unique elements of the array `A` along the selected dimension `dim`
+ia - a Vector{Int} of indices such that:
+     `A[ia] == C` if `A` is a one-dimensional array and `dim == 1`
+     `A[ia,:] == C` if `A` is a two-dimensional array and `dim == 1`
+     `A[:,ia] == C` if `A` is a two-dimensional array and `dim == 2`
+     `A[:,:,ia] == C` if `A` is a three-dimensional array and `dim == 3`
+     and so forth for higher dimensional arrays.
+ib - a Vector{Vector{Int}} where each Vector{Int} contains the indices associated with the
+     individual entries of `C` along the dimension `dim`
+ic - A Vector{Int} of indices such that:
+     `C[ic] == A` if `A` is a one-dimensional array and `dim == 1`
+     `C[ic,:] == A` if `A` is a two-dimensional array and `dim == 1`
+     `C[:,ic] == A` if `A` is a two-dimensional array and `dim == 2`
+     `C[:,:,ic] == A` if `A` is a three-dimensional array and `dim == 3`
+     and so forth for higher dimensional arrays.
+
+Examples:
+
+julia> A = [1;2;3;2;3;5;6;5;7;1];
+julia> C, ia, ib, ic = uniqueind(itr,1)
+([1,2,3,5,6,7],[1,2,3,6,7,9],[[1,10],[2,4],[3,5],[6,8],[7],[9]],[1,2,3,2,3,4,5,4,6,1])
+julia> C[ic] == A
+true
+julia> A[ia] == C
+true
+julia> ib
+6-element Array{Array{Int64,1},1}:
+ [1,10]
+ [2,4]
+ [3,5]
+ [6,8]
+ [7]
+ [9]
+
+julia> D = [1 2 3 ; 4 5 6];
+julia> E = [11 12 13; 14 15 16];
+julia> F = [21 22 23; 24 25 26];
+julia> A = cat(3, D, F, E, E, D)
+2x3x5 Array{Int64,3}:
+[:, :, 1] =
+ 1  2  3
+ 4  5  6
+
+[:, :, 2] =
+ 21  22  23
+ 24  25  26
+
+[:, :, 3] =
+ 11  12  13
+ 14  15  16
+
+[:, :, 4] =
+ 11  12  13
+ 14  15  16
+
+[:, :, 5] =
+ 1  2  3
+ 4  5  6
+
+julia> C, ia, ib, ic = uniqueind(A,3)
+(
+2x3x3 Array{Int64,3}:
+[:, :, 1] =
+ 1  2  3
+ 4  5  6
+
+[:, :, 2] =
+ 21  22  23
+ 24  25  26
+
+[:, :, 3] =
+ 11  12  13
+ 14  15  16,
+
+[1,2,3],[[1,5],[2],[3,4]],[1,2,3,3,1])
+
+julia> A[:,:,ia] == C
+true
+julia> C[:,:,ic] == A
+true
+julia> ib
+3-element Array{Array{Int64,1},1}:
+ [1,5]
+ [2]
+ [3,4]
+
+"""
+@generated function uniqueslices{T,N}(A::AbstractArray{T,N}, dim::Int)
+    quote
+        1 <= dim <= $N || return copy(A)
+        hashes = zeros(UInt, size(A, dim))
+
+        # Compute hash for each row
+        k = 0
+        @nloops $N i A d->(if d == dim; k = i_d; end) begin
+            @inbounds hashes[k] = hash(hashes[k], hash((@nref $N A i)))
+        end
+
+        # Collect index of first row for each hash
+        uniquerow = Array(Int, size(A, dim))
+        ic = Array(Int, size(A, dim))
+        ia = Int[]
+        firstrow = Dict{Prehashed,Int}()
+        icdict = Dict{Int,Int}()
+        iadict = Dict{UInt,Int}()
+        h = 0
+        for k = 1:size(A, dim)
+            tmp = get!(firstrow, Prehashed(hashes[k]), k)
+            uniquerow[k] = tmp
+            if !haskey(icdict,tmp)
+                h += 1
+                icdict[tmp] = h
+                ic[k] = h
+            else
+                ic[k] = icdict[tmp]
+            end
+            if !haskey(iadict,hashes[k])
+                iadict[hashes[k]] = k
+                push!(ia,k)
+            end
+        end
+        uniquerows = collect(values(firstrow))
+
+        # Check for collisions
+        collided = falses(size(A, dim))
+        @inbounds begin
+            @nloops $N i A d->(if d == dim
+                k = i_d
+                j_d = uniquerow[k]
+            else
+                j_d = i_d
+            end) begin
+                if (@nref $N A j) != (@nref $N A i)
+                    collided[k] = true
+                end
+            end
+        end
+
+        if any(collided)
+            nowcollided = BitArray(size(A, dim))
+            while any(collided)
+                # Collect index of first row for each collided hash
+                empty!(firstrow)
+                for j = 1:size(A, dim)
+                    collided[j] || continue
+                    uniquerow[j] = get!(firstrow, Prehashed(hashes[j]), j)
+                end
+                for v in values(firstrow)
+                    push!(uniquerows, v)
+                end
+
+                # Check for collisions
+                fill!(nowcollided, false)
+                @nloops $N i A d->begin
+                    if d == dim
+                        k = i_d
+                        j_d = uniquerow[k]
+                        (!collided[k] || j_d == k) && continue
+                    else
+                        j_d = i_d
+                    end
+                end begin
+                    if (@nref $N A j) != (@nref $N A i)
+                        nowcollided[k] = true
+                    end
+                end
+                (collided, nowcollided) = (nowcollided, collided)
+            end
+        end
+
+        C = @nref $N A d->d == dim ? sort!(uniquerows) : (1:size(A, d))
+
+        ib = Array(Vector{Int},length(ia))
+        for k = 1:length(ia)
+            ib[k] = Int[]
+        end
+        for h = 1:length(ic)
+            push!(ib[ic[h]], h)
+        end
+
+        return C, ia, ib, ic
+    end
+end
