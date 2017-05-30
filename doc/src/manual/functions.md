@@ -175,7 +175,7 @@ names.
 ## [Anonymous Functions](@id man-anonymous-functions)
 
 Functions in Julia are [first-class objects](https://en.wikipedia.org/wiki/First-class_citizen):
-they can be assigned to variables, and called using the standard function call syntax from the
+they can be assigned to variables, and be called using the standard function call syntax by the
 variable they have been assigned to. They can be used as arguments, and they can be returned as
 values. They can also be created anonymously, without being given a name, using either of these
 syntaxes:
@@ -194,9 +194,9 @@ This creates a function taking one argument `x` and returning the value of the p
 2x - 1` at that value. Notice that the result is a generic function, but with a compiler-generated
 name based on consecutive numbering.
 
-The primary use for anonymous functions is passing them to functions which take other functions
-as arguments. A classic example is [`map()`](@ref), which applies a function to each value of
-an array and returns a new array containing the resulting values:
+The primary use for anonymous functions is passing them as arguments to other functions. A classic 
+example of a function that takes other functions as arguments is [`map()`](@ref), which applies a 
+function to each value of an array and returns a new array containing the resulting values:
 
 ```jldoctest
 julia> map(round, [1.2,3.5,1.7])
