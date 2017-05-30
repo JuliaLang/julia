@@ -215,16 +215,15 @@ remote(f) = (args...; kwargs...)->remotecall_fetch(f, default_worker_pool(), arg
 remote(p::AbstractWorkerPool, f) = (args...; kwargs...)->remotecall_fetch(f, p, args...; kwargs...)
 
 mutable struct CachingPool <: AbstractWorkerPool
-    channel::Channel{Int}
-    workers::Set{Int}
+    pool::AbstractWorkerPool
 
     # Mapping between a tuple (worker_id, f) and a remote_ref
     map_obj2ref::Dict{Tuple{Int, Function}, RemoteChannel}
 
-    function CachingPool()
-        wp = new(Channel{Int}(typemax(Int)), Set{Int}(), Dict{Int, Function}())
-        finalizer(wp, clear!)
-        wp
+    function CachingPool(pool::AbstractWorkerPool)
+        cwp = new(pool, Dict{Int, Function}())
+        finalizer(cwp, clear!)
+        cwp
     end
 end
 
@@ -256,13 +255,32 @@ end
 
 The above would transfer `foo` only once to each worker.
 
+Other constructors:
+
+    CachingPool(pool:AbstractWorkerPool)
+
+Wraps function caching functionality over `pool`. For example, to cache functions over the
+default worker pool, use `CachingPool(default_worker_pool())`.
+
+    CachingPool()
+
+Equivalent to `CachingPool(WorkerPool())`, i.e., wraps an initially empty `WorkerPool`.
 """
 function CachingPool(workers::Vector{Int})
     pool = CachingPool()
     for w in workers
-        push!(pool, w)
+        push!(pool.pool, w)
     end
     return pool
+end
+CachingPool() = CachingPool(WorkerPool())
+
+for func = (:length, :isready, :workers, :nworkers, :take!)
+    @eval ($func)(pool::CachingPool) = ($func)(pool.pool)
+end
+
+for func = (:push!, :put!)
+    @eval ($func)(pool::CachingPool, id::Int) = ($func)(pool.pool, id)
 end
 
 """

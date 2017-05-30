@@ -1648,6 +1648,24 @@ syms = setup_syms(3, workers())
 clear!(syms, workers())
 test_clear(syms, workers())
 
+# Ensure pmap uses a CachingPool for anonymous functions.
+# Difficult to test directly which type of pool is used. Test indirectly
+# by checking the number of times a variable captured in a closure
+# is serialized.
+let
+    cp_tsc = TestSerCnt(UInt8(1))
+    data = rand(UInt8, 10)
+    oidtsc = object_id(cp_tsc)
+    @test data + UInt8(1) == pmap(x->getfield(cp_tsc, :v)+x, data)
+    @test testsercnt_d[oidtsc] == nworkers()
+
+    cp_tsc = TestSerCnt(UInt8(1))
+    data = rand(UInt8, 10)
+    oidtsc = object_id(cp_tsc)
+    @test data + UInt8(1) == pmap(default_worker_pool(), x->getfield(cp_tsc, :v)+x, data)
+    @test testsercnt_d[oidtsc] == length(data)
+end
+
 # Test partial recovery from a deserialization error in CapturedException
 try
     expr = quote

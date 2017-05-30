@@ -37,11 +37,13 @@ workers and tasks.
 
 For multiple collection arguments, apply `f` elementwise.
 
+By default (worker pool unspecified), all available workers are used.
+
 Note that `f` must be made available to all worker processes; see
 [Code Availability and Loading Packages](@ref) for details.
 
-If a worker pool is not specified, all available workers, i.e., the default worker pool
-is used.
+`f` can also be an anonymous function. In this case, if a worker pool is unspecified,
+a [`CachingPool`](@CachingPool) is created and used during the call.
 
 By default, `pmap` distributes the computation over all specified workers. To use only the
 local process and distribute over tasks, specify `distributed=false`.
@@ -153,7 +155,18 @@ function pmap(p::AbstractWorkerPool, f, c; distributed=true, batch_size=1, on_er
 end
 
 pmap(p::AbstractWorkerPool, f, c1, c...; kwargs...) = pmap(p, a->f(a...), zip(c1, c...); kwargs...)
-pmap(f, c; kwargs...) = pmap(default_worker_pool(), f, c; kwargs...)
+
+function pmap(f, c; kwargs...)
+    if isanon_function(f)
+        cp = CachingPool(default_worker_pool())
+        result = pmap(cp, f, c; kwargs...)
+        @schedule clear!(cp) # clear cache immediately instead of waiting for gc to kick in.
+    else
+        result = pmap(default_worker_pool(), f, c; kwargs...)
+    end
+    return result
+end
+
 pmap(f, c1, c...; kwargs...) = pmap(a->f(a...), zip(c1, c...); kwargs...)
 
 function wrap_on_error(f, on_error; capture_data=false)
@@ -292,4 +305,19 @@ function batchsplit(c; min_batch_count=1, max_batch_size=100)
     end
 
     return Iterators.flatten((head, tail))
+end
+
+function isanon_function(f)
+    t = typeof(f)
+    tn = t.name
+    if isdefined(tn, :mt)
+        name = tn.mt.name
+        mod = tn.module
+        if t.super === Function &&
+            unsafe_load(Base.unsafe_convert(Ptr{UInt8}, tn.name)) == UInt8('#') &&
+            (!isdefined(mod, name) || t != typeof(getfield(mod, name)))
+            return true
+        end
+    end
+    return false
 end
