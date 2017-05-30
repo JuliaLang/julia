@@ -53,6 +53,9 @@ Library improvements
     method can be opened in an editor by entering the corresponding number in the REPL
     and pressing `^Q` ([#22007]).
 
+  * A macro `Base.@topmodule` was added to make it easier to override key functions in packages ([#22147]).
+
+
 Compiler/Runtime improvements
 -----------------------------
 
