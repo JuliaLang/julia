@@ -2257,7 +2257,7 @@
    (lambda (e) (expand-forms `(call (top vect) ,@(cdr e))))
 
    'hcat
-   (lambda (e) (expand-forms `(call hcat ,.(map expand-forms (cdr e)))))
+   (lambda (e) (expand-forms `(call (top hcat) ,.(map expand-forms (cdr e)))))
 
    'vcat
    (lambda (e)

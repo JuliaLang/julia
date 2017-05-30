@@ -349,6 +349,7 @@ include("stacktraces.jl")
 importall .StackTraces
 
 # misc useful functions & macros
+include("topmodule.jl")
 include("util.jl")
 
 # dense linear algebra
