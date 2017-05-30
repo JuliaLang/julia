@@ -1,4 +1,18 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
+# issue #19892
+# (test this first to make sure it happens before set_num_threads)
+let a = randn(10^5,1), p1 = plan_rfft(a, flags=FFTW.ESTIMATE)
+    FFTW.set_num_threads(2)
+    p2 = plan_rfft(a, flags=FFTW.ESTIMATE)
+    @test p1*a ≈ p2*a
+    # make sure threads are actually being used for p2
+    # (tests #21163).
+    if FFTW.version >= v"3.3.4"
+        @test !contains(string(p1), "dft-thr")
+        @test contains(string(p2), "dft-thr")
+    end
+end
 
 # fft
 a = rand(8) + im*rand(8)

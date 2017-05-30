@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ### Data
 
@@ -159,10 +159,10 @@ let xr = sprand(Bool, 1000, 0.9)
     @test all(nonzeros(xr))
 end
 
-let r1 = MersenneTwister(), r2 = MersenneTwister()
+let r1 = MersenneTwister(0), r2 = MersenneTwister(0)
     @test sprand(r1, 100, .9) == sprand(r2, 100, .9)
     @test sprandn(r1, 100, .9) == sprandn(r2, 100, .9)
-    @test sprand(r1, Bool, 100, .9, ) == sprand(r2,  Bool, 100, .9)
+    @test sprand(r1, Bool, 100, .9) == sprand(r2,  Bool, 100, .9)
 end
 
 ### Element access
@@ -637,14 +637,16 @@ let x = spv_x1, x2 = spv_x2
     @test exact_equal(complex.(x2, x),
         SparseVector(8, [1,2,5,6,7], [3.25+0.0im, 4.0+1.25im, -0.75im, -5.5+3.5im, -6.0+0.0im]))
 
-    # real & imag
+    # real, imag and conj
 
     @test real(x) === x
     @test exact_equal(imag(x), spzeros(Float64, length(x)))
+    @test conj(x) === x
 
     xcp = complex.(x, x2)
     @test exact_equal(real(xcp), x)
     @test exact_equal(imag(xcp), x2)
+    @test exact_equal(conj(xcp), complex.(x, -x2))
 end
 
 ### Zero-preserving math functions: sparse -> sparse
@@ -1080,13 +1082,13 @@ s14046 = sprand(5, 1.0)
 @test 2*s14046 == s14046 + s14046
 
 # Issue 14589
-#test vectors with no zero elements
+# test vectors with no zero elements
 x = sparsevec(1:7, [3., 2., -1., 1., -2., -3., 3.], 7)
 @test collect(sort(x)) == sort(collect(x))
-#test vectors with all zero elements
+# test vectors with all zero elements
 x = sparsevec(Int64[], Float64[], 7)
 @test collect(sort(x)) == sort(collect(x))
-#test vector with sparsity approx 1/2
+# test vector with sparsity approx 1/2
 x = sparsevec(1:7, [3., 2., -1., 1., -2., -3., 3.], 15)
 @test collect(sort(x)) == sort(collect(x))
 # apply three distinct tranformations where zeros sort into start/middle/end
@@ -1094,7 +1096,7 @@ x = sparsevec(1:7, [3., 2., -1., 1., -2., -3., 3.], 15)
 @test collect(sort(x, by=sign)) == sort(collect(x), by=sign)
 @test collect(sort(x, by=inv)) == sort(collect(x), by=inv)
 
-#fill!
+# fill!
 for Tv in [Float32, Float64, Int64, Int32, Complex128]
     for Ti in [Int16, Int32, Int64, BigInt]
         sptypes = (SparseMatrixCSC{Tv, Ti}, SparseVector{Tv, Ti})
@@ -1124,7 +1126,7 @@ end
 @test issparse([sprand(10,.1); rand(10)])
 
 
-type t20488 end
+mutable struct t20488 end
 
 @testset "similar" begin
     x = sparsevec(rand(3) .+ 0.1)

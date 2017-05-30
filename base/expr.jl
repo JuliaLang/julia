@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## symbols ##
 
@@ -117,6 +117,7 @@ Small functions typically do not need the `@inline` annotation,
 as the compiler does it automatically. By using `@inline` on bigger functions,
 an extra nudge can be given to the compiler to inline it.
 This is shown in the following example:
+
 ```julia
 @inline function bigfunction(x)
     #=
@@ -137,6 +138,7 @@ Prevents the compiler from inlining a function.
 Small functions are typically inlined automatically.
 By using `@noinline` on small functions, auto-inlining can be
 prevented. This is shown in the following example:
+
 ```julia
 @noinline function smallfunction(x)
     #=
@@ -274,9 +276,16 @@ end
 
 remove_linenums!(ex) = ex
 function remove_linenums!(ex::Expr)
-    filter!(x->!((isa(x,Expr) && x.head === :line) || isa(x,LineNumberNode)), ex.args)
+    if ex.head === :body || ex.head === :block || ex.head === :quote
+        # remove line number expressions from metadata (not argument literal or inert) position
+        filter!(ex.args) do x
+            isa(x, Expr) && x.head === :line && return false
+            isa(x, LineNumberNode) && return false
+            return true
+        end
+    end
     for subex in ex.args
         remove_linenums!(subex)
     end
-    ex
+    return ex
 end

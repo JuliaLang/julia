@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 srand(123)
 
@@ -191,30 +191,21 @@ ACSC = sprandn(10, 10, 0.3) + I
 @test ishermitian(Sparse(Hermitian(complex(ACSC), :U)))
 
 # test Sparse constructor for c_SparseVoid (and read_sparse)
-let testfile = joinpath(tempdir(), "tmp.mtx")
-    try
-        writedlm(testfile, ["%%MatrixMarket matrix coordinate real symmetric","3 3 4","1 1 1","2 2 1","3 2 0.5","3 3 1"])
-        @test sparse(CHOLMOD.Sparse(testfile)) == [1 0 0;0 1 0.5;0 0.5 1]
-    finally
-        rm(testfile)
-    end
-end
-let testfile = joinpath(tempdir(), "tmp.mtx")
-    try
-        writedlm(testfile, ["%%MatrixMarket matrix coordinate complex Hermitian",
-                 "3 3 4","1 1 1.0 0.0","2 2 1.0 0.0","3 2 0.5 0.5","3 3 1.0 0.0"])
-        @test sparse(CHOLMOD.Sparse(testfile)) == [1 0 0;0 1 0.5-0.5im;0 0.5+0.5im 1]
-    finally
-        rm(testfile)
-    end
-end
-let testfile = joinpath(tempdir(), "tmp.mtx")
-    try
-        writedlm(testfile, ["%%MatrixMarket matrix coordinate real symmetric","%3 3 4","1 1 1","2 2 1","3 2 0.5","3 3 1"])
-        @test_throws ArgumentError sparse(CHOLMOD.Sparse(testfile))
-    finally
-        rm(testfile)
-    end
+mktempdir() do temp_dir
+    testfile = joinpath(temp_dir, "tmp.mtx")
+
+    writedlm(testfile, ["%%MatrixMarket matrix coordinate real symmetric","3 3 4","1 1 1","2 2 1","3 2 0.5","3 3 1"])
+    @test sparse(CHOLMOD.Sparse(testfile)) == [1 0 0;0 1 0.5;0 0.5 1]
+    rm(testfile)
+
+    writedlm(testfile, ["%%MatrixMarket matrix coordinate complex Hermitian",
+                        "3 3 4","1 1 1.0 0.0","2 2 1.0 0.0","3 2 0.5 0.5","3 3 1.0 0.0"])
+    @test sparse(CHOLMOD.Sparse(testfile)) == [1 0 0;0 1 0.5-0.5im;0 0.5+0.5im 1]
+    rm(testfile)
+
+    writedlm(testfile, ["%%MatrixMarket matrix coordinate real symmetric","%3 3 4","1 1 1","2 2 1","3 2 0.5","3 3 1"])
+    @test_throws ArgumentError sparse(CHOLMOD.Sparse(testfile))
+    rm(testfile)
 end
 
 # test that Sparse(Ptr) constructor throws the right places
@@ -692,3 +683,21 @@ let A = sprandn(10, 10, 0.1)
     end
 end
 
+@testset "Check inputs to Sparse. Related to #20024" for A in (
+    SparseMatrixCSC(2, 2, [1, 2], CHOLMOD.SuiteSparse_long[], Float64[]),
+    SparseMatrixCSC(2, 2, [1, 2, 3], CHOLMOD.SuiteSparse_long[1], Float64[]),
+    SparseMatrixCSC(2, 2, [1, 2, 3], CHOLMOD.SuiteSparse_long[], Float64[1.0]),
+    SparseMatrixCSC(2, 2, [1, 2, 3], CHOLMOD.SuiteSparse_long[1], Float64[1.0]))
+
+    @test_throws ArgumentError CHOLMOD.Sparse(size(A)..., A.colptr - 1, A.rowval - 1, A.nzval)
+    @test_throws ArgumentError CHOLMOD.Sparse(A)
+end
+
+@testset "sparse right multiplication of Symmetric and Hermitian matrices #21431" begin
+    @test issparse(speye(2)*speye(2)*speye(2))
+    for T in (Symmetric, Hermitian)
+        @test issparse(speye(2)*T(speye(2))*speye(2))
+        @test issparse(speye(2)*(T(speye(2))*speye(2)))
+        @test issparse((speye(2)*T(speye(2)))*speye(2))
+    end
+end

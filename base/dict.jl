@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 function _truncate_at_width_or_chars(str, width, chars="", truncmark="…")
     truncwidth = strwidth(truncmark)
@@ -23,7 +23,7 @@ function _truncate_at_width_or_chars(str, width, chars="", truncmark="…")
     end
 end
 
-function show{K,V}(io::IO, t::Associative{K,V})
+function show(io::IO, t::Associative{K,V}) where V where K
     recur_io = IOContext(io, :SHOWN_SET => t)
     limit::Bool = get(io, :limit, false)
     if !haskey(io, :compact)
@@ -154,12 +154,12 @@ end
 
 TP{K,V} = Union{Type{Tuple{K,V}},Type{Pair{K,V}}}
 
-associative_with_eltype{K,V}(DT_apply, kv, ::TP{K,V}) = DT_apply(K, V)(kv)
-associative_with_eltype{K,V}(DT_apply, kv::Generator, ::TP{K,V}) = DT_apply(K, V)(kv)
-associative_with_eltype{K,V}(DT_apply, ::Type{Pair{K,V}}) = DT_apply(K, V)()
+associative_with_eltype(DT_apply, kv, ::TP{K,V}) where {K,V} = DT_apply(K, V)(kv)
+associative_with_eltype(DT_apply, kv::Generator, ::TP{K,V}) where {K,V} = DT_apply(K, V)(kv)
+associative_with_eltype(DT_apply, ::Type{Pair{K,V}}) where {K,V} = DT_apply(K, V)()
 associative_with_eltype(DT_apply, ::Type) = DT_apply(Any, Any)()
-associative_with_eltype{F}(DT_apply::F, kv, t) = grow_to!(associative_with_eltype(DT_apply, _default_eltype(typeof(kv))), kv)
-function associative_with_eltype{F}(DT_apply::F, kv::Generator, t)
+associative_with_eltype(DT_apply::F, kv, t) where {F} = grow_to!(associative_with_eltype(DT_apply, _default_eltype(typeof(kv))), kv)
+function associative_with_eltype(DT_apply::F, kv::Generator, t) where F
     T = _default_eltype(typeof(kv))
     if T <: Union{Pair, Tuple{Any, Any}} && isleaftype(T)
         return associative_with_eltype(DT_apply, kv, T)
@@ -174,7 +174,7 @@ function grow_to!(dest::Associative, itr)
     return isempty(out) ? dest : out
 end
 
-function grow_to!{K,V}(dest::Associative{K,V}, itr, st)
+function grow_to!(dest::Associative{K,V}, itr, st) where V where K
     while !done(itr, st)
         (k,v), st = next(itr, st)
         if isa(k,K) && isa(v,V)
@@ -189,11 +189,11 @@ function grow_to!{K,V}(dest::Associative{K,V}, itr, st)
     return dest
 end
 
-similar{K,V}(d::Dict{K,V}) = Dict{K,V}()
-similar{K,V}(d::Dict, ::Type{Pair{K,V}}) = Dict{K,V}()
+similar(d::Dict{K,V}) where {K,V} = Dict{K,V}()
+similar(d::Dict, ::Type{Pair{K,V}}) where {K,V} = Dict{K,V}()
 
 # conversion between Dict types
-function convert{K,V}(::Type{Dict{K,V}},d::Associative)
+function convert(::Type{Dict{K,V}},d::Associative) where V where K
     h = Dict{K,V}()
     for (k,v) in d
         ck = convert(K,k)
@@ -205,7 +205,7 @@ function convert{K,V}(::Type{Dict{K,V}},d::Associative)
     end
     return h
 end
-convert{K,V}(::Type{Dict{K,V}},d::Dict{K,V}) = d
+convert(::Type{Dict{K,V}},d::Dict{K,V}) where {K,V} = d
 
 hashindex(key, sz) = (((hash(key)%Int) & (sz-1)) + 1)::Int
 
@@ -213,7 +213,7 @@ isslotempty(h::Dict, i::Int) = h.slots[i] == 0x0
 isslotfilled(h::Dict, i::Int) = h.slots[i] == 0x1
 isslotmissing(h::Dict, i::Int) = h.slots[i] == 0x2
 
-function rehash!{K,V}(h::Dict{K,V}, newsz = length(h.keys))
+function rehash!(h::Dict{K,V}, newsz = length(h.keys)) where V where K
     olds = h.slots
     oldk = h.keys
     oldv = h.vals
@@ -300,7 +300,7 @@ julia> A
 Dict{String,Int64} with 0 entries
 ```
 """
-function empty!{K,V}(h::Dict{K,V})
+function empty!(h::Dict{K,V}) where V where K
     fill!(h.slots, 0x0)
     sz = length(h.slots)
     empty!(h.keys)
@@ -315,7 +315,7 @@ function empty!{K,V}(h::Dict{K,V})
 end
 
 # get the index where a key is stored, or -1 if not present
-function ht_keyindex{K,V}(h::Dict{K,V}, key)
+function ht_keyindex(h::Dict{K,V}, key) where V where K
     sz = length(h.keys)
     iter = 0
     maxprobe = h.maxprobe
@@ -340,7 +340,7 @@ end
 # get the index where a key is stored, or -pos if not present
 # and the key would be inserted at pos
 # This version is for use by setindex! and get!
-function ht_keyindex2{K,V}(h::Dict{K,V}, key)
+function ht_keyindex2(h::Dict{K,V}, key) where V where K
     age0 = h.age
     sz = length(h.keys)
     iter = 0
@@ -408,7 +408,7 @@ function _setindex!(h::Dict, v, key, index)
     end
 end
 
-function setindex!{K,V}(h::Dict{K,V}, v0, key0)
+function setindex!(h::Dict{K,V}, v0, key0) where V where K
     key = convert(K, key0)
     if !isequal(key, key0)
         throw(ArgumentError("$key0 is not a valid key for type $K"))
@@ -416,7 +416,7 @@ function setindex!{K,V}(h::Dict{K,V}, v0, key0)
     setindex!(h, v0, key)
 end
 
-function setindex!{K,V}(h::Dict{K,V}, v0, key::K)
+function setindex!(h::Dict{K,V}, v0, key::K) where V where K
     v = convert(V, v0)
     index = ht_keyindex2(h, key)
 
@@ -431,8 +431,8 @@ function setindex!{K,V}(h::Dict{K,V}, v0, key::K)
     return h
 end
 
-get!{K,V}(h::Dict{K,V}, key0, default) = get!(()->default, h, key0)
-function get!{K,V}(default::Callable, h::Dict{K,V}, key0)
+get!(h::Dict{K,V}, key0, default) where {K,V} = get!(()->default, h, key0)
+function get!(default::Callable, h::Dict{K,V}, key0) where V where K
     key = convert(K, key0)
     if !isequal(key, key0)
         throw(ArgumentError("$key0 is not a valid key for type $K"))
@@ -440,7 +440,7 @@ function get!{K,V}(default::Callable, h::Dict{K,V}, key0)
     return get!(default, h, key)
 end
 
-function get!{K,V}(default::Callable, h::Dict{K,V}, key::K)
+function get!(default::Callable, h::Dict{K,V}, key::K) where V where K
     index = ht_keyindex2(h, key)
 
     index > 0 && return h.vals[index]
@@ -469,17 +469,17 @@ macro get!(h, key0, default)
 end
 
 
-function getindex{K,V}(h::Dict{K,V}, key)
+function getindex(h::Dict{K,V}, key) where V where K
     index = ht_keyindex(h, key)
     return (index < 0) ? throw(KeyError(key)) : h.vals[index]::V
 end
 
-function get{K,V}(h::Dict{K,V}, key, default)
+function get(h::Dict{K,V}, key, default) where V where K
     index = ht_keyindex(h, key)
     return (index < 0) ? default : h.vals[index]::V
 end
 
-function get{K,V}(default::Callable, h::Dict{K,V}, key)
+function get(default::Callable, h::Dict{K,V}, key) where V where K
     index = ht_keyindex(h, key)
     return (index < 0) ? default() : h.vals[index]::V
 end
@@ -523,7 +523,7 @@ julia> getkey(a,'d','a')
 'a': ASCII/Unicode U+0061 (category Ll: Letter, lowercase)
 ```
 """
-function getkey{K,V}(h::Dict{K,V}, key, default)
+function getkey(h::Dict{K,V}, key, default) where V where K
     index = ht_keyindex(h, key)
     return (index<0) ? default : h.keys[index]::K
 end
@@ -542,6 +542,15 @@ end
 function pop!(h::Dict, key, default)
     index = ht_keyindex(h, key)
     return index > 0 ? _pop!(h, index) : default
+end
+
+function pop!(h::Dict)
+    isempty(h) && throw(ArgumentError("dict must be non-empty"))
+    idx = start(h)
+    key = h.keys[idx]
+    val = h.vals[idx]
+    _delete!(h, idx)
+    key => val
 end
 
 function _delete!(h::Dict, index)
@@ -576,7 +585,7 @@ function start(t::Dict)
     return i
 end
 done(t::Dict, i) = i > length(t.vals)
-next{K,V}(t::Dict{K,V}, i) = (Pair{K,V}(t.keys[i],t.vals[i]), skip_deleted(t,i+1))
+next(t::Dict{K,V}, i) where {K,V} = (Pair{K,V}(t.keys[i],t.vals[i]), skip_deleted(t,i+1))
 
 isempty(t::Dict) = (t.count == 0)
 length(t::Dict) = t.count
@@ -595,8 +604,8 @@ function filter!(f, d::Union{ObjectIdDict,Dict})
     return d
 end
 
-struct ImmutableDict{K, V} <: Associative{K,V}
-    parent::ImmutableDict{K, V}
+struct ImmutableDict{K,V} <: Associative{K,V}
+    parent::ImmutableDict{K,V}
     key::K
     value::V
     ImmutableDict{K,V}() where {K,V} = new() # represents an empty dictionary
@@ -660,7 +669,7 @@ end
 
 # this actually defines reverse iteration (e.g. it should not be used for merge/copy/filter type operations)
 start(t::ImmutableDict) = t
-next{K,V}(::ImmutableDict{K,V}, t) = (Pair{K,V}(t.key, t.value), t.parent)
+next(::ImmutableDict{K,V}, t) where {K,V} = (Pair{K,V}(t.key, t.value), t.parent)
 done(::ImmutableDict, t) = !isdefined(t, :parent)
 length(t::ImmutableDict) = count(x->true, t)
 isempty(t::ImmutableDict) = done(t, start(t))

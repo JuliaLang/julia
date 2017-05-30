@@ -1,8 +1,8 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module LibGit2
 
-import Base: merge!, cat, ==
+import Base: merge!, ==
 
 export with, GitRepo, GitConfig
 
@@ -72,6 +72,19 @@ end
 
 Checks if commit `id` (which is a [`GitHash`](@ref) in string form)
 is in the repository.
+
+# Example
+
+```julia-repl
+julia> repo = LibGit2.GitRepo(repo_path);
+
+julia> LibGit2.add!(repo, test_file);
+
+julia> commit_oid = LibGit2.commit(repo, "add test_file");
+
+julia> LibGit2.iscommit(string(commit_oid), repo)
+true
+```
 """
 function iscommit(id::AbstractString, repo::GitRepo)
     res = true
@@ -95,6 +108,17 @@ Checks if there have been any changes to tracked files in the working tree (if
 `cached=false`) or the index (if `cached=true`).
 `pathspecs` are the specifications for options for the diff.
 
+# Example
+```julia
+repo = LibGit2.GitRepo(repo_path)
+LibGit2.isdirty(repo) # should be false
+open(joinpath(repo_path, new_file), "a") do f
+    println(f, "here's my cool new file")
+end
+LibGit2.isdirty(repo) # now true
+LibGit2.isdirty(repo, new_file) # now true
+```
+
 Equivalent to `git diff-index HEAD [-- <pathspecs>]`.
 """
 isdirty(repo::GitRepo, paths::AbstractString=""; cached::Bool=false) =
@@ -106,6 +130,16 @@ isdirty(repo::GitRepo, paths::AbstractString=""; cached::Bool=false) =
 Checks if there are any differences between the tree specified by `treeish` and the
 tracked files in the working tree (if `cached=false`) or the index (if `cached=true`).
 `pathspecs` are the specifications for options for the diff.
+
+# Example
+```julia
+repo = LibGit2.GitRepo(repo_path)
+LibGit2.isdiff(repo, "HEAD") # should be false
+open(joinpath(repo_path, new_file), "a") do f
+    println(f, "here's my cool new file")
+end
+LibGit2.isdiff(repo, "HEAD") # now true
+```
 
 Equivalent to `git diff-index <treeish> [-- <pathspecs>]`.
 """
@@ -128,15 +162,34 @@ Show which files have changed in the git repository `repo` between branches `bra
 and `branch2`.
 
 The keyword argument is:
-  * `filter::Set{Cint}=Set([Consts.DELTA_ADDED, Consts.DELTA_MODIFIED, Consts.DELTA_DELETED]))`,
+  * `filter::Set{Consts.DELTA_STATUS}=Set([Consts.DELTA_ADDED, Consts.DELTA_MODIFIED, Consts.DELTA_DELETED]))`,
     and it sets options for the diff. The default is to show files added, modified, or deleted.
 
 Returns only the *names* of the files which have changed, *not* their contents.
 
+# Example
+
+```julia
+LibGit2.branch!(repo, "branch/a")
+LibGit2.branch!(repo, "branch/b")
+# add a file to repo
+open(joinpath(LibGit2.path(repo),"file"),"w") do f
+    write(f, "hello repo\n")
+end
+LibGit2.add!(repo, "file")
+LibGit2.commit(repo, "add file")
+# returns ["file"]
+filt = Set([LibGit2.Consts.DELTA_ADDED])
+files = LibGit2.diff_files(repo, "branch/a", "branch/b", filter=filt)
+# returns [] because existing files weren't modified
+filt = Set([LibGit2.Consts.DELTA_MODIFIED])
+files = LibGit2.diff_files(repo, "branch/a", "branch/b", filter=filt)
+```
+
 Equivalent to `git diff --name-only --diff-filter=<filter> <branch1> <branch2>`.
 """
 function diff_files(repo::GitRepo, branch1::AbstractString, branch2::AbstractString;
-                    filter::Set{Cint}=Set([Consts.DELTA_ADDED, Consts.DELTA_MODIFIED, Consts.DELTA_DELETED]))
+                    filter::Set{Consts.DELTA_STATUS}=Set([Consts.DELTA_ADDED, Consts.DELTA_MODIFIED, Consts.DELTA_DELETED]))
     b1_id = revparseid(repo, branch1*"^{tree}")
     b2_id = revparseid(repo, branch2*"^{tree}")
     tree1 = GitTree(repo, b1_id)
@@ -147,7 +200,7 @@ function diff_files(repo::GitRepo, branch1::AbstractString, branch2::AbstractStr
         for i in 1:count(diff)
             delta = diff[i]
             delta === nothing && break
-            if delta.status in filter
+            if Consts.DELTA_STATUS(delta.status) in filter
                 push!(files, unsafe_string(delta.new_file.path))
             end
         end
@@ -164,6 +217,23 @@ end
 
 Returns `true` if `a`, a [`GitHash`](@ref) in string form, is an ancestor of
 `b`, a [`GitHash`](@ref) in string form.
+
+# Example
+
+```julia-repl
+julia> repo = LibGit2.GitRepo(repo_path);
+
+julia> LibGit2.add!(repo, test_file1);
+
+julia> commit_oid1 = LibGit2.commit(repo, "commit1");
+
+julia> LibGit2.add!(repo, test_file2);
+
+julia> commit_oid2 = LibGit2.commit(repo, "commit2");
+
+julia> LibGit2.is_ancestor_of(string(commit_oid1), string(commit_oid2), repo)
+true
+```
 """
 function is_ancestor_of(a::AbstractString, b::AbstractString, repo::GitRepo)
     A = revparseid(repo, a)
@@ -175,6 +245,17 @@ end
 
 Set the `url` for `remote` for the git repository `repo`.
 The default name of the remote is `"origin"`.
+
+# Examples
+
+```julia
+repo_path = joinpath("test_directory", "Example")
+repo = LibGit2.init(repo_path)
+url1 = "https://github.com/JuliaLang/Example.jl"
+LibGit2.set_remote_url(repo, url1, remote="upstream")
+url2 = "https://github.com/JuliaLang/Example2.jl"
+LibGit2.set_remote_url(repo_path, url2, remote="upstream2")
+```
 """
 function set_remote_url(repo::GitRepo, url::AbstractString; remote::AbstractString="origin")
     with(GitConfig, repo) do cfg
@@ -296,6 +377,7 @@ end
 
 Checkout a new git branch in the `repo` repository. `commit` is the [`GitHash`](@ref),
 in string form, which will be the start of the new branch.
+If `commit` is an empty string, the current HEAD will be used.
 
 The keyword arguments are:
   * `track::AbstractString=""`: the name of the
@@ -308,6 +390,13 @@ The keyword arguments are:
     finishes the branch head will be set as the HEAD of `repo`.
 
 Equivalent to `git checkout [-b|-B] <branch_name> [<commit>] [--track <track>]`.
+
+# Example
+
+```julia
+repo = LibGit2.GitRepo(repo_path)
+LibGit2.branch!(repo, "new_branch", set_head=false)
+```
 """
 function branch!(repo::GitRepo, branch_name::AbstractString,
                  commit::AbstractString = ""; # start point
@@ -382,6 +471,23 @@ Equivalent to `git checkout [-f] --detach <commit>`.
 Checkout the git commit `commit` (a [`GitHash`](@ref) in string form)
 in `repo`. If `force` is `true`, force the checkout and discard any
 current changes. Note that this detaches the current HEAD.
+
+# Example
+
+```julia
+repo = LibGit2.init(repo_path)
+open(joinpath(LibGit2.path(repo), "file1"), "w") do f
+    write(f, "111\n")
+end
+LibGit2.add!(repo, "file1")
+commit_oid = LibGit2.commit(repo, "add file1")
+open(joinpath(LibGit2.path(repo), "file1"), "w") do f
+    write(f, "112\n")
+end
+# would fail without the force=true
+# since there are modifications to the file
+LibGit2.checkout!(repo, string(commit_oid), force=true)
+```
 """
 function checkout!(repo::GitRepo, commit::AbstractString = "";
                   force::Bool = true)
@@ -403,15 +509,15 @@ function checkout!(repo::GitRepo, commit::AbstractString = "";
     # search for commit to get a commit object
     obj = GitObject(repo, GitHash(commit))
     peeled = peel(GitCommit, obj)
-
-    opts = force ? CheckoutOptions(checkout_strategy = Consts.CHECKOUT_FORCE) : CheckoutOptions()
-    # detach commit
     obj_oid = GitHash(peeled)
-    ref = GitReference(repo, obj_oid, force=force,
-                       msg="libgit2.checkout: moving from $head_name to $(string(obj_oid))")
 
     # checkout commit
-    checkout_tree(repo, peeled, options = opts)
+    checkout_tree(repo, peeled, options = force ? CheckoutOptions(checkout_strategy = Consts.CHECKOUT_FORCE) : CheckoutOptions())
+
+    GitReference(repo, obj_oid, force=force,
+                 msg="libgit2.checkout: moving from $head_name to $(obj_oid))")
+
+    return nothing
 end
 
 """
@@ -434,6 +540,16 @@ The keyword arguments are:
     repository.
 
 Equivalent to `git clone [-b <branch>] [--bare] <repo_url> <repo_path>`.
+
+# Examples
+
+```julia
+repo_url = "https://github.com/JuliaLang/Example.jl"
+repo1 = LibGit2.clone(repo_url, "test_path")
+repo2 = LibGit2.clone(repo_url, "test_path", isbare=true)
+julia_url = "https://github.com/JuliaLang/julia"
+julia_repo = LibGit2.clone(julia_url, "julia_path", branch="release-0.6")
+```
 """
 function clone(repo_url::AbstractString, repo_path::AbstractString;
                branch::AbstractString="",
@@ -470,30 +586,45 @@ set by `mode`:
   3. `Consts.RESET_HARD` - move HEAD to `id`, reset the index to `id`, and discard all working changes.
 
 Equivalent to `git reset [--soft | --mixed | --hard] <id>`.
+
+# Example
+
+```julia
+repo = LibGit2.GitRepo(repo_path)
+head_oid = LibGit2.head_oid(repo)
+open(joinpath(repo_path, "file1"), "w") do f
+    write(f, "111\n")
+end
+LibGit2.add!(repo, "file1")
+mode = LibGit2.Consts.RESET_HARD
+# will discard the changes to file1
+# and unstage it
+new_head = LibGit2.reset!(repo, head_oid, mode)
+```
 """
 reset!(repo::GitRepo, id::GitHash, mode::Cint = Consts.RESET_MIXED) =
     reset!(repo, GitObject(repo, id), mode)
 
-""" git cat-file <commit> """
-function cat(repo::GitRepo, spec)
-    obj = GitObject(repo, spec)
-    if isa(obj, GitBlob)
-        content(obj)
-    else
-        nothing
-    end
-end
+"""
+    LibGit2.revcount(repo::GitRepo, commit1::AbstractString, commit2::AbstractString)
 
-""" git rev-list --count <commit1> <commit2> """
-function revcount(repo::GitRepo, fst::AbstractString, snd::AbstractString)
-    fst_id = revparseid(repo, fst)
-    snd_id = revparseid(repo, snd)
-    base_id = merge_base(repo, string(fst_id), string(snd_id))
+List the number of revisions between `commit1` and `commit2` (committish OIDs in string form).
+Since `commit1` and `commit2` may be on different branches, `revcount` performs a "left-right"
+revision list (and count), returning a tuple of `Int`s - the number of left and right
+commits, respectively. A left (or right) commit refers to which side of a symmetric
+difference in a tree the commit is reachable from.
+
+Equivalent to `git rev-list --left-right --count <commit1> <commit2>`.
+"""
+function revcount(repo::GitRepo, commit1::AbstractString, commit2::AbstractString)
+    commit1_id = revparseid(repo, commit1)
+    commit2_id = revparseid(repo, commit2)
+    base_id = merge_base(repo, string(commit1_id), string(commit2_id))
     fc = with(GitRevWalker(repo)) do walker
-        count((i,r)->i!=base_id, walker, oid=fst_id, by=Consts.SORT_TOPOLOGICAL)
+        count((i,r)->i!=base_id, walker, oid=commit1_id, by=Consts.SORT_TOPOLOGICAL)
     end
     sc = with(GitRevWalker(repo)) do walker
-        count((i,r)->i!=base_id, walker, oid=snd_id, by=Consts.SORT_TOPOLOGICAL)
+        count((i,r)->i!=base_id, walker, oid=commit2_id, by=Consts.SORT_TOPOLOGICAL)
     end
     return (fc-1, sc-1)
 end
@@ -519,6 +650,12 @@ The keyword arguments are:
     options for the checkout step.
 
 Equivalent to `git merge [--ff-only] [<committish> | <branch>]`.
+
+!!! note
+    If you specify a `branch`, this must be done in reference format, since
+    the string will be turned into a `GitReference`. For example, if you
+    wanted to merge branch `branch_a`, you would call
+    `merge!(repo, branch="refs/heads/branch_a")`.
 """
 function merge!(repo::GitRepo;
                 committish::AbstractString = "",
@@ -667,6 +804,26 @@ end
     authors(repo::GitRepo) -> Vector{Signature}
 
 Returns all authors of commits to the `repo` repository.
+
+# Example
+
+```julia
+repo = LibGit2.GitRepo(repo_path)
+repo_file = open(joinpath(repo_path, test_file), "a")
+
+println(repo_file, commit_msg)
+flush(repo_file)
+LibGit2.add!(repo, test_file)
+sig = LibGit2.Signature("TEST", "TEST@TEST.COM", round(time(), 0), 0)
+commit_oid1 = LibGit2.commit(repo, "commit1"; author=sig, committer=sig)
+println(repo_file, randstring(10))
+flush(repo_file)
+LibGit2.add!(repo, test_file)
+commit_oid2 = LibGit2.commit(repo, "commit2"; author=sig, committer=sig)
+
+# will be a Vector of [sig, sig]
+auths = LibGit2.authors(repo)
+```
 """
 function authors(repo::GitRepo)
     return with(GitRevWalker(repo)) do walker

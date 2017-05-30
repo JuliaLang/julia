@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module PermutedDimsArrays
 
@@ -46,10 +46,10 @@ function PermutedDimsArray(data::AbstractArray{T,N}, perm) where {T,N}
 end
 
 Base.parent(A::PermutedDimsArray) = A.parent
-Base.size{T,N,perm}(A::PermutedDimsArray{T,N,perm})    = genperm(size(parent(A)),    perm)
-Base.indices{T,N,perm}(A::PermutedDimsArray{T,N,perm}) = genperm(indices(parent(A)), perm)
+Base.size(A::PermutedDimsArray{T,N,perm}) where {T,N,perm}    = genperm(size(parent(A)),    perm)
+Base.indices(A::PermutedDimsArray{T,N,perm}) where {T,N,perm} = genperm(indices(parent(A)), perm)
 
-Base.unsafe_convert{T}(::Type{Ptr{T}}, A::PermutedDimsArray{T}) = Base.unsafe_convert(Ptr{T}, parent(A))
+Base.unsafe_convert(::Type{Ptr{T}}, A::PermutedDimsArray{T}) where {T} = Base.unsafe_convert(Ptr{T}, parent(A))
 
 # It's OK to return a pointer to the first element, and indeed quite
 # useful for wrapping C routines that require a different storage
@@ -58,26 +58,23 @@ Base.unsafe_convert{T}(::Type{Ptr{T}}, A::PermutedDimsArray{T}) = Base.unsafe_co
 # or a linear index?
 Base.pointer(A::PermutedDimsArray, i::Integer) = throw(ArgumentError("pointer(A, i) is deliberately unsupported for PermutedDimsArray"))
 
-function Base.strides{T,N,perm}(A::PermutedDimsArray{T,N,perm})
+function Base.strides(A::PermutedDimsArray{T,N,perm}) where {T,N,perm}
     s = strides(parent(A))
     ntuple(d->s[perm[d]], Val{N})
 end
 
-@inline function Base.getindex{T,N,perm,iperm}(A::PermutedDimsArray{T,N,perm,iperm}, I::Vararg{Int,N})
+@inline function Base.getindex(A::PermutedDimsArray{T,N,perm,iperm}, I::Vararg{Int,N}) where {T,N,perm,iperm}
     @boundscheck checkbounds(A, I...)
     @inbounds val = getindex(A.parent, genperm(I, iperm)...)
     val
 end
-@inline function Base.setindex!{T,N,perm,iperm}(A::PermutedDimsArray{T,N,perm,iperm}, val, I::Vararg{Int,N})
+@inline function Base.setindex!(A::PermutedDimsArray{T,N,perm,iperm}, val, I::Vararg{Int,N}) where {T,N,perm,iperm}
     @boundscheck checkbounds(A, I...)
     @inbounds setindex!(A.parent, val, genperm(I, iperm)...)
     val
 end
 
-# For some reason this is faster than ntuple(d->I[perm[d]], Val{N}) (#15276?)
-@inline genperm{N}(I::NTuple{N,Any}, perm::Dims{N}) = _genperm((), I, perm...)
-_genperm(out, I) = out
-@inline _genperm(out, I, p, perm...) = _genperm((out..., I[p]), I, perm...)
+@inline genperm(I::NTuple{N,Any}, perm::Dims{N}) where {N} = ntuple(d -> I[perm[d]], Val{N})
 @inline genperm(I, perm::AbstractVector{Int}) = genperm(I, (perm...,))
 
 """
@@ -132,13 +129,13 @@ function Base.permutedims!(dest, src::AbstractArray, perm)
     return dest
 end
 
-function Base.copy!{T,N}(dest::PermutedDimsArray{T,N}, src::AbstractArray{T,N})
+function Base.copy!(dest::PermutedDimsArray{T,N}, src::AbstractArray{T,N}) where {T,N}
     checkbounds(dest, indices(src)...)
     _copy!(dest, src)
 end
 Base.copy!(dest::PermutedDimsArray, src::AbstractArray) = _copy!(dest, src)
 
-function _copy!{T,N,perm}(P::PermutedDimsArray{T,N,perm}, src)
+function _copy!(P::PermutedDimsArray{T,N,perm}, src) where {T,N,perm}
     # If dest/src are "close to dense," then it pays to be cache-friendly.
     # Determine the first permuted dimension
     d = 0  # d+1 will hold the first permuted dimension of src

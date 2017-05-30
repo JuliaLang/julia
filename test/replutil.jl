@@ -1,9 +1,7 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
-const curmod = current_module()
-const curmod_name = fullname(curmod)
-const curmod_str = curmod === Main ? "Main" : join(curmod_name, ".")
-const curmod_prefix = "$(["$m." for m in curmod_name]...)"
+# For curmod_*
+include("testenv.jl")
 
 function test_have_color(buf, color, no_color)
     if Base.have_color
@@ -14,12 +12,13 @@ function test_have_color(buf, color, no_color)
 end
 
 cfile = " at $(@__FILE__):"
-c1line = @__LINE__ + 1
+c1line = @__LINE__() + 1
 method_c1(x::Float64, s::AbstractString...) = true
 
 buf = IOBuffer()
 Base.show_method_candidates(buf, Base.MethodError(method_c1,(1, 1, "")))
 no_color = "\nClosest candidates are:\n  method_c1(!Matched::Float64, !Matched::AbstractString...)$cfile$c1line"
+@test length(methods(method_c1)) <= 3 # because of '...' in candidate printing
 test_have_color(buf,
                 "\e[0m\nClosest candidates are:\n  method_c1(\e[1m\e[31m::Float64\e[0m, \e[1m\e[31m::AbstractString...\e[0m)$cfile$c1line\e[0m",
                 no_color)
@@ -60,7 +59,7 @@ color = "\e[0m\nClosest candidates are:\n  method_c2(\e[1m\e[31m::Int32\e[0m, ::
 no_color = no_color = "\nClosest candidates are:\n  method_c2(!Matched::Int32, ::Float64, ::Any...)$cfile$(c2line+2)\n  method_c2(!Matched::Int32, ::Any...)$cfile$(c2line+1)\n  method_c2(::T<:Real, ::T<:Real, !Matched::T<:Real) where T<:Real$cfile$(c2line+5)\n  ..."
 test_have_color(buf, color, no_color)
 
-c3line = @__LINE__ + 1
+c3line = @__LINE__() + 1
 method_c3(x::Float64, y::Float64) = true
 Base.show_method_candidates(buf, Base.MethodError(method_c3,(1.,)))
 color = "\e[0m\nClosest candidates are:\n  method_c3(::Float64, \e[1m\e[31m::Float64\e[0m)$cfile$c3line\e[0m"
@@ -76,7 +75,7 @@ test_have_color(buf,
     "\e[0m\nClosest candidates are:\n  method_c4(::AbstractString)$cfile$(c4line+2)\n  method_c4()$cfile$(c4line+1)\e[0m",
     "\nClosest candidates are:\n  method_c4(::AbstractString)$cfile$(c4line+2)\n  method_c4()$cfile$(c4line+1)")
 
-c5line = @__LINE__ + 1
+c5line = @__LINE__() + 1
 method_c5(::Type{Float64}) = true
 Base.show_method_candidates(buf, MethodError(method_c5,(Float64,)))
 test_have_color(buf, "\e[0m\nClosest candidates are:\n  method_c5(::Type{Float64})$cfile$c5line\e[0m",
@@ -93,21 +92,21 @@ for f in [getindex, setindex!]
     test_have_color(buf, "", "")
 end
 
-PR16155line = @__LINE__ + 2
+PR16155line = @__LINE__() + 2
 mutable struct PR16155
     a::Int64
     b
 end
-PR16155line2 = @__LINE__ + 1
+PR16155line2 = @__LINE__() + 1
 (::Type{T}){T<:PR16155}(arg::Any) = "replace call-to-convert method from sysimg"
 
 Base.show_method_candidates(buf, MethodError(PR16155,(1.0, 2.0, Int64(3))))
-test_have_color(buf, "\e[0m\nClosest candidates are:\n  $(curmod_prefix)PR16155(::Any, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(\e[1m\e[31m::Int64\e[0m, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any) where T<:$(curmod_prefix)PR16155$cfile$PR16155line2\n  ...\e[0m",
-                     "\nClosest candidates are:\n  $(curmod_prefix)PR16155(::Any, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(!Matched::Int64, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any) where T<:$(curmod_prefix)PR16155$cfile$PR16155line2\n  ...")
+test_have_color(buf, "\e[0m\nClosest candidates are:\n  $(curmod_prefix)PR16155(::Any, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(\e[1m\e[31m::Int64\e[0m, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any) where T<:$(curmod_prefix)PR16155$cfile$PR16155line2\e[0m",
+                     "\nClosest candidates are:\n  $(curmod_prefix)PR16155(::Any, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(!Matched::Int64, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any) where T<:$(curmod_prefix)PR16155$cfile$PR16155line2")
 
 Base.show_method_candidates(buf, MethodError(PR16155,(Int64(3), 2.0, Int64(3))))
-test_have_color(buf, "\e[0m\nClosest candidates are:\n  $(curmod_prefix)PR16155(::Int64, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any) where T<:$(curmod_prefix)PR16155$cfile$PR16155line2\n  ...\e[0m",
-                     "\nClosest candidates are:\n  $(curmod_prefix)PR16155(::Int64, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any) where T<:$(curmod_prefix)PR16155$cfile$PR16155line2\n  ...")
+test_have_color(buf, "\e[0m\nClosest candidates are:\n  $(curmod_prefix)PR16155(::Int64, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any) where T<:$(curmod_prefix)PR16155$cfile$PR16155line2\e[0m",
+                     "\nClosest candidates are:\n  $(curmod_prefix)PR16155(::Int64, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any) where T<:$(curmod_prefix)PR16155$cfile$PR16155line2")
 
 c6line = @__LINE__
 method_c6(; x=1) = x
@@ -147,12 +146,12 @@ else
     @test contains(error_out3, "method_c6_in_module(::Any; y)$cfile$(c6mline + 3) got unsupported keyword argument \"x\"")
 end
 
-c7line = @__LINE__ + 1
+c7line = @__LINE__() + 1
 method_c7(a, b; kargs...) = a
 Base.show_method_candidates(buf, MethodError(method_c7, (1, 1)), [(:x, 1), (:y, 2)])
 test_have_color(buf, "\e[0m\nClosest candidates are:\n  method_c7(::Any, ::Any; kargs...)$cfile$c7line\e[0m",
                      "\nClosest candidates are:\n  method_c7(::Any, ::Any; kargs...)$cfile$c7line")
-c8line = @__LINE__ + 1
+c8line = @__LINE__() + 1
 method_c8(a, b; y=1, w=1) = a
 Base.show_method_candidates(buf, MethodError(method_c8, (1, 1)), [(:x, 1), (:y, 2), (:z, 1), (:w, 1)])
 test_have_color(buf, "\e[0m\nClosest candidates are:\n  method_c8(::Any, ::Any; y, w)$cfile$c8line\e[1m\e[31m got unsupported keyword arguments \"x\", \"z\"\e[0m\e[0m",
@@ -252,12 +251,6 @@ let
     @test contains(err_str, "column vector")
 end
 
-abstract type T11007 end
-let
-    err_str = @except_str T11007() MethodError
-    @test contains(err_str, "no method matching $(curmod_prefix)T11007()")
-end
-
 struct TypeWithIntParam{T <: Integer} end
 let undefvar
     err_str = @except_strbt sqrt(-1) DomainError
@@ -351,7 +344,7 @@ end
 @test stringmime("text/plain", FunctionLike()) == "(::FunctionLike) (generic function with 0 methods)"
 @test ismatch(r"^@doc \(macro with \d+ method[s]?\)$", stringmime("text/plain", getfield(Base, Symbol("@doc"))))
 
-method_defs_lineno = @__LINE__+1
+method_defs_lineno = @__LINE__() + 1
 Base.Symbol() = throw(ErrorException("1"))
 (::Symbol)() = throw(ErrorException("2"))
 EightBitType() = throw(ErrorException("3"))
@@ -368,15 +361,24 @@ let err_str,
     sp = Base.source_path()
     sn = basename(sp)
 
-    @test sprint(show, which(Symbol, Tuple{})) == "Symbol() in $curmod_str at $sp:$(method_defs_lineno + 0)"
-    @test sprint(show, which(:a, Tuple{})) == "(::Symbol)() in $curmod_str at $sp:$(method_defs_lineno + 1)"
-    @test sprint(show, which(EightBitType, Tuple{})) == "$(curmod_prefix)EightBitType() in $curmod_str at $sp:$(method_defs_lineno + 2)"
-    @test sprint(show, which(reinterpret(EightBitType, 0x54), Tuple{})) == "(::$(curmod_prefix)EightBitType)() in $curmod_str at $sp:$(method_defs_lineno + 3)"
-    @test sprint(show, which(EightBitTypeT, Tuple{})) == "(::Type{$(curmod_prefix)EightBitTypeT})() in $curmod_str at $sp:$(method_defs_lineno + 4)"
-    @test sprint(show, which(EightBitTypeT{Int32}, Tuple{})) == "(::Type{$(curmod_prefix)EightBitTypeT{T}})() where T in $curmod_str at $sp:$(method_defs_lineno + 5)"
-    @test sprint(show, which(reinterpret(EightBitTypeT{Int32}, 0x54), Tuple{})) == "(::$(curmod_prefix)EightBitTypeT)() in $curmod_str at $sp:$(method_defs_lineno + 6)"
-    @test startswith(sprint(show, which(getfield(Base, Symbol("@doc")), Tuple{Vararg{Any}})), "@doc(x...) in Core at boot.jl:")
-    @test startswith(sprint(show, which(FunctionLike(), Tuple{})), "(::$(curmod_prefix)FunctionLike)() in $curmod_str at $sp:$(method_defs_lineno + 7)")
+    @test sprint(show, which(Symbol, Tuple{})) ==
+        "Symbol() in $curmod_str at $sp:$(method_defs_lineno + 0)"
+    @test sprint(show, which(:a, Tuple{})) ==
+        "(::Symbol)() in $curmod_str at $sp:$(method_defs_lineno + 1)"
+    @test sprint(show, which(EightBitType, Tuple{})) ==
+        "$(curmod_prefix)EightBitType() in $curmod_str at $sp:$(method_defs_lineno + 2)"
+    @test sprint(show, which(reinterpret(EightBitType, 0x54), Tuple{})) ==
+        "(::$(curmod_prefix)EightBitType)() in $curmod_str at $sp:$(method_defs_lineno + 3)"
+    @test sprint(show, which(EightBitTypeT, Tuple{})) ==
+        "(::Type{$(curmod_prefix)EightBitTypeT})() in $curmod_str at $sp:$(method_defs_lineno + 4)"
+    @test sprint(show, which(EightBitTypeT{Int32}, Tuple{})) ==
+        "(::Type{$(curmod_prefix)EightBitTypeT{T}})() where T in $curmod_str at $sp:$(method_defs_lineno + 5)"
+    @test sprint(show, which(reinterpret(EightBitTypeT{Int32}, 0x54), Tuple{})) ==
+        "(::$(curmod_prefix)EightBitTypeT)() in $curmod_str at $sp:$(method_defs_lineno + 6)"
+    @test startswith(sprint(show, which(getfield(Base, Symbol("@doc")), Tuple{LineNumberNode, Vararg{Any}})),
+                     "@doc(__source__::LineNumberNode, x...) in Core at boot.jl:")
+    @test startswith(sprint(show, which(FunctionLike(), Tuple{})),
+                     "(::$(curmod_prefix)FunctionLike)() in $curmod_str at $sp:$(method_defs_lineno + 7)")
     @test stringmime("text/plain", FunctionLike()) == "(::FunctionLike) (generic function with 1 method)"
     @test stringmime("text/plain", Core.arraysize) == "arraysize (built-in function)"
 
@@ -498,4 +500,72 @@ foo_9965(x::Int) = 2x
     io = IOBuffer()
     Base.show_method_candidates(io, ex, [(:w,true)])
     @test contains(String(take!(io)), "got unsupported keyword argument \"w\"")
+end
+
+# Issue #20556
+module EnclosingModule
+    abstract type AbstractTypeNoConstructors end
+end
+let
+    method_error = MethodError(EnclosingModule.AbstractTypeNoConstructors, ())
+
+    # Test that it shows a special message when no constructors have been defined by the user.
+    @test sprint(showerror, method_error) ==
+        "MethodError: no constructors have been defined for $(EnclosingModule.AbstractTypeNoConstructors)"
+
+    # Does it go back to previous behaviour when there *is* at least
+    # one constructor defined?
+    EnclosingModule.AbstractTypeNoConstructors(x, y) = x + y
+    @test startswith(sprint(showerror, method_error),
+        "MethodError: no method matching $(EnclosingModule.AbstractTypeNoConstructors)()")
+
+    # Test that the 'default' sysimg.jl method is not displayed.
+    @test !contains(sprint(showerror, method_error), "where T at sysimg.jl")
+
+    # Test that tab-completion will not show the 'default' sysimg.jl method.
+    for method_string in Base.REPLCompletions.complete_methods(:(EnclosingModule.AbstractTypeNoConstructors()))
+        @test !startswith(method_string, "(::Type{T})(arg) where T in Base at sysimg.jl")
+    end
+end
+
+@testset "show for manually thrown MethodError" begin
+    global f21006
+
+    f21006() = nothing
+    # Normal method error should not warn about world age.
+    ex1 = try
+        f21006(())
+    catch e
+        e
+    end::MethodError
+    str = sprint(Base.showerror, ex1)
+    @test startswith(str, "MethodError: no method matching f21006(::Tuple{})")
+    @test !contains(str, "The applicable method may be too new")
+
+    # If newer applicable methods are available, world age should be mentioned.
+    f21006(x) = x
+    @test f21006(()) === ()
+    str = sprint(Base.showerror, ex1)
+    @test startswith(str, "MethodError: no method matching f21006(::Tuple{})")
+    @test contains(str, "The applicable method may be too new: running in world age $(ex1.world)")
+
+    # This method error should be thrown in a world new enough for `f21006(())`.
+    # Also makes sure it's printed correctly.
+    ex2 = try
+        f21006((), ())
+    catch e
+        e
+    end::MethodError
+    str = sprint(Base.showerror, ex2)
+    @test startswith(str, "MethodError: no method matching f21006(::Tuple{}, ::Tuple{})")
+    @test !contains(str, "The applicable method may be too new")
+
+    # If the method is available in the exception world or if the exception world is invalid,
+    # don't warn about world age
+    for ex3 in (MethodError(ex1.f, ex1.args, ex2.world),
+                MethodError(ex1.f, ex1.args, typemax(UInt)))
+        str = sprint(Base.showerror, ex3)
+        @test startswith(str, "MethodError: no method matching f21006(::Tuple{})")
+        @test !contains(str, "The applicable method may be too new")
+    end
 end

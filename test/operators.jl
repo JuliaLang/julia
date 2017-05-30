@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 @test ifelse(true, 1, 2) == 1
 @test ifelse(false, 1, 2) == 2
@@ -96,4 +96,19 @@ end
     @test B == [true false false]
     B = 3 .> [1 -1 5] .> 0
     @test B == [true false false]
+end
+
+struct TypeWrapper
+    t::Type
+end
+Base.:(<)(x::TypeWrapper, y::TypeWrapper) = (x.t <: y.t) & (x.t != y.t)
+@testset "poset" begin
+    #   Real
+    #  /    \
+    # Int  Float64
+    #  \    /
+    #  Union{}
+    @test TypeWrapper(Int) <= TypeWrapper(Int)
+    @test TypeWrapper(Int) <= TypeWrapper(Real)
+    @test !(TypeWrapper(Int) <= TypeWrapper(Float64))
 end

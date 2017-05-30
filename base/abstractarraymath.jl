@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
  ## Basic functions ##
 
@@ -12,7 +12,9 @@ all(::typeof(isinteger), ::AbstractArray{<:Integer}) = true
 """
     vec(a::AbstractArray) -> Vector
 
-Reshape array `a` as a one-dimensional column vector.
+Reshape the array `a` as a one-dimensional column vector. The resulting array
+shares the same underlying data as `a`, so modifying one will also modify the
+other.
 
 ```jldoctest
 julia> a = [1 2 3; 4 5 6]
@@ -29,6 +31,8 @@ julia> vec(a)
  3
  6
 ```
+
+See also [`reshape`](@ref).
 """
 vec(a::AbstractArray) = reshape(a,_length(a))
 vec(a::AbstractVector) = a
@@ -116,11 +120,6 @@ function slicedim(A::AbstractArray, d::Integer, i)
     A[setindex(indices(A), i, d)...]
 end
 
-function flipdim(A::AbstractVector, d::Integer)
-    d == 1 || throw(ArgumentError("dimension to flip must be 1"))
-    reverse(A)
-end
-
 """
     flipdim(A, d::Integer)
 
@@ -143,6 +142,8 @@ function flipdim(A::AbstractArray, d::Integer)
     1 ≤ d ≤ nd || throw(ArgumentError("dimension $d is not 1 ≤ $d ≤ $nd"))
     if isempty(A)
         return copy(A)
+    elseif nd == 1
+        return reverse(A)
     end
     inds = indices(A)
     B = similar(A)
@@ -206,7 +207,7 @@ function circshift(a::AbstractArray, shiftamt)
 end
 
 # Uses K-B-N summation
-function cumsum_kbn{T<:AbstractFloat}(v::AbstractVector{T})
+function cumsum_kbn(v::AbstractVector{T}) where T<:AbstractFloat
     r = similar(v)
     if isempty(v); return r; end
 
@@ -229,7 +230,7 @@ function cumsum_kbn{T<:AbstractFloat}(v::AbstractVector{T})
 end
 
 # Uses K-B-N summation
-# TODO: Needs a separate LinearSlow method, this is only fast for LinearIndexing
+# TODO: Needs a separate IndexCartesian method, this is only fast for IndexLinear
 
 """
     cumsum_kbn(A, [dim::Integer=1])
@@ -237,7 +238,7 @@ end
 Cumulative sum along a dimension, using the Kahan-Babuska-Neumaier compensated summation
 algorithm for additional accuracy. The dimension defaults to 1.
 """
-function cumsum_kbn{T<:AbstractFloat}(A::AbstractArray{T}, axis::Integer=1)
+function cumsum_kbn(A::AbstractArray{T}, axis::Integer=1) where T<:AbstractFloat
     dimsA = size(A)
     ndimsA = ndims(A)
     axis_size = dimsA[axis]
@@ -360,40 +361,70 @@ julia> repeat([1 2; 3 4], inner=(2, 1), outer=(1, 3))
 ```
 """
 function repeat(A::AbstractArray;
-                inner=ntuple(x->1, ndims(A)),
-                outer=ntuple(x->1, ndims(A)))
-    ndims_in = ndims(A)
-    length_inner = length(inner)
-    length_outer = length(outer)
+                inner=ntuple(n->1, Val{ndims(A)}),
+                outer=ntuple(n->1, Val{ndims(A)}))
+    return _repeat(A, rep_kw2tup(inner), rep_kw2tup(outer))
+end
 
-    length_inner >= ndims_in || throw(ArgumentError("number of inner repetitions ($(length(inner))) cannot be less than number of dimensions of input ($(ndims(A)))"))
-    length_outer >= ndims_in || throw(ArgumentError("number of outer repetitions ($(length(outer))) cannot be less than number of dimensions of input ($(ndims(A)))"))
+rep_kw2tup(n::Integer) = (n,)
+rep_kw2tup(v::AbstractArray{<:Integer}) = (v...)
+rep_kw2tup(t::Tuple) = t
 
-    ndims_out = max(ndims_in, length_inner, length_outer)
+rep_shapes(A, i, o) = _rshps((), (), size(A), i, o)
 
-    inner = vcat(collect(inner), ones(Int,ndims_out-length_inner))
-    outer = vcat(collect(outer), ones(Int,ndims_out-length_outer))
+_rshps(shp, shp_i, ::Tuple{}, ::Tuple{}, ::Tuple{}) = (shp, shp_i)
+@inline _rshps(shp, shp_i, ::Tuple{}, ::Tuple{}, o) =
+    _rshps((shp..., o[1]), (shp_i..., 1), (), (), tail(o))
+@inline _rshps(shp, shp_i, ::Tuple{}, i, ::Tuple{}) = (n = i[1];
+    _rshps((shp..., n), (shp_i..., n), (), tail(i), ()))
+@inline _rshps(shp, shp_i, ::Tuple{}, i, o) = (n = i[1];
+    _rshps((shp..., n * o[1]), (shp_i..., n), (), tail(i), tail(o)))
+@inline _rshps(shp, shp_i, sz, i, o) = (n = sz[1] * i[1];
+    _rshps((shp..., n * o[1]), (shp_i..., n), tail(sz), tail(i), tail(o)))
+_rshps(shp, shp_i, sz, ::Tuple{}, ::Tuple{}) =
+    (n = length(shp); N = n + length(sz); _reperr("inner", n, N))
+_rshps(shp, shp_i, sz, ::Tuple{}, o) =
+    (n = length(shp); N = n + length(sz); _reperr("inner", n, N))
+_rshps(shp, shp_i, sz, i, ::Tuple{}) =
+    (n = length(shp); N = n + length(sz); _reperr("outer", n, N))
+_reperr(s, n, N) = throw(ArgumentError("number of " * s * " repetitions " *
+    "($n) cannot be less than number of dimensions of input ($N)"))
 
-    size_in = size(A)
-    size_out = ntuple(i->inner[i]*size(A,i)*outer[i],ndims_out)::Dims
-    inner_size_out = ntuple(i->inner[i]*size(A,i),ndims_out)::Dims
+@propagate_inbounds function _repeat(A::AbstractArray, inner, outer)
+    shape, inner_shape = rep_shapes(A, inner, outer)
 
-    indices_in = Vector{Int}(ndims_in)
-    indices_out = Vector{Int}(ndims_out)
+    R = similar(A, shape)
+    if any(iszero, shape)
+        return R
+    end
 
-    length_out = prod(size_out)
-    R = similar(A, size_out)
-
-    for index_out in 1:length_out
-        ind2sub!(indices_out, size_out, index_out)
-        for t in 1:ndims_in
-            # "Project" outer repetitions into inner repetitions
-            indices_in[t] = mod1(indices_out[t], inner_size_out[t])
-            # Find inner repetitions using flooring division
-            indices_in[t] = fld1(indices_in[t], inner[t])
+    # fill the first inner block
+    if all(x -> x == 1, inner)
+        R[indices(A)...] = A
+    else
+        inner_indices = [1:n for n in inner]
+        for c in CartesianRange(indices(A))
+            for i in 1:ndims(A)
+                n = inner[i]
+                inner_indices[i] = (1:n) + ((c[i] - 1) * n)
+            end
+            R[inner_indices...] = A[c]
         end
-        index_in = sub2ind(size_in, indices_in...)
-        R[index_out] = A[index_in]
+    end
+
+    # fill the outer blocks along each dimension
+    if all(x -> x == 1, outer)
+        return R
+    end
+    src_indices  = [1:n for n in inner_shape]
+    dest_indices = copy(src_indices)
+    for i in 1:length(outer)
+        B = view(R, src_indices...)
+        for j in 2:outer[i]
+            dest_indices[i] += inner_shape[i]
+            R[dest_indices...] = B
+        end
+        src_indices[i] = dest_indices[i] = 1:shape[i]
     end
 
     return R

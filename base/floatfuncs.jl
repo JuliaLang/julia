@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## floating-point functions ##
 
@@ -19,7 +19,7 @@ signbit(x::Float16) = signbit(bitcast(Int16, x))
 maxintfloat(::Type{Float64}) = 9007199254740992.
 maxintfloat(::Type{Float32}) = Float32(16777216.)
 maxintfloat(::Type{Float16}) = Float16(2048f0)
-maxintfloat{T<:AbstractFloat}(x::T)  = maxintfloat(T)
+maxintfloat(x::T) where {T<:AbstractFloat} = maxintfloat(T)
 maxintfloat() = maxintfloat(Float64)
 
 isinteger(x::AbstractFloat) = (x - trunc(x) == 0)
@@ -78,7 +78,7 @@ julia> round(pi, 3, 2)
 
 !!! note
     Rounding to specified digits in bases other than 2 can be inexact when
-    operating on binary floating point numbers. For example, the `Float64`
+    operating on binary floating point numbers. For example, the [`Float64`](@ref)
     value represented by `1.15` is actually *less* than 1.15, yet will be
     rounded to 1.2.
 
@@ -110,7 +110,7 @@ function round(x::AbstractFloat, ::RoundingMode{:NearestTiesUp})
     y = floor(x)
     ifelse(x==y,y,copysign(floor(2*x-y),x))
 end
-round{T<:Integer}(::Type{T}, x::AbstractFloat, r::RoundingMode) = trunc(T,round(x,r))
+round(::Type{T}, x::AbstractFloat, r::RoundingMode) where {T<:Integer} = trunc(T,round(x,r))
 
 # adapted from Matlab File Exchange roundsd: http://www.mathworks.com/matlabcentral/fileexchange/26212
 # for round, og is the power of 10 relative to the decimal point
@@ -208,9 +208,9 @@ const ≈ = isapprox
 ≉(args...; kws...) = !≈(args...; kws...)
 
 # default tolerance arguments
-rtoldefault{T<:AbstractFloat}(::Type{T}) = sqrt(eps(T))
+rtoldefault(::Type{T}) where {T<:AbstractFloat} = sqrt(eps(T))
 rtoldefault(::Type{<:Real}) = 0
-rtoldefault{T<:Number,S<:Number}(x::Union{T,Type{T}}, y::Union{S,Type{S}}) = max(rtoldefault(real(T)),rtoldefault(real(S)))
+rtoldefault(x::Union{T,Type{T}}, y::Union{S,Type{S}}) where {T<:Number,S<:Number} = max(rtoldefault(real(T)),rtoldefault(real(S)))
 
 # fused multiply-add
 fma_libm(x::Float32, y::Float32, z::Float32) =

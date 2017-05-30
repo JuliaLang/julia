@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 baremodule Base
 
@@ -21,10 +21,9 @@ include("coreio.jl")
 
 eval(x) = Core.eval(Base, x)
 eval(m, x) = Core.eval(m, x)
-(::Type{T}){T}(arg) = convert(T, arg)::T
-(::Type{VecElement{T}}){T}(arg) = VecElement{T}(convert(T, arg))
-convert{T<:VecElement}(::Type{T}, arg) = T(arg)
-convert{T<:VecElement}(::Type{T}, arg::T) = arg
+VecElement{T}(arg) where {T} = VecElement{T}(convert(T, arg))
+convert(::Type{T}, arg)  where {T<:VecElement} = T(arg)
+convert(::Type{T}, arg::T) where {T<:VecElement} = arg
 
 # init core docsystem
 import Core: @doc, @__doc__, @doc_str
@@ -73,6 +72,10 @@ include("refpointer.jl")
 include("checked.jl")
 importall .Checked
 
+# buggy handling of ispure in type-inference means this should be
+# after re-defining the basic operations that they might try to call
+(::Type{T})(arg) where {T} = convert(T, arg)::T # Hidden from the REPL.
+
 # vararg Symbol constructor
 Symbol(x...) = Symbol(string(x...))
 
@@ -90,16 +93,16 @@ include("abstractarray.jl")
 include("subarray.jl")
 
 # Array convenience converting constructors
-(::Type{Array{T}}){T}(m::Integer) = Array{T,1}(Int(m))
-(::Type{Array{T}}){T}(m::Integer, n::Integer) = Array{T,2}(Int(m), Int(n))
-(::Type{Array{T}}){T}(m::Integer, n::Integer, o::Integer) = Array{T,3}(Int(m), Int(n), Int(o))
-(::Type{Array{T}}){T}(d::Integer...) = Array{T}(convert(Tuple{Vararg{Int}}, d))
+Array{T}(m::Integer) where {T} = Array{T,1}(Int(m))
+Array{T}(m::Integer, n::Integer) where {T} = Array{T,2}(Int(m), Int(n))
+Array{T}(m::Integer, n::Integer, o::Integer) where {T} = Array{T,3}(Int(m), Int(n), Int(o))
+Array{T}(d::Integer...) where {T} = Array{T}(convert(Tuple{Vararg{Int}}, d))
 
-(::Type{Vector})() = Array{Any,1}(0)
-(::Type{Vector{T}}){T}(m::Integer) = Array{T,1}(Int(m))
-(::Type{Vector})(m::Integer) = Array{Any,1}(Int(m))
-(::Type{Matrix{T}}){T}(m::Integer, n::Integer) = Matrix{T}(Int(m), Int(n))
-(::Type{Matrix})(m::Integer, n::Integer) = Matrix{Any}(Int(m), Int(n))
+Vector() = Array{Any,1}(0)
+Vector{T}(m::Integer) where {T} = Array{T,1}(Int(m))
+Vector(m::Integer) = Array{Any,1}(Int(m))
+Matrix{T}(m::Integer, n::Integer) where {T} = Matrix{T}(Int(m), Int(n))
+Matrix(m::Integer, n::Integer) = Matrix{Any}(Int(m), Int(n))
 
 # numeric operations
 include("hashing.jl")
@@ -142,9 +145,15 @@ using .Iterators: Flatten, product  # for generators
 
 # Definition of StridedArray
 StridedReshapedArray{T,N,A<:DenseArray} = ReshapedArray{T,N,A}
-StridedArray{T,N,A<:Union{DenseArray,StridedReshapedArray},I<:Tuple{Vararg{Union{RangeIndex, AbstractCartesianIndex}}}} = Union{DenseArray{T,N}, SubArray{T,N,A,I}, StridedReshapedArray{T,N}}
-StridedVector{T,A<:Union{DenseArray,StridedReshapedArray},I<:Tuple{Vararg{Union{RangeIndex, AbstractCartesianIndex}}}} = Union{DenseArray{T,1}, SubArray{T,1,A,I}, StridedReshapedArray{T,1}}
-StridedMatrix{T,A<:Union{DenseArray,StridedReshapedArray},I<:Tuple{Vararg{Union{RangeIndex, AbstractCartesianIndex}}}} = Union{DenseArray{T,2}, SubArray{T,2,A,I}, StridedReshapedArray{T,2}}
+StridedArray{T,N,A<:Union{DenseArray,StridedReshapedArray},
+    I<:Tuple{Vararg{Union{RangeIndex, AbstractCartesianIndex}}}} =
+    Union{DenseArray{T,N}, SubArray{T,N,A,I}, StridedReshapedArray{T,N}}
+StridedVector{T,A<:Union{DenseArray,StridedReshapedArray},
+    I<:Tuple{Vararg{Union{RangeIndex, AbstractCartesianIndex}}}} =
+    Union{DenseArray{T,1}, SubArray{T,1,A,I}, StridedReshapedArray{T,1}}
+StridedMatrix{T,A<:Union{DenseArray,StridedReshapedArray},
+    I<:Tuple{Vararg{Union{RangeIndex, AbstractCartesianIndex}}}} =
+    Union{DenseArray{T,2}, SubArray{T,2,A,I}, StridedReshapedArray{T,2}}
 StridedVecOrMat{T} = Union{StridedVector{T}, StridedMatrix{T}}
 
 # For OS specific stuff
@@ -185,6 +194,25 @@ include("nullable.jl")
 
 include("broadcast.jl")
 importall .Broadcast
+
+# define the real ntuple functions
+@generated function ntuple(f::F, ::Type{Val{N}}) where {F,N}
+    Core.typeassert(N, Int)
+    (N >= 0) || return :(throw($(ArgumentError(string("tuple length should be ≥0, got ", N)))))
+    return quote
+        $(Expr(:meta, :inline))
+        @nexprs $N i -> t_i = f(i)
+        @ncall $N tuple t
+    end
+end
+@generated function fill_to_length(t::Tuple, val, ::Type{Val{N}}) where {N}
+    M = length(t.parameters)
+    M > N  && return :(throw($(ArgumentError("input tuple of length $M, requested $N"))))
+    return quote
+        $(Expr(:meta, :inline))
+        (t..., $(Any[ :val for i = (M + 1):N ]...))
+    end
+end
 
 # base64 conversions (need broadcast)
 include("base64.jl")
@@ -249,6 +277,10 @@ importall .Order
 include("sort.jl")
 importall .Sort
 
+# Fast math
+include("fastmath.jl")
+importall .FastMath
+
 function deepcopy_internal end
 
 # BigInts and BigFloats
@@ -264,6 +296,9 @@ include("combinatorics.jl")
 
 # more hashing definitions
 include("hashing2.jl")
+
+# irrational mathematical constants
+include("irrationals.jl")
 
 # random number generation
 include("dSFMT.jl")
@@ -325,18 +360,11 @@ const × = cross
 # statistics
 include("statistics.jl")
 
-# irrational mathematical constants
-include("irrationals.jl")
-
 # signal processing
 include("dft.jl")
 importall .DFT
 include("dsp.jl")
 importall .DSP
-
-# Fast math
-include("fastmath.jl")
-importall .FastMath
 
 # libgit2 support
 include("libgit2/libgit2.jl")
@@ -358,8 +386,8 @@ importall .SparseArrays
 
 include("asyncmap.jl")
 
-include("parallel/Parallel.jl")
-importall .Parallel
+include("distributed/Distributed.jl")
+importall .Distributed
 include("sharedarray.jl")
 
 # code loading
@@ -387,7 +415,7 @@ function __init__()
     Multimedia.reinit_displays() # since Multimedia.displays uses STDOUT as fallback
     early_init()
     init_load_path()
-    Parallel.init_parallel()
+    Distributed.init_parallel()
     init_threadcall()
 end
 

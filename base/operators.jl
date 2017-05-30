@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## types ##
 
@@ -86,13 +86,17 @@ false
 """
 isequal(x, y) = x == y
 
-isequal(x::AbstractFloat, y::AbstractFloat) = (isnan(x) & isnan(y)) | (signbit(x) == signbit(y)) & (x == y)
-isequal(x::Real,          y::AbstractFloat) = (isnan(x) & isnan(y)) | (signbit(x) == signbit(y)) & (x == y)
-isequal(x::AbstractFloat, y::Real         ) = (isnan(x) & isnan(y)) | (signbit(x) == signbit(y)) & (x == y)
+signequal(x, y) = signbit(x)::Bool == signbit(y)::Bool
+signless(x, y) = signbit(x)::Bool & !signbit(y)::Bool
 
-isless(x::AbstractFloat, y::AbstractFloat) = (!isnan(x) & isnan(y)) | (signbit(x) & !signbit(y)) | (x < y)
-isless(x::Real,          y::AbstractFloat) = (!isnan(x) & isnan(y)) | (signbit(x) & !signbit(y)) | (x < y)
-isless(x::AbstractFloat, y::Real         ) = (!isnan(x) & isnan(y)) | (signbit(x) & !signbit(y)) | (x < y)
+isequal(x::AbstractFloat, y::AbstractFloat) = (isnan(x) & isnan(y)) | signequal(x, y) & (x == y)
+isequal(x::Real,          y::AbstractFloat) = (isnan(x) & isnan(y)) | signequal(x, y) & (x == y)
+isequal(x::AbstractFloat, y::Real         ) = (isnan(x) & isnan(y)) | signequal(x, y) & (x == y)
+
+isless(x::AbstractFloat, y::AbstractFloat) = (!isnan(x) & isnan(y)) | signless(x, y) | (x < y)
+isless(x::Real,          y::AbstractFloat) = (!isnan(x) & isnan(y)) | signless(x, y) | (x < y)
+isless(x::AbstractFloat, y::Real         ) = (!isnan(x) & isnan(y)) | signless(x, y) | (x < y)
+
 
 function ==(T::Type, S::Type)
     @_pure_meta
@@ -122,7 +126,7 @@ julia> "foo" ≠ "foo"
 false
 ```
 """
-!=(x, y) = !(x == y)
+!=(x, y) = !(x == y)::Bool
 const ≠ = !=
 
 """
@@ -231,7 +235,7 @@ julia> 5 <= 3
 false
 ```
 """
-<=(x, y) = !(y < x)
+<=(x, y) = (x < y) | (x == y)
 const ≤ = <=
 
 """
@@ -528,8 +532,8 @@ Unsigned right bit shift operator, `x >>> n`. For `n >= 0`, the result is `x`
 shifted right by `n` bits, where `n >= 0`, filling with `0`s. For `n < 0`, this
 is equivalent to `x << -n`.
 
-For `Unsigned` integer types, this is equivalent to [`>>`](@ref). For
-`Signed` integer types, this is equivalent to `signed(unsigned(x) >> n)`.
+For [`Unsigned`](@ref) integer types, this is equivalent to [`>>`](@ref). For
+[`Signed`](@ref) integer types, this is equivalent to `signed(unsigned(x) >> n)`.
 
 ```jldoctest
 julia> Int8(-14) >>> 2
@@ -541,7 +545,8 @@ julia> bits(Int8(-14))
 julia> bits(Int8(60))
 "00111100"
 ```
-`BigInt`s are treated as if having infinite size, so no filling is required and this
+
+[`BigInt`](@ref)s are treated as if having infinite size, so no filling is required and this
 is equivalent to [`>>`](@ref).
 
 See also [`>>`](@ref), [`<<`](@ref).
@@ -637,7 +642,7 @@ julia> mod1(4, 3)
 """
 mod1{T<:Real}(x::T, y::T) = (m = mod(x, y); ifelse(m == 0, y, m))
 # efficient version for integers
-mod1{T<:Integer}(x::T, y::T) = mod(x + y - T(1), y) + T(1)
+mod1{T<:Integer}(x::T, y::T) = (@_inline_meta; mod(x + y - T(1), y) + T(1))
 
 
 """
@@ -660,9 +665,9 @@ julia> x == (fld1(x, y) - 1) * y + mod1(x, y)
 true
 ```
 """
-fld1{T<:Real}(x::T, y::T) = (m=mod(x,y); fld(x-m,y))
+fld1(x::T, y::T) where {T<:Real} = (m=mod(x,y); fld(x-m,y))
 # efficient version for integers
-fld1{T<:Integer}(x::T, y::T) = fld(x+y-T(1),y)
+fld1(x::T, y::T) where {T<:Integer} = fld(x+y-T(1),y)
 
 """
     fldmod1(x, y)
@@ -671,9 +676,9 @@ Return `(fld1(x,y), mod1(x,y))`.
 
 See also: [`fld1`](@ref), [`mod1`](@ref).
 """
-fldmod1{T<:Real}(x::T, y::T) = (fld1(x,y), mod1(x,y))
+fldmod1(x::T, y::T) where {T<:Real} = (fld1(x,y), mod1(x,y))
 # efficient version for integers
-fldmod1{T<:Integer}(x::T, y::T) = (fld1(x,y), mod1(x,y))
+fldmod1(x::T, y::T) where {T<:Integer} = (fld1(x,y), mod1(x,y))
 
 # transpose
 
@@ -836,7 +841,7 @@ For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ`` \\ ``Bᵀ``.
 """
 Ac_ldiv_Bt(a,b) = Ac_ldiv_B(a,transpose(b))
 
-widen{T<:Number}(x::T) = convert(widen(T), x)
+widen(x::T) where {T<:Number} = convert(widen(T), x)
 
 # function pipelining
 

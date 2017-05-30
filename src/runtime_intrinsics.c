@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 // This is in implementation of the Julia intrinsic functions against boxed types
 // excluding the native function call interface (ccall, llvmcall)
@@ -46,7 +46,7 @@ JL_DLLEXPORT jl_value_t *jl_pointerref(jl_value_t *p, jl_value_t *i, jl_value_t 
     else {
         if (!jl_is_datatype(ety))
             jl_error("pointerref: invalid pointer");
-        size_t nb = LLT_ALIGN(jl_datatype_size(ety), ((jl_datatype_t*)ety)->layout->alignment);
+        size_t nb = LLT_ALIGN(jl_datatype_size(ety), jl_datatype_align(ety));
         char *pp = (char*)jl_unbox_long(p) + (jl_unbox_long(i)-1)*nb;
         return jl_new_bits(ety, pp);
     }
@@ -67,7 +67,7 @@ JL_DLLEXPORT jl_value_t *jl_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t 
     else {
         if (!jl_is_datatype(ety))
             jl_error("pointerset: invalid pointer");
-        size_t nb = LLT_ALIGN(jl_datatype_size(ety), ((jl_datatype_t*)ety)->layout->alignment);
+        size_t nb = LLT_ALIGN(jl_datatype_size(ety), jl_datatype_align(ety));
         char *pp = (char*)jl_unbox_long(p) + (jl_unbox_long(i)-1)*nb;
         if (jl_typeof(x) != ety)
             jl_error("pointerset: type mismatch in assign");
@@ -924,31 +924,6 @@ un_fintrinsic(floor_float,floor_llvm)
 un_fintrinsic(trunc_float,trunc_llvm)
 un_fintrinsic(rint_float,rint_llvm)
 un_fintrinsic(sqrt_float,sqrt_llvm)
-
-JL_DLLEXPORT jl_value_t *jl_powi_llvm(jl_value_t *a, jl_value_t *b)
-{
-    jl_ptls_t ptls = jl_get_ptls_states();
-    jl_value_t *ty = jl_typeof(a);
-    if (!jl_is_primitivetype(ty))
-        jl_error("powi_llvm: a is not a primitive type");
-    if (!jl_is_primitivetype(jl_typeof(b)) || jl_datatype_size(jl_typeof(b)) != 4)
-        jl_error("powi_llvm: b is not a 32-bit primitive type");
-    int sz = jl_datatype_size(ty);
-    jl_value_t *newv = jl_gc_alloc(ptls, sz, ty);
-    void *pa = jl_data_ptr(a), *pr = jl_data_ptr(newv);
-    switch (sz) {
-    /* choose the right size c-type operation */
-    case 4:
-        *(float*)pr = powf(*(float*)pa, (float)jl_unbox_int32(b));
-        break;
-    case 8:
-        *(double*)pr = pow(*(double*)pa, (double)jl_unbox_int32(b));
-        break;
-    default:
-        jl_error("powi_llvm: runtime floating point intrinsics are not implemented for bit sizes other than 32 and 64");
-    }
-    return newv;
-}
 
 JL_DLLEXPORT jl_value_t *jl_select_value(jl_value_t *isfalse, jl_value_t *a, jl_value_t *b)
 {

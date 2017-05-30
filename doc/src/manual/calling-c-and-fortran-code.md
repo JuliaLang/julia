@@ -55,7 +55,7 @@ to [`ccall`](@ref) are as follows:
 As a complete but simple example, the following calls the `clock` function from the standard C
 library:
 
-```julia
+```julia-repl
 julia> t = ccall((:clock, "libc"), Int32, ())
 2292761
 
@@ -66,11 +66,11 @@ julia> typeof(ans)
 Int32
 ```
 
-`clock` takes no arguments and returns an `Int32`. One common gotcha is that a 1-tuple must be
+`clock` takes no arguments and returns an [`Int32`](@ref). One common gotcha is that a 1-tuple must be
 written with a trailing comma. For example, to call the `getenv` function to get a pointer to
 the value of an environment variable, one makes a call like this:
 
-```julia
+```julia-repl
 julia> path = ccall((:getenv, "libc"), Cstring, (Cstring,), "SHELL")
 Cstring(@0x00007fff5fbffc45)
 
@@ -95,7 +95,7 @@ uses in Julia functions that set up arguments and then check for errors in whate
 C or Fortran function indicates them, propagating to the Julia caller as exceptions. This is especially
 important since C and Fortran APIs are notoriously inconsistent about how they indicate error
 conditions. For example, the `getenv` C library function is wrapped in the following Julia function,
-which is a simplified version of the actual definition from [env.jl](https://github.com/JuliaLang/julia/blob/master/base/env.jl):
+which is a simplified version of the actual definition from [`env.jl`](https://github.com/JuliaLang/julia/blob/master/base/env.jl):
 
 ```julia
 function getenv(var::AbstractString)
@@ -113,7 +113,7 @@ indicate errors in various different ways, including by returning -1, 0, 1 and o
 This wrapper throws an exception clearly indicating the problem if the caller tries to get a non-existent
 environment variable:
 
-```julia
+```julia-repl
 julia> getenv("SHELL")
 "/bin/bash"
 
@@ -149,7 +149,7 @@ throw a conversion error.
 It is possible to pass Julia functions to native C functions that accept function pointer arguments.
 For example, to match C prototypes of the form:
 
-```
+```c
 typedef returntype (*functiontype)(argumenttype,...)
 ```
 
@@ -162,7 +162,7 @@ Julia library function. Arguments to [`cfunction()`](@ref) are as follows:
 
 A classic example is the standard C library `qsort` function, declared as:
 
-```
+```c
 void qsort(void *base, size_t nmemb, size_t size,
            int(*compare)(const void *a, const void *b));
 ```
@@ -176,7 +176,7 @@ calling `qsort` and passing arguments, we need to write a comparison function th
 arbitrary type T:
 
 ```jldoctest mycompare
-julia> function mycompare{T}(a::T, b::T)
+julia> function mycompare(a::T, b::T) where T
            return convert(Cint, a < b ? -1 : a > b ? +1 : 0)::Cint
        end
 mycompare (generic function with 1 method)
@@ -192,8 +192,8 @@ julia> const mycompare_c = cfunction(mycompare, Cint, (Ref{Cdouble}, Ref{Cdouble
 ```
 
 [`cfunction()`](@ref) accepts three arguments: the Julia function (`mycompare`), the return type
-(`Cint`), and a tuple of the argument types, in this case to sort an array of `Cdouble` (`Float64`)
-elements.
+(`Cint`), and a tuple of the argument types, in this case to sort an array of `Cdouble`
+([`Float64`](@ref)) elements.
 
 The final call to `qsort` looks like this:
 
@@ -269,7 +269,7 @@ First, a review of some relevant Julia type terminology:
 | `T{A}`                        | `Vector{Int}`                               | "Type Parameter" :: A specialization of a type (typically used for dispatch or storage optimization).                                                                                                                                                                          |
 |                               |                                             | "TypeVar" :: The `T` in the type parameter declaration is referred to as a TypeVar (short for type variable).                                                                                                                                                                  |
 | `primitive type`              | `Int`, `Float64`                            | "Primitive Type" :: A type with no fields, but a size. It is stored and defined by-value.                                                                                                                                                                                           |
-| `struct`                      | `Pair{Int, Int}`                            | "Struct" :: A type with all fields defined to be constant. It is defined by-value. And may be stored with a type-tag.                                                                                                                                                       |
+| `struct`                      | `Pair{Int, Int}`                            | "Struct" :: A type with all fields defined to be constant. It is defined by-value, and may be stored with a type-tag.                                                                                                                                                       |
 |                               | `Complex128` (`isbits`)                     | "Is-Bits"   :: A `primitive type`, or a `struct` type where all fields are other `isbits` types. It is defined by-value, and is stored without a type-tag.                                                                                                                       |
 | `struct ...; end`             | `nothing`                                   | "Singleton" :: a Leaf Type or Struct with no fields.                                                                                                                                                                                                                        |
 | `(...)` or `tuple(...)`       | `(1, 2, 3)`                                 | "Tuple" :: an immutable data-structure similar to an anonymous struct type, or a constant array. Represented as either an array or a struct.                                                                                                                                |
@@ -298,7 +298,7 @@ same:
   * `Signed`
 
     Exactly corresponds to the `signed` type annotation in C (or any `INTEGER` type in Fortran).
-    Any Julia type that is not a subtype of `Signed` is assumed to be unsigned.
+    Any Julia type that is not a subtype of [`Signed`](@ref) is assumed to be unsigned.
 
 
   * `Ref{T}`
@@ -409,7 +409,7 @@ checks and is only meant to improve readability of the call.
     C functions that take an argument of the type `char**` can be called by using a `Ptr{Ptr{UInt8}}`
     type within Julia. For example, C functions of the form:
 
-    ```
+    ```c
     int main(int argc, char **argv);
     ```
 
@@ -451,17 +451,17 @@ struct B {
 b_a_2 = B.A[2];
 
 in Julia:
-type B
+struct B
     A::NTuple{3, CInt}
 end
-b_a_2 = B.A[2]
+b_a_2 = B.A[3]  # note the difference in indexing (1-based in Julia, 0-based in C)
 ```
 
 Arrays of unknown size (C99-compliant variable length structs specified by `[]` or `[0]`) are not directly supported.
 Often the best way to deal with these is to deal with the byte offsets directly.
-For example, if a c-library declared a proper string type and returned a pointer to it:
+For example, if a C library declared a proper string type and returned a pointer to it:
 
-```
+```c
 struct String {
     int strlen;
     char data[];
@@ -470,7 +470,7 @@ struct String {
 
 In Julia, we can access the parts independently to make a copy of that string:
 
-```
+```julia
 str = from_c::Ptr{Void}
 len = unsafe_load(Ptr{Cint}(str))
 unsafe_string(str + Core.sizeof(Cint), len)
@@ -489,9 +489,9 @@ However, while the type layout must be known statically to compute the `ccall` A
 the static parameters of the function are considered to be part of this static environment.
 The static parameters of the function may be used as type parameters in the `ccall` signature,
 as long as they don't affect the layout of the type.
-For example, `f{T}(x::T) = ccall(:valid, Ptr{T}, (Ptr{T},), x)`
+For example, `f(x::T) where {T} = ccall(:valid, Ptr{T}, (Ptr{T},), x)`
 is valid, since `Ptr` is always a word-size primitive type.
-But, `g{T}(x::T) = ccall(:notvalid, T, (T,), x)`
+But, `g(x::T) where {T} = ccall(:notvalid, T, (T,), x)`
 is not valid, since the type layout of `T` is not known statically.
 
 ### SIMD Values
@@ -508,7 +508,7 @@ Julia type is a homogeneous tuple of `VecElement` that naturally maps to the SIM
 
 For instance, consider this C routine that uses AVX intrinsics:
 
-```
+```c
 #include <immintrin.h>
 
 __m256 dist( __m256 a, __m256 b ) {
@@ -677,14 +677,14 @@ arguments, as noted above). The following example computes a dot product using a
 
 ```julia
 function compute_dot(DX::Vector{Float64}, DY::Vector{Float64})
-  assert(length(DX) == length(DY))
-  n = length(DX)
-  incx = incy = 1
-  product = ccall((:ddot_, "libLAPACK"),
-                  Float64,
-                  (Ptr{Int32}, Ptr{Float64}, Ptr{Int32}, Ptr{Float64}, Ptr{Int32}),
-                  &n, DX, &incx, DY, &incy)
-  return product
+    @assert length(DX) == length(DY)
+    n = length(DX)
+    incx = incy = 1
+    product = ccall((:ddot_, "libLAPACK"),
+                    Float64,
+                    (Ptr{Int32}, Ptr{Float64}, Ptr{Int32}, Ptr{Float64}, Ptr{Int32}),
+                    &n, DX, &incx, DY, &incy)
+    return product
 end
 ```
 
@@ -702,7 +702,7 @@ converted to type `T`.
 Here is a simple example of a C wrapper that returns a `Ptr` type:
 
 ```julia
-type gsl_permutation
+mutable struct gsl_permutation
 end
 
 # The corresponding C signature is
@@ -847,8 +847,8 @@ case, the expression must evaluate to a `Ptr`, which will be used as the address
 function to call. This behavior occurs when the first [`ccall`](@ref) argument contains references
 to non-constants, such as local variables, function arguments, or non-constant globals.
 
-For example, you might lookup the function via `dlsym`, then cache it in a global variable for
-that session. For example:
+For example, you might look up the function via `dlsym`, then cache it in a global
+variable for that session. For example:
 
 ```julia
 macro dlsym(func, lib)
@@ -905,7 +905,7 @@ Global variables exported by native libraries can be accessed by name using the 
 function. The arguments to [`cglobal()`](@ref) are a symbol specification identical to that used
 by [`ccall`](@ref), and a type describing the value stored in the variable:
 
-```julia
+```julia-repl
 julia> cglobal((:errno, :libc), Int32)
 Ptr{Int32} @0x00007f418d0816b8
 ```
@@ -965,7 +965,7 @@ wait(cond)
 ```
 
 The callback you pass to C should only execute a [`ccall`](@ref) to `:uv_async_send`, passing
-`cb.handle` as the argument, taking care to avoid any allocations or other interactions with the
+`cond.handle` as the argument, taking care to avoid any allocations or other interactions with the
 Julia runtime.
 
 Note that events may be coalesced, so multiple calls to `uv_async_send` may result in a single wakeup
@@ -973,8 +973,9 @@ notification to the condition.
 
 ## More About Callbacks
 
-For more details on how to pass callbacks to C libraries, see this [blog post](http://julialang.org/blog/2013/05/callback).
+For more details on how to pass callbacks to C libraries, see this [blog post](https://julialang.org/blog/2013/05/callback).
 
 ## C++
 
-For direct C++ interfacing, see the [Cxx](https://github.com/Keno/Cxx.jl) package. For tools to create C++ bindings, see the [CxxWrap](https://github.com/JuliaInterop/CxxWrap.jl) package.
+For direct C++ interfacing, see the [Cxx](https://github.com/Keno/Cxx.jl) package. For tools to create C++
+bindings, see the [CxxWrap](https://github.com/JuliaInterop/CxxWrap.jl) package.

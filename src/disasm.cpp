@@ -83,6 +83,7 @@
 #else
 #include <llvm/DebugInfo.h>
 #endif
+#include "fix_llvm_assert.h"
 
 #include "julia.h"
 #include "julia_internal.h"

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 struct SummarySize
     seen::ObjectIdDict
     frontier_x::Vector{Any}
@@ -13,9 +15,9 @@ end
 Compute the amount of memory used by all unique objects reachable from the argument.
 
 # Keyword Arguments
-* `exclude`: specifies the types of objects to exclude from the traversal.
-* `chargeall`: specifies the types of objects to always charge the size of all of their fields,
-               even if those fields would normally be excluded.
+- `exclude`: specifies the types of objects to exclude from the traversal.
+- `chargeall`: specifies the types of objects to always charge the size of all of their
+  fields, even if those fields would normally be excluded.
 """
 function summarysize(obj::ANY;
                      exclude::ANY = Union{DataType, TypeName, Method},

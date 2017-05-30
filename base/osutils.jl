@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
     is_unix([os])
@@ -30,7 +30,7 @@ is_linux(os::Symbol) = (os == :Linux)
 Predicate for testing if the OS is a derivative of BSD.
 See documentation in [Handling Operating System Variation](@ref).
 """
-is_bsd(os::Symbol) = (os == :FreeBSD || os == :OpenBSD || os == :NetBSD || os == :Darwin || os == :Apple)
+is_bsd(os::Symbol) = (os == :FreeBSD || os == :OpenBSD || os == :NetBSD || os == :DragonFly || os == :Darwin || os == :Apple)
 
 """
     is_windows([os])

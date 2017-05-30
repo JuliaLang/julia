@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Tests for /base/stacktraces.jl
 
@@ -6,7 +6,7 @@ let
     @noinline child() = stacktrace()
     @noinline parent() = child()
     @noinline grandparent() = parent()
-    line_numbers = @__LINE__ - [3, 2, 1]
+    line_numbers = @__LINE__() - [3, 2, 1]
     stack = grandparent()
 
     # Basic tests.
@@ -68,7 +68,7 @@ let ct = current_task()
             return catch_stacktrace()
         end
     end
-    line_numbers = @__LINE__ .- [15, 10, 5]
+    line_numbers = @__LINE__() .- [15, 10, 5]
 
     # Test try...catch with stacktrace
     @test try_stacktrace()[1] == StackFrame(:try_stacktrace, @__FILE__, line_numbers[2])
@@ -130,3 +130,15 @@ let st = stacktrace(empty!(backtrace()))
     @test isempty(st)
     @test isa(st, StackTrace)
 end
+
+module StackTracesTestMod
+    unfiltered_stacktrace() = stacktrace()
+    filtered_stacktrace() = StackTraces.remove_frames!(stacktrace(), StackTracesTestMod)
+end
+
+# Test that `removes_frames!` can correctly remove frames from within the module
+trace = StackTracesTestMod.unfiltered_stacktrace()
+@test contains(string(trace), "unfiltered_stacktrace")
+
+trace = StackTracesTestMod.filtered_stacktrace()
+@test !contains(string(trace), "filtered_stacktrace")

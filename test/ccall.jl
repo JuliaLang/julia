@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 import Base.copy, Base.==
 
@@ -1236,3 +1236,44 @@ for i in 1:100
     @test_spill_n 9 int32args float32args
     @test_spill_n 10 int32args float32args
 end
+
+# issue #20835
+@test_throws ErrorException eval(:(f20835(x) = ccall(:fn, Void, (Ptr{typeof(x)},), x)))
+@test_throws UndefVarError  eval(:(f20835(x) = ccall(:fn, Something_not_defined_20835, (Ptr{typeof(x)},), x)))
+
+@noinline f21104at(::Type{T}) where {T} = ccall(:fn, Void, (Nullable{T},), 0)
+@noinline f21104rt(::Type{T}) where {T} = ccall(:fn, Nullable{T}, ())
+@test code_llvm(DevNull, f21104at, (Type{Float64},)) === nothing
+@test code_llvm(DevNull, f21104rt, (Type{Float64},)) === nothing
+@test try
+          f21104at(Float64)
+          "unreachable"
+      catch ex
+          (ex::ErrorException).msg
+      end == "ccall: the type of argument 1 doesn't correspond to a C type"
+@test try
+          f21104rt(Float64)
+          "unreachable"
+      catch ex
+          (ex::ErrorException).msg
+      end == "ccall: return type doesn't correspond to a C type"
+
+
+# cfunction on non-function singleton
+struct CallableSingleton
+end
+(::CallableSingleton)(x, y) = x + y
+@test ccall(cfunction(CallableSingleton(), Int, Tuple{Int,Int}),
+            Int, (Int, Int), 1, 2) === 3
+
+# 19805
+mutable struct callinfos_19805{FUNC_FT<:Function}
+    f :: FUNC_FT
+end
+
+evalf_callback_19805{FUNC_FT}(ci::callinfos_19805{FUNC_FT}) = ci.f(0.5)::Float64
+
+evalf_callback_c_19805{FUNC_FT}(ci::callinfos_19805{FUNC_FT}) = cfunction(
+    evalf_callback_19805, Float64, (callinfos_19805{FUNC_FT},))
+
+@test_throws ErrorException evalf_callback_c_19805( callinfos_19805(sin) )

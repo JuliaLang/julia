@@ -144,7 +144,7 @@ Type *preferred_llvm_type(jl_datatype_t *dt, bool isret) const override
     // rewrite integer-sized (non-HFA) struct to an array
     // the bitsize of the integer gives the desired alignment
     if (size > 8) {
-        if (dt->layout->alignment <= 8) {
+        if (jl_datatype_align(dt) <= 8) {
             return ArrayType::get(T_int64, (size + 7) / 8);
         }
         else {

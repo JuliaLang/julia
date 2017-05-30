@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # editing files
 
@@ -40,7 +40,7 @@ function edit(path::AbstractString, line::Integer=0)
     end
     background = true
     line_unsupported = false
-    if startswith(name, "emacs") || name == "gedit"
+    if startswith(name, "emacs") || name == "gedit" || startswith(name, "gvim")
         cmd = line != 0 ? `$command +$line $path` : `$command $path`
     elseif startswith(name, "vim.") || name == "vi" || name == "vim" || name == "nvim" || name == "mvim" || name == "nano"
         cmd = line != 0 ? `$command +$line $path` : `$command $path`
@@ -49,12 +49,11 @@ function edit(path::AbstractString, line::Integer=0)
         cmd = line != 0 ? `$command $path -l $line` : `$command $path`
     elseif startswith(name, "subl") || startswith(name, "atom")
         cmd = line != 0 ? `$command $path:$line` : `$command $path`
+    elseif name == "code" || (is_windows() && uppercase(name) == "CODE.EXE")
+        cmd = line != 0 ? `$command -g $path:$line` : `$command -g $path`
     elseif startswith(name, "notepad++")
         cmd = line != 0 ? `$command $path -n$line` : `$command $path`
-    elseif is_windows() && (name == "start" || name == "open")
-        cmd = `cmd /c start /b $path`
-        line_unsupported = true
-    elseif is_apple() && (name == "start" || name == "open")
+    elseif is_apple() && name == "open"
         cmd = `open -t $path`
         line_unsupported = true
     else
@@ -63,7 +62,12 @@ function edit(path::AbstractString, line::Integer=0)
         line_unsupported = true
     end
 
-    if background
+    if is_windows() && name == "open"
+        @static is_windows() && # don't emit this ccall on other platforms
+            systemerror(:edit, ccall((:ShellExecuteW, "shell32"), stdcall, Int,
+                                     (Ptr{Void}, Cwstring, Cwstring, Ptr{Void}, Ptr{Void}, Cint),
+                                     C_NULL, "open", path, C_NULL, C_NULL, 10) ≤ 32)
+    elseif background
         spawn(pipeline(cmd, stderr=STDERR))
     else
         run(cmd)
@@ -269,7 +273,7 @@ function versioninfo(io::IO=STDOUT, verbose::Bool=false)
         if is_windows()
             try lsb = strip(readstring(`$(ENV["COMSPEC"]) /c ver`)) end
         end
-        if lsb != ""
+        if !isempty(lsb)
             println(io,     "           ", lsb)
         end
         if is_unix()
@@ -345,7 +349,7 @@ function code_warntype(io::IO, f, t::ANY)
 end
 code_warntype(f, t::ANY) = code_warntype(STDOUT, f, t)
 
-typesof(args...) = Tuple{map(a->(isa(a,Type) ? Type{a} : typeof(a)), args)...}
+typesof(args...) = Tuple{Any[ Core.Typeof(a) for a in args ]...}
 
 gen_call_with_extracted_types(fcn, ex0::Symbol) = Expr(:call, fcn, Meta.quot(ex0))
 function gen_call_with_extracted_types(fcn, ex0)
@@ -367,9 +371,9 @@ function gen_call_with_extracted_types(fcn, ex0)
     exret = Expr(:none)
     is_macro = false
     ex = expand(ex0)
-    if isa(ex0, Expr) && ex0.head == :macrocall # Make @edit @time 1+2 edit the macro
+    if isa(ex0, Expr) && ex0.head == :macrocall # Make @edit @time 1+2 edit the macro by using the types of the *expressions*
         is_macro = true
-        exret = Expr(:call, fcn,  esc(ex0.args[1]), typesof(ex0.args[2:end]...))
+        exret = Expr(:call, fcn, esc(ex0.args[1]), Tuple{#=__source__=#LineNumberNode, Any[ Core.Typeof(a) for a in ex0.args[3:end] ]...})
     elseif !isa(ex, Expr)
         exret = Expr(:call, :error, "expression is not a function call or symbol")
     elseif ex.head == :call
@@ -586,9 +590,14 @@ else
             end
         end
         if downloadcmd == :wget
-            run(`wget -O $filename $url`)
+            try
+                run(`wget -O $filename $url`)
+            catch
+                rm(filename)  # wget always creates a file
+                rethrow()
+            end
         elseif downloadcmd == :curl
-            run(`curl -o $filename -L $url`)
+            run(`curl -L -f -o $filename $url`)
         elseif downloadcmd == :fetch
             run(`fetch -f $filename $url`)
         else

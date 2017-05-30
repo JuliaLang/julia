@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 /*
   AST
@@ -176,23 +176,45 @@ value_t fl_invoke_julia_macro(fl_context_t *fl_ctx, value_t *args, uint32_t narg
 {
     JL_TIMING(MACRO_INVOCATION);
     jl_ptls_t ptls = jl_get_ptls_states();
-    if (nargs < 1)
-        argcount(fl_ctx, "invoke-julia-macro", nargs, 1);
+    if (nargs < 2) // macro name and location
+        argcount(fl_ctx, "invoke-julia-macro", nargs, 2);
     jl_method_instance_t *mfunc = NULL;
     jl_value_t **margs;
     // Reserve one more slot for the result
     JL_GC_PUSHARGS(margs, nargs + 1);
     int i;
-    for(i=1; i < nargs; i++) margs[i] = scm_to_julia(fl_ctx, args[i], 1);
+    margs[0] = scm_to_julia(fl_ctx, args[0], 1);
+    // __source__ argument
+    jl_value_t *lno = scm_to_julia(fl_ctx, args[1], 1);
+    margs[1] = lno;
+    if (jl_is_expr(lno) && ((jl_expr_t*)lno)->head == line_sym) {
+        jl_value_t *file = jl_nothing;
+        jl_value_t *line = NULL;
+        switch (jl_expr_nargs(lno)) {
+        case 2:
+            file = jl_exprarg(lno, 1); // file
+            JL_FALLTHROUGH;
+        case 1:
+            line = jl_exprarg(lno, 0); // line
+            JL_FALLTHROUGH;
+        default: ;
+        }
+        if (line == NULL)
+            line = jl_box_long(0);
+        margs[1] = jl_new_struct(jl_linenumbernode_type, line, file);
+    }
+    else if (!jl_typeis(lno, jl_linenumbernode_type)) {
+        margs[1] = jl_new_struct(jl_linenumbernode_type, jl_box_long(0), jl_nothing);
+    }
+    for (i = 2; i < nargs; i++)
+        margs[i] = scm_to_julia(fl_ctx, args[i], 1);
     jl_value_t *result = NULL;
     size_t world = jl_get_ptls_states()->world_age;
 
     JL_TRY {
-        margs[0] = scm_to_julia(fl_ctx, args[0], 1);
         margs[0] = jl_toplevel_eval(margs[0]);
         mfunc = jl_method_lookup(jl_gf_mtable(margs[0]), margs, nargs, 1, world);
         if (mfunc == NULL) {
-            JL_GC_POP();
             jl_method_error((jl_function_t*)margs[0], margs, nargs, world);
             // unreachable
         }
@@ -429,6 +451,31 @@ JL_DLLEXPORT void jl_lisp_prompt(void)
     jl_ast_ctx_leave(ctx);
 }
 
+JL_DLLEXPORT void fl_show_profile(void)
+{
+    jl_ast_context_t *ctx = jl_ast_ctx_enter();
+    fl_context_t *fl_ctx = &ctx->fl;
+    fl_applyn(fl_ctx, 0, symbol_value(symbol(fl_ctx, "show-profiles")));
+    jl_ast_ctx_leave(ctx);
+}
+
+JL_DLLEXPORT void fl_clear_profile(void)
+{
+    jl_ast_context_t *ctx = jl_ast_ctx_enter();
+    fl_context_t *fl_ctx = &ctx->fl;
+    fl_applyn(fl_ctx, 0, symbol_value(symbol(fl_ctx, "clear-profiles")));
+    jl_ast_ctx_leave(ctx);
+}
+
+JL_DLLEXPORT void fl_profile(const char *fname)
+{
+    jl_ast_context_t *ctx = jl_ast_ctx_enter();
+    fl_context_t *fl_ctx = &ctx->fl;
+    fl_applyn(fl_ctx, 1, symbol_value(symbol(fl_ctx, "profile-e")), symbol(fl_ctx, fname));
+    jl_ast_ctx_leave(ctx);
+}
+
+
 static jl_sym_t *scmsym_to_julia(fl_context_t *fl_ctx, value_t s)
 {
     assert(issymbol(s));
@@ -536,10 +583,13 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, int eo)
         else
             n++;
         if (!eo) {
-            if (sym == line_sym && n==1) {
+            if (sym == line_sym && (n == 1 || n == 2)) {
                 jl_value_t *linenum = scm_to_julia_(fl_ctx, car_(e), 0);
-                JL_GC_PUSH1(&linenum);
-                jl_value_t *temp = jl_new_struct(jl_linenumbernode_type, linenum);
+                jl_value_t *file = jl_nothing;
+                JL_GC_PUSH2(&linenum, &file);
+                if (n == 2)
+                    file = scm_to_julia_(fl_ctx, car_(cdr_(e)), 0);
+                jl_value_t *temp = jl_new_struct(jl_linenumbernode_type, linenum, file);
                 JL_GC_POP();
                 return temp;
             }
@@ -638,7 +688,7 @@ static value_t julia_to_scm(fl_context_t *fl_ctx, jl_value_t *v)
         temp = julia_to_scm_(fl_ctx, v);
     }
     FL_CATCH_EXTERN(fl_ctx) {
-        temp = fl_list2(fl_ctx, jl_ast_ctx(fl_ctx)->error_sym, cvalue_static_cstring(fl_ctx, "expression too large"));
+        temp = fl_ctx->lasterror;
     }
     return temp;
 }
@@ -646,7 +696,7 @@ static value_t julia_to_scm(fl_context_t *fl_ctx, jl_value_t *v)
 static void array_to_list(fl_context_t *fl_ctx, jl_array_t *a, value_t *pv)
 {
     if (jl_array_len(a) > 300000)
-        lerror(fl_ctx, fl_ctx->OutOfMemoryError, "expression too large");
+        lerror(fl_ctx, symbol(fl_ctx, "error"), "expression too large");
     value_t temp;
     for(long i=jl_array_len(a)-1; i >= 0; i--) {
         *pv = fl_cons(fl_ctx, fl_ctx->NIL, *pv);
@@ -668,6 +718,8 @@ static value_t julia_to_list2(fl_context_t *fl_ctx, jl_value_t *a, jl_value_t *b
 
 static value_t julia_to_scm_(fl_context_t *fl_ctx, jl_value_t *v)
 {
+    if (v == NULL)
+        lerror(fl_ctx, symbol(fl_ctx, "error"), "undefined reference in AST");
     if (jl_is_symbol(v))
         return symbol(fl_ctx, jl_symbol_name((jl_sym_t*)v));
     if (v == jl_true)
@@ -698,8 +750,16 @@ static value_t julia_to_scm_(fl_context_t *fl_ctx, jl_value_t *v)
     //          shouldn't allocate in this case.
     if (jl_typeis(v, jl_labelnode_type))
         return julia_to_list2(fl_ctx, (jl_value_t*)label_sym, jl_fieldref(v,0));
-    if (jl_typeis(v, jl_linenumbernode_type))
-        return julia_to_list2(fl_ctx, (jl_value_t*)line_sym, jl_fieldref(v,0));
+    if (jl_typeis(v, jl_linenumbernode_type)) {
+        jl_value_t *file = jl_fieldref(v,1); // non-allocating
+        jl_value_t *line = jl_fieldref(v,0); // allocating
+        value_t args = julia_to_list2(fl_ctx, line, file);
+        fl_gc_handle(fl_ctx, &args);
+        value_t hd = julia_to_scm_(fl_ctx, (jl_value_t*)line_sym);
+        value_t scmv = fl_cons(fl_ctx, hd, args);
+        fl_free_gc_handles(fl_ctx, 1);
+        return scmv;
+    }
     if (jl_typeis(v, jl_gotonode_type))
         return julia_to_list2(fl_ctx, (jl_value_t*)goto_sym, jl_fieldref(v,0));
     if (jl_typeis(v, jl_quotenode_type))
@@ -722,9 +782,9 @@ static value_t julia_to_scm_(fl_context_t *fl_ctx, jl_value_t *v)
     if (jl_is_long(v) && fits_fixnum(jl_unbox_long(v)))
         return fixnum(jl_unbox_long(v));
     if (jl_is_ssavalue(v))
-        jl_error("SSAValue objects should not occur in an AST");
+        lerror(fl_ctx, symbol(fl_ctx, "error"), "SSAValue objects should not occur in an AST");
     if (jl_is_slot(v))
-        jl_error("Slot objects should not occur in an AST");
+        lerror(fl_ctx, symbol(fl_ctx, "error"), "Slot objects should not occur in an AST");
     value_t opaque = cvalue(fl_ctx, jl_ast_ctx(fl_ctx)->jvtype, sizeof(void*));
     *(jl_value_t**)cv_data((cvalue_t*)ptr(opaque)) = v;
     return opaque;

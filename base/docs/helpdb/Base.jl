@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Base
 
@@ -229,7 +229,7 @@ julia> Float32(1/3, RoundUp)
 
 See [`RoundingMode`](@ref) for available rounding modes.
 """
-Float32
+Float32(x)
 
 """
     Mmap.mmap(io::Union{IOStream,AbstractString,Mmap.AnonymousMmap}[, type::Type{Array{T,N}}, dims, offset]; grow::Bool=true, shared::Bool=true)
@@ -243,7 +243,7 @@ determines how the bytes of the array are interpreted. Note that the file must b
 binary format, and no format conversions are possible (this is a limitation of operating
 systems, not Julia).
 
-`dims` is a tuple or single `Integer` specifying the size or length of the array.
+`dims` is a tuple or single [`Integer`](@ref) specifying the size or length of the array.
 
 The file is passed via the stream argument, either as an open `IOStream` or filename string.
 When you initialize the stream, use `"r"` for a "read-only" array, and `"w+"` to create a
@@ -341,7 +341,7 @@ If `T` does not have a specific size, an error is thrown.
 julia> sizeof(Base.LinAlg.LU)
 ERROR: argument is an abstract type; size is indeterminate
 Stacktrace:
- [1] sizeof(::Type{T} where T) at ./essentials.jl:147
+ [1] sizeof(::Type{T} where T) at ./essentials.jl:160
 ```
 """
 sizeof(::Type)
@@ -814,7 +814,7 @@ julia> Float64(pi, RoundUp)
 
 See [`RoundingMode`](@ref) for available rounding modes.
 """
-Float64
+Float64(x)
 
 """
     union(s1,s2...)
@@ -1061,7 +1061,15 @@ For arrays, this constructs an array with the same binary data as the given
 array, but with the specified element type.
 For example,
 `reinterpret(Float32, UInt32(7))` interprets the 4 bytes corresponding to `UInt32(7)` as a
-`Float32`.
+[`Float32`](@ref).
+
+!!! warning
+
+    It is not allowed to `reinterpret` an array to an element type with a larger alignment then
+    the alignment of the array. For a normal `Array`, this is the alignment of its element type.
+    For a reinterpreted array, this is the alignment of the `Array` it was reinterpreted from.
+    For example, `reinterpret(UInt32, UInt8[0, 0, 0, 0])` is not allowed but
+    `reinterpret(UInt32, reinterpret(UInt8, Float32[1.0]))` is allowed.
 
 ```jldoctest
 julia> reinterpret(Float32, UInt32(7))
@@ -1127,28 +1135,6 @@ Delete the mapping for the given key in a collection, and return the collection.
 """
 delete!
 
-"""
-    eps(T)
-
-The distance between 1.0 and the next larger representable floating-point value of
-`DataType` `T`. Only floating-point types are sensible arguments.
-"""
-eps(::Union{Type{BigFloat},Type{Float64},Type{Float32},Type{Float16}})
-
-"""
-    eps()
-
-The distance between 1.0 and the next larger representable floating-point value of `Float64`.
-"""
-eps()
-
-"""
-    eps(x)
-
-The distance between `x` and the next larger representable floating-point value of the same
-`DataType` as `x`.
-"""
-eps(::AbstractFloat)
 
 """
     searchsortedfirst(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
@@ -1161,8 +1147,8 @@ searchsortedfirst
 """
     big(x)
 
-Convert a number to a maximum precision representation (typically `BigInt` or `BigFloat`).
-See [`BigFloat`](@ref) for information about some pitfalls with floating-point numbers.
+Convert a number to a maximum precision representation (typically [`BigInt`](@ref) or
+`BigFloat`). See [`BigFloat`](@ref) for information about some pitfalls with floating-point numbers.
 """
 big
 
@@ -1322,20 +1308,23 @@ cotd
 
 Block the current task until some event occurs, depending on the type of the argument:
 
-* [`RemoteChannel`](@ref) : Wait for a value to become available on the specified remote channel.
+* [`RemoteChannel`](@ref) : Wait for a value to become available on the specified remote
+  channel.
 * [`Future`](@ref) : Wait for a value to become available for the specified future.
 * [`Channel`](@ref): Wait for a value to be appended to the channel.
 * [`Condition`](@ref): Wait for [`notify`](@ref) on a condition.
 * `Process`: Wait for a process or process chain to exit. The `exitcode` field of a process
   can be used to determine success or failure.
-* [`Task`](@ref): Wait for a `Task` to finish, returning its result value. If the task fails with an
-  exception, the exception is propagated (re-thrown in the task that called `wait`).
-* `RawFD`: Wait for changes on a file descriptor (see [`poll_fd`](@ref) for keyword arguments and return code)
+* [`Task`](@ref): Wait for a `Task` to finish, returning its result value. If the task fails
+  with an exception, the exception is propagated (re-thrown in the task that called `wait`).
+* `RawFD`: Wait for changes on a file descriptor (see [`poll_fd`](@ref) for keyword
+  arguments and return code)
 
 If no argument is passed, the task blocks for an undefined period. A task can only be
 restarted by an explicit call to [`schedule`](@ref) or [`yieldto`](@ref).
 
-Often `wait` is called within a `while` loop to ensure a waited-for condition is met before proceeding.
+Often `wait` is called within a `while` loop to ensure a waited-for condition is met before
+proceeding.
 """
 wait
 
@@ -1443,24 +1432,12 @@ recurses infinitely.
 StackOverflowError
 
 """
-    BigInt(x)
-
-Create an arbitrary precision integer. `x` may be an `Int` (or anything that can be
-converted to an `Int`).  The usual mathematical operators are defined for this type, and
-results are promoted to a `BigInt`.
-
-Instances can be constructed from strings via [`parse`](@ref), or using the `big`
-string literal.
-"""
-BigInt
-
-"""
     ==(x, y)
 
-Generic equality operator, giving a single `Bool` result. Falls back to `===`. Should be
-implemented for all types with a notion of equality, based on the abstract value that an
-instance represents. For example, all numeric types are compared by numeric value, ignoring
-type. Strings are compared as sequences of characters, ignoring encoding.
+Generic equality operator, giving a single [`Bool`](@ref) result. Falls back to `===`.
+Should be implemented for all types with a notion of equality, based on the abstract value
+that an instance represents. For example, all numeric types are compared by numeric value,
+ignoring type. Strings are compared as sequences of characters, ignoring encoding.
 
 Follows IEEE semantics for floating-point numbers.
 
@@ -1659,10 +1636,11 @@ true
 issubtype(type1, type2)
 
 """
-    finalizer(x, function)
+    finalizer(x, f)
 
 Register a function `f(x)` to be called when there are no program-accessible references to
-`x`. The behavior of this function is unpredictable if `x` is of a bits type.
+`x`. The type of `x` must be a `mutable struct`, otherwise the behavior of this function is
+unpredictable.
 """
 finalizer
 
@@ -1956,7 +1934,7 @@ done
 
 Convert `x` to a value of type `T`.
 
-If `T` is an `Integer` type, an [`InexactError`](@ref) will be raised if `x`
+If `T` is an [`Integer`](@ref) type, an [`InexactError`](@ref) will be raised if `x`
 is not representable by `T`, for example if `x` is not integer-valued, or is outside the
 range supported by `T`.
 
@@ -1967,10 +1945,10 @@ julia> convert(Int, 3.0)
 julia> convert(Int, 3.5)
 ERROR: InexactError()
 Stacktrace:
- [1] convert(::Type{Int64}, ::Float64) at ./float.jl:675
+ [1] convert(::Type{Int64}, ::Float64) at ./float.jl:680
 ```
 
-If `T` is a `AbstractFloat` or `Rational` type,
+If `T` is a [`AbstractFloat`](@ref) or [`Rational`](@ref) type,
 then it will return the closest value to `x` representable by `T`.
 
 ```jldoctest
@@ -2048,13 +2026,6 @@ significantly more expensive than `x*y+z`. `fma` is used to improve accuracy in 
 algorithms. See [`muladd`](@ref).
 """
 fma
-
-"""
-    copy!(dest, src)
-
-Copy all elements from collection `src` to array `dest`. Returns `dest`.
-"""
-copy!(dest,src)
 
 """
     copy!(dest, do, src, so, N)
@@ -2189,7 +2160,7 @@ isvalid(value)
     isvalid(T, value) -> Bool
 
 Returns `true` if the given value is valid for that type. Types currently can
-be either `Char` or `String`. Values for `Char` can be of type `Char` or `UInt32`.
+be either `Char` or `String`. Values for `Char` can be of type `Char` or [`UInt32`](@ref).
 Values for `String` can be of that type, or `Vector{UInt8}`.
 """
 isvalid(T,value)
@@ -2385,28 +2356,35 @@ pop!(collection,key,?)
 """
     pop!(collection) -> item
 
-Remove the last item in `collection` and return it.
+Remove an item in `collection` and return it. If `collection` is an
+ordered container, the last item is returned.
 
 ```jldoctest
-julia> A=[1, 2, 3, 4, 5, 6]
-6-element Array{Int64,1}:
+julia> A=[1, 2, 3]
+3-element Array{Int64,1}:
  1
  2
  3
- 4
- 5
- 6
 
 julia> pop!(A)
-6
+3
 
 julia> A
-5-element Array{Int64,1}:
+2-element Array{Int64,1}:
  1
  2
- 3
- 4
- 5
+
+julia> S = Set([1, 2])
+Set([2, 1])
+
+julia> pop!(S)
+2
+
+julia> S
+Set([1])
+
+julia> pop!(Dict(1=>2))
+1=>2
 ```
 """
 pop!(collection)
@@ -2424,3 +2402,81 @@ seekend
 Integer division was attempted with a denominator value of 0.
 """
 DivideError
+
+"""
+    Number
+
+Abstract supertype for all number types.
+"""
+Number
+
+"""
+    Real <: Number
+
+Abstract supertype for all real numbers.
+"""
+Real
+
+"""
+    AbstractFloat <: Real
+
+Abstract supertype for all floating point numbers.
+"""
+AbstractFloat
+
+"""
+    Integer <: Real
+
+Abstract supertype for all integers.
+"""
+Integer
+
+"""
+    Signed <: Integer
+
+Abstract supertype for all signed integers.
+"""
+Signed
+
+"""
+    Unsigned <: Integer
+
+Abstract supertype for all unsigned integers.
+"""
+Unsigned
+
+"""
+    Bool <: Integer
+
+Boolean type.
+"""
+Bool
+
+for bit in (16, 32, 64)
+    @eval begin
+        """
+            Float$($bit) <: AbstractFloat
+
+        $($bit)-bit floating point number type.
+        """
+        $(Symbol("Float", bit))
+    end
+end
+
+for bit in (8, 16, 32, 64, 128)
+    @eval begin
+        """
+            Int$($bit) <: Signed
+
+        $($bit)-bit signed integer type.
+        """
+        $(Symbol("Int", bit))
+
+        """
+            UInt$($bit) <: Unsigned
+
+        $($bit)-bit unsigned integer type.
+        """
+        $(Symbol("UInt", bit))
+    end
+end

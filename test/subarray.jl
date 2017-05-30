@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.Test
 
@@ -545,13 +545,21 @@ let size=(x,y)-> error("should not happen"), Base=nothing
 end
 
 # issue #18034
-# ensure that it is possible to create an isbits, LinearFast view of an immutable Array
+# ensure that it is possible to create an isbits, IndexLinear view of an immutable Array
 let
     struct ImmutableTestArray{T, N} <: Base.DenseArray{T, N}
     end
     Base.size(::Union{ImmutableTestArray, Type{ImmutableTestArray}}) = (0, 0)
-    Base.linearindexing(::Union{ImmutableTestArray, Type{ImmutableTestArray}}) = Base.LinearFast()
+    Base.IndexStyle(::Union{ImmutableTestArray, Type{ImmutableTestArray}}) = Base.IndexLinear()
     a = ImmutableTestArray{Float64, 2}()
-    @test Base.linearindexing(view(a, :, :)) == Base.LinearFast()
+    @test Base.IndexStyle(view(a, :, :)) == Base.IndexLinear()
     @test isbits(view(a, :, :))
+end
+
+# Issue #17351
+let
+    x = rand(10)
+    u = rand(10, 3)
+    su = view(u, :, 1)
+    @test size(@inferred(xcorr(x, su))) == (19,)
 end

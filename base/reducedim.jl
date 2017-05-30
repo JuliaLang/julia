@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## Functions to compute the reduced shape
 
@@ -8,7 +8,7 @@ reduced_indices(a::AbstractArray, region) = reduced_indices(indices(a), region)
 # for reductions that keep 0 dims as 0
 reduced_indices0(a::AbstractArray, region) = reduced_indices0(indices(a), region)
 
-function reduced_indices{N}(inds::Indices{N}, d::Int, rd::AbstractUnitRange)
+function reduced_indices(inds::Indices{N}, d::Int, rd::AbstractUnitRange) where N
     d < 1 && throw(ArgumentError("dimension must be ≥ 1, got $d"))
     if d == 1
         return (oftype(inds[1], rd), tail(inds)...)
@@ -20,7 +20,7 @@ function reduced_indices{N}(inds::Indices{N}, d::Int, rd::AbstractUnitRange)
 end
 reduced_indices(inds::Indices, d::Int) = reduced_indices(inds, d, OneTo(1))
 
-function reduced_indices0{N}(inds::Indices{N}, d::Int)
+function reduced_indices0(inds::Indices{N}, d::Int) where N
     d < 1 && throw(ArgumentError("dimension must be ≥ 1, got $d"))
     if d <= N
         return reduced_indices(inds, d, (inds[d] == OneTo(0) ? OneTo(0) : OneTo(1)))
@@ -29,7 +29,7 @@ function reduced_indices0{N}(inds::Indices{N}, d::Int)
     end
 end
 
-function reduced_indices{N}(inds::Indices{N}, region)
+function reduced_indices(inds::Indices{N}, region) where N
     rinds = [inds...]
     for i in region
         isa(i, Integer) || throw(ArgumentError("reduced dimension(s) must be integers"))
@@ -43,7 +43,7 @@ function reduced_indices{N}(inds::Indices{N}, region)
     tuple(rinds...)::typeof(inds)
 end
 
-function reduced_indices0{N}(inds::Indices{N}, region)
+function reduced_indices0(inds::Indices{N}, region) where N
     rinds = [inds...]
     for i in region
         isa(i, Integer) || throw(ArgumentError("reduced dimension(s) must be integers"))
@@ -70,11 +70,11 @@ for (Op, initval) in ((:(typeof(&)), true), (:(typeof(|)), false))
     @eval initarray!(a::AbstractArray, ::$(Op), init::Bool) = (init && fill!(a, $initval); a)
 end
 
-reducedim_initarray{R}(A::AbstractArray, region, v0, ::Type{R}) = fill!(similar(A,R,reduced_indices(A,region)), v0)
-reducedim_initarray{T}(A::AbstractArray, region, v0::T) = reducedim_initarray(A, region, v0, T)
+reducedim_initarray(A::AbstractArray, region, v0, ::Type{R}) where {R} = fill!(similar(A,R,reduced_indices(A,region)), v0)
+reducedim_initarray(A::AbstractArray, region, v0::T) where {T} = reducedim_initarray(A, region, v0, T)
 
-reducedim_initarray0{R}(A::AbstractArray, region, v0, ::Type{R}) = fill!(similar(A,R,reduced_indices0(A,region)), v0)
-reducedim_initarray0{T}(A::AbstractArray, region, v0::T) = reducedim_initarray0(A, region, v0, T)
+reducedim_initarray0(A::AbstractArray, region, v0, ::Type{R}) where {R} = fill!(similar(A,R,reduced_indices0(A,region)), v0)
+reducedim_initarray0(A::AbstractArray, region, v0::T) where {T} = reducedim_initarray0(A, region, v0, T)
 
 # TODO: better way to handle reducedim initialization
 #
@@ -106,9 +106,9 @@ reducedim_init(f, op::typeof(max), A::AbstractArray, region) = reducedim_init(f,
 reducedim_init(f, op::typeof(min), A::AbstractArray, region) = reducedim_init(f, scalarmin, A, region)
 reducedim_init(f::Union{typeof(abs),typeof(abs2)}, op::typeof(max), A::AbstractArray, region) = reducedim_init(f, scalarmax, A, region)
 
-reducedim_init{T}(f, op::typeof(scalarmax), A::AbstractArray{T}, region) = reducedim_initarray0(A, region, typemin(f(zero(T))))
-reducedim_init{T}(f, op::typeof(scalarmin), A::AbstractArray{T}, region) = reducedim_initarray0(A, region, typemax(f(zero(T))))
-reducedim_init{T}(f::Union{typeof(abs),typeof(abs2)}, op::typeof(scalarmax), A::AbstractArray{T}, region) =
+reducedim_init(f, op::typeof(scalarmax), A::AbstractArray{T}, region) where {T} = reducedim_initarray0(A, region, typemin(f(zero(T))))
+reducedim_init(f, op::typeof(scalarmin), A::AbstractArray{T}, region) where {T} = reducedim_initarray0(A, region, typemax(f(zero(T))))
+reducedim_init(f::Union{typeof(abs),typeof(abs2)}, op::typeof(scalarmax), A::AbstractArray{T}, region) where {T} =
     reducedim_initarray(A, region, zero(f(zero(T))))
 
 reducedim_init(f, op::typeof(&), A::AbstractArray, region) = reducedim_initarray(A, region, true)
@@ -210,7 +210,7 @@ end
 mapreducedim!(f, op, R::AbstractArray, A::AbstractArray) =
     (_mapreducedim!(f, op, R, A); R)
 
-reducedim!{RT}(op, R::AbstractArray{RT}, A::AbstractArray) =
+reducedim!(op, R::AbstractArray{RT}, A::AbstractArray) where {RT} =
     mapreducedim!(identity, op, R, A, zero(RT))
 
 """
@@ -576,7 +576,7 @@ end
 
 ##### findmin & findmax #####
 
-function findminmax!{T,N}(f, Rval, Rind, A::AbstractArray{T,N})
+function findminmax!(f, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
     (isempty(Rval) || isempty(A)) && return Rval, Rind
     lsiz = check_reducedims(Rval, A)
     for i = 1:N
@@ -650,7 +650,7 @@ julia> findmin(A, 2)
 ([1; 3], [1; 2])
 ```
 """
-function findmin{T}(A::AbstractArray{T}, region)
+function findmin(A::AbstractArray{T}, region) where T
     if isempty(A)
         return (similar(A, reduced_indices0(A, region)),
                 similar(dims->zeros(Int, dims), reduced_indices0(A, region)))
@@ -688,7 +688,7 @@ julia> findmax(A,2)
 ([2; 4], [3; 4])
 ```
 """
-function findmax{T}(A::AbstractArray{T}, region)
+function findmax(A::AbstractArray{T}, region) where T
     if isempty(A)
         return (similar(A, reduced_indices0(A,region)),
                 similar(dims->zeros(Int, dims), reduced_indices0(A,region)))

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
     Generator(f, iter)
@@ -35,7 +35,7 @@ end
 
 Generator(f, I1, I2, Is...) = Generator(a->f(a...), zip(I1, I2, Is...))
 
-Generator{T,I}(::Type{T}, iter::I) = Generator{I,Type{T}}(T, iter)
+Generator(::Type{T}, iter::I) where {T,I} = Generator{I,Type{T}}(T, iter)
 
 start(g::Generator) = (@_inline_meta; start(g.iter))
 done(g::Generator, s) = (@_inline_meta; done(g.iter, s))
@@ -109,10 +109,10 @@ iteratoreltype(x) = iteratoreltype(typeof(x))
 iteratoreltype(::Type) = HasEltype()  # HasEltype is the default
 
 iteratorsize(::Type{<:AbstractArray}) = HasShape()
-iteratorsize{I,F}(::Type{Generator{I,F}}) = iteratorsize(I)
+iteratorsize(::Type{Generator{I,F}}) where {I,F} = iteratorsize(I)
 length(g::Generator) = length(g.iter)
 size(g::Generator) = size(g.iter)
 indices(g::Generator) = indices(g.iter)
 ndims(g::Generator) = ndims(g.iter)
 
-iteratoreltype{I,T}(::Type{Generator{I,T}}) = EltypeUnknown()
+iteratoreltype(::Type{Generator{I,T}}) where {I,T} = EltypeUnknown()

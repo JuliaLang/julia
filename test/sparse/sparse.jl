@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 @testset "issparse" begin
     @test issparse(sparse(ones(5,5)))
@@ -45,14 +45,18 @@ do33 = ones(3)
 end
 
 @testset "concatenation tests" begin
+    sp33 = speye(3, 3)
+
     @testset "horizontal concatenation" begin
         @test all([se33 se33] == sparse([1, 2, 3, 1, 2, 3], [1, 2, 3, 4, 5, 6], ones(6)))
+        @test length(([sp33 0I]).nzval) == 3
     end
 
     @testset "vertical concatenation" begin
         @test all([se33; se33] == sparse([1, 4, 2, 5, 3, 6], [1, 1, 2, 2, 3, 3], ones(6)))
         se33_32bit = convert(SparseMatrixCSC{Float32,Int32}, se33)
         @test all([se33; se33_32bit] == sparse([1, 4, 2, 5, 3, 6], [1, 1, 2, 2, 3, 3], ones(6)))
+        @test length(([sp33; 0I]).nzval) == 3
     end
 
     se44 = speye(4)
@@ -62,6 +66,7 @@ end
     se77 = speye(7)
     @testset "h+v concatenation" begin
         @test all([se44 sz42 sz41; sz34 se33] == se77)
+        @test length(([sp33 0I; 1I 0I]).nzval) == 6
     end
 
     @testset "blkdiag concatenation" begin
@@ -533,10 +538,12 @@ end
     @test tan.(Afull) == Array(tan.(A)) # should be redundant with sin test
     @test ceil.(Afull) == Array(ceil.(A))
     @test floor.(Afull) == Array(floor.(A)) # should be redundant with ceil test
-    @test real.(Afull) == Array(real.(A))
-    @test imag.(Afull) == Array(imag.(A))
-    @test real.(Cfull) == Array(real.(C))
-    @test imag.(Cfull) == Array(imag.(C))
+    @test real.(Afull) == Array(real.(A)) == Array(real(A))
+    @test imag.(Afull) == Array(imag.(A)) == Array(imag(A))
+    @test conj.(Afull) == Array(conj.(A)) == Array(conj(A))
+    @test real.(Cfull) == Array(real.(C)) == Array(real(C))
+    @test imag.(Cfull) == Array(imag.(C)) == Array(imag(C))
+    @test conj.(Cfull) == Array(conj.(C)) == Array(conj(C))
     # Test representatives of [unary functions that map zeros to zeros and nonzeros to nonzeros]
     @test expm1.(Afull) == Array(expm1.(A))
     @test abs.(Afull) == Array(abs.(A))
@@ -554,12 +561,19 @@ end
         I = rand(T[1:100;], 2, 2)
         D = R + I*im
         S = sparse(D)
-        @test R == real.(S)
-        @test I == imag.(S)
-        @test real.(sparse(R)) == R
-        @test nnz(imag.(sparse(R))) == 0
+        spR = sparse(R)
+
+        @test R == real.(S) == real(S)
+        @test I == imag.(S) == imag(S)
+        @test conj(full(S)) == conj.(S) == conj(S)
+        @test real.(spR) == R
+        @test nnz(imag.(spR)) == nnz(imag(spR)) == 0
         @test abs.(S) == abs.(D)
         @test abs2.(S) == abs2.(D)
+
+        # test aliasing of real and conj of real valued matrix
+        @test real(spR) === spR
+        @test conj(spR) === spR
     end
 end
 
@@ -805,7 +819,7 @@ end
     FS = Array(S)
     FI = Array(I)
     @test sparse(FS[FI]) == S[I] == S[FI]
-    @test sum(S[FI]) + sum(S[!FI]) == sum(S)
+    @test sum(S[FI]) + sum(S[.!FI]) == sum(S)
     @test countnz(I) == count(I)
 
     sumS1 = sum(S)
@@ -1722,6 +1736,17 @@ end
     @test x[2, 3] == 0.0
 end
 
+@testset "setindex issue #20657" begin
+    A = spzeros(3, 3)
+    I = [1, 1, 1]; J = [1, 1, 1]
+    A[I, 1] = 1
+    @test nnz(A) == 1
+    A[1, J] = 1
+    @test nnz(A) == 1
+    A[I, J] = 1
+    @test nnz(A) == 1
+end
+
 @testset "show" begin
     io = IOBuffer()
     show(io, MIME"text/plain"(), sparse(Int64[1], Int64[1], [1.0]))
@@ -1737,4 +1762,17 @@ end
     Base.SparseArrays.dropstored!(b, 1, 1)
     @test length(c.rowval) == 9
     @test length(c.nzval) == 9
+end
+
+@testset "check buffers" for n in 1:3
+    colptr = [1,2,3,4]
+    rowval = [1,2,3]
+    nzval1  = ones(0)
+    nzval2  = ones(3)
+    A = SparseMatrixCSC(n, n, colptr, rowval, nzval1)
+    @test nnz(A) == n
+    @test_throws BoundsError A[n,n]
+    A = SparseMatrixCSC(n, n, colptr, rowval, nzval2)
+    @test nnz(A) == n
+    @test A      == eye(n)
 end

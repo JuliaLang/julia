@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 Main.Core.eval(Main.Core, :(baremodule Inference
 using Core.Intrinsics
@@ -11,7 +11,9 @@ eval(m, x) = Core.eval(m, x)
 
 const include = Core.include
 # conditional to allow redefining Core.Inference after base exists
-isdefined(Main, :Base) || ((::Type{T}){T}(arg) = convert(T, arg)::T)
+isdefined(Main, :Base) || ((::Type{T})(arg) where {T} = convert(T, arg)::T)
+
+function return_type end
 
 ## Load essential files and libraries
 include("essentials.jl")

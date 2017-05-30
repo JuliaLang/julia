@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module DFT
 
@@ -8,7 +8,7 @@ abstract type Plan{T} end
 import Base: show, summary, size, ndims, length, eltype,
              *, A_mul_B!, inv, \, A_ldiv_B!
 
-eltype{T}(::Type{Plan{T}}) = T
+eltype(::Type{Plan{T}}) where {T} = T
 
 # size(p) should return the size of the input array for p
 size(p::Plan, d) = size(p)[d]
@@ -22,24 +22,24 @@ export fft, ifft, bfft, fft!, ifft!, bfft!,
 
 const FFTWFloat = Union{Float32,Float64}
 fftwfloat(x) = _fftwfloat(float(x))
-_fftwfloat{T<:FFTWFloat}(::Type{T}) = T
+_fftwfloat(::Type{T}) where {T<:FFTWFloat} = T
 _fftwfloat(::Type{Float16}) = Float32
-_fftwfloat{T}(::Type{Complex{T}}) = Complex{_fftwfloat(T)}
-_fftwfloat{T}(::Type{T}) = error("type $T not supported")
-_fftwfloat{T}(x::T) = _fftwfloat(T)(x)
+_fftwfloat(::Type{Complex{T}}) where {T} = Complex{_fftwfloat(T)}
+_fftwfloat(::Type{T}) where {T} = error("type $T not supported")
+_fftwfloat(x::T) where {T} = _fftwfloat(T)(x)
 
 complexfloat(x::StridedArray{Complex{<:FFTWFloat}}) = x
 realfloat(x::StridedArray{<:FFTWFloat}) = x
 
 # return an Array, rather than similar(x), to avoid an extra copy for FFTW
 # (which only works on StridedArray types).
-complexfloat{T<:Complex}(x::AbstractArray{T}) = copy1(typeof(fftwfloat(zero(T))), x)
-complexfloat{T<:Real}(x::AbstractArray{T}) = copy1(typeof(complex(fftwfloat(zero(T)))), x)
+complexfloat(x::AbstractArray{T}) where {T<:Complex} = copy1(typeof(fftwfloat(zero(T))), x)
+complexfloat(x::AbstractArray{T}) where {T<:Real} = copy1(typeof(complex(fftwfloat(zero(T)))), x)
 
-realfloat{T<:Real}(x::AbstractArray{T}) = copy1(typeof(fftwfloat(zero(T))), x)
+realfloat(x::AbstractArray{T}) where {T<:Real} = copy1(typeof(fftwfloat(zero(T))), x)
 
 # copy to a 1-based array, using circular permutation
-function copy1{T}(::Type{T}, x)
+function copy1(::Type{T}, x) where T
     y = Array{T}(map(length, indices(x)))
     Base.circcopy!(y, x)
 end
@@ -211,7 +211,7 @@ rfft(x::AbstractArray{<:Union{Integer,Rational}}, region=1:ndims(x)) = rfft(real
 plan_rfft(x::AbstractArray, region; kws...) = plan_rfft(realfloat(x), region; kws...)
 
 # only require implementation to provide *(::Plan{T}, ::Array{T})
-*{T}(p::Plan{T}, x::AbstractArray) = p * copy1(T, x)
+*(p::Plan{T}, x::AbstractArray) where {T} = p * copy1(T, x)
 
 # Implementations should also implement A_mul_B!(Y, plan, X) so as to support
 # pre-allocated output arrays.  We don't define * in terms of A_mul_B!
@@ -337,7 +337,7 @@ function brfft_output_size(x::AbstractArray, d::Integer, region)
     return osize
 end
 
-plan_irfft{T}(x::AbstractArray{Complex{T}}, d::Integer, region; kws...) =
+plan_irfft(x::AbstractArray{Complex{T}}, d::Integer, region; kws...) where {T} =
     ScaledPlan(plan_brfft(x, d, region; kws...),
                normalization(T, brfft_output_size(x, d, region), region))
 
@@ -398,44 +398,193 @@ end
 ##############################################################################
 
 # FFTW module (may move to an external package at some point):
-if Base.USE_GPL_LIBS
-    @doc """
-        fft(A [, dims])
+"""
+    fft(A [, dims])
 
-    Performs a multidimensional FFT of the array `A`. The optional `dims` argument specifies an
-    iterable subset of dimensions (e.g. an integer, range, tuple, or array) to transform along.
-    Most efficient if the size of `A` along the transformed dimensions is a product of small
-    primes; see `nextprod()`. See also `plan_fft()` for even greater efficiency.
+Performs a multidimensional FFT of the array `A`. The optional `dims` argument specifies an
+iterable subset of dimensions (e.g. an integer, range, tuple, or array) to transform along.
+Most efficient if the size of `A` along the transformed dimensions is a product of small
+primes; see `nextprod()`. See also `plan_fft()` for even greater efficiency.
 
-    A one-dimensional FFT computes the one-dimensional discrete Fourier transform (DFT) as
-    defined by
+A one-dimensional FFT computes the one-dimensional discrete Fourier transform (DFT) as
+defined by
 
-    ```math
-    \\operatorname{DFT}(A)[k] =
-      \\sum_{n=1}^{\\operatorname{length}(A)}
-      \\exp\\left(-i\\frac{2\\pi
-      (n-1)(k-1)}{\\operatorname{length}(A)} \\right) A[n].
-    ```
+```math
+\\operatorname{DFT}(A)[k] =
+  \\sum_{n=1}^{\\operatorname{length}(A)}
+  \\exp\\left(-i\\frac{2\\pi
+  (n-1)(k-1)}{\\operatorname{length}(A)} \\right) A[n].
+```
 
-    A multidimensional FFT simply performs this operation along each transformed dimension of `A`.
+A multidimensional FFT simply performs this operation along each transformed dimension of `A`.
 
-    !!! note
-        * Julia starts FFTW up with 1 thread by default. Higher performance is usually possible by
-          increasing number of threads. Use `FFTW.set_num_threads(Sys.CPU_CORES)` to use as many
-          threads as cores on your system.
+!!! note
+    * Julia starts FFTW up with 1 thread by default. Higher performance is usually possible by
+      increasing number of threads. Use `FFTW.set_num_threads(Sys.CPU_CORES)` to use as many
+      threads as cores on your system.
 
-        * This performs a multidimensional FFT by default. FFT libraries in other languages such as
-          Python and Octave perform a one-dimensional FFT along the first non-singleton dimension
-          of the array. This is worth noting while performing comparisons. For more details,
-          refer to the [Noteworthy Differences from other Languages](@ref)
-          section of the manual.
-    """ ->
-    fft
+    * This performs a multidimensional FFT by default. FFT libraries in other languages such as
+      Python and Octave perform a one-dimensional FFT along the first non-singleton dimension
+      of the array. This is worth noting while performing comparisons. For more details,
+      refer to the [Noteworthy Differences from other Languages](@ref)
+      section of the manual.
+"""
+fft
 
-    include("fft/FFTW.jl")
-    importall .FFTW
-    export FFTW, dct, idct, dct!, idct!, plan_dct, plan_idct, plan_dct!, plan_idct!
+"""
+    plan_rfft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
+
+Pre-plan an optimized real-input FFT, similar to [`plan_fft`](@ref) except for
+[`rfft`](@ref) instead of [`fft`](@ref). The first two arguments, and the
+size of the transformed result, are the same as for [`rfft`](@ref).
+"""
+plan_rfft
+
+"""
+    plan_brfft(A, d [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
+
+Pre-plan an optimized real-input unnormalized transform, similar to
+[`plan_rfft`](@ref) except for [`brfft`](@ref) instead of
+[`rfft`](@ref). The first two arguments and the size of the transformed result, are
+the same as for [`brfft`](@ref).
+"""
+plan_brfft
+
+module FFTW
+    import ..DFT: fft, bfft, ifft, rfft, brfft, irfft, plan_fft, plan_bfft, plan_ifft,
+        plan_rfft, plan_brfft, plan_irfft, fft!, bfft!, ifft!, plan_fft!, plan_bfft!, plan_ifft!,
+        Plan, rfft_output_size, brfft_output_size, plan_inv, normalization, ScaledPlan
+
+    export r2r, r2r!, plan_r2r, plan_r2r!
+
+    """
+        plan_dct!(A [, dims [, flags [, timelimit]]])
+
+    Same as [`plan_dct`](@ref), but operates in-place on `A`.
+    """
+    function plan_dct! end
+
+    """
+        plan_idct(A [, dims [, flags [, timelimit]]])
+
+    Pre-plan an optimized inverse discrete cosine transform (DCT), similar to
+    [`plan_fft`](@ref) except producing a function that computes
+    [`idct`](@ref). The first two arguments have the same meaning as for
+    [`idct`](@ref).
+    """
+    function plan_idct end
+
+    """
+        plan_dct(A [, dims [, flags [, timelimit]]])
+
+    Pre-plan an optimized discrete cosine transform (DCT), similar to
+    [`plan_fft`](@ref) except producing a function that computes
+    [`dct`](@ref). The first two arguments have the same meaning as for
+    [`dct`](@ref).
+    """
+    function plan_dct end
+
+    """
+        plan_idct!(A [, dims [, flags [, timelimit]]])
+
+    Same as [`plan_idct`](@ref), but operates in-place on `A`.
+    """
+    function plan_idct! end
+
+    """
+        dct(A [, dims])
+
+    Performs a multidimensional type-II discrete cosine transform (DCT) of the array `A`, using
+    the unitary normalization of the DCT. The optional `dims` argument specifies an iterable
+    subset of dimensions (e.g. an integer, range, tuple, or array) to transform along.  Most
+    efficient if the size of `A` along the transformed dimensions is a product of small primes;
+    see [`nextprod`](@ref). See also [`plan_dct`](@ref) for even greater
+    efficiency.
+    """
+    function dct end
+
+    """
+        idct(A [, dims])
+
+    Computes the multidimensional inverse discrete cosine transform (DCT) of the array `A`
+    (technically, a type-III DCT with the unitary normalization). The optional `dims` argument
+    specifies an iterable subset of dimensions (e.g. an integer, range, tuple, or array) to
+    transform along.  Most efficient if the size of `A` along the transformed dimensions is a
+    product of small primes; see [`nextprod`](@ref).  See also
+    [`plan_idct`](@ref) for even greater efficiency.
+    """
+    function idct end
+
+    """
+        dct!(A [, dims])
+
+    Same as [`dct!`](@ref), except that it operates in-place on `A`, which must be an
+    array of real or complex floating-point values.
+    """
+    function dct! end
+
+    """
+        idct!(A [, dims])
+
+    Same as [`idct!`](@ref), but operates in-place on `A`.
+    """
+    function idct! end
+
+    """
+        r2r(A, kind [, dims])
+
+    Performs a multidimensional real-input/real-output (r2r) transform
+    of type `kind` of the array `A`, as defined in the FFTW manual.
+    `kind` specifies either a discrete cosine transform of various types
+    (`FFTW.REDFT00`, `FFTW.REDFT01`, `FFTW.REDFT10`, or
+    `FFTW.REDFT11`), a discrete sine transform of various types
+    (`FFTW.RODFT00`, `FFTW.RODFT01`, `FFTW.RODFT10`, or
+    `FFTW.RODFT11`), a real-input DFT with halfcomplex-format output
+    (`FFTW.R2HC` and its inverse `FFTW.HC2R`), or a discrete
+    Hartley transform (`FFTW.DHT`).  The `kind` argument may be
+    an array or tuple in order to specify different transform types
+    along the different dimensions of `A`; `kind[end]` is used
+    for any unspecified dimensions.  See the FFTW manual for precise
+    definitions of these transform types, at http://www.fftw.org/doc.
+
+    The optional `dims` argument specifies an iterable subset of
+    dimensions (e.g. an integer, range, tuple, or array) to transform
+    along. `kind[i]` is then the transform type for `dims[i]`,
+    with `kind[end]` being used for `i > length(kind)`.
+
+    See also [`plan_r2r`](@ref) to pre-plan optimized r2r transforms.
+    """
+    function r2r end
+
+    """
+        r2r!(A, kind [, dims])
+
+    Same as [`r2r`](@ref), but operates in-place on `A`, which must be
+    an array of real or complex floating-point numbers.
+    """
+    function r2r! end
+
+    """
+        plan_r2r!(A, kind [, dims [, flags [, timelimit]]])
+
+    Similar to [`plan_fft`](@ref), but corresponds to [`r2r!`](@ref).
+    """
+    function plan_r2r! end
+
+    """
+        plan_r2r(A, kind [, dims [, flags [, timelimit]]])
+
+    Pre-plan an optimized r2r transform, similar to [`plan_fft`](@ref)
+    except that the transforms (and the first three arguments)
+    correspond to [`r2r`](@ref) and [`r2r!`](@ref), respectively.
+    """
+    function plan_r2r end
+
+    (Base.USE_GPL_LIBS || Base.fftw_vendor() == :mkl) && include(joinpath("fft", "FFTW.jl"))
 end
+
+importall .FFTW
+export FFTW, dct, idct, dct!, idct!, plan_dct, plan_idct, plan_dct!, plan_idct!
 
 ##############################################################################
 

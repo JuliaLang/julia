@@ -1,5 +1,5 @@
 #!/bin/sh
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # script to prepare binaries and source tarballs for a Julia release
 # aka "bucket dance" julianightlies -> julialang
@@ -33,7 +33,7 @@ cd ..
 rm -rf julia-$version
 
 # download and rename binaries, with -latest copies
-julianightlies="https://s3.amazonaws.com/julianightlies/bin"
+julianightlies="https://julialangnightlies-s3.julialang.org/bin"
 curl -L -o julia-$version-linux-x86_64.tar.gz \
   $julianightlies/linux/x64/$majmin/julia-$majminpatch-$shashort-linux64.tar.gz
 cp julia-$version-linux-x86_64.tar.gz julia-$majmin-latest-linux-x86_64.tar.gz
@@ -56,8 +56,11 @@ curl -L -o julia-$version-win32.exe \
   $julianightlies/winnt/x86/$majmin/julia-$majminpatch-$shashort-win32.exe
 cp julia-$version-win32.exe julia-$majmin-latest-win32.exe
 
-echo "Note: if windows code signing is not working on the buildbots, then the"
-echo "checksums need to be re-calculated after the binaries are manually signed!"
+if [ -e codesign.sh ]; then
+  # code signing needs to run on windows, script is not checked in since it
+  # hard-codes a few things. TODO: see if signtool.exe can run in wine
+  ./codesign.sh
+fi
 
 shasum -a 256 julia-$version* | grep -v -e sha256 -e md5 -e asc > julia-$version.sha256
 md5sum julia-$version* | grep -v -e sha256 -e md5 -e asc > julia-$version.md5
@@ -69,7 +72,30 @@ gpg -u julia --armor --detach-sig julia-$version-linux-i686.tar.gz
 gpg -u julia --armor --detach-sig julia-$version-linux-arm.tar.gz
 gpg -u julia --armor --detach-sig julia-$version-linux-ppc64le.tar.gz
 
-echo "All files prepared. Attach julia-$version.tar.gz and julia-$version-full.tar.gz"
-echo "to github releases, upload all binaries and checksums to julialang S3. Be sure"
-echo "to set all S3 uploads to publicly readable, and replace $majmin-latest binaries."
-# TODO: also automate uploads via aws cli and github api?
+aws configure
+aws s3 cp --acl public-read julia-$version.sha256 s3://julialang/bin/checksums/
+aws s3 cp --acl public-read julia-$version.md5 s3://julialang/bin/checksums/
+for plat in x86_64 i686 arm ppc64le; do
+  platshort=$(echo $plat | sed -e 's/x86_64/x64/' -e 's/i686/x86/')
+  aws s3 cp --acl public-read julia-$version-linux-$plat.tar.gz \
+    s3://julialang/bin/linux/$platshort/$majmin/
+  aws s3 cp --acl public-read julia-$version-linux-$plat.tar.gz.asc \
+    s3://julialang/bin/linux/$platshort/$majmin/
+  aws s3 cp --acl public-read julia-$majmin-latest-linux-$plat.tar.gz \
+    s3://julialang/bin/linux/$platshort/$majmin/
+done
+aws s3 cp --acl public-read "julia-$version-osx10.7 .dmg" \
+  s3://julialang/bin/osx/x64/$majmin/
+aws s3 cp --acl public-read "julia-$majmin-latest-osx10.7 .dmg" \
+  s3://julialang/bin/osx/x64/$majmin/
+aws s3 cp --acl public-read "julia-$version-win64.exe" \
+  s3://julialang/bin/winnt/x64/$majmin/
+aws s3 cp --acl public-read "julia-$majmin-latest-win64.exe" \
+  s3://julialang/bin/winnt/x64/$majmin/
+aws s3 cp --acl public-read "julia-$version-win32.exe" \
+  s3://julialang/bin/winnt/x86/$majmin/
+aws s3 cp --acl public-read "julia-$majmin-latest-win32.exe" \
+  s3://julialang/bin/winnt/x86/$majmin/
+
+echo "All files prepared. Attach julia-$version.tar.gz"
+echo "and julia-$version-full.tar.gz to github releases."

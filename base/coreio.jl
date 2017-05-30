@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 show(x) = show(STDOUT::IO, x)
 print(xs...)   = print(STDOUT::IO, xs...)
@@ -12,6 +12,7 @@ iswritable(::DevNullStream) = true
 isopen(::DevNullStream) = true
 read(::DevNullStream, ::Type{UInt8}) = throw(EOFError())
 write(::DevNullStream, ::UInt8) = 1
+unsafe_write(::DevNullStream, ::Ptr{UInt8}, n::UInt)::Int = n
 close(::DevNullStream) = nothing
 flush(::DevNullStream) = nothing
 wait_connected(::DevNullStream) = nothing

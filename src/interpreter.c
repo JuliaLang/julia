@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include <stdlib.h>
 #include <setjmp.h>
@@ -85,7 +85,7 @@ static jl_value_t *do_invoke(jl_value_t **args, size_t nargs, interpreter_state 
     for (i = 1; i < nargs; i++)
         argv[i - 1] = eval(args[i], s);
     jl_method_instance_t *meth = (jl_method_instance_t*)args[0];
-    assert(jl_is_method_instance(meth) && !meth->inInference);
+    assert(jl_is_method_instance(meth));
     jl_value_t *result = jl_call_method_internal(meth, argv, nargs - 1);
     JL_GC_POP();
     return result;
@@ -116,12 +116,13 @@ static int equiv_type(jl_datatype_t *dta, jl_datatype_t *dtb)
           jl_field_count(dta) == jl_field_count(dtb)))
         return 0;
     jl_value_t *a=NULL, *b=NULL;
+    int ok = 1;
+    size_t i, nf = jl_field_count(dta);
     JL_GC_PUSH2(&a, &b);
     a = jl_rewrap_unionall((jl_value_t*)dta->super, dta->name->wrapper);
     b = jl_rewrap_unionall((jl_value_t*)dtb->super, dtb->name->wrapper);
     if (!jl_types_equal(a, b))
         goto no;
-    int ok = 1;
     JL_TRY {
         a = jl_apply_type(dtb->name->wrapper, jl_svec_data(dta->parameters), jl_nparams(dta));
     }
@@ -130,8 +131,6 @@ static int equiv_type(jl_datatype_t *dta, jl_datatype_t *dtb)
     }
     if (!ok) goto no;
     assert(jl_is_datatype(a));
-    if (!jl_egal((jl_value_t*)((jl_datatype_t*)a)->types, (jl_value_t*)dta->types))
-        goto no;
     a = dta->name->wrapper;
     b = dtb->name->wrapper;
     while (jl_is_unionall(a)) {
@@ -142,6 +141,19 @@ static int equiv_type(jl_datatype_t *dta, jl_datatype_t *dtb)
             goto no;
         a = jl_instantiate_unionall(ua, (jl_value_t*)ub->var);
         b = ub->body;
+    }
+    assert(jl_is_datatype(a) && jl_is_datatype(b));
+    for (i=0; i < nf; i++) {
+        jl_value_t *ta = jl_svecref(((jl_datatype_t*)a)->types, i);
+        jl_value_t *tb = jl_svecref(((jl_datatype_t*)b)->types, i);
+        if (jl_has_free_typevars(ta)) {
+            if (!jl_has_free_typevars(tb) || !jl_egal(ta, tb))
+                goto no;
+        }
+        else if (jl_has_free_typevars(tb) || jl_typeof(ta) != jl_typeof(tb) ||
+                 !jl_types_equal(ta, tb)) {
+            goto no;
+        }
     }
     JL_GC_POP();
     return 1;
@@ -191,14 +203,14 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
     jl_code_info_t *src = s==NULL ? NULL : s->src;
     if (jl_is_ssavalue(e)) {
         ssize_t id = ((jl_ssavalue_t*)e)->id;
-        if (id >= jl_source_nssavalues(src) || id < 0 || s->locals == NULL)
+        if (src == NULL || id >= jl_source_nssavalues(src) || id < 0 || s->locals == NULL)
             jl_error("access to invalid SSAValue");
         else
             return s->locals[jl_source_nslots(src) + id];
     }
     if (jl_is_slot(e)) {
         ssize_t n = jl_slot_number(e);
-        if (n > jl_source_nslots(src) || n < 1 || s->locals == NULL)
+        if (src == NULL || n > jl_source_nslots(src) || n < 1 || s->locals == NULL)
             jl_error("access to invalid slot number");
         jl_value_t *v = s->locals[n-1];
         if (v == NULL)
@@ -458,10 +470,7 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
             b->value = temp;
             jl_rethrow();
         }
-        if (dt->name->names == jl_emptysvec)
-            dt->layout = jl_void_type->layout; // reuse the same layout for all singletons
-        else if (jl_is_leaf_type((jl_value_t*)dt))
-            jl_compute_field_offsets(dt);
+        jl_compute_field_offsets(dt);
         if (para == (jl_value_t*)jl_emptysvec && jl_is_datatype_make_singleton(dt)) {
             dt->instance = jl_gc_alloc(ptls, 0, dt);
             jl_gc_wb(dt, dt->instance);
@@ -623,24 +632,28 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, int start,
 jl_value_t *jl_interpret_call(jl_method_instance_t *lam, jl_value_t **args, uint32_t nargs)
 {
     if (lam->jlcall_api == 2)
-        return lam->inferred;
+        return lam->inferred_const;
     jl_code_info_t *src = (jl_code_info_t*)lam->inferred;
-    if (src == NULL || !jl_is_code_info(src)) {
+    if (!src || (jl_value_t*)src == jl_nothing) {
         if (lam->def->isstaged) {
             src = jl_code_for_staged(lam);
             lam->inferred = (jl_value_t*)src;
             jl_gc_wb(lam, src);
         }
         else {
-            src = lam->def->source;
+            src = (jl_code_info_t*)lam->def->source;
         }
     }
-    jl_array_t *stmts = src->code;
-    if (!jl_typeis(stmts, jl_array_any_type)) {
-        stmts = jl_uncompress_ast(lam->def, stmts);
-        src->code = stmts;
-        jl_gc_wb(src, stmts);
+    if (src && (jl_value_t*)src != jl_nothing) {
+        src = jl_uncompress_ast(lam->def, (jl_array_t*)src);
+        lam->inferred = (jl_value_t*)src;
+        jl_gc_wb(lam, src);
     }
+    if (!src || !jl_is_code_info(src)) {
+        jl_error("source missing for method called in interpreter");
+    }
+
+    jl_array_t *stmts = src->code;
     assert(jl_typeis(stmts, jl_array_any_type));
     jl_value_t **locals;
     JL_GC_PUSHARGS(locals, jl_source_nslots(src) + jl_source_nssavalues(src) + 2);

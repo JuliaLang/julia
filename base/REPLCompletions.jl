@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module REPLCompletions
 
@@ -330,8 +330,14 @@ function complete_methods(ex_org::Expr)
     kwtype = isdefined(ml.mt, :kwsorter) ? Nullable{DataType}(typeof(ml.mt.kwsorter)) : Nullable{DataType}()
     io = IOBuffer()
     for method in ml
-        # Check if the method's type signature intersects the input types
         ms = method.sig
+
+        # Do not suggest the default method from sysimg.jl.
+        if Base.is_default_method(method)
+            continue
+        end
+
+        # Check if the method's type signature intersects the input types
         if typeintersect(Base.rewrap_unionall(Tuple{Base.unwrap_unionall(ms).parameters[1 : min(na, end)]...}, ms), t_in) != Union{}
             show(io, method, kwtype=kwtype)
             push!(out, String(take!(io)))

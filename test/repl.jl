@@ -1,8 +1,7 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
-const curmod = current_module()
-const curmod_name = fullname(curmod)
-const curmod_prefix = "$(["$m." for m in curmod_name]...)"
+# For curmod_*
+include("testenv.jl")
 
 # REPL tests
 isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
@@ -105,8 +104,32 @@ if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
         write(stdin_write, ";")
         readuntil(stdout_read, "shell> ")
         write(stdin_write, "echo hello >/dev/null\n")
-        readuntil(stdout_read, "\n")
-        readuntil(stdout_read, "\n")
+        let s = readuntil(stdout_read, "\n")
+            @test contains(s, "shell> ") # make sure we echoed the prompt
+            @test contains(s, "echo hello >/dev/null") # make sure we echoed the input
+        end
+        @test readuntil(stdout_read, "\n") == "\e[0m\n"
+    end
+
+    # issue #20771
+    let s
+        write(stdin_write, ";")
+        readuntil(stdout_read, "shell> ")
+        write(stdin_write, "'\n") # invalid input
+        s = readuntil(stdout_read, "\n")
+        @test contains(s, "shell> ") # check for the echo of the prompt
+        @test contains(s, "'") # check for the echo of the input
+        s = readuntil(stdout_read, "\n\n")
+        @test startswith(s, "\e[0mERROR: unterminated single quote\nStacktrace:\n [1] ") ||
+              startswith(s, "\e[0m\e[1m\e[91mERROR: \e[39m\e[22m\e[91munterminated single quote\e[39m\nStacktrace:\n [1] ")
+    end
+
+    # Issue #7001
+    # Test ignoring '\0'
+    let
+        write(stdin_write, "\0\n")
+        s = readuntil(stdout_read, "\n\n")
+        @test !contains(s, "invalid character")
     end
 
     # Test that accepting a REPL result immediately shows up, not
@@ -121,6 +144,7 @@ if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     # yield make sure this got processed
     readuntil(stdout_read, "1+1")
     close(t)
+    readuntil(stdout_read, "\n\n")
 
     # Issue #10222
     # Test ignoring insert key in standard and prefix search modes
@@ -226,6 +250,9 @@ fakehistory = """
 # time: 2014-06-30 17:32:59 EDT
 # mode: shell
 \tll
+# time: 2014-06-30 99:99:99 EDT
+# mode: julia
+\tx ΔxΔ
 # time: 2014-06-30 17:32:49 EDT
 # mode: julia
 \t1 + 1
@@ -347,6 +374,8 @@ begin
     LineEdit.enter_search(s, histp, true)
     write(ss.query_buffer, "l")
     LineEdit.update_display_buffer(ss, ss)
+    @test buffercontents(ss.response_buffer) == "ll"
+    @test position(ss.response_buffer) == 1
     write(ss.query_buffer, "l")
     LineEdit.update_display_buffer(ss, ss)
     LineEdit.accept_result(s, histp)
@@ -409,6 +438,20 @@ begin
     @test ps.parent == foobar_mode
     @test LineEdit.input_string(ps) == "ls"
     @test position(LineEdit.buffer(s)) == 1
+
+    # Some Unicode handling testing
+    LineEdit.history_prev(s, hp)
+    LineEdit.enter_search(s, histp, true)
+    write(ss.query_buffer, "x")
+    LineEdit.update_display_buffer(ss, ss)
+    @test buffercontents(ss.response_buffer) == "x ΔxΔ"
+    @test position(ss.response_buffer) == 4
+    write(ss.query_buffer, " ")
+    LineEdit.update_display_buffer(ss, ss)
+    LineEdit.accept_result(s, histp)
+    @test LineEdit.mode(s) == repl_mode
+    @test buffercontents(LineEdit.buffer(s)) == "x ΔxΔ"
+    @test position(LineEdit.buffer(s)) == 0
 
     # Try entering search mode while in custom repl mode
     LineEdit.enter_search(s, custom_histp, true)
@@ -582,3 +625,25 @@ function test_replinit()
     copy!(Base.repl_hooks, saved_replinit)
 end
 test_replinit()
+
+let ends_with_semicolon = Base.REPL.ends_with_semicolon
+    @test !ends_with_semicolon("")
+    @test ends_with_semicolon(";")
+    @test !ends_with_semicolon("a")
+    @test ends_with_semicolon("1;")
+    @test ends_with_semicolon("1;\n")
+    @test ends_with_semicolon("1;\r")
+    @test ends_with_semicolon("1;\r\n   \t\f")
+    @test ends_with_semicolon("1;#text\n")
+    @test ends_with_semicolon("a; #=#=# =# =#\n")
+    @test !ends_with_semicolon("begin\na;\nb;\nend")
+    @test !ends_with_semicolon("begin\na; #=#=#\n=#b=#\nend")
+    @test ends_with_semicolon("\na; #=#=#\n=#b=#\n# test\n#=\nfoobar\n=##bazbax\n")
+end
+
+# PR #20794, TTYTerminal with other kinds of streams
+let term = Base.Terminals.TTYTerminal("dumb",IOBuffer("1+2\n"),IOBuffer(),IOBuffer())
+    r = Base.REPL.BasicREPL(term)
+    REPL.run_repl(r)
+    @test String(take!(term.out_stream)) == "julia> 3\n\njulia> \n"
+end

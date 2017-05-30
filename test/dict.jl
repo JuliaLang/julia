@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Pair
 p = Pair(10,20)
@@ -394,6 +394,9 @@ let
     ca = empty!(ca)
     @test length(ca) == 0
     @test length(a) == 2
+
+    d = Dict('a'=>1, 'b'=>1, 'c'=> 3)
+    @test a != d
 end
 
 @test length(ObjectIdDict(1=>2, 1.0=>3)) == 2
@@ -620,7 +623,7 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
     @test isa(WeakKeyDict(A=>2, B=>3, C=>4), WeakKeyDict{Array{Int,1},Int})
     @test WeakKeyDict(a=>i+1 for (i,a) in enumerate([A,B,C]) ) == wkd
     @test WeakKeyDict([(A,2), (B,3), (C,4)]) == wkd
-
+    @test copy(wkd) == wkd
 
     @test length(wkd) == 3
     @test !isempty(wkd)
@@ -681,4 +684,46 @@ let
     for (pair, tupl) in zip(d, z)
         @test pair[1] == tupl[1] && pair[2] == tupl[2]
     end
+end
+
+@testset "Dict merge" begin
+    d1 = Dict("A" => 1, "B" => 2)
+    d2 = Dict("B" => 3.0, "C" => 4.0)
+    @test @inferred merge(d1, d2) == Dict("A" => 1, "B" => 3, "C" => 4)
+    # merge with combiner function
+    @test @inferred merge(+, d1, d2) == Dict("A" => 1, "B" => 5, "C" => 4)
+    @test @inferred merge(*, d1, d2) == Dict("A" => 1, "B" => 6, "C" => 4)
+    @test @inferred merge(-, d1, d2) == Dict("A" => 1, "B" => -1, "C" => 4)
+end
+
+@testset "Dict merge!" begin
+    d1 = Dict("A" => 1, "B" => 2)
+    d2 = Dict("B" => 3, "C" => 4)
+    @inferred merge!(d1, d2)
+    @test d1 == Dict("A" => 1, "B" => 3, "C" => 4)
+    # merge! with combiner function
+    @inferred merge!(+, d1, d2)
+    @test d1 == Dict("A" => 1, "B" => 6, "C" => 8)
+    @inferred merge!(*, d1, d2)
+    @test d1 == Dict("A" => 1, "B" => 18, "C" => 32)
+    @inferred merge!(-, d1, d2)
+    @test d1 == Dict("A" => 1, "B" => 15, "C" => 28)
+end
+
+@testset "misc error/io" begin
+    d = Dict('a'=>1, 'b'=>1, 'c'=> 3)
+    @test_throws ErrorException 'a' in d
+    key_str = sprint(show, keys(d))
+    @test 'a' ∈ key_str
+    @test 'b' ∈ key_str
+    @test 'c' ∈ key_str
+end
+
+@testset "Dict pop!" begin
+    d = Dict(1=>2, 3=>4)
+    @test pop!(d, 1) == 2
+    @test_throws KeyError pop!(d, 1)
+    @test pop!(d, 1, 0) == 0
+    @test pop!(d) == (3=>4)
+    @test_throws ArgumentError pop!(d)
 end

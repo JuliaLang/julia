@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## low-level pcre2 interface ##
 
@@ -8,20 +8,20 @@ include(string(length(Core.ARGS)>=2?Core.ARGS[2]:"","pcre_h.jl"))  # include($BU
 
 const PCRE_LIB = "libpcre2-8"
 
-global JIT_STACK = C_NULL
-global MATCH_CONTEXT = C_NULL
+const JIT_STACK = Ref{Ptr{Void}}(C_NULL)
+const MATCH_CONTEXT = Ref{Ptr{Void}}(C_NULL)
 
 function __init__()
     try
         JIT_STACK_START_SIZE = 32768
         JIT_STACK_MAX_SIZE = 1048576
-        global JIT_STACK = ccall((:pcre2_jit_stack_create_8, PCRE_LIB), Ptr{Void},
+        JIT_STACK[] = ccall((:pcre2_jit_stack_create_8, PCRE_LIB), Ptr{Void},
                                  (Cint, Cint, Ptr{Void}),
                                  JIT_STACK_START_SIZE, JIT_STACK_MAX_SIZE, C_NULL)
-        global MATCH_CONTEXT = ccall((:pcre2_match_context_create_8, PCRE_LIB),
+        MATCH_CONTEXT[] = ccall((:pcre2_match_context_create_8, PCRE_LIB),
                                      Ptr{Void}, (Ptr{Void},), C_NULL)
         ccall((:pcre2_jit_stack_assign_8, PCRE_LIB), Void,
-              (Ptr{Void}, Ptr{Void}, Ptr{Void}), MATCH_CONTEXT, C_NULL, JIT_STACK)
+              (Ptr{Void}, Ptr{Void}, Ptr{Void}), MATCH_CONTEXT[], C_NULL, JIT_STACK[])
     catch ex
         Base.showerror_nostdio(ex,
             "WARNING: Error during initialization of module PCRE")
@@ -69,10 +69,10 @@ const OPTIONS_MASK = COMPILE_MASK | EXECUTE_MASK
 
 const UNSET = ~Csize_t(0)  # Indicates that an output vector element is unset
 
-function info(regex::Ptr{Void}, what::Integer, T)
-    buf = zeros(UInt8,sizeof(T))
+function info(regex::Ptr{Void}, what::Integer, ::Type{T}) where T
+    buf = Ref{T}()
     ret = ccall((:pcre2_pattern_info_8, PCRE_LIB), Int32,
-                (Ptr{Void}, Int32, Ptr{UInt8}),
+                (Ptr{Void}, Int32, Ptr{Void}),
                 regex, what, buf)
     if ret != 0
         error(ret == ERROR_NULL      ? "NULL regex object" :
@@ -80,7 +80,7 @@ function info(regex::Ptr{Void}, what::Integer, T)
               ret == ERROR_BADOPTION ? "invalid option flags" :
                                        "unknown error $ret")
     end
-    reinterpret(T,buf)[1]
+    buf[]
 end
 
 function get_ovec(match_data)
@@ -120,7 +120,7 @@ free_match_context(context) =
     ccall((:pcre2_match_context_free_8, PCRE_LIB), Void, (Ptr{Void},), context)
 
 function err_message(errno)
-    buffer = Array{UInt8}(256)
+    buffer = Vector{UInt8}(256)
     ccall((:pcre2_get_error_message_8, PCRE_LIB), Void,
           (Int32, Ptr{UInt8}, Csize_t), errno, buffer, sizeof(buffer))
     unsafe_string(pointer(buffer))
@@ -129,7 +129,7 @@ end
 function exec(re,subject,offset,options,match_data)
     rc = ccall((:pcre2_match_8, PCRE_LIB), Cint,
                (Ptr{Void}, Ptr{UInt8}, Csize_t, Csize_t, Cuint, Ptr{Void}, Ptr{Void}),
-               re, subject, sizeof(subject), offset, options, match_data, MATCH_CONTEXT)
+               re, subject, sizeof(subject), offset, options, match_data, MATCH_CONTEXT[])
     # rc == -1 means no match, -2 means partial match.
     rc < -2 && error("PCRE.exec error: $(err_message(rc))")
     rc >= 0

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## Unary operators ##
 
@@ -25,11 +25,10 @@ julia> A
 """
 conj!(A::AbstractArray{<:Number}) = (@inbounds broadcast!(conj, A, A); A)
 
-for f in (:-, :~, :conj, :real, :imag)
+for f in (:-, :conj, :real, :imag)
     @eval ($f)(A::AbstractArray) = broadcast($f, A)
 end
 
-!(A::AbstractArray{Bool}) = broadcast(!, A)
 
 ## Binary arithmetic operators ##
 
@@ -51,7 +50,7 @@ end
 
 ## data movement ##
 
-function flipdim{T}(A::Array{T}, d::Integer)
+function flipdim(A::Array{T}, d::Integer) where T
     nd = ndims(A)
     1 ≤ d ≤ nd || throw(ArgumentError("dimension $d is not 1 ≤ $d ≤ $nd"))
     sd = size(A, d)

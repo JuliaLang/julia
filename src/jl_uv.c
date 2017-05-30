@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "platform.h"
 
@@ -26,20 +26,6 @@
 #if defined(_COMPILER_MICROSOFT_) && !defined(write)
 #include <io.h>
 #define write _write
-#endif
-
-#ifndef static_assert
-#  ifndef __cplusplus
-#    define static_assert(...)
-// Remove the following gcc special handling when we officially requires
-// gcc 4.7 (for c++11) and -std=gnu11
-#    ifdef __GNUC__
-#      if __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 6)
-#        undef static_assert
-#        define static_assert _Static_assert
-#      endif
-#    endif
-#  endif
 #endif
 
 #ifdef __cplusplus
@@ -369,7 +355,7 @@ JL_DLLEXPORT int jl_fs_write(int handle, const char *data, size_t len,
                              int64_t offset)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    if (ptls->safe_restore)
+    if (ptls->safe_restore || ptls->tid != 0)
         return write(handle, data, len);
     uv_fs_t req;
     uv_buf_t buf[1];
@@ -419,13 +405,13 @@ JL_DLLEXPORT int jl_fs_close(int handle)
 }
 
 JL_DLLEXPORT int jl_uv_write(uv_stream_t *stream, const char *data, size_t n,
-                             uv_write_t *uvw, void *writecb)
+                             uv_write_t *uvw, uv_write_cb writecb)
 {
     uv_buf_t buf[1];
     buf[0].base = (char*)data;
     buf[0].len = n;
     JL_SIGATOMIC_BEGIN();
-    int err = uv_write(uvw,stream,buf,1,(uv_write_cb)writecb);
+    int err = uv_write(uvw, stream, buf, 1, writecb);
     JL_SIGATOMIC_END();
     return err;
 }
@@ -446,7 +432,7 @@ JL_DLLEXPORT void jl_uv_puts(uv_stream_t *stream, const char *str, size_t n)
         sizeof(((uv_stream_t*)0)->type) == sizeof(((ios_t*)0)->bm),
             "UV and ios layout mismatch");
 
-    uv_file fd = 0;
+    uv_file fd = -1;
 
     // Fallback for output during early initialisation...
     if (stream == (void*)STDOUT_FILENO || stream == (void*)STDERR_FILENO) {
@@ -457,7 +443,18 @@ JL_DLLEXPORT void jl_uv_puts(uv_stream_t *stream, const char *str, size_t n)
         fd = ((jl_uv_file_t*)stream)->file;
     }
 
-    if (fd) {
+    // Hack to make CoreIO thread-safer
+    jl_ptls_t ptls = jl_get_ptls_states();
+    if (ptls->tid != 0) {
+        if (stream == JL_STDOUT) {
+            fd = STDOUT_FILENO;
+        }
+        else if (stream == JL_STDERR) {
+            fd = STDERR_FILENO;
+        }
+    }
+
+    if (fd != -1) {
         // Write to file descriptor...
         jl_fs_write(fd, str, n, -1);
     }
@@ -944,15 +941,15 @@ void jl_work_notifier(uv_work_t *req, int status)
     free(baton);
 }
 
-JL_DLLEXPORT int jl_queue_work(void *work_func, void *work_args, void *work_retval,
-                               void *notify_func, int notify_idx)
+JL_DLLEXPORT int jl_queue_work(work_cb_t work_func, void *work_args, void *work_retval,
+                               notify_cb_t notify_func, int notify_idx)
 {
     struct work_baton *baton = (struct work_baton*) malloc(sizeof(struct work_baton));
     baton->req.data = (void*) baton;
-    baton->work_func = (work_cb_t)work_func;
+    baton->work_func = work_func;
     baton->work_args = work_args;
     baton->work_retval = work_retval;
-    baton->notify_func = (notify_cb_t)notify_func;
+    baton->notify_func = notify_func;
     baton->notify_idx = notify_idx;
 
     uv_queue_work(jl_io_loop, &baton->req, jl_work_wrapper, jl_work_notifier);

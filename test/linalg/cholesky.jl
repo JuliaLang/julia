@@ -1,10 +1,10 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 debug = false
 
 using Base.Test
 
-using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted
+using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted, PosDefException
 
 n = 10
 
@@ -60,7 +60,7 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
 
     apos = apd[1,1]            # test chol(x::Number), needs x>0
     @test all(x -> x ≈ √apos, cholfact(apos).factors)
-    @test_throws ArgumentError chol(-one(eltya))
+    @test_throws PosDefException chol(-one(eltya))
 
     if eltya <: Real
         capds = cholfact(apds)
@@ -71,6 +71,8 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
             @test inv(capds)*apds ≈ eye(n)
             @test abs((det(capds) - det(apd))/det(capds)) <= ε*κ*n
         end
+        ulstring = sprint(show,capds[:UL])
+        @test sprint(show,capds) == "$(typeof(capds)) with factor:\n$ulstring"
     else
         capdh = cholfact(apdh)
         @test inv(capdh)*apdh ≈ eye(n)
@@ -84,6 +86,8 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
         capdh = cholfact!(copy(apd), :L)
         @test inv(capdh)*apdh ≈ eye(n)
         @test abs((det(capdh) - det(apd))/det(capdh)) <= ε*κ*n
+        ulstring = sprint(show,capdh[:UL])
+        @test sprint(show,capdh) == "$(typeof(capdh)) with factor:\n$ulstring"
     end
 
     # test chol of 2x2 Strang matrix
@@ -169,6 +173,7 @@ debug && println("\ntype of a: ", eltya, " type of b: ", eltyb, "\n")
                     @test norm(apd * (lapd\b) - b)/norm(b) <= ε*κ*n
                     @test norm(apd * (lapd\b[1:n]) - b[1:n])/norm(b[1:n]) <= ε*κ*n
                 end
+                @test_throws DimensionMismatch lapd\RowVector(ones(n))
 
 debug && println("pivoted Cholesky decomposition")
                 if eltya != BigFloat && eltyb != BigFloat # Note! Need to implement pivoted Cholesky decomposition in julia
@@ -179,6 +184,8 @@ debug && println("pivoted Cholesky decomposition")
                     lpapd = cholfact(apd, :L, Val{true})
                     @test norm(apd * (lpapd\b) - b)/norm(b) <= ε*κ*n # Ad hoc, revisit
                     @test norm(apd * (lpapd\b[1:n]) - b[1:n])/norm(b[1:n]) <= ε*κ*n
+
+                    @test_throws BoundsError lpapd\RowVector(ones(n))
                 end
             end
         end
@@ -187,10 +194,9 @@ end
 
 begin
     # Cholesky factor of Matrix with non-commutative elements, here 2x2-matrices
-
     X = Matrix{Float64}[0.1*rand(2,2) for i in 1:3, j = 1:3]
-    L = full(Base.LinAlg._chol!(X*X', LowerTriangular))
-    U = full(Base.LinAlg._chol!(X*X', UpperTriangular))
+    L = full(Base.LinAlg._chol!(X*X', LowerTriangular)[1])
+    U = full(Base.LinAlg._chol!(X*X', UpperTriangular)[1])
     XX = full(X*X')
 
     @test sum(sum(norm, L*L' - XX)) < eps()
@@ -205,8 +211,8 @@ for elty in (Float32, Float64, Complex{Float32}, Complex{Float64})
         A = randn(5,5)
     end
     A = convert(Matrix{elty}, A'A)
-    @test full(cholfact(A)[:L]) ≈ full(invoke(Base.LinAlg._chol!, Tuple{AbstractMatrix, Type{LowerTriangular}}, copy(A), LowerTriangular))
-    @test full(cholfact(A)[:U]) ≈ full(invoke(Base.LinAlg._chol!, Tuple{AbstractMatrix, Type{UpperTriangular}}, copy(A), UpperTriangular))
+    @test full(cholfact(A)[:L]) ≈ full(invoke(Base.LinAlg._chol!, Tuple{AbstractMatrix, Type{LowerTriangular}}, copy(A), LowerTriangular)[1])
+    @test full(cholfact(A)[:U]) ≈ full(invoke(Base.LinAlg._chol!, Tuple{AbstractMatrix, Type{UpperTriangular}}, copy(A), UpperTriangular)[1])
 end
 
 # Test up- and downdates
@@ -265,3 +271,14 @@ end
 
 # Fail for non-BLAS element types
 @test_throws ArgumentError cholfact!(Hermitian(rand(Float16, 5,5)), Val{true})
+
+@testset "throw for non positive matrix" begin
+    for T in (Float32, Float64, Complex64, Complex128)
+        A = T[1 2; 2 1]; B = T[1, 1]
+        C = cholfact(A)
+        @show typeof(A), typeof(B), typeof(C.factors)
+        @test_throws PosDefException C\B
+        @test_throws PosDefException det(C)
+        @test_throws PosDefException logdet(C)
+    end
+end

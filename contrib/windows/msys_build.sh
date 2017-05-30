@@ -1,5 +1,5 @@
 #!/bin/sh
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Script to compile Windows Julia, using binary dependencies from nightlies.
 # Should work in MSYS assuming 7zip is installed and on the path,
@@ -89,7 +89,7 @@ esac
 if ! [ -e julia-installer.exe ]; then
   f=julia-latest-win$bits.exe
   echo "Downloading $f"
-  $curlflags -O https://s3.amazonaws.com/julianightlies/bin/winnt/x$archsuffix/$f
+  $curlflags -O https://julialangnightlies-s3.julialang.org/bin/winnt/x$archsuffix/$f
   echo "Extracting $f"
   $SEVENZIP x -y $f >> get-deps.log
 fi
@@ -203,6 +203,7 @@ fi
 echo 'FORCE_ASSERTIONS = 1' >> Make.user
 
 cat Make.user
-make -j3 VERBOSE=1
+make -j3 VERBOSE=1 install
+make VERBOSE=1 -C examples
+cp usr/bin/busybox.exe julia-*/bin
 make build-stats
-#make debug

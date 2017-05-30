@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Test string/show representation of Date
 @test string(Dates.Date(1, 1, 1)) == "0001-01-01" # January 1st, 1 AD/CE
@@ -29,10 +29,13 @@
 # DateTime parsing
 # Useful reference for different locales: http://library.princeton.edu/departments/tsd/katmandu/reference/months.html
 
-let str = "1996/02/15 24:00", format = "yyyy/mm/dd HH:MM"
-    expected = (1996, 2, 15, 24, 0, 0, 0)
-    @test get(Dates.tryparse_internal(DateTime, str, Dates.DateFormat(format))) == expected
-    @test_throws ArgumentError Dates.DateTime(str, Dates.DateFormat(format))
+# Allow parsing of strings which are not representable as a TimeType
+let str = "02/15/1996 24:00", df = Dates.DateFormat("mm/dd/yyyy HH:MM")
+    parsed = Any[
+        Dates.Month(2), Dates.Day(15), Dates.Year(1996), Dates.Hour(24), Dates.Minute(0)
+    ]
+    @test Dates.parse_components(str, df) == parsed
+    @test_throws ArgumentError Dates.parse(DateTime, str, df)
 end
 
 # DateFormat printing
@@ -76,18 +79,18 @@ b2 = "96/Feb/1"
 b3 = "96/2/15"
 @test_throws ArgumentError Dates.DateTime(b3, f)
 try
-    Dates.tryparse_internal(DateTime, "2012/02/20T09:09:31.25i90", dateformat"yyyy/mm/ddTHH:MM:SS.s", true)
+    Dates.parse(DateTime, "2012/2/20T9:9:31.25i90", dateformat"yyyy/mm/ddTHH:MM:SS.s")
     @test false
 catch err
     @test isa(err, ArgumentError)
     @test err.msg == "Found extra characters at the end of date time string"
 end
 try
-    Dates.tryparse_internal(DateTime, "2012/02/20T09:09:3i90", dateformat"yyyy/mm/ddTHH:MM:SS.s", true)
+    Dates.parse(DateTime, "2012/2/20T9:9:3i90", dateformat"yyyy/mm/ddTHH:MM:SS.s")
     @test false
 catch err
     @test isa(err, ArgumentError)
-    @test err.msg == "Unable to parse date time. Expected token Delim(.) at char 19"
+    @test err.msg == "Unable to parse date time. Expected directive Delim(.) at char 16"
 end
 
 f = "yy:dd:mm"
@@ -375,32 +378,57 @@ let f = "YY"
 end
 
 # Issue: https://github.com/quinnj/TimeZones.jl/issues/19
-let ds = "2015-07-24T05:38:19.591Z",
-    dt = Dates.DateTime(2015, 7, 24, 5, 38, 19, 591),
+let
+    const Zulu = String
 
-    format = "yyyy-mm-ddTHH:MM:SS.sssZ",
+    function Dates.tryparsenext(d::Dates.DatePart{'Z'}, str, i, len)
+        Dates.tryparsenext_word(str, i, len, Dates.min_width(d), Dates.max_width(d))
+    end
+
+    str = "2015-07-24T05:38:19.591Z"
+    dt = Dates.DateTime(2015, 7, 24, 5, 38, 19, 591)
+    parsed = Any[
+        Dates.Year(2015), Dates.Month(7), Dates.Day(24),
+        Dates.Hour(5), Dates.Minute(38), Dates.Second(19), Dates.Millisecond(591)
+    ]
+
+    format = "yyyy-mm-ddTHH:MM:SS.sssZ"
     escaped_format = "yyyy-mm-dd\\THH:MM:SS.sss\\Z"
 
-    # Typically 'Z' isn't treated as a slot so it doesn't have to be escaped
-    @test DateTime(ds, format) == dt
-    @test DateTime(ds, escaped_format) == dt
+    # Typically 'Z' isn't treated as a specifier so it doesn't have to be escaped
+    @test Dates.parse_components(str, Dates.DateFormat(format)) == parsed
+    @test Dates.parse_components(str, Dates.DateFormat(escaped_format)) == parsed
 
     try
-        # Make 'Z' into a slot
-        Dates.SLOT_RULE['Z'] = Dates.TimeZone
+        # Make 'Z' into a specifier
+        Dates.CONVERSION_SPECIFIERS['Z'] = Zulu
+        Dates.CONVERSION_DEFAULTS[Zulu] = ""
 
-        @test_throws MethodError DateTime(ds, format)
-        @test DateTime(ds, escaped_format) == dt
+        @test Dates.parse_components(str, Dates.DateFormat(format)) == [parsed; Zulu("Z")]
+        @test Dates.parse_components(str, Dates.DateFormat(escaped_format)) == parsed
     finally
-        delete!(Dates.SLOT_RULE, 'Z')
+        delete!(Dates.CONVERSION_SPECIFIERS, 'Z')
+        delete!(Dates.CONVERSION_DEFAULTS, Zulu)
     end
 
     # Ensure that the default behaviour has been restored
-    @test DateTime(ds, format) == dt
-    @test DateTime(ds, escaped_format) == dt
+    @test Dates.parse_components(str, Dates.DateFormat(format)) == parsed
+    @test Dates.parse_components(str, Dates.DateFormat(escaped_format)) == parsed
 end
 
 # Issue 10817
 @test Dates.Date("Apr 01 2014", "uuu dd yyyy") == Dates.Date(2014, 4, 1)
 @test_throws ArgumentError Dates.Date("Apr 01 xx 2014", "uuu dd zz yyyy")
 @test_throws ArgumentError Dates.Date("Apr 01 xx 2014", "uuu dd    yyyy")
+
+# Issue 21001
+for (ms, str) in zip([0, 1, 20, 300, 450, 678], ["0", "001", "02", "3", "45", "678"])
+    dt = DateTime(2000, 1, 1, 0, 0, 0, ms)
+    @test Dates.format(dt, "s") == str
+    @test Dates.format(dt, "ss") == rpad(str, 2, '0')
+    @test Dates.format(dt, "sss") == rpad(str, 3, '0')
+    @test Dates.format(dt, "ssss") == rpad(str, 4, '0')
+end
+
+# Issue #21504
+@test isnull(tryparse(Dates.Date, "0-1000"))

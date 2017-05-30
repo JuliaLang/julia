@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 debug = false
 using Base.Test
@@ -60,6 +60,9 @@ debug && println("QR decomposition (without pivoting)")
                     ac = copy(a)
                     @test qrfact!(a[:, 1:5])\b == qrfact!(view(ac, :, 1:5))\b
                 end
+                rstring = sprint(show,r)
+                qstring = sprint(show,q)
+                @test sprint(show,qra) == "$(typeof(qra)) with factors Q and R:\n$qstring\n$rstring"
 
 debug && println("Thin QR decomposition (without pivoting)")
                 qra   = @inferred qrfact(a[:,1:n1], Val{false})

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Cartesian
 
@@ -13,22 +13,22 @@ export @nloops, @nref, @ncall, @nexprs, @nextract, @nall, @nany, @ntuple, @nif
 
 Generate `N` nested loops, using `itersym` as the prefix for the iteration variables.
 `rangeexpr` may be an anonymous-function expression, or a simple symbol `var` in which case
-the range is `1:size(var,d)` for dimension `d`.
+the range is `indices(var, d)` for dimension `d`.
 
 Optionally, you can provide "pre" and "post" expressions. These get executed first and last,
 respectively, in the body of each loop. For example:
 
-    @nloops 2 i A d->j_d=min(i_d,5) begin
+    @nloops 2 i A d -> j_d = min(i_d, 5) begin
         s += @nref 2 A j
     end
 
 would generate:
 
-    for i_2 = 1:size(A, 2)
+    for i_2 = indices(A, 2)
         j_2 = min(i_2, 5)
-        for i_1 = 1:size(A, 1)
+        for i_1 = indices(A, 1)
             j_1 = min(i_1, 5)
-            s += A[j_1,j_2]
+            s += A[j_1, j_2]
         end
     end
 

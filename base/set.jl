@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 mutable struct Set{T} <: AbstractSet{T}
     dict::Dict{T,Void}
@@ -14,8 +14,8 @@ function Set(g::Generator)
     return Set{T}(g)
 end
 
-eltype{T}(::Type{Set{T}}) = T
-similar{T}(s::Set{T}) = Set{T}()
+eltype(::Type{Set{T}}) where {T} = T
+similar(s::Set{T}) where {T} = Set{T}()
 similar(s::Set, T::Type) = Set{T}()
 
 function show(io::IO, s::Set)
@@ -35,7 +35,15 @@ in(x, s::Set) = haskey(s.dict, x)
 push!(s::Set, x) = (s.dict[x] = nothing; s)
 pop!(s::Set, x) = (pop!(s.dict, x); x)
 pop!(s::Set, x, deflt) = x in s ? pop!(s, x) : deflt
-pop!(s::Set) = (idx = start(s.dict); val = s.dict.keys[idx]; _delete!(s.dict, idx); val)
+
+function pop!(s::Set)
+    isempty(s) && throw(ArgumentError("set must be non-empty"))
+    idx = start(s.dict)
+    val = s.dict.keys[idx]
+    _delete!(s.dict, idx)
+    val
+end
+
 delete!(s::Set, x) = (delete!(s.dict, x); s)
 
 copy(s::Set) = union!(similar(s), s)
@@ -108,6 +116,9 @@ end
 const ⊆ = issubset
 ⊊(l::Set, r::Set) = <(l, r)
 ⊈(l::Set, r::Set) = !⊆(l, r)
+⊇(l, r) = issubset(r, l)
+⊉(l::Set, r::Set) = !⊇(l, r)
+⊋(l::Set, r::Set) = <(r, l)
 
 """
     unique(itr)
@@ -220,7 +231,7 @@ end
 
 allunique(::Set) = true
 
-allunique{T}(r::Range{T}) = (step(r) != zero(T)) || (length(r) <= 1)
+allunique(r::Range{T}) where {T} = (step(r) != zero(T)) || (length(r) <= 1)
 
 function filter(f, s::Set)
     u = similar(s)
@@ -249,5 +260,5 @@ function hash(s::Set, h::UInt)
     return h
 end
 
-convert{T}(::Type{Set{T}}, s::Set{T}) = s
-convert{T}(::Type{Set{T}}, x::Set) = Set{T}(x)
+convert(::Type{Set{T}}, s::Set{T}) where {T} = s
+convert(::Type{Set{T}}, x::Set) where {T} = Set{T}(x)

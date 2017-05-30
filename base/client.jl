@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## client.jl - frontend handling command line options, environment setup,
 ##             and REPL
@@ -22,6 +22,7 @@ const text_colors = AnyDict(
     :normal        => "\033[0m",
     :default       => "\033[39m",
     :bold          => "\033[1m",
+    :underline     => "\033[4m",
     :nothing       => "",
 )
 
@@ -31,6 +32,7 @@ end
 
 const disable_text_style = AnyDict(
     :bold => "\033[22m",
+    :underline => "\033[24m",
     :normal => "",
     :default => "",
 )
@@ -414,7 +416,8 @@ function _start()
             end
         end
     catch err
-        display_error(err,catch_backtrace())
+        eval(Main, Expr(:body, Expr(:return, Expr(:call, Base.display_error,
+                                                  QuoteNode(err), catch_backtrace()))))
         exit(1)
     end
     if is_interactive && have_color

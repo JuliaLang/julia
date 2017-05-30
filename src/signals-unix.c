@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include <signal.h>
 #include <sys/types.h>
@@ -117,7 +117,7 @@ static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), void *_ctx)
     ucontext_t *ctx = (ucontext_t*)_ctx;
     uintptr_t target = (uintptr_t)fptr;
     // Apparently some glibc's sigreturn target is running in thumb state.
-    // Mimic a `bx` instruction by settting the T(5) bit of CPSR
+    // Mimic a `bx` instruction by setting the T(5) bit of CPSR
     // depending on the target address.
     uintptr_t cpsr = ctx->uc_mcontext.arm_cpsr;
     // Thumb mode function pointer should have the lowest bit set
@@ -482,7 +482,7 @@ void jl_install_thread_signal_handler(jl_ptls_t ptls)
     void *signal_stack = alloc_sigstack(sig_stack_size);
     stack_t ss;
     ss.ss_flags = 0;
-    ss.ss_size = sig_stack_size;
+    ss.ss_size = sig_stack_size - 16;
     ss.ss_sp = signal_stack;
     if (sigaltstack(&ss, NULL) < 0) {
         jl_errorf("fatal error: sigaltstack: %s", strerror(errno));

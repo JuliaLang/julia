@@ -1,5 +1,5 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
-#
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 # These tests cover the higher order functions specialized for sparse arrays defined in
 # base/sparse/higherorderfns.jl, particularly map[!]/broadcast[!] for SparseVectors and
 # SparseMatrixCSCs at present.
@@ -164,6 +164,7 @@ end
     mats = (sprand(N, M, p), sprand(N, 1, p), sprand(1, M, p), sprand(1, 1, 1.0), spzeros(1, 1))
     vecs = (sprand(N, p), sprand(1, 1.0), spzeros(1))
     tens = (mats..., vecs...)
+    fZ = Array(first(mats))
     for Xo in tens
         X = ndims(Xo) == 1 ? SparseVector{Float32,Int32}(Xo) : SparseMatrixCSC{Float32,Int32}(Xo)
         # use different types to check internal type stability via allocation tests below
@@ -182,17 +183,17 @@ end
                 @test_throws DimensionMismatch broadcast(+, spzeros((shapeX .- 1)...), Y)
             end
             # --> test broadcast! entry point / +-like zero-preserving op
-            fZ = broadcast(+, fX, fY); Z = sparse(fZ)
+            broadcast!(+, fZ, fX, fY); Z = sparse(fZ)
             broadcast!(+, Z, X, Y); Z = sparse(fZ) # warmup for @allocated
             @test (@allocated broadcast!(+, Z, X, Y)) == 0
             @test broadcast!(+, Z, X, Y) == sparse(broadcast!(+, fZ, fX, fY))
             # --> test broadcast! entry point / *-like zero-preserving op
-            fZ = broadcast(*, fX, fY); Z = sparse(fZ)
+            broadcast!(*, fZ, fX, fY); Z = sparse(fZ)
             broadcast!(*, Z, X, Y); Z = sparse(fZ) # warmup for @allocated
             @test (@allocated broadcast!(*, Z, X, Y)) == 0
             @test broadcast!(*, Z, X, Y) == sparse(broadcast!(*, fZ, fX, fY))
             # --> test broadcast! entry point / not zero-preserving op
-            fZ = broadcast(f, fX, fY); Z = sparse(fZ)
+            broadcast!(f, fZ, fX, fY); Z = sparse(fZ)
             broadcast!(f, Z, X, Y); Z = sparse(fZ) # warmup for @allocated
             @test (@allocated broadcast!(f, Z, X, Y)) == 0
             @test broadcast!(f, Z, X, Y) == sparse(broadcast!(f, fZ, fX, fY))
@@ -265,14 +266,24 @@ end
     end
 end
 
-
 @testset "sparse map/broadcast with result eltype not a concrete subtype of Number (#19561/#19589)" begin
-    intoneorfloatzero(x) = x != 0.0 ? Int(1) : Float64(x)
-    stringorfloatzero(x) = x != 0.0 ? "Hello" : Float64(x)
-    @test map(intoneorfloatzero, speye(4)) == sparse(map(intoneorfloatzero, eye(4)))
-    @test map(stringorfloatzero, speye(4)) == sparse(map(stringorfloatzero, eye(4)))
-    @test broadcast(intoneorfloatzero, speye(4)) == sparse(broadcast(intoneorfloatzero, eye(4)))
-    @test broadcast(stringorfloatzero, speye(4)) == sparse(broadcast(stringorfloatzero, eye(4)))
+    N = 4
+    A, fA = speye(N), eye(N)
+    B, fB = spzeros(1, N), zeros(1, N)
+    intorfloat_zeropres(xs...) = all(iszero, xs) ? zero(Float64) : Int(1)
+    stringorfloat_zeropres(xs...) = all(iszero, xs) ? zero(Float64) : "hello"
+    intorfloat_notzeropres(xs...) = all(iszero, xs) ? Int(1) : zero(Float64)
+    stringorfloat_notzeropres(xs...) = all(iszero, xs) ? "hello" : zero(Float64)
+    for fn in (intorfloat_zeropres, intorfloat_notzeropres,
+                stringorfloat_zeropres, stringorfloat_notzeropres)
+        @test map(fn, A) == sparse(map(fn, fA))
+        @test broadcast(fn, A) == sparse(broadcast(fn, fA))
+        @test broadcast(fn, A, B) == sparse(broadcast(fn, fA, fB))
+        @test broadcast(fn, B, A) == sparse(broadcast(fn, fB, fA))
+    end
+    for fn in (intorfloat_zeropres, stringorfloat_zeropres)
+        @test broadcast(fn, A, B, A) == sparse(broadcast(fn, fA, fB, fA))
+    end
 end
 
 @testset "broadcast[!] over combinations of scalars and sparse vectors/matrices" begin
@@ -392,17 +403,39 @@ end
     densearrays = (C, M)
     fD, fB = Array(D), Array(B)
     for X in densearrays
-        @test (Q = broadcast(+, D, X); Q isa SparseMatrixCSC && Q == sparse(broadcast(+, fD, X)))
+        @test broadcast(+, D, X)::SparseMatrixCSC == sparse(broadcast(+, fD, X))
         @test broadcast!(+, Z, D, X) == sparse(broadcast(+, fD, X))
-        @test (Q = broadcast(*, s, B, X); Q isa SparseMatrixCSC && Q == sparse(broadcast(*, s, fB, X)))
+        @test broadcast(*, s, B, X)::SparseMatrixCSC == sparse(broadcast(*, s, fB, X))
         @test broadcast!(*, Z, s, B, X) == sparse(broadcast(*, s, fB, X))
-        @test (Q = broadcast(+, V, B, X); Q isa SparseMatrixCSC && Q == sparse(broadcast(+, fV, fB, X)))
+        @test broadcast(+, V, B, X)::SparseMatrixCSC == sparse(broadcast(+, fV, fB, X))
         @test broadcast!(+, Z, V, B, X) == sparse(broadcast(+, fV, fB, X))
-        @test (Q = broadcast(+, V, A, X); Q isa SparseMatrixCSC && Q == sparse(broadcast(+, fV, fA, X)))
+        @test broadcast(+, V, A, X)::SparseMatrixCSC == sparse(broadcast(+, fV, fA, X))
         @test broadcast!(+, Z, V, A, X) == sparse(broadcast(+, fV, fA, X))
-        @test (Q = broadcast(*, s, V, A, X); Q isa SparseMatrixCSC && Q == sparse(broadcast(*, s, fV, fA, X)))
+        @test broadcast(*, s, V, A, X)::SparseMatrixCSC == sparse(broadcast(*, s, fV, fA, X))
         @test broadcast!(*, Z, s, V, A, X) == sparse(broadcast(*, s, fV, fA, X))
+        # Issue #20954 combinations of sparse arrays and RowVectors
+        @test broadcast(+, A, X')::SparseMatrixCSC == sparse(broadcast(+, fA, X'))
+        @test broadcast(*, V, X')::SparseMatrixCSC == sparse(broadcast(*, fV, X'))
     end
+end
+
+@testset "broadcast! where the destination is a structured matrix" begin
+    # Where broadcast!'s destination is a structured matrix, broadcast! should fall back
+    # to the generic AbstractArray broadcast! code (at least for now).
+    N, p = 5, 0.4
+    A = sprand(N, N, p)
+    sA = A + transpose(A)
+    D = Diagonal(rand(N))
+    B = Bidiagonal(rand(N), rand(N - 1), true)
+    T = Tridiagonal(rand(N - 1), rand(N), rand(N - 1))
+    @test broadcast!(sin, copy(D), D) == Diagonal(sin.(D))
+    @test broadcast!(sin, copy(B), B) == Bidiagonal(sin.(B), true)
+    @test broadcast!(sin, copy(T), T) == Tridiagonal(sin.(T))
+    @test broadcast!(*, copy(D), D, A) == Diagonal(broadcast(*, D, A))
+    @test broadcast!(*, copy(B), B, A) == Bidiagonal(broadcast(*, B, A), true)
+    @test broadcast!(*, copy(T), T, A) == Tridiagonal(broadcast(*, T, A))
+    # SymTridiagonal (and similar symmetric matrix types) do not support setindex!
+    # off the diagonal, and so cannot serve as a destination for broadcast!
 end
 
 @testset "map[!] over combinations of sparse and structured matrices" begin

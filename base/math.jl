@@ -1,8 +1,8 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Math
 
-export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
+export sin, cos, sincos, tan, sinh, cosh, tanh, asin, acos, atan,
        asinh, acosh, atanh, sec, csc, cot, asec, acsc, acot,
        sech, csch, coth, asech, acsch, acoth,
        sinpi, cospi, sinc, cosc,
@@ -20,13 +20,23 @@ import Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
              max, min, minmax, ^, exp2, muladd, rem,
              exp10, expm1, log1p
 
-using Base: sign_mask, exponent_mask, exponent_one, exponent_bias,
-            exponent_half, exponent_max, exponent_raw_max, fpinttype,
-            significand_mask, significand_bits, exponent_bits
+using Base: sign_mask, exponent_mask, exponent_one,
+            exponent_half, fpinttype, significand_mask
 
-using Core.Intrinsics: sqrt_llvm, powi_llvm
+using Core.Intrinsics: sqrt_llvm
 
-const IEEEFloat = Union{Float16,Float32,Float64}
+const IEEEFloat = Union{Float16, Float32, Float64}
+
+for T in (Float16, Float32, Float64)
+    @eval significand_bits(::Type{$T}) = $(trailing_ones(significand_mask(T)))
+    @eval exponent_bits(::Type{$T}) = $(sizeof(T)*8 - significand_bits(T) - 1)
+    @eval exponent_bias(::Type{$T}) = $(Int(exponent_one(T) >> significand_bits(T)))
+    # maximum float exponent
+    @eval exponent_max(::Type{$T}) = $(Int(exponent_mask(T) >> significand_bits(T)) - exponent_bias(T))
+    # maximum float exponent without bias
+    @eval exponent_raw_max(::Type{$T}) = $(Int(exponent_mask(T) >> significand_bits(T)))
+end
+
 # non-type specific math functions
 
 """
@@ -43,7 +53,7 @@ julia> clamp.([pi, 1.0, big(10.)], 2., 9.)
  9.000000000000000000000000000000000000000000000000000000000000000000000000000000
 ```
 """
-clamp{X,L,H}(x::X, lo::L, hi::H) =
+clamp(x::X, lo::L, hi::H) where {X,L,H} =
     ifelse(x > hi, convert(promote_type(X,L,H), hi),
            ifelse(x < lo,
                   convert(promote_type(X,L,H), lo),
@@ -114,7 +124,7 @@ macro evalpoly(z, p...)
              :(s = muladd(x, x, y*y)),
              as...,
              :(muladd($ai, tt, $b)))
-    R = Expr(:macrocall, Symbol("@horner"), :tt, map(esc, p)...)
+    R = Expr(:macrocall, Symbol("@horner"), (), :tt, map(esc, p)...)
     :(let tt = $(esc(z))
           isa(tt, Complex) ? $C : $R
       end)
@@ -146,12 +156,13 @@ deg2rad(z::AbstractFloat) = z * (oftype(z, pi) / 180)
 rad2deg(z::Real) = rad2deg(float(z))
 deg2rad(z::Real) = deg2rad(float(z))
 
-log{T<:Number}(b::T, x::T) = log(x)/log(b)
+log(b::T, x::T) where {T<:Number} = log(x)/log(b)
 
 """
     log(b,x)
 
-Compute the base `b` logarithm of `x`. Throws [`DomainError`](@ref) for negative `Real` arguments.
+Compute the base `b` logarithm of `x`. Throws [`DomainError`](@ref) for negative
+[`Real`](@ref) arguments.
 
 ```jldoctest
 julia> log(4,8)
@@ -229,8 +240,6 @@ for f in (:cbrt, :sinh, :cosh, :tanh, :atan, :asinh, :exp2, :expm1)
         ($f)(x::Real) = ($f)(float(x))
     end
 end
-# pure julia exp function
-include("special/exp.jl")
 exp(x::Real) = exp(float(x))
 
 # fallback definitions to prevent infinite loop from $f(x::Real) def above
@@ -283,9 +292,11 @@ end
 # TODO: GNU libc has exp10 as an extension; should openlibm?
 exp10(x::Float64) = 10.0^x
 exp10(x::Float32) = 10.0f0^x
-exp10(x::Integer) = exp10(float(x))
+exp10(x::Real) = exp10(float(x))
 
 # utility for converting NaN return to DomainError
+# the branch in nan_dom_err prevents its callers from inlining, so be sure to force it
+# until the heuristics can be improved
 @inline nan_dom_err(f, x) = isnan(f) & !isnan(x) ? throw(DomainError()) : f
 
 # functions that return NaN on non-NaN argument for domain error
@@ -341,8 +352,8 @@ atanh(x)
 """
     log(x)
 
-Compute the natural logarithm of `x`. Throws [`DomainError`](@ref) for negative `Real` arguments.
-Use complex negative arguments to obtain complex results.
+Compute the natural logarithm of `x`. Throws [`DomainError`](@ref) for negative
+[`Real`](@ref) arguments. Use complex negative arguments to obtain complex results.
 
 There is an experimental variant in the `Base.Math.JuliaLibm` module, which is typically
 faster and more accurate.
@@ -352,8 +363,10 @@ log(x)
 """
     log2(x)
 
-Compute the logarithm of `x` to base 2. Throws [`DomainError`](@ref) for negative `Real` arguments.
+Compute the logarithm of `x` to base 2. Throws [`DomainError`](@ref) for negative
+[`Real`](@ref) arguments.
 
+# Example
 ```jldoctest
 julia> log2(4)
 2.0
@@ -368,8 +381,9 @@ log2(x)
     log10(x)
 
 Compute the logarithm of `x` to base 10.
-Throws [`DomainError`](@ref) for negative `Real` arguments.
+Throws [`DomainError`](@ref) for negative [`Real`](@ref) arguments.
 
+# Example
 ```jldoctest
 julia> log10(100)
 2.0
@@ -383,19 +397,42 @@ log10(x)
 """
     log1p(x)
 
-Accurate natural logarithm of `1+x`. Throws [`DomainError`](@ref) for `Real` arguments less than -1.
+Accurate natural logarithm of `1+x`. Throws [`DomainError`](@ref) for [`Real`](@ref)
+arguments less than -1.
 
 There is an experimental variant in the `Base.Math.JuliaLibm` module, which is typically
 faster and more accurate.
+
+# Examples
+```jldoctest
+julia> log1p(-0.5)
+-0.6931471805599453
+
+julia> log1p(0)
+0.0
+```
 """
 log1p(x)
 for f in (:sin, :cos, :tan, :asin, :acos, :acosh, :atanh, :log, :log2, :log10,
           :lgamma, :log1p)
     @eval begin
-        ($f)(x::Float64) = nan_dom_err(ccall(($(string(f)),libm), Float64, (Float64,), x), x)
-        ($f)(x::Float32) = nan_dom_err(ccall(($(string(f,"f")),libm), Float32, (Float32,), x), x)
-        ($f)(x::Real) = ($f)(float(x))
+        @inline ($f)(x::Float64) = nan_dom_err(ccall(($(string(f)), libm), Float64, (Float64,), x), x)
+        @inline ($f)(x::Float32) = nan_dom_err(ccall(($(string(f, "f")), libm), Float32, (Float32,), x), x)
+        @inline ($f)(x::Real) = ($f)(float(x))
     end
+end
+
+"""
+    sincos(x)
+
+Compute sine and cosine of `x`, where `x` is in radians.
+"""
+@inline function sincos(x)
+    res = Base.FastMath.sincos_fast(x)
+    if (isnan(res[1]) | isnan(res[2])) & !isnan(x)
+        throw(DomainError())
+    end
+    return res
 end
 
 sqrt(x::Float64) = sqrt_llvm(x)
@@ -404,8 +441,8 @@ sqrt(x::Float32) = sqrt_llvm(x)
 """
     sqrt(x)
 
-Return ``\\sqrt{x}``. Throws [`DomainError`](@ref) for negative `Real` arguments. Use complex
-negative arguments instead.  The prefix operator `√` is equivalent to `sqrt`.
+Return ``\\sqrt{x}``. Throws [`DomainError`](@ref) for negative [`Real`](@ref) arguments.
+Use complex negative arguments instead. The prefix operator `√` is equivalent to `sqrt`.
 """
 sqrt(x::Real) = sqrt(float(x))
 
@@ -414,6 +451,7 @@ sqrt(x::Real) = sqrt(float(x))
 
 Compute the hypotenuse ``\\sqrt{x^2+y^2}`` avoiding overflow and underflow.
 
+# Examples
 ```jldoctest
 julia> a = 10^10;
 
@@ -424,11 +462,11 @@ julia> √(a^2 + a^2) # a^2 overflows
 ERROR: DomainError:
 sqrt will only return a complex result if called with a complex argument. Try sqrt(complex(x)).
 Stacktrace:
- [1] sqrt(::Int64) at ./math.jl:433
+ [1] sqrt(::Int64) at ./math.jl:447
 ```
 """
 hypot(x::Number, y::Number) = hypot(promote(x, y)...)
-function hypot{T<:Number}(x::T, y::T)
+function hypot(x::T, y::T) where T<:Number
     ax = abs(x)
     ay = abs(y)
     if ax < ay
@@ -467,19 +505,19 @@ Compute the inverse tangent of `y/x`, using the signs of both `x` and `y` to det
 quadrant of the return value.
 """
 atan2(y::Real, x::Real) = atan2(promote(float(y),float(x))...)
-atan2{T<:AbstractFloat}(y::T, x::T) = Base.no_op_err("atan2", T)
+atan2(y::T, x::T) where {T<:AbstractFloat} = Base.no_op_err("atan2", T)
 
 atan2(y::Float64, x::Float64) = ccall((:atan2,libm), Float64, (Float64, Float64,), y, x)
 atan2(y::Float32, x::Float32) = ccall((:atan2f,libm), Float32, (Float32, Float32), y, x)
 
-max{T<:AbstractFloat}(x::T, y::T) = ifelse((y > x) | (signbit(y) < signbit(x)),
+max(x::T, y::T) where {T<:AbstractFloat} = ifelse((y > x) | (signbit(y) < signbit(x)),
                                     ifelse(isnan(x), x, y), ifelse(isnan(y), y, x))
 
 
-min{T<:AbstractFloat}(x::T, y::T) = ifelse((y < x) | (signbit(y) > signbit(x)),
+min(x::T, y::T) where {T<:AbstractFloat} = ifelse((y < x) | (signbit(y) > signbit(x)),
                                     ifelse(isnan(x), x, y), ifelse(isnan(y), y, x))
 
-minmax{T<:AbstractFloat}(x::T, y::T) =
+minmax(x::T, y::T) where {T<:AbstractFloat} =
     ifelse(isnan(x) | isnan(y), ifelse(isnan(x), (x,x), (y,y)),
            ifelse((y > x) | (signbit(x) > signbit(y)), (x,y), (y,x)))
 
@@ -489,12 +527,13 @@ minmax{T<:AbstractFloat}(x::T, y::T) =
 
 Compute ``x \\times 2^n``.
 
+# Example
 ```jldoctest
 julia> ldexp(5., 2)
 20.0
 ```
 """
-function ldexp{T<:IEEEFloat}(x::T, e::Integer)
+function ldexp(x::T, e::Integer) where T<:IEEEFloat
     xu = reinterpret(Unsigned, x)
     xs = xu & ~sign_mask(T)
     xs >= exponent_mask(T) && return x # NaN or Inf
@@ -543,7 +582,7 @@ ldexp(x::Float16, q::Integer) = Float16(ldexp(Float32(x), q))
 
 Get the exponent of a normalized floating-point number.
 """
-function exponent{T<:IEEEFloat}(x::T)
+function exponent(x::T) where T<:IEEEFloat
     xs = reinterpret(Unsigned, x) & ~sign_mask(T)
     xs >= exponent_mask(T) && return throw(DomainError()) # NaN or Inf
     k = Int(xs >> significand_bits(T))
@@ -562,6 +601,7 @@ Extract the `significand(s)` (a.k.a. mantissa), in binary representation, of a
 floating-point number. If `x` is a non-zero finite number, then the result will be
 a number of the same type on the interval ``[1,2)``. Otherwise `x` is returned.
 
+# Examples
 ```jldoctest
 julia> significand(15.2)/15.2
 0.125
@@ -570,7 +610,7 @@ julia> significand(15.2)*8
 15.2
 ```
 """
-function significand{T<:IEEEFloat}(x::T)
+function significand(x::T) where T<:IEEEFloat
     xu = reinterpret(Unsigned, x)
     xs = xu & ~sign_mask(T)
     xs >= exponent_mask(T) && return x # NaN or Inf
@@ -590,7 +630,7 @@ end
 Return `(x,exp)` such that `x` has a magnitude in the interval ``[1/2, 1)`` or 0,
 and `val` is equal to ``x \\times 2^{exp}``.
 """
-function frexp{T<:IEEEFloat}(x::T)
+function frexp(x::T) where T<:IEEEFloat
     xu = reinterpret(Unsigned, x)
     xs = xu & ~sign_mask(T)
     xs >= exponent_mask(T) && return x, 0 # NaN or Inf
@@ -649,6 +689,7 @@ rem(x::Float16, y::Float16, r::RoundingMode{:Nearest}) = Float16(rem(Float32(x),
 Return a tuple (fpart,ipart) of the fractional and integral parts of a number. Both parts
 have the same sign as the argument.
 
+# Example
 ```jldoctest
 julia> modf(3.5)
 (0.5, 3.0)
@@ -668,14 +709,12 @@ function modf(x::Float64)
     f, _modf_temp[]
 end
 
-^(x::Float64, y::Float64) = nan_dom_err(ccall((:pow,libm),  Float64, (Float64,Float64), x, y), x+y)
-^(x::Float32, y::Float32) = nan_dom_err(ccall((:powf,libm), Float32, (Float32,Float32), x, y), x+y)
-
-^(x::Float64, y::Integer) = x^Int32(y)
-^(x::Float64, y::Int32) = powi_llvm(x, y)
-^(x::Float32, y::Integer) = x^Int32(y)
-^(x::Float32, y::Int32) = powi_llvm(x, y)
-^(x::Float16, y::Integer) = Float16(Float32(x)^y)
+@inline ^(x::Float64, y::Float64) = nan_dom_err(ccall("llvm.pow.f64", llvmcall, Float64, (Float64, Float64), x, y), x + y)
+@inline ^(x::Float32, y::Float32) = nan_dom_err(ccall("llvm.pow.f32", llvmcall, Float32, (Float32, Float32), x, y), x + y)
+@inline ^(x::Float64, y::Integer) = x ^ Float64(y)
+@inline ^(x::Float32, y::Integer) = x ^ Float32(y)
+@inline ^(x::Float16, y::Integer) = Float16(Float32(x) ^ Float32(y))
+@inline literal_pow(::typeof(^), x::Float16, ::Type{Val{p}}) where {p} = Float16(literal_pow(^,Float32(x),Val{p}))
 
 function angle_restrict_symm(theta)
     const P1 = 4 * 7.8539812564849853515625e-01
@@ -753,6 +792,7 @@ without any intermediate rounding. This internally uses a high precision approxi
 
 - if `r == RoundUp`, then the result is in the interval ``[-2π, 0]``.
 
+# Example
 ```jldoctest
 julia> rem2pi(7pi/4, RoundNearest)
 -0.7853981633974485
@@ -887,6 +927,7 @@ This function computes a floating point representation of the modulus after divi
 numerically exact `2π`, and is therefore not exactly the same as `mod(x,2π)`, which would
 compute the modulus of `x` relative to division by the floating-point number `2π`.
 
+# Example
 ```jldoctest
 julia> mod2pi(9*pi/4)
 0.7853981633974481
@@ -903,6 +944,7 @@ Combined multiply-add, computes `x*y+z` in an efficient manner. This may on some
 equivalent to `x*y+z`, or to `fma(x,y,z)`. `muladd` is used to improve performance.
 See [`fma`](@ref).
 
+# Example
 ```jldoctest
 julia> muladd(3, 2, 1)
 7
@@ -932,11 +974,12 @@ end
 cbrt(a::Float16) = Float16(cbrt(Float32(a)))
 
 # More special functions
-include("special/trig.jl")
-include("special/gamma.jl")
+include(joinpath("special", "exp.jl"))
+include(joinpath("special", "trig.jl"))
+include(joinpath("special", "gamma.jl"))
 
 module JuliaLibm
-include("special/log.jl")
+include(joinpath("special", "log.jl"))
 end
 
 end # module

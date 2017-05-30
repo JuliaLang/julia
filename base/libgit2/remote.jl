@@ -1,9 +1,16 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
     GitRemote(repo::GitRepo, rmt_name::AbstractString, rmt_url::AbstractString) -> GitRemote
 
 Look up a remote git repository using its name and URL. Uses the default fetch refspec.
+
+# Example
+
+```julia
+repo = LibGit2.init(repo_path)
+remote = LibGit2.GitRemote(repo, "upstream", repo_url)
+```
 """
 function GitRemote(repo::GitRepo, rmt_name::AbstractString, rmt_url::AbstractString)
     rmt_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
@@ -19,6 +26,14 @@ end
 Look up a remote git repository using the repository's name and URL,
 as well as specifications for how to fetch from the remote
 (e.g. which remote branch to fetch from).
+
+# Example
+
+```julia
+repo = LibGit2.init(repo_path)
+refspec = "+refs/heads/mybranch:refs/remotes/origin/mybranch"
+remote = LibGit2.GitRemote(repo, "upstream", repo_url, refspec)
+```
 """
 function GitRemote(repo::GitRepo, rmt_name::AbstractString, rmt_url::AbstractString, fetch_spec::AbstractString)
     rmt_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
@@ -32,6 +47,13 @@ end
     GitRemoteAnon(repo::GitRepo, url::AbstractString) -> GitRemote
 
 Look up a remote git repository using only its URL, not its name.
+
+# Example
+
+```julia
+repo = LibGit2.init(repo_path)
+remote = LibGit2.GitRemoteAnon(repo, repo_url)
+```
 """
 function GitRemoteAnon(repo::GitRepo, url::AbstractString)
     rmt_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
@@ -53,9 +75,22 @@ end
     url(rmt::GitRemote)
 
 Get the URL of a remote git repository.
+
+# Example
+
+```julia-repl
+julia> repo_url = "https://github.com/JuliaLang/Example.jl";
+
+julia> repo = LibGit2.clone(cache_repo, "test_directory");
+
+julia> remote = LibGit2.GitRemote(repo, "origin", repo_url);
+
+julia> url(remote)
+"https://github.com/JuliaLang/Example.jl"
+```
 """
 function url(rmt::GitRemote)
-    url_ptr = ccall((:git_remote_url, :libgit2), Cstring, (Ptr{Void}, ), rmt.ptr)
+    url_ptr = ccall((:git_remote_url, :libgit2), Cstring, (Ptr{Void},), rmt.ptr)
     url_ptr == C_NULL && return ""
     return unsafe_string(url_ptr)
 end
@@ -66,9 +101,22 @@ end
 Get the name of a remote repository, for instance `"origin"`.
 If the remote is anonymous (see [`GitRemoteAnon`](@ref))
 the name will be an empty string `""`.
+
+# Example
+
+```julia-repl
+julia> repo_url = "https://github.com/JuliaLang/Example.jl";
+
+julia> repo = LibGit2.clone(cache_repo, "test_directory");
+
+julia> remote = LibGit2.GitRemote(repo, "origin", repo_url);
+
+julia> name(remote)
+"origin"
+```
 """
 function name(rmt::GitRemote)
-    name_ptr = ccall((:git_remote_name, :libgit2), Cstring, (Ptr{Void}, ), rmt.ptr)
+    name_ptr = ccall((:git_remote_name, :libgit2), Cstring, (Ptr{Void},), rmt.ptr)
     name_ptr == C_NULL && return ""
     return unsafe_string(name_ptr)
 end
@@ -104,6 +152,54 @@ function push_refspecs(rmt::GitRemote)
 end
 
 """
+    add_fetch!(repo::GitRepo, rmt::GitRemote, fetch_spec::String)
+
+Add a *fetch* refspec for the specified `rmt`. This refspec will contain
+information about which branch(es) to fetch from.
+
+# Example
+```julia-repl
+julia> LibGit2.add_fetch!(repo, remote, "upstream");
+
+julia> LibGit2.fetch_refspecs(remote)
+String["+refs/heads/*:refs/remotes/upstream/*"]
+```
+"""
+function add_fetch!(repo::GitRepo, rmt::GitRemote, fetch_spec::String)
+    @check ccall((:git_remote_add_fetch, :libgit2), Cint,
+                 (Ptr{Void}, Cstring, Cstring), repo.ptr,
+                 name(rmt), fetch_spec)
+end
+
+"""
+    add_push!(repo::GitRepo, rmt::GitRemote, push_spec::String)
+
+Add a *push* refspec for the specified `rmt`. This refspec will contain
+information about which branch(es) to push to.
+
+# Example
+```julia-repl
+julia> LibGit2.add_push!(repo, remote, "refs/heads/master");
+
+julia> remote = LibGit2.get(LibGit2.GitRemote, repo, branch);
+
+julia> LibGit2.push_refspecs(remote)
+String["refs/heads/master"]
+```
+
+!!! note
+    You may need to [`close`](@ref) and reopen the `GitRemote`
+    in question after updating its push refspecs in order for
+    the change to take effect and for calls to [`push`](@ref)
+    to work.
+"""
+function add_push!(repo::GitRepo, rmt::GitRemote, push_spec::String)
+    @check ccall((:git_remote_add_push, :libgit2), Cint,
+                 (Ptr{Void}, Cstring, Cstring), repo.ptr,
+                 name(rmt), push_spec)
+end
+
+"""
     fetch(rmt::GitRemote, refspecs; options::FetchOptions=FetchOptions(), msg="")
 
 Fetch from the specified `rmt` remote git repository, using `refspecs` to
@@ -129,6 +225,13 @@ determine which remote branch(es) to push to.
 The keyword arguments are:
   * `force`: if `true`, a force-push will occur, disregarding conflicts.
   * `options`: determines the options for the push, e.g. which proxy headers to use.
+
+!!! note
+    You can add information about the push refspecs in two other ways: by setting
+    an option in the repository's `GitConfig` (with `push.default` as the key) or
+    by calling [`add_push!`](@ref). Otherwise you will need to explicitly specify
+    a push refspec in the call to `push` for it to have any effect, like so:
+    `LibGit2.push(repo, refspecs=["refs/heads/master"])`.
 """
 function push(rmt::GitRemote, refspecs::Vector{<:AbstractString};
               force::Bool = false, options::PushOptions = PushOptions())

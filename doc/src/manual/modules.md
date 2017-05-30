@@ -21,7 +21,7 @@ importall OtherLib
 
 export MyType, foo
 
-type MyType
+struct MyType
     x
 end
 
@@ -321,7 +321,7 @@ Other known potential failure scenarios include:
    code snippet:
 
    ```julia
-   type UniquedById
+   mutable struct UniquedById
        myid::Int
        let counter = 0
            UniquedById() = new(counter += 1)

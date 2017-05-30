@@ -4,11 +4,11 @@
 
 ```@docs
 Core.Task
-Base.yieldto
 Base.current_task
 Base.istaskdone
 Base.istaskstarted
 Base.yield
+Base.yieldto
 Base.task_local_storage(::Any)
 Base.task_local_storage(::Any, ::Any)
 Base.task_local_storage(::Function, ::Any, ::Any)
@@ -62,10 +62,10 @@ Base.CachingPool
 Base.default_worker_pool
 Base.clear!(::CachingPool)
 Base.remote
-Base.remotecall(::Any, ::Base.Parallel.AbstractWorkerPool, ::Any...)
-Base.remotecall_wait(::Any, ::Base.Parallel.AbstractWorkerPool, ::Any...)
-Base.remotecall_fetch(::Any, ::Base.Parallel.AbstractWorkerPool, ::Any...)
-Base.remote_do(::Any, ::Base.Parallel.AbstractWorkerPool, ::Any...)
+Base.remotecall(::Any, ::Base.Distributed.AbstractWorkerPool, ::Any...)
+Base.remotecall_wait(::Any, ::Base.Distributed.AbstractWorkerPool, ::Any...)
+Base.remotecall_fetch(::Any, ::Base.Distributed.AbstractWorkerPool, ::Any...)
+Base.remote_do(::Any, ::Base.Distributed.AbstractWorkerPool, ::Any...)
 Base.timedwait
 Base.@spawn
 Base.@spawnat

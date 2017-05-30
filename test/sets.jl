@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Set tests
 
@@ -78,6 +78,7 @@ push!(s,1); push!(s,2); push!(s,3)
 @test pop!(s) == 3
 @test length(s) == 0
 @test isempty(s)
+@test_throws ArgumentError pop!(s)
 
 # copy
 data_in = (1,2,9,8,4)
@@ -203,6 +204,10 @@ end
 @test ⊊(Set([1]), Set([1,2]))
 @test !⊊(Set([1]), Set([1]))
 @test ⊈(Set([1]), Set([2]))
+@test ⊇(Set([1,2]), Set([1]))
+@test ⊋(Set([1,2]), Set([1]))
+@test !⊋(Set([1]), Set([1]))
+@test ⊉(Set([1]), Set([2]))
 @test symdiff(Set([1,2,3,4]), Set([2,4,5,6])) == Set([1,3,5,6])
 
 # unique

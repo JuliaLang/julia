@@ -1,5 +1,27 @@
 # [Arrays](@id lib-arrays)
 
+## Constructors and Types
+
+```@docs
+Core.AbstractArray
+Core.Array
+Base.getindex(::Type, ::Any...)
+Base.zeros
+Base.ones
+Base.BitArray
+Base.trues
+Base.falses
+Base.fill
+Base.fill!
+Base.similar(::AbstractArray)
+Base.similar(::Any, ::Tuple)
+Base.eye
+Base.linspace
+Base.logspace
+Base.Random.randsubseq
+Base.Random.randsubseq!
+```
+
 ## Basic functions
 
 ```@docs
@@ -10,7 +32,7 @@ Base.indices(::AbstractArray, ::Any)
 Base.length(::AbstractArray)
 Base.eachindex
 Base.linearindices
-Base.linearindexing
+Base.IndexStyle
 Base.countnz
 Base.conj!
 Base.stride
@@ -18,27 +40,6 @@ Base.strides
 Base.ind2sub
 Base.sub2ind
 Base.LinAlg.checksquare
-```
-
-## Constructors
-
-```@docs
-Core.Array
-Base.getindex(::Type, ::Any...)
-Base.zeros
-Base.ones
-Base.BitArray
-Base.trues
-Base.falses
-Base.fill
-Base.fill!
-Base.reshape
-Base.similar(::AbstractArray)
-Base.similar(::Any, ::Tuple)
-Base.reinterpret
-Base.eye
-Base.linspace
-Base.logspace
 ```
 
 ## Broadcast and vectorization
@@ -56,20 +57,39 @@ Base.Broadcast.broadcast_getindex
 Base.Broadcast.broadcast_setindex!
 ```
 
-## Indexing, Assignment, and Concatenation
+## Indexing and assignment
 
 ```@docs
 Base.getindex(::AbstractArray, ::Any...)
+Base.setindex!(::AbstractArray, ::Any, ::Any...)
+Base.copy!(::AbstractArray, ::CartesianRange, ::AbstractArray, ::CartesianRange)
+Base.isassigned
+Base.Colon
+Base.CartesianIndex
+Base.CartesianRange
+Base.to_indices
+Base.checkbounds
+Base.checkindex
+```
+
+## Views (SubArrays and other view types)
+
+```@docs
 Base.view
 Base.@view
 Base.@views
-Base.to_indices
-Base.Colon
 Base.parent
 Base.parentindexes
 Base.slicedim
-Base.setindex!(::AbstractArray, ::Any, ::Any...)
-Base.isassigned
+Base.reinterpret
+Base.reshape
+Base.squeeze
+Base.vec
+```
+
+## Concatenation and permutation
+
+```@docs
 Base.cat
 Base.vcat
 Base.hcat
@@ -98,13 +118,7 @@ Base.findprev(::Any, ::Any, ::Integer)
 Base.permutedims
 Base.permutedims!
 Base.PermutedDimsArray
-Base.squeeze
-Base.vec
 Base.promote_shape
-Base.checkbounds
-Base.checkindex
-Base.Random.randsubseq
-Base.Random.randsubseq!
 ```
 
 ## Array functions
@@ -134,7 +148,7 @@ Base.sum_kbn
 Base.Random.randperm
 Base.invperm
 Base.isperm
-Base.permute!{T}(::Any, ::AbstractArray{T, 1})
+Base.permute!(::Any, ::AbstractVector)
 Base.ipermute!
 Base.Random.randcycle
 Base.Random.shuffle

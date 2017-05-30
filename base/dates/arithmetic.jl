@@ -1,12 +1,12 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Instant arithmetic
 (+)(x::Instant) = x
-(-){T<:Instant}(x::T, y::T) = x.periods - y.periods
+(-)(x::T, y::T) where {T<:Instant} = x.periods - y.periods
 
 # TimeType arithmetic
 (+)(x::TimeType) = x
-(-){T<:TimeType}(x::T, y::T) = x.instant - y.instant
+(-)(x::T, y::T) where {T<:TimeType} = x.instant - y.instant
 
 # Date-Time arithmetic
 """
@@ -90,9 +90,9 @@ end
 (-)(x::StridedArray{<:GeneralPeriod}, y::TimeType) = x .- y
 
 # TimeType, AbstractArray{TimeType}
-(-){T<:TimeType}(x::AbstractArray{T}, y::T) = x .- y
-(-){T<:TimeType}(y::T, x::AbstractArray{T}) = y .- x
+(-)(x::AbstractArray{T}, y::T) where {T<:TimeType} = x .- y
+(-)(y::T, x::AbstractArray{T}) where {T<:TimeType} = y .- x
 
 # AbstractArray{TimeType}, AbstractArray{TimeType}
-(-){T<:TimeType}(x::OrdinalRange{T}, y::OrdinalRange{T}) = collect(x) - collect(y)
-(-){T<:TimeType}(x::Range{T}, y::Range{T}) = collect(x) - collect(y)
+(-)(x::OrdinalRange{T}, y::OrdinalRange{T}) where {T<:TimeType} = collect(x) - collect(y)
+(-)(x::Range{T}, y::Range{T}) where {T<:TimeType} = collect(x) - collect(y)

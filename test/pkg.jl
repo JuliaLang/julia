@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 import Base.Pkg.PkgError
 
@@ -18,18 +18,23 @@ function capture_stdout(f::Function)
 end
 
 
-function temp_pkg_dir(fn::Function, remove_tmp_dir::Bool=true)
+function temp_pkg_dir(fn::Function, tmp_dir=joinpath(tempdir(), randstring()),
+        remove_tmp_dir::Bool=true; initialize::Bool=true)
+
     # Used in tests below to set up and tear down a sandboxed package directory
-    const tmpdir = joinpath(tempdir(),randstring())
-    withenv("JULIA_PKGDIR" => tmpdir) do
+    withenv("JULIA_PKGDIR" => tmp_dir) do
         @test !isdir(Pkg.dir())
         try
-            Pkg.init()
-            @test isdir(Pkg.dir())
-            Pkg.resolve()
+            if initialize
+                Pkg.init()
+                @test isdir(Pkg.dir())
+                Pkg.resolve()
+            else
+                mkpath(Pkg.dir())
+            end
             fn()
         finally
-            remove_tmp_dir && rm(tmpdir, recursive=true)
+            remove_tmp_dir && rm(tmp_dir, recursive=true)
         end
     end
 end
@@ -124,7 +129,6 @@ temp_pkg_dir() do
     Pkg.status("Example", iob)
     str = chomp(String(take!(iob)))
     @test endswith(str, string(Pkg.installed("Example")))
-    @test isempty(Pkg.dependents("Example"))
 
     # 17364 - a, Pkg.checkout with specific local branch
     let branch_name = "test-branch-1",
@@ -420,6 +424,24 @@ temp_pkg_dir() do
         @test !contains(msg, "signal (15)")
     end
 
+    # issue #20695
+    Pkg.cd() do
+        @test Pkg.Entry.url_and_pkg("Example") == ("git://github.com/JuliaLang/Example.jl.git", "Example")
+        for url = [
+            "https://github.com/Org/Nonsense",
+            "git@github.com:Org/Nonsense",
+            "file:///home/user/Nonsense",
+            "/home/user/Nonsense",
+        ]
+            @test Pkg.Entry.url_and_pkg(url) == (url, "Nonsense")
+            @test Pkg.Entry.url_and_pkg("$url.jl") == ("$url.jl", "Nonsense")
+            @test Pkg.Entry.url_and_pkg("$url.git") == ("$url.git", "Nonsense")
+            @test Pkg.Entry.url_and_pkg("$url.jl.git") == ("$url.jl.git", "Nonsense")
+        end
+        pkg = randstring(20)
+        @test Pkg.Entry.url_and_pkg(pkg) == (pkg, pkg)
+    end
+
     # partial Pkg.update
     @test "" == capture_stdout() do
         nothingtodomsg = "INFO: No packages to install, update or remove"
@@ -462,6 +484,21 @@ temp_pkg_dir() do
             LibGit2.reset!(repo, LibGit2.GitHash(old_commit), LibGit2.Consts.RESET_HARD)
         end
 
+        # run these at an old metadata commit where it's guaranteed no
+        # packages depend on Example.jl
+        @test isempty(Pkg.dependents("Example"))
+        @test isempty(Pkg.dependents("Example.jl"))
+
+        @test_warn s -> !contains(s, "updated but were already imported") begin
+            Pkg.add("Iterators")
+            Pkg.update("Iterators")
+        end
+
+        # Do it again, because the above Iterators test will update things prematurely
+        LibGit2.with(LibGit2.GitRepo, metadata_dir) do repo
+            LibGit2.reset!(repo, LibGit2.GitHash(old_commit), LibGit2.Consts.RESET_HARD)
+        end
+
         @test_warn ("INFO: Installing Colors v0.6.4",
                     "INFO: Installing ColorTypes v0.2.2",
                     "INFO: Installing FixedPointNumbers v0.1.3",
@@ -496,7 +533,92 @@ temp_pkg_dir() do
     end
 end
 
+@testset "Pkg functions with .jl extension" begin
+    temp_pkg_dir() do
+        @test Pkg.installed("Example.jl") === nothing
+        Pkg.add("Example.jl")
+        @test [keys(Pkg.installed())...] == ["Example"]
+        iob = IOBuffer()
+        Pkg.checkout("Example.jl")
+        Pkg.status("Example.jl", iob)
+        str = chomp(String(take!(iob)))
+        @test startswith(str, " - Example")
+        @test endswith(str, "master")
+        Pkg.free("Example.jl")
+        Pkg.status("Example.jl", iob)
+        str = chomp(String(take!(iob)))
+        @test endswith(str, string(Pkg.installed("Example.jl")))
+        Pkg.checkout("Example.jl")
+        Pkg.free(("Example.jl",))
+        Pkg.status("Example.jl", iob)
+        str = chomp(String(take!(iob)))
+        @test endswith(str, string(Pkg.installed("Example.jl")))
+        Pkg.rm("Example.jl")
+        @test isempty(Pkg.installed())
+        @test !isempty(Pkg.available("Example.jl"))
+        @test !in("Example", keys(Pkg.installed()))
+        Pkg.rm("Example.jl")
+        @test isempty(Pkg.installed())
+        @test !isempty(Pkg.available("Example.jl"))
+        @test !in("Example", keys(Pkg.installed()))
+        Pkg.clone("https://github.com/JuliaLang/Example.jl.git")
+        @test [keys(Pkg.installed())...] == ["Example"]
+        Pkg.status("Example.jl", iob)
+        str = chomp(String(take!(iob)))
+        @test startswith(str, " - Example")
+        @test endswith(str, "master")
+        Pkg.free("Example.jl")
+        Pkg.status("Example.jl", iob)
+        str = chomp(String(take!(iob)))
+        @test endswith(str, string(Pkg.installed("Example.jl")))
+        Pkg.checkout("Example.jl")
+        Pkg.free(("Example.jl",))
+        Pkg.status("Example.jl", iob)
+        str = chomp(String(take!(iob)))
+        @test endswith(str, string(Pkg.installed("Example.jl")))
+    end
+end
+
 let io = IOBuffer()
     Base.showerror(io, Base.Pkg.Entry.PkgTestError("ppp"), backtrace())
     @test !contains(String(take!(io)), "backtrace()")
+end
+
+@testset "Relative path operations" begin
+    cd(tempdir()) do
+        temp_pkg_dir(randstring()) do
+            Pkg.add("Example")
+            @test [keys(Pkg.installed())...] == ["Example"]
+        end
+    end
+end
+
+temp_pkg_dir(initialize=false) do
+    function write_build(pkg, content)
+        build_filename = Pkg.dir(pkg, "deps", "build.jl")
+        mkpath(dirname(build_filename))
+        write(build_filename, content)
+    end
+
+    write_build("Normal", "")
+    write_build("Error", "error(\"An error has occurred while building a package\")")
+    write_build("Exit", "exit()")
+
+    cd(Pkg.dir()) do
+        errors = Dict()
+
+        empty!(errors)
+        @test_warn ("INFO: Building Error",
+                    "INFO: Building Normal") Pkg.Entry.build!(["Error", "Normal"], errors)
+
+        empty!(errors)
+        @test_warn ("INFO: Building Exit",
+                    "INFO: Building Normal") Pkg.Entry.build!(["Exit", "Normal"], errors)
+
+        empty!(errors)
+        @test_warn ("INFO: Building Exit",
+                    "INFO: Building Normal",
+                    "INFO: Building Exit",
+                    "INFO: Building Normal") Pkg.Entry.build!(["Exit", "Normal", "Exit", "Normal"], errors)
+    end
 end

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
 Simple unit testing functionality:
@@ -115,7 +115,7 @@ end
     Error
 
 The test condition couldn't be evaluated due to an exception, or
-it evaluated to something other than a `Bool`.
+it evaluated to something other than a [`Bool`](@ref).
 In the case of `@test_broken` it is used to indicate that an
 unexpected `Pass` `Result` occurred.
 """
@@ -793,7 +793,7 @@ end
 Starts a new test set, or multiple test sets if a `for` loop is provided.
 
 If no custom testset type is given it defaults to creating a `DefaultTestSet`.
-`DefaultTestSet` records all the results and, and if there are any `Fail`s or
+`DefaultTestSet` records all the results and, if there are any `Fail`s or
 `Error`s, throws an exception at the end of the top-level (non-nested) test set,
 along with a summary of the test results.
 
@@ -848,6 +848,9 @@ function testset_beginend(args, tests)
     # action (such as reporting the results)
     quote
         ts = $(testsettype)($desc; $options...)
+        # this empty loop is here to force the block to be compiled,
+        # which is needed for backtrace scrubbing to work correctly.
+        while false; end
         push_testset(ts)
         try
             $(esc(tests))
@@ -1105,10 +1108,8 @@ end
 #
 # Raises an error if any columnwise vector norm exceeds err. Otherwise, returns
 # nothing.
-function test_approx_eq_modphase{S<:Real,T<:Real}(
-        a::StridedVecOrMat{S}, b::StridedVecOrMat{T},
-        err = length(indices(a,1))^3*(eps(S)+eps(T))
-    )
+function test_approx_eq_modphase(a::StridedVecOrMat{S}, b::StridedVecOrMat{T},
+                                 err = length(indices(a,1))^3*(eps(S)+eps(T))) where {S<:Real,T<:Real}
     @test indices(a,1) == indices(b,1) && indices(a,2) == indices(b,2)
     for i in indices(a,2)
         v1, v2 = a[:, i], b[:, i]
@@ -1117,14 +1118,25 @@ function test_approx_eq_modphase{S<:Real,T<:Real}(
 end
 
 """
-    detect_ambiguities(mod1, mod2...; imported=false)
+    detect_ambiguities(mod1, mod2...; imported=false, ambiguous_bottom=false)
 
 Returns a vector of `(Method,Method)` pairs of ambiguous methods
 defined in the specified modules. Use `imported=true` if you wish to
 also test functions that were imported into these modules from
 elsewhere.
+
+`ambiguous_bottom` controls whether ambiguities triggered only by
+`Union{}` type parameters are included; in most cases you probably
+want to set this to `false`. See [`Base.isambiguous`](@ref).
 """
-function detect_ambiguities(mods...; imported::Bool=false, allow_bottom::Bool=true)
+function detect_ambiguities(mods...;
+                            imported::Bool = false,
+                            ambiguous_bottom::Bool = false,
+                            allow_bottom::Union{Bool,Void} = nothing)
+    if allow_bottom !== nothing
+        Base.depwarn("the `allow_bottom` keyword to detect_ambiguities has been renamed to `ambiguous_bottom`", :detect_ambiguities)
+        ambiguous_bottom = allow_bottom
+    end
     function sortdefs(m1, m2)
         ord12 = m1.file < m2.file
         if !ord12 && (m1.file == m2.file)
@@ -1146,7 +1158,7 @@ function detect_ambiguities(mods...; imported::Bool=false, allow_bottom::Bool=tr
                 for m in mt
                     if m.ambig !== nothing
                         for m2 in m.ambig
-                            if Base.isambiguous(m, m2, allow_bottom)
+                            if Base.isambiguous(m, m2, ambiguous_bottom=ambiguous_bottom)
                                 push!(ambs, sortdefs(m, m2))
                             end
                         end

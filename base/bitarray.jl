@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## BitArray
 
@@ -17,7 +17,7 @@ mutable struct BitArray{N} <: DenseArray{Bool, N}
             i += 1
         end
         nc = num_bit_chunks(n)
-        chunks = Array{UInt64}(nc)
+        chunks = Vector{UInt64}(nc)
         nc > 0 && (chunks[end] = UInt64(0))
         b = new(chunks, n)
         N != 1 && (b.dims = dims)
@@ -35,7 +35,7 @@ end
 Construct an uninitialized `BitArray` with the given dimensions.
 Behaves identically to the [`Array`](@ref) constructor.
 
-```julia
+```julia-repl
 julia> BitArray(2, 2)
 2×2 BitArray{2}:
  false  false
@@ -69,7 +69,7 @@ end
 
 isassigned(B::BitArray, i::Int) = 1 <= i <= length(B)
 
-linearindexing(::Type{<:BitArray}) = LinearFast()
+IndexStyle(::Type{<:BitArray}) = IndexLinear()
 
 ## aux functions ##
 
@@ -80,7 +80,7 @@ const _msk64 = ~UInt64(0)
 @inline _msk_end(B::BitArray) = _msk_end(length(B))
 num_bit_chunks(n::Int) = _div64(n+63)
 
-function _check_bitarray_consistency{N}(B::BitArray{N})
+function _check_bitarray_consistency(B::BitArray{N}) where N
     n = length(B)
     if N ≠ 1
         all(d ≥ 0 for d in B.dims) || (warn("negative d in dims: $(B.dims)"); return false)
@@ -238,7 +238,7 @@ function fill_chunks!(Bc::Array{UInt64}, x::Bool, pos::Integer, numbits::Integer
     end
 end
 
-copy_to_bitarray_chunks!(dest::Vector{UInt64}, pos_d::Integer, src::BitArray, pos_s::Integer, numbits::Integer) =
+copy_to_bitarray_chunks!(dest::Vector{UInt64}, pos_d::Int, src::BitArray, pos_s::Int, numbits::Int) =
     copy_chunks!(dest, pos_d, src.chunks, pos_s, numbits)
 
 # pack 8 Bools encoded as one contiguous UIn64 into a single byte, e.g.:
@@ -283,11 +283,12 @@ function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::Array{Bool}
     nc8 = (nc >>> 3) << 3
     if nc8 > 0
         ind8 = 1
-        C8 = reinterpret(UInt64, unsafe_wrap(Array, pointer(C, ind), nc8 << 6))
+        P8 = Ptr{UInt64}(pointer(C, ind)) # unaligned i64 pointer
         @inbounds for i = 1:nc8
             c = UInt64(0)
             for j = 0:7
-                c |= (pack8bools(C8[ind8]) << (j<<3))
+                # unaligned load
+                c |= (pack8bools(unsafe_load(P8, ind8)) << (j<<3))
                 ind8 += 1
             end
             Bc[bind] = c
@@ -315,79 +316,7 @@ function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::Array{Bool}
     end
 end
 
-function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::Array, pos_s::Int, numbits::Int)
-    bind = pos_d
-    cind = pos_s
-    lastind = pos_d + numbits - 1
-    @inbounds while bind ≤ lastind
-        unsafe_bitsetindex!(Bc, Bool(C[cind]), bind)
-        bind += 1
-        cind += 1
-    end
-end
-
-# Note: the next two functions rely on the following definition of the conversion to Bool:
-#   convert(::Type{Bool}, x::Real) = x==0 ? false : x==1 ? true : throw(InexactError())
-# they're used to pre-emptively check in bulk when possible, which is much faster.
-# Also, the functions can be overloaded for custom types T<:Real :
-#  a) in the unlikely eventuality that they use a different logic for Bool conversion
-#  b) to skip the check if not necessary
-@inline try_bool_conversion(x::Real) = x == 0 || x == 1 || throw(InexactError())
-@inline unchecked_bool_convert(x::Real) = x == 1
-
-function copy_to_bitarray_chunks!(Bc::Vector{UInt64}, pos_d::Int, C::Array{<:Real}, pos_s::Int, numbits::Int)
-    @inbounds for i = (1:numbits) + pos_s - 1
-        try_bool_conversion(C[i])
-    end
-
-    kd0, ld0 = get_chunks_id(pos_d)
-    kd1, ld1 = get_chunks_id(pos_d + numbits - 1)
-
-    delta_kd = kd1 - kd0
-
-    u = _msk64
-    if delta_kd == 0
-        msk_d0 = msk_d1 = ~(u << ld0) | (u << (ld1+1))
-        lt0 = ld1
-    else
-        msk_d0 = ~(u << ld0)
-        msk_d1 = (u << (ld1+1))
-        lt0 = 63
-    end
-
-    bind = kd0
-    ind = pos_s
-    @inbounds if ld0 > 0
-        c = UInt64(0)
-        for j = ld0:lt0
-            c |= (UInt64(unchecked_bool_convert(C[ind])) << j)
-            ind += 1
-        end
-        Bc[kd0] = (Bc[kd0] & msk_d0) | (c & ~msk_d0)
-        bind += 1
-    end
-
-    nc = _div64(numbits - ind + pos_s)
-    @inbounds for i = 1:nc
-        c = UInt64(0)
-        for j = 0:63
-            c |= (UInt64(unchecked_bool_convert(C[ind])) << j)
-            ind += 1
-        end
-        Bc[bind] = c
-        bind += 1
-    end
-
-    @inbounds if bind ≤ kd1
-        @assert bind == kd1
-        c = UInt64(0)
-        for j = 0:ld1
-            c |= (UInt64(unchecked_bool_convert(C[ind])) << j)
-            ind += 1
-        end
-        Bc[kd1] = (Bc[kd1] & msk_d1) | (c & ~msk_d1)
-    end
-end
+## More definitions in multidimensional.jl
 
 # auxiliary definitions used when filling a BitArray via a Vector{Bool} cache
 # (e.g. when constructing from an iterable, or in broadcast!)
@@ -544,11 +473,14 @@ function copy!(dest::BitArray, src::Array)
     return unsafe_copy!(dest, 1, src, 1, length(src))
 end
 
-function reshape{N}(B::BitArray, dims::NTuple{N,Int})
+function reshape(B::BitArray{N}, dims::NTuple{N,Int}) where N
+    return dims == size(B) ? B : _bitreshape(B, dims)
+end
+reshape(B::BitArray, dims::Tuple{Vararg{Int}}) = _bitreshape(B, dims)
+function _bitreshape(B::BitArray, dims::NTuple{N,Int}) where N
     prod(dims) == length(B) ||
         throw(DimensionMismatch("new dimensions $(dims) must be consistent with array size $(length(B))"))
-    dims == size(B) && return B
-    Br = BitArray{N}(ntuple(i->0,N)...)
+    Br = BitArray{N}(ntuple(i->0,Val{N})...)
     Br.chunks = B.chunks
     Br.len = prod(dims)
     N != 1 && (Br.dims = dims)
@@ -557,9 +489,9 @@ end
 
 ## Conversions ##
 
-convert{T,N}(::Type{Array{T}}, B::BitArray{N}) = convert(Array{T,N}, B)
-convert{T,N}(::Type{Array{T,N}}, B::BitArray{N}) = _convert(Array{T,N}, B) # see #15801
-function _convert{T,N}(::Type{Array{T,N}}, B::BitArray{N})
+convert(::Type{Array{T}}, B::BitArray{N}) where {T,N} = convert(Array{T,N}, B)
+convert(::Type{Array{T,N}}, B::BitArray{N}) where {T,N} = _convert(Array{T,N}, B) # see #15801
+function _convert(::Type{Array{T,N}}, B::BitArray{N}) where {T,N}
     A = Array{T}(size(B))
     Bc = B.chunks
     @inbounds for i = 1:length(A)
@@ -568,8 +500,8 @@ function _convert{T,N}(::Type{Array{T,N}}, B::BitArray{N})
     return A
 end
 
-convert{T,N}(::Type{BitArray}, A::AbstractArray{T,N}) = convert(BitArray{N}, A)
-function convert{T,N}(::Type{BitArray{N}}, A::AbstractArray{T,N})
+convert(::Type{BitArray}, A::AbstractArray{T,N}) where {T,N} = convert(BitArray{N}, A)
+function convert(::Type{BitArray{N}}, A::AbstractArray{T,N}) where N where T
     B = BitArray(size(A))
     Bc = B.chunks
     l = length(B)
@@ -594,7 +526,7 @@ function convert{T,N}(::Type{BitArray{N}}, A::AbstractArray{T,N})
     return B
 end
 
-function convert{N}(::Type{BitArray{N}}, A::Array{Bool,N})
+function convert(::Type{BitArray{N}}, A::Array{Bool,N}) where N
     B = BitArray(size(A))
     Bc = B.chunks
     l = length(B)
@@ -603,15 +535,15 @@ function convert{N}(::Type{BitArray{N}}, A::Array{Bool,N})
     return B
 end
 
-convert{N}(::Type{BitArray{N}}, B::BitArray{N}) = B
-convert{T,N}(::Type{AbstractArray{T,N}}, B::BitArray{N}) = convert(Array{T,N}, B)
+convert(::Type{BitArray{N}}, B::BitArray{N}) where {N} = B
+convert(::Type{AbstractArray{T,N}}, B::BitArray{N}) where {T,N} = convert(Array{T,N}, B)
 
-reinterpret{N}(::Type{Bool}, B::BitArray, dims::NTuple{N,Int}) = reinterpret(B, dims)
-reinterpret{N}(B::BitArray, dims::NTuple{N,Int}) = reshape(B, dims)
+reinterpret(::Type{Bool}, B::BitArray, dims::NTuple{N,Int}) where {N} = reinterpret(B, dims)
+reinterpret(B::BitArray, dims::NTuple{N,Int}) where {N} = reshape(B, dims)
 
 ## Constructors from generic iterables ##
 
-BitArray{T,N}(A::AbstractArray{T,N}) = convert(BitArray{N}, A)
+BitArray(A::AbstractArray{<:Any,N}) where {N} = convert(BitArray{N}, A)
 
 """
     BitArray(itr)
@@ -1195,7 +1127,7 @@ function (-)(B::BitArray)
 end
 broadcast(::typeof(sign), B::BitArray) = copy(B)
 
-function (~)(B::BitArray)
+function broadcast(::typeof(~), B::BitArray)
     C = similar(B)
     Bc = B.chunks
     if !isempty(Bc)
@@ -1236,7 +1168,6 @@ function flipbits!(B::BitArray)
     return B
 end
 
-!(B::BitArray) = ~B
 
 ## Binary arithmetic operators ##
 
@@ -1258,7 +1189,7 @@ end
 
 for f in (:/, :\)
     @eval begin
-        ($f)(A::BitArray, B::BitArray) = ($f)(Array(A), Array(B))
+        ($f)(A::Union{BitMatrix,BitVector}, B::Union{BitMatrix,BitVector}) = ($f)(Array(A), Array(B))
     end
 end
 (/)(B::BitArray, x::Number) = (/)(Array(B), x)
@@ -1269,7 +1200,7 @@ broadcast(::typeof(&), B::BitArray, x::Bool) = x ? copy(B) : falses(size(B))
 broadcast(::typeof(&), x::Bool, B::BitArray) = broadcast(&, B, x)
 broadcast(::typeof(|), B::BitArray, x::Bool) = x ? trues(size(B)) : copy(B)
 broadcast(::typeof(|), x::Bool, B::BitArray) = broadcast(|, B, x)
-broadcast(::typeof(xor), B::BitArray, x::Bool) = x ? ~B : copy(B)
+broadcast(::typeof(xor), B::BitArray, x::Bool) = x ? .~B : copy(B)
 broadcast(::typeof(xor), x::Bool, B::BitArray) = broadcast(xor, B, x)
 for f in (:&, :|, :xor)
     @eval begin
@@ -1448,10 +1379,89 @@ function (>>>)(B::BitVector, i::UInt)
     return A
 end
 
+"""
+    >>(B::BitVector, n) -> BitVector
+
+Right bit shift operator, `B >> n`. For `n >= 0`, the result is `B`
+with elements shifted `n` positions forward, filling with `false`
+values. If `n < 0`, elements are shifted backwards. Equivalent to
+`B << -n`.
+
+## Example
+
+```jldoctest
+julia> B = BitVector([true, false, true, false, false])
+5-element BitArray{1}:
+  true
+ false
+  true
+ false
+ false
+
+julia> B >> 1
+5-element BitArray{1}:
+ false
+  true
+ false
+  true
+ false
+
+julia> B >> -1
+5-element BitArray{1}:
+ false
+  true
+ false
+ false
+ false
+```
+"""
 (>>)(B::BitVector, i::Union{Int, UInt}) = B >>> i
 
 # signed integer version of shift operators with handling of negative values
+"""
+    <<(B::BitVector, n) -> BitVector
+
+Left bit shift operator, `B << n`. For `n >= 0`, the result is `B`
+with elements shifted `n` positions backwards, filling with `false`
+values. If `n < 0`, elements are shifted forwards. Equivalent to
+`B >> -n`.
+
+## Examples
+
+```jldoctest
+julia> B = BitVector([true, false, true, false, false])
+5-element BitArray{1}:
+  true
+ false
+  true
+ false
+ false
+
+julia> B << 1
+5-element BitArray{1}:
+ false
+  true
+ false
+ false
+ false
+
+julia> B << -1
+5-element BitArray{1}:
+ false
+  true
+ false
+  true
+ false
+```
+"""
 (<<)(B::BitVector, i::Int) = (i >=0 ? B << unsigned(i) : B >> unsigned(-i))
+
+"""
+    >>>(B::BitVector, n) -> BitVector
+
+Unsigned right bitshift operator, `B >>> n`. Equivalent to `B >> n`. See [`>>`](@ref) for
+details and examples.
+"""
 (>>>)(B::BitVector, i::Int) = (i >=0 ? B >> unsigned(i) : B << unsigned(-i))
 
 """
@@ -1757,7 +1767,7 @@ end
 function find(B::BitArray)
     l = length(B)
     nnzB = countnz(B)
-    I = Array{Int}(nnzB)
+    I = Vector{Int}(nnzB)
     nnzB == 0 && return I
     Bc = B.chunks
     Bcount = 1
@@ -1791,8 +1801,8 @@ findn(B::BitVector) = find(B)
 
 function findn(B::BitMatrix)
     nnzB = countnz(B)
-    I = Array{Int}(nnzB)
-    J = Array{Int}(nnzB)
+    I = Vector{Int}(nnzB)
+    J = Vector{Int}(nnzB)
     count = 1
     for j = 1:size(B,2), i = 1:size(B,1)
         if B[i,j]
@@ -1871,7 +1881,7 @@ end
 # If we were able to specialize the function to a known bitwise operation,
 # map across the chunks. Otherwise, fall-back to the AbstractArray method that
 # iterates bit-by-bit.
-function bit_map!{F}(f::F, dest::BitArray, A::BitArray)
+function bit_map!(f::F, dest::BitArray, A::BitArray) where F
     size(A) == size(dest) || throw(DimensionMismatch("sizes of dest and A must match"))
     isempty(A) && return dest
     destc = dest.chunks
@@ -1882,7 +1892,7 @@ function bit_map!{F}(f::F, dest::BitArray, A::BitArray)
     destc[end] = f(Ac[end]) & _msk_end(A)
     dest
 end
-function bit_map!{F}(f::F, dest::BitArray, A::BitArray, B::BitArray)
+function bit_map!(f::F, dest::BitArray, A::BitArray, B::BitArray) where F
     size(A) == size(B) == size(dest) || throw(DimensionMismatch("sizes of dest, A, and B must all match"))
     isempty(A) && return dest
     destc = dest.chunks

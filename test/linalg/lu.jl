@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 debug = false
 
@@ -64,6 +64,10 @@ debug && println("(Automatic) Square LU decomposition. eltya: $eltya, eltyb: $el
         @test l*u ≈ a[p,:]
         @test (l*u)[invperm(p),:] ≈ a
         @test a * inv(lua) ≈ eye(n)
+
+        lstring = sprint(show,l)
+        ustring = sprint(show,u)
+        @test sprint(show,lua) == "$(typeof(lua)) with factors L and U:\n$lstring\n$ustring"
         let Bs = b, Cs = c
             for atype in ("Array", "SubArray")
                 if atype == "Array"
@@ -102,6 +106,7 @@ debug && println("Tridiagonal LU")
         @test_throws DimensionMismatch lud\f
         @test_throws DimensionMismatch lud.'\f
         @test_throws DimensionMismatch lud'\f
+        @test_throws DimensionMismatch Base.LinAlg.At_ldiv_B!(lud, f)
         let Bs = b
             for atype in ("Array", "SubArray")
                 if atype == "Array"
@@ -113,6 +118,9 @@ debug && println("Tridiagonal LU")
                 @test norm(d*(lud\b) - b, 1) < ε*κd*n*2 # Two because the right hand side has two columns
                 if eltya <: Real
                     @test norm((lud.'\b) - Array(d.')\b, 1) < ε*κd*n*2 # Two because the right hand side has two columns
+                    if eltya != Int && eltyb != Int
+                        @test norm(Base.LinAlg.At_ldiv_B!(lud, copy(b)) - Array(d.')\b, 1) < ε*κd*n*2
+                    end
                 end
                 if eltya <: Complex
                     @test norm((lud'\b) - Array(d')\b, 1) < ε*κd*n*2 # Two because the right hand side has two columns
@@ -200,3 +208,6 @@ end
 
 @test @inferred(logdet(Complex64[1.0f0 0.5f0; 0.5f0 -1.0f0])) === 0.22314355f0 + 3.1415927f0im
 @test_throws DomainError logdet([1 1; 1 -1])
+
+# Issue 21453.
+@test_throws ArgumentError LinAlg._cond1Inf(lufact(randn(5,5)), 2, 2.0)

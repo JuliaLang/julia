@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## core string functions ##
 
@@ -69,7 +69,7 @@ julia> "Hello " * "world"
 """
 (*)(s1::AbstractString, ss::AbstractString...) = string(s1, ss...)
 
-one{T<:AbstractString}(::Union{T,Type{T}}) = convert(T, "")
+one(::Union{T,Type{T}}) where {T<:AbstractString} = convert(T, "")
 
 length(s::DirectIndexString) = endof(s)
 
@@ -394,6 +394,8 @@ lowercase(s::AbstractString) = map(lowercase, s)
     titlecase(s::AbstractString)
 
 Capitalizes the first character of each word in `s`.
+See also [`ucfirst`](@ref) to capitalize only the first
+character in `s`.
 
 ```jldoctest
 julia> titlecase("the julia programming language")
@@ -418,7 +420,10 @@ end
 """
     ucfirst(s::AbstractString)
 
-Returns `string` with the first character converted to uppercase.
+Returns `string` with the first character converted to uppercase
+(technically "title case" for Unicode).
+See also [`titlecase`](@ref) to capitalize the first character of
+every word in `s`.
 
 ```jldoctest
 julia> ucfirst("python")
@@ -426,7 +431,10 @@ julia> ucfirst("python")
 ```
 """
 function ucfirst(s::AbstractString)
-    isempty(s) || isupper(s[1]) ? s : string(uppercase(s[1]),s[nextind(s,1):end])
+    isempty(s) && return s
+    c = s[1]
+    tc = titlecase(c)
+    return c==tc ? s : string(tc,s[nextind(s,1):end])
 end
 
 """

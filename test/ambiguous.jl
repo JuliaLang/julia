@@ -1,7 +1,7 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # DO NOT ALTER ORDER OR SPACING OF METHODS BELOW
-const lineoffset = @__LINE__ + 0 # XXX: __LINE__ at the end of a line is off-by-one
+const lineoffset = @__LINE__
 ambig(x, y) = 1
 ambig(x::Integer, y) = 2
 ambig(x, y::Integer) = 3
@@ -9,9 +9,8 @@ ambig(x::Int, y::Int) = 4
 ambig(x::Number, y) = 5
 # END OF LINE NUMBER SENSITIVITY
 
-const curmod = current_module()
-const curmod_name = fullname(curmod)
-const curmod_str = curmod === Main ? "Main" : join(curmod_name, ".")
+# For curmod_*
+include("testenv.jl")
 
 ambigs = Any[[], [3], [2,5], [], [3]]
 
@@ -60,6 +59,8 @@ let err = try
                            startswith(str, "  ambig(x::Integer, y) in $curmod_str at")
     @test ambig_checkline(lines[2])
     @test ambig_checkline(lines[3])
+    @test lines[4] == "Possible fix, define"
+    @test lines[5] == "  ambig(::Integer, ::Integer)"
 end
 
 ## Other ways of accessing functions
@@ -83,6 +84,16 @@ cfunction(ambig, Int, (UInt8, Int))  # test for a crash (doesn't throw an error)
 @test_throws MethodError ambig(2, 0x03)
 ambig(x, y::Integer) = 3
 @test_throws MethodError ambig(2, 0x03)
+
+# Method overwriting by an ambiguity should also invalidate the method cache (#21963)
+ambig(x::Union{Char, Int8}) = 'r'
+@test ambig('c') == 'r'
+@test ambig(Int8(1)) == 'r'
+@test_throws MethodError ambig(Int16(1))
+ambig(x::Union{Char, Int16}) = 's'
+@test_throws MethodError ambig('c')
+@test ambig(Int8(1)) == 'r'
+@test ambig(Int16(1)) == 's'
 
 # Automatic detection of ambiguities
 module Ambig1
@@ -133,9 +144,10 @@ ambs = detect_ambiguities(Ambig5)
 @test length(ambs) == 2
 
 # Test that Core and Base are free of ambiguities
-# TODO jb/subtype: we now detect a lot more
-@test_broken detect_ambiguities(Core, Base; imported=true) == []
 # not using isempty so this prints more information when it fails
+@test detect_ambiguities(Core, Base; imported=true, ambiguous_bottom=false) == []
+# some ambiguities involving Union{} type parameters are expected, but not required
+@test !isempty(detect_ambiguities(Core, Base; imported=true, ambiguous_bottom=true))
 
 amb_1(::Int8, ::Int) = 1
 amb_1(::Integer, x) = 2
@@ -221,5 +233,16 @@ catch err
         rethrow(err)
     end
 end
+
+module Ambig9
+f(x::Complex{<:Integer}) = 1
+f(x::Complex{<:Rational}) = 2
+end
+@test !Base.isambiguous(methods(Ambig9.f)..., ambiguous_bottom=false)
+@test Base.isambiguous(methods(Ambig9.f)..., ambiguous_bottom=true)
+@test !Base.isambiguous(methods(Ambig9.f)...)
+@test length(detect_ambiguities(Ambig9, ambiguous_bottom=false)) == 0
+@test length(detect_ambiguities(Ambig9, ambiguous_bottom=true)) == 1
+@test length(detect_ambiguities(Ambig9)) == 0
 
 nothing # don't return a module from the remote include

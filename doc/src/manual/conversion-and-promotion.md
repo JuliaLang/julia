@@ -46,7 +46,7 @@ generally takes two arguments: the first is a type object while the second is a 
 to that type; the returned value is the value converted to an instance of given type. The simplest
 way to understand this function is to see it in action:
 
-```julia
+```jldoctest
 julia> x = 12
 12
 
@@ -66,12 +66,12 @@ julia> typeof(ans)
 Float64
 
 julia> a = Any[1 2 3; 4 5 6]
-2x3 Array{Any,2}:
+2×3 Array{Any,2}:
  1  2  3
  4  5  6
 
 julia> convert(Array{Float64}, a)
-2x3 Array{Float64,2}:
+2×3 Array{Float64,2}:
  1.0  2.0  3.0
  4.0  5.0  6.0
 ```
@@ -79,12 +79,11 @@ julia> convert(Array{Float64}, a)
 Conversion isn't always possible, in which case a no method error is thrown indicating that `convert`
 doesn't know how to perform the requested conversion:
 
-```julia
+```jldoctest
 julia> convert(AbstractFloat, "foo")
 ERROR: MethodError: Cannot `convert` an object of type String to an object of type AbstractFloat
 This may have arisen from a call to the constructor AbstractFloat(...),
 since type constructors fall back to convert methods.
- ...
 ```
 
 Some languages consider parsing strings as numbers or formatting numbers as strings to be conversions
@@ -102,16 +101,17 @@ is to it. For example, the method to convert a real number to a boolean is this:
 convert(::Type{Bool}, x::Real) = x==0 ? false : x==1 ? true : throw(InexactError())
 ```
 
-The type of the first argument of this method is a [singleton type](@ref man-singleton-types), `Type{Bool}`, the only
-instance of which is `Bool`. Thus, this method is only invoked when the first argument is the
-type value `Bool`. Notice the syntax used for the first argument: the argument name is omitted
-prior to the `::` symbol, and only the type is given.  This is the syntax in Julia for a function
-argument whose type is specified but whose value is never used in the function body.  In this
-example, since the type is a singleton, there would never be any reason to use its value within
-the body. When invoked, the method determines whether a numeric value is true or false as a boolean,
+The type of the first argument of this method is a [singleton type](@ref man-singleton-types),
+`Type{Bool}`, the only instance of which is [`Bool`](@ref). Thus, this method is only invoked
+when the first argument is the type value `Bool`. Notice the syntax used for the first
+argument: the argument name is omitted prior to the `::` symbol, and only the type is given.
+This is the syntax in Julia for a function argument whose type is specified but whose value
+is never used in the function body. In this example, since the type is a singleton, there
+would never be any reason to use its value within the body. When invoked, the method
+determines whether a numeric value is true or false as a boolean,
 by comparing it to one and zero:
 
-```julia
+```jldoctest
 julia> convert(Bool, 1)
 true
 
@@ -120,8 +120,8 @@ false
 
 julia> convert(Bool, 1im)
 ERROR: InexactError()
- in convert(::Type{Bool}, ::Complex{Int64}) at ./complex.jl:23
- ...
+Stacktrace:
+ [1] convert(::Type{Bool}, ::Complex{Int64}) at ./complex.jl:31
 
 julia> convert(Bool, 0im)
 false
@@ -132,25 +132,21 @@ especially for parametric types. The example above is meant to be pedagogical, a
 actual Julia behaviour. This is the actual implementation in Julia:
 
 ```julia
-convert{T<:Real}(::Type{T}, z::Complex) = (imag(z)==0 ? convert(T,real(z)) :
-                                           throw(InexactError()))
-
-julia> convert(Bool, 1im)
-ERROR: InexactError()
- in convert(::Type{Bool}, ::Complex{Int64}) at ./complex.jl:18
- ...
+convert(::Type{T}, z::Complex) where {T<:Real} =
+    (imag(z) == 0 ? convert(T, real(z)) : throw(InexactError()))
 ```
 
 ### [Case Study: Rational Conversions](@id man-rational-conversion)
 
-To continue our case study of Julia's `Rational` type, here are the conversions declared in [rational.jl](https://github.com/JuliaLang/julia/blob/master/base/rational.jl),
+To continue our case study of Julia's [`Rational`](@ref) type, here are the conversions declared in
+[`rational.jl`](https://github.com/JuliaLang/julia/blob/master/base/rational.jl),
 right after the declaration of the type and its constructors:
 
 ```julia
-convert{T<:Integer}(::Type{Rational{T}}, x::Rational) = Rational(convert(T,x.num),convert(T,x.den))
-convert{T<:Integer}(::Type{Rational{T}}, x::Integer) = Rational(convert(T,x), convert(T,1))
+convert(::Type{Rational{T}}, x::Rational) where {T<:Integer} = Rational(convert(T,x.num),convert(T,x.den))
+convert(::Type{Rational{T}}, x::Integer) where {T<:Integer} = Rational(convert(T,x), convert(T,1))
 
-function convert{T<:Integer}(::Type{Rational{T}}, x::AbstractFloat, tol::Real)
+function convert(::Type{Rational{T}}, x::AbstractFloat, tol::Real) where T<:Integer
     if isnan(x); return zero(T)//zero(T); end
     if isinf(x); return sign(x)//zero(T); end
     y = x
@@ -165,10 +161,10 @@ function convert{T<:Integer}(::Type{Rational{T}}, x::AbstractFloat, tol::Real)
         y = 1/y
     end
 end
-convert{T<:Integer}(rt::Type{Rational{T}}, x::AbstractFloat) = convert(rt,x,eps(x))
+convert(rt::Type{Rational{T}}, x::AbstractFloat) where {T<:Integer} = convert(rt,x,eps(x))
 
-convert{T<:AbstractFloat}(::Type{T}, x::Rational) = convert(T,x.num)/convert(T,x.den)
-convert{T<:Integer}(::Type{T}, x::Rational) = div(convert(T,x.num),convert(T,x.den))
+convert(::Type{T}, x::Rational) where {T<:AbstractFloat} = convert(T,x.num)/convert(T,x.den)
+convert(::Type{T}, x::Rational) where {T<:Integer} = div(convert(T,x.num),convert(T,x.den))
 ```
 
 The initial four convert methods provide conversions to rational types. The first method converts
@@ -193,32 +189,32 @@ since the values are converted to a "greater" type -- i.e. one which can represe
 input values in a single common type. It is important, however, not to confuse this with object-oriented
 (structural) super-typing, or Julia's notion of abstract super-types: promotion has nothing to
 do with the type hierarchy, and everything to do with converting between alternate representations.
-For instance, although every `Int32` value can also be represented as a `Float64` value, `Int32`
-is not a subtype of `Float64`.
+For instance, although every [`Int32`](@ref) value can also be represented as a [`Float64`](@ref) value,
+`Int32` is not a subtype of `Float64`.
 
 Promotion to a common "greater" type is performed in Julia by the `promote` function, which takes
 any number of arguments, and returns a tuple of the same number of values, converted to a common
 type, or throws an exception if promotion is not possible. The most common use case for promotion
 is to convert numeric arguments to a common type:
 
-```julia
+```jldoctest
 julia> promote(1, 2.5)
-(1.0,2.5)
+(1.0, 2.5)
 
 julia> promote(1, 2.5, 3)
-(1.0,2.5,3.0)
+(1.0, 2.5, 3.0)
 
 julia> promote(2, 3//4)
-(2//1,3//4)
+(2//1, 3//4)
 
 julia> promote(1, 2.5, 3, 3//4)
-(1.0,2.5,3.0,0.75)
+(1.0, 2.5, 3.0, 0.75)
 
 julia> promote(1.5, im)
-(1.5 + 0.0im,0.0 + 1.0im)
+(1.5 + 0.0im, 0.0 + 1.0im)
 
 julia> promote(1 + 2im, 3//4)
-(1//1 + 2//1*im,3//4 + 0//1*im)
+(1//1 + 2//1*im, 3//4 + 0//1*im)
 ```
 
 Floating-point values are promoted to the largest of the floating-point argument types. Integer
@@ -231,7 +227,7 @@ promoted to the appropriate kind of complex value.
 That is really all there is to using promotions. The rest is just a matter of clever application,
 the most typical "clever" application being the definition of catch-all methods for numeric operations
 like the arithmetic operators `+`, `-`, `*` and `/`. Here are some of the catch-all method definitions
-given in [promotion.jl](https://github.com/JuliaLang/julia/blob/master/base/promotion.jl):
+given in [`promotion.jl`](https://github.com/JuliaLang/julia/blob/master/base/promotion.jl):
 
 ```julia
 +(x::Number, y::Number) = +(promote(x,y)...)
@@ -245,11 +241,11 @@ multiplying and dividing pairs of numeric values, promote the values to a common
 try again. That's all there is to it: nowhere else does one ever need to worry about promotion
 to a common numeric type for arithmetic operations -- it just happens automatically. There are
 definitions of catch-all promotion methods for a number of other arithmetic and mathematical functions
-in [promotion.jl](https://github.com/JuliaLang/julia/blob/master/base/promotion.jl), but beyond
+in [`promotion.jl`](https://github.com/JuliaLang/julia/blob/master/base/promotion.jl), but beyond
 that, there are hardly any calls to `promote` required in the Julia standard library. The most
 common usages of `promote` occur in outer constructors methods, provided for convenience, to allow
 constructor calls with mixed types to delegate to an inner type with fields promoted to an appropriate
-common type. For example, recall that [rational.jl](https://github.com/JuliaLang/julia/blob/master/base/rational.jl)
+common type. For example, recall that [`rational.jl`](https://github.com/JuliaLang/julia/blob/master/base/rational.jl)
 provides the following outer constructor method:
 
 ```julia
@@ -258,7 +254,7 @@ Rational(n::Integer, d::Integer) = Rational(promote(n,d)...)
 
 This allows calls like the following to work:
 
-```julia
+```jldoctest
 julia> Rational(Int8(15),Int32(-5))
 -3//1
 
@@ -280,7 +276,7 @@ another type object, such that instances of the argument types will be promoted 
 type. Thus, by defining the rule:
 
 ```julia
-promote_rule(::Type{Float64}, ::Type{Float32} ) = Float64
+promote_rule(::Type{Float64}, ::Type{Float32}) = Float64
 ```
 
 one declares that when 64-bit and 32-bit floating-point values are promoted together, they should
@@ -292,24 +288,25 @@ promote_rule(::Type{UInt8}, ::Type{Int8}) = Int
 promote_rule(::Type{BigInt}, ::Type{Int8}) = BigInt
 ```
 
-In the latter case, the result type is `BigInt` since `BigInt` is the only type large enough to
-hold integers for arbitrary-precision integer arithmetic.  Also note that one does not need to
-define both `promote_rule(::Type{A}, ::Type{B})` and `promote_rule(::Type{B}, ::Type{A})` -- the
-symmetry is implied by the way `promote_rule` is used in the promotion process.
+In the latter case, the result type is [`BigInt`](@ref) since `BigInt` is the only type
+large enough to hold integers for arbitrary-precision integer arithmetic. Also note that
+one does not need to define both `promote_rule(::Type{A}, ::Type{B})` and
+`promote_rule(::Type{B}, ::Type{A})` -- the symmetry is implied by the way `promote_rule`
+is used in the promotion process.
 
 The `promote_rule` function is used as a building block to define a second function called `promote_type`,
 which, given any number of type objects, returns the common type to which those values, as arguments
 to `promote` should be promoted. Thus, if one wants to know, in absence of actual values, what
 type a collection of values of certain types would promote to, one can use `promote_type`:
 
-```julia
+```jldoctest
 julia> promote_type(Int8, UInt16)
 Int64
 ```
 
 Internally, `promote_type` is used inside of `promote` to determine what type argument values
 should be converted to for promotion. It can, however, be useful in its own right. The curious
-reader can read the code in [promotion.jl](https://github.com/JuliaLang/julia/blob/master/base/promotion.jl),
+reader can read the code in [`promotion.jl`](https://github.com/JuliaLang/julia/blob/master/base/promotion.jl),
 which defines the complete promotion mechanism in about 35 lines.
 
 ### Case Study: Rational Promotions
@@ -318,9 +315,9 @@ Finally, we finish off our ongoing case study of Julia's rational number type, w
 sophisticated use of the promotion mechanism with the following promotion rules:
 
 ```julia
-promote_rule{T<:Integer,S<:Integer}(::Type{Rational{T}}, ::Type{S}) = Rational{promote_type(T,S)}
-promote_rule{T<:Integer,S<:Integer}(::Type{Rational{T}}, ::Type{Rational{S}}) = Rational{promote_type(T,S)}
-promote_rule{T<:Integer,S<:AbstractFloat}(::Type{Rational{T}}, ::Type{S}) = promote_type(T,S)
+promote_rule(::Type{Rational{T}}, ::Type{S}) where {T<:Integer,S<:Integer} = Rational{promote_type(T,S)}
+promote_rule(::Type{Rational{T}}, ::Type{Rational{S}}) where {T<:Integer,S<:Integer} = Rational{promote_type(T,S)}
+promote_rule(::Type{Rational{T}}, ::Type{S}) where {T<:Integer,S<:AbstractFloat} = promote_type(T,S)
 ```
 
 The first rule says that promoting a rational number with any other integer type promotes to a

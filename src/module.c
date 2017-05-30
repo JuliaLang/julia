@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 /*
   modules and top-level bindings
@@ -29,7 +29,9 @@ JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name)
     m->istopmod = 0;
     static unsigned int mcounter; // simple counter backup, in case hrtime is not incrementing
     m->uuid = jl_hrtime() + (++mcounter);
-    if (!m->uuid) m->uuid++; // uuid 0 is invalid
+    if (!m->uuid)
+        m->uuid++; // uuid 0 is invalid
+    m->primary_world = 0;
     m->counter = 0;
     htable_new(&m->bindings, 0);
     arraylist_new(&m->usings, 0);
@@ -261,9 +263,8 @@ static int eq_bindings(jl_binding_t *a, jl_binding_t *b)
 // does module m explicitly import s?
 JL_DLLEXPORT int jl_is_imported(jl_module_t *m, jl_sym_t *s)
 {
-    jl_binding_t **bp = (jl_binding_t**)ptrhash_bp(&m->bindings, s);
-    jl_binding_t *bto = *bp;
-    return (bto != HT_NOTFOUND && bto->imported);
+    jl_binding_t *b = (jl_binding_t*)ptrhash_get(&m->bindings, s);
+    return (b != HT_NOTFOUND && b->imported);
 }
 
 // NOTE: we use explici since explicit is a C++ keyword
@@ -411,23 +412,20 @@ JL_DLLEXPORT int jl_boundp(jl_module_t *m, jl_sym_t *var)
 
 JL_DLLEXPORT int jl_defines_or_exports_p(jl_module_t *m, jl_sym_t *var)
 {
-    jl_binding_t **bp = (jl_binding_t**)ptrhash_bp(&m->bindings, var);
-    if (*bp == HT_NOTFOUND) return 0;
-    return (*bp)->exportp || (*bp)->owner==m;
+    jl_binding_t *b = (jl_binding_t*)ptrhash_get(&m->bindings, var);
+    return b != HT_NOTFOUND && (b->exportp || b->owner==m);
 }
 
 JL_DLLEXPORT int jl_module_exports_p(jl_module_t *m, jl_sym_t *var)
 {
-    jl_binding_t **bp = (jl_binding_t**)ptrhash_bp(&m->bindings, var);
-    if (*bp == HT_NOTFOUND) return 0;
-    return (*bp)->exportp;
+    jl_binding_t *b = (jl_binding_t*)ptrhash_get(&m->bindings, var);
+    return b != HT_NOTFOUND && b->exportp;
 }
 
 JL_DLLEXPORT int jl_binding_resolved_p(jl_module_t *m, jl_sym_t *var)
 {
-    jl_binding_t **bp = (jl_binding_t**)ptrhash_bp(&m->bindings, var);
-    if (*bp == HT_NOTFOUND) return 0;
-    return (*bp)->owner != NULL;
+    jl_binding_t *b = (jl_binding_t*)ptrhash_get(&m->bindings, var);
+    return b != HT_NOTFOUND && b->owner != NULL;
 }
 
 JL_DLLEXPORT jl_value_t *jl_get_global(jl_module_t *m, jl_sym_t *var)
@@ -491,10 +489,21 @@ void jl_binding_deprecation_warning(jl_binding_t *b)
         else
             jl_printf(JL_STDERR, "%s is deprecated", jl_symbol_name(b->name));
         jl_value_t *v = b->value;
-        if (v && (jl_is_type(v) || jl_is_module(v)/* || (jl_is_function(v) && jl_is_gf(v))*/)) {
-            jl_printf(JL_STDERR, ", use ");
-            jl_static_show(JL_STDERR, v);
-            jl_printf(JL_STDERR, " instead");
+        if (v) {
+            if (jl_is_type(v) || jl_is_module(v)) {
+                jl_printf(JL_STDERR, ", use ");
+                jl_static_show(JL_STDERR, v);
+                jl_printf(JL_STDERR, " instead");
+            }
+            else {
+                jl_methtable_t *mt = jl_gf_mtable(v);
+                if (mt != NULL && mt->defs.unknown != jl_nothing) {
+                    jl_printf(JL_STDERR, ", use ");
+                    jl_static_show(JL_STDERR, (jl_value_t*)mt->module);
+                    jl_printf(JL_STDERR, ".%s", jl_symbol_name(mt->name));
+                    jl_printf(JL_STDERR, " instead");
+                }
+            }
         }
         jl_printf(JL_STDERR, ".\n");
 

@@ -1,25 +1,25 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Markdown
 
 import Base: show, ==
 import Core: @doc_str
 
-include("parse/config.jl")
-include("parse/util.jl")
-include("parse/parse.jl")
+include(joinpath("parse", "config.jl"))
+include(joinpath("parse", "util.jl"))
+include(joinpath("parse", "parse.jl"))
 
-include("Common/Common.jl")
-include("GitHub/GitHub.jl")
-include("IPython/IPython.jl")
-include("Julia/Julia.jl")
+include(joinpath("Common", "Common.jl"))
+include(joinpath("GitHub", "GitHub.jl"))
+include(joinpath("IPython", "IPython.jl"))
+include(joinpath("Julia", "Julia.jl"))
 
-include("render/plain.jl")
-include("render/html.jl")
-include("render/latex.jl")
-include("render/rst.jl")
+include(joinpath("render", "plain.jl"))
+include(joinpath("render", "html.jl"))
+include(joinpath("render", "latex.jl"))
+include(joinpath("render", "rst.jl"))
 
-include("render/terminal/render.jl")
+include(joinpath("render", "terminal", "render.jl"))
 
 export readme, license, @md_str, @doc_str
 
@@ -37,25 +37,23 @@ function mdexpr(s, flavor = :julia)
     esc(toexpr(md))
 end
 
-function docexpr(s, flavor = :julia)
-    quote
-        let md = $(mdexpr(s, flavor))
-            md.meta[:path] = @__FILE__
-            md.meta[:module] = current_module()
-            md
-        end
-    end
+function docexpr(source::LineNumberNode, s, flavor = :julia)
+    :($doc_str($(mdexpr(s, flavor)), $(QuoteNode(source))))
 end
 
 macro md_str(s, t...)
     mdexpr(s, t...)
 end
 
-doc_str(md, file, mod) = (md.meta[:path] = file; md.meta[:module] = mod; md)
-doc_str(md::AbstractString, file, mod) = doc_str(parse(md), file, mod)
+function doc_str(md, source::LineNumberNode)
+    md.meta[:path] = isa(source.file, Symbol) ? String(source.file) : ""
+    md.meta[:module] = current_module()
+    md
+end
+doc_str(md::AbstractString, source::LineNumberNode) = doc_str(parse(md), source)
 
 macro doc_str(s::AbstractString, t...)
-    :($(doc_str)($(mdexpr(s, t...)), $(Base).@__FILE__, $(current_module)()))
+    docexpr(__source__, s, t...)
 end
 
 function Base.display(d::Base.REPL.REPLDisplay, md::Vector{MD})

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Enums
 
@@ -9,10 +9,10 @@ function basetype end
 
 abstract type Enum{T<:Integer} end
 
-Base.convert{T<:Integer}(::Type{Integer}, x::Enum{T}) = bitcast(T, x)
-Base.convert{T<:Integer,T2<:Integer}(::Type{T}, x::Enum{T2}) = convert(T, bitcast(T2, x))
-Base.write{T<:Integer}(io::IO, x::Enum{T}) = write(io, T(x))
-Base.read{T<:Enum}(io::IO, ::Type{T}) = T(read(io, Enums.basetype(T)))
+Base.convert(::Type{Integer}, x::Enum{T}) where {T<:Integer} = bitcast(T, x)
+Base.convert(::Type{T}, x::Enum{T2}) where {T<:Integer,T2<:Integer} = convert(T, bitcast(T2, x))
+Base.write(io::IO, x::Enum{T}) where {T<:Integer} = write(io, T(x))
+Base.read(io::IO, ::Type{T}) where {T<:Enum} = T(read(io, Enums.basetype(T)))
 
 # generate code to test whether expr is in the given set of values
 function membershiptest(expr, values)
@@ -45,8 +45,9 @@ julia> f(apple)
 "I'm a Fruit with value: 1"
 ```
 
-`BaseType`, which defaults to `Int32`, must be a primitive subtype of Integer. Member values can be converted between
-the enum type and `BaseType`. `read` and `write` perform these conversions automatically.
+`BaseType`, which defaults to [`Int32`](@ref), must be a primitive subtype of `Integer`.
+Member values can be converted between the enum type and `BaseType`. `read` and `write`
+perform these conversions automatically.
 """
 macro enum(T,syms...)
     if isempty(syms)
@@ -63,7 +64,7 @@ macro enum(T,syms...)
     elseif !isa(T,Symbol)
         throw(ArgumentError("invalid type expression for enum $T"))
     end
-    vals = Array{Tuple{Symbol,Integer}}(0)
+    vals = Vector{Tuple{Symbol,Integer}}(0)
     lo = hi = 0
     i = zero(basetype)
     hasexpr = false

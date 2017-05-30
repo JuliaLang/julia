@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 @testset "Core" begin
     v = [1,2,3]
@@ -248,4 +248,23 @@ end
         @test x*A == y'*A == x*B' == y'*B' == C
         @test A'*x' == A'*y == B*x' == B*y == C'
     end
+end
+
+@testset "issue #20979" begin
+    f20979(z::Complex) = [z.re -z.im; z.im z.re]
+    v = [1+2im]'
+    @test (f20979.(v))[1] == f20979(v[1])
+    @test f20979.(v) == f20979.(collect(v))
+
+    w = rand(Complex128, 3)
+    @test f20979.(v') == f20979.(collect(v')) == (f20979.(v))'
+
+    g20979(x, y) = [x[2,1] x[1,2]; y[1,2] y[2,1]]
+    v = [rand(2,2), rand(2,2), rand(2,2)]
+    @test g20979.(v', v') == g20979.(collect(v'), collect(v')) ==
+          map(g20979, v', v') == map(g20979, collect(v'), collect(v'))
+end
+
+@testset "ambiguity between * methods with RowVectors and ConjRowVectors (#20971)" begin
+    @test RowVector(ConjArray(ones(4))) * ones(4) == 4
 end

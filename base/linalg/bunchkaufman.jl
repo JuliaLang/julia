@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## Create an extractor that extracts the modified original matrix, e.g.
 ## LD for BunchKaufman, UL for CholeskyDense, LU for LUDense and
@@ -66,22 +66,22 @@ If `symmetric` is `true`, `A` is assumed to be symmetric. If `symmetric` is `fal
 The following functions are available for
 `BunchKaufman` objects: [`size`](@ref), `\\`, [`inv`](@ref), [`issymmetric`](@ref), [`ishermitian`](@ref).
 
-[^Bunch1977]: J R Bunch and L Kaufman, Some stable methods for calculating inertia and solving symmetric linear systems, Mathematics of Computation 31:137 (1977), 163-179. [url](http://www.ams.org/journals/mcom/1977-31-137/S0025-5718-1977-0428694-0).
+[^Bunch1977]: J R Bunch and L Kaufman, Some stable methods for calculating inertia and solving symmetric linear systems, Mathematics of Computation 31:137 (1977), 163-179. [url](http://www.ams.org/journals/mcom/1977-31-137/S0025-5718-1977-0428694-0/).
 
 """
 bkfact(A::StridedMatrix{<:BlasFloat}, uplo::Symbol=:U, symmetric::Bool=issymmetric(A),
     rook::Bool=false) =
         bkfact!(copy(A), uplo, symmetric, rook)
-bkfact{T}(A::StridedMatrix{T}, uplo::Symbol=:U, symmetric::Bool=issymmetric(A),
-    rook::Bool=false) =
+bkfact(A::StridedMatrix{T}, uplo::Symbol=:U, symmetric::Bool=issymmetric(A),
+    rook::Bool=false) where {T} =
         bkfact!(convert(Matrix{promote_type(Float32, typeof(sqrt(one(T))))}, A),
                 uplo, symmetric, rook)
 
-convert{T}(::Type{BunchKaufman{T}}, B::BunchKaufman{T}) = B
-convert{T}(::Type{BunchKaufman{T}}, B::BunchKaufman) =
+convert(::Type{BunchKaufman{T}}, B::BunchKaufman{T}) where {T} = B
+convert(::Type{BunchKaufman{T}}, B::BunchKaufman) where {T} =
     BunchKaufman(convert(Matrix{T}, B.LD), B.ipiv, B.uplo, B.symmetric, B.rook, B.info)
-convert{T}(::Type{Factorization{T}}, B::BunchKaufman{T}) = B
-convert{T}(::Type{Factorization{T}}, B::BunchKaufman) = convert(BunchKaufman{T}, B)
+convert(::Type{Factorization{T}}, B::BunchKaufman{T}) where {T} = B
+convert(::Type{Factorization{T}}, B::BunchKaufman) where {T} = convert(BunchKaufman{T}, B)
 
 size(B::BunchKaufman) = size(B.LD)
 size(B::BunchKaufman, d::Integer) = size(B.LD, d)
@@ -120,7 +120,7 @@ function inv(B::BunchKaufman{<:BlasComplex})
     end
 end
 
-function A_ldiv_B!{T<:BlasReal}(B::BunchKaufman{T}, R::StridedVecOrMat{T})
+function A_ldiv_B!(B::BunchKaufman{T}, R::StridedVecOrMat{T}) where T<:BlasReal
     if B.info > 0
         throw(SingularException(B.info))
     end
@@ -131,7 +131,7 @@ function A_ldiv_B!{T<:BlasReal}(B::BunchKaufman{T}, R::StridedVecOrMat{T})
         LAPACK.sytrs!(B.uplo, B.LD, B.ipiv, R)
     end
 end
-function A_ldiv_B!{T<:BlasComplex}(B::BunchKaufman{T}, R::StridedVecOrMat{T})
+function A_ldiv_B!(B::BunchKaufman{T}, R::StridedVecOrMat{T}) where T<:BlasComplex
     if B.info > 0
         throw(SingularException(B.info))
     end
@@ -149,6 +149,11 @@ function A_ldiv_B!{T<:BlasComplex}(B::BunchKaufman{T}, R::StridedVecOrMat{T})
             LAPACK.hetrs!(B.uplo, B.LD, B.ipiv, R)
         end
     end
+end
+# There is no fallback solver for Bunch-Kaufman so we'll have to promote to same element type
+function A_ldiv_B!(B::BunchKaufman{T}, R::StridedVecOrMat{S}) where {T,S}
+    TS = promote_type(T,S)
+    return A_ldiv_B!(convert(BunchKaufman{TS}, B), convert(AbstractArray{TS}, R))
 end
 
 function logabsdet(F::BunchKaufman)

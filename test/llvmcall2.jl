@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 function declared_floor(x::Float64)
     return ccall("llvm.floor.f64", llvmcall, Float64, (Float64,), x)

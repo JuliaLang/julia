@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module BaseDocs
 
@@ -7,17 +7,14 @@ struct Keyword
 end
 macro kw_str(text) Keyword(Symbol(text)) end
 
-"Hello, Human."
-kw"hello", kw"hi"
-
 """
 **Welcome to Julia $(string(VERSION)).** The full manual is available at
 
-    http://docs.julialang.org/
+    https://docs.julialang.org/
 
 as well many great tutorials and learning resources:
 
-    http://julialang.org/learning/
+    https://julialang.org/learning/
 
 For help on a specific function or macro, type `?` followed
 by its name, e.g. `?fft`, or `?@time`, and press enter.
@@ -84,7 +81,7 @@ Julia’s type system more than just a collection of object implementations. For
     abstract type Number end
     abstract type Real <: Number end
 
-`Number` has no supertype, whereas `Real` is an abstract subtype of `Number`.
+[`Number`](@ref) has no supertype, whereas [`Real`](@ref) is an abstract subtype of `Number`.
 """
 kw"abstract type"
 
@@ -127,7 +124,7 @@ primitive type declarations:
 
 The number after the name indicates how many bits of storage the type requires. Currently,
 only sizes that are multiples of 8 bits are supported.
-The `Bool` declaration shows how a primitive type can be optionally
+The [`Bool`](@ref) declaration shows how a primitive type can be optionally
 declared to be a subtype of some supertype.
 """
 kw"primitive type"
@@ -648,13 +645,6 @@ to be set after construction. See `struct` and the manual for more information.
 kw"mutable struct"
 
 """
-    @__LINE__ -> Int
-
-`@__LINE__` expands to the line number of the call-site.
-"""
-kw"@__LINE__"
-
-"""
     ans
 
 A variable referring to the last computed value, automatically set at the interactive prompt.
@@ -678,6 +668,13 @@ generation specialization for that field.
 ANY
 
 """
+    Core.TypeofBottom
+
+The singleton type containing only the value `Union{}`.
+"""
+Core.TypeofBottom
+
+"""
     DevNull
 
 Used in a stream redirect to discard all data written to it. Essentially equivalent to
@@ -688,5 +685,23 @@ run(pipeline(`cat test.txt`, DevNull))
 ```
 """
 DevNull
+
+"""
+    Function
+
+Abstract type of all functions.
+
+```jldoctest
+julia> isa(+, Function)
+true
+
+julia> typeof(sin)
+Base.#sin
+
+julia> ans <: Function
+true
+```
+"""
+Function
 
 end

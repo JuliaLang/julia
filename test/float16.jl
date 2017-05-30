@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.Test
 
@@ -49,6 +49,11 @@ g = Float16(1.)
 @test floor(Float16(1)) === Float16(1)
 @test ceil(Float16(0.1)) == ceil(0.1)
 @test ceil(Float16(0.9)) == ceil(0.9)
+@test unsafe_trunc(UInt8, Float16(3)) === 0x03
+@test unsafe_trunc(Int16, Float16(3)) === Int16(3)
+@test unsafe_trunc(UInt128, Float16(3)) === UInt128(3)
+@test unsafe_trunc(Int128, Float16(3)) === Int128(3)
+@test unsafe_trunc(Int16, NaN16) === Int16(0)  #18771
 @test fma(Float16(0.1),Float16(0.9),Float16(0.5)) ≈ fma(0.1,0.9,0.5)
 @test muladd(Float16(0.1),Float16(0.9),Float16(0.5)) ≈ muladd(0.1,0.9,0.5)
 @test convert(Int128,Float16(-1.0)) == Int128(-1)
@@ -61,6 +66,7 @@ g = Float16(1.)
 @test f*g === Float16(2f0)
 @test f/g === Float16(2f0)
 @test f^g === Float16(2f0)
+@test f^1 === Float16(2f0)
 @test f^-g === Float16(0.5f0)
 
 @test f + 2 === Float16(4f0)

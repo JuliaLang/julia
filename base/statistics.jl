@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ##### mean #####
 
@@ -41,7 +41,7 @@ function mean!(R::AbstractArray, A::AbstractArray)
     return R
 end
 
-momenttype{T}(::Type{T}) = typeof((zero(T)*zero(T) + zero(T)*zero(T)) / 2)
+momenttype(::Type{T}) where {T} = typeof((zero(T)*zero(T) + zero(T)*zero(T)) / 2)
 momenttype(::Type{Float32}) = Float32
 momenttype(::Type{<:Union{Float64,Int32,Int64,UInt32,UInt64}}) = Float64
 
@@ -54,7 +54,7 @@ Compute the mean of whole array `v`, or optionally along the dimensions in `regi
     Julia does not ignore `NaN` values in the computation. For applications requiring the
     handling of missing data, the `DataArrays.jl` package is recommended.
 """
-mean{T}(A::AbstractArray{T}, region) =
+mean(A::AbstractArray{T}, region) where {T} =
     mean!(reducedim_initarray(A, region, 0, momenttype(T)), A)
 
 
@@ -108,7 +108,7 @@ centralize_sumabs2(A::AbstractArray, m::Number) =
 centralize_sumabs2(A::AbstractArray, m::Number, ifirst::Int, ilast::Int) =
     mapreduce_impl(centralizedabs2fun(m), +, A, ifirst, ilast)
 
-function centralize_sumabs2!{S}(R::AbstractArray{S}, A::AbstractArray, means::AbstractArray)
+function centralize_sumabs2!(R::AbstractArray{S}, A::AbstractArray, means::AbstractArray) where S
     # following the implementation of _mapreducedim! at base/reducedim.jl
     lsiz = check_reducedims(R,A)
     isempty(R) || fill!(R, zero(S))
@@ -147,14 +147,14 @@ function centralize_sumabs2!{S}(R::AbstractArray{S}, A::AbstractArray, means::Ab
     return R
 end
 
-function varm{T}(A::AbstractArray{T}, m::Number; corrected::Bool=true)
+function varm(A::AbstractArray{T}, m::Number; corrected::Bool=true) where T
     n = _length(A)
     n == 0 && return convert(real(momenttype(T)), NaN)
     n == 1 && return convert(real(momenttype(T)), abs2(A[1] - m)/(1 - Int(corrected)))
     return centralize_sumabs2(A, m) / (n - Int(corrected))
 end
 
-function varm!{S}(R::AbstractArray{S}, A::AbstractArray, m::AbstractArray; corrected::Bool=true)
+function varm!(R::AbstractArray{S}, A::AbstractArray, m::AbstractArray; corrected::Bool=true) where S
     if isempty(A)
         fill!(R, convert(S, NaN))
     else
@@ -177,11 +177,11 @@ whereas the sum is scaled with `n` if `corrected` is `false` where `n = length(x
     applications requiring the handling of missing data, the
     `DataArrays.jl` package is recommended.
 """
-varm{T}(A::AbstractArray{T}, m::AbstractArray, region; corrected::Bool=true) =
+varm(A::AbstractArray{T}, m::AbstractArray, region; corrected::Bool=true) where {T} =
     varm!(reducedim_initarray(A, region, 0, real(momenttype(T))), A, m; corrected=corrected)
 
 
-var{T}(A::AbstractArray{T}; corrected::Bool=true, mean=nothing) =
+var(A::AbstractArray{T}; corrected::Bool=true, mean=nothing) where {T} =
     convert(real(momenttype(T)),
             varm(A, mean === nothing ? Base.mean(A) : mean; corrected=corrected))
 
@@ -307,7 +307,7 @@ _vmean(x::AbstractMatrix, vardim::Int) = mean(x, vardim)
 unscaled_covzm(x::AbstractVector) = sum(abs2, x)
 unscaled_covzm(x::AbstractMatrix, vardim::Int) = (vardim == 1 ? _conj(x'x) : x * x')
 
-unscaled_covzm(x::AbstractVector, y::AbstractVector) = dot(x, y)
+unscaled_covzm(x::AbstractVector, y::AbstractVector) = dot(y, x)
 unscaled_covzm(x::AbstractVector, y::AbstractMatrix, vardim::Int) =
     (vardim == 1 ? At_mul_B(x, _conj(y)) : At_mul_Bt(x, _conj(y)))
 unscaled_covzm(x::AbstractMatrix, y::AbstractVector, vardim::Int) =
@@ -362,9 +362,10 @@ cov(X::AbstractMatrix) = cov(X, 1, true)
 """
     cov(x, y[, corrected=true])
 
-Compute the covariance between the vectors `x` and `y`. If `corrected` is `true` (the default)
-then the sum is scaled with `n-1`, whereas the sum is scaled with `n` if `corrected` is `false`
-where `n = length(x) = length(y)`.
+Compute the covariance between the vectors `x` and `y`. If `corrected` is `true` (the
+default), computes ``\\frac{1}{n-1}\\sum_{i=1}^n (x_i-\\bar x) (y_i-\\bar y)^*`` where
+``*`` denotes the complex conjugate and `n = length(x) = length(y)`. If `corrected` is
+`false`, computes ``\frac{1}{n}\sum_{i=1}^n (x_i-\\bar x) (y_i-\\bar y)^*``.
 """
 cov(x::AbstractVector, y::AbstractVector, corrected::Bool) =
     covm(x, Base.mean(x), y, Base.mean(y), corrected)
@@ -388,18 +389,26 @@ cov(X::AbstractMatrix, Y::AbstractMatrix) = cov(X, Y, 1, true)
 
 ##### correlation #####
 
+"""
+    clampcor(x)
+
+Clamp a real correlation to between -1 and 1, leaving complex correlations unchanged
+"""
+clampcor(x::Real) = clamp(x, -1, 1)
+clampcor(x) = x
+
 # cov2cor!
 
-function cov2cor!{T}(C::AbstractMatrix{T}, xsd::AbstractArray)
+function cov2cor!(C::AbstractMatrix{T}, xsd::AbstractArray) where T
     nx = length(xsd)
     size(C) == (nx, nx) || throw(DimensionMismatch("inconsistent dimensions"))
     for j = 1:nx
         for i = 1:j-1
-            C[i,j] = C[j,i]
+            C[i,j] = C[j,i]'
         end
         C[j,j] = oneunit(T)
         for i = j+1:nx
-            C[i,j] = clamp(C[i,j] / (xsd[i] * xsd[j]), -1, 1)
+            C[i,j] = clampcor(C[i,j] / (xsd[i] * xsd[j]))
         end
     end
     return C
@@ -409,7 +418,7 @@ function cov2cor!(C::AbstractMatrix, xsd::Number, ysd::AbstractArray)
     length(ysd) == ny || throw(DimensionMismatch("inconsistent dimensions"))
     for (j, y) in enumerate(ysd)   # fixme (iter): here and in all `cov2cor!` we assume that `C` is efficiently indexed by integers
         for i in 1:nx
-            C[i,j] = clamp(C[i, j] / (xsd * y), -1, 1)
+            C[i,j] = clampcor(C[i, j] / (xsd * y))
         end
     end
     return C
@@ -419,7 +428,7 @@ function cov2cor!(C::AbstractMatrix, xsd::AbstractArray, ysd::Number)
     length(xsd) == nx || throw(DimensionMismatch("inconsistent dimensions"))
     for j in 1:ny
         for (i, x) in enumerate(xsd)
-            C[i,j] = clamp(C[i,j] / (x * ysd), -1, 1)
+            C[i,j] = clampcor(C[i,j] / (x * ysd))
         end
     end
     return C
@@ -430,7 +439,7 @@ function cov2cor!(C::AbstractMatrix, xsd::AbstractArray, ysd::AbstractArray)
         throw(DimensionMismatch("inconsistent dimensions"))
     for (i, x) in enumerate(xsd)
         for (j, y) in enumerate(ysd)
-            C[i,j] = clamp(C[i,j] / (x * y), -1, 1)
+            C[i,j] = clampcor(C[i,j] / (x * y))
         end
     end
     return C
@@ -438,7 +447,7 @@ end
 
 # corzm (non-exported, with centered data)
 
-corzm{T}(x::AbstractVector{T}) = one(real(T))
+corzm(x::AbstractVector{T}) where {T} = one(real(T))
 function corzm(x::AbstractMatrix, vardim::Int=1)
     c = unscaled_covzm(x, vardim)
     return cov2cor!(c, sqrt!(diag(c)))
@@ -452,7 +461,7 @@ corzm(x::AbstractMatrix, y::AbstractMatrix, vardim::Int=1) =
 
 # corm
 
-corm{T}(x::AbstractVector{T}, xmean) = one(real(T))
+corm(x::AbstractVector{T}, xmean) where {T} = one(real(T))
 corm(x::AbstractMatrix, xmean, vardim::Int=1) = corzm(x .- xmean, vardim)
 function corm(x::AbstractVector, mx::Number, y::AbstractVector, my::Number)
     n = length(x)
@@ -461,11 +470,11 @@ function corm(x::AbstractVector, mx::Number, y::AbstractVector, my::Number)
 
     @inbounds begin
         # Initialize the accumulators
-        xx = zero(sqrt(x[1] * x[1]))
-        yy = zero(sqrt(y[1] * y[1]))
-        xy = zero(xx * yy)
+        xx = zero(sqrt(abs2(x[1])))
+        yy = zero(sqrt(abs2(y[1])))
+        xy = zero(x[1] * y[1]')
 
-        @simd for i = 1:n
+        @simd for i in eachindex(x, y)
             xi = x[i] - mx
             yi = y[i] - my
             xx += abs2(xi)
@@ -473,8 +482,9 @@ function corm(x::AbstractVector, mx::Number, y::AbstractVector, my::Number)
             xy += xi * yi'
         end
     end
-    return clamp(xy / max(xx, yy) / sqrt(min(xx, yy) / max(xx, yy)), -1, 1)
+    return clampcor(xy / max(xx, yy) / sqrt(min(xx, yy) / max(xx, yy)))
 end
+
 corm(x::AbstractVecOrMat, xmean, y::AbstractVecOrMat, ymean, vardim::Int=1) =
     corzm(x .- xmean, y .- ymean, vardim)
 
@@ -613,10 +623,11 @@ median(v::AbstractArray, region) = mapslices(median!, v, region)
 """
     quantile!([q, ] v, p; sorted=false)
 
-Compute the quantile(s) of a vector `v` at the probabilities `p`, with optional output into
-array `q` (if not provided, a new output array is created). The keyword argument `sorted`
-indicates whether `v` can be assumed to be sorted; if `false` (the default), then the
-elements of `v` may be partially sorted.
+Compute the quantile(s) of a vector `v` at the probability or probabilities `p`, which
+can be given as a single value, a vector, or a tuple. If `p` is a vector, an optional
+output array `q` may also be specified. (If not provided, a new output array is created.)
+The keyword argument `sorted` indicates whether `v` can be assumed to be sorted; if
+`false` (the default), then the elements of `v` may be partially sorted.
 
 The elements of `p` should be on the interval [0,1], and `v` should not have any `NaN`
 values.
@@ -638,19 +649,10 @@ function quantile!(q::AbstractArray, v::AbstractVector, p::AbstractArray;
     if size(p) != size(q)
         throw(DimensionMismatch("size of p, $(size(p)), must equal size of q, $(size(q))"))
     end
+    isempty(q) && return q
 
-    isempty(v) && throw(ArgumentError("empty data vector"))
-
-    lv = length(v)
-    if !sorted
-        minp, maxp = extrema(p)
-        lo = floor(Int,1+minp*(lv-1))
-        hi = ceil(Int,1+maxp*(lv-1))
-
-        # only need to perform partial sort
-        sort!(v, 1, lv, PartialQuickSort(lo:hi), Base.Sort.Forward)
-    end
-    isnan(v[end]) && throw(ArgumentError("quantiles are undefined in presence of NaNs"))
+    minp, maxp = extrema(p)
+    _quantilesort!(v, sorted, minp, maxp)
 
     for (i, j) in zip(eachindex(p), eachindex(q))
         @inbounds q[j] = _quantile(v,p[i])
@@ -661,21 +663,30 @@ end
 quantile!(v::AbstractVector, p::AbstractArray; sorted::Bool=false) =
     quantile!(similar(p,float(eltype(v))), v, p; sorted=sorted)
 
-function quantile!(v::AbstractVector, p::Real;
-                   sorted::Bool=false)
+quantile!(v::AbstractVector, p::Real; sorted::Bool=false) =
+    _quantile(_quantilesort!(v, sorted, p, p), p)
+
+function quantile!(v::AbstractVector, p::Tuple{Vararg{Real}}; sorted::Bool=false)
+    isempty(p) && return ()
+    minp, maxp = extrema(p)
+    _quantilesort!(v, sorted, minp, maxp)
+    return map(x->_quantile(v, x), p)
+end
+
+# Function to perform partial sort of v for quantiles in given range
+function _quantilesort!(v::AbstractArray, sorted::Bool, minp::Real, maxp::Real)
     isempty(v) && throw(ArgumentError("empty data vector"))
 
-    lv = length(v)
     if !sorted
-        lo = floor(Int,1+p*(lv-1))
-        hi = ceil(Int,1+p*(lv-1))
+        lv = length(v)
+        lo = floor(Int,1+minp*(lv-1))
+        hi = ceil(Int,1+maxp*(lv-1))
 
         # only need to perform partial sort
         sort!(v, 1, lv, PartialQuickSort(lo:hi), Base.Sort.Forward)
     end
     isnan(v[end]) && throw(ArgumentError("quantiles are undefined in presence of NaNs"))
-
-    return _quantile(v,p)
+    return v
 end
 
 # Core quantile lookup function: assumes `v` sorted
@@ -707,8 +718,9 @@ end
 """
     quantile(v, p; sorted=false)
 
-Compute the quantile(s) of a vector `v` at a specified probability or vector `p`. The
-keyword argument `sorted` indicates whether `v` can be assumed to be sorted.
+Compute the quantile(s) of a vector `v` at a specified probability or vector or tuple of
+probabilities `p`. The keyword argument `sorted` indicates whether `v` can be assumed to
+be sorted.
 
 The `p` should be on the interval [0,1], and `v` should not have any `NaN` values.
 
@@ -721,7 +733,7 @@ for `k = 1:n` where `n = length(v)`. This corresponds to Definition 7 of Hyndman
     handling of missing data, the `DataArrays.jl` package is recommended. `quantile` will
     throw an `ArgumentError` in the presence of `NaN` values in the data array.
 
-* Hyndman, R.J and Fan, Y. (1996) "Sample Quantiles in Statistical Packages",
+- Hyndman, R.J and Fan, Y. (1996) "Sample Quantiles in Statistical Packages",
   *The American Statistician*, Vol. 50, No. 4, pp. 361-365
 """
 quantile(v::AbstractVector, p; sorted::Bool=false) =

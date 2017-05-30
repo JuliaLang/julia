@@ -1,8 +1,5 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
-module BitArrayTests
-
-using Base.Test
 using Base: findprevnot, findnextnot
 
 tc{N}(r1::NTuple{N,Any}, r2::NTuple{N,Any}) = all(x->tc(x...), [zip(r1,r2)...])
@@ -143,6 +140,10 @@ timesofar("conversions")
         @check_bit_operation reshape(b1, (n2,n1)) BitMatrix
         @test_throws DimensionMismatch reshape(b1, (1,n1))
 
+        @test @inferred(reshape(b1, n1*n2)) == @inferred(reshape(b1, (n1*n2,))) == @inferred(reshape(b1, Val{1})) == @inferred(reshape(b1, :))
+        @test @inferred(reshape(b1, n1, n2)) === @inferred(reshape(b1, Val{2})) === b1
+        @test @inferred(reshape(b1, n2, :)) == @inferred(reshape(b1, (n2, n1))) != @inferred(reshape(b1, Val{2}))
+
         b1 = bitrand(s1, s2, s3, s4)
         @check_bit_operation reshape(b1, (s3,s1,s2,s4)) BitArray{4}
         @test_throws DimensionMismatch reshape(b1, (1,n1))
@@ -231,7 +232,9 @@ timesofar("constructors")
             x = rand(Bool)
             @check_bit_operation setindex!(b1, x, 1:j) T
             b2 = bitrand(j)
-            @check_bit_operation setindex!(b1, b2, 1:j) T
+            for bb in (b2, view(b2, 1:j), view(Array{Any}(b2), :))
+                @check_bit_operation setindex!(b1, bb, 1:j) T
+            end
             x = rand(Bool)
             @check_bit_operation setindex!(b1, x, j+1:l) T
             b2 = bitrand(l-j)
@@ -381,7 +384,9 @@ timesofar("constructors")
 
         for (b2, k1, k2) in Channel(gen_setindex_data)
             # println(typeof(b2), " ", typeof(k1), " ", typeof(k2)) # uncomment to debug
-            @check_bit_operation setindex!(b1, b2, k1, k2) BitMatrix
+            for bb in ((b2 isa AbstractArray) ? (b2, view(b2, :), view(Array{Any}(b2), :)) : (b2,))
+                @check_bit_operation setindex!(b1, bb, k1, k2) BitMatrix
+            end
         end
 
         m1, m2 = rand_m1m2()
@@ -721,8 +726,8 @@ timesofar("dequeue")
 
 @testset "Unary operators" begin
     b1 = bitrand(n1, n2)
-    @check_bit_operation (~)(b1)  BitMatrix
-    @check_bit_operation (!)(b1)  BitMatrix
+    @check_bit_operation broadcast(~, b1)  BitMatrix
+    @check_bit_operation broadcast(!, b1)  BitMatrix
     @check_bit_operation (-)(b1)  Matrix{Int}
     @check_bit_operation broadcast(sign, b1) BitMatrix
     @check_bit_operation real(b1) BitMatrix
@@ -730,15 +735,15 @@ timesofar("dequeue")
     @check_bit_operation conj(b1) BitMatrix
 
     b0 = falses(0)
-    @check_bit_operation (~)(b0)  BitVector
-    @check_bit_operation (!)(b0)  BitVector
+    @check_bit_operation broadcast(~, b0)  BitVector
+    @check_bit_operation broadcast(!, b0)  BitVector
     @check_bit_operation (-)(b0)  Vector{Int}
     @check_bit_operation broadcast(sign, b0) BitVector
 
     @testset "flipbits!" begin
         b1 = bitrand(n1, n2)
         i1 = Array(b1)
-        @test flipbits!(b1) == ~i1
+        @test flipbits!(b1) == .~i1
         @test bitcheck(b1)
     end
 end
@@ -1072,13 +1077,13 @@ timesofar("datamove")
     b1 = trues(v1)
     for i = 0:(v1-1)
         @test findfirst(b1 >> i) == i+1
-        @test Base.findfirstnot(~(b1 >> i)) == i+1
+        @test Base.findfirstnot(.~(b1 >> i)) == i+1
     end
 
     for i = 3:(v1-1), j = 2:i
         submask = b1 << (v1-j+1)
         @test findnext((b1 >> i) .| submask, j) == i+1
-        @test findnextnot((~(b1 >> i)) .⊻ submask, j) == i+1
+        @test findnextnot((.~(b1 >> i)) .⊻ submask, j) == i+1
     end
 
     b1 = bitrand(n1, n2)
@@ -1116,8 +1121,8 @@ timesofar("nnz&find")
     n = maximum(elts)
     for c = [falses, trues]
         b1 = c(n)
-        b1[elts] = !b1[elts]
-        b2 = ~b1
+        b1[elts] = .!b1[elts]
+        b2 = .~b1
         i1 = Array(b1)
         for i = 1:n
             @test findprev(b1, i) == findprev(i1, i) == findprevnot(b2, i) == findprev(!, b2, i)
@@ -1128,7 +1133,7 @@ timesofar("nnz&find")
     b1 = falses(1000)
     b1[77] = true
     b1[777] = true
-    b2 = ~b1
+    b2 = .~b1
     @test_throws BoundsError findprev(b1, 1001)
     @test_throws BoundsError findprevnot(b2, 1001)
     @test_throws BoundsError findprev(!, b2, 1001)
@@ -1184,13 +1189,13 @@ timesofar("nnz&find")
         @test findprev(t, l) == findprevnot(f, l) == l
         b1 = falses(l)
         b1[end] = true
-        b2 = ~b1
+        b2 = .~b1
         @test findprev(b1, l) == findprevnot(b2, l) == l
         @test findprevnot(b1, l) == findprev(b2, l) == l-1
         if l > 1
             b1 = falses(l)
             b1[end-1] = true
-            b2 = ~b1
+            b2 = .~b1
             @test findprev(b1, l) == findprevnot(b2, l) == l-1
             @test findprevnot(b1, l) == findprev(b2, l) == l
         end
@@ -1223,7 +1228,7 @@ timesofar("reductions")
     for l = [0, 1, 63, 64, 65, 127, 128, 129, 255, 256, 257, 6399, 6400, 6401]
         b1 = bitrand(l)
         b2 = bitrand(l)
-        @test map(~, b1) == map(x->~x, b1) == ~b1
+        @test map(~, b1) == map(x->~x, b1) == broadcast(~, b1)
         @test map(identity, b1) == map(x->x, b1) == b1
 
         @test map(&, b1, b2) == map((x,y)->x&y, b1, b2) == broadcast(&, b1, b2)
@@ -1245,8 +1250,8 @@ timesofar("reductions")
 
         @testset "map! for length $l" begin
             b = BitArray(l)
-            @test map!(~, b, b1) == map!(x->~x, b, b1) == ~b1 == b
-            @test map!(!, b, b1) == map!(x->!x, b, b1) == ~b1 == b
+            @test map!(~, b, b1) == map!(x->~x, b, b1) == broadcast(~, b1) == b
+            @test map!(!, b, b1) == map!(x->!x, b, b1) == broadcast(~, b1) == b
             @test map!(identity, b, b1) == map!(x->x, b, b1) == b1 == b
             @test map!(zero, b, b1) == map!(x->false, b, b1) == falses(l) == b
             @test map!(one, b, b1) == map!(x->true, b, b1) == trues(l) == b
@@ -1459,5 +1464,3 @@ end
 end
 
 timesofar("I/O")
-
-end # module

@@ -1,4 +1,5 @@
 # -*- mode: makefile-gmake -*-
+# vi:syntax=make
 
 ## Note:
 ##   It is generally preferable to change these options, for
@@ -177,7 +178,7 @@ endif
 USE_GPL_LIBS ?= 1
 
 # Directories where said libraries get installed to
-prefix ?= $(abspath julia-$(JULIA_COMMIT))
+prefix ?= $(BUILDROOT)/julia-$(JULIA_COMMIT)
 bindir := $(prefix)/bin
 libdir := $(prefix)/lib
 libexecdir := $(prefix)/libexec
@@ -236,8 +237,12 @@ BUILD_LLVM_CLANG := 0
 # set to 1 to get lldb (often does not work, no chance with llvm3.2 and earlier)
 # see http://lldb.llvm.org/build.html for dependencies
 BUILD_LLDB := 0
+
+# Options to enable Polly and its code-generation options
 USE_POLLY := 0
-USE_POLLY_OPENMP := 0
+USE_POLLY_OPENMP := 0  # Enable OpenMP code-generation
+USE_POLLY_ACC := 0     # Enable GPU code-generation
+CUDALIB_INCLUDE_DIR := # Path to CUDA header files
 
 # Cross-compile
 #XC_HOST := i686-w64-mingw32
@@ -316,9 +321,13 @@ JULIACODEGEN := LLVM
 
 # flag for disabling assertions
 ifeq ($(FORCE_ASSERTIONS), 1)
+# C++ code needs to include LLVM header with the same assertion flag as LLVM
+# Use this flag to re-enable assertion in our code after all the LLVM headers are included
+CXX_DISABLE_ASSERTION :=
 DISABLE_ASSERTIONS :=
 else
-DISABLE_ASSERTIONS := -DNDEBUG
+CXX_DISABLE_ASSERTION := -DJL_NDEBUG
+DISABLE_ASSERTIONS := -DNDEBUG -DJL_NDEBUG
 endif
 
 # Compiler specific stuff
@@ -529,12 +538,7 @@ SANITIZE_LDFLAGS := -fsanitize=address
 endif
 JCXXFLAGS += $(SANITIZE_OPTS)
 JCFLAGS += $(SANITIZE_OPTS)
-LDFLAGS += $(SANITIZE_LDFLAGS)
-# FIXME: sanitizing all dependencies doesn't work because of -Wl,--no-undefined
-#        https://github.com/JuliaLang/julia/issues/13858
-#        use LLVM_SANITIZE to sanitize LLVM
-#DEPS_CFLAGS += $(SANITIZE_OPTS)
-#DEPS_CXXFLAGS += $(SANITIZE_OPTS)
+JLDFLAGS += $(SANITIZE_LDFLAGS)
 endif
 
 TAR := $(shell which gtar 2>/dev/null || which tar 2>/dev/null)
@@ -656,6 +660,7 @@ ifneq (,$(filter $(ARCH), powerpc64le ppc64le))
 JCFLAGS += -fsigned-char
 OPENBLAS_DYNAMIC_ARCH:=0
 OPENBLAS_TARGET_ARCH:=POWER8
+BINARY:=64
 # GCC doesn't do -march= on ppc64le
 MARCH=
 endif
@@ -997,9 +1002,16 @@ MKLLIB := $(MKLROOT)/lib/ia32
 endif
 USE_SYSTEM_BLAS:=1
 USE_SYSTEM_LAPACK:=1
+ifeq ($(OS), WINNT)
+LIBBLASNAME := mkl_rt
+LIBLAPACKNAME := mkl_rt
+# work around libtool issue with arpack
+MKL_LDFLAGS := -L$(MKLLIB) -Wl,-lmkl_rt
+else
 LIBBLASNAME := libmkl_rt
 LIBLAPACKNAME := libmkl_rt
 MKL_LDFLAGS := -L$(MKLLIB) -lmkl_rt
+endif
 ifneq ($(strip $(MKLLIB)),)
   ifeq ($(OS), Linux)
     RPATH_MKL := -Wl,-rpath,$(MKLLIB)

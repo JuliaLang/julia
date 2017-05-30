@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 if is_windows()
     const ERROR_ENVVAR_NOT_FOUND = UInt32(203)
@@ -97,7 +97,7 @@ if is_windows()
         pos = block[1]
         blk = block[2]
         len = ccall(:wcslen, UInt, (Ptr{UInt16},), pos)
-        buf = Array{UInt16}(len)
+        buf = Vector{UInt16}(len)
         unsafe_copy!(pointer(buf), pos, len)
         env = transcode(String, buf)
         m = match(r"^(=?[^=]+)=(.*)$"s, env)

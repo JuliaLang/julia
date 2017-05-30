@@ -16,7 +16,7 @@ add your code to the curated METADATA repository.
 The [`Pkg.status()`](@ref) function prints out a summary of the state of packages you have installed.
 Initially, you'll have no packages installed:
 
-```julia
+```julia-repl
 julia> Pkg.status()
 INFO: Initializing package repository /Users/stefan/.julia/v0.6
 INFO: Cloning METADATA from git://github.com/JuliaLang/METADATA.jl
@@ -24,14 +24,14 @@ No packages installed.
 ```
 
 Your package directory is automatically initialized the first time you run a `Pkg` command
-that expects it to exist – which includes  [`Pkg.status()`](@ref). Here's an example non-trivial
+that expects it to exist – which includes [`Pkg.status()`](@ref). Here's an example non-trivial
 set of required and additional packages:
 
-```julia
+```julia-repl
 julia> Pkg.status()
 Required packages:
  - Distributions                 0.2.8
- - UTF16                         0.2.0
+ - SHA                           0.3.2
 Additional packages:
  - NumericExtensions             0.2.17
  - Stats                         0.2.6
@@ -43,12 +43,12 @@ will explain these states and annotations as we encounter them. For programmatic
 returns a dictionary, mapping installed package names to the version of that package which is
 installed:
 
-```julia
+```julia-repl
 julia> Pkg.installed()
 Dict{String,VersionNumber} with 4 entries:
 "Distributions"     => v"0.2.8"
 "Stats"             => v"0.2.6"
-"UTF16"             => v"0.2.0"
+"SHA"               => v"0.3.2"
 "NumericExtensions" => v"0.2.17"
 ```
 
@@ -73,7 +73,7 @@ commands, which add or remove a single requirement to `REQUIRE` and then call [`
 You can add a package to the list of requirements with the [`Pkg.add()`](@ref) function, and the
 package and all the packages that it depends on will be installed:
 
-```julia
+```julia-repl
 julia> Pkg.status()
 No packages installed.
 
@@ -106,23 +106,23 @@ that the `Distributions` package should be installed since it is required but no
 stated before, you can accomplish the same thing by editing your `~/.julia/v0.6/REQUIRE` file
 by hand and then running [`Pkg.resolve()`](@ref) yourself:
 
-```julia
-$ echo UTF16 >> ~/.julia/v0.6/REQUIRE
+```julia-repl
+$ echo SHA >> ~/.julia/v0.6/REQUIRE
 
 julia> Pkg.resolve()
-INFO: Cloning cache of UTF16 from git://github.com/nolta/UTF16.jl.git
-INFO: Installing UTF16 v0.2.0
+INFO: Cloning cache of SHA from git://github.com/staticfloat/SHA.jl.git
+INFO: Installing SHA v0.3.2
 
 julia> Pkg.status()
 Required packages:
  - Distributions                 0.2.7
- - UTF16                         0.2.0
+ - SHA                           0.3.2
 Additional packages:
  - NumericExtensions             0.2.17
  - Stats                         0.2.6
 ```
 
-This is functionally equivalent to calling [`Pkg.add("UTF16")`](@ref), except that [`Pkg.add()`](@ref)
+This is functionally equivalent to calling [`Pkg.add("SHA")`](@ref), except that [`Pkg.add()`](@ref)
 doesn't change `REQUIRE` until *after* installation has completed, so if there are problems,
 `REQUIRE` will be left as it was before calling [`Pkg.add()`](@ref). The format of the `REQUIRE`
 file is described in [Requirements Specification](@ref); it allows, among other things, requiring
@@ -131,7 +131,7 @@ specific ranges of versions of packages.
 When you decide that you don't want to have a package around any more, you can use [`Pkg.rm()`](@ref)
 to remove the requirement for it from the `REQUIRE` file:
 
-```julia
+```julia-repl
 julia> Pkg.rm("Distributions")
 INFO: Removing Distributions v0.2.7
 INFO: Removing Stats v0.2.6
@@ -140,10 +140,10 @@ INFO: REQUIRE updated.
 
 julia> Pkg.status()
 Required packages:
- - UTF16                         0.2.0
+ - SHA                           0.3.2
 
-julia> Pkg.rm("UTF16")
-INFO: Removing UTF16 v0.2.0
+julia> Pkg.rm("SHA")
+INFO: Removing SHA v0.3.2
 INFO: REQUIRE updated.
 
 julia> Pkg.status()
@@ -161,7 +161,7 @@ have to run [`Pkg.edit()`](@ref) again to fix the files contents yourself.
 Because the package manager uses libgit2 internally to manage the package git repositories, users
 may run into protocol issues (if behind a firewall, for example), when running [`Pkg.add()`](@ref).
 By default, all GitHub-hosted packages wil be accessed via 'https'; this default can be modified
-by calling [`Pkg.setprotocol!()`](@ref).  The following command can be run from the command line
+by calling [`Pkg.setprotocol!()`](@ref). The following command can be run from the command line
 in order to tell git to use 'https' instead of the 'git' protocol when cloning all repositories,
 wherever they are hosted:
 
@@ -170,6 +170,15 @@ git config --global url."https://".insteadOf git://
 ```
 
 However, this change will be system-wide and thus the use of [`Pkg.setprotocol!()`](@ref) is preferable.
+
+!!! note
+    The package manager functions also accept the `.jl` suffix on package names, though the suffix is
+    stripped internally. For example:
+
+    ```julia
+    Pkg.add("Distributions.jl")
+    Pkg.rm("Distributions.jl")
+    ```
 
 ## Offline Installation of Packages
 
@@ -198,7 +207,7 @@ in the previous section interact with registered packages, but the package manag
 and work with unregistered packages too. To install an unregistered package, use [`Pkg.clone(url)`](@ref),
 where `url` is a git URL from which the package can be cloned:
 
-```julia
+```julia-repl
 julia> Pkg.clone("git://example.com/path/to/Package.jl.git")
 INFO: Cloning Package from git://example.com/path/to/Package.jl.git
 Cloning into 'Package'...
@@ -233,7 +242,7 @@ When package developers publish new registered versions of packages that you're 
 of course, want the new shiny versions. To get the latest and greatest versions of all your packages,
 just do [`Pkg.update()`](@ref):
 
-```julia
+```julia-repl
 julia> Pkg.update()
 INFO: Updating METADATA...
 INFO: Computing changes...
@@ -267,7 +276,7 @@ You can also update only a subset of the installed packages, by providing argume
 function. In that case, only the packages provided as arguments and their dependencies will be
 updated:
 
-```julia
+```julia-repl
 julia> Pkg.update("Example")
 INFO: Updating METADATA...
 INFO: Computing changes...
@@ -286,7 +295,7 @@ registered versions, or you may be a developer of the package and need to make c
 or some other development branch. In such cases, you can do [`Pkg.checkout(pkg)`](@ref) to checkout
 the `master` branch of `pkg` or [`Pkg.checkout(pkg,branch)`](@ref) to checkout some other branch:
 
-```julia
+```julia-repl
 julia> Pkg.add("Distributions")
 INFO: Installing Distributions v0.2.9
 INFO: Installing NumericExtensions v0.2.17
@@ -328,7 +337,7 @@ for this (described below).
 When you decide that you no longer want to have a package checked out on a branch, you can "free"
 it back to the control of the package manager with [`Pkg.free(pkg)`](@ref):
 
-```julia
+```julia-repl
 julia> Pkg.free("Distributions")
 INFO: Freeing Distributions...
 INFO: No packages to install, update or remove.
@@ -347,7 +356,7 @@ be updated as new registered versions of the package are published.
 If you want to pin a package at a specific version so that calling [`Pkg.update()`](@ref) won't
 change the version the package is on, you can use the [`Pkg.pin()`](@ref) function:
 
-```julia
+```julia-repl
 julia> Pkg.pin("Stats")
 INFO: Creating Stats branch pinned.47c198b1.tmp
 
@@ -365,7 +374,7 @@ the same thing. [`Pkg.pin()`](@ref) works by creating a throw-away branch for th
 to pin the package at and then checking that branch out. By default, it pins a package at the
 current commit, but you can choose a different version by passing a second argument:
 
-```julia
+```julia-repl
 julia> Pkg.pin("Stats",v"0.2.5")
 INFO: Creating Stats branch pinned.1fd0983b.tmp
 INFO: No packages to install, update or remove.
@@ -382,7 +391,7 @@ Now the `Stats` package is pinned at commit `1fd0983b`, which corresponds to ver
 When you decide to "unpin" a package and let the package manager update it again, you can use
 [`Pkg.free()`](@ref) like you would to move off of any branch:
 
-```julia
+```julia-repl
 julia> Pkg.free("Stats")
 INFO: Freeing Stats...
 INFO: No packages to install, update or remove.
@@ -415,7 +424,7 @@ local metadata repository using that custom location and branch and then periodi
 custom branch with the official `metadata-v2` branch. In order to use a custom repository and
 branch, issue the following command:
 
-```julia
+```julia-repl
 julia> Pkg.init("https://me.example.com/METADATA.jl.git", "branch")
 ```
 
@@ -473,7 +482,7 @@ GitHub "home page," find the file (e.g., `README.md`) within the repository's fo
 and click on it. You'll see the contents displayed, along with a small "pencil" icon in the upper
 right hand corner. Clicking that icon opens the file in edit mode. Make your changes, write a
 brief summary describing the changes you want to make (this is your *commit message*), and then
-hit "Propose file change."  Your changes will be submitted for consideration by the package owner(s)
+hit "Propose file change." Your changes will be submitted for consideration by the package owner(s)
 and collaborators.
 
 For larger documentation changes--and especially ones that you expect to have to update in response
@@ -484,7 +493,7 @@ to feedback--you might find it easier to use the procedure for code changes desc
 #### Executive summary
 
 Here we assume you've already set up git on your local machine and have a GitHub account (see
-above).  Let's imagine you're fixing a bug in the Images package:
+above). Let's imagine you're fixing a bug in the Images package:
 
 ```
 Pkg.checkout("Images")           # check out the master branch
@@ -511,18 +520,18 @@ project's main repository. Because the online repository can't see the code on y
 you first *push* your changes to a publicly-visible location, your own online *fork* of the package
 (hosted on your own personal GitHub account).
 
-Let's assume you already have the `Foo` package installed.  In the description below, anything
+Let's assume you already have the `Foo` package installed. In the description below, anything
 starting with `Pkg.` or `PkgDev.` is meant to be typed at the Julia prompt; anything starting
 with `git` is meant to be typed in [julia's shell mode](@ref man-shell-mode) (or using the shell that comes with
-your operating system).  Within Julia, you can combine these two modes:
+your operating system). Within Julia, you can combine these two modes:
 
-```julia
+```julia-repl
 julia> cd(Pkg.dir("Foo"))          # go to Foo's folder
 
 shell> git command arguments...    # command will apply to Foo
 ```
 
-Now suppose you're ready to make some changes to `Foo`.  While there are several possible approaches,
+Now suppose you're ready to make some changes to `Foo`. While there are several possible approaches,
 here is one that is widely used:
 
   * From the Julia prompt, type [`Pkg.checkout("Foo")`](@ref). This ensures you're running the latest
@@ -540,10 +549,10 @@ here is one that is widely used:
     If you forget to do this step until after you've already made some changes, don't worry: see
     [more detail about branching](@ref man-branch-post-hoc) below.
   * Make your changes. Whether it's fixing a bug or adding new functionality, in most cases your change
-    should include updates to both the `src/` and `test/` folders.  If you're fixing a bug, add your
+    should include updates to both the `src/` and `test/` folders. If you're fixing a bug, add your
     minimal example demonstrating the bug (on the current code) to the test suite; by contributing
     a test for the bug, you ensure that the bug won't accidentally reappear at some later time due
-    to other changes.  If you're adding new functionality, creating tests demonstrates to the package
+    to other changes. If you're adding new functionality, creating tests demonstrates to the package
     owner that you've made sure your code works as intended.
   * Run the package's tests and make sure they pass. There are several ways to run the tests:
 
@@ -571,7 +580,7 @@ here is one that is widely used:
       * From the shell, type `git push`.  This will add your new commit(s) to the same pull request; you
         should see them appear automatically on the page holding the discussion of your pull request.
 
-    One potential type of change the owner may request is that you squash your commits.  See [Squashing](@ref man-squashing-and-rebasing)
+    One potential type of change the owner may request is that you squash your commits. See [Squashing](@ref man-squashing-and-rebasing)
     below.
 
 ### Dirty packages
@@ -586,9 +595,9 @@ Naturally, this deletes any changes you've made.
 ### [Making a branch *post hoc*](@id man-branch-post-hoc)
 
 Especially for newcomers to git, one often forgets to create a new branch until after some changes
-have already been made.  If you haven't yet staged or committed your changes, you can create a
+have already been made. If you haven't yet staged or committed your changes, you can create a
 new branch with `git checkout -b <newbranch>` just as usual--git will kindly show you that some
-files have been modified and create the new branch for you.  *Your changes have not yet been committed to this new branch*,
+files have been modified and create the new branch for you. *Your changes have not yet been committed to this new branch*,
 so the normal work rules still apply.
 
 However, if you've already made a commit to `master` but wish to go back to the official `master`
@@ -671,7 +680,7 @@ of what your package supports.
 
 You might also have no interest in supporting the development version of Julia. Just as you can
 add a floor to the version you expect your users to be on, you can set an upper bound. In this
-case, you would put `julia 0.x 0.y-` in your `REQUIRE` file.  The `-` at the end of the version
+case, you would put `julia 0.x 0.y-` in your `REQUIRE` file. The `-` at the end of the version
 number means pre-release versions of that specific version from the very first commit. By setting
 it as the ceiling, you mean the code supports everything up to but not including the ceiling version.
 
@@ -680,7 +689,7 @@ and do not want to support the current stable version of Julia. If you choose to
 add `julia 0.y-` to your `REQUIRE`. Just remember to change the `julia 0.y-` to `julia 0.y` in
 your `REQUIRE` file once `0.y` is officially released. If you don't edit the dash cruft you are
 suggesting that you support both the development and stable versions of the same version number!
-That would be madness.  See the [Requirements Specification](@ref) for the full format of `REQUIRE`.
+That would be madness. See the [Requirements Specification](@ref) for the full format of `REQUIRE`.
 
 Lastly, in many cases you may need extra packages for testing. Additional packages which
 are only required for tests should be specified in the `test/REQUIRE` file. This `REQUIRE`
@@ -730,11 +739,11 @@ to follow in naming your package:
 
 ### Generating the package
 
-Suppose you want to create a new Julia package called `FooBar`.  To get started, do `PkgDev.generate(pkg,license)`
+Suppose you want to create a new Julia package called `FooBar`. To get started, do `PkgDev.generate(pkg,license)`
 where `pkg` is the new package name and `license` is the name of a license that the package generator
 knows about:
 
-```julia
+```julia-repl
 julia> PkgDev.generate("FooBar","MIT")
 INFO: Initializing FooBar repo: /Users/stefan/.julia/v0.6/FooBar
 INFO: Origin: git://github.com/StefanKarpinski/FooBar.jl.git
@@ -781,14 +790,14 @@ Date:   Wed Oct 16 17:57:58 2013 -0400
 
 At the moment, the package manager knows about the MIT "Expat" License, indicated by `"MIT"`,
 the Simplified BSD License, indicated by `"BSD"`, and version 2.0 of the Apache Software License,
-indicated by `"ASL"`.  If you want to use a different license, you can ask us to add it to the
+indicated by `"ASL"`. If you want to use a different license, you can ask us to add it to the
 package generator, or just pick one of these three and then modify the `~/.julia/v0.6/PACKAGE/LICENSE.md`
 file after it has been generated.
 
 If you created a GitHub account and configured git to know about it, `PkgDev.generate()` will
-set an appropriate origin URL for you.  It will also automatically generate a `.travis.yml` file
+set an appropriate origin URL for you. It will also automatically generate a `.travis.yml` file
 for using the [Travis](https://travis-ci.org) automated testing service, and an `appveyor.yml`
-file for using [AppVeyor](https://www.appveyor.com).  You will have to enable testing on the Travis
+file for using [AppVeyor](https://www.appveyor.com). You will have to enable testing on the Travis
 and AppVeyor websites for your package repository, but once you've done that, it will already
 have working tests. Of course, all the default testing does is verify that `using FooBar` in Julia
 works.
@@ -808,9 +817,9 @@ foo = readcsv(joinpath(datapath, "foo.csv"))
 ### Making Your Package Available
 
 Once you've made some commits and you're happy with how `FooBar` is working, you may want to get
-some other people to try it out.  First you'll need to create the remote repository and push your
+some other people to try it out. First you'll need to create the remote repository and push your
 code to it; we don't yet automatically do this for you, but we will in the future and it's not
-too hard to figure out [^3].  Once you've done this, letting people try out your code is as simple
+too hard to figure out [^3]. Once you've done this, letting people try out your code is as simple
 as sending them the URL of the published repo – in this case:
 
 ```
@@ -821,7 +830,7 @@ For your package, it will be your GitHub user name and the name of your package,
 idea. People you send this URL to can use [`Pkg.clone()`](@ref) to install the package and try
 it out:
 
-```julia
+```julia-repl
 julia> Pkg.clone("git://github.com/StefanKarpinski/FooBar.jl.git")
 INFO: Cloning FooBar from git@github.com:StefanKarpinski/FooBar.jl.git
 ```
@@ -840,7 +849,7 @@ INFO: Cloning FooBar from git@github.com:StefanKarpinski/FooBar.jl.git
 Once you've decided that `FooBar` is ready to be registered as an official package, you can add
 it to your local copy of `METADATA` using `PkgDev.register()`:
 
-```julia
+```julia-repl
 julia> PkgDev.register("FooBar")
 INFO: Registering FooBar at git://github.com/StefanKarpinski/FooBar.jl.git
 INFO: Committing METADATA for FooBar
@@ -866,12 +875,12 @@ index 0000000..30e525e
 +git://github.com/StefanKarpinski/FooBar.jl.git
 ```
 
-This commit is only locally visible, however.  To make it visible to the Julia community, you
-need to merge your local `METADATA` upstream into the official repo.  The `PkgDev.publish()` command
+This commit is only locally visible, however. To make it visible to the Julia community, you
+need to merge your local `METADATA` upstream into the official repo. The `PkgDev.publish()` command
 will fork the `METADATA` repository on GitHub, push your changes to your fork, and open a pull
 request:
 
-```julia
+```julia-repl
 julia> PkgDev.publish()
 INFO: Validating METADATA
 INFO: No new package versions to publish
@@ -894,14 +903,14 @@ INFO: To create a pull-request open:
     is to delete the "Julia Package Manager" personal access token [from your Github account](https://github.com/login?return_to=https%3A%2F%2Fgithub.com%2Fsettings%2Ftokens)
     and try again.
 
-    Other failures may require you to circumvent `PkgDev.publish()` by [creating a pull request on GitHub](https://help.github.com/articles/creating-a-pull-request).
+    Other failures may require you to circumvent `PkgDev.publish()` by [creating a pull request on GitHub](https://help.github.com/articles/creating-a-pull-request/).
     See: [Publishing METADATA manually](@ref) below.
 
 Once the package URL for `FooBar` is registered in the official `METADATA` repo, people know where
 to clone the package from, but there still aren't any registered versions available. You can tag
 and register it with the `PkgDev.tag()` command:
 
-```julia
+```julia-repl
 julia> PkgDev.tag("FooBar")
 INFO: Tagging FooBar v0.0.1
 INFO: Committing METADATA for FooBar
@@ -934,7 +943,7 @@ index 0000000..c1cb1c1
 ```
 
 The `PkgDev.tag()` command takes an optional second argument that is either an explicit version
-number object like `v"0.0.1"` or one of the symbols `:patch`, `:minor` or `:major`.  These increment
+number object like `v"0.0.1"` or one of the symbols `:patch`, `:minor` or `:major`. These increment
 the patch, minor or major version number of your package intelligently.
 
 Adding a tagged version of your package will expedite the official registration into METADATA.jl
@@ -949,7 +958,7 @@ they've been included upstream. Again, use the `PkgDev.publish()` command, which
 that individual package repos have been tagged, pushes them if they haven't already been, and
 then opens a pull request to `METADATA`:
 
-```julia
+```julia-repl
 julia> PkgDev.publish()
 INFO: Validating METADATA
 INFO: Pushing FooBar permanent tags: v0.0.1
@@ -1010,7 +1019,7 @@ however, you should also fix the `REQUIRE` file in the current version of the pa
 
 The `~/.julia/v0.6/REQUIRE` file, the `REQUIRE` file inside packages, and the `METADATA` package
 `requires` files use a simple line-based format to express the ranges of package versions which
-need to be installed.  Package `REQUIRE` and `METADATA requires` files should also include the
+need to be installed. Package `REQUIRE` and `METADATA requires` files should also include the
 range of versions of `julia` the package is expected to work with. Additionally, packages can
 include a `test/REQUIRE` file to specify additional packages which are only required for testing.
 
@@ -1071,7 +1080,7 @@ If a requirement line has leading words that begin with `@`, it is a system-depe
 If your system matches these system conditionals, the requirement is included, if not, the requirement
 is ignored. For example:
 
-```julia
+```
 @osx Homebrew
 ```
 
@@ -1089,7 +1098,7 @@ conditions that are currently supported are (hierarchically):
 The `@unix` condition is satisfied on all UNIX systems, including Linux and BSD. Negated system
 conditionals are also supported by adding a `!` after the leading `@`. Examples:
 
-```julia
+```
 @!windows
 @unix @!osx
 ```

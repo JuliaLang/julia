@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # pseudo-definitions to show how everything behaves
 #
@@ -98,7 +98,7 @@ end
 """
     ExponentialBackOff(; n=1, first_delay=0.05, max_delay=10.0, factor=5.0, jitter=0.1)
 
-A `Float64` iterator of length `n` whose elements exponentially increase at a
+A [`Float64`](@ref) iterator of length `n` whose elements exponentially increase at a
 rate in the interval `factor` * (1 ± `jitter`).  The first element is
 `first_delay` and all elements are clamped to `max_delay`.
 """
@@ -128,15 +128,15 @@ retry(f, delays=fill(5.0, 3))
 retry(f, delays=rand(5:10, 2))
 retry(f, delays=Base.ExponentialBackOff(n=3, first_delay=5, max_delay=1000))
 retry(http_get, check=(s,e)->e.status == "503")(url)
-retry(read, check=(s,e)->isa(e, UVError))(io)
+retry(read, check=(s,e)->isa(e, UVError))(io, 128; all=false)
 ```
 """
 function retry(f::Function;  delays=ExponentialBackOff(), check=nothing)
-    (args...) -> begin
+    (args...; kwargs...) -> begin
         state = start(delays)
         while true
             try
-                return f(args...)
+                return f(args...; kwargs...)
             catch e
                 done(delays, state) && rethrow(e)
                 if check !== nothing

@@ -10,6 +10,7 @@ matrix:
           sources:
             - ubuntu-toolchain-r-test
           packages:
+            - libssl1.0.0
             - bar
             - time
             - binutils
@@ -29,6 +30,7 @@ matrix:
           sources:
             - ubuntu-toolchain-r-test
           packages:
+            - libssl1.0.0
             - bar
             - time
             - g++-5
@@ -44,7 +46,8 @@ cache:
 branches:
   only:
     - master
-    - /release-.*/
+    - /^release-.*/
+    - /^v\d+\.\d+\.\d+$/
 notifications:
     email: false
     irc:
@@ -96,6 +99,7 @@ before_install:
 script:
     - echo BUILDOPTS=$BUILDOPTS
     - export BUILDOPTS
+    # compile / install dependencies
     - contrib/download_cmake.sh
     - make -C moreutils mispipe
     - make $BUILDOPTS -C base version_git.jl.phony
@@ -113,6 +117,7 @@ script:
           cat deps.log;
           echo "-- end of deps build log -----------------------------------------------";
           false; }
+    # compile / install Julia
     - make $BUILDOPTS NO_GIT=1 prefix=/tmp/julia install | moreutils/ts -s "%.s"
     - make $BUILDOPTS NO_GIT=1 build-stats
     - du -sk /tmp/julia/*
@@ -122,14 +127,23 @@ script:
         done;
       fi
     - cd .. && mv julia julia2
+    # run tests
     - /tmp/julia/bin/julia --precompiled=no -e 'true' &&
         /tmp/julia/bin/julia-debug --precompiled=no -e 'true'
     - /tmp/julia/bin/julia -e 'versioninfo()'
+    - pushd /tmp/julia/share/julia/test
     - export JULIA_CPU_CORES=2 && export JULIA_TEST_MAXRSS_MB=600 &&
-        cd /tmp/julia/share/julia/test &&
         /tmp/julia/bin/julia --check-bounds=yes runtests.jl $TESTSTORUN &&
-        /tmp/julia/bin/julia --check-bounds=yes runtests.jl libgit2-online pkg
-    - cd `dirname $TRAVIS_BUILD_DIR` && mv julia2 julia &&
+        /tmp/julia/bin/julia --check-bounds=yes runtests.jl libgit2-online download pkg
+    - popd
+    # test that the embedding code works on our installation
+    - mkdir /tmp/embedding-test &&
+        make check -C /tmp/julia/share/doc/julia/examples/embedding \
+             JULIA="DYLD_FALLBACK_LIBRARY_PATH='$DYLD_FALLBACK_LIBRARY_PATH' /tmp/julia/bin/julia" \
+             BIN=/tmp/embedding-test \
+             "$(cd julia2 && make print-CC)"
+    # restore initial state and prepare for travis caching
+    - mv julia2 julia &&
         rm -f julia/deps/scratch/libgit2-*/CMakeFiles/CMakeOutput.log
 # uncomment the following if failures are suspected to be due to the out-of-memory killer
 #    - dmesg

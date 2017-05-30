@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Tests that do not really go anywhere else
 
@@ -52,12 +52,12 @@ end
 @test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
 
 
-logging(DevNull, TestMain_misc.Logging, :bar;  kind=:info)
+logging(DevNull, Logging, :bar;  kind=:info)
 @test all(contains.(sprint(Logging.bar), ["WARNING: barwarn", "ERROR: \"barerror\""]))
 @test all(contains.(sprint(Logging.pooh), ["INFO: poohinfo", "WARNING: poohwarn", "ERROR: \"pooherror\""]))
 @test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
 
-logging(DevNull, TestMain_misc.Logging;  kind=:info)
+logging(DevNull, Logging;  kind=:info)
 @test all(contains.(sprint(Logging.bar), ["WARNING: barwarn", "ERROR: \"barerror\""]))
 @test all(contains.(sprint(Logging.pooh), ["WARNING: poohwarn", "ERROR: \"pooherror\""]))
 @test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
@@ -73,12 +73,12 @@ logging(kind=:info)
 @test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
 
 
-logging(DevNull, TestMain_misc.Logging, :bar;  kind=:warn)
+logging(DevNull, Logging, :bar;  kind=:warn)
 @test all(contains.(sprint(Logging.bar), ["INFO: barinfo", "ERROR: \"barerror\""]))
 @test all(contains.(sprint(Logging.pooh), ["INFO: poohinfo", "WARNING: poohwarn", "ERROR: \"pooherror\""]))
 @test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
 
-logging(DevNull, TestMain_misc.Logging;  kind=:warn)
+logging(DevNull, Logging;  kind=:warn)
 @test all(contains.(sprint(Logging.bar), ["INFO: barinfo", "ERROR: \"barerror\""]))
 @test all(contains.(sprint(Logging.pooh), ["INFO: poohinfo", "ERROR: \"pooherror\""]))
 @test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
@@ -94,12 +94,12 @@ logging(kind=:warn)
 @test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
 
 
-logging(DevNull, TestMain_misc.Logging, :bar;  kind=:error)
+logging(DevNull, Logging, :bar;  kind=:error)
 @test all(contains.(sprint(Logging.bar), ["INFO: barinfo", "WARNING: barwarn"]))
 @test all(contains.(sprint(Logging.pooh), ["INFO: poohinfo", "WARNING: poohwarn", "ERROR: \"pooherror\""]))
 @test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
 
-logging(DevNull, TestMain_misc.Logging;  kind=:error)
+logging(DevNull, Logging;  kind=:error)
 @test all(contains.(sprint(Logging.bar), ["INFO: barinfo", "WARNING: barwarn"]))
 @test all(contains.(sprint(Logging.pooh), ["INFO: poohinfo", "WARNING: poohwarn"]))
 @test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
@@ -115,12 +115,12 @@ logging(kind=:error)
 @test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
 
 
-logging(DevNull, TestMain_misc.Logging, :bar)
+logging(DevNull, Logging, :bar)
 @test sprint(Logging.bar) == ""
 @test all(contains.(sprint(Logging.pooh), ["INFO: poohinfo", "WARNING: poohwarn", "ERROR: \"pooherror\""]))
 @test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
 
-logging(DevNull, TestMain_misc.Logging)
+logging(DevNull, Logging)
 @test sprint(Logging.bar) == ""
 @test sprint(Logging.pooh) == ""
 @test all(contains.(sprint(foo), ["INFO: fooinfo", "WARNING: foowarn", "ERROR: \"fooerror\""]))
@@ -514,9 +514,19 @@ if is_windows()
     end
 end
 
-optstring = sprint(show, Base.JLOptions())
-@test startswith(optstring, "JLOptions(")
-@test endswith(optstring, ")")
+let optstring = stringmime(MIME("text/plain"), Base.JLOptions())
+    @test startswith(optstring, "JLOptions(\n")
+    @test !contains(optstring, "Ptr")
+    @test endswith(optstring, "\n)")
+    @test contains(optstring, " = \"")
+end
+let optstring = repr(Base.JLOptions())
+    @test startswith(optstring, "JLOptions(")
+    @test endswith(optstring, ")")
+    @test !contains(optstring, "\n")
+    @test !contains(optstring, "Ptr")
+    @test contains(optstring, " = \"")
+end
 
 # Base.securezero! functions (#17579)
 import Base: securezero!, unsafe_securezero!
@@ -572,6 +582,25 @@ let
     end
 end
 
+# Test that `print_with_color` accepts non-string values, just as `print` does
+let
+    old_have_color = Base.have_color
+    try
+        @eval Base have_color = true
+        buf_color = IOBuffer()
+        args = (3.2, "foo", :testsym)
+        print_with_color(:red, buf_color, args...)
+        buf_plain = IOBuffer()
+        print(buf_plain, args...)
+        expected_str = string(Base.text_colors[:red],
+                              String(take!(buf_plain)),
+                              Base.text_colors[:default])
+        @test expected_str == String(take!(buf_color))
+    finally
+        @eval Base have_color = $(old_have_color)
+    end
+end
+
 let
     global c_18711 = 0
     buf = IOContext(IOBuffer(), :hascontext => true)
@@ -609,7 +638,7 @@ end
 
 @testset "test this does not segfault #19281" begin
     @test Foo_19281().f[1] == ()
-    @test Foo_19281().f[2] == (1, )
+    @test Foo_19281().f[2] == (1,)
 end
 
 let
@@ -639,4 +668,77 @@ if Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
         @test_throws StackOverflowError Demo_20254()
         @test_throws StackOverflowError f_19433(+, 1, 2)
     end
+end
+
+# invokelatest function for issue #19774
+issue19774(x) = 1
+let foo() = begin
+        eval(:(issue19774(x::Int) = 2))
+        return Base.invokelatest(issue19774, 0)
+    end
+    @test foo() == 2
+end
+
+# Endian tests
+# For now, we only support little endian.
+# Add an `Sys.ARCH` test for big endian when/if we add support for that.
+# Do **NOT** use `ENDIAN_BOM` to figure out the endianess
+# since that's exactly what we want to test.
+@test ENDIAN_BOM == 0x04030201
+@test ntoh(0x1) == 0x1
+@test hton(0x1) == 0x1
+@test ltoh(0x1) == 0x1
+@test htol(0x1) == 0x1
+@test ntoh(0x102) == 0x201
+@test hton(0x102) == 0x201
+@test ltoh(0x102) == 0x102
+@test htol(0x102) == 0x102
+@test ntoh(0x1020304) == 0x4030201
+@test hton(0x1020304) == 0x4030201
+@test ltoh(0x1020304) == 0x1020304
+@test htol(0x1020304) == 0x1020304
+@test ntoh(0x102030405060708) == 0x807060504030201
+@test hton(0x102030405060708) == 0x807060504030201
+@test ltoh(0x102030405060708) == 0x102030405060708
+@test htol(0x102030405060708) == 0x102030405060708
+
+module DeprecationTests # to test @deprecate
+    f() = true
+
+    # test the Symbol path of @deprecate
+    @deprecate f1 f
+    @deprecate f2 f false # test that f2 is not exported
+
+    # test the Expr path of @deprecate
+    @deprecate f3() f()
+    @deprecate f4() f() false # test that f4 is not exported
+    @deprecate f5(x::T) where T f()
+
+    # test deprecation of a constructor
+    struct A{T} end
+    @deprecate A{T}(x::S) where {T, S} f()
+end # module
+
+@testset "@deprecate" begin
+    using .DeprecationTests
+    # enable when issue #22043 is fixed
+    # @test @test_warn "f1 is deprecated, use f instead." f1()
+    # @test @test_nowarn f1()
+
+    # @test_throws UndefVarError f2() # not exported
+    # @test @test_warn "f2 is deprecated, use f instead." DeprecationTests.f2()
+    # @test @test_nowarn DeprecationTests.f2()
+
+    # @test @test_warn "f3() is deprecated, use f() instead." f3()
+    # @test @test_nowarn f3()
+
+    # @test_throws UndefVarError f4() # not exported
+    # @test @test_warn "f4() is deprecated, use f() instead." DeprecationTests.f4()
+    # @test @test_nowarn DeprecationTests.f4()
+
+    # @test @test_warn "f5(x::T) where T is deprecated, use f() instead." f5(1)
+    # @test @test_nowarn f5(1)
+
+    # @test @test_warn "A{T}(x::S) where {T, S} is deprecated, use f() instead." A{Int}(1.)
+    # @test @test_nowarn A{Int}(1.)
 end

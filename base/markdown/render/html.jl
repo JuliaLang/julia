@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 include("rich.jl")
 
@@ -39,12 +39,12 @@ end
 function htmlesc(io::IO, s::Symbol)
     htmlesc(io, string(s))
 end
-function htmlesc(io::IO, xs::Union{AbstractString, Symbol}...)
+function htmlesc(io::IO, xs::Union{AbstractString,Symbol}...)
     for s in xs
         htmlesc(io, s)
     end
 end
-function htmlesc(s::Union{AbstractString, Symbol})
+function htmlesc(s::Union{AbstractString,Symbol})
     sprint(htmlesc, s)
 end
 
@@ -67,7 +67,7 @@ end
 
 function html(io::IO, code::Code)
     withtag(io, :pre) do
-        maybe_lang = code.language != "" ? Any[:class=>"language-$(code.language)"] : []
+        maybe_lang = !isempty(code.language) ? Any[:class=>"language-$(code.language)"] : []
         withtag(io, :code, maybe_lang...) do
             htmlesc(io, code.code)
             # TODO should print newline if this is longer than one line ?
@@ -139,7 +139,7 @@ function htmlinline(io::IO, code::Code)
     end
 end
 
-function htmlinline(io::IO, md::Union{Symbol, AbstractString})
+function htmlinline(io::IO, md::Union{Symbol,AbstractString})
     htmlesc(io, md)
 end
 

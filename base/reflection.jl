@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # name and module reflection
 
@@ -18,6 +18,7 @@ module_name(m::Module) = ccall(:jl_module_name, Ref{Symbol}, (Any,), m)
     module_parent(m::Module) -> Module
 
 Get a module's enclosing `Module`. `Main` is its own parent, as is `LastMain` after `workspace()`.
+
 ```jldoctest
 julia> module_parent(Main)
 Main
@@ -218,8 +219,8 @@ isstructtype(x) = (@_pure_meta; false)
     isbits(T)
 
 Return `true` if `T` is a "plain data" type, meaning it is immutable and contains no
-references to other values. Typical examples are numeric types such as `UInt8`, `Float64`,
-and `Complex{Float64}`.
+references to other values. Typical examples are numeric types such as [`UInt8`](@ref),
+[`Float64`](@ref), and [`Complex{Float64}`](@ref).
 
 ```jldoctest
 julia> isbits(Complex{Float64})
@@ -251,6 +252,7 @@ true
 
 julia> isleaftype(Vector{Complex{Float32}})
 true
+```
 """
 isleaftype(t::ANY) = (@_pure_meta; isa(t, DataType) && t.isleaftype)
 
@@ -278,6 +280,7 @@ end
     Base.parameter_upper_bound(t::UnionAll, idx)
 
 Determine the upper bound of a type parameter in the underlying type. E.g.:
+
 ```jldoctest
 julia> struct Foo{T<:AbstractFloat, N}
            x::Tuple{T, N}
@@ -337,7 +340,7 @@ fieldoffset(x::DataType, idx::Integer) = (@_pure_meta; ccall(:jl_get_field_offse
 Determine the declared type of a field (specified by name or index) in a composite DataType `T`.
 
 ```jldoctest
-julia> immutable Foo
+julia> struct Foo
            x::Int64
            y::String
        end
@@ -358,7 +361,7 @@ Get the index of a named field, throwing an error if the field does not exist (w
 or returning 0 (when err==false).
 
 ```jldoctest
-julia> immutable Foo
+julia> struct Foo
            x::Int64
            y::String
        end
@@ -480,8 +483,7 @@ Returns an array of lowered ASTs for the methods matching the given generic func
 """
 function code_lowered(f::ANY, t::ANY=Tuple)
     asts = map(methods(f, t)) do m
-        m = m::Method
-        return uncompressed_ast(m, m.source)
+        return uncompressed_ast(m::Method)
     end
     return asts
 end
@@ -638,13 +640,8 @@ end
 isempty(mt::MethodTable) = (mt.defs === nothing)
 
 uncompressed_ast(m::Method) = uncompressed_ast(m, m.source)
-function uncompressed_ast(m::Method, s::CodeInfo)
-    if isa(s.code, Array{UInt8,1})
-        s = ccall(:jl_copy_code_info, Ref{CodeInfo}, (Any,), s)
-        s.code = ccall(:jl_uncompress_ast, Array{Any,1}, (Any, Any), m, s.code)
-    end
-    return s
-end
+uncompressed_ast(m::Method, s::CodeInfo) = s
+uncompressed_ast(m::Method, s::Array{UInt8,1}) = ccall(:jl_uncompress_ast, Any, (Any, Any), m, s)::CodeInfo
 
 # this type mirrors jl_cghooks_t (documented in julia.h)
 struct CodegenHooks
@@ -923,30 +920,59 @@ function function_module(f::ANY, types::ANY)
 end
 
 """
-    method_exists(f, Tuple type) -> Bool
+    method_exists(f, Tuple type, world=typemax(UInt)) -> Bool
 
 Determine whether the given generic function has a method matching the given
-`Tuple` of argument types.
+`Tuple` of argument types with the upper bound of world age given by `world`.
 
 ```jldoctest
 julia> method_exists(length, Tuple{Array})
 true
 ```
 """
-function method_exists(f::ANY, t::ANY)
+function method_exists(f::ANY, t::ANY, world=typemax(UInt))
     t = to_tuple_type(t)
     t = Tuple{isa(f,Type) ? Type{f} : typeof(f), t.parameters...}
-    return ccall(:jl_method_exists, Cint, (Any, Any, UInt), typeof(f).name.mt, t,
-        typemax(UInt)) != 0
+    return ccall(:jl_method_exists, Cint, (Any, Any, UInt), typeof(f).name.mt, t, world) != 0
 end
 
-function isambiguous(m1::Method, m2::Method, allow_bottom_tparams::Bool=true)
+"""
+    isambiguous(m1, m2; ambiguous_bottom=false) -> Bool
+
+Determine whether two methods `m1` and `m2` (typically of the same
+function) are ambiguous.  This test is performed in the context of
+other methods of the same function; in isolation, `m1` and `m2` might
+be ambiguous, but if a third method resolving the ambiguity has been
+defined, this returns `false`.
+
+For parametric types, the `ambiguous_bottom` keyword argument controls whether
+`Union{}` counts as an ambiguous intersection of type parameters – when `true`,
+it is considered ambiguous, when `false` it is not. For example:
+
+```jldoctest
+julia> foo(x::Complex{<:Integer}) = 1
+foo (generic function with 1 method)
+
+julia> foo(x::Complex{<:Rational}) = 2
+foo (generic function with 2 methods)
+
+julia> m1, m2 = collect(methods(foo));
+
+julia> typeintersect(m1.sig, m2.sig)
+Tuple{#foo,Complex{Union{}}}
+
+julia> Base.isambiguous(m1, m2, ambiguous_bottom=true)
+true
+
+julia> Base.isambiguous(m1, m2, ambiguous_bottom=false)
+false
+```
+"""
+function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
     ti = typeintersect(m1.sig, m2.sig)
     ti === Bottom && return false
-    if !allow_bottom_tparams
-        (_, env) = ccall(:jl_match_method, Ref{SimpleVector}, (Any, Any),
-                         ti, m1.sig)
-        any(x->x === Bottom, env) && return false
+    if !ambiguous_bottom
+        has_bottom_parameter(ti) && return false
     end
     ml = _methods_by_ftype(ti, -1, typemax(UInt))
     isempty(ml) && return true
@@ -958,7 +984,24 @@ function isambiguous(m1::Method, m2::Method, allow_bottom_tparams::Bool=true)
     return true
 end
 
+"""
+    has_bottom_parameter(t) -> Bool
+
+Determine whether `t` is a Type for which one or more of its parameters is `Union{}`.
+"""
+function has_bottom_parameter(t::Type)
+    ret = false
+    for p in t.parameters
+        ret |= (p == Bottom) || has_bottom_parameter(p)
+    end
+    ret
+end
+has_bottom_parameter(t::UnionAll) = has_bottom_parameter(unwrap_unionall(t))
+has_bottom_parameter(t::Union) = has_bottom_parameter(t.a) & has_bottom_parameter(t.b)
+has_bottom_parameter(t::TypeVar) = has_bottom_parameter(t.ub)
+has_bottom_parameter(::Any) = false
+
 min_world(m::Method) = reinterpret(UInt, m.min_world)
-max_world(m::Method) = reinterpret(UInt, m.max_world)
+max_world(m::Method) = typemax(UInt)
 min_world(m::Core.MethodInstance) = reinterpret(UInt, m.min_world)
 max_world(m::Core.MethodInstance) = reinterpret(UInt, m.max_world)

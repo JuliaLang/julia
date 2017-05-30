@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 plain(x) = sprint(plain, x)
 
@@ -13,7 +13,7 @@ end
 
 plain(io::IO, md::MD) = plain(io, md.content)
 
-function plain{l}(io::IO, header::Header{l})
+function plain(io::IO, header::Header{l}) where l
     print(io, "#"^l*" ")
     plaininline(io, header.text)
     println(io)

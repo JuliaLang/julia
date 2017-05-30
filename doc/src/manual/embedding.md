@@ -11,13 +11,13 @@ further language bridges (e.g. calling Julia from Python or C#).
 
 We start with a simple C program that initializes Julia and calls some Julia code:
 
-```
+```c
 #include <julia.h>
 
 int main(int argc, char *argv[])
 {
     /* required: setup the Julia context */
-    jl_init(NULL);
+    jl_init();
 
     /* run Julia commands */
     jl_eval_string("print(sqrt(2.0))");
@@ -48,9 +48,9 @@ The file `ui/repl.c` program is another simple example of how to set `jl_options
 linking against `libjulia`.
 
 The first thing that has to be done before calling any other Julia C function is to initialize
-Julia. This is done by calling `jl_init`, which takes as argument a C string (`const char*`) to
-the location where Julia is installed. When the argument is `NULL`, Julia tries to determine the
-install location automatically.
+Julia. This is done by calling `jl_init`, which tries to automatically determine Julia's install
+location. If you need to specify a custom location, or specify which system image to load,
+use `jl_init_with_image` instead.
 
 The second statement in the test program evaluates a Julia statement using a call to `jl_eval_string`.
 
@@ -63,8 +63,8 @@ example program calls this before returning from `main`.
 
     ```
     >>> julia=CDLL('./libjulia.dylib',RTLD_GLOBAL)
-    >>> julia.jl_init.argtypes = [c_char_p]
-    >>> julia.jl_init('.')
+    >>> julia.jl_init.argtypes = []
+    >>> julia.jl_init()
     250593296
     ```
 
@@ -75,7 +75,7 @@ example program calls this before returning from `main`.
 
 ### Using julia-config to automatically determine build parameters
 
-The script *julia-config.jl* was created to aid in determining what build parameters are required
+The script `julia-config.jl` was created to aid in determining what build parameters are required
 by a program that uses embedded Julia.  This script uses the build parameters and system configuration
 of the particular Julia distribution it is invoked by to export the necessary compiler flags for
 an embedding program to interact with that distribution.  This script is located in the Julia
@@ -83,25 +83,22 @@ shared data directory.
 
 #### Example
 
-Below is essentially the same as above with one small change; the argument to `jl_init` is now
-**JULIA_INIT_DIR** which is defined by *julia-config.jl*.:
-
-```
+```c
 #include <julia.h>
 
 int main(int argc, char *argv[])
 {
-   jl_init(JULIA_INIT_DIR);
-   (void)jl_eval_string("println(sqrt(2.0))");
-   jl_atexit_hook(0);
-   return 0;
+    jl_init();
+    (void)jl_eval_string("println(sqrt(2.0))");
+    jl_atexit_hook(0);
+    return 0;
 }
 ```
 
 #### On the command line
 
-A simple use of this script is from the command line.  Assuming that *julia-config.jl* is located
-in */usr/local/julia/share/julia*, it can be invoked on the command line directly and takes any
+A simple use of this script is from the command line.  Assuming that `julia-config.jl` is located
+in `/usr/local/julia/share/julia`, it can be invoked on the command line directly and takes any
 combination of 3 flags:
 
 ```
@@ -109,7 +106,7 @@ combination of 3 flags:
 Usage: julia-config [--cflags|--ldflags|--ldlibs]
 ```
 
-If the above example source is saved in the file *embed_example.c*, then the following command
+If the above example source is saved in the file `embed_example.c`, then the following command
 will compile it into a running program on Linux and Windows (MSYS2 environment), or if on OS/X,
 then substitute `clang` for `gcc`.:
 
@@ -121,8 +118,8 @@ then substitute `clang` for `gcc`.:
 
 But in general, embedding projects will be more complicated than the above, and so the following
 allows general makefile support as well – assuming GNU make because of the use of the **shell**
-macro expansions.  Additionally, though many times *julia-config.jl* may be found in the directory
-*/usr/local*, this is not necessarily the case, but Julia can be used to locate *julia-config.jl*
+macro expansions.  Additionally, though many times `julia-config.jl` may be found in the directory
+`/usr/local`, this is not necessarily the case, but Julia can be used to locate `julia-config.jl`
 too, and the makefile can be used to take advantage of that.  The above example is extended to
 use a Makefile:
 
@@ -136,33 +133,37 @@ LDLIBS   += $(shell $(JL_SHARE)/julia-config.jl --ldlibs)
 all: embed_example
 ```
 
-Now the build command is simply **make**.
+Now the build command is simply `make`.
 
 ## Converting Types
 
 Real applications will not just need to execute expressions, but also return their values to the
 host program. `jl_eval_string` returns a `jl_value_t*`, which is a pointer to a heap-allocated
-Julia object. Storing simple data types like `Float64` in this way is called `boxing`, and extracting
-the stored primitive data is called `unboxing`. Our improved sample program that calculates the
-square root of 2 in Julia and reads back the result in C looks as follows:
+Julia object. Storing simple data types like [`Float64`](@ref) in this way is called `boxing`,
+and extracting the stored primitive data is called `unboxing`. Our improved sample program that
+calculates the square root of 2 in Julia and reads back the result in C looks as follows:
 
-```
+```c
 jl_value_t *ret = jl_eval_string("sqrt(2.0)");
 
-if (jl_is_float64(ret)) {
+if (jl_typeis(ret, jl_float64_type)) {
     double ret_unboxed = jl_unbox_float64(ret);
     printf("sqrt(2.0) in C: %e \n", ret_unboxed);
 }
+else {
+    printf("ERROR: unexpected return type from sqrt(::Float64)\n");
+}
 ```
 
-In order to check whether `ret` is of a specific Julia type, we can use the `jl_is_...` functions.
-By typing `typeof(sqrt(2.0))` into the Julia shell we can see that the return type is `Float64`
-(`double` in C). To convert the boxed Julia value into a C double the `jl_unbox_float64` function
-is used in the above code snippet.
+In order to check whether `ret` is of a specific Julia type, we can use the
+`jl_isa`, `jl_typeis`, or `jl_is_...` functions.
+By typing `typeof(sqrt(2.0))` into the Julia shell we can see that the return type is
+[`Float64`](@ref) (`double` in C). To convert the boxed Julia value into a C double the
+`jl_unbox_float64` function is used in the above code snippet.
 
 Corresponding `jl_box_...` functions are used to convert the other way:
 
-```julia
+```c
 jl_value_t *a = jl_box_float64(3.0);
 jl_value_t *b = jl_box_float32(3.0f);
 jl_value_t *c = jl_box_int32(3);
@@ -176,7 +177,7 @@ While `jl_eval_string` allows C to obtain the result of a Julia expression, it d
 passing arguments computed in C to Julia. For this you will need to invoke Julia functions directly,
 using `jl_call`:
 
-```julia
+```c
 jl_function_t *func = jl_get_function(jl_base_module, "sqrt");
 jl_value_t *argument = jl_box_float64(2.0);
 jl_value_t *ret = jl_call1(func, argument);
@@ -210,7 +211,7 @@ safe to use pointers in between `jl_...` calls. But in order to make sure that v
 `jl_...` calls, we have to tell Julia that we hold a reference to a Julia value. This can be done
 using the `JL_GC_PUSH` macros:
 
-```
+```c
 jl_value_t *ret = jl_eval_string("sqrt(2.0)");
 JL_GC_PUSH1(&ret);
 // Do something with ret
@@ -225,7 +226,7 @@ Several Julia values can be pushed at once using the `JL_GC_PUSH2` , `JL_GC_PUSH
 macros. To push an array of Julia values one can use the  `JL_GC_PUSHARGS` macro, which can be
 used as follows:
 
-```
+```c
 jl_value_t **args;
 JL_GC_PUSHARGS(args, 2); // args can now hold 2 `jl_value_t*` objects
 args[0] = some_value;
@@ -238,7 +239,7 @@ The garbage collector also operates under the assumption that it is aware of eve
 object pointing to a young-generation one. Any time a pointer is updated breaking that assumption,
 it must be signaled to the collector with the `jl_gc_wb` (write barrier) function like so:
 
-```
+```c
 jl_value_t *parent = some_old_value, *child = some_young_value;
 ((some_specific_type*)parent)->field = child;
 jl_gc_wb(parent, child);
@@ -252,7 +253,7 @@ can sometimes invoke garbage collection.
 The write barrier is also necessary for arrays of pointers when updating their data directly.
 For example:
 
-```
+```c
 jl_array_t *some_array = ...; // e.g. a Vector{Any}
 void **data = (void**)jl_array_data(some_array);
 jl_value_t *some_value = ...;
@@ -285,7 +286,7 @@ struct that contains:
 To keep things simple, we start with a 1D array. Creating an array containing Float64 elements
 of length 10 is done by:
 
-```julia
+```c
 jl_value_t* array_type = jl_apply_array_type(jl_float64_type, 1);
 jl_array_t* x          = jl_alloc_array_1d(array_type, 10);
 ```
@@ -293,7 +294,7 @@ jl_array_t* x          = jl_alloc_array_1d(array_type, 10);
 Alternatively, if you have already allocated the array you can generate a thin wrapper around
 its data:
 
-```
+```c
 double *existingArray = (double*)malloc(sizeof(double)*10);
 jl_array_t *x = jl_ptr_to_array_1d(array_type, existingArray, 10, 0);
 ```
@@ -304,21 +305,21 @@ referenced.
 
 In order to access the data of x, we can use `jl_array_data`:
 
-```
+```c
 double *xData = (double*)jl_array_data(x);
 ```
 
 Now we can fill the array:
 
-```
+```c
 for(size_t i=0; i<jl_array_len(x); i++)
     xData[i] = i;
 ```
 
 Now let us call a Julia function that performs an in-place operation on `x`:
 
-```
-jl_function_t *func  = jl_get_function(jl_base_module, "reverse!");
+```c
+jl_function_t *func = jl_get_function(jl_base_module, "reverse!");
 jl_call1(func, (jl_value_t*)x);
 ```
 
@@ -329,7 +330,7 @@ By printing the array, one can verify that the elements of `x` are now reversed.
 If a Julia function returns an array, the return value of `jl_eval_string` and `jl_call` can be
 cast to a `jl_array_t*`:
 
-```
+```c
 jl_function_t *func  = jl_get_function(jl_base_module, "reverse");
 jl_array_t *y = (jl_array_t*)jl_call1(func, (jl_value_t*)x);
 ```
@@ -342,7 +343,7 @@ keep a reference to the array while it is in use.
 Julia's multidimensional arrays are stored in memory in column-major order. Here is some code
 that creates a 2D array and accesses its properties:
 
-```
+```c
 // Create 2D array of float64 type
 jl_value_t *array_type = jl_apply_array_type(jl_float64_type, 2);
 jl_array_t *x  = jl_alloc_array_2d(array_type, 10, 5);
@@ -368,14 +369,14 @@ in calling `jl_array_dim`) in order to read as idiomatic C code.
 
 Julia code can throw exceptions. For example, consider:
 
-```julia
+```c
 jl_eval_string("this_function_does_not_exist()");
 ```
 
 This call will appear to do nothing. However, it is possible to check whether an exception was
 thrown:
 
-```julia
+```c
 if (jl_exception_occurred())
     printf("%s \n", jl_typeof_str(jl_exception_occurred()));
 ```
@@ -389,22 +390,22 @@ was thrown, and then rethrows the exception in the host language.
 When writing Julia callable functions, it might be necessary to validate arguments and throw exceptions
 to indicate errors. A typical type check looks like:
 
-```
-if (!jl_is_float64(val)) {
+```c
+if (!jl_typeis(val, jl_float64_type)) {
     jl_type_error(function_name, (jl_value_t*)jl_float64_type, val);
 }
 ```
 
 General exceptions can be raised using the functions:
 
-```
+```c
 void jl_error(const char *str);
 void jl_errorf(const char *fmt, ...);
 ```
 
 `jl_error` takes a C string, and `jl_errorf` is called like `printf`:
 
-```julia
+```c
 jl_errorf("argument x = %d is too large", x);
 ```
 

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module TestBoundsCheck
 
@@ -204,7 +204,7 @@ function V1()
 end
 
 if bc_opt == bc_default || bc_opt == bc_off
-    @test V1() == nothing
+    @test V1() === nothing
 else
     @test_throws BoundsError V1()
 end

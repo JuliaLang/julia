@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # SubString and RevString types
 
@@ -26,7 +26,7 @@ struct SubString{T<:AbstractString} <: AbstractString
         end
     end
 end
-SubString(s::T, i::Int, j::Int) where T<:AbstractString = SubString{T}(s, i, j)
+SubString(s::T, i::Int, j::Int) where {T<:AbstractString} = SubString{T}(s, i, j)
 SubString(s::SubString, i::Int, j::Int) = SubString(s.string, s.offset+i, s.offset+j)
 SubString(s::AbstractString, i::Integer, j::Integer) = SubString(s, Int(i), Int(j))
 SubString(s::AbstractString, i::Integer) = SubString(s, i, endof(s))
@@ -73,7 +73,7 @@ chr2ind(s::SubString{<:DirectIndexString}, i::Integer) = begin checkbounds(s,i);
 nextind(s::SubString, i::Integer) = nextind(s.string, i+s.offset)-s.offset
 prevind(s::SubString, i::Integer) = prevind(s.string, i+s.offset)-s.offset
 
-convert{T<:AbstractString}(::Type{SubString{T}}, s::T) = SubString(s, 1, endof(s))
+convert(::Type{SubString{T}}, s::T) where {T<:AbstractString} = SubString(s, 1, endof(s))
 
 String(p::SubString{String}) =
     unsafe_string(pointer(p.string, p.offset+1), nextind(p, p.endof)-1)
@@ -94,7 +94,7 @@ end
 # don't make unnecessary copies when passing substrings to C functions
 cconvert(::Type{Ptr{UInt8}}, s::SubString{String}) = s
 cconvert(::Type{Ptr{Int8}}, s::SubString{String}) = s
-function unsafe_convert{R<:Union{Int8, UInt8}}(::Type{Ptr{R}}, s::SubString{String})
+function unsafe_convert(::Type{Ptr{R}}, s::SubString{String}) where R<:Union{Int8, UInt8}
     convert(Ptr{R}, pointer(s.string)) + s.offset
 end
 

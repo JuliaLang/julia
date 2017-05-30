@@ -42,8 +42,8 @@ code further up the stack.
 
 There may be certain scenarios where for code-organization reasons you want more than one layer
 between the `@inbounds` and `@boundscheck` declarations. For instance, the default `getindex`
-methods have the chain `getindex(A::AbstractArray, i::Real)` calls `getindex(linearindexing(A), A, i)`
-calls `_getindex(::LinearFast, A, i)`.
+methods have the chain `getindex(A::AbstractArray, i::Real)` calls `getindex(IndexStyle(A), A, i)`
+calls `_getindex(::IndexLinear, A, i)`.
 
 To override the "one layer of inlining" rule, a function may be marked with `@propagate_inbounds`
 to propagate an inbounds context (or out of bounds context) through one additional layer of inlining.

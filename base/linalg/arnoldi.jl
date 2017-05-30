@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using .ARPACK
 
@@ -90,10 +90,10 @@ julia> λ
 eigs(A; kwargs...) = eigs(A, I; kwargs...)
 eigs(A::AbstractMatrix{<:BlasFloat}, ::UniformScaling; kwargs...) = _eigs(A, I; kwargs...)
 
-eigs{T<:BlasFloat}(A::AbstractMatrix{T}, B::AbstractMatrix{T}; kwargs...) = _eigs(A, B; kwargs...)
+eigs(A::AbstractMatrix{T}, B::AbstractMatrix{T}; kwargs...) where {T<:BlasFloat} = _eigs(A, B; kwargs...)
 eigs(A::AbstractMatrix{BigFloat}, B::AbstractMatrix...; kwargs...) = throw(MethodError(eigs, Any[A,B,kwargs...]))
 eigs(A::AbstractMatrix{BigFloat}, B::UniformScaling; kwargs...) = throw(MethodError(eigs, Any[A,B,kwargs...]))
-function eigs{T}(A::AbstractMatrix{T}, ::UniformScaling; kwargs...)
+function eigs(A::AbstractMatrix{T}, ::UniformScaling; kwargs...) where T
     Tnew = typeof(zero(T)/sqrt(one(T)))
     eigs(convert(AbstractMatrix{Tnew}, A), I; kwargs...)
 end
@@ -169,17 +169,16 @@ julia> λ
 """
 eigs(A, B; kwargs...) = _eigs(A, B; kwargs...)
 function _eigs(A, B;
-              nev::Integer=6, ncv::Integer=max(20,2*nev+1), which=:LM,
-              tol=0.0, maxiter::Integer=300, sigma=nothing, v0::Vector=zeros(eltype(A),(0,)),
-              ritzvec::Bool=true)
-
+               nev::Integer=6, ncv::Integer=max(20,2*nev+1), which=:LM,
+               tol=0.0, maxiter::Integer=300, sigma=nothing, v0::Vector=zeros(eltype(A),(0,)),
+               ritzvec::Bool=true)
     n = checksquare(A)
 
     T = eltype(A)
     iscmplx = T <: Complex
     isgeneral = B !== I
-    sym = issymmetric(A) && issymmetric(B) && !iscmplx
-    nevmax=sym ? n-1 : n-2
+    sym = !iscmplx && issymmetric(A) && issymmetric(B)
+    nevmax = sym ? n-1 : n-2
     if nevmax <= 0
         throw(ArgumentError("input matrix A is too small. Use eigfact instead."))
     end
@@ -300,61 +299,81 @@ end
 
 
 ## svds
-### Restrict operator to BlasFloat because ARPACK only supports that. Loosen restriction
-### when we switch to our own implementation
-mutable struct SVDOperator{T<:BlasFloat,S} <: AbstractArray{T, 2}
+struct SVDAugmented{T,S} <: AbstractArray{T, 2}
     X::S
-    m::Int
-    n::Int
-    SVDOperator{T,S}(X::AbstractMatrix) where {T<:BlasFloat,S} = new(X, size(X, 1), size(X, 2))
+    SVDAugmented{T,S}(X::AbstractMatrix) where {T,S} = new(X)
 end
 
-function SVDOperator(A::AbstractMatrix{T}) where T
+function SVDAugmented(A::AbstractMatrix{T}) where T
     Tnew = typeof(zero(T)/sqrt(one(T)))
     Anew = convert(AbstractMatrix{Tnew}, A)
-    SVDOperator{Tnew,typeof(Anew)}(Anew)
+    SVDAugmented{Tnew,typeof(Anew)}(Anew)
 end
 
-function A_mul_B!{T}(u::StridedVector{T}, s::SVDOperator{T}, v::StridedVector{T})
-    a, b = s.m, length(v)
-    A_mul_B!(view(u,1:a), s.X, view(v,a+1:b)) # left singular vector
-    Ac_mul_B!(view(u,a+1:b), s.X, view(v,1:a)) # right singular vector
-    u
+function A_mul_B!(y::StridedVector{T}, A::SVDAugmented{T}, x::StridedVector{T}) where T
+    m, mn = size(A.X, 1), length(x)
+    A_mul_B!( view(y, 1:m), A.X, view(x, m + 1:mn)) # left singular vector
+    Ac_mul_B!(view(y, m + 1:mn), A.X, view(x, 1:m)) # right singular vector
+    return y
 end
-size(s::SVDOperator)  = s.m + s.n, s.m + s.n
-issymmetric(s::SVDOperator) = true
+size(A::SVDAugmented)  = ((+)(size(A.X)...), (+)(size(A.X)...))
+ishermitian(A::SVDAugmented) = true
+
+struct AtA_or_AAt{T,S} <: AbstractArray{T, 2}
+    A::S
+    buffer::Vector{T}
+end
+
+function AtA_or_AAt(A::AbstractMatrix{T}) where T
+    Tnew = typeof(zero(T)/sqrt(one(T)))
+    Anew = convert(AbstractMatrix{Tnew}, A)
+    AtA_or_AAt{Tnew,typeof(Anew)}(Anew, Vector{Tnew}(max(size(A)...)))
+end
+
+function A_mul_B!(y::StridedVector{T}, A::AtA_or_AAt{T}, x::StridedVector{T}) where T
+    if size(A.A, 1) >= size(A.A, 2)
+        A_mul_B!(A.buffer, A.A, x)
+        return Ac_mul_B!(y, A.A, A.buffer)
+    else
+        Ac_mul_B!(A.buffer, A.A, x)
+        return A_mul_B!(y, A.A, A.buffer)
+    end
+end
+size(A::AtA_or_AAt) = ntuple(i -> min(size(A.A)...), Val{2})
+ishermitian(s::AtA_or_AAt) = true
+
 
 svds(A::AbstractMatrix{<:BlasFloat}; kwargs...) = _svds(A; kwargs...)
 svds(A::AbstractMatrix{BigFloat}; kwargs...) = throw(MethodError(svds, Any[A, kwargs...]))
-function svds{T}(A::AbstractMatrix{T}; kwargs...)
+function svds(A::AbstractMatrix{T}; kwargs...) where T
     Tnew = typeof(zero(T)/sqrt(one(T)))
     svds(convert(AbstractMatrix{Tnew}, A); kwargs...)
 end
 
 """
-    svds(A; nsv=6, ritzvec=true, tol=0.0, maxiter=1000, ncv=2*nsv, u0=zeros((0,)), v0=zeros((0,))) -> (SVD([left_sv,] s, [right_sv,]), nconv, niter, nmult, resid)
+    svds(A; nsv=6, ritzvec=true, tol=0.0, maxiter=1000, ncv=2*nsv, v0=zeros((0,))) -> (SVD([left_sv,] s, [right_sv,]), nconv, niter, nmult, resid)
 
 Computes the largest singular values `s` of `A` using implicitly restarted Lanczos
 iterations derived from [`eigs`](@ref).
 
 **Inputs**
 
-* `A`: Linear operator whose singular values are desired. `A` may be represented
-  as a subtype of `AbstractArray`, e.g., a sparse matrix, or any other type
-  supporting the four methods `size(A)`, `eltype(A)`, `A * vector`, and
-  `A' * vector`.
+* `A`: Linear operator whose singular values are desired. `A` may be represented as a
+  subtype of `AbstractArray`, e.g., a sparse matrix, or any other type supporting the four
+  methods `size(A)`, `eltype(A)`, `A * vector`, and `A' * vector`.
 * `nsv`: Number of singular values. Default: 6.
 * `ritzvec`: If `true`, return the left and right singular vectors `left_sv` and `right_sv`.
    If `false`, omit the singular vectors. Default: `true`.
 * `tol`: tolerance, see [`eigs`](@ref).
 * `maxiter`: Maximum number of iterations, see [`eigs`](@ref). Default: 1000.
 * `ncv`: Maximum size of the Krylov subspace, see [`eigs`](@ref) (there called `nev`). Default: `2*nsv`.
-* `u0`: Initial guess for the first left Krylov vector. It may have length `m` (the first dimension of `A`), or 0.
-* `v0`: Initial guess for the first right Krylov vector. It may have length `n` (the second dimension of `A`), or 0.
+* `v0`: Initial guess for the first Krylov vector. It may have length `min(size(A)...)`, or 0.
 
 **Outputs**
 
-* `svd`: An `SVD` object containing the left singular vectors, the requested values, and the right singular vectors. If `ritzvec = false`, the left and right singular vectors will be empty.
+* `svd`: An `SVD` object containing the left singular vectors, the requested values, and the
+  right singular vectors. If `ritzvec = false`, the left and right singular vectors will be
+  empty.
 * `nconv`: Number of converged singular values.
 * `niter`: Number of iterations.
 * `nmult`: Number of matrix--vector products used.
@@ -375,48 +394,45 @@ julia> s[:S]
 
 !!! note "Implementation"
     `svds(A)` is formally equivalent to calling [`eigs`](@ref) to perform implicitly restarted
-    Lanczos tridiagonalization on the Hermitian matrix
-    ``\\begin{pmatrix} 0 & A^\\prime \\\\ A & 0 \\end{pmatrix}``, whose eigenvalues are
-    plus and minus the singular values of ``A``.
+    Lanczos tridiagonalization on the Hermitian matrix ``A^\\prime A`` or ``AA^\\prime`` such
+    that the size is smallest.
 """
 svds(A; kwargs...) = _svds(A; kwargs...)
-function _svds(X; nsv::Int = 6, ritzvec::Bool = true, tol::Float64 = 0.0, maxiter::Int = 1000, ncv::Int = 2*nsv, u0::Vector=zeros(eltype(X),(0,)), v0::Vector=zeros(eltype(X),(0,)))
+function _svds(X; nsv::Int = 6, ritzvec::Bool = true, tol::Float64 = 0.0, maxiter::Int = 1000, ncv::Int = 2*nsv, v0::Vector=zeros(eltype(X),(0,)))
     if nsv < 1
         throw(ArgumentError("number of singular values (nsv) must be ≥ 1, got $nsv"))
     end
     if nsv > minimum(size(X))
         throw(ArgumentError("number of singular values (nsv) must be ≤ $(minimum(size(X))), got $nsv"))
     end
-    m,n = size(X)
+    m, n = size(X)
     otype = eltype(X)
-    padv0 = zeros(eltype(X),(0,))
     if length(v0) ∉ [0,n]
         throw(DimensionMismatch("length of v0, the guess for the starting right Krylov vector, must be 0, or $n, got $(length(v0))"))
     end
-    if length(u0) ∉ [0,m]
-        throw(DimensionMismatch("length of u0, the guess for the starting left Krylov vector, must be 0, or $m, got $(length(u0))"))
-    end
-    if length(v0) == n && length(u0) == m
-        padv0 = [u0; v0]
-    elseif length(v0) == n && length(u0) == 0
-        padv0 = [zeros(otype,m); v0]
-    elseif length(v0) == 0 && length(u0) == m
-        padv0 = [u0; zeros(otype,n) ]
-    end
-    ex    = eigs(SVDOperator(X), I; ritzvec = ritzvec, nev = ncv, tol = tol, maxiter = maxiter, v0=padv0)
-    ind   = [1:2:ncv;]
-    sval  = abs.(ex[1][ind])
+    ex    = eigs(AtA_or_AAt(X), I; which = :LM, ritzvec = ritzvec, nev = nsv, tol = tol, maxiter = maxiter, v0=v0)
+    # ind   = [1:2:ncv;]
+    # sval  = abs.(ex[1][ind])
 
+    svals = sqrt.(real.(ex[1]))
     if ritzvec
         # calculating singular vectors
-        left_sv  = sqrt(2) * ex[2][ 1:size(X,1),     ind ] .* sign.(ex[1][ind]')
-        right_sv = sqrt(2) * ex[2][ size(X,1)+1:end, ind ]
-        return (SVD(left_sv, sval, right_sv'), ex[3], ex[4], ex[5], ex[6])
+        # left_sv  = sqrt(2) * ex[2][ 1:size(X,1),     ind ] .* sign.(ex[1][ind]')
+        if size(X, 1) >= size(X, 2)
+            V = ex[2]
+            U = qr(scale!(X*V, inv.(svals)))[1]
+        else
+            U = ex[2]
+            V = qr(scale!(X'U, inv.(svals)))[1]
+        end
+
+        # right_sv = sqrt(2) * ex[2][ size(X,1)+1:end, ind ]
+        return (SVD(U, svals, V'), ex[3], ex[4], ex[5], ex[6])
     else
         #The sort is necessary to work around #10329
-        return (SVD(zeros(eltype(sval), n, 0),
-                    sort!(sval, by=real, rev=true),
-                    zeros(eltype(sval), 0, m)),
+        return (SVD(zeros(eltype(svals), n, 0),
+                    svals,
+                    zeros(eltype(svals), 0, m)),
                     ex[2], ex[3], ex[4], ex[5])
     end
 end

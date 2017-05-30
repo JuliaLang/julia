@@ -1,23 +1,23 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module TestBroadcastInternals
 
 using Base.Broadcast: broadcast_indices, check_broadcast_indices,
-                      check_broadcast_shape, newindex, _bcs, _bcsm
+                      check_broadcast_shape, newindex, _bcs
 using Base: Test, OneTo
 
-@test @inferred(_bcs((), (3,5), (3,5))) == (3,5)
-@test @inferred(_bcs((), (3,1), (3,5))) == (3,5)
-@test @inferred(_bcs((), (3,),  (3,5))) == (3,5)
-@test @inferred(_bcs((), (3,5), (3,)))  == (3,5)
-@test_throws DimensionMismatch _bcs((), (3,5), (4,5))
-@test_throws DimensionMismatch _bcs((), (3,5), (3,4))
-@test @inferred(_bcs((), (-1:1, 2:5), (-1:1, 2:5))) == (-1:1, 2:5)
-@test @inferred(_bcs((), (-1:1, 2:5), (1, 2:5)))    == (-1:1, 2:5)
-@test @inferred(_bcs((), (-1:1, 1),   (1, 2:5)))    == (-1:1, 2:5)
-@test @inferred(_bcs((), (-1:1,),     (-1:1, 2:5))) == (-1:1, 2:5)
-@test_throws DimensionMismatch _bcs((), (-1:1, 2:6), (-1:1, 2:5))
-@test_throws DimensionMismatch _bcs((), (-1:1, 2:5), (2, 2:5))
+@test @inferred(_bcs((3,5), (3,5))) == (3,5)
+@test @inferred(_bcs((3,1), (3,5))) == (3,5)
+@test @inferred(_bcs((3,),  (3,5))) == (3,5)
+@test @inferred(_bcs((3,5), (3,)))  == (3,5)
+@test_throws DimensionMismatch _bcs((3,5), (4,5))
+@test_throws DimensionMismatch _bcs((3,5), (3,4))
+@test @inferred(_bcs((-1:1, 2:5), (-1:1, 2:5))) == (-1:1, 2:5)
+@test @inferred(_bcs((-1:1, 2:5), (1, 2:5)))    == (-1:1, 2:5)
+@test @inferred(_bcs((-1:1, 1),   (1, 2:5)))    == (-1:1, 2:5)
+@test @inferred(_bcs((-1:1,),     (-1:1, 2:5))) == (-1:1, 2:5)
+@test_throws DimensionMismatch _bcs((-1:1, 2:6), (-1:1, 2:5))
+@test_throws DimensionMismatch _bcs((-1:1, 2:5), (2, 2:5))
 
 @test @inferred(broadcast_indices(zeros(3,4), zeros(3,4))) == (OneTo(3),OneTo(4))
 @test @inferred(broadcast_indices(zeros(3,4), zeros(3)))   == (OneTo(3),OneTo(4))
@@ -493,4 +493,25 @@ end
     A = fill(zeros(2,2), 4, 4)
     A[1:3,1:3] .= [ones(2,2)]
     @test all(A[1:3,1:3] .== [ones(2,2)])
+end
+
+# Test that broadcast does not confuse eltypes. See also
+# https://github.com/JuliaLang/julia/issues/21325
+@testset "eltype confusion (#21325)" begin
+    foo(x::Char, y::Int) = 0
+    foo(x::String, y::Int) = "hello"
+    @test broadcast(foo, "x", [1, 2, 3]) == ["hello", "hello", "hello"]
+
+    @test isequal(
+        [Set([1]), Set([2])] .∪ Set([3]),
+        [Set([1, 3]), Set([2, 3])])
+
+    @test isequal(@inferred(broadcast(foo, "world", Nullable(1))),
+                  Nullable("hello"))
+end
+
+# Issue #21291
+let t = (0, 1, 2)
+    o = 1
+    @test @inferred(broadcast(+, t, o)) == (1, 2, 3)
 end

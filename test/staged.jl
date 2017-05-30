@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 @generated function staged_t1(a,b)
     if a == Int
@@ -147,7 +147,6 @@ module TestGeneratedThrow
     foo() = (bar(rand() > 0.5 ? 1 : 1.0); error("foo"))
     function __init__()
         code_typed(foo,(); optimize = false)
-        @test Core.Inference.isempty(Core.Inference.active) && Core.Inference.isempty(Core.Inference.workq)
         cfunction(foo,Void,())
     end
 end
@@ -175,7 +174,7 @@ let gf_err, tsk = @async nothing # create a Task for yield to try to run
     end
     @test_throws ErrorException gf_err()
     @test_throws ErrorException gf_err()
-    @test gf_err_ref[] == 4
+    @test gf_err_ref[] == 3
 end
 
 gf_err_ref[] = 0
@@ -213,3 +212,15 @@ end
 
 # issue #19897
 @test code_lowered(staged_t1, (Int,Int)) isa Array  # check no error thrown
+
+# issue #10178
+@generated function f10178(x::X) where X
+    :(x)
+end
+g10178(x) = f10178(x)
+@test g10178(5) == 5
+@generated function f10178(x::X) where X
+    :(2x)
+end
+g10178(x) = f10178(x)
+@test g10178(5) == 10

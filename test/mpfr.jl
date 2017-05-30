@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 import Base.MPFR
 # constructors
@@ -878,4 +878,10 @@ for prec in (10, 100, 1000)
             (val != 3.1) && @test e > d     # rounding has no effect when constructing from Float64
         end
     end
+end
+
+setprecision(256) do
+    @test string(big(Inf)) == "BigFloat(Inf, 256)"
+    @test string(big(-Inf)) == "BigFloat(-Inf, 256)"
+    @test string(big(NaN)) == "BigFloat(NaN, 256)"
 end

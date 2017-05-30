@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 function simd_loop_example_from_manual(x, y, z)
     s = zero(eltype(z))

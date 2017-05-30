@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 function GitConfig(path::AbstractString,
                    level::Consts.GIT_CONFIG = Consts.CONFIG_LEVEL_APP,
@@ -26,7 +26,7 @@ end
 function GitConfig(level::Consts.GIT_CONFIG = Consts.CONFIG_LEVEL_DEFAULT)
     cfg_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_config_open_default, :libgit2), Cint,
-                  (Ptr{Ptr{Void}}, ), cfg_ptr_ptr)
+                  (Ptr{Ptr{Void}},), cfg_ptr_ptr)
     cfg = GitConfig(cfg_ptr_ptr[])
     if level != Consts.CONFIG_LEVEL_DEFAULT
         glb_cfg_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
@@ -82,7 +82,7 @@ function get(::Type{Int64}, c::GitConfig, name::AbstractString)
     return val_ptr[]
 end
 
-function get{T}(c::GitConfig, name::AbstractString, default::T)
+function get(c::GitConfig, name::AbstractString, default::T) where T
     res = default
     try res = get(T,c,name) end
     return res

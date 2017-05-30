@@ -194,9 +194,12 @@ julia> ex = quote
            y = 2
            x + y
        end
-quote  # none, line 2:
-    x = 1 # none, line 3:
-    y = 2 # none, line 4:
+quote
+    #= none:2 =#
+    x = 1
+    #= none:3 =#
+    y = 2
+    #= none:4 =#
     x + y
 end
 
@@ -238,7 +241,7 @@ julia> ex = :(a in $:((1,2,3)) )
 Interpolating symbols into a nested expression requires enclosing each symbol in an enclosing
 quote block:
 
-```julia
+```julia-repl
 julia> :( :a in $( :(:a + :b) ) )
                    ^^^^^^^^^^
                    quoted inner expression
@@ -298,7 +301,7 @@ Since expressions are just `Expr` objects which can be constructed programmatica
 it is possible to dynamically generate arbitrary code which can then be run using [`eval()`](@ref).
 Here is a simple example:
 
-```julia
+```julia-repl
 julia> a = 1;
 
 julia> ex = Expr(:call, :+, a, :b)
@@ -474,7 +477,7 @@ I execute at runtime. The argument is: (1, 2, 3)
 
 Macros are invoked with the following general syntax:
 
-```
+```julia
 @name expr1 expr2 ...
 @name(expr1, expr2, ...)
 ```
@@ -484,7 +487,7 @@ expressions in the first form, and the lack of whitespace after `@name` in the s
 two styles should not be mixed. For example, the following syntax is different from the examples
 above; it passes the tuple `(expr1, expr2, ...)` as one argument to the macro:
 
-```
+```julia
 @name (expr1, expr2, ...)
 ```
 
@@ -507,6 +510,28 @@ julia> @showarg(1+1)
 
 julia> @showarg(println("Yo!"))
 :(println("Yo!"))
+```
+
+In addition to the given argument list, every macro is passed an extra argument named `__source__`
+providing information (in the form of a `LineNumberNode` object) about the parser location
+of the `@` sign from the macro invocation.
+
+This allows macros to include better error diagnostic information,
+and is commonly used by logging, string-parser macros, and docs, for example,
+as well as to implement the `@__LINE__`, `@__FILE__`, and `@__DIR__` macros.
+
+The location information can be accessed by referencing `__source__.line` and `__source__.file`:
+
+```jldoctest
+julia> macro __LOCATION__(); return QuoteNode(__source__); end
+@__LOCATION__ (macro with 1 method)
+
+julia> dump(
+            @__LOCATION__(
+       ))
+LineNumberNode
+  line: Int64 2
+  file: Symbol none
 ```
 
 ### Building an advanced macro
@@ -609,7 +634,7 @@ Expr
 
 So now instead of getting a plain string in `msg_body`, the macro is receiving a full expression
 that will need to be evaluated in order to display as expected. This can be spliced directly into
-the returned expression as an argument to the [`string()`](@ref) call; see [error.jl](https://github.com/JuliaLang/julia/blob/master/base/error.jl)
+the returned expression as an argument to the [`string()`](@ref) call; see [`error.jl`](https://github.com/JuliaLang/julia/blob/master/base/error.jl)
 for the complete implementation.
 
 The `@assert` macro makes great use of splicing into quoted expressions to simplify the manipulation
@@ -661,7 +686,7 @@ with any user variables, and `time` and `println` will refer to the standard lib
 
 One problem remains however. Consider the following use of this macro:
 
-```
+```julia
 module MyModule
 import Base.@time
 
@@ -675,7 +700,7 @@ Here the user expression `ex` is a call to `time`, but not the same `time` funct
 uses. It clearly refers to `MyModule.time`. Therefore we must arrange for the code in `ex` to
 be resolved in the macro call environment. This is done by "escaping" the expression with [`esc()`](@ref):
 
-```
+```julia
 macro time(ex)
     ...
     local val = $(esc(ex))
@@ -707,6 +732,32 @@ julia> foo()
 ```
 
 This kind of manipulation of variables should be used judiciously, but is occasionally quite handy.
+
+Getting the hygiene rules correct can be a formidable challenge.
+Before using a macro, you might want to consider whether a function closure
+would be sufficient. Another useful strategy is to defer as much work as possible to runtime.
+For example, many macros simply wrap their arguments in a QuoteNode or other similar Expr.
+Some examples of this include `@task body` which simply returns `schedule(Task(() -> $body))`,
+and `@eval expr`, which simply returns `eval(QuoteNode(expr))`.
+
+To demonstrate, we might rewrite the `@time` example above as:
+
+```julia
+macro time(expr)
+    return :(timeit(() -> $(esc(expr))))
+end
+function timeit(f)
+    t0 = time()
+    val = f()
+    t1 = time()
+    println("elapsed time: ", t1-t0, " seconds")
+    return val
+end
+```
+
+However, we don't do this for a good reason: wrapping the `expr` in a new scope block (the anonymous function)
+also slightly changes the meaning of the expression (the scope of any variables in it),
+while we want `@time` to be usable with minimum impact on the wrapped code.
 
 ## Code Generation
 
@@ -876,8 +927,10 @@ When defining generated functions, there are four main differences to ordinary f
    function.
 3. Instead of calculating something or performing some action, you return a *quoted expression* which,
    when evaluated, does what you want.
-4. Generated functions must not have any side-effects or examine any non-constant global state (including,
-   for example, IO, locks, or non-local dictionaries). In other words, they must be completely pure.
+4. Generated functions must not *mutate* or *observe* any non-constant global state (including,
+   for example, IO, locks, non-local dictionaries, or using `method_exists`).
+   This means they can only read global constants, and cannot have any side effects.
+   In other words, they must be completely pure.
    Due to an implementation limitation, this also means that they currently cannot define a closure
    or untyped generator.
 
@@ -918,12 +971,12 @@ we returned from the definition, now with the *value* of `x`.
 
 What happens if we evaluate `foo` again with a type that we have already used?
 
-```julia generated
+```jldoctest generated
 julia> foo(4)
 16
 ```
 
-Note that there is no printout of `Int64`. We can see that the body of the generated function
+Note that there is no printout of [`Int64`](@ref). We can see that the body of the generated function
 was only executed once here, for the specific set of argument types, and the result was cached.
 After that, for this example, the expression returned from the generated function on the first
 invocation was re-used as the method body. However, the actual caching behavior is an implementation-defined
@@ -1073,7 +1126,7 @@ can be used to index into an array `A` using `A[i]`, instead of `A[x,y,z,...]`. 
 is the following:
 
 ```jldoctest sub2ind
-julia> function sub2ind_loop{N}(dims::NTuple{N}, I::Integer...)
+julia> function sub2ind_loop(dims::NTuple{N}, I::Integer...) where N
            ind = I[N] - 1
            for i = N-1:-1:1
                ind = I[i]-1 + dims[i]*ind
@@ -1112,7 +1165,7 @@ we use generated functions to manually unroll the loop. The body becomes almost 
 instead of calculating the linear index, we build up an *expression* that calculates the index:
 
 ```jldoctest sub2ind_gen
-julia> @generated function sub2ind_gen{N}(dims::NTuple{N}, I::Integer...)
+julia> @generated function sub2ind_gen(dims::NTuple{N}, I::Integer...) where N
            ex = :(I[$N] - 1)
            for i = (N - 1):-1:1
                ex = :(I[$i] - 1 + dims[$i] * $ex)
@@ -1130,7 +1183,7 @@ julia> sub2ind_gen((3, 5), 1, 2)
 An easy way to find out is to extract the body into another (regular) function:
 
 ```jldoctest sub2ind_gen2
-julia> @generated function sub2ind_gen{N}(dims::NTuple{N}, I::Integer...)
+julia> @generated function sub2ind_gen(dims::NTuple{N}, I::Integer...) where N
            return sub2ind_gen_impl(dims, I...)
        end
 sub2ind_gen (generic function with 1 method)

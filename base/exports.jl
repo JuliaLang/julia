@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 export
 # Modules
@@ -23,7 +23,7 @@ export
     Markdown,
     Threads,
     Iterators,
-    Parallel,
+    Distributed,
 
 # Types
     AbstractChannel,
@@ -66,9 +66,11 @@ export
     ExponentialBackOff,
     Factorization,
     FileMonitor,
-    StepRangeLen,
     Hermitian,
     UniformScaling,
+    IndexCartesian,
+    IndexLinear,
+    IndexStyle,
     InsertionSort,
     IntSet,
     IOBuffer,
@@ -109,6 +111,7 @@ export
     SharedMatrix,
     SharedVector,
     StepRange,
+    StepRangeLen,
     StridedArray,
     StridedMatrix,
     StridedVecOrMat,
@@ -402,6 +405,7 @@ export
     significand,
     sin,
     sinc,
+    sincos,
     sind,
     sinh,
     sinpi,
@@ -726,6 +730,9 @@ export
     ⊆,
     ⊈,
     ⊊,
+    ⊇,
+    ⊉,
+    ⊋,
     ∩,
     ∪,
 
@@ -1065,6 +1072,7 @@ export
     getaddrinfo,
     gethostname,
     getipaddr,
+    getpeername,
     getsockname,
     htol,
     hton,
@@ -1241,6 +1249,7 @@ export
     # parser internal
     @__FILE__,
     @__DIR__,
+    @__LINE__,
     @int128_str,
     @uint128_str,
     @big_str,
@@ -1341,7 +1350,7 @@ export
     nzrange,
     nnz,
 
-# Parallel module re-exports
+# Distributed module re-exports
     @spawn,
     @spawnat,
     @fetch,

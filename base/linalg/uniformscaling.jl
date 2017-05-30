@@ -1,7 +1,7 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 import Base: copy, ctranspose, getindex, show, transpose, one, zero, inv,
-             @_pure_meta, hcat, vcat, hvcat
+             hcat, vcat, hvcat
 import Base.LinAlg: SingularException
 
 struct UniformScaling{T<:Number}
@@ -27,7 +27,7 @@ julia> [1 2im 3; 1im 2 3] * I
 """
 const I = UniformScaling(1)
 
-eltype{T}(::Type{UniformScaling{T}}) = T
+eltype(::Type{UniformScaling{T}}) where {T} = T
 ndims(J::UniformScaling) = 2
 getindex(J::UniformScaling, i::Integer,j::Integer) = ifelse(i==j,J.λ,zero(J.λ))
 
@@ -37,12 +37,12 @@ copy(J::UniformScaling) = UniformScaling(J.λ)
 transpose(J::UniformScaling) = J
 ctranspose(J::UniformScaling) = UniformScaling(conj(J.λ))
 
-one{T}(::Type{UniformScaling{T}}) = UniformScaling(one(T))
-one{T}(J::UniformScaling{T}) = one(UniformScaling{T})
-oneunit{T}(::Type{UniformScaling{T}}) = UniformScaling(oneunit(T))
-oneunit{T}(J::UniformScaling{T}) = oneunit(UniformScaling{T})
-zero{T}(::Type{UniformScaling{T}}) = UniformScaling(zero(T))
-zero{T}(J::UniformScaling{T}) = zero(UniformScaling{T})
+one(::Type{UniformScaling{T}}) where {T} = UniformScaling(one(T))
+one(J::UniformScaling{T}) where {T} = one(UniformScaling{T})
+oneunit(::Type{UniformScaling{T}}) where {T} = UniformScaling(oneunit(T))
+oneunit(J::UniformScaling{T}) where {T} = oneunit(UniformScaling{T})
+zero(::Type{UniformScaling{T}}) where {T} = UniformScaling(zero(T))
+zero(J::UniformScaling{T}) where {T} = zero(UniformScaling{T})
 
 istriu(::UniformScaling) = true
 istril(::UniformScaling) = true
@@ -109,7 +109,7 @@ function (-)(J::UniformScaling, UL::Union{LowerTriangular,UnitLowerTriangular})
     return LowerTriangular(ULnew)
 end
 
-function (+){TA,TJ}(A::AbstractMatrix{TA}, J::UniformScaling{TJ})
+function (+)(A::AbstractMatrix{TA}, J::UniformScaling{TJ}) where {TA,TJ}
     n = checksquare(A)
     B = similar(A, promote_type(TA,TJ))
     copy!(B,A)
@@ -119,7 +119,7 @@ function (+){TA,TJ}(A::AbstractMatrix{TA}, J::UniformScaling{TJ})
     B
 end
 
-function (-){TA,TJ<:Number}(A::AbstractMatrix{TA}, J::UniformScaling{TJ})
+function (-)(A::AbstractMatrix{TA}, J::UniformScaling{TJ}) where {TA,TJ<:Number}
     n = checksquare(A)
     B = similar(A, promote_type(TA,TJ))
     copy!(B, A)
@@ -128,7 +128,7 @@ function (-){TA,TJ<:Number}(A::AbstractMatrix{TA}, J::UniformScaling{TJ})
     end
     B
 end
-function (-){TA,TJ<:Number}(J::UniformScaling{TJ}, A::AbstractMatrix{TA})
+function (-)(J::UniformScaling{TJ}, A::AbstractMatrix{TA}) where {TA,TJ<:Number}
     n = checksquare(A)
     B = convert(AbstractMatrix{promote_type(TJ,TA)}, -A)
     @inbounds for j = 1:n
@@ -154,7 +154,7 @@ inv(J::UniformScaling) = UniformScaling(inv(J.λ))
 /(J::UniformScaling, x::Number) = UniformScaling(J.λ/x)
 
 \(J1::UniformScaling, J2::UniformScaling) = J1.λ == 0 ? throw(SingularException(1)) : UniformScaling(J1.λ\J2.λ)
-\{T<:Number}(A::Union{Bidiagonal{T},AbstractTriangular{T}}, J::UniformScaling) = scale!(inv(A), J.λ)
+\(A::Union{Bidiagonal{T},AbstractTriangular{T}}, J::UniformScaling) where {T<:Number} = scale!(inv(A), J.λ)
 \(J::UniformScaling, A::AbstractVecOrMat) = J.λ == 0 ? throw(SingularException(1)) : J.λ\A
 \(A::AbstractMatrix, J::UniformScaling) = scale!(inv(A), J.λ)
 
@@ -167,8 +167,8 @@ broadcast(::typeof(/), J::UniformScaling,x::Number) = UniformScaling(J.λ/x)
 
 ==(J1::UniformScaling,J2::UniformScaling) = (J1.λ == J2.λ)
 
-function isapprox{T<:Number,S<:Number}(J1::UniformScaling{T}, J2::UniformScaling{S};
-                              rtol::Real=Base.rtoldefault(T,S), atol::Real=0, nans::Bool=false)
+function isapprox(J1::UniformScaling{T}, J2::UniformScaling{S};
+            rtol::Real=Base.rtoldefault(T,S), atol::Real=0, nans::Bool=false) where {T<:Number,S<:Number}
     isapprox(J1.λ, J2.λ, rtol=rtol, atol=atol, nans=nans)
 end
 
@@ -182,7 +182,7 @@ function copy!(A::AbstractMatrix, J::UniformScaling)
     return A
 end
 
-function cond{T}(J::UniformScaling{T})
+function cond(J::UniformScaling{T}) where T
     onereal = inv(one(real(J.λ)))
     return J.λ ≠ zero(T) ? onereal : oftype(onereal, Inf)
 end
@@ -191,17 +191,17 @@ end
 # in A to matrices of type T and sizes given by n[k:end].  n is an array
 # so that the same promotion code can be used for hvcat.  We pass the type T
 # so that we can re-use this code for sparse-matrix hcat etcetera.
-promote_to_arrays_{T}(n::Int, ::Type{Matrix}, J::UniformScaling{T}) = copy!(Matrix{T}(n,n), J)
+promote_to_arrays_(n::Int, ::Type{Matrix}, J::UniformScaling{T}) where {T} = copy!(Matrix{T}(n,n), J)
 promote_to_arrays_(n::Int, ::Type, A::AbstractVecOrMat) = A
 promote_to_arrays(n,k, ::Type) = ()
-promote_to_arrays{T}(n,k, ::Type{T}, A) = (promote_to_arrays_(n[k], T, A),)
-promote_to_arrays{T}(n,k, ::Type{T}, A, B) =
+promote_to_arrays(n,k, ::Type{T}, A) where {T} = (promote_to_arrays_(n[k], T, A),)
+promote_to_arrays(n,k, ::Type{T}, A, B) where {T} =
     (promote_to_arrays_(n[k], T, A), promote_to_arrays_(n[k+1], T, B))
-promote_to_arrays{T}(n,k, ::Type{T}, A, B, C) =
+promote_to_arrays(n,k, ::Type{T}, A, B, C) where {T} =
     (promote_to_arrays_(n[k], T, A), promote_to_arrays_(n[k+1], T, B), promote_to_arrays_(n[k+2], T, C))
-promote_to_arrays{T}(n,k, ::Type{T}, A, B, Cs...) =
+promote_to_arrays(n,k, ::Type{T}, A, B, Cs...) where {T} =
     (promote_to_arrays_(n[k], T, A), promote_to_arrays_(n[k+1], T, B), promote_to_arrays(n,k+2, T, Cs...)...)
-promote_to_array_type(A::Tuple{Vararg{Union{AbstractVecOrMat,UniformScaling}}}) = (@_pure_meta; Matrix)
+promote_to_array_type(A::Tuple{Vararg{Union{AbstractVecOrMat,UniformScaling}}}) = Matrix
 
 for (f,dim,name) in ((:hcat,1,"rows"), (:vcat,2,"cols"))
     @eval begin

@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "llvm-version.h"
 #include "platform.h"
@@ -6,12 +6,14 @@
 
 #ifdef USE_MCJIT
 #include <llvm/ExecutionEngine/SectionMemoryManager.h>
+#include "fix_llvm_assert.h"
 #include "julia.h"
 #include "julia_internal.h"
 
 #if JL_LLVM_VERSION >= 30700
 #if JL_LLVM_VERSION < 30800
 #  include <llvm/ExecutionEngine/Orc/ObjectLinkingLayer.h>
+#  include "fix_llvm_assert.h"
 #endif
 #ifdef _OS_LINUX_
 #  include <sys/syscall.h>
@@ -730,8 +732,11 @@ public:
     }
     void registerEHFrames(uint8_t *Addr, uint64_t LoadAddr,
                           size_t Size) override;
+#if 0
+    // Disable for now since we are not actually using this.
     void deregisterEHFrames(uint8_t *Addr, uint64_t LoadAddr,
                             size_t Size) override;
+#endif
     uint8_t *allocateCodeSection(uintptr_t Size, unsigned Alignment,
                                  unsigned SectionID,
                                  StringRef SectionName) override;
@@ -858,12 +863,14 @@ void RTDyldMemoryManagerJL::registerEHFrames(uint8_t *Addr,
     }
 }
 
+#if 0
 void RTDyldMemoryManagerJL::deregisterEHFrames(uint8_t *Addr,
                                                uint64_t LoadAddr,
                                                size_t Size)
 {
     deregister_eh_frames((uint8_t*)LoadAddr, Size);
 }
+#endif
 
 }
 

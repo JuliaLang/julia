@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## linalg.jl: Some generic Linear Algebra definitions
 
@@ -350,7 +350,7 @@ end
 # faster computation of norm(x)^2, avoiding overflow for integers
 norm_sqr(x) = norm(x)^2
 norm_sqr(x::Number) = abs2(x)
-norm_sqr{T<:Integer}(x::Union{T,Complex{T},Rational{T}}) = abs2(float(x))
+norm_sqr(x::Union{T,Complex{T},Rational{T}}) where {T<:Integer} = abs2(float(x))
 
 function generic_vecnorm2(x)
     maxabs = vecnormInf(x)
@@ -412,13 +412,22 @@ vecnorm2(x) = generic_vecnorm2(x)
 vecnormp(x, p) = generic_vecnormp(x, p)
 
 """
-    vecnorm(A, [p::Real=2])
+    vecnorm(A, p::Real=2)
 
 For any iterable container `A` (including arrays of any dimension) of numbers (or any
 element type for which `norm` is defined), compute the `p`-norm (defaulting to `p=2`) as if
 `A` were a vector of the corresponding length.
 
-For example, if `A` is a matrix and `p=2`, then this is equivalent to the Frobenius norm.
+The `p`-norm is defined as:
+```math
+\\|A\\|_p = \\left( \\sum_{i=1}^n | a_i | ^p \\right)^{1/p}
+```
+with ``a_i`` the entries of ``A`` and ``n`` its length.
+
+`p` can assume any numeric value (even though not all values produce a
+mathematically valid vector norm). In particular, `vecnorm(A, Inf)` returns the largest value
+in `abs(A)`, whereas `vecnorm(A, -Inf)` returns the smallest. If `A` is a matrix and `p=2`,
+then this is equivalent to the Frobenius norm.
 
 # Example
 
@@ -447,14 +456,18 @@ function vecnorm(itr, p::Real=2)
         vecnormp(itr,p)
     end
 end
+
+"""
+    vecnorm(x::Number, p::Real=2)
+
+For numbers, return ``\\left( |x|^p \\right) ^{1/p}``.
+"""
 @inline vecnorm(x::Number, p::Real=2) = p == 0 ? (x==0 ? zero(abs(x)) : oneunit(abs(x))) : abs(x)
 
-norm(x::AbstractVector, p::Real=2) = vecnorm(x, p)
-
-function norm1{T}(A::AbstractMatrix{T})
+function norm1(A::AbstractMatrix{T}) where T
     m, n = size(A)
     Tnorm = typeof(float(real(zero(T))))
-    Tsum = promote_type(Float64,Tnorm)
+    Tsum = promote_type(Float64, Tnorm)
     nrm::Tsum = 0
     @inbounds begin
         for j = 1:n
@@ -467,16 +480,16 @@ function norm1{T}(A::AbstractMatrix{T})
     end
     return convert(Tnorm, nrm)
 end
-function norm2{T}(A::AbstractMatrix{T})
+function norm2(A::AbstractMatrix{T}) where T
     m,n = size(A)
     if m == 1 || n == 1 return vecnorm2(A) end
     Tnorm = typeof(float(real(zero(T))))
     (m == 0 || n == 0) ? zero(Tnorm) : convert(Tnorm, svdvals(A)[1])
 end
-function normInf{T}(A::AbstractMatrix{T})
+function normInf(A::AbstractMatrix{T}) where T
     m,n = size(A)
     Tnorm = typeof(float(real(zero(T))))
-    Tsum = promote_type(Float64,Tnorm)
+    Tsum = promote_type(Float64, Tnorm)
     nrm::Tsum = 0
     @inbounds begin
         for i = 1:m
@@ -491,18 +504,27 @@ function normInf{T}(A::AbstractMatrix{T})
 end
 
 """
-    norm(A, [p::Real=2])
+    norm(A::AbstractArray, p::Real=2)
 
-Compute the `p`-norm of a vector or the operator norm of a matrix `A`, defaulting to the `p=2`-norm.
+Compute the `p`-norm of a vector or the operator norm of a matrix `A`,
+defaulting to the 2-norm.
 
-For vectors, `p` can assume any numeric value (even though not all values produce a
+    norm(A::AbstractVector, p::Real=2)
+
+For vectors, this is equivalent to [`vecnorm`](@ref) and equal to:
+```math
+\\|A\\|_p = \\left( \\sum_{i=1}^n | a_i | ^p \\right)^{1/p}
+```
+with ``a_i`` the entries of ``A`` and ``n`` its length.
+
+`p` can assume any numeric value (even though not all values produce a
 mathematically valid vector norm). In particular, `norm(A, Inf)` returns the largest value
 in `abs(A)`, whereas `norm(A, -Inf)` returns the smallest.
 
 # Example
 
 ```jldoctest
-julia> v = [3;-2;6]
+julia> v = [3, -2, 6]
 3-element Array{Int64,1}:
   3
  -2
@@ -514,10 +536,29 @@ julia> norm(v)
 julia> norm(v, Inf)
 6.0
 ```
+"""
+norm(x::AbstractVector, p::Real=2) = vecnorm(x, p)
+
+"""
+    norm(A::AbstractMatrix, p::Real=2)
 
 For matrices, the matrix norm induced by the vector `p`-norm is used, where valid values of
 `p` are `1`, `2`, or `Inf`. (Note that for sparse matrices, `p=2` is currently not
 implemented.) Use [`vecnorm`](@ref) to compute the Frobenius norm.
+
+When `p=1`, the matrix norm is the maximum absolute column sum of `A`:
+```math
+\\|A\\|_1 = \\max_{1 ≤ j ≤ n} \\sum_{i=1}^m | a_{ij} |
+```
+with ``a_{ij}`` the entries of ``A``, and ``m`` and ``n`` its dimensions.
+
+When `p=2`, the matrix norm is the spectral norm, equal to the largest
+singular value of `A`.
+
+When `p=Inf`, the matrix norm is the maximum absolute row sum of `A`:
+```math
+\\|A\\|_\\infty = \\max_{1 ≤ i ≤ m} \\sum _{j=1}^n | a_{ij} |
+```
 
 # Example
 
@@ -543,14 +584,20 @@ function norm(A::AbstractMatrix, p::Real=2)
     end
 end
 
+"""
+    norm(x::Number, p::Real=2)
+
+For numbers, return ``\\left( |x|^p \\right)^{1/p}``.
+This is equivalent to [`vecnorm`](@ref).
+"""
 @inline norm(x::Number, p::Real=2) = vecnorm(x, p)
 
 @inline norm(tv::RowVector) = norm(transpose(tv))
 
 """
-    norm(rowvector, [q = 2])
+    norm(A::RowVector, q::Real=2)
 
-Takes the q-norm of a `RowVector`, which is equivalent to the p-norm with
+For row vectors, return the ``q``-norm of `A`, which is equivalent to the p-norm with
 value `p = q/(q-1)`. They coincide at `p = q = 2`.
 
 The difference in norm between a vector space and its dual arises to preserve
@@ -718,7 +765,7 @@ julia> M*N == N*M == eye(2)
 true
 ```
 """
-function inv{T}(A::AbstractMatrix{T})
+function inv(A::AbstractMatrix{T}) where T
     S = typeof(zero(T)/one(T))      # dimensionful
     S0 = typeof(zero(T)/oneunit(T)) # dimensionless
     A_ldiv_B!(factorize(convert(AbstractMatrix{S}, A)), eye(S0, checksquare(A)))
@@ -799,6 +846,8 @@ This quantity is also known in the literature as the Bauer condition number, rel
 condition number, or componentwise relative condition number.
 """
 condskeel(A::AbstractMatrix, x::AbstractVector, p::Real=Inf) = norm(abs.(inv(A))*(abs.(A)*abs.(x)), p)
+
+issymmetric(A::AbstractMatrix{<:Real}) = ishermitian(A)
 
 """
     issymmetric(A) -> Bool
@@ -1154,7 +1203,7 @@ julia> det(M)
 2.0
 ```
 """
-function det{T}(A::AbstractMatrix{T})
+function det(A::AbstractMatrix{T}) where T
     if istriu(A) || istril(A)
         S = typeof((one(T)*zero(T) + zero(T))/one(T))
         return convert(S, det(UpperTriangular(A)))
@@ -1166,7 +1215,7 @@ det(x::Number) = x
 """
     logabsdet(M)
 
-Log of absolute value of determinant of real matrix. Equivalent to
+Log of absolute value of matrix determinant. Equivalent to
 `(log(abs(det(M))), sign(det(M)))`, but may provide increased accuracy and/or speed.
 """
 logabsdet(A::AbstractMatrix) = logabsdet(lufact(A))
@@ -1197,7 +1246,7 @@ function logdet(A::AbstractMatrix)
     return d + log(s)
 end
 
-NumberArray{T<:Number} = AbstractArray{T}
+const NumberArray{T<:Number} = AbstractArray{T}
 
 """
     promote_leaf_eltypes(itr)
@@ -1219,9 +1268,9 @@ julia> promote_leaf_eltypes(a)
 Complex{Float64}
 ```
 """
-promote_leaf_eltypes{T<:Number}(x::Union{AbstractArray{T},Tuple{Vararg{T}}}) = T
-promote_leaf_eltypes{T<:NumberArray}(x::Union{AbstractArray{T},Tuple{Vararg{T}}}) = eltype(T)
-promote_leaf_eltypes{T}(x::T) = T
+promote_leaf_eltypes(x::Union{AbstractArray{T},Tuple{Vararg{T}}}) where {T<:Number} = T
+promote_leaf_eltypes(x::Union{AbstractArray{T},Tuple{Vararg{T}}}) where {T<:NumberArray} = eltype(T)
+promote_leaf_eltypes(x::T) where {T} = T
 promote_leaf_eltypes(x::Union{AbstractArray,Tuple}) = mapreduce(promote_leaf_eltypes, promote_type, Bool, x)
 
 # isapprox: approximate equality of arrays [like isapprox(Number,Number)]
@@ -1240,10 +1289,11 @@ function isapprox(x::AbstractArray, y::AbstractArray;
 end
 
 """
-    normalize!(v, [p::Real=2])
+    normalize!(v::AbstractVector, p::Real=2)
 
-Normalize the vector `v` in-place with respect to the `p`-norm.
-See also [`vecnorm`](@ref) and [`normalize`](@ref).
+Normalize the vector `v` in-place so that its `p`-norm equals unity,
+i.e. `norm(v, p) == 1`.
+See also [`normalize`](@ref) and [`vecnorm`](@ref).
 """
 function normalize!(v::AbstractVector, p::Real=2)
     nrm = norm(v, p)
@@ -1268,9 +1318,10 @@ end
 end
 
 """
-    normalize(v, [p::Real=2])
+    normalize(v::AbstractVector, p::Real=2)
 
-Normalize the vector `v` with respect to the `p`-norm.
+Normalize the vector `v` so that its `p`-norm equals unity,
+i.e. `norm(v, p) == vecnorm(v, p) == 1`.
 See also [`normalize!`](@ref) and [`vecnorm`](@ref).
 
 # Example
@@ -1278,17 +1329,23 @@ See also [`normalize!`](@ref) and [`vecnorm`](@ref).
 ```jldoctest
 julia> a = [1,2,4];
 
-julia> normalize(a)
+julia> b = normalize(a)
 3-element Array{Float64,1}:
  0.218218
  0.436436
  0.872872
 
-julia> normalize(a,1)
+julia> norm(b)
+1.0
+
+julia> c = normalize(a, 1)
 3-element Array{Float64,1}:
  0.142857
  0.285714
  0.571429
+
+julia> norm(c, 1)
+1.0
 ```
 """
 function normalize(v::AbstractVector, p::Real = 2)

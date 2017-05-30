@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 @test convert(Tuple, (1,2)) == (1,2)
 @testset "indexing" begin
@@ -65,8 +65,14 @@ end
 @test eltype((1,2,3)) === Int
 @test eltype((1.0,2.0,3.0)) <: AbstractFloat
 @test eltype((true, false)) === Bool
-@test eltype((1,2.0, false)) === Any
+@test eltype((1, 2.0, false)) === typejoin(Int, Float64, Bool)
 @test eltype(()) === Union{}
+@test eltype(Tuple{Int, Float64, Vararg{Bool}}) === typejoin(Int, Float64, Bool)
+@test eltype(Tuple{Int, T, Vararg{Bool}} where T <: AbstractFloat) ===
+    typejoin(Int, AbstractFloat, Bool)
+@test eltype(Tuple{Int, Bool, Vararg{T}} where T <: AbstractFloat) ===
+    typejoin(Int, AbstractFloat, Bool)
+@test eltype(Union{Tuple{Int, Float64}, Tuple{Vararg{Bool}}}) === typejoin(Int, Float64, Bool)
 
 begin
     local foo
@@ -90,14 +96,17 @@ begin
     @test map(foo, (1,2), (1,2)) === (2,4)
     @test map(foo, (1,2,3,4), (1,2,3,4)) === (2,4,6,8)
     @test map(foo, longtuple, longtuple) === ntuple(i->2i,20)
+    @test_throws BoundsError map(foo, (), (1,))
+    @test_throws BoundsError map(foo, (1,), ())
 
     # n arguments
     @test map(foo, (), (), ()) === ()
-    @test map(foo, (), (1,2,3), (1,2,3)) === ()
     @test map(foo, (1,), (1,), (1,)) === (3,)
     @test map(foo, (1,2), (1,2), (1,2)) === (3,6)
     @test map(foo, (1,2,3,4), (1,2,3,4), (1,2,3,4)) === (3,6,9,12)
     @test map(foo, longtuple, longtuple, longtuple) === ntuple(i->3i,20)
+    @test_throws BoundsError map(foo, (), (1,), (1,))
+    @test_throws BoundsError map(foo, (1,), (1,), ())
 end
 
 ## comparison ##
@@ -159,6 +168,8 @@ end
 @test @inferred(ntuple(abs2, Val{4})) == (1, 4, 9, 16)
 @test @inferred(ntuple(abs2, Val{5})) == (1, 4, 9, 16, 25)
 @test @inferred(ntuple(abs2, Val{6})) == (1, 4, 9, 16, 25, 36)
+# issue #21697
+@test_throws ArgumentError ntuple(abs2, Val{-1})
 
 # issue #12854
 @test_throws TypeError ntuple(identity, Val{1:2})
@@ -170,6 +181,8 @@ for n = 0:20
         @test t[i] == i
     end
 end
+# issue #21697
+@test_throws ArgumentError ntuple(identity, -1)
 
 # issue #19719
 @test_throws BoundsError (1,2,3)[falses(4)]
@@ -235,4 +248,15 @@ end
 @testset "Multidimensional indexing (issue #20453)" begin
     @test_throws MethodError (1,)[]
     @test_throws MethodError (1,1,1)[1,1]
+end
+
+@testset "ambiguity between tuple constructors #20990" begin
+    Tuple16Int = Tuple{Int,Int,Int,Int,Int,Int,Int,Int,Int,Int,Int,Int,Int,Int,Int,Int}
+    tuple16int = (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
+    @test Tuple16Int(tuple16int) isa Tuple16Int
+end
+
+# PR #21446
+for n = 0:15
+    @test ntuple(identity, Val{n}) == ntuple(identity, n)
 end
