@@ -2,14 +2,16 @@
 
 # Factorials
 
-const _fact_table64 = Int64[1]
+const _fact_table64 = Vector{Int64}(20)
+_fact_table64[1] = 1
 for n in 2:20
-    push!(_fact_table64, _fact_table64[end] * n)
+    _fact_table64[n] = _fact_table64[n-1] * n
 end
 
-const _fact_table128 = UInt128[1]
+const _fact_table128 = Vector{UInt128}(34)
+_fact_table128[1] = 1
 for n in 2:34
-    push!(_fact_table128, _fact_table128[end] * n)
+    _fact_table128[n] = _fact_table128[n-1] * n
 end
 
 function factorial_lookup(n::Integer, table, lim)
