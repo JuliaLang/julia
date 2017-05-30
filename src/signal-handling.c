@@ -3,8 +3,13 @@
 #include <stdlib.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <inttypes.h>
 #include "julia.h"
 #include "julia_internal.h"
+#ifndef _OS_WINDOWS_
+#include <unistd.h>
+#include <sys/mman.h>
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -88,11 +93,132 @@ JL_DLLEXPORT void jl_exit_on_sigint(int on)
     exit_on_sigint = on;
 }
 
+static uintptr_t jl_get_pc_from_ctx(const void *_ctx);
+void jl_show_sigill(void *_ctx);
+static size_t jl_safe_read_mem(const volatile char *ptr, char *out, size_t len)
+{
+    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_jmp_buf *old_buf = ptls->safe_restore;
+    jl_jmp_buf buf;
+    ptls->safe_restore = &buf;
+    volatile size_t i = 0;
+    if (!jl_setjmp(buf, 0)) {
+        for (;i < len;i++) {
+            out[i] = ptr[i];
+        }
+    }
+    ptls->safe_restore = old_buf;
+    return i;
+}
+
 #if defined(_WIN32)
 #include "signals-win.c"
 #else
 #include "signals-unix.c"
 #endif
+
+static uintptr_t jl_get_pc_from_ctx(const void *_ctx)
+{
+#if defined(_OS_LINUX_) && defined(_CPU_X86_64_)
+    return ((ucontext_t*)_ctx)->uc_mcontext.gregs[REG_RIP];
+#elif defined(_OS_FREEBSD_) && defined(_CPU_X86_64_)
+    return ((ucontext_t*)_ctx)->uc_mcontext.mc_rip;
+#elif defined(_OS_LINUX_) && defined(_CPU_X86_)
+    return ((ucontext_t*)_ctx)->uc_mcontext.gregs[REG_EIP];
+#elif defined(_OS_FREEBSD_) && defined(_CPU_X86_)
+    return ((ucontext_t*)_ctx)->uc_mcontext.mc_eip;
+#elif defined(_OS_DARWIN_)
+    return ((ucontext64_t*)_ctx)->uc_mcontext64->__ss.__rip;
+#elif defined(_OS_WINDOWS_) && defined(_CPU_X86_)
+    return ((CONTEXT*)_ctx)->Eip;
+#elif defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
+    return ((CONTEXT*)_ctx)->Rip;
+#elif defined(_OS_LINUX_) && defined(_CPU_AARCH64_)
+    return ((ucontext_t*)_ctx)->uc_mcontext.pc;
+#elif defined(_OS_LINUX_) && defined(_CPU_ARM_)
+    return ((ucontext_t*)_ctx)->uc_mcontext.arm_pc;
+#else
+    // TODO for PPC
+    return 0;
+#endif
+}
+
+void jl_show_sigill(void *_ctx)
+{
+    char *pc = (char*)jl_get_pc_from_ctx(_ctx);
+    // unsupported platform
+    if (!pc)
+        return;
+#if defined(_CPU_X86_64_) || defined(_CPU_X86_)
+    uint8_t inst[15]; // max length of x86 instruction
+    size_t len = jl_safe_read_mem(pc, (char*)inst, sizeof(inst));
+    // ud2
+    if (len >= 2 && inst[0] == 0x0f && inst[1] == 0x0b) {
+        jl_safe_printf("Unreachable reached at %p\n", (void*)pc);
+    }
+    else {
+        jl_safe_printf("Invalid instruction at %p: ", (void*)pc);
+        for (int i = 0;i < len;i++) {
+            if (i == 0) {
+                jl_safe_printf("0x%02" PRIx8, inst[i]);
+            }
+            else {
+                jl_safe_printf(", 0x%02" PRIx8, inst[i]);
+            }
+        }
+        jl_safe_printf("\n");
+    }
+#elif defined(_OS_LINUX_) && defined(_CPU_AARCH64_)
+    uint32_t inst = 0;
+    size_t len = jl_safe_read_mem(ptr, (char*)&inst, 4);
+    if (len < 4)
+        jl_safe_printf("Fault when reading instruction: %d bytes read\n". (int)len);
+    if (inst == 0xd4200020) { // brk #0x1
+        // The signal might actually be SIGTRAP instead, doesn't hurt to handle it here though.
+        jl_safe_printf("Unreachable reached at %p\n", pc);
+    }
+    else {
+        jl_safe_printf("Invalid instruction at %p: 0x%08" PRIx32 "\n", pc, inst);
+    }
+#elif defined(_OS_LINUX_) && defined(_CPU_ARM_)
+    ucontext_t *ctx = (ucontext_t*)_ctx;
+    if (ctx->uc_mcontext.arm_cpsr & (1 << 5)) {
+        // Thumb
+        uint16_t inst[2] = {0, 0};
+        size_t len = jl_safe_read_mem(ptr, (char*)&inst, 4);
+        if (len < 2)
+            jl_safe_printf("Fault when reading Thumb instruction: %d bytes read\n". (int)len);
+        // LLVM and GCC uses different code for the trap...
+        if (inst[0] == 0xdefe || inst[0] == 0xdeff) {
+            // The signal might actually be SIGTRAP instead, doesn't hurt to handle it here though.
+            jl_safe_printf("Unreachable reached in Thumb mode at %p: 0x%04" PRIx16 "\n",
+                           (void*)pc, inst[0]);
+        }
+        else {
+            jl_safe_printf("Invalid Thumb instruction at %p: 0x%04" PRIx16 ", 0x%04" PRIx16 "\n",
+                           (void*)pc, inst[0], inst[1]);
+        }
+    }
+    else {
+        uint32_t inst = 0;
+        size_t len = jl_safe_read_mem(ptr, (char*)&inst, 4);
+        if (len < 4)
+            jl_safe_printf("Fault when reading instruction: %d bytes read\n". (int)len);
+        // LLVM and GCC uses different code for the trap...
+        if (inst == 0xe7ffdefe || inst == 0xe7f000f0) {
+            // The signal might actually be SIGTRAP instead, doesn't hurt to handle it here though.
+            jl_safe_printf("Unreachable reached in ARM mode at %p: 0x%08" PRIx32 "\n",
+                           (void*)pc, inst);
+        }
+        else {
+            jl_safe_printf("Invalid ARM instruction at %p: 0x%08" PRIx32 "\n", (void*)pc, inst);
+        }
+    }
+#else
+    // TODO for PPC
+    (void)_ctx;
+#endif
+}
 
 // what to do on a critical error
 void jl_critical_error(int sig, bt_context_t *context, uintptr_t *bt_data, size_t *bt_size)
