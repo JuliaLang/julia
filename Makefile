@@ -186,6 +186,7 @@ $(build_private_libdir)/%.$(SHLIB_EXT): $(build_private_libdir)/%.o
 
 CORE_SRCS := $(addprefix $(JULIAHOME)/, \
 		base/boot.jl base/coreimg.jl \
+		base/docs/core.jl \
 		base/abstractarray.jl \
 		base/array.jl \
 		base/bool.jl \
