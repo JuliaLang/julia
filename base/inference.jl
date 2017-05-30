@@ -2437,7 +2437,7 @@ function typeinf_active(linfo::MethodInstance)
     for infstate in active
         infstate === nothing && continue
         infstate = infstate::InferenceState
-        if linfo === infstate.linfo
+        if linfo === infstate.linfo && infstate.cached
             return infstate
         end
     end
@@ -5478,7 +5478,8 @@ end
 # especially try to make sure any recursive and leaf functions have concrete signatures,
 # since we won't be able to specialize & infer them at runtime
 
-let fs = Any[typeinf_ext, typeinf_loop, typeinf_edge, occurs_outside_getfield, pure_eval_call]
+let fs = Any[typeinf_ext, typeinf_loop, typeinf_edge, occurs_outside_getfield, pure_eval_call],
+    world = ccall(:jl_get_world_counter, UInt, ())
     for x in t_ffunc_val
         push!(fs, x[3])
     end
@@ -5497,7 +5498,7 @@ let fs = Any[typeinf_ext, typeinf_loop, typeinf_edge, occurs_outside_getfield, p
                     typ[i] = typ[i].ub
                 end
             end
-            typeinf_type(m[3], Tuple{typ...}, m[2], true, InferenceParams(typemax(UInt)))
+            typeinf_type(m[3], Tuple{typ...}, m[2], true, InferenceParams(world))
         end
     end
 end
