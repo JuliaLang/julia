@@ -333,6 +333,12 @@ let padding = 4, low = big(4), high = big(2^20)
     @test hex(-high, padding) == "-100000"
 end
 
+# respect 0-padding on big(0)
+for f in (bin, oct, dec, hex)
+    @test f(big(0), 0) == ""
+end
+@test base(rand(2:62), big(0), 0) == ""
+
 @test isqrt(big(4)) == 2
 @test isqrt(big(5)) == 2
 
