@@ -39,7 +39,7 @@ function generic_lufact!(A::StridedMatrix{T}, ::Type{Val{Pivot}} = Val{true}) wh
             # find index max
             kp = k
             if Pivot
-                amax = real(zero(T))
+                amax = abs(zero(T))
                 for i = k:m
                     absi = abs(A[i,k])
                     if absi > amax
@@ -49,7 +49,7 @@ function generic_lufact!(A::StridedMatrix{T}, ::Type{Val{Pivot}} = Val{true}) wh
                 end
             end
             ipiv[k] = kp
-            if A[kp,k] != 0
+            if A[kp,k] != zero(T)
                 if k != kp
                     # Interchange
                     for i = 1:n
