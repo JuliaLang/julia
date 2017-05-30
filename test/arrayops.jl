@@ -2082,12 +2082,12 @@ struct F21666{T <: Base.TypeArithmetic}
     x::Float32
 end
 
+Base.TypeArithmetic(::Type{F21666{T}}) where {T} = T()
+Base.:+(x::F, y::F) where {F <: F21666} = F(x.x + y.x)
+Base.convert(::Type{Float64}, x::F21666) = Float64(x.x)
 @testset "Exactness of cumsum # 21666" begin
     # test that cumsum uses more stable algorithm
     # for types with unknown/rounding arithmetic
-    Base.TypeArithmetic(::Type{F21666{T}}) where {T} = T
-    Base.:+(x::F, y::F) where {F <: F21666} = F(x.x + y.x)
-    Base.convert(::Type{Float64}, x::F21666) = Float64(x.x)
     # we make v pretty large, because stable algorithm may have a large base case
     v = zeros(300); v[1] = 2; v[200:end] = eps(Float32)
 

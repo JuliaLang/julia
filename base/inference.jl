@@ -36,8 +36,6 @@ struct InferenceParams
     end
 end
 
-const UNION_SPLIT_MISMATCH_ERROR = false
-
 # alloc_elim_pass! relies on `Slot_AssignedOnce | Slot_UsedUndef` being
 # SSA. This should be true now but can break if we start to track conditional
 # constants. e.g.
@@ -1412,10 +1410,6 @@ function abstract_call_gf_by_type(f::ANY, atype::ANY, sv::InferenceState)
         add_mt_backedge(ftname.mt, argtype, sv)
         update_valid_age!(min_valid[1], max_valid[1], sv)
     end
-    if isempty(applicable)
-        # TODO: this is needed because type intersection is wrong in some cases
-        return Any
-    end
     #print("=> ", rettype, "\n")
     return rettype
 end
@@ -1579,13 +1573,6 @@ function return_type_tfunc(argtypes::ANY, vtypes::VarTable, sv::InferenceState)
                 if isa(af_argtype, DataType) && af_argtype <: Tuple
                     argtypes_vec = Any[aft, af_argtype.parameters...]
                     astype = argtypes_to_type(argtypes_vec)
-                    if !(aft ⊑ Builtin) &&
-                        _methods_by_ftype(astype, 0, sv.params.world,
-                                          UInt[typemin(UInt)], UInt[typemax(UInt)]) !== false
-                        # return_type returns Bottom if no methods match, even though
-                        # inference doesn't necessarily.
-                        return Const(Bottom)
-                    end
                     if isa(aft, Const)
                         rt = abstract_call(aft.val, (), argtypes_vec, vtypes, sv)
                     elseif isconstType(aft)
@@ -3590,7 +3577,7 @@ function invoke_NF(argexprs, etype::ANY, atypes, sv, atype_unlimited::ANY,
                             all = false
                         end
                     end
-                    if UNION_SPLIT_MISMATCH_ERROR && all
+                    if all
                         error_label === nothing && (error_label = genlabel(sv))
                         push!(stmts, GotoNode(error_label.label))
                     else
