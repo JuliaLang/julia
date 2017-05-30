@@ -575,27 +575,21 @@ oct(n::BigInt, pad::Int) = base( 8, n, pad)
 dec(n::BigInt, pad::Int) = base(10, n, pad)
 hex(n::BigInt, pad::Int) = base(16, n, pad)
 
-function base(b::Integer, n::BigInt)
-    b < 0 && return base(Int(b), n, 1, (b>0) & (n.size<0))
-    2 <= b <= 62 || throw(ArgumentError("base must be 2 ≤ base ≤ 62, got $b"))
-    nd = ndigits(n, b)
-    str = Base._string_n(n < 0 ? nd+1 : nd)
-    MPZ.get_str!(str, b, n)
-end
-
-function base(b::Integer, n::BigInt, pad::Integer)
+function base(b::Integer, n::BigInt, pad::Integer=1)
     b < 0 && return base(Int(b), n, pad, (b>0) & (n.size<0))
-    s = base(b, n)
-    buf = IOBuffer()
-    if n < 0
-        s = s[2:end]
-        write(buf, '-')
+    2 <= b <= 62 || throw(ArgumentError("base must be 2 ≤ base ≤ 62, got $b"))
+    nd1 = ndigits(n, b)
+    nd  = max(nd1, pad)
+    str = Base._string_n(nd + isneg(n) + 1) # +1 for final '\0'
+    ptr = pointer(str)
+    MPZ.get_str!(ptr + nd - nd1, b, n)
+    for i = (0:nd-nd1-1) + isneg(n)
+        unsafe_store!(ptr+i, '0' % UInt8)
     end
-    for i in 1:pad-sizeof(s) # `s` is known to be ASCII, and `length` is slower
-        write(buf, '0')
-    end
-    write(buf, s)
-    String(buf)
+    isneg(n) && unsafe_store!(ptr, '-' % UInt8)
+    str.len -= 1 # final '\0'
+    iszero(n) && pad < 1 && (str.len -= 1)
+    str
 end
 
 function ndigits0zpb(x::BigInt, b::Integer)
