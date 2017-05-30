@@ -2963,10 +2963,10 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
                   (Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &uplo, &size(A,1), A, &lda, info)
             chkargsok(info[])
-            #info[1]>0 means the leading minor of order info[i] is not positive definite
+            #info[] > 0 means the leading minor of order info[] is not positive definite
             #ordinarily, throw Exception here, but return error code here
             #this simplifies isposdef! and factorize
-            return A, info[]
+            return A, info[] # info stored in Cholesky
         end
 
         #       SUBROUTINE DPOTRI( UPLO, N, A, LDA, INFO )
