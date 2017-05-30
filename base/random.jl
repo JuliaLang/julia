@@ -257,11 +257,22 @@ globalRNG() = GLOBAL_RNG
 Pick a random element or array of random elements from the set of values specified by `S`; `S` can be
 
 * an indexable collection (for example `1:n` or `['x','y','z']`), or
+* a `Dict`, a `Set` or an `IntSet`, or
 * a type: the set of values to pick from is then equivalent to `typemin(S):typemax(S)` for
   integers (this is not applicable to [`BigInt`](@ref)), and to ``[0, 1)`` for floating
   point numbers;
 
 `S` defaults to [`Float64`](@ref).
+
+```julia-repl
+julia> rand(Int, 2)
+2-element Array{Int64,1}:
+ 1339893410598768192
+ 1575814717733606317
+
+julia> rand(MersenneTwister(0), Dict(1=>2, 3=>4))
+1=>2
+```
 """
 @inline rand() = rand(GLOBAL_RNG, CloseOpen)
 @inline rand(T::Type) = rand(GLOBAL_RNG, T)
@@ -276,7 +287,7 @@ rand(r::AbstractArray) = rand(GLOBAL_RNG, r)
 """
     rand!([rng=GLOBAL_RNG], A, [coll])
 
-Populate the array `A` with random values. If the indexable collection `coll` is specified,
+Populate the array `A` with random values. If the collection `coll` is specified,
 the values are picked randomly from `coll`. This is equivalent to `copy!(A, rand(rng, coll, size(A)))`
 or `copy!(A, rand(rng, eltype(A), size(A)))` but without allocating a new array.
 """
@@ -339,18 +350,32 @@ function rand(r::AbstractRNG, ::Type{Char})
     (c < 0xd800) ? Char(c) : Char(c+0x800)
 end
 
-# random values from Dict or Set (for efficiency)
+# random values from Dict, Set, IntSet (for efficiency)
 function rand(r::AbstractRNG, t::Dict)
-    isempty(t) && throw(ArgumentError("dict must be non-empty"))
-    n = length(t.slots)
+    isempty(t) && throw(ArgumentError("collection must be non-empty"))
+    rg = RangeGenerator(1:length(t.slots))
     while true
-        i = rand(r, 1:n)
-        Base.isslotfilled(t, i) && return (t.keys[i] => t.vals[i])
+        i = rand(r, rg)
+        Base.isslotfilled(t, i) && @inbounds return (t.keys[i] => t.vals[i])
     end
 end
 rand(t::Dict) = rand(GLOBAL_RNG, t)
 rand(r::AbstractRNG, s::Set) = rand(r, s.dict).first
 rand(s::Set) = rand(GLOBAL_RNG, s)
+
+function rand(r::AbstractRNG, s::IntSet)
+    isempty(s) && throw(ArgumentError("collection must be non-empty"))
+    # s can be empty while s.bits is not, so we cannot rely on the
+    # length check in RangeGenerator below
+    rg = RangeGenerator(1:length(s.bits))
+    while true
+        n = rand(r, rg)
+        @inbounds b = s.bits[n]
+        b && return n
+    end
+end
+
+rand(s::IntSet) = rand(GLOBAL_RNG, s)
 
 ## Arrays of random numbers
 
@@ -369,6 +394,22 @@ function rand!{T}(r::AbstractRNG, A::AbstractArray{T})
     end
     A
 end
+
+function rand!(r::AbstractRNG, A::AbstractArray, s::Union{Dict,Set,IntSet})
+    for i in eachindex(A)
+        @inbounds A[i] = rand(r, s)
+    end
+    A
+end
+
+rand!(A::AbstractArray, s::Union{Dict,Set,IntSet}) = rand!(GLOBAL_RNG, A, s)
+
+rand(r::AbstractRNG, s::Dict{K,V}, dims::Dims) where {K,V} = rand!(r, Array{Pair{K,V}}(dims), s)
+rand(r::AbstractRNG, s::Set{T}, dims::Dims) where {T} = rand!(r, Array{T}(dims), s)
+rand(r::AbstractRNG, s::IntSet, dims::Dims) = rand!(r, Array{Int}(dims), s)
+rand(r::AbstractRNG, s::Union{Dict,Set,IntSet}, dims::Integer...) = rand(r, s, convert(Dims, dims))
+rand(s::Union{Dict,Set,IntSet}, dims::Integer...) = rand(GLOBAL_RNG, s, dims)
+rand(s::Union{Dict,Set,IntSet}, dims::Dims) = rand(GLOBAL_RNG, s, dims)
 
 # MersenneTwister
 
