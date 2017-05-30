@@ -88,6 +88,8 @@ void __cdecl crt_sig_handler(int sig, int num)
     default: // SIGSEGV, (SSIGTERM, IGILL)
         memset(&Context, 0, sizeof(Context));
         RtlCaptureContext(&Context);
+        if (sig == SIGILL)
+            jl_show_sigill(&Context);
         jl_critical_error(sig, &Context, ptls->bt_data, &ptls->bt_size);
         raise(sig);
     }
@@ -225,6 +227,10 @@ static LONG WINAPI _exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo,
                         ExceptionInfo->ContextRecord,in_ctx);
                     return EXCEPTION_CONTINUE_EXECUTION;
                 }
+        }
+        if (ExceptionInfo->ExceptionRecord->ExceptionCode == EXCEPTION_ILLEGAL_INSTRUCTION) {
+            jl_safe_printf("\n");
+            jl_show_sigill(ExceptionInfo->ContextRecord);
         }
         jl_safe_printf("\nPlease submit a bug report with steps to reproduce this fault, and any error messages that follow (in their entirety). Thanks.\nException: ");
         switch (ExceptionInfo->ExceptionRecord->ExceptionCode) {
