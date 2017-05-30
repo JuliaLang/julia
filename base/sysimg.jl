@@ -292,6 +292,9 @@ big(n::Integer) = convert(BigInt,n)
 big(x::AbstractFloat) = convert(BigFloat,x)
 big(q::Rational) = big(numerator(q))//big(denominator(q))
 
+# IEEE 754-2008 Decimal Floating Point types
+include("decfp.jl")
+
 include("combinatorics.jl")
 
 # more hashing definitions
