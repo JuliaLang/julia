@@ -613,7 +613,7 @@
 (define (eventually-call ex)
   (and (pair? ex)
        (or (eq? (car ex) 'call)
-           (and (eq? (car ex) 'where)
+           (and (or (eq? (car ex) 'where) (eq? (car ex) '|::|))
                 (eventually-call (cadr ex))))))
 
 ;; insert line/file for short-form function defs, otherwise leave alone
