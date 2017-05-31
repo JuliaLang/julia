@@ -319,8 +319,9 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()])
                    1:100                   => Int,
                    rand(Int, 100)          => Int,
                    Int                     => Int,
-                   Float64                 => Float64]
-
+                   Float64                 => Float64,
+                   "qwèrtï"                => Char,
+                   GenericString("qwèrtï") => Char]
     b2 = big(2)
     u3 = UInt(3)
     for f in [rand, randn, randexp]
@@ -346,10 +347,13 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()])
         a0 = rand(rng..., C)                  ::T
         a1 = rand(rng..., C, 5)               ::Vector{T}
         a2 = rand(rng..., C, 2, 3)            ::Array{T, 2}
-        a3 = rand(rng..., C, b2, u3)          ::Array{T, 2}
-        a4 = rand!(rng..., Array{T}(5), C)    ::Vector{T}
-        a5 = rand!(rng..., Array{T}(2, 3), C) ::Array{T, 2}
-        for a in [a0, a1..., a2..., a3..., a4..., a5...]
+        a3 = rand(rng..., C, (2, 3))          ::Array{T, 2}
+        a4 = rand(rng..., C, b2, u3)          ::Array{T, 2}
+        a5 = rand!(rng..., Array{T}(5), C)    ::Vector{T}
+        a6 = rand!(rng..., Array{T}(2, 3), C) ::Array{T, 2}
+        @test size(a1) == (5,)
+        @test size(a2) == size(a3) == (2, 3)
+        for a in [a0, a1..., a2..., a3..., a4..., a5..., a6...]
             if C isa Type
                 @test a isa C
             else

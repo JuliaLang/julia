@@ -256,8 +256,9 @@ globalRNG() = GLOBAL_RNG
 
 Pick a random element or array of random elements from the set of values specified by `S`; `S` can be
 
-* an indexable collection (for example `1:n` or `['x','y','z']`), or
-* an `Associative` or `AbstractSet` object, or
+* an indexable collection (for example `1:n` or `['x','y','z']`),
+* an `Associative` or `AbstractSet` object,
+* a string (considered as a collection of characters),
 * a type: the set of values to pick from is then equivalent to `typemin(S):typemax(S)` for
   integers (this is not applicable to [`BigInt`](@ref)), and to ``[0, 1)`` for floating
   point numbers;
@@ -708,6 +709,44 @@ end
 
 rand(rng::AbstractRNG, r::AbstractArray{T}, dims::Dims) where {T} = rand!(rng, Array{T}(dims), r)
 rand(rng::AbstractRNG, r::AbstractArray, dims::Integer...) = rand(rng, r, convert(Dims, dims))
+
+# rand from a string
+
+rand(rng::AbstractRNG, s::AbstractString) = rand_iter(rng, s, Base.iteratorsize(s))
+rand(s::AbstractString) = rand(GLOBAL_RNG, s)
+
+## optimization for String
+
+isvalid_unsafe(s::String, i) = !Base.is_valid_continuation(unsafe_load(pointer(s), i))
+
+function rand(rng::AbstractRNG, s::String)
+    rg = Base.Random.RangeGenerator(1:s.len)
+    while true
+        pos = rand(Base.Random.GLOBAL_RNG, rg)
+        isvalid_unsafe(s, pos) && return s[pos]
+    end
+end
+
+## rand from an iterator
+
+rand_iter(rng, s, ::Base.IteratorSize) = throw(ArgumentError("iterator must have a known length"))
+
+function rand_iter(rng::AbstractRNG, s, ::Union{Base.HasShape,Base.HasLength})::eltype(s)
+    pos = rand(rng, 1:length(s))
+    for (i, c) in enumerate(s)
+        i == pos && return c
+    end
+end
+
+## rand from a string for arrays
+# we use collect(str), which is most of the time more efficient than specialized methods
+# (except maybe for very small arrays)
+rand!(rng::AbstractRNG, A::AbstractArray, str::AbstractString) = rand!(rng, A, collect(str))
+rand!(A::AbstractArray, str::AbstractString) = rand!(GLOBAL_RNG, A, str)
+rand(rng::AbstractRNG, str::AbstractString, dims::Dims) = rand!(rng, Array{eltype(str)}(dims), str)
+rand(rng::AbstractRNG, str::AbstractString, d1::Integer, dims::Integer...) = rand(rng, str, convert(Dims, tuple(d1, dims...)))
+rand(str::AbstractString, dims::Dims) = rand(GLOBAL_RNG, str, dims)
+rand(str::AbstractString, d1::Integer, dims::Integer...) = rand(GLOBAL_RNG, str, d1, dims...)
 
 ## random BitArrays (AbstractRNG)
 
