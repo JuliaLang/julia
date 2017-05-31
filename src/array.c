@@ -755,14 +755,17 @@ STATIC_INLINE void jl_array_grow_at_end(jl_array_t *a, size_t idx,
     size_t elsz = a->elsize;
     char *data = (char*)a->data;
     int has_gap = n > idx;
-    if (__unlikely((n + inc) > a->maxsize - a->offset)) {
+    size_t reqmaxsize = a->offset + n + inc;
+    if (__unlikely(reqmaxsize > a->maxsize)) {
         size_t nb1 = idx * elsz;
         size_t nbinc = inc * elsz;
-        size_t newlen = a->maxsize == 0 ? (inc < 4 ? 4 : inc) : a->maxsize * 2;
-        while ((n + inc) > newlen - a->offset)
-            newlen *= 2;
-        newlen = limit_overallocation(a, n, newlen, inc);
-        int newbuf = array_resize_buffer(a, newlen);
+        // if the requested size is more than 2x current maxsize, grow exactly
+        // otherwise double the maxsize
+        size_t newmaxsize = reqmaxsize >= a->maxsize * 2
+                          ? (reqmaxsize < 4 ? 4 : reqmaxsize)
+                          : a->maxsize * 2;
+        newmaxsize = limit_overallocation(a, n, newmaxsize, inc);
+        int newbuf = array_resize_buffer(a, newmaxsize);
         char *newdata = (char*)a->data + a->offset * elsz;
         if (newbuf) {
             memcpy(newdata, data, nb1);
