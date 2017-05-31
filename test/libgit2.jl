@@ -1628,6 +1628,7 @@ mktempdir() do dir
 
             loopback = ip"127.0.0.1"
             for hostname in hostnames
+                local addr
                 try
                     addr = getaddrinfo(hostname)
                 catch

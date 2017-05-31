@@ -2501,7 +2501,7 @@
 ;; 3. variables assigned inside this scope-block that don't exist in outer
 ;;    scopes
 ;; returns lambdas in the form (lambda (args...) (locals...) body)
-(define (resolve-scopes- e env implicitglobals lam renames newlam)
+(define (resolve-scopes- e env outerglobals implicitglobals lam renames newlam)
   (cond ((symbol? e) (let ((r (assq e renames)))
                        (if r (cdr r) e))) ;; return the renaming for e, or e
         ((or (not (pair? e)) (quoted? e) (memq (car e) '(toplevel global))) e)
@@ -2512,10 +2512,11 @@
          (let* ((lv (lam:vars e))
                 (env (append lv env))
                 (body (resolve-scopes- (lam:body e) env
-                                       ;; don't propagate implicit globals
-                                       ;; issue #7234
+                                       ;; don't propagate implicit or outer globals
+                                       '()
                                        '()
                                        e
+                                       ;; remove renames corresponding to local variables from the environment
                                        (filter (lambda (ren) (not (memq (car ren) lv)))
                                                renames)
                                        #t)))
@@ -2523,17 +2524,16 @@
         ((eq? (car e) 'scope-block)
          (let* ((blok (cadr e)) ;; body of scope-block expression
                 (other-locals (if lam (caddr lam) '())) ;; locals that are explicitly part of containing lambda expression
-                (iglo (find-decls 'implicit-global blok)) ;; implicitly defined globals used in blok
+                (iglo (find-decls 'implicit-global blok)) ;; globals defined implicitly outside blok
                 (glob (diff (find-global-decls blok) iglo)) ;; all globals declared in blok
                 (vars-def (check-dups (find-local-def-decls blok) '()))
                 (locals-declared (check-dups (find-local-decls blok) vars-def))
-                (locals-implicit (diff (implicit-locals
-                                         blok
-                                         ;; being declared global prevents a variable
-                                         ;; assignment from introducing a local
-                                         (append env glob implicitglobals iglo)
-                                         (append glob iglo))
-                                       vars-def))
+                (locals-implicit (implicit-locals
+                                   blok
+                                   ;; being declared global prevents a variable
+                                   ;; assignment from introducing a local
+                                   (append env glob iglo outerglobals locals-declared vars-def)
+                                   (append glob iglo)))
                 (vars (delete-duplicates (append! locals-declared locals-implicit)))
                 (all-vars (append vars vars-def))
                 (need-rename?
@@ -2552,26 +2552,22 @@
                 (renamed (map named-gensy need-rename))
                 (renamed-def (map named-gensy need-rename-def))
                 (new-env (append all-vars glob env)) ;; all variables declared in or outside blok
-                (new-iglo-table ;; initial list of implicit globals from outside blok which aren't part of the local vars
-                  (let ((tab (table)))
-                    (for-each (lambda (v) (if (not (memq v all-vars)) (put! tab v #t))) iglo)
-                    (for-each (lambda (v) (if (not (memq v all-vars)) (put! tab v #t))) implicitglobals)
-                    tab))
-                (new-iglo (table.keys ;; compute list of all globals used implicitly in blok
-                            (unbound-vars blok
-                                          new-env ;; list of everything else
-                                          new-iglo-table)))
+                ;; compute list of all globals used implicitly in blok (need renames)
+                (new-iglo (table.keys (unbound-vars blok
+                                                    new-env ;; list of everything else
+                                                    (table))))
                 ;; combine the list of new renamings with the inherited list
                 (new-renames (append (map cons need-rename renamed) ;; map from definition name -> gensym name
                                      (map cons need-rename-def renamed-def)
                                      (map (lambda (g) (cons g `(outerref ,g))) new-iglo)
                                      (filter (lambda (ren) ;; old renames list, with anything in vars removed
-                                               (not (or (memq (car ren) all-vars)
-                                                        (memq (car ren) iglo)
-                                                        (memq (car ren) implicitglobals)
-                                                        (memq (car ren) glob))))
+                                               (let ((var (car ren)))
+                                                 (not (or (memq var all-vars) ;; remove anything new
+                                                          (memq var implicitglobals) ;; remove anything only added implicitly in the last scope block
+                                                          (memq var glob))))) ;; remove anything that's now global
                                              renames)))
-                (body (resolve-scopes- blok new-env new-iglo lam new-renames #f))
+                (new-oglo (append iglo outerglobals)) ;; list of all outer-globals from outside blok
+                (body (resolve-scopes- blok new-env new-oglo new-iglo lam new-renames #f))
                 (real-new-vars (append (diff vars need-rename) renamed))
                 (real-new-vars-def (append (diff vars-def need-rename-def) renamed-def)))
                (for-each (lambda (v)
@@ -2591,18 +2587,18 @@
          (error "module expression not at top level"))
         ((eq? (car e) 'break-block)
          `(break-block ,(cadr e) ;; ignore type symbol of break-block expression
-                       ,(resolve-scopes- (caddr e) env implicitglobals lam renames #f))) ;; body of break-block expression
+                       ,(resolve-scopes- (caddr e) env outerglobals implicitglobals lam renames #f))) ;; body of break-block expression
         ((eq? (car e) 'with-static-parameters)
          `(with-static-parameters ;; ignore list of sparams in break-block expression
-            ,(resolve-scopes- (cadr e) env implicitglobals lam renames #f)
+            ,(resolve-scopes- (cadr e) env outerglobals implicitglobals lam renames #f)
             ,@(cddr e))) ;; body of break-block expression
         (else
          (cons (car e)
                (map (lambda (x)
-                      (resolve-scopes- x env implicitglobals lam renames #f))
+                      (resolve-scopes- x env outerglobals implicitglobals lam renames #f))
                     (cdr e))))))
 
-(define (resolve-scopes e) (resolve-scopes- e '() '() #f '() #f))
+(define (resolve-scopes e) (resolve-scopes- e '() '() '() #f '() #f))
 
 ;; pass 3: analyze variables
 
