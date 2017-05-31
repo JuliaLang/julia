@@ -34,9 +34,17 @@ convert(::Type{Tuple{Vararg{T}}}, x::Tuple) where {T} = cnvt_all(T, x...)
 cnvt_all(T) = ()
 cnvt_all(T, x, rest...) = tuple(convert(T,x), cnvt_all(T, rest...)...)
 
+# test whether an assignment LHS is a function definition
+function eventually_call(ex)
+    isa(ex, Expr) && (ex.head === :call ||
+                      ((ex.head === :where || ex.head === :(::)) &&
+                       eventually_call(ex.args[1])))
+end
+
 macro generated(f)
     isa(f, Expr) || error("invalid syntax; @generated must be used with a function definition")
-    if f.head === :function || (isdefined(:length) && f.head === :(=) && length(f.args) == 2 && f.args[1].head == :call)
+    if f.head === :function || (isdefined(:length) && f.head === :(=) && length(f.args) == 2 &&
+                                eventually_call(f.args[1]))
         f.head = :stagedfunction
         return Expr(:escape, f)
     else

@@ -762,6 +762,22 @@ end
 let ex = expand(:(@M16096.iter))
     @test !(isa(ex,Expr) && ex.head === :error)
 end
+macro f16096()
+    quote
+        g16096($(esc(:x))) = 2x
+    end
+end
+let g = @f16096
+    @test g(3) == 6
+end
+macro f16096_2()
+    quote
+        g16096_2(;$(esc(:x))=2) = 2x
+    end
+end
+let g = @f16096_2
+    @test g() == 4
+end
 
 # issue #15838
 module A15838
@@ -1187,3 +1203,7 @@ module Test21607
         x
     end === 1.0
 end
+
+# issue #19351
+# adding return type decl should not affect parse of function body
+@test :(t(abc) = 3).args[2] == :(t(abc)::Int = 3).args[2]
