@@ -170,9 +170,9 @@ void jl_show_sigill(void *_ctx)
     }
 #elif defined(_OS_LINUX_) && defined(_CPU_AARCH64_)
     uint32_t inst = 0;
-    size_t len = jl_safe_read_mem(ptr, (char*)&inst, 4);
+    size_t len = jl_safe_read_mem(pc, (char*)&inst, 4);
     if (len < 4)
-        jl_safe_printf("Fault when reading instruction: %d bytes read\n". (int)len);
+        jl_safe_printf("Fault when reading instruction: %d bytes read\n", (int)len);
     if (inst == 0xd4200020) { // brk #0x1
         // The signal might actually be SIGTRAP instead, doesn't hurt to handle it here though.
         jl_safe_printf("Unreachable reached at %p\n", pc);
@@ -185,9 +185,9 @@ void jl_show_sigill(void *_ctx)
     if (ctx->uc_mcontext.arm_cpsr & (1 << 5)) {
         // Thumb
         uint16_t inst[2] = {0, 0};
-        size_t len = jl_safe_read_mem(ptr, (char*)&inst, 4);
+        size_t len = jl_safe_read_mem(pc, (char*)&inst, 4);
         if (len < 2)
-            jl_safe_printf("Fault when reading Thumb instruction: %d bytes read\n". (int)len);
+            jl_safe_printf("Fault when reading Thumb instruction: %d bytes read\n", (int)len);
         // LLVM and GCC uses different code for the trap...
         if (inst[0] == 0xdefe || inst[0] == 0xdeff) {
             // The signal might actually be SIGTRAP instead, doesn't hurt to handle it here though.
@@ -201,9 +201,9 @@ void jl_show_sigill(void *_ctx)
     }
     else {
         uint32_t inst = 0;
-        size_t len = jl_safe_read_mem(ptr, (char*)&inst, 4);
+        size_t len = jl_safe_read_mem(pc, (char*)&inst, 4);
         if (len < 4)
-            jl_safe_printf("Fault when reading instruction: %d bytes read\n". (int)len);
+            jl_safe_printf("Fault when reading instruction: %d bytes read\n", (int)len);
         // LLVM and GCC uses different code for the trap...
         if (inst == 0xe7ffdefe || inst == 0xe7f000f0) {
             // The signal might actually be SIGTRAP instead, doesn't hurt to handle it here though.
