@@ -15,10 +15,6 @@ SVD(U::AbstractArray{T}, S::Vector{Tr}, Vt::AbstractArray{T}) where {T,Tr} = SVD
 
 `svdfact!` is the same as [`svdfact`](@ref), but saves space by
 overwriting the input `A`, instead of creating a copy.
-
-If `thin=true` (default), a thin SVD is returned. For a ``M \\times N`` matrix
-`A`, `U` is ``M \\times M`` for a full SVD (`thin=false`) and
-``M \\times \\min(M, N)`` for a thin SVD.
 """
 function svdfact!(A::StridedMatrix{T}; thin::Bool=true) where T<:BlasFloat
     m,n = size(A)
@@ -38,6 +34,7 @@ Compute the singular value decomposition (SVD) of `A` and return an `SVD` object
 `U`, `S`, `V` and `Vt` can be obtained from the factorization `F` with `F[:U]`,
 `F[:S]`, `F[:V]` and `F[:Vt]`, such that `A = U*diagm(S)*Vt`.
 The algorithm produces `Vt` and hence `Vt` is more efficient to extract than `V`.
+The singular values in `S` are sorted in descending order.
 
 If `thin=true` (default), a thin SVD is returned. For a ``M \\times N`` matrix
 `A`, `U` is ``M \\times M`` for a full SVD (`thin=false`) and
@@ -74,7 +71,7 @@ svdfact(x::Integer; thin::Bool=true) = svdfact(float(x), thin=thin)
     svd(A, thin::Bool=true) -> U, S, V
 
 Computes the SVD of `A`, returning `U`, vector `S`, and `V` such that
-`A == U*diagm(S)*V'`.
+`A == U*diagm(S)*V'`. The singular values in `S` are sorted in descending order.
 
 If `thin=true` (default), a thin SVD is returned. For a ``M \\times N`` matrix
 `A`, `U` is ``M \\times M`` for a full SVD (`thin=false`) and
@@ -136,7 +133,7 @@ svdvals(A::AbstractMatrix{<:BlasFloat}) = svdvals!(copy(A))
 """
     svdvals(A)
 
-Returns the singular values of `A`.
+Returns the singular values of `A` in descending order.
 
 # Example
 
