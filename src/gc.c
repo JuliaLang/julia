@@ -971,7 +971,8 @@ int jl_gc_classify_pools(size_t sz, size_t alignment, int *osize)
         return -1;
     size_t allocsz = sz + sizeof(jl_taggedvalue_t);
     size_t alignsz = jl_gc_alignsz(allocsz, alignment);
-    int klass = jl_gc_szclass(alignsz);
+    int klass = jl_gc_szclass(alignsz, alignment);
+    assert(klass != -1);
     *osize = jl_gc_sizeclasses[klass];
     return (int)(intptr_t)(&((jl_ptls_t)0)->heap.norm_pools[klass]);
 }

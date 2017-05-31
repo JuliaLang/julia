@@ -187,30 +187,18 @@ STATIC_INLINE int JL_CONST_FUNC jl_gc_alignsz(size_t sz, size_t alignment)
 }
 
 // Use jl_gc_alignsz to obtain the right sz.
-STATIC_INLINE int JL_CONST_FUNC jl_gc_szclass(size_t sz)
+STATIC_INLINE int JL_CONST_FUNC jl_gc_szclass(size_t sz, size_t alignment)
 {
-    // Check that the object fits in the largest pool.
-    assert(sz <= GC_MAX_SZCLASS + sizeof(jl_taggedvalue_t));
-#ifdef _P64
-    if (sz <=    8)
-        return 0;
-    const int N = 0;
-#elif defined(_CPU_ARM_) || defined(_CPU_PPC_)
-    if (sz <=    8)
-        return (sz + 3) / 4 - 1;
-    const int N = 1;
-#else
-    if (sz <=   12)
-        return (sz + 3) / 4 - 1;
-    const int N = 2;
-#endif
-    if (sz <=  256)
-        return (sz + 15) / 16 + N;
-    if (sz <=  496)
-        return 16 - 16376 / 4 / LLT_ALIGN(sz, 16 * 4) + 16 + N;
-    if (sz <= 1008)
-        return 16 - 16376 / 2 / LLT_ALIGN(sz, 16 * 2) + 24 + N;
-    return     16 - 16376 / 1 / LLT_ALIGN(sz, 16 * 1) + 32 + N;
+    size_t klass = 0;
+    while (klass < JL_GC_N_POOLS) {
+        size_t osize = jl_gc_sizeclasses[klass];
+        if (sz <= osize) {
+            if (alignment == 1 || alignment == 0 || osize % alignment == 0)
+                return klass;
+        }
+        klass++;
+    }
+    return -1;
 }
 
 #ifdef __GNUC__
@@ -225,9 +213,10 @@ STATIC_INLINE jl_value_t *jl_gc_alloc_(jl_ptls_t ptls, size_t sz, size_t alignme
     if (allocsz < sz) // overflow in adding offs, size was "negative"
         jl_throw(jl_memory_exception);
     const size_t alignsz = jl_gc_alignsz(allocsz, alignment);
+    const int klass = jl_gc_szclass(alignsz, alignment);
     jl_value_t *v;
-    if (alignsz <= GC_MAX_SZCLASS + sizeof(jl_taggedvalue_t)) {
-        int pool_id = jl_gc_szclass(alignsz);
+    if (klass != -1 && alignsz <= GC_MAX_SZCLASS + sizeof(jl_taggedvalue_t)) {
+        int pool_id = klass;
         jl_gc_pool_t *p = &ptls->heap.norm_pools[pool_id];
         int osize;
         if (jl_is_constexpr(alignsz)) {
