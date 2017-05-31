@@ -400,6 +400,12 @@ Library improvements
     that dimension's length will be computed such that its product with all the other dimensions is equal
     to the length of the original array ([#19919]).
 
+  * The new `to_indices` function provides a uniform interface for index conversions,
+    taking an array and a tuple of indices as arguments and returning a tuple of
+    integers and/or arrays of supported scalar indices. It will throw an `ArgumentError`
+    for any unsupported indices, and the returned arrays should be iterated over (and
+    not indexed into) to support more efficient linear indexing ([#19730]).
+
   * A new `titlecase` function was added, to capitalize the first character of each word within a string ([#19469]).
 
   * `any` and `all` now always short-circuit, and `mapreduce` never short-circuits ([#19543]).
