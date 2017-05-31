@@ -838,3 +838,8 @@ f21771(::Val{U}) where {U} = Tuple{g21771(U)}
 
 # missing method should be inferred as Union{}, ref https://github.com/JuliaLang/julia/issues/20033#issuecomment-282228948
 @test Base.return_types(f -> f(1), (typeof((x::String) -> x),)) == Any[Union{}]
+
+# issue #21653
+# ensure that we don't try to resolve cycles using uncached edges
+f21653() = f21653()
+@test code_typed(f21653, Tuple{}, optimize=false)[1] isa Pair{CodeInfo, typeof(Union{})}
