@@ -445,3 +445,42 @@ end
     # Ensure that no overflow occurs when using Int32 literals: Int32(10)^10
     @test Dates.parse_components("." * rpad(999, 10, '0'), Dates.DateFormat(".s")) == [Dates.Millisecond(999)]
 end
+
+# Time Parsing
+let
+    time_tuple(t::Dates.Time) = (
+        Dates.hour(t), Dates.minute(t), Dates.second(t),
+        Dates.millisecond(t), Dates.microsecond(t), Dates.nanosecond(t)
+    )
+
+    ## default ISOTimeFormat
+    t = Dates.Time("01")
+    @test time_tuple(t) == (1, 0, 0, 0, 0, 0)
+    t = Dates.Time("01:23")
+    @test time_tuple(t) == (1, 23, 0, 0, 0, 0)
+    t = Dates.Time("01:23:45")
+    @test time_tuple(t) == (1, 23, 45, 0, 0, 0)
+    t = Dates.Time("01:23:45.678")
+    @test time_tuple(t) == (1, 23, 45, 678, 0, 0)
+
+    ## string format
+    t = Dates.Time("23:56:12.1", "HH:MM:SS.s")
+    @test time_tuple(t) == (23, 56, 12, 100, 0, 0)
+
+    ## precomputed DateFormat
+    t = Dates.Time("04:09:45.012", DateFormat("HH:MM:SS.s"))
+    @test time_tuple(t) == (4, 9, 45, 12, 0, 0)
+    t = Dates.Time("21 07", DateFormat("HH MM"))
+    @test time_tuple(t) == (21, 7, 0, 0, 0, 0)
+    t = Dates.Time("4.02", DateFormat("H.MM"))
+    @test time_tuple(t) == (4, 2, 0, 0, 0, 0)
+    t = Dates.Time("1725", DateFormat("HHMM"))
+    @test time_tuple(t) == (17, 25, 0, 0, 0, 0)
+
+    ## exceptions
+    @test_throws ArgumentError Dates.Time("24:00")  # invalid hours
+    @test_throws ArgumentError Dates.Time("00:60")  # invalid minutes
+    @test_throws ArgumentError Dates.Time("00:00:60")  # invalid seconds
+    @test_throws ArgumentError Dates.Time("20:03:20", DateFormat("HH:MM"))  # too much precision
+    @test_throws ArgumentError Dates.Time("10:33:51", DateFormat("YYYY-MM-DD HH:MM:SS"))  # Time can't hold year/month/day
+end

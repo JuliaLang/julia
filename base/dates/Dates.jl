@@ -78,6 +78,6 @@ export Period, DatePeriod, TimePeriod,
        firstdayofquarter, lastdayofquarter,
        adjust, tonext, toprev, tofirst, tolast,
        # io.jl
-       ISODateTimeFormat, ISODateFormat, DateFormat, RFC1123Format, @dateformat_str
+       ISODateTimeFormat, ISODateFormat, ISOTimeFormat, DateFormat, RFC1123Format, @dateformat_str
 
 end # module
