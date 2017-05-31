@@ -1620,10 +1620,8 @@ Base.show(io::IO, u::UUID) = write(io, Base.repr(u))
 # return a random string (often useful for temporary filenames/dirnames)
 let b = UInt8['0':'9';'A':'Z';'a':'z']
     global randstring
-    randstring(r::AbstractRNG, n::Int) = String(b[rand(r, 1:length(b), n)])
-    randstring(r::AbstractRNG) = randstring(r,8)
-    randstring(n::Int) = randstring(GLOBAL_RNG, n)
-    randstring() = randstring(GLOBAL_RNG)
+    randstring(r::AbstractRNG, n::Int=8) = String(rand(r, b, n))
+    randstring(n::Int=8) = randstring(GLOBAL_RNG, n)
 end
 
 
