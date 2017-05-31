@@ -17,7 +17,7 @@ export
 # Disable 128-bit types on 32-bit Intel sytems due to LLVM problems;
 # see <https://github.com/JuliaLang/julia/issues/14818> (fixed on LLVM 3.9)
 # 128-bit atomics do not exist on AArch32.
-if (VersionNumber(Base.libllvm_version) < v"3.9-" && ARCH === :i686) ||
+if (Base.libllvm_version < v"3.9-" && ARCH === :i686) ||
         startswith(string(ARCH), "arm")
     const inttypes = (Int8, Int16, Int32, Int64,
                       UInt8, UInt16, UInt32, UInt64)
@@ -330,8 +330,8 @@ alignment(::Type{T}) where {T} = ccall(:jl_alignment, Cint, (Csize_t,), sizeof(T
 for typ in atomictypes
     lt = llvmtypes[typ]
     ilt = llvmtypes[inttype(typ)]
-    rt = VersionNumber(Base.libllvm_version) >= v"3.6" ? "$lt, $lt*" : "$lt*"
-    irt = VersionNumber(Base.libllvm_version) >= v"3.6" ? "$ilt, $ilt*" : "$ilt*"
+    rt = Base.libllvm_version >= v"3.6" ? "$lt, $lt*" : "$lt*"
+    irt = Base.libllvm_version >= v"3.6" ? "$ilt, $ilt*" : "$ilt*"
     if VersionNumber(Base.libllvm_version) >= v"3.8"
         @eval getindex(x::Atomic{$typ}) =
             llvmcall($"""
