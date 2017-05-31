@@ -1618,12 +1618,25 @@ end
 Base.show(io::IO, u::UUID) = write(io, Base.repr(u))
 
 # return a random string (often useful for temporary filenames/dirnames)
+
 let b = UInt8['0':'9';'A':'Z';'a':'z']
     global randstring
-    randstring(r::AbstractRNG, n::Int=8) = String(rand(r, b, n))
-    randstring(n::Int=8) = randstring(GLOBAL_RNG, n)
+    randstring(r::AbstractRNG, chars::AbstractArray{<:Union{UInt8,Char}}=b, n::Int=8) =
+        String(rand(r, chars, n))
+    randstring(r::AbstractRNG, n::Int) = randstring(r, b, n)
+    randstring(chars::AbstractArray{<:Union{UInt8,Char}}=b, n::Int=8) = randstring(GLOBAL_RNG, chars, n)
+    randstring(n::Int) = randstring(GLOBAL_RNG, b, n)
 end
 
+"""
+    randstring([rng=GLOBAL_RNG], [chars::AbstractArray{<:Union{UInt8,Char}}], [len=8])
+
+Create a random ASCII string of length `len`, consisting of characters
+from `chars` if specified, and of upper- and lower-case letters and
+the digits 0-9 otherwise. The optional `rng` argument specifies a
+random number generator, see [Random Numbers](@ref).
+"""
+randstring
 
 # Fill S (resized as needed) with a random subsequence of A, where
 # each element of A is included in S with independent probability p.
