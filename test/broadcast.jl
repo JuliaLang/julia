@@ -430,8 +430,8 @@ Base.Broadcast.promote_containertype(::Type{Array19745}, ct)                 = A
 Base.Broadcast.promote_containertype(::Type{Array}, ::Type{Array19745})      = Array19745
 Base.Broadcast.promote_containertype(ct, ::Type{Array19745})                 = Array19745
 
-Base.Broadcast.broadcast_indices(::Type{Array19745}, A)      = indices(A)
-Base.Broadcast.broadcast_indices(::Type{Array19745}, A::Ref) = ()
+Base.Broadcast._broadcast_indices(::Type{Array19745}, A)      = indices(A)
+Base.Broadcast._broadcast_indices(::Type{Array19745}, A::Ref) = ()
 
 getfield19745(x::Array19745) = x.data
 getfield19745(x)             = x
@@ -520,3 +520,6 @@ let t = (0, 1, 2)
     o = 1
     @test @inferred(broadcast(+, t, o)) == (1, 2, 3)
 end
+
+# issue #22130
+@test convert.(Any, [1, 2]) == [1, 2]
