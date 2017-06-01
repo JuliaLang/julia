@@ -173,7 +173,7 @@ static const int jl_gc_sizeclasses[JL_GC_N_POOLS] = {
 //    64,   32,  160,   64,   16,   64,  112,  128, bytes lost
 };
 
-STATIC_INLINE int JL_CONST_FUNC jl_gc_alignsz(size_t sz, size_t alignment)
+STATIC_INLINE size_t JL_CONST_FUNC jl_gc_alignsz(size_t sz, size_t alignment)
 {
     // The pools are aligned with JL_HEAP_ALIGNMENT and no bigger alignment is possible.
     assert(alignment <= JL_HEAP_ALIGNMENT);
@@ -213,6 +213,7 @@ STATIC_INLINE jl_value_t *jl_gc_alloc_(jl_ptls_t ptls, size_t sz, size_t alignme
     if (allocsz < sz) // overflow in adding offs, size was "negative"
         jl_throw(jl_memory_exception);
     const size_t alignsz = jl_gc_alignsz(allocsz, alignment);
+    assert(alignsz >= allocsz);
     const int klass = jl_gc_szclass(alignsz, alignment);
     jl_value_t *v;
     if (klass != -1 && alignsz <= GC_MAX_SZCLASS + sizeof(jl_taggedvalue_t)) {
