@@ -1412,6 +1412,27 @@ global v4 = v3
 @test remotecall_fetch(()->isdefined(Main, :v3), id_other)
 @test remotecall_fetch(()->isdefined(Main, :v4), id_other)
 
+# Global references to Types and Modules should work if they are locally defined
+global v5 = Int
+global v6 = Base.Distributed
+@test remotecall_fetch(()->v5, id_other) === Int
+@test remotecall_fetch(()->v6, id_other) === Base.Distributed
+
+struct FooStructLocal end
+module FooModLocal end
+v5 = FooStructLocal
+v6 = FooModLocal
+@test_throws RemoteException remotecall_fetch(()->v5, id_other)
+@test_throws RemoteException remotecall_fetch(()->v6, id_other)
+
+@everywhere struct FooStructEverywhere end
+@everywhere module FooModEverywhere end
+v5 = FooStructEverywhere
+v6 = FooModEverywhere
+@test remotecall_fetch(()->v5, id_other) === FooStructEverywhere
+@test remotecall_fetch(()->v6, id_other) === FooModEverywhere
+
+
 # Test that a global is not being repeatedly serialized when
 # a) referenced multiple times in the closure
 # b) hash value has not changed.
