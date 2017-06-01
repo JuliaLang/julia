@@ -225,7 +225,8 @@ STATIC_INLINE jl_value_t *jl_gc_alloc_(jl_ptls_t ptls, size_t sz, size_t alignme
         else {
             osize = p->osize;
         }
-        assert((size_t)osize >= alignment && osize % alignment == 0);
+        assert((size_t)osize >= alignment &&
+               (alignment == 0 || alignment == 1 || osize % alignment == 0));
         v = jl_gc_pool_alloc(ptls, (char*)p - (char*)ptls, osize);
     }
     else {
