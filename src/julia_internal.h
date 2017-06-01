@@ -135,7 +135,7 @@ void *jl_gc_perm_alloc(size_t sz, int zero, unsigned align, unsigned offset);
 #define JL_SMALL_BYTE_ALIGNMENT 16
 #define JL_CACHE_BYTE_ALIGNMENT 64
 // JL_HEAP_ALIGNMENT is the maximum alignment that the GC can provide
-#define JL_HEAP_ALIGNMENT JL_SMALL_BYTE_ALIGNMENT
+#define JL_HEAP_ALIGNMENT JL_CACHE_BYTE_ALIGNMENT
 #define GC_MAX_SZCLASS (2032-sizeof(void*))
 
 // pools are 16376 bytes large (GC_POOL_SZ - GC_PAGE_OFFSET)
