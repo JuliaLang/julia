@@ -695,15 +695,12 @@ dot(x::AbstractVector, y::AbstractVector) = vecdot(x, y)
 ###########################################################################################
 
 """
-    rank(M[, tol::Real])
+    rank(M[, abstol::Real,reltol::Real])
 
 Compute the rank of a matrix by counting how many singular
 values of `M` have magnitude greater than `tol`.
 By default, the value of `tol` is the largest
-dimension of `M` multiplied by the [`eps`](@ref)
-of the [`eltype`](@ref) of `M`.
-"""
-rank(A::AbstractMatrix, tol::Real) = mapreduce(x -> x > tol, +, 0, svdvals(A))
+
 function rank(A::AbstractMatrix)
     m,n = size(A)
     (m == 0 || n == 0) && return 0
