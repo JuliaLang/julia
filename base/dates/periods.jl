@@ -443,8 +443,8 @@ Base.promote_rule(::Type{Year}, ::Type{Month}) = Month
 (==)(x::FixedPeriod, y::OtherPeriod) = throw(MethodError(==, (x, y)))
 (==)(x::OtherPeriod, y::FixedPeriod) = throw(MethodError(==, (x, y)))
 
-Base.isless(x::FixedPeriod, y::OtherPeriod) = throw(MethodError(isless, (x, y)))
-Base.isless(x::OtherPeriod, y::FixedPeriod) = throw(MethodError(isless, (x, y)))
+Base.isless(x::FixedPeriod, y::OtherPeriod) = false
+Base.isless(x::OtherPeriod, y::FixedPeriod) = false
 
 # truncating conversions to milliseconds and days:
 toms(c::Nanosecond)  = div(value(c), 1000000)

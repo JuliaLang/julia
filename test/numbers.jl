@@ -1181,9 +1181,9 @@ for A = real_types, B = real_types
     @test typeof(Complex(convert(A,2),convert(B,3))) <: Complex{T}
 end
 
-# comparison should fail on complex
-@test_throws MethodError complex(1,2) > 0
-@test_throws MethodError complex(1,2) > complex(0,0)
+# comparison should not fail on complex
+@test !(complex(1,2) > 0)
+@test !(complex(1,2) > complex(0,0))
 
 # div, fld, cld, rem, mod
 for yr = Any[
