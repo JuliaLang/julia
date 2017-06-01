@@ -476,7 +476,8 @@ parses as:
 ```
 (if a (block (line 2) b)
     (block (line 3) (if c (block (line 4) d)
-                        (block (line 5) e (line 6) f))))
+                             (block (line 5) e
+                                    (line 6) f))))
 ```
 
 A `while` loop parses as `(while condition body)`.
@@ -499,9 +500,10 @@ end
 parses as:
 
 ```
-(function (call (curly f T) (parameters (kw k 1))
-                (:: x T))
-          (block (line 2 file.jl) (return (call + x 1))))
+(function (where (call f (parameters (kw k 1))
+                       (:: x T))
+                 T)
+          (block (line 2) (return (call + x 1))))
 ```
 
 Type definition:
@@ -515,8 +517,8 @@ end
 parses as:
 
 ```
-(type #t (curly Foo (<: T S))
-      (block (line 2 none) (:: x T)))
+(type true (curly Foo (<: T S))
+      (block (line 2) (:: x T)))
 ```
 
 The first argument is a boolean telling whether the type is mutable.
