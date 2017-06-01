@@ -224,3 +224,7 @@ g10178(x) = f10178(x)
 end
 g10178(x) = f10178(x)
 @test g10178(5) == 10
+
+# issue #22135
+@generated f22135(x::T) where T = x
+@test f22135(1) === Int
