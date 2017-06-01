@@ -39,7 +39,7 @@ function Base.show(io::IO, sig::Signature)
     print(io, "Name: ", sig.name, ", ")
     print(io, "Email: ", sig.email, ", ")
     print(io, "Time: ", Dates.unix2datetime(sig.time + 60*sig.time_offset))
-    @printf(io, "%+03i:%02i", divrem(sig.time_offset,60)...)
+    @printf(io, "%+03i:%02i", divrem(sig.time_offset, 60)...)
 end
 
 """Return signature object. Free it after use."""
