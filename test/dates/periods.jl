@@ -394,3 +394,24 @@ cpa = [1y + 1s 1m + 1s 1w + 1s 1d + 1s; 1h + 1s 1mi + 1s 2m + 1s 1s + 1ms]
 
 @test [1y + 1s 1m + 1s; 1w + 1s 1d + 1s] + [1y + 1h 1y + 1mi; 1y + 1s 1y + 1ms] == [2y + 1h + 1s 1y + 1m + 1mi + 1s; 1y + 1w + 2s 1y + 1d + 1s + 1ms]
 @test [1y + 1s 1m + 1s; 1w + 1s 1d + 1s] - [1y + 1h 1y + 1mi; 1y + 1s 1y + 1ms] == [1s-1h 1m + 1s-1y-1mi; 1w-1y 1d + 1s-1y-1ms]
+
+# Equality and hashing between FixedPeriod types
+let types = (Dates.Week, Dates.Day, Dates.Hour, Dates.Minute,
+             Dates.Second, Dates.Millisecond, Dates.Microsecond, Dates.Nanosecond)
+    for i in 1:length(types), j in i:length(types), x in (0, 1, 235, -4677, 15250)
+        T = types[i]
+        U = types[j]
+        y = T(x)
+        z = convert(U, y)
+        @test y == z
+        @test hash(y) == hash(z)
+    end
+end
+
+# Equality and hashing between OtherPeriod types
+for x in (0, 1, 235, -4677, 15250)
+    y = Dates.Year(x)
+    z = convert(Dates.Month, y)
+    @test y == z
+    @test hash(y) == hash(z)
+end
