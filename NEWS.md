@@ -242,6 +242,9 @@ This section lists changes that do not have deprecation warnings.
      special 1×n-sized `AbstractMatrix`), not a `Matrix`, etc. In particular, for
      `v::AbstractVector` we now have `(v.').' === v` and `v.' * v` is a scalar ([#19670]).
 
+  * The outer product of two vectors can be taken by `*(::AbstractVector, ::RowVector)`.
+    The ability to multiply vectors by 1xN matrices has been removed in favor of this.
+
   * Parametric types with "unspecified" parameters, such as `Array`, are now represented
     as `UnionAll` types instead of `DataType`s ([#18457]).
 
