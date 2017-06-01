@@ -539,6 +539,21 @@ end
 @test a[2](10) == 12
 @test a[3](10) == 13
 
+# issue #22032
+let a = [], fs = []
+    for f() in 1:3
+        push!(a, f())
+        push!(fs, f)
+    end
+    @test a == [1,2,3]
+    @test [f() for f in fs] == [1,2,3]
+end
+let t = (22,33)
+    (g(), x) = t
+    @test g() == 22
+    @test x == 33
+end
+
 # issue #21900
 f21900_cnt = 0
 function f21900()
@@ -5018,3 +5033,65 @@ for i in 1:10
     @test ptr1 === ptr2
     @test ptr1 % 16 == 0
 end
+
+# issue #21581
+global function f21581()::Int
+    return 2.0
+end
+@test f21581() === 2
+global g21581()::Int = 2.0
+@test g21581() === 2
+module M21581
+macro bar()
+    :(foo21581(x)::Int = x)
+end
+M21581.@bar
+end
+@test M21581.foo21581(1) === 1
+
+module N21581
+macro foo(var)
+    quote
+        function f(x::T = 1) where T
+            ($(esc(var)), x)
+        end
+        f()
+    end
+end
+end
+let x = 8
+    @test @N21581.foo(x) === (8, 1)
+end
+
+# issue #22122
+let
+    global @inline function f22122(x::T) where {T}
+        T
+    end
+end
+@test f22122(1) === Int
+
+# issue #22026
+module M22026
+
+macro foo(TYP)
+    quote
+        global foofunction
+        foofunction(x::Type{T}) where {T<:Number} = x
+    end
+end
+struct Foo end
+@foo Foo
+
+macro foo2()
+    quote
+        global foofunction2
+        (foofunction2(x::T)::Float32) where {T<:Number} = 2x
+    end
+end
+
+@foo2
+
+end
+@test M22026.foofunction(Int16) === Int16
+@test M22026.foofunction2(3) === 6.0f0

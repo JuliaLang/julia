@@ -828,18 +828,18 @@
   (pattern-replace
    (pattern-set
     ;; definitions without `where`
-    (pattern-lambda (function       (call name . sig) body)
+    (pattern-lambda (function       (-$ (call name . sig) (|::| (call name . sig) _t)) body)
                     (ctor-def (car __) name Tname params bounds sig ctor-body body #f))
-    (pattern-lambda (stagedfunction (call name . sig) body)
+    (pattern-lambda (stagedfunction (-$ (call name . sig) (|::| (call name . sig) _t)) body)
                     (ctor-def (car __) name Tname params bounds sig ctor-body body #f))
-    (pattern-lambda (= (call name . sig) body)
+    (pattern-lambda (= (-$ (call name . sig) (|::| (call name . sig) _t)) body)
                     (ctor-def 'function name Tname params bounds sig ctor-body body #f))
     ;; definitions with `where`
-    (pattern-lambda (function       (where (call name . sig) . wheres) body)
+    (pattern-lambda (function       (where (-$ (call name . sig) (|::| (call name . sig) _t)) . wheres) body)
                     (ctor-def (car __) name Tname params bounds sig ctor-body body wheres))
-    (pattern-lambda (stagedfunction (where (call name . sig) . wheres) body)
+    (pattern-lambda (stagedfunction (where (-$ (call name . sig) (|::| (call name . sig) _t)) . wheres) body)
                     (ctor-def (car __) name Tname params bounds sig ctor-body body wheres))
-    (pattern-lambda (= (where (call name . sig) . wheres) body)
+    (pattern-lambda (= (where (-$ (call name . sig) (|::| (call name . sig) _t)) . wheres) body)
                     (ctor-def 'function name Tname params bounds sig ctor-body body wheres)))
 
    ;; flatten `where`s first
@@ -1329,10 +1329,13 @@
       e
       (expand-forms (expand-decls (car e) (cdr e) #f))))
 
+;; given a complex assignment LHS, return the symbol that will ultimately be assigned to
 (define (assigned-name e)
-  (if (and (pair? e) (memq (car e) '(call curly)))
-      (assigned-name (cadr e))
-      e))
+  (cond ((atom? e) e)
+        ((or (memq (car e) '(call curly where))
+             (and (eq? (car e) '|::|) (eventually-call e)))
+         (assigned-name (cadr e)))
+        (else e)))
 
 ;; local x, y=2, z => local x;local y;local z;y = 2
 (define (expand-decls what binds const?)
@@ -1404,8 +1407,16 @@
       ,@(let loop ((lhs lhss)
                    (i   1))
           (if (null? lhs) '((null))
-              (cons `(= ,(car lhs)
-                        (call (core getfield) ,t ,i))
+              (cons (if (eventually-call (car lhs))
+                        ;; if this is a function assignment, avoid putting our ssavalue
+                        ;; inside the function and instead create a capture-able variable.
+                        ;; issue #22032
+                        (let ((temp (gensy)))
+                          `(block
+                            (= ,temp (call (core getfield) ,t ,i))
+                            (= ,(car lhs) ,temp)))
+                        `(= ,(car lhs)
+                            (call (core getfield) ,t ,i)))
                     (loop (cdr lhs)
                           (+ i 1)))))
       ,t)))
@@ -2428,7 +2439,8 @@
         (else '())))
 
 (define (all-decl-vars e)  ;; map decl-var over every level of an assignment LHS
-  (cond ((decl? e)   (decl-var e))
+  (cond ((eventually-call e) e)
+        ((decl? e)   (decl-var e))
         ((and (pair? e) (eq? (car e) 'tuple))
          (cons 'tuple (map all-decl-vars (cdr e))))
         (else e)))

@@ -29,12 +29,10 @@ TODO:
 #  if defined(_CPU_X86_64_) || defined(_CPU_X86_)
 #    define JL_ELF_TLS_VARIANT 2
 #    define JL_ELF_TLS_INIT_SIZE 0
-#  endif
-#  if defined(_CPU_AARCH64_)
+#  elif defined(_CPU_AARCH64_)
 #    define JL_ELF_TLS_VARIANT 1
 #    define JL_ELF_TLS_INIT_SIZE 16
-#  endif
-#  if defined(__ARM_ARCH) && __ARM_ARCH >= 7
+#  elif defined(__ARM_ARCH) && __ARM_ARCH >= 7
 #    define JL_ELF_TLS_VARIANT 1
 #    define JL_ELF_TLS_INIT_SIZE 8
 #  endif

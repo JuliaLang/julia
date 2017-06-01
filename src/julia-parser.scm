@@ -676,7 +676,7 @@
 (define (eventually-call ex)
   (and (pair? ex)
        (or (eq? (car ex) 'call)
-           (and (eq? (car ex) 'where)
+           (and (or (eq? (car ex) 'where) (eq? (car ex) '|::|))
                 (eventually-call (cadr ex))))))
 
 (define (short-form-function-loc ex lno)
