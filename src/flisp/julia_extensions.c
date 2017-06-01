@@ -12,6 +12,11 @@
 extern "C" {
 #endif
 
+#define _equal_wchar_(x, y, ctx) ((x) == (y))
+#define _hash_wchar_(x, ctx) inthash((uint32_t) ((uintptr_t) (x)))
+#include "htable.inc"
+HTIMPL_R(wcharhash, _hash_wchar_, _equal_wchar_)
+
 static int is_uws(uint32_t wc)
 {
     return (wc==9 || wc==10 || wc==11 || wc==12 || wc==13 || wc==32 ||
@@ -134,15 +139,28 @@ JL_DLLEXPORT int jl_id_char(uint32_t wc)
     return 0;
 }
 
+#include "julia_opsuffs.h"
+
 // chars that can follow an operator (e.g. +) and be parsed as part of the operator
-JL_DLLEXPORT int jl_op_suffix_char(uint32_t wc)
+int jl_op_suffix_char(uint32_t wc)
 {
+    static htable_t jl_opsuffs;
+    if (!jl_opsuffs.size) { // initialize hash table of suffixes
+        size_t i, opsuffs_len = sizeof(opsuffs) / (sizeof(uint32_t));
+        htable_t *h = htable_new(&jl_opsuffs, opsuffs_len);
+        assert(sizeof(uint32_t) <= sizeof(void*));
+        for (i = 0; i < opsuffs_len; ++i) {
+            assert((void*)(uintptr_t)opsuffs[i] != HT_NOTFOUND);
+            wcharhash_put_r(h, (void*)((uintptr_t)opsuffs[i]), NULL, NULL);
+        }
+    }
     if (wc < 0xA1 || wc > 0x10ffff) return 0;
     utf8proc_category_t cat = utf8proc_category((utf8proc_int32_t) wc);
-    return (cat == UTF8PROC_CATEGORY_MN || cat == UTF8PROC_CATEGORY_MC ||
-            cat == UTF8PROC_CATEGORY_ME ||
-            // primes (single, double, triple, their reverses, and quadruple)
-            (wc >= 0x2032 && wc <= 0x2037) || (wc == 0x2057));
+    if (cat == UTF8PROC_CATEGORY_MN || cat == UTF8PROC_CATEGORY_MC ||
+        cat == UTF8PROC_CATEGORY_ME)
+        return 1;
+    // use hash table of other allowed characters: primes and sub/superscripts
+    return HT_NOTFOUND != wcharhash_get_r(&jl_opsuffs, (void*)((uintptr_t)wc), NULL);
 }
 
 value_t fl_julia_identifier_char(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
@@ -195,32 +213,25 @@ value_t fl_julia_strip_op_suffix(fl_context_t *fl_ctx, value_t *args, uint32_t n
 }
 
 #include "julia_charmap.h"
-#define _equal_wchar_(x, y, ctx) ((x) == (y))
-#define _hash_wchar_(x, ctx) inthash((uint32_t) ((uintptr_t) (x)))
-#include "htable.inc"
-HTIMPL_R(wcharhash, _hash_wchar_, _equal_wchar_)
 
-void jl_charmap_init(fl_context_t *fl_ctx)
+utf8proc_int32_t jl_charmap_map(utf8proc_int32_t c, void *ctx)
 {
-    size_t charmap_len = sizeof(charmap) / (2*sizeof(uint32_t));
-    size_t i;
-    htable_t *h = htable_new(&fl_ctx->jl_charmap, charmap_len);
-    assert(sizeof(uint32_t) <= sizeof(void*));
-    for (i = 0; i < charmap_len; ++i) {
-        /* Store charmap in a hash table.  Typecasting codepoints
-           directly to pointer keys works because pointers are at
-           least 32 bits on all Julia-supported systems, and because
-           we never map anything to U+0001 (since HT_NOTFOUND is (void*)1). */
-        assert((void*)(uintptr_t)charmap[i][1] != HT_NOTFOUND);
-        wcharhash_put_r(h, (void*)((uintptr_t)charmap[i][0]),
-                           (void*)((uintptr_t)charmap[i][1]), (void*)fl_ctx);
+    static htable_t jl_charmap;
+    if (!jl_charmap.size) { // initialize hash table
+        size_t i, charmap_len = sizeof(charmap) / (2*sizeof(uint32_t));
+        htable_t *h = htable_new(&jl_charmap, charmap_len);
+        assert(sizeof(uint32_t) <= sizeof(void*));
+        for (i = 0; i < charmap_len; ++i) {
+            /* Store charmap in a hash table.  Typecasting codepoints
+               directly to pointer keys works because pointers are at
+               least 32 bits on all Julia-supported systems, and because
+               we never map anything to U+0001 (since HT_NOTFOUND is (void*)1). */
+            assert((void*)(uintptr_t)charmap[i][1] != HT_NOTFOUND);
+            wcharhash_put_r(h, (void*)((uintptr_t)charmap[i][0]),
+                               (void*)((uintptr_t)charmap[i][1]), NULL);
+        }
     }
-}
-utf8proc_int32_t jl_charmap_map(utf8proc_int32_t c, void *fl_ctx_)
-{
-    fl_context_t *fl_ctx = (fl_context_t *) fl_ctx_;
-    htable_t *h = &fl_ctx->jl_charmap;
-    void *v = wcharhash_get_r(h, (void*)((uintptr_t)c), (void*) fl_ctx);
+    void *v = wcharhash_get_r(&jl_charmap, (void*)((uintptr_t)c), NULL);
     return v == HT_NOTFOUND ? c : (utf8proc_int32_t) ((uintptr_t) v);
 }
 
@@ -233,7 +244,7 @@ static char *normalize(fl_context_t *fl_ctx, char *s)
     ssize_t result;
     size_t newlen;
     result = utf8proc_decompose_custom((uint8_t*) s, 0, NULL, 0, (utf8proc_option_t)options,
-                                       jl_charmap_map, (void*) fl_ctx);
+                                       jl_charmap_map, NULL);
     if (result < 0) goto error;
     newlen = result * sizeof(int32_t) + 1;
     if (newlen > fl_ctx->jlbuflen) {
@@ -242,7 +253,7 @@ static char *normalize(fl_context_t *fl_ctx, char *s)
         if (!fl_ctx->jlbuf) lerror(fl_ctx, fl_ctx->OutOfMemoryError, "error allocating UTF8 buffer");
     }
     result = utf8proc_decompose_custom((uint8_t*)s,0, (int32_t*)fl_ctx->jlbuf,result, (utf8proc_option_t)options,
-                                       jl_charmap_map, (void*) fl_ctx);
+                                       jl_charmap_map, NULL);
     if (result < 0) goto error;
     result = utf8proc_reencode((int32_t*)fl_ctx->jlbuf,result, (utf8proc_option_t)options);
     if (result < 0) goto error;

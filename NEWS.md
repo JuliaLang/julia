@@ -8,8 +8,9 @@ New language features
     using the new `@isdefined variable` macro ([#TBD]).
 
  * Custom infix operators can now be defined by appending Unicode
-   combining marks and primes to other operators.  For example, `+̂″` is parsed
-   as an infix operator with the same precedence as `+` ([#22089]).
+   combining marks, primes, and sub/superscripts to other operators.
+   For example, `+̂ₐ″` is parsed as an infix operator with the same
+   precedence as `+` ([#22089]).
 
 Language changes
 ----------------

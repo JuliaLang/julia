@@ -1231,6 +1231,7 @@ end === (3, String)
 # operator suffixes
 @test parse("3 +̂ 4") == Expr(:call, :+̂, 3, 4)
 @test parse("3 +̂′ 4") == Expr(:call, :+̂′, 3, 4)
+@test parse("3 +⁽¹⁾ 4") == Expr(:call, :+⁽¹⁾, 3, 4)
 @test Base.operator_precedence(:+̂) == Base.operator_precedence(:+)
 
 # issue #19351

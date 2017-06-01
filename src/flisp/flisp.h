@@ -407,7 +407,6 @@ struct _fl_context_t {
     fltype_t *builtintype;
 
     htable_t equal_eq_hashtable;
-    htable_t jl_charmap;
 
     value_t tablesym;
     fltype_t *tabletype;
