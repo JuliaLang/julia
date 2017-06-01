@@ -917,6 +917,7 @@ function rem2pi(x::Int64, r::RoundingMode)
     fx == x || throw(ArgumentError("Int64 argument to rem2pi is too large: $x"))
     rem2pi(fx, r)
 end
+@vectorize_1arg Number mod2pi
 
 """
     mod2pi(x)

@@ -194,3 +194,4 @@ testModPi()
 @test mod2pi(355.0f0) ≈ 3.1416228f0
 @test mod2pi(Int64(2)^60) == mod2pi(2.0^60)
 @test_throws ArgumentError mod2pi(Int64(2)^60-1)
+@test_approx_eq maximum(abs(mod2pi(testCases[:,1]).-testCases[:,2])) 0.0
