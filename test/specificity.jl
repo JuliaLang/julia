@@ -142,3 +142,12 @@ f17016(f, t1::Tuple) = 1
 
 @test args_morespecific(Tuple{Type{CartesianIndex{N}}} where N,
                         Tuple{Type{CartesianIndex{N}},Vararg{Int,N}} where N)
+
+# issue #22164
+let A = Tuple{Type{D},D} where D<:Pair,
+    B = Tuple{Type{Any}, Any},
+    C = Tuple{Type{Pair}, Pair}
+    @test  args_morespecific(C, A)
+    @test !args_morespecific(A, B)
+    @test !args_morespecific(C, B)
+end
