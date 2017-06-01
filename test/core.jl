@@ -539,6 +539,21 @@ end
 @test a[2](10) == 12
 @test a[3](10) == 13
 
+# issue #22032
+let a = [], fs = []
+    for f() in 1:3
+        push!(a, f())
+        push!(fs, f)
+    end
+    @test a == [1,2,3]
+    @test [f() for f in fs] == [1,2,3]
+end
+let t = (22,33)
+    (g(), x) = t
+    @test g() == 22
+    @test x == 33
+end
+
 # issue #21900
 f21900_cnt = 0
 function f21900()

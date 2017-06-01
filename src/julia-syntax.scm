@@ -1404,8 +1404,16 @@
       ,@(let loop ((lhs lhss)
                    (i   1))
           (if (null? lhs) '((null))
-              (cons `(= ,(car lhs)
-                        (call (core getfield) ,t ,i))
+              (cons (if (eventually-call (car lhs))
+                        ;; if this is a function assignment, avoid putting our ssavalue
+                        ;; inside the function and instead create a capture-able variable.
+                        ;; issue #22032
+                        (let ((temp (gensy)))
+                          `(block
+                            (= ,temp (call (core getfield) ,t ,i))
+                            (= ,(car lhs) ,temp)))
+                        `(= ,(car lhs)
+                            (call (core getfield) ,t ,i)))
                     (loop (cdr lhs)
                           (+ i 1)))))
       ,t)))
