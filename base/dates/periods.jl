@@ -443,10 +443,20 @@ Base.promote_rule(::Type{Year}, ::Type{Month}) = Month
 (==)(x::FixedPeriod, y::OtherPeriod) = throw(MethodError(==, (x, y)))
 (==)(x::OtherPeriod, y::FixedPeriod) = throw(MethodError(==, (x, y)))
 
+const fixedperiod_seed = UInt === UInt64 ? 0x5b7fc751bba97516 : 0xeae0fdcb
+const otherperiod_seed = UInt === UInt64 ? 0xe1837356ff2d2ac9 : 0x170d1b00
+# tons() will overflow for periods longer than ~300,000 years, implying a hash collision
+# which is relatively harmless given how infrequent such periods should appear
+Base.hash(x::FixedPeriod, h::UInt) = hash(tons(x), h + fixedperiod_seed)
+# Overflow can also happen here for really long periods (~8e17 years)
+Base.hash(x::Year, h::UInt) = hash(12 * value(x), h + otherperiod_seed)
+Base.hash(x::Month, h::UInt) = hash(value(x), h + otherperiod_seed)
+
 Base.isless(x::FixedPeriod, y::OtherPeriod) = throw(MethodError(isless, (x, y)))
 Base.isless(x::OtherPeriod, y::FixedPeriod) = throw(MethodError(isless, (x, y)))
 
-# truncating conversions to milliseconds and days:
+# truncating conversions to milliseconds, nanoseconds and days:
+# overflow can happen for periods longer than ~300,000 years
 toms(c::Nanosecond)  = div(value(c), 1000000)
 toms(c::Microsecond) = div(value(c), 1000)
 toms(c::Millisecond) = value(c)
