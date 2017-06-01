@@ -89,8 +89,7 @@ function serialize(s::ClusterSerializer, g::GlobalRef)
     sym = g.name
     if g.mod === Main && isdefined(g.mod, sym)
         v = getfield(Main, sym)
-        if  !isa(v, DataType) && !isa(v, Module) &&
-            (binding_module(Main, sym) === Main) && (s.anonfunc_id != 0)
+         if (binding_module(Main, sym) === Main) && (s.anonfunc_id != 0)
             push!(get!(s.glbs_in_tnobj, s.anonfunc_id, []), sym)
         end
     end
