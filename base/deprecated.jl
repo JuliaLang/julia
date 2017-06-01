@@ -847,7 +847,9 @@ end
 @deprecate ~(B::BitArray) .~B
 
 function frexp(A::Array{<:AbstractFloat})
-    depwarn("`frexp(x::Array)` is discontinued.", :frexp)
+    depwarn(string("`frexp(x::Array)` is discontinued. Though not a direct replacement, ",
+                   "consider using dot-syntax to `broadcast` scalar `frexp` over `Array`s ",
+                   "instead, for example `frexp.(rand(4))`."), :frexp)
     F = similar(A)
     E = Array{Int}(size(A))
     for (iF, iE, iA) in zip(eachindex(F), eachindex(E), eachindex(A))
