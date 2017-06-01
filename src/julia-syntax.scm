@@ -924,7 +924,7 @@
          ,@(map (lambda (v) `(local ,v)) params)
          ,@(map (lambda (n v) (make-assignment n (bounds-to-TypeVar v))) params bounds)
          (struct_type ,name (call (core svec) ,@params)
-                      (call (core svec) ,@(map (lambda (x) `',x) field-names))
+                      (call (core svec) ,@(map quotify field-names))
                       ,super (call (core svec) ,@field-types) ,mut ,min-initialized)))
        ;; "inner" constructors
        (scope-block
@@ -1920,6 +1920,76 @@
               (extract (cdr params) (cons p newparams) whereparams)))))
   (extract (cddr e) '() '()))
 
+(define (named-tuple-expr names values)
+  `(call (curly (core NamedTuple) (tuple ,@names))
+         (tuple ,@values)))
+
+(define (lower-named-tuple lst)
+  (let* ((names (apply append
+                       (map (lambda (x)
+                              (cond #;((symbol? x) (list x))
+                                    ((and (or (assignment? x) (kwarg? x)) (symbol? (cadr x)))
+                                     (list (cadr x)))
+                                    #;((and (length= x 3) (eq? (car x) '|.|))
+                                     (list (cadr (caddr x))))
+                                    (else '())))
+                            lst)))
+         (dups (has-dups names)))
+    (if dups
+        (error (string "field name \"" (car dups) "\" repeated in named tuple"))))
+  (define (to-nt n v)
+    (if (null? n)
+        #f
+        (named-tuple-expr (reverse! (map quotify n)) (reverse v))))
+  (define (merge old new)
+    (if old
+        (if new
+            `(call (top merge) ,old ,new)
+            old)
+        new))
+  (let loop ((L             lst)
+             (current-names '())
+             (current-vals  '())
+             (expr          #f))
+    (if (null? L)
+        (merge expr (to-nt current-names current-vals))
+        (let ((el (car L)))
+          (cond ((or (assignment? el) (kwarg? el))
+                 (if (not (symbol? (cadr el)))
+                     (error (string "invalid named tuple field name \"" (deparse (cadr el)) "\"")))
+                 (loop (cdr L)
+                       (cons (cadr el) current-names)
+                       (cons (caddr el) current-vals)
+                       expr))
+#|
+                ((symbol? el)  ;; x  =>  x = x
+                 (loop (cdr L)
+                       (cons el current-names)
+                       (cons el current-vals)
+                       expr))
+                ((and (length= el 3) (eq? (car el) '|.|))  ;; a.x  =>  x = a.x
+                 (loop (cdr L)
+                       (cons (cadr (caddr el)) current-names)
+                       (cons el current-vals)
+                       expr))
+                ((and (length= el 4) (eq? (car el) 'call) (eq? (cadr el) '=>))
+                 (loop (cdr L)
+                       '()
+                       '()
+                       (merge (merge expr (to-nt current-names current-vals))
+                              (named-tuple-expr (list (caddr el)) (list (cadddr el))))))
+|#
+                ((vararg? el)
+                 (loop (cdr L)
+                       '()
+                       '()
+                       (let ((current (merge expr (to-nt current-names current-vals))))
+                         (if current
+                             (merge current (cadr el))
+                             `(call (top merge) (call (top NamedTuple)) ,(cadr el))))))
+                (else
+                 (error (string "invalid named tuple element \"" (deparse el) "\""))))))))
+
 (define (expand-forms e)
   (if (or (atom? e) (memq (car e) '(quote inert top core globalref outerref line module toplevel ssavalue null meta)))
       e
@@ -2246,11 +2316,16 @@
 
    'tuple
    (lambda (e)
-     (if (and (length> e 1) (pair? (cadr e)) (eq? (caadr e) 'parameters))
-         (error "unexpected semicolon in tuple"))
-     (if (any assignment? (cdr e))
-         (error "assignment not allowed inside tuple"))
-     (expand-forms `(call (core tuple) ,@(cdr e))))
+     (cond ((and (length> e 1) (pair? (cadr e)) (eq? (caadr e) 'parameters))
+            (error "unexpected semicolon in tuple")
+            ;; this enables `(; ...)` named tuple syntax
+            #;(if (length= e 2)
+                (expand-forms (lower-named-tuple (cdr (cadr e))))
+                (error "unexpected semicolon in tuple")))
+           ((any assignment? (cdr e))
+            (expand-forms (lower-named-tuple (cdr e))))
+           (else
+            (expand-forms `(call (core tuple) ,@(cdr e))))))
 
    '=>
    (lambda (e)
@@ -2861,7 +2936,7 @@ f(x) = yt(x)
         (body (global ,name) (const ,name)
               ,@(map (lambda (p n) `(= ,p (call (core TypeVar) ',n (core Any)))) P names)
               (struct_type ,name (call (core svec) ,@P)
-                           (call (core svec) ,@(map (lambda (v) `',v) fields))
+                           (call (core svec) ,@(map quotify fields))
                            ,super
                            (call (core svec) ,@types) false ,(length fields))
               (return (null))))))))
@@ -2871,7 +2946,7 @@ f(x) = yt(x)
             (() () 0 ())
             (body (global ,name) (const ,name)
                   (struct_type ,name (call (core svec))
-                               (call (core svec) ,@(map (lambda (v) `',v) fields))
+                               (call (core svec) ,@(map quotify fields))
                                ,super
                                (call (core svec) ,@(map (lambda (v) '(core Box)) fields))
                                false ,(length fields))
@@ -2888,7 +2963,7 @@ f(x) = yt(x)
 ;          (const ,name)
 ;          ,@(map (lambda (p n) `(= ,p (call (core TypeVar) ',n (core Any)))) P names)
 ;          (struct_type ,name (call (core svec) ,@P)
-;                       (call (core svec) ,@(map (lambda (v) `',v) fields))
+;                       (call (core svec) ,@(map quotify fields))
 ;                       ,super
 ;                       (call (core svec) ,@types) false ,(length fields)))))
 
@@ -2897,7 +2972,7 @@ f(x) = yt(x)
 ;  `((global ,name)
 ;    (const ,name)
 ;    (struct_type ,name (call (core svec))
-;                 (call (core svec) ,@(map (lambda (v) `',v) fields))
+;                 (call (core svec) ,@(map quotify fields))
 ;                 ,super
 ;                 (call (core svec) ,@(map (lambda (v) 'Any) fields))
 ;                 false ,(length fields))))

@@ -1001,6 +1001,22 @@ copy_dims_pair(out, dim::Colon, tail...) = copy_dims_pair(out => dim, tail...)
 @test Base.return_types(copy_dims_pair, (Tuple{}, Vararg{Union{Int,Colon}})) == Any[Tuple{}, Tuple{}, Tuple{}]
 @test all(m -> 5 < count_specializations(m) < 25, methods(copy_dims_pair))
 
+@test isdefined_tfunc(typeof(NamedTuple()), Const(0)) === Const(false)
+@test isdefined_tfunc(typeof(NamedTuple()), Const(1)) === Const(false)
+@test isdefined_tfunc(typeof((a=1,b=2)), Const(:a)) === Const(true)
+@test isdefined_tfunc(typeof((a=1,b=2)), Const(:b)) === Const(true)
+@test isdefined_tfunc(typeof((a=1,b=2)), Const(:c)) === Const(false)
+@test isdefined_tfunc(typeof((a=1,b=2)), Const(0)) === Const(false)
+@test isdefined_tfunc(typeof((a=1,b=2)), Const(1)) === Const(true)
+@test isdefined_tfunc(typeof((a=1,b=2)), Const(2)) === Const(true)
+@test isdefined_tfunc(typeof((a=1,b=2)), Const(3)) === Const(false)
+@test isdefined_tfunc(NamedTuple, Const(1)) == Bool
+@test isdefined_tfunc(NamedTuple, Symbol) == Bool
+@test Const(false) ⊑ isdefined_tfunc(NamedTuple{(:x,:y)}, Const(:z))
+@test Const(true) ⊑ isdefined_tfunc(NamedTuple{(:x,:y)}, Const(1))
+@test Const(false) ⊑ isdefined_tfunc(NamedTuple{(:x,:y)}, Const(3))
+@test Const(true) ⊑ isdefined_tfunc(NamedTuple{(:x,:y)}, Const(:y))
+
 # splatting an ::Any should still allow inference to use types of parameters preceding it
 f22364(::Int, ::Any...) = 0
 f22364(::String, ::Any...) = 0.0

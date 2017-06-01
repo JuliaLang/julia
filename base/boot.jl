@@ -120,7 +120,7 @@ export
     # key types
     Any, DataType, Vararg, ANY, NTuple,
     Tuple, Type, UnionAll, TypeName, TypeVar, Union, Void,
-    SimpleVector, AbstractArray, DenseArray,
+    SimpleVector, AbstractArray, DenseArray, NamedTuple,
     # special objects
     Function, CodeInfo, Method, MethodTable, TypeMapEntry, TypeMapLevel,
     Module, Symbol, Task, Array, WeakRef, VecElement,

@@ -1583,6 +1583,7 @@ static void jl_init_serializer2(int for_serialize)
                      jl_gotonode_type->name, jl_quotenode_type->name,
                      jl_globalref_type->name, jl_typeofbottom_type->name,
                      jl_string_type->name, jl_abstractstring_type->name,
+                     jl_namedtuple_type, jl_namedtuple_typename,
 
                      jl_int32_type, jl_int64_type, jl_bool_type, jl_uint8_type,
 
@@ -1649,6 +1650,7 @@ static void jl_init_serializer2(int for_serialize)
     arraylist_push(&builtin_typenames, ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_densearray_type))->name);
     arraylist_push(&builtin_typenames, jl_tuple_typename);
     arraylist_push(&builtin_typenames, jl_vararg_typename);
+    arraylist_push(&builtin_typenames, jl_namedtuple_typename);
 }
 
 static void jl_cleanup_serializer2(void)

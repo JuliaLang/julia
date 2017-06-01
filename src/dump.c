@@ -367,6 +367,7 @@ static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt)
     if (has_instance)
         jl_serialize_value(s, dt->instance);
     jl_serialize_value(s, dt->name);
+    jl_serialize_value(s, dt->names);
     jl_serialize_value(s, dt->parameters);
     jl_serialize_value(s, dt->super);
     jl_serialize_value(s, dt->types);
@@ -1245,6 +1246,8 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
     }
     dt->name = (jl_typename_t*)jl_deserialize_value(s, (jl_value_t**)&dt->name);
     jl_gc_wb(dt, dt->name);
+    dt->names = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&dt->names);
+    jl_gc_wb(dt, dt->names);
     dt->parameters = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&dt->parameters);
     jl_gc_wb(dt, dt->parameters);
     dt->super = (jl_datatype_t*)jl_deserialize_value(s, (jl_value_t**)&dt->super);
@@ -2804,7 +2807,6 @@ void jl_init_serializer(void)
                      jl_box_int32(30), jl_box_int32(31), jl_box_int32(32),
 #ifndef _P64
                      jl_box_int32(33), jl_box_int32(34), jl_box_int32(35),
-                     jl_box_int32(36), jl_box_int32(37),
 #endif
                      jl_box_int64(0), jl_box_int64(1), jl_box_int64(2),
                      jl_box_int64(3), jl_box_int64(4), jl_box_int64(5),
@@ -2819,7 +2821,6 @@ void jl_init_serializer(void)
                      jl_box_int64(30), jl_box_int64(31), jl_box_int64(32),
 #ifdef _P64
                      jl_box_int64(33), jl_box_int64(34), jl_box_int64(35),
-                     jl_box_int64(36), jl_box_int64(37),
 #endif
                      jl_labelnode_type, jl_linenumbernode_type, jl_gotonode_type,
                      jl_quotenode_type, jl_type_type, jl_bottom_type, jl_ref_type,
@@ -2845,7 +2846,8 @@ void jl_init_serializer(void)
                      jl_intrinsic_type->name, jl_task_type->name, jl_labelnode_type->name,
                      jl_linenumbernode_type->name, jl_builtin_type->name, jl_gotonode_type->name,
                      jl_quotenode_type->name, jl_globalref_type->name, jl_typeofbottom_type->name,
-                     jl_string_type->name, jl_abstractstring_type->name,
+                     jl_string_type->name, jl_abstractstring_type->name, jl_namedtuple_type,
+                     jl_namedtuple_typename,
 
                      ptls->root_task,
 
@@ -2883,6 +2885,7 @@ void jl_init_serializer(void)
     arraylist_push(&builtin_typenames, ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_densearray_type))->name);
     arraylist_push(&builtin_typenames, jl_tuple_typename);
     arraylist_push(&builtin_typenames, jl_vararg_typename);
+    arraylist_push(&builtin_typenames, jl_namedtuple_typename);
 }
 
 #ifdef __cplusplus
