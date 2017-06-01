@@ -129,6 +129,7 @@ makedocs(
     authors   = "The Julia Project",
     analytics = "UA-28835595-6",
     pages     = PAGES,
+    html_prettyurls = ("deploy" in ARGS),
 )
 
 if "deploy" in ARGS

@@ -8,7 +8,7 @@ JULIAHOME        := $(abspath $(SRCDIR)/..)
 include $(JULIAHOME)/Make.inc
 JULIA_EXECUTABLE := $(call spawn,$(build_bindir)/julia)
 
-.PHONY: help clean cleanall html pdf linkcheck doctest check deps
+.PHONY: help clean cleanall html pdf linkcheck doctest check deps deploy
 
 help:
 	@echo "Please use 'make <target>' where <target> is one of"
@@ -32,10 +32,10 @@ cleanall: clean
 html: deps
 	@echo "Building HTML documentation."
 ifneq ($(OS),WINNT)
-	$(JULIA_EXECUTABLE) $(call cygpath_w,$(SRCDIR)/make.jl) -- deploy
+	$(JULIA_EXECUTABLE) $(call cygpath_w,$(SRCDIR)/make.jl)
 else
 # work around issue #11727, windows output redirection breaking on buildbot
-	$(JULIA_EXECUTABLE) $(call cygpath_w,$(SRCDIR)/make.jl) -- deploy > docbuild.log 2>&1
+	$(JULIA_EXECUTABLE) $(call cygpath_w,$(SRCDIR)/make.jl) > docbuild.log 2>&1
 	@cat docbuild.log
 endif
 	@echo "Build finished. The HTML pages are in _build/html."
@@ -59,3 +59,9 @@ check: deps
 	@echo "Running all embedded 'doctests' and checking external links."
 	$(JULIA_EXECUTABLE) --color=yes $(call cygpath_w,$(SRCDIR)/make.jl) -- doctest linkcheck
 	@echo "Checks finished."
+
+# The deploy target should only be called in Travis builds
+deploy: deps
+	@echo "Deploying HTML documentation."
+	$(JULIA_EXECUTABLE) $(call cygpath_w,$(SRCDIR)/make.jl) -- deploy
+	@echo "Build & deploy of docs finished."
