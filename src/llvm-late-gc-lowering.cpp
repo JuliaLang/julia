@@ -328,7 +328,6 @@ private:
     Instruction *get_pgcstack(Instruction *ptlsStates);
     bool CleanupIR(Function &F);
     void NoteUseChain(State &S, BBState &BBS, User *TheUser);
-    void MaybeNotePhiJLCallFrameUses(State &S, BBState &BBS, PHINode *Phi);
 };
 
 static unsigned getValueAddrSpace(Value *V) {
@@ -651,25 +650,6 @@ void RecursivelyVisitStoresTo(callback f, Value *V) {
       }, V);
 }
 
-/*
- * Mark phi uses in jlcall frames. Note this does not do any sort of phi lifting
- * which is done only if a phi actually ends up getting used somewhere.
- */
-void LateLowerGCFrame::MaybeNotePhiJLCallFrameUses(State &S, BBState &BBS, PHINode *Phi)
-{
-    if (!Phi->getType()->isPointerTy())
-        return;
-    Type *ElType = cast<PointerType>(Phi->getType())->getElementType();
-    if (isSpecialPtr(ElType) && cast<PointerType>(ElType)->getAddressSpace() == AddressSpace::Tracked) {
-        for (unsigned i = 0; i < Phi->getNumIncomingValues(); ++i) {
-            RecursivelyVisitStoresTo([&](StoreInst *SI){
-                BBState &IncombingBBS = S.BBStates[Phi->getIncomingBlock(i)];
-                NoteUse(S, IncombingBBS, SI->getValueOperand(), IncombingBBS.PhiOuts);
-            }, Phi->getIncomingValue(i));
-        }
-    }
-}
-
 static void dumpBitVectorValues(State &S, BitVector &BV) {
     bool first = true;
     for (int Idx = BV.find_first(); Idx >= 0; Idx = BV.find_next(Idx)) {
@@ -856,10 +836,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     NoteOperandUses(S, BBS, I, BBS.UpExposedUsesUnrooted);
                 }
             } else if (PHINode *Phi = dyn_cast<PHINode>(&I)) {
-                // We can have phis of jlcall frames. We consider each of the
-                // values stored to that jlcall frame a phi use
                 if (!isSpecialPtr(Phi->getType())) {
-                    MaybeNotePhiJLCallFrameUses(S, BBS, Phi);
                     continue;
                 }
                 // We need to insert an extra phi for the GC root
