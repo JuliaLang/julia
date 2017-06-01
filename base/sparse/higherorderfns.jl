@@ -6,8 +6,7 @@ module HigherOrderFns
 # particularly map[!]/broadcast[!] for SparseVectors and SparseMatrixCSCs at present.
 import Base: map, map!, broadcast, broadcast!
 import Base.Broadcast: _containertype, promote_containertype,
-                       broadcast_indices, _broadcast_indices,
-                       broadcast_c, broadcast_c!
+                       broadcast_indices, broadcast_c, broadcast_c!
 
 using Base: front, tail, to_shape
 using ..SparseArrays: SparseVector, SparseMatrixCSC, AbstractSparseVector,
@@ -901,7 +900,7 @@ end
 # (10) broadcast[!] over combinations of broadcast scalars and sparse vectors/matrices
 
 # broadcast shape promotion for combinations of sparse arrays and other types
-_broadcast_indices(::Type{AbstractSparseArray}, A) = indices(A)
+broadcast_indices(::Type{AbstractSparseArray}, A) = indices(A)
 # broadcast container type promotion for combinations of sparse arrays and other types
 _containertype(::Type{<:SparseVecOrMat}) = AbstractSparseArray
 # combinations of sparse arrays with broadcast scalars should yield sparse arrays
@@ -985,7 +984,7 @@ struct PromoteToSparse end
 # broadcast containertype definitions for structured matrices
 StructuredMatrix = Union{Diagonal,Bidiagonal,Tridiagonal,SymTridiagonal}
 _containertype(::Type{<:StructuredMatrix}) = PromoteToSparse
-_broadcast_indices(::Type{PromoteToSparse}, A) = indices(A)
+broadcast_indices(::Type{PromoteToSparse}, A) = indices(A)
 
 # combinations explicitly involving Tuples and PromoteToSparse collections
 # divert to the generic AbstractArray broadcast code
