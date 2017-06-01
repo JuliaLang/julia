@@ -53,6 +53,9 @@ Library improvements
   * `getpeername` on a `TCPSocket` returns the address and port of the remote
     endpoint of the TCP connection ([#21825]).
 
+  * `resize!` and `sizehint!` methods no longer over-reserve memory when the
+    requested array size is more than double of its current size ([#22038]).
+
 Compiler/Runtime improvements
 -----------------------------
 
