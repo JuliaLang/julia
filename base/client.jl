@@ -85,8 +85,20 @@ stackframe_lineinfo_color() = repl_color("JULIA_STACKFRAME_LINEINFO_COLOR", :bol
 stackframe_function_color() = repl_color("JULIA_STACKFRAME_FUNCTION_COLOR", :bold)
 
 function repl_cmd(cmd, out)
-    shell = shell_split(get(ENV,"JULIA_SHELL",get(ENV,"SHELL","/bin/sh")))
-    shell_name = Base.basename(shell[1])
+    if is_windows()
+	    default_shell = string("\"", joinpath(JULIA_HOME, "busybox"), "\"")
+	    shell = shell_split(get(ENV, "JULIA_SHELL", default_shell))
+	    shell_name = isempty(shell) ? "" : lowercase(splitext(basename(shell[1]))[1])
+        if shell_name == "cmd"
+            warn_once("Windows \"cmd\" is not a supported shell, defaulting to $default_shell\n",
+                "Set the JULIA_SHELL environment variable to suppress this warning")
+            shell = shell_split(default_shell)
+            shell_name = isempty(shell) ? "" : lowercase(splitext(basename(shell[1]))[1])
+        end
+    else
+        shell = shell_split(get(ENV,"JULIA_SHELL",get(ENV,"SHELL","/bin/sh")))
+        shell_name = basename(shell[1])
+    end
 
     if isempty(cmd.exec)
         throw(ArgumentError("no cmd to execute"))
@@ -110,7 +122,19 @@ function repl_cmd(cmd, out)
         ENV["OLDPWD"] = new_oldpwd
         println(out, pwd())
     else
-        run(ignorestatus(@static is_windows() ? cmd : (isa(STDIN, TTY) ? `$shell -i -c "$(shell_wrap_true(shell_name, cmd))"` : `$shell -c "$(shell_wrap_true(shell_name, cmd))"`)))
+        if is_windows()
+            if shell_name == ""
+                run(ignorestatus(cmd))
+            elseif shell_name == "powershell"
+                run(ignorestatus(`$shell -Command $(shell_escape(cmd))`))
+            elseif shell_name == "busybox"
+                run(ignorestatus(`$shell sh -c $(shell_escape(cmd))`))
+            else
+                run(ignorestatus(`$shell /c $(shell_escape(cmd))`))
+            end
+        else
+            run(ignorestatus(isa(STDIN, TTY) ? `$shell -i -c "$(shell_wrap_true(shell_name, cmd))"` : `$shell -c "$(shell_wrap_true(shell_name, cmd))"`))
+        end
     end
     nothing
 end
