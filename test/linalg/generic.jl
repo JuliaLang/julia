@@ -312,15 +312,15 @@ end
 @test [[1,2, [3,4]], 5.0, [6im, [7.0, 8.0]]] ≈ [[1,2, [3,4]], 5.0, [6im, [7.0, 8.0]]]
 
 # Issue 22042
-# Minimal modulo number type - but not subclassing Number
+# Minimal modulo number type - but not subtyping Number
 struct ModInt{n}
-        k
-        ModInt{n}(k) where {n} = new(mod(k,n))
+    k
+    ModInt{n}(k) where {n} = new(mod(k,n))
 end
 
-Base.:+(a::ModInt{n}, b::ModInt{n}) where {n} = ModInt{n}(a.k+b.k)
-Base.:-(a::ModInt{n}, b::ModInt{n}) where {n} = ModInt{n}(a.k-b.k)
-Base.:*(a::ModInt{n}, b::ModInt{n}) where {n} = ModInt{n}(a.k*b.k)
+Base.:+(a::ModInt{n}, b::ModInt{n}) where {n} = ModInt{n}(a.k + b.k)
+Base.:-(a::ModInt{n}, b::ModInt{n}) where {n} = ModInt{n}(a.k - b.k)
+Base.:*(a::ModInt{n}, b::ModInt{n}) where {n} = ModInt{n}(a.k * b.k)
 Base.:-(a::ModInt{n}) where {n} = ModInt{n}(-a.k)
 Base.inv(a::ModInt{n}) where {n} = ModInt{n}(invmod(a.k, n))
 Base.:/(a::ModInt{n}, b::ModInt{n}) where {n} = a*inv(b)
@@ -331,12 +331,12 @@ Base.one(::Type{ModInt{n}}) where {n} = ModInt{n}(1)
 Base.one(::ModInt{n}) where {n} = ModInt{n}(1)
 
 # Needed for pivoting:
-Base.abs( a::ModInt{n} ) where {n} = a
-Base.:<( a::ModInt{n}, b::ModInt{n} ) where {n} = a.k < b.k
+Base.abs(a::ModInt{n}) where {n} = a
+Base.:<(a::ModInt{n}, b::ModInt{n}) where {n} = a.k < b.k
 Base.transpose(a::ModInt{n}) where {n} = a  # see Issue 20978
 
 A = [ ModInt{2}(1) ModInt{2}(0) ; ModInt{2}(1) ModInt{2}(1) ]
 b = [ ModInt{2}(1), ModInt{2}(0) ]
 
-@test A * (A\b) == b
+@test A*(A\b) == b
 @test_nowarn lufact( A, Val{true} )
