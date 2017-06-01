@@ -485,7 +485,7 @@ jl_datatype_t *jl_argument_datatype(jl_value_t *argt);
 jl_value_t *jl_nth_slot_type(jl_value_t *sig, size_t i);
 void jl_compute_field_offsets(jl_datatype_t *st);
 jl_array_t *jl_new_array_for_deserialization(jl_value_t *atype, uint32_t ndims, size_t *dims,
-                                             int isunboxed, int elsz);
+                                             int isunboxed, int elsz, int elalign);
 void jl_module_run_initializer(jl_module_t *m);
 extern jl_array_t *jl_module_init_order;
 extern union jl_typemap_t jl_cfunction_list;

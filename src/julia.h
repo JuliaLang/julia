@@ -148,6 +148,7 @@ JL_EXTENSION typedef struct {
 #endif
     jl_array_flags_t flags;
     uint16_t elsize;
+    uint16_t elalign;
     uint32_t offset;  // for 1-d only. does not need to get big.
     size_t nrows;
     union {
