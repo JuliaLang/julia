@@ -62,7 +62,7 @@ typedef struct {
     // variables for allocating objects from pools
 #ifdef _P64
 #  define JL_GC_N_POOLS 41
-#elif defined(_CPU_ARM_) || defined(_CPU_PPC_) || defined(_CPU_X86_)
+#elif defined(_CPU_ARM_) || defined(_CPU_PPC_)
 #  define JL_GC_N_POOLS 42
 #else
 #  define JL_GC_N_POOLS 43

@@ -136,12 +136,9 @@ void *jl_gc_perm_alloc(size_t sz, int zero, unsigned align, unsigned offset);
 static const int jl_gc_sizeclasses[JL_GC_N_POOLS] = {
 #ifdef _P64
     8,
-#elif defined(_CPU_ARM_) || defined(_CPU_PPC_) || defined(_CPU_X86_)
+#elif defined(_CPU_ARM_) || defined(_CPU_PPC_)
     // ARM and PowerPC have max alignment of 8,
     // make sure allocation of size 8 has that alignment.
-    // for x86 alignment is important for atomic ops and
-    // the corresponding platform ABI. Once we can use
-    // libatomic on Windows this is no longer necessary.
     4, 8,
 #else
     4, 8, 12,
@@ -177,7 +174,7 @@ STATIC_INLINE int jl_gc_alignment(size_t sz)
 #ifdef _P64
     (void)sz;
     return 16;
-#elif defined(_CPU_ARM_) || defined(_CPU_PPC_) || defined(_CPU_X86_)
+#elif defined(_CPU_ARM_) || defined(_CPU_PPC_)
     return sz <= 4 ? 8 : 16;
 #else
     // szclass 8
@@ -198,7 +195,7 @@ STATIC_INLINE int JL_CONST_FUNC jl_gc_szclass(size_t sz)
     if (sz <=    8)
         return 0;
     const int N = 0;
-#elif defined(_CPU_ARM_) || defined(_CPU_PPC_) || defined(_CPU_X86_)
+#elif defined(_CPU_ARM_) || defined(_CPU_PPC_)
     if (sz <=    8)
         return (sz + 3) / 4 - 1;
     const int N = 1;
