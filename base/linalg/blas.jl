@@ -110,6 +110,32 @@ function set_num_threads(n::Integer)
     return nothing
 end
 
+"""
+    get_num_threads(n)
+
+Get the number of threads the BLAS library can use.
+"""
+function get_num_threads()
+    blas = BLAS.vendor()
+    # Wrap in a try to catch unsupported blas versions
+    try
+        if blas == :openblas
+            return ccall((:openblas_get_num_threads, Base.libblas_name), Cint, ())
+        elseif blas == :openblas64
+            return ccall((:openblas_get_num_threads64_, Base.libblas_name), Cint, ())
+        elseif blas == :mkl
+            return ccall((:MKL_Get_Max_Num_Threads, Base.libblas_name), Cint, ())
+        end
+
+        # OSX BLAS looks at an environment variable
+        if is_apple()
+            return ENV["VECLIB_MAXIMUM_THREADS"]
+        end
+    end
+
+    return nothing
+end
+
 function check()
     blas = vendor()
     if blas == :openblas || blas == :openblas64
