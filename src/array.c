@@ -147,7 +147,7 @@ static inline jl_array_t *_new_array(jl_value_t *atype, uint32_t ndims, size_t *
     isunboxed = store_unboxed(el_type);
     if (isunboxed) {
         elsz = jl_datatype_size(el_type);
-        elalign =jl_datatype_size(el_type);
+        elalign = jl_datatype_align(el_type);
     }
     return _new_array_(atype, ndims, dims, isunboxed, elsz, elalign);
 }
