@@ -421,6 +421,11 @@ JL_DLLEXPORT void jl_get_fenv_consts(int *ret)
     ret[8] = FE_TOWARDZERO;
 }
 
+JL_DLLEXPORT jl_function_t *jl_get_function(jl_module_t *m, const char *name)
+{
+    return (jl_function_t*)jl_get_global(m, jl_symbol(name));
+}
+
 #ifdef __cplusplus
 }
 #endif
