@@ -422,7 +422,9 @@ static Type *bitstype_to_llvm(jl_value_t *bt)
 // fields depend on any of the parameters of the containing type)
 static bool julia_struct_has_layout(jl_datatype_t *dt, jl_unionall_t *ua)
 {
-    if (dt->layout || dt->struct_decl || jl_is_primitivetype(dt) || jl_isbits(dt))
+    if (!dt->layout)
+        return false;
+    if (dt->struct_decl || jl_is_primitivetype(dt) || jl_isbits(dt))
         return true;
     if (ua) {
         size_t i, ntypes = jl_svec_len(dt->types);
