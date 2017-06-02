@@ -35,6 +35,9 @@ include("abstractsparse.jl")
 include("sparsematrix.jl")
 include("sparsevector.jl")
 include("higherorderfns.jl")
+if Base.BLAS.vendor() == :mkl
+    include("mkl_sparse.jl")
+end
 
 include("linalg.jl")
 if Base.USE_GPL_LIBS
