@@ -568,7 +568,6 @@ end
 
 # file downloading
 
-downloadcmd = nothing
 if is_windows()
     function download(url::AbstractString, filename::AbstractString)
         ps = "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"
@@ -580,6 +579,7 @@ if is_windows()
         filename
     end
 else
+    downloadcmd = nothing
     function download(url::AbstractString, filename::AbstractString)
         global downloadcmd
         if downloadcmd === nothing
