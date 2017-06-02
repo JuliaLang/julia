@@ -752,6 +752,7 @@ export
     chop,
     chr2ind,
     codeunit,
+    cpad,
     dec,
     digits,
     digits!,

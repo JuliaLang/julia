@@ -1,14 +1,18 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# padding (lpad and rpad)
+# padding (lpad, rpad, and cpad)
 @test lpad("foo", 3) == "foo"
 @test rpad("foo", 3) == "foo"
+@test cpad("foo", 3) == "foo"
 @test lpad("foo", 5) == "  foo"
 @test rpad("foo", 5) == "foo  "
+@test cpad("foo", 5) == " foo "
 @test lpad("foo", 5, "  ") == "  foo"
 @test rpad("foo", 5, "  ") == "foo  "
+@test cpad("foo", 5, "  ") == " foo "
 @test lpad("foo", 6, "  ") == "   foo"
 @test rpad("foo", 6, "  ") == "foo   "
+@test cpad("foo", 6, "  ") == " foo  "
 
 # string manipulation
 @test strip("") == ""
