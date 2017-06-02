@@ -93,8 +93,8 @@ abs2(x::Real) = x*x
 
 Return `x` with its sign flipped if `y` is negative. For example `abs(x) = flipsign(x,x)`.
 """
-flipsign(x::Real, y::Real) = ifelse(signbit(y), -x, x)
-copysign(x::Real, y::Real) = ifelse(signbit(x)!=signbit(y), -x, x)
+flipsign(x::Real, y::Real) = ifelse(signbit(y), -x, +x) # the + is for type-stability on Bool
+copysign(x::Real, y::Real) = ifelse(signbit(x)!=signbit(y), -x, +x)
 
 conj(x::Real) = x
 transpose(x::Number) = x

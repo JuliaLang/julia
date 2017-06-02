@@ -17,15 +17,30 @@ for y in (4, Float32(4), 4.0, big(4.0))
     @test copysign(-3, y) == 3
 end
 
-# Result type must be type of first argument
-for T in (Base.BitInteger_types..., BigInt,
+# Result type must be type of first argument, except for Bool
+for U in (Base.BitInteger_types..., BigInt,
           Rational{Int}, Rational{BigInt},
           Float16, Float32, Float64)
-    for U in (Base.BitInteger_types..., BigInt,
+    for T in (Base.BitInteger_types..., BigInt,
               Rational{Int}, Rational{BigInt},
               Float16, Float32, Float64)
         @test typeof(copysign(T(3), U(4))) === T
         @test typeof(flipsign(T(3), U(4))) === T
+    end
+    # Bool promotes to Int
+    U <: Unsigned && continue
+    for x in [true, false]
+        @test flipsign(x, U(4)) === Int(x)
+        @test flipsign(x, U(-1)) === -Int(x)
+        @test copysign(x, U(4)) === Int(x)
+        @test copysign(x, U(-1)) === -Int(x)
+    end
+end
+
+@testset "flipsign/copysign(typemin($T), -1)" for T in Base.BitInteger_types
+    for U in (Base.BitSigned_types..., BigInt, Float16, Float32, Float64)
+        @test flipsign(typemin(T), U(-1)) == typemin(T)
+        @test copysign(typemin(T), U(-1)) == typemin(T)
     end
 end
 
