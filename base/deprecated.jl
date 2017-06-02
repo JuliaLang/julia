@@ -1354,6 +1354,14 @@ end
 @deprecate versioninfo(verbose::Bool) versioninfo(verbose=verbose)
 @deprecate versioninfo(io::IO, verbose::Bool) versioninfo(io, verbose=verbose)
 
+# PR #22188
+@deprecate cholfact!(A::StridedMatrix, uplo::Symbol, ::Type{Val{false}}) cholfact!(Hermitian(A, uplo), Val{false})
+@deprecate cholfact!(A::StridedMatrix, uplo::Symbol) cholfact!(Hermitian(A, uplo))
+@deprecate cholfact(A::StridedMatrix, uplo::Symbol, ::Type{Val{false}}) cholfact(Hermitian(A, uplo), Val{false})
+@deprecate cholfact(A::StridedMatrix, uplo::Symbol) cholfact(Hermitian(A, uplo))
+@deprecate cholfact!(A::StridedMatrix, uplo::Symbol, ::Type{Val{true}}; tol = 0.0) cholfact!(Hermitian(A, uplo), Val{true}, tol = tol)
+@deprecate cholfact(A::StridedMatrix, uplo::Symbol, ::Type{Val{true}}; tol = 0.0) cholfact(Hermitian(A, uplo), Val{true}, tol = tol)
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

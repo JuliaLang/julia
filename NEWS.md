@@ -70,6 +70,9 @@ Deprecated or removed
 
   * The method `srand(rng, filename, n=4)` has been deprecated ([#21359]).
 
+  * The `cholfact`/`cholfact!` methods that accepted an `uplo` symbol have been deprecated
+    in favor of using `Hermitian` (or `Symmetric`) views ([#22187], [#22188]).
+
 
 Julia v0.6.0 Release Notes
 ==========================
