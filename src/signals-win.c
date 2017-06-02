@@ -86,8 +86,12 @@ void __cdecl crt_sig_handler(int sig, int num)
         }
         break;
     default: // SIGSEGV, (SSIGTERM, IGILL)
+        if (ptls->safe_restore)
+            jl_rethrow();
         memset(&Context, 0, sizeof(Context));
         RtlCaptureContext(&Context);
+        if (sig == SIGILL)
+            jl_show_sigill(&Context);
         jl_critical_error(sig, &Context, ptls->bt_data, &ptls->bt_size);
         raise(sig);
     }
@@ -105,7 +109,6 @@ void restore_signals(void)
 void jl_throw_in_ctx(jl_value_t *excpt, CONTEXT *ctxThread, int bt)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    assert(excpt != NULL);
 #if defined(_CPU_X86_64_)
     DWORD64 Rsp = (ctxThread->Rsp&(DWORD64)-16) - 8;
 #elif defined(_CPU_X86_)
@@ -113,9 +116,12 @@ void jl_throw_in_ctx(jl_value_t *excpt, CONTEXT *ctxThread, int bt)
 #else
 #error WIN16 not supported :P
 #endif
-    ptls->bt_size = bt ? rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE,
-                                           ctxThread) : 0;
-    ptls->exception_in_transit = excpt;
+    if (!ptls->safe_restore) {
+        assert(excpt != NULL);
+        ptls->bt_size = bt ? rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE,
+                                               ctxThread) : 0;
+        ptls->exception_in_transit = excpt;
+    }
 #if defined(_CPU_X86_64_)
     *(DWORD64*)Rsp = 0;
     ctxThread->Rsp = Rsp;
@@ -220,11 +226,19 @@ static LONG WINAPI _exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo,
                     }
                     return EXCEPTION_CONTINUE_EXECUTION;
                 }
+                if (ptls->safe_restore) {
+                    jl_throw_in_ctx(NULL, ExceptionInfo->ContextRecord, in_ctx);
+                    return EXCEPTION_CONTINUE_EXECUTION;
+                }
                 if (ExceptionInfo->ExceptionRecord->ExceptionInformation[0] == 1) { // writing to read-only memory (e.g. mmap)
                     jl_throw_in_ctx(jl_readonlymemory_exception,
                         ExceptionInfo->ContextRecord,in_ctx);
                     return EXCEPTION_CONTINUE_EXECUTION;
                 }
+        }
+        if (ExceptionInfo->ExceptionRecord->ExceptionCode == EXCEPTION_ILLEGAL_INSTRUCTION) {
+            jl_safe_printf("\n");
+            jl_show_sigill(ExceptionInfo->ContextRecord);
         }
         jl_safe_printf("\nPlease submit a bug report with steps to reproduce this fault, and any error messages that follow (in their entirety). Thanks.\nException: ");
         switch (ExceptionInfo->ExceptionRecord->ExceptionCode) {
