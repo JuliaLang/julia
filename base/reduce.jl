@@ -703,6 +703,19 @@ end
 count(itr) = count(identity, itr)
 
 """
+    count(itr) -> Integer
+
+Count the number of `true` elements in `itr`.
+
+```jldoctest
+julia> count(4<=i<=6 for i in [2,3,4,5,6])
+3
+```
+"""
+count(itr) = count(identity, itr)
+
+
+"""
     countnz(A) -> Integer
 
 Counts the number of nonzero values in array `A` (dense or sparse). Note that this is not a constant-time operation.
