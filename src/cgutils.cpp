@@ -1117,7 +1117,7 @@ static std::pair<Value*, bool> emit_isa(const jl_cgval_t &x, jl_value_t *type, c
             maybe_decay_untracked(literal_pointer_val(type))), false);
     }
     // everything else can be handled via subtype tests
-    Value *vxt = emit_typeof_boxed(x, ctx);
+    Value *vxt = maybe_decay_untracked(emit_typeof_boxed(x, ctx));
     return std::make_pair(builder.CreateICmpNE(
 #if JL_LLVM_VERSION >= 30700
             builder.CreateCall(prepare_call(jlsubtype_func),

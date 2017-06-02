@@ -56,6 +56,7 @@ public:
     void visitGetElementPtrInst(GetElementPtrInst &GEP);
     void visitIntToPtrInst(IntToPtrInst &IPI);
     void visitPtrToIntInst(PtrToIntInst &PII);
+    void visitCallInst(CallInst &CI);
 };
 
 void GCInvariantVerifier::visitAddrSpaceCastInst(AddrSpaceCastInst &I) {
@@ -140,6 +141,17 @@ void GCInvariantVerifier::visitGetElementPtrInst(GetElementPtrInst &GEP) {
         Check(AS != AddressSpace::Tracked,
              "GC tracked values may not appear in GEP expressions."
              " You may have to decay the value first", &GEP);
+    }
+}
+
+void GCInvariantVerifier::visitCallInst(CallInst &CI) {
+    CallingConv::ID CC = CI.getCallingConv();
+    if (CC == JLCALL_CC || CC == JLCALL_F_CC) {
+        for (Value *Arg : CI.arg_operands()) {
+            Type *Ty = Arg->getType();
+            Check(Ty->isPointerTy() && cast<PointerType>(Ty)->getAddressSpace() == AddressSpace::Tracked,
+                "Invalid derived pointer in jlcall", &CI);
+        }
     }
 }
 

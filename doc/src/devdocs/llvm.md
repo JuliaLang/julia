@@ -108,6 +108,30 @@ study it and the pass of interest in isolation.
 
 The last step is labor intensive.  Suggestions on a better way would be appreciated.
 
+## The jlcall calling convention
+
+Julia has a generic calling convention for unoptimized code, which looks somewhat
+as follows:
+```
+    jl_value_t *any_unoptimized_call(jl_value_t *, jl_value_t **, int);
+```
+where the first argument is the boxed function object, the second argument is
+an on-stack array of arguments and the third is the number of arguments. Now,
+we could perform a straightforward lowering and emit an alloca for the argument
+array. However, this would betray the SSA nature of the uses at the callsite,
+making optimizations (including GC root placement), significantly harder.
+Instead, we emit it as follows:
+```
+    %bitcast = bitcast @any_unoptimized_call to %jl_value_t *(*)(%jl_value_t *, %jl_value_t *)
+    call cc 37 %jl_value_t *%bitcast(%jl_value_t *%arg1, %jl_value_t *%arg2)
+```
+The special `cc 37` annotation marks the fact that this call site is really using
+jlcall calling convention. This allows us to retain the SSA-ness of the
+uses throughout the optimizer. GC root placement will later lower this call to
+the original C ABI. In the code the calling convention number is represented by
+the `JLCALL_F_CC` constant. In addition, there ist the `JLCALL_CC` calling
+convention which functions similarly, but omits the first argument.
+
 ## GC root placement
 
 GC root placement is done by an LLVM late in the pass pipeline. Doing GC root

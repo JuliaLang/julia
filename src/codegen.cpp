@@ -646,7 +646,6 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx);
 
 static Value *emit_local_root(jl_codectx_t *ctx, jl_varinfo_t *vi = NULL);
 static void mark_gc_use(const jl_cgval_t &v);
-static Value *make_jlcall(ArrayRef<const jl_cgval_t*> args, jl_codectx_t *ctx);
 static Value *global_binding_pointer(jl_module_t *m, jl_sym_t *s,
                                      jl_binding_t **pbnd, bool assign, jl_codectx_t *ctx);
 static jl_cgval_t emit_checked_var(Value *bp, jl_sym_t *name, jl_codectx_t *ctx, bool isvol, MDNode *tbaa);
@@ -657,6 +656,10 @@ static GlobalVariable *prepare_global(GlobalVariable *G, Module *M = jl_builderM
 static Value *prepare_call(Value *Callee);
 static Value *prepare_call(IRBuilder<> &builder, Value *Callee);
 static void CreateTrap(IRBuilder<> &builder);
+static Value *emit_jlcall(Value *theFptr, Value *theF, jl_cgval_t *args,
+                          size_t nargs, jl_codectx_t *ctx);
+static Value *emit_jlcall(Value *theFptr, Value *theF, jl_value_t **args,
+                          size_t nargs, jl_codectx_t *ctx);
 
 template<typename T> static void push_gc_use(T &&vec, const jl_cgval_t &v)
 {
@@ -2399,50 +2402,6 @@ static void mark_gc_use(const jl_cgval_t &v)
         builder.CreateCall(prepare_call(gckill_func), v.gcroot);
 }
 
-// turn an array of arguments into a single object suitable for passing to a jlcall
-static Value *make_jlcall(ArrayRef<const jl_cgval_t*> args, jl_codectx_t *ctx)
-{
-    Value *largs = new AllocaInst(T_prjlvalue,
-#if JL_LLVM_VERSION >= 50000
-      0,
-#endif
-      ConstantInt::get(T_int32, args.size()), "jlcall", ctx->ptlsStates);
-    int slot = 0;
-    assert(args.size() > 0);
-    Value *lifetime_largs = largs;
-#if JL_LLVM_VERSION < 50000
-    lifetime_largs = builder.CreateBitCast(largs, T_pint8);
-    auto lifetime_start = Intrinsic::getDeclaration(jl_Module, Intrinsic::lifetime_start);
-#else
-    auto lifetime_start = Intrinsic::getDeclaration(jl_Module, Intrinsic::lifetime_start, {T_pprjlvalue});
-#endif
-    builder.CreateCall(lifetime_start, {
-      ConstantInt::get(T_int64, args.size()*sizeof(jl_value_t*)),
-      lifetime_largs});
-    for (ArrayRef<const jl_cgval_t*>::iterator I = args.begin(), E = args.end(); I < E; ++I, ++slot) {
-        Value *arg = boxed(**I, ctx, false); // mark_gc_use isn't needed since jlcall_frame_func can take ownership of this root
-        GetElementPtrInst *newroot = GetElementPtrInst::Create(LLVM37_param(NULL) largs,
-                ArrayRef<Value*>(ConstantInt::get(T_int32, slot)));
-        builder.Insert(newroot);
-        arg = maybe_decay_untracked(arg);
-        builder.CreateStore(arg, newroot);
-    }
-    return largs;
-}
-
-static void end_lifetime(Value *args, size_t size, jl_codectx_t *ctx) {
-    Value *lifetime_args = args;
-#if JL_LLVM_VERSION < 50000
-    lifetime_args = builder.CreateBitCast(args, T_pint8);
-    auto lifetime_end = Intrinsic::getDeclaration(jl_Module, Intrinsic::lifetime_end);
-#else
-    auto lifetime_end = Intrinsic::getDeclaration(jl_Module, Intrinsic::lifetime_end, {T_pprjlvalue});
-#endif
-    builder.CreateCall(lifetime_end, {
-      ConstantInt::get(T_int64, size*sizeof(jl_value_t*)),
-      lifetime_args});
-}
-
 static void jl_add_method_root(jl_codectx_t *ctx, jl_value_t *val)
 {
     if (jl_is_leaf_type(val) || jl_is_bool(val) || jl_is_symbol(val) ||
@@ -2510,18 +2469,11 @@ static jl_cgval_t emit_getfield(jl_value_t *expr, jl_sym_t *name, jl_codectx_t *
     // and offsets of some fields are independent of parameters.
 
     // TODO: generic getfield func with more efficient calling convention
-    jl_cgval_t arg1 = emit_expr(expr, ctx);
-    jl_cgval_t arg2 = mark_julia_const((jl_value_t*)name);
-    const jl_cgval_t* myargs_array[2] = {&arg1, &arg2};
-    Value *myargs = make_jlcall(makeArrayRef(myargs_array), ctx);
-#if JL_LLVM_VERSION >= 30700
-    Value *result = builder.CreateCall(prepare_call(jlgetfield_func),
-      {maybe_decay_untracked(V_null), myargs, ConstantInt::get(T_int32,2)});
-#else
-    Value *result = builder.CreateCall3(prepare_call(jlgetfield_func),
-      maybe_decay_untracked(V_null), myargs, ConstantInt::get(T_int32,2));
-#endif
-    end_lifetime(myargs, 2, ctx);
+    jl_cgval_t myargs_array[2] = {
+        emit_expr(expr, ctx),
+        mark_julia_const((jl_value_t*)name)
+    };
+    Value *result = emit_jlcall(jlgetfield_func, maybe_decay_untracked(V_null), myargs_array, 2, ctx);
     bool needsgcroot = true; // !arg1.isimmutable || !jl_is_leaf_type(arg1.typ) || !is_datatype_all_pointers((jl_datatype_t*)arg1.typ); // TODO: probably want this as a llvm pass
     jl_cgval_t ret = mark_julia_type(result, true, jl_any_type, ctx, needsgcroot); // (typ will be patched up by caller)
     return ret;
@@ -3272,35 +3224,40 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
     return false;
 }
 
-static Value *emit_jlcall(Value *theFptr, Value *theF, jl_value_t **args,
+static Value *emit_jlcall(Value *theFptr, Value *theF, jl_cgval_t *args,
                           size_t nargs, jl_codectx_t *ctx)
 {
     // emit arguments
-    Value *myargs;
-    if (nargs > 0) {
-        jl_cgval_t *anArg = (jl_cgval_t*)alloca(sizeof(jl_cgval_t) * nargs);
-        const jl_cgval_t **largs = (const jl_cgval_t**)alloca(sizeof(jl_cgval_t*) * nargs);
-        for(size_t i=0; i < nargs; i++) {
-            anArg[i] = emit_expr(args[i], ctx);
-            largs[i] = &anArg[i];
-        }
-        // put into argument space
-        myargs = make_jlcall(makeArrayRef(largs, nargs), ctx);
+    SmallVector<Value*, 3> theArgs;
+    if (theF)
+        theArgs.push_back(theF);
+    for(size_t i=0; i < nargs; i++) {
+        Value *arg = maybe_decay_untracked(boxed(args[i], ctx, false));
+        theArgs.push_back(arg);
     }
-    else {
-        myargs = Constant::getNullValue(T_pprjlvalue);
+    SmallVector<Type *, 3> argsT;
+    for(size_t i=0; i < nargs + (theF != nullptr); i++) {
+        argsT.push_back(T_prjlvalue);
     }
-#if JL_LLVM_VERSION >= 30700
-    Value *result = builder.CreateCall(prepare_call(theFptr), {maybe_decay_untracked(theF), myargs,
-                                       ConstantInt::get(T_int32,nargs)});
-#else
-    Value *result = builder.CreateCall3(prepare_call(theFptr), maybe_decay_untracked(theF), myargs,
-                                        ConstantInt::get(T_int32,nargs));
-#endif
-    if (nargs > 0) {
-        end_lifetime(myargs, nargs, ctx);
-    }
+    FunctionType *FTy = FunctionType::get(T_prjlvalue, argsT, false);
+    CallInst *result = builder.CreateCall(FTy,
+        builder.CreateBitCast(prepare_call(theFptr), FTy->getPointerTo()),
+        theArgs);
+    if (theF)
+        result->setCallingConv(JLCALL_F_CC);
+    else
+        result->setCallingConv(JLCALL_CC);
     return result;
+}
+
+
+static Value *emit_jlcall(Value *theFptr, Value *theF, jl_value_t **args,
+                          size_t nargs, jl_codectx_t *ctx)
+{
+    jl_cgval_t *cgargs = (jl_cgval_t*)alloca(sizeof(jl_cgval_t) * nargs);
+    for (size_t i = 0; i < nargs; ++i)
+        cgargs[i] = emit_expr(args[i], ctx);
+    return emit_jlcall(theFptr, theF, cgargs, nargs, ctx);
 }
 
 static jl_cgval_t emit_call_function_object(jl_method_instance_t *li, const jl_cgval_t &theF, jl_llvm_functions_t decls,
@@ -3521,22 +3478,7 @@ static jl_cgval_t emit_call(jl_expr_t *ex, jl_codectx_t *ctx)
 
     // emit function and arguments
     nargs++; // add function to nargs count
-    jl_cgval_t *anArg = (jl_cgval_t*)alloca(sizeof(jl_cgval_t) * nargs);
-    const jl_cgval_t **largs = (const jl_cgval_t**)alloca(sizeof(jl_cgval_t*) * nargs);
-    for(size_t i=0; i < nargs; i++) {
-        anArg[i] = emit_expr(args[i], ctx);
-        largs[i] = &anArg[i];
-    }
-    // put into argument space
-    Value *myargs = make_jlcall(makeArrayRef(largs, nargs), ctx);
-#if JL_LLVM_VERSION >= 30700
-    Value *callval = builder.CreateCall(prepare_call(jlapplygeneric_func),
-                                 {myargs, ConstantInt::get(T_int32, nargs)});
-#else
-    Value *callval = builder.CreateCall2(prepare_call(jlapplygeneric_func),
-                                  myargs, ConstantInt::get(T_int32, nargs));
-#endif
-    end_lifetime(myargs, nargs, ctx);
+    Value *callval = emit_jlcall(jlapplygeneric_func, nullptr, args, nargs, ctx);
     result = mark_julia_type(callval, true, expr_type(expr, ctx), ctx);
 
     JL_GC_POP();

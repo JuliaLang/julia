@@ -54,7 +54,6 @@ using namespace llvm;
               b) a store to a tracked/derived value
               c) a store OF a tracked/derived value
               d) a use of a value as a call operand (including operand bundles)
-              e) an indirect use through a jlcall array
         - Any safepoint
 
       Crucially, we also perform pointer numbering during the local scan,
@@ -117,7 +116,7 @@ using namespace llvm;
 
       Unlike earlier iterations of the gc root placement logic, jlcall frames
       are no longer treated as a special case and need not necessarily be sunk
-      into the gc frame. Additionally, the frontend now emits lifetime
+      into the gc frame. Additionally, we now emit lifetime
       intrinsics, so regular stack slot coloring will merge any jlcall frames
       not sunk into the gc frame. Nevertheless performing such sinking can still
       be profitable. Since all arguments to a jlcall are guaranteed to be live
@@ -634,22 +633,6 @@ void RecursivelyVisit(callback f, Value *V) {
     }
 }
 
-template <typename callback>
-void RecursivelyVisitStoresTo(callback f, Value *V) {
-    RecursivelyVisit<StoreInst>(
-      [&](Use &VU) {
-        assert(isa<StoreInst>(VU.getUser()));
-        if (VU.getOperandNo() != 1) {
-            // We spill jlcall arg arrays to the stack for
-            // better debugging. These have no uses, so we're
-            // ok. Allow that as a special case.
-            assert(cast<StoreInst>(VU.getUser())->getPointerOperand()->getNumUses() == 1);
-            return;
-        }
-        f(cast<StoreInst>(VU.getUser()));
-      }, V);
-}
-
 static void dumpBitVectorValues(State &S, BitVector &BV) {
     bool first = true;
     for (int Idx = BV.find_first(); Idx >= 0; Idx = BV.find_next(Idx)) {
@@ -686,40 +669,8 @@ JL_USED_FUNC static void dumpLivenessState(Function &F, State &S) {
     }
 }
 
-static std::set<Instruction *> DominatingLifetimes(DominatorTree &DT, Instruction *I, Value *V) {
-    // Find all lifetime starts that dominate this call
-    // instruction.
-    std::set<Instruction *> Dead;
-    std::set<Instruction *> LifeTimeStarts;
-    // This could be combined with the visit in the caller or even cached
-    // Don't bother with the additional complexity for now.
-    RecursivelyVisit<IntrinsicInst>([&](Use &VU) {
-        IntrinsicInst *II = cast<IntrinsicInst>(VU.getUser());
-        if (II->getIntrinsicID() == Intrinsic::lifetime_start &&
-            DT.dominates(II, I)) {
-            LifeTimeStarts.insert(II);
-        }
-    }, V);
-    // If one lifetime start dominates another, we can
-    // remove the earlier one.
-    for (auto *LifetimeStart : LifeTimeStarts) {
-        for (auto *LifetimeStart2 : LifeTimeStarts) {
-            if (LifetimeStart == LifetimeStart2 ||
-                Dead.find(LifetimeStart2) != Dead.end())
-                continue;
-            if (DT.dominates(LifetimeStart, LifetimeStart2)) {
-                Dead.insert(LifetimeStart);
-            }
-        }
-    }
-    for (auto *ToDelete : Dead)
-        LifeTimeStarts.erase(ToDelete);
-    return LifeTimeStarts;
-}
-
 State LateLowerGCFrame::LocalScan(Function &F) {
     State S;
-    auto &DT = getAnalysis<DominatorTreeWrapperPass>().getDomTree();
     for (BasicBlock &BB : F) {
         BBState &BBS = S.BBStates[&BB];
         for (auto it = BB.rbegin(); it != BB.rend(); ++it) {
@@ -731,87 +682,10 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                 }
                 MaybeNoteDef(S, BBS, CI, BBS.Safepoints);
                 NoteOperandUses(S, BBS, I);
-                // Note uses via jlcall frames
                 for (Use &U : CI->operands()) {
                     Value *V = U;
                     if (isUnionRep(V->getType())) {
                         NoteUse(S, BBS, V);
-                        continue;
-                    }
-                    if (!V->getType()->isPointerTy())
-                        continue;
-                    if (isSpecialPtr(cast<PointerType>(V->getType())->getElementType())) {
-                        V = FindBaseValue(S, V, false);
-                        if (AllocaInst *AI = dyn_cast<AllocaInst>(V)) {
-                            // This was sunk into the gc frame anyway - nothing
-                            // to do.
-                            if (isSpecialPtr(AI->getAllocatedType()) && !AI->isArrayAllocation())
-                                continue;
-                        }
-                        if (isa<GetElementPtrInst>(V) || isa<Constant>(V))
-                            continue;
-                        if (PHINode *Phi = dyn_cast<PHINode>(V)) {
-                            // Find the set of values that could potentially be
-                            // referenced here. We marks uses for all of them
-                            // that are fully available and create a splitting
-                            // phi for those that are not. Note we may be
-                            // keeping more values alive than we need to, but
-                            // this situation is a bit of a marginal case.
-                            std::set<Value *> PotentialUses;
-                            for (unsigned i = 0; i < cast<PHINode>(V)->getNumIncomingValues(); ++i) {
-                                RecursivelyVisitStoresTo([&](StoreInst *SI){
-                                    PotentialUses.insert(SI->getValueOperand());
-                                }, Phi->getIncomingValue(i));
-                            }
-                            for (Value *Val : PotentialUses) {
-                                if (isa<Constant>(Val) || isa<Argument>(Val) ||
-                                    DT.dominates(cast<Instruction>(Val), Phi))
-                                    NoteUse(S, BBS, Val);
-                                else {
-                                    PHINode *Lift = PHINode::Create(T_prjlvalue, 0, "partiallift", Phi);
-                                    for (unsigned i = 0; i < Phi->getNumIncomingValues(); ++i) {
-                                        BasicBlock *IncomingBB = Phi->getIncomingBlock(i);
-                                        if (DT.dominates(cast<Instruction>(Val), IncomingBB->getTerminator())) {
-                                            Lift->addIncoming(Val, IncomingBB);
-                                            NoteUse(S, S.BBStates[IncomingBB], Val, S.BBStates[IncomingBB].PhiOuts);
-                                        } else {
-                                            Lift->addIncoming(ConstantPointerNull::get(cast<PointerType>(T_prjlvalue)), IncomingBB);
-                                        }
-                                    }
-                                    NoteUse(S, BBS, Lift);
-                                    BBState &LiftBBS = S.BBStates[Phi->getParent()];
-                                    if (LiftBBS.Done) {
-                                        // This is ok to do if we already processed that
-                                        // basic block (up to phis), because we inserted it at the start
-                                        // of the basic block, so we're not violating any
-                                        // ordering constraints.
-                                        MaybeNoteDef(S, LiftBBS, Lift, LiftBBS.Safepoints);
-                                    }
-                                }
-                            }
-                            continue;
-                        }
-                        // Sometimes we load an arg array from a global. That's
-                        // fine as long as we don't store to it.
-                        if (isa<LoadInst>(V)) {
-                            RecursivelyVisitStoresTo([&](StoreInst *SI){
-                                assert(false && "Shouldn't try to store to a global arg array");
-                            }, V);
-                            continue;
-                        }
-                        std::set<Instruction *> LifeTimeStarts = DominatingLifetimes(DT, CI, V);
-
-                        assert(isa<AllocaInst>(V) || isa<CallInst>(V) || isa<Argument>(V));
-                        RecursivelyVisitStoresTo([&](StoreInst *SI){
-                            bool AnyDominates = LifeTimeStarts.empty();
-                            for (auto *Lifetime : LifeTimeStarts) {
-                                if (DT.dominates(Lifetime, SI))
-                                    AnyDominates = true;
-                            }
-                            if (AnyDominates)
-                                NoteUse(S, BBS, SI->getValueOperand());
-                        }, V);
-
                         continue;
                     }
                 }
@@ -1125,6 +999,17 @@ void LateLowerGCFrame::PopGCFrame(AllocaInst *gcframe, Instruction *InsertBefore
 
 bool LateLowerGCFrame::CleanupIR(Function &F) {
     bool ChangesMade = false;
+    // We create one alloca for all the jlcall frames that haven't been processed
+    // yet. LLVM would merge them anyway later, so might as well save it a bit
+    // of work
+    size_t maxframeargs = 0;
+    PointerType *T_pprjlvalue = T_prjlvalue->getPointerTo();
+    Instruction *StartOff = &*(F.getEntryBlock().begin());
+    AllocaInst *Frame = new AllocaInst(T_prjlvalue, ConstantInt::get(T_int32, maxframeargs),
+#if JL_LLVM_VERSION >= 50000
+        0,
+#endif
+        "", StartOff);
     for (BasicBlock &BB : F) {
         for (auto it = BB.begin(); it != BB.end();) {
             auto *CI = dyn_cast<CallInst>(&*it);
@@ -1132,6 +1017,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F) {
                 ++it;
                 continue;
             }
+            CallingConv::ID CC = CI->getCallingConv();
             if ((gc_kill_func != nullptr && CI->getCalledFunction() == gc_kill_func) ||
                 (gc_flush_func != nullptr && CI->getCalledFunction() == gc_flush_func)) {
                 /* No replacement */
@@ -1141,6 +1027,36 @@ bool LateLowerGCFrame::CleanupIR(Function &F) {
                     CI->getType(), "", CI);
                 ASCI->takeName(CI);
                 CI->replaceAllUsesWith(ASCI);
+            } else if (CC == JLCALL_CC ||
+                       CC == JLCALL_F_CC) {
+                size_t nframeargs = CI->getNumArgOperands() - (CC == JLCALL_F_CC);
+                SmallVector<Value *, 3> ReplacementArgs;
+                auto it = CI->arg_begin();
+                if (CC == JLCALL_F_CC)
+                    ReplacementArgs.push_back(*(it++));
+                maxframeargs = std::max(maxframeargs, nframeargs);
+                int slot = 0;
+                IRBuilder<> Builder (CI);
+                for (; it != CI->arg_end(); ++it) {
+                    Builder.CreateStore(*it, Builder.CreateGEP(T_prjlvalue, Frame,
+                      {ConstantInt::get(T_int32, slot++)}));
+                }
+                ReplacementArgs.push_back(nframeargs == 0 ?
+                    (llvm::Value*)ConstantPointerNull::get(T_pprjlvalue) :
+                    (llvm::Value*)Frame);
+                ReplacementArgs.push_back(ConstantInt::get(T_int32, nframeargs));
+                FunctionType *FTy = CC == JLCALL_F_CC ?
+                    FunctionType::get(T_prjlvalue, {T_prjlvalue,
+                        T_pprjlvalue, T_int32}, false) :
+                    FunctionType::get(T_prjlvalue,
+                        {T_pprjlvalue, T_int32}, false);
+                Value *newFptr = Builder.CreateBitCast(CI->getCalledValue(),
+                    FTy->getPointerTo());
+                CallInst *NewCall = CallInst::Create(newFptr, ReplacementArgs, "", CI);
+                NewCall->setTailCallKind(CI->getTailCallKind());
+                NewCall->setAttributes(CI->getAttributes());
+                NewCall->setDebugLoc(CI->getDebugLoc());
+                CI->replaceAllUsesWith(NewCall);
             } else if (CI->getNumArgOperands() == CI->getNumOperands()) {
                 /* No operand bundle to lower */
                 ++it;
@@ -1154,6 +1070,10 @@ bool LateLowerGCFrame::CleanupIR(Function &F) {
             ChangesMade = true;
         }
     }
+    if (maxframeargs == 0)
+        Frame->eraseFromParent();
+    else
+        Frame->setOperand(0, ConstantInt::get(T_int32, maxframeargs));
     return ChangesMade;
 }
 

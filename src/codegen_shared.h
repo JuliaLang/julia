@@ -4,3 +4,6 @@ enum AddressSpace {
     FirstSpecial = Tracked,
     LastSpecial = CalleeRooted,
 };
+
+#define JLCALL_CC (CallingConv::ID)36
+#define JLCALL_F_CC (CallingConv::ID)37

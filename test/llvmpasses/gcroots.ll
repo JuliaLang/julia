@@ -128,101 +128,6 @@ common:
     ret void
 }
 
-; Checks for ugly phi corner case
-define void @phi_corner_case(i64 %a, i64 %b, i64 %c, i64 %d) {
-top:
-; CHECK-LABEL: @phi_corner_case
-; CHECK: %gcframe = alloca %jl_value_t addrspace(10)*, i32 6
-; Currently each value gets stored twice, once to the gc frame, once to the
-; jlcall frame. Future optimizations may change that, which would require appropriate
-; adjustments to this test.
-; CHECK: store %jl_value_t addrspace(10)* %aboxed
-; CHECK: store %jl_value_t addrspace(10)* %aboxed
-; CHECK: store %jl_value_t addrspace(10)* %bboxed
-; CHECK: store %jl_value_t addrspace(10)* %bboxed
-; CHECK: store %jl_value_t addrspace(10)* %cboxed
-; CHECK: store %jl_value_t addrspace(10)* %cboxed
-; CHECK: store %jl_value_t addrspace(10)* %dboxed
-; CHECK: store %jl_value_t addrspace(10)* %dboxed
-    %ptls = call %jl_value_t*** @jl_get_ptls_states()
-    %frame1 = alloca %jl_value_t addrspace(10)*, i32 2
-    %frame11 = getelementptr %jl_value_t addrspace(10)*, %jl_value_t addrspace(10)** %frame1, i32 1
-    %frame2 = alloca %jl_value_t addrspace(10)*, i32 2
-    %frame21 = getelementptr %jl_value_t addrspace(10)*, %jl_value_t addrspace(10)** %frame2, i32 1
-    %aboxed = call %jl_value_t addrspace(10)* @jl_box_int64(i64 signext %a)
-    %bboxed = call %jl_value_t addrspace(10)* @jl_box_int64(i64 signext %b)
-    store %jl_value_t addrspace(10)* %aboxed, %jl_value_t addrspace(10)** %frame1
-    store %jl_value_t addrspace(10)* %bboxed, %jl_value_t addrspace(10)** %frame11
-    %cboxed = call %jl_value_t addrspace(10)* @jl_box_int64(i64 signext %c)
-    %dboxed = call %jl_value_t addrspace(10)* @jl_box_int64(i64 signext %d)
-    store %jl_value_t addrspace(10)* %cboxed, %jl_value_t addrspace(10)** %frame2
-    store %jl_value_t addrspace(10)* %dboxed, %jl_value_t addrspace(10)** %frame21
-    %cmp = icmp eq i64 %a, %b
-    br i1 %cmp, label %alabel, label %blabel
-alabel:
-    br label %common
-blabel:
-    br label %common
-common:
-    %callframe = phi %jl_value_t addrspace(10)** [ %frame1, %alabel], [ %frame2, %blabel ]
-    call %jl_value_t addrspace(10)* @jl_apply_generic(%jl_value_t addrspace(10)* null, %jl_value_t addrspace(10)** %callframe, i32 2)
-    ret void
-}
-
-define void @phi_corner_case2(i64 %a, i64 %b, i64 %c, i64 %d) {
-; CHECK-LABEL: @phi_corner_case2
-; CHECK: %gcframe = alloca %jl_value_t addrspace(10)*, i32 6
-    %ptls = call %jl_value_t*** @jl_get_ptls_states()
-    %frame1 = alloca %jl_value_t addrspace(10)*, i32 2
-    %frame11 = getelementptr %jl_value_t addrspace(10)*, %jl_value_t addrspace(10)** %frame1, i32 1
-    %frame2 = alloca %jl_value_t addrspace(10)*, i32 2
-    %frame21 = getelementptr %jl_value_t addrspace(10)*, %jl_value_t addrspace(10)** %frame2, i32 1
-    %aboxed = call %jl_value_t addrspace(10)* @jl_box_int64(i64 signext %a)
-    %bboxed = call %jl_value_t addrspace(10)* @jl_box_int64(i64 signext %b)
-    store %jl_value_t addrspace(10)* %aboxed, %jl_value_t addrspace(10)** %frame1
-    store %jl_value_t addrspace(10)* %bboxed, %jl_value_t addrspace(10)** %frame11
-    %cmp = icmp eq i64 %a, %b
-    br i1 %cmp, label %alabel, label %blabel
-alabel:
-    br label %common
-blabel:
-    %cboxed = call %jl_value_t addrspace(10)* @jl_box_int64(i64 signext %c)
-; cboxed gets two stores (one to gcroot it for the boxing of d)
-; CHECK: store %jl_value_t addrspace(10)* %cboxed
-; CHECK: store %jl_value_t addrspace(10)* %cboxed
-; CHECK: store %jl_value_t addrspace(10)* %dboxed
-    %dboxed = call %jl_value_t addrspace(10)* @jl_box_int64(i64 signext %d)
-    store %jl_value_t addrspace(10)* %cboxed, %jl_value_t addrspace(10)** %frame2
-    store %jl_value_t addrspace(10)* %dboxed, %jl_value_t addrspace(10)** %frame21
-    br label %common
-common:
-; CHECK-DAG: [[LIFT1:%.*]] = phi %jl_value_t addrspace(10)* [ null, %alabel ], [ %cboxed, %blabel ]
-; CHECK-DAG: [[LIFT2:%.*]] = phi %jl_value_t addrspace(10)* [ null, %alabel ], [ %dboxed, %blabel ]
-; CHECK-DAG: store %jl_value_t addrspace(10)* [[LIFT2]]
-; CHECK-DAG: store %jl_value_t addrspace(10)* [[LIFT1]]
-    %callframe = phi %jl_value_t addrspace(10)** [ %frame1, %alabel], [ %frame2, %blabel ]
-    call %jl_value_t addrspace(10)* @jl_apply_generic(%jl_value_t addrspace(10)* null, %jl_value_t addrspace(10)** %callframe, i32 2)
-    ret void
-}
-
-define void @underlying_object(i64 %a, i64 %b) {
-; CHECK-LABEL: @underlying_object
-; We need to root both values here. The observed failure case was that we'd
-; only consider stores to the gep passed to the call rather than all stores
-; to the alloca.
-; CHECK: %gcframe = alloca %jl_value_t addrspace(10)*, i32 4
-    %jlcall = alloca [2 x %jl_value_t addrspace(10)*], align 8
-    %jlcall.sub = getelementptr inbounds [2 x %jl_value_t addrspace(10)*], [2 x %jl_value_t addrspace(10)*]* %jlcall, i64 0, i64 0
-    %ptls = call %jl_value_t*** @jl_get_ptls_states()
-    %aboxed = call %jl_value_t addrspace(10)* @jl_box_int64(i64 signext %a)
-    %bboxed = call %jl_value_t addrspace(10)* @jl_box_int64(i64 signext %b)
-    store %jl_value_t addrspace(10)* %aboxed, %jl_value_t addrspace(10)** %jlcall.sub
-    %bslot = getelementptr inbounds [2 x %jl_value_t addrspace(10)*], [2 x %jl_value_t addrspace(10)*]* %jlcall, i64 0, i64 1
-    store %jl_value_t addrspace(10)* %bboxed, %jl_value_t addrspace(10)** %bslot
-    call %jl_value_t addrspace(10)* @jl_apply_generic(%jl_value_t addrspace(10)* null, %jl_value_t addrspace(10)** %jlcall.sub, i32 2)
-    ret void
-}
-
 define void @live_if_live_out(i64 %a, i64 %b) {
 ; CHECK-LABEL: @live_if_live_out
 top:
@@ -239,33 +144,6 @@ succ:
     ret void
 }
 
-declare void @llvm.lifetime.start.p0p10s_jl_value_ts(i64, %jl_value_t addrspace(10)**)
-declare void @llvm.lifetime.end.p0p10s_jl_value_ts(i64, %jl_value_t addrspace(10)**)
-
-; The system shouldn't really be generating things like this, but we can get unlucky
-define void @weird_alloca(i1 %cnd, i64 %a, i64 %b) {
-; CHECK-LABEL: weird_alloca
-; CHECK: %gcframe = alloca %jl_value_t addrspace(10)*, i32 4
-    %jlcall = alloca [2 x %jl_value_t addrspace(10)*], align 8
-    %ptls = call %jl_value_t*** @jl_get_ptls_states()
-    %jlcall.sub = getelementptr inbounds [2 x %jl_value_t addrspace(10)*], [2 x %jl_value_t addrspace(10)*]* %jlcall, i64 0, i64 0
-    %jlcall1 = getelementptr inbounds [2 x %jl_value_t addrspace(10)*], [2 x %jl_value_t addrspace(10)*]* %jlcall, i64 0, i64 1
-    store %jl_value_t addrspace(10)* null, %jl_value_t addrspace(10)** %jlcall.sub
-    store %jl_value_t addrspace(10)* null, %jl_value_t addrspace(10)** %jlcall1
-    br i1 %cnd, label %if, label %done
-
-if:
-    %aboxed = call %jl_value_t addrspace(10)* @jl_box_int64(i64 signext %a)
-    %bboxed = call %jl_value_t addrspace(10)* @jl_box_int64(i64 signext %b)
-    store %jl_value_t addrspace(10)* %aboxed, %jl_value_t addrspace(10)** %jlcall.sub
-    store %jl_value_t addrspace(10)* %bboxed, %jl_value_t addrspace(10)** %jlcall1
-    br label %done
-
-done:
-    call %jl_value_t addrspace(10)* @jl_apply_generic(%jl_value_t addrspace(10)* null, %jl_value_t addrspace(10)** %jlcall.sub, i32 2)
-    ret void
-}
-
 ; A ret is a use - make sure the value is kept alive for any intervening
 ; safepoint
 define %jl_value_t addrspace(10)* @ret_use(i64 %a, i64 %b) {
@@ -276,21 +154,4 @@ define %jl_value_t addrspace(10)* @ret_use(i64 %a, i64 %b) {
 ; CHECK: store %jl_value_t addrspace(10)* %aboxed
     %bboxed = call %jl_value_t addrspace(10)* @jl_box_int64(i64 signext %b)
     ret %jl_value_t addrspace(10)* %aboxed
-}
-
-define void @vector_ops(%jl_value_t addrspace(10)* %a, %jl_value_t addrspace(10)** %b, i32 %c) {
-; CHECK-LABEL: @vector_ops
-; N.B.: This should be 4, but it's currently not realizing that %a doesn't need a root
-; CHECK: %gcframe = alloca %jl_value_t addrspace(10)*, i32 5
-    %ptls = call %jl_value_t*** @jl_get_ptls_states()
-    %jlcall = alloca [3 x %jl_value_t addrspace(10)*], align 8
-    %jlcall.sub = getelementptr inbounds [3 x %jl_value_t addrspace(10)*], [3 x %jl_value_t addrspace(10)*]* %jlcall, i64 0, i64 0
-    %casted = bitcast %jl_value_t addrspace(10)** %b to <2 x %jl_value_t addrspace(10)*>*
-    %loaded = load <2 x %jl_value_t addrspace(10)*>, <2 x %jl_value_t addrspace(10)*>* %casted
-    %jlcall.casted = bitcast [3 x %jl_value_t addrspace(10)*]* %jlcall to <2 x %jl_value_t addrspace(10)*>*
-    store <2 x %jl_value_t addrspace(10)*> %loaded, <2 x %jl_value_t addrspace(10)*>* %jlcall.casted
-    %third = getelementptr inbounds [3 x %jl_value_t addrspace(10)*], [3 x %jl_value_t addrspace(10)*]* %jlcall, i64 0, i64 2
-    store %jl_value_t addrspace(10)* %a, %jl_value_t addrspace(10)** %third
-    call %jl_value_t addrspace(10)* @jl_apply_generic(%jl_value_t addrspace(10)* %a, %jl_value_t addrspace(10)** %jlcall.sub, i32 3)
-    ret void
 }
