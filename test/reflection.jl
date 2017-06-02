@@ -546,7 +546,7 @@ function has_backslashes(meth::Method)
 end
 has_backslashes(x) = Nullable{Method}()
 h16850 = has_backslashes(Base)
-if is_windows()
+if Sys.iswindows()
     if isnull(h16850)
         warn("No methods found in Base with backslashes in file name, ",
              "skipping test for Base.url")

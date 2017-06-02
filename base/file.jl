@@ -51,7 +51,7 @@ function cd(dir::AbstractString)
 end
 cd() = cd(homedir())
 
-if is_windows()
+if Sys.iswindows()
     function cd(f::Function, dir::AbstractString)
         old = pwd()
         try
@@ -91,7 +91,7 @@ this function throws an error. See [`mkpath`](@ref) for a function which creates
 required intermediate directories.
 """
 function mkdir(path::AbstractString, mode::Unsigned=0o777)
-    @static if is_windows()
+    @static if Sys.iswindows()
         ret = ccall(:_wmkdir, Int32, (Cwstring,), path)
     else
         ret = ccall(:mkdir, Int32, (Cstring, UInt32), path, mode)
@@ -136,7 +136,7 @@ directory, then all contents are removed recursively.
 function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
     if islink(path) || !isdir(path)
         try
-            @static if is_windows()
+            @static if Sys.iswindows()
                 # is writable on windows actually means "is deletable"
                 if (filemode(path) & 0o222) == 0
                     chmod(path, 0o777)
@@ -155,7 +155,7 @@ function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
                 rm(joinpath(path, p), force=force, recursive=true)
             end
         end
-        @static if is_windows()
+        @static if Sys.iswindows()
             ret = ccall(:_wrmdir, Int32, (Cwstring,), path)
         else
             ret = ccall(:rmdir, Int32, (Cstring,), path)
@@ -254,7 +254,7 @@ function touch(path::AbstractString)
     end
 end
 
-if is_windows()
+if Sys.iswindows()
 
 function tempdir()
     temppath = Vector{UInt16}(32767)
@@ -536,7 +536,7 @@ function sendfile(src::AbstractString, dst::AbstractString)
     end
 end
 
-if is_windows()
+if Sys.iswindows()
     const UV_FS_SYMLINK_JUNCTION = 0x0002
 end
 
@@ -550,20 +550,20 @@ Creates a symbolic link to `target` with the name `link`.
     soft symbolic links, such as Windows XP.
 """
 function symlink(p::AbstractString, np::AbstractString)
-    @static if is_windows()
+    @static if Sys.iswindows()
         if Sys.windows_version() < Sys.WINDOWS_VISTA_VER
             error("Windows XP does not support soft symlinks")
         end
     end
     flags = 0
-    @static if is_windows()
+    @static if Sys.iswindows()
         if isdir(p)
             flags |= UV_FS_SYMLINK_JUNCTION
             p = abspath(p)
         end
     end
     err = ccall(:jl_fs_symlink, Int32, (Cstring, Cstring, Cint), p, np, flags)
-    @static if is_windows()
+    @static if Sys.iswindows()
         if err < 0 && !isdir(p)
             Base.warn_once("Note: on Windows, creating file symlinks requires Administrator privileges.")
         end

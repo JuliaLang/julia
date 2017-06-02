@@ -60,7 +60,7 @@ end
 
 # init with default values
 # Use a max size of 1M profile samples, and fire timer every 1ms
-if is_windows()
+if Sys.iswindows()
     __init__() = init(1_000_000, 0.01)
 else
     __init__() = init(1_000_000, 0.001)

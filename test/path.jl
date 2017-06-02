@@ -11,7 +11,7 @@ for S in (String, GenericString)
     @test dirname(S("foo$(sep)bar")) == "foo"
 
     @test expanduser(S("x")) == "x"
-    @test expanduser(S("~")) == (is_windows() ? "~" : homedir())
+    @test expanduser(S("~")) == (Sys.iswindows() ? "~" : homedir())
 
     @test isabspath(S(homedir()))
     @test !isabspath(S("foo"))
@@ -68,7 +68,7 @@ for S in (String, GenericString)
     @test joinpath(splitdir(S(homedir()))...) == homedir()
     @test string(splitdrive(S(homedir()))...) == homedir()
 
-    if is_windows()
+    if Sys.iswindows()
         @test splitdrive(S("\\\\servername\\hello.world\\filename.ext")) ==
             ("\\\\servername\\hello.world","\\filename.ext")
         @test splitdrive(S("\\\\servername.com\\hello.world\\filename.ext")) ==
@@ -95,8 +95,8 @@ end
 
 @test isabspath("~") == false
 @test isabspath("/") == true # on windows, this is relatively absolute
-@test isabspath("A:/") == is_windows()
-@test isabspath("B:\\") == is_windows()
+@test isabspath("A:/") == Sys.iswindows()
+@test isabspath("B:\\") == Sys.iswindows()
 @test isabspath("./") == false
 @test isabspath("C:") == false
 @test isabspath("C:.") == false
@@ -104,8 +104,8 @@ end
 @test isabspath(".:/") == false
 #@test isabspath("_:/") == false # FIXME?
 #@test isabspath("AB:/") == false # FIXME?
-@test isabspath("\\\\") == is_windows()
-if is_unix()
+@test isabspath("\\\\") == Sys.iswindows()
+if Sys.isunix()
     @test isabspath(expanduser("~")) == true
     @test startswith(expanduser("~"), homedir())
 else
@@ -199,8 +199,8 @@ test_relpath()
 @test isa(joinpath(abspath("a"), "b"), String)
 
 # homedir
-let var = is_windows() ? "USERPROFILE" : "HOME",
-    MAX_PATH = is_windows() ? 240 : 1020
+let var = Sys.iswindows() ? "USERPROFILE" : "HOME",
+    MAX_PATH = Sys.iswindows() ? 240 : 1020
     for i = 0:9
         local home = " "^MAX_PATH * "123456789"[1:i]
         @test withenv(var => home) do

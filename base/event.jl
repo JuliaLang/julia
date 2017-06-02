@@ -247,7 +247,7 @@ function wait()
     # unreachable
 end
 
-if is_windows()
+if Sys.iswindows()
     pause() = ccall(:Sleep, stdcall, Void, (UInt32,), 0xffffffff)
 else
     pause() = ccall(:pause, Void, ())

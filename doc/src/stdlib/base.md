@@ -189,11 +189,11 @@ Base.@elapsed
 Base.@allocated
 Base.EnvHash
 Base.ENV
-Base.is_unix
-Base.is_apple
-Base.is_linux
-Base.is_bsd
-Base.is_windows
+Base.Sys.isunix
+Base.Sys.isapple
+Base.Sys.islinux
+Base.Sys.isbsd
+Base.Sys.iswindows
 Base.Sys.windows_version
 Base.@static
 ```

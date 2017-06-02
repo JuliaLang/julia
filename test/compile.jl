@@ -286,7 +286,7 @@ try
     @test !isdefined(Main, :FooBar1)
 
     relFooBar_file = joinpath(dir, "subfolder", "..", "FooBar.jl")
-    @test Base.stale_cachefile(relFooBar_file, joinpath(dir, "FooBar.ji")) == !is_windows() # `..` is not a symlink on Windows
+    @test Base.stale_cachefile(relFooBar_file, joinpath(dir, "FooBar.ji")) == !Sys.iswindows() # `..` is not a symlink on Windows
     mkdir(joinpath(dir, "subfolder"))
     @test !Base.stale_cachefile(relFooBar_file, joinpath(dir, "FooBar.ji"))
 

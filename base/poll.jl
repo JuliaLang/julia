@@ -13,7 +13,7 @@ export
 import Base: @handle_as, wait, close, uvfinalize, eventloop, notify_error, stream_wait,
     _sizeof_uv_poll, _sizeof_uv_fs_poll, _sizeof_uv_fs_event, _uv_hook_close,
     associate_julia_struct, disassociate_julia_struct, |
-if is_windows()
+if Sys.iswindows()
     import Base.WindowsRawSocket
 end
 
@@ -106,7 +106,7 @@ mutable struct _FDWatcher
 
     let FDWatchers = Vector{Any}()
         global _FDWatcher
-        @static if is_unix()
+        @static if Sys.isunix()
             function _FDWatcher(fd::RawFD, readable::Bool, writable::Bool)
                 if !readable && !writable
                     throw(ArgumentError("must specify at least one of readable or writable to create a FDWatcher"))
@@ -154,7 +154,7 @@ mutable struct _FDWatcher
             end
             t.refcount = (0, 0)
             t.active = (false, false)
-            @static if is_unix()
+            @static if Sys.isunix()
                 if FDWatchers[t.fdnum] == t
                     FDWatchers[t.fdnum] = nothing
                 end
@@ -164,7 +164,7 @@ mutable struct _FDWatcher
         end
     end
 
-    @static if is_windows()
+    @static if Sys.iswindows()
         function _FDWatcher(fd::RawFD, readable::Bool, writable::Bool)
             handle = Libc._get_osfhandle(fd)
             return _FDWatcher(handle, readable, writable)
@@ -205,7 +205,7 @@ mutable struct FDWatcher
         finalizer(this, close)
         return this
     end
-    @static if is_windows()
+    @static if Sys.iswindows()
         function FDWatcher(fd::WindowsRawSocket, readable::Bool, writable::Bool)
             this = new(_FDWatcher(fd, readable, writable), readable, writable)
             finalizer(this, close)
@@ -406,7 +406,7 @@ function wait(fd::RawFD; readable=false, writable=false)
     end
 end
 
-if is_windows()
+if Sys.iswindows()
     function wait(socket::WindowsRawSocket; readable=false, writable=false)
         fdw = _FDWatcher(socket, readable, writable)
         try
@@ -443,7 +443,7 @@ least one of them must be set to `true`.
 The returned value is an object with boolean fields `readable`, `writable`, and `timedout`,
 giving the result of the polling.
 """
-function poll_fd(s::Union{RawFD, is_windows() ? WindowsRawSocket : Union{}}, timeout_s::Real=-1; readable=false, writable=false)
+function poll_fd(s::Union{RawFD, Sys.iswindows() ? WindowsRawSocket : Union{}}, timeout_s::Real=-1; readable=false, writable=false)
     wt = Condition()
     fdw = _FDWatcher(s, readable, writable)
     try

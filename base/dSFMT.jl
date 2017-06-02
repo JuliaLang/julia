@@ -163,7 +163,7 @@ end
 
 ## Windows entropy
 
-if is_windows()
+if Sys.iswindows()
     function win32_SystemFunction036!(a::Array)
         ccall((:SystemFunction036, :Advapi32), stdcall, UInt8, (Ptr{Void}, UInt32), a, sizeof(a))
     end

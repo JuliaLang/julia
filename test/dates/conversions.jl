@@ -48,7 +48,7 @@
 @test typeof(Dates.today()) <: Dates.Date
 @test typeof(Dates.now(Dates.UTC)) <: Dates.DateTime
 
-if is_apple()
+if Sys.isapple()
     withenv("TZ" => "UTC") do
         @test abs(Dates.now() - now(Dates.UTC)) < Dates.Second(1)
     end

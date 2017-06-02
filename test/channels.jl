@@ -315,7 +315,7 @@ let tc = Ref(0),
     ccall(:uv_async_send, Void, (Ptr{Void},), async)
     Base.process_events(false) # schedule event
     ccall(:uv_async_send, Void, (Ptr{Void},), async)
-    is_windows() && Base.process_events(false) # schedule event (windows?)
+    Sys.iswindows() && Base.process_events(false) # schedule event (windows?)
     @test tc[] == 0
     yield() # consume event
     @test tc[] == 1
@@ -327,7 +327,7 @@ let tc = Ref(0),
     @test !isopen(async)
     @test tc[] == 1
     Base.process_events(false) # schedule event & then close
-    is_windows() && Base.process_events(false) # schedule event (windows?)
+    Sys.iswindows() && Base.process_events(false) # schedule event (windows?)
     yield() # consume event & then close
     @test tc[] == 2
     sleep(0.1) # no further events
@@ -342,7 +342,7 @@ let tc = Ref(0),
     close(async)
     @test !isopen(async)
     Base.process_events(false) # schedule event & then close
-    is_windows() && Base.process_events(false) # schedule event (windows)
+    Sys.iswindows() && Base.process_events(false) # schedule event (windows)
     @test tc[] == 0
     yield() # consume event & then close
     @test tc[] == 1

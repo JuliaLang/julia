@@ -460,7 +460,7 @@ function socket_reuse_port()
         s = TCPSocket(delay = false)
 
         # Some systems (e.g. Linux) require the port to be bound before setting REUSEPORT
-        bind_early = is_linux()
+        bind_early = Sys.islinux()
 
         bind_early && bind_client_port(s)
         rc = ccall(:jl_tcp_reuseport, Int32, (Ptr{Void},), s.handle)

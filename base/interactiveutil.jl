@@ -10,7 +10,7 @@ for use within backticks. You can change the editor by setting `JULIA_EDITOR`, `
 `EDITOR` as an environment variable.
 """
 function editor()
-    if is_windows() || is_apple()
+    if Sys.iswindows() || Sys.isapple()
         default_editor = "open"
     elseif isfile("/etc/alternatives/editor")
         default_editor = "/etc/alternatives/editor"
@@ -49,11 +49,11 @@ function edit(path::AbstractString, line::Integer=0)
         cmd = line != 0 ? `$command $path -l $line` : `$command $path`
     elseif startswith(name, "subl") || startswith(name, "atom")
         cmd = line != 0 ? `$command $path:$line` : `$command $path`
-    elseif name == "code" || (is_windows() && uppercase(name) == "CODE.EXE")
+    elseif name == "code" || (Sys.iswindows() && uppercase(name) == "CODE.EXE")
         cmd = line != 0 ? `$command -g $path:$line` : `$command -g $path`
     elseif startswith(name, "notepad++")
         cmd = line != 0 ? `$command $path -n$line` : `$command $path`
-    elseif is_apple() && name == "open"
+    elseif Sys.isapple() && name == "open"
         cmd = `open -t $path`
         line_unsupported = true
     else
@@ -62,8 +62,8 @@ function edit(path::AbstractString, line::Integer=0)
         line_unsupported = true
     end
 
-    if is_windows() && name == "open"
-        @static is_windows() && # don't emit this ccall on other platforms
+    if Sys.iswindows() && name == "open"
+        @static Sys.iswindows() && # don't emit this ccall on other platforms
             systemerror(:edit, ccall((:ShellExecuteW, "shell32"), stdcall, Int,
                                      (Ptr{Void}, Cwstring, Cwstring, Ptr{Void}, Ptr{Void}, Cint),
                                      C_NULL, "open", path, C_NULL, C_NULL, 10) ≤ 32)
@@ -90,7 +90,7 @@ edit(file, line::Integer) = error("could not find source file for function")
 
 # terminal pager
 
-if is_windows()
+if Sys.iswindows()
     function less(file::AbstractString, line::Integer)
         pager = get(ENV, "PAGER", "more")
         g = pager == "more" ? "" : "g"
@@ -123,7 +123,7 @@ less(file, line::Integer) = error("could not find source file for function")
 
 # clipboard copy and paste
 
-if is_apple()
+if Sys.isapple()
     function clipboard(x)
         open(pipeline(`pbcopy`, stderr=STDERR), "w") do io
             print(io, x)
@@ -131,7 +131,7 @@ if is_apple()
     end
     clipboard() = readstring(`pbpaste`)
 
-elseif is_linux()
+elseif Sys.islinux()
     _clipboardcmd = nothing
     function clipboardcmd()
         global _clipboardcmd
@@ -158,7 +158,7 @@ elseif is_linux()
         readstring(pipeline(cmd, stderr=STDERR))
     end
 
-elseif is_windows()
+elseif Sys.iswindows()
     # TODO: these functions leak memory and memory locks if they throw an error
     function clipboard(x::AbstractString)
         if containsnul(x)
@@ -262,21 +262,21 @@ function versioninfo(io::IO=STDOUT; verbose::Bool=false, packages::Bool=false)
         println(io, "DEBUG build")
     end
     println(io, "Platform Info:")
-    println(io, "  OS: ", is_windows() ? "Windows" : is_apple() ?
+    println(io, "  OS: ", Sys.iswindows() ? "Windows" : Sys.isapple() ?
         "macOS" : Sys.KERNEL, " (", Sys.MACHINE, ")")
 
     if verbose
         lsb = ""
-        if is_linux()
+        if Sys.islinux()
             try lsb = readchomp(pipeline(`lsb_release -ds`, stderr=DevNull)) end
         end
-        if is_windows()
+        if Sys.iswindows()
             try lsb = strip(readstring(`$(ENV["COMSPEC"]) /c ver`)) end
         end
         if !isempty(lsb)
             println(io, "      ", lsb)
         end
-        if is_unix()
+        if Sys.isunix()
             println(io, "  uname: ", readchomp(`uname -mprsv`))
         end
     end
@@ -592,7 +592,7 @@ end
 # file downloading
 
 downloadcmd = nothing
-if is_windows()
+if Sys.iswindows()
     function download(url::AbstractString, filename::AbstractString)
         res = ccall((:URLDownloadToFileW,:urlmon),stdcall,Cuint,
                     (Ptr{Void},Cwstring,Cwstring,Cuint,Ptr{Void}),C_NULL,url,filename,0,C_NULL)

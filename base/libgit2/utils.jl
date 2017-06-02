@@ -32,7 +32,7 @@ reset(val::Integer, flag::Integer) = (val &= ~flag)
 toggle(val::Integer, flag::Integer) = (val |= flag)
 
 function prompt(msg::AbstractString; default::AbstractString="", password::Bool=false)
-    if is_windows() && password
+    if Sys.iswindows() && password
         error("Command line prompt not supported for password entry on windows. Use winprompt instead")
     end
     msg = !isempty(default) ? msg*" [$default]:" : msg*":"
@@ -60,8 +60,8 @@ end
 Standardise the path string `path` to use POSIX separators.
 """
 function posixpath end
-if is_windows()
+if Sys.iswindows()
     posixpath(path) = replace(path,'\\','/')
-else is_unix()
+else Sys.isunix()
     posixpath(path) = path
 end
