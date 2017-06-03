@@ -24,7 +24,7 @@ module FastMath
 
 export @fastmath
 
-import Core.Intrinsics: sqrt_llvm_fast, neg_float_fast,
+import Core.Intrinsics: sqrt_llvm, neg_float_fast,
     add_float_fast, sub_float_fast, mul_float_fast, div_float_fast, rem_float_fast,
     eq_float_fast, ne_float_fast, lt_float_fast, le_float_fast
 
@@ -264,9 +264,7 @@ end
 pow_fast(x::Float32, y::Integer) = ccall("llvm.powi.f32", llvmcall, Float32, (Float32, Int32), x, y)
 pow_fast(x::Float64, y::Integer) = ccall("llvm.powi.f64", llvmcall, Float64, (Float64, Int32), x, y)
 
-# TODO: Change sqrt_llvm intrinsic to avoid nan checking; add nan
-# checking to sqrt in math.jl; remove sqrt_llvm_fast intrinsic
-sqrt_fast(x::FloatTypes) = sqrt_llvm_fast(x)
+sqrt_fast(x::FloatTypes) = sqrt_llvm(x)
 
 # libm
 

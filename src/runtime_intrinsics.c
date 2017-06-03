@@ -901,8 +901,6 @@ bi_iintrinsic_fast(jl_LLVMFlipSign, flipsign, flipsign_int,  )
 #define trunc_float(pr, a) *pr = fp_select(a, trunc)
 #define rint_float(pr, a) *pr = fp_select(a, rint)
 #define sqrt_float(pr, a) \
-        if (a < 0) \
-            jl_throw(jl_domain_exception); \
         *pr = fp_select(a, sqrt)
 #define copysign_float(a, b) \
         fp_select2(a, b, copysign)
