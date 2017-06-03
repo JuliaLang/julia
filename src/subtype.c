@@ -2600,10 +2600,9 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, int invariant, jl_ty
         if (!jl_is_type(b))
             return 0;
         if (invariant) {
-            if (num_occurs((jl_tvar_t*)a, env) < 2)
-                return 0;
             if (eq_msp(((jl_tvar_t*)a)->ub, b, env))
-                return 1;
+                return num_occurs((jl_tvar_t*)a, env) >= 2;
+            return 0;
         }
         return type_morespecific_((jl_value_t*)((jl_tvar_t*)a)->ub, b, 0, env);
     }
