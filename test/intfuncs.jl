@@ -125,8 +125,8 @@ end
 @test hex(-12, 3) == "-00c"
 @test num2hex(1243) == (Int == Int32 ? "000004db" : "00000000000004db")
 @test num2hex(-1243) == (Int == Int32 ? "fffffb25" : "fffffffffffffb25")
-@test num2hex(true) == "1"
-@test num2hex(false) == "0"
+@test num2hex(true) == "01"
+@test num2hex(false) == "00"
 
 for elty in Base.BitInteger_types, _ = 1:10
     x = rand(elty)

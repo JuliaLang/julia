@@ -518,8 +518,7 @@ julia> num2hex(2.2)
 "400199999999999a"
 ```
 """
-num2hex(n::BitReal) = hex(reinterpret(Unsigned, n), sizeof(n)*2)
-num2hex(n::Bool) = hex(n)
+num2hex(n::Union{Bool,BitReal}) = hex(reinterpret(Unsigned, n), sizeof(n)*2)
 
 """
     hex2num(T::Type, str)
@@ -535,7 +534,7 @@ julia> hex2num(Int32, "fffffffe")
 -2
 ```
 """
-hex2num(::Type{T}, s::AbstractString) where {T<:BitReal} =
+hex2num(::Type{T}, s::AbstractString) where {T<:Union{Bool,BitReal}} =
     reinterpret(T, parse(reinterpret(Unsigned, T), s, 16))
 
 const base36digits = ['0':'9';'a':'z']

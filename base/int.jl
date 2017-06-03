@@ -32,6 +32,10 @@ const BitReal        = Union{BitReal_types...}
 
 reinterpret(::Type{Unsigned}, x::BitInteger) = unsigned(x)
 reinterpret(::Type{  Signed}, x::BitInteger) = signed(x)
+reinterpret(::Type{Unsigned}, ::Type{Bool})  = UInt8
+reinterpret(::Type{  Signed}, ::Type{Bool})  =  Int8
+reinterpret(::Type{Unsigned}, x::Bool)       = x % UInt8
+reinterpret(::Type{  Signed}, x::Bool)       = x %  Int8
 
 """
     unsigned(T::Type) -> UnsignedType
