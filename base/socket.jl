@@ -3,7 +3,7 @@
 ## IP ADDRESS HANDLING ##
 abstract type IPAddr end
 
-Base.isless{T<:IPAddr}(a::T, b::T) = isless(a.host, b.host)
+Base.isless(a::T, b::T) where {T<:IPAddr} = isless(a.host, b.host)
 Base.convert(dt::Type{<:Integer}, ip::IPAddr) = dt(ip.host)
 
 struct IPv4 <: IPAddr

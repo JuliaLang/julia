@@ -40,7 +40,7 @@ end
     #C
 #end
 
-#aCb{T, S}(A::BitMatrix{T}, B::BitMatrix{S}) = aTb(A, B)
+#aCb(A::BitMatrix{T}, B::BitMatrix{S}) where {T, S} = aTb(A, B)
 
 function triu(B::BitMatrix, k::Integer=0)
     m,n = size(B)

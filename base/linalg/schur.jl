@@ -48,7 +48,7 @@ julia> F[:vectors] * F[:Schur] * F[:vectors]'
 ```
 """
 schurfact(A::StridedMatrix{<:BlasFloat}) = schurfact!(copy(A))
-function schurfact{T}(A::StridedMatrix{T})
+function schurfact(A::StridedMatrix{T}) where T
     S = promote_type(Float32, typeof(one(T)/norm(one(T))))
     return schurfact!(copy_oftype(A, S))
 end

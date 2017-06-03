@@ -563,7 +563,7 @@ end
 # fallback div, fld, and cld implementations
 # NOTE: C89 fmod() and x87 FPREM implicitly provide truncating float division,
 # so it is used here as the basis of float div().
-div{T<:Real}(x::T, y::T) = convert(T,round((x-rem(x,y))/y))
+div(x::T, y::T) where {T<:Real} = convert(T,round((x-rem(x,y))/y))
 
 """
     fld(x, y)
@@ -575,7 +575,7 @@ julia> fld(7.3,5.5)
 1.0
 ```
 """
-fld{T<:Real}(x::T, y::T) = convert(T,round((x-mod(x,y))/y))
+fld(x::T, y::T) where {T<:Real} = convert(T,round((x-mod(x,y))/y))
 
 """
     cld(x, y)
@@ -586,10 +586,10 @@ julia> cld(5.5,2.2)
 3.0
 ```
 """
-cld{T<:Real}(x::T, y::T) = convert(T,round((x-modCeil(x,y))/y))
-#rem{T<:Real}(x::T, y::T) = convert(T,x-y*trunc(x/y))
-#mod{T<:Real}(x::T, y::T) = convert(T,x-y*floor(x/y))
-modCeil{T<:Real}(x::T, y::T) = convert(T,x-y*ceil(x/y))
+cld(x::T, y::T) where {T<:Real} = convert(T,round((x-modCeil(x,y))/y))
+#rem(x::T, y::T) where {T<:Real} = convert(T,x-y*trunc(x/y))
+#mod(x::T, y::T) where {T<:Real} = convert(T,x-y*floor(x/y))
+modCeil(x::T, y::T) where {T<:Real} = convert(T,x-y*ceil(x/y))
 
 # operator alias
 
@@ -644,9 +644,9 @@ julia> mod1(4, 3)
 1
 ```
 """
-mod1{T<:Real}(x::T, y::T) = (m = mod(x, y); ifelse(m == 0, y, m))
+mod1(x::T, y::T) where {T<:Real} = (m = mod(x, y); ifelse(m == 0, y, m))
 # efficient version for integers
-mod1{T<:Integer}(x::T, y::T) = (@_inline_meta; mod(x + y - T(1), y) + T(1))
+mod1(x::T, y::T) where {T<:Integer} = (@_inline_meta; mod(x + y - T(1), y) + T(1))
 
 
 """

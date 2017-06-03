@@ -208,8 +208,8 @@ mutable struct DLMStore{T} <: DLMHandler
     eol::Char
 end
 
-function DLMStore{T}(::Type{T}, dims::NTuple{2,Integer},
-        has_header::Bool, sbuff::String, auto::Bool, eol::Char)
+function DLMStore(::Type{T}, dims::NTuple{2,Integer},
+        has_header::Bool, sbuff::String, auto::Bool, eol::Char) where T
     (nrows,ncols) = dims
     nrows <= 0 && throw(ArgumentError("number of rows in dims must be > 0, got $nrows"))
     ncols <= 0 && throw(ArgumentError("number of columns in dims must be > 0, got $ncols"))
@@ -408,7 +408,7 @@ function colval(sbuff::String, startpos::Int, endpos::Int, cells::Array{Bool,2},
     isnull(n) || (cells[row, col] = get(n))
     isnull(n)
 end
-function colval{T<:Integer}(sbuff::String, startpos::Int, endpos::Int, cells::Array{T,2}, row::Int, col::Int)
+function colval(sbuff::String, startpos::Int, endpos::Int, cells::Array{T,2}, row::Int, col::Int) where T<:Integer
     n = tryparse_internal(T, sbuff, startpos, endpos, 0, false)
     isnull(n) || (cells[row, col] = get(n))
     isnull(n)
@@ -620,7 +620,7 @@ readcsv(io, T::Type; opts...) = readdlm(io, ',', T; opts...)
 
 # todo: keyword argument for # of digits to print
 writedlm_cell(io::IO, elt::AbstractFloat, dlm, quotes) = print_shortest(io, elt)
-function writedlm_cell{T}(io::IO, elt::AbstractString, dlm::T, quotes::Bool)
+function writedlm_cell(io::IO, elt::AbstractString, dlm::T, quotes::Bool) where T
     if quotes && !isempty(elt) && (('"' in elt) || ('\n' in elt) || ((T <: Char) ? (dlm in elt) : contains(elt, dlm)))
         print(io, '"', replace(elt, r"\"", "\"\""), '"')
     else

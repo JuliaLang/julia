@@ -76,7 +76,7 @@ function tuple_type_tail(T::DataType)
 end
 
 tuple_type_cons(::Type, ::Type{Union{}}) = Union{}
-function tuple_type_cons{S,T<:Tuple}(::Type{S}, ::Type{T})
+function tuple_type_cons(::Type{S}, ::Type{T}) where T<:Tuple where S
     @_pure_meta
     Tuple{S, T.parameters...}
 end

@@ -218,7 +218,7 @@ String
 ```
 """
 valtype(::Type{Associative{K,V}}) where {K,V} = V
-valtype{A<:Associative}(::Type{A}) = valtype(supertype(A))
+valtype(::Type{A}) where {A<:Associative} = valtype(supertype(A))
 valtype(a::Associative) = valtype(typeof(a))
 
 """

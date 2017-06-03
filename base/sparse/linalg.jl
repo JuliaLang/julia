@@ -903,7 +903,7 @@ function factorize(A::SparseMatrixCSC)
     end
 end
 
-function factorize{Ti}(A::Symmetric{Float64,SparseMatrixCSC{Float64,Ti}})
+function factorize(A::Symmetric{Float64,SparseMatrixCSC{Float64,<:Any}})
     try
         return cholfact(A)
     catch e
@@ -911,7 +911,7 @@ function factorize{Ti}(A::Symmetric{Float64,SparseMatrixCSC{Float64,Ti}})
         return ldltfact(A)
     end
 end
-function factorize{Ti}(A::Hermitian{Complex{Float64}, SparseMatrixCSC{Complex{Float64},Ti}})
+function factorize(A::Hermitian{Complex{Float64}, SparseMatrixCSC{Complex{Float64},<:Any}})
     try
         return cholfact(A)
     catch e

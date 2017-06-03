@@ -174,7 +174,9 @@ function reinterpret(::Type{T}, a::SparseMatrixCSC{Tv}) where {T,Tv}
     return SparseMatrixCSC(mA, nA, colptr, rowval, nzval)
 end
 
-function sparse_compute_reshaped_colptr_and_rowval{Ti}(colptrS::Vector{Ti}, rowvalS::Vector{Ti}, mS::Int, nS::Int, colptrA::Vector{Ti}, rowvalA::Vector{Ti}, mA::Int, nA::Int)
+function sparse_compute_reshaped_colptr_and_rowval(colptrS::Vector{Ti}, rowvalS::Vector{Ti},
+                                                   mS::Int, nS::Int, colptrA::Vector{Ti},
+                                                   rowvalA::Vector{Ti}, mA::Int, nA::Int) where Ti
     lrowvalA = length(rowvalA)
     maxrowvalA = (lrowvalA > 0) ? maximum(rowvalA) : zero(Ti)
     ((length(colptrA) == (nA+1)) && (maximum(colptrA) <= (lrowvalA+1)) && (maxrowvalA <= mA)) || throw(BoundsError())
@@ -514,11 +516,10 @@ sparse(I::AbstractVector, J::AbstractVector, V::AbstractVector, m::Integer, n::I
     sparse(AbstractVector{Int}(I), AbstractVector{Int}(J), V, m, n, combine)
 
 """
-    sparse!{Tv,Ti<:Integer}(
-        I::AbstractVector{Ti}, J::AbstractVector{Ti}, V::AbstractVector{Tv},
-        m::Integer, n::Integer, combine, klasttouch::Vector{Ti},
-        csrrowptr::Vector{Ti}, csrcolval::Vector{Ti}, csrnzval::Vector{Tv},
-        [csccolptr::Vector{Ti}], [cscrowval::Vector{Ti}, cscnzval::Vector{Tv}] )
+    sparse!(I::AbstractVector{Ti}, J::AbstractVector{Ti}, V::AbstractVector{Tv},
+            m::Integer, n::Integer, combine, klasttouch::Vector{Ti},
+            csrrowptr::Vector{Ti}, csrcolval::Vector{Ti}, csrnzval::Vector{Tv},
+            [csccolptr::Vector{Ti}], [cscrowval::Vector{Ti}, cscnzval::Vector{Tv}] ) where {Tv,Ti<:Integer}
 
 Parent of and expert driver for [`sparse`](@ref);
 see [`sparse`](@ref) for basic usage. This method
@@ -713,8 +714,8 @@ end
 ## Transposition and permutation methods
 
 """
-    halfperm!{Tv,Ti}(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti},
-        q::AbstractVector{<:Integer}, f::Function = identity)
+    halfperm!(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti},
+              q::AbstractVector{<:Integer}, f::Function = identity) where {Tv,Ti}
 
 Column-permute and transpose `A`, simultaneously applying `f` to each entry of `A`, storing
 the result `(f(A)Q)^T` (`map(f, transpose(A[:,q]))`) in `X`.
@@ -809,9 +810,9 @@ transpose(A::SparseMatrixCSC) = ftranspose(A, identity)
 ctranspose(A::SparseMatrixCSC) = ftranspose(A, conj)
 
 """
-    unchecked_noalias_permute!{Tv,Ti}(X::SparseMatrixCSC{Tv,Ti},
+    unchecked_noalias_permute!(X::SparseMatrixCSC{Tv,Ti},
         A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{<:Integer},
-        q::AbstractVector{<:Integer}, C::SparseMatrixCSC{Tv,Ti})
+        q::AbstractVector{<:Integer}, C::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti}
 
 See [`permute!`](@ref) for basic usage. Parent of `permute[!]`
 methods operating on `SparseMatrixCSC`s that assume none of `X`, `A`, and `C` alias each
@@ -839,9 +840,9 @@ function unchecked_noalias_permute!(X::SparseMatrixCSC{Tv,Ti},
     return X
 end
 """
-    unchecked_aliasing_permute!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti},
+    unchecked_aliasing_permute!(A::SparseMatrixCSC{Tv,Ti},
         p::AbstractVector{<:Integer}, q::AbstractVector{<:Integer},
-        C::SparseMatrixCSC{Tv,Ti}, workcolptr::Vector{Ti})
+        C::SparseMatrixCSC{Tv,Ti}, workcolptr::Vector{Ti}) where {Tv,Ti}
 
 See [`permute!`](@ref) for basic usage. Parent of `permute!`
 methods operating on `SparseMatrixCSC`s where the source and destination matrices are the
@@ -976,16 +977,18 @@ function _checkargs_sourcecompatworkcolptr_permute!(A::SparseMatrixCSC{Tv,Ti},
     end
 end
 """
-    permute!{Tv,Ti}(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti},
-        p::AbstractVector{<:Integer}, q::AbstractVector{<:Integer}[, C::SparseMatrixCSC{Tv,Ti}])
+    permute!(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti},
+             p::AbstractVector{<:Integer}, q::AbstractVector{<:Integer},
+             [C::SparseMatrixCSC{Tv,Ti}]) where {Tv,Ti}
 
 Bilaterally permute `A`, storing result `PAQ` (`A[p,q]`) in `X`. Stores intermediate result
 `(AQ)^T` (`transpose(A[:,q])`) in optional argument `C` if present. Requires that none of
 `X`, `A`, and, if present, `C` alias each other; to store result `PAQ` back into `A`, use
 the following method lacking `X`:
 
-    permute!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{<:Integer},
-        q::AbstractVector{<:Integer}[, C::SparseMatrixCSC{Tv,Ti}[, workcolptr::Vector{Ti}]])
+    permute!(A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{<:Integer},
+             q::AbstractVector{<:Integer}[, C::SparseMatrixCSC{Tv,Ti},
+             [workcolptr::Vector{Ti}]]) where {Tv,Ti}
 
 `X`'s dimensions must match those of `A` (`X.m == A.m` and `X.n == A.n`), and `X` must
 have enough storage to accommodate all allocated entries in `A` (`length(X.rowval) >= nnz(A)`
@@ -1046,8 +1049,8 @@ function permute!(A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{<:Integer},
     unchecked_aliasing_permute!(A, p, q, C, workcolptr)
 end
 """
-    permute{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{<:Integer},
-        q::AbstractVector{<:Integer})
+    permute(A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{<:Integer},
+        q::AbstractVector{<:Integer}) where {Tv,Ti}
 
 Bilaterally permute `A`, returning `PAQ` (`A[p,q]`). Column-permutation `q`'s length must
 match `A`'s column count (`length(q) == A.n`). Row-permutation `p`'s length must match `A`'s
@@ -2258,8 +2261,8 @@ setindex!(A::SparseMatrixCSC, x, ::Colon, ::Colon) = setindex!(A, x, 1:size(A, 1
 setindex!(A::SparseMatrixCSC, x, ::Colon, j::Union{Integer, AbstractVector}) = setindex!(A, x, 1:size(A, 1), j)
 setindex!(A::SparseMatrixCSC, x, i::Union{Integer, AbstractVector}, ::Colon) = setindex!(A, x, i, 1:size(A, 2))
 
-function setindex!{Tv}(A::SparseMatrixCSC{Tv}, x::Number,
-        I::AbstractVector{<:Integer}, J::AbstractVector{<:Integer})
+function setindex!(A::SparseMatrixCSC{Tv}, x::Number,
+        I::AbstractVector{<:Integer}, J::AbstractVector{<:Integer}) where Tv
     if isempty(I) || isempty(J); return A; end
     # lt=≤ to check for strict sorting
     if !issorted(I, lt=≤); I = sort!(unique(I)); end

@@ -870,7 +870,7 @@ end
 # to transform the indices such that we can call the only getindex method that
 # we require the type A{T,N} <: AbstractArray{T,N} to define; either:
 #       getindex(::A, ::Int) # if IndexStyle(A) == IndexLinear() OR
-#       getindex{T,N}(::A{T,N}, ::Vararg{Int, N}) # if IndexCartesian()
+#       getindex(::A{T,N}, ::Vararg{Int, N}) where {T,N} # if IndexCartesian()
 # If the subtype hasn't defined the required method, it falls back to the
 # _getindex function again where an error is thrown to prevent stack overflows.
 
@@ -1192,7 +1192,7 @@ end
 _cs(d, a, b) = (a == b ? a : throw(DimensionMismatch(
     "mismatch in dimension $d (expected $a got $b)")))
 
-dims2cat{n}(::Type{Val{n}}) = ntuple(i -> (i == n), Val{n})
+dims2cat(::Type{Val{n}}) where {n} = ntuple(i -> (i == n), Val{n})
 dims2cat(dims) = ntuple(i -> (i in dims), maximum(dims))
 
 cat(dims, X...) = cat_t(dims, promote_eltypeof(X...), X...)

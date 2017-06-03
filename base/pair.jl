@@ -23,7 +23,7 @@ isless(p::Pair, q::Pair) = ifelse(!isequal(p.first,q.first), isless(p.first,q.fi
                                                              isless(p.second,q.second))
 getindex(p::Pair,i::Int) = getfield(p,i)
 getindex(p::Pair,i::Real) = getfield(p, convert(Int, i))
-reverse{A,B}(p::Pair{A,B}) = Pair{B,A}(p.second, p.first)
+reverse(p::Pair{A,B}) where {A,B} = Pair{B,A}(p.second, p.first)
 
 endof(p::Pair) = 2
 length(p::Pair) = 2

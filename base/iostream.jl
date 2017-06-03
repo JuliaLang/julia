@@ -166,7 +166,7 @@ function unsafe_write(s::IOStream, p::Ptr{UInt8}, nb::UInt)
     return Int(ccall(:ios_write, Csize_t, (Ptr{Void}, Ptr{Void}, Csize_t), s.ios, p, nb))
 end
 
-function write{T,N}(s::IOStream, a::SubArray{T,N,<:Array})
+function write(s::IOStream, a::SubArray{T,N,<:Array}) where {T,N}
     if !isbits(T) || stride(a,1)!=1
         return invoke(write, Tuple{Any, AbstractArray}, s, a)
     end

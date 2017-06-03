@@ -178,7 +178,7 @@ for specific arrays. For example, here are the two default methods from [`sort.j
 
 ```julia
 defalg(v::AbstractArray) = MergeSort
-defalg{T<:Number}(v::AbstractArray{T}) = QuickSort
+defalg(v::AbstractArray{<:Number}) = QuickSort
 ```
 
 As for numeric arrays, choosing a non-stable default algorithm for array types for which the notion

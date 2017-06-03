@@ -1856,7 +1856,7 @@ function _densifystarttolastnz!(x::SparseVector)
 end
 
 #sorting
-function sort{Tv,Ti}(x::SparseVector{Tv,Ti}; kws...)
+function sort(x::SparseVector{Tv,Ti}; kws...) where {Tv,Ti}
     allvals = push!(copy(nonzeros(x)),zero(Tv))
     sinds = sortperm(allvals;kws...)
     n,k = length(x),length(allvals)

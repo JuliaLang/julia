@@ -462,7 +462,7 @@ function +(x::TwicePrecision{T}, y::TwicePrecision{T}) where T
     TwicePrecision(r, s)
 end
 +(x::TwicePrecision, y::TwicePrecision) = _add2(promote(x, y)...)
-_add2{T<:TwicePrecision}(x::T, y::T) = x + y
+_add2(x::T, y::T) where {T<:TwicePrecision} = x + y
 _add2(x::TwicePrecision, y::TwicePrecision) = TwicePrecision(x.hi+y.hi, x.lo+y.lo)
 
 function *(x::TwicePrecision, v::Integer)

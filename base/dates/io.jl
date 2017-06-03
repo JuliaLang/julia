@@ -431,7 +431,7 @@ Parse a date from a date string `dt` using a `DateFormat` object `df`.
 """
 Date(dt::AbstractString,df::DateFormat=ISODateFormat) = parse(Date, dt, df)
 
-@generated function format{S, T}(io::IO, dt::TimeType, fmt::DateFormat{S, T})
+@generated function format(io::IO, dt::TimeType, fmt::DateFormat{S, T}) where {S, T}
     N = nfields(T)
     quote
         ts = fmt.tokens

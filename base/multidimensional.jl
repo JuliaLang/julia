@@ -119,8 +119,8 @@ module IteratorsMD
 
     CartesianRange(index::CartesianIndex) = CartesianRange(one(index), index)
     CartesianRange(::Tuple{}) = CartesianRange{CartesianIndex{0}}(CartesianIndex{0}(()),CartesianIndex{0}(()))
-    CartesianRange{N}(sz::NTuple{N,Int}) = CartesianRange(CartesianIndex(sz))
-    CartesianRange{N}(rngs::NTuple{N,Union{Integer,AbstractUnitRange}}) =
+    CartesianRange(sz::NTuple{N,Int}) where {N} = CartesianRange(CartesianIndex(sz))
+    CartesianRange(rngs::NTuple{N,Union{Integer,AbstractUnitRange}}) where {N} =
         CartesianRange(CartesianIndex(map(first, rngs)), CartesianIndex(map(last, rngs)))
 
     convert(::Type{NTuple{N,UnitRange{Int}}}, R::CartesianRange{CartesianIndex{N}}) where {N} =
@@ -813,10 +813,10 @@ function copy!(dest::AbstractArray{T,N}, src::AbstractArray{T,N}) where {T,N}
     dest
 end
 
-@generated function copy!{T1,T2,N}(dest::AbstractArray{T1,N},
-                                   Rdest::CartesianRange{CartesianIndex{N}},
-                                   src::AbstractArray{T2,N},
-                                   Rsrc::CartesianRange{CartesianIndex{N}})
+@generated function copy!(dest::AbstractArray{T1,N},
+                          Rdest::CartesianRange{CartesianIndex{N}},
+                          src::AbstractArray{T2,N},
+                          Rsrc::CartesianRange{CartesianIndex{N}}) where {T1,T2,N}
     quote
         isempty(Rdest) && return dest
         if size(Rdest) != size(Rsrc)
@@ -1249,7 +1249,7 @@ function permutedims(B::StridedArray, perm)
     permutedims!(P, B, perm)
 end
 
-function checkdims_perm{TP,TB,N}(P::AbstractArray{TP,N}, B::AbstractArray{TB,N}, perm)
+function checkdims_perm(P::AbstractArray{TP,N}, B::AbstractArray{TB,N}, perm) where {TP,TB,N}
     indsB = indices(B)
     length(perm) == N || throw(ArgumentError("expected permutation of size $N, but length(perm)=$(length(perm))"))
     isperm(perm) || throw(ArgumentError("input is not a permutation"))

@@ -639,9 +639,9 @@ function with(f::Function, obj)
     end
 end
 
-with{T}(f::Function, ::Type{T}, args...) = with(f, T(args...))
+with(f::Function, ::Type{T}, args...) where {T} = with(f, T(args...))
 
-function with_warn{T}(f::Function, ::Type{T}, args...)
+function with_warn(f::Function, ::Type{T}, args...) where T
     obj = T(args...)
     try
         with(f, obj)
@@ -651,7 +651,7 @@ function with_warn{T}(f::Function, ::Type{T}, args...)
 end
 
 """
-    LibGit2.Consts.OBJECT{T<:GitObject}(::Type{T})
+    LibGit2.Consts.OBJECT(::Type{T}) where T<:GitObject
 
 The `OBJECT` enum value corresponding to type `T`.
 """

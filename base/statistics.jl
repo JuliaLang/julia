@@ -602,7 +602,7 @@ function median!(v::AbstractVector)
     end
 end
 median!(v::AbstractArray) = median!(vec(v))
-median{T}(v::AbstractArray{T}) = median!(copy!(Array{T,1}(_length(v)), v))
+median(v::AbstractArray{T}) where {T} = median!(copy!(Array{T,1}(_length(v)), v))
 
 """
     median(v[, region])
