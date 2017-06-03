@@ -21,7 +21,12 @@ body, input {
 }
 
 pre, code {
-  font-family: 'Ubuntu Mono', Monaco, courier, monospace;
+  font-family: 'Roboto Mono', Monaco, courier, monospace;
+  font-size: 0.90em;
+}
+
+pre code {
+  font-size: 1em;
 }
 
 a {
@@ -273,6 +278,10 @@ article {
 
 article > header {}
 
+article > header div#topbar {
+    display: none;
+}
+
 article > header nav ul {
     display: inline-block;
     list-style: none;
@@ -427,4 +436,106 @@ article section.docstring a.source-link {
 .hljs {
     background-color: transparent;
     padding: 0;
+}
+
+@media only screen and (max-width: 768px) {
+    nav.toc {
+        position: fixed;
+        overflow-y: scroll;
+        width: 16em;
+        left: -16em;
+        -webkit-overflow-scrolling: touch;
+        -webkit-transition-property: left; /* Safari */
+        -webkit-transition-duration: 0.3s; /* Safari */
+        transition-property: left;
+        transition-duration: 0.3s;
+        -webkit-transition-timing-function: ease-out; /* Safari */
+        transition-timing-function: ease-out;
+        z-index: 2;
+    }
+
+    nav.toc.show {
+        left: 0;
+    }
+
+    article {
+        margin-left: 0;
+        padding: 3em 0.9em 0 0.9em; /* top right bottom left */
+        overflow-wrap: break-word;
+    }
+
+    article > header {
+        position: fixed;
+        left: 0;
+        z-index: 1;
+    }
+
+    article > header nav, hr {
+        display: none;
+    }
+
+    article > header div#topbar {
+        display: block; /* is mobile */
+        position: fixed;
+        width: 100%;
+        height: 1.5em;
+        padding-top: 1em;
+        padding-bottom: 1em;
+        background-color: #fcfcfc;
+        box-shadow: 0 1px 3px rgba(0,0,0,.26);
+        top: 0;
+        -webkit-transition-property: top; /* Safari */
+        -webkit-transition-duration: 0.3s; /* Safari */
+        transition-property: top;
+        transition-duration: 0.3s;
+    }
+
+    article > header div#topbar.headroom--unpinned.headroom--not-top.headroom--not-bottom {
+        top: -4em;
+        -webkit-transition-property: top; /* Safari */
+        -webkit-transition-duration: 0.7s; /* Safari */
+        transition-property: top;
+        transition-duration: 0.7s;
+    }
+
+    article > header div#topbar span {
+        position: fixed;
+        width: 80%;
+        height: 1.5em;
+        margin-top: -0.1em;
+        margin-left: 0.9em;
+        font-size: 1.2em;
+        overflow: hidden;
+    }
+
+    article > header div#topbar a.fa-bars {
+        float: right;
+        padding: 0.6em;
+        margin-top: -0.6em;
+        margin-right: 0.3em;
+        font-size: 1.5em;
+    }
+
+    article > header div#topbar a.fa-bars:visited {
+        color: #3091d1;
+    }
+
+    article table {
+        overflow-x: auto;
+        display: block;
+    }
+
+    article div.MathJax_Display {
+        overflow: scroll;
+    }
+
+    article span.MathJax {
+        overflow: hidden;
+    }
+}
+
+@media only screen and (max-width: 320px) {
+    body {
+        font-size: 15px;
+    }
 }
