@@ -30,20 +30,6 @@ maxintfloat() = maxintfloat(Float64)
 isinteger(x::AbstractFloat) = (x - trunc(x) == 0)
 
 """
-    hex2num(str)
-
-Convert a hexadecimal string to the floating point number it represents.
-This function, which is inherently type-unstable, returns a `Float16`,
-a `Float32`, or a `Float64` depending on the length of the string `str`
-(note that this length must hence be no greater than 16).
-"""
-function hex2num(s::AbstractString)
-    l = length(s)
-    l > 16 && throw(ArgumentError("the length of the passed string must be <= 16, got $l"))
-    hex2num(l <= 4 ? Float16 : l <= 8 ? Float32 : Float64, s)
-end
-
-"""
     round([T,] x, [digits, [base]], [r::RoundingMode])
 
 Rounds `x` to an integer value according to the provided

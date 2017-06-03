@@ -36,6 +36,10 @@ reinterpret(::Type{Unsigned}, ::Type{Bool})  = UInt8
 reinterpret(::Type{  Signed}, ::Type{Bool})  =  Int8
 reinterpret(::Type{Unsigned}, x::Bool)       = x % UInt8
 reinterpret(::Type{  Signed}, x::Bool)       = x %  Int8
+reinterpret(::Type{Unsigned}, ::Type{Char}) = UInt32
+reinterpret(::Type{  Signed}, ::Type{Char}) =  Int32
+reinterpret(::Type{Unsigned}, x::Char) = unsigned(x)
+reinterpret(::Type{  Signed}, x::Char) = signed(x)
 
 """
     unsigned(T::Type) -> UnsignedType

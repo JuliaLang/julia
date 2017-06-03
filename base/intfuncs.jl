@@ -504,38 +504,21 @@ function hex(x::Unsigned, pad::Int, neg::Bool)
 end
 
 """
-    num2hex(f)
+    reinterpret(T::Type, str::AbstractString, b=16)
 
-A hexadecimal string of the binary representation of a number.
-See also the [`bits`](@ref) function, which is similar but gives
-a binary string, and [`hex2num`](@ref) which does the opposite conversion.
-
-```jldoctest
-julia> num2hex(Int64(4))
-"0000000000000004"
-
-julia> num2hex(2.2)
-"400199999999999a"
-```
-"""
-num2hex(n::Union{Bool,BitReal}) = hex(reinterpret(Unsigned, n), sizeof(n)*2)
-
-"""
-    hex2num(T::Type, str)
-
-Interprets a hexadecimal string as the bit representation of a
-number of type `T`. See also [`num2hex`](@ref).
+Interprets a string as the bit representation of a
+number of type `T`, encoded in base `b`.
 
 ```jldoctest
-julia> hex2num(Float64, "400199999999999a")
+julia> reinterpret(Float64, "400199999999999a")
 2.2
 
-julia> hex2num(Int32, "fffffffe")
+julia> reinterpret(Int32, "fffffffe")
 -2
 ```
 """
-hex2num(::Type{T}, s::AbstractString) where {T<:Union{Bool,BitReal}} =
-    reinterpret(T, parse(reinterpret(Unsigned, T), s, 16))
+reinterpret(::Type{T}, s::AbstractString, b=16) where {T<:Union{Bool,Char,BitReal}} =
+    reinterpret(T, parse(reinterpret(Unsigned, T), s, b))
 
 const base36digits = ['0':'9';'a':'z']
 const base62digits = ['0':'9';'A':'Z';'a':'z']
@@ -626,25 +609,29 @@ Convert an integer to a decimal string, optionally specifying a number of digits
 dec
 
 """
-    bits(n)
+    bits(n, fmt=bin)
 
 A string giving the literal bit representation of a number.
-See also the [`num2hex`](@ref) function, which is similar but
-gives a hexadecimal string.
+The `fmt` function, which can be `bin` or `hex`,
+determines the format used to represent those bits
+respectively as a binary or hexadecimal string.
 
 ```jldoctest
 julia> bits(4)
 "0000000000000000000000000000000000000000000000000000000000000100"
 
+julia> bits(4, hex)
+"0000000000000004"
+
 julia> bits(2.2)
 "0100000000000001100110011001100110011001100110011001100110011010"
+
+julia> bits(2.2, hex)
+"400199999999999a"
 ```
 """
-bits(x::Union{Bool,Int8,UInt8})           = bin(reinterpret(UInt8,x),8)
-bits(x::Union{Int16,UInt16,Float16})      = bin(reinterpret(UInt16,x),16)
-bits(x::Union{Char,Int32,UInt32,Float32}) = bin(reinterpret(UInt32,x),32)
-bits(x::Union{Int64,UInt64,Float64})      = bin(reinterpret(UInt64,x),64)
-bits(x::Union{Int128,UInt128})            = bin(reinterpret(UInt128,x),128)
+bits(n::Union{Bool,Char,BitReal}, fmt::Union{typeof(bin), typeof(hex)}=bin) =
+    fmt(reinterpret(Unsigned, n), sizeof(n)*(fmt === bin ? 8 : 2))
 
 """
     digits([T<:Integer], n::Integer, base::T=10, pad::Integer=1)

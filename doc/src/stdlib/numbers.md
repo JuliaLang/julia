@@ -58,8 +58,6 @@ Base.Math.significand
 Base.Math.exponent
 Base.complex(::Complex)
 Base.bswap
-Base.num2hex
-Base.hex2num
 Base.hex2bytes
 Base.bytes2hex
 ```
