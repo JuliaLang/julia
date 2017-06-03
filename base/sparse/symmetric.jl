@@ -44,7 +44,7 @@ function A_mul_B_U_kernel!(α::Number, A::Symmetric{TA,SparseMatrixCSC{TA,S}}, B
                 C[row, k] += a * αxj
                 row == col || (tmp += a * B[row, k])
             end
-            C[col, k] += tmp
+            C[col, k] += α * tmp
         end
     end
     C
@@ -69,7 +69,7 @@ function A_mul_B_L_kernel!(α::Number, A::Symmetric{TA,SparseMatrixCSC{TA,S}}, B
               C[row, k] += a * αxj
               row == col || (tmp += a * B[row, k])
           end
-          C[col, k] += tmp
+          C[col, k] += α * tmp
       end
   end
   C
