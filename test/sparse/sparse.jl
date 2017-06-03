@@ -137,6 +137,19 @@ end
     end
 end
 
+@testset "symmetric sparse matrix-vector multiplication" begin
+    for i = 1:5
+        a = sprand(10, 10, 0.25)
+        a = a + a'
+        b = rand(10)
+        ab = a*b
+        u = Symmetric(a, :U)
+        @test maximum(abs.(u*b - ab)) < 100*eps() * maximum(abs.(ab))
+        l = Symmetric(a, :L)
+        @test maximum(abs.(l*b - ab)) < 100*eps() * maximum(abs.(ab))
+    end
+end
+
 @testset "sparse matrix * BitArray" begin
     A = sprand(5,5,0.2)
     B = trues(5)

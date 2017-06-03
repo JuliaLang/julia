@@ -33,6 +33,7 @@ export AbstractSparseArray, AbstractSparseMatrix, AbstractSparseVector,
 
 include("abstractsparse.jl")
 include("sparsematrix.jl")
+include("symmetric.jl")
 include("sparsevector.jl")
 include("higherorderfns.jl")
 
