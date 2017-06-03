@@ -69,7 +69,6 @@
     /*  checked conversion */ \
     ADD_I(checked_trunc_sint, 2) \
     ADD_I(checked_trunc_uint, 2) \
-    ADD_I(check_top_bit, 1) \
     /*  checked arithmetic */ \
     ADD_I(checked_sadd_int, 2) \
     ADD_I(checked_uadd_int, 2) \

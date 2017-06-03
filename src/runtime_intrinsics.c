@@ -867,16 +867,6 @@ static unsigned check_trunc_uint(unsigned isize, unsigned osize, void *pa)
 }
 cvt_iintrinsic_checked(LLVMTrunc, check_trunc_uint, checked_trunc_uint)
 
-JL_DLLEXPORT jl_value_t *jl_check_top_bit(jl_value_t *a)
-{
-    jl_value_t *ty = jl_typeof(a);
-    if (!jl_is_primitivetype(ty))
-        jl_error("check_top_bit: value is not a primitive type");
-    if (signbitbyte(jl_data_ptr(a), jl_datatype_size(ty)))
-        jl_throw(jl_inexact_exception);
-    return a;
-}
-
 // checked arithmetic
 #define check_sadd_int(a,b) \
         /* this test is a reduction of (b > 0) ? (a + b > typemax(a)) : (a + b < typemin(a)) ==> overflow \
