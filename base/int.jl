@@ -318,7 +318,7 @@ trailing_ones(x::Integer) = trailing_zeros(~x)
 ## integer conversions ##
 
 for to in BitInteger_types, from in (BitInteger_types..., Bool)
-    if !(to === from)
+    if to !== from
         if to.size < from.size
             if issubtype(to, Signed)
                 if issubtype(from, Unsigned)
