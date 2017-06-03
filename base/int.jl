@@ -407,6 +407,22 @@ end
 
 ## integer conversions ##
 
+function checked_trunc_sint{To,From}(::Type{To}, x::From)
+    @_inline_meta
+    y = trunc_int(To, x)
+    back = sext_int(From, y)
+    x == back || throw(InexactError())
+    y
+end
+
+function checked_trunc_uint{To,From}(::Type{To}, x::From)
+    @_inline_meta
+    y = trunc_int(To, x)
+    back = zext_int(From, y)
+    x == back || throw(InexactError())
+    y
+end
+
 for to in BitInteger_types, from in (BitInteger_types..., Bool)
     if !(to === from)
         if to.size < from.size

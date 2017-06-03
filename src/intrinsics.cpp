@@ -498,24 +498,6 @@ static Value *generic_trunc(jl_codectx_t &ctx, Type *to, Value *x)
     return ctx.builder.CreateTrunc(x, to);
 }
 
-static Value *generic_trunc_uchecked(jl_codectx_t &ctx, Type *to, Value *x)
-{
-    Value *ans = ctx.builder.CreateTrunc(x, to);
-    Value *back = ctx.builder.CreateZExt(ans, x->getType());
-    raise_exception_unless(ctx, ctx.builder.CreateICmpEQ(back, x),
-                           literal_pointer_val(ctx, jl_inexact_exception));
-    return ans;
-}
-
-static Value *generic_trunc_schecked(jl_codectx_t &ctx, Type *to, Value *x)
-{
-    Value *ans = ctx.builder.CreateTrunc(x, to);
-    Value *back = ctx.builder.CreateSExt(ans, x->getType());
-    raise_exception_unless(ctx, ctx.builder.CreateICmpEQ(back, x),
-                           literal_pointer_val(ctx, jl_inexact_exception));
-    return ans;
-}
-
 static Value *generic_sext(jl_codectx_t &ctx, Type *to, Value *x)
 {
     return ctx.builder.CreateSExt(x, to);
@@ -777,10 +759,6 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
         return generic_bitcast(ctx, argv);
     case trunc_int:
         return generic_cast(ctx, f, generic_trunc, argv, true, true);
-    case checked_trunc_uint:
-        return generic_cast(ctx, f, generic_trunc_uchecked, argv, true, true);
-    case checked_trunc_sint:
-        return generic_cast(ctx, f, generic_trunc_schecked, argv, true, true);
     case sext_int:
         return generic_cast(ctx, f, generic_sext, argv, true, true);
     case zext_int:

@@ -6231,7 +6231,6 @@ static void init_julia_llvm_env(Module *m)
     global_jlvalue_to_llvm("jl_diverror_exception", &jl_diverror_exception, m);
     global_jlvalue_to_llvm("jl_undefref_exception", &jl_undefref_exception, m);
     global_jlvalue_to_llvm("jl_overflow_exception", &jl_overflow_exception, m);
-    global_jlvalue_to_llvm("jl_inexact_exception", &jl_inexact_exception, m);
 
     jlRTLD_DEFAULT_var =
         new GlobalVariable(*m, T_pint8,

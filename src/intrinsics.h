@@ -66,9 +66,6 @@
     ADD_I(sitofp, 2) \
     ADD_I(fptrunc, 2) \
     ADD_I(fpext, 2) \
-    /*  checked conversion */ \
-    ADD_I(checked_trunc_sint, 2) \
-    ADD_I(checked_trunc_uint, 2) \
     /*  checked arithmetic */ \
     ADD_I(checked_sadd_int, 2) \
     ADD_I(checked_uadd_int, 2) \

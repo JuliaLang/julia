@@ -378,15 +378,13 @@ static inline jl_value_t *jl_intrinsiclambda_u1(jl_value_t *ty, void *pa, unsign
 
 typedef void (*intrinsic_cvt_t)(unsigned, void*, unsigned, void*);
 typedef unsigned (*intrinsic_cvt_check_t)(unsigned, unsigned, void*);
-#define cvt_iintrinsic_checked(LLVMOP, check_op, name) \
+#define cvt_iintrinsic(LLVMOP, name) \
 JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *ty, jl_value_t *a) \
 { \
-    return jl_intrinsic_cvt(ty, a, #name, LLVMOP, check_op); \
+    return jl_intrinsic_cvt(ty, a, #name, LLVMOP); \
 }
-#define cvt_iintrinsic(LLVMOP, name) \
-    cvt_iintrinsic_checked(LLVMOP, NULL, name) \
 
-static inline jl_value_t *jl_intrinsic_cvt(jl_value_t *ty, jl_value_t *a, const char *name, intrinsic_cvt_t op, intrinsic_cvt_check_t check_op)
+static inline jl_value_t *jl_intrinsic_cvt(jl_value_t *ty, jl_value_t *a, const char *name, intrinsic_cvt_t op)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_value_t *aty = jl_typeof(a);
@@ -397,8 +395,6 @@ static inline jl_value_t *jl_intrinsic_cvt(jl_value_t *ty, jl_value_t *a, const 
     void *pa = jl_data_ptr(a);
     unsigned isize = jl_datatype_size(aty);
     unsigned osize = jl_datatype_size(ty);
-    if (check_op && check_op(isize, osize, pa))
-        jl_throw(jl_inexact_exception);
     jl_value_t *newv = jl_gc_alloc(ptls, jl_datatype_size(ty), ty);
     op(aty == (jl_value_t*)jl_bool_type ? 1 : isize * host_char_bit, pa,
             osize * host_char_bit, jl_data_ptr(newv));
@@ -856,16 +852,6 @@ static inline int all_eq(char *p, char n, char v)
             return 0;
     return 1;
 }
-static unsigned check_trunc_sint(unsigned isize, unsigned osize, void *pa)
-{
-    return !all_eq((char*)pa + osize, isize - osize, signbitbyte(pa, isize)); // TODO: assumes little-endian
-}
-cvt_iintrinsic_checked(LLVMTrunc, check_trunc_sint, checked_trunc_sint)
-static unsigned check_trunc_uint(unsigned isize, unsigned osize, void *pa)
-{
-    return !all_eq((char*)pa + osize, isize - osize, 0); // TODO: assumes little-endian
-}
-cvt_iintrinsic_checked(LLVMTrunc, check_trunc_uint, checked_trunc_uint)
 
 // checked arithmetic
 #define check_sadd_int(a,b) \

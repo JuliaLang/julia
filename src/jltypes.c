@@ -121,7 +121,6 @@ jl_value_t *jl_segv_exception;
 JL_DLLEXPORT jl_value_t *jl_diverror_exception;
 JL_DLLEXPORT jl_value_t *jl_domain_exception;
 JL_DLLEXPORT jl_value_t *jl_overflow_exception;
-JL_DLLEXPORT jl_value_t *jl_inexact_exception;
 JL_DLLEXPORT jl_value_t *jl_undefref_exception;
 jl_value_t *jl_interrupt_exception;
 jl_datatype_t *jl_boundserror_type;
