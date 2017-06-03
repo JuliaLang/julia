@@ -224,7 +224,6 @@ Base.LinAlg.BLAS.gemv(::Any, ::Any, ::Any)
 Base.LinAlg.BLAS.symm!
 Base.LinAlg.BLAS.symm(::Any, ::Any, ::Any, ::Any, ::Any)
 Base.LinAlg.BLAS.symm(::Any, ::Any, ::Any, ::Any)
-Base.LinAlg.BLAS.symm(::Char, ::Char, ::Any, ::Any, ::Any)
 Base.LinAlg.BLAS.symv!
 Base.LinAlg.BLAS.symv(::Any, ::Any, ::Any, ::Any)
 Base.LinAlg.BLAS.symv(::Any, ::Any, ::Any)
