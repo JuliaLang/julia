@@ -1,10 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-function Symmetric(A::SparseMatrixCSC, uplo::Symbol=:U)
-    checksquare(A)
-    Symmetric{eltype(A), typeof(A)}(A, Base.LinAlg.char_uplo(uplo))  # preserve A
-end
-
 (*)(A::Symmetric{TA,SparseMatrixCSC{TA,S}}, x::StridedVecOrMat{Tx}) where {TA,S,Tx} = A_mul_B(A, x)
 
 function A_mul_B!(α::Number, A::Symmetric{TA,SparseMatrixCSC{TA,S}}, B::StridedVecOrMat, β::Number, C::StridedVecOrMat) where {TA,S}
