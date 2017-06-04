@@ -102,10 +102,11 @@ julia> U*diagm(S)*V'
  0.0  2.0  0.0  0.0  0.0
 ```
 """
-function svd(A::Union{Number, AbstractArray}; thin::Bool=true)
+function svd(A::AbstractArray; thin::Bool=true)
     F = svdfact(A, thin=thin)
     F.U, F.S, F.Vt'
 end
+svd(x::Number; thin::Bool=true) = first.(svd(fill(x, 1, 1)))
 
 function getindex(F::SVD, d::Symbol)
     if d == :U
@@ -231,6 +232,10 @@ function svdfact(A::StridedMatrix{TA}, B::StridedMatrix{TB}) where {TA,TB}
     S = promote_type(Float32, typeof(one(TA)/norm(one(TA))),TB)
     return svdfact!(copy_oftype(A, S), copy_oftype(B, S))
 end
+# This method can be heavily optimized but it is probably not critical
+# and might introduce bugs or inconsistencies relative to the 1x1 matrix
+# version
+svdfact(x::Number, y::Number) = svdfact(fill(x, 1, 1), fill(y, 1, 1))
 
 """
     svd(A, B) -> U, V, Q, D1, D2, R0
@@ -245,6 +250,7 @@ function svd(A::AbstractMatrix, B::AbstractMatrix)
     F = svdfact(A, B)
     F[:U], F[:V], F[:Q], F[:D1], F[:D2], F[:R0]
 end
+svd(x::Number, y::Number) = first.(svd(fill(x, 1, 1), fill(y, 1, 1)))
 
 function getindex(obj::GeneralizedSVD{T}, d::Symbol) where T
     if d == :U
@@ -305,6 +311,7 @@ function svdvals(A::StridedMatrix{TA}, B::StridedMatrix{TB}) where {TA,TB}
     S = promote_type(Float32, typeof(one(TA)/norm(one(TA))), TB)
     return svdvals!(copy_oftype(A, S), copy_oftype(B, S))
 end
+svdvals(x::Number, y::Number) = abs(x/y)
 
 # Conversion
 convert(::Type{AbstractMatrix}, F::SVD) = (F.U * Diagonal(F.S)) * F.Vt
