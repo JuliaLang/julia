@@ -411,7 +411,7 @@ Library improvements
       As a result, the type of `SubArray`s that represent views over colon indices has changed.
 
     + Logical indexing is now more efficient. Logical arrays are converted by `to_indices` to
-      a lazy, iterative collection of indices that doesn't support indexing. A deprecation
+      a lazy, iterable collection of indices that doesn't support indexing. A deprecation
       provides indexing support with O(n) lookup.
 
     + The performance of indexing with `CartesianIndex`es is also improved in many situations.
