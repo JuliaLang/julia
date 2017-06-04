@@ -209,7 +209,7 @@ mutable struct DLMStore{T} <: DLMHandler
 end
 
 function DLMStore(::Type{T}, dims::NTuple{2,Integer},
-        has_header::Bool, sbuff::String, auto::Bool, eol::Char) where T
+                  has_header::Bool, sbuff::String, auto::Bool, eol::Char) where T
     (nrows,ncols) = dims
     nrows <= 0 && throw(ArgumentError("number of rows in dims must be > 0, got $nrows"))
     ncols <= 0 && throw(ArgumentError("number of columns in dims must be > 0, got $ncols"))
@@ -223,7 +223,7 @@ _chrinstr(sbuff::String, chr::UInt8, startpos::Int, endpos::Int) =
     (Ptr{UInt8}, Int32, Csize_t), pointer(sbuff)+startpos-1, chr, endpos-startpos+1))
 
 function store_cell(dlmstore::DLMStore{T}, row::Int, col::Int,
-        quoted::Bool, startpos::Int, endpos::Int) where T
+                    quoted::Bool, startpos::Int, endpos::Int) where T
     drow = row - dlmstore.hdr_offset
 
     ncols = dlmstore.ncols
