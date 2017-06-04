@@ -1,4 +1,4 @@
-## this is a simple wrapper just to forward on known commands to the
+## This is a simple wrapper just to forward on known commands to the
 ## embedding example with values pulled from Make.inc
 SRCDIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 JULIAHOME := $(abspath $(SRCDIR)/..)
