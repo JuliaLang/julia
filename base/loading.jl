@@ -318,8 +318,7 @@ Specify whether the file calling this function is precompilable. If `isprecompil
 `true`, then `__precompile__` throws an exception when the file is loaded by
 `using`/`import`/`require` *unless* the file is being precompiled, and in a module file it
 causes the module to be automatically precompiled when it is imported. Typically,
-`__precompile__()` should occur before the `module` declaration in the file, or better yet
-`VERSION >= v"0.4" && __precompile__()` in order to be backward-compatible with Julia 0.3.
+`__precompile__()` should occur before the `module` declaration in the file.
 
 If a module or file is *not* safely precompilable, it should call `__precompile__(false)` in
 order to throw an error if Julia attempts to precompile it.
