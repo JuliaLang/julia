@@ -1050,7 +1050,7 @@ function permute!(A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{<:Integer},
 end
 """
     permute(A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{<:Integer},
-        q::AbstractVector{<:Integer}) where {Tv,Ti}
+            q::AbstractVector{<:Integer}) where {Tv,Ti}
 
 Bilaterally permute `A`, returning `PAQ` (`A[p,q]`). Column-permutation `q`'s length must
 match `A`'s column count (`length(q) == A.n`). Row-permutation `p`'s length must match `A`'s

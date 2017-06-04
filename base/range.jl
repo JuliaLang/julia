@@ -176,14 +176,14 @@ struct OneTo{T<:Integer} <: AbstractUnitRange{T}
 end
 OneTo(stop::T) where {T<:Integer} = OneTo{T}(stop)
 
-## Step ranges parametrized by length
+## Step ranges parameterized by length
 
 """
     StepRangeLen{T,R,S}(ref::R, step::S, len, [offset=1]) where {T,R,S}
     StepRangeLen(       ref::R, step::S, len, [offset=1]) where {  R,S}
 
 A range `r` where `r[i]` produces values of type `T` (in the second
-form, `T` is deduced automatically), parametrized by a `ref`erence
+form, `T` is deduced automatically), parameterized by a `ref`erence
 value, a `step`, and the `len`gth. By default `ref` is the starting
 value `r[1]`, but alternatively you can supply it as the value of
 `r[offset]` for some other index `1 <= offset <= len`. In conjunction

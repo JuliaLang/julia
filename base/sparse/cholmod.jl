@@ -953,10 +953,10 @@ convert(::Type{Sparse}, A::Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse
 convert(::Type{Sparse}, A::Hermitian{Tv,SparseMatrixCSC{Tv,SuiteSparse_long}}) where {Tv<:VTypes} =
     Sparse(A.data, A.uplo == 'L' ? -1 : 1)
 function convert(::Type{Sparse},
-    A::Union{SparseMatrixCSC{BigFloat,Ti},
-             Symmetric{BigFloat,SparseMatrixCSC{BigFloat,Ti}},
-             Hermitian{Complex{BigFloat},SparseMatrixCSC{Complex{BigFloat},Ti}}},
-    args...) where Ti<:ITypes
+                 A::Union{SparseMatrixCSC{BigFloat,Ti},
+                          Symmetric{BigFloat,SparseMatrixCSC{BigFloat,Ti}},
+                          Hermitian{Complex{BigFloat},SparseMatrixCSC{Complex{BigFloat},Ti}}},
+                 args...) where Ti<:ITypes
     throw(MethodError(convert, (Sparse, A)))
 end
 function convert(::Type{Sparse},
