@@ -116,7 +116,7 @@
 
 (define initial-reserved-words '(begin while if for try return break continue
                          function macro quote let local global const do
-                         struct
+                         struct mutable
                          abstract typealias bitstype type immutable  ;; to be deprecated
                          module baremodule using import export importall))
 
@@ -1005,7 +1005,7 @@
 ;; also handles looking for syntactic reserved words
 (define (parse-call s)
   (let ((ex (parse-unary-prefix s)))
-    (if (or (initial-reserved-word? ex) (memq ex '(mutable primitive)))
+    (if (or (initial-reserved-word? ex) (eq? ex 'primitive))
         (parse-resword s ex)
         (parse-call-chain s ex #f))))
 
@@ -1320,10 +1320,9 @@
         (begin (take-token s)
                (parse-struct-def s #f word)))
        ((mutable)
-        (if (not (eq? (peek-token s) 'struct))
-            (parse-call-chain s word #f)
-            (begin (take-token s)
-                   (parse-struct-def s #t word))))
+        (if (eq? (peek-token s) 'struct)
+            (take-token s))
+        (parse-struct-def s #t word))
        ((primitive)
         (if (not (eq? (peek-token s) 'type))
             (parse-call-chain s word #f)

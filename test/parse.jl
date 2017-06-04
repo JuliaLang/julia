@@ -1215,3 +1215,20 @@ end
 # issue #19351
 # adding return type decl should not affect parse of function body
 @test :(t(abc) = 3).args[2] == :(t(abc)::Int = 3).args[2]
+
+# Optional `struct` in `mutable struct`
+let
+    mutsct = """
+        mutable struct Enterprise <: Starship
+            captain::String
+        end
+    """
+    mut = """
+        mutable Enterprise <: Starship
+            captain::String
+        end
+    """
+    @test parse(mutsct) == parse(mut)
+    # Ensure we haven't broken the `T.mutable` field for types
+    @test !Int.mutable
+end
