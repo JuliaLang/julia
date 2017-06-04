@@ -648,7 +648,7 @@ typedef struct {
 } bt_cursor_t;
 #endif
 extern volatile int jl_in_stackwalk;
-#else
+#elif !defined(JL_DISABLE_LIBUNWIND)
 // This gives unwind only local unwinding options ==> faster code
 #  define UNW_LOCAL_ONLY
 #  include <libunwind.h>
@@ -660,6 +660,10 @@ typedef unw_cursor_t bt_cursor_t;
 // on a newer release
 #    define JL_UNW_HAS_FORMAT_IP 1
 #  endif
+#else
+// Unwinding is disabled
+typedef int bt_context_t;
+typedef int bt_cursor_t;
 #endif
 size_t rec_backtrace(uintptr_t *data, size_t maxsize);
 size_t rec_backtrace_ctx(uintptr_t *data, size_t maxsize, bt_context_t *ctx);

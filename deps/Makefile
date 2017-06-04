@@ -48,6 +48,7 @@ ifeq ($(USE_SYSTEM_LIBUV), 0)
 DEP_LIBS += libuv
 endif
 
+ifeq ($(DISABLE_LIBUNWIND), 0)
 ifeq ($(USE_SYSTEM_LIBUNWIND), 0)
 ifeq ($(OS), Linux)
 DEP_LIBS += unwind
@@ -55,6 +56,7 @@ else ifeq ($(OS), FreeBSD)
 DEP_LIBS += unwind
 else ifeq ($(OS), Darwin)
 DEP_LIBS += osxunwind
+endif
 endif
 endif
 
