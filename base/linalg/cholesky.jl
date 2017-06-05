@@ -101,15 +101,11 @@ function _chol!(A::AbstractMatrix, ::Type{LowerTriangular})
             end
             A[k,k] = Akk
             AkkInv = inv(Akk)
-            for j = 1:k
-                for i = k + 1:n
-                    if j == 1
-                        A[i,k] = A[i,k]*AkkInv'
-                    end
-                    if j < k
-                        A[i,k] -= A[i,j]*A[k,j]'*AkkInv'
-                    end
+            for i = k + 1:n
+                for j = 1:k-1
+                    A[i,k] -= A[i,j]*A[k,j]'
                 end
+                A[i,k] = A[i,k]*AkkInv'
             end
         end
      end
