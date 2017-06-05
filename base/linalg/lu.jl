@@ -11,9 +11,11 @@ struct LU{T,S<:AbstractMatrix} <: Factorization{T}
 end
 LU(factors::AbstractMatrix{T}, ipiv::Vector{BlasInt}, info::BlasInt) where {T} = LU{T,typeof(factors)}(factors, ipiv, info)
 
+const PivotMethod = Union{Type{Val{:maxabspivot}}, Type{Val{:nopivot}}, Type{Val{:nonzeropivot}} }
+
 # StridedMatrix
-function lufact!(A::StridedMatrix{T}, pivot::Union{Type{Val{false}}, Type{Val{true}}} = Val{true}) where T<:BlasFloat
-    if pivot === Val{false}
+function lufact!(A::StridedMatrix{T}, pivot::PivotMethod = Val{:maxabspivot}) where T<:BlasFloat
+    if pivot === Val{:nopivot}
         return generic_lufact!(A, pivot)
     end
     lpt = LAPACK.getrf!(A)
@@ -21,15 +23,15 @@ function lufact!(A::StridedMatrix{T}, pivot::Union{Type{Val{false}}, Type{Val{tr
 end
 
 """
-    lufact!(A, pivot=Val{true}) -> LU
+    lufact!(A, pivot=Val{:maxabspivot}) -> LU
 
 `lufact!` is the same as [`lufact`](@ref), but saves space by overwriting the
 input `A`, instead of creating a copy. An [`InexactError`](@ref)
 exception is thrown if the factorization produces a number not representable by the
 element type of `A`, e.g. for integer types.
 """
-lufact!(A::StridedMatrix, pivot::Union{Type{Val{false}}, Type{Val{true}}} = Val{true}) = generic_lufact!(A, pivot)
-function generic_lufact!(A::StridedMatrix{T}, ::Type{Val{Pivot}} = Val{true}) where {T,Pivot}
+lufact!(A::StridedMatrix, pivot::PivotMethod = Val{:maxabspivot}) = generic_lufact!(A, pivot)
+function generic_lufact!(A::StridedMatrix{T}, ::Type{Val{Pivot}} = Val{:maxabspivot}) where {T,Pivot}
     m, n = size(A)
     minmn = min(m,n)
     info = 0
@@ -38,13 +40,20 @@ function generic_lufact!(A::StridedMatrix{T}, ::Type{Val{Pivot}} = Val{true}) wh
         for k = 1:minmn
             # find index max
             kp = k
-            if Pivot
+            if Pivot==:maxabspivot
                 amax = abs(zero(T))
                 for i = k:m
                     absi = abs(A[i,k])
                     if absi > amax
                         kp = i
                         amax = absi
+                    end
+                end
+            elseif Pivot==:nonzeropivot
+                for i = k:m
+                    if !iszero(A[i,k])
+                        kp = i
+                        break
                     end
                 end
             end
@@ -79,12 +88,12 @@ end
 
 # floating point types doesn't have to be promoted for LU, but should default to pivoting
 lufact(A::Union{AbstractMatrix{T}, AbstractMatrix{Complex{T}}},
-    pivot::Union{Type{Val{false}}, Type{Val{true}}} = Val{true}) where {T<:AbstractFloat} =
+    pivot::PivotMethod = Val{:maxabspivot}) where {T<:AbstractFloat} =
         lufact!(copy(A), pivot)
 
 # for all other types we must promote to a type which is stable under division
 """
-    lufact(A [,pivot=Val{true}]) -> F::LU
+    lufact(A [,pivot=Val{:maxabspivot}]) -> F::LU
 
 Compute the LU factorization of `A`.
 
@@ -135,7 +144,7 @@ julia> F[:L] * F[:U] == A[F[:p], :]
 true
 ```
 """
-function lufact(A::AbstractMatrix{T}, pivot::Union{Type{Val{false}}, Type{Val{true}}}) where T
+function lufact(A::AbstractMatrix{T}, pivot::PivotMethod) where T
     S = typeof(zero(T)/one(T))
     AA = similar(A, S, size(A))
     copy!(AA, A)
@@ -146,13 +155,13 @@ function lufact(A::AbstractMatrix{T}) where T
     S = typeof(zero(T)/one(T))
     AA = similar(A, S, size(A))
     copy!(AA, A)
-    F = lufact!(AA, Val{false})
+    F = lufact!(AA, Val{:nopivot})
     if F.info == 0
         return F
     else
         AA = similar(A, S, size(A))
         copy!(AA, A)
-        return lufact!(AA, Val{true})
+        return lufact!(AA, Val{:maxabspivot})
     end
 end
 
@@ -185,7 +194,7 @@ julia> A[p, :] == L * U
 true
 ```
 """
-function lu(A::AbstractMatrix, pivot::Union{Type{Val{false}}, Type{Val{true}}} = Val{true})
+function lu(A::AbstractMatrix, pivot::PivotMethod = Val{:maxabspivot})
     F = lufact(A, pivot)
     F[:L], F[:U], F[:p]
 end
@@ -319,7 +328,7 @@ end
 # Tridiagonal
 
 # See dgttrf.f
-function lufact!(A::Tridiagonal{T}, pivot::Union{Type{Val{false}}, Type{Val{true}}} = Val{true}) where T
+function lufact!(A::Tridiagonal{T}, pivot::PivotMethod = Val{:maxabspivot}) where T
     n = size(A, 1)
     info = 0
     ipiv = Vector{BlasInt}(n)
@@ -334,7 +343,7 @@ function lufact!(A::Tridiagonal{T}, pivot::Union{Type{Val{false}}, Type{Val{true
         end
         for i = 1:n-2
             # pivot or not?
-            if pivot === Val{false} || abs(d[i]) >= abs(dl[i])
+            if pivot === Val{:nopivot} || abs(d[i]) >= abs(dl[i])
                 # No interchange
                 if d[i] != 0
                     fact = dl[i]/d[i]
@@ -357,7 +366,7 @@ function lufact!(A::Tridiagonal{T}, pivot::Union{Type{Val{false}}, Type{Val{true
         end
         if n > 1
             i = n-1
-            if pivot === Val{false} || abs(d[i]) >= abs(dl[i])
+            if pivot === Val{:nopivot} || abs(d[i]) >= abs(dl[i])
                 if d[i] != 0
                     fact = dl[i]/d[i]
                     dl[i] = fact

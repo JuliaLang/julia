@@ -332,13 +332,22 @@ Base.one(::Type{ModInt{n}}) where {n} = ModInt{n}(1)
 Base.one(::ModInt{n}) where {n} = ModInt{n}(1)
 Base.transpose(a::ModInt{n}) where {n} = a  # see Issue 20978
 
+# no pivoting required:
 A = [ModInt{2}(1) ModInt{2}(0); ModInt{2}(1) ModInt{2}(1)]
 b = [ModInt{2}(1), ModInt{2}(0)]
 
-@test A*(lufact(A, Val{false})\b) == b
+@test A*(lufact(A, Val{:nopivot})\b) == b
+
+# pivoting required:
+A = [ModInt{2}(0) ModInt{2}(1); ModInt{2}(1) ModInt{2}(1)]
+
+@test A*(lufact(A, Val{:nonzeropivot})\b) == b
 
 # Needed for pivoting:
 Base.abs(a::ModInt{n}) where {n} = a
 Base.:<(a::ModInt{n}, b::ModInt{n}) where {n} = a.k < b.k
 
-@test A*(lufact(A, Val{true})\b) == b
+@test A*(lufact(A, Val{:maxabspivot})\b) == b
+
+Base.lufact{N}(A::AbstractMatrix{ModInt{N}}, pivot::Union{Type{Val{:maxabspivot}}, Type{Val{:nopivot}}, Type{Val{:nonzeropivot}} } = Val{:nonzeropivot}) = lufact!(copy(A), pivot)
+@test A*(A\b) == b
