@@ -1482,12 +1482,12 @@ randsubseq(A::AbstractArray, p::Real) = randsubseq(GLOBAL_RNG, A, p)
 end
 
 """
-    shuffle!([rng=GLOBAL_RNG,] v)
+    shuffle!([rng=GLOBAL_RNG,] v::AbstractArray)
 
-In-place version of [`shuffle`](@ref): randomly permute the array `v` in-place,
+In-place version of [`shuffle`](@ref): randomly permute `v` in-place,
 optionally supplying the random-number generator `rng`.
 """
-function shuffle!(r::AbstractRNG, a::AbstractVector)
+function shuffle!(r::AbstractRNG, a::AbstractArray)
     n = length(a)
     @assert n <= Int64(2)^52
     mask = nextpow2(n) - 1
@@ -1499,18 +1499,18 @@ function shuffle!(r::AbstractRNG, a::AbstractVector)
     return a
 end
 
-shuffle!(a::AbstractVector) = shuffle!(GLOBAL_RNG, a)
+shuffle!(a::AbstractArray) = shuffle!(GLOBAL_RNG, a)
 
 """
-    shuffle([rng=GLOBAL_RNG,] v)
+    shuffle([rng=GLOBAL_RNG,] v::AbstractArray)
 
 Return a randomly permuted copy of `v`. The optional `rng` argument specifies a random
 number generator (see [Random Numbers](@ref)).
-To permute `v` in-place, see [`shuffle!`](@ref).  To obtain randomly permuted
+To permute `v` in-place, see [`shuffle!`](@ref). To obtain randomly permuted
 indices, see [`randperm`](@ref).
 """
-shuffle(r::AbstractRNG, a::AbstractVector) = shuffle!(r, copymutable(a))
-shuffle(a::AbstractVector) = shuffle(GLOBAL_RNG, a)
+shuffle(r::AbstractRNG, a::AbstractArray) = shuffle!(r, copymutable(a))
+shuffle(a::AbstractArray) = shuffle(GLOBAL_RNG, a)
 
 """
     randperm([rng=GLOBAL_RNG,] n::Integer)

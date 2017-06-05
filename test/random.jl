@@ -431,6 +431,8 @@ let mta = MersenneTwister(42), mtb = MersenneTwister(42)
     @test shuffle(mta,collect(1:10)) == shuffle(mtb,collect(1:10))
     @test shuffle!(mta,collect(1:10)) == shuffle!(mtb,collect(1:10))
     @test shuffle(mta,collect(2:11)) == shuffle(mtb,2:11)
+    @test shuffle!(mta, rand(mta, 2, 3)) == shuffle!(mtb, rand(mtb, 2, 3))
+    @test shuffle(mta, rand(mta, 2, 3)) == shuffle(mtb, rand(mtb, 2, 3))
 
     @test randperm(mta,10) == randperm(mtb,10)
     @test sort!(randperm(10)) == sort!(shuffle(1:10)) == collect(1:10)
