@@ -304,7 +304,7 @@ gradient(F::AbstractVector, h::Real) = gradient(F, [h*(1:length(F));])
 
 diag(A::AbstractVector) = throw(ArgumentError("use diagm instead of diag to construct a diagonal matrix"))
 
-#diagm{T}(v::AbstractVecOrMat{T})
+#diagm(v::AbstractVecOrMat{T}) where {T}
 
 ###########################################################################################
 # Inner products and norms
@@ -736,7 +736,7 @@ end
 trace(x::Number) = x
 
 #kron(a::AbstractVector, b::AbstractVector)
-#kron{T,S}(a::AbstractMatrix{T}, b::AbstractMatrix{S})
+#kron(a::AbstractMatrix{T}, b::AbstractMatrix{S}) where {T,S}
 
 #det(a::AbstractMatrix)
 

@@ -59,7 +59,7 @@ end
 
 html(io::IO, md::MD) = html(io, md.content)
 
-function html{l}(io::IO, header::Header{l})
+function html(io::IO, header::Header{l}) where l
     withtag(io, "h$l") do
         htmlinline(io, header.text)
     end

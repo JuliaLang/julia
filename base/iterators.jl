@@ -18,7 +18,7 @@ _diff_length(a, b, ::IsInfinite, ::IsInfinite) = 0
 _diff_length(a, b, ::IsInfinite, B) = length(a) # inherit behaviour, error
 _diff_length(a, b, A, B) = max(length(a)-length(b), 0)
 
-and_iteratorsize{T}(isz::T, ::T) = isz
+and_iteratorsize(isz::T, ::T) where {T} = isz
 and_iteratorsize(::HasLength, ::HasShape) = HasLength()
 and_iteratorsize(::HasShape, ::HasLength) = HasLength()
 and_iteratorsize(a, b) = SizeUnknown()
@@ -645,7 +645,7 @@ eltype(::Type{Prod{I1,I2}}) where {I1,I2} = tuple_type_cons(eltype(I1), eltype(I
 iteratoreltype(::Type{Prod{I1,I2}}) where {I1,I2} = and_iteratoreltype(iteratoreltype(I1),iteratoreltype(I2))
 iteratorsize(::Type{Prod{I1,I2}}) where {I1,I2} = prod_iteratorsize(iteratorsize(I1),iteratorsize(I2))
 
-@inline function next{I1,I2}(p::Prod{I1,I2}, st)
+@inline function next(p::Prod, st)
     x = prod_next(p, st)
     ((x[1][1],x[1][2]...), x[2])
 end

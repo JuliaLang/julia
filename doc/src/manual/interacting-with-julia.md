@@ -286,8 +286,8 @@ and `keep` are keyword arguments:
 
 ```julia-repl
 julia> split("1 1 1", [TAB]
-split(str::AbstractString) in Base at strings/util.jl:278
-split{T<:AbstractString}(str::T, splitter; limit, keep) in Base at strings/util.jl:254
+split(str::AbstractString) in Base at strings/util.jl:302
+split(str::T, splitter; limit, keep) where T<:AbstractString in Base at strings/util.jl:277
 ```
 
 The completion of the methods uses type inference and can therefore see if the arguments match

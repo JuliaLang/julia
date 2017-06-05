@@ -290,9 +290,10 @@ function write(io::IO, xs...)
     return written
 end
 
-@noinline unsafe_write{T}(s::IO, p::Ref{T}, n::Integer) = unsafe_write(s, unsafe_convert(Ref{T}, p)::Ptr, n) # mark noinline to ensure ref is gc-rooted somewhere (by the caller)
+@noinline unsafe_write(s::IO, p::Ref{T}, n::Integer) where {T} =
+    unsafe_write(s, unsafe_convert(Ref{T}, p)::Ptr, n) # mark noinline to ensure ref is gc-rooted somewhere (by the caller)
 unsafe_write(s::IO, p::Ptr, n::Integer) = unsafe_write(s, convert(Ptr{UInt8}, p), convert(UInt, n))
-write{T}(s::IO, x::Ref{T}) = unsafe_write(s, x, Core.sizeof(T))
+write(s::IO, x::Ref{T}) where {T} = unsafe_write(s, x, Core.sizeof(T))
 write(s::IO, x::Int8) = write(s, reinterpret(UInt8, x))
 function write(s::IO, x::Union{Int16,UInt16,Int32,UInt32,Int64,UInt64,Int128,UInt128,Float16,Float32,Float64})
     return write(s, Ref(x))
@@ -313,7 +314,7 @@ end
     return unsafe_write(s, pointer(a), sizeof(a))
 end
 
-@noinline function write{T}(s::IO, a::Array{T}) # mark noinline to ensure the array is gc-rooted somewhere (by the caller)
+@noinline function write(s::IO, a::Array{T}) where T # mark noinline to ensure the array is gc-rooted somewhere (by the caller)
     if isbits(T)
         return unsafe_write(s, pointer(a), sizeof(a))
     else
@@ -437,7 +438,7 @@ function readuntil(s::IO, delim::Char)
     return String(take!(out))
 end
 
-function readuntil{T}(s::IO, delim::T)
+function readuntil(s::IO, delim::T) where T
     out = T[]
     while !eof(s)
         c = read(s, T)

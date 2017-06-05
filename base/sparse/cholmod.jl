@@ -565,7 +565,7 @@ function check_factor(F::Factor{Tv}) where Tv<:VTypes
           get(F.p), common())!=0
 end
 
-function nnz{Tv<:VTypes}(A::Sparse{Tv})
+function nnz(A::Sparse{Tv}) where Tv<:VTypes
     ccall((@cholmod_name("nnz", SuiteSparse_long),:libcholmod), Int,
             (Ptr{C_Sparse{Tv}}, Ptr{UInt8}),
                 get(A.p), common())
@@ -749,7 +749,7 @@ end
 # cholmod_cholesky.h
 # For analyze, analyze_p, and factorize_p!, the Common argument must be
 # supplied in order to control if the factorization is LLt or LDLt
-function analyze{Tv<:VTypes}(A::Sparse{Tv}, cmmn::Vector{UInt8})
+function analyze(A::Sparse{Tv}, cmmn::Vector{UInt8}) where Tv<:VTypes
     f = Factor(ccall((@cholmod_name("analyze", SuiteSparse_long),:libcholmod),
         Ptr{C_Factor{Tv}},
             (Ptr{C_Sparse{Tv}}, Ptr{UInt8}),
@@ -757,8 +757,8 @@ function analyze{Tv<:VTypes}(A::Sparse{Tv}, cmmn::Vector{UInt8})
     finalizer(f, free!)
     f
 end
-function analyze_p{Tv<:VTypes}(A::Sparse{Tv}, perm::Vector{SuiteSparse_long},
-    cmmn::Vector{UInt8})
+function analyze_p(A::Sparse{Tv}, perm::Vector{SuiteSparse_long},
+                   cmmn::Vector{UInt8}) where Tv<:VTypes
     length(perm) != size(A,1) && throw(BoundsError())
     f = Factor(ccall((@cholmod_name("analyze_p", SuiteSparse_long),:libcholmod),
             Ptr{C_Factor{Tv}},
@@ -952,11 +952,11 @@ convert(::Type{Sparse}, A::Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse
     Sparse(A.data, A.uplo == 'L' ? -1 : 1)
 convert(::Type{Sparse}, A::Hermitian{Tv,SparseMatrixCSC{Tv,SuiteSparse_long}}) where {Tv<:VTypes} =
     Sparse(A.data, A.uplo == 'L' ? -1 : 1)
-function convert{Ti<:ITypes}(::Type{Sparse},
-    A::Union{SparseMatrixCSC{BigFloat,Ti},
-             Symmetric{BigFloat,SparseMatrixCSC{BigFloat,Ti}},
-             Hermitian{Complex{BigFloat},SparseMatrixCSC{Complex{BigFloat},Ti}}},
-    args...)
+function convert(::Type{Sparse},
+                 A::Union{SparseMatrixCSC{BigFloat,Ti},
+                          Symmetric{BigFloat,SparseMatrixCSC{BigFloat,Ti}},
+                          Hermitian{Complex{BigFloat},SparseMatrixCSC{Complex{BigFloat},Ti}}},
+                 args...) where Ti<:ITypes
     throw(MethodError(convert, (Sparse, A)))
 end
 function convert(::Type{Sparse},

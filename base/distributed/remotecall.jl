@@ -271,7 +271,7 @@ function send_add_client(rr::AbstractRemoteRef, i)
     end
 end
 
-channel_type{T}(rr::RemoteChannel{T}) = T
+channel_type(rr::RemoteChannel{T}) where {T} = T
 
 serialize(s::AbstractSerializer, f::Future) = serialize(s, f, isnull(f.v))
 serialize(s::AbstractSerializer, rr::RemoteChannel) = serialize(s, rr, true)

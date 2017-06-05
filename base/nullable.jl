@@ -31,7 +31,7 @@ Nullable{Int64}
   value: Int64 1
 ```
 """
-Nullable{T}(value::T, hasvalue::Bool=true) = Nullable{T}(value, hasvalue)
+Nullable(value::T, hasvalue::Bool=true) where {T} = Nullable{T}(value, hasvalue)
 Nullable() = Nullable{Union{}}()
 
 eltype(::Type{Nullable{T}}) where {T} = T

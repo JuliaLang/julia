@@ -188,7 +188,7 @@ function promote(x, y, zs...)
      convert(promote_typeof(x,y,zs...), y),
      convert(Tuple{Vararg{promote_typeof(x,y,zs...)}}, zs)...)
 end
-# TODO: promote{T}(x::T, ys::T...) here to catch all circularities?
+# TODO: promote(x::T, ys::T...) where {T} here to catch all circularities?
 
 ## promotions in arithmetic, etc. ##
 
@@ -316,13 +316,13 @@ else
 end
 
 promote_op(::Any...) = (@_inline_meta; Any)
-function promote_op{S}(f, ::Type{S})
+function promote_op(f, ::Type{S}) where S
     @_inline_meta
     T = _return_type(f, Tuple{_default_type(S)})
     isleaftype(S) && return isleaftype(T) ? T : Any
     return typejoin(S, T)
 end
-function promote_op{R,S}(f, ::Type{R}, ::Type{S})
+function promote_op(f, ::Type{R}, ::Type{S}) where {R,S}
     @_inline_meta
     T = _return_type(f, Tuple{_default_type(R), _default_type(S)})
     isleaftype(R) && isleaftype(S) && return isleaftype(T) ? T : Any

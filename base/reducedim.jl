@@ -63,7 +63,7 @@ end
 ## initialization
 
 for (Op, initfun) in ((:(typeof(+)), :zero), (:(typeof(*)), :one), (:(typeof(scalarmax)), :typemin), (:(typeof(scalarmin)), :typemax), (:(typeof(max)), :typemin), (:(typeof(min)), :typemax))
-    @eval initarray!{T}(a::AbstractArray{T}, ::$(Op), init::Bool) = (init && fill!(a, $(initfun)(T)); a)
+    @eval initarray!(a::AbstractArray{T}, ::$(Op), init::Bool) where {T} = (init && fill!(a, $(initfun)(T)); a)
 end
 
 for (Op, initval) in ((:(typeof(&)), true), (:(typeof(|)), false))

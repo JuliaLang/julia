@@ -148,7 +148,7 @@ by zero or more `"var"=>val` arguments `kv`. `withenv` is generally used via the
 environment variable (if it is set). When `withenv` returns, the original environment has
 been restored.
 """
-function withenv{T<:AbstractString}(f::Function, keyvals::Pair{T}...)
+function withenv(f::Function, keyvals::Pair{T}...) where T<:AbstractString
     old = Dict{T,Any}()
     for (key,val) in keyvals
         old[key] = get(ENV,key,nothing)
