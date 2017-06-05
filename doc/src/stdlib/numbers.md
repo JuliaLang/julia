@@ -2,22 +2,40 @@
 
 ## Standard Numeric Types
 
-  * `Bool`
-  * `Int8`
-  * `UInt8`
-  * `Int16`
-  * `UInt16`
-  * `Int32`
-  * `UInt32`
-  * `Int64`
-  * `UInt64`
-  * `Int128`
-  * `UInt128`
-  * `Float16`
-  * `Float32`
-  * `Float64`
-  * `Complex64`
-  * `Complex128`
+### Abstract number types
+
+```@docs
+Core.Number
+Core.Real
+Core.AbstractFloat
+Core.Integer
+Core.Signed
+Core.Unsigned
+```
+
+### Concrete number types
+
+```@docs
+Core.Float16
+Core.Float32
+Core.Float64
+Base.BigFloat
+Core.Bool
+Core.Int8
+Core.UInt8
+Core.Int16
+Core.UInt16
+Core.Int32
+Core.UInt32
+Core.Int64
+Core.UInt64
+Core.Int128
+Core.UInt128
+Base.BigInt
+Base.Complex
+Base.Rational
+Base.Irrational
+```
 
 ## Data Formats
 
@@ -73,10 +91,10 @@ Base.nextfloat
 Base.prevfloat
 Base.isinteger
 Base.isreal
-Core.Float32
-Core.Float64
-Base.GMP.BigInt
-Base.MPFR.BigFloat
+Core.Float32(::Any)
+Core.Float64(::Any)
+Base.GMP.BigInt(::Any)
+Base.MPFR.BigFloat(::Any)
 Base.Rounding.rounding
 Base.Rounding.setrounding(::Type, ::Any)
 Base.Rounding.setrounding(::Function, ::Type, ::RoundingMode)
@@ -99,7 +117,8 @@ Base.iseven
 
 ## BigFloats
 
-The `BigFloat` type implements arbitrary-precision floating-point arithmetic using the [GNU MPFR library](http://www.mpfr.org/).
+The [`BigFloat`](@ref) type implements arbitrary-precision floating-point arithmetic using
+the [GNU MPFR library](http://www.mpfr.org/).
 
 ```@docs
 Base.precision
@@ -125,10 +144,12 @@ dimension specifications `dims...` (which can be given as a tuple) to generate a
 values.
 
 A `MersenneTwister` or `RandomDevice` RNG can generate random numbers of the following types:
-`Float16`, `Float32`, `Float64`, `Bool`, `Int8`, `UInt8`, `Int16`, `UInt16`, `Int32`, `UInt32`,
-`Int64`, `UInt64`, `Int128`, `UInt128`, `BigInt` (or complex numbers of those types). Random floating
-point numbers are generated uniformly in ``[0, 1)``. As `BigInt` represents unbounded integers,
-the interval must be specified (e.g. `rand(big(1:6))`).
+[`Float16`](@ref), [`Float32`](@ref), [`Float64`](@ref), [`Bool`](@ref), [`Int8`](@ref),
+[`UInt8`](@ref), [`Int16`](@ref), [`UInt16`](@ref), [`Int32`](@ref), [`UInt32`](@ref),
+[`Int64`](@ref), [`UInt64`](@ref), [`Int128`](@ref), [`UInt128`](@ref), [`BigInt`](@ref)
+(or complex numbers of those types). Random floating point numbers are generated uniformly
+in ``[0, 1)``. As `BigInt` represents unbounded integers, the interval must be specified
+(e.g. `rand(big(1:6))`).
 
 ```@docs
 Base.Random.srand

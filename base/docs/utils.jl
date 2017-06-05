@@ -190,7 +190,7 @@ function repl(io::IO, s::Symbol)
         $(_repl(s))
     end
 end
-isregex(x) = isexpr(x, :macrocall, 2) && x.args[1] === Symbol("@r_str") && !isempty(x.args[2])
+isregex(x) = isexpr(x, :macrocall, 3) && x.args[1] === Symbol("@r_str") && !isempty(x.args[3])
 repl(io::IO, ex::Expr) = isregex(ex) ? :(apropos($io, $ex)) : _repl(ex)
 repl(io::IO, str::AbstractString) = :(apropos($io, $str))
 repl(io::IO, other) = :(@doc $(esc(other)))
@@ -414,6 +414,7 @@ Strip all Markdown markup from x, leaving the result in plain text. Used
 internally by apropos to make docstrings containing more than one markdown
 element searchable.
 """
+stripmd(x::ANY) = string(x) # for random objects interpolated into the docstring
 stripmd(x::AbstractString) = x  # base case
 stripmd(x::Void) = " "
 stripmd(x::Vector) = string(map(stripmd, x)...)

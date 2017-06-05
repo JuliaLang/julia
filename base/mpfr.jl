@@ -13,7 +13,7 @@ import
         nextfloat, prevfloat, promote_rule, rem, rem2pi, round, show, float,
         sum, sqrt, string, print, trunc, precision, exp10, expm1,
         gamma, lgamma, log1p,
-        eps, signbit, sin, cos, tan, sec, csc, cot, acos, asin, atan,
+        eps, signbit, sin, cos, sincos, tan, sec, csc, cot, acos, asin, atan,
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, atan2,
         cbrt, typemax, typemin, unsafe_trunc, realmin, realmax, rounding,
         setrounding, maxintfloat, widen, significand, frexp, tryparse, iszero, big
@@ -23,6 +23,8 @@ import Base.Rounding: rounding_raw, setrounding_raw
 import Base.GMP: ClongMax, CulongMax, CdoubleMax, Limb
 
 import Base.Math.lgamma_r
+
+import Base.FastMath.sincos_fast
 
 function __init__()
     try
@@ -41,23 +43,9 @@ const DEFAULT_PRECISION = [256]
 # Basic type and initialization definitions
 
 """
-    BigFloat(x)
+    BigFloat <: AbstractFloat
 
-Create an arbitrary precision floating point number. `x` may be an `Integer`, a `Float64` or
-a `BigInt`. The usual mathematical operators are defined for this type, and results are
-promoted to a `BigFloat`.
-
-Note that because decimal literals are converted to floating point numbers when parsed,
-`BigFloat(2.1)` may not yield what you expect. You may instead prefer to initialize
-constants from strings via [`parse`](@ref), or using the `big` string literal.
-
-```jldoctest
-julia> BigFloat(2.1)
-2.100000000000000088817841970012523233890533447265625000000000000000000000000000
-
-julia> big"2.1"
-2.099999999999999999999999999999999999999999999999999999999999999999999999999986
-```
+Arbitrary precision floating point number type.
 """
 mutable struct BigFloat <: AbstractFloat
     prec::Clong
@@ -78,6 +66,27 @@ mutable struct BigFloat <: AbstractFloat
         new(prec, sign, exp, d)
     end
 end
+
+"""
+    BigFloat(x)
+
+Create an arbitrary precision floating point number. `x` may be an [`Integer`](@ref), a
+[`Float64`](@ref) or a [`BigInt`](@ref). The usual mathematical operators are defined for
+this type, and results are promoted to a [`BigFloat`](@ref).
+
+Note that because decimal literals are converted to floating point numbers when parsed,
+`BigFloat(2.1)` may not yield what you expect. You may instead prefer to initialize
+constants from strings via [`parse`](@ref), or using the `big` string literal.
+
+```jldoctest
+julia> BigFloat(2.1)
+2.100000000000000088817841970012523233890533447265625000000000000000000000000000
+
+julia> big"2.1"
+2.099999999999999999999999999999999999999999999999999999999999999999999999999986
+```
+"""
+BigFloat(x)
 
 widen(::Type{Float64}) = BigFloat
 widen(::Type{BigFloat}) = BigFloat
@@ -124,7 +133,7 @@ float(::Type{BigInt}) = BigFloat
 """
     BigFloat(x, prec::Int)
 
-Create a representation of `x` as a `BigFloat` with precision `prec`.
+Create a representation of `x` as a [`BigFloat`](@ref) with precision `prec`.
 """
 function BigFloat(x, prec::Int)
     setprecision(BigFloat, prec) do
@@ -135,7 +144,8 @@ end
 """
     BigFloat(x, prec::Int, rounding::RoundingMode)
 
-Create a representation of `x` as a `BigFloat` with precision `prec` and rounding mode `rounding`.
+Create a representation of `x` as a [`BigFloat`](@ref) with precision `prec` and
+rounding mode `rounding`.
 """
 function BigFloat(x, prec::Int, rounding::RoundingMode)
     setrounding(BigFloat, rounding) do
@@ -146,7 +156,8 @@ end
 """
     BigFloat(x, rounding::RoundingMode)
 
-Create a representation of `x` as a `BigFloat` with the current global precision and rounding mode `rounding`.
+Create a representation of `x` as a [`BigFloat`](@ref) with the current global precision
+and rounding mode `rounding`.
 """
 function BigFloat(x::Union{Integer, AbstractFloat, String}, rounding::RoundingMode)
     BigFloat(x, precision(BigFloat), rounding)
@@ -155,7 +166,7 @@ end
 """
     BigFloat(x::String)
 
-Create a representation of the string `x` as a `BigFloat`.
+Create a representation of the string `x` as a [`BigFloat`](@ref).
 """
 BigFloat(x::String) = parse(BigFloat, x)
 
@@ -515,6 +526,15 @@ for f in (:exp, :exp2, :exp10, :expm1, :cosh, :sinh, :tanh, :sech, :csch, :coth,
     end
 end
 
+function sincos_fast(v::BigFloat)
+    s = BigFloat()
+    c = BigFloat()
+    ccall((:mpfr_sin_cos, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{BigFloat}, Int32),
+          &s, &c, &v, ROUNDING_MODE[])
+    return (s, c)
+end
+sincos(v::BigFloat) = sincos_fast(v)
+
 # return log(2)
 function big_ln2()
     c = BigFloat()
@@ -710,7 +730,7 @@ end
 """
     precision(BigFloat)
 
-Get the precision (in bits) currently used for `BigFloat` arithmetic.
+Get the precision (in bits) currently used for [`BigFloat`](@ref) arithmetic.
 """
 precision(::Type{BigFloat}) = DEFAULT_PRECISION[end]  # precision of the type BigFloat itself
 

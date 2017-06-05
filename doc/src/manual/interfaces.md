@@ -187,7 +187,7 @@ julia> Squares(10)[[3,4.,5]]
 While this is starting to support more of the [indexing operations supported by some of the builtin types](@ref man-array-indexing),
 there's still quite a number of behaviors missing. This `Squares` sequence is starting to look
 more and more like a vector as we've added behaviors to it. Instead of defining all these behaviors
-ourselves, we can officially define it as a subtype of an `AbstractArray`.
+ourselves, we can officially define it as a subtype of an [`AbstractArray`](@ref).
 
 ## [Abstract Arrays](@id man-interface-array)
 

@@ -35,8 +35,7 @@ cnvt_all(T) = ()
 cnvt_all(T, x, rest...) = tuple(convert(T,x), cnvt_all(T, rest...)...)
 
 macro generated(f)
-    isa(f, Expr) || error("invalid syntax; @generated must be used with a function definition")
-    if f.head === :function || (isdefined(:length) && f.head === :(=) && length(f.args) == 2 && f.args[1].head == :call)
+    if isa(f, Expr) && (f.head === :function || is_short_function_def(f))
         f.head = :stagedfunction
         return Expr(:escape, f)
     else

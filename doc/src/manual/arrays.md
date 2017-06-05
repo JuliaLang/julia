@@ -10,7 +10,7 @@ on implementing a custom array type.
 
 An array is a collection of objects stored in a multi-dimensional grid. In the most general case,
 an array may contain objects of type `Any`. For most computational purposes, arrays should contain
-objects of a more specific type, such as `Float64` or `Int32`.
+objects of a more specific type, such as [`Float64`](@ref) or [`Int32`](@ref).
 
 In general, unlike many other technical computing languages, Julia does not expect programs to
 be written in a vectorized style for performance. Julia's compiler uses type inference and generates
@@ -46,7 +46,7 @@ Many functions for constructing and initializing arrays are provided. In the fol
 such functions, calls with a `dims...` argument can either take a single tuple of dimension sizes
 or a series of dimension sizes passed as a variable number of arguments. Most of these functions
 also accept a first input `T`, which is the element type of the array. If the type `T` is
-omitted it will default to `Float64`.
+omitted it will default to [`Float64`](@ref).
 
 | Function                           | Description                                                                                                                                                                                                                                  |
 |:---------------------------------- |:-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -137,7 +137,7 @@ of the variable ranges `rx`, `ry`, etc. and each `F(x,y,...)` evaluation returns
 The following example computes a weighted average of the current element and its left and right
 neighbor along a 1-d grid. :
 
-```julia
+```julia-repl
 julia> x = rand(8)
 8-element Array{Float64,1}:
  0.843025
@@ -182,7 +182,7 @@ julia> sum(1/n^2 for n=1:1000)
 When writing a generator expression with multiple dimensions inside an argument list, parentheses
 are needed to separate the generator from subsequent arguments:
 
-```julia
+```julia-repl
 julia> map(tuple, 1/(i+j) for i=1:2, j=1:2, [1:4;])
 ERROR: syntax: invalid iteration specification
 ```
@@ -510,7 +510,7 @@ iterate over any array type.
 
 ### Array traits
 
-If you write a custom `AbstractArray` type, you can specify that it has fast linear indexing using
+If you write a custom [`AbstractArray`](@ref) type, you can specify that it has fast linear indexing using
 
 ```julia
 Base.IndexStyle(::Type{<:MyArray}) = IndexLinear()
@@ -556,7 +556,7 @@ It is sometimes useful to perform element-by-element binary operations on arrays
 sizes, such as adding a vector to each column of a matrix. An inefficient way to do this would
 be to replicate the vector to the size of the matrix:
 
-```julia
+```julia-repl
 julia> a = rand(2,1); A = rand(2,3);
 
 julia> repmat(a,1,3)+A
@@ -569,7 +569,7 @@ This is wasteful when dimensions get large, so Julia offers [`broadcast()`](@ref
 singleton dimensions in array arguments to match the corresponding dimension in the other array
 without using extra memory, and applies the given function elementwise:
 
-```julia
+```julia-repl
 julia> broadcast(+, a, A)
 2×3 Array{Float64,2}:
  1.20813  1.82068  1.25387
@@ -666,7 +666,7 @@ The following example computes the QR decomposition of a small section of a larg
 creating any temporaries, and by calling the appropriate LAPACK function with the right leading
 dimension size and stride parameters.
 
-```julia
+```julia-repl
 julia> a = rand(10,10)
 10×10 Array{Float64,2}:
  0.561255   0.226678   0.203391  0.308912   …  0.750307  0.235023   0.217964
@@ -712,7 +712,7 @@ gains in either time or space when compared to performing the same operations on
 ### Compressed Sparse Column (CSC) Storage
 
 In Julia, sparse matrices are stored in the [Compressed Sparse Column (CSC) format](https://en.wikipedia.org/wiki/Sparse_matrix#Compressed_sparse_column_.28CSC_or_CCS.29).
-Julia sparse matrices have the type `SparseMatrixCSC{Tv,Ti}`, where `Tv` is the type of the nonzero
+Julia sparse matrices have the type `SparseMatrixCSC{Tv,Ti}`, where `Tv` is the type of the stored
 values, and `Ti` is the integer type for storing column pointers and row indices.:
 
 ```julia
@@ -720,8 +720,8 @@ struct SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}
     m::Int                  # Number of rows
     n::Int                  # Number of columns
     colptr::Vector{Ti}      # Column i is in colptr[i]:(colptr[i+1]-1)
-    rowval::Vector{Ti}      # Row values of nonzeros
-    nzval::Vector{Tv}       # Nonzero values
+    rowval::Vector{Ti}      # Row indices of stored values
+    nzval::Vector{Tv}       # Stored values, typically nonzeros
 end
 ```
 
@@ -765,10 +765,10 @@ julia> speye(3,5)
 ```
 
 The [`sparse()`](@ref) function is often a handy way to construct sparse matrices. It takes as
-its input a vector `I` of row indices, a vector `J` of column indices, and a vector `V` of nonzero
+its input a vector `I` of row indices, a vector `J` of column indices, and a vector `V` of stored
 values. `sparse(I,J,V)` constructs a sparse matrix such that `S[I[k], J[k]] = V[k]`.
 
-```jldoctest
+```jldoctest sparse_function
 julia> I = [1, 4, 3, 5]; J = [4, 7, 18, 9]; V = [1, 2, -5, 3];
 
 julia> S = sparse(I,J,V)
@@ -782,12 +782,12 @@ julia> S = sparse(I,J,V)
 The inverse of the [`sparse()`](@ref) function is [`findn()`](@ref), which retrieves the inputs
 used to create the sparse matrix.
 
-```julia
+```jldoctest sparse_function
 julia> findn(S)
-([1,4,5,3],[4,7,9,18])
+([1, 4, 5, 3], [4, 7, 9, 18])
 
 julia> findnz(S)
-([1,4,5,3],[4,7,9,18],[1,2,3,-5])
+([1, 4, 5, 3], [4, 7, 9, 18], [1, 2, 3, -5])
 ```
 
 Another way to create sparse matrices is to convert a dense matrix into a sparse matrix using

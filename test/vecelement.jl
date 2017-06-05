@@ -23,6 +23,13 @@ for i=1:20
     end
 end
 
+# Try various large tuple lengths and element types #20961
+for i in (34, 36, 48, 64, 72, 80, 96)
+    for t in [Bool, Int8, Int16, Int32, Int64, Float32, Float64]
+        call_iota(i,t)
+    end
+end
+
 # Another crash report for #15244 motivated this test.
 struct Bunch{N,T}
     elts::NTuple{N,Base.VecElement{T}}
@@ -65,3 +72,50 @@ a[1] = Gr(5.0, Bunch((VecElement(6.0), VecElement(7.0))), 8.0)
 @test a[2] == Gr(1.0, Bunch((VecElement(2.0), VecElement(3.0))), 4.0)
 
 @test isa(VecElement((1,2)), VecElement{Tuple{Int,Int}})
+
+# The following test mimic SIMD.jl
+const _llvmtypes = Dict{DataType, String}(
+    Float64 => "double",
+    Float32 => "float",
+    Int32 => "i32",
+    Int64 => "i64"
+)
+
+@generated function vecadd(x::Vec{N, T}, y::Vec{N, T}) where {N, T}
+    llvmT = _llvmtypes[T]
+    func = T <: AbstractFloat ? "fadd" : "add"
+    exp = """
+    %3 = $(func) <$(N) x $(llvmT)> %0, %1
+    ret <$(N) x $(llvmT)> %3
+    """
+    return quote
+        Base.@_inline_meta
+        Base.llvmcall($exp, Vec{$N, $T}, Tuple{Vec{$N, $T}, Vec{$N, $T}}, x, y)
+    end
+end
+
+function f20961(x::Vector{Vec{N, T}}, y::Vector{Vec{N, T}}) where{N, T}
+    @inbounds begin
+        a = x[1]
+        b = y[1]
+        return vecadd(a, b)
+    end
+end
+
+# Test various SIMD Vectors with known good sizes
+for T in (Float64, Float32, Int64, Int32)
+    for N in 1:36
+        # For some vectortypes Julia emits llvm arrays instead of vectors
+        if N %  7 == 0 || N % 11 == 0 || N % 13 == 0 || N % 15 == 0 ||
+           N % 19 == 0 || N % 23 == 0 || N % 25 == 0 || N % 27 == 0 ||
+           N % 29 == 0 || N % 31 == 0
+            continue
+        end
+        a = ntuple(i->VecElement(T(i)), N)
+        result = ntuple(i-> VecElement(T(i+i)), N)
+        b = vecadd(a, a)
+        @test b == result
+        b = f20961([a], [a])
+        @test b == result
+    end
+end

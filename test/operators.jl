@@ -97,3 +97,18 @@ end
     B = 3 .> [1 -1 5] .> 0
     @test B == [true false false]
 end
+
+struct TypeWrapper
+    t::Type
+end
+Base.:(<)(x::TypeWrapper, y::TypeWrapper) = (x.t <: y.t) & (x.t != y.t)
+@testset "poset" begin
+    #   Real
+    #  /    \
+    # Int  Float64
+    #  \    /
+    #  Union{}
+    @test TypeWrapper(Int) <= TypeWrapper(Int)
+    @test TypeWrapper(Int) <= TypeWrapper(Real)
+    @test !(TypeWrapper(Int) <= TypeWrapper(Float64))
+end

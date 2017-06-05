@@ -53,10 +53,22 @@ import Core: arraysize, arrayset, arrayref
     Array{T,N}(dims)
 
 Construct an uninitialized `N`-dimensional dense array with element type `T`,
-where `N` is determined from the length or number of `dims`.  `dims` may
+where `N` is determined from the length or number of `dims`. `dims` may
 be a tuple or a series of integer arguments corresponding to the lengths in each dimension.
 If the rank `N` is supplied explicitly as in `Array{T,N}(dims)`, then it must
 match the length or number of `dims`.
+
+# Example
+
+```jldoctest
+julia> A = Array{Float64, 2}(2, 2);
+
+julia> ndims(A)
+2
+
+julia> eltype(A)
+Float64
+```
 """
 Array
 
@@ -73,12 +85,7 @@ end
 size(a::Array, d) = arraysize(a, d)
 size(a::Vector) = (arraysize(a,1),)
 size(a::Matrix) = (arraysize(a,1), arraysize(a,2))
-size(a::Array) = (@_inline_meta; _size((), a))
-_size(out::NTuple{N}, A::Array{_,N}) where {_,N} = out
-function _size(out::NTuple{M}, A::Array{_,N}) where _ where M where N
-    @_inline_meta
-    _size((out..., size(A,M+1)), A)
-end
+size(a::Array{<:Any,N}) where {N} = (@_inline_meta; ntuple(M -> size(a, M), Val{N}))
 
 asize_from(a::Array, n) = n > ndims(a) ? () : (arraysize(a,n), asize_from(a, n+1)...)
 
@@ -259,7 +266,7 @@ end
     eye([T::Type=Float64,] m::Integer, n::Integer)
 
 `m`-by-`n` identity matrix.
-The default element type is `Float64`.
+The default element type is [`Float64`](@ref).
 """
 function eye(::Type{T}, m::Integer, n::Integer) where T
     a = zeros(T,m,n)
@@ -280,7 +287,7 @@ eye(::Type{T}, n::Integer) where {T} = eye(T, n, n)
     eye([T::Type=Float64,] n::Integer)
 
 `n`-by-`n` identity matrix.
-The default element type is `Float64`.
+The default element type is [`Float64`](@ref).
 """
 eye(n::Integer) = eye(Float64, n)
 
@@ -590,11 +597,19 @@ setindex!(A::Array{T, N}, x::Number, ::Vararg{Colon, N}) where {T, N} = fill!(A,
 
 # efficiently grow an array
 
+_growbeg!(a::Vector, delta::Integer) =
+    ccall(:jl_array_grow_beg, Void, (Any, UInt), a, delta)
+_growend!(a::Vector, delta::Integer) =
+    ccall(:jl_array_grow_end, Void, (Any, UInt), a, delta)
 _growat!(a::Vector, i::Integer, delta::Integer) =
     ccall(:jl_array_grow_at, Void, (Any, Int, UInt), a, i - 1, delta)
 
 # efficiently delete part of an array
 
+_deletebeg!(a::Vector, delta::Integer) =
+    ccall(:jl_array_del_beg, Void, (Any, UInt), a, delta)
+_deleteend!(a::Vector, delta::Integer) =
+    ccall(:jl_array_del_end, Void, (Any, UInt), a, delta)
 _deleteat!(a::Vector, i::Integer, delta::Integer) =
     ccall(:jl_array_del_at, Void, (Any, Int, UInt), a, i - 1, delta)
 
@@ -603,13 +618,13 @@ _deleteat!(a::Vector, i::Integer, delta::Integer) =
 function push!(a::Array{T,1}, item) where T
     # convert first so we don't grow the array if the assignment won't work
     itemT = convert(T, item)
-    ccall(:jl_array_grow_end, Void, (Any, UInt), a, 1)
+    _growend!(a, 1)
     a[end] = itemT
     return a
 end
 
 function push!(a::Array{Any,1}, item::ANY)
-    ccall(:jl_array_grow_end, Void, (Any, UInt), a, 1)
+    _growend!(a, 1)
     arrayset(a, item, length(a))
     return a
 end
@@ -617,7 +632,7 @@ end
 function append!(a::Array{<:Any,1}, items::AbstractVector)
     itemindices = eachindex(items)
     n = length(itemindices)
-    ccall(:jl_array_grow_end, Void, (Any, UInt), a, n)
+    _growend!(a, n)
     copy!(a, length(a)-n+1, items, first(itemindices), n)
     return a
 end
@@ -659,7 +674,7 @@ function prepend! end
 function prepend!(a::Array{<:Any,1}, items::AbstractVector)
     itemindices = eachindex(items)
     n = length(itemindices)
-    ccall(:jl_array_grow_beg, Void, (Any, UInt), a, n)
+    _growbeg!(a, n)
     if a === items
         copy!(a, 1, items, n+1, n)
     else
@@ -673,7 +688,7 @@ unshift!(a::Vector, iter...) = prepend!(a, iter)
 
 function _prepend!(a, ::Union{HasLength,HasShape}, iter)
     n = length(iter)
-    ccall(:jl_array_grow_beg, Void, (Any, UInt), a, n)
+    _growbeg!(a, n)
     i = 0
     for item in iter
         @inbounds a[i += 1] = item
@@ -706,7 +721,7 @@ julia> resize!([6, 5, 4, 3, 2, 1], 3)
  4
 ```
 
-```julia
+```julia-repl
 julia> resize!([6, 5, 4, 3, 2, 1], 8)
 8-element Array{Int64,1}:
  6
@@ -727,7 +742,7 @@ function resize!(a::Vector, nl::Integer)
         if nl < 0
             throw(ArgumentError("new length must be ≥ 0"))
         end
-        ccall(:jl_array_del_end, Void, (Any, UInt), a, l-nl)
+        _deleteend!(a, l-nl)
     end
     return a
 end
@@ -742,7 +757,7 @@ function pop!(a::Vector)
         throw(ArgumentError("array must be non-empty"))
     end
     item = a[end]
-    ccall(:jl_array_del_end, Void, (Any, UInt), a, 1)
+    _deleteend!(a, 1)
     return item
 end
 
@@ -764,7 +779,7 @@ julia> unshift!([1, 2, 3, 4], 5, 6)
 """
 function unshift!(a::Array{T,1}, item) where T
     item = convert(T, item)
-    ccall(:jl_array_grow_beg, Void, (Any, UInt), a, 1)
+    _growbeg!(a, 1)
     a[1] = item
     return a
 end
@@ -774,7 +789,7 @@ function shift!(a::Vector)
         throw(ArgumentError("array must be non-empty"))
     end
     item = a[1]
-    ccall(:jl_array_del_beg, Void, (Any, UInt), a, 1)
+    _deletebeg!(a, 1)
     return item
 end
 
@@ -853,8 +868,8 @@ julia> deleteat!([6, 5, 4, 3, 2, 1], [true, false, true, false, true, false])
 julia> deleteat!([6, 5, 4, 3, 2, 1], (2, 2))
 ERROR: ArgumentError: indices must be unique and sorted
 Stacktrace:
- [1] _deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:873
- [2] deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:860
+ [1] _deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:880
+ [2] deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:867
 ```
 """
 deleteat!(a::Vector, inds) = _deleteat!(a, inds)
@@ -885,7 +900,7 @@ function _deleteat!(a::Vector, inds)
         @inbounds a[p] = a[q]
         p += 1; q += 1
     end
-    ccall(:jl_array_del_end, Void, (Any, UInt), a, n-p+1)
+    _deleteend!(a, n-p+1)
     return a
 end
 
@@ -898,7 +913,7 @@ function deleteat!(a::Vector, inds::AbstractVector{Bool})
         @inbounds a[p] = a[q]
         p += !i
     end
-    ccall(:jl_array_del_end, Void, (Any, UInt), a, n-p+1)
+    _deleteend!(a, n-p+1)
     return a
 end
 
@@ -1027,7 +1042,7 @@ function splice!(a::Vector, r::UnitRange{<:Integer}, ins=_default_splice)
 end
 
 function empty!(a::Vector)
-    ccall(:jl_array_del_end, Void, (Any, UInt), a, length(a))
+    _deleteend!(a, length(a))
     return a
 end
 
@@ -1734,6 +1749,9 @@ function _findin(a, b)
     ind
 end
 
+# If two collections are already sorted, findin can be computed with
+# a single traversal of the two collections. This is much faster than
+# using a hash table (although it has the same complexity).
 function _sortedfindin(v, w)
     viter, witer = eachindex(v), eachindex(w)
     out  = eltype(viter)[]
@@ -1745,22 +1763,29 @@ function _sortedfindin(v, w)
     witerj, j = next(witer, j)
     @inbounds begin
         vi, wj = v[viteri], w[witerj]
-        while !(done(viter, i) || done(witer, j))
-            if vi < wj
+        while true
+            if isless(vi, wj)
+                if done(viter, i)
+                    break
+                end
                 viteri, i = next(viter, i)
                 vi        = v[viteri]
-            elseif vi > wj
+            elseif isless(wj, vi)
+                if done(witer, j)
+                    break
+                end
                 witerj, j = next(witer, j)
                 wj        = w[witerj]
             else
                 push!(out, viteri)
+                if done(viter, i)
+                    break
+                end
+                # We only increment the v iterator because v can have
+                # repeated matches to a single value in w
                 viteri, i = next(viter, i)
-                witerj, j = next(witer, j)
-                vi, wj    = v[viteri], w[witerj]
+                vi        = v[viteri]
             end
-        end
-        if vi == wj
-            push!(out, viteri)
         end
     end
     return out
@@ -1791,13 +1816,16 @@ julia> findin(a,b) # 10 is the only common element
  4
 ```
 """
-function findin(a, b)
+function findin(a::Array{<:Real}, b::Union{Array{<:Real},Real})
     if issorted(a, Sort.Forward) && issorted(b, Sort.Forward)
         return _sortedfindin(a, b)
     else
         return _findin(a, b)
     end
 end
+# issorted fails for some element types so the method above has to be restricted
+# to element with isless/< defined.
+findin(a, b) = _findin(a, b)
 
 # Copying subregions
 # TODO: DEPRECATE FOR #14770

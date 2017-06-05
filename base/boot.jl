@@ -87,6 +87,7 @@
 
 #struct LineNumberNode
 #    line::Int
+#    file::Any # nominally Union{Symbol,Void}
 #end
 
 #struct LabelNode
@@ -281,7 +282,8 @@ _new(:GotoNode, :Int)
 _new(:NewvarNode, :SlotNumber)
 _new(:QuoteNode, :ANY)
 _new(:SSAValue, :Int)
-eval(:((::Type{LineNumberNode})(l::Int) = $(Expr(:new, :LineNumberNode, :l))))
+eval(:((::Type{LineNumberNode})(l::Int) = $(Expr(:new, :LineNumberNode, :l, nothing))))
+eval(:((::Type{LineNumberNode})(l::Int, f::ANY) = $(Expr(:new, :LineNumberNode, :l, :f))))
 eval(:((::Type{GlobalRef})(m::Module, s::Symbol) = $(Expr(:new, :GlobalRef, :m, :s))))
 eval(:((::Type{SlotNumber})(n::Int) = $(Expr(:new, :SlotNumber, :n))))
 eval(:((::Type{TypedSlot})(n::Int, t::ANY) = $(Expr(:new, :TypedSlot, :n, :t))))
@@ -335,7 +337,7 @@ end
 
 # docsystem basics
 macro doc(x...)
-    atdoc(x...)
+    atdoc(__source__, x...)
 end
 macro __doc__(x)
     Expr(:escape, Expr(:block, Expr(:meta, :doc), x))
@@ -343,7 +345,7 @@ end
 macro doc_str(s)
     Expr(:escape, s)
 end
-atdoc     = (str, expr) -> Expr(:escape, expr)
+atdoc     = (source, str, expr) -> Expr(:escape, expr)
 atdoc!(λ) = global atdoc = λ
 
 

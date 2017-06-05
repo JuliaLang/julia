@@ -194,9 +194,12 @@ julia> ex = quote
            y = 2
            x + y
        end
-quote  # none, line 2:
-    x = 1 # none, line 3:
-    y = 2 # none, line 4:
+quote
+    #= none:2 =#
+    x = 1
+    #= none:3 =#
+    y = 2
+    #= none:4 =#
     x + y
 end
 
@@ -238,7 +241,7 @@ julia> ex = :(a in $:((1,2,3)) )
 Interpolating symbols into a nested expression requires enclosing each symbol in an enclosing
 quote block:
 
-```julia
+```julia-repl
 julia> :( :a in $( :(:a + :b) ) )
                    ^^^^^^^^^^
                    quoted inner expression
@@ -298,7 +301,7 @@ Since expressions are just `Expr` objects which can be constructed programmatica
 it is possible to dynamically generate arbitrary code which can then be run using [`eval()`](@ref).
 Here is a simple example:
 
-```julia
+```julia-repl
 julia> a = 1;
 
 julia> ex = Expr(:call, :+, a, :b)
@@ -509,6 +512,28 @@ julia> @showarg(println("Yo!"))
 :(println("Yo!"))
 ```
 
+In addition to the given argument list, every macro is passed an extra argument named `__source__`
+providing information (in the form of a `LineNumberNode` object) about the parser location
+of the `@` sign from the macro invocation.
+
+This allows macros to include better error diagnostic information,
+and is commonly used by logging, string-parser macros, and docs, for example,
+as well as to implement the `@__LINE__`, `@__FILE__`, and `@__DIR__` macros.
+
+The location information can be accessed by referencing `__source__.line` and `__source__.file`:
+
+```jldoctest
+julia> macro __LOCATION__(); return QuoteNode(__source__); end
+@__LOCATION__ (macro with 1 method)
+
+julia> dump(
+            @__LOCATION__(
+       ))
+LineNumberNode
+  line: Int64 2
+  file: Symbol none
+```
+
 ### Building an advanced macro
 
 Here is a simplified definition of Julia's `@assert` macro:
@@ -707,6 +732,32 @@ julia> foo()
 ```
 
 This kind of manipulation of variables should be used judiciously, but is occasionally quite handy.
+
+Getting the hygiene rules correct can be a formidable challenge.
+Before using a macro, you might want to consider whether a function closure
+would be sufficient. Another useful strategy is to defer as much work as possible to runtime.
+For example, many macros simply wrap their arguments in a QuoteNode or other similar Expr.
+Some examples of this include `@task body` which simply returns `schedule(Task(() -> $body))`,
+and `@eval expr`, which simply returns `eval(QuoteNode(expr))`.
+
+To demonstrate, we might rewrite the `@time` example above as:
+
+```julia
+macro time(expr)
+    return :(timeit(() -> $(esc(expr))))
+end
+function timeit(f)
+    t0 = time()
+    val = f()
+    t1 = time()
+    println("elapsed time: ", t1-t0, " seconds")
+    return val
+end
+```
+
+However, we don't do this for a good reason: wrapping the `expr` in a new scope block (the anonymous function)
+also slightly changes the meaning of the expression (the scope of any variables in it),
+while we want `@time` to be usable with minimum impact on the wrapped code.
 
 ## Code Generation
 
@@ -920,12 +971,12 @@ we returned from the definition, now with the *value* of `x`.
 
 What happens if we evaluate `foo` again with a type that we have already used?
 
-```julia generated
+```jldoctest generated
 julia> foo(4)
 16
 ```
 
-Note that there is no printout of `Int64`. We can see that the body of the generated function
+Note that there is no printout of [`Int64`](@ref). We can see that the body of the generated function
 was only executed once here, for the specific set of argument types, and the result was cached.
 After that, for this example, the expression returned from the generated function on the first
 invocation was re-used as the method body. However, the actual caching behavior is an implementation-defined

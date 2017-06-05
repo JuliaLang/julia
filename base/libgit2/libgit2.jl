@@ -75,7 +75,7 @@ is in the repository.
 
 # Example
 
-```julia
+```julia-repl
 julia> repo = LibGit2.GitRepo(repo_path);
 
 julia> LibGit2.add!(repo, test_file);
@@ -149,10 +149,10 @@ function isdiff(repo::GitRepo, treeish::AbstractString, paths::AbstractString=""
         diff = diff_tree(repo, tree, paths, cached=cached)
         result = count(diff) > 0
         close(diff)
+        return result
     finally
         close(tree)
     end
-    return result
 end
 
 """
@@ -220,7 +220,7 @@ Returns `true` if `a`, a [`GitHash`](@ref) in string form, is an ancestor of
 
 # Example
 
-```julia
+```julia-repl
 julia> repo = LibGit2.GitRepo(repo_path);
 
 julia> LibGit2.add!(repo, test_file1);
@@ -954,4 +954,3 @@ end
 
 
 end # module
-

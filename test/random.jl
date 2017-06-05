@@ -13,6 +13,7 @@ srand(0); rand(); x = rand(384)
 @test typeof(rand(false:true)) === Bool
 @test typeof(rand(Char)) === Char
 @test length(randn(4, 5)) == 20
+@test length(randn(Complex128, 4, 5)) == 20
 @test length(bitrand(4, 5)) == 20
 
 @test rand(MersenneTwister(0)) == 0.8236475079774124
@@ -52,18 +53,17 @@ let mt = MersenneTwister(0)
     rand(coll, 2, 3)
 end
 
-# rand using Dict, Set
-adict = Dict(1=>2, 3=>4, 5=>6)
-@test rand(adict) in adict
-aset = Set(1:10)
-@test rand(aset) in aset
-
 # randn
 @test randn(MersenneTwister(42)) == -0.5560268761463861
 A = zeros(2, 2)
 randn!(MersenneTwister(42), A)
 @test A == [-0.5560268761463861  0.027155338009193845;
             -0.444383357109696  -0.29948409035891055]
+
+B = zeros(Complex128, 2)
+randn!(MersenneTwister(42), B)
+@test B == [Complex128(-0.5560268761463861,-0.444383357109696),
+            Complex128(0.027155338009193845,-0.29948409035891055)] * 0.7071067811865475244008
 
 for T in (Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128, BigInt,
           Float16, Float32, Float64, Rational{Int})
@@ -306,8 +306,14 @@ end
 
 # test all rand APIs
 for rng in ([], [MersenneTwister(0)], [RandomDevice()])
-    types = [Base.BitInteger_types..., Bool, Float16, Float32, Float64, Char]
     ftypes = [Float16, Float32, Float64]
+    cftypes = [Complex32, Complex64, Complex128, ftypes...]
+    types = [Bool, Char, Base.BitInteger_types..., ftypes...]
+    collections = [(IntSet(rand(1:100, 20)), Int),
+                   (Set(rand(Int, 20)), Int),
+                   (Dict(zip(rand(Int,10), rand(Int, 10))), Pair{Int,Int}),
+                   (1:100, Int),
+                   (rand(Int, 100), Int)]
     b2 = big(2)
     u3 = UInt(3)
     for f in [rand, randn, randexp]
@@ -316,7 +322,7 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()])
         f(rng..., 2, 3)               ::Array{Float64, 2}
         f(rng..., b2, u3)             ::Array{Float64, 2}
         f(rng..., (2, 3))             ::Array{Float64, 2}
-        for T in (f === rand ? types : ftypes)
+        for T in (f === rand ? types : f === randn ? cftypes : ftypes)
             a0 = f(rng..., T)         ::T
             a1 = f(rng..., T, 5)      ::Vector{T}
             a2 = f(rng..., T, 2, 3)   ::Array{T, 2}
@@ -329,8 +335,22 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()])
             end
         end
     end
+    for (C, T) in collections
+        a0 = rand(rng..., C)                  ::T
+        a1 = rand(rng..., C, 5)               ::Vector{T}
+        a2 = rand(rng..., C, 2, 3)            ::Array{T, 2}
+        a3 = rand!(rng..., Array{T}(5), C)    ::Vector{T}
+        a4 = rand!(rng..., Array{T}(2, 3), C) ::Array{T, 2}
+        for a in [a0, a1..., a2..., a3..., a4...]
+            @test a in C
+        end
+    end
+    for C in [1:0, Dict(), Set(), IntSet(), Int[]]
+        @test_throws ArgumentError rand(rng..., C)
+        @test_throws ArgumentError rand(rng..., C, 5)
+    end
     for f! in [rand!, randn!, randexp!]
-        for T in (f! === rand! ? types : ftypes)
+        for T in (f! === rand! ? types : f! === randn! ? cftypes : ftypes)
             X = T == Bool ? T[0,1] : T[0,1,2]
             for A in (Array{T}(5), Array{T}(2, 3))
                 f!(rng..., A)                    ::typeof(A)

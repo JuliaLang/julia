@@ -12,7 +12,7 @@ function test_have_color(buf, color, no_color)
 end
 
 cfile = " at $(@__FILE__):"
-c1line = @__LINE__ + 1
+c1line = @__LINE__() + 1
 method_c1(x::Float64, s::AbstractString...) = true
 
 buf = IOBuffer()
@@ -59,7 +59,7 @@ color = "\e[0m\nClosest candidates are:\n  method_c2(\e[1m\e[31m::Int32\e[0m, ::
 no_color = no_color = "\nClosest candidates are:\n  method_c2(!Matched::Int32, ::Float64, ::Any...)$cfile$(c2line+2)\n  method_c2(!Matched::Int32, ::Any...)$cfile$(c2line+1)\n  method_c2(::T<:Real, ::T<:Real, !Matched::T<:Real) where T<:Real$cfile$(c2line+5)\n  ..."
 test_have_color(buf, color, no_color)
 
-c3line = @__LINE__ + 1
+c3line = @__LINE__() + 1
 method_c3(x::Float64, y::Float64) = true
 Base.show_method_candidates(buf, Base.MethodError(method_c3,(1.,)))
 color = "\e[0m\nClosest candidates are:\n  method_c3(::Float64, \e[1m\e[31m::Float64\e[0m)$cfile$c3line\e[0m"
@@ -75,7 +75,7 @@ test_have_color(buf,
     "\e[0m\nClosest candidates are:\n  method_c4(::AbstractString)$cfile$(c4line+2)\n  method_c4()$cfile$(c4line+1)\e[0m",
     "\nClosest candidates are:\n  method_c4(::AbstractString)$cfile$(c4line+2)\n  method_c4()$cfile$(c4line+1)")
 
-c5line = @__LINE__ + 1
+c5line = @__LINE__() + 1
 method_c5(::Type{Float64}) = true
 Base.show_method_candidates(buf, MethodError(method_c5,(Float64,)))
 test_have_color(buf, "\e[0m\nClosest candidates are:\n  method_c5(::Type{Float64})$cfile$c5line\e[0m",
@@ -92,12 +92,12 @@ for f in [getindex, setindex!]
     test_have_color(buf, "", "")
 end
 
-PR16155line = @__LINE__ + 2
+PR16155line = @__LINE__() + 2
 mutable struct PR16155
     a::Int64
     b
 end
-PR16155line2 = @__LINE__ + 1
+PR16155line2 = @__LINE__() + 1
 (::Type{T}){T<:PR16155}(arg::Any) = "replace call-to-convert method from sysimg"
 
 Base.show_method_candidates(buf, MethodError(PR16155,(1.0, 2.0, Int64(3))))
@@ -146,12 +146,12 @@ else
     @test contains(error_out3, "method_c6_in_module(::Any; y)$cfile$(c6mline + 3) got unsupported keyword argument \"x\"")
 end
 
-c7line = @__LINE__ + 1
+c7line = @__LINE__() + 1
 method_c7(a, b; kargs...) = a
 Base.show_method_candidates(buf, MethodError(method_c7, (1, 1)), [(:x, 1), (:y, 2)])
 test_have_color(buf, "\e[0m\nClosest candidates are:\n  method_c7(::Any, ::Any; kargs...)$cfile$c7line\e[0m",
                      "\nClosest candidates are:\n  method_c7(::Any, ::Any; kargs...)$cfile$c7line")
-c8line = @__LINE__ + 1
+c8line = @__LINE__() + 1
 method_c8(a, b; y=1, w=1) = a
 Base.show_method_candidates(buf, MethodError(method_c8, (1, 1)), [(:x, 1), (:y, 2), (:z, 1), (:w, 1)])
 test_have_color(buf, "\e[0m\nClosest candidates are:\n  method_c8(::Any, ::Any; y, w)$cfile$c8line\e[1m\e[31m got unsupported keyword arguments \"x\", \"z\"\e[0m\e[0m",
@@ -344,7 +344,7 @@ end
 @test stringmime("text/plain", FunctionLike()) == "(::FunctionLike) (generic function with 0 methods)"
 @test ismatch(r"^@doc \(macro with \d+ method[s]?\)$", stringmime("text/plain", getfield(Base, Symbol("@doc"))))
 
-method_defs_lineno = @__LINE__+1
+method_defs_lineno = @__LINE__() + 1
 Base.Symbol() = throw(ErrorException("1"))
 (::Symbol)() = throw(ErrorException("2"))
 EightBitType() = throw(ErrorException("3"))
@@ -361,15 +361,24 @@ let err_str,
     sp = Base.source_path()
     sn = basename(sp)
 
-    @test sprint(show, which(Symbol, Tuple{})) == "Symbol() in $curmod_str at $sp:$(method_defs_lineno + 0)"
-    @test sprint(show, which(:a, Tuple{})) == "(::Symbol)() in $curmod_str at $sp:$(method_defs_lineno + 1)"
-    @test sprint(show, which(EightBitType, Tuple{})) == "$(curmod_prefix)EightBitType() in $curmod_str at $sp:$(method_defs_lineno + 2)"
-    @test sprint(show, which(reinterpret(EightBitType, 0x54), Tuple{})) == "(::$(curmod_prefix)EightBitType)() in $curmod_str at $sp:$(method_defs_lineno + 3)"
-    @test sprint(show, which(EightBitTypeT, Tuple{})) == "(::Type{$(curmod_prefix)EightBitTypeT})() in $curmod_str at $sp:$(method_defs_lineno + 4)"
-    @test sprint(show, which(EightBitTypeT{Int32}, Tuple{})) == "(::Type{$(curmod_prefix)EightBitTypeT{T}})() where T in $curmod_str at $sp:$(method_defs_lineno + 5)"
-    @test sprint(show, which(reinterpret(EightBitTypeT{Int32}, 0x54), Tuple{})) == "(::$(curmod_prefix)EightBitTypeT)() in $curmod_str at $sp:$(method_defs_lineno + 6)"
-    @test startswith(sprint(show, which(getfield(Base, Symbol("@doc")), Tuple{Vararg{Any}})), "@doc(x...) in Core at boot.jl:")
-    @test startswith(sprint(show, which(FunctionLike(), Tuple{})), "(::$(curmod_prefix)FunctionLike)() in $curmod_str at $sp:$(method_defs_lineno + 7)")
+    @test sprint(show, which(Symbol, Tuple{})) ==
+        "Symbol() in $curmod_str at $sp:$(method_defs_lineno + 0)"
+    @test sprint(show, which(:a, Tuple{})) ==
+        "(::Symbol)() in $curmod_str at $sp:$(method_defs_lineno + 1)"
+    @test sprint(show, which(EightBitType, Tuple{})) ==
+        "$(curmod_prefix)EightBitType() in $curmod_str at $sp:$(method_defs_lineno + 2)"
+    @test sprint(show, which(reinterpret(EightBitType, 0x54), Tuple{})) ==
+        "(::$(curmod_prefix)EightBitType)() in $curmod_str at $sp:$(method_defs_lineno + 3)"
+    @test sprint(show, which(EightBitTypeT, Tuple{})) ==
+        "(::Type{$(curmod_prefix)EightBitTypeT})() in $curmod_str at $sp:$(method_defs_lineno + 4)"
+    @test sprint(show, which(EightBitTypeT{Int32}, Tuple{})) ==
+        "(::Type{$(curmod_prefix)EightBitTypeT{T}})() where T in $curmod_str at $sp:$(method_defs_lineno + 5)"
+    @test sprint(show, which(reinterpret(EightBitTypeT{Int32}, 0x54), Tuple{})) ==
+        "(::$(curmod_prefix)EightBitTypeT)() in $curmod_str at $sp:$(method_defs_lineno + 6)"
+    @test startswith(sprint(show, which(getfield(Base, Symbol("@doc")), Tuple{LineNumberNode, Vararg{Any}})),
+                     "@doc(__source__::LineNumberNode, x...) in Core at boot.jl:")
+    @test startswith(sprint(show, which(FunctionLike(), Tuple{})),
+                     "(::$(curmod_prefix)FunctionLike)() in $curmod_str at $sp:$(method_defs_lineno + 7)")
     @test stringmime("text/plain", FunctionLike()) == "(::FunctionLike) (generic function with 1 method)"
     @test stringmime("text/plain", Core.arraysize) == "arraysize (built-in function)"
 

@@ -2,7 +2,7 @@
 
 module Math
 
-export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
+export sin, cos, sincos, tan, sinh, cosh, tanh, asin, acos, atan,
        asinh, acosh, atanh, sec, csc, cot, asec, acsc, acot,
        sech, csch, coth, asech, acsch, acoth,
        sinpi, cospi, sinc, cosc,
@@ -124,7 +124,7 @@ macro evalpoly(z, p...)
              :(s = muladd(x, x, y*y)),
              as...,
              :(muladd($ai, tt, $b)))
-    R = Expr(:macrocall, Symbol("@horner"), :tt, map(esc, p)...)
+    R = Expr(:macrocall, Symbol("@horner"), (), :tt, map(esc, p)...)
     :(let tt = $(esc(z))
           isa(tt, Complex) ? $C : $R
       end)
@@ -161,7 +161,8 @@ log(b::T, x::T) where {T<:Number} = log(x)/log(b)
 """
     log(b,x)
 
-Compute the base `b` logarithm of `x`. Throws [`DomainError`](@ref) for negative `Real` arguments.
+Compute the base `b` logarithm of `x`. Throws [`DomainError`](@ref) for negative
+[`Real`](@ref) arguments.
 
 ```jldoctest
 julia> log(4,8)
@@ -351,8 +352,8 @@ atanh(x)
 """
     log(x)
 
-Compute the natural logarithm of `x`. Throws [`DomainError`](@ref) for negative `Real` arguments.
-Use complex negative arguments to obtain complex results.
+Compute the natural logarithm of `x`. Throws [`DomainError`](@ref) for negative
+[`Real`](@ref) arguments. Use complex negative arguments to obtain complex results.
 
 There is an experimental variant in the `Base.Math.JuliaLibm` module, which is typically
 faster and more accurate.
@@ -362,7 +363,8 @@ log(x)
 """
     log2(x)
 
-Compute the logarithm of `x` to base 2. Throws [`DomainError`](@ref) for negative `Real` arguments.
+Compute the logarithm of `x` to base 2. Throws [`DomainError`](@ref) for negative
+[`Real`](@ref) arguments.
 
 # Example
 ```jldoctest
@@ -379,7 +381,7 @@ log2(x)
     log10(x)
 
 Compute the logarithm of `x` to base 10.
-Throws [`DomainError`](@ref) for negative `Real` arguments.
+Throws [`DomainError`](@ref) for negative [`Real`](@ref) arguments.
 
 # Example
 ```jldoctest
@@ -395,7 +397,8 @@ log10(x)
 """
     log1p(x)
 
-Accurate natural logarithm of `1+x`. Throws [`DomainError`](@ref) for `Real` arguments less than -1.
+Accurate natural logarithm of `1+x`. Throws [`DomainError`](@ref) for [`Real`](@ref)
+arguments less than -1.
 
 There is an experimental variant in the `Base.Math.JuliaLibm` module, which is typically
 faster and more accurate.
@@ -419,14 +422,27 @@ for f in (:sin, :cos, :tan, :asin, :acos, :acosh, :atanh, :log, :log2, :log10,
     end
 end
 
+"""
+    sincos(x)
+
+Compute sine and cosine of `x`, where `x` is in radians.
+"""
+@inline function sincos(x)
+    res = Base.FastMath.sincos_fast(x)
+    if (isnan(res[1]) | isnan(res[2])) & !isnan(x)
+        throw(DomainError())
+    end
+    return res
+end
+
 sqrt(x::Float64) = sqrt_llvm(x)
 sqrt(x::Float32) = sqrt_llvm(x)
 
 """
     sqrt(x)
 
-Return ``\\sqrt{x}``. Throws [`DomainError`](@ref) for negative `Real` arguments. Use complex
-negative arguments instead.  The prefix operator `√` is equivalent to `sqrt`.
+Return ``\\sqrt{x}``. Throws [`DomainError`](@ref) for negative [`Real`](@ref) arguments.
+Use complex negative arguments instead. The prefix operator `√` is equivalent to `sqrt`.
 """
 sqrt(x::Real) = sqrt(float(x))
 
@@ -446,7 +462,7 @@ julia> √(a^2 + a^2) # a^2 overflows
 ERROR: DomainError:
 sqrt will only return a complex result if called with a complex argument. Try sqrt(complex(x)).
 Stacktrace:
- [1] sqrt(::Int64) at ./math.jl:431
+ [1] sqrt(::Int64) at ./math.jl:447
 ```
 """
 hypot(x::Number, y::Number) = hypot(promote(x, y)...)

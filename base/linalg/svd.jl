@@ -15,10 +15,6 @@ SVD(U::AbstractArray{T}, S::Vector{Tr}, Vt::AbstractArray{T}) where {T,Tr} = SVD
 
 `svdfact!` is the same as [`svdfact`](@ref), but saves space by
 overwriting the input `A`, instead of creating a copy.
-
-If `thin=true` (default), a thin SVD is returned. For a ``M \\times N`` matrix
-`A`, `U` is ``M \\times M`` for a full SVD (`thin=false`) and
-``M \\times \\min(M, N)`` for a thin SVD.
 """
 function svdfact!(A::StridedMatrix{T}; thin::Bool=true) where T<:BlasFloat
     m,n = size(A)
@@ -38,6 +34,7 @@ Compute the singular value decomposition (SVD) of `A` and return an `SVD` object
 `U`, `S`, `V` and `Vt` can be obtained from the factorization `F` with `F[:U]`,
 `F[:S]`, `F[:V]` and `F[:Vt]`, such that `A = U*diagm(S)*Vt`.
 The algorithm produces `Vt` and hence `Vt` is more efficient to extract than `V`.
+The singular values in `S` are sorted in descending order.
 
 If `thin=true` (default), a thin SVD is returned. For a ``M \\times N`` matrix
 `A`, `U` is ``M \\times M`` for a full SVD (`thin=false`) and
@@ -74,7 +71,7 @@ svdfact(x::Integer; thin::Bool=true) = svdfact(float(x), thin=thin)
     svd(A, thin::Bool=true) -> U, S, V
 
 Computes the SVD of `A`, returning `U`, vector `S`, and `V` such that
-`A == U*diagm(S)*V'`.
+`A == U*diagm(S)*V'`. The singular values in `S` are sorted in descending order.
 
 If `thin=true` (default), a thin SVD is returned. For a ``M \\times N`` matrix
 `A`, `U` is ``M \\times M`` for a full SVD (`thin=false`) and
@@ -105,10 +102,11 @@ julia> U*diagm(S)*V'
  0.0  2.0  0.0  0.0  0.0
 ```
 """
-function svd(A::Union{Number, AbstractArray}; thin::Bool=true)
+function svd(A::AbstractArray; thin::Bool=true)
     F = svdfact(A, thin=thin)
     F.U, F.S, F.Vt'
 end
+svd(x::Number; thin::Bool=true) = first.(svd(fill(x, 1, 1)))
 
 function getindex(F::SVD, d::Symbol)
     if d == :U
@@ -136,7 +134,7 @@ svdvals(A::AbstractMatrix{<:BlasFloat}) = svdvals!(copy(A))
 """
     svdvals(A)
 
-Returns the singular values of `A`.
+Returns the singular values of `A` in descending order.
 
 # Example
 
@@ -234,6 +232,10 @@ function svdfact(A::StridedMatrix{TA}, B::StridedMatrix{TB}) where {TA,TB}
     S = promote_type(Float32, typeof(one(TA)/norm(one(TA))),TB)
     return svdfact!(copy_oftype(A, S), copy_oftype(B, S))
 end
+# This method can be heavily optimized but it is probably not critical
+# and might introduce bugs or inconsistencies relative to the 1x1 matrix
+# version
+svdfact(x::Number, y::Number) = svdfact(fill(x, 1, 1), fill(y, 1, 1))
 
 """
     svd(A, B) -> U, V, Q, D1, D2, R0
@@ -248,6 +250,7 @@ function svd(A::AbstractMatrix, B::AbstractMatrix)
     F = svdfact(A, B)
     F[:U], F[:V], F[:Q], F[:D1], F[:D2], F[:R0]
 end
+svd(x::Number, y::Number) = first.(svd(fill(x, 1, 1), fill(y, 1, 1)))
 
 function getindex(obj::GeneralizedSVD{T}, d::Symbol) where T
     if d == :U
@@ -308,6 +311,7 @@ function svdvals(A::StridedMatrix{TA}, B::StridedMatrix{TB}) where {TA,TB}
     S = promote_type(Float32, typeof(one(TA)/norm(one(TA))), TB)
     return svdvals!(copy_oftype(A, S), copy_oftype(B, S))
 end
+svdvals(x::Number, y::Number) = abs(x/y)
 
 # Conversion
 convert(::Type{AbstractMatrix}, F::SVD) = (F.U * Diagonal(F.S)) * F.Vt

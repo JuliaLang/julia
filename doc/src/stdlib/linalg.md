@@ -154,13 +154,13 @@ Base.At_rdiv_Bt
 
 In Julia (as in much of scientific computation), dense linear-algebra operations are based on
 the [LAPACK library](http://www.netlib.org/lapack/), which in turn is built on top of basic linear-algebra
-building-blocks known as the [BLAS](http://www.netlib.org/blas/).  There are highly optimized
+building-blocks known as the [BLAS](http://www.netlib.org/blas/). There are highly optimized
 implementations of BLAS available for every computer architecture, and sometimes in high-performance
 linear algebra routines it is useful to call the BLAS functions directly.
 
 `Base.LinAlg.BLAS` provides wrappers for some of the BLAS functions. Those BLAS functions
 that overwrite one of the input arrays have names ending in `'!'`.  Usually, a BLAS function has
-four methods defined, for `Float64`, `Float32`, `Complex128`, and `Complex64` arrays.
+four methods defined, for [`Float64`](@ref), [`Float32`](@ref), `Complex128`, and `Complex64` arrays.
 
 ### [BLAS Character Arguments](@id stdlib-blas-chars)
 Many BLAS functions accept arguments that determine whether to transpose an argument (`trans`),
@@ -224,7 +224,6 @@ Base.LinAlg.BLAS.gemv(::Any, ::Any, ::Any)
 Base.LinAlg.BLAS.symm!
 Base.LinAlg.BLAS.symm(::Any, ::Any, ::Any, ::Any, ::Any)
 Base.LinAlg.BLAS.symm(::Any, ::Any, ::Any, ::Any)
-Base.LinAlg.BLAS.symm(::Char, ::Char, ::Any, ::Any, ::Any)
 Base.LinAlg.BLAS.symv!
 Base.LinAlg.BLAS.symv(::Any, ::Any, ::Any, ::Any)
 Base.LinAlg.BLAS.symv(::Any, ::Any, ::Any)
@@ -245,8 +244,8 @@ Base.LinAlg.I
 `Base.LinAlg.LAPACK` provides wrappers for some of the LAPACK functions for linear algebra.
  Those functions that overwrite one of the input arrays have names ending in `'!'`.
 
-Usually a function has 4 methods defined, one each for `Float64`, `Float32`, `Complex128` and
-`Complex64` arrays.
+Usually a function has 4 methods defined, one each for [`Float64`](@ref), [`Float32`](@ref),
+`Complex128` and `Complex64` arrays.
 
 Note that the LAPACK API provided by Julia can and will change in the future. Since this API is
 not user-facing, there is no commitment to support/deprecate this specific set of functions in

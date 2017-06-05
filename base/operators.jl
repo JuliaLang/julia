@@ -235,7 +235,7 @@ julia> 5 <= 3
 false
 ```
 """
-<=(x, y) = !(y < x)
+<=(x, y) = (x < y) | (x == y)
 const ≤ = <=
 
 """
@@ -480,6 +480,7 @@ julia> bits(Int8(12))
 See also [`>>`](@ref), [`>>>`](@ref).
 """
 function <<(x::Integer, c::Integer)
+    @_inline_meta
     typemin(Int) <= c <= typemax(Int) && return x << (c % Int)
     (x >= 0 || c >= 0) && return zero(x)
     oftype(x, -1)
@@ -518,6 +519,7 @@ julia> bits(Int8(-4))
 See also [`>>>`](@ref), [`<<`](@ref).
 """
 function >>(x::Integer, c::Integer)
+    @_inline_meta
     typemin(Int) <= c <= typemax(Int) && return x >> (c % Int)
     (x >= 0 || c < 0) && return zero(x)
     oftype(x, -1)
@@ -532,8 +534,8 @@ Unsigned right bit shift operator, `x >>> n`. For `n >= 0`, the result is `x`
 shifted right by `n` bits, where `n >= 0`, filling with `0`s. For `n < 0`, this
 is equivalent to `x << -n`.
 
-For `Unsigned` integer types, this is equivalent to [`>>`](@ref). For
-`Signed` integer types, this is equivalent to `signed(unsigned(x) >> n)`.
+For [`Unsigned`](@ref) integer types, this is equivalent to [`>>`](@ref). For
+[`Signed`](@ref) integer types, this is equivalent to `signed(unsigned(x) >> n)`.
 
 ```jldoctest
 julia> Int8(-14) >>> 2
@@ -545,13 +547,16 @@ julia> bits(Int8(-14))
 julia> bits(Int8(60))
 "00111100"
 ```
-`BigInt`s are treated as if having infinite size, so no filling is required and this
+
+[`BigInt`](@ref)s are treated as if having infinite size, so no filling is required and this
 is equivalent to [`>>`](@ref).
 
 See also [`>>`](@ref), [`<<`](@ref).
 """
->>>(x::Integer, c::Integer) =
+function >>>(x::Integer, c::Integer)
+    @_inline_meta
     typemin(Int) <= c <= typemax(Int) ? x >>> (c % Int) : zero(x)
+end
 >>>(x::Integer, c::Unsigned) = c <= typemax(UInt) ? x >>> (c % UInt) : zero(x)
 >>>(x::Integer, c::Int) = c >= 0 ? x >>> unsigned(c) : x << unsigned(-c)
 

@@ -229,7 +229,7 @@ julia> Float32(1/3, RoundUp)
 
 See [`RoundingMode`](@ref) for available rounding modes.
 """
-Float32
+Float32(x)
 
 """
     Mmap.mmap(io::Union{IOStream,AbstractString,Mmap.AnonymousMmap}[, type::Type{Array{T,N}}, dims, offset]; grow::Bool=true, shared::Bool=true)
@@ -243,7 +243,7 @@ determines how the bytes of the array are interpreted. Note that the file must b
 binary format, and no format conversions are possible (this is a limitation of operating
 systems, not Julia).
 
-`dims` is a tuple or single `Integer` specifying the size or length of the array.
+`dims` is a tuple or single [`Integer`](@ref) specifying the size or length of the array.
 
 The file is passed via the stream argument, either as an open `IOStream` or filename string.
 When you initialize the stream, use `"r"` for a "read-only" array, and `"w+"` to create a
@@ -814,7 +814,7 @@ julia> Float64(pi, RoundUp)
 
 See [`RoundingMode`](@ref) for available rounding modes.
 """
-Float64
+Float64(x)
 
 """
     union(s1,s2...)
@@ -1061,7 +1061,7 @@ For arrays, this constructs an array with the same binary data as the given
 array, but with the specified element type.
 For example,
 `reinterpret(Float32, UInt32(7))` interprets the 4 bytes corresponding to `UInt32(7)` as a
-`Float32`.
+[`Float32`](@ref).
 
 !!! warning
 
@@ -1147,8 +1147,8 @@ searchsortedfirst
 """
     big(x)
 
-Convert a number to a maximum precision representation (typically `BigInt` or `BigFloat`).
-See [`BigFloat`](@ref) for information about some pitfalls with floating-point numbers.
+Convert a number to a maximum precision representation (typically [`BigInt`](@ref) or
+`BigFloat`). See [`BigFloat`](@ref) for information about some pitfalls with floating-point numbers.
 """
 big
 
@@ -1432,24 +1432,12 @@ recurses infinitely.
 StackOverflowError
 
 """
-    BigInt(x)
-
-Create an arbitrary precision integer. `x` may be an `Int` (or anything that can be
-converted to an `Int`).  The usual mathematical operators are defined for this type, and
-results are promoted to a `BigInt`.
-
-Instances can be constructed from strings via [`parse`](@ref), or using the `big`
-string literal.
-"""
-BigInt
-
-"""
     ==(x, y)
 
-Generic equality operator, giving a single `Bool` result. Falls back to `===`. Should be
-implemented for all types with a notion of equality, based on the abstract value that an
-instance represents. For example, all numeric types are compared by numeric value, ignoring
-type. Strings are compared as sequences of characters, ignoring encoding.
+Generic equality operator, giving a single [`Bool`](@ref) result. Falls back to `===`.
+Should be implemented for all types with a notion of equality, based on the abstract value
+that an instance represents. For example, all numeric types are compared by numeric value,
+ignoring type. Strings are compared as sequences of characters, ignoring encoding.
 
 Follows IEEE semantics for floating-point numbers.
 
@@ -1946,7 +1934,7 @@ done
 
 Convert `x` to a value of type `T`.
 
-If `T` is an `Integer` type, an [`InexactError`](@ref) will be raised if `x`
+If `T` is an [`Integer`](@ref) type, an [`InexactError`](@ref) will be raised if `x`
 is not representable by `T`, for example if `x` is not integer-valued, or is outside the
 range supported by `T`.
 
@@ -1957,10 +1945,10 @@ julia> convert(Int, 3.0)
 julia> convert(Int, 3.5)
 ERROR: InexactError()
 Stacktrace:
- [1] convert(::Type{Int64}, ::Float64) at ./float.jl:679
+ [1] convert(::Type{Int64}, ::Float64) at ./float.jl:680
 ```
 
-If `T` is a `AbstractFloat` or `Rational` type,
+If `T` is a [`AbstractFloat`](@ref) or [`Rational`](@ref) type,
 then it will return the closest value to `x` representable by `T`.
 
 ```jldoctest
@@ -2172,7 +2160,7 @@ isvalid(value)
     isvalid(T, value) -> Bool
 
 Returns `true` if the given value is valid for that type. Types currently can
-be either `Char` or `String`. Values for `Char` can be of type `Char` or `UInt32`.
+be either `Char` or `String`. Values for `Char` can be of type `Char` or [`UInt32`](@ref).
 Values for `String` can be of that type, or `Vector{UInt8}`.
 """
 isvalid(T,value)
@@ -2414,3 +2402,81 @@ seekend
 Integer division was attempted with a denominator value of 0.
 """
 DivideError
+
+"""
+    Number
+
+Abstract supertype for all number types.
+"""
+Number
+
+"""
+    Real <: Number
+
+Abstract supertype for all real numbers.
+"""
+Real
+
+"""
+    AbstractFloat <: Real
+
+Abstract supertype for all floating point numbers.
+"""
+AbstractFloat
+
+"""
+    Integer <: Real
+
+Abstract supertype for all integers.
+"""
+Integer
+
+"""
+    Signed <: Integer
+
+Abstract supertype for all signed integers.
+"""
+Signed
+
+"""
+    Unsigned <: Integer
+
+Abstract supertype for all unsigned integers.
+"""
+Unsigned
+
+"""
+    Bool <: Integer
+
+Boolean type.
+"""
+Bool
+
+for bit in (16, 32, 64)
+    @eval begin
+        """
+            Float$($bit) <: AbstractFloat
+
+        $($bit)-bit floating point number type.
+        """
+        $(Symbol("Float", bit))
+    end
+end
+
+for bit in (8, 16, 32, 64, 128)
+    @eval begin
+        """
+            Int$($bit) <: Signed
+
+        $($bit)-bit signed integer type.
+        """
+        $(Symbol("Int", bit))
+
+        """
+            UInt$($bit) <: Unsigned
+
+        $($bit)-bit unsigned integer type.
+        """
+        $(Symbol("UInt", bit))
+    end
+end

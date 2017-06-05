@@ -138,9 +138,10 @@ module IteratorsMD
     eachindex(::IndexCartesian, A::AbstractArray) = CartesianRange(indices(A))
 
     @inline eachindex(::IndexCartesian, A::AbstractArray, B::AbstractArray...) =
-        CartesianRange(maxsize((), A, B...))
-    maxsize(sz) = sz
-    @inline maxsize(sz, A, B...) = maxsize(maxt(sz, size(A)), B...)
+        CartesianRange(maxsize(A, B...))
+    maxsize() = ()
+    @inline maxsize(A) = size(A)
+    @inline maxsize(A, B...) = maxt(size(A), maxsize(B...))
     @inline maxt(a::Tuple{}, b::Tuple{}) = ()
     @inline maxt(a::Tuple{}, b::Tuple)   = b
     @inline maxt(a::Tuple,   b::Tuple{}) = a
@@ -908,7 +909,7 @@ their indices; any offset results in a (circular) wraparound. If the
 arrays have overlapping indices, then on the domain of the overlap
 `dest` agrees with `src`.
 
-```julia
+```julia-repl
 julia> src = reshape(collect(1:16), (4,4))
 4×4 Array{Int64,2}:
  1  5   9  13

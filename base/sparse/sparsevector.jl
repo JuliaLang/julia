@@ -2,7 +2,7 @@
 
 ### Common definitions
 
-import Base: scalarmax, scalarmin, sort, find, findnz, @_pure_meta
+import Base: scalarmax, scalarmin, sort, find, findnz
 import Base.LinAlg: promote_to_array_type, promote_to_arrays_
 
 ### The SparseVector
@@ -455,7 +455,7 @@ function getindex(x::SparseMatrixCSC, ::Colon, j::Integer)
     SparseVector(x.m, x.rowval[r1:r2], x.nzval[r1:r2])
 end
 
-function getindex(x::SparseMatrixCSC, I::UnitRange, j::Integer)
+function getindex(x::SparseMatrixCSC, I::AbstractUnitRange, j::Integer)
     checkbounds(x, I, j)
     # Get the selected column
     c1 = convert(Int, x.colptr[j])
@@ -548,7 +548,7 @@ end
 # TODO: further optimizations are available for ::Colon and other types of Range
 getindex(A::SparseMatrixCSC, ::Colon) = A[1:end]
 
-function getindex(A::SparseMatrixCSC{Tv}, I::UnitRange) where Tv
+function getindex(A::SparseMatrixCSC{Tv}, I::AbstractUnitRange) where Tv
     checkbounds(A, I)
     szA = size(A)
     nA = szA[1]*szA[2]
@@ -685,7 +685,7 @@ function getindex(x::AbstractSparseVector, i::Integer)
     _spgetindex(nnz(x), nonzeroinds(x), nonzeros(x), i)
 end
 
-function getindex(x::AbstractSparseVector{Tv,Ti}, I::UnitRange) where {Tv,Ti}
+function getindex(x::AbstractSparseVector{Tv,Ti}, I::AbstractUnitRange) where {Tv,Ti}
     checkbounds(x, I)
     xlen = length(x)
     i0 = first(I)
@@ -962,8 +962,8 @@ function hvcat(rows::Tuple{Vararg{Int}}, X::_SparseConcatGroup...)
 end
 
 # make sure UniformScaling objects are converted to sparse matrices for concatenation
-promote_to_array_type(A::Tuple{Vararg{Union{_SparseConcatGroup,UniformScaling}}}) = (@_pure_meta; SparseMatrixCSC)
-promote_to_array_type(A::Tuple{Vararg{Union{_DenseConcatGroup,UniformScaling}}}) = (@_pure_meta; Matrix)
+promote_to_array_type(A::Tuple{Vararg{Union{_SparseConcatGroup,UniformScaling}}}) = SparseMatrixCSC
+promote_to_array_type(A::Tuple{Vararg{Union{_DenseConcatGroup,UniformScaling}}}) = Matrix
 promote_to_arrays_(n::Int, ::Type{SparseMatrixCSC}, J::UniformScaling) = sparse(J, n, n)
 
 # Concatenations strictly involving un/annotated dense matrices/vectors should yield dense arrays
@@ -985,7 +985,6 @@ hvcat(rows::Tuple{Vararg{Int}}, xs::_TypedDenseConcatGroup{T}...) where {T} = Ba
 ### Unary Map
 
 # zero-preserving functions (z->z, nz->nz)
-conj(x::SparseVector) = SparseVector(length(x), copy(nonzeroinds(x)), conj(nonzeros(x)))
 -(x::SparseVector) = SparseVector(length(x), copy(nonzeroinds(x)), -(nonzeros(x)))
 
 # functions f, such that
@@ -1019,9 +1018,9 @@ macro unarymap_nz2z_z2z(op, TF)
     end)
 end
 
-real(x::AbstractSparseVector{<:Real}) = x
+# the rest of real, conj, imag are handled correctly via AbstractArray methods
 @unarymap_nz2z_z2z real Complex
-
+conj(x::SparseVector{<:Complex}) = SparseVector(length(x), copy(nonzeroinds(x)), conj(nonzeros(x)))
 imag(x::AbstractSparseVector{Tv,Ti}) where {Tv<:Real,Ti<:Integer} = SparseVector(length(x), Ti[], Tv[])
 @unarymap_nz2z_z2z imag Complex
 

@@ -14,8 +14,8 @@ have.
 A *concrete* type `T` describes the set of values whose direct tag, as returned by the `typeof`
 function, is `T`. An *abstract* type describes some possibly-larger set of values.
 
-`Any` describes the entire universe of possible values. `Integer` is a subset of `Any` that includes
-`Int`, `Int8`, and other concrete types.
+`Any` describes the entire universe of possible values. [`Integer`](@ref) is a subset of
+`Any` that includes `Int`, [`Int8`](@ref), and other concrete types.
 Internally, Julia also makes heavy use of another type known as `Bottom`, which can also be written
 as `Union{}`. This corresponds to the empty set.
 
@@ -169,7 +169,7 @@ Array{T,N}
 These can be distinguished by examining the `name` field of the type, which is an object of type
 `TypeName`:
 
-```julia
+```julia-repl
 julia> dump(Array{Int,1}.name)
 TypeName
   name: Symbol Array
@@ -207,7 +207,7 @@ TypeName
 In this case, the relevant field is `wrapper`, which holds a reference to the top-level type used
 to make new `Array` types.
 
-```julia
+```julia-repl
 julia> pointer_from_objref(Array)
 Ptr{Void} @0x00007fcc7de64850
 
@@ -299,7 +299,7 @@ Union{}
 
 What is the "primary" tuple-type?
 
-```julia
+```julia-repl
 julia> pointer_from_objref(Tuple)
 Ptr{Void} @0x00007f5998a04370
 
@@ -330,7 +330,7 @@ However, this interpretation causes some practical problems.
 
 First, a value of `T` needs to be available inside the method definition.
 For a call like `f(1, 1.0)`, it's not clear what `T` should be.
-It could be `Union{Int,Float64}`, or perhaps `Real`.
+It could be `Union{Int,Float64}`, or perhaps [`Real`](@ref).
 Intuitively, we expect the declaration `x::T` to mean `T === typeof(x)`.
 To make sure that invariant holds, we need `typeof(x) === typeof(y) === T` in this method.
 That implies the method should only be called for arguments of the exact same type.
@@ -433,7 +433,7 @@ When we are done evaluating the body of a `UnionAll` type whose variable is diag
 we look at the final values of the bounds.
 Since the variable must be concrete, a contradiction occurs if its lower bound
 could not be a subtype of a concrete type.
-For example, an abstract type like `AbstractArray` cannot be a subtype of a concrete
+For example, an abstract type like [`AbstractArray`](@ref) cannot be a subtype of a concrete
 type, but a concrete type like `Int` can be, and the empty type `Bottom` can be as well.
 If a lower bound fails this test the algorithm stops with the answer `false`.
 
@@ -461,7 +461,7 @@ Build Julia with `make debug` and fire up Julia within a debugger.
 Because the subtyping code is used heavily in the REPL itself--and hence breakpoints in this
 code get triggered often--it will be easiest if you make the following definition:
 
-```julia
+```julia-repl
 julia> function mysubtype(a,b)
            ccall(:jl_breakpoint, Void, (Any,), nothing)
            issubtype(a, b)

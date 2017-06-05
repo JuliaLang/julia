@@ -3,9 +3,6 @@ Julia v0.7.0 Release Notes
 
 New language features
 ---------------------
-  * `getpeername` on a `TCPSocket` returns the address and port of the remote
-    endpoint of the TCP connection ([#21825]).
-
 
 Language changes
 ----------------
@@ -24,6 +21,16 @@ This section lists changes that do not have deprecation warnings.
   * `@__DIR__` returns the current working directory rather than `nothing` when not run
     from a file ([#21759]).
 
+  * `@__FILE__` and `@__DIR__` return information relative to the file that it was parsed from,
+    rather than from the task-local `SOURCE_PATH` global when it was expanded.
+
+  * All macros receive an extra argument `__source__::LineNumberNode` which describes the
+    parser location in the source file for the `@` of the macro call.
+    It can be accessed as a normal argument variable in the body of the macro.
+    This is implemented by inserting an extra leading argument into the
+    `Expr(:macrocall, :@name, LineNumberNode(...), args...)`
+    surface syntax. ([#21746])
+
   * Passing the same keyword argument multiple times is now a syntax error ([#16937]).
 
   * `getsockname` on a `TCPSocket` now returns the locally bound address and port
@@ -33,8 +40,21 @@ This section lists changes that do not have deprecation warnings.
 Library improvements
 --------------------
 
-  * the functions `base` and `digits` digits now accept a negative
+  * The functions `base` and `digits` digits now accept a negative
     base (like `ndigits` did) ([#21692]).
+
+  * The function `randn` now accepts complex arguments (`Complex{T <: AbstractFloat}`)
+    ([#21973]).
+
+  * Method lists are now printed as a numbered list. In addition, the source code of a
+    method can be opened in an editor by entering the corresponding number in the REPL
+    and pressing `^Q` ([#22007]).
+
+  * `getpeername` on a `TCPSocket` returns the address and port of the remote
+    endpoint of the TCP connection ([#21825]).
+
+  * `resize!` and `sizehint!` methods no longer over-reserve memory when the
+    requested array size is more than double of its current size ([#22038]).
 
 Compiler/Runtime improvements
 -----------------------------
@@ -451,17 +471,22 @@ Library improvements
     `map(uppercase ∘ hex, 250:255)` is now equivalent to
     `map(x -> uppercase(hex(x)), 250:255)` ([#17155]).
 
+  * `enumerate` now supports the two-argument form `enumerate(::IndexStyle, iterable)`.
+    This form allows specification of the returned indices' style. For example,
+    `enumerate(IndexLinear, iterable)` yields linear indices and
+    `enumerate(IndexCartesian, iterable)` yields cartesian indices ([#16378]).
+
 Compiler/Runtime improvements
 -----------------------------
 
   * `ccall` is now implemented as a macro,
-    removing the need for special code-generator support for Intrinsics.
+    removing the need for special code-generator support for `Intrinsics` ([#18754]).
 
   * `ccall` gained limited support for a `llvmcall` calling-convention.
-    This can replace many uses of `llvmcall` with a simpler, shorter declaration.
+    This can replace many uses of `llvmcall` with a simpler, shorter declaration ([#18754]).
 
-  * All Intrinsics are now Builtin functions instead and have proper error checking
-    and fall-back static compilation support.
+  * All `Intrinsics` are now `Builtin` functions instead and have proper error checking
+    and fall-back static compilation support ([#18754]).
 
 Deprecated or removed
 ---------------------
@@ -512,7 +537,7 @@ Deprecated or removed
     including step specification, for example `Dates.Hour(1):Dates.Hour(1):Dates.Hour(2)`
     ([#19920]).
 
-  * `cummin` and `cummax` have been deprecated in favor of `accumulate`.
+  * `cummin` and `cummax` have been deprecated in favor of `accumulate` ([#18931]).
 
   * The `Array` constructor syntax `Array(T, dims...)` has been deprecated
     in favor of the forms `Array{T,N}(dims...)` (where `N` is known, or
@@ -548,18 +573,29 @@ Deprecated or removed
      For example, `isnumber("123")` should now be expressed `all(isnumber, "123")`
      ([#20342]).
 
+  * A few names related to indexing traits have been changed: `LinearIndexing` and
+    `linearindexing` have been deprecated in favor of `IndexStyle`. `LinearFast` has
+    been deprecated in favor of `IndexLinear`, and `LinearSlow` has been deprecated in
+    favor of `IndexCartesian` ([#16378]).
+
   * The two-argument forms of `map` (`map!(f, A)`) and `asyncmap!` (`asyncmap!(f, A)`)
     have been deprecated in anticipation of future semantic changes ([#19721]).
+
+  * `unsafe_wrap(String, ...)` has been deprecated in favor of `unsafe_string` ([#19449]).
 
   * `zeros` and `ones` methods accepting an element type as the first argument and an
     array as the second argument, for example `zeros(Float64, [1, 2, 3])`, have been
     deprecated in favor of equivalent methods with the second argument instead the
     size of the array, for example `zeros(Float64, size([1, 2, 3]))` ([#21183]).
 
+  * `Base.promote_eltype_op` has been deprecated ([#19669], [#19814], [#19937]).
+
   * `isimag` has been deprecated ([#19949]).
 
   * The tuple-of-types form of `invoke`, `invoke(f, (types...), ...)`, has been deprecated
     in favor of the tuple-type form `invoke(f, Tuple{types...}, ...)` ([#18444]).
+
+  * `Base._promote_array_type` has been deprecated ([#19766]).
 
   * `broadcast_zpreserving` has been deprecated ([#19533], [#19720]).
 
@@ -575,6 +611,9 @@ Deprecated or removed
     `@test f(args..., key=val...)`. This syntax allows, for example, writing
     `@test a ≈ b atol=c` in place of `@test ≈(a, b, atol=c)` (and hence
     `@test_approx_eq_eps a b c`) ([#19901]).
+
+  * `takebuf_array` has been deprecated in favor of `take!`, and `takebuf_string(x)`
+    has been deprecated in favor of `String(take!(x))` ([#19088]).
 
   * `convert` methods from `Diagonal` and `Bidiagonal` to subtypes of
     `AbstractTriangular` have been deprecated ([#17723]).
@@ -605,7 +644,7 @@ Deprecated or removed
   * To complete the deprecation of histogram-related functions, `midpoints` has been
     deprecated. Instead use the
     [StatsBase.jl package](https://github.com/JuliaStats/StatsBase.jl)'s
-    `midpoint` function ([#20058]).
+    `midpoints` function ([#20058]).
 
 Command-line option changes
 ---------------------------
@@ -628,6 +667,7 @@ Command-line option changes
 [#12563]: https://github.com/JuliaLang/julia/issues/12563
 [#15850]: https://github.com/JuliaLang/julia/issues/15850
 [#16213]: https://github.com/JuliaLang/julia/issues/16213
+[#16378]: https://github.com/JuliaLang/julia/issues/16378
 [#16937]: https://github.com/JuliaLang/julia/issues/16937
 [#16961]: https://github.com/JuliaLang/julia/issues/16961
 [#16984]: https://github.com/JuliaLang/julia/issues/16984
@@ -665,6 +705,7 @@ Command-line option changes
 [#18644]: https://github.com/JuliaLang/julia/issues/18644
 [#18660]: https://github.com/JuliaLang/julia/issues/18660
 [#18690]: https://github.com/JuliaLang/julia/issues/18690
+[#18754]: https://github.com/JuliaLang/julia/issues/18754
 [#18777]: https://github.com/JuliaLang/julia/issues/18777
 [#18832]: https://github.com/JuliaLang/julia/issues/18832
 [#18839]: https://github.com/JuliaLang/julia/issues/18839
@@ -673,6 +714,7 @@ Command-line option changes
 [#18965]: https://github.com/JuliaLang/julia/issues/18965
 [#18977]: https://github.com/JuliaLang/julia/issues/18977
 [#19018]: https://github.com/JuliaLang/julia/issues/19018
+[#19088]: https://github.com/JuliaLang/julia/issues/19088
 [#19157]: https://github.com/JuliaLang/julia/issues/19157
 [#19233]: https://github.com/JuliaLang/julia/issues/19233
 [#19239]: https://github.com/JuliaLang/julia/issues/19239
@@ -693,6 +735,7 @@ Command-line option changes
 [#19598]: https://github.com/JuliaLang/julia/issues/19598
 [#19635]: https://github.com/JuliaLang/julia/issues/19635
 [#19636]: https://github.com/JuliaLang/julia/issues/19636
+[#19669]: https://github.com/JuliaLang/julia/issues/19669
 [#19670]: https://github.com/JuliaLang/julia/issues/19670
 [#19677]: https://github.com/JuliaLang/julia/issues/19677
 [#19680]: https://github.com/JuliaLang/julia/issues/19680
@@ -706,6 +749,7 @@ Command-line option changes
 [#19724]: https://github.com/JuliaLang/julia/issues/19724
 [#19737]: https://github.com/JuliaLang/julia/issues/19737
 [#19741]: https://github.com/JuliaLang/julia/issues/19741
+[#19766]: https://github.com/JuliaLang/julia/issues/19766
 [#19771]: https://github.com/JuliaLang/julia/issues/19771
 [#19779]: https://github.com/JuliaLang/julia/issues/19779
 [#19784]: https://github.com/JuliaLang/julia/issues/19784
@@ -715,6 +759,7 @@ Command-line option changes
 [#19800]: https://github.com/JuliaLang/julia/issues/19800
 [#19802]: https://github.com/JuliaLang/julia/issues/19802
 [#19811]: https://github.com/JuliaLang/julia/issues/19811
+[#19814]: https://github.com/JuliaLang/julia/issues/19814
 [#19841]: https://github.com/JuliaLang/julia/issues/19841
 [#19900]: https://github.com/JuliaLang/julia/issues/19900
 [#19901]: https://github.com/JuliaLang/julia/issues/19901
@@ -725,6 +770,7 @@ Command-line option changes
 [#19926]: https://github.com/JuliaLang/julia/issues/19926
 [#19931]: https://github.com/JuliaLang/julia/issues/19931
 [#19934]: https://github.com/JuliaLang/julia/issues/19934
+[#19937]: https://github.com/JuliaLang/julia/issues/19937
 [#19944]: https://github.com/JuliaLang/julia/issues/19944
 [#19949]: https://github.com/JuliaLang/julia/issues/19949
 [#19950]: https://github.com/JuliaLang/julia/issues/19950

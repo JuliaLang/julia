@@ -34,6 +34,20 @@ macro macro_doctest() end
 
 @test (@doc @macro_doctest) !== nothing
 
+# test that random stuff interpolated into docstrings doesn't break search or other methods here
+doc"""
+break me:
+
+    code
+
+$:asymbol # a symbol
+$1 # a number
+$string # a function
+$$latex literal$$
+### header!
+"""
+function break_me_docs end
+
 # issue #11548
 
 module ModuleMacroDoc
@@ -48,7 +62,7 @@ end
 
 # General tests for docstrings.
 
-const LINE_NUMBER = @__LINE__+1
+const LINE_NUMBER = @__LINE__() + 1
 "DocsTest"
 module DocsTest
 
@@ -481,24 +495,26 @@ end
 
 # Issue #16359. Error message for invalid doc syntax.
 
-for each in [ # valid syntax
-        :(f()),
-        :(f(x)),
-        :(f(x::Int)),
-        :(f(x...)),
-        :(f(x = 1)),
-        :(f(; x = 1))
-    ]
-    @test Meta.isexpr(Docs.docm("...", each), :block)
-end
-for each in [ # invalid syntax
-        :(f("...")),
-        :(f(1, 2)),
-        :(f(() -> ()))
-    ]
-    result = Docs.docm("...", each)
-    @test Meta.isexpr(result, :call)
-    @test result.args[1] === error
+let __source__ = LineNumberNode(0)
+    for each in [ # valid syntax
+            :(f()),
+            :(f(x)),
+            :(f(x::Int)),
+            :(f(x...)),
+            :(f(x = 1)),
+            :(f(; x = 1))
+        ]
+        @test Meta.isexpr(Docs.docm(__source__, "...", each), :block)
+    end
+    for each in [ # invalid syntax
+            :(f("...")),
+            :(f(1, 2)),
+            :(f(() -> ()))
+        ]
+        result = Docs.docm(__source__, "...", each)
+        @test Meta.isexpr(result, :call)
+        @test result.args[1] === error
+    end
 end
 
 # Issue #15424. Non-markdown docstrings.
@@ -906,23 +922,24 @@ let x = Binding(Main, :⊕)
     @test parse(string(x)) == :(⊕)
 end
 
+doc_util_path = Symbol(joinpath("docs", "utils.jl"))
 # Docs.helpmode tests: we test whether the correct expressions are being generated here,
 # rather than complete integration with Julia's REPL mode system.
 for (line, expr) in Pair[
     "sin"          => :sin,
     "Base.sin"     => :(Base.sin),
-    "@time(x)"     => :(@time(x)),
-    "@time"        => :(:@time),
-    ":@time"       => :(:@time),
-    "@time()"      => :(@time),
-    "Base.@time()" => :(Base.@time),
+    "@time(x)"     => Expr(:macrocall, Symbol("@time"), LineNumberNode(1, :none), :x),
+    "@time"        => Expr(:macrocall, Symbol("@time"), LineNumberNode(1, :none)),
+    ":@time"       => Expr(:quote, (Expr(:macrocall, Symbol("@time"), LineNumberNode(1, :none)))),
+    "@time()"      => Expr(:macrocall, Symbol("@time"), LineNumberNode(1, :none)),
+    "Base.@time()" => Expr(:macrocall, Expr(:., :Base, QuoteNode(Symbol("@time"))), LineNumberNode(1, :none)),
     "ccall"        => :ccall, # keyword
     "while       " => :while, # keyword, trailing spaces should be stripped.
     "0"            => 0,
     "\"...\""      => "...",
-    "r\"...\""     => :(r"..."),
+    "r\"...\""     => Expr(:macrocall, Symbol("@r_str"), LineNumberNode(1, :none), "...")
     ]
-    @test Docs.helpmode(line) == :(Base.Docs.@repl($STDOUT, $expr))
+    @test Docs.helpmode(line) == Expr(:macrocall, Expr(:., Expr(:., :Base, QuoteNode(:Docs)), QuoteNode(Symbol("@repl"))), LineNumberNode(117, doc_util_path), STDOUT, expr)
     buf = IOBuffer()
     @test eval(Base, Docs.helpmode(buf, line)) isa Union{Base.Markdown.MD,Void}
 end
@@ -961,8 +978,8 @@ dynamic_test.x = "test 2"
 @test @doc(dynamic_test) == "test 2 Union{}"
 @test @doc(dynamic_test(::String)) == "test 2 Tuple{String}"
 
-@test Docs._repl(:(dynamic_test(1.0))) == :(@doc $(Expr(:escape, :(dynamic_test(::typeof(1.0))))))
-@test Docs._repl(:(dynamic_test(::String))) == :(@doc $(Expr(:escape, :(dynamic_test(::String)))))
+@test Docs._repl(:(dynamic_test(1.0))) == Expr(:macrocall, Symbol("@doc"), LineNumberNode(204, doc_util_path), esc(:(dynamic_test(::typeof(1.0)))))
+@test Docs._repl(:(dynamic_test(::String))) == Expr(:macrocall, Symbol("@doc"), LineNumberNode(204, doc_util_path), esc(:(dynamic_test(::String))))
 
 
 # Equality testing
@@ -1011,3 +1028,21 @@ end
     """
 )
 
+# issue #22105
+module I22105
+    lineno = @__LINE__
+    """foo docs"""
+    function foo end
+end
+
+let foo_docs = meta(I22105)[@var(I22105.foo)].docs
+    @test length(foo_docs) === 1
+    @test isa(first(foo_docs), Pair)
+    local docstr = first(foo_docs).second
+    @test isa(docstr, DocStr)
+    @test docstr.data[:path] == Base.source_path()
+    @test docstr.data[:linenumber] == I22105.lineno + 1
+    @test docstr.data[:module] === I22105
+    @test docstr.data[:typesig] === Union{}
+    @test docstr.data[:binding] == Binding(I22105, :foo)
+end

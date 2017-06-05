@@ -150,11 +150,15 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
     kwtype = isdefined(mt, :kwsorter) ? Nullable{DataType}(typeof(mt.kwsorter)) : Nullable{DataType}()
     n = rest = 0
     local last
+
+    resize!(LAST_SHOWN_LINE_INFOS, 0)
     for meth in ms
        if max==-1 || n<max
-            println(io)
-            show(io, meth; kwtype=kwtype)
             n += 1
+            println(io)
+            print(io, "[$(n)] ")
+            show(io, meth; kwtype=kwtype)
+            push!(LAST_SHOWN_LINE_INFOS, (string(meth.file), meth.line))
         else
             rest += 1
             last = meth
@@ -285,7 +289,16 @@ end
 
 show(io::IO, mime::MIME"text/html", mt::MethodTable) = show(io, mime, MethodList(mt))
 
-# pretty-printing of Vector{Method} for output of methodswith:
+# pretty-printing of AbstractVector{Method} for output of methodswith:
+function show(io::IO, mime::MIME"text/plain", mt::AbstractVector{Method})
+    resize!(LAST_SHOWN_LINE_INFOS, 0)
+    for (i, m) in enumerate(mt)
+        print(io, "[$(i)] ")
+        show(io, m)
+        println(io)
+        push!(LAST_SHOWN_LINE_INFOS, (string(m.file), m.line))
+    end
+end
 
 function show(io::IO, mime::MIME"text/html", mt::AbstractVector{Method})
     print(io, summary(mt))

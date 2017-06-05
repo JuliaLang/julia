@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 import Base: copy, ctranspose, getindex, show, transpose, one, zero, inv,
-             @_pure_meta, hcat, vcat, hvcat
+             hcat, vcat, hvcat
 import Base.LinAlg: SingularException
 
 struct UniformScaling{T<:Number}
@@ -201,7 +201,7 @@ promote_to_arrays(n,k, ::Type{T}, A, B, C) where {T} =
     (promote_to_arrays_(n[k], T, A), promote_to_arrays_(n[k+1], T, B), promote_to_arrays_(n[k+2], T, C))
 promote_to_arrays(n,k, ::Type{T}, A, B, Cs...) where {T} =
     (promote_to_arrays_(n[k], T, A), promote_to_arrays_(n[k+1], T, B), promote_to_arrays(n,k+2, T, Cs...)...)
-promote_to_array_type(A::Tuple{Vararg{Union{AbstractVecOrMat,UniformScaling}}}) = (@_pure_meta; Matrix)
+promote_to_array_type(A::Tuple{Vararg{Union{AbstractVecOrMat,UniformScaling}}}) = Matrix
 
 for (f,dim,name) in ((:hcat,1,"rows"), (:vcat,2,"cols"))
     @eval begin

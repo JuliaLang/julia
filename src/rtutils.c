@@ -757,7 +757,9 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         n += jl_printf(out, ">");
     }
     else if (vt == jl_linenumbernode_type) {
-        n += jl_printf(out, "# line %" PRIuPTR, jl_linenode_line(v));
+        n += jl_printf(out, "#= ");
+        n += jl_static_show_x(out, jl_linenode_file(v), depth);
+        n += jl_printf(out, ":%" PRIuPTR " =#", jl_linenode_line(v));
     }
     else if (vt == jl_expr_type) {
         jl_expr_t *e = (jl_expr_t*)v;

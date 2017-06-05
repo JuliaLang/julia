@@ -12,7 +12,8 @@ function launch(manager::UnixDomainCM, params::Dict, launched::Array, c::Conditi
     for i in 1:manager.np
         sockname = tempname()
         try
-            cmd = `$(params[:exename]) --startup-file=no $(@__FILE__) udwrkr $sockname $cookie`
+            __file__ = @__FILE__
+            cmd = `$(params[:exename]) --startup-file=no $__file__ udwrkr $sockname $cookie`
             pobj = open(cmd)
 
             wconfig = WorkerConfig()

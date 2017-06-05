@@ -3,7 +3,7 @@
 module Random
 
 using Base.dSFMT
-using Base.GMP: GMP_VERSION, Limb, MPZ
+using Base.GMP: Limb, MPZ
 import Base: copymutable, copy, copy!, ==
 
 export srand,
@@ -221,8 +221,8 @@ end
 
 Reseed the random number generator. If a `seed` is provided, the RNG will give a
 reproducible sequence of numbers, otherwise Julia will get entropy from the system. For
-`MersenneTwister`, the `seed` may be a non-negative integer or a vector of `UInt32` integers.
-`RandomDevice` does not support seeding.
+`MersenneTwister`, the `seed` may be a non-negative integer or a vector of [`UInt32`](@ref)
+integers. `RandomDevice` does not support seeding.
 """
 srand(r::MersenneTwister) = srand(r, make_seed())
 srand(r::MersenneTwister, n::Integer) = srand(r, make_seed(n))
@@ -257,10 +257,22 @@ globalRNG() = GLOBAL_RNG
 Pick a random element or array of random elements from the set of values specified by `S`; `S` can be
 
 * an indexable collection (for example `1:n` or `['x','y','z']`), or
+* a `Dict`, a `Set` or an `IntSet`, or
 * a type: the set of values to pick from is then equivalent to `typemin(S):typemax(S)` for
-  integers (this is not applicable to `BigInt`), and to ``[0, 1)`` for floating point numbers;
+  integers (this is not applicable to [`BigInt`](@ref)), and to ``[0, 1)`` for floating
+  point numbers;
 
-`S` defaults to `Float64`.
+`S` defaults to [`Float64`](@ref).
+
+```julia-repl
+julia> rand(Int, 2)
+2-element Array{Int64,1}:
+ 1339893410598768192
+ 1575814717733606317
+
+julia> rand(MersenneTwister(0), Dict(1=>2, 3=>4))
+1=>2
+```
 """
 @inline rand() = rand(GLOBAL_RNG, CloseOpen)
 @inline rand(T::Type) = rand(GLOBAL_RNG, T)
@@ -275,7 +287,7 @@ rand(r::AbstractArray) = rand(GLOBAL_RNG, r)
 """
     rand!([rng=GLOBAL_RNG], A, [coll])
 
-Populate the array `A` with random values. If the indexable collection `coll` is specified,
+Populate the array `A` with random values. If the collection `coll` is specified,
 the values are picked randomly from `coll`. This is equivalent to `copy!(A, rand(rng, coll, size(A)))`
 or `copy!(A, rand(rng, eltype(A), size(A)))` but without allocating a new array.
 """
@@ -338,18 +350,32 @@ function rand(r::AbstractRNG, ::Type{Char})
     (c < 0xd800) ? Char(c) : Char(c+0x800)
 end
 
-# random values from Dict or Set (for efficiency)
+# random values from Dict, Set, IntSet (for efficiency)
 function rand(r::AbstractRNG, t::Dict)
-    isempty(t) && throw(ArgumentError("dict must be non-empty"))
-    n = length(t.slots)
+    isempty(t) && throw(ArgumentError("collection must be non-empty"))
+    rg = RangeGenerator(1:length(t.slots))
     while true
-        i = rand(r, 1:n)
-        Base.isslotfilled(t, i) && return (t.keys[i] => t.vals[i])
+        i = rand(r, rg)
+        Base.isslotfilled(t, i) && @inbounds return (t.keys[i] => t.vals[i])
     end
 end
 rand(t::Dict) = rand(GLOBAL_RNG, t)
 rand(r::AbstractRNG, s::Set) = rand(r, s.dict).first
 rand(s::Set) = rand(GLOBAL_RNG, s)
+
+function rand(r::AbstractRNG, s::IntSet)
+    isempty(s) && throw(ArgumentError("collection must be non-empty"))
+    # s can be empty while s.bits is not, so we cannot rely on the
+    # length check in RangeGenerator below
+    rg = RangeGenerator(1:length(s.bits))
+    while true
+        n = rand(r, rg)
+        @inbounds b = s.bits[n]
+        b && return n
+    end
+end
+
+rand(s::IntSet) = rand(GLOBAL_RNG, s)
 
 ## Arrays of random numbers
 
@@ -368,6 +394,22 @@ function rand!{T}(r::AbstractRNG, A::AbstractArray{T})
     end
     A
 end
+
+function rand!(r::AbstractRNG, A::AbstractArray, s::Union{Dict,Set,IntSet})
+    for i in eachindex(A)
+        @inbounds A[i] = rand(r, s)
+    end
+    A
+end
+
+rand!(A::AbstractArray, s::Union{Dict,Set,IntSet}) = rand!(GLOBAL_RNG, A, s)
+
+rand(r::AbstractRNG, s::Dict{K,V}, dims::Dims) where {K,V} = rand!(r, Array{Pair{K,V}}(dims), s)
+rand(r::AbstractRNG, s::Set{T}, dims::Dims) where {T} = rand!(r, Array{T}(dims), s)
+rand(r::AbstractRNG, s::IntSet, dims::Dims) = rand!(r, Array{Int}(dims), s)
+rand(r::AbstractRNG, s::Union{Dict,Set,IntSet}, dims::Integer...) = rand(r, s, convert(Dims, dims))
+rand(s::Union{Dict,Set,IntSet}, dims::Integer...) = rand(GLOBAL_RNG, s, dims)
+rand(s::Union{Dict,Set,IntSet}, dims::Dims) = rand(GLOBAL_RNG, s, dims)
 
 # MersenneTwister
 
@@ -550,23 +592,12 @@ for (T, U) in [(UInt8, UInt32), (UInt16, UInt32),
     end
 end
 
-if GMP_VERSION.major >= 6
-    struct RangeGeneratorBigInt <: RangeGenerator
-        a::BigInt             # first
-        m::BigInt             # range length - 1
-        nlimbs::Int           # number of limbs in generated BigInt's
-        mask::Limb            # applied to the highest limb
-    end
-
-else
-    struct RangeGeneratorBigInt <: RangeGenerator
-        a::BigInt             # first
-        m::BigInt             # range length - 1
-        limbs::Vector{Limb}   # buffer to be copied into generated BigInt's
-        mask::Limb            # applied to the highest limb
-
-        RangeGeneratorBigInt(a, m, nlimbs, mask) = new(a, m, Vector{Limb}(nlimbs), mask)
-    end
+struct RangeGeneratorBigInt <: RangeGenerator
+    a::BigInt         # first
+    m::BigInt         # range length - 1
+    nlimbs::Int       # number of limbs in generated BigInt's (z ∈ [0, m])
+    nlimbsmax::Int    # max number of limbs for z+a
+    mask::Limb        # applied to the highest limb
 end
 
 
@@ -577,7 +608,8 @@ function RangeGenerator(r::UnitRange{BigInt})
     nlimbs, highbits = divrem(nd, 8*sizeof(Limb))
     highbits > 0 && (nlimbs += 1)
     mask = highbits == 0 ? ~zero(Limb) : one(Limb)<<highbits - one(Limb)
-    return RangeGeneratorBigInt(first(r), m, nlimbs, mask)
+    nlimbsmax = max(nlimbs, abs(last(r).size), abs(first(r).size))
+    return RangeGeneratorBigInt(first(r), m, nlimbs, nlimbsmax, mask)
 end
 
 
@@ -607,30 +639,21 @@ function rand{T<:Integer, U<:Unsigned}(rng::AbstractRNG, g::RangeGeneratorInt{T,
     (unsigned(g.a) + rem_knuth(x, g.k)) % T
 end
 
-if GMP_VERSION.major >= 6
-    # mpz_limbs_write and mpz_limbs_finish are available only in GMP version 6
-    function rand(rng::AbstractRNG, g::RangeGeneratorBigInt)
-        x = BigInt()
-        while true
-            # note: on CRAY computers, the second argument may be of type Cint (48 bits) and not Clong
-            xd = MPZ.limbs_write!(x, g.nlimbs)
-            limbs = unsafe_wrap(Array, xd, g.nlimbs)
-            rand!(rng, limbs)
-            limbs[end] &= g.mask
-            MPZ.limbs_finish!(x, g.nlimbs)
-            x <= g.m && return MPZ.add!(x, g.a)
-        end
+function rand(rng::AbstractRNG, g::RangeGeneratorBigInt)
+    x = MPZ.realloc2(g.nlimbsmax*8*sizeof(Limb))
+    limbs = unsafe_wrap(Array, x.d, g.nlimbs)
+    while true
+        rand!(rng, limbs)
+        @inbounds limbs[end] &= g.mask
+        MPZ.mpn_cmp(x, g.m, g.nlimbs) <= 0 && break
     end
-else
-    function rand(rng::AbstractRNG, g::RangeGeneratorBigInt)
-        x = BigInt()
-        while true
-            rand!(rng, g.limbs)
-            g.limbs[end] &= g.mask
-            MPZ.import!(x, length(g.limbs), -1, sizeof(Limb), 0, 0, g.limbs)
-            x <= g.m && return MPZ.add!(x, g.a)
-        end
+    # adjust x.size (normally done by mpz_limbs_finish, in GMP version >= 6)
+    x.size = g.nlimbs
+    while x.size > 0
+        @inbounds limbs[x.size] != 0 && break
+        x.size -= 1
     end
+    MPZ.add!(x, g.a)
 end
 
 rand(rng::AbstractRNG, r::UnitRange{<:Union{Signed,Unsigned,BigInt,Bool}}) = rand(rng, RangeGenerator(r))
@@ -1181,7 +1204,9 @@ const ziggurat_exp_r      = 7.6971174701310497140446280481
 Generate a normally-distributed random number of type `T` with mean 0 and standard deviation 1.
 Optionally generate an array of normally-distributed random numbers.
 The `Base` module currently provides an implementation for the types
-`Float16`, `Float32`, and `Float64` (the default).
+[`Float16`](@ref), [`Float32`](@ref), and [`Float64`](@ref) (the default), and their
+[`Complex`](@ref) counterparts. When the type argument is complex, the values are drawn
+from the circularly symmetric complex normal distribution.
 """
 @inline function randn(rng::AbstractRNG=GLOBAL_RNG)
     @inbounds begin
@@ -1215,7 +1240,7 @@ end
 Generate a random number of type `T` according to the exponential distribution with scale 1.
 Optionally generate an array of such random numbers.
 The `Base` module currently provides an implementation for the types
-`Float16`, `Float32`, and `Float64` (the default).
+[`Float16`](@ref), [`Float32`](@ref), and [`Float64`](@ref) (the default).
 """
 @inline function randexp(rng::AbstractRNG=GLOBAL_RNG)
     @inbounds begin
@@ -1283,6 +1308,11 @@ let Floats = Union{Float16,Float32,Float64}
         end
     end
 end
+
+# complex randn
+Base.@irrational SQRT_HALF 0.7071067811865475244008  sqrt(big(0.5))
+randn(rng::AbstractRNG, ::Type{Complex{T}}) where {T <: AbstractFloat} =
+    Complex{T}(SQRT_HALF * randn(rng, T), SQRT_HALF * randn(rng, T))
 
 ## random UUID generation
 
