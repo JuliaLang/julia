@@ -547,6 +547,18 @@ d = SharedArray{Int}(10)
 finalize(d)
 @test_throws BoundsError d[1]
 
+# Issue 22139
+aorig = a1 = SharedArray{Float64}((3, 3))
+a1 = remotecall_fetch(fill!, id_other, a1, 1.0)
+@test object_id(aorig) == object_id(a1)
+id = a1.id
+aorig = nothing
+a1 = remotecall_fetch(fill!, id_other, a1, 1.0)
+gc(); gc()
+a1 = remotecall_fetch(fill!, id_other, a1, 1.0)
+@test haskey(Base.sa_refs, id)
+finalize(a1)
+@test !haskey(Base.sa_refs, id)
 
 # Test @parallel load balancing - all processors should get either M or M+1
 # iterations out of the loop range for some M.
@@ -1411,6 +1423,27 @@ global v4 = v3
 @test remotecall_fetch(()->v3, id_other) == remotecall_fetch(()->v4, id_other)
 @test remotecall_fetch(()->isdefined(Main, :v3), id_other)
 @test remotecall_fetch(()->isdefined(Main, :v4), id_other)
+
+# Global references to Types and Modules should work if they are locally defined
+global v5 = Int
+global v6 = Base.Distributed
+@test remotecall_fetch(()->v5, id_other) === Int
+@test remotecall_fetch(()->v6, id_other) === Base.Distributed
+
+struct FooStructLocal end
+module FooModLocal end
+v5 = FooStructLocal
+v6 = FooModLocal
+@test_throws RemoteException remotecall_fetch(()->v5, id_other)
+@test_throws RemoteException remotecall_fetch(()->v6, id_other)
+
+@everywhere struct FooStructEverywhere end
+@everywhere module FooModEverywhere end
+v5 = FooStructEverywhere
+v6 = FooModEverywhere
+@test remotecall_fetch(()->v5, id_other) === FooStructEverywhere
+@test remotecall_fetch(()->v6, id_other) === FooModEverywhere
+
 
 # Test that a global is not being repeatedly serialized when
 # a) referenced multiple times in the closure

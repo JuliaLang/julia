@@ -26,7 +26,7 @@ Base.Test.@test_throws
 
 For example, suppose we want to check our new function `foo(x)` works as expected:
 
-```julia
+```julia-repl
 julia> using Base.Test
 
 julia> foo(x) = length(x)^2
@@ -35,7 +35,7 @@ foo (generic function with 1 method)
 
 If the condition is true, a `Pass` is returned:
 
-```julia
+```julia-repl
 julia> @test foo("bar") == 9
 Test Passed
   Expression: foo("bar") == 9
@@ -49,7 +49,7 @@ Test Passed
 
 If the condition is false, then a `Fail` is returned and an exception is thrown:
 
-```julia
+```julia-repl
 julia> @test foo("f") == 20
 Test Failed
   Expression: foo("f") == 20
@@ -63,7 +63,7 @@ If the condition could not be evaluated because an exception was thrown, which o
 case because `length()` is not defined for symbols, an `Error` object is returned and an exception
 is thrown:
 
-```julia
+```julia-repl
 julia> @test foo(:cat) == 1
 Error During Test
   Test threw an exception of type MethodError
@@ -80,7 +80,7 @@ ERROR: There was an error during testing
 If we expect that evaluating an expression *should* throw an exception, then we can use `@test_throws()`
 to check that this occurs:
 
-```julia
+```julia-repl
 julia> @test_throws MethodError foo(:cat)
 Test Passed
   Expression: foo(:cat)
@@ -104,7 +104,7 @@ Base.Test.@testset
 
 We can put our tests for the `foo(x)` function in a test set:
 
-```julia
+```julia-repl
 julia> @testset "Foo Tests" begin
            @test foo("a")   == 1
            @test foo("ab")  == 4
@@ -116,7 +116,7 @@ Foo Tests     |    3      3
 
 Test sets can also be nested:
 
-```julia
+```julia-repl
 julia> @testset "Foo Tests" begin
            @testset "Animals" begin
                @test foo("cat") == 9
@@ -134,7 +134,7 @@ Foo Tests     |    8      8
 In the event that a nested test set has no failures, as happened here, it will be hidden in the
 summary. If we do have a test failure, only the details for the failed test sets will be shown:
 
-```julia
+```julia-repl
 julia> @testset "Foo Tests" begin
            @testset "Animals" begin
                @testset "Felines" begin
@@ -169,7 +169,7 @@ As calculations on floating-point values can be imprecise, you can perform appro
 checks using either `@test a ≈ b` (where `≈`, typed via tab completion of `\approx`, is the
 [`isapprox()`](@ref) function) or use [`isapprox()`](@ref) directly.
 
-```julia
+```julia-repl
 julia> @test 1 ≈ 0.999999999
 
 julia> @test 1 ≈ 0.999999

@@ -778,6 +778,37 @@ function break_21369()
 end
 @test_throws ErrorException break_21369()  # not TypeError
 
+# issue #17003
+abstract type AArray_17003{T,N} end
+AVector_17003{T} = AArray_17003{T,1}
+
+struct Nable_17003{T}
+end
+
+struct NArray_17003{T,N} <: AArray_17003{Nable_17003{T},N}
+end
+
+(::Type{NArray_17003}){T,N}(::Array{T,N}) = NArray_17003{T,N}()
+
+gl_17003 = [1, 2, 3]
+
+f2_17003(item::AVector_17003) = nothing
+f2_17003(::Any) = f2_17003(NArray_17003(gl_17003))
+
+@test f2_17003(1) == nothing
+
+# issue #20847
+function segfaultfunction_20847{N, T}(A::Vector{NTuple{N, T}})
+    B = reinterpret(T, A, (N, length(A)))
+    return nothing
+end
+
+tuplevec_20847 = Tuple{Float64, Float64}[(0.0,0.0), (1.0,0.0)]
+
+for A in (1,)
+    @test segfaultfunction_20847(tuplevec_20847) == nothing
+end
+
 # issue #21848
 @test Core.Inference.limit_type_depth(Ref{Complex{T} where T}, Core.Inference.MAX_TYPE_DEPTH) == Ref
 let T = Tuple{Tuple{Int64, Void},
@@ -788,3 +819,27 @@ let T = Tuple{Tuple{Int64, Void},
     @test Core.Inference.limit_type_depth(T, 1) >: T
     @test Core.Inference.limit_type_depth(T, 2) >: T
 end
+
+# Issue #20902, check that this doesn't error.
+@generated function test_20902()
+    quote
+        10 + 11
+    end
+end
+@test length(code_typed(test_20902, (), optimize = false)) == 1
+@test length(code_typed(test_20902, (), optimize = false)) == 1
+
+# normalization of arguments with constant Types as parameters
+g21771(T) = T
+f21771(::Val{U}) where {U} = Tuple{g21771(U)}
+@test @inferred(f21771(Val{Int}())) === Tuple{Int}
+@test @inferred(f21771(Val{Union{}}())) === Tuple{Union{}}
+@test @inferred(f21771(Val{Integer}())) === Tuple{Integer}
+
+# missing method should be inferred as Union{}, ref https://github.com/JuliaLang/julia/issues/20033#issuecomment-282228948
+@test Base.return_types(f -> f(1), (typeof((x::String) -> x),)) == Any[Union{}]
+
+# issue #21653
+# ensure that we don't try to resolve cycles using uncached edges
+f21653() = f21653()
+@test code_typed(f21653, Tuple{}, optimize=false)[1] isa Pair{CodeInfo, typeof(Union{})}

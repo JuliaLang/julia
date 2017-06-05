@@ -177,6 +177,8 @@ void sigdie_handler(int sig, siginfo_t *info, void *context)
     jl_ptls_t ptls = jl_get_ptls_states();
     sigset_t sset;
     uv_tty_reset_mode();
+    if (sig == SIGILL)
+        jl_show_sigill(context);
     jl_critical_error(sig, jl_to_bt_context(context),
                       ptls->bt_data, &ptls->bt_size);
     sigfillset(&sset);

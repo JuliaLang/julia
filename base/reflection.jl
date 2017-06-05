@@ -219,8 +219,8 @@ isstructtype(x) = (@_pure_meta; false)
     isbits(T)
 
 Return `true` if `T` is a "plain data" type, meaning it is immutable and contains no
-references to other values. Typical examples are numeric types such as `UInt8`, `Float64`,
-and `Complex{Float64}`.
+references to other values. Typical examples are numeric types such as [`UInt8`](@ref),
+[`Float64`](@ref), and [`Complex{Float64}`](@ref).
 
 ```jldoctest
 julia> isbits(Complex{Float64})
@@ -507,44 +507,7 @@ function _methods_by_ftype(t::ANY, lim::Int, world::UInt)
     return _methods_by_ftype(t, lim, world, UInt[typemin(UInt)], UInt[typemax(UInt)])
 end
 function _methods_by_ftype(t::ANY, lim::Int, world::UInt, min::Array{UInt,1}, max::Array{UInt,1})
-    tp = unwrap_unionall(t).parameters::SimpleVector
-    nu = 1
-    for ti in tp
-        if isa(ti, Union)
-            nu *= unionlen(ti::Union)
-        end
-    end
-    if 1 < nu <= 64
-        return _methods_by_ftype(Any[tp...], t, length(tp), lim, [], world, min, max)
-    end
-    # XXX: the following can return incorrect answers that the above branch would have corrected
     return ccall(:jl_matching_methods, Any, (Any, Cint, Cint, UInt, Ptr{UInt}, Ptr{UInt}), t, lim, 0, world, min, max)
-end
-
-function _methods_by_ftype(t::Array, origt::ANY, i, lim::Integer, matching::Array{Any,1},
-                           world::UInt, min::Array{UInt,1}, max::Array{UInt,1})
-    if i == 0
-        world = typemax(UInt)
-        new = ccall(:jl_matching_methods, Any, (Any, Cint, Cint, UInt, Ptr{UInt}, Ptr{UInt}),
-                    rewrap_unionall(Tuple{t...}, origt), lim, 0, world, min, max)
-        new === false && return false
-        append!(matching, new::Array{Any,1})
-    else
-        ti = t[i]
-        if isa(ti, Union)
-            for ty in uniontypes(ti::Union)
-                t[i] = ty
-                if _methods_by_ftype(t, origt, i - 1, lim, matching, world, min, max) === false
-                    t[i] = ti
-                    return false
-                end
-            end
-            t[i] = ti
-        else
-            return _methods_by_ftype(t, origt, i - 1, lim, matching, world, min, max)
-        end
-    end
-    return matching
 end
 
 # high-level, more convenient method lookup functions
@@ -763,7 +726,6 @@ function func_for_method_checked(m::Method, types::ANY)
     return m
 end
 
-
 """
     code_typed(f, types; optimize=true)
 
@@ -778,7 +740,7 @@ function code_typed(f::ANY, types::ANY=Tuple; optimize=true)
     end
     types = to_tuple_type(types)
     asts = []
-    world = typemax(UInt)
+    world = ccall(:jl_get_world_counter, UInt, ())
     params = Core.Inference.InferenceParams(world)
     for x in _methods(f, types, -1, world)
         meth = func_for_method_checked(x[3], types)
@@ -796,7 +758,7 @@ function return_types(f::ANY, types::ANY=Tuple)
     end
     types = to_tuple_type(types)
     rt = []
-    world = typemax(UInt)
+    world = ccall(:jl_get_world_counter, UInt, ())
     params = Core.Inference.InferenceParams(world)
     for x in _methods(f, types, -1, world)
         meth = func_for_method_checked(x[3], types)

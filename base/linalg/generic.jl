@@ -962,7 +962,7 @@ true
 function istriu(A::AbstractMatrix)
     m, n = size(A)
     for j = 1:min(n,m-1), i = j+1:m
-        if A[i,j] != 0
+        if !iszero(A[i,j])
             return false
         end
     end
@@ -997,7 +997,7 @@ true
 function istril(A::AbstractMatrix)
     m, n = size(A)
     for j = 2:n, i = 1:min(j-1,m)
-        if A[i,j] != 0
+        if !iszero(A[i,j])
             return false
         end
     end

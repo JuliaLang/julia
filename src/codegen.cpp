@@ -3048,7 +3048,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
         jl_datatype_t *sty = (jl_datatype_t*)expr_type(args[1], ctx);
         rt1 = (jl_value_t*)sty;
         jl_datatype_t *uty = (jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)sty);
-        if (jl_is_structtype(uty) && uty != jl_module_type) {
+        if (jl_is_structtype(uty) && uty != jl_module_type && ((jl_datatype_t*)uty)->layout) {
             size_t idx = (size_t)-1;
             if (jl_is_quotenode(args[2]) && jl_is_symbol(jl_fieldref(args[2],0))) {
                 idx = jl_field_index(uty, (jl_sym_t*)jl_fieldref(args[2],0), 0);
@@ -3688,7 +3688,7 @@ static void union_alloca_type(jl_uniontype_t *ut,
             [&](unsigned idx, jl_datatype_t *jt) {
                 if (!jl_is_datatype_singleton(jt)) {
                     size_t nb1 = jl_datatype_size(jt);
-                    size_t align1 = jt->layout->alignment;
+                    size_t align1 = jl_datatype_align(jt);
                     if (nb1 > nbytes)
                         nbytes = nb1;
                     if (align1 > align)
@@ -3959,7 +3959,7 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
                     builder.CreateMemCpy(vi.value.V,
                                          data_pointer(rval_info, ctx, T_pint8),
                                          copy_bytes,
-                                         ((jl_datatype_t*)rval_info.typ)->layout->alignment,
+                                         jl_datatype_align(rval_info.typ),
                                          vi.isVolatile,
                                          tbaa);
                 }
@@ -4083,13 +4083,13 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
         return emit_getfield((jl_value_t*)jl_globalref_mod(expr), jl_globalref_name(expr), ctx);
     }
     if (jl_is_labelnode(expr)) {
-        jl_error("Labelnode in value position");
+        jl_error("LabelNode in value position");
     }
     if (jl_is_linenode(expr)) {
-        jl_error("Linenode in value position");
+        jl_error("LineNumberNode in value position");
     }
     if (jl_is_gotonode(expr)) {
-        jl_error("Gotonode in value position");
+        jl_error("GotoNode in value position");
     }
     if (!jl_is_expr(expr)) {
         int needroot = true;

@@ -27,7 +27,7 @@ Compute the Bar index between `x` and `y`. If `y` is missing, compute
 the Bar index between all pairs of columns of `x`.
 
 # Examples
-```julia
+```julia-repl
 julia> bar([1, 2], [1, 2])
 1
 ```
@@ -109,8 +109,8 @@ As in the example above, we recommend following some simple conventions when wri
        Calling `rand` and other RNG-related functions should be avoided in doctests since they will not
        produce consistent outputs during different Julia sessions.
 
-       Operating system word size (`Int32` or `Int64`) as well as path separator differences (`/` or
-       `\`) will also effect the reproducibility of some doctests.
+       Operating system word size ([`Int32`](@ref) or [`Int64`](@ref)) as well as path separator differences
+       (`/` or `\`) will also affect the reproducibility of some doctests.
 
        Note that whitespace in your doctest is significant! The doctest will fail if you misalign the
        output of pretty-printing an array, for example.

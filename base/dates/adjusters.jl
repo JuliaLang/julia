@@ -253,8 +253,8 @@ tonext(dt::TimeType, dow::Int; same::Bool=false) = adjust(ISDAYOFWEEK[dow], same
     tonext(func::Function, dt::TimeType; step=Day(1), limit=10000, same=false) -> TimeType
 
 Adjusts `dt` by iterating at most `limit` iterations by `step` increments until `func`
-returns `true`. `func` must take a single `TimeType` argument and return a `Bool`. `same`
-allows `dt` to be considered in satisfying `func`.
+returns `true`. `func` must take a single `TimeType` argument and return a [`Bool`](@ref).
+`same` allows `dt` to be considered in satisfying `func`.
 """
 function tonext(func::Function, dt::TimeType; step::Period=Day(1), negate=nothing, limit::Int=10000, same::Bool=false)
     func = deprecate_negate(:tonext, func, "func,dt", negate)
@@ -274,8 +274,8 @@ toprev(dt::TimeType, dow::Int; same::Bool=false) = adjust(ISDAYOFWEEK[dow], same
     toprev(func::Function, dt::TimeType; step=Day(-1), limit=10000, same=false) -> TimeType
 
 Adjusts `dt` by iterating at most `limit` iterations by `step` increments until `func`
-returns `true`. `func` must take a single `TimeType` argument and return a `Bool`. `same`
-allows `dt` to be considered in satisfying `func`.
+returns `true`. `func` must take a single `TimeType` argument and return a [`Bool`](@ref).
+`same` allows `dt` to be considered in satisfying `func`.
 """
 function toprev(func::Function, dt::TimeType; step::Period=Day(-1), negate=nothing, limit::Int=10000, same::Bool=false)
     func = deprecate_negate(:toprev, func, "func,dt", negate)

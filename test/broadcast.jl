@@ -3,21 +3,21 @@
 module TestBroadcastInternals
 
 using Base.Broadcast: broadcast_indices, check_broadcast_indices,
-                      check_broadcast_shape, newindex, _bcs, _bcsm
+                      check_broadcast_shape, newindex, _bcs
 using Base: Test, OneTo
 
-@test @inferred(_bcs((), (3,5), (3,5))) == (3,5)
-@test @inferred(_bcs((), (3,1), (3,5))) == (3,5)
-@test @inferred(_bcs((), (3,),  (3,5))) == (3,5)
-@test @inferred(_bcs((), (3,5), (3,)))  == (3,5)
-@test_throws DimensionMismatch _bcs((), (3,5), (4,5))
-@test_throws DimensionMismatch _bcs((), (3,5), (3,4))
-@test @inferred(_bcs((), (-1:1, 2:5), (-1:1, 2:5))) == (-1:1, 2:5)
-@test @inferred(_bcs((), (-1:1, 2:5), (1, 2:5)))    == (-1:1, 2:5)
-@test @inferred(_bcs((), (-1:1, 1),   (1, 2:5)))    == (-1:1, 2:5)
-@test @inferred(_bcs((), (-1:1,),     (-1:1, 2:5))) == (-1:1, 2:5)
-@test_throws DimensionMismatch _bcs((), (-1:1, 2:6), (-1:1, 2:5))
-@test_throws DimensionMismatch _bcs((), (-1:1, 2:5), (2, 2:5))
+@test @inferred(_bcs((3,5), (3,5))) == (3,5)
+@test @inferred(_bcs((3,1), (3,5))) == (3,5)
+@test @inferred(_bcs((3,),  (3,5))) == (3,5)
+@test @inferred(_bcs((3,5), (3,)))  == (3,5)
+@test_throws DimensionMismatch _bcs((3,5), (4,5))
+@test_throws DimensionMismatch _bcs((3,5), (3,4))
+@test @inferred(_bcs((-1:1, 2:5), (-1:1, 2:5))) == (-1:1, 2:5)
+@test @inferred(_bcs((-1:1, 2:5), (1, 2:5)))    == (-1:1, 2:5)
+@test @inferred(_bcs((-1:1, 1),   (1, 2:5)))    == (-1:1, 2:5)
+@test @inferred(_bcs((-1:1,),     (-1:1, 2:5))) == (-1:1, 2:5)
+@test_throws DimensionMismatch _bcs((-1:1, 2:6), (-1:1, 2:5))
+@test_throws DimensionMismatch _bcs((-1:1, 2:5), (2, 2:5))
 
 @test @inferred(broadcast_indices(zeros(3,4), zeros(3,4))) == (OneTo(3),OneTo(4))
 @test @inferred(broadcast_indices(zeros(3,4), zeros(3)))   == (OneTo(3),OneTo(4))
@@ -419,6 +419,7 @@ struct Array19745{T,N} <: AbstractArray{T,N}
     data::Array{T,N}
 end
 Base.getindex(A::Array19745, i::Integer...) = A.data[i...]
+Base.setindex!(A::Array19745, v::Any, i::Integer...) = setindex!(A.data, v, i...)
 Base.size(A::Array19745) = size(A.data)
 
 Base.Broadcast._containertype{T<:Array19745}(::Type{T}) = Array19745
@@ -435,8 +436,12 @@ Base.Broadcast.broadcast_indices(::Type{Array19745}, A::Ref) = ()
 getfield19745(x::Array19745) = x.data
 getfield19745(x)             = x
 
-Base.Broadcast.broadcast_c(f, ::Type{Array19745}, A, Bs...) =
-    Array19745(Base.Broadcast.broadcast_c(f, Array, getfield19745(A), map(getfield19745, Bs)...))
+function Base.Broadcast.broadcast_c(f, ::Type{Array19745}, A, Bs...)
+    T     = Base.Broadcast._broadcast_eltype(f, A, Bs...)
+    shape = Base.Broadcast.broadcast_indices(A, Bs...)
+    dest = Array19745(Array{T}(Base.index_lengths(shape...)))
+    return broadcast!(f, dest, A, Bs...)
+end
 
 @testset "broadcasting for custom AbstractArray" begin
     a  = randn(10)

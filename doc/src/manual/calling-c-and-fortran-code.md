@@ -55,7 +55,7 @@ to [`ccall`](@ref) are as follows:
 As a complete but simple example, the following calls the `clock` function from the standard C
 library:
 
-```julia
+```julia-repl
 julia> t = ccall((:clock, "libc"), Int32, ())
 2292761
 
@@ -66,11 +66,11 @@ julia> typeof(ans)
 Int32
 ```
 
-`clock` takes no arguments and returns an `Int32`. One common gotcha is that a 1-tuple must be
+`clock` takes no arguments and returns an [`Int32`](@ref). One common gotcha is that a 1-tuple must be
 written with a trailing comma. For example, to call the `getenv` function to get a pointer to
 the value of an environment variable, one makes a call like this:
 
-```julia
+```julia-repl
 julia> path = ccall((:getenv, "libc"), Cstring, (Cstring,), "SHELL")
 Cstring(@0x00007fff5fbffc45)
 
@@ -113,7 +113,7 @@ indicate errors in various different ways, including by returning -1, 0, 1 and o
 This wrapper throws an exception clearly indicating the problem if the caller tries to get a non-existent
 environment variable:
 
-```julia
+```julia-repl
 julia> getenv("SHELL")
 "/bin/bash"
 
@@ -192,8 +192,8 @@ julia> const mycompare_c = cfunction(mycompare, Cint, (Ref{Cdouble}, Ref{Cdouble
 ```
 
 [`cfunction()`](@ref) accepts three arguments: the Julia function (`mycompare`), the return type
-(`Cint`), and a tuple of the argument types, in this case to sort an array of `Cdouble` (`Float64`)
-elements.
+(`Cint`), and a tuple of the argument types, in this case to sort an array of `Cdouble`
+([`Float64`](@ref)) elements.
 
 The final call to `qsort` looks like this:
 
@@ -298,7 +298,7 @@ same:
   * `Signed`
 
     Exactly corresponds to the `signed` type annotation in C (or any `INTEGER` type in Fortran).
-    Any Julia type that is not a subtype of `Signed` is assumed to be unsigned.
+    Any Julia type that is not a subtype of [`Signed`](@ref) is assumed to be unsigned.
 
 
   * `Ref{T}`
@@ -905,7 +905,7 @@ Global variables exported by native libraries can be accessed by name using the 
 function. The arguments to [`cglobal()`](@ref) are a symbol specification identical to that used
 by [`ccall`](@ref), and a type describing the value stored in the variable:
 
-```julia
+```julia-repl
 julia> cglobal((:errno, :libc), Int32)
 Ptr{Int32} @0x00007f418d0816b8
 ```

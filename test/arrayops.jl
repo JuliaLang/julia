@@ -273,6 +273,20 @@ end
     @test findin(a, Int[]) == Int[]
     @test findin(Int[], a) == Int[]
 
+    a = collect(1:3:15)
+    b = collect(2:4:10)
+    @test findin(a, b) == [4]
+    @test findin([a[1:4]; a[4:end]], b) == [4,5]
+
+    @test findin([1.0, NaN, 2.0], NaN) == [2]
+    @test findin([1.0, 2.0, NaN], NaN) == [3]
+
+    @testset "findin for uncomparable element types" begin
+        a = [1 + 1im, 1 - 1im]
+        @test findin(a, 1 + 1im) == [1]
+        @test findin(a, a)       == [1,2]
+    end
+
     rt = Base.return_types(setindex!, Tuple{Array{Int32, 3}, UInt8, Vector{Int}, Int16, UnitRange{Int}})
     @test length(rt) == 1 && rt[1] == Array{Int32, 3}
 end
@@ -2068,12 +2082,12 @@ struct F21666{T <: Base.TypeArithmetic}
     x::Float32
 end
 
+Base.TypeArithmetic(::Type{F21666{T}}) where {T} = T()
+Base.:+(x::F, y::F) where {F <: F21666} = F(x.x + y.x)
+Base.convert(::Type{Float64}, x::F21666) = Float64(x.x)
 @testset "Exactness of cumsum # 21666" begin
     # test that cumsum uses more stable algorithm
     # for types with unknown/rounding arithmetic
-    Base.TypeArithmetic(::Type{F21666{T}}) where {T} = T
-    Base.:+(x::F, y::F) where {F <: F21666} = F(x.x + y.x)
-    Base.convert(::Type{Float64}, x::F21666) = Float64(x.x)
     # we make v pretty large, because stable algorithm may have a large base case
     v = zeros(300); v[1] = 2; v[200:end] = eps(Float32)
 
@@ -2132,3 +2146,6 @@ end
 Base.:*(a::T11053, b::Real) = T11053(a.a*b)
 Base.:(==)(a::T11053, b::T11053) = a.a == b.a
 @test [T11053(1)] * 5 == [T11053(1)] .* 5 == [T11053(5.0)]
+
+#15907
+@test typeof(Array{Int,0}()) == Array{Int,0}
