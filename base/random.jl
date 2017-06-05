@@ -51,7 +51,7 @@ else # !windows
     end
 
     rand(rd::RandomDevice, ::Type{T}) where {T<:Union{Bool,Base.BitInteger}} = read( rd.file, T)
-    rand!(rd::RandomDevice, A::Array{<:Union{Bool,Base.BitInteger}})        = read!(rd.file, A)
+    rand!(rd::RandomDevice, A::Array{<:Union{Bool,Base.BitInteger}})         = read!(rd.file, A)
 end # os-test
 
 
