@@ -329,13 +329,14 @@ Base.zero(::Type{ModInt{n}}) where {n} = ModInt{n}(0)
 Base.zero(::ModInt{n}) where {n} = ModInt{n}(0)
 Base.one(::Type{ModInt{n}}) where {n} = ModInt{n}(1)
 Base.one(::ModInt{n}) where {n} = ModInt{n}(1)
+Base.oneunit(::Type{ModInt{n}}) where {n} = ModInt{n}(1)
 
 # Needed for pivoting:
 Base.abs(a::ModInt{n}) where {n} = a
 Base.:<(a::ModInt{n}, b::ModInt{n}) where {n} = a.k < b.k
 Base.transpose(a::ModInt{n}) where {n} = a  # see Issue 20978
 
-A = [ ModInt{2}(1) ModInt{2}(0) ; ModInt{2}(1) ModInt{2}(1) ]
+A = [ ModInt{2}(1) ModInt{2}(1) ; ModInt{2}(1) ModInt{2}(0) ]
 b = [ ModInt{2}(1), ModInt{2}(0) ]
 
 @test A*(A\b) == b
