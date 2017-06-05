@@ -374,8 +374,6 @@
   (or (number? x) (string? x) (char? x) (and (pair? x) (memq (car x) '(quote inert)))
       (eq? x 'true) (eq? x 'false)))
 
-(define empty-vector-any '(call (core AnyVector) 0))
-
 (define (keywords-method-def-expr name sparams argl body isstaged rett)
   (let* ((kargl (cdar argl))  ;; keyword expressions (= k v)
          (pargl (cdr argl))   ;; positional args
@@ -443,7 +441,7 @@
             ;; call mangled(vals..., [rest_kw,] pargs..., [vararg]...)
             (return (call ,mangled
                           ,@(if ordered-defaults keynames vals)
-                          ,@(if (null? restkw) '() (list empty-vector-any))
+                          ,@(if (null? restkw) '() (list '(top EmptyKWDict)))
                           ,@(map arg-name pargl)
                           ,@(if (null? vararg) '()
                                 (list `(... ,(arg-name (car vararg))))))))
@@ -474,20 +472,29 @@
           `((|::|
              ;; if there are optional positional args, we need to be able to reference the function name
              ,(if (any kwarg? pargl) (gensy) UNUSED)
-             (call (core kwftype) ,ftype)) (:: ,kw (core AnyVector)) ,@pargl ,@vararg)
+             (call (core kwftype) ,ftype)) ,kw ,@pargl ,@vararg)
           `(block
             ;; initialize keyword args to their defaults, or set a flag telling
             ;; whether this keyword needs to be set.
             ,@(map (lambda (kwname) `(local ,kwname)) keynames)
-            ,@(map (lambda (name dflt flag)
-                     (if (const-default? dflt)
-                         `(= ,name ,dflt)
-                         `(= ,flag true)))
-                   keynames vals flags)
+            ,@(apply append (map (lambda (name dflt)
+                                   (if (const-default? dflt)
+                                       `((= ,name ,dflt))
+                                       '()))
+                                 keynames vals))
+            ,@(map (lambda (flag) `(= ,flag true))
+                   flags)
             ,@(if (null? restkw) '()
-                  `((= ,rkw ,empty-vector-any)))
+                  `((= ,rkw (top EmptyKWDict))))
+            ,(if (and (not (null? restkw)) (null? keynames))
+                 `(if (call (core isa) ,kw (top KWDict))
+                      (block
+                       (= ,rkw ,kw)  ;; reuse kwarg list for delegation if possible
+                       (symbolicgoto do_call)))
+                 `(if (call (core isa) ,kw (top KWDict))
+                      (= ,kw (call (top collect_as_kwargs) ,kw))))
             ;; for i = 1:(length(kw)>>1)
-            (for (= ,i (: 1 (call (top >>) (call (top length) ,kw) 1)))
+            (for (= ,i (: (call (top >>) (call (top length) ,kw) 1) -1 1))
                  (block
                   ;; ii = i*2 - 1
                   (= ,ii (call (top -) (call (top *) ,i 2) 1))
@@ -523,11 +530,10 @@
                                              rval0)))
                               ;; if kw[ii] == 'k; k = kw[ii+1]::Type; end
                               `(if (comparison ,elt === (quote ,(decl-var k)))
-                                   (block
-                                    (= ,(decl-var k) ,rval)
-                                    ,@(if (not (const-default? (cadr kvf)))
-                                          `((= ,(caddr kvf) false))
-                                          '()))
+                                   (if ,(caddr kvf)
+                                       (block
+                                        (= ,(decl-var k) ,rval)
+                                        (= ,(caddr kvf) false)))
                                    ,else)))
                           (if (null? restkw)
                               ;; if no rest kw, give error for unrecognized
@@ -535,10 +541,10 @@
                                      ,@(if (null? vararg) '()
                                            (list `(... ,(arg-name (car vararg))))))
                               ;; otherwise add to rest keywords
-                              `(foreigncall 'jl_array_ptr_1d_push (core Void) (call (core svec) Any Any)
-                                            ,rkw 0 (tuple ,elt
-                                                          (call (core arrayref) ,kw
-                                                                (call (top +) ,ii 1))) 0))
+                              `(if (call (top haskey) ,rkw ,elt)
+                                   (null)
+                                   (= ,rkw (call (top KWDict) ,rkw ,elt (call (core arrayref) ,kw
+                                                                              (call (top +) ,ii 1))))))
                           (map list vars vals flags))))
             ;; set keywords that weren't present to their default values
             ,@(apply append
@@ -547,6 +553,7 @@
                                 '()
                                 `((if ,flag (= ,name ,dflt)))))
                           keynames vals flags))
+            (symboliclabel do_call)
             ;; finally, call the core function
             (return (call ,mangled
                           ,@keynames
