@@ -720,9 +720,9 @@ rand(s::AbstractString) = rand(GLOBAL_RNG, s)
 isvalid_unsafe(s::String, i) = !Base.is_valid_continuation(unsafe_load(pointer(s), i))
 
 function rand(rng::AbstractRNG, s::String)
-    rg = Base.Random.RangeGenerator(1:s.len)
+    rg = RangeGenerator(1:s.len)
     while true
-        pos = rand(Base.Random.GLOBAL_RNG, rg)
+        pos = rand(rng, rg)
         isvalid_unsafe(s, pos) && return s[pos]
     end
 end
