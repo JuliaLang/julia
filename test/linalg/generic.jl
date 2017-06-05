@@ -338,16 +338,16 @@ b = [ModInt{2}(1), ModInt{2}(0)]
 
 @test A*(lufact(A, Val{:nopivot})\b) == b
 
-# pivoting required:
+# nonzero pivoting required:
 A = [ModInt{2}(0) ModInt{2}(1); ModInt{2}(1) ModInt{2}(1)]
 
 @test A*(lufact(A, Val{:nonzeropivot})\b) == b
 
-# Needed for pivoting:
+Base.lufact{N}(A::AbstractMatrix{ModInt{N}}, pivot::Union{Type{Val{:maxabspivot}}, Type{Val{:nopivot}}, Type{Val{:nonzeropivot}} } = Val{:nonzeropivot}) = lufact!(copy(A), pivot)
+@test A*(A\b) == b
+
+# Needed for absmax pivoting:
 Base.abs(a::ModInt{n}) where {n} = a
 Base.:<(a::ModInt{n}, b::ModInt{n}) where {n} = a.k < b.k
 
 @test A*(lufact(A, Val{:maxabspivot})\b) == b
-
-Base.lufact{N}(A::AbstractMatrix{ModInt{N}}, pivot::Union{Type{Val{:maxabspivot}}, Type{Val{:nopivot}}, Type{Val{:nonzeropivot}} } = Val{:nonzeropivot}) = lufact!(copy(A), pivot)
-@test A*(A\b) == b
