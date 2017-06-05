@@ -1212,6 +1212,11 @@ end
 @test expand(:(f(2, a=1, w=3, c=3, w=4, b=2))) == Expr(:error,
                                                        "keyword argument \"w\" repeated in call to \"f\"")
 
+let f(x) =
+      g(x) = 1
+    @test functionloc(f(1))[2] > functionloc(f)[2]
+end
+
 # issue #19351
 # adding return type decl should not affect parse of function body
 @test :(t(abc) = 3).args[2] == :(t(abc)::Int = 3).args[2]
