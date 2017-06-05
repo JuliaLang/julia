@@ -409,7 +409,7 @@ myfunc (generic function with 3 methods)
     Because we can only define `MyContainer` for
     `A<:AbstractArray`, and any unspecified parameters are arbitrary,
     the first function above could have been written more succinctly as
-    `function myfunc{T<:Integer}(c::MyContainer{T})`
+    `function myfunc(c::MyContainer{<:Integer})`
 
 
 ```jldoctest containers2

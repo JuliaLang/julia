@@ -153,7 +153,7 @@ function unique(itr)
 end
 
 _unique_from(itr, out, seen, i) = unique_from(itr, out, seen, i)
-@inline function unique_from{T}(itr, out::Vector{T}, seen, i)
+@inline function unique_from(itr, out::Vector{T}, seen, i) where T
     while !done(itr, i)
         x, i = next(itr, i)
         S = typeof(x)

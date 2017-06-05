@@ -206,7 +206,7 @@ by a `Union` of `Tuple` types. For example the following `Method` definition
 
 is stored as `Tuple{Any, Any}` in the `MultiDoc` while
 
-    f{T}(x::T, y = ?) = ...
+    f(x::T, y = ?) where {T} = ...
 
 is stored as `Union{Tuple{T, Any}, Tuple{T}} where T`.
 
@@ -426,7 +426,7 @@ function summarize(io::IO, m::Module, binding)
     end
 end
 
-function summarize{T}(io::IO, ::T, binding)
+function summarize(io::IO, ::T, binding) where T
     println(io, "`", binding, "` is of type `", T, "`.\n")
     summarize(io, T, binding)
 end

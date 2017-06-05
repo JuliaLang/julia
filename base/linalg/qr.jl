@@ -472,7 +472,7 @@ rows of `R` in the QR factorization that are zero. The resulting matrix is the `
 QR factorization (sometimes called the reduced QR factorization). If `false`, returns a `Q`
 that spans all rows of `R` in its corresponding QR factorization.
 """
-function full{T}(A::Union{QRPackedQ{T},QRCompactWYQ{T}}; thin::Bool = true)
+function full(A::Union{QRPackedQ{T},QRCompactWYQ{T}}; thin::Bool = true) where T
     if thin
         convert(Array, A)
     else

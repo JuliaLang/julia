@@ -46,7 +46,7 @@ is also used in indexing to select whole dimensions.
 colon(start::T, step, stop::T) where {T} = _colon(start, step, stop)
 colon(start::T, step, stop::T) where {T<:Real} = _colon(start, step, stop)
 # without the second method above, the first method above is ambiguous with
-# colon{A<:Real,C<:Real}(start::A, step, stop::C)
+# colon(start::A, step, stop::C) where {A<:Real,C<:Real}
 function _colon(start::T, step, stop::T) where T
     T′ = typeof(start+step)
     StepRange(convert(T′,start), step, convert(T′,stop))
@@ -176,17 +176,19 @@ struct OneTo{T<:Integer} <: AbstractUnitRange{T}
 end
 OneTo(stop::T) where {T<:Integer} = OneTo{T}(stop)
 
-## Step ranges parametrized by length
+## Step ranges parameterized by length
 
 """
-    StepRangeLen{T,R,S}(ref::R, step::S, len, [offset=1])
+    StepRangeLen{T,R,S}(ref::R, step::S, len, [offset=1]) where {T,R,S}
+    StepRangeLen(       ref::R, step::S, len, [offset=1]) where {  R,S}
 
-A range `r` where `r[i]` produces values of type `T`, parametrized by
-a `ref`erence value, a `step`, and the `len`gth.  By default `ref` is
-the starting value `r[1]`, but alternatively you can supply it as the
-value of `r[offset]` for some other index `1 <= offset <= len`.  In
-conjunction with `TwicePrecision` this can be used to implement ranges
-that are free of roundoff error.
+A range `r` where `r[i]` produces values of type `T` (in the second
+form, `T` is deduced automatically), parameterized by a `ref`erence
+value, a `step`, and the `len`gth. By default `ref` is the starting
+value `r[1]`, but alternatively you can supply it as the value of
+`r[offset]` for some other index `1 <= offset <= len`. In conjunction
+with `TwicePrecision` this can be used to implement ranges that are
+free of roundoff error.
 """
 struct StepRangeLen{T,R,S} <: Range{T}
     ref::R       # reference value (might be smallest-magnitude value in the range)
@@ -377,7 +379,7 @@ length(r::OneTo) = unsafe_length(r)
 length(r::StepRangeLen) = r.len
 length(r::LinSpace) = r.len
 
-function length{T<:Union{Int,UInt,Int64,UInt64}}(r::StepRange{T})
+function length(r::StepRange{T}) where T<:Union{Int,UInt,Int64,UInt64}
     isempty(r) && return zero(T)
     if r.step > 1
         return checked_add(convert(T, div(unsigned(r.stop - r.start), r.step)), one(T))
@@ -388,13 +390,13 @@ function length{T<:Union{Int,UInt,Int64,UInt64}}(r::StepRange{T})
     end
 end
 
-function length{T<:Union{Int,Int64}}(r::AbstractUnitRange{T})
+function length(r::AbstractUnitRange{T}) where T<:Union{Int,Int64}
     @_inline_meta
     checked_add(checked_sub(last(r), first(r)), one(T))
 end
-length{T<:Union{Int,Int64}}(r::OneTo{T}) = T(r.stop)
+length(r::OneTo{T}) where {T<:Union{Int,Int64}} = T(r.stop)
 
-length{T<:Union{UInt,UInt64}}(r::AbstractUnitRange{T}) =
+length(r::AbstractUnitRange{T}) where {T<:Union{UInt,UInt64}} =
     r.stop < r.start ? zero(T) : checked_add(last(r) - first(r), one(T))
 
 # some special cases to favor default Int type
@@ -510,7 +512,7 @@ function unsafe_getindex(r::LinSpace, i::Integer)
     lerpi.(i-1, r.lendiv, r.start, r.stop)
 end
 
-function lerpi{T}(j::Integer, d::Integer, a::T, b::T)
+function lerpi(j::Integer, d::Integer, a::T, b::T) where T
     @_inline_meta
     t = j/d
     T((1-t)*a + t*b)

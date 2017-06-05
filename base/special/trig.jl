@@ -326,10 +326,10 @@ for (tfa, tfainv, hfa, hfainv, fn) in ((:asec, :acos, :asech, :acosh, "secant"),
     @eval begin
         @doc """
             $($tname)(x)
-        Compute the inverse $($fn) of `x`, where the output is in radians. """ ($tfa){T<:Number}(y::T) = ($tfainv)(one(T) / y)
+        Compute the inverse $($fn) of `x`, where the output is in radians. """ ($tfa)(y::T) where {T<:Number} = ($tfainv)(one(T) / y)
         @doc """
             $($hname)(x)
-        Compute the inverse hyperbolic $($fn) of `x`. """ ($hfa){T<:Number}(y::T) = ($hfainv)(one(T) / y)
+        Compute the inverse hyperbolic $($fn) of `x`. """ ($hfa)(y::T) where {T<:Number} = ($hfainv)(one(T) / y)
     end
 end
 

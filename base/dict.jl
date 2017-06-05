@@ -680,5 +680,5 @@ function similar(t::ImmutableDict)
     return t
 end
 
-_similar_for{P<:Pair}(c::Dict, ::Type{P}, itr, isz) = similar(c, P)
+_similar_for(c::Dict, ::Type{P}, itr, isz) where {P<:Pair} = similar(c, P)
 _similar_for(c::Associative, T, itr, isz) = throw(ArgumentError("for Associatives, similar requires an element type of Pair;\n  if calling map, consider a comprehension instead"))

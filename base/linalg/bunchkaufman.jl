@@ -12,8 +12,8 @@ struct BunchKaufman{T,S<:AbstractMatrix} <: Factorization{T}
     rook::Bool
     info::BlasInt
 end
-BunchKaufman{T}(A::AbstractMatrix{T}, ipiv::Vector{BlasInt}, uplo::Char, symmetric::Bool,
-    rook::Bool, info::BlasInt) =
+BunchKaufman(A::AbstractMatrix{T}, ipiv::Vector{BlasInt}, uplo::Char, symmetric::Bool,
+             rook::Bool, info::BlasInt) where {T} =
         BunchKaufman{T,typeof(A)}(A, ipiv, uplo, symmetric, rook, info)
 
 """

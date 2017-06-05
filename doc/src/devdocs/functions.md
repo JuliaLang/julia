@@ -98,7 +98,7 @@ table for `DataType` contains most constructor definitions. One wrinkle is the f
 that makes all types callable via `convert`:
 
 ```julia
-(::Type{T}){T}(args...) = convert(T, args...)::T
+(::Type{T})(args...) where {T} = convert(T, args...)::T
 ```
 
 In this definition the function type is abstract, which is not normally supported. To make this

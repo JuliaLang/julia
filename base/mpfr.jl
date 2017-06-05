@@ -201,7 +201,7 @@ unsafe_cast(::Type{T}, x::BigFloat, r::RoundingMode) where {T<:Integer} = unsafe
 
 unsafe_trunc(::Type{T}, x::BigFloat) where {T<:Integer} = unsafe_cast(T,x,RoundToZero)
 
-function trunc{T<:Union{Signed,Unsigned}}(::Type{T}, x::BigFloat)
+function trunc(::Type{T}, x::BigFloat) where T<:Union{Signed,Unsigned}
     (typemin(T) <= x <= typemax(T)) || throw(InexactError())
     unsafe_cast(T,x,RoundToZero)
 end

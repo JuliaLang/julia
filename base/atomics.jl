@@ -70,7 +70,7 @@ end
 Atomic() = Atomic{Int}()
 
 """
-    Threads.atomic_cas!{T}(x::Atomic{T}, cmp::T, newval::T)
+    Threads.atomic_cas!(x::Atomic{T}, cmp::T, newval::T) where T
 
 Atomically compare-and-set `x`
 
@@ -104,7 +104,7 @@ Base.Threads.Atomic{Int64}(2)
 function atomic_cas! end
 
 """
-    Threads.atomic_xchg!{T}(x::Atomic{T}, newval::T)
+    Threads.atomic_xchg!(x::Atomic{T}, newval::T) where T
 
 Atomically exchange the value in `x`
 
@@ -127,7 +127,7 @@ julia> x[]
 function atomic_xchg! end
 
 """
-    Threads.atomic_add!{T}(x::Atomic{T}, val::T)
+    Threads.atomic_add!(x::Atomic{T}, val::T) where T
 
 Atomically add `val` to `x`
 
@@ -149,7 +149,7 @@ julia> x[]
 function atomic_add! end
 
 """
-    Threads.atomic_sub!{T}(x::Atomic{T}, val::T)
+    Threads.atomic_sub!(x::Atomic{T}, val::T) where T
 
 Atomically subtract `val` from `x`
 
@@ -171,7 +171,7 @@ julia> x[]
 function atomic_sub! end
 
 """
-    Threads.atomic_and!{T}(x::Atomic{T}, val::T)
+    Threads.atomic_and!(x::Atomic{T}, val::T) where T
 
 Atomically bitwise-and `x` with `val`
 
@@ -193,7 +193,7 @@ julia> x[]
 function atomic_and! end
 
 """
-    Threads.atomic_nand!{T}(x::Atomic{T}, val::T)
+    Threads.atomic_nand!(x::Atomic{T}, val::T) where T
 
 Atomically bitwise-nand (not-and) `x` with `val`
 
@@ -215,7 +215,7 @@ julia> x[]
 function atomic_nand! end
 
 """
-    Threads.atomic_or!{T}(x::Atomic{T}, val::T)
+    Threads.atomic_or!(x::Atomic{T}, val::T) where T
 
 Atomically bitwise-or `x` with `val`
 
@@ -237,7 +237,7 @@ julia> x[]
 function atomic_or! end
 
 """
-    Threads.atomic_xor!{T}(x::Atomic{T}, val::T)
+    Threads.atomic_xor!(x::Atomic{T}, val::T) where T
 
 Atomically bitwise-xor (exclusive-or) `x` with `val`
 
@@ -259,7 +259,7 @@ julia> x[]
 function atomic_xor! end
 
 """
-    Threads.atomic_max!{T}(x::Atomic{T}, val::T)
+    Threads.atomic_max!(x::Atomic{T}, val::T) where T
 
 Atomically store the maximum of `x` and `val` in `x`
 
@@ -281,7 +281,7 @@ julia> x[]
 function atomic_max! end
 
 """
-    Threads.atomic_min!{T}(x::Atomic{T}, val::T)
+    Threads.atomic_min!(x::Atomic{T}, val::T) where T
 
 Atomically store the minimum of `x` and `val` in `x`
 

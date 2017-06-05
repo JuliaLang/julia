@@ -316,6 +316,7 @@ end
 struct ModInt{n}
     k
     ModInt{n}(k) where {n} = new(mod(k,n))
+    ModInt{n}(k::ModInt{n}) where {n} = k
 end
 
 Base.:+(a::ModInt{n}, b::ModInt{n}) where {n} = ModInt{n}(a.k + b.k)
@@ -329,15 +330,15 @@ Base.zero(::Type{ModInt{n}}) where {n} = ModInt{n}(0)
 Base.zero(::ModInt{n}) where {n} = ModInt{n}(0)
 Base.one(::Type{ModInt{n}}) where {n} = ModInt{n}(1)
 Base.one(::ModInt{n}) where {n} = ModInt{n}(1)
-Base.oneunit(::Type{ModInt{n}}) where {n} = ModInt{n}(1)
+Base.transpose(a::ModInt{n}) where {n} = a  # see Issue 20978
+
+A = [ModInt{2}(1) ModInt{2}(0); ModInt{2}(1) ModInt{2}(1)]
+b = [ModInt{2}(1), ModInt{2}(0)]
+
+@test A*(lufact(A, Val{false})\b) == b
 
 # Needed for pivoting:
 Base.abs(a::ModInt{n}) where {n} = a
 Base.:<(a::ModInt{n}, b::ModInt{n}) where {n} = a.k < b.k
-Base.transpose(a::ModInt{n}) where {n} = a  # see Issue 20978
 
-A = [ ModInt{2}(1) ModInt{2}(1) ; ModInt{2}(1) ModInt{2}(0) ]
-b = [ ModInt{2}(1), ModInt{2}(0) ]
-
-@test A*(A\b) == b
-@test_nowarn lufact( A, Val{true} )
+@test A*(lufact(A, Val{true})\b) == b

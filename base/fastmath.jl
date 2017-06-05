@@ -141,9 +141,9 @@ mul_fast(x::T, y::T) where {T<:FloatTypes} = mul_float_fast(x, y)
 div_fast(x::T, y::T) where {T<:FloatTypes} = div_float_fast(x, y)
 rem_fast(x::T, y::T) where {T<:FloatTypes} = rem_float_fast(x, y)
 
-add_fast{T<:FloatTypes}(x::T, y::T, zs::T...) =
+add_fast(x::T, y::T, zs::T...) where {T<:FloatTypes} =
     add_fast(add_fast(x, y), zs...)
-mul_fast{T<:FloatTypes}(x::T, y::T, zs::T...) =
+mul_fast(x::T, y::T, zs::T...) where {T<:FloatTypes} =
     mul_fast(mul_fast(x, y), zs...)
 
 @fastmath begin
@@ -208,7 +208,7 @@ ComplexTypes = Union{Complex64, Complex128}
     eq_fast(a::T, y::Complex{T}) where {T<:FloatTypes} =
         (a==real(y)) & (T(0)==imag(y))
 
-    ne_fast{T<:ComplexTypes}(x::T, y::T) = !(x==y)
+    ne_fast(x::T, y::T) where {T<:ComplexTypes} = !(x==y)
 end
 
 # fall-back implementations and type promotion

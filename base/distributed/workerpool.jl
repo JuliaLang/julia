@@ -52,7 +52,7 @@ function serialize(S::AbstractSerializer, pool::WorkerPool)
     serialize(S, pool.ref)
 end
 
-deserialize{T<:WorkerPool}(S::AbstractSerializer, t::Type{T}) = T(deserialize(S))
+deserialize(S::AbstractSerializer, t::Type{T}) where {T<:WorkerPool} = T(deserialize(S))
 
 wp_local_push!(pool::AbstractWorkerPool, w::Int) = (push!(pool.workers, w); put!(pool.channel, w); pool)
 wp_local_length(pool::AbstractWorkerPool) = length(pool.workers)

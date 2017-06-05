@@ -48,10 +48,10 @@ WeakKeyDict() = WeakKeyDict{Any,Any}()
 WeakKeyDict(kv::Tuple{}) = WeakKeyDict()
 copy(d::WeakKeyDict) = WeakKeyDict(d)
 
-WeakKeyDict{K,V}(ps::Pair{K,V}...)            = WeakKeyDict{K,V}(ps)
-WeakKeyDict{K  }(ps::Pair{K}...,)             = WeakKeyDict{K,Any}(ps)
-WeakKeyDict{V  }(ps::(Pair{K,V} where K)...,) = WeakKeyDict{Any,V}(ps)
-WeakKeyDict(     ps::Pair...)                 = WeakKeyDict{Any,Any}(ps)
+WeakKeyDict(ps::Pair{K,V}...)           where {K,V} = WeakKeyDict{K,V}(ps)
+WeakKeyDict(ps::Pair{K}...)             where {K  } = WeakKeyDict{K,Any}(ps)
+WeakKeyDict(ps::(Pair{K,V} where K)...) where {V  } = WeakKeyDict{Any,V}(ps)
+WeakKeyDict(ps::Pair...)                            = WeakKeyDict{Any,Any}(ps)
 
 function WeakKeyDict(kv)
     try
@@ -110,7 +110,7 @@ get!(wkh::WeakKeyDict{K}, key, default) where {K} = lock(() -> get!(wkh.ht, key,
 get!(default::Callable, wkh::WeakKeyDict{K}, key) where {K} = lock(() -> get!(default, wkh.ht, key), wkh)
 pop!(wkh::WeakKeyDict{K}, key) where {K} = lock(() -> pop!(wkh.ht, key), wkh)
 pop!(wkh::WeakKeyDict{K}, key, default) where {K} = lock(() -> pop!(wkh.ht, key, default), wkh)
-delete!{K}(wkh::WeakKeyDict{K}, key) = lock(() -> delete!(wkh.ht, key), wkh)
+delete!(wkh::WeakKeyDict, key) = lock(() -> delete!(wkh.ht, key), wkh)
 empty!(wkh::WeakKeyDict) = (lock(() -> empty!(wkh.ht), wkh); wkh)
 haskey(wkh::WeakKeyDict{K}, key) where {K} = lock(() -> haskey(wkh.ht, key), wkh)
 getindex(wkh::WeakKeyDict{K}, key) where {K} = lock(() -> getindex(wkh.ht, key), wkh)
