@@ -1,4 +1,4 @@
-/* crc32c.c -- compute CRC-32C using the Intel crc32 instruction
+/* crc32c.c -- compute CRC-32C using software table or available hardware instructions
  * Copyright (C) 2013 Mark Adler
  * Version 1.1  1 Aug 2013  Mark Adler
  *
@@ -7,10 +7,9 @@
  * Modified for use in libjulia:
  *    - exported function renamed to jl_crc32c, DLL exports added.
  *    - removed main() function
- *    - changed initialization to a single jl_crc23_init(0) call.
- *    - protect sse code with #ifdef (correct architecture and compiler)
- *    - added header file
+ *    - architecture and compiler detection
  *    - precompute crc32c tables and store in a generated .c file
+ *    - ARMv8 support
  */
 
 /*
@@ -34,9 +33,8 @@
   madler@alumni.caltech.edu
 */
 
-/* Use hardware CRC instruction on Intel SSE 4.2 processors.  This computes a
-   CRC-32C, *not* the CRC-32 used by Ethernet and zip, gzip, etc.  A software
-   version is provided as a fall-back, as well as for speed comparisons. */
+/* This computes a CRC-32C, *not* the CRC-32 used by Ethernet and zip, gzip, etc.
+ * A software version is provided as a fall-back, as well as for speed comparisons. */
 
 /* Version history:
    1.0  10 Feb 2013  First version
@@ -45,6 +43,10 @@
 
 #include "julia.h"
 #include "julia_internal.h"
+
+#ifdef _CPU_AARCH64_
+#  include <sys/auxv.h>
+#endif
 
 /* CRC-32C (iSCSI) polynomial in reversed bit order. */
 #define POLY 0x82f63b78
@@ -78,7 +80,7 @@ JL_UNUSED static inline uint32_t crc32c_shift(const uint32_t zeros[][256], uint3
 }
 
 #if defined(_CPU_X86_64_) && !defined(_COMPILER_MICROSOFT_)
-/* Compute CRC-32C using the Intel hardware instruction. */
+/* Compute CRC-32C using the SSE4.2 hardware instruction. */
 static uint32_t crc32c_sse42(uint32_t crc, const char *buf, size_t len)
 {
     const unsigned char *next = (const unsigned char *) buf;
@@ -197,6 +199,163 @@ static crc32c_func_t crc32c_dispatch(void)
 #    define crc32c_dispatch crc32c_dispatch
 #    define crc32c_dispatch_ifunc "crc32c_dispatch"
 #  endif
+#elif defined(_CPU_AARCH64_)
+#define CRC_TARGET __attribute__((target("+crc")))
+/* Compute CRC-32C using the ARMv8 CRC32 extension. */
+CRC_TARGET static inline uint32_t crc32cx(uint32_t crc, uint64_t val)
+{
+    uint32_t res;
+    asm("crc32cx %w0, %w1, %2" : "=r"(res) : "r"(crc), "r"(val));
+    return res;
+}
+CRC_TARGET static inline uint32_t crc32cw(uint32_t crc, uint32_t val)
+{
+    uint32_t res;
+    asm("crc32cw %w0, %w1, %w2" : "=r"(res) : "r"(crc), "r"(val));
+    return res;
+}
+CRC_TARGET static inline uint32_t crc32ch(uint32_t crc, uint32_t val)
+{
+    uint32_t res;
+    asm("crc32ch %w0, %w1, %w2" : "=r"(res) : "r"(crc), "r"(val));
+    return res;
+}
+CRC_TARGET static inline uint32_t crc32cb(uint32_t crc, uint32_t val)
+{
+    uint32_t res;
+    asm("crc32cb %w0, %w1, %w2" : "=r"(res) : "r"(crc), "r"(val));
+    return res;
+}
+static inline uint64_t unaligned_i64(const char *ptr)
+{
+    uint64_t val;
+    memcpy(&val, ptr, 8);
+    return val;
+}
+static inline uint32_t unaligned_i32(const char *ptr)
+{
+    uint32_t val;
+    memcpy(&val, ptr, 4);
+    return val;
+}
+static inline uint16_t unaligned_i16(const char *ptr)
+{
+    uint16_t val;
+    memcpy(&val, ptr, 2);
+    return val;
+}
+
+// Modified from the SSE4.2 version.
+CRC_TARGET static uint32_t crc32c_armv8(uint32_t crc, const char *buf, size_t len)
+{
+    /* pre-process the crc */
+    crc = ~crc;
+
+    // Misaligned access doesn't seem to have any measurable performance overhead
+    // on Cortex-A57
+
+    // crc32c has a latency of 3 and throughput of 1 on Cortex-A57
+    // The latency and throughput are 2 and 1 on Cortex-A72
+    // In either case, the 3 wide parallel processing shouldn't hurt since the block size
+    // should be big enough.
+    /* compute the crc on sets of LONG*3 bytes, executing three independent crc
+     * instructions, each on LONG bytes. */
+    while (len >= LONG * 3) {
+        uint32_t crc1 = 0;
+        uint32_t crc2 = 0;
+        const char *end = buf + LONG;
+        const char *buf2 = end;
+        const char *buf3 = end + LONG;
+        do {
+            crc = crc32cx(crc, unaligned_i64(buf));
+            buf += 8;
+            crc1 = crc32cx(crc1, unaligned_i64(buf2));
+            buf2 += 8;
+            crc2 = crc32cx(crc2, unaligned_i64(buf3));
+            buf3 += 8;
+        } while (buf < end);
+        crc = crc32c_shift(crc32c_long, crc) ^ crc1;
+        crc = crc32c_shift(crc32c_long, crc) ^ crc2;
+        buf += LONG * 2;
+        len -= LONG * 3;
+    }
+
+    /* do the same thing, but now on SHORT*3 blocks for the remaining data less
+     * than a LONG*3 block */
+    while (len >= SHORT * 3) {
+        uint32_t crc1 = 0;
+        uint32_t crc2 = 0;
+        const char *end = buf + SHORT;
+        const char *buf2 = end;
+        const char *buf3 = end + SHORT;
+        do {
+            crc = crc32cx(crc, unaligned_i64(buf));
+            buf += 8;
+            crc1 = crc32cx(crc1, unaligned_i64(buf2));
+            buf2 += 8;
+            crc2 = crc32cx(crc2, unaligned_i64(buf3));
+            buf3 += 8;
+        } while (buf < end);
+        crc = crc32c_shift(crc32c_short, crc) ^ crc1;
+        crc = crc32c_shift(crc32c_short, crc) ^ crc2;
+        buf += SHORT * 2;
+        len -= SHORT * 3;
+    }
+    // The same shift table can be used to compute two SHORT blocks simultaneously
+    if (len >= SHORT * 2) {
+        uint32_t crc1 = 0;
+        const char *end = buf + SHORT;
+        const char *buf2 = end;
+        do {
+            crc = crc32cx(crc, unaligned_i64(buf));
+            buf += 8;
+            crc1 = crc32cx(crc1, unaligned_i64(buf2));
+            buf2 += 8;
+        } while (buf < end);
+        crc = crc32c_shift(crc32c_short, crc) ^ crc1;
+        buf += SHORT;
+        len -= SHORT * 2;
+    }
+
+    /* compute the crc on the remaining eight-byte units less than a SHORT*2
+       block */
+    const char *end = buf + len - 8;
+    while (buf <= end) {
+        crc = crc32cx(crc, unaligned_i64(buf));
+        buf += 8;
+    }
+    if (len & 4) {
+        crc = crc32cw(crc, unaligned_i32(buf));
+        buf += 4;
+    }
+    if (len & 2) {
+        crc = crc32ch(crc, unaligned_i16(buf));
+        buf += 2;
+    }
+    if (len & 1)
+        crc = crc32cb(crc, *buf);
+    /* return a post-processed crc */
+    return ~crc;
+}
+
+// HW feature detection
+#  ifdef __ARM_FEATURE_CRC32
+// The C code is compiled with CRC32 being required. Skip runtime dispatch.
+JL_DLLEXPORT uint32_t jl_crc32c(uint32_t crc, const char *buf, size_t len)
+{
+    return crc32c_armv8(crc, buf, len);
+}
+#  else
+static crc32c_func_t crc32c_dispatch(unsigned long hwcap)
+{
+    if (hwcap & HWCAP_CRC32)
+        return crc32c_armv8;
+    return jl_crc32c_sw;
+}
+// For ifdef detection below
+#    define crc32c_dispatch() crc32c_dispatch(getauxval(AT_HWCAP))
+#    define crc32c_dispatch_ifunc "crc32c_dispatch"
+#  endif
 #else
 // If we don't have any accelerated version to define, just make the _sw version define
 // the real version and then define a _sw version as test wrapper.
@@ -234,7 +393,7 @@ JL_DLLEXPORT uint32_t jl_crc32c(uint32_t crc, const char *buf, size_t len)
 
 /* Table-driven software version as a fall-back.  This is about 15 times slower
    than using the hardware instructions.  This computes a little-endian
-   CRC32c, equivalent to the little-endian CRC of the Intel instructions,
+   CRC32c, equivalent to the little-endian CRC of the SSE4.2 or ARMv8 instructions,
    regardless of the endianness of the machine this is running on.  */
 JL_DLLEXPORT uint32_t jl_crc32c_sw(uint32_t crci, const char *buf, size_t len)
 {
