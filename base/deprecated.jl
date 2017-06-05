@@ -1350,6 +1350,25 @@ end
 @deprecate srand(filename::AbstractString, n::Integer=4) srand(read!(filename, Array{UInt32}(Int(n))))
 @deprecate MersenneTwister(filename::AbstractString)  srand(MersenneTwister(0), read!(filename, Array{UInt32}(Int(4))))
 
+# PR #22203
+@deprecate num2hex(n::Union{Bool, Base.BitReal}) bits(n, hex)
+
+"""
+    hex2num(str)
+
+Convert a hexadecimal string to the floating point number it represents.
+This function, which is inherently type-unstable, returns a `Float16`,
+a `Float32`, or a `Float64` depending on the length of the string `str`
+(note that this length must hence be no greater than 16).
+"""
+function hex2num(s::AbstractString)
+    depwarn("hex2num(s) is deprecated, use reinterpret(T::Type, s)", :hex2num)
+    l = length(s)
+    l > 16 && throw(ArgumentError("the length of the passed string must be <= 16, got $l"))
+    reinterpret(l <= 4 ? Float16 : l <= 8 ? Float32 : Float64, s)
+end
+export hex2num
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

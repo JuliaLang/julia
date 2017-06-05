@@ -2,16 +2,9 @@
 
 module MultiplicativeInverses
 
-import Base: div, divrem, rem, unsigned
+import Base: div, divrem, rem
 using  Base: IndexLinear, IndexCartesian, tail
 export multiplicativeinverse
-
-unsigned(::Type{Int8}) = UInt8
-unsigned(::Type{Int16}) = UInt16
-unsigned(::Type{Int32}) = UInt32
-unsigned(::Type{Int64}) = UInt64
-unsigned(::Type{Int128}) = UInt128
-unsigned{T<:Unsigned}(::Type{T}) = T
 
 abstract type  MultiplicativeInverse{T} end
 

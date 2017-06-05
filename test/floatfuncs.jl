@@ -35,10 +35,10 @@ for elty in (Float16,Float32,Float64)
     @test !isinteger(elty(NaN))
 end
 
-# num2hex, hex2num
+# bits, reinterpret
 for elty in (Float16,Float32,Float64), _ = 1:10
     x = rand(elty)
-    @test hex2num(num2hex(x)) ≈ x
+    @test reinterpret(elty, bits(x, hex)) ≈ x
 end
 
 # round

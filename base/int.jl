@@ -23,6 +23,51 @@ const BitInteger     = Union{BitInteger_types...}
 const BitSigned64T   = Union{Type{Int8}, Type{Int16}, Type{Int32}, Type{Int64}}
 const BitUnsigned64T = Union{Type{UInt8}, Type{UInt16}, Type{UInt32}, Type{UInt64}}
 
+const BitFloat_types = (Float16, Float32, Float64)
+const BitFloat       = Union{BitFloat_types...}
+const BitReal_types  = (BitInteger_types..., BitFloat_types...)
+const BitReal        = Union{BitReal_types...}
+
+## integer signed-ness conversions
+
+reinterpret(::Type{Unsigned}, x::BitInteger) = unsigned(x)
+reinterpret(::Type{  Signed}, x::BitInteger) = signed(x)
+reinterpret(::Type{Unsigned}, ::Type{Bool})  = UInt8
+reinterpret(::Type{  Signed}, ::Type{Bool})  =  Int8
+reinterpret(::Type{Unsigned}, x::Bool)       = x % UInt8
+reinterpret(::Type{  Signed}, x::Bool)       = x %  Int8
+reinterpret(::Type{Unsigned}, ::Type{Char}) = UInt32
+reinterpret(::Type{  Signed}, ::Type{Char}) =  Int32
+reinterpret(::Type{Unsigned}, x::Char) = unsigned(x)
+reinterpret(::Type{  Signed}, x::Char) = signed(x)
+
+"""
+    unsigned(T::Type) -> UnsignedType
+
+Return the return-type of `unsigned(x::T)`, so that `unsigned(x)::unsigned(typeof(x))`.
+
+```jldoctest
+julia> unsigned(Int64)
+UInt64
+```
+"""
+unsigned(::Type{T}) where {T<:Unsigned} = T
+
+"""
+    signed(T::Type) -> SignedType
+
+Return the return-type of `signed(x::T)`, so that `signed(x)::signed(typeof(x))`.
+
+```jldoctest
+julia> signed(UInt64)
+Int64
+```
+"""
+signed(::Type{T}) where {T<:Signed} = T
+
+unsigned(::Type{<:Union{Bool,BitFloat}}) = UInt
+signed(  ::Type{<:Union{Bool,BitFloat}}) = Int
+
 ## integer comparisons ##
 
 (<)(x::T, y::T) where {T<:BitSigned}  = slt_int(x, y)

@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Test integer conversion routines from int.jl
-
+using Base: BitInteger_types, BitFloat_types
 
 for y in (-4, Float32(-4), -4.0, big(-4.0))
     @test flipsign(3, y)  == -3
@@ -18,10 +18,10 @@ for y in (4, Float32(4), 4.0, big(4.0))
 end
 
 # Result type must be type of first argument, except for Bool
-for U in (Base.BitInteger_types..., BigInt,
+for U in (BitInteger_types..., BigInt,
           Rational{Int}, Rational{BigInt},
           Float16, Float32, Float64)
-    for T in (Base.BitInteger_types..., BigInt,
+    for T in (BitInteger_types..., BigInt,
               Rational{Int}, Rational{BigInt},
               Float16, Float32, Float64)
         @test typeof(copysign(T(3), U(4))) === T
@@ -139,7 +139,7 @@ for T in (UInt8, UInt16, UInt32, UInt64)
 end
 
 # Test bit shifts
-for T in Base.BitInteger_types
+for T in BitInteger_types
     nbits = 8*sizeof(T)
     issigned = typemin(T) < 0
     highbit = T(2) ^ (nbits-1)
@@ -218,7 +218,34 @@ end
 @test unsafe_trunc(Int8, -129) === Int8(127)
 
 # Test x % T returns a T
-for T in [Base.BitInteger_types..., BigInt],
-    U in [Base.BitInteger_types..., BigInt]
+for T in [BitInteger_types..., BigInt],
+    U in [BitInteger_types..., BigInt]
     @test typeof(rand(U(0):U(127)) % T) === T
+end
+
+@testset "reinterpret and unsigned/signed on $T" for T in BitInteger_types
+    t = -1 % T
+    A, B =  T <: Unsigned ? (Unsigned, Signed) : (Signed, Unsigned)
+    @test reinterpret(A, reinterpret(B, t)) == t
+    @test reinterpret(A, t) == t
+    @test reinterpret(B, t) != t
+    @test (T <: Unsigned ? unsigned : signed)(T) === T
+    @test unsigned(T) <: Unsigned
+    @test signed(T) <: Signed
+end
+
+@testset "unsigned/signed(::Bool)" begin
+    @test signed(true) === 1
+    @test signed(false) === 0
+    @test unsigned(true) === 1 % UInt
+    @test unsigned(false) === 0 % UInt
+    @test signed(Bool) === Int
+    @test unsigned(Bool) === UInt
+end
+
+@testset "unsigned/signed(::$T)" for T in BitFloat_types
+    @test signed(T(1)) === Int(1)
+    @test unsigned(T(1)) === UInt(1)
+    @test_throws InexactError signed(T(1.1))
+    @test_throws InexactError unsigned(T(1.1))
 end

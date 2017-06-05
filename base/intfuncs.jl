@@ -1,5 +1,25 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# this construction is not available when put in int.jl and running in Core
+for (S,U,F) in zip(BitSigned_types, BitUnsigned_types,
+                   (nothing, Float16, Float32, Float64, nothing))
+    @eval begin
+        unsigned(::Type{$S}) = $U
+        unsigned(::Type{$U}) = $U
+        signed(  ::Type{$S}) = $S
+        signed(  ::Type{$U}) = $S
+        reinterpret(::Type{Unsigned}, ::Type{$S}) = $U
+        reinterpret(::Type{Unsigned}, ::Type{$U}) = $U
+        reinterpret(::Type{Signed}, ::Type{$S}) = $S
+        reinterpret(::Type{Signed}, ::Type{$U}) = $S
+    end
+    F === nothing && continue
+    @eval begin
+        reinterpret(::Type{Unsigned}, ::Type{$F}) = $U
+        reinterpret(::Type{Signed}, ::Type{$F}) = $S
+    end
+end
+
 ## number-theoretic functions ##
 
 """
@@ -483,7 +503,22 @@ function hex(x::Unsigned, pad::Int, neg::Bool)
     String(a)
 end
 
-num2hex(n::Integer) = hex(n, sizeof(n)*2)
+"""
+    reinterpret(T::Type, str::AbstractString, b=16)
+
+Interprets a string as the bit representation of a
+number of type `T`, encoded in base `b`.
+
+```jldoctest
+julia> reinterpret(Float64, "400199999999999a")
+2.2
+
+julia> reinterpret(Int32, "fffffffe")
+-2
+```
+"""
+reinterpret(::Type{T}, s::AbstractString, b=16) where {T<:Union{Bool,Char,BitReal}} =
+    reinterpret(T, parse(reinterpret(Unsigned, T), s, b))
 
 const base36digits = ['0':'9';'a':'z']
 const base62digits = ['0':'9';'A':'Z';'a':'z']
@@ -573,11 +608,30 @@ Convert an integer to a decimal string, optionally specifying a number of digits
 """
 dec
 
-bits(x::Union{Bool,Int8,UInt8})           = bin(reinterpret(UInt8,x),8)
-bits(x::Union{Int16,UInt16,Float16})      = bin(reinterpret(UInt16,x),16)
-bits(x::Union{Char,Int32,UInt32,Float32}) = bin(reinterpret(UInt32,x),32)
-bits(x::Union{Int64,UInt64,Float64})      = bin(reinterpret(UInt64,x),64)
-bits(x::Union{Int128,UInt128})            = bin(reinterpret(UInt128,x),128)
+"""
+    bits(n, fmt=bin)
+
+A string giving the literal bit representation of a number.
+The `fmt` function, which can be `bin` or `hex`,
+determines the format used to represent those bits
+respectively as a binary or hexadecimal string.
+
+```jldoctest
+julia> bits(4)
+"0000000000000000000000000000000000000000000000000000000000000100"
+
+julia> bits(4, hex)
+"0000000000000004"
+
+julia> bits(2.2)
+"0100000000000001100110011001100110011001100110011001100110011010"
+
+julia> bits(2.2, hex)
+"400199999999999a"
+```
+"""
+bits(n::Union{Bool,Char,BitReal}, fmt::Union{typeof(bin), typeof(hex)}=bin) =
+    fmt(reinterpret(Unsigned, n), sizeof(n)*(fmt === bin ? 8 : 2))
 
 """
     digits([T<:Integer], n::Integer, base::T=10, pad::Integer=1)

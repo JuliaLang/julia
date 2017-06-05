@@ -123,7 +123,15 @@ end
 
 @test hex(12) == "c"
 @test hex(-12, 3) == "-00c"
-@test num2hex(1243) == (Int == Int32 ? "000004db" : "00000000000004db")
+@test bits(1243, hex) == (Int == Int32 ? "000004db" : "00000000000004db")
+@test bits(-1243, hex) == (Int == Int32 ? "fffffb25" : "fffffffffffffb25")
+@test bits(true, hex) == "01"
+@test bits(false, hex) == "00"
+
+for elty in Base.BitInteger_types, _ = 1:10
+    x = rand(elty)
+    @test reinterpret(elty, bits(x, hex)) == x
+end
 
 @test base(2, 5, 7) == "0000101"
 
