@@ -79,3 +79,25 @@ a2img  = randn(n,n)/2
         end
     end
 end
+
+@testset "Number input" begin
+    x, y = randn(2)
+    @test svdfact(x)    == svdfact(      fill(x, 1, 1))
+    @test svdvals(x)    == first(svdvals(fill(x, 1, 1)))
+    @test svd(x)        == first.(svd(   fill(x, 1, 1)))
+    @test svdfact(x, y) == svdfact(      fill(x, 1, 1), fill(y, 1, 1))
+    @test svdvals(x, y) == first(svdvals(fill(x, 1, 1), fill(y, 1, 1)))
+    @test svd(x, y)     == first.(svd(   fill(x, 1, 1), fill(y, 1, 1)))
+end
+
+@testset "isequal, ==, and hash" begin
+    x, y   = rand(), NaN
+    Fx, Fy = svdfact(x), svdfact(y)
+    @test   Fx == Fx
+    @test !(Fy == Fy)
+    @test isequal(Fy, Fy)
+    @test hash(Fx)          == hash(Fx)
+    @test hash(Fx, UInt(1)) == hash(Fx, UInt(1))
+    @test hash(Fy)          == hash(Fy)
+    @test hash(Fy, UInt(1)) == hash(Fy, UInt(1))
+end

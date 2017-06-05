@@ -14,8 +14,8 @@ have.
 A *concrete* type `T` describes the set of values whose direct tag, as returned by the `typeof`
 function, is `T`. An *abstract* type describes some possibly-larger set of values.
 
-`Any` describes the entire universe of possible values. `Integer` is a subset of `Any` that includes
-`Int`, `Int8`, and other concrete types.
+`Any` describes the entire universe of possible values. [`Integer`](@ref) is a subset of
+`Any` that includes `Int`, [`Int8`](@ref), and other concrete types.
 Internally, Julia also makes heavy use of another type known as `Bottom`, which can also be written
 as `Union{}`. This corresponds to the empty set.
 
@@ -330,7 +330,7 @@ However, this interpretation causes some practical problems.
 
 First, a value of `T` needs to be available inside the method definition.
 For a call like `f(1, 1.0)`, it's not clear what `T` should be.
-It could be `Union{Int,Float64}`, or perhaps `Real`.
+It could be `Union{Int,Float64}`, or perhaps [`Real`](@ref).
 Intuitively, we expect the declaration `x::T` to mean `T === typeof(x)`.
 To make sure that invariant holds, we need `typeof(x) === typeof(y) === T` in this method.
 That implies the method should only be called for arguments of the exact same type.
@@ -433,7 +433,7 @@ When we are done evaluating the body of a `UnionAll` type whose variable is diag
 we look at the final values of the bounds.
 Since the variable must be concrete, a contradiction occurs if its lower bound
 could not be a subtype of a concrete type.
-For example, an abstract type like `AbstractArray` cannot be a subtype of a concrete
+For example, an abstract type like [`AbstractArray`](@ref) cannot be a subtype of a concrete
 type, but a concrete type like `Int` can be, and the empty type `Bottom` can be as well.
 If a lower bound fails this test the algorithm stops with the answer `false`.
 

@@ -194,9 +194,12 @@ julia> ex = quote
            y = 2
            x + y
        end
-quote  # none, line 2:
-    x = 1 # none, line 3:
-    y = 2 # none, line 4:
+quote
+    #= none:2 =#
+    x = 1
+    #= none:3 =#
+    y = 2
+    #= none:4 =#
     x + y
 end
 
@@ -521,13 +524,14 @@ The location information can be accessed by referencing `__source__.line` and `_
 
 ```jldoctest
 julia> macro __LOCATION__(); return QuoteNode(__source__); end
+@__LOCATION__ (macro with 1 method)
 
 julia> dump(
             @__LOCATION__(
        ))
 LineNumberNode
   line: Int64 2
-  file: Symbol REPL[2]
+  file: Symbol none
 ```
 
 ### Building an advanced macro
@@ -972,7 +976,7 @@ julia> foo(4)
 16
 ```
 
-Note that there is no printout of `Int64`. We can see that the body of the generated function
+Note that there is no printout of [`Int64`](@ref). We can see that the body of the generated function
 was only executed once here, for the specific set of argument types, and the result was cached.
 After that, for this example, the expression returned from the generated function on the first
 invocation was re-used as the method body. However, the actual caching behavior is an implementation-defined

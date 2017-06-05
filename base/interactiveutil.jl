@@ -245,26 +245,26 @@ end
 
 
 """
-    versioninfo(io::IO=STDOUT, verbose::Bool=false)
+    versioninfo(io::IO=STDOUT; verbose::Bool=false, packages::Bool=false)
 
-Print information about the version of Julia in use. If the `verbose` argument is `true`,
-detailed system information is shown as well.
+Print information about the version of Julia in use. The output is
+controlled with boolean keyword arguments:
+
+- `packages`: print information about installed packages
+- `verbose`: print all additional information
 """
-function versioninfo(io::IO=STDOUT, verbose::Bool=false)
-    println(io,             "Julia Version $VERSION")
+function versioninfo(io::IO=STDOUT; verbose::Bool=false, packages::Bool=false)
+    println(io, "Julia Version $VERSION")
     if !isempty(GIT_VERSION_INFO.commit_short)
-        println(io,         "Commit $(GIT_VERSION_INFO.commit_short) ($(GIT_VERSION_INFO.date_string))")
+        println(io, "Commit $(GIT_VERSION_INFO.commit_short) ($(GIT_VERSION_INFO.date_string))")
     end
     if ccall(:jl_is_debugbuild, Cint, ())!=0
         println(io, "DEBUG build")
     end
-    println(io,             "Platform Info:")
-    println(io,             "  OS: ", is_windows() ? "Windows" : is_apple() ?
+    println(io, "Platform Info:")
+    println(io, "  OS: ", is_windows() ? "Windows" : is_apple() ?
         "macOS" : Sys.KERNEL, " (", Sys.MACHINE, ")")
 
-    cpu = Sys.cpu_info()
-    println(io,             "  CPU: ", cpu[1].model)
-    println(io,             "  WORD_SIZE: ", Sys.WORD_SIZE)
     if verbose
         lsb = ""
         if is_linux()
@@ -274,45 +274,65 @@ function versioninfo(io::IO=STDOUT, verbose::Bool=false)
             try lsb = strip(readstring(`$(ENV["COMSPEC"]) /c ver`)) end
         end
         if !isempty(lsb)
-            println(io,     "           ", lsb)
+            println(io, "      ", lsb)
         end
         if is_unix()
-            println(io,         "  uname: ", readchomp(`uname -mprsv`))
+            println(io, "  uname: ", readchomp(`uname -mprsv`))
         end
-        println(io,         "Memory: $(Sys.total_memory()/2^30) GB ($(Sys.free_memory()/2^20) MB free)")
-        try println(io,     "Uptime: $(Sys.uptime()) sec") end
-        print(io,           "Load Avg: ")
-        print_matrix(io,    Sys.loadavg()')
-        println(io          )
-        Sys.cpu_summary(io)
-        println(io          )
     end
+
+    if verbose
+        cpuio = IOBuffer() # print cpu_summary with correct alignment
+        Sys.cpu_summary(cpuio)
+        for (i, line) in enumerate(split(String(take!(cpuio)), "\n"))
+            prefix = i == 1 ? "  CPU: " : "       "
+            println(io, prefix, line)
+        end
+    else
+        cpu = Sys.cpu_info()
+        println(io, "  CPU: ", cpu[1].model)
+    end
+
+    if verbose
+        println(io, "  Memory: $(Sys.total_memory()/2^30) GB ($(Sys.free_memory()/2^20) MB free)")
+        try println(io, "  Uptime: $(Sys.uptime()) sec") end
+        print(io, "  Load Avg: ")
+        print_matrix(io, Sys.loadavg()')
+        println(io)
+    end
+    println(io, "  WORD_SIZE: ", Sys.WORD_SIZE)
     if Base.libblas_name == "libopenblas" || BLAS.vendor() == :openblas || BLAS.vendor() == :openblas64
         openblas_config = BLAS.openblas_get_config()
-        println(io,         "  BLAS: libopenblas (", openblas_config, ")")
+        println(io, "  BLAS: libopenblas (", openblas_config, ")")
     else
-        println(io,         "  BLAS: ",libblas_name)
+        println(io, "  BLAS: ",libblas_name)
     end
-    println(io,             "  LAPACK: ",liblapack_name)
-    println(io,             "  LIBM: ",libm_name)
-    println(io,             "  LLVM: libLLVM-",libllvm_version," (", Sys.JIT, ", ", Sys.cpu_name, ")")
+    println(io, "  LAPACK: ",liblapack_name)
+    println(io, "  LIBM: ",libm_name)
+    println(io, "  LLVM: libLLVM-",libllvm_version," (", Sys.JIT, ", ", Sys.cpu_name, ")")
+
+    println(io, "Environment:")
+    for (k,v) in ENV
+        if ismatch(r"JULIA", String(k))
+            println(io, "  $(k) = $(v)")
+        end
+    end
     if verbose
-        println(io,         "Environment:")
         for (k,v) in ENV
-            if match(r"JULIA|PATH|FLAG|^TERM$|HOME", String(k)) !== nothing
+            if ismatch(r"PATH|FLAG|^TERM$|HOME", String(k))
                 println(io, "  $(k) = $(v)")
             end
         end
-        println(io          )
-        println(io,         "Package Directory: ", Pkg.dir())
+    end
+    if packages || verbose
+        println(io, "Packages:")
+        println(io, "  Package Directory: ", Pkg.dir())
+        println(io, "  Package Status:")
         Pkg.status(io)
     end
 end
-versioninfo(verbose::Bool) = versioninfo(STDOUT,verbose)
 
 # displaying type-ambiguity warnings
-
-
 """
     code_warntype([io::IO], f, types)
 

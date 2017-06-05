@@ -162,7 +162,6 @@ include(string((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "version_git.jl")) # 
 
 include("osutils.jl")
 include("c.jl")
-include("sysinfo.jl")
 
 if !isdefined(Core, :Inference)
     include("docs/core.jl")
@@ -222,6 +221,7 @@ importall .Base64
 include("version.jl")
 
 # system & environment
+include("sysinfo.jl")
 include("libc.jl")
 using .Libc: getpid, gethostname, time
 include("libdl.jl")
@@ -286,6 +286,12 @@ function deepcopy_internal end
 # BigInts and BigFloats
 include("gmp.jl")
 importall .GMP
+
+for T in [Signed, Integer, BigInt, Float32, Float64, Real, Complex, Rational]
+    @eval flipsign(x::$T, ::Unsigned) = +x
+    @eval copysign(x::$T, ::Unsigned) = +x
+end
+
 include("mpfr.jl")
 importall .MPFR
 big(n::Integer) = convert(BigInt,n)

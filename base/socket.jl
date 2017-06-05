@@ -24,7 +24,7 @@ end
 """
     IPv4(host::Integer) -> IPv4
 
-Returns an IPv4 object from ip address `host` formatted as an `Integer`.
+Returns an IPv4 object from ip address `host` formatted as an [`Integer`](@ref).
 
 ```jldoctest
 julia> IPv4(3223256218)
@@ -76,7 +76,7 @@ end
 """
     IPv6(host::Integer) -> IPv6
 
-Returns an IPv6 object from ip address `host` formatted as an `Integer`.
+Returns an IPv6 object from ip address `host` formatted as an [`Integer`](@ref).
 
 ```jldoctest
 julia> IPv6(3223256218)

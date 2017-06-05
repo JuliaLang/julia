@@ -10,7 +10,7 @@ on implementing a custom array type.
 
 An array is a collection of objects stored in a multi-dimensional grid. In the most general case,
 an array may contain objects of type `Any`. For most computational purposes, arrays should contain
-objects of a more specific type, such as `Float64` or `Int32`.
+objects of a more specific type, such as [`Float64`](@ref) or [`Int32`](@ref).
 
 In general, unlike many other technical computing languages, Julia does not expect programs to
 be written in a vectorized style for performance. Julia's compiler uses type inference and generates
@@ -46,7 +46,7 @@ Many functions for constructing and initializing arrays are provided. In the fol
 such functions, calls with a `dims...` argument can either take a single tuple of dimension sizes
 or a series of dimension sizes passed as a variable number of arguments. Most of these functions
 also accept a first input `T`, which is the element type of the array. If the type `T` is
-omitted it will default to `Float64`.
+omitted it will default to [`Float64`](@ref).
 
 | Function                           | Description                                                                                                                                                                                                                                  |
 |:---------------------------------- |:-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -510,7 +510,7 @@ iterate over any array type.
 
 ### Array traits
 
-If you write a custom `AbstractArray` type, you can specify that it has fast linear indexing using
+If you write a custom [`AbstractArray`](@ref) type, you can specify that it has fast linear indexing using
 
 ```julia
 Base.IndexStyle(::Type{<:MyArray}) = IndexLinear()
@@ -712,7 +712,7 @@ gains in either time or space when compared to performing the same operations on
 ### Compressed Sparse Column (CSC) Storage
 
 In Julia, sparse matrices are stored in the [Compressed Sparse Column (CSC) format](https://en.wikipedia.org/wiki/Sparse_matrix#Compressed_sparse_column_.28CSC_or_CCS.29).
-Julia sparse matrices have the type `SparseMatrixCSC{Tv,Ti}`, where `Tv` is the type of the nonzero
+Julia sparse matrices have the type `SparseMatrixCSC{Tv,Ti}`, where `Tv` is the type of the stored
 values, and `Ti` is the integer type for storing column pointers and row indices.:
 
 ```julia
@@ -720,8 +720,8 @@ struct SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}
     m::Int                  # Number of rows
     n::Int                  # Number of columns
     colptr::Vector{Ti}      # Column i is in colptr[i]:(colptr[i+1]-1)
-    rowval::Vector{Ti}      # Row values of nonzeros
-    nzval::Vector{Tv}       # Nonzero values
+    rowval::Vector{Ti}      # Row indices of stored values
+    nzval::Vector{Tv}       # Stored values, typically nonzeros
 end
 ```
 
@@ -765,7 +765,7 @@ julia> speye(3,5)
 ```
 
 The [`sparse()`](@ref) function is often a handy way to construct sparse matrices. It takes as
-its input a vector `I` of row indices, a vector `J` of column indices, and a vector `V` of nonzero
+its input a vector `I` of row indices, a vector `J` of column indices, and a vector `V` of stored
 values. `sparse(I,J,V)` constructs a sparse matrix such that `S[I[k], J[k]] = V[k]`.
 
 ```jldoctest sparse_function

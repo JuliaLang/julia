@@ -1265,3 +1265,15 @@ end
 (::CallableSingleton)(x, y) = x + y
 @test ccall(cfunction(CallableSingleton(), Int, Tuple{Int,Int}),
             Int, (Int, Int), 1, 2) === 3
+
+# 19805
+mutable struct callinfos_19805{FUNC_FT<:Function}
+    f :: FUNC_FT
+end
+
+evalf_callback_19805{FUNC_FT}(ci::callinfos_19805{FUNC_FT}) = ci.f(0.5)::Float64
+
+evalf_callback_c_19805{FUNC_FT}(ci::callinfos_19805{FUNC_FT}) = cfunction(
+    evalf_callback_19805, Float64, (callinfos_19805{FUNC_FT},))
+
+@test_throws ErrorException evalf_callback_c_19805( callinfos_19805(sin) )

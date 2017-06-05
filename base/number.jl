@@ -93,8 +93,8 @@ abs2(x::Real) = x*x
 
 Return `x` with its sign flipped if `y` is negative. For example `abs(x) = flipsign(x,x)`.
 """
-flipsign(x::Real, y::Real) = ifelse(signbit(y), -x, x)
-copysign(x::Real, y::Real) = ifelse(signbit(x)!=signbit(y), -x, x)
+flipsign(x::Real, y::Real) = ifelse(signbit(y), -x, +x) # the + is for type-stability on Bool
+copysign(x::Real, y::Real) = ifelse(signbit(x)!=signbit(y), -x, +x)
 
 conj(x::Real) = x
 transpose(x::Number) = x
@@ -190,8 +190,8 @@ _default_type(::Type{Number}) = Int
 """
     factorial(n)
 
-Factorial of `n`.  If `n` is an `Integer`, the factorial is computed as an
-integer (promoted to at least 64 bits).  Note that this may overflow if `n` is not small,
+Factorial of `n`. If `n` is an [`Integer`](@ref), the factorial is computed as an
+integer (promoted to at least 64 bits). Note that this may overflow if `n` is not small,
 but you can use `factorial(big(n))` to compute the result exactly in arbitrary precision.
 If `n` is not an `Integer`, `factorial(n)` is equivalent to [`gamma(n+1)`](@ref).
 

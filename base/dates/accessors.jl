@@ -74,7 +74,7 @@ for func in (:year, :month)
         @doc """
             $($name)(dt::TimeType) -> Int64
 
-        The $($name) of a `Date` or `DateTime` as an `Int64`.
+        The $($name) of a `Date` or `DateTime` as an [`Int64`](@ref).
         """ $func(dt::TimeType)
     end
 end
@@ -83,9 +83,10 @@ end
     week(dt::TimeType) -> Int64
 
 Return the [ISO week date](https://en.wikipedia.org/wiki/ISO_week_date) of a `Date` or
-`DateTime` as an `Int64`. Note that the first week of a year is the week that contains the
-first Thursday of the year which can result in dates prior to January 4th being in the last
-week of the previous year. For example `week(Date(2005,1,1))` is the 53rd week of 2004.
+`DateTime` as an [`Int64`](@ref). Note that the first week of a year is the week that
+contains the first Thursday of the year which can result in dates prior to January 4th
+being in the last week of the previous year. For example `week(Date(2005,1,1))` is the 53rd
+week of 2004.
 """
 week(dt::TimeType)
 
@@ -95,7 +96,7 @@ for func in (:day, :dayofmonth)
         @doc """
             $($name)(dt::TimeType) -> Int64
 
-        The day of month of a `Date` or `DateTime` as an `Int64`.
+        The day of month of a `Date` or `DateTime` as an [`Int64`](@ref).
         """ $func(dt::TimeType)
     end
 end
@@ -103,7 +104,7 @@ end
 """
     hour(dt::DateTime) -> Int64
 
-The hour of day of a `DateTime` as an `Int64`.
+The hour of day of a `DateTime` as an [`Int64`](@ref).
 """
 hour(dt::DateTime)
 
@@ -113,7 +114,7 @@ for func in (:minute, :second, :millisecond)
         @doc """
             $($name)(dt::DateTime) -> Int64
 
-        The $($name) of a `DateTime` as an `Int64`.
+        The $($name) of a `DateTime` as an [`Int64`](@ref).
         """ $func(dt::DateTime)
     end
 end
@@ -137,7 +138,7 @@ for func in (:hour, :minute, :second, :millisecond, :microsecond, :nanosecond)
         @doc """
             $($name)(t::Time) -> Int64
 
-        The $($name) of a `Time` as an `Int64`.
+        The $($name) of a `Time` as an [`Int64`](@ref).
         """ $func(t::Time)
     end
 end

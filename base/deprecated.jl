@@ -200,7 +200,7 @@ end
 # Deprecate vectorized unary functions over sparse matrices in favor of compact broadcast syntax (#17265).
 for f in (:sin, :sinh, :sind, :asin, :asinh, :asind,
         :tan, :tanh, :tand, :atan, :atanh, :atand,
-        :sinpi, :cosc, :ceil, :floor, :trunc, :round, :real, :imag,
+        :sinpi, :cosc, :ceil, :floor, :trunc, :round,
         :log1p, :expm1, :abs, :abs2,
         :log, :log2, :log10, :exp, :exp2, :exp10, :sinc, :cospi,
         :cos, :cosh, :cosd, :acos, :acosd,
@@ -847,7 +847,9 @@ end
 @deprecate ~(B::BitArray) .~B
 
 function frexp(A::Array{<:AbstractFloat})
-    depwarn("`frexp(x::Array)` is discontinued.", :frexp)
+    depwarn(string("`frexp(x::Array)` is discontinued. Though not a direct replacement, ",
+                   "consider using dot-syntax to `broadcast` scalar `frexp` over `Array`s ",
+                   "instead, for example `frexp.(rand(4))`."), :frexp)
     F = similar(A)
     E = Array{Int}(size(A))
     for (iF, iE, iA) in zip(eachindex(F), eachindex(E), eachindex(A))
@@ -1347,6 +1349,10 @@ end
 @deprecate srand(r::MersenneTwister, filename::AbstractString, n::Integer=4) srand(r, read!(filename, Array{UInt32}(Int(n))))
 @deprecate srand(filename::AbstractString, n::Integer=4) srand(read!(filename, Array{UInt32}(Int(n))))
 @deprecate MersenneTwister(filename::AbstractString)  srand(MersenneTwister(0), read!(filename, Array{UInt32}(Int(4))))
+
+# PR #21974
+@deprecate versioninfo(verbose::Bool) versioninfo(verbose=verbose)
+@deprecate versioninfo(io::IO, verbose::Bool) versioninfo(io, verbose=verbose)
 
 # END 0.7 deprecations
 

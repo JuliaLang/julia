@@ -214,9 +214,10 @@ julia> function unstable(flag::Bool)
 unstable (generic function with 1 method)
 ```
 
-It returns either an `Int` or a `Float64` depending on the value of its argument. Since Julia
-can't predict the return type of this function at compile-time, any computation that uses it will
-have to guard against both types possibly occurring, making generation of fast machine code difficult.
+It returns either an `Int` or a [`Float64`](@ref) depending on the value of its argument.
+Since Julia can't predict the return type of this function at compile-time, any computation
+that uses it will have to guard against both types possibly occurring, making generation of
+fast machine code difficult.
 
 ### [Why does Julia give a `DomainError` for certain seemingly-sensible operations?](@id faq-domain-errors)
 
@@ -227,7 +228,7 @@ julia> sqrt(-2.0)
 ERROR: DomainError:
 sqrt will only return a complex result if called with a complex argument. Try sqrt(complex(x)).
 Stacktrace:
- [1] sqrt(::Float64) at ./math.jl:422
+ [1] sqrt(::Float64) at ./math.jl:438
 
 julia> 2^-5
 ERROR: DomainError:
@@ -281,7 +282,7 @@ ideal for a high-level programming language to expose this to the user. For nume
 efficiency and transparency are at a premium, however, the alternatives are worse.
 
 One alternative to consider would be to check each integer operation for overflow and promote
-results to bigger integer types such as `Int128` or [`BigInt`](@ref) in the case of overflow.
+results to bigger integer types such as [`Int128`](@ref) or [`BigInt`](@ref) in the case of overflow.
 Unfortunately, this introduces major overhead on every integer operation (think incrementing a
 loop counter) – it requires emitting code to perform run-time overflow checks after arithmetic
 instructions and branches to handle potential overflows. Worse still, this would cause every computation

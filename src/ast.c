@@ -190,11 +190,13 @@ value_t fl_invoke_julia_macro(fl_context_t *fl_ctx, value_t *args, uint32_t narg
     if (jl_is_expr(lno) && ((jl_expr_t*)lno)->head == line_sym) {
         jl_value_t *file = jl_nothing;
         jl_value_t *line = NULL;
-        switch (jl_expr_nargs(lno)) { // fall-through is intentional
+        switch (jl_expr_nargs(lno)) {
         case 2:
             file = jl_exprarg(lno, 1); // file
+            JL_FALLTHROUGH;
         case 1:
             line = jl_exprarg(lno, 0); // line
+            JL_FALLTHROUGH;
         default: ;
         }
         if (line == NULL)

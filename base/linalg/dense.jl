@@ -770,10 +770,12 @@ function factorize(A::StridedMatrix{T}) where T
             return UpperTriangular(A)
         end
         if herm
-            try
-                return cholfact(A)
+            cf = cholfact(A)
+            if cf.info == 0
+                return cf
+            else
+                return factorize(Hermitian(A))
             end
-            return factorize(Hermitian(A))
         end
         if sym
             return factorize(Symmetric(A))

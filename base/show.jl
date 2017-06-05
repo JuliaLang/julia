@@ -518,7 +518,7 @@ typeemphasize(io::IO) = get(io, :TYPEEMPHASIZE, false) === true
 
 const indent_width = 4
 
-function show_expr_type(io::IO, ty, emph)
+function show_expr_type(io::IO, ty::ANY, emph::Bool)
     if ty === Function
         print(io, "::F")
     elseif ty === Core.IntrinsicFunction
@@ -627,7 +627,7 @@ function show_unquoted(io::IO, ex::Slot, ::Int, ::Int)
         if isa(slottypes, Array) && slotid <= length(slottypes::Array)
             slottype = slottypes[slotid]
             # The Slot in assignment can somehow have an Any type
-            if slottype <: typ
+            if isa(slottype, Type) && isa(typ, Type) && slottype <: typ
                 typ = slottype
             end
         end
@@ -1570,7 +1570,7 @@ end
     summary(x)
 
 Return a string giving a brief description of a value. By default returns
-`string(typeof(x))`, e.g. `Int64`.
+`string(typeof(x))`, e.g. [`Int64`](@ref).
 
 For arrays, returns a string of size and type info,
 e.g. `10-element Array{Int64,1}`.

@@ -3,9 +3,6 @@ Julia v0.7.0 Release Notes
 
 New language features
 ---------------------
-  * `getpeername` on a `TCPSocket` returns the address and port of the remote
-    endpoint of the TCP connection ([#21825]).
-
 
 Language changes
 ----------------
@@ -52,6 +49,14 @@ Library improvements
   * Method lists are now printed as a numbered list. In addition, the source code of a
     method can be opened in an editor by entering the corresponding number in the REPL
     and pressing `^Q` ([#22007]).
+
+  * `getpeername` on a `TCPSocket` returns the address and port of the remote
+    endpoint of the TCP connection ([#21825]).
+
+  * `resize!` and `sizehint!` methods no longer over-reserve memory when the
+    requested array size is more than double of its current size ([#22038]).
+
+  * The output of `versioninfo()` is now controlled with keyword arguments ([#21974]).
 
 Compiler/Runtime improvements
 -----------------------------

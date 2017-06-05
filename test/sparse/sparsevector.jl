@@ -637,14 +637,16 @@ let x = spv_x1, x2 = spv_x2
     @test exact_equal(complex.(x2, x),
         SparseVector(8, [1,2,5,6,7], [3.25+0.0im, 4.0+1.25im, -0.75im, -5.5+3.5im, -6.0+0.0im]))
 
-    # real & imag
+    # real, imag and conj
 
     @test real(x) === x
     @test exact_equal(imag(x), spzeros(Float64, length(x)))
+    @test conj(x) === x
 
     xcp = complex.(x, x2)
     @test exact_equal(real(xcp), x)
     @test exact_equal(imag(xcp), x2)
+    @test exact_equal(conj(xcp), complex.(x, -x2))
 end
 
 ### Zero-preserving math functions: sparse -> sparse

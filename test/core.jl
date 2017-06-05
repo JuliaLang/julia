@@ -438,16 +438,27 @@ glotest()
 @test loc_x == 10
 
 # issue #7234
+f7234_cnt = 0
 begin
     glob_x2 = 24
-    f7234_a() = (glob_x2 += 1)
+    function f7234_a()
+        global f7234_cnt += 1
+        glob_x2 += 1
+        global f7234_cnt += -10000
+    end
 end
 @test_throws UndefVarError f7234_a()
+@test f7234_cnt == 1
 begin
     global glob_x2 = 24
-    f7234_b() = (glob_x2 += 1)
+    function f7234_b()
+        global f7234_cnt += 1
+        glob_x2 += 1
+        global f7235_cnt += -10000
+    end
 end
 @test_throws UndefVarError f7234_b()
+@test f7234_cnt == 2
 # existing globals can be inherited by non-function blocks
 for i = 1:2
     glob_x2 += 1
@@ -486,16 +497,23 @@ end
 @test h19333() == 4
 
 # let - new variables, including undefinedness
+let_undef_cnt = 0
 function let_undef()
     first = true
     for i = 1:2
-        let x
-            if first; x=1; first=false; end
-            x+1
+        let x # new x
+            if first # not defined on second pass
+                x = 1
+                first = false
+            end
+            global let_undef_cnt += 1
+            x + 1
+            global let_undef_cnt += 23
         end
     end
 end
 @test_throws UndefVarError let_undef()
+@test let_undef_cnt == 25
 
 # const implies local in a local scope block
 function const_implies_local()
@@ -520,6 +538,71 @@ end
 @test a[1](10) == 11
 @test a[2](10) == 12
 @test a[3](10) == 13
+
+# issue #22032
+let a = [], fs = []
+    for f() in 1:3
+        push!(a, f())
+        push!(fs, f)
+    end
+    @test a == [1,2,3]
+    @test [f() for f in fs] == [1,2,3]
+end
+let t = (22,33)
+    (g(), x) = t
+    @test g() == 22
+    @test x == 33
+end
+
+# issue #21900
+f21900_cnt = 0
+function f21900()
+    for i = 1:1
+        x = 0
+    end
+    global f21900_cnt += 1
+    x
+    global f21900_cnt += -1000
+    nothing
+end
+@test_throws UndefVarError f21900()
+@test f21900_cnt == 1
+
+@test_throws UndefVarError @eval begin
+    for i21900 = 1:10
+        for j21900 = 1:10
+            foo21900 = 10
+        end
+        bar21900 = 0
+        bar21900 = foo21900 + 1
+    end
+end
+@test !isdefined(:foo21900)
+@test !isdefined(:bar21900)
+bar21900 = 0
+@test_throws UndefVarError @eval begin
+    for i21900 = 1:10
+        for j21900 = 1:10
+            foo21900 = 10
+        end
+        bar21900 = -1
+        bar21900 = foo21900 + 1
+    end
+end
+@test bar21900 == -1
+@test !isdefined(:foo21900)
+foo21900 = 0
+@test nothing === @eval begin
+    for i21900 = 1:10
+        for j21900 = 1:10
+            foo21900 = 10
+        end
+        bar21900 = -1
+        bar21900 = foo21900 + 1
+    end
+end
+@test foo21900 == 10
+@test bar21900 == 11
 
 # ? syntax
 @test (true ? 1 : false ? 2 : 3) == 1
@@ -4950,3 +5033,65 @@ for i in 1:10
     @test ptr1 === ptr2
     @test ptr1 % 16 == 0
 end
+
+# issue #21581
+global function f21581()::Int
+    return 2.0
+end
+@test f21581() === 2
+global g21581()::Int = 2.0
+@test g21581() === 2
+module M21581
+macro bar()
+    :(foo21581(x)::Int = x)
+end
+M21581.@bar
+end
+@test M21581.foo21581(1) === 1
+
+module N21581
+macro foo(var)
+    quote
+        function f(x::T = 1) where T
+            ($(esc(var)), x)
+        end
+        f()
+    end
+end
+end
+let x = 8
+    @test @N21581.foo(x) === (8, 1)
+end
+
+# issue #22122
+let
+    global @inline function f22122(x::T) where {T}
+        T
+    end
+end
+@test f22122(1) === Int
+
+# issue #22026
+module M22026
+
+macro foo(TYP)
+    quote
+        global foofunction
+        foofunction(x::Type{T}) where {T<:Number} = x
+    end
+end
+struct Foo end
+@foo Foo
+
+macro foo2()
+    quote
+        global foofunction2
+        (foofunction2(x::T)::Float32) where {T<:Number} = 2x
+    end
+end
+
+@foo2
+
+end
+@test M22026.foofunction(Int16) === Int16
+@test M22026.foofunction2(3) === 6.0f0

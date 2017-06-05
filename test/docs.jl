@@ -34,6 +34,20 @@ macro macro_doctest() end
 
 @test (@doc @macro_doctest) !== nothing
 
+# test that random stuff interpolated into docstrings doesn't break search or other methods here
+doc"""
+break me:
+
+    code
+
+$:asymbol # a symbol
+$1 # a number
+$string # a function
+$$latex literal$$
+### header!
+"""
+function break_me_docs end
+
 # issue #11548
 
 module ModuleMacroDoc
@@ -481,24 +495,26 @@ end
 
 # Issue #16359. Error message for invalid doc syntax.
 
-for each in [ # valid syntax
-        :(f()),
-        :(f(x)),
-        :(f(x::Int)),
-        :(f(x...)),
-        :(f(x = 1)),
-        :(f(; x = 1))
-    ]
-    @test Meta.isexpr(Docs.docm("...", each), :block)
-end
-for each in [ # invalid syntax
-        :(f("...")),
-        :(f(1, 2)),
-        :(f(() -> ()))
-    ]
-    result = Docs.docm("...", each)
-    @test Meta.isexpr(result, :call)
-    @test result.args[1] === error
+let __source__ = LineNumberNode(0)
+    for each in [ # valid syntax
+            :(f()),
+            :(f(x)),
+            :(f(x::Int)),
+            :(f(x...)),
+            :(f(x = 1)),
+            :(f(; x = 1))
+        ]
+        @test Meta.isexpr(Docs.docm(__source__, "...", each), :block)
+    end
+    for each in [ # invalid syntax
+            :(f("...")),
+            :(f(1, 2)),
+            :(f(() -> ()))
+        ]
+        result = Docs.docm(__source__, "...", each)
+        @test Meta.isexpr(result, :call)
+        @test result.args[1] === error
+    end
 end
 
 # Issue #15424. Non-markdown docstrings.
@@ -1012,3 +1028,21 @@ end
     """
 )
 
+# issue #22105
+module I22105
+    lineno = @__LINE__
+    """foo docs"""
+    function foo end
+end
+
+let foo_docs = meta(I22105)[@var(I22105.foo)].docs
+    @test length(foo_docs) === 1
+    @test isa(first(foo_docs), Pair)
+    local docstr = first(foo_docs).second
+    @test isa(docstr, DocStr)
+    @test docstr.data[:path] == Base.source_path()
+    @test docstr.data[:linenumber] == I22105.lineno + 1
+    @test docstr.data[:module] === I22105
+    @test docstr.data[:typesig] === Union{}
+    @test docstr.data[:binding] == Binding(I22105, :foo)
+end

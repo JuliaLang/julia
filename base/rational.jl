@@ -1,5 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+    Rational{T<:Integer} <: Real
+
+Rational number type, with numerator and denominator of type `T`.
+"""
 struct Rational{T<:Integer} <: Real
     num::T
     den::T
@@ -22,7 +27,7 @@ end
 """
     //(num, den)
 
-Divide two integers or rational numbers, giving a `Rational` result.
+Divide two integers or rational numbers, giving a [`Rational`](@ref) result.
 
 ```jldoctest
 julia> 3 // 5
@@ -104,7 +109,7 @@ widen(::Type{Rational{T}}) where {T} = Rational{widen(T)}
 """
     rationalize([T<:Integer=Int,] x; tol::Real=eps(x))
 
-Approximate floating point number `x` as a `Rational` number with components
+Approximate floating point number `x` as a [`Rational`](@ref) number with components
 of the given integer type. The result will differ from `x` by no more than `tol`.
 If `T` is not provided, it defaults to `Int`.
 

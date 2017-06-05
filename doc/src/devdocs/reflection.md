@@ -50,7 +50,7 @@ of these fields is the `types` field observed in the example above.
 ## Subtypes
 
 The *direct* subtypes of any `DataType` may be listed using [`subtypes()`](@ref). For example,
-the abstract `DataType``AbstractFloat` has four (concrete) subtypes:
+the abstract `DataType` [`AbstractFloat`](@ref) has four (concrete) subtypes:
 
 ```jldoctest
 julia> subtypes(AbstractFloat)
@@ -99,7 +99,8 @@ and variable assignments:
 julia> expand( :(f() = 1) )
 :(begin
         $(Expr(:method, :f))
-        $(Expr(:method, :f, :((Core.svec)((Core.svec)((Core.Typeof)(f)), (Core.svec)())), CodeInfo(:(begin  # none, line 1:
+        $(Expr(:method, :f, :((Core.svec)((Core.svec)((Core.Typeof)(f)), (Core.svec)())), CodeInfo(:(begin
+        #= none:1 =#
         return 1
     end)), false))
         return f

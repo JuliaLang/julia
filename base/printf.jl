@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Printf
-using Base.Grisu
+using Base: Grisu, GMP
 export @printf, @sprintf
 
 ### printf formatter generation ###
@@ -1128,10 +1128,12 @@ function bigfloat_printf(out, d, flags::String, width::Int, precision::Int, c::C
     write(fmt, UInt8(0))
     printf_fmt = take!(fmt)
     @assert length(printf_fmt) == fmt_len
-    bufsiz = length(DIGITS) - 1
-    lng = ccall((:mpfr_snprintf,:libmpfr), Int32, (Ptr{UInt8}, Culong, Ptr{UInt8}, Ptr{BigFloat}...), DIGITS, bufsiz, printf_fmt, &d)
+    bufsiz = length(DIGITS)
+    lng = ccall((:mpfr_snprintf,:libmpfr), Int32,
+                (Ptr{UInt8}, Culong, Ptr{UInt8}, Ptr{BigFloat}...),
+                DIGITS, bufsiz, printf_fmt, &d)
     lng > 0 || error("invalid printf formatting for BigFloat")
-    unsafe_write(out, pointer(DIGITS), min(lng,bufsiz))
+    unsafe_write(out, pointer(DIGITS), min(lng, bufsiz-1))
     return (false, ())
 end
 

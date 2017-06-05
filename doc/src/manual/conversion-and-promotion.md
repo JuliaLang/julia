@@ -101,13 +101,14 @@ is to it. For example, the method to convert a real number to a boolean is this:
 convert(::Type{Bool}, x::Real) = x==0 ? false : x==1 ? true : throw(InexactError())
 ```
 
-The type of the first argument of this method is a [singleton type](@ref man-singleton-types), `Type{Bool}`, the only
-instance of which is `Bool`. Thus, this method is only invoked when the first argument is the
-type value `Bool`. Notice the syntax used for the first argument: the argument name is omitted
-prior to the `::` symbol, and only the type is given.  This is the syntax in Julia for a function
-argument whose type is specified but whose value is never used in the function body.  In this
-example, since the type is a singleton, there would never be any reason to use its value within
-the body. When invoked, the method determines whether a numeric value is true or false as a boolean,
+The type of the first argument of this method is a [singleton type](@ref man-singleton-types),
+`Type{Bool}`, the only instance of which is [`Bool`](@ref). Thus, this method is only invoked
+when the first argument is the type value `Bool`. Notice the syntax used for the first
+argument: the argument name is omitted prior to the `::` symbol, and only the type is given.
+This is the syntax in Julia for a function argument whose type is specified but whose value
+is never used in the function body. In this example, since the type is a singleton, there
+would never be any reason to use its value within the body. When invoked, the method
+determines whether a numeric value is true or false as a boolean,
 by comparing it to one and zero:
 
 ```jldoctest
@@ -120,7 +121,7 @@ false
 julia> convert(Bool, 1im)
 ERROR: InexactError()
 Stacktrace:
- [1] convert(::Type{Bool}, ::Complex{Int64}) at ./complex.jl:23
+ [1] convert(::Type{Bool}, ::Complex{Int64}) at ./complex.jl:31
 
 julia> convert(Bool, 0im)
 false
@@ -137,7 +138,8 @@ convert(::Type{T}, z::Complex) where {T<:Real} =
 
 ### [Case Study: Rational Conversions](@id man-rational-conversion)
 
-To continue our case study of Julia's `Rational` type, here are the conversions declared in [`rational.jl`](https://github.com/JuliaLang/julia/blob/master/base/rational.jl),
+To continue our case study of Julia's [`Rational`](@ref) type, here are the conversions declared in
+[`rational.jl`](https://github.com/JuliaLang/julia/blob/master/base/rational.jl),
 right after the declaration of the type and its constructors:
 
 ```julia
@@ -187,8 +189,8 @@ since the values are converted to a "greater" type -- i.e. one which can represe
 input values in a single common type. It is important, however, not to confuse this with object-oriented
 (structural) super-typing, or Julia's notion of abstract super-types: promotion has nothing to
 do with the type hierarchy, and everything to do with converting between alternate representations.
-For instance, although every `Int32` value can also be represented as a `Float64` value, `Int32`
-is not a subtype of `Float64`.
+For instance, although every [`Int32`](@ref) value can also be represented as a [`Float64`](@ref) value,
+`Int32` is not a subtype of `Float64`.
 
 Promotion to a common "greater" type is performed in Julia by the `promote` function, which takes
 any number of arguments, and returns a tuple of the same number of values, converted to a common
@@ -286,10 +288,11 @@ promote_rule(::Type{UInt8}, ::Type{Int8}) = Int
 promote_rule(::Type{BigInt}, ::Type{Int8}) = BigInt
 ```
 
-In the latter case, the result type is `BigInt` since `BigInt` is the only type large enough to
-hold integers for arbitrary-precision integer arithmetic.  Also note that one does not need to
-define both `promote_rule(::Type{A}, ::Type{B})` and `promote_rule(::Type{B}, ::Type{A})` -- the
-symmetry is implied by the way `promote_rule` is used in the promotion process.
+In the latter case, the result type is [`BigInt`](@ref) since `BigInt` is the only type
+large enough to hold integers for arbitrary-precision integer arithmetic. Also note that
+one does not need to define both `promote_rule(::Type{A}, ::Type{B})` and
+`promote_rule(::Type{B}, ::Type{A})` -- the symmetry is implied by the way `promote_rule`
+is used in the promotion process.
 
 The `promote_rule` function is used as a building block to define a second function called `promote_type`,
 which, given any number of type objects, returns the common type to which those values, as arguments

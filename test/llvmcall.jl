@@ -177,7 +177,7 @@ module ObjLoadTest
 end
 
 # Test for proper parenting
-if VersionNumber(Base.libllvm_version) >= v"3.6" # llvm 3.6 changed the syntax for a gep, so just ignore this test on older versions
+if Base.libllvm_version >= v"3.6" # llvm 3.6 changed the syntax for a gep, so just ignore this test on older versions
     local foo
     function foo()
         # this IR snippet triggers an optimization relying
