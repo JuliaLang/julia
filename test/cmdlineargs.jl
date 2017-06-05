@@ -256,7 +256,8 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes --startup-file=no`
             # write a julia source file that just prints ARGS to STDOUT
             write(testfile, """
                 println(ARGS)
-            """)
+                """
+            )
             @test readchomp(`$exename $testfile foo -bar --baz`) ==
                 "String[\"foo\", \"-bar\", \"--baz\"]"
             @test readchomp(`$exename $testfile -- foo -bar --baz`) ==
@@ -272,30 +273,46 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes --startup-file=no`
         end
     end
 
-    # test the script name
-    # TODO: Add tests to make sure PROGRAM_FILE is available within the `.juliarc.jl`
-    let a = tempname(), b = tempname()
-        try
-            write(a, """
-                println(@__FILE__)
-                println(PROGRAM_FILE)
-                println(length(ARGS))
-                include(\"$(escape(b))\")
-            """)
-            write(b, """
-                println(@__FILE__)
-                println(PROGRAM_FILE)
-                println(length(ARGS))
-            """)
-            @test split(readchomp(`$exename $a`), '\n') ==
-                ["$a", "$a", "0", "$b", "$a", "0"]
-            @test split(readchomp(`$exename -L $b -e 'exit(0)'`), '\n') ==
-                ["$(realpath(b))", "", "0"]
-            @test split(readchomp(`$exename -L $b $a`), '\n') ==
-                ["$(realpath(b))", "$a", "0", "$a", "$a", "0", "$b", "$a", "0"]
-        finally
-            rm(a)
-            rm(b)
+    # test the program name remains constant
+    mktempdir() do dir
+        a = joinpath(dir, "a.jl")
+        b = joinpath(dir, "b.jl")
+        c = joinpath(dir, ".juliarc.jl")
+
+        write(a, """
+            println(@__FILE__)
+            println(PROGRAM_FILE)
+            include(\"$(escape(b))\")
+            """
+        )
+        write(b, """
+            println(@__FILE__)
+            println(PROGRAM_FILE)
+            """
+        )
+        cp(b, c)
+
+        @test split(readchomp(`$exename $a`), '\n') ==
+            [a, a,
+             b, a]
+        @test split(readchomp(`$exename -L $b -e 'exit(0)'`), '\n') ==
+            [realpath(b), ""]
+        @test split(readchomp(`$exename -L $b $a`), '\n') ==
+            [realpath(b), a,
+             a, a,
+             b, a]
+
+        withenv("HOME" => dir) do
+            @test split(readchomp(`$exename --startup-file=yes -e 'exit(0)'`), '\n') ==
+                [c, ""]
+            @test split(readchomp(`$exename --startup-file=yes -L $b -e 'exit(0)'`), '\n') ==
+                [c, "",
+                 realpath(b), ""]
+            @test split(readchomp(`$exename --startup-file=yes -L $b $a`), '\n') ==
+                [c, a,
+                 realpath(b), a,
+                 a, a,
+                 b, a]
         end
     end
 
