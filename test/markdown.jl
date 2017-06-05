@@ -247,8 +247,8 @@ end
 @test md"###### h6" |> html == "<h6>h6</h6>\n"
 @test md"####### h7" |> html == "<p>####### h7</p>\n"
 @test md"   >" |> html == "<blockquote>\n</blockquote>\n"
-@test md"1. Hello" |> html == "<ol>\n<li><p>Hello</p>\n</li>\n</ol>\n"
-@test md"* World" |> html == "<ul>\n<li><p>World</p>\n</li>\n</ul>\n"
+@test md"1. Hello" |> html == "<ol>\n<li>Hello\n</li>\n</ol>\n"
+@test md"* World" |> html == "<ul>\n<li>World\n</li>\n</ul>\n"
 @test md"# title *blah*" |> html == "<h1>title <em>blah</em></h1>\n"
 @test md"## title *blah*" |> html == "<h2>title <em>blah</em></h2>\n"
 @test md"<https://julialang.org>" |> html == """<p><a href="https://julialang.org">https://julialang.org</a></p>\n"""
@@ -326,9 +326,9 @@ let out =
     <h2>Section <em>important</em></h2>
     <p>Some <strong>bolded</strong></p>
     <ul>
-    <li><p>list1</p>
+    <li>list1
     </li>
-    <li><p>list2</p>
+    <li>list2
     </li>
     </ul>
     </div>"""
@@ -922,7 +922,7 @@ let text =
             </li>
             </ol>
             <ul>
-            <li><p>one</p>
+            <li>one
             </li>
             </ul>
             <p>two</p>
@@ -938,11 +938,11 @@ let text =
             </li>
             </ul>
             <ol>
-            <li><p>foo</p>
+            <li>foo
             </li>
-            <li><p>bar</p>
+            <li>bar
             </li>
-            <li><p>baz</p>
+            <li>baz
             </li>
             </ol>
             """
@@ -1003,21 +1003,21 @@ let text =
     let expected =
             """
             <ol start="42">
-            <li><p>foo</p>
+            <li>foo
             </li>
-            <li><p>bar</p>
+            <li>bar
             </li>
             </ol>
             <ol>
-            <li><p>foo</p>
+            <li>foo
             </li>
-            <li><p>bar</p>
+            <li>bar
             </li>
             </ol>
             <ul>
-            <li><p>foo</p>
+            <li>foo
             </li>
-            <li><p>bar</p>
+            <li>bar
             </li>
             </ul>
             """

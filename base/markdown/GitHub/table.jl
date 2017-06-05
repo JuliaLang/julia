@@ -61,7 +61,7 @@ function github_table(stream::IO, md::MD)
     end
 end
 
-function html(io::IO, md::Table)
+function html(io::IO, md::Table, parent = nothing)
     withtag(io, :table) do
         for (i, row) in enumerate(md.rows)
             withtag(io, :tr) do
@@ -102,7 +102,7 @@ _dash(width, align) =
     align == :c ? ":" * "-"^width * ":" :
     throw(ArgumentError("Invalid alignment $align"))
 
-function plain(io::IO, md::Table)
+function plain(io::IO, md::Table, parent = nothing)
     cells = mapmap(md.rows) do each
         replace(plaininline(each), "|", "\\|")
     end
@@ -119,7 +119,7 @@ function plain(io::IO, md::Table)
     end
 end
 
-function rst(io::IO, md::Table)
+function rst(io::IO, md::Table, parent = nothing)
     cells = mapmap(rstinline, md.rows)
     padcells!(cells, md.align, len = length, min = 3)
     single = ["-"^length(c) for c in cells[1]]
@@ -137,7 +137,7 @@ function rst(io::IO, md::Table)
     end
 end
 
-function term(io::IO, md::Table, columns)
+function term(io::IO, md::Table, columns, parent = nothing)
     cells = mapmap(terminline, md.rows)
     padcells!(cells, md.align, len = ansi_length)
     for i = 1:length(cells)
@@ -150,7 +150,7 @@ function term(io::IO, md::Table, columns)
     end
 end
 
-function latex(io::IO, md::Table)
+function latex(io::IO, md::Table, parent = nothing)
     wrapblock(io, "tabular") do
         align = md.align
         println(io, "{$(join(align, " | "))}")

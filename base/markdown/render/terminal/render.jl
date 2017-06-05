@@ -2,60 +2,61 @@
 
 include("formatting.jl")
 
-const margin = 2
+const MARGIN = 2
 cols(io) = displaysize(io)[2]
 
-function term(io::IO, content::Vector, cols)
+function term(io::IO, content::Vector, cols, parent = nothing)
     isempty(content) && return
     for md in content[1:end-1]
-        term(io, md, cols)
+        term(io, md, cols, parent)
         println(io)
     end
-    term(io, content[end], cols)
+    term(io, content[end], cols, parent)
 end
 
-term(io::IO, md::MD, columns = cols(io)) = term(io, md.content, columns)
+term(io::IO, md::MD, columns = cols(io), parent = nothing) = term(io, md.content, columns, md)
 
-function term(io::IO, md::Paragraph, columns)
-    print(io, " "^margin)
-    print_wrapped(io, width = columns-2margin, pre = " "^margin) do io
+function term(io::IO, md::Paragraph, columns, parent = nothing)
+    print(io, " "^MARGIN)
+    newline = !isa(parent, List) || parent.isloose
+    print_wrapped(io, width = columns-2MARGIN, pre = " "^MARGIN, newline = newline) do io
         terminline(io, md.content)
     end
 end
 
-function term(io::IO, md::BlockQuote, columns)
-    s = sprint(term, md.content, columns - 10)
+function term(io::IO, md::BlockQuote, columns, parent = nothing)
+    s = sprint(term, md.content, columns - 10, md)
     for line in split(rstrip(s), "\n")
-        println(io, " "^margin, "|", line)
+        println(io, " "^MARGIN, "|", line)
     end
 end
 
-function term(io::IO, md::Admonition, columns)
-    print(io, " "^margin, "| ")
+function term(io::IO, md::Admonition, columns, parent = nothing)
+    print(io, " "^MARGIN, "| ")
     with_output_format(:bold, print, io, isempty(md.title) ? md.category : md.title)
-    println(io, "\n", " "^margin, "|")
-    s = sprint(term, md.content, columns - 10)
+    println(io, "\n", " "^MARGIN, "|")
+    s = sprint(term, md.content, columns - 10, md)
     for line in split(rstrip(s), "\n")
-        println(io, " "^margin, "|", line)
+        println(io, " "^MARGIN, "|", line)
     end
 end
 
-function term(io::IO, f::Footnote, columns)
-    print(io, " "^margin, "| ")
+function term(io::IO, f::Footnote, columns, parent = nothing)
+    print(io, " "^MARGIN, "| ")
     with_output_format(:bold, print, io, "[^$(f.id)]")
-    println(io, "\n", " "^margin, "|")
-    s = sprint(term, f.text, columns - 10)
+    println(io, "\n", " "^MARGIN, "|")
+    s = sprint(term, f.text, columns - 10, md)
     for line in split(rstrip(s), "\n")
-        println(io, " "^margin, "|", line)
+        println(io, " "^MARGIN, "|", line)
     end
 end
 
-function term(io::IO, md::List, columns)
+function term(io::IO, md::List, columns, parent = nothing)
     for (i, point) in enumerate(md.items)
-        print(io, " "^2margin, isordered(md) ? "$(i + md.ordered - 1). " : "•  ")
-        print_wrapped(io, width = columns-(4margin+2), pre = " "^(2margin+2),
-                          i = 2margin+2) do io
-            term(io, point, columns - 10)
+        print(io, " "^2MARGIN, isordered(md) ? "$(i + md.ordered - 1). " : "•  ")
+        print_wrapped(io, width = columns-(4MARGIN+2), pre = " "^(2MARGIN+2),
+                          i = 2MARGIN+2) do io
+            term(io, point, columns - 10, md)
         end
     end
 end
@@ -63,40 +64,40 @@ end
 function _term_header(io::IO, md, char, columns)
     text = terminline(md.text)
     with_output_format(:bold, io) do io
-        print(io, " "^(2margin), " ")
+        print(io, " "^(2MARGIN), " ")
         line_no, lastline_width = print_wrapped(io, text,
-                                                width=columns - 4margin; pre=" ")
+                                                width=columns - 4MARGIN; pre=" ")
         line_width = min(1 + lastline_width, columns)
         if line_no > 1
             line_width = max(line_width, div(columns, 3))
         end
-        char != ' ' && println(io, " "^(2margin), string(char) ^ line_width)
+        char != ' ' && println(io, " "^(2MARGIN), string(char) ^ line_width)
     end
 end
 
 const _header_underlines = collect("≡=–-⋅ ")
 # TODO settle on another option with unicode e.g. "≡=≃–∼⋅" ?
 
-function term{l}(io::IO, md::Header{l}, columns)
+function term{l}(io::IO, md::Header{l}, columns, parent = nothing)
     underline = _header_underlines[l]
     _term_header(io, md, underline, columns)
 end
 
-function term(io::IO, md::Code, columns)
+function term(io::IO, md::Code, columns, parent = nothing)
     with_output_format(:cyan, io) do io
         for line in lines(md.code)
-            print(io, " "^margin)
+            print(io, " "^MARGIN)
             println(io, line)
         end
     end
 end
 
-function term(io::IO, br::LineBreak, columns)
+function term(io::IO, br::LineBreak, columns, parent = nothing)
    println(io)
 end
 
-function term(io::IO, br::HorizontalRule, columns)
-   println(io, " " ^ margin, "-" ^ (columns - 2margin))
+function term(io::IO, br::HorizontalRule, columns, parent = nothing)
+   println(io, " " ^ MARGIN, "-" ^ (columns - 2MARGIN))
 end
 
 term(io::IO, x, _) = show(io, MIME"text/plain"(), x)
