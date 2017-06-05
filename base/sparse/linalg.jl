@@ -290,6 +290,27 @@ A_ldiv_B!(U::UpperTriangular{T,<:SparseMatrixCSC{T}}, B::StridedVecOrMat) where 
 (\)(L::LowerTriangular{T,<:SparseMatrixCSC{T}}, B::SparseMatrixCSC) where {T} = A_ldiv_B!(L, Array(B))
 (\)(U::UpperTriangular{T,<:SparseMatrixCSC{T}}, B::SparseMatrixCSC) where {T} = A_ldiv_B!(U, Array(B))
 
+function A_rdiv_B!(A::SparseMatrixCSC{T}, D::Diagonal{T}) where T
+    dd = D.diag
+    if (k = length(dd)) ≠ A.n
+        throw(DimensionMismatch("size(A, 2)=$(A.n) should be size(D, 1)=$k"))
+    end
+    nonz = nonzeros(A)
+    @inbounds for j in 1:k
+        ddj = dd[j]
+        if iszero(ddj)
+            throw(SingularException(j))
+        end
+        for k in nzrange(A, j)
+            nonz[k] /= ddj
+        end
+    end
+    A
+end
+
+A_rdiv_Bc!(A::SparseMatrixCSC{T}, D::Diagonal{T}) where T = A_rdiv_B!(A, conj(D))
+A_rdiv_Bt!(A::SparseMatrixCSC{T}, D::Diagonal{T}) where T = A_rdiv_B!(A, D)
+
 ## triu, tril
 
 function triu(S::SparseMatrixCSC{Tv,Ti}, k::Integer=0) where {Tv,Ti}

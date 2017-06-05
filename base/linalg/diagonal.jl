@@ -266,6 +266,30 @@ function A_ldiv_B!(D::Diagonal{T}, V::AbstractMatrix{T}) where T
     V
 end
 
+Ac_ldiv_B!(D::Diagonal{T}, B::AbstractVecOrMat{T}) where T = A_ldiv_B!(conj(D), B)
+At_ldiv_B!(D::Diagonal{T}, B::AbstractVecOrMat{T}) where T = A_ldiv_B!(D, B)
+
+function A_rdiv_B!(A::AbstractMatrix{T}, D::Diagonal{T}) where T
+    dd = D.diag
+    m, n = size(A)
+    if (k = length(dd)) ≠ n
+        throw(DimensionMismatch("left hand side has $n columns but D is $k by $k"))
+    end
+    @inbounds for j in 1:n
+        ddj = dd[j]
+        if iszero(ddj)
+            throw(SingularException(j))
+        end
+        for i in 1:m
+            A[i, j] /= ddj
+        end
+    end
+    A
+end
+
+A_rdiv_Bc!(A::AbstractMatrix{T}, D::Diagonal{T}) where T = A_rdiv_B!(A, conj(D))
+A_rdiv_Bt!(A::AbstractMatrix{T}, D::Diagonal{T}) where T = A_rdiv_B!(A, D)
+
 # Methods to resolve ambiguities with `Diagonal`
 @inline *(rowvec::RowVector, D::Diagonal) = transpose(D * transpose(rowvec))
 @inline A_mul_Bt(D::Diagonal, rowvec::RowVector) = D*transpose(rowvec)
