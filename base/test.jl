@@ -18,7 +18,7 @@ export @testset
 # Legacy approximate testing functions, yet to be included
 export @inferred
 export detect_ambiguities
-export GenericString
+export GenericString, GenericSet, GenericDict
 
 #-----------------------------------------------------------------------
 
@@ -1181,5 +1181,25 @@ end
 Base.convert(::Type{GenericString}, s::AbstractString) = GenericString(s)
 Base.endof(s::GenericString) = endof(s.string)
 Base.next(s::GenericString, i::Int) = next(s.string, i)
+
+"""
+The `GenericSet` can be used to test generic set APIs that program to
+the `AbstractSet` interface, in order to ensure that functions can work
+with set types besides the standard `Set` and `IntSet` types.
+"""
+struct GenericSet{T} <: AbstractSet{T}
+    s::AbstractSet{T}
+end
+
+"""
+The `GenericDict` can be used to test generic dict APIs that program to
+the `Associative` interface, in order to ensure that functions can work
+with associative types besides the standard `Dict` type.
+"""
+struct GenericDict{K,V} <: Associative{K,V}
+    s::Associative{K,V}
+end
+
+Base.get(s::GenericDict, x, y) = get(s.s, x, y)
 
 end # module
