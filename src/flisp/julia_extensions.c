@@ -149,10 +149,8 @@ int jl_op_suffix_char(uint32_t wc)
         size_t i, opsuffs_len = sizeof(opsuffs) / (sizeof(uint32_t));
         htable_t *h = htable_new(&jl_opsuffs, opsuffs_len);
         assert(sizeof(uint32_t) <= sizeof(void*));
-        for (i = 0; i < opsuffs_len; ++i) {
-            assert((void*)(uintptr_t)opsuffs[i] != HT_NOTFOUND);
+        for (i = 0; i < opsuffs_len; ++i)
             wcharhash_put_r(h, (void*)((uintptr_t)opsuffs[i]), NULL, NULL);
-        }
     }
     if (wc < 0xA1 || wc > 0x10ffff) return 0;
     utf8proc_category_t cat = utf8proc_category((utf8proc_int32_t) wc);
