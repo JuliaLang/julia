@@ -98,6 +98,15 @@ _bound_vararg_specificity_1{T}(::Type{Array{T,1}}, d::Int) = 1
 @test args_morespecific(Tuple{Array}, Tuple{AbstractVector})
 @test args_morespecific(Tuple{Matrix}, Tuple{AbstractVector})
 
+# issue #22164 and #22002
+let A = Tuple{Type{D},D} where D<:Pair,
+    B = Tuple{Type{Any}, Any},
+    C = Tuple{Type{Pair}, Pair}
+    @test  args_morespecific(C, A)
+    @test !args_morespecific(A, B)
+    @test !args_morespecific(C, B)
+end
+
 # issue #12939
 module Issue12939
 abstract type Abs; end
