@@ -765,16 +765,22 @@ if is_windows()
 
 end
 
+# compute sizeof correctly for strings, arrays, and subarrays of bytes
+_sizeof(a) = sizeof(a)
+_sizeof(a::FastContiguousSubArray{UInt8,N,<:Array{UInt8}} where N) = length(a)
+
 """
     crc32c(data, crc::UInt32=0x00000000)
+
 Compute the CRC-32c checksum of the given `data`, which can be
-an `Array{UInt8}` or a `String`.  Optionally, you can pass
-a starting `crc` integer to be mixed in with the checksum.
+an `Array{UInt8}`, a contiguous subarray thereof, or a `String`.  Optionally, you can pass
+a starting `crc` integer to be mixed in with the checksum.  The `crc` parameter
+can be used to compute a checksum on data divided into chunks: performing
+`crc32c(data2, crc32c(data1))` is equivalent to the checksum of `[data1; data2]`.
 (Technically, a little-endian checksum is computed.)
 """
-function crc32c end
-crc32c(a::Union{Array{UInt8},String}, crc::UInt32=0x00000000) =
-    ccall(:jl_crc32c, UInt32, (UInt32, Ptr{UInt8}, Csize_t), crc, a, sizeof(a))
+crc32c(a::Union{Array{UInt8},FastContiguousSubArray{UInt8,N,<:Array{UInt8}} where N,String}, crc::UInt32=0x00000000) =
+    ccall(:jl_crc32c, UInt32, (UInt32, Ptr{UInt8}, Csize_t), crc, a, _sizeof(a))
 
 """
     @kwdef typedef
