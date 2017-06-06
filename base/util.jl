@@ -638,7 +638,7 @@ will always be called.
 function securezero! end
 @noinline securezero!(a::AbstractArray{<:Number}) = fill!(a, 0)
 securezero!(s::String) = unsafe_securezero!(pointer(s), sizeof(s))
-@noinline unsafe_securezero!(p::Ptr{T}, len::Integer=1) where T =
+@noinline unsafe_securezero!(p::Ptr{T}, len::Integer=1) where {T} =
     ccall(:memset, Ptr{T}, (Ptr{T}, Cint, Csize_t), p, 0, len*sizeof(T))
 unsafe_securezero!(p::Ptr{Void}, len::Integer=1) = Ptr{Void}(unsafe_securezero!(Ptr{UInt8}(p), len))
 
