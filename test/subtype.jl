@@ -1108,3 +1108,8 @@ end
 @testintersect(Tuple{Type{B21613{Tuple{L},L}} where L, Any},
                Tuple{Type{SA}, Tuple} where SA<:(A21613{S} where S<:Tuple),
                Tuple{Type{B21613{Tuple{L},L}} where L, Tuple})
+
+# issue #22239
+@testintersect(Val{Pair{T,T}} where T,
+               Val{Pair{Int,T}} where T,
+               Val{Pair{Int,Int}})
