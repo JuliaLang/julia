@@ -1287,7 +1287,7 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
         return ub;
     }
     else if (bb->constraintkind == 0) {
-        if (!jl_is_typevar(a)) {
+        if (!jl_is_typevar(bb->ub) && !jl_is_typevar(a)) {
             if (try_subtype_in_env(bb->ub, a, e))
                 return (jl_value_t*)b;
         }
