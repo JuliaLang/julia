@@ -748,6 +748,7 @@ end
 
 # Deprecate manually vectorized clamp methods in favor of compact broadcast syntax
 @deprecate clamp(A::AbstractArray, lo, hi) clamp.(A, lo, hi)
+@deprecate clamp!(A::AbstractArray, lo, hi) A .= clamp.(A, lo, hi)
 
 # Deprecate manually vectorized round methods in favor of compact broadcast syntax
 @deprecate round(M::Bidiagonal) round.(M)
