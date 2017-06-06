@@ -65,7 +65,7 @@ clamp( x, ::Type{T} ) where {T} = clamp( x, typemin(T), typemax(T) ) % T
 """
     clamp!(array::AbstractArray, lo, hi)
     clamp!(array::AbstractArray, T)
-    
+
 Restrict values in `array` to the specified range, in-place.  If the type `T` is
 given `lo` and `hi` are typemin(T) and typemax(T) respectively
 See also [`clamp`](@ref).
