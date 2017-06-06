@@ -698,7 +698,6 @@ julia> dot([[0 1; -1 0], [im 0; 0 im]], [1; 1])
 dot(x::AbstractVector, y::AbstractVector) = vecdot(x, y)
 dot(x::AbstractArray, y::Number) = ctranspose(x) * y
 dot(x::Number, y::AbstractArray) = conj(x) * y
-dot(x::AbstractArray, y::AbstractArray) = ctranspose(x) * y
 
 
 ###########################################################################################
