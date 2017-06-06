@@ -302,7 +302,7 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes --startup-file=no`
              a, a,
              b, a]
 
-        withenv("HOME" => dir) do
+        withenv((is_windows() ? "USERPROFILE" : "HOME") => dir) do
             @test split(readchomp(`$exename --startup-file=yes -e 'exit(0)'`), '\n') ==
                 [c, ""]
             @test split(readchomp(`$exename --startup-file=yes -L $b -e 'exit(0)'`), '\n') ==
