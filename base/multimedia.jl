@@ -229,7 +229,7 @@ end
 macro display(exs...)
     blk = Expr(:block)
     for ex in exs
-        push!(blk.args, :(print($(sprint(show_unquoted,ex)*" = "))))
+        push!(blk.args, :(print($(sprint(print, ex)), " = ")))
         push!(blk.args, :(display(begin value=$(esc(ex)) end)))
         push!(blk.args, :(println()))
     end
