@@ -413,6 +413,22 @@ Library improvements
     that dimension's length will be computed such that its product with all the other dimensions is equal
     to the length of the original array ([#19919]).
 
+  * The new `to_indices` function provides a uniform interface for index conversions,
+    taking an array and a tuple of indices as arguments and returning a tuple of
+    integers and/or arrays of supported scalar indices. It will throw an `ArgumentError`
+    for any unsupported indices, and the returned arrays should be iterated over (and
+    not indexed into) to support more efficient logical indexing ([#19730]).
+
+    + Using colons (`:`) to represent a collection of indices is deprecated. They now must be
+      explicitly converted to a specialized array of integers with the `to_indices` function.
+      As a result, the type of `SubArray`s that represent views over colon indices has changed.
+
+    + Logical indexing is now more efficient. Logical arrays are converted by `to_indices` to
+      a lazy, iterable collection of indices that doesn't support indexing. A deprecation
+      provides indexing support with O(n) lookup.
+
+    + The performance of indexing with `CartesianIndex`es is also improved in many situations.
+
   * A new `titlecase` function was added, to capitalize the first character of each word within a string ([#19469]).
 
   * `any` and `all` now always short-circuit, and `mapreduce` never short-circuits ([#19543]).
