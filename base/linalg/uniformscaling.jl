@@ -171,23 +171,14 @@ function isapprox(J1::UniformScaling{T}, J2::UniformScaling{S};
             rtol::Real=Base.rtoldefault(T,S), atol::Real=0, nans::Bool=false) where {T<:Number,S<:Number}
     isapprox(J1.λ, J2.λ, rtol=rtol, atol=atol, nans=nans)
 end
-
-function Base.isapprox(J::UniformScaling{TJ}, A::AbstractMatrix{TA};
-                  rtol::Real=Base.rtoldefault(TA,TJ), atol::Real=0, nans::Bool=false) where {TA,TJ<:Number}
-    n = LinAlg.checksquare(A)
-    res = true
-    @inbounds for j = 1:n
-        for i = 1:n
-            if !Base.isapprox(A[i,j],i == j ? J.λ : zero(TA),rtol=rtol,atol=atol,nans=nans)
-                return false
-            end
-        end
-    end
-    return true
+function isapprox(J::UniformScaling,A::AbstractMatrix;kwargs...)
+    n = checksquare(A)
+    D = diagm(J.λ*ones(typeof(J.λ),n))
+    return isapprox(D,A;kwargs...)
 end
-function Base.isapprox(A::AbstractMatrix{TA},J::UniformScaling{TJ};
-                  rtol::Real=Base.rtoldefault(TA,TJ), atol::Real=0, nans::Bool=false) where {TA,TJ<:Number}
-    return Base.isapprox(J,A,rtol=rtol,atol=atol,nans=nans)
+function isapprox(A::AbstractMatrix,J::UniformScaling;
+                  kwargs...)
+    return isapprox(J,A;kwargs...)
 end
 
 function copy!(A::AbstractMatrix, J::UniformScaling)
