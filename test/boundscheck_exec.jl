@@ -209,4 +209,14 @@ else
     @test_throws BoundsError V1()
 end
 
+# This tests both the bounds check elision and the behavior of `jl_array_isassigned`
+# For `isbits` array the `ccall` should return a constant `true` and does not access
+# the array
+inbounds_isassigned(a, i) = @inbounds return isassigned(a, i)
+if bc_opt == bc_default || bc_opt == bc_off
+    @test inbounds_isassigned(Int[], 2) == true
+else
+    @test inbounds_isassigned(Int[], 2) == false
+end
+
 end
