@@ -4,15 +4,15 @@
 
 for (G, A) in ((GenericSet, AbstractSet),
                (GenericDict, Associative))
-   @eval begin
-      Base.convert(::Type{$G}, s::$A) = $G(s)
-       Base.done(s::$G, state) = done(s.s, state)
-      Base.next(s::$G, state) = next(s.s, state)
-  end
-   for f in (:eltype, :isempty, :length, :start)
-       @eval begin
-           Base.$f(s::$G) = $f(s.s)
-       end
+    @eval begin
+        Base.convert(::Type{$G}, s::$A) = $G(s)
+        Base.done(s::$G, state) = done(s.s, state)
+        Base.next(s::$G, state) = next(s.s, state)
+    end
+    for f in (:eltype, :isempty, :length, :start)
+        @eval begin
+            Base.$f(s::$G) = $f(s.s)
+        end
     end
 end
 
