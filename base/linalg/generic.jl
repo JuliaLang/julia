@@ -678,7 +678,7 @@ dot(x::Number, y::Number) = vecdot(x, y)
     dot(x, y)
     ⋅(x,y)
 
-Compute the dot product. For complex vectors, the first vector is conjugated.
+Compute the dot product. For complex vectors, the first vector is conjugated. For vectors of matrices, the matrices in the first vector are also transposed.
 
 # Example
 
@@ -688,9 +688,18 @@ julia> dot([1; 1], [2; 3])
 
 julia> dot([im; im], [1; 1])
 0 - 2im
+
+julia> dot([[0 1; -1 0], [im 0; 0 im]], [1; 1])
+2×2 Array{Complex{Int64},2}:
+ 0-1im  -1+0im
+ 1+0im   0-1im
 ```
 """
 dot(x::AbstractVector, y::AbstractVector) = vecdot(x, y)
+dot(x::AbstractArray, y::Number) = ctranspose(x) * y
+dot(x::Number, y::AbstractArray) = conj(x) * y
+dot(x::AbstractArray, y::AbstractArray) = ctranspose(x) * y
+
 
 ###########################################################################################
 
