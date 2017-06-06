@@ -15,11 +15,22 @@
 
     @test clamp.([0, 1, 2, 3, 4], 1.0, 3.0) == [1.0, 1.0, 2.0, 3.0, 3.0]
     @test clamp.([0 1; 2 3], 1.0, 3.0) == [1.0 1.0; 2.0 3.0]
+
+    @test clamp(-200,Int8) === typemin(Int8)
+    @test clamp(100,Int8) === Int8(100)
+    @test clamp(200,Int8) === typemax(Int8)
+
     begin
         x = [0.0, 1.0, 2.0, 3.0, 4.0]
         clamp!(x, 1, 3)
         @test x == [1.0, 1.0, 2.0, 3.0, 3.0]
     end
+    begin
+        x = [-1000,0,1000]
+        clamp!(x, UInt8)
+        @test x == UInt8[0, 0, 255]
+    end
+
 end
 
 @testset "constants" begin
