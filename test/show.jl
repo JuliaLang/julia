@@ -764,3 +764,21 @@ end
 @test static_shown(Symbol("")) == "Symbol(\"\")"
 @test static_shown(Symbol("a/b")) == "Symbol(\"a/b\")"
 @test static_shown(Symbol("a-b")) == "Symbol(\"a-b\")"
+
+
+# Test @show
+fname = tempname()
+f = open(fname, "w")
+redirect_stdout(f)
+@show x = 1 y = 2
+close(f)
+@test readstring(fname) == "x = 1 = 1\ny = 2 = 2\n"
+rm(fname)
+
+fname = tempname()
+f = open(fname, "w")
+redirect_stdout(f)
+@show zeros(2, 2)
+close(f)
+@test readstring(fname) == "zeros(2, 2) = 2×2 Array{Float64,2}:\n 0.0  0.0\n 0.0  0.0\n"
+rm(fname)
