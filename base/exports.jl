@@ -1271,6 +1271,7 @@ export
 
     # output
     @show,
+    @display,
     @printf,
     @sprintf,
 
