@@ -172,6 +172,24 @@ function isapprox(J1::UniformScaling{T}, J2::UniformScaling{S};
     isapprox(J1.λ, J2.λ, rtol=rtol, atol=atol, nans=nans)
 end
 
+function Base.isapprox(J::UniformScaling{TJ}, A::AbstractMatrix{TA};
+                  rtol::Real=Base.rtoldefault(TA,TJ), atol::Real=0, nans::Bool=false) where {TA,TJ<:Number}
+    n = LinAlg.checksquare(A)
+    res = true
+    @inbounds for j = 1:n
+        for i = 1:n
+            if !Base.isapprox(A[i,j],i == j ? J.λ : zero(TA),rtol=rtol,atol=atol,nans=nans)
+                return false
+            end
+        end
+    end
+    return true
+end
+function Base.isapprox(A::AbstractMatrix{TA},J::UniformScaling{TJ};
+                  rtol::Real=Base.rtoldefault(TA,TJ), atol::Real=0, nans::Bool=false) where {TA,TJ<:Number}
+    return Base.isapprox(J,A,rtol=rtol,atol=atol,nans=nans)
+end
+
 function copy!(A::AbstractMatrix, J::UniformScaling)
     size(A,1)==size(A,2) || throw(DimensionMismatch("a UniformScaling can only be copied to a square matrix"))
     fill!(A, 0)
