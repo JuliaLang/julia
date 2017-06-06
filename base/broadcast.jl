@@ -6,10 +6,13 @@ using Base.Cartesian
 using Base: linearindices, tail, OneTo, to_shape,
             _msk_end, unsafe_bitgetindex, bitcache_chunks, bitcache_size, dumpbitcache,
             nullable_returntype, null_safe_op, hasvalue, isoperator
-import Base: broadcast, broadcast!
-export broadcast_getindex, broadcast_setindex!, dotview, @__dot__
+import Base: broadcast, broadcast!, @_pure_meta
+export broadcast_getindex, broadcast_setindex!, dotview, @__dot__, isfusing
 
 const ScalarType = Union{Type{Any}, Type{Nullable}}
+
+# containers can override isfusing to disable broadcast fusion for specific container types
+isfusing(args...) = (@_pure_meta; true)
 
 ## Broadcasting utilities ##
 # fallbacks for some special cases
