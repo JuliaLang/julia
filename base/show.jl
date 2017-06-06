@@ -317,13 +317,14 @@ function sourceinfo_slotnames(src::CodeInfo)
 end
 
 function show(io::IO, l::Core.MethodInstance)
-    if isdefined(l, :def)
-        if l.def.isstaged && l === l.def.generator
+    def = l.def
+    if isa(def, Method)
+        if def.isstaged && l === def.generator
             print(io, "MethodInstance generator for ")
-            show(io, l.def)
+            show(io, def)
         else
             print(io, "MethodInstance for ")
-            show_tuple_as_call(io, l.def.name, l.specTypes)
+            show_tuple_as_call(io, def.name, l.specTypes)
         end
     else
         print(io, "Toplevel MethodInstance thunk")
@@ -1097,12 +1098,30 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type)
     nothing
 end
 
+resolvebinding(ex::ANY) = ex
+resolvebinding(ex::QuoteNode) = ex.value
+resolvebinding(ex::Symbol) = resolvebinding(GlobalRef(Main, ex))
+function resolvebinding(ex::Expr)
+    if ex.head == :. && isa(ex.args[2], Symbol)
+        parent = resolvebinding(ex.args[1])
+        if isa(parent, Module)
+            return resolvebinding(GlobalRef(parent, ex.args[2]))
+        end
+    end
+    return nothing
+end
+function resolvebinding(ex::GlobalRef)
+    isdefined(ex.mod, ex.name) || return nothing
+    isconst(ex.mod, ex.name) || return nothing
+    m = getfield(ex.mod, ex.name)
+    isa(m, Module) || return nothing
+    return m
+end
+
 function ismodulecall(ex::Expr)
     return ex.head == :call && (ex.args[1] === GlobalRef(Base,:getfield) ||
                                 ex.args[1] === GlobalRef(Core,:getfield)) &&
-        isa(ex.args[2], Symbol) &&
-        isdefined(current_module(), ex.args[2]) &&
-        isa(getfield(current_module(), ex.args[2]), Module)
+           isa(resolvebinding(ex.args[2]), Module)
 end
 
 function show(io::IO, tv::TypeVar)

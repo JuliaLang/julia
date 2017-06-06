@@ -119,19 +119,23 @@
 ;; called by jl_eval_module_expr
 (define (module-default-defs e)
   (jl-expand-to-thunk
-   (let ((name (caddr e))
-         (body (cadddr e)))
-     (let ((loc (cadr body)))
-       `(block
-         ,(let ((x (if (eq? name 'x) 'y 'x)))
-            `(= (call eval ,x)
-                (block
-                 ,loc
-                 (call (core eval) ,name ,x))))
-         (= (call eval m x)
-            (block
-             ,loc
-             (call (core eval) m x))))))))
+   (let* ((name (caddr e))
+          (body (cadddr e))
+          (loc (cadr body))
+          (x (if (eq? name 'x) 'y 'x)))
+     `(block
+       (= (call eval ,x)
+          (block
+           ,loc
+           (call (core eval) ,name ,x)))
+       (= (call eval m ,x)
+          (block
+           ,loc
+           (call (core eval) m ,x)))
+       (= (call include ,x)
+          (block
+           ,loc
+           (call (top include) ,name ,x)))))))
 
 ;; parse only, returning end position, no expansion.
 (define (jl-parse-one-string s pos0 greedy)

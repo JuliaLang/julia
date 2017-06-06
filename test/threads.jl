@@ -136,7 +136,7 @@ threaded_gc_locked(Mutex)
 
 # Issue 14726
 # Make sure that eval'ing in a different module doesn't mess up other threads
-orig_curmodule14726 = current_module()
+orig_curmodule14726 = @__MODULE__
 main_var14726 = 1
 module M14726
 module_var14726 = 1
@@ -147,15 +147,15 @@ end
         @eval M14726 module_var14726 = $j
     end
 end
-@test isdefined(:orig_curmodule14726)
-@test isdefined(:main_var14726)
-@test current_module() == orig_curmodule14726
+@test @isdefined(orig_curmodule14726)
+@test @isdefined(main_var14726)
+@test @__MODULE__() == orig_curmodule14726
 
 @threads for i in 1:100
     # Make sure current module is not null.
     # The @test might not be particularly meaningful currently since the
     # thread infrastructures swallows the error. (Same below)
-    @test current_module() == orig_curmodule14726
+    @test @__MODULE__() == orig_curmodule14726
 end
 
 module M14726_2
@@ -166,7 +166,7 @@ using Base.Threads
     # pushes the work onto the threads.
     # The @test might not be particularly meaningful currently since the
     # thread infrastructures swallows the error. (See also above)
-    @test current_module() == M14726_2
+    @test @__MODULE__() == M14726_2
 end
 end
 

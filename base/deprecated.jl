@@ -103,14 +103,13 @@ function firstcaller(bt::Array{Ptr{Void},1}, funcsyms)
     return lkup
 end
 
-deprecate(s::Symbol) = deprecate(current_module(), s)
 deprecate(m::Module, s::Symbol) = ccall(:jl_deprecate_binding, Void, (Any, Any), m, s)
 
 macro deprecate_binding(old, new, export_old=true)
-    Expr(:toplevel,
+    return Expr(:toplevel,
          export_old ? Expr(:export, esc(old)) : nothing,
          Expr(:const, Expr(:(=), esc(old), esc(new))),
-         Expr(:call, :deprecate, Expr(:quote, old)))
+         Expr(:call, :deprecate, __module__, Expr(:quote, old)))
 end
 
 # BEGIN 0.6-alpha deprecations (delete when 0.6 is released)
@@ -630,7 +629,7 @@ for (Bsig, A1sig, A2sig, gbb, funcname) in
             func       = @get! cache  f  gen_broadcast_function_sparse($gbb, f, ($A1sig) <: SparseMatrixCSC)
             # need eval because func was just created by gen_broadcast_function_sparse
             # TODO: convert this to a generated function
-            eval(current_module(), Expr(:body, Expr(:return, Expr(:call, QuoteNode(func), QuoteNode(B), QuoteNode(A1), QuoteNode(A2)))))
+            eval(_current_module(), Expr(:body, Expr(:return, Expr(:call, QuoteNode(func), QuoteNode(B), QuoteNode(A1), QuoteNode(A2)))))
             return B
         end
     end  # let broadcast_cache
@@ -1361,6 +1360,48 @@ end
 @deprecate cholfact(A::StridedMatrix, uplo::Symbol) cholfact(Hermitian(A, uplo))
 @deprecate cholfact!(A::StridedMatrix, uplo::Symbol, ::Type{Val{true}}; tol = 0.0) cholfact!(Hermitian(A, uplo), Val{true}, tol = tol)
 @deprecate cholfact(A::StridedMatrix, uplo::Symbol, ::Type{Val{true}}; tol = 0.0) cholfact(Hermitian(A, uplo), Val{true}, tol = tol)
+
+# also remove all support machinery in src for current_module when removing this deprecation
+# and make Base.include an error
+_current_module() = ccall(:jl_get_current_module, Ref{Module}, ())
+@noinline function binding_module(s::Symbol)
+    depwarn("binding_module(symbol) is deprecated, use `binding_module(module, symbol)` instead.", :binding_module)
+    return binding_module(_current_module(), s)
+end
+@noinline function expand(x::ANY)
+    depwarn("expand(x) is deprecated, use `expand(module, x)` instead.", :expand)
+    return expand(_current_module(), x)
+end
+@noinline function macroexpand(x::ANY)
+    depwarn("macroexpand(x) is deprecated, use `macroexpand(module, x)` instead.", :macroexpand)
+    return macroexpand(_current_module(), x)
+end
+@noinline function isconst(s::Symbol)
+    depwarn("isconst(symbol) is deprecated, use `isconst(module, symbol)` instead.", :isconst)
+    return isconst(_current_module(), s)
+end
+@noinline function include_string(txt::AbstractString, fname::AbstractString)
+    depwarn("include_string(string, fname) is deprecated, use `include_string(module, string, fname)` instead.", :include_string)
+    return include_string(_current_module(), txt, fname)
+end
+@noinline function include_string(txt::AbstractString)
+    depwarn("include_string(string) is deprecated, use `include_string(module, string)` instead.", :include_string)
+    return include_string(_current_module(), txt, "string")
+end
+
+"""
+    current_module() -> Module
+
+Get the *dynamically* current `Module`, which is the `Module` code is currently being read
+from. In general, this is not the same as the module containing the call to this function.
+
+DEPRECATED: use @__MODULE__ instead
+"""
+@noinline function current_module()
+    depwarn("current_module() is deprecated, use `@__MODULE__` instead.", :current_module)
+    return _current_module()
+end
+export current_module
 
 # END 0.7 deprecations
 

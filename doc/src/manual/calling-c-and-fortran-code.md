@@ -847,21 +847,19 @@ case, the expression must evaluate to a `Ptr`, which will be used as the address
 function to call. This behavior occurs when the first [`ccall`](@ref) argument contains references
 to non-constants, such as local variables, function arguments, or non-constant globals.
 
-For example, you might look up the function via `dlsym`, then cache it in a global
-variable for that session. For example:
+For example, you might look up the function via `dlsym`,
+then cache it in a shared reference for that session. For example:
 
 ```julia
 macro dlsym(func, lib)
-    z, zlocal = gensym(string(func)), gensym()
-    eval(current_module(), :(global $z = C_NULL))
-    z = esc(z)
+    z = Ref{Ptr{Void}}(C_NULL)
     quote
-        let $zlocal::Ptr{Void} = $z::Ptr{Void}
-            if $zlocal == C_NULL
-                $zlocal = dlsym($(esc(lib))::Ptr{Void}, $(esc(func)))
-                global $z = $zlocal
+        let zlocal = $z[]
+            if zlocal == C_NULL
+                zlocal = dlsym($(esc(lib))::Ptr{Void}, $(esc(func)))::Ptr{Void}
+                $z[] = $zlocal
             end
-            $zlocal
+            zlocal
         end
     end
 end

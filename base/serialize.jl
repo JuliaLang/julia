@@ -404,7 +404,7 @@ end
 
 function serialize(s::AbstractSerializer, linfo::Core.MethodInstance)
     serialize_cycle(s, linfo) && return
-    isdefined(linfo, :def) && error("can only serialize toplevel MethodInstance objects")
+    isa(linfo.def, Module) || error("can only serialize toplevel MethodInstance objects")
     writetag(s.io, METHODINSTANCE_TAG)
     serialize(s, linfo.inferred)
     if isdefined(linfo, :inferred_const)
@@ -415,6 +415,8 @@ function serialize(s::AbstractSerializer, linfo::Core.MethodInstance)
     serialize(s, linfo.sparam_vals)
     serialize(s, linfo.rettype)
     serialize(s, linfo.specTypes)
+    serialize(s, linfo.def)
+    nothing
 end
 
 function serialize(s::AbstractSerializer, t::Task)
@@ -765,7 +767,7 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
         meth = meth::Method
         makenew = false
     else
-        meth = ccall(:jl_new_method_uninit, Ref{Method}, ())
+        meth = ccall(:jl_new_method_uninit, Ref{Method}, (Any,), Main)
         makenew = true
     end
     deserialize_cycle(s, meth)
@@ -798,6 +800,7 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
             linfo = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, ())
             linfo.specTypes = Tuple
             linfo.inferred = template
+            linfo.def = meth
             meth.generator = linfo
         end
         ftype = ccall(:jl_first_argument_datatype, Any, (Any,), sig)::DataType
@@ -820,6 +823,7 @@ function deserialize(s::AbstractSerializer, ::Type{Core.MethodInstance})
     linfo.sparam_vals = deserialize(s)::SimpleVector
     linfo.rettype = deserialize(s)
     linfo.specTypes = deserialize(s)
+    linfo.def = deserialize(s)::Module
     return linfo
 end
 
@@ -920,8 +924,8 @@ function deserialize_typename(s::AbstractSerializer, number)
         # TODO: there's an unhanded cycle in the dependency graph at this point:
         # while deserializing super and/or types, we may have encountered
         # tn.wrapper and throw UndefRefException before we get to this point
-        ndt = ccall(:jl_new_datatype, Any, (Any, Any, Any, Any, Any, Cint, Cint, Cint),
-                    tn, super, parameters, names, types,
+        ndt = ccall(:jl_new_datatype, Any, (Any, Any, Any, Any, Any, Any, Cint, Cint, Cint),
+                    tn, tn.module, super, parameters, names, types,
                     abstr, mutabl, ninitialized)
         tn.wrapper = ndt.name.wrapper
         ccall(:jl_set_const, Void, (Any, Any, Any), tn.module, tn.name, tn.wrapper)

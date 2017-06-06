@@ -1286,13 +1286,12 @@ Run a command object asynchronously, returning the resulting `Process` object.
 spawn
 
 """
-    isdefined([m::Module,] s::Symbol)
+    isdefined(m::Module, s::Symbol)
     isdefined(object, s::Symbol)
     isdefined(object, index::Int)
 
 Tests whether an assignable location is defined. The arguments can be a module and a symbol
-or a composite object and field name (as a symbol) or index. With a single symbol argument,
-tests whether a global variable with that name is defined in [`current_module()`](@ref).
+or a composite object and field name (as a symbol) or index.
 """
 isdefined
 

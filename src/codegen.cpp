@@ -1169,7 +1169,7 @@ jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t **pli, jl_code_info_t 
         jl_error("functions compiled with custom codegen params mustn't be cached");
 
     // Fast path for the already-compiled case
-    if (li->def != NULL) {
+    if (jl_is_method(li->def.method)) {
         decls = li->functionObjectsDecls;
         bool already_compiled = params->cached && decls.functionObject != NULL;
         if (!src) {
@@ -1190,10 +1190,8 @@ jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t **pli, jl_code_info_t 
     {
         // Step 1: Re-check if this was already compiled (it may have been while
         // we waited at the lock).
-        if (li->def == NULL) {
+        if (!jl_is_method(li->def.method)) {
             src = (jl_code_info_t*)li->inferred;
-            if (src && (jl_value_t*)src != jl_nothing)
-                src = jl_uncompress_ast(li->def, (jl_array_t*)src);
             if (decls.functionObject != NULL || !src || !jl_is_code_info(src) || li->jlcall_api == 2) {
                 goto locked_out;
             }
@@ -1209,7 +1207,7 @@ jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t **pli, jl_code_info_t 
             src = (jl_code_info_t*)li->inferred;
             if (src) {
                 if ((jl_value_t*)src != jl_nothing)
-                    src = jl_uncompress_ast(li->def, (jl_array_t*)src);
+                    src = jl_uncompress_ast(li->def.method, (jl_array_t*)src);
                 if (!jl_is_code_info(src)) {
                     src = jl_type_infer(pli, world, 0);
                     li = *pli;
@@ -1229,7 +1227,7 @@ jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t **pli, jl_code_info_t 
         }
         else {
             if ((jl_value_t*)src != jl_nothing)
-                src = jl_uncompress_ast(li->def, (jl_array_t*)src);
+                src = jl_uncompress_ast(li->def.method, (jl_array_t*)src);
         }
         assert(jl_is_code_info(src));
 
@@ -1249,7 +1247,7 @@ jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t **pli, jl_code_info_t 
                 pdecls = &decls;
             else if (li->min_world <= world && li->max_world >= world)
                 pdecls = &li->functionObjectsDecls;
-            else if (li->def == NULL)
+            else if (!jl_is_method(li->def.method)) // toplevel thunk
                 pdecls = &li->functionObjectsDecls;
             else
                 pdecls = &decls;
@@ -1267,7 +1265,8 @@ jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t **pli, jl_code_info_t 
             builder.restoreIP(old);
             builder.SetCurrentDebugLocation(olddl);
             JL_UNLOCK(&codegen_lock); // Might GC
-            jl_rethrow_with_add("error compiling %s", jl_symbol_name(li->def ? li->def->name : anonymous_sym));
+            const char *mname = jl_symbol_name(jl_is_method(li->def.method) ? li->def.method->name : anonymous_sym);
+            jl_rethrow_with_add("error compiling %s", mname);
         }
         Function *f = (Function*)decls.functionObject;
         Function *specf = (Function*)decls.specFunctionObject;
@@ -1278,7 +1277,7 @@ jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t **pli, jl_code_info_t 
             // Step 4. Prepare debug info to receive this function
             // record that this function name came from this linfo,
             // so we can build a reverse mapping for debug-info.
-            bool toplevel = li->def == NULL;
+            bool toplevel = !jl_is_method(li->def.method);
             if (!toplevel) {
                 const DataLayout &DL =
 #if JL_LLVM_VERSION >= 30500
@@ -1301,13 +1300,13 @@ jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t **pli, jl_code_info_t 
                 // don't delete code when debugging level >= 2
                 jl_options.debug_level <= 1 &&
                 // don't delete toplevel code
-                li->def &&
+                jl_is_method(li->def.method) &&
                 // don't change inferred state
                 li->inferred &&
                 // and there is something to delete (test this before calling jl_ast_flag_inlineable)
                 li->inferred != jl_nothing &&
                 // don't delete the code for the generator
-                li != li->def->generator &&
+                li != li->def.method->generator &&
                 // don't delete inlineable code, unless it is constant
                 (li->jlcall_api == 2 || !jl_ast_flag_inlineable((jl_array_t*)li->inferred)) &&
                 // don't delete code when generating a precompile file
@@ -1430,7 +1429,7 @@ uint64_t jl_get_llvm_fptr(llvm::Function *llvmf)
 static jl_method_instance_t *jl_get_unspecialized(jl_method_instance_t *method)
 {
     // one unspecialized version of a function can be shared among all cached specializations
-    jl_method_t *def = method->def;
+    jl_method_t *def = method->def.method;
     if (def->isstaged) {
         return method;
     }
@@ -1469,9 +1468,9 @@ jl_generic_fptr_t jl_generate_fptr(jl_method_instance_t *li, void *_F, size_t wo
         return fptr;
     }
     jl_method_instance_t *unspec = NULL;
-    if (li->def) {
-        if (!li->def->isstaged && li->def->unspecialized) {
-            unspec = li->def->unspecialized;
+    if (jl_is_method(li->def.method)) {
+        if (!li->def.method->isstaged && li->def.method->unspecialized) {
+            unspec = li->def.method->unspecialized;
         }
         if (!F || !jl_can_finalize_function(F)) {
             // can't compile F in the JIT right now,
@@ -1479,7 +1478,7 @@ jl_generic_fptr_t jl_generate_fptr(jl_method_instance_t *li, void *_F, size_t wo
             // and return its fptr instead
             if (!unspec)
                 unspec = jl_get_unspecialized(li); // get-or-create the unspecialized version to cache the result
-            jl_code_info_t *src = unspec->def->isstaged ? jl_code_for_staged(unspec) : (jl_code_info_t*)unspec->def->source;
+            jl_code_info_t *src = unspec->def.method->isstaged ? jl_code_for_staged(unspec) : (jl_code_info_t*)unspec->def.method->source;
             fptr.fptr = unspec->fptr;
             fptr.jlcall_api = unspec->jlcall_api;
             if (fptr.fptr && fptr.jlcall_api) {
@@ -1611,7 +1610,7 @@ void jl_extern_c(jl_function_t *f, jl_value_t *rt, jl_value_t *argt, char *name)
 extern "C" JL_DLLEXPORT
 void *jl_get_llvmf_defn(jl_method_instance_t *linfo, size_t world, bool getwrapper, bool optimize, const jl_cgparams_t params)
 {
-    if (linfo->def && linfo->def->source == NULL) {
+    if (jl_is_method(linfo->def.method) && linfo->def.method->source == NULL) {
         // not a generic function
         return NULL;
     }
@@ -1620,12 +1619,17 @@ void *jl_get_llvmf_defn(jl_method_instance_t *linfo, size_t world, bool getwrapp
     JL_GC_PUSH1(&src);
     if (!src || (jl_value_t*)src == jl_nothing) {
         src = jl_type_infer(&linfo, world, 0);
-        if (!src)
-            src = linfo->def->isstaged ? jl_code_for_staged(linfo) : (jl_code_info_t*)linfo->def->source;
+        if (!src && jl_is_method(linfo->def.method))
+            src = linfo->def.method->isstaged ? jl_code_for_staged(linfo) : (jl_code_info_t*)linfo->def.method->source;
     }
-    if (!src || (jl_value_t*)src == jl_nothing)
+    if ((jl_value_t*)src == jl_nothing)
+        src = NULL;
+    if (src && !jl_is_code_info(src) && jl_is_method(linfo->def.method))
+        src = jl_uncompress_ast(linfo->def.method, (jl_array_t*)src);
+    if (src && !jl_is_code_info(src))
+        src = NULL;
+    if (!src)
         jl_error("source not found for function");
-    src = jl_uncompress_ast(linfo->def, (jl_array_t*)src);
 
     // Backup the info for the nested compile
     JL_LOCK(&codegen_lock);
@@ -1646,7 +1650,8 @@ void *jl_get_llvmf_defn(jl_method_instance_t *linfo, size_t world, bool getwrapp
         builder.restoreIP(old);
         builder.SetCurrentDebugLocation(olddl);
         JL_UNLOCK(&codegen_lock); // Might GC
-        jl_rethrow_with_add("error compiling %s", jl_symbol_name(linfo->def ? linfo->def->name : anonymous_sym));
+        const char *mname = jl_symbol_name(jl_is_method(linfo->def.method) ? linfo->def.method->name : anonymous_sym);
+        jl_rethrow_with_add("error compiling %s", mname);
     }
     // Restore the previous compile context
     builder.restoreIP(old);
@@ -1691,7 +1696,7 @@ void *jl_get_llvmf_defn(jl_method_instance_t *linfo, size_t world, bool getwrapp
 extern "C" JL_DLLEXPORT
 void *jl_get_llvmf_decl(jl_method_instance_t *linfo, size_t world, bool getwrapper, const jl_cgparams_t params)
 {
-    if (linfo->def && linfo->def->source == NULL) {
+    if (jl_is_method(linfo->def.method) && linfo->def.method->source == NULL) {
         // not a generic function
         return NULL;
     }
@@ -1699,7 +1704,7 @@ void *jl_get_llvmf_decl(jl_method_instance_t *linfo, size_t world, bool getwrapp
     // compile this normally
     jl_llvm_functions_t decls = jl_compile_for_dispatch(&linfo, world);
 
-    if (decls.functionObject == NULL && linfo->jlcall_api == 2 && linfo->def) {
+    if (decls.functionObject == NULL && linfo->jlcall_api == 2 && jl_is_method(linfo->def.method)) {
         // normally we don't generate native code for these functions, so need an exception here
         // This leaks a bit of memory to cache native code that we'll never actually need
         JL_LOCK(&codegen_lock);
@@ -1708,7 +1713,7 @@ void *jl_get_llvmf_decl(jl_method_instance_t *linfo, size_t world, bool getwrapp
             jl_code_info_t *src = NULL;
             src = jl_type_infer(&linfo, world, 0);
             if (!src) {
-                src = linfo->def->isstaged ? jl_code_for_staged(linfo) : (jl_code_info_t*)linfo->def->source;
+                src = linfo->def.method->isstaged ? jl_code_for_staged(linfo) : (jl_code_info_t*)linfo->def.method->source;
             }
             decls = jl_compile_linfo(&linfo, src, world, &params);
             linfo->functionObjectsDecls = decls;
@@ -3159,7 +3164,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
 
     else if (f==jl_builtin_apply_type && nargs > 0) {
         size_t i;
-        if (ctx->linfo->def == NULL) {
+        if (jl_is_method(ctx->linfo->def.method)) {
             // don't bother codegen constant-folding for toplevel
             JL_GC_POP();
             return false;
@@ -4051,7 +4056,8 @@ static void emit_stmtpos(jl_value_t *expr, jl_codectx_t *ctx)
                            ConstantInt::get(T_int32, jl_unbox_long(args[0])));
     }
     else {
-        if (ctx->linfo->def == NULL) {
+        if (!jl_is_method(ctx->linfo->def.method)) {
+            // TODO: inference is invalid if this has an effect
             Value *world = builder.CreateLoad(prepare_global(jlgetworld_global));
             builder.CreateStore(world, ctx->world_age_field);
         }
@@ -4113,7 +4119,7 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
                 expr = jl_box_int64(val);
             }
         }
-        if (needroot && ctx->linfo->def) { // toplevel exprs and some integers are already rooted
+        if (needroot && jl_is_method(ctx->linfo->def.method)) { // toplevel exprs and some integers are already rooted
             jl_add_method_root(ctx, expr);
         }
         return mark_julia_const(expr);
@@ -4129,7 +4135,7 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
         return emit_invoke(ex, ctx);
     }
     else if (head == call_sym) {
-        if (ctx->linfo->def) { // don't bother codegen constant-folding for toplevel
+        if (jl_is_method(ctx->linfo->def.method)) { // don't bother codegen constant-folding for toplevel
             jl_value_t *c = static_eval(expr, ctx, true, true);
             if (c) {
                 jl_add_method_root(ctx, c);
@@ -4165,8 +4171,8 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
         jl_binding_t *bnd = NULL;
         bool issym = jl_is_symbol(mn);
         bool isglobalref = !issym && jl_is_globalref(mn);
+        jl_module_t *mod = ctx->module;
         if (issym || isglobalref) {
-            jl_module_t *mod = ctx->module;
             if (isglobalref) {
                 mod = jl_globalref_mod(mn);
                 mn = (jl_value_t*)jl_globalref_name(mn);
@@ -4185,17 +4191,22 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
             name = literal_pointer_val((jl_value_t*)slot_symbol(sl, ctx));
         }
         if (bp) {
-            Value *mdargs[4] = { name, bp, bp_owner, literal_pointer_val(bnd) };
+            Value *mdargs[5] = { name, literal_pointer_val((jl_value_t*)mod), bp, bp_owner, literal_pointer_val(bnd) };
             jl_cgval_t gf = mark_julia_type(
-                    builder.CreateCall(prepare_call(jlgenericfunction_func), ArrayRef<Value*>(&mdargs[0], 4)),
+                    builder.CreateCall(prepare_call(jlgenericfunction_func), makeArrayRef(mdargs)),
                     true, jl_function_type, ctx);
             if (jl_expr_nargs(ex) == 1)
                 return gf;
         }
         Value *a1 = boxed(emit_expr(args[1], ctx), ctx);
         Value *a2 = boxed(emit_expr(args[2], ctx), ctx);
-        Value *mdargs[3] = { a1, a2, literal_pointer_val(args[3]) };
-        builder.CreateCall(prepare_call(jlmethod_func), ArrayRef<Value*>(&mdargs[0], 3));
+        Value *mdargs[4] = {
+            /*argdata*/a1,
+            /*code*/a2,
+            /*module*/literal_pointer_val((jl_value_t*)ctx->module),
+            /*isstaged*/literal_pointer_val(args[3])
+        };
+        builder.CreateCall(prepare_call(jlmethod_func), makeArrayRef(mdargs));
         return ghostValue(jl_void_type);
     }
     else if (head == const_sym) {
@@ -4267,11 +4278,15 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
         if (!strcmp(jl_symbol_name(head), "$"))
             jl_error("syntax: prefix \"$\" in non-quoted expression");
         if (jl_is_toplevel_only_expr(expr) &&
-            ctx->linfo->def == NULL) {
+            !jl_is_method(ctx->linfo->def.method)) {
             JL_FEAT_REQUIRE(ctx, runtime);
             // call interpreter to run a toplevel expr from inside a
             // compiled toplevel thunk.
-            builder.CreateCall(prepare_call(jltopeval_func), literal_pointer_val(expr));
+            Value *args[2] = {
+                literal_pointer_val((jl_value_t*)ctx->module),
+                literal_pointer_val(expr)
+            };
+            builder.CreateCall(prepare_call(jltopeval_func), args);
             return ghostValue(jl_void_type);
         }
         if (head == abstracttype_sym || head == compositetype_sym ||
@@ -4330,7 +4345,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
     jl_value_t *astrt = (jl_value_t*)jl_any_type;
     // infer it first, if necessary
     if (lam) {
-        name = jl_symbol_name(lam->def->name);
+        name = jl_symbol_name(lam->def.method->name);
         jl_code_info_t *src = NULL;
         if (!lam->inferred) // TODO: this isn't ideal to be unconditionally calling type inference from here
             src = jl_type_infer(&lam, world, 0);
@@ -4946,7 +4961,7 @@ static Function *gen_jlcall_wrapper(jl_method_instance_t *lam, const jl_returnin
     allocate_gc_frame(b0, &ctx);
 
     FunctionType *ftype = f.decl->getFunctionType();
-    size_t nargs = lam->def->nargs;
+    size_t nargs = lam->def.method->nargs;
     size_t nfargs = ftype->getNumParams();
     Value **args = (Value**) alloca(nfargs*sizeof(Value*));
     unsigned idx = 0;
@@ -5143,7 +5158,6 @@ static std::unique_ptr<Module> emit_function(
         jl_llvm_functions_t *declarations,
         const jl_cgparams_t *params)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
     assert(declarations && "Capturing declarations is always required");
 
     // step 1. unpack AST and allocate codegen context for this function
@@ -5156,18 +5170,18 @@ static std::unique_ptr<Module> emit_function(
     std::map<int, jl_arrayvar_t> arrayvars;
     std::map<int, BasicBlock*> labels;
     ctx.arrayvars = &arrayvars;
-    ctx.module = lam->def ? lam->def->module : ptls->current_module;
+    ctx.module = jl_is_method(lam->def.method) ? lam->def.method->module : lam->def.module;
     ctx.linfo = lam;
     ctx.source = src;
     ctx.world = world;
-    ctx.name = jl_symbol_name(lam->def ? lam->def->name : anonymous_sym);
+    ctx.name = jl_symbol_name(jl_is_method(lam->def.method) ? lam->def.method->name : anonymous_sym);
     ctx.funcName = ctx.name;
     ctx.vaSlot = -1;
     ctx.vaStack = false;
     ctx.params = params;
     ctx.spvals_ptr = NULL;
-    ctx.nargs = lam->def ? lam->def->nargs : 0;
-    bool toplevel = lam->def == NULL;
+    ctx.nargs = jl_is_method(lam->def.method) ? lam->def.method->nargs : 0;
+    bool toplevel = !jl_is_method(lam->def.method);
 
     // step 1b. unpack debug information
     int coverage_mode = jl_options.code_coverage;
@@ -5175,10 +5189,10 @@ static std::unique_ptr<Module> emit_function(
     StringRef filename = "<missing>";
     StringRef dbgFuncName = ctx.name;
     int toplineno = -1;
-    if (lam->def) {
-        toplineno = lam->def->line;
-        if (lam->def->file != empty_sym)
-            filename = jl_symbol_name(lam->def->file);
+    if (jl_is_method(lam->def.method)) {
+        toplineno = lam->def.method->line;
+        if (lam->def.method->file != empty_sym)
+            filename = jl_symbol_name(lam->def.method->file);
     }
     ctx.file = filename;
     // jl_printf(JL_STDERR, "\n*** compiling %s at %s:%d\n\n",
@@ -5204,7 +5218,7 @@ static std::unique_ptr<Module> emit_function(
 
     assert(lam->specTypes); // the specTypes field should always be assigned
 
-    if (nreq > 0 && lam->def->isva) {
+    if (nreq > 0 && lam->def.method->isva) {
         nreq--;
         va = 1;
         jl_sym_t *vn = (jl_sym_t*)jl_array_ptr_ref(src->slotnames, ctx.nargs - 1);
@@ -5262,7 +5276,9 @@ static std::unique_ptr<Module> emit_function(
     jl_value_t *jlrettype = lam->rettype;
 
     bool specsig = false;
-    bool needsparams = lam->def ? jl_svec_len(lam->def->sparam_syms) != jl_svec_len(lam->sparam_vals) : false;
+    bool needsparams = jl_is_method(lam->def.method)
+        ? jl_svec_len(lam->def.method->sparam_syms) != jl_svec_len(lam->sparam_vals)
+        : false;
     for (i = 0; !needsparams && i < jl_svec_len(lam->sparam_vals); i++) {
         jl_value_t *e = jl_svecref(lam->sparam_vals, i);
         if (jl_is_typevar(e))
@@ -6257,7 +6273,7 @@ static std::unique_ptr<Module> emit_function(
     // copy ctx.roots into m->roots
     // if we created any new roots during codegen
     if (ctx.roots) {
-        jl_method_t *m = lam->def;
+        jl_method_t *m = lam->def.method;
         JL_LOCK(&m->writelock);
         if (m->roots == NULL) {
             m->roots = ctx.roots;
@@ -6357,7 +6373,7 @@ extern "C" void jl_fptr_to_llvm(jl_fptr_t fptr, jl_method_instance_t *lam, int s
             funcName << "jlsysw_"; // it's a specsig wrapper
         else if (lam->jlcall_api == 1)
             funcName << "jsys1_"; // it's a jlcall without a specsig
-        const char* unadorned_name = jl_symbol_name(lam->def->name);
+        const char* unadorned_name = jl_symbol_name(lam->def.method->name);
 #if (defined(_OS_LINUX_) && JL_LLVM_VERSION < 30400)
         if (unadorned_name[0] == '@')
             unadorned_name++;
@@ -6826,16 +6842,19 @@ static void init_julia_llvm_env(Module *m)
     exp_args.push_back(T_int1);
     expect_func = Intrinsic::getDeclaration(m, Intrinsic::expect, exp_args);
 
-    std::vector<Type*> args3(0);
-    args3.push_back(T_pjlvalue);
+    std::vector<Type*> args_topeval(0);
+    args_topeval.push_back(T_pjlvalue);
+    args_topeval.push_back(T_pjlvalue);
     jltopeval_func =
-        Function::Create(FunctionType::get(T_pjlvalue, args3, false),
+        Function::Create(FunctionType::get(T_pjlvalue, args_topeval, false),
                          Function::ExternalLinkage,
                          "jl_toplevel_eval", m);
     add_named_global(jltopeval_func, &jl_toplevel_eval);
 
+    std::vector<Type*> args_copyast(0);
+    args_copyast.push_back(T_pjlvalue);
     jlcopyast_func =
-        Function::Create(FunctionType::get(T_pjlvalue, args3, false),
+        Function::Create(FunctionType::get(T_pjlvalue, args_copyast, false),
                          Function::ExternalLinkage,
                          "jl_copy_ast", m);
     add_named_global(jlcopyast_func, &jl_copy_ast);
@@ -6852,6 +6871,7 @@ static void init_julia_llvm_env(Module *m)
     mdargs.push_back(T_pjlvalue);
     mdargs.push_back(T_pjlvalue);
     mdargs.push_back(T_pjlvalue);
+    mdargs.push_back(T_pjlvalue);
     jlmethod_func =
         Function::Create(FunctionType::get(T_void, mdargs, false),
                          Function::ExternalLinkage,
@@ -6859,6 +6879,7 @@ static void init_julia_llvm_env(Module *m)
     add_named_global(jlmethod_func, &jl_method_def);
 
     std::vector<Type*> funcdefargs(0);
+    funcdefargs.push_back(T_pjlvalue);
     funcdefargs.push_back(T_pjlvalue);
     funcdefargs.push_back(T_ppjlvalue);
     funcdefargs.push_back(T_pjlvalue);

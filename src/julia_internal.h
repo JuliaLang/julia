@@ -294,17 +294,14 @@ jl_value_t *jl_gc_realloc_string(jl_value_t *s, size_t sz);
 
 jl_code_info_t *jl_type_infer(jl_method_instance_t **li, size_t world, int force);
 jl_generic_fptr_t jl_generate_fptr(jl_method_instance_t *li, void *F, size_t world);
-jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t **pli, jl_code_info_t *src, size_t world, const jl_cgparams_t *params);
+jl_llvm_functions_t jl_compile_linfo(
+        jl_method_instance_t **pli,
+        jl_code_info_t *src,
+        size_t world,
+        const jl_cgparams_t *params);
 jl_llvm_functions_t jl_compile_for_dispatch(jl_method_instance_t **li, size_t world);
 JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types);
 jl_code_info_t *jl_new_code_info_from_ast(jl_expr_t *ast);
-jl_method_t *jl_new_method(jl_code_info_t *definition,
-                           jl_sym_t *name,
-                           jl_tupletype_t *sig,
-                           size_t nargs,
-                           int isva,
-                           jl_svec_t *tvars,
-                           int isstaged);
 
 STATIC_INLINE jl_value_t *jl_compile_method_internal(jl_generic_fptr_t *fptr,
                                                      jl_method_instance_t *meth)
@@ -326,11 +323,11 @@ STATIC_INLINE jl_value_t *jl_compile_method_internal(jl_generic_fptr_t *fptr,
             fptr->fptr = meth->unspecialized_ducttape;
             fptr->jlcall_api = 1;
             if (!fptr->fptr) {
-                if (meth->def && !meth->def->isstaged && meth->def->unspecialized) {
-                    fptr->fptr = meth->def->unspecialized->fptr;
-                    fptr->jlcall_api = meth->def->unspecialized->jlcall_api;
+                if (jl_is_method(meth->def.method) && !meth->def.method->isstaged && meth->def.method->unspecialized) {
+                    fptr->fptr = meth->def.method->unspecialized->fptr;
+                    fptr->jlcall_api = meth->def.method->unspecialized->jlcall_api;
                     if (fptr->jlcall_api == 2) {
-                        return jl_assume(meth->def->unspecialized->inferred_const);
+                        return jl_assume(meth->def.method->unspecialized->inferred_const);
                     }
                 }
             }
@@ -461,8 +458,6 @@ jl_svec_t *jl_outer_unionall_vars(jl_value_t *u);
 int jl_count_union_components(jl_value_t *v);
 jl_value_t *jl_nth_union_component(jl_value_t *v, int i);
 jl_datatype_t *jl_new_uninitialized_datatype(void);
-jl_datatype_t *jl_new_abstracttype(jl_value_t *name, jl_datatype_t *super,
-                                   jl_svec_t *parameters);
 void jl_precompute_memoized_dt(jl_datatype_t *dt);
 jl_datatype_t *jl_wrap_Type(jl_value_t *t);  // x -> Type{x}
 jl_value_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n);
@@ -473,19 +468,19 @@ jl_function_t *jl_new_generic_function_with_supertype(jl_sym_t *name, jl_module_
 jl_function_t *jl_module_call_func(jl_module_t *m);
 int jl_is_submodule(jl_module_t *child, jl_module_t *parent);
 
-jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast, int expanded);
+jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int expanded);
 
 jl_code_info_t *jl_wrap_expr(jl_value_t *expr);
 jl_value_t *jl_eval_global_var(jl_module_t *m, jl_sym_t *e);
 jl_value_t *jl_parse_eval_all(const char *fname,
-                              const char *content, size_t contentlen);
-jl_value_t *jl_interpret_toplevel_thunk(jl_code_info_t *src);
-jl_value_t *jl_interpret_toplevel_expr(jl_value_t *e);
+                              const char *content, size_t contentlen,
+                              jl_module_t *inmodule);
+jl_value_t *jl_interpret_toplevel_thunk(jl_module_t *m, jl_code_info_t *src);
 jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e,
                                           jl_code_info_t *src,
                                           jl_svec_t *sparam_vals);
 int jl_is_toplevel_only_expr(jl_value_t *e);
-jl_value_t *jl_call_scm_on_ast(const char *funcname, jl_value_t *expr);
+jl_value_t *jl_call_scm_on_ast(const char *funcname, jl_value_t *expr, jl_module_t *inmodule);
 
 jl_method_instance_t *jl_method_lookup_by_type(jl_methtable_t *mt, jl_tupletype_t *types,
                                                int cache, int inexact, int allow_exec, size_t world);

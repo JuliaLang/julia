@@ -3,17 +3,42 @@
 baremodule Base
 
 using Core.Intrinsics
-ccall(:jl_set_istopmod, Void, (Bool,), true)
+ccall(:jl_set_istopmod, Void, (Any, Bool), Base, true)
+function include(mod::Module, path::AbstractString)
+    local result
+    if INCLUDE_STATE === 1
+        result = Core.include(mod, path)
+    elseif INCLUDE_STATE === 2
+        result = _include(mod, path)
+    elseif INCLUDE_STATE === 3
+        result = include_from_node1(mod, path)
+    end
+    result
+end
 function include(path::AbstractString)
     local result
     if INCLUDE_STATE === 1
-        result = Core.include(path)
+        result = Core.include(Base, path)
     elseif INCLUDE_STATE === 2
-        result = _include(path)
-    elseif INCLUDE_STATE === 3
-        result = include_from_node1(path)
+        result = _include(Base, path)
+    else
+        # to help users avoid error (accidentally evaluating into Base), this is deprecated
+        depwarn("Base.include(string) is deprecated, use `include(fname)` or `Base.include(@__MODULE__, fname)` instead.", :include)
+        result = include_from_node1(_current_module(), path)
     end
     result
+end
+let SOURCE_PATH = ""
+    # simple, race-y TLS, relative include
+    global _include
+    function _include(mod::Module, path)
+        prev = SOURCE_PATH
+        path = joinpath(dirname(prev), path)
+        SOURCE_PATH = path
+        result = Core.include(mod, path)
+        SOURCE_PATH = prev
+        result
+    end
 end
 INCLUDE_STATE = 1 # include = Core.include
 
@@ -255,15 +280,6 @@ importall .Math
 const (√)=sqrt
 const (∛)=cbrt
 
-let SOURCE_PATH = ""
-    global function _include(path)
-        prev = SOURCE_PATH
-        path = joinpath(dirname(prev),path)
-        SOURCE_PATH = path
-        Core.include(path)
-        SOURCE_PATH = prev
-    end
-end
 INCLUDE_STATE = 2 # include = _include (from lines above)
 
 # reduction along dims
@@ -426,11 +442,11 @@ function __init__()
 end
 
 INCLUDE_STATE = 3 # include = include_from_node1
-include("precompile.jl")
+include(Base, "precompile.jl")
 
 end # baremodule Base
 
 using Base
 importall Base.Operators
 
-Base.isfile("userimg.jl") && Base.include("userimg.jl")
+Base.isfile("userimg.jl") && Base.include(Main, "userimg.jl")

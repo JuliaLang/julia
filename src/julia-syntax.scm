@@ -1163,6 +1163,7 @@
            (expand-forms
             `(function (call ,(symbol (string #\@ (cadr (cadr e))))
                              (|::| __source__ (core LineNumberNode))
+                             (|::| __module__ (core Module))
                              ,@(map (lambda (v)
                                       (if (symbol? v)
                                           `(|::| ,v (core ANY))

@@ -76,6 +76,7 @@ Base.finalize
 Base.copy
 Base.deepcopy
 Core.isdefined
+Base.@isdefined
 Base.convert
 Base.promote
 Base.oftype
@@ -250,7 +251,7 @@ Base.AsyncCondition(::Function)
 ```@docs
 Base.module_name
 Base.module_parent
-Base.current_module
+Base.@__MODULE__
 Base.fullname
 Base.names
 Core.nfields

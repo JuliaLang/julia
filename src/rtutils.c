@@ -532,19 +532,21 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     }
     else if (vt == jl_method_instance_type) {
         jl_method_instance_t *li = (jl_method_instance_t*)v;
-        if (li->def) {
-            n += jl_static_show_x(out, (jl_value_t*)li->def->module, depth);
+        if (jl_is_method(li->def.method)) {
+            jl_method_t *m = li->def.method;
+            n += jl_static_show_x(out, (jl_value_t*)m->module, depth);
             if (li->specTypes) {
                 n += jl_printf(out, ".");
                 n += jl_show_svec(out, ((jl_datatype_t*)jl_unwrap_unionall(li->specTypes))->parameters,
-                                  jl_symbol_name(li->def->name), "(", ")");
+                                  jl_symbol_name(m->name), "(", ")");
             }
             else {
-                n += jl_printf(out, ".%s(?)", jl_symbol_name(li->def->name));
+                n += jl_printf(out, ".%s(?)", jl_symbol_name(m->name));
             }
         }
         else {
-            n += jl_printf(out, "<toplevel thunk> -> ");
+            n += jl_static_show_x(out, (jl_value_t*)li->def.module, depth);
+            n += jl_printf(out, ".<toplevel thunk> -> ");
             n += jl_static_show_x(out, li->inferred, depth);
         }
     }

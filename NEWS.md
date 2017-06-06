@@ -73,6 +73,11 @@ Deprecated or removed
   * The `cholfact`/`cholfact!` methods that accepted an `uplo` symbol have been deprecated
     in favor of using `Hermitian` (or `Symmetric`) views ([#22187], [#22188]).
 
+  * The function `current_module` is deprecated and replaced with `@__MODULE__` ([#22064]).
+    This caused the deprecation of some reflection methods (such as `macroexpand` and `isconst`),
+    which now require a module argument.
+    And it caused the bugfix of other default arguments to use the Main module (including `whos`, `which`).
+
 
 Julia v0.6.0 Release Notes
 ==========================

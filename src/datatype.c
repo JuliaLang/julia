@@ -66,17 +66,11 @@ JL_DLLEXPORT jl_typename_t *jl_new_typename_in(jl_sym_t *name, jl_module_t *modu
     return tn;
 }
 
-JL_DLLEXPORT jl_typename_t *jl_new_typename(jl_sym_t *name)
-{
-    jl_ptls_t ptls = jl_get_ptls_states();
-    return jl_new_typename_in(name, ptls->current_module);
-}
-
 // allocating DataTypes -----------------------------------------------------------
 
-jl_datatype_t *jl_new_abstracttype(jl_value_t *name, jl_datatype_t *super, jl_svec_t *parameters)
+jl_datatype_t *jl_new_abstracttype(jl_value_t *name, jl_module_t *module, jl_datatype_t *super, jl_svec_t *parameters)
 {
-    return jl_new_datatype((jl_sym_t*)name, super, parameters, jl_emptysvec, jl_emptysvec, 1, 0, 0);
+    return jl_new_datatype((jl_sym_t*)name, module, super, parameters, jl_emptysvec, jl_emptysvec, 1, 0, 0);
 }
 
 jl_datatype_t *jl_new_uninitialized_datatype(void)
@@ -330,15 +324,18 @@ void jl_compute_field_offsets(jl_datatype_t *st)
 
 extern int jl_boot_file_loaded;
 
-JL_DLLEXPORT jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super,
-                                            jl_svec_t *parameters,
-                                            jl_svec_t *fnames, jl_svec_t *ftypes,
-                                            int abstract, int mutabl,
-                                            int ninitialized)
+JL_DLLEXPORT jl_datatype_t *jl_new_datatype(
+        jl_sym_t *name,
+        jl_module_t *module,
+        jl_datatype_t *super,
+        jl_svec_t *parameters,
+        jl_svec_t *fnames,
+        jl_svec_t *ftypes,
+        int abstract, int mutabl,
+        int ninitialized)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
-    jl_datatype_t *t=NULL;
-    jl_typename_t *tn=NULL;
+    jl_datatype_t *t = NULL;
+    jl_typename_t *tn = NULL;
     JL_GC_PUSH2(&t, &tn);
 
     if (!jl_boot_file_loaded && jl_is_symbol(name)) {
@@ -357,7 +354,7 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super
         t = jl_new_uninitialized_datatype();
     else
         tn = t->name;
-    // init before possibly calling jl_new_typename
+    // init before possibly calling jl_new_typename_in
     t->super = super;
     if (super != NULL) jl_gc_wb(t, t->super);
     t->parameters = parameters;
@@ -378,9 +375,9 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super
             tn = (jl_typename_t*)name;
         }
         else {
-            tn = jl_new_typename((jl_sym_t*)name);
+            tn = jl_new_typename_in((jl_sym_t*)name, module);
             if (!abstract) {
-                tn->mt = jl_new_method_table(name, ptls->current_module);
+                tn->mt = jl_new_method_table(name, module);
                 jl_gc_wb(tn, tn->mt);
             }
         }
@@ -412,10 +409,11 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super
     return t;
 }
 
-JL_DLLEXPORT jl_datatype_t *jl_new_primitivetype(jl_value_t *name, jl_datatype_t *super,
+JL_DLLEXPORT jl_datatype_t *jl_new_primitivetype(jl_value_t *name, jl_module_t *module,
+                                                 jl_datatype_t *super,
                                                  jl_svec_t *parameters, size_t nbits)
 {
-    jl_datatype_t *bt = jl_new_datatype((jl_sym_t*)name, super, parameters,
+    jl_datatype_t *bt = jl_new_datatype((jl_sym_t*)name, module, super, parameters,
                                         jl_emptysvec, jl_emptysvec, 0, 0, 0);
     uint32_t nbytes = (nbits + 7) / 8;
     uint32_t alignm = next_power_of_two(nbytes);

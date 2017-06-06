@@ -269,7 +269,7 @@ end
 
 # test that they don't introduce global vars
 global v11801, t11801, names_before_timing
-names_before_timing = names(current_module(), true)
+names_before_timing = names(@__MODULE__, true)
 
 let t = @elapsed 1+1
     @test isa(t, Real) && t >= 0
@@ -288,7 +288,7 @@ v11801, t11801 = @timed sin(1)
 @test v11801 == sin(1)
 @test isa(t11801,Real) && t11801 >= 0
 
-@test names(current_module(), true) == names_before_timing
+@test names(@__MODULE__, true) == names_before_timing
 
 # interactive utilities
 
