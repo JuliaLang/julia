@@ -31,7 +31,8 @@ eltype(::Type{UniformScaling{T}}) where {T} = T
 ndims(J::UniformScaling) = 2
 getindex(J::UniformScaling, i::Integer,j::Integer) = ifelse(i==j,J.λ,zero(J.λ))
 
-show(io::IO, J::UniformScaling) = print(io, "$(typeof(J))\n$(J.λ)*I")
+show(io::IO, J::UniformScaling) = isa(J.λ, Complex) ? print(io, "$(typeof(J))\n($(J.λ))*I") :
+    print(io, "$(typeof(J))\n$(J.λ)*I")
 copy(J::UniformScaling) = UniformScaling(J.λ)
 
 transpose(J::UniformScaling) = J
