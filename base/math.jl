@@ -61,25 +61,17 @@ clamp(x::X, lo::L, hi::H) where {X,L,H} =
                   convert(promote_type(X,L,H), lo),
                   convert(promote_type(X,L,H), x)))
 
-clamp( x, ::Type{T} ) where {T} = clamp( x, typemin(T), typemax(T) ) % T
+clamp(::Type{T}, x) where {T} = clamp(x, typemin(T), typemax(T)) % T
 """
     clamp!(array::AbstractArray, lo, hi)
     clamp!(array::AbstractArray, T)
 
-Restrict values in `array` to the specified range, in-place.  If the type `T` is
-given `lo` and `hi` are typemin(T) and typemax(T) respectively
+Restrict values in `array` to the specified range, in-place.
 See also [`clamp`](@ref).
 """
 function clamp!(x::AbstractArray, lo, hi)
     @inbounds for i in eachindex(x)
         x[i] = clamp(x[i], lo, hi)
-    end
-    x
-end
-
-function clamp!(x::AbstractArray, ::Type{T}) where {T}
-    @inbounds for i in eachindex(x)
-        x[i] = clamp(x[i], T )
     end
     x
 end
