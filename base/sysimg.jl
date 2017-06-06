@@ -447,6 +447,5 @@ include(Base, "precompile.jl")
 end # baremodule Base
 
 using Base
-importall Base.Operators
 
 Base.isfile("userimg.jl") && Base.include(Main, "userimg.jl")

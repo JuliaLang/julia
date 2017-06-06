@@ -169,9 +169,6 @@ A few special expressions correspond to calls to functions with non-obvious name
 | `A[i]`            | [`getindex()`](@ref)   |
 | `A[i]=x`          | [`setindex!()`](@ref)  |
 
-These functions are included in the `Base.Operators` module even though they do not have operator-like
-names.
-
 ## [Anonymous Functions](@id man-anonymous-functions)
 
 Functions in Julia are [first-class objects](https://en.wikipedia.org/wiki/First-class_citizen):

@@ -92,6 +92,9 @@ Deprecated or removed
     which now require a module argument.
     And it caused the bugfix of other default arguments to use the Main module (including `whos`, `which`).
 
+  * The `Operators` module is deprecated. Instead, import required operators explicitly
+    from `Base`, e.g. `import Base: +, -, *, /` ([#22251]).
+
 
 Julia v0.6.0 Release Notes
 ==========================

@@ -2,8 +2,6 @@
 
 module VersionWeights
 
-importall ....Base.Operators
-
 export VersionWeight
 
 struct HierarchicalValue{T}

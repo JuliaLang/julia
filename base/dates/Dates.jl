@@ -32,7 +32,7 @@ for more information.
 """
 module Dates
 
-importall ..Base.Operators
+import ..Base: ==, div, fld, mod, rem, gcd, lcm, +, -, *, /, %
 import ..Base.broadcast
 
 using Base.Iterators
