@@ -284,6 +284,11 @@ julia> rand(MersenneTwister(0), Dict(1=>2, 3=>4))
     `Set` and `IntSet`. For more than a few calls, use `rand(rng,
     collect(s))` instead, or either `rand(rng, Dict(s))` or `rand(rng,
     Set(s))` as appropriate.
+
+!!! note
+    the complexity of `rand(rng, s::AbstractString)` is linear
+    in the length of `s` if `s` is not of type `String`. If called more
+    than a few times, you should use `rand(rng, collect(s))` instead.
 """
 @inline rand() = rand(GLOBAL_RNG, CloseOpen)
 @inline rand(T::Type) = rand(GLOBAL_RNG, T)
