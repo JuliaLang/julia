@@ -191,9 +191,9 @@ function unique(f::Callable, C)
 end
 
 """
-    unique!(c::AbstractVector)
+    unique!(A::AbstractVector)
 
-Remove duplicate items as determined by [`isequal`](@ref), then return the modified `c`.
+Remove duplicate items as determined by [`isequal`](@ref), then return the modified `A`.
 
 ```jldoctest
 julia> unique!([1, 1, 1])
@@ -212,39 +212,39 @@ julia> A
  5
 ```
 """
-function unique!(c::AbstractVector)
-    if isempty(c)
-        count = 0
-    elseif (issorted(c) || issorted(c, rev=true))
-        # If c is sorted, then we only need to keep track of one element and add that to c
+function unique!(A::AbstractVector)
+    if isempty(A)
+        return A
+    elseif issorted(A) || issorted(A, rev=true)
+        # If A is sorted, then we only need to keep track of one element and add that to A
         # everytime that we see a new element.
         count = 1
-        for i in indices(c, 1)
-            x = c[i]
-            if x != c[count]
+        for i in indices(A, 1)
+            x = A[i]
+            if x != A[count]
                 count += 1
-                c[count] = x
+                A[count] = x
             end
         end
     else
-        # If c is not sorted, then we will need to keep track of all of the elements that
+        # If A is not sorted, then we will need to keep track of all of the elements that
         # we have seen so far.
-        seen = Set{eltype(c)}()
-        idxs = eachindex(c)
+        seen = Set{eltype(A)}()
+        idxs = eachindex(A)
         m = n = start(idxs)
         count = 0
-        while !done(c, n)
+        while !done(A, n)
             i, n = next(idxs, n)
-            x = c[i]
+            x = A[i]
             if x ∉ seen
                 count += 1
                 push!(seen, x)
                 j, m = next(idxs, m)
-                c[j] = x
+                A[j] = x
             end
         end
     end
-    resize!(c, count)
+    resize!(A, count)
 end
 
 """
