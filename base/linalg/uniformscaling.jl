@@ -171,15 +171,27 @@ function isapprox(J1::UniformScaling{T}, J2::UniformScaling{S};
             rtol::Real=Base.rtoldefault(T,S), atol::Real=0, nans::Bool=false) where {T<:Number,S<:Number}
     isapprox(J1.λ, J2.λ, rtol=rtol, atol=atol, nans=nans)
 end
-function isapprox(J::UniformScaling,A::AbstractMatrix;kwargs...)
+function isapprox(J::UniformScaling,A::AbstractMatrix;
+                       rtol::Real=rtoldefault(promote_leaf_eltypes(A),eltype(J)),
+                       atol::Real=0, nans::Bool=false, norm::Function=vecnorm)
     n = checksquare(A)
-    D = diagm(J.λ*ones(typeof(J.λ),n))
-    return isapprox(D,A;kwargs...)
+    normdiff2 = zero(promote_type(eltype(A),eltype(J)))
+    if norm == vecnorm
+        #special non-allocating path for standard vecnorm
+        @inbounds for j = 1:n
+            for i = 1:n
+                normdiff2 += abs2(A[i,j] - (i == j ? J.λ : zero(eltype(J))))
+            end
+        end
+        Jnorm = abs(J.λ)*sqrt(n)
+        return sqrt(normdiff2) <= atol + rtol*max(norm(A), Jnorm)
+    else
+        #fallback to memory-allocating version for arbitrary norms
+        D = diagm(J.λ*ones(typeof(J.λ),n))
+        return isapprox(D,A;rtol=rtol,atol=atol,nans=nans,norm=norm)
+    end
 end
-function isapprox(A::AbstractMatrix,J::UniformScaling;
-                  kwargs...)
-    return isapprox(J,A;kwargs...)
-end
+isapprox(A::AbstractMatrix,J::UniformScaling;kwargs...) = isapprox(J,A;kwargs...)
 
 function copy!(A::AbstractMatrix, J::UniformScaling)
     size(A,1)==size(A,2) || throw(DimensionMismatch("a UniformScaling can only be copied to a square matrix"))
