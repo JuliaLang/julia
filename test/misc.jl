@@ -571,9 +571,19 @@ for force_software_crc in (1,0)
     # test that crc parameter is equivalent to checksum of concatenated data,
     # and test crc of subarrays:
     a = UInt8[1:255;]
-    crc_256 = Base.crc32c(UInt8[1:255;])
+    crc_256 = crc32c(a)
     @views for n = 1:255
-        @test Base.crc32c(a[n+1:end], Base.crc32c(a[1:n])) == crc_256
+        @test crc32c(a[n+1:end], Base.crc32c(a[1:n])) == crc_256
+    end
+
+    @test crc32c(IOBuffer(a)) == crc_256
+    let f = tempname()
+        try
+            write(f, a)
+            @test crc32c(f) == crc_256
+        finally
+            rm(f, force=true)
+        end
     end
 end
 

@@ -765,22 +765,38 @@ if is_windows()
 
 end
 
-# compute sizeof correctly for strings, arrays, and subarrays of bytes
-_sizeof(a) = sizeof(a)
-_sizeof(a::FastContiguousSubArray{UInt8,N,<:Array{UInt8}} where N) = length(a)
-
 """
     crc32c(data, crc::UInt32=0x00000000)
 
 Compute the CRC-32c checksum of the given `data`, which can be
-an `Array{UInt8}`, a contiguous subarray thereof, or a `String`.  Optionally, you can pass
+an `Array{UInt8}`, a contiguous subarray thereof, an `IOBuffer`, or
+a filename (whose contents will be checksummed).  Optionally, you can pass
 a starting `crc` integer to be mixed in with the checksum.  The `crc` parameter
 can be used to compute a checksum on data divided into chunks: performing
 `crc32c(data2, crc32c(data1))` is equivalent to the checksum of `[data1; data2]`.
 (Technically, a little-endian checksum is computed.)
+
+To checksum `s::String`, you can do `crc32c(Vector{UInt8}(s))`; note
+that the result is specific to the UTF-8 encoding of `String`.  To checksum
+an `a::Array` of some other bitstype, you can do `crc32c(reinterpret(UInt8,a))`;
+note that the result is endian-dependent.
 """
-crc32c(a::Union{Array{UInt8},FastContiguousSubArray{UInt8,N,<:Array{UInt8}} where N,String}, crc::UInt32=0x00000000) =
-    ccall(:jl_crc32c, UInt32, (UInt32, Ptr{UInt8}, Csize_t), crc, a, _sizeof(a))
+function crc32c end
+
+crc32c(a::Union{Array{UInt8},FastContiguousSubArray{UInt8,N,<:Array{UInt8}} where N}, crc::UInt32=0x00000000) =
+    ccall(:jl_crc32c, UInt32, (UInt32, Ptr{UInt8}, Csize_t), crc, a, length(a))
+
+crc32c(buf::IOBuffer, crc::UInt32=0x00000000) = crc32c(buf.data, crc)
+
+function crc32c(filename::AbstractString, crc::UInt32=0x00000000)
+    open(filename, "r") do f
+        data = Mmap.mmap(f, Vector{UInt8}, filesize(f), 0)
+        checksum = crc32c(data, crc)
+        finalize(data)
+        checksum
+    end
+end
+
 
 """
     @kwdef typedef
