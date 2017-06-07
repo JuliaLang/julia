@@ -38,6 +38,12 @@
 
 using namespace llvm;
 
+#if JL_LLVM_VERSION >= 50000
+using llvm_file_magic = file_magic;
+#else
+using llvm_file_magic = sys::fs::file_magic;
+#endif
+
 #include "julia.h"
 #include "julia_internal.h"
 #include "codegen_internal.h"
@@ -1009,7 +1015,7 @@ openDebugInfo(StringRef debuginfopath, const debug_link_info &info)
 
     auto error_splitobj = object::ObjectFile::createObjectFile(
             SplitFile.get().get()->getMemBufferRef(),
-            sys::fs::file_magic::unknown);
+            llvm_file_magic::unknown);
     if (!error_splitobj) {
 #if JL_LLVM_VERSION >= 30900
         return error_splitobj.takeError();
@@ -1181,13 +1187,13 @@ bool jl_dylib_DI_for_fptr(size_t pointer, const llvm::object::ObjectFile **obj, 
         std::unique_ptr<MemoryBuffer> membuf = MemoryBuffer::getMemBuffer(
                 StringRef((const char *)fbase, msize), "", false);
         auto origerrorobj = llvm::object::ObjectFile::createObjectFile(
-            membuf->getMemBufferRef(), sys::fs::file_magic::unknown);
+            membuf->getMemBufferRef(), llvm_file_magic::unknown);
 #elif JL_LLVM_VERSION >= 30500
         MemoryBuffer *membuf = MemoryBuffer::getMemBuffer(
             StringRef((const char *)fbase, msize), "", false);
         std::unique_ptr<MemoryBuffer> buf(membuf);
         auto origerrorobj = llvm::object::ObjectFile::createObjectFile(
-            buf, sys::fs::file_magic::unknown);
+            buf, llvm_file_magic::unknown);
 #else
         MemoryBuffer *membuf = MemoryBuffer::getMemBuffer(
             StringRef((const char *)fbase, msize), "", false);
