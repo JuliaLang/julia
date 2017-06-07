@@ -783,8 +783,10 @@ note that the result is endian-dependent.
 """
 function crc32c end
 
+unsafe_crc32c(a, n, crc) = ccall(:jl_crc32c, UInt32, (UInt32, Ptr{UInt8}, Csize_t), crc, a, n)
+
 crc32c(a::Union{Array{UInt8},FastContiguousSubArray{UInt8,N,<:Array{UInt8}} where N}, crc::UInt32=0x00000000) =
-    ccall(:jl_crc32c, UInt32, (UInt32, Ptr{UInt8}, Csize_t), crc, a, length(a))
+    unsafe_crc32c(a, length(a), crc)
 
 crc32c(buf::IOBuffer, crc::UInt32=0x00000000) = crc32c(buf.data, crc)
 
@@ -796,12 +798,12 @@ mixed with a starting `crc` integer.
 """
 function crc32c(f::IO, nb::Integer, crc::UInt32=0x00000000)
     buf = Array{UInt8}(min(nb, 16384))
-    while !eof(f) && nb > 0
-        n = readbytes!(f, buf, nb)
-        crc = ccall(:jl_crc32c, UInt32, (UInt32, Ptr{UInt8}, Csize_t), crc, buf, n)
+    while !eof(f) && nb > 16384
+        n = readbytes!(f, buf)
+        crc = unsafe_crc32c(buf, n, crc)
         nb -= n
     end
-    return crc
+    return unsafe_crc32c(buf, readbytes!(f, buf, nb), crc)
 end
 
 crc32c(filename::AbstractString, crc::UInt32=0x00000000) =
