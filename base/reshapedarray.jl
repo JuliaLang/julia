@@ -193,7 +193,7 @@ end
     @inbounds ret = parent(A)[index]
     ret
 end
-@inline function getindex(A::ReshapedArray, indexes::Int...)
+@inline function getindex(A::ReshapedArray{T,N}, indexes::Vararg{Int,N}) where {T,N}
     @boundscheck checkbounds(A, indexes...)
     _unsafe_getindex(A, indexes...)
 end
@@ -203,12 +203,8 @@ end
     ret
 end
 
-@inline function _unsafe_getindex(A::ReshapedArray, indexes::Int...)
+@inline function _unsafe_getindex(A::ReshapedArray{T,N}, indexes::Vararg{Int,N}) where {T,N}
     @inbounds ret = parent(A)[ind2sub_rs(A.mi, sub2ind(size(A), indexes...))...]
-    ret
-end
-@inline function _unsafe_getindex(A::ReshapedArrayLF, indexes::Int...)
-    @inbounds ret = parent(A)[sub2ind(size(A), indexes...)]
     ret
 end
 
@@ -217,7 +213,7 @@ end
     @inbounds parent(A)[index] = val
     val
 end
-@inline function setindex!(A::ReshapedArray, val, indexes::Int...)
+@inline function setindex!(A::ReshapedArray{T,N}, val, indexes::Vararg{Int,N}) where {T,N}
     @boundscheck checkbounds(A, indexes...)
     _unsafe_setindex!(A, val, indexes...)
 end
@@ -227,19 +223,15 @@ end
     val
 end
 
-@inline function _unsafe_setindex!(A::ReshapedArray, val, indexes::Int...)
+@inline function _unsafe_setindex!(A::ReshapedArray{T,N}, val, indexes::Vararg{Int,N}) where {T,N}
     @inbounds parent(A)[ind2sub_rs(A.mi, sub2ind(size(A), indexes...))...] = val
-    val
-end
-@inline function _unsafe_setindex!(A::ReshapedArrayLF, val, indexes::Int...)
-    @inbounds parent(A)[sub2ind(size(A), indexes...)] = val
     val
 end
 
 # helpful error message for a common failure case
 const ReshapedRange{T,N,A<:Range} = ReshapedArray{T,N,A,Tuple{}}
 setindex!(A::ReshapedRange, val, index::Int) = _rs_setindex!_err()
-setindex!(A::ReshapedRange, val, indexes::Int...) = _rs_setindex!_err()
+setindex!(A::ReshapedRange{T,N}, val, indexes::Vararg{Int,N}) where {T,N} = _rs_setindex!_err()
 setindex!(A::ReshapedRange, val, index::ReshapedIndex) = _rs_setindex!_err()
 
 @noinline _rs_setindex!_err() = error("indexed assignment fails for a reshaped range; consider calling collect")
