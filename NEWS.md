@@ -56,7 +56,7 @@ Library improvements
   * `resize!` and `sizehint!` methods no longer over-reserve memory when the
     requested array size is more than double of its current size ([#22038]).
 
-  * The `crc32c` function for CRC-32c checksums is now exported.
+  * The `crc32c` function for CRC-32c checksums is now exported ([#22274]).
 
   * The output of `versioninfo()` is now controlled with keyword arguments ([#21974]).
 
