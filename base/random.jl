@@ -257,12 +257,20 @@ globalRNG() = GLOBAL_RNG
 Pick a random element or array of random elements from the set of values specified by `S`; `S` can be
 
 * an indexable collection (for example `1:n` or `['x','y','z']`), or
-* a `Dict`, a `Set` or an `IntSet`, or
+* an `Associative` or `AbstractSet` object, or
 * a type: the set of values to pick from is then equivalent to `typemin(S):typemax(S)` for
   integers (this is not applicable to [`BigInt`](@ref)), and to ``[0, 1)`` for floating
   point numbers;
 
 `S` defaults to [`Float64`](@ref).
+
+!!! note
+    The complexity of `rand(rng, s::Union{Associative,AbstractSet})`
+    is linear in the length of `s`, unless an optimized method (with
+    constant complexity) is available (which is the case for `Dict`,
+    `Set` and `IntSet`). For more than a few calls, use `rand(rng,
+    collect(s))` instead (or `rand(rng, Dict(s))`, or `rand(rng,
+    Set(s))`).
 
 ```julia-repl
 julia> rand(Int, 2)
