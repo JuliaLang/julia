@@ -584,7 +584,12 @@ for force_software_crc in (1,0)
             open(f, "r") do io
                 @test crc32c(io, 16) == crc32c(a[1:16])
                 @test crc32c(io, 16) == crc32c(a[17:32])
+                @test crc32c(io, 1000) == crc32c(a[33:end])
+                @test crc32c(io, 1000) == 0x00000000
             end
+            a = rand(UInt8, 30000)
+            write(f, a)
+            @test crc32c(f) == crc32c(a)
         finally
             rm(f, force=true)
         end
