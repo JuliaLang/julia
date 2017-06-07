@@ -1599,7 +1599,7 @@ function setup_syms(n, pids)
         eval(:(global $sym = rand()))
         for p in pids
             eval(:(@test $sym == remotecall_fetch(()->$sym, $p)))
-            eval(:(@test remotecall_fetch(isdefined, $p, Symbol($symstr))))
+            eval(:(@test remotecall_fetch(isdefined, $p, Main, Symbol($symstr))))
         end
         push!(syms, sym)
     end

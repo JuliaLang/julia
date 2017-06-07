@@ -46,7 +46,7 @@ static int exec_program(char *program)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     JL_TRY {
-        jl_load(program);
+        jl_load(jl_main_module, program);
     }
     JL_CATCH {
         jl_value_t *errs = jl_stderr_obj();

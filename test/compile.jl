@@ -310,6 +310,12 @@ try
     @test !Base.stale_cachefile(FooBar_file, joinpath(dir2, "FooBar.ji"))
     @test !Base.stale_cachefile(FooBar1_file, joinpath(dir2, "FooBar1.ji"))
 
+    # test checksum
+    open(joinpath(dir2, "FooBar1.ji"), "a") do f
+        write(f, 0x076cac96) # append 4 random bytes
+    end
+    @test Base.stale_cachefile(FooBar1_file, joinpath(dir2, "FooBar1.ji"))
+
     # test behavior of precompile modules that throw errors
     write(FooBar_file,
           """

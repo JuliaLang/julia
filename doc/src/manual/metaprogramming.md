@@ -512,10 +512,10 @@ julia> @showarg(println("Yo!"))
 :(println("Yo!"))
 ```
 
-In addition to the given argument list, every macro is passed an extra argument named `__source__`
-providing information (in the form of a `LineNumberNode` object) about the parser location
-of the `@` sign from the macro invocation.
+In addition to the given argument list, every macro is passed extra arguments named `__source__` and `__module__`.
 
+The argument `__source__` provides information (in the form of a `LineNumberNode` object) about the parser location
+of the `@` sign from the macro invocation.
 This allows macros to include better error diagnostic information,
 and is commonly used by logging, string-parser macros, and docs, for example,
 as well as to implement the `@__LINE__`, `@__FILE__`, and `@__DIR__` macros.
@@ -533,6 +533,13 @@ LineNumberNode
   line: Int64 2
   file: Symbol none
 ```
+
+The argument `__module__` provides information (in the form of a `Module` object)
+about the expansion context of the macro invocation.
+This allows macros to look up contextual information, such as existing bindings,
+or to insert the value as an extra argument to a runtime function call doing self-reflection
+in the current module.
+
 
 ### Building an advanced macro
 

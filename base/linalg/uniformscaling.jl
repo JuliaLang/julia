@@ -31,7 +31,13 @@ eltype(::Type{UniformScaling{T}}) where {T} = T
 ndims(J::UniformScaling) = 2
 getindex(J::UniformScaling, i::Integer,j::Integer) = ifelse(i==j,J.λ,zero(J.λ))
 
-show(io::IO, J::UniformScaling) = print(io, "$(typeof(J))\n$(J.λ)*I")
+function show(io::IO, J::UniformScaling)
+    s = "$(J.λ)"
+    if ismatch(r"\w+\s*[\+\-]\s*\w+", s)
+        s = "($s)"
+    end
+    print(io, "$(typeof(J))\n$s*I")
+end
 copy(J::UniformScaling) = UniformScaling(J.λ)
 
 transpose(J::UniformScaling) = J

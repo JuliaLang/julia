@@ -230,7 +230,7 @@ String(s::String) = s  # no constructor yet
 # This should always be inlined
 getptls() = ccall(:jl_get_ptls_states, Ptr{Void}, ())
 
-include(fname::String) = ccall(:jl_load_, Any, (Any,), fname)
+include(m::Module, fname::String) = ccall(:jl_load_, Any, (Any, Any), m, fname)
 
 eval(e::ANY) = eval(Main, e)
 eval(m::Module, e::ANY) = ccall(:jl_toplevel_eval_in, Any, (Any, Any), m, e)
@@ -337,7 +337,7 @@ end
 
 # docsystem basics
 macro doc(x...)
-    atdoc(__source__, x...)
+    atdoc(__source__, __module__, x...)
 end
 macro __doc__(x)
     Expr(:escape, Expr(:block, Expr(:meta, :doc), x))
@@ -345,7 +345,7 @@ end
 macro doc_str(s)
     Expr(:escape, s)
 end
-atdoc     = (source, str, expr) -> Expr(:escape, expr)
+atdoc     = (source, mod, str, expr) -> Expr(:escape, expr)
 atdoc!(λ) = global atdoc = λ
 
 
@@ -382,4 +382,4 @@ show(a::ANY) = show(STDOUT, a)
 print(a::ANY...) = print(STDOUT, a...)
 println(a::ANY...) = println(STDOUT, a...)
 
-ccall(:jl_set_istopmod, Void, (Bool,), true)
+ccall(:jl_set_istopmod, Void, (Any, Bool), Core, true)

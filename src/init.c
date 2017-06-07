@@ -664,11 +664,11 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         jl_internal_main_module = jl_main_module;
 
         ptls->current_module = jl_core_module;
-        for (int t = 0;t < jl_n_threads;t++) {
-            jl_all_tls_states[t]->root_task->current_module = ptls->current_module;
+        for (int t = 0; t < jl_n_threads; t++) {
+            jl_all_tls_states[t]->root_task->current_module = jl_core_module;
         }
 
-        jl_load("boot.jl");
+        jl_load(jl_core_module, "boot.jl");
         jl_get_builtin_hooks();
         jl_boot_file_loaded = 1;
         jl_init_box_caches();
@@ -713,8 +713,8 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         jl_add_standard_imports(jl_main_module);
     }
     ptls->current_module = jl_main_module;
-    for (int t = 0;t < jl_n_threads;t++) {
-        jl_all_tls_states[t]->root_task->current_module = ptls->current_module;
+    for (int t = 0; t < jl_n_threads; t++) {
+        jl_all_tls_states[t]->root_task->current_module = jl_main_module;
     }
 
     // This needs to be after jl_start_threads

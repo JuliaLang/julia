@@ -592,7 +592,7 @@ end # let exename
 # issue #19864:
 mutable struct Error19864 <: Exception; end
 function test19864()
-    @eval current_module() Base.showerror(io::IO, e::Error19864) = print(io, "correct19864")
+    @eval Base.showerror(io::IO, e::Error19864) = print(io, "correct19864")
     buf = IOBuffer()
     REPL.print_response(buf, Error19864(), [], false, false, nothing)
     return String(take!(buf))

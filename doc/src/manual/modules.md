@@ -336,8 +336,8 @@ Other known potential failure scenarios include:
    Note that `object_id` (which works by hashing the memory pointer) has similar issues (see notes
    on `Dict` usage below).
 
-   One alternative is to store both [`current_module()`](@ref) and the current `counter` value, however,
-   it may be better to redesign the code to not depend on this global state.
+   One alternative is to use a macro to capture [`@__MODULE__`](@ref) and store it alone with the current `counter` value,
+   however, it may be better to redesign the code to not depend on this global state.
 2. Associative collections (such as `Dict` and `Set`) need to be re-hashed in `__init__`. (In the
    future, a mechanism may be provided to register an initializer function.)
 3. Depending on compile-time side-effects persisting through load-time. Example include: modifying

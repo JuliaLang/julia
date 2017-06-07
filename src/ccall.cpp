@@ -483,7 +483,7 @@ static Value *runtime_apply_type(jl_value_t *ty, jl_unionall_t *unionall, jl_cod
     // box if concrete type was not statically known
     Value *args[3];
     args[0] = literal_pointer_val(ty);
-    args[1] = literal_pointer_val((jl_value_t*)ctx->linfo->def->sig);
+    args[1] = literal_pointer_val((jl_value_t*)ctx->linfo->def.method->sig);
     args[2] = builder.CreateInBoundsGEP(
             LLVM37_param(T_pjlvalue)
             emit_bitcast(ctx->spvals_ptr, T_ppjlvalue),
@@ -1522,8 +1522,8 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         return jl_cgval_t();
     }
 
-    jl_unionall_t *unionall = (ctx->linfo->def && jl_is_unionall(ctx->linfo->def->sig))
-        ? (jl_unionall_t*)ctx->linfo->def->sig
+    jl_unionall_t *unionall = (jl_is_method(ctx->linfo->def.method) && jl_is_unionall(ctx->linfo->def.method->sig))
+        ? (jl_unionall_t*)ctx->linfo->def.method->sig
         : NULL;
 
     if (jl_is_abstract_ref_type(rt)) {

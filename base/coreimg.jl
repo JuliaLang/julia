@@ -4,12 +4,14 @@ Main.Core.eval(Main.Core, :(baremodule Inference
 using Core.Intrinsics
 import Core: print, println, show, write, unsafe_write, STDOUT, STDERR
 
-ccall(:jl_set_istopmod, Void, (Bool,), false)
+ccall(:jl_set_istopmod, Void, (Any, Bool), Inference, false)
 
 eval(x) = Core.eval(Inference, x)
 eval(m, x) = Core.eval(m, x)
 
-const include = Core.include
+include(x) = Core.include(Inference, x)
+include(mod, x) = Core.include(mod, x)
+
 # conditional to allow redefining Core.Inference after base exists
 isdefined(Main, :Base) || ((::Type{T})(arg) where {T} = convert(T, arg)::T)
 

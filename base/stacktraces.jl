@@ -213,7 +213,7 @@ function show_spec_linfo(io::IO, frame::StackFrame)
         end
     else
         linfo = get(frame.linfo)
-        if isdefined(linfo, :def)
+        if isa(linfo.def, Method)
             Base.show_tuple_as_call(io, linfo.def.name, linfo.specTypes)
         else
             Base.show(io, linfo)
@@ -250,7 +250,8 @@ function from(frame::StackFrame, m::Module)
     result = false
 
     if !isnull(finfo)
-        frame_m = get(finfo).def.module
+        frame_m = get(finfo).def
+        isa(frame_m, Method) && (frame_m = frame_m.module)
         result = module_name(frame_m) === module_name(m)
     end
 

@@ -493,6 +493,20 @@ struct recur_list {
 static size_t jl_static_show_x(JL_STREAM *out, jl_value_t *v, struct recur_list *depth);
 
 JL_DLLEXPORT int jl_id_start_char(uint32_t wc);
+JL_DLLEXPORT int jl_id_char(uint32_t wc);
+
+JL_DLLEXPORT int jl_is_identifier(char *str)
+{
+    size_t i = 0;
+    uint32_t wc = u8_nextchar(str, &i);
+    if (!jl_id_start_char(wc))
+        return 0;
+    while ((wc = u8_nextchar(str, &i)) != 0) {
+        if (!jl_id_char(wc))
+            return 0;
+    }
+    return 1;
+}
 
 // `v` might be pointing to a field inlined in a structure therefore
 // `jl_typeof(v)` may not be the same with `vt` and only `vt` should be
@@ -518,19 +532,21 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     }
     else if (vt == jl_method_instance_type) {
         jl_method_instance_t *li = (jl_method_instance_t*)v;
-        if (li->def) {
-            n += jl_static_show_x(out, (jl_value_t*)li->def->module, depth);
+        if (jl_is_method(li->def.method)) {
+            jl_method_t *m = li->def.method;
+            n += jl_static_show_x(out, (jl_value_t*)m->module, depth);
             if (li->specTypes) {
                 n += jl_printf(out, ".");
                 n += jl_show_svec(out, ((jl_datatype_t*)jl_unwrap_unionall(li->specTypes))->parameters,
-                                  jl_symbol_name(li->def->name), "(", ")");
+                                  jl_symbol_name(m->name), "(", ")");
             }
             else {
-                n += jl_printf(out, ".%s(?)", jl_symbol_name(li->def->name));
+                n += jl_printf(out, ".%s(?)", jl_symbol_name(m->name));
             }
         }
         else {
-            n += jl_printf(out, "<toplevel thunk> -> ");
+            n += jl_static_show_x(out, (jl_value_t*)li->def.module, depth);
+            n += jl_printf(out, ".<toplevel thunk> -> ");
             n += jl_static_show_x(out, li->inferred, depth);
         }
     }
@@ -717,8 +733,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     }
     else if (vt == jl_sym_type) {
         char *sn = jl_symbol_name((jl_sym_t*)v);
-        // TODO check for valid identifier
-        int quoted = strchr(sn, '/') && strcmp(sn, "/") && strcmp(sn, "//") && strcmp(sn, "//=");
+        int quoted = !jl_is_identifier(sn) && jl_operator_precedence(sn) == 0;
         if (quoted)
             n += jl_printf(out, "Symbol(\"");
         else
