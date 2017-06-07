@@ -170,15 +170,15 @@ function reinterpret(::Type{T}, a::Array{S}) where T where S
 end
 
 function reinterpret(::Type{T}, a::Array{S}, dims::NTuple{N,Int}) where T where S where N
-    if !isbits(T)
-        throw(ArgumentError("cannot reinterpret Array{$(S)} to ::Type{Array{$(T)}}, type $(T) is not a bits type"))
+    function throwbits(::Type{S}, ::Type{T}, ::Type{U}) where {S,T,U}
+        @_noinline_meta
+        throw(ArgumentError("cannot reinterpret Array{$(S)} to ::Type{Array{$(T)}}, type $(U) is not a bits type"))
     end
-    if !isbits(S)
-        throw(ArgumentError("cannot reinterpret Array{$(S)} to ::Type{Array{$(T)}}, type $(S) is not a bits type"))
-    end
+    isbits(T) || throwbits(S, T, T)
+    isbits(S) || throwbits(S, T, S)
     nel = div(length(a)*sizeof(S),sizeof(T))
     if prod(dims) != nel
-        throw(DimensionMismatch("new dimensions $(dims) must be consistent with array size $(nel)"))
+        _throw_dmrsa(dims, nel)
     end
     ccall(:jl_reshape_array, Array{T,N}, (Any, Any, Any), Array{T,N}, a, dims)
 end
@@ -186,7 +186,7 @@ end
 # reshaping to same # of dimensions
 function reshape(a::Array{T,N}, dims::NTuple{N,Int}) where T where N
     if prod(dims) != length(a)
-        throw(DimensionMismatch("new dimensions $(dims) must be consistent with array size $(length(a))"))
+        _throw_dmrsa(dims, length(a))
     end
     if dims == size(a)
         return a
@@ -197,9 +197,14 @@ end
 # reshaping to different # of dimensions
 function reshape(a::Array{T}, dims::NTuple{N,Int}) where T where N
     if prod(dims) != length(a)
-        throw(DimensionMismatch("new dimensions $(dims) must be consistent with array size $(length(a))"))
+        _throw_dmrsa(dims, length(a))
     end
     ccall(:jl_reshape_array, Array{T,N}, (Any, Any, Any), Array{T,N}, a, dims)
+end
+
+function _throw_dmrsa(dims, len)
+    @_noinline_meta
+    throw(DimensionMismatch("new dimensions $(dims) must be consistent with array size $len"))
 end
 
 ## Constructors ##
