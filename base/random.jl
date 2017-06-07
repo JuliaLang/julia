@@ -1626,33 +1626,17 @@ let b = UInt8['0':'9';'A':'Z';'a':'z']
     randstring(r::AbstractRNG, n::Int) = randstring(r, b, n)
     randstring(chars::AbstractArray{<:Union{UInt8,Char}}=b, n::Int=8) = randstring(GLOBAL_RNG, chars, n)
     randstring(n::Int) = randstring(GLOBAL_RNG, b, n)
-
-    rand(rng::AbstractRNG, ::Type{String}, chars::AbstractArray{<:Union{UInt8,Char}}=b, n::Int=8) =
-        randstring(rng, chars, n)
-    rand(rng::AbstractRNG, ::Type{String}, n::Int) = randstring(rng, b, n)
-    rand(::Type{String}, chars::AbstractArray{<:Union{UInt8,Char}}=b, n::Int=8) =
-        randstring(GLOBAL_RNG, chars, n)
-    rand(::Type{String}, n::Int) = randstring(GLOBAL_RNG, b, n)
 end
 
 """
     randstring([rng=GLOBAL_RNG], [chars::AbstractArray{<:Union{UInt8,Char}}], [len=8])
 
-Create a random string of length `len`, consisting of characters
+Create a random ASCII string of length `len`, consisting of characters
 from `chars` if specified, and of upper- and lower-case letters and
 the digits 0-9 otherwise. The optional `rng` argument specifies a
 random number generator, see [Random Numbers](@ref).
 """
 randstring
-
-"""
-    rand([rng=GLOBAL_RNG], ::Type{String}, [chars::AbstractArray{<:Union{UInt8,Char}}], [len=8])
-
-Create a random string of length `len`, consisting of characters
-from `chars` if specified, and of upper- and lower-case letters and
-the digits 0-9 otherwise. Equivalent to [`randstring`](@ref)`(rng, chars, len)`.
-"""
-rand
 
 # Fill S (resized as needed) with a random subsequence of A, where
 # each element of A is included in S with independent probability p.
