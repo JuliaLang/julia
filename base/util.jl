@@ -769,7 +769,7 @@ end
     crc32c(data, crc::UInt32=0x00000000)
 
 Compute the CRC-32c checksum of the given `data`, which can be
-an `Array{UInt8}`, a contiguous subarray thereof, an `IOBuffer`, or
+an `Array{UInt8}`, a contiguous subarray thereof, or an `IOBuffer`, or
 a filename (whose contents will be checksummed).  Optionally, you can pass
 a starting `crc` integer to be mixed in with the checksum.  The `crc` parameter
 can be used to compute a checksum on data divided into chunks: performing
@@ -788,14 +788,26 @@ crc32c(a::Union{Array{UInt8},FastContiguousSubArray{UInt8,N,<:Array{UInt8}} wher
 
 crc32c(buf::IOBuffer, crc::UInt32=0x00000000) = crc32c(buf.data, crc)
 
-function crc32c(filename::AbstractString, crc::UInt32=0x00000000)
-    open(filename, "r") do f
-        data = Mmap.mmap(f, Vector{UInt8}, filesize(f), 0)
-        checksum = crc32c(data, crc)
-        finalize(data)
-        checksum
+"""
+    crc32c(f::IO, nb::Integer, crc::UInt32=0x00000000)
+
+Read up to `nb` bytes from `f` and return the CRC-32c checksum, optionally
+mixed with a starting `crc` integer.
+"""
+function crc32c(f::IO, nb::Integer, crc::UInt32=0x00000000)
+    buf = Array{UInt8}(min(nb, 16384))
+    while !eof(f) && nb > 0
+        n = readbytes!(f, buf, nb)
+        crc = ccall(:jl_crc32c, UInt32, (UInt32, Ptr{UInt8}, Csize_t), crc, buf, n)
+        nb -= n
     end
+    return crc
 end
+
+crc32c(filename::AbstractString, crc::UInt32=0x00000000) =
+    open(filename, "r") do f
+        crc32c(f, filesize(f), crc)
+    end
 
 
 """
