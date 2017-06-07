@@ -58,6 +58,10 @@ Library improvements
 
   * The output of `versioninfo()` is now controlled with keyword arguments ([#21974]).
 
+  * The function `LibGit2.set_remote_url` now always sets both the fetch and push URLs for a
+    git repo. Additionally, the argument order was changed to be consistent with the git
+    command line tool ([#22062]).
+
 Compiler/Runtime improvements
 -----------------------------
 
