@@ -803,6 +803,7 @@ function crc32c(f::IO, nb::Integer, crc::UInt32=0x00000000)
         crc = unsafe_crc32c(buf, n, crc)
         nb -= n
     end
+    @assert 0 ≤ nb ≤ length(buf)
     return unsafe_crc32c(buf, readbytes!(f, buf, nb), crc)
 end
 
