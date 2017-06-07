@@ -531,6 +531,37 @@ temp_pkg_dir() do
             "redirect_stderr(STDOUT); using Example; Pkg.update(\"$package\")"`))
         @test contains(msg, "- $package\nRestart Julia to use the updated versions.")
     end
+
+    # Modify remote url and branch of METADATA
+    LibGit2.with(LibGit2.GitRepo, Pkg.dir("METADATA")) do repo
+        @test isdir(Pkg.dir("METADATA"))
+
+        # Make sure that init does not create a new branch
+        @test_throws ErrorException Pkg.init("foo", "bar")
+
+        commit = LibGit2.peel(LibGit2.GitCommit, LibGit2.head(repo))
+        LibGit2.create_branch(repo, "bar", commit)
+        @test LibGit2.branch(LibGit2.head(repo)) != "bar"
+
+        Pkg.init("foo", "bar")
+
+        @test LibGit2.url(LibGit2.get(LibGit2.GitRemote, repo, "origin")) == "foo"
+        @test LibGit2.branch(LibGit2.head(repo)) == "bar"
+        @test readstring(joinpath(Pkg.dir(), "META_BRANCH")) == "bar"
+
+        remote_branch = "origin/$(Pkg.META_BRANCH)"
+        Pkg.init("foo", remote_branch)
+
+        remote_branch_ref = LibGit2.lookup_branch(repo, remote_branch, true)
+        @test LibGit2.GitHash(LibGit2.head(repo)) == LibGit2.GitHash(get(remote_branch_ref))
+        @test readstring(joinpath(Pkg.dir(), "META_BRANCH")) == remote_branch
+
+        Pkg.init()  # reset
+
+        @test LibGit2.url(LibGit2.get(LibGit2.GitRemote, repo, "origin")) == Pkg.DEFAULT_META
+        @test LibGit2.branch(LibGit2.head(repo)) == Pkg.META_BRANCH
+        @test readstring(joinpath(Pkg.dir(), "META_BRANCH")) == Pkg.META_BRANCH
+    end
 end
 
 @testset "Pkg functions with .jl extension" begin

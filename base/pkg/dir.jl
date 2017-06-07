@@ -43,7 +43,24 @@ function init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRA
     metadata_dir = joinpath(dir, "METADATA")
     if isdir(metadata_dir)
         info("Package directory $dir is already initialized.")
-        LibGit2.set_remote_url(metadata_dir, meta)
+        with(LibGit2.GitRepo, metadata_dir) do r
+            LibGit2.transact(r) do repo
+                LibGit2.set_remote_url(repo, meta)
+
+                # Ideally this logic would be contained within LibGit2
+                ref = LibGit2.lookup_branch(repo, branch, true)  # remote branch
+                isnull(ref) && (ref = LibGit2.lookup_branch(repo, branch, false))  # local branch
+                isnull(ref) && error("METADATA repo does not contain branch: $branch")
+                commit_obj = LibGit2.peel(LibGit2.GitCommit, unsafe_get(ref))
+                LibGit2.checkout_tree(repo, commit_obj)
+                LibGit2.head!(repo, unsafe_get(ref))
+
+                # Overwrite file last as the transact block won't roll this change back
+                open(joinpath(dir, "META_BRANCH"), "w") do io
+                    write(io, branch)
+                end
+            end
+        end
         return
     end
     local temp_dir = ""
