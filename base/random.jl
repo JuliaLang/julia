@@ -284,11 +284,6 @@ julia> rand(MersenneTwister(0), Dict(1=>2, 3=>4))
     `Set` and `IntSet`. For more than a few calls, use `rand(rng,
     collect(s))` instead, or either `rand(rng, Dict(s))` or `rand(rng,
     Set(s))` as appropriate.
-
-!!! note
-    the complexity of `rand(rng, s::AbstractString)` is linear
-    in the length of `s` if `s` is not of type `String`. If called more
-    than a few times, you should use `rand(rng, collect(s))` instead.
 """
 @inline rand() = rand(GLOBAL_RNG, CloseOpen)
 @inline rand(T::Type) = rand(GLOBAL_RNG, T)
@@ -717,31 +712,26 @@ rand(rng::AbstractRNG, r::AbstractArray, dims::Integer...) = rand(rng, r, conver
 
 # rand from a string
 
-rand(rng::AbstractRNG, s::AbstractString) = rand_iter(rng, s, Base.iteratorsize(s))
-rand(s::AbstractString) = rand(GLOBAL_RNG, s)
-
-## optimization for String
-
 isvalid_unsafe(s::String, i) = !Base.is_valid_continuation(unsafe_load(pointer(s), i))
 
-function rand(rng::AbstractRNG, s::String)
-    rg = RangeGenerator(1:s.len)
+function rand(rng::AbstractRNG, s::String)::Char
+    g = RangeGenerator(1:s.len)
     while true
-        pos = rand(rng, rg)
+        pos = rand(rng, g)
         isvalid_unsafe(s, pos) && return s[pos]
     end
 end
 
-## rand from an iterator
-
-rand_iter(rng, s, ::Base.IteratorSize) = throw(ArgumentError("iterator must have a known length"))
-
-function rand_iter(rng::AbstractRNG, s, ::Union{Base.HasShape,Base.HasLength})::eltype(s)
-    pos = rand(rng, 1:length(s))
-    for (i, c) in enumerate(s)
-        i == pos && return c
+function rand(rng::AbstractRNG, s::AbstractString)::Char
+    g = RangeGenerator(1:endof(s))
+    while true
+        try # the generic `isvalid` includes an equivalent try/catch statement
+            return s[rand(rng, g)]
+        end
     end
 end
+
+rand(s::AbstractString) = rand(GLOBAL_RNG, s)
 
 ## rand from a string for arrays
 # we use collect(str), which is most of the time more efficient than specialized methods
