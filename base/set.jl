@@ -203,6 +203,7 @@ end
 
 """
     unique!(c)
+
 Remove duplicate items and return the modified collection, as determined by
 [`isequal`](@ref).
 
