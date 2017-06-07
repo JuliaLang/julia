@@ -1567,7 +1567,7 @@ A = view(rand(5,5), 1:3, 1:3)
 # julia#17623
 if VERSION >= v"0.5.0-dev+5509"
 # Use include_string to work around unsupported syntax on Julia 0.4
-include_string("""
+include_string(Main, """
     @test [true, false] .& [true, true] == [true, false]
     @test [true, false] .| [true, true] == [true, true]
 """)
@@ -1852,6 +1852,8 @@ if VERSION >= v"0.5.0-rc1+46"
     @test b == [1,2,3]
 end
 
+@test (@__MODULE__) === Main
+
 # invokelatest
 issue19774(x) = 1
 let foo() = begin
@@ -1860,7 +1862,8 @@ let foo() = begin
     end
     @test foo() == 2
 end
-@test Compat.invokelatest(current_module) === current_module()
+cm359() = @__MODULE__
+@test Compat.invokelatest(cm359) === @__MODULE__
 
 # PR 21378
 let
