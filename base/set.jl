@@ -191,10 +191,9 @@ function unique(f::Callable, C)
 end
 
 """
-    unique!(c)
+    unique!(c::AbstractVector)
 
-Remove duplicate items and return the modified collection, as determined by
-[`isequal`](@ref).
+Remove duplicate items as determined by [`isequal`](@ref), then return the modified `c`.
 
 ```jldoctest
 julia> unique!([1, 1, 1])
@@ -214,7 +213,9 @@ julia> A
 ```
 """
 function unique!(c::AbstractVector)
-    if (issorted(c) || issorted(c, rev=true)) && !isempty(c)
+    if isempty(c)
+        count = 0
+    elseif (issorted(c) || issorted(c, rev=true))
         # If c is sorted, then we only need to keep track of one element and add that to c
         # everytime that we see a new element.
         count = 1
