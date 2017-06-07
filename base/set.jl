@@ -228,7 +228,7 @@ function unique!(A::AbstractVector)
         return A
     elseif issorted(A) || issorted(A, rev=true)
         # If A is sorted, then we only need to keep track of one element and add that to A
-        # everytime that we see a new element.
+        # every time that we see a new element.
         count = 1
         for i in eachindex(A)
             @inbounds x = A[i]
