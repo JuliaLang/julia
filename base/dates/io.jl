@@ -111,7 +111,15 @@ end
 @inline function tryparsenext(d::DatePart{'s'}, str, i, len)
     ms, ii = tryparsenext_base10(str, i, len, min_width(d), max_width(d))
     if !isnull(ms)
-        ms = Nullable{Int64}(get(ms) * 10 ^ (3 - (ii - i)))
+        val = get(ms)
+        len = ii - i
+        if len > 3
+            val, r = divrem(val, Int64(10) ^ (len - 3))
+            r == 0 || throw(InexactError())
+        else
+            val *= Int64(10) ^ (3 - len)
+        end
+        ms = Nullable{Int64}(val)
     end
     return ms, ii
 end

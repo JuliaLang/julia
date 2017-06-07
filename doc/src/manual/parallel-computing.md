@@ -71,7 +71,7 @@ you read from a remote object to obtain data needed by the next local operation.
 [`remotecall_fetch()`](@ref) exists for this purpose. It is equivalent to `fetch(remotecall(...))`
 but is more efficient.
 
-```julia
+```julia-repl
 julia> remotecall_fetch(getindex, 2, r, 1, 1)
 0.18526337335308085
 ```
@@ -83,7 +83,7 @@ The syntax of [`remotecall()`](@ref) is not especially convenient. The macro [`@
 makes things easier. It operates on an expression rather than a function, and picks where to do
 the operation for you:
 
-```julia
+```julia-repl
 julia> r = @spawn rand(2,2)
 Future(2, 1, 4, Nullable{Any}())
 
@@ -113,7 +113,7 @@ have fetched, the remote stored value is deleted.
 Your code must be available on any process that runs it. For example, type the following into
 the Julia prompt:
 
-```julia
+```julia-repl
 julia> function rand2(dims...)
            return 2*rand(dims...)
        end
@@ -169,7 +169,7 @@ Starting Julia with `julia -p 2`, you can use this to verify the following:
 You can force a command to run on all processes using the [`@everywhere`](@ref) macro. For example, `@everywhere`
 can also be used to directly define a function on all processes:
 
-```julia
+```julia-repl
 julia> @everywhere id = myid()
 
 julia> remotecall_fetch(()->id, 2)
@@ -216,7 +216,7 @@ operation. Consider these two approaches to constructing and squaring a random m
 
 Method 1:
 
-```julia
+```julia-repl
 julia> A = rand(1000,1000);
 
 julia> Bref = @spawn A^2;
@@ -228,7 +228,7 @@ julia> fetch(Bref);
 
 Method 2:
 
-```julia
+```julia-repl
 julia> Bref = @spawn rand(1000,1000)^2;
 
 [...]
@@ -256,7 +256,7 @@ Expressions executed remotely via `@spawn`, or closures specified for remote exe
 a little differently compared to global bindings in other modules. Consider the following code
 snippet:
 
-```julia
+```julia-repl
 A = rand(10,10)
 remotecall_fetch(()->foo(A), 2)
 ```
@@ -296,7 +296,7 @@ altogether if possible. If you must reference globals, consider using `let` bloc
 
 For example:
 
-```julia
+```julia-repl
 julia> A = rand(10,10);
 
 julia> remotecall_fetch(()->A, 2);
@@ -339,7 +339,7 @@ end
 The function `count_heads` simply adds together `n` random bits. Here is how we can perform some
 trials on two machines, and add together the results:
 
-```julia
+```julia-repl
 julia> @everywhere include("count_heads.jl")
 
 julia> a = @spawn count_heads(100000000)
@@ -424,7 +424,7 @@ in some range (or, more generally, to all elements in some collection). This is 
 operation called *parallel map*, implemented in Julia as the [`pmap()`](@ref) function. For example,
 we could compute the singular values of several large random matrices in parallel as follows:
 
-```julia
+```julia-repl
 julia> M = Matrix{Float64}[rand(1000,1000) for i = 1:10];
 
 julia> pmap(svd, M);
@@ -453,7 +453,7 @@ work to processes only when they finish their current tasks.
 
 As an example, consider computing the singular values of matrices of different sizes:
 
-```julia
+```julia-repl
 julia> M = Matrix{Float64}[rand(800,800), rand(600,600), rand(800,800), rand(600,600)];
 
 julia> pmap(svd, M);
@@ -553,7 +553,7 @@ A channel can be visualized as a pipe, i.e., it has a write end and read end.
     freely via [`take!()`](@ref) and [`put!()`](@ref) calls. [`close()`](@ref) closes a [`Channel`](@ref).
     On a closed [`Channel`](@ref), [`put!()`](@ref) will fail. For example:
 
-```julia
+```julia-repl
 julia> c = Channel(2);
 
 julia> put!(c, 1) # `put!` on an open channel succeeds
@@ -569,7 +569,7 @@ ERROR: InvalidStateException("Channel is closed.",:closed)
   * [`take!()`](@ref) and [`fetch()`](@ref) (which retrieves but does not remove the value) on a closed
     channel successfully return any existing values until it is emptied. Continuing the above example:
 
-```julia
+```julia-repl
 julia> fetch(c) # Any number of `fetch` calls succeed.
 1
 
@@ -590,7 +590,7 @@ long as the `Channel` has data or is open. The loop variable takes on all values
 
 For example, the following would cause the `for` loop to wait for more data:
 
-```julia
+```julia-repl
 julia> c = Channel{Int}(10);
 
 julia> foreach(i->put!(c, i), 1:3) # add a few entries
@@ -600,7 +600,7 @@ julia> data = [i for i in c]
 
 while this will return after reading all data:
 
-```julia
+```julia-repl
 julia> c = Channel{Int}(10);
 
 julia> foreach(i->put!(c, i), 1:3); # add a few entries
@@ -620,7 +620,7 @@ Each task in this simulation reads a `job_id`, waits for a random amout of time 
 a tuple of `job_id` and the simulated time to the results channel. Finally all the `results` are
 printed out.
 
-```julia
+```julia-repl
 julia> const jobs = Channel{Int}(32);
 
 julia> const results = Channel{Tuple}(32);
@@ -725,7 +725,7 @@ are written to the channel. Each remotely executing task in this simulation read
 waits for a random amount of time and writes back a tuple of `job_id`, time taken and its own
 `pid` to the results channel. Finally all the `results` are printed out on the master process.
 
-```julia
+```julia-repl
 julia> addprocs(4); # add worker processes
 
 julia> const jobs = RemoteChannel(()->Channel{Int}(32));
@@ -845,7 +845,7 @@ portion of the array, thereby parallelizing initialization.
 
 Here's a brief example:
 
-```julia
+```julia-repl
 julia> addprocs(3)
 3-element Array{Int64,1}:
  2
@@ -872,7 +872,7 @@ julia> S
 convenient for splitting up tasks among processes. You can, of course, divide the work any way
 you wish:
 
-```julia
+```julia-repl
 julia> S = SharedArray{Int,2}((3,4), init = S -> S[indexpids(S):length(procs(S)):length(S)] = myid())
 3×4 SharedArray{Int64,2}:
  2  2  2  2
@@ -910,7 +910,7 @@ not be ready at the time it's needed for computing `q[i,j,t+1]`. In such cases, 
 off chunking the array manually. Let's split along the second dimension.
 Define a function that returns the `(irange, jrange)` indexes assigned to this worker:
 
-```julia
+```julia-repl
 julia> @everywhere function myrange(q::SharedArray)
            idx = indexpids(q)
            if idx == 0 # This worker is not assigned a piece
@@ -924,7 +924,7 @@ julia> @everywhere function myrange(q::SharedArray)
 
 Next, define the kernel:
 
-```julia
+```julia-repl
 julia> @everywhere function advection_chunk!(q, u, irange, jrange, trange)
            @show (irange, jrange, trange)  # display so we can see what's happening
            for t in trange, j in jrange, i in irange
@@ -936,20 +936,20 @@ julia> @everywhere function advection_chunk!(q, u, irange, jrange, trange)
 
 We also define a convenience wrapper for a `SharedArray` implementation
 
-```julia
+```julia-repl
 julia> @everywhere advection_shared_chunk!(q, u) =
            advection_chunk!(q, u, myrange(q)..., 1:size(q,3)-1)
 ```
 
 Now let's compare three different versions, one that runs in a single process:
 
-```julia
+```julia-repl
 julia> advection_serial!(q, u) = advection_chunk!(q, u, 1:size(q,1), 1:size(q,2), 1:size(q,3)-1);
 ```
 
 one that uses [`@parallel`](@ref):
 
-```julia
+```julia-repl
 julia> function advection_parallel!(q, u)
            for t = 1:size(q,3)-1
                @sync @parallel for j = 1:size(q,2)
@@ -964,7 +964,7 @@ julia> function advection_parallel!(q, u)
 
 and one that delegates in chunks:
 
-```julia
+```julia-repl
 julia> function advection_shared!(q, u)
            @sync begin
                for p in procs(q)
@@ -977,7 +977,7 @@ julia> function advection_shared!(q, u)
 
 If we create `SharedArray`s and time these functions, we get the following results (with `julia -p 4`):
 
-```julia
+```julia-repl
 julia> q = SharedArray{Float64,3}((500,500,500));
 
 julia> u = SharedArray{Float64,3}((500,500,500));
@@ -985,7 +985,7 @@ julia> u = SharedArray{Float64,3}((500,500,500));
 
 Run the functions once to JIT-compile and [`@time`](@ref) them on the second run:
 
-```julia
+```julia-repl
 julia> @time advection_serial!(q, u);
 (irange,jrange,trange) = (1:500,1:500,1:499)
  830.220 milliseconds (216 allocations: 13820 bytes)
@@ -1299,7 +1299,7 @@ in the future.
 By default, Julia starts up with a single thread of execution. This can be verified by using the
 command [`Threads.nthreads()`](@ref):
 
-```julia
+```julia-repl
 julia> Threads.nthreads()
 1
 ```
@@ -1307,7 +1307,7 @@ julia> Threads.nthreads()
 The number of threads Julia starts up with is controlled by an environment variable called `JULIA_NUM_THREADS`.
 Now, let's start up Julia with 4 threads:
 
-```
+```bash
 export JULIA_NUM_THREADS=4
 ```
 
@@ -1317,14 +1317,14 @@ start up the command line in the location of `julia.exe` and use `set` instead o
 
 Let's verify there are 4 threads at our disposal.
 
-```julia
+```julia-repl
 julia> Threads.nthreads()
 4
 ```
 
 But we are currently on the master thread. To check, we use the command [`Threads.threadid()`](@ref)
 
-```julia
+```julia-repl
 julia> Threads.threadid()
 1
 ```
@@ -1354,7 +1354,7 @@ thread ID into each location.
 Julia supports parallel loops using the [`Threads.@threads`](@ref) macro. This macro is affixed
 in front of a `for` loop to indicate to Julia that the loop is a multi-threaded region:
 
-```julia
+```julia-repl
 julia> Threads.@threads for i = 1:10
            a[i] = Threads.threadid()
        end
@@ -1363,7 +1363,7 @@ julia> Threads.@threads for i = 1:10
 The iteration space is split amongst the threads, after which each thread writes its thread ID
 to its assigned locations:
 
-```julia
+```julia-repl
 julia> a
 10-element Array{Float64,1}:
  1.0
@@ -1414,4 +1414,3 @@ It is very important that the called function does not call back into Julia.
     introduced a new set of communication mechanisms, collectively referred to as Remote Memory Access
     (RMA). The motivation for adding RMA to the MPI standard was to facilitate one-sided communication
     patterns. For additional information on the latest MPI standard, see [http://mpi-forum.org/docs](http://mpi-forum.org/docs/).
-

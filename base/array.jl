@@ -53,10 +53,22 @@ import Core: arraysize, arrayset, arrayref
     Array{T,N}(dims)
 
 Construct an uninitialized `N`-dimensional dense array with element type `T`,
-where `N` is determined from the length or number of `dims`.  `dims` may
+where `N` is determined from the length or number of `dims`. `dims` may
 be a tuple or a series of integer arguments corresponding to the lengths in each dimension.
 If the rank `N` is supplied explicitly as in `Array{T,N}(dims)`, then it must
 match the length or number of `dims`.
+
+# Example
+
+```jldoctest
+julia> A = Array{Float64, 2}(2, 2);
+
+julia> ndims(A)
+2
+
+julia> eltype(A)
+Float64
+```
 """
 Array
 
@@ -259,7 +271,7 @@ end
     eye([T::Type=Float64,] m::Integer, n::Integer)
 
 `m`-by-`n` identity matrix.
-The default element type is `Float64`.
+The default element type is [`Float64`](@ref).
 """
 function eye(::Type{T}, m::Integer, n::Integer) where T
     a = zeros(T,m,n)
@@ -280,7 +292,7 @@ eye(::Type{T}, n::Integer) where {T} = eye(T, n, n)
     eye([T::Type=Float64,] n::Integer)
 
 `n`-by-`n` identity matrix.
-The default element type is `Float64`.
+The default element type is [`Float64`](@ref).
 """
 eye(n::Integer) = eye(Float64, n)
 
@@ -706,7 +718,7 @@ julia> resize!([6, 5, 4, 3, 2, 1], 3)
  4
 ```
 
-```julia
+```julia-repl
 julia> resize!([6, 5, 4, 3, 2, 1], 8)
 8-element Array{Int64,1}:
  6
@@ -853,8 +865,8 @@ julia> deleteat!([6, 5, 4, 3, 2, 1], [true, false, true, false, true, false])
 julia> deleteat!([6, 5, 4, 3, 2, 1], (2, 2))
 ERROR: ArgumentError: indices must be unique and sorted
 Stacktrace:
- [1] _deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:873
- [2] deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:860
+ [1] _deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:885
+ [2] deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:872
 ```
 """
 deleteat!(a::Vector, inds) = _deleteat!(a, inds)

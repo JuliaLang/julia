@@ -173,8 +173,8 @@ julia> if 1
 ERROR: TypeError: non-boolean (Int64) used in boolean context
 ```
 
-This error indicates that the conditional was of the wrong type: `Int64` rather than the required
-`Bool`.
+This error indicates that the conditional was of the wrong type: [`Int64`](@ref) rather
+than the required [`Bool`](@ref).
 
 The so-called "ternary operator", `?:`, is closely related to the `if`-`elseif`-`else` syntax,
 but is used where a conditional choice between single expression values is required, as opposed
@@ -571,7 +571,7 @@ julia> sqrt(-1)
 ERROR: DomainError:
 sqrt will only return a complex result if called with a complex argument. Try sqrt(complex(x)).
 Stacktrace:
- [1] sqrt(::Int64) at ./math.jl:431
+ [1] sqrt(::Int64) at ./math.jl:434
 ```
 
 You may define your own exceptions in the following way:

@@ -448,6 +448,7 @@ void fl_print_child(fl_context_t *fl_ctx, ios_t *f, value_t v)
     case TAG_CVALUE:
     case TAG_CPRIM:
         if (v == UNBOUND) { outs(fl_ctx, "#<undefined>", f); break; }
+        JL_FALLTHROUGH;
     case TAG_VECTOR:
     case TAG_CONS:
         if (print_circle_prefix(fl_ctx, f, v)) break;

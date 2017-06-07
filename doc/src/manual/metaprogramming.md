@@ -238,7 +238,7 @@ julia> ex = :(a in $:((1,2,3)) )
 Interpolating symbols into a nested expression requires enclosing each symbol in an enclosing
 quote block:
 
-```julia
+```julia-repl
 julia> :( :a in $( :(:a + :b) ) )
                    ^^^^^^^^^^
                    quoted inner expression
@@ -298,7 +298,7 @@ Since expressions are just `Expr` objects which can be constructed programmatica
 it is possible to dynamically generate arbitrary code which can then be run using [`eval()`](@ref).
 Here is a simple example:
 
-```julia
+```julia-repl
 julia> a = 1;
 
 julia> ex = Expr(:call, :+, a, :b)
@@ -920,12 +920,12 @@ we returned from the definition, now with the *value* of `x`.
 
 What happens if we evaluate `foo` again with a type that we have already used?
 
-```julia generated
+```jldoctest generated
 julia> foo(4)
 16
 ```
 
-Note that there is no printout of `Int64`. We can see that the body of the generated function
+Note that there is no printout of [`Int64`](@ref). We can see that the body of the generated function
 was only executed once here, for the specific set of argument types, and the result was cached.
 After that, for this example, the expression returned from the generated function on the first
 invocation was re-used as the method body. However, the actual caching behavior is an implementation-defined

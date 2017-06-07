@@ -181,7 +181,7 @@ julia> mutable struct SelfReferential
 This type may appear innocuous enough, until one considers how to construct an instance of it.
 If `a` is an instance of `SelfReferential`, then a second instance can be created by the call:
 
-```julia
+```julia-repl
 julia> b = SelfReferential(a)
 ```
 
@@ -246,7 +246,7 @@ and does not reference other objects. The plain data types consist of primitive 
 and immutable structs of other plain data types. The initial contents of a plain data type is
 undefined:
 
-```julia
+```julia-repl
 julia> struct HasPlain
            n::Int
            HasPlain() = new()
@@ -313,10 +313,10 @@ Point{Float64}(1.0, 2.0)
 
 As you can see, for constructor calls with explicit type parameters, the arguments are converted
 to the implied field types: `Point{Int64}(1,2)` works, but `Point{Int64}(1.0,2.5)` raises an
-[`InexactError`](@ref) when converting `2.5` to `Int64`. When the type is implied by the arguments to
-the constructor call, as in `Point(1,2)`, then the types of the arguments must agree -- otherwise
-the `T` cannot be determined -- but any pair of real arguments with matching type may be given
-to the generic `Point` constructor.
+[`InexactError`](@ref) when converting `2.5` to [`Int64`](@ref). When the type is implied
+by the arguments to the constructor call, as in `Point(1,2)`, then the types of the
+arguments must agree -- otherwise the `T` cannot be determined -- but any pair of real
+arguments with matching type may be given to the generic `Point` constructor.
 
 What's really going on here is that `Point`, `Point{Float64}` and `Point{Int64}` are all different
 constructor functions. In fact, `Point{T}` is a distinct constructor function for each type `T`.
@@ -551,10 +551,11 @@ SummedArray{Int32,Int32}(Int32[1, 2, 3], 6)
 ```
 
 The problem is that we want `S` to be a larger type than `T`, so that we can sum many elements
-with less information loss. For example, when `T` is `Int32`, we would like `S` to be `Int64`.
-Therefore we want to avoid an interface that allows the user to construct instances of the type
-`SummedArray{Int32,Int32}`. One way to do this is to provide a constructor only for `SummedArray`,
-but inside the `type` definition block to suppress generation of default constructors:
+with less information loss. For example, when `T` is [`Int32`](@ref), we would like `S` to
+be [`Int64`](@ref). Therefore we want to avoid an interface that allows the user to construct
+instances of the type `SummedArray{Int32,Int32}`. One way to do this is to provide a
+constructor only for `SummedArray`, but inside the `type` definition block to suppress
+generation of default constructors:
 
 ```jldoctest
 julia> struct SummedArray{T<:Number,S<:Number}

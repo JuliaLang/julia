@@ -255,3 +255,6 @@ end
 
 # @printf
 @test_throws ArgumentError eval(:(@printf 1))
+
+# Check bug with trailing nul printing BigFloat
+@test (@sprintf("%.330f", BigFloat(1)))[end] != '\0'

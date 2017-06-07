@@ -704,6 +704,7 @@ JL_DLLEXPORT jl_value_t *jl_gc_big_alloc(jl_ptls_t ptls, size_t sz)
 {
     maybe_collect(ptls);
     size_t offs = offsetof(bigval_t, header);
+    static_assert(sizeof(bigval_t) % JL_HEAP_ALIGNMENT == 0, "");
     size_t allocsz = LLT_ALIGN(sz + offs, JL_CACHE_BYTE_ALIGNMENT);
     if (allocsz < sz)  // overflow in adding offs, size was "negative"
         jl_throw(jl_memory_exception);
@@ -2334,7 +2335,8 @@ jl_value_t *jl_gc_realloc_string(jl_value_t *s, size_t sz)
         return snew;
     }
     size_t newsz = sz + sizeof(size_t) + 1;
-    size_t offs = offsetof(bigval_t, header);
+    size_t offs = sizeof(bigval_t);
+    size_t oldsz = LLT_ALIGN(strsz + offs, JL_CACHE_BYTE_ALIGNMENT);
     size_t allocsz = LLT_ALIGN(newsz + offs, JL_CACHE_BYTE_ALIGNMENT);
     if (allocsz < sz)  // overflow in adding offs, size was "negative"
         jl_throw(jl_memory_exception);
@@ -2346,9 +2348,7 @@ jl_value_t *jl_gc_realloc_string(jl_value_t *s, size_t sz)
     // the old pointer to be left alone if we can't grow in place.
     // for now it's up to the caller to make sure there are no references to the
     // old pointer.
-    bigval_t *newbig =
-        (bigval_t*)gc_managed_realloc_(ptls, hdr, allocsz, LLT_ALIGN(strsz+offs, JL_CACHE_BYTE_ALIGNMENT),
-                                       1, s, 0);
+    bigval_t *newbig = (bigval_t*)gc_managed_realloc_(ptls, hdr, allocsz, oldsz, 1, s, 0);
     newbig->sz = allocsz;
     newbig->age = 0;
     gc_big_object_link(newbig, &ptls->heap.big_objects);

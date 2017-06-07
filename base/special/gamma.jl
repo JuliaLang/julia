@@ -37,7 +37,7 @@ lfact(x::Integer) = x < 0 ? throw(DomainError()) : lgamma(x + oneunit(x))
     lgamma(x)
 
 Compute the logarithm of the absolute value of [`gamma`](@ref) for
-`Real` `x`, while for `Complex` `x` it computes the
+[`Real`](@ref) `x`, while for [`Complex`](@ref) `x` compute the
 principal branch cut of the logarithm of `gamma(x)` (defined for negative `real(x)`
 by analytic continuation from positive `real(x)`).
 """

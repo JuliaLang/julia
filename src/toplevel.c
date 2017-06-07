@@ -54,8 +54,10 @@ JL_DLLEXPORT jl_module_t *jl_new_main_module(void)
 
     jl_main_module = jl_new_module(jl_symbol("Main"));
     jl_main_module->parent = jl_main_module;
-    if (old_main) // don't block continued loading of incremental caches
+    if (old_main) { // don't block continued loading of incremental caches
+        jl_main_module->primary_world = old_main->primary_world;
         jl_main_module->uuid = old_main->uuid;
+    }
     ptls->current_module = jl_main_module;
 
     jl_core_module->parent = jl_main_module;

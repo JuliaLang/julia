@@ -14,7 +14,7 @@ The names of `DataType` fields may be interrogated using [`fieldnames()`](@ref).
 given the following type, `fieldnames(Point)` returns an arrays of [`Symbol`](@ref) elements representing
 the field names:
 
-```julia
+```jldoctest struct_point
 julia> struct Point
            x::Int
            y
@@ -29,9 +29,9 @@ julia> fieldnames(Point)
 The type of each field in a `Point` object is stored in the `types` field of the `Point` variable
 itself:
 
-```julia
+```jldoctest struct_point
 julia> Point.types
-svec(Int64,Any)
+svec(Int64, Any)
 ```
 
 While `x` is annotated as an `Int`, `y` was unannotated in the type definition, therefore `y`
@@ -39,7 +39,7 @@ defaults to the `Any` type.
 
 Types are themselves represented as a structure called `DataType`:
 
-```julia
+```jldoctest struct_point
 julia> typeof(Point)
 DataType
 ```
@@ -50,11 +50,11 @@ of these fields is the `types` field observed in the example above.
 ## Subtypes
 
 The *direct* subtypes of any `DataType` may be listed using [`subtypes()`](@ref). For example,
-the abstract `DataType``AbstractFloat` has four (concrete) subtypes:
+the abstract `DataType` [`AbstractFloat`](@ref) has four (concrete) subtypes:
 
-```julia
+```jldoctest
 julia> subtypes(AbstractFloat)
-4-element Array{DataType,1}:
+4-element Array{Union{DataType, UnionAll},1}:
  BigFloat
  Float16
  Float32
@@ -83,9 +83,9 @@ the unquoted and interpolated expression (`Expr`) form for a given macro. To use
 `quote` the expression block itself (otherwise, the macro will be evaluated and the result will
 be passed instead!). For example:
 
-```julia
+```jldoctest
 julia> macroexpand( :(@edit println("")) )
-:((Base.edit)(println,(Base.typesof)("")))
+:((Base.edit)(println, (Base.typesof)("")))
 ```
 
 The functions `Base.Meta.show_sexpr()` and [`dump()`](@ref) are used to display S-expr style views
@@ -95,11 +95,11 @@ Finally, the [`expand()`](@ref) function gives the `lowered` form of any express
 particular interest for understanding both macros and top-level statements such as function declarations
 and variable assignments:
 
-```julia
+```jldoctest
 julia> expand( :(f() = 1) )
 :(begin
         $(Expr(:method, :f))
-        $(Expr(:method, :f, :((Core.svec)((Core.svec)((Core.Typeof)(f)),(Core.svec)())), CodeInfo(:(begin  # none, line 1:
+        $(Expr(:method, :f, :((Core.svec)((Core.svec)((Core.Typeof)(f)), (Core.svec)())), CodeInfo(:(begin  # none, line 1:
         return 1
     end)), false))
         return f
@@ -123,7 +123,7 @@ generation for any function which has not previously been called).
 For convenience, there are macro versions of the above functions which take standard function
 calls and expand argument types automatically:
 
-```julia
+```julia-repl
 julia> @code_llvm +(1,1)
 
 ; Function Attrs: sspreq

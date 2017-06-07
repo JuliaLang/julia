@@ -64,8 +64,8 @@ julia> typeof(ans)
 Int64
 ```
 
-On 32-bit architectures, [`typeof(ans)`](@ref) will be `Int32`. You can convert an integer value
-back to a `Char` just as easily:
+On 32-bit architectures, [`typeof(ans)`](@ref) will be [`Int32`](@ref). You can convert an
+integer value back to a `Char` just as easily:
 
 ```jldoctest
 julia> Char(120)
@@ -645,7 +645,7 @@ For when a capture doesn't match, instead of a substring, `m.captures` contains 
 position, and `m.offsets` has a zero offset (recall that indices in Julia are 1-based, so a zero
 offset into a string is invalid). Here is a pair of somewhat contrived examples:
 
-```jldoctest
+```jldoctest acdmatch
 julia> m = match(r"(a|b)(c)?(d)", "acd")
 RegexMatch("acd", 1="a", 2="c", 3="d")
 
@@ -692,7 +692,7 @@ julia> m.offsets
 It is convenient to have captures returned as an array so that one can use destructuring syntax
 to bind them to local variables:
 
-```julia
+```jldoctest acdmatch
 julia> first, second, third = m.captures; first
 "a"
 ```
@@ -778,8 +778,8 @@ for regular expressions containing quotation marks or newlines).
 ## [Byte Array Literals](@id man-byte-array-literals)
 
 Another useful non-standard string literal is the byte-array string literal: `b"..."`. This form
-lets you use string notation to express literal byte arrays -- i.e. arrays of `UInt8` values.
-The rules for byte array literals are the following:
+lets you use string notation to express literal byte arrays -- i.e. arrays of
+[`UInt8`](@ref) values. The rules for byte array literals are the following:
 
   * ASCII characters and ASCII escapes produce a single byte.
   * `\x` and octal escape sequences produce the *byte* corresponding to the escape value.
@@ -808,7 +808,7 @@ The Unicode escape `\u2200` is encoded in UTF-8 as the three bytes 226, 136, 128
 resulting byte array does not correspond to a valid UTF-8 string -- if you try to use this as
 a regular string literal, you will get a syntax error:
 
-```julia
+```julia-repl
 julia> "DATA\xff\u2200"
 ERROR: syntax: invalid UTF-8 sequence
 ```

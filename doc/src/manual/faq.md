@@ -214,9 +214,10 @@ julia> function unstable(flag::Bool)
 unstable (generic function with 1 method)
 ```
 
-It returns either an `Int` or a `Float64` depending on the value of its argument. Since Julia
-can't predict the return type of this function at compile-time, any computation that uses it will
-have to guard against both types possibly occurring, making generation of fast machine code difficult.
+It returns either an `Int` or a [`Float64`](@ref) depending on the value of its argument.
+Since Julia can't predict the return type of this function at compile-time, any computation
+that uses it will have to guard against both types possibly occurring, making generation of
+fast machine code difficult.
 
 ### [Why does Julia give a `DomainError` for certain seemingly-sensible operations?](@id faq-domain-errors)
 
@@ -227,7 +228,7 @@ julia> sqrt(-2.0)
 ERROR: DomainError:
 sqrt will only return a complex result if called with a complex argument. Try sqrt(complex(x)).
 Stacktrace:
- [1] sqrt(::Float64) at ./math.jl:422
+ [1] sqrt(::Float64) at ./math.jl:425
 
 julia> 2^-5
 ERROR: DomainError:
@@ -281,7 +282,7 @@ ideal for a high-level programming language to expose this to the user. For nume
 efficiency and transparency are at a premium, however, the alternatives are worse.
 
 One alternative to consider would be to check each integer operation for overflow and promote
-results to bigger integer types such as `Int128` or [`BigInt`](@ref) in the case of overflow.
+results to bigger integer types such as [`Int128`](@ref) or [`BigInt`](@ref) in the case of overflow.
 Unfortunately, this introduces major overhead on every integer operation (think incrementing a
 loop counter) – it requires emitting code to perform run-time overflow checks after arithmetic
 instructions and branches to handle potential overflows. Worse still, this would cause every computation
@@ -391,7 +392,7 @@ arithmetic. For example, since Julia integers use normal machine integer arithme
 to aggressively optimize simple little functions like `f(k) = 5k-1`. The machine code for this
 function is just this:
 
-```julia
+```julia-repl
 julia> code_native(f, Tuple{Int})
   .text
 Filename: none
@@ -407,7 +408,7 @@ Source line: 1
 The actual body of the function is a single `leaq` instruction, which computes the integer multiply
 and add at once. This is even more beneficial when `f` gets inlined into another function:
 
-```julia
+```julia-repl
 julia> function g(k, n)
            for i = 1:n
                k = f(k)
@@ -442,7 +443,7 @@ L26:
 Since the call to `f` gets inlined, the loop body ends up being just a single `leaq` instruction.
 Next, consider what happens if we make the number of loop iterations fixed:
 
-```julia
+```julia-repl
 julia> function g(k)
            for i = 1:10
                k = f(k)
@@ -485,7 +486,7 @@ to checked integer arithmetic in Julia, but for now, we have to live with the po
 As the error states, an immediate cause of an `UndefVarError` on a remote node is that a binding
 by that name does not exist. Let us explore some of the possible causes.
 
-```julia
+```julia-repl
 julia> module Foo
            foo() = remotecall_fetch(x->x, 2, "Hello")
        end
@@ -502,7 +503,7 @@ an `UndefVarError` is thrown.
 Globals under modules other than `Main` are not serialized by value to the remote node. Only a reference is sent.
 Functions which create global bindings (except under `Main`) may cause an `UndefVarError` to be thrown later.
 
-```julia
+```julia-repl
 julia> @everywhere module Foo
            function foo()
                global gvar = "Hello"
@@ -522,7 +523,7 @@ a new global binding `gvar` on the local node, but this was not found on node 2 
 Note that this does not apply to globals created under module `Main`. Globals under module `Main` are serialized
 and new bindings created under `Main` on the remote node.
 
-```julia
+```julia-repl
 julia> gvar_self = "Node1"
 "Node1"
 
@@ -540,7 +541,7 @@ julia> remotecall_fetch(whos, 2)
 This does not apply to `function` or `type` declarations. However, anonymous functions bound to global
 variables are serialized as can be seen below.
 
-```julia
+```julia-repl
 julia> bar() = 1
 bar (generic function with 1 method)
 

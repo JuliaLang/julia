@@ -219,8 +219,8 @@ isstructtype(x) = (@_pure_meta; false)
     isbits(T)
 
 Return `true` if `T` is a "plain data" type, meaning it is immutable and contains no
-references to other values. Typical examples are numeric types such as `UInt8`, `Float64`,
-and `Complex{Float64}`.
+references to other values. Typical examples are numeric types such as [`UInt8`](@ref),
+[`Float64`](@ref), and [`Complex{Float64}`](@ref).
 
 ```jldoctest
 julia> isbits(Complex{Float64})
@@ -763,7 +763,6 @@ function func_for_method_checked(m::Method, types::ANY)
     return m
 end
 
-
 """
     code_typed(f, types; optimize=true)
 
@@ -778,7 +777,7 @@ function code_typed(f::ANY, types::ANY=Tuple; optimize=true)
     end
     types = to_tuple_type(types)
     asts = []
-    world = typemax(UInt)
+    world = ccall(:jl_get_world_counter, UInt, ())
     params = Core.Inference.InferenceParams(world)
     for x in _methods(f, types, -1, world)
         meth = func_for_method_checked(x[3], types)
@@ -796,7 +795,7 @@ function return_types(f::ANY, types::ANY=Tuple)
     end
     types = to_tuple_type(types)
     rt = []
-    world = typemax(UInt)
+    world = ccall(:jl_get_world_counter, UInt, ())
     params = Core.Inference.InferenceParams(world)
     for x in _methods(f, types, -1, world)
         meth = func_for_method_checked(x[3], types)

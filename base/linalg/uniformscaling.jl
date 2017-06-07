@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 import Base: copy, ctranspose, getindex, show, transpose, one, zero, inv,
-             @_pure_meta, hcat, vcat, hvcat
+             hcat, vcat, hvcat
 import Base.LinAlg: SingularException
 
 struct UniformScaling{T<:Number}
@@ -31,7 +31,13 @@ eltype(::Type{UniformScaling{T}}) where {T} = T
 ndims(J::UniformScaling) = 2
 getindex(J::UniformScaling, i::Integer,j::Integer) = ifelse(i==j,J.λ,zero(J.λ))
 
-show(io::IO, J::UniformScaling) = print(io, "$(typeof(J))\n$(J.λ)*I")
+function show(io::IO, J::UniformScaling)
+    s = "$(J.λ)"
+    if ismatch(r"\w+\s*[\+\-]\s*\w+", s)
+        s = "($s)"
+    end
+    print(io, "$(typeof(J))\n$s*I")
+end
 copy(J::UniformScaling) = UniformScaling(J.λ)
 
 transpose(J::UniformScaling) = J
@@ -201,7 +207,7 @@ promote_to_arrays(n,k, ::Type{T}, A, B, C) where {T} =
     (promote_to_arrays_(n[k], T, A), promote_to_arrays_(n[k+1], T, B), promote_to_arrays_(n[k+2], T, C))
 promote_to_arrays(n,k, ::Type{T}, A, B, Cs...) where {T} =
     (promote_to_arrays_(n[k], T, A), promote_to_arrays_(n[k+1], T, B), promote_to_arrays(n,k+2, T, Cs...)...)
-promote_to_array_type(A::Tuple{Vararg{Union{AbstractVecOrMat,UniformScaling}}}) = (@_pure_meta; Matrix)
+promote_to_array_type(A::Tuple{Vararg{Union{AbstractVecOrMat,UniformScaling}}}) = Matrix
 
 for (f,dim,name) in ((:hcat,1,"rows"), (:vcat,2,"cols"))
     @eval begin

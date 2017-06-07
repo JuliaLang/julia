@@ -555,3 +555,11 @@ let
     @test Base.IndexStyle(view(a, :, :)) == Base.IndexLinear()
     @test isbits(view(a, :, :))
 end
+
+# Issue #17351
+let
+    x = rand(10)
+    u = rand(10, 3)
+    su = view(u, :, 1)
+    @test size(@inferred(xcorr(x, su))) == (19,)
+end
