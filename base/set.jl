@@ -230,8 +230,8 @@ function unique!(A::AbstractVector)
         # If A is sorted, then we only need to keep track of one element and add that to A
         # everytime that we see a new element.
         count = 1
-        for i in indices(A, 1)
-            x = A[i]
+        for i in eachindex(A)
+            @inbounds x = A[i]
             if x != A[count]
                 count += 1
                 A[count] = x
@@ -246,12 +246,12 @@ function unique!(A::AbstractVector)
         count = 0
         while !done(A, n)
             i, n = next(idxs, n)
-            x = A[i]
+            @inbounds x = A[i]
             if x ∉ seen
                 count += 1
                 push!(seen, x)
                 j, m = next(idxs, m)
-                A[j] = x
+                @inbounds A[j] = x
             end
         end
     end
