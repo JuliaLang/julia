@@ -172,12 +172,12 @@ function isapprox(J1::UniformScaling{T}, J2::UniformScaling{S};
     isapprox(J1.λ, J2.λ, rtol=rtol, atol=atol, nans=nans)
 end
 function isapprox(J::UniformScaling,A::AbstractMatrix;
-                       rtol::Real=rtoldefault(promote_leaf_eltypes(A),eltype(J)),
-                       atol::Real=0, nans::Bool=false, norm::Function=vecnorm)
+                  rtol::Real=rtoldefault(promote_leaf_eltypes(A),eltype(J)),
+                  atol::Real=0, nans::Bool=false, norm::Function=vecnorm)
     n = checksquare(A)
-    normdiff2 = zero(promote_type(eltype(A),eltype(J)))
     if norm == vecnorm
         #special non-allocating path for standard vecnorm
+        normdiff2 = zero(promote_type(eltype(A),eltype(J)))
         @inbounds for j = 1:n
             for i = 1:n
                 normdiff2 += abs2(A[i,j] - (i == j ? J.λ : zero(eltype(J))))
