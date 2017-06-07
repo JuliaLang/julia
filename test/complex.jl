@@ -967,10 +967,10 @@ end
 @testset "array printing with exponent format" begin
     a = [1.0 + 1e-10im, 2.0e-15 - 2.0e-5im, 1.0e-15 + 2im, 1.0 + 2e-15im]
     @test sprint((io, x) -> show(io, MIME("text/plain"), x), a) ==
-    join([
-        "4-element Array{Complex{Float64},1}:",
-        "     1.0+1.0e-10im",
-        " 2.0e-15-2.0e-5im ",
-        " 1.0e-15+2.0im    ",
-        "     1.0+2.0e-15im"], "\n")
+        join([
+            "4-element Array{Complex{Float64},1}:",
+            "     1.0+1.0e-10im",
+            " 2.0e-15-2.0e-5im ",
+            " 1.0e-15+2.0im    ",
+            "     1.0+2.0e-15im"], "\n")
 end
