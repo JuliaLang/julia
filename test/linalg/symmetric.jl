@@ -93,14 +93,20 @@ let n=10
             @test ishermitian(Symmetric(b + b'))
         end
 
-        #transpose, ctranspose
+        # transpose, ctranspose
+        S = Symmetric(asym)
+        H = Hermitian(asym)
         if eltya <: Real
-            @test transpose(Symmetric(asym)) == asym
+            @test  transpose(S) === S == asym
+            @test ctranspose(S) === S == asym
+            @test  transpose(H) === H == asym
+            @test ctranspose(H) === H == asym
         else
-            @test transpose(Hermitian(asym)) == transpose(asym)
+            @test  transpose(S) === S
+            @test ctranspose(S) ==  Symmetric(conj(asym))
+            @test  transpose(H) ==  Hermitian(transpose(asym))
+            @test ctranspose(H) === H == asym
         end
-        @test ctranspose(Symmetric(asym)) == Symmetric(conj(asym))
-        @test ctranspose(Hermitian(asym)) == asym
 
         #tril/triu
         for di in -n:n
