@@ -29,13 +29,12 @@ function scale!(X::Array{T}, s::Real) where T<:BlasComplex
     X
 end
 
-# Test whether a matrix is positive-definite
-isposdef!(A::StridedMatrix{<:BlasFloat}, UL::Symbol) = LAPACK.potrf!(char_uplo(UL), A)[2] == 0
-
 """
     isposdef!(A) -> Bool
 
-Test whether a matrix is positive definite, overwriting `A` in the process.
+Test whether a matrix is positive definite by trying to perform a
+Cholesky factorization of `A`, overwriting `A` in the process.
+See also [`isposdef`](@ref).
 
 # Example
 
@@ -51,16 +50,14 @@ julia> A
  2.0  6.78233
 ```
 """
-isposdef!(A::StridedMatrix) = ishermitian(A) && isposdef!(A, :U)
+isposdef!(A::AbstractMatrix) = ishermitian(A) && isposdef(cholfact!(Hermitian(A)))
 
-function isposdef(A::AbstractMatrix{T}, UL::Symbol) where T
-    S = typeof(sqrt(one(T)))
-    isposdef!(S == T ? copy(A) : convert(AbstractMatrix{S}, A), UL)
-end
 """
     isposdef(A) -> Bool
 
-Test whether a matrix is positive definite.
+Test whether a matrix is positive definite by trying to perform a
+Cholesky factorization of `A`.
+See also [`isposdef!`](@ref)
 
 # Example
 
@@ -74,10 +71,7 @@ julia> isposdef(A)
 true
 ```
 """
-function isposdef(A::AbstractMatrix{T}) where T
-    S = typeof(sqrt(one(T)))
-    isposdef!(S == T ? copy(A) : convert(AbstractMatrix{S}, A))
-end
+isposdef(A::AbstractMatrix) = ishermitian(A) && isposdef(cholfact(Hermitian(A)))
 isposdef(x::Number) = imag(x)==0 && real(x) > 0
 
 stride1(x::Array) = 1

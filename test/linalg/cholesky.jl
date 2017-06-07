@@ -67,10 +67,14 @@ using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted, PosDefException
             capds = cholfact(apds)
             @test inv(capds)*apds ≈ eye(n)
             @test abs((det(capds) - det(apd))/det(capds)) <= ε*κ*n
+            @test logdet(capds) ≈ log(det(capds))
+            @test isposdef(capds)
             if eltya <: BlasReal
                 capds = cholfact!(copy(apds))
                 @test inv(capds)*apds ≈ eye(n)
                 @test abs((det(capds) - det(apd))/det(capds)) <= ε*κ*n
+                @test logdet(capds) ≈ log(det(capds))
+                @test isposdef(capds)
             end
             ulstring = sprint(show,capds[:UL])
             @test sprint(show,capds) == "$(typeof(capds)) with factor:\n$ulstring"
@@ -78,12 +82,18 @@ using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted, PosDefException
             capdh = cholfact(apdh)
             @test inv(capdh)*apdh ≈ eye(n)
             @test abs((det(capdh) - det(apd))/det(capdh)) <= ε*κ*n
+            @test logdet(capdh) ≈ log(det(capdh))
+            @test isposdef(capdh)
             capdh = cholfact!(copy(apdh))
             @test inv(capdh)*apdh ≈ eye(n)
             @test abs((det(capdh) - det(apd))/det(capdh)) <= ε*κ*n
+            @test logdet(capdh) ≈ log(det(capdh))
+            @test isposdef(capdh)
             capdh = cholfact!(copy(apd))
             @test inv(capdh)*apdh ≈ eye(n)
             @test abs((det(capdh) - det(apd))/det(capdh)) <= ε*κ*n
+            @test logdet(capdh) ≈ log(det(capdh))
+            @test isposdef(capdh)
             ulstring = sprint(show,capdh[:UL])
             @test sprint(show,capdh) == "$(typeof(capdh)) with factor:\n$ulstring"
         end
@@ -270,6 +280,7 @@ end
     for T in (Float32, Float64, Complex64, Complex128)
         A = T[1 2; 2 1]; B = T[1, 1]
         C = cholfact(A)
+        @test !isposdef(C)
         @test_throws PosDefException C\B
         @test_throws PosDefException det(C)
         @test_throws PosDefException logdet(C)

@@ -314,8 +314,6 @@ det(A::Symmetric) = det(bkfact(A))
 inv(A::Hermitian{T,S}) where {T<:BlasFloat,S<:StridedMatrix} = Hermitian{T,S}(inv(bkfact(A)), A.uplo)
 inv(A::Symmetric{T,S}) where {T<:BlasFloat,S<:StridedMatrix} = Symmetric{T,S}(inv(bkfact(A)), A.uplo)
 
-isposdef!(A::HermOrSym{<:BlasFloat,<:StridedMatrix}) = ishermitian(A) && LAPACK.potrf!(A.uplo, A.data)[2] == 0
-
 eigfact!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}) = Eigen(LAPACK.syevr!('V', 'A', A.uplo, A.data, 0.0, 0.0, 0, 0, -1.0)...)
 
 function eigfact(A::RealHermSymComplexHerm)
