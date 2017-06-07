@@ -138,6 +138,7 @@ function (-)(J::UniformScaling{TJ}, A::AbstractMatrix{TA}) where {TA,TJ<:Number}
 end
 
 inv(J::UniformScaling) = UniformScaling(inv(J.λ))
+norm(J::UniformScaling, p::Real=2) = abs(J.λ)
 
 *(J1::UniformScaling, J2::UniformScaling) = UniformScaling(J1.λ*J2.λ)
 *(B::BitArray{2}, J::UniformScaling) = *(Array(B), J::UniformScaling)
@@ -175,21 +176,8 @@ function isapprox(J::UniformScaling,A::AbstractMatrix;
                   rtol::Real=rtoldefault(promote_leaf_eltypes(A),eltype(J)),
                   atol::Real=0, nans::Bool=false, norm::Function=vecnorm)
     n = checksquare(A)
-    if norm == vecnorm
-        #special non-allocating path for standard vecnorm
-        normdiff2 = zero(promote_type(eltype(A),eltype(J)))
-        @inbounds for j = 1:n
-            for i = 1:n
-                normdiff2 += abs2(A[i,j] - (i == j ? J.λ : zero(eltype(J))))
-            end
-        end
-        Jnorm = abs(J.λ)*sqrt(n)
-        return sqrt(normdiff2) <= atol + rtol*max(norm(A), Jnorm)
-    else
-        #fallback to memory-allocating version for arbitrary norms
-        D = diagm(J.λ*ones(typeof(J.λ),n))
-        return isapprox(D,A;rtol=rtol,atol=atol,nans=nans,norm=norm)
-    end
+    Jnorm = norm == vecnorm ? abs(J.λ)*sqrt(n) : norm(J)
+    return norm(A - J) <= atol + rtol*max(norm(A), Jnorm)
 end
 isapprox(A::AbstractMatrix,J::UniformScaling;kwargs...) = isapprox(J,A;kwargs...)
 
