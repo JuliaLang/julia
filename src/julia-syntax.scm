@@ -1777,6 +1777,9 @@
       (if (eq? arg (car args))
           (car fargs)
           (findfarg arg (cdr args) (cdr fargs))))
+    (define (literal-rational? g)
+      (and (length= g 4) (eq? (car g) 'call) (eq? (cadr g) '//)
+        (integer? (caddr g)) (integer? (cadddr g))))
     (if (fuse? e)
         (let ((f (cadr e))
               (args (caddr e)))
@@ -1797,7 +1800,7 @@
                                 new-fargs new-args (cons (cons (cadr farg) (cadr varfarg)) renames)
                                 varfarg vararg)
                             (error "multiple splatted args cannot be fused into a single broadcast"))))
-                   ((julia-scalar? arg) ; inline numeric literals etc.
+                   ((or (julia-scalar? arg) (literal-rational? arg)) ; inline numeric literals etc.
                     (cf (cdr old-fargs) (cdr old-args)
                         new-fargs new-args
                         (cons (cons farg arg) renames)
@@ -2136,9 +2139,19 @@
                     (expand-forms
                      `(call (core _apply) ,f ,@(tuple-wrap argl '())))))
 
-                 ((and (eq? f '^) (length= e 4) (integer? (cadddr e)))
-                  (expand-forms
-                   `(call (top literal_pow) ^ ,(caddr e) (call (core apply_type) (top Val) ,(cadddr e)))))
+                 ((and (eq? f '^) (length= e 4))
+                     (let ((g (cadddr e)))
+                        (cond ((integer? g)
+                               (expand-forms
+                                `(call (top literal_pow) ^ ,(caddr e)
+                                  (call (core apply_type) (top Val) ,(cadddr e)))))
+                              ((and (length= g 4) (eq? (car g) 'call) (eq? (cadr g) '//)
+                                (integer? (caddr g)) (integer? (cadddr g)))
+                               (expand-forms
+                                `(call (top literal_pow) ^ ,(caddr e)
+                                  (call (core apply_type) (top Val) ,(caddr g))
+                                  (call (core apply_type) (top Val) ,(cadddr g)))))
+                              (else (map expand-forms e)))))
 
                  ((and (eq? f '*) (length= e 4))
                   (expand-transposed-op

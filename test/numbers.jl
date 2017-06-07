@@ -2914,15 +2914,21 @@ import Base.^
 struct PR20530; end
 struct PR20889; x; end
 ^(::PR20530, p::Int) = 1
+^(::PR20530, p::Rational) = 3
 ^(t::PR20889, b) = t.x + b
 ^(t::PR20889, b::Integer) = t.x + b
 Base.literal_pow{p}(::typeof(^), ::PR20530, ::Type{Val{p}}) = 2
+Base.literal_pow{n,d}(::typeof(^), ::PR20530, ::Type{Val{n}}, ::Type{Val{d}}) = 4
 @testset "literal powers" begin
     x = PR20530()
     p = 2
+    r = 2//1
     @test x^p == 1
     @test x^2 == 2
+    @test x^r == 3
+    @test x^(2//1) == 4
     @test [x,x,x].^2 == [2,2,2]
+    @test [x,x,x].^(2//1) == [4,4,4]
     for T in (Float16, Float32, Float64, BigFloat, Int8, Int, BigInt, Complex{Int}, Complex{Float64})
         for p in -4:4
             if p < 0 && real(T) <: Integer
@@ -2935,11 +2941,13 @@ Base.literal_pow{p}(::typeof(^), ::PR20530, ::Type{Val{p}}) = 2
         end
     end
     @test PR20889(2)^3 == 5
+    @test PR20889(2)^(3//1) == 5
 end
 module M20889 # do we get the expected behavior without importing Base.^?
     struct PR20889; x; end
     ^(t::PR20889, b) = t.x + b
     Base.Test.@test PR20889(2)^3 == 5
+    Base.Test.@test PR20889(2)^(3//1) == 5
 end
 
 @testset "iszero" begin

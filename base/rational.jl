@@ -429,6 +429,8 @@ function ^(z::Complex{<:Rational}, n::Integer)
     n >= 0 ? power_by_squaring(z,n) : power_by_squaring(inv(z),-n)
 end
 
+@inline literal_pow{n,d}(f, x, ::Type{Val{n}}, ::Type{Val{d}}) = f(x, n//d)
+
 iszero(x::Rational) = iszero(numerator(x))
 
 function lerpi(j::Integer, d::Integer, a::Rational, b::Rational)
