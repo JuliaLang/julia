@@ -4,6 +4,9 @@ Julia v0.7.0 Release Notes
 New language features
 ---------------------
 
+  * Local variables can be tested for being defined
+    using the new `@isdefined variable` macro ([#TBD]).
+
 Language changes
 ----------------
 

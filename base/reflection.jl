@@ -171,10 +171,10 @@ isconst(m::Module, s::Symbol) =
 """
     @isdefined s -> Bool
 
-Tests whether symbol `s` is defined in the current scope.
+Tests whether variable `s` is defined in the current scope.
 """
 macro isdefined(s::Symbol)
-    return :(isdefined($__module__, $(QuoteNode(s))))
+    return Expr(:isdefined, esc(s))
 end
 
 # return an integer such that object_id(x)==object_id(y) if x===y

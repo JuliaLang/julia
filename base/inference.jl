@@ -542,7 +542,7 @@ add_tfunc(===, 2, 2,
         end
         return Bool
     end)
-add_tfunc(isdefined, 1, IInf, (args...)->Bool)
+add_tfunc(isdefined, 1, 2, (args...)->Bool)
 add_tfunc(Core.sizeof, 1, 1, x->Int)
 add_tfunc(nfields, 1, 1,
     function (x::ANY)
@@ -2064,6 +2064,25 @@ function abstract_eval(e::ANY, vtypes::VarTable, sv::InferenceState)
         return abstract_eval_constant(e.args[1])
     elseif e.head === :invoke
         error("type inference data-flow error: tried to double infer a function")
+    elseif e.head === :isdefined
+        sym = e.args[1]
+        t = Bool
+        if isa(sym, Slot)
+            vtyp = vtypes[slot_id(sym)]
+            if vtyp.typ === Bottom
+                t = Const(false) # never assigned previously
+            elseif !vtyp.undef
+                t = Const(true) # definitely assigned previously
+            end
+        elseif isa(sym, Symbol)
+            if isdefined(sv.mod, sym.name)
+                t = Const(true)
+            end
+        elseif isa(sym, GlobalRef)
+            if isdefined(sym.mod, sym.name)
+                t = Const(true)
+            end
+        end
     else
         t = Any
     end
@@ -4342,6 +4361,10 @@ const corenumtype = Union{Int32, Int64, Float32, Float64}
 # return inlined replacement for `e`, inserting new needed statements
 # at index `ins` in `stmts`.
 function inlining_pass(e::Expr, sv::InferenceState, stmts, ins)
+    if e.head === :isdefined
+        isa(e.typ, Const) && return e.typ.val
+        return e
+    end
     if e.head === :method
         # avoid running the inlining pass on function definitions
         return e
@@ -4654,15 +4677,22 @@ function replace_vars!(src::CodeInfo, r::ObjectIdDict)
 end
 
 function _replace_vars!(e::ANY, r::ObjectIdDict)
-    if isa(e,SSAValue) || isa(e,Slot)
+    if isa(e, SSAValue) || isa(e, Slot)
         v = normvar(e)
         if haskey(r, v)
             return r[v]
         end
     end
-    if isa(e,Expr)
+    if isa(e, Expr)
         for i = 1:length(e.args)
-            e.args[i] = _replace_vars!(e.args[i], r)
+            a = e.args[i]
+            if e.head === :isdefined
+                if e.args[i] !== _replace_vars!(a, r)
+                    return true
+                end
+            else
+                e.args[i] = _replace_vars!(a, r)
+            end
         end
     end
     return e
