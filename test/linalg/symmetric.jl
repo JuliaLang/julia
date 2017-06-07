@@ -53,6 +53,13 @@ let n=10
         @test Hermitian(Hermitian(asym, :U), :U) === Hermitian(asym, :U)
         @test_throws ArgumentError Symmetric(Symmetric(asym, :U), :L)
         @test_throws ArgumentError Hermitian(Hermitian(asym, :U), :L)
+        # mixed cases with Hermitian/Symmetric
+        @test Symmetric(Hermitian(asym, :U))     === Symmetric(asym, :U)
+        @test Hermitian(Symmetric(asym, :U))     === Hermitian(asym, :U)
+        @test Symmetric(Hermitian(asym, :U), :U) === Symmetric(asym, :U)
+        @test Hermitian(Symmetric(asym, :U), :U) === Hermitian(asym, :U)
+        @test_throws ArgumentError Symmetric(Hermitian(asym, :U), :L)
+        @test_throws ArgumentError Hermitian(Symmetric(asym, :U), :L)
 
         # similar
         @test isa(similar(Symmetric(asym)), Symmetric{eltya})
