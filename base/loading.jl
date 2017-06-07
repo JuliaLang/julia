@@ -682,9 +682,8 @@ function compilecache(name::String)
     end
     if success(create_expr_cache(path, cachefile, concrete_deps))
         # append checksum to the end of the .ji file:
-        checksum = crc32c(cachefile)
-        open(cachefile, "a") do f
-            write(f, hton(checksum))
+        open(cachefile, "a+") do f
+            write(f, hton(crc32c(seekstart(f), filesize(f))))
         end
     else
         error("Failed to precompile $name to $cachefile.")
