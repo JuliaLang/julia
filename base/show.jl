@@ -249,10 +249,11 @@ show_supertypes(typ::DataType) = show_supertypes(STDOUT, typ)
 macro show(exs...)
     blk = Expr(:block)
     for ex in exs
-        push!(blk.args, :(println($(sprint(show_unquoted,ex)*" = "),
-                                  repr(begin value=$(esc(ex)) end))))
+        push!(blk.args, :(print($(sprint(show_unquoted,ex)*" = "))))
+        push!(blk.args, :(show(STDOUT, "text/plain", begin value=$(esc(ex)) end)))
+        push!(blk.args, :(println()))
     end
-    if !isempty(exs); push!(blk.args, :value); end
+    isempty(exs) || push!(blk.args, :value)
     return blk
 end
 

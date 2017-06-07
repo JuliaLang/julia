@@ -764,3 +764,18 @@ end
 @test static_shown(Symbol("")) == "Symbol(\"\")"
 @test static_shown(Symbol("a/b")) == "Symbol(\"a/b\")"
 @test static_shown(Symbol("a-b")) == "Symbol(\"a-b\")"
+
+
+# Test @show
+let fname = tempname()
+    try
+        open(fname, "w") do fout
+            redirect_stdout(fout) do
+                @show zeros(2, 2)
+            end
+        end
+        @test readstring(fname) == "zeros(2, 2) = 2×2 Array{Float64,2}:\n 0.0  0.0\n 0.0  0.0\n"
+    finally
+        rm(fname, force=true)
+    end
+end
