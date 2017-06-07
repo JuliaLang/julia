@@ -248,16 +248,13 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes --startup-file=no`
     # tested in test/parallel.jl, test/examples.jl)
     @test !success(`$exename --worker=true`)
 
-    escape(str) = replace(str, "\\", "\\\\")
-
     # test passing arguments
     let testfile = tempname()
         try
             # write a julia source file that just prints ARGS to STDOUT
             write(testfile, """
                 println(ARGS)
-                """
-            )
+                """)
             @test readchomp(`$exename $testfile foo -bar --baz`) ==
                 "String[\"foo\", \"-bar\", \"--baz\"]"
             @test readchomp(`$exename $testfile -- foo -bar --baz`) ==
@@ -282,14 +279,12 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes --startup-file=no`
         write(a, """
             println(@__FILE__)
             println(PROGRAM_FILE)
-            include(\"$(escape(b))\")
-            """
-        )
+            include(\"$(escape_string(b))\")
+            """)
         write(b, """
             println(@__FILE__)
             println(PROGRAM_FILE)
-            """
-        )
+            """)
         cp(b, c)
 
         @test split(readchomp(`$exename $a`), '\n') ==
