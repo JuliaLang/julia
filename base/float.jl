@@ -978,7 +978,7 @@ isodd(x::AbstractFloat) = isinteger(x) && abs(x) ≤ maxintfloat(x) && isodd(Int
     eps(::Type{Float32}) = $(bitcast(Float32, 0x34000000))
     eps(::Type{Float64}) = $(bitcast(Float64, 0x3cb0000000000000))
     eps(::Type{Complex{T}}) where {T<:AbstractFloat} = eps(T)
-    eps(x::Complex{T}) where {T<:AbstractFloat} = eps(norm(x))
+    eps(z::Complex{T}) where {T<:AbstractFloat} = hypot(eps(real(z)), eps(imag(z)))
     eps() = eps(Float64)
 end
 
