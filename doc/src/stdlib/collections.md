@@ -79,6 +79,7 @@ Base.eltype
 Base.indexin
 Base.findin
 Base.unique
+Base.unique!(::AbstractVector)
 Base.allunique
 Base.reduce(::Any, ::Any, ::Any)
 Base.reduce(::Any, ::Any)
