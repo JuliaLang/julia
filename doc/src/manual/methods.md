@@ -189,7 +189,7 @@ Whoa there, Nelly.
 ```
 
 This catch-all is less specific than any other possible method definition for a pair of parameter
-values, so it is only be called on pairs of arguments to which no other method definition applies.
+values, so it is only to be called on pairs of arguments to which no other method definition applies.
 
 Although it seems a simple concept, multiple dispatch on the types of values is perhaps the single
 most powerful and central feature of the Julia language. Core operations typically have dozens
