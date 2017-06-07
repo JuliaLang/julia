@@ -41,11 +41,9 @@ end
 
 """
     clamp(x, lo, hi)
-    clamp(x, T)
 
 Return `x` if `lo <= x <= hi`. If `x < lo`, return `lo`. If `x > hi`, return `hi`. Arguments
-are promoted to a common type. If the type `T` is given `lo` and `hi` are typemin(T)
-and typemax(T) respectively and the result is converted to `T`
+are promoted to a common type.
 
 ```jldoctest
 julia> clamp.([pi, 1.0, big(10.)], 2., 9.)
@@ -61,7 +59,21 @@ clamp(x::X, lo::L, hi::H) where {X,L,H} =
                   convert(promote_type(X,L,H), lo),
                   convert(promote_type(X,L,H), x)))
 
-clamp(::Type{T}, x) where {T} = clamp(x, typemin(T), typemax(T)) % T
+"""
+    clamp(T, x)
+
+Clamp `x` between `typemin(T)` and `typemax(T)` and convert the result to type `T`.
+
+```jldoctest
+julia> clamp(Int8, 200)
+127
+
+julia> clamp(Int8, -200)
+-128
+```
+"""
+clamp(::Type{T}, x) where {T<:Integer} = clamp(x, typemin(T), typemax(T)) % T
+
 """
     clamp!(array::AbstractArray, lo, hi)
     clamp!(array::AbstractArray, T)
