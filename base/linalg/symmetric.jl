@@ -269,7 +269,8 @@ function triu(A::Symmetric, k::Integer=0)
     end
 end
 
-(-)(A::Symmetric{Tv,S}) where {Tv,S<:AbstractMatrix} = Symmetric{Tv,S}(-A.data, A.uplo)
+(-)(A::Symmetric{Tv,S}) where {Tv,S} = Symmetric{Tv,S}(-A.data, A.uplo)
+(-)(A::Hermitian{Tv,S}) where {Tv,S} = Hermitian{Tv,S}(-A.data, A.uplo)
 
 ## Matvec
 A_mul_B!(y::StridedVector{T}, A::Symmetric{T,<:StridedMatrix}, x::StridedVector{T}) where {T<:BlasFloat} =
