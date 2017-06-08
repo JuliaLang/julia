@@ -210,6 +210,7 @@ issymmetric(A::Hermitian{<:Real}) = true
 issymmetric(A::Hermitian{<:Complex}) = isreal(A)
 issymmetric(A::Symmetric) = true
 transpose(A::Symmetric) = A
+transpose(A::Hermitian{<:Real}) = A
 ctranspose(A::Symmetric{<:Real}) = A
 function ctranspose(A::Symmetric)
     AC = ctranspose(A.data)
