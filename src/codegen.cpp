@@ -3050,10 +3050,10 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
     }
 
     else if (f==jl_builtin_setfield && nargs==3) {
-        jl_datatype_t *sty = (jl_datatype_t*)expr_type(args[1], ctx);
-        rt1 = (jl_value_t*)sty;
-        jl_datatype_t *uty = (jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)sty);
-        if (jl_is_structtype(uty) && uty != jl_module_type && ((jl_datatype_t*)uty)->layout) {
+        jl_value_t *sty = expr_type(args[1], ctx);
+        rt1 = sty;
+        jl_datatype_t *uty = (jl_datatype_t*)jl_unwrap_unionall(sty);
+        if (jl_is_structtype(uty) && uty != jl_module_type && uty->layout) {
             size_t idx = (size_t)-1;
             if (jl_is_quotenode(args[2]) && jl_is_symbol(jl_fieldref(args[2],0))) {
                 idx = jl_field_index(uty, (jl_sym_t*)jl_fieldref(args[2],0), 0);
@@ -3075,7 +3075,7 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
                     // TODO: attempt better codegen for approximate types
                     jl_cgval_t strct = emit_expr(args[1], ctx); // emit lhs
                     *ret = emit_expr(args[3], ctx);
-                    emit_setfield(sty, strct, idx, *ret, ctx, true, true);
+                    emit_setfield(uty, strct, idx, *ret, ctx, true, true);
                     JL_GC_POP();
                     return true;
                 }

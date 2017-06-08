@@ -4973,6 +4973,20 @@ let
 end
 @test f22122(1) === Int
 
+# issue #22256
+mutable struct Bar22256{AParameter}
+    inner::Int
+end
+mutable struct Foo22256
+    bar::Bar22256
+end
+setbar22256_inner(a) = (a.bar.inner = 3; nothing)
+let a_foo = Foo22256(Bar22256{true}(2))
+   @test a_foo.bar.inner == 2
+   setbar22256_inner(a_foo)
+   @test a_foo.bar.inner == 3
+end
+
 # issue #22026
 module M22026
 
