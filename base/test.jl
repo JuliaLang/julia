@@ -76,7 +76,7 @@ function Base.show(io::IO, t::Pass)
     if t.test_type == :test_throws
         # The correct type of exception was thrown
         print(io, "\n      Thrown: ", typeof(t.value))
-    elseif t.test_type == :test && isa(t.data,Expr) && t.data.head == :comparison
+    elseif t.test_type == :test && isa(t.data, Expr)
         # The test was an expression, so display the term-by-term
         # evaluated version as well
         print(io, "\n   Evaluated: ", t.data)
@@ -106,7 +106,7 @@ function Base.show(io::IO, t::Fail)
         # An exception was expected, but no exception was thrown
         print(io, "\n    Expected: ", t.data)
         print(io, "\n  No exception thrown")
-    elseif t.test_type == :test && isa(t.data,Expr) && t.data.head == :comparison
+    elseif t.test_type == :test && isa(t.data, Expr)
         # The test was an expression, so display the term-by-term
         # evaluated version as well
         print(io, "\n   Evaluated: ", t.data)
@@ -188,20 +188,31 @@ struct Threw <: ExecutionResult
     backtrace
 end
 
-function eval_comparison(evaluated::Expr, quoted::Expr)
+function eval_test(evaluated::Expr, quoted::Expr)
     res = true
     i = 1
     args = evaluated.args
     quoted_args = quoted.args
     n = length(args)
-    while i < n
-        a, op, b = args[i], args[i+1], args[i+2]
-        if res
-            res = op(a, b) === true  # Keep `res` type stable
+    if evaluated.head == :comparison
+        while i < n
+            a, op, b = args[i], args[i+1], args[i+2]
+            if res
+                res = op(a, b) === true  # Keep `res` type stable
+            end
+            quoted_args[i] = a
+            quoted_args[i+2] = b
+            i += 2
         end
-        quoted_args[i] = a
-        quoted_args[i+2] = b
-        i += 2
+
+    elseif evaluated.head == :call
+        op = args[1]
+        res = op(args[2:n]...) === true
+        for i in 2:n
+            quoted_args[i] = args[i]
+        end
+    else
+        throw(ArgumentError("Unhandled expression type: $(evaluated.head)"))
     end
     Returned(res, quoted)
 end
@@ -307,9 +318,16 @@ function get_test_result(ex)
         # pass all terms of the comparison to `eval_comparison`, as an Expr
         escaped_terms = [esc(arg) for arg in ex.args]
         quoted_terms = [QuoteNode(arg) for arg in ex.args]
-        testret = :(eval_comparison(
+        testret = :(eval_test(
             Expr(:comparison, $(escaped_terms...)),
             Expr(:comparison, $(quoted_terms...)),
+        ))
+    elseif isa(ex, Expr) && ex.head == :call && ex.args[1] == :isequal
+        escaped_terms = [esc(arg) for arg in ex.args]
+        quoted_terms = [QuoteNode(arg) for arg in ex.args]
+        testret = :(eval_test(
+            Expr(:call, $(escaped_terms...)),
+            Expr(:call, $(quoted_terms...)),
         ))
     else
         testret = :(Returned($(esc(ex)), nothing))

@@ -79,6 +79,8 @@ Library improvements
 
   * Added `unique!` which is an inplace version of `unique` ([#20549]).
 
+  * `@test isequal(x, y)` now prints an evaluated expression when the test fails ([#22296]).
+
 Compiler/Runtime improvements
 -----------------------------
 
