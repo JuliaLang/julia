@@ -498,3 +498,31 @@ julia> ascii("abcdefgh")
 ```
 """
 ascii(x::AbstractString) = ascii(convert(String, x))
+
+"""
+    take(s::AbstractString, n)
+
+Return a `SubString` with at most the first `n` characters of `s`. A character
+is defined as a Unicode scalar value.
+"""
+function take(s::AbstractString, n::Int)
+    for i in eachindex(s)
+        n -= 1
+        n == 0 && return SubString(s, 1, i)
+    end
+    SubString(s, 1)
+end
+
+"""
+    drop(s::AbstractString, n)
+
+Return a `SubString` without the first `n` characters of `s`. A character is
+defined as a Unicode scalar value.
+"""
+function drop(s::AbstractString, n::Int)
+    for i in eachindex(s)
+        n == 0 && return SubString(s, i)
+        n -= 1
+    end
+    SubString(s, endof(s)+1)
+end
