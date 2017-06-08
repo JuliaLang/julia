@@ -225,6 +225,18 @@ function displayable(m::MIME)
     return false
 end
 
+
+macro display(exs...)
+    blk = Expr(:block)
+    for ex in exs
+        push!(blk.args, :(print($(sprint(print, ex)), " = ")))
+        push!(blk.args, :(display(begin value=$(esc(ex)) end)))
+        push!(blk.args, :(println()))
+    end
+    if !isempty(exs); push!(blk.args, :value); end
+    return blk
+end
+
 ###########################################################################
 # The redisplay method can be overridden by a Display in order to
 # update an existing display (instead of, for example, opening a new
