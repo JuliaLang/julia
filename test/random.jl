@@ -1,22 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# should be in base/test.jl, but does not compile...
-
-for (G, A) in ((GenericSet, AbstractSet),
-               (GenericDict, Associative))
-    @eval begin
-        Base.convert(::Type{$G}, s::$A) = $G(s)
-        Base.done(s::$G, state) = done(s.s, state)
-        Base.next(s::$G, state) = next(s.s, state)
-    end
-    for f in (:eltype, :isempty, :length, :start)
-        @eval begin
-            Base.$f(s::$G) = $f(s.s)
-        end
-    end
-end
-
-
 # Issue #6573
 srand(0); rand(); x = rand(384)
 @test find(x .== rand()) == []
