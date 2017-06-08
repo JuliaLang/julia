@@ -876,6 +876,11 @@ end
 # of _absspvec_vcat below. The <:Integer qualifications are necessary for correct dispatch.
 vcat(X::SparseVector{Tv,Ti}...) where {Tv,Ti<:Integer} = _absspvec_vcat(X...)
 vcat(X::AbstractSparseVector{Tv,Ti}...) where {Tv,Ti<:Integer} = _absspvec_vcat(X...)
+function vcat(X::SparseVector...)
+    commeltype = promote_type(map(eltype, X)...)
+    commindtype = promote_type(map(indtype, X)...)
+    vcat(map(x -> SparseVector{commeltype,commindtype}(x), X)...)
+end
 function _absspvec_vcat(X::AbstractSparseVector{Tv,Ti}...) where {Tv,Ti}
     # check sizes
     n = length(X)

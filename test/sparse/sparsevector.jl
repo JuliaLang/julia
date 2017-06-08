@@ -474,7 +474,12 @@ let N = 4
     @test issparse(cat((1,2), densemat, diagmat, spmat, densevec, spvec))
     @test issparse(cat((1,2), spvec, diagmat, densevec, spmat, densemat))
 end
-
+@testset "vertical concatenation of SparseVectors with different el- and ind-type (#22225)" begin
+    spv6464 = SparseVector(0, Int64[], Int64[])
+    @test isa(vcat(spv6464, SparseVector(0, Int64[], Int32[])), SparseVector{Int64,Int64})
+    @test isa(vcat(spv6464, SparseVector(0, Int32[], Int64[])), SparseVector{Int64,Int64})
+    @test isa(vcat(spv6464, SparseVector(0, Int32[], Int32[])), SparseVector{Int64,Int64})
+end
 
 ## sparsemat: combinations with sparse matrix
 
