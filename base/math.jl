@@ -76,7 +76,6 @@ clamp(::Type{T}, x) where {T<:Integer} = clamp(x, typemin(T), typemax(T)) % T
 
 """
     clamp!(array::AbstractArray, lo, hi)
-    clamp!(array::AbstractArray, T)
 
 Restrict values in `array` to the specified range, in-place.
 See also [`clamp`](@ref).
