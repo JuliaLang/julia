@@ -231,30 +231,30 @@ for T in types
     x3 = Nullable(zero(T))
     x4 = Nullable(one(T))
 
-    @test_throws NullException (x0 == x1)
-    @test_throws NullException (x0 == x2)
-    @test_throws NullException (x0 == x3)
-    @test_throws NullException (x0 == x4)
+    @test x0 == x1
+    @test x0 == x2
+    @test x0 != x3
+    @test x0 != x4
 
-    @test_throws NullException (x1 == x1)
-    @test_throws NullException (x1 == x2)
-    @test_throws NullException (x1 == x3)
-    @test_throws NullException (x1 == x4)
+    @test x1 == x1
+    @test x1 == x2
+    @test x1 != x3
+    @test x1 != x4
 
-    @test_throws NullException (x2 == x1)
-    @test_throws NullException (x2 == x2)
-    @test_throws NullException (x2 == x3)
-    @test_throws NullException (x2 == x4)
+    @test x2 == x1
+    @test x2 == x2
+    @test x2 != x3
+    @test x2 != x4
 
-    @test_throws NullException (x3 == x1)
-    @test_throws NullException (x3 == x2)
-    @test_throws NullException (x3 == x3)
-    @test_throws NullException (x3 == x4)
+    @test x3 != x1
+    @test x3 != x2
+    @test x3 == x3
+    @test x3 != x4
 
-    @test_throws NullException (x4 == x1)
-    @test_throws NullException (x4 == x2)
-    @test_throws NullException (x4 == x3)
-    @test_throws NullException (x4 == x4)
+    @test x4 != x1
+    @test x4 != x2
+    @test x4 != x3
+    @test x4 == x4
 end
 
 # function hash(x::Nullable, h::UInt)
