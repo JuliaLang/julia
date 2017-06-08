@@ -90,6 +90,7 @@ aws s3 cp --acl public-read "julia-$version-osx10.7 .dmg" \
 aws s3 cp --acl public-read "julia-$majmin-latest-osx10.7 .dmg" \
   s3://julialang/bin/osx/x64/$majmin/
 curl -X PURGE -L "https://julialang-s3.julialang.org/bin/osx/x64/$majmin/julia-$majmin-latest-osx10.7 .dmg"
+curl -X PURGE -L "https://julialang-s3.julialang.org/bin/osx/x64/$majmin/julia-$majmin-latest-osx10.7+.dmg"
 aws s3 cp --acl public-read "julia-$version-win64.exe" \
   s3://julialang/bin/winnt/x64/$majmin/
 aws s3 cp --acl public-read "julia-$majmin-latest-win64.exe" \
