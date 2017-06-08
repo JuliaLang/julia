@@ -708,7 +708,7 @@ A = SparseMatrixCSC{Float64,CHOLMOD.SuiteSparse_long}(10, 5, [1,3,6,8,10,13], [6
     1.02371, -0.502384, 1.10686, 0.262229, -1.6935, 0.525239])
 AtA = A'*A;
 C0 = [1., 2., 0, 0, 0]
-#Test both cholfact and LDLt with and without automatic permulations
+#Test both cholfact and LDLt with and without automatic permutations
 for F in (cholfact(AtA), cholfact(AtA, perm=1:5), ldltfact(AtA), ldltfact(AtA, perm=1:5))
     B0 = F\ones(5)
     #Test both sparse/dense and vectors/matrices
