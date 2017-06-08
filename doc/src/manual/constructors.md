@@ -512,11 +512,6 @@ to their types. The type of a type is `Type`, so all constructor methods are sto
 table for the `Type` type. This means that you can declare more flexible constructors, e.g. constructors
 for abstract types, by explicitly defining methods for the appropriate types.
 
-However, in some cases you could consider adding methods to `Base.convert` *instead* of defining
-a constructor, because Julia falls back to calling [`convert()`](@ref) if no matching constructor
-is found. For example, if no constructor `T(args...) = ...` exists `Base.convert(::Type{T}, args...) = ...`
-is called.
-
 `convert` is used extensively throughout Julia whenever one type needs to be converted to another
 (e.g. in assignment, [`ccall`](@ref), etcetera), and should generally only be defined (or successful)
 if the conversion is lossless.  For example, `convert(Int, 3.0)` produces `3`, but `convert(Int, 3.2)`
