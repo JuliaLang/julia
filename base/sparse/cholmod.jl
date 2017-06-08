@@ -1548,10 +1548,10 @@ ldltfact(A::Union{SparseMatrixCSC{T},SparseMatrixCSC{Complex{T}},
 
 Update an `LDLt` or `LLt` Factorization `F` of `A` to a factorization of `A±C*C'`.
 
-If sparsity perserving factorization is used, i.e. `L*L'*=P*A*P'` then the new
+If sparsity preserving factorization is used, i.e. `L*L'*=P*A*P'` then the new
 factor will be `L*L'=P*A*P'+C'*C`
 
-update: Cint(1) for A+CC', Cint(0) for A-CC'
+update: `Cint(1)` for `A+CC'`, `Cint(0)` for `A-CC'`
 """
 function lowrankupdowndate!{Tv<:VTypes}(F::Factor{Tv}, C::Sparse{Tv}, update::Cint)
     lF = unsafe_load(get(F.p))
@@ -1565,7 +1565,7 @@ function lowrankupdowndate!{Tv<:VTypes}(F::Factor{Tv}, C::Sparse{Tv}, update::Ci
     F
 end
 
-#Help functions for rank updates
+#Helper functions for rank updates
 lowrank_reorder(V::AbstractArray,p) = Sparse(sparse(V[p,:]))
 lowrank_reorder(V::AbstractSparseArray,p) = Sparse(V[p,:])
 
@@ -1602,7 +1602,7 @@ end
 """
     lowrankupdate(F::Factor, C) -> FF::Factor
 
-Get an LDLt Factorization of `A+C*C'` given an `LDLt` or `LLt` factorization `F` of `A`.
+Get an `LDLt` Factorization of `A+C*C'` given an `LDLt` or `LLt` factorization `F` of `A`.
 
 The returned factor is always an `LDLt` factorization.
 
@@ -1614,7 +1614,7 @@ lowrankupdate{Tv<:VTypes}(F::Factor{Tv}, V::AbstractArray{Tv}) =
 """
     lowrankupdate(F::Factor, C) -> FF::Factor
 
-Get an LDLt Factorization of `A+C*C'` given an `LDLt` or `LLt` factorization `F` of `A`.
+Get an `LDLt` Factorization of `A+C*C'` given an `LDLt` or `LLt` factorization `F` of `A`.
 
 The returned factor is always an `LDLt` factorization.
 
