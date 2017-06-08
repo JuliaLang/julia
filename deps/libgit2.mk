@@ -2,7 +2,7 @@
 
 LIBGIT2_GIT_URL := git://github.com/libgit2/libgit2.git
 LIBGIT2_TAR_URL = https://api.github.com/repos/libgit2/libgit2/tarball/$1
-$(eval $(call git-external,libgit2,LIBGIT2,CMakeLists.txt,,$(SRCDIR)/srccache))
+$(eval $(call git-external,libgit2,LIBGIT2,CMakeLists.txt,,$(SRCCACHE)))
 
 ifeq ($(USE_SYSTEM_LIBSSH2), 0)
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: | $(build_prefix)/manifest/libssh2
@@ -58,14 +58,14 @@ CERTFILE=$(OPENSSL_DIR)/certs/ca.pem
 endif
 endif # Linux and FreeBSD
 
-LIBGIT2_SRC_PATH := $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)
+LIBGIT2_SRC_PATH := $(SRCCACHE)/$(LIBGIT2_SRC_DIR)
 
 $(LIBGIT2_SRC_PATH)/libgit2-ssh.patch-applied: $(LIBGIT2_SRC_PATH)/source-extracted
 	cd $(LIBGIT2_SRC_PATH) && \
 		patch -p0 -f < $(SRCDIR)/patches/libgit2-ssh.patch
 	echo 1 > $@
 
-$(LIBGIT2_SRC_PATH)/libgit2-mbedtls.patch-applied: $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/source-extracted | $(LIBGIT2_SRC_PATH)/libgit2-ssh.patch-applied
+$(LIBGIT2_SRC_PATH)/libgit2-mbedtls.patch-applied: $(SRCCACHE)/$(LIBGIT2_SRC_DIR)/source-extracted | $(LIBGIT2_SRC_PATH)/libgit2-ssh.patch-applied
 	cd $(LIBGIT2_SRC_PATH) && \
 		patch -p1 -f < $(SRCDIR)/patches/libgit2-mbedtls.patch
 	echo 1 > $@
@@ -135,7 +135,7 @@ clean-libgit2:
 	-$(MAKE) -C $(BUILDDIR)/$(LIBGIT2_SRC_DIR) clean
 
 get-libgit2: $(LIBGIT2_SRC_FILE)
-extract-libgit2: $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)/source-extracted
+extract-libgit2: $(SRCCACHE)/$(LIBGIT2_SRC_DIR)/source-extracted
 configure-libgit2: $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured
 compile-libgit2: $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-compiled
 fastcheck-libgit2: #none

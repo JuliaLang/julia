@@ -154,10 +154,10 @@ LAPACK_MFLAGS := NOOPT="$(FFLAGS) $(JFFLAGS) $(USE_BLAS_FFLAGS) -O0" \
     OPTS="$(FFLAGS) $(JFFLAGS) $(USE_BLAS_FFLAGS)" FORTRAN="$(FC)" \
     LOADER="$(FC)" BLASLIB="$(RPATH_ESCAPED_ORIGIN) $(LIBBLAS)"
 
-$(SRCDIR)/srccache/lapack-$(LAPACK_VER).tgz: | $(SRCDIR)/srccache
+$(SRCCACHE)/lapack-$(LAPACK_VER).tgz: | $(SRCCACHE)
 	$(JLDOWNLOAD) $@ http://www.netlib.org/lapack/$(notdir $@)
 
-$(BUILDDIR)/lapack-$(LAPACK_VER)/source-extracted: $(SRCDIR)/srccache/lapack-$(LAPACK_VER).tgz
+$(BUILDDIR)/lapack-$(LAPACK_VER)/source-extracted: $(SRCCACHE)/lapack-$(LAPACK_VER).tgz
 	$(JLCHECKSUM) $<
 	mkdir -p $(BUILDDIR)
 	cd $(BUILDDIR) && $(TAR) -zxf $<
@@ -196,10 +196,10 @@ clean-lapack:
 	-$(MAKE) -C $(BUILDDIR)/lapack-$(LAPACK_VER) clean
 
 distclean-lapack:
-	-rm -rf $(SRCDIR)/srccache/lapack-$(LAPACK_VER).tgz $(BUILDDIR)/lapack-$(LAPACK_VER)
+	-rm -rf $(SRCCACHE)/lapack-$(LAPACK_VER).tgz $(BUILDDIR)/lapack-$(LAPACK_VER)
 
 
-get-lapack: $(SRCDIR)/srccache/lapack-$(LAPACK_VER).tgz
+get-lapack: $(SRCCACHE)/lapack-$(LAPACK_VER).tgz
 extract-lapack: $(BUILDDIR)/lapack-$(LAPACK_VER)/source-extracted
 configure-lapack: extract-lapack
 compile-lapack: $(BUILDDIR)/lapack-$(LAPACK_VER)/build-compiled

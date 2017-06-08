@@ -10,16 +10,16 @@ endif
 
 CURL_LDFLAGS := $(RPATH_ESCAPED_ORIGIN)
 
-$(SRCDIR)/srccache/curl-$(CURL_VER).tar.bz2: | $(SRCDIR)/srccache
+$(SRCCACHE)/curl-$(CURL_VER).tar.bz2: | $(SRCCACHE)
 	$(JLDOWNLOAD) $@ https://curl.haxx.se/download/curl-$(CURL_VER).tar.bz2
 
-$(SRCDIR)/srccache/curl-$(CURL_VER)/source-extracted: $(SRCDIR)/srccache/curl-$(CURL_VER).tar.bz2
+$(SRCCACHE)/curl-$(CURL_VER)/source-extracted: $(SRCCACHE)/curl-$(CURL_VER).tar.bz2
 	$(JLCHECKSUM) $<
 	cd $(dir $<) && $(TAR) jxf $(notdir $<)
-	touch -c $(SRCDIR)/srccache/curl-$(CURL_VER)/configure # old target
+	touch -c $(SRCCACHE)/curl-$(CURL_VER)/configure # old target
 	echo 1 > $@
 
-$(BUILDDIR)/curl-$(CURL_VER)/build-configured: $(SRCDIR)/srccache/curl-$(CURL_VER)/source-extracted
+$(BUILDDIR)/curl-$(CURL_VER)/build-configured: $(SRCCACHE)/curl-$(CURL_VER)/source-extracted
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(dir $<)/configure $(CONFIGURE_COMMON) --includedir=$(build_includedir) \
@@ -52,10 +52,10 @@ clean-curl:
 	-$(MAKE) -C $(BUILDDIR)/curl-$(CURL_VER) clean
 
 distclean-curl:
-	-rm -rf $(SRCDIR)/srccache/curl-$(CURL_VER).tar.bz2 $(SRCDIR)/srccache/curl-$(CURL_VER) $(BUILDDIR)/curl-$(CURL_VER)
+	-rm -rf $(SRCCACHE)/curl-$(CURL_VER).tar.bz2 $(SRCCACHE)/curl-$(CURL_VER) $(BUILDDIR)/curl-$(CURL_VER)
 
-get-curl: $(SRCDIR)/srccache/curl-$(CURL_VER).tar.bz2
-extract-curl: $(SRCDIR)/srccache/curl-$(CURL_VER)/source-extracted
+get-curl: $(SRCCACHE)/curl-$(CURL_VER).tar.bz2
+extract-curl: $(SRCCACHE)/curl-$(CURL_VER)/source-extracted
 configure-curl: $(BUILDDIR)/curl-$(CURL_VER)/build-configured
 compile-curl: $(BUILDDIR)/curl-$(CURL_VER)/build-compiled
 fastcheck-curl: #none
