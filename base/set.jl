@@ -219,15 +219,16 @@ function unique!(A::AbstractVector)
         # If A is sorted, then we only need to keep track of one element and add that to A
         # every time that we see a new element.
         idxs = eachindex(A)
-        m = start(idxs)
+        j = m = start(idxs)
+        j += 1
         for i in idxs
             x = A[i]
-            if x != A[m]
+            if x != A[j]
                 j, m = next(idxs, m)
-                A[m] = x
+                A[j] = x
             end
         end
-        count = m - start(idxs) + 1
+        count = m - start(idxs)
     else
         # If A is not sorted, then we will need to keep track of all of the elements that
         # we have seen so far.
