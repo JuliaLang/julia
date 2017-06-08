@@ -174,6 +174,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `==(::Period, ::Period)` and `isless(::Period, ::Period)` is supported for 0.5 and below. Earlier versions of Julia only supported limited comparison methods between Periods which did not support comparing custom Period subtypes. ([#21378])
 
+* `@__MODULE__` is aliased to `current_module()` for Julia versions 0.6 and below. Versions of `Base.binding_module`, `expand`, `macroexpand`, and `include_string` were added that accept a module as the first argument. ([#22064])
+
 ## Renamed functions
 
 * `pointer_to_array` and `pointer_to_string` have been replaced with `unsafe_wrap(Array, ...)` and `unsafe_wrap(String, ...)` respectively
@@ -377,3 +379,4 @@ includes this fix. Find the minimum version from there.
 [#20500]: https://github.com/JuliaLang/julia/issues/20500
 [#21257]: https://github.com/JuliaLang/julia/issues/21257
 [#21346]: https://github.com/JuliaLang/julia/issues/21346
+[#22064]: https://github.com/JuliaLang/julia/issues/22064

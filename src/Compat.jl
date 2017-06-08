@@ -1481,6 +1481,20 @@ else
     using Base: StringVector
 end
 
+# https://github.com/JuliaLang/julia/pull/22064
+if !isdefined(Base, Symbol("@__MODULE__"))
+    export @__MODULE__
+    macro __MODULE__()
+        return current_module()
+    end
+    Base.expand(mod::Module, x::ANY) = eval(mod, :(expand($(QuoteNode(x)))))
+    Base.macroexpand(mod::Module, x::ANY) = eval(mod, :(macroexpand($(QuoteNode(x)))))
+    Base.include_string(mod::Module, code::String, fname::String) =
+        eval(mod, :(include_string($code, $fname)))
+    Base.include_string(mod::Module, code::AbstractString, fname::AbstractString="string") =
+        eval(mod, :(include_string($code, $fname)))
+end
+
 # https://github.com/JuliaLang/julia/pull/19784
 if isdefined(Base, :invokelatest)
     import Base.invokelatest
