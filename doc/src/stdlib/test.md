@@ -1,5 +1,11 @@
 # Unit Testing
 
+```@meta
+DocTestSetup = quote
+    using Base.Test
+end
+```
+
 ## Testing Base Julia
 
 Julia is under rapid development and has an extensive test suite to verify functionality across
@@ -26,7 +32,7 @@ Base.Test.@test_throws
 
 For example, suppose we want to check our new function `foo(x)` works as expected:
 
-```julia-repl
+```jldoctest testfoo
 julia> using Base.Test
 
 julia> foo(x) = length(x)^2
@@ -35,28 +41,22 @@ foo (generic function with 1 method)
 
 If the condition is true, a `Pass` is returned:
 
-```julia-repl
+```jldoctest testfoo
 julia> @test foo("bar") == 9
 Test Passed
-  Expression: foo("bar") == 9
-   Evaluated: 9 == 9
 
 julia> @test foo("fizz") >= 10
 Test Passed
-  Expression: foo("fizz") >= 10
-   Evaluated: 16 >= 10
 ```
 
 If the condition is false, then a `Fail` is returned and an exception is thrown:
 
-```julia-repl
+```jldoctest testfoo
 julia> @test foo("f") == 20
 Test Failed
   Expression: foo("f") == 20
    Evaluated: 1 == 20
 ERROR: There was an error during testing
- in record at test.jl:268
- in do_test at test.jl:191
 ```
 
 If the condition could not be evaluated because an exception was thrown, which occurs in this
@@ -68,23 +68,24 @@ julia> @test foo(:cat) == 1
 Error During Test
   Test threw an exception of type MethodError
   Expression: foo(:cat) == 1
-  MethodError: `length` has no method matching length(::Symbol)
-   in foo at none:1
-   in anonymous at test.jl:159
-   in do_test at test.jl:180
+  MethodError: no method matching length(::Symbol)
+  Closest candidates are:
+    length(::SimpleVector) at essentials.jl:256
+    length(::Base.MethodList) at reflection.jl:521
+    length(::MethodTable) at reflection.jl:597
+    ...
+  Stacktrace:
+   [...]
 ERROR: There was an error during testing
- in record at test.jl:268
- in do_test at test.jl:191
 ```
 
 If we expect that evaluating an expression *should* throw an exception, then we can use `@test_throws()`
 to check that this occurs:
 
-```julia-repl
+```jldoctest testfoo
 julia> @test_throws MethodError foo(:cat)
 Test Passed
-  Expression: foo(:cat)
-   Evaluated: MethodError
+      Thrown: MethodError
 ```
 
 ## Working with Test Sets
@@ -104,19 +105,19 @@ Base.Test.@testset
 
 We can put our tests for the `foo(x)` function in a test set:
 
-```julia-repl
+```jldoctest testfoo
 julia> @testset "Foo Tests" begin
            @test foo("a")   == 1
            @test foo("ab")  == 4
            @test foo("abc") == 9
-       end
+       end;
 Test Summary: | Pass  Total
 Foo Tests     |    3      3
 ```
 
 Test sets can also be nested:
 
-```julia-repl
+```jldoctest testfoo
 julia> @testset "Foo Tests" begin
            @testset "Animals" begin
                @test foo("cat") == 9
@@ -126,7 +127,7 @@ julia> @testset "Foo Tests" begin
                @test foo(zeros(i)) == i^2
                @test foo(ones(i)) == i^2
            end
-       end
+       end;
 Test Summary: | Pass  Total
 Foo Tests     |    8      8
 ```
@@ -153,14 +154,13 @@ julia> @testset "Foo Tests" begin
 Arrays: Test Failed
   Expression: foo(ones(4)) == 15
    Evaluated: 16 == 15
- in record at test.jl:297
- in do_test at test.jl:191
+Stacktrace:
+    [...]
 Test Summary: | Pass  Fail  Total
 Foo Tests     |    3     1      4
   Animals     |    2            2
   Arrays      |    1     1      2
 ERROR: Some tests did not pass: 3 passed, 1 failed, 0 errored, 0 broken.
- in finish at test.jl:362
 ```
 
 ## Other Test Macros
@@ -169,15 +169,15 @@ As calculations on floating-point values can be imprecise, you can perform appro
 checks using either `@test a ≈ b` (where `≈`, typed via tab completion of `\approx`, is the
 [`isapprox()`](@ref) function) or use [`isapprox()`](@ref) directly.
 
-```julia-repl
+```jldoctest
 julia> @test 1 ≈ 0.999999999
+Test Passed
 
 julia> @test 1 ≈ 0.999999
-ERROR: test failed: 1 isapprox 0.999999
- in expression: 1 ≈ 0.999999
- in error at error.jl:21
- in default_handler at test.jl:30
- in do_test at test.jl:53
+Test Failed
+  Expression: 1 ≈ 0.999999
+   Evaluated: 1 ≈ 0.999999
+ERROR: There was an error during testing
 ```
 
 ```@docs
@@ -263,4 +263,8 @@ And using that testset looks like:
         @test true
     end
 end
+```
+
+```@meta
+DocTestSetup = nothing
 ```
