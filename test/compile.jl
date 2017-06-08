@@ -239,7 +239,7 @@ try
           end
           """)
 
-    @test_warn "ERROR: LoadError: Declaring __precompile__(false) is not allowed in files that are being precompiled.\nStacktrace:\n [1] __precompile__" try
+    @test_warn r"ERROR: LoadError: Declaring __precompile__\(false\) is not allowed in files that are being precompiled\.(\n|\r\n)Stacktrace:(\n|\r\n) \[1\] __precompile__" try
         Base.compilecache("Baz") # from __precompile__(false)
         error("__precompile__ disabled test failed")
     catch exc
@@ -324,7 +324,7 @@ try
           error("break me")
           end
           """)
-    @test_warn "ERROR: LoadError: break me\nStacktrace:\n [1] error" try
+    @test_warn r"ERROR: LoadError: break me(\n|\r\n)Stacktrace:(\n|\r\n) \[1\] error" try
         Base.require(:FooBar)
         error("\"LoadError: break me\" test failed")
     catch exc
