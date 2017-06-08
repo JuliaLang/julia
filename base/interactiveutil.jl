@@ -620,7 +620,7 @@ else
                 rethrow()
             end
         elseif downloadcmd == :curl
-            run(`curl -L -f -o $filename $url`)
+            run(`curl -L -f -s -o $filename $url`)
         elseif downloadcmd == :fetch
             run(`fetch -f $filename $url`)
         else
