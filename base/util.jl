@@ -788,7 +788,7 @@ unsafe_crc32c(a, n, crc) = ccall(:jl_crc32c, UInt32, (UInt32, Ptr{UInt8}, Csize_
 crc32c(a::Union{Array{UInt8},FastContiguousSubArray{UInt8,N,<:Array{UInt8}} where N}, crc::UInt32=0x00000000) =
     unsafe_crc32c(a, length(a), crc)
 
-crc32c(buf::IOBuffer, crc::UInt32=0x00000000) = crc32c(buf.data, crc)
+crc32c(buf::IOBuffer, crc::UInt32=0x00000000) = unsafe_crc32c(buf.data, min(buf.size, length(buf.data)), crc)
 
 """
     crc32c(f::IO, nb::Integer, crc::UInt32=0x00000000)

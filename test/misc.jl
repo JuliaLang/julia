@@ -577,6 +577,11 @@ for force_software_crc in (1,0)
     end
 
     @test crc32c(IOBuffer(a)) == crc_256
+    let buf = IOBuffer()
+        write(buf, a[1:3])
+        @test crc32c(buf) == crc32c(a[1:3])
+    end
+
     let f = tempname()
         try
             write(f, a)
