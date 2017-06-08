@@ -218,14 +218,16 @@ function unique!(A::AbstractVector)
     elseif issorted(A) || issorted(A, rev=true)
         # If A is sorted, then we only need to keep track of one element and add that to A
         # every time that we see a new element.
-        count = 1
-        for i in eachindex(A)
-            @inbounds x = A[i]
-            if x != A[count]
-                count += 1
-                A[count] = x
+        idxs = eachindex(A)
+        m = start(idxs)
+        for i in idxs
+            x = A[i]
+            if x != A[m]
+                _, m = next(idxs, m)
+                A[m] = x
             end
         end
+        count = m - start(idxs) + 1
     else
         # If A is not sorted, then we will need to keep track of all of the elements that
         # we have seen so far.
@@ -235,12 +237,12 @@ function unique!(A::AbstractVector)
         count = 0
         while !done(A, n)
             i, n = next(idxs, n)
-            @inbounds x = A[i]
+            x = A[i]
             if x ∉ seen
                 count += 1
                 push!(seen, x)
                 j, m = next(idxs, m)
-                @inbounds A[j] = x
+                A[j] = x
             end
         end
     end
