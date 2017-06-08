@@ -16,6 +16,9 @@ end
 @test_throws ArgumentError sortperm!(view([1,2,3,4], 1:4), [2,3,1])
 @test !issorted([2,3,1])
 @test issorted([1,2,3])
+@test issorted([1,1,2], lt=(<=))
+@test issorted([1,1,1], lt=(==))
+@test issorted([3,2,1], lt=(>))
 @test reverse([2,3,1]) == [1,3,2]
 @test select([3,6,30,1,9],3) == 6
 @test select([3,6,30,1,9],3:4) == [6,9]
