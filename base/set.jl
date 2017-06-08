@@ -223,7 +223,7 @@ function unique!(A::AbstractVector)
         for i in idxs
             x = A[i]
             if x != A[m]
-                _, m = next(idxs, m)
+                j, m = next(idxs, m)
                 A[m] = x
             end
         end
