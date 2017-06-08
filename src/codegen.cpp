@@ -7327,10 +7327,18 @@ extern "C" void jl_init_codegen(void)
     initializeAnalysis(Registry);
 #endif
 
+#ifdef USE_POLLY
+    InitializeAllTargets();
+    InitializeAllTargetMCs();
+    InitializeAllAsmPrinters();
+    InitializeAllAsmParsers();
+    InitializeAllDisassemblers();
+#else
     InitializeNativeTarget();
     InitializeNativeTargetAsmPrinter();
     InitializeNativeTargetAsmParser();
     InitializeNativeTargetDisassembler();
+#endif
 
     Module *m, *engine_module;
     engine_module = new Module("julia", jl_LLVMContext);
