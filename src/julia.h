@@ -1253,10 +1253,8 @@ JL_DLLEXPORT int jl_is_imported(jl_module_t *m, jl_sym_t *s);
 JL_DLLEXPORT int jl_module_exports_p(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT jl_module_t *jl_new_main_module(void);
 JL_DLLEXPORT void jl_add_standard_imports(jl_module_t *m);
-STATIC_INLINE jl_function_t *jl_get_function(jl_module_t *m, const char *name)
-{
-    return (jl_function_t*)jl_get_global(m, jl_symbol(name));
-}
+JL_DLLEXPORT jl_function_t *jl_get_function(jl_module_t *m, const char *name);
+
 int jl_is_submodule(jl_module_t *child, jl_module_t *parent);
 
 // eq hash tables
