@@ -1229,7 +1229,7 @@ end
         @nexprs $N d->begin
             l = size(B,d)
             stride *= l
-            1 <= I_{d-1} <= l || return false
+            @boundscheck 1 <= I_{d-1} <= l || return false
             index += (I_d - 1) * stride
         end
         return isassigned(B, index)

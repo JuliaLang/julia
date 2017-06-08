@@ -294,7 +294,7 @@ false
 function isassigned end
 
 function isassigned(v::SimpleVector, i::Int)
-    1 <= i <= length(v) || return false
+    @boundscheck 1 <= i <= length(v) || return false
     x = unsafe_load(convert(Ptr{Ptr{Void}},data_pointer_from_objref(v)) + i*sizeof(Ptr))
     return x != C_NULL
 end
