@@ -226,6 +226,7 @@ julia> A
 function unique!(A::AbstractVector)
     isempty(A) && return A
 
+    sorted = false
     try
         sorted = issorted(A) || issorted(A, rev=true)
     catch
@@ -238,7 +239,7 @@ function unique!(A::AbstractVector)
         idxs = eachindex(A)
         y = first(A)
         state = start(idxs)
-        _, state = next(idxs, state)
+        j, state = next(idxs, state)
         for i in idxs
             x = A[i]
             if !isequal(x, y)
@@ -252,7 +253,7 @@ function unique!(A::AbstractVector)
         # we have seen so far.
         seen = Set{eltype(A)}()
         idxs = eachindex(A)
-        state = start(idxs)
+        i = state = start(idxs)
         for x in A
             if x ∉ seen
                 push!(seen, x)
