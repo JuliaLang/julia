@@ -135,6 +135,8 @@ end
     val
 end
 
+Base.resize!(A::OffsetVector, nl::Integer) = resize!(A.parent, nl)
+Base.done(A::OffsetVector, ind::Integer) = done(A.parent, ind - A.offsets[1])
 # Computing a shifted index (subtracting the offset)
 offset{N}(offsets::NTuple{N,Int}, inds::NTuple{N,Int}) = _offset((), offsets, inds)
 _offset(out, ::Tuple{}, ::Tuple{}) = out

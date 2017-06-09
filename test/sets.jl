@@ -228,6 +228,15 @@ u = unique([1,1,2])
     u = [6,5,5,3,3,2,1]
     unique!(u)
     @test u == [6,5,3,2,1]
+    u = OffsetArray([1,2,2,3,5,5], -1)
+    unique!(u)
+    @test u == OffsetArray([1,2,3,5], -1)
+    u = OffsetArray([1,1,2,3,1,4,6], -1)
+    unique!(u)
+    @test u == OffsetArray([1,2,3,4,6], -1)
+    u = OffsetArray([5,5,4,4,2,2,0,-1,-1], -1)
+    unique!(u)
+    @test u == OffsetArray([5,4,2,0,-1], -1)
 end
 
 # allunique
