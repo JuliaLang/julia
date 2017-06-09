@@ -186,19 +186,22 @@ struct Threw <: ExecutionResult
     backtrace
 end
 
-function eval_comparison(ex::Expr)
+function eval_comparison(evaluated::Expr, quoted::Expr)
     res = true
     i = 1
-    a = ex.args
-    n = length(a)
+    args = evaluated.args
+    quoted_args = quoted.args
+    n = length(args)
     while i < n
-        res = a[i+1](a[i], a[i+2])
-        if !isa(res,Bool) || !res
-            break
+        a, op, b = args[i], args[i+1], args[i+2]
+        if res
+            res = op(a, b) === true  # Keep `res` type stable
         end
+        quoted_args[i] = a
+        quoted_args[i+2] = b
         i += 2
     end
-    Returned(res, ex)
+    Returned(res, quoted)
 end
 
 const comparison_prec = Base.operator_precedence(:(==))
@@ -293,15 +296,19 @@ end
 function get_test_result(ex)
     orig_ex = Expr(:inert, ex)
     # Normalize non-dot comparison operator calls to :comparison expressions
-    if isa(ex, Expr) && ex.head == :call && length(ex.args)==3 &&
+    if isa(ex, Expr) && ex.head == :call && length(ex.args) == 3 &&
         first(string(ex.args[1])) != '.' &&
         (ex.args[1] === :(==) || Base.operator_precedence(ex.args[1]) == comparison_prec)
-        testret = :(eval_comparison(Expr(:comparison,
-                                         $(esc(ex.args[2])), $(esc(ex.args[1])), $(esc(ex.args[3])))))
-    elseif isa(ex, Expr) && ex.head == :comparison
+        ex = Expr(:comparison, ex.args[2], ex.args[1], ex.args[3])
+    end
+    if isa(ex, Expr) && ex.head == :comparison
         # pass all terms of the comparison to `eval_comparison`, as an Expr
-        terms = [esc(arg) for arg in ex.args]
-        testret = :(eval_comparison(Expr(:comparison, $(terms...))))
+        escaped_terms = [esc(arg) for arg in ex.args]
+        quoted_terms = [QuoteNode(arg) for arg in ex.args]
+        testret = :(eval_comparison(
+            Expr(:comparison, $(escaped_terms...)),
+            Expr(:comparison, $(quoted_terms...)),
+        ))
     else
         testret = :(Returned($(esc(ex)), nothing))
     end
