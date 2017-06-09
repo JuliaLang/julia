@@ -701,3 +701,40 @@ end
         @test issparse((speye(2)*T(speye(2)))*speye(2))
     end
 end
+
+#Test sparse low rank update for cholesky decomposion
+A = SparseMatrixCSC{Float64,CHOLMOD.SuiteSparse_long}(10, 5, [1,3,6,8,10,13], [6,7,1,2,9,3,5,1,7,6,7,9],
+    [-0.138843, 2.99571, -0.556814, 0.669704, -1.39252, 1.33814,
+    1.02371, -0.502384, 1.10686, 0.262229, -1.6935, 0.525239])
+AtA = A'*A;
+C0 = [1., 2., 0, 0, 0]
+#Test both cholfact and LDLt with and without automatic permutations
+for F in (cholfact(AtA), cholfact(AtA, perm=1:5), ldltfact(AtA), ldltfact(AtA, perm=1:5))
+    B0 = F\ones(5)
+    #Test both sparse/dense and vectors/matrices
+    for Ctest in (C0, sparse(C0), [C0 2*C0], sparse([C0 2*C0]))
+        C = copy(Ctest)
+        F1 = copy(F)
+        B = (AtA+C*C')\ones(5)
+
+        #Test update
+        F11 = CHOLMOD.lowrankupdate(F1, C)
+        @test full(sparse(F11)) ≈ AtA+C*C'
+        @test F11\ones(5) ≈ B
+        #Make sure we get back the same factor again
+        F10 = CHOLMOD.lowrankdowndate(F11, C)
+        @test full(sparse(F10)) ≈ AtA
+        @test F10\ones(5) ≈ B0
+
+        #Test in-place update
+        CHOLMOD.lowrankupdate!(F1, C)
+        @test full(sparse(F1)) ≈ AtA+C*C'
+        @test F1\ones(5) ≈ B
+        #Test in-place downdate
+        CHOLMOD.lowrankdowndate!(F1, C)
+        @test full(sparse(F1)) ≈ AtA
+        @test F1\ones(5) ≈ B0
+
+        @test C == Ctest    #Make sure C didn't change
+    end
+end

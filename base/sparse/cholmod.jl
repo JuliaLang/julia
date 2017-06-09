@@ -1541,6 +1541,88 @@ ldltfact(A::Union{SparseMatrixCSC{T},SparseMatrixCSC{Complex{T}},
     Hermitian{T,SparseMatrixCSC{T,SuiteSparse_long}}};
     kws...) where {T<:Real} = ldltfact(Sparse(A); kws...)
 
+## Rank updates
+
+"""
+    lowrankupdowndate!(F::Factor, C::Sparse, update::Cint)
+
+Update an `LDLt` or `LLt` Factorization `F` of `A` to a factorization of `A ± C*C'`.
+
+If sparsity preserving factorization is used, i.e. `L*L' == P*A*P'` then the new
+factor will be `L*L' == P*A*P' + C'*C`
+
+update: `Cint(1)` for `A + CC'`, `Cint(0)` for `A - CC'`
+"""
+function lowrankupdowndate!{Tv<:VTypes}(F::Factor{Tv}, C::Sparse{Tv}, update::Cint)
+    lF = unsafe_load(get(F.p))
+    lC = unsafe_load(get(C.p))
+    if lF.n != lC.nrow
+        throw(DimensionMismatch("matrix dimensions do not fit"))
+    end
+    @isok ccall((:cholmod_l_updown, :libcholmod), Cint,
+        (Cint, Ptr{C_Sparse{Tv}}, Ptr{C_Factor{Tv}}, Ptr{Void}),
+        update, get(C.p), get(F.p), common())
+    F
+end
+
+#Helper functions for rank updates
+lowrank_reorder(V::AbstractArray,p) = Sparse(sparse(V[p,:]))
+lowrank_reorder(V::AbstractSparseArray,p) = Sparse(V[p,:])
+
+"""
+    lowrankupdate!(F::Factor, C)
+
+Update an `LDLt` or `LLt` Factorization `F` of `A` to a factorization of `A + C*C'`.
+
+`LLt` factorizations are converted to `LDLt`.
+
+See also [`lowrankupdate`](@ref), [`lowrankdowndate`](@ref), [`lowrankdowndate!`](@ref).
+"""
+function lowrankupdate!{Tv<:VTypes}(F::Factor{Tv}, V::AbstractArray{Tv})
+    #Reorder and copy V to account for permutation
+    C = lowrank_reorder(V, get_perm(F))
+    lowrankupdowndate!(F, C, Cint(1))
+end
+
+"""
+    lowrankdowndate!(F::Factor, C)
+
+Update an `LDLt` or `LLt` Factorization `F` of `A` to a factorization of `A - C*C'`.
+
+`LLt` factorizations are converted to `LDLt`.
+
+See also [`lowrankdowndate`](@ref), [`lowrankupdate`](@ref), [`lowrankupdate!`](@ref).
+"""
+function lowrankdowndate!{Tv<:VTypes}(F::Factor{Tv}, V::AbstractArray{Tv})
+    #Reorder and copy V to account for permutation
+    C = lowrank_reorder(V, get_perm(F))
+    lowrankupdowndate!(F, C, Cint(0))
+end
+
+"""
+    lowrankupdate(F::Factor, C) -> FF::Factor
+
+Get an `LDLt` Factorization of `A + C*C'` given an `LDLt` or `LLt` factorization `F` of `A`.
+
+The returned factor is always an `LDLt` factorization.
+
+See also [`lowrankupdate!`](@ref), [`lowrankdowndate`](@ref), [`lowrankdowndate!`](@ref).
+"""
+lowrankupdate{Tv<:VTypes}(F::Factor{Tv}, V::AbstractArray{Tv}) =
+    lowrankupdate!(copy(F), V)
+
+"""
+    lowrankupdate(F::Factor, C) -> FF::Factor
+
+Get an `LDLt` Factorization of `A + C*C'` given an `LDLt` or `LLt` factorization `F` of `A`.
+
+The returned factor is always an `LDLt` factorization.
+
+See also [`lowrankdowndate!`](@ref), [`lowrankupdate`](@ref), [`lowrankupdate!`](@ref).
+"""
+lowrankdowndate{Tv<:VTypes}(F::Factor{Tv}, V::AbstractArray{Tv}) =
+    lowrankdowndate!(copy(F), V)
+
 ## Solvers
 
 for (T, f) in ((:Dense, :solve), (:Sparse, :spsolve))
