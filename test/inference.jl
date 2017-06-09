@@ -952,3 +952,10 @@ g23024(TT::Tuple{DataType}) = f23024(TT[1], v23024)
 @test Base.return_types(f23024, (DataType, Any)) == Any[Int]
 @test Base.return_types(g23024, (Tuple{DataType},)) == Any[Int]
 @test g23024((UInt8,)) === 2
+
+# issue #22290
+f22290() = return nothing
+for i in 1:3
+    ir = sprint(io->code_llvm(io, f22290, Tuple{}))
+    @test contains(ir, "julia_f22290")
+end
