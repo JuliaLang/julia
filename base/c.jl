@@ -344,9 +344,18 @@ function ccallable(f::Function, rt::Type, argt::Type, name::Union{AbstractString
     ccall(:jl_extern_c, Void, (Any, Any, Any, Cstring), f, rt, argt, name)
 end
 
-macro ccallable(rt, def)
+function expand_ccallable(rt, def)
     if isa(def,Expr) && (def.head === :(=) || def.head === :function)
         sig = def.args[1]
+        if sig.head === :(::)
+            if rt === nothing
+                rt = sig.args[2]
+            end
+            sig = sig.args[1]
+        end
+        if rt === nothing
+            error("@ccallable requires a return type")
+        end
         if sig.head === :call
             name = sig.args[1]
             at = map(sig.args[2:end]) do a
@@ -363,4 +372,11 @@ macro ccallable(rt, def)
         end
     end
     error("expected method definition in @ccallable")
+end
+
+macro ccallable(def)
+    expand_ccallable(nothing, def)
+end
+macro ccallable(rt, def)
+    expand_ccallable(rt, def)
 end
