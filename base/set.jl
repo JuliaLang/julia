@@ -202,6 +202,37 @@ function unique(f::Callable, C)
 end
 
 """
+	unique!(itr)
+
+Remove duplicate items and return the modified collection,
+as determined by [`isequal`](@ref).
+
+```jldoctest
+julia> unique!([1, 1, 1])
+1-element Array{Int64,1}:
+ 1
+
+julia> unique!([7, 3, 2, 3, 7, 5])
+4-element Array{Int64,1}:
+ 7
+ 3
+ 2
+ 5
+```
+"""
+function unique!(c)
+    seen = Set{eltype(c)}()
+    index_iterator = eachindex(c)
+    inds = Vector{eltype(index_iterator)}()
+    @inbounds for i in index_iterator
+        x = c[i]
+        x in seen ? push!(inds, i) : push!(seen, x)
+    end
+    deleteat!(c, inds)
+    return c
+end
+
+"""
     allunique(itr) -> Bool
 
 Return `true` if all values from `itr` are distinct when compared with [`isequal`](@ref).

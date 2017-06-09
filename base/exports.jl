@@ -721,6 +721,7 @@ export
     union!,
     union,
     unique,
+    unique!,
     values,
     valtype,
     ∈,
