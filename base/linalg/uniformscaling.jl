@@ -176,7 +176,7 @@ function isapprox(J::UniformScaling,A::AbstractMatrix;
                   rtol::Real=rtoldefault(promote_leaf_eltypes(A),eltype(J)),
                   atol::Real=0, nans::Bool=false, norm::Function=vecnorm)
     n = checksquare(A)
-    Jnorm = norm == vecnorm ? abs(J.λ)*sqrt(n) : norm(J)
+    Jnorm = norm === vecnorm ? abs(J.λ)*sqrt(n) : (norm === Base.norm ? abs(J.λ) : norm(diagm(fill(J.λ, n))))
     return norm(A - J) <= atol + rtol*max(norm(A), Jnorm)
 end
 isapprox(A::AbstractMatrix,J::UniformScaling;kwargs...) = isapprox(J,A;kwargs...)
