@@ -60,16 +60,19 @@ fails = @testset NoThrowTestSet begin
     @test_throws OverflowError 1 + 1
     # Fail - comparison
     @test 1+1 == 2+2
+    # Fail - chained comparison
+    @test 1+0 == 2+0 == 3+0
     # Error - unexpected pass
     @test_broken true
 end
-for i in 1:3
+for i in 1:length(fails) - 1
     @test isa(fails[i], Base.Test.Fail)
 end
 @test contains(sprint(show, fails[1]), "Thrown: ErrorException")
 @test contains(sprint(show, fails[2]), "No exception thrown")
 @test contains(sprint(show, fails[3]), "Evaluated: 2 == 4")
-@test contains(sprint(show, fails[4]), "Unexpected Pass")
+@test contains(sprint(show, fails[4]), "Evaluated: 1 == 2 == 3")
+@test contains(sprint(show, fails[5]), "Unexpected Pass")
 
 # Test printing of a TestSetException
 tse_str = sprint(show, Test.TestSetException(1,2,3,4,Vector{Union{Base.Test.Error, Base.Test.Fail}}()))

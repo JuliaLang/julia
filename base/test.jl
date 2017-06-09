@@ -300,10 +300,7 @@ function get_test_result(ex)
                                          $(esc(ex.args[2])), $(esc(ex.args[1])), $(esc(ex.args[3])))))
     elseif isa(ex, Expr) && ex.head == :comparison
         # pass all terms of the comparison to `eval_comparison`, as an Expr
-        terms = ex.args
-        for i = 1:length(terms)
-            terms[i] = esc(terms[i])
-        end
+        terms = [esc(arg) for arg in ex.args]
         testret = :(eval_comparison(Expr(:comparison, $(terms...))))
     else
         testret = :(Returned($(esc(ex)), nothing))
