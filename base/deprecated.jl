@@ -747,7 +747,6 @@ end
 
 # Deprecate manually vectorized clamp methods in favor of compact broadcast syntax
 @deprecate clamp(A::AbstractArray, lo, hi) clamp.(A, lo, hi)
-@deprecate clamp!(A::AbstractArray, lo, hi) A .= clamp.(A, lo, hi)
 
 # Deprecate manually vectorized round methods in favor of compact broadcast syntax
 @deprecate round(M::Bidiagonal) round.(M)
@@ -1417,6 +1416,10 @@ function LibGit2.set_remote_url(path::AbstractString, url::AbstractString; remot
         "`LibGit2.set_remote_url(path, remote, url)` instead."), :set_remote_url)
     LibGit2.set_remote_url(path, remote, url)
 end
+
+# Deprecate manually vectorized clamp methods in favor of compact broadcast syntax
+# PR #22247
+@deprecate clamp!(A::AbstractArray, lo, hi) A .= clamp.(A, lo, hi)
 
 # END 0.7 deprecations
 
