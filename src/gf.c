@@ -265,9 +265,10 @@ jl_code_info_t *jl_type_infer(jl_method_instance_t **pli, size_t world, int forc
     assert((jl_is_method(li->def.method) || li->inInference == 0) && "inference failed on a toplevel expr");
 
     jl_code_info_t *src = NULL;
-    if (jl_is_svec(linfo_src_rettype) && jl_svec_len(linfo_src_rettype) == 3 &&
-        jl_is_method_instance(jl_svecref(linfo_src_rettype, 0)) &&
-        jl_is_code_info(jl_svecref(linfo_src_rettype, 1))) {
+    if (linfo_src_rettype &&
+            jl_is_svec(linfo_src_rettype) && jl_svec_len(linfo_src_rettype) == 3 &&
+            jl_is_method_instance(jl_svecref(linfo_src_rettype, 0)) &&
+            jl_is_code_info(jl_svecref(linfo_src_rettype, 1))) {
         *pli = (jl_method_instance_t*)jl_svecref(linfo_src_rettype, 0);
         src = (jl_code_info_t*)jl_svecref(linfo_src_rettype, 1);
     }

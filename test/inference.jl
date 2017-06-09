@@ -843,3 +843,16 @@ f21771(::Val{U}) where {U} = Tuple{g21771(U)}
 # ensure that we don't try to resolve cycles using uncached edges
 f21653() = f21653()
 @test code_typed(f21653, Tuple{}, optimize=false)[1] isa Pair{CodeInfo, typeof(Union{})}
+
+# ensure _apply can "see-through" SSAValue to infer precise container types
+let f, m
+    f() = 0
+    m = first(methods(f))
+    m.source = Base.uncompressed_ast(m)::CodeInfo
+    m.source.ssavaluetypes = 1
+    m.source.code = Any[
+        Expr(:(=), SSAValue(0), Expr(:call, GlobalRef(Core, :svec), 1, 2, 3)),
+        Expr(:return, Expr(:call, Core._apply, :+, SSAValue(0)))
+    ]
+    @test @inferred(f()) == 6
+end

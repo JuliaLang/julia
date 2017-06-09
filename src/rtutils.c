@@ -236,7 +236,7 @@ JL_DLLEXPORT void jl_pop_handler(int n)
     jl_eh_restore_state(eh);
 }
 
-JL_DLLEXPORT jl_value_t *jl_apply_with_saved_exception_state(jl_value_t **args, uint32_t nargs, int catch_exceptions)
+JL_DLLEXPORT jl_value_t *jl_apply_with_saved_exception_state(jl_value_t **args, uint32_t nargs, int drop_exceptions)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_value_t *exc = ptls->exception_in_transit;
@@ -245,16 +245,17 @@ JL_DLLEXPORT jl_value_t *jl_apply_with_saved_exception_state(jl_value_t **args, 
     if (ptls->bt_size > 0)
         bt = (jl_array_t*)jl_get_backtrace();
     jl_value_t *v;
-    if (catch_exceptions) {
-        JL_TRY {
-            v = jl_apply(args, nargs);
-        }
-        JL_CATCH {
-            v = NULL;
-        }
-    }
-    else {
+    JL_TRY {
         v = jl_apply(args, nargs);
+    }
+    JL_CATCH {
+        if (!drop_exceptions) {
+            jl_printf(JL_STDERR, "Internal error: encountered unexpected error in runtime:\n");
+            jl_static_show(JL_STDERR, ptls->exception_in_transit);
+            jl_printf(JL_STDERR, "\n");
+            jlbacktrace(); // written to STDERR_FILENO
+        }
+        v = NULL;
     }
     ptls->exception_in_transit = exc;
     if (bt != NULL) {
