@@ -224,19 +224,24 @@ julia> A
 ```
 """
 function unique!(A::AbstractVector)
+    try
+        Aissorted = issorted(A) || issorted(A, rev=true)
+    catch
+        Aissorted = false
+    end
     if isempty(A)
         return A
-    elseif issorted(A) || issorted(A, rev=true)
+    elseif Aissorted
         # If A is sorted, then we only need to keep track of one element and add that to A
         # every time that we see a new element.
         idxs = eachindex(A)
-        m = first(A)
+        y = first(A)
         j = start(idxs)
         for i in idxs
             x = A[i]
-            if x != m
-                m, j = next(idxs, j)
-                m = A[j] = x
+            if !isequal(x, y)
+                _, j = next(idxs, j)
+                y = A[j] = x
             end
         end
         count = j - start(idxs) + 1
@@ -245,18 +250,16 @@ function unique!(A::AbstractVector)
         # we have seen so far.
         seen = Set{eltype(A)}()
         idxs = eachindex(A)
-        m = n = start(idxs)
-        count = 0
-        while !done(A, n)
-            i, n = next(idxs, n)
-            x = A[i]
+        state = n = start(idxs)
+        for x in A
+            _, n = next(idxs, n)
             if x ∉ seen
-                count += 1
                 push!(seen, x)
-                j, m = next(idxs, m)
-                A[j] = x
+                i, state = next(idxs, state)
+                A[i] = x
             end
         end
+        count = i - start(idxs) + 1
     end
     resize!(A, count)
 end
