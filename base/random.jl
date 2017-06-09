@@ -4,6 +4,7 @@ module Random
 
 using Base.dSFMT
 using Base.GMP: Limb, MPZ
+using Base: @defaults
 import Base: copymutable, copy, copy!, ==
 
 export srand,
@@ -24,6 +25,17 @@ abstract type AbstractRNG end
 abstract type FloatInterval end
 mutable struct CloseOpen <: FloatInterval end
 mutable struct Close1Open2 <: FloatInterval end
+
+
+macro defaultRNG(e)
+    if e.args[1].head == :where
+        args = e.args[1].args[1].args
+    else
+        args = e.args[1].args
+    end
+    args[2] = :([$(args[2]) = Base.Random.GLOBAL_RNG])
+    esc(:(Base.@defaults $e))
+end
 
 
 ## RandomDevice
@@ -274,15 +286,7 @@ julia> rand(MersenneTwister(0), Dict(1=>2, 3=>4))
 1=>2
 ```
 """
-@inline rand() = rand(GLOBAL_RNG, CloseOpen)
 @inline rand(T::Type) = rand(GLOBAL_RNG, T)
-rand(dims::Dims) = rand(GLOBAL_RNG, dims)
-rand(dims::Integer...) = rand(convert(Tuple{Vararg{Int}}, dims))
-rand(T::Type, dims::Dims) = rand(GLOBAL_RNG, T, dims)
-rand(T::Type, d1::Integer, dims::Integer...) = rand(T, tuple(Int(d1), convert(Tuple{Vararg{Int}}, dims)...))
-rand!(A::AbstractArray) = rand!(GLOBAL_RNG, A)
-
-rand(r::AbstractArray) = rand(GLOBAL_RNG, r)
 
 """
     rand!([rng=GLOBAL_RNG], A, [coll])
@@ -291,14 +295,11 @@ Populate the array `A` with random values. If the collection `coll` is specified
 the values are picked randomly from `coll`. This is equivalent to `copy!(A, rand(rng, coll, size(A)))`
 or `copy!(A, rand(rng, eltype(A), size(A)))` but without allocating a new array.
 """
-rand!(A::AbstractArray, r::AbstractArray) = rand!(GLOBAL_RNG, A, r)
-
-rand(r::AbstractArray, dims::Dims) = rand(GLOBAL_RNG, r, dims)
-rand(r::AbstractArray, dims::Integer...) = rand(GLOBAL_RNG, r, convert(Tuple{Vararg{Int}}, dims))
+:rand!
 
 ## random floating point values
 
-@inline rand(r::AbstractRNG) = rand(r, CloseOpen)
+@inline rand(r::AbstractRNG=GLOBAL_RNG) = rand(r, CloseOpen)
 
 # MersenneTwister & RandomDevice
 @inline rand(r::Union{RandomDevice,MersenneTwister}, ::Type{Float64}) = rand(r, CloseOpen)
@@ -352,7 +353,7 @@ function rand(r::AbstractRNG, ::Type{Char})
 end
 
 # random values from Dict, Set, IntSet (for efficiency)
-function rand(r::AbstractRNG, t::Dict)
+@defaultRNG function rand(r::AbstractRNG, t::Dict)
     isempty(t) && throw(ArgumentError("collection must be non-empty"))
     rg = RangeGenerator(1:length(t.slots))
     while true
@@ -360,11 +361,10 @@ function rand(r::AbstractRNG, t::Dict)
         Base.isslotfilled(t, i) && @inbounds return (t.keys[i] => t.vals[i])
     end
 end
-rand(t::Dict) = rand(GLOBAL_RNG, t)
-rand(r::AbstractRNG, s::Set) = rand(r, s.dict).first
-rand(s::Set) = rand(GLOBAL_RNG, s)
 
-function rand(r::AbstractRNG, s::IntSet)
+@defaultRNG rand(r::AbstractRNG, s::Set) = rand(r, s.dict).first
+
+@defaultRNG function rand(r::AbstractRNG, s::IntSet)
     isempty(s) && throw(ArgumentError("collection must be non-empty"))
     # s can be empty while s.bits is not, so we cannot rely on the
     # length check in RangeGenerator below
@@ -376,41 +376,35 @@ function rand(r::AbstractRNG, s::IntSet)
     end
 end
 
-rand(s::IntSet) = rand(GLOBAL_RNG, s)
-
 ## Arrays of random numbers
 
-rand(r::AbstractRNG, dims::Dims) = rand(r, Float64, dims)
-rand(r::AbstractRNG, dims::Integer...) = rand(r, convert(Tuple{Vararg{Int}}, dims))
+@defaultRNG rand(r::AbstractRNG, dims::Dims) = rand(r, Float64, dims)
+@defaultRNG rand(r::AbstractRNG, dims::Integer...) = rand(r, convert(Tuple{Vararg{Int}}, dims))
 
-rand(r::AbstractRNG, T::Type, dims::Dims) = rand!(r, Array{T}(dims))
-rand(r::AbstractRNG, T::Type, d1::Integer, dims::Integer...) = rand(r, T, tuple(Int(d1), convert(Tuple{Vararg{Int}}, dims)...))
+@defaultRNG rand(r::AbstractRNG, T::Type, dims::Dims) = rand!(r, Array{T}(dims))
+@defaultRNG rand(r::AbstractRNG, T::Type, d1::Integer, dims::Integer...) = rand(r, T, tuple(Int(d1), convert(Tuple{Vararg{Int}}, dims)...))
 # note: the above method would trigger an ambiguity warning if d1 was not separated out:
 # rand(r, ()) would match both this method and rand(r, dims::Dims)
 # moreover, a call like rand(r, NotImplementedType()) would be an infinite loop
 
-function rand!(r::AbstractRNG, A::AbstractArray{T}) where T
+@defaultRNG function rand!(r::AbstractRNG, A::AbstractArray{T}) where T
     for i in eachindex(A)
         @inbounds A[i] = rand(r, T)
     end
     A
 end
 
-function rand!(r::AbstractRNG, A::AbstractArray, s::Union{Dict,Set,IntSet})
+@defaultRNG function rand!(r::AbstractRNG, A::AbstractArray, s::Union{Dict,Set,IntSet})
     for i in eachindex(A)
         @inbounds A[i] = rand(r, s)
     end
     A
 end
 
-rand!(A::AbstractArray, s::Union{Dict,Set,IntSet}) = rand!(GLOBAL_RNG, A, s)
-
-rand(r::AbstractRNG, s::Dict{K,V}, dims::Dims) where {K,V} = rand!(r, Array{Pair{K,V}}(dims), s)
-rand(r::AbstractRNG, s::Set{T}, dims::Dims) where {T} = rand!(r, Array{T}(dims), s)
-rand(r::AbstractRNG, s::IntSet, dims::Dims) = rand!(r, Array{Int}(dims), s)
-rand(r::AbstractRNG, s::Union{Dict,Set,IntSet}, dims::Integer...) = rand(r, s, convert(Dims, dims))
-rand(s::Union{Dict,Set,IntSet}, dims::Integer...) = rand(GLOBAL_RNG, s, dims)
-rand(s::Union{Dict,Set,IntSet}, dims::Dims) = rand(GLOBAL_RNG, s, dims)
+@defaultRNG rand(r::AbstractRNG, s::Dict{K,V}, dims::Dims) where {K,V} = rand!(r, Array{Pair{K,V}}(dims), s)
+@defaultRNG rand(r::AbstractRNG, s::Set{T}, dims::Dims) where {T} = rand!(r, Array{T}(dims), s)
+@defaultRNG rand(r::AbstractRNG, s::IntSet, dims::Dims) = rand!(r, Array{Int}(dims), s)
+@defaultRNG rand(r::AbstractRNG, s::Union{Dict,Set,IntSet}, dims::Integer...) = rand(r, s, convert(Dims, dims))
 
 # MersenneTwister
 
@@ -663,7 +657,7 @@ rand(rng::AbstractRNG, r::UnitRange{<:Union{Signed,Unsigned,BigInt,Bool}}) = ran
 
 # Randomly draw a sample from an AbstractArray r
 # (e.g. r is a range 0:2:8 or a vector [2, 3, 5, 7])
-rand(rng::AbstractRNG, r::AbstractArray) = @inbounds return r[rand(rng, 1:length(r))]
+@defaultRNG rand(rng::AbstractRNG, r::AbstractArray) = @inbounds return r[rand(rng, 1:length(r))]
 
 function rand!(rng::AbstractRNG, A::AbstractArray, g::RangeGenerator)
     for i in eachindex(A)
@@ -674,7 +668,7 @@ end
 
 rand!(rng::AbstractRNG, A::AbstractArray, r::UnitRange{<:Union{Signed,Unsigned,BigInt,Bool,Char}}) = rand!(rng, A, RangeGenerator(r))
 
-function rand!(rng::AbstractRNG, A::AbstractArray, r::AbstractArray)
+@defaultRNG function rand!(rng::AbstractRNG, A::AbstractArray, r::AbstractArray)
     g = RangeGenerator(1:(length(r)))
     for i in eachindex(A)
         @inbounds A[i] = r[rand(rng, g)]
@@ -682,8 +676,8 @@ function rand!(rng::AbstractRNG, A::AbstractArray, r::AbstractArray)
     return A
 end
 
-rand(rng::AbstractRNG, r::AbstractArray{T}, dims::Dims) where {T} = rand!(rng, Array{T}(dims), r)
-rand(rng::AbstractRNG, r::AbstractArray, dims::Int...) = rand(rng, r, dims)
+@defaultRNG rand(rng::AbstractRNG, r::AbstractArray{T}, dims::Dims) where {T} = rand!(rng, Array{T}(dims), r)
+@defaultRNG rand(rng::AbstractRNG, r::AbstractArray, dims::Integer...) = rand(rng, r, dims)
 
 ## random BitArrays (AbstractRNG)
 
@@ -700,11 +694,11 @@ end
 
 Generate a `BitArray` of random boolean values.
 """
-bitrand(r::AbstractRNG, dims::Dims)   = rand!(r, BitArray(dims))
-bitrand(r::AbstractRNG, dims::Int...) = rand!(r, BitArray(dims))
+:bitrand
 
-bitrand(dims::Dims)   = rand!(BitArray(dims))
-bitrand(dims::Int...) = rand!(BitArray(dims))
+@defaultRNG bitrand(r::AbstractRNG, dims::Dims)   = rand!(r, BitArray(dims))
+@defaultRNG bitrand(r::AbstractRNG, dims::Int...) = rand!(r, BitArray(dims))
+
 
 ## randn() - Normally distributed random numbers using Ziggurat algorithm
 
@@ -1288,25 +1282,19 @@ let Floats = Union{Float16,Float32,Float64}
             $randfun(::Type{T}) where {T} = $randfun(GLOBAL_RNG, T)
 
             # filling arrays
-            function $randfun!(rng::AbstractRNG, A::AbstractArray{T}) where T
+            @defaultRNG function $randfun!(rng::AbstractRNG, A::AbstractArray{T}) where T
                 for i in eachindex(A)
                     @inbounds A[i] = $randfun(rng, T)
                 end
                 A
             end
 
-            $randfun!(A::AbstractArray) = $randfun!(GLOBAL_RNG, A)
-
             # generating arrays
-            $randfun(rng::AbstractRNG, ::Type{T}, dims::Dims                     ) where {T} = $randfun!(rng, Array{T}(dims))
+            @defaults $randfun([rng::AbstractRNG=GLOBAL_RNG], [::Type{T}=Float64], dims::Dims                     ) where {T} =
+                $randfun!(rng, Array{T}(dims))
             # Note that this method explicitly does not define $randfun(rng, T), in order to prevent an infinite recursion.
-            $randfun(rng::AbstractRNG, ::Type{T}, dim1::Integer, dims::Integer...) where {T} = $randfun!(rng, Array{T}(dim1, dims...))
-            $randfun(                  ::Type{T}, dims::Dims                     ) where {T} = $randfun(GLOBAL_RNG, T, dims)
-            $randfun(                  ::Type{T}, dims::Integer...               ) where {T} = $randfun(GLOBAL_RNG, T, dims...)
-            $randfun(rng::AbstractRNG,            dims::Dims                     )           = $randfun(rng, Float64, dims)
-            $randfun(rng::AbstractRNG,            dims::Integer...               )           = $randfun(rng, Float64, dims...)
-            $randfun(                             dims::Dims                     )           = $randfun(GLOBAL_RNG, Float64, dims)
-            $randfun(                             dims::Integer...               )           = $randfun(GLOBAL_RNG, Float64, dims...)
+            @defaults $randfun([rng::AbstractRNG=GLOBAL_RNG], [::Type{T}=Float64], dim1::Integer, dims::Integer...) where {T} =
+                $randfun!(rng, Array{T}(dim1, dims...))
         end
     end
 end
@@ -1412,10 +1400,8 @@ Base.show(io::IO, u::UUID) = write(io, Base.repr(u))
 # return a random string (often useful for temporary filenames/dirnames)
 let b = UInt8['0':'9';'A':'Z';'a':'z']
     global randstring
-    randstring(r::AbstractRNG, n::Int) = String(b[rand(r, 1:length(b), n)])
-    randstring(r::AbstractRNG) = randstring(r,8)
-    randstring(n::Int) = randstring(GLOBAL_RNG, n)
-    randstring() = randstring(GLOBAL_RNG)
+    @defaultRNG randstring(r::AbstractRNG, n::Int) = String(b[rand(r, 1:length(b), n)])
+    @defaultRNG randstring(r::AbstractRNG) = randstring(r,8)
 end
 
 
@@ -1423,7 +1409,7 @@ end
 # each element of A is included in S with independent probability p.
 # (Note that this is different from the problem of finding a random
 #  size-m subset of A where m is fixed!)
-function randsubseq!(r::AbstractRNG, S::AbstractArray, A::AbstractArray, p::Real)
+@defaultRNG function randsubseq!(r::AbstractRNG, S::AbstractArray, A::AbstractArray, p::Real)
     0 <= p <= 1 || throw(ArgumentError("probability $p not in [0,1]"))
     n = length(A)
     p == 1 && return copy!(resize!(S, n), A)
@@ -1457,9 +1443,8 @@ function randsubseq!(r::AbstractRNG, S::AbstractArray, A::AbstractArray, p::Real
     end
     return S
 end
-randsubseq!(S::AbstractArray, A::AbstractArray, p::Real) = randsubseq!(GLOBAL_RNG, S, A, p)
 
-randsubseq(r::AbstractRNG, A::AbstractArray{T}, p::Real) where {T} = randsubseq!(r, T[], A, p)
+@defaultRNG randsubseq(r::AbstractRNG, A::AbstractArray{T}, p::Real) where {T} = randsubseq!(r, T[], A, p)
 
 """
     randsubseq(A, p) -> Vector
@@ -1469,7 +1454,7 @@ element of `A` is included (in order) with independent probability `p`. (Complex
 linear in `p*length(A)`, so this function is efficient even if `p` is small and `A` is
 large.) Technically, this process is known as "Bernoulli sampling" of `A`.
 """
-randsubseq(A::AbstractArray, p::Real) = randsubseq(GLOBAL_RNG, A, p)
+randsubseq
 
 "Return a random `Int` (masked with `mask`) in ``[0, n)``, when `n <= 2^52`."
 @inline function rand_lt(r::AbstractRNG, n::Int, mask::Int=nextpow2(n)-1)
@@ -1487,7 +1472,9 @@ end
 In-place version of [`shuffle`](@ref): randomly permute `v` in-place,
 optionally supplying the random-number generator `rng`.
 """
-function shuffle!(r::AbstractRNG, a::AbstractArray)
+:shuffle!
+
+@defaultRNG function shuffle!(r::AbstractRNG, a::AbstractArray)
     n = length(a)
     @assert n <= Int64(2)^52
     mask = nextpow2(n) - 1
@@ -1499,8 +1486,6 @@ function shuffle!(r::AbstractRNG, a::AbstractArray)
     return a
 end
 
-shuffle!(a::AbstractArray) = shuffle!(GLOBAL_RNG, a)
-
 """
     shuffle([rng=GLOBAL_RNG,] v::AbstractArray)
 
@@ -1509,8 +1494,9 @@ number generator (see [Random Numbers](@ref)).
 To permute `v` in-place, see [`shuffle!`](@ref). To obtain randomly permuted
 indices, see [`randperm`](@ref).
 """
-shuffle(r::AbstractRNG, a::AbstractArray) = shuffle!(r, copymutable(a))
-shuffle(a::AbstractArray) = shuffle(GLOBAL_RNG, a)
+:shuffle
+
+@defaultRNG shuffle(r::AbstractRNG, a::AbstractArray) = shuffle!(r, copymutable(a))
 
 """
     randperm([rng=GLOBAL_RNG,] n::Integer)
@@ -1520,7 +1506,9 @@ number generator (see [Random Numbers](@ref)).
 To randomly permute a arbitrary vector, see [`shuffle`](@ref)
 or [`shuffle!`](@ref).
 """
-function randperm(r::AbstractRNG, n::Integer)
+:randperm
+
+@defaultRNG function randperm(r::AbstractRNG, n::Integer)
     a = Vector{typeof(n)}(n)
     @assert n <= Int64(2)^52
     if n == 0
@@ -1538,7 +1526,6 @@ function randperm(r::AbstractRNG, n::Integer)
     end
     return a
 end
-randperm(n::Integer) = randperm(GLOBAL_RNG, n)
 
 """
     randcycle([rng=GLOBAL_RNG,] n::Integer)
@@ -1546,7 +1533,9 @@ randperm(n::Integer) = randperm(GLOBAL_RNG, n)
 Construct a random cyclic permutation of length `n`. The optional `rng`
 argument specifies a random number generator, see [Random Numbers](@ref).
 """
-function randcycle(r::AbstractRNG, n::Integer)
+:randcycle
+
+@defaultRNG function randcycle(r::AbstractRNG, n::Integer)
     a = Vector{typeof(n)}(n)
     n == 0 && return a
     @assert n <= Int64(2)^52
@@ -1560,6 +1549,5 @@ function randcycle(r::AbstractRNG, n::Integer)
     end
     return a
 end
-randcycle(n::Integer) = randcycle(GLOBAL_RNG, n)
 
 end # module

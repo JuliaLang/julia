@@ -322,6 +322,11 @@ include("hashing2.jl")
 # irrational mathematical constants
 include("irrationals.jl")
 
+
+# @defaults macro
+include("defaults.jl")
+using .Defaults: @defaults
+
 # random number generation
 include("dSFMT.jl")
 include("random.jl")
