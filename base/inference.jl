@@ -543,7 +543,47 @@ add_tfunc(===, 2, 2,
         end
         return Bool
     end)
-add_tfunc(isdefined, 1, 2, (args...)->Bool)
+function isdefined_tfunc(args...)
+    arg1 = args[1]
+    if isa(arg1, Const)
+        a1 = typeof(arg1.val)
+    else
+        a1 = widenconst(arg1)
+    end
+    if isType(a1)
+        return Bool
+    end
+    a1 = unwrap_unionall(a1)
+    if isa(a1, DataType) && !a1.abstract
+        if a1 <: Array # TODO update when deprecation is removed
+        elseif a1 === Module
+            length(args) == 2 || return Bottom
+            sym = args[2]
+            Symbol <: widenconst(sym) || return Bottom
+            if isa(sym, Const) && isa(sym.val, Symbol) && isa(arg1, Const) && isdefined(arg1.val, sym.val)
+                return Const(true)
+            end
+        elseif length(args) == 2 && isa(args[2], Const)
+            val = args[2].val
+            idx::Int = 0
+            if isa(val, Symbol)
+                idx = fieldindex(a1, val, false)
+            elseif isa(val, Int)
+                idx = val
+            else
+                return Bottom
+            end
+            if 1 <= idx <= a1.ninitialized
+                return Const(true)
+            elseif idx <= 0 || (idx > nfields(a1) && !isvatuple(a1))
+                return Const(false)
+            end
+        end
+    end
+    Bool
+end
+# TODO change IInf to 2 when deprecation is removed
+add_tfunc(isdefined, 1, IInf, isdefined_tfunc)
 add_tfunc(Core.sizeof, 1, 1, x->Int)
 add_tfunc(nfields, 1, 1,
     function (x::ANY)
@@ -3419,7 +3459,7 @@ end
 const _pure_builtins = Any[tuple, svec, fieldtype, apply_type, ===, isa, typeof, UnionAll, nfields]
 
 # known effect-free calls (might not be affect-free)
-const _pure_builtins_volatile = Any[getfield, arrayref]
+const _pure_builtins_volatile = Any[getfield, arrayref, isdefined]
 
 function is_pure_intrinsic(f::IntrinsicFunction)
     return !(f === Intrinsics.pointerref || # this one is volatile

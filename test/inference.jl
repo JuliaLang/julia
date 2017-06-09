@@ -863,3 +863,50 @@ for i in 1:3
     ir = sprint(io->code_llvm(io, f22290, Tuple{}))
     @test contains(ir, "julia_f22290")
 end
+
+# constant inference of isdefined
+let f(x) = isdefined(x, 2) ? 1 : ""
+    @test Base.return_types(f, (Tuple{Int,Int},)) == Any[Int]
+    @test Base.return_types(f, (Tuple{Int,},)) == Any[String]
+end
+let f(x) = isdefined(x, :re) ? 1 : ""
+    @test Base.return_types(f, (Complex64,)) == Any[Int]
+    @test Base.return_types(f, (Complex,)) == Any[Int]
+end
+let f(x) = isdefined(x, :NonExistentField) ? 1 : ""
+    @test Base.return_types(f, (Complex64,)) == Any[String]
+    @test Union{Int,String} <: Base.return_types(f, (AbstractArray,))[1]
+end
+import Core.Inference: Const, isdefined_tfunc, ⊑
+@test isdefined_tfunc(Complex64, Const(())) === Union{}
+@test isdefined_tfunc(Complex64, Const(1)) === Const(true)
+@test isdefined_tfunc(Complex64, Const(2)) === Const(true)
+@test isdefined_tfunc(Complex64, Const(3)) === Const(false)
+@test isdefined_tfunc(Complex64, Const(0)) === Const(false)
+mutable struct SometimesDefined
+    x
+    function SometimesDefined()
+        v = new()
+        if rand(Bool)
+            v.x = 0
+        end
+        return v
+    end
+end
+@test isdefined_tfunc(SometimesDefined, Const(:x)) == Bool
+@test isdefined_tfunc(SometimesDefined, Const(:y)) === Const(false)
+@test isdefined_tfunc(Const(Base), Const(:length)) === Const(true)
+@test isdefined_tfunc(Const(Base), Symbol) == Bool
+@test isdefined_tfunc(Const(Base), Const(:NotCurrentlyDefinedButWhoKnows)) == Bool
+@test isdefined_tfunc(SimpleVector, Const(1)) === Const(true)
+@test isdefined_tfunc(SimpleVector, Const(:length)) === Const(true)
+@test Const(false) ⊑ isdefined_tfunc(Const(:x), Symbol)
+@test Const(false) ⊑ isdefined_tfunc(Const(:x), Const(:y))
+@test isdefined_tfunc(Vector{Int}, Const(1)) == Bool
+@test isdefined_tfunc(Vector{Any}, Const(1)) == Bool
+@test isdefined_tfunc(Module, Any, Any) === Union{}
+@test isdefined_tfunc(Module, Int) === Union{}
+@test isdefined_tfunc(Tuple{Any,Vararg{Any}}, Const(0)) === Const(false)
+@test isdefined_tfunc(Tuple{Any,Vararg{Any}}, Const(1)) === Const(true)
+@test isdefined_tfunc(Tuple{Any,Vararg{Any}}, Const(2)) === Bool
+@test isdefined_tfunc(Tuple{Any,Vararg{Any}}, Const(3)) === Bool
