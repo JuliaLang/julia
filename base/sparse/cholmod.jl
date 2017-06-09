@@ -1546,12 +1546,12 @@ ldltfact(A::Union{SparseMatrixCSC{T},SparseMatrixCSC{Complex{T}},
 """
     lowrankupdowndate!(F::Factor, C::Sparse, update::Cint)
 
-Update an `LDLt` or `LLt` Factorization `F` of `A` to a factorization of `A±C*C'`.
+Update an `LDLt` or `LLt` Factorization `F` of `A` to a factorization of `A ± C*C'`.
 
-If sparsity preserving factorization is used, i.e. `L*L'*=P*A*P'` then the new
-factor will be `L*L'=P*A*P'+C'*C`
+If sparsity preserving factorization is used, i.e. `L*L' == P*A*P'` then the new
+factor will be `L*L' == P*A*P' + C'*C`
 
-update: `Cint(1)` for `A+CC'`, `Cint(0)` for `A-CC'`
+update: `Cint(1)` for `A + CC'`, `Cint(0)` for `A - CC'`
 """
 function lowrankupdowndate!{Tv<:VTypes}(F::Factor{Tv}, C::Sparse{Tv}, update::Cint)
     lF = unsafe_load(get(F.p))
@@ -1572,7 +1572,7 @@ lowrank_reorder(V::AbstractSparseArray,p) = Sparse(V[p,:])
 """
     lowrankupdate!(F::Factor, C)
 
-Update an `LDLt` or `LLt` Factorization `F` of `A` to a factorization of `A+C*C'`.
+Update an `LDLt` or `LLt` Factorization `F` of `A` to a factorization of `A + C*C'`.
 
 `LLt` factorizations are converted to `LDLt`.
 
@@ -1587,7 +1587,7 @@ end
 """
     lowrankdowndate!(F::Factor, C)
 
-Update an `LDLt` or `LLt` Factorization `F` of `A` to a factorization of `A-C*C'`.
+Update an `LDLt` or `LLt` Factorization `F` of `A` to a factorization of `A - C*C'`.
 
 `LLt` factorizations are converted to `LDLt`.
 
@@ -1602,7 +1602,7 @@ end
 """
     lowrankupdate(F::Factor, C) -> FF::Factor
 
-Get an `LDLt` Factorization of `A+C*C'` given an `LDLt` or `LLt` factorization `F` of `A`.
+Get an `LDLt` Factorization of `A + C*C'` given an `LDLt` or `LLt` factorization `F` of `A`.
 
 The returned factor is always an `LDLt` factorization.
 
@@ -1614,7 +1614,7 @@ lowrankupdate{Tv<:VTypes}(F::Factor{Tv}, V::AbstractArray{Tv}) =
 """
     lowrankupdate(F::Factor, C) -> FF::Factor
 
-Get an `LDLt` Factorization of `A+C*C'` given an `LDLt` or `LLt` factorization `F` of `A`.
+Get an `LDLt` Factorization of `A + C*C'` given an `LDLt` or `LLt` factorization `F` of `A`.
 
 The returned factor is always an `LDLt` factorization.
 
