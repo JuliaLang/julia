@@ -238,14 +238,15 @@ function unique!(A::AbstractVector)
         idxs = eachindex(A)
         y = first(A)
         state = start(idxs)
+        _, state = next(idxs, state)
         for i in idxs
             x = A[i]
             if !isequal(x, y)
                 j, state = next(idxs, state)
-                y = A[j+1] = x
+                y = A[j] = x
             end
         end
-        count = j - first(idxs) + 2
+        count = j - first(idxs) + 1
     else
         # If A is not sorted, then we will need to keep track of all of the elements that
         # we have seen so far.
