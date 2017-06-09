@@ -38,6 +38,7 @@ end
 end
 
 @test copy(UniformScaling(one(Float64))) == UniformScaling(one(Float64))
+@test sprint(show,UniformScaling(one(Complex128))) == "UniformScaling{Complex{Float64}}\n(1.0 + 0.0im)*I"
 @test sprint(show,UniformScaling(one(Float32))) == "UniformScaling{Float32}\n1.0*I"
 
 λ = complex(randn(),randn())

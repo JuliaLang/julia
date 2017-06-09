@@ -153,7 +153,7 @@ function eval_user_input(ast::ANY, show_value)
                 display_error(lasterr,bt)
                 errcount, lasterr = 0, ()
             else
-                ast = expand(ast)
+                ast = expand(Main, ast)
                 value = eval(Main, ast)
                 eval(Main, Expr(:body, Expr(:(=), :ans, QuoteNode(value)), Expr(:return, nothing)))
                 if !(value === nothing) && show_value
@@ -210,7 +210,7 @@ function parse_input_line(s::String; filename::String="none")
                s, sizeof(s), filename, sizeof(filename))
     if ex === :_
         # remove with 0.6 deprecation
-        expand(ex)  # to get possible warning about using _ as an rvalue
+        expand(Main, ex)  # to get possible warning about using _ as an rvalue
     end
     return ex
 end
@@ -243,7 +243,7 @@ function incomplete_tag(ex::Expr)
 end
 
 # try to include() a file, ignoring if not found
-try_include(path::AbstractString) = isfile(path) && include(path)
+try_include(mod::Module, path::AbstractString) = isfile(path) && include(mod, path)
 
 function process_options(opts::JLOptions)
     if !isempty(ARGS)
@@ -279,7 +279,7 @@ function process_options(opts::JLOptions)
         # load file immediately on all processors
         if opts.load != C_NULL
             @sync for p in procs()
-                @async remotecall_fetch(include, p, unsafe_string(opts.load))
+                @async remotecall_fetch(include, p, Main, unsafe_string(opts.load))
             end
         end
         # eval expression
@@ -304,7 +304,7 @@ function process_options(opts::JLOptions)
             if !is_interactive
                 ccall(:jl_exit_on_sigint, Void, (Cint,), 1)
             end
-            include(PROGRAM_FILE)
+            include(Main, PROGRAM_FILE)
         end
         break
     end
@@ -315,12 +315,13 @@ end
 function load_juliarc()
     # If the user built us with a specific Base.SYSCONFDIR, check that location first for a juliarc.jl file
     #   If it is not found, then continue on to the relative path based on JULIA_HOME
-    if !isempty(Base.SYSCONFDIR) && isfile(joinpath(JULIA_HOME,Base.SYSCONFDIR,"julia","juliarc.jl"))
-        include(abspath(JULIA_HOME,Base.SYSCONFDIR,"julia","juliarc.jl"))
+    if !isempty(Base.SYSCONFDIR) && isfile(joinpath(JULIA_HOME, Base.SYSCONFDIR, "julia", "juliarc.jl"))
+        include(Main, abspath(JULIA_HOME, Base.SYSCONFDIR, "julia", "juliarc.jl"))
     else
-        try_include(abspath(JULIA_HOME,"..","etc","julia","juliarc.jl"))
+        try_include(Main, abspath(JULIA_HOME, "..", "etc", "julia", "juliarc.jl"))
     end
-    try_include(abspath(homedir(),".juliarc.jl"))
+    try_include(Main, abspath(homedir(), ".juliarc.jl"))
+    nothing
 end
 
 function load_machine_file(path::AbstractString)
@@ -363,12 +364,13 @@ function __atreplinit(repl)
         end
     end
 end
-_atreplinit(repl) = @eval Main $__atreplinit($repl)
+_atreplinit(repl) = invokelatest(__atreplinit, repl)
 
 function _start()
     empty!(ARGS)
     append!(ARGS, Core.ARGS)
     opts = JLOptions()
+    @eval Main include(x) = $include(Main, x)
     try
         (quiet,repl,startup,color_set,history_file) = process_options(opts)
 

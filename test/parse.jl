@@ -495,7 +495,7 @@ test_parseerror("0x0.1", "hex float literal must contain \"p\" or \"P\"")
 test_parseerror("0x1.0p", "invalid numeric constant \"0x1.0\"")
 
 # issue #15798
-@test expand(Base.parse_input_line("""
+@test expand(Main, Base.parse_input_line("""
               try = "No"
            """)) == Expr(:error, "unexpected \"=\"")
 
@@ -524,10 +524,10 @@ test_parseerror("if\nfalse\nend", "missing condition in \"if\" at none:1")
 test_parseerror("if false\nelseif\nend", "missing condition in \"elseif\" at none:2")
 
 # issue #15828
-@test expand(parse("x...")) == Expr(:error, "\"...\" expression outside call")
+@test expand(Main, parse("x...")) == Expr(:error, "\"...\" expression outside call")
 
 # issue #15830
-@test expand(parse("foo(y = (global x)) = y")) == Expr(:error, "misplaced \"global\" declaration")
+@test expand(Main, parse("foo(y = (global x)) = y")) == Expr(:error, "misplaced \"global\" declaration")
 
 # issue #15844
 function f15844(x)
@@ -558,11 +558,11 @@ add_method_to_glob_fn!()
 @test_throws ParseError parse("function finally() end")
 
 # PR #16170
-@test expand(parse("true(x) = x")) == Expr(:error, "invalid function name \"true\"")
-@test expand(parse("false(x) = x")) == Expr(:error, "invalid function name \"false\"")
+@test expand(Main, parse("true(x) = x")) == Expr(:error, "invalid function name \"true\"")
+@test expand(Main, parse("false(x) = x")) == Expr(:error, "invalid function name \"false\"")
 
 # issue #16355
-@test expand(:(f(d:Int...)=nothing)) == Expr(:error, "\"d:Int\" is not a valid function argument name")
+@test expand(Main, :(f(d:Int...) = nothing)) == Expr(:error, "\"d:Int\" is not a valid function argument name")
 
 # issue #16517
 @test (try error(); catch 0; end) === 0
@@ -642,7 +642,7 @@ end
 
 # issue #16720
 let err = try
-    include_string("module A
+    include_string(@__MODULE__, "module A
 
         function broken()
 
@@ -707,27 +707,27 @@ let m_error, error_out, filename = Base.source_path()
 end
 
 # issue #7272
-@test expand(parse("let
+@test expand(Main, parse("let
               global x = 2
               local x = 1
               end")) == Expr(:error, "variable \"x\" declared both local and global")
 
-@test expand(parse("let
+@test expand(Main, parse("let
               local x = 2
               local x = 1
               end")) == Expr(:error, "local \"x\" declared twice")
 
-@test expand(parse("let x
+@test expand(Main, parse("let x
                   local x = 1
               end")) == Expr(:error, "local \"x\" declared twice")
 
-@test expand(parse("let x = 2
+@test expand(Main, parse("let x = 2
                   local x = 1
               end")) == Expr(:error, "local \"x\" declared twice")
 
 
 # make sure front end can correctly print values to error messages
-let ex = expand(parse("\"a\"=1"))
+let ex = expand(Main, parse("\"a\"=1"))
     @test ex == Expr(:error, "invalid assignment location \"\"a\"\"")
 end
 
@@ -747,20 +747,23 @@ for (str, tag) in Dict("" => :none, "\"" => :string, "#=" => :comment, "'" => :c
 end
 
 # meta nodes for optional positional arguments
-@test expand(:(@inline f(p::Int=2) = 3)).args[2].args[3].inlineable
+@test expand(Main, :(@inline f(p::Int=2) = 3)).args[2].args[3].inlineable
 
 # issue #16096
 module M16096
 macro iter()
-    quote
+    return quote
         @inline function foo(sub)
             it = 1
         end
     end
 end
 end
-let ex = expand(:(@M16096.iter))
-    @test !(isa(ex,Expr) && ex.head === :error)
+let ex = expand(@__MODULE__, :(@M16096.iter))
+    @test isa(ex, Expr) && ex.head === :thunk
+end
+let ex = expand(Main, :($M16096.@iter))
+    @test isa(ex, Expr) && ex.head === :thunk
 end
 macro f16096()
     quote
@@ -791,12 +794,12 @@ module B15838
 end
 @test A15838.@f() === nothing
 @test A15838.@f(1) === :b
-let nometh = expand(:(A15838.@f(1, 2))), __source__ = LineNumberNode(@__LINE__, Symbol(@__FILE__))
+let nometh = expand(@__MODULE__, :(A15838.@f(1, 2))), __source__ = LineNumberNode(@__LINE__, Symbol(@__FILE__))
     @test (nometh::Expr).head === :error
     @test length(nometh.args) == 1
     e = nometh.args[1]::MethodError
     @test e.f === getfield(A15838, Symbol("@f"))
-    @test e.args === (__source__, 1, 2)
+    @test e.args === (__source__, @__MODULE__, 1, 2)
 end
 
 # issue 10046
@@ -805,11 +808,11 @@ for op in ["+", "-", "\$", "|", ".+", ".-", "*", ".*"]
 end
 
 # issue #17701
-@test expand(:(i==3 && i+=1)) == Expr(:error, "invalid assignment location \"==(i,3)&&i\"")
+@test expand(Main, :(i==3 && i+=1)) == Expr(:error, "invalid assignment location \"==(i,3)&&i\"")
 
 # issue #18667
-@test expand(:(true = 1)) == Expr(:error, "invalid assignment location \"true\"")
-@test expand(:(false = 1)) == Expr(:error, "invalid assignment location \"false\"")
+@test expand(Main, :(true = 1)) == Expr(:error, "invalid assignment location \"true\"")
+@test expand(Main, :(false = 1)) == Expr(:error, "invalid assignment location \"false\"")
 
 # PR #15592
 let str = "[1] [2]"
@@ -869,7 +872,7 @@ macro m2()
         1
     end
 end
-include_string("""
+include_string(@__MODULE__, """
 macro m3()
     quote
         @m1
@@ -881,10 +884,10 @@ macro m4()
     end
 end
 """, "another_file.jl")
-m1_exprs = get_expr_list(expand(:(@m1)))
-m2_exprs = get_expr_list(expand(:(@m2)))
-m3_exprs = get_expr_list(expand(:(@m3)))
-m4_exprs = get_expr_list(expand(:(@m4)))
+m1_exprs = get_expr_list(expand(@__MODULE__, :(@m1)))
+m2_exprs = get_expr_list(expand(@__MODULE__, :(@m2)))
+m3_exprs = get_expr_list(expand(@__MODULE__, :(@m3)))
+m4_exprs = get_expr_list(expand(@__MODULE__, :(@m4)))
 
 # Check the expanded expresion has expected number of matching push/pop
 # and the return is handled correctly
@@ -967,7 +970,7 @@ end
 @test parse("Foo{T} = Bar{T}") == Expr(:(=), Expr(:curly, :Foo, :T), Expr(:curly, :Bar, :T))
 
 # don't insert push_loc for filename `none` at the top level
-let ex = expand(parse("""
+let ex = expand(Main, parse("""
 begin
     x = 1
 end"""))
@@ -1026,8 +1029,8 @@ end
 let
     global const (c8925, d8925) = (3, 4)
 end
-@test c8925 == 3 && isconst(:c8925)
-@test d8925 == 4 && isconst(:d8925)
+@test c8925 == 3 && isconst(@__MODULE__, :c8925)
+@test d8925 == 4 && isconst(@__MODULE__, :d8925)
 
 # issue #18754: parse ccall as a regular function
 @test parse("ccall([1], 2)[3]") == Expr(:ref, Expr(:call, :ccall, Expr(:vect, 1), 2), 3)
@@ -1054,8 +1057,8 @@ end
 # issue #20541
 @test parse("[a .!b]") == Expr(:hcat, :a, Expr(:call, :(.!), :b))
 
-@test expand(:(a{1} = b)) == Expr(:error, "invalid type parameter name \"1\"")
-@test expand(:(a{2<:Any} = b)) == Expr(:error, "invalid type parameter name \"2\"")
+@test expand(Main, :(a{1} = b)) == Expr(:error, "invalid type parameter name \"1\"")
+@test expand(Main, :(a{2<:Any} = b)) == Expr(:error, "invalid type parameter name \"2\"")
 
 # issue #20653
 @test_throws UndefVarError Base.call(::Int) = 1
@@ -1076,14 +1079,14 @@ macro m20729()
     return ex
 end
 
-@test_throws ErrorException eval(:(@m20729))
-@test expand(:(@m20729)) == Expr(:error, "undefined reference in AST")
+@test_throws ErrorException eval(@__MODULE__, :(@m20729))
+@test expand(@__MODULE__, :(@m20729)) == Expr(:error, "undefined reference in AST")
 
 macro err20000()
     return Expr(:error, "oops!")
 end
 
-@test expand(:(@err20000)) == Expr(:error, "oops!")
+@test expand(@__MODULE__, :(@err20000)) == Expr(:error, "oops!")
 
 # issue #20000
 @test parse("@m(a; b=c)") == Expr(:macrocall, Symbol("@m"), LineNumberNode(1, :none),
@@ -1101,8 +1104,8 @@ g21054(>:) = >:2
 @test g21054(-) == -2
 
 # issue #21168
-@test expand(:(a.[1])) == Expr(:error, "invalid syntax a.[1]")
-@test expand(:(a.{1})) == Expr(:error, "invalid syntax a.{1}")
+@test expand(Main, :(a.[1])) == Expr(:error, "invalid syntax a.[1]")
+@test expand(Main, :(a.{1})) == Expr(:error, "invalid syntax a.{1}")
 
 # Issue #21225
 let abstr = parse("abstract type X end")
@@ -1209,8 +1212,8 @@ module Test21607
 end
 
 # issue #16937
-@test expand(:(f(2, a=1, w=3, c=3, w=4, b=2))) == Expr(:error,
-                                                       "keyword argument \"w\" repeated in call to \"f\"")
+@test expand(Main, :(f(2, a=1, w=3, c=3, w=4, b=2))) ==
+    Expr(:error, "keyword argument \"w\" repeated in call to \"f\"")
 
 let f(x) =
       g(x) = 1

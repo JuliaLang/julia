@@ -24,17 +24,8 @@ typedef struct {
 static jl_value_t *eval(jl_value_t *e, interpreter_state *s);
 static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, int start, int toplevel);
 
-jl_value_t *jl_eval_module_expr(jl_expr_t *ex);
+jl_value_t *jl_eval_module_expr(jl_module_t *m, jl_expr_t *ex);
 int jl_is_toplevel_only_expr(jl_value_t *e);
-
-jl_value_t *jl_interpret_toplevel_expr(jl_value_t *e)
-{
-    size_t last_age = jl_get_ptls_states()->world_age;
-    jl_get_ptls_states()->world_age = jl_world_counter;
-    jl_value_t *ret = eval(e, NULL);
-    jl_get_ptls_states()->world_age = last_age;
-    return ret;
-}
 
 jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e,
                                           jl_code_info_t *src,
@@ -200,7 +191,7 @@ static int jl_source_nssavalues(jl_code_info_t *src)
 static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
-    jl_code_info_t *src = s==NULL ? NULL : s->src;
+    jl_code_info_t *src = s->src;
     if (jl_is_ssavalue(e)) {
         ssize_t id = ((jl_ssavalue_t*)e)->id;
         if (src == NULL || id >= jl_source_nssavalues(src) || id < 0 || s->locals == NULL)
@@ -226,7 +217,7 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
     }
     if (jl_is_quotenode(e))
         return jl_fieldref(e,0);
-    jl_module_t *modu = (s == NULL ? ptls->current_module : s->module);
+    jl_module_t *modu = s->module;
     if (jl_is_symbol(e)) {  // bare symbols appear in toplevel exprs not wrapped in `thunk`
         jl_value_t *v = jl_get_global(modu, (jl_sym_t*)e);
         if (v == NULL)
@@ -291,7 +282,7 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
                 bp = &b->value;
                 bp_owner = (jl_value_t*)modu;
             }
-            jl_value_t *gf = jl_generic_function_def(fname, bp, bp_owner, b);
+            jl_value_t *gf = jl_generic_function_def(fname, modu, bp, bp_owner, b);
             if (jl_expr_nargs(ex) == 1)
                 return gf;
         }
@@ -300,7 +291,7 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
         JL_GC_PUSH2(&atypes, &meth);
         atypes = eval(args[1], s);
         meth = eval(args[2], s);
-        jl_method_def((jl_svec_t*)atypes, (jl_code_info_t*)meth, args[3]);
+        jl_method_def((jl_svec_t*)atypes, (jl_code_info_t*)meth, s->module, args[3]);
         JL_GC_POP();
         return jl_nothing;
     }
@@ -347,7 +338,7 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
             name = (jl_value_t*)jl_globalref_name(name);
         }
         assert(jl_is_symbol(name));
-        dt = jl_new_abstracttype(name, NULL, (jl_svec_t*)para);
+        dt = jl_new_abstracttype(name, modu, NULL, (jl_svec_t*)para);
         w = dt->name->wrapper;
         jl_binding_t *b = jl_get_binding_wr(modu, (jl_sym_t*)name);
         temp = b->value;
@@ -395,7 +386,7 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
         if (nb < 1 || nb>=(1<<23) || (nb&7) != 0)
             jl_errorf("invalid number of bits in type %s",
                       jl_symbol_name((jl_sym_t*)name));
-        dt = jl_new_primitivetype(name, NULL, (jl_svec_t*)para, nb);
+        dt = jl_new_primitivetype(name, modu, NULL, (jl_svec_t*)para, nb);
         w = dt->name->wrapper;
         jl_binding_t *b = jl_get_binding_wr(modu, (jl_sym_t*)name);
         temp = b->value;
@@ -437,7 +428,7 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
         assert(jl_is_symbol(name));
         assert(jl_is_svec(para));
         temp = eval(args[2], s);  // field names
-        dt = jl_new_datatype((jl_sym_t*)name, NULL, (jl_svec_t*)para,
+        dt = jl_new_datatype((jl_sym_t*)name, modu, NULL, (jl_svec_t*)para,
                              (jl_svec_t*)temp, NULL,
                              0, args[5]==jl_true ? 1 : 0, jl_unbox_long(args[6]));
         w = dt->name->wrapper;
@@ -485,10 +476,10 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
         return (jl_value_t*)jl_nothing;
     }
     else if (ex->head == module_sym) {
-        return jl_eval_module_expr(ex);
+        return jl_eval_module_expr(s->module, ex);
     }
     else if (ex->head == thunk_sym) {
-        return jl_toplevel_eval((jl_value_t*)ex);
+        return jl_toplevel_eval(s->module, (jl_value_t*)ex);
     }
     else if (ex->head == error_sym || ex->head == jl_incomplete_sym) {
         if (nargs == 0)
@@ -505,19 +496,24 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
     return (jl_value_t*)jl_nothing;
 }
 
-jl_value_t *jl_toplevel_eval_body(jl_array_t *stmts)
+jl_value_t *jl_toplevel_eval_body(jl_module_t *m, jl_array_t *stmts)
 {
     size_t last_age = jl_get_ptls_states()->world_age;
-    jl_value_t *ret = eval_body(stmts, NULL, 0, 1);
+    interpreter_state s;
+    s.src = NULL;
+    s.module = m;
+    s.locals = NULL;
+    s.sparam_vals = NULL;
+    jl_value_t *ret = eval_body(stmts, &s, 0, 1);
     jl_get_ptls_states()->world_age = last_age;
     return ret;
 }
 
 static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, int start, int toplevel)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
     jl_handler_t __eh;
-    size_t i=start, ns = jl_array_len(stmts);
+    size_t i = start;
+    size_t ns = jl_array_len(stmts);
 
     while (1) {
         if (i >= ns)
@@ -534,7 +530,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, int start,
             if (head == return_sym) {
                 jl_value_t *ex = jl_exprarg(stmt, 0);
                 if (toplevel && jl_is_toplevel_only_expr(ex))
-                    return jl_toplevel_eval(ex);
+                    return jl_toplevel_eval(s->module, ex);
                 else
                     return eval(ex, s);
             }
@@ -559,7 +555,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, int start,
                         sym = (jl_value_t*)jl_globalref_name(sym);
                     }
                     else {
-                        m = (s == NULL ? ptls->current_module : s->module);
+                        m = s->module;
                     }
                     assert(jl_is_symbol(sym));
                     JL_GC_PUSH1(&rhs);
@@ -590,7 +586,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, int start,
                 }
                 else {
 #ifdef _OS_WINDOWS_
-                    if (ptls->exception_in_transit == jl_stackovf_exception)
+                    if (jl_get_ptls_states()->exception_in_transit == jl_stackovf_exception)
                         _resetstkoflw();
 #endif
                     i = jl_unbox_long(jl_exprarg(stmt, 0)) - 1;
@@ -602,7 +598,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, int start,
                 jl_pop_handler(hand_n_leave);
             }
             else if (toplevel && jl_is_toplevel_only_expr(stmt)) {
-                jl_toplevel_eval(stmt);
+                jl_toplevel_eval(s->module, stmt);
             }
             else {
                 eval(stmt, s);
@@ -635,17 +631,17 @@ jl_value_t *jl_interpret_call(jl_method_instance_t *lam, jl_value_t **args, uint
         return lam->inferred_const;
     jl_code_info_t *src = (jl_code_info_t*)lam->inferred;
     if (!src || (jl_value_t*)src == jl_nothing) {
-        if (lam->def->isstaged) {
+        if (lam->def.method->isstaged) {
             src = jl_code_for_staged(lam);
             lam->inferred = (jl_value_t*)src;
             jl_gc_wb(lam, src);
         }
         else {
-            src = (jl_code_info_t*)lam->def->source;
+            src = (jl_code_info_t*)lam->def.method->source;
         }
     }
     if (src && (jl_value_t*)src != jl_nothing) {
-        src = jl_uncompress_ast(lam->def, (jl_array_t*)src);
+        src = jl_uncompress_ast(lam->def.method, (jl_array_t*)src);
         lam->inferred = (jl_value_t*)src;
         jl_gc_wb(lam, src);
     }
@@ -661,12 +657,12 @@ jl_value_t *jl_interpret_call(jl_method_instance_t *lam, jl_value_t **args, uint
     locals[1] = (jl_value_t*)stmts;
     interpreter_state s;
     s.src = src;
-    s.module = lam->def->module;
+    s.module = lam->def.method->module;
     s.locals = locals + 2;
     s.sparam_vals = lam->sparam_vals;
     size_t i;
-    for (i = 0; i < lam->def->nargs; i++) {
-        if (lam->def->isva && i == lam->def->nargs - 1)
+    for (i = 0; i < lam->def.method->nargs; i++) {
+        if (lam->def.method->isva && i == lam->def.method->nargs - 1)
             s.locals[i] = jl_f_tuple(NULL, &args[i], nargs - i);
         else
             s.locals[i] = args[i];
@@ -676,9 +672,8 @@ jl_value_t *jl_interpret_call(jl_method_instance_t *lam, jl_value_t **args, uint
     return r;
 }
 
-jl_value_t *jl_interpret_toplevel_thunk(jl_code_info_t *src)
+jl_value_t *jl_interpret_toplevel_thunk(jl_module_t *m, jl_code_info_t *src)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
     jl_array_t *stmts = src->code;
     assert(jl_typeis(stmts, jl_array_any_type));
     jl_value_t **locals;
@@ -686,7 +681,7 @@ jl_value_t *jl_interpret_toplevel_thunk(jl_code_info_t *src)
     interpreter_state s;
     s.src = src;
     s.locals = locals;
-    s.module = ptls->current_module;
+    s.module = m;
     s.sparam_vals = jl_emptysvec;
     size_t last_age = jl_get_ptls_states()->world_age;
     jl_value_t *r = eval_body(stmts, &s, 0, 1);

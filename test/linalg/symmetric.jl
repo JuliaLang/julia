@@ -53,6 +53,13 @@ let n=10
         @test Hermitian(Hermitian(asym, :U), :U) === Hermitian(asym, :U)
         @test_throws ArgumentError Symmetric(Symmetric(asym, :U), :L)
         @test_throws ArgumentError Hermitian(Hermitian(asym, :U), :L)
+        # mixed cases with Hermitian/Symmetric
+        @test Symmetric(Hermitian(asym, :U))     === Symmetric(asym, :U)
+        @test Hermitian(Symmetric(asym, :U))     === Hermitian(asym, :U)
+        @test Symmetric(Hermitian(asym, :U), :U) === Symmetric(asym, :U)
+        @test Hermitian(Symmetric(asym, :U), :U) === Hermitian(asym, :U)
+        @test_throws ArgumentError Symmetric(Hermitian(asym, :U), :L)
+        @test_throws ArgumentError Hermitian(Symmetric(asym, :U), :L)
 
         # similar
         @test isa(similar(Symmetric(asym)), Symmetric{eltya})
@@ -86,14 +93,20 @@ let n=10
             @test ishermitian(Symmetric(b + b'))
         end
 
-        #transpose, ctranspose
+        # transpose, ctranspose
+        S = Symmetric(asym)
+        H = Hermitian(asym)
         if eltya <: Real
-            @test transpose(Symmetric(asym)) == asym
+            @test  transpose(S) === S == asym
+            @test ctranspose(S) === S == asym
+            @test  transpose(H) === H == asym
+            @test ctranspose(H) === H == asym
         else
-            @test transpose(Hermitian(asym)) == transpose(asym)
+            @test  transpose(S) === S
+            @test ctranspose(S) ==  Symmetric(conj(asym))
+            @test  transpose(H) ==  Hermitian(transpose(asym))
+            @test ctranspose(H) === H == asym
         end
-        @test ctranspose(Symmetric(asym)) == Symmetric(conj(asym))
-        @test ctranspose(Hermitian(asym)) == asym
 
         #tril/triu
         for di in -n:n
@@ -248,10 +261,12 @@ let A = [1.0+im 2.0; 2.0 0.0]
     @test_throws ArgumentError Hermitian(A)
 end
 
-# Unary minus for Symmetric matrices
-let A = Symmetric(randn(5,5))
-    B = -A
-    @test A + B ≈ zeros(5,5)
+# Unary minus for Symmetric/Hermitian matrices
+let A = randn(5, 5)
+    for SH in (Symmetric(A), Hermitian(A))
+        F = Matrix(SH)
+        @test (-SH)::typeof(SH) == -F
+    end
 end
 
 # 17780

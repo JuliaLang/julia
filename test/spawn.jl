@@ -448,14 +448,6 @@ if is_unix()
     end
 end
 
-# Test for PR 17803
-let p=Pipe()
-    Base.link_pipe(p; julia_only_read=true, julia_only_write=true)
-    ccall(:jl_static_show, Void, (Ptr{Void}, Any), p.in, Int128(-1))
-    @async close(p.in)
-    @test readstring(p.out) == "Int128(0xffffffffffffffffffffffffffffffff)"
-end
-
 # readlines(::Cmd), accidentally broken in #20203
 @test sort(readlines(`$lscmd -A`)) == sort(readdir())
 

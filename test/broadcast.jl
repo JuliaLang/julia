@@ -312,12 +312,12 @@ end
 
 # make sure scalars are inlined, which causes f.(x,scalar) to lower to a "thunk"
 import Base.Meta: isexpr
-@test isexpr(expand(:(f.(x,y))), :call)
-@test isexpr(expand(:(f.(x,1))), :thunk)
-@test isexpr(expand(:(f.(x,1.0))), :thunk)
-@test isexpr(expand(:(f.(x,$π))), :thunk)
-@test isexpr(expand(:(f.(x,"hello"))), :thunk)
-@test isexpr(expand(:(f.(x,$("hello")))), :thunk)
+@test isexpr(expand(Main, :(f.(x,y))), :call)
+@test isexpr(expand(Main, :(f.(x,1))), :thunk)
+@test isexpr(expand(Main, :(f.(x,1.0))), :thunk)
+@test isexpr(expand(Main, :(f.(x,$π))), :thunk)
+@test isexpr(expand(Main, :(f.(x,"hello"))), :thunk)
+@test isexpr(expand(Main, :(f.(x,$("hello")))), :thunk)
 
 # PR #17623: Fused binary operators
 @test [true] .* [true] == [true]

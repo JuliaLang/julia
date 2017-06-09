@@ -658,6 +658,7 @@ void jl_init_tasks(void)
     _probe_arch();
     jl_task_type = (jl_datatype_t*)
         jl_new_datatype(jl_symbol("Task"),
+                        NULL,
                         jl_any_type,
                         jl_emptysvec,
                         jl_perm_symsvec(9,

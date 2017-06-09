@@ -88,7 +88,7 @@ tag = Base.have_color ? Base.error_color() : "ARRAY{FLOAT64,N}"
 # Make sure emphasis is not used for other functions
 tag = Base.have_color ? Base.error_color() : "ANY"
 iob = IOBuffer()
-show(iob, expand(:(x->x^2)))
+show(iob, expand(Main, :(x -> x^2)))
 str = String(take!(iob))
 @test isempty(search(str, tag))
 
@@ -151,11 +151,11 @@ i10165{T,n}(::Type{AbstractArray{T,n}}) = 1
 
 const a_const = 1
 not_const = 1
-@test isconst(:a_const) == true
+@test isconst(@__MODULE__, :a_const) == true
 @test isconst(Base, :pi) == true
-@test isconst(:pi) == true
-@test isconst(:not_const) == false
-@test isconst(:is_not_defined) == false
+@test isconst(@__MODULE__, :pi) == true
+@test isconst(@__MODULE__, :not_const) == false
+@test isconst(@__MODULE__, :is_not_defined) == false
 
 @test isimmutable(1) == true
 @test isimmutable([]) == false
@@ -188,22 +188,21 @@ module TestModSub9475
     b9475 = 7
     foo9475(x) = x
     let
-        @test Base.binding_module(:a9475) == current_module()
-        @test Base.binding_module(:c7648) == TestMod7648
-        @test Base.module_name(current_module()) == :TestModSub9475
-        @test Base.fullname(current_module()) == (curmod_name..., :TestMod7648,
-                                                  :TestModSub9475)
-        @test Base.module_parent(current_module()) == TestMod7648
+        @test Base.binding_module(@__MODULE__, :a9475) == @__MODULE__
+        @test Base.binding_module(@__MODULE__, :c7648) == TestMod7648
+        @test Base.module_name(@__MODULE__) == :TestModSub9475
+        @test Base.fullname(@__MODULE__) == (curmod_name..., :TestMod7648, :TestModSub9475)
+        @test Base.module_parent(@__MODULE__) == TestMod7648
     end
 end # module TestModSub9475
 
 using .TestModSub9475
 
 let
-    @test Base.binding_module(:d7648) == current_module()
-    @test Base.binding_module(:a9475) == TestModSub9475
-    @test Base.module_name(current_module()) == :TestMod7648
-    @test Base.module_parent(current_module()) == curmod
+    @test Base.binding_module(@__MODULE__, :d7648) == @__MODULE__
+    @test Base.binding_module(@__MODULE__, :a9475) == TestModSub9475
+    @test Base.module_name(@__MODULE__) == :TestMod7648
+    @test Base.module_parent(@__MODULE__) == curmod
 end
 end # module TestMod7648
 
@@ -214,18 +213,19 @@ let
     @test Set(names(TestMod7648))==Set([:TestMod7648, :a9475, :foo9475, :c7648, :foo7648, :foo7648_nomethods, :Foo7648])
     @test Set(names(TestMod7648, true)) == Set([:TestMod7648, :TestModSub9475, :a9475, :foo9475, :c7648, :d7648, :f7648,
                                                 :foo7648, Symbol("#foo7648"), :foo7648_nomethods, Symbol("#foo7648_nomethods"),
-                                                :Foo7648, :eval, Symbol("#eval")])
+                                                :Foo7648, :eval, Symbol("#eval"), :include, Symbol("#include")])
     @test Set(names(TestMod7648, true, true)) == Set([:TestMod7648, :TestModSub9475, :a9475, :foo9475, :c7648, :d7648, :f7648,
                                                       :foo7648, Symbol("#foo7648"), :foo7648_nomethods, Symbol("#foo7648_nomethods"),
-                                                      :Foo7648, :eval, Symbol("#eval"), :convert, :curmod_name, :curmod])
+                                                      :Foo7648, :eval, Symbol("#eval"), :include, Symbol("#include"),
+                                                      :convert, :curmod_name, :curmod])
     @test isconst(TestMod7648, :c7648)
     @test !isconst(TestMod7648, :d7648)
 end
 
 let
     using .TestMod7648
-    @test Base.binding_module(:a9475) == TestMod7648.TestModSub9475
-    @test Base.binding_module(:c7648) == TestMod7648
+    @test Base.binding_module(@__MODULE__, :a9475) == TestMod7648.TestModSub9475
+    @test Base.binding_module(@__MODULE__, :c7648) == TestMod7648
     @test Base.function_name(foo7648) == :foo7648
     @test Base.function_module(foo7648, (Any,)) == TestMod7648
     @test Base.function_module(foo7648) == TestMod7648
@@ -254,11 +254,14 @@ export this_is_not_defined
 @test_throws ErrorException which(:this_is_not_defined)
 @test_throws ErrorException @which this_is_not_defined
 @test_throws ErrorException which(:this_is_not_exported)
-@test isexported(current_module(), :this_is_not_defined)
-@test !isexported(current_module(), :this_is_not_exported)
+@test isexported(@__MODULE__, :this_is_not_defined)
+@test !isexported(@__MODULE__, :this_is_not_exported)
 const a_value = 1
-@test which(:a_value) == current_module()
-@test !isexported(current_module(), :a_value)
+@test Base.which_module(@__MODULE__, :a_value) === @__MODULE__
+@test @which(a_value) === @__MODULE__
+@test_throws ErrorException which(:a_value)
+@test which(:Core) === Main
+@test !isexported(@__MODULE__, :a_value)
 end
 
 # issue #13264
@@ -365,11 +368,11 @@ end
 let
     using .MacroTest
     a = 1
-    m = getfield(current_module(), Symbol("@macrotest"))
-    @test which(m, Tuple{LineNumberNode, Int, Symbol}) == @which @macrotest 1 a
-    @test which(m, Tuple{LineNumberNode, Int, Int}) == @which @macrotest 1 1
+    m = getfield(@__MODULE__, Symbol("@macrotest"))
+    @test which(m, Tuple{LineNumberNode, Module, Int, Symbol}) == @which @macrotest 1 a
+    @test which(m, Tuple{LineNumberNode, Module, Int, Int}) == @which @macrotest 1 1
 
-    @test first(methods(m, Tuple{LineNumberNode, Int, Int})) == @which MacroTest.@macrotest 1 1
+    @test first(methods(m, Tuple{LineNumberNode, Module, Int, Int})) == @which MacroTest.@macrotest 1 1
     @test functionloc(@which @macrotest 1 1) == @functionloc @macrotest 1 1
 end
 

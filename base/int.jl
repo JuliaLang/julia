@@ -363,7 +363,7 @@ end
 # @doc isn't available when running in Core at this point.
 # Tuple syntax for documention two function signatures at the same time
 # doesn't work either at this point.
-if module_name(current_module()) === :Base
+if module_name(@__MODULE__) === :Base
     for fname in (:mod, :rem)
         @eval @doc ("""
             rem(x::Integer, T::Type{<:Integer}) -> T

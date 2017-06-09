@@ -371,8 +371,7 @@ code_warntype(f, t::ANY) = code_warntype(STDOUT, f, t)
 
 typesof(args...) = Tuple{Any[ Core.Typeof(a) for a in args ]...}
 
-gen_call_with_extracted_types(fcn, ex0::Symbol) = Expr(:call, fcn, Meta.quot(ex0))
-function gen_call_with_extracted_types(fcn, ex0)
+function gen_call_with_extracted_types(__module__, fcn, ex0)
     if isa(ex0, Expr)
         if any(a->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex0.args)
             # remove keyword args, but call the kwfunc
@@ -390,10 +389,10 @@ function gen_call_with_extracted_types(fcn, ex0)
     end
     exret = Expr(:none)
     is_macro = false
-    ex = expand(ex0)
+    ex = expand(__module__, ex0)
     if isa(ex0, Expr) && ex0.head == :macrocall # Make @edit @time 1+2 edit the macro by using the types of the *expressions*
         is_macro = true
-        exret = Expr(:call, fcn, esc(ex0.args[1]), Tuple{#=__source__=#LineNumberNode, Any[ Core.Typeof(a) for a in ex0.args[3:end] ]...})
+        exret = Expr(:call, fcn, esc(ex0.args[1]), Tuple{#=__source__=#LineNumberNode, #=__module__=#Module, Any[ Core.Typeof(a) for a in ex0.args[3:end] ]...})
     elseif !isa(ex, Expr)
         exret = Expr(:call, :error, "expression is not a function call or symbol")
     elseif ex.head == :call
@@ -430,15 +429,19 @@ for fname in [:which, :less, :edit, :functionloc, :code_warntype,
               :code_llvm, :code_llvm_raw, :code_native]
     @eval begin
         macro ($fname)(ex0)
-            gen_call_with_extracted_types($(Expr(:quote,fname)), ex0)
+            gen_call_with_extracted_types(__module__, $(Expr(:quote, fname)), ex0)
         end
     end
+end
+macro which(ex0::Symbol)
+    ex0 = QuoteNode(ex0)
+    return :(which_module($__module__, $ex0))
 end
 
 for fname in [:code_typed, :code_lowered]
     @eval begin
         macro ($fname)(ex0)
-            thecall = gen_call_with_extracted_types($(Expr(:quote,fname)), ex0)
+            thecall = gen_call_with_extracted_types(__module__, $(Expr(:quote, fname)), ex0)
             quote
                 results = $thecall
                 length(results) == 1 ? results[1] : results
@@ -654,15 +657,15 @@ accessed using a statement such as `using LastMain.Package`.
 This function should only be used interactively.
 """
 function workspace()
-    last = Core.Main
-    b = last.Base
-    ccall(:jl_new_main_module, Any, ())
-    m = Core.Main
+    last = Core.Main # ensure to reference the current Main module
+    b = Base # this module
+    ccall(:jl_new_main_module, Any, ()) # make Core.Main a new baremodule
+    m = Core.Main # now grab a handle to the new Main module
     ccall(:jl_add_standard_imports, Void, (Any,), m)
-    eval(m,
-         Expr(:toplevel,
-              :(const Base = $(Expr(:quote, b))),
-              :(const LastMain = $(Expr(:quote, last)))))
+    eval(m, Expr(:toplevel,
+        :(const Base = $b),
+        :(const LastMain = $last),
+        :(include(x) = $include($m, x))))
     empty!(package_locks)
     nothing
 end
@@ -696,13 +699,13 @@ end
 
 
 """
-    whos(io::IO=STDOUT, m::Module=current_module(), pattern::Regex=r"")
+    whos(io::IO=STDOUT, m::Module=Main, pattern::Regex=r"")
 
 Print information about exported global variables in a module, optionally restricted to those matching `pattern`.
 
 The memory consumption estimate is an approximate lower bound on the size of the internal structure of the object.
 """
-function whos(io::IO=STDOUT, m::Module=current_module(), pattern::Regex=r"")
+function whos(io::IO=STDOUT, m::Module=Main, pattern::Regex=r"")
     maxline = displaysize(io)[2]
     line = zeros(UInt8, maxline)
     head = PipeBuffer(maxline + 1)
@@ -746,4 +749,4 @@ function whos(io::IO=STDOUT, m::Module=current_module(), pattern::Regex=r"")
     end
 end
 whos(m::Module, pat::Regex=r"") = whos(STDOUT, m, pat)
-whos(pat::Regex) = whos(STDOUT, current_module(), pat)
+whos(pat::Regex) = whos(STDOUT, Main, pat)

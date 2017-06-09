@@ -431,7 +431,8 @@ const log_error_to = Dict{Tuple{Union{Module,Void},Union{Symbol,Void}},IO}()
 
 function _redirect(io::IO, log_to::Dict, sf::StackTraces.StackFrame)
     isnull(sf.linfo) && return io
-    mod = get(sf.linfo).def.module
+    mod = get(sf.linfo).def
+    isa(mod, Method) && (mod = mod.module)
     fun = sf.func
     if haskey(log_to, (mod,fun))
         return log_to[(mod,fun)]
@@ -456,7 +457,9 @@ function _redirect(io::IO, log_to::Dict, fun::Symbol)
             isnull(frame.linfo) && continue
             sf = frame
             break_next_frame && (@goto skip)
-            get(frame.linfo).def.module == Base || continue
+            mod = get(frame.linfo).def
+            isa(mod, Method) && (mod = mod.module)
+            mod === Base || continue
             sff = string(frame.func)
             if frame.func == fun || startswith(sff, clos) || startswith(sff, kw)
                 break_next_frame = true
@@ -638,7 +641,7 @@ will always be called.
 function securezero! end
 @noinline securezero!(a::AbstractArray{<:Number}) = fill!(a, 0)
 securezero!(s::String) = unsafe_securezero!(pointer(s), sizeof(s))
-@noinline unsafe_securezero!(p::Ptr{T}, len::Integer=1) where T =
+@noinline unsafe_securezero!(p::Ptr{T}, len::Integer=1) where {T} =
     ccall(:memset, Ptr{T}, (Ptr{T}, Cint, Csize_t), p, 0, len*sizeof(T))
 unsafe_securezero!(p::Ptr{Void}, len::Integer=1) = Ptr{Void}(unsafe_securezero!(Ptr{UInt8}(p), len))
 
@@ -762,16 +765,22 @@ if is_windows()
 
 end
 
+# compute sizeof correctly for strings, arrays, and subarrays of bytes
+_sizeof(a) = sizeof(a)
+_sizeof(a::FastContiguousSubArray{UInt8,N,<:Array{UInt8}} where N) = length(a)
+
 """
     crc32c(data, crc::UInt32=0x00000000)
+
 Compute the CRC-32c checksum of the given `data`, which can be
-an `Array{UInt8}` or a `String`.  Optionally, you can pass
-a starting `crc` integer to be mixed in with the checksum.
+an `Array{UInt8}`, a contiguous subarray thereof, or a `String`.  Optionally, you can pass
+a starting `crc` integer to be mixed in with the checksum.  The `crc` parameter
+can be used to compute a checksum on data divided into chunks: performing
+`crc32c(data2, crc32c(data1))` is equivalent to the checksum of `[data1; data2]`.
 (Technically, a little-endian checksum is computed.)
 """
-function crc32c end
-crc32c(a::Union{Array{UInt8},String}, crc::UInt32=0x00000000) =
-    ccall(:jl_crc32c, UInt32, (UInt32, Ptr{UInt8}, Csize_t), crc, a, sizeof(a))
+crc32c(a::Union{Array{UInt8},FastContiguousSubArray{UInt8,N,<:Array{UInt8}} where N,String}, crc::UInt32=0x00000000) =
+    ccall(:jl_crc32c, UInt32, (UInt32, Ptr{UInt8}, Csize_t), crc, a, _sizeof(a))
 
 """
     @kwdef typedef
@@ -792,7 +801,7 @@ end
 ```
 """
 macro kwdef(expr)
-    expr = macroexpand(expr) # to expand @static
+    expr = macroexpand(__module__, expr) # to expand @static
     T = expr.args[2]
     params_ex = Expr(:parameters)
     call_ex = Expr(:call, T)

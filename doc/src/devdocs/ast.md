@@ -242,8 +242,8 @@ for important details on how to modify these fields safely.
 
   * `def`
 
-    The `Method` that this function describes a specialization of. Or `#undef`, if this is
-    a top-level Lambda that is not part of a Method.
+    The `Method` that this function describes a specialization of. Or a `Module`,
+    if this is a top-level Lambda expanded in Module, and which is not part of a Method.
 
   * `sparam_vals`
 

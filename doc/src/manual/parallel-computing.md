@@ -152,8 +152,8 @@ end
 
 Starting Julia with `julia -p 2`, you can use this to verify the following:
 
-  * [`include("DummyModule.jl")`](@ref) loads the file on just a single process (whichever one executes
-    the statement).
+  * `include("DummyModule.jl")` loads the file on just a single process
+    (whichever one executes the statement).
   * `using DummyModule` causes the module to be loaded on all processes; however, the module is brought
     into scope only on the one executing the statement.
   * As long as `DummyModule` is loaded on process 2, commands like

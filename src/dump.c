@@ -442,7 +442,7 @@ static void jl_update_all_fptrs(void)
     jl_method_instance_t **linfos = (jl_method_instance_t**)malloc(sizeof(jl_method_instance_t*) * sysimg_fvars_max);
     for (i = 0; i < delayed_fptrs_n; i++) {
         jl_method_instance_t *li = delayed_fptrs[i].li;
-        assert(li->def && li->jlcall_api && li->jlcall_api != 2);
+        assert(jl_is_method(li->def.method) && li->jlcall_api && li->jlcall_api != 2);
         int32_t cfunc = delayed_fptrs[i].cfunc - 1;
         if (cfunc >= 0) {
             jl_fptr_to_llvm((jl_fptr_t)(uintptr_t)fvars[cfunc], li, 1);
@@ -961,7 +961,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
             if (li->max_world == 0 && li->min_world == 0) {
                 internal = 1; // not world-tracked
             }
-            else if (!li->def || module_in_worklist(li->def->module)) {
+            else if (!jl_is_method(li->def.method) || module_in_worklist(li->def.method->module)) {
                 if (li->max_world == ~(size_t)0) {
                     internal = 2; // update world on deserialization
                 }
@@ -978,9 +978,9 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         }
         jl_serialize_value(s, (jl_value_t*)li->specTypes);
         if (s->mode == MODE_MODULE && !internal)
-            jl_serialize_value(s, (jl_value_t*)li->def->sig);
+            jl_serialize_value(s, (jl_value_t*)li->def.method->sig);
         else
-            jl_serialize_value(s, (jl_value_t*)li->def);
+            jl_serialize_value(s, li->def.value);
         if (s->mode == MODE_MODULE) {
             write_uint8(s->s, internal);
             if (!internal)
@@ -995,7 +995,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
             write_int32(s->s, li->min_world);
             write_int32(s->s, li->max_world);
         }
-        if (li->def) {
+        if (jl_is_method(li->def.method)) {
             uint16_t id = jl_fptr_id((void*)(uintptr_t)li->fptr);
             if (li->jlcall_api == 2) {
                 write_int8(s->s, 2);
@@ -1266,7 +1266,7 @@ static void jl_serialize_backedges(jl_serializer_state *s)
     for (i = 0; i < edges_map.size; i += 2) {
         jl_method_instance_t *caller = (jl_method_instance_t*)table[i];
         jl_array_t *callee = (jl_array_t*)table[i + 1];
-        if (callee != HT_NOTFOUND && module_in_worklist(caller->def->module)) {
+        if (callee != HT_NOTFOUND && module_in_worklist(caller->def.method->module)) {
             arraylist_push(&worklist, (void*)caller);
         }
     }
@@ -1776,9 +1776,9 @@ static jl_value_t *jl_deserialize_value_method_instance(jl_serializer_state *s, 
     li->specTypes = (jl_value_t*)jl_deserialize_value(s, (jl_value_t**)&li->specTypes);
     if (li->specTypes)
         jl_gc_wb(li, li->specTypes);
-    li->def = (jl_method_t*)jl_deserialize_value(s, (jl_value_t**)&li->def);
-    if (li->def)
-        jl_gc_wb(li, li->def);
+    li->def.value = jl_deserialize_value(s, &li->def.value);
+    if (li->def.value)
+        jl_gc_wb(li, li->def.value);
 
     int internal = 0;
     if (s->mode == MODE_MODULE) {
@@ -1828,7 +1828,7 @@ static jl_value_t *jl_deserialize_value_method_instance(jl_serializer_state *s, 
     li->functionObjectsDecls.specFunctionObject = NULL;
     li->inInference = 0;
     int8_t jlcall_api = read_int8(s->s);
-    if (jlcall_api == 2 || jlcall_api == 0 || li->def == NULL) {
+    if (jlcall_api == 2 || jlcall_api == 0 || !jl_is_method(li->def.method)) {
         li->fptr = NULL;
         li->jlcall_api = jlcall_api;
     }
@@ -2204,12 +2204,12 @@ static void jl_insert_backedges(linkedlist_t *list)
             assert(jl_is_method_instance(caller));
             jl_array_t *callees = list->def[i].callee;
             assert(jl_is_array(callees));
-            if (!caller->inferred || module_in_worklist(caller->def->module)) {
+            if (!caller->inferred || module_in_worklist(caller->def.method->module)) {
                 for (j = 0; j < jl_array_len(callees); j++) {
                     jl_value_t *callee = jl_array_ptr_ref(callees, j);
                     if (jl_is_method_instance(callee)) {
                         jl_method_instance_t *callee_mi = (jl_method_instance_t*)callee;
-                        if (!module_in_worklist(callee_mi->def->module)) {
+                        if (!module_in_worklist(callee_mi->def.method->module)) {
                             // verify that this MethodInstance is still the correct lookup for this callee sig
                             jl_value_t *sig = callee_mi->specTypes;
                             jl_method_t *m = NULL;
@@ -2222,7 +2222,7 @@ static void jl_insert_backedges(linkedlist_t *list)
                                 if (entry != NULL)
                                     m = entry->func.method;
                             }
-                            if (m != callee_mi->def) {
+                            if (m != callee_mi->def.method) {
                                 // probably no good, just invalidate everything now
                                 jl_method_instance_delete(caller);
                                 break;
@@ -3169,7 +3169,7 @@ static jl_method_t *jl_recache_method(jl_method_t *m, size_t start, arraylist_t 
 
 static jl_method_instance_t *jl_recache_method_instance(jl_method_instance_t *li, size_t start, arraylist_t *dependent_worlds)
 {
-    jl_datatype_t *sig = (jl_datatype_t*)li->def;
+    jl_datatype_t *sig = (jl_datatype_t*)li->def.value;
     assert(jl_is_datatype(sig) || jl_is_unionall(sig));
     jl_datatype_t *ftype = jl_first_argument_datatype((jl_value_t*)sig);
     jl_methtable_t *mt = ftype->name->mt;

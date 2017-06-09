@@ -41,14 +41,6 @@ julia> Slower = Symmetric(A, :L)
 Note that `Supper` will not be equal to `Slower` unless `A` is itself symmetric (e.g. if `A == A.'`).
 """
 Symmetric(A::AbstractMatrix, uplo::Symbol=:U) = (checksquare(A); Symmetric{eltype(A),typeof(A)}(A, char_uplo(uplo)))
-Symmetric(A::Symmetric) = A
-function Symmetric(A::Symmetric, uplo::Symbol)
-    if A.uplo == char_uplo(uplo)
-        return A
-    else
-        throw(ArgumentError("Cannot construct Symmetric; uplo doesn't match"))
-    end
-end
 
 struct Hermitian{T,S<:AbstractMatrix} <: AbstractMatrix{T}
     data::S
@@ -91,12 +83,25 @@ function Hermitian(A::AbstractMatrix, uplo::Symbol=:U)
     end
     Hermitian{eltype(A),typeof(A)}(A, char_uplo(uplo))
 end
-Hermitian(A::Hermitian) = A
-function Hermitian(A::Hermitian, uplo::Symbol)
-    if A.uplo == char_uplo(uplo)
-        return A
-    else
-        throw(ArgumentError("Cannot construct Hermitian; uplo doesn't match"))
+
+for (S, H) in ((:Symmetric, :Hermitian), (:Hermitian, :Symmetric))
+    @eval begin
+        $S(A::$S) = A
+        function $S(A::$S, uplo::Symbol)
+            if A.uplo == char_uplo(uplo)
+                return A
+            else
+                throw(ArgumentError("Cannot construct $($S); uplo doesn't match"))
+            end
+        end
+        $S(A::$H) = $S(A.data, Symbol(A.uplo))
+        function $S(A::$H, uplo::Symbol)
+            if A.uplo == char_uplo(uplo)
+                return $S(A.data, Symbol(A.uplo))
+            else
+                throw(ArgumentError("Cannot construct $($S); uplo doesn't match"))
+            end
+        end
     end
 end
 
@@ -205,6 +210,7 @@ issymmetric(A::Hermitian{<:Real}) = true
 issymmetric(A::Hermitian{<:Complex}) = isreal(A)
 issymmetric(A::Symmetric) = true
 transpose(A::Symmetric) = A
+transpose(A::Hermitian{<:Real}) = A
 ctranspose(A::Symmetric{<:Real}) = A
 function ctranspose(A::Symmetric)
     AC = ctranspose(A.data)
@@ -269,7 +275,8 @@ function triu(A::Symmetric, k::Integer=0)
     end
 end
 
-(-)(A::Symmetric{Tv,S}) where {Tv,S<:AbstractMatrix} = Symmetric{Tv,S}(-A.data, A.uplo)
+(-)(A::Symmetric{Tv,S}) where {Tv,S} = Symmetric{Tv,S}(-A.data, A.uplo)
+(-)(A::Hermitian{Tv,S}) where {Tv,S} = Hermitian{Tv,S}(-A.data, A.uplo)
 
 ## Matvec
 A_mul_B!(y::StridedVector{T}, A::Symmetric{T,<:StridedMatrix}, x::StridedVector{T}) where {T<:BlasFloat} =

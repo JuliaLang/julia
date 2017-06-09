@@ -493,7 +493,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
     JL_TRY {
         ptls->current_task->current_module = ptls->current_module = m;
         ptls->world_age = jl_world_counter;
-        v = jl_toplevel_eval(ex);
+        v = jl_toplevel_eval(m, ex);
     }
     JL_CATCH {
         jl_lineno = last_lineno;
@@ -511,9 +511,8 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
 
 JL_CALLABLE(jl_f_isdefined)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
-    jl_module_t *m = ptls->current_module;
-    jl_sym_t *s=NULL;
+    jl_module_t *m = NULL;
+    jl_sym_t *s = NULL;
     JL_NARGSV(isdefined, 1);
     if (jl_is_array(args[0])) {
         return jl_array_isdefined(args, nargs) ? jl_true : jl_false;
@@ -524,6 +523,11 @@ JL_CALLABLE(jl_f_isdefined)
     }
     if (nargs != 2) {
         JL_NARGS(isdefined, 1, 1);
+        jl_depwarn("`isdefined(:symbol)` is deprecated, "
+                   "use `@isdefined symbol` instead",
+                   (jl_value_t*)jl_symbol("isdefined"));
+        jl_ptls_t ptls = jl_get_ptls_states();
+        m = ptls->current_module;
     }
     else {
         if (!jl_is_module(args[0])) {

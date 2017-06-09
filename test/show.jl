@@ -742,3 +742,40 @@ end
 
 @test sprint(Base.show_supertypes, Int64) == "Int64 <: Signed <: Integer <: Real <: Number <: Any"
 @test sprint(Base.show_supertypes, Vector{String}) == "Array{String,1} <: DenseArray{String,1} <: AbstractArray{String,1} <: Any"
+
+# static_show
+
+function static_shown(x)
+    p = Pipe()
+    Base.link_pipe(p; julia_only_read=true, julia_only_write=true)
+    ccall(:jl_static_show, Void, (Ptr{Void}, Any), p.in, x)
+    @async close(p.in)
+    return readstring(p.out)
+end
+
+# Test for PR 17803
+@test static_shown(Int128(-1)) == "Int128(0xffffffffffffffffffffffffffffffff)"
+
+# PR #22160
+@test static_shown(:aa) == ":aa"
+@test static_shown(:+) == ":+"
+@test static_shown(://) == "://"
+@test static_shown(://=) == "://="
+@test static_shown(Symbol("")) == "Symbol(\"\")"
+@test static_shown(Symbol("a/b")) == "Symbol(\"a/b\")"
+@test static_shown(Symbol("a-b")) == "Symbol(\"a-b\")"
+
+
+# Test @show
+let fname = tempname()
+    try
+        open(fname, "w") do fout
+            redirect_stdout(fout) do
+                @show zeros(2, 2)
+            end
+        end
+        @test readstring(fname) == "zeros(2, 2) = 2×2 Array{Float64,2}:\n 0.0  0.0\n 0.0  0.0\n"
+    finally
+        rm(fname, force=true)
+    end
+end
