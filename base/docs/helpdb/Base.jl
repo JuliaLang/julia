@@ -2226,16 +2226,6 @@ processes completed successfully.
 exit
 
 """
-    skipchars(stream, predicate; linecomment::Char)
-
-Advance the stream until before the first character for which `predicate` returns `false`.
-For example `skipchars(stream, isspace)` will skip all whitespace. If keyword argument
-`linecomment` is specified, characters from that character through the end of a line will
-also be skipped.
-"""
-skipchars
-
-"""
     realmin(T)
 
 The smallest in absolute value non-subnormal value representable by the given floating-point DataType `T`.
