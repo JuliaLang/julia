@@ -647,11 +647,11 @@ Commit all currently buffered writes to the given stream.
 flush(io::IO) = nothing
 
 """
-    skipchars(io::IO, predicate; linecomment=nothing)
+    skipchars(io::IO, predicate; linecomment::Char)
 
-Skip forward in `io` until `predicate` returns `false`. If `linecomment`
-is defined, all characters after the `linecomment` character are ignored
-until the next line.
+Advance the stream `io` until before the first character for which `predicate`
+returns `false`. If keyword argument `linecomment` is specified, all characters
+after the `linecomment` character are ignored until the next line.
 
 ```jldoctext
 julia> buf = IOBuffer("    text")
