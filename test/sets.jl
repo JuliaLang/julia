@@ -228,6 +228,26 @@ u = unique([1,1,2])
     u = [6,5,5,3,3,2,1]
     unique!(u)
     @test u == [6,5,3,2,1]
+    u = OffsetArray([1,2,2,3,5,5], -1)
+    unique!(u)
+    @test u == OffsetArray([1,2,3,5], -1)
+    u = OffsetArray([5,5,4,4,2,2,0,-1,-1], -1)
+    unique!(u)
+    @test u == OffsetArray([5,4,2,0,-1], -1)
+    u = OffsetArray(["w","we","w",5,"r",5,5], -1)
+    unique!(u)
+    @test u == OffsetArray(["w","we",5,"r"], -1)
+    u = [0.0,-0.0,1.0,2]
+    unique!(u)
+    @test u == [0.0,-0.0,1.0,2.0]
+    u = [1,NaN,NaN,3]
+    unique!(u)
+    @test u[1] == 1
+    @test isnan(u[2])
+    @test u[3] == 3
+    u = [5,"w","we","w","r",5,"w"]
+    unique!(u)
+    @test u == [5,"w","we","r"]
 end
 
 # allunique
