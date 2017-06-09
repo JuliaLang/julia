@@ -1,8 +1,5 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-// TODO: add `@isdefined`
-//
-
 #ifndef JULIA_H
 #define JULIA_H
 
@@ -1328,6 +1325,12 @@ typedef enum {
     JL_IMAGE_JULIA_HOME = 1,
     //JL_IMAGE_LIBJULIA = 2,
 } JL_IMAGE_SEARCH;
+#ifdef JULIA_ENABLE_THREADING
+// this helps turn threading compilation mismatches into linker errors
+#define julia_init julia_init__threading
+#define jl_init jl_init__threading
+#define jl_init_with_image jl_init_with_image__threading
+#endif
 JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel);
 JL_DLLEXPORT void jl_init(void);
 JL_DLLEXPORT void jl_init_with_image(const char *julia_home_dir,
@@ -1849,6 +1852,23 @@ typedef struct {
     jl_cghooks_t hooks;
 } jl_cgparams_t;
 extern JL_DLLEXPORT jl_cgparams_t jl_default_cgparams;
+
+#if defined(JULIA_ENABLE_THREADING) && !defined(_OS_DARWIN_) && !defined(_OS_WINDOWS_)
+#define JULIA_DEFINE_FAST_TLS()                                                             \
+JL_DLLEXPORT JL_CONST_FUNC jl_ptls_t jl_get_ptls_states_static(void)                        \
+{                                                                                           \
+    static __attribute__((tls_model("local-exec"))) __thread jl_tls_states_t tls_states;    \
+    return &tls_states;                                                                     \
+}                                                                                           \
+__attribute__((constructor)) void jl_register_ptls_states_getter(void)                      \
+{                                                                                           \
+    /* We need to make sure this function is called before any reference to */              \
+    /* TLS variables. */                                                                    \
+    jl_set_ptls_states_getter(jl_get_ptls_states_static);                                   \
+}
+#else
+#define JULIA_DEFINE_FAST_TLS()
+#endif
 
 #ifdef __cplusplus
 }
