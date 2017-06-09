@@ -651,7 +651,7 @@ flush(io::IO) = nothing
 
 Advance the stream `io` until before the first character for which `predicate`
 returns `false`. If keyword argument `linecomment` is specified, all characters
-after the `linecomment` character are ignored until the next line.
+from that character until the start of the next line are ignored.
 
 ```jldoctext
 julia> buf = IOBuffer("    text")
