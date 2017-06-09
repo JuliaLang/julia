@@ -1058,7 +1058,9 @@ static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **i
     JL_GC_PUSH2(&p, &ndt);
 
     jl_value_t *last = iparams[ntp - 1];
+    int isvatuple = 0;
     if (istuple && ntp > 0 && jl_is_vararg_type(last)) {
+        isvatuple = 1;
         // normalize Tuple{..., Vararg{Int, 3}} to Tuple{..., Int, Int, Int}
         jl_value_t *va = jl_unwrap_unionall(last);
         jl_value_t *va0 = jl_tparam0(va), *va1 = jl_tparam1(va);
@@ -1185,7 +1187,7 @@ static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **i
         }
     }
     if (istuple)
-        ndt->ninitialized = ntp;
+        ndt->ninitialized = ntp - isvatuple;
     else
         ndt->ninitialized = dt->ninitialized;
 

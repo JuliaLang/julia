@@ -260,3 +260,9 @@ end
 for n = 0:15
     @test ntuple(identity, Val{n}) == ntuple(identity, n)
 end
+
+# Tuple type ninitialized
+@test Tuple{Int,Any}.ninitialized == 2
+@test Tuple.ninitialized == 0
+@test Tuple{Int,Vararg{Any}}.ninitialized == 1
+@test Tuple{Any,Any,Vararg{Any}}.ninitialized == 2
