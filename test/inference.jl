@@ -856,3 +856,10 @@ let f, m
     ]
     @test @inferred(f()) == 6
 end
+
+# issue #22290
+f22290() = return nothing
+for i in 1:3
+    ir = sprint(io->code_llvm(io, f22290, Tuple{}))
+    @test contains(ir, "julia_f22290")
+end
