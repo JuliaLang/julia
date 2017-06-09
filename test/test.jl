@@ -76,12 +76,30 @@ end
 for i in 1:length(fails) - 1
     @test isa(fails[i], Base.Test.Fail)
 end
-@test contains(sprint(show, fails[1]), "Thrown: ErrorException")
-@test contains(sprint(show, fails[2]), "No exception thrown")
-@test contains(sprint(show, fails[3]), "Evaluated: 2 == 4")
-@test contains(sprint(show, fails[4]), "Evaluated: 1.0 ≈ 2.0")
-@test contains(sprint(show, fails[5]), "Evaluated: 1 == 2 == 3")
-@test contains(sprint(show, fails[6]), "Unexpected Pass")
+
+str = sprint(show, fails[1])
+@test contains(str, "Expression: error()")
+@test contains(str, "Thrown: ErrorException")
+
+str = sprint(show, fails[2])
+@test contains(str, "Expression: 1 + 1")
+@test contains(str, "No exception thrown")
+
+str = sprint(show, fails[3])
+@test contains(str, "Expression: 1 + 1 == 2 + 2")
+@test contains(str, "Evaluated: 2 == 4")
+
+str = sprint(show, fails[4])
+@test contains(str, "Expression: 1 / 1 ≈ 2 / 1")
+@test contains(str, "Evaluated: 1.0 ≈ 2.0")
+
+str = sprint(show, fails[5])
+@test contains(str, "Expression: 1 + 0 == 2 + 0 == 3 + 0")
+@test contains(str, "Evaluated: 1 == 2 == 3")
+
+str = sprint(show, fails[6])
+@test contains(str, "Unexpected Pass")
+@test contains(str, "Expression: true")
 
 # Test printing of a TestSetException
 tse_str = sprint(show, Test.TestSetException(1,2,3,4,Vector{Union{Base.Test.Error, Base.Test.Fail}}()))
