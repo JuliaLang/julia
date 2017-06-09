@@ -70,6 +70,8 @@ fails = @testset NoThrowTestSet begin
     @test 1/1 ≈ 2/1
     # Fail - chained comparison
     @test 1+0 == 2+0 == 3+0
+    # Fail - comparison call
+    @test ==(1 - 2, 2 - 1)
     # Error - unexpected pass
     @test_broken true
 end
@@ -98,6 +100,10 @@ str = sprint(show, fails[5])
 @test contains(str, "Evaluated: 1 == 2 == 3")
 
 str = sprint(show, fails[6])
+@test contains(str, "Expression: 1 - 2 == 2 - 1")
+@test contains(str, "Evaluated: -1 == 1")
+
+str = sprint(show, fails[7])
 @test contains(str, "Unexpected Pass")
 @test contains(str, "Expression: true")
 
