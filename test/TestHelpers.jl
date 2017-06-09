@@ -224,7 +224,7 @@ _offset(out, ::Tuple{}, ::Tuple{}) = out
 indsoffset(r::Range) = first(r) - 1
 indsoffset(i::Integer) = 0
 
-Base.resize!(A::OffsetVector, nl::Integer) = resize!(A.parent, nl)
+Base.resize!(A::OffsetVector, nl::Integer) = (resize!(A.parent, nl); A)
 
 end
 
