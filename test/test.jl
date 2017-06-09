@@ -80,6 +80,8 @@ fails = @testset NoThrowTestSet begin
     @test ==(1 - 2, 2 - 1)
     # Fail - isequal
     @test isequal(0 / 0, 1 / 0)
+    # Fail - isapprox
+    @test isapprox(0 / 1, -1 / 0)
     # Error - unexpected pass
     @test_broken true
 end
@@ -116,6 +118,10 @@ str = sprint(show, fails[7])
 @test contains(str, "Evaluated: isequal(NaN, Inf)")
 
 str = sprint(show, fails[8])
+@test contains(str, "Expression: isapprox(0 / 1, -1 / 0)")
+@test contains(str, "Evaluated: isapprox(0.0, -Inf)")
+
+str = sprint(show, fails[9])
 @test contains(str, "Unexpected Pass")
 @test contains(str, "Expression: true")
 

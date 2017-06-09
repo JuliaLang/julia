@@ -322,7 +322,7 @@ function get_test_result(ex)
             Expr(:comparison, $(escaped_terms...)),
             Expr(:comparison, $(quoted_terms...)),
         ))
-    elseif isa(ex, Expr) && ex.head == :call && ex.args[1] == :isequal
+    elseif isa(ex, Expr) && ex.head == :call && ex.args[1] in (:isequal, :isapprox)
         escaped_terms = [esc(arg) for arg in ex.args]
         quoted_terms = [QuoteNode(arg) for arg in ex.args]
         testret = :(eval_test(
