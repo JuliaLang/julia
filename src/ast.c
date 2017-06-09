@@ -56,6 +56,7 @@ jl_sym_t *inert_sym; jl_sym_t *vararg_sym;
 jl_sym_t *unused_sym; jl_sym_t *static_parameter_sym;
 jl_sym_t *polly_sym; jl_sym_t *inline_sym;
 jl_sym_t *propagate_inbounds_sym;
+jl_sym_t *isdefined_sym;
 
 static uint8_t flisp_system_image[] = {
 #include <julia_flisp.boot.inc>
@@ -431,6 +432,7 @@ void jl_init_frontend(void)
     polly_sym = jl_symbol("polly");
     inline_sym = jl_symbol("inline");
     propagate_inbounds_sym = jl_symbol("propagate_inbounds");
+    isdefined_sym = jl_symbol("isdefined");
 }
 
 JL_DLLEXPORT void jl_lisp_prompt(void)

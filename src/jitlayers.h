@@ -68,7 +68,7 @@ void addOptimizationPasses(PassManager *PM);
 void* jl_emit_and_add_to_shadow(GlobalVariable *gv, void *gvarinit = NULL);
 GlobalVariable *jl_emit_sysimg_slot(Module *m, Type *typ, const char *name,
                                     uintptr_t init, size_t &idx);
-void* jl_get_global(GlobalVariable *gv);
+void* jl_get_globalvar(GlobalVariable *gv);
 GlobalVariable *jl_get_global_for(const char *cname, void *addr, Module *M);
 void jl_add_to_shadow(Module *m);
 void jl_init_function(Function *f);

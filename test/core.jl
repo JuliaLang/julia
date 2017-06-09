@@ -4997,3 +4997,57 @@ end
 end
 @test M22026.foofunction(Int16) === Int16
 @test M22026.foofunction2(3) === 6.0f0
+
+# tests for isdefined behavior and code generation
+global undefined_variable
+@test @isdefined Test
+@test !@isdefined undefined_variable
+@test !@isdefined undefined_variable2
+@test let local_undef, local_def = 1
+    !@isdefined local_undef
+    @isdefined local_def
+end
+f_isdefined_latedef() = @isdefined f_isdefined_def
+@test !f_isdefined_latedef()
+f_isdefined(x) = @isdefined x
+f_isdefined_undef() = @isdefined x_isundef
+f_isdefined_def() = @isdefined f_isdefined_def
+@test f_isdefined(1)
+@test f_isdefined("")
+@test !f_isdefined_undef()
+@test f_isdefined_def()
+@test f_isdefined_latedef()
+f_isdefined_defvarI() = (x = rand(Int); @isdefined x)
+f_isdefined_defvarS() = (x = randstring(1); @isdefined x)
+@test f_isdefined_defvarI()
+@test f_isdefined_defvarS()
+f_isdefined_undefvar() = (local x; @isdefined x)
+@test !f_isdefined_undefvar()
+f_isdefined_unionvar(y, t) = (t > 0 && (x = (t == 1 ? 1 : y)); @isdefined x)
+@test f_isdefined_unionvar(nothing, 1)
+@test f_isdefined_unionvar("", 1)
+@test f_isdefined_unionvar(1.0, 1)
+@test f_isdefined_unionvar(1, 1)
+@test !f_isdefined_unionvar(nothing, 0)
+@test !f_isdefined_unionvar("", 0)
+@test !f_isdefined_unionvar(1.0, 0)
+@test !f_isdefined_unionvar(1, 0)
+f_isdefined_splat(x...) = @isdefined x
+@test f_isdefined_splat(1, 2, 3)
+@test let err = @macroexpand @isdefined :x
+    isa(err, Expr) && err.head === :error && isa(err.args[1], MethodError)
+end
+f_isdefined_cl_1(y) = (local x; for i = 1:y; x = 2; end; () -> x; @isdefined x)
+f_isdefined_cl_2(y) = (local x; for i = 1:y; x = 2; end; () -> @isdefined x)
+f_isdefined_cl_3() = (x = 2; () -> x; @isdefined x)
+f_isdefined_cl_4() = (local x; () -> x; @isdefined x)
+f_isdefined_cl_5() = (x = 2; () -> @isdefined x)
+f_isdefined_cl_6() = (local x; () -> @isdefined x)
+@test f_isdefined_cl_1(1)
+@test !f_isdefined_cl_1(0)
+@test f_isdefined_cl_2(1)()
+@test !f_isdefined_cl_2(0)()
+@test f_isdefined_cl_3()
+@test !f_isdefined_cl_4()
+@test f_isdefined_cl_5()()
+@test !f_isdefined_cl_6()()

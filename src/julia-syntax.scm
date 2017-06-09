@@ -3073,6 +3073,24 @@ f(x) = yt(x)
                    (assq (cadr e) (cadr (lam:vinfo lam))))
                '(null)
                e))
+          ((isdefined) ;; convert isdefined expr to function for closure converted variables
+           (let* ((sym (cadr e))
+                  (vi (and (symbol? sym) (assq sym (car  (lam:vinfo lam)))))
+                  (cv (and (symbol? sym) (assq sym (cadr (lam:vinfo lam))))))
+             (cond ((eq? sym fname) e)
+                   ((memq sym (lam:sp lam)) e)
+                   (cv
+                    (if (and (vinfo:asgn cv) (vinfo:capt cv))
+                      (let ((access (if interp
+                                      `($ (call (core QuoteNode) ,sym))
+                                      `(call (core getfield) ,fname (inert ,sym)))))
+                          `(call (core isdefined) ,access (inert contents)))
+                      'true))
+                   (vi
+                    (if (and (vinfo:asgn vi) (vinfo:capt vi))
+                        `(call (core isdefined) ,sym (inert contents))
+                        e))
+                   (else e))))
           ((method)
            (let* ((name  (method-expr-name e))
                   (short (length= e 2))  ;; function f end
@@ -3597,6 +3615,7 @@ f(x) = yt(x)
             ((local) #f)
             ((implicit-global) #f)
             ((const) (emit e))
+            ((isdefined) (if tail (emit-return e) e))
 
             ;; top level expressions returning values
             ((abstract_type bits_type composite_type thunk toplevel module)

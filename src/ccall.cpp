@@ -95,7 +95,7 @@ static bool runtime_sym_gvs(const char *f_lib, const char *f_name, MT &&M,
         }
     }
     if (libsym == NULL) {
-        libsym = *(void**)jl_get_global(libptrgv);
+        libsym = *(void**)jl_get_globalvar(libptrgv);
     }
     assert(libsym != NULL);
 

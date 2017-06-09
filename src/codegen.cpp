@@ -357,6 +357,7 @@ static Function *jlboundserrorv_func;
 static Function *jlcheckassign_func;
 static Function *jldeclareconst_func;
 static Function *jlgetbindingorerror_func;
+static Function *jlboundp_func;
 static Function *jltopeval_func;
 static Function *jlcopyast_func;
 static Function *jltuple_func;
@@ -2325,7 +2326,6 @@ static void simple_escape_analysis(jl_value_t *expr, bool esc, jl_codectx_t *ctx
             }
         }
         else if (e->head == foreigncall_sym) {
-            esc = true;
             simple_escape_analysis(jl_exprarg(e, 0), esc, ctx);
             // 2nd and 3d arguments are static
             size_t alen = jl_array_dim0(e->args);
@@ -2334,20 +2334,22 @@ static void simple_escape_analysis(jl_value_t *expr, bool esc, jl_codectx_t *ctx
             }
         }
         else if (e->head == method_sym) {
-            simple_escape_analysis(jl_exprarg(e,0), esc, ctx);
+            simple_escape_analysis(jl_exprarg(e, 0), esc, ctx);
             if (jl_expr_nargs(e) > 1) {
-                simple_escape_analysis(jl_exprarg(e,1), esc, ctx);
-                simple_escape_analysis(jl_exprarg(e,2), esc, ctx);
+                simple_escape_analysis(jl_exprarg(e, 1), esc, ctx);
+                simple_escape_analysis(jl_exprarg(e, 2), esc, ctx);
             }
         }
         else if (e->head == assign_sym) {
             // don't consider assignment LHS as a variable "use"
-            simple_escape_analysis(jl_exprarg(e,1), esc, ctx);
+            simple_escape_analysis(jl_exprarg(e, 1), esc, ctx);
         }
         else if (e->head != line_sym) {
+            if (e->head == isdefined_sym)
+                esc = false;
             size_t elen = jl_array_dim0(e->args);
-            for(i=0; i < elen; i++) {
-                simple_escape_analysis(jl_exprarg(e,i), esc, ctx);
+            for (i = 0; i < elen; i++) {
+                simple_escape_analysis(jl_exprarg(e, i), esc, ctx);
             }
         }
         return;
@@ -3603,6 +3605,67 @@ static jl_cgval_t emit_global(jl_sym_t *sym, jl_codectx_t *ctx)
     return emit_checked_var(bp, sym, ctx, false, tbaa_binding);
 }
 
+static jl_cgval_t emit_isdefined(jl_value_t *sym, jl_codectx_t *ctx)
+{
+    Value *isnull;
+    if (jl_is_slot(sym)) {
+        size_t sl = jl_slot_number(sym) - 1;
+        jl_varinfo_t &vi = ctx->slots[sl];
+        if (!vi.usedUndef)
+            return mark_julia_const(jl_true);
+        if (vi.boxroot == NULL || vi.pTIndex != NULL) {
+            assert(vi.defFlag);
+            isnull = builder.CreateLoad(vi.defFlag, vi.isVolatile);
+        }
+        if (vi.boxroot != NULL) {
+            Value *boxed = builder.CreateLoad(vi.boxroot, vi.isVolatile);
+            Value *box_isnull = builder.CreateICmpNE(boxed, V_null);
+            if (vi.pTIndex) {
+                // value is either boxed in the stack slot, or unboxed in value
+                // as indicated by testing (pTIndex & 0x80)
+                Value *tindex = builder.CreateLoad(vi.pTIndex, vi.isVolatile);
+                Value *load_unbox = builder.CreateICmpEQ(
+                            builder.CreateAnd(tindex, ConstantInt::get(T_int8, 0x80)),
+                            ConstantInt::get(T_int8, 0));
+                isnull = builder.CreateSelect(load_unbox, isnull, box_isnull);
+            }
+            else {
+                isnull = box_isnull;
+            }
+        }
+    }
+    else {
+        jl_module_t *modu;
+        jl_sym_t *name;
+        if (jl_is_globalref(sym)) {
+            modu = jl_globalref_mod(sym);
+            name = jl_globalref_name(sym);
+        }
+        else {
+            assert(jl_is_symbol(sym) && "malformed isdefined expression");
+            modu = ctx->module;
+            name = (jl_sym_t*)sym;
+        }
+        jl_binding_t *bnd = jl_get_binding(modu, name);
+        if (bnd) {
+            if (bnd->value != NULL)
+                return mark_julia_const(jl_true);
+            Value *bp = julia_binding_gv(bnd);
+            Instruction *v = builder.CreateLoad(bp);
+            tbaa_decorate(tbaa_binding, v);
+            isnull = builder.CreateICmpNE(v, V_null);
+        }
+        else {
+            Value *v = builder.CreateCall(prepare_call(jlboundp_func), {
+                    literal_pointer_val((jl_value_t*)modu),
+                    literal_pointer_val((jl_value_t*)name)
+                });
+            isnull = builder.CreateICmpNE(v, V_null);
+        }
+    }
+    return mark_julia_type(isnull, false, jl_bool_type, ctx);
+}
+
 static jl_cgval_t emit_local(jl_value_t *slotload, jl_codectx_t *ctx)
 {
     size_t sl = jl_slot_number(slotload) - 1;
@@ -4131,7 +4194,10 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
     // this is object-disoriented.
     // however, this is a good way to do it because it should *not* be easy
     // to add new node types.
-    if (head == invoke_sym) {
+    if (head == isdefined_sym) {
+        return emit_isdefined(args[0], ctx);
+    }
+    else if (head == invoke_sym) {
         return emit_invoke(ex, ctx);
     }
     else if (head == call_sym) {
@@ -6773,6 +6839,12 @@ static void init_julia_llvm_env(Module *m)
                          Function::ExternalLinkage,
                          "jl_get_binding_or_error", m);
     add_named_global(jlgetbindingorerror_func, &jl_get_binding_or_error);
+
+    jlboundp_func =
+        Function::Create(FunctionType::get(T_pjlvalue, args_2ptrs, false),
+                         Function::ExternalLinkage,
+                         "jl_boundp", m);
+    add_named_global(jlboundp_func, &jl_boundp);
 
     builtin_func_map[jl_f_is] = jlcall_func_to_llvm("jl_f_is", &jl_f_is, m);
     builtin_func_map[jl_f_typeof] = jlcall_func_to_llvm("jl_f_typeof", &jl_f_typeof, m);

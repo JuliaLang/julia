@@ -203,33 +203,46 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
         ssize_t n = jl_slot_number(e);
         if (src == NULL || n > jl_source_nslots(src) || n < 1 || s->locals == NULL)
             jl_error("access to invalid slot number");
-        jl_value_t *v = s->locals[n-1];
+        jl_value_t *v = s->locals[n - 1];
         if (v == NULL)
             jl_undefined_var_error((jl_sym_t*)jl_array_ptr_ref(src->slotnames, n - 1));
         return v;
     }
     if (jl_is_globalref(e)) {
-        jl_sym_t *s = jl_globalref_name(e);
-        jl_value_t *v = jl_get_global(jl_globalref_mod(e), s);
-        if (v == NULL)
-            jl_undefined_var_error(s);
-        return v;
+        return jl_eval_global_var(jl_globalref_mod(e), jl_globalref_name(e));
     }
     if (jl_is_quotenode(e))
         return jl_fieldref(e,0);
     jl_module_t *modu = s->module;
     if (jl_is_symbol(e)) {  // bare symbols appear in toplevel exprs not wrapped in `thunk`
-        jl_value_t *v = jl_get_global(modu, (jl_sym_t*)e);
-        if (v == NULL)
-            jl_undefined_var_error((jl_sym_t*)e);
-        return v;
+        return jl_eval_global_var(modu, (jl_sym_t*)e);
     }
     if (!jl_is_expr(e))
         return e;
     jl_expr_t *ex = (jl_expr_t*)e;
     jl_value_t **args = (jl_value_t**)jl_array_data(ex->args);
     size_t nargs = jl_array_len(ex->args);
-    if (ex->head == call_sym) {
+    if (ex->head == isdefined_sym) {
+        jl_value_t *sym = args[0];
+        int defined = 0;
+        if (jl_is_slot(sym)) {
+            ssize_t n = jl_slot_number(sym);
+            if (src == NULL || n > jl_source_nslots(src) || n < 1 || s->locals == NULL)
+                jl_error("access to invalid slot number");
+            defined = s->locals[n - 1] != NULL;
+        }
+        else if (jl_is_globalref(sym)) {
+            defined = jl_boundp(jl_globalref_mod(sym), jl_globalref_name(sym));
+        }
+        else if (jl_is_symbol(sym)) {
+            defined = jl_boundp(modu, (jl_sym_t*)sym);
+        }
+        else {
+            assert(0 && "malformed isdefined expression");
+        }
+        return defined ? jl_true : jl_false;
+    }
+    else if (ex->head == call_sym) {
         return do_call(args, nargs, s);
     }
     else if (ex->head == invoke_sym) {
