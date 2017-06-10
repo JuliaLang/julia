@@ -395,8 +395,9 @@ end
 """
     replace(string::AbstractString, pat, r[, n::Integer=0])
 
-Search for the given pattern `pat`, and replace each occurrence with `r`. If `n` is
-provided, replace at most `n` occurrences. As with search, the second argument may be a
+Search for the given pattern `pat`, and replace each occurrence with `r`.
+If `n` is provided, replace at most `n` occurrences (if `n < 0`, replace
+all occurrences). As with search, the second argument may be a
 single character, a vector or a set of characters, a string, or a regular expression. If `r`
 is a function, each occurrence is replaced with `r(s)` where `s` is the matched substring.
 If `pat` is a regular expression and `r` is a `SubstitutionString`, then capture group
