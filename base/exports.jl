@@ -748,6 +748,7 @@ export
     randstring,
     repeat,
     replace,
+    replace!,
     repr,
     reverseind,
     rpad,
