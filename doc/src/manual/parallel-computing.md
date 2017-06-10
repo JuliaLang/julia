@@ -262,7 +262,7 @@ remotecall_fetch(()->norm(A), 2)
 ```
 
 In this case [`norm`](@ref) is a function that takes 2D array as a parameter, and MUST be defined in
-the remote process.  You could, any function other than `norm` as long as it is defined in the remote
+the remote process.  You could use any function other than `norm` as long as it is defined in the remote
 process and accepts the appropriate parameter.
 
 Note that `A` is a global variable defined in the local workspace. Worker 2 does not have a variable called
