@@ -823,6 +823,15 @@ JL_DLLEXPORT int jl_tcp_quickack(uv_tcp_t *handle, int on)
 
 #endif
 
+JL_DLLEXPORT int jl_has_so_reuseport(void)
+{
+#if defined(SO_REUSEPORT)
+    return 1;
+#else
+    return 0;
+#endif
+}
+
 JL_DLLEXPORT int jl_tcp_reuseport(uv_tcp_t *handle)
 {
 #if defined(SO_REUSEPORT)
@@ -833,7 +842,7 @@ JL_DLLEXPORT int jl_tcp_reuseport(uv_tcp_t *handle)
     }
     return 0;
 #else
-    return 1;
+    return -1;
 #endif
 }
 

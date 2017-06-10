@@ -48,15 +48,10 @@ end
 
 # Test that the client port is reused. SO_REUSEPORT may not be supported on
 # all UNIX platforms, Linux kernels prior to 3.9 and older versions of OSX
-if is_unix()
-    # Run reuse client port tests only if SO_REUSEPORT is supported.
-    s = TCPSocket(delay = false)
-    is_linux() && Base.Distributed.bind_client_port(s)
-    if ccall(:jl_tcp_reuseport, Int32, (Ptr{Void},), s.handle) == 0
-        reuseport_tests()
-    else
-        info("SO_REUSEPORT is unsupported, skipping reuseport tests.")
-    end
+if ccall(:jl_has_so_reuseport, Int32, ()) == 1
+    reuseport_tests()
+else
+    info("SO_REUSEPORT is unsupported, skipping reuseport tests.")
 end
 
 id_me = myid()

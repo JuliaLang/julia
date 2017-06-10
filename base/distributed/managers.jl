@@ -455,22 +455,22 @@ end
 const client_port = Ref{Cushort}(0)
 
 function socket_reuse_port()
-    @static if is_linux() || is_apple()
+    if ccall(:jl_has_so_reuseport, Int32, ()) == 1
         s = TCPSocket(delay = false)
 
-        # Linux requires the port to be bound before setting REUSEPORT, OSX after.
-        is_linux() && bind_client_port(s)
+        # Some systems (e.g. Linux) require the port to be bound before setting REUSEPORT
+        bind_early = is_linux()
+
+        bind_early && bind_client_port(s)
         rc = ccall(:jl_tcp_reuseport, Int32, (Ptr{Void},), s.handle)
-        if rc > 0  # SO_REUSEPORT is unsupported, just return the ephemerally bound socket
-            return s
-        elseif rc < 0
+        if rc < 0
             # This is an issue only on systems with lots of client connections, hence delay the warning
             nworkers() > 128 && warn_once("Error trying to reuse client port number, falling back to regular socket.")
 
             # provide a clean new socket
             return TCPSocket()
         end
-        is_apple() && bind_client_port(s)
+        bind_early || bind_client_port(s)
         return s
     else
         return TCPSocket()
