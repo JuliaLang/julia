@@ -360,6 +360,7 @@ _replace(io, repl::Function, str, r, pattern) =
     print(io, repl(SubString(str, first(r), last(r))))
 
 function replace(str::String, pattern, repl, limit::Integer)
+    limit == 0 && return str
     n = 1
     e = endof(str)
     i = a = start(str)
@@ -402,7 +403,7 @@ If `pat` is a regular expression and `r` is a `SubstitutionString`, then capture
 references in `r` are replaced with the corresponding matched text.
 """
 replace(s::AbstractString, pat, f, n::Integer) = replace(String(s), pat, f, n)
-replace(s::AbstractString, pat, r) = replace(s, pat, r, 0)
+replace(s::AbstractString, pat, r) = replace(s, pat, r, -1)
 
 # hex <-> bytes conversion
 
