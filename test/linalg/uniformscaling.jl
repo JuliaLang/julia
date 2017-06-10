@@ -18,6 +18,7 @@ srand(123)
     @test -one(UniformScaling(2)) == UniformScaling(-1)
     @test sparse(3I,4,5) == spdiagm(fill(3,4),0,4,5)
     @test sparse(3I,5,4) == spdiagm(fill(3,4),0,5,4)
+    @test norm(UniformScaling(1+im)) ≈ sqrt(2)
 end
 
 @testset "istriu, istril, issymmetric, ishermitian, isapprox" begin
@@ -29,6 +30,11 @@ end
     @test !ishermitian(UniformScaling(complex(1.0,1.0)))
     @test UniformScaling(4.00000000000001) ≈ UniformScaling(4.0)
     @test UniformScaling(4.32) ≈ UniformScaling(4.3) rtol=0.1 atol=0.01
+    @test UniformScaling(4.32) ≈ 4.3*eye(2) rtol=0.1 atol=0.01
+    @test UniformScaling(4.32) ≈ 4.3*eye(2) rtol=0.1 atol=0.01 norm=norm
+    @test 4.3*eye(2) ≈ UniformScaling(4.32) rtol=0.1 atol=0.01
+    @test [4.3201 0.002;0.001 4.32009] ≈ UniformScaling(4.32) rtol=0.1 atol=0.
+    @test UniformScaling(4.32) ≉ 4.3*ones(2,2) rtol=0.1 atol=0.01
 end
 
 @testset "* and / with number" begin
