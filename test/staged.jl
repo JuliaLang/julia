@@ -174,7 +174,7 @@ let gf_err, tsk = @async nothing # create a Task for yield to try to run
     end
     @test_throws ErrorException gf_err()
     @test_throws ErrorException gf_err()
-    @test gf_err_ref[] == 3
+    @test gf_err_ref[] == 4
 end
 
 gf_err_ref[] = 0

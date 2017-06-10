@@ -262,7 +262,7 @@ jl_code_info_t *jl_type_infer(jl_method_instance_t **pli, size_t world, int forc
     li->inInference = 1;
     jl_svec_t *linfo_src_rettype = (jl_svec_t*)jl_apply_with_saved_exception_state(fargs, 3, 0);
     ptls->world_age = last_age;
-    assert((jl_is_method(li->def.method) || li->inInference == 0) && "inference failed on a toplevel expr");
+    li->inInference = 0;
 
     jl_code_info_t *src = NULL;
     if (linfo_src_rettype &&
