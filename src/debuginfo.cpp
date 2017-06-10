@@ -47,9 +47,7 @@ using llvm_file_magic = sys::fs::file_magic;
 #include "julia.h"
 #include "julia_internal.h"
 #include "codegen_internal.h"
-#ifdef _OS_LINUX_
-#  define UNW_LOCAL_ONLY
-#  include <libunwind.h>
+#if defined(_OS_LINUX_)
 #  include <link.h>
 #endif
 
@@ -1406,7 +1404,7 @@ static int jl_getDylibFunctionInfo(jl_frame_t **frames, size_t pointer, int skip
     }
     frame0->fromC = !isSysImg;
     if (isSysImg && sysimg_fvars) {
-#ifdef _OS_LINUX_
+#if defined(_OS_LINUX_) && !defined(JL_DISABLE_LIBUNWIND)
         unw_proc_info_t pip;
         if (!saddr && unw_get_proc_info_by_ip(unw_local_addr_space,
                                               pointer, &pip, NULL) == 0)

@@ -26,6 +26,7 @@ OPENBLAS_USE_THREAD:=1
 # Use libraries available on the system instead of building them
 USE_SYSTEM_LLVM:=0
 USE_SYSTEM_LIBUNWIND:=0
+DISABLE_LIBUNWIND:=0
 USE_SYSTEM_PCRE:=0
 USE_SYSTEM_LIBM:=0
 USE_SYSTEM_OPENLIBM:=0
@@ -767,6 +768,8 @@ endif
 
 ifeq ($(OS),WINNT)
 LIBUNWIND:=
+else ifneq ($(DISABLE_LIBUNWIND), 0)
+LIBUNWIND:=
 else
 ifeq ($(USE_SYSTEM_LIBUNWIND), 1)
 ifneq ($(OS),Darwin)
@@ -1013,6 +1016,10 @@ endif
 # OProfile
 ifeq ($(USE_OPROFILE_JITEVENTS), 1)
 JCPPFLAGS += -DJL_USE_OPROFILE_JITEVENTS
+endif
+
+ifeq ($(DISABLE_LIBUNWIND), 1)
+JCPPFLAGS += -DJL_DISABLE_LIBUNWIND
 endif
 
 # Intel libraries
