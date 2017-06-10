@@ -216,6 +216,7 @@ end
     @inbounds deleteat!(parent(A), first_idx:last_idx)
 end
 
+Base.resize!(A::OffsetVector, nl::Integer) = (resize!(A.parent, nl); A)
 # Computing a shifted index (subtracting the offset)
 offset{N}(offsets::NTuple{N,Int}, inds::NTuple{N,Int}) = _offset((), offsets, inds)
 _offset(out, ::Tuple{}, ::Tuple{}) = out
