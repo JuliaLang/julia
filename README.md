@@ -42,12 +42,25 @@ New developers may find the notes in [CONTRIBUTING](https://github.com/JuliaLang
 
 ## Currently Supported Platforms
 
-- **Linux**
-- **MacOS**
-- **FreeBSD**
-- **Windows**
+Julia is built and tested regularly on the following platforms:
 
-All systems are supported with both x86/64 (64-bit) and x86 (32-bit, except MacOS) architectures. Support for [ARM](https://github.com/JuliaLang/julia/blob/master/README.arm.md), AARCH64, and POWER8 (little-endian) has been added recently.
+| Operating System | Architecture     | CI | Binaries | Support Level |
+|:----------------:|:----------------:|:--:|:--------:|:-------------:|
+| Linux 2.6.18+    | x86-64 (64-bit)  | ✓  | ✓        | Official      |
+|                  | i686 (32-bit)    | ✓  | ✓        | Official      |
+|                  | PowerPC (64-bit) |    | ✓        | Official      |
+|                  | ARM v7 (32-bit)  |    | ✓        | Official      |
+|                  | ARM v8 (64-bit)  |    | ✓        | Official      |
+| macOS 10.8+      | x86-64 (64-bit)  | ✓  | ✓        | Official      |
+| Windows 7+       | x86-64 (64-bit)  | ✓  | ✓        | Official      |
+|                  | i686 (32-bit)    | ✓  | ✓        | Official      |
+| FreeBSD 11.0+    | x86-64 (64-bit)  |    |          | Community     |
+
+All systems marked with ✓ for CI are tested using continuous integration for every commit.
+Systems with ✓ for binaries have official binaries available on the [downloads](https://julialang.org/downloads) page and are tested regularly.
+The systems listed here with neither CI nor official binaries are known to build and work, but ongoing support for those platforms is dependent on community efforts.
+It's possible that Julia will build and work on other platforms too, and we're always looking to better our platform coverage.
+If you're using Julia on a platform not listed here, let us know!
 
 ## Source Download and Compilation
 
