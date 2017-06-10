@@ -201,6 +201,39 @@ function unique(f::Callable, C)
     out
 end
 
+# If A is not sorted, then we will need to keep track of all of the elements that
+# we have seen so far.
+function _unique!(A)
+    seen = Set{eltype(A)}()
+    idxs = eachindex(A)
+    i = state = start(idxs)
+    for x in A
+        if x ∉ seen
+            push!(seen, x)
+            i, state = next(idxs, state)
+            A[i] = x
+        end
+    end
+    resize!(A, i - first(idxs) + 1)
+end
+
+# If A is sorted, then we only need to keep track of one element and add that to A
+# every time that we see a new element.
+function _sortedunique!(A)
+    idxs = eachindex(A)
+    y = first(A)
+    state = start(idxs)
+    j, state = next(idxs, state)
+    for i in idxs
+        x = A[i]
+        if !isequal(x, y)
+            j, state = next(idxs, state)
+            y = A[j] = x
+        end
+    end
+    resize!(A, j - first(idxs) + 1)
+end
+
 """
     unique!(A::AbstractVector)
 
@@ -223,47 +256,18 @@ julia> A
  5
 ```
 """
-function unique!(A::AbstractVector)
-    isempty(A) && return A
-
-    sorted = false
-    try
-        sorted = issorted(A) || issorted(A, rev=true)
-    catch
-        sorted = false
-    end
-
-    if sorted
-        # If A is sorted, then we only need to keep track of one element and add that to A
-        # every time that we see a new element.
-        idxs = eachindex(A)
-        y = first(A)
-        state = start(idxs)
-        j, state = next(idxs, state)
-        for i in idxs
-            x = A[i]
-            if !isequal(x, y)
-                j, state = next(idxs, state)
-                y = A[j] = x
-            end
-        end
-        count = j - first(idxs) + 1
+function unique!(A::AbstractVector{<:Real})
+    if issorted(A) || issorted(A, rev=true)
+        return _sortedunique!(A)
     else
-        # If A is not sorted, then we will need to keep track of all of the elements that
-        # we have seen so far.
-        seen = Set{eltype(A)}()
-        idxs = eachindex(A)
-        i = state = start(idxs)
-        for x in A
-            if x ∉ seen
-                push!(seen, x)
-                i, state = next(idxs, state)
-                A[i] = x
-            end
-        end
-        count = i - first(idxs) + 1
+        return _unique!(A)
     end
-    resize!(A, count)
+end
+# issorted fails for some element types so the method above has to be restricted
+# to element with isless/< defined.
+function unique!(A)
+    isempty(A) && return A
+    _unique!(A)
 end
 
 """
