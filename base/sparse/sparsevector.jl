@@ -906,6 +906,12 @@ end
 
 hcat(Xin::Union{Vector, AbstractSparseVector}...) = hcat(map(sparse, Xin)...)
 vcat(Xin::Union{Vector, AbstractSparseVector}...) = vcat(map(sparse, Xin)...)
+# Without the following method, vertical concatenations of SparseVectors with Vectors
+# fall back to the vertical concatenation method that ensures that combinations of
+# sparse/special/dense matrix/vector types concatenate to SparseMatrixCSCs (because
+# the vcat method immediately above is less specific, being defined in AbstractSparseVector
+# rather than SparseVector).
+vcat(X::Union{Vector,SparseVector}...) = vcat(map(sparse, X)...)
 
 
 ### Concatenation of un/annotated sparse/special/dense vectors/matrices
