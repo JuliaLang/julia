@@ -393,7 +393,7 @@ function replace(str::String, pattern, repl, limit::Integer)
 end
 
 """
-    replace(string::AbstractString, pat, r[, n::Integer=0])
+    replace(string::AbstractString, pat, r, [n::Integer])
 
 Search for the given pattern `pat`, and replace each occurrence with `r`.
 If `n` is provided, replace at most `n` occurrences (if `n < 0`, replace
