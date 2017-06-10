@@ -285,11 +285,13 @@ rand!(A::AbstractArray) = rand!(GLOBAL_RNG, A)
 rand(r::AbstractArray) = rand(GLOBAL_RNG, r)
 
 """
-    rand!([rng=GLOBAL_RNG], A, [coll])
+    rand!([rng=GLOBAL_RNG], A, [S=eltype(A)])
 
-Populate the array `A` with random values. If the collection `coll` is specified,
-the values are picked randomly from `coll`. This is equivalent to `copy!(A, rand(rng, coll, size(A)))`
-or `copy!(A, rand(rng, eltype(A), size(A)))` but without allocating a new array.
+Populate the array `A` with random values. If `S` is specified
+(`S` can be a type or a collection, cf. [`rand`](@ref) for details),
+the values are picked randomly from `S`.
+This is equivalent to `copy!(A, rand(rng, S, size(A)))`
+but without allocating a new array.
 """
 rand!(A::AbstractArray, r::AbstractArray) = rand!(GLOBAL_RNG, A, r)
 
@@ -389,12 +391,14 @@ rand(r::AbstractRNG, T::Type, d1::Integer, dims::Integer...) = rand(r, T, tuple(
 # rand(r, ()) would match both this method and rand(r, dims::Dims)
 # moreover, a call like rand(r, NotImplementedType()) would be an infinite loop
 
-function rand!(r::AbstractRNG, A::AbstractArray{T}) where T
+function rand!(r::AbstractRNG, A::AbstractArray{T}, ::Type{X}=T) where {T,X}
     for i in eachindex(A)
-        @inbounds A[i] = rand(r, T)
+        @inbounds A[i] = rand(r, X)
     end
     A
 end
+
+rand!(A::AbstractArray, ::Type{X}) where {X} = rand!(GLOBAL_RNG, A, X)
 
 function rand!(r::AbstractRNG, A::AbstractArray, s::Union{Dict,Set,IntSet})
     for i in eachindex(A)

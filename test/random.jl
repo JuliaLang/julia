@@ -309,11 +309,13 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()])
     ftypes = [Float16, Float32, Float64]
     cftypes = [Complex32, Complex64, Complex128, ftypes...]
     types = [Bool, Char, Base.BitInteger_types..., ftypes...]
-    collections = [(IntSet(rand(1:100, 20)), Int),
-                   (Set(rand(Int, 20)), Int),
-                   (Dict(zip(rand(Int,10), rand(Int, 10))), Pair{Int,Int}),
-                   (1:100, Int),
-                   (rand(Int, 100), Int)]
+    collections = [IntSet(rand(1:100, 20))                => Int,
+                   Set(rand(Int, 20))                     => Int,
+                   Dict(zip(rand(Int,10), rand(Int, 10))) => Pair{Int,Int},
+                   1:100                                  => Int,
+                   rand(Int, 100)                         => Int,
+                   Int                                    => Int,
+                   Float64                                => Float64]
     b2 = big(2)
     u3 = UInt(3)
     for f in [rand, randn, randexp]
@@ -342,7 +344,11 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()])
         a3 = rand!(rng..., Array{T}(5), C)    ::Vector{T}
         a4 = rand!(rng..., Array{T}(2, 3), C) ::Array{T, 2}
         for a in [a0, a1..., a2..., a3..., a4...]
-            @test a in C
+            if C isa Type
+                @test a isa C
+            else
+                @test a in C
+            end
         end
     end
     for C in [1:0, Dict(), Set(), IntSet(), Int[]]
