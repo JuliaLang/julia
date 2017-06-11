@@ -4,6 +4,8 @@
 isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__),
                                                              "TestHelpers.jl"))
 
+using TestHelpers
+
 # Set tests
 
 # Construction, collect
