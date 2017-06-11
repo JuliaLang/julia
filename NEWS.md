@@ -65,7 +65,12 @@ Library improvements
     git repo. Additionally, the argument order was changed to be consistent with the git
     command line tool ([#22062]).
 
+
   * Added `unique!` which is an inplace version of `unique` ([#20619]).
+
+  * `logspace` now accepts a `base` keyword argument to specify the base of the logarithmic
+    range. The base defaults to 10 ([#22310]).
+
 
 Compiler/Runtime improvements
 -----------------------------
