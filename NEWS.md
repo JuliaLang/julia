@@ -798,6 +798,7 @@ Command-line option changes
 [#19721]: https://github.com/JuliaLang/julia/issues/19721
 [#19722]: https://github.com/JuliaLang/julia/issues/19722
 [#19724]: https://github.com/JuliaLang/julia/issues/19724
+[#19730]: https://github.com/JuliaLang/julia/issues/19730
 [#19737]: https://github.com/JuliaLang/julia/issues/19737
 [#19741]: https://github.com/JuliaLang/julia/issues/19741
 [#19766]: https://github.com/JuliaLang/julia/issues/19766
@@ -864,4 +865,15 @@ Command-line option changes
 [#21359]: https://github.com/JuliaLang/julia/issues/21359
 [#21692]: https://github.com/JuliaLang/julia/issues/21692
 [#21697]: https://github.com/JuliaLang/julia/issues/21697
+[#21746]: https://github.com/JuliaLang/julia/issues/21746
 [#21759]: https://github.com/JuliaLang/julia/issues/21759
+[#21818]: https://github.com/JuliaLang/julia/issues/21818
+[#21825]: https://github.com/JuliaLang/julia/issues/21825
+[#21973]: https://github.com/JuliaLang/julia/issues/21973
+[#21974]: https://github.com/JuliaLang/julia/issues/21974
+[#22007]: https://github.com/JuliaLang/julia/issues/22007
+[#22038]: https://github.com/JuliaLang/julia/issues/22038
+[#22062]: https://github.com/JuliaLang/julia/issues/22062
+[#22064]: https://github.com/JuliaLang/julia/issues/22064
+[#22187]: https://github.com/JuliaLang/julia/issues/22187
+[#22188]: https://github.com/JuliaLang/julia/issues/22188
