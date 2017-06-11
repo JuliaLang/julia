@@ -316,9 +316,9 @@ function print_range(io::IO, r::Range,
 end
 
 """
-    logspace(start::Real, stop::Real, n::Integer=50)
+    logspace(start::Real, stop::Real, n::Integer=50; base=10)
 
-Construct a vector of `n` logarithmically spaced numbers from `10^start` to `10^stop`.
+Construct a vector of `n` logarithmically spaced numbers from `base^start` to `base^stop`.
 
 ```jldoctest
 julia> logspace(1.,10.,5)
@@ -328,9 +328,17 @@ julia> logspace(1.,10.,5)
     3.16228e5
     5.62341e7
     1.0e10
+
+julia> logspace(1.,10.,5,base=2)
+5-element Array{Float64,1}:
+    2.0
+    9.51366
+   45.2548
+  215.269
+ 1024.0
 ```
 """
-logspace(start::Real, stop::Real, n::Integer=50) = 10.^linspace(start, stop, n)
+logspace(start::Real, stop::Real, n::Integer=50; base=10) = base.^linspace(start, stop, n)
 
 ## interface implementations
 
