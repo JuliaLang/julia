@@ -515,6 +515,10 @@ done(a::Array,i) = (@_inline_meta; i == length(a)+1)
 getindex(A::Array, i1::Int) = arrayref(A, i1)
 getindex(A::Array, i1::Int, i2::Int, I::Int...) = (@_inline_meta; arrayref(A, i1, i2, I...)) # TODO: REMOVE FOR #14770
 
+# Issue #20065: Indexing into Array{Bool} can sometimes leak higher bits
+getindex(A::Array{Bool}, i1::Int) = Bool(UInt8(arrayref(A, i1)) & 1)
+getindex(A::Array{Bool}, i1::Int, i2::Int, I::Int...) = (@_inline_meta; Bool(UInt8(arrayref(A, i1, i2, I...)) & 1))
+
 # Faster contiguous indexing using copy! for UnitRange and Colon
 function getindex(A::Array, I::UnitRange{Int})
     @_inline_meta
