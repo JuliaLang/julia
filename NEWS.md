@@ -65,6 +65,8 @@ Library improvements
     git repo. Additionally, the argument order was changed to be consistent with the git
     command line tool ([#22062]).
 
+  * Added `unique!` which is an inplace version of `unique` ([#20619]).
+
 Compiler/Runtime improvements
 -----------------------------
 
