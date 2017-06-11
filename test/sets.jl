@@ -3,6 +3,7 @@
 # OffsetVector is used to test `unique!` on non-standard indices (PR #20619).
 isdefined(Main, :TestHelpers) || (@eval Main include(joinpath(dirname(@__FILE__),
    "TestHelpers.jl")))
+using TestHelpers
 
 # Set tests
 
