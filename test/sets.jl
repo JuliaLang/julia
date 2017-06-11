@@ -1,7 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # OffsetVector is used to test `unique!` on non-standard indices (PR #20619).
-isdefined(Main, :TestHelpers) || include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
+isdefined(Main, :TestHelpers) || (@eval Main include(joinpath(dirname(@__FILE__),
+   "TestHelpers.jl")))
 
 # Set tests
 
