@@ -1503,6 +1503,8 @@ function bkfact!(A::StridedMatrix, uplo::Symbol, symmetric::Bool = issymmetric(A
     return bkfact!(symmetric ? Symmetric(A, uplo) : Hermitian(A, uplo), rook)
 end
 
+# NOTE: rename the function replace_new from strings/util.jl to replace
+# when this replace is removed from deprecated.jl
 function replace(s::AbstractString, pat, f, n::Integer)
     if n <= 0
         depwarn(string("`replace(s, pat, r, count)` with `count <= 0` is deprecated, use ",
@@ -1510,7 +1512,7 @@ function replace(s::AbstractString, pat, f, n::Integer)
                 :replace)
         Base.replace(s, pat, f)
     else
-        Base.replace_new(String(s), pat, f, Int(n))
+        Base.replace_new(String(s), pat, f, clamp(n, 0, typemax(Int)) % Int)
     end
 end
 
