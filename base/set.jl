@@ -245,7 +245,8 @@ julia> A
  5
 ```
 """
-function unique!(A::AbstractVector{<:Union{Real, AbstractString, Symbol}})
+function unique!(A::Union{AbstractVector{<:Real}, AbstractVector{<:AbstractString},
+                          AbstractVector{<:Symbol}})
     if issorted(A) || issorted(A, rev=true)
         return _sortedunique!(A)
     else
