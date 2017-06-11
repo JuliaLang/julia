@@ -359,8 +359,9 @@ _replace(io, repl, str, r, pattern) = print(io, repl)
 _replace(io, repl::Function, str, r, pattern) =
     print(io, repl(SubString(str, first(r), last(r))))
 
-function replace(str::String, pattern, repl, limit::Integer)
+function replace(str::String, pattern, repl, limit::Int)
     limit == 0 && return str
+    limit < 0 && throw(DomainError())
     n = 1
     e = endof(str)
     i = a = start(str)
@@ -393,18 +394,18 @@ function replace(str::String, pattern, repl, limit::Integer)
 end
 
 """
-    replace(string::AbstractString, pat, r, [n::Integer])
+    replace(string::AbstractString, pat, r, [count::Integer])
 
 Search for the given pattern `pat`, and replace each occurrence with `r`.
-If `n` is provided, replace at most `n` occurrences (if `n < 0`, replace
-all occurrences). As with search, the second argument may be a
+If `count` is provided, replace at most `count` occurrences.
+As with search, the second argument may be a
 single character, a vector or a set of characters, a string, or a regular expression. If `r`
 is a function, each occurrence is replaced with `r(s)` where `s` is the matched substring.
 If `pat` is a regular expression and `r` is a `SubstitutionString`, then capture group
 references in `r` are replaced with the corresponding matched text.
 """
-replace(s::AbstractString, pat, f, n::Integer) = replace(String(s), pat, f, n)
-replace(s::AbstractString, pat, r) = replace(s, pat, r, -1)
+replace(s::AbstractString, pat, f, n::Integer=typemax(Int)) =
+    replace(String(s), pat, f, Int(n))
 
 # hex <-> bytes conversion
 
