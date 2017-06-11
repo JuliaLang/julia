@@ -67,13 +67,15 @@ struct LowerSIMDLoop: public LoopPass {
     LowerSIMDLoop() : LoopPass(ID) {}
 
 private:
-    /*override*/ bool runOnLoop(Loop *, LPPassManager &LPM);
+    bool runOnLoop(Loop *, LPPassManager &LPM) override;
 
     /// Check if loop has "simd_loop" annotation.
     /// If present, the annotation is an MDNode attached to an instruction in the loop's latch.
     bool hasSIMDLoopMetadata( Loop *L) const;
 
-    /// If Phi is part of a reduction cycle of FAdd or FMul, mark the ops as permitting reassociation/commuting.
+    /// If Phi is part of a reduction cycle of FAdd, FSub, FMul or FDiv,
+    /// mark the ops as permitting reassociation/commuting.
+    /// As of LLVM 4.0, FDiv is not handled by the loop vectorizer
     void enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop *L) const;
 };
 
@@ -85,6 +87,26 @@ bool LowerSIMDLoop::hasSIMDLoopMetadata(Loop *L) const
             if (II->getMetadata(simd_loop_mdkind))
                 return true;
     return false;
+}
+
+static unsigned getReduceOpcode(Instruction *J, Instruction *operand)
+{
+    switch (J->getOpcode()) {
+    case Instruction::FSub:
+        if (J->getOperand(0) != operand)
+            return 0;
+        JL_FALLTHROUGH;
+    case Instruction::FAdd:
+        return Instruction::FAdd;
+    case Instruction::FDiv:
+        if (J->getOperand(0) != operand)
+            return 0;
+        JL_FALLTHROUGH;
+    case Instruction::FMul:
+        return Instruction::FMul;
+    default:
+        return 0;
+    }
 }
 
 void LowerSIMDLoop::enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop *L) const
@@ -115,21 +137,21 @@ void LowerSIMDLoop::enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop *L) const
             DEBUG(dbgs() << "LSL: chain prematurely terminated at " << *I << "\n");
             return;
         }
-        if (J==Phi) {
+        if (J == Phi) {
             // Found the entire chain.
             break;
         }
         if (opcode) {
             // Check that arithmetic op matches prior arithmetic ops in the chain.
-            if (J->getOpcode()!=opcode) {
+            if (getReduceOpcode(J, I) != opcode) {
                 DEBUG(dbgs() << "LSL: chain broke at " << *J << " because of wrong opcode\n");
                 return;
             }
         }
         else {
             // First arithmetic op in the chain.
-            opcode = J->getOpcode();
-            if (opcode!=Instruction::FAdd && opcode!=Instruction::FMul) {
+            opcode = getReduceOpcode(J, I);
+            if (!opcode) {
                 DEBUG(dbgs() << "LSL: first arithmetic op in chain is uninteresting" << *J << "\n");
                 return;
             }
