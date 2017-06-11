@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# OffsetVector is used to test `unique!` on non-standard indices (PR #20619).
+isdefined(Main, :TestHelpers) || include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
+
 # Set tests
 
 # Construction, collect
@@ -222,6 +225,7 @@ u = unique([1,1,2])
 @test unique(x for x in Any[1,1.0])::Vector{Real} == [1]
 
 # unique!
+OffsetArray = TestHelpers.OAs.OffsetArray
 @testset "unique!" begin
     u = [1,1,3,2,1]
     unique!(u)
