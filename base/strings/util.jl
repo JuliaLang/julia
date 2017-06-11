@@ -406,6 +406,10 @@ If `pat` is a regular expression and `r` is a `SubstitutionString`, then capture
 references in `r` are replaced with the corresponding matched text.
 """
 replace(s::AbstractString, pat, f) = replace_new(String(s), pat, f, typemax(Int))
+# change this to the following when `replace` is removed from deprecated:
+# replace(s::AbstractString, pat, f, count::Integer=typemax(Int)) =
+#     replace(String(s), pat, f, clamp(count, typemin(Int), typemax(Int)) % Int)
+
 
 # hex <-> bytes conversion
 
