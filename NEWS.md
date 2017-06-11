@@ -127,6 +127,9 @@ Deprecated or removed
     Ternaries must now include some amount of whitespace, e.g. `x ? a : b` rather than
     `x? a : b` ([#22523]).
 
+  * The method `replace(s::AbstractString, pat, r, count)` with `count <= 0` is deprecated
+    in favor of `replace(s::AbstractString, pat, r, typemax(Int))` ([#22325]).
+
 
 Julia v0.6.0 Release Notes
 ==========================

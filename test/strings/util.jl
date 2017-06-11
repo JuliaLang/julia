@@ -209,11 +209,12 @@ end
 @test replace("abc", 'b', 2.1) == "a2.1c"
 
 # test replace with a count, check that replace is a no-op if count==0
-@test replace("aaa", 'a', 'z', 0) == "aaa"
+# @test replace("aaa", 'a', 'z', 0) == "aaa" # re-enable when undeprecated
 @test replace("aaa", 'a', 'z', 1) == "zaa"
 @test replace("aaa", 'a', 'z', 2) == "zza"
 @test replace("aaa", 'a', 'z', 3) == "zzz"
 @test replace("aaa", 'a', 'z', 4) == "zzz"
+@test replace("aaa", 'a', 'z', typemax(Int)) == "zzz"
 
 # chomp/chop
 @test chomp("foo\n") == "foo"
