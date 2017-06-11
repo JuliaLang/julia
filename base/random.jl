@@ -277,9 +277,9 @@ julia> rand(MersenneTwister(0), Dict(1=>2, 3=>4))
 @inline rand() = rand(GLOBAL_RNG, CloseOpen)
 @inline rand(T::Type) = rand(GLOBAL_RNG, T)
 rand(dims::Dims) = rand(GLOBAL_RNG, dims)
-rand(dims::Integer...) = rand(convert(Tuple{Vararg{Int}}, dims))
+rand(dims::Integer...) = rand(convert(Dims, dims))
 rand(T::Type, dims::Dims) = rand(GLOBAL_RNG, T, dims)
-rand(T::Type, d1::Integer, dims::Integer...) = rand(T, tuple(Int(d1), convert(Tuple{Vararg{Int}}, dims)...))
+rand(T::Type, d1::Integer, dims::Integer...) = rand(T, tuple(Int(d1), convert(Dims, dims)...))
 rand!(A::AbstractArray) = rand!(GLOBAL_RNG, A)
 
 rand(r::AbstractArray) = rand(GLOBAL_RNG, r)
@@ -296,7 +296,7 @@ but without allocating a new array.
 rand!(A::AbstractArray, r::AbstractArray) = rand!(GLOBAL_RNG, A, r)
 
 rand(r::AbstractArray, dims::Dims) = rand(GLOBAL_RNG, r, dims)
-rand(r::AbstractArray, dims::Integer...) = rand(GLOBAL_RNG, r, convert(Tuple{Vararg{Int}}, dims))
+rand(r::AbstractArray, dims::Integer...) = rand(GLOBAL_RNG, r, convert(Dims, dims))
 
 ## random floating point values
 
@@ -383,10 +383,10 @@ rand(s::IntSet) = rand(GLOBAL_RNG, s)
 ## Arrays of random numbers
 
 rand(r::AbstractRNG, dims::Dims) = rand(r, Float64, dims)
-rand(r::AbstractRNG, dims::Integer...) = rand(r, convert(Tuple{Vararg{Int}}, dims))
+rand(r::AbstractRNG, dims::Integer...) = rand(r, convert(Dims, dims))
 
 rand(r::AbstractRNG, T::Type, dims::Dims) = rand!(r, Array{T}(dims))
-rand(r::AbstractRNG, T::Type, d1::Integer, dims::Integer...) = rand(r, T, tuple(Int(d1), convert(Tuple{Vararg{Int}}, dims)...))
+rand(r::AbstractRNG, T::Type, d1::Integer, dims::Integer...) = rand(r, T, tuple(Int(d1), convert(Dims, dims)...))
 # note: the above method would trigger an ambiguity warning if d1 was not separated out:
 # rand(r, ()) would match both this method and rand(r, dims::Dims)
 # moreover, a call like rand(r, NotImplementedType()) would be an infinite loop
@@ -413,7 +413,7 @@ rand(r::AbstractRNG, s::Dict{K,V}, dims::Dims) where {K,V} = rand!(r, Array{Pair
 rand(r::AbstractRNG, s::Set{T}, dims::Dims) where {T} = rand!(r, Array{T}(dims), s)
 rand(r::AbstractRNG, s::IntSet, dims::Dims) = rand!(r, Array{Int}(dims), s)
 rand(r::AbstractRNG, s::Union{Dict,Set,IntSet}, dims::Integer...) = rand(r, s, convert(Dims, dims))
-rand(s::Union{Dict,Set,IntSet}, dims::Integer...) = rand(GLOBAL_RNG, s, dims)
+rand(s::Union{Dict,Set,IntSet}, dims::Integer...) = rand(GLOBAL_RNG, s, convert(Dims, dims))
 rand(s::Union{Dict,Set,IntSet}, dims::Dims) = rand(GLOBAL_RNG, s, dims)
 
 # MersenneTwister
@@ -687,7 +687,7 @@ function rand!(rng::AbstractRNG, A::AbstractArray, r::AbstractArray)
 end
 
 rand(rng::AbstractRNG, r::AbstractArray{T}, dims::Dims) where {T} = rand!(rng, Array{T}(dims), r)
-rand(rng::AbstractRNG, r::AbstractArray, dims::Int...) = rand(rng, r, dims)
+rand(rng::AbstractRNG, r::AbstractArray, dims::Integer...) = rand(rng, r, convert(Dims, dims))
 
 ## random BitArrays (AbstractRNG)
 
@@ -705,10 +705,10 @@ end
 Generate a `BitArray` of random boolean values.
 """
 bitrand(r::AbstractRNG, dims::Dims)   = rand!(r, BitArray(dims))
-bitrand(r::AbstractRNG, dims::Int...) = rand!(r, BitArray(dims))
+bitrand(r::AbstractRNG, dims::Integer...) = rand!(r, BitArray(convert(Dims, dims)))
 
 bitrand(dims::Dims)   = rand!(BitArray(dims))
-bitrand(dims::Int...) = rand!(BitArray(dims))
+bitrand(dims::Integer...) = rand!(BitArray(convert(Dims, dims)))
 
 ## randn() - Normally distributed random numbers using Ziggurat algorithm
 

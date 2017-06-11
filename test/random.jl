@@ -341,9 +341,10 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()])
         a0 = rand(rng..., C)                  ::T
         a1 = rand(rng..., C, 5)               ::Vector{T}
         a2 = rand(rng..., C, 2, 3)            ::Array{T, 2}
-        a3 = rand!(rng..., Array{T}(5), C)    ::Vector{T}
-        a4 = rand!(rng..., Array{T}(2, 3), C) ::Array{T, 2}
-        for a in [a0, a1..., a2..., a3..., a4...]
+        a3 = rand(rng..., C, b2, u3)          ::Array{T, 2}
+        a4 = rand!(rng..., Array{T}(5), C)    ::Vector{T}
+        a5 = rand!(rng..., Array{T}(2, 3), C) ::Array{T, 2}
+        for a in [a0, a1..., a2..., a3..., a4..., a5...]
             if C isa Type
                 @test a isa C
             else
@@ -373,6 +374,7 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()])
 
     bitrand(rng..., 5)             ::BitArray{1}
     bitrand(rng..., 2, 3)          ::BitArray{2}
+    bitrand(rng..., b2, u3)        ::BitArray{2}
     rand!(rng..., BitArray(5))     ::BitArray{1}
     rand!(rng..., BitArray(2, 3))  ::BitArray{2}
 
