@@ -78,15 +78,6 @@ _bound_vararg_specificity_1{T}(::Type{Array{T,1}}, d::Int) = 1
 @test args_morespecific(Tuple{Array}, Tuple{AbstractVector})
 @test args_morespecific(Tuple{Matrix}, Tuple{AbstractVector})
 
-# issue #22164 and #22002
-let A = Tuple{Type{D},D} where D<:Pair,
-    B = Tuple{Type{Any}, Any},
-    C = Tuple{Type{Pair}, Pair}
-    @test  args_morespecific(C, A)
-    @test !args_morespecific(A, B)
-    @test !args_morespecific(C, B)
-end
-
 # Method specificity
 begin
     local f, A
@@ -151,3 +142,31 @@ f17016(f, t1::Tuple) = 1
 
 @test args_morespecific(Tuple{Type{CartesianIndex{N}}} where N,
                         Tuple{Type{CartesianIndex{N}},Vararg{Int,N}} where N)
+
+# issue #22164 and #22002
+let A = Tuple{Type{D},D} where D<:Pair,
+    B = Tuple{Type{Any}, Any},
+    C = Tuple{Type{Pair}, Pair}
+    @test  args_morespecific(C, A)
+    @test !args_morespecific(A, B)
+    @test !args_morespecific(C, B)
+end
+
+# issue #22338
+let A = Tuple{Ref, Tuple{T}} where T,
+    B = Tuple{Ref{T}, Tuple{Vararg{T}}} where T,
+    C = Tuple{Ref{T}, Tuple{T}} where T
+    @test  args_morespecific(C, A)
+    @test  args_morespecific(C, B)
+    @test !args_morespecific(A, B)
+    @test !args_morespecific(B, A)
+end
+
+# issue #22339
+let A = Tuple{T, Array{T, 1}} where T,
+    B = Tuple{T} where T,
+    C = Tuple{T} where T<:AbstractFloat
+    @test args_morespecific(B, A)
+    @test args_morespecific(C, B)
+    @test args_morespecific(C, A)
+end

@@ -2322,11 +2322,17 @@ static int tuple_morespecific(jl_datatype_t *cdt, jl_datatype_t *pdt, int invari
         if (!cms && !eqv)
             return 0;
 
+        // Tuple{..., T} not more specific than Tuple{..., Vararg{S}} if S is diagonal
+        if (eqv && i == clen-1 && clen == plen && !cva && pva && jl_is_typevar(ce) && jl_is_typevar(pe) && !cdiag && pdiag)
+            return 0;
+
         if (cms) some_morespecific = 1;
         i++;
     }
     if (cva && pva && clen > plen && (!pdiag || cdiag))
         return 1;
+    if (cva && !pva && !some_morespecific)
+        return 0;
     return some_morespecific || (cdiag && !pdiag);
 }
 
@@ -2570,8 +2576,7 @@ static int type_morespecific_(jl_value_t *a, jl_value_t *b, int invariant, jl_ty
                     ( type_morespecific_((jl_value_t*)((jl_tvar_t*)b)->lb,
                                          (jl_value_t*)((jl_tvar_t*)a)->lb, 0, env) &&
                      !type_morespecific_((jl_value_t*)((jl_tvar_t*)b)->ub,
-                                         (jl_value_t*)((jl_tvar_t*)a)->ub, 0, env))) &&
-                num_occurs((jl_tvar_t*)a, env) >= num_occurs((jl_tvar_t*)b, env);
+                                         (jl_value_t*)((jl_tvar_t*)a)->ub, 0, env)));
         }
         if (!jl_is_type(b))
             return 0;
