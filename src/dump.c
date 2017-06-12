@@ -1176,6 +1176,7 @@ static void jl_serialize_missing_backedges_to_mod(jl_serializer_state *s, jl_met
 }
 
 // the intent of this function is to invert the backedges tree
+// for anything that points to a method not part of the worklist
 static void serialize_backedges(jl_method_instance_t *callee)
 {
     jl_array_t *backedges = callee->backedges;
@@ -1257,31 +1258,48 @@ static void jl_serialize_lambdas_from_mod(jl_serializer_state *s, jl_module_t *m
     }
 }
 
+// flatten the backedge map reachable from caller into callees
+static void jl_collect_backedges_to(jl_serializer_state *s, jl_method_instance_t *caller, jl_array_t *callees, arraylist_t *to_restore)
+{
+    jl_array_t **pcallee = (jl_array_t**)ptrhash_bp(&edges_map, (void*)caller),
+                *callee = *pcallee;
+    if (callee != HT_NOTFOUND) {
+        arraylist_push(to_restore, (void*)pcallee);
+        arraylist_push(to_restore, (void*)callee);
+        *pcallee = (jl_array_t*) HT_NOTFOUND;
+        jl_array_ptr_1d_append(callees, callee);
+        size_t i, l = jl_array_len(callee);
+        for (i = 0; i < l; i++) {
+            jl_value_t *c = jl_array_ptr_ref(callee, i);
+            if (jl_is_method_instance(c)) {
+                jl_collect_backedges_to(s, (jl_method_instance_t*)c, callees, to_restore);
+            }
+        }
+    }
+}
+
 static void jl_serialize_backedges(jl_serializer_state *s)
 {
-    arraylist_t worklist;
-    arraylist_new(&worklist, 0);
+    arraylist_t to_restore;
+    arraylist_new(&to_restore, 0);
     size_t i;
     void **table = edges_map.table;
     for (i = 0; i < edges_map.size; i += 2) {
         jl_method_instance_t *caller = (jl_method_instance_t*)table[i];
         jl_array_t *callee = (jl_array_t*)table[i + 1];
         if (callee != HT_NOTFOUND && module_in_worklist(caller->def.method->module)) {
-            arraylist_push(&worklist, (void*)caller);
-        }
-    }
-    while (worklist.len) {
-        jl_method_instance_t *caller = (jl_method_instance_t*)arraylist_pop(&worklist);
-        jl_array_t **pcallee = (jl_array_t**)ptrhash_bp(&edges_map, (void*)caller),
-                    *callee = *pcallee;
-        if (callee != HT_NOTFOUND) {
+            size_t i, l = jl_array_len(callee); // length may change during iteration
+            for (i = 0; i < l; i++) {           // only consider the initial list
+                jl_value_t *c = jl_array_ptr_ref(callee, i);
+                if (jl_is_method_instance(c)) {
+                    jl_collect_backedges_to(s, (jl_method_instance_t*)c, callee, &to_restore);
+                }
+            }
             jl_serialize_value(s, caller);
             jl_serialize_value(s, callee);
-            *pcallee = (jl_array_t*) HT_NOTFOUND;
-            for (i = 0; i < jl_array_len(callee); i++) {
-                jl_value_t *c = jl_array_ptr_ref(callee, i);
-                if (jl_is_method_instance(c))
-                    arraylist_push(&worklist, (void*)c);
+            while (to_restore.len) {
+                void **pp = (void**)arraylist_pop(&to_restore);
+                *pp = arraylist_pop(&to_restore);
             }
         }
     }
@@ -2194,61 +2212,77 @@ static void jl_insert_methods(linkedlist_t *list)
     }
 }
 
+static size_t lowerbound_dependent_world_set(size_t world, arraylist_t *dependent_worlds)
+{
+    size_t i, l = dependent_worlds->len;
+    for (i = 0; i < l; i++) {
+        size_t depworld = (size_t)dependent_worlds->items[i];
+        if (depworld <= world)
+            return depworld;
+    }
+    return jl_main_module->primary_world;
+}
+
 void jl_method_instance_delete(jl_method_instance_t *mi);
-static void jl_insert_backedges(linkedlist_t *list)
+static void jl_insert_backedges(linkedlist_t *list, arraylist_t *dependent_worlds)
 {
     while (list) {
-        size_t i, j;
+        size_t i, j, k;
         for (i = 0; i < list->count; i++) {
             jl_method_instance_t *caller = list->def[i].caller;
             assert(jl_is_method_instance(caller));
+            assert(caller->min_world == jl_world_counter); // caller should be new
             jl_array_t *callees = list->def[i].callee;
             assert(jl_is_array(callees));
-            if (!caller->inferred || module_in_worklist(caller->def.method->module)) {
+            int valid = 1;
+            for (j = 0; valid && j < jl_array_len(callees); j++) {
+                jl_value_t *callee = jl_array_ptr_ref(callees, j);
+                jl_method_instance_t *callee_mi = (jl_method_instance_t*)callee;
+                jl_value_t *sig;
+                if (jl_is_method_instance(callee)) {
+                    sig = callee_mi->specTypes;
+                    assert(!module_in_worklist(callee_mi->def.method->module));
+                    if (callee_mi->max_world != ~(size_t)0) {
+                        // the cached code backedge is invalid, delete everything associated with it
+                        valid = 0;
+                        break;
+                    }
+                }
+                else {
+                    sig = callee;
+                }
+                // verify that this backedge doesn't intersect with any new methods
+                size_t min_valid = 0;
+                size_t max_valid = ~(size_t)0;
+                jl_value_t *matches = jl_matching_methods((jl_tupletype_t*)sig, 50, 1, jl_world_counter, &min_valid, &max_valid);
+                if (matches == jl_false)
+                    valid = 0;
+                for (k = 0; valid && k < jl_array_len(matches); k++) {
+                    jl_method_t *m = (jl_method_t*)jl_svecref(jl_array_ptr_ref(matches, k), 2);
+                    if (lowerbound_dependent_world_set(m->min_world, dependent_worlds) != m->min_world) {
+                        // intersection has a new method and is now probably no good, just invalidate everything now
+                        valid = 0;
+                    }
+                }
+            }
+            if (valid) {
+                // if this callee is still valid, add all the backedges
                 for (j = 0; j < jl_array_len(callees); j++) {
                     jl_value_t *callee = jl_array_ptr_ref(callees, j);
                     if (jl_is_method_instance(callee)) {
-                        jl_method_instance_t *callee_mi = (jl_method_instance_t*)callee;
-                        if (!module_in_worklist(callee_mi->def.method->module)) {
-                            // verify that this MethodInstance is still the correct lookup for this callee sig
-                            jl_value_t *sig = callee_mi->specTypes;
-                            jl_method_t *m = NULL;
-                            if (jl_is_datatype(sig)) {
-                                jl_datatype_t *ftype = jl_first_argument_datatype(sig);
-                                jl_methtable_t *mt = ftype->name->mt;
-                                jl_typemap_entry_t *entry = jl_typemap_assoc_by_type(
-                                        mt->defs, (jl_datatype_t*)sig,
-                                        NULL, /*inexact*/0, /*subtype*/1, 0, jl_world_counter);
-                                if (entry != NULL)
-                                    m = entry->func.method;
-                            }
-                            if (m != callee_mi->def.method) {
-                                // probably no good, just invalidate everything now
-                                jl_method_instance_delete(caller);
-                                break;
-                            }
-                        }
-                        if (callee_mi->max_world == ~(size_t)0) {
-                            // if this callee is still valid, just add a backedge
-                            jl_method_instance_add_backedge(callee_mi, caller);
-                        }
-                        else if (caller->min_world == jl_world_counter) {
-                            // if this caller was just added, delete everything associated with it
-                            jl_method_instance_delete(caller);
-                            break;
-                        }
-                        else {
-                            // the caller must have been something pre-existing
-                            // assume that it'll take care of deleting the deserialized code
-                            // whenever we process it here
-                        }
+                        jl_method_instance_add_backedge((jl_method_instance_t*)callee, caller);
                     }
                     else {
-                        jl_datatype_t *gf = jl_first_argument_datatype(callee);
-                        assert(jl_is_datatype(gf) && gf->name->mt);
-                        jl_method_table_add_backedge(gf->name->mt, callee, (jl_value_t*)caller);
+                        jl_datatype_t *ftype = jl_first_argument_datatype(callee);
+                        jl_methtable_t *mt = ftype->name->mt;
+                        assert(jl_is_datatype(ftype) && mt);
+                        jl_method_table_add_backedge(mt, callee, (jl_value_t*)caller);
                     }
                 }
+            }
+            else {
+                // otherwise delete it
+                jl_method_instance_delete(caller);
             }
         }
         list = list->next;
@@ -3108,17 +3142,6 @@ static void jl_update_backref_list(jl_value_t *old, jl_value_t *_new, size_t sta
     }
 }
 
-static size_t lowerbound_dependent_world_set(size_t world, arraylist_t *dependent_worlds)
-{
-    size_t i, l = dependent_worlds->len;
-    for (i = 0; i < l; i++) {
-        size_t depworld = (size_t)dependent_worlds->items[i];
-        if (depworld <= world)
-            return depworld;
-    }
-    return jl_main_module->primary_world;
-}
-
 // repeatedly look up older methods until we come to one that existed
 // at the time this module was serialized
 static jl_method_t *jl_lookup_method_worldset(jl_methtable_t *mt, jl_datatype_t *sig, arraylist_t *dependent_worlds)
@@ -3138,8 +3161,9 @@ static jl_method_t *jl_lookup_method_worldset(jl_methtable_t *mt, jl_datatype_t 
     }
 }
 
-// repeated look up older methods until we come to one that was valid
+// repeated look up older methods instances until we come to one that was valid
 // at the time this module was serialized
+// TODO: consider moving this to jl_insert_backedges
 static jl_method_instance_t *jl_lookup_methodinstance_worldset(jl_method_t *m, jl_datatype_t *argtypes, jl_svec_t *env, arraylist_t *dependent_worlds)
 {
     size_t world = jl_world_counter;
@@ -3283,7 +3307,7 @@ static jl_value_t *_jl_restore_incremental(ios_t *f)
     jl_recache_other(&dependent_worlds); // make all of the other objects identities correct (needs to be after recache types)
     init_order = jl_finalize_deserializer(&s, tracee_list); // done with f and s (needs to be after recache types)
     jl_insert_methods(&external_methods); // hook up methods of external generic functions (needs to be after recache other)
-    jl_insert_backedges(&external_backedges); // restore external backedges (needs to be after insert methods)
+    jl_insert_backedges(&external_backedges, &dependent_worlds); // restore external backedges (needs to be after insert methods)
     free_linkedlist(external_methods.next);
     free_linkedlist(external_backedges.next);
     serializer_worklist = NULL;

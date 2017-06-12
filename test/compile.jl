@@ -30,6 +30,14 @@ try
           __precompile__(true)
 
           module $FooBase_module
+              import Base: hash, >
+              struct fmpz end
+              struct typeA end
+              >(x::fmpz, y::Int) = Base.cmp(x, y) > 0
+              function hash(a::typeA, h::UInt)
+                  d = den(a)
+                  return h
+              end
           end
           """)
     write(Foo2_file,
@@ -47,8 +55,14 @@ try
           __precompile__(true)
 
           module $Foo_module
-              using $FooBase_module
+              using $FooBase_module, $FooBase_module.typeA
               import $Foo2_module: $Foo2_module, override
+              import $FooBase_module.hash
+
+              struct typeB
+                  y::typeA
+              end
+              hash(x::typeB) = hash(x.y)
 
               # test that docs get reconnected
               @doc "foo function" foo(x) = x + 1
