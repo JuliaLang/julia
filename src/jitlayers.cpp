@@ -154,6 +154,7 @@ void addOptimizationPasses(PassManager *PM, int opt_level)
 #endif
         return;
     }
+    PM->add(createPropagateJuliaAddrspaces());
 #if JL_LLVM_VERSION >= 30700
     PM->add(createTargetTransformInfoWrapperPass(jl_TargetMachine->getTargetIRAnalysis()));
 #else
@@ -173,6 +174,7 @@ void addOptimizationPasses(PassManager *PM, int opt_level)
     }
     // list of passes from vmkit
     PM->add(createCFGSimplificationPass()); // Clean up disgusting code
+    PM->add(createDeadInstEliminationPass());
     PM->add(createPromoteMemoryToRegisterPass()); // Kill useless allocas
 
     // Due to bugs and missing features LLVM < 5.0, does not properly propagate
@@ -1441,7 +1443,7 @@ public:
 #else
         PassManager PM;
 #endif
-        addOptimizationPasses(&PM);
+        addOptimizationPasses(&PM, 3);
         PM.run(M);
         return true;
     }

@@ -250,6 +250,7 @@ Pass *createLowerPTLSPass(bool imaging_mode);
 Pass *createLateLowerGCFramePass();
 Pass *createLowerExcHandlersPass();
 Pass *createGCInvariantVerifierPass(bool Strong);
+Pass *createPropagateJuliaAddrspaces();
 // Whether the Function is an llvm or julia intrinsic.
 static inline bool isIntrinsicFunction(Function *F)
 {
