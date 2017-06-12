@@ -1252,6 +1252,20 @@ end
 @test_throws(ErrorException("ccall: return type doesn't correspond to a C type"),
              f21104rt(Float64))
 
+# test for malformed syntax errors
+@test Expr(:error, "more arguments than types for ccall") == expand(@__MODULE__, :(ccall(:fn, A, (), x)))
+@test Expr(:error, "more arguments than types for ccall") == expand(@__MODULE__, :(ccall(:fn, A, (B,), x, y)))
+@test Expr(:error, "more arguments than types for ccall") == expand(@__MODULE__, :(ccall(:fn, A, (B,), x, y, z)))
+@test Expr(:error, "more arguments than types for ccall") == expand(@__MODULE__, :(ccall(:fn, A, (B,), x, y)))
+@test Expr(:error, "more arguments than types for ccall") == expand(@__MODULE__, :(ccall(:fn, A, (B,), x, y, z)))
+@test Expr(:error, "more arguments than types for ccall") == expand(@__MODULE__, :(ccall(:fn, A, (B, C), x, y, z)))
+@test Expr(:error, "more types than arguments for ccall") == expand(@__MODULE__, :(ccall(:fn, A, (B,),)))
+@test Expr(:error, "more types than arguments for ccall") == expand(@__MODULE__, :(ccall(:fn, A, (B, C), )))
+@test Expr(:error, "more types than arguments for ccall") == expand(@__MODULE__, :(ccall(:fn, A, (B..., C...), )))
+@test Expr(:error, "only the trailing ccall argument type should have '...'") == expand(@__MODULE__, :(ccall(:fn, A, (B..., C...), x)))
+@test Expr(:error, "only the trailing ccall argument type should have '...'") == expand(@__MODULE__, :(ccall(:fn, A, (B..., C...), x, y, z)))
+@test Expr(:error, "more types than arguments for ccall") == expand(@__MODULE__, :(ccall(:fn, A, (B, C...), )))
+
 # cfunction on non-function singleton
 struct CallableSingleton
 end

@@ -951,20 +951,24 @@
 
 ;; insert calls to convert() in ccall, and pull out expressions that might
 ;; need to be rooted before conversion.
-(define (lower-ccall name RT atypes args)
+(define (lower-ccall name RT atypes args cconv)
   (let loop ((F atypes)  ;; formals
              (A args)    ;; actuals
              (stmts '()) ;; initializers
              (C '()))    ;; converted
-    (if (or (null? F) (null? A))
+    (if (and (null? F) (not (null? A))) (error "more arguments than types for ccall"))
+    (if (and (null? A) (not (or (null? F) (and (pair? F) (vararg? (car F)) (null? (cdr F)))))) (error "more types than arguments for ccall"))
+    (if (null? A)
         `(block
           ,.(reverse! stmts)
           (foreigncall ,name ,RT (call (core svec) ,@(dots->vararg atypes))
                 ,.(reverse! C)
-                ,@A))
+                ,@A
+                ,@cconv))
         (let* ((a     (car A))
-               (isseq (and (pair? (car F)) (eq? (caar F) '...)))
+               (isseq (and (vararg? (car F))))
                (ty    (if isseq (cadar F) (car F))))
+          (if (and isseq (not (null? (cdr F)))) (error "only the trailing ccall argument type should have '...'"))
           (if (eq? ty 'Any)
               (loop (if isseq F (cdr F)) (cdr A) stmts (list* 0 a C))
               (let* ((g (make-ssavalue))
@@ -2080,7 +2084,8 @@
          (let ((f (cadr e)))
            (cond ((dotop? f)
                   (expand-fuse-broadcast '() `(|.| ,(undotop f) (tuple ,@(cddr e)))))
-                 ((and (eq? f 'ccall) (length> e 4))
+                 ((eq? f 'ccall)
+                  (if (not (length> e 4)) (error "too few arguments to ccall"))
                   (let* ((cconv (cadddr e))
                          (have-cconv (memq cconv '(cdecl stdcall fastcall thiscall llvmcall)))
                          (after-cconv (if have-cconv (cddddr e) (cdddr e)))
@@ -2096,8 +2101,8 @@
                                   (error "ccall argument types must be a tuple; try \"(T,)\" and check if you specified a correct return type")
                                   (error "ccall argument types must be a tuple; try \"(T,)\"")))
                           (expand-forms
-                           (lower-ccall name RT (cdr argtypes)
-                            (if have-cconv (append args (list (list cconv))) args)))))) ;; place (callingconv) at end of arglist
+                           (lower-ccall name RT (cdr argtypes) args
+                            (if have-cconv (list (list cconv)) '()))))))
                  ((and (pair? (caddr e))
                        (eq? (car (caddr e)) 'parameters))
                   ;; (call f (parameters . kwargs) ...)
@@ -2315,25 +2320,6 @@
 
    '|'|  (lambda (e) `(call ctranspose ,(expand-forms (cadr e))))
    '|.'| (lambda (e) `(call  transpose ,(expand-forms (cadr e))))
-
-   'ccall
-   (lambda (e)
-     (syntax-deprecation #f "Expr(:ccall)" "Expr(:call, :ccall)")
-     (if (length> e 3)
-         (let ((name (cadr e))
-               (RT   (caddr e))
-               (argtypes (cadddr e))
-               (args (cddddr e)))
-           (begin
-             (if (not (and (pair? argtypes)
-                           (eq? (car argtypes) 'tuple)))
-                 (if (and (pair? RT)
-                          (eq? (car RT) 'tuple))
-                     (error "ccall argument types must be a tuple; try \"(T,)\" and check if you specified a correct return type")
-                     (error "ccall argument types must be a tuple; try \"(T,)\"")))
-             (expand-forms
-              (lower-ccall name RT (cdr argtypes) args))))
-         e))
 
    'generator
    (lambda (e)
