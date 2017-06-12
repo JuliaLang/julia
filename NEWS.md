@@ -882,5 +882,4 @@ Command-line option changes
 [#22062]: https://github.com/JuliaLang/julia/issues/22062
 [#22064]: https://github.com/JuliaLang/julia/issues/22064
 [#22187]: https://github.com/JuliaLang/julia/issues/22187
-[#20549]: https://github.com/JuliaLang/julia/issues/20549
 [#22188]: https://github.com/JuliaLang/julia/issues/22188
