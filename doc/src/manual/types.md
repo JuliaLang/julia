@@ -352,7 +352,7 @@ Stacktrace:
 You may find a list of field names using the `fieldnames` function.
 
 ```jldoctest footype
-julia> fieldnames(foo)
+julia> fieldnames(Foo)
 3-element Array{Symbol,1}:
  :bar
  :baz

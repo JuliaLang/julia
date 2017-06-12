@@ -617,10 +617,13 @@ JL_DLLEXPORT jl_datatype_t *jl_first_argument_datatype(jl_value_t *argtypes)
     return first_arg_datatype(argtypes, 0);
 }
 
-// get DataType implied by a single given type
-jl_datatype_t *jl_argument_datatype(jl_value_t *argt)
+// get DataType implied by a single given type, or `nothing`
+JL_DLLEXPORT jl_value_t *jl_argument_datatype(jl_value_t *argt)
 {
-    return first_arg_datatype(argt, 1);
+    jl_datatype_t *dt = first_arg_datatype(argt, 1);
+    if (dt == NULL)
+        return jl_nothing;
+    return (jl_value_t*)dt;
 }
 
 extern tracer_cb jl_newmeth_tracer;

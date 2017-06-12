@@ -153,7 +153,7 @@ end
 
 function show(io::IO, ::MIME"text/plain", opt::JLOptions)
     println(io, "JLOptions(")
-    fields = fieldnames(opt)
+    fields = fieldnames(JLOptions)
     nfields = length(fields)
     for (i, f) in enumerate(fields)
         v = getfield(opt, i)

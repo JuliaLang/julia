@@ -510,7 +510,7 @@ JL_DLLEXPORT jl_value_t *jl_matching_methods(jl_tupletype_t *types, int lim, int
                                              size_t world, size_t *min_valid, size_t *max_valid);
 
 JL_DLLEXPORT jl_datatype_t *jl_first_argument_datatype(jl_value_t *argtypes);
-jl_datatype_t *jl_argument_datatype(jl_value_t *argt);
+JL_DLLEXPORT jl_value_t *jl_argument_datatype(jl_value_t *argt);
 
 jl_value_t *jl_nth_slot_type(jl_value_t *sig, size_t i);
 void jl_compute_field_offsets(jl_datatype_t *st);

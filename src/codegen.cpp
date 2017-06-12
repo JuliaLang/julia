@@ -2919,7 +2919,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             // this is issue #8798
             sty != (jl_value_t*)jl_datatype_type) {
             if (jl_is_leaf_type(sty) ||
-                (((jl_datatype_t*)sty)->name->names == jl_emptysvec && jl_datatype_size(sty) > 0)) {
+                (jl_field_names((jl_datatype_t*)sty) == jl_emptysvec && jl_datatype_size(sty) > 0)) {
                 *ret = mark_julia_type(ctx, ConstantInt::get(T_size, jl_datatype_size(sty)), false, jl_long_type);
                 JL_GC_POP();
                 return true;

@@ -946,6 +946,7 @@ export
     fieldoffset,
     fieldname,
     fieldnames,
+    fieldcount,
     isleaftype,
     oftype,
     promote,

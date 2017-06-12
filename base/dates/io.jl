@@ -470,7 +470,7 @@ Parse a time from a time string `t` using a `DateFormat` object `df`.
 Time(t::AbstractString, df::DateFormat=ISOTimeFormat) = parse(Time, t, df)
 
 @generated function format(io::IO, dt::TimeType, fmt::DateFormat{<:Any,T}) where T
-    N = nfields(T)
+    N = fieldcount(T)
     quote
         ts = fmt.tokens
         loc = fmt.locale

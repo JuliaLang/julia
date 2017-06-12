@@ -1560,6 +1560,10 @@ end
 @deprecate Bidiagonal(dv::AbstractVector, ev::AbstractVector, uplo::Char) Bidiagonal(dv, ev, ifelse(uplo == 'U', :U, :L))
 @deprecate Bidiagonal(A::AbstractMatrix, isupper::Bool) Bidiagonal(A, ifelse(isupper, :U, :L))
 
+@deprecate fieldnames(v) fieldnames(typeof(v))
+# nfields(::Type) deprecation in builtins.c: update nfields tfunc in inference.jl when it is removed.
+# also replace `_nfields` with `nfields` in summarysize.c when this is removed.
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations
