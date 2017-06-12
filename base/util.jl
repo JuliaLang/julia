@@ -817,12 +817,7 @@ function crc32c(io::IO, nb::Integer, crc::UInt32=0x00000000)
     return unsafe_crc32c(buf, readbytes!(io, buf, nb), crc)
 end
 crc32c(io::IO, crc::UInt32=0x00000000) = crc32c(io, typemax(Int64), crc)
-
-# optimization for `open(crc, filename)` to use the size of the file
-open(::typeof(crc32c), filename::AbstractString) =
-    open(filename, "r") do f
-        crc32c(f, filesize(f))
-    end
+crc32c(io::IOStream, crc::UInt32=0x00000000) = crc32c(io, filesize(io)-position(io), crc)
 
 
 """
