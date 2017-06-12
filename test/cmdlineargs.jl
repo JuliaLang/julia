@@ -293,23 +293,24 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes --startup-file=no`
             """)
         cp(b, c)
 
-        @test split(readchomp(`$exename $a`), '\n') ==
-            [a, a,
-             b, a]
-        @test split(readchomp(`$exename -L $b -e 'exit(0)'`), '\n') ==
-            [realpath(b), ""]
-        @test split(readchomp(`$exename -L $b $a`), '\n') ==
-            [realpath(b), a,
-             a, a,
-             b, a]
+        readsplit(cmd) = split(readchomp(cmd), '\n')
 
         withenv((is_windows() ? "USERPROFILE" : "HOME") => dir) do
-            @test split(readchomp(`$exename --startup-file=yes -e 'exit(0)'`), '\n') ==
+            @test readsplit(`$exename $a`) ==
+                [a, a,
+                 b, a]
+            @test readsplit(`$exename -L $b -e 'exit(0)'`) ==
+                [realpath(b), ""]
+            @test readsplit(`$exename -L $b $a`) ==
+                [realpath(b), a,
+                 a, a,
+                 b, a]
+            @test readsplit(`$exename --startup-file=yes -e 'exit(0)'`) ==
                 [c, ""]
-            @test split(readchomp(`$exename --startup-file=yes -L $b -e 'exit(0)'`), '\n') ==
+            @test readsplit(`$exename --startup-file=yes -L $b -e 'exit(0)'`) ==
                 [c, "",
                  realpath(b), ""]
-            @test split(readchomp(`$exename --startup-file=yes -L $b $a`), '\n') ==
+            @test readsplit(`$exename --startup-file=yes -L $b $a`) ==
                 [c, a,
                  realpath(b), a,
                  a, a,
