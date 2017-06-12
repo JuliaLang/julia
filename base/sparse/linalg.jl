@@ -890,12 +890,7 @@ function factorize(A::SparseMatrixCSC)
             return UpperTriangular(A)
         end
         if ishermitian(A)
-            try
-                return cholfact(Hermitian(A))
-            catch e
-                isa(e, PosDefException) || rethrow(e)
-                return ldltfact(Hermitian(A))
-            end
+            return factorize(Hermitian(A))
         end
         return lufact(A)
     else
@@ -903,20 +898,22 @@ function factorize(A::SparseMatrixCSC)
     end
 end
 
-function factorize(A::Symmetric{Float64,SparseMatrixCSC{Float64,Ti}}) where Ti
-    try
-        return cholfact(A)
-    catch e
-        isa(e, PosDefException) || rethrow(e)
-        return ldltfact(A)
-    end
-end
-function factorize(A::Hermitian{Complex{Float64}, SparseMatrixCSC{Complex{Float64},Ti}}) where Ti
-    try
-        return cholfact(A)
-    catch e
-        isa(e, PosDefException) || rethrow(e)
-        return ldltfact(A)
+# function factorize(A::Symmetric{Float64,SparseMatrixCSC{Float64,Ti}}) where Ti
+#     F = cholfact(A)
+#     if LinAlg.issuccess(F)
+#         return F
+#     else
+#         ldltfact!(F, A)
+#         return F
+#     end
+# end
+function factorize(A::LinAlg.RealHermSymComplexHerm{Float64,<:SparseMatrixCSC})
+    F = cholfact(A)
+    if LinAlg.issuccess(F)
+        return F
+    else
+        ldltfact!(F, A)
+        return F
     end
 end
 

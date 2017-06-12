@@ -348,14 +348,18 @@ for elty in (Float64, Complex{Float64})
 
     # Factor
     @test_throws ArgumentError cholfact(A1)
-    @test_throws Base.LinAlg.PosDefException cholfact(A1 + A1' - 2eigmax(Array(A1 + A1'))I)
-    @test_throws Base.LinAlg.PosDefException cholfact(A1 + A1', shift=-2eigmax(Array(A1 + A1')))
-    @test_throws ArgumentError ldltfact(A1 + A1' - 2real(A1[1,1])I)
-    @test_throws ArgumentError ldltfact(A1 + A1', shift=-2real(A1[1,1]))
     @test_throws ArgumentError cholfact(A1)
     @test_throws ArgumentError cholfact(A1, shift=1.0)
     @test_throws ArgumentError ldltfact(A1)
     @test_throws ArgumentError ldltfact(A1, shift=1.0)
+    @test_throws LinAlg.PosDefException cholfact(A1 + A1' - 2eigmax(Array(A1 + A1'))*I)\ones(size(A1, 1))
+    @test_throws LinAlg.PosDefException cholfact(A1 + A1', shift=-2eigmax(Array(A1 + A1')))\ones(size(A1, 1))
+    @test_throws ArgumentError ldltfact(A1 + A1' - 2real(A1[1,1])*I)\ones(size(A1, 1))
+    @test_throws ArgumentError ldltfact(A1 + A1', shift=-2real(A1[1,1]))\ones(size(A1, 1))
+    @test !isposdef(cholfact(A1 + A1' - 2eigmax(Array(A1 + A1'))*I))
+    @test !isposdef(cholfact(A1 + A1', shift=-2eigmax(Array(A1 + A1'))))
+    @test !LinAlg.issuccess(ldltfact(A1 + A1' - 2real(A1[1,1])*I))
+    @test !LinAlg.issuccess(ldltfact(A1 + A1', shift=-2real(A1[1,1])))
     F = cholfact(A1pd)
     tmp = IOBuffer()
     show(tmp, F)
@@ -738,3 +742,15 @@ for F in (cholfact(AtA), cholfact(AtA, perm=1:5), ldltfact(AtA), ldltfact(AtA, p
         @test C == Ctest    #Make sure C didn't change
     end
 end
+
+@testset "Issue #22335" begin
+    A = speye(3)
+    @test LinAlg.issuccess(cholfact(A))
+    A[3, 3] = -1
+    F = cholfact(A)
+    @test !LinAlg.issuccess(F)
+    @test LinAlg.issuccess(ldltfact!(F, A))
+    A[3, 3] = 1
+    @test A[:, 3:-1:1]\ones(3) == [1, 1, 1]
+end
+

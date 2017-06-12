@@ -51,6 +51,7 @@ using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted, PosDefException
             @test E[i,j] <= (n+1)ε/(1-(n+1)ε)*real(sqrt(apd[i,i]*apd[j,j]))
         end
         @test apd*inv(capd) ≈ eye(n)
+        @test LinAlg.issuccess(capd)
         @test abs((det(capd) - det(apd))/det(capd)) <= ε*κ*n # Ad hoc, but statistically verified, revisit
         @test @inferred(logdet(capd)) ≈ log(det(capd)) # logdet is less likely to overflow
 
@@ -77,7 +78,7 @@ using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted, PosDefException
                 @test isposdef(capds)
             end
             ulstring = sprint(show,capds[:UL])
-            @test sprint(show,capds) == "$(typeof(capds)) with factor:\n$ulstring"
+            @test sprint(show,capds) == "$(typeof(capds)) with factor:\n$ulstring\nsuccessful: true"
         else
             capdh = cholfact(apdh)
             @test inv(capdh)*apdh ≈ eye(n)
@@ -95,7 +96,7 @@ using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted, PosDefException
             @test logdet(capdh) ≈ log(det(capdh))
             @test isposdef(capdh)
             ulstring = sprint(show,capdh[:UL])
-            @test sprint(show,capdh) == "$(typeof(capdh)) with factor:\n$ulstring"
+            @test sprint(show,capdh) == "$(typeof(capdh)) with factor:\n$ulstring\nsuccessful: true"
         end
 
         # test chol of 2x2 Strang matrix
@@ -281,6 +282,7 @@ end
         A = T[1 2; 2 1]; B = T[1, 1]
         C = cholfact(A)
         @test !isposdef(C)
+        @test !LinAlg.issuccess(C)
         @test_throws PosDefException C\B
         @test_throws PosDefException det(C)
         @test_throws PosDefException logdet(C)

@@ -50,6 +50,7 @@ bimg  = randn(n,2)/2
 
                 @testset "(Automatic) Bunch-Kaufman factor of indefinite matrix" begin
                     bc1 = factorize(asym)
+                    @test LinAlg.issuccess(bc1)
                     @test logabsdet(bc1)[1] ≈ log(abs(det(bc1)))
                     if eltya <: Real
                         @test logabsdet(bc1)[2] == sign(det(bc1))
@@ -72,6 +73,7 @@ bimg  = randn(n,2)/2
                 @testset "Bunch-Kaufman factors of a pos-def matrix" begin
                     @testset for rook in (false, true)
                         bc2 = bkfact(apd, :U, issymmetric(apd), rook)
+                        @test LinAlg.issuccess(bc2)
                         @test logdet(bc2) ≈ log(det(bc2))
                         @test logabsdet(bc2)[1] ≈ log(abs(det(bc2)))
                         @test logabsdet(bc2)[2] == sign(det(bc2))
@@ -103,6 +105,7 @@ end
 
                 @testset for rook in (false, true)
                     F = bkfact(As, :U, issymmetric(As), rook)
+                    @test !LinAlg.issuccess(F)
                     @test det(F) == 0
                     @test_throws LinAlg.SingularException inv(F)
                     @test_throws LinAlg.SingularException F \ ones(size(As, 1))
