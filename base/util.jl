@@ -812,9 +812,7 @@ function crc32c(io::IO, nb::Integer, crc::UInt32=0x00000000)
         crc = unsafe_crc32c(buf, n, crc)
         nb -= n
     end
-    eof(io) && return crc
-    @assert 0 ≤ nb ≤ length(buf)
-    return unsafe_crc32c(buf, readbytes!(io, buf, nb), crc)
+    return unsafe_crc32c(buf, readbytes!(io, buf, min(nb, length(buf))), crc)
 end
 crc32c(io::IO, crc::UInt32=0x00000000) = crc32c(io, typemax(Int64), crc)
 crc32c(io::IOStream, crc::UInt32=0x00000000) = crc32c(io, filesize(io)-position(io), crc)
