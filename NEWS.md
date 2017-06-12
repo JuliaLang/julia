@@ -65,7 +65,6 @@ Library improvements
     git repo. Additionally, the argument order was changed to be consistent with the git
     command line tool ([#22062]).
 
-
   * Added `unique!` which is an inplace version of `unique` ([#20619]).
 
   * `logspace` now accepts a `base` keyword argument to specify the base of the logarithmic
@@ -883,4 +882,5 @@ Command-line option changes
 [#22062]: https://github.com/JuliaLang/julia/issues/22062
 [#22064]: https://github.com/JuliaLang/julia/issues/22064
 [#22187]: https://github.com/JuliaLang/julia/issues/22187
+[#20619]: https://github.com/JuliaLang/julia/pull/20619
 [#22188]: https://github.com/JuliaLang/julia/issues/22188
