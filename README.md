@@ -412,6 +412,7 @@ The following distributions include julia, but the versions may be out of date d
   * [Nightly builds PPA](https://launchpad.net/~staticfloat/+archive/julianightlies) (depends on the [julia-deps PPA](https://launchpad.net/~staticfloat/+archive/julia-deps/))
 * [MacPorts](https://trac.macports.org/browser/trunk/dports/lang/julia/Portfile)
 * [OS X Homebrew Tap](https://github.com/staticfloat/homebrew-julia/)
+* [FreeBSD Ports](https://www.freshports.org/lang/julia/)
 
 ## Editor and Terminal Setup
 
