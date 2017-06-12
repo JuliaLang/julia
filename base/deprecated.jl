@@ -1510,7 +1510,7 @@ function replace(s::AbstractString, pat, f, n::Integer)
         depwarn(string("`replace(s, pat, r, count)` with `count <= 0` is deprecated, use ",
                        "`replace(s, pat, r, typemax(Int))` or replace(s, pat, r)` instead"),
                 :replace)
-        Base.replace(s, pat, f)
+        replace(s, pat, f)
     else
         Base.replace_new(String(s), pat, f, clamp(n, 0, typemax(Int)) % Int)
     end
