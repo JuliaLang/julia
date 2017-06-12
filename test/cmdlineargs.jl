@@ -249,24 +249,30 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes --startup-file=no`
     @test !success(`$exename --worker=true`)
 
     # test passing arguments
-    let testfile = tempname()
-        try
-            # write a julia source file that just prints ARGS to STDOUT
-            write(testfile, """
-                println(ARGS)
-                """)
-            @test readchomp(`$exename $testfile foo -bar --baz`) ==
-                "String[\"foo\", \"-bar\", \"--baz\"]"
-            @test readchomp(`$exename $testfile -- foo -bar --baz`) ==
-                "String[\"foo\", \"-bar\", \"--baz\"]"
+    mktempdir() do dir
+        testfile = joinpath(dir, tempname())
+        # write a julia source file that just prints ARGS to STDOUT
+        write(testfile, """
+            println(ARGS)
+            """)
+        cp(testfile, joinpath(dir, ".juliarc.jl"))
+
+        withenv((is_windows() ? "USERPROFILE" : "HOME") => dir) do
+            output = "String[\"foo\", \"-bar\", \"--baz\"]"
+            @test readchomp(`$exename $testfile foo -bar --baz`) == output
+            @test readchomp(`$exename $testfile -- foo -bar --baz`) == output
             @test readchomp(`$exename -L $testfile -e 'exit(0)' -- foo -bar --baz`) ==
-                "String[\"foo\", \"-bar\", \"--baz\"]"
-            @test split(readchomp(`$exename -L $testfile $testfile`), '\n') ==
-                ["String[]", "String[]"]
+                output
+            @test readchomp(`$exename --startup-file=yes -e 'exit(0)' -- foo -bar --baz`) ==
+                output
+
+            output = "String[]\nString[]"
+            @test readchomp(`$exename -L $testfile $testfile`) == output
+            @test readchomp(`$exename --startup-file=yes $testfile`) == output
+
             @test !success(`$exename --foo $testfile`)
-            @test readchomp(`$exename -L $testfile -e 'exit(0)' -- foo -bar -- baz`) == "String[\"foo\", \"-bar\", \"--\", \"baz\"]"
-        finally
-            rm(testfile)
+            @test readchomp(`$exename -L $testfile -e 'exit(0)' -- foo -bar -- baz`) ==
+                "String[\"foo\", \"-bar\", \"--\", \"baz\"]"
         end
     end
 
