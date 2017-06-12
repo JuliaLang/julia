@@ -208,13 +208,17 @@ end
 # Issue 13332
 @test replace("abc", 'b', 2.1) == "a2.1c"
 
-# test replace with a count, check that replace is a no-op if count==0
-# @test replace("aaa", 'a', 'z', 0) == "aaa" # re-enable when undeprecated
-@test replace("aaa", 'a', 'z', 1) == "zaa"
-@test replace("aaa", 'a', 'z', 2) == "zza"
-@test replace("aaa", 'a', 'z', 3) == "zzz"
-@test replace("aaa", 'a', 'z', 4) == "zzz"
-@test replace("aaa", 'a', 'z', typemax(Int)) == "zzz"
+# test replace with a count for String and GenericString
+# check that replace is a no-op if count==0
+for s in ["aaa", Base.Test.GenericString("aaa")]
+    # @test replace("aaa", 'a', 'z', 0) == "aaa" # enable when undeprecated
+    @test replace(s, 'a', 'z', 1) == "zaa"
+    @test replace(s, 'a', 'z', 2) == "zza"
+    @test replace(s, 'a', 'z', 3) == "zzz"
+    @test replace(s, 'a', 'z', 4) == "zzz"
+    @test replace(s, 'a', 'z', typemax(Int)) == "zzz"
+    @test replace(s, 'a', 'z')    == "zzz"
+end
 
 # chomp/chop
 @test chomp("foo\n") == "foo"
