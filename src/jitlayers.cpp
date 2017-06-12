@@ -1174,7 +1174,7 @@ static void jl_gen_llvm_globaldata(llvm::Module *mod, ValueToValueMapTy &VMap,
 // takes the running content that has collected in the shadow module and dump it to disk
 // this builds the object file portion of the sysimage files for fast startup
 extern "C"
-void jl_dump_native(const char *bc_fname, const char *obj_fname, const char *sysimg_data, size_t sysimg_len)
+void jl_dump_native(const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *sysimg_data, size_t sysimg_len)
 {
     JL_TIMING(NATIVE_DUMP);
     assert(imaging_mode);
@@ -1240,17 +1240,45 @@ void jl_dump_native(const char *bc_fname, const char *obj_fname, const char *sys
     PM.add(new DataLayout(*jl_ExecutionEngine->getDataLayout()));
 #endif
 
-    addOptimizationPasses(&PM);
-
+    std::unique_ptr<raw_fd_ostream> unopt_bc_OS;
     std::unique_ptr<raw_fd_ostream> bc_OS;
     std::unique_ptr<raw_fd_ostream> obj_OS;
 #if JL_LLVM_VERSION >= 30700 // 3.7 simplified formatted output; just use the raw stream alone
+    std::unique_ptr<raw_fd_ostream> &unopt_bc_FOS = unopt_bc_OS;
     std::unique_ptr<raw_fd_ostream> &bc_FOS = bc_OS;
     std::unique_ptr<raw_fd_ostream> &obj_FOS = obj_OS;
 #else
+    std::unique_ptr<formatted_raw_ostream> unopt_bc_FOS;
     std::unique_ptr<formatted_raw_ostream> bc_FOS;
     std::unique_ptr<formatted_raw_ostream> obj_FOS;
 #endif
+
+
+    if (unopt_bc_fname) {
+#if JL_LLVM_VERSION >= 30500
+        // call output handler directly to avoid special case handling of `-` filename
+        int FD;
+        std::error_code EC = sys::fs::openFileForWrite(unopt_bc_fname, FD, sys::fs::F_None);
+        unopt_bc_FOS.reset(new raw_fd_ostream(FD, true));
+        std::string err;
+        if (EC)
+            err = "ERROR: failed to open --output-unopt-bc file '" + std::string(unopt_bc_fname) + "': " + EC.message();
+#else
+        std::string err;
+        unopt_bc_OS.reset(new raw_fd_ostream(unopt_bc_fname, err, raw_fd_ostream::F_Binary));
+#endif
+        if (!err.empty())
+            jl_safe_printf("%s\n", err.c_str());
+        else {
+#if JL_LLVM_VERSION < 30700
+            unopt_bc_FOS.reset(new formatted_raw_ostream(*unopt_bc_OS.get()));
+#endif
+            PM.add(createBitcodeWriterPass(*unopt_bc_FOS.get()));
+        }
+    }
+
+    if (bc_fname || obj_fname)
+        addOptimizationPasses(&PM);
 
     if (bc_fname) {
 #if JL_LLVM_VERSION >= 30500
@@ -1271,7 +1299,7 @@ void jl_dump_native(const char *bc_fname, const char *obj_fname, const char *sys
 #if JL_LLVM_VERSION < 30700
             bc_FOS.reset(new formatted_raw_ostream(*bc_OS.get()));
 #endif
-            PM.add(createBitcodeWriterPass(*bc_FOS.get()));     // Unroll small loops
+            PM.add(createBitcodeWriterPass(*bc_FOS.get()));
         }
     }
 
@@ -1369,3 +1397,25 @@ GlobalVariable *jl_get_global_for(const char *cname, void *addr, Module *M)
     *(void**)jl_emit_and_add_to_shadow(gv, addr) = addr;
     return gv;
 }
+
+// An LLVM module pass that just runs all julia passes in order. Useful for
+// debugging
+extern "C" void jl_init_codegen(void);
+class JuliaPipeline : public ModulePass {
+public:
+    static char ID;
+    JuliaPipeline() : ModulePass(ID) {}
+    virtual bool runOnModule(Module &M) {
+        (void)jl_init_llvm();
+#if JL_LLVM_VERSION >= 30700
+        legacy::PassManager PM;
+#else
+        PassManager PM;
+#endif
+        addOptimizationPasses(&PM);
+        PM.run(M);
+        return true;
+    }
+};
+char JuliaPipeline::ID = 0;
+static RegisterPass<JuliaPipeline> X("julia", "Runs the entire julia pipeline", false, false);

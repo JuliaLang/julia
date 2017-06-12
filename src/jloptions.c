@@ -67,6 +67,7 @@ jl_options_t jl_options = { 0,    // quiet
                             JL_OPTIONS_USE_COMPILECACHE_YES,
                             NULL, // bind-to
                             NULL, // output-bc
+                            NULL, // output-unopt-bc
                             NULL, // output-o
                             NULL, // output-ji
                             0, // incremental
@@ -125,6 +126,7 @@ static const char opts[]  =
     // compiler output options
     " --output-o name           Generate an object file (including system image data)\n"
     " --output-ji name          Generate a system image data file (.ji)\n"
+    " --output-unopt-bc name    Generate unoptimized LLVM bitcode (.bc)\n"
     " --output-bc name          Generate LLVM bitcode (.bc)\n"
     " --output-incremental=no   Generate an incremental output file (rather than complete)\n\n"
 
@@ -145,6 +147,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_code_coverage,
            opt_track_allocation,
            opt_check_bounds,
+           opt_output_unopt_bc,
            opt_output_bc,
            opt_depwarn,
            opt_inline,
@@ -186,6 +189,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "optimize",        optional_argument, 0, 'O' },
         { "check-bounds",    required_argument, 0, opt_check_bounds },
         { "output-bc",       required_argument, 0, opt_output_bc },
+        { "output-unopt-bc", required_argument, 0, opt_output_unopt_bc },
         { "output-o",        required_argument, 0, opt_output_o },
         { "output-ji",       required_argument, 0, opt_output_ji },
         { "output-incremental",required_argument, 0, opt_incremental },
@@ -432,6 +436,10 @@ restart_switch:
             break;
         case opt_output_bc:
             jl_options.outputbc = optarg;
+            if (!jl_options.image_file_specified) jl_options.image_file = NULL;
+            break;
+        case opt_output_unopt_bc:
+            jl_options.outputunoptbc = optarg;
             if (!jl_options.image_file_specified) jl_options.image_file = NULL;
             break;
         case opt_output_o:
