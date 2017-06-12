@@ -235,9 +235,13 @@ function _sortedunique!(A)
 end
 
 """
-    unique!(A::AbstractVector)
+    unique!(A:Union{AbstractVector{<:Real}, AbstractVector{<:AbstractString},
+                    AbstractVector{<:Symbol}}; sortdata=false)
 
 Remove duplicate items as determined by [`isequal`](@ref), then return the modified `A`.
+By default, `unique!` will return the elements of `A` in the order that they occur. If
+you want `unique!` to return the data sorted, then set `sort=true`. With `sort=true`,
+`unique!` will be able to run faster, however you must ensure that the data can be sorted.
 
 ```jldoctest
 julia> unique!([1, 1, 1])
@@ -246,7 +250,12 @@ julia> unique!([1, 1, 1])
 
 julia> A = [7, 3, 2, 3, 7, 5];
 
-julia> unique!(A);
+julia> unique!(A)
+4-element Array{Int64,1}:
+ 7
+ 3
+ 2
+ 5
 
 julia> A
 4-element Array{Int64,1}:
@@ -254,6 +263,20 @@ julia> A
  3
  2
  5
+
+julia> B = [7, 6, 42, 6, 7, 42];
+
+julia> unique!(B, sortdata=true)
+3-element Array{Int64,1}:
+ 6
+ 7
+ 42
+
+julia> B
+3-element Array{Int64,1}:
+ 6
+ 7
+ 42
 ```
 """
 function unique!(A::Union{AbstractVector{<:Real}, AbstractVector{<:AbstractString},
@@ -266,9 +289,14 @@ function unique!(A::Union{AbstractVector{<:Real}, AbstractVector{<:AbstractStrin
 end
 # issorted fails for some element types so the method above has to be restricted
 # to element with isless/< defined.
-function unique!(A)
-    isempty(A) && return A
-    _unique!(A)
+function unique!(A; sortdata=false)
+    if sortdata
+        return _sortedunique!(sort!(A))
+    elseif isempty(A)
+        return A
+    else
+        return _unique!(A)
+    end
 end
 
 """
