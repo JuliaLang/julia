@@ -258,7 +258,7 @@ Pick a random element or array of random elements from the set of values specifi
 
 * an indexable collection (for example `1:n` or `['x','y','z']`),
 * an `Associative` or `AbstractSet` object,
-* a string (considered as a collection of characters),
+* a string (considered as a collection of characters), or
 * a type: the set of values to pick from is then equivalent to `typemin(S):typemax(S)` for
   integers (this is not applicable to [`BigInt`](@ref)), and to ``[0, 1)`` for floating
   point numbers;
