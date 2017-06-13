@@ -309,13 +309,18 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()])
     ftypes = [Float16, Float32, Float64]
     cftypes = [Complex32, Complex64, Complex128, ftypes...]
     types = [Bool, Char, Base.BitInteger_types..., ftypes...]
-    collections = [IntSet(rand(1:100, 20))                => Int,
-                   Set(rand(Int, 20))                     => Int,
-                   Dict(zip(rand(Int,10), rand(Int, 10))) => Pair{Int,Int},
-                   1:100                                  => Int,
-                   rand(Int, 100)                         => Int,
-                   Int                                    => Int,
-                   Float64                                => Float64]
+    randset = Set(rand(Int, 20))
+    randdict = Dict(zip(rand(Int,10), rand(Int, 10)))
+    collections = [IntSet(rand(1:100, 20)) => Int,
+                   randset                 => Int,
+                   GenericSet(randset)     => Int,
+                   randdict                => Pair{Int,Int},
+                   GenericDict(randdict)   => Pair{Int,Int},
+                   1:100                   => Int,
+                   rand(Int, 100)          => Int,
+                   Int                     => Int,
+                   Float64                 => Float64]
+
     b2 = big(2)
     u3 = UInt(3)
     for f in [rand, randn, randexp]
@@ -352,7 +357,8 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()])
             end
         end
     end
-    for C in [1:0, Dict(), Set(), IntSet(), Int[]]
+    for C in [1:0, Dict(), Set(), IntSet(), Int[],
+              GenericDict(Dict()), GenericSet(Set())]
         @test_throws ArgumentError rand(rng..., C)
         @test_throws ArgumentError rand(rng..., C, 5)
     end

@@ -257,12 +257,14 @@ globalRNG() = GLOBAL_RNG
 Pick a random element or array of random elements from the set of values specified by `S`; `S` can be
 
 * an indexable collection (for example `1:n` or `['x','y','z']`), or
-* a `Dict`, a `Set` or an `IntSet`, or
+* an `Associative` or `AbstractSet` object, or
 * a type: the set of values to pick from is then equivalent to `typemin(S):typemax(S)` for
   integers (this is not applicable to [`BigInt`](@ref)), and to ``[0, 1)`` for floating
   point numbers;
 
 `S` defaults to [`Float64`](@ref).
+
+# Examples
 
 ```julia-repl
 julia> rand(Int, 2)
@@ -273,6 +275,14 @@ julia> rand(Int, 2)
 julia> rand(MersenneTwister(0), Dict(1=>2, 3=>4))
 1=>2
 ```
+
+!!! note
+    The complexity of `rand(rng, s::Union{Associative,AbstractSet})`
+    is linear in the length of `s`, unless an optimized method with
+    constant complexity is available, which is the case for `Dict`,
+    `Set` and `IntSet`. For more than a few calls, use `rand(rng,
+    collect(s))` instead, or either `rand(rng, Dict(s))` or `rand(rng,
+    Set(s))` as appropriate.
 """
 @inline rand() = rand(GLOBAL_RNG, CloseOpen)
 @inline rand(T::Type) = rand(GLOBAL_RNG, T)
@@ -362,9 +372,8 @@ function rand(r::AbstractRNG, t::Dict)
         Base.isslotfilled(t, i) && @inbounds return (t.keys[i] => t.vals[i])
     end
 end
-rand(t::Dict) = rand(GLOBAL_RNG, t)
+
 rand(r::AbstractRNG, s::Set) = rand(r, s.dict).first
-rand(s::Set) = rand(GLOBAL_RNG, s)
 
 function rand(r::AbstractRNG, s::IntSet)
     isempty(s) && throw(ArgumentError("collection must be non-empty"))
@@ -378,7 +387,16 @@ function rand(r::AbstractRNG, s::IntSet)
     end
 end
 
-rand(s::IntSet) = rand(GLOBAL_RNG, s)
+function nth(iter, n::Integer)::eltype(iter)
+    for (i, x) in enumerate(iter)
+        i == n && return x
+    end
+end
+nth(iter::AbstractArray, n::Integer) = iter[n]
+
+rand(r::AbstractRNG, s::Union{Associative,AbstractSet}) = nth(s, rand(r, 1:length(s)))
+
+rand(s::Union{Associative,AbstractSet}) = rand(GLOBAL_RNG, s)
 
 ## Arrays of random numbers
 
@@ -407,14 +425,16 @@ function rand!(r::AbstractRNG, A::AbstractArray, s::Union{Dict,Set,IntSet})
     A
 end
 
-rand!(A::AbstractArray, s::Union{Dict,Set,IntSet}) = rand!(GLOBAL_RNG, A, s)
+# avoid linear complexity for repeated calls with generic containers
+rand!(r::AbstractRNG, A::AbstractArray, s::Union{Associative,AbstractSet}) = rand!(r, A, collect(s))
 
-rand(r::AbstractRNG, s::Dict{K,V}, dims::Dims) where {K,V} = rand!(r, Array{Pair{K,V}}(dims), s)
-rand(r::AbstractRNG, s::Set{T}, dims::Dims) where {T} = rand!(r, Array{T}(dims), s)
-rand(r::AbstractRNG, s::IntSet, dims::Dims) = rand!(r, Array{Int}(dims), s)
-rand(r::AbstractRNG, s::Union{Dict,Set,IntSet}, dims::Integer...) = rand(r, s, convert(Dims, dims))
-rand(s::Union{Dict,Set,IntSet}, dims::Integer...) = rand(GLOBAL_RNG, s, convert(Dims, dims))
-rand(s::Union{Dict,Set,IntSet}, dims::Dims) = rand(GLOBAL_RNG, s, dims)
+rand!(A::AbstractArray, s::Union{Associative,AbstractSet}) = rand!(GLOBAL_RNG, A, s)
+
+rand(r::AbstractRNG, s::Associative{K,V}, dims::Dims) where {K,V} = rand!(r, Array{Pair{K,V}}(dims), s)
+rand(r::AbstractRNG, s::AbstractSet{T}, dims::Dims) where {T} = rand!(r, Array{T}(dims), s)
+rand(r::AbstractRNG, s::Union{Associative,AbstractSet}, dims::Integer...) = rand(r, s, convert(Dims, dims))
+rand(s::Union{Associative,AbstractSet}, dims::Integer...) = rand(GLOBAL_RNG, s, convert(Dims, dims))
+rand(s::Union{Associative,AbstractSet}, dims::Dims) = rand(GLOBAL_RNG, s, dims)
 
 # MersenneTwister
 

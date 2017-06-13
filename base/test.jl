@@ -11,6 +11,8 @@ test set that throws on the first failure. Users can choose to wrap
 their tests in (possibly nested) test sets that will store results
 and summarize them at the end of the test set with `@testset`.
 """
+:Test # cf. #22288
+
 module Test
 
 export @test, @test_throws, @test_broken, @test_skip, @test_warn, @test_nowarn
@@ -18,7 +20,7 @@ export @testset
 # Legacy approximate testing functions, yet to be included
 export @inferred
 export detect_ambiguities
-export GenericString
+export GenericString, GenericSet, GenericDict
 
 #-----------------------------------------------------------------------
 
@@ -1181,5 +1183,39 @@ end
 Base.convert(::Type{GenericString}, s::AbstractString) = GenericString(s)
 Base.endof(s::GenericString) = endof(s.string)
 Base.next(s::GenericString, i::Int) = next(s.string, i)
+
+"""
+The `GenericSet` can be used to test generic set APIs that program to
+the `AbstractSet` interface, in order to ensure that functions can work
+with set types besides the standard `Set` and `IntSet` types.
+"""
+struct GenericSet{T} <: AbstractSet{T}
+    s::AbstractSet{T}
+end
+
+"""
+The `GenericDict` can be used to test generic dict APIs that program to
+the `Associative` interface, in order to ensure that functions can work
+with associative types besides the standard `Dict` type.
+"""
+struct GenericDict{K,V} <: Associative{K,V}
+    s::Associative{K,V}
+end
+
+for (G, A) in ((GenericSet, AbstractSet),
+               (GenericDict, Associative))
+    @eval begin
+        Base.convert(::Type{$G}, s::$A) = $G(s)
+        Base.done(s::$G, state) = done(s.s, state)
+        Base.next(s::$G, state) = next(s.s, state)
+    end
+    for f in (:eltype, :isempty, :length, :start)
+        @eval begin
+            Base.$f(s::$G) = $f(s.s)
+        end
+    end
+end
+
+Base.get(s::GenericDict, x, y) = get(s.s, x, y)
 
 end # module
