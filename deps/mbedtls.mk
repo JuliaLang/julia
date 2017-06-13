@@ -15,6 +15,10 @@ ifeq ($(BUILD_OS),WINNT)
 MBEDTLS_OPTS += -G"MSYS Makefiles"
 endif
 
+ifneq (,$(findstring $(OS),Linux FreeBSD))
+MBEDTLS_OPTS += -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
+endif
+
 $(SRCDIR)/srccache/$(MBEDTLS_SRC).tgz: | $(SRCDIR)/srccache
 	$(JLDOWNLOAD) $@ $(MBEDTLS_URL)
 
