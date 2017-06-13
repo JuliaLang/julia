@@ -124,6 +124,32 @@ function make_fastmath(symb::Symbol)
 end
 make_fastmath(expr) = expr
 
+"""
+@fastmath expr
+
+Executes a transformed version of the expression, which calls
+functions that may violate strict IEEE semantics. This allows
+the fastest possible operation, but results are undefined.
+
+This makes the following transformations:
+- nnan: No NaNs - Allow optimizations to assume the arguments and
+        result are not NaN.
+- ninf: No Infs - Allow optimizations to assume the arguments and
+        result are not +/-Inf.
+- nsz:  No Signed Zeros - Allow optimizations to treat the sign of a
+        zero argument or result as insignificant.
+- arcp: Allow Reciprocal - Allow optimizations to use the reciprocal
+        of an argument rather than perform division.
+
+# Examples
+```jldoctest
+julia> @fastmath 1+2
+3
+
+julia> @fastmath(sin(3))
+0.1411200080598672
+```
+"""
 macro fastmath(expr)
     make_fastmath(esc(expr))
 end
