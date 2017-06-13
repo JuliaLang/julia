@@ -9,7 +9,7 @@ A string containing the script name passed to Julia from the command line. Note 
 script name remains unchanged from within included files. Alternatively see
 [`@__FILE__`](@ref).
 """
-PROGRAM_FILE = ""
+:PROGRAM_FILE
 
 """
     ARGS

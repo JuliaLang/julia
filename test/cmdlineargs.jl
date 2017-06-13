@@ -248,53 +248,73 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes --startup-file=no`
     # tested in test/parallel.jl, test/examples.jl)
     @test !success(`$exename --worker=true`)
 
-    escape(str) = replace(str, "\\", "\\\\")
-
     # test passing arguments
-    let testfile = tempname()
-        try
-            # write a julia source file that just prints ARGS to STDOUT
-            write(testfile, """
-                println(ARGS)
+    mktempdir() do dir
+        testfile = joinpath(dir, tempname())
+        # write a julia source file that just prints ARGS to STDOUT
+        write(testfile, """
+            println(ARGS)
             """)
-            @test readchomp(`$exename $testfile foo -bar --baz`) ==
-                "String[\"foo\", \"-bar\", \"--baz\"]"
-            @test readchomp(`$exename $testfile -- foo -bar --baz`) ==
-                "String[\"foo\", \"-bar\", \"--baz\"]"
+        cp(testfile, joinpath(dir, ".juliarc.jl"))
+
+        withenv((is_windows() ? "USERPROFILE" : "HOME") => dir) do
+            output = "String[\"foo\", \"-bar\", \"--baz\"]"
+            @test readchomp(`$exename $testfile foo -bar --baz`) == output
+            @test readchomp(`$exename $testfile -- foo -bar --baz`) == output
             @test readchomp(`$exename -L $testfile -e 'exit(0)' -- foo -bar --baz`) ==
-                "String[\"foo\", \"-bar\", \"--baz\"]"
-            @test split(readchomp(`$exename -L $testfile $testfile`), '\n') ==
-                ["String[\"$(escape(testfile))\"]", "String[]"]
+                output
+            @test readchomp(`$exename --startup-file=yes -e 'exit(0)' -- foo -bar --baz`) ==
+                output
+
+            output = "String[]\nString[]"
+            @test readchomp(`$exename -L $testfile $testfile`) == output
+            @test readchomp(`$exename --startup-file=yes $testfile`) == output
+
             @test !success(`$exename --foo $testfile`)
-            @test readchomp(`$exename -L $testfile -e 'exit(0)' -- foo -bar -- baz`) == "String[\"foo\", \"-bar\", \"--\", \"baz\"]"
-        finally
-            rm(testfile)
+            @test readchomp(`$exename -L $testfile -e 'exit(0)' -- foo -bar -- baz`) ==
+                "String[\"foo\", \"-bar\", \"--\", \"baz\"]"
         end
     end
 
-    # test the script name
-    let a = tempname(), b = tempname()
-        try
-            write(a, """
-                println(@__FILE__)
-                println(PROGRAM_FILE)
-                println(length(ARGS))
-                include(\"$(escape(b))\")
+    # test the program name remains constant
+    mktempdir() do dir
+        a = joinpath(dir, "a.jl")
+        b = joinpath(dir, "b.jl")
+        c = joinpath(dir, ".juliarc.jl")
+
+        write(a, """
+            println(@__FILE__)
+            println(PROGRAM_FILE)
+            include(\"$(escape_string(b))\")
             """)
-            write(b, """
-                println(@__FILE__)
-                println(PROGRAM_FILE)
-                println(length(ARGS))
+        write(b, """
+            println(@__FILE__)
+            println(PROGRAM_FILE)
             """)
-            @test split(readchomp(`$exename $a`), '\n') ==
-                ["$a", "$a", "0", "$b", "$a", "0"]
-            @test split(readchomp(`$exename -L $b -e 'exit(0)'`), '\n') ==
-                ["$(realpath(b))", "", "0"]
-            @test split(readchomp(`$exename -L $b $a`), '\n') ==
-                ["$(realpath(b))", "", "1", "$a", "$a", "0", "$b", "$a", "0"]
-        finally
-            rm(a)
-            rm(b)
+        cp(b, c)
+
+        readsplit(cmd) = split(readchomp(cmd), '\n')
+
+        withenv((is_windows() ? "USERPROFILE" : "HOME") => dir) do
+            @test readsplit(`$exename $a`) ==
+                [a, a,
+                 b, a]
+            @test readsplit(`$exename -L $b -e 'exit(0)'`) ==
+                [realpath(b), ""]
+            @test readsplit(`$exename -L $b $a`) ==
+                [realpath(b), a,
+                 a, a,
+                 b, a]
+            @test readsplit(`$exename --startup-file=yes -e 'exit(0)'`) ==
+                [c, ""]
+            @test readsplit(`$exename --startup-file=yes -L $b -e 'exit(0)'`) ==
+                [c, "",
+                 realpath(b), ""]
+            @test readsplit(`$exename --startup-file=yes -L $b $a`) ==
+                [c, a,
+                 realpath(b), a,
+                 a, a,
+                 b, a]
         end
     end
 
