@@ -435,13 +435,9 @@ getindex(t::Tuple,  i::CartesianIndex{1}) = getindex(t, i.I[1])
 # These are not defined on directly on getindex to avoid
 # ambiguities for AbstractArray subtypes. See the note in abstractarray.jl
 
-@generated function _getindex(l::IndexStyle, A::AbstractArray, I::Union{Real, AbstractArray}...)
-    N = length(I)
-    quote
-        @_inline_meta
-        @boundscheck checkbounds(A, I...)
-        _unsafe_getindex(l, _maybe_reshape(l, A, I...), I...)
-    end
+@inline function _getindex(l::IndexStyle, A::AbstractArray, I::Union{Real, AbstractArray}...)
+    @boundscheck checkbounds(A, I...)
+    return _unsafe_getindex(l, _maybe_reshape(l, A, I...), I...)
 end
 # But we can speed up IndexCartesian arrays by reshaping them to the appropriate dimensionality:
 _maybe_reshape(::IndexLinear, A::AbstractArray, I...) = A
@@ -450,31 +446,26 @@ _maybe_reshape(::IndexCartesian, A::AbstractVector, I...) = A
 @inline __maybe_reshape(A::AbstractArray{T,N}, ::NTuple{N,Any}) where {T,N} = A
 @inline __maybe_reshape(A::AbstractArray, ::NTuple{N,Any}) where {N} = reshape(A, Val{N})
 
-@generated function _unsafe_getindex(::IndexStyle, A::AbstractArray, I::Union{Real, AbstractArray}...)
-    N = length(I)
-    quote
-        # This is specifically not inlined to prevent exessive allocations in type unstable code
-        @nexprs $N d->(I_d = I[d])
-        shape = @ncall $N index_shape I
-        dest = similar(A, shape)
-        map(unsafe_length, indices(dest)) == map(unsafe_length, shape) || throw_checksize_error(dest, shape)
-        @ncall $N _unsafe_getindex! dest A I
-    end
+function _unsafe_getindex(::IndexStyle, A::AbstractArray, I::Vararg{Union{Real, AbstractArray}, N}) where N
+    # This is specifically not inlined to prevent excessive allocations in type unstable code
+    shape = index_shape(I...)
+    dest = similar(A, shape)
+    map(unsafe_length, indices(dest)) == map(unsafe_length, shape) || throw_checksize_error(dest, shape)
+    _unsafe_getindex!(dest, A, I...) # usually a generated function, don't allow it to impact inference result
+    return dest
 end
 
 # Always index with the exactly indices provided.
-@generated function _unsafe_getindex!(dest::AbstractArray, src::AbstractArray, I::Union{Real, AbstractArray}...)
-    N = length(I)
+@generated function _unsafe_getindex!(dest::AbstractArray, src::AbstractArray, I::Vararg{Union{Real, AbstractArray}, N}) where N
     quote
-        $(Expr(:meta, :inline))
-        @nexprs $N d->(J_d = I[d])
+        @_inline_meta
         D = eachindex(dest)
         Ds = start(D)
-        @inbounds @nloops $N j d->J_d begin
+        @inbounds @nloops $N j d->I[d] begin
             d, Ds = next(D, Ds)
             dest[d] = @ncall $N getindex src j
         end
-        dest
+        return dest
     end
 end
 

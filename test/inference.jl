@@ -810,7 +810,7 @@ for A in (1,)
 end
 
 # issue #21848
-@test Core.Inference.limit_type_depth(Ref{Complex{T} where T}, Core.Inference.MAX_TYPE_DEPTH) == Ref
+@test Core.Inference.limit_type_depth(Ref{Complex{T} where T}, 0) == Ref
 let T = Tuple{Tuple{Int64, Void},
               Tuple{Tuple{Int64, Void},
                     Tuple{Int64, Tuple{Tuple{Int64, Void},
@@ -921,3 +921,31 @@ let niter = 0
     end
     @test niter == 4
 end
+
+# demonstrate that inference must converge
+# while doing constant propagation
+Base.@pure plus1(x) = x + 1
+f21933(x::Val{T}) where {T} = f(Val{plus1(T)}())
+@code_typed f21933(Val{1}())
+Base.return_types(f21933, (Val{1},))
+
+function count_specializations(method::Method)
+    n = 0
+    Base.visit(method.specializations) do m
+        n += 1
+    end
+    return n::Int
+end
+
+# demonstrate that inference can complete without waiting for MAX_TUPLETYPE_LEN or MAX_TYPE_DEPTH
+copy_dims_out(out) = ()
+copy_dims_out(out, dim::Int, tail...) =  copy_dims_out((out..., dim), tail...)
+copy_dims_out(out, dim::Colon, tail...) = copy_dims_out((out..., dim), tail...)
+@test Base.return_types(copy_dims_out, (Tuple{}, Vararg{Union{Int,Colon}})) == Any[Tuple{}, Tuple{}, Tuple{}]
+@test all(m -> 2 < count_specializations(m) < 15, methods(copy_dims_out))
+
+copy_dims_pair(out) = ()
+copy_dims_pair(out, dim::Int, tail...) =  copy_dims_out(out => dim, tail...)
+copy_dims_pair(out, dim::Colon, tail...) = copy_dims_out(out => dim, tail...)
+@test Base.return_types(copy_dims_pair, (Tuple{}, Vararg{Union{Int,Colon}})) == Any[Tuple{}, Tuple{}, Tuple{}]
+@test all(m -> 5 < count_specializations(m) < 25, methods(copy_dims_out))
