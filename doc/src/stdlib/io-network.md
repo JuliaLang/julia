@@ -12,6 +12,7 @@ Base.take!(::Base.AbstractIOBuffer)
 Base.fdio
 Base.flush
 Base.close
+Base.crc32c(::IO, ::Integer, ::UInt32)
 Base.write
 Base.read
 Base.read!

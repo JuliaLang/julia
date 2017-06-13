@@ -131,6 +131,7 @@ Base.cumprod!
 Base.cumsum
 Base.cumsum!
 Base.cumsum_kbn
+Base.crc32c
 Base.LinAlg.diff
 Base.LinAlg.gradient
 Base.rot180
