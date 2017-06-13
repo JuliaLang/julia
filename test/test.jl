@@ -7,6 +7,12 @@
 @test strip("\t  hi   \n") == "hi"
 @test strip("\t  this should fail   \n") != "hi"
 
+# @test should only evaluate the arguments once
+let g = Int[], f = (x) -> (push!(g, x); x)
+    @test f(1) == 1
+    @test g == [1]
+end
+
 # Test @test_broken with fail
 @test_broken false
 @test_broken 1 == 2
@@ -60,16 +66,46 @@ fails = @testset NoThrowTestSet begin
     @test_throws OverflowError 1 + 1
     # Fail - comparison
     @test 1+1 == 2+2
+    # Fail - approximate comparison
+    @test 1/1 ≈ 2/1
+    # Fail - chained comparison
+    @test 1+0 == 2+0 == 3+0
+    # Fail - comparison call
+    @test ==(1 - 2, 2 - 1)
     # Error - unexpected pass
     @test_broken true
 end
-for i in 1:3
+for i in 1:length(fails) - 1
     @test isa(fails[i], Base.Test.Fail)
 end
-@test contains(sprint(show, fails[1]), "Thrown: ErrorException")
-@test contains(sprint(show, fails[2]), "No exception thrown")
-@test contains(sprint(show, fails[3]), "Evaluated: 2 == 4")
-@test contains(sprint(show, fails[4]), "Unexpected Pass")
+
+str = sprint(show, fails[1])
+@test contains(str, "Expression: error()")
+@test contains(str, "Thrown: ErrorException")
+
+str = sprint(show, fails[2])
+@test contains(str, "Expression: 1 + 1")
+@test contains(str, "No exception thrown")
+
+str = sprint(show, fails[3])
+@test contains(str, "Expression: 1 + 1 == 2 + 2")
+@test contains(str, "Evaluated: 2 == 4")
+
+str = sprint(show, fails[4])
+@test contains(str, "Expression: 1 / 1 ≈ 2 / 1")
+@test contains(str, "Evaluated: 1.0 ≈ 2.0")
+
+str = sprint(show, fails[5])
+@test contains(str, "Expression: 1 + 0 == 2 + 0 == 3 + 0")
+@test contains(str, "Evaluated: 1 == 2 == 3")
+
+str = sprint(show, fails[6])
+@test contains(str, "Expression: 1 - 2 == 2 - 1")
+@test contains(str, "Evaluated: -1 == 1")
+
+str = sprint(show, fails[7])
+@test contains(str, "Unexpected Pass")
+@test contains(str, "Expression: true")
 
 # Test printing of a TestSetException
 tse_str = sprint(show, Test.TestSetException(1,2,3,4,Vector{Union{Base.Test.Error, Base.Test.Fail}}()))
