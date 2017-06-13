@@ -300,7 +300,7 @@ function unique!(A; sort=false)
     elseif sort
         return _sortedunique!(sort!(A))
     else
-        _unique!(A)
+        return _unique!(A)
     end
 end
 
