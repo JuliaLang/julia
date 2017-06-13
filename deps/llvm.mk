@@ -556,6 +556,11 @@ $(eval $(call LLVM_PATCH,llvm-D33179))
 $(eval $(call LLVM_PATCH,llvm-PR29010-i386-xmm)) # Remove for 4.0
 endif # LLVM_VER
 
+# patch the AsmWriter to print debug info comments
+ifeq ($(LLVM_VER_SHORT),3.9)
+$(eval $(call LLVM_PATCH,llvm-3.9-asmwriter-di))
+endif
+
 ifeq ($(LLVM_VER),3.7.1)
 ifeq ($(BUILD_LLDB),1)
 $(eval $(call LLVM_PATCH,lldb-3.7.1))

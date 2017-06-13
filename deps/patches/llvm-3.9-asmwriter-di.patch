@@ -1,0 +1,43 @@
+diff --git a/lib/IR/AsmWriter.cpp b/lib/IR/AsmWriter.cpp
+index 9b2399d..e7bb1ad 100644
+--- a/lib/IR/AsmWriter.cpp
++++ b/lib/IR/AsmWriter.cpp
+@@ -2115,6 +2115,8 @@ private:
+   // printGCRelocateComment - print comment after call to the gc.relocate
+   // intrinsic indicating base and derived pointer names.
+   void printGCRelocateComment(const GCRelocateInst &Relocate);
++
++  DILocation *InstrLoc = nullptr;
+ };
+ } // namespace
+ 
+@@ -2710,6 +2712,7 @@ void AssemblyWriter::printFunction(const Function *F) {
+ 
+     Out << " {";
+     // Output all of the function's basic blocks.
++    InstrLoc = nullptr;
+     for (const BasicBlock &BB : *F)
+       printBasicBlock(&BB);
+ 
+@@ -2792,6 +2795,21 @@ void AssemblyWriter::printBasicBlock(const BasicBlock *BB) {
+ 
+ /// printInstructionLine - Print an instruction and a newline character.
+ void AssemblyWriter::printInstructionLine(const Instruction &I) {
++  DILocation *NewInstrLoc = I.getDebugLoc();
++  if (NewInstrLoc != nullptr && NewInstrLoc != InstrLoc) {
++    bool NewFile = false;
++    if (!NewInstrLoc->getFilename().empty() &&
++        (InstrLoc == nullptr || NewInstrLoc->getFilename() != InstrLoc->getFilename())) {
++      Out << "; Filename: " << NewInstrLoc->getFilename() << '\n';
++      NewFile = true;
++    }
++
++    if (NewInstrLoc->getLine() != UINT_MAX &&
++        (NewFile || NewInstrLoc->getLine() != InstrLoc->getLine()))
++      Out << "; Source line: " << NewInstrLoc->getLine() << '\n';
++  }
++  InstrLoc = NewInstrLoc;
++
+   printInstruction(I);
+   Out << '\n';
+ }
