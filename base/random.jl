@@ -713,21 +713,15 @@ rand(rng::AbstractRNG, r::AbstractArray, dims::Integer...) = rand(rng, r, conver
 # rand from a string
 
 isvalid_unsafe(s::String, i) = !Base.is_valid_continuation(unsafe_load(pointer(s), i))
+isvalid_unsafe(s::AbstractString, i) = isvalid(s, i)
+_endof(s::String) = s.len
+_endof(s::AbstractString) = endof(s)
 
-function rand(rng::AbstractRNG, s::String)::Char
-    g = RangeGenerator(1:s.len)
+function rand(rng::AbstractRNG, s::AbstractString)::Char
+    g = RangeGenerator(1:_endof(s))
     while true
         pos = rand(rng, g)
         isvalid_unsafe(s, pos) && return s[pos]
-    end
-end
-
-function rand(rng::AbstractRNG, s::AbstractString)::Char
-    g = RangeGenerator(1:endof(s))
-    while true
-        try # the generic `isvalid` includes an equivalent try/catch statement
-            return s[rand(rng, g)]
-        end
     end
 end
 
