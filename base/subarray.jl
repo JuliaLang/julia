@@ -264,7 +264,7 @@ end
 # indexing uses the indices along the given dimension. Otherwise
 # linear indexing always starts with 1.
 compute_offset1(parent, stride1::Integer, I::Tuple) =
-    (@_inline_meta; compute_offset1(parent, stride1, find_extended_dims(I)..., I))
+    (@_inline_meta; compute_offset1(parent, stride1, find_extended_dims(1, I...), find_extended_inds(I...), I))
 compute_offset1(parent, stride1::Integer, dims::Tuple{Int}, inds::Tuple{Slice}, I::Tuple) =
     (@_inline_meta; compute_linindex(parent, I) - stride1*first(indices(parent, dims[1])))  # index-preserving case
 compute_offset1(parent, stride1::Integer, dims, inds, I::Tuple) =
@@ -287,12 +287,12 @@ function compute_linindex(f, s, IP::Tuple, I::Tuple{Any, Vararg{Any}})
 end
 compute_linindex(f, s, IP::Tuple, I::Tuple{}) = f
 
-find_extended_dims(I) = (@_inline_meta; _find_extended_dims((), (), 1, I...))
-_find_extended_dims(dims, inds, dim) = dims, inds
-_find_extended_dims(dims, inds, dim, ::ScalarIndex, I...) =
-    (@_inline_meta; _find_extended_dims(dims, inds, dim+1, I...))
-_find_extended_dims(dims, inds, dim, i1, I...) =
-    (@_inline_meta; _find_extended_dims((dims..., dim), (inds..., i1), dim+1, I...))
+find_extended_dims(dim, ::ScalarIndex, I...) = (@_inline_meta; find_extended_dims(dim + 1, I...))
+find_extended_dims(dim, i1, I...) = (@_inline_meta; (dim, find_extended_dims(dim + 1, I...)...))
+find_extended_dims(dim) = ()
+find_extended_inds(::ScalarIndex, I...) = (@_inline_meta; find_extended_inds(I...))
+find_extended_inds(i1, I...) = (@_inline_meta; (i1, find_extended_inds(I...)...))
+find_extended_inds() = ()
 
 unsafe_convert(::Type{Ptr{T}}, V::SubArray{T,N,P,<:Tuple{Vararg{RangeIndex}}}) where {T,N,P} =
     unsafe_convert(Ptr{T}, V.parent) + (first_index(V)-1)*sizeof(T)
