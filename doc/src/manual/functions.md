@@ -206,10 +206,10 @@ julia> map(round, [1.2,3.5,1.7])
  2.0
 ```
 
-This is fine if a named function effecting the transform one wants already exists to pass as the
-first argument to [`map()`](@ref). Often, however, a ready-to-use, named function does not exist.
-In these situations, the anonymous function construct allows easy creation of a single-use function
-object without needing a name:
+This is fine if a named function effecting the transform already exists to pass as the first argument
+to [`map()`](@ref). Often, however, a ready-to-use, named function does not exist. In these
+situations, the anonymous function construct allows easy creation of a single-use function object
+without needing a name:
 
 ```jldoctest
 julia> map(x -> x^2 + 2x - 1, [1,3,-1])
