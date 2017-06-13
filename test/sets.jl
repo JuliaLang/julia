@@ -232,6 +232,7 @@ OffsetArray = TestHelpers.OAs.OffsetArray
     unique!(u)
     @test u == [1,3,2]
     @test unique!([]) == []
+    @test unique!(Float64[]) == Float64[]
     u = [1,2,2,3,5,5]
     @test unique!(u) === u
     @test u == [1,2,3,5]
@@ -259,7 +260,7 @@ OffsetArray = TestHelpers.OAs.OffsetArray
     unique!(u)
     @test u == [5,"w","we","r"]
     u = [1,2,5,1,3,2]
-    @test unique!(u, sortdata=true) === u
+    @test unique!(u, sort=true) === u
     @test u == [1,2,3,5]
 end
 
