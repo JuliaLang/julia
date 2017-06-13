@@ -60,6 +60,12 @@ else
 LLVM_TARGETS := host;NVPTX
 endif
 
+LLVM_CFLAGS :=
+LLVM_CXXFLAGS :=
+LLVM_CPPFLAGS :=
+LLVM_LDFLAGS :=
+LLVM_CMAKE :=
+
 # Allow adding LLVM specific flags
 LLVM_CFLAGS += $(CFLAGS)
 LLVM_CXXFLAGS += $(CXXFLAGS)
