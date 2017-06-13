@@ -5,7 +5,8 @@
 # This module provides versions of math functions that may violate
 # strict IEEE semantics.
 
-# This allows the following transformations:
+# This allows the following transformations. For more information see
+# http://llvm.org/docs/LangRef.html#fast-math-flags:
 # nnan: No NaNs - Allow optimizations to assume the arguments and
 #       result are not NaN. Such optimizations are required to retain
 #       defined behavior over NaNs, but the value of the result is
@@ -131,7 +132,9 @@ Executes a transformed version of the expression, which calls
 functions that may violate strict IEEE semantics. This allows
 the fastest possible operation, but results are undefined.
 
-This makes the following transformations:
+This sets the [LLVM Fast-Math
+flags](http://llvm.org/docs/LangRef.html#fast-math-flags), including
+the following transformations:
 - nnan: No NaNs - Allow optimizations to assume the arguments and
         result are not NaN.
 - ninf: No Infs - Allow optimizations to assume the arguments and
@@ -140,6 +143,10 @@ This makes the following transformations:
         zero argument or result as insignificant.
 - arcp: Allow Reciprocal - Allow optimizations to use the reciprocal
         of an argument rather than perform division.
+- contract: Allow floating-point contraction (e.g. fusing a multiply
+        followed by an addition into a fused multiply-and-add).
+- fast: Allow algebraically equivalent transformations that may
+        dramatically change results in floating point (e.g. reassociate).
 
 # Examples
 ```jldoctest
