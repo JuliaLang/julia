@@ -2180,7 +2180,7 @@ static size_t lowerbound_dependent_world_set(size_t world, arraylist_t *dependen
         if (depworld <= world)
             return depworld;
     }
-    return jl_main_module->primary_world;
+    return world;
 }
 
 void jl_method_instance_delete(jl_method_instance_t *mi);
