@@ -201,8 +201,8 @@ function unique(f::Callable, C)
     out
 end
 
-# If A is not sorted, then we will need to keep track of all of the elements that we have
-# seen so far.
+# If A is not sorted, then we will need to keep track of all of the elements that
+# we have seen so far.
 function _unique!(A)
     seen = Set{eltype(A)}()
     idxs = eachindex(A)
@@ -217,10 +217,8 @@ function _unique!(A)
     resize!(A, i - first(idxs) + 1)
 end
 
-# If A is sorted, then we only need to keep track of one element at a time. We replace the
-# elements of A with the unique elements that we see in the order that we see them. Once
-# we have iterated through A, we resize A based on the number of unique elements that we
-# see.
+# If A is sorted, then we only need to keep track of one element and add that to A
+# every time that we see a new element.
 function _sortedunique!(A)
     idxs = eachindex(A)
     y = first(A)
@@ -237,7 +235,8 @@ function _sortedunique!(A)
 end
 
 """
-    unique!(A::AbstractVector; sort=false)
+    unique!(A:Union{AbstractVector{<:Real}, AbstractVector{<:AbstractString},
+                    AbstractVector{<:Symbol}}; sortdata=false)
 
 Remove duplicate items as determined by [`isequal`](@ref), then return the modified `A`.
 By default, `unique!` will return the elements of `A` in the order that they occur. If
@@ -267,7 +266,7 @@ julia> A
 
 julia> B = [7, 6, 42, 6, 7, 42];
 
-julia> unique!(B, sort=true)
+julia> unique!(B, sortdata=true)
 3-element Array{Int64,1}:
  6
  7
@@ -281,26 +280,22 @@ julia> B
 ```
 """
 function unique!(A::Union{AbstractVector{<:Real}, AbstractVector{<:AbstractString},
-                          AbstractVector{<:Symbol}}; sort=false)
-    if isempty(A)
-        return A
-    elseif sort
-        return _sortedunique!(sort!(A))
-    elseif issorted(A) || issorted(A, rev=true)
+                          AbstractVector{<:Symbol}})
+    if issorted(A) || issorted(A, rev=true)
         return _sortedunique!(A)
     else
         return _unique!(A)
     end
 end
-# issorted fails for some element types, so the method above has to be restricted to
-# elements with isless/< defined.
-function unique!(A; sort=false)
-    if isempty(A)
-        return A
-    elseif sort
+# issorted fails for some element types so the method above has to be restricted
+# to element with isless/< defined.
+function unique!(A; sortdata=false)
+    if sortdata
         return _sortedunique!(sort!(A))
+    elseif isempty(A)
+        return A
     else
-        _unique!(A)
+        return _unique!(A)
     end
 end
 
