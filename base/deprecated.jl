@@ -1512,7 +1512,7 @@ function replace(s::AbstractString, pat, f, n::Integer)
                 :replace)
         replace(s, pat, f)
     else
-        Base.replace_new(String(s), pat, f, clamp(n, 0, typemax(Int)) % Int)
+        replace_new(String(s), pat, f, n)
     end
 end
 

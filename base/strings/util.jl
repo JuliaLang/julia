@@ -359,7 +359,7 @@ _replace(io, repl, str, r, pattern) = print(io, repl)
 _replace(io, repl::Function, str, r, pattern) =
     print(io, repl(SubString(str, first(r), last(r))))
 
-function replace_new(str::String, pattern, repl, count::Int)
+function replace_new(str::String, pattern, repl, count::Integer)
     # rename to `replace` when `replace` is removed from deprecated.jl
     count == 0 && return str
     count < 0 && throw(DomainError())
@@ -408,7 +408,7 @@ references in `r` are replaced with the corresponding matched text.
 replace(s::AbstractString, pat, f) = replace_new(String(s), pat, f, typemax(Int))
 # change this to the following when `replace` is removed from deprecated:
 # replace(s::AbstractString, pat, f, count::Integer=typemax(Int)) =
-#     replace(String(s), pat, f, clamp(count, typemin(Int), typemax(Int)) % Int)
+#     replace(String(s), pat, f, count)
 
 
 # hex <-> bytes conversion
