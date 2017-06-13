@@ -840,3 +840,14 @@ f21771(::Val{U}) where {U} = Tuple{g21771(U)}
 # ensure that we don't try to resolve cycles using uncached edges
 f21653() = f21653()
 @test code_typed(f21653, Tuple{}, optimize=false)[1] isa Pair{CodeInfo, typeof(Union{})}
+
+@noinline map3_22347(f, t::Tuple{}) = ()
+@noinline map3_22347(f, t::Tuple) = (f(t[1]), map3_22347(f, Base.tail(t))...)
+# issue #22347
+let niter = 0
+    map3_22347((1, 2, 3, 4)) do y
+        niter += 1
+        nothing
+    end
+    @test niter == 4
+end

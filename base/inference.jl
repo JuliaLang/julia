@@ -4521,7 +4521,8 @@ function inlining_pass(e::Expr, sv::InferenceState, stmts, ins)
                 if isa(aarg,Expr) && (is_known_call(aarg, tuple, sv.src, sv.mod) || is_known_call(aarg, svec, sv.src, sv.mod))
                     # apply(f,tuple(x,y,...)) => f(x,y,...)
                     newargs[i-2] = aarg.args[2:end]
-                elseif isa(argt,Const) && (isa(argt.val, Tuple) || isa(argt.val, SimpleVector))
+                elseif isa(argt,Const) && (isa(argt.val, Tuple) || isa(argt.val, SimpleVector)) &&
+                        effect_free(aarg, sv.src, sv.mod, true)
                     newargs[i-2] = Any[ QuoteNode(x) for x in argt.val ]
                 elseif isa(aarg, Tuple) || (isa(aarg, QuoteNode) && (isa(aarg.value, Tuple) || isa(aarg.value, SimpleVector)))
                     if isa(aarg, QuoteNode)
