@@ -7260,7 +7260,7 @@ static inline void checkARMArchFeature(std::string &cpu,
 static inline SmallVector<std::string,10> getTargetFeatures(std::string &cpu)
 {
     StringMap<bool> HostFeatures;
-    if (!strcmp(jl_options.cpu_target,"native")) {
+    if (jl_options.cpu_target && !strcmp(jl_options.cpu_target,"native")) {
         // On earlier versions of LLVM this is empty
         llvm::sys::getHostCPUFeatures(HostFeatures);
     }
@@ -7286,8 +7286,8 @@ static inline SmallVector<std::string,10> getTargetFeatures(std::string &cpu)
 #endif
 
     // Figure out if we know the cpu_target
-    cpu = (strcmp(jl_options.cpu_target,"native") ? jl_options.cpu_target :
-           getNativeTarget());
+    cpu = ((jl_options.cpu_target && strcmp(jl_options.cpu_target,"native")) ?
+            jl_options.cpu_target : getNativeTarget());
 #if defined(_CPU_ARM_)
     // Figure out what we are compiling against from the C defines.
     // This might affect ABI but is fine since
@@ -7372,7 +7372,7 @@ static inline SmallVector<std::string,10> getTargetFeatures(std::string &cpu)
     return attr;
 }
 
-extern "C" void jl_init_codegen(void)
+extern "C" void *jl_init_llvm(void)
 {
     const char *const argv_tailmerge[] = {"", "-enable-tail-merge=0"}; // NOO TOUCHIE; NO TOUCH! See #922
     cl::ParseCommandLineOptions(sizeof(argv_tailmerge)/sizeof(argv_tailmerge[0]), argv_tailmerge, "disable-tail-merge\n");
@@ -7487,14 +7487,13 @@ extern "C" void jl_init_codegen(void)
             targetFeatures);
     assert(jl_TargetMachine && "Failed to select target machine -"
                                " Is the LLVM backend for this CPU enabled?");
-#if defined(USE_MCJIT) && (!defined(_CPU_ARM_) && !defined(_CPU_PPC64_))
+    #if defined(USE_MCJIT) && (!defined(_CPU_ARM_) && !defined(_CPU_PPC64_))
     // FastISel seems to be buggy for ARM. Ref #13321
     if (jl_options.opt_level < 2)
         jl_TargetMachine->setFastISel(true);
-#endif
+    #endif
 
     init_julia_llvm_meta();
-
 #ifdef USE_ORCJIT
     jl_ExecutionEngine = new JuliaOJIT(*jl_TargetMachine);
 #else
@@ -7514,6 +7513,12 @@ extern "C" void jl_init_codegen(void)
     // Now that the execution engine exists, initialize all modules
     jl_setup_module(engine_module);
     jl_setup_module(m);
+    return (void*)m;
+}
+
+extern "C" void jl_init_codegen(void)
+{
+    Module *m = (Module *)jl_init_llvm();
     init_julia_llvm_env(m);
 
 #ifndef USE_ORCJIT

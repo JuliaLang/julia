@@ -1726,6 +1726,7 @@ typedef struct {
     int8_t use_compilecache;
     const char *bindto;
     const char *outputbc;
+    const char *outputunoptbc;
     const char *outputo;
     const char *outputji;
     int8_t incremental;
