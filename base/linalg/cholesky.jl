@@ -288,7 +288,7 @@ and return a `Cholesky` factorization. The matrix `A` can either be a [`Symmetri
 `StridedMatrix` or a *perfectly* symmetric or Hermitian `StridedMatrix`.
 The triangular Cholesky factor can be obtained from the factorization `F` with: `F[:L]` and `F[:U]`.
 The following functions are available for `Cholesky` objects: [`size`](@ref), [`\\`](@ref),
-[`inv`](@ref), and [`det`](@ref).
+[`inv`](@ref), [`det`](@ref), [`logdet`](@ref) and [`isposdef`](@ref).
 
 # Example
 
@@ -461,17 +461,19 @@ function A_ldiv_B!(C::CholeskyPivoted, B::StridedMatrix)
     end
 end
 
+isposdef(C::Cholesky) = C.info == 0
+
 function det(C::Cholesky)
-    C.info == 0 || throw(PosDefException(C.info))
     dd = one(real(eltype(C)))
     @inbounds for i in 1:size(C.factors,1)
         dd *= real(C.factors[i,i])^2
     end
-    dd
+    @assertposdef dd C.info
 end
 
 function logdet(C::Cholesky)
-    C.info == 0 || throw(PosDefException(C.info))
+    # need to check first, or log will throw DomainError
+    isposdef(C) || throw(PosDefException(C.info))
     dd = zero(real(eltype(C)))
     @inbounds for i in 1:size(C.factors,1)
         dd += log(real(C.factors[i,i]))

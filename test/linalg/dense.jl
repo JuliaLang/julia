@@ -49,7 +49,12 @@ bimg  = randn(n,2)/2
 
     apd  = ainit'*ainit # symmetric positive-definite
     @testset "Positive definiteness" begin
-        @test isposdef(apd,:U)
+        @test !isposdef(ainit)
+        @test isposdef(apd)
+        if eltya != Int # cannot perform cholfact! for Matrix{Int}
+            @test !isposdef!(copy(ainit))
+            @test isposdef!(copy(apd))
+        end
     end
     @testset "For b containing $eltyb" for eltyb in (Float32, Float64, Complex64, Complex128, Int)
         binit = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex.(breal, bimg) : breal)

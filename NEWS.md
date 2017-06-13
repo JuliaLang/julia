@@ -83,6 +83,10 @@ Deprecated or removed
   * The `cholfact`/`cholfact!` methods that accepted an `uplo` symbol have been deprecated
     in favor of using `Hermitian` (or `Symmetric`) views ([#22187], [#22188]).
 
+  * `isposdef(A::AbstractMatrix, UL::Symbol)` and `isposdef!(A::AbstractMatrix, UL::Symbol)`
+    have been deprecated in favor of `isposdef(Hermitian(A, UL))` and `isposdef!(Hermitian(A, UL))`
+    respectively ([#22245]).
+
   * The function `current_module` is deprecated and replaced with `@__MODULE__` ([#22064]).
     This caused the deprecation of some reflection methods (such as `macroexpand` and `isconst`),
     which now require a module argument.
