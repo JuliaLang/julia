@@ -60,6 +60,38 @@ via the environment variable `JULIA_LLVM_ARGS`. Here are example settings using 
     about "Unknown command line argument". Counter-intuitively, building Julia with `LLVM_DEBUG=1`
     is *not* enough to dump `DEBUG` diagnostics from a pass.
 
+## Debugging LLVM transformations in isolation
+
+On occasion, it can be useful to debug LLVM's transformations in isolation from
+the rest of the julia system, e.g. because reproducing the issue inside julia
+would take too long, or because one wants to take advantage of LLVM's tooling
+(e.g. bugpoint). To get unoptimized IR for the entire system iamge, pass the
+`--output-unopt-bc unopt.bc` option to the system image build process, which will
+output the unoptimized IR to an `unopt.bc` file. This file can then be passed to
+LLVM tools as usual. `libjulia` can function as an LLVM pass plugin and can be
+loaded into LLVM tools, to make julia-specific passes available in this
+environment. In addition, it exposes the `-julia` meta-pass, which runs the
+entire julia pass-pipeline over the IR. As an example, to generate a system
+image, one could do:
+```
+opt -load libjulia.so -julia -o opt.bc unopt.bc
+llc -o sys.o opt.bc
+cc -shared -o sys.so sys.o
+```
+This system image can then be loaded by julia as usual.
+
+It is also possible to dump an LLVM IR module for just one julia function,
+using:
+```
+f, T = +, Tuple{Int,Int} # Substitute your function of interest here
+optimize = false
+open("plus.ll","w") do f
+    println(f, Base._dump_function(f, T, false, false, false, true, :att, optimize))
+end
+```
+These files can be processed the same way as the unoptimized sysimg IR shown
+above.
+
 ## Improving LLVM optimizations for Julia
 
 Improving LLVM code generation usually involves either changing Julia lowering to be more friendly
