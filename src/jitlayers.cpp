@@ -55,6 +55,8 @@ namespace llvm {
 #include <llvm/Bitcode/BitcodeWriterPass.h>
 #endif
 
+#include <llvm/IR/LegacyPassManagers.h>
+#include <llvm/IR/IRPrintingPasses.h>
 #include <llvm/Transforms/Utils/Cloning.h>
 #include <llvm/ExecutionEngine/JITEventListener.h>
 
@@ -109,7 +111,7 @@ void jl_init_jit(Type *T_pjlvalue_)
 
 // this defines the set of optimization passes defined for Julia at various optimization levels
 #if JL_LLVM_VERSION >= 30700
-void addOptimizationPasses(legacy::PassManager *PM, int opt_level)
+void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level)
 #else
 void addOptimizationPasses(PassManager *PM, int opt_level)
 #endif
@@ -1432,20 +1434,24 @@ GlobalVariable *jl_get_global_for(const char *cname, void *addr, Module *M)
 // An LLVM module pass that just runs all julia passes in order. Useful for
 // debugging
 extern "C" void jl_init_codegen(void);
-class JuliaPipeline : public ModulePass {
+class JuliaPipeline : public Pass {
 public:
     static char ID;
-    JuliaPipeline() : ModulePass(ID) {}
-    virtual bool runOnModule(Module &M) {
+    // A bit of a hack, but works
+    struct TPMAdapter : public PassManagerBase {
+        PMTopLevelManager *TPM;
+        TPMAdapter(PMTopLevelManager *TPM) : TPM(TPM) {}
+        void add(Pass *P) { TPM->schedulePass(P); }
+    };
+    void preparePassManager(PMStack &Stack) override {
         (void)jl_init_llvm();
-#if JL_LLVM_VERSION >= 30700
-        legacy::PassManager PM;
-#else
-        PassManager PM;
-#endif
-        addOptimizationPasses(&PM, 3);
-        PM.run(M);
-        return true;
+        PMTopLevelManager *TPM = Stack.top()->getTopLevelManager();
+        TPMAdapter Adapter(TPM);
+        addOptimizationPasses(&Adapter, 3);
+    }
+    JuliaPipeline() : Pass(PT_PassManager, ID) {}
+    Pass *createPrinterPass(raw_ostream &O, const std::string &Banner) const {
+        return createPrintModulePass(O, Banner);
     }
 };
 char JuliaPipeline::ID = 0;

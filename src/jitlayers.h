@@ -61,7 +61,7 @@ extern size_t jltls_offset_idx;
 typedef struct {Value *gv; int32_t index;} jl_value_llvm; // uses 1-based indexing
 
 #if JL_LLVM_VERSION >= 30700
-void addOptimizationPasses(legacy::PassManager *PM, int opt_level);
+void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level);
 #else
 void addOptimizationPasses(PassManager *PM, int opt_level);
 #endif
