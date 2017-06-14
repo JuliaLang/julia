@@ -236,35 +236,58 @@ At_mul_B!(out::AbstractMatrix, A::Diagonal, in::AbstractMatrix) = out .= transpo
 
 
 (/)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag ./ Db.diag)
-function A_ldiv_B!(D::Diagonal{T}, v::AbstractVector{T}) where T
+function A_ldiv_B!(D::Diagonal{T}, v::AbstractVector{T}) where {T}
     if length(v) != length(D.diag)
         throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $(length(v)) rows"))
     end
-    for i=1:length(D.diag)
+    for i = 1:length(D.diag)
         d = D.diag[i]
-        if d == zero(T)
+        if iszero(d)
             throw(SingularException(i))
         end
-        v[i] *= inv(d)
+        v[i] = d\v[i]
     end
     v
 end
-function A_ldiv_B!(D::Diagonal{T}, V::AbstractMatrix{T}) where T
+function A_ldiv_B!(D::Diagonal{T}, V::AbstractMatrix{T}) where {T}
     if size(V,1) != length(D.diag)
         throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $(size(V,1)) rows"))
     end
-    for i=1:length(D.diag)
+    for i = 1:length(D.diag)
         d = D.diag[i]
-        if d == zero(T)
+        if iszero(d)
             throw(SingularException(i))
         end
-        d⁻¹ = inv(d)
-        for j=1:size(V,2)
-            @inbounds V[i,j] *= d⁻¹
+        for j = 1:size(V,2)
+            @inbounds V[i,j] = d\V[i,j]
         end
     end
     V
 end
+
+Ac_ldiv_B!(D::Diagonal{T}, B::AbstractVecOrMat{T}) where {T} = A_ldiv_B!(conj(D), B)
+At_ldiv_B!(D::Diagonal{T}, B::AbstractVecOrMat{T}) where {T} = A_ldiv_B!(D, B)
+
+function A_rdiv_B!(A::AbstractMatrix{T}, D::Diagonal{T}) where {T}
+    dd = D.diag
+    m, n = size(A)
+    if (k = length(dd)) ≠ n
+        throw(DimensionMismatch("left hand side has $n columns but D is $k by $k"))
+    end
+    @inbounds for j in 1:n
+        ddj = dd[j]
+        if iszero(ddj)
+            throw(SingularException(j))
+        end
+        for i in 1:m
+            A[i, j] /= ddj
+        end
+    end
+    A
+end
+
+A_rdiv_Bc!(A::AbstractMatrix{T}, D::Diagonal{T}) where {T} = A_rdiv_B!(A, conj(D))
+A_rdiv_Bt!(A::AbstractMatrix{T}, D::Diagonal{T}) where {T} = A_rdiv_B!(A, D)
 
 # Methods to resolve ambiguities with `Diagonal`
 @inline *(rowvec::RowVector, D::Diagonal) = transpose(D * transpose(rowvec))

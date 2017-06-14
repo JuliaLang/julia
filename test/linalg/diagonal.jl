@@ -1,7 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.Test
-import Base.LinAlg: BlasFloat, BlasComplex, SingularException
+import Base.LinAlg: BlasFloat, BlasComplex, SingularException, A_rdiv_B!, A_rdiv_Bt!,
+    A_rdiv_Bc!
 
 n=12 #Size of matrix problem to test
 srand(1)
@@ -82,7 +83,16 @@ srand(1)
                     @test D\v ≈ DM\v atol=2n^2*eps(relty)*(1+(elty<:Complex))
                     @test D\U ≈ DM\U atol=2n^3*eps(relty)*(1+(elty<:Complex))
                     @test A_ldiv_B!(D,copy(v)) ≈ DM\v atol=2n^2*eps(relty)*(1+(elty<:Complex))
+                    @test At_ldiv_B!(D,copy(v)) ≈ DM\v atol=2n^2*eps(relty)*(1+(elty<:Complex))
+                    @test Ac_ldiv_B!(conj(D),copy(v)) ≈ DM\v atol=2n^2*eps(relty)*(1+(elty<:Complex))
                     @test A_ldiv_B!(D,copy(U)) ≈ DM\U atol=2n^3*eps(relty)*(1+(elty<:Complex))
+                    @test At_ldiv_B!(D,copy(U)) ≈ DM\U atol=2n^3*eps(relty)*(1+(elty<:Complex))
+                    @test Ac_ldiv_B!(conj(D),copy(U)) ≈ DM\U atol=2n^3*eps(relty)*(1+(elty<:Complex))
+                    Uc = ctranspose(U)
+                    target = scale!(Uc,inv.(D.diag))
+                    @test A_rdiv_B!(Uc,D) ≈ target atol=2n^3*eps(relty)*(1+(elty<:Complex))
+                    @test A_rdiv_Bt!(Uc,D) ≈ target atol=2n^3*eps(relty)*(1+(elty<:Complex))
+                    @test A_rdiv_Bc!(Uc,conj(D)) ≈ target atol=2n^3*eps(relty)*(1+(elty<:Complex))
                     @test A_ldiv_B!(D,eye(D)) ≈ D\eye(D) atol=2n^3*eps(relty)*(1+(elty<:Complex))
                     @test_throws DimensionMismatch A_ldiv_B!(D, ones(elty, n + 1))
                     @test_throws SingularException A_ldiv_B!(Diagonal(zeros(relty,n)),copy(v))

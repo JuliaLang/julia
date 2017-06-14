@@ -288,6 +288,15 @@ b = randn(7)
     @test scale!(sC, 0.5, sA) == scale!(sC, sA, 0.5)
 end
 
+@testset "inverse scale!" begin
+    bi = inv.(b)
+    dAt = transpose(dA)
+    sAt = transpose(sA)
+    @test scale!(copy(dAt), bi) ≈ Base.LinAlg.A_rdiv_B!(copy(sAt), Diagonal(b))
+    @test scale!(copy(dAt), bi) ≈ Base.LinAlg.A_rdiv_Bt!(copy(sAt), Diagonal(b))
+    @test scale!(copy(dAt), conj(bi)) ≈ Base.LinAlg.A_rdiv_Bc!(copy(sAt), Diagonal(b))
+end
+
 @testset "copy!" begin
     A = sprand(5, 5, 0.2)
     B = sprand(5, 5, 0.2)
