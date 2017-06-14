@@ -133,20 +133,7 @@ functions that may violate strict IEEE semantics. This allows
 the fastest possible operation, but results are undefined.
 
 This sets the [LLVM Fast-Math
-flags](http://llvm.org/docs/LangRef.html#fast-math-flags), including
-the following transformations:
-- nnan: No NaNs - Allow optimizations to assume the arguments and
-        result are not NaN.
-- ninf: No Infs - Allow optimizations to assume the arguments and
-        result are not +/-Inf.
-- nsz:  No Signed Zeros - Allow optimizations to treat the sign of a
-        zero argument or result as insignificant.
-- arcp: Allow Reciprocal - Allow optimizations to use the reciprocal
-        of an argument rather than perform division.
-- contract: Allow floating-point contraction (e.g. fusing a multiply
-        followed by an addition into a fused multiply-and-add).
-- fast: Allow algebraically equivalent transformations that may
-        dramatically change results in floating point (e.g. reassociate).
+flags](http://llvm.org/docs/LangRef.html#fast-math-flags), and corresponds to the `-ffast-math` option in clang. See [the notes on performance annotations](https://docs.julialang.org/en/stable/manual/performance-tips#performance-annotations) for more details.
 
 # Examples
 ```jldoctest
