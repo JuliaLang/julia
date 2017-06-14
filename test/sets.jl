@@ -1,10 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-isdefined(Main, :TestHelpers) ||
-                        @eval Main include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
-using TestHelpers
-
 # Set tests
+isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
+using TestHelpers.OAs
 
 # Construction, collect
 @test ===(typeof(Set([1,2,3])), Set{Int})
@@ -226,7 +224,6 @@ u = unique([1,1,2])
 @test unique(x for x in Any[1,1.0])::Vector{Real} == [1]
 
 # unique!
-OffsetArray = TestHelpers.OAs.OffsetArray
 @testset "unique!" begin
     u = [1,1,3,2,1]
     unique!(u)

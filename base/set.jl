@@ -201,9 +201,9 @@ function unique(f::Callable, C)
     out
 end
 
-# If A is not sorted, then we will need to keep track of all of the elements that we have
+# If A is not grouped, then we will need to keep track of all of the elements that we have
 # seen so far.
-function _unique!(A)
+function _unique!(A::AbstractArray)
     seen = Set{eltype(A)}()
     idxs = eachindex(A)
     i = state = start(idxs)
@@ -217,23 +217,23 @@ function _unique!(A)
     resize!(A, i - first(idxs) + 1)
 end
 
-# If A is sorted, then we only need to keep track of one element at a time. We replace the
-# elements of A with the unique elements that we see in the order that we see them. Once
-# we have iterated through A, we resize A based on the number of unique elements that we
-# see.
-function _sortedunique!(A)
+# If A is grouped, so that each unique element is in a contiguous group, then we only
+# need to keep track of one element at a time. We replace the elements of A with the
+# unique elements that we see in the order that we see them. Once we have iterated
+# through A, we resize A based on the number of unique elements that we see.
+function _groupedunique!(A::AbstractArray)
+    isempty(A) && return A
     idxs = eachindex(A)
     y = first(A)
     state = start(idxs)
-    j, state = next(idxs, state)
-    for i in idxs
-        x = A[i]
+    i, state = next(idxs, state)
+    for x in A
         if !isequal(x, y)
-            j, state = next(idxs, state)
-            y = A[j] = x
+            i, state = next(idxs, state)
+            y = A[i] = x
         end
     end
-    resize!(A, j - first(idxs) + 1)
+    resize!(A, i - first(idxs) + 1)
 end
 
 """
@@ -285,9 +285,9 @@ function unique!(A::Union{AbstractVector{<:Real}, AbstractVector{<:AbstractStrin
     if isempty(A)
         return A
     elseif sort
-        return _sortedunique!(sort!(A))
+        return _groupedunique!(sort!(A))
     elseif issorted(A) || issorted(A, rev=true)
-        return _sortedunique!(A)
+        return _groupedunique!(A)
     else
         return _unique!(A)
     end
@@ -298,7 +298,7 @@ function unique!(A; sort=false)
     if isempty(A)
         return A
     elseif sort
-        return _sortedunique!(sort!(A))
+        return _groupedunique!(sort!(A))
     else
         return _unique!(A)
     end
