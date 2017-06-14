@@ -28,8 +28,13 @@
 
 #include "llvm-version.h"
 #include <llvm/Object/ObjectFile.h>
+#if JL_LLVM_VERSION >= 50000
+#include <llvm/BinaryFormat/MachO.h>
+#include <llvm/BinaryFormat/COFF.h>
+#else
 #include <llvm/Support/MachO.h>
 #include <llvm/Support/COFF.h>
+#endif
 #include <llvm/MC/MCInst.h>
 #include <llvm/MC/MCStreamer.h>
 #include <llvm/MC/MCSubtargetInfo.h>

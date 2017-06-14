@@ -29,6 +29,9 @@
 #else
 #include <llvm/ExecutionEngine/JITMemoryManager.h>
 #endif
+#if JL_LLVM_VERSION >= 50000
+#include <llvm/BinaryFormat/Magic.h>
+#endif
 #include <llvm/Object/MachO.h>
 #include <llvm/Object/COFF.h>
 #if JL_LLVM_VERSION >= 30700
