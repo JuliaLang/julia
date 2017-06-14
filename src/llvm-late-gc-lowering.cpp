@@ -445,9 +445,8 @@ int LateLowerGCFrame::Number(State &S, Value *V) {
     if (it != S.AllPtrNumbering.end())
         return it->second;
     int Number;
-    if (isa<Constant>(CurrentV) ||
-        ((isa<Argument>(CurrentV) || isa<AllocaInst>(CurrentV) ||
-         isa<AddrSpaceCastInst>(CurrentV)) &&
+    if (isa<Constant>(CurrentV) || isa<Argument>(CurrentV) ||
+        ((isa<AllocaInst>(CurrentV) || isa<AddrSpaceCastInst>(CurrentV)) &&
          getValueAddrSpace(CurrentV) != AddressSpace::Tracked)) {
         // We know this is rooted in the parent
         Number = -1;
@@ -831,8 +830,9 @@ void LateLowerGCFrame::ComputeLiveSets(Function &F, State &S) {
             if ((unsigned)i >= LS.size() || !LS[i])
                 continue;
             for (int Idx = LS.find_first(); Idx >= 0; Idx = LS.find_next(Idx)) {
-                if (Idx == i)
-                    continue;
+                // We explicitly let i be a neighbor of itself, to distinguish
+                // between being the only value live at a safepoint, vs not
+                // being live at any safepoint.
                 Neighbors.push_back(Idx);
             }
         }
@@ -916,6 +916,8 @@ struct PEOIterator {
         Elements[NextElement].weight = (unsigned)-1;
         // Raise neighbors
         for (int Neighbor : Neighbors[NextElement]) {
+            if (Neighbor == NextElement)
+                continue;
             Element &NElement = Elements[Neighbor];
             // Already processed. Don't re-enqueue
             if (NElement.weight == (unsigned)-1)
@@ -947,6 +949,10 @@ std::vector<int> LateLowerGCFrame::ColorRoots(const State &S) {
         assert(Colors[ActiveElement] == -1);
         UsedColors.resize(MaxAssignedColor + 2, false);
         UsedColors.reset();
+        if (S.Neighbors[ActiveElement].empty()) {
+            // No need to color a value not live at any safe point
+            continue;
+        }
         for (int Neighbor : S.Neighbors[ActiveElement]) {
             if (Colors[Neighbor] == -1)
                 continue;

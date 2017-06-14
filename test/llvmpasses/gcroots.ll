@@ -155,3 +155,22 @@ define %jl_value_t addrspace(10)* @ret_use(i64 %a, i64 %b) {
     %bboxed = call %jl_value_t addrspace(10)* @jl_box_int64(i64 signext %b)
     ret %jl_value_t addrspace(10)* %aboxed
 }
+
+define i8 @nosafepoint(%jl_value_t addrspace(10)* dereferenceable(16)) {
+; CHECK-LABEL: @nosafepoint
+; CHECK-NOT: %gcframe
+top:
+  %1 = call %jl_value_t*** @jl_get_ptls_states()
+  %2 = bitcast %jl_value_t*** %1 to %jl_value_t addrspace(10)**
+  %3 = getelementptr %jl_value_t addrspace(10)*, %jl_value_t addrspace(10)** %2, i64 3
+  %4 = bitcast %jl_value_t addrspace(10)** %3 to i64**
+  %5 = load i64*, i64** %4
+  %6 = bitcast %jl_value_t addrspace(10)* %0 to i8 addrspace(10)*
+  %7 = addrspacecast i8 addrspace(10)* %6 to i8 addrspace(11)*
+  %8 = getelementptr i8, i8 addrspace(11)* %7, i64 0
+  %9 = load i8, i8 addrspace(11)* %8
+  %10 = trunc i8 %9 to i1
+  %11 = zext i1 %10 to i8
+  %12 = xor i8 %11, 1
+  ret i8 %12
+}
