@@ -181,6 +181,7 @@ Base.Math.lbeta
 Base.ndigits
 Base.widemul
 Base.Math.@evalpoly
+Base.FastMath.@fastmath
 ```
 
 ## Statistics
