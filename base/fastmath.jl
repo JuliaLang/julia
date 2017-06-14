@@ -126,7 +126,7 @@ end
 make_fastmath(expr) = expr
 
 """
-@fastmath expr
+    @fastmath expr
 
 Executes a transformed version of the expression, which calls
 functions that may violate strict IEEE semantics. This allows
