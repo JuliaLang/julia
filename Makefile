@@ -301,6 +301,9 @@ ifeq ($(USE_LLVM_SHLIB),1)
 JL_PRIVATE_LIBS += LLVM
 endif
 endif
+ifeq ($(USE_POLLY_ACC),1)
+JL_PRIVATE_LIBS += GPURuntime
+endif
 ifeq ($(OS),Darwin)
 ifeq ($(USE_SYSTEM_BLAS),1)
 ifeq ($(USE_SYSTEM_LAPACK),0)
