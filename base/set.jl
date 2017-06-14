@@ -123,8 +123,9 @@ const ⊆ = issubset
 """
     unique(itr)
 
-Returns an array containing one value from `itr` for each unique value,
-as determined by [`isequal`](@ref).
+Return an array containing only the unique elements of collection `itr`,
+as determined by [`isequal`](@ref), in the order that the first of each
+set of equivalent elements originally appears.
 
 ```jldoctest
 julia> unique([1; 2; 2; 6])
