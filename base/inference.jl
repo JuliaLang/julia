@@ -123,7 +123,7 @@ mutable struct InferenceState
     bestguess #::Type
     # current active instruction pointers
     ip::IntSet
-    pc´´::LineNum
+    pc´´::Int
     nstmts::Int
     # current exception handler info
     cur_hand #::Tuple{LineNum, Tuple{LineNum, ...}}
@@ -131,7 +131,7 @@ mutable struct InferenceState
     n_handlers::Int
     # ssavalue sparsity and restart info
     ssavalue_uses::Vector{IntSet}
-    ssavalue_defs::Vector{LineNum}
+    ssavalue_init::Vector{Any}
 
     backedges::Vector{Tuple{InferenceState, LineNum}} # call-graph backedges connecting from callee to caller
     callers_in_cycle::Vector{InferenceState}
@@ -168,8 +168,7 @@ mutable struct InferenceState
             sp = linfo.sparam_vals
         end
 
-        nssavalues = src.ssavaluetypes::Int
-        src.ssavaluetypes = Any[ NF for i = 1:nssavalues ]
+        src.ssavaluetypes = Any[ NF for i = 1:(src.ssavaluetypes::Int) ]
 
         n = length(code)
         s_edges = Any[ () for i = 1:n ]
@@ -237,8 +236,8 @@ mutable struct InferenceState
             @assert la == 0 # wrong number of arguments
         end
 
-        ssavalue_uses = find_ssavalue_uses(code, nssavalues)
-        ssavalue_defs = find_ssavalue_defs(code, nssavalues)
+        ssavalue_uses = find_ssavalue_uses(code)
+        ssavalue_init = copy(src.ssavaluetypes::Vector{Any})
 
         # exception handlers
         cur_hand = ()
@@ -268,7 +267,7 @@ mutable struct InferenceState
             nargs, s_types, s_edges,
             Union{}, W, 1, n,
             cur_hand, handler_at, n_handlers,
-            ssavalue_uses, ssavalue_defs,
+            ssavalue_uses, ssavalue_init,
             Vector{Tuple{InferenceState,LineNum}}(), # backedges
             Vector{InferenceState}(), # callers_in_cycle
             #=parent=#nothing,
@@ -1791,12 +1790,6 @@ function precise_container_type(arg::ANY, typ::ANY, vtypes::VarTable, sv::Infere
         end
     end
 
-    while isa(arg, SSAValue)
-        def = sv.ssavalue_defs[arg.id + 1]
-        stmt = sv.src.code[def]::Expr
-        arg = stmt.args[2]
-    end
-
     tti0 = widenconst(typ)
     tti = unwrap_unionall(tti0)
     if isa(arg, Expr) && arg.head === :call && (abstract_evals_to_constant(arg.args[1], svec, vtypes, sv) ||
@@ -2661,53 +2654,49 @@ end
 
 #### helper functions for typeinf initialization and looping ####
 
-function label_counter(body::Vector{Any})
+function label_counter(body)
     l = -1
     for b in body
-        if isa(b, LabelNode) && b.label > l
-            l = b.label
+        if isa(b,LabelNode) && (b::LabelNode).label > l
+            l = (b::LabelNode).label
         end
     end
     return l
 end
 genlabel(sv) = LabelNode(sv.label_counter += 1)
 
-function find_ssavalue_uses(body::Vector{Any}, nvals::Int)
-    uses = IntSet[ IntSet() for i = 1:nvals ]
-    for line in 1:length(body)
-        e = body[line]
-        isa(e, Expr) && find_ssavalue_uses(e, uses, line)
+function find_ssavalue_uses(body)
+    uses = IntSet[]
+    for line = 1:length(body)
+        find_ssavalue_uses(body[line], uses, line)
     end
     return uses
 end
-
-function find_ssavalue_uses(e::Expr, uses::Vector{IntSet}, line::Int)
-    head = e.head
-    is_meta_expr_head(head) && return
-    skiparg = (head === :(=))
-    for a in e.args
-        if skiparg
-            skiparg = false
-        elseif isa(a, SSAValue)
-            push!(uses[a.id + 1], line)
-        elseif isa(a, Expr)
+function find_ssavalue_uses(e::ANY, uses, line)
+    if isa(e,SSAValue)
+        id = (e::SSAValue).id + 1
+        while length(uses) < id
+            push!(uses, IntSet())
+        end
+        push!(uses[id], line)
+    elseif isa(e,Expr)
+        b = e::Expr
+        head = b.head
+        is_meta_expr_head(head) && return
+        if head === :(=)
+            if isa(b.args[1],SSAValue)
+                id = (b.args[1]::SSAValue).id + 1
+                while length(uses) < id
+                    push!(uses, IntSet())
+                end
+            end
+            find_ssavalue_uses(b.args[2], uses, line)
+            return
+        end
+        for a in b.args
             find_ssavalue_uses(a, uses, line)
         end
     end
-end
-
-function find_ssavalue_defs(body::Vector{Any}, nvals::Int)
-    defs = zeros(Int, nvals)
-    for line in 1:length(body)
-        e = body[line]
-        if isa(e, Expr) && e.head === :(=)
-            lhs = e.args[1]
-            if isa(lhs, SSAValue)
-                defs[lhs.id + 1] = line
-            end
-        end
-    end
-    return defs
 end
 
 function newvar!(sv::InferenceState, typ::ANY)
