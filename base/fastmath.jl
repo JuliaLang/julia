@@ -128,12 +128,13 @@ make_fastmath(expr) = expr
 """
     @fastmath expr
 
-Executes a transformed version of the expression, which calls
-functions that may violate strict IEEE semantics. This allows
-the fastest possible operation, but results are undefined.
+Executes a transformed version of the expression, which calls functions that
+may violate strict IEEE semantics. This allows the fastest possible operation,
+but results are undefined.
 
-This sets the [LLVM Fast-Math
-flags](http://llvm.org/docs/LangRef.html#fast-math-flags), and corresponds to the `-ffast-math` option in clang. See [the notes on performance annotations](https://docs.julialang.org/en/stable/manual/performance-tips#performance-annotations) for more details.
+This sets the [LLVM Fast-Math flags](http://llvm.org/docs/LangRef.html#fast-math-flags),
+and corresponds to the `-ffast-math` option in clang. See [the notes on performance
+annotations](@ref man-performance-annotations) for more details.
 
 # Examples
 ```jldoctest
