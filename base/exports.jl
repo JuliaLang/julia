@@ -4,7 +4,6 @@ export
 # Modules
     FFTW,
     Meta,
-    Operators,
     Pkg,
     LibGit2,
     StackTraces,

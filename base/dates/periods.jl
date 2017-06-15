@@ -65,7 +65,6 @@ Base.isless(x::P, y::P) where {P<:Period} = isless(value(x), value(y))
 Base.isless(x::Period, y::Period) = isless(promote(x, y)...)
 
 # Period Arithmetic, grouped by dimensionality:
-import Base: div, fld, mod, rem, gcd, lcm, +, -, *, /, %
 for op in (:+, :-, :lcm, :gcd)
     @eval ($op)(x::P, y::P) where {P<:Period} = P(($op)(value(x), value(y)))
 end

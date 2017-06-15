@@ -6,7 +6,7 @@ module IteratorsMD
                  setindex!, IndexStyle, min, max, zero, one, isless, eachindex,
                  ndims, iteratorsize, convert
 
-    importall ..Base.Operators
+    import Base: +, -, *
     import Base: simd_outer_range, simd_inner_length, simd_index
     using Base: IndexLinear, IndexCartesian, AbstractCartesianIndex, fill_to_length, tail
 

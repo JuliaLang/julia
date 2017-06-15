@@ -1421,6 +1421,19 @@ function LibGit2.set_remote_url(path::AbstractString, url::AbstractString; remot
     LibGit2.set_remote_url(path, remote, url)
 end
 
+module Operators
+    for op in [:!, :(!=), :(!==), :%, :&, :*, :+, :-, :/, ://, :<, :<:, :<<, :(<=),
+               :<|, :(==), :(===), :>, :>:, :(>=), :>>, :>>>, :\, :^, :colon,
+               :ctranspose, :getindex, :hcat, :hvcat, :setindex!, :transpose, :vcat,
+               :xor, :|, :|>, :~, :×, :÷, :∈, :∉, :∋, :∌, :∘, :√, :∛, :∩, :∪, :≠, :≤,
+               :≥, :⊆, :⊈, :⊊, :⊻, :⋅]
+        if isdefined(Base, op)
+            @eval Base.@deprecate_binding $op Base.$op
+        end
+    end
+end
+export Operators
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations
