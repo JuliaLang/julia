@@ -15,14 +15,32 @@ abstract type ModeState end
 export run_interface, Prompt, ModalInterface, transition, reset_state, edit_insert, keymap
 
 struct ModalInterface <: TextInterface
-    modes
+    modes::Array{Base.LineEdit.TextInterface,1}
 end
+
+mutable struct Prompt <: TextInterface
+    prompt::String
+    # A string or function to be printed before the prompt. May not change the length of the prompt.
+    # This may be used for changing the color, issuing other terminal escape codes, etc.
+    prompt_prefix::Union{String,Function}
+    # Same as prefix except after the prompt
+    prompt_suffix::Union{String,Function}
+    keymap_dict::Dict{Char}
+    keymap_func_data # ::AbstractREPL
+    complete # ::REPLCompletionProvider
+    on_enter::Function
+    on_done::Function
+    hist # ::REPLHistoryProvider
+    sticky::Bool
+end
+
+show(io::IO, x::Prompt) = show(io, string("Prompt(\"", x.prompt, "\",...)"))
 
 mutable struct MIState
     interface::ModalInterface
-    current_mode
+    current_mode::TextInterface
     aborted::Bool
-    mode_state
+    mode_state::Dict
     kill_buffer::String
     previous_key::Array{Char,1}
     key_repeats::Int
@@ -33,31 +51,13 @@ function show(io::IO, s::MIState)
     print(io, "MI State (", s.current_mode, " active)")
 end
 
-mutable struct Prompt <: TextInterface
-    prompt
-    # A string or function to be printed before the prompt. May not change the length of the prompt.
-    # This may be used for changing the color, issuing other terminal escape codes, etc.
-    prompt_prefix
-    # Same as prefix except after the prompt
-    prompt_suffix
-    keymap_dict
-    keymap_func_data
-    complete
-    on_enter
-    on_done
-    hist
-    sticky::Bool
-end
-
-show(io::IO, x::Prompt) = show(io, string("Prompt(\"", x.prompt, "\",...)"))
-
 struct InputAreaState
     num_rows::Int64
     curs_row::Int64
 end
 
 mutable struct PromptState <: ModeState
-    terminal
+    terminal::AbstractTerminal
     p::Prompt
     input_buffer::IOBuffer
     ias::InputAreaState
@@ -967,15 +967,15 @@ function write_response_buffer(s::PromptState, data)
 end
 
 mutable struct SearchState <: ModeState
-    terminal
-    histprompt
+    terminal::AbstractTerminal
+    histprompt # ::HistoryPrompt
     #rsearch (true) or ssearch (false)
     backward::Bool
     query_buffer::IOBuffer
     response_buffer::IOBuffer
     ias::InputAreaState
     #The prompt whose input will be replaced by the matched history
-    parent
+    parent::Prompt
     SearchState(terminal, histprompt, backward, query_buffer, response_buffer) =
         new(terminal, histprompt, backward, query_buffer, response_buffer, InputAreaState(0,0))
 end
@@ -1012,7 +1012,7 @@ end
 
 mutable struct HistoryPrompt{T<:HistoryProvider} <: TextInterface
     hp::T
-    complete
+    complete # ::CompletionProvider
     keymap_dict::Dict{Char,Any}
     HistoryPrompt{T}(hp) where T<:HistoryProvider = new(hp, EmptyCompletionProvider())
 end
@@ -1021,16 +1021,16 @@ HistoryPrompt(hp::T) where T<:HistoryProvider = HistoryPrompt{T}(hp)
 init_state(terminal, p::HistoryPrompt) = SearchState(terminal, p, true, IOBuffer(), IOBuffer())
 
 mutable struct PrefixSearchState <: ModeState
-    terminal
-    histprompt
+    terminal::AbstractTerminal
+    histprompt # ::HistoryPrompt
     prefix::String
     response_buffer::IOBuffer
     ias::InputAreaState
     indent::Int
     # The modal interface state, if present
-    mi
+    mi::MIState
     #The prompt whose input will be replaced by the matched history
-    parent
+    parent::Prompt
     PrefixSearchState(terminal, histprompt, prefix, response_buffer) =
         new(terminal, histprompt, prefix, response_buffer, InputAreaState(0,0), 0)
 end
@@ -1052,7 +1052,7 @@ input_string(s::PrefixSearchState) = String(s.response_buffer)
 mutable struct PrefixHistoryPrompt{T<:HistoryProvider} <: TextInterface
     hp::T
     parent_prompt::Prompt
-    complete
+    complete # ::CompletionProvider
     keymap_dict::Dict{Char,Any}
     PrefixHistoryPrompt{T}(hp, parent_prompt) where T<:HistoryProvider =
         new(hp, parent_prompt, EmptyCompletionProvider())
