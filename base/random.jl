@@ -1621,10 +1621,10 @@ Base.show(io::IO, u::UUID) = write(io, Base.repr(u))
 
 let b = UInt8['0':'9';'A':'Z';'a':'z']
     global randstring
-    randstring(r::AbstractRNG, chars=b, n::Int=8) = String(rand(r, chars, n))
-    randstring(r::AbstractRNG, n::Int) = randstring(r, b, n)
-    randstring(chars=b, n::Int=8) = randstring(GLOBAL_RNG, chars, n)
-    randstring(n::Int) = randstring(GLOBAL_RNG, b, n)
+    randstring(r::AbstractRNG, chars=b, n::Integer=8) = String(rand(r, chars, n))
+    randstring(r::AbstractRNG, n::Integer) = randstring(r, b, n)
+    randstring(chars=b, n::Integer=8) = randstring(GLOBAL_RNG, chars, n)
+    randstring(n::Integer) = randstring(GLOBAL_RNG, b, n)
 end
 
 """
