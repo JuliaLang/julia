@@ -53,6 +53,9 @@ Library improvements
   * The function `randn` now accepts complex arguments (`Complex{T <: AbstractFloat}`)
     ([#21973]).
 
+  * The function `rand` can now pick up random elements from strings, associatives
+    and sets ([#22228], [#21960], [#18155], [#22224]).
+
   * Method lists are now printed as a numbered list. In addition, the source code of a
     method can be opened in an editor by entering the corresponding number in the REPL
     and pressing `^Q` ([#22007]).
@@ -749,6 +752,7 @@ Command-line option changes
 [#17785]: https://github.com/JuliaLang/julia/issues/17785
 [#18012]: https://github.com/JuliaLang/julia/issues/18012
 [#18050]: https://github.com/JuliaLang/julia/issues/18050
+[#18155]: https://github.com/JuliaLang/julia/issues/18155
 [#18159]: https://github.com/JuliaLang/julia/issues/18159
 [#18218]: https://github.com/JuliaLang/julia/issues/18218
 [#18251]: https://github.com/JuliaLang/julia/issues/18251
@@ -882,6 +886,7 @@ Command-line option changes
 [#21759]: https://github.com/JuliaLang/julia/issues/21759
 [#21818]: https://github.com/JuliaLang/julia/issues/21818
 [#21825]: https://github.com/JuliaLang/julia/issues/21825
+[#21960]: https://github.com/JuliaLang/julia/issues/21960
 [#21973]: https://github.com/JuliaLang/julia/issues/21973
 [#21974]: https://github.com/JuliaLang/julia/issues/21974
 [#22007]: https://github.com/JuliaLang/julia/issues/22007
@@ -890,3 +895,7 @@ Command-line option changes
 [#22064]: https://github.com/JuliaLang/julia/issues/22064
 [#22187]: https://github.com/JuliaLang/julia/issues/22187
 [#22188]: https://github.com/JuliaLang/julia/issues/22188
+[#22224]: https://github.com/JuliaLang/julia/issues/22224
+[#22228]: https://github.com/JuliaLang/julia/issues/22228
+[#22245]: https://github.com/JuliaLang/julia/issues/22245
+[#22310]: https://github.com/JuliaLang/julia/issues/22310
