@@ -3,6 +3,7 @@
 module Terminals
 
 export
+    AbstractTerminal,
     TextTerminal,
     UnixTerminal,
     TerminalBuffer,
@@ -33,11 +34,15 @@ import Base:
     read,
     readuntil
 
+## AbstractTerminal: abstract supertype of all terminals ##
+
+abstract type AbstractTerminal <: Base.AbstractPipe end
+
 ## TextTerminal ##
 
-abstract type TextTerminal <: Base.AbstractPipe end
+abstract type TextTerminal <: AbstractTerminal end
 
-# INTERFACE
+# Terminal interface:
 pipe_reader(::TextTerminal) = error("Unimplemented")
 pipe_writer(::TextTerminal) = error("Unimplemented")
 displaysize(::TextTerminal) = error("Unimplemented")
