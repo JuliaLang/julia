@@ -13,6 +13,7 @@
 #include <assert.h>
 #include "julia.h"
 #include "options.h"
+#include "crc32c.h"
 
 #ifdef __cplusplus
 #include <cfenv>

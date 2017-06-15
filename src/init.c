@@ -24,6 +24,7 @@
 #include "builtin_proto.h"
 #undef DEFINE_BUILTIN_GLOBALS
 #include "threading.h"
+#include "crc32c.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -547,6 +548,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_safepoint_init();
     libsupport_init();
+    jl_crc32c_init(0);
     ios_set_io_wait_func = jl_set_io_wait;
     jl_io_loop = uv_default_loop(); // this loop will internal events (spawning process etc.),
                                     // best to call this first, since it also initializes libuv
