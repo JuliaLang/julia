@@ -82,6 +82,22 @@ static inline void jl_assume_(int cond)
 #define jl_assume(cond) (cond)
 #endif
 
+#if defined(__GLIBC__) && defined(JULIA_HAS_IFUNC_SUPPORT)
+// Make sure both the compiler and the glibc supports it.
+// Only enable this on known working glibc versions.
+#  if (defined(_CPU_X86_) || defined(_CPU_X86_64_)) && __GLIBC_PREREQ(2, 12)
+#    define JL_USE_IFUNC 1
+#  elif (defined(_CPU_ARM_) || defined(_CPU_AARCH64_)) && __GLIBC_PREREQ(2, 18)
+// This is the oldest tested version that supports ifunc.
+#    define JL_USE_IFUNC 1
+#  endif
+// TODO: PPC probably supports ifunc on some glibc versions too
+#endif
+// Make sure JL_USE_IFUNC is always defined to catch include errors.
+#ifndef JL_USE_IFUNC
+#  define JL_USE_IFUNC 0
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
