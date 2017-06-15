@@ -1621,20 +1621,24 @@ Base.show(io::IO, u::UUID) = write(io, Base.repr(u))
 
 let b = UInt8['0':'9';'A':'Z';'a':'z']
     global randstring
-    randstring(r::AbstractRNG, chars::AbstractArray{<:Union{UInt8,Char}}=b, n::Int=8) =
-        String(rand(r, chars, n))
+    randstring(r::AbstractRNG, chars=b, n::Int=8) = String(rand(r, chars, n))
     randstring(r::AbstractRNG, n::Int) = randstring(r, b, n)
-    randstring(chars::AbstractArray{<:Union{UInt8,Char}}=b, n::Int=8) = randstring(GLOBAL_RNG, chars, n)
+    randstring(chars=b, n::Int=8) = randstring(GLOBAL_RNG, chars, n)
     randstring(n::Int) = randstring(GLOBAL_RNG, b, n)
 end
 
 """
-    randstring([rng=GLOBAL_RNG], [chars::AbstractArray{<:Union{UInt8,Char}}], [len=8])
+    randstring([rng=GLOBAL_RNG], [chars], [len=8])
 
 Create a random string of length `len`, consisting of characters
 from `chars` if specified, and of upper- and lower-case letters and
 the digits 0-9 otherwise. The optional `rng` argument specifies a
 random number generator, see [Random Numbers](@ref).
+
+!!! note
+    The collection `chars` can be any collection of characters
+    (of type `Char` or `UInt8`)
+    from which [`rand`](@ref) can randomly pick characters.
 """
 randstring
 
