@@ -1635,6 +1635,18 @@ from `chars` if specified, and of upper- and lower-case letters and
 the digits 0-9 otherwise. The optional `rng` argument specifies a
 random number generator, see [Random Numbers](@ref).
 
+# Examples
+```julia-repl
+julia> randstring()
+"c03rgKi1"
+
+julia> randstring(MersenneTwister(0), 'a':'z', 6)
+"wijzek"
+
+julia> randstring("gcat")
+"tgtcaatc"
+```
+
 !!! note
     The collection `chars` can be any collection of characters
     (of type `Char` or `UInt8`)
