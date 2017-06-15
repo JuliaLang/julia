@@ -1563,6 +1563,12 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         rt = (jl_value_t*)jl_any_type; // convert return type to jl_value_t*
     }
 
+    // check if we require the runtime
+    // TODO: could be more fine-grained,
+    //       respecting special functions below that don't require the runtime
+    if (!llvmcall && (!f_lib || f_lib == JL_DL_LIBNAME))
+        JL_FEAT_REQUIRE(ctx, runtime);
+
     // some sanity checking and check whether there's a vararg
     bool isVa;
     size_t nargt;
