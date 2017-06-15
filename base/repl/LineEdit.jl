@@ -77,11 +77,8 @@ end
 abstract type HistoryProvider end
 abstract type CompletionProvider end
 
-mutable struct EmptyCompletionProvider <: CompletionProvider
-end
-
-mutable struct EmptyHistoryProvider <: HistoryProvider
-end
+struct EmptyCompletionProvider <: CompletionProvider end
+struct EmptyHistoryProvider <: HistoryProvider end
 
 reset_state(::EmptyHistoryProvider) = nothing
 

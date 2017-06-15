@@ -275,11 +275,9 @@ LineEditREPL(t::TextTerminal, envcolors = false) =  LineEditREPL(t,
                                               Base.text_colors[:yellow],
                                               false, false, false, envcolors)
 
-mutable struct REPLCompletionProvider <: CompletionProvider; end
-
-mutable struct ShellCompletionProvider <: CompletionProvider; end
-
-struct LatexCompletions <: CompletionProvider; end
+mutable struct REPLCompletionProvider <: CompletionProvider end
+mutable struct ShellCompletionProvider <: CompletionProvider end
+struct LatexCompletions <: CompletionProvider end
 
 beforecursor(buf::IOBuffer) = String(buf.data[1:buf.ptr-1])
 
