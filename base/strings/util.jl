@@ -359,8 +359,8 @@ _replace(io, repl, str, r, pattern) = print(io, repl)
 _replace(io, repl::Function, str, r, pattern) =
     print(io, repl(SubString(str, first(r), last(r))))
 
+# TODO: rename to `replace` when `replace` is removed from deprecated.jl
 function replace_new(str::String, pattern, repl, count::Integer)
-    # rename to `replace` when `replace` is removed from deprecated.jl
     count == 0 && return str
     count < 0 && throw(DomainError())
     n = 1
@@ -406,7 +406,7 @@ If `pat` is a regular expression and `r` is a `SubstitutionString`, then capture
 references in `r` are replaced with the corresponding matched text.
 """
 replace(s::AbstractString, pat, f) = replace_new(String(s), pat, f, typemax(Int))
-# change this to the following when `replace` is removed from deprecated:
+# TODO: change this to the following when `replace` is removed from deprecated.jl:
 # replace(s::AbstractString, pat, f, count::Integer=typemax(Int)) =
 #     replace(String(s), pat, f, count)
 
