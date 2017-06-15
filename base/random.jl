@@ -1630,10 +1630,10 @@ end
 """
     randstring([rng=GLOBAL_RNG], [chars], [len=8])
 
-Create a random string of length `len`, consisting of characters
-from `chars` if specified, and of upper- and lower-case letters and
-the digits 0-9 otherwise. The optional `rng` argument specifies a
-random number generator, see [Random Numbers](@ref).
+Create a random string of length `len`, consisting of characters from
+`chars`, which defaults to the set of upper- and lower-case letters
+and the digits 0-9. The optional `rng` argument specifies a random
+number generator, see [Random Numbers](@ref).
 
 # Examples
 ```julia-repl
@@ -1643,15 +1643,16 @@ julia> randstring()
 julia> randstring(MersenneTwister(0), 'a':'z', 6)
 "wijzek"
 
-julia> randstring("gcat")
-"tgtcaatc"
+julia> randstring("ACGT")
+"TATCGGTC"
 ```
 
 !!! note
-    The collection `chars` can be any collection of characters
-    (of type `Char` or `UInt8`)
-    from which [`rand`](@ref) can randomly pick characters.
+    `chars` can be any collection of characters, of type `Char` or
+    `UInt8` (more efficient), provided [`rand`](@ref) can randomly
+    pick characters from it.
 """
+
 randstring
 
 # Fill S (resized as needed) with a random subsequence of A, where
