@@ -95,7 +95,7 @@ pipe_reader(t::UnixTerminal) = t.in_stream
 pipe_writer(t::UnixTerminal) = t.out_stream
 
 mutable struct TerminalBuffer <: UnixTerminal
-    out_stream::Base.IO
+    out_stream::IO
 end
 
 mutable struct TTYTerminal <: UnixTerminal
@@ -113,22 +113,17 @@ cmove_right(t::UnixTerminal, n) = write(t.out_stream, "$(CSI)$(n)C")
 cmove_left(t::UnixTerminal, n) = write(t.out_stream, "$(CSI)$(n)D")
 cmove_line_up(t::UnixTerminal, n) = (cmove_up(t, n); cmove_col(t, 1))
 cmove_line_down(t::UnixTerminal, n) = (cmove_down(t, n); cmove_col(t, 1))
-cmove_col(t::UnixTerminal, n) = (write(t.out_stream, '\r'); n > 1 && cmove_right(t, n - 1))
+cmove_col(t::UnixTerminal, n) = (write(t.out_stream, '\r'); n > 1 && cmove_right(t, n-1))
 
 if is_windows()
     function raw!(t::TTYTerminal,raw::Bool)
         check_open(t.in_stream)
         if Base.ispty(t.in_stream)
-            run(if raw
-                    `stty raw -echo onlcr -ocrnl opost`
-                else
-                    `stty sane`
-                end,t.in_stream,t.out_stream,t.err_stream)
+            run((raw ? `stty raw -echo onlcr -ocrnl opost` : `stty sane`),
+                t.in_stream, t.out_stream, t.err_stream)
             true
         else
-            ccall(:jl_tty_set_mode,
-                 Int32, (Ptr{Void},Int32),
-                 t.in_stream.handle, raw) != -1
+            ccall(:jl_tty_set_mode, Int32, (Ptr{Void},Int32), t.in_stream.handle, raw) != -1
         end
     end
 else
@@ -148,9 +143,7 @@ end
 @eval clear_line(t::UnixTerminal) = write(t.out_stream, $"\r$(CSI)0K")
 #beep(t::UnixTerminal) = write(t.err_stream,"\x7")
 
-function Base.displaysize(t::UnixTerminal)
-    return displaysize(t.out_stream)
-end
+Base.displaysize(t::UnixTerminal) = displaysize(t.out_stream)
 
 if is_windows()
     hascolor(t::TTYTerminal) = true
