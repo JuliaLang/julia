@@ -79,24 +79,27 @@ JL_UNUSED static inline uint32_t crc32c_shift(const uint32_t zeros[][256], uint3
         zeros[2][(crc >> 16) & 0xff] ^ zeros[3][crc >> 24];
 }
 
-#if defined(_CPU_X86_64_) && !defined(_COMPILER_MICROSOFT_)
+#if (defined(_CPU_X86_64_) || defined(_CPU_X86_)) && !defined(_COMPILER_MICROSOFT_)
+#  ifdef _CPU_X86_64_
+#    define CRC32_PTR "crc32q"
+#  else
+#    define CRC32_PTR "crc32l"
+#  endif
+
 /* Compute CRC-32C using the SSE4.2 hardware instruction. */
 static uint32_t crc32c_sse42(uint32_t crc, const char *buf, size_t len)
 {
-    const unsigned char *next = (const unsigned char *) buf;
-    const unsigned char *end;
-    uint64_t crc0, crc1, crc2;      /* need to be 64 bits for crc32q */
-
+    /* need to be 64 bits for crc32q */
     /* pre-process the crc */
-    crc0 = crc ^ 0xffffffff;
+    uintptr_t crc0 = crc ^ 0xffffffff;
 
     /* compute the crc for up to seven leading bytes to bring the data pointer
        to an eight-byte boundary */
-    while (len && ((uintptr_t)next & 7) != 0) {
+    while (len && ((uintptr_t)buf & 7) != 0) {
         __asm__("crc32b\t" "(%1), %0"
                 : "=r"(crc0)
-                : "r"(next), "0"(crc0));
-        next++;
+                : "r"(buf), "0"(crc0));
+        buf++;
         len--;
     }
 
@@ -105,51 +108,51 @@ static uint32_t crc32c_sse42(uint32_t crc, const char *buf, size_t len)
        Westmere, Sandy Bridge, and Ivy Bridge architectures, which have a
        throughput of one crc per cycle, but a latency of three cycles */
     while (len >= LONG * 3) {
-        crc1 = 0;
-        crc2 = 0;
-        end = next + LONG;
+        uintptr_t crc1 = 0;
+        uintptr_t crc2 = 0;
+        const char *end = buf + LONG;
         do {
-            __asm__("crc32q\t" "(%3), %0\n\t"
-                    "crc32q\t" LONGx1 "(%3), %1\n\t"
-                    "crc32q\t" LONGx2 "(%3), %2"
+            __asm__(CRC32_PTR "\t" "(%3), %0\n\t"
+                    CRC32_PTR "\t" LONGx1 "(%3), %1\n\t"
+                    CRC32_PTR "\t" LONGx2 "(%3), %2"
                     : "=r"(crc0), "=r"(crc1), "=r"(crc2)
-                    : "r"(next), "0"(crc0), "1"(crc1), "2"(crc2));
-            next += 8;
-        } while (next < end);
+                    : "r"(buf), "0"(crc0), "1"(crc1), "2"(crc2));
+            buf += sizeof(void*);
+        } while (buf < end);
         crc0 = crc32c_shift(crc32c_long, crc0) ^ crc1;
         crc0 = crc32c_shift(crc32c_long, crc0) ^ crc2;
-        next += LONG * 2;
+        buf += LONG * 2;
         len -= LONG * 3;
     }
 
     /* do the same thing, but now on SHORT*3 blocks for the remaining data less
        than a LONG*3 block */
     while (len >= SHORT * 3) {
-        crc1 = 0;
-        crc2 = 0;
-        end = next + SHORT;
+        uintptr_t crc1 = 0;
+        uintptr_t crc2 = 0;
+        const char *end = buf + SHORT;
         do {
-            __asm__("crc32q\t" "(%3), %0\n\t"
-                    "crc32q\t" SHORTx1 "(%3), %1\n\t"
-                    "crc32q\t" SHORTx2 "(%3), %2"
+            __asm__(CRC32_PTR "\t" "(%3), %0\n\t"
+                    CRC32_PTR "\t" SHORTx1 "(%3), %1\n\t"
+                    CRC32_PTR "\t" SHORTx2 "(%3), %2"
                     : "=r"(crc0), "=r"(crc1), "=r"(crc2)
-                    : "r"(next), "0"(crc0), "1"(crc1), "2"(crc2));
-            next += 8;
-        } while (next < end);
+                    : "r"(buf), "0"(crc0), "1"(crc1), "2"(crc2));
+            buf += sizeof(void*);
+        } while (buf < end);
         crc0 = crc32c_shift(crc32c_short, crc0) ^ crc1;
         crc0 = crc32c_shift(crc32c_short, crc0) ^ crc2;
-        next += SHORT * 2;
+        buf += SHORT * 2;
         len -= SHORT * 3;
     }
 
     /* compute the crc on the remaining eight-byte units less than a SHORT*3
        block */
-    end = next + (len - (len & 7));
-    while (next < end) {
-        __asm__("crc32q\t" "(%1), %0"
+    const char *end = buf + (len - (len & 7));
+    while (buf < end) {
+        __asm__(CRC32_PTR "\t" "(%1), %0"
                 : "=r"(crc0)
-                : "r"(next), "0"(crc0));
-        next += 8;
+                : "r"(buf), "0"(crc0));
+        buf += sizeof(void*);
     }
     len &= 7;
 
@@ -157,8 +160,8 @@ static uint32_t crc32c_sse42(uint32_t crc, const char *buf, size_t len)
     while (len) {
         __asm__("crc32b\t" "(%1), %0"
                 : "=r"(crc0)
-                : "r"(next), "0"(crc0));
-        next++;
+                : "r"(buf), "0"(crc0));
+        buf++;
         len--;
     }
 
