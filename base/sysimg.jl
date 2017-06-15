@@ -360,10 +360,10 @@ using .I18n
 
 # frontend
 include("initdefs.jl")
-include("Terminals.jl")
-include("LineEdit.jl")
-include("REPLCompletions.jl")
-include("REPL.jl")
+include("repl/Terminals.jl")
+include("repl/LineEdit.jl")
+include("repl/REPLCompletions.jl")
+include("repl/REPL.jl")
 include("client.jl")
 
 # Stack frames and traces

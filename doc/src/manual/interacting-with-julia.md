@@ -202,7 +202,7 @@ end
 atreplinit(customize_keys)
 ```
 
-Users should refer to `base/LineEdit.jl` to discover the available actions on key input.
+Users should refer to `LineEdit.jl` to discover the available actions on key input.
 
 ## Tab completion
 
