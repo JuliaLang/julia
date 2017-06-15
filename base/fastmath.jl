@@ -130,7 +130,8 @@ make_fastmath(expr) = expr
 
 Executes a transformed version of the expression, which calls functions that
 may violate strict IEEE semantics. This allows the fastest possible operation,
-but results are undefined.
+but results are undefined -- be careful when doing this, as it may change numerical
+results.
 
 This sets the [LLVM Fast-Math flags](http://llvm.org/docs/LangRef.html#fast-math-flags),
 and corresponds to the `-ffast-math` option in clang. See [the notes on performance
