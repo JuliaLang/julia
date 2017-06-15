@@ -254,8 +254,8 @@ mutable struct LineEditREPL <: AbstractREPL
     in_help::Bool
     envcolors::Bool
     waserror::Bool
-    specialdisplay
-    interface
+    specialdisplay::Union{Void,Display}
+    interface::ModalInterface
     backendref::REPLBackendRef
     LineEditREPL(t,hascolor,prompt_color,input_color,answer_color,shell_color,help_color,history_file,in_shell,in_help,envcolors) =
         new(t,true,prompt_color,input_color,answer_color,shell_color,help_color,history_file,in_shell,
@@ -303,16 +303,15 @@ function complete_line(c::LatexCompletions, s)
     return ret, partial[range], should_complete
 end
 
-
 mutable struct REPLHistoryProvider <: HistoryProvider
     history::Array{String,1}
-    history_file
+    history_file::Union{Void,IO}
     start_idx::Int
     cur_idx::Int
     last_idx::Int
     last_buffer::IOBuffer
     last_mode
-    mode_mapping
+    mode_mapping::Dict
     modes::Array{Symbol,1}
 end
 REPLHistoryProvider(mode_mapping) =
