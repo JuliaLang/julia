@@ -216,4 +216,10 @@ typedef enum { T_INT8, T_UINT8, T_INT16, T_UINT16, T_INT32, T_UINT32,
 #define JL_FALLTHROUGH
 #endif
 
+#if defined(__GNUC__)
+#define JL_UNUSED __attribute__((__unused__))
+#else
+#define JL_UNUSED
+#endif
+
 #endif /* DTYPES_H */

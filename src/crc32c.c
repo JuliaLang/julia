@@ -43,11 +43,8 @@
    1.1   1 Aug 2013  Correct comments on why three crc instructions in parallel
 */
 
-#include "crc32c.h"
-
-#if defined(_CPU_X86_64_) && !defined(_COMPILER_MICROSOFT_)
-#  define HW_CRC
-#endif
+#include "julia.h"
+#include "julia_internal.h"
 
 /* CRC-32C (iSCSI) polynomial in reversed bit order. */
 #define POLY 0x82f63b78
@@ -65,59 +62,28 @@
 #ifndef GEN_CRC32C_TABLES
 #include "crc32c-tables.c"
 
-/* Table-driven software version as a fall-back.  This is about 15 times slower
-   than using the hardware instructions.  This computes a little-endian
-   CRC32c, equivalent to the little-endian CRC of the Intel instructions,
-   regardless of the endianness of the machine this is running on.  */
-static uint32_t crc32c_sw(uint32_t crci, const void *buf, size_t len)
-{
-    const unsigned char *next = (const unsigned char *) buf;
-    uint64_t crc;
+#if JL_USE_IFUNC
+// Archs that can't use ifunc to do feature detection (e.g. ARM) should undef this below.
+#  define JL_CRC32C_USE_IFUNC
+#endif
 
-    /* pthread_once(&crc32c_once_sw, crc32c_init_sw); */
-    crc = crci ^ 0xffffffff;
-    while (len && ((uintptr_t)next & 7) != 0) {
-        crc = crc32c_table[0][(crc ^ *next++) & 0xff] ^ (crc >> 8);
-        len--;
-    }
-    while (len >= 8) {
-        crc ^= *(uint64_t *)next;
-                crc = crc32c_table[7][crc & 0xff] ^
-                    crc32c_table[6][(crc >> 8) & 0xff] ^
-                    crc32c_table[5][(crc >> 16) & 0xff] ^
-                    crc32c_table[4][(crc >> 24) & 0xff] ^
-                    crc32c_table[3][(crc >> 32) & 0xff] ^
-                    crc32c_table[2][(crc >> 40) & 0xff] ^
-                    crc32c_table[1][(crc >> 48) & 0xff] ^
-                    crc32c_table[0][crc >> 56];
-                next += 8;
-                len -= 8;
-    }
-    while (len) {
-        crc = crc32c_table[0][(crc ^ *next++) & 0xff] ^ (crc >> 8);
-        len--;
-    }
-    return (uint32_t)crc ^ 0xffffffff;
-}
-
-#ifdef HW_CRC
+JL_DLLEXPORT uint32_t jl_crc32c_sw(uint32_t crci, const char *buf, size_t len);
+typedef uint32_t (*crc32c_func_t)(uint32_t crc, const char *buf, size_t len);
 
 /* Apply the zeros operator table to crc. */
-static inline uint32_t crc32c_shift(const uint32_t zeros[][256], uint32_t crc)
+JL_UNUSED static inline uint32_t crc32c_shift(const uint32_t zeros[][256], uint32_t crc)
 {
     return zeros[0][crc & 0xff] ^ zeros[1][(crc >> 8) & 0xff] ^
         zeros[2][(crc >> 16) & 0xff] ^ zeros[3][crc >> 24];
 }
 
+#if defined(_CPU_X86_64_) && !defined(_COMPILER_MICROSOFT_)
 /* Compute CRC-32C using the Intel hardware instruction. */
-static uint32_t crc32c_hw(uint32_t crc, const void *buf, size_t len)
+static uint32_t crc32c_sse42(uint32_t crc, const char *buf, size_t len)
 {
     const unsigned char *next = (const unsigned char *) buf;
     const unsigned char *end;
     uint64_t crc0, crc1, crc2;      /* need to be 64 bits for crc32q */
-
-    /* populate shift tables the first time through */
-    /* pthread_once(&crc32c_once_hw, crc32c_init_hw); */
 
     /* pre-process the crc */
     crc0 = crc ^ 0xffffffff;
@@ -136,42 +102,42 @@ static uint32_t crc32c_hw(uint32_t crc, const void *buf, size_t len)
        instructions, each on LONG bytes -- this is optimized for the Nehalem,
        Westmere, Sandy Bridge, and Ivy Bridge architectures, which have a
        throughput of one crc per cycle, but a latency of three cycles */
-    while (len >= LONG*3) {
+    while (len >= LONG * 3) {
         crc1 = 0;
         crc2 = 0;
         end = next + LONG;
         do {
             __asm__("crc32q\t" "(%3), %0\n\t"
-                                        "crc32q\t" LONGx1 "(%3), %1\n\t"
-                                        "crc32q\t" LONGx2 "(%3), %2"
+                    "crc32q\t" LONGx1 "(%3), %1\n\t"
+                    "crc32q\t" LONGx2 "(%3), %2"
                     : "=r"(crc0), "=r"(crc1), "=r"(crc2)
                     : "r"(next), "0"(crc0), "1"(crc1), "2"(crc2));
             next += 8;
         } while (next < end);
         crc0 = crc32c_shift(crc32c_long, crc0) ^ crc1;
         crc0 = crc32c_shift(crc32c_long, crc0) ^ crc2;
-        next += LONG*2;
-        len -= LONG*3;
+        next += LONG * 2;
+        len -= LONG * 3;
     }
 
     /* do the same thing, but now on SHORT*3 blocks for the remaining data less
        than a LONG*3 block */
-    while (len >= SHORT*3) {
+    while (len >= SHORT * 3) {
         crc1 = 0;
         crc2 = 0;
         end = next + SHORT;
         do {
             __asm__("crc32q\t" "(%3), %0\n\t"
-                                        "crc32q\t" SHORTx1 "(%3), %1\n\t"
-                                        "crc32q\t" SHORTx2 "(%3), %2"
+                    "crc32q\t" SHORTx1 "(%3), %1\n\t"
+                    "crc32q\t" SHORTx2 "(%3), %2"
                     : "=r"(crc0), "=r"(crc1), "=r"(crc2)
                     : "r"(next), "0"(crc0), "1"(crc1), "2"(crc2));
             next += 8;
         } while (next < end);
         crc0 = crc32c_shift(crc32c_short, crc0) ^ crc1;
         crc0 = crc32c_shift(crc32c_short, crc0) ^ crc2;
-        next += SHORT*2;
-        len -= SHORT*3;
+        next += SHORT * 2;
+        len -= SHORT * 3;
     }
 
     /* compute the crc on the remaining eight-byte units less than a SHORT*3
@@ -198,48 +164,104 @@ static uint32_t crc32c_hw(uint32_t crc, const void *buf, size_t len)
     return (uint32_t)crc0 ^ 0xffffffff;
 }
 
-/* Check for SSE 4.2.  SSE 4.2 was first supported in Nehalem processors
-   introduced in November, 2008.  This does not check for the existence of the
-   cpuid instruction itself, which was introduced on the 486SL in 1992, so this
-   will fail on earlier x86 processors.  cpuid works on all Pentium and later
-   processors. */
-#define SSE42(have) \
-    do { \
-        uint32_t eax, ecx; \
-        eax = 1; \
-        __asm__("cpuid" \
-                : "=c"(ecx) \
-                : "a"(eax) \
-                : "%ebx", "%edx"); \
-        (have) = (ecx >> 20) & 1; \
-    } while (0)
-
-static int sse42 = 0;
-
-#endif /* ifdef HW_CRC */
-
-/* jl_crc32c_init must be called before jl_crc32c.  Passing 1
-   can be used to force the use of the software implementation,
-   which is useful for testing purposes. */
-JL_DLLEXPORT void jl_crc32c_init(int force_sw)
+// HW feature detection
+#  ifdef __SSE4_2__
+// The C code is compiled with SSE42 being required. Skip runtime dispatch.
+JL_DLLEXPORT uint32_t jl_crc32c(uint32_t crc, const char *buf, size_t len)
 {
-#ifdef HW_CRC
-    if (force_sw)
-        sse42 = 0; /* useful for testing purposes */
-    else
-        SSE42(sse42);
+    return crc32c_sse42(crc, buf, len);
+}
+#  else
+static crc32c_func_t crc32c_dispatch(void)
+{
+    // When used in ifunc, we cannot call external functions (i.e. jl_cpuid)
+    uint32_t eax = 1, ebx, ecx, edx;
+    asm (
+#if defined(__i386__) && defined(__PIC__)
+        "xchg %%ebx, %%esi;"
+        "cpuid;"
+        "xchg %%esi, %%ebx;":
+        "=S" (ebx) ,
+#else
+        "cpuid":
+        "=b" (ebx),
 #endif
+        "+a" (eax),
+        "=c" (ecx),
+        "=d" (edx));
+    if ((ecx >> 20) & 1)
+        return crc32c_sse42;
+    return jl_crc32c_sw;
+}
+// For ifdef detection below
+#    define crc32c_dispatch crc32c_dispatch
+#    define crc32c_dispatch_ifunc "crc32c_dispatch"
+#  endif
+#else
+// If we don't have any accelerated version to define, just make the _sw version define
+// the real version and then define a _sw version as test wrapper.
+JL_DLLEXPORT uint32_t jl_crc32c(uint32_t crc, const char *buf, size_t len);
+JL_DLLEXPORT uint32_t jl_crc32c_sw(uint32_t crc, const char *buf, size_t len)
+{
+    return jl_crc32c(crc, buf, len);
+}
+#define jl_crc32c_sw jl_crc32c
+#endif
+
+#ifdef crc32c_dispatch
+#  ifdef JL_CRC32C_USE_IFUNC
+// ifunc dispatch
+JL_DLLEXPORT uint32_t jl_crc32c(uint32_t crc, const char *buf, size_t len)
+    __attribute__((ifunc (crc32c_dispatch_ifunc)));
+#  else
+// lazy wrapper dispatch
+static uint32_t crc32c_lazy(uint32_t crc, const char *buf, size_t len);
+static crc32c_func_t crc32c_func = crc32c_lazy;
+
+static uint32_t crc32c_lazy(uint32_t crc, const char *buf, size_t len)
+{
+    crc32c_func = crc32c_dispatch();
+    return crc32c_func(crc, buf, len);
 }
 
-/* Compute a CRC-32C.  If the crc32 instruction is available, use the hardware
-   version.  Otherwise, use the software version. */
-JL_DLLEXPORT uint32_t jl_crc32c(uint32_t crc, const void *buf, size_t len)
+/* Compute a CRC-32C. Do a lazy dispatch based on hardware features */
+JL_DLLEXPORT uint32_t jl_crc32c(uint32_t crc, const char *buf, size_t len)
 {
-    return
-#ifdef HW_CRC
-    sse42 ? crc32c_hw(crc, buf, len) :
+    return crc32c_func(crc, buf, len);
+}
+#  endif
 #endif
-    crc32c_sw(crc, buf, len);
+
+/* Table-driven software version as a fall-back.  This is about 15 times slower
+   than using the hardware instructions.  This computes a little-endian
+   CRC32c, equivalent to the little-endian CRC of the Intel instructions,
+   regardless of the endianness of the machine this is running on.  */
+JL_DLLEXPORT uint32_t jl_crc32c_sw(uint32_t crci, const char *buf, size_t len)
+{
+    const unsigned char *next = (const unsigned char *) buf;
+    uint64_t crc = crci ^ 0xffffffff;
+    while (len && ((uintptr_t)next & 7) != 0) {
+        crc = crc32c_table[0][(crc ^ *next++) & 0xff] ^ (crc >> 8);
+        len--;
+    }
+    while (len >= 8) {
+        crc ^= *(uint64_t*)next;
+        crc = crc32c_table[7][crc & 0xff] ^
+            crc32c_table[6][(crc >> 8) & 0xff] ^
+            crc32c_table[5][(crc >> 16) & 0xff] ^
+            crc32c_table[4][(crc >> 24) & 0xff] ^
+            crc32c_table[3][(crc >> 32) & 0xff] ^
+            crc32c_table[2][(crc >> 40) & 0xff] ^
+            crc32c_table[1][(crc >> 48) & 0xff] ^
+            crc32c_table[0][crc >> 56];
+        next += 8;
+        len -= 8;
+    }
+    while (len) {
+        crc = crc32c_table[0][(crc ^ *next++) & 0xff] ^ (crc >> 8);
+        len--;
+    }
+    return (uint32_t)crc ^ 0xffffffff;
 }
 
 /*****************************************************************************/
@@ -248,6 +270,9 @@ JL_DLLEXPORT uint32_t jl_crc32c(uint32_t crc, const void *buf, size_t len)
 
 /* Compile with -DGEN_CRC32C_TABLES to generate header file containing
    precomputed hardware and software tables */
+// Example command line, run from top level directory:
+// $ gcc src/crc32c.c -o main -DGEN_CRC32C_TABLES -I src -I src/support
+// $ ./main > src/crc32c-tables.c
 
 #else /* ifdef GEN_CRC32C_TABLES */
 
@@ -382,7 +407,7 @@ static void crc32c_init_hw(void)
 static void print_array(const char *name, int m, int n, const uint32_t *a)
 {
     int i, j;
-    printf("static const uint32_t %s[%d][%d] = {\n", name, m, n);
+    printf("JL_UNUSED static const uint32_t %s[%d][%d] = {\n", name, m, n);
     for (i = 0; i < m; ++i) {
         printf("    { %u", a[i*n+0]);
         for (j = 1; j < n; ++j) printf(",%u", a[i*n+j]);
@@ -393,15 +418,15 @@ static void print_array(const char *name, int m, int n, const uint32_t *a)
 
 int main(void)
 {
+    printf("// This file is a part of Julia. License is MIT: https://julialang.org/license\n\n");
     printf("/* Pregenerated tables for crc32c.c, produced by compiling with -DGEN_CRC32C_TABLES. */\n"
            "#if POLY != 0x%x\n#  error \"tables generated for different polynomial\"\n#endif\n\n", POLY);
     crc32c_init_sw();
     print_array("crc32c_table", 8, 256, &crc32c_table[0][0]);
     crc32c_init_hw();
-    printf("\n#ifdef HW_CRC\n");
+    printf("\n");
     print_array("crc32c_long", 4, 256, &crc32c_long[0][0]);
     print_array("crc32c_short", 4, 256, &crc32c_short[0][0]);
-    printf("#endif /* HW_CRC */\n");
     return 0;
 }
 
