@@ -1,4 +1,15 @@
-# Julia Documentation
+# Julia v0.6 Documentation
+
+Welcome to the documentation for Julia 0.6!
+
+### What's new in Julia 0.6
+
+The [release notes](NEWS.md) contain a list of new features, changes and deprecations.
+A closer look at some of the larger, new, functionalities can be found in the following blog posts:
+
+* [More Dots: Syntactic Loop Fusion in Julia](http://julialang.org/blog/2017/01/moredots)
+* [Knowing where you are: custom array indices in Julia](https://julialang.org/blog/2017/04/offset-arrays)
+* [Upgrades to the REPL in Julia 0.6](https://julialang.org/blog/2017/04/repl-0.6-highlights)
 
 ## Manual
 

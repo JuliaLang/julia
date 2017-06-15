@@ -7,6 +7,7 @@
 /usr-staging
 /Make.user
 /julia-*
+/doc/src/NEWS.md
 /source-dist.tmp
 /source-dist.tmp1
 

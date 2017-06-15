@@ -14,10 +14,14 @@ isdefined(:build_sysimg) || @eval module BuildSysImg
     include(joinpath(@__DIR__, "..", "contrib", "build_sysimg.jl"))
 end
 
+include("NEWS-makedoc.jl")
+create_NEWS()
+
 # Documenter Setup.
 
 const PAGES = [
     "Home" => "index.md",
+    "Release Notes" => "NEWS.md",
     "Manual" => [
         "manual/introduction.md",
         "manual/getting-started.md",

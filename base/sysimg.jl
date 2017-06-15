@@ -388,12 +388,6 @@ importall .DFT
 include("dsp.jl")
 importall .DSP
 
-# libgit2 support
-include("libgit2/libgit2.jl")
-
-# package manager
-include("pkg/pkg.jl")
-
 # profiler
 include("profile.jl")
 importall .Profile
@@ -401,6 +395,12 @@ importall .Profile
 # dates
 include("dates/Dates.jl")
 import .Dates: Date, DateTime, DateFormat, @dateformat_str, now
+
+# libgit2 support
+include("libgit2/libgit2.jl")
+
+# package manager
+include("pkg/pkg.jl")
 
 # sparse matrices, vectors, and sparse linear algebra
 include("sparse/sparse.jl")
