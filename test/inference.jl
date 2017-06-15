@@ -911,6 +911,17 @@ end
 @test isdefined_tfunc(Tuple{Any,Vararg{Any}}, Const(2)) === Bool
 @test isdefined_tfunc(Tuple{Any,Vararg{Any}}, Const(3)) === Bool
 
+@noinline map3_22347(f, t::Tuple{}) = ()
+@noinline map3_22347(f, t::Tuple) = (f(t[1]), map3_22347(f, Base.tail(t))...)
+# issue #22347
+let niter = 0
+    map3_22347((1, 2, 3, 4)) do y
+        niter += 1
+        nothing
+    end
+    @test niter == 4
+end
+
 # demonstrate that inference must converge
 # while doing constant propagation
 Base.@pure plus1(x) = x + 1
