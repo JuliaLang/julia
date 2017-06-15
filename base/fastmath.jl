@@ -128,7 +128,7 @@ make_fastmath(expr) = expr
 """
     @fastmath expr
 
-Executes a transformed version of the expression, which calls functions that
+Execute a transformed version of the expression, which calls functions that
 may violate strict IEEE semantics. This allows the fastest possible operation,
 but results are undefined -- be careful when doing this, as it may change numerical
 results.
