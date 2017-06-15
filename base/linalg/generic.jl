@@ -676,6 +676,7 @@ dot(x::Number, y::Number) = vecdot(x, y)
 
 dot(x::Number, y::AbstractArray) = conj(x) * y
 dot(x::AbstractArray, y::Number) = ctranspose(x) * y
+dot(x::AbstractArray, y::AbstractArray) = ctranspose(x) * y
 
 """
     dot(x, y)
