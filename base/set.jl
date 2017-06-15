@@ -203,7 +203,7 @@ end
 
 # If A is not grouped, then we will need to keep track of all of the elements that we have
 # seen so far.
-function _unique!(A::AbstractArray)
+function _unique!(A::AbstractVector)
     seen = Set{eltype(A)}()
     idxs = eachindex(A)
     i = state = start(idxs)
@@ -221,7 +221,7 @@ end
 # need to keep track of one element at a time. We replace the elements of A with the
 # unique elements that we see in the order that we see them. Once we have iterated
 # through A, we resize A based on the number of unique elements that we see.
-function _groupedunique!(A::AbstractArray)
+function _groupedunique!(A::AbstractVector)
     isempty(A) && return A
     idxs = eachindex(A)
     y = first(A)
@@ -237,12 +237,12 @@ function _groupedunique!(A::AbstractArray)
 end
 
 """
-    unique!(A::AbstractVector; sort=false)
+    unique!(A::AbstractVector)
 
 Remove duplicate items as determined by [`isequal`](@ref), then return the modified `A`.
-By default, `unique!` will return the elements of `A` in the order that they occur. If
-you want `unique!` to return the data sorted, then set `sort=true`. With `sort=true`,
-`unique!` will be able to run faster, however you must ensure that the data can be sorted.
+`unique!` will return the elements of `A` in the order that they occur. If you do not care
+about the order of the returned data, then calling `(sort!(A); unique!(A))` will be much
+more efficient as long as the elements of `A` can be sorted.
 
 ```jldoctest
 julia> unique!([1, 1, 1])
@@ -258,22 +258,11 @@ julia> unique!(A)
  2
  5
 
-julia> A
-4-element Array{Int64,1}:
- 7
- 3
- 2
- 5
-
 julia> B = [7, 6, 42, 6, 7, 42];
 
-julia> unique!(B, sort=true)
-3-element Array{Int64,1}:
- 6
- 7
- 42
+julia> sort!(B);  # unique! is able to process sorted data much more efficiently.
 
-julia> B
+julia> unique!(B)
 3-element Array{Int64,1}:
  6
  7
@@ -281,11 +270,9 @@ julia> B
 ```
 """
 function unique!(A::Union{AbstractVector{<:Real}, AbstractVector{<:AbstractString},
-                          AbstractVector{<:Symbol}}; sort=false)
+                          AbstractVector{<:Symbol}})
     if isempty(A)
         return A
-    elseif sort
-        return _groupedunique!(sort!(A))
     elseif issorted(A) || issorted(A, rev=true)
         return _groupedunique!(A)
     else
@@ -294,11 +281,9 @@ function unique!(A::Union{AbstractVector{<:Real}, AbstractVector{<:AbstractStrin
 end
 # issorted fails for some element types, so the method above has to be restricted to
 # elements with isless/< defined.
-function unique!(A; sort=false)
+function unique!(A)
     if isempty(A)
         return A
-    elseif sort
-        return _groupedunique!(sort!(A))
     else
         return _unique!(A)
     end
