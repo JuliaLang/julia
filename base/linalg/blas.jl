@@ -327,6 +327,10 @@ function dotu(DX::Union{DenseArray{T},StridedVector{T}}, DY::Union{DenseArray{T}
     dotu(n, pointer(DX), stride(DX, 1), pointer(DY), stride(DY, 1))
 end
 
+function dot(DX::Union{DenseArray{T},StridedVector{T}}, DY::Union{DenseArray{T},StridedVector{T}}) where T<:BlasComplex
+    dotc(DX, DY)
+end
+
 ## nrm2
 
 stride1(x) = stride(x,1)
