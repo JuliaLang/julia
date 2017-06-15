@@ -72,7 +72,11 @@
       op))
 
 ; like Set, but strip operator suffixes before testing membership
-(define (SuffSet l) (let ((S (Set l))) (lambda (op) (S (maybe-strip-op-suffix op)))))
+(define (SuffSet l)
+  (let ((S (Set l)))
+    (if (every no-suffix? l)
+        S ; suffixes not allowed for anything in l
+        (lambda (op) (S (maybe-strip-op-suffix op))))))
 
 ;; for each prec-x generate an is-prec-x? procedure
 (for-each (lambda (name)
