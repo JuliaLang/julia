@@ -1249,6 +1249,8 @@ static int JL_DEBUG_METHOD_INVALIDATION = 0;
 // invalidate cached methods that had an edge to a replaced method
 static void invalidate_method_instance(jl_method_instance_t *replaced, size_t max_world, int depth)
 {
+    if (!jl_is_method(replaced->def.method))
+        return;
     JL_LOCK_NOGC(&replaced->def.method->writelock);
     jl_array_t *backedges = replaced->backedges;
     if (replaced->max_world > max_world) {
@@ -1599,7 +1601,8 @@ jl_method_instance_t *jl_method_lookup(jl_methtable_t *mt, jl_value_t **args, si
 //
 // lim is the max # of methods to return. if there are more, returns jl_false.
 // -1 for no limit.
-JL_DLLEXPORT jl_value_t *jl_matching_methods(jl_tupletype_t *types, int lim, int include_ambiguous, size_t world, size_t *min_valid, size_t *max_valid)
+JL_DLLEXPORT jl_value_t *jl_matching_methods(jl_tupletype_t *types, int lim, int include_ambiguous,
+                                             size_t world, size_t *min_valid, size_t *max_valid)
 {
     jl_value_t *unw = jl_unwrap_unionall((jl_value_t*)types);
     if (jl_is_tuple_type(unw) && jl_tparam0(unw) == jl_bottom_type)

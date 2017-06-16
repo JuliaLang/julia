@@ -387,6 +387,7 @@ JL_DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from)
     }
 
     arraylist_push(&to->usings, from);
+    jl_gc_wb(to, from);
 }
 
 JL_DLLEXPORT void jl_module_export(jl_module_t *from, jl_sym_t *s)
