@@ -226,7 +226,7 @@ function wait()
                     # probably broken now, but try discarding this switch and keep going
                     # can't throw here, because it's probably not the fault of the caller to wait
                     # and don't want to use print() here, because that may try to incur a task switch
-                    ccall(:jl_safe_printf, Void, (Ptr{UInt8}, Vararg{Int32}),
+                    ccall(:jl_safe_printf, Void, (Ptr{UInt8}, Int32...),
                         "\nWARNING: Workqueue inconsistency detected: shift!(Workqueue).state != :queued\n")
                     continue
                 end

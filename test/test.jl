@@ -49,8 +49,10 @@ a[1,1,1,1,1] = 10
 @test rand() != rand()
 
 # Pass - exception
-@test contains(sprint(show, @test_throws ErrorException error()),
-                "Thrown: ErrorException")
+@test endswith(sprint(show, @test_throws ErrorException error()),
+               "Thrown: ErrorException")
+@test endswith(sprint(show, @test_throws ErrorException("test") error("test")),
+               "Thrown: ErrorException")
 
 # Test printing of Fail results
 mutable struct NoThrowTestSet <: Base.Test.AbstractTestSet

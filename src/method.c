@@ -100,15 +100,6 @@ jl_value_t *jl_resolve_globals(jl_value_t *expr, jl_module_t *module, jl_svec_t 
                     jl_error("ccall: missing return type");
                 JL_TYPECHK(ccall method definition, type, rt);
                 JL_TYPECHK(ccall method definition, simplevector, at);
-                size_t nargt = jl_svec_len(at);
-                int isVa = (nargt > 0 && jl_is_vararg_type(jl_svecref(at, nargt - 1)));
-                if (nargs % 2 == 0) // ignore calling-convention arg, if present
-                    nargs -= 1;
-                if ((!isVa && nargt    != (nargs - 2) / 2) ||
-                    ( isVa && nargt - 1 > (nargs - 2) / 2)) {
-                    jl_printf(JL_STDERR, "WARNING: ccall: wrong number of arguments to C function in %s\n",
-                              jl_symbol_name(module->name)); // TODO: make this an error
-                }
             }
             if (e->head == method_sym || e->head == abstracttype_sym || e->head == compositetype_sym ||
                 e->head == bitstype_sym || e->head == module_sym) {
