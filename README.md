@@ -295,7 +295,6 @@ Julia uses the following external libraries, which are automatically downloaded 
 - **[AMOS]**                 — subroutines for computing Bessel and Airy functions.
 - **[SuiteSparse]** (>= 4.1) — library of linear algebra routines for sparse matrices.
 - **[ARPACK]**               — collection of subroutines designed to solve large, sparse eigenvalue problems.
-- **[FFTW]** (>= 3.3)        — library for computing fast Fourier transforms very quickly and efficiently.
 - **[PCRE]** (>= 10.00)      — Perl-compatible regular expressions library.
 - **[GMP]** (>= 5.0)         — GNU multiple precision arithmetic library, needed for `BigInt` support.
 - **[MPFR]** (>= 3.0)        — GNU multiple precision floating point library, needed for arbitrary precision floating point (`BigFloat`) support.
@@ -327,7 +326,6 @@ Julia uses the following external libraries, which are automatically downloaded 
 [SuiteSparse]:  http://faculty.cse.tamu.edu/davis/suitesparse.html
 [AMOS]:         http://netlib.org/amos
 [ARPACK]:       http://forge.scilab.org/index.php/p/arpack-ng
-[FFTW]:         http://www.fftw.org
 [PCRE]:         http://www.pcre.org
 [LLVM]:         http://www.llvm.org
 [FemtoLisp]:    https://github.com/JeffBezanson/femtolisp
@@ -368,7 +366,6 @@ Add the following to the `Make.user` file:
     USEICC = 1
     USEIFC = 1
     USE_INTEL_MKL = 1
-    USE_INTEL_MKL_FFT = 1
     USE_INTEL_LIBM = 1
 
 It is highly recommended to start with a fresh clone of the Julia repository.

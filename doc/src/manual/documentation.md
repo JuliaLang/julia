@@ -164,7 +164,7 @@ Documentation can be accessed at the REPL or in [IJulia](https://github.com/Juli
 by typing `?` followed by the name of a function or macro, and pressing `Enter`. For example,
 
 ```julia
-?fft
+?cos
 ?@time
 ?r""
 ```

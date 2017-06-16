@@ -165,7 +165,7 @@ if ! [ -e usr/bin/busybox.exe ]; then
   $curlflags -o usr/bin/busybox.exe http://frippery.org/files/busybox/$f
 fi
 
-for lib in SUITESPARSE ARPACK BLAS LAPACK FFTW \
+for lib in SUITESPARSE ARPACK BLAS LAPACK \
     GMP MPFR PCRE LIBUNWIND OPENSPECFUN; do
   echo "USE_SYSTEM_$lib = 1" >> Make.user
 done

@@ -86,7 +86,7 @@ before_install:
         BUILDOPTS="-j3 USECLANG=1 LLVM_CONFIG=$(brew --prefix llvm39-julia)/bin/llvm-config LLVM_SIZE=$(brew --prefix llvm39-julia)/bin/llvm-size";
         BUILDOPTS="$BUILDOPTS VERBOSE=1 USE_BLAS64=0 SUITESPARSE_INC=-I$(brew --prefix suite-sparse-julia)/include FORCE_ASSERTIONS=1";
         BUILDOPTS="$BUILDOPTS LIBBLAS=-lopenblas LIBBLASNAME=libopenblas LIBLAPACK=-lopenblas LIBLAPACKNAME=libopenblas";
-        for lib in LLVM SUITESPARSE ARPACK BLAS FFTW LAPACK GMP MPFR PCRE LIBUNWIND; do
+        for lib in LLVM SUITESPARSE ARPACK BLAS LAPACK GMP MPFR PCRE LIBUNWIND; do
             BUILDOPTS="$BUILDOPTS USE_SYSTEM_$lib=1";
         done;
         export LDFLAGS="-L$(brew --prefix openblas-julia)/lib -L$(brew --prefix suite-sparse-julia)/lib";

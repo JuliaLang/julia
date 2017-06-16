@@ -382,12 +382,6 @@ const × = cross
 # statistics
 include("statistics.jl")
 
-# signal processing
-include("dft.jl")
-importall .DFT
-include("dsp.jl")
-importall .DSP
-
 # libgit2 support
 include("libgit2/libgit2.jl")
 
