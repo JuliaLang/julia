@@ -1461,7 +1461,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Documentation",
     "title": "Accessing Documentation",
     "category": "section",
-    "text": "Documentation can be accessed at the REPL or in IJulia by typing ? followed by the name of a function or macro, and pressing Enter. For example,?fft\n?@time\n?r\"\"will bring up docs for the relevant function, macro or string macro respectively. In Juno using Ctrl-J, Ctrl-D will bring up documentation for the object under the cursor."
+    "text": "Documentation can be accessed at the REPL or in IJulia by typing ? followed by the name of a function or macro, and pressing Enter. For example,?cos\n?@time\n?r\"\"will bring up docs for the relevant function, macro or string macro respectively. In Juno using Ctrl-J, Ctrl-D will bring up documentation for the object under the cursor."
 },
 
 {
@@ -4253,7 +4253,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Noteworthy Differences from other Languages",
     "title": "Noteworthy differences from MATLAB",
     "category": "section",
-    "text": "Although MATLAB users may find Julia's syntax familiar, Julia is not a MATLAB clone. There are major syntactic and functional differences. The following are some noteworthy differences that may trip up Julia users accustomed to MATLAB:Julia arrays are indexed with square brackets, A[i,j].\nJulia arrays are assigned by reference. After A=B, changing elements of B will modify A as well.\nJulia values are passed and assigned by reference. If a function modifies an array, the changes will be visible in the caller.\nJulia does not automatically grow arrays in an assignment statement. Whereas in MATLAB a(4) = 3.2 can create the array a = [0 0 0 3.2] and a(5) = 7 can grow it into a = [0 0 0 3.2 7], the corresponding Julia statement a[5] = 7 throws an error if the length of a is less than 5 or if this statement is the first use of the identifier a. Julia has push!() and append!(), which grow Vectors much more efficiently than MATLAB's a(end+1) = val.\nThe imaginary unit sqrt(-1) is represented in Julia as im, not i or j as in MATLAB.\nIn Julia, literal numbers without a decimal point (such as 42) create integers instead of floating point numbers. Arbitrarily large integer literals are supported. As a result, some operations such as 2^-1 will throw a domain error as the result is not an integer (see the FAQ entry on domain errors for details).\nIn Julia, multiple values are returned and assigned as tuples, e.g. (a, b) = (1, 2) or a, b = 1, 2. MATLAB's nargout, which is often used in MATLAB to do optional work based on the number of returned values, does not exist in Julia. Instead, users can use optional and keyword arguments to achieve similar capabilities.\nJulia has true one-dimensional arrays. Column vectors are of size N, not Nx1. For example, rand(N) makes a 1-dimensional array.\nIn Julia, [x,y,z] will always construct a 3-element array containing x, y and z.\nTo concatenate in the first (\"vertical\") dimension use either vcat(x,y,z) or separate with semicolons ([x; y; z]).\nTo concatenate in the second (\"horizontal\") dimension use either hcat(x,y,z) or separate with spaces ([x y z]).\nTo construct block matrices (concatenating in the first two dimensions), use either hvcat() or combine spaces and semicolons ([a b; c d]).\nIn Julia, a:b and a:b:c construct Range objects. To construct a full vector like in MATLAB, use collect(a:b). Generally, there is no need to call collect though. Range will act like a normal array in most cases but is more efficient because it lazily computes its values. This pattern of creating specialized objects instead of full arrays is used frequently, and is also seen in functions such as linspace, or with iterators such as enumerate, and zip. The special objects can mostly be used as if they were normal arrays.\nFunctions in Julia return values from their last expression or the return keyword instead of listing the names of variables to return in the function definition (see The return Keyword for details).\nA Julia script may contain any number of functions, and all definitions will be externally visible when the file is loaded. Function definitions can be loaded from files outside the current working directory.\nIn Julia, reductions such as sum(), prod(), and max() are performed over every element of an array when called with a single argument, as in sum(A), even if A has more than one dimension.\nIn Julia, functions such as sort() that operate column-wise by default (sort(A) is equivalent to sort(A,1)) do not have special behavior for 1xN arrays; the argument is returned unmodified since it still performs sort(A,1). To sort a 1xN matrix like a vector, use sort(A,2).\nIn Julia, if A is a 2-dimensional array, fft(A) computes a 2D FFT. In particular, it is not equivalent to fft(A,1), which computes a 1D FFT acting column-wise.\nIn Julia, parentheses must be used to call a function with zero arguments, like in tic() and toc().\nJulia discourages the used of semicolons to end statements. The results of statements are not automatically printed (except at the interactive prompt), and lines of code do not need to end with semicolons. println() or @printf() can be used to print specific output.\nIn Julia, if A and B are arrays, logical comparison operations like A == B do not return an array of booleans. Instead, use A .== B, and similarly for the other boolean operators like <, > and =.\nIn Julia, the operators &, |, and ⊻ (xor) perform the bitwise operations equivalent to and, or, and xor respectively in MATLAB, and have precedence similar to Python's bitwise operators (unlike C). They can operate on scalars or element-wise across arrays and can be used to combine logical arrays, but note the difference in order of operations: parentheses may be required (e.g., to select elements of A equal to 1 or 2 use (A .== 1) | (A .== 2)).\nIn Julia, the elements of a collection can be passed as arguments to a function using the splat operator ..., as in xs=[1,2]; f(xs...).\nJulia's svd() returns singular values as a vector instead of as a dense diagonal matrix.\nIn Julia, ... is not used to continue lines of code. Instead, incomplete expressions automatically continue onto the next line.\nIn both Julia and MATLAB, the variable ans is set to the value of the last expression issued in an interactive session. In Julia, unlike MATLAB, ans is not set when Julia code is run in non-interactive mode.\nJulia's types do not support dynamically adding fields at runtime, unlike MATLAB's classes. Instead, use a Dict.\nIn Julia each module has its own global scope/namespace, whereas in MATLAB there is just one global scope.\nIn MATLAB, an idiomatic way to remove unwanted values is to use logical indexing, like in the expression x(x>3) or in the statement x(x>3) = [] to modify x in-place. In contrast, Julia provides the higher order functions filter() and filter!(), allowing users to write filter(z->z>3, x) and filter!(z->z>3, x) as alternatives to the corresponding transliterations x[x.>3] and x = x[x.>3]. Using filter!() reduces the use of temporary arrays.\nThe analogue of extracting (or \"dereferencing\") all elements of a cell array, e.g. in vertcat(A{:}) in MATLAB, is written using the splat operator in Julia, e.g. as vcat(A...)."
+    "text": "Although MATLAB users may find Julia's syntax familiar, Julia is not a MATLAB clone. There are major syntactic and functional differences. The following are some noteworthy differences that may trip up Julia users accustomed to MATLAB:Julia arrays are indexed with square brackets, A[i,j].\nJulia arrays are assigned by reference. After A=B, changing elements of B will modify A as well.\nJulia values are passed and assigned by reference. If a function modifies an array, the changes will be visible in the caller.\nJulia does not automatically grow arrays in an assignment statement. Whereas in MATLAB a(4) = 3.2 can create the array a = [0 0 0 3.2] and a(5) = 7 can grow it into a = [0 0 0 3.2 7], the corresponding Julia statement a[5] = 7 throws an error if the length of a is less than 5 or if this statement is the first use of the identifier a. Julia has push!() and append!(), which grow Vectors much more efficiently than MATLAB's a(end+1) = val.\nThe imaginary unit sqrt(-1) is represented in Julia as im, not i or j as in MATLAB.\nIn Julia, literal numbers without a decimal point (such as 42) create integers instead of floating point numbers. Arbitrarily large integer literals are supported. As a result, some operations such as 2^-1 will throw a domain error as the result is not an integer (see the FAQ entry on domain errors for details).\nIn Julia, multiple values are returned and assigned as tuples, e.g. (a, b) = (1, 2) or a, b = 1, 2. MATLAB's nargout, which is often used in MATLAB to do optional work based on the number of returned values, does not exist in Julia. Instead, users can use optional and keyword arguments to achieve similar capabilities.\nJulia has true one-dimensional arrays. Column vectors are of size N, not Nx1. For example, rand(N) makes a 1-dimensional array.\nIn Julia, [x,y,z] will always construct a 3-element array containing x, y and z.\nTo concatenate in the first (\"vertical\") dimension use either vcat(x,y,z) or separate with semicolons ([x; y; z]).\nTo concatenate in the second (\"horizontal\") dimension use either hcat(x,y,z) or separate with spaces ([x y z]).\nTo construct block matrices (concatenating in the first two dimensions), use either hvcat() or combine spaces and semicolons ([a b; c d]).\nIn Julia, a:b and a:b:c construct Range objects. To construct a full vector like in MATLAB, use collect(a:b). Generally, there is no need to call collect though. Range will act like a normal array in most cases but is more efficient because it lazily computes its values. This pattern of creating specialized objects instead of full arrays is used frequently, and is also seen in functions such as linspace, or with iterators such as enumerate, and zip. The special objects can mostly be used as if they were normal arrays.\nFunctions in Julia return values from their last expression or the return keyword instead of listing the names of variables to return in the function definition (see The return Keyword for details).\nA Julia script may contain any number of functions, and all definitions will be externally visible when the file is loaded. Function definitions can be loaded from files outside the current working directory.\nIn Julia, reductions such as sum(), prod(), and max() are performed over every element of an array when called with a single argument, as in sum(A), even if A has more than one dimension.\nIn Julia, functions such as sort() that operate column-wise by default (sort(A) is equivalent to sort(A,1)) do not have special behavior for 1xN arrays; the argument is returned unmodified since it still performs sort(A,1). To sort a 1xN matrix like a vector, use sort(A,2).\nIn Julia, parentheses must be used to call a function with zero arguments, like in tic() and toc().\nJulia discourages the used of semicolons to end statements. The results of statements are not automatically printed (except at the interactive prompt), and lines of code do not need to end with semicolons. println() or @printf() can be used to print specific output.\nIn Julia, if A and B are arrays, logical comparison operations like A == B do not return an array of booleans. Instead, use A .== B, and similarly for the other boolean operators like <, > and =.\nIn Julia, the operators &, |, and ⊻ (xor) perform the bitwise operations equivalent to and, or, and xor respectively in MATLAB, and have precedence similar to Python's bitwise operators (unlike C). They can operate on scalars or element-wise across arrays and can be used to combine logical arrays, but note the difference in order of operations: parentheses may be required (e.g., to select elements of A equal to 1 or 2 use (A .== 1) | (A .== 2)).\nIn Julia, the elements of a collection can be passed as arguments to a function using the splat operator ..., as in xs=[1,2]; f(xs...).\nJulia's svd() returns singular values as a vector instead of as a dense diagonal matrix.\nIn Julia, ... is not used to continue lines of code. Instead, incomplete expressions automatically continue onto the next line.\nIn both Julia and MATLAB, the variable ans is set to the value of the last expression issued in an interactive session. In Julia, unlike MATLAB, ans is not set when Julia code is run in non-interactive mode.\nJulia's types do not support dynamically adding fields at runtime, unlike MATLAB's classes. Instead, use a Dict.\nIn Julia each module has its own global scope/namespace, whereas in MATLAB there is just one global scope.\nIn MATLAB, an idiomatic way to remove unwanted values is to use logical indexing, like in the expression x(x>3) or in the statement x(x>3) = [] to modify x in-place. In contrast, Julia provides the higher order functions filter() and filter!(), allowing users to write filter(z->z>3, x) and filter!(z->z>3, x) as alternatives to the corresponding transliterations x[x.>3] and x = x[x.>3]. Using filter!() reduces the use of temporary arrays.\nThe analogue of extracting (or \"dereferencing\") all elements of a cell array, e.g. in vertcat(A{:}) in MATLAB, is written using the splat operator in Julia, e.g. as vcat(A...)."
 },
 
 {
@@ -6289,6 +6289,14 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "stdlib/collections/#Base.unique!",
+    "page": "Collections and Data Structures",
+    "title": "Base.unique!",
+    "category": "Function",
+    "text": "unique!(A::AbstractVector)\n\nRemove duplicate items as determined by isequal, then return the modified A. unique! will return the elements of A in the order that they occur. If you do not care about the order of the returned data, then calling (sort!(A); unique!(A)) will be much more efficient as long as the elements of A can be sorted.\n\njulia> unique!([1, 1, 1])\n1-element Array{Int64,1}:\n 1\n\njulia> A = [7, 3, 2, 3, 7, 5];\n\njulia> unique!(A)\n4-element Array{Int64,1}:\n 7\n 3\n 2\n 5\n\njulia> B = [7, 6, 42, 6, 7, 42];\n\njulia> sort!(B);  # unique! is able to process sorted data much more efficiently.\n\njulia> unique!(B)\n3-element Array{Int64,1}:\n 6\n 7\n 42\n\n\n\n"
+},
+
+{
     "location": "stdlib/collections/#Base.allunique",
     "page": "Collections and Data Structures",
     "title": "Base.allunique",
@@ -6717,7 +6725,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Iterable Collections",
     "category": "section",
-    "text": "Base.in\nBase.eltype\nBase.indexin\nBase.findin\nBase.unique\nBase.allunique\nBase.reduce(::Any, ::Any, ::Any)\nBase.reduce(::Any, ::Any)\nBase.foldl(::Any, ::Any, ::Any)\nBase.foldl(::Any, ::Any)\nBase.foldr(::Any, ::Any, ::Any)\nBase.foldr(::Any, ::Any)\nBase.maximum(::Any)\nBase.maximum(::Any, ::Any)\nBase.maximum!\nBase.minimum(::Any)\nBase.minimum(::Any, ::Any)\nBase.minimum!\nBase.extrema(::Any)\nBase.extrema(::AbstractArray, ::Any)\nBase.indmax\nBase.indmin\nBase.findmax(::Any)\nBase.findmax(::AbstractArray, ::Any)\nBase.findmin(::Any)\nBase.findmin(::AbstractArray, ::Any)\nBase.findmax!\nBase.findmin!\nBase.sum\nBase.sum!\nBase.prod\nBase.prod!\nBase.any(::Any)\nBase.any(::AbstractArray, ::Any)\nBase.any!\nBase.all(::Any)\nBase.all(::AbstractArray, ::Any)\nBase.all!\nBase.count\nBase.any(::Any, ::Any)\nBase.all(::Any, ::Any)\nBase.foreach\nBase.map\nBase.map!\nBase.mapreduce(::Any, ::Any, ::Any, ::Any)\nBase.mapreduce(::Any, ::Any, ::Any)\nBase.mapfoldl(::Any, ::Any, ::Any, ::Any)\nBase.mapfoldl(::Any, ::Any, ::Any)\nBase.mapfoldr(::Any, ::Any, ::Any, ::Any)\nBase.mapfoldr(::Any, ::Any, ::Any)\nBase.first\nBase.last\nBase.step\nBase.collect(::Any)\nBase.collect(::Type, ::Any)\nBase.issubset(::Any, ::Any)\nBase.filter\nBase.filter!"
+    "text": "Base.in\nBase.eltype\nBase.indexin\nBase.findin\nBase.unique\nBase.unique!\nBase.allunique\nBase.reduce(::Any, ::Any, ::Any)\nBase.reduce(::Any, ::Any)\nBase.foldl(::Any, ::Any, ::Any)\nBase.foldl(::Any, ::Any)\nBase.foldr(::Any, ::Any, ::Any)\nBase.foldr(::Any, ::Any)\nBase.maximum(::Any)\nBase.maximum(::Any, ::Any)\nBase.maximum!\nBase.minimum(::Any)\nBase.minimum(::Any, ::Any)\nBase.minimum!\nBase.extrema(::Any)\nBase.extrema(::AbstractArray, ::Any)\nBase.indmax\nBase.indmin\nBase.findmax(::Any)\nBase.findmax(::AbstractArray, ::Any)\nBase.findmin(::Any)\nBase.findmin(::AbstractArray, ::Any)\nBase.findmax!\nBase.findmin!\nBase.sum\nBase.sum!\nBase.prod\nBase.prod!\nBase.any(::Any)\nBase.any(::AbstractArray, ::Any)\nBase.any!\nBase.all(::Any)\nBase.all(::AbstractArray, ::Any)\nBase.all!\nBase.count\nBase.any(::Any, ::Any)\nBase.all(::Any, ::Any)\nBase.foreach\nBase.map\nBase.map!\nBase.mapreduce(::Any, ::Any, ::Any, ::Any)\nBase.mapreduce(::Any, ::Any, ::Any)\nBase.mapfoldl(::Any, ::Any, ::Any, ::Any)\nBase.mapfoldl(::Any, ::Any, ::Any)\nBase.mapfoldr(::Any, ::Any, ::Any, ::Any)\nBase.mapfoldr(::Any, ::Any, ::Any)\nBase.first\nBase.last\nBase.step\nBase.collect(::Any)\nBase.collect(::Type, ::Any)\nBase.issubset(::Any, ::Any)\nBase.filter\nBase.filter!"
 },
 
 {
@@ -6861,7 +6869,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.merge!",
     "category": "Function",
-    "text": "merge!(d::Associative, others::Associative...)\n\nUpdate collection with pairs from the other collections. See also merge.\n\njulia> d1 = Dict(1 => 2, 3 => 4);\n\njulia> d2 = Dict(1 => 4, 4 => 5);\n\njulia> merge!(d1, d2);\n\njulia> d1\nDict{Int64,Int64} with 3 entries:\n  4 => 5\n  3 => 4\n  1 => 4\n\n\n\nmerge!(combine, d::Associative, others::Associative...)\n\nUpdate collection with pairs from the other collections. Values with the same key will be combined using the combiner function.\n\njulia> d1 = Dict(1 => 2, 3 => 4);\n\njulia> d2 = Dict(1 => 4, 4 => 5);\n\njulia> merge!(+, d1, d2);\n\njulia> d1\nDict{Int64,Int64} with 3 entries:\n  4 => 5\n  3 => 4\n  1 => 6\n\njulia> merge!(-, d1, d1);\n\njulia> d1\nDict{Int64,Int64} with 3 entries:\n  4 => 0\n  3 => 0\n  1 => 0\n\n\n\nMerge changes into current head \n\n\n\nInternal implementation of merge. Returns true if merge was successful, otherwise false\n\n\n\nmerge!(repo::GitRepo; kwargs...) -> Bool\n\nPerform a git merge on the repository repo, merging commits with diverging history into the current branch. Returns true if the merge succeeded, false if not.\n\nThe keyword arguments are:\n\ncommittish::AbstractString=\"\": Merge the named commit(s) in committish.\nbranch::AbstractString=\"\": Merge the branch branch and all its commits since it diverged from the current branch.\nfastforward::Bool=false: If fastforward is true, only merge if the merge is a fast-forward (the current branch head is an ancestor of the commits to be merged), otherwise refuse to merge and return false. This is equivalent to the git CLI option --ff-only.\nmerge_opts::MergeOptions=MergeOptions(): merge_opts specifies options for the merge, such as merge strategy in case of conflicts.\ncheckout_opts::CheckoutOptions=CheckoutOptions(): checkout_opts specifies options for the checkout step.\n\nEquivalent to git merge [--ff-only] [<committish> | <branch>].\n\nnote: Note\nIf you specify a branch, this must be done in reference format, since the string will be turned into a GitReference. For example, if you wanted to merge branch branch_a, you would call merge!(repo, branch=\"refs/heads/branch_a\").\n\n\n\n"
+    "text": "Merge changes into current head \n\n\n\nInternal implementation of merge. Returns true if merge was successful, otherwise false\n\n\n\nmerge!(repo::GitRepo; kwargs...) -> Bool\n\nPerform a git merge on the repository repo, merging commits with diverging history into the current branch. Returns true if the merge succeeded, false if not.\n\nThe keyword arguments are:\n\ncommittish::AbstractString=\"\": Merge the named commit(s) in committish.\nbranch::AbstractString=\"\": Merge the branch branch and all its commits since it diverged from the current branch.\nfastforward::Bool=false: If fastforward is true, only merge if the merge is a fast-forward (the current branch head is an ancestor of the commits to be merged), otherwise refuse to merge and return false. This is equivalent to the git CLI option --ff-only.\nmerge_opts::MergeOptions=MergeOptions(): merge_opts specifies options for the merge, such as merge strategy in case of conflicts.\ncheckout_opts::CheckoutOptions=CheckoutOptions(): checkout_opts specifies options for the checkout step.\n\nEquivalent to git merge [--ff-only] [<committish> | <branch>].\n\nnote: Note\nIf you specify a branch, this must be done in reference format, since the string will be turned into a GitReference. For example, if you wanted to merge branch branch_a, you would call merge!(repo, branch=\"refs/heads/branch_a\").\n\n\n\nmerge!(d::Associative, others::Associative...)\n\nUpdate collection with pairs from the other collections. See also merge.\n\njulia> d1 = Dict(1 => 2, 3 => 4);\n\njulia> d2 = Dict(1 => 4, 4 => 5);\n\njulia> merge!(d1, d2);\n\njulia> d1\nDict{Int64,Int64} with 3 entries:\n  4 => 5\n  3 => 4\n  1 => 4\n\n\n\nmerge!(combine, d::Associative, others::Associative...)\n\nUpdate collection with pairs from the other collections. Values with the same key will be combined using the combiner function.\n\njulia> d1 = Dict(1 => 2, 3 => 4);\n\njulia> d2 = Dict(1 => 4, 4 => 5);\n\njulia> merge!(+, d1, d2);\n\njulia> d1\nDict{Int64,Int64} with 3 entries:\n  4 => 5\n  3 => 4\n  1 => 6\n\njulia> merge!(-, d1, d1);\n\njulia> d1\nDict{Int64,Int64} with 3 entries:\n  4 => 0\n  3 => 0\n  1 => 0\n\n\n\n"
 },
 
 {
@@ -8622,326 +8630,6 @@ var documenterSearchIndex = {"docs": [
     "title": "Statistics",
     "category": "section",
     "text": "Base.mean\nBase.mean!\nBase.std\nBase.stdm\nBase.var\nBase.varm\nBase.middle\nBase.median\nBase.median!\nBase.quantile\nBase.quantile!\nBase.cov\nBase.cor"
-},
-
-{
-    "location": "stdlib/math/#Base.DFT.fft",
-    "page": "Mathematics",
-    "title": "Base.DFT.fft",
-    "category": "Function",
-    "text": "fft(A [, dims])\n\nPerforms a multidimensional FFT of the array A. The optional dims argument specifies an iterable subset of dimensions (e.g. an integer, range, tuple, or array) to transform along. Most efficient if the size of A along the transformed dimensions is a product of small primes; see nextprod(). See also plan_fft() for even greater efficiency.\n\nA one-dimensional FFT computes the one-dimensional discrete Fourier transform (DFT) as defined by\n\noperatornameDFT(A)k =\n  sum_n=1^operatornamelength(A)\n  expleft(-ifrac2pi\n  (n-1)(k-1)operatornamelength(A) right) An\n\nA multidimensional FFT simply performs this operation along each transformed dimension of A.\n\nnote: Note\nJulia starts FFTW up with 1 thread by default. Higher performance is usually possible by increasing number of threads. Use FFTW.set_num_threads(Sys.CPU_CORES) to use as many threads as cores on your system.\nThis performs a multidimensional FFT by default. FFT libraries in other languages such as Python and Octave perform a one-dimensional FFT along the first non-singleton dimension of the array. This is worth noting while performing comparisons. For more details, refer to the Noteworthy Differences from other Languages section of the manual.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math/#Base.DFT.fft!",
-    "page": "Mathematics",
-    "title": "Base.DFT.fft!",
-    "category": "Function",
-    "text": "fft!(A [, dims])\n\nSame as fft, but operates in-place on A, which must be an array of complex floating-point numbers.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math/#Base.DFT.ifft",
-    "page": "Mathematics",
-    "title": "Base.DFT.ifft",
-    "category": "Function",
-    "text": "ifft(A [, dims])\n\nMultidimensional inverse FFT.\n\nA one-dimensional inverse FFT computes\n\noperatornameIDFT(A)k = frac1operatornamelength(A)\nsum_n=1^operatornamelength(A) expleft(+ifrac2pi (n-1)(k-1)\noperatornamelength(A) right) An\n\nA multidimensional inverse FFT simply performs this operation along each transformed dimension of A.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math/#Base.DFT.ifft!",
-    "page": "Mathematics",
-    "title": "Base.DFT.ifft!",
-    "category": "Function",
-    "text": "ifft!(A [, dims])\n\nSame as ifft, but operates in-place on A.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math/#Base.DFT.bfft",
-    "page": "Mathematics",
-    "title": "Base.DFT.bfft",
-    "category": "Function",
-    "text": "bfft(A [, dims])\n\nSimilar to ifft, but computes an unnormalized inverse (backward) transform, which must be divided by the product of the sizes of the transformed dimensions in order to obtain the inverse. (This is slightly more efficient than ifft because it omits a scaling step, which in some applications can be combined with other computational steps elsewhere.)\n\noperatornameBDFT(A)k = operatornamelength(A) operatornameIDFT(A)k\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math/#Base.DFT.bfft!",
-    "page": "Mathematics",
-    "title": "Base.DFT.bfft!",
-    "category": "Function",
-    "text": "bfft!(A [, dims])\n\nSame as bfft, but operates in-place on A.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math/#Base.DFT.plan_fft",
-    "page": "Mathematics",
-    "title": "Base.DFT.plan_fft",
-    "category": "Function",
-    "text": "plan_fft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)\n\nPre-plan an optimized FFT along given dimensions (dims) of arrays matching the shape and type of A.  (The first two arguments have the same meaning as for fft.) Returns an object P which represents the linear operator computed by the FFT, and which contains all of the information needed to compute fft(A, dims) quickly.\n\nTo apply P to an array A, use P * A; in general, the syntax for applying plans is much like that of matrices.  (A plan can only be applied to arrays of the same size as the A for which the plan was created.)  You can also apply a plan with a preallocated output array Â by calling A_mul_B!(Â, plan, A).  (For A_mul_B!, however, the input array A must be a complex floating-point array like the output Â.) You can compute the inverse-transform plan by inv(P) and apply the inverse plan with P \\ Â (the inverse plan is cached and reused for subsequent calls to inv or \\), and apply the inverse plan to a pre-allocated output array A with A_ldiv_B!(A, P, Â).\n\nThe flags argument is a bitwise-or of FFTW planner flags, defaulting to FFTW.ESTIMATE. e.g. passing FFTW.MEASURE or FFTW.PATIENT will instead spend several seconds (or more) benchmarking different possible FFT algorithms and picking the fastest one; see the FFTW manual for more information on planner flags.  The optional timelimit argument specifies a rough upper bound on the allowed planning time, in seconds. Passing FFTW.MEASURE or FFTW.PATIENT may cause the input array A to be overwritten with zeros during plan creation.\n\nplan_fft! is the same as plan_fft but creates a plan that operates in-place on its argument (which must be an array of complex floating-point numbers). plan_ifft and so on are similar but produce plans that perform the equivalent of the inverse transforms ifft and so on.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math/#Base.DFT.plan_ifft",
-    "page": "Mathematics",
-    "title": "Base.DFT.plan_ifft",
-    "category": "Function",
-    "text": "plan_ifft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)\n\nSame as plan_fft, but produces a plan that performs inverse transforms ifft.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math/#Base.DFT.plan_bfft",
-    "page": "Mathematics",
-    "title": "Base.DFT.plan_bfft",
-    "category": "Function",
-    "text": "plan_bfft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)\n\nSame as plan_fft, but produces a plan that performs an unnormalized backwards transform bfft.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math/#Base.DFT.plan_fft!",
-    "page": "Mathematics",
-    "title": "Base.DFT.plan_fft!",
-    "category": "Function",
-    "text": "plan_fft!(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)\n\nSame as plan_fft, but operates in-place on A.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math/#Base.DFT.plan_ifft!",
-    "page": "Mathematics",
-    "title": "Base.DFT.plan_ifft!",
-    "category": "Function",
-    "text": "plan_ifft!(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)\n\nSame as plan_ifft, but operates in-place on A.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math/#Base.DFT.plan_bfft!",
-    "page": "Mathematics",
-    "title": "Base.DFT.plan_bfft!",
-    "category": "Function",
-    "text": "plan_bfft!(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)\n\nSame as plan_bfft, but operates in-place on A.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math/#Base.DFT.rfft",
-    "page": "Mathematics",
-    "title": "Base.DFT.rfft",
-    "category": "Function",
-    "text": "rfft(A [, dims])\n\nMultidimensional FFT of a real array A, exploiting the fact that the transform has conjugate symmetry in order to save roughly half the computational time and storage costs compared with fft. If A has size (n_1, ..., n_d), the result has size (div(n_1,2)+1, ..., n_d).\n\nThe optional dims argument specifies an iterable subset of one or more dimensions of A to transform, similar to fft. Instead of (roughly) halving the first dimension of A in the result, the dims[1] dimension is (roughly) halved in the same way.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math/#Base.DFT.irfft",
-    "page": "Mathematics",
-    "title": "Base.DFT.irfft",
-    "category": "Function",
-    "text": "irfft(A, d [, dims])\n\nInverse of rfft: for a complex array A, gives the corresponding real array whose FFT yields A in the first half. As for rfft, dims is an optional subset of dimensions to transform, defaulting to 1:ndims(A).\n\nd is the length of the transformed real array along the dims[1] dimension, which must satisfy div(d,2)+1 == size(A,dims[1]). (This parameter cannot be inferred from size(A) since both 2*size(A,dims[1])-2 as well as 2*size(A,dims[1])-1 are valid sizes for the transformed real array.)\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math/#Base.DFT.brfft",
-    "page": "Mathematics",
-    "title": "Base.DFT.brfft",
-    "category": "Function",
-    "text": "brfft(A, d [, dims])\n\nSimilar to irfft but computes an unnormalized inverse transform (similar to bfft), which must be divided by the product of the sizes of the transformed dimensions (of the real output array) in order to obtain the inverse transform.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math/#Base.DFT.plan_rfft",
-    "page": "Mathematics",
-    "title": "Base.DFT.plan_rfft",
-    "category": "Function",
-    "text": "plan_rfft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)\n\nPre-plan an optimized real-input FFT, similar to plan_fft except for rfft instead of fft. The first two arguments, and the size of the transformed result, are the same as for rfft.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math/#Base.DFT.plan_brfft",
-    "page": "Mathematics",
-    "title": "Base.DFT.plan_brfft",
-    "category": "Function",
-    "text": "plan_brfft(A, d [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)\n\nPre-plan an optimized real-input unnormalized transform, similar to plan_rfft except for brfft instead of rfft. The first two arguments and the size of the transformed result, are the same as for brfft.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math/#Base.DFT.plan_irfft",
-    "page": "Mathematics",
-    "title": "Base.DFT.plan_irfft",
-    "category": "Function",
-    "text": "plan_irfft(A, d [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)\n\nPre-plan an optimized inverse real-input FFT, similar to plan_rfft except for irfft and brfft, respectively. The first three arguments have the same meaning as for irfft.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math/#Base.DFT.FFTW.dct",
-    "page": "Mathematics",
-    "title": "Base.DFT.FFTW.dct",
-    "category": "Function",
-    "text": "dct(A [, dims])\n\nPerforms a multidimensional type-II discrete cosine transform (DCT) of the array A, using the unitary normalization of the DCT. The optional dims argument specifies an iterable subset of dimensions (e.g. an integer, range, tuple, or array) to transform along.  Most efficient if the size of A along the transformed dimensions is a product of small primes; see nextprod. See also plan_dct for even greater efficiency.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math/#Base.DFT.FFTW.dct!",
-    "page": "Mathematics",
-    "title": "Base.DFT.FFTW.dct!",
-    "category": "Function",
-    "text": "dct!(A [, dims])\n\nSame as dct!, except that it operates in-place on A, which must be an array of real or complex floating-point values.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math/#Base.DFT.FFTW.idct",
-    "page": "Mathematics",
-    "title": "Base.DFT.FFTW.idct",
-    "category": "Function",
-    "text": "idct(A [, dims])\n\nComputes the multidimensional inverse discrete cosine transform (DCT) of the array A (technically, a type-III DCT with the unitary normalization). The optional dims argument specifies an iterable subset of dimensions (e.g. an integer, range, tuple, or array) to transform along.  Most efficient if the size of A along the transformed dimensions is a product of small primes; see nextprod.  See also plan_idct for even greater efficiency.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math/#Base.DFT.FFTW.idct!",
-    "page": "Mathematics",
-    "title": "Base.DFT.FFTW.idct!",
-    "category": "Function",
-    "text": "idct!(A [, dims])\n\nSame as idct!, but operates in-place on A.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math/#Base.DFT.FFTW.plan_dct",
-    "page": "Mathematics",
-    "title": "Base.DFT.FFTW.plan_dct",
-    "category": "Function",
-    "text": "plan_dct(A [, dims [, flags [, timelimit]]])\n\nPre-plan an optimized discrete cosine transform (DCT), similar to plan_fft except producing a function that computes dct. The first two arguments have the same meaning as for dct.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math/#Base.DFT.FFTW.plan_dct!",
-    "page": "Mathematics",
-    "title": "Base.DFT.FFTW.plan_dct!",
-    "category": "Function",
-    "text": "plan_dct!(A [, dims [, flags [, timelimit]]])\n\nSame as plan_dct, but operates in-place on A.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math/#Base.DFT.FFTW.plan_idct",
-    "page": "Mathematics",
-    "title": "Base.DFT.FFTW.plan_idct",
-    "category": "Function",
-    "text": "plan_idct(A [, dims [, flags [, timelimit]]])\n\nPre-plan an optimized inverse discrete cosine transform (DCT), similar to plan_fft except producing a function that computes idct. The first two arguments have the same meaning as for idct.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math/#Base.DFT.FFTW.plan_idct!",
-    "page": "Mathematics",
-    "title": "Base.DFT.FFTW.plan_idct!",
-    "category": "Function",
-    "text": "plan_idct!(A [, dims [, flags [, timelimit]]])\n\nSame as plan_idct, but operates in-place on A.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math/#Base.DFT.fftshift-Tuple{Any}",
-    "page": "Mathematics",
-    "title": "Base.DFT.fftshift",
-    "category": "Method",
-    "text": "fftshift(x)\n\nSwap the first and second halves of each dimension of x.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math/#Base.DFT.fftshift-Tuple{Any,Any}",
-    "page": "Mathematics",
-    "title": "Base.DFT.fftshift",
-    "category": "Method",
-    "text": "fftshift(x,dim)\n\nSwap the first and second halves of the given dimension or iterable of dimensions of array x.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math/#Base.DFT.ifftshift",
-    "page": "Mathematics",
-    "title": "Base.DFT.ifftshift",
-    "category": "Function",
-    "text": "ifftshift(x, [dim])\n\nUndoes the effect of fftshift.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math/#Base.DSP.filt",
-    "page": "Mathematics",
-    "title": "Base.DSP.filt",
-    "category": "Function",
-    "text": "filt(b, a, x, [si])\n\nApply filter described by vectors a and b to vector x, with an optional initial filter state vector si (defaults to zeros).\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math/#Base.DSP.filt!",
-    "page": "Mathematics",
-    "title": "Base.DSP.filt!",
-    "category": "Function",
-    "text": "filt!(out, b, a, x, [si])\n\nSame as filt but writes the result into the out argument, which may alias the input x to modify it in-place.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math/#Base.DSP.deconv",
-    "page": "Mathematics",
-    "title": "Base.DSP.deconv",
-    "category": "Function",
-    "text": "deconv(b,a) -> c\n\nConstruct vector c such that b = conv(a,c) + r. Equivalent to polynomial division.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math/#Base.DSP.conv",
-    "page": "Mathematics",
-    "title": "Base.DSP.conv",
-    "category": "Function",
-    "text": "conv(u,v)\n\nConvolution of two vectors. Uses FFT algorithm.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math/#Base.DSP.conv2",
-    "page": "Mathematics",
-    "title": "Base.DSP.conv2",
-    "category": "Function",
-    "text": "conv2(u,v,A)\n\n2-D convolution of the matrix A with the 2-D separable kernel generated by the vectors u and v. Uses 2-D FFT algorithm.\n\n\n\nconv2(B,A)\n\n2-D convolution of the matrix B with the matrix A. Uses 2-D FFT algorithm.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math/#Base.DSP.xcorr",
-    "page": "Mathematics",
-    "title": "Base.DSP.xcorr",
-    "category": "Function",
-    "text": "xcorr(u,v)\n\nCompute the cross-correlation of two vectors.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math/#Base.DFT.FFTW.r2r",
-    "page": "Mathematics",
-    "title": "Base.DFT.FFTW.r2r",
-    "category": "Function",
-    "text": "r2r(A, kind [, dims])\n\nPerforms a multidimensional real-input/real-output (r2r) transform of type kind of the array A, as defined in the FFTW manual. kind specifies either a discrete cosine transform of various types (FFTW.REDFT00, FFTW.REDFT01, FFTW.REDFT10, or FFTW.REDFT11), a discrete sine transform of various types (FFTW.RODFT00, FFTW.RODFT01, FFTW.RODFT10, or FFTW.RODFT11), a real-input DFT with halfcomplex-format output (FFTW.R2HC and its inverse FFTW.HC2R), or a discrete Hartley transform (FFTW.DHT).  The kind argument may be an array or tuple in order to specify different transform types along the different dimensions of A; kind[end] is used for any unspecified dimensions.  See the FFTW manual for precise definitions of these transform types, at http://www.fftw.org/doc.\n\nThe optional dims argument specifies an iterable subset of dimensions (e.g. an integer, range, tuple, or array) to transform along. kind[i] is then the transform type for dims[i], with kind[end] being used for i > length(kind).\n\nSee also plan_r2r to pre-plan optimized r2r transforms.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math/#Base.DFT.FFTW.r2r!",
-    "page": "Mathematics",
-    "title": "Base.DFT.FFTW.r2r!",
-    "category": "Function",
-    "text": "r2r!(A, kind [, dims])\n\nSame as r2r, but operates in-place on A, which must be an array of real or complex floating-point numbers.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math/#Base.DFT.FFTW.plan_r2r",
-    "page": "Mathematics",
-    "title": "Base.DFT.FFTW.plan_r2r",
-    "category": "Function",
-    "text": "plan_r2r(A, kind [, dims [, flags [, timelimit]]])\n\nPre-plan an optimized r2r transform, similar to plan_fft except that the transforms (and the first three arguments) correspond to r2r and r2r!, respectively.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math/#Base.DFT.FFTW.plan_r2r!",
-    "page": "Mathematics",
-    "title": "Base.DFT.FFTW.plan_r2r!",
-    "category": "Function",
-    "text": "plan_r2r!(A, kind [, dims [, flags [, timelimit]]])\n\nSimilar to plan_fft, but corresponds to r2r!.\n\n\n\n"
-},
-
-{
-    "location": "stdlib/math/#Signal-Processing-1",
-    "page": "Mathematics",
-    "title": "Signal Processing",
-    "category": "section",
-    "text": "Fast Fourier transform (FFT) functions in Julia are implemented by calling functions from FFTW.Base.DFT.fft\nBase.DFT.fft!\nBase.DFT.ifft\nBase.DFT.ifft!\nBase.DFT.bfft\nBase.DFT.bfft!\nBase.DFT.plan_fft\nBase.DFT.plan_ifft\nBase.DFT.plan_bfft\nBase.DFT.plan_fft!\nBase.DFT.plan_ifft!\nBase.DFT.plan_bfft!\nBase.DFT.rfft\nBase.DFT.irfft\nBase.DFT.brfft\nBase.DFT.plan_rfft\nBase.DFT.plan_brfft\nBase.DFT.plan_irfft\nBase.DFT.FFTW.dct\nBase.DFT.FFTW.dct!\nBase.DFT.FFTW.idct\nBase.DFT.FFTW.idct!\nBase.DFT.FFTW.plan_dct\nBase.DFT.FFTW.plan_dct!\nBase.DFT.FFTW.plan_idct\nBase.DFT.FFTW.plan_idct!\nBase.DFT.fftshift(::Any)\nBase.DFT.fftshift(::Any, ::Any)\nBase.DFT.ifftshift\nBase.DSP.filt\nBase.DSP.filt!\nBase.DSP.deconv\nBase.DSP.conv\nBase.DSP.conv2\nBase.DSP.xcorrThe following functions are defined within the Base.FFTW module.Base.DFT.FFTW.r2r\nBase.DFT.FFTW.r2r!\nBase.DFT.FFTW.plan_r2r\nBase.DFT.FFTW.plan_r2r!"
 },
 
 {
@@ -12765,7 +12453,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.lufact",
     "category": "Function",
-    "text": "lufact(A [,pivot=Val{true}]) -> F::LU\n\nCompute the LU factorization of A.\n\nIn most cases, if A is a subtype S of AbstractMatrix{T} with an element type T supporting +, -, * and /, the return type is LU{T,S{T}}. If pivoting is chosen (default) the element type should also support abs and <.\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] (right) permutation Vector\nF[:P] (right) permutation Matrix\n\nThe relationship between F and A is\n\nF[:L]*F[:U] == A[F[:p], :]\n\nF further supports the following functions:\n\nSupported function LU LU{T,Tridiagonal{T}}\n/ ✓ \n\\ ✓ ✓\ninv ✓ ✓\ndet ✓ ✓\nlogdet ✓ ✓\nlogabsdet ✓ ✓\nsize ✓ ✓\n\nExample\n\njulia> A = [4 3; 6 3]\n2×2 Array{Int64,2}:\n 4  3\n 6  3\n\njulia> F = lufact(A)\nBase.LinAlg.LU{Float64,Array{Float64,2}} with factors L and U:\n[1.0 0.0; 1.5 1.0]\n[4.0 3.0; 0.0 -1.5]\n\njulia> F[:L] * F[:U] == A[F[:p], :]\ntrue\n\n\n\nlufact(A::SparseMatrixCSC) -> F::UmfpackLU\n\nCompute the LU factorization of a sparse matrix A.\n\nFor sparse A with real or complex element type, the return type of F is UmfpackLU{Tv, Ti}, with Tv = Float64 or Complex128 respectively and Ti is an integer type (Int32 or Int64).\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] right permutation Vector\nF[:q] left permutation Vector\nF[:Rs] Vector of scaling factors\nF[:(:)] (L,U,p,q,Rs) components\n\nThe relation between F and A is\n\nF[:L]*F[:U] == (F[:Rs] .* A)[F[:p], F[:q]]\n\nF further supports the following functions:\n\n\\\ncond\ndet\n\nnote: Note\nlufact(A::SparseMatrixCSC) uses the UMFPACK library that is part of SuiteSparse. As this library only supports sparse matrices with Float64 or Complex128 elements, lufact converts A into a copy that is of type SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\n"
+    "text": "lufact(A::SparseMatrixCSC) -> F::UmfpackLU\n\nCompute the LU factorization of a sparse matrix A.\n\nFor sparse A with real or complex element type, the return type of F is UmfpackLU{Tv, Ti}, with Tv = Float64 or Complex128 respectively and Ti is an integer type (Int32 or Int64).\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] right permutation Vector\nF[:q] left permutation Vector\nF[:Rs] Vector of scaling factors\nF[:(:)] (L,U,p,q,Rs) components\n\nThe relation between F and A is\n\nF[:L]*F[:U] == (F[:Rs] .* A)[F[:p], F[:q]]\n\nF further supports the following functions:\n\n\\\ncond\ndet\n\nnote: Note\nlufact(A::SparseMatrixCSC) uses the UMFPACK library that is part of SuiteSparse. As this library only supports sparse matrices with Float64 or Complex128 elements, lufact converts A into a copy that is of type SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\nlufact(A [,pivot=Val{true}]) -> F::LU\n\nCompute the LU factorization of A.\n\nIn most cases, if A is a subtype S of AbstractMatrix{T} with an element type T supporting +, -, * and /, the return type is LU{T,S{T}}. If pivoting is chosen (default) the element type should also support abs and <.\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] (right) permutation Vector\nF[:P] (right) permutation Matrix\n\nThe relationship between F and A is\n\nF[:L]*F[:U] == A[F[:p], :]\n\nF further supports the following functions:\n\nSupported function LU LU{T,Tridiagonal{T}}\n/ ✓ \n\\ ✓ ✓\ninv ✓ ✓\ndet ✓ ✓\nlogdet ✓ ✓\nlogabsdet ✓ ✓\nsize ✓ ✓\n\nExample\n\njulia> A = [4 3; 6 3]\n2×2 Array{Int64,2}:\n 4  3\n 6  3\n\njulia> F = lufact(A)\nBase.LinAlg.LU{Float64,Array{Float64,2}} with factors L and U:\n[1.0 0.0; 1.5 1.0]\n[4.0 3.0; 0.0 -1.5]\n\njulia> F[:L] * F[:U] == A[F[:p], :]\ntrue\n\n\n\n"
 },
 
 {
@@ -12789,7 +12477,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.cholfact",
     "category": "Function",
-    "text": "cholfact(A, Val{false}) -> Cholesky\n\nCompute the Cholesky factorization of a dense symmetric positive definite matrix A and return a Cholesky factorization. The matrix A can either be a Symmetric or Hermitian StridedMatrix or a perfectly symmetric or Hermitian StridedMatrix. The triangular Cholesky factor can be obtained from the factorization F with: F[:L] and F[:U]. The following functions are available for Cholesky objects: size, \\, inv, det, logdet and isposdef.\n\nExample\n\njulia> A = [4. 12. -16.; 12. 37. -43.; -16. -43. 98.]\n3×3 Array{Float64,2}:\n   4.0   12.0  -16.0\n  12.0   37.0  -43.0\n -16.0  -43.0   98.0\n\njulia> C = cholfact(A)\nBase.LinAlg.Cholesky{Float64,Array{Float64,2}} with factor:\n[2.0 6.0 -8.0; 0.0 1.0 5.0; 0.0 0.0 3.0]\n\njulia> C[:U]\n3×3 UpperTriangular{Float64,Array{Float64,2}}:\n 2.0  6.0  -8.0\n  ⋅   1.0   5.0\n  ⋅    ⋅    3.0\n\njulia> C[:L]\n3×3 LowerTriangular{Float64,Array{Float64,2}}:\n  2.0   ⋅    ⋅\n  6.0  1.0   ⋅\n -8.0  5.0  3.0\n\njulia> C[:L] * C[:U] == A\ntrue\n\n\n\ncholfact(A, Val{true}; tol = 0.0) -> CholeskyPivoted\n\nCompute the pivoted Cholesky factorization of a dense symmetric positive semi-definite matrix A and return a CholeskyPivoted factorization. The matrix A can either be a Symmetric or Hermitian StridedMatrix or a perfectly symmetric or Hermitian StridedMatrix. The triangular Cholesky factor can be obtained from the factorization F with: F[:L] and F[:U]. The following functions are available for PivotedCholesky objects: size, \\, inv, det, and rank. The argument tol determines the tolerance for determining the rank. For negative values, the tolerance is the machine precision.\n\n\n\ncholfact(A; shift = 0.0, perm = Int[]) -> CHOLMOD.Factor\n\nCompute the Cholesky factorization of a sparse positive definite matrix A. A must be a SparseMatrixCSC, Symmetric{SparseMatrixCSC}, or Hermitian{SparseMatrixCSC}. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian. A fill-reducing permutation is used. F = cholfact(A) is most frequently used to solve systems of equations with F\\b, but also the methods diag, det, and logdet are defined for F. You can also extract individual factors from F, using F[:L]. However, since pivoting is on by default, the factorization is internally represented as A == P'*L*L'*P with a permutation matrix P; using just L without accounting for P will give incorrect answers. To include the effects of permutation, it's typically preferable to extract \"combined\" factors like PtL = F[:PtL] (the equivalent of P'*L) and LtP = F[:UP] (the equivalent of L'*P).\n\nSetting the optional shift keyword argument computes the factorization of A+shift*I instead of A. If the perm argument is nonempty, it should be a permutation of 1:size(A,1) giving the ordering to use (instead of CHOLMOD's default AMD ordering).\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.Many other functions from CHOLMOD are wrapped but not exported from the Base.SparseArrays.CHOLMOD module.\n\n\n\n"
+    "text": "cholfact(A; shift = 0.0, perm = Int[]) -> CHOLMOD.Factor\n\nCompute the Cholesky factorization of a sparse positive definite matrix A. A must be a SparseMatrixCSC, Symmetric{SparseMatrixCSC}, or Hermitian{SparseMatrixCSC}. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian. A fill-reducing permutation is used. F = cholfact(A) is most frequently used to solve systems of equations with F\\b, but also the methods diag, det, and logdet are defined for F. You can also extract individual factors from F, using F[:L]. However, since pivoting is on by default, the factorization is internally represented as A == P'*L*L'*P with a permutation matrix P; using just L without accounting for P will give incorrect answers. To include the effects of permutation, it's typically preferable to extract \"combined\" factors like PtL = F[:PtL] (the equivalent of P'*L) and LtP = F[:UP] (the equivalent of L'*P).\n\nSetting the optional shift keyword argument computes the factorization of A+shift*I instead of A. If the perm argument is nonempty, it should be a permutation of 1:size(A,1) giving the ordering to use (instead of CHOLMOD's default AMD ordering).\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.Many other functions from CHOLMOD are wrapped but not exported from the Base.SparseArrays.CHOLMOD module.\n\n\n\ncholfact(A, Val{false}) -> Cholesky\n\nCompute the Cholesky factorization of a dense symmetric positive definite matrix A and return a Cholesky factorization. The matrix A can either be a Symmetric or Hermitian StridedMatrix or a perfectly symmetric or Hermitian StridedMatrix. The triangular Cholesky factor can be obtained from the factorization F with: F[:L] and F[:U]. The following functions are available for Cholesky objects: size, \\, inv, det, logdet and isposdef.\n\nExample\n\njulia> A = [4. 12. -16.; 12. 37. -43.; -16. -43. 98.]\n3×3 Array{Float64,2}:\n   4.0   12.0  -16.0\n  12.0   37.0  -43.0\n -16.0  -43.0   98.0\n\njulia> C = cholfact(A)\nBase.LinAlg.Cholesky{Float64,Array{Float64,2}} with factor:\n[2.0 6.0 -8.0; 0.0 1.0 5.0; 0.0 0.0 3.0]\n\njulia> C[:U]\n3×3 UpperTriangular{Float64,Array{Float64,2}}:\n 2.0  6.0  -8.0\n  ⋅   1.0   5.0\n  ⋅    ⋅    3.0\n\njulia> C[:L]\n3×3 LowerTriangular{Float64,Array{Float64,2}}:\n  2.0   ⋅    ⋅\n  6.0  1.0   ⋅\n -8.0  5.0  3.0\n\njulia> C[:L] * C[:U] == A\ntrue\n\n\n\ncholfact(A, Val{true}; tol = 0.0) -> CholeskyPivoted\n\nCompute the pivoted Cholesky factorization of a dense symmetric positive semi-definite matrix A and return a CholeskyPivoted factorization. The matrix A can either be a Symmetric or Hermitian StridedMatrix or a perfectly symmetric or Hermitian StridedMatrix. The triangular Cholesky factor can be obtained from the factorization F with: F[:L] and F[:U]. The following functions are available for PivotedCholesky objects: size, \\, inv, det, and rank. The argument tol determines the tolerance for determining the rank. For negative values, the tolerance is the machine precision.\n\n\n\n"
 },
 
 {
@@ -12797,7 +12485,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.cholfact!",
     "category": "Function",
-    "text": "cholfact!(A, Val{false}) -> Cholesky\n\nThe same as cholfact, but saves space by overwriting the input A, instead of creating a copy. An InexactError exception is thrown if the factorization produces a number not representable by the element type of A, e.g. for integer types.\n\nExample\n\njulia> A = [1 2; 2 50]\n2×2 Array{Int64,2}:\n 1   2\n 2  50\n\njulia> cholfact!(A)\nERROR: InexactError()\n\n\n\ncholfact!(A, Val{true}; tol = 0.0) -> CholeskyPivoted\n\nThe same as cholfact, but saves space by overwriting the input A, instead of creating a copy. An InexactError exception is thrown if the factorization produces a number not representable by the element type of A, e.g. for integer types.\n\n\n\ncholfact!(F::Factor, A; shift = 0.0) -> CHOLMOD.Factor\n\nCompute the Cholesky (LL) factorization of A, reusing the symbolic factorization F. A must be a SparseMatrixCSC, Symmetric{SparseMatrixCSC}, or Hermitian{SparseMatrixCSC}. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian.\n\nSee also cholfact.\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\n"
+    "text": "cholfact!(F::Factor, A; shift = 0.0) -> CHOLMOD.Factor\n\nCompute the Cholesky (LL) factorization of A, reusing the symbolic factorization F. A must be a SparseMatrixCSC, Symmetric{SparseMatrixCSC}, or Hermitian{SparseMatrixCSC}. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian.\n\nSee also cholfact.\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\ncholfact!(A, Val{false}) -> Cholesky\n\nThe same as cholfact, but saves space by overwriting the input A, instead of creating a copy. An InexactError exception is thrown if the factorization produces a number not representable by the element type of A, e.g. for integer types.\n\nExample\n\njulia> A = [1 2; 2 50]\n2×2 Array{Int64,2}:\n 1   2\n 2  50\n\njulia> cholfact!(A)\nERROR: InexactError()\n\n\n\ncholfact!(A, Val{true}; tol = 0.0) -> CholeskyPivoted\n\nThe same as cholfact, but saves space by overwriting the input A, instead of creating a copy. An InexactError exception is thrown if the factorization produces a number not representable by the element type of A, e.g. for integer types.\n\n\n\n"
 },
 
 {
@@ -12837,7 +12525,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.ldltfact",
     "category": "Function",
-    "text": "ldltfact(S::SymTridiagonal) -> LDLt\n\nCompute an LDLt factorization of a real symmetric tridiagonal matrix such that A = L*Diagonal(d)*L' where L is a unit lower triangular matrix and d is a vector. The main use of an LDLt factorization F = ldltfact(A) is to solve the linear system of equations Ax = b with F\\b.\n\n\n\nldltfact(A; shift = 0.0, perm=Int[]) -> CHOLMOD.Factor\n\nCompute the LDL factorization of a sparse matrix A. A must be a SparseMatrixCSC, Symmetric{SparseMatrixCSC}, or Hermitian{SparseMatrixCSC}. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian. A fill-reducing permutation is used. F = ldltfact(A) is most frequently used to solve systems of equations A*x = b with F\\b. The returned factorization object F also supports the methods diag, det, logdet, and inv. You can extract individual factors from F using F[:L]. However, since pivoting is on by default, the factorization is internally represented as A == P'*L*D*L'*P with a permutation matrix P; using just L without accounting for P will give incorrect answers. To include the effects of permutation, it is typically preferable to extract \"combined\" factors like PtL = F[:PtL] (the equivalent of P'*L) and LtP = F[:UP] (the equivalent of L'*P). The complete list of supported factors is :L, :PtL, :D, :UP, :U, :LD, :DU, :PtLD, :DUP.\n\nSetting the optional shift keyword argument computes the factorization of A+shift*I instead of A. If the perm argument is nonempty, it should be a permutation of 1:size(A,1) giving the ordering to use (instead of CHOLMOD's default AMD ordering).\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.Many other functions from CHOLMOD are wrapped but not exported from the Base.SparseArrays.CHOLMOD module.\n\n\n\n"
+    "text": "ldltfact(A; shift = 0.0, perm=Int[]) -> CHOLMOD.Factor\n\nCompute the LDL factorization of a sparse matrix A. A must be a SparseMatrixCSC, Symmetric{SparseMatrixCSC}, or Hermitian{SparseMatrixCSC}. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian. A fill-reducing permutation is used. F = ldltfact(A) is most frequently used to solve systems of equations A*x = b with F\\b. The returned factorization object F also supports the methods diag, det, logdet, and inv. You can extract individual factors from F using F[:L]. However, since pivoting is on by default, the factorization is internally represented as A == P'*L*D*L'*P with a permutation matrix P; using just L without accounting for P will give incorrect answers. To include the effects of permutation, it is typically preferable to extract \"combined\" factors like PtL = F[:PtL] (the equivalent of P'*L) and LtP = F[:UP] (the equivalent of L'*P). The complete list of supported factors is :L, :PtL, :D, :UP, :U, :LD, :DU, :PtLD, :DUP.\n\nSetting the optional shift keyword argument computes the factorization of A+shift*I instead of A. If the perm argument is nonempty, it should be a permutation of 1:size(A,1) giving the ordering to use (instead of CHOLMOD's default AMD ordering).\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.Many other functions from CHOLMOD are wrapped but not exported from the Base.SparseArrays.CHOLMOD module.\n\n\n\nldltfact(S::SymTridiagonal) -> LDLt\n\nCompute an LDLt factorization of a real symmetric tridiagonal matrix such that A = L*Diagonal(d)*L' where L is a unit lower triangular matrix and d is a vector. The main use of an LDLt factorization F = ldltfact(A) is to solve the linear system of equations Ax = b with F\\b.\n\n\n\n"
 },
 
 {
@@ -12845,7 +12533,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.ldltfact!",
     "category": "Function",
-    "text": "ldltfact!(S::SymTridiagonal) -> LDLt\n\nSame as ldltfact, but saves space by overwriting the input A, instead of creating a copy.\n\n\n\nldltfact!(F::Factor, A; shift = 0.0) -> CHOLMOD.Factor\n\nCompute the LDL factorization of A, reusing the symbolic factorization F. A must be a SparseMatrixCSC, Symmetric{SparseMatrixCSC}, or Hermitian{SparseMatrixCSC}. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian.\n\nSee also ldltfact.\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\n"
+    "text": "ldltfact!(F::Factor, A; shift = 0.0) -> CHOLMOD.Factor\n\nCompute the LDL factorization of A, reusing the symbolic factorization F. A must be a SparseMatrixCSC, Symmetric{SparseMatrixCSC}, or Hermitian{SparseMatrixCSC}. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian.\n\nSee also ldltfact.\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\nldltfact!(S::SymTridiagonal) -> LDLt\n\nSame as ldltfact, but saves space by overwriting the input A, instead of creating a copy.\n\n\n\n"
 },
 
 {
@@ -12869,7 +12557,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.qrfact",
     "category": "Function",
-    "text": "qrfact(A, pivot=Val{false}) -> F\n\nCompute the QR factorization of the matrix A: an orthogonal (or unitary if A is complex-valued) matrix Q, and an upper triangular matrix R such that\n\nA = Q R\n\nThe returned object F stores the factorization in a packed format:\n\nif pivot == Val{true} then F is a QRPivoted object,\notherwise if the element type of A is a BLAS type (Float32, Float64, Complex64 or Complex128), then F is a QRCompactWY object,\notherwise F is a QR object.\n\nThe individual components of the factorization F can be accessed by indexing with a symbol:\n\nF[:Q]: the orthogonal/unitary matrix Q\nF[:R]: the upper triangular matrix R\nF[:p]: the permutation vector of the pivot (QRPivoted only)\nF[:P]: the permutation matrix of the pivot (QRPivoted only)\n\nThe following functions are available for the QR objects: inv, size, and \\. When A is rectangular, \\ will return a least squares solution and if the solution is not unique, the one with smallest norm is returned.\n\nMultiplication with respect to either thin or full Q is allowed, i.e. both F[:Q]*F[:R] and F[:Q]*A are supported. A Q matrix can be converted into a regular matrix with full which has a named argument thin.\n\nExample\n\njulia> A = [3.0 -6.0; 4.0 -8.0; 0.0 1.0]\n3×2 Array{Float64,2}:\n 3.0  -6.0\n 4.0  -8.0\n 0.0   1.0\n\njulia> F = qrfact(A)\nBase.LinAlg.QRCompactWY{Float64,Array{Float64,2}} with factors Q and R:\n[-0.6 0.0 0.8; -0.8 0.0 -0.6; 0.0 -1.0 0.0]\n[-5.0 10.0; 0.0 -1.0]\n\njulia> F[:Q] * F[:R] == A\ntrue\n\nnote: Note\nqrfact returns multiple types because LAPACK uses several representations that minimize the memory storage requirements of products of Householder elementary reflectors, so that the Q and R matrices can be stored compactly rather as two separate dense matrices.\n\n\n\nqrfact(A) -> SPQR.Factorization\n\nCompute the QR factorization of a sparse matrix A. A fill-reducing permutation is used. The main application of this type is to solve least squares problems with \\. The function calls the C library SPQR and a few additional functions from the library are wrapped but not exported.\n\n\n\n"
+    "text": "qrfact(A) -> SPQR.Factorization\n\nCompute the QR factorization of a sparse matrix A. A fill-reducing permutation is used. The main application of this type is to solve least squares problems with \\. The function calls the C library SPQR and a few additional functions from the library are wrapped but not exported.\n\n\n\nqrfact(A, pivot=Val{false}) -> F\n\nCompute the QR factorization of the matrix A: an orthogonal (or unitary if A is complex-valued) matrix Q, and an upper triangular matrix R such that\n\nA = Q R\n\nThe returned object F stores the factorization in a packed format:\n\nif pivot == Val{true} then F is a QRPivoted object,\notherwise if the element type of A is a BLAS type (Float32, Float64, Complex64 or Complex128), then F is a QRCompactWY object,\notherwise F is a QR object.\n\nThe individual components of the factorization F can be accessed by indexing with a symbol:\n\nF[:Q]: the orthogonal/unitary matrix Q\nF[:R]: the upper triangular matrix R\nF[:p]: the permutation vector of the pivot (QRPivoted only)\nF[:P]: the permutation matrix of the pivot (QRPivoted only)\n\nThe following functions are available for the QR objects: inv, size, and \\. When A is rectangular, \\ will return a least squares solution and if the solution is not unique, the one with smallest norm is returned.\n\nMultiplication with respect to either thin or full Q is allowed, i.e. both F[:Q]*F[:R] and F[:Q]*A are supported. A Q matrix can be converted into a regular matrix with full which has a named argument thin.\n\nExample\n\njulia> A = [3.0 -6.0; 4.0 -8.0; 0.0 1.0]\n3×2 Array{Float64,2}:\n 3.0  -6.0\n 4.0  -8.0\n 0.0   1.0\n\njulia> F = qrfact(A)\nBase.LinAlg.QRCompactWY{Float64,Array{Float64,2}} with factors Q and R:\n[-0.6 0.0 0.8; -0.8 0.0 -0.6; 0.0 -1.0 0.0]\n[-5.0 10.0; 0.0 -1.0]\n\njulia> F[:Q] * F[:R] == A\ntrue\n\nnote: Note\nqrfact returns multiple types because LAPACK uses several representations that minimize the memory storage requirements of products of Householder elementary reflectors, so that the Q and R matrices can be stored compactly rather as two separate dense matrices.\n\n\n\n"
 },
 
 {
