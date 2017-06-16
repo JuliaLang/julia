@@ -1082,7 +1082,7 @@ These are some minor points that might help in tight inner loops.
   * Use [`div(x,y)`](@ref) for truncating division of integers instead of [`trunc(x/y)`](@ref), [`fld(x,y)`](@ref)
     instead of [`floor(x/y)`](@ref), and [`cld(x,y)`](@ref) instead of [`ceil(x/y)`](@ref).
 
-## Performance Annotations
+## [Performance Annotations](@id man-performance-annotations)
 
 Sometimes you can enable better optimization by promising certain program properties.
 
