@@ -109,6 +109,7 @@ end
 
 const HermOrSym{T,S} = Union{Hermitian{T,S}, Symmetric{T,S}}
 const RealHermSymComplexHerm{T<:Real,S} = Union{Hermitian{T,S}, Symmetric{T,S}, Hermitian{Complex{T},S}}
+const RealHermSymComplexSym{T<:Real,S} = Union{Hermitian{T,S}, Symmetric{T,S}, Symmetric{Complex{T},S}}
 
 size(A::HermOrSym, d) = size(A.data, d)
 size(A::HermOrSym) = size(A.data)
@@ -302,6 +303,25 @@ A_mul_B!(C::StridedMatrix{T}, A::StridedMatrix{T}, B::Hermitian{T,<:StridedMatri
     BLAS.hemm!('R', B.uplo, one(T), B.data, A, zero(T), C)
 
 *(A::HermOrSym, B::HermOrSym) = A*full(B)
+
+# Fallbacks to avoid generic_matvecmul!/generic_matmatmul!
+## Symmetric{<:Number} and Hermitian{<:Real} are invariant to transpose; peel off the t
+At_mul_B(A::RealHermSymComplexSym, B::AbstractVector) = A*B
+At_mul_B(A::RealHermSymComplexSym, B::AbstractMatrix) = A*B
+A_mul_Bt(A::AbstractMatrix, B::RealHermSymComplexSym) = A*B
+## Hermitian{<:Number} and Symmetric{<:Real} are invariant to ctranspose; peel off the c
+Ac_mul_B(A::RealHermSymComplexHerm, B::AbstractVector) = A*B
+Ac_mul_B(A::RealHermSymComplexHerm, B::AbstractMatrix) = A*B
+A_mul_Bc(A::AbstractMatrix, B::RealHermSymComplexHerm) = A*B
+
+# ambiguities with RowVector
+A_mul_Bt(A::RowVector, B::RealHermSymComplexSym) = A*B
+A_mul_Bc(A::RowVector, B::RealHermSymComplexHerm) = A*B
+# ambiguities with AbstractTriangular
+At_mul_B(A::RealHermSymComplexSym, B::AbstractTriangular) = A*B
+A_mul_Bt(A::AbstractTriangular, B::RealHermSymComplexSym) = A*B
+Ac_mul_B(A::RealHermSymComplexHerm, B::AbstractTriangular) = A*B
+A_mul_Bc(A::AbstractTriangular, B::RealHermSymComplexHerm) = A*B
 
 for T in (:Symmetric, :Hermitian), op in (:+, :-, :*, :/)
     # Deal with an ambiguous case

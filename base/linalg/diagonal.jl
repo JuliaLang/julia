@@ -234,6 +234,12 @@ A_mul_B!(out::AbstractMatrix, A::Diagonal, in::AbstractMatrix) = out .= A.diag .
 Ac_mul_B!(out::AbstractMatrix, A::Diagonal, in::AbstractMatrix) = out .= ctranspose.(A.diag) .* in
 At_mul_B!(out::AbstractMatrix, A::Diagonal, in::AbstractMatrix) = out .= transpose.(A.diag) .* in
 
+# ambiguities with Symmetric/Hermitian
+# RealHermSymComplex[Sym]/[Herm] only include Number; invariant to [c]transpose
+A_mul_Bt(A::Diagonal, B::RealHermSymComplexSym) = A*B
+At_mul_B(A::RealHermSymComplexSym, B::Diagonal) = A*B
+A_mul_Bc(A::Diagonal, B::RealHermSymComplexHerm) = A*B
+Ac_mul_B(A::RealHermSymComplexHerm, B::Diagonal) = A*B
 
 (/)(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag ./ Db.diag)
 function A_ldiv_B!(D::Diagonal{T}, v::AbstractVector{T}) where {T}
