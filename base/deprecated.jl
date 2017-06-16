@@ -1445,8 +1445,8 @@ module DFT
         pkg = endswith(String(f), "shift") ? "AbstractFFTs" : "FFTW"
         @eval begin
             function $f(args...; kwargs...)
-                error($f, " has been moved to the package $pkg.jl.\n",
-                      "Run `Pkg.add(\"$pkg\")` to install $pkg then run `using $pkg` ",
+                error($f, " has been moved to the package $($pkg).jl.\n",
+                      "Run `Pkg.add(\"$($pkg)\")` to install $($pkg) then run `using $($pkg)` ",
                       "to load it.")
             end
             export $f
