@@ -459,7 +459,9 @@ static Value *llvm_type_rewrite(
     // sizes.
     Value *from;
     Value *to;
-#if JL_LLVM_VERSION >= 30600
+#if JL_LLVM_VERSION >= 40000
+    const DataLayout &DL = jl_data_layout;
+#elif JL_LLVM_VERSION >= 30600
     const DataLayout &DL = jl_ExecutionEngine->getDataLayout();
 #else
     const DataLayout &DL = *jl_ExecutionEngine->getDataLayout();
@@ -485,8 +487,8 @@ static Value *runtime_apply_type(jl_value_t *ty, jl_unionall_t *unionall, jl_cod
     args[0] = literal_pointer_val(ty);
     args[1] = literal_pointer_val((jl_value_t*)ctx->linfo->def.method->sig);
     args[2] = builder.CreateInBoundsGEP(
-            LLVM37_param(T_pjlvalue)
-            emit_bitcast(ctx->spvals_ptr, T_ppjlvalue),
+            LLVM37_param(T_prjlvalue)
+            emit_bitcast(decay_derived(ctx->spvals_ptr), T_pprjlvalue),
             ConstantInt::get(T_size, sizeof(jl_svec_t) / sizeof(jl_value_t*)));
     return builder.CreateCall(prepare_call(jlapplytype_func), makeArrayRef(args));
 }
@@ -639,7 +641,7 @@ static Value *julia_to_native(Type *to, bool toboxed, jl_value_t *jlto, jl_union
     // We're passing Any
     if (toboxed) {
         assert(!byRef); // don't expect any ABI to pass pointers by pointer
-        return boxed(jvinfo, ctx);
+        return maybe_decay_untracked(boxed(jvinfo, ctx));
     }
     assert(jl_is_datatype(jlto) && julia_struct_has_layout((jl_datatype_t*)jlto, jlto_env));
 
@@ -1208,7 +1210,9 @@ static jl_cgval_t mark_or_box_ccall_result(Value *result, bool isboxed, jl_value
         Value *runtime_dt = runtime_apply_type(rt, unionall, ctx);
         // TODO: is this leaf check actually necessary, or is it structurally guaranteed?
         emit_leafcheck(runtime_dt, "ccall: return type must be a leaf DataType", ctx);
-#if JL_LLVM_VERSION >= 30600
+#if JL_LLVM_VERSION >= 40000
+        const DataLayout &DL = jl_data_layout;
+#elif JL_LLVM_VERSION >= 30600
         const DataLayout &DL = jl_ExecutionEngine->getDataLayout();
 #else
         const DataLayout &DL = *jl_ExecutionEngine->getDataLayout();
@@ -1306,7 +1310,7 @@ std::string generate_func_sig()
 #else
             paramattrs.push_back(AttributeSet::get(jl_LLVMContext, 1, retattrs));
 #endif
-            fargt_sig.push_back(PointerType::get(lrt, 0));
+            fargt_sig.push_back(PointerType::get(lrt, AddressSpace::Derived));
             sret = 1;
             prt = lrt;
         }
@@ -1349,6 +1353,8 @@ std::string generate_func_sig()
             }
 
             t = julia_struct_to_llvm(tti, unionall_env, &isboxed);
+            if (isboxed)
+                t = T_prjlvalue;
             if (t == NULL || t == T_void) {
                 std::stringstream msg;
                 msg << "ccall: the type of argument ";
@@ -1369,7 +1375,7 @@ std::string generate_func_sig()
             pat = t;
         }
         else if (byRef) {
-            pat = PointerType::get(t, 0);
+            pat = PointerType::get(t, AddressSpace::Derived);
         }
         else {
             pat = abi->preferred_llvm_type((jl_datatype_t*)tti, false);
@@ -1459,6 +1465,8 @@ static const std::string verify_ccall_sig(size_t nargs, jl_value_t *&rt, jl_valu
     lrt = julia_struct_to_llvm(rt, unionall_env, &retboxed);
     if (lrt == NULL)
         return "ccall: return type doesn't correspond to a C type";
+    else if (retboxed)
+        lrt = T_prjlvalue;
 
     // is return type fully statically known?
     if (unionall_env == NULL) {
@@ -1652,8 +1660,16 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             ary = emit_unbox(largty, emit_expr(argi, ctx), tti);
         }
         JL_GC_POP();
-        return mark_or_box_ccall_result(emit_bitcast(ary, lrt),
-                                        retboxed, rt, unionall, static_rt, ctx);
+        if (!retboxed) {
+            return mark_or_box_ccall_result(
+                      emit_bitcast(emit_pointer_from_objref(
+                                          emit_bitcast(ary, T_prjlvalue)), lrt),
+                   retboxed, rt, unionall, static_rt, ctx);
+        } else {
+            return mark_or_box_ccall_result(maybe_decay_untracked(
+                                            emit_bitcast(ary, lrt)),
+                                            retboxed, rt, unionall, static_rt, ctx);
+        }
     }
     else if (is_libjulia_func(jl_cpu_pause)) {
         // Keep in sync with the julia_threads.h version
@@ -1977,6 +1993,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
                                 ai + 1, ctx, &needStackRestore);
             bool issigned = jl_signed_type && jl_subtype(jargty, (jl_value_t*)jl_signed_type);
             if (byRef) {
+                v = decay_derived(v);
                 // julia_to_native should already have done the alloca and store
                 assert(v->getType() == pargty);
             }
@@ -1992,6 +2009,13 @@ jl_cgval_t function_sig_t::emit_a_ccall(
             }
             v = julia_to_address(largty, jargty_in_env, unionall_env, arg,
                                  ai + 1, ctx, &needStackRestore);
+            if (isa<UndefValue>(v)) {
+                JL_GC_POP();
+                return jl_cgval_t();
+            }
+            // A bit of a hack, but we're trying to get rid of this feature
+            // anyway.
+            v = emit_bitcast(emit_pointer_from_objref(v), pargty);
             assert((!toboxed && !byRef) || isa<UndefValue>(v));
         }
 
@@ -2019,7 +2043,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
                                    literal_pointer_val((jl_value_t*)rt));
             sretboxed = true;
         }
-        argvals[0] = emit_bitcast(result, fargt_sig.at(0));
+        argvals[0] = emit_bitcast(decay_derived(result), fargt_sig.at(0));
     }
 
     Instruction *stacksave = NULL;
@@ -2107,9 +2131,11 @@ jl_cgval_t function_sig_t::emit_a_ccall(
     // Mark GC use before **and** after the ccall to make sure the arguments
     // are alive during the ccall even if the function called is `noreturn`.
     mark_gc_uses(gc_uses);
+    OperandBundleDef OpBundle("jl_roots", gc_uses);
     // the actual call
     Value *ret = builder.CreateCall(prepare_call(llvmf),
-                                    ArrayRef<Value*>(&argvals[0], nargs + sret));
+                                    ArrayRef<Value*>(&argvals[0], nargs + sret),
+                                    ArrayRef<OperandBundleDef>(&OpBundle, gc_uses.empty() ? 0 : 1));
     ((CallInst*)ret)->setAttributes(attributes);
 
     if (cc != CallingConv::C)
@@ -2151,6 +2177,9 @@ jl_cgval_t function_sig_t::emit_a_ccall(
     }
     else {
         Type *jlrt = julia_type_to_llvm(rt, &jlretboxed); // compute the real "julian" return type and compute whether it is boxed
+        if (jlretboxed) {
+            jlrt = T_prjlvalue;
+        }
         if (type_is_ghost(jlrt)) {
             return ghostValue(rt);
         }
@@ -2166,7 +2195,9 @@ jl_cgval_t function_sig_t::emit_a_ccall(
                 Value *strct = emit_allocobj(ctx, rtsz, runtime_bt);
                 int boxalign = jl_gc_alignment(rtsz);
 #ifndef JL_NDEBUG
-#if JL_LLVM_VERSION >= 30600
+#if JL_LLVM_VERSION >= 40000
+                const DataLayout &DL = jl_data_layout;
+#elif JL_LLVM_VERSION >= 30600
                 const DataLayout &DL = jl_ExecutionEngine->getDataLayout();
 #else
                 const DataLayout &DL = *jl_ExecutionEngine->getDataLayout();

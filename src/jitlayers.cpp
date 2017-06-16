@@ -55,6 +55,8 @@ namespace llvm {
 #include <llvm/Bitcode/BitcodeWriterPass.h>
 #endif
 
+#include <llvm/IR/LegacyPassManagers.h>
+#include <llvm/IR/IRPrintingPasses.h>
 #include <llvm/Transforms/Utils/Cloning.h>
 #include <llvm/ExecutionEngine/JITEventListener.h>
 
@@ -109,14 +111,13 @@ void jl_init_jit(Type *T_pjlvalue_)
 
 // this defines the set of optimization passes defined for Julia at various optimization levels
 #if JL_LLVM_VERSION >= 30700
-void addOptimizationPasses(legacy::PassManager *PM)
+void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level)
 #else
-void addOptimizationPasses(PassManager *PM)
+void addOptimizationPasses(PassManager *PM, int opt_level)
 #endif
 {
-    PM->add(createLowerExcHandlersPass());
-    PM->add(createLowerGCFramePass());
 #ifdef JL_DEBUG_BUILD
+    PM->add(createGCInvariantVerifierPass(true));
     PM->add(createVerifierPass());
 #endif
 
@@ -130,17 +131,32 @@ void addOptimizationPasses(PassManager *PM)
 #if defined(JL_MSAN_ENABLED)
     PM->add(llvm::createMemorySanitizerPass(true));
 #endif
-    if (jl_options.opt_level == 0) {
+    if (opt_level == 0) {
         PM->add(createCFGSimplificationPass()); // Clean up disgusting code
-        PM->add(createMemCpyOptPass()); // Remove memcpy / form memset
+#if JL_LLVM_VERSION < 50000
+        PM->add(createBarrierNoopPass());
+        PM->add(createLowerExcHandlersPass());
+        PM->add(createGCInvariantVerifierPass(false));
+        PM->add(createLateLowerGCFramePass());
         PM->add(createLowerPTLSPass(imaging_mode));
+        PM->add(createBarrierNoopPass());
+#endif
+        PM->add(createMemCpyOptPass()); // Remove memcpy / form memset
 #if JL_LLVM_VERSION >= 40000
         PM->add(createAlwaysInlinerLegacyPass()); // Respect always_inline
 #else
         PM->add(createAlwaysInlinerPass()); // Respect always_inline
 #endif
+#if JL_LLVM_VERSION >= 50000
+        PM->add(createBarrierNoopPass());
+        PM->add(createLowerExcHandlersPass());
+        PM->add(createGCInvariantVerifierPass(false));
+        PM->add(createLateLowerGCFramePass());
+        PM->add(createLowerPTLSPass(imaging_mode));
+#endif
         return;
     }
+    PM->add(createPropagateJuliaAddrspaces());
 #if JL_LLVM_VERSION >= 30700
     PM->add(createTargetTransformInfoWrapperPass(jl_TargetMachine->getTargetIRAnalysis()));
 #else
@@ -160,7 +176,18 @@ void addOptimizationPasses(PassManager *PM)
     }
     // list of passes from vmkit
     PM->add(createCFGSimplificationPass()); // Clean up disgusting code
+    PM->add(createDeadInstEliminationPass());
     PM->add(createPromoteMemoryToRegisterPass()); // Kill useless allocas
+
+    // Due to bugs and missing features LLVM < 5.0, does not properly propagate
+    // our invariants. We need to do GC rooting here. This reduces the
+    // effectiveness of the optimization, but should retain correctness.
+#if JL_LLVM_VERSION < 50000
+    PM->add(createLowerExcHandlersPass());
+    PM->add(createLateLowerGCFramePass());
+    PM->add(createLowerPTLSPass(imaging_mode));
+#endif
+
     PM->add(createMemCpyOptPass());
 
     // hopefully these functions (from llvmcall) don't try to interact with the Julia runtime
@@ -176,7 +203,6 @@ void addOptimizationPasses(PassManager *PM)
 #endif
     // Let the InstCombine pass remove the unnecessary load of
     // safepoint address first
-    PM->add(createLowerPTLSPass(imaging_mode));
     PM->add(createSROAPass());                 // Break up aggregate allocas
 #ifndef INSTCOMBINE_BUG
     PM->add(createInstructionCombiningPass()); // Cleanup for scalarrepl.
@@ -265,6 +291,16 @@ void addOptimizationPasses(PassManager *PM)
         PM->add(createInstructionCombiningPass());   // Clean up after SLP loop vectorizer
     PM->add(createLoopVectorizePass());         // Vectorize loops
     PM->add(createInstructionCombiningPass());  // Clean up after loop vectorizer
+#endif
+    // LowerPTLS removes an indirect call. As a result, it is likely to trigger
+    // LLVM's devirtualization heuristics, which would result in the entire
+    // pass pipeline being re-exectuted. Prevent this by inserting a barrier.
+#if JL_LLVM_VERSION >= 50000
+    PM->add(createBarrierNoopPass());
+    PM->add(createLowerExcHandlersPass());
+    PM->add(createGCInvariantVerifierPass(false));
+    PM->add(createLateLowerGCFramePass());
+    PM->add(createLowerPTLSPass(imaging_mode));
 #endif
 }
 
@@ -490,14 +526,7 @@ JuliaOJIT::JuliaOJIT(TargetMachine &TM)
             }
         )
 {
-    if (!jl_generating_output()) {
-        addOptimizationPasses(&PM);
-    }
-    else {
-        PM.add(createLowerExcHandlersPass());
-        PM.add(createLowerGCFramePass());
-        PM.add(createLowerPTLSPass(imaging_mode));
-    }
+    addOptimizationPasses(&PM, jl_generating_output() ? 0 : jl_options.opt_level);
     if (TM.addPassesToEmitMC(PM, Ctx, ObjStream))
         llvm_unreachable("Target does not support MC emission.");
 
@@ -1278,7 +1307,7 @@ void jl_dump_native(const char *bc_fname, const char *unopt_bc_fname, const char
     }
 
     if (bc_fname || obj_fname)
-        addOptimizationPasses(&PM);
+        addOptimizationPasses(&PM, jl_options.opt_level);
 
     if (bc_fname) {
 #if JL_LLVM_VERSION >= 30500
@@ -1339,7 +1368,11 @@ void jl_dump_native(const char *bc_fname, const char *unopt_bc_fname, const char
 #if JL_LLVM_VERSION >= 30700
     // Reset the target triple to make sure it matches the new target machine
     clone->setTargetTriple(TM->getTargetTriple().str());
-#if JL_LLVM_VERSION >= 30800
+#if JL_LLVM_VERSION >= 40000
+    DataLayout DL = TM->createDataLayout();
+    DL.reset(DL.getStringRepresentation() + "-ni:10:11:12");
+    clone->setDataLayout(DL);
+#elif JL_LLVM_VERSION >= 30800
     clone->setDataLayout(TM->createDataLayout());
 #else
     clone->setDataLayout(TM->getDataLayout()->getStringRepresentation());
@@ -1401,20 +1434,24 @@ GlobalVariable *jl_get_global_for(const char *cname, void *addr, Module *M)
 // An LLVM module pass that just runs all julia passes in order. Useful for
 // debugging
 extern "C" void jl_init_codegen(void);
-class JuliaPipeline : public ModulePass {
+class JuliaPipeline : public Pass {
 public:
     static char ID;
-    JuliaPipeline() : ModulePass(ID) {}
-    virtual bool runOnModule(Module &M) {
+    // A bit of a hack, but works
+    struct TPMAdapter : public PassManagerBase {
+        PMTopLevelManager *TPM;
+        TPMAdapter(PMTopLevelManager *TPM) : TPM(TPM) {}
+        void add(Pass *P) { TPM->schedulePass(P); }
+    };
+    void preparePassManager(PMStack &Stack) override {
         (void)jl_init_llvm();
-#if JL_LLVM_VERSION >= 30700
-        legacy::PassManager PM;
-#else
-        PassManager PM;
-#endif
-        addOptimizationPasses(&PM);
-        PM.run(M);
-        return true;
+        PMTopLevelManager *TPM = Stack.top()->getTopLevelManager();
+        TPMAdapter Adapter(TPM);
+        addOptimizationPasses(&Adapter, 3);
+    }
+    JuliaPipeline() : Pass(PT_PassManager, ID) {}
+    Pass *createPrinterPass(raw_ostream &O, const std::string &Banner) const {
+        return createPrintModulePass(O, Banner);
     }
 };
 char JuliaPipeline::ID = 0;

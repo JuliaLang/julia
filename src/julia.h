@@ -42,13 +42,17 @@
 #if defined(__GNUC__)
 #  define JL_NORETURN __attribute__ ((noreturn))
 #  define JL_CONST_FUNC __attribute__((const))
+#  define JL_USED_FUNC __attribute__((used))
 #elif defined(_COMPILER_MICROSOFT_)
 #  define JL_NORETURN __declspec(noreturn)
 // This is the closest I can find for __attribute__((const))
 #  define JL_CONST_FUNC __declspec(noalias)
+// Does MSVC have this?
+#  define JL_USED_FUNC
 #else
 #  define JL_NORETURN
 #  define JL_CONST_FUNC
+#  define JL_USED_FUNC
 #endif
 
 #define container_of(ptr, type, member) \
