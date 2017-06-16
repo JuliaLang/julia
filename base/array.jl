@@ -1143,16 +1143,20 @@ function lexcmp(a::Array{UInt8,1}, b::Array{UInt8,1})
 end
 
 # use memcmp for == on bit integer types
-function ==(a::Array{T,N}, b::Array{T,N}) where T<:BitInteger where N
-    size(a) == size(b) && 0 == ccall(
-        :memcmp, Int32, (Ptr{T}, Ptr{T}, UInt), a, b, sizeof(T) * length(a))
-end
+for T in BitInteger_types
+    @eval begin
+        function ==(a::Array{$T,N}, b::Array{$T,N}) where N
+            size(a) == size(b) && 0 == ccall(
+                :memcmp, Int32, (Ptr{$T}, Ptr{$T}, UInt), a, b, sizeof($T) * length(a))
+        end
 
-# this is ~20% faster than the generic implementation above for very small arrays
-function ==(a::Array{T,1}, b::Array{T,1}) where T<:BitInteger
-    len = length(a)
-    len == length(b) && 0 == ccall(
-        :memcmp, Int32, (Ptr{T}, Ptr{T}, UInt), a, b, sizeof(T) * len)
+        # this is ~20% faster than the generic implementation above for very small arrays
+        function ==(a::Array{$T,1}, b::Array{$T,1})
+            len = length(a)
+            len == length(b) && 0 == ccall(
+                :memcmp, Int32, (Ptr{$T}, Ptr{$T}, UInt), a, b, sizeof($T) * len)
+        end
+    end
 end
 
 function reverse(A::AbstractVector, s=first(linearindices(A)), n=last(linearindices(A)))

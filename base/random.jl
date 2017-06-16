@@ -35,25 +35,33 @@ if is_windows()
 
         RandomDevice() = new(Vector{UInt128}(1))
     end
-
-    function rand(rd::RandomDevice, ::Type{T}) where T<:Union{Bool,Base.BitInteger}
-        win32_SystemFunction036!(rd.buffer)
-        @inbounds return rd.buffer[1] % T
-    end
-
-    rand!(rd::RandomDevice, A::Array{<:Union{Bool,Base.BitInteger}}) = (win32_SystemFunction036!(A); A)
 else # !windows
+
     struct RandomDevice <: AbstractRNG
         file::IOStream
         unlimited::Bool
 
         RandomDevice(unlimited::Bool=true) = new(open(unlimited ? "/dev/urandom" : "/dev/random"), unlimited)
     end
+end
 
-    rand(rd::RandomDevice, ::Type{T}) where {T<:Union{Bool,Base.BitInteger}} = read( rd.file, T)
-    rand!(rd::RandomDevice, A::Array{<:Union{Bool,Base.BitInteger}})         = read!(rd.file, A)
-end # os-test
+# this has to be split out from the above OS test to compile
+# (because of the use of @eval below)
+for T = (Bool, Base.BitInteger_types...)
+    if is_windows()
+        @eval begin
+            function rand(rd::RandomDevice, ::Type{$T})
+                win32_SystemFunction036!(rd.buffer)
+                @inbounds return rd.buffer[1] % $T
+            end
 
+            rand!(rd::RandomDevice, A::Array{$T}) = (win32_SystemFunction036!(A); A)
+       end
+    else
+        @eval rand(rd::RandomDevice, ::Type{$T})    = read( rd.file, $T)
+        @eval rand!(rd::RandomDevice, A::Array{$T}) = read!(rd.file, A)
+    end
+end
 
 """
     RandomDevice()
@@ -553,41 +561,44 @@ end
 @inline mask128(u::UInt128, ::Type{Float16}) = (u & 0x03ff03ff03ff03ff03ff03ff03ff03ff) | 0x3c003c003c003c003c003c003c003c00
 @inline mask128(u::UInt128, ::Type{Float32}) = (u & 0x007fffff007fffff007fffff007fffff) | 0x3f8000003f8000003f8000003f800000
 
-function rand!(r::MersenneTwister, A::Array{T}, ::Type{Close1Open2}) where T<:Union{Float16,Float32}
-    n = length(A)
-    n128 = n * sizeof(T) ÷ 16
-    rand!(r, unsafe_wrap(Array, convert(Ptr{Float64}, pointer(A)), 2*n128), 2*n128, Close1Open2)
-    A128 = unsafe_wrap(Array, convert(Ptr{UInt128}, pointer(A)), n128)
-    @inbounds for i in 1:n128
-        u = A128[i]
-        u ⊻= u << 26
-        # at this point, the 64 low bits of u, "k" being the k-th bit of A128[i] and "+" the bit xor, are:
-        # [..., 58+32,..., 53+27, 52+26, ..., 33+7, 32+6, ..., 27+1, 26, ..., 1]
-        # the bits needing to be random are
-        # [1:10, 17:26, 33:42, 49:58] (for Float16)
-        # [1:23, 33:55] (for Float32)
-        # this is obviously satisfied on the 32 low bits side, and on the high side, the entropy comes
-        # from bits 33:52 of A128[i] and then from bits 27:32 (which are discarded on the low side)
-        # this is similar for the 64 high bits of u
-        A128[i] = mask128(u, T)
+for T = (Float16,Float32)
+    @eval begin
+        function rand!(r::MersenneTwister, A::Array{$T}, ::Type{Close1Open2})
+            n = length(A)
+            n128 = n * sizeof($T) ÷ 16
+            rand!(r, unsafe_wrap(Array, convert(Ptr{Float64}, pointer(A)), 2*n128), 2*n128, Close1Open2)
+            A128 = unsafe_wrap(Array, convert(Ptr{UInt128}, pointer(A)), n128)
+            @inbounds for i in 1:n128
+                u = A128[i]
+                u ⊻= u << 26
+                # at this point, the 64 low bits of u, "k" being the k-th bit of A128[i] and "+" the bit xor, are:
+                # [..., 58+32,..., 53+27, 52+26, ..., 33+7, 32+6, ..., 27+1, 26, ..., 1]
+                # the bits needing to be random are
+                # [1:10, 17:26, 33:42, 49:58] (for Float16)
+                # [1:23, 33:55] (for Float32)
+                # this is obviously satisfied on the 32 low bits side, and on the high side, the entropy comes
+                # from bits 33:52 of A128[i] and then from bits 27:32 (which are discarded on the low side)
+                # this is similar for the 64 high bits of u
+                A128[i] = mask128(u, $T)
+            end
+            for i in 16*n128÷sizeof($T)+1:n
+                @inbounds A[i] = rand(r, $T) + oneunit($T)
+            end
+            A
+        end
+
+        function rand!(r::MersenneTwister, A::Array{$T}, ::Type{CloseOpen})
+            rand!(r, A, Close1Open2)
+            I32 = one(Float32)
+            for i in eachindex(A)
+                @inbounds A[i] = $T(Float32(A[i])-I32) # faster than "A[i] -= one($T)" for $T==Float16
+            end
+            A
+        end
+
+        rand!(r::MersenneTwister, A::Array{$T}) = rand!(r, A, CloseOpen)
     end
-    for i in 16*n128÷sizeof(T)+1:n
-        @inbounds A[i] = rand(r, T) + oneunit(T)
-    end
-    A
 end
-
-function rand!(r::MersenneTwister, A::Array{T}, ::Type{CloseOpen}) where T<:Union{Float16,Float32}
-    rand!(r, A, Close1Open2)
-    I32 = one(Float32)
-    for i in eachindex(A)
-        @inbounds A[i] = T(Float32(A[i])-I32) # faster than "A[i] -= one(T)" for T==Float16
-    end
-    A
-end
-
-rand!(r::MersenneTwister, A::Array{<:Union{Float16,Float32}}) = rand!(r, A, CloseOpen)
-
 
 function rand!(r::MersenneTwister, A::Array{UInt128}, n::Int=length(A))
     if n > length(A)
@@ -617,16 +628,17 @@ function rand!(r::MersenneTwister, A::Array{UInt128}, n::Int=length(A))
     A
 end
 
-function rand!(r::MersenneTwister, A::Array{T}) where T<:Union{Base.BitInteger64,Int128}
-    n=length(A)
-    n128 = n * sizeof(T) ÷ 16
-    rand!(r, unsafe_wrap(Array, convert(Ptr{UInt128}, pointer(A)), n128))
-    for i = 16*n128÷sizeof(T)+1:n
-        @inbounds A[i] = rand(r, T)
+for T = (Base.BitInteger64_types..., Int128)
+   @eval function rand!(r::MersenneTwister, A::Array{$T})
+        n=length(A)
+        n128 = n * sizeof($T) ÷ 16
+        rand!(r, unsafe_wrap(Array, convert(Ptr{UInt128}, pointer(A)), n128))
+        for i = 16*n128÷sizeof($T)+1:n
+            @inbounds A[i] = rand(r, $T)
+        end
+        A
     end
-    A
 end
-
 ## Generate random integer within a range
 
 # remainder function according to Knuth, where rem_knuth(a, 0) = a
@@ -1461,35 +1473,35 @@ julia> randexp!(rng, zeros(5))
 """
 function randexp! end
 
-let Floats = Union{Float16,Float32,Float64}
-    for randfun in [:randn, :randexp]
-        randfun! = Symbol(randfun, :!)
-        @eval begin
-            # scalars
-            $randfun(rng::AbstractRNG, ::Type{T}) where {T<:$Floats} = convert(T, $randfun(rng))
-            $randfun(::Type{T}) where {T} = $randfun(GLOBAL_RNG, T)
+for randfun in [:randn, :randexp]
+    randfun! = Symbol(randfun, :!)
+    for T = (Float16, Float32, Float64)
+        @eval $randfun(rng::AbstractRNG, ::Type{$T}) = convert($T, $randfun(rng))
+    end
+    @eval begin
+        # scalars
+        $randfun(::Type{T}) where {T} = $randfun(GLOBAL_RNG, T)
 
-            # filling arrays
-            function $randfun!(rng::AbstractRNG, A::AbstractArray{T}) where T
-                for i in eachindex(A)
-                    @inbounds A[i] = $randfun(rng, T)
-                end
-                A
+        # filling arrays
+        function $randfun!(rng::AbstractRNG, A::AbstractArray{T}) where T
+            for i in eachindex(A)
+                @inbounds A[i] = $randfun(rng, T)
             end
-
-            $randfun!(A::AbstractArray) = $randfun!(GLOBAL_RNG, A)
-
-            # generating arrays
-            $randfun(rng::AbstractRNG, ::Type{T}, dims::Dims                     ) where {T} = $randfun!(rng, Array{T}(dims))
-            # Note that this method explicitly does not define $randfun(rng, T), in order to prevent an infinite recursion.
-            $randfun(rng::AbstractRNG, ::Type{T}, dim1::Integer, dims::Integer...) where {T} = $randfun!(rng, Array{T}(dim1, dims...))
-            $randfun(                  ::Type{T}, dims::Dims                     ) where {T} = $randfun(GLOBAL_RNG, T, dims)
-            $randfun(                  ::Type{T}, dims::Integer...               ) where {T} = $randfun(GLOBAL_RNG, T, dims...)
-            $randfun(rng::AbstractRNG,            dims::Dims                     )           = $randfun(rng, Float64, dims)
-            $randfun(rng::AbstractRNG,            dims::Integer...               )           = $randfun(rng, Float64, dims...)
-            $randfun(                             dims::Dims                     )           = $randfun(GLOBAL_RNG, Float64, dims)
-            $randfun(                             dims::Integer...               )           = $randfun(GLOBAL_RNG, Float64, dims...)
+            A
         end
+
+        $randfun!(A::AbstractArray) = $randfun!(GLOBAL_RNG, A)
+
+        # generating arrays
+        $randfun(rng::AbstractRNG, ::Type{T}, dims::Dims                     ) where {T} = $randfun!(rng, Array{T}(dims))
+        # Note that this method explicitly does not define $randfun(rng, T), in order to prevent an infinite recursion.
+        $randfun(rng::AbstractRNG, ::Type{T}, dim1::Integer, dims::Integer...) where {T} = $randfun!(rng, Array{T}(dim1, dims...))
+        $randfun(                  ::Type{T}, dims::Dims                     ) where {T} = $randfun(GLOBAL_RNG, T, dims)
+        $randfun(                  ::Type{T}, dims::Integer...               ) where {T} = $randfun(GLOBAL_RNG, T, dims...)
+        $randfun(rng::AbstractRNG,            dims::Dims                     )           = $randfun(rng, Float64, dims)
+        $randfun(rng::AbstractRNG,            dims::Integer...               )           = $randfun(rng, Float64, dims...)
+        $randfun(                             dims::Dims                     )           = $randfun(GLOBAL_RNG, Float64, dims)
+        $randfun(                             dims::Integer...               )           = $randfun(GLOBAL_RNG, Float64, dims...)
     end
 end
 
