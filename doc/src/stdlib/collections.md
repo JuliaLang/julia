@@ -79,6 +79,7 @@ Base.eltype
 Base.indexin
 Base.findin
 Base.unique
+Base.unique!
 Base.allunique
 Base.reduce(::Any, ::Any, ::Any)
 Base.reduce(::Any, ::Any)

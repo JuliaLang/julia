@@ -1,6 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Set tests
+isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
+using TestHelpers.OAs
 
 # Construction, collect
 @test ===(typeof(Set([1,2,3])), Set{Int})
@@ -220,6 +222,42 @@ u = unique([1,1,2])
 # issue 20105
 @test @inferred(unique(x for x in 1:1)) == [1]
 @test unique(x for x in Any[1,1.0])::Vector{Real} == [1]
+
+# unique!
+@testset "unique!" begin
+    u = [1,1,3,2,1]
+    unique!(u)
+    @test u == [1,3,2]
+    @test unique!([]) == []
+    @test unique!(Float64[]) == Float64[]
+    u = [1,2,2,3,5,5]
+    @test unique!(u) === u
+    @test u == [1,2,3,5]
+    u = [6,5,5,3,3,2,1]
+    @test unique!(u) === u
+    @test u == [6,5,3,2,1]
+    u = OffsetArray([1,2,2,3,5,5], -1)
+    @test unique!(u) === u
+    @test u == OffsetArray([1,2,3,5], -1)
+    u = OffsetArray([5,5,4,4,2,2,0,-1,-1], -1)
+    @test unique!(u) === u
+    @test u == OffsetArray([5,4,2,0,-1], -1)
+    u = OffsetArray(["w","we","w",5,"r",5,5], -1)
+    @test unique!(u) === u
+    @test u == OffsetArray(["w","we",5,"r"], -1)
+    u = [0.0,-0.0,1.0,2]
+    @test unique!(u) === u
+    @test u == [0.0,-0.0,1.0,2.0]
+    u = [1,NaN,NaN,3]
+    @test unique!(u) === u
+    @test u[1] == 1
+    @test isnan(u[2])
+    @test u[3] == 3
+    u = [5,"w","we","w","r",5,"w"]
+    unique!(u)
+    @test u == [5,"w","we","r"]
+    u = [1,2,5,1,3,2]
+end
 
 # allunique
 @test allunique([])

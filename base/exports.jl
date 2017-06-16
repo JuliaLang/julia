@@ -719,6 +719,7 @@ export
     symdiff,
     union!,
     union,
+    unique!,
     unique,
     values,
     valtype,

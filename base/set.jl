@@ -202,6 +202,94 @@ function unique(f::Callable, C)
     out
 end
 
+# If A is not grouped, then we will need to keep track of all of the elements that we have
+# seen so far.
+function _unique!(A::AbstractVector)
+    seen = Set{eltype(A)}()
+    idxs = eachindex(A)
+    i = state = start(idxs)
+    for x in A
+        if x ∉ seen
+            push!(seen, x)
+            i, state = next(idxs, state)
+            A[i] = x
+        end
+    end
+    resize!(A, i - first(idxs) + 1)
+end
+
+# If A is grouped, so that each unique element is in a contiguous group, then we only
+# need to keep track of one element at a time. We replace the elements of A with the
+# unique elements that we see in the order that we see them. Once we have iterated
+# through A, we resize A based on the number of unique elements that we see.
+function _groupedunique!(A::AbstractVector)
+    isempty(A) && return A
+    idxs = eachindex(A)
+    y = first(A)
+    state = start(idxs)
+    i, state = next(idxs, state)
+    for x in A
+        if !isequal(x, y)
+            i, state = next(idxs, state)
+            y = A[i] = x
+        end
+    end
+    resize!(A, i - first(idxs) + 1)
+end
+
+"""
+    unique!(A::AbstractVector)
+
+Remove duplicate items as determined by [`isequal`](@ref), then return the modified `A`.
+`unique!` will return the elements of `A` in the order that they occur. If you do not care
+about the order of the returned data, then calling `(sort!(A); unique!(A))` will be much
+more efficient as long as the elements of `A` can be sorted.
+
+```jldoctest
+julia> unique!([1, 1, 1])
+1-element Array{Int64,1}:
+ 1
+
+julia> A = [7, 3, 2, 3, 7, 5];
+
+julia> unique!(A)
+4-element Array{Int64,1}:
+ 7
+ 3
+ 2
+ 5
+
+julia> B = [7, 6, 42, 6, 7, 42];
+
+julia> sort!(B);  # unique! is able to process sorted data much more efficiently.
+
+julia> unique!(B)
+3-element Array{Int64,1}:
+ 6
+ 7
+ 42
+```
+"""
+function unique!(A::Union{AbstractVector{<:Real}, AbstractVector{<:AbstractString},
+                          AbstractVector{<:Symbol}})
+    if isempty(A)
+        return A
+    elseif issorted(A) || issorted(A, rev=true)
+        return _groupedunique!(A)
+    else
+        return _unique!(A)
+    end
+end
+# issorted fails for some element types, so the method above has to be restricted to
+# elements with isless/< defined.
+function unique!(A)
+    if isempty(A)
+        return A
+    else
+        return _unique!(A)
+    end
+end
+
 """
     allunique(itr) -> Bool
 
