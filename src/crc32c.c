@@ -400,14 +400,14 @@ JL_DLLEXPORT uint32_t jl_crc32c(uint32_t crc, const char *buf, size_t len)
    regardless of the endianness of the machine this is running on.  */
 JL_DLLEXPORT uint32_t jl_crc32c_sw(uint32_t crci, const char *buf, size_t len)
 {
-    const unsigned char *next = (const unsigned char *) buf;
-    uint64_t crc = crci ^ 0xffffffff;
-    while (len && ((uintptr_t)next & 7) != 0) {
-        crc = crc32c_table[0][(crc ^ *next++) & 0xff] ^ (crc >> 8);
+    uintptr_t crc = crci ^ 0xffffffff;
+    while (len && ((uintptr_t)buf & 7) != 0) {
+        crc = crc32c_table[0][(crc ^ *buf++) & 0xff] ^ (crc >> 8);
         len--;
     }
     while (len >= 8) {
-        crc ^= *(uint64_t*)next;
+#ifdef _P64
+        crc ^= *(uint64_t*)buf;
         crc = crc32c_table[7][crc & 0xff] ^
             crc32c_table[6][(crc >> 8) & 0xff] ^
             crc32c_table[5][(crc >> 16) & 0xff] ^
@@ -416,11 +416,24 @@ JL_DLLEXPORT uint32_t jl_crc32c_sw(uint32_t crci, const char *buf, size_t len)
             crc32c_table[2][(crc >> 40) & 0xff] ^
             crc32c_table[1][(crc >> 48) & 0xff] ^
             crc32c_table[0][crc >> 56];
-        next += 8;
+#else
+        uint32_t *p = (uint32_t*)buf;
+        crc ^= p[0];
+        uint32_t hi = p[1];
+        crc = crc32c_table[7][crc & 0xff] ^
+            crc32c_table[6][(crc >> 8) & 0xff] ^
+            crc32c_table[5][(crc >> 16) & 0xff] ^
+            crc32c_table[4][(crc >> 24) & 0xff] ^
+            crc32c_table[3][hi & 0xff] ^
+            crc32c_table[2][(hi >> 8) & 0xff] ^
+            crc32c_table[1][(hi >> 16) & 0xff] ^
+            crc32c_table[0][hi >> 24];
+#endif
+        buf += 8;
         len -= 8;
     }
     while (len) {
-        crc = crc32c_table[0][(crc ^ *next++) & 0xff] ^ (crc >> 8);
+        crc = crc32c_table[0][(crc ^ *buf++) & 0xff] ^ (crc >> 8);
         len--;
     }
     return (uint32_t)crc ^ 0xffffffff;
