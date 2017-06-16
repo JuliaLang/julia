@@ -1619,14 +1619,6 @@ Base.show(io::IO, u::UUID) = write(io, Base.repr(u))
 
 # return a random string (often useful for temporary filenames/dirnames)
 
-let b = UInt8['0':'9';'A':'Z';'a':'z']
-    global randstring
-    randstring(r::AbstractRNG, chars=b, n::Integer=8) = String(rand(r, chars, n))
-    randstring(r::AbstractRNG, n::Integer) = randstring(r, b, n)
-    randstring(chars=b, n::Integer=8) = randstring(GLOBAL_RNG, chars, n)
-    randstring(n::Integer) = randstring(GLOBAL_RNG, b, n)
-end
-
 """
     randstring([rng=GLOBAL_RNG], [chars], [len=8])
 
@@ -1652,8 +1644,15 @@ julia> randstring("ACGT")
     `UInt8` (more efficient), provided [`rand`](@ref) can randomly
     pick characters from it.
 """
+function randstring end
 
-randstring
+let b = UInt8['0':'9';'A':'Z';'a':'z']
+    global randstring
+    randstring(r::AbstractRNG, chars=b, n::Integer=8) = String(rand(r, chars, n))
+    randstring(r::AbstractRNG, n::Integer) = randstring(r, b, n)
+    randstring(chars=b, n::Integer=8) = randstring(GLOBAL_RNG, chars, n)
+    randstring(n::Integer) = randstring(GLOBAL_RNG, b, n)
+end
 
 # Fill S (resized as needed) with a random subsequence of A, where
 # each element of A is included in S with independent probability p.
