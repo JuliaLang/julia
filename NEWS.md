@@ -106,6 +106,10 @@ Deprecated or removed
   * The `Operators` module is deprecated. Instead, import required operators explicitly
     from `Base`, e.g. `import Base: +, -, *, /` ([#22251]).
 
+  * Bindings to the FFTW library have been removed from Base. The DFT framework for building FFT
+    implementations is now in AbstractFFTs.jl, the bindings to the FFTW library are in FFTW.jl,
+    and the Base signal processing functions which used FFTs are now in DSP.jl ([#21956]).
+
 
 Julia v0.6.0 Release Notes
 ==========================
@@ -891,6 +895,7 @@ Command-line option changes
 [#21759]: https://github.com/JuliaLang/julia/issues/21759
 [#21818]: https://github.com/JuliaLang/julia/issues/21818
 [#21825]: https://github.com/JuliaLang/julia/issues/21825
+[#21956]: https://github.com/JuliaLang/julia/issues/21956
 [#21960]: https://github.com/JuliaLang/julia/issues/21960
 [#21973]: https://github.com/JuliaLang/julia/issues/21973
 [#21974]: https://github.com/JuliaLang/julia/issues/21974
