@@ -3761,7 +3761,7 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "manual/performance-tips/#Performance-Annotations-1",
+    "location": "manual/performance-tips/#man-performance-annotations-1",
     "page": "Performance Tips",
     "title": "Performance Annotations",
     "category": "section",
@@ -8513,11 +8513,19 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "stdlib/math/#Base.FastMath.@fastmath",
+    "page": "Mathematics",
+    "title": "Base.FastMath.@fastmath",
+    "category": "Macro",
+    "text": "@fastmath expr\n\nExecute a transformed version of the expression, which calls functions that may violate strict IEEE semantics. This allows the fastest possible operation, but results are undefined – be careful when doing this, as it may change numerical results.\n\nThis sets the LLVM Fast-Math flags, and corresponds to the -ffast-math option in clang. See the notes on performance annotations for more details.\n\nExamples\n\njulia> @fastmath 1+2\n3\n\njulia> @fastmath(sin(3))\n0.1411200080598672\n\n\n\n"
+},
+
+{
     "location": "stdlib/math/#Mathematical-Functions-1",
     "page": "Mathematics",
     "title": "Mathematical Functions",
     "category": "section",
-    "text": "Base.isapprox\nBase.sin\nBase.cos\nBase.sincos\nBase.tan\nBase.Math.sind\nBase.Math.cosd\nBase.Math.tand\nBase.Math.sinpi\nBase.Math.cospi\nBase.sinh\nBase.cosh\nBase.tanh\nBase.asin\nBase.acos\nBase.atan\nBase.Math.atan2\nBase.Math.asind\nBase.Math.acosd\nBase.Math.atand\nBase.Math.sec\nBase.Math.csc\nBase.Math.cot\nBase.Math.secd\nBase.Math.cscd\nBase.Math.cotd\nBase.Math.asec\nBase.Math.acsc\nBase.Math.acot\nBase.Math.asecd\nBase.Math.acscd\nBase.Math.acotd\nBase.Math.sech\nBase.Math.csch\nBase.Math.coth\nBase.asinh\nBase.acosh\nBase.atanh\nBase.Math.asech\nBase.Math.acsch\nBase.Math.acoth\nBase.Math.sinc\nBase.Math.cosc\nBase.Math.deg2rad\nBase.Math.rad2deg\nBase.Math.hypot\nBase.log(::Any)\nBase.log(::Number, ::Number)\nBase.log2\nBase.log10\nBase.log1p\nBase.Math.frexp\nBase.exp\nBase.exp2\nBase.exp10\nBase.Math.ldexp\nBase.Math.modf\nBase.expm1\nBase.round(::Type, ::Any)\nBase.Rounding.RoundingMode\nBase.Rounding.RoundNearest\nBase.Rounding.RoundNearestTiesAway\nBase.Rounding.RoundNearestTiesUp\nBase.Rounding.RoundToZero\nBase.Rounding.RoundUp\nBase.Rounding.RoundDown\nBase.round{T <: AbstractFloat, MR, MI}(::Complex{T}, ::RoundingMode{MR}, ::RoundingMode{MI})\nBase.ceil\nBase.floor\nBase.trunc\nBase.unsafe_trunc\nBase.signif\nBase.min\nBase.max\nBase.minmax\nBase.Math.clamp\nBase.Math.clamp!\nBase.abs\nBase.Checked.checked_abs\nBase.Checked.checked_neg\nBase.Checked.checked_add\nBase.Checked.checked_sub\nBase.Checked.checked_mul\nBase.Checked.checked_div\nBase.Checked.checked_rem\nBase.Checked.checked_fld\nBase.Checked.checked_mod\nBase.Checked.checked_cld\nBase.Checked.add_with_overflow\nBase.Checked.sub_with_overflow\nBase.Checked.mul_with_overflow\nBase.abs2\nBase.copysign\nBase.sign\nBase.signbit\nBase.flipsign\nBase.sqrt\nBase.isqrt\nBase.Math.cbrt\nBase.real(::Complex)\nBase.imag\nBase.reim\nBase.conj\nBase.angle\nBase.cis\nBase.binomial\nBase.factorial\nBase.gcd\nBase.lcm\nBase.gcdx\nBase.ispow2\nBase.nextpow2\nBase.prevpow2\nBase.nextpow\nBase.prevpow\nBase.nextprod\nBase.invmod\nBase.powermod\nBase.Math.gamma\nBase.Math.lgamma\nBase.Math.lfact\nBase.Math.beta\nBase.Math.lbeta\nBase.ndigits\nBase.widemul\nBase.Math.@evalpoly"
+    "text": "Base.isapprox\nBase.sin\nBase.cos\nBase.sincos\nBase.tan\nBase.Math.sind\nBase.Math.cosd\nBase.Math.tand\nBase.Math.sinpi\nBase.Math.cospi\nBase.sinh\nBase.cosh\nBase.tanh\nBase.asin\nBase.acos\nBase.atan\nBase.Math.atan2\nBase.Math.asind\nBase.Math.acosd\nBase.Math.atand\nBase.Math.sec\nBase.Math.csc\nBase.Math.cot\nBase.Math.secd\nBase.Math.cscd\nBase.Math.cotd\nBase.Math.asec\nBase.Math.acsc\nBase.Math.acot\nBase.Math.asecd\nBase.Math.acscd\nBase.Math.acotd\nBase.Math.sech\nBase.Math.csch\nBase.Math.coth\nBase.asinh\nBase.acosh\nBase.atanh\nBase.Math.asech\nBase.Math.acsch\nBase.Math.acoth\nBase.Math.sinc\nBase.Math.cosc\nBase.Math.deg2rad\nBase.Math.rad2deg\nBase.Math.hypot\nBase.log(::Any)\nBase.log(::Number, ::Number)\nBase.log2\nBase.log10\nBase.log1p\nBase.Math.frexp\nBase.exp\nBase.exp2\nBase.exp10\nBase.Math.ldexp\nBase.Math.modf\nBase.expm1\nBase.round(::Type, ::Any)\nBase.Rounding.RoundingMode\nBase.Rounding.RoundNearest\nBase.Rounding.RoundNearestTiesAway\nBase.Rounding.RoundNearestTiesUp\nBase.Rounding.RoundToZero\nBase.Rounding.RoundUp\nBase.Rounding.RoundDown\nBase.round{T <: AbstractFloat, MR, MI}(::Complex{T}, ::RoundingMode{MR}, ::RoundingMode{MI})\nBase.ceil\nBase.floor\nBase.trunc\nBase.unsafe_trunc\nBase.signif\nBase.min\nBase.max\nBase.minmax\nBase.Math.clamp\nBase.Math.clamp!\nBase.abs\nBase.Checked.checked_abs\nBase.Checked.checked_neg\nBase.Checked.checked_add\nBase.Checked.checked_sub\nBase.Checked.checked_mul\nBase.Checked.checked_div\nBase.Checked.checked_rem\nBase.Checked.checked_fld\nBase.Checked.checked_mod\nBase.Checked.checked_cld\nBase.Checked.add_with_overflow\nBase.Checked.sub_with_overflow\nBase.Checked.mul_with_overflow\nBase.abs2\nBase.copysign\nBase.sign\nBase.signbit\nBase.flipsign\nBase.sqrt\nBase.isqrt\nBase.Math.cbrt\nBase.real(::Complex)\nBase.imag\nBase.reim\nBase.conj\nBase.angle\nBase.cis\nBase.binomial\nBase.factorial\nBase.gcd\nBase.lcm\nBase.gcdx\nBase.ispow2\nBase.nextpow2\nBase.prevpow2\nBase.nextpow\nBase.prevpow\nBase.nextprod\nBase.invmod\nBase.powermod\nBase.Math.gamma\nBase.Math.lgamma\nBase.Math.lfact\nBase.Math.beta\nBase.Math.lbeta\nBase.ndigits\nBase.widemul\nBase.Math.@evalpoly\nBase.FastMath.@fastmath"
 },
 
 {
