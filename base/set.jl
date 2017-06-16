@@ -127,8 +127,10 @@ Return an array containing only the unique elements of collection `itr`,
 as determined by [`isequal`](@ref), in the order that the first of each
 set of equivalent elements originally appears.
 
+# Example
+
 ```jldoctest
-julia> unique([1; 2; 2; 6])
+julia> unique([1, 2, 6, 2])
 3-element Array{Int64,1}:
  1
  2
@@ -182,8 +184,10 @@ end
 Returns an array containing one value from `itr` for each unique value produced by `f`
 applied to elements of `itr`.
 
+# Example
+
 ```jldoctest
-julia> unique(isodd, [1; 2; 2; 6])
+julia> unique(isodd, [1, 2, 6, 2])
 2-element Array{Int64,1}:
  1
  2
