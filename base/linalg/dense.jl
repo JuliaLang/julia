@@ -246,7 +246,8 @@ diag(A::AbstractMatrix, k::Integer=0) = A[diagind(A,k)]
 """
     diagm(v, k::Integer=0)
 
-Construct a matrix by placing `v` on the `k`th diagonal.
+Construct a matrix by placing `v` on the `k`th diagonal. This constructs a full matrix; if
+you want a storage-efficient version with fast arithmetic, use [`Diagonal`](@ref) instead.
 
 # Example
 
