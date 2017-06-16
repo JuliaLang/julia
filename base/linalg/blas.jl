@@ -2,13 +2,15 @@
 
 module BLAS
 
+import ..axpy!
 import Base: copy!
-import Base.LinAlg: axpy!, dot
 
 export
 # Level 1
     asum,
+    axpy!,
     blascopy!,
+    dot,
     dotc,
     dotu,
     scal!,

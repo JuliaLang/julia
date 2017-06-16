@@ -248,7 +248,6 @@ include("exceptions.jl")
 include("generic.jl")
 
 include("blas.jl")
-import .BLAS: gemv! # consider renaming gemv! in matmul
 include("matmul.jl")
 include("lapack.jl")
 
