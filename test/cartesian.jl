@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 @test Base.Cartesian.exprresolve(:(1 + 3)) == 4
 ex = Base.Cartesian.exprresolve(:(if 5 > 4; :x; else :y; end))

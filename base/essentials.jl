@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Core: CodeInfo
 
@@ -26,23 +26,13 @@ macro _propagate_inbounds_meta()
 end
 
 convert(::Type{Any}, x::ANY) = x
-convert{T}(::Type{T}, x::T) = x
+convert(::Type{T}, x::T) where {T} = x
 
 convert(::Type{Tuple{}}, ::Tuple{}) = ()
 convert(::Type{Tuple}, x::Tuple) = x
-convert{T}(::Type{Tuple{Vararg{T}}}, x::Tuple) = cnvt_all(T, x...)
+convert(::Type{Tuple{Vararg{T}}}, x::Tuple) where {T} = cnvt_all(T, x...)
 cnvt_all(T) = ()
 cnvt_all(T, x, rest...) = tuple(convert(T,x), cnvt_all(T, rest...)...)
-
-macro generated(f)
-    isa(f, Expr) || error("invalid syntax; @generated must be used with a function definition")
-    if f.head === :function || (isdefined(:length) && f.head === :(=) && length(f.args) == 2 && f.args[1].head == :call)
-        f.head = :stagedfunction
-        return Expr(:escape, f)
-    else
-        error("invalid syntax; @generated must be used with a function definition")
-    end
-end
 
 """
     @eval [mod,] ex
@@ -51,7 +41,7 @@ Evaluate an expression with values interpolated into it using `eval`.
 If two arguments are provided, the first is the module to evaluate in.
 """
 macro eval(ex)
-    :(eval($(current_module()), $(Expr(:quote,ex))))
+    :(eval($__module__, $(Expr(:quote,ex))))
 end
 macro eval(mod, ex)
     :(eval($(esc(mod)), $(Expr(:quote,ex))))
@@ -77,7 +67,7 @@ function tuple_type_tail(T::DataType)
 end
 
 tuple_type_cons(::Type, ::Type{Union{}}) = Union{}
-function tuple_type_cons{S,T<:Tuple}(::Type{S}, ::Type{T})
+function tuple_type_cons(::Type{S}, ::Type{T}) where T<:Tuple where S
     @_pure_meta
     Tuple{S, T.parameters...}
 end
@@ -133,9 +123,9 @@ function typename(a::Union)
 end
 typename(union::UnionAll) = typename(union.body)
 
-convert{T<:Tuple{Any,Vararg{Any}}}(::Type{T}, x::Tuple{Any, Vararg{Any}}) =
+convert(::Type{T}, x::Tuple{Any,Vararg{Any}}) where {T<:Tuple{Any,Vararg{Any}}} =
     tuple(convert(tuple_type_head(T),x[1]), convert(tuple_type_tail(T), tail(x))...)
-convert{T<:Tuple{Any,Vararg{Any}}}(::Type{T}, x::T) = x
+convert(::Type{T}, x::T) where {T<:Tuple{Any,Vararg{Any}}} = x
 
 oftype(x,c) = convert(typeof(x),c)
 
@@ -143,17 +133,17 @@ unsigned(x::Int) = reinterpret(UInt, x)
 signed(x::UInt) = reinterpret(Int, x)
 
 # conversions used by ccall
-ptr_arg_cconvert{T}(::Type{Ptr{T}}, x) = cconvert(T, x)
-ptr_arg_unsafe_convert{T}(::Type{Ptr{T}}, x) = unsafe_convert(T, x)
+ptr_arg_cconvert(::Type{Ptr{T}}, x) where {T} = cconvert(T, x)
+ptr_arg_unsafe_convert(::Type{Ptr{T}}, x) where {T} = unsafe_convert(T, x)
 ptr_arg_unsafe_convert(::Type{Ptr{Void}}, x) = x
 
 cconvert(T::Type, x) = convert(T, x) # do the conversion eagerly in most cases
 cconvert(::Type{<:Ptr}, x) = x # but defer the conversion to Ptr to unsafe_convert
-unsafe_convert{T}(::Type{T}, x::T) = x # unsafe_convert (like convert) defaults to assuming the convert occurred
-unsafe_convert{T<:Ptr}(::Type{T}, x::T) = x  # to resolve ambiguity with the next method
-unsafe_convert{P<:Ptr}(::Type{P}, x::Ptr) = convert(P, x)
+unsafe_convert(::Type{T}, x::T) where {T} = x # unsafe_convert (like convert) defaults to assuming the convert occurred
+unsafe_convert(::Type{T}, x::T) where {T<:Ptr} = x  # to resolve ambiguity with the next method
+unsafe_convert(::Type{P}, x::Ptr) where {P<:Ptr} = convert(P, x)
 
-reinterpret{T}(::Type{T}, x) = bitcast(T, x)
+reinterpret(::Type{T}, x) where {T} = bitcast(T, x)
 reinterpret(::Type{Unsigned}, x::Float16) = reinterpret(UInt16,x)
 reinterpret(::Type{Signed}, x::Float16) = reinterpret(Int16,x)
 
@@ -163,7 +153,7 @@ function append_any(xs...)
     # used by apply() and quote
     # must be a separate function from append(), since apply() needs this
     # exact function.
-    out = Array{Any}(4)
+    out = Vector{Any}(4)
     l = 4
     i = 1
     for x in xs
@@ -224,7 +214,7 @@ function sum(A::AbstractArray)
 end
 ```
 
-!!! Warning
+!!! warning
 
     Using `@inbounds` may return incorrect results/crashes/corruption
     for out-of-bounds indices. The user is responsible for checking it manually.
@@ -304,7 +294,7 @@ false
 function isassigned end
 
 function isassigned(v::SimpleVector, i::Int)
-    1 <= i <= length(v) || return false
+    @boundscheck 1 <= i <= length(v) || return false
     x = unsafe_load(convert(Ptr{Ptr{Void}},data_pointer_from_objref(v)) + i*sizeof(Ptr))
     return x != C_NULL
 end
@@ -329,11 +319,43 @@ end
 # used by interpolating quote and some other things in the front end
 function vector_any(xs::ANY...)
     n = length(xs)
-    a = Array{Any}(n)
+    a = Vector{Any}(n)
     @inbounds for i = 1:n
         Core.arrayset(a,xs[i],i)
     end
     a
 end
 
+function as_kwargs(xs::Union{AbstractArray,Associative})
+    n = length(xs)
+    to = Vector{Any}(n*2)
+    i = 1
+    for (k, v) in xs
+        to[i]   = k::Symbol
+        to[i+1] = v
+        i += 2
+    end
+    return to
+end
+
+function as_kwargs(xs)
+    to = Vector{Any}(0)
+    for (k, v) in xs
+        ccall(:jl_array_ptr_1d_push2, Void, (Any, Any, Any), to, k::Symbol, v)
+    end
+    return to
+end
+
 isempty(itr) = done(itr, start(itr))
+
+"""
+    invokelatest(f, args...)
+
+Calls `f(args...)`, but guarantees that the most recent method of `f`
+will be executed.   This is useful in specialized circumstances,
+e.g. long-running event loops or callback functions that may
+call obsolete versions of a function `f`.
+(The drawback is that `invokelatest` is somewhat slower than calling
+`f` directly, and the type of the result cannot be inferred by the compiler.)
+"""
+invokelatest(f, args...) = Core._apply_latest(f, args)

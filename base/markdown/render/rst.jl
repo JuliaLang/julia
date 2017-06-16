@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 rst(x) = sprint(rst, x)
 
@@ -13,7 +13,7 @@ end
 
 rst(io::IO, md::MD) = rst(io, md.content)
 
-function rst{l}(io::IO, header::Header{l})
+function rst(io::IO, header::Header{l}) where l
     s = rstinline(header.text)
     println(io, s)
     println(io, string("*=-~:.^"[l])^length(s))

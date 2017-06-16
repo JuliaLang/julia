@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 abstract type ClusterManager end
 
@@ -10,7 +10,7 @@ mutable struct WorkerConfig
 
     # Used when launching additional workers at a host
     count::Nullable{Union{Int, Symbol}}
-    exename::Nullable{AbstractString}
+    exename::Nullable{Union{AbstractString, Cmd}}
     exeflags::Nullable{Cmd}
 
     # External cluster managers can use this to store information at a per-worker level
@@ -153,8 +153,8 @@ function start_worker(out::IO, cookie::AbstractString)
     init_worker(cookie)
     interface = IPv4(LPROC.bind_addr)
     if LPROC.bind_port == 0
-        (actual_port,sock) = listenany(interface, UInt16(9009))
-        LPROC.bind_port = actual_port
+        (port, sock) = listenany(interface, UInt16(0))
+        LPROC.bind_port = port
     else
         sock = listen(interface, LPROC.bind_port)
     end
@@ -210,21 +210,55 @@ end
 # The master process uses this to connect to the worker and subsequently
 # setup a all-to-all network.
 function read_worker_host_port(io::IO)
-    while true
-        conninfo = readline(io)
+    t0 = time()
+
+    # Wait at most for JULIA_WORKER_TIMEOUT seconds to read host:port
+    # info from the worker
+    timeout = worker_timeout()
+
+    # We expect the first line to contain the host:port string. However, as
+    # the worker may be launched via ssh or a cluster manager like SLURM,
+    # ignore any informational / warning lines printed by the launch command.
+    # If we do not find the host:port string in the first 1000 lines, treat it
+    # as an error.
+
+    ntries = 1000
+    while ntries > 0
+        readtask = @schedule readline(io)
+        yield()
+        while !istaskdone(readtask) && ((time() - t0) < timeout)
+            sleep(0.05)
+        end
+        !istaskdone(readtask) && break
+
+        conninfo = wait(readtask)
+        if isempty(conninfo) && !isopen(io)
+            error("Unable to read host:port string from worker. Launch command exited with error?")
+        end
+
+        ntries -= 1
         bind_addr, port = parse_connection_info(conninfo)
-        if bind_addr != ""
+        if !isempty(bind_addr)
             return bind_addr, port
         end
+
+        # TODO: Identify root cause and report a better actionable error.
+        # Also print unmatched lines?
+    end
+    close(io)
+    if ntries > 0
+        error("Timed out waiting to read host:port string from worker.")
+    else
+        error("Unexpected output from worker launch command. Host:port string not found.")
     end
 end
 
 function parse_connection_info(str)
     m = match(r"^julia_worker:(\d+)#(.*)", str)
     if m !== nothing
-        (m.captures[2], parse(Int16, m.captures[1]))
+        (m.captures[2], parse(UInt16, m.captures[1]))
     else
-        ("", Int16(-1))
+        ("", UInt16(0))
     end
 end
 
@@ -278,6 +312,8 @@ master can be specified via variable `JULIA_WORKER_TIMEOUT` in the worker proces
 environment. Relevant only when using TCP/IP as transport.
 """
 function addprocs(manager::ClusterManager; kwargs...)
+    cluster_mgmt_from_master_check()
+
     lock(worker_lock)
     try
         addprocs_locked(manager::ClusterManager; kwargs...)
@@ -402,8 +438,14 @@ function create_worker(manager, wconfig)
 
     # initiate a connect. Does not wait for connection completion in case of TCP.
     w = Worker()
+    local r_s, w_s
+    try
+        (r_s, w_s) = connect(manager, w.id, wconfig)
+    catch e
+        deregister_worker(w.id)
+        rethrow(e)
+    end
 
-    (r_s, w_s) = connect(manager, w.id, wconfig)
     w = Worker(w.id, r_s, w_s, manager; config=wconfig)
     # install a finalizer to perform cleanup if necessary
     finalizer(w, (w)->if myid() == 1 manage(w.manager, w.id, w.config, :finalize) end)
@@ -483,8 +525,8 @@ function launch_additional(np::Integer, cmd::Cmd)
     addresses = Vector{Any}(np)
 
     for i in 1:np
-        io, pobj = open(pipeline(detach(cmd), stderr=STDERR), "r")
-        io_objs[i] = io
+        io = open(detach(cmd))
+        io_objs[i] = io.out
     end
 
     for (i,io) in enumerate(io_objs)
@@ -609,7 +651,20 @@ myid() = LPROC.id
 
 Get the number of available processes.
 """
-nprocs() = length(PGRP.workers)
+function nprocs()
+    if myid() == 1 || PGRP.topology == :all_to_all
+        n = length(PGRP.workers)
+        # filter out workers in the process of being setup/shutdown.
+        for jw in PGRP.workers
+            if !isa(jw, LocalProcess) && (jw.state != W_CONNECTED)
+                n = n - 1
+            end
+        end
+        return n
+    else
+        return length(PGRP.workers)
+    end
+end
 
 """
     nworkers()
@@ -627,7 +682,31 @@ end
 
 Returns a list of all process identifiers.
 """
-procs() = Int[x.id for x in PGRP.workers]
+function procs()
+    if myid() == 1 || PGRP.topology == :all_to_all
+        # filter out workers in the process of being setup/shutdown.
+        return Int[x.id for x in PGRP.workers if isa(x, LocalProcess) || (x.state == W_CONNECTED)]
+    else
+        return Int[x.id for x in PGRP.workers]
+    end
+end
+
+function id_in_procs(id)  # faster version of `id in procs()`
+    if myid() == 1 || PGRP.topology == :all_to_all
+        for x in PGRP.workers
+            if (x.id::Int) == id && (isa(x, LocalProcess) || (x::Worker).state == W_CONNECTED)
+                return true
+            end
+        end
+    else
+        for x in PGRP.workers
+            if (x.id::Int) == id
+                return true
+            end
+        end
+    end
+    return false
+end
 
 """
     procs(pid::Integer)
@@ -637,11 +716,12 @@ Specifically all workers bound to the same ip-address as `pid` are returned.
 """
 function procs(pid::Integer)
     if myid() == 1
+        all_workers = [x for x in PGRP.workers if isa(x, LocalProcess) || (x.state == W_CONNECTED)]
         if (pid == 1) || (isa(map_pid_wrkr[pid].manager, LocalManager))
-            Int[x.id for x in filter(w -> (w.id==1) || (isa(w.manager, LocalManager)), PGRP.workers)]
+            Int[x.id for x in filter(w -> (w.id==1) || (isa(w.manager, LocalManager)), all_workers)]
         else
             ipatpid = get_bind_addr(pid)
-            Int[x.id for x in filter(w -> get_bind_addr(w) == ipatpid, PGRP.workers)]
+            Int[x.id for x in filter(w -> get_bind_addr(w) == ipatpid, all_workers)]
         end
     else
         remotecall_fetch(procs, 1, pid)
@@ -655,10 +735,16 @@ Returns a list of all worker process identifiers.
 """
 function workers()
     allp = procs()
-    if nprocs() == 1
+    if length(allp) == 1
        allp
     else
        filter(x -> x != 1, allp)
+    end
+end
+
+function cluster_mgmt_from_master_check()
+    if myid() != 1
+        throw(ErrorException("Only process 1 can add and remove workers"))
     end
 end
 
@@ -678,10 +764,7 @@ Argument `waitfor` specifies how long to wait for the workers to shut down:
       parallel calls.
 """
 function rmprocs(pids...; waitfor=typemax(Int))
-    # Only pid 1 can add and remove processes
-    if myid() != 1
-        throw(ErrorException("only process 1 can add and remove processes"))
-    end
+    cluster_mgmt_from_master_check()
 
     pids = vcat(pids...)
     if waitfor == 0
@@ -740,17 +823,18 @@ mutable struct ProcessExitedException <: Exception end
 
 worker_from_id(i) = worker_from_id(PGRP, i)
 function worker_from_id(pg::ProcessGroup, i)
-    if in(i, map_del_wrkr)
+    if !isempty(map_del_wrkr) && in(i, map_del_wrkr)
         throw(ProcessExitedException())
     end
-    if !haskey(map_pid_wrkr,i)
+    w = get(map_pid_wrkr, i, nothing)
+    if w === nothing
         if myid() == 1
             error("no process with id $i exists")
         end
         w = Worker(i)
         map_pid_wrkr[i] = w
     else
-        w = map_pid_wrkr[i]
+        w = w::Union{Worker, LocalProcess}
     end
     w
 end
@@ -801,7 +885,7 @@ function deregister_worker(pg, pid)
             end
         end
 
-        if myid() == 1
+        if myid() == 1 && isdefined(w, :config)
             # Notify the cluster manager of this workers death
             manage(w.manager, w.id, w.config, :deregister)
             if PGRP.topology != :all_to_all

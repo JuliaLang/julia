@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 struct Pair{A,B}
     first::A
@@ -10,7 +10,7 @@ const => = Pair
 start(p::Pair) = 1
 done(p::Pair, i) = i>2
 next(p::Pair, i) = (getfield(p,i), i+1)
-eltype{A,B}(p::Pair{A,B}) = Union{A,B}
+eltype(p::Pair{A,B}) where {A,B} = Union{A,B}
 
 indexed_next(p::Pair, i::Int, state) = (getfield(p,i), i+1)
 
@@ -23,17 +23,17 @@ isless(p::Pair, q::Pair) = ifelse(!isequal(p.first,q.first), isless(p.first,q.fi
                                                              isless(p.second,q.second))
 getindex(p::Pair,i::Int) = getfield(p,i)
 getindex(p::Pair,i::Real) = getfield(p, convert(Int, i))
-reverse{A,B}(p::Pair{A,B}) = Pair{B,A}(p.second, p.first)
+reverse(p::Pair{A,B}) where {A,B} = Pair{B,A}(p.second, p.first)
 
 endof(p::Pair) = 2
 length(p::Pair) = 2
 first(p::Pair) = p.first
 last(p::Pair) = p.second
 
-convert{A,B}(::Type{Pair{A,B}}, x::Pair{A,B}) = x
-function convert{A,B}(::Type{Pair{A,B}}, x::Pair)
-    Pair{A, B}(convert(A, x[1]), convert(B, x[2]))
+convert(::Type{Pair{A,B}}, x::Pair{A,B}) where {A,B} = x
+function convert(::Type{Pair{A,B}}, x::Pair) where {A,B}
+    Pair{A,B}(convert(A, x[1]), convert(B, x[2]))
 end
 
-promote_rule{A1, B1, A2, B2}(::Type{Pair{A1, B1}}, ::Type{Pair{A2, B2}}) =
+promote_rule(::Type{Pair{A1,B1}}, ::Type{Pair{A2,B2}}) where {A1,B1,A2,B2} =
     Pair{promote_type(A1, A2), promote_type(B1, B2)}

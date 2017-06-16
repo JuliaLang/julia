@@ -1,10 +1,10 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
-include("testdefs.jl")
-addprocs(4; topology="master_slave")
-using Base.Test
+pids = addprocs_with_testenv(4; topology="master_slave")
+p1 = pids[1]
+p2 = pids[2]
 
-@test_throws RemoteException remotecall_fetch(()->remotecall_fetch(myid, 3), 2)
+@test_throws RemoteException remotecall_fetch(()->remotecall_fetch(myid, p2), p1)
 
 function test_worker_counts()
     # check if the nprocs/nworkers/workers are the same on the remaining workers
@@ -41,12 +41,13 @@ function Base.launch(manager::TopoTestManager, params::Dict, launched::Array, c:
     exename = params[:exename]
     exeflags = params[:exeflags]
 
+    cmd = `$exename $exeflags --bind-to 127.0.0.1 --worker $(Base.cluster_cookie())`
+    cmd = pipeline(detach(setenv(cmd, dir=dir)))
     for i in 1:manager.np
-        io, pobj = open(pipeline(detach(
-            setenv(`$(Base.julia_cmd(exename)) $exeflags --bind-to $(Base.Distributed.LPROC.bind_addr) --worker $(Base.cluster_cookie())`, dir=dir)); stderr=STDERR), "r")
+        io = open(cmd)
         wconfig = WorkerConfig()
-        wconfig.process = pobj
-        wconfig.io = io
+        wconfig.process = io
+        wconfig.io = io.out
         wconfig.ident = i
         wconfig.connect_idents = collect(i+2:2:manager.np)
         push!(launched, wconfig)
@@ -64,7 +65,7 @@ function Base.manage(manager::TopoTestManager, id::Integer, config::WorkerConfig
     end
 end
 
-addprocs(TopoTestManager(8); topology="custom")
+addprocs_with_testenv(TopoTestManager(8); topology="custom")
 
 while true
     if any(x->get(map_pid_ident, x, 0)==0, workers())

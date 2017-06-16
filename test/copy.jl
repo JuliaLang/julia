@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 mainres = ([4, 5, 3],
            [1, 5, 3])
@@ -47,6 +47,20 @@ for (dest, src, bigsrc, emptysrc, res) in [
 
     @test_throws BoundsError copy!(dest, 1, src(), 2, 2)
 end
+
+let A = reshape(1:6, 3, 2), B = similar(A)
+    RA = CartesianRange(indices(A))
+    copy!(B, RA, A, RA)
+    @test B == A
+end
+let A = reshape(1:6, 3, 2), B = zeros(8,8)
+    RA = CartesianRange(indices(A))
+    copy!(B, CartesianRange((5:7,2:3)), A, RA)
+    @test B[5:7,2:3] == A
+    B[5:7,2:3] = 0
+    @test all(x->x==0, B)
+end
+
 
 # test behavior of shallow and deep copying
 let a = Any[[1]], q = QuoteNode([1])
@@ -128,4 +142,3 @@ end
         @test bar2.fooDict[bar2.foo] != nothing
     end
 end
-

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## File Operations (Libuv-based) ##
 
@@ -21,7 +21,6 @@ export File,
        StatStruct,
        # open,
        futime,
-       unlink,
        write,
        JL_O_WRONLY,
        JL_O_RDONLY,

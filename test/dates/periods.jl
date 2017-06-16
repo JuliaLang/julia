@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Period testing
 @test -Dates.Year(1) == Dates.Year(-1)
@@ -234,6 +234,26 @@ test = ((((((((dt + y) - m) + w) - d) + h) - mi) + s) - ms)
 @test !(Dates.Millisecond(-1) > Dates.Millisecond(1))
 @test Dates.Millisecond(1) == Dates.Millisecond(1)
 @test_throws MethodError Dates.Year(1) < Dates.Millisecond(1)
+@test_throws MethodError Dates.Millisecond(1) < Dates.Year(1)
+@test_throws MethodError Dates.Year(1) == Dates.Millisecond(1)
+@test_throws MethodError Dates.Millisecond(1) == Dates.Year(1)
+
+# Allow comparisons with new Period subtypes
+let
+    # https://en.wikipedia.org/wiki/Swatch_Internet_Time
+    struct Beat <: Dates.Period
+        value::Int64
+    end
+
+    Dates.value(b::Beat) = b.value
+    Dates.toms(b::Beat) = Dates.value(b) * 86400
+    Dates._units(b::Beat) = " beat" * (abs(Dates.value(b)) == 1 ? "" : "s")
+    Base.promote_rule(::Type{Dates.Day}, ::Type{Beat}) = Dates.Millisecond
+    Base.convert{T<:Dates.Millisecond}(::Type{T}, b::Beat) = T(Dates.toms(b))
+
+    @test Beat(1000) == Dates.Day(1)
+    @test Beat(1) < Dates.Day(1)
+end
 
 @test Dates.Year("1") == y
 @test Dates.Month("1") == m
@@ -374,3 +394,24 @@ cpa = [1y + 1s 1m + 1s 1w + 1s 1d + 1s; 1h + 1s 1mi + 1s 2m + 1s 1s + 1ms]
 
 @test [1y + 1s 1m + 1s; 1w + 1s 1d + 1s] + [1y + 1h 1y + 1mi; 1y + 1s 1y + 1ms] == [2y + 1h + 1s 1y + 1m + 1mi + 1s; 1y + 1w + 2s 1y + 1d + 1s + 1ms]
 @test [1y + 1s 1m + 1s; 1w + 1s 1d + 1s] - [1y + 1h 1y + 1mi; 1y + 1s 1y + 1ms] == [1s-1h 1m + 1s-1y-1mi; 1w-1y 1d + 1s-1y-1ms]
+
+# Equality and hashing between FixedPeriod types
+let types = (Dates.Week, Dates.Day, Dates.Hour, Dates.Minute,
+             Dates.Second, Dates.Millisecond, Dates.Microsecond, Dates.Nanosecond)
+    for i in 1:length(types), j in i:length(types), x in (0, 1, 235, -4677, 15250)
+        T = types[i]
+        U = types[j]
+        y = T(x)
+        z = convert(U, y)
+        @test y == z
+        @test hash(y) == hash(z)
+    end
+end
+
+# Equality and hashing between OtherPeriod types
+for x in (0, 1, 235, -4677, 15250)
+    y = Dates.Year(x)
+    z = convert(Dates.Month, y)
+    @test y == z
+    @test hash(y) == hash(z)
+end

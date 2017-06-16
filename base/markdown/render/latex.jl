@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 export latex
 
@@ -24,7 +24,7 @@ function latex(io::IO, content::Vector)
     end
 end
 
-function latex{l}(io::IO, header::Header{l})
+function latex(io::IO, header::Header{l}) where l
     tag = l < 4 ? "sub"^(l-1) * "section" : "sub"^(l-4) * "paragraph"
     wrapinline(io, tag) do
         latexinline(io, header.text)

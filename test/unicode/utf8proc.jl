@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 @testset "string normalization" begin
     # normalize_string (Unicode normalization etc.):
@@ -109,26 +109,26 @@ end
     alphas=vcat(alower,ulower,aupper,uupper,nocase)
 
     for c in alphas
-         @test isalpha(c) == true
-         @test isnumber(c) == false
+        @test isalpha(c) == true
+        @test isnumber(c) == false
     end
 
     anumber=['0', '1', '5', '9']
     unumber=['٣', '٥', '٨', '¹', 'ⅳ' ]
 
     for c in anumber
-         @test isdigit(c) == true
-         @test isnumber(c) == true
+        @test isdigit(c) == true
+        @test isnumber(c) == true
     end
     for c in unumber
-         @test isdigit(c) == false
-         @test isnumber(c) == true
+        @test isdigit(c) == false
+        @test isnumber(c) == true
     end
 
     alnums=vcat(alphas,anumber,unumber)
     for c in alnums
-         @test isalnum(c) == true
-         @test ispunct(c) == false
+        @test isalnum(c) == true
+        @test ispunct(c) == false
     end
 
     asymbol = ['(',')', '~', '$' ]
@@ -138,8 +138,8 @@ end
     upunct =['‡', '؟', '჻' ]
 
     for c in vcat(apunct,upunct)
-         @test ispunct(c) == true
-         @test isalnum(c) == false
+        @test ispunct(c) == true
+        @test isalnum(c) == false
     end
 
     for c in vcat(alnums,asymbol,usymbol,apunct,upunct)

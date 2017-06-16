@@ -1,10 +1,10 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 import Base.Checked: add_with_overflow, mul_with_overflow
 
 ## string to integer functions ##
 
-function parse{T<:Integer}(::Type{T}, c::Char, base::Integer=36)
+function parse(::Type{T}, c::Char, base::Integer=36) where T<:Integer
     a::Int = (base <= 36 ? 10 : 36)
     2 <= base <= 62 || throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
     d = '0' <= c <= '9' ? c-'0'    :
@@ -56,7 +56,7 @@ function parseint_preamble(signed::Bool, base::Int, s::AbstractString, startpos:
     return sgn, base, j
 end
 
-function tryparse_internal{T<:Integer}(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, base_::Integer, raise::Bool)
+function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, base_::Integer, raise::Bool) where T<:Integer
     _n = Nullable{T}()
     sgn, base, i = parseint_preamble(T<:Signed, Int(base_), s, startpos, endpos)
     if sgn == 0 && base == 0 && i == 0
@@ -140,10 +140,10 @@ function tryparse_internal(::Type{Bool}, sbuff::Union{String,SubString},
 
     # Ignore leading and trailing whitespace
     while isspace(sbuff[startpos]) && startpos <= endpos
-        startpos += 1
+        startpos = nextind(sbuff, startpos)
     end
     while isspace(sbuff[endpos]) && endpos >= startpos
-        endpos -= 1
+        endpos = prevind(sbuff, endpos)
     end
 
     len = endpos - startpos + 1
@@ -171,16 +171,16 @@ end
     throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
 end
 
-tryparse{T<:Integer}(::Type{T}, s::AbstractString, base::Integer) =
+tryparse(::Type{T}, s::AbstractString, base::Integer) where {T<:Integer} =
     tryparse_internal(T, s, start(s), endof(s), check_valid_base(base), false)
-tryparse{T<:Integer}(::Type{T}, s::AbstractString) =
+tryparse(::Type{T}, s::AbstractString) where {T<:Integer} =
     tryparse_internal(T, s, start(s), endof(s), 0, false)
 
-function parse{T<:Integer}(::Type{T}, s::AbstractString, base::Integer)
+function parse(::Type{T}, s::AbstractString, base::Integer) where T<:Integer
     get(tryparse_internal(T, s, start(s), endof(s), check_valid_base(base), true))
 end
 
-function parse{T<:Integer}(::Type{T}, s::AbstractString)
+function parse(::Type{T}, s::AbstractString) where T<:Integer
     get(tryparse_internal(T, s, start(s), endof(s), 0, true)) # Zero means, "figure it out"
 end
 
@@ -193,9 +193,11 @@ tryparse(::Type{Float64}, s::SubString{String}) = ccall(:jl_try_substrtod, Nulla
 tryparse(::Type{Float32}, s::String) = ccall(:jl_try_substrtof, Nullable{Float32}, (Ptr{UInt8},Csize_t,Csize_t), s, 0, sizeof(s))
 tryparse(::Type{Float32}, s::SubString{String}) = ccall(:jl_try_substrtof, Nullable{Float32}, (Ptr{UInt8},Csize_t,Csize_t), s.string, s.offset, s.endof)
 
-tryparse{T<:Union{Float32,Float64}}(::Type{T}, s::AbstractString) = tryparse(T, String(s))
+tryparse(::Type{T}, s::AbstractString) where {T<:Union{Float32,Float64}} = tryparse(T, String(s))
 
-function parse{T<:AbstractFloat}(::Type{T}, s::AbstractString)
+tryparse(::Type{Float16}, s::AbstractString) = convert(Nullable{Float16}, tryparse(Float32, s))
+
+function parse(::Type{T}, s::AbstractString) where T<:AbstractFloat
     result = tryparse(T, s)
     if isnull(result)
         throw(ArgumentError("cannot parse $(repr(s)) as $T"))

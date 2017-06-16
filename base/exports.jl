@@ -1,10 +1,8 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 export
 # Modules
-    FFTW,
     Meta,
-    Operators,
     Pkg,
     LibGit2,
     StackTraces,
@@ -23,7 +21,7 @@ export
     Markdown,
     Threads,
     Iterators,
-    Parallel,
+    Distributed,
 
 # Types
     AbstractChannel,
@@ -405,6 +403,7 @@ export
     significand,
     sin,
     sinc,
+    sincos,
     sind,
     sinh,
     sinpi,
@@ -719,6 +718,7 @@ export
     symdiff,
     union!,
     union,
+    unique!,
     unique,
     values,
     valtype,
@@ -729,6 +729,9 @@ export
     ⊆,
     ⊈,
     ⊊,
+    ⊇,
+    ⊉,
+    ⊋,
     ∩,
     ∪,
 
@@ -859,42 +862,6 @@ export
     var,
     varm,
 
-# signal processing
-    bfft!,
-    bfft,
-    brfft,
-    conv,
-    conv2,
-    dct!,
-    dct,
-    deconv,
-    fft!,
-    fft,
-    fftshift,
-    filt,
-    filt!,
-    idct!,
-    idct,
-    ifft!,
-    ifft,
-    ifftshift,
-    irfft,
-    plan_bfft!,
-    plan_bfft,
-    plan_brfft,
-    plan_dct!,
-    plan_dct,
-    plan_fft!,
-    plan_fft,
-    plan_idct!,
-    plan_idct,
-    plan_ifft!,
-    plan_ifft,
-    plan_irfft,
-    plan_rfft,
-    rfft,
-    xcorr,
-
 # iteration
     done,
     next,
@@ -1001,7 +968,6 @@ export
 
 # help and reflection
     apropos,
-    current_module,
     edit,
     code_typed,
     code_warntype,
@@ -1023,6 +989,7 @@ export
     which,
     whos,
     workspace,
+    @isdefined,
 
 # loading source files
     __precompile__,
@@ -1043,6 +1010,7 @@ export
     atexit,
     atreplinit,
     clipboard,
+    crc32c,
     exit,
     ntuple,
     quit,
@@ -1068,6 +1036,7 @@ export
     getaddrinfo,
     gethostname,
     getipaddr,
+    getpeername,
     getsockname,
     htol,
     hton,
@@ -1244,6 +1213,8 @@ export
     # parser internal
     @__FILE__,
     @__DIR__,
+    @__LINE__,
+    @__MODULE__,
     @int128_str,
     @uint128_str,
     @big_str,
@@ -1344,7 +1315,7 @@ export
     nzrange,
     nnz,
 
-# Parallel module re-exports
+# Distributed module re-exports
     @spawn,
     @spawnat,
     @fetch,

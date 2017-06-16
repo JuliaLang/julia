@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module REPLCompletions
 
@@ -282,7 +282,7 @@ function get_type_call(expr::Expr)
         found ? push!(args, typ) : push!(args, Any)
     end
     # use _methods_by_ftype as the function is supplied as a type
-    world = typemax(UInt)
+    world = ccall(:jl_get_world_counter, UInt, ())
     mt = Base._methods_by_ftype(Tuple{ft, args...}, -1, world)
     length(mt) == 1 || return (Any, false)
     m = first(mt)
@@ -292,9 +292,10 @@ function get_type_call(expr::Expr)
     return_type === nothing && return (Any, false)
     return (return_type, true)
 end
-# Returns the return type. example: get_type(:(Base.strip("",' ')),Main) returns (String,true)
-function get_type(sym::Expr, fn)
-    sym=expand(sym)
+
+# Returns the return type. example: get_type(:(Base.strip("", ' ')), Main) returns (String, true)
+function get_type(sym::Expr, fn::Module)
+    sym = expand(fn, sym)
     val, found = get_value(sym, fn)
     found && return Base.typesof(val).parameters[1], found
     if sym.head === :call
@@ -310,10 +311,11 @@ function get_type(sym::Expr, fn)
     end
     return (Any, false)
 end
-function get_type(sym, fn)
+function get_type(sym, fn::Module)
     val, found = get_value(sym, fn)
     return found ? Base.typesof(val).parameters[1] : Any, found
 end
+
 # Method completion on function call expression that look like :(max(1))
 function complete_methods(ex_org::Expr)
     args_ex = Any[]

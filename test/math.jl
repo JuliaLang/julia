@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 @testset "clamp" begin
     @test clamp(0, 1, 3) == 1
@@ -128,6 +128,7 @@ end
         yi = 4
         @testset "Random values" begin
             @test x^y ≈ big(x)^big(y)
+            @test x^1 === x
             @test x^yi ≈ big(x)^yi
             @test acos(x) ≈ acos(big(x))
             @test acosh(1+x) ≈ acosh(big(1+x))
@@ -246,6 +247,8 @@ end
     end
 end
 @test exp10(5) ≈ exp10(5.0)
+@test exp10(50//10) ≈ exp10(5.0)
+@test log10(exp10(e)) ≈ e
 @test exp2(Float16(2.)) ≈ exp2(2.)
 @test log(e) == 1
 
@@ -376,6 +379,19 @@ end
     @test cosc(Inf) == 0
 end
 
+@testset "Irrational args to sinpi/cospi/sinc/cosc" begin
+    for x in (pi, e, golden)
+        @test sinpi(x) ≈ Float64(sinpi(big(x)))
+        @test cospi(x) ≈ Float64(cospi(big(x)))
+        @test sinc(x)  ≈ Float64(sinc(big(x)))
+        @test cosc(x)  ≈ Float64(cosc(big(x)))
+        @test sinpi(complex(x, x)) ≈ Complex{Float64}(sinpi(complex(big(x), big(x))))
+        @test cospi(complex(x, x)) ≈ Complex{Float64}(cospi(complex(big(x), big(x))))
+        @test sinc(complex(x, x))  ≈ Complex{Float64}(sinc(complex(big(x),  big(x))))
+        @test cosc(complex(x, x))  ≈ Complex{Float64}(cosc(complex(big(x),  big(x))))
+    end
+end
+
 @testset "trig function type stability" begin
     @testset "$T $f" for T = (Float32,Float64,BigFloat), f = (sind,cosd,sinpi,cospi)
         @test Base.return_types(f,Tuple{T}) == [T]
@@ -421,8 +437,11 @@ relerrc(z, x) = max(relerr(real(z),real(x)), relerr(imag(z),imag(x)))
         for x in (3.2, 2+1im, 3//2, 3.2+0.1im)
             @test factorial(x) == gamma(1+x)
         end
-        @test lfact(1) == 0
+        @test lfact(0) == lfact(1) == 0
         @test lfact(2) == lgamma(3)
+        # Ensure that the domain of lfact matches that of factorial (issue #21318)
+        @test_throws DomainError lfact(-3)
+        @test_throws MethodError lfact(1.0)
     end
 
     # lgamma test cases (from Wolfram Alpha)
@@ -607,4 +626,13 @@ end
 
 @testset "promote Float16 irrational #15359" begin
     @test typeof(Float16(.5) * pi) == Float16
+end
+
+@testset "sincos" begin
+    @test sincos(1.0) === (sin(1.0), cos(1.0))
+    @test sincos(1f0) === (sin(1f0), cos(1f0))
+    @test sincos(Float16(1)) === (sin(Float16(1)), cos(Float16(1)))
+    @test sincos(1) === (sin(1), cos(1))
+    @test sincos(big(1)) == (sin(big(1)), cos(big(1)))
+    @test sincos(big(1.0)) == (sin(big(1.0)), cos(big(1.0)))
 end

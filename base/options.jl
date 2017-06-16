@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # NOTE: This type needs to be kept in sync with jl_options in src/julia.h
 struct JLOptions
@@ -32,6 +32,7 @@ struct JLOptions
     use_compilecache::Int8
     bindto::Ptr{UInt8}
     outputbc::Ptr{UInt8}
+    outputunoptbc::Ptr{UInt8}
     outputo::Ptr{UInt8}
     outputji::Ptr{UInt8}
     incremental::Int8
@@ -40,15 +41,15 @@ end
 JLOptions() = unsafe_load(cglobal(:jl_options, JLOptions))
 
 function show(io::IO, opt::JLOptions)
-    println(io, "JLOptions(")
+    print(io, "JLOptions(")
     fields = fieldnames(opt)
     nfields = length(fields)
-    for (i,f) in enumerate(fieldnames(opt))
-        v = getfield(opt,f)
+    for (i, f) in enumerate(fields)
+        v = getfield(opt, i)
         if isa(v, Ptr{UInt8})
-            v = v != C_NULL ? unsafe_string(v) : ""
+            v = (v != C_NULL) ? unsafe_string(v) : ""
         end
-        println(io, "  ", f, " = ", repr(v), i < nfields ? "," : "")
+        print(io, f, " = ", repr(v), i < nfields ? ", " : "")
     end
-    print(io,")")
+    print(io, ")")
 end

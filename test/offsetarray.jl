@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
 using TestHelpers.OAs
@@ -278,12 +278,24 @@ am = map(identity, a)
 
 # other functions
 v = OffsetArray(v0, (-3,))
+@test endof(v) == 1
 @test v ≈ v
 @test indices(v') === (Base.OneTo(1),-2:1)
+@test parent(v) == collect(v)
+rv = reverse(v)
+@test indices(rv) == indices(v)
+@test rv[1] == v[-2]
+@test rv[0] == v[-1]
+@test rv[-1] == v[0]
+@test rv[-2] == v[1]
+cv = copy(v)
+@test reverse!(cv) == rv
+
 A = OffsetArray(rand(4,4), (-3,5))
 @test A ≈ A
 @test indices(A') === (6:9, -2:1)
 @test parent(A') == parent(A)'
+@test collect(A) == parent(A)
 @test maximum(A) == maximum(parent(A))
 @test minimum(A) == minimum(parent(A))
 @test extrema(A) == extrema(parent(A))
@@ -383,31 +395,6 @@ dest = OffsetArray(Array{Int}(4,4), (-1,1))
 circcopy!(dest, src)
 @test parent(dest) == [8 12 16 4; 5 9 13 1; 6 10 14 2; 7 11 15 3]
 @test dest[1:3,2:4] == src[1:3,2:4]
-
-e = eye(5)
-a = [e[:,1], e[:,2], e[:,3], e[:,4], e[:,5]]
-a1 = zeros(5)
-c = [ones(Complex{Float64}, 5),
-     exp.(-2*pi*im*(0:4)/5),
-     exp.(-4*pi*im*(0:4)/5),
-     exp.(-6*pi*im*(0:4)/5),
-     exp.(-8*pi*im*(0:4)/5)]
-for s = -5:5
-    for i = 1:5
-        thisa = OffsetArray(a[i], (s,))
-        thisc = c[mod1(i+s+5,5)]
-        if Base.USE_GPL_LIBS
-            @test fft(thisa) ≈ thisc
-            @test fft(thisa, 1) ≈ thisc
-            @test ifft(fft(thisa)) ≈ circcopy!(a1, thisa)
-            @test ifft(fft(thisa, 1), 1) ≈ circcopy!(a1, thisa)
-            @test rfft(thisa) ≈ thisc[1:3]
-            @test rfft(thisa, 1) ≈ thisc[1:3]
-            @test irfft(rfft(thisa, 1), 5, 1) ≈ a1
-            @test irfft(rfft(thisa, 1), 5, 1) ≈ a1
-        end
-    end
-end
 
 end # let
 

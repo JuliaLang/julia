@@ -39,7 +39,6 @@ endif
 ifeq ($(OS),Linux)
 LIBGIT2_OPTS += -DUSE_OPENSSL=OFF -DUSE_MBEDTLS=ON -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
 endif
-
 ifeq ($(OS),FreeBSD)
 LIBGIT2_OPTS += -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
 endif
@@ -89,6 +88,21 @@ $(LIBGIT2_SRC_PATH)/libgit2-mbedtls-verify.patch-applied: $(LIBGIT2_SRC_PATH)/so
 		patch -p1 -f < $(SRCDIR)/patches/libgit2-mbedtls-verify.patch
 	echo 1 > $@
 
+$(LIBGIT2_SRC_PATH)/libgit2-gitconfig-symlink.patch-applied: $(LIBGIT2_SRC_PATH)/source-extracted | $(LIBGIT2_SRC_PATH)/libgit2-mbedtls-verify.patch-applied
+	cd $(LIBGIT2_SRC_PATH) && \
+		patch -p1 -f < $(SRCDIR)/patches/libgit2-gitconfig-symlink.patch
+	echo 1 > $@
+
+$(LIBGIT2_SRC_PATH)/libgit2-free-config.patch-applied: $(LIBGIT2_SRC_PATH)/source-extracted | $(LIBGIT2_SRC_PATH)/libgit2-gitconfig-symlink.patch-applied
+	cd $(LIBGIT2_SRC_PATH) && \
+		patch -p1 -f < $(SRCDIR)/patches/libgit2-free-config.patch
+	echo 1 > $@
+
+$(LIBGIT2_SRC_PATH)/libgit2-remote-push-NULL.patch-applied: $(LIBGIT2_SRC_PATH)/source-extracted | $(LIBGIT2_SRC_PATH)/libgit2-free-config.patch-applied
+	cd $(LIBGIT2_SRC_PATH) && \
+		patch -p1 -f < $(SRCDIR)/patches/libgit2-remote-push-NULL.patch
+	echo 1 > $@
+
 $(build_datarootdir)/julia/cert.pem: $(CERTFILE)
 	mkdir -p $(build_datarootdir)/julia
 	-cp $(CERTFILE) $@
@@ -98,7 +112,10 @@ $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: \
 	$(LIBGIT2_SRC_PATH)/libgit2-ssh.patch-applied \
 	$(LIBGIT2_SRC_PATH)/libgit2-agent-nonfatal.patch-applied \
 	$(LIBGIT2_SRC_PATH)/libgit2-mbedtls-writer-fix.patch-applied \
-	$(LIBGIT2_SRC_PATH)/libgit2-mbedtls-verify.patch-applied
+	$(LIBGIT2_SRC_PATH)/libgit2-mbedtls-verify.patch-applied \
+	$(LIBGIT2_SRC_PATH)/libgit2-gitconfig-symlink.patch-applied \
+	$(LIBGIT2_SRC_PATH)/libgit2-free-config.patch-applied \
+	$(LIBGIT2_SRC_PATH)/libgit2-remote-push-NULL.patch-applied
 
 ifneq ($(CERTFILE),)
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: $(build_datarootdir)/julia/cert.pem

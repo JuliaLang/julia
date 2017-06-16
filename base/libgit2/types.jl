@@ -1,6 +1,7 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 import Base.@kwdef
-import .Consts: GIT_SUBMODULE_IGNORE, GIT_MERGE_FILE_FAVOR, GIT_MERGE_FILE
+import .Consts: GIT_SUBMODULE_IGNORE, GIT_MERGE_FILE_FAVOR, GIT_MERGE_FILE, GIT_CONFIG
 
 const OID_RAWSZ = 20
 const OID_HEXSZ = OID_RAWSZ * 2
@@ -196,8 +197,8 @@ Options for connecting through a proxy.
 Matches the [`git_proxy_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_proxy_options) struct.
 """
 @kwdef struct ProxyOptions
-    version::Cuint             = 1
-    proxytype::Cint
+    version::Cuint               = 1
+    proxytype::Consts.GIT_PROXY  = Consts.PROXY_AUTO
     url::Cstring
     credential_cb::Ptr{Void}
     certificate_cb::Ptr{Void}
@@ -270,6 +271,33 @@ Matches the [`git_diff_options`](https://libgit2.github.com/libgit2/#HEAD/type/g
 end
 
 """
+    LibGit2.DescribeOptions
+
+Matches the [`git_describe_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_describe_options) struct.
+"""
+@kwdef struct DescribeOptions
+    version::Cuint             = 1
+    max_candidates_tags::Cuint = 10
+    describe_strategy::Cuint   = Consts.DESCRIBE_DEFAULT
+
+    pattern::Cstring
+    only_follow_first_parent::Cint
+    show_commit_oid_as_fallback::Cint
+end
+
+"""
+    LibGit2.DescribeFormatOptions
+
+Matches the [`git_describe_format_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_describe_format_options) struct.
+"""
+@kwdef struct DescribeFormatOptions
+    version::Cuint          = 1
+    abbreviated_size::Cuint = 7
+    always_use_long_format::Cint
+    dirty_suffix::Cstring
+end
+
+"""
     LibGit2.DiffFile
 
 Description of one side of a delta.
@@ -297,7 +325,18 @@ end
     LibGit2.DiffDelta
 
 Description of changes to one entry.
-Matches the [`git_diff_file`](https://libgit2.github.com/libgit2/#HEAD/type/git_diff_file) struct.
+Matches the [`git_diff_delta`](https://libgit2.github.com/libgit2/#HEAD/type/git_diff_delta) struct.
+
+The fields represent:
+  * `status`: One of `Consts.DELTA_STATUS`, indicating whether the file has been added/modified/deleted.
+  * `flags`: Flags for the delta and the objects on each side. Determines whether to treat the file(s)
+     as binary/text, whether they exist on each side of the diff, and whether the object ids are known
+     to be correct.
+  * `similarity`: Used to indicate if a file has been renamed or copied.
+  * `nfiles`: The number of files in the delta (for instance, if the delta
+     was run on a submodule commit id, it may contain more than one file).
+  * `old_file`: A [`DiffFile`](@ref) containing information about the file(s) before the changes.
+  * `new_file`: A [`DiffFile`](@ref) containing information about the file(s) after the changes.
 """
 struct DiffDelta
     status::Cint
@@ -419,7 +458,10 @@ struct RebaseOperation
     id::GitHash
     exec::Cstring
 end
-Base.show(io::IO, rbo::RebaseOperation) = print(io, "RebaseOperation($(string(rbo.id)))")
+function Base.show(io::IO, rbo::RebaseOperation)
+    println(io, "RebaseOperation($(string(rbo.id)))")
+    println(io, "Operation type: $(Consts.GIT_REBASE_OPERATION(rbo.optype))")
+end
 
 """
     LibGit2.StatusOptions
@@ -474,6 +516,23 @@ function Base.show(io::IO, fh::FetchHead)
     println(io, "Merged: $(fh.ismerge)")
 end
 
+"""
+    LibGit2.ConfigEntry
+
+Matches the [`git_config_entry`](https://libgit2.github.com/libgit2/#HEAD/type/git_config_entry) struct.
+"""
+@kwdef struct ConfigEntry
+    name::Cstring
+    value::Cstring
+    level::GIT_CONFIG = Consts.CONFIG_LEVEL_DEFAULT
+    free::Ptr{Void}
+    payload::Ptr{Void}
+end
+
+function Base.show(io::IO, ce::ConfigEntry)
+    print(io, "ConfigEntry(\"", unsafe_string(ce.name), "\", \"", unsafe_string(ce.value), "\")")
+end
+
 # Abstract object types
 abstract type AbstractGitObject end
 Base.isempty(obj::AbstractGitObject) = (obj.ptr == C_NULL)
@@ -481,24 +540,26 @@ Base.isempty(obj::AbstractGitObject) = (obj.ptr == C_NULL)
 abstract type GitObject <: AbstractGitObject end
 
 for (typ, owntyp, sup, cname) in [
-    (:GitRepo,          nothing,               :AbstractGitObject, :git_repository),
-    (:GitDiffStats,     nothing,               :AbstractGitObject, :git_diff_stats),
-    (:GitConfig,        :(Nullable{GitRepo}),  :AbstractGitObject, :git_config),
-    (:GitIndex,         :(Nullable{GitRepo}),  :AbstractGitObject, :git_index),
-    (:GitRemote,        :GitRepo,              :AbstractGitObject, :git_remote),
-    (:GitRevWalker,     :GitRepo,              :AbstractGitObject, :git_revwalk),
-    (:GitReference,     :GitRepo,              :AbstractGitObject, :git_reference),
-    (:GitDiff,          :GitRepo,              :AbstractGitObject, :git_diff),
-    (:GitAnnotated,     :GitRepo,              :AbstractGitObject, :git_annotated_commit),
-    (:GitRebase,        :GitRepo,              :AbstractGitObject, :git_rebase),
-    (:GitStatus,        :GitRepo,              :AbstractGitObject, :git_status_list),
-    (:GitBranchIter,    :GitRepo,              :AbstractGitObject, :git_branch_iterator),
-    (:GitUnknownObject, :GitRepo,              :GitObject,         :git_object),
-    (:GitCommit,        :GitRepo,              :GitObject,         :git_commit),
-    (:GitBlob,          :GitRepo,              :GitObject,         :git_blob),
-    (:GitTree,          :GitRepo,              :GitObject,         :git_tree),
-    (:GitTag,           :GitRepo,              :GitObject,         :git_tag),
-    (:GitTreeEntry,     :GitTree,              :AbstractGitObject, :git_tree_entry),
+    (:GitRepo,           nothing,               :AbstractGitObject, :git_repository),
+    (:GitConfig,         :(Nullable{GitRepo}),  :AbstractGitObject, :git_config),
+    (:GitIndex,          :(Nullable{GitRepo}),  :AbstractGitObject, :git_index),
+    (:GitRemote,         :GitRepo,              :AbstractGitObject, :git_remote),
+    (:GitRevWalker,      :GitRepo,              :AbstractGitObject, :git_revwalk),
+    (:GitReference,      :GitRepo,              :AbstractGitObject, :git_reference),
+    (:GitDescribeResult, :GitRepo,              :AbstractGitObject, :git_describe_result),
+    (:GitDiff,           :GitRepo,              :AbstractGitObject, :git_diff),
+    (:GitDiffStats,      :GitRepo,              :AbstractGitObject, :git_diff_stats),
+    (:GitAnnotated,      :GitRepo,              :AbstractGitObject, :git_annotated_commit),
+    (:GitRebase,         :GitRepo,              :AbstractGitObject, :git_rebase),
+    (:GitStatus,         :GitRepo,              :AbstractGitObject, :git_status_list),
+    (:GitBranchIter,     :GitRepo,              :AbstractGitObject, :git_branch_iterator),
+    (:GitConfigIter,     nothing,               :AbstractGitObject, :git_config_iterator),
+    (:GitUnknownObject,  :GitRepo,              :GitObject,         :git_object),
+    (:GitCommit,         :GitRepo,              :GitObject,         :git_commit),
+    (:GitBlob,           :GitRepo,              :GitObject,         :git_blob),
+    (:GitTree,           :GitRepo,              :GitObject,         :git_tree),
+    (:GitTag,            :GitRepo,              :GitObject,         :git_tag),
+    (:GitTreeEntry,      :GitTree,              :AbstractGitObject, :git_tree_entry),
     ]
 
     if owntyp === nothing
@@ -596,9 +657,9 @@ function with(f::Function, obj)
     end
 end
 
-with{T}(f::Function, ::Type{T}, args...) = with(f, T(args...))
+with(f::Function, ::Type{T}, args...) where {T} = with(f, T(args...))
 
-function with_warn{T}(f::Function, ::Type{T}, args...)
+function with_warn(f::Function, ::Type{T}, args...) where T
     obj = T(args...)
     try
         with(f, obj)
@@ -608,7 +669,7 @@ function with_warn{T}(f::Function, ::Type{T}, args...)
 end
 
 """
-    LibGit2.Const.OBJECT{T<:GitObject}(::Type{T})
+    LibGit2.Consts.OBJECT(::Type{T}) where T<:GitObject
 
 The `OBJECT` enum value corresponding to type `T`.
 """
@@ -666,30 +727,39 @@ function securezero!(cred::UserPasswordCredentials)
     return cred
 end
 
+function Base.:(==)(a::UserPasswordCredentials, b::UserPasswordCredentials)
+    a.user == b.user && a.pass == b.pass
+end
+
 "SSH credentials type"
 mutable struct SSHCredentials <: AbstractCredentials
     user::String
     pass::String
-    pubkey::String
     prvkey::String
+    pubkey::String
     usesshagent::String  # used for ssh-agent authentication
     prompt_if_incorrect::Bool    # Whether to allow interactive prompting if the credentials are incorrect
     count::Int
-
-    function SSHCredentials(u::AbstractString,p::AbstractString,prompt_if_incorrect::Bool=false)
-        c = new(u,p,"","","Y",prompt_if_incorrect,3)
+    function SSHCredentials(u::AbstractString,p::AbstractString,prvkey::AbstractString,pubkey::AbstractString,prompt_if_incorrect::Bool=false)
+        c = new(u,p,prvkey,pubkey,"Y",prompt_if_incorrect,3)
         finalizer(c, securezero!)
         return c
     end
-    SSHCredentials(prompt_if_incorrect::Bool=false) = SSHCredentials("","",prompt_if_incorrect)
+    SSHCredentials(u::AbstractString,p::AbstractString,prompt_if_incorrect::Bool=false) = SSHCredentials(u,p,"","",prompt_if_incorrect)
+    SSHCredentials(prompt_if_incorrect::Bool=false) = SSHCredentials("","","","",prompt_if_incorrect)
 end
+
 function securezero!(cred::SSHCredentials)
     securezero!(cred.user)
     securezero!(cred.pass)
-    securezero!(cred.pubkey)
     securezero!(cred.prvkey)
+    securezero!(cred.pubkey)
     cred.count = 0
     return cred
+end
+
+function Base.:(==)(a::SSHCredentials, b::SSHCredentials)
+    a.user == b.user && a.pass == b.pass && a.prvkey == b.prvkey && a.pubkey == b.pubkey
 end
 
 "Credentials that support caching"

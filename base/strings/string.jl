@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 const ByteArray = Union{Vector{UInt8},Vector{Int8}}
 
@@ -68,7 +68,7 @@ codeunit(s::AbstractString, i::Integer)
     unsafe_load(pointer(s),i)
 end
 
-write(io::IO, s::String) = unsafe_write(io, pointer(s), UInt(s.len))
+write(io::IO, s::String) = unsafe_write(io, pointer(s), reinterpret(UInt, s.len))
 
 ## comparison ##
 

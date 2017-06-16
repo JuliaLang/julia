@@ -54,16 +54,15 @@
    ;; function with static parameters
    (pattern-lambda
     (function (call (curly name . sparams) . argl) body)
-    (cons 'varlist (append (llist-vars (fix-arglist argl))
-                           (apply nconc
-                                  (map (lambda (v) (trycatch
-                                                    (list (typevar-expr-name v))
-                                                    (lambda (e) '())))
-                                       sparams)))))
+    (cons 'varlist (append (safe-llist-positional-args (fix-arglist argl))
+                           (typevar-names sparams))))
 
    ;; function definition
-   (pattern-lambda (function (call name . argl) body)
-                   (cons 'varlist (llist-vars (fix-arglist argl))))
+   (pattern-lambda (function (-$ (call name . argl) (|::| (call name . argl) _t)) body)
+                   (cons 'varlist (safe-llist-positional-args (fix-arglist argl))))
+   (pattern-lambda (function (where (-$ (call name . argl) (|::| (call name . argl) _t)) . wheres) body)
+                   (cons 'varlist (append (safe-llist-positional-args (fix-arglist argl))
+                                          (typevar-names wheres))))
 
    (pattern-lambda (function (tuple . args) body)
                    `(-> (tuple ,@args) ,body))
@@ -71,8 +70,10 @@
    ;; expression form function definition
    (pattern-lambda (= (call (curly name . sparams) . argl) body)
                    `(function (call (curly ,name . ,sparams) . ,argl) ,body))
-   (pattern-lambda (= (call name . argl) body)
+   (pattern-lambda (= (-$ (call name . argl) (|::| (call name . argl) _t)) body)
                    `(function (call ,name ,@argl) ,body))
+   (pattern-lambda (= (where (-$ (call name . argl) (|::| (call name . argl) _t)) . wheres) body)
+                   (cons 'function (cdr __)))
 
    ;; anonymous function
    (pattern-lambda (-> a b)
@@ -80,7 +81,11 @@
                                      (eq? (car a) 'tuple))
                                 (cdr a)
                                 (list a))))
-                     (cons 'varlist (llist-vars (fix-arglist a)))))
+                     (cons 'varlist (safe-llist-positional-args (fix-arglist a)))))
+
+   ;; where
+   (pattern-lambda (where ex . vars)
+                   (cons 'varlist (typevar-names vars)))
 
    ;; let
    (pattern-lambda (let ex . binds)
@@ -127,10 +132,10 @@
    ;; type definition
    (pattern-lambda (type mut (<: (curly tn . tvars) super) body)
                    (list* 'varlist (cons (unescape tn) (unescape tn)) '(new . new)
-                          (map typevar-expr-name tvars)))
+                          (typevar-names tvars)))
    (pattern-lambda (type mut (curly tn . tvars) body)
                    (list* 'varlist (cons (unescape tn) (unescape tn)) '(new . new)
-                          (map typevar-expr-name tvars)))
+                          (typevar-names tvars)))
    (pattern-lambda (type mut (<: tn super) body)
                    (list 'varlist (cons (unescape tn) (unescape tn)) '(new . new)))
    (pattern-lambda (type mut tn body)
@@ -141,15 +146,19 @@
 (define keywords-introduced-by-patterns
   (pattern-set
    (pattern-lambda (function (call (curly name . sparams) . argl) body)
-                   (cons 'varlist (llist-keywords (fix-arglist argl))))
+                   (cons 'varlist (safe-llist-keyword-args (fix-arglist argl))))
 
-   (pattern-lambda (function (call name . argl) body)
-                   (cons 'varlist (llist-keywords (fix-arglist argl))))
+   (pattern-lambda (function (-$ (call name . argl) (|::| (call name . argl) _t)) body)
+                   (cons 'varlist (safe-llist-keyword-args (fix-arglist argl))))
+   (pattern-lambda (function (where (-$ (call name . argl) (|::| (call name . argl) _t)) . wheres) body)
+                   (cons 'varlist (safe-llist-keyword-args (fix-arglist argl))))
 
    (pattern-lambda (= (call (curly name . sparams) . argl) body)
                    `(function (call (curly ,name . ,sparams) . ,argl) ,body))
-   (pattern-lambda (= (call name . argl) body)
+   (pattern-lambda (= (-$ (call name . argl) (|::| (call name . argl) _t)) body)
                    `(function (call ,name ,@argl) ,body))
+   (pattern-lambda (= (where (-$ (call name . argl) (|::| (call name . argl) _t)) . wheres) body)
+                   (cons 'function (cdr __)))
    ))
 
 (define (pair-with-gensyms v)
@@ -165,6 +174,70 @@
       e))
 
 (define (typevar-expr-name e) (car (analyze-typevar e)))
+
+;; get the list of names from a list of `where` variable expressions
+(define (typevar-names lst)
+  (apply nconc
+         (map (lambda (v) (trycatch
+                           (list (typevar-expr-name v))
+                           (lambda (e) '())))
+              lst)))
+
+;; get the name from a function formal argument expression, allowing `(escape x)`
+(define (try-arg-name v)
+  (cond ((and (symbol? v) (not (eq? v 'true)) (not (eq? v 'false)))
+         (list v))
+        ((atom? v) '())
+        (else
+         (case (car v)
+           ((... kw |::|) (try-arg-name (cadr v)))
+           ((escape) (list v))
+           (else '())))))
+
+;; get names from a formal argument list, specifying whether to include escaped ones
+(define (safe-arg-names lst (escaped #f))
+  (apply nconc
+         (map (lambda (v)
+                (let ((vv (try-arg-name v)))
+                  (if (eq? escaped (and (pair? vv) (pair? (car vv)) (eq? (caar vv) 'escape)))
+                      (if escaped (list (cadar vv)) vv)
+                      '())))
+              lst)))
+
+;; arg names, looking only at positional args
+(define (safe-llist-positional-args lst (escaped #f))
+  (safe-arg-names
+   (filter (lambda (a) (not (and (pair? a)
+                                 (eq? (car a) 'parameters))))
+           lst)
+   escaped))
+
+;; arg names from keyword arguments, and positional arguments with escaped names
+(define (safe-llist-keyword-args lst)
+  (let ((kwargs (apply nconc
+                       (map cdr
+                            (filter (lambda (a) (and (pair? a) (eq? (car a) 'parameters)))
+                                    lst)))))
+    (append
+     (safe-arg-names kwargs #f)
+     (safe-arg-names kwargs #t)
+     ;; count escaped argument names as "keywords" to prevent renaming
+     (safe-llist-positional-args lst #t))))
+
+;; resolve-expansion-vars-with-new-env, but turn on `inarg` once we get inside
+;; the formal argument list. `e` in general might be e.g. `(f{T}(x)::T) where T`,
+;; and we want `inarg` to be true for the `(x)` part.
+(define (resolve-in-function-lhs e env m inarg)
+  (define (recur x) (resolve-in-function-lhs x env m inarg))
+  (define (other x) (resolve-expansion-vars-with-new-env x env m inarg))
+  (case (car e)
+    ((where) `(where ,(recur (cadr e)) ,@(map other (cddr e))))
+    ((|::|)  `(|::| ,(recur (cadr e)) ,(other (caddr e))))
+    ((call)  `(call ,(other (cadr e))
+                    ,@(map (lambda (x)
+                             (resolve-expansion-vars-with-new-env x env m #t))
+                           (cddr e))))
+    (else (other e))))
 
 (define (new-expansion-env-for x env (outermost #f))
   (let ((introduced (pattern-expand1 vars-introduced-by-patterns x)))
@@ -252,12 +325,9 @@
                        (cdr e))))
 
            ((= function)
-            (if (and (pair? (cadr e)) (eq? (caadr e) 'call))
+            (if (and (pair? (cadr e)) (function-def? e))
                 ;; in (kw x 1) inside an arglist, the x isn't actually a kwarg
-                `(,(car e) (call ,(resolve-expansion-vars-with-new-env (cadadr e) env m inarg)
-                                 ,@(map (lambda (x)
-                                          (resolve-expansion-vars-with-new-env x env m #t))
-                                        (cddr (cadr e))))
+                `(,(car e) ,(resolve-in-function-lhs (cadr e) env m inarg)
                   ,(resolve-expansion-vars-with-new-env (caddr e) env m inarg))
                 `(,(car e) ,@(map (lambda (x)
                                     (resolve-expansion-vars-with-new-env x env m inarg))
@@ -270,12 +340,12 @@
                       ,(if inarg
                            (resolve-expansion-vars- (cadr (cadr e)) env m inarg)
                            ;; in keyword arg A=B, don't transform "A"
-                           (cadr (cadr e)))
+                           (unescape (cadr (cadr e))))
                       ,(resolve-expansion-vars- (caddr (cadr e)) env m inarg))
                      ,(resolve-expansion-vars- (caddr e) env m inarg))
                 `(kw ,(if inarg
                           (resolve-expansion-vars- (cadr e) env m inarg)
-                          (cadr e))
+                          (unescape (cadr e)))
                      ,(resolve-expansion-vars- (caddr e) env m inarg))))
 
            ((let)
@@ -308,6 +378,8 @@
         ((eq? (car e) 'call)   (decl-var* (cadr e)))
         ((eq? (car e) '=)      (decl-var* (cadr e)))
         ((eq? (car e) 'curly)  (decl-var* (cadr e)))
+        ((eq? (car e) '|::|)   (decl-var* (cadr e)))
+        ((eq? (car e) 'where)  (decl-var* (cadr e)))
         (else                  (decl-var e))))
 
 (define (decl-vars* e)
@@ -318,7 +390,7 @@
 (define (function-def? e)
   (and (pair? e) (or (eq? (car e) 'function) (eq? (car e) '->)
                      (and (eq? (car e) '=) (length= e 3)
-                          (pair? (cadr e)) (eq? (caadr e) 'call)))))
+                          (eventually-call (cadr e))))))
 
 (define (find-declared-vars-in-expansion e decl (outer #t))
   (cond ((or (not (pair? e)) (quoted? e)) '())
@@ -335,11 +407,11 @@
         ((eq? (car e) 'escape)  '())
         ((and (not outer) (function-def? e))
          ;; pick up only function name
-         (let ((fname (cond ((eq? (car e) '=) (cadr (cadr e)))
+         (let ((fname (cond ((eq? (car e) '=) (decl-var* (cadr e)))
                             ((eq? (car e) 'function)
                              (cond ((atom? (cadr e))             (cadr e))
                                    ((eq? (car (cadr e)) 'tuple)  #f)
-                                   (else                         (cadr (cadr e)))))
+                                   (else                         (decl-var* (cadr e)))))
                             (else #f))))
            (if (symbol? fname)
                (list fname)

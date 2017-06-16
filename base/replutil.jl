@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # fallback text/plain representation of any type:
 show(io::IO, ::MIME"text/plain", x) = show(io, x)
@@ -34,7 +34,7 @@ function show(io::IO, ::MIME"text/plain", iter::Union{KeyIterator,ValueIterator}
     end
 end
 
-function show{K,V}(io::IO, ::MIME"text/plain", t::Associative{K,V})
+function show(io::IO, ::MIME"text/plain", t::Associative{K,V}) where {K,V}
     # show more descriptively, with one line per key/value pair
     recur_io = IOContext(io, :SHOWN_SET => t)
     limit::Bool = get(io, :limit, false)
@@ -55,8 +55,8 @@ function show{K,V}(io::IO, ::MIME"text/plain", t::Associative{K,V})
         rows -= 2 # Subtract the summary and final ⋮ continuation lines
 
         # determine max key width to align the output, caching the strings
-        ks = Array{AbstractString}(min(rows, length(t)))
-        vs = Array{AbstractString}(min(rows, length(t)))
+        ks = Vector{AbstractString}(min(rows, length(t)))
+        vs = Vector{AbstractString}(min(rows, length(t)))
         keylen = 0
         vallen = 0
         for (i, (k, v)) in enumerate(t)
@@ -150,6 +150,21 @@ function show(io::IO, ::MIME"text/plain", s::String)
         showarray(io, Vector{UInt8}(s), false; header=false)
     end
 end
+
+function show(io::IO, ::MIME"text/plain", opt::JLOptions)
+    println(io, "JLOptions(")
+    fields = fieldnames(opt)
+    nfields = length(fields)
+    for (i, f) in enumerate(fields)
+        v = getfield(opt, i)
+        if isa(v, Ptr{UInt8})
+            v = (v != C_NULL) ? unsafe_string(v) : ""
+        end
+        println(io, "  ", f, " = ", repr(v), i < nfields ? "," : "")
+    end
+    print(io, ")")
+end
+
 
 # showing exception objects as descriptive error messages
 
@@ -365,7 +380,8 @@ function showerror(io::IO, ex::MethodError)
             print(io, "You may have intended to import Base.", name)
         end
     end
-    if method_exists(ex.f, arg_types)
+    if (ex.world != typemax(UInt) && method_exists(ex.f, arg_types) &&
+        !method_exists(ex.f, arg_types, ex.world))
         curworld = ccall(:jl_get_world_counter, UInt, ())
         println(io)
         print(io, "The applicable method may be too new: running in world age $(ex.world), while current world is $(curworld).")
@@ -402,7 +418,7 @@ function showerror(io::IO, ex::MethodError)
     end
 end
 
-striptype{T}(::Type{T}) = T
+striptype(::Type{T}) where {T} = T
 striptype(::Any) = nothing
 
 function showerror_ambiguous(io::IO, meth, f, args)
@@ -413,8 +429,14 @@ function showerror_ambiguous(io::IO, meth, f, args)
         i < length(p) && print(io, ", ")
     end
     print(io, ") is ambiguous. Candidates:")
+    sigfix = Any
     for m in meth
         print(io, "\n  ", m)
+        sigfix = typeintersect(m.sig, sigfix)
+    end
+    if isa(unwrap_unionall(sigfix), DataType) && sigfix <: Tuple
+        print(io, "\nPossible fix, define\n  ")
+        Base.show_tuple_as_call(io, :function,  sigfix)
     end
     nothing
 end
@@ -575,9 +597,6 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs::Vector=Any[])
                 if ex.world < min_world(method)
                     print(buf, " (method too new to be called from this world context.)")
                 end
-                if ex.world > max_world(method)
-                    print(buf, " (method deleted before this world age.)")
-                end
                 # TODO: indicate if it's in the wrong world
                 push!(lines, (buf, right_matches))
             end
@@ -610,20 +629,20 @@ function show_trace_entry(io, frame, n; prefix = "")
 end
 
 # Contains file name and file number. Gets set when a backtrace
-# is shown. Used by the REPL to make it possible to open
-# the location of a stackframe in the edítor.
-global LAST_BACKTRACE_LINE_INFOS = Tuple{String, Int}[]
+# or methodlist is shown. Used by the REPL to make it possible to open
+# the location of a stackframe/method in the editor.
+global LAST_SHOWN_LINE_INFOS = Tuple{String, Int}[]
 
 function show_backtrace(io::IO, t::Vector)
     n_frames = 0
     frame_counter = 0
-    resize!(LAST_BACKTRACE_LINE_INFOS, 0)
+    resize!(LAST_SHOWN_LINE_INFOS, 0)
     process_backtrace((a,b) -> n_frames += 1, t)
     n_frames != 0 && print(io, "\nStacktrace:")
     process_entry = (last_frame, n) -> begin
         frame_counter += 1
         show_trace_entry(IOContext(io, :backtrace => true), last_frame, n, prefix = string(" [", frame_counter, "] "))
-        push!(LAST_BACKTRACE_LINE_INFOS, (string(last_frame.file), last_frame.line))
+        push!(LAST_SHOWN_LINE_INFOS, (string(last_frame.file), last_frame.line))
     end
     process_backtrace(process_entry, t)
 end

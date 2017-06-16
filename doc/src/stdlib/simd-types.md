@@ -4,13 +4,13 @@ Type `VecElement{T}` is intended for building libraries of SIMD operations. Prac
 requires using `llvmcall`. The type is defined as:
 
 ```julia
-immutable VecElement{T}
+struct VecElement{T}
     value::T
 end
 ```
 
 It has a special compilation rule: a homogeneous tuple of `VecElement{T}` maps to an LLVM `vector`
-type when `T` is a bitstype and the tuple length is in the set {2-6,8-10,16}.
+type when `T` is a primitive bits type and the tuple length is in the set {2-6,8-10,16}.
 
 At `-O3`, the compiler *might* automatically vectorize operations on such tuples. For example,
 the following program, when compiled with `julia -O3` generates two SIMD addition instructions

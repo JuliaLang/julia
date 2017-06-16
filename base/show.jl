@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 print(io::IO, s::Symbol) = (write(io,s); nothing)
 
@@ -183,7 +183,7 @@ function show(io::IO, x::Core.IntrinsicFunction)
     print(io, unsafe_string(name))
 end
 
-show(io::IO, ::Core.BottomType) = print(io, "Union{}")
+show(io::IO, ::Core.TypeofBottom) = print(io, "Union{}")
 
 function show(io::IO, x::Union)
     print(io, "Union")
@@ -236,13 +236,24 @@ function show_datatype(io::IO, x::DataType)
     end
 end
 
+function show_supertypes(io::IO, typ::DataType)
+    print(io, typ)
+    while typ != Any
+        typ = supertype(typ)
+        print(io, " <: ", typ)
+    end
+end
+
+show_supertypes(typ::DataType) = show_supertypes(STDOUT, typ)
+
 macro show(exs...)
     blk = Expr(:block)
     for ex in exs
-        push!(blk.args, :(println($(sprint(show_unquoted,ex)*" = "),
-                                  repr(begin value=$(esc(ex)) end))))
+        push!(blk.args, :(print($(sprint(show_unquoted,ex)*" = "))))
+        push!(blk.args, :(show(STDOUT, "text/plain", begin value=$(esc(ex)) end)))
+        push!(blk.args, :(println()))
     end
-    if !isempty(exs); push!(blk.args, :value); end
+    isempty(exs) || push!(blk.args, :value)
     return blk
 end
 
@@ -307,13 +318,14 @@ function sourceinfo_slotnames(src::CodeInfo)
 end
 
 function show(io::IO, l::Core.MethodInstance)
-    if isdefined(l, :def)
-        if l.def.isstaged && l === l.def.generator
+    def = l.def
+    if isa(def, Method)
+        if def.isstaged && l === def.generator
             print(io, "MethodInstance generator for ")
-            show(io, l.def)
+            show(io, def)
         else
             print(io, "MethodInstance for ")
-            show_lambda_types(io, l)
+            show_tuple_as_call(io, def.name, l.specTypes)
         end
     else
         print(io, "Toplevel MethodInstance thunk")
@@ -323,17 +335,13 @@ end
 function show(io::IO, src::CodeInfo)
     # Fix slot names and types in function body
     print(io, "CodeInfo(")
-    if isa(src.code, Array{Any,1})
-        lambda_io = IOContext(io, :SOURCEINFO => src)
-        if src.slotnames !== nothing
-            lambda_io = IOContext(lambda_io, :SOURCE_SLOTNAMES => sourceinfo_slotnames(src))
-        end
-        body = Expr(:body)
-        body.args = src.code
-        show(lambda_io, body)
-    else
-        print(io, "<compressed>")
+    lambda_io = IOContext(io, :SOURCEINFO => src)
+    if src.slotnames !== nothing
+        lambda_io = IOContext(lambda_io, :SOURCE_SLOTNAMES => sourceinfo_slotnames(src))
     end
+    body = Expr(:body)
+    body.args = src.code
+    show(lambda_io, body)
     print(io, ")")
 end
 
@@ -473,6 +481,24 @@ end
 isidentifier(s::Symbol) = isidentifier(string(s))
 
 isoperator(s::Symbol) = ccall(:jl_is_operator, Cint, (Cstring,), s) != 0
+
+"""
+    operator_precedence(s::Symbol)
+
+Return an integer representing the precedence of operator `s`, relative to
+other operators. Higher-numbered operators take precedence over lower-numbered
+operators. Return `0` if `s` is not a valid operator.
+
+# Examples
+
+```jldoctest
+julia> Base.operator_precedence(:+), Base.operator_precedence(:*), Base.operator_precedence(:.)
+(9,11,15)
+
+julia> Base.operator_precedence(:+=), Base.operator_precedence(:(=))  # (Note the necessary parens on `:(=)`)
+(1,1)
+```
+"""
 operator_precedence(s::Symbol) = Int(ccall(:jl_operator_precedence, Cint, (Cstring,), s))
 operator_precedence(x::Any) = 0 # fallback for generic expression nodes
 const prec_power = operator_precedence(:(^))
@@ -480,10 +506,6 @@ const prec_decl = operator_precedence(:(::))
 
 is_expr(ex, head::Symbol)         = (isa(ex, Expr) && (ex.head == head))
 is_expr(ex, head::Symbol, n::Int) = is_expr(ex, head) && length(ex.args) == n
-
-is_linenumber(ex::LineNumberNode) = true
-is_linenumber(ex::Expr)           = (ex.head == :line)
-is_linenumber(ex)                 = false
 
 is_quoted(ex)            = false
 is_quoted(ex::QuoteNode) = true
@@ -498,7 +520,7 @@ typeemphasize(io::IO) = get(io, :TYPEEMPHASIZE, false) === true
 
 const indent_width = 4
 
-function show_expr_type(io::IO, ty, emph)
+function show_expr_type(io::IO, ty::ANY, emph::Bool)
     if ty === Function
         print(io, "::F")
     elseif ty === Core.IntrinsicFunction
@@ -514,18 +536,22 @@ end
 
 emphasize(io, str::AbstractString) = have_color ? print_with_color(Base.error_color(), io, str; bold = true) : print(io, uppercase(str))
 
-show_linenumber(io::IO, line)       = print(io," # line ",line,':')
-show_linenumber(io::IO, line, file) = print(io," # ", file,", line ",line,':')
+show_linenumber(io::IO, line)       = print(io, "#= line ", line, " =#")
+show_linenumber(io::IO, line, file) = print(io, "#= ", file, ":", line, " =#")
+show_linenumber(io::IO, line, file::Void) = show_linenumber(io, line)
 
 # show a block, e g if/for/etc
 function show_block(io::IO, head, args::Vector, body, indent::Int)
-    print(io, head, ' ')
-    show_list(io, args, ", ", indent)
+    print(io, head)
+    if !isempty(args)
+        print(io, ' ')
+        show_list(io, args, ", ", indent)
+    end
 
     ind = head === :module || head === :baremodule ? indent : indent + indent_width
     exs = (is_expr(body, :block) || is_expr(body, :body)) ? body.args : Any[body]
     for ex in exs
-        if !is_linenumber(ex); print(io, '\n', " "^ind); end
+        print(io, '\n', " "^ind)
         show_unquoted(io, ex, ind, -1)
     end
     print(io, '\n', " "^indent)
@@ -542,7 +568,7 @@ end
 # show an indented list
 function show_list(io::IO, items, sep, indent::Int, prec::Int=0, enclose_operators::Bool=false)
     n = length(items)
-    if n == 0; return end
+    n == 0 && return
     indent += indent_width
     first = true
     for item in items
@@ -589,7 +615,7 @@ end
 ## AST printing ##
 
 show_unquoted(io::IO, sym::Symbol, ::Int, ::Int)        = print(io, sym)
-show_unquoted(io::IO, ex::LineNumberNode, ::Int, ::Int) = show_linenumber(io, ex.line)
+show_unquoted(io::IO, ex::LineNumberNode, ::Int, ::Int) = show_linenumber(io, ex.line, ex.file)
 show_unquoted(io::IO, ex::LabelNode, ::Int, ::Int)      = print(io, ex.label, ": ")
 show_unquoted(io::IO, ex::GotoNode, ::Int, ::Int)       = print(io, "goto ", ex.label)
 show_unquoted(io::IO, ex::GlobalRef, ::Int, ::Int)      = print(io, ex.mod, '.', ex.name)
@@ -603,7 +629,7 @@ function show_unquoted(io::IO, ex::Slot, ::Int, ::Int)
         if isa(slottypes, Array) && slotid <= length(slottypes::Array)
             slottype = slottypes[slotid]
             # The Slot in assignment can somehow have an Any type
-            if slottype <: typ
+            if isa(slottype, Type) && isa(typ, Type) && slottype <: typ
                 typ = slottype
             end
         end
@@ -889,12 +915,20 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         print(io, head, ' ')
         show_list(io, args, ", ", indent)
 
-    elseif head === :macrocall && nargs >= 1
+    elseif head === :macrocall && nargs >= 2
+        # first show the line number argument as a comment
+        if isa(args[2], LineNumberNode) || is_expr(args[2], :line)
+            print(io, args[2], ' ')
+        end
         # Use the functional syntax unless specifically designated with prec=-1
+        # and hide the line number argument from the argument list
         if prec >= 0
-            show_call(io, :call, ex.args[1], ex.args[2:end], indent)
+            show_call(io, :call, args[1], args[3:end], indent)
         else
-            show_list(io, args, ' ', indent)
+            show_args = Vector{Any}(length(args) - 1)
+            show_args[1] = args[1]
+            show_args[2:end] = args[3:end]
+            show_list(io, show_args, ' ', indent)
         end
 
     elseif head === :line && 1 <= nargs <= 2
@@ -1012,7 +1046,9 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         show_type = false
     # print anything else as "Expr(head, args...)"
     else
-        show_type = false
+        if head !== :invoke
+            show_type = false
+        end
         if emphstate && ex.head !== :lambda && ex.head !== :method
             io = IOContext(io, :TYPEEMPHASIZE => false)
             emphstate = false
@@ -1029,18 +1065,17 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     nothing
 end
 
-function show_lambda_types(io::IO, li::Core.MethodInstance)
+function show_tuple_as_call(io::IO, name::Symbol, sig::Type)
     # print a method signature tuple for a lambda definition
-    local sig
-    returned_from_do = false
-    Base.with_output_color(have_color && get(io, :backtrace, false) ? stackframe_function_color() : :nothing, io) do io
-        if li.specTypes === Tuple
-            print(io, li.def.name, "(...)")
-            returned_from_do = true
-            return
-        end
-        sig = unwrap_unionall(li.specTypes).parameters
-        ft = sig[1]; uw = unwrap_unionall(ft)
+    color = have_color && get(io, :backtrace, false) ? stackframe_function_color() : :nothing
+    if sig === Tuple
+        Base.print_with_color(color, io, name, "(...)")
+        return
+    end
+    sig = unwrap_unionall(sig).parameters
+    Base.with_output_color(color, io) do io
+        ft = sig[1]
+        uw = unwrap_unionall(ft)
         if ft <: Function && isa(uw,DataType) && isempty(uw.parameters) &&
                 isdefined(uw.name.module, uw.name.mt.name) &&
                 ft == typeof(getfield(uw.name.module, uw.name.mt.name))
@@ -1052,7 +1087,6 @@ function show_lambda_types(io::IO, li::Core.MethodInstance)
             print(io, "(::", ft, ")")
         end
     end
-    returned_from_do && return
     first = true
     print_style = have_color && get(io, :backtrace, false) ? :bold : :nothing
     print_with_color(print_style, io, "(")
@@ -1065,12 +1099,30 @@ function show_lambda_types(io::IO, li::Core.MethodInstance)
     nothing
 end
 
+resolvebinding(ex::ANY) = ex
+resolvebinding(ex::QuoteNode) = ex.value
+resolvebinding(ex::Symbol) = resolvebinding(GlobalRef(Main, ex))
+function resolvebinding(ex::Expr)
+    if ex.head == :. && isa(ex.args[2], Symbol)
+        parent = resolvebinding(ex.args[1])
+        if isa(parent, Module)
+            return resolvebinding(GlobalRef(parent, ex.args[2]))
+        end
+    end
+    return nothing
+end
+function resolvebinding(ex::GlobalRef)
+    isdefined(ex.mod, ex.name) || return nothing
+    isconst(ex.mod, ex.name) || return nothing
+    m = getfield(ex.mod, ex.name)
+    isa(m, Module) || return nothing
+    return m
+end
+
 function ismodulecall(ex::Expr)
     return ex.head == :call && (ex.args[1] === GlobalRef(Base,:getfield) ||
                                 ex.args[1] === GlobalRef(Core,:getfield)) &&
-        isa(ex.args[2], Symbol) &&
-        isdefined(current_module(), ex.args[2]) &&
-        isa(getfield(current_module(), ex.args[2]), Module)
+           isa(resolvebinding(ex.args[2]), Module)
 end
 
 function show(io::IO, tv::TypeVar)
@@ -1311,7 +1363,7 @@ function alignment(io::IO, x::Real)
 end
 "`alignment(1 + 10im)` yields (3,5) for `1 +` and `_10im` (plus sign on left, space on right)"
 function alignment(io::IO, x::Complex)
-    m = match(r"^(.*[\+\-])(.*)$", sprint(0, show, x, env=io))
+    m = match(r"^(.*[^e][\+\-])(.*)$", sprint(0, show, x, env=io))
     m === nothing ? (length(sprint(0, show, x, env=io)), 0) :
                    (length(m.captures[1]), length(m.captures[2]))
 end
@@ -1480,7 +1532,7 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
                 print(io, i == first(rowsA) ? pre : presp)
                 print_matrix_row(io, X,A,i,colsA,sep)
                 print(io, i == last(rowsA) ? post : postsp)
-                if i != last(rowsA); println(io, ); end
+                if i != last(rowsA); println(io); end
             end
         else # rows fit down screen but cols don't, so need horizontal ellipsis
             c = div(screenwidth-length(hdots)+1,2)+1  # what goes to right of ellipsis
@@ -1493,7 +1545,7 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
                 print(io, (i - first(rowsA)) % hmod == 0 ? hdots : repeat(" ", length(hdots)))
                 print_matrix_row(io, X,Ralign,i,n-length(Ralign)+colsA,sep)
                 print(io, i == last(rowsA) ? post : postsp)
-                if i != last(rowsA); println(io, ); end
+                if i != last(rowsA); println(io); end
             end
         end
     else # rows don't fit so will need vertical ellipsis
@@ -1502,7 +1554,7 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
                 print(io, i == first(rowsA) ? pre : presp)
                 print_matrix_row(io, X,A,i,colsA,sep)
                 print(io, i == last(rowsA) ? post : postsp)
-                if i != rowsA[end]; println(io, ); end
+                if i != rowsA[end]; println(io); end
                 if i == rowsA[halfheight]
                     print(io, i == first(rowsA) ? pre : presp)
                     print_matrix_vdots(io, vdots,A,sep,vmod,1)
@@ -1521,7 +1573,7 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
                 print(io, (i - first(rowsA)) % hmod == 0 ? hdots : repeat(" ", length(hdots)))
                 print_matrix_row(io, X,Ralign,i,n-length(Ralign)+colsA,sep)
                 print(io, i == last(rowsA) ? post : postsp)
-                if i != rowsA[end]; println(io, ); end
+                if i != rowsA[end]; println(io); end
                 if i == rowsA[halfheight]
                     print(io, i == first(rowsA) ? pre : presp)
                     print_matrix_vdots(io, vdots,Lalign,sep,vmod,1)
@@ -1538,7 +1590,7 @@ end
     summary(x)
 
 Return a string giving a brief description of a value. By default returns
-`string(typeof(x))`, e.g. `Int64`.
+`string(typeof(x))`, e.g. [`Int64`](@ref).
 
 For arrays, returns a string of size and type info,
 e.g. `10-element Array{Int64,1}`.
@@ -1661,7 +1713,7 @@ end
 
 show(io::IO, X::AbstractArray) = showarray(io, X, true)
 
-repremptyarray{T}(io::IO, X::Array{T}) = print(io, "Array{$T}(", join(size(X),','), ')')
+repremptyarray(io::IO, X::Array{T}) where {T} = print(io, "Array{$T}(", join(size(X),','), ')')
 repremptyarray(io, X) = nothing # by default, we don't know this constructor
 
 function showarray(io::IO, X::AbstractArray, repr::Bool = true; header = true)

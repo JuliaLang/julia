@@ -59,7 +59,7 @@ the ranges may not start at 1.  If you just want the range for a particular dime
 is `indices(A, d)`.
 
 Base implements a custom range type, `OneTo`, where `OneTo(n)` means the same thing as `1:n` but
-in a form that guarantees (via the type system) that the lower index is 1.  For any new `AbstractArray`
+in a form that guarantees (via the type system) that the lower index is 1. For any new [`AbstractArray`](@ref)
 type, this is the default returned by `indices`, and it indicates that this array type uses "conventional"
 1-based indexing.  Note that if you don't want to be bothered supporting arrays with non-1 indexing,
 you can add the following line:
@@ -108,8 +108,8 @@ Storage is often allocated with `Array{Int}(dims)` or `similar(A, args...)`. Whe
 to match the indices of some other array, this may not always suffice. The generic replacement
 for such patterns is to use `similar(storagetype, shape)`.  `storagetype` indicates the kind of
 underlying "conventional" behavior you'd like, e.g., `Array{Int}` or `BitArray` or even `dims->zeros(Float32, dims)`
-(which would allocate an all-zeros array). `shape` is a tuple of `Integer` or `AbstractUnitRange`
-values, specifying the indices that you want the result to use.
+(which would allocate an all-zeros array). `shape` is a tuple of [`Integer`](@ref) or
+`AbstractUnitRange` values, specifying the indices that you want the result to use.
 
 Let's walk through a couple of explicit examples. First, if `A` has conventional indices, then
 `similar(Array{Int}, indices(A))` would end up calling `Array{Int}(size(A))`, and thus return
@@ -169,8 +169,8 @@ is (perhaps counterintuitively) an advantage: `ModuleA.ZeroRange` indicates that
 create a `ModuleA.ZeroArray`, whereas `ModuleB.ZeroRange` indicates a `ModuleB.ZeroArray` type.
  This design allows peaceful coexistence among many different custom array types.
 
-Note that the Julia package `CustomUnitRanges.jl` can sometimes be used to avoid the need to write
-your own `ZeroRange` type.
+Note that the Julia package [CustomUnitRanges.jl](https://github.com/JuliaArrays/CustomUnitRanges.jl)
+can sometimes be used to avoid the need to write your own `ZeroRange` type.
 
 ### Specializing `indices`
 
@@ -186,7 +186,7 @@ implement this).
 In some cases, the fallback definition for `indices(A, d)`:
 
 ```julia
-indices{T,N}(A::AbstractArray{T,N}, d) = d <= N ? indices(A)[d] : OneTo(1)
+indices(A::AbstractArray{T,N}, d) where {T,N} = d <= N ? indices(A)[d] : OneTo(1)
 ```
 
 may not be what you want: you may need to specialize it to return something other than `OneTo(1)`
@@ -195,8 +195,8 @@ to `indices(A, 1)` but which avoids checking (at runtime) whether `ndims(A) > 0`
 a performance optimization.)  It is defined as:
 
 ```julia
-indices1{T}(A::AbstractArray{T,0}) = OneTo(1)
-indices1{T}(A::AbstractArray{T})   = indices(A)[1]
+indices1(A::AbstractArray{T,0}) where {T} = OneTo(1)
+indices1(A::AbstractArray) = indices(A)[1]
 ```
 
 If the first of these (the zero-dimensional case) is problematic for your custom array type, be

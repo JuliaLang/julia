@@ -1,13 +1,13 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Methods operating on different special matrix types
 
 # Interconversion between special matrix types
-convert{T}(::Type{Bidiagonal}, A::Diagonal{T}) =
+convert(::Type{Bidiagonal}, A::Diagonal{T}) where {T} =
     Bidiagonal(A.diag, zeros(T, size(A.diag,1)-1), true)
-convert{T}(::Type{SymTridiagonal}, A::Diagonal{T}) =
+convert(::Type{SymTridiagonal}, A::Diagonal{T}) where {T} =
     SymTridiagonal(A.diag, zeros(T, size(A.diag,1)-1))
-convert{T}(::Type{Tridiagonal}, A::Diagonal{T}) =
+convert(::Type{Tridiagonal}, A::Diagonal{T}) where {T} =
     Tridiagonal(zeros(T, size(A.diag,1)-1), A.diag, zeros(T, size(A.diag,1)-1))
 
 function convert(::Type{Diagonal}, A::Union{Bidiagonal, SymTridiagonal})
@@ -24,7 +24,7 @@ function convert(::Type{SymTridiagonal}, A::Bidiagonal)
     SymTridiagonal(A.dv, A.ev)
 end
 
-convert{T}(::Type{Tridiagonal}, A::Bidiagonal{T}) =
+convert(::Type{Tridiagonal}, A::Bidiagonal{T}) where {T} =
     Tridiagonal(A.isupper ? zeros(T, size(A.dv,1)-1) : A.ev, A.dv,
                 A.isupper ? A.ev:zeros(T, size(A.dv,1)-1))
 
@@ -94,9 +94,9 @@ function convert(::Type{Tridiagonal}, A::AbstractTriangular)
 end
 
 # Constructs two method definitions taking into account (assumed) commutativity
-# e.g. @commutative f{S,T}(x::S, y::T) = x+y is the same is defining
-#     f{S,T}(x::S, y::T) = x+y
-#     f{S,T}(y::T, x::S) = f(x, y)
+# e.g. @commutative f(x::S, y::T) where {S,T} = x+y is the same is defining
+#     f(x::S, y::T) where {S,T} = x+y
+#     f(y::T, x::S) where {S,T} = f(x, y)
 macro commutative(myexpr)
     @assert myexpr.head===:(=) || myexpr.head===:function # Make sure it is a function definition
     y = copy(myexpr.args[1].args[2:end])

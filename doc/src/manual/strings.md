@@ -64,8 +64,8 @@ julia> typeof(ans)
 Int64
 ```
 
-On 32-bit architectures, [`typeof(ans)`](@ref) will be `Int32`. You can convert an integer value
-back to a `Char` just as easily:
+On 32-bit architectures, [`typeof(ans)`](@ref) will be [`Int32`](@ref). You can convert an
+integer value back to a `Char` just as easily:
 
 ```jldoctest
 julia> Char(120)
@@ -179,7 +179,8 @@ julia> str[end]
 ```
 
 All indexing in Julia is 1-based: the first element of any integer-indexed object is found at
-index 1, and the last element is found at index `n`, when the string has a length of `n`.
+index 1. (As we will see below, this does not necessarily mean that the last element is found
+at index `n`, where `n` is the length of the string.)
 
 In any indexing expression, the keyword `end` can be used as a shorthand for the last index (computed
 by [`endof(str)`](@ref)). You can perform arithmetic and other operations with `end`, just like
@@ -514,7 +515,7 @@ false
 julia> contains("Xylophon", 'o')
 ERROR: MethodError: no method matching contains(::String, ::Char)
 Closest candidates are:
-  contains(!Matched::Function, ::Any, !Matched::Any) at reduce.jl:660
+  contains(!Matched::Function, ::Any, !Matched::Any) at reduce.jl:664
   contains(::AbstractString, !Matched::AbstractString) at strings/search.jl:378
 ```
 
@@ -644,7 +645,7 @@ For when a capture doesn't match, instead of a substring, `m.captures` contains 
 position, and `m.offsets` has a zero offset (recall that indices in Julia are 1-based, so a zero
 offset into a string is invalid). Here is a pair of somewhat contrived examples:
 
-```jldoctest
+```jldoctest acdmatch
 julia> m = match(r"(a|b)(c)?(d)", "acd")
 RegexMatch("acd", 1="a", 2="c", 3="d")
 
@@ -691,7 +692,7 @@ julia> m.offsets
 It is convenient to have captures returned as an array so that one can use destructuring syntax
 to bind them to local variables:
 
-```julia
+```jldoctest acdmatch
 julia> first, second, third = m.captures; first
 "a"
 ```
@@ -777,8 +778,8 @@ for regular expressions containing quotation marks or newlines).
 ## [Byte Array Literals](@id man-byte-array-literals)
 
 Another useful non-standard string literal is the byte-array string literal: `b"..."`. This form
-lets you use string notation to express literal byte arrays -- i.e. arrays of `UInt8` values.
-The rules for byte array literals are the following:
+lets you use string notation to express literal byte arrays -- i.e. arrays of
+[`UInt8`](@ref) values. The rules for byte array literals are the following:
 
   * ASCII characters and ASCII escapes produce a single byte.
   * `\x` and octal escape sequences produce the *byte* corresponding to the escape value.
@@ -807,7 +808,7 @@ The Unicode escape `\u2200` is encoded in UTF-8 as the three bytes 226, 136, 128
 resulting byte array does not correspond to a valid UTF-8 string -- if you try to use this as
 a regular string literal, you will get a syntax error:
 
-```julia
+```julia-repl
 julia> "DATA\xff\u2200"
 ERROR: syntax: invalid UTF-8 sequence
 ```
@@ -837,9 +838,11 @@ so the distinction can safely be ignored. For the escapes `\x80` through `\xff` 
 bytes, which -- unless followed by very specific continuation bytes -- do not form valid UTF-8
 data, whereas the latter escapes all represent Unicode code points with two-byte encodings.
 
-If this is all extremely confusing, try reading ["The Absolute Minimum Every Software Developer Absolutely, Positively Must Know About Unicode
-and Character Sets"](http://www.joelonsoftware.com/articles/Unicode.html). It's an excellent introduction
-to Unicode and UTF-8, and may help alleviate some confusion regarding the matter.
+If this is all extremely confusing, try reading ["The Absolute Minimum Every
+Software Developer Absolutely, Positively Must Know About Unicode and Character
+Sets"](https://www.joelonsoftware.com/2003/10/08/the-absolute-minimum-every-software-developer-absolutely-positively-must-know-about-unicode-and-character-sets-no-excuses/).
+It's an excellent introduction to Unicode and UTF-8, and may help alleviate
+some confusion regarding the matter.
 
 ## [Version Number Literals](@id man-version-number-literals)
 

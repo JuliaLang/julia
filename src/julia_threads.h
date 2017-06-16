@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 // Meant to be included in <julia.h>
 #ifndef JULIA_THREADS_H
@@ -33,6 +33,12 @@ typedef struct {
     jl_taggedvalue_t *newpages;   // root of list of chunks of free objects
     uint16_t osize;      // size of objects in this pool
 } jl_gc_pool_t;
+
+// Recursive spin lock
+typedef struct {
+    volatile unsigned long owner;
+    uint32_t count;
+} jl_mutex_t;
 
 typedef struct {
     // variable for tracking weak references
@@ -82,6 +88,10 @@ typedef struct {
     // this makes sure that a single objects can only appear once in
     // the lists (the mark bit cannot be flipped to `0` without sweeping)
     void *big_obj[1024];
+    jl_mutex_t stack_lock;
+    void **pc_stack;
+    void **pc_stack_end;
+    char *data_stack;
 } jl_gc_mark_cache_t;
 
 // This includes all the thread local states we care about for a thread.
@@ -105,7 +115,6 @@ typedef struct _jl_tls_states_t {
     struct _jl_module_t *current_module;
     struct _jl_task_t *volatile current_task;
     struct _jl_task_t *root_task;
-    struct _jl_value_t *volatile task_arg_in_transit;
     void *stackbase;
     char *stack_lo;
     char *stack_hi;
@@ -140,6 +149,7 @@ typedef struct _jl_tls_states_t {
 } jl_tls_states_t;
 typedef jl_tls_states_t *jl_ptls_t;
 
+// Update codegen version in `ccall.cpp` after changing either `pause` or `wake`
 #ifdef __MIC__
 #  define jl_cpu_pause() _mm_delay_64(100)
 #  define jl_cpu_wake() ((void)0)
@@ -503,12 +513,6 @@ JL_DLLEXPORT void (jl_gc_safepoint)(void);
         }                                                       \
     } while (0)
 
-// Recursive spin lock
-typedef struct {
-    volatile unsigned long owner;
-    uint32_t count;
-} jl_mutex_t;
-
 JL_DLLEXPORT void jl_gc_enable_finalizers(jl_ptls_t ptls, int on);
 static inline void jl_lock_frame_push(jl_mutex_t *lock);
 static inline void jl_lock_frame_pop(void);
@@ -557,6 +561,18 @@ static inline void jl_mutex_lock(jl_mutex_t *lock)
     jl_gc_enable_finalizers(ptls, 0);
 }
 
+/* Call this function for code that could be called from either a managed
+   or an unmanaged thread */
+static inline void jl_mutex_lock_maybe_nogc(jl_mutex_t *lock)
+{
+    jl_ptls_t ptls = jl_get_ptls_states();
+    if (ptls->safepoint) {
+        jl_mutex_lock(lock);
+    } else {
+        jl_mutex_lock_nogc(lock);
+    }
+}
+
 static inline void jl_mutex_unlock_nogc(jl_mutex_t *lock)
 {
     assert(lock->owner == jl_thread_self() &&
@@ -574,6 +590,15 @@ static inline void jl_mutex_unlock(jl_mutex_t *lock)
     jl_gc_enable_finalizers(ptls, 1);
     jl_lock_frame_pop();
     JL_SIGATOMIC_END();
+}
+
+static inline void jl_mutex_unlock_maybe_nogc(jl_mutex_t *lock) {
+    jl_ptls_t ptls = jl_get_ptls_states();
+    if (ptls->safepoint) {
+        jl_mutex_unlock(lock);
+    } else {
+        jl_mutex_unlock_nogc(lock);
+    }
 }
 
 static inline void jl_mutex_init(jl_mutex_t *lock)

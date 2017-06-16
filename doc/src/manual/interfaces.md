@@ -187,7 +187,7 @@ julia> Squares(10)[[3,4.,5]]
 While this is starting to support more of the [indexing operations supported by some of the builtin types](@ref man-array-indexing),
 there's still quite a number of behaviors missing. This `Squares` sequence is starting to look
 more and more like a vector as we've added behaviors to it. Instead of defining all these behaviors
-ourselves, we can officially define it as a subtype of an `AbstractArray`.
+ourselves, we can officially define it as a subtype of an [`AbstractArray`](@ref).
 
 ## [Abstract Arrays](@id man-interface-array)
 
@@ -294,11 +294,11 @@ julia> SparseArray{T,N}(::Type{T}, dims::NTuple{N,Int}) = SparseArray{T,N}(Dict{
 
 julia> Base.size(A::SparseArray) = A.dims
 
-julia> Base.similar{T}(A::SparseArray, ::Type{T}, dims::Dims) = SparseArray(T, dims)
+julia> Base.similar(A::SparseArray, ::Type{T}, dims::Dims) where {T} = SparseArray(T, dims)
 
-julia> Base.getindex{T,N}(A::SparseArray{T,N}, I::Vararg{Int,N}) = get(A.data, I, zero(T))
+julia> Base.getindex(A::SparseArray{T,N}, I::Vararg{Int,N}) where {T,N} = get(A.data, I, zero(T))
 
-julia> Base.setindex!{T,N}(A::SparseArray{T,N}, v, I::Vararg{Int,N}) = (A.data[I] = v)
+julia> Base.setindex!(A::SparseArray{T,N}, v, I::Vararg{Int,N}) where {T,N} = (A.data[I] = v)
 ```
 
 Notice that this is an `IndexCartesian` array, so we must manually define [`getindex()`](@ref) and [`setindex!()`](@ref)

@@ -1,8 +1,8 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Math
 
-export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
+export sin, cos, sincos, tan, sinh, cosh, tanh, asin, acos, atan,
        asinh, acosh, atanh, sec, csc, cot, asec, acsc, acot,
        sech, csch, coth, asech, acsch, acoth,
        sinpi, cospi, sinc, cosc,
@@ -53,7 +53,7 @@ julia> clamp.([pi, 1.0, big(10.)], 2., 9.)
  9.000000000000000000000000000000000000000000000000000000000000000000000000000000
 ```
 """
-clamp{X,L,H}(x::X, lo::L, hi::H) =
+clamp(x::X, lo::L, hi::H) where {X,L,H} =
     ifelse(x > hi, convert(promote_type(X,L,H), hi),
            ifelse(x < lo,
                   convert(promote_type(X,L,H), lo),
@@ -124,7 +124,7 @@ macro evalpoly(z, p...)
              :(s = muladd(x, x, y*y)),
              as...,
              :(muladd($ai, tt, $b)))
-    R = Expr(:macrocall, Symbol("@horner"), :tt, map(esc, p)...)
+    R = Expr(:macrocall, Symbol("@horner"), (), :tt, map(esc, p)...)
     :(let tt = $(esc(z))
           isa(tt, Complex) ? $C : $R
       end)
@@ -156,12 +156,13 @@ deg2rad(z::AbstractFloat) = z * (oftype(z, pi) / 180)
 rad2deg(z::Real) = rad2deg(float(z))
 deg2rad(z::Real) = deg2rad(float(z))
 
-log{T<:Number}(b::T, x::T) = log(x)/log(b)
+log(b::T, x::T) where {T<:Number} = log(x)/log(b)
 
 """
     log(b,x)
 
-Compute the base `b` logarithm of `x`. Throws [`DomainError`](@ref) for negative `Real` arguments.
+Compute the base `b` logarithm of `x`. Throws [`DomainError`](@ref) for negative
+[`Real`](@ref) arguments.
 
 ```jldoctest
 julia> log(4,8)
@@ -291,7 +292,7 @@ end
 # TODO: GNU libc has exp10 as an extension; should openlibm?
 exp10(x::Float64) = 10.0^x
 exp10(x::Float32) = 10.0f0^x
-exp10(x::Integer) = exp10(float(x))
+exp10(x::Real) = exp10(float(x))
 
 # utility for converting NaN return to DomainError
 # the branch in nan_dom_err prevents its callers from inlining, so be sure to force it
@@ -351,8 +352,8 @@ atanh(x)
 """
     log(x)
 
-Compute the natural logarithm of `x`. Throws [`DomainError`](@ref) for negative `Real` arguments.
-Use complex negative arguments to obtain complex results.
+Compute the natural logarithm of `x`. Throws [`DomainError`](@ref) for negative
+[`Real`](@ref) arguments. Use complex negative arguments to obtain complex results.
 
 There is an experimental variant in the `Base.Math.JuliaLibm` module, which is typically
 faster and more accurate.
@@ -362,7 +363,8 @@ log(x)
 """
     log2(x)
 
-Compute the logarithm of `x` to base 2. Throws [`DomainError`](@ref) for negative `Real` arguments.
+Compute the logarithm of `x` to base 2. Throws [`DomainError`](@ref) for negative
+[`Real`](@ref) arguments.
 
 # Example
 ```jldoctest
@@ -379,7 +381,7 @@ log2(x)
     log10(x)
 
 Compute the logarithm of `x` to base 10.
-Throws [`DomainError`](@ref) for negative `Real` arguments.
+Throws [`DomainError`](@ref) for negative [`Real`](@ref) arguments.
 
 # Example
 ```jldoctest
@@ -395,7 +397,8 @@ log10(x)
 """
     log1p(x)
 
-Accurate natural logarithm of `1+x`. Throws [`DomainError`](@ref) for `Real` arguments less than -1.
+Accurate natural logarithm of `1+x`. Throws [`DomainError`](@ref) for [`Real`](@ref)
+arguments less than -1.
 
 There is an experimental variant in the `Base.Math.JuliaLibm` module, which is typically
 faster and more accurate.
@@ -419,14 +422,27 @@ for f in (:sin, :cos, :tan, :asin, :acos, :acosh, :atanh, :log, :log2, :log10,
     end
 end
 
+"""
+    sincos(x)
+
+Compute sine and cosine of `x`, where `x` is in radians.
+"""
+@inline function sincos(x)
+    res = Base.FastMath.sincos_fast(x)
+    if (isnan(res[1]) | isnan(res[2])) & !isnan(x)
+        throw(DomainError())
+    end
+    return res
+end
+
 sqrt(x::Float64) = sqrt_llvm(x)
 sqrt(x::Float32) = sqrt_llvm(x)
 
 """
     sqrt(x)
 
-Return ``\\sqrt{x}``. Throws [`DomainError`](@ref) for negative `Real` arguments. Use complex
-negative arguments instead.  The prefix operator `√` is equivalent to `sqrt`.
+Return ``\\sqrt{x}``. Throws [`DomainError`](@ref) for negative [`Real`](@ref) arguments.
+Use complex negative arguments instead. The prefix operator `√` is equivalent to `sqrt`.
 """
 sqrt(x::Real) = sqrt(float(x))
 
@@ -446,11 +462,11 @@ julia> √(a^2 + a^2) # a^2 overflows
 ERROR: DomainError:
 sqrt will only return a complex result if called with a complex argument. Try sqrt(complex(x)).
 Stacktrace:
- [1] sqrt(::Int64) at ./math.jl:421
+ [1] sqrt(::Int64) at ./math.jl:447
 ```
 """
 hypot(x::Number, y::Number) = hypot(promote(x, y)...)
-function hypot{T<:Number}(x::T, y::T)
+function hypot(x::T, y::T) where T<:Number
     ax = abs(x)
     ay = abs(y)
     if ax < ay
@@ -489,19 +505,19 @@ Compute the inverse tangent of `y/x`, using the signs of both `x` and `y` to det
 quadrant of the return value.
 """
 atan2(y::Real, x::Real) = atan2(promote(float(y),float(x))...)
-atan2{T<:AbstractFloat}(y::T, x::T) = Base.no_op_err("atan2", T)
+atan2(y::T, x::T) where {T<:AbstractFloat} = Base.no_op_err("atan2", T)
 
 atan2(y::Float64, x::Float64) = ccall((:atan2,libm), Float64, (Float64, Float64,), y, x)
 atan2(y::Float32, x::Float32) = ccall((:atan2f,libm), Float32, (Float32, Float32), y, x)
 
-max{T<:AbstractFloat}(x::T, y::T) = ifelse((y > x) | (signbit(y) < signbit(x)),
+max(x::T, y::T) where {T<:AbstractFloat} = ifelse((y > x) | (signbit(y) < signbit(x)),
                                     ifelse(isnan(x), x, y), ifelse(isnan(y), y, x))
 
 
-min{T<:AbstractFloat}(x::T, y::T) = ifelse((y < x) | (signbit(y) > signbit(x)),
+min(x::T, y::T) where {T<:AbstractFloat} = ifelse((y < x) | (signbit(y) > signbit(x)),
                                     ifelse(isnan(x), x, y), ifelse(isnan(y), y, x))
 
-minmax{T<:AbstractFloat}(x::T, y::T) =
+minmax(x::T, y::T) where {T<:AbstractFloat} =
     ifelse(isnan(x) | isnan(y), ifelse(isnan(x), (x,x), (y,y)),
            ifelse((y > x) | (signbit(x) > signbit(y)), (x,y), (y,x)))
 
@@ -517,7 +533,7 @@ julia> ldexp(5., 2)
 20.0
 ```
 """
-function ldexp{T<:IEEEFloat}(x::T, e::Integer)
+function ldexp(x::T, e::Integer) where T<:IEEEFloat
     xu = reinterpret(Unsigned, x)
     xs = xu & ~sign_mask(T)
     xs >= exponent_mask(T) && return x # NaN or Inf
@@ -566,7 +582,7 @@ ldexp(x::Float16, q::Integer) = Float16(ldexp(Float32(x), q))
 
 Get the exponent of a normalized floating-point number.
 """
-function exponent{T<:IEEEFloat}(x::T)
+function exponent(x::T) where T<:IEEEFloat
     xs = reinterpret(Unsigned, x) & ~sign_mask(T)
     xs >= exponent_mask(T) && return throw(DomainError()) # NaN or Inf
     k = Int(xs >> significand_bits(T))
@@ -594,7 +610,7 @@ julia> significand(15.2)*8
 15.2
 ```
 """
-function significand{T<:IEEEFloat}(x::T)
+function significand(x::T) where T<:IEEEFloat
     xu = reinterpret(Unsigned, x)
     xs = xu & ~sign_mask(T)
     xs >= exponent_mask(T) && return x # NaN or Inf
@@ -614,7 +630,7 @@ end
 Return `(x,exp)` such that `x` has a magnitude in the interval ``[1/2, 1)`` or 0,
 and `val` is equal to ``x \\times 2^{exp}``.
 """
-function frexp{T<:IEEEFloat}(x::T)
+function frexp(x::T) where T<:IEEEFloat
     xu = reinterpret(Unsigned, x)
     xs = xu & ~sign_mask(T)
     xs >= exponent_mask(T) && return x, 0 # NaN or Inf
@@ -698,7 +714,7 @@ end
 @inline ^(x::Float64, y::Integer) = x ^ Float64(y)
 @inline ^(x::Float32, y::Integer) = x ^ Float32(y)
 @inline ^(x::Float16, y::Integer) = Float16(Float32(x) ^ Float32(y))
-@inline ^{p}(x::Float16, ::Type{Val{p}}) = Float16(Float32(x) ^ Val{p})
+@inline literal_pow(::typeof(^), x::Float16, ::Type{Val{p}}) where {p} = Float16(literal_pow(^,Float32(x),Val{p}))
 
 function angle_restrict_symm(theta)
     const P1 = 4 * 7.8539812564849853515625e-01
@@ -958,12 +974,12 @@ end
 cbrt(a::Float16) = Float16(cbrt(Float32(a)))
 
 # More special functions
-include("special/exp.jl")
-include("special/trig.jl")
-include("special/gamma.jl")
+include(joinpath("special", "exp.jl"))
+include(joinpath("special", "trig.jl"))
+include(joinpath("special", "gamma.jl"))
 
 module JuliaLibm
-include("special/log.jl")
+include(joinpath("special", "log.jl"))
 end
 
 end # module

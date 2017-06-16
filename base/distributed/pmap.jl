@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 mutable struct BatchProcessingError <: Exception
     data
@@ -60,7 +60,7 @@ which is then returned inline with the results to the caller.
 
 Consider the following two examples. The first one returns the exception object inline,
 the second a 0 in place of any exception:
-```julia
+```julia-repl
 julia> pmap(x->iseven(x) ? error("foo") : x, 1:4; on_error=identity)
 4-element Array{Any,1}:
  1

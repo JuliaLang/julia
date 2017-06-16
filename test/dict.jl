@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Pair
 p = Pair(10,20)
@@ -394,6 +394,9 @@ let
     ca = empty!(ca)
     @test length(ca) == 0
     @test length(a) == 2
+
+    d = Dict('a'=>1, 'b'=>1, 'c'=> 3)
+    @test a != d
 end
 
 @test length(ObjectIdDict(1=>2, 1.0=>3)) == 2
@@ -705,4 +708,22 @@ end
     @test d1 == Dict("A" => 1, "B" => 18, "C" => 32)
     @inferred merge!(-, d1, d2)
     @test d1 == Dict("A" => 1, "B" => 15, "C" => 28)
+end
+
+@testset "misc error/io" begin
+    d = Dict('a'=>1, 'b'=>1, 'c'=> 3)
+    @test_throws ErrorException 'a' in d
+    key_str = sprint(show, keys(d))
+    @test 'a' ∈ key_str
+    @test 'b' ∈ key_str
+    @test 'c' ∈ key_str
+end
+
+@testset "Dict pop!" begin
+    d = Dict(1=>2, 3=>4)
+    @test pop!(d, 1) == 2
+    @test_throws KeyError pop!(d, 1)
+    @test pop!(d, 1, 0) == 0
+    @test pop!(d) == (3=>4)
+    @test_throws ArgumentError pop!(d)
 end

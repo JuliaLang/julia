@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## symbols ##
 
@@ -46,19 +46,21 @@ copy_exprargs(x::Array{Any,1}) = Any[copy_exprs(a) for a in x]
 ==(x::QuoteNode, y::QuoteNode) = isequal(x.value, y.value)
 
 """
-    expand(x)
+    expand(m, x)
 
-Takes the expression `x` and returns an equivalent expression in lowered form.
+Takes the expression `x` and returns an equivalent expression in lowered form
+for executing in module `m`.
 See also [`code_lowered`](@ref).
 """
-expand(x::ANY) = ccall(:jl_expand, Any, (Any,), x)
+expand(m::Module, x::ANY) = ccall(:jl_expand, Any, (Any, Any), x, m)
 
 """
-    macroexpand(x)
+    macroexpand(m, x)
 
-Takes the expression `x` and returns an equivalent expression with all macros removed (expanded).
+Takes the expression `x` and returns an equivalent expression with all macros removed (expanded)
+for executing in module `m`.
 """
-macroexpand(x::ANY) = ccall(:jl_macroexpand, Any, (Any,), x)
+macroexpand(m::Module, x::ANY) = ccall(:jl_macroexpand, Any, (Any, Any), x, m)
 
 """
     @macroexpand
@@ -93,8 +95,7 @@ the code was finally called (REPL in the example).
 Note that when calling `macroexpand` or `@macroexpand` directly from the REPL, both of these contexts coincide, hence there is no difference.
 """
 macro macroexpand(code)
-    code_expanded = macroexpand(code)
-    QuoteNode(code_expanded)
+    return :(macroexpand($__module__, $(QuoteNode(code))))
 end
 
 ## misc syntax ##
@@ -240,7 +241,7 @@ function is_short_function_def(ex)
     ex.head == :(=) || return false
     while length(ex.args) >= 1 && isa(ex.args[1], Expr)
         (ex.args[1].head == :call) && return true
-        (ex.args[1].head == :where) || return false
+        (ex.args[1].head == :where || ex.args[1].head == :(::)) || return false
         ex = ex.args[1]
     end
     return false
@@ -276,9 +277,25 @@ end
 
 remove_linenums!(ex) = ex
 function remove_linenums!(ex::Expr)
-    filter!(x->!((isa(x,Expr) && x.head === :line) || isa(x,LineNumberNode)), ex.args)
+    if ex.head === :body || ex.head === :block || ex.head === :quote
+        # remove line number expressions from metadata (not argument literal or inert) position
+        filter!(ex.args) do x
+            isa(x, Expr) && x.head === :line && return false
+            isa(x, LineNumberNode) && return false
+            return true
+        end
+    end
     for subex in ex.args
         remove_linenums!(subex)
     end
-    ex
+    return ex
+end
+
+macro generated(f)
+     if isa(f, Expr) && (f.head === :function || is_short_function_def(f))
+        f.head = :stagedfunction
+        return Expr(:escape, f)
+    else
+        error("invalid syntax; @generated must be used with a function definition")
+    end
 end

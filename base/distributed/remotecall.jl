@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
     client_refs
@@ -152,7 +152,7 @@ function lookup_ref(pg, rrid, f)
         rv = get(pg.refs, rrid, false)
         if rv === false
             # first we've heard of this ref
-            rv = RemoteValue(eval(Main, Expr(:body, Expr(:return, Expr(:call, f)))))
+            rv = RemoteValue(invokelatest(f))
             pg.refs[rrid] = rv
             push!(rv.clientset, rrid.whence)
         end
@@ -235,7 +235,7 @@ end
 function send_del_client(rr)
     if rr.where == myid()
         del_client(rr)
-    elseif rr.where in procs() # process only if a valid worker
+    elseif id_in_procs(rr.where) # process only if a valid worker
         w = worker_from_id(rr.where)
         push!(w.del_msgs, (remoteref_id(rr), myid()))
         w.gcflag = true
@@ -260,7 +260,7 @@ end
 function send_add_client(rr::AbstractRemoteRef, i)
     if rr.where == myid()
         add_client(remoteref_id(rr), i)
-    elseif (i != rr.where) && (rr.where in procs())
+    elseif (i != rr.where) && id_in_procs(rr.where)
         # don't need to send add_client if the message is already going
         # to the processor that owns the remote ref. it will add_client
         # itself inside deserialize().
@@ -271,7 +271,7 @@ function send_add_client(rr::AbstractRemoteRef, i)
     end
 end
 
-channel_type{T}(rr::RemoteChannel{T}) = T
+channel_type(rr::RemoteChannel{T}) where {T} = T
 
 serialize(s::AbstractSerializer, f::Future) = serialize(s, f, isnull(f.v))
 serialize(s::AbstractSerializer, rr::RemoteChannel) = serialize(s, rr, true)

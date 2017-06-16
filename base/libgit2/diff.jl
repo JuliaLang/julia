@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # TODO: make this a general purpose solution
 function Base.cconvert(::Type{Ptr{DiffOptionsStruct}}, pathspecs::AbstractString)
@@ -39,7 +39,7 @@ function GitDiffStats(diff::GitDiff)
     @check ccall((:git_diff_get_stats, :libgit2), Cint,
                   (Ptr{Ptr{Void}}, Ptr{Void}),
                   diff_stat_ptr_ptr, diff.ptr)
-    return GitDiffStats(diff_stat_ptr_ptr[])
+    return GitDiffStats(diff.owner, diff_stat_ptr_ptr[])
 end
 
 function files_changed(diff_stat::GitDiffStats)

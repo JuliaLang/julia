@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 function GitReference(repo::GitRepo, refname::AbstractString)
     ref_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
@@ -48,7 +48,7 @@ end
 Returns a shortened version of the name of `ref` that's
 "human-readable".
 
-```julia
+```julia-repl
 julia> repo = LibGit2.GitRepo(path_to_repo);
 
 julia> branch_ref = LibGit2.head(repo);
@@ -162,12 +162,16 @@ end
     peel([T,] ref::GitReference)
 
 Recursively peel `ref` until an object of type `T` is obtained. If no `T` is provided,
-then `ref` will be peeled until an object other than a `GitTag` is obtained.
+then `ref` will be peeled until an object other than a [`GitTag`](@ref) is obtained.
 
 - A `GitTag` will be peeled to the object it references.
-- A `GitCommit` will be peeled to a `GitTree`.
+- A [`GitCommit`](@ref) will be peeled to a [`GitTree`](@ref).
+
+!!! note
+    Only annotated tags can be peeled to `GitTag` objects. Lightweight tags (the default)
+    are references under `refs/tags/` which point directly to `GitCommit` objects.
 """
-function peel{T<:GitObject}(::Type{T}, ref::GitReference)
+function peel(::Type{T}, ref::GitReference) where T<:GitObject
     obj_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_reference_peel, :libgit2), Cint,
                  (Ptr{Ptr{Void}}, Ptr{Void}, Cint), obj_ptr_ptr, ref.ptr, Consts.OBJECT(T))
@@ -334,7 +338,7 @@ function Base.map(f::Function, bi::GitBranchIter)
     while !done(bi, s)
         val = f(s[1:2])
         if res === nothing
-            res = Array{typeof(val)}(0)
+            res = Vector{typeof(val)}(0)
         end
         push!(res, val)
         val, s = next(bi, s)

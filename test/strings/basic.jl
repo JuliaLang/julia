@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # constructors
 @test String([0x61,0x62,0x63,0x21]) == "abc!"
@@ -53,7 +53,7 @@ let
     sym = Symbol(Char(0xdcdb))
     @test string(sym) == string(Char(0xdcdb))
     @test String(sym) == string(Char(0xdcdb))
-    @test expand(sym) === sym
+    @test expand(Main, sym) === sym
     res = string(parse(string(Char(0xdcdb)," = 1"),1,raise=false)[1])
     @test res == """\$(Expr(:error, "invalid character \\\"\\udcdb\\\"\"))"""
 end
@@ -151,6 +151,7 @@ end
 @test ucfirst("hola")=="Hola"
 @test ucfirst("")==""
 @test ucfirst("*")=="*"
+@test ucfirst("Ǆxx") == ucfirst("ǆxx") == "ǅxx"
 
 @test lcfirst("Hola")=="hola"
 @test lcfirst("hola")=="hola"
@@ -193,7 +194,7 @@ gstr = GenericString("12")
 @test ind2chr(gstr,2)==2
 
 # issue #10307
-@test typeof(map(Int16,AbstractString[])) == Vector{Int16}
+@test typeof(map(x -> parse(Int16, x), AbstractString[])) == Vector{Int16}
 
 for T in [Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128]
     for i in [typemax(T), typemin(T)]

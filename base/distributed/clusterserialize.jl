@@ -1,13 +1,16 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base.Serializer: known_object_data, object_number, serialize_cycle, deserialize_cycle, writetag,
+using Base.Serializer: object_number, serialize_cycle, deserialize_cycle, writetag,
                       __deserialized_types__, serialize_typename, deserialize_typename,
                       TYPENAME_TAG, object_numbers, reset_state, serialize_type
+
+import Base.Serializer: lookup_object_number, remember_object
 
 mutable struct ClusterSerializer{I<:IO} <: AbstractSerializer
     io::I
     counter::Int
     table::ObjectIdDict
+    pending_refs::Vector{Int}
 
     pid::Int                                     # Worker we are connected to.
     tn_obj_sent::Set{UInt64}                     # TypeName objects sent
@@ -17,21 +20,33 @@ mutable struct ClusterSerializer{I<:IO} <: AbstractSerializer
     anonfunc_id::UInt64
 
     function ClusterSerializer{I}(io::I) where I<:IO
-        new(io, 0, ObjectIdDict(), Base.worker_id_from_socket(io),
+        new(io, 0, ObjectIdDict(), Int[], Base.worker_id_from_socket(io),
             Set{UInt64}(), Dict{UInt64, UInt64}(), Dict{UInt64, Vector{Symbol}}(), 0)
     end
 end
 ClusterSerializer(io::IO) = ClusterSerializer{typeof(io)}(io)
 
+const known_object_data = Dict{UInt64,Any}()
+
+function lookup_object_number(s::ClusterSerializer, n::UInt64)
+    return get(known_object_data, n, nothing)
+end
+
+function remember_object(s::ClusterSerializer, o::ANY, n::UInt64)
+    known_object_data[n] = o
+    if isa(o, TypeName) && !haskey(object_numbers, o)
+        # set up reverse mapping for serialize
+        object_numbers[o] = n
+    end
+    return nothing
+end
+
 function deserialize(s::ClusterSerializer, ::Type{TypeName})
     full_body_sent = deserialize(s)
     number = read(s.io, UInt64)
     if !full_body_sent
-        tn = get(known_object_data, number, nothing)::TypeName
-        if !haskey(object_numbers, tn)
-            # set up reverse mapping for serialize
-            object_numbers[tn] = number
-        end
+        tn = lookup_object_number(s, number)::TypeName
+        remember_object(s, tn, number)
         deserialize_cycle(s, tn)
     else
         tn = deserialize_typename(s, number)
@@ -74,8 +89,7 @@ function serialize(s::ClusterSerializer, g::GlobalRef)
     sym = g.name
     if g.mod === Main && isdefined(g.mod, sym)
         v = getfield(Main, sym)
-        if  !isa(v, DataType) && !isa(v, Module) &&
-            (binding_module(Main, sym) === Main) && (s.anonfunc_id != 0)
+         if (binding_module(Main, sym) === Main) && (s.anonfunc_id != 0)
             push!(get!(s.glbs_in_tnobj, s.anonfunc_id, []), sym)
         end
     end
@@ -99,7 +113,7 @@ function syms_2b_sent(s::ClusterSerializer, identifier)
             oid = object_id(v)
             if haskey(s.glbs_sent, oid)
                 # We have sent this object before, see if it has changed.
-                s.glbs_sent[oid] != hash(v) && push!(lst, sym)
+                s.glbs_sent[oid] != hash(sym, hash(v)) && push!(lst, sym)
             else
                 push!(lst, sym)
             end
@@ -128,7 +142,7 @@ function serialize_global_from_main(s::ClusterSerializer, sym)
             end
         end
     end
-    record_v && (s.glbs_sent[oid] = hash(v))
+    record_v && (s.glbs_sent[oid] = hash(sym, hash(v)))
 
     serialize(s, isconst(Main, sym))
     serialize(s, v)

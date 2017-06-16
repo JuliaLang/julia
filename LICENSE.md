@@ -35,6 +35,7 @@ Julia includes code from the following projects, which have their own licenses:
 - [MUSL](http://git.musl-libc.org/cgit/musl/tree/COPYRIGHT) (for getopt implementation on Windows) [MIT]
 - [MINGW](https://sourceforge.net/p/mingw/mingw-org-wsl/ci/legacy/tree/mingwrt/mingwex/dirname.c) (for dirname implementation on Windows) [MIT]
 - [NetBSD](http://www.netbsd.org/about/redistribution.html) (for setjmp, longjmp, and strptime implementations on Windows) [BSD-3]
+- [Python](https://docs.python.org/2/license.html) (for strtod implementation on Windows) [BSD-3, effectively]
 - [randmtzig.c](https://github.com/JuliaLang/julia/blob/master/test/perf/micro/randmtzig.c) for Gaussian random number generation (for C benchmarks only) [BSD-3]
 
 The Julia language links to the following external libraries, which have their
@@ -55,7 +56,6 @@ their own licenses:
 - [OPENLIBM](https://github.com/JuliaLang/openlibm/blob/master/LICENSE.md) [MIT, BSD-2, ISC]
 - [OPENSPECFUN](https://github.com/JuliaLang/openspecfun) [MIT, public domain]
 - [FADDEEVA](http://ab-initio.mit.edu/Faddeeva) [MIT]
-- [FFTW](http://fftw.org/doc/License-and-Copyright.html) [GPL2+]
 - [GMP](http://gmplib.org/manual/Copying.html#Copying) [LGPL3+ or GPL2+]
 - [LIBGIT2](https://github.com/libgit2/libgit2/blob/development/COPYING) [GPL2+ with unlimited linking exception]
 - [CURL](https://curl.haxx.se/docs/copyright.html) [MIT/X derivative]
@@ -70,9 +70,9 @@ their own licenses:
 
 The following components of Julia's standard library have separate licenses:
 
-- base/fftw.jl (see [FFTW](http://fftw.org/doc/License-and-Copyright.html))
-- base/linalg/umfpack.jl (see [SUITESPARSE](http://faculty.cse.tamu.edu/davis/suitesparse.html))
-- base/linalg/cholmod.jl (see [SUITESPARSE](http://faculty.cse.tamu.edu/davis/suitesparse.html))
+- base/grisu/* (see [double-conversion](https://github.com/google/double-conversion/blob/master/LICENSE))
+- base/sparse/umfpack.jl (see [SUITESPARSE](http://faculty.cse.tamu.edu/davis/suitesparse.html))
+- base/sparse/cholmod.jl (see [SUITESPARSE](http://faculty.cse.tamu.edu/davis/suitesparse.html))
 - base/special/exp.jl (see [FREEBSD MSUN](https://github.com/freebsd/freebsd) [FreeBSD/2-clause BSD/Simplified BSD License])
 
 

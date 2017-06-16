@@ -1,10 +1,10 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## Matrix factorizations and decompositions
 
 abstract type Factorization{T} end
 
-eltype{T}(::Type{Factorization{T}}) = T
+eltype(::Type{Factorization{T}}) where {T} = T
 transpose(F::Factorization) = error("transpose not implemented for $(typeof(F))")
 ctranspose(F::Factorization) = error("ctranspose not implemented for $(typeof(F))")
 
@@ -27,12 +27,16 @@ function det(F::Factorization)
 end
 
 ### General promotion rules
-convert{T}(::Type{Factorization{T}}, F::Factorization{T}) = F
-inv{T}(F::Factorization{T}) = A_ldiv_B!(F, eye(T, size(F,1)))
+convert(::Type{Factorization{T}}, F::Factorization{T}) where {T} = F
+inv(F::Factorization{T}) where {T} = A_ldiv_B!(F, eye(T, size(F,1)))
+
+Base.hash(F::Factorization, h::UInt) = mapreduce(f -> hash(getfield(F, f)), hash, h, fieldnames(F))
+Base.:(==)(  F::T, G::T) where {T<:Factorization} = all(f -> getfield(F, f) == getfield(G, f), fieldnames(F))
+Base.isequal(F::T, G::T) where {T<:Factorization} = all(f -> isequal(getfield(F, f), getfield(G, f)), fieldnames(F))
 
 # With a real lhs and complex rhs with the same precision, we can reinterpret
 # the complex rhs as a real rhs with twice the number of columns
-function (\){T<:BlasReal}(F::Factorization{T}, B::VecOrMat{Complex{T}})
+function (\)(F::Factorization{T}, B::VecOrMat{Complex{T}}) where T<:BlasReal
     c2r = reshape(transpose(reinterpret(T, B, (2, length(B)))), size(B, 1), 2*size(B, 2))
     x = A_ldiv_B!(F, c2r)
     return reinterpret(Complex{T}, transpose(reshape(x, div(length(x), 2), 2)), _ret_size(F, B))
@@ -45,7 +49,7 @@ for (f1, f2) in ((:\, :A_ldiv_B!),
             TFB = typeof(oneunit(eltype(B)) / oneunit(eltype(F)))
             BB = similar(B, TFB, size(B))
             copy!(BB, B)
-            $f2(convert(Factorization{TFB}, F), BB)
+            $f2(F, BB)
         end
     end
 end

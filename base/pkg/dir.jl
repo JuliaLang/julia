@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Dir
 
@@ -28,7 +28,13 @@ function cd(f::Function, args...; kws...)
         !haskey(ENV,"JULIA_PKGDIR") ? init() :
             throw(PkgError("Package metadata directory $metadata_dir doesn't exist; run Pkg.init() to initialize it."))
     end
-    Base.cd(()->f(args...; kws...), dir)
+    if haskey(ENV,"JULIA_PKGDIR")
+        withenv("JULIA_PKGDIR" => abspath(ENV["JULIA_PKGDIR"])) do
+            Base.cd(()->f(args...; kws...), dir)
+        end
+    else
+        Base.cd(()->f(args...; kws...), dir)
+    end
 end
 
 function init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRANCH)
@@ -37,7 +43,7 @@ function init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRA
     metadata_dir = joinpath(dir, "METADATA")
     if isdir(metadata_dir)
         info("Package directory $dir is already initialized.")
-        LibGit2.set_remote_url(metadata_dir, meta)
+        LibGit2.set_remote_url(metadata_dir, "origin", meta)
         return
     end
     local temp_dir = ""
@@ -47,7 +53,7 @@ function init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRA
         Base.cd(temp_dir) do
             info("Cloning METADATA from $meta")
             with(LibGit2.clone(meta, "METADATA", branch = branch)) do metadata_repo
-                LibGit2.set_remote_url(metadata_repo, meta)
+                LibGit2.set_remote_url(metadata_repo, "origin", meta)
             end
             touch("REQUIRE")
             touch("META_BRANCH")

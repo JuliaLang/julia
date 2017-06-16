@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.Test
 
@@ -249,14 +249,15 @@ end
 # issue #6450
 @test dot(Any[1.0,2.0], Any[3.5,4.5]) === 12.5
 
-for elty in (Float32,Float64,Complex64,Complex128)
-    x = convert(Vector{elty},[1.0,2.0,3.0])
-    y = convert(Vector{elty},[3.5,4.5,5.5])
+@testset "dot" for elty in (Float32, Float64, Complex64, Complex128)
+    x = convert(Vector{elty},[1.0, 2.0, 3.0])
+    y = convert(Vector{elty},[3.5, 4.5, 5.5])
     @test_throws DimensionMismatch dot(x, 1:2, y, 1:3)
     @test_throws BoundsError dot(x, 1:4, y, 1:4)
     @test_throws BoundsError dot(x, 1:3, y, 2:4)
-    @test dot(x,1:2,y,1:2) == convert(elty,12.5)
-    @test x.'*y == convert(elty,29.0)
+    @test dot(x, 1:2,y, 1:2) == convert(elty, 12.5)
+    @test x.'*y == convert(elty, 29.0)
+    @test_throws MethodError dot(rand(elty, 2, 2), randn(elty, 2, 2))
 end
 
 vecdot_(x,y) = invoke(vecdot, Tuple{Any,Any}, x,y) # generic vecdot

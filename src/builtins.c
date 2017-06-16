@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 /*
   implementations of built-in functions
@@ -454,6 +454,18 @@ JL_CALLABLE(jl_f__apply_pure)
     return ret;
 }
 
+// this is like `_apply`, but always runs in the newest world
+JL_CALLABLE(jl_f__apply_latest)
+{
+    jl_ptls_t ptls = jl_get_ptls_states();
+    size_t last_age = ptls->world_age;
+    if (!ptls->in_pure_callback)
+        ptls->world_age = jl_world_counter;
+    jl_value_t *ret = jl_f__apply(NULL, args, nargs);
+    ptls->world_age = last_age;
+    return ret;
+}
+
 // eval -----------------------------------------------------------------------
 
 JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
@@ -481,7 +493,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
     JL_TRY {
         ptls->current_task->current_module = ptls->current_module = m;
         ptls->world_age = jl_world_counter;
-        v = jl_toplevel_eval(ex);
+        v = jl_toplevel_eval(m, ex);
     }
     JL_CATCH {
         jl_lineno = last_lineno;
@@ -499,9 +511,8 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
 
 JL_CALLABLE(jl_f_isdefined)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
-    jl_module_t *m = ptls->current_module;
-    jl_sym_t *s=NULL;
+    jl_module_t *m = NULL;
+    jl_sym_t *s = NULL;
     JL_NARGSV(isdefined, 1);
     if (jl_is_array(args[0])) {
         return jl_array_isdefined(args, nargs) ? jl_true : jl_false;
@@ -512,6 +523,11 @@ JL_CALLABLE(jl_f_isdefined)
     }
     if (nargs != 2) {
         JL_NARGS(isdefined, 1, 1);
+        jl_depwarn("`isdefined(:symbol)` is deprecated, "
+                   "use `@isdefined symbol` instead",
+                   (jl_value_t*)jl_symbol("isdefined"));
+        jl_ptls_t ptls = jl_get_ptls_states();
+        m = ptls->current_module;
     }
     else {
         if (!jl_is_module(args[0])) {
@@ -1089,6 +1105,7 @@ void jl_init_primitives(void)
     add_builtin_func("apply_type", jl_f_apply_type);
     add_builtin_func("_apply", jl_f__apply);
     add_builtin_func("_apply_pure", jl_f__apply_pure);
+    add_builtin_func("_apply_latest", jl_f__apply_latest);
     add_builtin_func("_expr", jl_f__expr);
     add_builtin_func("svec", jl_f_svec);
 
@@ -1102,7 +1119,7 @@ void jl_init_primitives(void)
     add_builtin("TypeVar", (jl_value_t*)jl_tvar_type);
     add_builtin("UnionAll", (jl_value_t*)jl_unionall_type);
     add_builtin("Union", (jl_value_t*)jl_uniontype_type);
-    add_builtin("BottomType", (jl_value_t*)jl_bottomtype_type);
+    add_builtin("TypeofBottom", (jl_value_t*)jl_typeofbottom_type);
     add_builtin("Tuple", (jl_value_t*)jl_anytuple_type);
     add_builtin("Vararg", (jl_value_t*)jl_vararg_type);
     add_builtin("SimpleVector", (jl_value_t*)jl_simplevector_type);

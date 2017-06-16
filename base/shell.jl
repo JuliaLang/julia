@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## shell-like command parsing ##
 
@@ -8,11 +8,8 @@ const shell_special = "#{}()[]<>|&*?~;"
 @noinline warn_shell_special(special) =
     depwarn("special characters \"$special\" should now be quoted in commands", :warn_shell_special)
 
-function shell_parse(
-        str::AbstractString,
-        interpolate::Bool=true;
-        special::AbstractString=""
-    )
+function shell_parse(str::AbstractString, interpolate::Bool=true;
+                     special::AbstractString="")
     s = lstrip(str)
     # strips the end but respects the space when the string ends with "\\ "
     r = RevString(s)
@@ -129,7 +126,7 @@ function shell_split(s::AbstractString)
     parsed = shell_parse(s, false)[1]
     args = String[]
     for arg in parsed
-       push!(args, string(arg...))
+        push!(args, string(arg...))
     end
     args
 end
@@ -164,10 +161,8 @@ function print_shell_word(io::IO, word::AbstractString, special::AbstractString 
     end
 end
 
-function print_shell_escaped(
-        io::IO, cmd::AbstractString, args::AbstractString...;
-        special::AbstractString=""
-    )
+function print_shell_escaped(io::IO, cmd::AbstractString, args::AbstractString...;
+                             special::AbstractString="")
     print_shell_word(io, cmd, special)
     for arg in args
         print(io, ' ')
@@ -183,13 +178,16 @@ The unexported `shell_escape` function is the inverse of the unexported `shell_s
 it takes a string or command object and escapes any special characters in such a way that calling
 `shell_split` on it would give back the array of words in the original command. The `special`
 keyword argument controls what characters in addition to whitespace, backslashes, quotes and
-dollar signs are considered to be special (default: none). Examples:
+dollar signs are considered to be special (default: none).
 
-    julia> Base.shell_escape("cat", "/foo/bar baz", "&&", "echo", "done")
-    "cat '/foo/bar baz' && echo done"
+# Examples
+```jldoctest
+julia> Base.shell_escape("cat", "/foo/bar baz", "&&", "echo", "done")
+"cat '/foo/bar baz' && echo done"
 
-    julia> Base.shell_escape("echo", "this", "&&", "that")
-    "echo this '&&' that"
+julia> Base.shell_escape("echo", "this", "&&", "that")
+"echo this && that"
+```
 """
 shell_escape(args::AbstractString...; special::AbstractString="") =
     sprint(io->print_shell_escaped(io, args..., special=special))

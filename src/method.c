@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 /*
   Defining and adding methods
@@ -73,26 +73,33 @@ jl_value_t *jl_resolve_globals(jl_value_t *expr, jl_module_t *module, jl_svec_t 
                 jl_value_t *rt = jl_exprarg(e, 1);
                 jl_value_t *at = jl_exprarg(e, 2);
                 if (!jl_is_type(rt)) {
-                    rt = jl_interpret_toplevel_expr_in(module, rt, NULL, sparam_vals);
+                    JL_TRY {
+                        rt = jl_interpret_toplevel_expr_in(module, rt, NULL, sparam_vals);
+                    }
+                    JL_CATCH {
+                        if (jl_typeis(jl_exception_in_transit, jl_errorexception_type))
+                            jl_error("could not evaluate ccall return type (it might depend on a local variable)");
+                        else
+                            jl_rethrow();
+                    }
                     jl_exprargset(e, 1, rt);
                 }
                 if (!jl_is_svec(at)) {
-                    at = jl_interpret_toplevel_expr_in(module, at, NULL, sparam_vals);
+                    JL_TRY {
+                        at = jl_interpret_toplevel_expr_in(module, at, NULL, sparam_vals);
+                    }
+                    JL_CATCH {
+                        if (jl_typeis(jl_exception_in_transit, jl_errorexception_type))
+                            jl_error("could not evaluate ccall argument type (it might depend on a local variable)");
+                        else
+                            jl_rethrow();
+                    }
                     jl_exprargset(e, 2, at);
                 }
                 if (jl_is_svec(rt))
                     jl_error("ccall: missing return type");
                 JL_TYPECHK(ccall method definition, type, rt);
                 JL_TYPECHK(ccall method definition, simplevector, at);
-                size_t nargt = jl_svec_len(at);
-                int isVa = (nargt > 0 && jl_is_vararg_type(jl_svecref(at, nargt - 1)));
-                if (nargs % 2 == 0) // ignore calling-convention arg, if present
-                    nargs -= 1;
-                if ((!isVa && nargt    != (nargs - 2) / 2) ||
-                    ( isVa && nargt - 1 > (nargs - 2) / 2)) {
-                    jl_printf(JL_STDERR, "WARNING: ccall: wrong number of arguments to C function in %s\n",
-                            jl_symbol_name(module->name)); // TODO: make this an error
-                }
             }
             if (e->head == method_sym || e->head == abstracttype_sym || e->head == compositetype_sym ||
                 e->head == bitstype_sym || e->head == module_sym) {
@@ -194,7 +201,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_new_method_instance_uninit(void)
     li->functionObjectsDecls.specFunctionObject = NULL;
     li->specTypes = NULL;
     li->inInference = 0;
-    li->def = NULL;
+    li->def.value = NULL;
     li->min_world = 0;
     li->max_world = 0;
     return li;
@@ -236,11 +243,11 @@ STATIC_INLINE jl_value_t *jl_call_staged(jl_svec_t *sparam_vals, jl_method_insta
     fptr.fptr = generator->fptr;
     fptr.jlcall_api = generator->jlcall_api;
     if (__unlikely(fptr.fptr == NULL || fptr.jlcall_api == 0)) {
-        size_t world = generator->def->min_world;
+        size_t world = generator->def.method->min_world;
         void *F = jl_compile_linfo(&generator, (jl_code_info_t*)generator->inferred, world, &jl_default_cgparams).functionObject;
         fptr = jl_generate_fptr(generator, F, world);
     }
-    assert(jl_svec_len(generator->def->sparam_syms) == jl_svec_len(sparam_vals));
+    assert(jl_svec_len(generator->def.method->sparam_syms) == jl_svec_len(sparam_vals));
     if (fptr.jlcall_api == 1)
         return fptr.fptr1(args[0], &args[1], nargs-1);
     else if (fptr.jlcall_api == 3)
@@ -256,13 +263,12 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
     JL_TIMING(STAGED_FUNCTION);
     jl_tupletype_t *tt = (jl_tupletype_t*)linfo->specTypes;
     jl_svec_t *env = linfo->sparam_vals;
-    size_t i, l;
     jl_expr_t *ex = NULL;
     jl_value_t *linenum = NULL;
     jl_svec_t *sparam_vals = env;
-    jl_method_instance_t *generator = linfo->def->generator;
+    jl_method_instance_t *generator = linfo->def.method->generator;
     assert(linfo != generator);
-    assert(linfo->def->isstaged);
+    assert(linfo->def.method->isstaged);
     jl_code_info_t *func = NULL;
     JL_GC_PUSH4(&ex, &linenum, &sparam_vals, &func);
     jl_ptls_t ptls = jl_get_ptls_states();
@@ -271,58 +277,74 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
     jl_module_t *last_m = ptls->current_module;
     jl_module_t *task_last_m = ptls->current_task->current_module;
     size_t last_age = jl_get_ptls_states()->world_age;
-    assert(jl_svec_len(linfo->def->sparam_syms) == jl_svec_len(sparam_vals));
+    assert(jl_svec_len(linfo->def.method->sparam_syms) == jl_svec_len(sparam_vals));
     JL_TRY {
         ptls->in_pure_callback = 1;
         // need to eval macros in the right module
-        ptls->current_task->current_module = ptls->current_module = linfo->def->module;
+        ptls->current_task->current_module = ptls->current_module = linfo->def.method->module;
         // and the right world
-        ptls->world_age = generator->def->min_world;
+        ptls->world_age = generator->def.method->min_world;
 
         ex = jl_exprn(lambda_sym, 2);
 
-        int nargs = linfo->def->nargs;
-        jl_array_t *argnames = jl_alloc_vec_any(nargs);
+        jl_array_t *argnames = jl_alloc_vec_any(linfo->def.method->nargs);
         jl_array_ptr_set(ex->args, 0, argnames);
-        for (i = 0; i < nargs; i++)
-            jl_array_ptr_set(argnames, i, jl_array_ptr_ref(linfo->def->source->slotnames, i));
+        jl_fill_argnames((jl_array_t*)linfo->def.method->source, argnames);
 
+        // build the rest of the body to pass to expand
         jl_expr_t *scopeblock = jl_exprn(jl_symbol("scope-block"), 1);
         jl_array_ptr_set(ex->args, 1, scopeblock);
-        jl_expr_t *body = jl_exprn(jl_symbol("block"), 2);
-        jl_array_ptr_set(((jl_expr_t*)jl_exprarg(ex,1))->args, 0, body);
-        linenum = jl_box_long(linfo->def->line);
-        jl_value_t *linenode = jl_new_struct(jl_linenumbernode_type, linenum);
+        jl_expr_t *body = jl_exprn(jl_symbol("block"), 3);
+        jl_array_ptr_set(((jl_expr_t*)jl_exprarg(ex, 1))->args, 0, body);
+
+        // add location meta
+        linenum = jl_box_long(linfo->def.method->line);
+        jl_value_t *linenode = jl_new_struct(jl_linenumbernode_type, linenum, linfo->def.method->file);
         jl_array_ptr_set(body->args, 0, linenode);
+        jl_expr_t *pushloc = jl_exprn(meta_sym, 3);
+        jl_array_ptr_set(body->args, 1, pushloc);
+        jl_array_ptr_set(pushloc->args, 0, jl_symbol("push_loc"));
+        jl_array_ptr_set(pushloc->args, 1, linfo->def.method->file); // file
+        jl_array_ptr_set(pushloc->args, 2, jl_symbol("@generated body")); // function
 
         // invoke code generator
         assert(jl_nparams(tt) == jl_array_len(argnames) ||
-               (linfo->def->isva && (jl_nparams(tt) >= jl_array_len(argnames) - 1)));
-        jl_array_ptr_set(body->args, 1,
-                jl_call_staged(sparam_vals, generator, jl_svec_data(tt->parameters), jl_nparams(tt)));
+               (linfo->def.method->isva && (jl_nparams(tt) >= jl_array_len(argnames) - 1)));
+        jl_value_t *generated_body = jl_call_staged(sparam_vals, generator, jl_svec_data(tt->parameters), jl_nparams(tt));
+        jl_array_ptr_set(body->args, 2, generated_body);
 
-        if (linfo->def->sparam_syms != jl_emptysvec) {
+        if (linfo->def.method->sparam_syms != jl_emptysvec) {
             // mark this function as having the same static parameters as the generator
-            size_t i, nsp = jl_svec_len(linfo->def->sparam_syms);
+            size_t i, nsp = jl_svec_len(linfo->def.method->sparam_syms);
             jl_expr_t *newast = jl_exprn(jl_symbol("with-static-parameters"), nsp + 1);
             jl_exprarg(newast, 0) = (jl_value_t*)ex;
             // (with-static-parameters func_expr sp_1 sp_2 ...)
             for (i = 0; i < nsp; i++)
-                jl_exprarg(newast, i+1) = jl_svecref(linfo->def->sparam_syms, i);
+                jl_exprarg(newast, i+1) = jl_svecref(linfo->def.method->sparam_syms, i);
             ex = newast;
         }
 
-        func = (jl_code_info_t*)jl_expand((jl_value_t*)ex);
+        func = (jl_code_info_t*)jl_expand((jl_value_t*)ex, linfo->def.method->module);
         if (!jl_is_code_info(func)) {
             if (jl_is_expr(func) && ((jl_expr_t*)func)->head == error_sym)
-                jl_interpret_toplevel_expr((jl_value_t*)func);
+                jl_interpret_toplevel_expr_in(linfo->def.method->module, (jl_value_t*)func, NULL, NULL);
             jl_error("generated function body is not pure. this likely means it contains a closure or comprehension.");
         }
 
         jl_array_t *stmts = (jl_array_t*)func->code;
+        size_t i, l;
         for (i = 0, l = jl_array_len(stmts); i < l; i++) {
-            jl_array_ptr_set(stmts, i, jl_resolve_globals(jl_array_ptr_ref(stmts, i), linfo->def->module, env));
+            jl_value_t *stmt = jl_array_ptr_ref(stmts, i);
+            stmt = jl_resolve_globals(stmt, linfo->def.method->module, env);
+            jl_array_ptr_set(stmts, i, stmt);
         }
+
+        // add pop_loc meta
+        jl_array_ptr_1d_push(stmts, jl_nothing);
+        jl_expr_t *poploc = jl_exprn(meta_sym, 1);
+        jl_array_ptr_set(stmts, jl_array_len(stmts) - 1, poploc);
+        jl_array_ptr_set(poploc->args, 0, jl_symbol("pop_loc"));
+
         ptls->in_pure_callback = last_in;
         jl_lineno = last_lineno;
         ptls->current_module = last_m;
@@ -355,11 +377,11 @@ jl_method_instance_t *jl_get_specialized(jl_method_t *m, jl_value_t *types, jl_s
 {
     assert(jl_svec_len(m->sparam_syms) == jl_svec_len(sp) || sp == jl_emptysvec);
     jl_method_instance_t *new_linfo = jl_new_method_instance_uninit();
-    new_linfo->def = m;
+    new_linfo->def.method = m;
     new_linfo->specTypes = types;
     new_linfo->sparam_vals = sp;
     new_linfo->min_world = m->min_world;
-    new_linfo->max_world = m->max_world;
+    new_linfo->max_world = ~(size_t)0;
     return new_linfo;
 }
 
@@ -375,10 +397,11 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
             called |= (1 << (j - 1));
     }
     m->called = called;
+    m->pure = src->pure;
 
     jl_array_t *copy = NULL;
     jl_svec_t *sparam_vars = jl_outer_unionall_vars(m->sig);
-    JL_GC_PUSH2(&copy, &sparam_vars);
+    JL_GC_PUSH3(&copy, &sparam_vars, &src);
     assert(jl_typeis(src->code, jl_array_any_type));
     jl_array_t *stmts = (jl_array_t*)src->code;
     size_t i, n = jl_array_len(stmts);
@@ -386,10 +409,27 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
     int set_lineno = 0;
     for (i = 0; i < n; i++) {
         jl_value_t *st = jl_array_ptr_ref(stmts, i);
-        if (jl_is_expr(st) && ((jl_expr_t*)st)->head == line_sym) {
+        if (jl_is_linenode(st)) {
             if (!set_lineno) {
-                m->line = jl_unbox_long(jl_exprarg(st, 0));
-                m->file = (jl_sym_t*)jl_exprarg(st, 1);
+                m->line = jl_linenode_line(st);
+                jl_value_t *file = jl_linenode_file(st);
+                if (jl_is_symbol(file))
+                    m->file = (jl_sym_t*)file;
+                st = jl_nothing;
+                set_lineno = 1;
+            }
+        }
+        else if (jl_is_expr(st) && ((jl_expr_t*)st)->head == line_sym) {
+            if (!set_lineno) {
+                switch (jl_expr_nargs(st)) {
+                case 2:
+                    m->file = (jl_sym_t*)jl_exprarg(st, 1);
+                    JL_FALLTHROUGH;
+                case 1:
+                    m->line = jl_unbox_long(jl_exprarg(st, 0));
+                    JL_FALLTHROUGH;
+                default: ;
+                }
                 st = jl_nothing;
                 set_lineno = 1;
             }
@@ -399,14 +439,15 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
         }
         jl_array_ptr_set(copy, i, st);
     }
-    copy = jl_compress_ast(m, copy);
-    m->source = jl_copy_code_info(src);
+    src = jl_copy_code_info(src);
+    src->code = copy;
+    jl_gc_wb(src, copy);
+    m->source = (jl_value_t*)jl_compress_ast(m, src);
     jl_gc_wb(m, m->source);
-    m->source->code = copy;
     JL_GC_POP();
 }
 
-JL_DLLEXPORT jl_method_t *jl_new_method_uninit(void)
+JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_method_t *m =
@@ -416,7 +457,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(void)
     m->sparam_syms = NULL;
     m->ambig = jl_nothing;
     m->roots = NULL;
-    m->module = ptls->current_module;
+    m->module = module;
     m->source = NULL;
     m->unspecialized = NULL;
     m->generator = NULL;
@@ -430,19 +471,20 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(void)
     m->nargs = 0;
     m->traced = 0;
     m->min_world = 1;
-    m->max_world = ~(size_t)0;
     JL_MUTEX_INIT(&m->writelock);
     return m;
 }
 
 jl_array_t *jl_all_methods;
-jl_method_t *jl_new_method(jl_code_info_t *definition,
-                           jl_sym_t *name,
-                           jl_tupletype_t *sig,
-                           size_t nargs,
-                           int isva,
-                           jl_svec_t *tvars,
-                           int isstaged)
+static jl_method_t *jl_new_method(
+        jl_code_info_t *definition,
+        jl_sym_t *name,
+        jl_module_t *inmodule,
+        jl_tupletype_t *sig,
+        size_t nargs,
+        int isva,
+        jl_svec_t *tvars,
+        int isstaged)
 {
     size_t i, l = jl_svec_len(tvars);
     jl_svec_t *sparam_syms = jl_alloc_svec_uninit(l);
@@ -453,7 +495,7 @@ jl_method_t *jl_new_method(jl_code_info_t *definition,
     jl_method_t *m = NULL;
     JL_GC_PUSH1(&root);
 
-    m = jl_new_method_uninit();
+    m = jl_new_method_uninit(inmodule);
     m->sparam_syms = sparam_syms;
     root = (jl_value_t*)m;
     m->min_world = ++jl_world_counter;
@@ -490,9 +532,8 @@ extern int jl_boot_file_loaded;
 
 void print_func_loc(JL_STREAM *s, jl_method_t *m);
 
-void jl_check_static_parameter_conflicts(jl_method_t *m, jl_svec_t *t)
+static void jl_check_static_parameter_conflicts(jl_method_t *m, jl_code_info_t *src, jl_svec_t *t)
 {
-    jl_code_info_t *src = m->source;
     size_t nvars = jl_array_len(src->slotnames);
 
     size_t i, n = jl_svec_len(t);
@@ -515,11 +556,12 @@ void jl_check_static_parameter_conflicts(jl_method_t *m, jl_svec_t *t)
 }
 
 // empty generic function def
-JL_DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name, jl_value_t **bp, jl_value_t *bp_owner,
+JL_DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name,
+                                                 jl_module_t *module,
+                                                 jl_value_t **bp, jl_value_t *bp_owner,
                                                  jl_binding_t *bnd)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
-    jl_value_t *gf=NULL;
+    jl_value_t *gf = NULL;
 
     assert(name && bp);
     if (bnd && bnd->value != NULL && !bnd->constp)
@@ -532,7 +574,6 @@ JL_DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name, jl_value_t **bp
     if (bnd)
         bnd->constp = 1;
     if (*bp == NULL) {
-        jl_module_t *module = (bnd ? bnd->owner : ptls->current_module);
         gf = (jl_value_t*)jl_new_generic_function(name, module);
         *bp = gf;
         if (bp_owner) jl_gc_wb(bp_owner, gf);
@@ -585,6 +626,7 @@ jl_datatype_t *jl_argument_datatype(jl_value_t *argt)
 extern tracer_cb jl_newmeth_tracer;
 JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
                                 jl_code_info_t *f,
+                                jl_module_t *module,
                                 jl_value_t *isstaged)
 {
     // argdata is svec(svec(types...), svec(typevars...))
@@ -625,14 +667,14 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
         jl_error("cannot add methods to a builtin function");
 
     int j;
-    for(j=(int)jl_svec_len(tvars)-1; j >= 0 ; j--) {
+    for (j = (int)jl_svec_len(tvars) - 1; j >= 0 ; j--) {
         jl_value_t *tv = jl_svecref(tvars,j);
         if (!jl_is_typevar(tv))
             jl_type_error_rt(jl_symbol_name(name), "method definition", (jl_value_t*)jl_tvar_type, tv);
         argtype = jl_new_struct(jl_unionall_type, tv, argtype);
     }
 
-    m = jl_new_method(f, name, (jl_tupletype_t*)argtype, nargs, isva, tvars, isstaged == jl_true);
+    m = jl_new_method(f, name, module, (jl_tupletype_t*)argtype, nargs, isva, tvars, isstaged == jl_true);
 
     if (jl_has_free_typevars(argtype)) {
         jl_exceptionf(jl_argumenterror_type,
@@ -642,7 +684,7 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
                       m->line);
     }
 
-    jl_check_static_parameter_conflicts(m, tvars);
+    jl_check_static_parameter_conflicts(m, f, tvars);
 
     size_t i, na = jl_svec_len(atypes);
     for (i = 0; i < na; i++) {
@@ -664,6 +706,12 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
                               jl_symbol_name(m->file),
                               m->line);
         }
+        if (jl_is_vararg_type(elt) && i < na-1)
+            jl_exceptionf(jl_argumenterror_type,
+                          "Vararg on non-final argument in method definition for %s at %s:%d",
+                          jl_symbol_name(name),
+                          jl_symbol_name(m->file),
+                          m->line);
     }
 
     int ishidden = !!strchr(jl_symbol_name(name), '#');

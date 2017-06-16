@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 export
     abspath,
@@ -19,7 +19,6 @@ export
 if is_unix()
     const path_separator    = "/"
     const path_separator_re = r"/+"
-    const path_absolute_re  = r"^/"
     const path_directory_re = r"(?:^|/)\.{0,2}$"
     const path_dir_splitter = r"^(.*?)(/+)([^/]*)$"
     const path_ext_splitter = r"^((?:.*/)?(?:\.|[^/\.])[^/]*?)(\.[^/\.]*|)$"
@@ -54,6 +53,11 @@ splitdrive(path::AbstractString)
     homedir() -> AbstractString
 
 Return the current user's home directory.
+
+!!! note
+    `homedir` determines the home directory via `libuv`'s `uv_os_homedir`. For details
+    (for example on how to specify the home directory via environment variables), see the
+    [`uv_os_homedir` documentation](http://docs.libuv.org/en/v1.x/misc.html#c.uv_os_homedir).
 """
 function homedir()
     path_max = 1024
@@ -73,6 +77,12 @@ function homedir()
 end
 
 
+if is_windows()
+    isabspath(path::String) = ismatch(path_absolute_re, path)
+else
+    isabspath(path::String) = startswith(path, '/')
+end
+
 """
     isabspath(path::AbstractString) -> Bool
 
@@ -86,7 +96,7 @@ julia> isabspath("home")
 false
 ```
 """
-isabspath(path::String) = ismatch(path_absolute_re, path)
+isabspath(path::AbstractString)
 
 """
     isdirpath(path::AbstractString) -> Bool
@@ -130,6 +140,8 @@ Get the directory part of a path.
 julia> dirname("/home/myuser")
 "/home"
 ```
+
+See also: [`basename`](@ref)
 """
  dirname(path::AbstractString) = splitdir(path)[1]
 
@@ -142,6 +154,8 @@ Get the file name part of a path.
 julia> basename("/home/myuser/example.jl")
 "example.jl"
 ```
+
+See also: [`dirname`](@ref)
 """
 basename(path::AbstractString) = splitdir(path)[2]
 
@@ -253,6 +267,13 @@ normpath(a::AbstractString, b::AbstractString...) = normpath(joinpath(a,b...))
 Convert a path to an absolute path by adding the current directory if necessary.
 """
 abspath(a::String) = normpath(isabspath(a) ? a : joinpath(pwd(),a))
+
+"""
+    abspath(path::AbstractString, paths::AbstractString...) -> AbstractString
+
+Convert a set of paths to an absolute path by joining them together and adding the
+current directory if necessary. Equivalent to `abspath(joinpath(path, paths...))`.
+"""
 abspath(a::AbstractString, b::AbstractString...) = abspath(joinpath(a,b...))
 
 if is_windows()

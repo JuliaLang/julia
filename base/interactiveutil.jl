@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # editing files
 
@@ -40,7 +40,7 @@ function edit(path::AbstractString, line::Integer=0)
     end
     background = true
     line_unsupported = false
-    if startswith(name, "emacs") || name == "gedit"
+    if startswith(name, "emacs") || name == "gedit" || startswith(name, "gvim")
         cmd = line != 0 ? `$command +$line $path` : `$command $path`
     elseif startswith(name, "vim.") || name == "vi" || name == "vim" || name == "nvim" || name == "mvim" || name == "nano"
         cmd = line != 0 ? `$command +$line $path` : `$command $path`
@@ -49,6 +49,8 @@ function edit(path::AbstractString, line::Integer=0)
         cmd = line != 0 ? `$command $path -l $line` : `$command $path`
     elseif startswith(name, "subl") || startswith(name, "atom")
         cmd = line != 0 ? `$command $path:$line` : `$command $path`
+    elseif name == "code" || (is_windows() && uppercase(name) == "CODE.EXE")
+        cmd = line != 0 ? `$command -g $path:$line` : `$command -g $path`
     elseif startswith(name, "notepad++")
         cmd = line != 0 ? `$command $path -n$line` : `$command $path`
     elseif is_apple() && name == "open"
@@ -61,9 +63,10 @@ function edit(path::AbstractString, line::Integer=0)
     end
 
     if is_windows() && name == "open"
-        systemerror(:edit, ccall((:ShellExecuteW,"shell32"), stdcall, Int,
-                                 (Ptr{Void}, Cwstring, Cwstring, Ptr{Void}, Ptr{Void}, Cint),
-                                 C_NULL, "open", path, C_NULL, C_NULL, 10) ≤ 32)
+        @static is_windows() && # don't emit this ccall on other platforms
+            systemerror(:edit, ccall((:ShellExecuteW, "shell32"), stdcall, Int,
+                                     (Ptr{Void}, Cwstring, Cwstring, Ptr{Void}, Ptr{Void}, Cint),
+                                     C_NULL, "open", path, C_NULL, C_NULL, 10) ≤ 32)
     elseif background
         spawn(pipeline(cmd, stderr=STDERR))
     else
@@ -242,26 +245,26 @@ end
 
 
 """
-    versioninfo(io::IO=STDOUT, verbose::Bool=false)
+    versioninfo(io::IO=STDOUT; verbose::Bool=false, packages::Bool=false)
 
-Print information about the version of Julia in use. If the `verbose` argument is `true`,
-detailed system information is shown as well.
+Print information about the version of Julia in use. The output is
+controlled with boolean keyword arguments:
+
+- `packages`: print information about installed packages
+- `verbose`: print all additional information
 """
-function versioninfo(io::IO=STDOUT, verbose::Bool=false)
-    println(io,             "Julia Version $VERSION")
+function versioninfo(io::IO=STDOUT; verbose::Bool=false, packages::Bool=false)
+    println(io, "Julia Version $VERSION")
     if !isempty(GIT_VERSION_INFO.commit_short)
-        println(io,         "Commit $(GIT_VERSION_INFO.commit_short) ($(GIT_VERSION_INFO.date_string))")
+        println(io, "Commit $(GIT_VERSION_INFO.commit_short) ($(GIT_VERSION_INFO.date_string))")
     end
     if ccall(:jl_is_debugbuild, Cint, ())!=0
         println(io, "DEBUG build")
     end
-    println(io,             "Platform Info:")
-    println(io,             "  OS: ", is_windows() ? "Windows" : is_apple() ?
+    println(io, "Platform Info:")
+    println(io, "  OS: ", is_windows() ? "Windows" : is_apple() ?
         "macOS" : Sys.KERNEL, " (", Sys.MACHINE, ")")
 
-    cpu = Sys.cpu_info()
-    println(io,             "  CPU: ", cpu[1].model)
-    println(io,             "  WORD_SIZE: ", Sys.WORD_SIZE)
     if verbose
         lsb = ""
         if is_linux()
@@ -270,46 +273,66 @@ function versioninfo(io::IO=STDOUT, verbose::Bool=false)
         if is_windows()
             try lsb = strip(readstring(`$(ENV["COMSPEC"]) /c ver`)) end
         end
-        if lsb != ""
-            println(io,     "           ", lsb)
+        if !isempty(lsb)
+            println(io, "      ", lsb)
         end
         if is_unix()
-            println(io,         "  uname: ", readchomp(`uname -mprsv`))
+            println(io, "  uname: ", readchomp(`uname -mprsv`))
         end
-        println(io,         "Memory: $(Sys.total_memory()/2^30) GB ($(Sys.free_memory()/2^20) MB free)")
-        try println(io,     "Uptime: $(Sys.uptime()) sec") end
-        print(io,           "Load Avg: ")
-        print_matrix(io,    Sys.loadavg()')
-        println(io          )
-        Sys.cpu_summary(io)
-        println(io          )
     end
+
+    if verbose
+        cpuio = IOBuffer() # print cpu_summary with correct alignment
+        Sys.cpu_summary(cpuio)
+        for (i, line) in enumerate(split(String(take!(cpuio)), "\n"))
+            prefix = i == 1 ? "  CPU: " : "       "
+            println(io, prefix, line)
+        end
+    else
+        cpu = Sys.cpu_info()
+        println(io, "  CPU: ", cpu[1].model)
+    end
+
+    if verbose
+        println(io, "  Memory: $(Sys.total_memory()/2^30) GB ($(Sys.free_memory()/2^20) MB free)")
+        try println(io, "  Uptime: $(Sys.uptime()) sec") end
+        print(io, "  Load Avg: ")
+        print_matrix(io, Sys.loadavg()')
+        println(io)
+    end
+    println(io, "  WORD_SIZE: ", Sys.WORD_SIZE)
     if Base.libblas_name == "libopenblas" || BLAS.vendor() == :openblas || BLAS.vendor() == :openblas64
         openblas_config = BLAS.openblas_get_config()
-        println(io,         "  BLAS: libopenblas (", openblas_config, ")")
+        println(io, "  BLAS: libopenblas (", openblas_config, ")")
     else
-        println(io,         "  BLAS: ",libblas_name)
+        println(io, "  BLAS: ",libblas_name)
     end
-    println(io,             "  LAPACK: ",liblapack_name)
-    println(io,             "  LIBM: ",libm_name)
-    println(io,             "  LLVM: libLLVM-",libllvm_version," (", Sys.JIT, ", ", Sys.cpu_name, ")")
+    println(io, "  LAPACK: ",liblapack_name)
+    println(io, "  LIBM: ",libm_name)
+    println(io, "  LLVM: libLLVM-",libllvm_version," (", Sys.JIT, ", ", Sys.cpu_name, ")")
+
+    println(io, "Environment:")
+    for (k,v) in ENV
+        if ismatch(r"JULIA", String(k))
+            println(io, "  $(k) = $(v)")
+        end
+    end
     if verbose
-        println(io,         "Environment:")
         for (k,v) in ENV
-            if match(r"JULIA|PATH|FLAG|^TERM$|HOME", String(k)) !== nothing
+            if ismatch(r"PATH|FLAG|^TERM$|HOME", String(k))
                 println(io, "  $(k) = $(v)")
             end
         end
-        println(io          )
-        println(io,         "Package Directory: ", Pkg.dir())
+    end
+    if packages || verbose
+        println(io, "Packages:")
+        println(io, "  Package Directory: ", Pkg.dir())
+        println(io, "  Package Status:")
         Pkg.status(io)
     end
 end
-versioninfo(verbose::Bool) = versioninfo(STDOUT,verbose)
 
 # displaying type-ambiguity warnings
-
-
 """
     code_warntype([io::IO], f, types)
 
@@ -346,10 +369,9 @@ function code_warntype(io::IO, f, t::ANY)
 end
 code_warntype(f, t::ANY) = code_warntype(STDOUT, f, t)
 
-typesof(args...) = Tuple{map(a->(isa(a,Type) ? Type{a} : typeof(a)), args)...}
+typesof(args...) = Tuple{Any[ Core.Typeof(a) for a in args ]...}
 
-gen_call_with_extracted_types(fcn, ex0::Symbol) = Expr(:call, fcn, Meta.quot(ex0))
-function gen_call_with_extracted_types(fcn, ex0)
+function gen_call_with_extracted_types(__module__, fcn, ex0)
     if isa(ex0, Expr)
         if any(a->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex0.args)
             # remove keyword args, but call the kwfunc
@@ -367,10 +389,10 @@ function gen_call_with_extracted_types(fcn, ex0)
     end
     exret = Expr(:none)
     is_macro = false
-    ex = expand(ex0)
-    if isa(ex0, Expr) && ex0.head == :macrocall # Make @edit @time 1+2 edit the macro
+    ex = expand(__module__, ex0)
+    if isa(ex0, Expr) && ex0.head == :macrocall # Make @edit @time 1+2 edit the macro by using the types of the *expressions*
         is_macro = true
-        exret = Expr(:call, fcn,  esc(ex0.args[1]), typesof(ex0.args[2:end]...))
+        exret = Expr(:call, fcn, esc(ex0.args[1]), Tuple{#=__source__=#LineNumberNode, #=__module__=#Module, Any[ Core.Typeof(a) for a in ex0.args[3:end] ]...})
     elseif !isa(ex, Expr)
         exret = Expr(:call, :error, "expression is not a function call or symbol")
     elseif ex.head == :call
@@ -407,15 +429,19 @@ for fname in [:which, :less, :edit, :functionloc, :code_warntype,
               :code_llvm, :code_llvm_raw, :code_native]
     @eval begin
         macro ($fname)(ex0)
-            gen_call_with_extracted_types($(Expr(:quote,fname)), ex0)
+            gen_call_with_extracted_types(__module__, $(Expr(:quote, fname)), ex0)
         end
     end
+end
+macro which(ex0::Symbol)
+    ex0 = QuoteNode(ex0)
+    return :(which_module($__module__, $ex0))
 end
 
 for fname in [:code_typed, :code_lowered]
     @eval begin
         macro ($fname)(ex0)
-            thecall = gen_call_with_extracted_types($(Expr(:quote,fname)), ex0)
+            thecall = gen_call_with_extracted_types(__module__, $(Expr(:quote, fname)), ex0)
             quote
                 results = $thecall
                 length(results) == 1 ? results[1] : results
@@ -587,9 +613,14 @@ else
             end
         end
         if downloadcmd == :wget
-            run(`wget -O $filename $url`)
+            try
+                run(`wget -O $filename $url`)
+            catch
+                rm(filename)  # wget always creates a file
+                rethrow()
+            end
         elseif downloadcmd == :curl
-            run(`curl -o $filename -L $url`)
+            run(`curl -L -f -o $filename $url`)
         elseif downloadcmd == :fetch
             run(`fetch -f $filename $url`)
         else
@@ -626,15 +657,15 @@ accessed using a statement such as `using LastMain.Package`.
 This function should only be used interactively.
 """
 function workspace()
-    last = Core.Main
-    b = last.Base
-    ccall(:jl_new_main_module, Any, ())
-    m = Core.Main
+    last = Core.Main # ensure to reference the current Main module
+    b = Base # this module
+    ccall(:jl_new_main_module, Any, ()) # make Core.Main a new baremodule
+    m = Core.Main # now grab a handle to the new Main module
     ccall(:jl_add_standard_imports, Void, (Any,), m)
-    eval(m,
-         Expr(:toplevel,
-              :(const Base = $(Expr(:quote, b))),
-              :(const LastMain = $(Expr(:quote, last)))))
+    eval(m, Expr(:toplevel,
+        :(const Base = $b),
+        :(const LastMain = $last),
+        :(include(x) = $include($m, x))))
     empty!(package_locks)
     nothing
 end
@@ -668,13 +699,13 @@ end
 
 
 """
-    whos(io::IO=STDOUT, m::Module=current_module(), pattern::Regex=r"")
+    whos(io::IO=STDOUT, m::Module=Main, pattern::Regex=r"")
 
 Print information about exported global variables in a module, optionally restricted to those matching `pattern`.
 
 The memory consumption estimate is an approximate lower bound on the size of the internal structure of the object.
 """
-function whos(io::IO=STDOUT, m::Module=current_module(), pattern::Regex=r"")
+function whos(io::IO=STDOUT, m::Module=Main, pattern::Regex=r"")
     maxline = displaysize(io)[2]
     line = zeros(UInt8, maxline)
     head = PipeBuffer(maxline + 1)
@@ -718,4 +749,4 @@ function whos(io::IO=STDOUT, m::Module=current_module(), pattern::Regex=r"")
     end
 end
 whos(m::Module, pat::Regex=r"") = whos(STDOUT, m, pat)
-whos(pat::Regex) = whos(STDOUT, current_module(), pat)
+whos(pat::Regex) = whos(STDOUT, Main, pat)

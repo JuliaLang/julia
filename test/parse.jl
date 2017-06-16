@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # tests for parser and syntax lowering
 
@@ -147,10 +147,10 @@ macro test999_str(args...); args; end
 
 # issue 11970
 @test parseall("""
-macro f(args...) end; @f ""
+    macro f(args...) end; @f "macro argument"
 """) == Expr(:toplevel,
-             Expr(:macro, Expr(:call, :f, Expr(:..., :args)), Expr(:block, Expr(:line, 1, :none))),
-             Expr(:macrocall, Symbol("@f"), ""))
+             Expr(:macro, Expr(:call, :f, Expr(:..., :args)), Expr(:block, LineNumberNode(1, :none))),
+             Expr(:macrocall, Symbol("@f"), LineNumberNode(1, :none), "macro argument"))
 
 # blocks vs. tuples
 @test parse("()") == Expr(:tuple)
@@ -246,7 +246,8 @@ for T in vcat(subtypes(Signed), subtypes(Unsigned))
 
     # Test that the entire input string appears in error messages
     let s = "     false    true     "
-        result = @test_throws ArgumentError get(Base.tryparse_internal(Bool, s, start(s), endof(s), 0, true))
+        result = @test_throws(ArgumentError,
+            get(Base.tryparse_internal(Bool, s, start(s), endof(s), 0, true)))
         @test result.value.msg == "invalid Bool representation: $(repr(s))"
     end
 
@@ -274,6 +275,9 @@ for T in vcat(subtypes(Signed), subtypes(Unsigned))
     @test parse(Float64, "    .5    ") == 0.5
     @test parse(Float64, ".5    "    ) == 0.5
 end
+
+@test parse(Bool, "\u202f true") === true
+@test parse(Bool, "\u202f false") === false
 
 parsebin(s) = parse(Int,s,2)
 parseoct(s) = parse(Int,s,8)
@@ -347,7 +351,7 @@ parsehex(s) = parse(Int,s,16)
 # issue #17705
 @test parse("2e3_") == Expr(:call, :*, 2e3, :_)
 @test parse("2e-3_") == Expr(:call, :*, 2e-3, :_)
-@test parse("2e3_\"x\"") == Expr(:call, :*, 2e3, Expr(:macrocall, Symbol("@__str"), "x"))
+@test parse("2e3_\"x\"") == Expr(:call, :*, 2e3, Expr(:macrocall, Symbol("@__str"), LineNumberNode(1, :none), "x"))
 
 # multibyte spaces
 @test parse(Int, "3\u2003\u202F") == 3
@@ -418,7 +422,9 @@ end
                                  Expr(Symbol("&&"), :c, :d))
 
 # issue #11988 -- normalize \r and \r\n in literal strings to \n
-@test "foo\nbar" == parse("\"\"\"\r\nfoo\r\nbar\"\"\"") == parse("\"\"\"\nfoo\nbar\"\"\"") == parse("\"\"\"\rfoo\rbar\"\"\"") == parse("\"foo\r\nbar\"") == parse("\"foo\rbar\"") == parse("\"foo\nbar\"")
+@test "foo\nbar" == parse("\"\"\"\r\nfoo\r\nbar\"\"\"") ==
+    parse("\"\"\"\nfoo\nbar\"\"\"") == parse("\"\"\"\rfoo\rbar\"\"\"") ==
+    parse("\"foo\r\nbar\"") == parse("\"foo\rbar\"") == parse("\"foo\nbar\"")
 @test '\r' == first("\r") == first("\r\n") # still allow explicit \r
 
 # issue #14561 - generating 0-method generic function def
@@ -489,7 +495,7 @@ test_parseerror("0x0.1", "hex float literal must contain \"p\" or \"P\"")
 test_parseerror("0x1.0p", "invalid numeric constant \"0x1.0\"")
 
 # issue #15798
-@test expand(Base.parse_input_line("""
+@test expand(Main, Base.parse_input_line("""
               try = "No"
            """)) == Expr(:error, "unexpected \"=\"")
 
@@ -508,7 +514,7 @@ let b = IOBuffer("""
                  end
                  f()
                  """)
-    @test Base.parse_input_line(b) == Expr(:let, Expr(:block, Expr(:line, 2, :none), :x), Expr(:(=), :x, :x))
+    @test Base.parse_input_line(b) == Expr(:let, Expr(:block, LineNumberNode(2, :none), :x), Expr(:(=), :x, :x))
     @test Base.parse_input_line(b) == Expr(:call, :f)
     @test Base.parse_input_line(b) === nothing
 end
@@ -518,10 +524,10 @@ test_parseerror("if\nfalse\nend", "missing condition in \"if\" at none:1")
 test_parseerror("if false\nelseif\nend", "missing condition in \"elseif\" at none:2")
 
 # issue #15828
-@test expand(parse("x...")) == Expr(:error, "\"...\" expression outside call")
+@test expand(Main, parse("x...")) == Expr(:error, "\"...\" expression outside call")
 
 # issue #15830
-@test expand(parse("foo(y = (global x)) = y")) == Expr(:error, "misplaced \"global\" declaration")
+@test expand(Main, parse("foo(y = (global x)) = y")) == Expr(:error, "misplaced \"global\" declaration")
 
 # issue #15844
 function f15844(x)
@@ -552,11 +558,11 @@ add_method_to_glob_fn!()
 @test_throws ParseError parse("function finally() end")
 
 # PR #16170
-@test expand(parse("true(x) = x")) == Expr(:error, "invalid function name \"true\"")
-@test expand(parse("false(x) = x")) == Expr(:error, "invalid function name \"false\"")
+@test expand(Main, parse("true(x) = x")) == Expr(:error, "invalid function name \"true\"")
+@test expand(Main, parse("false(x) = x")) == Expr(:error, "invalid function name \"false\"")
 
 # issue #16355
-@test expand(:(f(d:Int...)=nothing)) == Expr(:error, "\"d:Int\" is not a valid function argument name")
+@test expand(Main, :(f(d:Int...) = nothing)) == Expr(:error, "\"d:Int\" is not a valid function argument name")
 
 # issue #16517
 @test (try error(); catch 0; end) === 0
@@ -568,19 +574,19 @@ f16517() = try error(); catch 0; end
 # issue #16671
 @test parse("1.") === 1.0
 
+isline(x) = isa(x, LineNumberNode)
+
 # issue #16672
-let isline(x) = isa(x,Expr) && x.head === :line
-    @test count(isline, parse("begin end").args) == 1
-    @test count(isline, parse("begin; end").args) == 1
-    @test count(isline, parse("begin; x+2; end").args) == 1
-    @test count(isline, parse("begin; x+2; y+1; end").args) == 2
-end
+@test count(isline, parse("begin end").args) == 1
+@test count(isline, parse("begin; end").args) == 1
+@test count(isline, parse("begin; x+2; end").args) == 1
+@test count(isline, parse("begin; x+2; y+1; end").args) == 2
 
 # issue #16736
 let
-    local lineoffset0 = @__LINE__ + 1
-    local lineoffset1 = @__LINE__
-    local lineoffset2 = @__LINE__ - 1
+    local lineoffset0 = @__LINE__() + 1
+    local lineoffset1 = @__LINE__()
+    local lineoffset2 = @__LINE__() - 1
     @test lineoffset0 == lineoffset1 == lineoffset2
 end
 
@@ -590,13 +596,13 @@ end
                  y
              end") == Expr(:try,
                            Expr(:block,
-                                Expr(:line, 1, :none),
+                                LineNumberNode(1, :none),
                                 :x),
                            false,
                            Expr(:block,
-                                Expr(:line, 2, :none),
+                                LineNumberNode(2, :none),
                                 Expr(:call, :test),
-                                Expr(:line, 3, :none),
+                                LineNumberNode(3, :none),
                                 :y))
 
 # test that pre 0.5 deprecated syntax is a parse error
@@ -636,7 +642,7 @@ end
 
 # issue #16720
 let err = try
-    include_string("module A
+    include_string(@__MODULE__, "module A
 
         function broken()
 
@@ -668,6 +674,10 @@ end
 # error throwing branch from #10560
 @test_throws ArgumentError Base.tryparse_internal(Bool, "foo", 1, 2, 10, true)
 
+@test tryparse(Float64, "1.23") === Nullable(1.23)
+@test tryparse(Float32, "1.23") === Nullable(1.23f0)
+@test tryparse(Float16, "1.23") === Nullable(Float16(1.23))
+
 # PR #17393
 for op in (:.==, :.&, :.|, :.≤)
     @test parse("a $op b") == Expr(:call, op, :a, :b)
@@ -689,30 +699,35 @@ let m_error, error_out, filename = Base.source_path()
     m_error = try @eval method_c6(A; B) = 3; catch e; e; end
     error_out = sprint(showerror, m_error)
     @test error_out == "syntax: keyword argument \"B\" needs a default value"
+
+    # issue #20614
+    m_error = try @eval foo{N}(types::NTuple{N}, values::Vararg{Any,N}, c) = nothing; catch e; e; end
+    error_out = sprint(showerror, m_error)
+    @test startswith(error_out, "ArgumentError: Vararg on non-final argument")
 end
 
 # issue #7272
-@test expand(parse("let
+@test expand(Main, parse("let
               global x = 2
               local x = 1
               end")) == Expr(:error, "variable \"x\" declared both local and global")
 
-@test expand(parse("let
+@test expand(Main, parse("let
               local x = 2
               local x = 1
               end")) == Expr(:error, "local \"x\" declared twice")
 
-@test expand(parse("let x
+@test expand(Main, parse("let x
                   local x = 1
               end")) == Expr(:error, "local \"x\" declared twice")
 
-@test expand(parse("let x = 2
+@test expand(Main, parse("let x = 2
                   local x = 1
               end")) == Expr(:error, "local \"x\" declared twice")
 
 
 # make sure front end can correctly print values to error messages
-let ex = expand(parse("\"a\"=1"))
+let ex = expand(Main, parse("\"a\"=1"))
     @test ex == Expr(:error, "invalid assignment location \"\"a\"\"")
 end
 
@@ -732,20 +747,39 @@ for (str, tag) in Dict("" => :none, "\"" => :string, "#=" => :comment, "'" => :c
 end
 
 # meta nodes for optional positional arguments
-@test expand(:(@inline f(p::Int=2) = 3)).args[2].args[3].inlineable
+@test expand(Main, :(@inline f(p::Int=2) = 3)).args[2].args[3].inlineable
 
 # issue #16096
 module M16096
 macro iter()
-    quote
+    return quote
         @inline function foo(sub)
             it = 1
         end
     end
 end
 end
-let ex = expand(:(@M16096.iter))
-    @test !(isa(ex,Expr) && ex.head === :error)
+let ex = expand(@__MODULE__, :(@M16096.iter))
+    @test isa(ex, Expr) && ex.head === :thunk
+end
+let ex = expand(Main, :($M16096.@iter))
+    @test isa(ex, Expr) && ex.head === :thunk
+end
+macro f16096()
+    quote
+        g16096($(esc(:x))) = 2x
+    end
+end
+let g = @f16096
+    @test g(3) == 6
+end
+macro f16096_2()
+    quote
+        g16096_2(;$(esc(:x))=2) = 2x
+    end
+end
+let g = @f16096_2
+    @test g() == 4
 end
 
 # issue #15838
@@ -760,12 +794,12 @@ module B15838
 end
 @test A15838.@f() === nothing
 @test A15838.@f(1) === :b
-let nometh = expand(:(A15838.@f(1, 2)))
+let nometh = expand(@__MODULE__, :(A15838.@f(1, 2))), __source__ = LineNumberNode(@__LINE__, Symbol(@__FILE__))
     @test (nometh::Expr).head === :error
     @test length(nometh.args) == 1
     e = nometh.args[1]::MethodError
     @test e.f === getfield(A15838, Symbol("@f"))
-    @test e.args === (1,2)
+    @test e.args === (__source__, @__MODULE__, 1, 2)
 end
 
 # issue 10046
@@ -774,11 +808,11 @@ for op in ["+", "-", "\$", "|", ".+", ".-", "*", ".*"]
 end
 
 # issue #17701
-@test expand(:(i==3 && i+=1)) == Expr(:error, "invalid assignment location \"==(i,3)&&i\"")
+@test expand(Main, :(i==3 && i+=1)) == Expr(:error, "invalid assignment location \"==(i,3)&&i\"")
 
 # issue #18667
-@test expand(:(true = 1)) == Expr(:error, "invalid assignment location \"true\"")
-@test expand(:(false = 1)) == Expr(:error, "invalid assignment location \"false\"")
+@test expand(Main, :(true = 1)) == Expr(:error, "invalid assignment location \"true\"")
+@test expand(Main, :(false = 1)) == Expr(:error, "invalid assignment location \"false\"")
 
 # PR #15592
 let str = "[1] [2]"
@@ -838,7 +872,7 @@ macro m2()
         1
     end
 end
-include_string("""
+include_string(@__MODULE__, """
 macro m3()
     quote
         @m1
@@ -850,10 +884,10 @@ macro m4()
     end
 end
 """, "another_file.jl")
-m1_exprs = get_expr_list(expand(:(@m1)))
-m2_exprs = get_expr_list(expand(:(@m2)))
-m3_exprs = get_expr_list(expand(:(@m3)))
-m4_exprs = get_expr_list(expand(:(@m4)))
+m1_exprs = get_expr_list(expand(@__MODULE__, :(@m1)))
+m2_exprs = get_expr_list(expand(@__MODULE__, :(@m2)))
+m3_exprs = get_expr_list(expand(@__MODULE__, :(@m3)))
+m4_exprs = get_expr_list(expand(@__MODULE__, :(@m4)))
 
 # Check the expanded expresion has expected number of matching push/pop
 # and the return is handled correctly
@@ -889,8 +923,8 @@ f1_exprs = get_expr_list(@code_typed(f1(1))[1])
 f2_exprs = get_expr_list(@code_typed(f2(1))[1])
 
 @test Meta.isexpr(f1_exprs[end], :return)
-@test is_pop_loc(f2_exprs[end - 1])
-@test Meta.isexpr(f2_exprs[end], :return)
+@test is_pop_loc(f2_exprs[end])
+@test Meta.isexpr(f2_exprs[end - 1], :return)
 
 if Base.JLOptions().code_coverage != 0 && Base.JLOptions().can_inline != 0
     @test count_meta_loc(f1_exprs) == 1
@@ -909,10 +943,10 @@ end
 @test :(x`s\`"\x\$\\`) == :(@x_cmd "s`\"\\x\\\$\\\\")
 
 # Check multiline command literals
-@test :```
+@test :(@cmd "multiline\ncommand\n") == :```
 multiline
 command
-``` == :(@cmd "multiline\ncommand\n")
+```
 
 macro julia_cmd(s)
     Meta.quot(parse(s))
@@ -936,7 +970,7 @@ end
 @test parse("Foo{T} = Bar{T}") == Expr(:(=), Expr(:curly, :Foo, :T), Expr(:curly, :Bar, :T))
 
 # don't insert push_loc for filename `none` at the top level
-let ex = expand(parse("""
+let ex = expand(Main, parse("""
 begin
     x = 1
 end"""))
@@ -965,7 +999,7 @@ let ..(x,y) = x + y
 end
 
 # issue #7669
-@test parse("@a(b=1, c=2)") == Expr(:macrocall, Symbol("@a"), :(b=1), :(c=2))
+@test parse("@a(b=1, c=2)") == Expr(:macrocall, Symbol("@a"), LineNumberNode(1, :none), :(b=1), :(c=2))
 
 # issue #19685
 let f = function (x; kw...)
@@ -995,8 +1029,8 @@ end
 let
     global const (c8925, d8925) = (3, 4)
 end
-@test c8925 == 3 && isconst(:c8925)
-@test d8925 == 4 && isconst(:d8925)
+@test c8925 == 3 && isconst(@__MODULE__, :c8925)
+@test d8925 == 4 && isconst(@__MODULE__, :d8925)
 
 # issue #18754: parse ccall as a regular function
 @test parse("ccall([1], 2)[3]") == Expr(:ref, Expr(:call, :ccall, Expr(:vect, 1), 2), 3)
@@ -1007,11 +1041,24 @@ end
 short_where_call = :(f(x::T) where T = T)
 @test short_where_call.args[2].head == :block
 
+# `where` with multi-line anonymous functions
+let f = function (x::T) where T
+            T
+        end
+    @test f(:x) === Symbol
+end
+
+let f = function (x::T, y::S) where T<:S where S
+            (T,S)
+        end
+    @test f(0,1) === (Int,Int)
+end
+
 # issue #20541
 @test parse("[a .!b]") == Expr(:hcat, :a, Expr(:call, :(.!), :b))
 
-@test expand(:(a{1} = b)) == Expr(:error, "invalid type parameter name \"1\"")
-@test expand(:(a{2<:Any} = b)) == Expr(:error, "invalid type parameter name \"2\"")
+@test expand(Main, :(a{1} = b)) == Expr(:error, "invalid type parameter name \"1\"")
+@test expand(Main, :(a{2<:Any} = b)) == Expr(:error, "invalid type parameter name \"2\"")
 
 # issue #20653
 @test_throws UndefVarError Base.call(::Int) = 1
@@ -1032,15 +1079,147 @@ macro m20729()
     return ex
 end
 
-@test_throws ErrorException eval(:(@m20729))
-@test expand(:(@m20729)) == Expr(:error, "undefined reference in AST")
+@test_throws ErrorException eval(@__MODULE__, :(@m20729))
+@test expand(@__MODULE__, :(@m20729)) == Expr(:error, "undefined reference in AST")
 
 macro err20000()
     return Expr(:error, "oops!")
 end
 
-@test expand(:(@err20000)) == Expr(:error, "oops!")
+@test expand(@__MODULE__, :(@err20000)) == Expr(:error, "oops!")
 
 # issue #20000
-@test parse("@m(a; b=c)") == Expr(:macrocall, Symbol("@m"),
+@test parse("@m(a; b=c)") == Expr(:macrocall, Symbol("@m"), LineNumberNode(1, :none),
                                   Expr(:parameters, Expr(:kw, :b, :c)), :a)
+
+# issue #21054
+macro make_f21054(T)
+    quote
+        $(esc(:f21054))(X::Type{<:$T}) = 1
+    end
+end
+@eval @make_f21054 $Array
+@test isa(f21054, Function)
+g21054(>:) = >:2
+@test g21054(-) == -2
+
+# issue #21168
+@test expand(Main, :(a.[1])) == Expr(:error, "invalid syntax a.[1]")
+@test expand(Main, :(a.{1})) == Expr(:error, "invalid syntax a.{1}")
+
+# Issue #21225
+let abstr = parse("abstract type X end")
+    @test parse("abstract type X; end") == abstr
+    @test parse(string("abstract type X", ";"^5, " end")) == abstr
+    @test parse("abstract type X\nend") == abstr
+    @test parse(string("abstract type X", "\n"^5, "end")) == abstr
+end
+let prim = parse("primitive type X 8 end")
+    @test parse("primitive type X 8; end") == prim
+    @test parse(string("primitive type X 8", ";"^5, " end")) == prim
+    @test parse("primitive type X 8\nend") == prim
+    @test parse(string("primitive type X 8", "\n"^5, "end")) == prim
+end
+
+# issue #21155
+@test filter(!isline,
+             parse("module B
+                        using ..x,
+                              ..y
+                    end").args[3].args)[1] ==
+      Expr(:toplevel,
+           Expr(:using, Symbol("."), Symbol("."), :x),
+           Expr(:using, Symbol("."), Symbol("."), :y))
+
+@test filter(!isline,
+             parse("module A
+                        using .B,
+                              .C
+                    end").args[3].args)[1] ==
+      Expr(:toplevel,
+           Expr(:using, Symbol("."), :B),
+           Expr(:using, Symbol("."), :C))
+
+# issue #21440
+@test parse("+(x::T,y::T) where {T} = 0") == parse("(+)(x::T,y::T) where {T} = 0")
+@test parse("a::b::c") == Expr(:(::), Expr(:(::), :a, :b), :c)
+
+# issue #21545
+f21545(::Type{<: AbstractArray{T,N} where N}) where T = T
+@test f21545(Array{Int8}) === Int8
+@test parse("<:{T} where T") == Expr(:where, Expr(:curly, :(<:), :T), :T)
+@test parse("<:(T) where T") == Expr(:where, Expr(:(<:), :T), :T)
+@test parse("<:{T}(T) where T") == Expr(:where, Expr(:call, Expr(:curly, :(<:), :T), :T), :T)
+
+# issue #21586
+macro m21586(x)
+    Expr(:kw, esc(x), 42)
+end
+
+f21586(; @m21586(a), @m21586(b)) = a + b
+@test f21586(a=10) == 52
+
+# issue #21604
+@test_nowarn @eval module Test21604
+    const Foo = Any
+    struct X
+        x::Foo
+    end
+end
+@test Test21604.X(1.0) === Test21604.X(1.0)
+
+# issue #20575
+@test_throws ParseError parse("\"a\"x")
+@test_throws ParseError parse("\"a\"begin end")
+
+# comment 298107224 on pull #21607
+module Test21607
+    using Base.Test
+
+    @test_warn(
+    "WARNING: imported binding for Any overwritten in module Test21607",
+    @eval const Any = Integer)
+
+    # check that X <: Core.Any, not Integer
+    mutable struct X; end
+    @test supertype(X) === Core.Any
+
+    # check that return type is Integer
+    f()::Any = 1.0
+    @test f() === 1
+
+    # check that constructor accepts Any
+    struct Y
+        x
+    end
+    @test Y(1.0) !== Y(1)
+
+    # check that function default argument type is Any
+    g(x) = x
+    @test g(1.0) === 1.0
+
+    # check that asserted variable type is Integer
+    @test let
+        x::Any = 1.0
+        x
+    end === 1
+
+    # check that unasserted variable type is not Integer
+    @test let
+        x = 1.0
+        x
+    end === 1.0
+end
+
+# issue #16937
+@test expand(Main, :(f(2, a=1, w=3, c=3, w=4, b=2))) ==
+    Expr(:error, "keyword argument \"w\" repeated in call to \"f\"")
+
+let f(x) =
+      g(x) = 1
+    @test functionloc(f(1))[2] > functionloc(f)[2]
+end
+
+# issue #19351
+# adding return type decl should not affect parse of function body
+@test :(t(abc) = 3).args[2] == :(t(abc)::Int = 3).args[2]

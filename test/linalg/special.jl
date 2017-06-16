@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.Test
 debug = false
@@ -246,4 +246,7 @@ let
             @test !issparse(cat((1,2), otherdense, densemata))
         end
     end
+end
+@testset "vcat of Vectors with SparseVectors should yield SparseVector (#22225)" begin
+    @test isa((@inferred vcat(Float64[], spzeros(1))), SparseVector)
 end

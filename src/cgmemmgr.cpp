@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "llvm-version.h"
 #include "platform.h"
@@ -6,12 +6,14 @@
 
 #ifdef USE_MCJIT
 #include <llvm/ExecutionEngine/SectionMemoryManager.h>
+#include "fix_llvm_assert.h"
 #include "julia.h"
 #include "julia_internal.h"
 
 #if JL_LLVM_VERSION >= 30700
 #if JL_LLVM_VERSION < 30800
 #  include <llvm/ExecutionEngine/Orc/ObjectLinkingLayer.h>
+#  include "fix_llvm_assert.h"
 #endif
 #ifdef _OS_LINUX_
 #  include <sys/syscall.h>
@@ -262,9 +264,9 @@ static void *alloc_shared_page(size_t size, size_t *id, bool exec)
 #ifdef _OS_LINUX_
 // Using `/proc/self/mem`, A.K.A. Keno's remote memory manager.
 
-static int self_mem_fd = -1;
-
-static int init_self_mem()
+// Do not call this directly.
+// Use `get_self_mem_fd` which has a guard to call this only once.
+static int _init_self_mem()
 {
     struct utsname kernel;
     uname(&kernel);
@@ -286,22 +288,34 @@ static int init_self_mem()
         return -1;
     fcntl(fd, F_SETFD, FD_CLOEXEC);
 #endif
-    // buffer to check if write works;
-    volatile uint64_t buff = 0;
-    uint64_t v = 0x12345678;
-    int ret = pwrite(fd, (void*)&v, sizeof(uint64_t), (uintptr_t)&buff);
-    if (ret != sizeof(uint64_t) || buff != 0x12345678) {
+
+    // Check if we can write to a RX page
+    void *test_pg = mmap(nullptr, jl_page_size, PROT_READ | PROT_EXEC,
+                         MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    // We can ignore this though failure to allocate executable memory would be a bigger problem.
+    assert(test_pg != MAP_FAILED && "Cannot allocate executable memory");
+
+    const uint64_t v = 0xffff000012345678u;
+    int ret = pwrite(fd, (const void*)&v, sizeof(uint64_t), (uintptr_t)test_pg);
+    if (ret != sizeof(uint64_t) || *(volatile uint64_t*)test_pg != v) {
+        munmap(test_pg, jl_page_size);
         close(fd);
         return -1;
     }
-    self_mem_fd = fd;
+    munmap(test_pg, jl_page_size);
+    return fd;
+}
+
+static int get_self_mem_fd()
+{
+    static int fd = _init_self_mem();
     return fd;
 }
 
 static void write_self_mem(void *dest, void *ptr, size_t size)
 {
     while (size > 0) {
-        ssize_t ret = pwrite(self_mem_fd, ptr, size, (uintptr_t)dest);
+        ssize_t ret = pwrite(get_self_mem_fd(), ptr, size, (uintptr_t)dest);
         if ((size_t)ret == size)
             return;
         if (ret == -1 && (errno == EAGAIN || errno == EINTR))
@@ -655,7 +669,7 @@ public:
         : ROAllocator<exec>(),
           temp_buff()
     {
-        assert(self_mem_fd != -1);
+        assert(get_self_mem_fd() != -1);
     }
     void finalize() override
     {
@@ -715,7 +729,7 @@ public:
           code_allocated(false)
     {
 #ifdef _OS_LINUX_
-        if (!ro_alloc && init_self_mem() != -1) {
+        if (!ro_alloc && get_self_mem_fd() != -1) {
             ro_alloc.reset(new SelfMemAllocator<false>());
             exe_alloc.reset(new SelfMemAllocator<true>());
         }
@@ -730,8 +744,11 @@ public:
     }
     void registerEHFrames(uint8_t *Addr, uint64_t LoadAddr,
                           size_t Size) override;
+#if 0
+    // Disable for now since we are not actually using this.
     void deregisterEHFrames(uint8_t *Addr, uint64_t LoadAddr,
                             size_t Size) override;
+#endif
     uint8_t *allocateCodeSection(uintptr_t Size, unsigned Alignment,
                                  unsigned SectionID,
                                  StringRef SectionName) override;
@@ -858,12 +875,14 @@ void RTDyldMemoryManagerJL::registerEHFrames(uint8_t *Addr,
     }
 }
 
+#if 0
 void RTDyldMemoryManagerJL::deregisterEHFrames(uint8_t *Addr,
                                                uint64_t LoadAddr,
                                                size_t Size)
 {
     deregister_eh_frames((uint8_t*)LoadAddr, Size);
 }
+#endif
 
 }
 

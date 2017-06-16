@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 mutable struct Set{T} <: AbstractSet{T}
     dict::Dict{T,Void}
@@ -14,8 +14,8 @@ function Set(g::Generator)
     return Set{T}(g)
 end
 
-eltype{T}(::Type{Set{T}}) = T
-similar{T}(s::Set{T}) = Set{T}()
+eltype(::Type{Set{T}}) where {T} = T
+similar(s::Set{T}) where {T} = Set{T}()
 similar(s::Set, T::Type) = Set{T}()
 
 function show(io::IO, s::Set)
@@ -35,7 +35,15 @@ in(x, s::Set) = haskey(s.dict, x)
 push!(s::Set, x) = (s.dict[x] = nothing; s)
 pop!(s::Set, x) = (pop!(s.dict, x); x)
 pop!(s::Set, x, deflt) = x in s ? pop!(s, x) : deflt
-pop!(s::Set) = (idx = start(s.dict); val = s.dict.keys[idx]; _delete!(s.dict, idx); val)
+
+function pop!(s::Set)
+    isempty(s) && throw(ArgumentError("set must be non-empty"))
+    idx = start(s.dict)
+    val = s.dict.keys[idx]
+    _delete!(s.dict, idx)
+    val
+end
+
 delete!(s::Set, x) = (delete!(s.dict, x); s)
 
 copy(s::Set) = union!(similar(s), s)
@@ -108,12 +116,16 @@ end
 const ⊆ = issubset
 ⊊(l::Set, r::Set) = <(l, r)
 ⊈(l::Set, r::Set) = !⊆(l, r)
+⊇(l, r) = issubset(r, l)
+⊉(l::Set, r::Set) = !⊇(l, r)
+⊋(l::Set, r::Set) = <(r, l)
 
 """
     unique(itr)
 
-Returns an array containing one value from `itr` for each unique value,
-as determined by [`isequal`](@ref).
+Return an array containing only the unique elements of collection `itr`,
+as determined by [`isequal`](@ref), in the order that the first of each
+set of equivalent elements originally appears.
 
 ```jldoctest
 julia> unique([1; 2; 2; 6])
@@ -142,7 +154,7 @@ function unique(itr)
 end
 
 _unique_from(itr, out, seen, i) = unique_from(itr, out, seen, i)
-@inline function unique_from{T}(itr, out::Vector{T}, seen, i)
+@inline function unique_from(itr, out::Vector{T}, seen, i) where T
     while !done(itr, i)
         x, i = next(itr, i)
         S = typeof(x)
@@ -190,6 +202,94 @@ function unique(f::Callable, C)
     out
 end
 
+# If A is not grouped, then we will need to keep track of all of the elements that we have
+# seen so far.
+function _unique!(A::AbstractVector)
+    seen = Set{eltype(A)}()
+    idxs = eachindex(A)
+    i = state = start(idxs)
+    for x in A
+        if x ∉ seen
+            push!(seen, x)
+            i, state = next(idxs, state)
+            A[i] = x
+        end
+    end
+    resize!(A, i - first(idxs) + 1)
+end
+
+# If A is grouped, so that each unique element is in a contiguous group, then we only
+# need to keep track of one element at a time. We replace the elements of A with the
+# unique elements that we see in the order that we see them. Once we have iterated
+# through A, we resize A based on the number of unique elements that we see.
+function _groupedunique!(A::AbstractVector)
+    isempty(A) && return A
+    idxs = eachindex(A)
+    y = first(A)
+    state = start(idxs)
+    i, state = next(idxs, state)
+    for x in A
+        if !isequal(x, y)
+            i, state = next(idxs, state)
+            y = A[i] = x
+        end
+    end
+    resize!(A, i - first(idxs) + 1)
+end
+
+"""
+    unique!(A::AbstractVector)
+
+Remove duplicate items as determined by [`isequal`](@ref), then return the modified `A`.
+`unique!` will return the elements of `A` in the order that they occur. If you do not care
+about the order of the returned data, then calling `(sort!(A); unique!(A))` will be much
+more efficient as long as the elements of `A` can be sorted.
+
+```jldoctest
+julia> unique!([1, 1, 1])
+1-element Array{Int64,1}:
+ 1
+
+julia> A = [7, 3, 2, 3, 7, 5];
+
+julia> unique!(A)
+4-element Array{Int64,1}:
+ 7
+ 3
+ 2
+ 5
+
+julia> B = [7, 6, 42, 6, 7, 42];
+
+julia> sort!(B);  # unique! is able to process sorted data much more efficiently.
+
+julia> unique!(B)
+3-element Array{Int64,1}:
+ 6
+ 7
+ 42
+```
+"""
+function unique!(A::Union{AbstractVector{<:Real}, AbstractVector{<:AbstractString},
+                          AbstractVector{<:Symbol}})
+    if isempty(A)
+        return A
+    elseif issorted(A) || issorted(A, rev=true)
+        return _groupedunique!(A)
+    else
+        return _unique!(A)
+    end
+end
+# issorted fails for some element types, so the method above has to be restricted to
+# elements with isless/< defined.
+function unique!(A)
+    if isempty(A)
+        return A
+    else
+        return _unique!(A)
+    end
+end
+
 """
     allunique(itr) -> Bool
 
@@ -220,7 +320,7 @@ end
 
 allunique(::Set) = true
 
-allunique{T}(r::Range{T}) = (step(r) != zero(T)) || (length(r) <= 1)
+allunique(r::Range{T}) where {T} = (step(r) != zero(T)) || (length(r) <= 1)
 
 function filter(f, s::Set)
     u = similar(s)
@@ -249,5 +349,5 @@ function hash(s::Set, h::UInt)
     return h
 end
 
-convert{T}(::Type{Set{T}}, s::Set{T}) = s
-convert{T}(::Type{Set{T}}, x::Set) = Set{T}(x)
+convert(::Type{Set{T}}, s::Set{T}) where {T} = s
+convert(::Type{Set{T}}, x::Set) where {T} = Set{T}(x)

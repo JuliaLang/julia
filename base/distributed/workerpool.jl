@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 abstract type AbstractWorkerPool end
 
@@ -25,7 +25,7 @@ end
 
 function WorkerPool()
     wp = WorkerPool(Channel{Int}(typemax(Int)), RemoteChannel())
-    put!(wp.ref, wp)
+    put!(wp.ref, WeakRef(wp))
     wp
 end
 
@@ -52,7 +52,7 @@ function serialize(S::AbstractSerializer, pool::WorkerPool)
     serialize(S, pool.ref)
 end
 
-deserialize{T<:WorkerPool}(S::AbstractSerializer, t::Type{T}) = T(deserialize(S))
+deserialize(S::AbstractSerializer, t::Type{T}) where {T<:WorkerPool} = T(deserialize(S))
 
 wp_local_push!(pool::AbstractWorkerPool, w::Int) = (push!(pool.workers, w); put!(pool.channel, w); pool)
 wp_local_length(pool::AbstractWorkerPool) = length(pool.workers)
@@ -97,7 +97,7 @@ function wp_local_take!(pool::AbstractWorkerPool)
         end
 
         worker = take!(pool.channel)
-        if worker in procs()
+        if id_in_procs(worker)
             break
         else
             delete!(pool.workers, worker) # Remove invalid worker from pool
@@ -124,7 +124,7 @@ for func = (:length, :isready, :workers, :nworkers, :take!)
     @eval begin
         function ($func)(pool::WorkerPool)
             if pool.ref.where != myid()
-                return remotecall_fetch(ref->($func_local)(fetch(ref)), pool.ref.where, pool.ref)
+                return remotecall_fetch(ref->($func_local)(fetch(ref).value), pool.ref.where, pool.ref)
             else
                 return ($func_local)(pool)
             end
@@ -140,7 +140,7 @@ for func = (:push!, :put!)
     @eval begin
         function ($func)(pool::WorkerPool, w::Int)
             if pool.ref.where != myid()
-                return remotecall_fetch((ref, w)->($func_local)(fetch(ref), w), pool.ref.where, pool.ref, w)
+                return remotecall_fetch((ref, w)->($func_local)(fetch(ref).value, w), pool.ref.where, pool.ref, w)
             else
                 return ($func_local)(pool, w)
             end

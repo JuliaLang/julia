@@ -1,5 +1,5 @@
 #!/bin/sh
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Script to compile Windows Julia, using binary dependencies from nightlies.
 # Should work in MSYS assuming 7zip is installed and on the path,
@@ -89,7 +89,7 @@ esac
 if ! [ -e julia-installer.exe ]; then
   f=julia-latest-win$bits.exe
   echo "Downloading $f"
-  $curlflags -O https://s3.amazonaws.com/julianightlies/bin/winnt/x$archsuffix/$f
+  $curlflags -O https://julialangnightlies-s3.julialang.org/bin/winnt/x$archsuffix/$f
   echo "Extracting $f"
   $SEVENZIP x -y $f >> get-deps.log
 fi
@@ -123,7 +123,7 @@ if [ -z "$USEMSVC" ]; then
   fi
   export AR=${CROSS_COMPILE}ar
 
-  f=llvm-3.9.1-$ARCH-w64-mingw32-juliadeps-r04.7z
+  f=llvm-3.9.1-$ARCH-w64-mingw32-juliadeps-r06.7z
 else
   echo "override USEMSVC = 1" >> Make.user
   echo "override ARCH = $ARCH" >> Make.user
@@ -165,7 +165,7 @@ if ! [ -e usr/bin/busybox.exe ]; then
   $curlflags -o usr/bin/busybox.exe http://frippery.org/files/busybox/$f
 fi
 
-for lib in SUITESPARSE ARPACK BLAS LAPACK FFTW \
+for lib in SUITESPARSE ARPACK BLAS LAPACK \
     GMP MPFR PCRE LIBUNWIND OPENSPECFUN; do
   echo "USE_SYSTEM_$lib = 1" >> Make.user
 done
@@ -203,6 +203,7 @@ fi
 echo 'FORCE_ASSERTIONS = 1' >> Make.user
 
 cat Make.user
-make -j3 VERBOSE=1
+make -j3 VERBOSE=1 install
+make VERBOSE=1 -C examples
+cp usr/bin/busybox.exe julia-*/bin
 make build-stats
-#make debug

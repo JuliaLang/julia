@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include <stdlib.h>
 #include <stdarg.h>
@@ -426,6 +426,7 @@ size_t ios_write(ios_t *s, const char *data, size_t n)
     else {
         ios_flush(s);
         if (n > MOST_OF(s->maxsize)) {
+            s->fpos = -1;
             _os_write_all(s->fd, data, n, &wrote);
             return wrote;
         }

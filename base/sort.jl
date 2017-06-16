@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Sort
 
@@ -72,6 +72,9 @@ true
 
 julia> issorted([(1, "b"), (2, "a")], by = x -> x[2])
 false
+
+julia> issorted([(1, "b"), (2, "a")], by = x -> x[2], rev=true)
+true
 ```
 """
 issorted(itr;
@@ -742,6 +745,28 @@ end
 Sort the rows of matrix `A` lexicographically.
 See [`sort!`](@ref) for a description of possible
 keyword arguments.
+
+# Examples
+
+```jldoctest
+julia> sortrows([7 3 5; -1 6 4; 9 -2 8])
+3×3 Array{Int64,2}:
+ -1   6  4
+  7   3  5
+  9  -2  8
+
+julia> sortrows([7 3 5; -1 6 4; 9 -2 8], lt=(x,y)->isless(x[2],y[2]))
+3×3 Array{Int64,2}:
+  9  -2  8
+  7   3  5
+ -1   6  4
+
+julia> sortrows([7 3 5; -1 6 4; 9 -2 8], rev=true)
+3×3 Array{Int64,2}:
+  9  -2  8
+  7   3  5
+ -1   6  4
+```
 """
 function sortrows(A::AbstractMatrix; kws...)
     inds = indices(A,1)
@@ -760,6 +785,28 @@ end
 Sort the columns of matrix `A` lexicographically.
 See [`sort!`](@ref) for a description of possible
 keyword arguments.
+
+# Examples
+
+```jldoctest
+julia> sortcols([7 3 5; 6 -1 -4; 9 -2 8])
+3×3 Array{Int64,2}:
+  3   5  7
+ -1  -4  6
+ -2   8  9
+
+julia> sortcols([7 3 5; 6 -1 -4; 9 -2 8], alg=InsertionSort, lt=(x,y)->isless(x[2],y[2]))
+3×3 Array{Int64,2}:
+  5   3  7
+ -4  -1  6
+  8  -2  9
+
+julia> sortcols([7 3 5; 6 -1 -4; 9 -2 8], rev=true)
+3×3 Array{Int64,2}:
+ 7   5   3
+ 6  -4  -1
+ 9   8  -2
+```
 """
 function sortcols(A::AbstractMatrix; kws...)
     inds = indices(A,2)
@@ -772,13 +819,13 @@ function sortcols(A::AbstractMatrix; kws...)
     A[:,p]
 end
 
-function slicetypeof{T}(A::AbstractArray{T}, i1, i2)
+function slicetypeof(A::AbstractArray{T}, i1, i2) where T
     I = map(slice_dummy, to_indices(A, (i1, i2)))
     fast = isa(IndexStyle(viewindexing(I), IndexStyle(A)), IndexLinear)
     SubArray{T,1,typeof(A),typeof(I),fast}
 end
 slice_dummy(S::Slice) = S
-slice_dummy{T}(::AbstractUnitRange{T}) = oneunit(T)
+slice_dummy(::AbstractUnitRange{T}) where {T} = oneunit(T)
 
 ## fast clever sorting for floats ##
 
@@ -801,8 +848,8 @@ right(::DirectOrdering) = Right()
 left(o::Perm) = Perm(left(o.order), o.data)
 right(o::Perm) = Perm(right(o.order), o.data)
 
-lt{T<:Floats}(::Left, x::T, y::T) = slt_int(y, x)
-lt{T<:Floats}(::Right, x::T, y::T) = slt_int(x, y)
+lt(::Left, x::T, y::T) where {T<:Floats} = slt_int(y, x)
+lt(::Right, x::T, y::T) where {T<:Floats} = slt_int(x, y)
 
 isnan(o::DirectOrdering, x::Floats) = (x!=x)
 isnan(o::Perm, i::Int) = isnan(o.order,o.data[i])

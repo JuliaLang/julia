@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 function runtests(name, isolate=true)
     old_print_setting = Base.Test.TESTSET_PRINT_ENABLE[]
@@ -38,4 +38,5 @@ end
 
 # looking in . messes things up badly
 filter!(x->x!=".", LOAD_PATH)
-nothing
+
+nothing # File is loaded via a remotecall to "include". Ensure it returns "nothing".

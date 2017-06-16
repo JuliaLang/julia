@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Tests that do not really go anywhere else
 
@@ -269,7 +269,7 @@ end
 
 # test that they don't introduce global vars
 global v11801, t11801, names_before_timing
-names_before_timing = names(current_module(), true)
+names_before_timing = names(@__MODULE__, true)
 
 let t = @elapsed 1+1
     @test isa(t, Real) && t >= 0
@@ -288,7 +288,7 @@ v11801, t11801 = @timed sin(1)
 @test v11801 == sin(1)
 @test isa(t11801,Real) && t11801 >= 0
 
-@test names(current_module(), true) == names_before_timing
+@test names(@__MODULE__, true) == names_before_timing
 
 # interactive utilities
 
@@ -514,9 +514,19 @@ if is_windows()
     end
 end
 
-optstring = sprint(show, Base.JLOptions())
-@test startswith(optstring, "JLOptions(")
-@test endswith(optstring, ")")
+let optstring = stringmime(MIME("text/plain"), Base.JLOptions())
+    @test startswith(optstring, "JLOptions(\n")
+    @test !contains(optstring, "Ptr")
+    @test endswith(optstring, "\n)")
+    @test contains(optstring, " = \"")
+end
+let optstring = repr(Base.JLOptions())
+    @test startswith(optstring, "JLOptions(")
+    @test endswith(optstring, ")")
+    @test !contains(optstring, "\n")
+    @test !contains(optstring, "Ptr")
+    @test contains(optstring, " = \"")
+end
 
 # Base.securezero! functions (#17579)
 import Base: securezero!, unsafe_securezero!
@@ -556,7 +566,42 @@ end
 for force_software_crc in (1,0)
     ccall(:jl_crc32c_init, Void, (Cint,), force_software_crc)
     for (n,crc) in [(0,0x00000000),(1,0xa016d052),(2,0x03f89f52),(3,0xf130f21e),(4,0x29308cf4),(5,0x53518fab),(6,0x4f4dfbab),(7,0xbd3a64dc),(8,0x46891f81),(9,0x5a14b9f9),(10,0xb219db69),(11,0xd232a91f),(12,0x51a15563),(13,0x9f92de41),(14,0x4d8ae017),(15,0xc8b74611),(16,0xa0de6714),(17,0x672c992a),(18,0xe8206eb6),(19,0xc52fd285),(20,0x327b0397),(21,0x318263dd),(22,0x08485ccd),(23,0xea44d29e),(24,0xf6c0cb13),(25,0x3969bba2),(26,0x6a8810ec),(27,0x75b3d0df),(28,0x82d535b1),(29,0xbdf7fc12),(30,0x1f836b7d),(31,0xd29f33af),(32,0x8e4acb3e),(33,0x1cbee2d1),(34,0xb25f7132),(35,0xb0fa484c),(36,0xb9d262b4),(37,0x3207fe27),(38,0xa024d7ac),(39,0x49a2e7c5),(40,0x0e2c157f),(41,0x25f7427f),(42,0x368c6adc),(43,0x75efd4a5),(44,0xa84c5c31),(45,0x0fc817b2),(46,0x8d99a881),(47,0x5cc3c078),(48,0x9983d5e2),(49,0x9267c2db),(50,0xc96d4745),(51,0x058d8df3),(52,0x453f9cf3),(53,0xb714ade1),(54,0x55d3c2bc),(55,0x495710d0),(56,0x3bddf494),(57,0x4f2577d0),(58,0xdae0f604),(59,0x3c57c632),(60,0xfe39bbb0),(61,0x6f5d1d41),(62,0x7d996665),(63,0x68c738dc),(64,0x8dfea7ae)]
-        @test Base.crc32c(UInt8[1:n;]) == crc
+        @test crc32c(UInt8[1:n;]) == crc == crc32c(String(UInt8[1:n;]))
+    end
+    # test that crc parameter is equivalent to checksum of concatenated data,
+    # and test crc of subarrays:
+    a = UInt8[1:255;]
+    crc_256 = crc32c(a)
+    @views for n = 1:255
+        @test crc32c(a[n+1:end], crc32c(a[1:n])) == crc_256
+    end
+
+    @test crc32c(IOBuffer(a)) == crc_256
+    let buf = IOBuffer()
+        write(buf, a[1:3])
+        @test crc32c(seekstart(buf)) == crc32c(a[1:3])
+        @test crc32c(buf) == 0x00000000
+        @test crc32c(seek(buf, 1)) == crc32c(a[2:3])
+        @test crc32c(seek(buf, 0), 2) == crc32c(a[1:2])
+        @test crc32c(buf) == crc32c(a[3:3])
+    end
+
+    let f = tempname()
+        try
+            write(f, a)
+            @test open(crc32c, f) == crc_256
+            open(f, "r") do io
+                @test crc32c(io, 16) == crc32c(a[1:16])
+                @test crc32c(io, 16) == crc32c(a[17:32])
+                @test crc32c(io) == crc32c(a[33:end])
+                @test crc32c(io, 1000) == 0x00000000
+            end
+            a = rand(UInt8, 30000)
+            write(f, a)
+            @test open(crc32c, f) == crc32c(a) == open(io -> crc32c(io, 10^6), f)
+        finally
+            rm(f, force=true)
+        end
     end
 end
 
@@ -567,6 +612,25 @@ let
         buf = IOBuffer()
         print_with_color(:red, buf, "foo")
         @test startswith(String(take!(buf)), Base.text_colors[:red])
+    finally
+        @eval Base have_color = $(old_have_color)
+    end
+end
+
+# Test that `print_with_color` accepts non-string values, just as `print` does
+let
+    old_have_color = Base.have_color
+    try
+        @eval Base have_color = true
+        buf_color = IOBuffer()
+        args = (3.2, "foo", :testsym)
+        print_with_color(:red, buf_color, args...)
+        buf_plain = IOBuffer()
+        print(buf_plain, args...)
+        expected_str = string(Base.text_colors[:red],
+                              String(take!(buf_plain)),
+                              Base.text_colors[:default])
+        @test expected_str == String(take!(buf_color))
     finally
         @eval Base have_color = $(old_have_color)
     end
@@ -609,7 +673,7 @@ end
 
 @testset "test this does not segfault #19281" begin
     @test Foo_19281().f[1] == ()
-    @test Foo_19281().f[2] == (1, )
+    @test Foo_19281().f[2] == (1,)
 end
 
 let
@@ -639,4 +703,77 @@ if Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
         @test_throws StackOverflowError Demo_20254()
         @test_throws StackOverflowError f_19433(+, 1, 2)
     end
+end
+
+# invokelatest function for issue #19774
+issue19774(x) = 1
+let foo() = begin
+        eval(:(issue19774(x::Int) = 2))
+        return Base.invokelatest(issue19774, 0)
+    end
+    @test foo() == 2
+end
+
+# Endian tests
+# For now, we only support little endian.
+# Add an `Sys.ARCH` test for big endian when/if we add support for that.
+# Do **NOT** use `ENDIAN_BOM` to figure out the endianess
+# since that's exactly what we want to test.
+@test ENDIAN_BOM == 0x04030201
+@test ntoh(0x1) == 0x1
+@test hton(0x1) == 0x1
+@test ltoh(0x1) == 0x1
+@test htol(0x1) == 0x1
+@test ntoh(0x102) == 0x201
+@test hton(0x102) == 0x201
+@test ltoh(0x102) == 0x102
+@test htol(0x102) == 0x102
+@test ntoh(0x1020304) == 0x4030201
+@test hton(0x1020304) == 0x4030201
+@test ltoh(0x1020304) == 0x1020304
+@test htol(0x1020304) == 0x1020304
+@test ntoh(0x102030405060708) == 0x807060504030201
+@test hton(0x102030405060708) == 0x807060504030201
+@test ltoh(0x102030405060708) == 0x102030405060708
+@test htol(0x102030405060708) == 0x102030405060708
+
+module DeprecationTests # to test @deprecate
+    f() = true
+
+    # test the Symbol path of @deprecate
+    @deprecate f1 f
+    @deprecate f2 f false # test that f2 is not exported
+
+    # test the Expr path of @deprecate
+    @deprecate f3() f()
+    @deprecate f4() f() false # test that f4 is not exported
+    @deprecate f5(x::T) where T f()
+
+    # test deprecation of a constructor
+    struct A{T} end
+    @deprecate A{T}(x::S) where {T, S} f()
+end # module
+
+@testset "@deprecate" begin
+    using .DeprecationTests
+    # enable when issue #22043 is fixed
+    # @test @test_warn "f1 is deprecated, use f instead." f1()
+    # @test @test_nowarn f1()
+
+    # @test_throws UndefVarError f2() # not exported
+    # @test @test_warn "f2 is deprecated, use f instead." DeprecationTests.f2()
+    # @test @test_nowarn DeprecationTests.f2()
+
+    # @test @test_warn "f3() is deprecated, use f() instead." f3()
+    # @test @test_nowarn f3()
+
+    # @test_throws UndefVarError f4() # not exported
+    # @test @test_warn "f4() is deprecated, use f() instead." DeprecationTests.f4()
+    # @test @test_nowarn DeprecationTests.f4()
+
+    # @test @test_warn "f5(x::T) where T is deprecated, use f() instead." f5(1)
+    # @test @test_nowarn f5(1)
+
+    # @test @test_warn "A{T}(x::S) where {T, S} is deprecated, use f() instead." A{Int}(1.)
+    # @test @test_nowarn A{Int}(1.)
 end

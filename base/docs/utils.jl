@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Text / HTML objects
 
@@ -72,8 +72,8 @@ print(io::IO, t::Text) = print(io, t.content)
 print(io::IO, t::Text{<:Function}) = t.content(io)
 show(io::IO, t::Text) = print(io, t)
 
-=={T<:Union{HTML, Text}}(t1::T, t2::T) = t1.content == t2.content
-hash{T<:Union{HTML, Text}}(t::T, h::UInt) = hash(T, hash(t.content, h))
+==(t1::T, t2::T) where {T<:Union{HTML,Text}} = t1.content == t2.content
+hash(t::T, h::UInt) where {T<:Union{HTML,Text}} = hash(T, hash(t.content, h))
 
 """
     @text_str -> Docs.Text
@@ -186,11 +186,13 @@ function repl(io::IO, s::Symbol)
     quote
         repl_latex($io, $str)
         repl_search($io, $str)
-        ($(isdefined(s) || haskey(keywords, s))) || repl_corrections($io, $str)
+        $(if !isdefined(Main, s) && !haskey(keywords, s)
+               :(repl_corrections($io, $str))
+          end)
         $(_repl(s))
     end
 end
-isregex(x) = isexpr(x, :macrocall, 2) && x.args[1] === Symbol("@r_str") && !isempty(x.args[2])
+isregex(x) = isexpr(x, :macrocall, 3) && x.args[1] === Symbol("@r_str") && !isempty(x.args[3])
 repl(io::IO, ex::Expr) = isregex(ex) ? :(apropos($io, $ex)) : _repl(ex)
 repl(io::IO, str::AbstractString) = :(apropos($io, $str))
 repl(io::IO, other) = :(@doc $(esc(other)))
@@ -269,7 +271,7 @@ function levenshtein(s1, s2)
     a, b = collect(s1), collect(s2)
     m = length(a)
     n = length(b)
-    d = Array{Int}(m+1, n+1)
+    d = Matrix{Int}(m+1, n+1)
 
     d[1:m+1, 1] = 0:m
     d[1, 1:n+1] = 0:n
@@ -336,7 +338,7 @@ end
 print_joined_cols(args...; cols = displaysize(STDOUT)[2]) = print_joined_cols(STDOUT, args...; cols=cols)
 
 function print_correction(io, word)
-    cors = levsort(word, accessible(current_module()))
+    cors = levsort(word, accessible(Main))
     pre = "Perhaps you meant "
     print(io, pre)
     print_joined_cols(io, cors, ", ", " or "; cols = displaysize(io)[2] - length(pre))
@@ -364,7 +366,7 @@ accessible(mod::Module) =
      map(names, moduleusings(mod))...;
      builtins] |> unique |> filtervalid
 
-completions(name) = fuzzysort(name, accessible(current_module()))
+completions(name) = fuzzysort(name, accessible(Main))
 completions(name::Symbol) = completions(string(name))
 
 
@@ -414,6 +416,7 @@ Strip all Markdown markup from x, leaving the result in plain text. Used
 internally by apropos to make docstrings containing more than one markdown
 element searchable.
 """
+stripmd(x::ANY) = string(x) # for random objects interpolated into the docstring
 stripmd(x::AbstractString) = x  # base case
 stripmd(x::Void) = " "
 stripmd(x::Vector) = string(map(stripmd, x)...)

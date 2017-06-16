@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## Unary operators ##
 
@@ -50,7 +50,7 @@ end
 
 ## data movement ##
 
-function flipdim{T}(A::Array{T}, d::Integer)
+function flipdim(A::Array{T}, d::Integer) where T
     nd = ndims(A)
     1 ≤ d ≤ nd || throw(ArgumentError("dimension $d is not 1 ≤ $d ≤ $nd"))
     sd = size(A, d)

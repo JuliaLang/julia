@@ -23,27 +23,7 @@ endif
 endif
 endif
 
-ifeq ($(LLVM_DEBUG),1)
-LLVM_BUILDTYPE := Debug
-else
-LLVM_BUILDTYPE := Release
-endif
-LLVM_CMAKE_BUILDTYPE := $(LLVM_BUILDTYPE)
-ifeq ($(LLVM_ASSERTIONS),1)
-LLVM_BUILDTYPE := $(LLVM_BUILDTYPE)+Asserts
-endif
-LLVM_FLAVOR := $(LLVM_BUILDTYPE)
-ifeq ($(LLVM_SANITIZE),1)
-ifeq ($(SANITIZE_MEMORY),1)
-LLVM_BUILDTYPE := $(LLVM_BUILDTYPE)+MSAN
-else
-LLVM_BUILDTYPE := $(LLVM_BUILDTYPE)+ASAN
-endif
-endif
-
-LLVM_SRC_DIR:=$(SRCDIR)/srccache/llvm-$(LLVM_VER)
-LLVM_BUILD_DIR:=$(BUILDDIR)/llvm-$(LLVM_VER)
-LLVM_BUILDDIR_withtype := $(LLVM_BUILD_DIR)/build_$(LLVM_BUILDTYPE)
+include $(SRCDIR)/llvm-options.mk
 LLVM_LIB_FILE := libLLVMCodeGen.a
 
 ifeq ($(LLVM_VER), 3.3)
@@ -80,12 +60,21 @@ else
 LLVM_TARGETS := host;NVPTX
 endif
 
+LLVM_CFLAGS :=
+LLVM_CXXFLAGS :=
+LLVM_CPPFLAGS :=
+LLVM_LDFLAGS :=
+LLVM_CMAKE :=
+
 # Allow adding LLVM specific flags
 LLVM_CFLAGS += $(CFLAGS)
 LLVM_CXXFLAGS += $(CXXFLAGS)
 LLVM_CPPFLAGS += $(CPPFLAGS)
 LLVM_LDFLAGS += $(LDFLAGS)
 LLVM_CMAKE += -DLLVM_TARGETS_TO_BUILD:STRING="$(LLVM_TARGETS)" -DCMAKE_BUILD_TYPE="$(LLVM_CMAKE_BUILDTYPE)"
+ifeq ($(USE_POLLY_ACC),1)
+LLVM_CMAKE += -DPOLLY_ENABLE_GPGPU_CODEGEN=ON
+endif
 LLVM_CMAKE += -DLLVM_TOOLS_INSTALL_DIR=$(shell $(JULIAHOME)/contrib/relative_path.sh $(build_prefix) $(build_depsbindir))
 LLVM_CMAKE += -DLLVM_BINDINGS_LIST="" -DLLVM_INCLUDE_DOCS=Off -DLLVM_ENABLE_TERMINFO=Off -DHAVE_HISTEDIT_H=Off -DHAVE_LIBEDIT=Off
 LLVM_FLAGS += --disable-profiling --enable-static --enable-targets=$(LLVM_TARGETS)
@@ -93,6 +82,7 @@ LLVM_FLAGS += --disable-bindings --disable-docs --disable-libedit --disable-term
 # LLVM has weird install prefixes (see llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/Makefile.config for the full list)
 # We map them here to the "normal" ones, which means just prefixing "PROJ_" to the variable name.
 LLVM_MFLAGS := PROJ_libdir=$(build_libdir) PROJ_bindir=$(build_depsbindir) PROJ_includedir=$(build_includedir)
+LLVM_MFLAGS += LD="$(LD)"
 ifeq ($(LLVM_ASSERTIONS), 1)
 LLVM_FLAGS += --enable-assertions
 LLVM_CMAKE += -DLLVM_ENABLE_ASSERTIONS:BOOL=ON
@@ -124,7 +114,7 @@ ifeq ($(USE_LLVM_SHLIB),1)
 # NOTE: we could also --disable-static here (on the condition we link tools
 #       against libLLVM) but there doesn't seem to be a CMake counterpart option
 LLVM_FLAGS += --enable-shared
-LLVM_CMAKE += -DLLVM_BUILD_LLVM_DYLIB:BOOL=ON
+LLVM_CMAKE += -DLLVM_BUILD_LLVM_DYLIB:BOOL=ON -DLLVM_LINK_LLVM_DYLIB:BOOL=ON
 # NOTE: starting with LLVM 3.8, all symbols are exported
 ifeq ($(LLVM_VER_SHORT),$(filter $(LLVM_VER_SHORT),3.3 3.4 3.5 3.6 3.7))
 LLVM_CMAKE += -DLLVM_DYLIB_EXPORT_ALL:BOOL=ON
@@ -154,6 +144,13 @@ LLVM_CXXFLAGS += -DLLDB_DISABLE_PYTHON
 LLVM_CMAKE += -DLLDB_DISABLE_PYTHON=ON
 endif # LLDB_DISABLE_PYTHON
 endif # BUILD_LLDB
+
+# Part of the FreeBSD libgcc_s kludge
+ifeq ($(OS),FreeBSD)
+ifneq ($(GCCPATH),)
+LLVM_LDFLAGS += -Wl,-rpath,'\$$ORIGIN',-rpath,$(GCCPATH)
+endif
+endif
 
 ifneq (,$(filter $(ARCH), powerpc64le ppc64le))
 LLVM_CXXFLAGS += -mminimal-toc
@@ -195,6 +192,19 @@ LLVM_CPPFLAGS += -flto
 LLVM_LDFLAGS += -flto
 endif # LLVM_LTO
 
+ifeq ($(BUILD_CUSTOM_LIBCXX),1)
+LLVM_LDFLAGS += -Wl,-rpath,$(build_libdir)
+LLVM_CPPFLAGS += -I$(build_includedir)
+# We don't want to link to libc++ while trying to build it, so we define these
+# flags separately so that we can still pass them to the main LLVM build
+LLVM_LIBCXX_LDFLAGS := -lc++ -lc++abi
+ifeq ($(USEICC),1)
+LLVM_LDFLAGS += -no_cpprt
+endif # USEICC
+else
+LLVM_LIBCXX_LDFLAGS :=
+endif # BUILD_CUSTOM_LIBCXX
+
 ifneq ($(LLVM_CXXFLAGS),)
 LLVM_FLAGS += CXXFLAGS="$(LLVM_CXXFLAGS)"
 LLVM_MFLAGS += CXXFLAGS="$(LLVM_CXXFLAGS)"
@@ -204,25 +214,16 @@ LLVM_FLAGS += CFLAGS="$(LLVM_CFLAGS)"
 LLVM_MFLAGS += CFLAGS="$(LLVM_CFLAGS)"
 endif # LLVM_CFLAGS
 
-ifeq ($(BUILD_CUSTOM_LIBCXX),1)
-LLVM_LDFLAGS += -Wl,-R$(build_libdir) -lc++ -lc++abi
-ifeq ($(USEICC),1)
-LLVM_LDFLAGS += -no_cpprt
-endif # USEICC
-endif # BUILD_CUSTOM_LIBCXX
-
 ifneq ($(LLVM_CPPFLAGS),)
 LLVM_FLAGS += CPPFLAGS="$(LLVM_CPPFLAGS)"
 LLVM_MFLAGS += CPPFLAGS="$(LLVM_CPPFLAGS)"
 endif
 ifneq ($(LLVM_LDFLAGS),)
-LLVM_FLAGS += LDFLAGS="$(LLVM_LDFLAGS)"
-LLVM_MFLAGS += LDFLAGS="$(LLVM_LDFLAGS)"
+LLVM_FLAGS += LDFLAGS="$(LLVM_LDFLAGS) $(LLVM_LIBCXX_LDFLAGS)"
+LLVM_MFLAGS += LDFLAGS="$(LLVM_LDFLAGS) $(LLVM_LIBCXX_LDFLAGS)"
 endif
 LLVM_CMAKE += -DCMAKE_C_FLAGS="$(LLVM_CPPFLAGS) $(LLVM_CFLAGS)" \
-	-DCMAKE_CXX_FLAGS="$(LLVM_CPPFLAGS) $(LLVM_CXXFLAGS)" \
-	-DCMAKE_EXE_LINKER_FLAGS="$(LLVM_LDFLAGS)" \
-	-DCMAKE_SHARED_LINKER_FLAGS="$(LLVM_LDFLAGS)"
+	-DCMAKE_CXX_FLAGS="$(LLVM_CPPFLAGS) $(LLVM_CXXFLAGS)"
 
 ifeq ($(BUILD_LLVM_CLANG),1)
 LLVM_MFLAGS += OPTIONAL_PARALLEL_DIRS=clang
@@ -291,46 +292,83 @@ LLVM_FLAGS += --with-python="$(shell $(SRCDIR)/tools/find_python2)"
 
 ifeq ($(BUILD_CUSTOM_LIBCXX),1)
 
+# Take a snapshot of the CMake flags before linking to -lc++ and -lc++abi
+# These are added to the LLVM CMake flags further down
+LLVM_CMAKE_LIBCXX := $(LLVM_CMAKE) \
+	-DCMAKE_EXE_LINKER_FLAGS="$(LLVM_LDFLAGS)" \
+	-DCMAKE_SHARED_LINKER_FLAGS="$(LLVM_LDFLAGS)"
+
 ifeq ($(USEICC),1)
 LIBCXX_EXTRA_FLAGS := -Bstatic -lirc -Bdynamic
 endif
+
+# These libraries require unwind.h from the libunwind dependency
+ifeq ($(USE_SYSTEM_LIBUNWIND),0)
+ifeq ($(OS),Darwin)
+BUILT_UNWIND := $(build_prefix)/manifest/osxunwind
+else
+BUILT_UNWIND := $(build_prefix)/manifest/unwind
+endif # Darwin
+else
+BUILT_UNWIND :=
+endif # Building libunwind
 
 $(LLVM_SRC_DIR)/projects/libcxx: $(LLVM_LIBCXX_TAR) | $(LLVM_SRC_DIR)/source-extracted
 	([ ! -d $@ ] && \
 	git clone $(LLVM_GIT_URL_LIBCXX) $@  ) || \
 	(cd $@  && \
 	git pull --ff-only)
-$(LLVM_SRC_DIR)/projects/libcxx/.git/HEAD: | $(LLVM_SRC_DIR)/projects/libcxx/.git/HEAD
+$(LLVM_SRC_DIR)/projects/libcxx/.git/HEAD: | $(LLVM_SRC_DIR)/projects/libcxx
 $(LLVM_SRC_DIR)/projects/libcxxabi: $(LLVM_LIBCXXABI_TAR) | $(LLVM_SRC_DIR)/source-extracted
 	([ ! -d $@ ] && \
 	git clone $(LLVM_GIT_URL_LIBCXXABI) $@ ) || \
 	(cd $@ && \
 	git pull --ff-only)
 $(LLVM_SRC_DIR)/projects/libcxxabi/.git/HEAD: | $(LLVM_SRC_DIR)/projects/libcxxabi
-$(LLVM_BUILD_DIR)/libcxx-build/Makefile: | $(LLVM_SRC_DIR)/projects/libcxx $(LLVM_SRC_DIR)/projects/libcxxabi
+$(LLVM_BUILD_DIR)/libcxx-build/Makefile: | $(LLVM_SRC_DIR)/projects/libcxx $(LLVM_SRC_DIR)/projects/libcxxabi $(BUILT_UNWIND)
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
-		$(CMAKE) -G "Unix Makefiles" $(CMAKE_COMMON) $(LLVM_CMAKE) -DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_CXX_ABI_INCLUDE_PATHS="$(LLVM_SRC_DIR)/projects/libcxxabi/include" $(LLVM_SRC_DIR)/projects/libcxx -DCMAKE_SHARED_LINKER_FLAGS="$(LDFLAGS) -L$(build_libdir) $(LIBCXX_EXTRA_FLAGS)"
-$(LLVM_BUILD_DIR)/libcxxabi-build/Makefile: | $(LLVM_SRC_DIR)/projects/libcxxabi $(LLVM_SRC_DIR)/projects/libcxx
+		$(CMAKE) -G "Unix Makefiles" $(CMAKE_COMMON) $(LLVM_CMAKE_LIBCXX) -DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_CXX_ABI_INCLUDE_PATHS="$(LLVM_SRC_DIR)/projects/libcxxabi/include" $(LLVM_SRC_DIR)/projects/libcxx -DCMAKE_SHARED_LINKER_FLAGS="$(LDFLAGS) -L$(build_libdir) $(LIBCXX_EXTRA_FLAGS)"
+$(LLVM_BUILD_DIR)/libcxxabi-build/Makefile: | $(LLVM_SRC_DIR)/projects/libcxxabi $(LLVM_SRC_DIR)/projects/libcxx $(BUILT_UNWIND)
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
-		$(CMAKE) -G "Unix Makefiles" $(CMAKE_COMMON) $(LLVM_CMAKE) -DLLVM_ABI_BREAKING_CHECKS="WITH_ASSERTS" -DLLVM_PATH="$(LLVM_SRC_DIR)" $(LLVM_SRC_DIR)/projects/libcxxabi -DLIBCXXABI_CXX_ABI_LIBRARIES="$(LIBCXX_EXTRA_FLAGS)" -DCMAKE_CXX_FLAGS="$(LLVM_CPPFLAGS) $(LLVM_CXXFLAGS) -std=c++11"
+		$(CMAKE) -G "Unix Makefiles" $(CMAKE_COMMON) $(LLVM_CMAKE_LIBCXX) -DLLVM_ABI_BREAKING_CHECKS="WITH_ASSERTS" -DLLVM_PATH="$(LLVM_SRC_DIR)" $(LLVM_SRC_DIR)/projects/libcxxabi -DLIBCXXABI_CXX_ABI_LIBRARIES="$(LIBCXX_EXTRA_FLAGS)" -DCMAKE_CXX_FLAGS="$(LLVM_CPPFLAGS) $(LLVM_CXXFLAGS) -std=c++11"
 $(LLVM_BUILD_DIR)/libcxxabi-build/lib/libc++abi.so.1.0: $(LLVM_BUILD_DIR)/libcxxabi-build/Makefile $(LLVM_SRC_DIR)/projects/libcxxabi/.git/HEAD
 	$(MAKE) -C $(LLVM_BUILD_DIR)/libcxxabi-build
 	touch -c $@
 $(build_libdir)/libc++abi.so.1.0: $(LLVM_BUILD_DIR)/libcxxabi-build/lib/libc++abi.so.1.0
 	$(MAKE) -C $(LLVM_BUILD_DIR)/libcxxabi-build install
 	touch -c $@
+	# Building this library installs these headers, which breaks other dependencies
+	-rm -rf $(build_includedir)/c++
 $(LLVM_BUILD_DIR)/libcxx-build/lib/libc++.so.1.0: $(build_libdir)/libc++abi.so.1.0 $(LLVM_BUILD_DIR)/libcxx-build/Makefile $(LLVM_SRC_DIR)/projects/libcxx/.git/HEAD
 	$(MAKE) -C $(LLVM_BUILD_DIR)/libcxx-build
 $(build_libdir)/libc++.so.1.0: $(LLVM_BUILD_DIR)/libcxx-build/lib/libc++.so.1.0
 	$(MAKE) -C $(LLVM_BUILD_DIR)/libcxx-build install
 	touch -c $@
+	# Building this library installs these headers, which breaks other dependencies
+	-rm -rf $(build_includedir)/c++
 get-libcxx: $(LLVM_SRC_DIR)/projects/libcxx
 get-libcxxabi: $(LLVM_SRC_DIR)/projects/libcxxabi
 install-libcxxabi: $(build_libdir)/libc++abi.so.1.0
 install-libcxx: $(build_libdir)/libc++.so.1.0
-endif
+endif # BUILD_CUSTOM_LIBCXX
+
+# We want to be able to clean without having to pass BUILD_CUSTOM_LIBCXX=1, so define these
+# outside of the conditional above
+clean-libcxx:
+	-$(MAKE) -C $(LLVM_BUILD_DIR)/libcxx-build clean
+clean-libcxxabi:
+	-$(MAKE) -C $(LLVM_BUILD_DIR)/libcxxabi-build clean
+distclean-libcxx:
+	-rm -rf $(LLVM_LIBCXX_TAR) $(LLVM_SRC_DIR)/projects/libcxx $(LLVM_BUILD_DIR)/libcxx-build
+distclean-libcxxabi:
+	-rm -rf $(LLVM_LIBCXXABI_TAR) $(LLVM_SRC_DIR)/projects/libcxxabi $(LLVM_BUILD_DIR)/libcxxabi-build
+
+# We want to ensure that the libcxx linking flags don't get passed to the libcxx build, since it will
+# error on a fresh build
+LLVM_CMAKE += -DCMAKE_EXE_LINKER_FLAGS="$(LLVM_LDFLAGS) $(LLVM_LIBCXX_LDFLAGS)" \
+	-DCMAKE_SHARED_LINKER_FLAGS="$(LLVM_LDFLAGS) $(LLVM_LIBCXX_LDFLAGS)"
 
 ifeq ($(BUILD_CUSTOM_LIBCXX),1)
 LIBCXX_DEPENDENCY := $(build_libdir)/libc++abi.so.1.0 $(build_libdir)/libc++.so.1.0
@@ -513,6 +551,9 @@ $(eval $(call LLVM_PATCH,llvm-PR278923)) # Issue #19976, Remove for 4.0
 $(eval $(call LLVM_PATCH,llvm-D28759-loopclearance))
 $(eval $(call LLVM_PATCH,llvm-D28786-callclearance))
 $(eval $(call LLVM_PATCH,llvm-rL293230-icc17-cmake)) # Remove for 4.0
+$(eval $(call LLVM_PATCH,llvm-D32593))
+$(eval $(call LLVM_PATCH,llvm-D33179))
+$(eval $(call LLVM_PATCH,llvm-PR29010-i386-xmm)) # Remove for 4.0
 endif # LLVM_VER
 
 ifeq ($(LLVM_VER),3.7.1)
@@ -575,6 +616,9 @@ $(build_prefix)/manifest/llvm: | $(llvm_python_workaround)
 ifeq ($(LLVM_USE_CMAKE),1)
 LLVM_INSTALL = \
 	cd $1 && $$(CMAKE) -DCMAKE_INSTALL_PREFIX="$2$$(build_prefix)" -P cmake_install.cmake
+ifeq ($(OS), WINNT)
+LLVM_INSTALL += && cp $2$$(build_shlibdir)/LLVM.dll $2$$(build_depsbindir)
+endif
 else
 LLVM_INSTALL = \
 	$(call MAKE_INSTALL,$1,$2,$3 $$(LLVM_MFLAGS) PATH="$$(llvm_python_workaround):$$$$PATH" DestSharedLibDir="$2$$(build_shlibdir)")
@@ -583,11 +627,11 @@ endif # LLVM_USE_CMAKE
 $(eval $(call staged-install,llvm,llvm-$$(LLVM_VER)/build_$$(LLVM_BUILDTYPE), \
 	LLVM_INSTALL,,,))
 
-clean-llvm:
+clean-llvm: clean-libcxx clean-libcxxabi
 	-rm $(LLVM_BUILDDIR_withtype)/build-configured $(LLVM_BUILDDIR_withtype)/build-compiled
 	-$(MAKE) -C $(LLVM_BUILDDIR_withtype) clean
 
-distclean-llvm:
+distclean-llvm: distclean-libcxx distclean-libcxxabi
 	-rm -rf $(LLVM_TAR) $(LLVM_CLANG_TAR) \
 		$(LLVM_COMPILER_RT_TAR) $(LLVM_LIBCXX_TAR) $(LLVM_LLDB_TAR) \
 		$(LLVM_SRC_DIR) $(LLVM_BUILDDIR_withtype)

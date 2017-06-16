@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.Test
 
@@ -66,5 +66,12 @@ for elty in (Float32,Float64)
         @test round.(elty2,A,RoundUp) == fill(ceil(elty2,x),(10,10,10))
         @test round.(elty2,A,RoundDown) == fill(floor(elty2,x),(10,10,10))
         @test round.(elty2,A) == fill(round(elty2,x),(10,10,10))
+    end
+end
+
+@testset "Types" begin
+    for x in (Int16(0), 1, 2f0, pi, 3//4, big(5//6), 7.8, big(9), big(e))
+        @test float(typeof(x)) == typeof(float(x))
+        @test float(typeof(complex(x, x))) == typeof(float(complex(x, x)))
     end
 end

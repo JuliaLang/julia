@@ -32,11 +32,12 @@ complex(float(x))
 The second version will convert `x` to an appropriate type, instead of always the same type.
 
 This style point is especially relevant to function arguments. For example, don't declare an argument
-to be of type `Int` or `Int32` if it really could be any integer, expressed with the abstract
-type `Integer`. In fact, in many cases you can omit the argument type altogether, unless it is
-needed to disambiguate from other method definitions, since a [`MethodError`](@ref) will be thrown
-anyway if a type is passed that does not support any of the requisite operations. (This is known
-as [duck typing](https://en.wikipedia.org/wiki/Duck_typing).)
+to be of type `Int` or [`Int32`](@ref) if it really could be any integer, expressed with the abstract
+type [`Integer`](@ref). In fact, in many cases you can omit the argument type altogether,
+unless it is needed to disambiguate from other method definitions, since a
+[`MethodError`](@ref) will be thrown anyway if a type is passed that does not support any
+of the requisite operations. (This is known as
+[duck typing](https://en.wikipedia.org/wiki/Duck_typing).)
 
 For example, consider the following definitions of a function `addone` that returns one plus its
 argument:
@@ -90,7 +91,7 @@ is that declaring more specific types leaves more "space" for future method defi
 Instead of:
 
 ```julia
-function double{T<:Number}(a::AbstractArray{T})
+function double(a::AbstractArray{<:Number})
     for i = 1:endof(a)
         a[i] *= 2
     end
@@ -101,7 +102,7 @@ end
 use:
 
 ```julia
-function double!{T<:Number}(a::AbstractArray{T})
+function double!(a::AbstractArray{<:Number})
     for i = 1:endof(a)
         a[i] *= 2
     end
@@ -123,7 +124,7 @@ Types such as `Union{Function,AbstractString}` are often a sign that some design
 When creating a type such as:
 
 ```julia
-type MyType
+mutable struct MyType
     ...
     x::Union{Void,T}
 end
@@ -194,7 +195,7 @@ is already iterable it is often even better to leave it alone, and not convert i
 A function signature:
 
 ```julia
-foo{T<:Real}(x::T) = ...
+foo(x::T) where {T<:Real} = ...
 ```
 
 should be written as:
@@ -243,7 +244,7 @@ it will naturally have access to the run-time values it needs.
 If you have a type that uses a native pointer:
 
 ```julia
-type NativeType
+mutable struct NativeType
     p::Ptr{UInt8}
     ...
 end
@@ -272,6 +273,37 @@ show(io::IO, v::Vector{MyType}) = ...
 This would provide custom showing of vectors with a specific new element type. While tempting,
 this should be avoided. The trouble is that users will expect a well-known type like `Vector()`
 to behave in a certain way, and overly customizing its behavior can make it harder to work with.
+
+## Avoid type piracy
+
+"Type piracy" refers to the practice of extending or redefining methods in Base
+or other packages on types that you have not defined. In some cases, you can get away with
+type piracy with little ill effect. In extreme cases, however, you can even crash Julia
+(e.g. if your method extension or redefinition causes invalid input to be passed to a
+`ccall`). Type piracy can complicate reasoning about code, and may introduce
+incompatibilities that are hard to predict and diagnose.
+
+As an example, suppose you wanted to define multiplication on symbols in a module:
+
+```julia
+module A
+import Base.*
+*(x::Symbol, y::Symbol) = Symbol(x,y)
+end
+```
+
+The problem is that now any other module that uses `Base.*` will also see this definition.
+Since `Symbol` is defined in Base and is used by other modules, this can change the
+behavior of unrelated code unexpectedly. There are several alternatives here, including
+using a different function name, or wrapping the `Symbol`s in another type that you define.
+
+Sometimes, coupled packages may engage in type piracy to separate features from definitions,
+especially when the packages were designed by collaborating authors, and when the
+definitions are reusable. For example, one package might provide some types useful for
+working with colors; another package could define methods for those types that enable
+conversions between color spaces. Another example might be a package that acts as a thin
+wrapper for some C code, which another package might then pirate to implement a
+higher-level, Julia-friendly API.
 
 ## Be careful with type equality
 
@@ -325,7 +357,7 @@ julia> g(1)
 
 As you can see, the second version, where we used an `Int` literal, preserved the type of the
 input argument, while the first didn't. This is because e.g. `promote_type(Int, Float64) == Float64`,
-and promotion happens with the multiplication. Similarly, `Rational` literals are less type disruptive
+and promotion happens with the multiplication. Similarly, [`Rational`](@ref) literals are less type disruptive
 than [`Float64`](@ref) literals, but more disruptive than `Int`s:
 
 ```jldoctest

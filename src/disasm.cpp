@@ -28,8 +28,13 @@
 
 #include "llvm-version.h"
 #include <llvm/Object/ObjectFile.h>
+#if JL_LLVM_VERSION >= 50000
+#include <llvm/BinaryFormat/MachO.h>
+#include <llvm/BinaryFormat/COFF.h>
+#else
 #include <llvm/Support/MachO.h>
 #include <llvm/Support/COFF.h>
+#endif
 #include <llvm/MC/MCInst.h>
 #include <llvm/MC/MCStreamer.h>
 #include <llvm/MC/MCSubtargetInfo.h>
@@ -83,6 +88,7 @@
 #else
 #include <llvm/DebugInfo.h>
 #endif
+#include "fix_llvm_assert.h"
 
 #include "julia.h"
 #include "julia_internal.h"

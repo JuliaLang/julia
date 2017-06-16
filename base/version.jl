@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## semantic version numbers (http://semver.org)
 
@@ -223,10 +223,12 @@ catch e
     VersionNumber(0)
 end
 
+const libllvm_version = convert(VersionNumber, libllvm_version_string)
+
 function banner(io::IO = STDOUT)
     if GIT_VERSION_INFO.tagged_commit
         commit_string = TAGGED_RELEASE_BANNER
-    elseif GIT_VERSION_INFO.commit == ""
+    elseif isempty(GIT_VERSION_INFO.commit)
         commit_string = ""
     else
         days = Int(floor((ccall(:jl_clock_now, Float64, ()) - GIT_VERSION_INFO.fork_master_timestamp) / (60 * 60 * 24)))
@@ -242,20 +244,20 @@ function banner(io::IO = STDOUT)
             commit_string = "$(branch)/$(commit) (fork: $(distance) commits, $(days) $(unit))"
         end
     end
-    commit_date = GIT_VERSION_INFO.date_string != "" ? " ($(GIT_VERSION_INFO.date_string))": ""
+    commit_date = !isempty(GIT_VERSION_INFO.date_string) ? " ($(GIT_VERSION_INFO.date_string))": ""
 
     if have_color
         c = text_colors
         tx = c[:normal] # text
         jl = c[:normal] # julia
-        d1 = c[:bold] * c[:light_blue]    # first dot
-        d2 = c[:bold] * c[:light_red]     # second dot
-        d3 = c[:bold] * c[:light_green]   # third dot
-        d4 = c[:bold] * c[:light_magenta] # fourth dot
+        d1 = c[:bold] * c[:blue]    # first dot
+        d2 = c[:bold] * c[:red]     # second dot
+        d3 = c[:bold] * c[:green]   # third dot
+        d4 = c[:bold] * c[:magenta] # fourth dot
 
         print(io,"""               $(d3)_$(tx)
            $(d1)_$(tx)       $(jl)_$(tx) $(d2)_$(d3)(_)$(d4)_$(tx)     |  A fresh approach to technical computing
-          $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |  Documentation: http://docs.julialang.org
+          $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |  Documentation: https://docs.julialang.org
            $(jl)_ _   _| |_  __ _$(tx)   |  Type \"?help\" for help.
           $(jl)| | | | | | |/ _` |$(tx)  |
           $(jl)| | |_| | | | (_| |$(tx)  |  Version $(VERSION)$(commit_date)
@@ -267,7 +269,7 @@ function banner(io::IO = STDOUT)
         print(io,"""
                        _
            _       _ _(_)_     |  A fresh approach to technical computing
-          (_)     | (_) (_)    |  Documentation: http://docs.julialang.org
+          (_)     | (_) (_)    |  Documentation: https://docs.julialang.org
            _ _   _| |_  __ _   |  Type \"?help\" for help.
           | | | | | | |/ _` |  |
           | | |_| | | | (_| |  |  Version $(VERSION)$(commit_date)

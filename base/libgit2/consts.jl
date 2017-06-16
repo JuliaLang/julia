@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Consts
 
@@ -177,12 +177,12 @@ module Consts
     const RESET_HARD  = Cint(3) # MIXED plus changes in working tree discarded
 
     #rebase
-    const REBASE_OPERATION_PICK   = Cint(0)
-    const REBASE_OPERATION_REWORD = Cint(1)
-    const REBASE_OPERATION_EDIT   = Cint(2)
-    const REBASE_OPERATION_SQUASH = Cint(3)
-    const REBASE_OPERATION_FIXUP  = Cint(4)
-    const REBASE_OPERATION_EXEC   = Cint(5)
+    @enum(GIT_REBASE_OPERATION, REBASE_OPERATION_PICK   = Cint(0),
+                                REBASE_OPERATION_REWORD = Cint(1),
+                                REBASE_OPERATION_EDIT   = Cint(2),
+                                REBASE_OPERATION_SQUASH = Cint(3),
+                                REBASE_OPERATION_FIXUP  = Cint(4),
+                                REBASE_OPERATION_EXEC   = Cint(5))
 
     # fetch_prune
     const FETCH_PRUNE_UNSPECIFIED = Cint(0)
@@ -200,6 +200,11 @@ module Consts
     const CLONE_LOCAL          = Cint(1)
     const CLONE_NO_LOCAL       = Cint(2)
     const CLONE_LOCAL_NO_LINKS = Cint(3)
+
+    # describe
+    const DESCRIBE_DEFAULT = Cuint(0)
+    const DESCRIBE_TAGS    = Cuint(1 << 0)
+    const DESCRIBE_ALL     = Cuint(1 << 1)
 
     # status
     const STATUS_CURRENT          = Cuint(0)
@@ -344,5 +349,10 @@ These are used to select which global option to set or get and are used in `git_
                     GET_TEMPLATE_PATH        = 10,
                     SET_TEMPLATE_PATH        = 11,
                     SET_SSL_CERT_LOCATIONS   = 12)
+
+
+    @enum(GIT_PROXY, PROXY_NONE,
+                     PROXY_AUTO,
+                     PROXY_SPECIFIED)
 
 end

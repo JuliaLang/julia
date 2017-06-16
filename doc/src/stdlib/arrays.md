@@ -1,5 +1,27 @@
 # [Arrays](@id lib-arrays)
 
+## Constructors and Types
+
+```@docs
+Core.AbstractArray
+Core.Array
+Base.getindex(::Type, ::Any...)
+Base.zeros
+Base.ones
+Base.BitArray
+Base.trues
+Base.falses
+Base.fill
+Base.fill!
+Base.similar(::AbstractArray)
+Base.similar(::Any, ::Tuple)
+Base.eye
+Base.linspace
+Base.logspace
+Base.Random.randsubseq
+Base.Random.randsubseq!
+```
+
 ## Basic functions
 
 ```@docs
@@ -18,27 +40,6 @@ Base.strides
 Base.ind2sub
 Base.sub2ind
 Base.LinAlg.checksquare
-```
-
-## Constructors
-
-```@docs
-Core.Array
-Base.getindex(::Type, ::Any...)
-Base.zeros
-Base.ones
-Base.BitArray
-Base.trues
-Base.falses
-Base.fill
-Base.fill!
-Base.similar(::AbstractArray)
-Base.similar(::Any, ::Tuple)
-Base.eye
-Base.linspace
-Base.logspace
-Base.Random.randsubseq
-Base.Random.randsubseq!
 ```
 
 ## Broadcast and vectorization
@@ -61,6 +62,7 @@ Base.Broadcast.broadcast_setindex!
 ```@docs
 Base.getindex(::AbstractArray, ::Any...)
 Base.setindex!(::AbstractArray, ::Any, ::Any...)
+Base.copy!(::AbstractArray, ::CartesianRange, ::AbstractArray, ::CartesianRange)
 Base.isassigned
 Base.Colon
 Base.CartesianIndex
@@ -129,6 +131,7 @@ Base.cumprod!
 Base.cumsum
 Base.cumsum!
 Base.cumsum_kbn
+Base.crc32c
 Base.LinAlg.diff
 Base.LinAlg.gradient
 Base.rot180
@@ -146,7 +149,7 @@ Base.sum_kbn
 Base.Random.randperm
 Base.invperm
 Base.isperm
-Base.permute!{T}(::Any, ::AbstractArray{T, 1})
+Base.permute!(::Any, ::AbstractVector)
 Base.ipermute!
 Base.Random.randcycle
 Base.Random.shuffle

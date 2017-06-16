@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Deprecated functions and objects
 #
@@ -18,37 +18,43 @@
 # the name of the function, which is used to ensure that the deprecation warning
 # is only printed the first time for each call place.
 
-macro deprecate(old,new,ex=true)
+macro deprecate(old, new, ex=true)
     meta = Expr(:meta, :noinline)
     @gensym oldmtname
-    if isa(old,Symbol)
-        oldname = Expr(:quote,old)
-        newname = Expr(:quote,new)
+    if isa(old, Symbol)
+        oldname = Expr(:quote, old)
+        newname = Expr(:quote, new)
         Expr(:toplevel,
-            ex ? Expr(:export,esc(old)) : nothing,
+            ex ? Expr(:export, esc(old)) : nothing,
             :(function $(esc(old))(args...)
                   $meta
-                  depwarn(string($oldname," is deprecated, use ",$newname," instead."),
+                  depwarn(string($oldname, " is deprecated, use ", $newname, " instead."),
                           $oldmtname)
                   $(esc(new))(args...)
               end),
             :(const $oldmtname = Core.Typeof($(esc(old))).name.mt.name))
-    elseif isa(old,Expr) && old.head == :call
+    elseif isa(old, Expr) && (old.head == :call || old.head == :where)
         remove_linenums!(new)
         oldcall = sprint(show_unquoted, old)
         newcall = sprint(show_unquoted, new)
-        oldsym = if isa(old.args[1],Symbol)
-            old.args[1]::Symbol
-        elseif isa(old.args[1],Expr) && old.args[1].head == :curly
-            old.args[1].args[1]::Symbol
+        # if old.head is a :where, step down one level to the :call to avoid code duplication below
+        callexpr = old.head == :call ? old : old.args[1]
+        if callexpr.head == :call
+            if isa(callexpr.args[1], Symbol)
+                oldsym = callexpr.args[1]::Symbol
+            elseif isa(callexpr.args[1], Expr) && callexpr.args[1].head == :curly
+                oldsym = callexpr.args[1].args[1]::Symbol
+            else
+                error("invalid usage of @deprecate")
+            end
         else
             error("invalid usage of @deprecate")
         end
         Expr(:toplevel,
-            ex ? Expr(:export,esc(oldsym)) : nothing,
+            ex ? Expr(:export, esc(oldsym)) : nothing,
             :($(esc(old)) = begin
                   $meta
-                  depwarn(string($oldcall," is deprecated, use ",$newcall," instead."),
+                  depwarn(string($oldcall, " is deprecated, use ", $newcall, " instead."),
                           $oldmtname)
                   $(esc(new))
               end),
@@ -85,7 +91,7 @@ function firstcaller(bt::Array{Ptr{Void},1}, funcsyms)
     for frame in bt
         lkups = StackTraces.lookup(frame)
         for lkup in lkups
-            if lkup === StackTraces.UNKNOWN
+            if lkup == StackTraces.UNKNOWN
                 continue
             end
             found && @goto found
@@ -97,15 +103,21 @@ function firstcaller(bt::Array{Ptr{Void},1}, funcsyms)
     return lkup
 end
 
-deprecate(s::Symbol) = deprecate(current_module(), s)
 deprecate(m::Module, s::Symbol) = ccall(:jl_deprecate_binding, Void, (Any, Any), m, s)
 
 macro deprecate_binding(old, new, export_old=true)
-    Expr(:toplevel,
+    return Expr(:toplevel,
          export_old ? Expr(:export, esc(old)) : nothing,
          Expr(:const, Expr(:(=), esc(old), esc(new))),
-         Expr(:call, :deprecate, Expr(:quote, old)))
+         Expr(:call, :deprecate, __module__, Expr(:quote, old)))
 end
+
+# BEGIN 0.6-alpha deprecations (delete when 0.6 is released)
+
+@deprecate isambiguous(m1::Method, m2::Method, b::Bool) isambiguous(m1, m2, ambiguous_bottom=b) false
+# TODO: delete allow_bottom keyword code in Base.Test.detect_ambiguities
+
+# END 0.6-alpha deprecations
 
 # BEGIN 0.6 deprecations
 
@@ -187,7 +199,7 @@ end
 # Deprecate vectorized unary functions over sparse matrices in favor of compact broadcast syntax (#17265).
 for f in (:sin, :sinh, :sind, :asin, :asinh, :asind,
         :tan, :tanh, :tand, :atan, :atanh, :atand,
-        :sinpi, :cosc, :ceil, :floor, :trunc, :round, :real, :imag,
+        :sinpi, :cosc, :ceil, :floor, :trunc, :round,
         :log1p, :expm1, :abs, :abs2,
         :log, :log2, :log10, :exp, :exp2, :exp10, :sinc, :cospi,
         :cos, :cosh, :cosd, :acos, :acosd,
@@ -478,7 +490,8 @@ function getindex(A::LogicalIndex, i::Int)
     first(Iterators.drop(A, i-1))
 end
 function to_indexes(I...)
-    depwarn("to_indexes is deprecated; pass both the source array `A` and indices as `to_indices(A, $(I...))` instead.", :to_indexes)
+    Istr = join(I, ", ")
+    depwarn("to_indexes is deprecated; pass both the source array `A` and indices as `to_indices(A, $Istr)` instead.", :to_indexes)
     map(_to_index, I)
 end
 _to_index(i) = to_index(I)
@@ -616,7 +629,7 @@ for (Bsig, A1sig, A2sig, gbb, funcname) in
             func       = @get! cache  f  gen_broadcast_function_sparse($gbb, f, ($A1sig) <: SparseMatrixCSC)
             # need eval because func was just created by gen_broadcast_function_sparse
             # TODO: convert this to a generated function
-            eval(current_module(), Expr(:body, Expr(:return, Expr(:call, QuoteNode(func), QuoteNode(B), QuoteNode(A1), QuoteNode(A2)))))
+            eval(_current_module(), Expr(:body, Expr(:return, Expr(:call, QuoteNode(func), QuoteNode(B), QuoteNode(A1), QuoteNode(A2)))))
             return B
         end
     end  # let broadcast_cache
@@ -625,11 +638,11 @@ _broadcast_zpreserving!(args...) = broadcast!(args...)
 # note: promote_eltype_op also deprecated, defined later in this file
 _broadcast_zpreserving(f, As...) =
     broadcast!(f, similar(Array{_promote_eltype_op(f, As...)}, Base.Broadcast.broadcast_indices(As...)), As...)
-_broadcast_zpreserving{Tv1,Ti1,Tv2,Ti2}(f::Function, A_1::SparseMatrixCSC{Tv1,Ti1}, A_2::SparseMatrixCSC{Tv2,Ti2}) =
+_broadcast_zpreserving(f::Function, A_1::SparseMatrixCSC{Tv1,Ti1}, A_2::SparseMatrixCSC{Tv2,Ti2}) where {Tv1,Ti1,Tv2,Ti2} =
     _broadcast_zpreserving!(f, spzeros(promote_type(Tv1, Tv2), promote_type(Ti1, Ti2), Base.to_shape(Base.Broadcast.broadcast_indices(A_1, A_2))), A_1, A_2)
-_broadcast_zpreserving{Ti}(f::Function, A_1::SparseMatrixCSC{<:Any,Ti}, A_2::Union{Array,BitArray,Number}) =
+_broadcast_zpreserving(f::Function, A_1::SparseMatrixCSC{<:Any,Ti}, A_2::Union{Array,BitArray,Number}) where {Ti} =
     _broadcast_zpreserving!(f, spzeros(promote_eltype(A_1, A_2), Ti, Base.to_shape(Base.Broadcast.broadcast_indices(A_1, A_2))), A_1, A_2)
-_broadcast_zpreserving{Ti}(f::Function, A_1::Union{Array,BitArray,Number}, A_2::SparseMatrixCSC{<:Any,Ti}) =
+_broadcast_zpreserving(f::Function, A_1::Union{Array,BitArray,Number}, A_2::SparseMatrixCSC{<:Any,Ti}) where {Ti} =
     _broadcast_zpreserving!(f, spzeros(promote_eltype(A_1, A_2), Ti, Base.to_shape(Base.Broadcast.broadcast_indices(A_1, A_2))), A_1, A_2)
 
 function _depstring_bczpres()
@@ -826,13 +839,16 @@ end
 # Deprecate vectorized !
 @deprecate(!(A::AbstractArray{Bool}), .!A) # parens for #20541
 @deprecate(!(B::BitArray), .!B) # parens for #20541
+!(::typeof(()->())) = () # make sure ! has at least 4 methods so that for-loops don't end up getting a back-edge to depwarn
 
 # Deprecate vectorized ~
 @deprecate ~(A::AbstractArray) .~A
 @deprecate ~(B::BitArray) .~B
 
 function frexp(A::Array{<:AbstractFloat})
-    depwarn("`frexp(x::Array)` is discontinued.", :frexp)
+    depwarn(string("`frexp(x::Array)` is discontinued. Though not a direct replacement, ",
+                   "consider using dot-syntax to `broadcast` scalar `frexp` over `Array`s ",
+                   "instead, for example `frexp.(rand(4))`."), :frexp)
     F = similar(A)
     E = Array{Int}(size(A))
     for (iF, iE, iA) in zip(eachindex(F), eachindex(E), eachindex(A))
@@ -1052,7 +1068,7 @@ function partial_linear_indexing_warning_lookup(nidxs_remaining)
         for frame in bt
             lkups = StackTraces.lookup(frame)
             for caller in lkups
-                if caller === StackTraces.UNKNOWN
+                if caller == StackTraces.UNKNOWN
                     continue
                 end
                 found && @goto found
@@ -1129,8 +1145,17 @@ end
      @deprecate revparse(repo::GitRepo, objname::AbstractString) GitObject(repo, objname) false
      @deprecate object(repo::GitRepo, te::GitTreeEntry) GitObject(repo, te) false
      @deprecate commit(ann::GitAnnotated) GitHash(ann) false
-     @deprecate cat{T<:GitObject}(repo::GitRepo, ::Type{T}, object::AbstractString) cat(repo, object)
      @deprecate lookup(repo::GitRepo, oid::GitHash) GitBlob(repo, oid) false
+    function Base.cat{T<:GitObject}(repo::GitRepo, ::Type{T}, spec::Union{AbstractString,AbstractGitHash})
+        Base.depwarn("cat(repo::GitRepo, T, spec) is deprecated, use content(T(repo, spec))", :cat)
+        try
+            return content(GitBlob(repo, spec))
+        catch e
+            isa(e, LibGit2.GitError) && return nothing
+            rethrow(e)
+        end
+    end
+    Base.cat(repo::GitRepo, spec::Union{AbstractString,AbstractGitHash}) = cat(repo, GitBlob, spec)
 end
 
 # when this deprecation is deleted, remove all calls to it, and all
@@ -1156,7 +1181,7 @@ end
 ## the replacement StepRangeLen also has 4 real-valued fields, which
 ## makes deprecation tricky. See #20506.
 
-immutable Use_StepRangeLen_Instead{T<:AbstractFloat} <: Range{T}
+struct Use_StepRangeLen_Instead{T<:AbstractFloat} <: Range{T}
     start::T
     step::T
     len::T
@@ -1178,10 +1203,10 @@ last{T}(r::Use_StepRangeLen_Instead{T}) = convert(T, (r.start + (r.len-1)*r.step
 
 start(r::Use_StepRangeLen_Instead) = 0
 done(r::Use_StepRangeLen_Instead, i::Int) = length(r) <= i
-next{T}(r::Use_StepRangeLen_Instead{T}, i::Int) =
+next(r::Use_StepRangeLen_Instead{T}, i::Int) where {T} =
     (convert(T, (r.start + i*r.step)/r.divisor), i+1)
 
-function getindex{T}(r::Use_StepRangeLen_Instead{T}, i::Integer)
+function getindex(r::Use_StepRangeLen_Instead{T}, i::Integer) where T
     @_inline_meta
     @boundscheck checkbounds(r, i)
     convert(T, (r.start + (i-1)*r.step)/r.divisor)
@@ -1200,24 +1225,24 @@ end
 *(x::Real, r::Use_StepRangeLen_Instead)   = Use_StepRangeLen_Instead(x*r.start, x*r.step, r.len, r.divisor)
 *(r::Use_StepRangeLen_Instead, x::Real)   = x * r
 /(r::Use_StepRangeLen_Instead, x::Real)   = Use_StepRangeLen_Instead(r.start/x, r.step/x, r.len, r.divisor)
-promote_rule{T1,T2}(::Type{Use_StepRangeLen_Instead{T1}},::Type{Use_StepRangeLen_Instead{T2}}) =
+promote_rule(::Type{Use_StepRangeLen_Instead{T1}},::Type{Use_StepRangeLen_Instead{T2}}) where {T1,T2} =
     Use_StepRangeLen_Instead{promote_type(T1,T2)}
-convert{T<:AbstractFloat}(::Type{Use_StepRangeLen_Instead{T}}, r::Use_StepRangeLen_Instead{T}) = r
-convert{T<:AbstractFloat}(::Type{Use_StepRangeLen_Instead{T}}, r::Use_StepRangeLen_Instead) =
+convert(::Type{Use_StepRangeLen_Instead{T}}, r::Use_StepRangeLen_Instead{T}) where {T<:AbstractFloat} = r
+convert(::Type{Use_StepRangeLen_Instead{T}}, r::Use_StepRangeLen_Instead) where {T<:AbstractFloat} =
     Use_StepRangeLen_Instead{T}(r.start,r.step,r.len,r.divisor)
 
-promote_rule{F,OR<:OrdinalRange}(::Type{Use_StepRangeLen_Instead{F}}, ::Type{OR}) =
+promote_rule(::Type{Use_StepRangeLen_Instead{F}}, ::Type{OR}) where {F,OR<:OrdinalRange} =
     Use_StepRangeLen_Instead{promote_type(F,eltype(OR))}
-convert{T<:AbstractFloat}(::Type{Use_StepRangeLen_Instead{T}}, r::OrdinalRange) =
+convert(::Type{Use_StepRangeLen_Instead{T}}, r::OrdinalRange) where {T<:AbstractFloat} =
     Use_StepRangeLen_Instead{T}(first(r), step(r), length(r), one(T))
-convert{T}(::Type{Use_StepRangeLen_Instead}, r::OrdinalRange{T}) =
+convert(::Type{Use_StepRangeLen_Instead}, r::OrdinalRange{T}) where {T} =
     Use_StepRangeLen_Instead{typeof(float(first(r)))}(first(r), step(r), length(r), one(T))
 
-promote_rule{F,OR<:Use_StepRangeLen_Instead}(::Type{LinSpace{F}}, ::Type{OR}) =
+promote_rule(::Type{LinSpace{F}}, ::Type{OR}) where {F,OR<:Use_StepRangeLen_Instead} =
     LinSpace{promote_type(F,eltype(OR))}
-convert{T<:AbstractFloat}(::Type{LinSpace{T}}, r::Use_StepRangeLen_Instead) =
+convert(::Type{LinSpace{T}}, r::Use_StepRangeLen_Instead) where {T<:AbstractFloat} =
     linspace(convert(T, first(r)), convert(T, last(r)), convert(T, length(r)))
-convert{T<:AbstractFloat}(::Type{LinSpace}, r::Use_StepRangeLen_Instead{T}) =
+convert(::Type{LinSpace}, r::Use_StepRangeLen_Instead{T}) where {T<:AbstractFloat} =
     convert(LinSpace{T}, r)
 
 reverse(r::Use_StepRangeLen_Instead)   = Use_StepRangeLen_Instead(r.start + (r.len-1)*r.step, -r.step, r.len, r.divisor)
@@ -1278,7 +1303,189 @@ end
 @deprecate_binding LinearSlow IndexCartesian false
 @deprecate_binding linearindexing IndexStyle false
 
+# #20876
+@eval Base.Dates begin
+    function Base.Dates.parse(x::AbstractString, df::DateFormat)
+        Base.depwarn(string(
+            "`Dates.parse(x::AbstractString, df::DateFormat)` is deprecated, use ",
+            "`sort!(filter!(el -> isa(el, Dates.Period), Dates.parse_components(x, df), rev=true, lt=Dates.periodisless)` ",
+            " instead."), :parse)
+        sort!(filter!(el -> isa(el, Period), parse_components(x, df)), rev=true, lt=periodisless)
+     end
+end
+
+# PR #16984
+@deprecate MersenneTwister() MersenneTwister(0)
+
+# #19635
+for fname in (:ones, :zeros)
+    @eval @deprecate ($fname)(T::Type, arr) ($fname)(T, size(arr))
+    @eval ($fname)(T::Type, i::Integer) = ($fname)(T, (i,))
+    @eval function ($fname){T}(::Type{T}, arr::Array{T})
+        msg = string("`", $fname, "{T}(::Type{T}, arr::Array{T})` is deprecated, use ",
+                            "`", $fname , "(T, size(arr))` instead. ",
+                           )
+        error(msg)
+    end
+end
+
 # END 0.6 deprecations
+
+# BEGIN 0.7 deprecations
+
+# 12807
+start(::Union{Process, ProcessChain}) = 1
+done(::Union{Process, ProcessChain}, i::Int) = (i == 3)
+next(p::Union{Process, ProcessChain}, i::Int) = (getindex(p, i), i + 1)
+@noinline function getindex(p::Union{Process, ProcessChain}, i::Int)
+    depwarn("open(cmd) now returns only a Process<:IO object", :getindex)
+    return i == 1 ? getfield(p, p.openstream) : p
+end
+
+@deprecate cond(F::LinAlg.LU, p::Integer) cond(full(F), p)
+
+# PR #21359
+@deprecate srand(r::MersenneTwister, filename::AbstractString, n::Integer=4) srand(r, read!(filename, Array{UInt32}(Int(n))))
+@deprecate srand(filename::AbstractString, n::Integer=4) srand(read!(filename, Array{UInt32}(Int(n))))
+@deprecate MersenneTwister(filename::AbstractString)  srand(MersenneTwister(0), read!(filename, Array{UInt32}(Int(4))))
+
+# PR #21974
+@deprecate versioninfo(verbose::Bool) versioninfo(verbose=verbose)
+@deprecate versioninfo(io::IO, verbose::Bool) versioninfo(io, verbose=verbose)
+
+# PR #22188
+@deprecate cholfact!(A::StridedMatrix, uplo::Symbol, ::Type{Val{false}}) cholfact!(Hermitian(A, uplo), Val{false})
+@deprecate cholfact!(A::StridedMatrix, uplo::Symbol) cholfact!(Hermitian(A, uplo))
+@deprecate cholfact(A::StridedMatrix, uplo::Symbol, ::Type{Val{false}}) cholfact(Hermitian(A, uplo), Val{false})
+@deprecate cholfact(A::StridedMatrix, uplo::Symbol) cholfact(Hermitian(A, uplo))
+@deprecate cholfact!(A::StridedMatrix, uplo::Symbol, ::Type{Val{true}}; tol = 0.0) cholfact!(Hermitian(A, uplo), Val{true}, tol = tol)
+@deprecate cholfact(A::StridedMatrix, uplo::Symbol, ::Type{Val{true}}; tol = 0.0) cholfact(Hermitian(A, uplo), Val{true}, tol = tol)
+
+# PR #22245
+@deprecate isposdef(A::AbstractMatrix, UL::Symbol) isposdef(Hermitian(A, UL))
+@deprecate isposdef!(A::StridedMatrix, UL::Symbol) isposdef!(Hermitian(A, UL))
+
+# also remove all support machinery in src for current_module when removing this deprecation
+# and make Base.include an error
+_current_module() = ccall(:jl_get_current_module, Ref{Module}, ())
+@noinline function binding_module(s::Symbol)
+    depwarn("binding_module(symbol) is deprecated, use `binding_module(module, symbol)` instead.", :binding_module)
+    return binding_module(_current_module(), s)
+end
+@noinline function expand(x::ANY)
+    depwarn("expand(x) is deprecated, use `expand(module, x)` instead.", :expand)
+    return expand(_current_module(), x)
+end
+@noinline function macroexpand(x::ANY)
+    depwarn("macroexpand(x) is deprecated, use `macroexpand(module, x)` instead.", :macroexpand)
+    return macroexpand(_current_module(), x)
+end
+@noinline function isconst(s::Symbol)
+    depwarn("isconst(symbol) is deprecated, use `isconst(module, symbol)` instead.", :isconst)
+    return isconst(_current_module(), s)
+end
+@noinline function include_string(txt::AbstractString, fname::AbstractString)
+    depwarn("include_string(string, fname) is deprecated, use `include_string(module, string, fname)` instead.", :include_string)
+    return include_string(_current_module(), txt, fname)
+end
+@noinline function include_string(txt::AbstractString)
+    depwarn("include_string(string) is deprecated, use `include_string(module, string)` instead.", :include_string)
+    return include_string(_current_module(), txt, "string")
+end
+
+"""
+    current_module() -> Module
+
+Get the *dynamically* current `Module`, which is the `Module` code is currently being read
+from. In general, this is not the same as the module containing the call to this function.
+
+DEPRECATED: use @__MODULE__ instead
+"""
+@noinline function current_module()
+    depwarn("current_module() is deprecated, use `@__MODULE__` instead.", :current_module)
+    return _current_module()
+end
+export current_module
+
+# PR #22062
+function LibGit2.set_remote_url(repo::LibGit2.GitRepo, url::AbstractString; remote::AbstractString="origin")
+    Base.depwarn(string(
+        "`LibGit2.set_remote_url(repo, url; remote=remote)` is deprecated, use ",
+        "`LibGit2.set_remote_url(repo, remote, url)` instead."), :set_remote_url)
+    LibGit2.set_remote_url(repo, remote, url)
+end
+function LibGit2.set_remote_url(path::AbstractString, url::AbstractString; remote::AbstractString="origin")
+    Base.depwarn(string(
+        "`LibGit2.set_remote_url(path, url; remote=remote)` is deprecated, use ",
+        "`LibGit2.set_remote_url(path, remote, url)` instead."), :set_remote_url)
+    LibGit2.set_remote_url(path, remote, url)
+end
+
+module Operators
+    for op in [:!, :(!=), :(!==), :%, :&, :*, :+, :-, :/, ://, :<, :<:, :<<, :(<=),
+               :<|, :(==), :(===), :>, :>:, :(>=), :>>, :>>>, :\, :^, :colon,
+               :ctranspose, :getindex, :hcat, :hvcat, :setindex!, :transpose, :vcat,
+               :xor, :|, :|>, :~, :×, :÷, :∈, :∉, :∋, :∌, :∘, :√, :∛, :∩, :∪, :≠, :≤,
+               :≥, :⊆, :⊈, :⊊, :⊻, :⋅]
+        if isdefined(Base, op)
+            @eval Base.@deprecate_binding $op Base.$op
+        end
+    end
+end
+export Operators
+
+# PR #21956
+# This mimics the structure as it was defined in Base to avoid directly breaking code
+# that assumes this structure
+module DFT
+    for f in [:bfft, :bfft!, :brfft, :dct, :dct!, :fft, :fft!, :fftshift, :idct, :idct!,
+              :ifft, :ifft!, :ifftshift, :irfft, :plan_bfft, :plan_bfft!, :plan_brfft,
+              :plan_dct, :plan_dct!, :plan_fft, :plan_fft!, :plan_idct, :plan_idct!,
+              :plan_ifft, :plan_ifft!, :plan_irfft, :plan_rfft, :rfft]
+        pkg = endswith(String(f), "shift") ? "AbstractFFTs" : "FFTW"
+        @eval begin
+            function $f(args...; kwargs...)
+                error($f, " has been moved to the package $($pkg).jl.\n",
+                      "Run `Pkg.add(\"$($pkg)\")` to install $($pkg) then run `using $($pkg)` ",
+                      "to load it.")
+            end
+            export $f
+        end
+    end
+    module FFTW
+        for f in [:r2r, :r2r!, :plan_r2r, :plan_r2r!]
+            @eval begin
+                function $f(args...; kwargs...)
+                    error($f, " has been moved to the package FFTW.jl.\n",
+                          "Run `Pkg.add(\"FFTW\")` to install FFTW then run `using FFTW` ",
+                          "to load it.")
+                end
+                export $f
+            end
+        end
+    end
+    export FFTW
+end
+using .DFT
+for f in names(DFT)
+    @eval export $f
+end
+module DSP
+    for f in [:conv, :conv2, :deconv, :filt, :filt!, :xcorr]
+        @eval begin
+            function $f(args...; kwargs...)
+                error($f, " has been moved to the package DSP.jl.\n",
+                      "Run `Pkg.add(\"DSP\")` to install DSP then run `using DSP` ",
+                      "to load it.")
+            end
+            export $f
+        end
+    end
+end
+using .DSP
+export conv, conv2, deconv, filt, filt!, xcorr
+
+# END 0.7 deprecations
 
 # BEGIN 1.0 deprecations
 # END 1.0 deprecations

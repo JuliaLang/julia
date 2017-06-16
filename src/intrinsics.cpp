@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 namespace JL_I {
 #include "intrinsics.h"
@@ -154,8 +154,10 @@ static Value *uint_cnvt(Type *to, Value *x)
 #endif
 static Constant *julia_const_to_llvm(void *ptr, jl_value_t *bt)
 {
-    // assume `jl_isbits(bt)`.
+    // assumes `jl_isbits(bt)`.
     // `ptr` can point to a inline field, do not read the tag from it.
+    // make sure to return exactly the type specified by
+    // julia_type_to_llvm as this will be assumed by the callee.
     if (bt == (jl_value_t*)jl_bool_type)
         return ConstantInt::get(T_int8, (*(uint8_t*)ptr) ? 1 : 0);
 
@@ -177,22 +179,22 @@ static Constant *julia_const_to_llvm(void *ptr, jl_value_t *bt)
         }
         case 2: {
             uint16_t data16 = *(uint16_t*)ptr;
-#ifndef DISABLE_FLOAT16
-            if (jl_is_floattype(bt))
-                return ConstantFP::get(jl_LLVMContext, LLVM_FP(APFloat::IEEEhalf,APInt(16,data16)));
-#endif
             return ConstantInt::get(T_int16, data16);
         }
         case 4: {
             uint32_t data32 = *(uint32_t*)ptr;
-            if (jl_is_floattype(bt))
-                return ConstantFP::get(jl_LLVMContext, LLVM_FP(APFloat::IEEEsingle,APInt(32,data32)));
+            if (bt == (jl_value_t*)jl_float32_type)
+                return ConstantFP::get(jl_LLVMContext,
+                        LLVM_FP(APFloat::IEEEsingle,
+                            APInt(32, data32)));
             return ConstantInt::get(T_int32, data32);
         }
         case 8: {
             uint64_t data64 = *(uint64_t*)ptr;
-            if (jl_is_floattype(bt))
-                return ConstantFP::get(jl_LLVMContext, LLVM_FP(APFloat::IEEEdouble,APInt(64,data64)));
+            if (bt == (jl_value_t*)jl_float64_type)
+                return ConstantFP::get(jl_LLVMContext,
+                        LLVM_FP(APFloat::IEEEdouble,
+                            APInt(64, data64)));
             return ConstantInt::get(T_int64, data64);
         }
         default:
@@ -212,10 +214,6 @@ static Constant *julia_const_to_llvm(void *ptr, jl_value_t *bt)
             else
 #endif
             val = APInt(8*nb, ArrayRef<uint64_t>(data, nw));
-            if (nb == 16 && jl_is_floattype(bt)) {
-                return ConstantFP::get(jl_LLVMContext,LLVM_FP(APFloat::IEEEquad,val));
-                // If we have a floating point type that's not hardware supported, just treat it like an integer for LLVM purposes
-            }
             return ConstantInt::get(IntegerType::get(jl_LLVMContext,8*nb),val);
         }
     }
@@ -309,6 +307,10 @@ static Value *emit_unbox(Type *to, const jl_cgval_t &x, jl_value_t *jt, Value *d
         return NULL;
     }
 
+    // if this is a derived pointer, make sure the root usage itself is also visible to the delete-root pass
+    if (x.gcroot && x.V != x.gcroot)
+        mark_gc_use(x);
+
     // bools stored as int8, so an extra Trunc is needed to get an int1
     Value *p = x.constant ? literal_pointer_val(x.constant) : x.V;
     Type *ptype = (to == T_int1 ? T_pint8 : to->getPointerTo());
@@ -329,7 +331,7 @@ static Value *emit_unbox(Type *to, const jl_cgval_t &x, jl_value_t *jt, Value *d
 
     int alignment;
     if (x.isboxed) {
-         // julia's gc gives 16-byte aligned addresses
+        // julia's gc gives 16-byte aligned addresses
         alignment = 16;
     }
     else if (jt) {
@@ -614,7 +616,7 @@ static jl_cgval_t emit_pointerref(jl_cgval_t *argv, jl_codectx_t *ctx)
         Value *strct = emit_allocobj(ctx, size,
                                      literal_pointer_val((jl_value_t*)ety));
         im1 = builder.CreateMul(im1, ConstantInt::get(T_size,
-                    LLT_ALIGN(size, ((jl_datatype_t*)ety)->layout->alignment)));
+                    LLT_ALIGN(size, jl_datatype_align(ety))));
         Value *thePtr = emit_unbox(T_pint8, e, e.typ);
         thePtr = builder.CreateGEP(emit_bitcast(thePtr, T_pint8), im1);
         builder.CreateMemCpy(emit_bitcast(strct, T_pint8), thePtr, size, 1);
@@ -625,7 +627,7 @@ static jl_cgval_t emit_pointerref(jl_cgval_t *argv, jl_codectx_t *ctx)
     Type *ptrty = julia_type_to_llvm(e.typ, &isboxed);
     assert(!isboxed);
     Value *thePtr = emit_unbox(ptrty, e, e.typ);
-    return typed_load(thePtr, im1, ety, ctx, tbaa_data, align_nb);
+    return typed_load(thePtr, im1, ety, ctx, tbaa_data, true, align_nb);
 }
 
 static jl_cgval_t emit_runtime_pointerset(jl_cgval_t *argv, jl_codectx_t *ctx)
@@ -657,9 +659,7 @@ static jl_cgval_t emit_pointerset(jl_cgval_t *argv, jl_codectx_t *ctx)
         return emit_runtime_pointerset(argv, ctx);
     if (!jl_is_datatype(ety))
         ety = (jl_value_t*)jl_any_type;
-    jl_value_t *xty = x.typ;
-    if (!jl_subtype(xty, ety))
-        emit_typecheck(x, ety, "pointerset: type mismatch in assign", ctx);
+    emit_typecheck(x, ety, "pointerset: type mismatch in assign", ctx);
 
     Value *idx = emit_unbox(T_size, i, (jl_value_t*)jl_long_type);
     Value *im1 = builder.CreateSub(idx, ConstantInt::get(T_size, 1));
@@ -673,7 +673,7 @@ static jl_cgval_t emit_pointerset(jl_cgval_t *argv, jl_codectx_t *ctx)
         thePtr = emit_unbox(T_pint8, e, e.typ);
         uint64_t size = jl_datatype_size(ety);
         im1 = builder.CreateMul(im1, ConstantInt::get(T_size,
-                    LLT_ALIGN(size, ((jl_datatype_t*)ety)->layout->alignment)));
+                    LLT_ALIGN(size, jl_datatype_align(ety))));
         builder.CreateMemCpy(builder.CreateGEP(thePtr, im1),
                              data_pointer(x, ctx, T_pint8), size, align_nb);
     }

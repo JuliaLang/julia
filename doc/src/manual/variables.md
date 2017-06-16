@@ -3,7 +3,7 @@
 A variable, in Julia, is a name associated (or bound) to a value. It's useful when you want to
 store a value (that you obtained after some math, for example) for later use. For example:
 
-```julia
+```julia-repl
 # Assign the value 10 to the variable x
 julia> x = 10
 10
@@ -100,7 +100,7 @@ to define `⊗` as an infix Kronecker product).
 
 The only explicitly disallowed names for variables are the names of built-in statements:
 
-```julia
+```julia-repl
 julia> else = false
 ERROR: syntax: unexpected "else"
 
@@ -129,3 +129,5 @@ conventions:
   * Functions that write to their arguments have names that end in `!`. These are sometimes called
     "mutating" or "in-place" functions because they are intended to produce changes in their arguments
     after the function is called, not just return a value.
+
+For more information about stylistic conventions, see the [Style Guide](@ref).

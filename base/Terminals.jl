@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Terminals
 
@@ -100,9 +100,9 @@ end
 
 mutable struct TTYTerminal <: UnixTerminal
     term_type::String
-    in_stream::Base.TTY
-    out_stream::Base.TTY
-    err_stream::Base.TTY
+    in_stream::IO
+    out_stream::IO
+    err_stream::IO
 end
 
 const CSI = "\x1b["
@@ -113,7 +113,7 @@ cmove_right(t::UnixTerminal, n) = write(t.out_stream, "$(CSI)$(n)C")
 cmove_left(t::UnixTerminal, n) = write(t.out_stream, "$(CSI)$(n)D")
 cmove_line_up(t::UnixTerminal, n) = (cmove_up(t, n); cmove_col(t, 1))
 cmove_line_down(t::UnixTerminal, n) = (cmove_down(t, n); cmove_col(t, 1))
-cmove_col(t::UnixTerminal, n) = write(t.out_stream, "$(CSI)$(n)G")
+cmove_col(t::UnixTerminal, n) = (write(t.out_stream, '\r'); n > 1 && cmove_right(t, n - 1))
 
 if is_windows()
     function raw!(t::TTYTerminal,raw::Bool)
@@ -137,18 +137,20 @@ else
         ccall(:jl_tty_set_mode, Int32, (Ptr{Void},Int32), t.in_stream.handle, raw) != -1
     end
 end
-enable_bracketed_paste(t::UnixTerminal) = write(t.out_stream, "$(CSI)?2004h")
-disable_bracketed_paste(t::UnixTerminal) = write(t.out_stream, "$(CSI)?2004l")
-end_keypad_transmit_mode(t::UnixTerminal) = # tput rmkx
-    write(t.out_stream, "$(CSI)?1l\x1b>")
+
+# eval some of these definitions to insert CSI as a constant string
+@eval enable_bracketed_paste(t::UnixTerminal) = write(t.out_stream, $"$(CSI)?2004h")
+@eval disable_bracketed_paste(t::UnixTerminal) = write(t.out_stream, $"$(CSI)?2004l")
+@eval end_keypad_transmit_mode(t::UnixTerminal) = # tput rmkx
+    write(t.out_stream, $"$(CSI)?1l\x1b>")
+
+@eval clear(t::UnixTerminal) = write(t.out_stream, $"$(CSI)H$(CSI)2J")
+@eval clear_line(t::UnixTerminal) = write(t.out_stream, $"\r$(CSI)0K")
+#beep(t::UnixTerminal) = write(t.err_stream,"\x7")
 
 function Base.displaysize(t::UnixTerminal)
     return displaysize(t.out_stream)
 end
-
-clear(t::UnixTerminal) = write(t.out_stream, "\x1b[H\x1b[2J")
-clear_line(t::UnixTerminal) = write(t.out_stream, "\x1b[1G\x1b[0K")
-#beep(t::UnixTerminal) = write(t.err_stream,"\x7")
 
 if is_windows()
     hascolor(t::TTYTerminal) = true

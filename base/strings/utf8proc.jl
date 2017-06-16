@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Various Unicode functionality from the utf8proc library
 module UTF8proc
@@ -160,18 +160,19 @@ Alternatively, finer control and additional transformations may be be obtained b
 options (which all default to `false` except for `compose`) are specified:
 
 * `compose=false`: do not perform canonical composition
-* `decompose=true`: do canonical decomposition instead of canonical composition (`compose=true`
-  is ignored if present)
+* `decompose=true`: do canonical decomposition instead of canonical composition
+  (`compose=true` is ignored if present)
 * `compat=true`: compatibility equivalents are canonicalized
 * `casefold=true`: perform Unicode case folding, e.g. for case-insensitive string comparison
-* `newline2lf=true`, `newline2ls=true`, or `newline2ps=true`: convert various newline sequences
-  (LF, CRLF, CR, NEL) into a linefeed (LF), line-separation (LS), or paragraph-separation (PS)
-  character, respectively
+* `newline2lf=true`, `newline2ls=true`, or `newline2ps=true`: convert various newline
+  sequences (LF, CRLF, CR, NEL) into a linefeed (LF), line-separation (LS), or
+  paragraph-separation (PS) character, respectively
 * `stripmark=true`: strip diacritical marks (e.g. accents)
 * `stripignore=true`: strip Unicode's "default ignorable" characters (e.g. the soft hyphen
   or the left-to-right marker)
 * `stripcc=true`: strip control characters; horizontal tabs and form feeds are converted to
-  spaces; newlines are also converted to spaces unless a newline-conversion flag was specified
+  spaces; newlines are also converted to spaces unless a newline-conversion flag was
+  specified
 * `rejectna=true`: throw an error if unassigned code points are found
 * `stable=true`: enforce Unicode Versioning Stability
 
@@ -352,7 +353,7 @@ letter combined with an accent mark is a single grapheme.)
 """
 graphemes(s::AbstractString) = GraphemeIterator{typeof(s)}(s)
 
-eltype{S}(::Type{GraphemeIterator{S}}) = SubString{S}
+eltype(::Type{GraphemeIterator{S}}) where {S} = SubString{S}
 
 function length(g::GraphemeIterator)
     c0 = Char(0x00ad) # soft hyphen (grapheme break always allowed after this)
@@ -387,9 +388,9 @@ end
 hash(g::GraphemeIterator, h::UInt) = hash(g.s, h)
 isless(g1::GraphemeIterator, g2::GraphemeIterator) = isless(g1.s, g2.s)
 
-convert{S<:AbstractString}(::Type{S}, g::GraphemeIterator) = convert(S, g.s)
+convert(::Type{S}, g::GraphemeIterator) where {S<:AbstractString} = convert(S, g.s)
 
-show{S}(io::IO, g::GraphemeIterator{S}) = print(io, "length-$(length(g)) GraphemeIterator{$S} for \"$(g.s)\"")
+show(io::IO, g::GraphemeIterator{S}) where {S} = print(io, "length-$(length(g)) GraphemeIterator{$S} for \"$(g.s)\"")
 
 ############################################################################
 

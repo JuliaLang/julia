@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
  ## Basic functions ##
 
@@ -12,7 +12,9 @@ all(::typeof(isinteger), ::AbstractArray{<:Integer}) = true
 """
     vec(a::AbstractArray) -> Vector
 
-Reshape array `a` as a one-dimensional column vector.
+Reshape the array `a` as a one-dimensional column vector. The resulting array
+shares the same underlying data as `a`, so modifying one will also modify the
+other.
 
 ```jldoctest
 julia> a = [1 2 3; 4 5 6]
@@ -29,6 +31,8 @@ julia> vec(a)
  3
  6
 ```
+
+See also [`reshape`](@ref).
 """
 vec(a::AbstractArray) = reshape(a,_length(a))
 vec(a::AbstractVector) = a
@@ -116,11 +120,6 @@ function slicedim(A::AbstractArray, d::Integer, i)
     A[setindex(indices(A), i, d)...]
 end
 
-function flipdim(A::AbstractVector, d::Integer)
-    d == 1 || throw(ArgumentError("dimension to flip must be 1"))
-    reverse(A)
-end
-
 """
     flipdim(A, d::Integer)
 
@@ -143,6 +142,8 @@ function flipdim(A::AbstractArray, d::Integer)
     1 ≤ d ≤ nd || throw(ArgumentError("dimension $d is not 1 ≤ $d ≤ $nd"))
     if isempty(A)
         return copy(A)
+    elseif nd == 1
+        return reverse(A)
     end
     inds = indices(A)
     B = similar(A)
@@ -206,7 +207,7 @@ function circshift(a::AbstractArray, shiftamt)
 end
 
 # Uses K-B-N summation
-function cumsum_kbn{T<:AbstractFloat}(v::AbstractVector{T})
+function cumsum_kbn(v::AbstractVector{T}) where T<:AbstractFloat
     r = similar(v)
     if isempty(v); return r; end
 
@@ -237,7 +238,7 @@ end
 Cumulative sum along a dimension, using the Kahan-Babuska-Neumaier compensated summation
 algorithm for additional accuracy. The dimension defaults to 1.
 """
-function cumsum_kbn{T<:AbstractFloat}(A::AbstractArray{T}, axis::Integer=1)
+function cumsum_kbn(A::AbstractArray{T}, axis::Integer=1) where T<:AbstractFloat
     dimsA = size(A)
     ndimsA = ndims(A)
     axis_size = dimsA[axis]

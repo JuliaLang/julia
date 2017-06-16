@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # timing
 
@@ -82,7 +82,7 @@ gc_bytes() = ccall(:jl_gc_total_bytes, Int64, ())
 Set a timer to be read by the next call to [`toc`](@ref) or [`toq`](@ref). The
 macro call `@time expr` can also be used to time evaluation.
 
-```julia
+```julia-repl
 julia> tic()
 0x0000c45bc7abac95
 
@@ -105,7 +105,7 @@ end
 Return, but do not print, the time elapsed since the last [`tic`](@ref). The
 macro calls `@timed expr` and `@elapsed expr` also return evaluation time.
 
-```julia
+```julia-repl
 julia> tic()
 0x0000c46477a9675d
 
@@ -132,7 +132,7 @@ end
 Print and return the time elapsed since the last [`tic`](@ref). The macro call
 `@time expr` can also be used to time evaluation.
 
-```julia
+```julia-repl
 julia> tic()
 0x0000c45bc7abac95
 
@@ -219,7 +219,7 @@ returning the value of the expression.
 See also [`@timev`](@ref), [`@timed`](@ref), [`@elapsed`](@ref), and
 [`@allocated`](@ref).
 
-```julia
+```julia-repl
 julia> @time rand(10^6);
   0.001525 seconds (7 allocations: 7.630 MiB)
 
@@ -253,7 +253,7 @@ expression.
 See also [`@time`](@ref), [`@timed`](@ref), [`@elapsed`](@ref), and
 [`@allocated`](@ref).
 
-```julia
+```julia-repl
 julia> @timev rand(10^6);
   0.001006 seconds (7 allocations: 7.630 MiB)
 elapsed time (ns): 1005567
@@ -282,7 +282,7 @@ number of seconds it took to execute as a floating-point number.
 See also [`@time`](@ref), [`@timev`](@ref), [`@timed`](@ref),
 and [`@allocated`](@ref).
 
-```julia
+```julia-repl
 julia> @elapsed sleep(0.3)
 0.301391426
 ```
@@ -314,7 +314,7 @@ for the effects of compilation.
 See also [`@time`](@ref), [`@timev`](@ref), [`@timed`](@ref),
 and [`@elapsed`](@ref).
 
-```julia
+```julia-repl
 julia> @allocated rand(10^6)
 8000080
 ```
@@ -343,7 +343,7 @@ counters.
 See also [`@time`](@ref), [`@timev`](@ref), [`@elapsed`](@ref), and
 [`@allocated`](@ref).
 
-```julia
+```julia-repl
 julia> val, t, bytes, gctime, memallocs = @timed rand(10^6);
 
 julia> t
@@ -382,14 +382,6 @@ macro timed(ex)
     end
 end
 
-function fftw_vendor()
-    if Base.libfftw_name == "libmkl_rt"
-        return :mkl
-    else
-        return :fftw
-    end
-end
-
 
 ## printing with color ##
 
@@ -406,21 +398,21 @@ function with_output_color(f::Function, color::Union{Int, Symbol}, io::IO, args.
 end
 
 """
-    print_with_color(color::Union{Symbol, Int}, [io], strings...; bold::Bool = false)
+    print_with_color(color::Union{Symbol, Int}, [io], xs...; bold::Bool = false)
 
-Print strings in a color specified as a symbol.
+Print `xs` in a color specified as a symbol.
 
 `color` may take any of the values $(Base.available_text_colors_docstring)
 or an integer between 0 and 255 inclusive. Note that not all terminals support 256 colors.
 If the keyword `bold` is given as `true`, the result will be printed in bold.
 """
-print_with_color(color::Union{Int, Symbol}, io::IO, msg::AbstractString...; bold::Bool = false) =
+print_with_color(color::Union{Int, Symbol}, io::IO, msg...; bold::Bool = false) =
     with_output_color(print, color, io, msg...; bold = bold)
-print_with_color(color::Union{Int, Symbol}, msg::AbstractString...; bold::Bool = false) =
+print_with_color(color::Union{Int, Symbol}, msg...; bold::Bool = false) =
     print_with_color(color, STDOUT, msg...; bold = bold)
-println_with_color(color::Union{Int, Symbol}, io::IO, msg::AbstractString...; bold::Bool = false) =
+println_with_color(color::Union{Int, Symbol}, io::IO, msg...; bold::Bool = false) =
     with_output_color(println, color, io, msg...; bold = bold)
-println_with_color(color::Union{Int, Symbol}, msg::AbstractString...; bold::Bool = false) =
+println_with_color(color::Union{Int, Symbol}, msg...; bold::Bool = false) =
     println_with_color(color, STDOUT, msg...; bold = bold)
 
 ## warnings and messages ##
@@ -431,7 +423,8 @@ const log_error_to = Dict{Tuple{Union{Module,Void},Union{Symbol,Void}},IO}()
 
 function _redirect(io::IO, log_to::Dict, sf::StackTraces.StackFrame)
     isnull(sf.linfo) && return io
-    mod = get(sf.linfo).def.module
+    mod = get(sf.linfo).def
+    isa(mod, Method) && (mod = mod.module)
     fun = sf.func
     if haskey(log_to, (mod,fun))
         return log_to[(mod,fun)]
@@ -456,7 +449,9 @@ function _redirect(io::IO, log_to::Dict, fun::Symbol)
             isnull(frame.linfo) && continue
             sf = frame
             break_next_frame && (@goto skip)
-            get(frame.linfo).def.module == Base || continue
+            mod = get(frame.linfo).def
+            isa(mod, Method) && (mod = mod.module)
+            mod === Base || continue
             sff = string(frame.func)
             if frame.func == fun || startswith(sff, clos) || startswith(sff, kw)
                 break_next_frame = true
@@ -619,7 +614,13 @@ function julia_cmd(julia=joinpath(JULIA_HOME, julia_exename()))
     `$julia -C$cpu_target -J$image_file --compile=$compile --depwarn=$depwarn`
 end
 
-julia_exename() = ccall(:jl_is_debugbuild,Cint,())==0 ? "julia" : "julia-debug"
+function julia_exename()
+    if ccall(:jl_is_debugbuild, Cint, ()) == 0
+        return @static is_windows() ? "julia.exe" : "julia"
+    else
+        return @static is_windows() ? "julia-debug.exe" : "julia-debug"
+    end
+end
 
 """
     securezero!(o)
@@ -632,7 +633,7 @@ will always be called.
 function securezero! end
 @noinline securezero!(a::AbstractArray{<:Number}) = fill!(a, 0)
 securezero!(s::String) = unsafe_securezero!(pointer(s), sizeof(s))
-@noinline unsafe_securezero!{T}(p::Ptr{T}, len::Integer=1) =
+@noinline unsafe_securezero!(p::Ptr{T}, len::Integer=1) where {T} =
     ccall(:memset, Ptr{T}, (Ptr{T}, Cint, Csize_t), p, 0, len*sizeof(T))
 unsafe_securezero!(p::Ptr{Void}, len::Integer=1) = Ptr{Void}(unsafe_securezero!(Ptr{UInt8}(p), len))
 
@@ -640,7 +641,7 @@ if is_windows()
 function getpass(prompt::AbstractString)
     print(prompt)
     flush(STDOUT)
-    p = Array{UInt8}(128) # mimic Unix getpass in ignoring more than 128-char passwords
+    p = Vector{UInt8}(128) # mimic Unix getpass in ignoring more than 128-char passwords
                           # (also avoids any potential memory copies arising from push!)
     try
         plen = 0
@@ -758,14 +759,56 @@ end
 
 """
     crc32c(data, crc::UInt32=0x00000000)
+
 Compute the CRC-32c checksum of the given `data`, which can be
-an `Array{UInt8}` or a `String`.  Optionally, you can pass
-a starting `crc` integer to be mixed in with the checksum.
+an `Array{UInt8}`, a contiguous subarray thereof, or a `String`.  Optionally, you can pass
+a starting `crc` integer to be mixed in with the checksum.  The `crc` parameter
+can be used to compute a checksum on data divided into chunks: performing
+`crc32c(data2, crc32c(data1))` is equivalent to the checksum of `[data1; data2]`.
 (Technically, a little-endian checksum is computed.)
+
+There is also a method `crc32c(io, nb, crc)` to checksum `nb` bytes from
+a stream `io`, or `crc32c(io, crc)` to checksum all the remaining bytes.
+Hence you can do [`open(crc32c, filename)`](@ref) to checksum an entire file,
+or `crc32c(seekstart(buf))` to checksum an [`IOBuffer`](@ref) without
+calling [`take!`](@ref).
+
+For a `String`, note that the result is specific to the UTF-8 encoding
+(a different checksum would be obtained from a different Unicode encoding).
+To checksum an `a::Array` of some other bitstype, you can do `crc32c(reinterpret(UInt8,a))`,
+but note that the result may be endian-dependent.
 """
 function crc32c end
-crc32c(a::Union{Array{UInt8},String}, crc::UInt32=0x00000000) =
-    ccall(:jl_crc32c, UInt32, (UInt32, Ptr{UInt8}, Csize_t), crc, a, sizeof(a))
+
+unsafe_crc32c(a, n, crc) = ccall(:jl_crc32c, UInt32, (UInt32, Ptr{UInt8}, Csize_t), crc, a, n)
+
+crc32c(a::Union{Array{UInt8},FastContiguousSubArray{UInt8,N,<:Array{UInt8}} where N}, crc::UInt32=0x00000000) =
+    unsafe_crc32c(a, length(a), crc)
+
+crc32c(s::String, crc::UInt32=0x00000000) = unsafe_crc32c(s, sizeof(s), crc)
+
+"""
+    crc32c(io::IO, [nb::Integer,] crc::UInt32=0x00000000)
+
+Read up to `nb` bytes from `io` and return the CRC-32c checksum, optionally
+mixed with a starting `crc` integer.  If `nb` is not supplied, then
+`io` will be read until the end of the stream.
+"""
+function crc32c(io::IO, nb::Integer, crc::UInt32=0x00000000)
+    nb < 0 && throw(ArgumentError("number of bytes to checksum must be ≥ 0"))
+    # use block size 24576=8192*3, since that is the threshold for
+    # 3-way parallel SIMD code in the underlying jl_crc32c C function.
+    buf = Array{UInt8}(min(nb, 24576))
+    while !eof(io) && nb > 24576
+        n = readbytes!(io, buf)
+        crc = unsafe_crc32c(buf, n, crc)
+        nb -= n
+    end
+    return unsafe_crc32c(buf, readbytes!(io, buf, min(nb, length(buf))), crc)
+end
+crc32c(io::IO, crc::UInt32=0x00000000) = crc32c(io, typemax(Int64), crc)
+crc32c(io::IOStream, crc::UInt32=0x00000000) = crc32c(io, filesize(io)-position(io), crc)
+
 
 """
     @kwdef typedef
@@ -786,7 +829,7 @@ end
 ```
 """
 macro kwdef(expr)
-    expr = macroexpand(expr) # to expand @static
+    expr = macroexpand(__module__, expr) # to expand @static
     T = expr.args[2]
     params_ex = Expr(:parameters)
     call_ex = Expr(:call, T)
@@ -838,10 +881,10 @@ The default value for a type for use with the `@kwdef` macro. Returns:
 """
 function kwdef_val end
 
-kwdef_val{T}(::Type{Ptr{T}}) = Ptr{T}(C_NULL)
+kwdef_val(::Type{Ptr{T}}) where {T} = Ptr{T}(C_NULL)
 kwdef_val(::Type{Cstring}) = Cstring(C_NULL)
 kwdef_val(::Type{Cwstring}) = Cwstring(C_NULL)
 
-kwdef_val{T<:Integer}(::Type{T}) = zero(T)
+kwdef_val(::Type{T}) where {T<:Integer} = zero(T)
 
-kwdef_val{T}(::Type{T}) = T()
+kwdef_val(::Type{T}) where {T} = T()

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module TestBoundsCheck
 
@@ -204,9 +204,19 @@ function V1()
 end
 
 if bc_opt == bc_default || bc_opt == bc_off
-    @test V1() == nothing
+    @test V1() === nothing
 else
     @test_throws BoundsError V1()
+end
+
+# This tests both the bounds check elision and the behavior of `jl_array_isassigned`
+# For `isbits` array the `ccall` should return a constant `true` and does not access
+# the array
+inbounds_isassigned(a, i) = @inbounds return isassigned(a, i)
+if bc_opt == bc_default || bc_opt == bc_off
+    @test inbounds_isassigned(Int[], 2) == true
+else
+    @test inbounds_isassigned(Int[], 2) == false
 end
 
 end

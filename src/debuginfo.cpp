@@ -1,4 +1,4 @@
-// This file is a part of Julia. License is MIT: http://julialang.org/license
+// This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "platform.h"
 
@@ -29,24 +29,28 @@
 #else
 #include <llvm/ExecutionEngine/JITMemoryManager.h>
 #endif
+#if JL_LLVM_VERSION >= 50000
+#include <llvm/BinaryFormat/Magic.h>
+#endif
 #include <llvm/Object/MachO.h>
 #include <llvm/Object/COFF.h>
 #if JL_LLVM_VERSION >= 30700
 #  include <llvm/Object/ELFObjectFile.h>
 #endif
-
-#if defined(USE_MCJIT) && JL_LLVM_VERSION < 30600 && defined(_OS_DARWIN_)
-#include "../deps/llvm-3.5.0/lib/ExecutionEngine/MCJIT/MCJIT.h"
-#endif
+#include "fix_llvm_assert.h"
 
 using namespace llvm;
+
+#if JL_LLVM_VERSION >= 50000
+using llvm_file_magic = file_magic;
+#else
+using llvm_file_magic = sys::fs::file_magic;
+#endif
 
 #include "julia.h"
 #include "julia_internal.h"
 #include "codegen_internal.h"
-#ifdef _OS_LINUX_
-#  define UNW_LOCAL_ONLY
-#  include <libunwind.h>
+#if defined(_OS_LINUX_)
 #  include <link.h>
 #endif
 
@@ -764,6 +768,7 @@ static int lookup_pointer(DIContext *context, jl_frame_t **frames,
         }
         return 1;
     }
+    jl_mutex_lock_maybe_nogc(&codegen_lock);
 #if JL_LLVM_VERSION >= 30500
     DILineInfoSpecifier infoSpec(DILineInfoSpecifier::FileLineInfoKind::AbsoluteFilePath,
                                  DILineInfoSpecifier::FunctionNameKind::ShortName);
@@ -777,9 +782,11 @@ static int lookup_pointer(DIContext *context, jl_frame_t **frames,
 
     int fromC = (*frames)[0].fromC;
     int n_frames = inlineInfo.getNumberOfFrames();
-    if (n_frames == 0)
+    if (n_frames == 0) {
+        jl_mutex_unlock_maybe_nogc(&codegen_lock);
         // no line number info available in the context, return without the context
         return lookup_pointer(NULL, frames, pointer, demangle, noInline);
+    }
     if (noInline)
         n_frames = 1;
     if (n_frames > 1) {
@@ -837,6 +844,7 @@ static int lookup_pointer(DIContext *context, jl_frame_t **frames,
         else
             jl_copy_str(&frame->file_name, file_name.c_str());
     }
+    jl_mutex_unlock_maybe_nogc(&codegen_lock);
     return n_frames;
 }
 
@@ -1008,7 +1016,7 @@ openDebugInfo(StringRef debuginfopath, const debug_link_info &info)
 
     auto error_splitobj = object::ObjectFile::createObjectFile(
             SplitFile.get().get()->getMemBufferRef(),
-            sys::fs::file_magic::unknown);
+            llvm_file_magic::unknown);
     if (!error_splitobj) {
 #if JL_LLVM_VERSION >= 30900
         return error_splitobj.takeError();
@@ -1040,6 +1048,7 @@ template<typename T>
 static inline void ignoreError(T &err)
 {
 #if JL_LLVM_VERSION >= 30900 && !defined(NDEBUG)
+    // Needed only with LLVM assertion build
     consumeError(err.takeError());
 #endif
 }
@@ -1179,13 +1188,13 @@ bool jl_dylib_DI_for_fptr(size_t pointer, const llvm::object::ObjectFile **obj, 
         std::unique_ptr<MemoryBuffer> membuf = MemoryBuffer::getMemBuffer(
                 StringRef((const char *)fbase, msize), "", false);
         auto origerrorobj = llvm::object::ObjectFile::createObjectFile(
-            membuf->getMemBufferRef(), sys::fs::file_magic::unknown);
+            membuf->getMemBufferRef(), llvm_file_magic::unknown);
 #elif JL_LLVM_VERSION >= 30500
         MemoryBuffer *membuf = MemoryBuffer::getMemBuffer(
             StringRef((const char *)fbase, msize), "", false);
         std::unique_ptr<MemoryBuffer> buf(membuf);
         auto origerrorobj = llvm::object::ObjectFile::createObjectFile(
-            buf, sys::fs::file_magic::unknown);
+            buf, llvm_file_magic::unknown);
 #else
         MemoryBuffer *membuf = MemoryBuffer::getMemBuffer(
             StringRef((const char *)fbase, msize), "", false);
@@ -1398,7 +1407,7 @@ static int jl_getDylibFunctionInfo(jl_frame_t **frames, size_t pointer, int skip
     }
     frame0->fromC = !isSysImg;
     if (isSysImg && sysimg_fvars) {
-#ifdef _OS_LINUX_
+#if defined(_OS_LINUX_) && !defined(JL_DISABLE_LIBUNWIND)
         unw_proc_info_t pip;
         if (!saddr && unw_get_proc_info_by_ip(unw_local_addr_space,
                                               pointer, &pip, NULL) == 0)

@@ -1,8 +1,10 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 import .Serializer: serialize_cycle_header, serialize_type, writetag, UNDEFREF_TAG
+import .Distributed: RRID
 
 mutable struct SharedArray{T,N} <: DenseArray{T,N}
+    id::RRID
     dims::NTuple{N,Int}
     pids::Vector{Int}
     refs::Vector
@@ -24,9 +26,13 @@ mutable struct SharedArray{T,N} <: DenseArray{T,N}
     loc_subarr_1d::SubArray{T,1,Array{T,1},Tuple{UnitRange{Int}},true}
 
     function SharedArray{T,N}(d,p,r,sn,s) where {T,N}
-        new(d,p,r,sn,s,0,view(Array{T}(ntuple(d->0,N)), 1:0))
+        S = new(RRID(),d,p,r,sn,s,0,view(Array{T}(ntuple(d->0,N)), 1:0))
+        sa_refs[S.id] = WeakRef(S)
+        S
     end
 end
+
+const sa_refs = Dict{RRID, WeakRef}()
 
 """
     SharedArray{T}(dims::NTuple; init=false, pids=Int[])
@@ -44,6 +50,9 @@ computation with the master process acting as a driver.
 
 If an `init` function of the type `initfn(S::SharedArray)` is specified, it is called on all
 the participating workers.
+
+The shared array is valid as long as a reference to the `SharedArray` object exists on the node
+which created the mapping.
 
     SharedArray{T}(filename::AbstractString, dims::NTuple, [offset=0]; mode=nothing, init=false, pids=Int[])
     SharedArray{T,N}(...)
@@ -77,7 +86,7 @@ beginning of the file.
 """
 SharedArray
 
-function (::Type{SharedArray{T,N}}){T,N}(dims::Dims{N}; init=false, pids=Int[])
+function SharedArray{T,N}(dims::Dims{N}; init=false, pids=Int[]) where {T,N}
     isbits(T) || throw(ArgumentError("type of SharedArray elements must be bits types, got $(T)"))
 
     pids, onlocalhost = shared_pids(pids)
@@ -103,7 +112,7 @@ function (::Type{SharedArray{T,N}}){T,N}(dims::Dims{N}; init=false, pids=Int[])
 
         func_mapshmem = () -> shm_mmap_array(T, dims, shm_seg_name, JL_O_RDWR)
 
-        refs = Array{Future}(length(pids))
+        refs = Vector{Future}(length(pids))
         for (i, p) in enumerate(pids)
             refs[i] = remotecall(func_mapshmem, p)
         end
@@ -127,28 +136,28 @@ function (::Type{SharedArray{T,N}}){T,N}(dims::Dims{N}; init=false, pids=Int[])
         shm_seg_name = ""
 
     finally
-        if shm_seg_name != ""
+        if !isempty(shm_seg_name)
             remotecall_fetch(shm_unlink, shmmem_create_pid, shm_seg_name)
         end
     end
     S
 end
 
-(::Type{SharedArray{T,N}}){T,N}(I::Integer...; kwargs...) =
+SharedArray{T,N}(I::Integer...; kwargs...) where {T,N} =
     SharedArray{T,N}(I; kwargs...)
-(::Type{SharedArray{T}}){T}(d::NTuple; kwargs...) =
+SharedArray{T}(d::NTuple; kwargs...) where {T} =
     SharedArray{T,length(d)}(d; kwargs...)
-(::Type{SharedArray{T}}){T}(I::Integer...; kwargs...) =
+SharedArray{T}(I::Integer...; kwargs...) where {T} =
     SharedArray{T,length(I)}(I; kwargs...)
-(::Type{SharedArray{T}}){T}(m::Integer; kwargs...) =
+SharedArray{T}(m::Integer; kwargs...) where {T} =
     SharedArray{T,1}(m; kwargs...)
-(::Type{SharedArray{T}}){T}(m::Integer, n::Integer; kwargs...) =
+SharedArray{T}(m::Integer, n::Integer; kwargs...) where {T} =
     SharedArray{T,2}(m, n; kwargs...)
-(::Type{SharedArray{T}}){T}(m::Integer, n::Integer, o::Integer; kwargs...) =
+SharedArray{T}(m::Integer, n::Integer, o::Integer; kwargs...) where {T} =
     SharedArray{T,3}(m, n, o; kwargs...)
 
-function (::Type{SharedArray{T,N}}){T,N}(filename::AbstractString, dims::NTuple{N,Int},
-        offset::Integer=0; mode=nothing, init=false, pids::Vector{Int}=Int[])
+function SharedArray{T,N}(filename::AbstractString, dims::NTuple{N,Int}, offset::Integer=0;
+                          mode=nothing, init=false, pids::Vector{Int}=Int[]) where {T,N}
     if !isabspath(filename)
         throw(ArgumentError("$filename is not an absolute path; try abspath(filename)?"))
     end
@@ -180,7 +189,7 @@ function (::Type{SharedArray{T,N}}){T,N}(filename::AbstractString, dims::NTuple{
     end
 
     # Create the file if it doesn't exist, map it if it does
-    refs = Array{Future}(length(pids))
+    refs = Vector{Future}(length(pids))
     func_mmap = mode -> open(filename, mode) do io
         Mmap.mmap(io, Array{T,N}, dims, offset; shared=true)
     end
@@ -213,8 +222,8 @@ function (::Type{SharedArray{T,N}}){T,N}(filename::AbstractString, dims::NTuple{
     S
 end
 
-(::Type{SharedArray{T}}){T,N}(filename::AbstractString, dims::NTuple{N,Int}, offset::Integer=0;
-                              mode=nothing, init=false, pids::Vector{Int}=Int[]) =
+SharedArray{T}(filename::AbstractString, dims::NTuple{N,Int}, offset::Integer=0;
+               mode=nothing, init=false, pids::Vector{Int}=Int[]) where {T,N} =
     SharedArray{T,N}(filename, dims, offset; mode=mode, init=init, pids=pids)
 
 function initialize_shared_array(S, onlocalhost, init, pids)
@@ -237,7 +246,7 @@ function initialize_shared_array(S, onlocalhost, init, pids)
     S
 end
 
-function finalize_refs{T,N}(S::SharedArray{T,N})
+function finalize_refs(S::SharedArray{T,N}) where T where N
     if length(S.pids) > 0
         for r in S.refs
             finalize(r)
@@ -246,19 +255,21 @@ function finalize_refs{T,N}(S::SharedArray{T,N})
         empty!(S.refs)
         init_loc_flds(S)
         S.s = Array{T}(ntuple(d->0,N))
+        delete!(sa_refs, S.id)
     end
     S
 end
 
-SharedVector{T} = SharedArray{T,1}
-SharedMatrix{T} = SharedArray{T,2}
+
+const SharedVector{T} = SharedArray{T,1}
+const SharedMatrix{T} = SharedArray{T,2}
 
 length(S::SharedArray) = prod(S.dims)
 size(S::SharedArray) = S.dims
 ndims(S::SharedArray) = length(S.dims)
 IndexStyle(::Type{<:SharedArray}) = IndexLinear()
 
-function reshape{T,N}(a::SharedArray{T}, dims::NTuple{N,Int})
+function reshape(a::SharedArray{T}, dims::NTuple{N,Int}) where {T,N}
     if length(a) != prod(dims)
         throw(DimensionMismatch("dimensions must be consistent with array size"))
     end
@@ -314,18 +325,18 @@ for each worker process.
 """
 localindexes(S::SharedArray) = S.pidx > 0 ? range_1dim(S, S.pidx) : 1:0
 
-unsafe_convert{T}(::Type{Ptr{T}}, S::SharedArray{T}) = unsafe_convert(Ptr{T}, sdata(S))
-unsafe_convert{T}(::Type{Ptr{T}}, S::SharedArray   ) = unsafe_convert(Ptr{T}, sdata(S))
+unsafe_convert(::Type{Ptr{T}}, S::SharedArray{T}) where {T} = unsafe_convert(Ptr{T}, sdata(S))
+unsafe_convert(::Type{Ptr{T}}, S::SharedArray   ) where {T} = unsafe_convert(Ptr{T}, sdata(S))
 
 function convert(::Type{SharedArray}, A::Array)
     S = SharedArray{eltype(A),ndims(A)}(size(A))
     copy!(S, A)
 end
-function convert{T}(::Type{SharedArray{T}}, A::Array)
+function convert(::Type{SharedArray{T}}, A::Array) where T
     S = SharedArray{T,ndims(A)}(size(A))
     copy!(S, A)
 end
-function convert{TS,TA,N}(::Type{SharedArray{TS,N}}, A::Array{TA,N})
+function convert(::Type{SharedArray{TS,N}}, A::Array{TA,N}) where {TS,TA,N}
     S = SharedArray{TS,ndims(A)}(size(A))
     copy!(S, A)
 end
@@ -377,7 +388,7 @@ end
 
 sub_1dim(S::SharedArray, pidx) = view(S.s, range_1dim(S, pidx))
 
-function init_loc_flds{T,N}(S::SharedArray{T,N}, empty_local=false)
+function init_loc_flds(S::SharedArray{T,N}, empty_local=false) where T where N
     if myid() in S.pids
         S.pidx = findfirst(S.pids, myid())
         if isa(S.refs[1], Future)
@@ -402,6 +413,17 @@ end
 # pidx, which is relevant to the current process only
 function serialize(s::AbstractSerializer, S::SharedArray)
     serialize_cycle_header(s, S) && return
+
+    destpid = worker_id_from_socket(s.io)
+    if S.id.whence == destpid
+        # The shared array was created from destpid, hence a reference to it
+        # must be available at destpid.
+        serialize(s, true)
+        serialize(s, S.id.whence)
+        serialize(s, S.id.id)
+        return
+    end
+    serialize(s, false)
     for n in fieldnames(SharedArray)
         if n in [:s, :pidx, :loc_subarr_1d]
             writetag(s.io, UNDEFREF_TAG)
@@ -421,9 +443,18 @@ function serialize(s::AbstractSerializer, S::SharedArray)
 end
 
 function deserialize(s::AbstractSerializer, t::Type{<:SharedArray})
+    ref_exists = deserialize(s)
+    if ref_exists
+        sref = sa_refs[RRID(deserialize(s), deserialize(s))]
+        if sref.value !== nothing
+            return sref.value
+        end
+        error("Expected reference to shared array instance not found")
+    end
+
     S = invoke(deserialize, Tuple{AbstractSerializer,DataType}, s, t)
     init_loc_flds(S, true)
-    S
+    return S
 end
 
 function show(io::IO, S::SharedArray)
@@ -460,7 +491,7 @@ function fill!(S::SharedArray, v)
     return S
 end
 
-function rand!{T}(S::SharedArray{T})
+function rand!(S::SharedArray{T}) where T
     f = S->map!(x -> rand(T), S.loc_subarr_1d, S.loc_subarr_1d)
     @sync for p in procs(S)
         @async remotecall_wait(f, p, S)
@@ -507,12 +538,11 @@ similar(S::SharedArray, dims::Dims) = similar(S.s, eltype(S), dims)
 similar(S::SharedArray) = similar(S.s, eltype(S), size(S))
 
 reduce(f, S::SharedArray) =
-    mapreduce(fetch, f,
-              Any[ @spawnat p reduce(f, S.loc_subarr_1d) for p in procs(S) ])
+    mapreduce(fetch, f, Any[ @spawnat p reduce(f, S.loc_subarr_1d) for p in procs(S) ])
 
 
 function map!(f, S::SharedArray, Q::SharedArray)
-    if !(S === Q) && (procs(S) != procs(Q) || localindexes(S) != localindexes(Q))
+    if (S !== Q) && (procs(S) != procs(Q) || localindexes(S) != localindexes(Q))
         throw(ArgumentError("incompatible source and destination arguments"))
     end
     @sync for p in procs(S)

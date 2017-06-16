@@ -1,20 +1,20 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Sys
 
-export  CPU_CORES,
-        WORD_SIZE,
-        ARCH,
-        MACHINE,
-        KERNEL,
-        JIT,
-        cpu_info,
-        cpu_name,
-        cpu_summary,
-        uptime,
-        loadavg,
-        free_memory,
-        total_memory
+export CPU_CORES,
+       WORD_SIZE,
+       ARCH,
+       MACHINE,
+       KERNEL,
+       JIT,
+       cpu_info,
+       cpu_name,
+       cpu_summary,
+       uptime,
+       loadavg,
+       free_memory,
+       total_memory
 
 import ..Base: show
 
@@ -92,7 +92,7 @@ CPUinfo(info::UV_cpu_info_t) = CPUinfo(unsafe_string(info.model), info.speed,
 
 show(io::IO, info::CPUinfo) = Base._show_cpuinfo(io, info, true, "    ")
 
-function _cpu_summary(io::IO, cpu::Array{CPUinfo}, i, j)
+function _cpu_summary(io::IO, cpu::AbstractVector{CPUinfo}, i, j)
     if j-i < 9
         header = true
         for x = i:j
@@ -117,7 +117,7 @@ function _cpu_summary(io::IO, cpu::Array{CPUinfo}, i, j)
     println(io)
 end
 
-function cpu_summary(io::IO=STDOUT, cpu::Array{CPUinfo}=cpu_info())
+function cpu_summary(io::IO=STDOUT, cpu::AbstractVector{CPUinfo} = cpu_info())
     model = cpu[1].model
     first = 1
     for i = 2:length(cpu)
@@ -130,25 +130,35 @@ function cpu_summary(io::IO=STDOUT, cpu::Array{CPUinfo}=cpu_info())
 end
 
 function cpu_info()
-    UVcpus = Array{Ptr{UV_cpu_info_t}}(1)
-    count = Array{Int32}(1)
+    UVcpus = Ref{Ptr{UV_cpu_info_t}}()
+    count = Ref{Int32}()
     Base.uv_error("uv_cpu_info",ccall(:uv_cpu_info, Int32, (Ptr{Ptr{UV_cpu_info_t}}, Ptr{Int32}), UVcpus, count))
-    cpus = Array{CPUinfo}(count[1])
+    cpus = Vector{CPUinfo}(count[])
     for i = 1:length(cpus)
-        cpus[i] = CPUinfo(unsafe_load(UVcpus[1], i))
+        cpus[i] = CPUinfo(unsafe_load(UVcpus[], i))
     end
-    ccall(:uv_free_cpu_info, Void, (Ptr{UV_cpu_info_t}, Int32), UVcpus[1], count[1])
+    ccall(:uv_free_cpu_info, Void, (Ptr{UV_cpu_info_t}, Int32), UVcpus[], count[])
     return cpus
 end
 
+"""
+    Sys.uptime()
+
+Gets the current system uptime in seconds.
+"""
 function uptime()
-    uptime_ = Array{Float64}(1)
+    uptime_ = Ref{Float64}()
     Base.uv_error("uv_uptime",ccall(:uv_uptime, Int32, (Ptr{Float64},), uptime_))
-    return uptime_[1]
+    return uptime_[]
 end
 
+"""
+    Sys.loadavg()
+
+Get the load average. See: https://en.wikipedia.org/wiki/Load_(computing).
+"""
 function loadavg()
-    loadavg_ = Array{Float64}(3)
+    loadavg_ = Vector{Float64}(3)
     ccall(:uv_loadavg, Void, (Ptr{Float64},), loadavg_)
     return loadavg_
 end
@@ -159,10 +169,10 @@ total_memory() = ccall(:uv_get_total_memory, UInt64, ())
 """
     Sys.get_process_title()
 
-Get the process title. On some systems, will always return empty string. (not exported)
+Get the process title. On some systems, will always return an empty string.
 """
 function get_process_title()
-    buf = zeros(UInt8, 512)
+    buf = Vector{UInt8}(512)
     err = ccall(:uv_get_process_title, Cint, (Ptr{UInt8}, Cint), buf, 512)
     Base.uv_error("get_process_title", err)
     return unsafe_string(pointer(buf))
@@ -171,7 +181,7 @@ end
 """
     Sys.set_process_title(title::AbstractString)
 
-Set the process title. No-op on some operating systems. (not exported)
+Set the process title. No-op on some operating systems.
 """
 function set_process_title(title::AbstractString)
     err = ccall(:uv_set_process_title, Cint, (Cstring,), title)
@@ -183,19 +193,19 @@ maxrss() = ccall(:jl_maxrss, Csize_t, ())
 if is_windows()
     function windows_version()
         verinfo = ccall(:GetVersion, UInt32, ())
-        (Int(verinfo & 0xFF), Int((verinfo >> 8) & 0xFF))
+        VersionNumber(verinfo & 0xFF, (verinfo >> 8) & 0xFF, verinfo >> 16)
     end
 else
-    windows_version() = (0, 0)
+    windows_version() = v"0.0"
 end
 """
-    windows_version()
+    Sys.windows_version()
 
-Returns the version number for the Windows NT Kernel as a (major, minor) pair,
-or `(0, 0)` if this is not running on Windows.
+Returns the version number for the Windows NT Kernel as a `VersionNumber`,
+i.e. `v"major.minor.build"`, or `v"0.0.0"` if this is not running on Windows.
 """
 windows_version
 
-const WINDOWS_VISTA_VER = (6, 0)
+const WINDOWS_VISTA_VER = v"6.0"
 
 end # module Sys

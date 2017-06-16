@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Test integer conversion routines from int.jl
 
@@ -17,15 +17,30 @@ for y in (4, Float32(4), 4.0, big(4.0))
     @test copysign(-3, y) == 3
 end
 
-# Result type must be type of first argument
-for T in (Base.BitInteger_types..., BigInt,
+# Result type must be type of first argument, except for Bool
+for U in (Base.BitInteger_types..., BigInt,
           Rational{Int}, Rational{BigInt},
           Float16, Float32, Float64)
-    for U in (Base.BitInteger_types..., BigInt,
+    for T in (Base.BitInteger_types..., BigInt,
               Rational{Int}, Rational{BigInt},
               Float16, Float32, Float64)
         @test typeof(copysign(T(3), U(4))) === T
         @test typeof(flipsign(T(3), U(4))) === T
+    end
+    # Bool promotes to Int
+    U <: Unsigned && continue
+    for x in [true, false]
+        @test flipsign(x, U(4)) === Int(x)
+        @test flipsign(x, U(-1)) === -Int(x)
+        @test copysign(x, U(4)) === Int(x)
+        @test copysign(x, U(-1)) === -Int(x)
+    end
+end
+
+@testset "flipsign/copysign(typemin($T), -1)" for T in Base.BitInteger_types
+    for U in (Base.BitSigned_types..., BigInt, Float16, Float32, Float64)
+        @test flipsign(typemin(T), U(-1)) == typemin(T)
+        @test copysign(typemin(T), U(-1)) == typemin(T)
     end
 end
 
@@ -201,3 +216,9 @@ end
 @test unsafe_trunc(Int8, -127) === Int8(-127)
 @test unsafe_trunc(Int8, -128) === Int8(-128)
 @test unsafe_trunc(Int8, -129) === Int8(127)
+
+# Test x % T returns a T
+for T in [Base.BitInteger_types..., BigInt],
+    U in [Base.BitInteger_types..., BigInt]
+    @test typeof(rand(U(0):U(127)) % T) === T
+end

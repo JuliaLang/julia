@@ -1,29 +1,29 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## floating point traits ##
 
 """
     Inf16
 
-Positive infinity of type `Float16`.
+Positive infinity of type [`Float16`](@ref).
 """
 const Inf16 = bitcast(Float16, 0x7c00)
 """
     NaN16
 
-A not-a-number value of type `Float16`.
+A not-a-number value of type [`Float16`](@ref).
 """
 const NaN16 = bitcast(Float16, 0x7e00)
 """
     Inf32
 
-Positive infinity of type `Float32`.
+Positive infinity of type [`Float32`](@ref).
 """
 const Inf32 = bitcast(Float32, 0x7f800000)
 """
     NaN32
 
-A not-a-number value of type `Float32`.
+A not-a-number value of type [`Float32`](@ref).
 """
 const NaN32 = bitcast(Float32, 0x7fc00000)
 const Inf64 = bitcast(Float64, 0x7ff0000000000000)
@@ -32,13 +32,13 @@ const NaN64 = bitcast(Float64, 0x7ff8000000000000)
 """
     Inf
 
-Positive infinity of type `Float64`.
+Positive infinity of type [`Float64`](@ref).
 """
 const Inf = Inf64
 """
     NaN
 
-A not-a-number value of type `Float64`.
+A not-a-number value of type [`Float64`](@ref).
 """
 const NaN = NaN64
 
@@ -64,7 +64,7 @@ for t1 in (Float32, Float64)
     end
 end
 convert(::Type{Integer}, x::Float16) = convert(Integer, Float32(x))
-convert{T<:Integer}(::Type{T}, x::Float16) = convert(T, Float32(x))
+convert(::Type{T}, x::Float16) where {T<:Integer} = convert(T, Float32(x))
 
 
 promote_rule(::Type{Float64}, ::Type{UInt128}) = Float64
@@ -197,8 +197,8 @@ end
 #   "Fast Half Float Conversion" by Jeroen van der Zijp
 #   ftp://ftp.fox-toolkit.org/pub/fasthalffloatconversion.pdf
 
-const basetable = Array{UInt16}(512)
-const shifttable = Array{UInt8}(512)
+const basetable = Vector{UInt16}(512)
+const shifttable = Vector{UInt8}(512)
 
 for i = 0:255
     e = i - 127
@@ -271,16 +271,19 @@ julia> float(Int)
 Float64
 ```
 """
-float{T<:Number}(::Type{T}) = typeof(float(zero(T)))
+float(::Type{T}) where {T<:Number} = typeof(float(zero(T)))
+float(::Type{T}) where {T<:AbstractFloat} = T
 
 for Ti in (Int8, Int16, Int32, Int64)
     @eval begin
+        unsafe_trunc(::Type{$Ti}, x::Float16) = unsafe_trunc($Ti, Float32(x))
         unsafe_trunc(::Type{$Ti}, x::Float32) = fptosi($Ti, x)
         unsafe_trunc(::Type{$Ti}, x::Float64) = fptosi($Ti, x)
     end
 end
 for Ti in (UInt8, UInt16, UInt32, UInt64)
     @eval begin
+        unsafe_trunc(::Type{$Ti}, x::Float16) = unsafe_trunc($Ti, Float32(x))
         unsafe_trunc(::Type{$Ti}, x::Float32) = fptoui($Ti, x)
         unsafe_trunc(::Type{$Ti}, x::Float64) = fptoui($Ti, x)
     end
@@ -314,6 +317,8 @@ function unsafe_trunc(::Type{Int128}, x::Float32)
     copysign(unsafe_trunc(UInt128,x) % Int128, x)
 end
 
+unsafe_trunc(::Type{UInt128}, x::Float16) = unsafe_trunc(UInt128, Float32(x))
+unsafe_trunc(::Type{Int128}, x::Float16) = unsafe_trunc(Int128, Float32(x))
 
 # matches convert methods
 # also determines floor, ceil, round
@@ -323,15 +328,15 @@ trunc(::Type{Unsigned}, x::Float32) = trunc(UInt,x)
 trunc(::Type{Unsigned}, x::Float64) = trunc(UInt,x)
 trunc(::Type{Integer}, x::Float32) = trunc(Int,x)
 trunc(::Type{Integer}, x::Float64) = trunc(Int,x)
-trunc{T<:Integer}(::Type{T}, x::Float16) = trunc(T, Float32(x))
+trunc(::Type{T}, x::Float16) where {T<:Integer} = trunc(T, Float32(x))
 
 # fallbacks
-floor{T<:Integer}(::Type{T}, x::AbstractFloat) = trunc(T,floor(x))
-floor{T<:Integer}(::Type{T}, x::Float16) = floor(T, Float32(x))
-ceil{ T<:Integer}(::Type{T}, x::AbstractFloat) = trunc(T,ceil(x))
-ceil{ T<:Integer}(::Type{T}, x::Float16) = ceil(T, Float32(x))
-round{T<:Integer}(::Type{T}, x::AbstractFloat) = trunc(T,round(x))
-round{T<:Integer}(::Type{T}, x::Float16) = round(T, Float32(x))
+floor(::Type{T}, x::AbstractFloat) where {T<:Integer} = trunc(T,floor(x))
+floor(::Type{T}, x::Float16) where {T<:Integer} = floor(T, Float32(x))
+ceil(::Type{T}, x::AbstractFloat) where {T<:Integer} = trunc(T,ceil(x))
+ceil(::Type{T}, x::Float16) where {T<:Integer} = ceil(T, Float32(x))
+round(::Type{T}, x::AbstractFloat) where {T<:Integer} = trunc(T,round(x))
+round(::Type{T}, x::Float16) where {T<:Integer} = round(T, Float32(x))
 
 trunc(x::Float64) = trunc_llvm(x)
 trunc(x::Float32) = trunc_llvm(x)
@@ -395,9 +400,9 @@ end
 rem(x::Float32, y::Float32) = rem_float(x, y)
 rem(x::Float64, y::Float64) = rem_float(x, y)
 
-cld{T<:AbstractFloat}(x::T, y::T) = -fld(-x,y)
+cld(x::T, y::T) where {T<:AbstractFloat} = -fld(-x,y)
 
-function mod{T<:AbstractFloat}(x::T, y::T)
+function mod(x::T, y::T) where T<:AbstractFloat
     r = rem(x,y)
     if r == 0
         copysign(r,y)
@@ -515,7 +520,7 @@ abs(x::Float64) = abs_float(x)
 Test whether a floating point number is not a number (NaN).
 """
 isnan(x::AbstractFloat) = x != x
-isnan(x::Float16)    = reinterpret(UInt16,x)&0x7fff  > 0x7c00
+isnan(x::Float16) = reinterpret(UInt16,x)&0x7fff > 0x7c00
 isnan(x::Real) = false
 
 """
@@ -559,7 +564,7 @@ hash(x::Float32, h::UInt) = hash(Float64(x), h)
 precision(::Type{Float16}) = 11
 precision(::Type{Float32}) = 24
 precision(::Type{Float64}) = 53
-precision{T<:AbstractFloat}(::T) = precision(T)
+precision(::T) where {T<:AbstractFloat} = precision(T)
 
 """
     uabs(x::Integer)
@@ -690,8 +695,8 @@ end
     typemax(::Type{Float32}) = $(Inf32)
     typemin(::Type{Float64}) = $(-Inf64)
     typemax(::Type{Float64}) = $(Inf64)
-    typemin{T<:Real}(x::T) = typemin(T)
-    typemax{T<:Real}(x::T) = typemax(T)
+    typemin(x::T) where {T<:Real} = typemin(T)
+    typemax(x::T) where {T<:Real} = typemax(T)
 
     realmin(::Type{Float16}) = $(bitcast(Float16, 0x0400))
     realmin(::Type{Float32}) = $(bitcast(Float32, 0x00800000))
@@ -699,8 +704,8 @@ end
     realmax(::Type{Float16}) = $(bitcast(Float16, 0x7bff))
     realmax(::Type{Float32}) = $(bitcast(Float32, 0x7f7fffff))
     realmax(::Type{Float64}) = $(bitcast(Float64, 0x7fefffffffffffff))
-    realmin{T<:AbstractFloat}(x::T) = realmin(T)
-    realmax{T<:AbstractFloat}(x::T) = realmax(T)
+    realmin(x::T) where {T<:AbstractFloat} = realmin(T)
+    realmax(x::T) where {T<:AbstractFloat} = realmax(T)
     realmin() = realmin(Float64)
     realmax() = realmax(Float64)
 
@@ -745,8 +750,8 @@ of `x` is different, then the larger of the two is taken, that is
     eps(x) == max(x-prevfloat(x), nextfloat(x)-x)
 
 The exceptions to this rule are the smallest and largest finite values
-(e.g. `nextfloat(-Inf)` and `prevfloat(Inf)` for `Float64`), which round to the smaller of
-the values.
+(e.g. `nextfloat(-Inf)` and `prevfloat(Inf)` for [`Float64`](@ref)), which round to the
+smaller of the values.
 
 The rationale for this behavior is that `eps` bounds the floating point rounding
 error. Under the default `RoundNearest` rounding mode, if ``y`` is a real number and ``x``
@@ -839,7 +844,7 @@ truncmask(x, mask) = x
 
 float(A::AbstractArray{<:AbstractFloat}) = A
 
-function float{T}(A::AbstractArray{T})
+function float(A::AbstractArray{T}) where T
     if !isleaftype(T)
         error("`float` not defined on abstractly-typed arrays; please convert to a more specific type")
     end

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module LineEdit
 
@@ -725,6 +725,9 @@ function match_input(k::Dict, s, term=terminal(s), cs=Char[], keymap = k)
     # return an empty keymap function
     eof(term) && return keymap_fcn(nothing, "")
     c = read(term, Char)
+    # Ignore any '\0' (eg, CTRL-space in xterm), as this is used as a
+    # placeholder for the wildcard (see normalize_key("*"))
+    c != '\0' || return keymap_fcn(nothing, "")
     push!(cs, c)
     key = haskey(k, c) ? c : '\0'
     # if we don't match on the key, look for a default action then fallback on 'nothing' to ignore
@@ -864,7 +867,7 @@ function keymap_merge(target,source)
     for key in setdiff(keys(source), keys(direct_keys))
         # We first resolve redirects in the source
         value = source[key]
-        visited = Array{Any}(0)
+        visited = Vector{Any}(0)
         while isa(value, Union{Char,AbstractString})
             value = normalize_key(value)
             if value in visited
@@ -1572,13 +1575,19 @@ end
 function run_interface(terminal, m::ModalInterface)
     s::MIState = init_state(terminal, m)
     while !s.aborted
-        p = s.current_mode
         buf, ok, suspend = prompt!(terminal, m, s)
         while suspend
             @static if is_unix(); ccall(:jl_repl_raise_sigtstp, Cint, ()); end
             buf, ok, suspend = prompt!(terminal, m, s)
         end
-        mode(state(s, s.current_mode)).on_done(s, buf, ok)
+        eval(Main,
+            Expr(:body,
+                Expr(:return,
+                     Expr(:call,
+                          QuoteNode(mode(state(s, s.current_mode)).on_done),
+                          QuoteNode(s),
+                          QuoteNode(buf),
+                          QuoteNode(ok)))))
     end
 end
 
@@ -1597,17 +1606,22 @@ function prompt!(term, prompt, s = init_state(term, prompt))
     enable_bracketed_paste(term)
     try
         activate(prompt, s, term, term)
+        old_state = mode(s)
         while true
-            map = keymap(s, prompt)
-            fcn = match_input(map, s)
+            kmap = keymap(s, prompt)
+            fcn = match_input(kmap, s)
+            kdata = keymap_data(s, prompt)
             # errors in keymaps shouldn't cause the REPL to fail, so wrap in a
             # try/catch block
             local state
             try
-                state = fcn(s, keymap_data(s, prompt))
+                state = fcn(s, kdata)
             catch e
-                warn("Caught an exception in the keymap:")
-                warn(e)
+                bt = catch_backtrace()
+                warn(e, bt = bt, prefix = "ERROR (in the keymap): ")
+                # try to cleanup and get `s` back to its original state before returning
+                transition(s, :reset)
+                transition(s, old_state)
                 state = :done
             end
             if state === :abort

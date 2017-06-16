@@ -181,7 +181,7 @@ julia> mutable struct SelfReferential
 This type may appear innocuous enough, until one considers how to construct an instance of it.
 If `a` is an instance of `SelfReferential`, then a second instance can be created by the call:
 
-```julia
+```julia-repl
 julia> b = SelfReferential(a)
 ```
 
@@ -246,7 +246,7 @@ and does not reference other objects. The plain data types consist of primitive 
 and immutable structs of other plain data types. The initial contents of a plain data type is
 undefined:
 
-```julia
+```julia-repl
 julia> struct HasPlain
            n::Int
            HasPlain() = new()
@@ -301,7 +301,7 @@ Point{Int64}(1, 2)
 julia> Point{Int64}(1.0,2.5) ## explicit T ##
 ERROR: InexactError()
 Stacktrace:
- [1] convert(::Type{Int64}, ::Float64) at ./float.jl:675
+ [1] convert(::Type{Int64}, ::Float64) at ./float.jl:680
  [2] Point{Int64}(::Float64, ::Float64) at ./none:2
 
 julia> Point{Float64}(1.0, 2.5) ## explicit T ##
@@ -313,10 +313,10 @@ Point{Float64}(1.0, 2.0)
 
 As you can see, for constructor calls with explicit type parameters, the arguments are converted
 to the implied field types: `Point{Int64}(1,2)` works, but `Point{Int64}(1.0,2.5)` raises an
-[`InexactError`](@ref) when converting `2.5` to `Int64`. When the type is implied by the arguments to
-the constructor call, as in `Point(1,2)`, then the types of the arguments must agree -- otherwise
-the `T` cannot be determined -- but any pair of real arguments with matching type may be given
-to the generic `Point` constructor.
+[`InexactError`](@ref) when converting `2.5` to [`Int64`](@ref). When the type is implied
+by the arguments to the constructor call, as in `Point(1,2)`, then the types of the
+arguments must agree -- otherwise the `T` cannot be determined -- but any pair of real
+arguments with matching type may be given to the generic `Point` constructor.
 
 What's really going on here is that `Point`, `Point{Float64}` and `Point{Int64}` are all different
 constructor functions. In fact, `Point{T}` is a distinct constructor function for each type `T`.
@@ -330,10 +330,10 @@ This automatic provision of constructors is equivalent to the following explicit
 julia> struct Point{T<:Real}
            x::T
            y::T
-           Point{T}(x,y) where T<:Real = new(x,y)
+           Point{T}(x,y) where {T<:Real} = new(x,y)
        end
 
-julia> Point(x::T, y::T) where T<:Real = Point{T}(x,y);
+julia> Point(x::T, y::T) where {T<:Real} = Point{T}(x,y);
 ```
 
 Notice that each definition looks like the form of constructor call that it handles.
@@ -407,7 +407,7 @@ defining sophisticated behavior is typically quite simple.
 ## Case Study: Rational
 
 Perhaps the best way to tie all these pieces together is to present a real world example of a
-parametric composite type and its constructor methods. To that end, here is the (slightly modified) beginning of [rational.jl](https://github.com/JuliaLang/julia/blob/master/base/rational.jl),
+parametric composite type and its constructor methods. To that end, here is the (slightly modified) beginning of [`rational.jl`](https://github.com/JuliaLang/julia/blob/master/base/rational.jl),
 which implements Julia's [Rational Numbers](@ref):
 
 ```jldoctest rational
@@ -425,7 +425,7 @@ julia> struct OurRational{T<:Integer} <: Real
            end
        end
 
-julia> OurRational(n::T, d::T) where T<:Integer = OurRational{T}(n,d)
+julia> OurRational(n::T, d::T) where {T<:Integer} = OurRational{T}(n,d)
 OurRational
 
 julia> OurRational(n::Integer, d::Integer) = OurRational(promote(n,d)...)
@@ -502,7 +502,7 @@ false
 
 Thus, although the [`//`](@ref) operator usually returns an instance of `OurRational`, if either
 of its arguments are complex integers, it will return an instance of `Complex{OurRational}` instead.
-The interested reader should consider perusing the rest of [rational.jl](https://github.com/JuliaLang/julia/blob/master/base/rational.jl):
+The interested reader should consider perusing the rest of [`rational.jl`](https://github.com/JuliaLang/julia/blob/master/base/rational.jl):
 it is short, self-contained, and implements an entire basic Julia type.
 
 ## [Constructors and Conversion](@id constructors-and-conversion)
@@ -551,10 +551,11 @@ SummedArray{Int32,Int32}(Int32[1, 2, 3], 6)
 ```
 
 The problem is that we want `S` to be a larger type than `T`, so that we can sum many elements
-with less information loss. For example, when `T` is `Int32`, we would like `S` to be `Int64`.
-Therefore we want to avoid an interface that allows the user to construct instances of the type
-`SummedArray{Int32,Int32}`. One way to do this is to provide a constructor only for `SummedArray`,
-but inside the `type` definition block to suppress generation of default constructors:
+with less information loss. For example, when `T` is [`Int32`](@ref), we would like `S` to
+be [`Int64`](@ref). Therefore we want to avoid an interface that allows the user to construct
+instances of the type `SummedArray{Int32,Int32}`. One way to do this is to provide a
+constructor only for `SummedArray`, but inside the `type` definition block to suppress
+generation of default constructors:
 
 ```jldoctest
 julia> struct SummedArray{T<:Number,S<:Number}

@@ -39,7 +39,7 @@ Fully implemented by:
   * `UnitRange`
   * `Tuple`
   * `Number`
-  * `AbstractArray`
+  * [`AbstractArray`](@ref)
   * [`IntSet`](@ref)
   * [`ObjectIdDict`](@ref)
   * [`Dict`](@ref)
@@ -63,7 +63,7 @@ Fully implemented by:
   * `UnitRange`
   * `Tuple`
   * `Number`
-  * `AbstractArray`
+  * [`AbstractArray`](@ref)
   * [`IntSet`](@ref)
   * [`ObjectIdDict`](@ref)
   * [`Dict`](@ref)
@@ -79,6 +79,7 @@ Base.eltype
 Base.indexin
 Base.findin
 Base.unique
+Base.unique!
 Base.allunique
 Base.reduce(::Any, ::Any, ::Any)
 Base.reduce(::Any, ::Any)
@@ -145,7 +146,7 @@ Fully implemented by:
 
   * [`Array`](@ref)
   * [`BitArray`](@ref)
-  * `AbstractArray`
+  * [`AbstractArray`](@ref)
   * `SubArray`
   * [`ObjectIdDict`](@ref)
   * [`Dict`](@ref)

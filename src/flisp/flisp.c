@@ -1020,7 +1020,7 @@ static uint32_t process_keys(fl_context_t *fl_ctx, value_t kwtable,
   - allocate vararg array
   - push closed env, set up new environment
 */
-static value_t apply_cl(fl_context_t *fl_ctx, uint32_t nargs)
+JL_EXTENSION static value_t apply_cl(fl_context_t *fl_ctx, uint32_t nargs)
 {
     VM_LABELS;
     VM_APPLY_LABELS;
@@ -1173,7 +1173,7 @@ static value_t apply_cl(fl_context_t *fl_ctx, uint32_t nargs)
             }
             else if (iscbuiltin(fl_ctx, fl_apply_func)) {
                 s = fl_ctx->SP;
-                fl_apply_v = ((builtin_t)(((void**)ptr(fl_apply_func))[3]))(fl_ctx, &fl_ctx->Stack[fl_ctx->SP-n], n);
+                fl_apply_v = ((builtin_t)(uintptr_t)(((void**)ptr(fl_apply_func))[3]))(fl_ctx, &fl_ctx->Stack[fl_ctx->SP-n], n);
                 fl_ctx->SP = s-n;
                 fl_ctx->Stack[fl_ctx->SP-1] = fl_apply_v;
                 NEXT_OP;
@@ -1223,7 +1223,7 @@ static value_t apply_cl(fl_context_t *fl_ctx, uint32_t nargs)
             }
             else if (iscbuiltin(fl_ctx, fl_apply_func)) {
                 s = fl_ctx->SP;
-                fl_apply_v = ((builtin_t)(((void**)ptr(fl_apply_func))[3]))(fl_ctx, &fl_ctx->Stack[fl_ctx->SP-n], n);
+                fl_apply_v = ((builtin_t)(uintptr_t)(((void**)ptr(fl_apply_func))[3]))(fl_ctx, &fl_ctx->Stack[fl_ctx->SP-n], n);
                 fl_ctx->SP = s-n;
                 fl_ctx->Stack[fl_ctx->SP-1] = fl_apply_v;
                 NEXT_OP;

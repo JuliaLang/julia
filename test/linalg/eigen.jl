@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.Test
 
@@ -35,14 +35,15 @@ aimg  = randn(n,n)/2
         @test eab[1] == eigvals(fill(α,1,1),fill(β,1,1))
         @test eab[2] == eigvecs(fill(α,1,1),fill(β,1,1))
 
-        d,v   = eig(a)
         @testset "non-symmetric eigen decomposition" begin
+            d, v = eig(a)
             for i in 1:size(a,2)
                 @test a*v[:,i] ≈ d[i]*v[:,i]
             end
             f = eigfact(a)
             @test det(a) ≈ det(f)
             @test inv(a) ≈ inv(f)
+            @test isposdef(a) == isposdef(f)
             @test eigvals(f) === f[:values]
             @test eigvecs(f) === f[:vectors]
 

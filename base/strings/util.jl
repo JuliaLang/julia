@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # starts with and ends with predicates
 
@@ -21,7 +21,7 @@ function startswith(a::AbstractString, b::AbstractString)
     while !done(a,i) && !done(b,i)
         c, i = next(a,i)
         d, j = next(b,j)
-        if c != d return false end
+        (c != d) && (return false)
     end
     done(b,i)
 end
@@ -48,7 +48,7 @@ function endswith(a::AbstractString, b::AbstractString)
     while a1 <= i && b1 <= j
         c = a[i]
         d = b[j]
-        if c != d return false end
+        (c != d) && (return false)
         i = prevind(a,i)
         j = prevind(b,j)
     end
@@ -90,9 +90,9 @@ julia> chomp("Hello\\n")
 """
 function chomp(s::AbstractString)
     i = endof(s)
-    if (i < 1 || s[i] != '\n') return SubString(s, 1, i) end
+    (i < 1 || s[i] != '\n') && (return SubString(s, 1, i))
     j = prevind(s,i)
-    if (j < 1 || s[j] != '\r') return SubString(s, 1, i-1) end
+    (j < 1 || s[j] != '\r') && (return SubString(s, 1, i-1))
     return SubString(s, 1, j-1)
 end
 function chomp(s::String)
@@ -197,7 +197,7 @@ strip(s::AbstractString, chars::Chars) = lstrip(rstrip(s, chars), chars)
 
 function lpad(s::AbstractString, n::Integer, p::AbstractString=" ")
     m = n - strwidth(s)
-    if m <= 0; return s; end
+    (m <= 0) && (return s)
     l = strwidth(p)
     if l==1
         return string(p^m, s)
@@ -210,7 +210,7 @@ end
 
 function rpad(s::AbstractString, n::Integer, p::AbstractString=" ")
     m = n - strwidth(s)
-    if m <= 0; return s; end
+    (m <= 0) && (return s)
     l = strwidth(p)
     if l==1
         return string(s, p^m)
@@ -250,7 +250,8 @@ cpad(s, n::Integer, p=" ") = rpad(lpad(s,div(n+strwidth(s),2),p),n,p)
 
 # splitter can be a Char, Vector{Char}, AbstractString, Regex, ...
 # any splitter that provides search(s::AbstractString, splitter)
-split{T<:SubString}(str::T, splitter; limit::Integer=0, keep::Bool=true) = _split(str, splitter, limit, keep, T[])
+split(str::T, splitter; limit::Integer=0, keep::Bool=true) where {T<:SubString} =
+    _split(str, splitter, limit, keep, T[])
 
 """
     split(s::AbstractString, [chars]; limit::Integer=0, keep::Bool=true)
@@ -273,7 +274,8 @@ julia> split(a,".")
  "rch"
 ```
 """
-split{T<:AbstractString}(str::T, splitter; limit::Integer=0, keep::Bool=true) = _split(str, splitter, limit, keep, SubString{T}[])
+split(str::T, splitter; limit::Integer=0, keep::Bool=true) where {T<:AbstractString} =
+    _split(str, splitter, limit, keep, SubString{T}[])
 function _split(str::AbstractString, splitter, limit::Integer, keep_empty::Bool, strs::Array)
     i = start(str)
     n = endof(str)
@@ -286,7 +288,7 @@ function _split(str::AbstractString, splitter, limit::Integer, keep_empty::Bool,
             end
             i = k
         end
-        if k <= j; k = nextind(str,j) end
+        (k <= j) && (k = nextind(str,j))
         r = search(str,splitter,k)
         j, k = first(r), nextind(str,last(r))
     end
@@ -299,7 +301,8 @@ end
 # a bit oddball, but standard behavior in Perl, Ruby & Python:
 split(str::AbstractString) = split(str, _default_delims; limit=0, keep=false)
 
-rsplit{T<:SubString}(str::T, splitter; limit::Integer=0, keep::Bool=true) = _rsplit(str, splitter, limit, keep, T[])
+rsplit(str::T, splitter; limit::Integer=0, keep::Bool=true) where {T<:SubString} =
+    _rsplit(str, splitter, limit, keep, T[])
 
 """
     rsplit(s::AbstractString, [chars]; limit::Integer=0, keep::Bool=true)
@@ -328,7 +331,8 @@ julia> rsplit(a,".";limit=2)
  "h"
 ```
 """
-rsplit{T<:AbstractString}(str::T, splitter   ; limit::Integer=0, keep::Bool=true) = _rsplit(str, splitter, limit, keep, SubString{T}[])
+rsplit(str::T, splitter; limit::Integer=0, keep::Bool=true) where {T<:AbstractString} =
+    _rsplit(str, splitter, limit, keep, SubString{T}[])
 function _rsplit(str::AbstractString, splitter, limit::Integer, keep_empty::Bool, strs::Array)
     i = start(str)
     n = endof(str)
@@ -487,7 +491,7 @@ throwing an `ArgumentError` indicating the position of the first non-ASCII byte.
 julia> ascii("abcdeγfgh")
 ERROR: ArgumentError: invalid ASCII at index 6 in "abcdeγfgh"
 Stacktrace:
- [1] ascii(::String) at ./strings/util.jl:475
+ [1] ascii(::String) at ./strings/util.jl:479
 
 julia> ascii("abcdefgh")
 "abcdefgh"

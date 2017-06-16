@@ -28,9 +28,12 @@
         ((atom? e) (string e))
         ((eq? (car e) '|.|)
          (string (deparse (cadr e)) '|.|
-                 (if (and (pair? (caddr e)) (memq (caaddr e) '(quote inert)))
-                     (deparse (cadr (caddr e)))
-                     (string #\( (deparse (caddr e)) #\)))))
+                 (cond ((and (pair? (caddr e)) (memq (caaddr e) '(quote inert)))
+                        (deparse (cadr (caddr e))))
+                       ((and (pair? (caddr e)) (eq? (caaddr e) 'copyast))
+                        (deparse (cadr (cadr (caddr e)))))
+                       (else
+                        (string #\( (deparse (caddr e)) #\))))))
         ((memq (car e) '(... |'| |.'|))
          (string (deparse (cadr e)) (car e)))
         ((or (syntactic-op? (car e)) (eq? (car e) '|<:|) (eq? (car e) '|>:|))
@@ -91,6 +94,7 @@
                 ((function for while)
                  (deparse-block (string (car e) " " (deparse (cadr e)))
                                 (block-stmts (caddr e))))
+                ((copyast) (deparse (cadr e)))
                 (else
                  (string e))))))
 
@@ -150,7 +154,7 @@
            (else (bad-formal-argument v))))))
 
 (define (arg-type v)
-  (cond ((symbol? v)  'Any)
+  (cond ((symbol? v)  '(core Any))
         ((not (pair? v))
          (bad-formal-argument v))
         (else
@@ -203,7 +207,7 @@
   (if (decl? v) (cadr v) v))
 
 (define (decl-type v)
-  (if (decl? v) (caddr v) 'Any))
+  (if (decl? v) (caddr v) '(core Any)))
 
 (define (sym-dot? e)
   (and (length= e 3) (eq? (car e) '|.|)
@@ -269,7 +273,7 @@
 (define (eq-sym? a b)
   (or (eq? a b) (and (ssavalue? a) (ssavalue? b) (eqv? (cdr a) (cdr b)))))
 
-(define (make-var-info name) (list name 'Any 0))
+(define (make-var-info name) (list name '(core Any) 0))
 (define vinfo:name car)
 (define vinfo:type cadr)
 (define (vinfo:set-type! v t) (set-car! (cdr v) t))

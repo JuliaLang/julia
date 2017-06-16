@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ioslength(io::IOBuffer) = (io.seekable ? io.size : nb_available(io))
 
@@ -231,4 +231,30 @@ end
 # pr #19461
 let io = IOBuffer()
     @test Base.buffer_writes(io) === io
+end
+
+# skipchars
+let
+    io = IOBuffer("")
+    @test eof(skipchars(io, isspace))
+
+    io = IOBuffer("   ")
+    @test eof(skipchars(io, isspace))
+
+    io = IOBuffer("#    \n     ")
+    @test eof(skipchars(io, isspace, linecomment='#'))
+
+    io = IOBuffer("      text")
+    skipchars(io, isspace)
+    @test String(readavailable(io)) == "text"
+
+    io = IOBuffer("   # comment \n    text")
+    skipchars(io, isspace, linecomment='#')
+    @test String(readavailable(io)) == "text"
+
+    for char in ['@','߷','࿊','𐋺']
+        io = IOBuffer("alphabeticalstuff$char")
+        @test !eof(skipchars(io, isalpha))
+        @test read(io, Char) == char
+    end
 end

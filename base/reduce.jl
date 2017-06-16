@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## reductions ##
 
@@ -17,19 +17,19 @@ const WidenReduceResult = Union{SmallSigned, SmallUnsigned, Float16}
 
 # r_promote_type: promote T to the type of reduce(op, ::Array{T})
 # (some "extra" methods are required here to avoid ambiguity warnings)
-r_promote_type{T}(op, ::Type{T}) = T
-r_promote_type{T<:WidenReduceResult}(op, ::Type{T}) = widen(T)
-r_promote_type{T<:WidenReduceResult}(::typeof(+), ::Type{T}) = widen(T)
-r_promote_type{T<:WidenReduceResult}(::typeof(*), ::Type{T}) = widen(T)
-r_promote_type{T<:Number}(::typeof(+), ::Type{T}) = typeof(zero(T)+zero(T))
-r_promote_type{T<:Number}(::typeof(*), ::Type{T}) = typeof(one(T)*one(T))
-r_promote_type{T<:WidenReduceResult}(::typeof(scalarmax), ::Type{T}) = T
-r_promote_type{T<:WidenReduceResult}(::typeof(scalarmin), ::Type{T}) = T
-r_promote_type{T<:WidenReduceResult}(::typeof(max), ::Type{T}) = T
-r_promote_type{T<:WidenReduceResult}(::typeof(min), ::Type{T}) = T
+r_promote_type(op, ::Type{T}) where {T} = T
+r_promote_type(op, ::Type{T}) where {T<:WidenReduceResult} = widen(T)
+r_promote_type(::typeof(+), ::Type{T}) where {T<:WidenReduceResult} = widen(T)
+r_promote_type(::typeof(*), ::Type{T}) where {T<:WidenReduceResult} = widen(T)
+r_promote_type(::typeof(+), ::Type{T}) where {T<:Number} = typeof(zero(T)+zero(T))
+r_promote_type(::typeof(*), ::Type{T}) where {T<:Number} = typeof(one(T)*one(T))
+r_promote_type(::typeof(scalarmax), ::Type{T}) where {T<:WidenReduceResult} = T
+r_promote_type(::typeof(scalarmin), ::Type{T}) where {T<:WidenReduceResult} = T
+r_promote_type(::typeof(max), ::Type{T}) where {T<:WidenReduceResult} = T
+r_promote_type(::typeof(min), ::Type{T}) where {T<:WidenReduceResult} = T
 
 # r_promote: promote x to the type of reduce(op, [x])
-r_promote{T}(op, x::T) = convert(r_promote_type(op, T), x)
+r_promote(op, x::T) where {T} = convert(r_promote_type(op, T), x)
 
 ## foldl && mapfoldl
 
@@ -104,7 +104,7 @@ foldl(op, itr) = mapfoldl(identity, op, itr)
 function mapfoldr_impl(f, op, v0, itr, i::Integer)
     # Unroll the while loop once; if v0 is known, the call to op may
     # be evaluated at compile time
-    if isempty(itr)
+    if isempty(itr) || i == 0
         return r_promote(op, v0)
     else
         x = itr[i]
@@ -167,15 +167,25 @@ foldr(op, itr) = mapfoldr(identity, op, itr)
 
 ## reduce & mapreduce
 
+# `mapreduce_impl()` is called by `mapreduce()` (via `_mapreduce()`, when `A`
+# supports linear indexing) and does actual calculations (for `A[ifirst:ilast]` subset).
+# For efficiency, no parameter validity checks are done, it's the caller's responsibility.
+# `ifirst:ilast` range is assumed to be a valid non-empty subset of `A` indices.
+
+# This is a generic implementation of `mapreduce_impl()`,
+# certain `op` (e.g. `min` and `max`) may have their own specialized versions.
 function mapreduce_impl(f, op, A::AbstractArray, ifirst::Integer, ilast::Integer, blksize::Int=pairwise_blocksize(f, op))
-    if ifirst + blksize > ilast
+    if ifirst == ilast
+        @inbounds a1 = A[ifirst]
+        return r_promote(op, f(a1))
+    elseif ifirst + blksize > ilast
         # sequential portion
-        fx1 = r_promote(op, f(A[ifirst]))
-        fx2 = r_promote(op, f(A[ifirst + 1]))
-        v = op(fx1, fx2)
+        @inbounds a1 = A[ifirst]
+        @inbounds a2 = A[ifirst+1]
+        v = op(r_promote(op, f(a1)), r_promote(op, f(a2)))
         @simd for i = ifirst + 2 : ilast
-            @inbounds Ai = A[i]
-            v = op(v, f(Ai))
+            @inbounds ai = A[i]
+            v = op(v, f(ai))
         end
         return v
     else
@@ -248,27 +258,26 @@ mr_empty_iter(f, op, itr, ::EltypeUnknown) = _empty_reduce_error()
 
 _mapreduce(f, op, A::AbstractArray) = _mapreduce(f, op, IndexStyle(A), A)
 
-function _mapreduce{T}(f, op, ::IndexLinear, A::AbstractArray{T})
+function _mapreduce(f, op, ::IndexLinear, A::AbstractArray{T}) where T
     inds = linearindices(A)
     n = length(inds)
-    @inbounds begin
-        if n == 0
-            return mr_empty(f, op, T)
-        elseif n == 1
-            return r_promote(op, f(A[inds[1]]))
-        elseif n < 16
-            fx1 = r_promote(op, f(A[inds[1]]))
-            fx2 = r_promote(op, f(A[inds[2]]))
-            s = op(fx1, fx2)
-            i = inds[2]
-            while i < last(inds)
-                Ai = A[i+=1]
-                s = op(s, f(Ai))
-            end
-            return s
-        else
-            return mapreduce_impl(f, op, A, first(inds), last(inds))
+    if n == 0
+        return mr_empty(f, op, T)
+    elseif n == 1
+        @inbounds a1 = A[inds[1]]
+        return r_promote(op, f(a1))
+    elseif n < 16 # process short array here, avoid mapreduce_impl() compilation
+        @inbounds i = inds[1]
+        @inbounds a1 = A[i]
+        @inbounds a2 = A[i+=1]
+        s = op(r_promote(op, f(a1)), r_promote(op, f(a2)))
+        while i < last(inds)
+            @inbounds Ai = A[i+=1]
+            s = op(s, f(Ai))
         end
+        return s
+    else
+        return mapreduce_impl(f, op, A, first(inds), last(inds))
     end
 end
 
@@ -415,17 +424,12 @@ function mapreduce_impl(f, op::Union{typeof(scalarmax),
                                      typeof(min)},
                         A::AbstractArray, first::Int, last::Int)
     # locate the first non NaN number
-    v = f(A[first])
+    @inbounds a1 = A[first]
+    v = f(a1)
     i = first + 1
-    while v != v && i <= last
-        @inbounds Ai = A[i]
-        v = f(Ai)
-        i += 1
-    end
-    while i <= last
-        @inbounds Ai = A[i]
-        x = f(Ai)
-        v = op(v, x)
+    while (v == v) && (i <= last)
+        @inbounds ai = A[i]
+        v = op(v, f(ai))
         i += 1
     end
     v
@@ -637,7 +641,7 @@ const ∈ = in
 Returns `true` if there is at least one element `y` in `itr` such that `fun(y,x)` is `true`.
 
 ```jldoctest
-julia> vec = [ 10, 100, 200 ]
+julia> vec = [10, 100, 200]
 3-element Array{Int64,1}:
   10
  100

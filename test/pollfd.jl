@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # This script does the following
 # Sets up n unix pipes
@@ -123,7 +123,25 @@ end
 # issue #12473
 # make sure 1-shot timers work
 let a = []
-    Timer(t->push!(a, 1), 0.01, 0)
+    Timer(t -> push!(a, 1), 0.01, 0)
     sleep(0.2)
     @test a == [1]
+end
+
+# make sure repeating timers work
+@noinline function make_unrooted_timer(a)
+    t = Timer(0.0, 0.1)
+    finalizer(t, t -> a[] += 1)
+    wait(t)
+    e = @elapsed for i = 1:5
+        wait(t)
+    end
+    @test 1.5 > e >= 0.4
+    @test a[] == 0
+    nothing
+end
+let a = Ref(0)
+    make_unrooted_timer(a)
+    gc()
+    @test a[] == 1
 end

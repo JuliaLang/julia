@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.Test
 using Base.Threads
@@ -136,7 +136,7 @@ threaded_gc_locked(Mutex)
 
 # Issue 14726
 # Make sure that eval'ing in a different module doesn't mess up other threads
-orig_curmodule14726 = current_module()
+orig_curmodule14726 = @__MODULE__
 main_var14726 = 1
 module M14726
 module_var14726 = 1
@@ -147,15 +147,15 @@ end
         @eval M14726 module_var14726 = $j
     end
 end
-@test isdefined(:orig_curmodule14726)
-@test isdefined(:main_var14726)
-@test current_module() == orig_curmodule14726
+@test @isdefined(orig_curmodule14726)
+@test @isdefined(main_var14726)
+@test @__MODULE__() == orig_curmodule14726
 
 @threads for i in 1:100
     # Make sure current module is not null.
     # The @test might not be particularly meaningful currently since the
     # thread infrastructures swallows the error. (Same below)
-    @test current_module() == orig_curmodule14726
+    @test @__MODULE__() == orig_curmodule14726
 end
 
 module M14726_2
@@ -166,7 +166,7 @@ using Base.Threads
     # pushes the work onto the threads.
     # The @test might not be particularly meaningful currently since the
     # thread infrastructures swallows the error. (See also above)
-    @test current_module() == M14726_2
+    @test @__MODULE__() == M14726_2
 end
 end
 
@@ -381,6 +381,23 @@ for period in (0.06, Dates.Millisecond(60))
     end
 end
 
+complex_cfunction = function(a)
+    s = zero(eltype(a))
+    @inbounds @simd for i in a
+        s += muladd(a[i], a[i], -2)
+    end
+    return s
+end
+function test_thread_cfunction()
+    @threads for i in 1:1000
+        # Make sure this is not inferrable
+        # and a runtime call to `jl_function_ptr` will be created
+        ccall(:jl_function_ptr, Ptr{Void}, (Any, Any, Any),
+              complex_cfunction, Float64, Tuple{Ref{Vector{Float64}}})
+    end
+end
+test_thread_cfunction()
+
 # Compare the two ways of checking if threading is enabled.
 # `jl_tls_states` should only be defined on non-threading build.
 if ccall(:jl_threading_enabled, Cint, ()) == 0
@@ -389,6 +406,20 @@ if ccall(:jl_threading_enabled, Cint, ()) == 0
 else
     @test_throws ErrorException cglobal(:jl_tls_states)
 end
+
+function test_thread_range()
+    a = zeros(Int, nthreads())
+    @threads for i in 1:threadid()
+        a[i] = 1
+    end
+    for i in 1:threadid()
+        @test a[i] == 1
+    end
+    for i in (threadid() + 1):nthreads()
+        @test a[i] == 0
+    end
+end
+test_thread_range()
 
 # Thread safety of `jl_load_and_lookup`.
 function test_load_and_lookup_18020(n)
@@ -401,3 +432,20 @@ function test_load_and_lookup_18020(n)
     end
 end
 test_load_and_lookup_18020(10000)
+
+# Nested threaded loops
+# This may not be efficient/fully supported but should work without crashing.....
+function test_nested_loops()
+    a = zeros(Int, 100, 100)
+    @threads for i in 1:100
+        @threads for j in 1:100
+            a[j, i] = i + j
+        end
+    end
+    for i in 1:100
+        for j in 1:100
+            @test a[j, i] == i + j
+        end
+    end
+end
+test_nested_loops()

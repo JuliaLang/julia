@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Built-in SSH and Local Managers
 
@@ -58,48 +58,47 @@ location on each node, or to be available via a shared file system.
 
 A machine specification is either a string `machine_spec` or a tuple - `(machine_spec, count)`.
 
-`machine_spec` is a string of the form `[user@]host[:port] [bind_addr[:port]]`. `user` defaults
-to current user, `port` to the standard ssh port. If `[bind_addr[:port]]` is specified, other
-workers will connect to this worker at the specified `bind_addr` and `port`.
+`machine_spec` is a string of the form `[user@]host[:port] [bind_addr[:port]]`. `user`
+defaults to current user, `port` to the standard ssh port. If `[bind_addr[:port]]` is
+specified, other workers will connect to this worker at the specified `bind_addr` and
+`port`.
 
-`count` is the number of workers to be launched on the specified host. If specified as `:auto`
-it will launch as many workers as the number of cores on the specific host.
+`count` is the number of workers to be launched on the specified host. If specified as
+`:auto` it will launch as many workers as the number of cores on the specific host.
 
 Keyword arguments:
 
 * `tunnel`: if `true` then SSH tunneling will be used to connect to the worker from the
-            master process. Default is `false`.
+  master process. Default is `false`.
 
-* `sshflags`: specifies additional ssh options, e.g.
-  ```sshflags=\`-i /home/foo/bar.pem\` ```
+* `sshflags`: specifies additional ssh options, e.g. ```sshflags=\`-i /home/foo/bar.pem\````
 
-* `max_parallel`: specifies the maximum number of workers connected to in parallel at a host.
-                  Defaults to 10.
+* `max_parallel`: specifies the maximum number of workers connected to in parallel at a
+  host. Defaults to 10.
 
 * `dir`: specifies the working directory on the workers. Defaults to the host's current
-         directory (as found by `pwd()`)
+  directory (as found by `pwd()`)
 
- * `enable_threaded_blas`: if `true` then  BLAS will run on multiple threads in added
-                           processes. Default is `false`.
+* `enable_threaded_blas`: if `true` then  BLAS will run on multiple threads in added
+  processes. Default is `false`.
 
 * `exename`: name of the `julia` executable. Defaults to `"\$JULIA_HOME/julia"` or
-             `"\$JULIA_HOME/julia-debug"` as the case may be.
+  `"\$JULIA_HOME/julia-debug"` as the case may be.
 
 * `exeflags`: additional flags passed to the worker processes.
 
-* `topology`: Specifies how the workers connect to each other. Sending a message
-            between unconnected workers results in an error.
+* `topology`: Specifies how the workers connect to each other. Sending a message between
+  unconnected workers results in an error.
 
-  + `topology=:all_to_all`  :  All processes are connected to each other.
-                      This is the default.
+    + `topology=:all_to_all`: All processes are connected to each other. The default.
 
-  + `topology=:master_slave`  :  Only the driver process, i.e. `pid` 1 connects to the
-                        workers. The workers do not connect to each other.
+    + `topology=:master_slave`: Only the driver process, i.e. `pid` 1 connects to the
+      workers. The workers do not connect to each other.
 
-  + `topology=:custom`  :  The `launch` method of the cluster manager specifies the
-                  connection topology via fields `ident` and `connect_idents` in
-                  `WorkerConfig`. A worker with a cluster manager identity `ident`
-                  will connect to all workers specified in `connect_idents`.
+    + `topology=:custom`: The `launch` method of the cluster manager specifies the
+      connection topology via fields `ident` and `connect_idents` in `WorkerConfig`.
+      A worker with a cluster manager identity `ident` will connect to all workers specified
+      in `connect_idents`.
 
 
 Environment variables :
@@ -167,7 +166,7 @@ function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, 
     portopt = ``
     if length(machine_def) == 2
         portstr = machine_def[2]
-        if !isinteger(portstr) || (p = parse(Int,portstr); p < 1 || p > 65535)
+        if !all(isdigit, portstr) || (p = parse(Int,portstr); p < 1 || p > 65535)
             msg = "invalid machine definition format string: invalid port format \"$machine_def\""
             throw(ArgumentError(msg))
         end
@@ -201,11 +200,11 @@ function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, 
 
     # detach launches the command in a new process group, allowing it to outlive
     # the initial julia process (Ctrl-C and teardown methods are handled through messages)
-    # for the launched porcesses.
-    io, pobj = open(pipeline(detach(cmd), stderr=STDERR), "r")
+    # for the launched processes.
+    io = open(detach(cmd))
 
     wconfig = WorkerConfig()
-    wconfig.io = io
+    wconfig.io = io.out
     wconfig.host = host
     wconfig.tunnel = params[:tunnel]
     wconfig.sshflags = sshflags
@@ -259,8 +258,7 @@ Returns a port number `localport` such that `localhost:localport` connects to `h
 """
 function ssh_tunnel(user, host, bind_addr, port, sshflags)
     port = Int(port)
-    cnt  = 100
-    localport = next_tunnel_port()
+    cnt = ntries = 100
     # if we cannot do port forwarding, bail immediately
     # the connection is forwarded to `port` on the remote server over the local port `localport`
     # the -f option backgrounds the ssh session
@@ -269,15 +267,16 @@ function ssh_tunnel(user, host, bind_addr, port, sshflags)
     # If no connections are made within 60 seconds, ssh will exit and an error will be printed on the
     # process that launched the remote process.
     ssh = `ssh -T -a -x -o ExitOnForwardFailure=yes`
-    while !success(detach(`$ssh -f $sshflags $user@$host -L $localport:$bind_addr:$port sleep 60`)) && cnt > 0
+    while cnt > 0
         localport = next_tunnel_port()
+        if success(detach(`$ssh -f $sshflags $user@$host -L $localport:$bind_addr:$port sleep 60`))
+            return localport
+        end
         cnt -= 1
     end
-    if cnt == 0
-        throw(ErrorException(
-            "unable to create SSH tunnel after $cnt tries. No free port?"))
-    end
-    return localport
+
+    throw(ErrorException(
+        string("unable to create SSH tunnel after ", ntries, " tries. No free port?")))
 end
 
 
@@ -321,12 +320,11 @@ function launch(manager::LocalManager, params::Dict, launched::Array, c::Conditi
     bind_to = manager.restrict ? `127.0.0.1` : `$(LPROC.bind_addr)`
 
     for i in 1:manager.np
-        io, pobj = open(pipeline(detach(
-                setenv(`$(julia_cmd(exename)) $exeflags --bind-to $bind_to --worker $(cluster_cookie())`, dir=dir)),
-            stderr=STDERR), "r")
+        cmd = `$(julia_cmd(exename)) $exeflags --bind-to $bind_to --worker $(cluster_cookie())`
+        io = open(detach(setenv(cmd, dir=dir)))
         wconfig = WorkerConfig()
-        wconfig.process = pobj
-        wconfig.io = io
+        wconfig.process = io
+        wconfig.io = io.out
         wconfig.enable_threaded_blas = params[:enable_threaded_blas]
         push!(launched, wconfig)
     end
@@ -457,31 +455,35 @@ end
 const client_port = Ref{Cushort}(0)
 
 function socket_reuse_port()
-    s = TCPSocket()
-    client_host = Ref{Cuint}(0)
-    ccall(:jl_tcp_bind, Int32,
-            (Ptr{Void}, UInt16, UInt32, Cuint),
-            s.handle, hton(client_port.x), hton(UInt32(0)), 0) < 0 && throw(SystemError("bind() : "))
+    if ccall(:jl_has_so_reuseport, Int32, ()) == 1
+        s = TCPSocket(delay = false)
 
-    # TODO: Support OSX and change the above code to call setsockopt before bind once libuv provides
-    # early access to a socket fd, i.e., before a bind call.
+        # Some systems (e.g. Linux) require the port to be bound before setting REUSEPORT
+        bind_early = is_linux()
 
-    @static if is_linux()
-        try
-            rc = ccall(:jl_tcp_reuseport, Int32, (Ptr{Void}, ), s.handle)
-            if rc > 0  # SO_REUSEPORT is unsupported, just return the ephemerally bound socket
-                return s
-            elseif rc < 0
-                throw(SystemError("setsockopt() SO_REUSEPORT : "))
-            end
-            getsockname(s)
-        catch e
+        bind_early && bind_client_port(s)
+        rc = ccall(:jl_tcp_reuseport, Int32, (Ptr{Void},), s.handle)
+        if rc < 0
             # This is an issue only on systems with lots of client connections, hence delay the warning
-            nworkers() > 128 && warn_once("Error trying to reuse client port number, falling back to plain socket : ", e)
+            nworkers() > 128 && warn_once("Error trying to reuse client port number, falling back to regular socket.")
+
             # provide a clean new socket
             return TCPSocket()
         end
+        bind_early || bind_client_port(s)
+        return s
+    else
+        return TCPSocket()
     end
+end
+
+function bind_client_port(s)
+    err = ccall(:jl_tcp_bind, Int32, (Ptr{Void}, UInt16, UInt32, Cuint),
+                            s.handle, hton(client_port[]), hton(UInt32(0)), 0)
+    Base.uv_error("bind() failed", err)
+
+    _addr, port = getsockname(s)
+    client_port[] = port
     return s
 end
 

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Base.require is the implementation for the `import` statement
 
@@ -47,7 +47,7 @@ elseif is_apple()
         path_basename = String(basename(path))
         local casepreserved_basename
         const header_size = 12
-        buf = Array{UInt8}(length(path_basename) + header_size + 1)
+        buf = Vector{UInt8}(length(path_basename) + header_size + 1)
         while true
             ret = ccall(:getattrlist, Cint,
                         (Cstring, Ptr{Void}, Ptr{Void}, Csize_t, Culong),
@@ -172,19 +172,25 @@ function _require_from_serialized(node::Int, mod::Symbol, path_to_try::String, t
         end
         restored = _include_from_serialized(content)
         isa(restored, Exception) && return restored
-        others = filter(x -> x != myid(), procs())
-        refs = Any[
-            (p, @spawnat(p,
-                let m = try
-                            _include_from_serialized(content)
-                        catch ex
-                            isa(ex, Exception) ? ex : ErrorException(string(ex))
+
+        results = sizehint!(Vector{Tuple{Int,Any}}(), nprocs())
+        @sync for p in procs()
+            if p != myid()
+                @async begin
+                    result = remotecall_fetch(p) do
+                        let m = try
+                                    _include_from_serialized(content)
+                                catch ex
+                                    isa(ex, Exception) ? ex : ErrorException(string(ex))
+                                end
+                            isa(m, Exception) ? m : nothing
                         end
-                    isa(m, Exception) ? m : nothing
-                end))
-            for p in others ]
-        for (id, ref) in refs
-            m = fetch(ref)
+                    end
+                    push!(results, (p, result))
+                end
+            end
+        end
+        for (id, m) in results
             if m !== nothing
                 warn("Node state is inconsistent: node $id failed to load cache from $path_to_try. Got:")
                 warn(m, prefix="WARNING: ")
@@ -218,8 +224,14 @@ function _require_search_from_serialized(node::Int, mod::Symbol, sourcepath::Str
     end
 
     for path_to_try in paths::Vector{String}
-        if stale_cachefile(sourcepath, path_to_try)
-            continue
+        if node == myid()
+            if stale_cachefile(sourcepath, path_to_try)
+                continue
+            end
+        else
+            if @fetchfrom node stale_cachefile(sourcepath, path_to_try)
+                continue
+            end
         end
         restored = _require_from_serialized(node, mod, path_to_try, toplevel_load)
         if isa(restored, Exception)
@@ -245,6 +257,11 @@ const DEBUG_LOADING = Ref(false)
 
 # to synchronize multiple tasks trying to import/using something
 const package_locks = Dict{Symbol,Condition}()
+
+# to notify downstream consumers that a module was successfully loaded
+# Callbacks take the form (mod::Symbol) -> nothing.
+# WARNING: This is an experimental feature and might change later, without deprecation.
+const package_callbacks = Any[]
 
 # used to optionally track dependencies when requiring a module:
 const _concrete_dependencies = Any[] # these dependency versions are "set in stone", and the process should try to avoid invalidating them
@@ -301,8 +318,7 @@ Specify whether the file calling this function is precompilable. If `isprecompil
 `true`, then `__precompile__` throws an exception when the file is loaded by
 `using`/`import`/`require` *unless* the file is being precompiled, and in a module file it
 causes the module to be automatically precompiled when it is imported. Typically,
-`__precompile__()` should occur before the `module` declaration in the file, or better yet
-`VERSION >= v"0.4" && __precompile__()` in order to be backward-compatible with Julia 0.3.
+`__precompile__()` should occur before the `module` declaration in the file.
 
 If a module or file is *not* safely precompilable, it should call `__precompile__(false)` in
 order to throw an error if Julia attempts to precompile it.
@@ -378,6 +394,14 @@ all platforms, including those with case-insensitive filesystems like macOS and
 Windows.
 """
 function require(mod::Symbol)
+    _require(mod::Symbol)
+    # After successfully loading notify downstream consumers
+    for callback in package_callbacks
+        invokelatest(callback, mod)
+    end
+end
+
+function _require(mod::Symbol)
     # dependency-tracking is only used for one top-level include(path),
     # and is not applied recursively to imported modules:
     old_track_dependencies = _track_dependencies[]
@@ -442,15 +466,19 @@ function require(mod::Symbol)
         # just load the file normally via include
         # for unknown dependencies
         try
-            if last && myid() == 1 && nprocs() > 1
-                # include on node 1 first to check for PrecompilableErrors
-                eval(Main, :(Base.include_from_node1($path)))
+            # include on node 1 first to check for PrecompilableErrors
+            Base.include_from_node1(Main, path)
 
+            if last && myid() == 1 && nprocs() > 1
                 # broadcast top-level import/using from node 1 (only)
-                refs = Any[ @spawnat p eval(Main, :(Base.include_from_node1($path))) for p in filter(x -> x != 1, procs()) ]
-                for r in refs; wait(r); end
-            else
-                eval(Main, :(Base.include_from_node1($path)))
+                @sync begin
+                    for p in filter(x -> x != 1, procs())
+                        @async remotecall_fetch(p) do
+                            Base.include_from_node1(Main, path)
+                            nothing
+                        end
+                    end
+                end
             end
         catch ex
             if doneprecompile === true || JLOptions().use_compilecache == 0 || !precompilableerror(ex, true)
@@ -477,17 +505,17 @@ end
 # remote/parallel load
 
 """
-    include_string(code::AbstractString, filename::AbstractString="string")
+    include_string(m::Module, code::AbstractString, filename::AbstractString="string")
 
 Like `include`, except reads code from the given string rather than from a file. Since there
 is no file path involved, no path processing or fetching from node 1 is done.
 """
-include_string(txt::String, fname::String) =
-    ccall(:jl_load_file_string, Any, (Ptr{UInt8},Csize_t,Cstring),
-          txt, sizeof(txt), fname)
+include_string(m::Module, txt::String, fname::String) =
+    ccall(:jl_load_file_string, Any, (Ptr{UInt8}, Csize_t, Cstring, Any),
+          txt, sizeof(txt), fname, m)
 
-include_string(txt::AbstractString, fname::AbstractString="string") =
-    include_string(String(txt), String(fname))
+include_string(m::Module, txt::AbstractString, fname::AbstractString="string") =
+    include_string(m, String(txt), String(fname))
 
 function source_path(default::Union{AbstractString,Void}="")
     t = current_task()
@@ -505,29 +533,11 @@ end
 
 function source_dir()
     p = source_path(nothing)
-    p === nothing ? p : dirname(p)
+    p === nothing ? pwd() : dirname(p)
 end
 
-"""
-    @__FILE__ -> AbstractString
-
-`@__FILE__` expands to a string with the absolute file path of the file containing the
-macro. Returns `nothing` if run from a REPL or an empty string if evaluated by
-`julia -e <expr>`. Alternatively see [`PROGRAM_FILE`](@ref).
-"""
-macro __FILE__() source_path() end
-
-"""
-    @__DIR__ -> AbstractString
-
-`@__DIR__` expands to a string with the directory part of the absolute path of the file
-containing the macro. Returns `nothing` if run from a REPL or an empty string if
-evaluated by `julia -e <expr>`.
-"""
-macro __DIR__() source_dir() end
-
-include_from_node1(path::AbstractString) = include_from_node1(String(path))
-function include_from_node1(_path::String)
+include_from_node1(mod::Module, path::AbstractString) = include_from_node1(mod, String(path))
+function include_from_node1(mod::Module, _path::String)
     path, prev = _include_dependency(_path)
     tls = task_local_storage()
     tls[:SOURCE_PATH] = path
@@ -536,10 +546,10 @@ function include_from_node1(_path::String)
         if myid()==1
             # sleep a bit to process file requests from other nodes
             nprocs()>1 && sleep(0.005)
-            result = Core.include(path)
+            result = Core.include(mod, path)
             nprocs()>1 && sleep(0.005)
         else
-            result = include_string(remotecall_fetch(readstring, 1, path), path)
+            result = include_string(mod, remotecall_fetch(readstring, 1, path), path)
         end
     finally
         if prev === nothing
@@ -552,9 +562,9 @@ function include_from_node1(_path::String)
 end
 
 """
-    include(path::AbstractString)
+    include(m::Module, path::AbstractString)
 
-Evaluate the contents of the input source file in the current context. Returns the result
+Evaluate the contents of the input source file into module `m`. Returns the result
 of the last evaluated expression of the input file. During including, a task-local include
 path is set to the directory containing the file. Nested calls to `include` will search
 relative to that path. All paths refer to files on node 1 when running in parallel, and
@@ -573,9 +583,10 @@ function evalfile(path::AbstractString, args::Vector{String}=String[])
     return eval(Module(:__anon__),
                 Expr(:toplevel,
                      :(const ARGS = $args),
-                     :(eval(x) = Main.Core.eval(__anon__,x)),
-                     :(eval(m,x) = Main.Core.eval(m,x)),
-                     :(Main.Base.include($path))))
+                     :(eval(x) = $(Expr(:core, :eval))(__anon__, x)),
+                     :(eval(m, x) = $(Expr(:core, :eval))(m, x)),
+                     :(include(x) = $(Expr(:top, :include))(__anon__, x)),
+                     :(include($path))))
 end
 evalfile(path::AbstractString, args::Vector) = evalfile(path, String[args...])
 
@@ -586,14 +597,15 @@ function create_expr_cache(input::String, output::String, concrete_deps::Vector{
             eval(Main, deserialize(STDIN))
         end
         """
-    io, pobj = open(pipeline(detach(`$(julia_cmd()) -O0
-                                    --output-ji $output --output-incremental=yes
-                                    --startup-file=no --history-file=no
-                                    --color=$(have_color ? "yes" : "no")
-                                    --eval $code_object`), stderr=STDERR),
-                    "w", STDOUT)
+    io = open(pipeline(detach(`$(julia_cmd()) -O0
+                              --output-ji $output --output-incremental=yes
+                              --startup-file=no --history-file=no
+                              --color=$(have_color ? "yes" : "no")
+                              --eval $code_object`), stderr=STDERR),
+              "w", STDOUT)
+    in = io.in
     try
-        serialize(io, quote
+        serialize(in, quote
                   empty!(Base.LOAD_PATH)
                   append!(Base.LOAD_PATH, $LOAD_PATH)
                   empty!(Base.LOAD_CACHE_PATH)
@@ -606,22 +618,21 @@ function create_expr_cache(input::String, output::String, concrete_deps::Vector{
                   end)
         source = source_path(nothing)
         if source !== nothing
-            serialize(io, quote
+            serialize(in, quote
                       task_local_storage()[:SOURCE_PATH] = $(source)
                       end)
         end
-        serialize(io, :(Base.include($(abspath(input)))))
+        serialize(in, :(Base.include(Main, $(abspath(input)))))
         if source !== nothing
-            serialize(io, :(delete!(task_local_storage(), :SOURCE_PATH)))
+            serialize(in, :(delete!(task_local_storage(), :SOURCE_PATH)))
         end
-        close(io)
-        wait(pobj)
-        return pobj
-    catch
-        kill(pobj)
-        close(io)
-        rethrow()
+        close(in)
+    catch ex
+        close(in)
+        process_running(io) && Timer(t -> kill(io), 5.0) # wait a short time before killing the process to give it a chance to clean up on its own first
+        rethrow(ex)
     end
+    return io
 end
 
 compilecache(mod::Symbol) = compilecache(string(mod))
@@ -669,7 +680,12 @@ function compilecache(name::String)
             info("Precompiling module $name.")
         end
     end
-    if !success(create_expr_cache(path, cachefile, concrete_deps))
+    if success(create_expr_cache(path, cachefile, concrete_deps))
+        # append checksum to the end of the .ji file:
+        open(cachefile, "a+") do f
+            write(f, hton(crc32c(seekstart(f))))
+        end
+    else
         error("Failed to precompile $name to $cachefile.")
     end
     return cachefile
@@ -699,7 +715,16 @@ function parse_cache_header(f::IO)
         push!(files, (String(read(f, n)), ntoh(read(f, Float64))))
     end
     @assert totbytes == 4 "header of cache file appears to be corrupt"
-    return modules, files
+    # read the list of modules that are required to be present during loading
+    required_modules = Dict{Symbol,UInt64}()
+    while true
+        n = ntoh(read(f, Int32))
+        n == 0 && break
+        sym = Symbol(read(f, n)) # module symbol
+        uuid = ntoh(read(f, UInt64)) # module UUID
+        required_modules[sym] = uuid
+    end
+    return modules, files, required_modules
 end
 
 function parse_cache_header(cachefile::String)
@@ -713,15 +738,7 @@ function parse_cache_header(cachefile::String)
 end
 
 function cache_dependencies(f::IO)
-    defs, files = parse_cache_header(f)
-    modules = []
-    while true
-        n = ntoh(read(f, Int32))
-        n == 0 && break
-        sym = Symbol(read(f, n)) # module symbol
-        uuid = ntoh(read(f, UInt64)) # module UUID (mostly just a timestamp)
-        push!(modules, (sym, uuid))
-    end
+    defs, files, modules = parse_cache_header(f)
     return modules, files
 end
 
@@ -742,7 +759,22 @@ function stale_cachefile(modpath::String, cachefile::String)
             DEBUG_LOADING[] && info("JL_DEBUG_LOADING: Rejecting cache file $cachefile due to it containing an invalid cache header.")
             return true # invalid cache file
         end
-        modules, files = parse_cache_header(io)
+        modules, files, required_modules = parse_cache_header(io)
+
+        # Check if transitive dependencies can be fullfilled
+        for mod in keys(required_modules)
+            if mod == :Main || mod == :Core || mod == :Base
+                continue
+            # Module is already loaded
+            elseif isbindingresolved(Main, mod)
+                continue
+            end
+            name = string(mod)
+            path = find_in_node_path(name, nothing, 1)
+            if path === nothing
+                return true # Won't be able to fullfill dependency
+            end
+        end
 
         # check if this file is going to provide one of our concrete dependencies
         # or if it provides a version that conflicts with our concrete dependencies
@@ -765,14 +797,58 @@ function stale_cachefile(modpath::String, cachefile::String)
         end
         for (f, ftime_req) in files
             # Issue #13606: compensate for Docker images rounding mtimes
+            # Issue #20837: compensate for GlusterFS truncating mtimes to microseconds
             ftime = mtime(f)
-            if ftime != ftime_req && ftime != floor(ftime_req)
+            if ftime != ftime_req && ftime != floor(ftime_req) && ftime != trunc(ftime_req, 6)
                 DEBUG_LOADING[] && info("JL_DEBUG_LOADING: Rejecting stale cache file $cachefile (mtime $ftime_req) because file $f (mtime $ftime) has changed.")
                 return true
             end
         end
+
+        # finally, verify that the cache file has a valid checksum
+        crc = crc32c(seekstart(io), filesize(io)-4)
+        if crc != ntoh(read(io, UInt32))
+            DEBUG_LOADING[] && info("JL_DEBUG_LOADING: Rejecting cache file $cachefile because it has an invalid checksum.")
+            return true
+        end
+
         return false # fresh cachefile
     finally
         close(io)
     end
+end
+
+"""
+    @__LINE__ -> Int
+
+`@__LINE__` expands to the line number of the location of the macrocall.
+Returns `0` if the line number could not be determined.
+"""
+macro __LINE__()
+    return __source__.line
+end
+
+"""
+    @__FILE__ -> AbstractString
+
+`@__FILE__` expands to a string with the path to the file containing the
+macrocall, or an empty string if evaluated by `julia -e <expr>`.
+Returns `nothing` if the macro was missing parser source information.
+Alternatively see [`PROGRAM_FILE`](@ref).
+"""
+macro __FILE__()
+    __source__.file === nothing && return nothing
+    return String(__source__.file)
+end
+
+"""
+    @__DIR__ -> AbstractString
+
+`@__DIR__` expands to a string with the absolute path to the directory of the file
+containing the macrocall.
+Returns the current working directory if run from a REPL or if evaluated by `julia -e <expr>`.
+"""
+macro __DIR__()
+    __source__.file === nothing && return nothing
+    return abspath(dirname(String(__source__.file)))
 end

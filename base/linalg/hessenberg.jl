@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 struct Hessenberg{T,S<:AbstractMatrix} <: Factorization{T}
     factors::S
@@ -48,7 +48,7 @@ julia> F[:Q] * F[:H] * F[:Q]'
  4.0  3.0  2.0
 ```
 """
-function hessfact{T}(A::StridedMatrix{T})
+function hessfact(A::StridedMatrix{T}) where T
     S = promote_type(Float32, typeof(zero(T)/norm(one(T))))
     return hessfact!(copy_oftype(A, S))
 end
@@ -58,7 +58,7 @@ struct HessenbergQ{T,S<:AbstractMatrix} <: AbstractMatrix{T}
     τ::Vector{T}
     HessenbergQ{T,S}(factors::AbstractMatrix{T}, τ::Vector{T}) where {T,S<:AbstractMatrix} = new(factors, τ)
 end
-HessenbergQ{T}(factors::AbstractMatrix{T}, τ::Vector{T}) = HessenbergQ{T,typeof(factors)}(factors, τ)
+HessenbergQ(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = HessenbergQ{T,typeof(factors)}(factors, τ)
 HessenbergQ(A::Hessenberg) = HessenbergQ(A.factors, A.τ)
 size(A::HessenbergQ, d) = size(A.factors, d)
 size(A::HessenbergQ) = size(A.factors)
@@ -87,29 +87,29 @@ convert(::Type{Matrix}, F::Hessenberg) = convert(Array, convert(AbstractArray, F
 convert(::Type{Array}, F::Hessenberg) = convert(Matrix, F)
 full(F::Hessenberg) = convert(AbstractArray, F)
 
-A_mul_B!{T<:BlasFloat}(Q::HessenbergQ{T}, X::StridedVecOrMat{T}) =
+A_mul_B!(Q::HessenbergQ{T}, X::StridedVecOrMat{T}) where {T<:BlasFloat} =
     LAPACK.ormhr!('L', 'N', 1, size(Q.factors, 1), Q.factors, Q.τ, X)
-A_mul_B!{T<:BlasFloat}(X::StridedMatrix{T}, Q::HessenbergQ{T}) =
+A_mul_B!(X::StridedMatrix{T}, Q::HessenbergQ{T}) where {T<:BlasFloat} =
     LAPACK.ormhr!('R', 'N', 1, size(Q.factors, 1), Q.factors, Q.τ, X)
-Ac_mul_B!{T<:BlasFloat}(Q::HessenbergQ{T}, X::StridedVecOrMat{T}) =
+Ac_mul_B!(Q::HessenbergQ{T}, X::StridedVecOrMat{T}) where {T<:BlasFloat} =
     LAPACK.ormhr!('L', ifelse(T<:Real, 'T', 'C'), 1, size(Q.factors, 1), Q.factors, Q.τ, X)
-A_mul_Bc!{T<:BlasFloat}(X::StridedMatrix{T}, Q::HessenbergQ{T}) =
+A_mul_Bc!(X::StridedMatrix{T}, Q::HessenbergQ{T}) where {T<:BlasFloat} =
     LAPACK.ormhr!('R', ifelse(T<:Real, 'T', 'C'), 1, size(Q.factors, 1), Q.factors, Q.τ, X)
 
 
-function (*){T,S}(Q::HessenbergQ{T}, X::StridedVecOrMat{S})
+function (*)(Q::HessenbergQ{T}, X::StridedVecOrMat{S}) where {T,S}
     TT = typeof(zero(T)*zero(S) + zero(T)*zero(S))
     return A_mul_B!(Q, copy_oftype(X, TT))
 end
-function (*){T,S}(X::StridedVecOrMat{S}, Q::HessenbergQ{T})
+function (*)(X::StridedVecOrMat{S}, Q::HessenbergQ{T}) where {T,S}
     TT = typeof(zero(T)*zero(S) + zero(T)*zero(S))
     return A_mul_B!(copy_oftype(X, TT), Q)
 end
-function Ac_mul_B{T,S}(Q::HessenbergQ{T}, X::StridedVecOrMat{S})
+function Ac_mul_B(Q::HessenbergQ{T}, X::StridedVecOrMat{S}) where {T,S}
     TT = typeof(zero(T)*zero(S) + zero(T)*zero(S))
     return Ac_mul_B!(Q, copy_oftype(X, TT))
 end
-function A_mul_Bc{T,S}(X::StridedVecOrMat{S}, Q::HessenbergQ{T})
+function A_mul_Bc(X::StridedVecOrMat{S}, Q::HessenbergQ{T}) where {T,S}
     TT = typeof(zero(T)*zero(S) + zero(T)*zero(S))
     return A_mul_Bc!(copy_oftype(X, TT), Q)
 end

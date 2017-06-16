@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Tests for /base/stacktraces.jl
 
@@ -6,7 +6,7 @@ let
     @noinline child() = stacktrace()
     @noinline parent() = child()
     @noinline grandparent() = parent()
-    line_numbers = @__LINE__ - [3, 2, 1]
+    line_numbers = @__LINE__() - [3, 2, 1]
     stack = grandparent()
 
     # Basic tests.
@@ -68,7 +68,7 @@ let ct = current_task()
             return catch_stacktrace()
         end
     end
-    line_numbers = @__LINE__ .- [15, 10, 5]
+    line_numbers = @__LINE__() .- [15, 10, 5]
 
     # Test try...catch with stacktrace
     @test try_stacktrace()[1] == StackFrame(:try_stacktrace, @__FILE__, line_numbers[2])
@@ -98,12 +98,13 @@ for (frame, func, inlined) in zip(trace, [g,h,f], (can_inline, can_inline, false
 end
 end
 
-let src = expand(quote let x = 1 end end).args[1]::CodeInfo,
+let src = expand(Main, quote let x = 1 end end).args[1]::CodeInfo,
     li = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, ()),
     sf
 
     li.inferred = src
     li.specTypes = Tuple{}
+    li.def = @__MODULE__
     sf = StackFrame(:a, :b, 3, li, false, false, 0)
     repr = string(sf)
     @test repr == "Toplevel MethodInstance thunk at b:3"
@@ -130,3 +131,15 @@ let st = stacktrace(empty!(backtrace()))
     @test isempty(st)
     @test isa(st, StackTrace)
 end
+
+module StackTracesTestMod
+    unfiltered_stacktrace() = stacktrace()
+    filtered_stacktrace() = StackTraces.remove_frames!(stacktrace(), StackTracesTestMod)
+end
+
+# Test that `removes_frames!` can correctly remove frames from within the module
+trace = StackTracesTestMod.unfiltered_stacktrace()
+@test contains(string(trace), "unfiltered_stacktrace")
+
+trace = StackTracesTestMod.filtered_stacktrace()
+@test !contains(string(trace), "filtered_stacktrace")
