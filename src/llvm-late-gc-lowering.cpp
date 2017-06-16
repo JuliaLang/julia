@@ -1045,7 +1045,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F) {
                 IRBuilder<> Builder (CI);
                 for (; it != CI->arg_end(); ++it) {
                     Builder.CreateStore(*it, Builder.CreateGEP(T_prjlvalue, Frame,
-                      {ConstantInt::get(T_int32, slot++)}));
+                        ConstantInt::get(T_int32, slot++)));
                 }
                 ReplacementArgs.push_back(nframeargs == 0 ?
                     (llvm::Value*)ConstantPointerNull::get(T_pprjlvalue) :
