@@ -939,7 +939,7 @@ copy_dims_pair(out, dim::Colon, tail...) = copy_dims_out(out => dim, tail...)
 @test Base.return_types(copy_dims_pair, (Tuple{}, Vararg{Union{Int,Colon}})) == Any[Tuple{}, Tuple{}, Tuple{}]
 @test all(m -> 5 < count_specializations(m) < 25, methods(copy_dims_out))
 
-# splatting an ::Any should still allow inference to use types of parameters preceeding it
+# splatting an ::Any should still allow inference to use types of parameters preceding it
 f22364(::Int, ::Any...) = 0
 f22364(::String, ::Any...) = 0.0
 g22364(x) = f22364(x, Any[[]][1]...)
