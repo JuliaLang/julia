@@ -388,7 +388,7 @@ julia> A = spdiagm(1:5);
 
 julia> Z = svds(A, nsv = 2)[1];
 
-julia> Z.U #or Z[:U]
+julia> Z[:U]
 5×2 Array{Float64,2}:
  -2.35514e-16   2.35514e-16
  -3.14018e-16  -3.92523e-17
@@ -396,12 +396,12 @@ julia> Z.U #or Z[:U]
   7.85046e-16   1.0
   1.0           5.49532e-16
 
-julia> Z.S #or Z[:S]
+julia> Z[:S]
 2-element Array{Float64,1}:
  5.0
  4.0
 
-julia> Z.Vt #or Z[:Vt]
+julia> Z[:Vt]
 5×2 Array{Float64,2}:
  -2.35514e-16  1.57009e-16
   0.0          0.0
