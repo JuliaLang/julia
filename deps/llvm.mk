@@ -554,6 +554,26 @@ $(eval $(call LLVM_PATCH,llvm-rL293230-icc17-cmake)) # Remove for 4.0
 $(eval $(call LLVM_PATCH,llvm-D32593))
 $(eval $(call LLVM_PATCH,llvm-D33179))
 $(eval $(call LLVM_PATCH,llvm-PR29010-i386-xmm)) # Remove for 4.0
+else ifeq ($(LLVM_VER_SHORT),4.0)
+# Cygwin and openSUSE still use win32-threads mingw, https://llvm.org/bugs/show_bug.cgi?id=26365
+$(eval $(call LLVM_PATCH,llvm-4.0.0_threads))
+$(eval $(call LLVM_PATCH,llvm-3.9.0_D27296-libssp))
+$(eval $(call LLVM_PATCH,llvm-D27629-AArch64-large_model_4.0))
+$(eval $(call LLVM_PATCH,llvm-D28215_FreeBSD_shlib)) # Remove for 5.0
+$(eval $(call LLVM_PATCH,llvm-D28759-loopclearance)) # Remove for 5.0
+$(eval $(call LLVM_PATCH,llvm-D28786-callclearance_4.0)) # Remove for 5.0
+$(eval $(call LLVM_PATCH,llvm-D32593)) # Remove for 5.0
+$(eval $(call LLVM_PATCH,llvm-D33179)) # Remove for 5.0
+$(eval $(call LLVM_PATCH,llvm-D32203-SORA-non-integral)) # Remove for 5.0
+$(eval $(call LLVM_PATCH,llvm-D33110-codegen-prepare-inttoptr))
+$(eval $(call LLVM_PATCH,llvm-D30478-VNCoercion)) # Remove for 5.0
+$(eval $(call LLVM_PATCH,llvm-VNCoercion-signatures)) # Remove for 5.0
+$(eval $(call LLVM_PATCH,llvm-VNCoercion-template)) # Remove for 5.0
+$(eval $(call LLVM_PATCH,llvm-D32196-LIR-non-integral)) # Remove for 5.0
+$(eval $(call LLVM_PATCH,llvm-D32208-coerce-non-integral)) # Remove for 5.0
+$(eval $(call LLVM_PATCH,llvm-D32623-GVN-non-integral)) # Remove for 5.0
+$(eval $(call LLVM_PATCH,llvm-D33129-scevexpander-non-integral)) # Remove for 5.0
+$(eval $(call LLVM_PATCH,llvm-Yet-another-fix))
 endif # LLVM_VER
 
 ifeq ($(LLVM_VER),3.7.1)
