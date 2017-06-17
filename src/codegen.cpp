@@ -4322,7 +4322,7 @@ static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx)
         }
         jl_cgval_t ast = emit_expr(arg, ctx);
         return mark_julia_type(builder.CreateCall(prepare_call(jlcopyast_func),
-          maybe_decay_untracked(boxed(ast, ctx))), true, ast.typ, ctx);
+            maybe_decay_untracked(boxed(ast, ctx))), true, ast.typ, ctx);
     }
     else if (head == simdloop_sym) {
         llvm::annotateSimdLoop(builder.GetInsertBlock());

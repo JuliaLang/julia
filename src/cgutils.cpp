@@ -1104,7 +1104,7 @@ static std::pair<Value*, bool> emit_isa(const jl_cgval_t &x, jl_value_t *type, c
                 builder.CreateCondBr(isboxed, isaBB, postBB);
                 builder.SetInsertPoint(isaBB);
                 Value *istype_boxed = builder.CreateICmpEQ(emit_typeof(x.V),
-                  maybe_decay_untracked(literal_pointer_val(type)));
+                    maybe_decay_untracked(literal_pointer_val(type)));
                 builder.CreateBr(postBB);
                 builder.SetInsertPoint(postBB);
                 PHINode *istype = builder.CreatePHI(T_int1, 2);
