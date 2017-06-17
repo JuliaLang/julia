@@ -583,7 +583,7 @@ static int NoteSafepoint(State &S, BBState &BBS, CallInst *CI) {
 }
 
 void LateLowerGCFrame::NoteUse(State &S, BBState &BBS, Value *V, BitVector &Uses) {
-    // Short circuit to avoid having to dealing with vectors of constants, etc.
+    // Short circuit to avoid having to deal with vectors of constants, etc.
     if (isa<Constant>(V))
         return;
     else if (isSpecialPtrVec(V->getType())) {
@@ -719,8 +719,8 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                 } else {
                     MaybeNoteDef(S, BBS, Phi, BBS.Safepoints);
                     for (unsigned i = 0; i < Phi->getNumIncomingValues(); ++i) {
-                        BBState &IncombingBBS = S.BBStates[Phi->getIncomingBlock(i)];
-                        NoteUse(S, IncombingBBS, Phi->getIncomingValue(i), IncombingBBS.PhiOuts);
+                        BBState &IncomingBBS = S.BBStates[Phi->getIncomingBlock(i)];
+                        NoteUse(S, IncomingBBS, Phi->getIncomingValue(i), IncomingBBS.PhiOuts);
                     }
                 }
             } else if (isa<StoreInst>(&I) || isa<ReturnInst>(&I)) {

@@ -4407,7 +4407,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
         // figure out how to repack this type
         if (!specsig) {
             Value *arg = boxed(inputarg, &ctx, false); // don't want a gcroot, since it's about to be put into the jlcall frame anyways
-            GetElementPtrInst *slot = GetElementPtrInst::Create(NULL, myargs,
+            GetElementPtrInst *slot = GetElementPtrInst::Create(T_prjlvalue, myargs,
                     ArrayRef<Value*>(ConstantInt::get(T_int32, FParamIndex)));
             slot->insertAfter(ctx.ptlsStates);
             builder.CreateStore(arg, slot);
@@ -4487,7 +4487,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
         // for jlcall, we need to pass the function object even if it is a ghost.
         // here we reconstruct the function instance from its type (first elt of argt)
         Value *theF = literal_pointer_val((jl_value_t*)ff);
-        GetElementPtrInst *slot = GetElementPtrInst::Create(NULL, myargs,
+        GetElementPtrInst *slot = GetElementPtrInst::Create(T_prjlvalue, myargs,
                 ArrayRef<Value*>(ConstantInt::get(T_int32, 0)));
         slot->insertAfter(ctx.ptlsStates);
         builder.CreateStore(theF, slot);
@@ -4502,7 +4502,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
             builder.CreateCondBr(age_ok, b_jlcall, b_generic);
             builder.SetInsertPoint(b_jlcall);
             Value *nargs_v = ConstantInt::get(T_int32, nargs);
-            Value *myargs1 = builder.CreateConstInBoundsGEP1_32(NULL, myargs, 1);
+            Value *myargs1 = builder.CreateConstInBoundsGEP1_32(T_prjlvalue, myargs, 1);
             ret_jlcall = builder.CreateCall(prepare_call(theFptr), {theF, myargs1, nargs_v});
             builder.CreateBr(b_after);
             builder.SetInsertPoint(b_generic);
@@ -4611,7 +4611,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
                 }
                 (void)at;
             }
-            Value *argn = builder.CreateConstInBoundsGEP1_32(NULL, myargs, i);
+            Value *argn = builder.CreateConstInBoundsGEP1_32(T_prjlvalue, myargs, i);
             builder.CreateStore(maybe_decay_untracked(arg_box), argn);
         }
         assert(AI == gf_thunk->arg_end());

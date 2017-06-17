@@ -472,59 +472,7 @@ $$(LLVM_SRC_DIR)/$1.patch-applied: $$(LLVM_SRC_DIR)/source-extracted | $$(SRCDIR
 LLVM_PATCH_PREV := $$(LLVM_SRC_DIR)/$1.patch-applied
 endef
 
-ifeq ($(LLVM_VER),3.3)
-$(eval $(call LLVM_PATCH,llvm-3.3))
-$(eval $(call LLVM_PATCH,instcombine-llvm-3.3))
-$(eval $(call LLVM_PATCH,int128-vector.llvm-3.3))
-$(eval $(call LLVM_PATCH,osx-10.10.llvm-3.3))
-$(eval $(call LLVM_PATCH,win64-int128.llvm-3.3))
-else ifeq ($(LLVM_VER_SHORT),3.7)
-ifeq ($(LLVM_VER),3.7.0)
-$(eval $(call LLVM_PATCH,llvm-3.7.0))
-endif
-$(eval $(call LLVM_PATCH,llvm-3.7.1))
-$(eval $(call LLVM_PATCH,llvm-3.7.1_2))
-$(eval $(call LLVM_PATCH,llvm-3.7.1_3))
-$(eval $(call LLVM_PATCH,llvm-3.7.1_symlinks))
-$(eval $(call LLVM_PATCH,llvm-3.8.0_bindir))
-$(eval $(call LLVM_PATCH,llvm-D14260))
-$(eval $(call LLVM_PATCH,llvm-nodllalias))
-$(eval $(call LLVM_PATCH,llvm-D21271-instcombine-tbaa-3.7))
-$(eval $(call LLVM_PATCH,llvm-win64-reloc-dwarf))
-$(eval $(call LLVM_PATCH,llvm-3.7.1_destsharedlibdir))
-$(eval $(call LLVM_PATCH,llvm-arm-fix-prel31))
-else ifeq ($(LLVM_VER_SHORT),3.8)
-ifeq ($(LLVM_VER),3.8.0)
-$(eval $(call LLVM_PATCH,llvm-D17326_unpack_load))
-endif
-ifeq ($(LLVM_VER),3.8.1)
-$(eval $(call LLVM_PATCH,llvm-3.8.1-version))
-endif
-$(eval $(call LLVM_PATCH,llvm-3.7.1_3)) # Remove for 3.9
-$(eval $(call LLVM_PATCH,llvm-D14260))
-$(eval $(call LLVM_PATCH,llvm-3.8.0_bindir)) # Remove for 3.9
-$(eval $(call LLVM_PATCH,llvm-3.8.0_winshlib)) # Remove for 3.9
-$(eval $(call LLVM_PATCH,llvm-D25865-cmakeshlib))
-$(eval $(call LLVM_PATCH,llvm-nodllalias)) # Remove for 3.9
-# Cygwin and openSUSE still use win32-threads mingw, https://llvm.org/bugs/show_bug.cgi?id=26365
-$(eval $(call LLVM_PATCH,llvm-3.8.0_threads))
-# fix replutil test on unix
-$(eval $(call LLVM_PATCH,llvm-D17165-D18583)) # Remove for 3.9
-# Segfault for aggregate load
-$(eval $(call LLVM_PATCH,llvm-D17712)) # Remove for 3.9
-$(eval $(call LLVM_PATCH,llvm-PR26180)) # Remove for 3.9
-$(eval $(call LLVM_PATCH,llvm-PR27046)) # Remove for 3.9
-$(eval $(call LLVM_PATCH,llvm-3.8.0_ppc64_SUBFC8)) # Remove for 3.9
-$(eval $(call LLVM_PATCH,llvm-D21271-instcombine-tbaa-3.8)) # Remove for 3.9
-$(eval $(call LLVM_PATCH,llvm-win64-reloc-dwarf))
-$(eval $(call LLVM_PATCH,llvm-arm-fix-prel31))
-else ifeq ($(LLVM_VER_SHORT),3.9)
-ifeq ($(LLVM_VER),3.9.0)
-# fix lowering for atomics on ppc
-$(eval $(call LLVM_PATCH,llvm-rL279933-ppc-atomicrmw-lowering)) # Remove for 4.0
-$(eval $(call LLVM_PATCH,llvm-r282182)) # Remove for 4.0
-$(eval $(call LLVM_PATCH,llvm-3.9.0_cygwin)) # R283427, Remove for 4.0
-endif
+ifeq ($(LLVM_VER_SHORT),3.9)
 $(eval $(call LLVM_PATCH,llvm-PR22923)) # Remove for 4.0
 $(eval $(call LLVM_PATCH,llvm-arm-fix-prel31)) # Remove for 4.0
 $(eval $(call LLVM_PATCH,llvm-D25865-cmakeshlib)) # Remove for 4.0
@@ -556,14 +504,6 @@ $(eval $(call LLVM_PATCH,llvm-D33179))
 $(eval $(call LLVM_PATCH,llvm-PR29010-i386-xmm)) # Remove for 4.0
 endif # LLVM_VER
 
-ifeq ($(LLVM_VER),3.7.1)
-ifeq ($(BUILD_LLDB),1)
-$(eval $(call LLVM_PATCH,lldb-3.7.1))
-endif
-ifeq ($(BUILD_LLVM_CLANG),1)
-$(eval $(call LLVM_PATCH,compiler-rt-3.7.1))
-endif
-endif
 $(LLVM_BUILDDIR_withtype)/build-configured: $(LLVM_PATCH_PREV)
 
 ifeq ($(LLVM_USE_CMAKE),1)
