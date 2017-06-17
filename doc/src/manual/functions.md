@@ -443,7 +443,7 @@ prior keyword arguments.
 The types of keyword arguments can be made explicit as follows:
 
 ```julia
-function f(;x::Int64=1)
+function f(;x::Int=1)
     ###
 end
 ```
