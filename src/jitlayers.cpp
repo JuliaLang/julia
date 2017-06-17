@@ -1450,7 +1450,7 @@ public:
         addOptimizationPasses(&Adapter, 3);
     }
     JuliaPipeline() : Pass(PT_PassManager, ID) {}
-    Pass *createPrinterPass(raw_ostream &O, const std::string &Banner) const {
+    Pass *createPrinterPass(raw_ostream &O, const std::string &Banner) const override {
         return createPrintModulePass(O, Banner);
     }
 };
