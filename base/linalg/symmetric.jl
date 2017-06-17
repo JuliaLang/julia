@@ -299,8 +299,7 @@ A_mul_B!(C::StridedMatrix{T}, A::Hermitian{T,<:StridedMatrix}, B::StridedMatrix{
 A_mul_B!(C::StridedMatrix{T}, A::StridedMatrix{T}, B::Hermitian{T,<:StridedMatrix}) where {T<:BlasComplex} =
     BLAS.hemm!('R', B.uplo, one(T), B.data, A, zero(T), C)
 
-*(A::HermOrSym, B::HermOrSym) = full(A)*full(B)
-*(A::StridedMatrix, B::HermOrSym) = A*full(B)
+*(A::HermOrSym, B::HermOrSym) = A*full(B)
 
 for T in (:Symmetric, :Hermitian), op in (:+, :-, :*, :/)
     # Deal with an ambiguous case
