@@ -50,8 +50,8 @@ development version of LLVM.
 
 ## Passing options to LLVM
 
-You can pass options to LLVM using *debug* builds of Julia.  To create a debug build, run `make debug`.
- The resulting executable is `usr/bin/julia-debug`. You can pass LLVM options to this executable
+You can pass options to LLVM using *debug* builds of Julia. To create a debug build, run `make debug`.
+The resulting executable is `usr/bin/julia-debug`. You can pass LLVM options to this executable
 via the environment variable `JULIA_LLVM_ARGS`. Here are example settings using `bash` syntax:
 
   * `export JULIA_LLVM_ARGS = -print-after-all` dumps IR after each pass.
@@ -63,29 +63,29 @@ via the environment variable `JULIA_LLVM_ARGS`. Here are example settings using 
 ## Debugging LLVM transformations in isolation
 
 On occasion, it can be useful to debug LLVM's transformations in isolation from
-the rest of the julia system, e.g. because reproducing the issue inside julia
+the rest of the Julia system, e.g. because reproducing the issue inside `julia`
 would take too long, or because one wants to take advantage of LLVM's tooling
-(e.g. bugpoint). To get unoptimized IR for the entire system iamge, pass the
+(e.g. bugpoint). To get unoptimized IR for the entire system image, pass the
 `--output-unopt-bc unopt.bc` option to the system image build process, which will
 output the unoptimized IR to an `unopt.bc` file. This file can then be passed to
 LLVM tools as usual. `libjulia` can function as an LLVM pass plugin and can be
 loaded into LLVM tools, to make julia-specific passes available in this
 environment. In addition, it exposes the `-julia` meta-pass, which runs the
-entire julia pass-pipeline over the IR. As an example, to generate a system
+entire Julia pass-pipeline over the IR. As an example, to generate a system
 image, one could do:
 ```
 opt -load libjulia.so -julia -o opt.bc unopt.bc
 llc -o sys.o opt.bc
 cc -shared -o sys.so sys.o
 ```
-This system image can then be loaded by julia as usual.
+This system image can then be loaded by `julia` as usual.
 
-It is also possible to dump an LLVM IR module for just one julia function,
+It is also possible to dump an LLVM IR module for just one Julia function,
 using:
-```
+```julia
 f, T = +, Tuple{Int,Int} # Substitute your function of interest here
 optimize = false
-open("plus.ll","w") do f
+open("plus.ll", "w") do f
     println(f, Base._dump_function(f, T, false, false, false, true, :att, optimize))
 end
 ```
@@ -112,40 +112,40 @@ The last step is labor intensive.  Suggestions on a better way would be apprecia
 
 Julia has a generic calling convention for unoptimized code, which looks somewhat
 as follows:
-```
-    jl_value_t *any_unoptimized_call(jl_value_t *, jl_value_t **, int);
+```c
+jl_value_t *any_unoptimized_call(jl_value_t *, jl_value_t **, int);
 ```
 where the first argument is the boxed function object, the second argument is
 an on-stack array of arguments and the third is the number of arguments. Now,
 we could perform a straightforward lowering and emit an alloca for the argument
-array. However, this would betray the SSA nature of the uses at the callsite,
+array. However, this would betray the SSA nature of the uses at the call site,
 making optimizations (including GC root placement), significantly harder.
 Instead, we emit it as follows:
-```
-    %bitcast = bitcast @any_unoptimized_call to %jl_value_t *(*)(%jl_value_t *, %jl_value_t *)
-    call cc 37 %jl_value_t *%bitcast(%jl_value_t *%arg1, %jl_value_t *%arg2)
+```llvm
+%bitcast = bitcast @any_unoptimized_call to %jl_value_t *(*)(%jl_value_t *, %jl_value_t *)
+call cc 37 %jl_value_t *%bitcast(%jl_value_t *%arg1, %jl_value_t *%arg2)
 ```
 The special `cc 37` annotation marks the fact that this call site is really using
-jlcall calling convention. This allows us to retain the SSA-ness of the
+the jlcall calling convention. This allows us to retain the SSA-ness of the
 uses throughout the optimizer. GC root placement will later lower this call to
 the original C ABI. In the code the calling convention number is represented by
-the `JLCALL_F_CC` constant. In addition, there ist the `JLCALL_CC` calling
+the `JLCALL_F_CC` constant. In addition, there is the `JLCALL_CC` calling
 convention which functions similarly, but omits the first argument.
 
 ## GC root placement
 
-GC root placement is done by an LLVM late in the pass pipeline. Doing GC root
+GC root placement is done by an LLVM pass late in the pass pipeline. Doing GC root
 placement this late enables LLVM to make more aggressive optimizations around
 code that requires GC roots, as well as allowing us to reduce the number of
 required GC roots and GC root store operations (since LLVM doesn't understand
 our GC, it wouldn't otherwise know what it is and is not allowed to do with
 values stored to the GC frame, so it'll conservatively do very little). As an
 example, consider an error path
-```
-    if some_condition()
-        #= Use some variables maybe =#
-        error("An error occurred")
-    end
+```julia
+if some_condition()
+    #= Use some variables maybe =#
+    error("An error occurred")
+end
 ```
 During constant folding, LLVM may discover that the condition is always false,
 and can remove the basic block. However, if GC root lowering is done early,
@@ -153,37 +153,37 @@ the GC root slots used in the deleted block, as well as any values kept alive
 in those slots only because they were used in the error path, would be kept
 alive by LLVM. By doing GC root lowering late, we give LLVM the license to do
 any of its usual optimizations (constant folding, dead code elimination, etc.),
-without having to worry (too much) about which values may or may not be gc
+without having to worry (too much) about which values may or may not be GC
 tracked.
 
 However, in order to be able to do late GC root placement, we need to be able to
 identify a) which pointers are gc tracked and b) all uses of such pointers. The
 goal of the GC placement pass is thus simple:
 
-Minimize the number of needed gc roots/stores to them subject to the constraint
-that at every safepoint, any live gc-tracked pointer (i.e. for which there is
-a path after this point that contains a use of this pointer) is in some gc slot.
+Minimize the number of needed GC roots/stores to them subject to the constraint
+that at every safepoint, any live GC-tracked pointer (i.e. for which there is
+a path after this point that contains a use of this pointer) is in some GC slot.
 
 ### Representation
 
 The primary difficulty is thus choosing an IR representation that allows us to
-identify gc-tracked pointers and their uses, even after the program has been
+identify GC-tracked pointers and their uses, even after the program has been
 run through the optimizer. Our design makes use of three LLVM features to achieve
 this:
 - Custom address spaces
 - Operand Bundles
-- non-integral pointers
+- Non-integral pointers
 
 Custom address spaces allow us to tag every point with an integer that needs
 to be preserved through optimizations. The compiler may not insert casts between
 address spaces that did not exist in the original program and it must never
 change the address space of a pointer on a load/store/etc operation. This allows
-us to annotate which pointers are gc-tracked in an optimizer-resistant way. Note
+us to annotate which pointers are GC-tracked in an optimizer-resistant way. Note
 that metadata would not be able to achieve the same purpose. Metadata is supposed
 to always be discardable without altering the semantics of the program. However,
-failing to identify a gc-tracked pointer alters the resulting program behavior
+failing to identify a GC-tracked pointer alters the resulting program behavior
 dramatically - it'll probably crash or return wrong results. We currently use
-three different addressspaces (their numbers are defined in src/codegen_shared.cpp):
+three different address spaces (their numbers are defined in `src/codegen_shared.cpp`):
 
 - GC Tracked Pointers (currently 10): These are pointers to boxed values that may be put
   into a GC frame. It is loosely equivalent to a `jl_value_t*` pointer on the C
@@ -201,14 +201,15 @@ three different addressspaces (their numbers are defined in src/codegen_shared.c
   call (they do still need to be rooted if they are live across another safepoint
   between the definition and the call).
 
-### Invariants.
+### Invariants
+
 The GC root placement pass makes use of several invariants, which need
 to be observed by the frontend and are preserved by the optimizer.
 
-First, only the following addressspace casts are allowed
+First, only the following address space casts are allowed:
 - 0->{Tracked,Derived,CalleeRooted}: It is allowable to decay an untracked pointer to any of the
-  other. However, do note that the optimizer has broad license to not root
-  such a value. It is never safe to have a value in addressspace 0 in any part
+  others. However, do note that the optimizer has broad license to not root
+  such a value. It is never safe to have a value in address space 0 in any part
   of the program if it is (or is derived from) a value that requires a GC root.
 - Tracked->Derived: This is the standard decay route for interior values. The placement
   pass will look for these to identify the base pointer for any use.
@@ -228,63 +229,65 @@ We explicitly allow load/stores and simple calls in address spaces Tracked/Deriv
 argument arrays must always be in address space Tracked (it is required by the ABI that
 they are valid `jl_value_t*` pointers). The same is true for return instructions
 (though note that struct return arguments are allowed to have any of the address
-spaces). The only allowable use of an address space CalleRooted pointer is to pass it to
+spaces). The only allowable use of an address space CalleeRooted pointer is to pass it to
 a call (which must have an appropriately typed operand).
 
-Further, we disallow getelementptr in addrspace Tracked. This is because unless
+Further, we disallow `getelementptr` in addrspace Tracked. This is because unless
 the operation is a noop, the resulting pointer will not be validly storable
 to a GC slot and may thus not be in this address space. If such a pointer
 is required, it should be decayed to addrspace Derived first.
 
-Lastly, we disallow inttoptr/ptrtoint instructions in these address spaces.
-Having these instructions would mean that some i64 values are really gc tracked.
+Lastly, we disallow `inttoptr`/`ptrtoint` instructions in these address spaces.
+Having these instructions would mean that some `i64` values are really GC tracked.
 This is problematic, because it breaks that stated requirement that we're able
-to identify gc-relevant pointers. This invariant is accomplished using the LLVM
+to identify GC-relevant pointers. This invariant is accomplished using the LLVM
 "non-integral pointers" feature, which is new in LLVM 5.0. It prohibits the
 optimizer from making optimizations that would introduce these operations. Note
-we can still insert static constants at JIT time by using inttoptr in address
+we can still insert static constants at JIT time by using `inttoptr` in address
 space 0 and then decaying to the appropriate address space afterwards.
 
 ### Supporting ccall
+
 One important aspect missing from the discussion so far is the handling of
 `ccall`. `ccall` has the peculiar feature that the location and scope of a use
 do not coincide. As an example consider:
-```
+```julia
 A = randn(1024)
 ccall(:foo, Void, (Ptr{Float64},), A)
 ```
 In lowering, the compiler will insert a conversion from the array to the
 pointer which drops the reference to the array value. However, we of course
-need to make sure that the array does stay alive while we're doing the ccall.
+need to make sure that the array does stay alive while we're doing the `ccall`.
 To understand how this is done, first recall the lowering of the above code:
-```
-    return $(Expr(:foreigncall, :(:foo), Void, svec(Ptr{Float64}), :($(Expr(:foreigncall, :(:jl_array_ptr), Ptr{Float64}, svec(Any), :(A), 0))), :(A)))
+```julia
+return $(Expr(:foreigncall, :(:foo), Void, svec(Ptr{Float64}), :($(Expr(:foreigncall, :(:jl_array_ptr), Ptr{Float64}, svec(Any), :(A), 0))), :(A)))
 ```
 The last `:(A)`, is an extra argument list inserted during lowering that informs
-the code generator which julia level values need to be kept alive for the
-duration of this ccall. We then take this information and represent it in an
+the code generator which Julia level values need to be kept alive for the
+duration of this `ccall`. We then take this information and represent it in an
 "operand bundle" at the IR level. An operand bundle is essentially a fake use
 that is attached to the call site. At the IR level, this looks like so:
+```llvm
+call void inttoptr (i64 ... to void (double*)*)(double* %5) [ "jl_roots"(%jl_value_t addrspace(10)* %A) ]
 ```
-    call void inttoptr (i64 ... to void (double*)*)(double* %5) [ "jl_roots"(%jl_value_t addrspace(10)* %A) ]
-```
-The GC root placement pass will treat the jl_roots operand bundle as if it were
-a regular operand. However, as a final step, after the gc roots are inserted,
+The GC root placement pass will treat the `jl_roots` operand bundle as if it were
+a regular operand. However, as a final step, after the GC roots are inserted,
 it will drop the operand bundle to avoid confusing instruction selection.
 
 ### Supporting pointer_from_objref
+
 `pointer_from_objref` is special because it requires the user to take explicit
 control of GC rooting. By our above invariants, this function is illegal,
-because it performs an addressspace cast from 10 to 0. However, it can be useful,
+because it performs an address space cast from 10 to 0. However, it can be useful,
 in certain situations, so we provide a special intrinsic:
-```
+```llvm
 declared %jl_value_t *julia.pointer_from_objref(%jl_value_t addrspace(10)*)
 ```
-which is lowered to the corresponding address space cast after gc root lowering.
+which is lowered to the corresponding address space cast after GC root lowering.
 Do note however that by using this intrinsic, the caller assumes all responsibility
 for making sure that the value in question is rooted. Further this intrinsic is
 not considered a use, so the GC root placement pass will not provide a GC root
 for the function. As a result, the external rooting must be arranged while the
-value is still tracked by the system. I.e. it is not valid to attempt use the
+value is still tracked by the system. I.e. it is not valid to attempt to use the
 result of this operation to establish a global root - the optimizer may have
 already dropped the value.
