@@ -1,5 +1,5 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
-// This LLVM pass verifier invariants required for correct GC root placement.
+// This LLVM pass verifies invariants required for correct GC root placement.
 // See the devdocs for a description of these invariants.
 
 #include <llvm/ADT/BitVector.h>
@@ -132,11 +132,13 @@ void GCInvariantVerifier::visitGetElementPtrInst(GetElementPtrInst &GEP) {
     if (!isSpecialAS(AS))
         return;
     /* We're actually ok with GEPs here, as long as they don't feed into any
-       uses. Upstream is currently still debating whether CAST(GEP) == GEP(CAST),
-       so though we enforce casting to they decayed as first in the frontend,
-       the optimizer will introduce the other form. While upstream is debating
-       what the semantics here are, just check this for things coming from
-       the frontend */
+       uses. Upstream is currently still debating whether CAST(GEP) == GEP(CAST).
+       In the frontend, we always perform CAST(GEP), so while we can enforce
+       this invariant when we run directly after the frontend (Strong == 1),
+       the optimizer will introduce the other form. Thus, we need to allow it
+       while upstream hasn't decided whether the optimizer is allowed to
+       introduce these.
+       */
     if (Strong) {
         Check(AS != AddressSpace::Tracked,
              "GC tracked values may not appear in GEP expressions."

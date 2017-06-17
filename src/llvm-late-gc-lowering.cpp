@@ -35,7 +35,7 @@ using namespace llvm;
    a path after this point that contains a use of this pointer) is in some gc slot.
 
    In particular, in order to understand this algorithm, it is important to
-   realize that the only places where rootedness matters is at a safepoint.
+   realize that the only places where rootedness matters is at safepoints.
 
    Now, the primary phases of the algorithm are:
 
@@ -69,7 +69,7 @@ using namespace llvm;
       and does not look into a basic block. The algorithm is essentially
       textbook iterative data flow for liveness computation. However, the
       data flow equations are slightly more complicated because we also
-      forward propagate rootedness information in addition to backproagating
+      forward propagate rootedness information in addition to backpropagating
       liveness.
 
     3. Live Set Computation
@@ -91,18 +91,18 @@ using namespace llvm;
               set.
 
        Lastly, we also explicitly compute, for each value, the list of values
-       that are simulataneously live at some safepoint. This is known as an
+       that are simultaneously live at some safepoint. This is known as an
        "interference graph" and is the input to the next step.
 
     4. GC Root coloring
 
-      Two values which are not simulataneously live at a safepoint can share the
+      Two values which are not simultaneously live at a safepoint can share the
       same slot. This is an important optimization, because otherwise long
       functions would have exceptionally large GC slots, reducing performance
-      and bloating the size of the stack. Assigning values to these slots is,
+      and bloating the size of the stack. Assigning values to these slots is
       equivalent to doing graph coloring on the interference graph - the graph
       where nodes are values and two values have an edge if they are
-      simulataneously live at a safepoint - which we computed in the previous
+      simultaneously live at a safepoint - which we computed in the previous
       step. Now graph coloring in general is a hard problem. However, for SSA
       form programs, (and most programs in general, by virtue of their
       structure), the resulting interference graphs are chordal and can be
@@ -137,7 +137,7 @@ using namespace llvm;
       (this is beneficial for code where the primary path does not have
       safepoints, but some other path - e.g. the error path does). However,
       if the first safepoint is not dominated by the definition (this can
-      happen due to the non-ssa corner cases), the store is insert right after
+      happen due to the non-ssa corner cases), the store is inserted right after
       the definition.
 
     7. Cleanup
@@ -157,7 +157,7 @@ using namespace llvm;
       of the algorithm and their operands as uses of those values. It is
       important to consider however WHERE the uses of PHI's operands are
       located. It is neither at the start of the basic block, because the values
-      do not dominated the block (so can't really consider them live-in), nor
+      do not dominate the block (so can't really consider them live-in), nor
       at the end of the predecessor (because they are actually live out).
       Instead it is best to think of those uses as living on the edge between
       the appropriate predecessor and the block containing the PHI.
@@ -183,7 +183,7 @@ using namespace llvm;
                         %Bbase, %B]
 
       We then pretend, for the purposes of numbering that %phi was derived from
-      %philift. Note that in order to be able to this, we need to be able to
+      %philift. Note that in order to be able to do this, we need to be able to
       perform this lifting either during numbering or instruction scanning.
 
     B. Vectors of pointers/Union representations
@@ -212,7 +212,7 @@ struct BBState {
     // These do not get updated after local analysis
     BitVector Defs;
     BitVector PhiOuts;
-    //// Upward exposed uses that do not have a preceeding safepoint
+    //// Upward exposed uses that do not have a preceding safepoint
     BitVector UpExposedUsesUnrooted;
     //// All other uses
     BitVector UpExposedUses;
@@ -246,13 +246,13 @@ struct State {
     std::map<Value *, int> PtrNumbering;
     // The reverse of the previous maps
     std::map<int, Value *> ReversePtrNumbering;
-    // Neighbors in the coloring interferece graph. I.e. for each value, the
-    // indicies of other values that are used simulataneously at some safe point.
+    // Neighbors in the coloring interference graph. I.e. for each value, the
+    // indices of other values that are used simultaneously at some safe point.
     std::vector<std::vector<int>> Neighbors;
     // The result of the local analysis
     std::map<BasicBlock *, BBState> BBStates;
 
-    // The assignment of numbers to safepoints. The indicies in the map
+    // The assignment of numbers to safepoints. The indices in the map
     // are indices into the next three maps which store safepoint properties
     std::map<Instruction *, int> SafepointNumbering;
 
@@ -488,7 +488,7 @@ std::vector<int> LateLowerGCFrame::NumberVector(State &S, Value *V) {
         S.AllVectorNumbering[V] = std::vector<int>{};
     }
     /* We (the frontend) don't insert either of these, but it would be legal -
-       though a bit strange, considering they're pointers) for the optimizer to
+       though a bit strange, considering they're pointers - for the optimizer to
        do so. All that's needed here is to NumberVector the previous vector/value
        and lift the operation */
     else if (isa<ShuffleVectorInst>(CurrentV)) {
@@ -547,7 +547,7 @@ void LateLowerGCFrame::MaybeNoteDef(State &S, BBState &BBS, Value *Def, const st
     Type *RT = Def->getType();
     if (isSpecialPtr(RT)) {
         assert(getValueAddrSpace(Def) == AddressSpace::Tracked &&
-          "Returned value of GC interest, but not tracked?");
+            "Returned value of GC interest, but not tracked?");
         Num = Number(S, Def);
     }
     else if (isUnionRep(RT)) {
@@ -583,8 +583,7 @@ static int NoteSafepoint(State &S, BBState &BBS, CallInst *CI) {
 }
 
 void LateLowerGCFrame::NoteUse(State &S, BBState &BBS, Value *V, BitVector &Uses) {
-    // Short circuit to have to avoid dealing specially with vectors of
-    // constants, etc.
+    // Short circuit to avoid having to dealing with vectors of constants, etc.
     if (isa<Constant>(V))
         return;
     else if (isSpecialPtrVec(V->getType())) {
@@ -822,7 +821,7 @@ void LateLowerGCFrame::ComputeLiveSets(Function &F, State &S) {
                 S.LiveSets[idx][Live] = 1;
         }
     }
-    // Compute the inference graph
+    // Compute the interference graph
     for (int i = 0; i <= S.MaxPtrNumber; ++i) {
         std::vector<int> Neighbors;
         for (auto it : S.SafepointNumbering) {
@@ -875,7 +874,7 @@ void LateLowerGCFrame::ComputeLiveSets(Function &F, State &S) {
     }
 }
 
-/* For chordal interference graphs, this class gives the verticies in a (reverse
+/* For chordal interference graphs, this class gives the vertices in a (reverse
  * - depending on definition) perfect elimination ordering, in such a way that
  * greedy coloring gives an optimal coloring. Since our roots are in SSA form,
  * the interference should be chordal.
