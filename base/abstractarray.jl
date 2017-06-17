@@ -1841,7 +1841,7 @@ end
             for i in 1:nidx
                 idx[otherdims[i]] = ridx[otherdims[i]] = I.I[i]
             end
-            Base._unsafe_getindex!(Aslice, A, idx...)
+            _unsafe_getindex!(Aslice, A, idx...)
             R[ridx...] = f(Aslice)
         end
     else
