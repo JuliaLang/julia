@@ -1284,12 +1284,21 @@ static void jl_collect_backedges_to(jl_method_instance_t *caller, jl_array_t *di
         arraylist_push(to_restore, (void*)pcallees);
         arraylist_push(to_restore, (void*)callees);
         *pcallees = (jl_array_t*) HT_NOTFOUND;
-        jl_array_ptr_1d_append(direct_callees, callees);
         size_t i, l = jl_array_len(callees);
         for (i = 0; i < l; i++) {
             jl_value_t *c = jl_array_ptr_ref(callees, i);
-            if (jl_is_method_instance(c)) {
-                jl_collect_backedges_to((jl_method_instance_t*)c, direct_callees, to_restore);
+            size_t j, l = jl_array_len(direct_callees);
+            // check whether this edge is already recorded
+            for (j = 0; j < l; j++) {
+                if (jl_egal(c, jl_array_ptr_ref(direct_callees, j)))
+                    break;
+            }
+            // recurse as needed
+            if (j == l) {
+                jl_array_ptr_1d_push(direct_callees, c);
+                if (jl_is_method_instance(c)) {
+                    jl_collect_backedges_to((jl_method_instance_t*)c, direct_callees, to_restore);
+                }
             }
         }
     }

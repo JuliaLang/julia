@@ -35,7 +35,7 @@ try
               struct typeA end
               >(x::fmpz, y::Int) = Base.cmp(x, y) > 0
               function hash(a::typeA, h::UInt)
-                  d = den(a)
+                  d = repr(a)
                   return h
               end
           end
