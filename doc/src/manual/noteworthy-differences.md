@@ -205,8 +205,8 @@ For users coming to Julia from R, these are some noteworthy differences:
     be reversed in Julia relative to NumPy (see relevant section of [Performance Tips](@ref man-performance-tips)).
   * Julia's updating operators (e.g. `+=`, `-=`, ...) are *not in-place* whereas NumPy's are. This
     means `A = ones(4); B = A; B += 3` doesn't change values in `A`, it rather rebinds the name `B`
-    to the result of the right- hand side `B = B + 3`, which is a new array. Use `B[:] += 3`, explicit
-    loops, or `InplaceOps.jl`.
+    to the result of the right- hand side `B = B + 3`, which is a new array. Use `B .+= 3`
+    (see also [dot operators](@ref man-dot-operators)), `B[:] += 3`, explicit loops, or `InplaceOps.jl`.
   * Julia evaluates default values of function arguments every time the method is invoked, unlike
     in Python where the default values are evaluated only once when the function is defined. For example,
     the function `f(x=rand()) = x` returns a new random number every time it is invoked without argument.
