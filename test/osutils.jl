@@ -26,3 +26,13 @@ end
 @test (@static false && 1) === false
 @test (@static true || 1) === true
 @test (@static false || 1) === 1
+
+# test that path variables use proper path deliminter on windows
+if is_windows()
+    @test !contains(Base.SYSCONFDIR, "/")
+    @test !contains(Base.DATAROOTDIR, "/")
+    @test !contains(Base.DOCDIR, "/")
+    @test !contains(Base.LIBDIR, "/")
+    @test !contains(Base.PRIVATE_LIBDIR, "/")
+    @test !contains(Base.INCLUDEDIR, "/")
+end
