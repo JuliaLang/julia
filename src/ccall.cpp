@@ -166,17 +166,9 @@ static Value *runtime_sym_lookup(PointerType *funcptype, const char *f_lib,
     else {
         libname = literal_static_pointer_val(f_lib, T_pint8);
     }
-#if JL_LLVM_VERSION >= 30700
     Value *llvmf = builder.CreateCall(prepare_call(builder, jldlsym_func), { libname, stringConstPtr(builder, f_name), libptrgv });
-#else
-    Value *llvmf = builder.CreateCall3(prepare_call(builder, jldlsym_func), libname, stringConstPtr(builder, f_name), libptrgv);
-#endif
     auto store = builder.CreateAlignedStore(llvmf, llvmgv, sizeof(void*));
-#  if JL_LLVM_VERSION >= 30900
     store->setAtomic(AtomicOrdering::Release);
-#  else
-    store->setAtomic(Release);
-#  endif
     builder.CreateBr(ccall_bb);
 
     f->getBasicBlockList().push_back(ccall_bb);
@@ -254,11 +246,7 @@ static GlobalVariable *emit_plt_thunk(Module *M, FunctionType *functype,
     Value *ptr = runtime_sym_lookup(funcptype, f_lib, f_name, plt, libptrgv,
                                     llvmgv, runtime_lib);
     auto store = builder.CreateAlignedStore(builder.CreateBitCast(ptr, T_pvoidfunc), got, sizeof(void*));
-#if JL_LLVM_VERSION >= 30900
     store->setAtomic(AtomicOrdering::Release);
-#else
-    store->setAtomic(Release);
-#endif
     SmallVector<Value*, 16> args;
     for (Function::arg_iterator arg = plt->arg_begin(), arg_e = plt->arg_end(); arg != arg_e; ++arg)
         args.push_back(&*arg);
@@ -280,7 +268,7 @@ static GlobalVariable *emit_plt_thunk(Module *M, FunctionType *functype,
     else {
         // musttail support is very bad on ARM, PPC, PPC64 (as of LLVM 3.9)
         // Known failures includes vararg (not needed here) and sret.
-#if JL_LLVM_VERSION >= 30700 && (defined(_CPU_X86_) || defined(_CPU_X86_64_) || \
+#if (defined(_CPU_X86_) || defined(_CPU_X86_64_) || \
                         defined(_CPU_AARCH64_))
         ret->setTailCallKind(CallInst::TCK_MustTail);
 #endif
@@ -461,10 +449,8 @@ static Value *llvm_type_rewrite(
     Value *to;
 #if JL_LLVM_VERSION >= 40000
     const DataLayout &DL = jl_data_layout;
-#elif JL_LLVM_VERSION >= 30600
-    const DataLayout &DL = jl_ExecutionEngine->getDataLayout();
 #else
-    const DataLayout &DL = *jl_ExecutionEngine->getDataLayout();
+    const DataLayout &DL = jl_ExecutionEngine->getDataLayout();
 #endif
     if (DL.getTypeAllocSize(target_type) >= DL.getTypeAllocSize(from_type)) {
         to = emit_static_alloca(target_type, ctx);
@@ -487,7 +473,7 @@ static Value *runtime_apply_type(jl_value_t *ty, jl_unionall_t *unionall, jl_cod
     args[0] = literal_pointer_val(ty);
     args[1] = literal_pointer_val((jl_value_t*)ctx->linfo->def.method->sig);
     args[2] = builder.CreateInBoundsGEP(
-            LLVM37_param(T_prjlvalue)
+            T_prjlvalue,
             emit_bitcast(decay_derived(ctx->spvals_ptr), T_pprjlvalue),
             ConstantInt::get(T_size, sizeof(jl_svec_t) / sizeof(jl_value_t*)));
     return builder.CreateCall(prepare_call(jlapplytype_func), makeArrayRef(args));
@@ -519,11 +505,7 @@ static void typeassert_input(const jl_cgval_t &jvinfo, jl_value_t *jlto, jl_unio
                 Value *vx = boxed(jvinfo, ctx);
                 Value *istype = builder.
                     CreateICmpNE(
-#if JL_LLVM_VERSION >= 30700
                                  builder.CreateCall(prepare_call(jlisa_func), { vx, boxed(jlto_runtime, ctx) }),
-#else
-                                 builder.CreateCall2(prepare_call(jlisa_func), vx, boxed(jlto_runtime, ctx)),
-#endif
                                  ConstantInt::get(T_int32, 0));
                 BasicBlock *failBB = BasicBlock::Create(jl_LLVMContext, "fail", ctx->f);
                 BasicBlock *passBB = BasicBlock::Create(jl_LLVMContext, "pass", ctx->f);
@@ -834,7 +816,6 @@ static jl_cgval_t emit_cglobal(jl_value_t **args, size_t nargs, jl_codectx_t *ct
     return mark_julia_type(res, false, rt, ctx);
 }
 
-#ifdef USE_MCJIT
 class FunctionMover final : public ValueMaterializer
 {
 public:
@@ -871,11 +852,6 @@ public:
             VMap[&*I] = &*(DestI++);        // Add mapping to VMap
         }
 
-#if JL_LLVM_VERSION >= 30600
-        // Clone debug info - Not yet public API
-        // llvm::CloneDebugInfoMetadata(NewF,F,VMap);
-#endif
-
         SmallVector<ReturnInst*, 8> Returns;
         llvm::CloneFunctionInto(NewF,F,VMap,true,Returns,"",NULL,NULL,this);
         NewF->setComdat(nullptr);
@@ -910,13 +886,7 @@ public:
         return NewF;
     }
 
-#if JL_LLVM_VERSION >= 30900
     Value *materialize(Value *V) override
-#elif JL_LLVM_VERSION >= 30800
-    Value *materializeDeclFor(Value *V) override
-#else
-    Value *materializeValueFor (Value *V) override
-#endif
     {
         Function *F = dyn_cast<Function>(V);
         if (F) {
@@ -984,7 +954,6 @@ public:
         return NULL;
     };
 };
-#endif
 
 // llvmcall(ir, (rettypes...), (argtypes...), args...)
 static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
@@ -1109,14 +1078,10 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
         << jl_string_data(ir) << "\n}";
         SMDiagnostic Err = SMDiagnostic();
         std::string ir_string = ir_stream.str();
-#if JL_LLVM_VERSION >= 30600
         Module *m = NULL;
         bool failed = parseAssemblyInto(llvm::MemoryBufferRef(ir_string,"llvmcall"),*jl_Module,Err);
         if (!failed)
             m = jl_Module;
-#else
-        Module *m = ParseAssemblyString(ir_string.c_str(),jl_Module,Err,jl_LLVMContext);
-#endif
         if (m == NULL) {
             std::string message = "Failed to parse LLVM Assembly: \n";
             llvm::raw_string_ostream stream(message);
@@ -1136,20 +1101,14 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
             it != argtypes.end(); ++it, ++i)
             assert(*it == f->getFunctionType()->getParamType(i));
 
-#ifdef USE_MCJIT
         if (f->getParent() != jl_Module) {
             FunctionMover mover(jl_Module, f->getParent());
             f = mover.CloneFunction(f);
         }
-#endif
 
         //f->dump();
-#if JL_LLVM_VERSION < 30500
-        if (verifyFunction(*f,PrintMessageAction)) {
-#else
         llvm::raw_fd_ostream out(1,false);
         if (verifyFunction(*f,&out)) {
-#endif
 #if JL_LLVM_VERSION >= 50000
             f->print(llvm::dbgs(), nullptr, false, true);
 #else
@@ -1212,10 +1171,8 @@ static jl_cgval_t mark_or_box_ccall_result(Value *result, bool isboxed, jl_value
         emit_leafcheck(runtime_dt, "ccall: return type must be a leaf DataType", ctx);
 #if JL_LLVM_VERSION >= 40000
         const DataLayout &DL = jl_data_layout;
-#elif JL_LLVM_VERSION >= 30600
-        const DataLayout &DL = jl_ExecutionEngine->getDataLayout();
 #else
-        const DataLayout &DL = *jl_ExecutionEngine->getDataLayout();
+        const DataLayout &DL = jl_ExecutionEngine->getDataLayout();
 #endif
         unsigned nb = DL.getTypeStoreSize(result->getType());
         MDNode *tbaa = jl_is_mutable(rt) ? tbaa_mutab : tbaa_immut;
@@ -1301,7 +1258,7 @@ std::string generate_func_sig()
         }
         else if (abi->use_sret((jl_datatype_t*)rt)) {
             AttrBuilder retattrs = AttrBuilder();
-#if !defined(_OS_WINDOWS_) || JL_LLVM_VERSION >= 30500 // llvm used to use the old mingw ABI, skipping this marking works around that difference
+#if !defined(_OS_WINDOWS_) // llvm used to use the old mingw ABI, skipping this marking works around that difference
             retattrs.addAttribute(Attribute::StructRet);
 #endif
             retattrs.addAttribute(Attribute::NoAlias);
@@ -1679,13 +1636,11 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 #ifdef __MIC__
         // TODO
 #elif defined(_CPU_X86_64_) || defined(_CPU_X86_)  /* !__MIC__ */
-#if JL_LLVM_VERSION >= 30700
         static auto pauseinst = InlineAsm::get(FunctionType::get(T_void, false), "pause",
                                                "~{memory}", true);
         builder.CreateCall(pauseinst);
         JL_GC_POP();
         return ghostValue(jl_void_type);
-#endif
 #elif defined(_CPU_AARCH64_) || (defined(_CPU_ARM_) && __ARM_ARCH >= 7)
         static auto wfeinst = InlineAsm::get(FunctionType::get(T_void, false), "wfe",
                                              "~{memory}", true);
@@ -2051,11 +2006,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         stacksave = CallInst::Create(Intrinsic::getDeclaration(jl_Module,
                                                                Intrinsic::stacksave));
         if (savespot) {
-#if JL_LLVM_VERSION >= 30800
             instList.insertAfter(savespot->getIterator(), stacksave);
-#else
-            instList.insertAfter(savespot, stacksave);
-#endif
         }
         else {
             instList.push_front(stacksave);
@@ -2197,10 +2148,8 @@ jl_cgval_t function_sig_t::emit_a_ccall(
 #ifndef JL_NDEBUG
 #if JL_LLVM_VERSION >= 40000
                 const DataLayout &DL = jl_data_layout;
-#elif JL_LLVM_VERSION >= 30600
-                const DataLayout &DL = jl_ExecutionEngine->getDataLayout();
 #else
-                const DataLayout &DL = *jl_ExecutionEngine->getDataLayout();
+                const DataLayout &DL = jl_ExecutionEngine->getDataLayout();
 #endif
                 // ARM and AArch64 can use a LLVM type larger than the julia
                 // type. However, the LLVM type size should be no larger than

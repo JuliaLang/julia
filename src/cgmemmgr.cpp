@@ -4,17 +4,11 @@
 #include "platform.h"
 #include "options.h"
 
-#ifdef USE_MCJIT
 #include <llvm/ExecutionEngine/SectionMemoryManager.h>
 #include "fix_llvm_assert.h"
 #include "julia.h"
 #include "julia_internal.h"
 
-#if JL_LLVM_VERSION >= 30700
-#if JL_LLVM_VERSION < 30800
-#  include <llvm/ExecutionEngine/Orc/ObjectLinkingLayer.h>
-#  include "fix_llvm_assert.h"
-#endif
 #ifdef _OS_LINUX_
 #  include <sys/syscall.h>
 #  include <sys/utsname.h>
@@ -755,11 +749,9 @@ public:
     uint8_t *allocateDataSection(uintptr_t Size, unsigned Alignment,
                                  unsigned SectionID, StringRef SectionName,
                                  bool isReadOnly) override;
-#if JL_LLVM_VERSION >= 30800
     using SectionMemoryManager::notifyObjectLoaded;
     void notifyObjectLoaded(RuntimeDyld &Dyld,
                             const object::ObjectFile &Obj) override;
-#endif
     bool finalizeMemory(std::string *ErrMsg = nullptr) override;
     template <typename DL, typename Alloc>
     void mapAddresses(DL &Dyld, Alloc &&allocator)
@@ -831,7 +823,6 @@ uint8_t *RTDyldMemoryManagerJL::allocateDataSection(uintptr_t Size,
                                                      SectionName, isReadOnly);
 }
 
-#if JL_LLVM_VERSION >= 30800
 void RTDyldMemoryManagerJL::notifyObjectLoaded(RuntimeDyld &Dyld,
                                                const object::ObjectFile &Obj)
 {
@@ -843,7 +834,6 @@ void RTDyldMemoryManagerJL::notifyObjectLoaded(RuntimeDyld &Dyld,
     assert(exe_alloc);
     mapAddresses(Dyld);
 }
-#endif
 
 bool RTDyldMemoryManagerJL::finalizeMemory(std::string *ErrMsg)
 {
@@ -886,14 +876,6 @@ void RTDyldMemoryManagerJL::deregisterEHFrames(uint8_t *Addr,
 
 }
 
-#if JL_LLVM_VERSION < 30800
-void notifyObjectLoaded(RTDyldMemoryManager *memmgr,
-                        llvm::orc::ObjectLinkingLayerBase::ObjSetHandleT H)
-{
-    ((RTDyldMemoryManagerJL*)memmgr)->mapAddresses(**H);
-}
-#endif
-
 #ifdef _OS_WINDOWS_
 void *lookupWriteAddressFor(RTDyldMemoryManager *memmgr, void *rt_addr)
 {
@@ -901,12 +883,7 @@ void *lookupWriteAddressFor(RTDyldMemoryManager *memmgr, void *rt_addr)
 }
 #endif
 
-#else // JL_LLVM_VERSION >= 30700
-typedef SectionMemoryManager RTDyldMemoryManagerJL;
-#endif // JL_LLVM_VERSION >= 30700
-
 RTDyldMemoryManager* createRTDyldMemoryManager()
 {
     return new RTDyldMemoryManagerJL();
 }
-#endif // USE_MCJIT

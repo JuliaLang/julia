@@ -32,11 +32,7 @@ bool annotateSimdLoop(BasicBlock *incr)
     // Lazy initialization
     if (!simd_loop_mdkind) {
         simd_loop_mdkind = incr->getContext().getMDKindID("simd_loop");
-#if JL_LLVM_VERSION >= 30600
         simd_loop_md = MDNode::get(incr->getContext(), ArrayRef<Metadata*>());
-#else
-        simd_loop_md = MDNode::get(incr->getContext(), ArrayRef<Value*>());
-#endif
     }
     // Ideally, the decoration would go on the block itself, but LLVM 3.3 does not
     // support putting metadata on blocks.  So instead, put the decoration on the last
@@ -118,13 +114,8 @@ void LowerSIMDLoop::enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop *L) const
     for (Instruction *I = Phi; ; I=J) {
         J = NULL;
         // Find the user of instruction I that is within loop L.
-#if JL_LLVM_VERSION >= 30500
         for (User *UI : I->users()) { /*}*/
             Instruction *U = cast<Instruction>(UI);
-#else
-        for (Value::use_iterator UI = I->use_begin(), UE = I->use_end(); UI != UE; ++UI) {
-            Instruction *U = cast<Instruction>(*UI);
-#endif
             if (L->contains(U)) {
                 if (J) {
                     DEBUG(dbgs() << "LSL: not a reduction var because op has two internal uses: " << *I << "\n");
@@ -168,11 +159,7 @@ bool LowerSIMDLoop::runOnLoop(Loop *L, LPPassManager &LPM)
 {
     if (!simd_loop_mdkind) {
         simd_loop_mdkind = L->getHeader()->getContext().getMDKindID("simd_loop");
-#if JL_LLVM_VERSION >= 30600
         simd_loop_md = MDNode::get(L->getHeader()->getContext(), ArrayRef<Metadata*>());
-#else
-        simd_loop_md = MDNode::get(L->getHeader()->getContext(), ArrayRef<Value*>());
-#endif
     }
 
     if (!hasSIMDLoopMetadata(L))
@@ -181,27 +168,14 @@ bool LowerSIMDLoop::runOnLoop(Loop *L, LPPassManager &LPM)
     DEBUG(dbgs() << "LSL: simd_loop found\n");
     BasicBlock *Lh = L->getHeader();
     DEBUG(dbgs() << "LSL: loop header: " << *Lh << "\n");
-#if JL_LLVM_VERSION >= 30400
     MDNode *n = L->getLoopID();
     if (!n) {
         // Loop does not have a LoopID yet, so give it one.
-#if JL_LLVM_VERSION >= 30600
         n = MDNode::get(Lh->getContext(), ArrayRef<Metadata*>(NULL));
-#else
-        n = MDNode::get(Lh->getContext(), ArrayRef<Value*>(NULL));
-#endif
         n->replaceOperandWith(0,n);
         L->setLoopID(n);
     }
-#else
-    MDNode *n = MDNode::get(Lh->getContext(), ArrayRef<Value*>());
-    L->getLoopLatch()->getTerminator()->setMetadata("llvm.loop.parallel", n);
-#endif
-#if JL_LLVM_VERSION >= 30600
     MDNode *m = MDNode::get(Lh->getContext(), ArrayRef<Metadata*>(n));
-#else
-    MDNode *m = MDNode::get(Lh->getContext(), ArrayRef<Value*>(n));
-#endif
 
     // Mark memory references so that Loop::isAnnotatedParallel will return true for this loop.
     for(Loop::block_iterator BBI = L->block_begin(), E=L->block_end(); BBI!=E; ++BBI)

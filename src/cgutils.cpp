@@ -1156,7 +1156,7 @@ static void emit_leafcheck(Value *typ, const std::string &msg, jl_codectx_t *ctx
     assert(typ->getType() == T_pjlvalue);
     emit_typecheck(mark_julia_type(typ, true, jl_any_type, ctx, false), (jl_value_t*)jl_datatype_type, msg, ctx);
     Value *isleaf;
-    isleaf = builder.CreateConstInBoundsGEP1_32(LLVM37_param(T_int8) emit_bitcast(decay_derived(typ), T_pint8), offsetof(jl_datatype_t, isleaftype));
+    isleaf = builder.CreateConstInBoundsGEP1_32(T_int8, emit_bitcast(decay_derived(typ), T_pint8), offsetof(jl_datatype_t, isleaftype));
     isleaf = builder.CreateLoad(isleaf, tbaa_const);
     isleaf = builder.CreateTrunc(isleaf, T_int1);
     error_unless(isleaf, msg, ctx);
@@ -1526,14 +1526,14 @@ static jl_cgval_t emit_getfield_knownidx(const jl_cgval_t &strct, unsigned idx, 
                 lt = vlt->getElementType();
                 Value *ptr = data_pointer(strct, ctx, lt->getPointerTo());
                 Value *llvm_idx = ConstantInt::get(T_size, idx);
-                addr = builder.CreateGEP(LLVM37_param(lt) ptr, llvm_idx);
+                addr = builder.CreateGEP(lt, ptr, llvm_idx);
             }
             else if (lt->isSingleValueType()) {
                 addr = data_pointer(strct, ctx, lt->getPointerTo());
             }
             else {
                 Value *ptr = data_pointer(strct, ctx, lt->getPointerTo());
-                addr = builder.CreateStructGEP(LLVM37_param(lt) ptr, idx);
+                addr = builder.CreateStructGEP(lt, ptr, idx);
             }
         }
         if (jl_field_isptr(jt, idx)) {
@@ -2394,7 +2394,7 @@ static jl_cgval_t emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **arg
                     if (!init_as_value) {
                         // avoid unboxing the argument explicitely
                         // and use memcpy instead
-                        dest = builder.CreateConstInBoundsGEP2_32(LLVM37_param(lt) strct, 0, i);
+                        dest = builder.CreateConstInBoundsGEP2_32(lt, strct, 0, i);
                     }
                     fval = emit_unbox(fty, fval_info, jtype, dest);
 
