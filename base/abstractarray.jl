@@ -1838,23 +1838,25 @@ end
         # when f returns an array, R[ridx...] = f(Aslice) line copies elements,
         # so we can reuse Aslice
         for I in indexes # skip the first element, we already handled it
-            for i in 1:nidx
-                idx[otherdims[i]] = ridx[otherdims[i]] = I.I[i]
-            end
+            replace_tuples!(nidx, idx, ridx, otherdims, I)
             _unsafe_getindex!(Aslice, A, idx...)
             R[ridx...] = f(Aslice)
         end
     else
         # we can't guarantee safety (#18524), so allocate new storage for each slice
         for I in indexes
-            for i in 1:nidx
-                idx[otherdims[i]] = ridx[otherdims[i]] = I.I[i]
-            end
+            replace_tuples!(nidx, idx, ridx, otherdims, I)
             R[ridx...] = f(A[idx...])
         end
     end
 
     return R
+end
+
+function replace_tuples!(nidx, idx, ridx, otherdims, I)
+    for i in 1:nidx
+        idx[otherdims[i]] = ridx[otherdims[i]] = I.I[i]
+    end
 end
 
 
