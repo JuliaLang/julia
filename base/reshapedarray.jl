@@ -204,9 +204,12 @@ end
 end
 
 @inline function _unsafe_getindex(A::ReshapedArray{T,N}, indexes::Vararg{Int,N}) where {T,N}
-    @inbounds ret = parent(A)[ind2sub_rs(A.mi, sub2ind(size(A), indexes...))...]
-    ret
+    i = sub2ind(size(A), indexes...)
+    I = ind2sub_rs(A.mi, i)
+    _unsafe_getindex_rs(parent(A), I)
 end
+_unsafe_getindex_rs(A, i::Integer) = (@inbounds ret = A[i]; ret)
+@inline _unsafe_getindex_rs(A, I) = (@inbounds ret = A[I...]; ret)
 
 @inline function setindex!(A::ReshapedArrayLF, val, index::Int)
     @boundscheck checkbounds(A, index)
