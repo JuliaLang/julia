@@ -60,3 +60,5 @@ if opt_level > 0
     # Check that we load the elsize
     test_loads_no_call(get_llvm(core_sizeof, Tuple{Vector}), [Iptr, "i16"])
 end
+
+@test !contains(get_llvm(isequal, Tuple{Nullable{BigFloat}, Nullable{BigFloat}}), "%gcframe")

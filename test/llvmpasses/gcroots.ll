@@ -28,7 +28,7 @@ top:
     ret void
 }
 
-define void @leftover_alloca(%jl_value_t addrspace(10)*%a) {
+define void @leftover_alloca(%jl_value_t addrspace(10)* %a) {
 ; If this pass encounters an alloca, it'll just sink it into the gcframe,
 ; relying on mem2reg to catch simple cases such as this earlier
 ; CHECK-LABEL: @leftover_alloca
@@ -173,4 +173,14 @@ top:
   %11 = zext i1 %10 to i8
   %12 = xor i8 %11, 1
   ret i8 %12
+}
+
+define void @global_ref() {
+; CHECK-LABEL: @global_ref
+; CHECK: %gcframe = alloca %jl_value_t addrspace(10)*, i32 3
+    %ptls = call %jl_value_t*** @jl_get_ptls_states()
+    %loaded = load %jl_value_t addrspace(10)*, %jl_value_t addrspace(10)** getelementptr (%jl_value_t addrspace(10)*, %jl_value_t addrspace(10)** inttoptr (i64 140540744325952 to %jl_value_t addrspace(10)**), i64 1)
+; CHECK: store %jl_value_t addrspace(10)* %loaded, %jl_value_t addrspace(10)**
+    call void @one_arg_boxed(%jl_value_t addrspace(10)* %loaded)
+    ret void
 }
