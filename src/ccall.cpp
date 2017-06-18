@@ -603,7 +603,6 @@ static Value *julia_to_address(Type *to, jl_value_t *jlto, jl_unionall_t *jlto_e
                              data_pointer(jvinfo, ctx, slot->getType()),
                              (uint64_t)jl_datatype_size(ety),
                              (uint64_t)jl_datatype_align(ety));
-        mark_gc_use(jvinfo);
     }
     if (slot->getType() != to)
         slot = emit_bitcast(slot, to);
@@ -642,7 +641,6 @@ static Value *julia_to_native(Type *to, bool toboxed, jl_value_t *jlto, jl_union
                              data_pointer(jvinfo, ctx, slot->getType()),
                              (uint64_t)jl_datatype_size(jlto),
                              (uint64_t)jl_datatype_align(jlto));
-        mark_gc_use(jvinfo);
     }
     return slot;
 }
@@ -1021,7 +1019,6 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
 
         Value *v = julia_to_native(t, toboxed, tti, NULL, arg, false, i, ctx, NULL);
         bool issigned = jl_signed_type && jl_subtype(tti, (jl_value_t*)jl_signed_type);
-        // make sure args are rooted
         argvals[i] = llvm_type_rewrite(v, t, issigned, ctx);
     }
 
@@ -1134,22 +1131,9 @@ static jl_cgval_t emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *c
         f->setLinkage(GlobalValue::LinkOnceODRLinkage);
     }
 
-    // the actual call
-    builder.CreateCall(prepare_call(gcroot_flush_func));
-    SmallVector<Value*, 16> gc_uses;
-    for (size_t i = 0; i < nargt; ++i) {
-        const jl_cgval_t &arg = argv[i];
-        push_gc_use(gc_uses, arg);
-    }
-    // Mark GC use before **and** after the llvmcall to make sure the arguments
-    // are alive during the llvmcall even if the llvmcall has `unreachable`.
-    // If the llvmcall generates GC safepoint, it might need to emit its own
-    // gckill.
-    mark_gc_uses(gc_uses);
     CallInst *inst = builder.CreateCall(f, ArrayRef<Value*>(&argvals[0], nargt));
     if (isString)
         f->addFnAttr(Attribute::AlwaysInline);
-    mark_gc_uses(gc_uses);
 
     JL_GC_POP();
 
@@ -1859,14 +1843,15 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 
         jl_cgval_t &arg = argv[ai];
         arg = emit_expr((jl_value_t*)argi, ctx);
-        push_gc_use(gc_uses, arg);
 
         // Julia (expression) value of current parameter gcroot
         jl_value_t *argi_root = args[i + 1];
         if (jl_is_long(argi_root))
             continue;
         jl_cgval_t arg_root = emit_expr(argi_root, ctx);
-        push_gc_use(gc_uses, arg_root);
+        Value *gcuse = arg_root.gcroot ? builder.CreateLoad(arg_root.gcroot) : arg_root.V;
+        if (gcuse)
+            gc_uses.push_back(gcuse);
     }
 
     function_sig_t sig(lrt, rt, retboxed, (jl_svec_t*)at, unionall, (nargs - 3) / 2, isVa, cc, llvmcall);
@@ -2079,9 +2064,6 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         }
     }
 
-    // Mark GC use before **and** after the ccall to make sure the arguments
-    // are alive during the ccall even if the function called is `noreturn`.
-    mark_gc_uses(gc_uses);
     OperandBundleDef OpBundle("jl_roots", gc_uses);
     // the actual call
     Value *ret = builder.CreateCall(prepare_call(llvmf),
@@ -2101,9 +2083,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         ctx->f->addFnAttr(Attribute::StackProtectReq);
     }
 
-    mark_gc_uses(gc_uses);
     if (rt == jl_bottom_type) {
-        // Do this after we marked all the GC uses.
         CreateTrap(builder);
         return jl_cgval_t();
     }

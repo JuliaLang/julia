@@ -2099,10 +2099,6 @@ static Value *box_union(const jl_cgval_t &vinfo, jl_codectx_t *ctx, const SmallB
         builder.CreateUnreachable();
     }
     else {
-        if (vinfo.gcroot && vinfo.V != vinfo.gcroot) {
-            // if this is a derived pointer, make sure the root usage itself is also visible to the delete-root pass
-            mark_gc_use(vinfo);
-        }
         // We're guaranteed here that Load(.gcroot) == .V, because we have determined
         // that this union is a boxed value, rather than an interior pointer of some sort
         box_merge->addIncoming(builder.CreateLoad(vinfo.gcroot), defaultBB);
@@ -2216,10 +2212,6 @@ static void emit_unionmove(Value *dest, const jl_cgval_t &src, Value *skip, bool
             builder.CreateBr(postBB);
         }
         builder.SetInsertPoint(postBB);
-        if (src.gcroot && src.V != src.gcroot) {
-            // if this is a derived pointer, make sure the root usage itself is also visible to the delete-root pass
-            mark_gc_use(src);
-        }
     }
     else {
         Value *datatype = emit_typeof_boxed(src, ctx);
@@ -2331,11 +2323,10 @@ static void emit_setfield(jl_datatype_t *sty, const jl_cgval_t &strct, size_t id
                 ConstantInt::get(T_size, jl_field_offset(sty, idx0)));
         jl_value_t *jfty = jl_svecref(sty->types, idx0);
         if (jl_field_isptr(sty, idx0)) {
-            Value *r = maybe_decay_untracked(boxed(rhs, ctx, false)); // don't need a temporary gcroot since it'll be rooted by strct (but should ensure strct is rooted via mark_gc_use)
+            Value *r = maybe_decay_untracked(boxed(rhs, ctx, false)); // don't need a temporary gcroot since it'll be rooted by strct
             tbaa_decorate(strct.tbaa, builder.CreateStore(r,
                 emit_bitcast(addr, T_pprjlvalue)));
             if (wb && strct.isboxed) emit_checked_write_barrier(ctx, boxed(strct, ctx), r);
-            mark_gc_use(strct);
         }
         else {
             int align = jl_field_offset(sty, idx0);
