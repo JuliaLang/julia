@@ -674,15 +674,11 @@ vecdot(x::Number, y::Number) = conj(x) * y
 
 dot(x::Number, y::Number) = vecdot(x, y)
 
-dot(x::Number, y::AbstractArray) = conj(x) * y
-dot(x::AbstractArray, y::Number) = ctranspose(x) * y
-dot(x::AbstractArray, y::AbstractArray) = ctranspose(x) * y
-
 """
     dot(x, y)
     ⋅(x,y)
 
-Compute the dot product. For complex vectors, the first vector is conjugated. If the first argument is a matrix, it is conjugate transposed instead.  Note: if both arguments are vectors, `dot` is called recursively between its inner elements (see `vecdot`).
+Compute the dot product. For complex vectors, the first vector is conjugated.
 
 # Example
 
@@ -692,11 +688,6 @@ julia> dot([1; 1], [2; 3])
 
 julia> dot([im; im], [1; 1])
 0 - 2im
-
-julia> dot([im 0; 0 im], [1; 1])
-2-element Array{Complex{Int64},1}:
- 0-1im
- 0-1im
 ```
 """
 dot(x::AbstractVector, y::AbstractVector) = vecdot(x, y)
