@@ -6,11 +6,7 @@ include $(JULIAHOME)/Make.inc
 include $(JULIAHOME)/deps/llvm-ver.make
 
 override CFLAGS += $(JCFLAGS)
-ifeq ($(LLVM_VER),3.3)
-override CXXFLAGS += $(JCXXFLAGS) -std=c++11
-else
 override CXXFLAGS += $(JCXXFLAGS)
-endif
 override CPPFLAGS += $(JCPPFLAGS)
 
 # -I BUILDDIR comes before -I SRCDIR so that the user can override <options.h> on a per-build-directory basis

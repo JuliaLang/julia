@@ -1224,6 +1224,6 @@ public:
 template<> char JuliaPipeline<0>::ID = 0;
 template<> char JuliaPipeline<2>::ID = 0;
 template<> char JuliaPipeline<3>::ID = 0;
-static RegisterPass<JuliaPipeline<0>> X("juliaO2", "Runs the entire julia pipeline (at -O0)", false, false);
+static RegisterPass<JuliaPipeline<0>> X("juliaO0", "Runs the entire julia pipeline (at -O0)", false, false);
 static RegisterPass<JuliaPipeline<2>> Y("julia", "Runs the entire julia pipeline (at -O2)", false, false);
 static RegisterPass<JuliaPipeline<3>> Z("juliaO3", "Runs the entire julia pipeline (at -O3)", false, false);

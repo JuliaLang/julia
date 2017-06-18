@@ -26,11 +26,7 @@ endif
 include $(SRCDIR)/llvm-options.mk
 LLVM_LIB_FILE := libLLVMCodeGen.a
 
-ifeq ($(LLVM_VER), 3.3)
-LLVM_TAR_EXT:=$(LLVM_VER).src.tar.gz
-else
 LLVM_TAR_EXT:=$(LLVM_VER).src.tar.xz
-endif # LLVM_VER == 3.3
 
 ifneq ($(LLVM_VER),svn)
 LLVM_TAR:=$(SRCDIR)/srccache/llvm-$(LLVM_TAR_EXT)
@@ -54,11 +50,7 @@ endif
 endif # LLVM_VER != svn
 
 # Figure out which targets to build
-ifeq ($(LLVM_VER_SHORT),$(filter $(LLVM_VER_SHORT),3.3 3.4 3.5 3.6 3.7 3.8))
-LLVM_TARGETS := host
-else
 LLVM_TARGETS := host;NVPTX
-endif
 
 LLVM_CFLAGS :=
 LLVM_CXXFLAGS :=
@@ -115,10 +107,6 @@ ifeq ($(USE_LLVM_SHLIB),1)
 #       against libLLVM) but there doesn't seem to be a CMake counterpart option
 LLVM_FLAGS += --enable-shared
 LLVM_CMAKE += -DLLVM_BUILD_LLVM_DYLIB:BOOL=ON -DLLVM_LINK_LLVM_DYLIB:BOOL=ON
-# NOTE: starting with LLVM 3.8, all symbols are exported
-ifeq ($(LLVM_VER_SHORT),$(filter $(LLVM_VER_SHORT),3.3 3.4 3.5 3.6 3.7))
-LLVM_CMAKE += -DLLVM_DYLIB_EXPORT_ALL:BOOL=ON
-endif
 endif
 ifeq ($(USE_INTEL_JITEVENTS), 1)
 LLVM_FLAGS += --with-intel-jitevents
@@ -156,22 +144,7 @@ ifneq (,$(filter $(ARCH), powerpc64le ppc64le))
 LLVM_CXXFLAGS += -mminimal-toc
 endif
 
-# LLVM bug #24157
-ifeq ($(USE_LLVM_SHLIB),1)
-ifeq ($(LLVM_USE_CMAKE),1)
-ifeq ($(LLVM_VER_SHORT),$(filter $(LLVM_VER_SHORT),3.3 3.4 3.5 3.6 3.7))
-$(error USE_LLVM_SHLIB=1 with LLVM_USE_CMAKE=1 requires LLVM > 3.7.x)
-endif
-endif
-endif
-
 ifeq ($(LLVM_SANITIZE),1)
-# autotools doesn't provide a sanitation build mode (linking libLLVM will fail)
-ifeq ($(USE_LLVM_SHLIB),1)
-ifeq ($(LLVM_USE_CMAKE),0)
-$(error LLVM_SANITIZE=1 with USE_LLVM_SHLIB=1 requires LLVM_USE_CMAKE=1)
-endif
-endif
 ifeq ($(SANITIZE_MEMORY),1)
 LLVM_CFLAGS += -fsanitize=memory -fsanitize-memory-track-origins
 LLVM_LDFLAGS += -fsanitize=memory -fsanitize-memory-track-origins
@@ -230,24 +203,15 @@ LLVM_MFLAGS += OPTIONAL_PARALLEL_DIRS=clang
 else
 # block default building of Clang
 LLVM_MFLAGS += OPTIONAL_PARALLEL_DIRS=
-ifeq ($(LLVM_VER_SHORT),$(filter $(LLVM_VER_SHORT),3.3 3.4 3.5 3.6 3.7))
-LLVM_CMAKE += -DLLVM_EXTERNAL_CLANG_BUILD=OFF
-LLVM_CMAKE += -DLLVM_EXTERNAL_COMPILER_RT_BUILD=OFF
-else
 LLVM_CMAKE += -DLLVM_TOOL_CLANG_BUILD=OFF
 LLVM_CMAKE += -DLLVM_TOOL_COMPILER_RT_BUILD=OFF
-endif
 endif
 ifeq ($(BUILD_LLDB),1)
 LLVM_MFLAGS += OPTIONAL_DIRS=lldb
 else
 # block default building of lldb
 LLVM_MFLAGS += OPTIONAL_DIRS=
-ifeq ($(LLVM_VER_SHORT),$(filter $(LLVM_VER_SHORT),3.3 3.4 3.5 3.6 3.7))
-LLVM_CMAKE += -DLLVM_EXTERNAL_LLDB_BUILD=OFF
-else
 LLVM_CMAKE += -DLLVM_TOOL_LLDB_BUILD=OFF
-endif
 endif
 
 LLVM_SRC_URL := http://releases.llvm.org/$(LLVM_VER)
@@ -506,8 +470,6 @@ endif # LLVM_VER
 
 $(LLVM_BUILDDIR_withtype)/build-configured: $(LLVM_PATCH_PREV)
 
-ifeq ($(LLVM_USE_CMAKE),1)
-
 $(LLVM_BUILDDIR_withtype)/build-configured: $(LLVM_SRC_DIR)/source-extracted | $(llvm_python_workaround) $(LIBCXX_DEPENDENCY)
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
@@ -524,45 +486,21 @@ $(LLVM_BUILDDIR_withtype)/build-compiled: $(LLVM_BUILDDIR_withtype)/build-config
 		  $(CMAKE) --build .)
 	echo 1 > $@
 
-else
-
-$(LLVM_BUILDDIR_withtype)/build-configured: $(LLVM_SRC_DIR)/source-extracted | $(llvm_python_workaround) $(LIBCXX_DEPENDENCY)
-	mkdir -p $(dir $@)
-	cd $(dir $@) && \
-		export PATH=$(llvm_python_workaround):$$PATH && \
-		$(LLVM_SRC_DIR)/configure $(CONFIGURE_COMMON) $(LLVM_FLAGS)
-	echo 1 > $@
-
-$(LLVM_BUILDDIR_withtype)/build-compiled: $(LLVM_BUILDDIR_withtype)/build-configured | $(llvm_python_workaround)
-	cd $(LLVM_BUILDDIR_withtype) && \
-		export PATH=$(llvm_python_workaround):$$PATH && \
-		$(MAKE) $(LLVM_MFLAGS) $(MAKE_COMMON)
-	echo 1 > $@
-
-endif # LLVM_USE_CMAKE
-
 $(LLVM_BUILDDIR_withtype)/build-checked: $(LLVM_BUILDDIR_withtype)/build-compiled | $(llvm_python_workaround)
 ifeq ($(OS),$(BUILD_OS))
 	cd $(LLVM_BUILDDIR_withtype) && \
 		export PATH=$(llvm_python_workaround):$$PATH && \
-		$(if $(filter $(LLVM_USE_CMAKE),1), \
-		  $(CMAKE) --build . --target check, \
-		  $(MAKE) $(LLVM_MFLAGS) check)
+		  $(CMAKE) --build . --target check
 endif
 	echo 1 > $@
 
 $(build_prefix)/manifest/llvm: | $(llvm_python_workaround)
 
-ifeq ($(LLVM_USE_CMAKE),1)
 LLVM_INSTALL = \
 	cd $1 && $$(CMAKE) -DCMAKE_INSTALL_PREFIX="$2$$(build_prefix)" -P cmake_install.cmake
 ifeq ($(OS), WINNT)
 LLVM_INSTALL += && cp $2$$(build_shlibdir)/LLVM.dll $2$$(build_depsbindir)
 endif
-else
-LLVM_INSTALL = \
-	$(call MAKE_INSTALL,$1,$2,$3 $$(LLVM_MFLAGS) PATH="$$(llvm_python_workaround):$$$$PATH" DestSharedLibDir="$2$$(build_shlibdir)")
-endif # LLVM_USE_CMAKE
 
 $(eval $(call staged-install,llvm,llvm-$$(LLVM_VER)/build_$$(LLVM_BUILDTYPE), \
 	LLVM_INSTALL,,,))

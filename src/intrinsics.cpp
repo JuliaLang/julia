@@ -730,20 +730,12 @@ struct math_builder {
              jl_options.fast_math == JL_OPTIONS_FAST_MATH_ON)) {
             FastMathFlags fmf;
             fmf.setUnsafeAlgebra();
-#if JL_LLVM_VERSION >= 30800
             builder.setFastMathFlags(fmf);
-#else
-            builder.SetFastMathFlags(fmf);
-#endif
         }
     }
     IRBuilder<>& operator()() const { return builder; }
     ~math_builder() {
-#if JL_LLVM_VERSION >= 30800
         builder.setFastMathFlags(old_fmf);
-#else
-        builder.SetFastMathFlags(old_fmf);
-#endif
     }
 };
 
@@ -916,11 +908,7 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value **argvalues, size_t narg
 
     switch (f) {
     case neg_int:
-#if JL_LLVM_VERSION >= 30700
         return builder.CreateNeg(x);
-#else
-        return builder.CreateSub(ConstantInt::get(t, 0), x);
-#endif
     case add_int: return builder.CreateAdd(x, y);
     case sub_int: return builder.CreateSub(x, y);
     case mul_int: return builder.CreateMul(x, y);
@@ -933,15 +921,8 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value **argvalues, size_t narg
 // to implement this in LLVM 3.4, though there are two different idioms
 // that do the correct thing on LLVM <= 3.3 and >= 3.5 respectively.
 // See issue #7868
-#if JL_LLVM_VERSION >= 30500
     case neg_float: return math_builder(ctx)().CreateFSub(ConstantFP::get(t, -0.0), x);
     case neg_float_fast: return math_builder(ctx, true)().CreateFNeg(x);
-#else
-    case neg_float:
-        return math_builder(ctx)().CreateFMul(ConstantFP::get(t, -1.0), x);
-    case neg_float_fast:
-        return math_builder(ctx, true)().CreateFMul(ConstantFP::get(t, -1.0), x);
-#endif
     case add_float: return math_builder(ctx)().CreateFAdd(x, y);
     case sub_float: return math_builder(ctx)().CreateFSub(x, y);
     case mul_float: return math_builder(ctx)().CreateFMul(x, y);
@@ -956,25 +937,13 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value **argvalues, size_t narg
         assert(y->getType() == x->getType());
         assert(z->getType() == y->getType());
         Value *fmaintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::fma, makeArrayRef(t));
-#if JL_LLVM_VERSION >= 30700
         return builder.CreateCall(fmaintr, {x, y, z});
-#else
-        return builder.CreateCall3(fmaintr, x, y, z);
-#endif
     }
     case muladd_float: {
-#if JL_LLVM_VERSION >= 30400
         assert(y->getType() == x->getType());
         assert(z->getType() == y->getType());
         Value *muladdintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::fmuladd, makeArrayRef(t));
-#if JL_LLVM_VERSION >= 30700
         return builder.CreateCall(muladdintr, {x, y, z});
-#else
-        return builder.CreateCall3(muladdintr, x, y, z);
-#endif
-#else
-        return math_builder(ctx, true)().CreateFAdd(builder.CreateFMul(x, y), z);
-#endif
     }
 
     case checked_sadd_int:
@@ -997,11 +966,7 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value **argvalues, size_t narg
                  Intrinsic::smul_with_overflow :
                  Intrinsic::umul_with_overflow)))));
         Value *intr = Intrinsic::getDeclaration(jl_Module, intr_id, makeArrayRef(t));
-#if JL_LLVM_VERSION >= 30700
         Value *res = builder.CreateCall(intr, {x, y});
-#else
-        Value *res = builder.CreateCall2(intr, x, y);
-#endif
         Value *val = builder.CreateExtractValue(res, ArrayRef<unsigned>(0));
         Value *obit = builder.CreateExtractValue(res, ArrayRef<unsigned>(1));
         Value *obyte = builder.CreateZExt(obit, T_int8);
@@ -1134,34 +1099,17 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value **argvalues, size_t narg
     case ctlz_int: {
         Value *ctlz = Intrinsic::getDeclaration(jl_Module, Intrinsic::ctlz, makeArrayRef(t));
         y = ConstantInt::get(T_int1, 0);
-#if JL_LLVM_VERSION >= 30700
         return builder.CreateCall(ctlz, {x, y});
-#else
-        return builder.CreateCall2(ctlz, x, y);
-#endif
     }
     case cttz_int: {
         Value *cttz = Intrinsic::getDeclaration(jl_Module, Intrinsic::cttz, makeArrayRef(t));
         y = ConstantInt::get(T_int1, 0);
-#if JL_LLVM_VERSION >= 30700
         return builder.CreateCall(cttz, {x, y});
-#else
-        return builder.CreateCall2(cttz, x, y);
-#endif
     }
 
     case abs_float: {
-#if JL_LLVM_VERSION >= 30400
         Value *absintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::fabs, makeArrayRef(t));
         return builder.CreateCall(absintr, x);
-#else
-        Type *intt = INTT(t);
-        Value *bits = builder.CreateBitCast(x, intt);
-        Value *absbits =
-            builder.CreateAnd(bits,
-                              ConstantInt::get(intt, APInt::getSignedMaxValue(cast<IntegerType>(intt)->getBitWidth())));
-        return builder.CreateBitCast(absbits, t);
-#endif
     }
     case copysign_float: {
         Value *bits = builder.CreateBitCast(x, t);
