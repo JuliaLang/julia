@@ -1,0 +1,11 @@
+[package]
+name = "julia-bench"
+publish = false
+description = "Rust implementation of the micro benchmark"
+version = "0.1.0"
+
+[dependencies]
+blas = { version = "0.15.4", features = ["openblas"] }
+mersenne_twister = "1.1.0"
+num = "0.1.39"
+rand = "0.3.15"
