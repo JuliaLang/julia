@@ -571,14 +571,14 @@ ifeq ($(LLVM_USE_CMAKE),1)
 $(LLVM_BUILDDIR_withtype)/build-configured: $(LLVM_SRC_DIR)/source-extracted | $(llvm_python_workaround) $(LIBCXX_DEPENDENCY)
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
-		export PATH=$(llvm_python_workaround):$$PATH && \
+		export PATH=$(llvm_python_workaround):"$$PATH" && \
 		$(CMAKE) $(LLVM_SRC_DIR) $(CMAKE_GENERATOR_COMMAND) $(CMAKE_COMMON) $(LLVM_CMAKE) \
 		|| { echo '*** To install a newer version of cmake, run contrib/download_cmake.sh ***' && false; }
 	echo 1 > $@
 
 $(LLVM_BUILDDIR_withtype)/build-compiled: $(LLVM_BUILDDIR_withtype)/build-configured | $(llvm_python_workaround)
 	cd $(LLVM_BUILDDIR_withtype) && \
-		export PATH=$(llvm_python_workaround):$$PATH && \
+		export PATH=$(llvm_python_workaround):"$$PATH" && \
 		$(if $(filter $(CMAKE_GENERATOR),make), \
 		  $(MAKE), \
 		  $(CMAKE) --build .)
@@ -589,13 +589,13 @@ else
 $(LLVM_BUILDDIR_withtype)/build-configured: $(LLVM_SRC_DIR)/source-extracted | $(llvm_python_workaround) $(LIBCXX_DEPENDENCY)
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
-		export PATH=$(llvm_python_workaround):$$PATH && \
+		export PATH=$(llvm_python_workaround):"$$PATH" && \
 		$(LLVM_SRC_DIR)/configure $(CONFIGURE_COMMON) $(LLVM_FLAGS)
 	echo 1 > $@
 
 $(LLVM_BUILDDIR_withtype)/build-compiled: $(LLVM_BUILDDIR_withtype)/build-configured | $(llvm_python_workaround)
 	cd $(LLVM_BUILDDIR_withtype) && \
-		export PATH=$(llvm_python_workaround):$$PATH && \
+		export PATH=$(llvm_python_workaround):"$$PATH" && \
 		$(MAKE) $(LLVM_MFLAGS) $(MAKE_COMMON)
 	echo 1 > $@
 
@@ -604,7 +604,7 @@ endif # LLVM_USE_CMAKE
 $(LLVM_BUILDDIR_withtype)/build-checked: $(LLVM_BUILDDIR_withtype)/build-compiled | $(llvm_python_workaround)
 ifeq ($(OS),$(BUILD_OS))
 	cd $(LLVM_BUILDDIR_withtype) && \
-		export PATH=$(llvm_python_workaround):$$PATH && \
+		export PATH=$(llvm_python_workaround):"$$PATH" && \
 		$(if $(filter $(LLVM_USE_CMAKE),1), \
 		  $(CMAKE) --build . --target check, \
 		  $(MAKE) $(LLVM_MFLAGS) check)
