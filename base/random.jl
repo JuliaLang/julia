@@ -714,7 +714,7 @@ rand(rng::AbstractRNG, r::AbstractArray, dims::Integer...) = rand(rng, r, conver
 
 isvalid_unsafe(s::String, i) = !Base.is_valid_continuation(unsafe_load(pointer(s), i))
 isvalid_unsafe(s::AbstractString, i) = isvalid(s, i)
-_endof(s::String) = s.len
+_endof(s::String) = sizeof(s)
 _endof(s::AbstractString) = endof(s)
 
 function rand(rng::AbstractRNG, s::AbstractString)::Char

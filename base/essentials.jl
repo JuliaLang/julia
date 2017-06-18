@@ -244,12 +244,13 @@ function getindex(v::SimpleVector, i::Int)
     return unsafe_pointer_to_objref(x)
 end
 
-length(v::SimpleVector) = v.length
-endof(v::SimpleVector) = v.length
+# TODO: add gc use intrinsic call instead of noinline
+length(v::SimpleVector) = (@_noinline_meta; unsafe_load(convert(Ptr{Int},data_pointer_from_objref(v))))
+endof(v::SimpleVector) = length(v)
 start(v::SimpleVector) = 1
 next(v::SimpleVector,i) = (v[i],i+1)
-done(v::SimpleVector,i) = (i > v.length)
-isempty(v::SimpleVector) = (v.length == 0)
+done(v::SimpleVector,i) = (i > length(v))
+isempty(v::SimpleVector) = (length(v) == 0)
 indices(v::SimpleVector) = (OneTo(length(v)),)
 linearindices(v::SimpleVector) = indices(v, 1)
 indices(v::SimpleVector, d) = d <= 1 ? indices(v)[d] : OneTo(1)

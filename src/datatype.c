@@ -238,10 +238,21 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     if (st->types == NULL)
         return;
     uint32_t nfields = jl_svec_len(st->types);
-    if (nfields == 0 && st != jl_sym_type && st != jl_simplevector_type) {
-        // reuse the same layout for all singletons
-        static const jl_datatype_layout_t singleton_layout = {0, 1, 0, 0, 0};
-        st->layout = &singleton_layout;
+    if (nfields == 0) {
+        if (st == jl_sym_type || st == jl_string_type) {
+            // opaque layout - heap-allocated blob
+            static const jl_datatype_layout_t opaque_byte_layout = {0, 1, 0, 1, 0};
+            st->layout = &opaque_byte_layout;
+        }
+        else if (st == jl_simplevector_type || st->name == jl_array_typename) {
+            static const jl_datatype_layout_t opaque_ptr_layout = {0, sizeof(void*), 0, 1, 0};
+            st->layout = &opaque_ptr_layout;
+        }
+        else {
+            // reuse the same layout for all singletons
+            static const jl_datatype_layout_t singleton_layout = {0, 1, 0, 0, 0};
+            st->layout = &singleton_layout;
+        }
         return;
     }
     if (!jl_is_leaf_type((jl_value_t*)st)) {

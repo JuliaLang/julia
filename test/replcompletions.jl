@@ -359,17 +359,17 @@ c, r, res = test_complete(s)
 @test contains(c[1], "x, y, w...")
 
 # Test of inference based getfield completion
-s = "\"\"."
+s = "(1+2im)."
 c,r = test_complete(s)
-@test length(c)==1
+@test length(c)==2
 @test r == (endof(s)+1):endof(s)
-@test c[1] == "len"
+@test c == ["im","re"]
 
-s = "(\"\"*\"\")."
+s = "((1+2im))."
 c,r = test_complete(s)
-@test length(c)==1
+@test length(c)==2
 @test r == (endof(s)+1):endof(s)
-@test c[1] == "len"
+@test c == ["im","re"]
 
 s = "CompletionFoo.test_y_array[1]."
 c,r = test_complete(s)
