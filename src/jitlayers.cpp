@@ -1200,6 +1200,7 @@ GlobalVariable *jl_get_global_for(const char *cname, void *addr, Module *M)
 // An LLVM module pass that just runs all julia passes in order. Useful for
 // debugging
 extern "C" void jl_init_codegen(void);
+template <int OptLevel>
 class JuliaPipeline : public Pass {
 public:
     static char ID;
@@ -1213,12 +1214,16 @@ public:
         (void)jl_init_llvm();
         PMTopLevelManager *TPM = Stack.top()->getTopLevelManager();
         TPMAdapter Adapter(TPM);
-        addOptimizationPasses(&Adapter, 3);
+        addOptimizationPasses(&Adapter, OptLevel);
     }
     JuliaPipeline() : Pass(PT_PassManager, ID) {}
     Pass *createPrinterPass(raw_ostream &O, const std::string &Banner) const override {
         return createPrintModulePass(O, Banner);
     }
 };
-char JuliaPipeline::ID = 0;
-static RegisterPass<JuliaPipeline> X("julia", "Runs the entire julia pipeline", false, false);
+template<> char JuliaPipeline<0>::ID = 0;
+template<> char JuliaPipeline<2>::ID = 0;
+template<> char JuliaPipeline<3>::ID = 0;
+static RegisterPass<JuliaPipeline<0>> X("juliaO0", "Runs the entire julia pipeline (at -O0)", false, false);
+static RegisterPass<JuliaPipeline<2>> Y("julia", "Runs the entire julia pipeline (at -O2)", false, false);
+static RegisterPass<JuliaPipeline<3>> Z("juliaO3", "Runs the entire julia pipeline (at -O3)", false, false);

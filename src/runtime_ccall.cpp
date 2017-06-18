@@ -175,11 +175,7 @@ void *jl_load_and_lookup(const char *f_lib, const char *f_name, void **hnd)
 extern "C" JL_DLLEXPORT
 jl_value_t *jl_get_cpu_name(void)
 {
-#if JL_LLVM_VERSION >= 30500
     StringRef HostCPUName = llvm::sys::getHostCPUName();
-#else
-    const std::string& HostCPUName = llvm::sys::getHostCPUName();
-#endif
     return jl_pchar_to_string(HostCPUName.data(), HostCPUName.size());
 }
 
