@@ -185,7 +185,7 @@ function A_mul_B!(D::Diagonal, B::UnitUpperTriangular)
     UpperTriangular(B.data)
 end
 
-Ac_mul_B(D::Diagonal, B::Diagonal) = Diagonal(conj(D.diag) .* B.diag)
+Ac_mul_B(D::Diagonal, B::Diagonal) = Diagonal(ctranspose.(D.diag) .* B.diag)
 Ac_mul_B(A::AbstractTriangular, D::Diagonal) = A_mul_B!(ctranspose(A), D)
 function Ac_mul_B(A::AbstractMatrix, D::Diagonal)
     Ac = similar(A, promote_op(*, eltype(A), eltype(D.diag)), (size(A, 2), size(A, 1)))
@@ -193,7 +193,7 @@ function Ac_mul_B(A::AbstractMatrix, D::Diagonal)
     A_mul_B!(Ac, D)
 end
 
-At_mul_B(D::Diagonal, B::Diagonal) = Diagonal(D.diag .* B.diag)
+At_mul_B(D::Diagonal, B::Diagonal) = Diagonal(transpose.(D.diag) .* B.diag)
 At_mul_B(A::AbstractTriangular, D::Diagonal) = A_mul_B!(transpose(A), D)
 function At_mul_B(A::AbstractMatrix, D::Diagonal)
     At = similar(A, promote_op(*, eltype(A), eltype(D.diag)), (size(A, 2), size(A, 1)))
@@ -201,7 +201,7 @@ function At_mul_B(A::AbstractMatrix, D::Diagonal)
     A_mul_B!(At, D)
 end
 
-A_mul_Bc(D::Diagonal, B::Diagonal) = Diagonal(D.diag .* conj(B.diag))
+A_mul_Bc(D::Diagonal, B::Diagonal) = Diagonal(D.diag .* ctranspose.(B.diag))
 A_mul_Bc(D::Diagonal, B::AbstractTriangular) = A_mul_B!(D, ctranspose(B))
 A_mul_Bc(D::Diagonal, Q::Union{Base.LinAlg.QRCompactWYQ,Base.LinAlg.QRPackedQ}) = A_mul_Bc!(Array(D), Q)
 function A_mul_Bc(D::Diagonal, A::AbstractMatrix)
@@ -210,7 +210,7 @@ function A_mul_Bc(D::Diagonal, A::AbstractMatrix)
     A_mul_B!(D, Ac)
 end
 
-A_mul_Bt(D::Diagonal, B::Diagonal) = At_mul_B(D, B)
+A_mul_Bt(D::Diagonal, B::Diagonal) = Diagonal(D.diag .* transpose.(B.diag))
 A_mul_Bt(D::Diagonal, B::AbstractTriangular) = A_mul_B!(D, transpose(B))
 function A_mul_Bt(D::Diagonal, A::AbstractMatrix)
     At = similar(A, promote_op(*, eltype(A), eltype(D.diag)), (size(A, 2), size(A, 1)))
@@ -218,8 +218,8 @@ function A_mul_Bt(D::Diagonal, A::AbstractMatrix)
     A_mul_B!(D, At)
 end
 
-Ac_mul_Bc(D::Diagonal, B::Diagonal) = Diagonal(conj(D.diag) .* conj(B.diag))
-At_mul_Bt(D::Diagonal, B::Diagonal) = At_mul_B(D, B)
+Ac_mul_Bc(D::Diagonal, B::Diagonal) = Diagonal(ctranspose.(D.diag) .* ctranspose.(B.diag))
+At_mul_Bt(D::Diagonal, B::Diagonal) = Diagonal(transpose.(D.diag) .* transpose.(B.diag))
 
 A_mul_B!(A::Diagonal,B::Diagonal)  = throw(MethodError(A_mul_B!, Tuple{Diagonal,Diagonal}))
 At_mul_B!(A::Diagonal,B::Diagonal) = throw(MethodError(At_mul_B!, Tuple{Diagonal,Diagonal}))
