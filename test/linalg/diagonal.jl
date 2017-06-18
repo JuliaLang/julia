@@ -357,3 +357,19 @@ end
     @test logm(D) == Diagonal([logm([1 2; 3 4]), logm([1 2; 3 4])])
     @test sqrtm(D) == Diagonal([sqrtm([1 2; 3 4]), sqrtm([1 2; 3 4])])
 end
+
+@testset "multiplication of transposes of Diagonal (#22428)" begin
+    for t in (Float64, Complex{Float64})
+        D = Diagonal(randn(t, 5, 5))
+        B = Diagonal(randn(t, 5, 5))
+        @test D*B == Matrix(D)*Matrix(B) && typeof(D*B) <: Diagonal
+        @test D'B == Matrix(D)'*Matrix(B) && typeof(D'B) <: Diagonal
+        @test D*B' == Matrix(D)*Matrix(B)' && typeof(D*B') <: Diagonal
+        @test D'B' == Matrix(D)'*Matrix(B)' && typeof(D'*B') <: Diagonal
+        @test D.'B == Matrix(D).'*Matrix(B) && typeof(D.'B) <: Diagonal
+        @test D*B.' == Matrix(D)*Matrix(B).' && typeof(D*B.') <: Diagonal
+        @test D.'B.' == Matrix(D).'Matrix(B).' && typeof(D.'B.') <: Diagonal
+        @test D'B.' == Matrix(D)'Matrix(B).' && typeof(D'B.') <: Diagonal
+        @test D.'B' == Matrix(D).'Matrix(B)' && typeof(D.'B') <: Diagonal
+    end
+end
