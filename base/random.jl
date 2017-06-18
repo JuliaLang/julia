@@ -561,44 +561,41 @@ end
 @inline mask128(u::UInt128, ::Type{Float16}) = (u & 0x03ff03ff03ff03ff03ff03ff03ff03ff) | 0x3c003c003c003c003c003c003c003c00
 @inline mask128(u::UInt128, ::Type{Float32}) = (u & 0x007fffff007fffff007fffff007fffff) | 0x3f8000003f8000003f8000003f800000
 
-for T = (Float16,Float32)
-    @eval begin
-        function rand!(r::MersenneTwister, A::Array{$T}, ::Type{Close1Open2})
-            n = length(A)
-            n128 = n * sizeof($T) ÷ 16
-            rand!(r, unsafe_wrap(Array, convert(Ptr{Float64}, pointer(A)), 2*n128), 2*n128, Close1Open2)
-            A128 = unsafe_wrap(Array, convert(Ptr{UInt128}, pointer(A)), n128)
-            @inbounds for i in 1:n128
-                u = A128[i]
-                u ⊻= u << 26
-                # at this point, the 64 low bits of u, "k" being the k-th bit of A128[i] and "+" the bit xor, are:
-                # [..., 58+32,..., 53+27, 52+26, ..., 33+7, 32+6, ..., 27+1, 26, ..., 1]
-                # the bits needing to be random are
-                # [1:10, 17:26, 33:42, 49:58] (for Float16)
-                # [1:23, 33:55] (for Float32)
-                # this is obviously satisfied on the 32 low bits side, and on the high side, the entropy comes
-                # from bits 33:52 of A128[i] and then from bits 27:32 (which are discarded on the low side)
-                # this is similar for the 64 high bits of u
-                A128[i] = mask128(u, $T)
-            end
-            for i in 16*n128÷sizeof($T)+1:n
-                @inbounds A[i] = rand(r, $T) + oneunit($T)
-            end
-            A
-        end
-
-        function rand!(r::MersenneTwister, A::Array{$T}, ::Type{CloseOpen})
-            rand!(r, A, Close1Open2)
-            I32 = one(Float32)
-            for i in eachindex(A)
-                @inbounds A[i] = $T(Float32(A[i])-I32) # faster than "A[i] -= one($T)" for $T==Float16
-            end
-            A
-        end
-
-        rand!(r::MersenneTwister, A::Array{$T}) = rand!(r, A, CloseOpen)
+function rand!(r::MersenneTwister, A::Union{Array{Float16},Array{Float32}}, ::Type{Close1Open2})
+    T = eltype(A)
+    n = length(A)
+    n128 = n * sizeof(T) ÷ 16
+    rand!(r, unsafe_wrap(Array, convert(Ptr{Float64}, pointer(A)), 2*n128), 2*n128, Close1Open2)
+    A128 = unsafe_wrap(Array, convert(Ptr{UInt128}, pointer(A)), n128)
+    @inbounds for i in 1:n128
+        u = A128[i]
+        u ⊻= u << 26
+        # at this point, the 64 low bits of u, "k" being the k-th bit of A128[i] and "+" the bit xor, are:
+        # [..., 58+32,..., 53+27, 52+26, ..., 33+7, 32+6, ..., 27+1, 26, ..., 1]
+        # the bits needing to be random are
+        # [1:10, 17:26, 33:42, 49:58] (for Float16)
+        # [1:23, 33:55] (for Float32)
+        # this is obviously satisfied on the 32 low bits side, and on the high side, the entropy comes
+        # from bits 33:52 of A128[i] and then from bits 27:32 (which are discarded on the low side)
+        # this is similar for the 64 high bits of u
+        A128[i] = mask128(u, T)
     end
+    for i in 16*n128÷sizeof(T)+1:n
+        @inbounds A[i] = rand(r, T) + oneunit(T)
+    end
+    A
 end
+
+function rand!(r::MersenneTwister, A::Union{Array{Float16},Array{Float32}}, ::Type{CloseOpen})
+    rand!(r, A, Close1Open2)
+    I32 = one(Float32)
+    for i in eachindex(A)
+        @inbounds A[i] = Float32(A[i])-I32 # faster than "A[i] -= one(T)" for T==Float16
+    end
+    A
+end
+
+rand!(r::MersenneTwister, A::Union{Array{Float16},Array{Float32}}) = rand!(r, A, CloseOpen)
 
 function rand!(r::MersenneTwister, A::Array{UInt128}, n::Int=length(A))
     if n > length(A)
@@ -1475,11 +1472,10 @@ function randexp! end
 
 for randfun in [:randn, :randexp]
     randfun! = Symbol(randfun, :!)
-    for T = (Float16, Float32, Float64)
-        @eval $randfun(rng::AbstractRNG, ::Type{$T}) = convert($T, $randfun(rng))
-    end
     @eval begin
         # scalars
+        $randfun(rng::AbstractRNG, T::Union{Type{Float16},Type{Float32},Type{Float64}}) =
+            convert(T, $randfun(rng))
         $randfun(::Type{T}) where {T} = $randfun(GLOBAL_RNG, T)
 
         # filling arrays

@@ -1143,20 +1143,23 @@ function lexcmp(a::Array{UInt8,1}, b::Array{UInt8,1})
 end
 
 # use memcmp for == on bit integer types
-for T in BitInteger_types
-    @eval begin
-        function ==(a::Array{$T,N}, b::Array{$T,N}) where N
-            size(a) == size(b) && 0 == ccall(
-                :memcmp, Int32, (Ptr{$T}, Ptr{$T}, UInt), a, b, sizeof($T) * length(a))
-        end
 
-        # this is ~20% faster than the generic implementation above for very small arrays
-        function ==(a::Array{$T,1}, b::Array{$T,1})
-            len = length(a)
-            len == length(b) && 0 == ccall(
-                :memcmp, Int32, (Ptr{$T}, Ptr{$T}, UInt), a, b, sizeof($T) * len)
-        end
-    end
+function ==(a::A, b::A) where A <: Union{Array{Int8,N},Array{UInt8,N},Array{Int16,N},
+                                         Array{UInt16,N},Array{Int32,N},Array{UInt32,N},
+                                         Array{Int64,N},Array{UInt64,N},Array{Int128,N},
+                                         Array{UInt128,N}} where N
+    size(a) == size(b) && 0 == ccall(
+        :memcmp, Int32, (Ptr{Void}, Ptr{Void}, UInt), a, b, sizeof(eltype(A)) * length(a))
+end
+
+# this is ~20% faster than the generic implementation above for very small arrays
+function ==(a::A, b::A) where A <: Union{Array{Int8,1},Array{UInt8,1},Array{Int16,1},
+                                         Array{UInt16,1},Array{Int32,1},Array{UInt32,1},
+                                         Array{Int64,1},Array{UInt64,1},Array{Int128,1},
+                                         Array{UInt128,1}}
+    len = length(a)
+    len == length(b) && 0 == ccall(
+        :memcmp, Int32, (Ptr{Void}, Ptr{Void}, UInt), a, b, sizeof(eltype(A)) * len)
 end
 
 function reverse(A::AbstractVector, s=first(linearindices(A)), n=last(linearindices(A)))
