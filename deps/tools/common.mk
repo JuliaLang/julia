@@ -50,14 +50,12 @@ endif
 endif
 
 # For now this is LLVM specific, but I expect it won't be in the future
-ifeq ($(LLVM_USE_CMAKE),1)
 ifeq ($(CMAKE_GENERATOR),Ninja)
 CMAKE_GENERATOR_COMMAND := -G Ninja
 else ifeq ($(CMAKE_GENERATOR),make)
 CMAKE_GENERATOR_COMMAND := -G "Unix Makefiles"
 else
 $(error Unknown CMake generator '$(CMAKE_GENERATOR)'. Options are 'Ninja' and 'make')
-endif
 endif
 
 # If the top-level Makefile is called with environment variables,
