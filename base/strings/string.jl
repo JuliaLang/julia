@@ -51,7 +51,7 @@ convert(::Type{String}, v::Vector{UInt8}) = String(v)
 pointer(s::String) = unsafe_convert(Ptr{UInt8}, s)
 pointer(s::String, i::Integer) = pointer(s)+(i-1)
 
-sizeof(s::String) = s.len
+sizeof(s::String) = Core.sizeof(s)
 
 """
     codeunit(s::AbstractString, i::Integer)

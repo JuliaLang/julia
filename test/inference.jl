@@ -956,3 +956,97 @@ f22364(::String, ::Any...) = 0.0
 g22364(x) = f22364(x, Any[[]][1]...)
 @test @inferred(g22364(1)) === 0
 @test @inferred(g22364("1")) === 0.0
+
+function get_linfo(f::ANY, t::ANY)
+    if isa(f, Core.Builtin)
+        throw(ArgumentError("argument is not a generic function"))
+    end
+    # get the MethodInstance for the method match
+    world = typemax(UInt)
+    meth = which(f, t)
+    t = Base.to_tuple_type(t)
+    ft = isa(f, Type) ? Type{f} : typeof(f)
+    tt = Tuple{ft, t.parameters...}
+    precompile(tt)
+    (ti, env) = ccall(:jl_match_method, Ref{SimpleVector}, (Any, Any), tt, meth.sig)
+    meth = Base.func_for_method_checked(meth, tt)
+    return ccall(:jl_specializations_get_linfo, Ref{Core.MethodInstance},
+                 (Any, Any, Any, UInt), meth, tt, env, world)
+end
+
+function test_const_return(f::ANY, t::ANY, val::ANY)
+    linfo = get_linfo(f, t)
+    # If coverage is not enabled, make the check strict by requiring constant ABI
+    # Otherwise, check the typed AST to make sure we return a constant.
+    if Base.JLOptions().code_coverage == 0
+        @test linfo.jlcall_api == 2
+    end
+    if linfo.jlcall_api == 2
+        @test linfo.inferred_const == val
+        return
+    end
+    ct = code_typed(f, t)
+    @test length(ct) == 1
+    ast = first(ct[1])
+    ret_found = false
+    for ex in ast.code::Vector{Any}
+        if isa(ex, LineNumberNode)
+            continue
+        elseif isa(ex, Expr)
+            ex = ex::Expr
+            if Core.Inference.is_meta_expr(ex)
+                continue
+            elseif ex.head === :return
+                # multiple returns
+                @test !ret_found
+                ret_found = true
+                ret = ex.args[1]
+                # return value mismatch
+                @test ret === val || (isa(ret, QuoteNode) && (ret::QuoteNode).value === val)
+                continue
+            end
+        end
+        @test false || "Side effect expressions found $ex"
+        return
+    end
+end
+
+test_const_return(()->1, Tuple{}, 1)
+test_const_return(()->sizeof(Int), Tuple{}, sizeof(Int))
+test_const_return(()->sizeof(1), Tuple{}, sizeof(Int))
+test_const_return(()->sizeof(DataType), Tuple{}, sizeof(DataType))
+test_const_return(()->sizeof(1 < 2), Tuple{}, 1)
+@eval test_const_return(()->Core.sizeof($(Array{Int}())), Tuple{}, sizeof(Int))
+@eval test_const_return(()->Core.sizeof($(Matrix{Float32}(2, 2))), Tuple{}, 4 * 2 * 2)
+
+function find_core_sizeof_call(code)
+    for ex in code
+        isa(ex, Expr) || continue
+        ex = ex::Expr
+        if ex.head === :call && length(ex.args) == 2
+            if ex.args[1] === Core.sizeof || ex.args[1] == GlobalRef(Core, :sizeof)
+                return true
+            end
+        elseif Core.Inference.is_meta_expr(ex)
+            continue
+        end
+        find_core_sizeof_call(ex.args) && return true
+    end
+    return false
+end
+
+# Make sure Core.sizeof with a ::DataType as inferred input type is inferred but not constant.
+function sizeof_typeref(typeref)
+    Core.sizeof(typeref[])
+end
+@test @inferred(sizeof_typeref(Ref{DataType}(Int))) == sizeof(Int)
+@test find_core_sizeof_call(first(@code_typed sizeof_typeref(Ref{DataType}())).code)
+# Constant `Vector` can be resized and shouldn't be optimized to a constant.
+const constvec = [1, 2, 3]
+@eval function sizeof_constvec()
+    Core.sizeof($constvec)
+end
+@test @inferred(sizeof_constvec()) == sizeof(Int) * 3
+@test find_core_sizeof_call(first(@code_typed sizeof_constvec()).code)
+push!(constvec, 10)
+@test @inferred(sizeof_constvec()) == sizeof(Int) * 4

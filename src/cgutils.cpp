@@ -1645,6 +1645,20 @@ static Value *emit_arrayflags(const jl_cgval_t &tinfo, jl_codectx_t *ctx)
     return tbaa_decorate(tbaa_arrayflags, builder.CreateLoad(addr));
 }
 
+static Value *emit_arrayelsize(const jl_cgval_t &tinfo, jl_codectx_t *ctx)
+{
+    Value *t = boxed(tinfo, ctx);
+#ifdef STORE_ARRAY_LEN
+    int elsize_field = 3;
+#else
+    int elsize_field = 2;
+#endif
+    Value *addr = builder.CreateStructGEP(nullptr,
+                                          emit_bitcast(decay_derived(t), jl_parray_llvmt),
+                                          elsize_field);
+    return tbaa_decorate(tbaa_const, builder.CreateLoad(addr));
+}
+
 static void assign_arrayvar(jl_arrayvar_t &av, const jl_cgval_t &ainfo, jl_codectx_t *ctx)
 {
     tbaa_decorate(tbaa_arrayptr,builder.CreateStore(emit_bitcast(emit_arrayptr(ainfo, ctx),
