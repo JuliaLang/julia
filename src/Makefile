@@ -89,15 +89,7 @@ PUBLIC_HEADER_TARGETS := $(addprefix $(build_includedir)/julia/,$(notdir $(PUBLI
 ifneq ($(USE_LLVM_SHLIB),1)
 LLVMLINK += $(shell $(LLVM_CONFIG_HOST) --ldflags) $(shell $(LLVM_CONFIG_HOST) --libs $(LLVM_LIBS)) $(shell $(LLVM_CONFIG_HOST) --ldflags) $(shell $(LLVM_CONFIG_HOST) --system-libs 2> /dev/null)
 else
-ifeq ($(LLVM_USE_CMAKE),1)
 LLVMLINK += $(shell $(LLVM_CONFIG_HOST) --ldflags) -lLLVM
-else
-ifeq ($(OS),WINNT)
-LLVMLINK += $(shell $(LLVM_CONFIG_HOST) --ldflags) -lLLVM-$(LLVM_VER_SHORT)
-else
-LLVMLINK += $(shell $(LLVM_CONFIG_HOST) --ldflags) -lLLVM-$(shell $(LLVM_CONFIG_HOST) --version)
-endif # OS == WINNT
-endif # LLVM_USE_CMAKE == 1
 FLAGS += -DLLVM_SHLIB
 endif # USE_LLVM_SHLIB == 1
 
