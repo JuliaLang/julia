@@ -473,6 +473,16 @@ mktempdir() do dir
                     @test !(short_oid1 < commit_oid1)
                     short_str = sprint(show, short_oid1)
                     @test short_str == "GitShortHash(\"$(string(short_oid1))\")"
+                    short_oid2 = LibGit2.GitShortHash(cmt)
+                    @test startswith(hex(commit_oid1), hex(short_oid2))
+
+                    cmt2 = LibGit2.GitCommit(repo, short_oid2)
+                    try
+                        @test commit_oid1 == LibGit2.GitHash(cmt2)
+                    finally
+                        close(cmt2)
+                    end
+
                     auth = LibGit2.author(cmt)
                     @test isa(auth, LibGit2.Signature)
                     @test auth.name == test_sig.name

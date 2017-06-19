@@ -22,13 +22,11 @@ end
 GitHash() = GitHash(ntuple(i->zero(UInt8), OID_RAWSZ))
 
 """
-    GitShortHash
+    GitShortHash(hash::GitHash, len::Integer)
 
-This is a shortened form of `GitHash`, which can be used to identify a git object when it
-is unique.
-
-Internally it is stored as two fields: a full-size `GitHash` (`hash`) and a length
-(`len`). Only the initial `len` hex digits of `hash` are used.
+A shortened git object identifier, which can be used to identify a git object when it is
+unique, consisting of the initial `len` hexadecimal digits of `hash` (the remaining digits
+are ignored).
 """
 struct GitShortHash <: AbstractGitHash
     hash::GitHash   # underlying hash: unused digits are ignored
