@@ -258,6 +258,9 @@ end
     @test dot(x, 1:2,y, 1:2) == convert(elty, 12.5)
     @test x.'*y == convert(elty, 29.0)
     @test_throws MethodError dot(rand(elty, 2, 2), randn(elty, 2, 2))
+    X = convert(Vector{Matrix{elty}},[reshape(1:4, 2, 2), ones(2, 2)])
+    res = convert(Matrix{elty}, [7.0 13.0; 13.0 27.0])
+    @test dot(X, X) == res
 end
 
 vecdot_(x,y) = invoke(vecdot, Tuple{Any,Any}, x,y) # generic vecdot
