@@ -87,11 +87,12 @@ esac
 
 # Download most recent Julia binary for dependencies
 if ! [ -e julia-installer.exe ]; then
-  f=julia-latest-win$bits.exe
+  f=julia-0.6-latest-win$bits.exe
   echo "Downloading $f"
-  $curlflags -O https://julialangnightlies-s3.julialang.org/bin/winnt/x$archsuffix/$f
+  $curlflags -O https://julialang-s3.julialang.org/bin/winnt/x$archsuffix/0.6/$f
   echo "Extracting $f"
   $SEVENZIP x -y $f >> get-deps.log
+  rm $f
 fi
 for i in bin/*.dll; do
   $SEVENZIP e -y julia-installer.exe "$i" \
@@ -109,6 +110,7 @@ rm -f usr/bin/libgfortran-3.dll
 rm -f usr/bin/libquadmath-0.dll
 rm -f usr/bin/libssp-0.dll
 rm -f usr/bin/libstdc++-6.dll
+rm -f julia-installer.exe
 
 if [ -z "$USEMSVC" ]; then
   if [ -z "`which ${CROSS_COMPILE}gcc 2>/dev/null`" -o -n "$APPVEYOR" ]; then

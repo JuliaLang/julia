@@ -911,3 +911,10 @@ using TestHelpers.Furlong
 @test collect(Furlong(2):Furlong(1):Furlong(10)) == collect(range(Furlong(2),Furlong(1),9)) == Furlong.(2:10)
 @test collect(Furlong(1.0):Furlong(0.5):Furlong(10.0)) ==
       collect(Furlong(1):Furlong(0.5):Furlong(10)) == Furlong.(1:0.5:10)
+
+# issue #22270
+let linsp = linspace(1.0, 2.0, 10)
+    @test typeof(linsp.ref) == Base.TwicePrecision{Float64}
+    @test Float32(linsp.ref) === convert(Float32, linsp.ref)
+    @test Float32(linsp.ref) ≈ linsp.ref.hi + linsp.ref.lo
+end

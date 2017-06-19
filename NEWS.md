@@ -328,6 +328,22 @@ Library improvements
     that dimension's length will be computed such that its product with all the other dimensions is equal
     to the length of the original array ([#19919]).
 
+  * The new `to_indices` function provides a uniform interface for index conversions,
+    taking an array and a tuple of indices as arguments and returning a tuple of
+    integers and/or arrays of supported scalar indices. It will throw an `ArgumentError`
+    for any unsupported indices, and the returned arrays should be iterated over (and
+    not indexed into) to support more efficient logical indexing ([#19730]).
+
+    + Using colons (`:`) to represent a collection of indices is deprecated. They now must be
+      explicitly converted to a specialized array of integers with the `to_indices` function.
+      As a result, the type of `SubArray`s that represent views over colon indices has changed.
+
+    + Logical indexing is now more efficient. Logical arrays are converted by `to_indices` to
+      a lazy, iterable collection of indices that doesn't support indexing. A deprecation
+      provides indexing support with O(n) lookup.
+
+    + The performance of indexing with `CartesianIndex`es is also improved in many situations.
+
   * A new `titlecase` function was added, to capitalize the first character of each word within a string ([#19469]).
 
   * `any` and `all` now always short-circuit, and `mapreduce` never short-circuits ([#19543]).
@@ -571,6 +587,23 @@ Deprecated or removed
     [StatsBase.jl package](https://github.com/JuliaStats/StatsBase.jl)'s
     `midpoints` function ([#20058]).
 
+  * Passing a type argument to `LibGit2.cat` has been deprecated in favor of a simpler,
+    two-argument method for `LibGit2.cat` ([#20435]).
+
+  * The `LibGit2.owner` function for finding the repository which owns a given Git object
+    has been deprecated in favor of `LibGit2.repository` ([#20135]).
+
+  * The `LibGit2.GitAnyObject` type has been renamed to `LibGit2.GitUnknownObject` to
+    clarify its intent ([#19935]).
+
+  * The `LibGit2.GitOid` type has been renamed to `LibGit2.GitHash` for clarity ([#19878]).
+
+  * Finalizing `LibGit2` objects with `finalize` has been deprecated in favor of using `close`
+    ([#19660]).
+
+  * Parsing string dates from a `Dates.DateFormat` object has been deprecated as part of a
+    larger effort toward faster, more extensible date parsing ([#20952]).
+
 Command-line option changes
 ---------------------------
 
@@ -659,6 +692,7 @@ Command-line option changes
 [#19598]: https://github.com/JuliaLang/julia/issues/19598
 [#19635]: https://github.com/JuliaLang/julia/issues/19635
 [#19636]: https://github.com/JuliaLang/julia/issues/19636
+[#19660]: https://github.com/JuliaLang/julia/issues/19660
 [#19669]: https://github.com/JuliaLang/julia/issues/19669
 [#19670]: https://github.com/JuliaLang/julia/issues/19670
 [#19677]: https://github.com/JuliaLang/julia/issues/19677
@@ -671,6 +705,7 @@ Command-line option changes
 [#19721]: https://github.com/JuliaLang/julia/issues/19721
 [#19722]: https://github.com/JuliaLang/julia/issues/19722
 [#19724]: https://github.com/JuliaLang/julia/issues/19724
+[#19730]: https://github.com/JuliaLang/julia/issues/19730
 [#19737]: https://github.com/JuliaLang/julia/issues/19737
 [#19741]: https://github.com/JuliaLang/julia/issues/19741
 [#19766]: https://github.com/JuliaLang/julia/issues/19766
@@ -685,6 +720,7 @@ Command-line option changes
 [#19811]: https://github.com/JuliaLang/julia/issues/19811
 [#19814]: https://github.com/JuliaLang/julia/issues/19814
 [#19841]: https://github.com/JuliaLang/julia/issues/19841
+[#19878]: https://github.com/JuliaLang/julia/issues/19878
 [#19900]: https://github.com/JuliaLang/julia/issues/19900
 [#19901]: https://github.com/JuliaLang/julia/issues/19901
 [#19903]: https://github.com/JuliaLang/julia/issues/19903
@@ -694,6 +730,7 @@ Command-line option changes
 [#19926]: https://github.com/JuliaLang/julia/issues/19926
 [#19931]: https://github.com/JuliaLang/julia/issues/19931
 [#19934]: https://github.com/JuliaLang/julia/issues/19934
+[#19935]: https://github.com/JuliaLang/julia/issues/19935
 [#19937]: https://github.com/JuliaLang/julia/issues/19937
 [#19944]: https://github.com/JuliaLang/julia/issues/19944
 [#19949]: https://github.com/JuliaLang/julia/issues/19949
@@ -703,6 +740,7 @@ Command-line option changes
 [#20047]: https://github.com/JuliaLang/julia/issues/20047
 [#20058]: https://github.com/JuliaLang/julia/issues/20058
 [#20079]: https://github.com/JuliaLang/julia/issues/20079
+[#20135]: https://github.com/JuliaLang/julia/issues/20135
 [#20164]: https://github.com/JuliaLang/julia/issues/20164
 [#20213]: https://github.com/JuliaLang/julia/issues/20213
 [#20228]: https://github.com/JuliaLang/julia/issues/20228
@@ -722,9 +760,11 @@ Command-line option changes
 [#20414]: https://github.com/JuliaLang/julia/issues/20414
 [#20418]: https://github.com/JuliaLang/julia/issues/20418
 [#20427]: https://github.com/JuliaLang/julia/issues/20427
+[#20435]: https://github.com/JuliaLang/julia/issues/20435
 [#20500]: https://github.com/JuliaLang/julia/issues/20500
 [#20530]: https://github.com/JuliaLang/julia/issues/20530
 [#20543]: https://github.com/JuliaLang/julia/issues/20543
 [#20609]: https://github.com/JuliaLang/julia/issues/20609
 [#20889]: https://github.com/JuliaLang/julia/issues/20889
+[#20952]: https://github.com/JuliaLang/julia/issues/20952
 [#21183]: https://github.com/JuliaLang/julia/issues/21183

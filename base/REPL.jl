@@ -750,7 +750,9 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
         # and pass into Base.repl_cmd for processing (handles `ls` and `cd`
         # special)
         on_done = respond(repl, julia_prompt) do line
-            Expr(:call, :(Base.repl_cmd), Cmd(Base.shell_split(line)), outstream(repl))
+            Expr(:call, :(Base.repl_cmd),
+                :(Base.cmd_gen($(Base.shell_parse(line)[1]))),
+                outstream(repl))
         end)
 
 

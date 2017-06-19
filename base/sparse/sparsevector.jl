@@ -876,6 +876,11 @@ end
 # of _absspvec_vcat below. The <:Integer qualifications are necessary for correct dispatch.
 vcat(X::SparseVector{Tv,Ti}...) where {Tv,Ti<:Integer} = _absspvec_vcat(X...)
 vcat(X::AbstractSparseVector{Tv,Ti}...) where {Tv,Ti<:Integer} = _absspvec_vcat(X...)
+function vcat(X::SparseVector...)
+    commeltype = promote_type(map(eltype, X)...)
+    commindtype = promote_type(map(indtype, X)...)
+    vcat(map(x -> SparseVector{commeltype,commindtype}(x), X)...)
+end
 function _absspvec_vcat(X::AbstractSparseVector{Tv,Ti}...) where {Tv,Ti}
     # check sizes
     n = length(X)
@@ -906,6 +911,12 @@ end
 
 hcat(Xin::Union{Vector, AbstractSparseVector}...) = hcat(map(sparse, Xin)...)
 vcat(Xin::Union{Vector, AbstractSparseVector}...) = vcat(map(sparse, Xin)...)
+# Without the following method, vertical concatenations of SparseVectors with Vectors
+# fall back to the vertical concatenation method that ensures that combinations of
+# sparse/special/dense matrix/vector types concatenate to SparseMatrixCSCs (because
+# the vcat method immediately above is less specific, being defined in AbstractSparseVector
+# rather than SparseVector).
+vcat(X::Union{Vector,SparseVector}...) = vcat(map(sparse, X)...)
 
 
 ### Concatenation of un/annotated sparse/special/dense vectors/matrices

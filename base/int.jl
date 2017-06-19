@@ -333,7 +333,11 @@ for to in BitInteger_types, from in (BitInteger_types..., Bool)
                     checked_trunc_uint($to, x)
             end
             @eval rem(x::($from), ::Type{$to}) = trunc_int($to, x)
-        elseif from.size < to.size || from === Bool
+        elseif from === Bool
+            # Bools use i8 storage and may have garbage in their 7 high bits
+            @eval convert(::Type{$to}, x::($from)) = zext_int($to, x) & $to(1)
+            @eval rem(x::($from), ::Type{$to}) = convert($to, x)
+        elseif from.size < to.size
             if issubtype(from, Signed)
                 if issubtype(to, Unsigned)
                     @eval convert(::Type{$to}, x::($from)) =

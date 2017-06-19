@@ -124,6 +124,24 @@ if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
               startswith(s, "\e[0m\e[1m\e[91mERROR: \e[39m\e[22m\e[91munterminated single quote\e[39m\nStacktrace:\n [1] ")
     end
 
+    # issues #22176 & #20482
+    # TODO: figure out how to test this on Windows
+    is_windows() || let tmp = tempname()
+        try
+            write(stdin_write, ";")
+            readuntil(stdout_read, "shell> ")
+            write(stdin_write, "echo \$123 >$tmp\n")
+            let s = readuntil(stdout_read, "\n")
+                @test contains(s, "shell> ") # make sure we echoed the prompt
+                @test contains(s, "echo \$123 >$tmp") # make sure we echoed the input
+            end
+            @test readuntil(stdout_read, "\n") == "\e[0m\n"
+            @test readstring(tmp) == "123\n"
+        finally
+            rm(tmp, force=true)
+        end
+    end
+
     # Issue #7001
     # Test ignoring '\0'
     let

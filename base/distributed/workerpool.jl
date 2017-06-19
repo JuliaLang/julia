@@ -25,7 +25,7 @@ end
 
 function WorkerPool()
     wp = WorkerPool(Channel{Int}(typemax(Int)), RemoteChannel())
-    put!(wp.ref, wp)
+    put!(wp.ref, WeakRef(wp))
     wp
 end
 
@@ -124,7 +124,7 @@ for func = (:length, :isready, :workers, :nworkers, :take!)
     @eval begin
         function ($func)(pool::WorkerPool)
             if pool.ref.where != myid()
-                return remotecall_fetch(ref->($func_local)(fetch(ref)), pool.ref.where, pool.ref)
+                return remotecall_fetch(ref->($func_local)(fetch(ref).value), pool.ref.where, pool.ref)
             else
                 return ($func_local)(pool)
             end
@@ -140,7 +140,7 @@ for func = (:push!, :put!)
     @eval begin
         function ($func)(pool::WorkerPool, w::Int)
             if pool.ref.where != myid()
-                return remotecall_fetch((ref, w)->($func_local)(fetch(ref), w), pool.ref.where, pool.ref, w)
+                return remotecall_fetch((ref, w)->($func_local)(fetch(ref).value, w), pool.ref.where, pool.ref, w)
             else
                 return ($func_local)(pool, w)
             end
