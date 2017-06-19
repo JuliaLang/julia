@@ -33,7 +33,6 @@ const BoolBitIntegerType = Union{Type{Bool},BitIntegerType}
 const BoolBitIntegerArray = Union{Array{Bool},Base.BitIntegerArray}
 
 if is_windows()
-
     struct RandomDevice <: AbstractRNG
         buffer::Vector{UInt128}
 
@@ -46,9 +45,7 @@ if is_windows()
     end
 
     rand!(rd::RandomDevice, A::BoolBitIntegerArray) = (win32_SystemFunction036!(A); A)
-
 else # !windows
-
     struct RandomDevice <: AbstractRNG
         file::IOStream
         unlimited::Bool
@@ -622,7 +619,7 @@ function rand!(r::MersenneTwister, A::Array{UInt128}, n::Int=length(A))
     A
 end
 
-# A::Array{UInt128} will matche the specialized method above
+# A::Array{UInt128} will match the specialized method above
 function rand!(r::MersenneTwister, A::Base.BitIntegerArray)
     n=length(A)
     T = eltype(A)

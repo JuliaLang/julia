@@ -1144,16 +1144,16 @@ end
 
 const BitIntegerArray{N} = Union{map(T->Array{T,N}, BitInteger_types)...} where N
 # use memcmp for == on bit integer types
-function ==(a::A, b::A) where A <: BitIntegerArray
+function ==(a::Arr, b::Arr) where Arr <: BitIntegerArray
     size(a) == size(b) && 0 == ccall(
-        :memcmp, Int32, (Ptr{Void}, Ptr{Void}, UInt), a, b, sizeof(eltype(A)) * length(a))
+        :memcmp, Int32, (Ptr{Void}, Ptr{Void}, UInt), a, b, sizeof(eltype(Arr)) * length(a))
 end
 
 # this is ~20% faster than the generic implementation above for very small arrays
-function ==(a::A, b::A) where A <: BitIntegerArray{1}
+function ==(a::Arr, b::Arr) where Arr <: BitIntegerArray{1}
     len = length(a)
     len == length(b) && 0 == ccall(
-        :memcmp, Int32, (Ptr{Void}, Ptr{Void}, UInt), a, b, sizeof(eltype(A)) * len)
+        :memcmp, Int32, (Ptr{Void}, Ptr{Void}, UInt), a, b, sizeof(eltype(Arr)) * len)
 end
 
 function reverse(A::AbstractVector, s=first(linearindices(A)), n=last(linearindices(A)))
