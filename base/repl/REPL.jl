@@ -8,6 +8,7 @@ using ..LineEdit
 using ..REPLCompletions
 
 export
+    AbstractREPL,
     BasicREPL,
     LineEditREPL,
     StreamREPL
@@ -172,7 +173,7 @@ struct REPLBackendRef
     response_channel::Channel
 end
 
-function run_repl(repl::AbstractREPL, consumer = x->nothing)
+function run_repl(repl::AbstractREPL, consumer::Function = x->nothing)
     repl_channel = Channel(1)
     response_channel = Channel(1)
     backend = start_repl_backend(repl_channel, response_channel)
@@ -254,8 +255,8 @@ mutable struct LineEditREPL <: AbstractREPL
     in_help::Bool
     envcolors::Bool
     waserror::Bool
-    specialdisplay
-    interface
+    specialdisplay::Union{Void,Display}
+    interface::ModalInterface
     backendref::REPLBackendRef
     LineEditREPL(t,hascolor,prompt_color,input_color,answer_color,shell_color,help_color,history_file,in_shell,in_help,envcolors) =
         new(t,true,prompt_color,input_color,answer_color,shell_color,help_color,history_file,in_shell,
@@ -266,20 +267,19 @@ specialdisplay(r::LineEditREPL) = r.specialdisplay
 specialdisplay(r::AbstractREPL) = nothing
 terminal(r::LineEditREPL) = r.t
 
-LineEditREPL(t::TextTerminal, envcolors = false) =  LineEditREPL(t,
-                                              true,
-                                              Base.text_colors[:green],
-                                              Base.input_color(),
-                                              Base.answer_color(),
-                                              Base.text_colors[:red],
-                                              Base.text_colors[:yellow],
-                                              false, false, false, envcolors)
+LineEditREPL(t::TextTerminal, envcolors::Bool=false) =
+    LineEditREPL(t, true,
+        Base.text_colors[:green],
+        Base.input_color(),
+        Base.answer_color(),
+        Base.text_colors[:red],
+        Base.text_colors[:yellow],
+        false, false, false, envcolors
+    )
 
-mutable struct REPLCompletionProvider <: CompletionProvider; end
-
-mutable struct ShellCompletionProvider <: CompletionProvider; end
-
-struct LatexCompletions <: CompletionProvider; end
+mutable struct REPLCompletionProvider <: CompletionProvider end
+mutable struct ShellCompletionProvider <: CompletionProvider end
+struct LatexCompletions <: CompletionProvider end
 
 beforecursor(buf::IOBuffer) = String(buf.data[1:buf.ptr-1])
 
@@ -305,16 +305,15 @@ function complete_line(c::LatexCompletions, s)
     return ret, partial[range], should_complete
 end
 
-
 mutable struct REPLHistoryProvider <: HistoryProvider
     history::Array{String,1}
-    history_file
+    history_file::Union{Void,IO}
     start_idx::Int
     cur_idx::Int
     last_idx::Int
     last_buffer::IOBuffer
-    last_mode
-    mode_mapping
+    last_mode::Union{Void,Prompt}
+    mode_mapping::Dict
     modes::Array{Symbol,1}
 end
 REPLHistoryProvider(mode_mapping) =
@@ -619,7 +618,9 @@ end
 
 backend(r::AbstractREPL) = r.backendref
 
-send_to_backend(ast, backend::REPLBackendRef) = send_to_backend(ast, backend.repl_channel, backend.response_channel)
+send_to_backend(ast, backend::REPLBackendRef) =
+    send_to_backend(ast, backend.repl_channel, backend.response_channel)
+
 function send_to_backend(ast, req, rep)
     put!(req, (ast, 1))
     return take!(rep) # (val, bt)
@@ -661,7 +662,7 @@ function prepare_next(repl::LineEditREPL)
     println(terminal(repl))
 end
 
-function mode_keymap(julia_prompt)
+function mode_keymap(julia_prompt::Prompt)
     AnyDict(
     '\b' => function (s,o...)
         if isempty(s) || position(LineEdit.buffer(s)) == 0
@@ -689,7 +690,11 @@ repl_filename(repl, hp) = "REPL"
 const JL_PROMPT_PASTE = Ref(true)
 enable_promptpaste(v::Bool) = JL_PROMPT_PASTE[] = v
 
-function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_repl_keymap = Dict{Any,Any}[])
+function setup_interface(
+    repl::LineEditREPL;
+    hascolor::Bool = repl.hascolor,
+    extra_repl_keymap::Vector{<:Dict} = Dict{Any,Any}[]
+)
     ###
     #
     # This function returns the main interface that describes the REPL
@@ -932,7 +937,7 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
     ModalInterface([julia_prompt, shell_mode, help_mode, search_prompt, prefix_prompt])
 end
 
-function run_frontend(repl::LineEditREPL, backend)
+function run_frontend(repl::LineEditREPL, backend::REPLBackendRef)
     d = REPLDisplay(repl)
     dopushdisplay = repl.specialdisplay === nothing && !in(d,Base.Multimedia.displays)
     dopushdisplay && pushdisplay(d)
@@ -975,7 +980,7 @@ input_color(r::StreamREPL) = r.input_color
 
 # heuristic function to decide if the presence of a semicolon
 # at the end of the expression was intended for suppressing output
-function ends_with_semicolon(line)
+function ends_with_semicolon(line::AbstractString)
     match = rsearch(line, ';')
     if match != 0
         # state for comment parser, assuming that the `;` isn't in a string or comment
@@ -1057,7 +1062,7 @@ function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
     dopushdisplay && popdisplay(d)
 end
 
-function start_repl_server(port)
+function start_repl_server(port::Int)
     listen(port) do server, status
         client = accept(server)
         run_repl(client)
