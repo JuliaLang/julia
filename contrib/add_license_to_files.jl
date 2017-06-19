@@ -58,7 +58,7 @@ const skipfiles = [
     "../src/support/tzfile.h",
     "../src/support/utf8.c",
     "../test/perf/micro/randmtzig.c",
-    "../src/support/crc32c.c",
+    "../src/crc32c.c",
     "../examples/quine.jl", # has license text in code
 ]
 

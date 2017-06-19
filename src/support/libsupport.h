@@ -18,7 +18,6 @@
 #include "bitvector.h"
 #include "dirpath.h"
 #include "strtod.h"
-#include "crc32c.h"
 
 #ifdef __cplusplus
 extern "C" {

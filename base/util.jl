@@ -783,9 +783,9 @@ function crc32c end
 unsafe_crc32c(a, n, crc) = ccall(:jl_crc32c, UInt32, (UInt32, Ptr{UInt8}, Csize_t), crc, a, n)
 
 crc32c(a::Union{Array{UInt8},FastContiguousSubArray{UInt8,N,<:Array{UInt8}} where N}, crc::UInt32=0x00000000) =
-    unsafe_crc32c(a, length(a), crc)
+    unsafe_crc32c(a, length(a) % Csize_t, crc)
 
-crc32c(s::String, crc::UInt32=0x00000000) = unsafe_crc32c(s, sizeof(s), crc)
+crc32c(s::String, crc::UInt32=0x00000000) = unsafe_crc32c(s, sizeof(s) % Csize_t, crc)
 
 """
     crc32c(io::IO, [nb::Integer,] crc::UInt32=0x00000000)
