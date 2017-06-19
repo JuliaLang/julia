@@ -316,37 +316,41 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
         jl_value_t *generated_body = jl_call_staged(sparam_vals, generator, jl_svec_data(tt->parameters), jl_nparams(tt));
         jl_array_ptr_set(body->args, 2, generated_body);
 
-        if (linfo->def.method->sparam_syms != jl_emptysvec) {
-            // mark this function as having the same static parameters as the generator
-            size_t i, nsp = jl_svec_len(linfo->def.method->sparam_syms);
-            jl_expr_t *newast = jl_exprn(jl_symbol("with-static-parameters"), nsp + 1);
-            jl_exprarg(newast, 0) = (jl_value_t*)ex;
-            // (with-static-parameters func_expr sp_1 sp_2 ...)
-            for (i = 0; i < nsp; i++)
-                jl_exprarg(newast, i+1) = jl_svecref(linfo->def.method->sparam_syms, i);
-            ex = newast;
-        }
+        if (jl_is_code_info(generated_body)) {
+            func = (jl_code_info_t*)generated_body;
+        } else {
+            if (linfo->def.method->sparam_syms != jl_emptysvec) {
+                // mark this function as having the same static parameters as the generator
+                size_t i, nsp = jl_svec_len(linfo->def.method->sparam_syms);
+                jl_expr_t *newast = jl_exprn(jl_symbol("with-static-parameters"), nsp + 1);
+                jl_exprarg(newast, 0) = (jl_value_t*)ex;
+                // (with-static-parameters func_expr sp_1 sp_2 ...)
+                for (i = 0; i < nsp; i++)
+                    jl_exprarg(newast, i+1) = jl_svecref(linfo->def.method->sparam_syms, i);
+                ex = newast;
+            }
 
-        func = (jl_code_info_t*)jl_expand((jl_value_t*)ex, linfo->def.method->module);
-        if (!jl_is_code_info(func)) {
-            if (jl_is_expr(func) && ((jl_expr_t*)func)->head == error_sym)
-                jl_interpret_toplevel_expr_in(linfo->def.method->module, (jl_value_t*)func, NULL, NULL);
-            jl_error("generated function body is not pure. this likely means it contains a closure or comprehension.");
-        }
+            func = (jl_code_info_t*)jl_expand((jl_value_t*)ex, linfo->def.method->module);
+            if (!jl_is_code_info(func)) {
+                if (jl_is_expr(func) && ((jl_expr_t*)func)->head == error_sym)
+                    jl_interpret_toplevel_expr_in(linfo->def.method->module, (jl_value_t*)func, NULL, NULL);
+                jl_error("generated function body is not pure. this likely means it contains a closure or comprehension.");
+            }
 
-        jl_array_t *stmts = (jl_array_t*)func->code;
-        size_t i, l;
-        for (i = 0, l = jl_array_len(stmts); i < l; i++) {
-            jl_value_t *stmt = jl_array_ptr_ref(stmts, i);
-            stmt = jl_resolve_globals(stmt, linfo->def.method->module, env);
-            jl_array_ptr_set(stmts, i, stmt);
-        }
+            jl_array_t *stmts = (jl_array_t*)func->code;
+            size_t i, l;
+            for (i = 0, l = jl_array_len(stmts); i < l; i++) {
+                jl_value_t *stmt = jl_array_ptr_ref(stmts, i);
+                stmt = jl_resolve_globals(stmt, linfo->def.method->module, env);
+                jl_array_ptr_set(stmts, i, stmt);
+            }
 
-        // add pop_loc meta
-        jl_array_ptr_1d_push(stmts, jl_nothing);
-        jl_expr_t *poploc = jl_exprn(meta_sym, 1);
-        jl_array_ptr_set(stmts, jl_array_len(stmts) - 1, poploc);
-        jl_array_ptr_set(poploc->args, 0, jl_symbol("pop_loc"));
+            // add pop_loc meta
+            jl_array_ptr_1d_push(stmts, jl_nothing);
+            jl_expr_t *poploc = jl_exprn(meta_sym, 1);
+            jl_array_ptr_set(stmts, jl_array_len(stmts) - 1, poploc);
+            jl_array_ptr_set(poploc->args, 0, jl_symbol("pop_loc"));
+        }
 
         ptls->in_pure_callback = last_in;
         jl_lineno = last_lineno;
