@@ -71,9 +71,9 @@ The 64-bit (x86_64) binary will only run on 64-bit Windows and will otherwise re
 ### Supported build platforms
 
  -  Windows 10: supported (32 and 64 bits)
+    - **note: cross-compiling from WSL (Windows Subsystem for Linux) is currently discouraged due to WSL time stamp problems. See discussion and links in [#22074](https://github.com/JuliaLang/julia/pull/22074).**
  -  Windows 8: supported (32 and 64 bits)
  -  Windows 7: supported (32 and 64 bits)
-
 
 ### Compiling with MinGW/MSYS2
 
