@@ -1,3 +1,5 @@
 *.jl.cov
 *.jl.*.cov
 *.jl.mem
+*.o
+*.d
