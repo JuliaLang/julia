@@ -28,6 +28,10 @@ mutable struct Close1Open2 <: FloatInterval end
 
 ## RandomDevice
 
+const BitIntegerType = Union{map(T->Type{T}, Base.BitInteger_types)...}
+const BoolBitIntegerType = Union{Type{Bool},BitIntegerType}
+const BoolBitIntegerArray = Union{Array{Bool},Base.BitIntegerArray}
+
 if is_windows()
 
     struct RandomDevice <: AbstractRNG
@@ -35,6 +39,14 @@ if is_windows()
 
         RandomDevice() = new(Vector{UInt128}(1))
     end
+
+    function rand(rd::RandomDevice, T::BoolBitIntegerType)
+        win32_SystemFunction036!(rd.buffer)
+        @inbounds return rd.buffer[1] % T
+    end
+
+    rand!(rd::RandomDevice, A::BoolBitIntegerArray) = (win32_SystemFunction036!(A); A)
+
 else # !windows
 
     struct RandomDevice <: AbstractRNG
@@ -43,24 +55,9 @@ else # !windows
 
         RandomDevice(unlimited::Bool=true) = new(open(unlimited ? "/dev/urandom" : "/dev/random"), unlimited)
     end
-end
 
-# this has to be split out from the above OS test to compile
-# (because of the use of @eval below)
-for T = (Bool, Base.BitInteger_types...)
-    if is_windows()
-        @eval begin
-            function rand(rd::RandomDevice, ::Type{$T})
-                win32_SystemFunction036!(rd.buffer)
-                @inbounds return rd.buffer[1] % $T
-            end
-
-            rand!(rd::RandomDevice, A::Array{$T}) = (win32_SystemFunction036!(A); A)
-       end
-    else
-        @eval rand(rd::RandomDevice, ::Type{$T})    = read( rd.file, $T)
-        @eval rand!(rd::RandomDevice, A::Array{$T}) = read!(rd.file, A)
-    end
+    rand(rd::RandomDevice, T::BoolBitIntegerType)   = read( rd.file, T)
+    rand!(rd::RandomDevice, A::BoolBitIntegerArray) = read!(rd.file, A)
 end
 
 """
@@ -625,17 +622,17 @@ function rand!(r::MersenneTwister, A::Array{UInt128}, n::Int=length(A))
     A
 end
 
-for T = (Base.BitInteger64_types..., Int128)
-   @eval function rand!(r::MersenneTwister, A::Array{$T})
-        n=length(A)
-        n128 = n * sizeof($T) ÷ 16
-        rand!(r, unsafe_wrap(Array, convert(Ptr{UInt128}, pointer(A)), n128))
-        for i = 16*n128÷sizeof($T)+1:n
-            @inbounds A[i] = rand(r, $T)
-        end
-        A
+# A::Array{UInt128} will matche the specialized method above
+function rand!(r::MersenneTwister, A::Base.BitIntegerArray{T}) where T
+    n=length(A)
+    n128 = n * sizeof(T) ÷ 16
+    rand!(r, unsafe_wrap(Array, convert(Ptr{UInt128}, pointer(A)), n128))
+    for i = 16*n128÷sizeof(T)+1:n
+        @inbounds A[i] = rand(r, T)
     end
+    A
 end
+
 ## Generate random integer within a range
 
 # remainder function according to Knuth, where rem_knuth(a, 0) = a

@@ -1142,21 +1142,15 @@ function lexcmp(a::Array{UInt8,1}, b::Array{UInt8,1})
     return c < 0 ? -1 : c > 0 ? +1 : cmp(length(a),length(b))
 end
 
+const BitIntegerArray{N} = Union{map(T->Array{T,N}, BitInteger_types)...} where N
 # use memcmp for == on bit integer types
-
-function ==(a::A, b::A) where A <: Union{Array{Int8,N},Array{UInt8,N},Array{Int16,N},
-                                         Array{UInt16,N},Array{Int32,N},Array{UInt32,N},
-                                         Array{Int64,N},Array{UInt64,N},Array{Int128,N},
-                                         Array{UInt128,N}} where N
+function ==(a::A, b::A) where A <: BitIntegerArray
     size(a) == size(b) && 0 == ccall(
         :memcmp, Int32, (Ptr{Void}, Ptr{Void}, UInt), a, b, sizeof(eltype(A)) * length(a))
 end
 
 # this is ~20% faster than the generic implementation above for very small arrays
-function ==(a::A, b::A) where A <: Union{Array{Int8,1},Array{UInt8,1},Array{Int16,1},
-                                         Array{UInt16,1},Array{Int32,1},Array{UInt32,1},
-                                         Array{Int64,1},Array{UInt64,1},Array{Int128,1},
-                                         Array{UInt128,1}}
+function ==(a::A, b::A) where A <: BitIntegerArray{1}
     len = length(a)
     len == length(b) && 0 == ccall(
         :memcmp, Int32, (Ptr{Void}, Ptr{Void}, UInt), a, b, sizeof(eltype(A)) * len)
