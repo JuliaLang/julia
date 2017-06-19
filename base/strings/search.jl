@@ -366,7 +366,7 @@ rsearch(s::AbstractString, t::AbstractString, i::Integer=endof(s)) = _rsearch(s,
 rsearch(s::ByteArray, t::ByteArray, i::Integer=endof(s)) = _rsearch(s, t, i)
 
 """
-    contains(haystack::AbstractString, needle::AbstractString)
+    contains(haystack::AbstractString, needle::Union{AbstractString,Char})
 
 Determine whether the second argument is a substring of the first.
 
@@ -375,6 +375,6 @@ julia> contains("JuliaLang is pretty cool!", "Julia")
 true
 ```
 """
-contains(haystack::AbstractString, needle::AbstractString) = searchindex(haystack,needle)!=0
+contains(haystack::AbstractString, needle::Union{AbstractString,Char}) = searchindex(haystack,needle)!=0
 
 in(::AbstractString, ::AbstractString) = error("use contains(x,y) for string containment")
