@@ -2,6 +2,7 @@
 
 #include <llvm/ADT/BitVector.h>
 #include <llvm/ADT/PostOrderIterator.h>
+#include <llvm/ADT/SetVector.h>
 #include "llvm/Analysis/CFG.h"
 #include <llvm/IR/Value.h>
 #include <llvm/IR/Constants.h>
@@ -248,7 +249,7 @@ struct State {
     std::map<int, Value *> ReversePtrNumbering;
     // Neighbors in the coloring interference graph. I.e. for each value, the
     // indices of other values that are used simultaneously at some safe point.
-    std::vector<std::vector<int>> Neighbors;
+    std::vector<SetVector<int>> Neighbors;
     // The result of the local analysis
     std::map<BasicBlock *, BBState> BBStates;
 
@@ -823,17 +824,19 @@ void LateLowerGCFrame::ComputeLiveSets(Function &F, State &S) {
     }
     // Compute the interference graph
     for (int i = 0; i <= S.MaxPtrNumber; ++i) {
-        std::vector<int> Neighbors;
+        SetVector<int> Neighbors;
+        BitVector NeighborBits(S.MaxPtrNumber);
         for (auto it : S.SafepointNumbering) {
             const BitVector &LS = S.LiveSets[it.second];
             if ((unsigned)i >= LS.size() || !LS[i])
                 continue;
-            for (int Idx = LS.find_first(); Idx >= 0; Idx = LS.find_next(Idx)) {
-                // We explicitly let i be a neighbor of itself, to distinguish
-                // between being the only value live at a safepoint, vs not
-                // being live at any safepoint.
-                Neighbors.push_back(Idx);
-            }
+            NeighborBits |= LS;
+        }
+        for (int Idx = NeighborBits.find_first(); Idx >= 0; Idx = NeighborBits.find_next(Idx)) {
+            // We explicitly let i be a neighbor of itself, to distinguish
+            // between being the only value live at a safepoint, vs not
+            // being live at any safepoint.
+            Neighbors.insert(Idx);
         }
         S.Neighbors.push_back(Neighbors);
     }
@@ -886,8 +889,8 @@ struct PEOIterator {
     };
     std::vector<Element> Elements;
     std::vector<std::vector<int>> Levels;
-    const std::vector<std::vector<int>> &Neighbors;
-    PEOIterator(const std::vector<std::vector<int>> &Neighbors) : Neighbors(Neighbors) {
+    const std::vector<SetVector<int>> &Neighbors;
+    PEOIterator(const std::vector<SetVector<int>> &Neighbors) : Neighbors(Neighbors) {
         // Initialize State
         std::vector<int> FirstLevel;
         for (unsigned i = 0; i < Neighbors.size(); ++i) {
