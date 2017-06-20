@@ -2,6 +2,8 @@
 
 [![Build Status](https://travis-ci.org/nick-paul/TerminalMenus.jl.svg?branch=master)](https://travis-ci.org/nick-paul/TerminalMenus.jl)
 
+[![Build status](https://ci.appveyor.com/api/projects/status/weaqa64co5boj87g?svg=true)](https://ci.appveyor.com/project/nick-paul/terminalmenus-jl)
+
 ![demo.gif](demo.gif)
 
 TerminalMenus.jl is a small package that enables interactive menus in the terminal. This package is still in development. Multiple select, nested menus, and other menus will be added in the future.
