@@ -13,11 +13,6 @@ terminal = Base.Terminals.TTYTerminal(get(ENV, "TERM", @static is_windows() ? ""
 enableRawMode() = Base.Terminals.raw!(terminal, true)
 disableRawMode() = Base.Terminals.raw!(terminal, false)
 
-
-function clean(str::AbstractString)
-    replace(str, "\n", "\\n")
-end
-
 readNextChar() = Char(read(STDIN,1)[1])
 
 function readKey() ::UInt32
