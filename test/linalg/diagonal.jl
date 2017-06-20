@@ -363,7 +363,7 @@ end
         D = Diagonal(randn(t, 5, 5))
         B = Diagonal(randn(t, 5, 5))
         for f in (*, Ac_mul_B, A_mul_Bc, Ac_mul_Bc, At_mul_B, A_mul_Bt, At_mul_Bt)
-            @test f(D, B)::Diagonal{t} == f(Matrix(D), Matrix(B)) 
+            @test f(D, B)::Diagonal{t} == f(Matrix(D), Matrix(B))
         end
     end
 end
