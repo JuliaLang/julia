@@ -4,7 +4,7 @@
 
 ![demo.gif](demo.gif)
 
-TerminalMenus.jl is a small package that enables interactive menus in the terminal. It is currently only supports Linux. This package is still in development. Multiple select, nested menus, and better cross-platform support are planned. 
+TerminalMenus.jl is a small package that enables interactive menus in the terminal. This package is still in development. Multiple select, nested menus, and other menus will be added in the future.
 
 ## Example
 
