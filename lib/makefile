@@ -1,5 +1,3 @@
-# Makefile template for shared library
-
 CC = gcc # C compiler
 CFLAGS = -fPIC -Wall -Wextra -O2 -g # C flags
 LDFLAGS = -shared  # linking flags

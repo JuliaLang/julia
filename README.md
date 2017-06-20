@@ -2,8 +2,9 @@
 
 [![Build Status](https://travis-ci.org/nick-paul/TerminalMenus.jl.svg?branch=master)](https://travis-ci.org/nick-paul/TerminalMenus.jl)
 
+![demo.gif](demo.gif)
 
-TerminalMenus.jl is a small package that enables interactive menus in the terminal. It is currently only supports linux.
+TerminalMenus.jl is a small package that enables interactive menus in the terminal. It is currently only supports Linux. This package is still in development. Multiple select, nested menus, and better cross-platform support are planned. 
 
 ## Example
 
