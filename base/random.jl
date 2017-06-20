@@ -124,10 +124,10 @@ function gen_rand(r::MersenneTwister)
     mt_setfull!(r)
 end
 
-@inline reserve_1(r::MersenneTwister) = mt_empty(r) && gen_rand(r)
+@inline reserve_1(r::MersenneTwister) = (mt_empty(r) && gen_rand(r); nothing)
 # `reserve` allows one to call `rand_inbounds` n times
 # precondition: n <= MTCacheLength
-@inline reserve(r::MersenneTwister, n::Int) = mt_avail(r) < n && gen_rand(r)
+@inline reserve(r::MersenneTwister, n::Int) = (mt_avail(r) < n && gen_rand(r); nothing)
 
 # precondition: !mt_empty(r)
 @inline rand_inbounds(r::MersenneTwister, ::Type{Close1Open2}) = mt_pop!(r)
