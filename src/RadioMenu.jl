@@ -101,5 +101,5 @@ function printMenu(m::RadioMenu, selected::Int; init=false)
         i != (m.pagesize+m.pageoffset) && print(buf, "\r\n")
     end
 
-    print(takebuf_string(buf))
+    print(String(take!(buf)))
 end
