@@ -7,6 +7,10 @@
 [![codecov.io](http://codecov.io/github/nick-paul/TerminalMenus.jl/coverage.svg?branch=master)](http://codecov.io/github/nick-paul/TerminalMenus.jl?branch=master)
 
 
+TerminalMenus.jl is a small package that enables interactive menus in the terminal. It is currently only supports linux. 
+
+## Example
+
 ```julia
 
 using TerminalMenus
