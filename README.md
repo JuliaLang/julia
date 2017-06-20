@@ -2,7 +2,7 @@
 
 [![Build Status](https://travis-ci.org/nick-paul/TerminalMenus.jl.svg?branch=master)](https://travis-ci.org/nick-paul/TerminalMenus.jl) [![Build status](https://ci.appveyor.com/api/projects/status/weaqa64co5boj87g?svg=true)](https://ci.appveyor.com/project/nick-paul/terminalmenus-jl)
 
-![demo.gif](demo.gif)
+![Demo](http://npaul.co/files/TerminalMenus-demo.gif)
 
 TerminalMenus.jl enables small, low-profile interactive menus in the terminal. This package is still in development. Nested menus, unicode/ASCII UI configurations, better documentation, and other menus will be added soon.
 
