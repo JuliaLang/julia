@@ -5,6 +5,8 @@ function request(msg::AbstractString, m::AbstractMenu)
     request(m)
 end
 
+header(m::AbstractMenu) = ""
+keypress(m::AbstractMenu) = false
 pick(m::AbstractMenu, cursor::Int) = error("unimplemented")
 cancel(m::AbstractMenu) = error("unimplemented")
 options(m::AbstractMenu) = error("unimplemented")
@@ -14,6 +16,11 @@ end
 
 function request(m::AbstractMenu)
     cursor = 1
+
+    menu_header = header(m)
+    if menu_header != ""
+        println(header(m))
+    end
 
     printMenu(m, cursor, init=true)
 
@@ -37,9 +44,14 @@ function request(m::AbstractMenu)
                     m.pageoffset += 1
                 end
             elseif c == 13 # <enter>
+                # will break if pick returns true
                 pick(m, cursor) && break
             elseif c == UInt32('q') || c == 3 # ctrl-c (cancel)
                 cancel(m)
+                break
+            else
+                # will break if keypress returns true
+                keypress(m, c) && break
             end
 
             printMenu(m, cursor)

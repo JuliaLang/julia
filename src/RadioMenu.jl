@@ -1,5 +1,3 @@
-include("util.jl")
-
 type RadioMenu <: AbstractMenu
     options::Array{String,1}
     pagesize::Int
