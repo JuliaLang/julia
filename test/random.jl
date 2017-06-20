@@ -540,10 +540,6 @@ end
 
 # Issue 20062 - ensure internal functions reserve_1, reserve are type-stable
 let r = MersenneTwister(0)
-    @test  Base.Random.mt_empty(r); @inferred Base.Random.reserve_1(r)
-    @test !Base.Random.mt_empty(r); @inferred Base.Random.reserve_1(r)
-
-    rand(r)
-    @test 0 < Base.Random.mt_avail(r) < Base.Random.MTCacheLength; @inferred Base.Random.reserve(r, Base.Random.mt_avail(r))
-    @test 0 < Base.Random.mt_avail(r) < Base.Random.MTCacheLength; @inferred Base.Random.reserve(r, Base.Random.mt_avail(r)+1)
+    @inferred Base.Random.reserve_1(r)
+    @inferred Base.Random.reserve(r, 1)
 end
