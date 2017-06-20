@@ -18,6 +18,11 @@ using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted
     sf2 = svdfact(m2)
     @test sf1.S ≈ [2, 0]
     @test sf2.S ≈ [2, 1]
+    # U & Vt are unitary
+    @test sf1.U*sf1.U' ≈ eye(2)
+    @test sf1.Vt*sf1.Vt' ≈ eye(2)
+    @test sf2.U*sf2.U' ≈ eye(2)
+    @test sf2.Vt*sf2.Vt' ≈ eye(2)
     # SVD not uniquely determined, so just test we can reconstruct the
     # matrices from the factorizaion as expected.
     @test sf1.U*Diagonal(sf1.S)*sf1.Vt' ≈ m1
