@@ -1,12 +1,10 @@
 # TerminalMenus
 
-[![Build Status](https://travis-ci.org/nick-paul/TerminalMenus.jl.svg?branch=master)](https://travis-ci.org/nick-paul/TerminalMenus.jl)
-
-[![Build status](https://ci.appveyor.com/api/projects/status/weaqa64co5boj87g?svg=true)](https://ci.appveyor.com/project/nick-paul/terminalmenus-jl)
+[![Build Status](https://travis-ci.org/nick-paul/TerminalMenus.jl.svg?branch=master)](https://travis-ci.org/nick-paul/TerminalMenus.jl) [![Build status](https://ci.appveyor.com/api/projects/status/weaqa64co5boj87g?svg=true)](https://ci.appveyor.com/project/nick-paul/terminalmenus-jl)
 
 ![demo.gif](demo.gif)
 
-TerminalMenus.jl is a small package that enables small, low-profile interactive menus in the terminal. This package is still in development. Nested menus, unicode/ASCII UI configurations, better documentation, and other menus will be added soon.
+TerminalMenus.jl enables small, low-profile interactive menus in the terminal. This package is still in development. Nested menus, unicode/ASCII UI configurations, better documentation, and other menus will be added soon.
 
 ## Examples
 
@@ -24,8 +22,8 @@ The RadioMenu allows the user to select one option from the list. The `request` 
 
 
 ```julia
-# `pagesize` is the number of items to be displayed at a time
-#   the UI will scroll if the number of options is greater
+# `pagesize` is the number of items to be displayed at a time.
+#  The UI will scroll if the number of options is greater
 #   than the `pagesize`
 menu = RadioMenu(options, pagesize=4)
 
