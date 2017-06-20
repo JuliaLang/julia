@@ -64,6 +64,7 @@
 #include <llvm/Support/SourceMgr.h> // for llvmcall
 #include <llvm/Transforms/Utils/Cloning.h> // for llvmcall inlining
 #include <llvm/IR/Verifier.h> // for llvmcall validation
+#include <llvm/Bitcode/ReaderWriter.h>
 
 // C API
 #include <llvm-c/Types.h>
@@ -7144,4 +7145,16 @@ extern "C" void jl_dump_llvm_type(void *v)
     ((Type*)v)->dump();
 #endif
     putchar('\n');
+}
+
+extern void jl_write_bitcode_func(void *F, char *fname) {
+    std::error_code EC;
+    raw_fd_ostream OS(fname, EC, sys::fs::F_None);
+    llvm::WriteBitcodeToFile(((llvm::Function*)F)->getParent(), OS);
+}
+
+extern void jl_write_bitcode_module(void *M, char *fname) {
+    std::error_code EC;
+    raw_fd_ostream OS(fname, EC, sys::fs::F_None);
+    llvm::WriteBitcodeToFile((llvm::Module*)M, OS);
 }
