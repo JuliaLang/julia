@@ -64,7 +64,11 @@
 #include <llvm/Support/SourceMgr.h> // for llvmcall
 #include <llvm/Transforms/Utils/Cloning.h> // for llvmcall inlining
 #include <llvm/IR/Verifier.h> // for llvmcall validation
-#include <llvm/Bitcode/ReaderWriter.h>
+#if JL_LLVM_VERSION >= 40000
+#  include <llvm/Bitcode/BitcodeWriter.h>
+#else
+#  include <llvm/Bitcode/ReaderWriter.h>
+#endif
 
 // C API
 #include <llvm-c/Types.h>
