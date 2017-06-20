@@ -298,7 +298,6 @@ private:
     Type *T_size;
     Type *T_int32;
     MDNode *tbaa_gcframe;
-    Function *gc_kill_func;
     Function *ptls_getter;
     Function *gc_flush_func;
     Function *pointer_from_objref_func;
@@ -1026,8 +1025,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F) {
                 continue;
             }
             CallingConv::ID CC = CI->getCallingConv();
-            if ((gc_kill_func != nullptr && CI->getCalledFunction() == gc_kill_func) ||
-                (gc_flush_func != nullptr && CI->getCalledFunction() == gc_flush_func)) {
+            if (gc_flush_func != nullptr && CI->getCalledFunction() == gc_flush_func) {
                 /* No replacement */
             } else if (pointer_from_objref_func != nullptr &&
                 CI->getCalledFunction() == pointer_from_objref_func) {
@@ -1204,7 +1202,6 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(Function &F, std::vector<int> &C
 
 bool LateLowerGCFrame::doInitialization(Module &M) {
     ptls_getter = M.getFunction("jl_get_ptls_states");
-    gc_kill_func = M.getFunction("julia.gc_root_kill");
     gc_flush_func = M.getFunction("julia.gcroot_flush");
     pointer_from_objref_func = M.getFunction("julia.pointer_from_objref");
     return false;

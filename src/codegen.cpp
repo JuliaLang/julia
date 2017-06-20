@@ -355,9 +355,6 @@ static Function *jlarray_data_owner_func;
 static GlobalVariable *jlgetworld_global;
 
 // placeholder functions
-static Function *gcroot_func;
-static Function *gckill_func;
-static Function *jlcall_frame_func;
 static Function *gcroot_flush_func;
 static Function *except_enter_func;
 static Function *pointer_from_objref_func;
@@ -574,7 +571,6 @@ public:
 static jl_cgval_t emit_expr(jl_value_t *expr, jl_codectx_t *ctx);
 
 static Value *emit_local_root(jl_codectx_t *ctx, jl_varinfo_t *vi = NULL);
-static void mark_gc_use(const jl_cgval_t &v);
 static Value *global_binding_pointer(jl_module_t *m, jl_sym_t *s,
                                      jl_binding_t **pbnd, bool assign, jl_codectx_t *ctx);
 static jl_cgval_t emit_checked_var(Value *bp, jl_sym_t *name, jl_codectx_t *ctx, bool isvol, MDNode *tbaa);
@@ -589,21 +585,6 @@ static Value *emit_jlcall(Value *theFptr, Value *theF, jl_cgval_t *args,
                           size_t nargs, jl_codectx_t *ctx);
 static Value *emit_jlcall(Value *theFptr, Value *theF, jl_value_t **args,
                           size_t nargs, jl_codectx_t *ctx);
-
-template<typename T> static void push_gc_use(T &&vec, const jl_cgval_t &v)
-{
-    if (v.gcroot) {
-        vec.push_back(v.gcroot);
-    }
-}
-
-template<typename T> static void mark_gc_uses(T &&vec)
-{
-    auto f = prepare_call(gckill_func);
-    for (auto &v: vec) {
-        builder.CreateCall(f, v);
-    }
-}
 
 // --- convenience functions for tagging llvm values with julia types ---
 
@@ -987,9 +968,6 @@ static jl_cgval_t convert_julia_type(const jl_cgval_t &v, jl_value_t *typ, jl_co
                             newroot = builder.CreateSelect(wasboxed, emit_bitcast(oldroot, boxv->getType()), newroot);
                         }
                         builder.CreateStore(newroot, froot);
-                    }
-                    else {
-                        mark_gc_use(v);
                     }
                     if (v.V == NULL) {
                         // v.V might be NULL if it was all ghost objects before
@@ -2213,17 +2191,6 @@ static Value *emit_local_root(jl_codectx_t *ctx, jl_varinfo_t *vi)
     return newroot;
 }
 
-
-// Marks a use (and thus a potential kill) of a gcroot
-// Note that if the operation that needs the root has terminating control flow
-// (e.g. `unreachable`, `noreturn` functions) the use needs to be marked before
-// the operation as well as after it.
-static void mark_gc_use(const jl_cgval_t &v)
-{
-    if (v.gcroot)
-        builder.CreateCall(prepare_call(gckill_func), v.gcroot);
-}
-
 static void jl_add_method_root(jl_codectx_t *ctx, jl_value_t *val)
 {
     if (jl_is_leaf_type(val) || jl_is_bool(val) || jl_is_symbol(val) ||
@@ -2471,8 +2438,6 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
             v2 = update_julia_type(v2, expr_type(args[2], ctx), ctx); // patch up typ if necessary
         // emit comparison test
         Value *ans = emit_f_is(v1, v2, ctx);
-        mark_gc_use(v1);
-        mark_gc_use(v2);
         *ret = mark_julia_type(builder.CreateZExt(ans, T_int8), false, jl_bool_type, ctx);
         JL_GC_POP();
         return true;
@@ -3098,7 +3063,6 @@ static jl_cgval_t emit_call_function_object(jl_method_instance_t *li, const jl_c
             break;
         }
 
-        SmallVector<Value*, 16> gc_uses;
         for (size_t i = 0; i < nargs + 1; i++) {
             jl_value_t *jt = jl_nth_slot_type(li->specTypes, i);
             bool isboxed;
@@ -3122,7 +3086,6 @@ static jl_cgval_t emit_call_function_object(jl_method_instance_t *li, const jl_c
                 jl_cgval_t arg = i == 0 ? theF : emit_expr(args[i], ctx);
                 assert(arg.ispointer());
                 argvals[idx] = decay_derived(data_pointer(arg, ctx, at));
-                push_gc_use(gc_uses, arg);
             }
             else {
                 assert(at == et);
@@ -3134,10 +3097,8 @@ static jl_cgval_t emit_call_function_object(jl_method_instance_t *li, const jl_c
             idx++;
         }
         assert(idx == nfargs);
-        mark_gc_uses(gc_uses);
         CallInst *call = builder.CreateCall(returninfo.decl, ArrayRef<Value*>(&argvals[0], nfargs));
         call->setAttributes(returninfo.decl->getAttributes());
-        mark_gc_uses(gc_uses);
 
         jl_cgval_t retval;
         switch (returninfo.cc) {
@@ -6739,24 +6700,6 @@ static void init_julia_llvm_env(Module *m)
                       AttributeSet::FunctionIndex, Attribute::NoUnwind));
 #endif
     add_named_global(jlarray_data_owner_func, jl_array_data_owner);
-
-    gcroot_func =
-        Function::Create(FunctionType::get(T_pprjlvalue, false),
-                     Function::ExternalLinkage,
-                     "julia.gc_root_decl");
-    add_named_global(gcroot_func, (void*)NULL, /*dllimport*/false);
-
-    gckill_func =
-        Function::Create(FunctionType::get(T_void, ArrayRef<Type*>(T_pprjlvalue), false),
-                     Function::ExternalLinkage,
-                     "julia.gc_root_kill");
-    add_named_global(gckill_func, (void*)NULL, /*dllimport*/false);
-
-    jlcall_frame_func =
-        Function::Create(FunctionType::get(T_pprjlvalue, ArrayRef<Type*>(T_int32), false),
-                     Function::ExternalLinkage,
-                     "julia.jlcall_frame_decl");
-    add_named_global(jlcall_frame_func, (void*)NULL, /*dllimport*/false);
 
     gcroot_flush_func = Function::Create(FunctionType::get(T_void, false),
                                          Function::ExternalLinkage,
