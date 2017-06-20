@@ -6,7 +6,7 @@ function request(msg::AbstractString, m::AbstractMenu)
 end
 
 header(m::AbstractMenu) = ""
-keypress(m::AbstractMenu) = false
+keypress(m::AbstractMenu, i::UInt32) = false
 pick(m::AbstractMenu, cursor::Int) = error("unimplemented")
 cancel(m::AbstractMenu) = error("unimplemented")
 options(m::AbstractMenu) = error("unimplemented")
