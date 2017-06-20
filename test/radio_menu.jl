@@ -16,3 +16,4 @@ radio_menu = RadioMenu(string.(1:20))
 radio_menu.selected = 2
 TerminalMenus.cancel(radio_menu)
 @test radio_menu.selected == -1
+@test TerminalMenus.header(radio_menu) == ""
