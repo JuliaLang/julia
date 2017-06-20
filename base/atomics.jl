@@ -421,7 +421,7 @@ for typ in atomictypes
         fn = Symbol("atomic_", rmw, "!")
         if (rmw == "max" || rmw == "min") && typ <: Unsigned
             # LLVM distinguishes signedness in the operation, not the integer type.
-            rmw = "u" * rmw
+            rmw = "u" ++ rmw
         end
         if typ <: Integer
             @eval $fn(x::Atomic{$typ}, v::$typ) =

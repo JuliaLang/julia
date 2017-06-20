@@ -4,7 +4,7 @@
 
 ## SubString tests ##
 u8str = "∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε"
-u8str2 = u8str^2
+u8str2 = repeat(u8str,2)
 len_u8str = length(u8str)
 slen_u8str = length(u8str)
 len_u8str2 = length(u8str2)

@@ -360,3 +360,26 @@ minmax(x::Real) = (x, x)
 max(x::T, y::T) where {T<:Real} = select_value(y < x, x, y)
 min(x::T, y::T) where {T<:Real} = select_value(y < x, y, x)
 minmax(x::T, y::T) where {T<:Real} = y < x ? (y, x) : (x, y)
+
+# Concatenation via a++b++... -> concat(concate_typeof(a,b,..), a,b,...):
+# Similar to promote_rule, you can define a concat_rule(T, S) to
+# determine how instances of two types T and S are concatenated.  The
+# default is "Bottom", which gets turned into a vcat call in abstractarray.jl.
+concat_typeof() = concat_type()
+concat_typeof(x) = concat_type(typeof(x))
+concat_typeof(x, xs...) = (@_inline_meta; concat_type(typeof(x), concat_typeof(xs...)))
+concat_type()  = Bottom
+concat_type(T, S...) = (@_inline_meta; concat_type(T, concat_type(S...)))
+concat_type(::Type{Bottom}, ::Type{Bottom}) = Bottom
+concat_type(::Type{T}, ::Type{Bottom}) where {T} = T
+concat_type(::Type{Bottom}, ::Type{T}) where {T} = T
+function concat_type(::Type{T}, ::Type{S}) where {T,S}
+    @_inline_meta
+    concat_result(concat_rule(T,S), concat_rule(S,T))
+end
+concat_result(::Type{T},::Type{T}) where {T} = (@_inline_meta; T)
+concat_result(::Type{Bottom},::Type{T}) where {T} = (@_inline_meta; T)
+concat_result(::Type{T},::Type{Bottom}) where {T} = (@_inline_meta; T)
+concat_result(::Type{Bottom},::Type{Bottom}) = (@_inline_meta; Bottom)
+concat_result(::Type{T},::Type{S}) where {T,S} = (@_inline_meta; Bottom)
+concat_rule(T, S) = (@_inline_meta; Bottom)

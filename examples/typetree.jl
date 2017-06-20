@@ -134,7 +134,7 @@ function print_tree(subtypes::Dict{Binding, TTNode}, pfx::String="")
             println(pfx, "+- ", n, " = ", v.typ, " ", type_props(v.typ))
         end
         v.typ === Function && println(pfx, ".     ## hiding implicit Function subtypes ##")
-        print_tree(v.subtypes, pfx * ".  ")
+        print_tree(v.subtypes, pfx ++ ".  ")
     end
 end
 

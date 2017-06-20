@@ -153,7 +153,7 @@ function choosetests(choices = [])
     try
         ipa = getipaddr()
     catch
-        warn("Networking unavailable: Skipping tests [" * join(net_required_for, ", ") * "]")
+        warn("Networking unavailable: Skipping tests [" ++ join(net_required_for, ", ") ++ "]")
         net_on = false
     end
 

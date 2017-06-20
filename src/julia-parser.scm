@@ -19,9 +19,10 @@
   (append! '(|<:| |>:| in isa)
            (add-dots '(> < >= ≥ <= ≤ == === ≡ != ≠ !== ≢ ∈ ∉ ∋ ∌ ⊆ ⊈ ⊂ ⊄ ⊊ ∝ ∊ ∍ ∥ ∦ ∷ ∺ ∻ ∽ ∾ ≁ ≃ ≄ ≅ ≆ ≇ ≈ ≉ ≊ ≋ ≌ ≍ ≎ ≐ ≑ ≒ ≓ ≔ ≕ ≖ ≗ ≘ ≙ ≚ ≛ ≜ ≝ ≞ ≟ ≣ ≦ ≧ ≨ ≩ ≪ ≫ ≬ ≭ ≮ ≯ ≰ ≱ ≲ ≳ ≴ ≵ ≶ ≷ ≸ ≹ ≺ ≻ ≼ ≽ ≾ ≿ ⊀ ⊁ ⊃ ⊅ ⊇ ⊉ ⊋ ⊏ ⊐ ⊑ ⊒ ⊜ ⊩ ⊬ ⊮ ⊰ ⊱ ⊲ ⊳ ⊴ ⊵ ⊶ ⊷ ⋍ ⋐ ⋑ ⋕ ⋖ ⋗ ⋘ ⋙ ⋚ ⋛ ⋜ ⋝ ⋞ ⋟ ⋠ ⋡ ⋢ ⋣ ⋤ ⋥ ⋦ ⋧ ⋨ ⋩ ⋪ ⋫ ⋬ ⋭ ⋲ ⋳ ⋴ ⋵ ⋶ ⋷ ⋸ ⋹ ⋺ ⋻ ⋼ ⋽ ⋾ ⋿ ⟈ ⟉ ⟒ ⦷ ⧀ ⧁ ⧡ ⧣ ⧤ ⧥ ⩦ ⩧ ⩪ ⩫ ⩬ ⩭ ⩮ ⩯ ⩰ ⩱ ⩲ ⩳ ⩴ ⩵ ⩶ ⩷ ⩸ ⩹ ⩺ ⩻ ⩼ ⩽ ⩾ ⩿ ⪀ ⪁ ⪂ ⪃ ⪄ ⪅ ⪆ ⪇ ⪈ ⪉ ⪊ ⪋ ⪌ ⪍ ⪎ ⪏ ⪐ ⪑ ⪒ ⪓ ⪔ ⪕ ⪖ ⪗ ⪘ ⪙ ⪚ ⪛ ⪜ ⪝ ⪞ ⪟ ⪠ ⪡ ⪢ ⪣ ⪤ ⪥ ⪦ ⪧ ⪨ ⪩ ⪪ ⪫ ⪬ ⪭ ⪮ ⪯ ⪰ ⪱ ⪲ ⪳ ⪴ ⪵ ⪶ ⪷ ⪸ ⪹ ⪺ ⪻ ⪼ ⪽ ⪾ ⪿ ⫀ ⫁ ⫂ ⫃ ⫄ ⫅ ⫆ ⫇ ⫈ ⫉ ⫊ ⫋ ⫌ ⫍ ⫎ ⫏ ⫐ ⫑ ⫒ ⫓ ⫔ ⫕ ⫖ ⫗ ⫘ ⫙ ⫷ ⫸ ⫹ ⫺ ⊢ ⊣))))
 (define prec-pipe        (add-dots '(|\|>| |<\||)))
+(define prec-concat      (add-dots '(|++|)))
 (define prec-colon       '(: |..|))
 (define prec-plus        (append! '($)
-                          (add-dots '(+ - |\|| ⊕ ⊖ ⊞ ⊟ |++| ∪ ∨ ⊔ ± ∓ ∔ ∸ ≂ ≏ ⊎ ⊻ ⊽ ⋎ ⋓ ⧺ ⧻ ⨈ ⨢ ⨣ ⨤ ⨥ ⨦ ⨧ ⨨ ⨩ ⨪ ⨫ ⨬ ⨭ ⨮ ⨹ ⨺ ⩁ ⩂ ⩅ ⩊ ⩌ ⩏ ⩐ ⩒ ⩔ ⩖ ⩗ ⩛ ⩝ ⩡ ⩢ ⩣))))
+                          (add-dots '(+ - |\|| ⊕ ⊖ ⊞ ⊟ ∪ ∨ ⊔ ± ∓ ∔ ∸ ≂ ≏ ⊎ ⊻ ⊽ ⋎ ⋓ ⧺ ⧻ ⨈ ⨢ ⨣ ⨤ ⨥ ⨦ ⨧ ⨨ ⨩ ⨪ ⨫ ⨬ ⨭ ⨮ ⨹ ⨺ ⩁ ⩂ ⩅ ⩊ ⩌ ⩏ ⩐ ⩒ ⩔ ⩖ ⩗ ⩛ ⩝ ⩡ ⩢ ⩣))))
 (define prec-bitshift    (add-dots '(<< >> >>>)))
 (define prec-times       (add-dots '(* / ÷ % & ⋅ ∘ × |\\| ∩ ∧ ⊗ ⊘ ⊙ ⊚ ⊛ ⊠ ⊡ ⊓ ∗ ∙ ∤ ⅋ ≀ ⊼ ⋄ ⋆ ⋇ ⋉ ⋊ ⋋ ⋌ ⋏ ⋒ ⟑ ⦸ ⦼ ⦾ ⦿ ⧶ ⧷ ⨇ ⨰ ⨱ ⨲ ⨳ ⨴ ⨵ ⨶ ⨷ ⨸ ⨻ ⨼ ⨽ ⩀ ⩃ ⩄ ⩋ ⩍ ⩎ ⩑ ⩓ ⩕ ⩘ ⩚ ⩜ ⩞ ⩟ ⩠ ⫛ ⊍ ▷ ⨝ ⟕ ⟖ ⟗)))
 (define prec-rational    (add-dots '(//)))
@@ -34,7 +35,7 @@
 
 (define prec-names '(prec-assignment
                      prec-conditional prec-lazy-or prec-lazy-and prec-arrow prec-comparison
-                     prec-pipe prec-colon prec-plus prec-bitshift prec-times prec-rational
+                     prec-pipe prec-concat prec-colon prec-plus prec-bitshift prec-times prec-rational
                      prec-power prec-decl prec-dot))
 
 (define (Set l)
@@ -759,7 +760,8 @@
                    `(call ,op ,arg1 ,arg2))))
             (else ex)))))
 
-(define (parse-pipes s) (parse-LtoR s parse-range is-prec-pipe?))
+(define (parse-pipes s)   (parse-LtoR        s parse-concat is-prec-pipe?))
+(define (parse-concat s)  (parse-with-chains s parse-range  is-prec-concat? '++))
 
 ; parse ranges and postfix ...
 ; colon is strange; 3 arguments with 2 colons yields one call:
@@ -828,7 +830,7 @@
 
 ;; parse left to right, combining chains of a certain operator into 1 call
 ;; e.g. a+b+c => (call + a b c)
-(define (parse-with-chains s down ops chain-ops)
+(define (parse-with-chains s down ops chain-op)
   (let loop ((ex (down s)))
     (let ((t (peek-token s)))
       (if (not (ops t))
@@ -840,15 +842,15 @@
                    ;; here we have "x -y"
                    (ts:put-back! s t)
                    ex)
-                  ((memq t chain-ops)
+                  ((eq? t chain-op)
                    (loop (list* 'call t ex
                                 (parse-chain s down t))))
                   (else
                    (loop (list 'call t ex (down s))))))))))
 
-(define (parse-expr s)     (parse-with-chains s parse-shift         is-prec-plus? '(+ ++)))
+(define (parse-expr s)     (parse-with-chains s parse-shift         is-prec-plus? '+))
 (define (parse-shift s)    (parse-LtoR        s parse-term          is-prec-bitshift?))
-(define (parse-term s)     (parse-with-chains s parse-rational      is-prec-times? '(*)))
+(define (parse-term s)     (parse-with-chains s parse-rational      is-prec-times? '*))
 (define (parse-rational s) (parse-LtoR        s parse-unary-subtype is-prec-rational?))
 
 ;; parse `<: A where B` as `<: (A where B)` (issue #21545)

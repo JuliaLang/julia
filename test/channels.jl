@@ -220,7 +220,7 @@ end
 
 
 # test for yield/wait/event failures
-@noinline garbage_finalizer(f) = finalizer("gar" * "bage", f)
+@noinline garbage_finalizer(f) = finalizer("gar" ++ "bage", f)
 let t, run = Ref(0)
     gc_enable(false)
     # test for finalizers trying to yield leading to failed attempts to context switch

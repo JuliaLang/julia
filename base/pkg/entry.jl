@@ -305,7 +305,7 @@ function pin(pkg::AbstractString, head::AbstractString)
             # note: changing the following naming scheme requires a corresponding change in Read.ispinned()
             branch = "pinned.$(string(id)[1:8]).tmp"
             if LibGit2.isattached(repo) && LibGit2.branch(repo) == branch
-                info("Package $pkg is already pinned" * (isempty(head) ? "" : " to the selected commit"))
+                info("Package $pkg is already pinned", (isempty(head) ? "" : " to the selected commit"))
                 should_resolve = false
                 return
             end
@@ -313,7 +313,7 @@ function pin(pkg::AbstractString, head::AbstractString)
             try
                 if !isnull(ref)
                     if LibGit2.revparseid(repo, branch) != id
-                        throw(PkgError("Package $pkg: existing branch $branch has " *
+                        throw(PkgError("Package $pkg: existing branch $branch has " ++
                             "been edited and doesn't correspond to its original commit"))
                     end
                     info("Package $pkg: checking out existing branch $branch")
@@ -375,8 +375,8 @@ function update(branch::AbstractString, upkgs::Set{String})
             end
         catch err
             cex = CapturedException(err, catch_backtrace())
-            throw(PkgError("METADATA cannot be updated. Resolve problems manually in " *
-                Pkg.dir("METADATA") * ".", cex))
+            throw(PkgError("METADATA cannot be updated. Resolve problems manually in " ++
+                Pkg.dir("METADATA") ++ ".", cex))
         end
     end
     deferred_errors = CompositeException()
@@ -394,8 +394,8 @@ function update(branch::AbstractString, upkgs::Set{String})
     reqs = Reqs.parse("REQUIRE")
     if !isempty(upkgs)
         for (pkg, (v,f)) in instd
-            satisfies(pkg, v, reqs) || throw(PkgError("Package $pkg: current " *
-                "package status does not satisfy the requirements, cannot do " *
+            satisfies(pkg, v, reqs) || throw(PkgError("Package $pkg: current " ++
+                "package status does not satisfy the requirements, cannot do " ++
                 "a partial update; use `Pkg.update()`"))
         end
     end
@@ -483,11 +483,11 @@ function resolve(
     for pkg in keys(reqs)
         if !haskey(deps,pkg)
             if "julia" in conflicts[pkg]
-                throw(PkgError("$pkg can't be installed because it has no versions that support $VERSION " *
+                throw(PkgError("$pkg can't be installed because it has no versions that support $VERSION " ++
                    "of julia. You may need to update METADATA by running `Pkg.update()`"))
             else
                 sconflicts = join(conflicts[pkg], ", ", " and ")
-                throw(PkgError("$pkg's requirements can't be satisfied because " *
+                throw(PkgError("$pkg's requirements can't be satisfied because " ++
                     "of the following fixed packages: $sconflicts"))
             end
         end

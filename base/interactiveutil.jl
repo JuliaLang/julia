@@ -222,7 +222,7 @@ function _show_cpuinfo(io::IO, info::Sys.CPUinfo, header::Bool=true, prefix::Abs
     tck = Sys.SC_CLK_TCK
     if header
         println(io, info.model, ": ")
-        print(io, " "^length(prefix))
+        print(io, repeat(" ",length(prefix)))
         if tck > 0
             @printf(io, "    %5s    %9s    %9s    %9s    %9s    %9s\n",
                     "speed", "user", "nice", "sys", "idle", "irq")
@@ -419,8 +419,8 @@ function gen_call_with_extracted_types(__module__, fcn, ex0)
     end
     if (!is_macro && ex.head == :thunk) || exret.head == :none
         exret = Expr(:call, :error, "expression is not a function call, "
-                                  * "or is too complex for @$fcn to analyze; "
-                                  * "break it down to simpler parts if possible")
+                                  ++ "or is too complex for @$fcn to analyze; "
+                                  ++ "break it down to simpler parts if possible")
     end
     exret
 end
@@ -690,7 +690,7 @@ function runtests(tests = ["all"], numcores = ceil(Int, Sys.CPU_CORES / 2))
     catch
         buf = PipeBuffer()
         versioninfo(buf)
-        error("A test has failed. Please submit a bug report (https://github.com/JuliaLang/julia/issues)\n" *
+        error("A test has failed. Please submit a bug report (https://github.com/JuliaLang/julia/issues)\n" ++
               "including error messages above and the output of versioninfo():\n$(readstring(buf))")
     end
 end

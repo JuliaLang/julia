@@ -17,8 +17,8 @@ end
 term(io::IO, md::MD, columns = cols(io)) = term(io, md.content, columns)
 
 function term(io::IO, md::Paragraph, columns)
-    print(io, " "^margin)
-    print_wrapped(io, width = columns-2margin, pre = " "^margin) do io
+    print(io, repeat(" ",margin))
+    print_wrapped(io, width = columns-2margin, pre = repeat(" ",margin)) do io
         terminline(io, md.content)
     end
 end
@@ -26,34 +26,34 @@ end
 function term(io::IO, md::BlockQuote, columns)
     s = sprint(term, md.content, columns - 10)
     for line in split(rstrip(s), "\n")
-        println(io, " "^margin, "|", line)
+        println(io, repeat(" ",margin), "|", line)
     end
 end
 
 function term(io::IO, md::Admonition, columns)
-    print(io, " "^margin, "| ")
+    print(io, repeat(" ",margin), "| ")
     with_output_format(:bold, print, io, isempty(md.title) ? md.category : md.title)
-    println(io, "\n", " "^margin, "|")
+    println(io, "\n", repeat(" ",margin), "|")
     s = sprint(term, md.content, columns - 10)
     for line in split(rstrip(s), "\n")
-        println(io, " "^margin, "|", line)
+        println(io, repeat(" ",margin), "|", line)
     end
 end
 
 function term(io::IO, f::Footnote, columns)
-    print(io, " "^margin, "| ")
+    print(io, repeat(" ",margin), "| ")
     with_output_format(:bold, print, io, "[^$(f.id)]")
-    println(io, "\n", " "^margin, "|")
+    println(io, "\n", repeat(" ",margin), "|")
     s = sprint(term, f.text, columns - 10)
     for line in split(rstrip(s), "\n")
-        println(io, " "^margin, "|", line)
+        println(io, repeat(" ",margin), "|", line)
     end
 end
 
 function term(io::IO, md::List, columns)
     for (i, point) in enumerate(md.items)
-        print(io, " "^2margin, isordered(md) ? "$(i + md.ordered - 1). " : "•  ")
-        print_wrapped(io, width = columns-(4margin+2), pre = " "^(2margin+2),
+        print(io, repeat(" ",2margin), isordered(md) ? "$(i + md.ordered - 1). " : "•  ")
+        print_wrapped(io, width = columns-(4margin+2), pre = repeat(" ",2margin+2),
                           i = 2margin+2) do io
             term(io, point, columns - 10)
         end
@@ -63,14 +63,14 @@ end
 function _term_header(io::IO, md, char, columns)
     text = terminline(md.text)
     with_output_format(:bold, io) do io
-        print(io, " "^(2margin), " ")
+        print(io, repeat(" ",2margin), " ")
         line_no, lastline_width = print_wrapped(io, text,
                                                 width=columns - 4margin; pre=" ")
         line_width = min(1 + lastline_width, columns)
         if line_no > 1
             line_width = max(line_width, div(columns, 3))
         end
-        char != ' ' && println(io, " "^(2margin), string(char) ^ line_width)
+        char != ' ' && println(io, repeat(" ",2margin), string(char) ^ line_width)
     end
 end
 
@@ -85,7 +85,7 @@ end
 function term(io::IO, md::Code, columns)
     with_output_format(:cyan, io) do io
         for line in lines(md.code)
-            print(io, " "^margin)
+            print(io, repeat(" ",margin))
             println(io, line)
         end
     end
@@ -96,7 +96,7 @@ function term(io::IO, br::LineBreak, columns)
 end
 
 function term(io::IO, br::HorizontalRule, columns)
-   println(io, " " ^ margin, "-" ^ (columns - 2margin))
+   println(io, repeat(" ",margin), repeat("-", columns - 2margin))
 end
 
 term(io::IO, x, _) = show(io, MIME"text/plain"(), x)

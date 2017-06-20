@@ -35,7 +35,7 @@ function prompt(msg::AbstractString; default::AbstractString="", password::Bool=
     if is_windows() && password
         error("Command line prompt not supported for password entry on windows. Use winprompt instead")
     end
-    msg = !isempty(default) ? msg*" [$default]:" : msg*":"
+    msg = !isempty(default) ? msg++" [$default]:" : msg++":"
     uinput = if password
         Base.getpass(msg)
     else

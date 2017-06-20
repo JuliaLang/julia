@@ -133,25 +133,22 @@ reverseind(s::RevString, i::Integer) = endof(s) - i + 1
 reverseind(s::SubString{String}, i::Integer) =
     reverseind(s.string, nextind(s.string, endof(s.string))-s.offset-s.endof+i-1) - s.offset
 
+"""
+    repeat(s::AbstractString, n::Integer)
+
+Construct a new string from `s` by repeating it `n` times.
+
+```jldoctest
+julia> repeat("Test ",3)
+"Test Test Test "
+```
+"""
 function repeat(s::AbstractString, r::Integer)
     r <  0 ? throw(ArgumentError("can't repeat a string $r times")) :
     r == 0 ? "" :
     r == 1 ? s  :
     repeat(convert(String, s), r)
 end
-
-"""
-    ^(s::AbstractString, n::Integer)
-
-Repeat `n` times the string `s`.
-The [`repeat`](@ref) function is an alias to this operator.
-
-```jldoctest
-julia> "Test "^3
-"Test Test Test "
-```
-"""
-(^)(s::AbstractString, r::Integer) = repeat(s,r)
 
 pointer(x::SubString{String}) = pointer(x.string) + x.offset
 pointer(x::SubString{String}, i::Integer) = pointer(x.string) + x.offset + (i-1)

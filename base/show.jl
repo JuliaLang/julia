@@ -249,7 +249,7 @@ show_supertypes(typ::DataType) = show_supertypes(STDOUT, typ)
 macro show(exs...)
     blk = Expr(:block)
     for ex in exs
-        push!(blk.args, :(print($(sprint(show_unquoted,ex)*" = "))))
+        push!(blk.args, :(print($(sprint(show_unquoted,ex)++" = "))))
         push!(blk.args, :(show(STDOUT, "text/plain", begin value=$(esc(ex)) end)))
         push!(blk.args, :(println()))
     end
@@ -551,10 +551,10 @@ function show_block(io::IO, head, args::Vector, body, indent::Int)
     ind = head === :module || head === :baremodule ? indent : indent + indent_width
     exs = (is_expr(body, :block) || is_expr(body, :body)) ? body.args : Any[body]
     for ex in exs
-        print(io, '\n', " "^ind)
+        print(io, '\n', repeat(" ",ind))
         show_unquoted(io, ex, ind, -1)
     end
-    print(io, '\n', " "^indent)
+    print(io, '\n', repeat(" ",indent))
 end
 show_block(io::IO,head,    block,i::Int) = show_block(io,head, [], block,i)
 function show_block(io::IO, head, arg, block, i::Int)

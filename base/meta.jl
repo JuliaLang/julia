@@ -28,20 +28,20 @@ const sexpr_indent_width = 2
 
 function show_sexpr(io::IO, ex::QuoteNode, indent::Int)
     inner = indent + sexpr_indent_width
-    print(io, "(:quote, #QuoteNode\n", " "^inner)
+    print(io, "(:quote, #QuoteNode\n", repeat(" ",inner))
     show_sexpr(io, ex.value, inner)
-    print(io, '\n', " "^indent, ')')
+    print(io, '\n', repeat(" ",indent), ')')
 end
 function show_sexpr(io::IO, ex::Expr, indent::Int)
     inner = indent + sexpr_indent_width
     print(io, '(')
     show_sexpr(io, ex.head, inner)
     for arg in ex.args
-        print(io, ex.head === :block ? ",\n"*" "^inner : ", ")
+        print(io, ex.head === :block ? ",\n"++repeat(" ",inner) : ", ")
         show_sexpr(io, arg, inner)
     end
     if isempty(ex.args); print(io, ",)")
-    else print(io, (ex.head === :block ? "\n"*" "^indent : ""), ')')
+    else print(io, (ex.head === :block ? "\n"++repeat(" ",indent) : ""), ')')
     end
 end
 

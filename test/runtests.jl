@@ -70,7 +70,7 @@ cd(dirname(@__FILE__)) do
                         end
                     end
                     if !isa(resp[1], Exception)
-                        print_with_color(:white, rpad(test*" ($wrkr)", name_align, " "), " | ")
+                        print_with_color(:white, rpad(test++" ($wrkr)", name_align, " "), " | ")
                         time_str = @sprintf("%7.2f",resp[2])
                         print_with_color(:white, rpad(time_str,elapsed_align," "), " | ")
                         gc_str = @sprintf("%5.2f",resp[5].total_time/10^9)

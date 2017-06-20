@@ -144,15 +144,15 @@ f2 = "1996 1 1"
 j = "1996-01-15"
 f = "yyyy-mm-dd zzz"
 @test Dates.DateTime(j, f) == dt
-@test Dates.format(dt, f) == j * " zzz"
+@test Dates.format(dt, f) == j ++ " zzz"
 k = "1996-01-15 10:00:00"
 f = "yyyy-mm-dd HH:MM:SS zzz"
 @test Dates.DateTime(k, f) == dt + Dates.Hour(10)
-@test Dates.format(dt + Dates.Hour(10), f) == k * " zzz"
+@test Dates.format(dt + Dates.Hour(10), f) == k ++ " zzz"
 l = "1996-01-15 10:10:10.25"
 f = "yyyy-mm-dd HH:MM:SS.ss zzz"
 @test Dates.DateTime(l, f) == dt + Dates.Hour(10) + Dates.Minute(10) + Dates.Second(10) + Dates.Millisecond(250)
-@test Dates.format(dt + Dates.Hour(10) + Dates.Minute(10) + Dates.Second(10) + Dates.Millisecond(250), f) == l * " zzz"
+@test Dates.format(dt + Dates.Hour(10) + Dates.Minute(10) + Dates.Second(10) + Dates.Millisecond(250), f) == l ++ " zzz"
 
 r = "1/15/1996" # Excel
 f = "m/dd/yyyy"
@@ -169,7 +169,7 @@ f = "yyyy-mm-dd HH:MM:SS"
 w = "1996-01-15T10:00:00"
 f = "yyyy-mm-ddTHH:MM:SS zzz"
 @test Dates.DateTime(w, f) == dt + Dates.Hour(10)
-@test Dates.format(dt + Dates.Hour(10), f) == w * " zzz"
+@test Dates.format(dt + Dates.Hour(10), f) == w ++ " zzz"
 
 f = "yyyy/m"
 y = "1996/1"
@@ -443,7 +443,7 @@ end
     @test_throws InexactError Dates.parse_components(".1234", Dates.DateFormat(".s"))
 
     # Ensure that no overflow occurs when using Int32 literals: Int32(10)^10
-    @test Dates.parse_components("." * rpad(999, 10, '0'), Dates.DateFormat(".s")) == [Dates.Millisecond(999)]
+    @test Dates.parse_components("." ++ rpad(999, 10, '0'), Dates.DateFormat(".s")) == [Dates.Millisecond(999)]
 end
 
 # Time Parsing

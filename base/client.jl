@@ -219,7 +219,7 @@ parse_input_line(s::AbstractString) = parse_input_line(String(s))
 function parse_input_line(io::IO)
     s = ""
     while !eof(io)
-        s *= readline(io, chomp=false)
+        s = s ++ readline(io, chomp=false)
         e = parse_input_line(s)
         if !(isa(e,Expr) && e.head === :incomplete)
             return e

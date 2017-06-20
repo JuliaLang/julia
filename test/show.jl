@@ -289,7 +289,7 @@ end"
 
 # issue #9474
 for s in ("(1::Int64 == 1::Int64)::Bool", "(1:2:3) + 4", "x = 1:2:3")
-    @test sprint(show, parse(s)) == ":("*s*")"
+    @test sprint(show, parse(s)) == ":("++s++")"
 end
 
 # parametric type instantiation printing

@@ -240,7 +240,7 @@ mutable struct Sparse{Tv<:VTypes} <: AbstractSparseMatrix{Tv,SuiteSparse_long}
     p::Ptr{C_Sparse{Tv}}
     function Sparse{Tv}(p::Ptr{C_Sparse{Tv}}) where Tv<:VTypes
         if p == C_NULL
-            throw(ArgumentError("sparse matrix construction failed for " *
+            throw(ArgumentError("sparse matrix construction failed for " ++
                 "unknown reasons. Please submit a bug report."))
         end
         new(p)
@@ -319,7 +319,7 @@ mutable struct Factor{Tv} <: Factorization{Tv}
     p::Ptr{C_Factor{Tv}}
     function Factor{Tv}(p::Ptr{C_Factor{Tv}}) where Tv
         if p == C_NULL
-            throw(ArgumentError("factorization construction failed for " *
+            throw(ArgumentError("factorization construction failed for " ++
                 "unknown reasons. Please submit a bug report."))
         end
         new(p)
@@ -333,7 +333,7 @@ Factor(p::Ptr{C_Factor{Tv}}) where {Tv<:VTypes} = Factor{Tv}(p)
 # when serialized so this can happen when mutiple processes are in use.
 function get(p::Ptr{T}) where T<:SuiteSparseStruct
     if p == C_NULL
-        throw(ArgumentError("pointer to the $T object is null. This can " *
+        throw(ArgumentError("pointer to the $T object is null. This can " ++
             "happen if the object has been serialized."))
     else
         return p
@@ -687,16 +687,16 @@ function scale!(S::Dense{Tv}, scale::Integer, A::Sparse{Tv}) where Tv<:VRealType
     if scale == SCALAR && sS.nrow != 1
         throw(DimensionMismatch("scaling argument must have length one"))
     elseif scale == ROW && sS.nrow*sS.ncol != sA.nrow
-        throw(DimensionMismatch("scaling vector has length $(sS.nrow*sS.ncol), " *
+        throw(DimensionMismatch("scaling vector has length $(sS.nrow*sS.ncol), " ++
             "but matrix has $(sA.nrow) rows."))
     elseif scale == COL && sS.nrow*sS.ncol != sA.ncol
-        throw(DimensionMismatch("scaling vector has length $(sS.nrow*sS.ncol), " *
+        throw(DimensionMismatch("scaling vector has length $(sS.nrow*sS.ncol), " ++
             "but matrix has $(sA.ncol) columns"))
     elseif scale == SYM
         if sA.nrow != sA.ncol
             throw(DimensionMismatch("matrix must be square"))
         elseif sS.nrow*sS.ncol != sA.nrow
-            throw(DimensionMismatch("scaling vector has length $(sS.nrow*sS.ncol), " *
+            throw(DimensionMismatch("scaling vector has length $(sS.nrow*sS.ncol), " ++
                 "but matrix has $(sA.ncol) columns and rows"))
         end
     end
@@ -786,7 +786,7 @@ end
 
 function solve(sys::Integer, F::Factor{Tv}, B::Dense{Tv}) where Tv<:VTypes
     if size(F,1) != size(B,1)
-        throw(DimensionMismatch("LHS and RHS should have the same number of rows. " *
+        throw(DimensionMismatch("LHS and RHS should have the same number of rows. " ++
             "LHS has $(size(F,1)) rows, but RHS has $(size(B,1)) rows."))
     end
     d = Dense(ccall((@cholmod_name("solve", SuiteSparse_long),:libcholmod), Ptr{C_Dense{Tv}},
@@ -798,7 +798,7 @@ end
 
 function spsolve(sys::Integer, F::Factor{Tv}, B::Sparse{Tv}) where Tv<:VTypes
     if size(F,1) != size(B,1)
-        throw(DimensionMismatch("LHS and RHS should have the same number of rows. " *
+        throw(DimensionMismatch("LHS and RHS should have the same number of rows. " ++
             "LHS has $(size(F,1)) rows, but RHS has $(size(B,1)) rows."))
     end
     s = Sparse(ccall((@cholmod_name("spsolve", SuiteSparse_long),:libcholmod),
@@ -970,7 +970,7 @@ end
 # Useful when reading in files, but not type stable
 function convert(::Type{Sparse}, p::Ptr{C_SparseVoid})
     if p == C_NULL
-        throw(ArgumentError("sparse matrix construction failed for " *
+        throw(ArgumentError("sparse matrix construction failed for " ++
             "unknown reasons. Please submit a bug report."))
     end
 
@@ -979,11 +979,11 @@ function convert(::Type{Sparse}, p::Ptr{C_SparseVoid})
     # Check integer type
     if s.itype == INT
         free_sparse!(p)
-        throw(CHOLMODException("the value of itype was $s.itype. " *
+        throw(CHOLMODException("the value of itype was $s.itype. " ++
             "Only integer type of $SuiteSparse_long is supported."))
     elseif s.itype == INTLONG
         free_sparse!(p)
-        throw(CHOLMODException("the value of itype was $s.itype. This combination " *
+        throw(CHOLMODException("the value of itype was $s.itype. This combination " ++
             "of integer types shouldn't happen. Please submit a bug report."))
     elseif s.itype != LONG # must be s.itype == LONG
         free_sparse!(p)
@@ -1062,7 +1062,7 @@ convert(::Type{Vector}, D::Dense{T}) where {T} = convert(Vector{T}, D)
 function convert(::Type{SparseMatrixCSC{Tv,SuiteSparse_long}}, A::Sparse{Tv}) where Tv
     s = unsafe_load(A.p)
     if s.stype != 0
-        throw(ArgumentError("matrix has stype != 0. Convert to matrix " *
+        throw(ArgumentError("matrix has stype != 0. Convert to matrix " ++
             "with stype == 0 before converting to SparseMatrixCSC"))
     end
 

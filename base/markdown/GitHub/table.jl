@@ -91,15 +91,15 @@ function padcells!(rows, align; len = length, min = 0)
     for i = 1:length(rows), j = indices(rows[1],1)
         cell = rows[i][j]
         lpad, rpad = padding(len(cell), widths[j], align[j])
-        rows[i][j] = " "^lpad * cell * " "^rpad
+        rows[i][j] = repeat(" ",lpad) ++ cell ++ repeat(" ",rpad)
     end
     return rows
 end
 
 _dash(width, align) =
-    align == :l ? ":" * "-"^width * " " :
-    align == :r ? " " * "-"^width * ":" :
-    align == :c ? ":" * "-"^width * ":" :
+    align == :l ? ":" ++ repeat("-",width) ++ " " :
+    align == :r ? " " ++ repeat("-",width) ++ ":" :
+    align == :c ? ":" ++ repeat("-",width) ++ ":" :
     throw(ArgumentError("Invalid alignment $align"))
 
 function plain(io::IO, md::Table)

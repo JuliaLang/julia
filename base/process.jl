@@ -206,10 +206,10 @@ end
 byteenv(env::AbstractArray{<:AbstractString}) =
     String[cstr(x) for x in env]
 byteenv(env::Associative) =
-    String[cstr(string(k)*"="*string(v)) for (k,v) in env]
+    String[cstr(string(k)++"="++string(v)) for (k,v) in env]
 byteenv(env::Void) = nothing
 byteenv(env::Union{AbstractVector{Pair{T}}, Tuple{Vararg{Pair{T}}}}) where {T<:AbstractString} =
-    String[cstr(k*"="*string(v)) for (k,v) in env]
+    String[cstr(k++"="++string(v)) for (k,v) in env]
 
 """
     setenv(command::Cmd, env; dir="")
@@ -774,9 +774,9 @@ process_signaled(s::Process) = (s.termsignal > 0)
 
 function process_status(s::Process)
     process_running(s) ? "ProcessRunning" :
-    process_signaled(s) ? "ProcessSignaled("*string(s.termsignal)*")" :
-    #process_stopped(s) ? "ProcessStopped("*string(process_stop_signal(s))*")" :
-    process_exited(s) ? "ProcessExited("*string(s.exitcode)*")" :
+    process_signaled(s) ? "ProcessSignaled("*string(s.termsignal)++")" :
+    #process_stopped(s) ? "ProcessStopped("*string(process_stop_signal(s))++")" :
+    process_exited(s) ? "ProcessExited("*string(s.exitcode)++")" :
     error("process status error")
 end
 

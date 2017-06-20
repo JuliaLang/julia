@@ -387,7 +387,7 @@ _rshps(shp, shp_i, sz, ::Tuple{}, o) =
     (n = length(shp); N = n + length(sz); _reperr("inner", n, N))
 _rshps(shp, shp_i, sz, i, ::Tuple{}) =
     (n = length(shp); N = n + length(sz); _reperr("outer", n, N))
-_reperr(s, n, N) = throw(ArgumentError("number of " * s * " repetitions " *
+_reperr(s, n, N) = throw(ArgumentError("number of " ++ s ++ " repetitions " ++
     "($n) cannot be less than number of dimensions of input ($N)"))
 
 @propagate_inbounds function _repeat(A::AbstractArray, inner, outer)

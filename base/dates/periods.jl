@@ -10,7 +10,7 @@ for period in (:Year, :Month, :Week, :Day, :Hour, :Minute, :Second, :Millisecond
     period_str = string(period)
     accessor_str = lowercase(period_str)
     # Convenience method for show()
-    @eval _units(x::$period) = " " * $accessor_str * (abs(value(x)) == 1 ? "" : "s")
+    @eval _units(x::$period) = " " ++ $accessor_str ++ (abs(value(x)) == 1 ? "" : "s")
     # periodisless
     @eval periodisless(x::$period, y::$period) = value(x) < value(y)
     # AbstractString parsing (mainly for IO code)
@@ -334,7 +334,7 @@ function Base.string(x::CompoundPeriod)
     else
         s = ""
         for p in x.periods
-            s *= ", " * string(p)
+            s *= ", " ++ string(p)
         end
         return s[3:end]
     end

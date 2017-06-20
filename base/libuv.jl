@@ -66,7 +66,7 @@ uverrorname(err::UVError) = uverrorname(err.code)
 
 uv_error(prefix::Symbol, c::Integer) = uv_error(string(prefix),c)
 uv_error(prefix::AbstractString, c::Integer) = c < 0 ? throw(UVError(prefix,c)) : nothing
-show(io::IO, e::UVError) = print(io, e.prefix*": "*struverror(e)*" ("*uverrorname(e)*")")
+show(io::IO, e::UVError) = print(io, e.prefix,": ",struverror(e)," (",uverrorname(e),")")
 
 ## event loop ##
 

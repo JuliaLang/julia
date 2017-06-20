@@ -308,8 +308,8 @@ end
 @test base(12,typemin(UInt128)) == "0"
 @test base(12,typemax(UInt128)) == "5916b64b41143526a777873841863a6a6993"
 
-@test bin(typemin(Int8)) == "-1"*"0"^7
-@test bin(typemax(Int8)) == "1"^7
+@test bin(typemin(Int8)) == "-1"++repeat("0",7)
+@test bin(typemax(Int8)) == repeat("1",7)
 @test oct(typemin(Int8)) == "-200"
 @test oct(typemax(Int8)) == "177"
 @test dec(typemin(Int8)) == "-128"
@@ -323,8 +323,8 @@ end
 @test base(12,typemin(Int8)) == "-a8"
 @test base(12,typemax(Int8)) == "a7"
 
-@test bin(typemin(Int16)) == "-1"*"0"^15
-@test bin(typemax(Int16)) == "1"^15
+@test bin(typemin(Int16)) == "-1"++repeat("0",15)
+@test bin(typemax(Int16)) == repeat("1",15)
 @test oct(typemin(Int16)) == "-100000"
 @test oct(typemax(Int16)) == "77777"
 @test dec(typemin(Int16)) == "-32768"
@@ -338,7 +338,7 @@ end
 @test base(12,typemin(Int16)) == "-16b68"
 @test base(12,typemax(Int16)) == "16b67"
 
-@test bin(typemin(Int32)) == "-1"*"0"^31
+@test bin(typemin(Int32)) == "-1"++repeat("0",31)
 @test bin(typemax(Int32)) == "1"^31
 @test oct(typemin(Int32)) == "-20000000000"
 @test oct(typemax(Int32)) == "17777777777"
@@ -353,8 +353,8 @@ end
 @test base(12,typemin(Int32)) == "-4bb2308a8"
 @test base(12,typemax(Int32)) == "4bb2308a7"
 
-@test bin(typemin(Int64)) == "-1"*"0"^63
-@test bin(typemax(Int64)) == "1"^63
+@test bin(typemin(Int64)) == "-1"++repeat("0",63)
+@test bin(typemax(Int64)) == repeat("1",63)
 @test oct(typemin(Int64)) == "-1000000000000000000000"
 @test oct(typemax(Int64)) == "777777777777777777777"
 @test dec(typemin(Int64)) == "-9223372036854775808"
@@ -368,8 +368,8 @@ end
 @test base(12,typemin(Int64)) == "-41a792678515120368"
 @test base(12,typemax(Int64)) == "41a792678515120367"
 
-@test bin(typemin(Int128)) == "-1"*"0"^127
-@test bin(typemax(Int128)) == "1"^127
+@test bin(typemin(Int128)) == "-1"++repeat("0",127)
+@test bin(typemax(Int128)) == repeat("1",127)
 @test oct(typemin(Int128)) == "-2000000000000000000000000000000000000000000"
 @test oct(typemax(Int128)) == "1777777777777777777777777777777777777777777"
 @test hex(typemin(Int128)) == "-80000000000000000000000000000000"

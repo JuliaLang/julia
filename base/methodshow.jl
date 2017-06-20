@@ -34,7 +34,7 @@ function argtype_decl(env, n, sig::DataType, i::Int, nargs, isva::Bool) # -> (ar
             if tt === Any || (isa(tt, TypeVar) && (tt === v1 || tt === v2))
                 return string(s, "..."), ""
             else
-                return s, string_with_env(env, tt) * "..."
+                return s, string_with_env(env, tt) ++ "..."
             end
         end
         return s, string_with_env(env, "Vararg{", tt, ",", tn, "}")
@@ -118,7 +118,7 @@ function show(io::IO, m::Method; kwtype::Nullable{DataType}=Nullable{DataType}()
         print(io, "(", d1[1], "::", d1[2], ")")
     end
     print(io, "(")
-    join(io, [isempty(d[2]) ? d[1] : d[1]*"::"*d[2] for d in decls[2:end]],
+    join(io, [isempty(d[2]) ? d[1] : d[1]++"::"++d[2] for d in decls[2:end]],
                  ", ", ", ")
     if !isnull(kwtype)
         kwargs = kwarg_decl(m, get(kwtype))
@@ -185,7 +185,7 @@ function inbase(m::Module)
         parent === m ? false : inbase(parent)
     end
 end
-fileurl(file) = let f = find_source_file(file); f === nothing ? "" : "file://"*f; end
+fileurl(file) = let f = find_source_file(file); f === nothing ? "" : "file://"++f; end
 
 function url(m::Method)
     M = m.module
@@ -211,7 +211,7 @@ function url(m::Method)
                     commit = string(LibGit2.head_oid(repo))
                     root = LibGit2.path(repo)
                     if startswith(file, root) || startswith(realpath(file), root)
-                        "https://github.com/$u/tree/$commit/"*file[length(root)+1:end]*"#L$line"
+                        "https://github.com/$u/tree/$commit/"++file[length(root)+1:end]++"#L$line"
                     else
                         fileurl(file)
                     end
@@ -248,7 +248,7 @@ function show(io::IO, ::MIME"text/html", m::Method; kwtype::Nullable{DataType}=N
         print(io,"</i>")
     end
     print(io, "(")
-    join(io, [isempty(d[2]) ? d[1] : d[1]*"::<b>"*d[2]*"</b>"
+    join(io, [isempty(d[2]) ? d[1] : d[1]++"::<b>"++d[2]++"</b>"
                       for d in decls[2:end]], ", ", ", ")
     if !isnull(kwtype)
         kwargs = kwarg_decl(m, get(kwtype))

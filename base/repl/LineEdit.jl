@@ -693,7 +693,7 @@ function add_nested_key!(keymap::Dict, key, value; override = false)
                 break
             else
                 if !isa(keymap[c], Dict)
-                    error("Conflicting definitions for keyseq " * escape_string(key) * " within one keymap")
+                    error("Conflicting definitions for keyseq ", escape_string(key), " within one keymap")
                 end
             end
         elseif done(key, i)
@@ -868,7 +868,7 @@ function keymap_merge(target,source)
         while isa(value, Union{Char,AbstractString})
             value = normalize_key(value)
             if value in visited
-                error("Eager redirection cycle detected for key " * escape_string(key))
+                error("Eager redirection cycle detected for key ", escape_string(key))
             end
             push!(visited,value)
             if !haskey(source,value)
@@ -880,7 +880,7 @@ function keymap_merge(target,source)
         if isa(value, Union{Char,AbstractString})
             value = getEntry(ret, value)
             if value === nothing
-                error("Could not find redirected value " * escape_string(source[key]))
+                error("Could not find redirected value ", escape_string(source[key]))
             end
         end
         add_nested_key!(ret, key, value; override = true)
@@ -1321,7 +1321,7 @@ function bracketed_paste(s)
         indent = Base.indentation(input; tabwidth=tabwidth)[1]
         input = Base.unindent(input, indent; tabwidth=tabwidth)
     end
-    return replace(input, '\t', " "^tabwidth)
+    return replace(input, '\t', repeat(" ",tabwidth))
 end
 
 const default_keymap =
@@ -1341,7 +1341,7 @@ AnyDict(
                # after a space, e.g., `cd <tab>`, while still
                # allowing multiple indent levels
                (c == UInt8(' ') && i > 3 && buf.data[i-1] == UInt8(' '))
-                edit_insert(s, " "^4)
+                edit_insert(s, repeat(" ",4))
                 return
             end
         end

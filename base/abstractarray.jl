@@ -1299,6 +1299,19 @@ julia> hcat(c...)
 """
 hcat(X...) = cat(Val{2}, X...)
 
+"""
+    ++(X...)
+
+`++` is a generic concatenation operator.  By default, it
+calls [`vcat`](@ref), concatenating arrays and elements thereof.
+For strings and characters, it performs string concatenation.
+Similarly, for other types it may perform an appropriate concatenation
+operation.
+"""
+++(X...) = concat(concat_typeof(X...), X...)
+concat(::Type{<:Any}, X...) = vcat(X...) # default
+concat_rule(::Type{<:AbstractArray}, S) = (@_inline_meta; Array) # arrays should concatenate to arrays
+
 typed_vcat(T::Type, X...) = cat_t(Val{1}, T, X...)
 typed_hcat(T::Type, X...) = cat_t(Val{2}, T, X...)
 

@@ -42,7 +42,7 @@ function rst(io::IO, list::List)
         print(io, bullet)
         lines = split(rstrip(sprint(rst, item)), '\n')
         for (n, line) in enumerate(lines)
-            print(io, (n == 1 || isempty(line)) ? "" : " "^length(bullet), line)
+            print(io, (n == 1 || isempty(line)) ? "" : repeat(" ",length(bullet)), line)
             n < length(lines) && println(io)
         end
         println(io)

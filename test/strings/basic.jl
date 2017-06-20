@@ -409,13 +409,9 @@ foobaz(ch) = reinterpret(Char, typemax(UInt32))
 @test map(foobar, GenericString(str)) == String(repeat(b"\ud800", outer=[17]))
 @test map(foobaz, GenericString(str)) == String(repeat(b"\ufffd", outer=[17]))
 
-@test "a".*["b","c"] == ["ab","ac"]
-@test ["b","c"].*"a" == ["ba","ca"]
-@test ["a","b"].*["c" "d"] == ["ac" "ad"; "bc" "bd"]
-
-@test one(String) == ""
-@test prod(["*" for i in 1:3]) == "***"
-@test prod(["*" for i in 1:0]) == ""
+@test "a".++["b","c"] == ["ab","ac"]
+@test ["b","c"].++"a" == ["ba","ca"]
+@test ["a","b"].++["c" "d"] == ["ac" "ad"; "bc" "bd"]
 
 # Make sure NULL pointers are handled consistently by String
 @test_throws ArgumentError unsafe_string(Ptr{UInt8}(0))
