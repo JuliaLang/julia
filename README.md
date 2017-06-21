@@ -213,7 +213,7 @@ On RHEL/CentOS 6 systems, the default compiler (`gcc` 4.4) is too old to build J
 
 Install or contact your systems administrator to install a more recent version of `gcc`. The [Scientific Linux Developer Toolset](http://linux.web.cern.ch/linux/devtoolset/) works well.
 
-You may find newer devtoolsets in `/opt/rh`, you can use these toolsets by executing `source /opt/rh/devtoolset-6/enable`. RHEL/CentOS also seems to seperate out `libstdc++` into two files. When linking, if you're having issues not finding `...@CXXABI` symbols, try adding `LDFLAGS=-lstdc++` to your `Make.user` to ensure you're getting the complete `libstdc++`.
+You may find newer devtoolsets in `/opt/rh`, which you can use by executing `source /opt/rh/devtoolset-6/enable`. Unlike the default system compler, the devtoolsets also seems to seperate out `libstdc++` into two files. When linking, if you're having issues not finding `...@CXXABI` symbols, try adding `LDFLAGS=-lstdc++` to your `Make.user` to ensure you're getting the complete `libstdc++`.
 
 #### Linux Build Troubleshooting
 
