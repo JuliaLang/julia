@@ -148,6 +148,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level)
 #if JL_LLVM_VERSION < 50000
     PM->add(createLowerExcHandlersPass());
     PM->add(createLateLowerGCFramePass());
+    PM->add(createDeadCodeEliminationPass());
     PM->add(createLowerPTLSPass(imaging_mode));
 #endif
 
@@ -240,6 +241,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level)
     PM->add(createLowerExcHandlersPass());
     PM->add(createGCInvariantVerifierPass(false));
     PM->add(createLateLowerGCFramePass());
+    PM->add(createDeadCodeEliminationPass());
     PM->add(createLowerPTLSPass(imaging_mode));
 #endif
 }
