@@ -375,6 +375,21 @@ Matches the [`git_merge_options`](https://libgit2.github.com/libgit2/#HEAD/type/
 end
 
 """
+    LibGit2.BlameOptions
+
+Matches the [`git_blame_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_blame_options) struct.
+"""
+@kwdef struct BlameOptions
+    version::Cuint                    = 1
+    flags::UInt32                     = 0
+    min_match_characters::UInt16      = 20
+    newest_commit::GitHash
+    oldest_commit::GitHash
+    min_line::Csize_t                 = 1
+    max_line::Csize_t                 = 0
+end
+
+"""
     LibGit2.PushOptions
 
 Matches the [`git_push_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_push_options) struct.
@@ -549,6 +564,7 @@ for (typ, owntyp, sup, cname) in [
     (:GitDiffStats,      :GitRepo,              :AbstractGitObject, :git_diff_stats),
     (:GitAnnotated,      :GitRepo,              :AbstractGitObject, :git_annotated_commit),
     (:GitRebase,         :GitRepo,              :AbstractGitObject, :git_rebase),
+    (:GitBlame,          :GitRepo,              :AbstractGitObject, :git_blame),
     (:GitStatus,         :GitRepo,              :AbstractGitObject, :git_status_list),
     (:GitBranchIter,     :GitRepo,              :AbstractGitObject, :git_branch_iterator),
     (:GitConfigIter,     nothing,               :AbstractGitObject, :git_config_iterator),
@@ -644,6 +660,41 @@ mutable struct Signature
     time::Int64
     time_offset::Cint
 end
+
+"""
+    LibGit2.BlameHunk
+
+Matches the [`git_blame_hunk`](https://libgit2.github.com/libgit2/#HEAD/type/git_blame_hunk) struct.
+The fields represent:
+    * `lines_in_hunk`: the number of lines in this hunk of the blame
+    * `final_commit_id`: the OID of the commit where this section was last changed
+    * `final_start_line_number`: the *one based* line number in the file where the
+       hunk starts, in the *final* version of the file
+    * `final_signature`: the [`GitSignature`] of the person who last modified this hunk
+    * `orig_commit_id`: the OID of the commit where this hunk was first found
+    * `orig_path`: the path to the file where the hunk originated. This may be different
+       than the current/final path, for instance if the file has been moved.
+    * `orig_start_line_number`: the *one based* line number in the file where the
+       hunk starts, in the *original* version of the file at `orig_path`
+    * `orig_signature`: the [`GitSignature`] of the person who introduced this hunk
+    * `boundary`: `1` if the original commit is a "boundary" commit (for instance, if it's
+       equal to an oldest commit set in `options`).
+"""
+@kwdef struct BlameHunk
+    lines_in_hunk::Csize_t
+
+    final_commit_id::GitHash
+    final_start_line_number::Csize_t
+    final_signature::Ptr{SignatureStruct}
+
+    orig_commit_id::GitHash
+    orig_path::Cstring
+    orig_start_line_number::Csize_t
+    orig_signature::Ptr{SignatureStruct}
+
+    boundary::Char
+end
+
 
 """ Resource management helper function
 """
