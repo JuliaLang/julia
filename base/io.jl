@@ -368,28 +368,15 @@ end
 
 @noinline unsafe_read(s::IO, p::Ref{T}, n::Integer) where {T} = unsafe_read(s, unsafe_convert(Ref{T}, p)::Ptr, n) # mark noinline to ensure ref is gc-rooted somewhere (by the caller)
 unsafe_read(s::IO, p::Ptr, n::Integer) = unsafe_read(s, convert(Ptr{UInt8}, p), convert(UInt, n))
-read(s::IO, x::Ref{T}) where {T} = (unsafe_read(s, x, Core.sizeof(T)); x)
+read!(s::IO, x::Ref{T}) where {T} = (unsafe_read(s, x, Core.sizeof(T)); x)
 
 read(s::IO, ::Type{Int8}) = reinterpret(Int8, read(s, UInt8))
 function read(s::IO, T::Union{Type{Int16},Type{UInt16},Type{Int32},Type{UInt32},Type{Int64},Type{UInt64},Type{Int128},Type{UInt128},Type{Float16},Type{Float32},Type{Float64}})
-    return read(s, Ref{T}(0))[]::T
+    return read!(s, Ref{T}(0))[]::T
 end
 
 read(s::IO, ::Type{Bool}) = (read(s, UInt8) != 0)
 read(s::IO, ::Type{Ptr{T}}) where {T} = convert(Ptr{T}, read(s, UInt))
-
-read(s::IO, t::Type{T}, d1::Int, dims::Int...) where {T} = read(s, t, tuple(d1,dims...))
-read(s::IO, t::Type{T}, d1::Integer, dims::Integer...) where {T} =
-    read(s, t, convert(Tuple{Vararg{Int}},tuple(d1,dims...)))
-
-"""
-    read(stream::IO, T, dims)
-
-Read a series of values of type `T` from `stream`, in canonical binary representation.
-`dims` is either a tuple or a series of integer arguments specifying the size of the `Array{T}`
-to return.
-"""
-read(s::IO, ::Type{T}, dims::Dims) where {T} = read!(s, Array{T}(dims))
 
 @noinline function read!(s::IO, a::Array{UInt8}) # mark noinline to ensure the array is gc-rooted somewhere (by the caller)
     unsafe_read(s, pointer(a), sizeof(a))
@@ -530,7 +517,7 @@ end
 
 Read at most `nb` bytes from `s`, returning a `Vector{UInt8}` of the bytes read.
 """
-function read(s::IO, nb=typemax(Int))
+function read(s::IO, nb::Integer = typemax(Int))
     # Let readbytes! grow the array progressively by default
     # instead of taking of risk of over-allocating
     b = Vector{UInt8}(nb == typemax(Int) ? 1024 : nb)

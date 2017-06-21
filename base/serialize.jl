@@ -865,7 +865,7 @@ function deserialize_array(s::AbstractSerializer)
                 end
             end
         else
-            A = read(s.io, elty, dims)
+            A = read!(s.io, Array{elty}(dims))
         end
         s.table[slot] = A
         return A

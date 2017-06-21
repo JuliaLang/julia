@@ -139,6 +139,10 @@ Deprecated or removed
   * The method `replace(s::AbstractString, pat, r, count)` with `count <= 0` is deprecated
     in favor of `replace(s::AbstractString, pat, r, typemax(Int))` ([#22325]).
 
+  * `read(io, type, dims)` is deprecated to `read!(io, Array{type}(dims))` ([#21450]).
+
+  * `read(::IO, ::Ref)` is now a method of `read!`, since it mutates its `Ref` argument ([#21592]).
+
 
 Julia v0.6.0 Release Notes
 ==========================
