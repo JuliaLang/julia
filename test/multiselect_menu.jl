@@ -13,4 +13,4 @@
 
 multi_menu = MultiSelectMenu(string.(1:20))
 @test TerminalMenus.options(multi_menu) == string.(1:20)
-@test header(multi_menu) == "[press: d=done, a=all, n=none]"
+@test TerminalMenus.header(multi_menu) == "[press: d=done, a=all, n=none]"
