@@ -297,7 +297,7 @@ end
 Recursively peel the object in `repo` specified by `spec` until an object of type `T` is
 found.
 """
-function peel{T<:GitObject}(::Type{T}, repo::GitRepo, spec::Union{AbstractGitHash, AbstractString})
+function peel(::Type{T}, repo::GitRepo, spec::Union{AbstractGitHash, AbstractString}) where T<:GitObject
     with(GitUnknownObject, repo, spec) do unkobj
         peel(T,unkobj)
     end
