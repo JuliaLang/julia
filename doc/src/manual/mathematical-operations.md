@@ -366,7 +366,7 @@ You can also find the numerical precedence for any given operator via the built-
 
 ```jldoctest
 julia> Base.operator_precedence(:+), Base.operator_precedence(:*), Base.operator_precedence(:.)
-(9, 11, 15)
+(10, 12, 16)
 
 julia> Base.operator_precedence(:+=), Base.operator_precedence(:(=))  # (Note the necessary parens on `:(=)`)
 (1, 1)

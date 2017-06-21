@@ -179,20 +179,21 @@ function parse_inline_wrapper(stream::IO, delimiter::AbstractString; rep = false
             (read(stream, Char) in delimiter) && return nothing
         end
         n = nmin
-        startswith(stream, delimiter^n) || return nothing
+        startswith(stream, repeat(delimiter,n)) || return nothing
         while startswith(stream, delimiter); n += 1; end
         !rep && n > nmin && return nothing
         !eof(stream) && Char(peek(stream)) in whitespace && return nothing
 
         buffer = IOBuffer()
+        delimitern = repeat(delimiter,n)
         while !eof(stream)
             char = read(stream, Char)
             write(buffer, char)
-            if !(char in whitespace || char == '\n' || char in delimiter) && startswith(stream, delimiter^n)
+            if !(char in whitespace || char == '\n' || char in delimiter) && startswith(stream, delimitern)
                 trailing = 0
                 while startswith(stream, delimiter); trailing += 1; end
                 trailing == 0 && return String(take!(buffer))
-                write(buffer, delimiter ^ (n + trailing))
+                write(buffer, repeat(delimiter, n + trailing))
             end
         end
     end

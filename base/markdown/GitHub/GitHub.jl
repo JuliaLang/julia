@@ -16,9 +16,10 @@ function fencedcode(stream::IO, block::MD)
         ch in flavor && return false
 
         buffer = IOBuffer()
+        chn = repeat(string(ch),n)
         while !eof(stream)
             line_start = position(stream)
-            if startswith(stream, string(ch) ^ n)
+            if startswith(stream, chn)
                 if !startswith(stream, string(ch))
                     if flavor == "math"
                         push!(block, LaTeX(String(take!(buffer)) |> chomp))
@@ -63,4 +64,3 @@ end
 
                 linebreak, escapes, en_dash, inline_code, asterisk_bold,
                 asterisk_italic, image, footnote_link, link, autolink]
-

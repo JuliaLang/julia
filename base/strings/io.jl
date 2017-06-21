@@ -112,6 +112,9 @@ string_with_env(env, xs...) = print_to_string(xs...; env=env)
 
 Create a string from any values using the [`print`](@ref) function.
 
+The [`++`](@ref) concatenation operator is equivalent to a call to `string`
+when applied to one or more string arguments.
+
 ```jldoctest
 julia> string("a", 1, true)
 "a1true"

@@ -334,7 +334,7 @@ function Base.string(x::CompoundPeriod)
     else
         s = ""
         for p in x.periods
-            s *= ", " ++ string(p)
+            s = string(s, ", ", p)
         end
         return s[3:end]
     end
