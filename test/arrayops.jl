@@ -16,31 +16,31 @@ using TestHelpers.OAs
     @test length((1,)) == 1
     @test length((1,2)) == 2
 
-    @test isequal(1.+[1,2,3], [2,3,4])
-    @test isequal([1,2,3].+1, [2,3,4])
-    @test isequal(1.-[1,2,3], [0,-1,-2])
-    @test isequal([1,2,3].-1, [0,1,2])
+    @test isequal(1 .+ [1,2,3], [2,3,4])
+    @test isequal([1,2,3] .+ 1, [2,3,4])
+    @test isequal(1 .- [1,2,3], [0,-1,-2])
+    @test isequal([1,2,3] .- 1, [0,1,2])
 
     @test isequal(5*[1,2,3], [5,10,15])
     @test isequal([1,2,3]*5, [5,10,15])
-    @test isequal(1./[1,2,5], [1.0,0.5,0.2])
+    @test isequal(1 ./ [1,2,5], [1.0,0.5,0.2])
     @test isequal([1,2,3]/5, [0.2,0.4,0.6])
 
-    @test isequal(2.%[1,2,3], [0,0,2])
-    @test isequal([1,2,3].%2, [1,0,1])
-    @test isequal(2.÷[1,2,3], [2,1,0])
-    @test isequal([1,2,3].÷2, [0,1,1])
-    @test isequal(-2.%[1,2,3], [0,0,-2])
+    @test isequal(2 .% [1,2,3], [0,0,2])
+    @test isequal([1,2,3] .% 2, [1,0,1])
+    @test isequal(2 .÷ [1,2,3], [2,1,0])
+    @test isequal([1,2,3] .÷ 2, [0,1,1])
+    @test isequal(-2 .% [1,2,3], [0,0,-2])
     @test isequal([-1,-2,-3].%2, [-1,0,-1])
-    @test isequal(-2.÷[1,2,3], [-2,-1,0])
-    @test isequal([-1,-2,-3].÷2, [0,-1,-1])
+    @test isequal(-2 .÷ [1,2,3], [-2,-1,0])
+    @test isequal([-1,-2,-3] .÷ 2, [0,-1,-1])
 
-    @test isequal(1.<<[1,2,5], [2,4,32])
-    @test isequal(128.>>[1,2,5], [64,32,4])
-    @test isequal(2.>>1, 1)
-    @test isequal(1.<<1, 2)
-    @test isequal([1,2,5].<<[1,2,5], [2,8,160])
-    @test isequal([10,20,50].>>[1,2,5], [5,5,1])
+    @test isequal(1 .<< [1,2,5], [2,4,32])
+    @test isequal(128 .>> [1,2,5], [64,32,4])
+    @test isequal(2 .>> 1, 1)
+    @test isequal(1 .<< 1, 2)
+    @test isequal([1,2,5] .<< [1,2,5], [2,8,160])
+    @test isequal([10,20,50] .>> [1,2,5], [5,5,1])
 
 
     a = ones(2,2)
@@ -1182,8 +1182,8 @@ end
             @test [1,2] ⊙ [3,4] == 11
         end
 
-        @test_throws DomainError (10.^[-1])[1] == 0.1
-        @test (10.^[-1.])[1] == 0.1
+        @test_throws DomainError (10 .^ [-1])[1] == 0.1
+        @test (10 .^ [-1.])[1] == 0.1
     end
 end
 

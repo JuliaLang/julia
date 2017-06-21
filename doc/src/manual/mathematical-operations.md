@@ -169,6 +169,11 @@ For example, if you define `⊗(A,B) = kron(A,B)` to give a convenient
 infix syntax `A ⊗ B` for Kronecker products ([`kron`](@ref)), then
 `[A,B] .⊗ [C,D]` will compute `[A⊗C, B⊗D]` with no additional coding.
 
+Combining dot operators with numeric literals can be ambiguous.
+For example, it is not clear whether `1.+x` means `1. + x` or `1 .+ x`.
+Therefore this syntax is disallowed, and spaces must be used around
+the operator in such cases.
+
 ## Numeric Comparisons
 
 Standard comparison operations are defined for all the primitive numeric types:

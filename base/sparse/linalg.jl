@@ -611,7 +611,7 @@ function normestinv(A::SparseMatrixCSC{T}, t::Integer = min(2,maximum(size(A))))
             end
         end
     end
-    scale!(X, 1./n)
+    scale!(X, 1 ./ n)
 
     iter = 0
     local est

@@ -21,9 +21,9 @@ end
 # issue #9684
 let
     undot(op) = Symbol(string(op)[2:end])
-    for (ex1, ex2) in [("5.≠x", "5.!=x"),
-                       ("5.≥x", "5.>=x"),
-                       ("5.≤x", "5.<=x")]
+    for (ex1, ex2) in [("5 .≠ x", "5 .!= x"),
+                       ("5 .≥ x", "5 .>= x"),
+                       ("5 .≤ x", "5 .<= x")]
         ex1 = parse(ex1); ex2 = parse(ex2)
         @test ex1.head === :call && (ex1.head === ex2.head)
         @test ex1.args[2] === 5 && ex2.args[2] === 5
