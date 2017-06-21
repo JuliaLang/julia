@@ -427,8 +427,12 @@ function repeat(s::String, r::Integer)
     r < 0 && throw(ArgumentError("can't repeat a string $r times"))
     n = s.len
     out = _string_n(n*r)
-    for i=1:r
-        unsafe_copy!(pointer(out, 1+(i-1)*n), pointer(s), n)
+    if n == 1 # common case: repeating a single ASCII char
+        ccall(:memset, Ptr{Void}, (Ptr{UInt8}, Cint, Csize_t), out, unsafe_load(pointer(s)), r)
+    else
+        for i=1:r
+            unsafe_copy!(pointer(out, 1+(i-1)*n), pointer(s), n)
+        end
     end
     return out
 end
