@@ -413,7 +413,6 @@ public:
     }
 };
 
-#ifdef USE_ORCJIT
 JL_DLLEXPORT void ORCNotifyObjectEmitted(JITEventListener *Listener,
                                          const object::ObjectFile &obj,
                                          const object::ObjectFile &debugObj,
@@ -422,7 +421,6 @@ JL_DLLEXPORT void ORCNotifyObjectEmitted(JITEventListener *Listener,
 {
     ((JuliaJITEventListener*)Listener)->_NotifyObjectEmitted(obj,debugObj,L,memmgr);
 }
-#endif
 
 static std::pair<char *, bool> jl_demangle(const char *name)
 {

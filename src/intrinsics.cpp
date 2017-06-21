@@ -911,10 +911,7 @@ static Value *emit_untyped_intrinsic(intrinsic f, Value **argvalues, size_t narg
     case srem_int: return builder.CreateSRem(x, y);
     case urem_int: return builder.CreateURem(x, y);
 
-// Implements IEEE negate. Unfortunately there is no compliant way
-// to implement this in LLVM 3.4, though there are two different idioms
-// that do the correct thing on LLVM <= 3.3 and >= 3.5 respectively.
-// See issue #7868
+// Implements IEEE negate. See issue #7868
     case neg_float: return math_builder(ctx)().CreateFSub(ConstantFP::get(t, -0.0), x);
     case neg_float_fast: return math_builder(ctx, true)().CreateFNeg(x);
     case add_float: return math_builder(ctx)().CreateFAdd(x, y);

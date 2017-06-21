@@ -148,14 +148,13 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level)
 #if JL_LLVM_VERSION < 50000
     PM->add(createLowerExcHandlersPass());
     PM->add(createLateLowerGCFramePass());
+    // Remove dead use of ptls
     PM->add(createDeadCodeEliminationPass());
     PM->add(createLowerPTLSPass(imaging_mode));
 #endif
 
     PM->add(createMemCpyOptPass());
 
-    // hopefully these functions (from llvmcall) don't try to interact with the Julia runtime
-    // or have anything that might corrupt the createLowerPTLSPass pass
 #if JL_LLVM_VERSION >= 40000
     PM->add(createAlwaysInlinerLegacyPass()); // Respect always_inline
 #else
@@ -163,8 +162,6 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level)
 #endif
 
     PM->add(createInstructionCombiningPass()); // Cleanup for scalarrepl.
-    // Let the InstCombine pass remove the unnecessary load of
-    // safepoint address first
     PM->add(createSROAPass());                 // Break up aggregate allocas
     PM->add(createInstructionCombiningPass()); // Cleanup for scalarrepl.
     PM->add(createJumpThreadingPass());        // Thread jumps.
@@ -241,6 +238,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level)
     PM->add(createLowerExcHandlersPass());
     PM->add(createGCInvariantVerifierPass(false));
     PM->add(createLateLowerGCFramePass());
+    // Remove dead use of ptls
     PM->add(createDeadCodeEliminationPass());
     PM->add(createLowerPTLSPass(imaging_mode));
 #endif
@@ -831,9 +829,6 @@ void jl_init_function(Function *F)
 // and will add it to the execution engine when required (by jl_finalize_function)
 void jl_finalize_module(Module *m, bool shadow)
 {
-#if !defined(USE_ORCJIT)
-    jl_globalPM->run(*m);
-#endif
     // record the function names that are part of this Module
     // so it can be added to the JIT when needed
     for (Module::iterator I = m->begin(), E = m->end(); I != E; ++I) {

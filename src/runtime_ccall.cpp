@@ -182,12 +182,6 @@ jl_value_t *jl_get_cpu_name(void)
 extern "C" JL_DLLEXPORT
 jl_value_t *jl_get_JIT(void)
 {
-#if defined(USE_ORCJIT)
     const std::string& HostJITName = "ORCJIT";
-#elif defined(USE_MCJIT)
-    const std::string& HostJITName = "MCJIT";
-#else
-    const std::string& HostJITName = "Unknown";
-#endif
     return jl_pchar_to_string(HostJITName.data(), HostJITName.size());
 }
