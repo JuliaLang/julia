@@ -91,7 +91,7 @@ asize_from(a::Array, n) = n > ndims(a) ? () : (arraysize(a,n), asize_from(a, n+1
 
 length(a::Array) = arraylen(a)
 elsize(a::Array{T}) where {T} = isbits(T) ? sizeof(T) : sizeof(Ptr)
-sizeof(a::Array) = elsize(a) * length(a)
+sizeof(a::Array) = Core.sizeof(a)
 
 function isassigned(a::Array, i::Int...)
     @_inline_meta

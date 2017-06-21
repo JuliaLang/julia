@@ -1818,6 +1818,15 @@ static jl_cgval_t emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             }
         }
     }
+    else if (is_libjulia_func(jl_string_ptr)) {
+        assert(lrt == T_pint8);
+        assert(!isVa && !llvmcall);
+        assert(nargt == 1);
+        auto obj = emit_pointer_from_objref(boxed(emit_expr(args[4], ctx), ctx));
+        auto strp = builder.CreateConstGEP1_32(emit_bitcast(obj, T_pint8), sizeof(void*));
+        JL_GC_POP();
+        return mark_or_box_ccall_result(strp, retboxed, rt, unionall, static_rt, ctx);
+    }
 
     // emit arguments
     jl_cgval_t *argv = (jl_cgval_t*)alloca(sizeof(jl_cgval_t) * (nargs - 3) / 2);

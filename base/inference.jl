@@ -599,7 +599,21 @@ function isdefined_tfunc(args...)
 end
 # TODO change IInf to 2 when deprecation is removed
 add_tfunc(isdefined, 1, IInf, isdefined_tfunc)
-add_tfunc(Core.sizeof, 1, 1, x->Int)
+_const_sizeof(x::ANY) = try
+    # Constant Vector does not have constant size
+    isa(x, Vector) && return Int
+    return Const(Core.sizeof(x))
+catch
+    return Int
+end
+add_tfunc(Core.sizeof, 1, 1,
+          function (x::ANY)
+              isa(x, Const) && return _const_sizeof(x.val)
+              isa(x, Conditional) && return _const_sizeof(Bool)
+              isType(x) && return _const_sizeof(x.parameters[1])
+              x !== DataType && isleaftype(x) && return _const_sizeof(x)
+              return Int
+          end)
 add_tfunc(nfields, 1, 1,
     function (x::ANY)
         isa(x,Const) && return Const(nfields(x.val))
@@ -3710,7 +3724,7 @@ end
 const _pure_builtins = Any[tuple, svec, fieldtype, apply_type, ===, isa, typeof, UnionAll, nfields]
 
 # known effect-free calls (might not be affect-free)
-const _pure_builtins_volatile = Any[getfield, arrayref, isdefined]
+const _pure_builtins_volatile = Any[getfield, arrayref, isdefined, Core.sizeof]
 
 function is_pure_intrinsic(f::IntrinsicFunction)
     return !(f === Intrinsics.pointerref || # this one is volatile
@@ -3792,7 +3806,8 @@ function effect_free(e::ANY, src::CodeInfo, mod::Module, allow_volatile::Bool)
                 # fall-through
             elseif is_known_call(e, _apply, src, mod) && length(ea) > 1
                 ft = exprtype(ea[2], src, mod)
-                if !isa(ft, Const) || !contains_is(_pure_builtins, ft.val)
+                if !isa(ft, Const) || (!contains_is(_pure_builtins, ft.val) &&
+                                       ft.val !== Core.sizeof)
                     return false
                 end
                 # fall-through
@@ -4052,6 +4067,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
         if isa(e.typ, Const) # || isconstType(e.typ)
             val = e.typ.val
             if (f === apply_type || f === fieldtype || f === typeof || f === (===) ||
+                f === Core.sizeof ||
                 istopfunction(topmod, f, :typejoin) ||
                 istopfunction(topmod, f, :isbits) ||
                 istopfunction(topmod, f, :promote_type) ||

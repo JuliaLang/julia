@@ -2899,6 +2899,40 @@ static bool emit_builtin_call(jl_cgval_t *ret, jl_value_t *f, jl_value_t **args,
     else if (f==jl_builtin_sizeof && nargs == 1) {
         jl_value_t *sty = expr_type(args[1], ctx); rt1 = sty;
         sty = jl_unwrap_unionall(sty);
+        assert(jl_string_type->mutabl);
+        if (sty == (jl_value_t*)jl_string_type || sty == (jl_value_t*)jl_simplevector_type) {
+            // String and SimpleVector's length fields have the same layout
+            auto ptr = emit_bitcast(boxed(emit_expr(args[1], ctx), ctx), T_psize);
+            Value *len = tbaa_decorate(tbaa_mutab, builder.CreateLoad(ptr));
+            if (sty == (jl_value_t*)jl_simplevector_type) {
+                len = builder.CreateMul(len, ConstantInt::get(T_size, sizeof(void*)));
+                len = builder.CreateAdd(len, ConstantInt::get(T_size, sizeof(void*)));
+            }
+            *ret = mark_julia_type(len, false, expr_type(expr, ctx), ctx);
+            JL_GC_POP();
+            return true;
+        }
+        else if (jl_is_datatype(sty) && ((jl_datatype_t*)sty)->name == jl_array_typename) {
+            auto obj = emit_expr(args[1], ctx);
+            auto len = emit_arraylen(obj, args[1], ctx);
+            jl_value_t *ety = jl_tparam0(sty);
+            Value *elsize;
+            if (!jl_has_free_typevars(ety)) {
+                if (!jl_array_store_unboxed(ety)) {
+                    elsize = ConstantInt::get(T_size, sizeof(void*));
+                }
+                else {
+                    elsize = ConstantInt::get(T_size, jl_datatype_size(ety));
+                }
+            }
+            else {
+                elsize = builder.CreateZExt(emit_arrayelsize(obj, ctx), T_size);
+            }
+            *ret = mark_julia_type(builder.CreateMul(len, elsize), false,
+                                   expr_type(expr, ctx), ctx);
+            JL_GC_POP();
+            return true;
+        }
         if (jl_is_type_type(sty) && !jl_is_typevar(jl_tparam0(sty))) {
             sty = jl_tparam0(sty);
         }
@@ -6206,6 +6240,7 @@ static void init_julia_llvm_env(Module *m)
 #ifdef STORE_ARRAY_LEN
                       , T_size
 #endif
+                      , T_int16
                       , T_int16
     };
     static_assert(sizeof(jl_array_flags_t) == sizeof(int16_t),
