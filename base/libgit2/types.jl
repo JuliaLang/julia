@@ -392,6 +392,19 @@ Matches the [`git_push_options`](https://libgit2.github.com/libgit2/#HEAD/type/g
 end
 
 """
+    LibGit2.CherrypickOptions
+
+Matches the [`git_cherrypick_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_cherrypick_options) struct.
+"""
+@kwdef struct CherrypickOptions
+    version::Cuint = 1
+    mainline::Cuint = 0
+    merge_opts::MergeOptions=MergeOptions()
+    checkout_opts::CheckoutOptions=CheckoutOptions()
+end
+
+
+"""
     LibGit2.IndexTime
 
 Matches the [`git_index_time`](https://libgit2.github.com/libgit2/#HEAD/type/git_index_time) struct.

@@ -313,6 +313,24 @@ function checkout_head(repo::GitRepo; options::CheckoutOptions = CheckoutOptions
                  repo.ptr, Ref(options))
 end
 
+"""
+    LibGit2.cherrypick(repo::GitRepo, commit::GitCommit; options::CherrypickOptions = CherrypickOptions())
+
+Cherrypick the commit `commit` and apply the changes in it to the current state of `repo`.
+The keyword argument `options` sets checkout and merge options for the cherrypick. If `null`,
+the default options are used.
+
+!!! note
+    `cherrypick` will *apply* the changes in `commit` but not *commit* them, so `repo` will
+    be left in a dirty state. If you want to apply and commit the changes in `commit` you must
+    call [`commit`](@ref) yourself.
+"""
+function cherrypick(repo::GitRepo, commit::GitCommit; options::CherrypickOptions = CherrypickOptions())
+    @check ccall((:git_cherrypick, :libgit2), Cint,
+                 (Ptr{Void}, Ptr{Void}, Ptr{CherrypickOptions}),
+                 repo.ptr, commit.ptr, Ref(options))
+end
+
 """Updates some entries, determined by the `pathspecs`, in the index from the target commit tree."""
 function reset!(repo::GitRepo, obj::Nullable{<:GitObject}, pathspecs::AbstractString...)
     @check ccall((:git_reset_default, :libgit2), Cint,
