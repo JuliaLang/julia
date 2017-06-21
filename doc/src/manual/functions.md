@@ -632,7 +632,7 @@ loops cannot be merged because of the intervening `sort` function.
 
 Finally, the maximum efficiency is typically achieved when the output array of a vectorized operation
 is *pre-allocated*, so that repeated calls do not allocate new arrays over and over again for
-the results ([Pre-allocating outputs](@ref):). A convenient syntax for this is `X .= ...`, which
+the results (see [Pre-allocating outputs](@ref)). A convenient syntax for this is `X .= ...`, which
 is equivalent to `broadcast!(identity, X, ...)` except that, as above, the `broadcast!` loop is
 fused with any nested "dot" calls. For example, `X .= sin.(Y)` is equivalent to `broadcast!(sin, X, Y)`,
 overwriting `X` with `sin.(Y)` in-place. If the left-hand side is an array-indexing expression,
