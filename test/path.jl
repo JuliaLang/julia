@@ -197,3 +197,15 @@ test_relpath()
 # Test type stability
 @test isa(joinpath("a", "b"), String)
 @test isa(joinpath(abspath("a"), "b"), String)
+
+# homedir
+let var = is_windows() ? "USERPROFILE" : "HOME",
+    MAX_PATH = is_windows() ? 240 : 1020
+    for i = 0:9
+        local home = " "^MAX_PATH * "123456789"[1:i]
+        @test withenv(var => home) do
+            homedir()
+        end == home
+    end
+    @test isabspath(withenv(homedir, var => nothing))
+end
