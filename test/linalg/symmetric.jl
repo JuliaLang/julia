@@ -119,6 +119,7 @@ let n=10
         @test eigvals(Hermitian(asym), 1:2) ≈ d[1:2]
         @test eigvals(Hermitian(asym), d[1] - 1, (d[2] + d[3])/2) ≈ d[1:2]
         @test full(eigfact(asym)) ≈ asym
+        @test eigvecs(Hermitian(asym)) ≈ eigvecs(asym)
 
         # relation to svdvals
         @test sum(sort(abs.(eigvals(Hermitian(asym))))) == sum(sort(svdvals(Hermitian(asym))))

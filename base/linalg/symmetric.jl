@@ -448,6 +448,8 @@ eigvals!(A::HermOrSym{T,S}, B::HermOrSym{T,S}) where {T<:BlasReal,S<:StridedMatr
 eigvals!(A::Hermitian{T,S}, B::Hermitian{T,S}) where {T<:BlasComplex,S<:StridedMatrix} =
     LAPACK.sygvd!(1, 'N', A.uplo, A.data, B.uplo == A.uplo ? B.data : B.data')[1]
 
+eigvecs(A::HermOrSym) = eigvecs(eigfact(A))
+
 function svdvals!(A::RealHermSymComplexHerm)
     vals = eigvals!(A)
     for i = 1:length(vals)
