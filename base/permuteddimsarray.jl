@@ -60,7 +60,7 @@ Base.pointer(A::PermutedDimsArray, i::Integer) = throw(ArgumentError("pointer(A,
 
 function Base.strides(A::PermutedDimsArray{T,N,perm}) where {T,N,perm}
     s = strides(parent(A))
-    ntuple(d->s[perm[d]], Val{N})
+    ntuple(d->s[perm[d]], Val(N))
 end
 
 @inline function Base.getindex(A::PermutedDimsArray{T,N,perm,iperm}, I::Vararg{Int,N}) where {T,N,perm,iperm}
@@ -74,7 +74,7 @@ end
     val
 end
 
-@inline genperm(I::NTuple{N,Any}, perm::Dims{N}) where {N} = ntuple(d -> I[perm[d]], Val{N})
+@inline genperm(I::NTuple{N,Any}, perm::Dims{N}) where {N} = ntuple(d -> I[perm[d]], Val(N))
 @inline genperm(I, perm::AbstractVector{Int}) = genperm(I, (perm...,))
 
 """

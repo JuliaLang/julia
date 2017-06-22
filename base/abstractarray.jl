@@ -28,7 +28,7 @@ julia> size(A,3,2)
 """
 size(t::AbstractArray{T,N}, d) where {T,N} = d <= N ? size(t)[d] : 1
 size(x, d1::Integer, d2::Integer, dx::Vararg{Integer, N}) where {N} =
-    (size(x, d1), size(x, d2), ntuple(k->size(x, dx[k]), Val{N})...)
+    (size(x, d1), size(x, d2), ntuple(k->size(x, dx[k]), Val(N))...)
 
 """
     indices(A, d)
@@ -954,13 +954,13 @@ function _getindex(::IndexCartesian, A::AbstractArray{T,N}, I::Vararg{Int, N}) w
     getindex(A, I...)
 end
 _to_subscript_indices(A::AbstractArray, i::Int) = (@_inline_meta; _unsafe_ind2sub(A, i))
-_to_subscript_indices(A::AbstractArray{T,N}) where {T,N} = (@_inline_meta; fill_to_length((), 1, Val{N})) # TODO: DEPRECATE FOR #14770
+_to_subscript_indices(A::AbstractArray{T,N}) where {T,N} = (@_inline_meta; fill_to_length((), 1, Val(N))) # TODO: DEPRECATE FOR #14770
 _to_subscript_indices(A::AbstractArray{T,0}) where {T} = () # TODO: REMOVE FOR #14770
 _to_subscript_indices(A::AbstractArray{T,0}, i::Int) where {T} = () # TODO: REMOVE FOR #14770
 _to_subscript_indices(A::AbstractArray{T,0}, I::Int...) where {T} = () # TODO: DEPRECATE FOR #14770
 function _to_subscript_indices(A::AbstractArray{T,N}, I::Int...) where {T,N} # TODO: DEPRECATE FOR #14770
     @_inline_meta
-    J, Jrem = IteratorsMD.split(I, Val{N})
+    J, Jrem = IteratorsMD.split(I, Val(N))
     _to_subscript_indices(A, J, Jrem)
 end
 _to_subscript_indices(A::AbstractArray, J::Tuple, Jrem::Tuple{}) =
@@ -1203,7 +1203,7 @@ cat_shape(dims, shape::Tuple) = shape
 
 _cshp(ndim::Int, ::Tuple{}, ::Tuple{}, ::Tuple{}) = ()
 _cshp(ndim::Int, ::Tuple{}, ::Tuple{}, nshape) = nshape
-_cshp(ndim::Int, dims, ::Tuple{}, ::Tuple{}) = ntuple(b -> 1, Val{length(dims)})
+_cshp(ndim::Int, dims, ::Tuple{}, ::Tuple{}) = ntuple(b -> 1, Val(length(dims)))
 @inline _cshp(ndim::Int, dims, shape, ::Tuple{}) =
     (shape[1] + dims[1], _cshp(ndim + 1, tail(dims), tail(shape), ())...)
 @inline _cshp(ndim::Int, dims, ::Tuple{}, nshape) =
@@ -1226,7 +1226,7 @@ end
 _cs(d, a, b) = (a == b ? a : throw(DimensionMismatch(
     "mismatch in dimension $d (expected $a got $b)")))
 
-dims2cat(::Type{Val{n}}) where {n} = ntuple(i -> (i == n), Val{n})
+dims2cat(::Val{n}) where {n} = ntuple(i -> (i == n), Val(n))
 dims2cat(dims) = ntuple(i -> (i in dims), maximum(dims))
 
 cat(dims, X...) = cat_t(dims, promote_eltypeof(X...), X...)
@@ -1290,7 +1290,7 @@ julia> vcat(c...)
  4  5  6
 ```
 """
-vcat(X...) = cat(Val{1}, X...)
+vcat(X...) = cat(Val(1), X...)
 """
     hcat(A...)
 
@@ -1331,28 +1331,28 @@ julia> hcat(c...)
  3  6
 ```
 """
-hcat(X...) = cat(Val{2}, X...)
+hcat(X...) = cat(Val(2), X...)
 
-typed_vcat(T::Type, X...) = cat_t(Val{1}, T, X...)
-typed_hcat(T::Type, X...) = cat_t(Val{2}, T, X...)
+typed_vcat(T::Type, X...) = cat_t(Val(1), T, X...)
+typed_hcat(T::Type, X...) = cat_t(Val(2), T, X...)
 
 cat(catdims, A::AbstractArray{T}...) where {T} = cat_t(catdims, T, A...)
 
 # The specializations for 1 and 2 inputs are important
 # especially when running with --inline=no, see #11158
-vcat(A::AbstractArray) = cat(Val{1}, A)
-vcat(A::AbstractArray, B::AbstractArray) = cat(Val{1}, A, B)
-vcat(A::AbstractArray...) = cat(Val{1}, A...)
-hcat(A::AbstractArray) = cat(Val{2}, A)
-hcat(A::AbstractArray, B::AbstractArray) = cat(Val{2}, A, B)
-hcat(A::AbstractArray...) = cat(Val{2}, A...)
+vcat(A::AbstractArray) = cat(Val(1), A)
+vcat(A::AbstractArray, B::AbstractArray) = cat(Val(1), A, B)
+vcat(A::AbstractArray...) = cat(Val(1), A...)
+hcat(A::AbstractArray) = cat(Val(2), A)
+hcat(A::AbstractArray, B::AbstractArray) = cat(Val(2), A, B)
+hcat(A::AbstractArray...) = cat(Val(2), A...)
 
-typed_vcat(T::Type, A::AbstractArray) = cat_t(Val{1}, T, A)
-typed_vcat(T::Type, A::AbstractArray, B::AbstractArray) = cat_t(Val{1}, T, A, B)
-typed_vcat(T::Type, A::AbstractArray...) = cat_t(Val{1}, T, A...)
-typed_hcat(T::Type, A::AbstractArray) = cat_t(Val{2}, T, A)
-typed_hcat(T::Type, A::AbstractArray, B::AbstractArray) = cat_t(Val{2}, T, A, B)
-typed_hcat(T::Type, A::AbstractArray...) = cat_t(Val{2}, T, A...)
+typed_vcat(T::Type, A::AbstractArray) = cat_t(Val(1), T, A)
+typed_vcat(T::Type, A::AbstractArray, B::AbstractArray) = cat_t(Val(1), T, A, B)
+typed_vcat(T::Type, A::AbstractArray...) = cat_t(Val(1), T, A...)
+typed_hcat(T::Type, A::AbstractArray) = cat_t(Val(2), T, A)
+typed_hcat(T::Type, A::AbstractArray, B::AbstractArray) = cat_t(Val(2), T, A, B)
+typed_hcat(T::Type, A::AbstractArray...) = cat_t(Val(2), T, A...)
 
 # 2d horizontal and vertical concatenation
 
@@ -1721,7 +1721,7 @@ _sub2ind_vec(i) = ()
 
 function ind2sub(inds::Union{DimsInteger{N},Indices{N}}, ind::AbstractVector{<:Integer}) where N
     M = length(ind)
-    t = ntuple(n->similar(ind),Val{N})
+    t = ntuple(n->similar(ind),Val(N))
     for (i,idx) in enumerate(IndexLinear(), ind)
         sub = ind2sub(inds, idx)
         for j = 1:N

@@ -2126,9 +2126,9 @@ function sqrtm(A::UpperTriangular)
             end
         end
     end
-    sqrtm(A,Val{realmatrix})
+    sqrtm(A,Val(realmatrix))
 end
-function sqrtm(A::UpperTriangular{T},::Type{Val{realmatrix}}) where {T,realmatrix}
+function sqrtm(A::UpperTriangular{T},::Val{realmatrix}) where {T,realmatrix}
     B = A.data
     n = checksquare(B)
     t = realmatrix ? typeof(sqrt(zero(T))) : typeof(sqrt(complex(zero(T))))

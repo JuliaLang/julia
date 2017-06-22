@@ -68,7 +68,7 @@ module IteratorsMD
     CartesianIndex(index::Integer...) = CartesianIndex(index)
     CartesianIndex{N}(index::Vararg{Integer,N}) where {N} = CartesianIndex{N}(index)
     # Allow passing tuples smaller than N
-    CartesianIndex{N}(index::Tuple) where {N} = CartesianIndex{N}(fill_to_length(index, 1, Val{N}))
+    CartesianIndex{N}(index::Tuple) where {N} = CartesianIndex{N}(fill_to_length(index, 1, Val(N)))
     CartesianIndex{N}(index::Integer...) where {N} = CartesianIndex{N}(index)
     CartesianIndex{N}() where {N} = CartesianIndex{N}(())
     # Un-nest passed CartesianIndexes
@@ -91,9 +91,9 @@ module IteratorsMD
 
     # zeros and ones
     zero(::CartesianIndex{N}) where {N} = zero(CartesianIndex{N})
-    zero(::Type{CartesianIndex{N}}) where {N} = CartesianIndex(ntuple(x -> 0, Val{N}))
+    zero(::Type{CartesianIndex{N}}) where {N} = CartesianIndex(ntuple(x -> 0, Val(N)))
     one(::CartesianIndex{N}) where {N} = one(CartesianIndex{N})
-    one(::Type{CartesianIndex{N}}) where {N} = CartesianIndex(ntuple(x -> 1, Val{N}))
+    one(::Type{CartesianIndex{N}}) where {N} = CartesianIndex(ntuple(x -> 1, Val(N)))
 
     # arithmetic, min/max
     @inline (-)(index::CartesianIndex{N}) where {N} =
@@ -249,18 +249,18 @@ module IteratorsMD
     end
 
     # Split out the first N elements of a tuple
-    @inline split(t, V::Type{<:Val}) = _split((), t, V)
-    @inline _split(tN, trest, V) = _split((tN..., trest[1]), tail(trest), V)
+    @inline split(t, V::Val) = _split((), t, V)
+    @inline _split(tN, trest, V::Val) = _split((tN..., trest[1]), tail(trest), V)
     # exit either when we've exhausted the input tuple or when tN has length N
-    @inline _split(tN::NTuple{N,Any}, ::Tuple{}, ::Type{Val{N}}) where {N} = tN, ()  # ambig.
-    @inline _split(tN,                ::Tuple{}, ::Type{Val{N}}) where {N} = tN, ()
-    @inline _split(tN::NTuple{N,Any},  trest,    ::Type{Val{N}}) where {N} = tN, trest
+    @inline _split(tN::NTuple{N,Any}, ::Tuple{}, ::Val{N}) where {N} = tN, ()  # ambig.
+    @inline _split(tN,                ::Tuple{}, ::Val{N}) where {N} = tN, ()
+    @inline _split(tN::NTuple{N,Any},  trest,    ::Val{N}) where {N} = tN, trest
 
-    @inline function split(I::CartesianIndex, V::Type{<:Val})
+    @inline function split(I::CartesianIndex, V::Val)
         i, j = split(I.I, V)
         CartesianIndex(i), CartesianIndex(j)
     end
-    function split(R::CartesianRange, V::Type{<:Val})
+    function split(R::CartesianRange, V::Val)
         istart, jstart = split(first(R), V)
         istop,  jstop  = split(last(R), V)
         CartesianRange(istart, istop), CartesianRange(jstart, jstop)
@@ -309,7 +309,7 @@ end
 end
 @inline function checkbounds_indices(::Type{Bool}, IA::Tuple,
         I::Tuple{AbstractArray{CartesianIndex{N}},Vararg{Any}}) where N
-    IA1, IArest = IteratorsMD.split(IA, Val{N})
+    IA1, IArest = IteratorsMD.split(IA, Val(N))
     checkindex(Bool, IA1, I[1]) & checkbounds_indices(Bool, IArest, tail(I))
 end
 
@@ -329,7 +329,7 @@ end
     (map(x->true, i1.I)..., index_ndims(I...)...)
 end
 @inline function index_ndims(i1::AbstractArray{CartesianIndex{N}}, I...) where N
-    (ntuple(x->true, Val{N})..., index_ndims(I...)...)
+    (ntuple(x->true, Val(N))..., index_ndims(I...)...)
 end
 index_ndims() = ()
 
@@ -339,7 +339,7 @@ index_ndims() = ()
 @inline index_dimsum(::Colon, I...) = (true, index_dimsum(I...)...)
 @inline index_dimsum(::AbstractArray{Bool}, I...) = (true, index_dimsum(I...)...)
 @inline function index_dimsum(::AbstractArray{<:Any,N}, I...) where N
-    (ntuple(x->true, Val{N})..., index_dimsum(I...)...)
+    (ntuple(x->true, Val(N))..., index_dimsum(I...)...)
 end
 index_dimsum() = ()
 
@@ -420,7 +420,7 @@ end
 @inline checkbounds_indices(::Type{Bool},IA::Tuple{Any},I::Tuple{LogicalIndex{Int,AbstractArray{Bool,N}}}) where {N} =
     checkindex(Bool, IA[1], I[1])
 @inline function checkbounds_indices(::Type{Bool}, IA::Tuple, I::Tuple{LogicalIndex{Int,AbstractArray{Bool,N}}}) where N
-    IA1, IArest = IteratorsMD.split(IA, Val{N})
+    IA1, IArest = IteratorsMD.split(IA, Val(N))
     checkindex(Bool, IA1, I[1])
 end
 @inline checkbounds(::Type{Bool}, A::AbstractArray, I::LogicalIndex{<:Any,<:AbstractArray{Bool,1}}) =
@@ -443,12 +443,12 @@ to_indices(A, I::Tuple{}) = ()
     to_indices(A, inds, (I[1].I..., tail(I)...))
 # But for arrays of CartesianIndex, we just skip the appropriate number of inds
 @inline function to_indices(A, inds, I::Tuple{AbstractArray{CartesianIndex{N}}, Vararg{Any}}) where N
-    _, indstail = IteratorsMD.split(inds, Val{N})
+    _, indstail = IteratorsMD.split(inds, Val(N))
     (to_index(A, I[1]), to_indices(A, indstail, tail(I))...)
 end
 # And boolean arrays behave similarly; they also skip their number of dimensions
 @inline function to_indices(A, inds, I::Tuple{AbstractArray{Bool, N}, Vararg{Any}}) where N
-    _, indstail = IteratorsMD.split(inds, Val{N})
+    _, indstail = IteratorsMD.split(inds, Val(N))
     (to_index(A, I[1]), to_indices(A, indstail, tail(I))...)
 end
 # As an optimization, we allow trailing Array{Bool} and BitArray to be linear over trailing dimensions
@@ -488,7 +488,7 @@ _maybe_reshape(::IndexLinear, A::AbstractArray, I...) = A
 _maybe_reshape(::IndexCartesian, A::AbstractVector, I...) = A
 @inline _maybe_reshape(::IndexCartesian, A::AbstractArray, I...) = __maybe_reshape(A, index_ndims(I...))
 @inline __maybe_reshape(A::AbstractArray{T,N}, ::NTuple{N,Any}) where {T,N} = A
-@inline __maybe_reshape(A::AbstractArray, ::NTuple{N,Any}) where {N} = reshape(A, Val{N})
+@inline __maybe_reshape(A::AbstractArray, ::NTuple{N,Any}) where {N} = reshape(A, Val(N))
 
 function _unsafe_getindex(::IndexStyle, A::AbstractArray, I::Vararg{Union{Real, AbstractArray}, N}) where N
     # This is specifically not inlined to prevent excessive allocations in type unstable code
@@ -897,7 +897,7 @@ See also [`circshift`](@ref).
     dest === src && throw(ArgumentError("dest and src must be separate arrays"))
     inds = indices(src)
     indices(dest) == inds || throw(ArgumentError("indices of src and dest must match (got $inds and $(indices(dest)))"))
-    _circshift!(dest, (), src, (), inds, fill_to_length(shiftamt, 0, Val{N}))
+    _circshift!(dest, (), src, (), inds, fill_to_length(shiftamt, 0, Val(N)))
 end
 circshift!(dest::AbstractArray, src, shiftamt) = circshift!(dest, src, (shiftamt...,))
 
@@ -1240,7 +1240,7 @@ end
 @generated function findn(B::BitArray{N}) where N
     quote
         nnzB = countnz(B)
-        I = ntuple(x->Vector{Int}(nnzB), Val{$N})
+        I = ntuple(x->Vector{Int}(nnzB), Val($N))
         if nnzB > 0
             count = 1
             @nloops $N i B begin

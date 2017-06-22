@@ -194,26 +194,26 @@ function qrfactPivotedUnblocked!(A::StridedMatrix)
 end
 
 # LAPACK version
-qrfact!(A::StridedMatrix{<:BlasFloat}, ::Type{Val{false}}) = QRCompactWY(LAPACK.geqrt!(A, min(minimum(size(A)), 36))...)
-qrfact!(A::StridedMatrix{<:BlasFloat}, ::Type{Val{true}}) = QRPivoted(LAPACK.geqp3!(A)...)
-qrfact!(A::StridedMatrix{<:BlasFloat}) = qrfact!(A, Val{false})
+qrfact!(A::StridedMatrix{<:BlasFloat}, ::Val{false}) = QRCompactWY(LAPACK.geqrt!(A, min(minimum(size(A)), 36))...)
+qrfact!(A::StridedMatrix{<:BlasFloat}, ::Val{true}) = QRPivoted(LAPACK.geqp3!(A)...)
+qrfact!(A::StridedMatrix{<:BlasFloat}) = qrfact!(A, Val(false))
 
 # Generic fallbacks
 
 """
-    qrfact!(A, pivot=Val{false})
+    qrfact!(A, pivot=Val(false))
 
 `qrfact!` is the same as [`qrfact`](@ref) when `A` is a subtype of
 `StridedMatrix`, but saves space by overwriting the input `A`, instead of creating a copy.
 An [`InexactError`](@ref) exception is thrown if the factorization produces a number not
 representable by the element type of `A`, e.g. for integer types.
 """
-qrfact!(A::StridedMatrix, ::Type{Val{false}}) = qrfactUnblocked!(A)
-qrfact!(A::StridedMatrix, ::Type{Val{true}}) = qrfactPivotedUnblocked!(A)
-qrfact!(A::StridedMatrix) = qrfact!(A, Val{false})
+qrfact!(A::StridedMatrix, ::Val{false}) = qrfactUnblocked!(A)
+qrfact!(A::StridedMatrix, ::Val{true}) = qrfactPivotedUnblocked!(A)
+qrfact!(A::StridedMatrix) = qrfact!(A, Val(false))
 
 """
-    qrfact(A, pivot=Val{false}) -> F
+    qrfact(A, pivot=Val(false)) -> F
 
 Compute the QR factorization of the matrix `A`: an orthogonal (or unitary if `A` is
 complex-valued) matrix `Q`, and an upper triangular matrix `R` such that
@@ -224,7 +224,7 @@ A = Q R
 
 The returned object `F` stores the factorization in a packed format:
 
- - if `pivot == Val{true}` then `F` is a [`QRPivoted`](@ref) object,
+ - if `pivot == Val(true)` then `F` is a [`QRPivoted`](@ref) object,
 
  - otherwise if the element type of `A` is a BLAS type ([`Float32`](@ref), [`Float64`](@ref),
    `Complex64` or `Complex128`), then `F` is a [`QRCompactWY`](@ref) object,
@@ -283,21 +283,21 @@ end
 qrfact(x::Number) = qrfact(fill(x,1,1))
 
 """
-    qr(A, pivot=Val{false}; thin::Bool=true) -> Q, R, [p]
+    qr(A, pivot=Val(false); thin::Bool=true) -> Q, R, [p]
 
 Compute the (pivoted) QR factorization of `A` such that either `A = Q*R` or `A[:,p] = Q*R`.
 Also see [`qrfact`](@ref).
 The default is to compute a thin factorization. Note that `R` is not
 extended with zeros when the full `Q` is requested.
 """
-qr(A::Union{Number, AbstractMatrix}, pivot::Union{Type{Val{false}}, Type{Val{true}}}=Val{false}; thin::Bool=true) =
+qr(A::Union{Number, AbstractMatrix}, pivot::Union{Val{false}, Val{true}}=Val(false); thin::Bool=true) =
     _qr(A, pivot, thin=thin)
-function _qr(A::Union{Number, AbstractMatrix}, ::Type{Val{false}}; thin::Bool=true)
-    F = qrfact(A, Val{false})
+function _qr(A::Union{Number, AbstractMatrix}, ::Val{false}; thin::Bool=true)
+    F = qrfact(A, Val(false))
     full(getq(F), thin=thin), F[:R]::Matrix{eltype(F)}
 end
-function _qr(A::Union{Number, AbstractMatrix}, ::Type{Val{true}}; thin::Bool=true)
-    F = qrfact(A, Val{true})
+function _qr(A::Union{Number, AbstractMatrix}, ::Val{true}; thin::Bool=true)
+    F = qrfact(A, Val(true))
     full(getq(F), thin=thin), F[:R]::Matrix{eltype(F)}, F[:p]::Vector{BlasInt}
 end
 

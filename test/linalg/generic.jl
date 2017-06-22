@@ -335,13 +335,13 @@ Base.transpose(a::ModInt{n}) where {n} = a  # see Issue 20978
 A = [ModInt{2}(1) ModInt{2}(0); ModInt{2}(1) ModInt{2}(1)]
 b = [ModInt{2}(1), ModInt{2}(0)]
 
-@test A*(lufact(A, Val{false})\b) == b
+@test A*(lufact(A, Val(false))\b) == b
 
 # Needed for pivoting:
 Base.abs(a::ModInt{n}) where {n} = a
 Base.:<(a::ModInt{n}, b::ModInt{n}) where {n} = a.k < b.k
 
-@test A*(lufact(A, Val{true})\b) == b
+@test A*(lufact(A, Val(true))\b) == b
 
 # test that the fallback throws properly for AbstractArrays with dimension > 2
 @test_throws ErrorException ctranspose(rand(2,2,2,2))

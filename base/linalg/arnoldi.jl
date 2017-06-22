@@ -339,7 +339,7 @@ function A_mul_B!(y::StridedVector{T}, A::AtA_or_AAt{T}, x::StridedVector{T}) wh
         return A_mul_B!(y, A.A, A.buffer)
     end
 end
-size(A::AtA_or_AAt) = ntuple(i -> min(size(A.A)...), Val{2})
+size(A::AtA_or_AAt) = ntuple(i -> min(size(A.A)...), Val(2))
 ishermitian(s::AtA_or_AAt) = true
 
 

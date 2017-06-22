@@ -924,8 +924,8 @@ end
 # demonstrate that inference must converge
 # while doing constant propagation
 Base.@pure plus1(x) = x + 1
-f21933(x::Val{T}) where {T} = f(Val{plus1(T)}())
-@code_typed f21933(Val{1}())
+f21933(x::Val{T}) where {T} = f(Val(plus1(T)))
+@code_typed f21933(Val(1))
 Base.return_types(f21933, (Val{1},))
 
 function count_specializations(method::Method)

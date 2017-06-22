@@ -86,6 +86,12 @@ Library improvements
   * `@test isequal(x, y)` and `@test isapprox(x, y)` now prints an evaluated expression when
     the test fails ([#22296]).
 
+  * Uses of `Val{c}` in `Base` has been replaced with `Val{c}()`, which is now easily
+    accessible via the `@pure` constructor `Val(c)`. Functions are defined as
+    `f(::Val{c}) = ...` and called by `f(Val(c))`. Notable affected functions include:
+    `ntuple`, `Base.literal_pow`, `sqrtm`, `lufact`, `lufact!`, `qrfact`, `qrfact!`,
+    `cholfact`, `cholfact!`, `_broadcast!`, `reshape`, `cat` and `cat_t`.
+
 Compiler/Runtime improvements
 -----------------------------
 

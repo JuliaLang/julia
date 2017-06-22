@@ -112,9 +112,9 @@ end
 @noinline _throw_reshape_colon_dimmismatch(A, dims) =
     throw(DimensionMismatch("array size $(length(A)) must be divisible by the product of the new dimensions $dims"))
 
-reshape(parent::AbstractArray{T,N}, ndims::Type{Val{N}}) where {T,N} = parent
-function reshape(parent::AbstractArray, ndims::Type{Val{N}}) where N
-    reshape(parent, rdims(Val{N}, indices(parent)))
+reshape(parent::AbstractArray{T,N}, ndims::Val{N}) where {T,N} = parent
+function reshape(parent::AbstractArray, ndims::Val{N}) where N
+    reshape(parent, rdims(Val(N), indices(parent)))
 end
 
 # Move elements from inds to out until out reaches the desired
@@ -122,7 +122,7 @@ end
 # product of trailing dims into the last element
 rdims_trailing(l, inds...) = length(l) * rdims_trailing(inds...)
 rdims_trailing(l) = length(l)
-rdims(out::Type{Val{N}}, inds::Tuple) where {N} = rdims(ntuple(i -> OneTo(1), Val{N}), inds)
+rdims(out::Val{N}, inds::Tuple) where {N} = rdims(ntuple(i -> OneTo(1), Val(N)), inds)
 rdims(out::Tuple{}, inds::Tuple{}) = () # N == 0, M == 0
 rdims(out::Tuple{}, inds::Tuple{Any}) = throw(ArgumentError("new dimensions cannot be empty")) # N == 0
 rdims(out::Tuple{}, inds::NTuple{M,Any}) where {M} = throw(ArgumentError("new dimensions cannot be empty")) # N == 0

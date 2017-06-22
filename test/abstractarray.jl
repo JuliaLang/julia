@@ -341,7 +341,7 @@ function test_scalar_indexing{T}(::Type{T}, shape, ::Type{TestAbstractArray})
     @test C == B == A
     C = T(Int, shape)
     i=0
-    C2 = reshape(C, Val{2})
+    C2 = reshape(C, Val(2))
     for i2 = 1:size(C2, 2)
         for i1 = 1:size(C2, 1)
             i += 1
@@ -351,7 +351,7 @@ function test_scalar_indexing{T}(::Type{T}, shape, ::Type{TestAbstractArray})
     @test C == B == A
     C = T(Int, shape)
     i=0
-    C3 = reshape(C, Val{3})
+    C3 = reshape(C, Val(3))
     for i3 = 1:size(C3, 3)
         for i2 = 1:size(C3, 2)
             for i1 = 1:size(C3, 1)

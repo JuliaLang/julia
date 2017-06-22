@@ -368,8 +368,8 @@ julia> repeat([1 2; 3 4], inner=(2, 1), outer=(1, 3))
 ```
 """
 function repeat(A::AbstractArray;
-                inner=ntuple(n->1, Val{ndims(A)}),
-                outer=ntuple(n->1, Val{ndims(A)}))
+                inner=ntuple(n->1, Val(ndims(A))),
+                outer=ntuple(n->1, Val(ndims(A))))
     return _repeat(A, rep_kw2tup(inner), rep_kw2tup(outer))
 end
 
