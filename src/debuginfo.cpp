@@ -716,6 +716,85 @@ static inline void ignoreError(T &err)
 #endif
 }
 
+static void get_function_name_and_base(const object::ObjectFile *object, bool insysimage,
+                                       void **saddr, char **name, size_t pointer,
+                                       int64_t slide)
+{
+    if (!object)
+        return;
+    // Assume we only need base address for sysimg for now
+    if (!insysimage || !sysimg_fvars)
+        saddr = nullptr;
+    // Try platform specific methods first since they are usually faster
+    if (saddr && !*saddr) {
+#if defined(_OS_LINUX_) && !defined(JL_DISABLE_LIBUNWIND)
+        unw_proc_info_t pip;
+        if (unw_get_proc_info_by_ip(unw_local_addr_space, pointer, &pip, NULL) == 0) {
+            *saddr = (void*)pip.start_ip;
+        }
+#endif
+#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
+        DWORD64 ImageBase;
+        PRUNTIME_FUNCTION fn = RtlLookupFunctionEntry(pointer, &ImageBase, NULL);
+        if (fn) {
+            *saddr = (void*)(ImageBase + fn->BeginAddress);
+        }
+#endif
+    }
+    if ((saddr && !*saddr) || (name && !*name)) {
+        size_t distance = (size_t)-1;
+        SymRef sym_found;
+        for (auto sym: object->symbols()) {
+            auto addr = sym.getAddress();
+            if (!addr)
+                continue;
+            size_t symptr = addr.get();
+            if (symptr > pointer + slide)
+                continue;
+            size_t new_dist = pointer + slide - symptr;
+            if (new_dist > distance)
+                continue;
+            distance = new_dist;
+            sym_found = sym;
+        }
+        if (distance != (size_t)-1) {
+            if (saddr && !*saddr) {
+                auto addr = sym_found.getAddress();
+                assert(addr);
+                *saddr = (void*)(uintptr_t)(addr.get() - slide);
+            }
+            if (name && !*name) {
+                if (auto name_or_err = sym_found.getName()) {
+                    auto nameref = name_or_err.get();
+                    size_t len = nameref.size();
+                    *name = (char*)malloc(len + 1);
+                    (*name)[len] = 0;
+                    memcpy(*name, nameref.data(), len);
+                }
+            }
+        }
+    }
+#ifdef _OS_WINDOWS_
+    // For ntdll and msvcrt since we are currently only parsing DWARF debug info through LLVM
+    if (!insysimage && name && !*name) {
+        static char frame_info_func[
+            sizeof(SYMBOL_INFO) +
+            MAX_SYM_NAME * sizeof(TCHAR)];
+        DWORD64 dwDisplacement64 = 0;
+        DWORD64 dwAddress = pointer;
+        PSYMBOL_INFO pSymbol = (PSYMBOL_INFO)frame_info_func;
+        pSymbol->SizeOfStruct = sizeof(SYMBOL_INFO);
+        pSymbol->MaxNameLen = MAX_SYM_NAME;
+        jl_in_stackwalk = 1;
+        if (SymFromAddr(GetCurrentProcess(), dwAddress, &dwDisplacement64, pSymbol)) {
+            // errors are ignored
+            jl_copy_str(name, pSymbol->Name);
+        }
+        jl_in_stackwalk = 0;
+    }
+#endif
+}
+
 extern "C" void jl_refresh_dbg_module_list(void);
 bool jl_dylib_DI_for_fptr(size_t pointer, const llvm::object::ObjectFile **obj, llvm::DIContext **context, int64_t *slide, int64_t *section_slide,
     bool onlySysImg, bool *isSysImg, void **saddr, char **name, char **filename)
@@ -746,35 +825,12 @@ bool jl_dylib_DI_for_fptr(size_t pointer, const llvm::object::ObjectFile **obj, 
     if (onlySysImg && !insysimage) {
         return false;
     }
-    static char frame_info_func[
-        sizeof(SYMBOL_INFO) +
-        MAX_SYM_NAME * sizeof(TCHAR)];
-    DWORD64 dwDisplacement64 = 0;
-    DWORD64 dwAddress = pointer;
-    PSYMBOL_INFO pSymbol = (PSYMBOL_INFO)frame_info_func;
-    pSymbol->SizeOfStruct = sizeof(SYMBOL_INFO);
-    pSymbol->MaxNameLen = MAX_SYM_NAME;
-    jl_in_stackwalk = 1;
-    if (SymFromAddr(GetCurrentProcess(), dwAddress, &dwDisplacement64,
-                    pSymbol)) {
-        // SymFromAddr returned success
-        // errors are ignored, but are hopefully patched up by
-        // using llvm to read the object (below)
-        if (name)
-            jl_copy_str(name, pSymbol->Name);
-        if (saddr)
-            *saddr = (void*)(uintptr_t)pSymbol->Address;
-    }
-    else if (saddr) {
-        *saddr = NULL;
-    }
-
     // If we didn't find the filename before in the debug
     // info, use the dll name
     if (filename && !*filename)
         jl_copy_str(filename, fname.data());
-
-    jl_in_stackwalk = 0;
+    if (saddr)
+        *saddr = NULL;
 
 #else // ifdef _OS_WINDOWS_
     Dl_info dlinfo;
@@ -832,6 +888,7 @@ bool jl_dylib_DI_for_fptr(size_t pointer, const llvm::object::ObjectFile **obj, 
         *context = it->second.ctx;
         *slide = it->second.slide;
         *section_slide = it->second.section_slide;
+        get_function_name_and_base(*obj, insysimage, saddr, name, pointer, *slide);
         return true;
     }
 
@@ -961,6 +1018,7 @@ bool jl_dylib_DI_for_fptr(size_t pointer, const llvm::object::ObjectFile **obj, 
     // update cache
     objfileentry_t entry = {*obj, *context, *slide, *section_slide};
     objfilemap[fbase] = entry;
+    get_function_name_and_base(*obj, insysimage, saddr, name, pointer, *slide);
     return true;
 }
 
@@ -999,32 +1057,15 @@ static int jl_getDylibFunctionInfo(jl_frame_t **frames, size_t pointer, int skip
         return 1;
     }
     frame0->fromC = !isSysImg;
-    if (isSysImg && sysimg_fvars) {
-#if defined(_OS_LINUX_) && !defined(JL_DISABLE_LIBUNWIND)
-        unw_proc_info_t pip;
-        if (!saddr && unw_get_proc_info_by_ip(unw_local_addr_space,
-                                              pointer, &pip, NULL) == 0)
-            saddr = (void*)pip.start_ip;
-#endif
-#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
-        if (!saddr) {
-            DWORD64 ImageBase;
-            PRUNTIME_FUNCTION fn = RtlLookupFunctionEntry(pointer, &ImageBase, NULL);
-            if (fn)
-                saddr = (void*)(ImageBase + fn->BeginAddress);
-        }
-#endif
-        if (saddr) {
-            for (size_t i = 0; i < sysimg_fvars_n; i++) {
-                if (saddr == sysimg_fvars[i]) {
-                    frame0->linfo = sysimg_fvars_linfo[i];
-                    break;
-                }
+    if (isSysImg && sysimg_fvars && saddr) {
+        for (size_t i = 0; i < sysimg_fvars_n; i++) {
+            if (saddr == sysimg_fvars[i]) {
+                frame0->linfo = sysimg_fvars_linfo[i];
+                break;
             }
         }
-        return lookup_pointer(context, frames, pointer+slide, isSysImg, noInline);
     }
-    return lookup_pointer(context, frames, pointer+slide, isSysImg, noInline);
+    return lookup_pointer(context, frames, pointer + slide, isSysImg, noInline);
 }
 
 int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, int64_t *slide, int64_t *section_slide,
