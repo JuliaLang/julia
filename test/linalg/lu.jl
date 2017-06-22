@@ -150,6 +150,12 @@ debug && println("Fat LU")
         lua   = lufact(a[1:n1,:])
         @test lua[:L]*lua[:U] ≈ lua[:P]*a[1:n1,:]
     end
+
+debug && println("LU of Symmetric/Hermitian")
+    for HS in (Hermitian(a'a), Symmetric(a'a))
+        luhs = lufact(HS)
+        @test luhs[:L]*luhs[:U] ≈ luhs[:P]*Matrix(HS)
+    end
 end
 
 # test conversion routine

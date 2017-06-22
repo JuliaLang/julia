@@ -19,6 +19,10 @@ function lufact!(A::StridedMatrix{T}, pivot::Union{Type{Val{false}}, Type{Val{tr
     lpt = LAPACK.getrf!(A)
     return LU{T,typeof(A)}(lpt[1], lpt[2], lpt[3])
 end
+function lufact!(A::HermOrSym, pivot::Union{Type{Val{false}}, Type{Val{true}}} = Val{true})
+    copytri!(A.data, A.uplo, isa(A, Hermitian))
+    lufact!(A.data, pivot)
+end
 
 """
     lufact!(A, pivot=Val{true}) -> LU
