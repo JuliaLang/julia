@@ -13,7 +13,7 @@ function counthunks(blame::GitBlame)
 end
 
 function Base.getindex(blame::GitBlame, i::Integer)
-    if !(1 <= i <= counthunk(blame))
+    if !(1 <= i <= counthunks(blame))
         throw(BoundsError(blame, (i,)))
     end
     hunk_ptr = ccall((:git_blame_get_hunk_byindex, :libgit2),
