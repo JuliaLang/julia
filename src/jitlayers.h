@@ -101,7 +101,7 @@ static inline Function *function_proto(Function *F, Module *M = NULL)
     return NewF;
 }
 
-static inline GlobalVariable *prepare_global(GlobalVariable *G, Module *M)
+static inline GlobalVariable *prepare_global_in(Module *M, GlobalVariable *G)
 {
     if (G->getParent() == M)
         return G;

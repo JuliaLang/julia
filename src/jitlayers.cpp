@@ -1189,7 +1189,7 @@ GlobalVariable *jl_get_global_for(const char *cname, void *addr, Module *M)
     // first see if there already is a GlobalVariable for this address
     it = jl_value_to_llvm.find(addr);
     if (it != jl_value_to_llvm.end())
-        return prepare_global((llvm::GlobalVariable*)it->second.gv, M);
+        return prepare_global_in(M, (llvm::GlobalVariable*)it->second.gv);
 
     std::stringstream gvname;
     gvname << cname << globalUnique++;
