@@ -78,7 +78,7 @@ function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::
     end
 
     base = convert(T,base)
-    m::T = div(typemax(T)-base+1,base)
+    m::T = div(typemax(T)-base+0x01,base)
     n::T = 0
     a::Int = base <= 36 ? 10 : 36
     while n <= m
@@ -92,7 +92,7 @@ function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::
         n *= base
         n += d
         if i > endpos
-            n *= sgn
+            (T <: Signed) && (n *= sgn)
             return Nullable{T}(n)
         end
         c, i = next(s,i)

@@ -163,11 +163,11 @@ function match(re::Regex, str::Union{SubString{String}, String}, idx::Integer, a
     end
     ovec = re.ovec
     n = div(length(ovec),2) - 1
-    mat = SubString(str, ovec[1]+1, ovec[2])
+    mat = SubString(str, ovec[1]+0x01, ovec[2])
     cap = Union{Void,SubString{String}}[
-            ovec[2i+1] == PCRE.UNSET ? nothing : SubString(str, ovec[2i+1]+1, ovec[2i+2]) for i=1:n ]
-    off = Int[ ovec[2i+1]+1 for i=1:n ]
-    RegexMatch(mat, cap, ovec[1]+1, off, re)
+            ovec[2i+1] == PCRE.UNSET ? nothing : SubString(str, ovec[2i+1]+0x01, ovec[2i+2]) for i=1:n ]
+    off = Int[ ovec[2i+1]+0x01 for i=1:n ]
+    RegexMatch(mat, cap, ovec[1]+0x01, off, re)
 end
 
 match(r::Regex, s::AbstractString) = match(r, s, start(s))

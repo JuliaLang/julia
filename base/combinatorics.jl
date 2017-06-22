@@ -11,7 +11,7 @@ end
 const _fact_table128 = Vector{UInt128}(34)
 _fact_table128[1] = 1
 for n in 2:34
-    _fact_table128[n] = _fact_table128[n-1] * n
+    _fact_table128[n] = _fact_table128[n-1] * UInt128(n)
 end
 
 function factorial_lookup(n::Integer, table, lim)

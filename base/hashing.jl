@@ -7,7 +7,7 @@ hash(w::WeakRef, h::UInt) = hash(w.value, h)
 
 ## hashing general objects ##
 
-hash(x::ANY, h::UInt) = hash_uint(3h - object_id(x))
+hash(x::ANY, h::UInt) = hash_uint(0x3h - object_id(x))
 
 ## core data hashing functions ##
 
@@ -27,7 +27,7 @@ function hash_64_32(n::UInt64)
     local a::UInt64 = n
     a = ~a + a << 18
     a =  a ⊻ a >> 31
-    a =  a * 21
+    a =  a * 0x15
     a =  a ⊻ a >> 11
     a =  a + a << 6
     a =  a ⊻ a >> 22
