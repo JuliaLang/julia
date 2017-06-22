@@ -479,7 +479,7 @@ value is not of the expected type, potentially catching certain bugs earlier.
 
 A slightly more generic way to annotate the type of `x` is `x = convert(Int32,a[1])::Int32`.  The
 use of the `convert` function allows `a[1]` to be any object convertible to an `Int32` (such as `UInt8`).
-Notice that the `convert` function itself needs a type annotation in order to achieve type stability.
+Notice that the `convert` function itself needs a type annotation in this context in order to achieve type stability.
 This is because the compiler cannot deduce the type of the return value of a function, even
 `convert`, unless the types of all its arguments are known.
 
