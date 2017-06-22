@@ -6,13 +6,18 @@ using TestHelpers.OAs
 
 # Construction, collect
 @test ===(typeof(Set([1,2,3])), Set{Int})
+@test ===(typeof(Set(1,2,3)), Set{Int})
 @test ===(typeof(Set{Int}([3])), Set{Int})
+@test ===(typeof(Set{Int}(3)), Set{Int})
+@test length(Set(3)) == 1
 data_in = (1,"banana", ())
-s = Set(data_in)
-data_out = collect(s)
-@test ===(typeof(data_out), Array{Any,1})
-@test all(map(d->in(d,data_out), data_in))
-@test length(data_out) == length(data_in)
+for s = [Set(data_in), Set(data_in...)]
+    data_out = collect(s)
+    @test ===(typeof(data_out), Array{Any,1})
+    @test all(map(d->in(d,data_out), data_in))
+    @test length(data_out) == length(data_in)
+end
+
 let f17741 = x -> x < 0 ? false : 1
     @test isa(Set(x for x = 1:3), Set{Int})
     @test isa(Set(sin(x) for x = 1:3), Set{Float64})

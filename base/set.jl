@@ -22,6 +22,8 @@ function Set(g::Generator)
     return Set{T}(g)
 end
 
+(::Type{SetType})(elts...) where {SetType <: AbstractSet} = SetType(elts)
+
 eltype(::Type{Set{T}}) where {T} = T
 similar(s::Set{T}) where {T} = Set{T}()
 similar(s::Set, T::Type) = Set{T}()
