@@ -246,6 +246,8 @@ mktempdir() do dir
                 else
                     error("Found unexpected entry: $name")
                 end
+                show_str = sprint(show, entry)
+                @test show_str == string("ConfigEntry(\"", name, "\", \"", value, "\")")
             end
             @test count == 4
         finally
