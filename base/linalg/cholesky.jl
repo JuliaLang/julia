@@ -102,7 +102,7 @@ function _chol!(A::AbstractMatrix, ::Type{LowerTriangular})
             A[k,k] = Akk
             AkkInv = inv(Akk)
             for j = 1:k - 1
-                for i = k + 1:n
+                @simd for i = k + 1:n
                     A[i,k] -= A[i,j]*A[k,j]'
                 end
             end
