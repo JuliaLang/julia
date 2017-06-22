@@ -666,17 +666,19 @@ end
 
 Matches the [`git_blame_hunk`](https://libgit2.github.com/libgit2/#HEAD/type/git_blame_hunk) struct.
 The fields represent:
-    * `lines_in_hunk`: the number of lines in this hunk of the blame
-    * `final_commit_id`: the OID of the commit where this section was last changed
+    * `lines_in_hunk`: the number of lines in this hunk of the blame.
+    * `final_commit_id`: the [`GitHash`](@ref) of the commit where this section was last changed.
     * `final_start_line_number`: the *one based* line number in the file where the
-       hunk starts, in the *final* version of the file
-    * `final_signature`: the [`GitSignature`] of the person who last modified this hunk
-    * `orig_commit_id`: the OID of the commit where this hunk was first found
+       hunk starts, in the *final* version of the file.
+    * `final_signature`: the signature of the person who last modified this hunk. You will
+       need to pass this to [`Signature`](@ref) to access its fields.
+    * `orig_commit_id`: the [`GitHash`](@ref) of the commit where this hunk was first found.
     * `orig_path`: the path to the file where the hunk originated. This may be different
        than the current/final path, for instance if the file has been moved.
     * `orig_start_line_number`: the *one based* line number in the file where the
-       hunk starts, in the *original* version of the file at `orig_path`
-    * `orig_signature`: the [`GitSignature`] of the person who introduced this hunk
+       hunk starts, in the *original* version of the file at `orig_path`.
+    * `orig_signature`: the signature of the person who introduced this hunk. You will
+       need to pass this to [`Signature`](@ref) to access its fields.
     * `boundary`: `1` if the original commit is a "boundary" commit (for instance, if it's
        equal to an oldest commit set in `options`).
 """
