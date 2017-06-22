@@ -291,7 +291,6 @@ mktempdir() do dir
                 @test isdir(cache_repo)
                 @test LibGit2.path(repo) == LibGit2.posixpath(realpath(cache_repo))
                 @test isdir(joinpath(cache_repo, ".git"))
-
                 # set a remote branch
                 branch = "upstream"
                 LibGit2.GitRemote(repo, branch, repo_url) |> close
@@ -437,6 +436,7 @@ mktempdir() do dir
                 @test LibGit2.iszero(commit_oid1)
                 commit_oid1 = LibGit2.commit(repo, commit_msg1; author=test_sig, committer=test_sig)
                 @test !LibGit2.iszero(commit_oid1)
+                @test LibGit2.GitHash(LibGit2.head(cache_repo)) == commit_oid1
 
                 println(repo_file, randstring(10))
                 flush(repo_file)
