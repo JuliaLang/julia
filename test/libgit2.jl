@@ -851,6 +851,33 @@ mktempdir() do dir
         end
     end
 
+    @testset "Cherrypick" begin
+        path = joinpath(dir, "Example.Cherrypick")
+        repo = LibGit2.clone(cache_repo, path)
+        # need to set this for merges to succeed
+        cfg = LibGit2.GitConfig(repo)
+        LibGit2.set!(cfg, "user.name", "AAAA")
+        LibGit2.set!(cfg, "user.email", "BBBB@BBBB.COM")
+        try
+            oldhead = LibGit2.head_oid(repo)
+            LibGit2.branch!(repo, "branch/cherry_a")
+            open(joinpath(LibGit2.path(repo),"file1"),"w") do f
+                write(f, "111\n")
+            end
+            LibGit2.add!(repo, "file1")
+            cmt_oid = LibGit2.commit(repo, "add file1")
+            cmt = LibGit2.GitCommit(repo, cmt_oid)
+            # switch back, try to cherrypick
+            # from branch/cherry_a
+            LibGit2.branch!(repo, "master")
+            LibGit2.cherrypick(repo, cmt, options=Base.LibGit2.CherrypickOptions())
+            cmt_oid2 = LibGit2.commit(repo, "add file1")
+            @test isempty(LibGit2.diff_files(repo, "master", "branch/cherry_a"))
+        finally
+            close(repo)
+        end
+    end
+
     @testset "Merges" begin
         path = joinpath(dir, "Example.Merge")
         repo = LibGit2.clone(cache_repo, path)
