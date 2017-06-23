@@ -350,7 +350,7 @@ for op in (:(!=), :≠, :+, :-, :*, :/, :÷, :%, :<, :(<=), :≤, :(==), :>, :>=
 end
 
 # Devectorize manually vectorized abs methods in favor of compact broadcast syntax
-@deprecate abs(f::Base.Pkg.Resolve.MaxSum.Field) abs.(f)
+# @deprecate abs(f::Base.Pkg.Resolve.MaxSum.Field) abs.(f)
 @deprecate abs(B::BitArray) abs.(B)
 @deprecate abs(M::Bidiagonal) abs.(M)
 @deprecate abs(D::Diagonal) abs.(D)
