@@ -165,11 +165,14 @@ srand(1)
 
         VV = full(D)
         DD = copy(D)
-        @test (r = VV * full(D)   ; full(A_mul_B!(VV, DD)) ≈ r ≈ full(D)*full(D))
+        r  = VV * full(D)
+        @test full(A_mul_B!(VV, DD)) ≈ r ≈ full(D)*full(D)
         DD = copy(D)
-        @test (r = VV * (full(D).')  ; full(A_mul_Bt!(VV, DD)) ≈ r)
+        r  = VV * (full(D).')
+        @test full(A_mul_Bt!(VV, DD)) ≈ r
         DD = copy(D)
-        @test (r = VV * (full(D)') ; full(A_mul_Bc!(VV, DD)) ≈ r)
+        r  = VV * (full(D)')
+        @test full(A_mul_Bc!(VV, DD)) ≈ r
     end
     @testset "triu/tril" begin
         @test istriu(D)
