@@ -36,9 +36,10 @@ int jl_getFunctionInfo(jl_frame_t **frames, uintptr_t pointer, int skipC, int no
     return 0;
 }
 
-void jl_register_fptrs(uint64_t sysimage_base, void **fptrs, jl_method_instance_t **linfos, size_t n)
+void jl_register_fptrs(uint64_t sysimage_base, const char *base, const int32_t *offsets,
+                       jl_method_instance_t **linfos, size_t n)
 {
-    (void)sysimage_base; (void)fptrs; (void)linfos; (void)n;
+    (void)sysimage_base; (void)base; (void)offsets; (void)linfos; (void)n;
 }
 
 void jl_compile_linfo(jl_method_instance_t *li) { }
