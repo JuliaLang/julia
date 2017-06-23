@@ -137,15 +137,16 @@ julia> lstrip(a)
 ```
 """
 function lstrip(s::AbstractString, chars::Chars=_default_delims)
+    e = endof(s)
     i = start(s)
     while !done(s,i)
         c, j = next(s,i)
         if !(c in chars)
-            return s[i:end]
+            return SubString(s, i, e)
         end
         i = j
     end
-    s[end+1:end]
+    SubString(s, e+1, e)
 end
 
 """
@@ -171,11 +172,11 @@ function rstrip(s::AbstractString, chars::Chars=_default_delims)
     while !done(r,i)
         c, j = next(r,i)
         if !(c in chars)
-            return s[1:end-i+1]
+            return SubString(s, 1, endof(s)-i+1)
         end
         i = j
     end
-    s[1:0]
+    SubString(s, 1, 0)
 end
 
 """
