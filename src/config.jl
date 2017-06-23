@@ -7,6 +7,10 @@ function config(;charset::Symbol = :na,
                 checked::String = "",
                 unchecked::String = "")
 
+    if !(charset in [:na, :ascii, :unicode])
+        error("charset should be :ascii or :unicode, recieved $charset")
+    end
+
     if charset == :ascii
         cursor = '>'
         up_arrow = '^'
@@ -15,17 +19,17 @@ function config(;charset::Symbol = :na,
         unchecked = "[ ]"
     elseif charset == :unicode
         cursor = '→'
-        scroll_up_arrow = '↑'
-        scroll_down_arrow = '↓'
+        up_arrow = '↑'
+        down_arrow = '↓'
         checked = "✓"
         unchecked = "⬚"
     end
 
-    cursor != '\0'      && CONFIG[:cursor] = cursor
-    up_arrow != '\0'    && CONFIG[:up_arrow] = up_arrow
-    down_arrow != '\0'  && CONFIG[:down_arrow] = down_arrow
-    checked != ""       && CONFIG[:checked] = checked
-    unchecked != ""     && CONFIG[:unchecked] = unchecked
+    cursor != '\0'      && (CONFIG[:cursor] = cursor)
+    up_arrow != '\0'    && (CONFIG[:up_arrow] = up_arrow)
+    down_arrow != '\0'  && (CONFIG[:down_arrow] = down_arrow)
+    checked != ""       && (CONFIG[:checked] = checked)
+    unchecked != ""     && (CONFIG[:unchecked] = unchecked)
 
     # Don't return anything
     nothing

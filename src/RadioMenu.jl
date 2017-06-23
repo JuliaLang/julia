@@ -32,7 +32,7 @@ end
 
 function writeLine(buf::IOBuffer, menu::RadioMenu, idx::Int, cursor::Bool)
     # print a ">" on the selected entry
-    cursor ? print(buf, "> ") : print(buf, "  ")
+    cursor ? print(buf, CONFIG[:cursor] ," ") : print(buf, "  ")
 
     print(buf, replace(menu.options[idx], "\n", "\\n"))
 end

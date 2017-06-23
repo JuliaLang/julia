@@ -80,10 +80,10 @@ function printMenu(m::AbstractMenu, cursor::Int; init=false)
 
         if i ==  m.pageoffset+1 && m.pageoffset > 0
             # first line && scrolled past first entry
-            print(buf, "^")
+            print(buf, CONFIG[:up_arrow])
         elseif i == m.pagesize+m.pageoffset && i != length(options(m))
             # last line && not last option
-            print(buf, "v")
+            print(buf, CONFIG[:down_arrow])
         else
             # non special line
             print(buf, " ")
