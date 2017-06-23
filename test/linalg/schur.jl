@@ -38,6 +38,15 @@ aimg  = randn(n,n)/2
         @test AbstractArray(f) ≈ a
         @test_throws KeyError f[:A]
 
+        sch, vecs, vals = schur(UpperTriangular(triu(a)))
+        @test vecs*sch*vecs' ≈ triu(a)
+        sch, vecs, vals = schur(LowerTriangular(tril(a)))
+        @test vecs*sch*vecs' ≈ tril(a)
+        sch, vecs, vals = schur(Hermitian(asym))
+        @test vecs*sch*vecs' ≈ asym
+        sch, vecs, vals = schur(Symmetric(a+a.'))
+        @test vecs*sch*vecs' ≈ a + a.'
+
         tstring = sprint(show,f[:T])
         zstring = sprint(show,f[:Z])
         vstring = sprint(show,f[:values])
