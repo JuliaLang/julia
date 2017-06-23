@@ -3,6 +3,7 @@
 # tests for codegen and optimizations
 
 const opt_level = Base.JLOptions().opt_level
+const coverage = Base.JLOptions().code_coverage || Base.JLOptions().malloc_log
 const Iptr = sizeof(Int) == 8 ? "i64" : "i32"
 
 # `_dump_function` might be more efficient but it doesn't really matter here...
@@ -28,7 +29,7 @@ function test_loads_no_call(ir, load_types)
         end
         @test !contains(line, " call ")
         load_split = split(line, " load ", limit=2)
-        if length(load_split) >= 2
+        if !coverage && length(load_split) >= 2
             @test load_idx <= length(load_types)
             if load_idx <= length(load_types)
                 @test startswith(load_split[2], "$(load_types[load_idx]),")
@@ -39,7 +40,9 @@ function test_loads_no_call(ir, load_types)
             break
         end
     end
-    @test load_idx == length(load_types) + 1
+    if !coverage
+        @test load_idx == length(load_types) + 1
+    end
 end
 if opt_level > 0
     # Make sure `jl_string_ptr` is inlined
