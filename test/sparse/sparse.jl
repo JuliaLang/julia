@@ -226,6 +226,14 @@ end
         @test (maximum(abs.(a'\b - Array(a')\b)) < 1000*eps())
         @test (maximum(abs.(a.'\b - Array(a.')\b)) < 1000*eps())
 
+        # UpperTriangular/LowerTriangular solve
+        a = UpperTriangular(speye(5) + triu(0.1*sprandn(5, 5, 0.2)))
+        b = sprandn(5, 5, 0.2)
+        @test (maximum(abs.(a\b - Array(a)\Array(b))) < 1000*eps())
+        a = LowerTriangular(speye(5) + tril(0.1*sprandn(5, 5, 0.2)))
+        b = sprandn(5, 5, 0.2)
+        @test (maximum(abs.(a\b - Array(a)\Array(b))) < 1000*eps())
+
         a = spdiagm(randn(5)) + im*spdiagm(randn(5))
         b = randn(5,3)
         @test (maximum(abs.(a*b - Array(a)*b)) < 100*eps())
@@ -295,6 +303,8 @@ end
     @test scale!(copy(dAt), bi) ≈ Base.LinAlg.A_rdiv_B!(copy(sAt), Diagonal(b))
     @test scale!(copy(dAt), bi) ≈ Base.LinAlg.A_rdiv_Bt!(copy(sAt), Diagonal(b))
     @test scale!(copy(dAt), conj(bi)) ≈ Base.LinAlg.A_rdiv_Bc!(copy(sAt), Diagonal(b))
+    @test_throws DimensionMismatch Base.LinAlg.A_rdiv_B!(copy(sAt), Diagonal(ones(length(b) + 1)))
+    @test_throws LinAlg.SingularException Base.LinAlg.A_rdiv_B!(copy(sAt), Diagonal(zeros(length(b))))
 end
 
 @testset "copy!" begin
