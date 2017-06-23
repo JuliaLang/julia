@@ -91,6 +91,8 @@ srand(1)
                     Uc = ctranspose(U)
                     target = scale!(Uc,inv.(D.diag))
                     @test A_rdiv_B!(Uc,D) ≈ target atol=2n^3*eps(relty)*(1+(elty<:Complex))
+                    @test_throws DimensionMismatch A_rdiv_B!(eye(elty, n-1),D)
+                    @test_throws SingularException A_rdiv_B!(Uc, zeros(D))
                     @test A_rdiv_Bt!(Uc,D) ≈ target atol=2n^3*eps(relty)*(1+(elty<:Complex))
                     @test A_rdiv_Bc!(Uc,conj(D)) ≈ target atol=2n^3*eps(relty)*(1+(elty<:Complex))
                     @test A_ldiv_B!(D,eye(D)) ≈ D\eye(D) atol=2n^3*eps(relty)*(1+(elty<:Complex))
@@ -158,6 +160,14 @@ srand(1)
         @test (r = full(D) * U   ; A_mul_B!(UU, D, U) ≈ r ≈ UU)
         @test (r = full(D)' * U  ; Ac_mul_B!(UU, D, U) ≈ r ≈ UU)
         @test (r = full(D).' * U ; At_mul_B!(UU, D, U) ≈ r ≈ UU)
+
+        VV = full(D)
+        DD = copy(D)
+        @test (r = VV * full(D)   ; full(A_mul_B!(VV, DD)) ≈ r ≈ full(D)*full(D))
+        DD = copy(D)
+        @test (r = VV * (full(D).')  ; full(A_mul_Bt!(VV, DD)) ≈ r)
+        DD = copy(D)
+        @test (r = VV * (full(D)') ; full(A_mul_Bc!(VV, DD)) ≈ r)
     end
     @testset "triu/tril" begin
         @test istriu(D)
@@ -328,6 +338,8 @@ end
     D = Diagonal(randn(5))
     Q = qrfact(randn(5, 5))[:Q]
     @test D * Q' == Array(D) * Q'
+    Q = qrfact(randn(5, 5), Val{true})[:Q]
+    @test_throws MethodError A_mul_B!(Q, D)
 end
 
 @testset "block diagonal matrices" begin
