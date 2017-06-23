@@ -246,6 +246,8 @@ mktempdir() do dir
                 else
                     error("Found unexpected entry: $name")
                 end
+                show_str = sprint(show, entry)
+                @test show_str == string("ConfigEntry(\"", name, "\", \"", value, "\")")
             end
             @test count == 4
         finally
@@ -291,7 +293,6 @@ mktempdir() do dir
                 @test isdir(cache_repo)
                 @test LibGit2.path(repo) == LibGit2.posixpath(realpath(cache_repo))
                 @test isdir(joinpath(cache_repo, ".git"))
-
                 # set a remote branch
                 branch = "upstream"
                 LibGit2.GitRemote(repo, branch, repo_url) |> close
@@ -437,6 +438,7 @@ mktempdir() do dir
                 @test LibGit2.iszero(commit_oid1)
                 commit_oid1 = LibGit2.commit(repo, commit_msg1; author=test_sig, committer=test_sig)
                 @test !LibGit2.iszero(commit_oid1)
+                @test LibGit2.GitHash(LibGit2.head(cache_repo)) == commit_oid1
 
                 println(repo_file, randstring(10))
                 flush(repo_file)
@@ -1402,11 +1404,17 @@ mktempdir() do dir
         @test LibGit2.checkused!(creds)
         @test creds.user == creds_user
         @test creds.pass == creds_pass
+        creds2 = LibGit2.UserPasswordCredentials(creds_user, creds_pass)
+        @test creds == creds2
+        LibGit2.reset!(creds)
+        @test !LibGit2.checkused!(creds)
         sshcreds = LibGit2.SSHCredentials(creds_user, creds_pass)
         @test sshcreds.user == creds_user
         @test sshcreds.pass == creds_pass
         @test isempty(sshcreds.prvkey)
         @test isempty(sshcreds.pubkey)
+        sshcreds2 = LibGit2.SSHCredentials(creds_user, creds_pass)
+        @test sshcreds == sshcreds2
     end
 
     # The following tests require that we can fake a TTY so that we can provide passwords
