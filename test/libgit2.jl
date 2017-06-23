@@ -369,7 +369,7 @@ mktempdir() do dir
                 error("unexpected")
             catch e
                 @test typeof(e) == LibGit2.GitError
-                @test startswith(sprint(show,e),"GitError(Code:ENOTFOUND, Class:OS, Failed to resolve path")
+                @test startswith(sprint(show,e),"GitError(Code:ENOTFOUND, Class:OS, failed to resolve path")
             end
             path = joinpath(dir, "Example.BareTwo")
             repo = LibGit2.init(path, true)
@@ -1899,6 +1899,7 @@ mktempdir() do dir
                         deserialize(f)
                     end
                     @test err.code == LibGit2.Error.ECERTIFICATE
+                    @test startswith(err.msg, "The SSL certificate is invalid")
 
                     rm(errfile)
 
@@ -1910,7 +1911,7 @@ mktempdir() do dir
                             deserialize(f)
                         end
                         @test err.code == LibGit2.Error.ERROR
-                        @test err.msg == "Invalid Content-Type: text/plain"
+                        @test err.msg == "invalid Content-Type: text/plain"
                     end
                 finally
                     kill(pobj)
