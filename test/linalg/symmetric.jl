@@ -224,6 +224,18 @@ end
             @test Symmetric(asym)[1:2,1:2] == asym[1:2,1:2]
         end
         @test Hermitian(asym)[1:2,1:2] == asym[1:2,1:2]
+
+        if eltya <: Real
+            @test asym^2 ≈ Symmetric((a+a')^2)
+            @test asym^-2 ≈ Symmetric((a+a')^-2)
+            @test asym^2.0 ≈ Symmetric((a+a')^2.0)
+            @test asym^-2.0 ≈ Symmetric((a+a')^-2.0)
+        else
+            @test asym^2 ≈ Hermitian((a+a')^2)
+            @test full(asym^-2) ≈ (a+a')^-2
+            @test asym^2.0 ≈ Hermitian((a+a')^2.0)
+            @test full(asym^-2.0) ≈ (a+a')^-2.0
+        end
     end
 end
 
