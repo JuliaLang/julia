@@ -108,11 +108,28 @@ Base.HasEltype()
 iteratoreltype(x) = iteratoreltype(typeof(x))
 iteratoreltype(::Type) = HasEltype()  # HasEltype is the default
 
+abstract type IteratorAccess end
+struct ForwardAccess <: IteratorAccess end
+struct RandomAccess <: IteratorAccess end
+struct WritableRandomAccess <: IteratorAccess end
+
+iteratoraccess(x) = iteratoraccess(typeof(x))
+iteratoraccess(::Type) = ForwardAccess() # ForwardAccess is the default
+
+removewritable(::ForwardAccess) = ForwardAccess()
+removewritable(::Union{RandomAccess,WritableRandomAccess}) = RandomAccess()
+
 iteratorsize(::Type{<:AbstractArray}) = HasShape()
 iteratorsize(::Type{Generator{I,F}}) where {I,F} = iteratorsize(I)
+
+iteratoraccess(::Type{<:AbstractArray}) = RandomAccess()
+iteratoraccess(::Type{<:Array}) = WritableRandomAccess()
+iteratoraccess(::Type{Generator{I,F}}) where{I,F} = removewritable(iteratoraccess(I))
+
 length(g::Generator) = length(g.iter)
 size(g::Generator) = size(g.iter)
 indices(g::Generator) = indices(g.iter)
 ndims(g::Generator) = ndims(g.iter)
+getindex(g::Generator, key...) = map(g.f, g.iter[key...])
 
 iteratoreltype(::Type{Generator{I,T}}) where {I,T} = EltypeUnknown()
