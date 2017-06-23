@@ -679,7 +679,7 @@ The fields represent:
        hunk starts, in the *original* version of the file at `orig_path`.
     * `orig_signature`: the signature of the person who introduced this hunk. You will
        need to pass this to [`Signature`](@ref) to access its fields.
-    * `boundary`: `1` if the original commit is a "boundary" commit (for instance, if it's
+    * `boundary`: `'1'` if the original commit is a "boundary" commit (for instance, if it's
        equal to an oldest commit set in `options`).
 """
 @kwdef struct BlameHunk
