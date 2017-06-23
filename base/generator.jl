@@ -113,6 +113,28 @@ struct ForwardAccess <: IteratorAccess end
 struct RandomAccess <: IteratorAccess end
 struct WritableRandomAccess <: IteratorAccess end
 
+"""
+    iteratoraccess(itertype::Type) -> IteratorAccess
+
+Given the type of an iterator, returns one of the following values:
+
+* `ForwardAccess()` if the iterator can be iterated over.
+* `RandomAccess()` if the iterator supports read-only indexing.
+* `WritableRandomAccess()` if the iterator supports read-write indexing.
+
+The default value (for iterators that do not define this function) is `ForwardAccess()`.
+
+```jldoctest
+julia> Base.iteratoraccess(1:5)
+Base.RandomAccess()
+
+julia> Base.iteratoraccess([1, 2, 3])
+Base.WritableRandomAccess()
+
+julia> Base.iteratoraccess(drop([1, 2, 3], 1))
+Base.WritableRandomAccess()
+```
+"""
 iteratoraccess(x) = iteratoraccess(typeof(x))
 iteratoraccess(::Type) = ForwardAccess() # ForwardAccess is the default
 
