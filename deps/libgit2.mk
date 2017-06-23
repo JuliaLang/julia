@@ -105,7 +105,7 @@ $(LIBGIT2_SRC_PATH)/libgit2-remote-push-NULL.patch-applied: $(LIBGIT2_SRC_PATH)/
 
 $(build_datarootdir)/julia/cert.pem: $(CERTFILE)
 	mkdir -p $(build_datarootdir)/julia
-	-cp $(CERTFILE) $@
+	cp -f $(CERTFILE) $@
 
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: \
 	$(LIBGIT2_SRC_PATH)/libgit2-mbedtls.patch-applied \
