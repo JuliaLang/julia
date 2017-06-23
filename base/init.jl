@@ -32,20 +32,17 @@ macro initialize(arg)
         Pkg = include(joinpath(Base._pkg_home(), "src", "Pkg.jl"))
 
         info("Initializing package directory...")
-        if !isdir(Pkg.dir()) || !ispath(Pkg.dir("REQUIRE"))
-            Pkg.init()
+        Pkg.init()
+
+        if !ispath(Pkg.dir("REQUIRE"))
             cp(Base._pkg_require(), Pkg.dir("REQUIRE"); remove_destination=true)
+        end
 
-            info("Installing default packages.")
-            if interactive
-                Pkg.edit()
-            else
-                Pkg.resolve()
-            end
-
-            # NOTE: might want to add `using Pkg` to the juliarc
+        info("Installing default packages.")
+        if interactive
+            Pkg.edit()
         else
-            info("Package directory $(Pkg.dir()) is already initialized")
+            Pkg.resolve()
         end
     end
 end
