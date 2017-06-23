@@ -80,41 +80,43 @@ srand(1)
                 @test U'*D ≈ U'*Array(D)
 
                 if relty != BigFloat
-                    @test D\v ≈ DM\v atol=2n^2*eps(relty)*(1+(elty<:Complex))
-                    @test D\U ≈ DM\U atol=2n^3*eps(relty)*(1+(elty<:Complex))
-                    @test A_ldiv_B!(D,copy(v)) ≈ DM\v atol=2n^2*eps(relty)*(1+(elty<:Complex))
-                    @test At_ldiv_B!(D,copy(v)) ≈ DM\v atol=2n^2*eps(relty)*(1+(elty<:Complex))
-                    @test Ac_ldiv_B!(conj(D),copy(v)) ≈ DM\v atol=2n^2*eps(relty)*(1+(elty<:Complex))
-                    @test A_ldiv_B!(D,copy(U)) ≈ DM\U atol=2n^3*eps(relty)*(1+(elty<:Complex))
-                    @test At_ldiv_B!(D,copy(U)) ≈ DM\U atol=2n^3*eps(relty)*(1+(elty<:Complex))
-                    @test Ac_ldiv_B!(conj(D),copy(U)) ≈ DM\U atol=2n^3*eps(relty)*(1+(elty<:Complex))
+                    atol_two = 2n^2 * eps(relty) * (1 + (elty <: Complex))
+                    atol_three = 2n^3 * eps(relty) * (1 + (elty <: Complex))
+                    @test D\v ≈ DM\v atol=atol_two
+                    @test D\U ≈ DM\U atol=atol_three
+                    @test A_ldiv_B!(D, copy(v)) ≈ DM\v atol=atol_two
+                    @test At_ldiv_B!(D, copy(v)) ≈ DM\v atol=atol_two
+                    @test Ac_ldiv_B!(conj(D), copy(v)) ≈ DM\v atol=atol_two
+                    @test A_ldiv_B!(D, copy(U)) ≈ DM\U atol=atol_three
+                    @test At_ldiv_B!(D, copy(U)) ≈ DM\U atol=atol_three
+                    @test Ac_ldiv_B!(conj(D), copy(U)) ≈ DM\U atol=atol_three
                     Uc = ctranspose(U)
-                    target = scale!(Uc,inv.(D.diag))
-                    @test A_rdiv_B!(Uc,D) ≈ target atol=2n^3*eps(relty)*(1+(elty<:Complex))
-                    @test_throws DimensionMismatch A_rdiv_B!(eye(elty, n-1),D)
+                    target = scale!(Uc, inv.(D.diag))
+                    @test A_rdiv_B!(Uc, D) ≈ target atol=atol_three
+                    @test_throws DimensionMismatch A_rdiv_B!(eye(elty, n-1), D)
                     @test_throws SingularException A_rdiv_B!(Uc, zeros(D))
-                    @test A_rdiv_Bt!(Uc,D) ≈ target atol=2n^3*eps(relty)*(1+(elty<:Complex))
-                    @test A_rdiv_Bc!(Uc,conj(D)) ≈ target atol=2n^3*eps(relty)*(1+(elty<:Complex))
-                    @test A_ldiv_B!(D,eye(D)) ≈ D\eye(D) atol=2n^3*eps(relty)*(1+(elty<:Complex))
+                    @test A_rdiv_Bt!(Uc, D) ≈ target atol=atol_three
+                    @test A_rdiv_Bc!(Uc, conj(D)) ≈ target atol=atol_three
+                    @test A_ldiv_B!(D, eye(D)) ≈ D\eye(D) atol=atol_three
                     @test_throws DimensionMismatch A_ldiv_B!(D, ones(elty, n + 1))
-                    @test_throws SingularException A_ldiv_B!(Diagonal(zeros(relty,n)),copy(v))
-                    b = rand(elty,n,n)
+                    @test_throws SingularException A_ldiv_B!(Diagonal(zeros(relty, n)), copy(v))
+                    b = rand(elty, n, n)
                     b = sparse(b)
-                    @test A_ldiv_B!(D,copy(b)) ≈ Array(D)\Array(b)
-                    @test_throws SingularException A_ldiv_B!(Diagonal(zeros(elty,n)),copy(b))
-                    b = view(rand(elty,n),collect(1:n))
+                    @test A_ldiv_B!(D, copy(b)) ≈ Array(D)\Array(b)
+                    @test_throws SingularException A_ldiv_B!(Diagonal(zeros(elty, n)), copy(b))
+                    b = view(rand(elty, n), collect(1:n))
                     b2 = copy(b)
-                    c = A_ldiv_B!(D,b)
+                    c = A_ldiv_B!(D, b)
                     d = Array(D)\b2
                     for i in 1:n
                         @test c[i] ≈ d[i]
                     end
-                    @test_throws SingularException A_ldiv_B!(Diagonal(zeros(elty,n)),b)
-                    b = rand(elty,n+1,n+1)
+                    @test_throws SingularException A_ldiv_B!(Diagonal(zeros(elty, n)), b)
+                    b = rand(elty, n+1, n+1)
                     b = sparse(b)
-                    @test_throws DimensionMismatch A_ldiv_B!(D,copy(b))
-                    b = view(rand(elty,n+1),collect(1:n+1))
-                    @test_throws DimensionMismatch A_ldiv_B!(D,b)
+                    @test_throws DimensionMismatch A_ldiv_B!(D, copy(b))
+                    b = view(rand(elty, n+1), collect(1:n+1))
+                    @test_throws DimensionMismatch A_ldiv_B!(D, b)
                 end
             end
         end
