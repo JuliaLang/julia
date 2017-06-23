@@ -1,5 +1,21 @@
+"""global menu configuration parameters"""
 CONFIG = Dict()
 
+
+"""
+
+    config( <see arguments> )
+
+Configure global Menu parameters
+
+# Arguments
+ - `charset::Symbol=:na`: ui characters to use (`:ascii` or `:unicode`); overridden by other arguments
+ - `cursor::Char='>'|'→'`: character to use for cursor
+ - `up_arrow::Char='^'|'↑'`: character to use for up arrow
+ - `down_arrow::Char='v'|'↓'`: character to use for down arrow
+ - `checked::String="[X]"|"✓"`: string to use for checked
+ - `unchecked::String="[ ]"|"⬚")`: string to use for unchecked
+"""
 function config(;charset::Symbol = :na,
                 cursor::Char = '\0',
                 up_arrow::Char = '\0',
