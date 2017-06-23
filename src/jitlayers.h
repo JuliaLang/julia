@@ -6,7 +6,6 @@
 #include <llvm/IR/Value.h>
 
 #include <llvm/ExecutionEngine/SectionMemoryManager.h>
-#if defined(USE_ORCJIT)
 #include "llvm/ExecutionEngine/Orc/CompileUtils.h"
 #include "llvm/ExecutionEngine/Orc/IRCompileLayer.h"
 #include "llvm/ExecutionEngine/Orc/LambdaResolver.h"
@@ -17,11 +16,6 @@
 #  include "llvm/ExecutionEngine/Orc/ObjectLinkingLayer.h"
 #endif
 #include "llvm/ExecutionEngine/ObjectMemoryBuffer.h"
-#else
-#include <llvm/ExecutionEngine/MCJIT.h>
-#include <llvm/ADT/DenseMapInfo.h>
-#include <llvm/Object/ObjectFile.h>
-#endif
 
 #include "llvm/IR/LegacyPassManager.h"
 extern legacy::PassManager *jl_globalPM;
@@ -128,7 +122,6 @@ static inline void add_named_global(GlobalObject *gv, T *addr, bool dllimport = 
 }
 
 void jl_init_jit(Type *T_pjlvalue_);
-#ifdef USE_ORCJIT
 #if JL_LLVM_VERSION >= 40000
 typedef JITSymbol JL_JITSymbol;
 // The type that is similar to SymbolInfo on LLVM 4.0 is actually
@@ -206,9 +199,6 @@ private:
     SymbolTableT LocalSymbolTable;
 };
 extern JuliaOJIT *jl_ExecutionEngine;
-#else
-extern ExecutionEngine *jl_ExecutionEngine;
-#endif
 JL_DLLEXPORT extern LLVMContext jl_LLVMContext;
 
 Pass *createLowerPTLSPass(bool imaging_mode);

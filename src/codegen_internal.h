@@ -20,10 +20,8 @@ extern int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, int64_t *slide, int6
 extern bool jl_dylib_DI_for_fptr(size_t pointer, const object::ObjectFile **object, llvm::DIContext **context, int64_t *slide, int64_t *section_slide,
         bool onlySysImg, bool *isSysImg, void **saddr, char **name, char **filename);
 
-#ifdef USE_ORCJIT
 #ifdef _OS_WINDOWS_
 void *lookupWriteAddressFor(RTDyldMemoryManager *memmgr, void *rt_addr);
-#endif
 #endif
 
 RTDyldMemoryManager* createRTDyldMemoryManager(void);

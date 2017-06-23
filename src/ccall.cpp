@@ -899,12 +899,8 @@ public:
                     Function *oldF = destModule->getFunction(F->getName());
                     if (oldF)
                         return oldF;
-
-#ifdef USE_ORCJIT
                     if (jl_ExecutionEngine->findSymbol(F->getName(), false))
                         return InjectFunctionProto(F);
-#endif
-
                     return CloneFunctionProto(shadow);
                 }
                 else if (!F->isDeclaration()) {

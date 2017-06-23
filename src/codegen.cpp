@@ -1305,10 +1305,8 @@ extern "C" JL_DLLEXPORT
 uint64_t jl_get_llvm_fptr(llvm::Function *llvmf)
 {
     uint64_t addr = getAddressForFunction(llvmf);
-#ifdef USE_ORCJIT
     if (!addr)
         addr = jl_ExecutionEngine->findUnmangledSymbol(llvmf->getName()).getAddress();
-#endif
     return addr;
 }
 
@@ -7009,9 +7007,6 @@ extern "C" void *jl_init_llvm(void)
 #else
         .setOptLevel(jl_options.opt_level == 0 ? CodeGenOpt::None : CodeGenOpt::Aggressive)
 #endif
-#ifdef USE_ORCMCJIT
-        .setUseOrcMCJITReplacement(true)
-#endif
     ;
     Triple TheTriple(sys::getProcessTriple());
 #if defined(FORCE_ELF)
@@ -7033,21 +7028,7 @@ extern "C" void *jl_init_llvm(void)
     #endif
 
     init_julia_llvm_meta();
-#ifdef USE_ORCJIT
     jl_ExecutionEngine = new JuliaOJIT(*jl_TargetMachine);
-#else
-    jl_ExecutionEngine = eb.create(jl_TargetMachine);
-    //jl_printf(JL_STDERR,"%s\n",jl_ExecutionEngine->getDataLayout()->getStringRepresentation().c_str());
-    if (!jl_ExecutionEngine) {
-        jl_printf(JL_STDERR, "Critical error initializing llvm: %s\n",
-                  ErrorStr.c_str());
-        exit(1);
-    }
-#if !defined(USE_ORCMCJIT)
-    jl_ExecutionEngine->setProcessAllSections(true);
-#endif
-    jl_ExecutionEngine->DisableLazyCompilation();
-#endif
 
 // Mark our address spaces as non-integral
 #if JL_LLVM_VERSION >= 40000
@@ -7066,21 +7047,6 @@ extern "C" void jl_init_codegen(void)
 {
     Module *m = (Module *)jl_init_llvm();
     init_julia_llvm_env(m);
-
-#ifndef USE_ORCJIT
-    jl_ExecutionEngine->RegisterJITEventListener(CreateJuliaJITEventListener());
-#ifdef JL_USE_INTEL_JITEVENTS
-    if (jl_using_intel_jitevents)
-        jl_ExecutionEngine->RegisterJITEventListener(
-            JITEventListener::createIntelJITEventListener());
-#endif // JL_USE_INTEL_JITEVENTS
-
-#ifdef JL_USE_OPROFILE_JITEVENTS
-    if (jl_using_oprofile_jitevents)
-        jl_ExecutionEngine->RegisterJITEventListener(
-            JITEventListener::createOProfileJITEventListener());
-#endif // JL_USE_OPROFILE_JITEVENTS
-#endif
 
     BOX_F(int8,int8);  UBOX_F(uint8,uint8);
     BOX_F(int16,int16); UBOX_F(uint16,uint16);
