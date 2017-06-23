@@ -17,3 +17,18 @@ radio_menu.selected = 2
 TerminalMenus.cancel(radio_menu)
 @test radio_menu.selected == -1
 @test TerminalMenus.header(radio_menu) == ""
+
+# Output
+TerminalMenus.config() # Use default chars
+CONFIG = TerminalMenus.CONFIG
+
+radio_menu = RadioMenu(string.(1:10))
+buf = IOBuffer()
+TerminalMenus.writeLine(buf, radio_menu, 1, true)
+@test String(take!(buf)) == string(CONFIG[:cursor], " 1")
+TerminalMenus.config(cursor='+')
+TerminalMenus.writeLine(buf, radio_menu, 1, true)
+@test String(take!(buf)) == "+ 1"
+TerminalMenus.config(charset=:unicode)
+TerminalMenus.writeLine(buf, radio_menu, 1, true)
+@test String(take!(buf)) == string(CONFIG[:cursor], " 1")
