@@ -150,20 +150,87 @@ export
 
 const AnyVector = Array{Any,1}
 
+"""
+    Number
+
+Abstract supertype for all number types.
+"""
 abstract type Number end
+
+"""
+    Real <: Number
+
+Abstract supertype for all real numbers.
+"""
 abstract type Real     <: Number end
+
+"""
+    AbstractFloat <: Real
+
+Abstract supertype for all floating point numbers.
+"""
 abstract type AbstractFloat <: Real end
+
+"""
+    Integer <: Real
+
+Abstract supertype for all integers.
+"""
 abstract type Integer  <: Real end
+
+"""
+    Signed <: Integer
+
+Abstract supertype for all signed integers.
+"""
 abstract type Signed   <: Integer end
+
+"""
+    Unsigned <: Integer
+
+Abstract supertype for all unsigned integers.
+"""
 abstract type Unsigned <: Integer end
 
+for bit in (16, 32, 64)
+    @eval begin
+        """
+            Float$($bit) <: AbstractFloat
+
+        $($bit)-bit floating point number type.
+        """
+        $(Symbol("Float", bit))
+    end
+end
 primitive type Float16 <: AbstractFloat 16 end
 primitive type Float32 <: AbstractFloat 32 end
 primitive type Float64 <: AbstractFloat 64 end
 
+"""
+    Bool <: Integer
+
+Boolean type.
+"""
 primitive type Bool <: Integer 8 end
 primitive type Char 32 end
 
+for bit in (8, 16, 32, 64, 128)
+    @eval begin
+        """
+            Int$($bit) <: Signed
+
+        $($bit)-bit signed integer type.
+        """
+        $(Symbol("Int", bit))
+
+        """
+            UInt$($bit) <: Unsigned
+
+        $($bit)-bit unsigned integer type.
+        """
+        $(Symbol("UInt", bit))
+    end
+end
 primitive type Int8    <: Signed   8 end
 primitive type UInt8   <: Unsigned 8 end
 primitive type Int16   <: Signed   16 end
@@ -203,14 +270,64 @@ struct BoundsError        <: Exception
     BoundsError(a::ANY) = (@_noinline_meta; new(a))
     BoundsError(a::ANY, i) = (@_noinline_meta; new(a,i))
 end
+
+"""
+    DivideError()
+
+Integer division was attempted with a denominator value of 0.
+"""
 struct DivideError        <: Exception end
+
+"""
+    DomainError()
+
+The arguments to a function or constructor are outside the valid domain.
+"""
 struct DomainError        <: Exception end
+
+"""
+    OverflowError()
+
+The result of an expression is too large for the specified type and will cause a wraparound.
+"""
 struct OverflowError      <: Exception end
+
+"""
+    InexactError()
+
+Type conversion cannot be done exactly.
+"""
 struct InexactError       <: Exception end
+
+"""
+    OutOfMemoryError()
+
+An operation allocated too much memory for either the system or the garbage collector to
+handle properly.
+"""
 struct OutOfMemoryError   <: Exception end
+
+"""
+    ReadOnlyMemoryError()
+
+An operation tried to write to memory that is read-only.
+"""
 struct ReadOnlyMemoryError<: Exception end
 struct SegmentationFault  <: Exception end
+
+"""
+    StackOverflowError()
+
+The function call grew beyond the size of the call stack. This usually happens when a call
+recurses infinitely.
+"""
 struct StackOverflowError <: Exception end
+
+"""
+    UndefRefError()
+
+The item or field is not defined for the given object.
+"""
 struct UndefRefError      <: Exception end
 struct UndefVarError      <: Exception
     var::Symbol

@@ -131,6 +131,13 @@ function _signif_og(x, digits, base)
     return og, e
 end
 
+"""
+    signif(x, digits, [base])
+
+Rounds (in the sense of [`round`](@ref)) `x` so that there are `digits` significant digits, under a
+base `base` representation, default 10. E.g., `signif(123.456, 2)` is `120.0`, and
+`signif(357.913, 4, 2)` is `352.0`.
+"""
 function signif(x::Real, digits::Integer, base::Integer=10)
     digits < 1 && throw(DomainError())
 

@@ -211,6 +211,12 @@ function ==(s1::IntSet, s2::IntSet)
     return true
 end
 
+"""
+    issubset(A::IntSet, S::Intset) -> Bool
+    ⊆(A,S) -> Bool
+
+Return `true` if `A` is a subset of or equal to `S`.
+"""
 issubset(a::IntSet, b::IntSet) = isequal(a, intersect(a,b))
 <(a::IntSet, b::IntSet) = (a<=b) && !isequal(a,b)
 <=(a::IntSet, b::IntSet) = issubset(a, b)

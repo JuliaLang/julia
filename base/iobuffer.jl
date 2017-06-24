@@ -174,6 +174,11 @@ function seek(io::AbstractIOBuffer, n::Integer)
     return io
 end
 
+"""
+    seekend(s)
+
+Seek a stream to its end.
+"""
 function seekend(io::AbstractIOBuffer)
     io.ptr = io.size+1
     return io

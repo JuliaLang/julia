@@ -183,13 +183,6 @@ Also available as the macro `@assert expr`.
 assert
 
 """
-    sech(x)
-
-Compute the hyperbolic secant of `x`
-"""
-sech
-
-"""
     unsafe_copy!(dest::Ptr{T}, src::Ptr{T}, N)
 
 Copy `N` elements from a source pointer to a destination, with no checking. The size of an
@@ -347,13 +340,6 @@ Stacktrace:
 sizeof(::Type)
 
 """
-    ReadOnlyMemoryError()
-
-An operation tried to write to memory that is read-only.
-"""
-ReadOnlyMemoryError
-
-"""
     ceil([T,] x, [digits, [base]])
 
 `ceil(x)` returns the nearest integral value of the same type as `x` that is greater than or
@@ -409,49 +395,6 @@ Returns the file descriptor backing the stream or file. Note that this function 
 to synchronous `File`'s and `IOStream`'s not to any of the asynchronous streams.
 """
 fd
-
-
-"""
-    ones([A::AbstractArray,] [T=eltype(A)::Type,] [dims=size(A)::Tuple])
-
-Create an array of all ones with the same layout as `A`, element type `T` and size `dims`.
-The `A` argument can be skipped, which behaves like `Array{Float64,0}()` was passed.
-For convenience `dims` may also be passed in variadic form.
-
-```jldoctest
-julia> ones(Complex128, 2, 3)
-2×3 Array{Complex{Float64},2}:
- 1.0+0.0im  1.0+0.0im  1.0+0.0im
- 1.0+0.0im  1.0+0.0im  1.0+0.0im
-
-julia> ones(1,2)
-1×2 Array{Float64,2}:
- 1.0  1.0
-
-julia> A = [1 2; 3 4]
-2×2 Array{Int64,2}:
- 1  2
- 3  4
-
-julia> ones(A)
-2×2 Array{Int64,2}:
- 1  1
- 1  1
-
-julia> ones(A, Float64)
-2×2 Array{Float64,2}:
- 1.0  1.0
- 1.0  1.0
-
-julia> ones(A, Bool, (3,))
-3-element Array{Bool,1}:
- true
- true
- true
-```
-See also [`zeros`](@ref), [`similar`](@ref).
-"""
-ones
 
 """
     randsubseq!(S, A, p)
@@ -601,21 +544,6 @@ julia> exp10(0.2)
 exp10
 
 """
-    &(x, y)
-
-Bitwise and.
-
-```jldoctest
-julia> 4 & 10
-0
-
-julia> 4 & 12
-4
-```
-"""
-&
-
-"""
     select(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
 Variant of `select!` which copies `v` before partially sorting it, thereby returning the
@@ -673,43 +601,6 @@ reverse
 In-place version of [`reverse`](@ref).
 """
 reverse!
-
-"""
-    UndefRefError()
-
-The item or field is not defined for the given object.
-"""
-UndefRefError
-
-"""
-    append!(collection, collection2) -> collection.
-
-Add the elements of `collection2` to the end of `collection`.
-
-```jldoctest
-julia> append!([1],[2,3])
-3-element Array{Int64,1}:
- 1
- 2
- 3
-```
-
-```jldoctest
-julia> append!([1, 2, 3], [4, 5, 6])
-6-element Array{Int64,1}:
- 1
- 2
- 3
- 4
- 5
- 6
-```
-
-Use [`push!`](@ref) to add individual items to `collection` which are not already
-themselves in another collection. The result is of the preceding example is equivalent to
-`push!([1, 2, 3], 4, 5, 6)`.
-"""
-append!
 
 """
     skip(s, offset)
@@ -968,14 +859,6 @@ Suggest that collection `s` reserve capacity for at least `n` elements. This can
 sizehint!
 
 """
-    OutOfMemoryError()
-
-An operation allocated too much memory for either the system or the garbage collector to
-handle properly.
-"""
-OutOfMemoryError
-
-"""
     finalize(x)
 
 Immediately run finalizers registered for object `x`.
@@ -1083,24 +966,6 @@ julia> reinterpret(Float32, UInt32[1 2 3 4 5])
 reinterpret
 
 """
-    ~(x)
-
-Bitwise not.
-
-```jldoctest
-julia> ~4
--5
-
-julia> ~10
--11
-
-julia> ~true
-false
-```
-"""
-~
-
-"""
     bswap(n)
 
 Byte-swap an integer. Flip the bits of its binary representation.
@@ -1183,13 +1048,6 @@ Compile the given function `f` for the argument tuple (of types) `args`, but do 
 precompile
 
 """
-    cot(x)
-
-Compute the cotangent of `x`, where `x` is in radians.
-"""
-cot
-
-"""
     get(collection, key, default)
 
 Return the value stored for the given key, or the given default value if no mapping for the
@@ -1221,13 +1079,6 @@ Forces synchronization between the in-memory version of a memory-mapped `Array` 
 `BitArray` and the on-disk version.
 """
 Mmap.sync!
-
-"""
-    csc(x)
-
-Compute the cosecant of `x`, where `x` is in radians.
-"""
-csc
 
 """
     hash(x[, h::UInt])
@@ -1296,13 +1147,6 @@ or a composite object and field name (as a symbol) or index.
 isdefined
 
 """
-    cotd(x)
-
-Compute the cotangent of `x`, where `x` is in degrees.
-"""
-cotd
-
-"""
     wait([x])
 
 Block the current task until some event occurs, depending on the type of the argument:
@@ -1367,25 +1211,11 @@ Convert a hexadecimal string to the floating point number it represents.
 hex2num
 
 """
-    InexactError()
-
-Type conversion cannot be done exactly.
-"""
-InexactError
-
-"""
     typemax(T)
 
 The highest value representable by the given (real) numeric `DataType`.
 """
 typemax
-
-"""
-    DomainError()
-
-The arguments to a function or constructor are outside the valid domain.
-"""
-DomainError
 
 """
     IntSet([itr])
@@ -1421,14 +1251,6 @@ Pushes a new display `d` on top of the global display-backend stack. Calling `di
 the topmost backend that does not throw a `MethodError`).
 """
 pushdisplay
-
-"""
-    StackOverflowError()
-
-The function call grew beyond the size of the call stack. This usually happens when a call
-recurses infinitely.
-"""
-StackOverflowError
 
 """
     ==(x, y)
@@ -1572,20 +1394,6 @@ used only with extreme caution, as it can cause memory use to grow without bound
 gc_enable
 
 """
-    secd(x)
-
-Compute the secant of `x`, where `x` is in degrees.
-"""
-secd
-
-"""
-    OverflowError()
-
-The result of an expression is too large for the specified type and will cause a wraparound.
-"""
-OverflowError
-
-"""
     object_id(x)
 
 Get a hash value for `x` based on object identity. `object_id(x)==object_id(y)` if `x === y`.
@@ -1642,20 +1450,6 @@ Register a function `f(x)` to be called when there are no program-accessible ref
 unpredictable.
 """
 finalizer
-
-"""
-    csch(x)
-
-Compute the hyperbolic cosecant of `x`.
-"""
-csch
-
-"""
-    sec(x)
-
-Compute the secant of `x`, where `x` is in radians.
-"""
-sec
 
 """
     TypeError(func::Symbol, context::AbstractString, expected::Type, got)
@@ -1870,13 +1664,6 @@ retrieved by accessing `m.match` and the captured sequences can be retrieved by 
 match
 
 """
-    coth(x)
-
-Compute the hyperbolic cotangent of `x`.
-"""
-coth
-
-"""
     start(iter) -> state
 
 Get initial iteration state for an iterable object.
@@ -2040,442 +1827,3 @@ copy!(dest,d,src,so,N)
 Addition operator. `x+y+z+...` calls this function with all arguments, i.e. `+(x, y, z, ...)`.
 """
 +
-
-"""
-    setindex!(A, X, inds...)
-
-Store values from array `X` within some subset of `A` as specified by `inds`.
-"""
-setindex!(A::AbstractArray,X,inds...)
-
-"""
-    setindex!(collection, value, key...)
-
-Store the given value at the given key or index within a collection. The syntax `a[i,j,...] =
-x` is converted by the compiler to `(setindex!(a, x, i, j, ...); x)`.
-"""
-setindex!(collection,value,key...)
-
-"""
-    signif(x, digits, [base])
-
-Rounds (in the sense of [`round`](@ref)) `x` so that there are `digits` significant digits, under a
-base `base` representation, default 10. E.g., `signif(123.456, 2)` is `120.0`, and
-`signif(357.913, 4, 2)` is `352.0`.
-"""
-signif
-
-"""
-    full(F)
-
-Reconstruct the matrix `A` from the factorization `F=factorize(A)`.
-"""
-full(F)
-
-"""
-    throw(e)
-
-Throw an object as an exception.
-"""
-throw
-
-"""
-    issubset(a, b)
-    ⊆(a,b) -> Bool
-    ⊈(a,b) -> Bool
-    ⊊(a,b) -> Bool
-
-Determine whether every element of `a` is also in `b`, using [`in`](@ref).
-"""
-issubset(a,b)
-
-"""
-    issubset(A, S) -> Bool
-    ⊆(A,S) -> Bool
-
-Return `true` if `A` is a subset of or equal to `S`.
-"""
-issubset
-
-"""
-    zeros([A::AbstractArray,] [T=eltype(A)::Type,] [dims=size(A)::Tuple])
-
-Create an array of all zeros with the same layout as `A`, element type `T` and size `dims`.
-The `A` argument can be skipped, which behaves like `Array{Float64,0}()` was passed.
-For convenience `dims` may also be passed in variadic form.
-
-
-```jldoctest
-julia> zeros(1)
-1-element Array{Float64,1}:
- 0.0
-
-julia> zeros(Int8, 2, 3)
-2×3 Array{Int8,2}:
- 0  0  0
- 0  0  0
-
-julia> A = [1 2; 3 4]
-2×2 Array{Int64,2}:
- 1  2
- 3  4
-
-julia> zeros(A)
-2×2 Array{Int64,2}:
- 0  0
- 0  0
-
-julia> zeros(A, Float64)
-2×2 Array{Float64,2}:
- 0.0  0.0
- 0.0  0.0
-
-julia> zeros(A, Bool, (3,))
-3-element Array{Bool,1}:
- false
- false
- false
-```
-See also [`ones`](@ref), [`similar`](@ref).
-"""
-zeros
-
-"""
-    Symbol(x...) -> Symbol
-
-Create a `Symbol` by concatenating the string representations of the arguments together.
-"""
-Symbol
-
-"""
-    isvalid(value) -> Bool
-
-Returns `true` if the given value is valid for its type, which currently can be either
-`Char` or `String`.
-"""
-isvalid(value)
-
-"""
-    isvalid(T, value) -> Bool
-
-Returns `true` if the given value is valid for that type. Types currently can
-be either `Char` or `String`. Values for `Char` can be of type `Char` or [`UInt32`](@ref).
-Values for `String` can be of that type, or `Vector{UInt8}`.
-"""
-isvalid(T,value)
-
-"""
-    unsigned(x) -> Unsigned
-
-Convert a number to an unsigned integer. If the argument is signed, it is reinterpreted as
-unsigned without checking for negative values.
-"""
-unsigned
-
-"""
-    reverseind(v, i)
-
-Given an index `i` in `reverse(v)`, return the corresponding index in `v` so that
-`v[reverseind(v,i)] == reverse(v)[i]`. (This can be nontrivial in the case where `v` is a
-Unicode string.)
-"""
-reverseind
-
-"""
-    signbit(x)
-
-Returns `true` if the value of the sign of `x` is negative, otherwise `false`.
-
-```jldoctest
-julia> signbit(-4)
-true
-
-julia> signbit(5)
-false
-
-julia> signbit(5.5)
-false
-
-julia> signbit(-4.1)
-true
-```
-"""
-signbit
-
-"""
-    cscd(x)
-
-Compute the cosecant of `x`, where `x` is in degrees.
-"""
-cscd
-
-"""
-    tryparse(type, str, [base])
-
-Like [`parse`](@ref), but returns a [`Nullable`](@ref) of the requested type. The result will be null if the
-string does not contain a valid number.
-"""
-tryparse
-
-"""
-    exit([code])
-
-Quit (or control-D at the prompt). The default exit code is zero, indicating that the
-processes completed successfully.
-"""
-exit
-
-"""
-    skipchars(stream, predicate; linecomment::Char)
-
-Advance the stream until before the first character for which `predicate` returns `false`.
-For example `skipchars(stream, isspace)` will skip all whitespace. If keyword argument
-`linecomment` is specified, characters from that character through the end of a line will
-also be skipped.
-"""
-skipchars
-
-"""
-    realmin(T)
-
-The smallest in absolute value non-subnormal value representable by the given floating-point DataType `T`.
-"""
-realmin
-
-"""
-    union!(s, iterable)
-
-Union each element of `iterable` into set `s` in-place.
-"""
-union!
-
-"""
-    deepcopy(x)
-
-Create a deep copy of `x`: everything is copied recursively, resulting in a fully
-independent object. For example, deep-copying an array produces a new array whose elements
-are deep copies of the original elements. Calling `deepcopy` on an object should generally
-have the same effect as serializing and then deserializing it.
-
-As a special case, functions can only be actually deep-copied if they are anonymous,
-otherwise they are just copied. The difference is only relevant in the case of closures,
-i.e. functions which may contain hidden internal references.
-
-While it isn't normally necessary, user-defined types can override the default `deepcopy`
-behavior by defining a specialized version of the function `deepcopy_internal(x::T, dict::ObjectIdDict)`
-(which shouldn't otherwise be used), where `T` is the type to be specialized for, and `dict`
-keeps track of objects copied so far within the recursion. Within the definition,
-`deepcopy_internal` should be used in place of `deepcopy`, and the `dict` variable should be
-updated as appropriate before returning.
-"""
-deepcopy
-
-"""
-    widen(x)
-
-If `x` is a type, return a "larger" type (for numeric types, this will be
-a type with at least as much range and precision as the argument, and usually more).
-Otherwise `x` is converted to `widen(typeof(x))`.
-
-```jldoctest
-julia> widen(Int32)
-Int64
-
-julia> widen(1.5f0)
-1.5
-```
-"""
-widen
-
-"""
-    Set([itr])
-
-Construct a [`Set`](@ref) of the values generated by the given iterable object, or an
-empty set. Should be used instead of [`IntSet`](@ref) for sparse integer sets, or
-for sets of arbitrary objects.
-"""
-Set
-
-"""
-    signed(x)
-
-Convert a number to a signed integer. If the argument is unsigned, it is reinterpreted as
-signed without checking for overflow.
-"""
-signed
-
-"""
-    Val{c}
-
-Create a "value type" out of `c`, which must be an `isbits` value. The intent of this
-construct is to be able to dispatch on constants, e.g., `f(Val{false})` allows you to
-dispatch directly (at compile-time) to an implementation `f(::Type{Val{false}})`, without
-having to test the boolean value at runtime.
-"""
-Val
-
-"""
-    |(x, y)
-
-Bitwise or.
-
-```jldoctest
-julia> 4 | 10
-14
-
-julia> 4 | 1
-5
-```
-"""
-Base.:(|)
-
-"""
-    pop!(collection, key[, default])
-
-Delete and return the mapping for `key` if it exists in `collection`, otherwise return
-`default`, or throw an error if `default` is not specified.
-
-```jldoctest
-julia> d = Dict("a"=>1, "b"=>2, "c"=>3);
-
-julia> pop!(d, "a")
-1
-
-julia> pop!(d, "d")
-ERROR: KeyError: key "d" not found
-Stacktrace:
- [1] pop!(::Dict{String,Int64}, ::String) at ./dict.jl:539
-
-julia> pop!(d, "e", 4)
-4
-```
-"""
-pop!(collection,key,?)
-
-"""
-    pop!(collection) -> item
-
-Remove an item in `collection` and return it. If `collection` is an
-ordered container, the last item is returned.
-
-```jldoctest
-julia> A=[1, 2, 3]
-3-element Array{Int64,1}:
- 1
- 2
- 3
-
-julia> pop!(A)
-3
-
-julia> A
-2-element Array{Int64,1}:
- 1
- 2
-
-julia> S = Set([1, 2])
-Set([2, 1])
-
-julia> pop!(S)
-2
-
-julia> S
-Set([1])
-
-julia> pop!(Dict(1=>2))
-1=>2
-```
-"""
-pop!(collection)
-
-"""
-    seekend(s)
-
-Seek a stream to its end.
-"""
-seekend
-
-"""
-    DivideError()
-
-Integer division was attempted with a denominator value of 0.
-"""
-DivideError
-
-"""
-    Number
-
-Abstract supertype for all number types.
-"""
-Number
-
-"""
-    Real <: Number
-
-Abstract supertype for all real numbers.
-"""
-Real
-
-"""
-    AbstractFloat <: Real
-
-Abstract supertype for all floating point numbers.
-"""
-AbstractFloat
-
-"""
-    Integer <: Real
-
-Abstract supertype for all integers.
-"""
-Integer
-
-"""
-    Signed <: Integer
-
-Abstract supertype for all signed integers.
-"""
-Signed
-
-"""
-    Unsigned <: Integer
-
-Abstract supertype for all unsigned integers.
-"""
-Unsigned
-
-"""
-    Bool <: Integer
-
-Boolean type.
-"""
-Bool
-
-for bit in (16, 32, 64)
-    @eval begin
-        """
-            Float$($bit) <: AbstractFloat
-
-        $($bit)-bit floating point number type.
-        """
-        $(Symbol("Float", bit))
-    end
-end
-
-for bit in (8, 16, 32, 64, 128)
-    @eval begin
-        """
-            Int$($bit) <: Signed
-
-        $($bit)-bit signed integer type.
-        """
-        $(Symbol("Int", bit))
-
-        """
-            UInt$($bit) <: Unsigned
-
-        $($bit)-bit unsigned integer type.
-        """
-        $(Symbol("UInt", bit))
-    end
-end
