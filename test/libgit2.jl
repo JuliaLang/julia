@@ -509,6 +509,14 @@ mktempdir() do dir
                     @test showstr[5] == "Message:"
                     @test showstr[6] == commit_msg1
                     @test LibGit2.revcount(repo, string(commit_oid1), string(commit_oid3)) == (-1,0)
+
+                    blame = LibGit2.GitBlame(repo, test_file)
+                    @test LibGit2.counthunks(blame) == 3
+                    @test_throws BoundsError getindex(blame, LibGit2.counthunks(blame)+1)
+                    @test_throws BoundsError getindex(blame, 0)
+                    sig = LibGit2.Signature(blame[1].orig_signature)
+                    @test sig.name == cmtr.name
+                    @test sig.email == cmtr.email
                 finally
                     close(cmt)
                 end
