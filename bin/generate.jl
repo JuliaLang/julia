@@ -46,10 +46,12 @@ include("utils.jl")
 
 for (bucket, b_pkgs) in buckets
     for (pkg, p) in b_pkgs
+        url = p.url
+        startswith(url, "git://github.com") && (url = "https"*url[4:end])
         write_toml(prefix, bucket, pkg, "package") do io
             println(io, "name = ", repr(pkg))
             println(io, "uuid = ", repr(string(p.uuid)))
-            println(io, "repo = ", repr(p.url))
+            println(io, "repo = ", repr(url))
         end
         write_toml(prefix, bucket, pkg, "versions") do io
             for (i, (ver, v)) in enumerate(sort!(collect(p.versions), by=first))
