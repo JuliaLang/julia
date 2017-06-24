@@ -144,29 +144,29 @@ specialized routines that are specially developed for particular matrix types.
 The following tables summarize the types of special matrices that have been implemented in Julia,
 as well as whether hooks to various optimized methods for them in LAPACK are available.
 
-| Type                     | Description                                                                      |
-|:------------------------ |:-------------------------------------------------------------------------------- |
-| [`Hermitian`](@ref)      | [Hermitian matrix](https://en.wikipedia.org/wiki/Hermitian_matrix)               |
-| `UpperTriangular`        | Upper [triangular matrix](https://en.wikipedia.org/wiki/Triangular_matrix)       |
-| `LowerTriangular`        | Lower [triangular matrix](https://en.wikipedia.org/wiki/Triangular_matrix)       |
-| [`Tridiagonal`](@ref)    | [Tridiagonal matrix](https://en.wikipedia.org/wiki/Tridiagonal_matrix)           |
-| [`SymTridiagonal`](@ref) | Symmetric tridiagonal matrix                                                     |
-| [`Bidiagonal`](@ref)     | Upper/lower [bidiagonal matrix](https://en.wikipedia.org/wiki/Bidiagonal_matrix) |
-| [`Diagonal`](@ref)       | [Diagonal matrix](https://en.wikipedia.org/wiki/Diagonal_matrix)                 |
-| `UniformScaling`         | [Uniform scaling operator](https://en.wikipedia.org/wiki/Uniform_scaling)        |
+| Type                      | Description                                                                      |
+|:------------------------- |:-------------------------------------------------------------------------------- |
+| [`Hermitian`](@ref)       | [Hermitian matrix](https://en.wikipedia.org/wiki/Hermitian_matrix)               |
+| [`UpperTriangular`](@ref) | Upper [triangular matrix](https://en.wikipedia.org/wiki/Triangular_matrix)       |
+| [`LowerTriangular`](@ref) | Lower [triangular matrix](https://en.wikipedia.org/wiki/Triangular_matrix)       |
+| [`Tridiagonal`](@ref)     | [Tridiagonal matrix](https://en.wikipedia.org/wiki/Tridiagonal_matrix)           |
+| [`SymTridiagonal`](@ref)  | Symmetric tridiagonal matrix                                                     |
+| [`Bidiagonal`](@ref)      | Upper/lower [bidiagonal matrix](https://en.wikipedia.org/wiki/Bidiagonal_matrix) |
+| [`Diagonal`](@ref)        | [Diagonal matrix](https://en.wikipedia.org/wiki/Diagonal_matrix)                 |
+| `UniformScaling`          | [Uniform scaling operator](https://en.wikipedia.org/wiki/Uniform_scaling)        |
 
 ### Elementary operations
 
-| Matrix type              | `+` | `-` | `*` | `\` | Other functions with optimized methods                              |
-|:------------------------ |:--- |:--- |:--- |:--- |:------------------------------------------------------------------- |
-| [`Hermitian`](@ref)      |     |     |     | MV  | [`inv()`](@ref), [`sqrtm()`](@ref), [`expm()`](@ref)                |
-| `UpperTriangular`        |     |     | MV  | MV  | [`inv()`](@ref), [`det()`](@ref)                                    |
-| `LowerTriangular`        |     |     | MV  | MV  | [`inv()`](@ref), [`det()`](@ref)                                    |
-| [`SymTridiagonal`](@ref) | M   | M   | MS  | MV  | [`eigmax()`](@ref), [`eigmin()`](@ref)                              |
-| [`Tridiagonal`](@ref)    | M   | M   | MS  | MV  |                                                                     |
-| [`Bidiagonal`](@ref)     | M   | M   | MS  | MV  |                                                                     |
-| [`Diagonal`](@ref)       | M   | M   | MV  | MV  | [`inv()`](@ref), [`det()`](@ref), [`logdet()`](@ref), [`/()`](@ref) |
-| `UniformScaling`         | M   | M   | MVS | MVS | [`/()`](@ref)                                                       |
+| Matrix type               | `+` | `-` | `*` | `\` | Other functions with optimized methods                              |
+|:------------------------- |:--- |:--- |:--- |:--- |:------------------------------------------------------------------- |
+| [`Hermitian`](@ref)       |     |     |     | MV  | [`inv()`](@ref), [`sqrtm()`](@ref), [`expm()`](@ref)                |
+| [`UpperTriangular`](@ref) |     |     | MV  | MV  | [`inv()`](@ref), [`det()`](@ref)                                    |
+| [`LowerTriangular`](@ref) |     |     | MV  | MV  | [`inv()`](@ref), [`det()`](@ref)                                    |
+| [`SymTridiagonal`](@ref)  | M   | M   | MS  | MV  | [`eigmax()`](@ref), [`eigmin()`](@ref)                              |
+| [`Tridiagonal`](@ref)     | M   | M   | MS  | MV  |                                                                     |
+| [`Bidiagonal`](@ref)      | M   | M   | MS  | MV  |                                                                     |
+| [`Diagonal`](@ref)        | M   | M   | MV  | MV  | [`inv()`](@ref), [`det()`](@ref), [`logdet()`](@ref), [`/()`](@ref) |
+| `UniformScaling`          | M   | M   | MVS | MVS | [`/()`](@ref)                                                       |
 
 Legend:
 
@@ -178,15 +178,15 @@ Legend:
 
 ### Matrix factorizations
 
-| Matrix type              | LAPACK | [`eig()`](@ref) | [`eigvals()`](@ref) | [`eigvecs()`](@ref) | [`svd()`](@ref) | [`svdvals()`](@ref) |
-|:------------------------ |:------ |:--------------- |:------------------- |:------------------- |:--------------- |:------------------- |
-| [`Hermitian`](@ref)      | HE     |                 | ARI                 |                     |                 |                     |
-| `UpperTriangular`        | TR     | A               | A                   | A                   |                 |                     |
-| `LowerTriangular`        | TR     | A               | A                   | A                   |                 |                     |
-| [`SymTridiagonal`](@ref) | ST     | A               | ARI                 | AV                  |                 |                     |
-| [`Tridiagonal`](@ref)    | GT     |                 |                     |                     |                 |                     |
-| [`Bidiagonal`](@ref)     | BD     |                 |                     |                     | A               | A                   |
-| [`Diagonal`](@ref)       | DI     |                 | A                   |                     |                 |                     |
+| Matrix type               | LAPACK | [`eig()`](@ref) | [`eigvals()`](@ref) | [`eigvecs()`](@ref) | [`svd()`](@ref) | [`svdvals()`](@ref) |
+|:------------------------- |:------ |:--------------- |:------------------- |:------------------- |:--------------- |:------------------- |
+| [`Hermitian`](@ref)       | HE     |                 | ARI                 |                     |                 |                     |
+| [`UpperTriangular`](@ref) | TR     | A               | A                   | A                   |                 |                     |
+| [`LowerTriangular`](@ref) | TR     | A               | A                   | A                   |                 |                     |
+| [`SymTridiagonal`](@ref)  | ST     | A               | ARI                 | AV                  |                 |                     |
+| [`Tridiagonal`](@ref)     | GT     |                 |                     |                     |                 |                     |
+| [`Bidiagonal`](@ref)      | BD     |                 |                     |                     | A               | A                   |
+| [`Diagonal`](@ref)        | DI     |                 | A                   |                     |                 |                     |
 
 Legend:
 

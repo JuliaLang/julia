@@ -18,6 +18,8 @@ Base.LinAlg.SymTridiagonal
 Base.LinAlg.Tridiagonal
 Base.LinAlg.Symmetric
 Base.LinAlg.Hermitian
+Base.LinAlg.LowerTriangular
+Base.LinAlg.UpperTriangular
 Base.LinAlg.lu
 Base.LinAlg.lufact
 Base.LinAlg.lufact!

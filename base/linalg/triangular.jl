@@ -50,6 +50,51 @@ LowerTriangular(U::UpperTriangular) = throw(ArgumentError(
 UpperTriangular(U::LowerTriangular) = throw(ArgumentError(
     "cannot create an UpperTriangular matrix from a LowerTriangular input"))
 
+"""
+    LowerTriangular(A::AbstractMatrix)
+
+Construct a `LowerTriangular` view of the the matrix `A`.
+
+# Example
+
+```jldoctest
+julia> A = [1.0 2.0 3.0; 4.0 5.0 6.0; 7.0 8.0 9.0]
+3×3 Array{Float64,2}:
+ 1.0  2.0  3.0
+ 4.0  5.0  6.0
+ 7.0  8.0  9.0
+
+julia> LowerTriangular(A)
+3×3 LowerTriangular{Float64,Array{Float64,2}}:
+ 1.0   ⋅    ⋅
+ 4.0  5.0   ⋅
+ 7.0  8.0  9.0
+```
+"""
+LowerTriangular
+"""
+    UpperTriangular(A::AbstractMatrix)
+
+Construct an `UpperTriangular` view of the the matrix `A`.
+
+# Example
+
+```jldoctest
+julia> A = [1.0 2.0 3.0; 4.0 5.0 6.0; 7.0 8.0 9.0]
+3×3 Array{Float64,2}:
+ 1.0  2.0  3.0
+ 4.0  5.0  6.0
+ 7.0  8.0  9.0
+
+julia> UpperTriangular(A)
+3×3 UpperTriangular{Float64,Array{Float64,2}}:
+ 1.0  2.0  3.0
+  ⋅   5.0  6.0
+  ⋅    ⋅   9.0
+```
+"""
+UpperTriangular
+
 imag(A::UpperTriangular) = UpperTriangular(imag(A.data))
 imag(A::LowerTriangular) = LowerTriangular(imag(A.data))
 imag(A::UnitLowerTriangular) = LowerTriangular(tril!(imag(A.data),-1))
