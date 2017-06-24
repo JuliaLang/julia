@@ -50,7 +50,7 @@ ABI_Win64Layout() : nargs(0) { }
 bool use_sret(jl_datatype_t *dt) override
 {
     size_t size = jl_datatype_size(dt);
-    if (win64_reg_size(size) || is_native_simd_type(dt))
+    if (win64_reg_size(size) || is_native_simd_type(dt) || dt == jl_float128_type)
         return false;
     nargs++;
     return true;

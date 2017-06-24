@@ -118,7 +118,7 @@ struct Classification {
 void classifyType(Classification& accum, jl_datatype_t *dt, uint64_t offset) const
 {
     // Floating point types
-    if (dt == jl_float64_type || dt == jl_float32_type) {
+    if (dt == jl_float64_type || dt == jl_float32_type || dt == jl_float128_type) {
         accum.addField(offset, Sse);
     }
     // Misc types
@@ -215,6 +215,10 @@ Type *preferred_llvm_type(jl_datatype_t *dt, bool isret) const override
     (void) isret;
     // no need to rewrite these types (they are returned as pointers anyways)
     if (is_native_simd_type(dt))
+        return NULL;
+
+    // Handle the same as SIMD
+    if (dt == jl_float128_type)
         return NULL;
 
     size_t size = jl_datatype_size(dt);
