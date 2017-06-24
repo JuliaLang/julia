@@ -299,7 +299,7 @@ function A_rdiv_B!(A::SparseMatrixCSC{T}, D::Diagonal{T}) where T
     @inbounds for j in 1:k
         ddj = dd[j]
         if iszero(ddj)
-            throw(SingularException(j))
+            throw(LinAlg.SingularException(j))
         end
         for k in nzrange(A, j)
             nonz[k] /= ddj
