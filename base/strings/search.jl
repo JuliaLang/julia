@@ -76,6 +76,8 @@ function _searchindex(s, t, i)
     end
 end
 
+_searchindex(s, t::Char, i) = search(s, t, i)
+
 function _search_bloom_mask(c)
     UInt64(1) << (c & 63)
 end
