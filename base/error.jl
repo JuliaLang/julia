@@ -65,6 +65,12 @@ systemerror(p, b::Bool; extrainfo=nothing) = b ? throw(Main.Base.SystemError(str
 
 ## assertion functions and macros ##
 
+"""
+    assert(cond)
+
+Throw an [`AssertionError`](@ref) if `cond` is `false`.
+Also available as the macro `@assert expr`.
+"""
 assert(x) = x ? nothing : throw(Main.Base.AssertionError())
 macro assert(ex, msgs...)
     msg = isempty(msgs) ? ex : msgs[1]

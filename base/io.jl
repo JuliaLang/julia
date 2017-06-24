@@ -384,22 +384,6 @@ to return.
 """
 read(s::IO, ::Type{T}, dims::Dims) where {T} = read!(s, Array{T}(dims))
 
-@noinline function read!(s::IO, a::Array{UInt8}) # mark noinline to ensure the array is gc-rooted somewhere (by the caller)
-    unsafe_read(s, pointer(a), sizeof(a))
-    return a
-end
-
-@noinline function read!(s::IO, a::Array{T}) where T # mark noinline to ensure the array is gc-rooted somewhere (by the caller)
-    if isbits(T)
-        unsafe_read(s, pointer(a), sizeof(a))
-    else
-        for i in eachindex(a)
-            a[i] = read(s, T)
-        end
-    end
-    return a
-end
-
 function read(s::IO, ::Type{Char})
     ch = read(s, UInt8)
     if ch < 0x80
@@ -417,6 +401,28 @@ function read(s::IO, ::Type{Char})
     c += ch
     c -= Base.utf8_offset[trailing+1]
     return Char(c)
+end
+
+"""
+    read!(stream::IO, array::Union{Array, BitArray})
+    read!(filename::AbstractString, array::Union{Array, BitArray})
+
+Read binary data from an I/O stream or file, filling in `array`.
+"""
+@noinline function read!(s::IO, a::Array{T}) where T # mark noinline to ensure the array is gc-rooted somewhere (by the caller)
+    if isbits(T)
+        unsafe_read(s, pointer(a), sizeof(a))
+    else
+        for i in eachindex(a)
+            a[i] = read(s, T)
+        end
+    end
+    return a
+end
+
+@noinline function read!(s::IO, a::Array{UInt8}) # mark noinline to ensure the array is gc-rooted somewhere (by the caller)
+    unsafe_read(s, pointer(a), sizeof(a))
+    return a
 end
 
 # readuntil_string is useful below since it has

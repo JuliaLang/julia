@@ -3,66 +3,6 @@
 # Base
 
 """
-    fill!(A, x)
-
-Fill array `A` with the value `x`. If `x` is an object reference, all elements will refer to
-the same object. `fill!(A, Foo())` will return `A` filled with the result of evaluating
-`Foo()` once.
-
-```jldoctest
-julia> A = zeros(2,3)
-2×3 Array{Float64,2}:
- 0.0  0.0  0.0
- 0.0  0.0  0.0
-
-julia> fill!(A, 2.)
-2×3 Array{Float64,2}:
- 2.0  2.0  2.0
- 2.0  2.0  2.0
-
-julia> a = [1, 1, 1]; A = fill!(Vector{Vector{Int}}(3), a); a[1] = 2; A
-3-element Array{Array{Int64,1},1}:
- [2, 1, 1]
- [2, 1, 1]
- [2, 1, 1]
-
-julia> x = 0; f() = (global x += 1; x); fill!(Vector{Int}(3), f())
-3-element Array{Int64,1}:
- 1
- 1
- 1
-```
-"""
-fill!
-
-"""
-    read!(stream::IO, array::Union{Array, BitArray})
-    read!(filename::AbstractString, array::Union{Array, BitArray})
-
-Read binary data from an I/O stream or file, filling in `array`.
-"""
-read!
-
-"""
-    pointer(array [, index])
-
-Get the native address of an array or string element. Be careful to ensure that a Julia
-reference to `a` exists as long as this pointer will be used. This function is "unsafe" like
-`unsafe_convert`.
-
-Calling `Ref(array[, index])` is generally preferable to this function.
-"""
-pointer
-
-"""
-    precision(num::AbstractFloat)
-
-Get the precision of a floating point number, as defined by the effective number of bits in
-the mantissa.
-"""
-precision
-
-"""
     -(x)
 
 Unary minus operator.
@@ -173,14 +113,6 @@ return an object of a type different from `T`, which however is suitable for
 Neither `convert` nor `cconvert` should take a Julia object and turn it into a `Ptr`.
 """
 cconvert
-
-"""
-    assert(cond)
-
-Throw an [`AssertionError`](@ref) if `cond` is `false`.
-Also available as the macro `@assert expr`.
-"""
-assert
 
 """
     sech(x)
@@ -345,13 +277,6 @@ Stacktrace:
 ```
 """
 sizeof(::Type)
-
-"""
-    ReadOnlyMemoryError()
-
-An operation tried to write to memory that is read-only.
-"""
-ReadOnlyMemoryError
 
 """
     ceil([T,] x, [digits, [base]])

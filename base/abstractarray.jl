@@ -858,6 +858,16 @@ end
 # note: the following type definitions don't mean any AbstractArray is convertible to
 # a data Ref. they just map the array element type to the pointer type for
 # convenience in cases that work.
+
+"""
+    pointer(array [, index])
+
+Get the native address of an array or string element. Be careful to ensure that a Julia
+reference to `a` exists as long as this pointer will be used. This function is "unsafe" like
+`unsafe_convert`.
+
+Calling `Ref(array[, index])` is generally preferable to this function.
+"""
 pointer(x::AbstractArray{T}) where {T} = unsafe_convert(Ptr{T}, x)
 function pointer(x::AbstractArray{T}, i::Integer) where T
     @_inline_meta
