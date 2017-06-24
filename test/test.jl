@@ -11,6 +11,10 @@
 let g = Int[], f = (x) -> (push!(g, x); x)
     @test f(1) == 1
     @test g == [1]
+
+    empty!(g)
+    @test isequal(f(2), 2)
+    @test g == [2]
 end
 
 # Test @test_broken with fail
@@ -74,6 +78,10 @@ fails = @testset NoThrowTestSet begin
     @test 1+0 == 2+0 == 3+0
     # Fail - comparison call
     @test ==(1 - 2, 2 - 1)
+    # Fail - isequal
+    @test isequal(0 / 0, 1 / 0)
+    # Fail - isapprox
+    @test isapprox(0 / 1, -1 / 0)
     # Error - unexpected pass
     @test_broken true
 end
@@ -106,6 +114,14 @@ str = sprint(show, fails[6])
 @test contains(str, "Evaluated: -1 == 1")
 
 str = sprint(show, fails[7])
+@test contains(str, "Expression: isequal(0 / 0, 1 / 0)")
+@test contains(str, "Evaluated: isequal(NaN, Inf)")
+
+str = sprint(show, fails[8])
+@test contains(str, "Expression: isapprox(0 / 1, -1 / 0)")
+@test contains(str, "Evaluated: isapprox(0.0, -Inf)")
+
+str = sprint(show, fails[9])
 @test contains(str, "Unexpected Pass")
 @test contains(str, "Expression: true")
 
