@@ -776,6 +776,7 @@ void jl_get_builtin_hooks(void)
     jl_int128_type  = (jl_datatype_t*)core("Int128");
     jl_uint128_type  = (jl_datatype_t*)core("UInt128");
     jl_float128_type = (jl_datatype_t*)core("Float128");
+    jl_float128_typename = ((jl_datatype_t*)core("Float128"))->name;
 
     jl_floatingpoint_type = (jl_datatype_t*)core("AbstractFloat");
     jl_number_type = (jl_datatype_t*)core("Number");

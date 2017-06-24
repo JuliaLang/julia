@@ -419,6 +419,8 @@ JL_DLLEXPORT jl_datatype_t *jl_new_primitivetype(jl_value_t *name, jl_module_t *
     uint32_t alignm = next_power_of_two(nbytes);
     if (alignm > MAX_ALIGN)
         alignm = MAX_ALIGN;
+    if (module == jl_core_module && name == jl_float128_typename)
+        alignm = 16;
     bt->size = nbytes;
     bt->layout = jl_get_layout(0, alignm, 0, NULL);
     return bt;
