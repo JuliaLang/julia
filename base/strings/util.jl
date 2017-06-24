@@ -115,7 +115,7 @@ end
 #    end
 #    return s
 #end
-#chomp!(s::AbstractString) = chomp(s) # copying fallback for other string types
+chomp!(s::AbstractString) = chomp(s) # copying fallback for other string types
 
 const _default_delims = [' ','\t','\n','\v','\f','\r']
 
