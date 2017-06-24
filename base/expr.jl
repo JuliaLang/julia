@@ -67,8 +67,9 @@ macroexpand(m::Module, x::ANY) = ccall(:jl_macroexpand, Any, (Any, Any), x, m)
 
 Return equivalent expression with all macros removed (expanded).
 
-There is a subtle difference between `@macroexpand` and `macroexpand` in that expansion takes place in
-different contexts. This is best seen in the following example:
+There is a difference between `@macroexpand` and `macroexpand` in that the `macroexpand` function
+also takes a module where the expansion takes place.
+This is best seen in the following example:
 
 ```jldoctest
 julia> module M
@@ -76,7 +77,10 @@ julia> module M
                1
            end
            function f()
-               (@macroexpand(@m), macroexpand(:(@m)))
+               (@macroexpand(@m),
+                macroexpand(M, :(@m)),
+                macroexpand(Main, :(@m))
+               )
            end
        end
 M
@@ -87,12 +91,10 @@ julia> macro m()
 @m (macro with 1 method)
 
 julia> M.f()
-(1, 2)
+(1, 1, 2)
 ```
 With `@macroexpand` the expression expands where `@macroexpand` appears in the code (module
-`M` in the example). With `macroexpand` the expression expands in the current module where
-the code was finally called (REPL in the example).
-Note that when calling `macroexpand` or `@macroexpand` directly from the REPL, both of these contexts coincide, hence there is no difference.
+`M` in the example). With `macroexpand` the expression expands in the module given as the first argument.
 """
 macro macroexpand(code)
     return :(macroexpand($__module__, $(QuoteNode(code))))
