@@ -9,6 +9,7 @@ Fill array `A` with the value `x`. If `x` is an object reference, all elements w
 the same object. `fill!(A, Foo())` will return `A` filled with the result of evaluating
 `Foo()` once.
 
+# Examples
 ```jldoctest
 julia> A = zeros(2,3)
 2×3 Array{Float64,2}:
@@ -81,6 +82,7 @@ Subtraction operator.
 
 A string giving the literal bit representation of a number.
 
+# Example
 ```jldoctest
 julia> bits(4)
 "0000000000000000000000000000000000000000000000000000000000000100"
@@ -97,6 +99,7 @@ bits
 Construct a 1-d array of the specified type. This is usually called with the syntax
 `Type[]`. Element values can be specified using `Type[a,b,c,...]`.
 
+# Example
 ```jldoctest
 julia> Int8[1, 2, 3]
 3-element Array{Int8,1}:
@@ -120,6 +123,7 @@ Returns a subset of array `A` as specified by `inds`, where each `ind` may be an
 `Int`, a `Range`, or a `Vector`. See the manual section on
 [array indexing](@ref man-array-indexing) for details.
 
+# Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
 2×2 Array{Int64,2}:
@@ -149,6 +153,7 @@ getindex(::AbstractArray, inds...)
 Retrieve the value(s) stored at the given key or index within a collection. The syntax
 `a[i,j,...]` is converted by the compiler to `getindex(a, i, j, ...)`.
 
+# Example
 ```jldoctest
 julia> A = Dict("a" => 1, "b" => 2)
 Dict{String,Int64} with 2 entries:
@@ -219,6 +224,7 @@ unsafe_copy!(dest::Array, d, src::Array, so, N)
 Create a Float32 from `x`. If `x` is not exactly representable then `mode` determines how
 `x` is rounded.
 
+# Examples
 ```jldoctest
 julia> Float32(1/3, RoundDown)
 0.3333333f0
@@ -310,6 +316,7 @@ Mmap.mmap(io, ::BitArray, dims = ?, offset = ?)
 Update `collection`, removing elements for which `function` is `false`.
 For associative collections, the function is passed two arguments (key and value).
 
+# Example
 ```jldoctest
 julia> filter!(isodd, collect(1:10))
 5-element Array{Int64,1}:
@@ -327,6 +334,7 @@ filter!
 
 Size, in bytes, of the canonical binary representation of the given DataType `T`, if any.
 
+# Examples
 ```jldoctest
 julia> sizeof(Float32)
 4
@@ -378,6 +386,7 @@ oftype
 
 Insert one or more `items` at the end of `collection`.
 
+# Example
 ```jldoctest
 julia> push!([1, 2, 3], 4, 5, 6)
 6-element Array{Int64,1}:
@@ -399,6 +408,12 @@ push!
     promote(xs...)
 
 Convert all arguments to their common promotion type (if any), and return them all (as a tuple).
+
+# Example
+```jldoctest
+julia> promote(Int8(1), Float16(4.5), Float32(4.1))
+(1.0f0, 4.5f0, 4.1f0)
+```
 """
 promote
 
@@ -418,6 +433,7 @@ Create an array of all ones with the same layout as `A`, element type `T` and si
 The `A` argument can be skipped, which behaves like `Array{Float64,0}()` was passed.
 For convenience `dims` may also be passed in variadic form.
 
+# Examples
 ```jldoctest
 julia> ones(Complex128, 2, 3)
 2×3 Array{Complex{Float64},2}:
@@ -549,6 +565,7 @@ print_shortest
 
 Construct a tuple of the given objects.
 
+# Example
 ```jldoctest
 julia> tuple(1, 'a', pi)
 (1, 'a', π = 3.1415926535897...)
@@ -570,6 +587,7 @@ eachmatch
 
 Get a hexadecimal string of the binary representation of a floating point number.
 
+# Example
 ```jldoctest
 julia> num2hex(2.2)
 "400199999999999a"
@@ -590,6 +608,7 @@ truncate
 
 Compute ``10^x``.
 
+# Examples
 ```jldoctest
 julia> exp10(2)
 100.0
@@ -605,6 +624,7 @@ exp10
 
 Bitwise and.
 
+# Examples
 ```jldoctest
 julia> 4 & 10
 0
@@ -664,6 +684,41 @@ ErrorException
     reverse(v [, start=1 [, stop=length(v) ]] )
 
 Return a copy of `v` reversed from start to stop.
+
+# Examples
+```jldoctest
+julia> A = collect(1:5)
+5-element Array{Int64,1}:
+ 1
+ 2
+ 3
+ 4
+ 5
+
+julia> reverse(A)
+5-element Array{Int64,1}:
+ 5
+ 4
+ 3
+ 2
+ 1
+
+julia> reverse(A, 1, 4)
+5-element Array{Int64,1}:
+ 4
+ 3
+ 2
+ 1
+ 5
+
+julia> reverse(A, 3, 5)
+5-element Array{Int64,1}:
+ 1
+ 2
+ 5
+ 4
+ 3
+```
 """
 reverse
 
@@ -686,15 +741,14 @@ UndefRefError
 
 Add the elements of `collection2` to the end of `collection`.
 
+# Examples
 ```jldoctest
 julia> append!([1],[2,3])
 3-element Array{Int64,1}:
  1
  2
  3
-```
 
-```jldoctest
 julia> append!([1, 2, 3], [4, 5, 6])
 6-element Array{Int64,1}:
  1
@@ -730,6 +784,7 @@ setdiff!
 
 Return `z` which has the magnitude of `x` and the same sign as `y`.
 
+# Examples
 ```jldoctest
 julia> copysign(1, -2)
 -1
@@ -767,6 +822,7 @@ showcompact
 Extract a named field from a `value` of composite type. The syntax `a.b` calls
 `getfield(a, :b)`.
 
+# Example
 ```jldoctest
 julia> a = 1//2
 1//2
@@ -804,6 +860,7 @@ randstring
 Create a Float64 from `x`. If `x` is not exactly representable then `mode` determines how
 `x` is rounded.
 
+# Examples
 ```jldoctest
 julia> Float64(pi, RoundDown)
 3.141592653589793
@@ -821,6 +878,28 @@ Float64(x)
     ∪(s1,s2...)
 
 Construct the union of two or more sets. Maintains order with arrays.
+
+# Examples
+```jldoctest
+julia> union([1, 2], [3, 4])
+4-element Array{Int64,1}:
+ 1
+ 2
+ 3
+ 4
+
+julia> union([1, 2], [2, 4])
+3-element Array{Int64,1}:
+ 1
+ 2
+ 4
+
+julia> union([4, 2], [1, 2])
+3-element Array{Int64,1}:
+ 4
+ 2
+ 1
+```
 """
 union
 
@@ -829,6 +908,7 @@ union
 
 The highest finite value representable by the given floating-point DataType `T`.
 
+# Examples
 ```jldoctest
 julia> realmax(Float16)
 Float16(6.55e4)
@@ -855,6 +935,7 @@ serialize
 
 The lowest value representable by the given (real) numeric DataType `T`.
 
+# Examples
 ```jldoctest
 julia> typemin(Float16)
 -Inf16
@@ -938,6 +1019,7 @@ cglobal
 
 Returns the last index of the collection.
 
+# Example
 ```jldoctest
 julia> endof([1,2,4])
 3
@@ -950,6 +1032,7 @@ endof
 
 For a given iterable object and iteration state, return the current item and the next iteration state.
 
+# Examples
 ```jldoctest
 julia> next(1:5, 3)
 (3, 4)
@@ -1087,7 +1170,7 @@ if `k` is a range) values of a fully sorted version of `v`. If `k` is a single i
 those indices is returned. Note that the handling of integer values for `k` is different
 from `select` in that it returns a vector of `k` elements instead of just the `k` th
 element. Also note that this is equivalent to, but more efficient than, calling
-`sortperm(...)[k]`
+`sortperm(...)[k]`.
 """
 selectperm
 
@@ -1109,6 +1192,7 @@ For example,
     For example, `reinterpret(UInt32, UInt8[0, 0, 0, 0])` is not allowed but
     `reinterpret(UInt32, reinterpret(UInt8, Float32[1.0]))` is allowed.
 
+# Examples
 ```jldoctest
 julia> reinterpret(Float32, UInt32(7))
 1.0f-44
@@ -1125,6 +1209,7 @@ reinterpret
 
 Bitwise not.
 
+# Examples
 ```jldoctest
 julia> ~4
 -5
@@ -1143,6 +1228,7 @@ false
 
 Byte-swap an integer. Flip the bits of its binary representation.
 
+# Examples
 ```jldoctest
 julia> a = bswap(4)
 288230376151711744
@@ -1170,6 +1256,18 @@ maxintfloat
     delete!(collection, key)
 
 Delete the mapping for the given key in a collection, and return the collection.
+
+# Example
+```jldoctest
+julia> d = Dict("a"=>1, "b"=>2)
+Dict{String,Int64} with 2 entries:
+  "b" => 2
+  "a" => 1
+
+julia> delete!(d, "b")
+Dict{String,Int64} with 1 entry:
+  "a" => 1
+```
 """
 delete!
 
@@ -1179,6 +1277,15 @@ delete!
 
 Returns the index of the first value in `a` greater than or equal to `x`, according to the
 specified order. Returns `length(a)+1` if `x` is greater than all values in `a`.
+
+# Examples
+```jldoctest
+julia> searchsortedfirst([1, 2, 4, 5, 4], 4)
+3
+
+julia> searchsortedfirst([1, 2, 4, 5, 4], 4, rev=true)
+1
+```
 """
 searchsortedfirst
 
@@ -1232,6 +1339,15 @@ cot
 
 Return the value stored for the given key, or the given default value if no mapping for the
 key is present.
+
+# Examples
+```jldoctest
+julia> get(d, "a", 3)
+1
+
+julia> get(d, "c", 3)
+3
+```
 """
 get(collection,key,default)
 
@@ -1292,6 +1408,7 @@ read(stream, t)
 
 Remove the first `item` from `collection`.
 
+# Example
 ```jldoctest
 julia> A = [1, 2, 3, 4, 5, 6]
 6-element Array{Int64,1}:
@@ -1387,6 +1504,7 @@ copy
 
 Determine whether a collection is empty (has no elements).
 
+# Examples
 ```jldoctest
 julia> isempty([])
 true
@@ -1441,6 +1559,7 @@ IntSet
 Create a `Task` (i.e. coroutine) to execute the given function (which must be
 callable with no arguments). The task exits when this function returns.
 
+# Example
 ```jldoctest
 julia> a() = det(rand(1000, 1000));
 
@@ -1542,7 +1661,7 @@ mean!
 
 Test whether `x` is less than `y`, according to a canonical total order. Values that are
 normally unordered, such as `NaN`, are ordered in an arbitrary but consistent fashion. This
-is the default comparison used by `sort`. Non-numeric types with a canonical total order
+is the default comparison used by [`sort`](@ref). Non-numeric types with a canonical total order
 should implement this function. Numeric types only need to implement it if they have special
 values such as `NaN`.
 """
@@ -1662,6 +1781,7 @@ show(x)
 Return `true` if and only if all values of `type1` are also of `type2`. Can also be written
 using the `<:` infix operator as `type1 <: type2`.
 
+# Examples
 ```jldoctest
 julia> issubtype(Int8, Int32)
 false
@@ -1746,6 +1866,7 @@ matchall
 Return the value stored for the given key, or if no mapping for the key is present, store
 `key => default`, and return `default`.
 
+# Examples
 ```jldoctest
 julia> d = Dict("a"=>1, "b"=>2, "c"=>3);
 
@@ -1772,11 +1893,12 @@ Return the value stored for the given key, or if no mapping for the key is prese
 `key => f()`, and return `f()`.
 
 This is intended to be called using `do` block syntax:
-
+```julia
     get!(dict, key) do
         # default value calculated here
         time()
     end
+```
 """
 get!(f::Function,collection,key)
 
@@ -1806,6 +1928,7 @@ For ordered, indexable collections, returns the maximum index `i` for which `get
 is valid.
 For unordered collections, returns the number of elements.
 
+# Examples
 ```jldoctest
 julia> length(1:5)
 5
@@ -1821,6 +1944,15 @@ length(collection)
 
 Returns the index of the last value in `a` less than or equal to `x`, according to the
 specified order. Returns `0` if `x` is less than all values in `a`.
+
+# Examples
+```jldoctest
+julia> searchsortedlast([1, 2, 4, 5, 4], 4)
+3
+
+julia> searchsortedlast([1, 2, 4, 5, 4], 4, rev=true)
+5
+```
 """
 searchsortedlast
 
@@ -1919,6 +2051,7 @@ coth
 
 Get initial iteration state for an iterable object.
 
+# Examples
 ```jldoctest
 julia> start(1:5)
 1
@@ -1953,6 +2086,7 @@ isa
 
 Test whether we are done iterating.
 
+# Examples
 ```jldoctest
 julia> done(1:5, 3)
 false
@@ -1975,6 +2109,7 @@ If `T` is an [`Integer`](@ref) type, an [`InexactError`](@ref) will be raised if
 is not representable by `T`, for example if `x` is not integer-valued, or is outside the
 range supported by `T`.
 
+# Examples
 ```jldoctest
 julia> convert(Int, 3.0)
 3
@@ -2041,6 +2176,7 @@ convert
 
 Determine whether the given generic function has a method applicable to the given arguments.
 
+# Examples
 ```jldoctest
 julia> function f(x, y)
            x + y
@@ -2124,6 +2260,14 @@ throw
     ⊊(a,b) -> Bool
 
 Determine whether every element of `a` is also in `b`, using [`in`](@ref).
+
+```jldoctest
+julia> issubset([1, 2], [1, 2, 3])
+true
+
+julia> issubset([1, 2, 3], [1, 2])
+false
+```
 """
 issubset(a,b)
 
@@ -2142,7 +2286,7 @@ Create an array of all zeros with the same layout as `A`, element type `T` and s
 The `A` argument can be skipped, which behaves like `Array{Float64,0}()` was passed.
 For convenience `dims` may also be passed in variadic form.
 
-
+# Examples
 ```jldoctest
 julia> zeros(1)
 1-element Array{Float64,1}:
@@ -2207,6 +2351,18 @@ isvalid(T,value)
 
 Convert a number to an unsigned integer. If the argument is signed, it is reinterpreted as
 unsigned without checking for negative values.
+
+# Examples
+```jldoctest
+julia> unsigned(-2)
+0xfffffffffffffffe
+
+julia> unsigned(2)
+0x0000000000000002
+
+julia> signed(unsigned(-2))
+-2
+```
 """
 unsigned
 
@@ -2224,6 +2380,7 @@ reverseind
 
 Returns `true` if the value of the sign of `x` is negative, otherwise `false`.
 
+# Examples
 ```jldoctest
 julia> signbit(-4)
 true
@@ -2315,6 +2472,7 @@ If `x` is a type, return a "larger" type (for numeric types, this will be
 a type with at least as much range and precision as the argument, and usually more).
 Otherwise `x` is converted to `widen(typeof(x))`.
 
+# Examples
 ```jldoctest
 julia> widen(Int32)
 Int64
@@ -2357,6 +2515,7 @@ Val
 
 Bitwise or.
 
+# Examples
 ```jldoctest
 julia> 4 | 10
 14
@@ -2373,6 +2532,7 @@ Base.:(|)
 Delete and return the mapping for `key` if it exists in `collection`, otherwise return
 `default`, or throw an error if `default` is not specified.
 
+# Examples
 ```jldoctest
 julia> d = Dict("a"=>1, "b"=>2, "c"=>3);
 
@@ -2396,6 +2556,7 @@ pop!(collection,key,?)
 Remove an item in `collection` and return it. If `collection` is an
 ordered container, the last item is returned.
 
+# Examples
 ```jldoctest
 julia> A=[1, 2, 3]
 3-element Array{Int64,1}:
