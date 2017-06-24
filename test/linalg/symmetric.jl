@@ -232,9 +232,9 @@ end
             @test asym^-2.0 ≈ Symmetric((a+a')^-2.0)
         else
             @test asym^2 ≈ Hermitian((a+a')^2)
-            @test full(asym^-2) ≈ (a+a')^-2
+            @test Array(asym^-2) ≈ (a+a')^-2
             @test asym^2.0 ≈ Hermitian((a+a')^2.0)
-            @test full(asym^-2.0) ≈ (a+a')^-2.0
+            @test Array(asym^-2.0) ≈ (a+a')^-2.0
         end
     end
 end

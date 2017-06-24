@@ -343,5 +343,6 @@ Base.:<(a::ModInt{n}, b::ModInt{n}) where {n} = a.k < b.k
 
 @test A*(lufact(A, Val{true})\b) == b
 
+# test that the fallback throws properly for AbstractArrays with dimension > 2
 @test_throws ErrorException ctranspose(rand(2,2,2,2))
 @test_throws ErrorException transpose(rand(2,2,2,2))

@@ -270,10 +270,10 @@ end
 end
 
 @testset "setindex!/getindex" begin
-    v = [2,3,4]
+    v = [2, 3, 4]
     rv = v.'
     @test_throws BoundsError setindex!(rv, 5, CartesianIndex((5, 4, 3)))
-    rv[CartesianIndex((1,1,1))] = 5
+    rv[CartesianIndex((1, 1, 1))] = 5
     @test_throws BoundsError getindex(rv, CartesianIndex((5, 4, 3)))
     @test rv[1] == 5
 

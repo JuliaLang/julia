@@ -163,16 +163,17 @@ srand(1)
         @test (r = full(D)' * U  ; Ac_mul_B!(UU, D, U) ≈ r ≈ UU)
         @test (r = full(D).' * U ; At_mul_B!(UU, D, U) ≈ r ≈ UU)
 
-        VV = full(D)
+        # make sure that A_mul_B{c,t}! works with B as a Diagonal
+        VV = Array(D)
         DD = copy(D)
         r  = VV * full(D)
-        @test full(A_mul_B!(VV, DD)) ≈ r ≈ full(D)*full(D)
+        @test Array(A_mul_B!(VV, DD)) ≈ r ≈ Array(D)*Array(D)
         DD = copy(D)
-        r  = VV * (full(D).')
-        @test full(A_mul_Bt!(VV, DD)) ≈ r
+        r  = VV * (Array(D).')
+        @test Array(A_mul_Bt!(VV, DD)) ≈ r
         DD = copy(D)
-        r  = VV * (full(D)')
-        @test full(A_mul_Bc!(VV, DD)) ≈ r
+        r  = VV * (Array(D)')
+        @test Array(A_mul_Bc!(VV, DD)) ≈ r
     end
     @testset "triu/tril" begin
         @test istriu(D)
