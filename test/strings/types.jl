@@ -86,6 +86,12 @@ u = SubString(str, 1, 5)
 @test rsearch(u, 'z') == 0
 @test rsearch(u, "ll") == 3:4
 
+# SubString created from SubString
+str = "Hello, world!"
+u = SubString(str, 2, 5)
+@test SubString(u, 2, 3) == u[2:3]
+@test SubString(u, 1, 10) == u
+
 # sizeof
 @test sizeof(SubString("abc\u2222def",4,4)) == 3
 
