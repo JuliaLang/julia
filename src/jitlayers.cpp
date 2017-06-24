@@ -244,6 +244,11 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level)
 #endif
 }
 
+extern "C" JL_DLLEXPORT
+void jl_add_optimization_passes(LLVMPassManagerRef PM, int opt_level) {
+    addOptimizationPasses(unwrap(PM), opt_level);
+}
+
 // ------------------------ TEMPORARILY COPIED FROM LLVM -----------------
 // This must be kept in sync with gdb/gdb/jit.h .
 extern "C" {
