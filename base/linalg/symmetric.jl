@@ -8,7 +8,8 @@ end
 """
     Symmetric(A, uplo=:U)
 
-Construct a `Symmetric` matrix from the upper (if `uplo = :U`) or lower (if `uplo = :L`) triangle of `A`.
+Construct a `Symmetric` view of the upper (if `uplo = :U`) or lower (if `uplo = :L`)
+triangle of the matrix `A`.
 
 # Example
 
@@ -57,7 +58,8 @@ end
 """
     Hermitian(A, uplo=:U)
 
-Construct a `Hermitian` matrix from the upper (if `uplo = :U`) or lower (if `uplo = :L`) triangle of `A`.
+Construct a `Hermitian` view of the upper (if `uplo = :U`) or lower (if `uplo = :L`)
+triangle of the matrix `A`.
 
 # Example
 

@@ -160,7 +160,7 @@ end
     chol(A) -> U
 
 Compute the Cholesky factorization of a positive definite matrix `A`
-and return the UpperTriangular matrix `U` such that `A = U'U`.
+and return the [`UpperTriangular`](@ref) matrix `U` such that `A = U'U`.
 
 # Example
 
