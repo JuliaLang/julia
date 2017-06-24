@@ -734,4 +734,140 @@ true
 """
 Function
 
+"""
+    Number
+
+Abstract supertype for all number types.
+"""
+Number
+
+"""
+    Real <: Number
+
+Abstract supertype for all real numbers.
+"""
+Real
+
+"""
+    AbstractFloat <: Real
+
+Abstract supertype for all floating point numbers.
+"""
+AbstractFloat
+
+"""
+    Integer <: Real
+
+Abstract supertype for all integers.
+"""
+Integer
+
+"""
+    Signed <: Integer
+
+Abstract supertype for all signed integers.
+"""
+Signed
+
+"""
+    Unsigned <: Integer
+
+Abstract supertype for all unsigned integers.
+"""
+Unsigned
+
+for bit in (16, 32, 64)
+    @eval begin
+        """
+            Float$($bit) <: AbstractFloat
+
+        $($bit)-bit floating point number type.
+        """
+        $(Symbol("Float", bit))
+    end
+end
+
+"""
+    Bool <: Integer
+
+Boolean type.
+"""
+Bool
+
+for bit in (8, 16, 32, 64, 128)
+    @eval begin
+        """
+            Int$($bit) <: Signed
+
+        $($bit)-bit signed integer type.
+        """
+        $(Symbol("Int", bit))
+
+        """
+            UInt$($bit) <: Unsigned
+
+        $($bit)-bit unsigned integer type.
+        """
+        $(Symbol("UInt", bit))
+    end
+end
+
+"""
+    DivideError()
+
+Integer division was attempted with a denominator value of 0.
+"""
+DivideError
+
+"""
+    DomainError()
+
+The arguments to a function or constructor are outside the valid domain.
+"""
+DomainError
+
+"""
+    OverflowError()
+
+The result of an expression is too large for the specified type and will cause a wraparound.
+"""
+OverflowError
+
+"""
+    InexactError()
+
+Type conversion cannot be done exactly.
+"""
+InexactError
+
+"""
+    OutOfMemoryError()
+
+An operation allocated too much memory for either the system or the garbage collector to
+handle properly.
+"""
+OutOfMemoryError
+
+"""
+    ReadOnlyMemoryError()
+
+An operation tried to write to memory that is read-only.
+"""
+ReadOnlyMemoryError
+
+"""
+    StackOverflowError()
+
+The function call grew beyond the size of the call stack. This usually happens when a call
+recurses infinitely.
+"""
+StackOverflowError
+
+"""
+    UndefRefError()
+
+The item or field is not defined for the given object.
+"""
+UndefRefError
+
 end

@@ -171,6 +171,12 @@ end
     throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
 end
 
+"""
+    tryparse(type, str, [base])
+
+Like [`parse`](@ref), but returns a [`Nullable`](@ref) of the requested type. The result will be null if the
+string does not contain a valid number.
+"""
 tryparse(::Type{T}, s::AbstractString, base::Integer) where {T<:Integer} =
     tryparse_internal(T, s, start(s), endof(s), check_valid_base(base), false)
 tryparse(::Type{T}, s::AbstractString) where {T<:Integer} =

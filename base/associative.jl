@@ -424,6 +424,27 @@ end
 get(t::ObjectIdDict, key::ANY, default::ANY) =
     ccall(:jl_eqtable_get, Any, (Any, Any, Any), t.ht, key, default)
 
+"""
+    pop!(collection, key[, default])
+
+Delete and return the mapping for `key` if it exists in `collection`, otherwise return
+`default`, or throw an error if `default` is not specified.
+
+```jldoctest
+julia> d = Dict("a"=>1, "b"=>2, "c"=>3);
+
+julia> pop!(d, "a")
+1
+
+julia> pop!(d, "d")
+ERROR: KeyError: key "d" not found
+Stacktrace:
+ [1] pop!(::Dict{String,Int64}, ::String) at ./dict.jl:539
+
+julia> pop!(d, "e", 4)
+4
+```
+"""
 function pop!(t::ObjectIdDict, key::ANY, default::ANY)
     val = ccall(:jl_eqtable_pop, Any, (Any, Any, Any), t.ht, key, default)
     # TODO: this can underestimate `ndel`

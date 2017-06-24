@@ -842,6 +842,11 @@ Represents the array `y` as an array having the same indices type as `x`.
 """
 of_indices(x, y) = similar(dims->y, oftype(indices(x), indices(y)))
 
+"""
+    full(F)
+
+Reconstruct the matrix `A` from the factorization `F=factorize(A)`.
+"""
 full(x::AbstractArray) = x
 
 ## range conversions ##
@@ -959,6 +964,11 @@ _unsafe_ind2sub(sz, i) = (@_inline_meta; ind2sub(sz, i))
 
 ## Setindex! is defined similarly. We first dispatch to an internal _setindex!
 # function that allows dispatch on array storage
+"""
+    setindex!(A::AbstractArray, X, inds...)
+
+Store values from array `X` within some subset of `A` as specified by `inds`.
+"""
 function setindex!(A::AbstractArray, v, I...)
     @_propagate_inbounds_meta
     error_if_canonical_indexing(IndexStyle(A), A, I...)

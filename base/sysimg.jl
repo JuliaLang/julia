@@ -102,6 +102,11 @@ importall .Checked
 (::Type{T})(arg) where {T} = convert(T, arg)::T # Hidden from the REPL.
 
 # vararg Symbol constructor
+"""
+    Symbol(x...) -> Symbol
+
+Create a `Symbol` by concatenating the string representations of the arguments together.
+"""
 Symbol(x...) = Symbol(string(x...))
 
 # Define the broadcast function, which is mostly implemented in
