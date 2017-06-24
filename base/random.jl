@@ -93,6 +93,11 @@ MersenneTwister(seed::Vector{UInt32}, state::DSFMT_state) =
 
 Create a `MersenneTwister` RNG object. Different RNG objects can have their own seeds, which
 may be useful for generating different streams of random numbers.
+
+# Example
+```jldoctest
+julia> rng = MersenneTwister(1234);
+```
 """
 MersenneTwister(seed) = srand(MersenneTwister(Vector{UInt32}(), DSFMT_state()), seed)
 
@@ -303,6 +308,20 @@ Populate the array `A` with random values. If `S` is specified
 the values are picked randomly from `S`.
 This is equivalent to `copy!(A, rand(rng, S, size(A)))`
 but without allocating a new array.
+
+# Example
+
+```jldoctest
+julia> rng = MersenneTwister(1234);
+
+julia> rand!(rng, zeros(5))
+5-element Array{Float64,1}:
+ 0.590845
+ 0.766797
+ 0.566237
+ 0.460085
+ 0.794026
+```
 """
 rand!(A::AbstractArray, r::AbstractArray) = rand!(GLOBAL_RNG, A, r)
 
@@ -751,6 +770,25 @@ end
     bitrand([rng=GLOBAL_RNG], [dims...])
 
 Generate a `BitArray` of random boolean values.
+
+# Example
+
+```jldoctest
+julia> rng = MersenneTwister(1234);
+
+julia> bitrand(rng, 10)
+10-element BitArray{1}:
+  true
+  true
+  true
+ false
+  true
+ false
+ false
+  true
+ false
+  true
+```
 """
 bitrand(r::AbstractRNG, dims::Dims)   = rand!(r, BitArray(dims))
 bitrand(r::AbstractRNG, dims::Integer...) = rand!(r, BitArray(convert(Dims, dims)))
@@ -1261,6 +1299,20 @@ The `Base` module currently provides an implementation for the types
 [`Float16`](@ref), [`Float32`](@ref), and [`Float64`](@ref) (the default), and their
 [`Complex`](@ref) counterparts. When the type argument is complex, the values are drawn
 from the circularly symmetric complex normal distribution.
+
+# Examples
+
+```jldoctest
+julia> rng = MersenneTwister(1234);
+
+julia> randn(rng, Complex128)
+0.6133070881429037 - 0.6376291670853887im
+
+julia> randn(rng, Complex64, (2, 4))
+2×4 Array{Complex{Float32},2}:
+ -0.349649-0.638457im  0.376756-0.192146im  -0.396334-0.0136413im  -0.585317+0.0778497im
+  0.611224+1.56403im   0.355204-0.365563im  0.0905552+1.31012im    -0.177608+0.261427im
+```
 """
 @inline function randn(rng::AbstractRNG=GLOBAL_RNG)
     @inbounds begin
@@ -1295,6 +1347,21 @@ Generate a random number of type `T` according to the exponential distribution w
 Optionally generate an array of such random numbers.
 The `Base` module currently provides an implementation for the types
 [`Float16`](@ref), [`Float32`](@ref), and [`Float64`](@ref) (the default).
+
+# Examples
+
+```jldoctest
+julia> rng = MersenneTwister(1234);
+
+julia> randexp(rng, Float32)
+2.4835055f0
+
+julia> randexp(rng, 3, 3)
+3×3 Array{Float64,2}:
+ 1.5167    1.30652   0.344435
+ 0.604436  2.78029   0.418516
+ 0.695867  0.693292  0.643644
+```
 """
 @inline function randexp(rng::AbstractRNG=GLOBAL_RNG)
     @inbounds begin
@@ -1321,6 +1388,20 @@ end
 
 Fill the array `A` with normally-distributed (mean 0, standard deviation 1) random numbers.
 Also see the [`rand`](@ref) function.
+
+# Example
+
+```jldoctest
+julia> rng = MersenneTwister(1234);
+
+julia> randn!(rng, zeros(5))
+5-element Array{Float64,1}:
+  0.867347
+ -0.901744
+ -0.494479
+ -0.902914
+  0.864401
+```
 """
 function randn! end
 
@@ -1328,6 +1409,20 @@ function randn! end
     randexp!([rng=GLOBAL_RNG], A::AbstractArray) -> A
 
 Fill the array `A` with random numbers following the exponential distribution (with scale 1).
+
+# Example
+
+```jldoctest
+julia> rng = MersenneTwister(1234);
+
+julia> randexp!(rng, zeros(5))
+5-element Array{Float64,1}:
+ 2.48351
+ 1.5167
+ 0.604436
+ 0.695867
+ 1.30652
+```
 """
 function randexp! end
 
@@ -1382,6 +1477,15 @@ end
 Generates a version 1 (time-based) universally unique identifier (UUID), as specified
 by RFC 4122. Note that the Node ID is randomly generated (does not identify the host)
 according to section 4.5 of the RFC.
+
+# Example
+
+```jldoctest
+julia> rng = MersenneTwister(1234);
+
+julia> Base.Random.uuid1(rng)
+2cc938da-5937-11e7-196e-0f4ef71aa64b
+```
 """
 function uuid1(rng::AbstractRNG=GLOBAL_RNG)
     u = rand(rng, UInt128)
@@ -1411,6 +1515,14 @@ end
 
 Generates a version 4 (random or pseudo-random) universally unique identifier (UUID),
 as specified by RFC 4122.
+
+# Example
+```jldoctest
+julia> rng = MersenneTwister(1234);
+
+julia> Base.Random.uuid4(rng)
+82015f10-44cc-4827-996e-0f4ef71aa64b
+```
 """
 function uuid4(rng::AbstractRNG=GLOBAL_RNG)
     u = rand(rng, UInt128)
@@ -1423,6 +1535,15 @@ end
     uuid_version(u::UUID) -> Integer
 
 Inspects the given UUID and returns its version (see RFC 4122).
+
+# Example
+
+```jldoctest
+julia> rng = MersenneTwister(1234);
+
+julia> Base.Random.uuid_version(Base.Random.uuid4(rng))
+4
+```
 """
 function uuid_version(u::UUID)
     Int((u.value >> 76) & 0xf)
@@ -1538,6 +1659,31 @@ end
 
 In-place version of [`shuffle`](@ref): randomly permute `v` in-place,
 optionally supplying the random-number generator `rng`.
+
+# Example
+
+```jldoctest
+julia> rng = MersenneTwister(1234);
+
+julia> shuffle!(rng, collect(1:16))
+16-element Array{Int64,1}:
+  2
+ 15
+  5
+ 14
+  1
+  9
+ 10
+  6
+ 11
+  3
+ 16
+  7
+  4
+ 12
+  8
+ 13
+```
 """
 function shuffle!(r::AbstractRNG, a::AbstractArray)
     n = length(a)
@@ -1560,6 +1706,25 @@ Return a randomly permuted copy of `v`. The optional `rng` argument specifies a 
 number generator (see [Random Numbers](@ref)).
 To permute `v` in-place, see [`shuffle!`](@ref). To obtain randomly permuted
 indices, see [`randperm`](@ref).
+
+# Example
+
+```jldoctest
+julia> rng = MersenneTwister(1234);
+
+julia> shuffle(rng, collect(1:10))
+10-element Array{Int64,1}:
+  6
+  1
+ 10
+  2
+  3
+  9
+  5
+  7
+  4
+  8
+```
 """
 shuffle(r::AbstractRNG, a::AbstractArray) = shuffle!(r, copymutable(a))
 shuffle(a::AbstractArray) = shuffle(GLOBAL_RNG, a)
@@ -1571,6 +1736,19 @@ Construct a random permutation of length `n`. The optional `rng` argument specif
 number generator (see [Random Numbers](@ref)).
 To randomly permute a arbitrary vector, see [`shuffle`](@ref)
 or [`shuffle!`](@ref).
+
+# Example
+
+```jldoctest
+julia> rng = MersenneTwister(1234);
+
+julia> randperm(rng, 4)
+4-element Array{Int64,1}:
+ 2
+ 1
+ 4
+ 3
+```
 """
 function randperm(r::AbstractRNG, n::Integer)
     a = Vector{typeof(n)}(n)
@@ -1597,6 +1775,21 @@ randperm(n::Integer) = randperm(GLOBAL_RNG, n)
 
 Construct a random cyclic permutation of length `n`. The optional `rng`
 argument specifies a random number generator, see [Random Numbers](@ref).
+
+# Example
+
+```jldoctest
+julia> rng = MersenneTwister(1234);
+
+julia> randcycle(rng, 6)
+6-element Array{Int64,1}:
+ 3
+ 5
+ 4
+ 6
+ 1
+ 2
+```
 """
 function randcycle(r::AbstractRNG, n::Integer)
     a = Vector{typeof(n)}(n)

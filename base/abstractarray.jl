@@ -799,7 +799,7 @@ A[iter] = 0
 
 If you supply more than one `AbstractArray` argument, `eachindex` will create an
 iterable object that is fast for all arguments (a `UnitRange`
-if all inputs have fast linear indexing, a `CartesianRange`
+if all inputs have fast linear indexing, a [`CartesianRange`](@ref)
 otherwise).
 If the arrays have different sizes and/or dimensionalities, `eachindex` returns an
 iterable that spans the largest range along each dimension.

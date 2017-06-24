@@ -499,6 +499,23 @@ Returns the range of indices of `a` which compare as equal to `x` (using binary 
 according to the order specified by the `by`, `lt` and `rev` keywords, assuming that `a`
 is already sorted in that order. Returns an empty range located at the insertion point
 if `a` does not contain values equal to `x`.
+
+# Examples
+
+```jldoctest
+julia> a = [4, 3, 2, 1]
+4-element Array{Int64,1}:
+ 4
+ 3
+ 2
+ 1
+
+julia> searchsorted(a, 4)
+5:4
+
+julia> searchsorted(a, 4, rev=true)
+1:1
+```
 """
 searchsorted
 
@@ -638,7 +655,7 @@ julia> 4 & 12
 """
     select(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
-Variant of `select!` which copies `v` before partially sorting it, thereby returning the
+Variant of [`select!`](@ref) which copies `v` before partially sorting it, thereby returning the
 same thing as `select!` but leaving `v` unmodified.
 """
 select
@@ -842,6 +859,48 @@ at the position where it would appear if the array were fully sorted via a non-s
 algorithm. If `k` is a single index, that value is returned; if `k` is a range, an array of
 values at those indices is returned. Note that `select!` does not fully sort the input
 array.
+
+# Examples
+
+```jldoctest
+julia> a = [1, 2, 4, 3, 4]
+5-element Array{Int64,1}:
+ 1
+ 2
+ 4
+ 3
+ 4
+
+julia> select!(a, 4)
+4
+
+julia> a
+5-element Array{Int64,1}:
+ 1
+ 2
+ 3
+ 4
+ 4
+
+julia> a = [1, 2, 4, 3, 4]
+5-element Array{Int64,1}:
+ 1
+ 2
+ 4
+ 3
+ 4
+
+julia> select!(a, 4, rev=true)
+2
+
+julia> a
+5-element Array{Int64,1}:
+ 4
+ 4
+ 3
+ 2
+ 1
+```
 """
 select!
 
@@ -851,6 +910,15 @@ select!
 Create a random ASCII string of length `len`, consisting of upper- and
 lower-case letters and the digits 0-9. The optional `rng` argument
 specifies a random number generator, see [Random Numbers](@ref).
+
+# Example
+
+```jldoctest
+julia> rng = MersenneTwister(1234);
+
+julia> randstring(rng, 4)
+"mbDd"
+```
 """
 randstring
 
@@ -1168,7 +1236,7 @@ Return a partial permutation of the vector `v`, according to the order specified
 if `k` is a range) values of a fully sorted version of `v`. If `k` is a single index
 (Integer), an array of the first `k` indices is returned; if `k` is a range, an array of
 those indices is returned. Note that the handling of integer values for `k` is different
-from `select` in that it returns a vector of `k` elements instead of just the `k` th
+from [`select`](@ref) in that it returns a vector of `k` elements instead of just the `k` th
 element. Also note that this is equivalent to, but more efficient than, calling
 `sortperm(...)[k]`.
 """
@@ -1279,12 +1347,16 @@ Returns the index of the first value in `a` greater than or equal to `x`, accord
 specified order. Returns `length(a)+1` if `x` is greater than all values in `a`.
 
 # Examples
+
 ```jldoctest
 julia> searchsortedfirst([1, 2, 4, 5, 4], 4)
 3
 
 julia> searchsortedfirst([1, 2, 4, 5, 4], 4, rev=true)
 1
+
+julia> searchsortedfirst([1, 2, 4, 5, 4], 6)
+6
 ```
 """
 searchsortedfirst
@@ -1315,7 +1387,7 @@ typejoin
 """
     selectperm!(ix, v, k, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false,] [initialized=false])
 
-Like `selectperm`, but accepts a preallocated index vector `ix`. If `initialized` is `false`
+Like [`selectperm`](@ref), but accepts a preallocated index vector `ix`. If `initialized` is `false`
 (the default), ix is initialized to contain the values `1:length(ix)`.
 """
 selectperm!
@@ -1342,6 +1414,8 @@ key is present.
 
 # Examples
 ```jldoctest
+julia> d = Dict("a"=>1, "b"=>2)
+
 julia> get(d, "a", 3)
 1
 
@@ -1946,12 +2020,16 @@ Returns the index of the last value in `a` less than or equal to `x`, according 
 specified order. Returns `0` if `x` is less than all values in `a`.
 
 # Examples
+
 ```jldoctest
 julia> searchsortedlast([1, 2, 4, 5, 4], 4)
 3
 
 julia> searchsortedlast([1, 2, 4, 5, 4], 4, rev=true)
 5
+
+julia> searchsortedlast([1, 2, 4, 5, 4], -1)
+0
 ```
 """
 searchsortedlast

@@ -63,6 +63,7 @@ end
 Test whether a vector is in sorted order. The `lt`, `by` and `rev` keywords modify what
 order is considered to be sorted just as they do for [`sort`](@ref).
 
+# Examples
 ```jldoctest
 julia> issorted([1, 2, 3])
 true
@@ -447,6 +448,8 @@ options are independent and can be used together in all possible combinations: i
 and `lt` are specified, the `lt` function is applied to the result of the `by` function;
 `rev=true` reverses whatever ordering specified via the `by` and `lt` keywords.
 
+# Examples
+
 ```jldoctest
 julia> v = [3, 1, 2]; sort!(v); v
 3-element Array{Int64,1}:
@@ -522,6 +525,8 @@ end
 
 Variant of [`sort!`](@ref) that returns a sorted copy of `v` leaving `v` itself unmodified.
 
+# Examples
+
 ```jldoctest
 julia> v = [3, 1, 2];
 
@@ -578,6 +583,8 @@ specified using the same keywords as `sort!`.
 
 See also [`sortperm!`](@ref).
 
+# Examples
+
 ```jldoctest
 julia> v = [3, 1, 2];
 
@@ -625,6 +632,8 @@ end
 
 Like [`sortperm`](@ref), but accepts a preallocated index vector `ix`.  If `initialized` is `false`
 (the default), `ix` is initialized to contain the values `1:length(v)`.
+
+# Examples
 
 ```jldoctest
 julia> v = [3, 1, 2]; p = zeros(Int, 3);
@@ -690,6 +699,8 @@ end
 Sort a multidimensional array `A` along the given dimension.
 See [`sort!`](@ref) for a description of possible
 keyword arguments.
+
+# Examples
 
 ```jldoctest
 julia> A = [4 3; 1 2]
