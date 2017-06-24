@@ -357,3 +357,18 @@ end
     @test logm(D) == Diagonal([logm([1 2; 3 4]), logm([1 2; 3 4])])
     @test sqrtm(D) == Diagonal([sqrtm([1 2; 3 4]), sqrtm([1 2; 3 4])])
 end
+
+@testset "multiplication with Symmetric/Hermitian" begin
+    for T in (Float64, Complex128)
+        D = Diagonal(randn(T, n))
+        A = randn(T, n, n); A = A'A
+        S = Symmetric(A)
+        H = Hermitian(A)
+        for f in (*, Ac_mul_B, A_mul_Bc, Ac_mul_Bc, At_mul_B, A_mul_Bt, At_mul_Bt)
+            @test f(D, S) ≈ f(Matrix(D), Matrix(S))
+            @test f(D, H) ≈ f(Matrix(D), Matrix(H))
+            @test f(S, D) ≈ f(Matrix(S), Matrix(D))
+            @test f(S, H) ≈ f(Matrix(S), Matrix(H))
+        end
+    end
+end

@@ -150,9 +150,9 @@ end
 (*)(D::Diagonal, B::AbstractTriangular) = A_mul_B!(D, copy(B))
 
 (*)(A::AbstractMatrix, D::Diagonal) =
-    scale!(similar(A, promote_op(*, eltype(A), eltype(D.diag))), A, D.diag)
+    scale!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), A, D.diag)
 (*)(D::Diagonal, A::AbstractMatrix) =
-    scale!(similar(A, promote_op(*, eltype(A), eltype(D.diag))), D.diag, A)
+    scale!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), D.diag, A)
 
 A_mul_B!(A::Union{LowerTriangular,UpperTriangular}, D::Diagonal) =
     typeof(A)(A_mul_B!(A.data, D))
