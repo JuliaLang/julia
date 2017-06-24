@@ -88,8 +88,15 @@ size(B::BunchKaufman, d::Integer) = size(B.LD, d)
 issymmetric(B::BunchKaufman) = B.symmetric
 ishermitian(B::BunchKaufman) = !B.symmetric
 
+issuccess(B::BunchKaufman) = B.info == 0
+
+function Base.show(io::IO, F::BunchKaufman)
+    println(io, summary(F))
+    print(io, "successful: $(issuccess(F))")
+end
+
 function inv(B::BunchKaufman{<:BlasReal})
-    if B.info > 0
+    if !issuccess(B)
         throw(SingularException(B.info))
     end
 
@@ -101,7 +108,7 @@ function inv(B::BunchKaufman{<:BlasReal})
 end
 
 function inv(B::BunchKaufman{<:BlasComplex})
-    if B.info > 0
+    if !issuccess(B)
         throw(SingularException(B.info))
     end
 
@@ -121,7 +128,7 @@ function inv(B::BunchKaufman{<:BlasComplex})
 end
 
 function A_ldiv_B!(B::BunchKaufman{T}, R::StridedVecOrMat{T}) where T<:BlasReal
-    if B.info > 0
+    if !issuccess(B)
         throw(SingularException(B.info))
     end
 
@@ -132,7 +139,7 @@ function A_ldiv_B!(B::BunchKaufman{T}, R::StridedVecOrMat{T}) where T<:BlasReal
     end
 end
 function A_ldiv_B!(B::BunchKaufman{T}, R::StridedVecOrMat{T}) where T<:BlasComplex
-    if B.info > 0
+    if !issuccess(B)
         throw(SingularException(B.info))
     end
 
@@ -161,7 +168,7 @@ function logabsdet(F::BunchKaufman)
     p = F.ipiv
     n = size(F.LD, 1)
 
-    if F.info > 0
+    if !issuccess(F)
         return eltype(F)(-Inf), zero(eltype(F))
     end
     s = one(real(eltype(F)))

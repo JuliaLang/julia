@@ -410,8 +410,13 @@ function getindex(C::CholeskyPivoted{T}, d::Symbol) where T<:BlasFloat
     throw(KeyError(d))
 end
 
-show(io::IO, C::Cholesky{<:Any,<:AbstractMatrix}) =
-    (println(io, "$(typeof(C)) with factor:");show(io,C[:UL]))
+issuccess(C::Cholesky) = C.info == 0
+
+function show(io::IO, C::Cholesky{<:Any,<:AbstractMatrix})
+    println(io, "$(typeof(C)) with factor:")
+    show(io, C[:UL])
+    print(io, "\nsuccessful: $(issuccess(C))")
+end
 
 A_ldiv_B!(C::Cholesky{T,<:AbstractMatrix}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
     @assertposdef LAPACK.potrs!(C.uplo, C.factors, B) C.info
@@ -464,11 +469,12 @@ end
 isposdef(C::Cholesky) = C.info == 0
 
 function det(C::Cholesky)
+    isposdef(C) || throw(PosDefException(C.info))
     dd = one(real(eltype(C)))
     @inbounds for i in 1:size(C.factors,1)
         dd *= real(C.factors[i,i])^2
     end
-    @assertposdef dd C.info
+    return dd
 end
 
 function logdet(C::Cholesky)

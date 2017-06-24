@@ -7,7 +7,7 @@ import Base: (*), convert, copy, eltype, get, getindex, show, size,
 
 import Base.LinAlg: (\), A_mul_Bc, A_mul_Bt, Ac_ldiv_B, Ac_mul_B, At_ldiv_B, At_mul_B,
                  cholfact, cholfact!, det, diag, ishermitian, isposdef,
-                 issymmetric, ldltfact, ldltfact!, logdet
+                 issuccess, issymmetric, ldltfact, ldltfact!, logdet
 
 importall ..SparseArrays
 
@@ -789,6 +789,14 @@ function solve(sys::Integer, F::Factor{Tv}, B::Dense{Tv}) where Tv<:VTypes
         throw(DimensionMismatch("LHS and RHS should have the same number of rows. " *
             "LHS has $(size(F,1)) rows, but RHS has $(size(B,1)) rows."))
     end
+    if !issuccess(F)
+        s = unsafe_load(F.p)
+        if s.is_ll == 1
+            throw(LinAlg.PosDefException(s.minor))
+        else
+            throw(ArgumentError("factorized matrix has one or more zero pivots. Try using lufact instead."))
+        end
+    end
     d = Dense(ccall((@cholmod_name("solve", SuiteSparse_long),:libcholmod), Ptr{C_Dense{Tv}},
             (Cint, Ptr{C_Factor{Tv}}, Ptr{C_Dense{Tv}}, Ptr{UInt8}),
                 sys, get(F.p), get(B.p), common()))
@@ -1195,6 +1203,7 @@ function showfactor(io::IO, F::Factor)
     @printf(io, "method: %10s\n", s.is_super!=0 ? "supernodal" : "simplicial")
     @printf(io, "maxnnz: %10d\n", Int(s.nzmax))
     @printf(io, "nnz: %13d\n", nnz(F))
+    @printf(io, "success: %9s\n", "$(s.minor == size(F, 1))")
 end
 
 # getindex not defined for these, so don't use the normal array printer
@@ -1356,8 +1365,6 @@ function cholfact!(F::Factor{Tv}, A::Sparse{Tv}; shift::Real=0.0) where Tv
     # Compute the numerical factorization
     factorize_p!(A, shift, F, cm)
 
-    s = unsafe_load(get(F.p))
-    s.minor < size(A, 1) && throw(Base.LinAlg.PosDefException(s.minor))
     return F
 end
 
@@ -1397,8 +1404,6 @@ function cholfact(A::Sparse; shift::Real=0.0,
     # Compute the numerical factorization
     cholfact!(F, A; shift = shift)
 
-    s = unsafe_load(get(F.p))
-    s.minor < size(A, 1) && throw(Base.LinAlg.PosDefException(s.minor))
     return F
 end
 
@@ -1443,13 +1448,17 @@ cholfact(A::Union{SparseMatrixCSC{T}, SparseMatrixCSC{Complex{T}},
 
 
 function ldltfact!(F::Factor{Tv}, A::Sparse{Tv}; shift::Real=0.0) where Tv
-    cm = common()
+    cm = defaults(common())
+    set_print_level(cm, 0)
+
+    # Makes it an LDLt
+    unsafe_store!(common_final_ll, 0)
+    # Really make sure it's an LDLt by avoiding supernodal factorization
+    unsafe_store!(common_supernodal, 0)
 
     # Compute the numerical factorization
     factorize_p!(A, shift, F, cm)
 
-    s = unsafe_load(get(F.p))
-    s.minor < size(A, 1) && throw(Base.LinAlg.ArgumentError("matrix has one or more zero pivots"))
     return F
 end
 
@@ -1494,10 +1503,6 @@ function ldltfact(A::Sparse; shift::Real=0.0,
     # Compute the numerical factorization
     ldltfact!(F, A; shift = shift)
 
-    s = unsafe_load(get(F.p))
-    if s.minor < size(A, 1)
-        throw(Base.LinAlg.ArgumentError("matrix has one or more zero pivots"))
-    end
     return F
 end
 
@@ -1699,11 +1704,16 @@ for f in (:\, :Ac_ldiv_B)
     @eval function ($f)(A::Union{Symmetric{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}},
                           Hermitian{Float64,SparseMatrixCSC{Float64,SuiteSparse_long}},
                           Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},SuiteSparse_long}}}, B::StridedVecOrMat)
-        try
-            return ($f)(cholfact(A), B)
-        catch e
-            isa(e, LinAlg.PosDefException) || rethrow(e)
-            return ($f)(ldltfact(A) , B)
+        F = cholfact(A)
+        if issuccess(F)
+            return ($f)(F, B)
+        else
+            ldltfact!(F, A)
+            if issuccess(F)
+                return ($f)(F, B)
+            else
+                return ($f)(lufact(convert(SparseMatrixCSC{eltype(A), SuiteSparse_long}, A)), B)
+            end
         end
     end
 end
@@ -1750,17 +1760,27 @@ end
 
 det(L::Factor) = exp(logdet(L))
 
-function isposdef(A::SparseMatrixCSC{<:VTypes,SuiteSparse_long})
-    if !ishermitian(A)
+function issuccess(F::Factor)
+    s = unsafe_load(F.p)
+    return s.minor == size(F, 1)
+end
+
+function isposdef(F::Factor)
+    if issuccess(F)
+        s = unsafe_load(F.p)
+        if s.is_ll == 1
+            return true
+        else
+            # try conversion to LLt
+            change_factor!(eltype(F), true, s.is_super, true, s.is_monotonic, F)
+            b = issuccess(F)
+            # convert back
+            change_factor!(eltype(F), false, s.is_super, true, s.is_monotonic, F)
+            return b
+        end
+    else
         return false
     end
-    try
-        f = cholfact(A)
-    catch e
-        isa(e, LinAlg.PosDefException) || rethrow(e)
-        return false
-    end
-    true
 end
 
 function ishermitian(A::Sparse{Float64})

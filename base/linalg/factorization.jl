@@ -16,6 +16,25 @@ macro assertnonsingular(A, info)
    :($(esc(info)) == 0 ? $(esc(A)) : throw(SingularException($(esc(info)))))
 end
 
+"""
+    issuccess(F::Factorization)
+
+Test that a factorization of a matrix succeeded.
+
+```jldoctest
+julia> cholfact([1 0; 0 1])
+Base.LinAlg.Cholesky{Float64,Array{Float64,2}} with factor:
+[1.0 0.0; 0.0 1.0]
+successful: true
+
+julia> cholfact([1 0; 0 -1])
+Base.LinAlg.Cholesky{Float64,Array{Float64,2}} with factor:
+[1.0 0.0; 0.0 -1.0]
+successful: false
+```
+"""
+issuccess(F::Factorization)
+
 function logdet(F::Factorization)
     d, s = logabsdet(F)
     return d + log(s)

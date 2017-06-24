@@ -147,7 +147,7 @@ function lufact(A::AbstractMatrix{T}) where T
     AA = similar(A, S, size(A))
     copy!(AA, A)
     F = lufact!(AA, Val{false})
-    if F.info == 0
+    if issuccess(F)
         return F
     else
         AA = similar(A, S, size(A))
@@ -227,11 +227,14 @@ function getindex(F::LU{T,<:StridedMatrix}, d::Symbol) where T
     end
 end
 
-function show(io::IO, C::LU)
-    println(io, "$(typeof(C)) with factors L and U:")
-    show(io, C[:L])
+issuccess(F::LU) = F.info == 0
+
+function show(io::IO, F::LU)
+    println(io, "$(typeof(F)) with factors L and U:")
+    show(io, F[:L])
     println(io)
-    show(io, C[:U])
+    show(io, F[:U])
+    print(io, "\nsuccessful: $(issuccess(F))")
 end
 
 A_ldiv_B!(A::LU{T,<:StridedMatrix}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
@@ -271,31 +274,31 @@ Ac_ldiv_Bc(A::LU{T,<:StridedMatrix}, B::StridedVecOrMat{T}) where {T<:BlasComple
     @assertnonsingular LAPACK.getrs!('C', A.factors, A.ipiv, ctranspose(B)) A.info
 Ac_ldiv_Bc(A::LU, B::StridedVecOrMat) = Ac_ldiv_B(A, ctranspose(B))
 
-function det(A::LU{T}) where T
-    n = checksquare(A)
-    A.info > 0 && return zero(T)
+function det(F::LU{T}) where T
+    n = checksquare(F)
+    issuccess(F) || return zero(T)
     P = one(T)
     c = 0
     @inbounds for i = 1:n
-        P *= A.factors[i,i]
-        if A.ipiv[i] != i
-                c += 1
+        P *= F.factors[i,i]
+        if F.ipiv[i] != i
+            c += 1
         end
     end
     s = (isodd(c) ? -one(T) : one(T))
     return P * s
 end
 
-function logabsdet(A::LU{T}) where T  # return log(abs(det)) and sign(det)
-    n = checksquare(A)
-    A.info > 0 && return log(zero(real(T))), log(one(T))
+function logabsdet(F::LU{T}) where T  # return log(abs(det)) and sign(det)
+    n = checksquare(F)
+    issuccess(F) || return log(zero(real(T))), log(one(T))
     c = 0
     P = one(T)
     abs_det = zero(real(T))
     @inbounds for i = 1:n
-        dg_ii = A.factors[i,i]
+        dg_ii = F.factors[i,i]
         P *= sign(dg_ii)
-        if A.ipiv[i] != i
+        if F.ipiv[i] != i
             c += 1
         end
         abs_det += log(abs(dg_ii))

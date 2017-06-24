@@ -95,6 +95,7 @@ Base.LinAlg.logm
 Base.LinAlg.sqrtm
 Base.LinAlg.lyap
 Base.LinAlg.sylvester
+Base.LinAlg.issuccess
 Base.LinAlg.issymmetric
 Base.LinAlg.isposdef
 Base.LinAlg.isposdef!
