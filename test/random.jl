@@ -537,3 +537,9 @@ let g = Base.Random.GLOBAL_RNG,
     @test srand(m, rand(UInt32, rand(1:10))) === m
     @test srand(m, rand(1:10)) === m
 end
+
+# Issue 20062 - ensure internal functions reserve_1, reserve are type-stable
+let r = MersenneTwister(0)
+    @inferred Base.Random.reserve_1(r)
+    @inferred Base.Random.reserve(r, 1)
+end
