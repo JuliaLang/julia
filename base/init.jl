@@ -18,18 +18,19 @@ macro initialize(arg)
         info("Initializing installation...")
         interactive = $arg
 
-        if !isdir(Base._pkg_home())
-            info("Cloning $(Base.PKG_URI) ...")
-            repo = Base.LibGit2.clone(Base.PKG_URI, Base._pkg_home())
-            info("Checking out $(Base.PKG_VERSION)")
-            Base.LibGit2.branch!(
-                repo, Base.PKG_VERSION,
-                track=Base.LibGit2.Consts.REMOTE_ORIGIN
-            )
-        end
-
-        info("Loading Pkg.jl")
-        Pkg = include(joinpath(Base._pkg_home(), "src", "Pkg.jl"))
+        # The following will install Pkg from a git repository
+        # if !isdir(Base._pkg_home())
+        #     info("Cloning $(Base.PKG_URI) ...")
+        #     repo = Base.LibGit2.clone(Base.PKG_URI, Base._pkg_home())
+        #     info("Checking out $(Base.PKG_VERSION)")
+        #     Base.LibGit2.branch!(
+        #         repo, Base.PKG_VERSION,
+        #         track=Base.LibGit2.Consts.REMOTE_ORIGIN
+        #     )
+        # end
+        #
+        # info("Loading Pkg.jl")
+        # Pkg = include(joinpath(Base._pkg_home(), "src", "Pkg.jl"))
 
         info("Initializing package directory...")
         Pkg.init()

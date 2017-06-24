@@ -386,7 +386,7 @@ include("statistics.jl")
 include("libgit2/libgit2.jl")
 
 # package manager
-# include("pkg/pkg.jl")
+include("pkg/pkg.jl")
 include("init.jl")
 
 # profiler
