@@ -9,10 +9,15 @@ import Base.LinAlg: promote_to_array_type, promote_to_arrays_
 
 ### Types
 
+"""
+    SparseVector{Tv,Ti<:Integer} <: AbstractSparseVector{Tv,Ti}
+
+Vector type for storing sparse vectors.
+"""
 struct SparseVector{Tv,Ti<:Integer} <: AbstractSparseVector{Tv,Ti}
-    n::Int              # the number of elements
-    nzind::Vector{Ti}   # the indices of nonzeros
-    nzval::Vector{Tv}   # the values of nonzeros
+    n::Int              # Length of the sparse vector
+    nzind::Vector{Ti}   # Indices of stored values
+    nzval::Vector{Tv}   # Stored values, typically nonzeros
 
     function SparseVector{Tv,Ti}(n::Integer, nzind::Vector{Ti}, nzval::Vector{Tv}) where {Tv,Ti<:Integer}
         n >= 0 || throw(ArgumentError("The number of elements must be non-negative."))
