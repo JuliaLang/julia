@@ -4623,6 +4623,7 @@ function inline_worthy(body::Expr, cost::Integer=1000) # precondition: 0 < cost;
         if !(isa(stmt, SSAValue) || inline_ignore(stmt))
             nstmt += 1
         end
+        isa(stmt, Expr) && stmt.head == :enter && return false # don't inline functions with try/catch
     end
     if nstmt < (symlim + 500) ÷ 1000
         symlim *= 16
