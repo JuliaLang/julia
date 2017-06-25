@@ -1200,7 +1200,7 @@ Removes stored numerical zeros from `A`, optionally trimming resulting excess sp
 `A.rowval` and `A.nzval` when `trim` is `true`.
 
 For an out-of-place version, see [`dropzeros`](@ref). For
-algorithmic information, see [`fkeep!`](@ref).
+algorithmic information, see `fkeep!`.
 """
 dropzeros!(A::SparseMatrixCSC, trim::Bool = true) = fkeep!(A, (i, j, x) -> x != 0, trim)
 """

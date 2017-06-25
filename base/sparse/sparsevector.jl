@@ -1920,7 +1920,7 @@ Removes stored numerical zeros from `x`, optionally trimming resulting excess sp
 `x.nzind` and `x.nzval` when `trim` is `true`.
 
 For an out-of-place version, see [`dropzeros`](@ref). For
-algorithmic information, see [`fkeep!`](@ref).
+algorithmic information, see `fkeep!`.
 """
 dropzeros!(x::SparseVector, trim::Bool = true) = fkeep!(x, (i, x) -> x != 0, trim)
 """
