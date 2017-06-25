@@ -474,7 +474,7 @@ function tree_format(lilist::Vector{StackFrame}, counts::Vector{Int}, level::Int
     for i = 1:length(lilist)
         li = lilist[i]
         if li != UNKNOWN
-            base = " "^nindent
+            base = repeat(" ",nindent)
             if showextra
                 base = string(base, "+", nextra, " ")
             end

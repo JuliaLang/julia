@@ -55,21 +55,9 @@ sizeof(s::AbstractString) = error("type $(typeof(s)) has no canonical binary rep
 
 eltype(::Type{<:AbstractString}) = Char
 
-"""
-```
-*(s::AbstractString, t::AbstractString)
-```
-
-Concatenate strings. The `*` operator is an alias to this function.
-
-```jldoctest
-julia> "Hello " * "world"
-"Hello world"
-```
-"""
-(*)(s1::AbstractString, ss::AbstractString...) = string(s1, ss...)
-
-one(::Union{T,Type{T}}) where {T<:AbstractString} = convert(T, "")
+# make ++ concatenate strings [but string++array = vcat(string,array)]
+concat(::Type{String}, X...) = string(X...)
+concat_rule(::Type{<:AbstractString}, T) = (@_inline_meta; String)
 
 length(s::DirectIndexString) = endof(s)
 

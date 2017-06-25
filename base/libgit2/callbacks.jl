@@ -205,7 +205,7 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Void}}, url_ptr::Cstring,
 
     # parse url for schema and host
     urlparts = match(URL_REGEX, url)
-    schema = urlparts[:scheme] === nothing ? "" : urlparts[:scheme] * "://"
+    schema = urlparts[:scheme] === nothing ? "" : urlparts[:scheme] ++ "://"
     urlusername = urlparts[:user] === nothing ? "" : urlparts[:user]
     host = urlparts[:host]
 
@@ -241,7 +241,7 @@ function credentials_callback(libgit2credptr::Ptr{Ptr{Void}}, url_ptr::Cstring,
     # with the remote host.
     if err == 0
         if explicit
-            warn("The explicitly provided credentials were incompatible with " *
+            warn("The explicitly provided credentials were incompatible with ",
                  "the server's supported authentication methods")
         end
         err = Cint(Error.EAUTH)

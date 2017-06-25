@@ -129,7 +129,7 @@ function SharedArray{T,N}(dims::Dims{N}; init=false, pids=Int[]) where {T,N}
             else
                 rc = remotecall_fetch(shm_unlink, shmmem_create_pid, shm_seg_name)
             end
-            systemerror("Error unlinking shmem segment " * shm_seg_name, rc != 0)
+            systemerror("Error unlinking shmem segment " ++ shm_seg_name, rc != 0)
         end
         S = SharedArray{T,N}(dims, pids, refs, shm_seg_name, s)
         initialize_shared_array(S, onlocalhost, init, pids)
@@ -647,7 +647,7 @@ shm_unlink(shm_seg_name) = 0
 else # !windows
 function _shm_mmap_array(T, dims, shm_seg_name, mode)
     fd_mem = shm_open(shm_seg_name, mode, S_IRUSR | S_IWUSR)
-    systemerror("shm_open() failed for " * shm_seg_name, fd_mem < 0)
+    systemerror("shm_open() failed for " ++ shm_seg_name, fd_mem < 0)
 
     s = fdio(fd_mem, true)
 
@@ -655,7 +655,7 @@ function _shm_mmap_array(T, dims, shm_seg_name, mode)
     # and only at creation time
     if (mode & JL_O_CREAT) == JL_O_CREAT
         rc = ccall(:jl_ftruncate, Cint, (Cint, Int64), fd_mem, prod(dims)*sizeof(T))
-        systemerror("ftruncate() failed for shm segment " * shm_seg_name, rc != 0)
+        systemerror("ftruncate() failed for shm segment " ++ shm_seg_name, rc != 0)
     end
 
     Mmap.mmap(s, Array{T,length(dims)}, dims, zero(Int64); grow=false)

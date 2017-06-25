@@ -140,7 +140,7 @@ function find_all_in_cache_path(mod::Symbol)
     name = string(mod)
     paths = String[]
     for prefix in LOAD_CACHE_PATH
-        path = joinpath(prefix, name*".ji")
+        path = joinpath(prefix, name++".ji")
         if isfile_casesensitive(path)
             push!(paths, path)
         end
@@ -345,7 +345,7 @@ function require_modname(name::AbstractString)
         if endswith(name, ".jl")
             tmp = name[1:end-3]
             for prefix in LOAD_CACHE_PATH
-                path = joinpath(prefix, tmp*".ji")
+                path = joinpath(prefix, tmp++".ji")
                 if isfile(path)
                     return tmp
                 end
@@ -658,7 +658,7 @@ function compilecache(name::String)
     if !isdir(cachepath)
         mkpath(cachepath)
     end
-    cachefile::String = abspath(cachepath, name*".ji")
+    cachefile::String = abspath(cachepath, name++".ji")
     # build up the list of modules that we want the precompile process to preserve
     concrete_deps = copy(_concrete_dependencies)
     for existing in names(Main)

@@ -245,7 +245,7 @@ function issue_url(pkg::AbstractString)
     ispath(pkg,".git") || return ""
     m = match(LibGit2.GITHUB_REGEX, url(pkg))
     m === nothing && return ""
-    return "https://github.com/" * m.captures[1] * "/issues"
+    return "https://github.com/" ++ m.captures[1] ++ "/issues"
 end
 
 end # module

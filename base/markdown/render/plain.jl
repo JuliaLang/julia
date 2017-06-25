@@ -14,7 +14,7 @@ end
 plain(io::IO, md::MD) = plain(io, md.content)
 
 function plain(io::IO, header::Header{l}) where l
-    print(io, "#"^l*" ")
+    print(io, repeat("#",l)++" ")
     plaininline(io, header.text)
     println(io)
 end
@@ -122,7 +122,7 @@ plaininline(io::IO, md::Italic) = plaininline(io, "*", md.text, "*")
 function plaininline(io::IO, md::Code)
     if contains(md.code, "`")
         n = maximum(length(m) for m in matchall(r"(`+)", md.code))
-        s = "`"^((iseven(n) ? 1 : 2) + n)
+        s = repeat("`", (iseven(n) ? 1 : 2) + n)
         print(io, s, Base.startswith(md.code, "`") ? " " : "")
         print(io, md.code, endswith(md.code, "`") ? " " : "", s)
     else

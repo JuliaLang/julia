@@ -965,11 +965,11 @@ Int64
 julia> x           # now we print x
 4
 
-julia> y = foo("bar");
-String
+julia> y = foo(3.0);
+Float64
 
 julia> y
-"barbar"
+9.0
 ```
 
 So, we see that in the body of the generated function, `x` is the *type* of the passed argument,

@@ -770,7 +770,7 @@ function show(io::IOContext, x::AbstractSparseVector)
             end
             k != length(nzind) && println(io)
         elseif k == half_screen_rows
-            println(io, "   ", " "^pad, "   \u22ee")
+            println(io, "   ", repeat(" ",pad), "   \u22ee")
         end
     end
 end

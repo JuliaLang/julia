@@ -126,8 +126,8 @@ end
 
 chol!(x::Number, uplo) = ((C, info) = _chol!(x, uplo); @assertposdef C info)
 
-non_hermitian_error(f) = throw(ArgumentError("matrix is not symmetric/" *
-    "Hermitian. This error can be avoided by calling $f(Hermitian(A)) " *
+non_hermitian_error(f) = throw(ArgumentError("matrix is not symmetric/" ++
+    "Hermitian. This error can be avoided by calling $f(Hermitian(A)) " ++
     "which will ignore either the upper or lower triangle of the matrix."))
 
 # chol!. Destructive methods for computing Cholesky factor of real symmetric or Hermitian

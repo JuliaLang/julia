@@ -400,9 +400,9 @@ end
 
 function dict_identifier_key(str,tag)
     if tag === :string
-        str_close = str*"\""
+        str_close = str++"\""
     elseif tag === :cmd
-        str_close = str*"`"
+        str_close = str++"`"
     else
         str_close = str
     end
@@ -479,7 +479,7 @@ function completions(string, pos)
     if inc_tag == :other && should_method_complete(partial)
         frange, method_name_end = find_start_brace(partial)
         ex = Base.syntax_deprecation_warnings(false) do
-            parse(partial[frange] * ")", raise=false)
+            parse(partial[frange] ++ ")", raise=false)
         end
         if isa(ex, Expr) && ex.head==:call
             return complete_methods(ex), start(frange):method_name_end, false

@@ -178,7 +178,7 @@ function splitext(path::String)
     a, b = splitdrive(path)
     m = match(path_ext_splitter, b)
     m === nothing && return (path,"")
-    a*m.captures[1], String(m.captures[2])
+    a ++ m.captures[1], String(m.captures[2])
 end
 
 function pathsep(paths::AbstractString...)
@@ -252,10 +252,10 @@ function normpath(path::String)
     end
     path = join(parts, path_separator)
     if isabs
-        path = path_separator*path
+        path = path_separator ++ path
     end
     if isdir && !isdirpath(path)
-        path *= path_separator
+        path = path ++ path_separator
     end
     string(drive,path)
 end
@@ -333,7 +333,7 @@ function expanduser(path::AbstractString)
     if c != '~' return path end
     if done(path,i) return homedir() end
     c, j = next(path,i)
-    if c == '/' return homedir()*path[i:end] end
+    if c == '/' return homedir() ++ path[i:end] end
     throw(ArgumentError("~user tilde expansion not yet implemented"))
 end
 end
@@ -373,10 +373,10 @@ function relpath(path::String, startpath::String = ".")
     pathpart = join(path_arr[i+1:findlast(x -> !isempty(x), path_arr)], path_separator)
     prefix_num = findlast(x -> !isempty(x), start_arr) - i - 1
     if prefix_num >= 0
-        prefix = pardir * path_separator
+        prefix = pardir ++ path_separator
         relpath_ = isempty(pathpart)     ?
-            (prefix^prefix_num) * pardir :
-            (prefix^prefix_num) * pardir * path_separator * pathpart
+            repeat(prefix,prefix_num) ++ pardir :
+            repeat(prefix,prefix_num) ++ pardir ++ path_separator ++ pathpart
     else
         relpath_ = pathpart
     end

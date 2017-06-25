@@ -1522,7 +1522,7 @@ mktempdir() do dir
             #=
             # Explicitly setting these env variables to an existing but invalid key pair
             # means the user will be given a prompt with that defaults to the given values.
-            withenv("SSH_KEY_PATH" => invalid_key, "SSH_PUB_KEY_PATH" => invalid_key * ".pub") do
+            withenv("SSH_KEY_PATH" => invalid_key, "SSH_PUB_KEY_PATH" => invalid_key ++ ".pub") do
                 challenges = [
                     "Private key location for 'git@github.com' [$invalid_key]:" => "$valid_key\n",
                 ]
@@ -1535,7 +1535,7 @@ mktempdir() do dir
             # TODO: Tests are currently broken. Credential callback currently infinite loops
             # and never prompts user to change private keys.
             #=
-            withenv("SSH_KEY_PATH" => valid_key, "SSH_PUB_KEY_PATH" => valid_key * ".public") do
+            withenv("SSH_KEY_PATH" => valid_key, "SSH_PUB_KEY_PATH" => valid_key ++ ".public") do
                 @test !isfile(ENV["SSH_PUB_KEY_PATH"])
 
                 # User explicitly sets the SSH_PUB_KEY_PATH incorrectly.
@@ -1805,9 +1805,9 @@ mktempdir() do dir
         end
         if openssl_installed && !isempty(common_name)
             mktempdir() do root
-                key = joinpath(root, common_name * ".key")
-                cert = joinpath(root, common_name * ".crt")
-                pem = joinpath(root, common_name * ".pem")
+                key = joinpath(root, common_name ++ ".key")
+                cert = joinpath(root, common_name ++ ".crt")
+                pem = joinpath(root, common_name ++ ".pem")
 
                 # Generated a certificate which has the CN set correctly but no subjectAltName
                 run(pipeline(`openssl req -new -x509 -newkey rsa:2048 -nodes -keyout $key -out $cert -days 1 -subj "/CN=$common_name"`, stderr=DevNull))

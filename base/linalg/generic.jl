@@ -1058,7 +1058,7 @@ function linreg(x::AbstractVector, y::AbstractVector)
     # b = cov(X, Y)/var(X)
     # a = mean(Y) - b*mean(X)
     if size(x) != size(y)
-        throw(DimensionMismatch("x has size $(size(x)) and y has size $(size(y)), " *
+        throw(DimensionMismatch("x has size $(size(x)) and y has size $(size(y)), " ++
             "but these must be the same size"))
     end
     mx = mean(x)

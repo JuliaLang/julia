@@ -112,7 +112,7 @@ function check_worker_state(w::Worker)
             wait(w.c_state)
             w.state == W_CREATED && error("peer $(w.id) didn't connect to $(myid()) within $timeout seconds")
         else
-            error("peer $(w.id) is not connected to $(myid()). Topology : " * string(PGRP.topology))
+            error("peer $(w.id) is not connected to $(myid()). Topology : ", PGRP.topology)
         end
     end
 end

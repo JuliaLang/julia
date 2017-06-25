@@ -420,7 +420,7 @@ julia> string.(("one","two","three","four"), ": ", 1:4)
  "three: 3"
  "four: 4"
 
-julia> Nullable("X") .* "Y"
+julia> Nullable("X") .++ "Y"
 Nullable{String}("XY")
 
 julia> broadcast(/, 1.0, Nullable(2.0))

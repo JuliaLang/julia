@@ -89,12 +89,12 @@ for testport in [0, defaultport]
         close(sock)
     end
     wait(port)
-    @test readstring(connect(fetch(port))) == "Hello World\n" * ("a1\n"^100)
+    @test readstring(connect(fetch(port))) == "Hello World\n" ++ repeat("a1\n",100)
     wait(tsk)
 end
 
 mktempdir() do tmpdir
-    socketname = is_windows() ? ("\\\\.\\pipe\\uv-test-" * randstring(6)) : joinpath(tmpdir, "socket")
+    socketname = is_windows() ? ("\\\\.\\pipe\\uv-test-" ++ randstring(6)) : joinpath(tmpdir, "socket")
     c = Base.Condition()
     tsk = @async begin
         s = listen(socketname)
@@ -329,4 +329,3 @@ let
 
     @test test_connect(addr)
 end
-

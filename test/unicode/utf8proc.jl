@@ -6,8 +6,8 @@
     @test "\u006e\u0303" == normalize_string("\u00f1", :NFD)
     @test normalize_string("\ufb00", :NFC) != "ff"
     @test normalize_string("\ufb00", :NFKC) == "ff"
-    @test normalize_string("\u006e\u0303\ufb00", :NFKC) == "\u00f1"*"ff"
-    @test normalize_string("\u00f1\ufb00", :NFKD) == "\u006e\u0303"*"ff"
+    @test normalize_string("\u006e\u0303\ufb00", :NFKC) == "\u00f1"++"ff"
+    @test normalize_string("\u00f1\ufb00", :NFKD) == "\u006e\u0303"++"ff"
     @test normalize_string("\u006e\u0303", compose=true) == "\u00f1"
     @test "\u006e\u0303" == normalize_string("\u00f1", decompose=true)
     @test normalize_string("\u006e\u0303\u00b5",compat=true) == "\u00f1\u03bc"

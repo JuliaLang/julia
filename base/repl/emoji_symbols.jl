@@ -6,7 +6,7 @@ emojis = JSON.parsefile(download("https://raw.githubusercontent.com/iamcal/emoji
 
 result = Dict()
 for emj in emojis
-    name = "\\:" * emj["short_name"] * ":"
+    name = "\\:" ++ emj["short_name"] ++ ":"
     unicode = emj["unified"]
     if '-' in unicode
         continue

@@ -179,7 +179,7 @@ end
 ## Wrappers for UMFPACK functions
 
 # generate the name of the C function according to the value and integer types
-umf_nm(nm,Tv,Ti) = "umfpack_" * (Tv == :Float64 ? "d" : "z") * (Ti == :Int64 ? "l_" : "i_") * nm
+umf_nm(nm,Tv,Ti) = "umfpack_" ++ (Tv == :Float64 ? "d" : "z") ++ (Ti == :Int64 ? "l_" : "i_") ++ nm
 
 for itype in UmfpackIndexTypes
     sym_r = umf_nm("symbolic", :Float64, itype)

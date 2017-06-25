@@ -175,7 +175,7 @@ getindex(A::UpperTriangular, i::Integer, j::Integer) =
 
 function setindex!(A::UpperTriangular, x, i::Integer, j::Integer)
     if i > j
-        x == 0 || throw(ArgumentError("cannot set index in the lower triangular part " *
+        x == 0 || throw(ArgumentError("cannot set index in the lower triangular part " ++
             "($i, $j) of an UpperTriangular matrix to a nonzero value ($x)"))
     else
         A.data[i,j] = x
@@ -185,10 +185,10 @@ end
 
 function setindex!(A::UnitUpperTriangular, x, i::Integer, j::Integer)
     if i > j
-        x == 0 || throw(ArgumentError("cannot set index in the lower triangular part " *
+        x == 0 || throw(ArgumentError("cannot set index in the lower triangular part " ++
             "($i, $j) of a UnitUpperTriangular matrix to a nonzero value ($x)"))
     elseif i == j
-        x == 1 || throw(ArgumentError("cannot set index on the diagonal ($i, $j) " *
+        x == 1 || throw(ArgumentError("cannot set index on the diagonal ($i, $j) " ++
             "of a UnitUpperTriangular matrix to a non-unit value ($x)"))
     else
         A.data[i,j] = x
@@ -198,7 +198,7 @@ end
 
 function setindex!(A::LowerTriangular, x, i::Integer, j::Integer)
     if i < j
-        x == 0 || throw(ArgumentError("cannot set index in the upper triangular part " *
+        x == 0 || throw(ArgumentError("cannot set index in the upper triangular part " ++
             "($i, $j) of a LowerTriangular matrix to a nonzero value ($x)"))
     else
         A.data[i,j] = x
@@ -208,10 +208,10 @@ end
 
 function setindex!(A::UnitLowerTriangular, x, i::Integer, j::Integer)
     if i < j
-        x == 0 || throw(ArgumentError("cannot set index in the upper triangular part " *
+        x == 0 || throw(ArgumentError("cannot set index in the upper triangular part " ++
             "($i, $j) of a UnitLowerTriangular matrix to a nonzero value ($x)"))
     elseif i == j
-        x == 1 || throw(ArgumentError("cannot set index on the diagonal ($i, $j) " *
+        x == 1 || throw(ArgumentError("cannot set index on the diagonal ($i, $j) " ++
             "of a UnitLowerTriangular matrix to a non-unit value ($x)"))
     else
         A.data[i,j] = x

@@ -36,9 +36,9 @@ end
 function ldflags()
     fl = "-L$(shell_escape(libDir()))"
     if is_windows()
-        fl = fl * " -Wl,--stack,8388608"
+        fl = fl ++ " -Wl,--stack,8388608"
     elseif is_linux()
-        fl = fl * " -Wl,--export-dynamic"
+        fl = fl ++ " -Wl,--export-dynamic"
     end
     return fl
 end

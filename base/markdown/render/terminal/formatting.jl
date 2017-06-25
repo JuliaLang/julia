@@ -72,7 +72,7 @@ function wrapped_lines(s::AbstractString; width = 80, i = 0)
             push!(lines, word)
         else
             i += word_length + 1
-            lines[end] *= " " * word
+            lines[end] = lines[end] ++ " " ++ word
         end
     end
     return lines
@@ -95,7 +95,7 @@ print_wrapped(f::Function, io::IO, args...; kws...) = print_wrapped(io, f, args.
 function print_centred(io::IO, s...; columns = 80, width = columns)
     lines = wrapped_lines(s..., width = width)
     for line in lines
-        print(io, " "^(div(columns-ansi_length(line), 2)))
+        print(io, repeat(" ",div(columns-ansi_length(line), 2)))
         println(io, line)
     end
     length(lines), length(pre) + length(lines[end])
@@ -103,5 +103,5 @@ end
 
 function centred(s, columns)
     pad = div(columns - ansi_length(s), 2)
-    " "^pad * s
+    repeat(" ",pad) ++ s
 end

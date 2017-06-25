@@ -202,8 +202,8 @@ temp_pkg_dir() do
         error("unexpected")
     catch err
         @test isa(err.exceptions[1].ex, PkgError)
-        @test err.exceptions[1].ex.msg == "REPL can't be installed because " *
-            "it has no versions that support $VERSION of julia. You may " *
+        @test err.exceptions[1].ex.msg == "REPL can't be installed because " ++
+            "it has no versions that support $VERSION of julia. You may " ++
             "need to update METADATA by running `Pkg.update()`"
     end
 

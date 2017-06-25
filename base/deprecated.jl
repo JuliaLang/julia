@@ -395,8 +395,8 @@ export $
 
 # promote_op method where the operator is also a type
 function promote_op(op::Type, Ts::Type...)
-    depwarn("promote_op(op::Type, ::Type...) is deprecated as it is no " *
-            "longer needed in Base. If you need its functionality, consider " *
+    depwarn("promote_op(op::Type, ::Type...) is deprecated as it is no " ++
+            "longer needed in Base. If you need its functionality, consider " ++
             "defining it locally.", :promote_op)
     if isdefined(Core, :Inference)
         return Core.Inference.return_type(op, Tuple{Ts...})
@@ -721,8 +721,8 @@ _promote_array_type(::typeof(\), ::Type{<:Integer}, ::Type{Bool}, T::Type) = T
 _promote_array_type(F, ::Type{<:Integer}, ::Type{Bool}, T::Type) = T
 _promote_array_type{T<:AbstractFloat}(F, ::Type{<:Union{Complex, Real}}, ::Type{Complex{T}}, ::Type) = Complex{T}
 function promote_array_type(F, R, S, T)
-    Base.depwarn("`promote_array_type` is deprecated as it is no longer needed " *
-                 "in Base. See https://github.com/JuliaLang/julia/issues/19669 " *
+    Base.depwarn("`promote_array_type` is deprecated as it is no longer needed " ++
+                 "in Base. See https://github.com/JuliaLang/julia/issues/19669 " ++
                  "for more information.", :promote_array_type)
     _promote_array_type(F, R, S, T)
 end
@@ -1165,8 +1165,8 @@ end
         return func
     else
         msg = "$f($sig; negate=$negate) is deprecated, use $f("
-        negate && (msg *= "!")
-        msg *= "$sig) instead."
+        negate && (msg = msg ++ "!")
+        msg = msg ++ "$sig) instead."
         Base.depwarn(msg, f)
         return negate ? !func : func
     end
@@ -1433,6 +1433,10 @@ module Operators
     end
 end
 export Operators
+
+# deprecate old string-concatenation ops in favor of ++
+@deprecate (*)(s1::AbstractString, ss::AbstractString...) (++)(s1, ss...)
+@deprecate (^)(s::AbstractString, r::Integer) repeat(s,r)
 
 # PR #21956
 # This mimics the structure as it was defined in Base to avoid directly breaking code

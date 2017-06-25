@@ -695,7 +695,7 @@ function _dump_function_linfo(linfo::Core.MethodInstance, world::UInt, native::B
     end
 
     # TODO: use jl_is_cacheable_sig instead of isleaftype
-    isleaftype(linfo.specTypes) || (str = "; WARNING: This code may not match what actually runs.\n" * str)
+    isleaftype(linfo.specTypes) || (str = "; WARNING: This code may not match what actually runs.\n" ++ str)
     return str
 end
 
