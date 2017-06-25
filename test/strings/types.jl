@@ -32,18 +32,14 @@ ss=SubString(str,1,length(str)) #match source string
 ss=SubString(str,1,0)    #empty SubString
 @test length(ss)==0
 
-ss=SubString(str,14,20)  #start indexed beyond source string length
-@test length(ss)==0
+@test_throws BoundsError SubString(str,14,20)  #start indexed beyond source string length
 
-ss=SubString(str,10,16)  #end indexed beyond source string length
-@test length(ss)==3
+@test_throws BoundsError SubString(str,10,16)  #end indexed beyond source string length
 
 str2=""
-ss=SubString(str2,1,4)  #empty source string
-@test length(ss)==0
+@test_throws BoundsError SubString(str2,1,4)  #empty source string
 
-ss=SubString(str2,1,1)  #empty source string, identical start and end index
-@test length(ss)==0
+@test_throws BoundsError ss=SubString(str2,1,1)  #empty source string, identical start and end index
 
 @test SubString("foobar",big(1),big(3)) == "foo"
 
@@ -72,13 +68,6 @@ b = IOBuffer()
 write(b, u)
 @test String(take!(b)) == ""
 
-str = "føøbar"
-u = SubString(str, 10, 10)
-@test length(u)==0
-b = IOBuffer()
-write(b, u)
-@test String(take!(b)) == ""
-
 # search and SubString (issue #5679)
 str = "Hello, world!"
 u = SubString(str, 1, 5)
@@ -90,7 +79,7 @@ u = SubString(str, 1, 5)
 str = "Hello, world!"
 u = SubString(str, 2, 5)
 @test SubString(u, 2, 3) == u[2:3]
-@test SubString(u, 1, 10) == u
+@test_throws BoundsError SubString(u, 1, 10)
 
 # sizeof
 @test sizeof(SubString("abc\u2222def",4,4)) == 3
@@ -116,8 +105,6 @@ let s="lorem ipsum",
                SubString(s,1,6)=>"lorem ",
                SubString(s,1,0)=>"",
                SubString(s,2,4)=>"ore",
-               SubString(s,2,16)=>"orem ipsum",
-               SubString(s,12,14)=>""
                )
     for (ss,s) in sdict
         for i in -1:12

@@ -10,26 +10,34 @@ struct SubString{T<:AbstractString} <: AbstractString
     endof::Int
 
     function SubString{T}(s::T, i::Int, j::Int) where T<:AbstractString
-        if i > endof(s) || j<i
-            return new(s, i-1, 0)
-        else
-            if !isvalid(s,i)
-                throw(ArgumentError("invalid SubString index"))
-            end
+        i > j && return new(s, 0, 0)
+        i < 1 && throw(BoundsError(s, i))
+        j > endof(s) && throw(BoundsError(s, j))
 
-            while !isvalid(s,j) && j > i
-                j -= 1
-            end
-
-            o = i-1
-            new(s, o, max(0, j-o))
+        if !isvalid(s,i)
+            throw(ArgumentError("invalid SubString index i"))
         end
+
+        while !isvalid(s,j) && j > i
+            j -= 1
+        end
+
+        o = i-1
+        new(s, o, max(0, j-o))
     end
 end
+
 SubString(s::T, i::Int, j::Int) where {T<:AbstractString} = SubString{T}(s, i, j)
-SubString(s::SubString, i::Int, j::Int) = SubString(s.string, s.offset+i, s.offset+min(endof(s), j))
 SubString(s::AbstractString, i::Integer, j::Integer) = SubString(s, Int(i), Int(j))
 SubString(s::AbstractString, i::Integer) = SubString(s, i, endof(s))
+SubString(s::AbstractString, r::UnitRange{Integer}) = SubString(s, Int(first(r)), Int(last(r)))
+
+function SubString(s::SubString, i::Int, j::Int) 
+    i > j && SubString(s, 1, 0)
+    i < 1 && throw(BoundsError(s, i))
+    j > endof(s) && throw(BoundsError(s, j))
+    SubString(s.string, s.offset+i, s.offset+j)
+end
 
 sizeof(s::SubString{String}) = s.endof == 0 ? 0 : nextind(s, s.endof) - 1
 
