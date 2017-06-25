@@ -637,6 +637,26 @@ let #test that it can auto complete with spaces in file/path
         c,r = test_complete(s)
         @test r == 5:15
         @test s[r] ==  dir_space
+
+        #Test for #18479
+        for c in "'`@\$;&"
+            test_dir = "test$(c)test"
+            mkdir(joinpath(path, test_dir))
+            try
+                if !(c in ['\'','$']) # As these characters hold special meaning
+                    # in shell commands the shell path completion cannot complete
+                    # paths with these characters
+                    c,r,res = test_scomplete(test_dir)
+                    @test c[1] == test_dir*(is_windows() ? "\\\\" : "/")
+                    @test res
+                end
+                c,r,res  = test_complete("\""*test_dir)
+                @test c[1] == test_dir*(is_windows() ? "\\\\" : "/")
+                @test res
+            finally
+                rm(joinpath(path, test_dir), recursive=true)
+            end
+        end
     end
     rm(dir, recursive=true)
 end

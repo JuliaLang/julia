@@ -456,7 +456,7 @@ function completions(string, pos)
 
     # otherwise...
     if inc_tag in [:cmd, :string]
-        m = match(r"[\t\n\r\"'`@\$><=;|&\{]| (?!\\)", reverse(partial))
+        m = match(r"[\t\n\r\"><=*?|]| (?!\\)", reverse(partial))
         startpos = nextind(partial, reverseind(partial, m.offset))
         r = startpos:pos
         paths, r, success = complete_path(replace(string[r], r"\\ ", " "), pos)
