@@ -64,4 +64,4 @@ function config(;charset::Symbol = :na,
 end
 
 # Set up defaults
-config(charset=:ascii, scroll=:wrap)
+config(charset=:ascii, scroll=:nowrap)
