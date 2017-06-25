@@ -207,3 +207,10 @@ for T in [Base.BitInteger_types..., BigInt],
     U in [Base.BitInteger_types..., BigInt]
     @test typeof(rand(U(0):U(127)) % T) === T
 end
+
+
+@testset "left shift with Vector{Int} on BigInt-scalar #13832" begin
+    x = BigInt(1) .<< [1:70;]
+    @test x[end] == 1180591620717411303424
+    @test eltype(x) == BigInt
+end
