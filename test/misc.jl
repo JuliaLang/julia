@@ -742,3 +742,9 @@ end # module
     # @test @test_warn "A{T}(x::S) where {T, S} is deprecated, use f() instead." A{Int}(1.)
     # @test @test_nowarn A{Int}(1.)
 end
+
+@testset "inline bug #18735" begin
+    @noinline f(n) = n ? error() : Int
+    g() = Union{f(true)}
+    @test_throws ErrorException g()
+end
