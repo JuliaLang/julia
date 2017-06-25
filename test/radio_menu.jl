@@ -2,8 +2,8 @@
 @test RadioMenu <: TerminalMenus.AbstractMenu
 
 # Invalid Menu Params
-@test_throws Exception RadioMenu(["one"])
-@test_throws Exception RadioMenu(["one", "two", "three"], pagesize=1)
+@test_throws ErrorException RadioMenu(["one"])
+@test_throws ErrorException RadioMenu(["one", "two", "three"], pagesize=1)
 
 # Constructor
 @test RadioMenu(["one", "two", "three"]).pagesize == 3
@@ -17,3 +17,18 @@ radio_menu.selected = 2
 TerminalMenus.cancel(radio_menu)
 @test radio_menu.selected == -1
 @test TerminalMenus.header(radio_menu) == ""
+
+# Output
+TerminalMenus.config() # Use default chars
+CONFIG = TerminalMenus.CONFIG
+
+radio_menu = RadioMenu(string.(1:10))
+buf = IOBuffer()
+TerminalMenus.writeLine(buf, radio_menu, 1, true)
+@test String(take!(buf)) == string(CONFIG[:cursor], " 1")
+TerminalMenus.config(cursor='+')
+TerminalMenus.writeLine(buf, radio_menu, 1, true)
+@test String(take!(buf)) == "+ 1"
+TerminalMenus.config(charset=:unicode)
+TerminalMenus.writeLine(buf, radio_menu, 1, true)
+@test String(take!(buf)) == string(CONFIG[:cursor], " 1")

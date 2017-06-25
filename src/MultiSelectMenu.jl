@@ -38,8 +38,12 @@ end
 
 function writeLine(buf::IOBuffer, menu::MultiSelectMenu, idx::Int, cursor::Bool)
     # print a ">" on the selected entry
-    cursor ? print(buf, "> ") : print(buf, "  ")
-    idx in menu.selected ? print(buf, "[X] ") : print(buf, "[ ] ")
+    cursor ? print(buf, CONFIG[:cursor]," ") : print(buf, "  ")
+    if idx in menu.selected
+        print(buf, CONFIG[:checked], " ")
+    else
+        print(buf, CONFIG[:unchecked], " ")
+    end
 
     print(buf, replace(menu.options[idx], "\n", "\\n"))
 end

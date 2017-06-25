@@ -29,20 +29,41 @@ function request(m::AbstractMenu)
     try
         while true
             c = readKey()
+
             if c == Int(ARROW_UP)
-                # move selection
-                cursor -= cursor > 1 ? 1 : 0
-                # scroll the page
-                if cursor < (2+m.pageoffset) && m.pageoffset > 0
-                    m.pageoffset -= 1
+
+                if cursor > 1
+                    # move selection up
+                    cursor -= 1
+                    # scroll the page
+                    if cursor < (2+m.pageoffset) && m.pageoffset > 0
+                        m.pageoffset -= 1
+                    end
+                elseif CONFIG[:scroll_wrap]
+                    # wrap to bottom
+                    cursor = length(options(m))
+                    m.pageoffset = length(options(m)) - m.pagesize
                 end
+
+
+
             elseif c == Int(ARROW_DOWN)
-                # move selection
-                cursor += cursor < length(options(m)) ? 1 : 0
-                # scroll page
-                if cursor >= m.pagesize + m.pageoffset && m.pagesize + m.pageoffset < length(options(m))
-                    m.pageoffset += 1
+
+                if cursor < length(options(m))
+                    # move selection up
+                    cursor += 1
+                    # scroll page
+                    if cursor >= m.pagesize + m.pageoffset && m.pagesize + m.pageoffset < length(options(m))
+                        m.pageoffset += 1
+                    end
+                elseif CONFIG[:scroll_wrap]
+                    # wrap to top
+                    cursor = 1
+                    m.pageoffset = 0
                 end
+
+
+
             elseif c == 13 # <enter>
                 # will break if pick returns true
                 pick(m, cursor) && break
@@ -80,10 +101,10 @@ function printMenu(m::AbstractMenu, cursor::Int; init=false)
 
         if i ==  m.pageoffset+1 && m.pageoffset > 0
             # first line && scrolled past first entry
-            print(buf, "^")
+            print(buf, CONFIG[:up_arrow])
         elseif i == m.pagesize+m.pageoffset && i != length(options(m))
             # last line && not last option
-            print(buf, "v")
+            print(buf, CONFIG[:down_arrow])
         else
             # non special line
             print(buf, " ")

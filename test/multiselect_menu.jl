@@ -2,8 +2,8 @@
 @test MultiSelectMenu <: TerminalMenus.AbstractMenu
 
 # Invalid Menu Params
-@test_throws Exception MultiSelectMenu(["one"])
-@test_throws Exception MultiSelectMenu(["one", "two", "three"], pagesize=1)
+@test_throws ErrorException MultiSelectMenu(["one"])
+@test_throws ErrorException MultiSelectMenu(["one", "two", "three"], pagesize=1)
 
 # Constructor
 @test MultiSelectMenu(["one", "two", "three"]).pagesize == 3
@@ -14,3 +14,18 @@
 multi_menu = MultiSelectMenu(string.(1:20))
 @test TerminalMenus.options(multi_menu) == string.(1:20)
 @test TerminalMenus.header(multi_menu) == "[press: d=done, a=all, n=none]"
+
+# Output
+TerminalMenus.config() # Use default chars
+CONFIG = TerminalMenus.CONFIG
+
+multi_menu = MultiSelectMenu(string.(1:10))
+buf = IOBuffer()
+TerminalMenus.writeLine(buf, multi_menu, 1, true)
+@test String(take!(buf)) == string(CONFIG[:cursor], " ", CONFIG[:unchecked], " 1")
+TerminalMenus.config(cursor='+')
+TerminalMenus.writeLine(buf, multi_menu, 1, true)
+@test String(take!(buf)) == string("+ ", CONFIG[:unchecked], " 1")
+TerminalMenus.config(charset=:unicode)
+TerminalMenus.writeLine(buf, multi_menu, 1, true)
+@test String(take!(buf)) == string(CONFIG[:cursor], " ", CONFIG[:unchecked], " 1")
