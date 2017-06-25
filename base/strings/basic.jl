@@ -67,10 +67,7 @@ julia> "Hello " * "world"
 "Hello world"
 ```
 """
-(*)(s1::AbstractString, ss::AbstractString...) = string(s1, ss...)
-(*)(c::Char, s::AbstractString) = string(c, s)
-(*)(s::AbstractString, c::Char) = string(s, c)
-(*)(c1::Char, c2::Char) = string(c1, c2)
+(*)(s1::Union{Char, AbstractString}, ss::Union{Char, AbstractString}...) = string(s1, ss...)
 
 one(::Union{T,Type{T}}) where {T<:AbstractString} = convert(T, "")
 
