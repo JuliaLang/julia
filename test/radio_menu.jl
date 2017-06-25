@@ -2,8 +2,8 @@
 @test RadioMenu <: TerminalMenus.AbstractMenu
 
 # Invalid Menu Params
-@test_throws Exception RadioMenu(["one"])
-@test_throws Exception RadioMenu(["one", "two", "three"], pagesize=1)
+@test_throws ErrorException RadioMenu(["one"])
+@test_throws ErrorException RadioMenu(["one", "two", "three"], pagesize=1)
 
 # Constructor
 @test RadioMenu(["one", "two", "three"]).pagesize == 3

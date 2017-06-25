@@ -2,8 +2,8 @@
 @test MultiSelectMenu <: TerminalMenus.AbstractMenu
 
 # Invalid Menu Params
-@test_throws Exception MultiSelectMenu(["one"])
-@test_throws Exception MultiSelectMenu(["one", "two", "three"], pagesize=1)
+@test_throws ErrorException MultiSelectMenu(["one"])
+@test_throws ErrorException MultiSelectMenu(["one", "two", "three"], pagesize=1)
 
 # Constructor
 @test MultiSelectMenu(["one", "two", "three"]).pagesize == 3
