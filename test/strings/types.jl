@@ -28,13 +28,18 @@ end
 str="tempus fugit"              #length(str)==12
 ss=SubString(str,1,length(str)) #match source string
 @test length(ss)==length(str)
+ss=SubString(str,1:length(str))
+@test length(ss)==length(str)
 
 ss=SubString(str,1,0)    #empty SubString
+@test length(ss)==0
+ss=SubString(str,1:0)
 @test length(ss)==0
 
 @test_throws BoundsError SubString(str,14,20)  #start indexed beyond source string length
 
 @test_throws BoundsError SubString(str,10,16)  #end indexed beyond source string length
+@test_throws BoundsError SubString(str,10:16)
 
 str2=""
 @test_throws BoundsError SubString(str2,1,4)  #empty source string
@@ -78,8 +83,12 @@ u = SubString(str, 1, 5)
 # SubString created from SubString
 str = "Hello, world!"
 u = SubString(str, 2, 5)
-@test SubString(u, 2, 3) == u[2:3]
+for idx in 1:4
+    @test SubString(u, 2, idx) == u[2:idx]
+    @test SubString(u, 2:idx) == u[2:idx]
+end
 @test_throws BoundsError SubString(u, 1, 10)
+@test_throws BoundsError SubString(u, 1:10)
 
 # sizeof
 @test sizeof(SubString("abc\u2222def",4,4)) == 3
