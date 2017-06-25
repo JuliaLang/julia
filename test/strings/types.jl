@@ -36,6 +36,17 @@ ss=SubString(str,1,0)    #empty SubString
 ss=SubString(str,1:0)
 @test length(ss)==0
 
+str = "∀"
+for idx in 0:3
+    @test SubString(str, 1, idx) == str[1:idx]
+end
+
+str = "∀∀"
+for idx in 0:6
+    @test SubString(str, 1, idx) == str[1:idx]
+    @test SubString(str, 4, idx) == str[4:idx]
+end
+
 @test_throws BoundsError SubString(str,14,20)  #start indexed beyond source string length
 
 @test_throws BoundsError SubString(str,10,16)  #end indexed beyond source string length
