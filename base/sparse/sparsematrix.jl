@@ -120,7 +120,102 @@ column. In conjunction with [`nonzeros`](@ref) and
 """
 nzrange(S::SparseMatrixCSC, col::Integer) = S.colptr[col]:(S.colptr[col+1]-1)
 
+
+module SparseArrayInvalid
+    @enum(_SparseArrayInvalid,
+        VALID,
+        COLPTR_LENGTH,
+        COLPTR_FIRST_VAL,
+        NZVAL_LENGTH,
+        COLPTR_SORTED,
+        ROWVAL_LENGTH,
+        ROWVAL_RANGE,
+        ROWVAL_SORTED_COLUMN,
+    )
+end
+
+
+"""
+    checkvalid(Bool, S::SparseMatrixCSC; full = true) -> Bool
+
+Return `true` if the sparse matrix `S` has a valid internal representation.
+If `full` is `false` only O(1) checks are done, otherwise full
+O(nnz) checks are performed.
+
+# Examples
+
+```jldoctest
+julia> Base.SparseArrays.checkvalid(Bool, sprand(5,5,0.5))
+true
+
+julia> Base.SparseArrays.checkvalid(Bool, SparseMatrixCSC(4, 4, Int[], Int[], Int[]))
+false
+```
+"""
+function checkvalid(::Type{Bool}, S::SparseMatrixCSC; full = true)
+    return _checkvalid(S; full = full) == SparseArrayInvalid.VALID
+end
+
+"""
+    checkvalid(S::SparseMatrixCSC; full = true)
+
+Throw an [`ArgumentError`](@ref) if the sparse matrix `S` does not have a valid internal representation.
+If `full` is `false` only O(1) checks are done, otherwise full
+O(nnz) checks are performed.
+```
+"""
+function checkvalid(S::SparseMatrixCSC; full = true)
+    validity = _checkvalid(S; full = full)
+    validity == SparseArrayInvalid.VALID && return
+    if validity == SparseArrayInvalid.COLPTR_LENGTH
+        err_str = "length of S.colptr must be at least size(S,2) + 1 = $(S.n + 1) but was $(length(S.colptr))"
+    elseif validity == SparseArrayInvalid.COLPTR_FIRST_VAL
+        err_str = "first element of S.colptr must be 1 but was $(S.colptr[1])"
+    elseif validity == SparseArrayInvalid.ROWVAL_LENGTH
+        err_str = "length of S.rowval must be at least S.colptr[S.n+1] - 1 but was $(length(S.rowval))"
+    elseif validity == SparseArrayInvalid.NZVAL_LENGTH
+        err_str = "length of S.nzval must be at least S.colptr[S.n+1] - 1 but was $(length(S.nzval))"
+    elseif validity == SparseArrayInvalid.COLPTR_SORTED
+        err_str = "S.colptr must be sorted"
+    elseif validity == SparseArrayInvalid.ROWVAL_RANGE
+        err_str = "each element in S.rowval must be > 0 and ⩽ size(S,1)"
+    elseif validity == SparseArrayInvalid.ROWVAL_SORTED_COLUMN
+        err_str = "S.rowval must be sorted for all column ranges"
+    end
+    throw(ArgumentError(err_str))
+end
+
+
+function _checkvalid(S::SparseMatrixCSC; full = true)
+    length(S.colptr) < S.n + 1               && return SparseArrayInvalid.COLPTR_LENGTH
+    length(S.rowval) < S.colptr[S.n + 1] - 1 && return SparseArrayInvalid.ROWVAL_LENGTH
+    length(S.nzval)  < S.colptr[S.n + 1] - 1 && return SparseArrayInvalid.NZVAL_LENGTH
+    S.colptr[1] != 1                         && return SparseArrayInvalid.COLPTR_FIRST_VAL
+
+    if full
+        # Check colptr increasing
+        !issorted(S.colptr) && return SparseArrayInvalid.COLPTR_SORTED
+        # Check rowval in range and sorted in each column
+        for col in 1:S.n
+            nzrang = nzrange(S, col)
+            for r in nzrang
+                ri = S.rowval[r]
+                (ri <= 0 || ri > S.m) && return SparseArrayInvalid.ROWVAL_RANGE
+                r == last(nzrang) && break
+                S.rowval[r+1] <= ri && return SparseArrayInvalid.ROWVAL_SORTED_COLUMN
+            end
+        end
+    end
+    return SparseArrayInvalid.VALID
+end
+
+_print_invalid(io, S) = print(io,  S.m, "×", S.n, " ", typeof(S), " with invalid internal representation")
+
 function Base.show(io::IO, ::MIME"text/plain", S::SparseMatrixCSC)
+    if !checkvalid(Bool, S; full = false)
+        _print_invalid(io, S)
+        return
+    end
     xnnz = nnz(S)
     print(io, S.m, "×", S.n, " ", typeof(S), " with ", xnnz, " stored ",
               xnnz == 1 ? "entry" : "entries")
@@ -132,10 +227,15 @@ end
 
 Base.show(io::IO, S::SparseMatrixCSC) = Base.show(convert(IOContext, io), S::SparseMatrixCSC)
 function Base.show(io::IOContext, S::SparseMatrixCSC)
+    limit::Bool = get(io, :limit, false)
+    # If we are printing all values (limit = false), might as well do O(nnz) validity check
+    if !checkvalid(Bool, S; full = !limit)
+        _print_invalid(io, S)
+        return
+    end
     if nnz(S) == 0
         return show(io, MIME("text/plain"), S)
     end
-    limit::Bool = get(io, :limit, false)
     rows = displaysize(io)[1] - 4 # -4 from [Prompt, header, newline after elements, new prompt]
     will_fit = !limit || rows >= nnz(S) # Will the whole matrix fit when printed?
 
