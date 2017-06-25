@@ -469,3 +469,10 @@ Base.endof(x::CharStr) = endof(x.chars)
 # issue #12495: check that logical indexing attempt raises ArgumentError
 @test_throws ArgumentError "abc"[[true, false, true]]
 @test_throws ArgumentError "abc"[BitArray([true, false, true])]
+
+@test "ab" * "cd" == "abcd"
+@test 'a' * "bc" == "abc"
+@test "ab" * 'c' == "abc"
+@test 'a' * 'b' == "ab"
+@test 'a' * "b" * 'c' == "abc"
+@test "a" * 'b' * 'c' == "abc"
