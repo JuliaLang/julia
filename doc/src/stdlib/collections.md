@@ -197,7 +197,8 @@ Base.pop!(::Any, ::Any, ::Any)
 Base.keys
 Base.values
 Base.merge
-Base.merge!
+Base.merge!(::Associative, ::Associative...)
+Base.merge!(::Function, ::Associative, ::Associative...)
 Base.sizehint!
 Base.keytype
 Base.valtype
