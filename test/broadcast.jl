@@ -200,7 +200,7 @@ end
 
 # issue #4883
 @test isa(broadcast(tuple, [1 2 3], ["a", "b", "c"]), Matrix{Tuple{Int,String}})
-@test isa(broadcast((x,y)->(x==1?1.0:x,y), [1 2 3], ["a", "b", "c"]), Matrix{Tuple{Real,String}})
+@test isa(broadcast((x,y)->(x==1 ? 1.0 : x, y), [1 2 3], ["a", "b", "c"]), Matrix{Tuple{Real,String}})
 let a = length.(["foo", "bar"])
     @test isa(a, Vector{Int})
     @test a == [3, 3]
