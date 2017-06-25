@@ -794,3 +794,21 @@ end # module
     # @test @test_warn "A{T}(x::S) where {T, S} is deprecated, use f() instead." A{Int}(1.)
     # @test @test_nowarn A{Int}(1.)
 end
+
+str = """
+if true # required to exhibit bug
+    upper = ones(4)
+    lower = ones(4)
+
+    # WARNING: imported binding overwritten
+    # required to exhibit bug
+    diag  = ones(5)
+
+    A = Tridiagonal(lower,diag,upper)
+
+    for i=1:10 # required to exhibit bug
+    end
+end"""
+
+cmd = `$(Base.julia_cmd()) -e $str`
+@test success(cmd)
