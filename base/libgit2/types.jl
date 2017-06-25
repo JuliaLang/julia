@@ -193,6 +193,18 @@ end
 Options for connecting through a proxy.
 
 Matches the [`git_proxy_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_proxy_options) struct.
+
+The fields represent:
+  * `version`: version of the struct in use, in case this changes later. For now, always `1`.
+  * `proxytype`: the type of proxy to use. Default is to auto-detect it.
+  * `url`: the URL of the proxy.
+  * `credential_cb`: a pointer to a callback function which will be called if the remote
+    requires authentication to connect.
+  * `certificate_cb`: a pointer to a callback function which will be called if certificate
+    verification fails. This lets the user decide whether or not to keep connecting. If
+    the function returns `1`, connecting will be allowed. If it returns `0`, the connection
+    will not be allowed. A negative value can be used to return errors.
+  * `payload`: the payload to be provided to the two callback functions.
 """
 @kwdef struct ProxyOptions
     version::Cuint               = 1
@@ -287,6 +299,12 @@ end
     LibGit2.DescribeFormatOptions
 
 Matches the [`git_describe_format_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_describe_format_options) struct.
+
+The fields represent:
+  * `version`: version of the struct in use, in case this changes later. For now, always `1`.
+  * `abbreviated_size`: lower bound on the size of the abbreviated `GitHash` to use, defaulting to `7`.
+  * `always_use_long_format`: set to `1` to use the long format for strings even if a short format can be used.
+  * `dirty_suffix`: if set, if the [`workdir`](@ref) is dirty this will be appended to the description string.
 """
 @kwdef struct DescribeFormatOptions
     version::Cuint          = 1
@@ -300,6 +318,17 @@ end
 
 Description of one side of a delta.
 Matches the [`git_diff_file`](https://libgit2.github.com/libgit2/#HEAD/type/git_diff_file) struct.
+
+The fields represent:
+  * `id`: the [`GitHash`](@ref) of the item in the diff. If the item is empty on this
+     side of the diff (for instance, if the diff is of the removal of a file), this will
+     be `GitHash(0)`.
+  * `path`: a `NULL` terminated path to the item relative to the working directory of the repository.
+  * `size`: the size of the item in bytes.
+  * `flags`: a combination of the [`git_diff_flag_t`](https://libgit2.github.com/libgit2/#HEAD/type/git_diff_flag_t) flags.
+  * `mode`: the [`stat`](@ref) mode for the item.
+  * `id_abbrev`: only present in versions newer than or equal to `0.25.0`.
+     The length of the `id` field when converted using [`hex`](@ref). Usually equal to `GIT_OID_HEXSZ`.
 """
 struct DiffFile
     id::GitHash
