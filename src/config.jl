@@ -15,8 +15,10 @@ Configure global Menu parameters
  - `down_arrow::Char='v'|'↓'`: character to use for down arrow
  - `checked::String="[X]"|"✓"`: string to use for checked
  - `unchecked::String="[ ]"|"⬚")`: string to use for unchecked
+ - `scroll::Symbol=:na`: If `:wrap` then wrap the cursor around top and bottom, if :`nowrap` do not wrap cursor
 """
 function config(;charset::Symbol = :na,
+                scroll::Symbol = :na,
                 cursor::Char = '\0',
                 up_arrow::Char = '\0',
                 down_arrow::Char = '\0',
@@ -25,6 +27,16 @@ function config(;charset::Symbol = :na,
 
     if !(charset in [:na, :ascii, :unicode])
         error("charset should be :ascii or :unicode, recieved $charset")
+    end
+
+    if !(scroll in [:na, :wrap, :nowrap])
+        error("scroll must be :wrap or :nowrap, recieved $scroll")
+    end
+
+    if scroll == :wrap
+        CONFIG[:scroll_wrap] = true
+    elseif scroll == :nowrap
+        CONFIG[:scroll_wrap] = false
     end
 
     if charset == :ascii
@@ -52,4 +64,4 @@ function config(;charset::Symbol = :na,
 end
 
 # Set up defaults
-config(charset=:ascii)
+config(charset=:ascii, scroll=:wrap)
