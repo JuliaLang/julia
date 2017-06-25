@@ -589,7 +589,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Functions",
     "title": "Optional Arguments",
     "category": "section",
-    "text": "In many cases, function arguments have sensible default values and therefore might not need to be passed explicitly in every call. For example, the library function parse(T, num, base) interprets a string as a number in some base. The base argument defaults to 10. This behavior can be expressed concisely as:function parse(type, num, base=10)\n    ###\nendWith this definition, the function can be called with either two or three arguments, and 10 is automatically passed when a third argument is not specified:julia> parse(Int,\"12\",10)\n12\n\njulia> parse(Int,\"12\",3)\n5\n\njulia> parse(Int,\"12\")\n12Optional arguments are actually just a convenient syntax for writing multiple method definitions with different numbers of arguments (see Note on Optional and keyword Arguments)."
+    "text": "In many cases, function arguments have sensible default values and therefore might not need to be passed explicitly in every call. For example, the library function parse(T, num, base) interprets a string as a number in some base. The base argument defaults to 10. This behavior can be expressed concisely as:function parse(T, num, base=10)\n    ###\nendWith this definition, the function can be called with either two or three arguments, and 10 is automatically passed when a third argument is not specified:julia> parse(Int,\"12\",10)\n12\n\njulia> parse(Int,\"12\",3)\n5\n\njulia> parse(Int,\"12\")\n12Optional arguments are actually just a convenient syntax for writing multiple method definitions with different numbers of arguments (see Note on Optional and keyword Arguments)."
 },
 
 {
