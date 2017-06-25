@@ -5165,7 +5165,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.parse",
     "category": "Method",
-    "text": "parse(str, start; greedy=true, raise=true)\n\nParse the expression string and return an expression (which could later be passed to eval for execution). start is the index of the first character to start parsing. If greedy is true (default), parse will try to consume as much input as it can; otherwise, it will stop as soon as it has parsed a valid expression. Incomplete but otherwise syntactically valid expressions will return Expr(:incomplete, \"(error message)\"). If raise is true (default), syntax errors other than incomplete expressions will raise an error. If raise is false, parse will return an expression that will raise an error upon evaluation.\n\n\n\n"
+    "text": "parse(str, start; greedy=true, raise=true)\n\nParse the expression string and return an expression (which could later be passed to eval for execution). start is the index of the first character to start parsing. If greedy is true (default), parse will try to consume as much input as it can; otherwise, it will stop as soon as it has parsed a valid expression. Incomplete but otherwise syntactically valid expressions will return Expr(:incomplete, \"(error message)\"). If raise is true (default), syntax errors other than incomplete expressions will raise an error. If raise is false, parse will return an expression that will raise an error upon evaluation.\n\njulia> parse(\"x = 3, y = 5\", 7)\n(:(y = 5), 13)\n\njulia> parse(\"x = 3, y = 5\", 5)\n(:((3, y) = 5), 13)\n\n\n\n"
 },
 
 {
@@ -5173,7 +5173,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.parse",
     "category": "Method",
-    "text": "parse(str; raise=true)\n\nParse the expression string greedily, returning a single expression. An error is thrown if there are additional characters after the first expression. If raise is true (default), syntax errors will raise an error; otherwise, parse will return an expression that will raise an error upon evaluation.\n\n\n\n"
+    "text": "parse(str; raise=true)\n\nParse the expression string greedily, returning a single expression. An error is thrown if there are additional characters after the first expression. If raise is true (default), syntax errors will raise an error; otherwise, parse will return an expression that will raise an error upon evaluation.\n\njulia> parse(\"x = 3\")\n:(x = 3)\n\njulia> parse(\"x = \")\n:($(Expr(:incomplete, \"incomplete: premature end of input\")))\n\njulia> parse(\"1.0.2\")\nERROR: ParseError(\"invalid numeric constant \\\"1.0.\\\"\")\nStacktrace:\n  [...]\n\njulia> parse(\"1.0.2\"; raise = false)\n:($(Expr(:error, \"invalid numeric constant \\\"1.0.\\\"\")))\n\n\n\n"
 },
 
 {
@@ -8245,7 +8245,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.abs2",
     "category": "Function",
-    "text": "abs2(x)\n\nSquared absolute value of x.\n\n\n\n"
+    "text": "abs2(x)\n\nSquared absolute value of x.\n\njulia> abs2(-3)\n9\n\n\n\n"
 },
 
 {
@@ -8277,7 +8277,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.flipsign",
     "category": "Function",
-    "text": "flipsign(x, y)\n\nReturn x with its sign flipped if y is negative. For example abs(x) = flipsign(x,x).\n\n\n\n"
+    "text": "flipsign(x, y)\n\nReturn x with its sign flipped if y is negative. For example abs(x) = flipsign(x,x).\n\njulia> flipsign(5, 3)\n5\n\njulia> flipsign(5, -3)\n-5\n\n\n\n"
 },
 
 {
@@ -8333,7 +8333,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.conj",
     "category": "Function",
-    "text": "conj(z)\n\nCompute the complex conjugate of a complex number z.\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\nconj(v::RowVector)\n\nReturns a ConjArray lazy view of the input, where each element is conjugated.\n\nExample\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\n"
+    "text": "conj(v::RowVector)\n\nReturns a ConjArray lazy view of the input, where each element is conjugated.\n\nExample\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\nconj(z)\n\nCompute the complex conjugate of a complex number z.\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\n"
 },
 
 {
@@ -8357,7 +8357,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.binomial",
     "category": "Function",
-    "text": "binomial(n,k)\n\nNumber of ways to choose k out of n items.\n\n\n\n"
+    "text": "binomial(n,k)\n\nNumber of ways to choose k out of n items.\n\njulia> binomial(5, 3)\n10\n\njulia> factorial(5) ÷ (factorial(5-3) * factorial(3))\n10\n\n\n\n"
 },
 
 {
@@ -8421,7 +8421,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.nextpow",
     "category": "Function",
-    "text": "nextpow(a, x)\n\nThe smallest a^n not less than x, where n is a non-negative integer. a must be greater than 1, and x must be greater than 0.\n\n\n\n"
+    "text": "nextpow(a, x)\n\nThe smallest a^n not less than x, where n is a non-negative integer. a must be greater than 1, and x must be greater than 0.\n\njulia> nextpow(2, 7)\n8\n\njulia> nextpow(2, 9)\n16\n\nSee also prevpow.\n\n\n\n"
 },
 
 {
@@ -8429,7 +8429,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.prevpow",
     "category": "Function",
-    "text": "prevpow(a, x)\n\nThe largest a^n not greater than x, where n is a non-negative integer. a must be greater than 1, and x must not be less than 1.\n\n\n\n"
+    "text": "prevpow(a, x)\n\nThe largest a^n not greater than x, where n is a non-negative integer. a must be greater than 1, and x must not be less than 1.\n\njulia> prevpow(2, 7)\n4\n\njulia> prevpow(2, 9)\n8\n\nSee also nextpow.\n\n\n\n"
 },
 
 {
@@ -8453,7 +8453,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.powermod",
     "category": "Function",
-    "text": "powermod(x::Integer, p::Integer, m)\n\nCompute x^p pmod m.\n\n\n\n"
+    "text": "powermod(x::Integer, p::Integer, m)\n\nCompute x^p pmod m.\n\njulia> powermod(2, 6, 5)\n4\n\njulia> mod(2^6, 5)\n4\n\n\n\n"
 },
 
 {
@@ -8501,7 +8501,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.ndigits",
     "category": "Function",
-    "text": "ndigits(n::Integer, b::Integer=10)\n\nCompute the number of digits in integer n written in base b. The base b must not be in [-1, 0, 1].\n\n\n\n"
+    "text": "ndigits(n::Integer, b::Integer=10)\n\nCompute the number of digits in integer n written in base b. The base b must not be in [-1, 0, 1].\n\njulia> ndigits(12345)\n5\n\njulia> ndigits(1022, 16)\n3\n\njulia> base(16, 1022)\n\"3fe\"\n\n\n\n"
 },
 
 {
@@ -8957,7 +8957,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Numbers",
     "title": "Base.parse",
     "category": "Method",
-    "text": "parse(type, str, [base])\n\nParse a string as a number. If the type is an integer type, then a base can be specified (the default is 10). If the type is a floating point type, the string is parsed as a decimal floating point number. If the string does not contain a valid number, an error is raised.\n\n\n\n"
+    "text": "parse(type, str, [base])\n\nParse a string as a number. If the type is an integer type, then a base can be specified (the default is 10). If the type is a floating point type, the string is parsed as a decimal floating point number. If the string does not contain a valid number, an error is raised.\n\njulia> parse(Int, \"1234\")\n1234\n\njulia> parse(Int, \"1234\", 5)\n194\n\njulia> parse(Int, \"afc\", 16)\n2812\n\njulia> parse(Float64, \"1.2e-3\")\n0.0012\n\n\n\n"
 },
 
 {
@@ -9093,7 +9093,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Numbers",
     "title": "Base.zero",
     "category": "Function",
-    "text": "zero(x)\n\nGet the additive identity element for the type of x (x can also specify the type itself).\n\n\n\n"
+    "text": "zero(x)\n\nGet the additive identity element for the type of x (x can also specify the type itself).\n\njulia> zero(1)\n0\n\njulia> zero(big\"2.0\")\n0.000000000000000000000000000000000000000000000000000000000000000000000000000000\n\njulia> zero(rand(2,2))\n2×2 Array{Float64,2}:\n 0.0  0.0\n 0.0  0.0\n\n\n\n"
 },
 
 {
@@ -10469,7 +10469,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.Broadcast.@__dot__",
     "category": "Macro",
-    "text": "@. expr\n\nConvert every function call or operator in expr into a \"dot call\" (e.g. convert f(x) to f.(x)), and convert every assignment in expr to a \"dot assignment\" (e.g. convert += to .+=).\n\nIf you want to avoid adding dots for selected function calls in expr, splice those function calls in with $.  For example, @. sqrt(abs($sort(x))) is equivalent to sqrt.(abs.(sort(x))) (no dot for sort).\n\n(@. is equivalent to a call to @__dot__.)\n\n\n\n"
+    "text": "@. expr\n\nConvert every function call or operator in expr into a \"dot call\" (e.g. convert f(x) to f.(x)), and convert every assignment in expr to a \"dot assignment\" (e.g. convert += to .+=).\n\nIf you want to avoid adding dots for selected function calls in expr, splice those function calls in with $.  For example, @. sqrt(abs($sort(x))) is equivalent to sqrt.(abs.(sort(x))) (no dot for sort).\n\n(@. is equivalent to a call to @__dot__.)\n\njulia> x = 1.0:3.0; y = similar(x);\n\njulia> @. y = x + 3 * sin(x)\n3-element Array{Float64,1}:\n 3.52441\n 4.72789\n 3.42336\n\n\n\n"
 },
 
 {
@@ -10885,7 +10885,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.permutedims!",
     "category": "Function",
-    "text": "permutedims!(dest, src, perm)\n\nPermute the dimensions of array src and store the result in the array dest. perm is a vector specifying a permutation of length ndims(src). The preallocated array dest should have size(dest) == size(src)[perm] and is completely overwritten. No in-place permutation is supported and unexpected results will happen if src and dest have overlapping memory regions.\n\n\n\n"
+    "text": "permutedims!(dest, src, perm)\n\nPermute the dimensions of array src and store the result in the array dest. perm is a vector specifying a permutation of length ndims(src). The preallocated array dest should have size(dest) == size(src)[perm] and is completely overwritten. No in-place permutation is supported and unexpected results will happen if src and dest have overlapping memory regions.\n\nSee also permutedims\n\n\n\n"
 },
 
 {
