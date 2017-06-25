@@ -6,6 +6,13 @@
 
 TerminalMenus.jl enables small, low-profile interactive menus in the terminal. This package is still in development. Nested menus, unicode/ASCII UI configurations, better documentation, and other menus will be added soon.
 
+## Installation
+
+```
+Pkg.add("TerminalMenus")
+```
+
+
 ## Examples
 
 ```julia
