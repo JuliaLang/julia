@@ -2899,6 +2899,13 @@ stored and otherwise do nothing. Derivative forms:
 
 # Example
 ```jldoctest
+julia> A = spdiagm([1, 2, 3, 4])
+4×4 SparseMatrixCSC{Int64,Int64} with 4 stored entries:
+  [1, 1]  =  1
+  [2, 2]  =  2
+  [3, 3]  =  3
+  [4, 4]  =  4
+
 julia> Base.SparseArrays.dropstored!(A, [1, 2], [1, 1])
 4×4 SparseMatrixCSC{Int64,Int64} with 3 stored entries:
   [2, 2]  =  2
