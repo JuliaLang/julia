@@ -224,6 +224,14 @@ const HWNumber = Union{HWReal, Complex{<:HWReal}, Rational{<:HWReal}}
     powermod(x::Integer, p::Integer, m)
 
 Compute ``x^p \\pmod m``.
+
+```jldoctest
+julia> powermod(2, 6, 5)
+4
+
+julia> mod(2^6, 5)
+4
+```
 """
 function powermod(x::Integer, p::Integer, m::T) where T<:Integer
     p < 0 && return powermod(invmod(x, m), -p, m)
@@ -302,6 +310,16 @@ ispow2(x::Integer) = x > 0 && count_ones(x) == 1
 
 The smallest `a^n` not less than `x`, where `n` is a non-negative integer. `a` must be
 greater than 1, and `x` must be greater than 0.
+
+```jldoctest
+julia> nextpow(2, 7)
+8
+
+julia> nextpow(2, 9)
+16
+```
+
+See also [`prevpow`](@ref).
 """
 function nextpow(a::Real, x::Real)
     (a <= 1 || x <= 0) && throw(DomainError())
@@ -317,6 +335,16 @@ end
 
 The largest `a^n` not greater than `x`, where `n` is a non-negative integer.
 `a` must be greater than 1, and `x` must not be less than 1.
+
+```jldoctest
+julia> prevpow(2, 7)
+4
+
+julia> prevpow(2, 9)
+8
+```
+
+See also [`nextpow`](@ref).
 """
 function prevpow(a::Real, x::Real)
     (a <= 1 || x < 1) && throw(DomainError())
@@ -386,10 +414,43 @@ ndigitsnb(x::Integer, b::Integer) = x==0 ? 1 : ndigits0znb(x, b)
 ndigits(x::Unsigned, b::Integer) = x==0 ? 1 : ndigits0z(x,Int(b))
 ndigits(x::Unsigned)             = x==0 ? 1 : ndigits0z(x)
 
+# The suffix "0z" means that the output is 0 on input zero (cf. #16841)
+"""
+    ndigits0z(n::Integer, b::Integer=10)
+
+Return 0 if `n == 0`, otherwise compute the number of digits in
+integer `n` written in base `b` (i.e. equal to `ndigits(n, b)`
+in this case).
+The base `b` must not be in `[-1, 0, 1]`.
+
+```jldoctest
+julia> Base.ndigits0z(0, 16)
+0
+
+julia> Base.ndigits(0, 16)
+1
+```
+
+See also [`ndigits`](@ref).
+"""
+ndigits0z
+
 """
     ndigits(n::Integer, b::Integer=10)
 
 Compute the number of digits in integer `n` written in base `b`.
+The base `b` must not be in `[-1, 0, 1]`.
+
+```jldoctest
+julia> ndigits(12345)
+5
+
+julia> ndigits(1022, 16)
+3
+
+julia> base(16, 1022)
+"3fe"
+```
 """
 ndigits(x::Integer, b::Integer) = b >= 0 ? ndigits(unsigned(abs(x)),Int(b)) : ndigitsnb(x, b)
 ndigits(x::Integer) = ndigits(unsigned(abs(x)))
@@ -601,6 +662,14 @@ end
     binomial(n,k)
 
 Number of ways to choose `k` out of `n` items.
+
+```jldoctest
+julia> binomial(5, 3)
+10
+
+julia> factorial(5) ÷ (factorial(5-3) * factorial(3))
+10
+```
 """
 function binomial(n::T, k::T) where T<:Integer
     k < 0 && return zero(T)

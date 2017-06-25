@@ -1010,6 +1010,14 @@ stop as soon as it has parsed a valid expression. Incomplete but otherwise synta
 valid expressions will return `Expr(:incomplete, "(error message)")`. If `raise` is `true`
 (default), syntax errors other than incomplete expressions will raise an error. If `raise`
 is `false`, `parse` will return an expression that will raise an error upon evaluation.
+
+```jldoctest
+julia> parse("x = 3, y = 5", 7)
+(:(y = 5), 13)
+
+julia> parse("x = 3, y = 5", 5)
+(:((3, y) = 5), 13)
+```
 """
 parse(str, start)
 
@@ -1020,6 +1028,22 @@ Parse the expression string greedily, returning a single expression. An error is
 there are additional characters after the first expression. If `raise` is `true` (default),
 syntax errors will raise an error; otherwise, `parse` will return an expression that will
 raise an error upon evaluation.
+
+```jldoctest
+julia> parse("x = 3")
+:(x = 3)
+
+julia> parse("x = ")
+:($(Expr(:incomplete, "incomplete: premature end of input")))
+
+julia> parse("1.0.2")
+ERROR: ParseError("invalid numeric constant \\\"1.0.\\\"")
+Stacktrace:
+  [...]
+
+julia> parse("1.0.2"; raise = false)
+:($(Expr(:error, "invalid numeric constant \"1.0.\"")))
+```
 """
 parse(str)
 
@@ -1029,6 +1053,20 @@ parse(str)
 Parse a string as a number. If the type is an integer type, then a base can be specified
 (the default is 10). If the type is a floating point type, the string is parsed as a decimal
 floating point number. If the string does not contain a valid number, an error is raised.
+
+```jldoctest
+julia> parse(Int, "1234")
+1234
+
+julia> parse(Int, "1234", 5)
+194
+
+julia> parse(Int, "afc", 16)
+2812
+
+julia> parse(Float64, "1.2e-3")
+0.0012
+```
 """
 parse(T::Type, str, base=Int)
 

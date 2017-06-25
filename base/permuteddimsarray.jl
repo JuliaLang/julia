@@ -124,6 +124,8 @@ vector specifying a permutation of length `ndims(src)`. The preallocated array `
 have `size(dest) == size(src)[perm]` and is completely overwritten. No in-place permutation
 is supported and unexpected results will happen if `src` and `dest` have overlapping memory
 regions.
+
+See also [`permutedims`](@ref)
 """
 function Base.permutedims!(dest, src::AbstractArray, perm)
     Base.checkdims_perm(dest, src, perm)

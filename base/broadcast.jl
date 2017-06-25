@@ -592,6 +592,16 @@ If you want to *avoid* adding dots for selected function calls in
 (no dot for `sort`).
 
 (`@.` is equivalent to a call to `@__dot__`.)
+
+```jldoctest
+julia> x = 1.0:3.0; y = similar(x);
+
+julia> @. y = x + 3 * sin(x)
+3-element Array{Float64,1}:
+ 3.52441
+ 4.72789
+ 3.42336
+```
 """
 macro __dot__(x)
     esc(__dot__(x))

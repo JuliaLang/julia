@@ -85,6 +85,11 @@ abs(x::Real) = ifelse(signbit(x), -x, x)
     abs2(x)
 
 Squared absolute value of `x`.
+
+```jldoctest
+julia> abs2(-3)
+9
+```
 """
 abs2(x::Real) = x*x
 
@@ -92,6 +97,14 @@ abs2(x::Real) = x*x
     flipsign(x, y)
 
 Return `x` with its sign flipped if `y` is negative. For example `abs(x) = flipsign(x,x)`.
+
+```jldoctest
+julia> flipsign(5, 3)
+5
+
+julia> flipsign(5, -3)
+-5
+```
 """
 flipsign(x::Real, y::Real) = ifelse(signbit(y), -x, x)
 copysign(x::Real, y::Real) = ifelse(signbit(x)!=signbit(y), -x, x)
@@ -126,6 +139,19 @@ map(f, x::Number, ys::Number...) = f(x, ys...)
     zero(x)
 
 Get the additive identity element for the type of `x` (`x` can also specify the type itself).
+
+```jldoctest
+julia> zero(1)
+0
+
+julia> zero(big"2.0")
+0.000000000000000000000000000000000000000000000000000000000000000000000000000000
+
+julia> zero(rand(2,2))
+2×2 Array{Float64,2}:
+ 0.0  0.0
+ 0.0  0.0
+```
 """
 zero(x::Number) = oftype(x,0)
 zero(::Type{T}) where {T<:Number} = convert(T,0)
