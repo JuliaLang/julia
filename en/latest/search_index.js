@@ -9589,7 +9589,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.length",
     "category": "Method",
-    "text": "length(s::AbstractString)\n\nThe number of characters in string s.\n\njulia> length(\"jμΛIα\")\n5\n\n\n\n"
+    "text": "length(s::AbstractString)\n\nThe number of characters in string s.\n\nExample\n\njulia> length(\"jμΛIα\")\n5\n\n\n\n"
 },
 
 {
@@ -9597,7 +9597,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.sizeof",
     "category": "Method",
-    "text": "sizeof(s::AbstractString)\n\nThe number of bytes in string s.\n\njulia> sizeof(\"❤\")\n3\n\n\n\n"
+    "text": "sizeof(s::AbstractString)\n\nThe number of bytes in string s.\n\nExample\n\njulia> sizeof(\"❤\")\n3\n\n\n\n"
 },
 
 {
@@ -9733,7 +9733,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.isvalid",
     "category": "Method",
-    "text": "isvalid(str::AbstractString, i::Integer)\n\nTells whether index i is valid for the given string.\n\njulia> str = \"αβγdef\";\n\njulia> isvalid(str, 1)\ntrue\n\njulia> str[1]\n'α': Unicode U+03b1 (category Ll: Letter, lowercase)\n\njulia> isvalid(str, 2)\nfalse\n\njulia> str[2]\nERROR: UnicodeError: invalid character index\n[...]\n\n\n\n"
+    "text": "isvalid(str::AbstractString, i::Integer)\n\nTells whether index i is valid for the given string.\n\nExamples\n\njulia> str = \"αβγdef\";\n\njulia> isvalid(str, 1)\ntrue\n\njulia> str[1]\n'α': Unicode U+03b1 (category Ll: Letter, lowercase)\n\njulia> isvalid(str, 2)\nfalse\n\njulia> str[2]\nERROR: UnicodeError: invalid character index\n[...]\n\n\n\n"
 },
 
 {
@@ -9909,7 +9909,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.uppercase",
     "category": "Function",
-    "text": "uppercase(s::AbstractString)\n\nReturns s with all characters converted to uppercase.\n\njulia> uppercase(\"Julia\")\n\"JULIA\"\n\n\n\n"
+    "text": "uppercase(s::AbstractString)\n\nReturns s with all characters converted to uppercase.\n\nExample\n\njulia> uppercase(\"Julia\")\n\"JULIA\"\n\n\n\n"
 },
 
 {
@@ -9917,7 +9917,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.lowercase",
     "category": "Function",
-    "text": "lowercase(s::AbstractString)\n\nReturns s with all characters converted to lowercase.\n\njulia> lowercase(\"STRINGS AND THINGS\")\n\"strings and things\"\n\n\n\n"
+    "text": "lowercase(s::AbstractString)\n\nReturns s with all characters converted to lowercase.\n\nExample\n\njulia> lowercase(\"STRINGS AND THINGS\")\n\"strings and things\"\n\n\n\n"
 },
 
 {
@@ -9925,7 +9925,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.titlecase",
     "category": "Function",
-    "text": "titlecase(s::AbstractString)\n\nCapitalizes the first character of each word in s. See also ucfirst to capitalize only the first character in s.\n\njulia> titlecase(\"the julia programming language\")\n\"The Julia Programming Language\"\n\n\n\n"
+    "text": "titlecase(s::AbstractString)\n\nCapitalizes the first character of each word in s. See also ucfirst to capitalize only the first character in s.\n\nExample\n\njulia> titlecase(\"the julia programming language\")\n\"The Julia Programming Language\"\n\n\n\n"
 },
 
 {
@@ -9933,7 +9933,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.ucfirst",
     "category": "Function",
-    "text": "ucfirst(s::AbstractString)\n\nReturns string with the first character converted to uppercase (technically \"title case\" for Unicode). See also titlecase to capitalize the first character of every word in s.\n\njulia> ucfirst(\"python\")\n\"Python\"\n\n\n\n"
+    "text": "ucfirst(s::AbstractString)\n\nReturns string with the first character converted to uppercase (technically \"title case\" for Unicode). See also titlecase to capitalize the first character of every word in s.\n\nExample\n\njulia> ucfirst(\"python\")\n\"Python\"\n\n\n\n"
 },
 
 {
@@ -9941,7 +9941,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.lcfirst",
     "category": "Function",
-    "text": "lcfirst(s::AbstractString)\n\nReturns string with the first character converted to lowercase.\n\njulia> lcfirst(\"Julia\")\n\"julia\"\n\n\n\n"
+    "text": "lcfirst(s::AbstractString)\n\nReturns string with the first character converted to lowercase.\n\nExample\n\njulia> lcfirst(\"Julia\")\n\"julia\"\n\n\n\n"
 },
 
 {
@@ -9973,7 +9973,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.ind2chr",
     "category": "Function",
-    "text": "ind2chr(s::AbstractString, i::Integer)\n\nConvert a byte index i to a character index with respect to string s.\n\nSee also chr2ind.\n\njulia> str = \"αβγdef\";\n\njulia> ind2chr(str, 3)\n2\n\njulia> chr2ind(str, 2)\n3\n\n\n\n"
+    "text": "ind2chr(s::AbstractString, i::Integer)\n\nConvert a byte index i to a character index with respect to string s.\n\nSee also chr2ind.\n\nExample\n\njulia> str = \"αβγdef\";\n\njulia> ind2chr(str, 3)\n2\n\njulia> chr2ind(str, 2)\n3\n\n\n\n"
 },
 
 {
@@ -9981,7 +9981,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.chr2ind",
     "category": "Function",
-    "text": "chr2ind(s::AbstractString, i::Integer)\n\nConvert a character index i to a byte index.\n\nSee also ind2chr.\n\njulia> str = \"αβγdef\";\n\njulia> chr2ind(str, 2)\n3\n\njulia> ind2chr(str, 3)\n2\n\n\n\n"
+    "text": "chr2ind(s::AbstractString, i::Integer)\n\nConvert a character index i to a byte index.\n\nSee also ind2chr.\n\nExample\n\njulia> str = \"αβγdef\";\n\njulia> chr2ind(str, 2)\n3\n\njulia> ind2chr(str, 3)\n2\n\n\n\n"
 },
 
 {
@@ -9989,7 +9989,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.nextind",
     "category": "Function",
-    "text": "nextind(str::AbstractString, i::Integer)\n\nGet the next valid string index after i. Returns a value greater than endof(str) at or after the end of the string.\n\njulia> str = \"αβγdef\";\n\njulia> nextind(str, 1)\n3\n\njulia> endof(str)\n9\n\njulia> nextind(str, 9)\n10\n\n\n\n"
+    "text": "nextind(str::AbstractString, i::Integer)\n\nGet the next valid string index after i. Returns a value greater than endof(str) at or after the end of the string.\n\nExamples\n\njulia> str = \"αβγdef\";\n\njulia> nextind(str, 1)\n3\n\njulia> endof(str)\n9\n\njulia> nextind(str, 9)\n10\n\n\n\n"
 },
 
 {
@@ -9997,7 +9997,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.prevind",
     "category": "Function",
-    "text": "prevind(str::AbstractString, i::Integer)\n\nGet the previous valid string index before i. Returns a value less than 1 at the beginning of the string.\n\njulia> prevind(\"αβγdef\", 3)\n1\n\njulia> prevind(\"αβγdef\", 1)\n0\n\n\n\n"
+    "text": "prevind(str::AbstractString, i::Integer)\n\nGet the previous valid string index before i. Returns a value less than 1 at the beginning of the string.\n\nExamples\n\njulia> prevind(\"αβγdef\", 3)\n1\n\njulia> prevind(\"αβγdef\", 1)\n0\n\n\n\n"
 },
 
 {
@@ -10021,7 +10021,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.strwidth",
     "category": "Function",
-    "text": "strwidth(s::AbstractString)\n\nGives the number of columns needed to print a string.\n\njulia> strwidth(\"March\")\n5\n\n\n\n"
+    "text": "strwidth(s::AbstractString)\n\nGives the number of columns needed to print a string.\n\nExample\n\njulia> strwidth(\"March\")\n5\n\n\n\n"
 },
 
 {
@@ -10125,7 +10125,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.isxdigit",
     "category": "Function",
-    "text": "isxdigit(c::Char) -> Bool\n\nTests whether a character is a valid hexadecimal digit. Note that this does not include x (as in the standard 0x prefix).\n\njulia> isxdigit('a')\ntrue\n\njulia> isxdigit('x')\nfalse\n\n\n\n"
+    "text": "isxdigit(c::Char) -> Bool\n\nTests whether a character is a valid hexadecimal digit. Note that this does not include x (as in the standard 0x prefix).\n\nExample\n\njulia> isxdigit('a')\ntrue\n\njulia> isxdigit('x')\nfalse\n\n\n\n"
 },
 
 {
@@ -17357,7 +17357,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Iteration utilities",
     "title": "Base.Iterators.zip",
     "category": "Function",
-    "text": "zip(iters...)\n\nFor a set of iterable objects, returns an iterable of tuples, where the ith tuple contains the ith component of each input iterable.\n\nNote that zip is its own inverse: collect(zip(zip(a...)...)) == collect(a).\n\njulia> a = 1:5\n1:5\n\njulia> b = [\"e\",\"d\",\"b\",\"c\",\"a\"]\n5-element Array{String,1}:\n \"e\"\n \"d\"\n \"b\"\n \"c\"\n \"a\"\n\njulia> c = zip(a,b)\nBase.Iterators.Zip2{UnitRange{Int64},Array{String,1}}(1:5, String[\"e\", \"d\", \"b\", \"c\", \"a\"])\n\njulia> length(c)\n5\n\njulia> first(c)\n(1, \"e\")\n\n\n\n"
+    "text": "zip(iters...)\n\nFor a set of iterable objects, returns an iterable of tuples, where the ith tuple contains the ith component of each input iterable.\n\nNote that zip is its own inverse: collect(zip(zip(a...)...)) == collect(a).\n\nExample\n\njulia> a = 1:5\n1:5\n\njulia> b = [\"e\",\"d\",\"b\",\"c\",\"a\"]\n5-element Array{String,1}:\n \"e\"\n \"d\"\n \"b\"\n \"c\"\n \"a\"\n\njulia> c = zip(a,b)\nBase.Iterators.Zip2{UnitRange{Int64},Array{String,1}}(1:5, String[\"e\", \"d\", \"b\", \"c\", \"a\"])\n\njulia> length(c)\n5\n\njulia> first(c)\n(1, \"e\")\n\n\n\n"
 },
 
 {
@@ -17365,7 +17365,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Iteration utilities",
     "title": "Base.Iterators.enumerate",
     "category": "Function",
-    "text": "enumerate(iter)\n\nAn iterator that yields (i, x) where i is a counter starting at 1, and x is the ith value from the given iterator. It's useful when you need not only the values x over which you are iterating, but also the number of iterations so far. Note that i may not be valid for indexing iter; it's also possible that x != iter[i], if iter has indices that do not start at 1. See the enumerate(IndexLinear(), iter) method if you want to ensure that i is an index.\n\njulia> a = [\"a\", \"b\", \"c\"];\n\njulia> for (index, value) in enumerate(a)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n\n\n\nenumerate(IndexLinear(), A)\nenumerate(IndexCartesian(), A)\nenumerate(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning (i, x), where i is the index for the element and x = A[i].  This is similar to enumerate(A), except i will always be a valid index for A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in enumerate(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in enumerate(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex{2}((1, 1)) a\nCartesianIndex{2}((2, 1)) b\nCartesianIndex{2}((1, 2)) d\nCartesianIndex{2}((2, 2)) e\n\nNote that enumerate(A) returns i as a counter (always starting at 1), whereas enumerate(IndexLinear(), A) returns i as an index (starting at the first linear index of A, which may or may not be 1).\n\nSee also: IndexStyle, indices.\n\n\n\n"
+    "text": "enumerate(iter)\n\nAn iterator that yields (i, x) where i is a counter starting at 1, and x is the ith value from the given iterator. It's useful when you need not only the values x over which you are iterating, but also the number of iterations so far. Note that i may not be valid for indexing iter; it's also possible that x != iter[i], if iter has indices that do not start at 1. See the enumerate(IndexLinear(), iter) method if you want to ensure that i is an index.\n\nExample\n\njulia> a = [\"a\", \"b\", \"c\"];\n\njulia> for (index, value) in enumerate(a)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n\n\n\nenumerate(IndexLinear(), A)\nenumerate(IndexCartesian(), A)\nenumerate(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning (i, x), where i is the index for the element and x = A[i].  This is similar to enumerate(A), except i will always be a valid index for A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in enumerate(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in enumerate(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex{2}((1, 1)) a\nCartesianIndex{2}((2, 1)) b\nCartesianIndex{2}((1, 2)) d\nCartesianIndex{2}((2, 2)) e\n\nNote that enumerate(A) returns i as a counter (always starting at 1), whereas enumerate(IndexLinear(), A) returns i as an index (starting at the first linear index of A, which may or may not be 1).\n\nSee also: IndexStyle, indices.\n\n\n\n"
 },
 
 {
@@ -17389,7 +17389,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Iteration utilities",
     "title": "Base.Iterators.take",
     "category": "Function",
-    "text": "take(iter, n)\n\nAn iterator that generates at most the first n elements of iter.\n\njulia> a = 1:2:11\n1:2:11\n\njulia> collect(a)\n6-element Array{Int64,1}:\n  1\n  3\n  5\n  7\n  9\n 11\n\njulia> collect(Iterators.take(a,3))\n3-element Array{Int64,1}:\n 1\n 3\n 5\n\n\n\n"
+    "text": "take(iter, n)\n\nAn iterator that generates at most the first n elements of iter.\n\nExample\n\njulia> a = 1:2:11\n1:2:11\n\njulia> collect(a)\n6-element Array{Int64,1}:\n  1\n  3\n  5\n  7\n  9\n 11\n\njulia> collect(Iterators.take(a,3))\n3-element Array{Int64,1}:\n 1\n 3\n 5\n\n\n\n"
 },
 
 {
@@ -17397,7 +17397,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Iteration utilities",
     "title": "Base.Iterators.drop",
     "category": "Function",
-    "text": "drop(iter, n)\n\nAn iterator that generates all but the first n elements of iter.\n\njulia> a = 1:2:11\n1:2:11\n\njulia> collect(a)\n6-element Array{Int64,1}:\n  1\n  3\n  5\n  7\n  9\n 11\n\njulia> collect(Iterators.drop(a,4))\n2-element Array{Int64,1}:\n  9\n 11\n\n\n\n"
+    "text": "drop(iter, n)\n\nAn iterator that generates all but the first n elements of iter.\n\nExample\n\njulia> a = 1:2:11\n1:2:11\n\njulia> collect(a)\n6-element Array{Int64,1}:\n  1\n  3\n  5\n  7\n  9\n 11\n\njulia> collect(Iterators.drop(a,4))\n2-element Array{Int64,1}:\n  9\n 11\n\n\n\n"
 },
 
 {
@@ -17413,7 +17413,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Iteration utilities",
     "title": "Base.Iterators.repeated",
     "category": "Function",
-    "text": "repeated(x[, n::Int])\n\nAn iterator that generates the value x forever. If n is specified, generates x that many times (equivalent to take(repeated(x), n)).\n\njulia> a = Iterators.repeated([1 2], 4);\n\njulia> collect(a)\n4-element Array{Array{Int64,2},1}:\n [1 2]\n [1 2]\n [1 2]\n [1 2]\n\n\n\n"
+    "text": "repeated(x[, n::Int])\n\nAn iterator that generates the value x forever. If n is specified, generates x that many times (equivalent to take(repeated(x), n)).\n\nExample\n\njulia> a = Iterators.repeated([1 2], 4);\n\njulia> collect(a)\n4-element Array{Array{Int64,2},1}:\n [1 2]\n [1 2]\n [1 2]\n [1 2]\n\n\n\n"
 },
 
 {
@@ -17421,7 +17421,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Iteration utilities",
     "title": "Base.Iterators.product",
     "category": "Function",
-    "text": "product(iters...)\n\nReturns an iterator over the product of several iterators. Each generated element is a tuple whose ith element comes from the ith argument iterator. The first iterator changes the fastest. Example:\n\njulia> collect(Iterators.product(1:2,3:5))\n2×3 Array{Tuple{Int64,Int64},2}:\n (1, 3)  (1, 4)  (1, 5)\n (2, 3)  (2, 4)  (2, 5)\n\n\n\n"
+    "text": "product(iters...)\n\nReturns an iterator over the product of several iterators. Each generated element is a tuple whose ith element comes from the ith argument iterator. The first iterator changes the fastest. Example:\n\nExample\n\njulia> collect(Iterators.product(1:2,3:5))\n2×3 Array{Tuple{Int64,Int64},2}:\n (1, 3)  (1, 4)  (1, 5)\n (2, 3)  (2, 4)  (2, 5)\n\n\n\n"
 },
 
 {
@@ -17429,7 +17429,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Iteration utilities",
     "title": "Base.Iterators.flatten",
     "category": "Function",
-    "text": "flatten(iter)\n\nGiven an iterator that yields iterators, return an iterator that yields the elements of those iterators. Put differently, the elements of the argument iterator are concatenated. Example:\n\njulia> collect(Iterators.flatten((1:2, 8:9)))\n4-element Array{Int64,1}:\n 1\n 2\n 8\n 9\n\n\n\n"
+    "text": "flatten(iter)\n\nGiven an iterator that yields iterators, return an iterator that yields the elements of those iterators. Put differently, the elements of the argument iterator are concatenated.\n\nExample\n\njulia> collect(Iterators.flatten((1:2, 8:9)))\n4-element Array{Int64,1}:\n 1\n 2\n 8\n 9\n\n\n\n"
 },
 
 {
@@ -17437,7 +17437,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Iteration utilities",
     "title": "Base.Iterators.partition",
     "category": "Function",
-    "text": "partition(collection, n)\n\nIterate over a collection n elements at a time.\n\njulia> collect(Iterators.partition([1,2,3,4,5], 2))\n3-element Array{Array{Int64,1},1}:\n [1, 2]\n [3, 4]\n [5]\n\n\n\n"
+    "text": "partition(collection, n)\n\nIterate over a collection n elements at a time.\n\nExample\n\njulia> collect(Iterators.partition([1,2,3,4,5], 2))\n3-element Array{Array{Int64,1},1}:\n [1, 2]\n [3, 4]\n [5]\n\n\n\n"
 },
 
 {
