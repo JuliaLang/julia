@@ -117,8 +117,8 @@ end
 Computes eigenvalues (`D`) and eigenvectors (`V`) of `A`.
 See [`eigfact`](@ref) for details on the
 `irange`, `vl`, and `vu` arguments
-(for [`SymTridiagonal`](@ref), `Hermitian`, and
-`Symmetric` matrices)
+(for [`SymTridiagonal`](@ref), [`Hermitian`](@ref), and
+[`Symmetric`](@ref) matrices)
 and the `permute` and `scale` keyword arguments.
 The eigenvectors are returned columnwise.
 
