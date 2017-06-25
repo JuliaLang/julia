@@ -477,6 +477,14 @@ Here, we happened to know that the first element of `a` would be an [`Int32`](@r
 an annotation like this has the added benefit that it will raise a run-time error if the
 value is not of the expected type, potentially catching certain bugs earlier.
 
+In the case that the type of `a[1]` is not known precisely, `x` can be declared via
+`x = convert(Int32,a[1])::Int32`. The use of the [`convert`](@ref) function allows `a[1]`
+to be any object convertible to an `Int32` (such as `UInt8`), thus increasing the genericity
+of the code by loosening the type requirement. Notice that `convert` itself needs a type
+annotation in this context in order to achieve type stability. This is because the compiler
+cannot deduce the type of the return value of a function, even `convert`, unless the types of
+all the function's arguments are known.
+
 ### Declare types of keyword arguments
 
 Keyword arguments can have declared types:
