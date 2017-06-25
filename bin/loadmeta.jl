@@ -119,12 +119,13 @@ function load_packages(dir::String)
             v"0.5.0"  => Version("3c9d75391c72d7c32eea75ff187ce77b2d5effc8"),
             v"0.5.1"  => Version("6445c82d0060dbe82b88436f0f4371a4ee64d918"),
             v"0.5.2"  => Version("f4c6c9d4bbbd9587d84494e314f692c15ff1f9c0"),
+            v"0.6.0"  => Version("903644385b91ed8d95e5e3a5716c089dd1f1b08a"),
         ),
     )
     return pkgs
 end
 
-@eval julia_versions() = $([VersionNumber(0,m) for m=1:5])
+@eval julia_versions() = $([VersionNumber(0,m) for m=1:7])
 julia_versions(f::Function) = filter(f, julia_versions())
 julia_versions(vi::VersionInterval) = julia_versions(v->v in vi)
 
