@@ -1345,17 +1345,18 @@ delete!
 
 Returns the index of the first value in `a` greater than or equal to `x`, according to the
 specified order. Returns `length(a)+1` if `x` is greater than all values in `a`.
+`a` is assuemd to be sorted.
 
 # Examples
 
 ```jldoctest
-julia> searchsortedfirst([1, 2, 4, 5, 4], 4)
+julia> searchsortedfirst([1, 2, 4, 5, 14], 4)
 3
 
-julia> searchsortedfirst([1, 2, 4, 5, 4], 4, rev=true)
+julia> searchsortedfirst([1, 2, 4, 5, 14], 4, rev=true)
 1
 
-julia> searchsortedfirst([1, 2, 4, 5, 4], 6)
+julia> searchsortedfirst([1, 2, 4, 5, 14], 15)
 6
 ```
 """
@@ -1968,10 +1969,10 @@ Return the value stored for the given key, or if no mapping for the key is prese
 
 This is intended to be called using `do` block syntax:
 ```julia
-    get!(dict, key) do
-        # default value calculated here
-        time()
-    end
+get!(dict, key) do
+    # default value calculated here
+    time()
+end
 ```
 """
 get!(f::Function,collection,key)
@@ -2017,18 +2018,19 @@ length(collection)
     searchsortedlast(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
 Returns the index of the last value in `a` less than or equal to `x`, according to the
-specified order. Returns `0` if `x` is less than all values in `a`.
+specified order. Returns `0` if `x` is less than all values in `a`. `a` is assumed to
+be sorted.
 
 # Examples
 
 ```jldoctest
-julia> searchsortedlast([1, 2, 4, 5, 4], 4)
+julia> searchsortedlast([1, 2, 4, 5, 14], 4)
 3
 
-julia> searchsortedlast([1, 2, 4, 5, 4], 4, rev=true)
+julia> searchsortedlast([1, 2, 4, 5, 14], 4, rev=true)
 5
 
-julia> searchsortedlast([1, 2, 4, 5, 4], -1)
+julia> searchsortedlast([1, 2, 4, 5, 14], -1)
 0
 ```
 """
@@ -2339,6 +2341,7 @@ throw
 
 Determine whether every element of `a` is also in `b`, using [`in`](@ref).
 
+# Examples
 ```jldoctest
 julia> issubset([1, 2], [1, 2, 3])
 true

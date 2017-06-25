@@ -756,16 +756,19 @@ julia> resize!([6, 5, 4, 3, 2, 1], 3)
  5
  4
 
-julia> resize!([6, 5, 4, 3, 2, 1], 8)
-8-element Array{Int64,1}:
- 6
- 5
- 4
- 3
- 2
- 1
- 0
- 0
+ julia> a = resize!([6, 5, 4, 3, 2, 1], 8);
+
+ julia> length(a)
+ 8
+
+ julia> a[1:6]
+ 6-element Array{Int64,1}:
+  6
+  5
+  4
+  3
+  2
+  1
 ```
 """
 function resize!(a::Vector, nl::Integer)
