@@ -810,5 +810,5 @@ if true # required to exhibit bug
     end
 end"""
 
-cmd = `$(Base.julia_cmd()) -e $str`
+cmd = `$(Base.julia_cmd()) --startup-file=no -e $str`
 @test success(cmd)
