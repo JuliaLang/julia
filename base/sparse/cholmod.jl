@@ -1372,8 +1372,8 @@ end
     cholfact!(F::Factor, A; shift = 0.0) -> CHOLMOD.Factor
 
 Compute the Cholesky (``LL'``) factorization of `A`, reusing the symbolic
-factorization `F`. `A` must be a `SparseMatrixCSC`, `Symmetric{SparseMatrixCSC}`,
-or `Hermitian{SparseMatrixCSC}`. Note that even if `A` doesn't
+factorization `F`. `A` must be a `SparseMatrixCSC` or a [`Symmetric`](@ref)/
+[`Hermitian`](@ref) view of a `SparseMatrixCSC`. Note that even if `A` doesn't
 have the type tag, it must still be symmetric or Hermitian.
 
 See also [`cholfact`](@ref).
@@ -1411,8 +1411,8 @@ end
     cholfact(A; shift = 0.0, perm = Int[]) -> CHOLMOD.Factor
 
 Compute the Cholesky factorization of a sparse positive definite matrix `A`.
-`A` must be a `SparseMatrixCSC`, `Symmetric{SparseMatrixCSC}`, or
-`Hermitian{SparseMatrixCSC}`. Note that even if `A` doesn't
+`A` must be a `SparseMatrixCSC` or a [`Symmetric`](@ref)/[`Hermitian`](@ref)
+view of a `SparseMatrixCSC`. Note that even if `A` doesn't
 have the type tag, it must still be symmetric or Hermitian.
 A fill-reducing permutation is used.
 `F = cholfact(A)` is most frequently used to solve systems of equations with `F\\b`,
@@ -1466,8 +1466,8 @@ end
     ldltfact!(F::Factor, A; shift = 0.0) -> CHOLMOD.Factor
 
 Compute the ``LDL'`` factorization of `A`, reusing the symbolic factorization `F`.
-`A` must be a `SparseMatrixCSC`, `Symmetric{SparseMatrixCSC}`, or
-`Hermitian{SparseMatrixCSC}`. Note that even if `A` doesn't
+`A` must be a `SparseMatrixCSC` or a [`Symmetric`](@ref)/[`Hermitian`](@ref) view
+of a `SparseMatrixCSC`. Note that even if `A` doesn't
 have the type tag, it must still be symmetric or Hermitian.
 
 See also [`ldltfact`](@ref).
@@ -1510,8 +1510,8 @@ end
     ldltfact(A; shift = 0.0, perm=Int[]) -> CHOLMOD.Factor
 
 Compute the ``LDL'`` factorization of a sparse matrix `A`.
-`A` must be a `SparseMatrixCSC`, `Symmetric{SparseMatrixCSC}`, or
-`Hermitian{SparseMatrixCSC}`. Note that even if `A` doesn't
+`A` must be a `SparseMatrixCSC`, [`Symmetric{SparseMatrixCSC}`](@ref), or
+[`Hermitian{SparseMatrixCSC}`](@ref). Note that even if `A` doesn't
 have the type tag, it must still be symmetric or Hermitian.
 A fill-reducing permutation is used. `F = ldltfact(A)` is most frequently
 used to solve systems of equations `A*x = b` with `F\\b`. The returned

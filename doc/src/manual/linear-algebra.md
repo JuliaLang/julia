@@ -146,6 +146,7 @@ as well as whether hooks to various optimized methods for them in LAPACK are ava
 
 | Type                      | Description                                                                      |
 |:------------------------- |:-------------------------------------------------------------------------------- |
+| [`Symmetric`](@ref)       | [Symmetric matrix](https://en.wikipedia.org/wiki/Symmetric_matrix)               |
 | [`Hermitian`](@ref)       | [Hermitian matrix](https://en.wikipedia.org/wiki/Hermitian_matrix)               |
 | [`UpperTriangular`](@ref) | Upper [triangular matrix](https://en.wikipedia.org/wiki/Triangular_matrix)       |
 | [`LowerTriangular`](@ref) | Lower [triangular matrix](https://en.wikipedia.org/wiki/Triangular_matrix)       |
@@ -159,12 +160,13 @@ as well as whether hooks to various optimized methods for them in LAPACK are ava
 
 | Matrix type               | `+` | `-` | `*` | `\` | Other functions with optimized methods                              |
 |:------------------------- |:--- |:--- |:--- |:--- |:------------------------------------------------------------------- |
-| [`Hermitian`](@ref)       |     |     |     | MV  | [`inv()`](@ref), [`sqrtm()`](@ref), [`expm()`](@ref)                |
-| [`UpperTriangular`](@ref) |     |     | MV  | MV  | [`inv()`](@ref), [`det()`](@ref)                                    |
-| [`LowerTriangular`](@ref) |     |     | MV  | MV  | [`inv()`](@ref), [`det()`](@ref)                                    |
+| [`Symmetric`](@ref)       |     |     |     | MV  | [`inv()`](@ref), [`sqrtm()`](@ref), [`expm()`](@ref)                |
+| [`Hermitian`](@ref)       |     |     |     | MV  | [`inv()`](@ref), [`sqrtm()`](@ref), [`expm()`](@ref)                |
+| [`UpperTriangular`](@ref) |     |     | MV  | MV  | [`inv()`](@ref), [`det()`](@ref)                                    |
+| [`LowerTriangular`](@ref) |     |     | MV  | MV  | [`inv()`](@ref), [`det()`](@ref)                                    |
 | [`SymTridiagonal`](@ref)  | M   | M   | MS  | MV  | [`eigmax()`](@ref), [`eigmin()`](@ref)                              |
-| [`Tridiagonal`](@ref)     | M   | M   | MS  | MV  |                                                                     |
-| [`Bidiagonal`](@ref)      | M   | M   | MS  | MV  |                                                                     |
+| [`Tridiagonal`](@ref)     | M   | M   | MS  | MV  |                                                                     |
+| [`Bidiagonal`](@ref)      | M   | M   | MS  | MV  |                                                                     |
 | [`Diagonal`](@ref)        | M   | M   | MV  | MV  | [`inv()`](@ref), [`det()`](@ref), [`logdet()`](@ref), [`/()`](@ref) |
 | [`UniformScaling`](@ref)  | M   | M   | MVS | MVS | [`/()`](@ref)                                                       |
 
@@ -180,6 +182,7 @@ Legend:
 
 | Matrix type               | LAPACK | [`eig()`](@ref) | [`eigvals()`](@ref) | [`eigvecs()`](@ref) | [`svd()`](@ref) | [`svdvals()`](@ref) |
 |:------------------------- |:------ |:--------------- |:------------------- |:------------------- |:--------------- |:------------------- |
+| [`Symmetric`](@ref)       | SY     |                 | ARI                 |                     |                 |                     |
 | [`Hermitian`](@ref)       | HE     |                 | ARI                 |                     |                 |                     |
 | [`UpperTriangular`](@ref) | TR     | A               | A                   | A                   |                 |                     |
 | [`LowerTriangular`](@ref) | TR     | A               | A                   | A                   |                 |                     |

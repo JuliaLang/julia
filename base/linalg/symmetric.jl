@@ -337,7 +337,7 @@ det(A::RealHermSymComplexHerm) = real(det(bkfact(A)))
 det(A::Symmetric{<:Real}) = det(bkfact(A))
 det(A::Symmetric) = det(bkfact(A))
 
-\(A::HermOrSym{<:Any,<:StridedMatrix}, B::StridedVecOrMat) = \(bkfact(A.data, Symbol(A.uplo), issymmetric(A)), B)
+\(A::HermOrSym{<:Any,<:StridedMatrix}, B::StridedVecOrMat) = \(bkfact(A), B)
 
 inv(A::Hermitian{T,S}) where {T<:BlasFloat,S<:StridedMatrix} = Hermitian{T,S}(inv(bkfact(A)), A.uplo)
 inv(A::Symmetric{T,S}) where {T<:BlasFloat,S<:StridedMatrix} = Symmetric{T,S}(inv(bkfact(A)), A.uplo)
