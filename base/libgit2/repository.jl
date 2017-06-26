@@ -3,7 +3,7 @@
 """
     LibGit2.GitRepo(path::AbstractString)
 
-Opens a git repository at `path`.
+Open a git repository at `path`.
 """
 function GitRepo(path::AbstractString)
     repo_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
@@ -15,7 +15,7 @@ end
 """
     LibGit2.GitRepoExt(path::AbstractString, flags::Cuint = Cuint(Consts.REPOSITORY_OPEN_DEFAULT))
 
-Opens a git repository at `path` with extended controls (for instance, if the current
+Open a git repository at `path` with extended controls (for instance, if the current
 user must be a member of a special access group to read `path`).
 """
 function GitRepoExt(path::AbstractString, flags::Cuint = Cuint(Consts.REPOSITORY_OPEN_DEFAULT))
@@ -36,7 +36,7 @@ end
 """
     LibGit2.init(path::AbstractString, bare::Bool=false) -> GitRepo
 
-Opens a new git repository at `path`. If `bare` is `false`,
+Open a new git repository at `path`. If `bare` is `false`,
 the working tree will be created in `path/.git`. If `bare`
 is `true`, no working directory will be created.
 """
@@ -83,7 +83,7 @@ end
 """
     isbare(repo::GitRepo) -> Bool
 
-Determines if `repo` is bare. Suppose the top level directory of `repo` is `DIR`.
+Determine if `repo` is bare. Suppose the top level directory of `repo` is `DIR`.
 A non-bare repository is one in which the git directory (see [`gitdir`](@ref)) is
 `DIR/.git`, and the working tree can be checked out. A bare repository is one in
 which all of git's administrative files are simply in `DIR`, rather than "hidden"
@@ -97,7 +97,7 @@ end
 """
     isattached(repo::GitRepo) -> Bool
 
-Determines if `repo` is detached - that is, whether its HEAD points to a commit
+Determine if `repo` is detached - that is, whether its HEAD points to a commit
 (detached) or whether HEAD points to a branch tip (attached).
 """
 function isattached(repo::GitRepo)
@@ -166,7 +166,7 @@ revparseid(repo::GitRepo, spec) = GitHash(GitUnknownObject(repo, spec))
 """
     LibGit2.gitdir(repo::GitRepo)
 
-Returns the location of the "git" files of `repo`:
+Return the location of the "git" files of `repo`:
 
  - for normal repositories, this is the location of the `.git` folder.
  - for bare repositories, this is the location of the repository itself.
@@ -181,8 +181,8 @@ end
 """
     LibGit2.workdir(repo::GitRepo)
 
-The location of the working directory of `repo`. This will throw an error for bare
-repositories.
+Return the location of the working directory of `repo`.
+This will throw an error for bare repositories.
 
 !!! note
 
@@ -202,7 +202,7 @@ end
 """
     LibGit2.path(repo::GitRepo)
 
-The base file path of the repository `repo`.
+Return the base file path of the repository `repo`.
 
  - for normal repositories, this will typically be the parent directory of the ".git"
    directory (note: this may be different than the working directory, see `workdir` for
@@ -387,7 +387,7 @@ end
 """
     LibGit2.remotes(repo::GitRepo)
 
-Returns a vector of the names of the remotes of `repo`.
+Return a vector of the names of the remotes of `repo`.
 """
 function remotes(repo::GitRepo)
     sa_ref = Ref(StrArrayStruct())
