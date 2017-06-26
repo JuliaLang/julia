@@ -1771,8 +1771,8 @@ end
 @testset "reverse search direction if step < 0 #21986" begin
     srand(1234)
     A = sprand(5, 5, 1/5)
-    A = max.(A,A')
+    A = max.(A, A')
     A = spones(A)
-    B = A[5:-1:1,5:-1:1];
+    B = A[5:-1:1, 5:-1:1]
     @test issymmetric(B)
 end
