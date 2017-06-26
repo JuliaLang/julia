@@ -132,12 +132,14 @@ function Base.show(io::IOContext, S::SparseMatrixCSC)
     if nnz(S) == 0
         return show(io, MIME("text/plain"), S)
     end
-
     limit::Bool = get(io, :limit, false)
     rows = displaysize(io)[1] - 4 # -4 from [Prompt, header, newline after elements, new prompt]
-    rows <= 2 && return
-    println(io)
     will_fit = !limit || rows >= nnz(S) # Will the whole matrix fit when printed?
+
+    if rows <= 2 && !will_fit
+        print(io, "\n  \u22ee")
+        return
+    end
 
     iob = IOBuffer()
     ioc = IOContext(iob, :compact => true)
@@ -153,9 +155,6 @@ function Base.show(io::IOContext, S::SparseMatrixCSC)
         return String(take!(iob))
     end
 
-    lines_top = String[]
-    lines_bottom = String[]
-
     if will_fit
         print_count = nnz(S)
     else
@@ -165,10 +164,11 @@ function Base.show(io::IOContext, S::SparseMatrixCSC)
     count = 0
     for col = 1:S.n, r = nzrange(S, col)
         count += 1
-        push!(lines_top, _format_line(r, col))
+        print(io, "\n", _format_line(r, col))
         count == print_count && break
     end
 
+    lines_bottom = String[]
     if !will_fit
         count = 0
         for col = reverse(1:S.n), r = reverse(nzrange(S, col))
@@ -178,7 +178,6 @@ function Base.show(io::IOContext, S::SparseMatrixCSC)
         end
     end
 
-    print(io, join(lines_top, '\n'))
     if !will_fit
         print(io, "\n  ", '\u22ee', "\n")
         print(io, join(reverse(lines_bottom), '\n'))
