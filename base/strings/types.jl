@@ -19,7 +19,7 @@ struct SubString{T<:AbstractString} <: AbstractString
     function SubString{T}(s::T, i::Int, j::Int) where T<:AbstractString
         i > j && return new(s, 0, 0) # allow i > j as it is consistent with getindex
         i < 1 && throw(BoundsError(s, i))
-        j > s.len && throw(BoundsError(s, j))
+        j > sizeof(s) && throw(BoundsError(s, j))
 
         if !isvalid(s,i)
             throw(ArgumentError("invalid SubString index i=$i"))
@@ -42,7 +42,7 @@ SubString(s::AbstractString, r::UnitRange{<:Integer}) = SubString(s, Int(first(r
 function SubString(s::SubString, i::Int, j::Int)
     i > j && SubString(s.string, 1, 0) # allow i > j as it is consistent with getindex
     i < 1 && throw(BoundsError(s, i))
-    j >= nextind(s, endof(s)) && throw(BoundsError(s, j))
+    j > sizeof(s) && throw(BoundsError(s, j))
     SubString(s.string, s.offset+i, s.offset+j)
 end
 
