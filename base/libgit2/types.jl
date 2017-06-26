@@ -325,9 +325,10 @@ The fields represent:
      be `GitHash(0)`.
   * `path`: a `NULL` terminated path to the item relative to the working directory of the repository.
   * `size`: the size of the item in bytes.
-  * `flags`: a combination of the [`git_diff_flag_t`](https://libgit2.github.com/libgit2/#HEAD/type/git_diff_flag_t) flags.
+  * `flags`: a combination of the [`git_diff_flag_t`](https://libgit2.github.com/libgit2/#HEAD/type/git_diff_flag_t)
+     flags. The `i`th bit of this integer sets the `i`th flag.
   * `mode`: the [`stat`](@ref) mode for the item.
-  * `id_abbrev`: only present in versions newer than or equal to `0.25.0`.
+  * `id_abbrev`: only present in LibGit2 versions newer than or equal to `0.25.0`.
      The length of the `id` field when converted using [`hex`](@ref). Usually equal to `GIT_OID_HEXSZ`.
 """
 struct DiffFile
