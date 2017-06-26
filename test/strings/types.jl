@@ -26,9 +26,9 @@ for i1 = 1:length(u8str2)
 end
 
 str="tempus fugit"              #length(str)==12
-ss=SubString(str,1,length(str)) #match source string
+ss=SubString(str,1,endof(str)) #match source string
 @test length(ss)==length(str)
-ss=SubString(str,1:length(str))
+ss=SubString(str,1:length(str)) # works as str is all ASCII
 @test length(ss)==length(str)
 
 ss=SubString(str,1,0)    #empty SubString
@@ -37,14 +37,25 @@ ss=SubString(str,1:0)
 @test length(ss)==0
 
 str = "∀"
-for idx in 0:3
+for idx in 0:1
     @test SubString(str, 1, idx) == str[1:idx]
 end
 
+@test_throws BoundsError SubString(str, 1, 2)
+@test_throws BoundsError SubString(str, 1, 3)
+@test_throws BoundsError SubString(str, 1, 4)
+
 str = "∀∀"
-for idx in 0:6
+for idx in 0:1
     @test SubString(str, 1, idx) == str[1:idx]
     @test SubString(str, 4, idx) == str[4:idx]
+end
+
+@test SubString(str, 4, 4) == str[4:4]
+
+for idx in 5:8
+    @test_throws BoundsError SubString(str, 1, idx) == str[1:idx]
+    @test_throws BoundsError SubString(str, 4, idx) == str[4:idx]
 end
 
 @test_throws BoundsError SubString(str,14,20)  #start indexed beyond source string length
@@ -52,10 +63,13 @@ end
 @test_throws BoundsError SubString(str,10,16)  #end indexed beyond source string length
 @test_throws BoundsError SubString(str,10:16)
 
+@test_throws BoundsError SubString(str,2:4)
+
 str2=""
 @test_throws BoundsError SubString(str2,1,4)  #empty source string
-
-@test_throws BoundsError ss=SubString(str2,1,1)  #empty source string, identical start and end index
+@test_throws BoundsError SubString(str2,1,1)  #empty source string, identical start and end index
+@test_throws BoundsError SubString(str2,10,12)
+@test SubString(str2,12,10) == ""
 
 @test SubString("foobar",big(1),big(3)) == "foo"
 
@@ -66,7 +80,7 @@ b = IOBuffer()
 write(b, u)
 @test String(take!(b)) == "\u2200\u2222"
 
-@test_throws ArgumentError SubString(str, 4, 5)
+@test_throws BoundsError SubString(str, 4, 5)
 @test_throws BoundsError next(u, 0)
 @test_throws BoundsError next(u, 7)
 @test_throws BoundsError getindex(u, 0)
@@ -125,6 +139,8 @@ let s="lorem ipsum",
                SubString(s,1,6)=>"lorem ",
                SubString(s,1,0)=>"",
                SubString(s,2,4)=>"ore",
+               SubString(s,2,11)=>"orem ipsum",
+               SubString(s,15,14)=>""
                )
     for (ss,s) in sdict
         for i in -1:12
@@ -145,10 +161,12 @@ end #let
 
 #for isvalid(SubString{String})
 let s = "Σx + βz - 2"
-  for i in -1:length(s)+2
-      ss=SubString(s,1,i)
-      @test isvalid(ss,i)==isvalid(s,i)
-  end
+    for i in -1:length(s)+2
+        if isvalid(s, i)
+            ss=SubString(s,1,i)
+            @test isvalid(ss,i)==isvalid(s,i)
+        end
+    end
 end
 
 ss=SubString("hello",1,5)

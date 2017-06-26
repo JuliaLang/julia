@@ -5,8 +5,8 @@
 ## substrings reference original strings ##
 
 """
-    SubString(s::AbstractString, i::Integer, j::Integer)
-    SubString(s::AbstractString, r::UnitRange{Integer})
+    SubString(s::AbstractString, i::Integer, j::Integer=endof(s))
+    SubString(s::AbstractString, r::UnitRange{<:Integer})
 
 Like [`getindex`](@ref), but returns a view into the parent AbstractString `s`
 with the given indices instead of making a copy.
@@ -18,31 +18,21 @@ struct SubString{T<:AbstractString} <: AbstractString
 
     function SubString{T}(s::T, i::Int, j::Int) where T<:AbstractString
         i > j && return new(s, 0, 0) # allow i > j as it is consistent with getindex
-        i < 1 && throw(BoundsError(s, i))
-        j > sizeof(s) && throw(BoundsError(s, j))
-
-        if !isvalid(s,i)
-            throw(ArgumentError("invalid SubString index i=$i"))
-        end
-
-        while !isvalid(s,j) && j > i
-            j -= 1
-        end
-
+        isvalid(s, i) || throw(BoundsError(s, i))
+        isvalid(s, j) || throw(BoundsError(s, j))
         o = i-1
-        new(s, o, max(0, j-o))
+        new(s, o, j-o)
     end
 end
 
 SubString(s::T, i::Int, j::Int) where {T<:AbstractString} = SubString{T}(s, i, j)
-SubString(s::AbstractString, i::Integer, j::Integer) = SubString(s, Int(i), Int(j))
-SubString(s::AbstractString, i::Integer) = SubString(s, i, endof(s))
-SubString(s::AbstractString, r::UnitRange{<:Integer}) = SubString(s, Int(first(r)), Int(last(r)))
+SubString(s::AbstractString, i::Integer, j::Integer=endof(s)) = SubString(s, Int(i), Int(j))
+SubString(s::AbstractString, r::UnitRange{<:Integer}) = SubString(s, first(r), last(r))
 
 function SubString(s::SubString, i::Int, j::Int)
     i > j && SubString(s.string, 1, 0) # allow i > j as it is consistent with getindex
-    i < 1 && throw(BoundsError(s, i))
-    j > sizeof(s) && throw(BoundsError(s, j))
+    isvalid(s, i) || throw(BoundsError(s, i))
+    isvalid(s, j) || throw(BoundsError(s, j))
     SubString(s.string, s.offset+i, s.offset+j)
 end
 
