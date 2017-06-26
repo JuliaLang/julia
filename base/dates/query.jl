@@ -91,7 +91,7 @@ dayofweek(days) = mod1(days, 7)
 
 Returns 366 if the year of `dt` is a leap year, otherwise returns 365.
 
-# Example
+# Examples
 ```jldoctest
 julia> Dates.daysinyear(1999)
 365
@@ -150,6 +150,7 @@ end
 Return the abbreviated name corresponding to the day of the week of the `Date` or `DateTime`
 in the given `locale`.
 
+# Example
 ```jldoctest
 julia> Dates.dayabbr(Date("2000-01-01"))
 "Sat"
@@ -176,12 +177,12 @@ For the day of week of `dt`, returns which number it is in `dt`'s month. So if t
 the week of `dt` is Monday, then `1 = First Monday of the month, 2 = Second Monday of the
 month, etc.` In the range 1:5.
 
-# Example
+# Examples
 ```jldoctest
-julia> Dates.dayofweekofmonth(Date("2000-02-1"))
+julia> Dates.dayofweekofmonth(Date("2000-02-01"))
 1
 
-julia> Dates.dayofweekofmonth(Date("2000-02-8"))
+julia> Dates.dayofweekofmonth(Date("2000-02-08"))
 2
 
 julia> Dates.dayofweekofmonth(Date("2000-02-15"))
@@ -207,7 +208,7 @@ month. Returns 4 or 5. Useful in temporal expressions for specifying the last da
 in a month by including `dayofweekofmonth(dt) == daysofweekinmonth(dt)` in the adjuster
 function.
 
-# Example
+# Examples
 ```jldoctest
 julia> Dates.daysofweekinmonth(Date("2005-01-01"))
 5
@@ -254,6 +255,7 @@ end
 
 Return the abbreviated month name of the `Date` or `DateTime` in the given `locale`.
 
+# Example
 ```jldoctest
 julia> Dates.monthabbr(Date("2005-01-04"))
 "Jan"
@@ -288,7 +290,7 @@ daysinmonth(dt::TimeType) = ((y, m) = yearmonth(dt); return daysinmonth(y, m))
 
 Returns `true` if the year of `dt` is a leap year.
 
-# Example
+# Examples
 ```jldoctest
 julia> Dates.isleapyear(Date("2004"))
 true

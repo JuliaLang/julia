@@ -141,7 +141,7 @@ lastdayofyear(dt::DateTime) = DateTime(lastdayofyear(Date(dt)))
 
 Adjusts `dt` to the first day of its quarter.
 
-# Example
+# Examples
 ```jldoctest
 julia> Dates.firstdayofquarter(DateTime("1996-05-20"))
 1996-04-01T00:00:00
@@ -164,7 +164,7 @@ firstdayofquarter(dt::DateTime) = DateTime(firstdayofquarter(Date(dt)))
 
 Adjusts `dt` to the last day of its quarter.
 
-# Example
+# Examples
 ```jldoctest
 julia> Dates.lastdayofquarter(DateTime("1996-05-20"))
 1996-06-30T00:00:00
