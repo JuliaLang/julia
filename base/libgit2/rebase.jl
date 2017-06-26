@@ -16,6 +16,14 @@ function Base.count(rb::GitRebase)
     return ccall((:git_rebase_operation_entrycount, :libgit2), Csize_t, (Ptr{Void},), rb.ptr)
 end
 
+"""
+    current(rb::GitRebase) -> Csize_t
+
+Returns the index of the current [`RebaseOperation`](@ref). If no operation has
+yet been applied (because the [`GitRebase`](@ref) has been constructed but `next`
+has not yet been called or iteration over `rb` has not yet begun), this returns
+`GIT_REBASE_NO_OPERATION`.
+"""
 function current(rb::GitRebase)
     return ccall((:git_rebase_operation_current, :libgit2), Csize_t, (Ptr{Void},), rb.ptr)
 end
@@ -69,11 +77,27 @@ function commit(rb::GitRebase, sig::GitSignature)
     return oid_ptr[]
 end
 
+"""
+    abort(rb::GitRebase) -> Csize_t
+
+Cancels the in-progress rebase, undoing all changes made so far and returning
+the parent repository of `rb` and its working directory to their state before
+the rebase was initiated. Returns `0` if the abort is successful, `GIT_ENOTFOUND`
+if no rebase is in progress (for example, if the rebase had completed), and `-1`
+for other errors.
+"""
 function abort(rb::GitRebase)
     return ccall((:git_rebase_abort, :libgit2), Csize_t,
                       (Ptr{Void},), rb.ptr)
 end
 
+"""
+    finish(rb::GitRebase, sig::GitSignature) -> Csize_t
+
+Complete the rebase described by `rb`. `sig` is an optional [`GitSignature`](@ref)
+to specify the identity of the user finishing the rebase. Returns `0` if the
+rebase finishes successfully, `-1` if there is an error.
+"""
 function finish(rb::GitRebase, sig::GitSignature)
     return ccall((:git_rebase_finish, :libgit2), Csize_t,
                   (Ptr{Void}, Ptr{SignatureStruct}),
