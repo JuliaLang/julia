@@ -257,6 +257,12 @@ struct State {
     // are indices into the next three maps which store safepoint properties
     std::map<Instruction *, int> SafepointNumbering;
 
+    // Instructions that can return twice. For now, all values live at these
+    // instructions will get their own, dedicated GC frame slots, because they
+    // have unobservable control flow, so we can't be sure where they're
+    // actually live. All of these are also considered safepoints.
+    std::vector<Instruction *> ReturnsTwice;
+
     // The set of values live at a particular safepoint
     std::vector<BitVector> LiveSets;
     // The set of values for which this is the first safepoint along some
@@ -687,6 +693,9 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                         continue;
                     }
                 }
+                if (CI->canReturnTwice()) {
+                    S.ReturnsTwice.push_back(CI);
+                }
                 int SafepointNumber = NoteSafepoint(S, BBS, CI);
                 BBS.HasSafepoint = true;
                 BBS.TopmostSafepoint = SafepointNumber;
@@ -942,12 +951,24 @@ std::vector<int> LateLowerGCFrame::ColorRoots(const State &S) {
     std::vector<int> Colors;
     Colors.resize(S.MaxPtrNumber + 1, -1);
     PEOIterator Ordering(S.Neighbors);
+    int PreAssignedColors = 0;
+    /* First assign permanent slots to things that need them due
+       to returns_twice */
+    for (auto it : S.ReturnsTwice) {
+        int Num = S.SafepointNumbering.at(it);
+        const BitVector &LS = S.LiveSets[Num];
+        for (int Idx = LS.find_first(); Idx >= 0; Idx = LS.find_next(Idx)) {
+            if (Colors[Idx] == -1)
+                Colors[Idx] = PreAssignedColors++;
+        }
+    }
     /* Greedy coloring */
-    int ActiveElement = 1;
     int MaxAssignedColor = -1;
+    int ActiveElement = 1;
     BitVector UsedColors;
     while ((ActiveElement = Ordering.next()) != -1) {
-        assert(Colors[ActiveElement] == -1);
+        if (Colors[ActiveElement] != -1)
+            continue;
         UsedColors.resize(MaxAssignedColor + 2, false);
         UsedColors.reset();
         if (S.Neighbors[ActiveElement].empty()) {
@@ -955,13 +976,18 @@ std::vector<int> LateLowerGCFrame::ColorRoots(const State &S) {
             continue;
         }
         for (int Neighbor : S.Neighbors[ActiveElement]) {
-            if (Colors[Neighbor] == -1)
+            int NeighborColor = Colors[Neighbor];
+            if (NeighborColor == -1)
                 continue;
-            UsedColors[Colors[Neighbor]] = 1;
+            if (NeighborColor < PreAssignedColors)
+                continue;
+            UsedColors[NeighborColor - PreAssignedColors] = 1;
         }
-        Colors[ActiveElement] = UsedColors.flip().find_first();
-        if (Colors[ActiveElement] > MaxAssignedColor)
-            MaxAssignedColor = Colors[ActiveElement];
+        int NewColor = UsedColors.flip().find_first();
+        if (NewColor > MaxAssignedColor)
+            MaxAssignedColor = NewColor;
+        NewColor += PreAssignedColors;
+        Colors[ActiveElement] = NewColor;
     }
     return Colors;
 }
