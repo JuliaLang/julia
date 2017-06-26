@@ -55,7 +55,7 @@ else # !windows
 
     rand(rd::RandomDevice, T::BoolBitIntegerType)   = read( rd.file, T)
     rand!(rd::RandomDevice, A::BoolBitIntegerArray) = read!(rd.file, A)
-end
+end # os-test
 
 """
     RandomDevice()
