@@ -20,9 +20,9 @@ command line::
       (_)     | (_) (_)    |  Documentation: https://docs.julialang.org
        _ _   _| |_  __ _   |  Type "?help" for help.
       | | | | | | |/ _` |  |
-      | | |_| | | | (_| |  |  Version 0.5.0-dev+2440 (2016-02-01 02:22 UTC)
-     _/ |\__'_|_|_|\__'_|  |  Commit 2bb94d6 (11 days old master)
-    |__/                   |  x86_64-apple-darwin13.1.0
+      | | |_| | | | (_| |  |  Version 0.6.0 (2017-06-19 13:05 UTC)
+     _/ |\__'_|_|_|\__'_|  |  Official http://julialang.org/ release
+    |__/                   |  x86_64-pc-linux-gnu
 
     julia> 1 + 2
     3
