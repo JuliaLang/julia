@@ -56,15 +56,16 @@ sizeof(s::AbstractString) = error("type $(typeof(s)) has no canonical binary rep
 eltype(::Type{<:AbstractString}) = Char
 
 """
-```
-*(s::AbstractString, t::AbstractString)
-```
+    *(s::Union{Char, AbstractString}, t::Union{Char, AbstractString})
 
-Concatenate strings. The `*` operator is an alias to this function.
+Concatenate strings and characters. The `*` operator is an alias to this function.
 
 ```jldoctest
 julia> "Hello " * "world"
 "Hello world"
+
+julia> 'j' * "ulia"
+"julia"
 ```
 """
 (*)(s1::Union{Char, AbstractString}, ss::Union{Char, AbstractString}...) = string(s1, ss...)
