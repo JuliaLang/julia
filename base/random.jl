@@ -621,7 +621,7 @@ end
 
 # A::Array{UInt128} will match the specialized method above
 function rand!(r::MersenneTwister, A::Base.BitIntegerArray)
-    n=length(A)
+    n = length(A)
     T = eltype(A)
     n128 = n * sizeof(T) ÷ 16
     rand!(r, unsafe_wrap(Array, convert(Ptr{UInt128}, pointer(A)), n128))
