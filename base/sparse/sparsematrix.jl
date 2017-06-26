@@ -1851,6 +1851,9 @@ function getindex_cols(A::SparseMatrixCSC{Tv,Ti}, J::AbstractVector) where {Tv,T
     return SparseMatrixCSC(m, nJ, colptrS, rowvalS, nzvalS)
 end
 
+getindex_traverse_col(::AbstractUnitRange, lo::Int, hi::Int) = lo:hi
+getindex_traverse_col(I::StepRange, lo::Int, hi::Int) = step(I) > 0 ? (lo:1:hi) : (hi:-1:lo)
+
 function getindex(A::SparseMatrixCSC{Tv,Ti}, I::Range, J::AbstractVector) where {Tv,Ti<:Integer}
     # Ranges for indexing rows
     (m, n) = size(A)
@@ -1884,7 +1887,7 @@ function getindex(A::SparseMatrixCSC{Tv,Ti}, I::Range, J::AbstractVector) where 
 
     @inbounds for j = 1:nJ
         col = J[j]
-        for k = colptrA[col]:colptrA[col+1]-1
+        for k = getindex_traverse_col(I, colptrA[col], colptrA[col+1]-1)
             rowA = rowvalA[k]
             i = rangesearch(I, rowA)
             if i > 0
