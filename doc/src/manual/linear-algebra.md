@@ -153,7 +153,7 @@ as well as whether hooks to various optimized methods for them in LAPACK are ava
 | [`SymTridiagonal`](@ref)  | Symmetric tridiagonal matrix                                                     |
 | [`Bidiagonal`](@ref)      | Upper/lower [bidiagonal matrix](https://en.wikipedia.org/wiki/Bidiagonal_matrix) |
 | [`Diagonal`](@ref)        | [Diagonal matrix](https://en.wikipedia.org/wiki/Diagonal_matrix)                 |
-| `UniformScaling`          | [Uniform scaling operator](https://en.wikipedia.org/wiki/Uniform_scaling)        |
+| [`UniformScaling`](@ref)  | [Uniform scaling operator](https://en.wikipedia.org/wiki/Uniform_scaling)        |
 
 ### Elementary operations
 
@@ -166,7 +166,7 @@ as well as whether hooks to various optimized methods for them in LAPACK are ava
 | [`Tridiagonal`](@ref)     | M   | M   | MS  | MV  |                                                                     |
 | [`Bidiagonal`](@ref)      | M   | M   | MS  | MV  |                                                                     |
 | [`Diagonal`](@ref)        | M   | M   | MV  | MV  | [`inv()`](@ref), [`det()`](@ref), [`logdet()`](@ref), [`/()`](@ref) |
-| `UniformScaling`          | M   | M   | MVS | MVS | [`/()`](@ref)                                                       |
+| [`UniformScaling`](@ref)  | M   | M   | MVS | MVS | [`/()`](@ref)                                                       |
 
 Legend:
 
@@ -199,8 +199,8 @@ Legend:
 
 ### The uniform scaling operator
 
-A `UniformScaling` operator represents a scalar times the identity operator, `λ*I`. The identity
-operator  `I` is defined as a constant and is an instance of `UniformScaling`. The size of these
+A [`UniformScaling`](@ref) operator represents a scalar times the identity operator, `λ*I`. The identity
+operator `I` is defined as a constant and is an instance of `UniformScaling`. The size of these
 operators are generic and match the other matrix in the binary operations [`+`](@ref), [`-`](@ref),
 [`*`](@ref) and [`\`](@ref). For `A+I` and `A-I` this means that `A` must be square. Multiplication
 with the identity operator `I` is a noop (except for checking that the scaling factor is one)

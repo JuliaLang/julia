@@ -4,6 +4,29 @@ import Base: copy, ctranspose, getindex, show, transpose, one, zero, inv,
              hcat, vcat, hvcat
 import Base.LinAlg: SingularException
 
+"""
+    UniformScaling{T<:Number}
+
+Generically sized uniform scaling operator defined as a scalar times the
+identity operator, `λ*I`. See also [`I`](@ref).
+
+# Example
+```jldoctest
+julia> J = UniformScaling(2.)
+UniformScaling{Float64}
+2.0*I
+
+julia> A = [1. 2.; 3. 4.]
+2×2 Array{Float64,2}:
+ 1.0  2.0
+ 3.0  4.0
+
+julia> J*A
+2×2 Array{Float64,2}:
+ 2.0  4.0
+ 6.0  8.0
+```
+"""
 struct UniformScaling{T<:Number}
     λ::T
 end
@@ -11,7 +34,7 @@ end
 """
     I
 
-An object of type `UniformScaling`, representing an identity matrix of any size.
+An object of type [`UniformScaling`](@ref), representing an identity matrix of any size.
 
 # Example
 

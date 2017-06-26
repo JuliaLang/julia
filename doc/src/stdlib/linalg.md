@@ -20,6 +20,7 @@ Base.LinAlg.Symmetric
 Base.LinAlg.Hermitian
 Base.LinAlg.LowerTriangular
 Base.LinAlg.UpperTriangular
+Base.LinAlg.UniformScaling
 Base.LinAlg.lu
 Base.LinAlg.lufact
 Base.LinAlg.lufact!
