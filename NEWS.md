@@ -10,6 +10,8 @@ New language features
 Language changes
 ----------------
 
+  * The syntax `1.+2` is deprecated, since it is ambiguous: it could mean either
+    `1 .+ 2` (the current meaning) or `1. + 2` ([#19089]).
 
 Breaking changes
 ----------------

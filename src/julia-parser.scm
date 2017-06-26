@@ -306,7 +306,13 @@
     (if (eqv? (peek-char port) #\.)
         (begin (read-char port)
                (if (dot-opchar? (peek-char port))
-                   (io.ungetc port #\.)
+                   (begin
+                     (if (not (eqv? (peek-char port) #\.))
+                         (let ((num (get-output-string str)))
+                           (syntax-deprecation port
+                                               (string num #\. (peek-char port))
+                                               (string num " ." (peek-char port)))))
+                     (io.ungetc port #\.))
                    (begin (write-char #\. str)
                           (read-digs #f #t)
                           (if (eq? pred char-hex?)
