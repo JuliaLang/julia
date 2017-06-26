@@ -4,15 +4,24 @@ function Base.length(blob::GitBlob)
     return ccall((:git_blob_rawsize, :libgit2), Int64, (Ptr{Void},), blob.ptr)
 end
 
+"""
+    rawcontent(blob::GitBlob) -> Array
+
+Fetch the *raw* contents of the [`GitBlob`](@ref) `blob`. This is a read-only
+`Array` containing the contents of the blob, which may be binary or may be ASCII
+`String` data.
+
+See also [`content`](@ref).
+"""
 function rawcontent(blob::GitBlob)
     ptr = ccall((:git_blob_rawcontent, :libgit2), Ptr{UInt8}, (Ptr{Void},), blob.ptr)
     copy(unsafe_wrap(Array, ptr, (length(blob),), false))
 end
 
 """
-    content(blob::GitBlob)
+    content(blob::GitBlob) -> String
 
-Fetch the contents of the `GitBlob` `blob`. If the `blob` contains
+Fetch the contents of the [`GitBlob`](@ref) `blob`. If the `blob` contains
 binary data (which can be determined using [`isbinary`](@ref)),
 throw an error. Otherwise, return a `String` containing the contents
 of the `blob`.
@@ -24,6 +33,8 @@ function content(blob::GitBlob)
 end
 
 """
+    isbinary(blob::GitBlob) -> Bool
+
 Use a heuristic to guess if a file is binary: searching for NULL bytes and
 looking for a reasonable ratio of printable to non-printable characters among
 the first 8000 bytes.
