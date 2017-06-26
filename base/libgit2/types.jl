@@ -196,7 +196,9 @@ Matches the [`git_proxy_options`](https://libgit2.github.com/libgit2/#HEAD/type/
 
 The fields represent:
   * `version`: version of the struct in use, in case this changes later. For now, always `1`.
-  * `proxytype`: the type of proxy to use. Default is to auto-detect it.
+  * `proxytype`: an `enum` for the type of proxy to use.
+     Defined in [`git_proxy_t`](https://libgit2.github.com/libgit2/#HEAD/type/git_proxy_t).
+     Default is to auto-detect the proxy type.
   * `url`: the URL of the proxy.
   * `credential_cb`: a pointer to a callback function which will be called if the remote
     requires authentication to connect.
