@@ -60,7 +60,7 @@ end
 """
     LibGit2.commit(rb::GitRebase, sig::GitSignature)
 
-Commits the current patch to the rebase `rb`, using `sig` as the committer. Is silent if
+Commit the current patch to the rebase `rb`, using `sig` as the committer. Is silent if
 the commit has already been applied.
 """
 function commit(rb::GitRebase, sig::GitSignature)
@@ -80,7 +80,7 @@ end
 """
     abort(rb::GitRebase) -> Csize_t
 
-Cancels the in-progress rebase, undoing all changes made so far and returning
+Cancel the in-progress rebase, undoing all changes made so far and returning
 the parent repository of `rb` and its working directory to their state before
 the rebase was initiated. Returns `0` if the abort is successful, `GIT_ENOTFOUND`
 if no rebase is in progress (for example, if the rebase had completed), and `-1`
