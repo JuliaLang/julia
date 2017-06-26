@@ -248,6 +248,90 @@ dims)` will return an array filled with the result of evaluating `Foo()` once.
 fill(v, dims::Dims)       = fill!(Array{typeof(v)}(dims), v)
 fill(v, dims::Integer...) = fill!(Array{typeof(v)}(dims...), v)
 
+"""
+    zeros([A::AbstractArray,] [T=eltype(A)::Type,] [dims=size(A)::Tuple])
+
+Create an array of all zeros with the same layout as `A`, element type `T` and size `dims`.
+The `A` argument can be skipped, which behaves like `Array{Float64,0}()` was passed.
+For convenience `dims` may also be passed in variadic form.
+
+
+```jldoctest
+julia> zeros(1)
+1-element Array{Float64,1}:
+ 0.0
+
+julia> zeros(Int8, 2, 3)
+2×3 Array{Int8,2}:
+ 0  0  0
+ 0  0  0
+
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> zeros(A)
+2×2 Array{Int64,2}:
+ 0  0
+ 0  0
+
+julia> zeros(A, Float64)
+2×2 Array{Float64,2}:
+ 0.0  0.0
+ 0.0  0.0
+
+julia> zeros(A, Bool, (3,))
+3-element Array{Bool,1}:
+ false
+ false
+ false
+```
+See also [`ones`](@ref), [`similar`](@ref).
+"""
+zeros
+
+"""
+    ones([A::AbstractArray,] [T=eltype(A)::Type,] [dims=size(A)::Tuple])
+
+Create an array of all ones with the same layout as `A`, element type `T` and size `dims`.
+The `A` argument can be skipped, which behaves like `Array{Float64,0}()` was passed.
+For convenience `dims` may also be passed in variadic form.
+
+```jldoctest
+julia> ones(Complex128, 2, 3)
+2×3 Array{Complex{Float64},2}:
+ 1.0+0.0im  1.0+0.0im  1.0+0.0im
+ 1.0+0.0im  1.0+0.0im  1.0+0.0im
+
+julia> ones(1,2)
+1×2 Array{Float64,2}:
+ 1.0  1.0
+
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> ones(A)
+2×2 Array{Int64,2}:
+ 1  1
+ 1  1
+
+julia> ones(A, Float64)
+2×2 Array{Float64,2}:
+ 1.0  1.0
+ 1.0  1.0
+
+julia> ones(A, Bool, (3,))
+3-element Array{Bool,1}:
+ true
+ true
+ true
+```
+See also [`zeros`](@ref), [`similar`](@ref).
+"""
+ones
 for (fname, felt) in ((:zeros,:zero), (:ones,:one))
     @eval begin
         # allow signature of similar
@@ -545,6 +629,12 @@ setindex!(A::Array{T}, x, i1::Int) where {T} = arrayset(A, convert(T,x)::T, i1)
 setindex!(A::Array{T}, x, i1::Int, i2::Int, I::Int...) where {T} = (@_inline_meta; arrayset(A, convert(T,x)::T, i1, i2, I...)) # TODO: REMOVE FOR #14770
 
 # These are redundant with the abstract fallbacks but needed for bootstrap
+"""
+    setindex!(collection, value, key...)
+
+Store the given value at the given key or index within a collection. The syntax `a[i,j,...] =
+x` is converted by the compiler to `(setindex!(a, x, i, j, ...); x)`.
+"""
 function setindex!(A::Array, x, I::AbstractVector{Int})
     @_propagate_inbounds_meta
     A === I && (I = copy(I))
@@ -629,6 +719,34 @@ function push!(a::Array{Any,1}, item::ANY)
     return a
 end
 
+"""
+    append!(collection, collection2) -> collection.
+
+Add the elements of `collection2` to the end of `collection`.
+
+```jldoctest
+julia> append!([1],[2,3])
+3-element Array{Int64,1}:
+ 1
+ 2
+ 3
+```
+
+```jldoctest
+julia> append!([1, 2, 3], [4, 5, 6])
+6-element Array{Int64,1}:
+ 1
+ 2
+ 3
+ 4
+ 5
+ 6
+```
+
+Use [`push!`](@ref) to add individual items to `collection` which are not already
+themselves in another collection. The result is of the preceding example is equivalent to
+`push!([1, 2, 3], 4, 5, 6)`.
+"""
 function append!(a::Array{<:Any,1}, items::AbstractVector)
     itemindices = eachindex(items)
     n = length(itemindices)
@@ -752,6 +870,40 @@ function sizehint!(a::Vector, sz::Integer)
     a
 end
 
+"""
+    pop!(collection) -> item
+
+Remove an item in `collection` and return it. If `collection` is an
+ordered container, the last item is returned.
+
+```jldoctest
+julia> A=[1, 2, 3]
+3-element Array{Int64,1}:
+ 1
+ 2
+ 3
+
+julia> pop!(A)
+3
+
+julia> A
+2-element Array{Int64,1}:
+ 1
+ 2
+
+julia> S = Set([1, 2])
+Set([2, 1])
+
+julia> pop!(S)
+2
+
+julia> S
+Set([1])
+
+julia> pop!(Dict(1=>2))
+1=>2
+```
+"""
 function pop!(a::Vector)
     if isempty(a)
         throw(ArgumentError("array must be non-empty"))

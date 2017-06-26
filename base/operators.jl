@@ -845,6 +845,21 @@ For matrices or vectors ``A`` and ``B``, calculates ``Aᴴ`` \\ ``Bᵀ``.
 """
 Ac_ldiv_Bt(a,b) = Ac_ldiv_B(a,transpose(b))
 
+"""
+    widen(x)
+
+If `x` is a type, return a "larger" type (for numeric types, this will be
+a type with at least as much range and precision as the argument, and usually more).
+Otherwise `x` is converted to `widen(typeof(x))`.
+
+```jldoctest
+julia> widen(Int32)
+Int64
+
+julia> widen(1.5f0)
+1.5
+```
+"""
 widen(x::T) where {T<:Number} = convert(widen(T), x)
 
 # function pipelining

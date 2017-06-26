@@ -121,6 +121,13 @@ byte_string_classify(s::String) =
     # 2: valid UTF-8
 
 isvalid(::Type{String}, s::Union{Vector{UInt8},String}) = byte_string_classify(s) != 0
+
+"""
+    isvalid(value) -> Bool
+
+Returns `true` if the given value is valid for its type, which currently can be either
+`Char` or `String`.
+"""
 isvalid(s::String) = isvalid(String, s)
 
 ## basic UTF-8 decoding & iteration ##
@@ -224,6 +231,13 @@ end
 
 ## overload methods for efficiency ##
 
+"""
+    isvalid(T, value) -> Bool
+
+Returns `true` if the given value is valid for that type. Types currently can
+be either `Char` or `String`. Values for `Char` can be of type `Char` or [`UInt32`](@ref).
+Values for `String` can be of that type, or `Vector{UInt8}`.
+"""
 isvalid(s::String, i::Integer) =
     (1 <= i <= s.len) && !is_valid_continuation(unsafe_load(pointer(s),i))
 

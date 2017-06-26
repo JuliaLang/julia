@@ -69,6 +69,26 @@ divrem(x,y) = (div(x,y),rem(x,y))
 The floored quotient and modulus after division. Equivalent to `(fld(x,y), mod(x,y))`.
 """
 fldmod(x,y) = (fld(x,y),mod(x,y))
+
+"""
+    signbit(x)
+
+Returns `true` if the value of the sign of `x` is negative, otherwise `false`.
+
+```jldoctest
+julia> signbit(-4)
+true
+
+julia> signbit(5)
+false
+
+julia> signbit(5.5)
+false
+
+julia> signbit(-4.1)
+true
+```
+"""
 signbit(x::Real) = x < 0
 
 """
