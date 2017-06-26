@@ -147,6 +147,9 @@ int jl_gc_classify_pools(size_t sz, int *osize);
 extern jl_mutex_t gc_perm_lock;
 void *jl_gc_perm_alloc_nolock(size_t sz, int zero, unsigned align, unsigned offset);
 void *jl_gc_perm_alloc(size_t sz, int zero, unsigned align, unsigned offset);
+void jl_gc_force_mark_old(jl_ptls_t ptls, jl_value_t *v);
+void gc_sweep_sysimg(void);
+
 
 // pools are 16376 bytes large (GC_POOL_SZ - GC_PAGE_OFFSET)
 static const int jl_gc_sizeclasses[JL_GC_N_POOLS] = {

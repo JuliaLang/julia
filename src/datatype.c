@@ -338,18 +338,6 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(
     jl_typename_t *tn = NULL;
     JL_GC_PUSH2(&t, &tn);
 
-    if (!jl_boot_file_loaded && jl_is_symbol(name)) {
-        // hack to avoid making two versions of basic types needed
-        // during bootstrapping
-        if (!strcmp(jl_symbol_name((jl_sym_t*)name), "Int32"))
-            t = jl_int32_type;
-        else if (!strcmp(jl_symbol_name((jl_sym_t*)name), "Int64"))
-            t = jl_int64_type;
-        else if (!strcmp(jl_symbol_name((jl_sym_t*)name), "Bool"))
-            t = jl_bool_type;
-        else if (!strcmp(jl_symbol_name((jl_sym_t*)name), "UInt8"))
-            t = jl_uint8_type;
-    }
     if (t == NULL)
         t = jl_new_uninitialized_datatype();
     else

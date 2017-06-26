@@ -55,9 +55,8 @@ object; initializes the global `jl_root_task` struct; and sets `jl_current_task`
 [`jl_init_codegen()`](https://github.com/JuliaLang/julia/blob/master/src/codegen.cpp) initializes
 the [LLVM library](http://llvm.org).
 
-[`jl_init_serializer()`](https://github.com/JuliaLang/julia/blob/master/src/dump.c) initializes
-8-bit serialization tags for 256 frequently used `jl_value_t` values. The serialization mechanism
-uses these tags as shorthand (in lieu of storing whole objects) to save storage space.
+[`jl_init_serializer()`](https://github.com/JuliaLang/julia/blob/master/src/staticdata.c) initializes
+8-bit serialization tags for builtin `jl_value_t` values.
 
 If there is no sysimg file (`!jl_options.image_file`) then the `Core` and `Main` modules are
 created and `boot.jl` is evaluated:
@@ -117,7 +116,7 @@ Other signals (`SIGINFO, SIGBUS, SIGILL, SIGTERM, SIGABRT, SIGQUIT, SIGSYS` and 
 hooked up to [`sigdie_handler()`](https://github.com/JuliaLang/julia/blob/master/src/signals-unix.c)
 which prints a backtrace.
 
-[`jl_init_restored_modules()`](https://github.com/JuliaLang/julia/blob/master/src/dump.c) calls
+[`jl_init_restored_modules()`](https://github.com/JuliaLang/julia/blob/master/src/staticdata.c) calls
 [`jl_module_run_initializer()`](https://github.com/JuliaLang/julia/blob/master/src/module.c) for
 each deserialized module to run the `__init__()` function.
 
@@ -131,11 +130,11 @@ and `main()` calls `true_main(argc, (char**)argv)`.
     If there is a sysimg file, it contains a pre-cooked image of the `Core` and `Main` modules (and
     whatever else is created by `boot.jl`). See [Building the Julia system image](@ref).
 
-    [`jl_restore_system_image()`](https://github.com/JuliaLang/julia/blob/master/src/dump.c) deserializes
+    [`jl_restore_system_image()`](https://github.com/JuliaLang/julia/blob/master/src/staticdata.c) deserializes
     the saved sysimg into the current Julia runtime environment and initialization continues after
     `jl_init_box_caches()` below...
 
-    Note: [`jl_restore_system_image()` (and `dump.c` in general)](https://github.com/JuliaLang/julia/blob/master/src/dump.c)
+    Note: [`jl_restore_system_image()` (and `staticdata.c` in general)](https://github.com/JuliaLang/julia/blob/master/src/staticdata.c)
     uses the [Legacy `ios.c` library](@ref).
 
 ## true_main()
@@ -228,4 +227,4 @@ and cleans up libuv handles.
 
 Finally, `main()` calls [`julia_save()`](https://github.com/JuliaLang/julia/blob/master/src/init.c),
 which if requested on the command line, saves the runtime state to a new system image. See [`jl_compile_all()`](https://github.com/JuliaLang/julia/blob/master/src/gf.c)
-and [`jl_save_system_image()`](https://github.com/JuliaLang/julia/blob/master/src/dump.c).
+and [`jl_save_system_image()`](https://github.com/JuliaLang/julia/blob/master/src/staticdata.c).

@@ -83,6 +83,7 @@ It provides cross-platform buffered file IO and in-memory temporary buffers.
 
   * `src/flisp/*.c`
   * `src/dump.c` – for serialization file IO and for memory buffers.
+  * `src/staticdata.c` – for serialization file IO and for memory buffers.
   * `base/iostream.jl` – for file IO (see `base/fs.jl` for libuv equivalent).
 
 Use of `ios.c` in these modules is mostly self-contained and separated from the libuv I/O system.
