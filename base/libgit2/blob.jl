@@ -8,13 +8,13 @@ end
     rawcontent(blob::GitBlob) -> Array
 
 Fetch the *raw* contents of the [`GitBlob`](@ref) `blob`. This is a read-only
-`Array` containing the contents of the blob, which may be binary or may be ASCII
-`String` data. `rawcontent` will allow the user to load the raw binary data into
-the output `Array` and will not check to ensure it is a valid `String`, so errors
-may occur if the result is passed to functions which expect valid `String` data.
+`Array` containing the contents of the blob, which may be binary or may be Unicode.
+`rawcontent` will allow the user to load the raw binary data into
+the output `Array` and will not check to ensure it is a valid Unicode, so errors
+may occur if the result is passed to functions which expect valid Unicode data.
 
 See also [`content`](@ref), which *will* throw an error the content of the `blob`
-is binary and not valid ASCII.
+is binary and not valid Unicode.
 """
 function rawcontent(blob::GitBlob)
     ptr = ccall((:git_blob_rawcontent, :libgit2), Ptr{UInt8}, (Ptr{Void},), blob.ptr)
@@ -51,7 +51,7 @@ end
     LibGit2.addblob!(repo::GitRepo, path::AbstractString)
 
 Reads the file at `path` and adds it to the object database of `repo` as a loose blob.
-Returns the `GitHash` of the resulting blob.
+Returns the [`GitHash`](@ref) of the resulting blob.
 
 # Example
 
