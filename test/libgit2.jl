@@ -297,16 +297,22 @@ mktempdir() do dir
                 branch = "upstream"
                 LibGit2.GitRemote(repo, branch, repo_url) |> close
 
+                # test remote's representation in the repo's config
                 config = joinpath(cache_repo, ".git", "config")
                 lines = split(open(readstring, config, "r"), "\n")
                 @test any(map(x->x == "[remote \"upstream\"]", lines))
 
                 remote = LibGit2.get(LibGit2.GitRemote, repo, branch)
+                # test various remote properties
                 @test LibGit2.url(remote) == repo_url
                 @test LibGit2.push_url(remote) == ""
                 @test LibGit2.name(remote) == "upstream"
                 @test isa(remote, LibGit2.GitRemote)
+
+                # test showing a GitRemote object
                 @test sprint(show, remote) == "GitRemote:\nRemote name: upstream url: $repo_url"
+
+                # test setting and getting the remote's URL
                 @test LibGit2.isattached(repo)
                 LibGit2.set_remote_url(repo, "upstream", "unknown")
                 remote = LibGit2.get(LibGit2.GitRemote, repo, branch)
@@ -320,6 +326,8 @@ mktempdir() do dir
                 @test LibGit2.push_url(remote) == repo_url
                 @test sprint(show, remote) == "GitRemote:\nRemote name: upstream url: $repo_url"
                 LibGit2.add_fetch!(repo, remote, "upstream")
+
+                # test setting fetch and push refspecs
                 @test LibGit2.fetch_refspecs(remote) == String["+refs/heads/*:refs/remotes/upstream/*"]
                 LibGit2.add_push!(repo, remote, "refs/heads/master")
                 close(remote)
@@ -375,7 +383,6 @@ mktempdir() do dir
     end
 
     @testset "Cloning repository" begin
-
         @testset "bare" begin
             repo_path = joinpath(dir, "Example.Bare1")
             repo = LibGit2.clone(cache_repo, repo_path, isbare = true)
@@ -451,6 +458,8 @@ mktempdir() do dir
                 @test LibGit2.iszero(commit_oid2)
                 commit_oid2 = LibGit2.commit(repo, commit_msg2; author=test_sig, committer=test_sig)
                 @test !LibGit2.iszero(commit_oid2)
+
+                # test getting list of commit authors
                 auths = LibGit2.authors(repo)
                 @test length(auths) == 3
                 for auth in auths
@@ -458,6 +467,9 @@ mktempdir() do dir
                     @test auth.time == test_sig.time
                     @test auth.email == test_sig.email
                 end
+
+                # check various commit properties - commit_oid1 happened before
+                # commit_oid2, so it *is* an ancestor of commit_oid2
                 @test LibGit2.is_ancestor_of(string(commit_oid1), string(commit_oid2), repo)
                 @test LibGit2.iscommit(string(commit_oid1), repo)
                 @test !LibGit2.iscommit(string(commit_oid1)*"fake", repo)
@@ -473,6 +485,8 @@ mktempdir() do dir
                     @test cmp(commit_oid1, short_oid1) == 0
                     @test cmp(short_oid1, commit_oid1) == 0
                     @test !(short_oid1 < commit_oid1)
+
+                    # test showing ShortHash
                     short_str = sprint(show, short_oid1)
                     @test short_str == "GitShortHash(\"$(string(short_oid1))\")"
                     short_oid2 = LibGit2.GitShortHash(cmt)
@@ -484,7 +498,7 @@ mktempdir() do dir
                     finally
                         close(cmt2)
                     end
-
+                    # check that the author and committer signatures are correct
                     auth = LibGit2.author(cmt)
                     @test isa(auth, LibGit2.Signature)
                     @test auth.name == test_sig.name
@@ -500,6 +514,8 @@ mktempdir() do dir
                     @test cmtr.time == test_sig.time
                     @test cmtr.email == test_sig.email
                     @test LibGit2.message(cmt) == commit_msg1
+
+                    # test showing the commit
                     showstr = split(sprint(show, cmt), "\n")
                     # the time of the commit will vary so just test the first two parts
                     @test contains(showstr[1], "Git Commit:")
@@ -532,12 +548,15 @@ mktempdir() do dir
                 brnch = LibGit2.branch(repo)
                 brref = LibGit2.head(repo)
                 try
+                    # various branch properties
                     @test LibGit2.isbranch(brref)
                     @test !LibGit2.isremote(brref)
                     @test LibGit2.name(brref) == "refs/heads/master"
                     @test LibGit2.shortname(brref) == master_branch
                     @test LibGit2.ishead(brref)
                     @test isnull(LibGit2.upstream(brref))
+
+                    # showing the GitReference to this branch
                     show_strs = split(sprint(show, brref), "\n")
                     @test show_strs[1] == "GitReference:"
                     @test show_strs[2] == "Branch with name refs/heads/master"
@@ -545,9 +564,12 @@ mktempdir() do dir
                     @test repo.ptr == LibGit2.repository(brref).ptr
                     @test brnch == master_branch
                     @test LibGit2.headname(repo) == master_branch
-                    LibGit2.branch!(repo, test_branch, string(commit_oid1), set_head=false)
 
+                    # create a branch *without* setting its tip as HEAD
+                    LibGit2.branch!(repo, test_branch, string(commit_oid1), set_head=false)
+                    # null because we are looking for a REMOTE branch
                     @test isnull(LibGit2.lookup_branch(repo, test_branch, true))
+                    # not null because we are now looking for a LOCAL branch
                     tbref = Base.get(LibGit2.lookup_branch(repo, test_branch, false))
                     try
                         @test LibGit2.shortname(tbref) == test_branch
@@ -556,6 +578,7 @@ mktempdir() do dir
                         close(tbref)
                     end
                     @test isnull(LibGit2.lookup_branch(repo, test_branch2, true))
+                    # test deleting the branch
                     LibGit2.branch!(repo, test_branch2; set_head=false)
                     tbref = Base.get(LibGit2.lookup_branch(repo, test_branch2, false))
                     try
@@ -568,7 +591,6 @@ mktempdir() do dir
                 finally
                     close(brref)
                 end
-
                 branches = map(b->LibGit2.shortname(b[1]), LibGit2.GitBranchIter(repo))
                 @test master_branch in branches
                 @test test_branch in branches
@@ -607,13 +629,17 @@ mktempdir() do dir
                 tags = LibGit2.tag_list(repo)
                 @test length(tags) == 0
 
+                # create tag and extract it from a GitReference
                 tag_oid1 = LibGit2.tag_create(repo, tag1, commit_oid1, sig=test_sig)
                 @test !LibGit2.iszero(tag_oid1)
                 tags = LibGit2.tag_list(repo)
                 @test length(tags) == 1
                 @test tag1 in tags
                 tag1ref = LibGit2.GitReference(repo, "refs/tags/$tag1")
-                @test isempty(LibGit2.fullname(tag1ref)) #because this is a reference to an OID
+                # because this is a reference to an OID
+                @test isempty(LibGit2.fullname(tag1ref))
+
+                # test showing a GitReference to a GitTag, and the GitTag itself
                 show_strs = split(sprint(show, tag1ref), "\n")
                 @test show_strs[1] == "GitReference:"
                 @test show_strs[2] == "Tag with name refs/tags/$tag1"
@@ -628,14 +654,15 @@ mktempdir() do dir
                 @test tag2 in tags
 
                 refs = LibGit2.ref_list(repo)
-                @test refs == ["refs/heads/master","refs/heads/test_branch","refs/tags/tag1","refs/tags/tag2"]
-
+                @test refs == ["refs/heads/master", "refs/heads/test_branch", "refs/tags/tag1", "refs/tags/tag2"]
+                # test deleting a tag
                 LibGit2.tag_delete(repo, tag1)
                 tags = LibGit2.tag_list(repo)
                 @test length(tags) == 1
                 @test tag2 ∈ tags
                 @test tag1 ∉ tags
 
+                # test git describe functions applied to these GitTags
                 description = LibGit2.GitDescribeResult(repo)
                 fmtted_description = LibGit2.format(description)
                 @test sprint(show, description) == "GitDescribeResult:\n$fmtted_description\n"
@@ -685,6 +712,8 @@ mktempdir() do dir
                 blob = LibGit2.GitBlob(repo, id)
                 @test LibGit2.isbinary(blob)
                 len1 = length(blob)
+
+                # test showing a GitBlob
                 blob_show_strs = split(sprint(show, blob), "\n")
                 @test blob_show_strs[1] == "GitBlob:"
                 @test contains(blob_show_strs[2], "Blob id:")
@@ -706,6 +735,8 @@ mktempdir() do dir
                 @test isa(LibGit2.GitObject(repo, "HEAD^{tree}"), LibGit2.GitTree)
                 @test LibGit2.Consts.OBJECT(typeof(tree)) == LibGit2.Consts.OBJ_TREE
                 @test count(tree) == 1
+
+                # test showing the GitTree and its entries
                 tree_str = sprint(show, tree)
                 @test tree_str == "GitTree:\nOwner: $(LibGit2.repository(tree))\nNumber of entries: 1\n"
                 @test_throws BoundsError tree[0]
@@ -713,7 +744,9 @@ mktempdir() do dir
                 tree_entry = tree[1]
                 @test LibGit2.filemode(tree_entry) == 33188
                 te_str = sprint(show, tree_entry)
-                @test te_str == "GitTreeEntry:\nEntry name: testfile\nEntry type: Base.LibGit2.GitBlob\nEntry OID: $(LibGit2.entryid(tree_entry))\n"
+                ref_te_str = "GitTreeEntry:\nEntry name: testfile\nEntry type: Base.LibGit2.GitBlob\nEntry OID: "
+                ref_te_str *= "$(LibGit2.entryid(tree_entry))\n"
+                @test te_str == ref_te_str
                 blob = LibGit2.GitBlob(tree_entry)
                 blob_str = sprint(show, blob)
                 @test blob_str == "GitBlob:\nBlob id: $(LibGit2.GitHash(blob))\nContents:\n$(LibGit2.content(blob))\n"
@@ -748,12 +781,16 @@ mktempdir() do dir
                 @test LibGit2.isdirty(repo, cached=true)
                 @test LibGit2.isdiff(repo, "HEAD", cached=true)
                 tree = LibGit2.GitTree(repo, "HEAD^{tree}")
+
+                # test properties of the diff_tree
                 diff = LibGit2.diff_tree(repo, tree, "", cached=true)
                 @test count(diff) == 1
                 @test_throws BoundsError diff[0]
                 @test_throws BoundsError diff[2]
                 @test LibGit2.Consts.DELTA_STATUS(diff[1].status) == LibGit2.Consts.DELTA_MODIFIED
                 @test diff[1].nfiles == 2
+
+                # test showing a DiffDelta
                 diff_strs = split(sprint(show, diff[1]), '\n')
                 @test diff_strs[1] == "DiffDelta:"
                 @test diff_strs[2] == "Status: DELTA_MODIFIED"
@@ -765,6 +802,8 @@ mktempdir() do dir
                 @test contains(diff_strs[8], "Size:")
                 @test isempty(diff_strs[9])
                 @test diff_strs[10] == "New file:"
+
+                # test showing a GitDiff
                 diff_strs = split(sprint(show, diff), '\n')
                 @test diff_strs[1] == "GitDiff:"
                 @test diff_strs[2] == "Number of deltas: 1"
@@ -772,6 +811,7 @@ mktempdir() do dir
                 @test diff_strs[4] == "Files changed: 1"
                 @test diff_strs[5] == "Insertions: 1"
                 @test diff_strs[6] == "Deletions: 0"
+
                 LibGit2.commit(repo, "zzz")
                 @test !LibGit2.isdirty(repo)
                 @test !LibGit2.isdiff(repo, "HEAD")
@@ -793,6 +833,9 @@ mktempdir() do dir
         LibGit2.set!(cfg, "user.name", "AAAA")
         LibGit2.set!(cfg, "user.email", "BBBB@BBBB.COM")
         try
+            # Sets up a branch "branch/ff_a" which will be two commits ahead
+            # of "master". It's possible to fast-forward merge "branch/ff_a"
+            # into "master", which is the default behavior.
             oldhead = LibGit2.head_oid(repo)
             LibGit2.branch!(repo, "branch/ff_a")
             open(joinpath(LibGit2.path(repo),"ff_file1"),"w") do f
@@ -809,7 +852,7 @@ mktempdir() do dir
             LibGit2.branch!(repo, "master")
             # switch back, now try to ff-merge the changes
             # from branch/a
-
+            # set up the merge using GitAnnotated objects
             upst_ann = LibGit2.GitAnnotated(repo, "branch/ff_a")
             head_ann = LibGit2.GitAnnotated(repo, "master")
 
@@ -817,6 +860,8 @@ mktempdir() do dir
             @test LibGit2.merge!(repo, [upst_ann], true)
             @test LibGit2.is_ancestor_of(string(oldhead), string(LibGit2.head_oid(repo)), repo)
 
+            # Repeat the process, but specifying a commit to merge in as opposed
+            # to a branch name or GitAnnotated.
             oldhead = LibGit2.head_oid(repo)
             LibGit2.branch!(repo, "branch/ff_b")
             open(joinpath(LibGit2.path(repo),"ff_file3"),"w") do f
@@ -837,6 +882,8 @@ mktempdir() do dir
             @test LibGit2.merge!(repo, committish=string(branchhead))
             @test LibGit2.is_ancestor_of(string(oldhead), string(LibGit2.head_oid(repo)), repo)
 
+            # Repeat the process, but specifying a branch name to merge in as opposed
+            # to a commit or GitAnnotated.
             oldhead = LibGit2.head_oid(repo)
             LibGit2.branch!(repo, "branch/ff_c")
             open(joinpath(LibGit2.path(repo),"ff_file5"),"w") do f
@@ -869,6 +916,9 @@ mktempdir() do dir
         LibGit2.set!(cfg, "user.name", "AAAA")
         LibGit2.set!(cfg, "user.email", "BBBB@BBBB.COM")
         try
+            # Create a commit on the new branch and cherry-pick it over to
+            # master. Since the cherry-pick does *not* make a new commit on
+            # master, we have to create our own commit of the dirty state.
             oldhead = LibGit2.head_oid(repo)
             LibGit2.branch!(repo, "branch/cherry_a")
             open(joinpath(LibGit2.path(repo),"file1"),"w") do f
@@ -1065,7 +1115,6 @@ mktempdir() do dir
                 finally
                     close(tag2ref)
                 end
-
             finally
                 close(repo)
             end
@@ -1216,7 +1265,6 @@ mktempdir() do dir
                 LibGit2.remote_delete(repo, remote_name)
                 @test isnull(LibGit2.lookup_remote(repo, remote_name))
             end
-
             # Invalid remote name
             @test_throws LibGit2.GitError LibGit2.set_remote_url(repo, "", url)
             @test_throws LibGit2.GitError LibGit2.set_remote_url(repo, remote_name, "")
