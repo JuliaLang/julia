@@ -47,6 +47,8 @@ This section lists changes that do not have deprecation warnings.
 Library improvements
 --------------------
 
+  * The functions `strip`, `lstrip` and `rstrip` now return `SubString` ([#22496]).
+
   * The functions `base` and `digits` digits now accept a negative
     base (like `ndigits` did) ([#21692]).
 
