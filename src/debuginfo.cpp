@@ -734,7 +734,7 @@ static void get_function_name_and_base(const object::ObjectFile *object, bool in
     bool needs_name = name && (!*name || untrusted_dladdr);
     // Try platform specific methods first since they are usually faster
     if (needs_saddr) {
-#if defined(_OS_LINUX_) && !defined(JL_DISABLE_LIBUNWIND)
+#if (defined(_OS_LINUX_) || defined(_OS_FREEBSD_)) && !defined(JL_DISABLE_LIBUNWIND)
         unw_proc_info_t pip;
         if (unw_get_proc_info_by_ip(unw_local_addr_space, pointer, &pip, NULL) == 0) {
             *saddr = (void*)pip.start_ip;

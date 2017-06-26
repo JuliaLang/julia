@@ -256,7 +256,6 @@ Some known issues on FreeBSD are:
 
 * The x86 architecture does not support threading due to lack of compiler runtime library support, so you may need to
   set `JULIA_THREADS=0` in your `Make.user` if you're on a 32-bit system.
-* Some stack trace information is not available due to differences with libunwind.
 
 ### Windows
 
