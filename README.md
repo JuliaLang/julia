@@ -4,16 +4,19 @@
 
 ![Demo](http://npaul.co/files/TerminalMenus-demo.gif)
 
-TerminalMenus.jl enables small, low-profile interactive menus in the terminal. This package is still in development. Nested menus, unicode/ASCII UI configurations, better documentation, and other menus will be added soon.
+TerminalMenus.jl enables small, low-profile interactive menus in the terminal.
 
-## Installation
+
+# Installation
+
+TerminalMenus requires Julia 0.6. Use `Pkg` to install:
 
 ```
 Pkg.add("TerminalMenus")
 ```
 
 
-## Examples
+# Examples
 
 ```julia
 using TerminalMenus
@@ -23,9 +26,11 @@ options = ["apple", "orange", "grape", "strawberry",
 
 ```
 
-### RadioMenu
+## RadioMenu
 
-The RadioMenu allows the user to select one option from the list. The `request` function displays the interactive menu and returns the index of the selected choice. If a user presses 'q' or `ctrl-c`, `request` will return a `-1`.
+The RadioMenu allows the user to select one option from the list. The `request`
+function displays the interactive menu and returns the index of the selected
+choice. If a user presses 'q' or `ctrl-c`, `request` will return a `-1`.
 
 
 ```julia
@@ -57,7 +62,7 @@ v  peach
 Your favorite fruit is blueberry!
 ```
 
-### MultiSelectMenu
+## MultiSelectMenu
 
 The MultiSelectMenu allows users to select many choices from a list.
 
@@ -65,7 +70,7 @@ The MultiSelectMenu allows users to select many choices from a list.
 # here we use the default `pagesize` 10
 menu = MultiSelectMenu(options)
 
-# `request` returns a set of selected indices
+# `request` returns a `Set` of selected indices
 # if the menu us canceled (ctrl-c or q), return an empty set
 choices = request("Select the fruits you like:", menu)
 
@@ -98,6 +103,66 @@ You like the following fruits:
   - peach
 ```
 
+# Customization / Configuation
 
-The interactive menu has been tested on Ubuntu 16.04 and windows 10. If there
-are any issues on your platform, please submit an issue or a pull request.
+All interface customization is done through the keyword only
+`TerminalMenus.config()` function.
+
+## Arguments
+
+ - `charset::Symbol=:na`: ui characters to use (`:ascii` or `:unicode`); overridden by other arguments
+ - `cursor::Char='>'|'→'`: character to use for cursor
+ - `up_arrow::Char='^'|'↑'`: character to use for up arrow
+ - `down_arrow::Char='v'|'↓'`: character to use for down arrow
+ - `checked::String="[X]"|"✓"`: string to use for checked
+ - `unchecked::String="[ ]"|"⬚")`: string to use for unchecked
+ - `scroll::Symbol=:na`: If `:wrap` then wrap the cursor around top and bottom, if :`nowrap` do not wrap cursor
+
+## Examples
+
+```julia
+julia> menu = MultiSelectMenu(options, pagesize=5);
+
+julia> request(menu) # ASCII is used by default
+[press: d=done, a=all, n=none]
+   [ ] apple
+   [X] orange
+   [ ] grape
+ > [X] strawberry
+v  [ ] blueberry
+Set([4, 2])
+
+julia> TerminalMenus.config(charset=:unicode)
+
+julia> request(menu)
+[press: d=done, a=all, n=none]
+   ⬚ apple
+   ✓ orange
+   ⬚ grape
+ → ✓ strawberry
+↓  ⬚ blueberry
+Set([4, 2])
+
+julia> TerminalMenus.config(checked="YEP!", unchecked="NOPE", cursor='⧐')
+
+julia> request(menu)
+[press: d=done, a=all, n=none]
+   NOPE apple
+   YEP! orange
+   NOPE grape
+ ⧐ YEP! strawberry
+↓  NOPE blueberry
+Set([4, 2])
+
+```
+
+# TODO
+
+  - Nested menus
+  - More customization?
+
+---
+
+*The interactive menu has been tested on Ubuntu 16.04 and windows 7, 8, & 10.
+If there are any issues on your platform, please submit an issue or a pull
+request.*
