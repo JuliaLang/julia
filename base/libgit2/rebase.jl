@@ -19,10 +19,10 @@ end
 """
     current(rb::GitRebase) -> Csize_t
 
-Returns the index of the current [`RebaseOperation`](@ref). If no operation has
+Return the index of the current [`RebaseOperation`](@ref). If no operation has
 yet been applied (because the [`GitRebase`](@ref) has been constructed but `next`
-has not yet been called or iteration over `rb` has not yet begun), this returns
-`GIT_REBASE_NO_OPERATION`.
+has not yet been called or iteration over `rb` has not yet begun), return
+`GIT_REBASE_NO_OPERATION`, which is equal to `SIZE_MAX` of `Csize_t`.
 """
 function current(rb::GitRebase)
     return ccall((:git_rebase_operation_current, :libgit2), Csize_t, (Ptr{Void},), rb.ptr)
