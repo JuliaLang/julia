@@ -561,10 +561,17 @@ hash(x::Union{Bool,Int8,UInt8,Int16,UInt16,Int32,UInt32}, h::UInt) = hash(Int64(
 hash(x::Float32, h::UInt) = hash(Float64(x), h)
 
 ## precision, as defined by the effective number of bits in the mantissa ##
+
+"""
+    precision(num::AbstractFloat)
+
+Get the precision of a floating point number, as defined by the effective number of bits in
+the mantissa.
+"""
+precision(::T) where {T<:AbstractFloat} = precision(T)
 precision(::Type{Float16}) = 11
 precision(::Type{Float32}) = 24
 precision(::Type{Float64}) = 53
-precision(::T) where {T<:AbstractFloat} = precision(T)
 
 """
     uabs(x::Integer)

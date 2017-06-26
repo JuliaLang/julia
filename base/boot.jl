@@ -208,6 +208,12 @@ struct DomainError        <: Exception end
 struct OverflowError      <: Exception end
 struct InexactError       <: Exception end
 struct OutOfMemoryError   <: Exception end
+
+"""
+    ReadOnlyMemoryError()
+
+An operation tried to write to memory that is read-only.
+"""
 struct ReadOnlyMemoryError<: Exception end
 struct SegmentationFault  <: Exception end
 struct StackOverflowError <: Exception end
