@@ -39,6 +39,7 @@ getindex(s::AbstractString, v::AbstractVector{<:Integer}) =
 getindex(s::AbstractString, v::AbstractVector{Bool}) =
     throw(ArgumentError("logical indexing not supported for strings"))
 
+get(s::AbstractString, i::Integer, default) = isvalid(s,i) ? s[i] : default
 Symbol(s::AbstractString) = Symbol(String(s))
 
 """
