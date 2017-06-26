@@ -567,8 +567,9 @@ function methodswith(t::Type, showparents::Bool=false)
 end
 
 # file downloading
-
+downloadcmd = nothing
 if is_windows()
+    downloadcmd = :powershell
     function download(url::AbstractString, filename::AbstractString)
         ps = "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"
         tls12 = "[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12"
@@ -579,7 +580,6 @@ if is_windows()
         filename
     end
 else
-    downloadcmd = nothing
     function download(url::AbstractString, filename::AbstractString)
         global downloadcmd
         if downloadcmd === nothing
