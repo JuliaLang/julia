@@ -27,11 +27,18 @@ end
 
 """
 
-    RadioMenu(options::Array{String,1}; pagesize=10)
+    RadioMenu(options::Array{String,1}; pagesize::Int=10)
 
 Create a RadioMenu object. Use `request(menu::RadioMenu)` to get user input.
+`request()` returns an `Int` which is the index of the option selected by the
+user.
+
+# Arguments
+
+  - `options::Array{String, 1}`: Options to be displayed
+  - `pagesize::Int=10`: The number of options to be displayed at one time, the menu will scroll if length(options) > pagesize
 """
-function RadioMenu(options::Array{String,1}; pagesize=10)
+function RadioMenu(options::Array{String,1}; pagesize::Int=10)
     length(options) < 2 && error("RadioMenu must have at least two options")
 
     # if pagesize is -1, use automatic paging
