@@ -82,6 +82,9 @@ fails = @testset NoThrowTestSet begin
     @test isequal(0 / 0, 1 / 0)
     # Fail - isapprox
     @test isapprox(0 / 1, -1 / 0)
+    # Fail - isapprox with keyword
+    @test isapprox(1 / 2, 2 / 1, atol=1 / 1)
+    @test isapprox(1 - 2, 2 - 1; atol=1 - 1)
     # Error - unexpected pass
     @test_broken true
 end
@@ -122,6 +125,14 @@ str = sprint(show, fails[8])
 @test contains(str, "Evaluated: isapprox(0.0, -Inf)")
 
 str = sprint(show, fails[9])
+@test contains(str, "Expression: isapprox(1 / 2, 2 / 1, atol=1 / 1)")
+@test contains(str, "Evaluated: isapprox(0.5, 2.0; atol=1.0)")
+
+str = sprint(show, fails[10])
+@test contains(str, "Expression: isapprox(1 - 2, 2 - 1; atol=1 - 1)")
+@test contains(str, "Evaluated: isapprox(-1, 1; atol=0)")
+
+str = sprint(show, fails[11])
 @test contains(str, "Unexpected Pass")
 @test contains(str, "Expression: true")
 

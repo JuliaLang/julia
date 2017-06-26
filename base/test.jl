@@ -191,10 +191,11 @@ end
 function eval_test(evaluated::Expr, quoted::Expr)
     res = true
     i = 1
-    args = evaluated.args
+    evaled_args = evaluated.args
     quoted_args = quoted.args
-    n = length(args)
+    n = length(evaled_args)
     if evaluated.head == :comparison
+        args = evaled_args
         while i < n
             a, op, b = args[i], args[i+1], args[i+2]
             if res
@@ -206,11 +207,16 @@ function eval_test(evaluated::Expr, quoted::Expr)
         end
 
     elseif evaluated.head == :call
-        op = args[1]
-        res = op(args[2:n]...) === true
-        for i in 2:n
-            quoted_args[i] = args[i]
-        end
+        op = evaled_args[1]
+        kwargs = evaled_args[2].args  # Keyword arguments from `Expr(:parameters, ...)`
+        args = evaled_args[3:n]
+
+        res = op(args...; kwargs...) === true
+
+        # Convert kwargs pairs back into keyword expressions
+        quoted_args[2] = Expr(:parameters, [Expr(:kw, k, v) for (k, v) in kwargs]...)
+        quoted_args[3:n] = args
+        isempty(kwargs) && deleteat!(quoted.args, 2)
     else
         throw(ArgumentError("Unhandled expression type: $(evaluated.head)"))
     end
@@ -323,11 +329,34 @@ function get_test_result(ex)
             Expr(:comparison, $(quoted_terms...)),
         ))
     elseif isa(ex, Expr) && ex.head == :call && ex.args[1] in (:isequal, :isapprox)
-        escaped_terms = [esc(arg) for arg in ex.args]
-        quoted_terms = [QuoteNode(arg) for arg in ex.args]
+        escaped_func = esc(ex.args[1])
+        quoted_func = QuoteNode(ex.args[1])
+
+        escaped_args = []
+        escaped_kwargs = []
+        quoted_args = []
+
+        # Add keyword parameters after `;` to the end of the args list.
+        # i.e. convert expression calls of `f(a, b=2; c=3)` into `f(a, b=2, c=3)`.
+        if isa(ex.args[2], Expr) && ex.args[2].head == :parameters
+            args = [ex.args[3:end]; ex.args[2].args]
+        else
+            args = ex.args[2:end]
+        end
+
+        for a in args
+            if isa(a, Expr) && a.head == :kw
+                # Revise keywords into a form we can splat as kwargs
+                push!(escaped_kwargs, Expr(:call, :(=>), QuoteNode(a.args[1]), esc(a.args[2])))
+            else
+                push!(escaped_args, esc(a))
+                push!(quoted_args, QuoteNode(a))
+            end
+        end
+
         testret = :(eval_test(
-            Expr(:call, $(escaped_terms...)),
-            Expr(:call, $(quoted_terms...)),
+            Expr(:call, $escaped_func, Expr(:parameters, $(escaped_kwargs...)), $(escaped_args...)),
+            Expr(:call, $quoted_func, Expr(:parameters), $(quoted_args...)),
         ))
     else
         testret = :(Returned($(esc(ex)), nothing))
