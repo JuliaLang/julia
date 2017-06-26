@@ -6,7 +6,7 @@ CONFIG = Dict()
 
     config( <see arguments> )
 
-Configure global Menu parameters
+Keyword-only function to configure global menu parameters
 
 # Arguments
  - `charset::Symbol=:na`: ui characters to use (`:ascii` or `:unicode`); overridden by other arguments

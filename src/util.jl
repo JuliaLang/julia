@@ -1,3 +1,4 @@
+# Enum for escaped (multi-byte) keys such as the arrows or the home/end keys
 @enum(Key,
     ARROW_LEFT = 1000,
     ARROW_RIGHT,
@@ -9,12 +10,21 @@
     PAGE_UP,
     PAGE_DOWN)
 
+# The user terminal
 terminal = Base.Terminals.TTYTerminal(get(ENV, "TERM", @static is_windows() ? "" : "dumb"), STDIN, STDOUT, STDERR)
+
+# Enable raw mode. Allows us to process keyboard inputs directly.
 enableRawMode() = Base.Terminals.raw!(terminal, true)
+
+# Disable raw mode. Give control back to Julia REPL if interactive session.
 disableRawMode() = Base.Terminals.raw!(terminal, false)
 
+# Reads a single byte from STDIN
 readNextChar() = Char(read(STDIN,1)[1])
 
+# Read the next key from STDIN. It is also able to read several bytes for
+#   escaped keys such as the arrow keys, home/end keys, etc.
+# Escaped keys are returned using the `Key` enum.
 function readKey() ::UInt32
     c = readNextChar()
 

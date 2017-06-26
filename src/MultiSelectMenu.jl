@@ -1,3 +1,30 @@
+"""
+
+    MultiSelectMenu
+
+A menu that allows a user to select a multiple options from a list.
+
+# Sample Output
+
+```julia
+julia> request(MultiSelectMenu(options))
+Select the fruits you like:
+[press: d=done, a=all, n=none]
+   [ ] apple
+ > [X] orange
+   [X] grape
+   [ ] strawberry
+   [ ] blueberry
+   [X] peach
+   [ ] lemon
+   [ ] lime
+You like the following fruits:
+  - orange
+  - grape
+  - peach
+```
+
+"""
 type MultiSelectMenu <: AbstractMenu
     options::Array{String,1}
     pagesize::Int
@@ -5,7 +32,21 @@ type MultiSelectMenu <: AbstractMenu
     selected::Set{Int}
 end
 
-function MultiSelectMenu(options::Array{String,1}; pagesize=10)
+
+"""
+
+    MultiSelectMenu(options::Array{String,1}; pagesize::Int=10)
+
+Create a MultiSelectMenu object. Use `request(menu::MultiSelectMenu)` to get
+user input. `request()` returns a `Set` containing the indices of options that
+were selected by the user.
+
+# Arguments
+
+  - `options::Array{String, 1}`: Options to be displayed
+  - `pagesize::Int=10`: The number of options to be displayed at one time, the menu will scroll if length(options) > pagesize
+"""
+function MultiSelectMenu(options::Array{String,1}; pagesize::Int=10)
     length(options) < 2 && error("MultiSelectMenu must have at least two options")
 
     # if pagesize is -1, use automatic paging
@@ -21,11 +62,19 @@ function MultiSelectMenu(options::Array{String,1}; pagesize=10)
     MultiSelectMenu(options, pagesize, pageoffset, selected)
 end
 
+
+
+# AbstractMenu implementation functions
+# See AbstractMenu.jl
+#######################################
+
 header(m::MultiSelectMenu) = "[press: d=done, a=all, n=none]"
+
 options(m::MultiSelectMenu) = m.options
+
 cancel(m::MultiSelectMenu) = m.selected = Set{Int}()
 
-"return true if done"
+# Do not exit menu when a user selects one of the options
 function pick(menu::MultiSelectMenu, cursor::Int)
     if cursor in menu.selected
         delete!(menu.selected, cursor)
@@ -48,6 +97,9 @@ function writeLine(buf::IOBuffer, menu::MultiSelectMenu, idx::Int, cursor::Bool)
     print(buf, replace(menu.options[idx], "\n", "\\n"))
 end
 
+# d: Done, return from request
+# a: Select all
+# n: Deselect all
 function keypress(menu::MultiSelectMenu, key::UInt32)
     if key == UInt32('d') || key == UInt32('D')
         return true # break

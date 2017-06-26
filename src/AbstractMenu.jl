@@ -1,19 +1,104 @@
+"""
+
+    AbstractMenu
+
+The supertype for all Menu types.
+See AbstractMenu.jl for descriptions of functions mentioned in this
+doc string.
+
+
+# Functions
+
+The following functions can be called on all <:AbstractMenu types.
+Details can be found in
+
+## Exported
+
+  - `request(m::AbstractMenu)`
+  - `request(msg::AbstractString, m::AbstractMenu)`
+
+## Hidden
+
+  - `printMenu(m::AbstractMenu, cursor::Int; init::Bool=false)`
+
+
+# Subtypes
+
+All subtypes must contain the feilds `pagesize::Int` and
+`pageoffset::Int`. They must also implement the following functions.
+
+## Necessary Functions
+
+These functions must be implemented for all subtypes of AbstractMenu.
+
+  - `pick(m::AbstractMenu, cursor::Int)`
+  - `cancel(m::AbstractMenu)`
+  - `options(m::AbstractMenu)`
+  - `writeLine(buf::IOBuffer, m::AbstractMenu, idx::Int, cur::Bool)`
+
+## Optional Functions
+
+These functions do not need to be implemented for all AbstractMenu
+subtypes.
+
+  - `header(m::AbstractMenu)`
+  - `keypress(m::AbstractMenu, i::UInt32)`
+
+"""
 abstract type AbstractMenu end
 
-function request(msg::AbstractString, m::AbstractMenu)
-    println(msg)
-    request(m)
-end
 
-header(m::AbstractMenu) = ""
-keypress(m::AbstractMenu, i::UInt32) = false
+
+# NECESSARY FUNCTIONS
+# These functions must be implemented for all subtypes of AbstractMenu
+######################################################################
+
+# This function must be implemented for all menu types. It defines what
+#   happens when a user presses the Enter key while the menu is open.
+# If this function returns true, `request()` will exit.
 pick(m::AbstractMenu, cursor::Int) = error("unimplemented")
+
+# This function must be implemented for all menu types. It defines what
+#   happends when a user cancels ('q' or ctrl-c) a menu. `request()` will
+#   always exit after calling this function.
 cancel(m::AbstractMenu) = error("unimplemented")
+
+# This function must be implemented for all menu types. It should return
+#   a list of strings to be displayed as options in the current page.
 options(m::AbstractMenu) = error("unimplemented")
-function writeLine(buf::IOBuffer, menu::AbstractMenu, idx::Int, cursor::Bool)
+
+# This function must be implemented for all menu types. It should write
+#   the option at index `idx` to the buffer. If cursor is `true` it
+#   should also display the cursor
+function writeLine(buf::IOBuffer, m::AbstractMenu, idx::Int, cur::Bool)
     error("unimplemented")
 end
 
+
+
+# OPTIONAL FUNCTIONS
+# These functions do not need to be implemented for all Menu types
+##################################################################
+
+# If `header()` is defined for a specific menu type, display the header
+#  above the menu when it is rendered to the screen.
+header(m::AbstractMenu) = ""
+
+# If `keypress()` is defined for a specific menu type, send any
+#   non-standard keypres event to this function. If the function returns
+#   true, `request()` will exit.
+keypress(m::AbstractMenu, i::UInt32) = false
+
+
+
+
+"""
+
+    request(m::AbstractMenu)
+
+Display the menu and enter interactive mode. Returns `m.selected` which
+varies based on menu type.
+"""
 function request(m::AbstractMenu)
     cursor = 1
 
@@ -45,8 +130,6 @@ function request(m::AbstractMenu)
                     m.pageoffset = length(options(m)) - m.pagesize
                 end
 
-
-
             elseif c == Int(ARROW_DOWN)
 
                 if cursor < length(options(m))
@@ -61,8 +144,6 @@ function request(m::AbstractMenu)
                     cursor = 1
                     m.pageoffset = 0
                 end
-
-
 
             elseif c == 13 # <enter>
                 # will break if pick returns true
@@ -88,7 +169,25 @@ function request(m::AbstractMenu)
     return m.selected
 end
 
-function printMenu(m::AbstractMenu, cursor::Int; init=false)
+
+"""
+
+    request(msg::AbstractString, m::AbstractMenu)
+
+Shorthand for  `println(msg); request(m)`.
+"""
+function request(msg::AbstractString, m::AbstractMenu)
+    println(msg)
+    request(m)
+end
+
+
+
+# The generic printMenu function is used for displaying the state of a
+#   menu to the screen. Menus must implement `writeLine` and `options`
+#   and have feilds `pagesize::Int` and `pageoffset::Int` as part of
+#   their type definition
+function printMenu(m::AbstractMenu, cursor::Int; init::Bool=false)
     buf = IOBuffer()
 
     # Move the cursor to the begining of where it should print
