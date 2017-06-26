@@ -80,10 +80,26 @@ function headname(repo::GitRepo)
     end
 end
 
+"""
+    isbare(repo::GitRepo) -> Bool
+
+Determines if `repo` is bare. Suppose the top level directory of `repo` is `DIR`.
+A non-bare repository is one in which the git directory (see [`gitdir`](@ref)) is
+`DIR/.git`, and the working tree can be checked out. A bare repository is one in
+which all of git's administrative files are simply in `DIR`, rather than "hidden"
+in the `.git` subdirectory. This means that there is nowhere to check out the working
+tree, and no tracking information for remote branches or configurations is present.
+"""
 function isbare(repo::GitRepo)
     return ccall((:git_repository_is_bare, :libgit2), Cint, (Ptr{Void},), repo.ptr) == 1
 end
 
+"""
+    isattached(repo::GitRepo) -> Bool
+
+Determines if `repo` is detached - that is, whether its HEAD points to a commit
+(detached) or whether HEAD points to a branch tip (attached).
+"""
 function isattached(repo::GitRepo)
     ccall((:git_repository_head_detached, :libgit2), Cint, (Ptr{Void},), repo.ptr) != 1
 end
