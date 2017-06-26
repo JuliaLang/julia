@@ -1345,7 +1345,7 @@ delete!
 
 Returns the index of the first value in `a` greater than or equal to `x`, according to the
 specified order. Returns `length(a)+1` if `x` is greater than all values in `a`.
-`a` is assuemd to be sorted.
+`a` is assumed to be sorted.
 
 # Examples
 
