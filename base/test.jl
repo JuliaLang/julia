@@ -67,9 +67,9 @@ struct Pass <: Result
     value
 end
 function Base.show(io::IO, t::Pass)
-    print_with_color(:green, io, "Test Passed\n"; bold = true)
+    print_with_color(:green, io, "Test Passed"; bold = true)
     if !(t.orig_expr === nothing)
-        print(io, "  Expression: ", t.orig_expr)
+        print(io, "\n  Expression: ", t.orig_expr)
     end
     if t.test_type == :test_throws
         # The correct type of exception was thrown
