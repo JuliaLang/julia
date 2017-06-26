@@ -27,14 +27,14 @@ similar(s::Set{T}) where {T} = Set{T}()
 similar(s::Set, T::Type) = Set{T}()
 
 function show(io::IO, s::Set)
-    print(io,"Set")
+    print(io, "Set")
     if isempty(s)
-        print(io,"{",eltype(s),"}()")
+        print(io, "{", eltype(s), "}()")
         return
     end
-    print(io,"(")
-    show_vector(io,s,"[","]")
-    print(io,")")
+    print(io, "(")
+    show_vector(io, s, "[", "]")
+    print(io, ")")
 end
 
 isempty(s::Set) = isempty(s.dict)
@@ -63,15 +63,15 @@ rehash!(s::Set) = (rehash!(s.dict); s)
 start(s::Set)       = start(s.dict)
 done(s::Set, state) = done(s.dict, state)
 # NOTE: manually optimized to take advantage of Dict representation
-next(s::Set, i)     = (s.dict.keys[i], skip_deleted(s.dict,i+1))
+next(s::Set, i)     = (s.dict.keys[i], skip_deleted(s.dict, i+1))
 
 union() = Set()
 union(s::Set) = copy(s)
 function union(s::Set, sets::Set...)
     u = Set{join_eltype(s, sets...)}()
-    union!(u,s)
+    union!(u, s)
     for t in sets
-        union!(u,t)
+        union!(u, t)
     end
     return u
 end
@@ -95,7 +95,7 @@ Set([7, 4, 3, 5, 1])
 function union!(s::Set{T}, xs) where T
     haslength(xs) && sizehint!(s, length(xs))
     for x=xs
-        push!(s,x)
+        push!(s, x)
         length(s) == max_values(T) && break
     end
     s
@@ -110,7 +110,7 @@ function intersect(s::Set, sets::Set...)
     for x in s
         inall = true
         for t in sets
-            if !in(x,t)
+            if !in(x, t)
                 inall = false
                 break
             end
@@ -146,7 +146,7 @@ julia> a
 Set([4])
 ```
 """
-setdiff!(s::Set, xs) = (for x=xs; delete!(s,x); end; s)
+setdiff!(s::Set, xs) = (for x=xs; delete!(s, x); end; s)
 
 ==(l::Set, r::Set) = (length(l) == length(r)) && (l <= r)
 <( l::Set, r::Set) = (length(l) < length(r)) && (l <= r)
