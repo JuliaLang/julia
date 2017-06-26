@@ -567,6 +567,7 @@ function methodswith(t::Type, showparents::Bool=false)
 end
 
 # file downloading
+
 downloadcmd = nothing
 if is_windows()
     downloadcmd = :powershell
