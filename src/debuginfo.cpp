@@ -734,7 +734,7 @@ static void get_function_name_and_base(const object::ObjectFile *object, bool in
         saddr = nullptr;
     // Try platform specific methods first since they are usually faster
     if (saddr && !*saddr) {
-#if defined(_OS_LINUX_) && !defined(JL_DISABLE_LIBUNWIND)
+#if (defined(_OS_LINUX_) || defined(_OS_FREEBSD_)) && !defined(JL_DISABLE_LIBUNWIND)
         unw_proc_info_t pip;
         if (unw_get_proc_info_by_ip(unw_local_addr_space, pointer, &pip, NULL) == 0) {
             *saddr = (void*)pip.start_ip;
@@ -860,7 +860,13 @@ bool jl_dylib_DI_for_fptr(size_t pointer, const llvm::object::ObjectFile **obj, 
 #endif
     StringRef fname;
     if (saddr)
+#ifdef _OS_FREEBSD_
+        // try `get_function_name_and_base` first on FreeBSD
+        // the fallback is FBSD_DLADDR section
+        *saddr = nullptr;
+#else
         *saddr = dlinfo.dli_saddr;
+#endif // ifdef _OS_FREEBSD_
     bool insysimage = (fbase == jl_sysimage_base);
     if (isSysImg)
         *isSysImg = insysimage;
@@ -870,7 +876,13 @@ bool jl_dylib_DI_for_fptr(size_t pointer, const llvm::object::ObjectFile **obj, 
     // In case we fail with the debug info lookup, we at least still
     // have the function name, even if we don't have line numbers
     if (name)
+#ifdef _OS_FREEBSD_
+        // try `get_function_name_and_base` first on FreeBSD
+        // the fallback is FBSD_DLADDR section
+        jl_copy_str(name, nullptr);
+#else
         jl_copy_str(name, dlinfo.dli_sname);
+#endif // ifdef _OS_FREEBSD_
     if (filename)
         jl_copy_str(filename, dlinfo.dli_fname);
     fname = dlinfo.dli_fname;
@@ -896,6 +908,13 @@ bool jl_dylib_DI_for_fptr(size_t pointer, const llvm::object::ObjectFile **obj, 
         *slide = it->second.slide;
         *section_slide = it->second.section_slide;
         get_function_name_and_base(*obj, insysimage, saddr, name, pointer, *slide);
+#ifdef _OS_FREEBSD_  // remember to change FBSD_DLADDR as well
+        // fallback to `dlinfo` from `dladdr`
+        if (name && (nullptr == *name))
+            jl_copy_str(name, dlinfo.dli_sname);
+        if (saddr && (nullptr == *saddr))
+            *saddr = dlinfo.dli_saddr;
+#endif
         return true;
     }
 
@@ -1026,6 +1045,13 @@ bool jl_dylib_DI_for_fptr(size_t pointer, const llvm::object::ObjectFile **obj, 
     objfileentry_t entry = {*obj, *context, *slide, *section_slide};
     objfilemap[fbase] = entry;
     get_function_name_and_base(*obj, insysimage, saddr, name, pointer, *slide);
+#ifdef _OS_FREEBSD_  // remember to change FBSD_DLADDR as well
+    // fallback to `dlinfo` from `dladdr`
+    if (name && (nullptr == *name))
+        jl_copy_str(name, dlinfo.dli_sname);
+    if (saddr && (nullptr == *saddr))
+        *saddr = dlinfo.dli_saddr;
+#endif
     return true;
 }
 
