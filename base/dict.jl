@@ -271,7 +271,8 @@ function rehash!(h::Dict{K,V}, newsz = length(h.keys)) where V where K
 end
 
 max_values(::Type) = typemax(Int)
-max_values(T::Type{<:Union{Void, Int8, UInt8, Int16, UInt16}}) = 1 << sizeof(T)
+max_values(T::Type{<:Union{Void,BitIntegerSmall}}) = 1 << 8*sizeof(T)
+max_values(T::Union) = max(max_values(T.a), max_values(T.b))
 max_values(::Type{Bool}) = 2
 
 function sizehint!(d::Dict{T}, newsz) where T
