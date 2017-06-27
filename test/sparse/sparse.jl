@@ -1827,26 +1827,26 @@ end
 
 @testset "checkvalid" begin
     for x in [sprand(10,5,0.5), sprand(5,10,0.5), spzeros(0,0), spzeros(2,2)]
-        @test SparseArrays._checkvalid(x; full = true) == SparseArrays.SparseArrayInvalid.VALID
+        @test SparseArrays._checkvalid(x; full = true) == SparseArrays.SparseArrayValidity.VALID
         @test SparseArrays.checkvalid(Bool, x; full = true) == true
         @test SparseArrays.checkvalid(x; full = true) == nothing
     end
 
     for (mat, err, full) in [
             # colptr doesn't start with 1
-            (SparseMatrixCSC(2, 2, [2, 3, 5], [1, 2, 1, 2], rand(4)), SparseArrays.SparseArrayInvalid.COLPTR_FIRST_VAL, false),
+            (SparseMatrixCSC(2, 2, [2, 3, 5], [1, 2, 1, 2], rand(4)), SparseArrays.SparseArrayValidity.COLPTR_FIRST_VAL, false),
             # nzval too short
-            (SparseMatrixCSC(2, 2, [1, 3, 5], [1, 2, 1, 2], rand(3)), SparseArrays.SparseArrayInvalid.NZVAL_LENGTH, false),
+            (SparseMatrixCSC(2, 2, [1, 3, 5], [1, 2, 1, 2], rand(3)), SparseArrays.SparseArrayValidity.NZVAL_LENGTH, false),
             # colptr not correct length
-            (SparseMatrixCSC(2, 2, Int64[1], Int64[1, 2, 1, 2], rand(4)), SparseArrays.SparseArrayInvalid.COLPTR_LENGTH, false),
+            (SparseMatrixCSC(2, 2, Int64[1], Int64[1, 2, 1, 2], rand(4)), SparseArrays.SparseArrayValidity.COLPTR_LENGTH, false),
             # rowval too short
-            (SparseMatrixCSC(2, 2, [1, 3, 5], [1, 2, 1], rand(4)), SparseArrays.SparseArrayInvalid.ROWVAL_LENGTH, true),
+            (SparseMatrixCSC(2, 2, [1, 3, 5], [1, 2, 1], rand(4)), SparseArrays.SparseArrayValidity.ROWVAL_LENGTH, true),
             # rowval out of range
-            (SparseMatrixCSC(2, 2, [1, 3, 5], [1, 2, 1, 3], rand(4)), SparseArrays.SparseArrayInvalid.ROWVAL_RANGE, true),
+            (SparseMatrixCSC(2, 2, [1, 3, 5], [1, 2, 1, 3], rand(4)), SparseArrays.SparseArrayValidity.ROWVAL_RANGE, true),
             # rowval not sorted in column
-            (SparseMatrixCSC(3, 3, [1, 3, 6, 8], [1, 2, 1, 3, 2, 2, 3], rand(7)), SparseArrays.SparseArrayInvalid.ROWVAL_SORTED_COLUMN, true),
+            (SparseMatrixCSC(3, 3, [1, 3, 6, 8], [1, 2, 1, 3, 2, 2, 3], rand(7)), SparseArrays.SparseArrayValidity.ROWVAL_SORTED_COLUMN, true),
             # colptr not sorted
-            (SparseMatrixCSC(2, 2, [1, 5, 3], [1, 2, 1, 3], rand(4)), SparseArrays.SparseArrayInvalid.COLPTR_SORTED, true),
+            (SparseMatrixCSC(2, 2, [1, 5, 3], [1, 2, 1, 3], rand(4)), SparseArrays.SparseArrayValidity.COLPTR_SORTED, true),
             ]
         @test SparseArrays._checkvalid(mat; full=full) == err
         @test SparseArrays.checkvalid(Bool, mat; full=full) == false

@@ -121,8 +121,8 @@ column. In conjunction with [`nonzeros`](@ref) and
 nzrange(S::SparseMatrixCSC, col::Integer) = S.colptr[col]:(S.colptr[col+1]-1)
 
 
-module SparseArrayInvalid
-    @enum(_SparseArrayInvalid,
+module SparseArrayValidity
+    @enum(_SparseArrayValidity,
         VALID,
         COLPTR_LENGTH,
         COLPTR_FIRST_VAL,
@@ -153,7 +153,7 @@ false
 ```
 """
 function checkvalid(::Type{Bool}, S::SparseMatrixCSC; full = true)
-    return _checkvalid(S; full = full) == SparseArrayInvalid.VALID
+    return _checkvalid(S; full = full) == SparseArrayValidity.VALID
 end
 
 """
@@ -162,24 +162,23 @@ end
 Throw an [`ArgumentError`](@ref) if the sparse matrix `S` does not have a valid internal representation.
 If `full` is `false` only O(1) checks are done, otherwise full
 O(nnz) checks are performed.
-```
 """
 function checkvalid(S::SparseMatrixCSC; full = true)
     validity = _checkvalid(S; full = full)
-    validity == SparseArrayInvalid.VALID && return
-    if validity == SparseArrayInvalid.COLPTR_LENGTH
+    validity == SparseArrayValidity.VALID && return
+    if validity == SparseArrayValidity.COLPTR_LENGTH
         err_str = "length of S.colptr must be at least size(S,2) + 1 = $(S.n + 1) but was $(length(S.colptr))"
-    elseif validity == SparseArrayInvalid.COLPTR_FIRST_VAL
+    elseif validity == SparseArrayValidity.COLPTR_FIRST_VAL
         err_str = "first element of S.colptr must be 1 but was $(S.colptr[1])"
-    elseif validity == SparseArrayInvalid.ROWVAL_LENGTH
+    elseif validity == SparseArrayValidity.ROWVAL_LENGTH
         err_str = "length of S.rowval must be at least S.colptr[S.n+1] - 1 but was $(length(S.rowval))"
-    elseif validity == SparseArrayInvalid.NZVAL_LENGTH
+    elseif validity == SparseArrayValidity.NZVAL_LENGTH
         err_str = "length of S.nzval must be at least S.colptr[S.n+1] - 1 but was $(length(S.nzval))"
-    elseif validity == SparseArrayInvalid.COLPTR_SORTED
+    elseif validity == SparseArrayValidity.COLPTR_SORTED
         err_str = "S.colptr must be sorted"
-    elseif validity == SparseArrayInvalid.ROWVAL_RANGE
+    elseif validity == SparseArrayValidity.ROWVAL_RANGE
         err_str = "each element in S.rowval must be > 0 and ⩽ size(S,1)"
-    elseif validity == SparseArrayInvalid.ROWVAL_SORTED_COLUMN
+    elseif validity == SparseArrayValidity.ROWVAL_SORTED_COLUMN
         err_str = "S.rowval must be sorted for all column ranges"
     end
     throw(ArgumentError(err_str))
@@ -187,26 +186,26 @@ end
 
 
 function _checkvalid(S::SparseMatrixCSC; full = true)
-    length(S.colptr) < S.n + 1               && return SparseArrayInvalid.COLPTR_LENGTH
-    length(S.rowval) < S.colptr[S.n + 1] - 1 && return SparseArrayInvalid.ROWVAL_LENGTH
-    length(S.nzval)  < S.colptr[S.n + 1] - 1 && return SparseArrayInvalid.NZVAL_LENGTH
-    S.colptr[1] != 1                         && return SparseArrayInvalid.COLPTR_FIRST_VAL
+    length(S.colptr) < S.n + 1               && return SparseArrayValidity.COLPTR_LENGTH
+    length(S.rowval) < S.colptr[S.n + 1] - 1 && return SparseArrayValidity.ROWVAL_LENGTH
+    length(S.nzval)  < S.colptr[S.n + 1] - 1 && return SparseArrayValidity.NZVAL_LENGTH
+    S.colptr[1] != 1                         && return SparseArrayValidity.COLPTR_FIRST_VAL
 
     if full
         # Check colptr increasing
-        !issorted(S.colptr) && return SparseArrayInvalid.COLPTR_SORTED
+        !issorted(S.colptr) && return SparseArrayValidity.COLPTR_SORTED
         # Check rowval in range and sorted in each column
         for col in 1:S.n
             nzrang = nzrange(S, col)
             for r in nzrang
                 ri = S.rowval[r]
-                (ri <= 0 || ri > S.m) && return SparseArrayInvalid.ROWVAL_RANGE
+                (ri <= 0 || ri > S.m) && return SparseArrayValidity.ROWVAL_RANGE
                 r == last(nzrang) && break
-                S.rowval[r+1] <= ri && return SparseArrayInvalid.ROWVAL_SORTED_COLUMN
+                S.rowval[r+1] <= ri && return SparseArrayValidity.ROWVAL_SORTED_COLUMN
             end
         end
     end
-    return SparseArrayInvalid.VALID
+    return SparseArrayValidity.VALID
 end
 
 _print_invalid(io, S) = print(io,  S.m, "×", S.n, " ", typeof(S), " with invalid internal representation")
