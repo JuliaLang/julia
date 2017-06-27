@@ -3,11 +3,11 @@
 # Test functionality of IntSet
 
 @testset "Construction, collect" begin
-    for data_in = [(1,), (1,5,100)],
-            s = (IntSet(data_in), IntSet(data_in...))
+    for data_in = ([(1, 5)], [(1, 5), (100,)])
+        s = IntSet(data_in...)
         data_out = collect(s)
-        @test all(map(d->in(d,data_out), data_in))
-        @test length(data_out) === length(data_in)
+        @test all(map(d->in(d,data_out), union(data_in...)))
+        @test length(data_out) === length(union(data_in...))
     end
 end
 
