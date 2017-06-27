@@ -235,8 +235,8 @@ isvalid(s::String, i::Integer) =
 
 function getindex(s::String, r::UnitRange{Int})
     isempty(r) && return ""
-    i, j = first(r), last(r)
     l = sizeof(s)
+    i = first(r)
     if i < 1 || i > l
         throw(BoundsError(s, i))
     end
@@ -244,11 +244,16 @@ function getindex(s::String, r::UnitRange{Int})
     if is_valid_continuation(si)
         throw(UnicodeError(UTF_ERR_INVALID_INDEX, i, si))
     end
+    j = last(r)
     if j > l
-        throw(BoundsError())
+        throw(BoundsError(s, j))
     end
-    j = nextind(s,j)-1
-    unsafe_string(pointer(s,i), j-i+1)
+    @inbounds sj = codeunit(s, j)
+    if is_valid_continuation(sj)
+        throw(UnicodeError(UTF_ERR_INVALID_INDEX, j, sj))
+    end
+    j = nextind(s,j)
+    unsafe_string(pointer(s,i), j-i)
 end
 
 function search(s::String, c::Char, i::Integer = 1)

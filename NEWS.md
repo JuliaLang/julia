@@ -100,6 +100,9 @@ Breaking changes
 
 This section lists changes that do not have deprecation warnings.
 
+  * `getindex(s::String, r::UnitRange{Int})` now throws `UnicodeError` if `last(r)`
+    is not a valid index into `s` ([#22572]).
+
   * `ntuple(f, n::Integer)` throws `ArgumentError` if `n` is negative.
     Previously an empty tuple was returned ([#21697]).
 
