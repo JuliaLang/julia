@@ -158,7 +158,7 @@ end
 """
     randjump(r::MersenneTwister, jumps::Integer, [jumppoly::AbstractString=dSFMT.JPOLY1e21]) -> Vector{MersenneTwister}
 
-Create an array of the size `jumps` of initialized `MersenneTwister` RNG objects. The
+Create an array of the size `jumps` of initialized [`MersenneTwister`](@ref) RNG objects. The
 first RNG object given as a parameter and following `MersenneTwister` RNGs in the array are
 initialized such that a state of the RNG object in the array would be moved forward (without
 generating numbers) from a previous RNG object array element on a particular number of steps
@@ -221,13 +221,46 @@ end
 ## srand()
 
 """
-    srand([rng=GLOBAL_RNG], seed) -> rng
-    srand([rng=GLOBAL_RNG]) -> rng
+    srand([rng::AbstractRNG=GLOBAL_RNG], seed::Integer) -> rng
+    srand([rng::AbstractRNG=GLOBAL_RNG]) -> rng
 
 Reseed the random number generator. If a `seed` is provided, the RNG will give a
 reproducible sequence of numbers, otherwise Julia will get entropy from the system. For
-`MersenneTwister`, the `seed` may be a non-negative integer or a vector of [`UInt32`](@ref)
+[`MersenneTwister`](@ref), the `seed` may be a non-negative integer or a vector of [`UInt32`](@ref)
 integers. `RandomDevice` does not support seeding.
+
+# Examples
+```jldoctest
+julia> rng = MersenneTwister(1234);
+
+julia> rand(rng, Int, 10)
+10-element Array{Int64,1}:
+ -3812393819966074295
+  3382543107028662972
+ -6289110377144490421
+  -307490521321136500
+  2773853658161409662
+  -935185547498531166
+  2298308441296417756
+ -4789949373768341045
+  6854464388812690306
+  1832535891186417742
+
+julia> srand(rng, 1234);
+
+julia> rand(rng, Int, 10)
+10-element Array{Int64,1}:
+ -3812393819966074295
+  3382543107028662972
+ -6289110377144490421
+  -307490521321136500
+  2773853658161409662
+  -935185547498531166
+  2298308441296417756
+ -4789949373768341045
+  6854464388812690306
+  1832535891186417742
+```
 """
 srand(r::MersenneTwister) = srand(r, make_seed())
 srand(r::MersenneTwister, n::Integer) = srand(r, make_seed(n))
@@ -257,7 +290,7 @@ globalRNG() = GLOBAL_RNG
 # rand: a non-specified RNG defaults to GLOBAL_RNG
 
 """
-    rand([rng=GLOBAL_RNG], [S], [dims...])
+    rand([rng::AbstractRNG=GLOBAL_RNG], [S], [dims...])
 
 Pick a random element or array of random elements from the set of values specified by `S`; `S` can be
 
@@ -272,11 +305,13 @@ Pick a random element or array of random elements from the set of values specifi
 
 # Examples
 
-```julia-repl
-julia> rand(Int, 2)
+```jldoctest
+julia> rng = MersenneTwister(1234);
+
+julia> rand(rng, Int, 2)
 2-element Array{Int64,1}:
- 1339893410598768192
- 1575814717733606317
+  5346145710047121644
+ -5834224487641148056
 
 julia> rand(MersenneTwister(0), Dict(1=>2, 3=>4))
 1=>2
@@ -1670,6 +1705,26 @@ Return a vector consisting of a random subsequence of the given array `A`, where
 element of `A` is included (in order) with independent probability `p`. (Complexity is
 linear in `p*length(A)`, so this function is efficient even if `p` is small and `A` is
 large.) Technically, this process is known as "Bernoulli sampling" of `A`.
+
+# Examples
+```jldoctest
+julia> a = collect(1:8);
+
+julia> rng = MersenneTwister(1234);
+
+julia> randsubseq(rng, a, 0.2)
+0-element Array{Int64,1}
+
+julia> randsubseq(rng, a, 0.8)
+7-element Array{Int64,1}:
+ 1
+ 2
+ 3
+ 4
+ 5
+ 7
+ 8
+```
 """
 randsubseq(A::AbstractArray, p::Real) = randsubseq(GLOBAL_RNG, A, p)
 
