@@ -1020,6 +1020,10 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(jl_sym_t *name,
                                             jl_svec_t *fnames, jl_svec_t *ftypes,
                                             int abstract, int mutabl,
                                             int ninitialized);
+JL_DLLEXPORT jl_datatype_t *jl_new_primitivetype_aligned(jl_value_t *name,
+                                                 jl_module_t *module,
+                                                 jl_datatype_t *super,
+                                                 jl_svec_t *parameters, size_t nbits, size_t alignment);
 JL_DLLEXPORT jl_datatype_t *jl_new_primitivetype(jl_value_t *name,
                                                  jl_module_t *module,
                                                  jl_datatype_t *super,
