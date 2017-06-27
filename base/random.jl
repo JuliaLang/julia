@@ -1291,7 +1291,7 @@ const ziggurat_nor_inv_r  = inv(ziggurat_nor_r)
 const ziggurat_exp_r      = 7.6971174701310497140446280481
 
 """
-    randn([rng=GLOBAL_RNG], [T=Float64], [dims...])
+    randn([rng::AbstractRNG=GLOBAL_RNG], [T=Float64], [dims...])
 
 Generate a normally-distributed random number of type `T` with mean 0 and standard deviation 1.
 Optionally generate an array of normally-distributed random numbers.
@@ -1341,7 +1341,7 @@ function randn_unlikely(rng, idx, rabs, x)
 end
 
 """
-    randexp([rng=GLOBAL_RNG], [T=Float64], [dims...])
+    randexp([rng::AbstractRNG=GLOBAL_RNG], [T=Float64], [dims...])
 
 Generate a random number of type `T` according to the exponential distribution with scale 1.
 Optionally generate an array of such random numbers.
@@ -1384,7 +1384,7 @@ function randexp_unlikely(rng, idx, x)
 end
 
 """
-    randn!([rng=GLOBAL_RNG], A::AbstractArray) -> A
+    randn!([rng::AbstractRNG=GLOBAL_RNG,] A::AbstractArray) -> A
 
 Fill the array `A` with normally-distributed (mean 0, standard deviation 1) random numbers.
 Also see the [`rand`](@ref) function.
@@ -1406,7 +1406,7 @@ julia> randn!(rng, zeros(5))
 function randn! end
 
 """
-    randexp!([rng=GLOBAL_RNG], A::AbstractArray) -> A
+    randexp!([rng::AbstractRNG=GLOBAL_RNG,] A::AbstractArray) -> A
 
 Fill the array `A` with random numbers following the exponential distribution (with scale 1).
 
@@ -1596,6 +1596,35 @@ end
 # each element of A is included in S with independent probability p.
 # (Note that this is different from the problem of finding a random
 #  size-m subset of A where m is fixed!)
+
+"""
+    randsubseq!([rng::AbstractRNG=GLOBAL_RNG,] S, A, p)
+
+Like [`randsubseq`](@ref), but the results are stored in `S`
+(which is resized as needed).
+
+# Examples
+```jldoctest
+julia> b = zeros(4);
+
+julia> a = collect(1:8);
+
+julia> rng = MersenneTwister(1234);
+
+julia> randsubseq!(rng, b, a, 0.9);
+
+julia> b
+8-element Array{Float64,1}:
+ 1.0
+ 2.0
+ 3.0
+ 4.0
+ 5.0
+ 6.0
+ 7.0
+ 8.0
+```
+"""
 function randsubseq!(r::AbstractRNG, S::AbstractArray, A::AbstractArray, p::Real)
     0 <= p <= 1 || throw(ArgumentError("probability $p not in [0,1]"))
     n = length(A)
@@ -1635,7 +1664,7 @@ randsubseq!(S::AbstractArray, A::AbstractArray, p::Real) = randsubseq!(GLOBAL_RN
 randsubseq(r::AbstractRNG, A::AbstractArray{T}, p::Real) where {T} = randsubseq!(r, T[], A, p)
 
 """
-    randsubseq(A, p) -> Vector
+    randsubseq([rng::AbstractRNG=GLOBAL_RNG,] A, p) -> Vector
 
 Return a vector consisting of a random subsequence of the given array `A`, where each
 element of `A` is included (in order) with independent probability `p`. (Complexity is

@@ -470,14 +470,6 @@ See also [`zeros`](@ref), [`similar`](@ref).
 ones
 
 """
-    randsubseq!(S, A, p)
-
-Like [`randsubseq`](@ref), but the results are stored in `S`
-(which is resized as needed).
-"""
-randsubseq!
-
-"""
     redisplay(x)
     redisplay(d::Display, x)
     redisplay(mime, x)
@@ -905,7 +897,7 @@ julia> a
 select!
 
 """
-    randstring([rng,] len=8)
+    randstring([rng::AbstractRNG=GLOBAL_RNG,] len::Int=8)
 
 Create a random ASCII string of length `len`, consisting of upper- and
 lower-case letters and the digits 0-9. The optional `rng` argument
