@@ -135,32 +135,55 @@ function Base.show(io::IOContext, S::SparseMatrixCSC)
     if nnz(S) == 0
         return show(io, MIME("text/plain"), S)
     end
-
     limit::Bool = get(io, :limit, false)
-    if limit
-        rows = displaysize(io)[1]
-        half_screen_rows = div(rows - 8, 2)
-    else
-        half_screen_rows = typemax(Int)
+    rows = displaysize(io)[1] - 4 # -4 from [Prompt, header, newline after elements, new prompt]
+    will_fit = !limit || rows >= nnz(S) # Will the whole matrix fit when printed?
+
+    if rows <= 2 && !will_fit
+        print(io, "\n  \u22ee")
+        return
     end
-    pad = ndigits(max(S.m,S.n))
-    k = 0
-    sep = "\n  "
-    if !haskey(io, :compact)
-        io = IOContext(io, :compact => true)
-    end
-    for col = 1:S.n, k = S.colptr[col] : (S.colptr[col+1]-1)
-        if k < half_screen_rows || k > nnz(S)-half_screen_rows
-            print(io, sep, '[', rpad(S.rowval[k], pad), ", ", lpad(col, pad), "]  =  ")
-            if isassigned(S.nzval, Int(k))
-                show(io, S.nzval[k])
-            else
-                print(io, Base.undef_ref_str)
-            end
-        elseif k == half_screen_rows
-            print(io, sep, '\u22ee')
+
+    iob = IOBuffer()
+    ioc = IOContext(iob, :compact => true)
+
+    function _format_line(r, col)
+        pad = ndigits(max(S.m, S.n))
+        print(ioc, "  ", '[', rpad(S.rowval[r], pad), ", ", lpad(col, pad), "]  =  ")
+        if isassigned(S.nzval, Int(r))
+            show(ioc, S.nzval[r])
+        else
+            print(ioc, Base.undef_ref_str)
         end
-        k += 1
+        return String(take!(iob))
+    end
+
+    if will_fit
+        print_count = nnz(S)
+    else
+        print_count = div(rows-1, 2)
+    end
+
+    count = 0
+    for col = 1:S.n, r = nzrange(S, col)
+        count += 1
+        print(io, "\n", _format_line(r, col))
+        count == print_count && break
+    end
+
+    lines_bottom = String[]
+    if !will_fit
+        count = 0
+        for col = reverse(1:S.n), r = reverse(nzrange(S, col))
+            count += 1
+            push!(lines_bottom, _format_line(r, col))
+            count == print_count && break
+        end
+    end
+
+    if !will_fit
+        print(io, "\n  ", '\u22ee', "\n")
+        print(io, join(reverse(lines_bottom), '\n'))
     end
 end
 
