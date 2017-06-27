@@ -11,6 +11,9 @@ Windows: [![Build status](https://ci.appveyor.com/api/projects/status/dvial98s5v
 
 Code Coverage: [![Coverage Status](https://coveralls.io/repos/JuliaLang/julia/badge.svg?branch=master)](https://coveralls.io/r/JuliaLang/julia?branch=master) [![codecov.io](http://codecov.io/github/JuliaLang/julia/coverage.svg?branch=master)](http://codecov.io/github/JuliaLang/julia?branch=master)
 
+[![Powered by NumFOCUS](https://img.shields.io/badge/powered%20by-NumFOCUS-orange.svg?style=flat&colorA=E1523D&colorB=007D8A)](http://numfocus.org)
+and our [fantastic contributors](https://github.com/JuliaLang/julia/graphs/contributors)
+
 ## The Julia Language
 
 Julia is a high-level, high-performance dynamic language for technical computing.
