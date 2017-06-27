@@ -213,10 +213,15 @@ function eval_test(evaluated::Expr, quoted::Expr)
 
         res = op(args...; kwargs...) === true
 
-        # Convert kwargs pairs back into keyword expressions
-        quoted_args[2] = Expr(:parameters, [Expr(:kw, k, v) for (k, v) in kwargs]...)
-        quoted_args[3:n] = args
-        isempty(kwargs) && deleteat!(quoted.args, 2)
+        # Create "Evaluated" expression which looks like the original call but has all of
+        # the arguments evaluated
+        func_sym = quoted_args[1]
+        if isempty(kwargs)
+            quoted = Expr(:call, func_sym, args...)
+        else
+            kwargs_expr = Expr(:parameters, [Expr(:kw, k, v) for (k, v) in kwargs]...)
+            quoted = Expr(:call, func_sym, kwargs_expr, args...)
+        end
     else
         throw(ArgumentError("Unhandled expression type: $(evaluated.head)"))
     end
@@ -334,29 +339,41 @@ function get_test_result(ex)
 
         escaped_args = []
         escaped_kwargs = []
-        quoted_args = []
 
-        # Add keyword parameters after `;` to the end of the args list.
-        # i.e. convert expression calls of `f(a, b=2; c=3)` into `f(a, b=2, c=3)`.
-        if isa(ex.args[2], Expr) && ex.args[2].head == :parameters
-            args = [ex.args[3:end]; ex.args[2].args]
-        else
-            args = ex.args[2:end]
+        # Keywords that occur before `;`. Note that the keywords are being revised into
+        # a form we can splat.
+        for a in ex.args[2:end]
+            if isa(a, Expr) && a.head == :kw
+                push!(escaped_kwargs, Expr(:call, :(=>), QuoteNode(a.args[1]), esc(a.args[2])))
+            end
         end
 
-        for a in args
-            if isa(a, Expr) && a.head == :kw
-                # Revise keywords into a form we can splat as kwargs
-                push!(escaped_kwargs, Expr(:call, :(=>), QuoteNode(a.args[1]), esc(a.args[2])))
+        # Keywords that occur after ';'
+        parameters_expr = ex.args[2]
+        if isa(parameters_expr, Expr) && parameters_expr.head == :parameters
+            for a in parameters_expr.args
+                if isa(a, Expr) && a.head == :kw
+                    push!(escaped_kwargs, Expr(:call, :(=>), QuoteNode(a.args[1]), esc(a.args[2])))
+                elseif isa(a, Expr) && a.head == :...
+                    push!(escaped_kwargs, Expr(:..., esc(a.args[1])))
+                end
+            end
+        end
+
+        # Positional arguments
+        for a in ex.args[2:end]
+            isa(a, Expr) && a.head in (:kw, :parameters) && continue
+
+            if isa(a, Expr) && a.head == :...
+                push!(escaped_args, Expr(:..., esc(a)))
             else
                 push!(escaped_args, esc(a))
-                push!(quoted_args, QuoteNode(a))
             end
         end
 
         testret = :(eval_test(
             Expr(:call, $escaped_func, Expr(:parameters, $(escaped_kwargs...)), $(escaped_args...)),
-            Expr(:call, $quoted_func, Expr(:parameters), $(quoted_args...)),
+            Expr(:call, $quoted_func),
         ))
     else
         testret = :(Returned($(esc(ex)), nothing))

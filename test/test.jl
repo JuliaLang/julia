@@ -78,13 +78,21 @@ fails = @testset NoThrowTestSet begin
     @test 1+0 == 2+0 == 3+0
     # Fail - comparison call
     @test ==(1 - 2, 2 - 1)
+    # Fail - splatting
+    @test ==(1:2...)
+    # @test ==(1, (1, 2)...)  # MethodError
     # Fail - isequal
     @test isequal(0 / 0, 1 / 0)
+    # Fail - function splatting
+    @test isequal(1:2...)
     # Fail - isapprox
     @test isapprox(0 / 1, -1 / 0)
-    # Fail - isapprox with keyword
+    # Fail - function with keyword
     @test isapprox(1 / 2, 2 / 1, atol=1 / 1)
     @test isapprox(1 - 2, 2 - 1; atol=1 - 1)
+    # Fail - function keyword splatting
+    k = [(:atol, 0), (:nans, true)]
+    @test isapprox(1, 2; k...)
     # Error - unexpected pass
     @test_broken true
 end
@@ -116,23 +124,35 @@ str = sprint(show, fails[6])
 @test contains(str, "Expression: 1 - 2 == 2 - 1")
 @test contains(str, "Evaluated: -1 == 1")
 
-str = sprint(show, fails[7])
+# str = sprint(show, fails[7])
+# @test contains(str, "Expression: ==(1:2...)")
+# @test contains(str, "Evaluated: ==(1, 2)")
+
+str = sprint(show, fails[8])
 @test contains(str, "Expression: isequal(0 / 0, 1 / 0)")
 @test contains(str, "Evaluated: isequal(NaN, Inf)")
 
-str = sprint(show, fails[8])
+str = sprint(show, fails[9])
+@test contains(str, "Expression: isequal(1:2...)")
+@test contains(str, "Evaluated: isequal(1, 2)")
+
+str = sprint(show, fails[10])
 @test contains(str, "Expression: isapprox(0 / 1, -1 / 0)")
 @test contains(str, "Evaluated: isapprox(0.0, -Inf)")
 
-str = sprint(show, fails[9])
+str = sprint(show, fails[11])
 @test contains(str, "Expression: isapprox(1 / 2, 2 / 1, atol=1 / 1)")
 @test contains(str, "Evaluated: isapprox(0.5, 2.0; atol=1.0)")
 
-str = sprint(show, fails[10])
+str = sprint(show, fails[12])
 @test contains(str, "Expression: isapprox(1 - 2, 2 - 1; atol=1 - 1)")
 @test contains(str, "Evaluated: isapprox(-1, 1; atol=0)")
 
-str = sprint(show, fails[11])
+str = sprint(show, fails[13])
+@test contains(str, "Expression: isapprox(1, 2; k...)")
+@test contains(str, "Evaluated: isapprox(1, 2; atol=0, nans=true)")
+
+str = sprint(show, fails[14])
 @test contains(str, "Unexpected Pass")
 @test contains(str, "Expression: true")
 
