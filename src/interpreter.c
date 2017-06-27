@@ -399,8 +399,9 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
         if (nb < 1 || nb>=(1<<23) || (nb&7) != 0)
             jl_errorf("invalid number of bits in type %s",
                       jl_symbol_name((jl_sym_t*)name));
-        valign = eval(args[3], s);
-        if (jl_is_long(valign)) {
+        if (nargs == 5) {
+            valign = eval(args[4], s);
+            assert(jl_is_long(valign));
             ssize_t align = jl_unbox_long(valign);
             dt = jl_new_primitivetype_aligned(name, modu, NULL, (jl_svec_t*)para, nb, align);
         } else {
