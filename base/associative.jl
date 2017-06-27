@@ -296,10 +296,10 @@ function emptymergedict(d::Associative, others::Associative...)
 end
 
 """
-    filter!(function, d::Associative)
+    filter!(f, d::Associative)
 
-Update `d`, removing elements for which `function` is `false`.
-Fhe function is passed two arguments (key and value).
+Update `d`, removing elements for which `f` is `false`.
+The function `f` is passed two arguments (key and value).
 
 # Example
 ```jldoctest
@@ -327,6 +327,24 @@ function filter!(f, d::Associative)
     end
     return d
 end
+
+"""
+    filter(f, d::Associative)
+
+Return a copy of `d`, removing elements for which `f` is `false`.The function `f` is passed two arguments (key and value).
+
+# Examples
+```jldocttest
+julia> d = Dict(1=>"a", 2=>"b")
+Dict{Int64,String} with 2 entries:
+  2 => "b"
+  1 => "a"
+
+julia> filter((x,y)->isodd(x), d)
+Dict{Int64,String} with 1 entry:
+  1 => "a"
+```
+"""
 function filter(f, d::Associative)
     # don't just do filter!(f, copy(d)): avoid making a whole copy of d
     df = similar(d)
