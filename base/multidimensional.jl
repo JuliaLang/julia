@@ -143,6 +143,7 @@ module IteratorsMD
     Consequently these can be useful for writing algorithms that
     work in arbitrary dimensions.
 
+    # Example
     ```jldoctest
     julia> foreach(println, CartesianRange((2, 2, 2)))
     CartesianIndex{3}((1, 1, 1))
