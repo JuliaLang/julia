@@ -233,33 +233,19 @@ integers. `RandomDevice` does not support seeding.
 ```jldoctest
 julia> rng = MersenneTwister(1234);
 
-julia> rand(rng, Int, 10)
-10-element Array{Int64,1}:
+julia> rand(rng, Int, 3)
+3-element Array{Int64,1}:
  -3812393819966074295
   3382543107028662972
  -6289110377144490421
-  -307490521321136500
-  2773853658161409662
-  -935185547498531166
-  2298308441296417756
- -4789949373768341045
-  6854464388812690306
-  1832535891186417742
 
 julia> srand(rng, 1234);
 
-julia> rand(rng, Int, 10)
-10-element Array{Int64,1}:
+julia> rand(rng, Int, 3)
+3-element Array{Int64,1}:
  -3812393819966074295
   3382543107028662972
  -6289110377144490421
-  -307490521321136500
-  2773853658161409662
-  -935185547498531166
-  2298308441296417756
- -4789949373768341045
-  6854464388812690306
-  1832535891186417742
 ```
 """
 srand(r::MersenneTwister) = srand(r, make_seed())
@@ -306,9 +292,9 @@ Pick a random element or array of random elements from the set of values specifi
 # Examples
 
 ```jldoctest
-julia> rng = MersenneTwister(1234);
+julia> srand(1234);
 
-julia> rand(rng, Int, 2)
+julia> rand(Int, 2)
 2-element Array{Int64,1}:
   5346145710047121644
  -5834224487641148056
