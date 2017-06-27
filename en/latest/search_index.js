@@ -8333,7 +8333,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.conj",
     "category": "Function",
-    "text": "conj(z)\n\nCompute the complex conjugate of a complex number z.\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\nconj(v::RowVector)\n\nReturns a ConjArray lazy view of the input, where each element is conjugated.\n\nExample\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\n"
+    "text": "conj(v::RowVector)\n\nReturns a ConjArray lazy view of the input, where each element is conjugated.\n\nExample\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\nconj(z)\n\nCompute the complex conjugate of a complex number z.\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\n"
 },
 
 {
@@ -12597,7 +12597,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.qrfact",
     "category": "Function",
-    "text": "qrfact(A) -> SPQR.Factorization\n\nCompute the QR factorization of a sparse matrix A. A fill-reducing permutation is used. The main application of this type is to solve least squares problems with \\. The function calls the C library SPQR and a few additional functions from the library are wrapped but not exported.\n\n\n\nqrfact(A, pivot=Val{false}) -> F\n\nCompute the QR factorization of the matrix A: an orthogonal (or unitary if A is complex-valued) matrix Q, and an upper triangular matrix R such that\n\nA = Q R\n\nThe returned object F stores the factorization in a packed format:\n\nif pivot == Val{true} then F is a QRPivoted object,\notherwise if the element type of A is a BLAS type (Float32, Float64, Complex64 or Complex128), then F is a QRCompactWY object,\notherwise F is a QR object.\n\nThe individual components of the factorization F can be accessed by indexing with a symbol:\n\nF[:Q]: the orthogonal/unitary matrix Q\nF[:R]: the upper triangular matrix R\nF[:p]: the permutation vector of the pivot (QRPivoted only)\nF[:P]: the permutation matrix of the pivot (QRPivoted only)\n\nThe following functions are available for the QR objects: inv, size, and \\. When A is rectangular, \\ will return a least squares solution and if the solution is not unique, the one with smallest norm is returned.\n\nMultiplication with respect to either thin or full Q is allowed, i.e. both F[:Q]*F[:R] and F[:Q]*A are supported. A Q matrix can be converted into a regular matrix with full which has a named argument thin.\n\nExample\n\njulia> A = [3.0 -6.0; 4.0 -8.0; 0.0 1.0]\n3×2 Array{Float64,2}:\n 3.0  -6.0\n 4.0  -8.0\n 0.0   1.0\n\njulia> F = qrfact(A)\nBase.LinAlg.QRCompactWY{Float64,Array{Float64,2}} with factors Q and R:\n[-0.6 0.0 0.8; -0.8 0.0 -0.6; 0.0 -1.0 0.0]\n[-5.0 10.0; 0.0 -1.0]\n\njulia> F[:Q] * F[:R] == A\ntrue\n\nnote: Note\nqrfact returns multiple types because LAPACK uses several representations that minimize the memory storage requirements of products of Householder elementary reflectors, so that the Q and R matrices can be stored compactly rather as two separate dense matrices.\n\n\n\n"
+    "text": "qrfact(A, pivot=Val{false}) -> F\n\nCompute the QR factorization of the matrix A: an orthogonal (or unitary if A is complex-valued) matrix Q, and an upper triangular matrix R such that\n\nA = Q R\n\nThe returned object F stores the factorization in a packed format:\n\nif pivot == Val{true} then F is a QRPivoted object,\notherwise if the element type of A is a BLAS type (Float32, Float64, Complex64 or Complex128), then F is a QRCompactWY object,\notherwise F is a QR object.\n\nThe individual components of the factorization F can be accessed by indexing with a symbol:\n\nF[:Q]: the orthogonal/unitary matrix Q\nF[:R]: the upper triangular matrix R\nF[:p]: the permutation vector of the pivot (QRPivoted only)\nF[:P]: the permutation matrix of the pivot (QRPivoted only)\n\nThe following functions are available for the QR objects: inv, size, and \\. When A is rectangular, \\ will return a least squares solution and if the solution is not unique, the one with smallest norm is returned.\n\nMultiplication with respect to either thin or full Q is allowed, i.e. both F[:Q]*F[:R] and F[:Q]*A are supported. A Q matrix can be converted into a regular matrix with full which has a named argument thin.\n\nExample\n\njulia> A = [3.0 -6.0; 4.0 -8.0; 0.0 1.0]\n3×2 Array{Float64,2}:\n 3.0  -6.0\n 4.0  -8.0\n 0.0   1.0\n\njulia> F = qrfact(A)\nBase.LinAlg.QRCompactWY{Float64,Array{Float64,2}} with factors Q and R:\n[-0.6 0.0 0.8; -0.8 0.0 -0.6; 0.0 -1.0 0.0]\n[-5.0 10.0; 0.0 -1.0]\n\njulia> F[:Q] * F[:R] == A\ntrue\n\nnote: Note\nqrfact returns multiple types because LAPACK uses several representations that minimize the memory storage requirements of products of Householder elementary reflectors, so that the Q and R matrices can be stored compactly rather as two separate dense matrices.\n\n\n\nqrfact(A) -> SPQR.Factorization\n\nCompute the QR factorization of a sparse matrix A. A fill-reducing permutation is used. The main application of this type is to solve least squares problems with \\. The function calls the C library SPQR and a few additional functions from the library are wrapped but not exported.\n\n\n\n"
 },
 
 {
@@ -19733,7 +19733,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Base.LibGit2",
     "title": "Base.LibGit2.GitRepo",
     "category": "Type",
-    "text": "LibGit2.GitRepo(path::AbstractString)\n\nOpens a git repository at path.\n\n\n\n"
+    "text": "LibGit2.GitRepo(path::AbstractString)\n\nOpen a git repository at path.\n\n\n\n"
 },
 
 {
@@ -19741,7 +19741,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Base.LibGit2",
     "title": "Base.LibGit2.GitRepoExt",
     "category": "Function",
-    "text": "LibGit2.GitRepoExt(path::AbstractString, flags::Cuint = Cuint(Consts.REPOSITORY_OPEN_DEFAULT))\n\nOpens a git repository at path with extended controls (for instance, if the current user must be a member of a special access group to read path).\n\n\n\n"
+    "text": "LibGit2.GitRepoExt(path::AbstractString, flags::Cuint = Cuint(Consts.REPOSITORY_OPEN_DEFAULT))\n\nOpen a git repository at path with extended controls (for instance, if the current user must be a member of a special access group to read path).\n\n\n\n"
 },
 
 {
@@ -20093,7 +20093,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Base.LibGit2",
     "title": "Base.LibGit2.gitdir",
     "category": "Function",
-    "text": "LibGit2.gitdir(repo::GitRepo)\n\nReturns the location of the \"git\" files of repo:\n\nfor normal repositories, this is the location of the .git folder.\nfor bare repositories, this is the location of the repository itself.\n\nSee also workdir, path.\n\n\n\n"
+    "text": "LibGit2.gitdir(repo::GitRepo)\n\nReturn the location of the \"git\" files of repo:\n\nfor normal repositories, this is the location of the .git folder.\nfor bare repositories, this is the location of the repository itself.\n\nSee also workdir, path.\n\n\n\n"
 },
 
 {
@@ -20133,7 +20133,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Base.LibGit2",
     "title": "Base.LibGit2.init",
     "category": "Function",
-    "text": "LibGit2.init(path::AbstractString, bare::Bool=false) -> GitRepo\n\nOpens a new git repository at path. If bare is false, the working tree will be created in path/.git. If bare is true, no working directory will be created.\n\n\n\n"
+    "text": "LibGit2.init(path::AbstractString, bare::Bool=false) -> GitRepo\n\nOpen a new git repository at path. If bare is false, the working tree will be created in path/.git. If bare is true, no working directory will be created.\n\n\n\n"
 },
 
 {
@@ -20237,7 +20237,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Base.LibGit2",
     "title": "Base.LibGit2.path",
     "category": "Function",
-    "text": "LibGit2.path(repo::GitRepo)\n\nThe base file path of the repository repo.\n\nfor normal repositories, this will typically be the parent directory of the \".git\" directory (note: this may be different than the working directory, see workdir for more details).\nfor bare repositories, this is the location of the \"git\" files.\n\nSee also gitdir, workdir.\n\n\n\n"
+    "text": "LibGit2.path(repo::GitRepo)\n\nReturn the base file path of the repository repo.\n\nfor normal repositories, this will typically be the parent directory of the \".git\" directory (note: this may be different than the working directory, see workdir for more details).\nfor bare repositories, this is the location of the \"git\" files.\n\nSee also gitdir, workdir.\n\n\n\n"
 },
 
 {
@@ -20309,7 +20309,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Base.LibGit2",
     "title": "Base.LibGit2.remotes",
     "category": "Function",
-    "text": "LibGit2.remotes(repo::GitRepo)\n\nReturns a vector of the names of the remotes of repo.\n\n\n\n"
+    "text": "LibGit2.remotes(repo::GitRepo)\n\nReturn a vector of the names of the remotes of repo.\n\n\n\n"
 },
 
 {
@@ -20437,7 +20437,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Base.LibGit2",
     "title": "Base.LibGit2.workdir",
     "category": "Function",
-    "text": "LibGit2.workdir(repo::GitRepo)\n\nThe location of the working directory of repo. This will throw an error for bare repositories.\n\nnote: Note\nThis will typically be the parent directory of gitdir(repo), but can be different in some cases: e.g. if either the core.worktree configuration variable or the GIT_WORK_TREE environment variable is set.\n\nSee also gitdir, path.\n\n\n\n"
+    "text": "LibGit2.workdir(repo::GitRepo)\n\nReturn the location of the working directory of repo. This will throw an error for bare repositories.\n\nnote: Note\nThis will typically be the parent directory of gitdir(repo), but can be different in some cases: e.g. if either the core.worktree configuration variable or the GIT_WORK_TREE environment variable is set.\n\nSee also gitdir, path.\n\n\n\n"
 },
 
 {
