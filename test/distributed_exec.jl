@@ -1684,27 +1684,33 @@ end
     end
 end == true
 
-@test let
+let
     # creates a new worker in a different folder and tries to include file
-    tmp_file, temp_file_stream = mktemp()
-    close(temp_file_stream)
-    tmp_file = relpath(tmp_file)
-    tmp_dir = relpath(mktempdir())
+    tmp_dir = mktempdir()
+    tmp_dir2 = joinpath(tmp_dir, "2")
+    tmp_file = joinpath(tmp_dir2, "testfile")
+    tmp_file2 = joinpath(tmp_dir2, "testfile2")
+    proc = addprocs_with_testenv(1, dir=tmp_dir)
     try
-        proc = addprocs_with_testenv(1, dir=tmp_dir)
-        include(tmp_file)
-        remotecall_fetch(include, proc[1], tmp_file)
+        mkdir(tmp_dir2)
+        write(tmp_file, "23.32 + 32 + myid() + include(\"testfile2\")")
+        write(tmp_file2, "myid() * 2")
+        @test_throws(ErrorException("could not open file $(abspath("testfile"))"),
+                     include("testfile"))
+        @test_throws(ErrorException("could not open file $(abspath("testfile2"))"),
+                     include("testfile2"))
+        @test_throws(ErrorException("could not open file $(abspath("2", "testfile"))"),
+                     include(joinpath("2", "testfile")))
+        @test include(tmp_file) == 58.32
+        @test remotecall_fetch(include, proc[1], joinpath("2", "testfile")) == 55.32 + proc[1] * 3
+    finally
         rmprocs(proc)
-        rm(tmp_dir)
-        rm(tmp_file)
-        return true
-    catch e
-        println(e)
-        rm(tmp_dir, force=true)
         rm(tmp_file, force=true)
-        return false
+        rm(tmp_file2, force=true)
+        rm(tmp_dir2, force=true)
+        rm(tmp_dir, force=true)
     end
-end == true
+end
 # cookie and comand line option `--worker` tests. remove workers, set cookie and test
 struct WorkerArgTester <: ClusterManager
     worker_opt
@@ -1744,6 +1750,9 @@ rmprocs(npids)
 Base.cluster_cookie("foobar") # custom cookie
 npids = addprocs_with_testenv(WorkerArgTester(`--worker=foobar`, false))
 @test remotecall_fetch(myid, npids[1]) == npids[1]
+=======
+end
+>>>>>>> include: assume that shared file systems exist for clusters
 
 # Run topology tests last after removing all workers, since a given
 # cluster at any time only supports a single topology.

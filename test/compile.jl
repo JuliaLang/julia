@@ -172,7 +172,7 @@ try
     # use _require_from_serialized to ensure that the test fails if
     # the module doesn't reload from the image:
     @test_warn "WARNING: replacing module $Foo_module." begin
-        @test isa(Base._require_from_serialized(myid(), Foo_module, cachefile, #=broadcast-load=#false), Array{Any,1})
+        @test isa(Base._require_from_serialized(Foo_module, cachefile), Array{Any,1})
     end
 
     let Foo = getfield(Main, Foo_module)
@@ -535,7 +535,8 @@ end
 let module_name = string("a",randstring())
     insert!(LOAD_PATH, 1, pwd())
     file_name = string(module_name, ".jl")
-    sleep(2); touch(file_name)
+    sleep(2)
+    touch(file_name)
     code = """module $(module_name)\nend\n"""
     write(file_name, code)
     reload(module_name)
@@ -546,51 +547,64 @@ end
 
 # Issue #19960
 let
-    # ideally this would test with workers on a remote host that does not have access to the master node filesystem for loading
-    # can simulate this for local workers by using relative load paths on master node that are not valid on workers
-    # so addprocs before changing directory to temp directory, otherwise workers will inherit temp working directory
-
     test_workers = addprocs(1)
-    temp_path = mktempdir()
+    push!(test_workers, myid())
     save_cwd = pwd()
-    cd(temp_path)
-    load_path = mktempdir(temp_path)
-    load_cache_path = mktempdir(temp_path)
-    unshift!(LOAD_PATH, basename(load_path))
-    unshift!(Base.LOAD_CACHE_PATH, basename(load_cache_path))
-
-    ModuleA = :Issue19960A
-    ModuleB = :Issue19960B
-
-    write(joinpath(load_path, "$ModuleA.jl"),
-        """
-        __precompile__(true)
-        module $ModuleA
-            export f
-            f() = myid()
-        end
-        """)
-
-    write(joinpath(load_path, "$ModuleB.jl"),
-        """
-        __precompile__(true)
-        module $ModuleB
-            using $ModuleA
-            export g
-            g() = f()
-        end
-        """)
-
+    temp_path = mktempdir()
     try
-        @eval using $ModuleB
-        for wid in test_workers
-            @test remotecall_fetch(g, wid) == wid
+        cd(temp_path)
+        load_path = mktempdir(temp_path)
+        load_cache_path = mktempdir(temp_path)
+
+        ModuleA = :Issue19960A
+        ModuleB = :Issue19960B
+
+        write(joinpath(load_path, "$ModuleA.jl"),
+            """
+            __precompile__(true)
+            module $ModuleA
+                export f
+                f() = myid()
+            end
+            """)
+
+        write(joinpath(load_path, "$ModuleB.jl"),
+            """
+            __precompile__(true)
+            module $ModuleB
+                using $ModuleA
+                export g
+                g() = f()
+            end
+            """)
+
+        @sync for wid in test_workers
+            @async remotecall_fetch(Core.eval, wid, Base, quote
+                unshift!(LOAD_PATH, $load_path)
+                unshift!(LOAD_CACHE_PATH, $load_cache_path)
+            end)
+        end
+        try
+            @eval using $ModuleB
+            uuid = Base.module_uuid(getfield(Main, ModuleB))
+            for wid in test_workers
+                @test remotecall_fetch(Core.eval, wid, Main, :( Base.module_uuid($ModuleB) )) == uuid
+                if wid != myid() # avoid world-age errors on the local proc
+                    @test remotecall_fetch(g, wid) == wid
+                end
+            end
+        finally
+            @sync for wid in test_workers
+                @async remotecall_fetch(Core.eval, wid, Base, quote
+                    shift!(LOAD_PATH)
+                    shift!(LOAD_CACHE_PATH)
+                end)
+            end
         end
     finally
-        shift!(LOAD_PATH)
-        shift!(Base.LOAD_CACHE_PATH)
         cd(save_cwd)
         rm(temp_path, recursive=true)
+        pop!(test_workers) # remove myid
         rmprocs(test_workers)
     end
 end
