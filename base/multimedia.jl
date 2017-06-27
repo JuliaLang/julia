@@ -31,6 +31,15 @@ print(io::IO, ::MIME{mime}) where {mime} = print(io, mime)
 Returns a boolean value indicating whether or not the object `x` can be written as the given
 `mime` type. (By default, this is determined automatically by the existence of the
 corresponding [`show`](@ref) method for `typeof(x)`.)
+
+# Examples
+```jldoctest
+julia> mimewritable(MIME("text/plain"), rand(5))
+true
+
+julia> mimewritable(MIME("img/png"), rand(5))
+false
+```
 """
 mimewritable(::MIME{mime}, x) where {mime} =
     method_exists(show, Tuple{IO, MIME{mime}, typeof(x)})
@@ -90,6 +99,15 @@ _binstringmime(m::MIME, x::Vector{UInt8}) = base64encode(write, x)
 
 Determine whether a MIME type is text data. MIME types are assumed to be binary
 data except for a set of types known to be text data (possibly Unicode).
+
+# Examples
+```jldoctest
+julia> istextmime(MIME("text/plain"))
+true
+
+julia> istextmime(MIME("img/png"))
+false
+```
 """
 istextmime(m::MIME) = startswith(string(m), "text/")
 

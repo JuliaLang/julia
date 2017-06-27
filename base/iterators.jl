@@ -267,6 +267,17 @@ returned iterable object. These calls are not cached and repeated calls will be
 made when reiterating.
 
 See [`Base.filter`](@ref) for an eager implementation of filtering for arrays.
+
+# Example
+```jldoctest
+julia> f = Iterators.filter(isodd, [1, 2, 3, 4, 5])
+Base.Iterators.Filter{Base.#isodd,Array{Int64,1}}(isodd, [1, 2, 3, 4, 5])
+
+julia> for v in f
+           print(v)
+       end
+135
+```
 """
 filter(flt, itr) = Filter(flt, itr)
 
@@ -313,6 +324,14 @@ end
     rest(iter, state)
 
 An iterator that yields the same elements as `iter`, but starting at the given `state`.
+
+```jldoctest
+julia> collect(Iterators.rest([1,2,3,4], 2))
+3-element Array{Any,1}:
+ 2
+ 3
+ 4
+```
 """
 rest(itr,state) = Rest(itr,state)
 
@@ -338,6 +357,17 @@ end
     countfrom(start=1, step=1)
 
 An iterator that counts forever, starting at `start` and incrementing by `step`.
+
+# Example
+```jldoctest
+julia> for v in Iterators.countfrom(5, 2)
+           v > 10 && break
+           println(v)
+       end
+5
+7
+9
+```
 """
 countfrom(start::Number, step::Number) = Count(promote(start, step)...)
 countfrom(start::Number)               = Count(start, oneunit(start))
@@ -478,6 +508,15 @@ end
     cycle(iter)
 
 An iterator that cycles through `iter` forever.
+
+# Example
+```jldoctest
+julia> for (i, v) in enumerate(Iterators.cycle("hello"))
+           print(v)
+           i > 10 && break
+       end
+hellohelloh
+```
 """
 cycle(xs) = Cycle(xs)
 

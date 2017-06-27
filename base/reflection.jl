@@ -7,6 +7,7 @@
 
 Get the name of a `Module` as a `Symbol`.
 
+# Example
 ```jldoctest
 julia> module_name(Base.LinAlg)
 :LinAlg
@@ -19,6 +20,7 @@ module_name(m::Module) = ccall(:jl_module_name, Ref{Symbol}, (Any,), m)
 
 Get a module's enclosing `Module`. `Main` is its own parent, as is `LastMain` after `workspace()`.
 
+# Examples
 ```jldoctest
 julia> module_parent(Main)
 Main
@@ -44,6 +46,7 @@ end
 
 Get the fully-qualified name of a module as a tuple of symbols. For example,
 
+# Examples
 ```jldoctest
 julia> fullname(Base.Pkg)
 (:Base, :Pkg)
@@ -110,11 +113,12 @@ end
 
 Get the name of field `i` of a `DataType`.
 
+# Examples
 ```jldoctest
-julia> fieldname(SparseMatrixCSC,1)
+julia> fieldname(SparseMatrixCSC, 1)
 :m
 
-julia> fieldname(SparseMatrixCSC,5)
+julia> fieldname(SparseMatrixCSC, 5)
 :nzval
 ```
 """
@@ -127,6 +131,7 @@ fieldname(t::Type{<:Tuple}, i::Integer) = i < 1 || i > nfields(t) ? throw(Bounds
 
 Get an array of the fields of a `DataType`.
 
+# Examples
 ```jldoctest
 julia> fieldnames(Hermitian)
 2-element Array{Symbol,1}:
@@ -149,6 +154,18 @@ fieldnames(t::Type{<:Tuple}) = Int[n for n in 1:nfields(t)]
     Base.datatype_name(t) -> Symbol
 
 Get the name of a (potentially UnionAll-wrapped) `DataType` (without its parent module) as a symbol.
+
+# Example
+```jldoctest
+julia> module Foo
+           struct S{T}
+           end
+       end
+Foo
+
+julia> Base.datatype_name(Foo.S{T} where T)
+:S
+```
 """
 datatype_name(t::DataType) = t.name.name
 datatype_name(t::UnionAll) = datatype_name(unwrap_unionall(t))
@@ -157,6 +174,20 @@ datatype_name(t::UnionAll) = datatype_name(unwrap_unionall(t))
     Base.datatype_module(t::DataType) -> Module
 
 Determine the module containing the definition of a `DataType`.
+
+# Example
+```jldoctest
+julia> module Foo
+           struct Int end
+       end
+Foo
+
+julia> Base.datatype_module(Int)
+Core
+
+julia> Base.datatype_module(Foo.Int)
+Foo
+```
 """
 datatype_module(t::DataType) = t.name.module
 
@@ -172,6 +203,20 @@ isconst(m::Module, s::Symbol) =
     @isdefined s -> Bool
 
 Tests whether variable `s` is defined in the current scope.
+
+# Example
+```jldoctest
+julia> function f()
+           println(@isdefined x)
+           x = 3
+           println(@isdefined x)
+       end
+f (generic function with 1 method)
+
+julia> f()
+false
+true
+```
 """
 macro isdefined(s::Symbol)
     return Expr(:isdefined, esc(s))
@@ -210,6 +255,7 @@ Return `true` iff value `v` is immutable.  See [Mutable Composite Types](@ref)
 for a discussion of immutability. Note that this function works on values, so if you give it
 a type, it will tell you that a value of `DataType` is mutable.
 
+# Examples
 ```jldoctest
 julia> isimmutable(1)
 true
@@ -229,6 +275,7 @@ Return `true` if `T` is a "plain data" type, meaning it is immutable and contain
 references to other values. Typical examples are numeric types such as [`UInt8`](@ref),
 [`Float64`](@ref), and [`Complex{Float64}`](@ref).
 
+# Examples
 ```jldoctest
 julia> isbits(Complex{Float64})
 true
@@ -247,6 +294,7 @@ isbits(x) = (@_pure_meta; isbits(typeof(x)))
 Determine whether `T`'s only subtypes are itself and `Union{}`. This means `T` is
 a concrete type that can have instances.
 
+# Examples
 ```jldoctest
 julia> isleaftype(Complex)
 false
@@ -269,6 +317,7 @@ isleaftype(t::ANY) = (@_pure_meta; isa(t, DataType) && t.isleaftype)
 Determine whether `T` was declared as an abstract type (i.e. using the
 `abstract` keyword).
 
+# Examples
 ```jldoctest
 julia> Base.isabstract(AbstractArray)
 true
@@ -288,6 +337,7 @@ end
 
 Determine the upper bound of a type parameter in the underlying type. E.g.:
 
+# Examples
 ```jldoctest
 julia> struct Foo{T<:AbstractFloat, N}
            x::Tuple{T, N}
@@ -346,6 +396,7 @@ fieldoffset(x::DataType, idx::Integer) = (@_pure_meta; ccall(:jl_get_field_offse
 
 Determine the declared type of a field (specified by name or index) in a composite DataType `T`.
 
+# Examples
 ```jldoctest
 julia> struct Foo
            x::Int64
@@ -367,6 +418,7 @@ fieldtype
 Get the index of a named field, throwing an error if the field does not exist (when err==true)
 or returning 0 (when err==false).
 
+# Examples
 ```jldoctest
 julia> struct Foo
            x::Int64
@@ -396,6 +448,7 @@ type_alignment(x::DataType) = (@_pure_meta; ccall(:jl_get_alignment, Csize_t, (A
 Return a collection of all instances of the given type, if applicable. Mostly used for
 enumerated types (see `@enum`).
 
+# Example
 ```jldoctest
 julia> @enum Colors Red Blue Green
 
@@ -455,6 +508,7 @@ end
 Return a list of immediate subtypes of DataType `T`. Note that all currently loaded subtypes
 are included, including those not visible in the current module.
 
+# Example
 ```jldoctest
 julia> subtypes(Integer)
 4-element Array{Union{DataType, UnionAll},1}:
@@ -894,6 +948,7 @@ end
 Determine whether the given generic function has a method matching the given
 `Tuple` of argument types with the upper bound of world age given by `world`.
 
+# Examples
 ```jldoctest
 julia> method_exists(length, Tuple{Array})
 true
@@ -918,6 +973,7 @@ For parametric types, the `ambiguous_bottom` keyword argument controls whether
 `Union{}` counts as an ambiguous intersection of type parameters – when `true`,
 it is considered ambiguous, when `false` it is not. For example:
 
+# Examples
 ```jldoctest
 julia> foo(x::Complex{<:Integer}) = 1
 foo (generic function with 1 method)
