@@ -562,14 +562,6 @@ application/postscript) or `x::Vector{UInt8}` (for binary MIME types).
 display
 
 """
-    @spawnat
-
-Accepts two arguments, `p` and an expression. A closure is created around the expression and
-run asynchronously on process `p`. Returns a [`Future`](@ref) to the result.
-"""
-:@spawnat
-
-"""
     print_shortest(io, x)
 
 Print the shortest possible representation, with the minimum number of consecutive non-zero
@@ -2084,14 +2076,6 @@ Construct the intersection of two or more sets.
 Maintains order and multiplicity of the first argument for arrays and ranges.
 """
 intersect
-
-"""
-    @spawn
-
-Creates a closure around an expression and runs it on an automatically-chosen process,
-returning a [`Future`](@ref) to the result.
-"""
-:@spawn
 
 """
     promote_rule(type1, type2)

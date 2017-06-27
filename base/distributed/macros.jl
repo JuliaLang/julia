@@ -16,11 +16,23 @@ spawnat(p, thunk) = sync_add(remotecall(thunk, p))
 
 spawn_somewhere(thunk) = spawnat(nextproc(),thunk)
 
+"""
+    @spawn
+
+Creates a closure around an expression and runs it on an automatically-chosen process,
+returning a [`Future`](@ref) to the result.
+"""
 macro spawn(expr)
     thunk = esc(:(()->($expr)))
     :(spawn_somewhere($thunk))
 end
 
+"""
+    @spawnat
+
+Accepts two arguments, `p` and an expression. A closure is created around the expression and
+run asynchronously on process `p`. Returns a [`Future`](@ref) to the result.
+"""
 macro spawnat(p, expr)
     thunk = esc(:(()->($expr)))
     :(spawnat($(esc(p)), $thunk))
