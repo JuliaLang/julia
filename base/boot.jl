@@ -125,6 +125,17 @@
 #    name::Symbol
 #end
 
+#if JULIA_PARTR
+#mutable struct Task
+#    storage::Any
+#    state::Symbol
+#    result::Any
+#    exception::Any
+#    backtrace::Any
+#    logstate::Any
+#    code::Any
+#end
+#else
 #mutable struct Task
 #    parent::Task
 #    storage::Any
@@ -136,6 +147,7 @@
 #    logstate::Any
 #    code::Any
 #end
+#end
 
 export
     # key types
@@ -145,6 +157,7 @@ export
     # special objects
     Function, Method,
     Module, Symbol, Task, Array, UndefInitializer, undef, WeakRef, VecElement,
+    Condition,
     # numeric types
     Number, Real, Integer, Bool, Ref, Ptr,
     AbstractFloat, Float16, Float32, Float64,
@@ -371,7 +384,12 @@ eval(Core, :(UpsilonNode() = $(Expr(:new, :UpsilonNode))))
 
 Module(name::Symbol=:anonymous, std_imports::Bool=true) = ccall(:jl_f_new_module, Ref{Module}, (Any, Bool), name, std_imports)
 
+# TODO: it seems JULIA_PARTR is not defined at this point; this `if` causes an error
+#if JULIA_PARTR
+#Task(@nospecialize(f)) = ccall(:jl_task_new, Ref{Task}, (Any,), f)
+#else
 Task(@nospecialize(f)) = ccall(:jl_new_task, Ref{Task}, (Any, Int), f, 0)
+#end
 
 # simple convert for use by constructors of types in Core
 # note that there is no actual conversion defined here,

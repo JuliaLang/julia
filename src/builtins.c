@@ -1282,6 +1282,9 @@ void jl_init_primitives(void)
     add_builtin("Ref", (jl_value_t*)jl_ref_type);
     add_builtin("Ptr", (jl_value_t*)jl_pointer_type);
     add_builtin("Task", (jl_value_t*)jl_task_type);
+#ifdef JULIA_ENABLE_PARTR
+    add_builtin("Condition", (jl_value_t*)jl_condition_type);
+#endif
 
     add_builtin("AbstractArray", (jl_value_t*)jl_abstractarray_type);
     add_builtin("DenseArray", (jl_value_t*)jl_densearray_type);

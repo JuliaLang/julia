@@ -65,6 +65,12 @@ USEIFC  ?= 0
 # Enable threading with one thread
 JULIA_THREADS := 1
 
+# Enable the parallel task runtime
+JULIA_PARTR := 0
+ifeq ($(JULIA_THREADS), 0)
+JULIA_PARTR := 0
+endif
+
 ifeq ($(USE_MKL), 1)
 $(warning "The julia make variable USE_MKL has been renamed to USE_INTEL_MKL")
 USE_INTEL_MKL := 1
@@ -1032,6 +1038,11 @@ endif
 # Threads
 ifneq ($(JULIA_THREADS), 0)
 JCPPFLAGS += -DJULIA_ENABLE_THREADING -DJULIA_NUM_THREADS=$(JULIA_THREADS)
+endif
+
+# Parallel task runtime
+ifneq ($(JULIA_PARTR), 0)
+JCPPFLAGS += -DJULIA_ENABLE_PARTR
 endif
 
 # Intel VTune Amplifier

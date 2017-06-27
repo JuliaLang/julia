@@ -107,6 +107,10 @@ struct _jl_tls_states_t {
     jl_jmp_buf base_ctx; // base context of stack
     jl_jmp_buf *safe_restore;
     int16_t tid;
+#ifdef JULIA_ENABLE_PARTR
+    uint64_t rngseed;
+    struct _jl_taskq_t *sticky_taskq;
+#endif
     size_t bt_size;
     // JL_MAX_BT_SIZE + 1 elements long
     uintptr_t *bt_data;

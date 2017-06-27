@@ -140,12 +140,15 @@ static void _probe_arch(void)
 
 /* end probing code */
 
-static jl_sym_t *done_sym;
-static jl_sym_t *failed_sym;
-static jl_sym_t *runnable_sym;
+jl_sym_t *done_sym;
+jl_sym_t *failed_sym;
+jl_sym_t *runnable_sym;
 
 extern size_t jl_page_size;
 jl_datatype_t *jl_task_type;
+#ifdef JULIA_ENABLE_PARTR
+jl_datatype_t *jl_condition_type;
+#endif
 
 #ifdef COPY_STACKS
 #if (defined(_CPU_X86_64_) || defined(_CPU_X86_) || defined(_CPU_AARCH64_) || defined(_CPU_ARM_)) && !defined(_COMPILER_MICROSOFT_)
@@ -194,6 +197,13 @@ static void NOINLINE restore_stack(jl_ptls_t ptls, char *p)
 }
 #endif
 
+static void record_backtrace(void)
+{
+    jl_ptls_t ptls = jl_get_ptls_states();
+    ptls->bt_size = rec_backtrace(ptls->bt_data, JL_MAX_BT_SIZE);
+}
+
+#ifndef JULIA_ENABLE_PARTR
 static jl_function_t *task_done_hook_func=NULL;
 
 static void JL_NORETURN finish_task(jl_task_t *t, jl_value_t *resultval)
@@ -240,12 +250,6 @@ static void JL_NORETURN finish_task(jl_task_t *t, jl_value_t *resultval)
     abort();
 }
 
-static void record_backtrace(void)
-{
-    jl_ptls_t ptls = jl_get_ptls_states();
-    ptls->bt_size = rec_backtrace(ptls->bt_data, JL_MAX_BT_SIZE);
-}
-
 static void NOINLINE JL_NORETURN JL_USED_FUNC start_task(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
@@ -277,6 +281,7 @@ static void NOINLINE JL_NORETURN JL_USED_FUNC start_task(void)
     gc_debug_critical_error();
     abort();
 }
+#endif // ! JULIA_ENABLE_PARTR
 
 #ifdef COPY_STACKS
 void NOINLINE jl_set_base_ctx(char *__stk)
@@ -302,6 +307,7 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
     _julia_init(rel);
 }
 
+#ifndef JULIA_ENABLE_PARTR
 static void ctx_switch(jl_ptls_t ptls, jl_task_t **pt)
 {
     jl_task_t *t = *pt;
@@ -433,6 +439,7 @@ JL_DLLEXPORT void jl_switchto(jl_task_t **pt)
     if (other_defer_signal && !defer_signal)
         jl_sigint_safepoint(ptls);
 }
+#endif // !JULIA_ENABLE_PARTR
 
 #ifndef COPY_STACKS
 
@@ -512,10 +519,11 @@ static void rebase_state(jl_jmp_buf *ctx, intptr_t local_sp, intptr_t new_sp)
 #error "COPY_STACKS must be defined on this platform."
 #endif
 }
-static void init_task(jl_task_t *t, char *stack)
+
+void init_task_entry(void (*task_entry)(void), jl_task_t *t, char *stack)
 {
     if (jl_setjmp(t->ctx, 0)) {
-        start_task();
+        (*task_entry)();
     }
     // this runs when the task is created
     intptr_t local_sp = (intptr_t)&t;
@@ -589,6 +597,7 @@ JL_DLLEXPORT void jl_rethrow_other(jl_value_t *e)
     throw_internal(e);
 }
 
+#ifndef JULIA_ENABLE_PARTR
 JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
@@ -637,7 +646,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
         jl_errorf("mprotect: %s", strerror(errno));
     stk += pagesz;
 
-    init_task(t, stk);
+    init_task_entry(start_task, t, stk);
     jl_gc_add_finalizer((jl_value_t*)t, jl_unprotect_stack_func);
     JL_GC_POP();
 #endif
@@ -647,6 +656,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
 #endif
     return t;
 }
+#endif // JULIA_ENABLE_PARTR
 
 #ifndef COPY_STACKS
 static void jl_unprotect_stack(jl_task_t *t)
@@ -670,6 +680,7 @@ jl_function_t *jl_unprotect_stack_func;
 void jl_init_tasks(void)
 {
     _probe_arch();
+#ifndef JULIA_ENABLE_PARTR
     jl_task_type = (jl_datatype_t*)
         jl_new_datatype(jl_symbol("Task"),
                         NULL,
@@ -697,6 +708,33 @@ void jl_init_tasks(void)
                                 jl_any_type),
                         0, 1, 8);
     jl_svecset(jl_task_type->types, 0, (jl_value_t*)jl_task_type);
+#else /* JULIA_ENABLE_PARTR */
+    jl_task_type = (jl_datatype_t*)
+        jl_new_datatype(jl_symbol("Task"), NULL, jl_any_type, jl_emptysvec,
+                        jl_perm_symsvec(7,
+                                        "storage",
+                                        "state",
+                                        "result",
+                                        "exception",
+                                        "backtrace",
+                                        "logstate",
+                                        "code"),
+                        jl_svec(7,
+                                jl_any_type,
+                                jl_sym_type,
+                                jl_any_type,
+                                jl_any_type,
+                                jl_any_type,
+                                jl_any_type,
+                                jl_any_type),
+                        0, 1, 6);
+    // TODO: how to make this opaque to Julia?
+    jl_condition_type = (jl_datatype_t*)
+        jl_new_datatype(jl_symbol("Condition"), NULL, jl_any_type, jl_emptysvec,
+                        jl_perm_symsvec(2, "notify", "waitq"),
+                        jl_svec(2, jl_uint8_type, jl_any_type),
+                        0, 1, 2);
+#endif /* JULIA_ENABLE_PARTR */
 
     done_sym = jl_symbol("done");
     failed_sym = jl_symbol("failed");
@@ -721,26 +759,38 @@ void jl_init_root_task(void *stack, size_t ssize)
     ptls->current_task->ssize = ssize;
     ptls->current_task->stkbuf = stack;
 #endif
-    ptls->current_task->started = 1;
-    ptls->current_task->parent = ptls->current_task;
-    ptls->current_task->current_module = ptls->current_module;
+#ifdef JULIA_ENABLE_PARTR
+    ptls->current_task->settings = TASK_IS_STICKY | TASK_IS_DETACHED;
+    ptls->current_task->next = NULL;
+    ptls->current_task->storage = jl_nothing;
+    ptls->current_task->current_tid = ptls->tid;
+    ptls->current_task->sticky_tid = ptls->tid;
+    ptls->current_task->parent = NULL;
+    ptls->current_task->arr = NULL;
+    ptls->current_task->red = NULL;
+    ptls->current_task->red_result = jl_nothing;
+    ptls->current_task->grain_num = -1;
+#else
     ptls->current_task->tls = jl_nothing;
-    ptls->current_task->state = runnable_sym;
     ptls->current_task->start = NULL;
-    ptls->current_task->result = jl_nothing;
+    ptls->current_task->tid = ptls->tid;
+    ptls->current_task->parent = ptls->current_task;
     ptls->current_task->donenotify = jl_nothing;
+#endif
+    ptls->current_task->result = jl_nothing;
+    ptls->current_task->state = runnable_sym;
+    ptls->current_task->started = 1;
     ptls->current_task->exception = jl_nothing;
     ptls->current_task->backtrace = jl_nothing;
     ptls->current_task->logstate = jl_nothing;
     ptls->current_task->eh = NULL;
-    ptls->current_task->gcstack = NULL;
-    ptls->current_task->tid = ptls->tid;
 #ifdef JULIA_ENABLE_THREADING
     arraylist_new(&ptls->current_task->locks, 0);
 #endif
+    ptls->current_task->gcstack = NULL;
+    ptls->current_task->current_module = ptls->current_module;
 
     ptls->root_task = ptls->current_task;
-
     ptls->exception_in_transit = (jl_value_t*)jl_nothing;
 }
 

@@ -784,6 +784,11 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
     else if (jl_typeis(v, jl_task_type)) {
         jl_error("Task cannot be serialized");
     }
+#ifdef JULIA_ENABLE_PARTR
+    else if (jl_typeis(v, jl_condition_type)) {
+        jl_error("Condition cannot be serialized");
+    }
+#endif
     else if (jl_typeis(v, jl_string_type)) {
         writetag(s->s, jl_string_type);
         write_int32(s->s, jl_string_len(v));
@@ -2986,6 +2991,9 @@ void jl_init_serializer(void)
                      jl_box_int64(21), jl_box_int64(22), jl_box_int64(23),
                      jl_box_int64(24), jl_box_int64(25), jl_box_int64(26),
                      jl_box_int64(27), jl_box_int64(28),
+#ifndef JULIA_ENABLE_PARTR
+                     jl_box_int64(29),
+#endif
 
                      jl_bool_type, jl_int32_type, jl_int64_type,
                      jl_labelnode_type, jl_gotonode_type,
@@ -3001,6 +3009,9 @@ void jl_init_serializer(void)
                      jl_array_symbol_type, jl_anytuple_type, jl_tparam0(jl_anytuple_type),
                      jl_emptytuple_type, jl_array_uint8_type, jl_code_info_type,
                      jl_typeofbottom_type, jl_namedtuple_type,
+#ifdef JULIA_ENABLE_PARTR
+                     jl_condition_type,
+#endif
 
                      ptls->root_task,
 

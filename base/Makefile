@@ -71,6 +71,11 @@ else
 	@echo "const PRIVATE_LIBDIR = \"$(private_libdir_rel)\"" >> $@
 	@echo "const INCLUDEDIR = \"$(includedir_rel)\"" >> $@
 endif
+ifneq ($(JULIA_PARTR), 0)
+	@echo "const JULIA_PARTR = true" >> $@
+else
+	@echo "const JULIA_PARTR = false" >> $@
+endif
 
 	@# This to ensure that we always rebuild this file, but only when it is modified do we touch build_h.jl,
 	@# ensuring we rebuild the system image as infrequently as possible
