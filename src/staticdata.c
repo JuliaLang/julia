@@ -290,6 +290,11 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v)
     else if (jl_typeis(v, jl_task_type)) {
         jl_error("Task cannot be serialized");
     }
+#ifdef JULIA_ENABLE_PARTR
+    else if (jl_typeis(v, jl_condition_type)) {
+        jl_error("Condition cannot be serialized");
+    }
+#endif
     else {
         char *data = (char*)jl_data_ptr(v);
         size_t i, nf = jl_datatype_nfields(t);
@@ -609,6 +614,11 @@ static void jl_write_values(jl_serializer_state *s)
         else if (jl_typeis(v, jl_task_type)) {
             jl_error("Task cannot be serialized");
         }
+#ifdef JULIA_ENABLE_PARTR
+        else if (jl_typeis(v, jl_condition_type)) {
+            jl_error("Condition cannot be serialized");
+        }
+#endif
         else if (jl_is_svec(v)) {
             ios_write(s->s, (char*)v, sizeof(void*));
             size_t i, l = jl_svec_len(v);
