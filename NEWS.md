@@ -117,6 +117,9 @@ Deprecated or removed
     implementations is now in AbstractFFTs.jl, the bindings to the FFTW library are in FFTW.jl,
     and the Base signal processing functions which used FFTs are now in DSP.jl ([#21956]).
 
+  * The `corrected` positional argument to `cov` has been deprecated in favor of
+    a keyword argument with the same name (#21709).
+
 
 Julia v0.6.0 Release Notes
 ==========================
