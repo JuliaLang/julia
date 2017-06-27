@@ -222,6 +222,7 @@ end
 
 """
     srand([rng::AbstractRNG=GLOBAL_RNG], seed::Integer) -> rng
+    srand([rng::AbstractRNG=GLOBAL_RNG], seed::Vector{UInt32}) -> rng
     srand([rng::AbstractRNG=GLOBAL_RNG]) -> rng
 
 Reseed the random number generator. If a `seed` is provided, the RNG will give a
@@ -1632,16 +1633,11 @@ julia> a = collect(1:8);
 
 julia> rng = MersenneTwister(1234);
 
-julia> randsubseq!(rng, b, a, 0.9);
+julia> randsubseq!(rng, b, a, 0.5);
 
 julia> b
-8-element Array{Float64,1}:
- 1.0
- 2.0
- 3.0
+3-element Array{Float64,1}:
  4.0
- 5.0
- 6.0
  7.0
  8.0
 ```
