@@ -269,8 +269,8 @@ julia> sort!(B);  # unique! is able to process sorted data much more efficiently
 
 julia> unique!(B)
 3-element Array{Int64,1}:
- 6
- 7
+  6
+  7
  42
 ```
 """

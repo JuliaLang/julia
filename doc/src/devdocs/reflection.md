@@ -79,12 +79,12 @@ table may be searched for methods accepting a given type using [`methodswith()`]
 ## Expansion and lowering
 
 As discussed in the [Metaprogramming](@ref) section, the [`macroexpand()`](@ref) function gives
-the unquoted and interpolated expression (`Expr`) form for a given macro. To use `macroexpand`,
-`quote` the expression block itself (otherwise, the macro will be evaluated and the result will
-be passed instead!). For example:
+the unquoted and interpolated expression (`Expr`) form for a given macro,
+expanded in a given module. To use [`macroexpand`](@ref), `quote` the expression block itself (otherwise,
+the macro will be evaluated and the result will be passed instead!). For example:
 
 ```jldoctest
-julia> macroexpand( :(@edit println("")) )
+julia> macroexpand(Main, :(@edit println("")) )
 :((Base.edit)(println, (Base.typesof)("")))
 ```
 
@@ -96,7 +96,7 @@ particular interest for understanding both macros and top-level statements such 
 and variable assignments:
 
 ```jldoctest
-julia> expand( :(f() = 1) )
+julia> expand(Main, :(f() = 1) )
 :(begin
         $(Expr(:method, :f))
         $(Expr(:method, :f, :((Core.svec)((Core.svec)((Core.Typeof)(f)), (Core.svec)())), CodeInfo(:(begin
