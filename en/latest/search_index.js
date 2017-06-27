@@ -317,7 +317,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematical Operations and Elementary Functions",
     "title": "Numerical Conversions",
     "category": "section",
-    "text": "Julia supports three forms of numerical conversion, which differ in their handling of inexact conversions.The notation T(x) or convert(T,x) converts x to a value of type T.\nIf T is a floating-point type, the result is the nearest representable value, which could be positive or negative infinity.\nIf T is an integer type, an InexactError is raised if x is not representable by T.\nx % T converts an integer x to a value of integer type T congruent to x modulo 2^n, where n is the number of bits in T. In other words, the binary representation is truncated to fit.\nThe Rounding functions take a type T as an optional argument. For example, round(Int,x) is a shorthand for Int(round(x)).The following examples show the different forms.julia> Int8(127)\n127\n\njulia> Int8(128)\nERROR: InexactError()\nStacktrace:\n [1] Int8(::Int64) at ./sysimg.jl:77\n\njulia> Int8(127.0)\n127\n\njulia> Int8(3.14)\nERROR: InexactError()\nStacktrace:\n [1] convert(::Type{Int8}, ::Float64) at ./float.jl:659\n [2] Int8(::Float64) at ./sysimg.jl:77\n\njulia> Int8(128.0)\nERROR: InexactError()\nStacktrace:\n [1] convert(::Type{Int8}, ::Float64) at ./float.jl:659\n [2] Int8(::Float64) at ./sysimg.jl:77\n\njulia> 127 % Int8\n127\n\njulia> 128 % Int8\n-128\n\njulia> round(Int8,127.4)\n127\n\njulia> round(Int8,127.6)\nERROR: InexactError()\nStacktrace:\n [1] trunc(::Type{Int8}, ::Float64) at ./float.jl:652\n [2] round(::Type{Int8}, ::Float64) at ./float.jl:338See Conversion and Promotion for how to define your own conversions and promotions."
+    "text": "Julia supports three forms of numerical conversion, which differ in their handling of inexact conversions.The notation T(x) or convert(T,x) converts x to a value of type T.\nIf T is a floating-point type, the result is the nearest representable value, which could be positive or negative infinity.\nIf T is an integer type, an InexactError is raised if x is not representable by T.\nx % T converts an integer x to a value of integer type T congruent to x modulo 2^n, where n is the number of bits in T. In other words, the binary representation is truncated to fit.\nThe Rounding functions take a type T as an optional argument. For example, round(Int,x) is a shorthand for Int(round(x)).The following examples show the different forms.julia> Int8(127)\n127\n\njulia> Int8(128)\nERROR: InexactError()\nStacktrace:\n [1] Int8(::Int64) at ./sysimg.jl:102\n\njulia> Int8(127.0)\n127\n\njulia> Int8(3.14)\nERROR: InexactError()\nStacktrace:\n [1] convert(::Type{Int8}, ::Float64) at ./float.jl:659\n [2] Int8(::Float64) at ./sysimg.jl:102\n\njulia> Int8(128.0)\nERROR: InexactError()\nStacktrace:\n [1] convert(::Type{Int8}, ::Float64) at ./float.jl:659\n [2] Int8(::Float64) at ./sysimg.jl:102\n\njulia> 127 % Int8\n127\n\njulia> 128 % Int8\n-128\n\njulia> round(Int8,127.4)\n127\n\njulia> round(Int8,127.6)\nERROR: InexactError()\nStacktrace:\n [1] trunc(::Type{Int8}, ::Float64) at ./float.jl:652\n [2] round(::Type{Int8}, ::Float64) at ./float.jl:338See Conversion and Promotion for how to define your own conversions and promotions."
 },
 
 {
@@ -933,7 +933,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Types",
     "title": "Parametric Composite Types",
     "category": "section",
-    "text": "Type parameters are introduced immediately after the type name, surrounded by curly braces:julia> struct Point{T}\n           x::T\n           y::T\n       endThis declaration defines a new parametric type, Point{T}, holding two \"coordinates\" of type T. What, one may ask, is T? Well, that's precisely the point of parametric types: it can be any type at all (or a value of any bits type, actually, although here it's clearly used as a type). Point{Float64} is a concrete type equivalent to the type defined by replacing T in the definition of Point with Float64. Thus, this single declaration actually declares an unlimited number of types: Point{Float64}, Point{AbstractString}, Point{Int64}, etc. Each of these is now a usable concrete type:julia> Point{Float64}\nPoint{Float64}\n\njulia> Point{AbstractString}\nPoint{AbstractString}The type Point{Float64} is a point whose coordinates are 64-bit floating-point values, while the type Point{AbstractString} is a \"point\" whose \"coordinates\" are string objects (see Strings).Point itself is also a valid type object, containing all instances Point{Float64}, Point{AbstractString}, etc. as subtypes:julia> Point{Float64} <: Point\ntrue\n\njulia> Point{AbstractString} <: Point\ntrueOther types, of course, are not subtypes of it:julia> Float64 <: Point\nfalse\n\njulia> AbstractString <: Point\nfalseConcrete Point types with different values of T are never subtypes of each other:julia> Point{Float64} <: Point{Int64}\nfalse\n\njulia> Point{Float64} <: Point{Real}\nfalsewarning: Warning\nThis last point is very important: even though Float64 <: Real we DO NOT have Point{Float64} <: Point{Real}.In other words, in the parlance of type theory, Julia's type parameters are invariant, rather than being covariant (or even contravariant). This is for practical reasons: while any instance of Point{Float64} may conceptually be like an instance of Point{Real} as well, the two types have different representations in memory:An instance of Point{Float64} can be represented compactly and efficiently as an immediate pair of 64-bit values;\nAn instance of Point{Real} must be able to hold any pair of instances of Real. Since objects that are instances of Real can be of arbitrary size and structure, in practice an instance of Point{Real} must be represented as a pair of pointers to individually allocated Real objects.The efficiency gained by being able to store Point{Float64} objects with immediate values is magnified enormously in the case of arrays: an Array{Float64} can be stored as a contiguous memory block of 64-bit floating-point values, whereas an Array{Real} must be an array of pointers to individually allocated Real objects – which may well be boxed 64-bit floating-point values, but also might be arbitrarily large, complex objects, which are declared to be implementations of the Real abstract type.Since Point{Float64} is not a subtype of Point{Real}, the following method can't be applied to arguments of type Point{Float64}:function norm(p::Point{Real})\n    sqrt(p.x^2 + p.y^2)\nendA correct way to define a method that accepts all arguments of type Point{T} where T is a subtype of Real is:function norm(p::Point{<:Real})\n    sqrt(p.x^2 + p.y^2)\nend(Equivalently, one could define function norm{T<:Real}(p::Point{T}) or function norm(p::Point{T} where T<:Real); see UnionAll Types.)More examples will be discussed later in Methods.How does one construct a Point object? It is possible to define custom constructors for composite types, which will be discussed in detail in Constructors, but in the absence of any special constructor declarations, there are two default ways of creating new composite objects, one in which the type parameters are explicitly given and the other in which they are implied by the arguments to the object constructor.Since the type Point{Float64} is a concrete type equivalent to Point declared with Float64 in place of T, it can be applied as a constructor accordingly:julia> Point{Float64}(1.0, 2.0)\nPoint{Float64}(1.0, 2.0)\n\njulia> typeof(ans)\nPoint{Float64}For the default constructor, exactly one argument must be supplied for each field:julia> Point{Float64}(1.0)\nERROR: MethodError: Cannot `convert` an object of type Float64 to an object of type Point{Float64}\nThis may have arisen from a call to the constructor Point{Float64}(...),\nsince type constructors fall back to convert methods.\nStacktrace:\n [1] Point{Float64}(::Float64) at ./sysimg.jl:77\n\njulia> Point{Float64}(1.0,2.0,3.0)\nERROR: MethodError: no method matching Point{Float64}(::Float64, ::Float64, ::Float64)Only one default constructor is generated for parametric types, since overriding it is not possible. This constructor accepts any arguments and converts them to the field types.In many cases, it is redundant to provide the type of Point object one wants to construct, since the types of arguments to the constructor call already implicitly provide type information. For that reason, you can also apply Point itself as a constructor, provided that the implied value of the parameter type T is unambiguous:julia> Point(1.0,2.0)\nPoint{Float64}(1.0, 2.0)\n\njulia> typeof(ans)\nPoint{Float64}\n\njulia> Point(1,2)\nPoint{Int64}(1, 2)\n\njulia> typeof(ans)\nPoint{Int64}In the case of Point, the type of T is unambiguously implied if and only if the two arguments to Point have the same type. When this isn't the case, the constructor will fail with a MethodError:julia> Point(1,2.5)\nERROR: MethodError: no method matching Point(::Int64, ::Float64)\nClosest candidates are:\n  Point(::T, !Matched::T) where T at none:2Constructor methods to appropriately handle such mixed cases can be defined, but that will not be discussed until later on in Constructors."
+    "text": "Type parameters are introduced immediately after the type name, surrounded by curly braces:julia> struct Point{T}\n           x::T\n           y::T\n       endThis declaration defines a new parametric type, Point{T}, holding two \"coordinates\" of type T. What, one may ask, is T? Well, that's precisely the point of parametric types: it can be any type at all (or a value of any bits type, actually, although here it's clearly used as a type). Point{Float64} is a concrete type equivalent to the type defined by replacing T in the definition of Point with Float64. Thus, this single declaration actually declares an unlimited number of types: Point{Float64}, Point{AbstractString}, Point{Int64}, etc. Each of these is now a usable concrete type:julia> Point{Float64}\nPoint{Float64}\n\njulia> Point{AbstractString}\nPoint{AbstractString}The type Point{Float64} is a point whose coordinates are 64-bit floating-point values, while the type Point{AbstractString} is a \"point\" whose \"coordinates\" are string objects (see Strings).Point itself is also a valid type object, containing all instances Point{Float64}, Point{AbstractString}, etc. as subtypes:julia> Point{Float64} <: Point\ntrue\n\njulia> Point{AbstractString} <: Point\ntrueOther types, of course, are not subtypes of it:julia> Float64 <: Point\nfalse\n\njulia> AbstractString <: Point\nfalseConcrete Point types with different values of T are never subtypes of each other:julia> Point{Float64} <: Point{Int64}\nfalse\n\njulia> Point{Float64} <: Point{Real}\nfalsewarning: Warning\nThis last point is very important: even though Float64 <: Real we DO NOT have Point{Float64} <: Point{Real}.In other words, in the parlance of type theory, Julia's type parameters are invariant, rather than being covariant (or even contravariant). This is for practical reasons: while any instance of Point{Float64} may conceptually be like an instance of Point{Real} as well, the two types have different representations in memory:An instance of Point{Float64} can be represented compactly and efficiently as an immediate pair of 64-bit values;\nAn instance of Point{Real} must be able to hold any pair of instances of Real. Since objects that are instances of Real can be of arbitrary size and structure, in practice an instance of Point{Real} must be represented as a pair of pointers to individually allocated Real objects.The efficiency gained by being able to store Point{Float64} objects with immediate values is magnified enormously in the case of arrays: an Array{Float64} can be stored as a contiguous memory block of 64-bit floating-point values, whereas an Array{Real} must be an array of pointers to individually allocated Real objects – which may well be boxed 64-bit floating-point values, but also might be arbitrarily large, complex objects, which are declared to be implementations of the Real abstract type.Since Point{Float64} is not a subtype of Point{Real}, the following method can't be applied to arguments of type Point{Float64}:function norm(p::Point{Real})\n    sqrt(p.x^2 + p.y^2)\nendA correct way to define a method that accepts all arguments of type Point{T} where T is a subtype of Real is:function norm(p::Point{<:Real})\n    sqrt(p.x^2 + p.y^2)\nend(Equivalently, one could define function norm{T<:Real}(p::Point{T}) or function norm(p::Point{T} where T<:Real); see UnionAll Types.)More examples will be discussed later in Methods.How does one construct a Point object? It is possible to define custom constructors for composite types, which will be discussed in detail in Constructors, but in the absence of any special constructor declarations, there are two default ways of creating new composite objects, one in which the type parameters are explicitly given and the other in which they are implied by the arguments to the object constructor.Since the type Point{Float64} is a concrete type equivalent to Point declared with Float64 in place of T, it can be applied as a constructor accordingly:julia> Point{Float64}(1.0, 2.0)\nPoint{Float64}(1.0, 2.0)\n\njulia> typeof(ans)\nPoint{Float64}For the default constructor, exactly one argument must be supplied for each field:julia> Point{Float64}(1.0)\nERROR: MethodError: Cannot `convert` an object of type Float64 to an object of type Point{Float64}\nThis may have arisen from a call to the constructor Point{Float64}(...),\nsince type constructors fall back to convert methods.\nStacktrace:\n [1] Point{Float64}(::Float64) at ./sysimg.jl:102\n\njulia> Point{Float64}(1.0,2.0,3.0)\nERROR: MethodError: no method matching Point{Float64}(::Float64, ::Float64, ::Float64)Only one default constructor is generated for parametric types, since overriding it is not possible. This constructor accepts any arguments and converts them to the field types.In many cases, it is redundant to provide the type of Point object one wants to construct, since the types of arguments to the constructor call already implicitly provide type information. For that reason, you can also apply Point itself as a constructor, provided that the implied value of the parameter type T is unambiguous:julia> Point(1.0,2.0)\nPoint{Float64}(1.0, 2.0)\n\njulia> typeof(ans)\nPoint{Float64}\n\njulia> Point(1,2)\nPoint{Int64}(1, 2)\n\njulia> typeof(ans)\nPoint{Int64}In the case of Point, the type of T is unambiguously implied if and only if the two arguments to Point have the same type. When this isn't the case, the constructor will fail with a MethodError:julia> Point(1,2.5)\nERROR: MethodError: no method matching Point(::Int64, ::Float64)\nClosest candidates are:\n  Point(::T, !Matched::T) where T at none:2Constructor methods to appropriately handle such mixed cases can be defined, but that will not be discussed until later on in Constructors."
 },
 
 {
@@ -4125,7 +4125,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Frequently Asked Questions",
     "title": "Why does Julia give a DomainError for certain seemingly-sensible operations?",
     "category": "section",
-    "text": "Certain operations make mathematical sense but result in errors:julia> sqrt(-2.0)\nERROR: DomainError:\nsqrt will only return a complex result if called with a complex argument. Try sqrt(complex(x)).\nStacktrace:\n [1] sqrt(::Float64) at ./math.jl:438\n\njulia> 2^-5\nERROR: DomainError:\nCannot raise an integer x to a negative power -n.\nMake x a float by adding a zero decimal (e.g. 2.0^-n instead of 2^-n), or write 1/x^n, float(x)^-n, or (x//1)^-n.\nStacktrace:\n [1] power_by_squaring(::Int64, ::Int64) at ./intfuncs.jl:170\n [2] literal_pow(::Base.#^, ::Int64, ::Type{Val{-5}}) at ./intfuncs.jl:205This behavior is an inconvenient consequence of the requirement for type-stability.  In the case of sqrt(), most users want sqrt(2.0) to give a real number, and would be unhappy if it produced the complex number 1.4142135623730951 + 0.0im.  One could write the sqrt() function to switch to a complex-valued output only when passed a negative number (which is what sqrt() does in some other languages), but then the result would not be type-stable and the sqrt() function would have poor performance.In these and other cases, you can get the result you want by choosing an input type that conveys your willingness to accept an output type in which the result can be represented:julia> sqrt(-2.0+0im)\n0.0 + 1.4142135623730951im\n\njulia> 2.0^-5\n0.03125"
+    "text": "Certain operations make mathematical sense but result in errors:julia> sqrt(-2.0)\nERROR: DomainError:\nsqrt will only return a complex result if called with a complex argument. Try sqrt(complex(x)).\nStacktrace:\n [1] sqrt(::Float64) at ./math.jl:438\n\njulia> 2^-5\nERROR: DomainError:\nCannot raise an integer x to a negative power -n.\nMake x a float by adding a zero decimal (e.g. 2.0^-n instead of 2^-n), or write 1/x^n, float(x)^-n, or (x//1)^-n.\nStacktrace:\n [1] power_by_squaring(::Int64, ::Int64) at ./intfuncs.jl:173\n [2] literal_pow(::Base.#^, ::Int64, ::Type{Val{-5}}) at ./intfuncs.jl:208This behavior is an inconvenient consequence of the requirement for type-stability.  In the case of sqrt(), most users want sqrt(2.0) to give a real number, and would be unhappy if it produced the complex number 1.4142135623730951 + 0.0im.  One could write the sqrt() function to switch to a complex-valued output only when passed a negative number (which is what sqrt() does in some other languages), but then the result would not be type-stable and the sqrt() function would have poor performance.In these and other cases, you can get the result you want by choosing an input type that conveys your willingness to accept an output type in which the result can be represented:julia> sqrt(-2.0+0im)\n0.0 + 1.4142135623730951im\n\njulia> 2.0^-5\n0.03125"
 },
 
 {
@@ -4669,7 +4669,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Core.tuple",
     "category": "Function",
-    "text": "tuple(xs...)\n\nConstruct a tuple of the given objects.\n\njulia> tuple(1, 'a', pi)\n(1, 'a', π = 3.1415926535897...)\n\n\n\n"
+    "text": "tuple(xs...)\n\nConstruct a tuple of the given objects.\n\nExample\n\njulia> tuple(1, 'a', pi)\n(1, 'a', π = 3.1415926535897...)\n\n\n\n"
 },
 
 {
@@ -4749,7 +4749,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.convert",
     "category": "Function",
-    "text": "convert(T, x)\n\nConvert x to a value of type T.\n\nIf T is an Integer type, an InexactError will be raised if x is not representable by T, for example if x is not integer-valued, or is outside the range supported by T.\n\njulia> convert(Int, 3.0)\n3\n\njulia> convert(Int, 3.5)\nERROR: InexactError()\nStacktrace:\n [1] convert(::Type{Int64}, ::Float64) at ./float.jl:680\n\nIf T is a AbstractFloat or Rational type, then it will return the closest value to x representable by T.\n\njulia> x = 1/3\n0.3333333333333333\n\njulia> convert(Float32, x)\n0.33333334f0\n\njulia> convert(Rational{Int32}, x)\n1//3\n\njulia> convert(Rational{Int64}, x)\n6004799503160661//18014398509481984\n\nIf T is a collection type and x a collection, the result of convert(T, x) may alias x.\n\njulia> x = Int[1,2,3];\n\njulia> y = convert(Vector{Int}, x);\n\njulia> y === x\ntrue\n\nSimilarly, if T is a composite type and x a related instance, the result of convert(T, x) may alias part or all of x.\n\njulia> x = speye(5);\n\njulia> typeof(x)\nSparseMatrixCSC{Float64,Int64}\n\njulia> y = convert(SparseMatrixCSC{Float64,Int64}, x);\n\njulia> z = convert(SparseMatrixCSC{Float32,Int64}, y);\n\njulia> y === x\ntrue\n\njulia> z === x\nfalse\n\njulia> z.colptr === x.colptr\ntrue\n\n\n\n"
+    "text": "convert(T, x)\n\nConvert x to a value of type T.\n\nIf T is an Integer type, an InexactError will be raised if x is not representable by T, for example if x is not integer-valued, or is outside the range supported by T.\n\nExamples\n\njulia> convert(Int, 3.0)\n3\n\njulia> convert(Int, 3.5)\nERROR: InexactError()\nStacktrace:\n [1] convert(::Type{Int64}, ::Float64) at ./float.jl:680\n\nIf T is a AbstractFloat or Rational type, then it will return the closest value to x representable by T.\n\njulia> x = 1/3\n0.3333333333333333\n\njulia> convert(Float32, x)\n0.33333334f0\n\njulia> convert(Rational{Int32}, x)\n1//3\n\njulia> convert(Rational{Int64}, x)\n6004799503160661//18014398509481984\n\nIf T is a collection type and x a collection, the result of convert(T, x) may alias x.\n\njulia> x = Int[1,2,3];\n\njulia> y = convert(Vector{Int}, x);\n\njulia> y === x\ntrue\n\nSimilarly, if T is a composite type and x a related instance, the result of convert(T, x) may alias part or all of x.\n\njulia> x = speye(5);\n\njulia> typeof(x)\nSparseMatrixCSC{Float64,Int64}\n\njulia> y = convert(SparseMatrixCSC{Float64,Int64}, x);\n\njulia> z = convert(SparseMatrixCSC{Float32,Int64}, y);\n\njulia> y === x\ntrue\n\njulia> z === x\nfalse\n\njulia> z.colptr === x.colptr\ntrue\n\n\n\n"
 },
 
 {
@@ -4757,7 +4757,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.promote",
     "category": "Function",
-    "text": "promote(xs...)\n\nConvert all arguments to their common promotion type (if any), and return them all (as a tuple).\n\n\n\n"
+    "text": "promote(xs...)\n\nConvert all arguments to their common promotion type (if any), and return them all (as a tuple).\n\nExample\n\njulia> promote(Int8(1), Float16(4.5), Float32(4.1))\n(1.0f0, 4.5f0, 4.1f0)\n\n\n\n"
 },
 
 {
@@ -4773,7 +4773,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.widen",
     "category": "Function",
-    "text": "widen(x)\n\nIf x is a type, return a \"larger\" type (for numeric types, this will be a type with at least as much range and precision as the argument, and usually more). Otherwise x is converted to widen(typeof(x)).\n\njulia> widen(Int32)\nInt64\n\njulia> widen(1.5f0)\n1.5\n\n\n\n"
+    "text": "widen(x)\n\nIf x is a type, return a \"larger\" type (for numeric types, this will be a type with at least as much range and precision as the argument, and usually more). Otherwise x is converted to widen(typeof(x)).\n\nExamples\n\njulia> widen(Int32)\nInt64\n\njulia> widen(1.5f0)\n1.5\n\n\n\n"
 },
 
 {
@@ -4805,7 +4805,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Core.issubtype",
     "category": "Function",
-    "text": "issubtype(type1, type2)\n\nReturn true if and only if all values of type1 are also of type2. Can also be written using the <: infix operator as type1 <: type2.\n\njulia> issubtype(Int8, Int32)\nfalse\n\njulia> Int8 <: Integer\ntrue\n\n\n\n"
+    "text": "issubtype(type1, type2)\n\nReturn true if and only if all values of type1 are also of type2. Can also be written using the <: infix operator as type1 <: type2.\n\nExamples\n\njulia> issubtype(Int8, Int32)\nfalse\n\njulia> Int8 <: Integer\ntrue\n\n\n\n"
 },
 
 {
@@ -4837,7 +4837,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.typemin",
     "category": "Function",
-    "text": "typemin(T)\n\nThe lowest value representable by the given (real) numeric DataType T.\n\njulia> typemin(Float16)\n-Inf16\n\njulia> typemin(Float32)\n-Inf32\n\n\n\n"
+    "text": "typemin(T)\n\nThe lowest value representable by the given (real) numeric DataType T.\n\nExamples\n\njulia> typemin(Float16)\n-Inf16\n\njulia> typemin(Float32)\n-Inf32\n\n\n\n"
 },
 
 {
@@ -4861,7 +4861,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.realmax",
     "category": "Function",
-    "text": "realmax(T)\n\nThe highest finite value representable by the given floating-point DataType T.\n\njulia> realmax(Float16)\nFloat16(6.55e4)\n\njulia> realmax(Float32)\n3.4028235f38\n\n\n\n"
+    "text": "realmax(T)\n\nThe highest finite value representable by the given floating-point DataType T.\n\nExamples\n\njulia> realmax(Float16)\nFloat16(6.55e4)\n\njulia> realmax(Float32)\n3.4028235f38\n\n\n\n"
 },
 
 {
@@ -4877,7 +4877,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.sizeof",
     "category": "Method",
-    "text": "sizeof(T)\n\nSize, in bytes, of the canonical binary representation of the given DataType T, if any.\n\njulia> sizeof(Float32)\n4\n\njulia> sizeof(Complex128)\n16\n\nIf T does not have a specific size, an error is thrown.\n\njulia> sizeof(Base.LinAlg.LU)\nERROR: argument is an abstract type; size is indeterminate\nStacktrace:\n [1] sizeof(::Type{T} where T) at ./essentials.jl:160\n\n\n\n"
+    "text": "sizeof(T)\n\nSize, in bytes, of the canonical binary representation of the given DataType T, if any.\n\nExamples\n\njulia> sizeof(Float32)\n4\n\njulia> sizeof(Complex128)\n16\n\nIf T does not have a specific size, an error is thrown.\n\njulia> sizeof(Base.LinAlg.LU)\nERROR: argument is an abstract type; size is indeterminate\nStacktrace:\n [1] sizeof(::Type{T} where T) at ./essentials.jl:150\n\n\n\n"
 },
 
 {
@@ -4917,7 +4917,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Core.getfield",
     "category": "Function",
-    "text": "getfield(value, name::Symbol)\n\nExtract a named field from a value of composite type. The syntax a.b calls getfield(a, :b).\n\njulia> a = 1//2\n1//2\n\njulia> getfield(a, :num)\n1\n\n\n\n"
+    "text": "getfield(value, name::Symbol)\n\nExtract a named field from a value of composite type. The syntax a.b calls getfield(a, :b).\n\nExample\n\njulia> a = 1//2\n1//2\n\njulia> getfield(a, :num)\n1\n\n\n\n"
 },
 
 {
@@ -5037,7 +5037,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Core.applicable",
     "category": "Function",
-    "text": "applicable(f, args...) -> Bool\n\nDetermine whether the given generic function has a method applicable to the given arguments.\n\njulia> function f(x, y)\n           x + y\n       end;\n\njulia> applicable(f, 1)\nfalse\n\njulia> applicable(f, 1, 2)\ntrue\n\n\n\n"
+    "text": "applicable(f, args...) -> Bool\n\nDetermine whether the given generic function has a method applicable to the given arguments.\n\nExamples\n\njulia> function f(x, y)\n           x + y\n       end;\n\njulia> applicable(f, 1)\nfalse\n\njulia> applicable(f, 1, 2)\ntrue\n\n\n\n"
 },
 
 {
@@ -6165,7 +6165,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.start",
     "category": "Function",
-    "text": "start(iter) -> state\n\nGet initial iteration state for an iterable object.\n\njulia> start(1:5)\n1\n\njulia> start([1;2;3])\n1\n\njulia> start([4;2;3])\n1\n\n\n\n"
+    "text": "start(iter) -> state\n\nGet initial iteration state for an iterable object.\n\nExamples\n\njulia> start(1:5)\n1\n\njulia> start([1;2;3])\n1\n\njulia> start([4;2;3])\n1\n\n\n\n"
 },
 
 {
@@ -6173,7 +6173,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.done",
     "category": "Function",
-    "text": "done(iter, state) -> Bool\n\nTest whether we are done iterating.\n\njulia> done(1:5, 3)\nfalse\n\njulia> done(1:5, 5)\nfalse\n\njulia> done(1:5, 6)\ntrue\n\n\n\n"
+    "text": "done(iter, state) -> Bool\n\nTest whether we are done iterating.\n\nExamples\n\njulia> done(1:5, 3)\nfalse\n\njulia> done(1:5, 5)\nfalse\n\njulia> done(1:5, 6)\ntrue\n\n\n\n"
 },
 
 {
@@ -6181,7 +6181,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.next",
     "category": "Function",
-    "text": "next(iter, state) -> item, state\n\nFor a given iterable object and iteration state, return the current item and the next iteration state.\n\njulia> next(1:5, 3)\n(3, 4)\n\njulia> next(1:5, 5)\n(5, 6)\n\n\n\n"
+    "text": "next(iter, state) -> item, state\n\nFor a given iterable object and iteration state, return the current item and the next iteration state.\n\nExamples\n\njulia> next(1:5, 3)\n(3, 4)\n\njulia> next(1:5, 5)\n(5, 6)\n\n\n\n"
 },
 
 {
@@ -6213,7 +6213,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.isempty",
     "category": "Function",
-    "text": "isempty(collection) -> Bool\n\nDetermine whether a collection is empty (has no elements).\n\njulia> isempty([])\ntrue\n\njulia> isempty([1 2 3])\nfalse\n\n\n\n"
+    "text": "isempty(collection) -> Bool\n\nDetermine whether a collection is empty (has no elements).\n\nExamples\n\njulia> isempty([])\ntrue\n\njulia> isempty([1 2 3])\nfalse\n\n\n\n"
 },
 
 {
@@ -6229,7 +6229,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.length",
     "category": "Method",
-    "text": "length(collection) -> Integer\n\nFor ordered, indexable collections, returns the maximum index i for which getindex(collection, i) is valid. For unordered collections, returns the number of elements.\n\njulia> length(1:5)\n5\n\njulia> length([1; 2; 3; 4])\n4\n\n\n\n"
+    "text": "length(collection) -> Integer\n\nFor ordered, indexable collections, returns the maximum index i for which getindex(collection, i) is valid. For unordered collections, returns the number of elements.\n\nExamples\n\njulia> length(1:5)\n5\n\njulia> length([1; 2; 3; 4])\n4\n\n\n\n"
 },
 
 {
@@ -6237,7 +6237,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.endof",
     "category": "Function",
-    "text": "endof(collection) -> Integer\n\nReturns the last index of the collection.\n\njulia> endof([1,2,4])\n3\n\n\n\n"
+    "text": "endof(collection) -> Integer\n\nReturns the last index of the collection.\n\nExample\n\njulia> endof([1,2,4])\n3\n\n\n\n"
 },
 
 {
@@ -6269,7 +6269,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.indexin",
     "category": "Function",
-    "text": "indexin(a, b)\n\nReturns a vector containing the highest index in b for each value in a that is a member of b . The output vector contains 0 wherever a is not a member of b.\n\njulia> a = ['a', 'b', 'c', 'b', 'd', 'a'];\n\njulia> b = ['a','b','c'];\n\njulia> indexin(a,b)\n6-element Array{Int64,1}:\n 1\n 2\n 3\n 2\n 0\n 1\n\njulia> indexin(b,a)\n3-element Array{Int64,1}:\n 6\n 4\n 3\n\n\n\n"
+    "text": "indexin(a, b)\n\nReturns a vector containing the highest index in b for each value in a that is a member of b . The output vector contains 0 wherever a is not a member of b.\n\nExamples\n\njulia> a = ['a', 'b', 'c', 'b', 'd', 'a'];\n\njulia> b = ['a','b','c'];\n\njulia> indexin(a,b)\n6-element Array{Int64,1}:\n 1\n 2\n 3\n 2\n 0\n 1\n\njulia> indexin(b,a)\n3-element Array{Int64,1}:\n 6\n 4\n 3\n\n\n\n"
 },
 
 {
@@ -6277,7 +6277,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.findin",
     "category": "Function",
-    "text": "findin(a, b)\n\nReturns the indices of elements in collection a that appear in collection b.\n\njulia> a = collect(1:3:15)\n5-element Array{Int64,1}:\n  1\n  4\n  7\n 10\n 13\n\njulia> b = collect(2:4:10)\n3-element Array{Int64,1}:\n  2\n  6\n 10\n\njulia> findin(a,b) # 10 is the only common element\n1-element Array{Int64,1}:\n 4\n\n\n\n"
+    "text": "findin(a, b)\n\nReturns the indices of elements in collection a that appear in collection b.\n\nExamples\n\njulia> a = collect(1:3:15)\n5-element Array{Int64,1}:\n  1\n  4\n  7\n 10\n 13\n\njulia> b = collect(2:4:10)\n3-element Array{Int64,1}:\n  2\n  6\n 10\n\njulia> findin(a,b) # 10 is the only common element\n1-element Array{Int64,1}:\n 4\n\n\n\n"
 },
 
 {
@@ -6373,7 +6373,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.maximum!",
     "category": "Function",
-    "text": "maximum!(r, A)\n\nCompute the maximum value of A over the singleton dimensions of r, and write results to r.\n\njulia> A = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> maximum!([1; 1], A)\n2-element Array{Int64,1}:\n 2\n 4\n\njulia> maximum!([1 1], A)\n1×2 Array{Int64,2}:\n 3  4\n\n\n\n"
+    "text": "maximum!(r, A)\n\nCompute the maximum value of A over the singleton dimensions of r, and write results to r.\n\nExamples\n\njulia> A = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> maximum!([1; 1], A)\n2-element Array{Int64,1}:\n 2\n 4\n\njulia> maximum!([1 1], A)\n1×2 Array{Int64,2}:\n 3  4\n\n\n\n"
 },
 
 {
@@ -6389,7 +6389,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.minimum",
     "category": "Method",
-    "text": "minimum(A, dims)\n\nCompute the minimum value of an array over the given dimensions. See also the min(a,b) function to take the minimum of two or more arguments, which can be applied elementwise to arrays via min.(a,b).\n\njulia> A = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> minimum(A, 1)\n1×2 Array{Int64,2}:\n 1  2\n\njulia> minimum(A, 2)\n2×1 Array{Int64,2}:\n 1\n 3\n\n\n\n"
+    "text": "minimum(A, dims)\n\nCompute the minimum value of an array over the given dimensions. See also the min(a,b) function to take the minimum of two or more arguments, which can be applied elementwise to arrays via min.(a,b).\n\nExamples\n\njulia> A = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> minimum(A, 1)\n1×2 Array{Int64,2}:\n 1  2\n\njulia> minimum(A, 2)\n2×1 Array{Int64,2}:\n 1\n 3\n\n\n\n"
 },
 
 {
@@ -6397,7 +6397,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.minimum!",
     "category": "Function",
-    "text": "minimum!(r, A)\n\nCompute the minimum value of A over the singleton dimensions of r, and write results to r.\n\njulia> A = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> minimum!([1; 1], A)\n2-element Array{Int64,1}:\n 1\n 3\n\njulia> minimum!([1 1], A)\n1×2 Array{Int64,2}:\n 1  2\n\n\n\n"
+    "text": "minimum!(r, A)\n\nCompute the minimum value of A over the singleton dimensions of r, and write results to r.\n\nExamples\n\njulia> A = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> minimum!([1; 1], A)\n2-element Array{Int64,1}:\n 1\n 3\n\njulia> minimum!([1 1], A)\n1×2 Array{Int64,2}:\n 1  2\n\n\n\n"
 },
 
 {
@@ -6421,7 +6421,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.indmax",
     "category": "Function",
-    "text": "indmax(itr) -> Integer\n\nReturns the index of the maximum element in a collection. If there are multiple maximal elements, then the first one will be returned. NaN values are ignored, unless all elements are NaN.\n\nThe collection must not be empty.\n\njulia> indmax([8,0.1,-9,pi])\n1\n\njulia> indmax([1,7,7,6])\n2\n\njulia> indmax([1,7,7,NaN])\n2\n\n\n\n"
+    "text": "indmax(itr) -> Integer\n\nReturns the index of the maximum element in a collection. If there are multiple maximal elements, then the first one will be returned. NaN values are ignored, unless all elements are NaN.\n\nThe collection must not be empty.\n\nExamples\n\njulia> indmax([8,0.1,-9,pi])\n1\n\njulia> indmax([1,7,7,6])\n2\n\njulia> indmax([1,7,7,NaN])\n2\n\n\n\n"
 },
 
 {
@@ -6429,7 +6429,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.indmin",
     "category": "Function",
-    "text": "indmin(itr) -> Integer\n\nReturns the index of the minimum element in a collection. If there are multiple minimal elements, then the first one will be returned. NaN values are ignored, unless all elements are NaN.\n\nThe collection must not be empty.\n\njulia> indmin([8,0.1,-9,pi])\n3\n\njulia> indmin([7,1,1,6])\n2\n\njulia> indmin([7,1,1,NaN])\n2\n\n\n\n"
+    "text": "indmin(itr) -> Integer\n\nReturns the index of the minimum element in a collection. If there are multiple minimal elements, then the first one will be returned. NaN values are ignored, unless all elements are NaN.\n\nThe collection must not be empty.\n\nExamples\n\njulia> indmin([8,0.1,-9,pi])\n3\n\njulia> indmin([7,1,1,6])\n2\n\njulia> indmin([7,1,1,NaN])\n2\n\n\n\n"
 },
 
 {
@@ -6437,7 +6437,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.findmax",
     "category": "Method",
-    "text": "findmax(itr) -> (x, index)\n\nReturns the maximum element of the collection itr and its index. If there are multiple maximal elements, then the first one will be returned. NaN values are ignored, unless all elements are NaN.\n\nThe collection must not be empty.\n\njulia> findmax([8,0.1,-9,pi])\n(8.0, 1)\n\njulia> findmax([1,7,7,6])\n(7, 2)\n\njulia> findmax([1,7,7,NaN])\n(7.0, 2)\n\n\n\n"
+    "text": "findmax(itr) -> (x, index)\n\nReturns the maximum element of the collection itr and its index. If there are multiple maximal elements, then the first one will be returned. NaN values are ignored, unless all elements are NaN.\n\nThe collection must not be empty.\n\nExamples\n\njulia> findmax([8,0.1,-9,pi])\n(8.0, 1)\n\njulia> findmax([1,7,7,6])\n(7, 2)\n\njulia> findmax([1,7,7,NaN])\n(7.0, 2)\n\n\n\n"
 },
 
 {
@@ -6445,7 +6445,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.findmax",
     "category": "Method",
-    "text": "findmax(A, region) -> (maxval, index)\n\nFor an array input, returns the value and index of the maximum over the given region.\n\njulia> A = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> findmax(A,1)\n([3 4], [2 4])\n\njulia> findmax(A,2)\n([2; 4], [3; 4])\n\n\n\n"
+    "text": "findmax(A, region) -> (maxval, index)\n\nFor an array input, returns the value and index of the maximum over the given region.\n\nExamples\n\njulia> A = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> findmax(A,1)\n([3 4], [2 4])\n\njulia> findmax(A,2)\n([2; 4], [3; 4])\n\n\n\n"
 },
 
 {
@@ -6453,7 +6453,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.findmin",
     "category": "Method",
-    "text": "findmin(itr) -> (x, index)\n\nReturns the minimum element of the collection itr and its index. If there are multiple minimal elements, then the first one will be returned. NaN values are ignored, unless all elements are NaN.\n\nThe collection must not be empty.\n\njulia> findmin([8,0.1,-9,pi])\n(-9.0, 3)\n\njulia> findmin([7,1,1,6])\n(1, 2)\n\njulia> findmin([7,1,1,NaN])\n(1.0, 2)\n\n\n\n"
+    "text": "findmin(itr) -> (x, index)\n\nReturns the minimum element of the collection itr and its index. If there are multiple minimal elements, then the first one will be returned. NaN values are ignored, unless all elements are NaN.\n\nThe collection must not be empty.\n\nExamples\n\njulia> findmin([8,0.1,-9,pi])\n(-9.0, 3)\n\njulia> findmin([7,1,1,6])\n(1, 2)\n\njulia> findmin([7,1,1,NaN])\n(1.0, 2)\n\n\n\n"
 },
 
 {
@@ -6461,7 +6461,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.findmin",
     "category": "Method",
-    "text": "findmin(A, region) -> (minval, index)\n\nFor an array input, returns the value and index of the minimum over the given region.\n\njulia> A = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> findmin(A, 1)\n([1 2], [1 3])\n\njulia> findmin(A, 2)\n([1; 3], [1; 2])\n\n\n\n"
+    "text": "findmin(A, region) -> (minval, index)\n\nFor an array input, returns the value and index of the minimum over the given region.\n\nExamples\n\njulia> A = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> findmin(A, 1)\n([1 2], [1 3])\n\njulia> findmin(A, 2)\n([1; 3], [1; 2])\n\n\n\n"
 },
 
 {
@@ -6485,7 +6485,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.sum",
     "category": "Function",
-    "text": "sum(f, itr)\n\nSum the results of calling function f on each element of itr.\n\njulia> sum(abs2, [2; 3; 4])\n29\n\n\n\nsum(itr)\n\nReturns the sum of all elements in a collection.\n\njulia> sum(1:20)\n210\n\n\n\nsum(A, dims)\n\nSum elements of an array over the given dimensions.\n\njulia> A = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> sum(A, 1)\n1×2 Array{Int64,2}:\n 4  6\n\njulia> sum(A, 2)\n2×1 Array{Int64,2}:\n 3\n 7\n\n\n\n"
+    "text": "sum(f, itr)\n\nSum the results of calling function f on each element of itr.\n\njulia> sum(abs2, [2; 3; 4])\n29\n\n\n\nsum(itr)\n\nReturns the sum of all elements in a collection.\n\njulia> sum(1:20)\n210\n\n\n\nsum(A, dims)\n\nSum elements of an array over the given dimensions.\n\nExamples\n\njulia> A = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> sum(A, 1)\n1×2 Array{Int64,2}:\n 4  6\n\njulia> sum(A, 2)\n2×1 Array{Int64,2}:\n 3\n 7\n\n\n\n"
 },
 
 {
@@ -6493,7 +6493,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.sum!",
     "category": "Function",
-    "text": "sum!(r, A)\n\nSum elements of A over the singleton dimensions of r, and write results to r.\n\njulia> A = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> sum!([1; 1], A)\n2-element Array{Int64,1}:\n 3\n 7\n\njulia> sum!([1 1], A)\n1×2 Array{Int64,2}:\n 4  6\n\n\n\n"
+    "text": "sum!(r, A)\n\nSum elements of A over the singleton dimensions of r, and write results to r.\n\nExamples\n\njulia> A = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> sum!([1; 1], A)\n2-element Array{Int64,1}:\n 3\n 7\n\njulia> sum!([1 1], A)\n1×2 Array{Int64,2}:\n 4  6\n\n\n\n"
 },
 
 {
@@ -6501,7 +6501,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.prod",
     "category": "Function",
-    "text": "prod(f, itr)\n\nReturns the product of f applied to each element of itr.\n\njulia> prod(abs2, [2; 3; 4])\n576\n\n\n\nprod(itr)\n\nReturns the product of all elements of a collection.\n\njulia> prod(1:20)\n2432902008176640000\n\n\n\nprod(A, dims)\n\nMultiply elements of an array over the given dimensions.\n\njulia> A = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> prod(A, 1)\n1×2 Array{Int64,2}:\n 3  8\n\njulia> prod(A, 2)\n2×1 Array{Int64,2}:\n  2\n 12\n\n\n\n"
+    "text": "prod(f, itr)\n\nReturns the product of f applied to each element of itr.\n\njulia> prod(abs2, [2; 3; 4])\n576\n\n\n\nprod(itr)\n\nReturns the product of all elements of a collection.\n\njulia> prod(1:20)\n2432902008176640000\n\n\n\nprod(A, dims)\n\nMultiply elements of an array over the given dimensions.\n\nExamples\n\njulia> A = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> prod(A, 1)\n1×2 Array{Int64,2}:\n 3  8\n\njulia> prod(A, 2)\n2×1 Array{Int64,2}:\n  2\n 12\n\n\n\n"
 },
 
 {
@@ -6509,7 +6509,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.prod!",
     "category": "Function",
-    "text": "prod!(r, A)\n\nMultiply elements of A over the singleton dimensions of r, and write results to r.\n\njulia> A = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> prod!([1; 1], A)\n2-element Array{Int64,1}:\n  2\n 12\n\njulia> prod!([1 1], A)\n1×2 Array{Int64,2}:\n 3  8\n\n\n\n"
+    "text": "prod!(r, A)\n\nMultiply elements of A over the singleton dimensions of r, and write results to r.\n\nExamples\n\njulia> A = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> prod!([1; 1], A)\n2-element Array{Int64,1}:\n  2\n 12\n\njulia> prod!([1 1], A)\n1×2 Array{Int64,2}:\n 3  8\n\n\n\n"
 },
 
 {
@@ -6525,7 +6525,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.any",
     "category": "Method",
-    "text": "any(A, dims)\n\nTest whether any values along the given dimensions of an array are true.\n\njulia> A = [true false; true false]\n2×2 Array{Bool,2}:\n true  false\n true  false\n\njulia> any(A, 1)\n1×2 Array{Bool,2}:\n true  false\n\njulia> any(A, 2)\n2×1 Array{Bool,2}:\n true\n true\n\n\n\n"
+    "text": "any(A, dims)\n\nTest whether any values along the given dimensions of an array are true.\n\nExamples\n\njulia> A = [true false; true false]\n2×2 Array{Bool,2}:\n true  false\n true  false\n\njulia> any(A, 1)\n1×2 Array{Bool,2}:\n true  false\n\njulia> any(A, 2)\n2×1 Array{Bool,2}:\n true\n true\n\n\n\n"
 },
 
 {
@@ -6533,7 +6533,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.any!",
     "category": "Function",
-    "text": "any!(r, A)\n\nTest whether any values in A along the singleton dimensions of r are true, and write results to r.\n\njulia> A = [true false; true false]\n2×2 Array{Bool,2}:\n true  false\n true  false\n\njulia> any!([1; 1], A)\n2-element Array{Int64,1}:\n 1\n 1\n\njulia> any!([1 1], A)\n1×2 Array{Int64,2}:\n 1  0\n\n\n\n"
+    "text": "any!(r, A)\n\nTest whether any values in A along the singleton dimensions of r are true, and write results to r.\n\nExamples\n\njulia> A = [true false; true false]\n2×2 Array{Bool,2}:\n true  false\n true  false\n\njulia> any!([1; 1], A)\n2-element Array{Int64,1}:\n 1\n 1\n\njulia> any!([1 1], A)\n1×2 Array{Int64,2}:\n 1  0\n\n\n\n"
 },
 
 {
@@ -6549,7 +6549,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.all",
     "category": "Method",
-    "text": "all(A, dims)\n\nTest whether all values along the given dimensions of an array are true.\n\njulia> A = [true false; true true]\n2×2 Array{Bool,2}:\n true  false\n true   true\n\njulia> all(A, 1)\n1×2 Array{Bool,2}:\n true  false\n\njulia> all(A, 2)\n2×1 Array{Bool,2}:\n false\n  true\n\n\n\n"
+    "text": "all(A, dims)\n\nTest whether all values along the given dimensions of an array are true.\n\nExamples\n\njulia> A = [true false; true true]\n2×2 Array{Bool,2}:\n true  false\n true   true\n\njulia> all(A, 1)\n1×2 Array{Bool,2}:\n true  false\n\njulia> all(A, 2)\n2×1 Array{Bool,2}:\n false\n  true\n\n\n\n"
 },
 
 {
@@ -6557,7 +6557,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.all!",
     "category": "Function",
-    "text": "all!(r, A)\n\nTest whether all values in A along the singleton dimensions of r are true, and write results to r.\n\njulia> A = [true false; true false]\n2×2 Array{Bool,2}:\n true  false\n true  false\n\njulia> all!([1; 1], A)\n2-element Array{Int64,1}:\n 0\n 0\n\njulia> all!([1 1], A)\n1×2 Array{Int64,2}:\n 1  0\n\n\n\n"
+    "text": "all!(r, A)\n\nTest whether all values in A along the singleton dimensions of r are true, and write results to r.\n\nExamples\n\njulia> A = [true false; true false]\n2×2 Array{Bool,2}:\n true  false\n true  false\n\njulia> all!([1; 1], A)\n2-element Array{Int64,1}:\n 0\n 0\n\njulia> all!([1 1], A)\n1×2 Array{Int64,2}:\n 1  0\n\n\n\n"
 },
 
 {
@@ -6589,7 +6589,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.foreach",
     "category": "Function",
-    "text": "foreach(f, c...) -> Void\n\nCall function f on each element of iterable c. For multiple iterable arguments, f is called elementwise. foreach should be used instead of map when the results of f are not needed, for example in foreach(println, array).\n\njulia> a = 1:3:7;\n\njulia> foreach(x -> println(x^2), a)\n1\n16\n49\n\n\n\n"
+    "text": "foreach(f, c...) -> Void\n\nCall function f on each element of iterable c. For multiple iterable arguments, f is called elementwise. foreach should be used instead of map when the results of f are not needed, for example in foreach(println, array).\n\nExample\n\njulia> a = 1:3:7;\n\njulia> foreach(x -> println(x^2), a)\n1\n16\n49\n\n\n\n"
 },
 
 {
@@ -6597,7 +6597,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.map",
     "category": "Function",
-    "text": "map(f, c...) -> collection\n\nTransform collection c by applying f to each element. For multiple collection arguments, apply f elementwise.\n\njulia> map(x -> x * 2, [1, 2, 3])\n3-element Array{Int64,1}:\n 2\n 4\n 6\n\njulia> map(+, [1, 2, 3], [10, 20, 30])\n3-element Array{Int64,1}:\n 11\n 22\n 33\n\n\n\nmap(f, x::Nullable)\n\nReturn f applied to the value of x if it has one, as a Nullable. If x is null, then return a null value of type Nullable{S}. S is guaranteed to be either Union{} or a concrete type. Whichever of these is chosen is an implementation detail, but typically the choice that maximizes performance would be used. If x has a value, then the return type is guaranteed to be of type Nullable{typeof(f(x))}.\n\n\n\n"
+    "text": "map(f, c...) -> collection\n\nTransform collection c by applying f to each element. For multiple collection arguments, apply f elementwise.\n\nExamples\n\njulia> map(x -> x * 2, [1, 2, 3])\n3-element Array{Int64,1}:\n 2\n 4\n 6\n\njulia> map(+, [1, 2, 3], [10, 20, 30])\n3-element Array{Int64,1}:\n 11\n 22\n 33\n\n\n\nmap(f, x::Nullable)\n\nReturn f applied to the value of x if it has one, as a Nullable. If x is null, then return a null value of type Nullable{S}. S is guaranteed to be either Union{} or a concrete type. Whichever of these is chosen is an implementation detail, but typically the choice that maximizes performance would be used. If x has a value, then the return type is guaranteed to be of type Nullable{typeof(f(x))}.\n\n\n\n"
 },
 
 {
@@ -6605,7 +6605,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.map!",
     "category": "Function",
-    "text": "map!(function, destination, collection...)\n\nLike map, but stores the result in destination rather than a new collection. destination must be at least as large as the first collection.\n\njulia> x = zeros(3);\n\njulia> map!(x -> x * 2, x, [1, 2, 3]);\n\njulia> x\n3-element Array{Float64,1}:\n 2.0\n 4.0\n 6.0\n\n\n\n"
+    "text": "map!(function, destination, collection...)\n\nLike map, but stores the result in destination rather than a new collection. destination must be at least as large as the first collection.\n\nExample\n\njulia> x = zeros(3);\n\njulia> map!(x -> x * 2, x, [1, 2, 3]);\n\njulia> x\n3-element Array{Float64,1}:\n 2.0\n 4.0\n 6.0\n\n\n\n"
 },
 
 {
@@ -6685,7 +6685,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.collect",
     "category": "Method",
-    "text": "collect(collection)\n\nReturn an Array of all items in a collection or iterator. For associative collections, returns Pair{KeyType, ValType}. If the argument is array-like or is an iterator with the HasShape() trait, the result will have the same shape and number of dimensions as the argument.\n\njulia> collect(1:2:13)\n7-element Array{Int64,1}:\n  1\n  3\n  5\n  7\n  9\n 11\n 13\n\n\n\n"
+    "text": "collect(collection)\n\nReturn an Array of all items in a collection or iterator. For associative collections, returns Pair{KeyType, ValType}. If the argument is array-like or is an iterator with the HasShape() trait, the result will have the same shape and number of dimensions as the argument.\n\nExample\n\njulia> collect(1:2:13)\n7-element Array{Int64,1}:\n  1\n  3\n  5\n  7\n  9\n 11\n 13\n\n\n\n"
 },
 
 {
@@ -6701,7 +6701,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.issubset",
     "category": "Method",
-    "text": "issubset(a, b)\n⊆(a,b) -> Bool\n⊈(a,b) -> Bool\n⊊(a,b) -> Bool\n\nDetermine whether every element of a is also in b, using in.\n\n\n\n"
+    "text": "issubset(a, b)\n⊆(a,b) -> Bool\n⊈(a,b) -> Bool\n⊊(a,b) -> Bool\n\nDetermine whether every element of a is also in b, using in.\n\nExamples\n\njulia> issubset([1, 2], [1, 2, 3])\ntrue\n\njulia> issubset([1, 2, 3], [1, 2])\nfalse\n\n\n\n"
 },
 
 {
@@ -6709,7 +6709,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.filter",
     "category": "Function",
-    "text": "filter(function, collection)\n\nReturn a copy of collection, removing elements for which function is false. For associative collections, the function is passed two arguments (key and value).\n\njulia> a = 1:10\n1:10\n\njulia> filter(isodd, a)\n5-element Array{Int64,1}:\n 1\n 3\n 5\n 7\n 9\n\n\n\nfilter(p, x::Nullable)\n\nReturn null if either x is null or p(get(x)) is false, and x otherwise.\n\n\n\n"
+    "text": "filter(function, collection)\n\nReturn a copy of collection, removing elements for which function is false. For associative collections, the function is passed two arguments (key and value).\n\nExamples\n\njulia> a = 1:10\n1:10\n\njulia> filter(isodd, a)\n5-element Array{Int64,1}:\n 1\n 3\n 5\n 7\n 9\n\njulia> d = Dict(1=>\"a\", 2=>\"b\")\nDict{Int64,String} with 2 entries:\n  2 => \"b\"\n  1 => \"a\"\n\njulia> filter((x,y)->isodd(x), d)\nDict{Int64,String} with 1 entry:\n  1 => \"a\"\n\n\n\nfilter(p, x::Nullable)\n\nReturn null if either x is null or p(get(x)) is false, and x otherwise.\n\n\n\n"
 },
 
 {
@@ -6717,7 +6717,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.filter!",
     "category": "Function",
-    "text": "filter!(function, collection)\n\nUpdate collection, removing elements for which function is false. For associative collections, the function is passed two arguments (key and value).\n\njulia> filter!(isodd, collect(1:10))\n5-element Array{Int64,1}:\n 1\n 3\n 5\n 7\n 9\n\n\n\n"
+    "text": "filter!(function, collection)\n\nUpdate collection, removing elements for which function is false. For associative collections, the function is passed two arguments (key and value).\n\nExample\n\njulia> filter!(isodd, collect(1:10))\n5-element Array{Int64,1}:\n 1\n 3\n 5\n 7\n 9\n\n\n\n"
 },
 
 {
@@ -6733,7 +6733,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.getindex",
     "category": "Method",
-    "text": "getindex(collection, key...)\n\nRetrieve the value(s) stored at the given key or index within a collection. The syntax a[i,j,...] is converted by the compiler to getindex(a, i, j, ...).\n\njulia> A = Dict(\"a\" => 1, \"b\" => 2)\nDict{String,Int64} with 2 entries:\n  \"b\" => 2\n  \"a\" => 1\n\njulia> getindex(A, \"a\")\n1\n\n\n\n"
+    "text": "getindex(collection, key...)\n\nRetrieve the value(s) stored at the given key or index within a collection. The syntax a[i,j,...] is converted by the compiler to getindex(a, i, j, ...).\n\nExample\n\njulia> A = Dict(\"a\" => 1, \"b\" => 2)\nDict{String,Int64} with 2 entries:\n  \"b\" => 2\n  \"a\" => 1\n\njulia> getindex(A, \"a\")\n1\n\n\n\n"
 },
 
 {
@@ -6789,7 +6789,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.get",
     "category": "Method",
-    "text": "get(collection, key, default)\n\nReturn the value stored for the given key, or the given default value if no mapping for the key is present.\n\n\n\n"
+    "text": "get(collection, key, default)\n\nReturn the value stored for the given key, or the given default value if no mapping for the key is present.\n\nExamples\n\njulia> d = Dict(\"a\"=>1, \"b\"=>2);\n\njulia> get(d, \"a\", 3)\n1\n\njulia> get(d, \"c\", 3)\n3\n\n\n\n"
 },
 
 {
@@ -6805,7 +6805,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.get!",
     "category": "Method",
-    "text": "get!(collection, key, default)\n\nReturn the value stored for the given key, or if no mapping for the key is present, store key => default, and return default.\n\njulia> d = Dict(\"a\"=>1, \"b\"=>2, \"c\"=>3);\n\njulia> get!(d, \"a\", 5)\n1\n\njulia> get!(d, \"d\", 4)\n4\n\njulia> d\nDict{String,Int64} with 4 entries:\n  \"c\" => 3\n  \"b\" => 2\n  \"a\" => 1\n  \"d\" => 4\n\n\n\n"
+    "text": "get!(collection, key, default)\n\nReturn the value stored for the given key, or if no mapping for the key is present, store key => default, and return default.\n\nExamples\n\njulia> d = Dict(\"a\"=>1, \"b\"=>2, \"c\"=>3);\n\njulia> get!(d, \"a\", 5)\n1\n\njulia> get!(d, \"d\", 4)\n4\n\njulia> d\nDict{String,Int64} with 4 entries:\n  \"c\" => 3\n  \"b\" => 2\n  \"a\" => 1\n  \"d\" => 4\n\n\n\n"
 },
 
 {
@@ -6829,7 +6829,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.delete!",
     "category": "Function",
-    "text": "delete!(collection, key)\n\nDelete the mapping for the given key in a collection, and return the collection.\n\n\n\n"
+    "text": "delete!(collection, key)\n\nDelete the mapping for the given key in a collection, and return the collection.\n\nExample\n\njulia> d = Dict(\"a\"=>1, \"b\"=>2)\nDict{String,Int64} with 2 entries:\n  \"b\" => 2\n  \"a\" => 1\n\njulia> delete!(d, \"b\")\nDict{String,Int64} with 1 entry:\n  \"a\" => 1\n\n\n\n"
 },
 
 {
@@ -6837,7 +6837,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.pop!",
     "category": "Method",
-    "text": "pop!(collection, key[, default])\n\nDelete and return the mapping for key if it exists in collection, otherwise return default, or throw an error if default is not specified.\n\njulia> d = Dict(\"a\"=>1, \"b\"=>2, \"c\"=>3);\n\njulia> pop!(d, \"a\")\n1\n\njulia> pop!(d, \"d\")\nERROR: KeyError: key \"d\" not found\nStacktrace:\n [1] pop!(::Dict{String,Int64}, ::String) at ./dict.jl:539\n\njulia> pop!(d, \"e\", 4)\n4\n\n\n\n"
+    "text": "pop!(collection, key[, default])\n\nDelete and return the mapping for key if it exists in collection, otherwise return default, or throw an error if default is not specified.\n\nExamples\n\njulia> d = Dict(\"a\"=>1, \"b\"=>2, \"c\"=>3);\n\njulia> pop!(d, \"a\")\n1\n\njulia> pop!(d, \"d\")\nERROR: KeyError: key \"d\" not found\nStacktrace:\n [1] pop!(::Dict{String,Int64}, ::String) at ./dict.jl:539\n\njulia> pop!(d, \"e\", 4)\n4\n\n\n\n"
 },
 
 {
@@ -6933,7 +6933,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.union",
     "category": "Function",
-    "text": "union(s1,s2...)\n∪(s1,s2...)\n\nConstruct the union of two or more sets. Maintains order with arrays.\n\n\n\n"
+    "text": "union(s1,s2...)\n∪(s1,s2...)\n\nConstruct the union of two or more sets. Maintains order with arrays.\n\nExamples\n\njulia> union([1, 2], [3, 4])\n4-element Array{Int64,1}:\n 1\n 2\n 3\n 4\n\njulia> union([1, 2], [2, 4])\n3-element Array{Int64,1}:\n 1\n 2\n 4\n\njulia> union([4, 2], [1, 2])\n3-element Array{Int64,1}:\n 4\n 2\n 1\n\n\n\n"
 },
 
 {
@@ -6957,7 +6957,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.setdiff",
     "category": "Function",
-    "text": "setdiff(a, b)\n\nConstruct the set of elements in a but not b. Maintains order with arrays. Note that both arguments must be collections, and both will be iterated over. In particular, setdiff(set,element) where element is a potential member of set, will not work in general.\n\njulia> setdiff([1,2,3],[3,4,5])\n2-element Array{Int64,1}:\n 1\n 2\n\n\n\n"
+    "text": "setdiff(a, b)\n\nConstruct the set of elements in a but not b. Maintains order with arrays. Note that both arguments must be collections, and both will be iterated over. In particular, setdiff(set,element) where element is a potential member of set, will not work in general.\n\nExample\n\njulia> setdiff([1,2,3],[3,4,5])\n2-element Array{Int64,1}:\n 1\n 2\n\n\n\n"
 },
 
 {
@@ -6973,7 +6973,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.symdiff",
     "category": "Function",
-    "text": "symdiff(a, b, rest...)\n\nConstruct the symmetric difference of elements in the passed in sets or arrays. Maintains order with arrays.\n\njulia> symdiff([1,2,3],[3,4,5],[4,5,6])\n3-element Array{Int64,1}:\n 1\n 2\n 6\n\n\n\n"
+    "text": "symdiff(a, b, rest...)\n\nConstruct the symmetric difference of elements in the passed in sets or arrays. Maintains order with arrays.\n\nExample\n\njulia> symdiff([1,2,3],[3,4,5],[4,5,6])\n3-element Array{Int64,1}:\n 1\n 2\n 6\n\n\n\n"
 },
 
 {
@@ -7029,7 +7029,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.push!",
     "category": "Function",
-    "text": "push!(collection, items...) -> collection\n\nInsert one or more items at the end of collection.\n\njulia> push!([1, 2, 3], 4, 5, 6)\n6-element Array{Int64,1}:\n 1\n 2\n 3\n 4\n 5\n 6\n\nUse append! to add all the elements of another collection to collection. The result of the preceding example is equivalent to append!([1, 2, 3], [4, 5, 6]).\n\n\n\n"
+    "text": "push!(collection, items...) -> collection\n\nInsert one or more items at the end of collection.\n\nExample\n\njulia> push!([1, 2, 3], 4, 5, 6)\n6-element Array{Int64,1}:\n 1\n 2\n 3\n 4\n 5\n 6\n\nUse append! to add all the elements of another collection to collection. The result of the preceding example is equivalent to append!([1, 2, 3], [4, 5, 6]).\n\n\n\n"
 },
 
 {
@@ -7037,7 +7037,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.pop!",
     "category": "Method",
-    "text": "pop!(collection) -> item\n\nRemove an item in collection and return it. If collection is an ordered container, the last item is returned.\n\njulia> A=[1, 2, 3]\n3-element Array{Int64,1}:\n 1\n 2\n 3\n\njulia> pop!(A)\n3\n\njulia> A\n2-element Array{Int64,1}:\n 1\n 2\n\njulia> S = Set([1, 2])\nSet([2, 1])\n\njulia> pop!(S)\n2\n\njulia> S\nSet([1])\n\njulia> pop!(Dict(1=>2))\n1=>2\n\n\n\n"
+    "text": "pop!(collection) -> item\n\nRemove an item in collection and return it. If collection is an ordered container, the last item is returned.\n\nExamples\n\njulia> A=[1, 2, 3]\n3-element Array{Int64,1}:\n 1\n 2\n 3\n\njulia> pop!(A)\n3\n\njulia> A\n2-element Array{Int64,1}:\n 1\n 2\n\njulia> S = Set([1, 2])\nSet([2, 1])\n\njulia> pop!(S)\n2\n\njulia> S\nSet([1])\n\njulia> pop!(Dict(1=>2))\n1=>2\n\n\n\n"
 },
 
 {
@@ -7045,7 +7045,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.unshift!",
     "category": "Function",
-    "text": "unshift!(collection, items...) -> collection\n\nInsert one or more items at the beginning of collection.\n\njulia> unshift!([1, 2, 3, 4], 5, 6)\n6-element Array{Int64,1}:\n 5\n 6\n 1\n 2\n 3\n 4\n\n\n\n"
+    "text": "unshift!(collection, items...) -> collection\n\nInsert one or more items at the beginning of collection.\n\nExample\n\njulia> unshift!([1, 2, 3, 4], 5, 6)\n6-element Array{Int64,1}:\n 5\n 6\n 1\n 2\n 3\n 4\n\n\n\n"
 },
 
 {
@@ -7053,7 +7053,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.shift!",
     "category": "Function",
-    "text": "shift!(collection) -> item\n\nRemove the first item from collection.\n\njulia> A = [1, 2, 3, 4, 5, 6]\n6-element Array{Int64,1}:\n 1\n 2\n 3\n 4\n 5\n 6\n\njulia> shift!(A)\n1\n\njulia> A\n5-element Array{Int64,1}:\n 2\n 3\n 4\n 5\n 6\n\n\n\n"
+    "text": "shift!(collection) -> item\n\nRemove the first item from collection.\n\nExample\n\njulia> A = [1, 2, 3, 4, 5, 6]\n6-element Array{Int64,1}:\n 1\n 2\n 3\n 4\n 5\n 6\n\njulia> shift!(A)\n1\n\njulia> A\n5-element Array{Int64,1}:\n 2\n 3\n 4\n 5\n 6\n\n\n\n"
 },
 
 {
@@ -7061,7 +7061,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.insert!",
     "category": "Function",
-    "text": "insert!(a::Vector, index::Integer, item)\n\nInsert an item into a at the given index. index is the index of item in the resulting a.\n\njulia> insert!([6, 5, 4, 2, 1], 4, 3)\n6-element Array{Int64,1}:\n 6\n 5\n 4\n 3\n 2\n 1\n\n\n\n"
+    "text": "insert!(a::Vector, index::Integer, item)\n\nInsert an item into a at the given index. index is the index of item in the resulting a.\n\nExample\n\njulia> insert!([6, 5, 4, 2, 1], 4, 3)\n6-element Array{Int64,1}:\n 6\n 5\n 4\n 3\n 2\n 1\n\n\n\n"
 },
 
 {
@@ -7069,7 +7069,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.deleteat!",
     "category": "Function",
-    "text": "deleteat!(a::Vector, i::Integer)\n\nRemove the item at the given i and return the modified a. Subsequent items are shifted to fill the resulting gap.\n\njulia> deleteat!([6, 5, 4, 3, 2, 1], 2)\n5-element Array{Int64,1}:\n 6\n 4\n 3\n 2\n 1\n\n\n\ndeleteat!(a::Vector, inds)\n\nRemove the items at the indices given by inds, and return the modified a. Subsequent items are shifted to fill the resulting gap.\n\ninds can be either an iterator or a collection of sorted and unique integer indices, or a boolean vector of the same length as a with true indicating entries to delete.\n\njulia> deleteat!([6, 5, 4, 3, 2, 1], 1:2:5)\n3-element Array{Int64,1}:\n 5\n 3\n 1\n\njulia> deleteat!([6, 5, 4, 3, 2, 1], [true, false, true, false, true, false])\n3-element Array{Int64,1}:\n 5\n 3\n 1\n\njulia> deleteat!([6, 5, 4, 3, 2, 1], (2, 2))\nERROR: ArgumentError: indices must be unique and sorted\nStacktrace:\n [1] _deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:880\n [2] deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:867\n\n\n\n"
+    "text": "deleteat!(a::Vector, i::Integer)\n\nRemove the item at the given i and return the modified a. Subsequent items are shifted to fill the resulting gap.\n\nExample\n\njulia> deleteat!([6, 5, 4, 3, 2, 1], 2)\n5-element Array{Int64,1}:\n 6\n 4\n 3\n 2\n 1\n\n\n\ndeleteat!(a::Vector, inds)\n\nRemove the items at the indices given by inds, and return the modified a. Subsequent items are shifted to fill the resulting gap.\n\ninds can be either an iterator or a collection of sorted and unique integer indices, or a boolean vector of the same length as a with true indicating entries to delete.\n\nExamples\n\njulia> deleteat!([6, 5, 4, 3, 2, 1], 1:2:5)\n3-element Array{Int64,1}:\n 5\n 3\n 1\n\njulia> deleteat!([6, 5, 4, 3, 2, 1], [true, false, true, false, true, false])\n3-element Array{Int64,1}:\n 5\n 3\n 1\n\njulia> deleteat!([6, 5, 4, 3, 2, 1], (2, 2))\nERROR: ArgumentError: indices must be unique and sorted\nStacktrace:\n [1] _deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:926\n [2] deleteat!(::Array{Int64,1}, ::Tuple{Int64,Int64}) at ./array.jl:913\n\n\n\n"
 },
 
 {
@@ -7077,7 +7077,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.splice!",
     "category": "Function",
-    "text": "splice!(a::Vector, index::Integer, [replacement]) -> item\n\nRemove the item at the given index, and return the removed item. Subsequent items are shifted left to fill the resulting gap. If specified, replacement values from an ordered collection will be spliced in place of the removed item.\n\njulia> A = [6, 5, 4, 3, 2, 1]; splice!(A, 5)\n2\n\njulia> A\n5-element Array{Int64,1}:\n 6\n 5\n 4\n 3\n 1\n\njulia> splice!(A, 5, -1)\n1\n\njulia> A\n5-element Array{Int64,1}:\n  6\n  5\n  4\n  3\n -1\n\njulia> splice!(A, 1, [-1, -2, -3])\n6\n\njulia> A\n7-element Array{Int64,1}:\n -1\n -2\n -3\n  5\n  4\n  3\n -1\n\nTo insert replacement before an index n without removing any items, use splice!(collection, n:n-1, replacement).\n\n\n\nsplice!(a::Vector, range, [replacement]) -> items\n\nRemove items in the specified index range, and return a collection containing the removed items. Subsequent items are shifted left to fill the resulting gap. If specified, replacement values from an ordered collection will be spliced in place of the removed items.\n\nTo insert replacement before an index n without removing any items, use splice!(collection, n:n-1, replacement).\n\njulia> splice!(A, 4:3, 2)\n0-element Array{Int64,1}\n\njulia> A\n8-element Array{Int64,1}:\n -1\n -2\n -3\n  2\n  5\n  4\n  3\n -1\n\n\n\n"
+    "text": "splice!(a::Vector, index::Integer, [replacement]) -> item\n\nRemove the item at the given index, and return the removed item. Subsequent items are shifted left to fill the resulting gap. If specified, replacement values from an ordered collection will be spliced in place of the removed item.\n\nExamples\n\njulia> A = [6, 5, 4, 3, 2, 1]; splice!(A, 5)\n2\n\njulia> A\n5-element Array{Int64,1}:\n 6\n 5\n 4\n 3\n 1\n\njulia> splice!(A, 5, -1)\n1\n\njulia> A\n5-element Array{Int64,1}:\n  6\n  5\n  4\n  3\n -1\n\njulia> splice!(A, 1, [-1, -2, -3])\n6\n\njulia> A\n7-element Array{Int64,1}:\n -1\n -2\n -3\n  5\n  4\n  3\n -1\n\nTo insert replacement before an index n without removing any items, use splice!(collection, n:n-1, replacement).\n\n\n\nsplice!(a::Vector, range, [replacement]) -> items\n\nRemove items in the specified index range, and return a collection containing the removed items. Subsequent items are shifted left to fill the resulting gap. If specified, replacement values from an ordered collection will be spliced in place of the removed items.\n\nTo insert replacement before an index n without removing any items, use splice!(collection, n:n-1, replacement).\n\nExample\n\njulia> splice!(A, 4:3, 2)\n0-element Array{Int64,1}\n\njulia> A\n8-element Array{Int64,1}:\n -1\n -2\n -3\n  2\n  5\n  4\n  3\n -1\n\n\n\n"
 },
 
 {
@@ -7085,7 +7085,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.resize!",
     "category": "Function",
-    "text": "resize!(a::Vector, n::Integer) -> Vector\n\nResize a to contain n elements. If n is smaller than the current collection length, the first n elements will be retained. If n is larger, the new elements are not guaranteed to be initialized.\n\njulia> resize!([6, 5, 4, 3, 2, 1], 3)\n3-element Array{Int64,1}:\n 6\n 5\n 4\n\njulia> resize!([6, 5, 4, 3, 2, 1], 8)\n8-element Array{Int64,1}:\n 6\n 5\n 4\n 3\n 2\n 1\n 0\n 0\n\n\n\n"
+    "text": "resize!(a::Vector, n::Integer) -> Vector\n\nResize a to contain n elements. If n is smaller than the current collection length, the first n elements will be retained. If n is larger, the new elements are not guaranteed to be initialized.\n\nExamples\n\njulia> resize!([6, 5, 4, 3, 2, 1], 3)\n3-element Array{Int64,1}:\n 6\n 5\n 4\n\njulia> a = resize!([6, 5, 4, 3, 2, 1], 8);\n\njulia> length(a)\n8\n\njulia> a[1:6]\n6-element Array{Int64,1}:\n 6\n 5\n 4\n 3\n 2\n 1\n\n\n\n"
 },
 
 {
@@ -7093,7 +7093,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.append!",
     "category": "Function",
-    "text": "append!(collection, collection2) -> collection.\n\nAdd the elements of collection2 to the end of collection.\n\njulia> append!([1],[2,3])\n3-element Array{Int64,1}:\n 1\n 2\n 3\n\njulia> append!([1, 2, 3], [4, 5, 6])\n6-element Array{Int64,1}:\n 1\n 2\n 3\n 4\n 5\n 6\n\nUse push! to add individual items to collection which are not already themselves in another collection. The result is of the preceding example is equivalent to push!([1, 2, 3], 4, 5, 6).\n\n\n\n"
+    "text": "append!(collection, collection2) -> collection.\n\nAdd the elements of collection2 to the end of collection.\n\nExamples\n\njulia> append!([1],[2,3])\n3-element Array{Int64,1}:\n 1\n 2\n 3\n\njulia> append!([1, 2, 3], [4, 5, 6])\n6-element Array{Int64,1}:\n 1\n 2\n 3\n 4\n 5\n 6\n\nUse push! to add individual items to collection which are not already themselves in another collection. The result is of the preceding example is equivalent to push!([1, 2, 3], 4, 5, 6).\n\n\n\n"
 },
 
 {
@@ -7101,7 +7101,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.prepend!",
     "category": "Function",
-    "text": "prepend!(a::Vector, items) -> collection\n\nInsert the elements of items to the beginning of a.\n\njulia> prepend!([3],[1,2])\n3-element Array{Int64,1}:\n 1\n 2\n 3\n\n\n\n"
+    "text": "prepend!(a::Vector, items) -> collection\n\nInsert the elements of items to the beginning of a.\n\nExample\n\njulia> prepend!([3],[1,2])\n3-element Array{Int64,1}:\n 1\n 2\n 3\n\n\n\n"
 },
 
 {
@@ -7453,7 +7453,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:~",
     "category": "Function",
-    "text": "~(x)\n\nBitwise not.\n\njulia> ~4\n-5\n\njulia> ~10\n-11\n\njulia> ~true\nfalse\n\n\n\n"
+    "text": "~(x)\n\nBitwise not.\n\nExamples\n\njulia> ~4\n-5\n\njulia> ~10\n-11\n\njulia> ~true\nfalse\n\n\n\n"
 },
 
 {
@@ -7461,7 +7461,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:&",
     "category": "Function",
-    "text": "&(x, y)\n\nBitwise and.\n\njulia> 4 & 10\n0\n\njulia> 4 & 12\n4\n\n\n\n"
+    "text": "&(x, y)\n\nBitwise and.\n\nExamples\n\njulia> 4 & 10\n0\n\njulia> 4 & 12\n4\n\n\n\n"
 },
 
 {
@@ -7469,7 +7469,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:|",
     "category": "Function",
-    "text": "|(x, y)\n\nBitwise or.\n\njulia> 4 | 10\n14\n\njulia> 4 | 1\n5\n\n\n\n"
+    "text": "|(x, y)\n\nBitwise or.\n\nExamples\n\njulia> 4 | 10\n14\n\njulia> 4 | 1\n5\n\n\n\n"
 },
 
 {
@@ -7949,7 +7949,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.exp10",
     "category": "Function",
-    "text": "exp10(x)\n\nCompute 10^x.\n\njulia> exp10(2)\n100.0\n\njulia> exp10(0.2)\n1.5848931924611136\n\n\n\n"
+    "text": "exp10(x)\n\nCompute 10^x.\n\nExamples\n\njulia> exp10(2)\n100.0\n\njulia> exp10(0.2)\n1.5848931924611136\n\n\n\n"
 },
 
 {
@@ -8253,7 +8253,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.copysign",
     "category": "Function",
-    "text": "copysign(x, y) -> z\n\nReturn z which has the magnitude of x and the same sign as y.\n\njulia> copysign(1, -2)\n-1\n\njulia> copysign(-1, 2)\n1\n\n\n\n"
+    "text": "copysign(x, y) -> z\n\nReturn z which has the magnitude of x and the same sign as y.\n\nExamples\n\njulia> copysign(1, -2)\n-1\n\njulia> copysign(-1, 2)\n1\n\n\n\n"
 },
 
 {
@@ -8269,7 +8269,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.signbit",
     "category": "Function",
-    "text": "signbit(x)\n\nReturns true if the value of the sign of x is negative, otherwise false.\n\njulia> signbit(-4)\ntrue\n\njulia> signbit(5)\nfalse\n\njulia> signbit(5.5)\nfalse\n\njulia> signbit(-4.1)\ntrue\n\n\n\n"
+    "text": "signbit(x)\n\nReturns true if the value of the sign of x is negative, otherwise false.\n\nExamples\n\njulia> signbit(-4)\ntrue\n\njulia> signbit(5)\nfalse\n\njulia> signbit(5.5)\nfalse\n\njulia> signbit(-4.1)\ntrue\n\n\n\n"
 },
 
 {
@@ -8333,7 +8333,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.conj",
     "category": "Function",
-    "text": "conj(v::RowVector)\n\nReturns a ConjArray lazy view of the input, where each element is conjugated.\n\nExample\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\nconj(z)\n\nCompute the complex conjugate of a complex number z.\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\n"
+    "text": "conj(z)\n\nCompute the complex conjugate of a complex number z.\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\nconj(v::RowVector)\n\nReturns a ConjArray lazy view of the input, where each element is conjugated.\n\nExample\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\n"
 },
 
 {
@@ -8357,7 +8357,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.binomial",
     "category": "Function",
-    "text": "binomial(n,k)\n\nNumber of ways to choose k out of n items.\n\njulia> binomial(5, 3)\n10\n\njulia> factorial(5) ÷ (factorial(5-3) * factorial(3))\n10\n\n\n\n"
+    "text": "binomial(n, k)\n\nNumber of ways to choose k out of n items.\n\nExample\n\njulia> binomial(5, 3)\n10\n\njulia> factorial(5) ÷ (factorial(5-3) * factorial(3))\n10\n\n\n\n"
 },
 
 {
@@ -8373,7 +8373,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.gcd",
     "category": "Function",
-    "text": "gcd(x,y)\n\nGreatest common (positive) divisor (or zero if x and y are both zero).\n\njulia> gcd(6,9)\n3\n\njulia> gcd(6,-9)\n3\n\n\n\n"
+    "text": "gcd(x,y)\n\nGreatest common (positive) divisor (or zero if x and y are both zero).\n\nExamples\n\njulia> gcd(6,9)\n3\n\njulia> gcd(6,-9)\n3\n\n\n\n"
 },
 
 {
@@ -8381,7 +8381,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.lcm",
     "category": "Function",
-    "text": "lcm(x,y)\n\nLeast common (non-negative) multiple.\n\njulia> lcm(2,3)\n6\n\njulia> lcm(-2,3)\n6\n\n\n\n"
+    "text": "lcm(x,y)\n\nLeast common (non-negative) multiple.\n\nExamples\n\njulia> lcm(2,3)\n6\n\njulia> lcm(-2,3)\n6\n\n\n\n"
 },
 
 {
@@ -8389,7 +8389,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.gcdx",
     "category": "Function",
-    "text": "gcdx(x,y)\n\nComputes the greatest common (positive) divisor of x and y and their Bézout coefficients, i.e. the integer coefficients u and v that satisfy ux+vy = d = gcd(xy). gcdx(xy) returns (duv).\n\njulia> gcdx(12, 42)\n(6, -3, 1)\n\njulia> gcdx(240, 46)\n(2, -9, 47)\n\nnote: Note\nBézout coefficients are not uniquely defined. gcdx returns the minimal Bézout coefficients that are computed by the extended Euclidean algorithm. (Ref: D. Knuth, TAoCP, 2/e, p. 325, Algorithm X.) For signed integers, these coefficients u and v are minimal in the sense that u  yd and v  xd. Furthermore, the signs of u and v are chosen so that d is positive. For unsigned integers, the coefficients u and v might be near their typemax, and the identity then holds only via the unsigned integers' modulo arithmetic.\n\n\n\n"
+    "text": "gcdx(x,y)\n\nComputes the greatest common (positive) divisor of x and y and their Bézout coefficients, i.e. the integer coefficients u and v that satisfy ux+vy = d = gcd(xy). gcdx(xy) returns (duv).\n\nExamples\n\njulia> gcdx(12, 42)\n(6, -3, 1)\n\njulia> gcdx(240, 46)\n(2, -9, 47)\n\nnote: Note\nBézout coefficients are not uniquely defined. gcdx returns the minimal Bézout coefficients that are computed by the extended Euclidean algorithm. (Ref: D. Knuth, TAoCP, 2/e, p. 325, Algorithm X.) For signed integers, these coefficients u and v are minimal in the sense that u  yd and v  xd. Furthermore, the signs of u and v are chosen so that d is positive. For unsigned integers, the coefficients u and v might be near their typemax, and the identity then holds only via the unsigned integers' modulo arithmetic.\n\n\n\n"
 },
 
 {
@@ -8397,7 +8397,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.ispow2",
     "category": "Function",
-    "text": "ispow2(n::Integer) -> Bool\n\nTest whether n is a power of two.\n\njulia> ispow2(4)\ntrue\n\njulia> ispow2(5)\nfalse\n\n\n\n"
+    "text": "ispow2(n::Integer) -> Bool\n\nTest whether n is a power of two.\n\nExamples\n\njulia> ispow2(4)\ntrue\n\njulia> ispow2(5)\nfalse\n\n\n\n"
 },
 
 {
@@ -8405,7 +8405,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.nextpow2",
     "category": "Function",
-    "text": "nextpow2(n::Integer)\n\nThe smallest power of two not less than n. Returns 0 for n==0, and returns -nextpow2(-n) for negative arguments.\n\njulia> nextpow2(16)\n16\n\njulia> nextpow2(17)\n32\n\n\n\n"
+    "text": "nextpow2(n::Integer)\n\nThe smallest power of two not less than n. Returns 0 for n==0, and returns -nextpow2(-n) for negative arguments.\n\nExamples\n\njulia> nextpow2(16)\n16\n\njulia> nextpow2(17)\n32\n\n\n\n"
 },
 
 {
@@ -8413,7 +8413,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.prevpow2",
     "category": "Function",
-    "text": "prevpow2(n::Integer)\n\nThe largest power of two not greater than n. Returns 0 for n==0, and returns -prevpow2(-n) for negative arguments.\n\njulia> prevpow2(5)\n4\n\n\n\n"
+    "text": "prevpow2(n::Integer)\n\nThe largest power of two not greater than n. Returns 0 for n==0, and returns -prevpow2(-n) for negative arguments.\n\nExamples\n\njulia> prevpow2(5)\n4\n\njulia> prevpow2(0)\n0\n\n\n\n"
 },
 
 {
@@ -8421,7 +8421,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.nextpow",
     "category": "Function",
-    "text": "nextpow(a, x)\n\nThe smallest a^n not less than x, where n is a non-negative integer. a must be greater than 1, and x must be greater than 0.\n\njulia> nextpow(2, 7)\n8\n\njulia> nextpow(2, 9)\n16\n\nSee also prevpow.\n\n\n\n"
+    "text": "nextpow(a, x)\n\nThe smallest a^n not less than x, where n is a non-negative integer. a must be greater than 1, and x must be greater than 0.\n\nExamples\n\njulia> nextpow(2, 7)\n8\n\njulia> nextpow(2, 9)\n16\n\njulia> nextpow(5, 20)\n25\n\njulia> nextpow(4, 16)\n16\n\nSee also prevpow.\n\n\n\n"
 },
 
 {
@@ -8429,7 +8429,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.prevpow",
     "category": "Function",
-    "text": "prevpow(a, x)\n\nThe largest a^n not greater than x, where n is a non-negative integer. a must be greater than 1, and x must not be less than 1.\n\njulia> prevpow(2, 7)\n4\n\njulia> prevpow(2, 9)\n8\n\nSee also nextpow.\n\n\n\n"
+    "text": "prevpow(a, x)\n\nThe largest a^n not greater than x, where n is a non-negative integer. a must be greater than 1, and x must not be less than 1.\n\nExamples\n\njulia> prevpow(2, 7)\n4\n\njulia> prevpow(2, 9)\n8\n\njulia> prevpow(5, 20)\n5\n\njulia> prevpow(4, 16)\n16\n\nSee also nextpow.\n\n\n\n"
 },
 
 {
@@ -8437,7 +8437,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.nextprod",
     "category": "Function",
-    "text": "nextprod([k_1, k_2,...], n)\n\nNext integer greater than or equal to n that can be written as prod k_i^p_i for integers p_1, p_2, etc.\n\njulia> nextprod([2, 3], 105)\n108\n\njulia> 2^2 * 3^3\n108\n\n\n\n"
+    "text": "nextprod([k_1, k_2,...], n)\n\nNext integer greater than or equal to n that can be written as prod k_i^p_i for integers p_1, p_2, etc.\n\nExample\n\njulia> nextprod([2, 3], 105)\n108\n\njulia> 2^2 * 3^3\n108\n\n\n\n"
 },
 
 {
@@ -8445,7 +8445,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.invmod",
     "category": "Function",
-    "text": "invmod(x,m)\n\nTake the inverse of x modulo m: y such that x y = 1 pmod m, with div(xy) = 0. This is undefined for m = 0, or if gcd(xm) neq 1.\n\njulia> invmod(2,5)\n3\n\njulia> invmod(2,3)\n2\n\njulia> invmod(5,6)\n5\n\n\n\n"
+    "text": "invmod(x,m)\n\nTake the inverse of x modulo m: y such that x y = 1 pmod m, with div(xy) = 0. This is undefined for m = 0, or if gcd(xm) neq 1.\n\nExamples\n\njulia> invmod(2,5)\n3\n\njulia> invmod(2,3)\n2\n\njulia> invmod(5,6)\n5\n\n\n\n"
 },
 
 {
@@ -8453,7 +8453,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.powermod",
     "category": "Function",
-    "text": "powermod(x::Integer, p::Integer, m)\n\nCompute x^p pmod m.\n\njulia> powermod(2, 6, 5)\n4\n\njulia> mod(2^6, 5)\n4\n\n\n\n"
+    "text": "powermod(x::Integer, p::Integer, m)\n\nCompute x^p pmod m.\n\nExamples\n\njulia> powermod(2, 6, 5)\n4\n\njulia> mod(2^6, 5)\n4\n\njulia> powermod(5, 2, 20)\n5\n\njulia> powermod(5, 2, 19)\n6\n\njulia> powermod(5, 3, 19)\n11\n\n\n\n"
 },
 
 {
@@ -8501,7 +8501,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.ndigits",
     "category": "Function",
-    "text": "ndigits(n::Integer, b::Integer=10)\n\nCompute the number of digits in integer n written in base b. The base b must not be in [-1, 0, 1].\n\njulia> ndigits(12345)\n5\n\njulia> ndigits(1022, 16)\n3\n\njulia> base(16, 1022)\n\"3fe\"\n\n\n\n"
+    "text": "ndigits(n::Integer, b::Integer=10)\n\nCompute the number of digits in integer n written in base b. The base b must not be in [-1, 0, 1].\n\nExamples\n\njulia> ndigits(12345)\n5\n\njulia> ndigits(1022, 16)\n3\n\njulia> base(16, 1022)\n\"3fe\"\n\n\n\n"
 },
 
 {
@@ -8901,7 +8901,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Numbers",
     "title": "Base.hex",
     "category": "Function",
-    "text": "hex(n, pad::Int=1)\n\nConvert an integer to a hexadecimal string, optionally specifying a number of digits to pad to.\n\n\n\n"
+    "text": "hex(n, pad::Int=1)\n\nConvert an integer to a hexadecimal string, optionally specifying a number of digits to pad to.\n\njulia> hex(20)\n\"14\"\n\njulia> hex(20, 3)\n\"014\"\n\n\n\n"
 },
 
 {
@@ -8909,7 +8909,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Numbers",
     "title": "Base.dec",
     "category": "Function",
-    "text": "dec(n, pad::Int=1)\n\nConvert an integer to a decimal string, optionally specifying a number of digits to pad to.\n\n\n\n"
+    "text": "dec(n, pad::Int=1)\n\nConvert an integer to a decimal string, optionally specifying a number of digits to pad to.\n\nExamples\n\njulia> dec(20)\n\"20\"\n\njulia> dec(20, 3)\n\"020\"\n\n\n\n"
 },
 
 {
@@ -8917,7 +8917,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Numbers",
     "title": "Base.oct",
     "category": "Function",
-    "text": "oct(n, pad::Int=1)\n\nConvert an integer to an octal string, optionally specifying a number of digits to pad to.\n\n\n\n"
+    "text": "oct(n, pad::Int=1)\n\nConvert an integer to an octal string, optionally specifying a number of digits to pad to.\n\njulia> oct(20)\n\"24\"\n\njulia> oct(20, 3)\n\"024\"\n\n\n\n"
 },
 
 {
@@ -8933,7 +8933,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Numbers",
     "title": "Base.digits",
     "category": "Function",
-    "text": "digits([T<:Integer], n::Integer, base::T=10, pad::Integer=1)\n\nReturns an array with element type T (default Int) of the digits of n in the given base, optionally padded with zeros to a specified size. More significant digits are at higher indexes, such that n == sum([digits[k]*base^(k-1) for k=1:length(digits)]).\n\n\n\n"
+    "text": "digits([T<:Integer], n::Integer, base::T=10, pad::Integer=1)\n\nReturns an array with element type T (default Int) of the digits of n in the given base, optionally padded with zeros to a specified size. More significant digits are at higher indexes, such that n == sum([digits[k]*base^(k-1) for k=1:length(digits)]).\n\nExamples\n\njulia> digits(10, 10)\n2-element Array{Int64,1}:\n 0\n 1\n\njulia> digits(10, 2)\n4-element Array{Int64,1}:\n 0\n 1\n 0\n 1\n\njulia> digits(10, 2, 6)\n6-element Array{Int64,1}:\n 0\n 1\n 0\n 1\n 0\n 0\n\n\n\n"
 },
 
 {
@@ -8941,7 +8941,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Numbers",
     "title": "Base.digits!",
     "category": "Function",
-    "text": "digits!(array, n::Integer, base::Integer=10)\n\nFills an array of the digits of n in the given base. More significant digits are at higher indexes. If the array length is insufficient, the least significant digits are filled up to the array length. If the array length is excessive, the excess portion is filled with zeros.\n\n\n\n"
+    "text": "digits!(array, n::Integer, base::Integer=10)\n\nFills an array of the digits of n in the given base. More significant digits are at higher indexes. If the array length is insufficient, the least significant digits are filled up to the array length. If the array length is excessive, the excess portion is filled with zeros.\n\nExamples\n\njulia> digits!([2,2,2,2], 10, 2)\n4-element Array{Int64,1}:\n 0\n 1\n 0\n 1\n\njulia> digits!([2,2,2,2,2,2], 10, 2)\n6-element Array{Int64,1}:\n 0\n 1\n 0\n 1\n 0\n 0\n\n\n\n"
 },
 
 {
@@ -8949,7 +8949,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Numbers",
     "title": "Base.bits",
     "category": "Function",
-    "text": "bits(n)\n\nA string giving the literal bit representation of a number.\n\njulia> bits(4)\n\"0000000000000000000000000000000000000000000000000000000000000100\"\n\njulia> bits(2.2)\n\"0100000000000001100110011001100110011001100110011001100110011010\"\n\n\n\n"
+    "text": "bits(n)\n\nA string giving the literal bit representation of a number.\n\nExample\n\njulia> bits(4)\n\"0000000000000000000000000000000000000000000000000000000000000100\"\n\njulia> bits(2.2)\n\"0100000000000001100110011001100110011001100110011001100110011010\"\n\n\n\n"
 },
 
 {
@@ -8989,7 +8989,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Numbers",
     "title": "Base.unsigned",
     "category": "Function",
-    "text": "unsigned(x) -> Unsigned\n\nConvert a number to an unsigned integer. If the argument is signed, it is reinterpreted as unsigned without checking for negative values.\n\n\n\n"
+    "text": "unsigned(x) -> Unsigned\n\nConvert a number to an unsigned integer. If the argument is signed, it is reinterpreted as unsigned without checking for negative values.\n\nExamples\n\njulia> unsigned(-2)\n0xfffffffffffffffe\n\njulia> unsigned(2)\n0x0000000000000002\n\njulia> signed(unsigned(-2))\n-2\n\n\n\n"
 },
 
 {
@@ -9029,7 +9029,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Numbers",
     "title": "Base.bswap",
     "category": "Function",
-    "text": "bswap(n)\n\nByte-swap an integer. Flip the bits of its binary representation.\n\njulia> a = bswap(4)\n288230376151711744\n\njulia> bswap(a)\n4\n\njulia> bin(1)\n\"1\"\n\njulia> bin(bswap(1))\n\"100000000000000000000000000000000000000000000000000000000\"\n\n\n\n"
+    "text": "bswap(n)\n\nByte-swap an integer. Flip the bits of its binary representation.\n\nExamples\n\njulia> a = bswap(4)\n288230376151711744\n\njulia> bswap(a)\n4\n\njulia> bin(1)\n\"1\"\n\njulia> bin(bswap(1))\n\"100000000000000000000000000000000000000000000000000000000\"\n\n\n\n"
 },
 
 {
@@ -9037,7 +9037,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Numbers",
     "title": "Base.num2hex",
     "category": "Function",
-    "text": "num2hex(f)\n\nGet a hexadecimal string of the binary representation of a floating point number.\n\njulia> num2hex(2.2)\n\"400199999999999a\"\n\n\n\n"
+    "text": "num2hex(f)\n\nGet a hexadecimal string of the binary representation of a floating point number.\n\nExample\n\njulia> num2hex(2.2)\n\"400199999999999a\"\n\n\n\n"
 },
 
 {
@@ -9269,7 +9269,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Numbers",
     "title": "Core.Float32",
     "category": "Method",
-    "text": "Float32(x [, mode::RoundingMode])\n\nCreate a Float32 from x. If x is not exactly representable then mode determines how x is rounded.\n\njulia> Float32(1/3, RoundDown)\n0.3333333f0\n\njulia> Float32(1/3, RoundUp)\n0.33333334f0\n\nSee RoundingMode for available rounding modes.\n\n\n\n"
+    "text": "Float32(x [, mode::RoundingMode])\n\nCreate a Float32 from x. If x is not exactly representable then mode determines how x is rounded.\n\nExamples\n\njulia> Float32(1/3, RoundDown)\n0.3333333f0\n\njulia> Float32(1/3, RoundUp)\n0.33333334f0\n\nSee RoundingMode for available rounding modes.\n\n\n\n"
 },
 
 {
@@ -9277,7 +9277,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Numbers",
     "title": "Core.Float64",
     "category": "Method",
-    "text": "Float64(x [, mode::RoundingMode])\n\nCreate a Float64 from x. If x is not exactly representable then mode determines how x is rounded.\n\njulia> Float64(pi, RoundDown)\n3.141592653589793\n\njulia> Float64(pi, RoundUp)\n3.1415926535897936\n\nSee RoundingMode for available rounding modes.\n\n\n\n"
+    "text": "Float64(x [, mode::RoundingMode])\n\nCreate a Float64 from x. If x is not exactly representable then mode determines how x is rounded.\n\nExamples\n\njulia> Float64(pi, RoundDown)\n3.141592653589793\n\njulia> Float64(pi, RoundUp)\n3.1415926535897936\n\nSee RoundingMode for available rounding modes.\n\n\n\n"
 },
 
 {
@@ -9493,7 +9493,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Numbers",
     "title": "Base.Random.MersenneTwister",
     "category": "Type",
-    "text": "MersenneTwister(seed)\n\nCreate a MersenneTwister RNG object. Different RNG objects can have their own seeds, which may be useful for generating different streams of random numbers.\n\n\n\n"
+    "text": "MersenneTwister(seed)\n\nCreate a MersenneTwister RNG object. Different RNG objects can have their own seeds, which may be useful for generating different streams of random numbers.\n\nExample\n\njulia> rng = MersenneTwister(1234);\n\n\n\n"
 },
 
 {
@@ -9517,7 +9517,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Numbers",
     "title": "Base.Random.rand!",
     "category": "Function",
-    "text": "rand!([rng=GLOBAL_RNG], A, [S=eltype(A)])\n\nPopulate the array A with random values. If S is specified (S can be a type or a collection, cf. rand for details), the values are picked randomly from S. This is equivalent to copy!(A, rand(rng, S, size(A))) but without allocating a new array.\n\n\n\n"
+    "text": "rand!([rng=GLOBAL_RNG], A, [S=eltype(A)])\n\nPopulate the array A with random values. If S is specified (S can be a type or a collection, cf. rand for details), the values are picked randomly from S. This is equivalent to copy!(A, rand(rng, S, size(A))) but without allocating a new array.\n\nExample\n\njulia> rng = MersenneTwister(1234);\n\njulia> rand!(rng, zeros(5))\n5-element Array{Float64,1}:\n 0.590845\n 0.766797\n 0.566237\n 0.460085\n 0.794026\n\n\n\n"
 },
 
 {
@@ -9525,7 +9525,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Numbers",
     "title": "Base.Random.bitrand",
     "category": "Function",
-    "text": "bitrand([rng=GLOBAL_RNG], [dims...])\n\nGenerate a BitArray of random boolean values.\n\n\n\n"
+    "text": "bitrand([rng=GLOBAL_RNG], [dims...])\n\nGenerate a BitArray of random boolean values.\n\nExample\n\njulia> rng = MersenneTwister(1234);\n\njulia> bitrand(rng, 10)\n10-element BitArray{1}:\n  true\n  true\n  true\n false\n  true\n false\n false\n  true\n false\n  true\n\n\n\n"
 },
 
 {
@@ -9533,7 +9533,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Numbers",
     "title": "Base.Random.randn",
     "category": "Function",
-    "text": "randn([rng=GLOBAL_RNG], [T=Float64], [dims...])\n\nGenerate a normally-distributed random number of type T with mean 0 and standard deviation 1. Optionally generate an array of normally-distributed random numbers. The Base module currently provides an implementation for the types Float16, Float32, and Float64 (the default), and their Complex counterparts. When the type argument is complex, the values are drawn from the circularly symmetric complex normal distribution.\n\n\n\n"
+    "text": "randn([rng=GLOBAL_RNG], [T=Float64], [dims...])\n\nGenerate a normally-distributed random number of type T with mean 0 and standard deviation 1. Optionally generate an array of normally-distributed random numbers. The Base module currently provides an implementation for the types Float16, Float32, and Float64 (the default), and their Complex counterparts. When the type argument is complex, the values are drawn from the circularly symmetric complex normal distribution.\n\nExamples\n\njulia> rng = MersenneTwister(1234);\n\njulia> randn(rng, Complex128)\n0.6133070881429037 - 0.6376291670853887im\n\njulia> randn(rng, Complex64, (2, 4))\n2×4 Array{Complex{Float32},2}:\n -0.349649-0.638457im  0.376756-0.192146im  -0.396334-0.0136413im  -0.585317+0.0778497im\n  0.611224+1.56403im   0.355204-0.365563im  0.0905552+1.31012im    -0.177608+0.261427im\n\n\n\n"
 },
 
 {
@@ -9541,7 +9541,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Numbers",
     "title": "Base.Random.randn!",
     "category": "Function",
-    "text": "randn!([rng=GLOBAL_RNG], A::AbstractArray) -> A\n\nFill the array A with normally-distributed (mean 0, standard deviation 1) random numbers. Also see the rand function.\n\n\n\n"
+    "text": "randn!([rng=GLOBAL_RNG], A::AbstractArray) -> A\n\nFill the array A with normally-distributed (mean 0, standard deviation 1) random numbers. Also see the rand function.\n\nExample\n\njulia> rng = MersenneTwister(1234);\n\njulia> randn!(rng, zeros(5))\n5-element Array{Float64,1}:\n  0.867347\n -0.901744\n -0.494479\n -0.902914\n  0.864401\n\n\n\n"
 },
 
 {
@@ -9549,7 +9549,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Numbers",
     "title": "Base.Random.randexp",
     "category": "Function",
-    "text": "randexp([rng=GLOBAL_RNG], [T=Float64], [dims...])\n\nGenerate a random number of type T according to the exponential distribution with scale 1. Optionally generate an array of such random numbers. The Base module currently provides an implementation for the types Float16, Float32, and Float64 (the default).\n\n\n\n"
+    "text": "randexp([rng=GLOBAL_RNG], [T=Float64], [dims...])\n\nGenerate a random number of type T according to the exponential distribution with scale 1. Optionally generate an array of such random numbers. The Base module currently provides an implementation for the types Float16, Float32, and Float64 (the default).\n\nExamples\n\njulia> rng = MersenneTwister(1234);\n\njulia> randexp(rng, Float32)\n2.4835055f0\n\njulia> randexp(rng, 3, 3)\n3×3 Array{Float64,2}:\n 1.5167    1.30652   0.344435\n 0.604436  2.78029   0.418516\n 0.695867  0.693292  0.643644\n\n\n\n"
 },
 
 {
@@ -9557,7 +9557,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Numbers",
     "title": "Base.Random.randexp!",
     "category": "Function",
-    "text": "randexp!([rng=GLOBAL_RNG], A::AbstractArray) -> A\n\nFill the array A with random numbers following the exponential distribution (with scale 1).\n\n\n\n"
+    "text": "randexp!([rng=GLOBAL_RNG], A::AbstractArray) -> A\n\nFill the array A with random numbers following the exponential distribution (with scale 1).\n\nExample\n\njulia> rng = MersenneTwister(1234);\n\njulia> randexp!(rng, zeros(5))\n5-element Array{Float64,1}:\n 2.48351\n 1.5167\n 0.604436\n 0.695867\n 1.30652\n\n\n\n"
 },
 
 {
@@ -10005,7 +10005,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.Random.randstring",
     "category": "Function",
-    "text": "randstring([rng,] len=8)\n\nCreate a random ASCII string of length len, consisting of upper- and lower-case letters and the digits 0-9. The optional rng argument specifies a random number generator, see Random Numbers.\n\n\n\n"
+    "text": "randstring([rng,] len=8)\n\nCreate a random ASCII string of length len, consisting of upper- and lower-case letters and the digits 0-9. The optional rng argument specifies a random number generator, see Random Numbers.\n\nExample\n\njulia> rng = MersenneTwister(1234);\n\njulia> randstring(rng, 4)\n\"mbDd\"\n\n\n\n"
 },
 
 {
@@ -10197,7 +10197,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.getindex",
     "category": "Method",
-    "text": "getindex(type[, elements...])\n\nConstruct a 1-d array of the specified type. This is usually called with the syntax Type[]. Element values can be specified using Type[a,b,c,...].\n\njulia> Int8[1, 2, 3]\n3-element Array{Int8,1}:\n 1\n 2\n 3\n\njulia> getindex(Int8, 1, 2, 3)\n3-element Array{Int8,1}:\n 1\n 2\n 3\n\n\n\n"
+    "text": "getindex(type[, elements...])\n\nConstruct a 1-d array of the specified type. This is usually called with the syntax Type[]. Element values can be specified using Type[a,b,c,...].\n\nExample\n\njulia> Int8[1, 2, 3]\n3-element Array{Int8,1}:\n 1\n 2\n 3\n\njulia> getindex(Int8, 1, 2, 3)\n3-element Array{Int8,1}:\n 1\n 2\n 3\n\n\n\n"
 },
 
 {
@@ -10205,7 +10205,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.zeros",
     "category": "Function",
-    "text": "zeros([A::AbstractArray,] [T=eltype(A)::Type,] [dims=size(A)::Tuple])\n\nCreate an array of all zeros with the same layout as A, element type T and size dims. The A argument can be skipped, which behaves like Array{Float64,0}() was passed. For convenience dims may also be passed in variadic form.\n\njulia> zeros(1)\n1-element Array{Float64,1}:\n 0.0\n\njulia> zeros(Int8, 2, 3)\n2×3 Array{Int8,2}:\n 0  0  0\n 0  0  0\n\njulia> A = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> zeros(A)\n2×2 Array{Int64,2}:\n 0  0\n 0  0\n\njulia> zeros(A, Float64)\n2×2 Array{Float64,2}:\n 0.0  0.0\n 0.0  0.0\n\njulia> zeros(A, Bool, (3,))\n3-element Array{Bool,1}:\n false\n false\n false\n\nSee also ones, similar.\n\n\n\n"
+    "text": "zeros([A::AbstractArray,] [T=eltype(A)::Type,] [dims=size(A)::Tuple])\n\nCreate an array of all zeros with the same layout as A, element type T and size dims. The A argument can be skipped, which behaves like Array{Float64,0}() was passed. For convenience dims may also be passed in variadic form.\n\nExamples\n\njulia> zeros(1)\n1-element Array{Float64,1}:\n 0.0\n\njulia> zeros(Int8, 2, 3)\n2×3 Array{Int8,2}:\n 0  0  0\n 0  0  0\n\njulia> A = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> zeros(A)\n2×2 Array{Int64,2}:\n 0  0\n 0  0\n\njulia> zeros(A, Float64)\n2×2 Array{Float64,2}:\n 0.0  0.0\n 0.0  0.0\n\njulia> zeros(A, Bool, (3,))\n3-element Array{Bool,1}:\n false\n false\n false\n\nSee also ones, similar.\n\n\n\n"
 },
 
 {
@@ -10213,7 +10213,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.ones",
     "category": "Function",
-    "text": "ones([A::AbstractArray,] [T=eltype(A)::Type,] [dims=size(A)::Tuple])\n\nCreate an array of all ones with the same layout as A, element type T and size dims. The A argument can be skipped, which behaves like Array{Float64,0}() was passed. For convenience dims may also be passed in variadic form.\n\njulia> ones(Complex128, 2, 3)\n2×3 Array{Complex{Float64},2}:\n 1.0+0.0im  1.0+0.0im  1.0+0.0im\n 1.0+0.0im  1.0+0.0im  1.0+0.0im\n\njulia> ones(1,2)\n1×2 Array{Float64,2}:\n 1.0  1.0\n\njulia> A = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> ones(A)\n2×2 Array{Int64,2}:\n 1  1\n 1  1\n\njulia> ones(A, Float64)\n2×2 Array{Float64,2}:\n 1.0  1.0\n 1.0  1.0\n\njulia> ones(A, Bool, (3,))\n3-element Array{Bool,1}:\n true\n true\n true\n\nSee also zeros, similar.\n\n\n\n"
+    "text": "ones([A::AbstractArray,] [T=eltype(A)::Type,] [dims=size(A)::Tuple])\n\nCreate an array of all ones with the same layout as A, element type T and size dims. The A argument can be skipped, which behaves like Array{Float64,0}() was passed. For convenience dims may also be passed in variadic form.\n\nExamples\n\njulia> ones(Complex128, 2, 3)\n2×3 Array{Complex{Float64},2}:\n 1.0+0.0im  1.0+0.0im  1.0+0.0im\n 1.0+0.0im  1.0+0.0im  1.0+0.0im\n\njulia> ones(1,2)\n1×2 Array{Float64,2}:\n 1.0  1.0\n\njulia> A = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> ones(A)\n2×2 Array{Int64,2}:\n 1  1\n 1  1\n\njulia> ones(A, Float64)\n2×2 Array{Float64,2}:\n 1.0  1.0\n 1.0  1.0\n\njulia> ones(A, Bool, (3,))\n3-element Array{Bool,1}:\n true\n true\n true\n\nSee also zeros, similar.\n\n\n\n"
 },
 
 {
@@ -10253,7 +10253,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.fill!",
     "category": "Function",
-    "text": "fill!(A, x)\n\nFill array A with the value x. If x is an object reference, all elements will refer to the same object. fill!(A, Foo()) will return A filled with the result of evaluating Foo() once.\n\njulia> A = zeros(2,3)\n2×3 Array{Float64,2}:\n 0.0  0.0  0.0\n 0.0  0.0  0.0\n\njulia> fill!(A, 2.)\n2×3 Array{Float64,2}:\n 2.0  2.0  2.0\n 2.0  2.0  2.0\n\njulia> a = [1, 1, 1]; A = fill!(Vector{Vector{Int}}(3), a); a[1] = 2; A\n3-element Array{Array{Int64,1},1}:\n [2, 1, 1]\n [2, 1, 1]\n [2, 1, 1]\n\njulia> x = 0; f() = (global x += 1; x); fill!(Vector{Int}(3), f())\n3-element Array{Int64,1}:\n 1\n 1\n 1\n\n\n\n"
+    "text": "fill!(A, x)\n\nFill array A with the value x. If x is an object reference, all elements will refer to the same object. fill!(A, Foo()) will return A filled with the result of evaluating Foo() once.\n\nExamples\n\njulia> A = zeros(2,3)\n2×3 Array{Float64,2}:\n 0.0  0.0  0.0\n 0.0  0.0  0.0\n\njulia> fill!(A, 2.)\n2×3 Array{Float64,2}:\n 2.0  2.0  2.0\n 2.0  2.0  2.0\n\njulia> a = [1, 1, 1]; A = fill!(Vector{Vector{Int}}(3), a); a[1] = 2; A\n3-element Array{Array{Int64,1},1}:\n [2, 1, 1]\n [2, 1, 1]\n [2, 1, 1]\n\njulia> x = 0; f() = (global x += 1; x); fill!(Vector{Int}(3), f())\n3-element Array{Int64,1}:\n 1\n 1\n 1\n\n\n\n"
 },
 
 {
@@ -10277,7 +10277,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.eye",
     "category": "Function",
-    "text": "eye([T::Type=Float64,] m::Integer, n::Integer)\n\nm-by-n identity matrix. The default element type is Float64.\n\n\n\neye(m, n)\n\nm-by-n identity matrix.\n\n\n\neye([T::Type=Float64,] n::Integer)\n\nn-by-n identity matrix. The default element type is Float64.\n\n\n\neye(A)\n\nConstructs an identity matrix of the same dimensions and type as A.\n\njulia> A = [1 2 3; 4 5 6; 7 8 9]\n3×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n 7  8  9\n\njulia> eye(A)\n3×3 Array{Int64,2}:\n 1  0  0\n 0  1  0\n 0  0  1\n\nNote the difference from ones.\n\n\n\n"
+    "text": "eye([T::Type=Float64,] m::Integer, n::Integer)\n\nm-by-n identity matrix. The default element type is Float64.\n\nExamples\n\njulia> eye(3, 4)\n3×4 Array{Float64,2}:\n 1.0  0.0  0.0  0.0\n 0.0  1.0  0.0  0.0\n 0.0  0.0  1.0  0.0\n\njulia> eye(2, 2)\n2×2 Array{Float64,2}:\n 1.0  0.0\n 0.0  1.0\n\njulia> eye(Int, 2, 2)\n2×2 Array{Int64,2}:\n 1  0\n 0  1\n\n\n\neye(m, n)\n\nm-by-n identity matrix.\n\n\n\neye([T::Type=Float64,] n::Integer)\n\nn-by-n identity matrix. The default element type is Float64.\n\nExamples\n\njulia> eye(Int, 2)\n2×2 Array{Int64,2}:\n 1  0\n 0  1\n\njulia> eye(2)\n2×2 Array{Float64,2}:\n 1.0  0.0\n 0.0  1.0\n\n\n\neye(A)\n\nConstructs an identity matrix of the same dimensions and type as A.\n\njulia> A = [1 2 3; 4 5 6; 7 8 9]\n3×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n 7  8  9\n\njulia> eye(A)\n3×3 Array{Int64,2}:\n 1  0  0\n 0  1  0\n 0  0  1\n\nNote the difference from ones.\n\n\n\n"
 },
 
 {
@@ -10397,7 +10397,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.conj!",
     "category": "Function",
-    "text": "conj!(A)\n\nTransform an array to its complex conjugate in-place.\n\nSee also conj.\n\njulia> A = [1+im 2-im; 2+2im 3+im]\n2×2 Array{Complex{Int64},2}:\n 1+1im  2-1im\n 2+2im  3+1im\n\njulia> conj!(A);\n\njulia> A\n2×2 Array{Complex{Int64},2}:\n 1-1im  2+1im\n 2-2im  3-1im\n\n\n\n"
+    "text": "conj!(A)\n\nTransform an array to its complex conjugate in-place.\n\nSee also conj.\n\nExample\n\njulia> A = [1+im 2-im; 2+2im 3+im]\n2×2 Array{Complex{Int64},2}:\n 1+1im  2-1im\n 2+2im  3+1im\n\njulia> conj!(A);\n\njulia> A\n2×2 Array{Complex{Int64},2}:\n 1-1im  2+1im\n 2-2im  3-1im\n\n\n\n"
 },
 
 {
@@ -10501,7 +10501,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.getindex",
     "category": "Method",
-    "text": "getindex(A, inds...)\n\nReturns a subset of array A as specified by inds, where each ind may be an Int, a Range, or a Vector. See the manual section on array indexing for details.\n\njulia> A = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> getindex(A, 1)\n1\n\njulia> getindex(A, [2, 1])\n2-element Array{Int64,1}:\n 3\n 1\n\njulia> getindex(A, 2:4)\n3-element Array{Int64,1}:\n 3\n 2\n 4\n\n\n\n"
+    "text": "getindex(A, inds...)\n\nReturns a subset of array A as specified by inds, where each ind may be an Int, a Range, or a Vector. See the manual section on array indexing for details.\n\nExamples\n\njulia> A = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> getindex(A, 1)\n1\n\njulia> getindex(A, [2, 1])\n2-element Array{Int64,1}:\n 3\n 1\n\njulia> getindex(A, 2:4)\n3-element Array{Int64,1}:\n 3\n 2\n 4\n\n\n\n"
 },
 
 {
@@ -10541,7 +10541,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.IteratorsMD.CartesianIndex",
     "category": "Type",
-    "text": "CartesianIndex(i, j, k...)   -> I\nCartesianIndex((i, j, k...)) -> I\n\nCreate a multidimensional index I, which can be used for indexing a multidimensional array A.  In particular, A[I] is equivalent to A[i,j,k...].  One can freely mix integer and CartesianIndex indices; for example, A[Ipre, i, Ipost] (where Ipre and Ipost are CartesianIndex indices and i is an Int) can be a useful expression when writing algorithms that work along a single dimension of an array of arbitrary dimensionality.\n\nA CartesianIndex is sometimes produced by eachindex, and always when iterating with an explicit CartesianRange.\n\n\n\n"
+    "text": "CartesianIndex(i, j, k...)   -> I\nCartesianIndex((i, j, k...)) -> I\n\nCreate a multidimensional index I, which can be used for indexing a multidimensional array A.  In particular, A[I] is equivalent to A[i,j,k...].  One can freely mix integer and CartesianIndex indices; for example, A[Ipre, i, Ipost] (where Ipre and Ipost are CartesianIndex indices and i is an Int) can be a useful expression when writing algorithms that work along a single dimension of an array of arbitrary dimensionality.\n\nA CartesianIndex is sometimes produced by eachindex, and always when iterating with an explicit CartesianRange.\n\nExample\n\njulia> A = reshape(collect(1:16), (2, 2, 2, 2))\n2×2×2×2 Array{Int64,4}:\n[:, :, 1, 1] =\n 1  3\n 2  4\n\n[:, :, 2, 1] =\n 5  7\n 6  8\n\n[:, :, 1, 2] =\n  9  11\n 10  12\n\n[:, :, 2, 2] =\n 13  15\n 14  16\n\njulia> A[CartesianIndex((1, 1, 1, 1))]\n1\n\njulia> A[CartesianIndex((1, 1, 1, 2))]\n9\n\njulia> A[CartesianIndex((1, 1, 2, 1))]\n5\n\n\n\n"
 },
 
 {
@@ -10549,7 +10549,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.IteratorsMD.CartesianRange",
     "category": "Type",
-    "text": "CartesianRange(Istart::CartesianIndex, Istop::CartesianIndex) -> R\nCartesianRange(sz::Dims) -> R\nCartesianRange(istart:istop, jstart:jstop, ...) -> R\n\nDefine a region R spanning a multidimensional rectangular range of integer indices. These are most commonly encountered in the context of iteration, where for I in R ... end will return CartesianIndex indices I equivalent to the nested loops\n\nfor j = jstart:jstop\n    for i = istart:istop\n        ...\n    end\nend\n\nConsequently these can be useful for writing algorithms that work in arbitrary dimensions.\n\n\n\n"
+    "text": "CartesianRange(Istart::CartesianIndex, Istop::CartesianIndex) -> R\nCartesianRange(sz::Dims) -> R\nCartesianRange(istart:istop, jstart:jstop, ...) -> R\n\nDefine a region R spanning a multidimensional rectangular range of integer indices. These are most commonly encountered in the context of iteration, where for I in R ... end will return CartesianIndex indices I equivalent to the nested loops\n\nfor j = jstart:jstop\n    for i = istart:istop\n        ...\n    end\nend\n\nConsequently these can be useful for writing algorithms that work in arbitrary dimensions.\n\njulia> foreach(println, CartesianRange((2, 2, 2)))\nCartesianIndex{3}((1, 1, 1))\nCartesianIndex{3}((2, 1, 1))\nCartesianIndex{3}((1, 2, 1))\nCartesianIndex{3}((2, 2, 1))\nCartesianIndex{3}((1, 1, 2))\nCartesianIndex{3}((2, 1, 2))\nCartesianIndex{3}((1, 2, 2))\nCartesianIndex{3}((2, 2, 2))\n\n\n\n"
 },
 
 {
@@ -10629,7 +10629,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.slicedim",
     "category": "Function",
-    "text": "slicedim(A, d::Integer, i)\n\nReturn all the data of A where the index for dimension d equals i. Equivalent to A[:,:,...,i,:,:,...] where i is in position d.\n\njulia> A = [1 2 3 4; 5 6 7 8]\n2×4 Array{Int64,2}:\n 1  2  3  4\n 5  6  7  8\n\njulia> slicedim(A,2,3)\n2-element Array{Int64,1}:\n 3\n 7\n\n\n\n"
+    "text": "slicedim(A, d::Integer, i)\n\nReturn all the data of A where the index for dimension d equals i. Equivalent to A[:,:,...,i,:,:,...] where i is in position d.\n\nExample\n\njulia> A = [1 2 3 4; 5 6 7 8]\n2×4 Array{Int64,2}:\n 1  2  3  4\n 5  6  7  8\n\njulia> slicedim(A,2,3)\n2-element Array{Int64,1}:\n 3\n 7\n\n\n\n"
 },
 
 {
@@ -10637,7 +10637,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.reinterpret",
     "category": "Function",
-    "text": "reinterpret(type, A)\n\nChange the type-interpretation of a block of memory. For arrays, this constructs an array with the same binary data as the given array, but with the specified element type. For example, reinterpret(Float32, UInt32(7)) interprets the 4 bytes corresponding to UInt32(7) as a Float32.\n\nwarning: Warning\nIt is not allowed to reinterpret an array to an element type with a larger alignment then the alignment of the array. For a normal Array, this is the alignment of its element type. For a reinterpreted array, this is the alignment of the Array it was reinterpreted from. For example, reinterpret(UInt32, UInt8[0, 0, 0, 0]) is not allowed but reinterpret(UInt32, reinterpret(UInt8, Float32[1.0])) is allowed.\n\njulia> reinterpret(Float32, UInt32(7))\n1.0f-44\n\njulia> reinterpret(Float32, UInt32[1 2 3 4 5])\n1×5 Array{Float32,2}:\n 1.4013f-45  2.8026f-45  4.2039f-45  5.60519f-45  7.00649f-45\n\n\n\n"
+    "text": "reinterpret(type, A)\n\nChange the type-interpretation of a block of memory. For arrays, this constructs an array with the same binary data as the given array, but with the specified element type. For example, reinterpret(Float32, UInt32(7)) interprets the 4 bytes corresponding to UInt32(7) as a Float32.\n\nwarning: Warning\nIt is not allowed to reinterpret an array to an element type with a larger alignment then the alignment of the array. For a normal Array, this is the alignment of its element type. For a reinterpreted array, this is the alignment of the Array it was reinterpreted from. For example, reinterpret(UInt32, UInt8[0, 0, 0, 0]) is not allowed but reinterpret(UInt32, reinterpret(UInt8, Float32[1.0])) is allowed.\n\nExamples\n\njulia> reinterpret(Float32, UInt32(7))\n1.0f-44\n\njulia> reinterpret(Float32, UInt32[1 2 3 4 5])\n1×5 Array{Float32,2}:\n 1.4013f-45  2.8026f-45  4.2039f-45  5.60519f-45  7.00649f-45\n\n\n\n"
 },
 
 {
@@ -10653,7 +10653,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.squeeze",
     "category": "Function",
-    "text": "squeeze(A, dims)\n\nRemove the dimensions specified by dims from array A. Elements of dims must be unique and within the range 1:ndims(A). size(A,i) must equal 1 for all i in dims.\n\njulia> a = reshape(collect(1:4),(2,2,1,1))\n2×2×1×1 Array{Int64,4}:\n[:, :, 1, 1] =\n 1  3\n 2  4\n\njulia> squeeze(a,3)\n2×2×1 Array{Int64,3}:\n[:, :, 1] =\n 1  3\n 2  4\n\n\n\n"
+    "text": "squeeze(A, dims)\n\nRemove the dimensions specified by dims from array A. Elements of dims must be unique and within the range 1:ndims(A). size(A,i) must equal 1 for all i in dims.\n\nExample\n\njulia> a = reshape(collect(1:4),(2,2,1,1))\n2×2×1×1 Array{Int64,4}:\n[:, :, 1, 1] =\n 1  3\n 2  4\n\njulia> squeeze(a,3)\n2×2×1 Array{Int64,3}:\n[:, :, 1] =\n 1  3\n 2  4\n\n\n\n"
 },
 
 {
@@ -10661,7 +10661,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.vec",
     "category": "Function",
-    "text": "vec(a::AbstractArray) -> Vector\n\nReshape the array a as a one-dimensional column vector. The resulting array shares the same underlying data as a, so modifying one will also modify the other.\n\njulia> a = [1 2 3; 4 5 6]\n2×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n\njulia> vec(a)\n6-element Array{Int64,1}:\n 1\n 4\n 2\n 5\n 3\n 6\n\nSee also reshape.\n\n\n\n"
+    "text": "vec(a::AbstractArray) -> Vector\n\nReshape the array a as a one-dimensional column vector. The resulting array shares the same underlying data as a, so modifying one will also modify the other.\n\nExample\n\njulia> a = [1 2 3; 4 5 6]\n2×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n\njulia> vec(a)\n6-element Array{Int64,1}:\n 1\n 4\n 2\n 5\n 3\n 6\n\nSee also reshape.\n\n\n\n"
 },
 
 {
@@ -10709,7 +10709,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.flipdim",
     "category": "Function",
-    "text": "flipdim(A, d::Integer)\n\nReverse A in dimension d.\n\njulia> b = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> flipdim(b,2)\n2×2 Array{Int64,2}:\n 2  1\n 4  3\n\n\n\n"
+    "text": "flipdim(A, d::Integer)\n\nReverse A in dimension d.\n\nExample\n\njulia> b = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> flipdim(b,2)\n2×2 Array{Int64,2}:\n 2  1\n 4  3\n\n\n\n"
 },
 
 {
@@ -10717,7 +10717,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.circshift",
     "category": "Function",
-    "text": "circshift(A, shifts)\n\nCircularly shift the data in an array. The second argument is a vector giving the amount to shift in each dimension.\n\njulia> b = reshape(collect(1:16), (4,4))\n4×4 Array{Int64,2}:\n 1  5   9  13\n 2  6  10  14\n 3  7  11  15\n 4  8  12  16\n\njulia> circshift(b, (0,2))\n4×4 Array{Int64,2}:\n  9  13  1  5\n 10  14  2  6\n 11  15  3  7\n 12  16  4  8\n\njulia> circshift(b, (-1,0))\n4×4 Array{Int64,2}:\n 2  6  10  14\n 3  7  11  15\n 4  8  12  16\n 1  5   9  13\n\nSee also circshift!.\n\n\n\n"
+    "text": "circshift(A, shifts)\n\nCircularly shift the data in an array. The second argument is a vector giving the amount to shift in each dimension.\n\nExample\n\njulia> b = reshape(collect(1:16), (4,4))\n4×4 Array{Int64,2}:\n 1  5   9  13\n 2  6  10  14\n 3  7  11  15\n 4  8  12  16\n\njulia> circshift(b, (0,2))\n4×4 Array{Int64,2}:\n  9  13  1  5\n 10  14  2  6\n 11  15  3  7\n 12  16  4  8\n\njulia> circshift(b, (-1,0))\n4×4 Array{Int64,2}:\n 2  6  10  14\n 3  7  11  15\n 4  8  12  16\n 1  5   9  13\n\nSee also circshift!.\n\n\n\n"
 },
 
 {
@@ -10733,7 +10733,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.circcopy!",
     "category": "Function",
-    "text": "circcopy!(dest, src)\n\nCopy src to dest, indexing each dimension modulo its length. src and dest must have the same size, but can be offset in their indices; any offset results in a (circular) wraparound. If the arrays have overlapping indices, then on the domain of the overlap dest agrees with src.\n\njulia> src = reshape(collect(1:16), (4,4))\n4×4 Array{Int64,2}:\n 1  5   9  13\n 2  6  10  14\n 3  7  11  15\n 4  8  12  16\n\njulia> dest = OffsetArray{Int}((0:3,2:5))\n\njulia> circcopy!(dest, src)\nOffsetArrays.OffsetArray{Int64,2,Array{Int64,2}} with indices 0:3×2:5:\n 8  12  16  4\n 5   9  13  1\n 6  10  14  2\n 7  11  15  3\n\njulia> dest[1:3,2:4] == src[1:3,2:4]\ntrue\n\n\n\n"
+    "text": "circcopy!(dest, src)\n\nCopy src to dest, indexing each dimension modulo its length. src and dest must have the same size, but can be offset in their indices; any offset results in a (circular) wraparound. If the arrays have overlapping indices, then on the domain of the overlap dest agrees with src.\n\nExample\n\njulia> src = reshape(collect(1:16), (4,4))\n4×4 Array{Int64,2}:\n 1  5   9  13\n 2  6  10  14\n 3  7  11  15\n 4  8  12  16\n\njulia> dest = OffsetArray{Int}((0:3,2:5))\n\njulia> circcopy!(dest, src)\nOffsetArrays.OffsetArray{Int64,2,Array{Int64,2}} with indices 0:3×2:5:\n 8  12  16  4\n 5   9  13  1\n 6  10  14  2\n 7  11  15  3\n\njulia> dest[1:3,2:4] == src[1:3,2:4]\ntrue\n\n\n\n"
 },
 
 {
@@ -10749,7 +10749,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.find",
     "category": "Method",
-    "text": "find(A)\n\nReturn a vector of the linear indexes of the non-zeros in A (determined by A[i]!=0). A common use of this is to convert a boolean array to an array of indexes of the true elements. If there are no non-zero elements of A, find returns an empty array.\n\njulia> A = [true false; false true]\n2×2 Array{Bool,2}:\n  true  false\n false   true\n\njulia> find(A)\n2-element Array{Int64,1}:\n 1\n 4\n\n\n\n"
+    "text": "find(A)\n\nReturn a vector of the linear indexes of the non-zeros in A (determined by A[i]!=0). A common use of this is to convert a boolean array to an array of indexes of the true elements. If there are no non-zero elements of A, find returns an empty array.\n\nExamples\n\njulia> A = [true false; false true]\n2×2 Array{Bool,2}:\n  true  false\n false   true\n\njulia> find(A)\n2-element Array{Int64,1}:\n 1\n 4\n\njulia> find(zeros(3))\n0-element Array{Int64,1}\n\n\n\n"
 },
 
 {
@@ -10757,7 +10757,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.find",
     "category": "Method",
-    "text": "find(f::Function, A)\n\nReturn a vector I of the linear indexes of A where f(A[I]) returns true. If there are no such elements of A, find returns an empty array.\n\njulia> A = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> find(isodd,A)\n2-element Array{Int64,1}:\n 1\n 2\n\n\n\n"
+    "text": "find(f::Function, A)\n\nReturn a vector I of the linear indexes of A where f(A[I]) returns true. If there are no such elements of A, find returns an empty array.\n\nExamples\n\njulia> A = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> find(isodd,A)\n2-element Array{Int64,1}:\n 1\n 2\n\njulia> find(isodd, [2, 4])\n0-element Array{Int64,1}\n\n\n\n"
 },
 
 {
@@ -10765,7 +10765,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.findn",
     "category": "Function",
-    "text": "findn(A)\n\nReturn a vector of indexes for each dimension giving the locations of the non-zeros in A (determined by A[i]!=0). If there are no non-zero elements of A, findn returns a 2-tuple of empty arrays.\n\njulia> A = [1 2 0; 0 0 3; 0 4 0]\n3×3 Array{Int64,2}:\n 1  2  0\n 0  0  3\n 0  4  0\n\njulia> findn(A)\n([1, 1, 3, 2], [1, 2, 2, 3])\n\njulia> A = zeros(2,2)\n2×2 Array{Float64,2}:\n 0.0  0.0\n 0.0  0.0\n\njulia> findn(A)\n(Int64[], Int64[])\n\n\n\n"
+    "text": "findn(A)\n\nReturn a vector of indexes for each dimension giving the locations of the non-zeros in A (determined by A[i]!=0). If there are no non-zero elements of A, findn returns a 2-tuple of empty arrays.\n\nExamples\n\njulia> A = [1 2 0; 0 0 3; 0 4 0]\n3×3 Array{Int64,2}:\n 1  2  0\n 0  0  3\n 0  4  0\n\njulia> findn(A)\n([1, 1, 3, 2], [1, 2, 2, 3])\n\njulia> A = zeros(2,2)\n2×2 Array{Float64,2}:\n 0.0  0.0\n 0.0  0.0\n\njulia> findn(A)\n(Int64[], Int64[])\n\n\n\n"
 },
 
 {
@@ -10773,7 +10773,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.findnz",
     "category": "Function",
-    "text": "findnz(A)\n\nReturn a tuple (I, J, V) where I and J are the row and column indexes of the non-zero values in matrix A, and V is a vector of the non-zero values.\n\njulia> A = [1 2 0; 0 0 3; 0 4 0]\n3×3 Array{Int64,2}:\n 1  2  0\n 0  0  3\n 0  4  0\n\njulia> findnz(A)\n([1, 1, 3, 2], [1, 2, 2, 3], [1, 2, 4, 3])\n\n\n\n"
+    "text": "findnz(A)\n\nReturn a tuple (I, J, V) where I and J are the row and column indexes of the non-zero values in matrix A, and V is a vector of the non-zero values.\n\nExample\n\njulia> A = [1 2 0; 0 0 3; 0 4 0]\n3×3 Array{Int64,2}:\n 1  2  0\n 0  0  3\n 0  4  0\n\njulia> findnz(A)\n([1, 1, 3, 2], [1, 2, 2, 3], [1, 2, 4, 3])\n\n\n\n"
 },
 
 {
@@ -10781,7 +10781,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.findfirst",
     "category": "Method",
-    "text": "findfirst(A)\n\nReturn the linear index of the first non-zero value in A (determined by A[i]!=0). Returns 0 if no such value is found.\n\njulia> A = [0 0; 1 0]\n2×2 Array{Int64,2}:\n 0  0\n 1  0\n\njulia> findfirst(A)\n2\n\n\n\n"
+    "text": "findfirst(A)\n\nReturn the linear index of the first non-zero value in A (determined by A[i]!=0). Returns 0 if no such value is found.\n\nExamples\n\njulia> A = [0 0; 1 0]\n2×2 Array{Int64,2}:\n 0  0\n 1  0\n\njulia> findfirst(A)\n2\n\njulia> findfirst(zeros(3))\n0\n\n\n\n"
 },
 
 {
@@ -10789,7 +10789,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.findfirst",
     "category": "Method",
-    "text": "findfirst(A, v)\n\nReturn the linear index of the first element equal to v in A. Returns 0 if v is not found.\n\njulia> A = [4 6; 2 2]\n2×2 Array{Int64,2}:\n 4  6\n 2  2\n\njulia> findfirst(A,2)\n2\n\njulia> findfirst(A,3)\n0\n\n\n\n"
+    "text": "findfirst(A, v)\n\nReturn the linear index of the first element equal to v in A. Returns 0 if v is not found.\n\nExamples\n\njulia> A = [4 6; 2 2]\n2×2 Array{Int64,2}:\n 4  6\n 2  2\n\njulia> findfirst(A,2)\n2\n\njulia> findfirst(A,3)\n0\n\n\n\n"
 },
 
 {
@@ -10797,7 +10797,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.findfirst",
     "category": "Method",
-    "text": "findfirst(predicate::Function, A)\n\nReturn the linear index of the first element of A for which predicate returns true. Returns 0 if there is no such element.\n\njulia> A = [1 4; 2 2]\n2×2 Array{Int64,2}:\n 1  4\n 2  2\n\njulia> findfirst(iseven, A)\n2\n\njulia> findfirst(x -> x>10, A)\n0\n\n\n\n"
+    "text": "findfirst(predicate::Function, A)\n\nReturn the linear index of the first element of A for which predicate returns true. Returns 0 if there is no such element.\n\nExamples\n\njulia> A = [1 4; 2 2]\n2×2 Array{Int64,2}:\n 1  4\n 2  2\n\njulia> findfirst(iseven, A)\n2\n\njulia> findfirst(x -> x>10, A)\n0\n\n\n\n"
 },
 
 {
@@ -10805,7 +10805,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.findlast",
     "category": "Method",
-    "text": "findlast(A)\n\nReturn the linear index of the last non-zero value in A (determined by A[i]!=0). Returns 0 if there is no non-zero value in A.\n\njulia> A = [1 0; 1 0]\n2×2 Array{Int64,2}:\n 1  0\n 1  0\n\njulia> findlast(A)\n2\n\njulia> A = zeros(2,2)\n2×2 Array{Float64,2}:\n 0.0  0.0\n 0.0  0.0\n\njulia> findlast(A)\n0\n\n\n\n"
+    "text": "findlast(A)\n\nReturn the linear index of the last non-zero value in A (determined by A[i]!=0). Returns 0 if there is no non-zero value in A.\n\nExamples\n\njulia> A = [1 0; 1 0]\n2×2 Array{Int64,2}:\n 1  0\n 1  0\n\njulia> findlast(A)\n2\n\njulia> A = zeros(2,2)\n2×2 Array{Float64,2}:\n 0.0  0.0\n 0.0  0.0\n\njulia> findlast(A)\n0\n\n\n\n"
 },
 
 {
@@ -10813,7 +10813,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.findlast",
     "category": "Method",
-    "text": "findlast(A, v)\n\nReturn the linear index of the last element equal to v in A. Returns 0 if there is no element of A equal to v.\n\njulia> A = [1 2; 2 1]\n2×2 Array{Int64,2}:\n 1  2\n 2  1\n\njulia> findlast(A,1)\n4\n\njulia> findlast(A,2)\n3\n\njulia> findlast(A,3)\n0\n\n\n\n"
+    "text": "findlast(A, v)\n\nReturn the linear index of the last element equal to v in A. Returns 0 if there is no element of A equal to v.\n\nExamples\n\njulia> A = [1 2; 2 1]\n2×2 Array{Int64,2}:\n 1  2\n 2  1\n\njulia> findlast(A,1)\n4\n\njulia> findlast(A,2)\n3\n\njulia> findlast(A,3)\n0\n\n\n\n"
 },
 
 {
@@ -10821,7 +10821,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.findlast",
     "category": "Method",
-    "text": "findlast(predicate::Function, A)\n\nReturn the linear index of the last element of A for which predicate returns true. Returns 0 if there is no such element.\n\njulia> A = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> findlast(isodd, A)\n2\n\njulia> findlast(x -> x > 5, A)\n0\n\n\n\n"
+    "text": "findlast(predicate::Function, A)\n\nReturn the linear index of the last element of A for which predicate returns true. Returns 0 if there is no such element.\n\nExamples\n\njulia> A = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> findlast(isodd, A)\n2\n\njulia> findlast(x -> x > 5, A)\n0\n\n\n\n"
 },
 
 {
@@ -10829,7 +10829,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.findnext",
     "category": "Method",
-    "text": "findnext(A, i::Integer)\n\nFind the next linear index >= i of a non-zero element of A, or 0 if not found.\n\njulia> A = [0 0; 1 0]\n2×2 Array{Int64,2}:\n 0  0\n 1  0\n\njulia> findnext(A,1)\n2\n\njulia> findnext(A,3)\n0\n\n\n\n"
+    "text": "findnext(A, i::Integer)\n\nFind the next linear index >= i of a non-zero element of A, or 0 if not found.\n\nExamples\n\njulia> A = [0 0; 1 0]\n2×2 Array{Int64,2}:\n 0  0\n 1  0\n\njulia> findnext(A,1)\n2\n\njulia> findnext(A,3)\n0\n\n\n\n"
 },
 
 {
@@ -10837,7 +10837,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.findnext",
     "category": "Method",
-    "text": "findnext(predicate::Function, A, i::Integer)\n\nFind the next linear index >= i of an element of A for which predicate returns true, or 0 if not found.\n\njulia> A = [1 4; 2 2]\n2×2 Array{Int64,2}:\n 1  4\n 2  2\n\njulia> findnext(isodd, A, 1)\n1\n\njulia> findnext(isodd, A, 2)\n0\n\n\n\n"
+    "text": "findnext(predicate::Function, A, i::Integer)\n\nFind the next linear index >= i of an element of A for which predicate returns true, or 0 if not found.\n\nExamples\n\njulia> A = [1 4; 2 2]\n2×2 Array{Int64,2}:\n 1  4\n 2  2\n\njulia> findnext(isodd, A, 1)\n1\n\njulia> findnext(isodd, A, 2)\n0\n\n\n\n"
 },
 
 {
@@ -10845,7 +10845,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.findnext",
     "category": "Method",
-    "text": "findnext(A, v, i::Integer)\n\nFind the next linear index >= i of an element of A equal to v (using ==), or 0 if not found.\n\njulia> A = [1 4; 2 2]\n2×2 Array{Int64,2}:\n 1  4\n 2  2\n\njulia> findnext(A,4,4)\n0\n\njulia> findnext(A,4,3)\n3\n\n\n\n"
+    "text": "findnext(A, v, i::Integer)\n\nFind the next linear index >= i of an element of A equal to v (using ==), or 0 if not found.\n\nExamples\n\njulia> A = [1 4; 2 2]\n2×2 Array{Int64,2}:\n 1  4\n 2  2\n\njulia> findnext(A,4,4)\n0\n\njulia> findnext(A,4,3)\n3\n\n\n\n"
 },
 
 {
@@ -10853,7 +10853,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.findprev",
     "category": "Method",
-    "text": "findprev(A, i::Integer)\n\nFind the previous linear index <= i of a non-zero element of A, or 0 if not found.\n\njulia> A = [0 0; 1 2]\n2×2 Array{Int64,2}:\n 0  0\n 1  2\n\njulia> findprev(A,2)\n2\n\njulia> findprev(A,1)\n0\n\n\n\n"
+    "text": "findprev(A, i::Integer)\n\nFind the previous linear index <= i of a non-zero element of A, or 0 if not found.\n\nExamples\n\njulia> A = [0 0; 1 2]\n2×2 Array{Int64,2}:\n 0  0\n 1  2\n\njulia> findprev(A,2)\n2\n\njulia> findprev(A,1)\n0\n\n\n\n"
 },
 
 {
@@ -10861,7 +10861,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.findprev",
     "category": "Method",
-    "text": "findprev(predicate::Function, A, i::Integer)\n\nFind the previous linear index <= i of an element of A for which predicate returns true, or 0 if not found.\n\njulia> A = [4 6; 1 2]\n2×2 Array{Int64,2}:\n 4  6\n 1  2\n\njulia> findprev(isodd, A, 1)\n0\n\njulia> findprev(isodd, A, 3)\n2\n\n\n\n"
+    "text": "findprev(predicate::Function, A, i::Integer)\n\nFind the previous linear index <= i of an element of A for which predicate returns true, or 0 if not found.\n\nExamples\n\njulia> A = [4 6; 1 2]\n2×2 Array{Int64,2}:\n 4  6\n 1  2\n\njulia> findprev(isodd, A, 1)\n0\n\njulia> findprev(isodd, A, 3)\n2\n\n\n\n"
 },
 
 {
@@ -10869,7 +10869,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.findprev",
     "category": "Method",
-    "text": "findprev(A, v, i::Integer)\n\nFind the previous linear index <= i of an element of A equal to v (using ==), or 0 if not found.\n\njulia> A = [0 0; 1 2]\n2×2 Array{Int64,2}:\n 0  0\n 1  2\n\njulia> findprev(A, 1, 4)\n2\n\njulia> findprev(A, 1, 1)\n0\n\n\n\n"
+    "text": "findprev(A, v, i::Integer)\n\nFind the previous linear index <= i of an element of A equal to v (using ==), or 0 if not found.\n\nExamples\n\njulia> A = [0 0; 1 2]\n2×2 Array{Int64,2}:\n 0  0\n 1  2\n\njulia> findprev(A, 1, 4)\n2\n\njulia> findprev(A, 1, 1)\n0\n\n\n\n"
 },
 
 {
@@ -10877,7 +10877,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.permutedims",
     "category": "Function",
-    "text": "permutedims(A, perm)\n\nPermute the dimensions of array A. perm is a vector specifying a permutation of length ndims(A). This is a generalization of transpose for multi-dimensional arrays. Transpose is equivalent to permutedims(A, [2,1]).\n\nSee also: PermutedDimsArray.\n\njulia> A = reshape(collect(1:8), (2,2,2))\n2×2×2 Array{Int64,3}:\n[:, :, 1] =\n 1  3\n 2  4\n\n[:, :, 2] =\n 5  7\n 6  8\n\njulia> permutedims(A, [3, 2, 1])\n2×2×2 Array{Int64,3}:\n[:, :, 1] =\n 1  3\n 5  7\n\n[:, :, 2] =\n 2  4\n 6  8\n\n\n\n"
+    "text": "permutedims(A, perm)\n\nPermute the dimensions of array A. perm is a vector specifying a permutation of length ndims(A). This is a generalization of transpose for multi-dimensional arrays. Transpose is equivalent to permutedims(A, [2,1]).\n\nSee also: PermutedDimsArray.\n\nExample\n\njulia> A = reshape(collect(1:8), (2,2,2))\n2×2×2 Array{Int64,3}:\n[:, :, 1] =\n 1  3\n 2  4\n\n[:, :, 2] =\n 5  7\n 6  8\n\njulia> permutedims(A, [3, 2, 1])\n2×2×2 Array{Int64,3}:\n[:, :, 1] =\n 1  3\n 5  7\n\n[:, :, 2] =\n 2  4\n 6  8\n\n\n\n"
 },
 
 {
@@ -10885,7 +10885,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.permutedims!",
     "category": "Function",
-    "text": "permutedims!(dest, src, perm)\n\nPermute the dimensions of array src and store the result in the array dest. perm is a vector specifying a permutation of length ndims(src). The preallocated array dest should have size(dest) == size(src)[perm] and is completely overwritten. No in-place permutation is supported and unexpected results will happen if src and dest have overlapping memory regions.\n\nSee also permutedims\n\n\n\n"
+    "text": "permutedims!(dest, src, perm)\n\nPermute the dimensions of array src and store the result in the array dest. perm is a vector specifying a permutation of length ndims(src). The preallocated array dest should have size(dest) == size(src)[perm] and is completely overwritten. No in-place permutation is supported and unexpected results will happen if src and dest have overlapping memory regions.\n\nSee also permutedims.\n\n\n\n"
 },
 
 {
@@ -10997,7 +10997,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.rot180",
     "category": "Function",
-    "text": "rot180(A)\n\nRotate matrix A 180 degrees.\n\njulia> a = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> rot180(a)\n2×2 Array{Int64,2}:\n 4  3\n 2  1\n\n\n\nrot180(A, k)\n\nRotate matrix A 180 degrees an integer k number of times. If k is even, this is equivalent to a copy.\n\njulia> a = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> rot180(a,1)\n2×2 Array{Int64,2}:\n 4  3\n 2  1\n\njulia> rot180(a,2)\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\n\n\n"
+    "text": "rot180(A)\n\nRotate matrix A 180 degrees.\n\nExample\n\njulia> a = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> rot180(a)\n2×2 Array{Int64,2}:\n 4  3\n 2  1\n\n\n\nrot180(A, k)\n\nRotate matrix A 180 degrees an integer k number of times. If k is even, this is equivalent to a copy.\n\nExamples\n\njulia> a = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> rot180(a,1)\n2×2 Array{Int64,2}:\n 4  3\n 2  1\n\njulia> rot180(a,2)\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\n\n\n"
 },
 
 {
@@ -11005,7 +11005,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.rotl90",
     "category": "Function",
-    "text": "rotl90(A)\n\nRotate matrix A left 90 degrees.\n\njulia> a = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> rotl90(a)\n2×2 Array{Int64,2}:\n 2  4\n 1  3\n\n\n\nrotl90(A, k)\n\nRotate matrix A left 90 degrees an integer k number of times. If k is zero or a multiple of four, this is equivalent to a copy.\n\njulia> a = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> rotl90(a,1)\n2×2 Array{Int64,2}:\n 2  4\n 1  3\n\njulia> rotl90(a,2)\n2×2 Array{Int64,2}:\n 4  3\n 2  1\n\njulia> rotl90(a,3)\n2×2 Array{Int64,2}:\n 3  1\n 4  2\n\njulia> rotl90(a,4)\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\n\n\n"
+    "text": "rotl90(A)\n\nRotate matrix A left 90 degrees.\n\nExample\n\njulia> a = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> rotl90(a)\n2×2 Array{Int64,2}:\n 2  4\n 1  3\n\n\n\nrotl90(A, k)\n\nRotate matrix A left 90 degrees an integer k number of times. If k is zero or a multiple of four, this is equivalent to a copy.\n\nExamples\n\njulia> a = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> rotl90(a,1)\n2×2 Array{Int64,2}:\n 2  4\n 1  3\n\njulia> rotl90(a,2)\n2×2 Array{Int64,2}:\n 4  3\n 2  1\n\njulia> rotl90(a,3)\n2×2 Array{Int64,2}:\n 3  1\n 4  2\n\njulia> rotl90(a,4)\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\n\n\n"
 },
 
 {
@@ -11013,7 +11013,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.rotr90",
     "category": "Function",
-    "text": "rotr90(A)\n\nRotate matrix A right 90 degrees.\n\njulia> a = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> rotr90(a)\n2×2 Array{Int64,2}:\n 3  1\n 4  2\n\n\n\nrotr90(A, k)\n\nRotate matrix A right 90 degrees an integer k number of times. If k is zero or a multiple of four, this is equivalent to a copy.\n\njulia> a = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> rotr90(a,1)\n2×2 Array{Int64,2}:\n 3  1\n 4  2\n\njulia> rotr90(a,2)\n2×2 Array{Int64,2}:\n 4  3\n 2  1\n\njulia> rotr90(a,3)\n2×2 Array{Int64,2}:\n 2  4\n 1  3\n\njulia> rotr90(a,4)\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\n\n\n"
+    "text": "rotr90(A)\n\nRotate matrix A right 90 degrees.\n\nExample\n\njulia> a = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> rotr90(a)\n2×2 Array{Int64,2}:\n 3  1\n 4  2\n\n\n\nrotr90(A, k)\n\nRotate matrix A right 90 degrees an integer k number of times. If k is zero or a multiple of four, this is equivalent to a copy.\n\nExamples\n\njulia> a = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> rotr90(a,1)\n2×2 Array{Int64,2}:\n 3  1\n 4  2\n\njulia> rotr90(a,2)\n2×2 Array{Int64,2}:\n 4  3\n 2  1\n\njulia> rotr90(a,3)\n2×2 Array{Int64,2}:\n 2  4\n 1  3\n\njulia> rotr90(a,4)\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\n\n\n"
 },
 
 {
@@ -11021,7 +11021,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.reducedim",
     "category": "Function",
-    "text": "reducedim(f, A, region[, v0])\n\nReduce 2-argument function f along dimensions of A. region is a vector specifying the dimensions to reduce, and v0 is the initial value to use in the reductions. For +, *, max and min the v0 argument is optional.\n\nThe associativity of the reduction is implementation-dependent; if you need a particular associativity, e.g. left-to-right, you should write your own loop. See documentation for reduce.\n\njulia> a = reshape(collect(1:16), (4,4))\n4×4 Array{Int64,2}:\n 1  5   9  13\n 2  6  10  14\n 3  7  11  15\n 4  8  12  16\n\njulia> reducedim(max, a, 2)\n4×1 Array{Int64,2}:\n 13\n 14\n 15\n 16\n\njulia> reducedim(max, a, 1)\n1×4 Array{Int64,2}:\n 4  8  12  16\n\n\n\n"
+    "text": "reducedim(f, A, region[, v0])\n\nReduce 2-argument function f along dimensions of A. region is a vector specifying the dimensions to reduce, and v0 is the initial value to use in the reductions. For +, *, max and min the v0 argument is optional.\n\nThe associativity of the reduction is implementation-dependent; if you need a particular associativity, e.g. left-to-right, you should write your own loop. See documentation for reduce.\n\nExamples\n\njulia> a = reshape(collect(1:16), (4,4))\n4×4 Array{Int64,2}:\n 1  5   9  13\n 2  6  10  14\n 3  7  11  15\n 4  8  12  16\n\njulia> reducedim(max, a, 2)\n4×1 Array{Int64,2}:\n 13\n 14\n 15\n 16\n\njulia> reducedim(max, a, 1)\n1×4 Array{Int64,2}:\n 4  8  12  16\n\n\n\n"
 },
 
 {
@@ -11029,7 +11029,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.mapreducedim",
     "category": "Function",
-    "text": "mapreducedim(f, op, A, region[, v0])\n\nEvaluates to the same as reducedim(op, map(f, A), region, f(v0)), but is generally faster because the intermediate array is avoided.\n\njulia> a = reshape(collect(1:16), (4,4))\n4×4 Array{Int64,2}:\n 1  5   9  13\n 2  6  10  14\n 3  7  11  15\n 4  8  12  16\n\njulia> mapreducedim(isodd, *, a, 1)\n1×4 Array{Bool,2}:\n false  false  false  false\n\njulia> mapreducedim(isodd, |, a, 1, true)\n1×4 Array{Bool,2}:\n true  true  true  true\n\n\n\n"
+    "text": "mapreducedim(f, op, A, region[, v0])\n\nEvaluates to the same as reducedim(op, map(f, A), region, f(v0)), but is generally faster because the intermediate array is avoided.\n\nExamples\n\njulia> a = reshape(collect(1:16), (4,4))\n4×4 Array{Int64,2}:\n 1  5   9  13\n 2  6  10  14\n 3  7  11  15\n 4  8  12  16\n\njulia> mapreducedim(isodd, *, a, 1)\n1×4 Array{Bool,2}:\n false  false  false  false\n\njulia> mapreducedim(isodd, |, a, 1, true)\n1×4 Array{Bool,2}:\n true  true  true  true\n\n\n\n"
 },
 
 {
@@ -11037,7 +11037,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.mapslices",
     "category": "Function",
-    "text": "mapslices(f, A, dims)\n\nTransform the given dimensions of array A using function f. f is called on each slice of A of the form A[...,:,...,:,...]. dims is an integer vector specifying where the colons go in this expression. The results are concatenated along the remaining dimensions. For example, if dims is [1,2] and A is 4-dimensional, f is called on A[:,:,i,j] for all i and j.\n\njulia> a = reshape(collect(1:16),(2,2,2,2))\n2×2×2×2 Array{Int64,4}:\n[:, :, 1, 1] =\n 1  3\n 2  4\n\n[:, :, 2, 1] =\n 5  7\n 6  8\n\n[:, :, 1, 2] =\n  9  11\n 10  12\n\n[:, :, 2, 2] =\n 13  15\n 14  16\n\njulia> mapslices(sum, a, [1,2])\n1×1×2×2 Array{Int64,4}:\n[:, :, 1, 1] =\n 10\n\n[:, :, 2, 1] =\n 26\n\n[:, :, 1, 2] =\n 42\n\n[:, :, 2, 2] =\n 58\n\n\n\n"
+    "text": "mapslices(f, A, dims)\n\nTransform the given dimensions of array A using function f. f is called on each slice of A of the form A[...,:,...,:,...]. dims is an integer vector specifying where the colons go in this expression. The results are concatenated along the remaining dimensions. For example, if dims is [1,2] and A is 4-dimensional, f is called on A[:,:,i,j] for all i and j.\n\nExamples\n\njulia> a = reshape(collect(1:16),(2,2,2,2))\n2×2×2×2 Array{Int64,4}:\n[:, :, 1, 1] =\n 1  3\n 2  4\n\n[:, :, 2, 1] =\n 5  7\n 6  8\n\n[:, :, 1, 2] =\n  9  11\n 10  12\n\n[:, :, 2, 2] =\n 13  15\n 14  16\n\njulia> mapslices(sum, a, [1,2])\n1×1×2×2 Array{Int64,4}:\n[:, :, 1, 1] =\n 10\n\n[:, :, 2, 1] =\n 26\n\n[:, :, 1, 2] =\n 42\n\n[:, :, 2, 2] =\n 58\n\n\n\n"
 },
 
 {
@@ -11061,7 +11061,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.Random.randperm",
     "category": "Function",
-    "text": "randperm([rng=GLOBAL_RNG,] n::Integer)\n\nConstruct a random permutation of length n. The optional rng argument specifies a random number generator (see Random Numbers). To randomly permute a arbitrary vector, see shuffle or shuffle!.\n\n\n\n"
+    "text": "randperm([rng=GLOBAL_RNG,] n::Integer)\n\nConstruct a random permutation of length n. The optional rng argument specifies a random number generator (see Random Numbers). To randomly permute a arbitrary vector, see shuffle or shuffle!.\n\nExample\n\njulia> rng = MersenneTwister(1234);\n\njulia> randperm(rng, 4)\n4-element Array{Int64,1}:\n 2\n 1\n 4\n 3\n\n\n\n"
 },
 
 {
@@ -11069,7 +11069,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.invperm",
     "category": "Function",
-    "text": "invperm(v)\n\nReturn the inverse permutation of v. If B = A[v], then A == B[invperm(v)].\n\njulia> v = [2; 4; 3; 1];\n\njulia> invperm(v)\n4-element Array{Int64,1}:\n 4\n 1\n 3\n 2\n\njulia> A = ['a','b','c','d'];\n\njulia> B = A[v]\n4-element Array{Char,1}:\n 'b'\n 'd'\n 'c'\n 'a'\n\njulia> B[invperm(v)]\n4-element Array{Char,1}:\n 'a'\n 'b'\n 'c'\n 'd'\n\n\n\n"
+    "text": "invperm(v)\n\nReturn the inverse permutation of v. If B = A[v], then A == B[invperm(v)].\n\nExample\n\njulia> v = [2; 4; 3; 1];\n\njulia> invperm(v)\n4-element Array{Int64,1}:\n 4\n 1\n 3\n 2\n\njulia> A = ['a','b','c','d'];\n\njulia> B = A[v]\n4-element Array{Char,1}:\n 'b'\n 'd'\n 'c'\n 'a'\n\njulia> B[invperm(v)]\n4-element Array{Char,1}:\n 'a'\n 'b'\n 'c'\n 'd'\n\n\n\n"
 },
 
 {
@@ -11077,7 +11077,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.isperm",
     "category": "Function",
-    "text": "isperm(v) -> Bool\n\nReturns true if v is a valid permutation.\n\njulia> isperm([1; 2])\ntrue\n\njulia> isperm([1; 3])\nfalse\n\n\n\n"
+    "text": "isperm(v) -> Bool\n\nReturns true if v is a valid permutation.\n\nExamples\n\njulia> isperm([1; 2])\ntrue\n\njulia> isperm([1; 3])\nfalse\n\n\n\n"
 },
 
 {
@@ -11085,7 +11085,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.permute!",
     "category": "Method",
-    "text": "permute!(v, p)\n\nPermute vector v in-place, according to permutation p. No checking is done to verify that p is a permutation.\n\nTo return a new permutation, use v[p]. Note that this is generally faster than permute!(v,p) for large vectors.\n\nSee also ipermute!\n\njulia> A = [1, 1, 3, 4];\n\njulia> perm = [2, 4, 3, 1];\n\njulia> permute!(A, perm);\n\njulia> A\n4-element Array{Int64,1}:\n 1\n 4\n 3\n 1\n\n\n\n"
+    "text": "permute!(v, p)\n\nPermute vector v in-place, according to permutation p. No checking is done to verify that p is a permutation.\n\nTo return a new permutation, use v[p]. Note that this is generally faster than permute!(v,p) for large vectors.\n\nSee also ipermute!.\n\nExample\n\njulia> A = [1, 1, 3, 4];\n\njulia> perm = [2, 4, 3, 1];\n\njulia> permute!(A, perm);\n\njulia> A\n4-element Array{Int64,1}:\n 1\n 4\n 3\n 1\n\n\n\n"
 },
 
 {
@@ -11093,7 +11093,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.ipermute!",
     "category": "Function",
-    "text": "ipermute!(v, p)\n\nLike permute!, but the inverse of the given permutation is applied.\n\njulia> A = [1, 1, 3, 4];\n\njulia> perm = [2, 4, 3, 1];\n\njulia> ipermute!(A, perm);\n\njulia> A\n4-element Array{Int64,1}:\n 4\n 1\n 3\n 1\n\n\n\n"
+    "text": "ipermute!(v, p)\n\nLike permute!, but the inverse of the given permutation is applied.\n\nExample\n\njulia> A = [1, 1, 3, 4];\n\njulia> perm = [2, 4, 3, 1];\n\njulia> ipermute!(A, perm);\n\njulia> A\n4-element Array{Int64,1}:\n 4\n 1\n 3\n 1\n\n\n\n"
 },
 
 {
@@ -11101,7 +11101,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.Random.randcycle",
     "category": "Function",
-    "text": "randcycle([rng=GLOBAL_RNG,] n::Integer)\n\nConstruct a random cyclic permutation of length n. The optional rng argument specifies a random number generator, see Random Numbers.\n\n\n\n"
+    "text": "randcycle([rng=GLOBAL_RNG,] n::Integer)\n\nConstruct a random cyclic permutation of length n. The optional rng argument specifies a random number generator, see Random Numbers.\n\nExample\n\njulia> rng = MersenneTwister(1234);\n\njulia> randcycle(rng, 6)\n6-element Array{Int64,1}:\n 3\n 5\n 4\n 6\n 1\n 2\n\n\n\n"
 },
 
 {
@@ -11109,7 +11109,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.Random.shuffle",
     "category": "Function",
-    "text": "shuffle([rng=GLOBAL_RNG,] v::AbstractArray)\n\nReturn a randomly permuted copy of v. The optional rng argument specifies a random number generator (see Random Numbers). To permute v in-place, see shuffle!. To obtain randomly permuted indices, see randperm.\n\n\n\n"
+    "text": "shuffle([rng=GLOBAL_RNG,] v::AbstractArray)\n\nReturn a randomly permuted copy of v. The optional rng argument specifies a random number generator (see Random Numbers). To permute v in-place, see shuffle!. To obtain randomly permuted indices, see randperm.\n\nExample\n\njulia> rng = MersenneTwister(1234);\n\njulia> shuffle(rng, collect(1:10))\n10-element Array{Int64,1}:\n  6\n  1\n 10\n  2\n  3\n  9\n  5\n  7\n  4\n  8\n\n\n\n"
 },
 
 {
@@ -11117,7 +11117,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.Random.shuffle!",
     "category": "Function",
-    "text": "shuffle!([rng=GLOBAL_RNG,] v::AbstractArray)\n\nIn-place version of shuffle: randomly permute v in-place, optionally supplying the random-number generator rng.\n\n\n\n"
+    "text": "shuffle!([rng=GLOBAL_RNG,] v::AbstractArray)\n\nIn-place version of shuffle: randomly permute v in-place, optionally supplying the random-number generator rng.\n\nExample\n\njulia> rng = MersenneTwister(1234);\n\njulia> shuffle!(rng, collect(1:16))\n16-element Array{Int64,1}:\n  2\n 15\n  5\n 14\n  1\n  9\n 10\n  6\n 11\n  3\n 16\n  7\n  4\n 12\n  8\n 13\n\n\n\n"
 },
 
 {
@@ -11125,7 +11125,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.reverse",
     "category": "Function",
-    "text": "reverse(v [, start=1 [, stop=length(v) ]] )\n\nReturn a copy of v reversed from start to stop.\n\n\n\n"
+    "text": "reverse(v [, start=1 [, stop=length(v) ]] )\n\nReturn a copy of v reversed from start to stop.\n\nExamples\n\njulia> A = collect(1:5)\n5-element Array{Int64,1}:\n 1\n 2\n 3\n 4\n 5\n\njulia> reverse(A)\n5-element Array{Int64,1}:\n 5\n 4\n 3\n 2\n 1\n\njulia> reverse(A, 1, 4)\n5-element Array{Int64,1}:\n 4\n 3\n 2\n 1\n 5\n\njulia> reverse(A, 3, 5)\n5-element Array{Int64,1}:\n 1\n 2\n 5\n 4\n 3\n\n\n\n"
 },
 
 {
@@ -11157,7 +11157,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.flipbits!",
     "category": "Function",
-    "text": "flipbits!(B::BitArray{N}) -> BitArray{N}\n\nPerforms a bitwise not operation on B. See ~.\n\njulia> A = trues(2,2)\n2×2 BitArray{2}:\n true  true\n true  true\n\njulia> flipbits!(A)\n2×2 BitArray{2}:\n false  false\n false  false\n\n\n\n"
+    "text": "flipbits!(B::BitArray{N}) -> BitArray{N}\n\nPerforms a bitwise not operation on B. See ~.\n\nExample\n\njulia> A = trues(2,2)\n2×2 BitArray{2}:\n true  true\n true  true\n\njulia> flipbits!(A)\n2×2 BitArray{2}:\n false  false\n false  false\n\n\n\n"
 },
 
 {
@@ -11173,7 +11173,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.rol",
     "category": "Function",
-    "text": "rol(B::BitVector, i::Integer) -> BitVector\n\nPerforms a left rotation operation, returning a new BitVector. i controls how far to rotate the bits. See also rol!.\n\njulia> A = BitArray([true, true, false, false, true])\n5-element BitArray{1}:\n  true\n  true\n false\n false\n  true\n\njulia> rol(A,1)\n5-element BitArray{1}:\n  true\n false\n false\n  true\n  true\n\njulia> rol(A,2)\n5-element BitArray{1}:\n false\n false\n  true\n  true\n  true\n\njulia> rol(A,5)\n5-element BitArray{1}:\n  true\n  true\n false\n false\n  true\n\n\n\n"
+    "text": "rol(B::BitVector, i::Integer) -> BitVector\n\nPerforms a left rotation operation, returning a new BitVector. i controls how far to rotate the bits. See also rol!.\n\nExamples\n\njulia> A = BitArray([true, true, false, false, true])\n5-element BitArray{1}:\n  true\n  true\n false\n false\n  true\n\njulia> rol(A,1)\n5-element BitArray{1}:\n  true\n false\n false\n  true\n  true\n\njulia> rol(A,2)\n5-element BitArray{1}:\n false\n false\n  true\n  true\n  true\n\njulia> rol(A,5)\n5-element BitArray{1}:\n  true\n  true\n false\n false\n  true\n\n\n\n"
 },
 
 {
@@ -11189,7 +11189,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.ror",
     "category": "Function",
-    "text": "ror(B::BitVector, i::Integer) -> BitVector\n\nPerforms a right rotation operation on B, returning a new BitVector. i controls how far to rotate the bits. See also ror!.\n\njulia> A = BitArray([true, true, false, false, true])\n5-element BitArray{1}:\n  true\n  true\n false\n false\n  true\n\njulia> ror(A,1)\n5-element BitArray{1}:\n  true\n  true\n  true\n false\n false\n\njulia> ror(A,2)\n5-element BitArray{1}:\n false\n  true\n  true\n  true\n false\n\njulia> ror(A,5)\n5-element BitArray{1}:\n  true\n  true\n false\n false\n  true\n\n\n\n"
+    "text": "ror(B::BitVector, i::Integer) -> BitVector\n\nPerforms a right rotation operation on B, returning a new BitVector. i controls how far to rotate the bits. See also ror!.\n\nExamples\n\njulia> A = BitArray([true, true, false, false, true])\n5-element BitArray{1}:\n  true\n  true\n false\n false\n  true\n\njulia> ror(A,1)\n5-element BitArray{1}:\n  true\n  true\n  true\n false\n false\n\njulia> ror(A,2)\n5-element BitArray{1}:\n false\n  true\n  true\n  true\n false\n\njulia> ror(A,5)\n5-element BitArray{1}:\n  true\n  true\n false\n false\n  true\n\n\n\n"
 },
 
 {
@@ -11205,7 +11205,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.SparseArrays.sparse",
     "category": "Function",
-    "text": "sparse(A)\n\nConvert an AbstractMatrix A into a sparse matrix.\n\njulia> A = eye(3)\n3×3 Array{Float64,2}:\n 1.0  0.0  0.0\n 0.0  1.0  0.0\n 0.0  0.0  1.0\n\njulia> sparse(A)\n3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:\n  [1, 1]  =  1.0\n  [2, 2]  =  1.0\n  [3, 3]  =  1.0\n\n\n\nsparse(I, J, V,[ m, n, combine])\n\nCreate a sparse matrix S of dimensions m x n such that S[I[k], J[k]] = V[k]. The combine function is used to combine duplicates. If m and n are not specified, they are set to maximum(I) and maximum(J) respectively. If the combine function is not supplied, combine defaults to + unless the elements of V are Booleans in which case combine defaults to |. All elements of I must satisfy 1 <= I[k] <= m, and all elements of J must satisfy 1 <= J[k] <= n. Numerical zeros in (I, J, V) are retained as structural nonzeros; to drop numerical zeros, use dropzeros!.\n\nFor additional documentation and an expert driver, see Base.SparseArrays.sparse!.\n\njulia> Is = [1; 2; 3];\n\njulia> Js = [1; 2; 3];\n\njulia> Vs = [1; 2; 3];\n\njulia> sparse(Is, Js, Vs)\n3×3 SparseMatrixCSC{Int64,Int64} with 3 stored entries:\n  [1, 1]  =  1\n  [2, 2]  =  2\n  [3, 3]  =  3\n\n\n\n"
+    "text": "sparse(A)\n\nConvert an AbstractMatrix A into a sparse matrix.\n\nExample\n\njulia> A = eye(3)\n3×3 Array{Float64,2}:\n 1.0  0.0  0.0\n 0.0  1.0  0.0\n 0.0  0.0  1.0\n\njulia> sparse(A)\n3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:\n  [1, 1]  =  1.0\n  [2, 2]  =  1.0\n  [3, 3]  =  1.0\n\n\n\nsparse(I, J, V,[ m, n, combine])\n\nCreate a sparse matrix S of dimensions m x n such that S[I[k], J[k]] = V[k]. The combine function is used to combine duplicates. If m and n are not specified, they are set to maximum(I) and maximum(J) respectively. If the combine function is not supplied, combine defaults to + unless the elements of V are Booleans in which case combine defaults to |. All elements of I must satisfy 1 <= I[k] <= m, and all elements of J must satisfy 1 <= J[k] <= n. Numerical zeros in (I, J, V) are retained as structural nonzeros; to drop numerical zeros, use dropzeros!.\n\nFor additional documentation and an expert driver, see Base.SparseArrays.sparse!.\n\nExample\n\njulia> Is = [1; 2; 3];\n\njulia> Js = [1; 2; 3];\n\njulia> Vs = [1; 2; 3];\n\njulia> sparse(Is, Js, Vs)\n3×3 SparseMatrixCSC{Int64,Int64} with 3 stored entries:\n  [1, 1]  =  1\n  [2, 2]  =  2\n  [3, 3]  =  3\n\n\n\n"
 },
 
 {
@@ -11213,7 +11213,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.SparseArrays.sparsevec",
     "category": "Function",
-    "text": "sparsevec(I, V, [m, combine])\n\nCreate a sparse vector S of length m such that S[I[k]] = V[k]. Duplicates are combined using the combine function, which defaults to + if no combine argument is provided, unless the elements of V are Booleans in which case combine defaults to |.\n\njulia> II = [1, 3, 3, 5]; V = [0.1, 0.2, 0.3, 0.2];\n\njulia> sparsevec(II, V)\n5-element SparseVector{Float64,Int64} with 3 stored entries:\n  [1]  =  0.1\n  [3]  =  0.5\n  [5]  =  0.2\n\njulia> sparsevec(II, V, 8, -)\n8-element SparseVector{Float64,Int64} with 3 stored entries:\n  [1]  =  0.1\n  [3]  =  -0.1\n  [5]  =  0.2\n\njulia> sparsevec([1, 3, 1, 2, 2], [true, true, false, false, false])\n3-element SparseVector{Bool,Int64} with 3 stored entries:\n  [1]  =  true\n  [2]  =  false\n  [3]  =  true\n\n\n\nsparsevec(d::Dict, [m])\n\nCreate a sparse vector of length m where the nonzero indices are keys from the dictionary, and the nonzero values are the values from the dictionary.\n\njulia> sparsevec(Dict(1 => 3, 2 => 2))\n2-element SparseVector{Int64,Int64} with 2 stored entries:\n  [1]  =  3\n  [2]  =  2\n\n\n\nsparsevec(A)\n\nConvert a vector A into a sparse vector of length m.\n\njulia> sparsevec([1.0, 2.0, 0.0, 0.0, 3.0, 0.0])\n6-element SparseVector{Float64,Int64} with 3 stored entries:\n  [1]  =  1.0\n  [2]  =  2.0\n  [5]  =  3.0\n\n\n\n"
+    "text": "sparsevec(I, V, [m, combine])\n\nCreate a sparse vector S of length m such that S[I[k]] = V[k]. Duplicates are combined using the combine function, which defaults to + if no combine argument is provided, unless the elements of V are Booleans in which case combine defaults to |.\n\njulia> II = [1, 3, 3, 5]; V = [0.1, 0.2, 0.3, 0.2];\n\njulia> sparsevec(II, V)\n5-element SparseVector{Float64,Int64} with 3 stored entries:\n  [1]  =  0.1\n  [3]  =  0.5\n  [5]  =  0.2\n\njulia> sparsevec(II, V, 8, -)\n8-element SparseVector{Float64,Int64} with 3 stored entries:\n  [1]  =  0.1\n  [3]  =  -0.1\n  [5]  =  0.2\n\njulia> sparsevec([1, 3, 1, 2, 2], [true, true, false, false, false])\n3-element SparseVector{Bool,Int64} with 3 stored entries:\n  [1]  =  true\n  [2]  =  false\n  [3]  =  true\n\n\n\nsparsevec(d::Dict, [m])\n\nCreate a sparse vector of length m where the nonzero indices are keys from the dictionary, and the nonzero values are the values from the dictionary.\n\njulia> sparsevec(Dict(1 => 3, 2 => 2))\n2-element SparseVector{Int64,Int64} with 2 stored entries:\n  [1]  =  3\n  [2]  =  2\n\n\n\nsparsevec(A)\n\nConvert a vector A into a sparse vector of length m.\n\nExample\n\njulia> sparsevec([1.0, 2.0, 0.0, 0.0, 3.0, 0.0])\n6-element SparseVector{Float64,Int64} with 3 stored entries:\n  [1]  =  1.0\n  [2]  =  2.0\n  [5]  =  3.0\n\n\n\n"
 },
 
 {
@@ -11229,7 +11229,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.full",
     "category": "Function",
-    "text": "full(S)\n\nConvert a sparse matrix or vector S into a dense matrix or vector.\n\njulia> A = speye(3)\n3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:\n  [1, 1]  =  1.0\n  [2, 2]  =  1.0\n  [3, 3]  =  1.0\n\njulia> full(A)\n3×3 Array{Float64,2}:\n 1.0  0.0  0.0\n 0.0  1.0  0.0\n 0.0  0.0  1.0\n\n\n\n"
+    "text": "full(S)\n\nConvert a sparse matrix or vector S into a dense matrix or vector.\n\nExample\n\njulia> A = speye(3)\n3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:\n  [1, 1]  =  1.0\n  [2, 2]  =  1.0\n  [3, 3]  =  1.0\n\njulia> full(A)\n3×3 Array{Float64,2}:\n 1.0  0.0  0.0\n 0.0  1.0  0.0\n 0.0  0.0  1.0\n\n\n\n"
 },
 
 {
@@ -11237,7 +11237,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.SparseArrays.nnz",
     "category": "Function",
-    "text": "nnz(A)\n\nReturns the number of stored (filled) elements in a sparse array.\n\njulia> A = speye(3)\n3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:\n  [1, 1]  =  1.0\n  [2, 2]  =  1.0\n  [3, 3]  =  1.0\n\njulia> nnz(A)\n3\n\n\n\n"
+    "text": "nnz(A)\n\nReturns the number of stored (filled) elements in a sparse array.\n\nExample\n\njulia> A = speye(3)\n3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:\n  [1, 1]  =  1.0\n  [2, 2]  =  1.0\n  [3, 3]  =  1.0\n\njulia> nnz(A)\n3\n\n\n\n"
 },
 
 {
@@ -11245,7 +11245,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.SparseArrays.spzeros",
     "category": "Function",
-    "text": "spzeros([type,]m[,n])\n\nCreate a sparse vector of length m or sparse matrix of size m x n. This sparse array will not contain any nonzero values. No storage will be allocated for nonzero values during construction. The type defaults to Float64 if not specified.\n\njulia> spzeros(3, 3)\n3×3 SparseMatrixCSC{Float64,Int64} with 0 stored entries\n\njulia> spzeros(Float32, 4)\n4-element SparseVector{Float32,Int64} with 0 stored entries\n\n\n\n"
+    "text": "spzeros([type,]m[,n])\n\nCreate a sparse vector of length m or sparse matrix of size m x n. This sparse array will not contain any nonzero values. No storage will be allocated for nonzero values during construction. The type defaults to Float64 if not specified.\n\nExamples\n\njulia> spzeros(3, 3)\n3×3 SparseMatrixCSC{Float64,Int64} with 0 stored entries\n\njulia> spzeros(Float32, 4)\n4-element SparseVector{Float32,Int64} with 0 stored entries\n\n\n\n"
 },
 
 {
@@ -11253,7 +11253,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.SparseArrays.spones",
     "category": "Function",
-    "text": "spones(S)\n\nCreate a sparse array with the same structure as that of S, but with every nonzero element having the value 1.0.\n\njulia> A = sparse([1,2,3,4],[2,4,3,1],[5.,4.,3.,2.])\n4×4 SparseMatrixCSC{Float64,Int64} with 4 stored entries:\n  [4, 1]  =  2.0\n  [1, 2]  =  5.0\n  [3, 3]  =  3.0\n  [2, 4]  =  4.0\n\njulia> spones(A)\n4×4 SparseMatrixCSC{Float64,Int64} with 4 stored entries:\n  [4, 1]  =  1.0\n  [1, 2]  =  1.0\n  [3, 3]  =  1.0\n  [2, 4]  =  1.0\n\nNote the difference from speye.\n\n\n\n"
+    "text": "spones(S)\n\nCreate a sparse array with the same structure as that of S, but with every nonzero element having the value 1.0.\n\nExample\n\njulia> A = sparse([1,2,3,4],[2,4,3,1],[5.,4.,3.,2.])\n4×4 SparseMatrixCSC{Float64,Int64} with 4 stored entries:\n  [4, 1]  =  2.0\n  [1, 2]  =  5.0\n  [3, 3]  =  3.0\n  [2, 4]  =  4.0\n\njulia> spones(A)\n4×4 SparseMatrixCSC{Float64,Int64} with 4 stored entries:\n  [4, 1]  =  1.0\n  [1, 2]  =  1.0\n  [3, 3]  =  1.0\n  [2, 4]  =  1.0\n\nNote the difference from speye.\n\n\n\n"
 },
 
 {
@@ -11269,7 +11269,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.SparseArrays.speye",
     "category": "Method",
-    "text": "speye(S)\n\nCreate a sparse identity matrix with the same size as S.\n\njulia> A = sparse([1,2,3,4],[2,4,3,1],[5.,4.,3.,2.])\n4×4 SparseMatrixCSC{Float64,Int64} with 4 stored entries:\n  [4, 1]  =  2.0\n  [1, 2]  =  5.0\n  [3, 3]  =  3.0\n  [2, 4]  =  4.0\n\njulia> speye(A)\n4×4 SparseMatrixCSC{Float64,Int64} with 4 stored entries:\n  [1, 1]  =  1.0\n  [2, 2]  =  1.0\n  [3, 3]  =  1.0\n  [4, 4]  =  1.0\n\nNote the difference from spones.\n\n\n\nspeye([type,]m[,n])\n\nCreate a sparse identity matrix of size m x m. When n is supplied, create a sparse identity matrix of size m x n. The type defaults to Float64 if not specified.\n\nsparse(I, m, n) is equivalent to speye(Int, m, n), and sparse(α*I, m, n) can be used to efficiently create a sparse multiple α of the identity matrix.\n\n\n\n"
+    "text": "speye(S)\n\nCreate a sparse identity matrix with the same size as S.\n\nExample\n\njulia> A = sparse([1,2,3,4],[2,4,3,1],[5.,4.,3.,2.])\n4×4 SparseMatrixCSC{Float64,Int64} with 4 stored entries:\n  [4, 1]  =  2.0\n  [1, 2]  =  5.0\n  [3, 3]  =  3.0\n  [2, 4]  =  4.0\n\njulia> speye(A)\n4×4 SparseMatrixCSC{Float64,Int64} with 4 stored entries:\n  [1, 1]  =  1.0\n  [2, 2]  =  1.0\n  [3, 3]  =  1.0\n  [4, 4]  =  1.0\n\nNote the difference from spones.\n\n\n\nspeye([type,]m[,n])\n\nCreate a sparse identity matrix of size m x m. When n is supplied, create a sparse identity matrix of size m x n. The type defaults to Float64 if not specified.\n\nsparse(I, m, n) is equivalent to speye(Int, m, n), and sparse(α*I, m, n) can be used to efficiently create a sparse multiple α of the identity matrix.\n\n\n\n"
 },
 
 {
@@ -11277,7 +11277,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.SparseArrays.spdiagm",
     "category": "Function",
-    "text": "spdiagm(B, d[, m, n])\n\nConstruct a sparse diagonal matrix. B is a tuple of vectors containing the diagonals and d is a tuple containing the positions of the diagonals. In the case the input contains only one diagonal, B can be a vector (instead of a tuple) and d can be the diagonal position (instead of a tuple), defaulting to 0 (diagonal). Optionally, m and n specify the size of the resulting sparse matrix.\n\njulia> spdiagm(([1,2,3,4],[4,3,2,1]),(-1,1))\n5×5 SparseMatrixCSC{Int64,Int64} with 8 stored entries:\n  [2, 1]  =  1\n  [1, 2]  =  4\n  [3, 2]  =  2\n  [2, 3]  =  3\n  [4, 3]  =  3\n  [3, 4]  =  2\n  [5, 4]  =  4\n  [4, 5]  =  1\n\n\n\n"
+    "text": "spdiagm(B, d[, m, n])\n\nConstruct a sparse diagonal matrix. B is a tuple of vectors containing the diagonals and d is a tuple containing the positions of the diagonals. In the case the input contains only one diagonal, B can be a vector (instead of a tuple) and d can be the diagonal position (instead of a tuple), defaulting to 0 (diagonal). Optionally, m and n specify the size of the resulting sparse matrix.\n\nExample\n\njulia> spdiagm(([1,2,3,4],[4,3,2,1]),(-1,1))\n5×5 SparseMatrixCSC{Int64,Int64} with 8 stored entries:\n  [2, 1]  =  1\n  [1, 2]  =  4\n  [3, 2]  =  2\n  [2, 3]  =  3\n  [4, 3]  =  3\n  [3, 4]  =  2\n  [5, 4]  =  4\n  [4, 5]  =  1\n\n\n\n"
 },
 
 {
@@ -11285,7 +11285,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.SparseArrays.sprand",
     "category": "Function",
-    "text": "sprand([rng],[type],m,[n],p::AbstractFloat,[rfn])\n\nCreate a random length m sparse vector or m by n sparse matrix, in which the probability of any element being nonzero is independently given by p (and hence the mean density of nonzeros is also exactly p). Nonzero values are sampled from the distribution specified by rfn and have the type type. The uniform distribution is used in case rfn is not specified. The optional rng argument specifies a random number generator, see Random Numbers.\n\njulia> rng = MersenneTwister(1234);\n\njulia> sprand(rng, Bool, 2, 2, 0.5)\n2×2 SparseMatrixCSC{Bool,Int64} with 2 stored entries:\n  [1, 1]  =  true\n  [2, 1]  =  true\n\njulia> sprand(rng, Float64, 3, 0.75)\n3-element SparseVector{Float64,Int64} with 1 stored entry:\n  [3]  =  0.298614\n\n\n\n"
+    "text": "sprand([rng],[type],m,[n],p::AbstractFloat,[rfn])\n\nCreate a random length m sparse vector or m by n sparse matrix, in which the probability of any element being nonzero is independently given by p (and hence the mean density of nonzeros is also exactly p). Nonzero values are sampled from the distribution specified by rfn and have the type type. The uniform distribution is used in case rfn is not specified. The optional rng argument specifies a random number generator, see Random Numbers.\n\nExample\n\njulia> rng = MersenneTwister(1234);\n\njulia> sprand(rng, Bool, 2, 2, 0.5)\n2×2 SparseMatrixCSC{Bool,Int64} with 2 stored entries:\n  [1, 1]  =  true\n  [2, 1]  =  true\n\njulia> sprand(rng, Float64, 3, 0.75)\n3-element SparseVector{Float64,Int64} with 1 stored entry:\n  [3]  =  0.298614\n\n\n\n"
 },
 
 {
@@ -11293,7 +11293,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.SparseArrays.sprandn",
     "category": "Function",
-    "text": "sprandn([rng], m[,n],p::AbstractFloat)\n\nCreate a random sparse vector of length m or sparse matrix of size m by n with the specified (independent) probability p of any entry being nonzero, where nonzero values are sampled from the normal distribution. The optional rng argument specifies a random number generator, see Random Numbers.\n\njulia> rng = MersenneTwister(1234);\n\njulia> sprandn(rng, 2, 2, 0.75)\n2×2 SparseMatrixCSC{Float64,Int64} with 3 stored entries:\n  [1, 1]  =  0.532813\n  [2, 1]  =  -0.271735\n  [2, 2]  =  0.502334\n\n\n\n"
+    "text": "sprandn([rng], m[,n],p::AbstractFloat)\n\nCreate a random sparse vector of length m or sparse matrix of size m by n with the specified (independent) probability p of any entry being nonzero, where nonzero values are sampled from the normal distribution. The optional rng argument specifies a random number generator, see Random Numbers.\n\nExample\n\njulia> rng = MersenneTwister(1234);\n\njulia> sprandn(rng, 2, 2, 0.75)\n2×2 SparseMatrixCSC{Float64,Int64} with 3 stored entries:\n  [1, 1]  =  0.532813\n  [2, 1]  =  -0.271735\n  [2, 2]  =  0.502334\n\n\n\n"
 },
 
 {
@@ -11301,7 +11301,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.SparseArrays.nonzeros",
     "category": "Function",
-    "text": "nonzeros(A)\n\nReturn a vector of the structural nonzero values in sparse array A. This includes zeros that are explicitly stored in the sparse array. The returned vector points directly to the internal nonzero storage of A, and any modifications to the returned vector will mutate A as well. See rowvals and nzrange.\n\njulia> A = speye(3)\n3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:\n  [1, 1]  =  1.0\n  [2, 2]  =  1.0\n  [3, 3]  =  1.0\n\njulia> nonzeros(A)\n3-element Array{Float64,1}:\n 1.0\n 1.0\n 1.0\n\n\n\n"
+    "text": "nonzeros(A)\n\nReturn a vector of the structural nonzero values in sparse array A. This includes zeros that are explicitly stored in the sparse array. The returned vector points directly to the internal nonzero storage of A, and any modifications to the returned vector will mutate A as well. See rowvals and nzrange.\n\nExample\n\njulia> A = speye(3)\n3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:\n  [1, 1]  =  1.0\n  [2, 2]  =  1.0\n  [3, 3]  =  1.0\n\njulia> nonzeros(A)\n3-element Array{Float64,1}:\n 1.0\n 1.0\n 1.0\n\n\n\n"
 },
 
 {
@@ -11309,7 +11309,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.SparseArrays.rowvals",
     "category": "Function",
-    "text": "rowvals(A::SparseMatrixCSC)\n\nReturn a vector of the row indices of A. Any modifications to the returned vector will mutate A as well. Providing access to how the row indices are stored internally can be useful in conjunction with iterating over structural nonzero values. See also nonzeros and nzrange.\n\njulia> A = speye(3)\n3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:\n  [1, 1]  =  1.0\n  [2, 2]  =  1.0\n  [3, 3]  =  1.0\n\njulia> rowvals(A)\n3-element Array{Int64,1}:\n 1\n 2\n 3\n\n\n\n"
+    "text": "rowvals(A::SparseMatrixCSC)\n\nReturn a vector of the row indices of A. Any modifications to the returned vector will mutate A as well. Providing access to how the row indices are stored internally can be useful in conjunction with iterating over structural nonzero values. See also nonzeros and nzrange.\n\nExample\n\njulia> A = speye(3)\n3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:\n  [1, 1]  =  1.0\n  [2, 2]  =  1.0\n  [3, 3]  =  1.0\n\njulia> rowvals(A)\n3-element Array{Int64,1}:\n 1\n 2\n 3\n\n\n\n"
 },
 
 {
@@ -11333,7 +11333,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.SparseArrays.dropzeros",
     "category": "Method",
-    "text": "dropzeros(A::SparseMatrixCSC, trim::Bool = true)\n\nGenerates a copy of A and removes stored numerical zeros from that copy, optionally trimming excess space from the result's rowval and nzval arrays when trim is true.\n\nFor an in-place version and algorithmic information, see dropzeros!.\n\n\n\n"
+    "text": "dropzeros(A::SparseMatrixCSC, trim::Bool = true)\n\nGenerates a copy of A and removes stored numerical zeros from that copy, optionally trimming excess space from the result's rowval and nzval arrays when trim is true.\n\nFor an in-place version and algorithmic information, see dropzeros!.\n\nExample\n\njulia> A = sparse([1, 2, 3], [1, 2, 3], [1.0, 0.0, 1.0])\n3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:\n  [1, 1]  =  1.0\n  [2, 2]  =  0.0\n  [3, 3]  =  1.0\n\njulia> dropzeros(A)\n3×3 SparseMatrixCSC{Float64,Int64} with 2 stored entries:\n  [1, 1]  =  1.0\n  [3, 3]  =  1.0\n\n\n\n"
 },
 
 {
@@ -11349,7 +11349,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.SparseArrays.dropzeros",
     "category": "Method",
-    "text": "dropzeros(x::SparseVector, trim::Bool = true)\n\nGenerates a copy of x and removes numerical zeros from that copy, optionally trimming excess space from the result's nzind and nzval arrays when trim is true.\n\nFor an in-place version and algorithmic information, see dropzeros!.\n\n\n\n"
+    "text": "dropzeros(x::SparseVector, trim::Bool = true)\n\nGenerates a copy of x and removes numerical zeros from that copy, optionally trimming excess space from the result's nzind and nzval arrays when trim is true.\n\nFor an in-place version and algorithmic information, see dropzeros!.\n\nExample\n\njulia> A = sparsevec([1, 2, 3], [1.0, 0.0, 1.0])\n3-element SparseVector{Float64,Int64} with 3 stored entries:\n  [1]  =  1.0\n  [2]  =  0.0\n  [3]  =  1.0\n\njulia> dropzeros(A)\n3-element SparseVector{Float64,Int64} with 2 stored entries:\n  [1]  =  1.0\n  [3]  =  1.0\n\n\n\n"
 },
 
 {
@@ -11357,7 +11357,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.SparseArrays.permute",
     "category": "Function",
-    "text": "permute(A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{<:Integer},\n        q::AbstractVector{<:Integer}) where {Tv,Ti}\n\nBilaterally permute A, returning PAQ (A[p,q]). Column-permutation q's length must match A's column count (length(q) == A.n). Row-permutation p's length must match A's row count (length(p) == A.m).\n\nFor expert drivers and additional information, see permute!.\n\n\n\n"
+    "text": "permute(A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{<:Integer},\n        q::AbstractVector{<:Integer}) where {Tv,Ti}\n\nBilaterally permute A, returning PAQ (A[p,q]). Column-permutation q's length must match A's column count (length(q) == A.n). Row-permutation p's length must match A's row count (length(p) == A.m).\n\nFor expert drivers and additional information, see permute!.\n\nExample\n\njulia> A = spdiagm([1, 2, 3, 4], 0, 4, 4) + spdiagm([5, 6, 7], 1, 4, 4)\n4×4 SparseMatrixCSC{Int64,Int64} with 7 stored entries:\n  [1, 1]  =  1\n  [1, 2]  =  5\n  [2, 2]  =  2\n  [2, 3]  =  6\n  [3, 3]  =  3\n  [3, 4]  =  7\n  [4, 4]  =  4\n\njulia> permute(A, [4, 3, 2, 1], [1, 2, 3, 4])\n4×4 SparseMatrixCSC{Int64,Int64} with 7 stored entries:\n  [4, 1]  =  1\n  [3, 2]  =  2\n  [4, 2]  =  5\n  [2, 3]  =  3\n  [3, 3]  =  6\n  [1, 4]  =  4\n  [2, 4]  =  7\n\njulia> permute(A, [1, 2, 3, 4], [4, 3, 2, 1])\n4×4 SparseMatrixCSC{Int64,Int64} with 7 stored entries:\n  [3, 1]  =  7\n  [4, 1]  =  4\n  [2, 2]  =  6\n  [3, 2]  =  3\n  [1, 3]  =  5\n  [2, 3]  =  2\n  [1, 4]  =  1\n\n\n\n"
 },
 
 {
@@ -11365,7 +11365,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.permute!",
     "category": "Method",
-    "text": "permute!(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti},\n         p::AbstractVector{<:Integer}, q::AbstractVector{<:Integer},\n         [C::SparseMatrixCSC{Tv,Ti}]) where {Tv,Ti}\n\nBilaterally permute A, storing result PAQ (A[p,q]) in X. Stores intermediate result (AQ)^T (transpose(A[:,q])) in optional argument C if present. Requires that none of X, A, and, if present, C alias each other; to store result PAQ back into A, use the following method lacking X:\n\npermute!(A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{<:Integer},\n         q::AbstractVector{<:Integer}[, C::SparseMatrixCSC{Tv,Ti},\n         [workcolptr::Vector{Ti}]]) where {Tv,Ti}\n\nX's dimensions must match those of A (X.m == A.m and X.n == A.n), and X must have enough storage to accommodate all allocated entries in A (length(X.rowval) >= nnz(A) and length(X.nzval) >= nnz(A)). Column-permutation q's length must match A's column count (length(q) == A.n). Row-permutation p's length must match A's row count (length(p) == A.m).\n\nC's dimensions must match those of transpose(A) (C.m == A.n and C.n == A.m), and C must have enough storage to accommodate all allocated entries in A (length(C.rowval) >= nnz(A) and length(C.nzval) >= nnz(A)).\n\nFor additional (algorithmic) information, and for versions of these methods that forgo argument checking, see (unexported) parent methods unchecked_noalias_permute! and unchecked_aliasing_permute!.\n\nSee also: permute\n\n\n\n"
+    "text": "permute!(X::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC{Tv,Ti},\n         p::AbstractVector{<:Integer}, q::AbstractVector{<:Integer},\n         [C::SparseMatrixCSC{Tv,Ti}]) where {Tv,Ti}\n\nBilaterally permute A, storing result PAQ (A[p,q]) in X. Stores intermediate result (AQ)^T (transpose(A[:,q])) in optional argument C if present. Requires that none of X, A, and, if present, C alias each other; to store result PAQ back into A, use the following method lacking X:\n\npermute!(A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{<:Integer},\n         q::AbstractVector{<:Integer}[, C::SparseMatrixCSC{Tv,Ti},\n         [workcolptr::Vector{Ti}]]) where {Tv,Ti}\n\nX's dimensions must match those of A (X.m == A.m and X.n == A.n), and X must have enough storage to accommodate all allocated entries in A (length(X.rowval) >= nnz(A) and length(X.nzval) >= nnz(A)). Column-permutation q's length must match A's column count (length(q) == A.n). Row-permutation p's length must match A's row count (length(p) == A.m).\n\nC's dimensions must match those of transpose(A) (C.m == A.n and C.n == A.m), and C must have enough storage to accommodate all allocated entries in A (length(C.rowval) >= nnz(A) and length(C.nzval) >= nnz(A)).\n\nFor additional (algorithmic) information, and for versions of these methods that forgo argument checking, see (unexported) parent methods unchecked_noalias_permute! and unchecked_aliasing_permute!.\n\nSee also: permute.\n\n\n\n"
 },
 
 {
@@ -11397,7 +11397,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Tasks and Parallel Computing",
     "title": "Core.Task",
     "category": "Type",
-    "text": "Task(func)\n\nCreate a Task (i.e. coroutine) to execute the given function (which must be callable with no arguments). The task exits when this function returns.\n\njulia> a() = det(rand(1000, 1000));\n\njulia> b = Task(a);\n\nIn this example, b is a runnable Task that hasn't started yet.\n\n\n\n"
+    "text": "Task(func)\n\nCreate a Task (i.e. coroutine) to execute the given function (which must be callable with no arguments). The task exits when this function returns.\n\nExample\n\njulia> a() = det(rand(1000, 1000));\n\njulia> b = Task(a);\n\nIn this example, b is a runnable Task that hasn't started yet.\n\n\n\n"
 },
 
 {
@@ -12493,7 +12493,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.lufact",
     "category": "Function",
-    "text": "lufact(A [,pivot=Val{true}]) -> F::LU\n\nCompute the LU factorization of A.\n\nIn most cases, if A is a subtype S of AbstractMatrix{T} with an element type T supporting +, -, * and /, the return type is LU{T,S{T}}. If pivoting is chosen (default) the element type should also support abs and <.\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] (right) permutation Vector\nF[:P] (right) permutation Matrix\n\nThe relationship between F and A is\n\nF[:L]*F[:U] == A[F[:p], :]\n\nF further supports the following functions:\n\nSupported function LU LU{T,Tridiagonal{T}}\n/ ✓ \n\\ ✓ ✓\ninv ✓ ✓\ndet ✓ ✓\nlogdet ✓ ✓\nlogabsdet ✓ ✓\nsize ✓ ✓\n\nExample\n\njulia> A = [4 3; 6 3]\n2×2 Array{Int64,2}:\n 4  3\n 6  3\n\njulia> F = lufact(A)\nBase.LinAlg.LU{Float64,Array{Float64,2}} with factors L and U:\n[1.0 0.0; 1.5 1.0]\n[4.0 3.0; 0.0 -1.5]\n\njulia> F[:L] * F[:U] == A[F[:p], :]\ntrue\n\n\n\nlufact(A::SparseMatrixCSC) -> F::UmfpackLU\n\nCompute the LU factorization of a sparse matrix A.\n\nFor sparse A with real or complex element type, the return type of F is UmfpackLU{Tv, Ti}, with Tv = Float64 or Complex128 respectively and Ti is an integer type (Int32 or Int64).\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] right permutation Vector\nF[:q] left permutation Vector\nF[:Rs] Vector of scaling factors\nF[:(:)] (L,U,p,q,Rs) components\n\nThe relation between F and A is\n\nF[:L]*F[:U] == (F[:Rs] .* A)[F[:p], F[:q]]\n\nF further supports the following functions:\n\n\\\ncond\ndet\n\nnote: Note\nlufact(A::SparseMatrixCSC) uses the UMFPACK library that is part of SuiteSparse. As this library only supports sparse matrices with Float64 or Complex128 elements, lufact converts A into a copy that is of type SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\n"
+    "text": "lufact(A::SparseMatrixCSC) -> F::UmfpackLU\n\nCompute the LU factorization of a sparse matrix A.\n\nFor sparse A with real or complex element type, the return type of F is UmfpackLU{Tv, Ti}, with Tv = Float64 or Complex128 respectively and Ti is an integer type (Int32 or Int64).\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] right permutation Vector\nF[:q] left permutation Vector\nF[:Rs] Vector of scaling factors\nF[:(:)] (L,U,p,q,Rs) components\n\nThe relation between F and A is\n\nF[:L]*F[:U] == (F[:Rs] .* A)[F[:p], F[:q]]\n\nF further supports the following functions:\n\n\\\ncond\ndet\n\nnote: Note\nlufact(A::SparseMatrixCSC) uses the UMFPACK library that is part of SuiteSparse. As this library only supports sparse matrices with Float64 or Complex128 elements, lufact converts A into a copy that is of type SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\nlufact(A [,pivot=Val{true}]) -> F::LU\n\nCompute the LU factorization of A.\n\nIn most cases, if A is a subtype S of AbstractMatrix{T} with an element type T supporting +, -, * and /, the return type is LU{T,S{T}}. If pivoting is chosen (default) the element type should also support abs and <.\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] (right) permutation Vector\nF[:P] (right) permutation Matrix\n\nThe relationship between F and A is\n\nF[:L]*F[:U] == A[F[:p], :]\n\nF further supports the following functions:\n\nSupported function LU LU{T,Tridiagonal{T}}\n/ ✓ \n\\ ✓ ✓\ninv ✓ ✓\ndet ✓ ✓\nlogdet ✓ ✓\nlogabsdet ✓ ✓\nsize ✓ ✓\n\nExample\n\njulia> A = [4 3; 6 3]\n2×2 Array{Int64,2}:\n 4  3\n 6  3\n\njulia> F = lufact(A)\nBase.LinAlg.LU{Float64,Array{Float64,2}} with factors L and U:\n[1.0 0.0; 1.5 1.0]\n[4.0 3.0; 0.0 -1.5]\n\njulia> F[:L] * F[:U] == A[F[:p], :]\ntrue\n\n\n\n"
 },
 
 {
@@ -12701,7 +12701,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.eigmax",
     "category": "Function",
-    "text": "eigmax(A; permute::Bool=true, scale::Bool=true)\n\nReturns the largest eigenvalue of A. The option permute=true permutes the matrix to become closer to upper triangular, and scale=true scales the matrix by its diagonal elements to make rows and columns more equal in norm. Note that if the eigenvalues of A are complex, this method will fail, since complex numbers cannot be sorted.\n\nExample\n\njulia> A = [0 im; -im 0]\n2×2 Array{Complex{Int64},2}:\n 0+0im  0+1im\n 0-1im  0+0im\n\njulia> eigmax(A)\n1.0\n\njulia> A = [0 im; -1 0]\n2×2 Array{Complex{Int64},2}:\n  0+0im  0+1im\n -1+0im  0+0im\n\njulia> eigmax(A)\nERROR: DomainError:\nStacktrace:\n [1] #eigmax#46(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:238\n [2] eigmax(::Array{Complex{Int64},2}) at ./linalg/eigen.jl:236\n\n\n\n"
+    "text": "eigmax(A; permute::Bool=true, scale::Bool=true)\n\nReturns the largest eigenvalue of A. The option permute=true permutes the matrix to become closer to upper triangular, and scale=true scales the matrix by its diagonal elements to make rows and columns more equal in norm. Note that if the eigenvalues of A are complex, this method will fail, since complex numbers cannot be sorted.\n\nExample\n\njulia> A = [0 im; -im 0]\n2×2 Array{Complex{Int64},2}:\n 0+0im  0+1im\n 0-1im  0+0im\n\njulia> eigmax(A)\n1.0\n\njulia> A = [0 im; -1 0]\n2×2 Array{Complex{Int64},2}:\n  0+0im  0+1im\n -1+0im  0+0im\n\njulia> eigmax(A)\nERROR: DomainError:\nStacktrace:\n [1] #eigmax#52(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:238\n [2] eigmax(::Array{Complex{Int64},2}) at ./linalg/eigen.jl:236\n\n\n\n"
 },
 
 {
@@ -12709,7 +12709,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.eigmin",
     "category": "Function",
-    "text": "eigmin(A; permute::Bool=true, scale::Bool=true)\n\nReturns the smallest eigenvalue of A. The option permute=true permutes the matrix to become closer to upper triangular, and scale=true scales the matrix by its diagonal elements to make rows and columns more equal in norm. Note that if the eigenvalues of A are complex, this method will fail, since complex numbers cannot be sorted.\n\nExample\n\njulia> A = [0 im; -im 0]\n2×2 Array{Complex{Int64},2}:\n 0+0im  0+1im\n 0-1im  0+0im\n\njulia> eigmin(A)\n-1.0\n\njulia> A = [0 im; -1 0]\n2×2 Array{Complex{Int64},2}:\n  0+0im  0+1im\n -1+0im  0+0im\n\njulia> eigmin(A)\nERROR: DomainError:\nStacktrace:\n [1] #eigmin#47(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:280\n [2] eigmin(::Array{Complex{Int64},2}) at ./linalg/eigen.jl:278\n\n\n\n"
+    "text": "eigmin(A; permute::Bool=true, scale::Bool=true)\n\nReturns the smallest eigenvalue of A. The option permute=true permutes the matrix to become closer to upper triangular, and scale=true scales the matrix by its diagonal elements to make rows and columns more equal in norm. Note that if the eigenvalues of A are complex, this method will fail, since complex numbers cannot be sorted.\n\nExample\n\njulia> A = [0 im; -im 0]\n2×2 Array{Complex{Int64},2}:\n 0+0im  0+1im\n 0-1im  0+0im\n\njulia> eigmin(A)\n-1.0\n\njulia> A = [0 im; -1 0]\n2×2 Array{Complex{Int64},2}:\n  0+0im  0+1im\n -1+0im  0+0im\n\njulia> eigmin(A)\nERROR: DomainError:\nStacktrace:\n [1] #eigmin#53(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:280\n [2] eigmin(::Array{Complex{Int64},2}) at ./linalg/eigen.jl:278\n\n\n\n"
 },
 
 {
@@ -12909,7 +12909,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.rank",
     "category": "Function",
-    "text": "rank(M[, tol::Real])\n\nCompute the rank of a matrix by counting how many singular values of M have magnitude greater than tol. By default, the value of tol is the largest dimension of M multiplied by the eps of the eltype of M.\n\n\n\n"
+    "text": "rank(M[, tol::Real])\n\nCompute the rank of a matrix by counting how many singular values of M have magnitude greater than tol. By default, the value of tol is the largest dimension of M multiplied by the eps of the eltype of M.\n\nExample\n\njulia> rank(eye(3))\n3\n\njulia> rank(diagm([1, 0, 2]))\n2\n\njulia> rank(diagm([1, 0.001, 2]), 0.1)\n2\n\njulia> rank(diagm([1, 0.001, 2]), 0.00001)\n3\n\n\n\n"
 },
 
 {
@@ -12941,7 +12941,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.normalize",
     "category": "Function",
-    "text": "normalize(v::AbstractVector, p::Real=2)\n\nNormalize the vector v so that its p-norm equals unity, i.e. norm(v, p) == vecnorm(v, p) == 1. See also normalize! and vecnorm.\n\nExample\n\njulia> a = [1,2,4];\n\njulia> b = normalize(a)\n3-element Array{Float64,1}:\n 0.218218\n 0.436436\n 0.872872\n\njulia> norm(b)\n1.0\n\njulia> c = normalize(a, 1)\n3-element Array{Float64,1}:\n 0.142857\n 0.285714\n 0.571429\n\njulia> norm(c, 1)\n1.0\n\n\n\n"
+    "text": "normalize(v::AbstractVector, p::Real=2)\n\nNormalize the vector v so that its p-norm equals unity, i.e. norm(v, p) == vecnorm(v, p) == 1. See also normalize! and vecnorm.\n\nExamples\n\njulia> a = [1,2,4];\n\njulia> b = normalize(a)\n3-element Array{Float64,1}:\n 0.218218\n 0.436436\n 0.872872\n\njulia> norm(b)\n1.0\n\njulia> c = normalize(a, 1)\n3-element Array{Float64,1}:\n 0.142857\n 0.285714\n 0.571429\n\njulia> norm(c, 1)\n1.0\n\n\n\n"
 },
 
 {
@@ -12981,7 +12981,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.logdet",
     "category": "Function",
-    "text": "logdet(M)\n\nLog of matrix determinant. Equivalent to log(det(M)), but may provide increased accuracy and/or speed.\n\nExample\n\njulia> M = [1 0; 2 2]\n2×2 Array{Int64,2}:\n 1  0\n 2  2\n\njulia> logdet(M)\n0.6931471805599453\n\njulia> logdet(eye(3))\n0.0\n\n\n\n"
+    "text": "logdet(M)\n\nLog of matrix determinant. Equivalent to log(det(M)), but may provide increased accuracy and/or speed.\n\nExamples\n\njulia> M = [1 0; 2 2]\n2×2 Array{Int64,2}:\n 1  0\n 2  2\n\njulia> logdet(M)\n0.6931471805599453\n\njulia> logdet(eye(3))\n0.0\n\n\n\n"
 },
 
 {
@@ -13021,7 +13021,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.repmat",
     "category": "Function",
-    "text": "repmat(A, m::Integer, n::Integer=1)\n\nConstruct a matrix by repeating the given matrix (or vector) m times in dimension 1 and n times in dimension 2.\n\njulia> repmat([1, 2, 3], 2)\n6-element Array{Int64,1}:\n 1\n 2\n 3\n 1\n 2\n 3\n\njulia> repmat([1, 2, 3], 2, 3)\n6×3 Array{Int64,2}:\n 1  1  1\n 2  2  2\n 3  3  3\n 1  1  1\n 2  2  2\n 3  3  3\n\n\n\n"
+    "text": "repmat(A, m::Integer, n::Integer=1)\n\nConstruct a matrix by repeating the given matrix (or vector) m times in dimension 1 and n times in dimension 2.\n\nExamples\n\njulia> repmat([1, 2, 3], 2)\n6-element Array{Int64,1}:\n 1\n 2\n 3\n 1\n 2\n 3\n\njulia> repmat([1, 2, 3], 2, 3)\n6×3 Array{Int64,2}:\n 1  1  1\n 2  2  2\n 3  3  3\n 1  1  1\n 2  2  2\n 3  3  3\n\n\n\n"
 },
 
 {
@@ -13029,7 +13029,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.repeat",
     "category": "Function",
-    "text": "repeat(A::AbstractArray; inner=ntuple(x->1, ndims(A)), outer=ntuple(x->1, ndims(A)))\n\nConstruct an array by repeating the entries of A. The i-th element of inner specifies the number of times that the individual entries of the i-th dimension of A should be repeated. The i-th element of outer specifies the number of times that a slice along the i-th dimension of A should be repeated. If inner or outer are omitted, no repetition is performed.\n\njulia> repeat(1:2, inner=2)\n4-element Array{Int64,1}:\n 1\n 1\n 2\n 2\n\njulia> repeat(1:2, outer=2)\n4-element Array{Int64,1}:\n 1\n 2\n 1\n 2\n\njulia> repeat([1 2; 3 4], inner=(2, 1), outer=(1, 3))\n4×6 Array{Int64,2}:\n 1  2  1  2  1  2\n 1  2  1  2  1  2\n 3  4  3  4  3  4\n 3  4  3  4  3  4\n\n\n\n"
+    "text": "repeat(A::AbstractArray; inner=ntuple(x->1, ndims(A)), outer=ntuple(x->1, ndims(A)))\n\nConstruct an array by repeating the entries of A. The i-th element of inner specifies the number of times that the individual entries of the i-th dimension of A should be repeated. The i-th element of outer specifies the number of times that a slice along the i-th dimension of A should be repeated. If inner or outer are omitted, no repetition is performed.\n\nExamples\n\njulia> repeat(1:2, inner=2)\n4-element Array{Int64,1}:\n 1\n 1\n 2\n 2\n\njulia> repeat(1:2, outer=2)\n4-element Array{Int64,1}:\n 1\n 2\n 1\n 2\n\njulia> repeat([1 2; 3 4], inner=(2, 1), outer=(1, 3))\n4×6 Array{Int64,2}:\n 1  2  1  2  1  2\n 1  2  1  2  1  2\n 3  4  3  4  3  4\n 3  4  3  4  3  4\n\n\n\n"
 },
 
 {
@@ -13109,7 +13109,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.issymmetric",
     "category": "Function",
-    "text": "issymmetric(A) -> Bool\n\nTest whether a matrix is symmetric.\n\nExample\n\njulia> a = [1 2; 2 -1]\n2×2 Array{Int64,2}:\n 1   2\n 2  -1\n\njulia> issymmetric(a)\ntrue\n\njulia> b = [1 im; -im 1]\n2×2 Array{Complex{Int64},2}:\n 1+0im  0+1im\n 0-1im  1+0im\n\njulia> issymmetric(b)\nfalse\n\n\n\n"
+    "text": "issymmetric(A) -> Bool\n\nTest whether a matrix is symmetric.\n\nExamples\n\njulia> a = [1 2; 2 -1]\n2×2 Array{Int64,2}:\n 1   2\n 2  -1\n\njulia> issymmetric(a)\ntrue\n\njulia> b = [1 im; -im 1]\n2×2 Array{Complex{Int64},2}:\n 1+0im  0+1im\n 0-1im  1+0im\n\njulia> issymmetric(b)\nfalse\n\n\n\n"
 },
 
 {
@@ -13133,7 +13133,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.istril",
     "category": "Function",
-    "text": "istril(A) -> Bool\n\nTest whether a matrix is lower triangular.\n\nExample\n\njulia> a = [1 2; 2 -1]\n2×2 Array{Int64,2}:\n 1   2\n 2  -1\n\njulia> istril(a)\nfalse\n\njulia> b = [1 0; -im -1]\n2×2 Array{Complex{Int64},2}:\n 1+0im   0+0im\n 0-1im  -1+0im\n\njulia> istril(b)\ntrue\n\n\n\n"
+    "text": "istril(A) -> Bool\n\nTest whether a matrix is lower triangular.\n\nExamples\n\njulia> a = [1 2; 2 -1]\n2×2 Array{Int64,2}:\n 1   2\n 2  -1\n\njulia> istril(a)\nfalse\n\njulia> b = [1 0; -im -1]\n2×2 Array{Complex{Int64},2}:\n 1+0im   0+0im\n 0-1im  -1+0im\n\njulia> istril(b)\ntrue\n\n\n\n"
 },
 
 {
@@ -13141,7 +13141,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.istriu",
     "category": "Function",
-    "text": "istriu(A) -> Bool\n\nTest whether a matrix is upper triangular.\n\nExample\n\njulia> a = [1 2; 2 -1]\n2×2 Array{Int64,2}:\n 1   2\n 2  -1\n\njulia> istriu(a)\nfalse\n\njulia> b = [1 im; 0 -1]\n2×2 Array{Complex{Int64},2}:\n 1+0im   0+1im\n 0+0im  -1+0im\n\njulia> istriu(b)\ntrue\n\n\n\n"
+    "text": "istriu(A) -> Bool\n\nTest whether a matrix is upper triangular.\n\nExamples\n\njulia> a = [1 2; 2 -1]\n2×2 Array{Int64,2}:\n 1   2\n 2  -1\n\njulia> istriu(a)\nfalse\n\njulia> b = [1 im; 0 -1]\n2×2 Array{Complex{Int64},2}:\n 1+0im   0+1im\n 0+0im  -1+0im\n\njulia> istriu(b)\ntrue\n\n\n\n"
 },
 
 {
@@ -13149,7 +13149,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.isdiag",
     "category": "Function",
-    "text": "isdiag(A) -> Bool\n\nTest whether a matrix is diagonal.\n\nExample\n\njulia> a = [1 2; 2 -1]\n2×2 Array{Int64,2}:\n 1   2\n 2  -1\n\njulia> isdiag(a)\nfalse\n\njulia> b = [im 0; 0 -im]\n2×2 Array{Complex{Int64},2}:\n 0+1im  0+0im\n 0+0im  0-1im\n\njulia> isdiag(b)\ntrue\n\n\n\n"
+    "text": "isdiag(A) -> Bool\n\nTest whether a matrix is diagonal.\n\nExamples\n\njulia> a = [1 2; 2 -1]\n2×2 Array{Int64,2}:\n 1   2\n 2  -1\n\njulia> isdiag(a)\nfalse\n\njulia> b = [im 0; 0 -im]\n2×2 Array{Complex{Int64},2}:\n 0+1im  0+0im\n 0+0im  0-1im\n\njulia> isdiag(b)\ntrue\n\n\n\n"
 },
 
 {
@@ -13157,7 +13157,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.ishermitian",
     "category": "Function",
-    "text": "ishermitian(A) -> Bool\n\nTest whether a matrix is Hermitian.\n\nExample\n\njulia> a = [1 2; 2 -1]\n2×2 Array{Int64,2}:\n 1   2\n 2  -1\n\njulia> ishermitian(a)\ntrue\n\njulia> b = [1 im; -im 1]\n2×2 Array{Complex{Int64},2}:\n 1+0im  0+1im\n 0-1im  1+0im\n\njulia> ishermitian(b)\ntrue\n\n\n\n"
+    "text": "ishermitian(A) -> Bool\n\nTest whether a matrix is Hermitian.\n\nExamples\n\njulia> a = [1 2; 2 -1]\n2×2 Array{Int64,2}:\n 1   2\n 2  -1\n\njulia> ishermitian(a)\ntrue\n\njulia> b = [1 im; -im 1]\n2×2 Array{Complex{Int64},2}:\n 1+0im  0+1im\n 0-1im  1+0im\n\njulia> ishermitian(b)\ntrue\n\n\n\n"
 },
 
 {
@@ -16173,7 +16173,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Sorting and Related Functions",
     "title": "Base.sort!",
     "category": "Function",
-    "text": "sort!(v; alg::Algorithm=defalg(v), lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)\n\nSort the vector v in place. QuickSort is used by default for numeric arrays while MergeSort is used for other arrays. You can specify an algorithm to use via the alg keyword (see Sorting Algorithms for available algorithms). The by keyword lets you provide a function that will be applied to each element before comparison; the lt keyword allows providing a custom \"less than\" function; use rev=true to reverse the sorting order. These options are independent and can be used together in all possible combinations: if both by and lt are specified, the lt function is applied to the result of the by function; rev=true reverses whatever ordering specified via the by and lt keywords.\n\njulia> v = [3, 1, 2]; sort!(v); v\n3-element Array{Int64,1}:\n 1\n 2\n 3\n\njulia> v = [3, 1, 2]; sort!(v, rev = true); v\n3-element Array{Int64,1}:\n 3\n 2\n 1\n\njulia> v = [(1, \"c\"), (3, \"a\"), (2, \"b\")]; sort!(v, by = x -> x[1]); v\n3-element Array{Tuple{Int64,String},1}:\n (1, \"c\")\n (2, \"b\")\n (3, \"a\")\n\njulia> v = [(1, \"c\"), (3, \"a\"), (2, \"b\")]; sort!(v, by = x -> x[2]); v\n3-element Array{Tuple{Int64,String},1}:\n (3, \"a\")\n (2, \"b\")\n (1, \"c\")\n\n\n\n"
+    "text": "sort!(v; alg::Algorithm=defalg(v), lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)\n\nSort the vector v in place. QuickSort is used by default for numeric arrays while MergeSort is used for other arrays. You can specify an algorithm to use via the alg keyword (see Sorting Algorithms for available algorithms). The by keyword lets you provide a function that will be applied to each element before comparison; the lt keyword allows providing a custom \"less than\" function; use rev=true to reverse the sorting order. These options are independent and can be used together in all possible combinations: if both by and lt are specified, the lt function is applied to the result of the by function; rev=true reverses whatever ordering specified via the by and lt keywords.\n\nExamples\n\njulia> v = [3, 1, 2]; sort!(v); v\n3-element Array{Int64,1}:\n 1\n 2\n 3\n\njulia> v = [3, 1, 2]; sort!(v, rev = true); v\n3-element Array{Int64,1}:\n 3\n 2\n 1\n\njulia> v = [(1, \"c\"), (3, \"a\"), (2, \"b\")]; sort!(v, by = x -> x[1]); v\n3-element Array{Tuple{Int64,String},1}:\n (1, \"c\")\n (2, \"b\")\n (3, \"a\")\n\njulia> v = [(1, \"c\"), (3, \"a\"), (2, \"b\")]; sort!(v, by = x -> x[2]); v\n3-element Array{Tuple{Int64,String},1}:\n (3, \"a\")\n (2, \"b\")\n (1, \"c\")\n\n\n\n"
 },
 
 {
@@ -16181,7 +16181,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Sorting and Related Functions",
     "title": "Base.sort",
     "category": "Function",
-    "text": "sort(v; alg::Algorithm=defalg(v), lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)\n\nVariant of sort! that returns a sorted copy of v leaving v itself unmodified.\n\njulia> v = [3, 1, 2];\n\njulia> sort(v)\n3-element Array{Int64,1}:\n 1\n 2\n 3\n\njulia> v\n3-element Array{Int64,1}:\n 3\n 1\n 2\n\n\n\nsort(A, dim::Integer; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward, initialized::Bool=false)\n\nSort a multidimensional array A along the given dimension. See sort! for a description of possible keyword arguments.\n\njulia> A = [4 3; 1 2]\n2×2 Array{Int64,2}:\n 4  3\n 1  2\n\njulia> sort(A, 1)\n2×2 Array{Int64,2}:\n 1  2\n 4  3\n\njulia> sort(A, 2)\n2×2 Array{Int64,2}:\n 3  4\n 1  2\n\n\n\n"
+    "text": "sort(v; alg::Algorithm=defalg(v), lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)\n\nVariant of sort! that returns a sorted copy of v leaving v itself unmodified.\n\nExamples\n\njulia> v = [3, 1, 2];\n\njulia> sort(v)\n3-element Array{Int64,1}:\n 1\n 2\n 3\n\njulia> v\n3-element Array{Int64,1}:\n 3\n 1\n 2\n\n\n\nsort(A, dim::Integer; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward, initialized::Bool=false)\n\nSort a multidimensional array A along the given dimension. See sort! for a description of possible keyword arguments.\n\nExamples\n\njulia> A = [4 3; 1 2]\n2×2 Array{Int64,2}:\n 4  3\n 1  2\n\njulia> sort(A, 1)\n2×2 Array{Int64,2}:\n 1  2\n 4  3\n\njulia> sort(A, 2)\n2×2 Array{Int64,2}:\n 3  4\n 1  2\n\n\n\n"
 },
 
 {
@@ -16189,7 +16189,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Sorting and Related Functions",
     "title": "Base.sortperm",
     "category": "Function",
-    "text": "sortperm(v; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)\n\nReturn a permutation vector of indices of v that puts it in sorted order. Specify alg to choose a particular sorting algorithm (see Sorting Algorithms). MergeSort is used by default, and since it is stable, the resulting permutation will be the lexicographically first one that puts the input array into sorted order – i.e. indices of equal elements appear in ascending order. If you choose a non-stable sorting algorithm such as QuickSort, a different permutation that puts the array into order may be returned. The order is specified using the same keywords as sort!.\n\nSee also sortperm!.\n\njulia> v = [3, 1, 2];\n\njulia> p = sortperm(v)\n3-element Array{Int64,1}:\n 2\n 3\n 1\n\njulia> v[p]\n3-element Array{Int64,1}:\n 1\n 2\n 3\n\n\n\n"
+    "text": "sortperm(v; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)\n\nReturn a permutation vector of indices of v that puts it in sorted order. Specify alg to choose a particular sorting algorithm (see Sorting Algorithms). MergeSort is used by default, and since it is stable, the resulting permutation will be the lexicographically first one that puts the input array into sorted order – i.e. indices of equal elements appear in ascending order. If you choose a non-stable sorting algorithm such as QuickSort, a different permutation that puts the array into order may be returned. The order is specified using the same keywords as sort!.\n\nSee also sortperm!.\n\nExamples\n\njulia> v = [3, 1, 2];\n\njulia> p = sortperm(v)\n3-element Array{Int64,1}:\n 2\n 3\n 1\n\njulia> v[p]\n3-element Array{Int64,1}:\n 1\n 2\n 3\n\n\n\n"
 },
 
 {
@@ -16197,7 +16197,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Sorting and Related Functions",
     "title": "Base.Sort.sortperm!",
     "category": "Function",
-    "text": "sortperm!(ix, v; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward, initialized::Bool=false)\n\nLike sortperm, but accepts a preallocated index vector ix.  If initialized is false (the default), ix is initialized to contain the values 1:length(v).\n\njulia> v = [3, 1, 2]; p = zeros(Int, 3);\n\njulia> sortperm!(p, v); p\n3-element Array{Int64,1}:\n 2\n 3\n 1\n\njulia> v[p]\n3-element Array{Int64,1}:\n 1\n 2\n 3\n\n\n\n"
+    "text": "sortperm!(ix, v; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward, initialized::Bool=false)\n\nLike sortperm, but accepts a preallocated index vector ix.  If initialized is false (the default), ix is initialized to contain the values 1:length(v).\n\nExamples\n\njulia> v = [3, 1, 2]; p = zeros(Int, 3);\n\njulia> sortperm!(p, v); p\n3-element Array{Int64,1}:\n 2\n 3\n 1\n\njulia> v[p]\n3-element Array{Int64,1}:\n 1\n 2\n 3\n\n\n\n"
 },
 
 {
@@ -16229,7 +16229,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Sorting and Related Functions",
     "title": "Base.issorted",
     "category": "Function",
-    "text": "issorted(v, lt=isless, by=identity, rev:Bool=false, order::Ordering=Forward)\n\nTest whether a vector is in sorted order. The lt, by and rev keywords modify what order is considered to be sorted just as they do for sort.\n\njulia> issorted([1, 2, 3])\ntrue\n\njulia> issorted([(1, \"b\"), (2, \"a\")], by = x -> x[1])\ntrue\n\njulia> issorted([(1, \"b\"), (2, \"a\")], by = x -> x[2])\nfalse\n\njulia> issorted([(1, \"b\"), (2, \"a\")], by = x -> x[2], rev=true)\ntrue\n\n\n\n"
+    "text": "issorted(v, lt=isless, by=identity, rev:Bool=false, order::Ordering=Forward)\n\nTest whether a vector is in sorted order. The lt, by and rev keywords modify what order is considered to be sorted just as they do for sort.\n\nExamples\n\njulia> issorted([1, 2, 3])\ntrue\n\njulia> issorted([(1, \"b\"), (2, \"a\")], by = x -> x[1])\ntrue\n\njulia> issorted([(1, \"b\"), (2, \"a\")], by = x -> x[2])\nfalse\n\njulia> issorted([(1, \"b\"), (2, \"a\")], by = x -> x[2], rev=true)\ntrue\n\n\n\n"
 },
 
 {
@@ -16237,7 +16237,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Sorting and Related Functions",
     "title": "Base.Sort.searchsorted",
     "category": "Function",
-    "text": "searchsorted(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])\n\nReturns the range of indices of a which compare as equal to x (using binary search) according to the order specified by the by, lt and rev keywords, assuming that a is already sorted in that order. Returns an empty range located at the insertion point if a does not contain values equal to x.\n\n\n\n"
+    "text": "searchsorted(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])\n\nReturns the range of indices of a which compare as equal to x (using binary search) according to the order specified by the by, lt and rev keywords, assuming that a is already sorted in that order. Returns an empty range located at the insertion point if a does not contain values equal to x.\n\nExamples\n\njulia> a = [4, 3, 2, 1]\n4-element Array{Int64,1}:\n 4\n 3\n 2\n 1\n\njulia> searchsorted(a, 4)\n5:4\n\njulia> searchsorted(a, 4, rev=true)\n1:1\n\n\n\n"
 },
 
 {
@@ -16245,7 +16245,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Sorting and Related Functions",
     "title": "Base.Sort.searchsortedfirst",
     "category": "Function",
-    "text": "searchsortedfirst(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])\n\nReturns the index of the first value in a greater than or equal to x, according to the specified order. Returns length(a)+1 if x is greater than all values in a.\n\n\n\n"
+    "text": "searchsortedfirst(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])\n\nReturns the index of the first value in a greater than or equal to x, according to the specified order. Returns length(a)+1 if x is greater than all values in a. a is assumed to be sorted.\n\nExamples\n\njulia> searchsortedfirst([1, 2, 4, 5, 14], 4)\n3\n\njulia> searchsortedfirst([1, 2, 4, 5, 14], 4, rev=true)\n1\n\njulia> searchsortedfirst([1, 2, 4, 5, 14], 15)\n6\n\n\n\n"
 },
 
 {
@@ -16253,7 +16253,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Sorting and Related Functions",
     "title": "Base.Sort.searchsortedlast",
     "category": "Function",
-    "text": "searchsortedlast(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])\n\nReturns the index of the last value in a less than or equal to x, according to the specified order. Returns 0 if x is less than all values in a.\n\n\n\n"
+    "text": "searchsortedlast(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])\n\nReturns the index of the last value in a less than or equal to x, according to the specified order. Returns 0 if x is less than all values in a. a is assumed to be sorted.\n\nExamples\n\njulia> searchsortedlast([1, 2, 4, 5, 14], 4)\n3\n\njulia> searchsortedlast([1, 2, 4, 5, 14], 4, rev=true)\n5\n\njulia> searchsortedlast([1, 2, 4, 5, 14], -1)\n0\n\n\n\n"
 },
 
 {
@@ -16261,7 +16261,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Sorting and Related Functions",
     "title": "Base.Sort.select!",
     "category": "Function",
-    "text": "select!(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])\n\nPartially sort the vector v in place, according to the order specified by by, lt and rev so that the value at index k (or range of adjacent values if k is a range) occurs at the position where it would appear if the array were fully sorted via a non-stable algorithm. If k is a single index, that value is returned; if k is a range, an array of values at those indices is returned. Note that select! does not fully sort the input array.\n\n\n\n"
+    "text": "select!(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])\n\nPartially sort the vector v in place, according to the order specified by by, lt and rev so that the value at index k (or range of adjacent values if k is a range) occurs at the position where it would appear if the array were fully sorted via a non-stable algorithm. If k is a single index, that value is returned; if k is a range, an array of values at those indices is returned. Note that select! does not fully sort the input array.\n\nExamples\n\njulia> a = [1, 2, 4, 3, 4]\n5-element Array{Int64,1}:\n 1\n 2\n 4\n 3\n 4\n\njulia> select!(a, 4)\n4\n\njulia> a\n5-element Array{Int64,1}:\n 1\n 2\n 3\n 4\n 4\n\njulia> a = [1, 2, 4, 3, 4]\n5-element Array{Int64,1}:\n 1\n 2\n 4\n 3\n 4\n\njulia> select!(a, 4, rev=true)\n2\n\njulia> a\n5-element Array{Int64,1}:\n 4\n 4\n 3\n 2\n 1\n\n\n\n"
 },
 
 {
@@ -16277,7 +16277,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Sorting and Related Functions",
     "title": "Base.Sort.selectperm",
     "category": "Function",
-    "text": "selectperm(v, k, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])\n\nReturn a partial permutation of the vector v, according to the order specified by by, lt and rev, so that v[output] returns the first k (or range of adjacent values if k is a range) values of a fully sorted version of v. If k is a single index (Integer), an array of the first k indices is returned; if k is a range, an array of those indices is returned. Note that the handling of integer values for k is different from select in that it returns a vector of k elements instead of just the k th element. Also note that this is equivalent to, but more efficient than, calling sortperm(...)[k]\n\n\n\n"
+    "text": "selectperm(v, k, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])\n\nReturn a partial permutation of the vector v, according to the order specified by by, lt and rev, so that v[output] returns the first k (or range of adjacent values if k is a range) values of a fully sorted version of v. If k is a single index (Integer), an array of the first k indices is returned; if k is a range, an array of those indices is returned. Note that the handling of integer values for k is different from select in that it returns a vector of k elements instead of just the k th element. Also note that this is equivalent to, but more efficient than, calling sortperm(...)[k].\n\n\n\n"
 },
 
 {
