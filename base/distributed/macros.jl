@@ -19,8 +19,25 @@ spawn_somewhere(thunk) = spawnat(nextproc(),thunk)
 """
     @spawn
 
-Creates a closure around an expression and runs it on an automatically-chosen process,
+Create a closure around an expression and run it on an automatically-chosen process,
 returning a [`Future`](@ref) to the result.
+
+# Examples
+```julia-repl
+julia> addprocs(3);
+
+julia> f = @spawn myid()
+Future(2, 1, 5, Nullable{Any}())
+
+julia> fetch(f)
+2
+
+julia> f = @spawn myid()
+Future(3, 1, 7, Nullable{Any}())
+
+julia> fetch(f)
+3
+```
 """
 macro spawn(expr)
     thunk = esc(:(()->($expr)))
@@ -30,8 +47,20 @@ end
 """
     @spawnat
 
-Accepts two arguments, `p` and an expression. A closure is created around the expression and
-run asynchronously on process `p`. Returns a [`Future`](@ref) to the result.
+Create a closure is created around the expression and run the closure
+asynchronously on process `p`. Returns a [`Future`](@ref) to the result.
+Accepts two arguments, `p` and an expression.
+
+# Examples
+```julia-repl
+julia> addprocs(1);
+
+julia> f = @spawnat 2 myid()
+Future(2, 1, 3, Nullable{Any}())
+
+julia> fetch(f)
+2
+```
 """
 macro spawnat(p, expr)
     thunk = esc(:(()->($expr)))
@@ -43,6 +72,23 @@ end
 
 Equivalent to `fetch(@spawn expr)`.
 See [`fetch`](@ref) and [`@spawn`](@ref).
+
+# Examples
+```julia-repl
+julia> addprocs(3);
+
+julia> @fetch myid()
+2
+
+julia> @fetch myid()
+3
+
+julia> @fetch myid()
+4
+
+julia> @fetch myid()
+2
+```
 """
 macro fetch(expr)
     thunk = esc(:(()->($expr)))
@@ -54,6 +100,17 @@ end
 
 Equivalent to `fetch(@spawnat p expr)`.
 See [`fetch`](@ref) and [`@spawnat`](@ref).
+
+# Examples
+```julia-repl
+julia> addprocs(3);
+
+julia> @fetchfrom 2 myid()
+2
+
+julia> @fetchfrom 4 myid()
+4
+```
 """
 macro fetchfrom(p, expr)
     thunk = esc(:(()->($expr)))
