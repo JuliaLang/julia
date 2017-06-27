@@ -14,6 +14,7 @@ empty set. Implemented as a bit string, and therefore designed for dense integer
 very large integers), use [`Set`](@ref) instead.
 """
 IntSet(itr) = union!(IntSet(), itr)
+IntSet(itr...) = foldl(union!, IntSet(), itr)
 
 eltype(::Type{IntSet}) = Int
 similar(s::IntSet) = IntSet()
