@@ -96,7 +96,11 @@ macro threads(args...)
         throw(ArgumentError("need an expression argument to @threads"))
     end
     if ex.head === :for
-        return _threadsfor(ex.args[1],ex.args[2])
+        if Base.JULIA_PARTR
+            return esc(ex)
+        else
+            return _threadsfor(ex.args[1],ex.args[2])
+        end
     else
         throw(ArgumentError("unrecognized argument to @threads"))
     end

@@ -59,16 +59,22 @@ volatile int jl_in_stackwalk = 0;
 
 #define ROOT_TASK_STACK_ADJUSTMENT 3000000
 
-static jl_sym_t *done_sym;
-static jl_sym_t *failed_sym;
-static jl_sym_t *runnable_sym;
+jl_sym_t *done_sym;
+jl_sym_t *failed_sym;
+jl_sym_t *runnable_sym;
 
 extern size_t jl_page_size;
 jl_datatype_t *jl_task_type;
-static char *jl_alloc_fiber(jl_ucontext_t *t, size_t *ssize, jl_task_t *owner);
-static void jl_set_fiber(jl_ucontext_t *t);
-static void jl_start_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t);
-static void jl_swap_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t);
+#ifdef JULIA_ENABLE_PARTR
+jl_datatype_t *jl_condition_type;
+
+void NOINLINE JL_NORETURN start_task(void);
+#endif
+
+char *jl_alloc_fiber(jl_ucontext_t *t, size_t *ssize, jl_task_t *owner);
+void jl_set_fiber(jl_ucontext_t *t);
+void jl_start_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t);
+void jl_swap_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t);
 
 #ifdef JL_HAVE_UNW_CONTEXT
 static JL_THREAD unw_cursor_t jl_basecursor;
@@ -84,7 +90,7 @@ static void memcpy_a16(uint64_t *to, uint64_t *from, size_t nb)
     //    *(to++) = *(from++);
 }
 
-static void NOINLINE save_stack(jl_ptls_t ptls, jl_task_t *lastt, jl_task_t **pt)
+void NOINLINE save_stack(jl_ptls_t ptls, jl_task_t *lastt, jl_task_t **pt)
 {
     char *frame_addr = (char*)((uintptr_t)jl_get_frame_addr() & ~15);
     char *stackbase = (char*)ptls->stackbase;
@@ -108,7 +114,7 @@ static void NOINLINE save_stack(jl_ptls_t ptls, jl_task_t *lastt, jl_task_t **pt
     jl_gc_wb_back(lastt);
 }
 
-static void NOINLINE JL_NORETURN restore_stack(jl_ptls_t ptls, char *p)
+void NOINLINE JL_NORETURN restore_stack(jl_ptls_t ptls, char *p)
 {
     jl_task_t *t = ptls->current_task;
     size_t nb = t->copy_stack;
@@ -126,7 +132,8 @@ static void NOINLINE JL_NORETURN restore_stack(jl_ptls_t ptls, char *p)
     jl_set_fiber(&t->ctx);
     abort(); // unreachable
 }
-static void restore_stack2(jl_ptls_t ptls, jl_task_t *lastt)
+
+void restore_stack2(jl_ptls_t ptls, jl_task_t *lastt)
 {
     jl_task_t *t = ptls->current_task;
     size_t nb = t->copy_stack;
@@ -137,8 +144,9 @@ static void restore_stack2(jl_ptls_t ptls, jl_task_t *lastt)
 }
 #endif
 
-static jl_function_t *task_done_hook_func = NULL;
+jl_function_t *task_done_hook_func=NULL;
 
+#ifndef JULIA_ENABLE_PARTR
 static void JL_NORETURN finish_task(jl_task_t *t, jl_value_t *resultval JL_MAYBE_UNROOTED)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
@@ -180,6 +188,7 @@ static void JL_NORETURN finish_task(jl_task_t *t, jl_value_t *resultval JL_MAYBE
     gc_debug_critical_error();
     abort();
 }
+#endif // JULIA_ENABLE_PARTR
 
 JL_DLLEXPORT void *jl_task_stack_buffer(jl_task_t *task, size_t *size, int *tid)
 {
@@ -296,6 +305,11 @@ static void ctx_switch(jl_ptls_t ptls, jl_task_t **pt)
     ptls->world_age = t->world_age;
     t->gcstack = NULL;
     ptls->current_task = t;
+#ifdef JULIA_ENABLE_PARTR
+    if (!lastt->copy_stack)
+        lastt->current_tid = -1;
+    t->current_tid = ptls->tid;
+#endif
 
     jl_ucontext_t *lastt_ctx = (killed ? NULL : &lastt->ctx);
 #ifdef COPY_STACKS
@@ -338,6 +352,8 @@ JL_DLLEXPORT void jl_switchto(jl_task_t **pt)
     jl_ptls_t ptls = jl_get_ptls_states();
     jl_task_t *t = *pt;
     if (t == ptls->current_task) {
+        if (t->state != runnable_sym)
+            jl_error("trying to switch to done task from itself");
         return;
     }
     if (t->state == done_sym || t->state == failed_sym ||
@@ -359,6 +375,8 @@ JL_DLLEXPORT void jl_switchto(jl_task_t **pt)
     if (other_defer_signal && !defer_signal)
         jl_sigint_safepoint(ptls);
 }
+
+jl_timing_block_t *jl_pop_timing_block(jl_timing_block_t *cur_block);
 
 JL_DLLEXPORT JL_NORETURN void jl_no_exc_handler(jl_value_t *e) JL_NOTSAFEPOINT
 {
@@ -452,6 +470,7 @@ JL_DLLEXPORT void jl_rethrow_other(jl_value_t *e JL_MAYBE_UNROOTED)
     throw_internal(NULL);
 }
 
+#ifndef JULIA_ENABLE_PARTR
 JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
@@ -475,9 +494,9 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
         if (t->stkbuf == NULL)
             jl_throw(jl_memory_exception);
     }
-    t->tls = jl_nothing;
+    t->storage = jl_nothing;
     t->state = runnable_sym;
-    t->start = start;
+    t->taskentry = start;
     t->result = jl_nothing;
     t->donenotify = jl_nothing;
     t->exception = jl_nothing;
@@ -486,11 +505,10 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     t->logstate = ptls->current_task->logstate;
     // there is no active exception handler available on this stack yet
     t->eh = NULL;
-    t->tid = 0;
+    t->current_tid = 0;
     t->gcstack = NULL;
     t->excstack = NULL;
     t->stkbuf = NULL;
-    t->tid = 0;
     t->started = 0;
 #ifdef ENABLE_TIMINGS
     t->timing_stack = NULL;
@@ -507,8 +525,10 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     if (t->copy_stack)
         memcpy(&t->ctx, &ptls->base_ctx, sizeof(t->ctx));
 #endif
+
     return t;
 }
+#endif // !JULIA_ENABLE_PARTR
 
 JL_DLLEXPORT jl_value_t *jl_get_current_task(void)
 {
@@ -519,6 +539,7 @@ JL_DLLEXPORT jl_value_t *jl_get_current_task(void)
 // Do one-time initializations for task system
 void jl_init_tasks(void) JL_GC_DISABLED
 {
+#ifndef JULIA_ENABLE_PARTR
     jl_task_type = (jl_datatype_t*)
         jl_new_datatype(jl_symbol("Task"),
                         NULL,
@@ -543,12 +564,57 @@ void jl_init_tasks(void) JL_GC_DISABLED
                                 jl_any_type,
                                 jl_any_type),
                         0, 1, 7);
+#else /* JULIA_ENABLE_PARTR */
+    jl_task_type = (jl_datatype_t*)
+        jl_new_datatype(jl_symbol("Task"), NULL, jl_any_type, jl_emptysvec,
+                        jl_perm_symsvec(14,
+                                        "storage",
+                                        "state",
+                                        "result",
+                                        "exception",
+                                        "backtrace",
+                                        "logstate",
+                                        "code",
+                                        "redentry",
+                                        "cq_head",
+                                        "cq_lock_owner",
+                                        "cq_lock_count",
+                                        "next",
+                                        "parent",
+                                        "redresult"),
+                        jl_svec(14,
+                                jl_any_type,
+                                jl_sym_type,
+                                jl_any_type,
+                                jl_any_type,
+                                jl_any_type,
+                                jl_any_type,
+                                jl_any_type,
+                                jl_any_type,
+                                jl_any_type,
+                                jl_long_type,
+                                jl_int32_type,
+                                jl_any_type,
+                                jl_any_type,
+                                jl_any_type),
+                        0, 1, 6);
+    jl_svecset(jl_task_type->types, 8, (jl_value_t*)jl_task_type);
+    jl_svecset(jl_task_type->types, 11, (jl_value_t*)jl_task_type);
+    jl_svecset(jl_task_type->types, 12, (jl_value_t*)jl_task_type);
+    jl_condition_type = (jl_datatype_t*)
+        jl_new_datatype(jl_symbol("Condition"), NULL, jl_any_type, jl_emptysvec,
+                        jl_perm_symsvec(3, "head", "lock_owner", "lock_count"),
+                        jl_svec(3, jl_task_type, jl_long_type, jl_int32_type),
+                        0, 1, 0);
+#endif /* JULIA_ENABLE_PARTR */
+
     done_sym = jl_symbol("done");
     failed_sym = jl_symbol("failed");
     runnable_sym = jl_symbol("runnable");
 }
 
-static void NOINLINE JL_NORETURN start_task(void)
+#ifndef JULIA_ENABLE_PARTR
+void NOINLINE JL_NORETURN start_task(void)
 {
     // this runs the first time we switch to a task
     jl_ptls_t ptls = jl_get_ptls_states();
@@ -558,7 +624,7 @@ static void NOINLINE JL_NORETURN start_task(void)
     if (t->exception != jl_nothing) {
         record_backtrace(ptls);
         jl_push_excstack(&t->excstack, t->exception,
-                          ptls->bt_data, ptls->bt_size);
+                         ptls->bt_data, ptls->bt_size);
         res = t->exception;
     }
     else {
@@ -569,7 +635,7 @@ static void NOINLINE JL_NORETURN start_task(void)
             }
             JL_TIMING(ROOT);
             ptls->world_age = jl_world_counter;
-            res = jl_apply(&t->start, 1);
+            res = jl_apply(&t->taskentry, 1);
         }
         JL_CATCH {
             res = jl_current_exception();
@@ -583,7 +649,7 @@ skip_pop_exception:;
     gc_debug_critical_error();
     abort();
 }
-
+#endif /* JULIA_ENABLE_PARTR */
 
 #if defined(JL_HAVE_UCONTEXT)
 #ifdef _OS_WINDOWS_
@@ -592,7 +658,7 @@ skip_pop_exception:;
 #define swapcontext jl_swapcontext
 #define makecontext jl_makecontext
 #endif
-static char *jl_alloc_fiber(jl_ucontext_t *t, size_t *ssize, jl_task_t *owner)
+char *jl_alloc_fiber(jl_ucontext_t *t, size_t *ssize, jl_task_t *owner)
 {
 #ifndef _OS_WINDOWS_
     int r = getcontext(t);
@@ -612,22 +678,22 @@ static char *jl_alloc_fiber(jl_ucontext_t *t, size_t *ssize, jl_task_t *owner)
 #endif
     return (char*)stk;
 }
-static void jl_start_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t)
+void jl_start_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t)
 {
     if (lastt)
         swapcontext(lastt, t);
     else
         setcontext(t);
 }
-static void jl_swap_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t)
+void jl_swap_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t)
 {
     swapcontext(lastt, t);
 }
-static void jl_set_fiber(jl_ucontext_t *t)
+void jl_set_fiber(jl_ucontext_t *t)
 {
     setcontext(t);
 }
-static void jl_init_basefiber(size_t ssize)
+void jl_init_basefiber(size_t ssize)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     char *stkbuf = jl_alloc_fiber(&ptls->base_ctx, &ssize, NULL);
@@ -637,7 +703,7 @@ static void jl_init_basefiber(size_t ssize)
 #endif
 
 #if defined(JL_HAVE_UNW_CONTEXT)
-static void start_basefiber(void)
+void start_basefiber(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     if (jl_setjmp(ptls->base_ctx.uc_mcontext, 0))
@@ -656,7 +722,7 @@ static void start_basefiber(void)
 #else
 #error please define how to simulate a CALL on this platform
 #endif
-static char *jl_alloc_fiber(unw_context_t *t, size_t *ssize, jl_task_t *owner)
+char *jl_alloc_fiber(unw_context_t *t, size_t *ssize, jl_task_t *owner)
 {
     char *stkbuf = (char*)jl_malloc_stack(ssize, owner);
     if (stkbuf == NULL)
@@ -679,23 +745,23 @@ static char *jl_alloc_fiber(unw_context_t *t, size_t *ssize, jl_task_t *owner)
     }
     return stkbuf;
 }
-static void jl_start_fiber(unw_context_t *lastt, unw_context_t *t)
+void jl_start_fiber(unw_context_t *lastt, unw_context_t *t)
 {
     if (lastt && jl_setjmp(lastt->uc_mcontext, 0))
         return;
     unw_resume(&jl_basecursor); // (doesn't return)
 }
-static void jl_swap_fiber(unw_context_t *lastt, unw_context_t *t)
+void jl_swap_fiber(unw_context_t *lastt, unw_context_t *t)
 {
     if (jl_setjmp(lastt->uc_mcontext, 0))
         return;
     jl_longjmp(t->uc_mcontext, 1); // (doesn't return)
 }
-static void jl_set_fiber(unw_context_t *t)
+void jl_set_fiber(unw_context_t *t)
 {
     jl_longjmp(t->uc_mcontext, 1);
 }
-static void jl_init_basefiber(size_t ssize)
+void jl_init_basefiber(size_t ssize)
 {
     int r = unw_getcontext(&ptls->base_ctx);
     if (r != 0)
@@ -714,7 +780,7 @@ static void jl_init_basefiber(size_t ssize)
 #endif
 
 #if defined(JL_HAVE_ASM)
-static char *jl_alloc_fiber(jl_ucontext_t *t, size_t *ssize, jl_task_t *owner)
+char *jl_alloc_fiber(jl_ucontext_t *t, size_t *ssize, jl_task_t *owner)
 {
     char *stkbuf = (char*)jl_malloc_stack(ssize, owner);
     if (stkbuf == NULL)
@@ -723,7 +789,7 @@ static char *jl_alloc_fiber(jl_ucontext_t *t, size_t *ssize, jl_task_t *owner)
     ((size_t*)t)[1] = *ssize; // stash the stack size somewhere for start_fiber
     return stkbuf;
 }
-static void jl_start_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t)
+void jl_start_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t)
 {
     if (lastt && jl_setjmp(lastt->uc_mcontext, 0))
         return;
@@ -770,17 +836,17 @@ static void jl_start_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t)
 #endif
     __builtin_unreachable();
 }
-static void jl_swap_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t)
+void jl_swap_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t)
 {
     if (jl_setjmp(lastt->uc_mcontext, 0))
         return;
     jl_longjmp(t->uc_mcontext, 1); // (doesn't return)
 }
-static void jl_set_fiber(jl_ucontext_t *t)
+void jl_set_fiber(jl_ucontext_t *t)
 {
     jl_longjmp(t->uc_mcontext, 1);
 }
-static void jl_init_basefiber(size_t ssize)
+void jl_init_basefiber(size_t ssize)
 {
 #ifdef COPY_STACKS
     jl_ptls_t ptls = jl_get_ptls_states();
@@ -792,13 +858,13 @@ static void jl_init_basefiber(size_t ssize)
 #endif
 
 #if defined(JL_HAVE_SIGALTSTACK)
-static void start_basefiber(void)
+void start_basefiber(void)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     if (jl_setjmp(ptls->base_ctx.uc_mcontext, 0))
         start_task();
 }
-static char *jl_alloc_fiber(jl_ucontext_t *t, size_t *ssize, jl_task_t *owner)
+char *jl_alloc_fiber(jl_ucontext_t *t, size_t *ssize, jl_task_t *owner)
 {
     stack_t uc_stack, osigstk;
     struct sigaction sa, osa;
@@ -852,23 +918,23 @@ static char *jl_alloc_fiber(jl_ucontext_t *t, size_t *ssize, jl_task_t *owner)
     memcpy(&ptls->base_ctx, &base_ctx, sizeof(ptls->base_ctx));
     return (char*)stk;
 }
-static void jl_start_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t)
+void jl_start_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t)
 {
     if (lastt && jl_setjmp(lastt->uc_mcontext, 0))
         return;
     jl_longjmp(t->uc_mcontext, 1); // (doesn't return)
 }
-static void jl_swap_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t)
+void jl_swap_fiber(jl_ucontext_t *lastt, jl_ucontext_t *t)
 {
     if (jl_setjmp(lastt->uc_mcontext, 0))
         return;
     jl_longjmp(t->uc_mcontext, 1); // (doesn't return)
 }
-static void jl_set_fiber(jl_ucontext_t *t)
+void jl_set_fiber(jl_ucontext_t *t)
 {
     jl_longjmp(t->uc_mcontext, 1);
 }
-static void jl_init_basefiber(size_t ssize)
+void jl_init_basefiber(size_t ssize)
 {
 #ifdef COPY_STACKS
     jl_ptls_t ptls = jl_get_ptls_states();
@@ -898,18 +964,31 @@ void jl_init_root_task(void *stack_lo, void *stack_hi)
     ptls->current_task->stkbuf = stack;
     ptls->current_task->bufsz = ssize;
     ptls->current_task->started = 1;
-    ptls->current_task->tls = jl_nothing;
-    ptls->current_task->state = runnable_sym;
-    ptls->current_task->start = NULL;
-    ptls->current_task->result = jl_nothing;
+#ifdef JULIA_ENABLE_PARTR
+    ptls->current_task->redentry = NULL;
+    ptls->current_task->cq.head = NULL;
+    JL_MUTEX_INIT(&ptls->current_task->cq.lock);
+    ptls->current_task->next = NULL;
+    ptls->current_task->parent = ptls->current_task;
+    ptls->current_task->redresult = jl_nothing;
+    ptls->current_task->arr = NULL;
+    ptls->current_task->red = NULL;
+    ptls->current_task->sticky_tid = -1;
+    ptls->current_task->grain_num = -1;
+#else
     ptls->current_task->donenotify = jl_nothing;
+#endif
+    ptls->current_task->current_tid = ptls->tid;
+    ptls->current_task->storage = jl_nothing;
+    ptls->current_task->taskentry = NULL;
+    ptls->current_task->state = runnable_sym;
+    ptls->current_task->result = jl_nothing;
     ptls->current_task->exception = jl_nothing;
     ptls->current_task->backtrace = jl_nothing;
     ptls->current_task->logstate = jl_nothing;
     ptls->current_task->eh = NULL;
     ptls->current_task->gcstack = NULL;
     ptls->current_task->excstack = NULL;
-    ptls->current_task->tid = ptls->tid;
 #ifdef JULIA_ENABLE_THREADING
     arraylist_new(&ptls->current_task->locks, 0);
 #endif

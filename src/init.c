@@ -611,7 +611,6 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     // Make sure we finalize the tls callback before starting any threads.
     jl_get_ptls_states_getter();
 #endif
-    jl_ptls_t ptls = jl_get_ptls_states();
     jl_safepoint_init();
     libsupport_init();
     htable_new(&jl_current_modules, 0);
@@ -813,8 +812,10 @@ void jl_get_builtin_hooks(void)
     int t;
     for (t = 0; t < jl_n_threads; t++) {
         jl_ptls_t ptls2 = jl_all_tls_states[t];
-        ptls2->root_task->tls = jl_nothing;
+        ptls2->root_task->storage = jl_nothing;
+#ifndef JULIA_ENABLE_PARTR
         ptls2->root_task->donenotify = jl_nothing;
+#endif
         ptls2->root_task->exception = jl_nothing;
         ptls2->root_task->result = jl_nothing;
     }

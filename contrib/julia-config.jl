@@ -62,6 +62,9 @@ function cflags()
     if threadingOn()
         print(flags, " -DJULIA_ENABLE_THREADING=1")
     end
+    if Base.JULIA_PARTR
+        print(flags, " -DJULIA_ENABLE_PARTR")
+    end
     if Sys.isunix()
         print(flags, " -fPIC")
     end

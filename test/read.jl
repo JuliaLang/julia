@@ -559,8 +559,9 @@ let p = Pipe()
     t = @async read(p)
     @sync begin
         @async write(p, zeros(UInt16, 660_000))
+        order::UInt16 = 0
         for i = 1:typemax(UInt16)
-            @async write(p, UInt16(i))
+            @async (order+=1; write(p, order))
         end
         @async close(p.in)
     end

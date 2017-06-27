@@ -53,7 +53,7 @@ typedef ucontext_t jl_ucontext_t;
 
 // Recursive spin lock
 typedef struct {
-    volatile unsigned long owner;
+    volatile uintptr_t owner;
     uint32_t count;
 } jl_mutex_t;
 
@@ -158,6 +158,10 @@ struct _jl_tls_states_t {
     jl_ucontext_t base_ctx; // base context of stack
     jl_jmp_buf *safe_restore;
     int16_t tid;
+#ifdef JULIA_ENABLE_PARTR
+    uint64_t rngseed;
+    struct _jl_taskq_t *sticky_taskq;
+#endif
     // Temp storage for exception thrown in signal handler. Not rooted.
     struct _jl_value_t *sig_exception;
     // Temporary backtrace buffer. Scanned for gc roots when bt_size > 0.

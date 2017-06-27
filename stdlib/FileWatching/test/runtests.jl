@@ -31,7 +31,7 @@ function pfd_tst_reads(idx, intvl)
     global ready += 1
     wait(ready_c)
     t_elapsed = @elapsed begin
-        start_evt2 = Condition()
+        start_evt2 = Threads.Event()
         evt2 = @async (notify(start_evt2); poll_fd(pipe_fds[idx][1], intvl; readable=true, writable=false))
         wait(start_evt2); yield() # make sure the async poll_fd is pumping events
         evt = poll_fd(pipe_fds[idx][1], intvl; readable=true, writable=false)
@@ -59,7 +59,7 @@ function pfd_tst_timeout(idx, intvl)
     global ready += 1
     wait(ready_c)
     t_elapsed = @elapsed begin
-        start_evt2 = Condition()
+        start_evt2 = Threads.Event()
         evt2 = @async (notify(start_evt2); poll_fd(pipe_fds[idx][1], intvl; readable=true, writable=false))
         wait(start_evt2); yield() # make sure the async poll_fd is pumping events
         evt = poll_fd(pipe_fds[idx][1], intvl; readable=true, writable=false)
@@ -384,7 +384,7 @@ mv(file * "~", file)
 let changes = []
     while true
         let c
-            timeout = Sys.iswindows() ? 0.1 : 0.0
+            timeout = 0.1
             @test @elapsed(c = watch_folder(dir, timeout)) < 0.5
             push!(changes, c)
             (c.second::FileWatching.FileEvent).timedout && break

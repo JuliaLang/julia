@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Random
+using Random, Test
 
 @testset "various constructors" begin
     c = Channel(1)
@@ -63,10 +63,11 @@ end
                 push!(results, ii)
             end
         end
-        sleep(1.0)
+        sleep(0.2)
         for i in 1:5
             put!(c,i)
         end
+        sleep(0.2)
         close(c)
     end
     @test sum(results) == 15
@@ -135,7 +136,7 @@ using Distributed
 
     # channeled_tasks
     for T in [Any, Int]
-        chnls, tasks = Base.channeled_tasks(2, (c1,c2)->(@assert take!(c1)==1; put!(c2,2)); ctypes=[T,T], csizes=[N,N])
+        chnls, tasks = Base.channeled_tasks(2, (c1,c2)->(@assert take!(c1)==1; put!(c2,2); sleep(0.2)); ctypes=[T,T], csizes=[N,N])
         put!(chnls[1], 1)
         @test take!(chnls[2]) == 2
         @test_throws InvalidStateException wait(chnls[1])
@@ -248,6 +249,7 @@ end
         error in running finalizer: ErrorException("task switch not allowed from inside gc finalizer")
         error in running finalizer: ErrorException("task switch not allowed from inside gc finalizer")
         """
+#= TODO: there's no Workqueue any more
     # test for invalid state in Workqueue during yield
     t = @async nothing
     t.state = :invalid
@@ -260,24 +262,16 @@ end
         close(newstderr[2])
     end
     @test fetch(errstream) == "\nWARNING: Workqueue inconsistency detected: popfirst!(Workqueue).state != :queued\n"
-end
-
-@testset "schedule_and_wait" begin
-    t = @async(nothing)
-    ct = current_task()
-    testobject = "testobject"
-    # note: there is a low probability this test could fail, due to receiving network traffic simultaneously
-    @test length(Base.Workqueue) == 1
-    @test Base.schedule_and_wait(ct, 8) == 8
-    @test isempty(Base.Workqueue)
-    @test Base.schedule_and_wait(ct, testobject) === testobject
+=#
 end
 
 @testset "throwto" begin
     t = @task(nothing)
     ct = current_task()
     testerr = ErrorException("expected")
-    @async Base.throwto(t, testerr)
+    # TODO: throwto() is unimplemented
+    #@async Base.throwto(t, testerr)
+    @async schedule(t, testerr, error=true)
     @test try
         Base.wait(t)
         false
@@ -286,26 +280,26 @@ end
     end === testerr
 end
 
+#= TODO: these tests depend on task execution ordering and that makes no
+# sense with threads!
+=#
 @testset "Timer / AsyncCondition triggering and race #12719" begin
     tc = Ref(0)
     t = Timer(0) do t
         tc[] += 1
     end
-    @test isopen(t)
     Base.process_events(false)
-    @test !isopen(t)
-    @test tc[] == 0
     yield()
+    @test !isopen(t)
     @test tc[] == 1
 
     tc = Ref(0)
-    t = Timer(0) do t
+    t = Timer(10) do t
         tc[] += 1
     end
     @test isopen(t)
     close(t)
     @test !isopen(t)
-    sleep(0.1)
     @test tc[] == 0
 
     tc = Ref(0)
@@ -320,8 +314,10 @@ end
     @test tc[] == 0
     yield() # consume event
     @test tc[] == 1
-    sleep(0.1) # no further events
-    @test tc[] == 1
+    # NOTE: this depended on the scheduler not calling process_events when there
+    # are tasks to run. Now, this is probabilistic.
+    #sleep(0.1) # no further events
+    #@test tc[] == 1
     ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
     ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
     close(async)

@@ -2,41 +2,45 @@
 
 ## condition variables
 
-"""
-    Condition()
 
-Create an edge-triggered event source that tasks can wait for. Tasks that call [`wait`](@ref) on a
-`Condition` are suspended and queued. Tasks are woken up when [`notify`](@ref) is later called on
-the `Condition`. Edge triggering means that only tasks waiting at the time [`notify`](@ref) is
-called can be woken up. For level-triggered notifications, you must keep extra state to keep
-track of whether a notification has happened. The [`Channel`](@ref) type does
-this, and so can be used for level-triggered events.
-"""
+if JULIA_PARTR
+
+import Core.Condition
+
+Condition() = ccall(:jl_condition_new, Ref{Condition}, ())
+
+wait(c::Condition) = ccall(:jl_task_wait, Any, (Ref{Condition},), c)
+
+notify(c::Condition, arg, all, error) = ccall(:jl_task_notify, Cvoid, (Ref{Condition},Any,Int8,Int8), c, arg, all, error)
+notify(c::Condition, @nospecialize(arg = nothing); all=true, error=false) = notify(c, arg, all, error)
+notify_error(c::Condition, err) = notify(c, err, true, true)
+
+isempty(c::Condition) = ccall(:jl_condition_isempty, Cint, (Ref{Condition},), c) == 1
+
+schedule(t::Task, @nospecialize(arg = nothing); error=false) =
+    ccall(:jl_task_spawn, Ref{Task}, (Ref{Task},Any,Int8,Int8,Int8),
+          t, arg, error, true, true)
+
+fetch(t::Task) = ccall(:jl_task_sync, Any, (Ref{Task},), t)
+
+yield() = ccall(:jl_task_yield, Any, (Cint,), 1)
+yield(t::Task, @nospecialize x = nothing) = (schedule(t, x); yield())
+yieldto(t::Task, @nospecialize x = nothing) = (schedule(t, x); wait())
+try_yieldto(undo, reftask::Ref{Task}) = (schedule(reftask[]); wait())
+throwto(t::Task, @nospecialize exc) = (schedule(t, exc, error=true); wait())
+
+wait() = ccall(:jl_task_yield, Any, (Cint,), 0)
+
+
+else # !JULIA_PARTR
+
+
 mutable struct Condition
     waitq::Vector{Any}
 
     Condition() = new([])
 end
 
-"""
-    wait([x])
-
-Block the current task until some event occurs, depending on the type of the argument:
-
-* [`Channel`](@ref): Wait for a value to be appended to the channel.
-* [`Condition`](@ref): Wait for [`notify`](@ref) on a condition.
-* `Process`: Wait for a process or process chain to exit. The `exitcode` field of a process
-  can be used to determine success or failure.
-* [`Task`](@ref): Wait for a `Task` to finish. If the task fails with an exception, the
-  exception is propagated (re-thrown in the task that called `wait`).
-* [`RawFD`](@ref): Wait for changes on a file descriptor (see the `FileWatching` package).
-
-If no argument is passed, the task blocks for an undefined period. A task can only be
-restarted by an explicit call to [`schedule`](@ref) or [`yieldto`](@ref).
-
-Often `wait` is called within a `while` loop to ensure a waited-for condition is met before
-proceeding.
-"""
 function wait(c::Condition)
     ct = current_task()
 
@@ -50,15 +54,6 @@ function wait(c::Condition)
     end
 end
 
-"""
-    notify(condition, val=nothing; all=true, error=false)
-
-Wake up tasks waiting for a condition, passing them `val`. If `all` is `true` (the default),
-all waiting tasks are woken, otherwise only one is. If `error` is `true`, the passed value
-is raised as an exception in the woken tasks.
-
-Return the count of tasks woken up. Return 0 if no tasks are waiting on `condition`.
-"""
 notify(c::Condition, @nospecialize(arg = nothing); all=true, error=false) = notify(c, arg, all, error)
 function notify(c::Condition, arg, all, error)
     cnt = 0
@@ -78,6 +73,8 @@ end
 
 notify_error(c::Condition, err) = notify(c, err, true, true)
 
+isempty(c::Condition) = isempty(c.waitq)
+
 n_waiters(c::Condition) = length(c.waitq)
 
 ## scheduler and work queue
@@ -94,36 +91,6 @@ end
 
 schedule(t::Task) = enq_work(t)
 
-"""
-    schedule(t::Task, [val]; error=false)
-
-Add a [`Task`](@ref) to the scheduler's queue. This causes the task to run constantly when the system
-is otherwise idle, unless the task performs a blocking operation such as [`wait`](@ref).
-
-If a second argument `val` is provided, it will be passed to the task (via the return value of
-[`yieldto`](@ref)) when it runs again. If `error` is `true`, the value is raised as an exception in
-the woken task.
-
-# Examples
-```jldoctest
-julia> a5() = sum(i for i in 1:1000);
-
-julia> b = Task(a5);
-
-julia> istaskstarted(b)
-false
-
-julia> schedule(b);
-
-julia> yield();
-
-julia> istaskstarted(b)
-true
-
-julia> istaskdone(b)
-true
-```
-"""
 function schedule(t::Task, arg; error=false)
     # schedule a task to be (re)started with the given value or exception
     if error
@@ -134,34 +101,8 @@ function schedule(t::Task, arg; error=false)
     return enq_work(t)
 end
 
-# fast version of `schedule(t, arg); wait()`
-function schedule_and_wait(t::Task, arg=nothing)
-    t.state == :runnable || error("schedule: Task not runnable")
-    if isempty(Workqueue)
-        return yieldto(t, arg)
-    else
-        t.result = arg
-        push!(Workqueue, t)
-        t.state = :queued
-    end
-    return wait()
-end
-
-"""
-    yield()
-
-Switch to the scheduler to allow another scheduled task to run. A task that calls this
-function is still runnable, and will be restarted immediately if there are no other runnable
-tasks.
-"""
 yield() = (enq_work(current_task()); wait())
 
-"""
-    yield(t::Task, arg = nothing)
-
-A fast, unfair-scheduling version of `schedule(t, arg); yield()` which
-immediately yields to `t` before calling the scheduler.
-"""
 function yield(t::Task, @nospecialize x = nothing)
     t.state == :runnable || error("schedule: Task not runnable")
     t.result = x
@@ -169,14 +110,6 @@ function yield(t::Task, @nospecialize x = nothing)
     return try_yieldto(ensure_rescheduled, Ref(t))
 end
 
-"""
-    yieldto(t::Task, arg = nothing)
-
-Switch to the given task. The first time a task is switched to, the task's function is
-called with no arguments. On subsequent switches, `arg` is returned from the task's last
-call to `yieldto`. This is a low-level call that only switches tasks, not considering states
-or scheduling in any way. Its use is discouraged.
-"""
 function yieldto(t::Task, @nospecialize x = nothing)
     t.result = x
     return try_yieldto(identity, Ref(t))
@@ -261,6 +194,126 @@ function wait()
     end
     # unreachable
 end
+
+end # JULIA_PARTR
+
+"""
+    isempty(condition)
+
+Return `true` if no tasks are waiting on the condition, `false` otherwise.
+"""
+isempty(c::Condition)
+
+"""
+    Condition()
+
+Create an edge-triggered event source that tasks can wait for. Tasks that call [`wait`](@ref) on a
+`Condition` are suspended and queued. Tasks are woken up when [`notify`](@ref) is later called on
+the `Condition`. Edge triggering means that only tasks waiting at the time [`notify`](@ref) is
+called can be woken up. For level-triggered notifications, you must keep extra state to keep
+track of whether a notification has happened. The [`Channel`](@ref) type does
+this, and so can be used for level-triggered events.
+"""
+Condition
+
+"""
+    wait([x])
+
+Block the current task until some event occurs, depending on the type of the argument:
+
+* [`Channel`](@ref): Wait for a value to be appended to the channel.
+* [`Condition`](@ref): Wait for [`notify`](@ref) on a condition.
+* `Process`: Wait for a process or process chain to exit. The `exitcode` field of a process
+  can be used to determine success or failure.
+* [`Task`](@ref): Wait for a `Task` to finish. If the task fails with an exception, the
+  exception is propagated (re-thrown in the task that called `wait`).
+* [`RawFD`](@ref): Wait for changes on a file descriptor (see the `FileWatching` package).
+
+If no argument is passed, the task blocks for an undefined period. A task can only be
+restarted by an explicit call to [`schedule`](@ref) or [`yieldto`](@ref).
+
+Often `wait` is called within a `while` loop to ensure a waited-for condition is met before
+proceeding.
+"""
+wait
+
+"""
+    notify(condition, val=nothing; all=true, error=false)
+
+Wake up tasks waiting for a condition, passing them `val`. If `all` is `true` (the default),
+all waiting tasks are woken, otherwise only one is. If `error` is `true`, the passed value
+is raised as an exception in the woken tasks.
+
+Return the count of tasks woken up. Return 0 if no tasks are waiting on `condition`.
+"""
+notify
+
+"""
+    fetch(t::Task)
+
+Wait for a Task to finish, then return its result value. If the task fails with an
+exception, the exception is propagated (re-thrown in the task that called fetch).
+"""
+fetch(t::Task)
+
+"""
+    yield()
+
+Switch to the scheduler to allow another scheduled task to run. A task that calls this
+function is still runnable, and will be restarted immediately if there are no other runnable
+tasks.
+"""
+yield
+
+"""
+    yield(t::Task, arg = nothing)
+
+A fast, unfair-scheduling version of `schedule(t, arg); yield()` which
+immediately yields to `t` before calling the scheduler.
+"""
+yield(t::Task)
+
+"""
+    yieldto(t::Task, arg = nothing)
+
+Switch to the given task. The first time a task is switched to, the task's function is
+called with no arguments. On subsequent switches, `arg` is returned from the task's last
+call to `yieldto`. This is a low-level call that only switches tasks, not considering states
+or scheduling in any way. Its use is discouraged.
+"""
+yieldto
+
+"""
+    schedule(t::Task, [val]; error=false)
+
+Add a [`Task`](@ref) to the scheduler's queue. This causes the task to run constantly when the system
+is otherwise idle, unless the task performs a blocking operation such as [`wait`](@ref).
+
+If a second argument `val` is provided, it will be passed to the task (via the return value of
+[`yieldto`](@ref)) when it runs again. If `error` is `true`, the value is raised as an exception in
+the woken task.
+
+# Examples
+```jldoctest
+julia> a5() = sum(i for i in 1:1000);
+
+julia> b = Task(a5);
+
+julia> istaskstarted(b)
+false
+
+julia> schedule(b);
+
+julia> yield();
+
+julia> istaskstarted(b)
+true
+
+julia> istaskdone(b)
+true
+```
+"""
+schedule
 
 if Sys.iswindows()
     pause() = ccall(:Sleep, stdcall, Cvoid, (UInt32,), 0xffffffff)
