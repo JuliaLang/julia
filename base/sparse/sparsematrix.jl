@@ -136,7 +136,7 @@ end
 
 
 """
-    checkvalid(Bool, S::SparseMatrixCSC; full = true) -> Bool
+    checkvalid(::Type{Bool}, S::SparseMatrixCSC; full = true) -> Bool
 
 Return `true` if the sparse matrix `S` has a valid internal representation.
 If `full` is `false` only O(1) checks are done, otherwise full

@@ -310,7 +310,7 @@ IndexStyle(::IndexStyle, ::IndexStyle) = IndexCartesian()
 # on index type (especially, its last argument).
 
 """
-    checkbounds(Bool, A, I...)
+    checkbounds(::Type{Bool}, A, I...)
 
 Return `true` if the specified indices `I` are in bounds for the given
 array `A`. Subtypes of `AbstractArray` should specialize this method
@@ -363,15 +363,15 @@ end
 checkbounds(A::AbstractArray) = checkbounds(A, 1) # 0-d case
 
 """
-    checkbounds_indices(Bool, IA, I)
+    checkbounds_indices(::Type{Bool}, IA, I)
 
 Return `true` if the "requested" indices in the tuple `I` fall within
 the bounds of the "permitted" indices specified by the tuple
 `IA`. This function recursively consumes elements of these tuples,
 usually in a 1-for-1 fashion,
 
-    checkbounds_indices(Bool, (IA1, IA...), (I1, I...)) = checkindex(Bool, IA1, I1) &
-                                                          checkbounds_indices(Bool, IA, I)
+    checkbounds_indices(::Type{Bool}, (IA1, IA...), (I1, I...)) = checkindex(Bool, IA1, I1) &
+                                                                  checkbounds_indices(Bool, IA, I)
 
 Note that [`checkindex`](@ref) is being used to perform the actual
 bounds-check for a single dimension of the array.
@@ -432,7 +432,7 @@ throw_boundserror(A, I) = (@_noinline_meta; throw(BoundsError(A, I)))
 
 # check along a single dimension
 """
-    checkindex(Bool, inds::AbstractUnitRange, index)
+    checkindex(::Type{Bool}, inds::AbstractUnitRange, index)
 
 Return `true` if the given `index` is within the bounds of
 `inds`. Custom types that would like to behave as indices for all
