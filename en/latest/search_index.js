@@ -16573,7 +16573,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Dates and Time",
     "title": "Base.Dates.DateTime",
     "category": "Method",
-    "text": "DateTime(f::Function, y[, m, d, h, mi, s]; step=Day(1), limit=10000) -> DateTime\n\nCreate a DateTime through the adjuster API. The starting point will be constructed from the provided y, m, d... arguments, and will be adjusted until f::Function returns true. The step size in adjusting can be provided manually through the step keyword. limit provides a limit to the max number of iterations the adjustment API will pursue before throwing an error (in the case that f::Function is never satisfied).\n\n\n\n"
+    "text": "DateTime(f::Function, y[, m, d, h, mi, s]; step=Day(1), limit=10000) -> DateTime\n\nCreate a DateTime through the adjuster API. The starting point will be constructed from the provided y, m, d... arguments, and will be adjusted until f::Function returns true. The step size in adjusting can be provided manually through the step keyword. limit provides a limit to the max number of iterations the adjustment API will pursue before throwing an error (in the case that f::Function is never satisfied).\n\nExamples\n\njulia> DateTime(dt -> Dates.second(dt) == 40, 2010, 10, 20, 10; step = Dates.Second(1))\n2010-10-20T10:00:40\n\njulia> DateTime(dt -> Dates.hour(dt) == 20, 2010, 10, 20, 10; step = Dates.Hour(1), limit = 5)\nERROR: ArgumentError: Adjustment limit reached: 5 iterations\nStacktrace:\n[...]\n\n\n\n"
 },
 
 {
@@ -16645,7 +16645,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Dates and Time",
     "title": "Base.Dates.Date",
     "category": "Method",
-    "text": "Date(f::Function, y[, m, d]; step=Day(1), limit=10000) -> Date\n\nCreate a Date through the adjuster API. The starting point will be constructed from the provided y, m, d arguments, and will be adjusted until f::Function returns true. The step size in adjusting can be provided manually through the step keyword. limit provides a limit to the max number of iterations the adjustment API will pursue before throwing an error (given that f::Function is never satisfied).\n\n\n\n"
+    "text": "Date(f::Function, y[, m, d]; step=Day(1), limit=10000) -> Date\n\nCreate a Date through the adjuster API. The starting point will be constructed from the provided y, m, d arguments, and will be adjusted until f::Function returns true. The step size in adjusting can be provided manually through the step keyword. limit provides a limit to the max number of iterations the adjustment API will pursue before throwing an error (given that f::Function is never satisfied).\n\nExamples\n\njulia> Date(date -> Dates.week(date) == 20, 2010, 01, 01)\n2010-05-17\n\njulia> Date(date -> Dates.year(date) == 2010, 2000, 01, 01)\n2010-01-01\n\njulia> Date(date -> Dates.month(date) == 10, 2000, 01, 01; limit = 5)\nERROR: ArgumentError: Adjustment limit reached: 5 iterations\nStacktrace:\n[...]\n\n\n\n"
 },
 
 {
@@ -16693,7 +16693,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Dates and Time",
     "title": "Base.Dates.Time",
     "category": "Method",
-    "text": "Time(f::Function, h, mi=0; step::Period=Second(1), limit::Int=10000)\nTime(f::Function, h, mi, s; step::Period=Millisecond(1), limit::Int=10000)\nTime(f::Function, h, mi, s, ms; step::Period=Microsecond(1), limit::Int=10000)\nTime(f::Function, h, mi, s, ms, us; step::Period=Nanosecond(1), limit::Int=10000)\n\nCreate a Time through the adjuster API. The starting point will be constructed from the provided h, mi, s, ms, us arguments, and will be adjusted until f::Function returns true. The step size in adjusting can be provided manually through the step keyword. limit provides a limit to the max number of iterations the adjustment API will pursue before throwing an error (in the case that f::Function is never satisfied). Note that the default step will adjust to allow for greater precision for the given arguments; i.e. if hour, minute, and second arguments are provided, the default step will be Millisecond(1) instead of Second(1).\n\n\n\n"
+    "text": "Time(f::Function, h, mi=0; step::Period=Second(1), limit::Int=10000)\nTime(f::Function, h, mi, s; step::Period=Millisecond(1), limit::Int=10000)\nTime(f::Function, h, mi, s, ms; step::Period=Microsecond(1), limit::Int=10000)\nTime(f::Function, h, mi, s, ms, us; step::Period=Nanosecond(1), limit::Int=10000)\n\nCreate a Time through the adjuster API. The starting point will be constructed from the provided h, mi, s, ms, us arguments, and will be adjusted until f::Function returns true. The step size in adjusting can be provided manually through the step keyword. limit provides a limit to the max number of iterations the adjustment API will pursue before throwing an error (in the case that f::Function is never satisfied). Note that the default step will adjust to allow for greater precision for the given arguments; i.e. if hour, minute, and second arguments are provided, the default step will be Millisecond(1) instead of Second(1).\n\nExamples\n\njulia> Dates.Time(t -> Dates.minute(t) == 30, 20)\n20:30:00\n\njulia> Dates.Time(t -> Dates.minute(t) == 0, 20)\n20:00:00\n\njulia> Dates.Time(t -> Dates.hour(t) == 10, 3; limit = 5)\nERROR: ArgumentError: Adjustment limit reached: 5 iterations\nStacktrace:\n[...]\n\n\n\n"
 },
 
 {
@@ -16757,7 +16757,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Dates and Time",
     "title": "Base.Dates.week",
     "category": "Function",
-    "text": "week(dt::TimeType) -> Int64\n\nReturn the ISO week date of a Date or DateTime as an Int64. Note that the first week of a year is the week that contains the first Thursday of the year which can result in dates prior to January 4th being in the last week of the previous year. For example week(Date(2005,1,1)) is the 53rd week of 2004.\n\n\n\n"
+    "text": "week(dt::TimeType) -> Int64\n\nReturn the ISO week date of a Date or DateTime as an Int64. Note that the first week of a year is the week that contains the first Thursday of the year, which can result in dates prior to January 4th being in the last week of the previous year. For example, week(Date(2005, 1, 1)) is the 53rd week of 2004.\n\nExamples\n\njulia> Dates.week(Date(1989, 6, 22))\n25\n\njulia> Dates.week(Date(2005, 1, 1))\n53\n\njulia> Dates.week(Date(2004, 12, 31))\n53\n\n\n\n"
 },
 
 {
@@ -16933,7 +16933,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Dates and Time",
     "title": "Base.Dates.dayname",
     "category": "Function",
-    "text": "dayname(dt::TimeType; locale=\"english\") -> AbstractString\n\nReturn the full day name corresponding to the day of the week of the Date or DateTime in the given locale.\n\n\n\n"
+    "text": "dayname(dt::TimeType; locale=\"english\") -> AbstractString\n\nReturn the full day name corresponding to the day of the week of the Date or DateTime in the given locale.\n\nExample\n\njulia> Dates.dayname(Date(\"2000-01-01\"))\n\"Saturday\"\n\n\n\n"
 },
 
 {
@@ -16941,7 +16941,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Dates and Time",
     "title": "Base.Dates.dayabbr",
     "category": "Function",
-    "text": "dayabbr(dt::TimeType; locale=\"english\") -> AbstractString\n\nReturn the abbreviated name corresponding to the day of the week of the Date or DateTime in the given locale.\n\n\n\n"
+    "text": "dayabbr(dt::TimeType; locale=\"english\") -> AbstractString\n\nReturn the abbreviated name corresponding to the day of the week of the Date or DateTime in the given locale.\n\nExample\n\njulia> Dates.dayabbr(Date(\"2000-01-01\"))\n\"Sat\"\n\n\n\n"
 },
 
 {
@@ -16949,7 +16949,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Dates and Time",
     "title": "Base.Dates.dayofweek",
     "category": "Function",
-    "text": "dayofweek(dt::TimeType) -> Int64\n\nReturns the day of the week as an Int64 with 1 = Monday, 2 = Tuesday, etc..\n\n\n\n"
+    "text": "dayofweek(dt::TimeType) -> Int64\n\nReturns the day of the week as an Int64 with 1 = Monday, 2 = Tuesday, etc..\n\nExample\n\njulia> Dates.dayofweek(Date(\"2000-01-01\"))\n6\n\n\n\n"
 },
 
 {
@@ -16965,7 +16965,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Dates and Time",
     "title": "Base.Dates.dayofweekofmonth",
     "category": "Function",
-    "text": "dayofweekofmonth(dt::TimeType) -> Int\n\nFor the day of week of dt, returns which number it is in dt's month. So if the day of the week of dt is Monday, then 1 = First Monday of the month, 2 = Second Monday of the month, etc. In the range 1:5.\n\n\n\n"
+    "text": "dayofweekofmonth(dt::TimeType) -> Int\n\nFor the day of week of dt, returns which number it is in dt's month. So if the day of the week of dt is Monday, then 1 = First Monday of the month, 2 = Second Monday of the month, etc. In the range 1:5.\n\nExamples\n\n```jldoctest julia> Dates.dayofweekofmonth(Date(\"2000-02-01\")) 1\n\njulia> Dates.dayofweekofmonth(Date(\"2000-02-08\")) 2\n\njulia> Dates.dayofweekofmonth(Date(\"2000-02-15\")) 3 ````\n\n\n\n"
 },
 
 {
@@ -16973,7 +16973,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Dates and Time",
     "title": "Base.Dates.daysofweekinmonth",
     "category": "Function",
-    "text": "daysofweekinmonth(dt::TimeType) -> Int\n\nFor the day of week of dt, returns the total number of that day of the week in dt's month. Returns 4 or 5. Useful in temporal expressions for specifying the last day of a week in a month by including dayofweekofmonth(dt) == daysofweekinmonth(dt) in the adjuster function.\n\n\n\n"
+    "text": "daysofweekinmonth(dt::TimeType) -> Int\n\nFor the day of week of dt, returns the total number of that day of the week in dt's month. Returns 4 or 5. Useful in temporal expressions for specifying the last day of a week in a month by including dayofweekofmonth(dt) == daysofweekinmonth(dt) in the adjuster function.\n\nExamples\n\njulia> Dates.daysofweekinmonth(Date(\"2005-01-01\"))\n5\n\njulia> Dates.daysofweekinmonth(Date(\"2005-01-04\"))\n4\n\n\n\n"
 },
 
 {
@@ -16981,7 +16981,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Dates and Time",
     "title": "Base.Dates.monthname",
     "category": "Function",
-    "text": "monthname(dt::TimeType; locale=\"english\") -> AbstractString\n\nReturn the full name of the month of the Date or DateTime in the given locale.\n\n\n\n"
+    "text": "monthname(dt::TimeType; locale=\"english\") -> AbstractString\n\nReturn the full name of the month of the Date or DateTime in the given locale.\n\nExample\n\njulia> Dates.monthname(Date(\"2005-01-04\"))\n\"January\"\n\n\n\n"
 },
 
 {
@@ -16989,7 +16989,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Dates and Time",
     "title": "Base.Dates.monthabbr",
     "category": "Function",
-    "text": "monthabbr(dt::TimeType; locale=\"english\") -> AbstractString\n\nReturn the abbreviated month name of the Date or DateTime in the given locale.\n\n\n\n"
+    "text": "monthabbr(dt::TimeType; locale=\"english\") -> AbstractString\n\nReturn the abbreviated month name of the Date or DateTime in the given locale.\n\nExample\n\njulia> Dates.monthabbr(Date(\"2005-01-04\"))\n\"Jan\"\n\n\n\n"
 },
 
 {
@@ -16997,7 +16997,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Dates and Time",
     "title": "Base.Dates.daysinmonth",
     "category": "Function",
-    "text": "daysinmonth(dt::TimeType) -> Int\n\nReturns the number of days in the month of dt. Value will be 28, 29, 30, or 31.\n\n\n\n"
+    "text": "daysinmonth(dt::TimeType) -> Int\n\nReturns the number of days in the month of dt. Value will be 28, 29, 30, or 31.\n\nExamples\n\njulia> Dates.daysinmonth(Date(\"2000-01\"))\n31\n\njulia> Dates.daysinmonth(Date(\"2001-02\"))\n28\n\njulia> Dates.daysinmonth(Date(\"2000-02\"))\n29\n\n\n\n"
 },
 
 {
@@ -17005,7 +17005,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Dates and Time",
     "title": "Base.Dates.isleapyear",
     "category": "Function",
-    "text": "isleapyear(dt::TimeType) -> Bool\n\nReturns true if the year of dt is a leap year.\n\n\n\n"
+    "text": "isleapyear(dt::TimeType) -> Bool\n\nReturns true if the year of dt is a leap year.\n\nExamples\n\njulia> Dates.isleapyear(Date(\"2004\"))\ntrue\n\njulia> Dates.isleapyear(Date(\"2005\"))\nfalse\n\n\n\n"
 },
 
 {
@@ -17021,7 +17021,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Dates and Time",
     "title": "Base.Dates.daysinyear",
     "category": "Function",
-    "text": "daysinyear(dt::TimeType) -> Int\n\nReturns 366 if the year of dt is a leap year, otherwise returns 365.\n\n\n\n"
+    "text": "daysinyear(dt::TimeType) -> Int\n\nReturns 366 if the year of dt is a leap year, otherwise returns 365.\n\nExamples\n\njulia> Dates.daysinyear(1999)\n365\n\njulia> Dates.daysinyear(2000)\n366\n\n\n\n"
 },
 
 {
@@ -17053,7 +17053,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Dates and Time",
     "title": "Base.trunc",
     "category": "Method",
-    "text": "trunc(dt::TimeType, ::Type{Period}) -> TimeType\n\nTruncates the value of dt according to the provided Period type. E.g. if dt is 1996-01-01T12:30:00, then trunc(dt,Day) == 1996-01-01T00:00:00.\n\n\n\n"
+    "text": "trunc(dt::TimeType, ::Type{Period}) -> TimeType\n\nTruncates the value of dt according to the provided Period type.\n\nExample\n\njulia> trunc(Dates.DateTime(\"1996-01-01T12:30:00\"), Dates.Day)\n1996-01-01T00:00:00\n\n\n\n"
 },
 
 {
@@ -17061,7 +17061,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Dates and Time",
     "title": "Base.Dates.firstdayofweek",
     "category": "Function",
-    "text": "firstdayofweek(dt::TimeType) -> TimeType\n\nAdjusts dt to the Monday of its week.\n\n\n\n"
+    "text": "firstdayofweek(dt::TimeType) -> TimeType\n\nAdjusts dt to the Monday of its week.\n\nExample\n\njulia> Dates.firstdayofweek(DateTime(\"1996-01-05T12:30:00\"))\n1996-01-01T00:00:00\n\n\n\n"
 },
 
 {
@@ -17069,7 +17069,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Dates and Time",
     "title": "Base.Dates.lastdayofweek",
     "category": "Function",
-    "text": "lastdayofweek(dt::TimeType) -> TimeType\n\nAdjusts dt to the Sunday of its week.\n\n\n\n"
+    "text": "lastdayofweek(dt::TimeType) -> TimeType\n\nAdjusts dt to the Sunday of its week.\n\nExample\n\njulia> Dates.lastdayofweek(DateTime(\"1996-01-05T12:30:00\"))\n1996-01-07T00:00:00\n\n\n\n"
 },
 
 {
@@ -17077,7 +17077,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Dates and Time",
     "title": "Base.Dates.firstdayofmonth",
     "category": "Function",
-    "text": "firstdayofmonth(dt::TimeType) -> TimeType\n\nAdjusts dt to the first day of its month.\n\n\n\n"
+    "text": "firstdayofmonth(dt::TimeType) -> TimeType\n\nAdjusts dt to the first day of its month.\n\nExample\n\njulia> Dates.firstdayofmonth(DateTime(\"1996-05-20\"))\n1996-05-01T00:00:00\n\n\n\n"
 },
 
 {
@@ -17085,7 +17085,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Dates and Time",
     "title": "Base.Dates.lastdayofmonth",
     "category": "Function",
-    "text": "lastdayofmonth(dt::TimeType) -> TimeType\n\nAdjusts dt to the last day of its month.\n\n\n\n"
+    "text": "lastdayofmonth(dt::TimeType) -> TimeType\n\nAdjusts dt to the last day of its month.\n\nExample\n\njulia> Dates.lastdayofmonth(DateTime(\"1996-05-20\"))\n1996-05-31T00:00:00\n\n\n\n"
 },
 
 {
@@ -17093,7 +17093,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Dates and Time",
     "title": "Base.Dates.firstdayofyear",
     "category": "Function",
-    "text": "firstdayofyear(dt::TimeType) -> TimeType\n\nAdjusts dt to the first day of its year.\n\n\n\n"
+    "text": "firstdayofyear(dt::TimeType) -> TimeType\n\nAdjusts dt to the first day of its year.\n\nExample\n\njulia> Dates.firstdayofyear(DateTime(\"1996-05-20\"))\n1996-01-01T00:00:00\n\n\n\n"
 },
 
 {
@@ -17101,7 +17101,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Dates and Time",
     "title": "Base.Dates.lastdayofyear",
     "category": "Function",
-    "text": "lastdayofyear(dt::TimeType) -> TimeType\n\nAdjusts dt to the last day of its year.\n\n\n\n"
+    "text": "lastdayofyear(dt::TimeType) -> TimeType\n\nAdjusts dt to the last day of its year.\n\nExample\n\njulia> Dates.lastdayofyear(DateTime(\"1996-05-20\"))\n1996-12-31T00:00:00\n\n\n\n"
 },
 
 {
@@ -17109,7 +17109,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Dates and Time",
     "title": "Base.Dates.firstdayofquarter",
     "category": "Function",
-    "text": "firstdayofquarter(dt::TimeType) -> TimeType\n\nAdjusts dt to the first day of its quarter.\n\n\n\n"
+    "text": "firstdayofquarter(dt::TimeType) -> TimeType\n\nAdjusts dt to the first day of its quarter.\n\nExamples\n\njulia> Dates.firstdayofquarter(DateTime(\"1996-05-20\"))\n1996-04-01T00:00:00\n\njulia> Dates.firstdayofquarter(DateTime(\"1996-08-20\"))\n1996-07-01T00:00:00\n\n\n\n"
 },
 
 {
@@ -17117,7 +17117,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Dates and Time",
     "title": "Base.Dates.lastdayofquarter",
     "category": "Function",
-    "text": "lastdayofquarter(dt::TimeType) -> TimeType\n\nAdjusts dt to the last day of its quarter.\n\n\n\n"
+    "text": "lastdayofquarter(dt::TimeType) -> TimeType\n\nAdjusts dt to the last day of its quarter.\n\nExamples\n\njulia> Dates.lastdayofquarter(DateTime(\"1996-05-20\"))\n1996-06-30T00:00:00\n\njulia> Dates.lastdayofquarter(DateTime(\"1996-08-20\"))\n1996-09-30T00:00:00\n\n\n\n"
 },
 
 {
