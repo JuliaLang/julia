@@ -94,60 +94,6 @@ julia> bits(2.2)
 bits
 
 """
-    getindex(type[, elements...])
-
-Construct a 1-d array of the specified type. This is usually called with the syntax
-`Type[]`. Element values can be specified using `Type[a,b,c,...]`.
-
-# Example
-```jldoctest
-julia> Int8[1, 2, 3]
-3-element Array{Int8,1}:
- 1
- 2
- 3
-
-julia> getindex(Int8, 1, 2, 3)
-3-element Array{Int8,1}:
- 1
- 2
- 3
-```
-"""
-getindex(::Type, elements...)
-
-"""
-    getindex(A, inds...)
-
-Returns a subset of array `A` as specified by `inds`, where each `ind` may be an
-`Int`, a `Range`, or a `Vector`. See the manual section on
-[array indexing](@ref man-array-indexing) for details.
-
-# Examples
-```jldoctest
-julia> A = [1 2; 3 4]
-2×2 Array{Int64,2}:
- 1  2
- 3  4
-
-julia> getindex(A, 1)
-1
-
-julia> getindex(A, [2, 1])
-2-element Array{Int64,1}:
- 3
- 1
-
-julia> getindex(A, 2:4)
-3-element Array{Int64,1}:
- 3
- 2
- 4
-```
-"""
-getindex(::AbstractArray, inds...)
-
-"""
     getindex(collection, key...)
 
 Retrieve the value(s) stored at the given key or index within a collection. The syntax
@@ -2146,14 +2092,6 @@ julia> start([4;2;3])
 start
 
 """
-    readavailable(stream)
-
-Read all available data on the stream, blocking the task only if no data is available. The
-result is a `Vector{UInt8,1}`.
-"""
-readavailable
-
-"""
     isa(x, type) -> Bool
 
 Determine whether `x` is of the given `type`. Can also be used as an infix operator, e.g.
@@ -2294,13 +2232,6 @@ copy!(dest,d,src,so,N)
 Addition operator. `x+y+z+...` calls this function with all arguments, i.e. `+(x, y, z, ...)`.
 """
 +
-
-"""
-    setindex!(A, X, inds...)
-
-Store values from array `X` within some subset of `A` as specified by `inds`.
-"""
-setindex!(A::AbstractArray,X,inds...)
 
 """
     setindex!(collection, value, key...)

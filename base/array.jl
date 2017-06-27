@@ -190,6 +190,27 @@ similar(a::Array, T::Type, dims::Dims{N}) where {N} = Array{T,N}(dims)
 similar(a::Array{T}, dims::Dims{N}) where {T,N}     = Array{T,N}(dims)
 
 # T[x...] constructs Array{T,1}
+"""
+    getindex(type[, elements...])
+
+Construct a 1-d array of the specified type. This is usually called with the syntax
+`Type[]`. Element values can be specified using `Type[a,b,c,...]`.
+
+# Example
+```jldoctest
+julia> Int8[1, 2, 3]
+3-element Array{Int8,1}:
+ 1
+ 2
+ 3
+
+julia> getindex(Int8, 1, 2, 3)
+3-element Array{Int8,1}:
+ 1
+ 2
+ 3
+```
+"""
 function getindex(::Type{T}, vals...) where T
     a = Array{T,1}(length(vals))
     @inbounds for i = 1:length(vals)
