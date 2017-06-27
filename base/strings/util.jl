@@ -57,7 +57,7 @@ end
 endswith(str::AbstractString, chars::Chars) = !isempty(str) && last(str) in chars
 
 startswith(a::String, b::String) =
-    (a.len >= b.len && ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, b.len) == 0)
+    (sizeof(a) >= sizeof(b) && ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, sizeof(b)) == 0)
 startswith(a::Vector{UInt8}, b::Vector{UInt8}) =
     (length(a) >= length(b) && ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, length(b)) == 0)
 
@@ -109,7 +109,7 @@ end
 # NOTE: use with caution -- breaks the immutable string convention!
 # TODO: this is hard to provide with the new representation
 #function chomp!(s::String)
-#    if !isempty(s) && codeunit(s,s.len) == 0x0a
+#    if !isempty(s) && codeunit(s,sizeof(s)) == 0x0a
 #        n = (endof(s) < 2 || s.data[end-1] != 0x0d) ? 1 : 2
 #        ccall(:jl_array_del_end, Void, (Any, UInt), s.data, n)
 #    end

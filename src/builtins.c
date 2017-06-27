@@ -251,8 +251,7 @@ JL_CALLABLE(jl_f_sizeof)
     }
     if (jl_is_datatype(x)) {
         jl_datatype_t *dx = (jl_datatype_t*)x;
-        if (dx->name == jl_array_typename || dx == jl_symbol_type || dx == jl_simplevector_type ||
-            dx == jl_string_type)
+        if (dx->layout && jl_is_layout_opaque(dx->layout))
             jl_error("type does not have a canonical binary representation");
         if (!(dx->name->names == jl_emptysvec && jl_datatype_size(dx) > 0)) {
             // names===() and size > 0  =>  bitstype, size always known

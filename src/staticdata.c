@@ -631,6 +631,19 @@ static void jl_write_values(jl_serializer_state *s)
         else if (jl_typeis(v, jl_task_type)) {
             jl_error("Task cannot be serialized");
         }
+        else if (jl_is_svec(v)) {
+            ios_write(s->s, (char*)v, sizeof(void*));
+            size_t i, l = jl_svec_len(v);
+            assert(l > 0);
+            for (i = 0; i < l; i++) {
+                write_pointerfield(s, jl_svecref(v, i));
+            }
+        }
+        else if (jl_is_string(v)) {
+            ios_write(s->s, (char*)v, sizeof(void*));
+            ios_write(s->s, jl_string_data(v), jl_string_len(v));
+            write_uint8(s->s, '\0'); // null-terminated strings for easier C-compatibility
+        }
         else if (jl_datatype_nfields(t) == 0) {
             assert(t->layout->npointers == 0);
             if (t->size > 0)
@@ -707,17 +720,6 @@ static void jl_write_values(jl_serializer_state *s)
                 }
                 newm->functionObjectsDecls.functionObject = NULL;
                 newm->functionObjectsDecls.specFunctionObject = NULL;
-            }
-            else if (jl_is_svec(v)) {
-                size_t i, l = jl_svec_len(v);
-                assert(l > 0);
-                for (i = 0; i < l; i++) {
-                    write_pointerfield(s, jl_svecref(v, i));
-                }
-            }
-            else if (jl_is_string(v)) {
-                ios_write(s->s, jl_string_data(v), jl_string_len(v));
-                write_uint8(s->s, '\0'); // null-terminated strings for easier C-compatibility
             }
             else if (jl_is_datatype(v)) {
                 jl_datatype_t *dt = (jl_datatype_t*)v;

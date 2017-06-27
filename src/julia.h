@@ -835,6 +835,11 @@ static inline uint32_t jl_fielddesc_size(int8_t fielddesc_type)
 
 #undef DEFINE_FIELD_ACCESSORS
 
+static inline int jl_is_layout_opaque(jl_datatype_layout_t *l)
+{
+    return l->nfields == 0 && l->npointers > 0;
+}
+
 // basic predicates -----------------------------------------------------------
 #define jl_is_nothing(v)     (((jl_value_t*)(v)) == ((jl_value_t*)jl_nothing))
 #define jl_is_tuple(v)       (((jl_datatype_t*)jl_typeof(v))->name == jl_tuple_typename)
