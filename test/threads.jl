@@ -369,7 +369,7 @@ using Dates
 for period in (0.06, Dates.Millisecond(60))
     let async = Base.AsyncCondition(), t
         c = Condition()
-        task = schedule(Task(function()
+        task = Base.unyielding_schedule(Task(function()
             notify(c)
             wait(c)
             t = Timer(period)

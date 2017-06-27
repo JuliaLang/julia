@@ -58,13 +58,13 @@ out = read(`$echocmd hello` & `$echocmd world`, String)
 Sys.isunix() && run(pipeline(yescmd, `head`, devnull))
 
 let a, p
-    a = Base.Condition()
+    a = Channel(0)
     t = @async begin
         p = run(pipeline(yescmd,devnull), wait=false)
-        Base.notify(a,p)
+        put!(a, p)
         @test !success(p)
     end
-    p = wait(a)
+    p = take!(a)
     kill(p)
     wait(t)
 end

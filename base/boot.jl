@@ -128,6 +128,17 @@
 #    name::Symbol
 #end
 
+#if JULIA_PARTR
+#mutable struct Task
+#    storage::Any
+#    state::Symbol
+#    result::Any
+#    exception::Any
+#    backtrace::Any
+#    logstate::Any
+#    code::Any
+#end
+#else
 #mutable struct Task
 #    parent::Task
 #    storage::Any
@@ -138,6 +149,7 @@
 #    backtrace::Any
 #    logstate::Any
 #    code::Any
+#end
 #end
 
 export

@@ -147,6 +147,16 @@ function (ss::SummarySize)(obj::Module)
     return size
 end
 
+if JULIA_PARTR
+
+function (ss::SummarySize)(obj::Task)
+    haskey(ss.seen, obj) ? (return 0) : (ss.seen[obj] = true)
+    size::Int = Core.sizeof(obj)
+    return size
+end
+
+else
+
 function (ss::SummarySize)(obj::Task)
     haskey(ss.seen, obj) ? (return 0) : (ss.seen[obj] = true)
     size::Int = Core.sizeof(obj)
@@ -160,4 +170,6 @@ function (ss::SummarySize)(obj::Task)
     size += ss(obj.result)::Int
     # TODO: add stack size, and possibly traverse stack roots
     return size
+end
+
 end

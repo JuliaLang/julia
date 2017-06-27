@@ -1650,6 +1650,13 @@ STATIC_INLINE int gc_mark_queue_obj(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_
     return (int)nptr;
 }
 
+#ifdef JULIA_ENABLE_PARTR
+int jl_gc_mark_queue_obj_explicit(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp, jl_value_t *obj)
+{
+    return gc_mark_queue_obj(gc_cache, sp, obj);
+}
+#endif
+
 JL_DLLEXPORT int jl_gc_mark_queue_obj(jl_ptls_t ptls, jl_value_t *obj)
 {
     return gc_mark_queue_obj(&ptls->gc_cache, &ptls->gc_mark_sp, obj);
@@ -2303,8 +2310,14 @@ mark: {
             jl_task_t *ta = (jl_task_t*)new_obj;
             gc_scrub_record_task(ta);
             void *stkbuf = ta->stkbuf;
+#ifdef JULIA_ENABLE_PARTR
+            int16_t tid = ta->current_tid;
+#else
             int16_t tid = ta->tid;
-            jl_ptls_t ptls2 = jl_all_tls_states[tid];
+#endif
+            jl_ptls_t ptls2 = NULL;
+            if (tid != -1)
+                ptls2 = jl_all_tls_states[tid];
             if (gc_cblist_task_scanner) {
                 export_gc_state(ptls, &sp);
                 gc_invoke_callbacks(jl_gc_cb_task_scanner_t,
@@ -2320,7 +2333,7 @@ mark: {
             uintptr_t offset = 0;
             uintptr_t lb = 0;
             uintptr_t ub = (uintptr_t)-1;
-            if (ta == ptls2->current_task) {
+            if (ptls2  &&  ta == ptls2->current_task) {
                 s = ptls2->pgcstack;
             }
             else if (stkbuf) {
@@ -2444,11 +2457,20 @@ static void jl_gc_queue_thread_local(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp
     gc_mark_queue_obj(gc_cache, sp, ptls2->exception_in_transit);
 }
 
+#ifdef JULIA_ENABLE_PARTR
+void jl_gc_mark_enqueued_tasks(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp);
+#endif
+
 // mark the initial root set
 static void mark_roots(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp)
 {
     // modules
     gc_mark_queue_obj(gc_cache, sp, jl_main_module);
+
+#ifdef JULIA_ENABLE_PARTR
+    // tasks
+    jl_gc_mark_enqueued_tasks(gc_cache, sp);
+#endif
 
     // invisible builtin values
     if (jl_an_empty_vec_any != NULL)

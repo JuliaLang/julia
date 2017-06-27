@@ -129,6 +129,12 @@
 #define MACHINE_EXCLUSIVE_NAME          "JULIA_EXCLUSIVE"
 #define DEFAULT_MACHINE_EXCLUSIVE       0
 
+// threading infrastructure selection
+#ifndef JULIA_ENABLE_PARTR
+#define JULIA_ENABLE_FORKJOIN_TI        1
+
+#endif // !JULIA_ENABLE_PARTR
+
 
 // sanitizer defaults ---------------------------------------------------------
 

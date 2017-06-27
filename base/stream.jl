@@ -278,7 +278,7 @@ function wait_readbyte(x::LibuvStream, c::UInt8)
             wait(x.readnotify)
         end
     finally
-        if isempty(x.readnotify.waitq)
+        if isempty(x.readnotify)
             stop_reading(x) # stop reading iff there are currently no other read clients of the stream
         end
         unpreserve_handle(x)
@@ -301,7 +301,7 @@ function wait_readnb(x::LibuvStream, nb::Int)
             wait(x.readnotify)
         end
     finally
-        if isempty(x.readnotify.waitq)
+        if isempty(x.readnotify)
             stop_reading(x) # stop reading iff there are currently no other read clients of the stream
         end
         if oldthrottle <= x.throttle <= nb
@@ -707,7 +707,7 @@ function readbytes!(s::LibuvStream, a::Vector{UInt8}, nb::Int)
             return bytesavailable(newbuf)
         finally
             s.buffer = sbuf
-            if !isempty(s.readnotify.waitq)
+            if !isempty(s.readnotify)
                 start_reading(s) # resume reading iff there are currently other read clients of the stream
             end
         end
@@ -743,7 +743,7 @@ function unsafe_read(s::LibuvStream, p::Ptr{UInt8}, nb::UInt)
             nb == bytesavailable(newbuf) || throw(EOFError())
         finally
             s.buffer = sbuf
-            if !isempty(s.readnotify.waitq)
+            if !isempty(s.readnotify)
                 start_reading(s) # resume reading iff there are currently other read clients of the stream
             end
         end
@@ -883,9 +883,9 @@ function uv_writecb_task(req::Ptr{Cvoid}, status::Cint)
         t = unsafe_pointer_to_objref(d)::Task
         if status < 0
             err = _UVError("write", status)
-            schedule(t, err, error=true)
+            unyielding_schedule(t, err, error=true)
         else
-            schedule(t)
+            unyielding_schedule(t)
         end
     else
         # no owner for this req, safe to just free it

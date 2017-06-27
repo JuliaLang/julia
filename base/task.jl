@@ -177,6 +177,15 @@ function task_local_storage(body::Function, key, val)
     end
 end
 
+if JULIA_PARTR
+
+function wait(t::Task)
+    fetch(t)
+    return nothing
+end
+
+else # !JULIA_PARTR
+
 # NOTE: you can only wait for scheduled tasks
 function wait(t::Task)
     if !istaskdone(t)
@@ -192,17 +201,12 @@ function wait(t::Task)
     end
 end
 
-"""
-    fetch(t::Task)
-
-Wait for a Task to finish, then return its result value. If the task fails with an
-exception, the exception is propagated (re-thrown in the task that called fetch).
-"""
 function fetch(t::Task)
     wait(t)
     task_result(t)
 end
 
+end # !JULIA_PARTR
 
 ## lexically-scoped waiting for multiple items
 
@@ -248,8 +252,6 @@ macro sync(block)
     end
 end
 
-# schedule an expression to run asynchronously
-
 """
     @async
 
@@ -273,6 +275,39 @@ function register_taskdone_hook(t::Task, hook)
     push!(get!(tls, :TASKDONE_HOOKS, []), hook)
     t
 end
+
+if JULIA_PARTR
+
+# runtime system hook called when a task finishes
+function task_done_hook(t::Task)
+    # `finish_task` sets `sigatomic` before entering this function
+    err = istaskfailed(t)
+    result = task_result(t)
+    handled = false
+    if err
+        t.backtrace = catch_backtrace()
+    end
+
+    # Execute any other hooks registered in the TLS
+    if isa(t.storage, IdDict) && haskey(t.storage, :TASKDONE_HOOKS)
+        foreach(hook -> hook(t), t.storage[:TASKDONE_HOOKS])
+        delete!(t.storage, :TASKDONE_HOOKS)
+        handled = true
+    end
+
+    if err && !handled
+        if isa(result,InterruptException) && isdefined(Base,:active_repl_backend) &&
+            active_repl_backend.backend_task.state == :runnable &&
+            #isempty(Workqueue) &&  # TODO
+            active_repl_backend.in_eval
+            throwto(active_repl_backend.backend_task, result) # this terminates the task
+        end
+    end
+    # Clear sigatomic before waiting
+    sigatomic_end()
+end
+
+else # !JULIA_PARTR
 
 # runtime system hook called when a task finishes
 function task_done_hook(t::Task)
@@ -320,6 +355,8 @@ function task_done_hook(t::Task)
         end
     end
 end
+
+end # !JULIA_PARTR
 
 """
     timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
