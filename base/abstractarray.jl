@@ -876,7 +876,7 @@ end
 """
     getindex(A, inds...)
 
-Returns a subset of array `A` as specified by `inds`, where each `ind` may be an
+Return a subset of array `A` as specified by `inds`, where each `ind` may be an
 `Int`, a `Range`, or a `Vector`. See the manual section on
 [array indexing](@ref man-array-indexing) for details.
 
