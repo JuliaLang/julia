@@ -336,9 +336,6 @@ sincos_fast(v::Real) = sincos_fast(float(v)::AbstractFloat)
 sincos_fast(v) = (sin_fast(v), cos_fast(v))
 
 @fastmath begin
-    exp10_fast(x::T) where {T<:FloatTypes} = exp2(log2(T(10))*x)
-    exp10_fast(x::Integer) = exp10(float(x))
-
     hypot_fast(x::T, y::T) where {T<:FloatTypes} = sqrt(x*x + y*y)
 
     # Note: we use the same comparison for min, max, and minmax, so
