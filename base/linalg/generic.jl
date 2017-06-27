@@ -702,6 +702,21 @@ values of `M` have magnitude greater than `tol`.
 By default, the value of `tol` is the largest
 dimension of `M` multiplied by the [`eps`](@ref)
 of the [`eltype`](@ref) of `M`.
+
+# Example
+```jldoctest
+julia> rank(eye(3))
+3
+
+julia> rank(diagm([1, 0, 2]))
+2
+
+julia> rank(diagm([1, 0.001, 2]), 0.1)
+2
+
+julia> rank(diagm([1, 0.001, 2]), 0.00001)
+3
+```
 """
 rank(A::AbstractMatrix, tol::Real) = mapreduce(x -> x > tol, +, 0, svdvals(A))
 function rank(A::AbstractMatrix)
@@ -854,7 +869,7 @@ issymmetric(A::AbstractMatrix{<:Real}) = ishermitian(A)
 
 Test whether a matrix is symmetric.
 
-# Example
+# Examples
 
 ```jldoctest
 julia> a = [1 2; 2 -1]
@@ -894,7 +909,7 @@ issymmetric(x::Number) = x == x
 
 Test whether a matrix is Hermitian.
 
-# Example
+# Examples
 
 ```jldoctest
 julia> a = [1 2; 2 -1]
@@ -934,7 +949,7 @@ ishermitian(x::Number) = (x == conj(x))
 
 Test whether a matrix is upper triangular.
 
-# Example
+# Examples
 
 ```jldoctest
 julia> a = [1 2; 2 -1]
@@ -969,7 +984,7 @@ end
 
 Test whether a matrix is lower triangular.
 
-# Example
+# Examples
 
 ```jldoctest
 julia> a = [1 2; 2 -1]
@@ -1004,7 +1019,7 @@ end
 
 Test whether a matrix is diagonal.
 
-# Example
+# Examples
 
 ```jldoctest
 julia> a = [1 2; 2 -1]
@@ -1226,7 +1241,7 @@ logabsdet(A::AbstractMatrix) = logabsdet(lufact(A))
 Log of matrix determinant. Equivalent to `log(det(M))`, but may provide
 increased accuracy and/or speed.
 
-# Example
+# Examples
 
 ```jldoctest
 julia> M = [1 0; 2 2]
@@ -1324,7 +1339,7 @@ Normalize the vector `v` so that its `p`-norm equals unity,
 i.e. `norm(v, p) == vecnorm(v, p) == 1`.
 See also [`normalize!`](@ref) and [`vecnorm`](@ref).
 
-# Example
+# Examples
 
 ```jldoctest
 julia> a = [1,2,4];

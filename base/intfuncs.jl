@@ -7,6 +7,7 @@
 
 Greatest common (positive) divisor (or zero if `x` and `y` are both zero).
 
+# Examples
 ```jldoctest
 julia> gcd(6,9)
 3
@@ -51,6 +52,8 @@ end
     lcm(x,y)
 
 Least common (non-negative) multiple.
+
+# Examples
 ```jldoctest
 julia> lcm(2,3)
 6
@@ -86,12 +89,11 @@ Computes the greatest common (positive) divisor of `x` and `y` and their Bézout
 coefficients, i.e. the integer coefficients `u` and `v` that satisfy
 ``ux+vy = d = gcd(x,y)``. ``gcdx(x,y)`` returns ``(d,u,v)``.
 
+# Examples
 ```jldoctest
 julia> gcdx(12, 42)
 (6, -3, 1)
-```
 
-```jldoctest
 julia> gcdx(240, 46)
 (2, -9, 47)
 ```
@@ -131,6 +133,7 @@ Take the inverse of `x` modulo `m`: `y` such that ``x y = 1 \\pmod m``,
 with ``div(x,y) = 0``. This is undefined for ``m = 0``, or if
 ``gcd(x,m) \\neq 1``.
 
+# Examples
 ```jldoctest
 julia> invmod(2,5)
 3
@@ -225,12 +228,22 @@ const HWNumber = Union{HWReal, Complex{<:HWReal}, Rational{<:HWReal}}
 
 Compute ``x^p \\pmod m``.
 
+# Examples
 ```jldoctest
 julia> powermod(2, 6, 5)
 4
 
 julia> mod(2^6, 5)
 4
+
+julia> powermod(5, 2, 20)
+5
+
+julia> powermod(5, 2, 19)
+6
+
+julia> powermod(5, 3, 19)
+11
 ```
 """
 function powermod(x::Integer, p::Integer, m::T) where T<:Integer
@@ -265,6 +278,7 @@ powermod(x::Integer, p::Integer, m::Union{Int128,UInt128}) = oftype(m, powermod(
 The smallest power of two not less than `n`. Returns 0 for `n==0`, and returns
 `-nextpow2(-n)` for negative arguments.
 
+# Examples
 ```jldoctest
 julia> nextpow2(16)
 16
@@ -282,9 +296,13 @@ nextpow2(x::Integer) = reinterpret(typeof(x),x < 0 ? -nextpow2(unsigned(-x)) : n
 The largest power of two not greater than `n`. Returns 0 for `n==0`, and returns
 `-prevpow2(-n)` for negative arguments.
 
+# Examples
 ```jldoctest
 julia> prevpow2(5)
 4
+
+julia> prevpow2(0)
+0
 ```
 """
 prevpow2(x::Unsigned) = one(x) << unsigned((sizeof(x)<<3)-leading_zeros(x)-1)
@@ -295,6 +313,7 @@ prevpow2(x::Integer) = reinterpret(typeof(x),x < 0 ? -prevpow2(unsigned(-x)) : p
 
 Test whether `n` is a power of two.
 
+# Examples
 ```jldoctest
 julia> ispow2(4)
 true
@@ -311,11 +330,18 @@ ispow2(x::Integer) = x > 0 && count_ones(x) == 1
 The smallest `a^n` not less than `x`, where `n` is a non-negative integer. `a` must be
 greater than 1, and `x` must be greater than 0.
 
+# Examples
 ```jldoctest
 julia> nextpow(2, 7)
 8
 
 julia> nextpow(2, 9)
+16
+
+julia> nextpow(5, 20)
+25
+
+julia> nextpow(4, 16)
 16
 ```
 
@@ -336,14 +362,20 @@ end
 The largest `a^n` not greater than `x`, where `n` is a non-negative integer.
 `a` must be greater than 1, and `x` must not be less than 1.
 
+# Examples
 ```jldoctest
 julia> prevpow(2, 7)
 4
 
 julia> prevpow(2, 9)
 8
-```
 
+julia> prevpow(5, 20)
+5
+
+julia> prevpow(4, 16)
+16
+```
 See also [`nextpow`](@ref).
 """
 function prevpow(a::Real, x::Real)
@@ -440,12 +472,22 @@ integer `n` written in base `b` (i.e. equal to `ndigits(n, b)`
 in this case).
 The base `b` must not be in `[-1, 0, 1]`.
 
+# Examples
 ```jldoctest
 julia> Base.ndigits0z(0, 16)
 0
 
 julia> Base.ndigits(0, 16)
 1
+
+julia> Base.ndigits0z(0)
+0
+
+julia> Base.ndigits0z(10, 2)
+4
+
+julia> Base.ndigits0z(10)
+2
 ```
 
 See also [`ndigits`](@ref).
@@ -466,6 +508,7 @@ end
 Compute the number of digits in integer `n` written in base `b`.
 The base `b` must not be in `[-1, 0, 1]`.
 
+# Examples
 ```jldoctest
 julia> ndigits(12345)
 5
@@ -604,21 +647,49 @@ bin
 """
     hex(n, pad::Int=1)
 
-Convert an integer to a hexadecimal string, optionally specifying a number of digits to pad to.
+Convert an integer to a hexadecimal string, optionally specifying a number of
+digits to pad to.
+
+```jldoctest
+julia> hex(20)
+"14"
+
+julia> hex(20, 3)
+"014"
+```
 """
 hex
 
 """
     oct(n, pad::Int=1)
 
-Convert an integer to an octal string, optionally specifying a number of digits to pad to.
+Convert an integer to an octal string, optionally specifying a number of digits
+to pad to.
+
+```jldoctest
+julia> oct(20)
+"24"
+
+julia> oct(20, 3)
+"024"
+```
 """
 oct
 
 """
     dec(n, pad::Int=1)
 
-Convert an integer to a decimal string, optionally specifying a number of digits to pad to.
+Convert an integer to a decimal string, optionally specifying a number of digits
+to pad to.
+
+# Examples
+```jldoctest
+julia> dec(20)
+"20"
+
+julia> dec(20, 3)
+"020"
+```
 """
 dec
 
@@ -634,6 +705,30 @@ bits(x::Union{Int128,UInt128})            = bin(reinterpret(UInt128,x),128)
 Returns an array with element type `T` (default `Int`) of the digits of `n` in the given
 base, optionally padded with zeros to a specified size. More significant digits are at
 higher indexes, such that `n == sum([digits[k]*base^(k-1) for k=1:length(digits)])`.
+
+# Examples
+```jldoctest
+julia> digits(10, 10)
+2-element Array{Int64,1}:
+ 0
+ 1
+
+julia> digits(10, 2)
+4-element Array{Int64,1}:
+ 0
+ 1
+ 0
+ 1
+
+julia> digits(10, 2, 6)
+6-element Array{Int64,1}:
+ 0
+ 1
+ 0
+ 1
+ 0
+ 0
+```
 """
 digits(n::Integer, base::T=10, pad::Integer=1) where {T<:Integer} = digits(T, n, base, pad)
 
@@ -647,6 +742,25 @@ end
 Fills an array of the digits of `n` in the given base. More significant digits are at higher
 indexes. If the array length is insufficient, the least significant digits are filled up to
 the array length. If the array length is excessive, the excess portion is filled with zeros.
+
+# Examples
+```jldoctest
+julia> digits!([2,2,2,2], 10, 2)
+4-element Array{Int64,1}:
+ 0
+ 1
+ 0
+ 1
+
+julia> digits!([2,2,2,2,2,2], 10, 2)
+6-element Array{Int64,1}:
+ 0
+ 1
+ 0
+ 1
+ 0
+ 0
+```
 """
 function digits!(a::AbstractVector{T}, n::Integer, base::Integer=10) where T<:Integer
     base < 0 && isa(n, Unsigned) && return digits!(a, convert(Signed, n), base)
@@ -696,10 +810,11 @@ function factorial(n::Integer)
 end
 
 """
-    binomial(n,k)
+    binomial(n, k)
 
 Number of ways to choose `k` out of `n` items.
 
+# Example
 ```jldoctest
 julia> binomial(5, 3)
 10
