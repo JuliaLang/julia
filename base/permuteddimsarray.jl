@@ -89,6 +89,7 @@ equivalent to `permutedims(A, [2,1])`.
 
 See also: [`PermutedDimsArray`](@ref).
 
+# Example
 ```jldoctest
 julia> A = reshape(collect(1:8), (2,2,2))
 2×2×2 Array{Int64,3}:
@@ -125,7 +126,7 @@ have `size(dest) == size(src)[perm]` and is completely overwritten. No in-place 
 is supported and unexpected results will happen if `src` and `dest` have overlapping memory
 regions.
 
-See also [`permutedims`](@ref)
+See also [`permutedims`](@ref).
 """
 function Base.permutedims!(dest, src::AbstractArray, perm)
     Base.checkdims_perm(dest, src, perm)

@@ -397,7 +397,7 @@ julia> Int8(127)
 julia> Int8(128)
 ERROR: InexactError()
 Stacktrace:
- [1] Int8(::Int64) at ./sysimg.jl:24
+ [1] Int8(::Int64) at ./sysimg.jl:102
 
 julia> Int8(127.0)
 127
@@ -411,8 +411,8 @@ Stacktrace:
 julia> Int8(128.0)
 ERROR: InexactError()
 Stacktrace:
- [1] convert(::Type{Int8}, ::Float64) at ./float.jl:658
- [2] Int8(::Float64) at ./sysimg.jl:24
+ [1] convert(::Type{Int8}, ::Float64) at ./float.jl:659
+ [2] Int8(::Float64) at ./sysimg.jl:102
 
 julia> 127 % Int8
 127

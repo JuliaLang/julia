@@ -27,6 +27,37 @@ module IteratorsMD
 
     A `CartesianIndex` is sometimes produced by [`eachindex`](@ref), and
     always when iterating with an explicit [`CartesianRange`](@ref).
+
+    # Example
+
+    ```jldoctest
+    julia> A = reshape(collect(1:16), (2, 2, 2, 2))
+    2×2×2×2 Array{Int64,4}:
+    [:, :, 1, 1] =
+     1  3
+     2  4
+
+    [:, :, 2, 1] =
+     5  7
+     6  8
+
+    [:, :, 1, 2] =
+      9  11
+     10  12
+
+    [:, :, 2, 2] =
+     13  15
+     14  16
+
+    julia> A[CartesianIndex((1, 1, 1, 1))]
+    1
+
+    julia> A[CartesianIndex((1, 1, 1, 2))]
+    9
+
+    julia> A[CartesianIndex((1, 1, 2, 1))]
+    5
+    ```
     """
     struct CartesianIndex{N} <: AbstractCartesianIndex{N}
         I::NTuple{N,Int}
@@ -111,6 +142,18 @@ module IteratorsMD
 
     Consequently these can be useful for writing algorithms that
     work in arbitrary dimensions.
+
+    ```jldoctest
+    julia> foreach(println, CartesianRange((2, 2, 2)))
+    CartesianIndex{3}((1, 1, 1))
+    CartesianIndex{3}((2, 1, 1))
+    CartesianIndex{3}((1, 2, 1))
+    CartesianIndex{3}((2, 2, 1))
+    CartesianIndex{3}((1, 1, 2))
+    CartesianIndex{3}((2, 1, 2))
+    CartesianIndex{3}((1, 2, 2))
+    CartesianIndex{3}((2, 2, 2))
+    ```
     """
     struct CartesianRange{I<:CartesianIndex}
         start::I
@@ -850,7 +893,7 @@ Circularly shift the data in `src`, storing the result in
 The `dest` array must be distinct from the `src` array (they cannot
 alias each other).
 
-See also `circshift`.
+See also [`circshift`](@ref).
 """
 @noinline function circshift!(dest::AbstractArray{T,N}, src, shiftamt::DimsInteger) where {T,N}
     dest === src && throw(ArgumentError("dest and src must be separate arrays"))
@@ -903,6 +946,7 @@ their indices; any offset results in a (circular) wraparound. If the
 arrays have overlapping indices, then on the domain of the overlap
 `dest` agrees with `src`.
 
+# Example
 ```julia-repl
 julia> src = reshape(collect(1:16), (4,4))
 4×4 Array{Int64,2}:

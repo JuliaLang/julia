@@ -235,8 +235,8 @@ ERROR: DomainError:
 Cannot raise an integer x to a negative power -n.
 Make x a float by adding a zero decimal (e.g. 2.0^-n instead of 2^-n), or write 1/x^n, float(x)^-n, or (x//1)^-n.
 Stacktrace:
- [1] power_by_squaring(::Int64, ::Int64) at ./intfuncs.jl:170
- [2] literal_pow(::Base.#^, ::Int64, ::Type{Val{-5}}) at ./intfuncs.jl:205
+ [1] power_by_squaring(::Int64, ::Int64) at ./intfuncs.jl:173
+ [2] literal_pow(::Base.#^, ::Int64, ::Type{Val{-5}}) at ./intfuncs.jl:208
 ```
 
 This behavior is an inconvenient consequence of the requirement for type-stability.  In the case

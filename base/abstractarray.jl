@@ -801,7 +801,7 @@ A[iter] = 0
 
 If you supply more than one `AbstractArray` argument, `eachindex` will create an
 iterable object that is fast for all arguments (a `UnitRange`
-if all inputs have fast linear indexing, a `CartesianRange`
+if all inputs have fast linear indexing, a [`CartesianRange`](@ref)
 otherwise).
 If the arrays have different sizes and/or dimensionalities, `eachindex` returns an
 iterable that spans the largest range along each dimension.
@@ -1718,6 +1718,7 @@ For multiple iterable arguments, `f` is called elementwise.
 `foreach` should be used instead of `map` when the results of `f` are not
 needed, for example in `foreach(println, array)`.
 
+# Example
 ```jldoctest
 julia> a = 1:3:7;
 
@@ -1745,6 +1746,7 @@ colons go in this expression. The results are concatenated along the remaining d
 For example, if `dims` is `[1,2]` and `A` is 4-dimensional, `f` is called on `A[:,:,i,j]`
 for all `i` and `j`.
 
+# Examples
 ```jldoctest
 julia> a = reshape(collect(1:16),(2,2,2,2))
 2×2×2×2 Array{Int64,4}:
@@ -1871,6 +1873,7 @@ map(f, A::Union{AbstractArray,AbstractSet,Associative}) = collect_similar(A, Gen
 Transform collection `c` by applying `f` to each element. For multiple collection arguments,
 apply `f` elementwise.
 
+# Examples
 ```jldoctest
 julia> map(x -> x * 2, [1, 2, 3])
 3-element Array{Int64,1}:
@@ -1913,6 +1916,7 @@ end
 Like [`map`](@ref), but stores the result in `destination` rather than a new
 collection. `destination` must be at least as large as the first collection.
 
+# Example
 ```jldoctest
 julia> x = zeros(3);
 
