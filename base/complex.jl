@@ -20,7 +20,7 @@ Complex(x::Real) = Complex(x, zero(x))
 
 The imaginary unit.
 
-# Example
+# Examples
 ```jldoctest
 julia> im * im
 -1 + 0im
@@ -55,7 +55,7 @@ float(::Type{Complex{T}}) where {T} = Complex{float(T)}
 
 Return the real part of the complex number `z`.
 
-# Example
+# Examples
 ```jldoctest
 julia> real(1 + 3im)
 1
@@ -68,7 +68,7 @@ real(z::Complex) = z.re
 
 Return the imaginary part of the complex number `z`.
 
-# Example
+# Examples
 ```jldoctest
 julia> imag(1 + 3im)
 3
@@ -83,7 +83,7 @@ imag(x::Real) = zero(x)
 
 Return both the real and imaginary parts of the complex number `z`.
 
-# Example
+# Examples
 ```jldoctest
 julia> reim(1 + 3im)
 (1, 3)
@@ -220,7 +220,7 @@ end
 
 Compute the complex conjugate of a complex number `z`.
 
-# Example
+# Examples
 ```jldoctest
 julia> conj(1 + 3im)
 1 - 3im
@@ -454,7 +454,7 @@ end
 
 Return ``\\exp(iz)``.
 
-# Example
+# Examples
 ```jldoctest
 julia> cis(π) ≈ -1
 true

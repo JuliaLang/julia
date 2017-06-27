@@ -889,6 +889,7 @@ The default value for a type for use with the `@kwdef` macro. Returns:
  - zero for integer types
  - no-argument constructor calls (e.g. `T()`) for all other types
 
+# Examples
 ```jldoctest
 julia> struct Foo
            i::Int

@@ -7,7 +7,7 @@
 
 Get the name of a `Module` as a `Symbol`.
 
-# Example
+# Examples
 ```jldoctest
 julia> module_name(Base.LinAlg)
 :LinAlg
@@ -155,7 +155,7 @@ fieldnames(t::Type{<:Tuple}) = Int[n for n in 1:nfields(t)]
 
 Get the name of a (potentially UnionAll-wrapped) `DataType` (without its parent module) as a symbol.
 
-# Example
+# Examples
 ```jldoctest
 julia> module Foo
            struct S{T}
@@ -175,7 +175,7 @@ datatype_name(t::UnionAll) = datatype_name(unwrap_unionall(t))
 
 Determine the module containing the definition of a `DataType`.
 
-# Example
+# Examples
 ```jldoctest
 julia> module Foo
            struct Int end
@@ -204,7 +204,7 @@ isconst(m::Module, s::Symbol) =
 
 Tests whether variable `s` is defined in the current scope.
 
-# Example
+# Examples
 ```jldoctest
 julia> function f()
            println(@isdefined x)

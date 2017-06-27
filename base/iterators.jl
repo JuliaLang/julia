@@ -268,7 +268,7 @@ made when reiterating.
 
 See [`Base.filter`](@ref) for an eager implementation of filtering for arrays.
 
-# Example
+# Examples
 ```jldoctest
 julia> f = Iterators.filter(isodd, [1, 2, 3, 4, 5])
 Base.Iterators.Filter{Base.#isodd,Array{Int64,1}}(isodd, [1, 2, 3, 4, 5])
@@ -325,6 +325,7 @@ end
 
 An iterator that yields the same elements as `iter`, but starting at the given `state`.
 
+# Examples
 ```jldoctest
 julia> collect(Iterators.rest([1,2,3,4], 2))
 3-element Array{Any,1}:
@@ -358,7 +359,7 @@ end
 
 An iterator that counts forever, starting at `start` and incrementing by `step`.
 
-# Example
+# Examples
 ```jldoctest
 julia> for v in Iterators.countfrom(5, 2)
            v > 10 && break
@@ -509,7 +510,7 @@ end
 
 An iterator that cycles through `iter` forever.
 
-# Example
+# Examples
 ```jldoctest
 julia> for (i, v) in enumerate(Iterators.cycle("hello"))
            print(v)
