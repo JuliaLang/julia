@@ -1204,7 +1204,6 @@ Optionally, an `IOStream`
 may be passed as the first argument to redirect output.
 
 # Examples
-
 ```jldoctest
 julia> @printf("%f %F %f %F\\n", Inf, Inf, NaN, NaN)
 Inf Inf NaN NaN\n
@@ -1230,7 +1229,6 @@ end
 Return `@printf` formatted output as string.
 
 # Examples
-
 ```jldoctest
 julia> s = @sprintf "this is a %s %15.1f" "test" 34.567;
 

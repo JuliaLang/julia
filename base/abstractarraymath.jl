@@ -16,7 +16,7 @@ Reshape the array `a` as a one-dimensional column vector. The resulting array
 shares the same underlying data as `a`, so modifying one will also modify the
 other.
 
-# Example
+# Examples
 ```jldoctest
 julia> a = [1 2 3; 4 5 6]
 2×3 Array{Int64,2}:
@@ -49,7 +49,7 @@ Remove the dimensions specified by `dims` from array `A`.
 Elements of `dims` must be unique and within the range `1:ndims(A)`.
 `size(A,i)` must equal 1 for all `i` in `dims`.
 
-# Example
+# Examples
 ```jldoctest
 julia> a = reshape(collect(1:4),(2,2,1,1))
 2×2×1×1 Array{Int64,4}:
@@ -103,7 +103,7 @@ imag(x::AbstractArray{<:Real}) = zero(x)
 Return all the data of `A` where the index for dimension `d` equals `i`. Equivalent to
 `A[:,:,...,i,:,:,...]` where `i` is in position `d`.
 
-# Example
+# Examples
 ```jldoctest
 julia> A = [1 2 3 4; 5 6 7 8]
 2×4 Array{Int64,2}:
@@ -128,7 +128,7 @@ end
 
 Reverse `A` in dimension `d`.
 
-# Example
+# Examples
 ```jldoctest
 julia> b = [1 2; 3 4]
 2×2 Array{Int64,2}:
@@ -181,7 +181,7 @@ circshift(a::AbstractArray, shiftamt::DimsInteger) = circshift!(similar(a), a, s
 Circularly shift the data in an array. The second argument is a vector giving the amount to
 shift in each dimension.
 
-# Example
+# Examples
 ```jldoctest
 julia> b = reshape(collect(1:16), (4,4))
 4×4 Array{Int64,2}:

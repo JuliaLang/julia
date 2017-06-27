@@ -103,7 +103,7 @@ To return a new permutation, use `v[p]`. Note that this is generally faster than
 
 See also [`ipermute!`](@ref).
 
-# Example
+# Examples
 ```jldoctest
 julia> A = [1, 1, 3, 4];
 
@@ -149,7 +149,7 @@ end
 
 Like [`permute!`](@ref), but the inverse of the given permutation is applied.
 
-# Example
+# Examples
 ```jldoctest
 julia> A = [1, 1, 3, 4];
 
@@ -173,7 +173,7 @@ ipermute!(a, p::AbstractVector) = ipermute!!(a, copymutable(p))
 Return the inverse permutation of `v`.
 If `B = A[v]`, then `A == B[invperm(v)]`.
 
-# Example
+# Examples
 ```jldoctest
 julia> v = [2; 4; 3; 1];
 
@@ -225,7 +225,7 @@ invperm(a::Tuple) = (invperm([a...])...,)
 Next integer greater than or equal to `n` that can be written as ``\\prod k_i^{p_i}`` for integers
 ``p_1``, ``p_2``, etc.
 
-# Example
+# Examples
 ```jldoctest
 julia> nextprod([2, 3], 105)
 108

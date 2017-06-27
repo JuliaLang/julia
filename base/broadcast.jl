@@ -367,6 +367,7 @@ A special syntax exists for broadcasting: `f.(args...)` is equivalent to
 `broadcast(f, args...)`, and nested `f.(g.(args...))` calls are fused into a
 single broadcast loop.
 
+# Examples
 ```jldoctest
 julia> A = [1, 2, 3, 4, 5]
 5-element Array{Int64,1}:
@@ -439,6 +440,7 @@ Broadcasts the `inds` arrays to a common size like [`broadcast`](@ref)
 and returns an array of the results `A[ks...]`,
 where `ks` goes over the positions in the broadcast result `A`.
 
+# Examples
 ```jldoctest
 julia> A = [1, 2, 3, 4, 5]
 5-element Array{Int64,1}:
@@ -592,6 +594,7 @@ If you want to *avoid* adding dots for selected function calls in
 
 (`@.` is equivalent to a call to `@__dot__`.)
 
+# Examples
 ```jldoctest
 julia> x = 1.0:3.0; y = similar(x);
 

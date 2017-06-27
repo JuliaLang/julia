@@ -19,6 +19,7 @@ typemax(::Type{Bool}) = true
 
 Boolean not.
 
+# Examples
 ```jldoctest
 julia> !true
 false
@@ -50,6 +51,7 @@ Bitwise exclusive or of `x` and `y`.  The infix operation
 `⊻` can be typed by tab-completing `\\xor`
 or `\\veebar` in the Julia REPL.
 
+# Examples
 ```jldoctest
 julia> [true; true; false] .⊻ [true; false; false]
 3-element BitArray{1}:

@@ -490,7 +490,6 @@ other operators. Higher-numbered operators take precedence over lower-numbered
 operators. Return `0` if `s` is not a valid operator.
 
 # Examples
-
 ```jldoctest
 julia> Base.operator_precedence(:+), Base.operator_precedence(:*), Base.operator_precedence(:.)
 (9,11,15)

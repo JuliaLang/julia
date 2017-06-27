@@ -50,8 +50,7 @@ The following keyword arguments are supported:
 iterations `niter` and the number of matrix vector multiplications `nmult`, as well as the
 final residual vector `resid`.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> A = spdiagm(1:4);
 
@@ -144,8 +143,7 @@ The following keyword arguments are supported:
 iterations `niter` and the number of matrix vector multiplications `nmult`, as well as the
 final residual vector `resid`.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> A = speye(4, 4); B = spdiagm(1:4);
 
@@ -379,8 +377,7 @@ iterations derived from [`eigs`](@ref).
 * `nmult`: Number of matrix--vector products used.
 * `resid`: Final residual vector.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> A = spdiagm(1:4);
 
