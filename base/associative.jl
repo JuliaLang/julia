@@ -295,6 +295,26 @@ function emptymergedict(d::Associative, others::Associative...)
     Dict{K,V}()
 end
 
+"""
+    filter!(function, d::Associative)
+
+Update `d`, removing elements for which `function` is `false`.
+Fhe function is passed two arguments (key and value).
+
+# Example
+```jldoctest
+julia> d = Dict(1=>"a", 2=>"b", 3=>"c")
+Dict{Int64,String} with 3 entries:
+  2 => "b"
+  3 => "c"
+  1 => "a"
+
+julia> filter!((x,y)->isodd(x), d)
+Dict{Int64,String} with 2 entries:
+  3 => "c"
+  1 => "a"
+```
+"""
 function filter!(f, d::Associative)
     badkeys = Vector{keytype(d)}(0)
     for (k,v) in d

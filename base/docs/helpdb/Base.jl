@@ -311,25 +311,6 @@ This would create a 25-by-30000 `BitArray`, linked to the file associated with s
 Mmap.mmap(io, ::BitArray, dims = ?, offset = ?)
 
 """
-    filter!(function, collection)
-
-Update `collection`, removing elements for which `function` is `false`.
-For associative collections, the function is passed two arguments (key and value).
-
-# Example
-```jldoctest
-julia> filter!(isodd, collect(1:10))
-5-element Array{Int64,1}:
- 1
- 3
- 5
- 7
- 9
-```
-"""
-filter!
-
-"""
     sizeof(T)
 
 Size, in bytes, of the canonical binary representation of the given DataType `T`, if any.
@@ -424,7 +405,6 @@ Returns the file descriptor backing the stream or file. Note that this function 
 to synchronous `File`'s and `IOStream`'s not to any of the asynchronous streams.
 """
 fd
-
 
 """
     ones([A::AbstractArray,] [T=eltype(A)::Type,] [dims=size(A)::Tuple])
@@ -788,13 +768,6 @@ append!
 Seek a stream relative to the current position.
 """
 skip
-
-"""
-    setdiff!(s, iterable)
-
-Remove each element of `iterable` from set `s` in-place.
-"""
-setdiff!
 
 """
     copysign(x, y) -> z
@@ -2517,13 +2490,6 @@ skipchars
 The smallest in absolute value non-subnormal value representable by the given floating-point DataType `T`.
 """
 realmin
-
-"""
-    union!(s, iterable)
-
-Union each element of `iterable` into set `s` in-place.
-"""
-union!
 
 """
     deepcopy(x)

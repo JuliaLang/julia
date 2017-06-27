@@ -1958,6 +1958,23 @@ Dict{Int64,String} with 1 entry:
 """
 filter(f, As::AbstractArray) = As[map(f, As)::AbstractArray{Bool}]
 
+"""
+    filter!(function, a::AbstractVector)
+
+Update `collection`, removing elements for which `function` is `false`.
+The function is passed one argument.
+
+# Example
+```jldoctest
+julia> filter!(isodd, collect(1:10))
+5-element Array{Int64,1}:
+ 1
+ 3
+ 5
+ 7
+ 9
+```
+"""
 function filter!(f, a::AbstractVector)
     isempty(a) && return a
 

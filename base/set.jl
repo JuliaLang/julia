@@ -68,6 +68,22 @@ function union(s::Set, sets::Set...)
     return u
 end
 const ∪ = union
+
+"""
+    union!(s, iterable)
+
+Union each element of `iterable` into set `s` in-place.
+
+# Examples
+```jldoctest
+julia> a = Set([1, 3, 4, 5]);
+
+julia> union!(a, 1:2:8);
+
+julia> a
+Set([7, 4, 3, 5, 1])
+```
+"""
 union!(s::Set, xs) = (for x=xs; push!(s,x); end; s)
 union!(s::Set, xs::AbstractArray) = (sizehint!(s,length(xs));for x=xs; push!(s,x); end; s)
 join_eltype() = Bottom
@@ -99,6 +115,22 @@ function setdiff(a::Set, b::Set)
     end
     d
 end
+
+"""
+    setdiff!(s, iterable)
+
+Remove each element of `iterable` from set `s` in-place.
+
+# Examples
+```jldoctest
+julia> a = Set([1, 3, 4, 5]);
+
+julia> setdiff!(a, 1:2:6);
+
+julia> a
+Set([4])
+```
+"""
 setdiff!(s::Set, xs) = (for x=xs; delete!(s,x); end; s)
 
 ==(l::Set, r::Set) = (length(l) == length(r)) && (l <= r)
@@ -249,6 +281,7 @@ Remove duplicate items as determined by [`isequal`](@ref), then return the modif
 about the order of the returned data, then calling `(sort!(A); unique!(A))` will be much
 more efficient as long as the elements of `A` can be sorted.
 
+# Examples
 ```jldoctest
 julia> unique!([1, 1, 1])
 1-element Array{Int64,1}:
@@ -299,6 +332,7 @@ end
 
 Return `true` if all values from `itr` are distinct when compared with [`isequal`](@ref).
 
+# Examples
 ```jldoctest
 julia> a = [1; 2; 3]
 3-element Array{Int64,1}:
