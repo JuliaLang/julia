@@ -1,5 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
+"""
+    GitIndex(repo::GitRepo)
 
+Load the index file for the repository `repo`.
+"""
 function GitIndex(repo::GitRepo)
     idx_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_repository_index, :libgit2), Cint,
@@ -7,16 +11,39 @@ function GitIndex(repo::GitRepo)
     return GitIndex(repo, idx_ptr_ptr[])
 end
 
+"""
+    read!(idx::GitIndex, force::Bool = false) -> GitIndex
+
+Update the contents of `idx` by reading changes made on disk. For example, `idx`
+might be updated if a file has been added to the repository since it was created.
+If `force` is `true`, any changes in memory (any changes in `idx` since its last
+[`write!`](@ref), or since its creation if no writes have occurred) are discarded.
+If `force` is `false`, the index data is only updated from disk if the data on disk
+has changed since the last time it was loaded into `idx`.
+"""
 function read!(idx::GitIndex, force::Bool = false)
     @check ccall((:git_index_read, :libgit2), Cint, (Ptr{Void}, Cint), idx.ptr, Cint(force))
     return idx
 end
 
+"""
+    write!(idx::GitIndex) -> GitIndex
+
+Write the state of index `idx` to disk using a file lock.
+"""
 function write!(idx::GitIndex)
     @check ccall((:git_index_write, :libgit2), Cint, (Ptr{Void},), idx.ptr)
     return idx
 end
 
+"""
+    write_tree!(idx::GitIndex) -> GitHash
+
+Write the index `idx` as a [`GitTree`](@ref) on disk. Trees will be recursively
+created for each subtree in `idx`. The returned [`GitHash`](@ref) can be used to
+create a [`GitCommit`](@ref). `idx` must have a parent repository and this
+repository cannot be bare. `idx` must not contain any files with conflicts.
+"""
 function write_tree!(idx::GitIndex)
     oid_ptr = Ref(GitHash())
     @check ccall((:git_index_write_tree, :libgit2), Cint,
