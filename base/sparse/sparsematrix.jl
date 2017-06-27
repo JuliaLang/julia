@@ -180,6 +180,8 @@ function checkvalid(S::SparseMatrixCSC; full = true)
         err_str = "each element in S.rowval must be > 0 and ⩽ size(S,1)"
     elseif validity == SparseArrayValidity.ROWVAL_SORTED_COLUMN
         err_str = "S.rowval must be sorted for all column ranges"
+    else # Should not happen
+        err_str = "sparse array is invalid"
     end
     throw(ArgumentError(err_str))
 end
