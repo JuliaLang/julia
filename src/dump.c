@@ -2694,7 +2694,7 @@ void jl_init_serializer(void)
 
                      jl_emptysvec, jl_emptytuple, jl_false, jl_true, jl_nothing, jl_any_type,
                      call_sym, invoke_sym, goto_ifnot_sym, return_sym, body_sym, line_sym,
-                     lambda_sym, jl_symbol("tuple"), assign_sym, isdefined_sym,
+                     lambda_sym, jl_symbol("tuple"), assign_sym, isdefined_sym, boundscheck_sym,
 
                      // empirical list of very common symbols
                      #include "common_symbols1.inc"

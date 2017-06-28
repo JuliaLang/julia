@@ -27,16 +27,20 @@ function A1_inbounds()
     end
     return r
 end
+A1_wrap() = @inbounds return A1_inbounds()
 
 if bc_opt == bc_default
     @test A1() == 1
-    @test A1_inbounds() == 0
+    @test A1_inbounds() == 1
+    @test A1_wrap() == 0
 elseif bc_opt == bc_on
     @test A1() == 1
     @test A1_inbounds() == 1
+    @test A1_wrap() == 1
 else
     @test A1() == 0
     @test A1_inbounds() == 0
+    @test A1_wrap() == 0
 end
 
 # test for boundscheck block eliminated one layer deep, if the called method is inlined
@@ -124,25 +128,31 @@ end
 # elide a throw
 cb(x) = x > 0 || throw(BoundsError())
 
-function B1()
-    y = [1,2,3]
+@inline function B1()
+    y = [1, 2, 3]
     @inbounds begin
         @boundscheck cb(0)
     end
     return 0
 end
+B1_wrap() = @inbounds return B1()
 
-if bc_opt == bc_default || bc_opt == bc_off
+if bc_opt == bc_default
+    @test_throws BoundsError B1()
+    @test B1_wrap() == 0
+elseif bc_opt == bc_off
     @test B1() == 0
+    @test B1_wrap() == 0
 else
     @test_throws BoundsError B1()
+    @test_throws BoundsError B1_wrap()
 end
 
 # elide a simple branch
 cond(x) = x > 0 ? x : -x
 
 function B2()
-    y = [1,2,3]
+    y = [1, 2, 3]
     @inbounds begin
         @boundscheck cond(0)
     end

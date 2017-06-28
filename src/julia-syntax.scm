@@ -483,10 +483,10 @@
                  (block
                   ;; ii = i*2 - 1
                   (= ,ii (call (top -) (call (top *) ,i 2) 1))
-                  (= ,elt (call (core arrayref) ,kw ,ii))
+                  (= ,elt (call (core arrayref) true ,kw ,ii))
                   ,(foldl (lambda (kn else)
                             (let* ((k     (car kn))
-                                   (rval0 `(call (core arrayref) ,kw
+                                   (rval0 `(call (core arrayref) true ,kw
                                                  (call (top +) ,ii 1)))
                                    ;; note: if the "declared" type of a KW arg
                                    ;; includes something from keyword-sparams
@@ -526,7 +526,7 @@
                               `(foreigncall 'jl_array_ptr_1d_push (core Void) (call (core svec) Any Any)
                                             'ccall 2
                                             ,rkw (tuple ,elt
-                                                        (call (core arrayref) ,kw
+                                                        (call (core arrayref) true ,kw
                                                               (call (top +) ,ii 1)))))
                           (map (lambda (k temp)
                                  (cons (if (decl? k) `(,(car k) ,temp ,(caddr k)) temp)
@@ -3719,6 +3719,7 @@ f(x) = yt(x)
                           "In the future the variable will be local to the loop instead." #\newline))
                  (put! deprecated-loop-vars (cadr e) #t))
              '(null))
+            ((boundscheck) (if tail (emit-return e) e))
 
             ;; top level expressions returning values
             ((abstract_type primitive_type struct_type thunk toplevel module)
