@@ -578,7 +578,7 @@ Equivalent to `git rev-list --left-right --count <commit1> <commit2>`.
 ```julia
 repo = LibGit2.GitRepo(repo_path)
 repo_file = open(joinpath(repo_path, test_file), "a")
-println(repo_file, "hello world");
+println(repo_file, "hello world")
 flush(repo_file)
 LibGit2.add!(repo, test_file)
 commit_oid1 = LibGit2.commit(repo, "commit 1")
