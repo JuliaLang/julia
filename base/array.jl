@@ -1952,10 +1952,10 @@ filter(f, As::AbstractArray) = As[map(f, As)::AbstractArray{Bool}]
 """
     filter!(f, a::AbstractVector)
 
-Update `a`, removing elements for which `function` is `false`.
+Update `a`, removing elements for which `f` is `false`.
 The function `f` is passed one argument.
 
-# Example
+# Examples
 ```jldoctest
 julia> filter!(isodd, collect(1:10))
 5-element Array{Int64,1}:
