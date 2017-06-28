@@ -523,7 +523,7 @@ mktempdir() do dir
                     @test show_strs[3] == "Lines in hunk: 1"
                     @test show_strs[4] == "Final commit oid: $commit_oid1"
                     @test show_strs[6] == "Original commit oid: $commit_oid1"
-                    @test length(show_strs) == 8
+                    @test length(show_strs) == 7
                 finally
                     close(cmt)
                 end
