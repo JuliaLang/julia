@@ -508,7 +508,7 @@ end
 Return a list of immediate subtypes of DataType `T`. Note that all currently loaded subtypes
 are included, including those not visible in the current module.
 
-# Example
+# Examples
 ```jldoctest
 julia> subtypes(Integer)
 4-element Array{Union{DataType, UnionAll},1}:

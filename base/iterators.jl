@@ -273,10 +273,10 @@ See [`Base.filter`](@ref) for an eager implementation of filtering for arrays.
 julia> f = Iterators.filter(isodd, [1, 2, 3, 4, 5])
 Base.Iterators.Filter{Base.#isodd,Array{Int64,1}}(isodd, [1, 2, 3, 4, 5])
 
-julia> for v in f
-           print(v)
-       end
-135
+julia> foreach(println, f)
+1
+3
+5
 ```
 """
 filter(flt, itr) = Filter(flt, itr)
