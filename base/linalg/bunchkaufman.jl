@@ -137,6 +137,8 @@ function getindex(B::BunchKaufman{T}, d::Symbol) where {T<:BlasFloat}
         return eye(T, n)[:,invperm(B[:p])]
     elseif d == :L || d == :U || d == :D
         if B.rook
+            # syconvf_rook just added to LAPACK 3.7.0. Uncomment and remove error when we distribute LAPACK 3.7.0
+            # LUD, od = LAPACK.syconvf_rook!(B.uplo, 'C', copy(B.LD), B.ipiv)
             throw(ArgumentError("reconstruction rook pivoted Bunch-Kaufman factorization not implemented yet"))
         else
             LUD, od = LAPACK.syconv!(B.uplo, copy(B.LD), B.ipiv)

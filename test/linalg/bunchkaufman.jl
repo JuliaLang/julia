@@ -74,6 +74,8 @@ bimg  = randn(n,2)/2
                             @test_throws ArgumentError bkfact(a)
                         end
                     end
+                    # Test extraction of factors
+                    # syconvf_rook just added to LAPACK 3.7.0. Test when we distribute LAPACK 3.7.0
                     @test bc1[uplo]*bc1[:D]*bc1[uplo]' ≈ aher[bc1[:p], bc1[:p]]
                     @test bc1[uplo]*bc1[:D]*bc1[uplo]' ≈ bc1[:P]*aher*bc1[:P]'
                     if eltya <: Complex
