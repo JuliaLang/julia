@@ -318,6 +318,60 @@ for (finv, f) in ((:sec, :cos), (:csc, :sin), (:cot, :tan),
     end
 end
 
+"""
+    cotd(x)
+
+Compute the cotangent of `x`, where `x` is in degrees.
+""" cotd
+
+"""
+    coth(x)
+
+Compute the hyperbolic cotangent of `x`.
+""" coth
+
+"""
+    cot(x)
+
+Compute the cotangent of `x`, where `x` is in radians.
+""" cot
+
+"""
+    cscd(x)
+
+Compute the cosecant of `x`, where `x` is in degrees.
+""" cscd
+
+"""
+    sech(x)
+
+Compute the hyperbolic secant of `x`
+""" sech
+
+"""
+    csc(x)
+
+Compute the cosecant of `x`, where `x` is in radians.
+""" csc
+
+"""
+    secd(x)
+
+Compute the secant of `x`, where `x` is in degrees.
+""" secd
+
+"""
+    csch(x)
+
+Compute the hyperbolic cosecant of `x`.
+""" csch
+
+"""
+    sec(x)
+
+Compute the secant of `x`, where `x` is in radians.
+""" sec
+
 for (tfa, tfainv, hfa, hfainv, fn) in ((:asec, :acos, :asech, :acosh, "secant"),
                                        (:acsc, :asin, :acsch, :asinh, "cosecant"),
                                        (:acot, :atan, :acoth, :atanh, "cotangent"))
