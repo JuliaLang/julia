@@ -180,7 +180,7 @@ Get the *fetch* refspecs for the specified `rmt`. These refspecs contain
 information about which branch(es) to fetch from.
 
 # Examples
-```julia-repl
+```julia
 julia> remote = LibGit2.get(LibGit2.GitRemote, repo, "upstream");
 
 julia> LibGit2.add_fetch!(repo, remote, "upstream");
@@ -205,7 +205,7 @@ Get the *push* refspecs for the specified `rmt`. These refspecs contain
 information about which branch(es) to push to.
 
 # Examples
-```julia-repl
+```julia
 julia> remote = LibGit2.get(LibGit2.GitRemote, repo, "upstream");
 
 julia> LibGit2.add_push!(repo, remote, "refs/heads/master");
@@ -216,6 +216,7 @@ julia> remote = LibGit2.get(LibGit2.GitRemote, repo, "upstream");
 
 julia> LibGit2.push_refspecs(remote)
 String["refs/heads/master"]
+```
 """
 function push_refspecs(rmt::GitRemote)
     sa_ref = Ref(StrArrayStruct())
