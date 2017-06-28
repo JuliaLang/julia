@@ -331,7 +331,8 @@ end
 """
     filter(f, d::Associative)
 
-Return a copy of `d`, removing elements for which `f` is `false`.The function `f` is passed two arguments (key and value).
+Return a copy of `d`, removing elements for which `f` is `false`.
+The function `f` is passed two arguments (key and value).
 
 # Examples
 ```jldocttest
