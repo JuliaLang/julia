@@ -316,11 +316,16 @@ Windows.
 """
 function require(mod::Symbol)
     _require(mod)
-    # After successfully loading notify downstream consumers
+    # After successfully loading, notify downstream consumers
     if toplevel_load[] && myid() == 1 && nprocs() > 1
         # broadcast top-level import/using from node 1 (only)
         @sync for p in procs()
-            p == 1 || @async remotecall_fetch(_require, p, mod)
+            p == 1 && continue
+            @async remotecall_wait(p) do
+                if !isbindingresolved(Main, mod) || !isdefined(Main, mod)
+                    _require(mod)
+                end
+            end
         end
     end
     for callback in package_callbacks

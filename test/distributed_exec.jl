@@ -1750,9 +1750,6 @@ rmprocs(npids)
 Base.cluster_cookie("foobar") # custom cookie
 npids = addprocs_with_testenv(WorkerArgTester(`--worker=foobar`, false))
 @test remotecall_fetch(myid, npids[1]) == npids[1]
-=======
-end
->>>>>>> include: assume that shared file systems exist for clusters
 
 # Run topology tests last after removing all workers, since a given
 # cluster at any time only supports a single topology.
