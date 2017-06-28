@@ -33,5 +33,4 @@ function Base.show(io::IO, blame_hunk::BlameHunk)
     println(io, "Original commit oid: ", blame_hunk.orig_commit_id)
     print(io, "Original signature: ")
     show(io, Signature(blame_hunk.orig_signature))
-    #println(io)
 end
