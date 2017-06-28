@@ -41,7 +41,6 @@
 #include <llvm/Target/TargetOptions.h>
 #include <llvm/Support/Host.h>
 #include <llvm/Support/TargetSelect.h>
-#include <llvm/Analysis/TargetLibraryInfo.h>
 #include <llvm/Object/SymbolSize.h>
 
 // IR building
@@ -6551,7 +6550,7 @@ static void init_julia_llvm_env(Module *m)
     add_named_global(jlgetworld_global, &jl_world_counter);
 
     jl_globalPM = new legacy::PassManager();
-    jl_globalPM->add(new TargetLibraryInfoWrapperPass(Triple(jl_TargetMachine->getTargetTriple())));
+    addTargetPasses(jl_globalPM, jl_TargetMachine);
     addOptimizationPasses(jl_globalPM, jl_options.opt_level);
 }
 
