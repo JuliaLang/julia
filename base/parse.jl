@@ -171,7 +171,7 @@ function parse{T<:AbstractFloat}(::Type{T}, s::AbstractString, base::Integer)
     res = zero(T)
     2 <= base <= 9 || throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 9, got $base"))
     b = Float64(base)
-    n, Exponent = 0,0,0
+    n, Exponent = 0,0
     pointfound = false
     for i in eachindex(s)
         if s[i] == '.' 
