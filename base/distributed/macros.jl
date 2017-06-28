@@ -47,7 +47,7 @@ end
 """
     @spawnat
 
-Create a closure is created around the expression and run the closure
+Create a closure around an expression and run the closure
 asynchronously on process `p`. Returns a [`Future`](@ref) to the result.
 Accepts two arguments, `p` and an expression.
 
