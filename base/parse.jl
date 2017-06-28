@@ -14,6 +14,24 @@ function parse{T<:Integer}(::Type{T}, c::Char, base::Integer=36)
     convert(T, d)
 end
 
+function parse{T<:AbstractFloat}(::Type{T}, s::AbstractString, base::Integer)
+    res = zero(T)
+    b = Float64(base)
+    n, Exponent = 0,0,0
+    pointfound = false
+    for i in eachindex(s)
+        if s[i] == '.' 
+            Exponent = i-1
+            pointfound = true
+            continue
+        end
+        n += 1
+        res += parse(Int,s[i])*b^(-n)
+    end
+    !pointfound && throw(ArgumentError("String must contain '.'"))
+    res*b^Exponent
+end
+
 function parseint_next(s::AbstractString, startpos::Int, endpos::Int)
     (0 < startpos <= endpos) || (return Char(0), 0, 0)
     j = startpos
