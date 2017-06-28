@@ -19981,7 +19981,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Base.LibGit2",
     "title": "Base.LibGit2.commit",
     "category": "Function",
-    "text": "Wrapper around git_commit_create \n\n\n\nCommit changes to repository\n\n\n\nLibGit2.commit(rb::GitRebase, sig::GitSignature)\n\nCommits the current patch to the rebase rb, using sig as the committer. Is silent if the commit has already been applied.\n\n\n\n"
+    "text": "Wrapper around git_commit_create \n\n\n\nCommit changes to repository\n\n\n\nLibGit2.commit(rb::GitRebase, sig::GitSignature)\n\nCommit the current patch to the rebase rb, using sig as the committer. Is silent if the commit has already been applied.\n\n\n\n"
 },
 
 {
