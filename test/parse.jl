@@ -901,3 +901,9 @@ let
 end
 @test c8925 == 3 && isconst(:c8925)
 @test d8925 == 4 && isconst(:d8925)
+
+# issue #22480
+@test parse(Float64, "1.1", 2) == 1.5
+@test parse(Float64, "0.001", 2) == 0.125
+@test parse(Float64, "0.1", 3) == 0.3333333333333333
+@test_throws ArgumentError parse(Float64, "11", 2)
