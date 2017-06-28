@@ -158,7 +158,7 @@ end
 """
     randjump(r::MersenneTwister, jumps::Integer, [jumppoly::AbstractString=dSFMT.JPOLY1e21]) -> Vector{MersenneTwister}
 
-Create an array of the size `jumps` of initialized `MersenneTwister` RNG objects. The
+Create an array of the size `jumps` of initialized [`MersenneTwister`](@ref) RNG objects. The
 first RNG object given as a parameter and following `MersenneTwister` RNGs in the array are
 initialized such that a state of the RNG object in the array would be moved forward (without
 generating numbers) from a previous RNG object array element on a particular number of steps
@@ -221,13 +221,33 @@ end
 ## srand()
 
 """
-    srand([rng=GLOBAL_RNG], seed) -> rng
-    srand([rng=GLOBAL_RNG]) -> rng
+    srand([rng::AbstractRNG=GLOBAL_RNG,] seed::Integer) -> rng
+    srand([rng::AbstractRNG=GLOBAL_RNG,] seed::Vector{UInt32}) -> rng
+    srand([rng::AbstractRNG=GLOBAL_RNG]) -> rng
 
 Reseed the random number generator. If a `seed` is provided, the RNG will give a
 reproducible sequence of numbers, otherwise Julia will get entropy from the system. For
-`MersenneTwister`, the `seed` may be a non-negative integer or a vector of [`UInt32`](@ref)
-integers. `RandomDevice` does not support seeding.
+[`MersenneTwister`](@ref), the `seed` may be a non-negative integer or a vector of [`UInt32`](@ref)
+integers. [`RandomDevice`](@ref) does not support seeding.
+
+# Examples
+```jldoctest
+julia> rng = MersenneTwister(1234);
+
+julia> rand(rng, Int, 3)
+3-element Array{Int64,1}:
+ -3812393819966074295
+  3382543107028662972
+ -6289110377144490421
+
+julia> srand(rng, 1234);
+
+julia> rand(rng, Int, 3)
+3-element Array{Int64,1}:
+ -3812393819966074295
+  3382543107028662972
+ -6289110377144490421
+```
 """
 srand(r::MersenneTwister) = srand(r, make_seed())
 srand(r::MersenneTwister, n::Integer) = srand(r, make_seed(n))
@@ -257,7 +277,7 @@ globalRNG() = GLOBAL_RNG
 # rand: a non-specified RNG defaults to GLOBAL_RNG
 
 """
-    rand([rng=GLOBAL_RNG], [S], [dims...])
+    rand([rng::AbstractRNG=GLOBAL_RNG,] [S,] [dims...])
 
 Pick a random element or array of random elements from the set of values specified by `S`; `S` can be
 
@@ -272,11 +292,13 @@ Pick a random element or array of random elements from the set of values specifi
 
 # Examples
 
-```julia-repl
+```jldoctest
+julia> srand(1234);
+
 julia> rand(Int, 2)
 2-element Array{Int64,1}:
- 1339893410598768192
- 1575814717733606317
+  5346145710047121644
+ -5834224487641148056
 
 julia> rand(MersenneTwister(0), Dict(1=>2, 3=>4))
 1=>2
@@ -301,7 +323,7 @@ rand!(A::AbstractArray) = rand!(GLOBAL_RNG, A)
 rand(r::AbstractArray) = rand(GLOBAL_RNG, r)
 
 """
-    rand!([rng=GLOBAL_RNG], A, [S=eltype(A)])
+    rand!([rng=GLOBAL_RNG,] A [,S=eltype(A)])
 
 Populate the array `A` with random values. If `S` is specified
 (`S` can be a type or a collection, cf. [`rand`](@ref) for details),
@@ -767,7 +789,7 @@ function rand!(rng::AbstractRNG, B::BitArray)
 end
 
 """
-    bitrand([rng=GLOBAL_RNG], [dims...])
+    bitrand([rng=GLOBAL_RNG,] [dims...])
 
 Generate a `BitArray` of random boolean values.
 
@@ -1291,7 +1313,7 @@ const ziggurat_nor_inv_r  = inv(ziggurat_nor_r)
 const ziggurat_exp_r      = 7.6971174701310497140446280481
 
 """
-    randn([rng=GLOBAL_RNG], [T=Float64], [dims...])
+    randn([rng::AbstractRNG=GLOBAL_RNG,] [T=Float64,] [dims...])
 
 Generate a normally-distributed random number of type `T` with mean 0 and standard deviation 1.
 Optionally generate an array of normally-distributed random numbers.
@@ -1341,7 +1363,7 @@ function randn_unlikely(rng, idx, rabs, x)
 end
 
 """
-    randexp([rng=GLOBAL_RNG], [T=Float64], [dims...])
+    randexp([rng::AbstractRNG=GLOBAL_RNG,] [T=Float64,] [dims...])
 
 Generate a random number of type `T` according to the exponential distribution with scale 1.
 Optionally generate an array of such random numbers.
@@ -1384,7 +1406,7 @@ function randexp_unlikely(rng, idx, x)
 end
 
 """
-    randn!([rng=GLOBAL_RNG], A::AbstractArray) -> A
+    randn!([rng::AbstractRNG=GLOBAL_RNG,] A::AbstractArray) -> A
 
 Fill the array `A` with normally-distributed (mean 0, standard deviation 1) random numbers.
 Also see the [`rand`](@ref) function.
@@ -1406,7 +1428,7 @@ julia> randn!(rng, zeros(5))
 function randn! end
 
 """
-    randexp!([rng=GLOBAL_RNG], A::AbstractArray) -> A
+    randexp!([rng::AbstractRNG=GLOBAL_RNG,] A::AbstractArray) -> A
 
 Fill the array `A` with random numbers following the exponential distribution (with scale 1).
 
@@ -1596,6 +1618,30 @@ end
 # each element of A is included in S with independent probability p.
 # (Note that this is different from the problem of finding a random
 #  size-m subset of A where m is fixed!)
+
+"""
+    randsubseq!([rng::AbstractRNG=GLOBAL_RNG,] S, A, p)
+
+Like [`randsubseq`](@ref), but the results are stored in `S`
+(which is resized as needed).
+
+# Examples
+```jldoctest
+julia> b = zeros(4);
+
+julia> a = collect(1:8);
+
+julia> rng = MersenneTwister(1234);
+
+julia> randsubseq!(rng, b, a, 0.5);
+
+julia> b
+3-element Array{Float64,1}:
+ 4.0
+ 7.0
+ 8.0
+```
+"""
 function randsubseq!(r::AbstractRNG, S::AbstractArray, A::AbstractArray, p::Real)
     0 <= p <= 1 || throw(ArgumentError("probability $p not in [0,1]"))
     n = length(A)
@@ -1635,12 +1681,32 @@ randsubseq!(S::AbstractArray, A::AbstractArray, p::Real) = randsubseq!(GLOBAL_RN
 randsubseq(r::AbstractRNG, A::AbstractArray{T}, p::Real) where {T} = randsubseq!(r, T[], A, p)
 
 """
-    randsubseq(A, p) -> Vector
+    randsubseq([rng::AbstractRNG=GLOBAL_RNG,] A, p) -> Vector
 
 Return a vector consisting of a random subsequence of the given array `A`, where each
 element of `A` is included (in order) with independent probability `p`. (Complexity is
 linear in `p*length(A)`, so this function is efficient even if `p` is small and `A` is
 large.) Technically, this process is known as "Bernoulli sampling" of `A`.
+
+# Examples
+```jldoctest
+julia> a = collect(1:8);
+
+julia> rng = MersenneTwister(1234);
+
+julia> randsubseq(rng, a, 0.2)
+0-element Array{Int64,1}
+
+julia> randsubseq(rng, a, 0.8)
+7-element Array{Int64,1}:
+ 1
+ 2
+ 3
+ 4
+ 5
+ 7
+ 8
+```
 """
 randsubseq(A::AbstractArray, p::Real) = randsubseq(GLOBAL_RNG, A, p)
 
