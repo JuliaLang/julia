@@ -71,7 +71,7 @@ Determine if the `remote_name` specified exists within the `repo`. Returns a
 does exist, the `Nullable` contains a [`GitRemote`](@ref) to the remote name.
 
 # Examples
-```julia-repl
+```julia
 repo = LibGit2.GitRepo(path)
 remote_name = "test"
 isnull(LibGit2.lookup_remote(repo, remote_name)) # will return true
@@ -180,7 +180,7 @@ Get the *fetch* refspecs for the specified `rmt`. These refspecs contain
 information about which branch(es) to fetch from.
 
 # Examples
-```julia
+```julia-repl
 julia> remote = LibGit2.get(LibGit2.GitRemote, repo, "upstream");
 
 julia> LibGit2.add_fetch!(repo, remote, "upstream");
@@ -205,7 +205,7 @@ Get the *push* refspecs for the specified `rmt`. These refspecs contain
 information about which branch(es) to push to.
 
 # Examples
-```julia
+```julia-repl
 julia> remote = LibGit2.get(LibGit2.GitRemote, repo, "upstream");
 
 julia> LibGit2.add_push!(repo, remote, "refs/heads/master");
