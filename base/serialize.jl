@@ -14,7 +14,8 @@ mutable struct SerializationState{I<:IO} <: AbstractSerializer
     table::ObjectIdDict
     pending_refs::Vector{Int}
     known_object_data::Dict{UInt64,Any}
-    SerializationState{I}(io::I) where I<:IO = new(io, 0, ObjectIdDict(), Int[], Dict{UInt64,Any}())
+    refs::Vector{Any}
+    SerializationState{I}(io::I) where I<:IO = new(io, 0, ObjectIdDict(), Int[], Dict{UInt64,Any}(), Any[])
 end
 
 SerializationState(io::IO) = SerializationState{typeof(io)}(io)
@@ -159,6 +160,7 @@ function reset_state(s::AbstractSerializer)
     s.counter = 0
     empty!(s.table)
     empty!(s.pending_refs)
+    empty!(s.refs)
     s
 end
 
@@ -636,9 +638,17 @@ function deserialize(s::AbstractSerializer)
     handle_deserialize(s, Int32(read(s.io, UInt8)::UInt8))
 end
 
+function record_ref!(s::AbstractSerializer, slot, x::ANY)
+    if slot >= length(s.refs)
+        resize!(s.refs, slot+1)
+    end
+    s.refs[slot+1] = x
+    nothing
+end
+
 function deserialize_cycle(s::AbstractSerializer, x::ANY)
     slot = pop!(s.pending_refs)
-    s.table[slot] = x
+    record_ref!(s, slot, x)
     nothing
 end
 
@@ -646,9 +656,9 @@ end
 #     slot = s.counter; s.counter += 1
 #     push!(s.pending_refs, slot)
 #     slot = pop!(s.pending_refs)
-#     s.table[slot] = x
+#     record_ref!(s, slot, x)
 function resolve_ref_immediately(s::AbstractSerializer, x::ANY)
-    s.table[s.counter] = x
+    record_ref!(s, s.counter, x)
     s.counter += 1
     nothing
 end
@@ -666,10 +676,10 @@ function handle_deserialize(s::AbstractSerializer, b::Int32)
         return deserialize_tuple(s, Int(read(s.io, UInt8)::UInt8))
     elseif b == SHORTBACKREF_TAG
         id = read(s.io, UInt16)::UInt16
-        return s.table[Int(id)]
+        return s.refs[Int(id)+1]
     elseif b == BACKREF_TAG
         id = read(s.io, Int32)::Int32
-        return s.table[Int(id)]
+        return s.refs[Int(id)+1]
     elseif b == ARRAY_TAG
         return deserialize_array(s)
     elseif b == DATATYPE_TAG
@@ -713,7 +723,7 @@ function handle_deserialize(s::AbstractSerializer, b::Int32)
         return deserialize_expr(s, Int(read(s.io, Int32)::Int32))
     elseif b == LONGBACKREF_TAG
         id = read(s.io, Int64)::Int64
-        return s.table[Int(id)]
+        return s.refs[Int(id)+1]
     elseif b == LONGSYMBOL_TAG
         return deserialize_symbol(s, Int(read(s.io, Int32)::Int32))
     end
@@ -839,7 +849,7 @@ function deserialize_array(s::AbstractSerializer)
     if isa(d1, Integer)
         if elty !== Bool && isbits(elty)
             a = Array{elty, 1}(d1)
-            s.table[slot] = a
+            record_ref!(s, slot, a)
             return read!(s.io, a)
         end
         dims = (Int(d1),)
@@ -864,11 +874,11 @@ function deserialize_array(s::AbstractSerializer)
         else
             A = read(s.io, elty, dims)
         end
-        s.table[slot] = A
+        record_ref!(s, slot, A)
         return A
     end
     A = Array{elty, length(dims)}(dims)
-    s.table[slot] = A
+    record_ref!(s, slot, A)
     for i = eachindex(A)
         tag = Int32(read(s.io, UInt8)::UInt8)
         if tag != UNDEFREF_TAG
@@ -998,7 +1008,7 @@ function deserialize_datatype(s::AbstractSerializer, full::Bool)
             end
         end
     end
-    s.table[slot] = t
+    record_ref!(s, slot, t)
     return t
 end
 
