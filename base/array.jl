@@ -1934,7 +1934,7 @@ Return a copy of `a`, removing elements for which `f` is `false`.
 The function `f` is passed one argument.
 
 # Examples
-```jldocttest
+```jldoctest
 julia> a = 1:10
 1:10
 

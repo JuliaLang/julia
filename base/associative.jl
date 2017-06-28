@@ -335,7 +335,7 @@ Return a copy of `d`, removing elements for which `f` is `false`.
 The function `f` is passed two arguments (key and value).
 
 # Examples
-```jldocttest
+```jldoctest
 julia> d = Dict(1=>"a", 2=>"b")
 Dict{Int64,String} with 2 entries:
   2 => "b"
