@@ -1790,7 +1790,7 @@ end
                                        "  =  1.0\n  ⋮\n  [5, 3]  =  5.0")
 
     show(ioc, MIME"text/plain"(), sparse(ones(5,3)))
-    @test String(take!(io)) ==  string("5×3 SparseMatrixCSC{Float64,Int64} with 15 stored entries:\n  [1, 1]",
+    @test String(take!(io)) ==  string("5×3 SparseMatrixCSC{Float64,$Int} with 15 stored entries:\n  [1, 1]",
                                        "  =  1.0\n  ⋮\n  [5, 3]  =  1.0")
 
     # odd number of rows
@@ -1804,7 +1804,7 @@ end
                                        "  =  1.0\n  [2, 1]  =  2.0\n  ⋮\n  [5, 3]  =  5.0\n  [6, 3]  =  6.0")
 
     show(ioc, MIME"text/plain"(), sparse(ones(6,3)))
-    @test String(take!(io)) ==  string("6×3 SparseMatrixCSC{Float64,Int64} with 18 stored entries:\n  [1, 1]",
+    @test String(take!(io)) ==  string("6×3 SparseMatrixCSC{Float64,$Int} with 18 stored entries:\n  [1, 1]",
                                        "  =  1.0\n  [2, 1]  =  1.0\n  ⋮\n  [5, 3]  =  1.0\n  [6, 3]  =  1.0")
 
     ioc = IOContext(io, :displaysize => (9, 80))
