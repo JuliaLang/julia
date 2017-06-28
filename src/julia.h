@@ -835,7 +835,7 @@ static inline uint32_t jl_fielddesc_size(int8_t fielddesc_type)
 
 #undef DEFINE_FIELD_ACCESSORS
 
-static inline int jl_is_layout_opaque(jl_datatype_layout_t *l)
+static inline int jl_is_layout_opaque(const jl_datatype_layout_t *l)
 {
     return l->nfields == 0 && l->npointers > 0;
 }
