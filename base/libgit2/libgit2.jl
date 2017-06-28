@@ -573,6 +573,23 @@ commits, respectively. A left (or right) commit refers to which side of a symmet
 difference in a tree the commit is reachable from.
 
 Equivalent to `git rev-list --left-right --count <commit1> <commit2>`.
+
+# Examples
+```julia
+repo = LibGit2.GitRepo(repo_path)
+repo_file = open(joinpath(repo_path, test_file), "a")
+println(repo_file, "hello world");
+flush(repo_file)
+LibGit2.add!(repo, test_file)
+commit_oid1 = LibGit2.commit(repo, "commit 1")
+println(repo_file, "hello world again")
+flush(repo_file)
+LibGit2.add!(repo, test_file)
+commit_oid2 = LibGit2.commit(repo, "commit 2")
+LibGit2.revcount(repo, string(commit_oid1), string(commit_oid2))
+```
+
+This will return `(-1, 0)`.
 """
 function revcount(repo::GitRepo, commit1::AbstractString, commit2::AbstractString)
     commit1_id = revparseid(repo, commit1)
