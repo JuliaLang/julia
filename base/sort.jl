@@ -219,12 +219,12 @@ for s in [:searchsortedfirst, :searchsortedlast, :searchsorted]
     end
 end
 
-@doc """
+"""
     searchsorted(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
-Returns the range of indices of `a` which compare as equal to `x` (using binary search)
+Return the range of indices of `a` which compare as equal to `x` (using binary search)
 according to the order specified by the `by`, `lt` and `rev` keywords, assuming that `a`
-is already sorted in that order. Returns an empty range located at the insertion point
+is already sorted in that order. Return an empty range located at the insertion point
 if `a` does not contain values equal to `x`.
 
 # Examples
@@ -244,11 +244,11 @@ julia> searchsorted(a, 4, rev=true)
 ```
 """ searchsorted
 
-@doc """
+"""
     searchsortedfirst(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
-Returns the index of the first value in `a` greater than or equal to `x`, according to the
-specified order. Returns `length(a)+1` if `x` is greater than all values in `a`.
+Return the index of the first value in `a` greater than or equal to `x`, according to the
+specified order. Return `length(a) + 1` if `x` is greater than all values in `a`.
 `a` is assumed to be sorted.
 
 # Examples
@@ -264,11 +264,11 @@ julia> searchsortedfirst([1, 2, 4, 5, 14], 15)
 ```
 """ searchsortedfirst
 
-@doc """
+"""
     searchsortedlast(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
-Returns the index of the last value in `a` less than or equal to `x`, according to the
-specified order. Returns `0` if `x` is less than all values in `a`. `a` is assumed to
+Return the index of the last value in `a` less than or equal to `x`, according to the
+specified order. Return `0` if `x` is less than all values in `a`. `a` is assumed to
 be sorted.
 
 # Examples
