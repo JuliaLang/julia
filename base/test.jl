@@ -320,8 +320,9 @@ end
 function get_test_result(ex)
     orig_ex = Expr(:inert, ex)
     # Normalize non-dot comparison operator calls to :comparison expressions
+    is_splat = x -> isa(x, Expr) && x.head == :...
     if isa(ex, Expr) && ex.head == :call && length(ex.args) == 3 &&
-        first(string(ex.args[1])) != '.' &&
+        first(string(ex.args[1])) != '.' && !is_splat(ex.args[2]) && !is_splat(ex.args[3]) &&
         (ex.args[1] === :(==) || Base.operator_precedence(ex.args[1]) == comparison_prec)
         ex = Expr(:comparison, ex.args[2], ex.args[1], ex.args[3])
     end
