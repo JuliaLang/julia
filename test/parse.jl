@@ -907,3 +907,4 @@ end
 @test parse(Float64, "0.001", 2) == 0.125
 @test parse(Float64, "0.1", 3) == 0.3333333333333333
 @test_throws ArgumentError parse(Float64, "11", 2)
+@test_throws ArgumentError parse(Float64, "14.0", 3)
