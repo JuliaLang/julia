@@ -221,14 +221,14 @@ end
 ## srand()
 
 """
-    srand([rng::AbstractRNG=GLOBAL_RNG], seed::Integer) -> rng
-    srand([rng::AbstractRNG=GLOBAL_RNG], seed::Vector{UInt32}) -> rng
+    srand([rng::AbstractRNG=GLOBAL_RNG,] seed::Integer) -> rng
+    srand([rng::AbstractRNG=GLOBAL_RNG,] seed::Vector{UInt32}) -> rng
     srand([rng::AbstractRNG=GLOBAL_RNG]) -> rng
 
 Reseed the random number generator. If a `seed` is provided, the RNG will give a
 reproducible sequence of numbers, otherwise Julia will get entropy from the system. For
 [`MersenneTwister`](@ref), the `seed` may be a non-negative integer or a vector of [`UInt32`](@ref)
-integers. `RandomDevice` does not support seeding.
+integers. [`RandomDevice`](@ref) does not support seeding.
 
 # Examples
 ```jldoctest
@@ -277,7 +277,7 @@ globalRNG() = GLOBAL_RNG
 # rand: a non-specified RNG defaults to GLOBAL_RNG
 
 """
-    rand([rng::AbstractRNG=GLOBAL_RNG], [S], [dims...])
+    rand([rng::AbstractRNG=GLOBAL_RNG,] [S,] [dims...])
 
 Pick a random element or array of random elements from the set of values specified by `S`; `S` can be
 
@@ -323,7 +323,7 @@ rand!(A::AbstractArray) = rand!(GLOBAL_RNG, A)
 rand(r::AbstractArray) = rand(GLOBAL_RNG, r)
 
 """
-    rand!([rng=GLOBAL_RNG], A, [S=eltype(A)])
+    rand!([rng=GLOBAL_RNG,] A [,S=eltype(A)])
 
 Populate the array `A` with random values. If `S` is specified
 (`S` can be a type or a collection, cf. [`rand`](@ref) for details),
@@ -789,7 +789,7 @@ function rand!(rng::AbstractRNG, B::BitArray)
 end
 
 """
-    bitrand([rng=GLOBAL_RNG], [dims...])
+    bitrand([rng=GLOBAL_RNG,] [dims...])
 
 Generate a `BitArray` of random boolean values.
 
@@ -1313,7 +1313,7 @@ const ziggurat_nor_inv_r  = inv(ziggurat_nor_r)
 const ziggurat_exp_r      = 7.6971174701310497140446280481
 
 """
-    randn([rng::AbstractRNG=GLOBAL_RNG], [T=Float64], [dims...])
+    randn([rng::AbstractRNG=GLOBAL_RNG,] [T=Float64,] [dims...])
 
 Generate a normally-distributed random number of type `T` with mean 0 and standard deviation 1.
 Optionally generate an array of normally-distributed random numbers.
@@ -1363,7 +1363,7 @@ function randn_unlikely(rng, idx, rabs, x)
 end
 
 """
-    randexp([rng::AbstractRNG=GLOBAL_RNG], [T=Float64], [dims...])
+    randexp([rng::AbstractRNG=GLOBAL_RNG,] [T=Float64,] [dims...])
 
 Generate a random number of type `T` according to the exponential distribution with scale 1.
 Optionally generate an array of such random numbers.
