@@ -16,6 +16,7 @@ end
 
 function parse{T<:AbstractFloat}(::Type{T}, s::AbstractString, base::Integer)
     res = zero(T)
+    2 <= base <= 9 || throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 9, got $base"))
     b = Float64(base)
     n, Exponent = 0,0,0
     pointfound = false
@@ -26,7 +27,9 @@ function parse{T<:AbstractFloat}(::Type{T}, s::AbstractString, base::Integer)
             continue
         end
         n += 1
-        res += parse(Int,s[i])*b^(-n)
+        d = parse(Int,s[i])
+        d < base || throw(ArgumentError("invalid base $base digit $(repr(c))"))
+        res += d*b^(-n)
     end
     !pointfound && throw(ArgumentError("String must contain '.'"))
     res*b^Exponent
