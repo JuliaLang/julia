@@ -14,7 +14,7 @@ If you write to this `Array` the blob on disk will not be updated.
 the output `Array` and will not check to ensure it is valid Unicode, so errors
 may occur if the result is passed to functions which expect valid Unicode data.
 
-See also [`content`](@ref), which *will* throw an error the content of the `blob`
+See also [`content`](@ref), which *will* throw an error if the content of the `blob`
 is binary and not valid Unicode.
 """
 function rawcontent(blob::GitBlob)
