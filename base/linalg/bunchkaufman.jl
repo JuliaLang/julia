@@ -69,11 +69,122 @@ size(B::BunchKaufman, d::Integer) = size(B.LD, d)
 issymmetric(B::BunchKaufman) = B.symmetric
 ishermitian(B::BunchKaufman) = !B.symmetric
 
+function _ipiv2perm_bk(v::AbstractVector{T}, maxi::Integer, uplo::Char) where T
+    p = T[1:maxi;]
+    uploL = uplo == 'L'
+    i = uploL ? 1 : maxi
+    # if uplo == 'U' we construct the permution backwards
+    @inbounds while 1 <= i <= length(v)
+        vi = v[i]
+        if vi > 0 # the 1x1 blocks
+            p[i], p[vi] = p[vi], p[i]
+            i += uploL ? 1 : -1
+        else # the 2x2 blocks
+            if uploL
+                p[i + 1], p[-vi] = p[-vi], p[i + 1]
+                i += 2
+            else # 'U'
+                p[i - 1], p[-vi] = p[-vi], p[i - 1]
+                i -= 2
+            end
+        end
+    end
+    return p
+end
+
+"""
+    getindex(B::BunchKaufman, d::Symbol)
+
+Extract the factors of the Bunch-Kaufman factorization `B`. The factorization can take the
+two forms `L*D*L.'` or `U*D*U.'` where `L` is a `UnitLowerTriangular` matrix, `U` is a
+`UnitUpperTriangular`, and `D` is a block diagonal matrix with 1x1 or 2x2 blocks. The argument
+`d` can be
+- `:D`: the block diagonal matrix
+- `:L`: the lower triangular factor (if factorization is `L*D*L.'`)
+- `:U`: the lower triangular factor (if factorization is `U*D*U.'`)
+- `:p`: permutation vector
+- `:P`: permutation matrix
+
+```jldoctest
+julia> A = [1 2 3; 2 1 2; 3 2 1]
+3×3 Array{Int64,2}:
+ 1  2  3
+ 2  1  2
+ 3  2  1
+
+julia> F = bkfact(Symmetric(A, :L));
+
+julia> F[:L]*F[:D]*F[:L].' - A[F[:p], F[:p]]
+3×3 Array{Float64,2}:
+ 0.0  0.0  0.0
+ 0.0  0.0  0.0
+ 0.0  0.0  0.0
+
+julia> F = bkfact(Symmetric(A));
+
+julia> F[:U]*F[:D]*F[:U].' - F[:P]*A*F[:P]'
+3×3 Array{Float64,2}:
+ 0.0  0.0  0.0
+ 0.0  0.0  0.0
+ 0.0  0.0  0.0
+```
+"""
+function getindex(B::BunchKaufman{T}, d::Symbol) where {T<:BlasFloat}
+    n = size(B, 1)
+    if d == :p
+        return _ipiv2perm_bk(B.ipiv, n, B.uplo)
+    elseif d == :P
+        return eye(T, n)[:,invperm(B[:p])]
+    elseif d == :L || d == :U || d == :D
+        if B.rook
+            throw(ArgumentError("reconstruction rook pivoted Bunch-Kaufman factorization not implemented yet"))
+        else
+            LUD, od = LAPACK.syconv!(B.uplo, copy(B.LD), B.ipiv)
+        end
+        if d == :D
+            D = diagm(diag(LUD))
+            for i in 1:n
+                if !iszero(od[i])
+                    odi = od[i]
+                    if B.uplo == 'L'
+                        D[i, i + 1] = B.symmetric ? odi : odi'
+                        D[i + 1, i] = odi
+                    else # 'U'
+                        D[i, i - 1] = B.symmetric ? odi : odi'
+                        D[i - 1, i] = odi
+                    end
+                end
+            end
+            return D
+        elseif d == :L
+            if B.uplo == 'L'
+                return UnitLowerTriangular(LUD)
+            else
+                throw(ArgumentError("factorization is U*D*U.' but you requested L"))
+            end
+        else # :U
+            if B.uplo == 'U'
+                return UnitUpperTriangular(LUD)
+            else
+                throw(ArgumentError("factorization is L*D*L.' but you requested U"))
+            end
+        end
+    else
+        throw(KeyError(d))
+    end
+end
+
 issuccess(B::BunchKaufman) = B.info == 0
 
 function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, B::BunchKaufman)
     println(io, summary(B))
-    print(io, "successful: $(issuccess(B))")
+    println(io, "D factor:")
+    show(io, mime, B[:D])
+    println(io, "\n$(B.uplo) factor:")
+    show(io, mime, B[Symbol(B.uplo)])
+    println(io, "\npermutation:")
+    show(io, mime, B[:p])
+    print(io, "\nsuccessful: $(issuccess(B))")
 end
 
 function inv(B::BunchKaufman{<:BlasReal})

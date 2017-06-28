@@ -73,6 +73,10 @@ bimg  = randn(n,2)/2
                             @test_throws ArgumentError bkfact(a)
                         end
                     end
+                    # @show norm(bc1[:U]*bc1[:D]*bc1[:U].' - asym[bc1[:p], bc1[:p]])
+                    @show norm(bc1[:U]*bc1[:D].'*bc1[:U]' - bc1[:P]*asym*bc1[:P]')
+                    # @test bc1[:U]*bc1[:D]*bc1[:U].' ≈ asym[bc1[:p], bc1[:p]]
+                    # @test bc1[:U]*bc1[:D]*bc1[:U].' ≈ bc1[:P]*asym*bc1[:P]'
                 end
 
                 @testset "$uplo Bunch-Kaufman factors of a pos-def matrix" for uplo in (:U, :L)
