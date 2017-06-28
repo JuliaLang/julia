@@ -28,7 +28,7 @@ function parse{T<:AbstractFloat}(::Type{T}, s::AbstractString, base::Integer)
         end
         n += 1
         d = parse(Int,s[i])
-        d < base || throw(ArgumentError("invalid base $base digit $(repr(c))"))
+        d < base || throw(ArgumentError("invalid base $base digit $d"))
         res += d*b^(-n)
     end
     !pointfound && throw(ArgumentError("String must contain '.'"))
