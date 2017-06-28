@@ -533,6 +533,13 @@ mktempdir() do dir
                     sig = LibGit2.Signature(blame[1].orig_signature)
                     @test sig.name == cmtr.name
                     @test sig.email == cmtr.email
+                    show_strs = split(sprint(show, blame[1]), "\n")
+                    @test show_strs[1] == "GitBlameHunk:"
+                    @test show_strs[2] == "Original path: $test_file"
+                    @test show_strs[3] == "Lines in hunk: 1"
+                    @test show_strs[4] == "Final commit oid: $commit_oid1"
+                    @test show_strs[6] == "Original commit oid: $commit_oid1"
+                    @test length(show_strs) == 7
                 finally
                     close(cmt)
                 end
