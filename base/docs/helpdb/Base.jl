@@ -1601,6 +1601,14 @@ hex2num
     InexactError()
 
 Type conversion cannot be done exactly.
+
+# Examples
+```jldoctest
+julia> convert(Float64, 1+2im)
+ERROR: InexactError()
+Stacktrace:
+ [1] convert(::Type{Float64}, ::Complex{Int64}) at ./complex.jl:31
+```
 """
 InexactError
 
@@ -1615,6 +1623,15 @@ typemax
     DomainError()
 
 The arguments to a function or constructor are outside the valid domain.
+
+# Examples
+```jldoctest
+julia> sqrt(-1)
+ERROR: DomainError:
+sqrt will only return a complex result if called with a complex argument. Try sqrt(complex(x)).
+Stacktrace:
+ [1] sqrt(::Int64) at ./math.jl:443
+```
 """
 DomainError
 
@@ -2044,6 +2061,17 @@ issubnormal
     NullException()
 
 An attempted access to a [`Nullable`](@ref) with no defined value.
+
+# Examples
+```jldoctest
+julia> a = Nullable{Int}()
+Nullable{Int64}()
+
+julia> get(a)
+ERROR: NullException()
+Stacktrace:
+ [1] get(::Nullable{Int64}) at ./nullable.jl:92
+```
 """
 NullException
 
@@ -2660,6 +2688,17 @@ seekend
     DivideError()
 
 Integer division was attempted with a denominator value of 0.
+
+# Examples
+```jldoctest
+julia> 2/0
+Inf
+
+julia> div(2, 0)
+ERROR: DivideError: integer division error
+Stacktrace:
+ [1] div(::Int64, ::Int64) at ./int.jl:183
+```
 """
 DivideError
 
