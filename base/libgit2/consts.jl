@@ -351,6 +351,13 @@ These are used to select which global option to set or get and are used in `git_
                     SET_SSL_CERT_LOCATIONS   = 12)
 
 
+    """
+Option flags for `GitProxy`.
+
+* `PROXY_NONE`: do not attempt the connection through a proxy.
+* `PROXY_AUTO`: attempt to figure out the proxy configuration from the git configuration.
+* `PROXY_SPECIFIED`: connect using the URL given in the `url` field of this struct.
+    """
     @enum(GIT_PROXY, PROXY_NONE,
                      PROXY_AUTO,
                      PROXY_SPECIFIED)

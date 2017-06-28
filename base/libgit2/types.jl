@@ -198,7 +198,7 @@ The fields represent:
   * `version`: version of the struct in use, in case this changes later. For now, always `1`.
   * `proxytype`: an `enum` for the type of proxy to use.
      Defined in [`git_proxy_t`](https://libgit2.github.com/libgit2/#HEAD/type/git_proxy_t).
-     The corresponding Julia enum is [`GIT_PROXY`](@ref) and has values:
+     The corresponding Julia enum is `GIT_PROXY` and has values:
      - `PROXY_NONE`: do not attempt the connection through a proxy.
      - `PROXY_AUTO`: attempt to figure out the proxy configuration from the git configuration.
      - `PROXY_SPECIFIED`: connect using the URL given in the `url` field of this struct.
