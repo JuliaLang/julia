@@ -669,3 +669,13 @@ let m = which(T20332{Int}(), (Int,)),
 end
 
 @test sprint(show, Main) == "Main"
+
+struct f_with_params{t} <: Function
+end
+
+(::f_with_params)(x) = 2x
+
+let io = IOBuffer()
+    show(io, MIME"text/html"(), f_with_params.body.name.mt)
+    @test contains(String(take!(io)), "f_with_params")
+end

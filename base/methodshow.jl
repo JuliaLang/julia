@@ -97,15 +97,16 @@ end
 function show(io::IO, m::Method; kwtype::Nullable{DataType}=Nullable{DataType}())
     tv, decls, file, line = arg_decl_parts(m)
     sig = unwrap_unionall(m.sig)
-    ft = unwrap_unionall(sig.parameters[1])
+    ft0 = sig.parameters[1]
+    ft = unwrap_unionall(ft0)
     d1 = decls[1]
     if sig === Tuple
         print(io, m.name)
         decls = Any[(), ("...", "")]
-    elseif ft <: Function &&
+    elseif ft <: Function && isa(ft, DataType) &&
             isdefined(ft.name.module, ft.name.mt.name) &&
                 # TODO: more accurate test? (tn.name === "#" name)
-            ft == typeof(getfield(ft.name.module, ft.name.mt.name))
+            ft0 === typeof(getfield(ft.name.module, ft.name.mt.name))
         print(io, ft.name.mt.name)
     elseif isa(ft, DataType) && ft.name === Type.body.name && isleaftype(ft)
         f = ft.parameters[1]
@@ -222,11 +223,12 @@ end
 function show(io::IO, ::MIME"text/html", m::Method; kwtype::Nullable{DataType}=Nullable{DataType}())
     tv, decls, file, line = arg_decl_parts(m)
     sig = unwrap_unionall(m.sig)
-    ft = sig.parameters[1]
+    ft0 = sig.parameters[1]
+    ft = unwrap_unionall(ft0)
     d1 = decls[1]
-    if ft <: Function &&
+    if ft <: Function && isa(ft, DataType) &&
             isdefined(ft.name.module, ft.name.mt.name) &&
-            ft == typeof(getfield(ft.name.module, ft.name.mt.name))
+            ft0 === typeof(getfield(ft.name.module, ft.name.mt.name))
         print(io, ft.name.mt.name)
     elseif isa(ft, DataType) && ft.name === Type.body.name && isleaftype(ft)
         f = ft.parameters[1]
