@@ -211,6 +211,15 @@ The fields represent:
     the function returns `1`, connecting will be allowed. If it returns `0`, the connection
     will not be allowed. A negative value can be used to return errors.
   * `payload`: the payload to be provided to the two callback functions.
+
+# Examples
+```julia-repl
+julia> fo = LibGit2.FetchOptions();
+
+julia> fo.proxy_opts = LibGit2.ProxyOptions(url=Cstring("https://my_proxy_url.com"))
+
+julia> fetch(remote, "master", options=fo)
+```
 """
 @kwdef struct ProxyOptions
     version::Cuint               = 1
