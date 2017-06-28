@@ -167,19 +167,19 @@ function checkvalid(S::SparseMatrixCSC; full = true)
     validity = _checkvalid(S; full = full)
     validity == SparseArrayValidity.VALID && return
     if validity == SparseArrayValidity.COLPTR_LENGTH
-        err_str = "length of S.colptr must be at least size(S,2) + 1 = $(S.n + 1) but was $(length(S.colptr))"
+        err_str = "length of `S.colptr` must be at least `size(S,2) + 1 = $(S.n + 1)` but was $(length(S.colptr))"
     elseif validity == SparseArrayValidity.COLPTR_FIRST_VAL
-        err_str = "first element of S.colptr must be 1 but was $(S.colptr[1])"
+        err_str = "first element of `S.colptr` must be 1 but was $(S.colptr[1])"
     elseif validity == SparseArrayValidity.ROWVAL_LENGTH
-        err_str = "length of S.rowval must be at least S.colptr[S.n+1] - 1 but was $(length(S.rowval))"
+        err_str = "length of `S.rowval` must be at least `S.colptr[S.n+1] - 1` but was $(length(S.rowval))"
     elseif validity == SparseArrayValidity.NZVAL_LENGTH
-        err_str = "length of S.nzval must be at least S.colptr[S.n+1] - 1 but was $(length(S.nzval))"
+        err_str = "length of `S.nzval` must be at least `S.colptr[S.n+1] - 1` but was $(length(S.nzval))"
     elseif validity == SparseArrayValidity.COLPTR_SORTED
-        err_str = "S.colptr must be sorted"
+        err_str = "`S.colptr` must be sorted"
     elseif validity == SparseArrayValidity.ROWVAL_RANGE
-        err_str = "each element in S.rowval must be > 0 and ⩽ size(S,1)"
+        err_str = "each element in `S.rowval` must be > 0 and ⩽ `size(S,1)`"
     elseif validity == SparseArrayValidity.ROWVAL_SORTED_COLUMN
-        err_str = "S.rowval must be sorted for all column ranges"
+        err_str = "`S.rowval` must be sorted for all column ranges"
     else # Should not happen
         err_str = "sparse array is invalid"
     end
