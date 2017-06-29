@@ -22,7 +22,7 @@ BunchKaufman(A::AbstractMatrix{T}, ipiv::Vector{BlasInt}, uplo::Char, symmetric:
 `bkfact!` is the same as [`bkfact`](@ref), but saves space by overwriting the
 input `A`, instead of creating a copy.
 """
-function bkfact!(A::RealHermSymComplexSym{T,S} where {T<:BlasFloat,S<:StridedMatrix{T}}, rook::Bool = false)
+function bkfact!(A::RealHermSymComplexSym{T,S} where {T<:BlasReal,S<:StridedMatrix}, rook::Bool = false)
     LD, ipiv, info = rook ? LAPACK.sytrf_rook!(A.uplo, A.data) : LAPACK.sytrf!(A.uplo, A.data)
     BunchKaufman(LD, ipiv, A.uplo, true, rook, info)
 end

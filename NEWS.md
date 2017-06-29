@@ -105,6 +105,9 @@ Deprecated or removed
     have been deprecated in favor of `isposdef(Hermitian(A, UL))` and `isposdef!(Hermitian(A, UL))`
     respectively ([#22245]).
 
+  * The `bkfact`/`bkfact!` methods that accepted `uplo` and `issymmetric` symbols have been deprecated
+    in favor of using `Hermitian` (or `Symmetric`) views ([#22605]).
+
   * The function `current_module` is deprecated and replaced with `@__MODULE__` ([#22064]).
     This caused the deprecation of some reflection methods (such as `macroexpand` and `isconst`),
     which now require a module argument.
