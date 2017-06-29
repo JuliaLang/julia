@@ -1928,13 +1928,13 @@ end
 ## Filter ##
 
 """
-    filter(function, collection)
+    filter(f, a::AbstractArray)
 
-Return a copy of `collection`, removing elements for which `function` is `false`. For
-associative collections, the function is passed two arguments (key and value).
+Return a copy of `a`, removing elements for which `f` is `false`.
+The function `f` is passed one argument.
 
 # Examples
-```jldocttest
+```jldoctest
 julia> a = 1:10
 1:10
 
@@ -1945,19 +1945,27 @@ julia> filter(isodd, a)
  5
  7
  9
-
-julia> d = Dict(1=>"a", 2=>"b")
-Dict{Int64,String} with 2 entries:
-  2 => "b"
-  1 => "a"
-
-julia> filter((x,y)->isodd(x), d)
-Dict{Int64,String} with 1 entry:
-  1 => "a"
 ```
 """
 filter(f, As::AbstractArray) = As[map(f, As)::AbstractArray{Bool}]
 
+"""
+    filter!(f, a::AbstractVector)
+
+Update `a`, removing elements for which `f` is `false`.
+The function `f` is passed one argument.
+
+# Examples
+```jldoctest
+julia> filter!(isodd, collect(1:10))
+5-element Array{Int64,1}:
+ 1
+ 3
+ 5
+ 7
+ 9
+```
+"""
 function filter!(f, a::AbstractVector)
     isempty(a) && return a
 
