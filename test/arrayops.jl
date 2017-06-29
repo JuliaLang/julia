@@ -107,6 +107,7 @@ end
         @test_throws MethodError convert(Array{Int,2}, r)
         @test convert(Array{Int}, r) == [2,3,4]
         @test Base.unsafe_convert(Ptr{Int}, r) == Base.unsafe_convert(Ptr{Int}, s)
+        @test isa(r, StridedArray)  # issue #22411
     end
     @testset "linearslow" begin
         s = view(a, :, [2,3,5])

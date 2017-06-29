@@ -144,7 +144,7 @@ using .Iterators: zip, enumerate
 using .Iterators: Flatten, product  # for generators
 
 # Definition of StridedArray
-StridedReshapedArray{T,N,A<:DenseArray} = ReshapedArray{T,N,A}
+StridedReshapedArray{T,N,A<:Union{DenseArray,FastContiguousSubArray}} = ReshapedArray{T,N,A}
 StridedArray{T,N,A<:Union{DenseArray,StridedReshapedArray},
     I<:Tuple{Vararg{Union{RangeIndex, AbstractCartesianIndex}}}} =
     Union{DenseArray{T,N}, SubArray{T,N,A,I}, StridedReshapedArray{T,N}}
