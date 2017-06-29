@@ -902,9 +902,9 @@ function testmap_equivalence(f, c...)
 end
 
 testmap_equivalence(identity, (1,2,3,4))
-testmap_equivalence(x->x>0?1.0:0.0, sparse(eye(5)))
+testmap_equivalence(x->x>0 ? 1.0 : 0.0, sparse(eye(5)))
 testmap_equivalence((x,y,z)->x+y+z, 1,2,3)
-testmap_equivalence(x->x?false:true, BitArray(10,10))
+testmap_equivalence(x->x ? false : true, BitArray(10,10))
 testmap_equivalence(x->"foobar", BitArray(10,10))
 testmap_equivalence((x,y,z)->string(x,y,z), BitArray(10), ones(10), "1234567890")
 

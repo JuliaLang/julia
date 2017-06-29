@@ -867,7 +867,7 @@ for (gels, gesv, getrs, getri, elty) in
                       (Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
-                      &(btrn?'T':'N'), &m, &n, &size(B,2), A, &max(1,stride(A,2)),
+                      &(btrn ? 'T' : 'N'), &m, &n, &size(B,2), A, &max(1,stride(A,2)),
                       B, &max(1,stride(B,2)), work, &lwork, info)
                 chklapackerror(info[])
                 if i == 1
