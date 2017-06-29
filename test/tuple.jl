@@ -34,6 +34,13 @@
         end
         @test BitPerm_19352(0,2,4,6,1,3,5,7).p[2] == 0x02
     end
+
+    @testset "ninitialized" begin
+        @test Tuple{Int,Any}.ninitialized == 2
+        @test Tuple.ninitialized == 0
+        @test Tuple{Int,Vararg{Any}}.ninitialized == 1
+        @test Tuple{Any,Any,Vararg{Any}}.ninitialized == 2
+    end
 end
 
 @testset "size" begin
