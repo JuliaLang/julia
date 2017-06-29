@@ -103,6 +103,7 @@ Duplicates are combined using the `combine` function, which defaults to
 `+` if no `combine` argument is provided, unless the elements of `V` are Booleans
 in which case `combine` defaults to `|`.
 
+# Examples
 ```jldoctest
 julia> II = [1, 3, 3, 5]; V = [0.1, 0.2, 0.3, 0.2];
 
@@ -176,6 +177,7 @@ sparsevec(I::AbstractVector, v::Number, len::Integer, combine::Function) =
 Create a sparse vector of length `m` where the nonzero indices are keys from
 the dictionary, and the nonzero values are the values from the dictionary.
 
+# Examples
 ```jldoctest
 julia> sparsevec(Dict(1 => 3, 2 => 2))
 2-element SparseVector{Int64,Int64} with 2 stored entries:

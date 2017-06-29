@@ -94,9 +94,24 @@ MersenneTwister(seed::Vector{UInt32}, state::DSFMT_state) =
 Create a `MersenneTwister` RNG object. Different RNG objects can have their own seeds, which
 may be useful for generating different streams of random numbers.
 
-# Example
+# Examples
 ```jldoctest
 julia> rng = MersenneTwister(1234);
+
+julia> x1 = rand(rng, 2)
+2-element Array{Float64,1}:
+ 0.590845
+ 0.766797
+
+julia> rng = MersenneTwister(1234);
+
+julia> x2 = rand(rng, 2)
+2-element Array{Float64,1}:
+ 0.590845
+ 0.766797
+
+julia> x1 == x2
+true
 ```
 """
 MersenneTwister(seed) = srand(MersenneTwister(Vector{UInt32}(), DSFMT_state()), seed)
@@ -228,6 +243,26 @@ Reseed the random number generator. If a `seed` is provided, the RNG will give a
 reproducible sequence of numbers, otherwise Julia will get entropy from the system. For
 `MersenneTwister`, the `seed` may be a non-negative integer or a vector of [`UInt32`](@ref)
 integers. `RandomDevice` does not support seeding.
+
+# Examples
+```jldoctest
+julia> srand(1234);
+
+julia> x1 = rand(2)
+2-element Array{Float64,1}:
+ 0.590845
+ 0.766797
+
+julia> srand(1234);
+
+julia> x2 = rand(2)
+2-element Array{Float64,1}:
+ 0.590845
+ 0.766797
+
+julia> x1 == x2
+true
+```
 """
 srand(r::MersenneTwister) = srand(r, make_seed())
 srand(r::MersenneTwister, n::Integer) = srand(r, make_seed(n))
@@ -1389,7 +1424,7 @@ end
 Fill the array `A` with normally-distributed (mean 0, standard deviation 1) random numbers.
 Also see the [`rand`](@ref) function.
 
-# Example
+# Examples
 
 ```jldoctest
 julia> rng = MersenneTwister(1234);
@@ -1478,7 +1513,7 @@ Generates a version 1 (time-based) universally unique identifier (UUID), as spec
 by RFC 4122. Note that the Node ID is randomly generated (does not identify the host)
 according to section 4.5 of the RFC.
 
-# Example
+# Examples
 
 ```jldoctest
 julia> rng = MersenneTwister(1234);

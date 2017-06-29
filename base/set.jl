@@ -195,10 +195,11 @@ applied to elements of `itr`.
 # Example
 
 ```jldoctest
-julia> unique(isodd, [1, 2, 6, 2])
-2-element Array{Int64,1}:
+julia> unique(x -> x^2, [1, -1, 3, -3, 4])
+3-element Array{Int64,1}:
  1
- 2
+ 3
+ 4
 ```
 """
 function unique(f::Callable, C)
