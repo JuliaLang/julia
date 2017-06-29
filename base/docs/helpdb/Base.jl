@@ -134,13 +134,6 @@ Also available as the macro `@assert expr`.
 assert
 
 """
-    sech(x)
-
-Compute the hyperbolic secant of `x`
-"""
-sech
-
-"""
     unsafe_copy!(dest::Ptr{T}, src::Ptr{T}, N)
 
 Copy `N` elements from a source pointer to a destination, with no checking. The size of an
@@ -1272,13 +1265,6 @@ Compile the given function `f` for the argument tuple (of types) `args`, but do 
 precompile
 
 """
-    cot(x)
-
-Compute the cotangent of `x`, where `x` is in radians.
-"""
-cot
-
-"""
     get(collection, key, default)
 
 Return the value stored for the given key, or the given default value if no mapping for the
@@ -1321,13 +1307,6 @@ Forces synchronization between the in-memory version of a memory-mapped `Array` 
 `BitArray` and the on-disk version.
 """
 Mmap.sync!
-
-"""
-    csc(x)
-
-Compute the cosecant of `x`, where `x` is in radians.
-"""
-csc
 
 """
     hash(x[, h::UInt])
@@ -1395,13 +1374,6 @@ Tests whether an assignable location is defined. The arguments can be a module a
 or a composite object and field name (as a symbol) or index.
 """
 isdefined
-
-"""
-    cotd(x)
-
-Compute the cotangent of `x`, where `x` is in degrees.
-"""
-cotd
 
 """
     wait([x])
@@ -1682,13 +1654,6 @@ used only with extreme caution, as it can cause memory use to grow without bound
 gc_enable
 
 """
-    secd(x)
-
-Compute the secant of `x`, where `x` is in degrees.
-"""
-secd
-
-"""
     OverflowError()
 
 The result of an expression is too large for the specified type and will cause a wraparound.
@@ -1753,20 +1718,6 @@ Register a function `f(x)` to be called when there are no program-accessible ref
 unpredictable.
 """
 finalizer
-
-"""
-    csch(x)
-
-Compute the hyperbolic cosecant of `x`.
-"""
-csch
-
-"""
-    sec(x)
-
-Compute the secant of `x`, where `x` is in radians.
-"""
-sec
 
 """
     TypeError(func::Symbol, context::AbstractString, expected::Type, got)
@@ -1985,13 +1936,6 @@ retrieved by accessing `m.match` and the captured sequences can be retrieved by 
 `m.captures` The optional `idx` argument specifies an index at which to start the search.
 """
 match
-
-"""
-    coth(x)
-
-Compute the hyperbolic cotangent of `x`.
-"""
-coth
 
 """
     start(iter) -> state
@@ -2307,43 +2251,6 @@ Given an index `i` in `reverse(v)`, return the corresponding index in `v` so tha
 Unicode string.)
 """
 reverseind
-
-"""
-    signbit(x)
-
-Returns `true` if the value of the sign of `x` is negative, otherwise `false`.
-
-# Examples
-```jldoctest
-julia> signbit(-4)
-true
-
-julia> signbit(5)
-false
-
-julia> signbit(5.5)
-false
-
-julia> signbit(-4.1)
-true
-```
-"""
-signbit
-
-"""
-    cscd(x)
-
-Compute the cosecant of `x`, where `x` is in degrees.
-"""
-cscd
-
-"""
-    tryparse(type, str, [base])
-
-Like [`parse`](@ref), but returns a [`Nullable`](@ref) of the requested type. The result will be null if the
-string does not contain a valid number.
-"""
-tryparse
 
 """
     exit([code])
