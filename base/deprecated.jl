@@ -1491,6 +1491,18 @@ export conv, conv2, deconv, filt, filt!, xcorr
 @deprecate cov(X::AbstractVector, Y::AbstractVector, corrected::Bool) cov(X, Y, corrected=corrected)
 @deprecate cov(X::AbstractVecOrMat, Y::AbstractVecOrMat, vardim::Int, corrected::Bool) cov(X, Y, vardim, corrected=corrected)
 
+# bkfact
+function bkfact(A::StridedMatrix, uplo::Symbol, symmetric::Bool = issymmetric(A), rook::Bool = false)
+    depwarn("bkfact with uplo and symmetric arguments deprecated. Please use bkfact($(symmetric ? "Symmetric(" : "Hermitian(")A, :$uplo))",
+        :bkfact)
+    return bkfact(symmetric ? Symmetric(A, uplo) : Hermitian(A, uplo), rook)
+end
+function bkfact!(A::StridedMatrix, uplo::Symbol, symmetric::Bool = issymmetric(A), rook::Bool = false)
+    depwarn("bkfact! with uplo and symmetric arguments deprecated. Please use bkfact!($(symmetric ? "Symmetric(" : "Hermitian(")A, :$uplo))",
+        :bkfact!)
+    return bkfact!(symmetric ? Symmetric(A, uplo) : Hermitian(A, uplo), rook)
+end
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

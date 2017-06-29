@@ -23,16 +23,17 @@ bimg  = randn(n,2)/2
     a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
     a2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(a2real, a2img) : a2real)
     @testset for atype in ("Array", "SubArray")
-        asym = a'+a                  # symmetric indefinite
-        apd  = a'*a                 # symmetric positive-definite
+        asym = a.'+ a                  # symmetric indefinite
+        aher = a' + a                  # Hermitian indefinite
+        apd  = a' * a                  # Positive-definite
         if atype == "Array"
-            a = a
+            a  = a
             a2 = a2
         else
-            a = view(a, 1:n, 1:n)
-            a2 = view(a2, 1:n, 1:n)
-            asym = view(asym, 1:n, 1:n)
-            apd = view(apd, 1:n, 1:n)
+            a    = view(a   , 1:n, 1:n)
+            a2   = view(a2  , 1:n, 1:n)
+            aher = view(aher, 1:n, 1:n)
+            apd  = view(apd , 1:n, 1:n)
         end
         ε = εa = eps(abs(float(one(eltya))))
 
@@ -48,8 +49,12 @@ bimg  = randn(n,2)/2
                 εb = eps(abs(float(one(eltyb))))
                 ε = max(εa,εb)
 
-                @testset "(Automatic) Bunch-Kaufman factor of indefinite matrix" begin
-                    bc1 = factorize(asym)
+                # check that factorize gives a Bunch-Kaufman
+                @test isa(factorize(asym), LinAlg.BunchKaufman)
+                @test isa(factorize(aher), LinAlg.BunchKaufman)
+
+                @testset "$uplo Bunch-Kaufman factor of indefinite matrix" for uplo in (:L, :U)
+                    bc1 = bkfact(Hermitian(aher, uplo))
                     @test LinAlg.issuccess(bc1)
                     @test logabsdet(bc1)[1] ≈ log(abs(det(bc1)))
                     if eltya <: Real
@@ -57,27 +62,27 @@ bimg  = randn(n,2)/2
                     else
                         @test logabsdet(bc1)[2] ≈ sign(det(bc1))
                     end
-                    @test inv(bc1)*asym ≈ eye(n)
-                    @test asym*(bc1\b) ≈ b atol=1000ε
+                    @test inv(bc1)*aher ≈ eye(n)
+                    @test aher*(bc1\b) ≈ b atol=1000ε
                     @testset for rook in (false, true)
-                        @test inv(bkfact(a.'+a, :U, true, rook))*(a.'+a) ≈ eye(n)
+                        @test inv(bkfact(Symmetric(a.' + a, uplo), rook))*(a.' + a) ≈ eye(n)
                         @test size(bc1) == size(bc1.LD)
-                        @test size(bc1,1) == size(bc1.LD,1)
-                        @test size(bc1,2) == size(bc1.LD,2)
+                        @test size(bc1, 1) == size(bc1.LD, 1)
+                        @test size(bc1, 2) == size(bc1.LD, 2)
                         if eltya <: BlasReal
                             @test_throws ArgumentError bkfact(a)
                         end
                     end
                 end
 
-                @testset "Bunch-Kaufman factors of a pos-def matrix" begin
-                    @testset for rook in (false, true)
-                        bc2 = bkfact(apd, :U, issymmetric(apd), rook)
+                @testset "$uplo Bunch-Kaufman factors of a pos-def matrix" for uplo in (:U, :L)
+                    @testset "rook pivoting: $rook" for rook in (false, true)
+                        bc2 = bkfact(Hermitian(apd, uplo), rook)
                         @test LinAlg.issuccess(bc2)
                         @test logdet(bc2) ≈ log(det(bc2))
                         @test logabsdet(bc2)[1] ≈ log(abs(det(bc2)))
                         @test logabsdet(bc2)[2] == sign(det(bc2))
-                        @test inv(bc2)*apd ≈ eye(n)
+                        @test inv(bc2)*apd ≈ eye(eltyb, n)
                         @test apd*(bc2\b) ≈ b atol=150000ε
                         @test ishermitian(bc2) == !issymmetric(bc2)
                     end
@@ -104,11 +109,13 @@ end
                 end
 
                 @testset for rook in (false, true)
-                    F = bkfact(As, :U, issymmetric(As), rook)
-                    @test !LinAlg.issuccess(F)
-                    @test det(F) == 0
-                    @test_throws LinAlg.SingularException inv(F)
-                    @test_throws LinAlg.SingularException F \ ones(size(As, 1))
+                    @testset for uplo in (:L, :U)
+                        F = bkfact(issymmetric(As) ? Symmetric(As, uplo) : Hermitian(As, uplo), rook)
+                        @test !LinAlg.issuccess(F)
+                        @test det(F) == 0
+                        @test_throws LinAlg.SingularException inv(F)
+                        @test_throws LinAlg.SingularException F \ ones(size(As, 1))
+                    end
                 end
             end
         end
