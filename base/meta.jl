@@ -9,6 +9,7 @@ using ..CoreLogging
 
 export quot,
        isexpr,
+       replace_sourceloc!,
        show_sexpr,
        @dump
 
@@ -65,6 +66,35 @@ isexpr(@nospecialize(ex), head::Symbol) = isa(ex, Expr) && ex.head === head
 isexpr(@nospecialize(ex), heads) = isa(ex, Expr) && in(ex.head, heads)
 isexpr(@nospecialize(ex), head::Symbol, n::Int) = isa(ex, Expr) && ex.head === head && length(ex.args) == n
 isexpr(@nospecialize(ex), heads, n::Int) = isa(ex, Expr) && in(ex.head, heads) && length(ex.args) == n
+
+"""
+    replace_sourceloc!(location, expr)
+
+Overwrite the caller source location for each macro call in `expr`, returning
+the resulting AST.  This is useful when you need to wrap a macro inside a
+macro, and want the inner macro to see the `__source__` location of the outer
+macro.  For example:
+
+```
+macro test_is_one(ex)
+    replace_sourceloc!(__source__, :(@test \$(esc(ex)) == 1))
+end
+@test_is_one 2
+```
+
+`@test` now reports the location of the call `@test_is_one 2` to the user,
+rather than line 2 where `@test` is used as an implementation detail.
+"""
+function replace_sourceloc!(sourceloc, @nospecialize(ex))
+    if ex isa Expr
+        if ex.head == :macrocall
+            ex.args[2] = sourceloc
+        end
+        map!(e -> replace_sourceloc!(sourceloc, e), ex.args, ex.args)
+    end
+    return ex
+end
+
 
 """
     Meta.show_sexpr([io::IO,], ex)
