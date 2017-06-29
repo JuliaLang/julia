@@ -19821,7 +19821,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Base.LibGit2",
     "title": "Base.LibGit2.PushOptions",
     "category": "Type",
-    "text": "LibGit2.PushOptions\n\nMatches the git_push_options struct.\n\n\n\n"
+    "text": "LibGit2.PushOptions\n\nMatches the git_push_options struct.\n\nThe fields represent:\n\nversion: version of the struct in use, in case this changes later. For now, always 1.\nparallelism: if a pack file must be created, this variable sets the number of worker  threads which will be spawned by the packbuilder. If 0, the packbuilder will auto-set  the number of threads to use. The default is 1.\ncallbacks: the callbacks (e.g. for authentication with the remote) to use for the push.\nproxy_opts: only relevant if the LibGit2 version is greater than or equal to 0.25.0.  Sets options for using a proxy to communicate with a remote. See ProxyOptions  for more information.\ncustom_headers: only relevant if the LibGit2 version is greater than or equal to 0.24.0.  Extra headers needed for the push operation.\n\n\n\n"
 },
 
 {
