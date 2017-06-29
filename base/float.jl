@@ -704,6 +704,13 @@ end
     realmax(::Type{Float16}) = $(bitcast(Float16, 0x7bff))
     realmax(::Type{Float32}) = $(bitcast(Float32, 0x7f7fffff))
     realmax(::Type{Float64}) = $(bitcast(Float64, 0x7fefffffffffffff))
+
+    """
+        realmin(T)
+
+    The smallest in absolute value non-subnormal value representable by the given
+    floating-point DataType `T`.
+    """
     realmin(x::T) where {T<:AbstractFloat} = realmin(T)
     realmax(x::T) where {T<:AbstractFloat} = realmax(T)
     realmin() = realmin(Float64)
