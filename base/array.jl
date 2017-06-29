@@ -32,6 +32,7 @@ For associative collection types, this will be a `Pair{KeyType,ValType}`. The de
 instead of types. However the form that accepts a type argument should be defined for new
 types.
 
+# Examples
 ```jldoctest
 julia> eltype(ones(Float32,2,2))
 Float32
@@ -58,8 +59,7 @@ be a tuple or a series of integer arguments corresponding to the lengths in each
 If the rank `N` is supplied explicitly as in `Array{T,N}(dims)`, then it must
 match the length or number of `dims`.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> A = Array{Float64, 2}(2, 2);
 
@@ -190,6 +190,27 @@ similar(a::Array, T::Type, dims::Dims{N}) where {N} = Array{T,N}(dims)
 similar(a::Array{T}, dims::Dims{N}) where {T,N}     = Array{T,N}(dims)
 
 # T[x...] constructs Array{T,1}
+"""
+    getindex(type[, elements...])
+
+Construct a 1-d array of the specified type. This is usually called with the syntax
+`Type[]`. Element values can be specified using `Type[a,b,c,...]`.
+
+# Examples
+```jldoctest
+julia> Int8[1, 2, 3]
+3-element Array{Int8,1}:
+ 1
+ 2
+ 3
+
+julia> getindex(Int8, 1, 2, 3)
+3-element Array{Int8,1}:
+ 1
+ 2
+ 3
+```
+"""
 function getindex(::Type{T}, vals...) where T
     a = Array{T,1}(length(vals))
     @inbounds for i = 1:length(vals)
@@ -232,6 +253,7 @@ end
 Create an array filled with the value `x`. For example, `fill(1.0, (5,5))` returns a 5×5
 array of floats, with each element initialized to `1.0`.
 
+# Examples
 ```jldoctest
 julia> fill(1.0, (5,5))
 5×5 Array{Float64,2}:
@@ -269,7 +291,6 @@ end
 The default element type is [`Float64`](@ref).
 
 # Examples
-
 ```jldoctest
 julia> eye(3, 4)
 3×4 Array{Float64,2}:
@@ -329,6 +350,7 @@ eye(n::Integer) = eye(Float64, n)
 
 Constructs an identity matrix of the same dimensions and type as `A`.
 
+# Examples
 ```jldoctest
 julia> A = [1 2 3; 4 5 6; 7 8 9]
 3×3 Array{Int64,2}:
@@ -377,6 +399,7 @@ promote_rule(::Type{Array{T,n}}, ::Type{Array{S,n}}) where {T,n,S} = Array{promo
 Return an `Array` with the given element type of all items in a collection or iterable.
 The result has the same shape and number of dimensions as `collection`.
 
+# Examples
 ```jldoctest
 julia> collect(Float64, 1:2:5)
 3-element Array{Float64,1}:
@@ -410,7 +433,7 @@ Return an `Array` of all items in a collection or iterator. For associative coll
 `Pair{KeyType, ValType}`. If the argument is array-like or is an iterator with the `HasShape()`
 trait, the result will have the same shape and number of dimensions as the argument.
 
-# Example
+# Examples
 ```jldoctest
 julia> collect(1:2:13)
 7-element Array{Int64,1}:
@@ -695,7 +718,7 @@ end
 
 Insert the elements of `items` to the beginning of `a`.
 
-# Example
+# Examples
 ```jldoctest
 julia> prepend!([3],[1,2])
 3-element Array{Int64,1}:
@@ -803,7 +826,7 @@ end
 
 Insert one or more `items` at the beginning of `collection`.
 
-# Example
+# Examples
 ```jldoctest
 julia> unshift!([1, 2, 3, 4], 5, 6)
 6-element Array{Int64,1}:
@@ -837,7 +860,7 @@ end
 Insert an `item` into `a` at the given `index`. `index` is the index of `item` in
 the resulting `a`.
 
-# Example
+# Examples
 ```jldoctest
 julia> insert!([6, 5, 4, 2, 1], 4, 3)
 6-element Array{Int64,1}:
@@ -864,7 +887,7 @@ end
 Remove the item at the given `i` and return the modified `a`. Subsequent items
 are shifted to fill the resulting gap.
 
-# Example
+# Examples
 ```jldoctest
 julia> deleteat!([6, 5, 4, 3, 2, 1], 2)
 5-element Array{Int64,1}:
@@ -1039,7 +1062,7 @@ place of the removed items.
 To insert `replacement` before an index `n` without removing any items, use
 `splice!(collection, n:n-1, replacement)`.
 
-# Example
+# Examples
 ```jldoctest splice!
 julia> splice!(A, 4:3, 2)
 0-element Array{Int64,1}
@@ -1622,7 +1645,7 @@ end
 Return a tuple `(I, J, V)` where `I` and `J` are the row and column indexes of the non-zero
 values in matrix `A`, and `V` is a vector of the non-zero values.
 
-# Example
+# Examples
 ```jldoctest
 julia> A = [1 2 0; 0 0 3; 0 4 0]
 3×3 Array{Int64,2}:
@@ -2037,7 +2060,7 @@ both arguments must be collections, and both will be iterated over. In particula
 `setdiff(set,element)` where `element` is a potential member of `set`, will not work in
 general.
 
-# Example
+# Examples
 ```jldoctest
 julia> setdiff([1,2,3],[3,4,5])
 2-element Array{Int64,1}:
@@ -2071,7 +2094,7 @@ symdiff(a, b) = union(setdiff(a,b), setdiff(b,a))
 Construct the symmetric difference of elements in the passed in sets or arrays.
 Maintains order with arrays.
 
-# Example
+# Examples
 ```jldoctest
 julia> symdiff([1,2,3],[3,4,5],[4,5,6])
 3-element Array{Int64,1}:
