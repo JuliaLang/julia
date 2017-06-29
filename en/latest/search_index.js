@@ -4613,7 +4613,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.isequal",
     "category": "Method",
-    "text": "isequal(x, y)\n\nSimilar to ==, except treats all floating-point NaN values as equal to each other, and treats -0.0 as unequal to 0.0. The default implementation of isequal calls ==, so if you have a type that doesn't have these floating-point subtleties then you probably only need to define ==.\n\nisequal is the comparison function used by hash tables (Dict). isequal(x,y) must imply that hash(x) == hash(y).\n\nThis typically means that if you define your own == function then you must define a corresponding hash (and vice versa). Collections typically implement isequal by calling isequal recursively on all contents.\n\nScalar types generally do not need to implement isequal separate from ==, unless they represent floating-point numbers amenable to a more efficient implementation than that provided as a generic fallback (based on isnan, signbit, and ==).\n\njulia> isequal([1., NaN], [1., NaN])\ntrue\n\njulia> [1., NaN] == [1., NaN]\nfalse\n\njulia> 0.0 == -0.0\ntrue\n\njulia> isequal(0.0, -0.0)\nfalse\n\n\n\nisequal(x::Nullable, y::Nullable)\n\nIf neither x nor y is null, compare them according to their values (i.e. isequal(get(x), get(y))). Else, return true if both arguments are null, and false if one is null but not the other: nulls are considered equal.\n\n\n\n"
+    "text": "isequal(x, y)\n\nSimilar to ==, except treats all floating-point NaN values as equal to each other, and treats -0.0 as unequal to 0.0. The default implementation of isequal calls ==, so if you have a type that doesn't have these floating-point subtleties then you probably only need to define ==.\n\nisequal is the comparison function used by hash tables (Dict). isequal(x,y) must imply that hash(x) == hash(y).\n\nThis typically means that if you define your own == function then you must define a corresponding hash (and vice versa). Collections typically implement isequal by calling isequal recursively on all contents.\n\nScalar types generally do not need to implement isequal separate from ==, unless they represent floating-point numbers amenable to a more efficient implementation than that provided as a generic fallback (based on isnan, signbit, and ==).\n\njulia> isequal([1., NaN], [1., NaN])\ntrue\n\njulia> [1., NaN] == [1., NaN]\nfalse\n\njulia> 0.0 == -0.0\ntrue\n\njulia> isequal(0.0, -0.0)\nfalse\n\n\n\nisequal(x::Nullable, y::Nullable)\n\nIf neither x nor y is null, compare them according to their values (i.e. isequal(get(x), get(y))). Else, return true if both arguments are null, and false if one is null but not the other: nulls are considered equal.\n\nExamples\n\njulia> isequal(Nullable(5), Nullable(5))\ntrue\n\njulia> isequal(Nullable(5), Nullable(4))\nfalse\n\njulia> isequal(Nullable(5), Nullable())\nfalse\n\njulia> isequal(Nullable(), Nullable())\ntrue\n\n\n\n"
 },
 
 {
@@ -4629,7 +4629,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.isless",
     "category": "Method",
-    "text": "isless(x::Nullable, y::Nullable)\n\nIf neither x nor y is null, compare them according to their values (i.e. isless(get(x), get(y))). Else, return true if only y is null, and false otherwise: nulls are always considered greater than non-nulls, but not greater than another null.\n\n\n\n"
+    "text": "isless(x::Nullable, y::Nullable)\n\nIf neither x nor y is null, compare them according to their values (i.e. isless(get(x), get(y))). Else, return true if only y is null, and false otherwise: nulls are always considered greater than non-nulls, but not greater than another null.\n\nExamples\n\njulia> isless(Nullable(6), Nullable(5))\nfalse\n\njulia> isless(Nullable(5), Nullable(6))\ntrue\n\njulia> isless(Nullable(5), Nullable(4))\nfalse\n\njulia> isless(Nullable(5), Nullable())\ntrue\n\njulia> isless(Nullable(), Nullable())\nfalse\n\njulia> isless(Nullable(), Nullable(5))\nfalse\n\n\n\n"
 },
 
 {
@@ -4741,7 +4741,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.@isdefined",
     "category": "Macro",
-    "text": "@isdefined s -> Bool\n\nTests whether variable s is defined in the current scope.\n\n\n\n"
+    "text": "@isdefined s -> Bool\n\nTests whether variable s is defined in the current scope.\n\nExamples\n\njulia> function f()\n           println(@isdefined x)\n           x = 3\n           println(@isdefined x)\n       end\nf (generic function with 1 method)\n\njulia> f()\nfalse\ntrue\n\n\n\n"
 },
 
 {
@@ -4829,7 +4829,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.subtypes",
     "category": "Function",
-    "text": "subtypes(T::DataType)\n\nReturn a list of immediate subtypes of DataType T. Note that all currently loaded subtypes are included, including those not visible in the current module.\n\njulia> subtypes(Integer)\n4-element Array{Union{DataType, UnionAll},1}:\n BigInt\n Bool\n Signed\n Unsigned\n\n\n\n"
+    "text": "subtypes(T::DataType)\n\nReturn a list of immediate subtypes of DataType T. Note that all currently loaded subtypes are included, including those not visible in the current module.\n\nExamples\n\njulia> subtypes(Integer)\n4-element Array{Union{DataType, UnionAll},1}:\n BigInt\n Bool\n Signed\n Unsigned\n\n\n\n"
 },
 
 {
@@ -4941,7 +4941,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Core.fieldtype",
     "category": "Function",
-    "text": "fieldtype(T, name::Symbol | index::Int)\n\nDetermine the declared type of a field (specified by name or index) in a composite DataType T.\n\njulia> struct Foo\n           x::Int64\n           y::String\n       end\n\njulia> fieldtype(Foo, :x)\nInt64\n\njulia> fieldtype(Foo, 2)\nString\n\n\n\n"
+    "text": "fieldtype(T, name::Symbol | index::Int)\n\nDetermine the declared type of a field (specified by name or index) in a composite DataType T.\n\nExamples\n\njulia> struct Foo\n           x::Int64\n           y::String\n       end\n\njulia> fieldtype(Foo, :x)\nInt64\n\njulia> fieldtype(Foo, 2)\nString\n\n\n\n"
 },
 
 {
@@ -4949,7 +4949,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.isimmutable",
     "category": "Function",
-    "text": "isimmutable(v)\n\nReturn true iff value v is immutable.  See Mutable Composite Types for a discussion of immutability. Note that this function works on values, so if you give it a type, it will tell you that a value of DataType is mutable.\n\njulia> isimmutable(1)\ntrue\n\njulia> isimmutable([1,2])\nfalse\n\n\n\n"
+    "text": "isimmutable(v)\n\nReturn true iff value v is immutable.  See Mutable Composite Types for a discussion of immutability. Note that this function works on values, so if you give it a type, it will tell you that a value of DataType is mutable.\n\nExamples\n\njulia> isimmutable(1)\ntrue\n\njulia> isimmutable([1,2])\nfalse\n\n\n\n"
 },
 
 {
@@ -4957,7 +4957,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.isbits",
     "category": "Function",
-    "text": "isbits(T)\n\nReturn true if T is a \"plain data\" type, meaning it is immutable and contains no references to other values. Typical examples are numeric types such as UInt8, Float64, and Complex{Float64}.\n\njulia> isbits(Complex{Float64})\ntrue\n\njulia> isbits(Complex)\nfalse\n\n\n\n"
+    "text": "isbits(T)\n\nReturn true if T is a \"plain data\" type, meaning it is immutable and contains no references to other values. Typical examples are numeric types such as UInt8, Float64, and Complex{Float64}.\n\nExamples\n\njulia> isbits(Complex{Float64})\ntrue\n\njulia> isbits(Complex)\nfalse\n\n\n\n"
 },
 
 {
@@ -4965,7 +4965,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.isleaftype",
     "category": "Function",
-    "text": "isleaftype(T)\n\nDetermine whether T's only subtypes are itself and Union{}. This means T is a concrete type that can have instances.\n\njulia> isleaftype(Complex)\nfalse\n\njulia> isleaftype(Complex{Float32})\ntrue\n\njulia> isleaftype(Vector{Complex})\ntrue\n\njulia> isleaftype(Vector{Complex{Float32}})\ntrue\n\n\n\n"
+    "text": "isleaftype(T)\n\nDetermine whether T's only subtypes are itself and Union{}. This means T is a concrete type that can have instances.\n\nExamples\n\njulia> isleaftype(Complex)\nfalse\n\njulia> isleaftype(Complex{Float32})\ntrue\n\njulia> isleaftype(Vector{Complex})\ntrue\n\njulia> isleaftype(Vector{Complex{Float32}})\ntrue\n\n\n\n"
 },
 
 {
@@ -5005,7 +5005,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.instances",
     "category": "Function",
-    "text": "instances(T::Type)\n\nReturn a collection of all instances of the given type, if applicable. Mostly used for enumerated types (see @enum).\n\njulia> @enum Colors Red Blue Green\n\njulia> instances(Colors)\n(Red::Colors = 0, Blue::Colors = 1, Green::Colors = 2)\n\n\n\n"
+    "text": "instances(T::Type)\n\nReturn a collection of all instances of the given type, if applicable. Mostly used for enumerated types (see @enum).\n\nExample\n\njulia> @enum Colors Red Blue Green\n\njulia> instances(Colors)\n(Red::Colors = 0, Blue::Colors = 1, Green::Colors = 2)\n\n\n\n"
 },
 
 {
@@ -5029,7 +5029,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.method_exists",
     "category": "Function",
-    "text": "method_exists(f, Tuple type, world=typemax(UInt)) -> Bool\n\nDetermine whether the given generic function has a method matching the given Tuple of argument types with the upper bound of world age given by world.\n\njulia> method_exists(length, Tuple{Array})\ntrue\n\n\n\n"
+    "text": "method_exists(f, Tuple type, world=typemax(UInt)) -> Bool\n\nDetermine whether the given generic function has a method matching the given Tuple of argument types with the upper bound of world age given by world.\n\nExamples\n\njulia> method_exists(length, Tuple{Array})\ntrue\n\n\n\n"
 },
 
 {
@@ -5197,7 +5197,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.get",
     "category": "Method",
-    "text": "get(x::Nullable[, y])\n\nAttempt to access the value of x. Returns the value if it is present; otherwise, returns y if provided, or throws a NullException if not.\n\n\n\n"
+    "text": "get(x::Nullable[, y])\n\nAttempt to access the value of x. Returns the value if it is present; otherwise, returns y if provided, or throws a NullException if not.\n\nExamples\n\njulia> get(Nullable(5))\n5\n\njulia> get(Nullable())\nERROR: NullException()\nStacktrace:\n [1] get(::Nullable{Union{}}) at ./nullable.jl:102\n\n\n\n"
 },
 
 {
@@ -5213,7 +5213,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.unsafe_get",
     "category": "Function",
-    "text": "unsafe_get(x)\n\nReturn the value of x for Nullable x; return x for all other x.\n\nThis method does not check whether or not x is null before attempting to access the value of x for x::Nullable (hence \"unsafe\").\n\njulia> x = Nullable(1)\nNullable{Int64}(1)\n\njulia> unsafe_get(x)\n1\n\njulia> x = Nullable{String}()\nNullable{String}()\n\njulia> unsafe_get(x)\nERROR: UndefRefError: access to undefined reference\nStacktrace:\n [1] unsafe_get(::Nullable{String}) at ./nullable.jl:125\n\njulia> x = 1\n1\n\njulia> unsafe_get(x)\n1\n\n\n\n"
+    "text": "unsafe_get(x)\n\nReturn the value of x for Nullable x; return x for all other x.\n\nThis method does not check whether or not x is null before attempting to access the value of x for x::Nullable (hence \"unsafe\").\n\nExamples\n\njulia> x = Nullable(1)\nNullable{Int64}(1)\n\njulia> unsafe_get(x)\n1\n\njulia> x = Nullable{String}()\nNullable{String}()\n\njulia> unsafe_get(x)\nERROR: UndefRefError: access to undefined reference\nStacktrace:\n [1] unsafe_get(::Nullable{String}) at ./nullable.jl:136\n\njulia> x = 1\n1\n\njulia> unsafe_get(x)\n1\n\n\n\n"
 },
 
 {
@@ -5429,7 +5429,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.@time",
     "category": "Macro",
-    "text": "@time\n\nA macro to execute an expression, printing the time it took to execute, the number of allocations, and the total number of bytes its execution caused to be allocated, before returning the value of the expression.\n\nSee also @timev, @timed, @elapsed, and @allocated.\n\njulia> @time rand(10^6);\n  0.001525 seconds (7 allocations: 7.630 MiB)\n\njulia> @time begin\n           sleep(0.3)\n           1+1\n       end\n  0.301395 seconds (8 allocations: 336 bytes)\n\n\n\n"
+    "text": "@time\n\nA macro to execute an expression, printing the time it took to execute, the number of allocations, and the total number of bytes its execution caused to be allocated, before returning the value of the expression.\n\nSee also @timev, @timed, @elapsed, and @allocated.\n\njulia> @time rand(10^6);\n  0.001525 seconds (7 allocations: 7.630 MiB)\n\njulia> @time begin\n           sleep(0.3)\n           1+1\n       end\n  0.301395 seconds (8 allocations: 336 bytes)\n2\n\n\n\n"
 },
 
 {
@@ -5869,7 +5869,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.module_name",
     "category": "Function",
-    "text": "module_name(m::Module) -> Symbol\n\nGet the name of a Module as a Symbol.\n\njulia> module_name(Base.LinAlg)\n:LinAlg\n\n\n\n"
+    "text": "module_name(m::Module) -> Symbol\n\nGet the name of a Module as a Symbol.\n\nExamples\n\njulia> module_name(Base.LinAlg)\n:LinAlg\n\n\n\n"
 },
 
 {
@@ -5877,7 +5877,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.module_parent",
     "category": "Function",
-    "text": "module_parent(m::Module) -> Module\n\nGet a module's enclosing Module. Main is its own parent, as is LastMain after workspace().\n\njulia> module_parent(Main)\nMain\n\njulia> module_parent(Base.LinAlg.BLAS)\nBase.LinAlg\n\n\n\n"
+    "text": "module_parent(m::Module) -> Module\n\nGet a module's enclosing Module. Main is its own parent, as is LastMain after workspace().\n\nExamples\n\njulia> module_parent(Main)\nMain\n\njulia> module_parent(Base.LinAlg.BLAS)\nBase.LinAlg\n\n\n\n"
 },
 
 {
@@ -5893,7 +5893,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.fullname",
     "category": "Function",
-    "text": "fullname(m::Module)\n\nGet the fully-qualified name of a module as a tuple of symbols. For example,\n\njulia> fullname(Base.Pkg)\n(:Base, :Pkg)\n\njulia> fullname(Main)\n()\n\n\n\n"
+    "text": "fullname(m::Module)\n\nGet the fully-qualified name of a module as a tuple of symbols. For example,\n\nExamples\n\njulia> fullname(Base.Pkg)\n(:Base, :Pkg)\n\njulia> fullname(Main)\n()\n\n\n\n"
 },
 
 {
@@ -5917,7 +5917,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.fieldnames",
     "category": "Function",
-    "text": "fieldnames(x::DataType)\n\nGet an array of the fields of a DataType.\n\njulia> fieldnames(Hermitian)\n2-element Array{Symbol,1}:\n :data\n :uplo\n\n\n\n"
+    "text": "fieldnames(x::DataType)\n\nGet an array of the fields of a DataType.\n\nExamples\n\njulia> fieldnames(Hermitian)\n2-element Array{Symbol,1}:\n :data\n :uplo\n\n\n\n"
 },
 
 {
@@ -5925,7 +5925,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.fieldname",
     "category": "Function",
-    "text": "fieldname(x::DataType, i::Integer)\n\nGet the name of field i of a DataType.\n\njulia> fieldname(SparseMatrixCSC,1)\n:m\n\njulia> fieldname(SparseMatrixCSC,5)\n:nzval\n\n\n\n"
+    "text": "fieldname(x::DataType, i::Integer)\n\nGet the name of field i of a DataType.\n\nExamples\n\njulia> fieldname(SparseMatrixCSC, 1)\n:m\n\njulia> fieldname(SparseMatrixCSC, 5)\n:nzval\n\n\n\n"
 },
 
 {
@@ -5933,7 +5933,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.datatype_module",
     "category": "Function",
-    "text": "Base.datatype_module(t::DataType) -> Module\n\nDetermine the module containing the definition of a DataType.\n\n\n\n"
+    "text": "Base.datatype_module(t::DataType) -> Module\n\nDetermine the module containing the definition of a DataType.\n\nExamples\n\njulia> module Foo\n           struct Int end\n       end\nFoo\n\njulia> Base.datatype_module(Int)\nCore\n\njulia> Base.datatype_module(Foo.Int)\nFoo\n\n\n\n"
 },
 
 {
@@ -5941,7 +5941,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.datatype_name",
     "category": "Function",
-    "text": "Base.datatype_name(t) -> Symbol\n\nGet the name of a (potentially UnionAll-wrapped) DataType (without its parent module) as a symbol.\n\n\n\n"
+    "text": "Base.datatype_name(t) -> Symbol\n\nGet the name of a (potentially UnionAll-wrapped) DataType (without its parent module) as a symbol.\n\nExamples\n\njulia> module Foo\n           struct S{T}\n           end\n       end\nFoo\n\njulia> Base.datatype_name(Foo.S{T} where T)\n:S\n\n\n\n"
 },
 
 {
@@ -6285,7 +6285,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.unique",
     "category": "Function",
-    "text": "unique(itr)\n\nReturn an array containing only the unique elements of collection itr, as determined by isequal, in the order that the first of each set of equivalent elements originally appears.\n\nExample\n\njulia> unique([1, 2, 6, 2])\n3-element Array{Int64,1}:\n 1\n 2\n 6\n\n\n\nunique(f, itr)\n\nReturns an array containing one value from itr for each unique value produced by f applied to elements of itr.\n\nExample\n\njulia> unique(isodd, [1, 2, 6, 2])\n2-element Array{Int64,1}:\n 1\n 2\n\n\n\nunique(A::AbstractArray, dim::Int)\n\nReturn unique regions of A along dimension dim.\n\nExamples\n\njulia> A = map(isodd, reshape(collect(1:8), (2,2,2)))\n2×2×2 Array{Bool,3}:\n[:, :, 1] =\n  true   true\n false  false\n\n[:, :, 2] =\n  true   true\n false  false\n\njulia> unique(A)\n2-element Array{Bool,1}:\n  true\n false\n\njulia> unique(A, 2)\n2×1×2 Array{Bool,3}:\n[:, :, 1] =\n  true\n false\n\n[:, :, 2] =\n  true\n false\n\njulia> unique(A, 3)\n2×2×1 Array{Bool,3}:\n[:, :, 1] =\n  true   true\n false  false\n\n\n\n"
+    "text": "unique(itr)\n\nReturn an array containing only the unique elements of collection itr, as determined by isequal, in the order that the first of each set of equivalent elements originally appears.\n\nExample\n\njulia> unique([1, 2, 6, 2])\n3-element Array{Int64,1}:\n 1\n 2\n 6\n\n\n\nunique(f, itr)\n\nReturns an array containing one value from itr for each unique value produced by f applied to elements of itr.\n\nExample\n\njulia> unique(x -> x^2, [1, -1, 3, -3, 4])\n3-element Array{Int64,1}:\n 1\n 3\n 4\n\n\n\nunique(A::AbstractArray, dim::Int)\n\nReturn unique regions of A along dimension dim.\n\nExamples\n\njulia> A = map(isodd, reshape(collect(1:8), (2,2,2)))\n2×2×2 Array{Bool,3}:\n[:, :, 1] =\n  true   true\n false  false\n\n[:, :, 2] =\n  true   true\n false  false\n\njulia> unique(A)\n2-element Array{Bool,1}:\n  true\n false\n\njulia> unique(A, 2)\n2×1×2 Array{Bool,3}:\n[:, :, 1] =\n  true\n false\n\n[:, :, 2] =\n  true\n false\n\njulia> unique(A, 3)\n2×2×1 Array{Bool,3}:\n[:, :, 1] =\n  true   true\n false  false\n\n\n\n"
 },
 
 {
@@ -6597,7 +6597,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.map",
     "category": "Function",
-    "text": "map(f, c...) -> collection\n\nTransform collection c by applying f to each element. For multiple collection arguments, apply f elementwise.\n\nExamples\n\njulia> map(x -> x * 2, [1, 2, 3])\n3-element Array{Int64,1}:\n 2\n 4\n 6\n\njulia> map(+, [1, 2, 3], [10, 20, 30])\n3-element Array{Int64,1}:\n 11\n 22\n 33\n\n\n\nmap(f, x::Nullable)\n\nReturn f applied to the value of x if it has one, as a Nullable. If x is null, then return a null value of type Nullable{S}. S is guaranteed to be either Union{} or a concrete type. Whichever of these is chosen is an implementation detail, but typically the choice that maximizes performance would be used. If x has a value, then the return type is guaranteed to be of type Nullable{typeof(f(x))}.\n\n\n\n"
+    "text": "map(f, c...) -> collection\n\nTransform collection c by applying f to each element. For multiple collection arguments, apply f elementwise.\n\nExamples\n\njulia> map(x -> x * 2, [1, 2, 3])\n3-element Array{Int64,1}:\n 2\n 4\n 6\n\njulia> map(+, [1, 2, 3], [10, 20, 30])\n3-element Array{Int64,1}:\n 11\n 22\n 33\n\n\n\nmap(f, x::Nullable)\n\nReturn f applied to the value of x if it has one, as a Nullable. If x is null, then return a null value of type Nullable{S}. S is guaranteed to be either Union{} or a concrete type. Whichever of these is chosen is an implementation detail, but typically the choice that maximizes performance would be used. If x has a value, then the return type is guaranteed to be of type Nullable{typeof(f(x))}.\n\nExamples\n\njulia> map(isodd, Nullable(1))\nNullable{Bool}(true)\n\njulia> map(isodd, Nullable(2))\nNullable{Bool}(false)\n\njulia> map(isodd, Nullable{Int}())\nNullable{Bool}()\n\n\n\n"
 },
 
 {
@@ -6709,7 +6709,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.filter",
     "category": "Function",
-    "text": "filter(function, collection)\n\nReturn a copy of collection, removing elements for which function is false. For associative collections, the function is passed two arguments (key and value).\n\nExamples\n\njulia> a = 1:10\n1:10\n\njulia> filter(isodd, a)\n5-element Array{Int64,1}:\n 1\n 3\n 5\n 7\n 9\n\njulia> d = Dict(1=>\"a\", 2=>\"b\")\nDict{Int64,String} with 2 entries:\n  2 => \"b\"\n  1 => \"a\"\n\njulia> filter((x,y)->isodd(x), d)\nDict{Int64,String} with 1 entry:\n  1 => \"a\"\n\n\n\nfilter(p, x::Nullable)\n\nReturn null if either x is null or p(get(x)) is false, and x otherwise.\n\n\n\n"
+    "text": "filter(function, collection)\n\nReturn a copy of collection, removing elements for which function is false. For associative collections, the function is passed two arguments (key and value).\n\nExamples\n\njulia> a = 1:10\n1:10\n\njulia> filter(isodd, a)\n5-element Array{Int64,1}:\n 1\n 3\n 5\n 7\n 9\n\njulia> d = Dict(1=>\"a\", 2=>\"b\")\nDict{Int64,String} with 2 entries:\n  2 => \"b\"\n  1 => \"a\"\n\njulia> filter((x,y)->isodd(x), d)\nDict{Int64,String} with 1 entry:\n  1 => \"a\"\n\n\n\nfilter(p, x::Nullable)\n\nReturn null if either x is null or p(get(x)) is false, and x otherwise.\n\nExamples\n\njulia> filter(isodd, Nullable(5))\nNullable{Int64}(5)\n\njulia> filter(isodd, Nullable(4))\nNullable{Int64}()\n\njulia> filter(isodd, Nullable{Int}())\nNullable{Int64}()\n\n\n\n"
 },
 
 {
@@ -8309,7 +8309,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.real",
     "category": "Method",
-    "text": "real(z)\n\nReturn the real part of the complex number z.\n\njulia> real(1 + 3im)\n1\n\n\n\n"
+    "text": "real(z)\n\nReturn the real part of the complex number z.\n\nExamples\n\njulia> real(1 + 3im)\n1\n\n\n\n"
 },
 
 {
@@ -8317,7 +8317,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.imag",
     "category": "Function",
-    "text": "imag(z)\n\nReturn the imaginary part of the complex number z.\n\njulia> imag(1 + 3im)\n3\n\n\n\n"
+    "text": "imag(z)\n\nReturn the imaginary part of the complex number z.\n\nExamples\n\njulia> imag(1 + 3im)\n3\n\n\n\n"
 },
 
 {
@@ -8325,7 +8325,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.reim",
     "category": "Function",
-    "text": "reim(z)\n\nReturn both the real and imaginary parts of the complex number z.\n\njulia> reim(1 + 3im)\n(1, 3)\n\n\n\n"
+    "text": "reim(z)\n\nReturn both the real and imaginary parts of the complex number z.\n\nExamples\n\njulia> reim(1 + 3im)\n(1, 3)\n\n\n\n"
 },
 
 {
@@ -8333,7 +8333,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.conj",
     "category": "Function",
-    "text": "conj(z)\n\nCompute the complex conjugate of a complex number z.\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\nconj(v::RowVector)\n\nReturns a ConjArray lazy view of the input, where each element is conjugated.\n\nExample\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\n"
+    "text": "conj(z)\n\nCompute the complex conjugate of a complex number z.\n\nExamples\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\nconj(v::RowVector)\n\nReturns a ConjArray lazy view of the input, where each element is conjugated.\n\nExample\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\n"
 },
 
 {
@@ -8341,7 +8341,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.angle",
     "category": "Function",
-    "text": "angle(z)\n\nCompute the phase angle in radians of a complex number z.\n\n\n\n"
+    "text": "angle(z)\n\nCompute the phase angle in radians of a complex number z.\n\nExamples\n\njulia> rad2deg(angle(1 + im))\n45.0\n\njulia> rad2deg(angle(1 - im))\n-45.0\n\njulia> rad2deg(angle(-1 - im))\n-135.0\n\n\n\n"
 },
 
 {
@@ -8349,7 +8349,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.cis",
     "category": "Function",
-    "text": "cis(z)\n\nReturn exp(iz).\n\n\n\n"
+    "text": "cis(z)\n\nReturn exp(iz).\n\nExamples\n\njulia> cis(π) ≈ -1\ntrue\n\n\n\n"
 },
 
 {
@@ -9109,7 +9109,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Numbers",
     "title": "Base.im",
     "category": "Constant",
-    "text": "im\n\nThe imaginary unit.\n\n\n\n"
+    "text": "im\n\nThe imaginary unit.\n\nExamples\n\njulia> im * im\n-1 + 0im\n\n\n\n"
 },
 
 {
@@ -9261,7 +9261,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Numbers",
     "title": "Base.isreal",
     "category": "Function",
-    "text": "isreal(x) -> Bool\n\nTest whether x or all its elements are numerically equal to some real number.\n\njulia> isreal(5.)\ntrue\n\njulia> isreal([4.; complex(0,1)])\nfalse\n\n\n\n"
+    "text": "isreal(x) -> Bool\n\nTest whether x or all its elements are numerically equal to some real number.\n\nExamples\n\njulia> isreal(5.)\ntrue\n\njulia> isreal([4.; complex(0,1)])\nfalse\n\n\n\n"
 },
 
 {
@@ -9485,7 +9485,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Numbers",
     "title": "Base.Random.srand",
     "category": "Function",
-    "text": "srand([rng=GLOBAL_RNG], seed) -> rng\nsrand([rng=GLOBAL_RNG]) -> rng\n\nReseed the random number generator. If a seed is provided, the RNG will give a reproducible sequence of numbers, otherwise Julia will get entropy from the system. For MersenneTwister, the seed may be a non-negative integer or a vector of UInt32 integers. RandomDevice does not support seeding.\n\n\n\n"
+    "text": "srand([rng=GLOBAL_RNG], seed) -> rng\nsrand([rng=GLOBAL_RNG]) -> rng\n\nReseed the random number generator. If a seed is provided, the RNG will give a reproducible sequence of numbers, otherwise Julia will get entropy from the system. For MersenneTwister, the seed may be a non-negative integer or a vector of UInt32 integers. RandomDevice does not support seeding.\n\nExamples\n\njulia> srand(1234);\n\njulia> x1 = rand(2)\n2-element Array{Float64,1}:\n 0.590845\n 0.766797\n\njulia> srand(1234);\n\njulia> x2 = rand(2)\n2-element Array{Float64,1}:\n 0.590845\n 0.766797\n\njulia> x1 == x2\ntrue\n\n\n\n"
 },
 
 {
@@ -9493,7 +9493,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Numbers",
     "title": "Base.Random.MersenneTwister",
     "category": "Type",
-    "text": "MersenneTwister(seed)\n\nCreate a MersenneTwister RNG object. Different RNG objects can have their own seeds, which may be useful for generating different streams of random numbers.\n\nExample\n\njulia> rng = MersenneTwister(1234);\n\n\n\n"
+    "text": "MersenneTwister(seed)\n\nCreate a MersenneTwister RNG object. Different RNG objects can have their own seeds, which may be useful for generating different streams of random numbers.\n\nExamples\n\njulia> rng = MersenneTwister(1234);\n\njulia> x1 = rand(rng, 2)\n2-element Array{Float64,1}:\n 0.590845\n 0.766797\n\njulia> rng = MersenneTwister(1234);\n\njulia> x2 = rand(rng, 2)\n2-element Array{Float64,1}:\n 0.590845\n 0.766797\n\njulia> x1 == x2\ntrue\n\n\n\n"
 },
 
 {
@@ -9541,7 +9541,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Numbers",
     "title": "Base.Random.randn!",
     "category": "Function",
-    "text": "randn!([rng=GLOBAL_RNG], A::AbstractArray) -> A\n\nFill the array A with normally-distributed (mean 0, standard deviation 1) random numbers. Also see the rand function.\n\nExample\n\njulia> rng = MersenneTwister(1234);\n\njulia> randn!(rng, zeros(5))\n5-element Array{Float64,1}:\n  0.867347\n -0.901744\n -0.494479\n -0.902914\n  0.864401\n\n\n\n"
+    "text": "randn!([rng=GLOBAL_RNG], A::AbstractArray) -> A\n\nFill the array A with normally-distributed (mean 0, standard deviation 1) random numbers. Also see the rand function.\n\nExamples\n\njulia> rng = MersenneTwister(1234);\n\njulia> randn!(rng, zeros(5))\n5-element Array{Float64,1}:\n  0.867347\n -0.901744\n -0.494479\n -0.902914\n  0.864401\n\n\n\n"
 },
 
 {
@@ -11213,7 +11213,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.SparseArrays.sparsevec",
     "category": "Function",
-    "text": "sparsevec(I, V, [m, combine])\n\nCreate a sparse vector S of length m such that S[I[k]] = V[k]. Duplicates are combined using the combine function, which defaults to + if no combine argument is provided, unless the elements of V are Booleans in which case combine defaults to |.\n\njulia> II = [1, 3, 3, 5]; V = [0.1, 0.2, 0.3, 0.2];\n\njulia> sparsevec(II, V)\n5-element SparseVector{Float64,Int64} with 3 stored entries:\n  [1]  =  0.1\n  [3]  =  0.5\n  [5]  =  0.2\n\njulia> sparsevec(II, V, 8, -)\n8-element SparseVector{Float64,Int64} with 3 stored entries:\n  [1]  =  0.1\n  [3]  =  -0.1\n  [5]  =  0.2\n\njulia> sparsevec([1, 3, 1, 2, 2], [true, true, false, false, false])\n3-element SparseVector{Bool,Int64} with 3 stored entries:\n  [1]  =  true\n  [2]  =  false\n  [3]  =  true\n\n\n\nsparsevec(d::Dict, [m])\n\nCreate a sparse vector of length m where the nonzero indices are keys from the dictionary, and the nonzero values are the values from the dictionary.\n\njulia> sparsevec(Dict(1 => 3, 2 => 2))\n2-element SparseVector{Int64,Int64} with 2 stored entries:\n  [1]  =  3\n  [2]  =  2\n\n\n\nsparsevec(A)\n\nConvert a vector A into a sparse vector of length m.\n\nExample\n\njulia> sparsevec([1.0, 2.0, 0.0, 0.0, 3.0, 0.0])\n6-element SparseVector{Float64,Int64} with 3 stored entries:\n  [1]  =  1.0\n  [2]  =  2.0\n  [5]  =  3.0\n\n\n\n"
+    "text": "sparsevec(I, V, [m, combine])\n\nCreate a sparse vector S of length m such that S[I[k]] = V[k]. Duplicates are combined using the combine function, which defaults to + if no combine argument is provided, unless the elements of V are Booleans in which case combine defaults to |.\n\nExamples\n\njulia> II = [1, 3, 3, 5]; V = [0.1, 0.2, 0.3, 0.2];\n\njulia> sparsevec(II, V)\n5-element SparseVector{Float64,Int64} with 3 stored entries:\n  [1]  =  0.1\n  [3]  =  0.5\n  [5]  =  0.2\n\njulia> sparsevec(II, V, 8, -)\n8-element SparseVector{Float64,Int64} with 3 stored entries:\n  [1]  =  0.1\n  [3]  =  -0.1\n  [5]  =  0.2\n\njulia> sparsevec([1, 3, 1, 2, 2], [true, true, false, false, false])\n3-element SparseVector{Bool,Int64} with 3 stored entries:\n  [1]  =  true\n  [2]  =  false\n  [3]  =  true\n\n\n\nsparsevec(d::Dict, [m])\n\nCreate a sparse vector of length m where the nonzero indices are keys from the dictionary, and the nonzero values are the values from the dictionary.\n\nExamples\n\njulia> sparsevec(Dict(1 => 3, 2 => 2))\n2-element SparseVector{Int64,Int64} with 2 stored entries:\n  [1]  =  3\n  [2]  =  2\n\n\n\nsparsevec(A)\n\nConvert a vector A into a sparse vector of length m.\n\nExample\n\njulia> sparsevec([1.0, 2.0, 0.0, 0.0, 3.0, 0.0])\n6-element SparseVector{Float64,Int64} with 3 stored entries:\n  [1]  =  1.0\n  [2]  =  2.0\n  [5]  =  3.0\n\n\n\n"
 },
 
 {
@@ -15573,7 +15573,7 @@ var documenterSearchIndex = {"docs": [
     "page": "I/O and Network",
     "title": "Base.info",
     "category": "Function",
-    "text": "info([io, ] msg..., [prefix=\"INFO: \"])\n\nDisplay an informational message. Argument msg is a string describing the information to be displayed. The prefix keyword argument can be used to override the default prepending of msg.\n\njulia> info(\"hello world\")\nINFO: hello world\n\njulia> info(\"hello world\"; prefix=\"MY INFO: \")\nMY INFO: hello world\n\nSee also logging.\n\n\n\n"
+    "text": "info([io, ] msg..., [prefix=\"INFO: \"])\n\nDisplay an informational message. Argument msg is a string describing the information to be displayed. The prefix keyword argument can be used to override the default prepending of msg.\n\nExamples\n\njulia> info(\"hello world\")\nINFO: hello world\n\njulia> info(\"hello world\"; prefix=\"MY INFO: \")\nMY INFO: hello world\n\nSee also logging.\n\n\n\n"
 },
 
 {
@@ -15581,7 +15581,7 @@ var documenterSearchIndex = {"docs": [
     "page": "I/O and Network",
     "title": "Base.warn",
     "category": "Function",
-    "text": "warn([io, ] msg..., [prefix=\"WARNING: \", once=false, key=nothing, bt=nothing, filename=nothing, lineno::Int=0])\n\nDisplay a warning. Argument msg is a string describing the warning to be displayed.  Set once to true and specify a key to only display msg the first time warn is called.  If bt is not nothing a backtrace is displayed. If filename is not nothing both it and lineno are displayed.\n\nSee also logging.\n\n\n\nwarn(msg)\n\nDisplay a warning. Argument msg is a string describing the warning to be displayed.\n\njulia> warn(\"Beep Beep\")\nWARNING: Beep Beep\n\n\n\n"
+    "text": "warn([io, ] msg..., [prefix=\"WARNING: \", once=false, key=nothing, bt=nothing, filename=nothing, lineno::Int=0])\n\nDisplay a warning. Argument msg is a string describing the warning to be displayed.  Set once to true and specify a key to only display msg the first time warn is called.  If bt is not nothing a backtrace is displayed. If filename is not nothing both it and lineno are displayed.\n\nSee also logging.\n\n\n\nwarn(msg)\n\nDisplay a warning. Argument msg is a string describing the warning to be displayed.\n\nExamples\n\njulia> warn(\"Beep Beep\")\nWARNING: Beep Beep\n\n\n\n"
 },
 
 {
@@ -15829,7 +15829,7 @@ var documenterSearchIndex = {"docs": [
     "page": "I/O and Network",
     "title": "Base.Multimedia.mimewritable",
     "category": "Function",
-    "text": "mimewritable(mime, x)\n\nReturns a boolean value indicating whether or not the object x can be written as the given mime type. (By default, this is determined automatically by the existence of the corresponding show method for typeof(x).)\n\n\n\n"
+    "text": "mimewritable(mime, x)\n\nReturns a boolean value indicating whether or not the object x can be written as the given mime type. (By default, this is determined automatically by the existence of the corresponding show method for typeof(x).)\n\nExamples\n\njulia> mimewritable(MIME(\"text/plain\"), rand(5))\ntrue\n\njulia> mimewritable(MIME(\"img/png\"), rand(5))\nfalse\n\n\n\n"
 },
 
 {
@@ -15877,7 +15877,7 @@ var documenterSearchIndex = {"docs": [
     "page": "I/O and Network",
     "title": "Base.Multimedia.istextmime",
     "category": "Function",
-    "text": "istextmime(m::MIME)\n\nDetermine whether a MIME type is text data. MIME types are assumed to be binary data except for a set of types known to be text data (possibly Unicode).\n\n\n\n"
+    "text": "istextmime(m::MIME)\n\nDetermine whether a MIME type is text data. MIME types are assumed to be binary data except for a set of types known to be text data (possibly Unicode).\n\nExamples\n\njulia> istextmime(MIME(\"text/plain\"))\ntrue\n\njulia> istextmime(MIME(\"img/png\"))\nfalse\n\n\n\n"
 },
 
 {
@@ -17381,7 +17381,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Iteration utilities",
     "title": "Base.Iterators.rest",
     "category": "Function",
-    "text": "rest(iter, state)\n\nAn iterator that yields the same elements as iter, but starting at the given state.\n\n\n\n"
+    "text": "rest(iter, state)\n\nAn iterator that yields the same elements as iter, but starting at the given state.\n\nExamples\n\njulia> collect(Iterators.rest([1,2,3,4], 2))\n3-element Array{Any,1}:\n 2\n 3\n 4\n\n\n\n"
 },
 
 {
@@ -17389,7 +17389,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Iteration utilities",
     "title": "Base.Iterators.countfrom",
     "category": "Function",
-    "text": "countfrom(start=1, step=1)\n\nAn iterator that counts forever, starting at start and incrementing by step.\n\n\n\n"
+    "text": "countfrom(start=1, step=1)\n\nAn iterator that counts forever, starting at start and incrementing by step.\n\nExamples\n\njulia> for v in Iterators.countfrom(5, 2)\n           v > 10 && break\n           println(v)\n       end\n5\n7\n9\n\n\n\n"
 },
 
 {
@@ -17413,7 +17413,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Iteration utilities",
     "title": "Base.Iterators.cycle",
     "category": "Function",
-    "text": "cycle(iter)\n\nAn iterator that cycles through iter forever.\n\n\n\n"
+    "text": "cycle(iter)\n\nAn iterator that cycles through iter forever.\n\nExamples\n\njulia> for (i, v) in enumerate(Iterators.cycle(\"hello\"))\n           print(v)\n           i > 10 && break\n       end\nhellohelloh\n\n\n\n"
 },
 
 {
