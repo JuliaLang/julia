@@ -124,7 +124,6 @@ If `x` is a number, this is essentially the same as `one(x)/x`, but for
 some types `inv(x)` may be slightly more efficient.
 
 # Examples
-
 ```jldoctest
 julia> inv(2)
 0.5
