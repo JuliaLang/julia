@@ -97,7 +97,7 @@ void addTargetPasses(legacy::PassManagerBase *PM, TargetMachine *TM)
 
 // this defines the set of optimization passes defined for Julia at various optimization levels.
 // it assumes that the TLI and TTI wrapper passes have already been added.
-void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level)
+void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level, bool dump_native)
 {
 #ifdef JL_DEBUG_BUILD
     PM->add(createGCInvariantVerifierPass(true));
@@ -133,6 +133,8 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level)
         PM->add(createLateLowerGCFramePass());
         PM->add(createLowerPTLSPass(imaging_mode));
 #endif
+        if (dump_native)
+            PM->add(createMultiVersioningPass());
         return;
     }
     PM->add(createPropagateJuliaAddrspaces());
@@ -172,6 +174,8 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level)
     PM->add(createAllocOptPass());
 #endif
     PM->add(createInstructionCombiningPass()); // Cleanup for scalarrepl.
+    if (dump_native)
+        PM->add(createMultiVersioningPass());
     PM->add(createSROAPass());                 // Break up aggregate allocas
     PM->add(createInstructionCombiningPass()); // Cleanup for scalarrepl.
     PM->add(createJumpThreadingPass());        // Thread jumps.
@@ -1022,20 +1026,18 @@ void jl_add_to_shadow(Module *m)
 
 static void emit_offset_table(Module *mod, const std::vector<GlobalValue*> &vars, StringRef name)
 {
+    // Emit a global variable with all the variable addresses.
+    // The cloning pass will convert them into offsets.
     assert(!vars.empty());
-    addComdat(GlobalAlias::create(GlobalVariable::ExternalLinkage, name + "_base", vars[0]));
-    auto vbase = ConstantExpr::getPtrToInt(vars[0], T_size);
     size_t nvars = vars.size();
-    std::vector<Constant*> offsets(nvars);
-    for (size_t i = 0; i < nvars; i++) {
-        auto ptrdiff = ConstantExpr::getSub(ConstantExpr::getPtrToInt(vars[i], T_size), vbase);
-        offsets[i] = sizeof(void*) == 8 ? ConstantExpr::getTrunc(ptrdiff, T_uint32) : ptrdiff;
-    }
-    ArrayType *vars_type = ArrayType::get(T_uint32, nvars);
-    addComdat(new GlobalVariable(*mod, vars_type, true,
-                                 GlobalVariable::ExternalLinkage,
-                                 ConstantArray::get(vars_type, ArrayRef<Constant*>(offsets)),
-                                 name + "_offsets"));
+    std::vector<Constant*> addrs(nvars);
+    for (size_t i = 0; i < nvars; i++)
+        addrs[i] = ConstantExpr::getBitCast(vars[i], T_psize);
+    ArrayType *vars_type = ArrayType::get(T_psize, nvars);
+    new GlobalVariable(*mod, vars_type, true,
+                       GlobalVariable::ExternalLinkage,
+                       ConstantArray::get(vars_type, addrs),
+                       name);
 }
 
 
@@ -1144,7 +1146,7 @@ void jl_dump_native(const char *bc_fname, const char *unopt_bc_fname, const char
     }
 
     if (bc_fname || obj_fname)
-        addOptimizationPasses(&PM, jl_options.opt_level);
+        addOptimizationPasses(&PM, jl_options.opt_level, true);
 
     if (bc_fname) {
         // call output handler directly to avoid special case handling of `-` filename

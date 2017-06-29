@@ -9,6 +9,7 @@
 #include "julia.h"
 #include "julia_internal.h"
 #include "builtin_proto.h"
+#include "processor.h"
 
 #ifndef _OS_WINDOWS_
 #include <dlfcn.h>
@@ -134,17 +135,11 @@ static void *jl_sysimg_handle = NULL;
 static uint64_t sysimage_base = 0;
 static uintptr_t *sysimg_gvars_base = NULL;
 static const int32_t *sysimg_gvars_offsets = NULL;
-static const char *sysimg_fvars_base = NULL;
-static const int32_t *sysimg_fvars_offsets = NULL;
+static jl_sysimg_fptrs_t sysimg_fptrs;
 
 static inline uintptr_t *sysimg_gvars(uintptr_t *base, size_t idx)
 {
     return base + sysimg_gvars_offsets[idx] / sizeof(base[0]);
-}
-
-static inline uintptr_t sysimg_fvars(const char *base, size_t idx)
-{
-    return (uintptr_t)(base + sysimg_fvars_offsets[idx]);
 }
 
 JL_DLLEXPORT int jl_running_on_valgrind(void)
@@ -160,9 +155,8 @@ static void jl_load_sysimg_so(void)
         sysimg_gvars_base = (uintptr_t*)jl_dlsym(jl_sysimg_handle, "jl_sysimg_gvars_base");
         sysimg_gvars_offsets = (const int32_t*)jl_dlsym(jl_sysimg_handle,
                                                         "jl_sysimg_gvars_offsets");
-        sysimg_fvars_base = (const char*)jl_dlsym(jl_sysimg_handle, "jl_sysimg_fvars_base");
-        sysimg_fvars_offsets = (const int32_t*)jl_dlsym(jl_sysimg_handle,
-                                                        "jl_sysimg_fvars_offsets");
+        sysimg_gvars_offsets += 1;
+        assert(sysimg_fptrs.base);
         globalUnique = *(size_t*)jl_dlsym(jl_sysimg_handle, "jl_globalUnique");
 #ifdef JULIA_ENABLE_THREADING
         size_t tls_getter_idx = *(size_t*)jl_dlsym(jl_sysimg_handle,
@@ -186,6 +180,9 @@ static void jl_load_sysimg_so(void)
             sysimage_base = 0;
         }
 #endif
+    }
+    else {
+        memset(&sysimg_fptrs, 0, sizeof(sysimg_fptrs));
     }
     const char *sysimg_data = (const char*)jl_dlsym(jl_sysimg_handle, "jl_system_image_data");
     size_t len = *(size_t*)jl_dlsym(jl_sysimg_handle, "jl_system_image_size");
@@ -931,14 +928,15 @@ static jl_value_t *jl_read_value(jl_serializer_state *s)
 
 static void jl_update_all_fptrs(jl_serializer_state *s)
 {
-    const char *fvars_base = sysimg_fvars_base;
+    jl_sysimg_fptrs_t fvars = sysimg_fptrs;
     // make these NULL now so we skip trying to restore GlobalVariable pointers later
     sysimg_gvars_base = NULL;
-    sysimg_fvars_base = NULL;
+    sysimg_fptrs.base = NULL;
     int sysimg_fvars_max = s->fptr_record->size / sizeof(void*);
     size_t i;
     uintptr_t base = (uintptr_t)&s->s->buf[0];
     jl_method_instance_t **linfos = (jl_method_instance_t**)&s->fptr_record->buf[0];
+    uint32_t clone_idx = 0;
     for (i = 0; i < sysimg_fvars_max; i++) {
         uintptr_t val = (uintptr_t)&linfos[i];
         uint32_t offset = load_uint32_be(&val);
@@ -950,18 +948,28 @@ static void jl_update_all_fptrs(jl_serializer_state *s)
                 offset = ~offset;
             }
             jl_method_instance_t *li = (jl_method_instance_t*)(base + offset);
-            if (fvars_base == NULL) {
+            if (fvars.base == NULL) {
                 li->jlcall_api = 0;
             }
             else {
+                uintptr_t base = (uintptr_t)fvars.base;
                 assert(jl_is_method(li->def.method) && li->jlcall_api && li->jlcall_api != 2);
                 linfos[i] = li;
-                jl_fptr_to_llvm((jl_fptr_t)sysimg_fvars(fvars_base, i), li, cfunc);
+                int32_t offset = fvars.offsets[i];
+                for (; clone_idx < fvars.nclones; clone_idx++) {
+                    uint32_t idx = fvars.clone_idxs[clone_idx] & jl_sysimg_val_mask;
+                    if (idx < i)
+                        continue;
+                    if (idx == i)
+                        offset = fvars.clone_offsets[clone_idx];
+                    break;
+                }
+                jl_fptr_to_llvm((jl_fptr_t)(base + offset), li, cfunc);
             }
         }
     }
-    if (fvars_base) {
-        jl_register_fptrs(sysimage_base, fvars_base, sysimg_fvars_offsets, linfos, sysimg_fvars_max);
+    if (fvars.base) {
+        jl_register_fptrs(sysimage_base, &fvars, linfos, sysimg_fvars_max);
     }
 }
 
@@ -1339,6 +1347,7 @@ JL_DLLEXPORT void jl_set_sysimg_so(void *handle)
     if (jl_options.cpu_target == NULL)
         jl_options.cpu_target = "native";
     jl_sysimg_handle = handle;
+    sysimg_fptrs = jl_init_processor_sysimg(handle);
 }
 
 static void jl_restore_system_image_from_stream(ios_t *f)

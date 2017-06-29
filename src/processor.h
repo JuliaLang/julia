@@ -124,7 +124,7 @@ int jl_test_cpu_feature(jl_cpu_feature_t feature);
 static const uint32_t jl_sysimg_tag_mask = 0x80000000u;
 static const uint32_t jl_sysimg_val_mask = ~((uint32_t)0x80000000u);
 
-typedef struct {
+typedef struct _jl_sysimg_fptrs_t {
     // base function pointer
     const char *base;
     // number of functions
