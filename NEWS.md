@@ -120,6 +120,10 @@ Deprecated or removed
   * The `corrected` positional argument to `cov` has been deprecated in favor of
     a keyword argument with the same name (#21709).
 
+  * Omitting a space between the condition and `?` in a ternary expression has been deprecated.
+    Ternaries must now include some amount of whitespace, e.g. `x ? a : b` rather than
+    `x? a : b` ([#22523]).
+
 
 Julia v0.6.0 Release Notes
 ==========================
@@ -919,3 +923,4 @@ Command-line option changes
 [#22228]: https://github.com/JuliaLang/julia/issues/22228
 [#22245]: https://github.com/JuliaLang/julia/issues/22245
 [#22310]: https://github.com/JuliaLang/julia/issues/22310
+[#22523]: https://github.com/JuliaLang/julia/issues/22523
