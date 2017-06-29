@@ -34,7 +34,7 @@ Julia includes code from the following projects, which have their own licenses:
 - [LLVM](http://releases.llvm.org/3.9.0/LICENSE.TXT) (for parts of src/jitlayers.cpp and src/disasm.cpp) [BSD-3, effectively]
 - [MUSL](http://git.musl-libc.org/cgit/musl/tree/COPYRIGHT) (for getopt implementation on Windows) [MIT]
 - [MINGW](https://sourceforge.net/p/mingw/mingw-org-wsl/ci/legacy/tree/mingwrt/mingwex/dirname.c) (for dirname implementation on Windows) [MIT]
-- [OPENLIBM](https://github.com/JuliaLang/openlibm/blob/master/LICENSE.md) [MIT, BSD-2, ISC]
+- [FDLIBM](http://www.netlib.org/fdlibm/readme) [Freely distributable]
 - [NetBSD](http://www.netbsd.org/about/redistribution.html) (for setjmp, longjmp, and strptime implementations on Windows) [BSD-3]
 - [Python](https://docs.python.org/2/license.html) (for strtod implementation on Windows) [BSD-3, effectively]
 - [randmtzig.c](https://github.com/JuliaLang/julia/blob/master/test/perf/micro/randmtzig.c) for Gaussian random number generation (for C benchmarks only) [BSD-3]
