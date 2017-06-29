@@ -4,8 +4,14 @@
 @test true
 @test 1 == 1
 @test 1 != 2
+@test ==(1, 1)
+@test ==((1, 1)...)
 @test strip("\t  hi   \n") == "hi"
 @test strip("\t  this should fail   \n") != "hi"
+@test isequal(1, 1)
+@test isapprox(1, 1, atol=0.1)
+@test isapprox(1, 1; atol=0.1)
+@test isapprox(1, 1; [(:atol, 0)]...)
 
 # @test should only evaluate the arguments once
 let g = Int[], f = (x) -> (push!(g, x); x)
