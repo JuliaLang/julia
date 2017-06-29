@@ -1,5 +1,14 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+struct BitPerm_19352
+    p::NTuple{8,UInt8}
+    function BitPerm(p::NTuple{8,UInt8})
+        sort(collect(p)) != collect(0:7) && error("$p is not a permutation of 0:7")
+        new(p)
+    end
+    BitPerm_19352(xs::Vararg{Any,8}) = BitPerm(map(UInt8, xs))
+end
+
 @testset "conversion and construction" begin
     @test convert(Tuple, (1,2)) == (1,2)
 
@@ -24,14 +33,6 @@
     end
 
     @testset "side effect in tuple constructor #19352" begin
-        struct BitPerm_19352
-            p::NTuple{8,UInt8}
-            function BitPerm(p::NTuple{8,UInt8})
-                sort(collect(p)) != collect(0:7) && error("$p is not a permutation of 0:7")
-                new(p)
-            end
-            BitPerm_19352(xs::Vararg{8}) = BitPerm(map(UInt8, xs))
-        end
         @test BitPerm_19352(0,2,4,6,1,3,5,7).p[2] == 0x02
     end
 
