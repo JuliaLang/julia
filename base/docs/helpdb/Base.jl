@@ -472,32 +472,6 @@ several times, and the backend may choose to defer the display until
 """
 redisplay
 
-"""
-    searchsorted(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
-
-Returns the range of indices of `a` which compare as equal to `x` (using binary search)
-according to the order specified by the `by`, `lt` and `rev` keywords, assuming that `a`
-is already sorted in that order. Returns an empty range located at the insertion point
-if `a` does not contain values equal to `x`.
-
-# Examples
-
-```jldoctest
-julia> a = [4, 3, 2, 1]
-4-element Array{Int64,1}:
- 4
- 3
- 2
- 1
-
-julia> searchsorted(a, 4)
-5:4
-
-julia> searchsorted(a, 4, rev=true)
-1:1
-```
-"""
-searchsorted
 
 """
     /(x, y)
@@ -1314,28 +1288,6 @@ delete!
 
 
 """
-    searchsortedfirst(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
-
-Returns the index of the first value in `a` greater than or equal to `x`, according to the
-specified order. Returns `length(a)+1` if `x` is greater than all values in `a`.
-`a` is assumed to be sorted.
-
-# Examples
-
-```jldoctest
-julia> searchsortedfirst([1, 2, 4, 5, 14], 4)
-3
-
-julia> searchsortedfirst([1, 2, 4, 5, 14], 4, rev=true)
-1
-
-julia> searchsortedfirst([1, 2, 4, 5, 14], 15)
-6
-```
-"""
-searchsortedfirst
-
-"""
     big(x)
 
 Convert a number to a maximum precision representation (typically [`BigInt`](@ref) or
@@ -1993,28 +1945,6 @@ julia> length([1; 2; 3; 4])
 ```
 """
 length(collection)
-
-"""
-    searchsortedlast(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
-
-Returns the index of the last value in `a` less than or equal to `x`, according to the
-specified order. Returns `0` if `x` is less than all values in `a`. `a` is assumed to
-be sorted.
-
-# Examples
-
-```jldoctest
-julia> searchsortedlast([1, 2, 4, 5, 14], 4)
-3
-
-julia> searchsortedlast([1, 2, 4, 5, 14], 4, rev=true)
-5
-
-julia> searchsortedlast([1, 2, 4, 5, 14], -1)
-0
-```
-"""
-searchsortedlast
 
 """
     InterruptException()
