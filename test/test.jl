@@ -6,12 +6,17 @@
 @test 1 != 2
 @test ==(1, 1)
 @test ==((1, 1)...)
+@test 1 ≈ 2 atol=1
 @test strip("\t  hi   \n") == "hi"
 @test strip("\t  this should fail   \n") != "hi"
 @test isequal(1, 1)
 @test isapprox(1, 1, atol=0.1)
 @test isapprox(1, 1; atol=0.1)
 @test isapprox(1, 1; [(:atol, 0)]...)
+
+# @test keyword precedence: post-semicolon keyword, suffix keyword, pre-semicolon keyword
+@test isapprox(1, 2, atol=0) atol=1
+@test isapprox(1, 3, atol=0; atol=2) atol=1
 
 # @test should only evaluate the arguments once
 let g = Int[], f = (x) -> (push!(g, x); x)
