@@ -85,7 +85,7 @@ Base.LinAlg.trace
 Base.LinAlg.det
 Base.LinAlg.logdet
 Base.LinAlg.logabsdet
-Base.inv
+Base.inv(::AbstractMatrix)
 Base.LinAlg.pinv
 Base.LinAlg.nullspace
 Base.repmat

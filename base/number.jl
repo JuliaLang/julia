@@ -112,8 +112,35 @@ copysign(x::Real, y::Real) = ifelse(signbit(x)!=signbit(y), -x, +x)
 conj(x::Real) = x
 transpose(x::Number) = x
 ctranspose(x::Number) = conj(x)
-inv(x::Number) = one(x)/x
 angle(z::Real) = atan2(zero(z), z)
+
+"""
+    inv(x)
+
+Return the multiplicative inverse of `x`, such that `x*inv(x)` or `inv(x)*x`
+yields [`one(x)`](@ref) (the multiplicative identity).
+
+If `x` is a number, this is essentially the same as `one(x)/x`, but for
+some types `inv(x)` may be slightly more efficient.
+
+# Examples
+
+```jldoctest
+julia> inv(2)
+0.5
+
+julia> inv(1 + 2im)
+0.2 - 0.4im
+
+julia> inv(1 + 2im) * (1 + 2im)
+1.0 + 0.0im
+
+julia> inv(2//3)
+3//2
+```
+"""
+inv(x::Number) = one(x)/x
+
 
 """
     widemul(x, y)
