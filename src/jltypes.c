@@ -748,15 +748,35 @@ static int within_typevar(jl_value_t *t, jl_value_t *vlb, jl_value_t *vub)
     return jl_subtype(vlb, lb) && jl_subtype(ub, vub);
 }
 
+typedef struct _jl_typestack_t jl_typestack_t;
+
+static jl_value_t *inst_datatype(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **iparams, size_t ntp,
+                                 int cacheable, jl_typestack_t *stack);
+
 jl_value_t *jl_apply_type(jl_value_t *tc, jl_value_t **params, size_t n)
 {
     if (tc == (jl_value_t*)jl_anytuple_type)
         return (jl_value_t*)jl_apply_tuple_type_v(params, n);
     if (tc == (jl_value_t*)jl_uniontype_type)
         return (jl_value_t*)jl_type_union(params, n);
+    size_t i;
+    if (n > 1) {
+        // detect common case of applying a wrapper, where we know that all parameters will
+        // end up as direct parameters of a certain datatype, which can be optimized.
+        jl_value_t *u = jl_unwrap_unionall(tc);
+        if (jl_is_datatype(u) && n == jl_nparams((jl_datatype_t*)u) &&
+            ((jl_datatype_t*)u)->name->wrapper == tc) {
+            int cacheable = 1;
+            for(i=0; i < n; i++) {
+                if (jl_has_free_typevars(params[i])) {
+                    cacheable = 0; break;
+                }
+            }
+            return inst_datatype((jl_datatype_t*)u, NULL, params, n, cacheable, NULL);
+        }
+    }
     JL_GC_PUSH1(&tc);
     jl_value_t *tc0 = tc;
-    size_t i;
     for (i=0; i < n; i++) {
         if (!jl_is_unionall(tc0))
             jl_error("too many parameters for type");
