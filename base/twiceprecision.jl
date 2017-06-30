@@ -107,6 +107,9 @@ end
 function floatrange(a::AbstractFloat, st::AbstractFloat, len::Real, divisor::AbstractFloat)
     T = promote_type(typeof(a), typeof(st), typeof(divisor))
     m = maxintfloat(T)
+    if Int == Int32
+        m = min(m, 2147483647.)
+    end
     if abs(a) <= m && abs(st) <= m && abs(divisor) <= m
         ia, ist, idivisor = round(Int, a), round(Int, st), round(Int, divisor)
         if ia == a && ist == st && idivisor == divisor
@@ -132,6 +135,9 @@ function colon(start::T, step::T, stop::T) where T<:Union{Float16,Float32,Float6
                 T(start_n/start_d) == start && T(stop_n/stop_d) == stop
             den = lcm(start_d, step_d) # use same denominator for start and step
             m = maxintfloat(T)
+            if Int == Int32
+                m = min(m, 2147483647.)
+            end
             if den != 0 && abs(start*den) <= m && abs(step*den) <= m &&  # will round succeed?
                     rem(den, start_d) == 0 && rem(den, step_d) == 0      # check lcm overflow
                 start_n = round(Int, start*den)
@@ -168,6 +174,9 @@ function range(a::T, st::T, len::Integer) where T<:Union{Float16,Float32,Float64
             T(start_n/start_d) == a && T(step_n/step_d) == st
         den = lcm(start_d, step_d)
         m = maxintfloat(T)
+        if Int == Int32
+            m = min(m, 2147483647.)
+        end
         if abs(den*a) <= m && abs(den*st) <= m &&
                 rem(den, start_d) == 0 && rem(den, step_d) == 0
             start_n = round(Int, den*a)
@@ -258,6 +267,9 @@ function _convertSRL(::Type{StepRangeLen{T,R,S}}, r::Range{U}) where {T,R,S,U}
             U(start_n/start_d) == f && U(step_n/step_d) == s
         den = lcm(start_d, step_d)
         m = maxintfloat(T)
+        if Int == Int32
+            m = min(m, 2147483647.)
+        end
         if den != 0 && abs(f*den) <= m && abs(s*den) <= m &&
                 rem(den, start_d) == 0 && rem(den, step_d) == 0
             start_n = round(Int, f*den)
@@ -327,6 +339,9 @@ function linspace(start::T, stop::T, len::Integer) where T<:Union{Float16,Float3
     if start_d != 0 && stop_d != 0
         den = lcm(start_d, stop_d)
         m = maxintfloat(T)
+        if Int == Int32
+            m = min(m, 2147483647.)
+        end
         if den != 0 && abs(den*start) <= m && abs(den*stop) <= m
             start_n = round(Int, den*start)
             stop_n = round(Int, den*stop)
