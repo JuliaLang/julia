@@ -118,7 +118,7 @@ angle(z::Real) = atan2(zero(z), z)
     inv(x)
 
 Return the multiplicative inverse of `x`, such that `x*inv(x)` or `inv(x)*x`
-yields [`one(x)`](@ref) (the multiplicative identity).
+yields [`one(x)`](@ref) (the multiplicative identity) up to roundoff errors.
 
 If `x` is a number, this is essentially the same as `one(x)/x`, but for
 some types `inv(x)` may be slightly more efficient.
