@@ -20,9 +20,9 @@ const pio2_3  =  2.02226624871116645580e-21
 const pio2_3t =  8.47842766036889956997e-32
 
 function cody_waite_2c_pio2(x, signed_k, n)
-    z = x - signed_k*pio2_1;
-    y1 = z - signed_k*pio2_1t;
-    y2 = (z - y1) - signed_k*pio2_1t;
+    z = x - signed_k*pio2_1
+    y1 = z - signed_k*pio2_1t
+    y2 = (z - y1) - signed_k*pio2_1t
     n, y1, y2
 end
 
