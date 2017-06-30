@@ -48,6 +48,7 @@ for elty in (Int, Rational{BigInt}, Float32, Float64, BigFloat, Complex{Float32}
 
     debug && println("element type: $elty")
 
+    @test logdet(A[1,1]) == log(det(A[1,1]))
     @test logdet(A) ≈ log(det(A))
     @test logabsdet(A)[1] ≈ log(abs(det(A)))
     @test logabsdet(convert(Matrix{elty}, -eye(n)))[2] == -1
