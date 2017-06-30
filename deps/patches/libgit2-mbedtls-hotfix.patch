@@ -1,0 +1,81 @@
+commit fa12f3ac2ad920f429b1d84c5cc4d35cf61b514b
+Author: Curtis Vogt <curtis.vogt@gmail.com>
+Date:   Fri Jun 23 20:38:25 2017 -0500
+
+    hotfix
+
+diff --git a/src/settings.c b/src/settings.c
+index 3a46f0d..9a0587c 100644
+--- a/src/settings.c
++++ b/src/settings.c
+@@ -179,14 +179,14 @@ int git_libgit2_opts(int key, ...)
+ 			const char *path = va_arg(ap, const char *);
+ 			error = git_openssl_set_cert_file(file, path);
+ 		}
+-#elif GIT_MBEDTLS
++#elif defined(GIT_MBEDTLS)
+ 		{
+ 			const char *file = va_arg(ap, const char *);
+ 			const char *path = va_arg(ap, const char *);
+ 			if (file)
+ 				error = git_mbedtls_set_cert_file(file, 0);
+-			if (error && path)
+-				error = git_mbedtls_set_cert_file(path, 0);
++			if (error < 0 && path)
++				error = git_mbedtls_set_cert_file(path, 1);
+ 		}
+ #else
+ 		giterr_set(GITERR_NET, "cannot set certificate locations: OpenSSL or mbedTLS is not enabled");
+diff --git a/src/streams/mbedtls.c b/src/streams/mbedtls.c
+index e52afc8..bcbd228 100644
+--- a/src/streams/mbedtls.c
++++ b/src/streams/mbedtls.c
+@@ -98,6 +98,7 @@ int git_mbedtls_stream_global_init(void)
+ 	// OPTIONAL because REQUIRED drops the certificate as soon as the check
+ 	// is made, so we can never see the certificate and override it.
+ 	mbedtls_ssl_conf_authmode(git__ssl_conf, MBEDTLS_SSL_VERIFY_OPTIONAL);
++	//mbedtls_ssl_conf_authmode(git__ssl_conf, MBEDTLS_SSL_VERIFY_NONE);
+ 
+ 	// set the list of allowed ciphersuites
+ 	ciphers_list = calloc(GIT_SSL_DEFAULT_CIPHERS_COUNT, sizeof(int));
+@@ -236,9 +237,14 @@ static int verify_server_cert(mbedtls_ssl_context *ssl, const char *host)
+ 	size_t sn_size = 512;
+ 	char buf[sn_size];
+ 
++	if (mbedtls_ssl_set_hostname(ssl, host) != 0) {
++		giterr_set(GITERR_SSL, "failed set hostname");
++		return -1;
++	}
++
+ 	if ((ret = mbedtls_ssl_get_verify_result(ssl)) != 0) {
+ 		mbedtls_x509_crt_verify_info(buf, sn_size, "  ! ", ret);
+-		giterr_set(GITERR_SSL, "The SSL certificate is invalid: %s", buf);
++		giterr_set(GITERR_SSL, "The SSL certificate is invalid: %s (0x%04x)", buf, ret);
+ 		return GIT_ECERTIFICATE;
+ 	}
+ 
+@@ -248,12 +254,14 @@ static int verify_server_cert(mbedtls_ssl_context *ssl, const char *host)
+ 		return -1;
+ 	}
+ 
++	/*
+ 	if (mbedtls_x509_crt_verify(cert, git__ssl_conf->ca_chain, NULL, host, &flags, NULL, NULL) != 0) {
+ 		mbedtls_x509_crt_verify_info(buf, sn_size, "", flags);
+ 		buf[strlen(buf) - 1] = '\0';  // Remove trailing newline
+-		giterr_set(GITERR_SSL, buf);
++		giterr_set(GITERR_SSL, "SSL certificate could not be verified: %s (0x%04x)", buf, flags);
+ 		return GIT_ECERTIFICATE;
+ 	}
++	*/
+ 
+ 	return 0;
+ }
+@@ -445,7 +453,7 @@ int git_mbedtls_set_cert_file(const char *path, int is_dir)
+ 		ret = mbedtls_x509_crt_parse_file(cacert, path);
+ 	}
+ 	// mbedtls_x509_crt_parse_path returns the number of invalid certs on success
+-	if (ret <= 0) {
++	if (ret < 0) {
+ 		mbedtls_x509_crt_free(cacert);
+ 		git__free(cacert);
+ 		mbedtls_strerror( ret, errbuf, 512 );
