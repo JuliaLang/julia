@@ -400,7 +400,7 @@ single character, a vector or a set of characters, a string, or a regular expres
 is a function, each occurrence is replaced with `r(s)` where `s` is the matched substring.
 If `pat` is a regular expression and `r` is a `SubstitutionString`, then capture group
 references in `r` are replaced with the corresponding matched text.
-To delete patterns in `pat` set `r` to an empty String (`""` or `string()`).
+To delete patterns in `pat` set `r` to an empty String (`""`).
 """
 replace(s::AbstractString, pat, f, n::Integer) = replace(String(s), pat, f, n)
 replace(s::AbstractString, pat, r) = replace(s, pat, r, 0)
