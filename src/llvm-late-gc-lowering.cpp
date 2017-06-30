@@ -253,9 +253,19 @@ struct State {
     // The result of the local analysis
     std::map<BasicBlock *, BBState> BBStates;
 
+    // Load refinement map. All uses of the keys can be combined with uses
+    // of the value (but not the other way around).
+    std::map<int, int> LoadRefinements;
+
     // The assignment of numbers to safepoints. The indices in the map
     // are indices into the next three maps which store safepoint properties
     std::map<Instruction *, int> SafepointNumbering;
+
+    // Instructions that can return twice. For now, all values live at these
+    // instructions will get their own, dedicated GC frame slots, because they
+    // have unobservable control flow, so we can't be sure where they're
+    // actually live. All of these are also considered safepoints.
+    std::vector<Instruction *> ReturnsTwice;
 
     // The set of values live at a particular safepoint
     std::vector<BitVector> LiveSets;
@@ -303,7 +313,7 @@ private:
     Function *pointer_from_objref_func;
     CallInst *ptlsStates;
 
-    void MaybeNoteDef(State &S, BBState &BBS, Value *Def, const std::vector<int> &SafepointsSoFar);
+    void MaybeNoteDef(State &S, BBState &BBS, Value *Def, const std::vector<int> &SafepointsSoFar, int RefinedPtr = -2);
     void NoteUse(State &S, BBState &BBS, Value *V, BitVector &Uses);
     void NoteUse(State &S, BBState &BBS, Value *V) {
         NoteUse(S, BBS, V, BBS.UpExposedUses);
@@ -542,7 +552,7 @@ static void NoteDef(State &S, BBState &BBS, int Num, const std::vector<int> &Saf
     }
 }
 
-void LateLowerGCFrame::MaybeNoteDef(State &S, BBState &BBS, Value *Def, const std::vector<int> &SafepointsSoFar) {
+void LateLowerGCFrame::MaybeNoteDef(State &S, BBState &BBS, Value *Def, const std::vector<int> &SafepointsSoFar, int RefinedPtr) {
     int Num = -1;
     Type *RT = Def->getType();
     if (isSpecialPtr(RT)) {
@@ -558,6 +568,8 @@ void LateLowerGCFrame::MaybeNoteDef(State &S, BBState &BBS, Value *Def, const st
         std::vector<int> Nums = NumberVector(S, Def);
         for (int Num : Nums) {
             NoteDef(S, BBS, Num, SafepointsSoFar);
+            if (RefinedPtr != -2)
+                S.LoadRefinements[Num] = RefinedPtr;
         }
         return;
     }
@@ -565,6 +577,8 @@ void LateLowerGCFrame::MaybeNoteDef(State &S, BBState &BBS, Value *Def, const st
         return;
     }
     NoteDef(S, BBS, Num, SafepointsSoFar);
+    if (RefinedPtr != -2)
+        S.LoadRefinements[Num] = RefinedPtr;
 }
 
 static int NoteSafepoint(State &S, BBState &BBS, CallInst *CI) {
@@ -667,6 +681,31 @@ JL_USED_FUNC static void dumpLivenessState(Function &F, State &S) {
     }
 }
 
+// Check if this is a load from an immutable value. The easiest
+// way to do so is to look at the tbaa and see if it derives from
+// jtbaa_immut.
+static bool isLoadFromImmut(LoadInst *LI)
+{
+    MDNode *TBAA = LI->getMetadata(LLVMContext::MD_tbaa);
+    if (!TBAA)
+        return false;
+    while (TBAA->getNumOperands() > 1) {
+        TBAA = cast<MDNode>(TBAA->getOperand(1).get());
+        if (cast<MDString>(TBAA->getOperand(0))->getString() == "jtbaa_immut") {
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool LooksLikeFrameRef(Value *V) {
+    if (isSpecialPtr(V->getType()))
+        return false;
+    if (isa<GetElementPtrInst>(V))
+        return LooksLikeFrameRef(cast<GetElementPtrInst>(V)->getOperand(0));
+    return isa<Argument>(V);
+}
+
 State LateLowerGCFrame::LocalScan(Function &F) {
     State S;
     for (BasicBlock &BB : F) {
@@ -687,13 +726,29 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                         continue;
                     }
                 }
+                if (CI->canReturnTwice()) {
+                    S.ReturnsTwice.push_back(CI);
+                }
                 int SafepointNumber = NoteSafepoint(S, BBS, CI);
                 BBS.HasSafepoint = true;
                 BBS.TopmostSafepoint = SafepointNumber;
                 BBS.Safepoints.push_back(SafepointNumber);
             } else if (LoadInst *LI = dyn_cast<LoadInst>(&I)) {
-                // Allocas get sunk into the gc frame, so don't generate defs
-                MaybeNoteDef(S, BBS, LI, BBS.Safepoints);
+                // If this is a load from an immutable, we know that
+                // this object will always be rooted as long as the
+                // object we're loading from is, so we can refine uses
+                // of this object to uses of the object we're loading
+                // from.
+                int RefinedPtr = -2;
+                if (isLoadFromImmut(LI) && isSpecialPtr(LI->getPointerOperand()->getType())) {
+                    RefinedPtr = Number(S, LI->getPointerOperand());
+                } else if (LI->getType()->isPointerTy() &&
+                    isSpecialPtr(LI->getType()) &&
+                    LooksLikeFrameRef(LI->getPointerOperand())) {
+                    // Loads from a jlcall argument array
+                    RefinedPtr = -1;
+                }
+                MaybeNoteDef(S, BBS, LI, BBS.Safepoints, RefinedPtr);
                 NoteOperandUses(S, BBS, I, BBS.UpExposedUsesUnrooted);
             } else if (SelectInst *SI = dyn_cast<SelectInst>(&I)) {
                 // We need to insert an extra select for the GC root
@@ -815,10 +870,19 @@ void LateLowerGCFrame::ComputeLiveSets(Function &F, State &S) {
         BBState &BBS = S.BBStates[BB];
         BitVector LiveAcross = BBS.LiveIn;
         LiveAcross &= BBS.LiveOut;
-        S.LiveSets[idx] |= LiveAcross;
+        BitVector &LS = S.LiveSets[idx];
+        LS |= LiveAcross;
         for (int Live : S.LiveIfLiveOut[idx]) {
             if (HasBitSet(BBS.LiveOut, Live))
-                S.LiveSets[idx][Live] = 1;
+                LS[Live] = 1;
+        }
+        // Apply refinements
+        for (int Idx = LS.find_first(); Idx >= 0; Idx = LS.find_next(Idx)) {
+            if (!S.LoadRefinements.count(Idx))
+                continue;
+            int RefinedPtr = S.LoadRefinements[Idx];
+            if (RefinedPtr == -1 || HasBitSet(LS, RefinedPtr))
+                LS[Idx] = 0;
         }
     }
     // Compute the interference graph
@@ -942,12 +1006,24 @@ std::vector<int> LateLowerGCFrame::ColorRoots(const State &S) {
     std::vector<int> Colors;
     Colors.resize(S.MaxPtrNumber + 1, -1);
     PEOIterator Ordering(S.Neighbors);
+    int PreAssignedColors = 0;
+    /* First assign permanent slots to things that need them due
+       to returns_twice */
+    for (auto it : S.ReturnsTwice) {
+        int Num = S.SafepointNumbering.at(it);
+        const BitVector &LS = S.LiveSets[Num];
+        for (int Idx = LS.find_first(); Idx >= 0; Idx = LS.find_next(Idx)) {
+            if (Colors[Idx] == -1)
+                Colors[Idx] = PreAssignedColors++;
+        }
+    }
     /* Greedy coloring */
-    int ActiveElement = 1;
     int MaxAssignedColor = -1;
+    int ActiveElement = 1;
     BitVector UsedColors;
     while ((ActiveElement = Ordering.next()) != -1) {
-        assert(Colors[ActiveElement] == -1);
+        if (Colors[ActiveElement] != -1)
+            continue;
         UsedColors.resize(MaxAssignedColor + 2, false);
         UsedColors.reset();
         if (S.Neighbors[ActiveElement].empty()) {
@@ -955,13 +1031,18 @@ std::vector<int> LateLowerGCFrame::ColorRoots(const State &S) {
             continue;
         }
         for (int Neighbor : S.Neighbors[ActiveElement]) {
-            if (Colors[Neighbor] == -1)
+            int NeighborColor = Colors[Neighbor];
+            if (NeighborColor == -1)
                 continue;
-            UsedColors[Colors[Neighbor]] = 1;
+            if (NeighborColor < PreAssignedColors)
+                continue;
+            UsedColors[NeighborColor - PreAssignedColors] = 1;
         }
-        Colors[ActiveElement] = UsedColors.flip().find_first();
-        if (Colors[ActiveElement] > MaxAssignedColor)
-            MaxAssignedColor = Colors[ActiveElement];
+        int NewColor = UsedColors.flip().find_first();
+        if (NewColor > MaxAssignedColor)
+            MaxAssignedColor = NewColor;
+        NewColor += PreAssignedColors;
+        Colors[ActiveElement] = NewColor;
     }
     return Colors;
 }

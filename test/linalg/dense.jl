@@ -278,7 +278,7 @@ end
 
                     # Against vectorized versions
                     @test norm(x,-Inf) ≈ minimum(abs.(x))
-                    @test norm(x,-1) ≈ inv(sum(1./abs.(x)))
+                    @test norm(x,-1) ≈ inv(sum(1 ./ abs.(x)))
                     @test norm(x,0) ≈ sum(x .!= 0)
                     @test norm(x,1) ≈ sum(abs.(x))
                     @test norm(x) ≈ sqrt(sum(abs2.(x)))
@@ -362,7 +362,7 @@ end
 
 ## Issue related tests
 @testset "issue #1447" begin
-    A = [1.+0.0im 0; 0 1]
+    A = [1.0+0.0im 0; 0 1]
     B = pinv(A)
     for i = 1:4
         @test A[i] ≈ B[i]

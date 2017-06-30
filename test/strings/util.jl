@@ -26,7 +26,7 @@ for s in ("", " ", " abc", "abc ", "  abc  "), f in (lstrip, rstrip, strip)
         ft = f(t)
         @test s == t
         @test fs == ft
-        @test typeof(ft) == typeof(t[1:end])
+        @test typeof(ft) == SubString{T}
 
         b = convert(SubString{T}, t)
         fb = f(b)

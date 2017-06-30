@@ -238,10 +238,21 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     if (st->types == NULL)
         return;
     uint32_t nfields = jl_svec_len(st->types);
-    if (nfields == 0 && st != jl_sym_type && st != jl_simplevector_type) {
-        // reuse the same layout for all singletons
-        static const jl_datatype_layout_t singleton_layout = {0, 1, 0, 0, 0};
-        st->layout = &singleton_layout;
+    if (nfields == 0) {
+        if (st == jl_sym_type || st == jl_string_type) {
+            // opaque layout - heap-allocated blob
+            static const jl_datatype_layout_t opaque_byte_layout = {0, 1, 0, 1, 0};
+            st->layout = &opaque_byte_layout;
+        }
+        else if (st == jl_simplevector_type || st->name == jl_array_typename) {
+            static const jl_datatype_layout_t opaque_ptr_layout = {0, sizeof(void*), 0, 1, 0};
+            st->layout = &opaque_ptr_layout;
+        }
+        else {
+            // reuse the same layout for all singletons
+            static const jl_datatype_layout_t singleton_layout = {0, 1, 0, 0, 0};
+            st->layout = &singleton_layout;
+        }
         return;
     }
     if (!jl_is_leaf_type((jl_value_t*)st)) {
@@ -338,18 +349,6 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(
     jl_typename_t *tn = NULL;
     JL_GC_PUSH2(&t, &tn);
 
-    if (!jl_boot_file_loaded && jl_is_symbol(name)) {
-        // hack to avoid making two versions of basic types needed
-        // during bootstrapping
-        if (!strcmp(jl_symbol_name((jl_sym_t*)name), "Int32"))
-            t = jl_int32_type;
-        else if (!strcmp(jl_symbol_name((jl_sym_t*)name), "Int64"))
-            t = jl_int64_type;
-        else if (!strcmp(jl_symbol_name((jl_sym_t*)name), "Bool"))
-            t = jl_bool_type;
-        else if (!strcmp(jl_symbol_name((jl_sym_t*)name), "UInt8"))
-            t = jl_uint8_type;
-    }
     if (t == NULL)
         t = jl_new_uninitialized_datatype();
     else

@@ -103,6 +103,7 @@ Duplicates are combined using the `combine` function, which defaults to
 `+` if no `combine` argument is provided, unless the elements of `V` are Booleans
 in which case `combine` defaults to `|`.
 
+# Examples
 ```jldoctest
 julia> II = [1, 3, 3, 5]; V = [0.1, 0.2, 0.3, 0.2];
 
@@ -176,6 +177,7 @@ sparsevec(I::AbstractVector, v::Number, len::Integer, combine::Function) =
 Create a sparse vector of length `m` where the nonzero indices are keys from
 the dictionary, and the nonzero values are the values from the dictionary.
 
+# Examples
 ```jldoctest
 julia> sparsevec(Dict(1 => 3, 2 => 2))
 2-element SparseVector{Int64,Int64} with 2 stored entries:
@@ -253,6 +255,7 @@ setindex!(x::SparseVector{Tv,Ti}, v, i::Integer) where {Tv,Ti<:Integer} =
 
 Drop entry `x[i]` from `x` if `x[i]` is stored and otherwise do nothing.
 
+# Examples
 ```jldoctest
 julia> x = sparsevec([1, 3], [1.0, 2.0])
 3-element SparseVector{Float64,Int64} with 2 stored entries:
@@ -305,6 +308,7 @@ convert(::Type{SparseVector}, s::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} =
 
 Convert a vector `A` into a sparse vector of length `m`.
 
+# Example
 ```jldoctest
 julia> sparsevec([1.0, 2.0, 0.0, 0.0, 3.0, 0.0])
 6-element SparseVector{Float64,Int64} with 3 stored entries:
@@ -1928,6 +1932,20 @@ Generates a copy of `x` and removes numerical zeros from that copy, optionally t
 excess space from the result's `nzind` and `nzval` arrays when `trim` is `true`.
 
 For an in-place version and algorithmic information, see [`dropzeros!`](@ref).
+
+# Example
+```jldoctest
+julia> A = sparsevec([1, 2, 3], [1.0, 0.0, 1.0])
+3-element SparseVector{Float64,Int64} with 3 stored entries:
+  [1]  =  1.0
+  [2]  =  0.0
+  [3]  =  1.0
+
+julia> dropzeros(A)
+3-element SparseVector{Float64,Int64} with 2 stored entries:
+  [1]  =  1.0
+  [3]  =  1.0
+```
 """
 dropzeros(x::SparseVector, trim::Bool = true) = dropzeros!(copy(x), trim)
 

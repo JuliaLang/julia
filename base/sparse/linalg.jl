@@ -586,7 +586,7 @@ function normestinv(A::SparseMatrixCSC{T}, t::Integer = min(2,maximum(size(A))))
 
     function _rand_pm1!(v)
         for i in eachindex(v)
-            v[i] = rand()<0.5?1:-1
+            v[i] = rand()<0.5 ? 1 : -1
         end
     end
 
@@ -611,7 +611,7 @@ function normestinv(A::SparseMatrixCSC{T}, t::Integer = min(2,maximum(size(A))))
             end
         end
     end
-    scale!(X, 1./n)
+    scale!(X, 1 ./ n)
 
     iter = 0
     local est
@@ -643,7 +643,7 @@ function normestinv(A::SparseMatrixCSC{T}, t::Integer = min(2,maximum(size(A))))
         S_old = copy(S)
         for j = 1:t
             for i = 1:n
-                S[i,j] = Y[i,j]==0?one(Y[i,j]):sign(Y[i,j])
+                S[i,j] = Y[i,j]==0 ? one(Y[i,j]) : sign(Y[i,j])
             end
         end
 

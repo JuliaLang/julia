@@ -372,7 +372,7 @@ end
 function copy!(A::T, B::T) where T<:Union{UpperTriangular,UnitUpperTriangular}
     n = size(B,1)
     for j = 1:n
-        for i = 1:(isa(B, UnitUpperTriangular)?j-1:j)
+        for i = 1:(isa(B, UnitUpperTriangular) ? j-1 : j)
             @inbounds A[i,j] = B[i,j]
         end
     end
@@ -381,7 +381,7 @@ end
 function copy!(A::T, B::T) where T<:Union{LowerTriangular,UnitLowerTriangular}
     n = size(B,1)
     for j = 1:n
-        for i = (isa(B, UnitLowerTriangular)?j+1:j):n
+        for i = (isa(B, UnitLowerTriangular) ? j+1 : j):n
             @inbounds A[i,j] = B[i,j]
         end
     end
@@ -394,7 +394,7 @@ function scale!(A::UpperTriangular, B::Union{UpperTriangular,UnitUpperTriangular
         if isa(B, UnitUpperTriangular)
             @inbounds A[j,j] = c
         end
-        for i = 1:(isa(B, UnitUpperTriangular)?j-1:j)
+        for i = 1:(isa(B, UnitUpperTriangular) ? j-1 : j)
             @inbounds A[i,j] = c * B[i,j]
         end
     end
@@ -406,7 +406,7 @@ function scale!(A::LowerTriangular, B::Union{LowerTriangular,UnitLowerTriangular
         if isa(B, UnitLowerTriangular)
             @inbounds A[j,j] = c
         end
-        for i = (isa(B, UnitLowerTriangular)?j+1:j):n
+        for i = (isa(B, UnitLowerTriangular) ? j+1 : j):n
             @inbounds A[i,j] = c * B[i,j]
         end
     end

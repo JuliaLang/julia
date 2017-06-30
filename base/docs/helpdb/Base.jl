@@ -9,6 +9,7 @@ Fill array `A` with the value `x`. If `x` is an object reference, all elements w
 the same object. `fill!(A, Foo())` will return `A` filled with the result of evaluating
 `Foo()` once.
 
+# Examples
 ```jldoctest
 julia> A = zeros(2,3)
 2×3 Array{Float64,2}:
@@ -81,6 +82,7 @@ Subtraction operator.
 
 A string giving the literal bit representation of a number.
 
+# Example
 ```jldoctest
 julia> bits(4)
 "0000000000000000000000000000000000000000000000000000000000000100"
@@ -92,63 +94,12 @@ julia> bits(2.2)
 bits
 
 """
-    getindex(type[, elements...])
-
-Construct a 1-d array of the specified type. This is usually called with the syntax
-`Type[]`. Element values can be specified using `Type[a,b,c,...]`.
-
-```jldoctest
-julia> Int8[1, 2, 3]
-3-element Array{Int8,1}:
- 1
- 2
- 3
-
-julia> getindex(Int8, 1, 2, 3)
-3-element Array{Int8,1}:
- 1
- 2
- 3
-```
-"""
-getindex(::Type, elements...)
-
-"""
-    getindex(A, inds...)
-
-Returns a subset of array `A` as specified by `inds`, where each `ind` may be an
-`Int`, a `Range`, or a `Vector`. See the manual section on
-[array indexing](@ref man-array-indexing) for details.
-
-```jldoctest
-julia> A = [1 2; 3 4]
-2×2 Array{Int64,2}:
- 1  2
- 3  4
-
-julia> getindex(A, 1)
-1
-
-julia> getindex(A, [2, 1])
-2-element Array{Int64,1}:
- 3
- 1
-
-julia> getindex(A, 2:4)
-3-element Array{Int64,1}:
- 3
- 2
- 4
-```
-"""
-getindex(::AbstractArray, inds...)
-
-"""
     getindex(collection, key...)
 
 Retrieve the value(s) stored at the given key or index within a collection. The syntax
 `a[i,j,...]` is converted by the compiler to `getindex(a, i, j, ...)`.
 
+# Example
 ```jldoctest
 julia> A = Dict("a" => 1, "b" => 2)
 Dict{String,Int64} with 2 entries:
@@ -219,6 +170,7 @@ unsafe_copy!(dest::Array, d, src::Array, so, N)
 Create a Float32 from `x`. If `x` is not exactly representable then `mode` determines how
 `x` is rounded.
 
+# Examples
 ```jldoctest
 julia> Float32(1/3, RoundDown)
 0.3333333f0
@@ -305,28 +257,11 @@ This would create a 25-by-30000 `BitArray`, linked to the file associated with s
 Mmap.mmap(io, ::BitArray, dims = ?, offset = ?)
 
 """
-    filter!(function, collection)
-
-Update `collection`, removing elements for which `function` is `false`.
-For associative collections, the function is passed two arguments (key and value).
-
-```jldoctest
-julia> filter!(isodd, collect(1:10))
-5-element Array{Int64,1}:
- 1
- 3
- 5
- 7
- 9
-```
-"""
-filter!
-
-"""
     sizeof(T)
 
 Size, in bytes, of the canonical binary representation of the given DataType `T`, if any.
 
+# Examples
 ```jldoctest
 julia> sizeof(Float32)
 4
@@ -341,7 +276,7 @@ If `T` does not have a specific size, an error is thrown.
 julia> sizeof(Base.LinAlg.LU)
 ERROR: argument is an abstract type; size is indeterminate
 Stacktrace:
- [1] sizeof(::Type{T} where T) at ./essentials.jl:160
+ [1] sizeof(::Type{T} where T) at ./essentials.jl:150
 ```
 """
 sizeof(::Type)
@@ -378,6 +313,7 @@ oftype
 
 Insert one or more `items` at the end of `collection`.
 
+# Example
 ```jldoctest
 julia> push!([1, 2, 3], 4, 5, 6)
 6-element Array{Int64,1}:
@@ -399,6 +335,12 @@ push!
     promote(xs...)
 
 Convert all arguments to their common promotion type (if any), and return them all (as a tuple).
+
+# Example
+```jldoctest
+julia> promote(Int8(1), Float16(4.5), Float32(4.1))
+(1.0f0, 4.5f0, 4.1f0)
+```
 """
 promote
 
@@ -410,7 +352,6 @@ to synchronous `File`'s and `IOStream`'s not to any of the asynchronous streams.
 """
 fd
 
-
 """
     ones([A::AbstractArray,] [T=eltype(A)::Type,] [dims=size(A)::Tuple])
 
@@ -418,6 +359,7 @@ Create an array of all ones with the same layout as `A`, element type `T` and si
 The `A` argument can be skipped, which behaves like `Array{Float64,0}()` was passed.
 For convenience `dims` may also be passed in variadic form.
 
+# Examples
 ```jldoctest
 julia> ones(Complex128, 2, 3)
 2×3 Array{Complex{Float64},2}:
@@ -476,15 +418,6 @@ several times, and the backend may choose to defer the display until
 """
 redisplay
 
-"""
-    searchsorted(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
-
-Returns the range of indices of `a` which compare as equal to `x` (using binary search)
-according to the order specified by the `by`, `lt` and `rev` keywords, assuming that `a`
-is already sorted in that order. Returns an empty range located at the insertion point
-if `a` does not contain values equal to `x`.
-"""
-searchsorted
 
 """
     /(x, y)
@@ -549,6 +482,7 @@ print_shortest
 
 Construct a tuple of the given objects.
 
+# Example
 ```jldoctest
 julia> tuple(1, 'a', pi)
 (1, 'a', π = 3.1415926535897...)
@@ -570,6 +504,7 @@ eachmatch
 
 Get a hexadecimal string of the binary representation of a floating point number.
 
+# Example
 ```jldoctest
 julia> num2hex(2.2)
 "400199999999999a"
@@ -590,6 +525,7 @@ truncate
 
 Compute ``10^x``.
 
+# Examples
 ```jldoctest
 julia> exp10(2)
 100.0
@@ -605,6 +541,7 @@ exp10
 
 Bitwise and.
 
+# Examples
 ```jldoctest
 julia> 4 & 10
 0
@@ -618,7 +555,7 @@ julia> 4 & 12
 """
     select(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
-Variant of `select!` which copies `v` before partially sorting it, thereby returning the
+Variant of [`select!`](@ref) which copies `v` before partially sorting it, thereby returning the
 same thing as `select!` but leaving `v` unmodified.
 """
 select
@@ -664,6 +601,41 @@ ErrorException
     reverse(v [, start=1 [, stop=length(v) ]] )
 
 Return a copy of `v` reversed from start to stop.
+
+# Examples
+```jldoctest
+julia> A = collect(1:5)
+5-element Array{Int64,1}:
+ 1
+ 2
+ 3
+ 4
+ 5
+
+julia> reverse(A)
+5-element Array{Int64,1}:
+ 5
+ 4
+ 3
+ 2
+ 1
+
+julia> reverse(A, 1, 4)
+5-element Array{Int64,1}:
+ 4
+ 3
+ 2
+ 1
+ 5
+
+julia> reverse(A, 3, 5)
+5-element Array{Int64,1}:
+ 1
+ 2
+ 5
+ 4
+ 3
+```
 """
 reverse
 
@@ -686,15 +658,14 @@ UndefRefError
 
 Add the elements of `collection2` to the end of `collection`.
 
+# Examples
 ```jldoctest
 julia> append!([1],[2,3])
 3-element Array{Int64,1}:
  1
  2
  3
-```
 
-```jldoctest
 julia> append!([1, 2, 3], [4, 5, 6])
 6-element Array{Int64,1}:
  1
@@ -719,17 +690,11 @@ Seek a stream relative to the current position.
 skip
 
 """
-    setdiff!(s, iterable)
-
-Remove each element of `iterable` from set `s` in-place.
-"""
-setdiff!
-
-"""
     copysign(x, y) -> z
 
 Return `z` which has the magnitude of `x` and the same sign as `y`.
 
+# Examples
 ```jldoctest
 julia> copysign(1, -2)
 -1
@@ -767,6 +732,7 @@ showcompact
 Extract a named field from a `value` of composite type. The syntax `a.b` calls
 `getfield(a, :b)`.
 
+# Example
 ```jldoctest
 julia> a = 1//2
 1//2
@@ -786,6 +752,48 @@ at the position where it would appear if the array were fully sorted via a non-s
 algorithm. If `k` is a single index, that value is returned; if `k` is a range, an array of
 values at those indices is returned. Note that `select!` does not fully sort the input
 array.
+
+# Examples
+
+```jldoctest
+julia> a = [1, 2, 4, 3, 4]
+5-element Array{Int64,1}:
+ 1
+ 2
+ 4
+ 3
+ 4
+
+julia> select!(a, 4)
+4
+
+julia> a
+5-element Array{Int64,1}:
+ 1
+ 2
+ 3
+ 4
+ 4
+
+julia> a = [1, 2, 4, 3, 4]
+5-element Array{Int64,1}:
+ 1
+ 2
+ 4
+ 3
+ 4
+
+julia> select!(a, 4, rev=true)
+2
+
+julia> a
+5-element Array{Int64,1}:
+ 4
+ 4
+ 3
+ 2
+ 1
+```
 """
 select!
 
@@ -795,6 +803,15 @@ select!
 Create a random ASCII string of length `len`, consisting of upper- and
 lower-case letters and the digits 0-9. The optional `rng` argument
 specifies a random number generator, see [Random Numbers](@ref).
+
+# Example
+
+```jldoctest
+julia> rng = MersenneTwister(1234);
+
+julia> randstring(rng, 4)
+"mbDd"
+```
 """
 randstring
 
@@ -804,6 +821,7 @@ randstring
 Create a Float64 from `x`. If `x` is not exactly representable then `mode` determines how
 `x` is rounded.
 
+# Examples
 ```jldoctest
 julia> Float64(pi, RoundDown)
 3.141592653589793
@@ -821,6 +839,28 @@ Float64(x)
     ∪(s1,s2...)
 
 Construct the union of two or more sets. Maintains order with arrays.
+
+# Examples
+```jldoctest
+julia> union([1, 2], [3, 4])
+4-element Array{Int64,1}:
+ 1
+ 2
+ 3
+ 4
+
+julia> union([1, 2], [2, 4])
+3-element Array{Int64,1}:
+ 1
+ 2
+ 4
+
+julia> union([4, 2], [1, 2])
+3-element Array{Int64,1}:
+ 4
+ 2
+ 1
+```
 """
 union
 
@@ -829,6 +869,7 @@ union
 
 The highest finite value representable by the given floating-point DataType `T`.
 
+# Examples
 ```jldoctest
 julia> realmax(Float16)
 Float16(6.55e4)
@@ -855,6 +896,7 @@ serialize
 
 The lowest value representable by the given (real) numeric DataType `T`.
 
+# Examples
 ```jldoctest
 julia> typemin(Float16)
 -Inf16
@@ -938,6 +980,7 @@ cglobal
 
 Returns the last index of the collection.
 
+# Example
 ```jldoctest
 julia> endof([1,2,4])
 3
@@ -950,6 +993,7 @@ endof
 
 For a given iterable object and iteration state, return the current item and the next iteration state.
 
+# Examples
 ```jldoctest
 julia> next(1:5, 3)
 (3, 4)
@@ -1085,9 +1129,9 @@ Return a partial permutation of the vector `v`, according to the order specified
 if `k` is a range) values of a fully sorted version of `v`. If `k` is a single index
 (Integer), an array of the first `k` indices is returned; if `k` is a range, an array of
 those indices is returned. Note that the handling of integer values for `k` is different
-from `select` in that it returns a vector of `k` elements instead of just the `k` th
+from [`select`](@ref) in that it returns a vector of `k` elements instead of just the `k` th
 element. Also note that this is equivalent to, but more efficient than, calling
-`sortperm(...)[k]`
+`sortperm(...)[k]`.
 """
 selectperm
 
@@ -1109,6 +1153,7 @@ For example,
     For example, `reinterpret(UInt32, UInt8[0, 0, 0, 0])` is not allowed but
     `reinterpret(UInt32, reinterpret(UInt8, Float32[1.0]))` is allowed.
 
+# Examples
 ```jldoctest
 julia> reinterpret(Float32, UInt32(7))
 1.0f-44
@@ -1125,6 +1170,7 @@ reinterpret
 
 Bitwise not.
 
+# Examples
 ```jldoctest
 julia> ~4
 -5
@@ -1143,6 +1189,7 @@ false
 
 Byte-swap an integer. Flip the bits of its binary representation.
 
+# Examples
 ```jldoctest
 julia> a = bswap(4)
 288230376151711744
@@ -1170,17 +1217,21 @@ maxintfloat
     delete!(collection, key)
 
 Delete the mapping for the given key in a collection, and return the collection.
+
+# Example
+```jldoctest
+julia> d = Dict("a"=>1, "b"=>2)
+Dict{String,Int64} with 2 entries:
+  "b" => 2
+  "a" => 1
+
+julia> delete!(d, "b")
+Dict{String,Int64} with 1 entry:
+  "a" => 1
+```
 """
 delete!
 
-
-"""
-    searchsortedfirst(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
-
-Returns the index of the first value in `a` greater than or equal to `x`, according to the
-specified order. Returns `length(a)+1` if `x` is greater than all values in `a`.
-"""
-searchsortedfirst
 
 """
     big(x)
@@ -1208,7 +1259,7 @@ typejoin
 """
     selectperm!(ix, v, k, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false,] [initialized=false])
 
-Like `selectperm`, but accepts a preallocated index vector `ix`. If `initialized` is `false`
+Like [`selectperm`](@ref), but accepts a preallocated index vector `ix`. If `initialized` is `false`
 (the default), ix is initialized to contain the values `1:length(ix)`.
 """
 selectperm!
@@ -1232,6 +1283,17 @@ cot
 
 Return the value stored for the given key, or the given default value if no mapping for the
 key is present.
+
+# Examples
+```jldoctest
+julia> d = Dict("a"=>1, "b"=>2);
+
+julia> get(d, "a", 3)
+1
+
+julia> get(d, "c", 3)
+3
+```
 """
 get(collection,key,default)
 
@@ -1292,6 +1354,7 @@ read(stream, t)
 
 Remove the first `item` from `collection`.
 
+# Example
 ```jldoctest
 julia> A = [1, 2, 3, 4, 5, 6]
 6-element Array{Int64,1}:
@@ -1387,6 +1450,7 @@ copy
 
 Determine whether a collection is empty (has no elements).
 
+# Examples
 ```jldoctest
 julia> isempty([])
 true
@@ -1408,6 +1472,14 @@ hex2num
     InexactError()
 
 Type conversion cannot be done exactly.
+
+# Examples
+```jldoctest
+julia> convert(Float64, 1+2im)
+ERROR: InexactError()
+Stacktrace:
+ [1] convert(::Type{Float64}, ::Complex{Int64}) at ./complex.jl:31
+```
 """
 InexactError
 
@@ -1422,18 +1494,17 @@ typemax
     DomainError()
 
 The arguments to a function or constructor are outside the valid domain.
+
+# Examples
+```jldoctest
+julia> sqrt(-1)
+ERROR: DomainError:
+sqrt will only return a complex result if called with a complex argument. Try sqrt(complex(x)).
+Stacktrace:
+ [1] sqrt(::Int64) at ./math.jl:443
+```
 """
 DomainError
-
-"""
-    IntSet([itr])
-
-Construct a sorted set of positive `Int`s generated by the given iterable object, or an
-empty set. Implemented as a bit string, and therefore designed for dense integer sets. Only
-`Int`s greater than 0 can be stored. If the set will be sparse (for example holding a few
-very large integers), use [`Set`](@ref) instead.
-"""
-IntSet
 
 """
     Task(func)
@@ -1441,6 +1512,7 @@ IntSet
 Create a `Task` (i.e. coroutine) to execute the given function (which must be
 callable with no arguments). The task exits when this function returns.
 
+# Example
 ```jldoctest
 julia> a() = det(rand(1000, 1000));
 
@@ -1542,7 +1614,7 @@ mean!
 
 Test whether `x` is less than `y`, according to a canonical total order. Values that are
 normally unordered, such as `NaN`, are ordered in an arbitrary but consistent fashion. This
-is the default comparison used by `sort`. Non-numeric types with a canonical total order
+is the default comparison used by [`sort`](@ref). Non-numeric types with a canonical total order
 should implement this function. Numeric types only need to implement it if they have special
 values such as `NaN`.
 """
@@ -1662,6 +1734,7 @@ show(x)
 Return `true` if and only if all values of `type1` are also of `type2`. Can also be written
 using the `<:` infix operator as `type1 <: type2`.
 
+# Examples
 ```jldoctest
 julia> issubtype(Int8, Int32)
 false
@@ -1746,6 +1819,7 @@ matchall
 Return the value stored for the given key, or if no mapping for the key is present, store
 `key => default`, and return `default`.
 
+# Examples
 ```jldoctest
 julia> d = Dict("a"=>1, "b"=>2, "c"=>3);
 
@@ -1772,11 +1846,12 @@ Return the value stored for the given key, or if no mapping for the key is prese
 `key => f()`, and return `f()`.
 
 This is intended to be called using `do` block syntax:
-
-    get!(dict, key) do
-        # default value calculated here
-        time()
-    end
+```julia
+get!(dict, key) do
+    # default value calculated here
+    time()
+end
+```
 """
 get!(f::Function,collection,key)
 
@@ -1806,6 +1881,7 @@ For ordered, indexable collections, returns the maximum index `i` for which `get
 is valid.
 For unordered collections, returns the number of elements.
 
+# Examples
 ```jldoctest
 julia> length(1:5)
 5
@@ -1815,14 +1891,6 @@ julia> length([1; 2; 3; 4])
 ```
 """
 length(collection)
-
-"""
-    searchsortedlast(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
-
-Returns the index of the last value in `a` less than or equal to `x`, according to the
-specified order. Returns `0` if `x` is less than all values in `a`.
-"""
-searchsortedlast
 
 """
     InterruptException()
@@ -1842,6 +1910,17 @@ issubnormal
     NullException()
 
 An attempted access to a [`Nullable`](@ref) with no defined value.
+
+# Examples
+```jldoctest
+julia> a = Nullable{Int}()
+Nullable{Int64}()
+
+julia> get(a)
+ERROR: NullException()
+Stacktrace:
+ [1] get(::Nullable{Int64}) at ./nullable.jl:92
+```
 """
 NullException
 
@@ -1919,6 +1998,7 @@ coth
 
 Get initial iteration state for an iterable object.
 
+# Examples
 ```jldoctest
 julia> start(1:5)
 1
@@ -1933,14 +2013,6 @@ julia> start([4;2;3])
 start
 
 """
-    readavailable(stream)
-
-Read all available data on the stream, blocking the task only if no data is available. The
-result is a `Vector{UInt8,1}`.
-"""
-readavailable
-
-"""
     isa(x, type) -> Bool
 
 Determine whether `x` is of the given `type`. Can also be used as an infix operator, e.g.
@@ -1953,6 +2025,7 @@ isa
 
 Test whether we are done iterating.
 
+# Examples
 ```jldoctest
 julia> done(1:5, 3)
 false
@@ -1975,6 +2048,7 @@ If `T` is an [`Integer`](@ref) type, an [`InexactError`](@ref) will be raised if
 is not representable by `T`, for example if `x` is not integer-valued, or is outside the
 range supported by `T`.
 
+# Examples
 ```jldoctest
 julia> convert(Int, 3.0)
 3
@@ -2041,6 +2115,7 @@ convert
 
 Determine whether the given generic function has a method applicable to the given arguments.
 
+# Examples
 ```jldoctest
 julia> function f(x, y)
            x + y
@@ -2080,13 +2155,6 @@ Addition operator. `x+y+z+...` calls this function with all arguments, i.e. `+(x
 +
 
 """
-    setindex!(A, X, inds...)
-
-Store values from array `X` within some subset of `A` as specified by `inds`.
-"""
-setindex!(A::AbstractArray,X,inds...)
-
-"""
     setindex!(collection, value, key...)
 
 Store the given value at the given key or index within a collection. The syntax `a[i,j,...] =
@@ -2124,6 +2192,15 @@ throw
     ⊊(a,b) -> Bool
 
 Determine whether every element of `a` is also in `b`, using [`in`](@ref).
+
+# Examples
+```jldoctest
+julia> issubset([1, 2], [1, 2, 3])
+true
+
+julia> issubset([1, 2, 3], [1, 2])
+false
+```
 """
 issubset(a,b)
 
@@ -2142,7 +2219,7 @@ Create an array of all zeros with the same layout as `A`, element type `T` and s
 The `A` argument can be skipped, which behaves like `Array{Float64,0}()` was passed.
 For convenience `dims` may also be passed in variadic form.
 
-
+# Examples
 ```jldoctest
 julia> zeros(1)
 1-element Array{Float64,1}:
@@ -2207,6 +2284,18 @@ isvalid(T,value)
 
 Convert a number to an unsigned integer. If the argument is signed, it is reinterpreted as
 unsigned without checking for negative values.
+
+# Examples
+```jldoctest
+julia> unsigned(-2)
+0xfffffffffffffffe
+
+julia> unsigned(2)
+0x0000000000000002
+
+julia> signed(unsigned(-2))
+-2
+```
 """
 unsigned
 
@@ -2224,6 +2313,7 @@ reverseind
 
 Returns `true` if the value of the sign of `x` is negative, otherwise `false`.
 
+# Examples
 ```jldoctest
 julia> signbit(-4)
 true
@@ -2281,13 +2371,6 @@ The smallest in absolute value non-subnormal value representable by the given fl
 realmin
 
 """
-    union!(s, iterable)
-
-Union each element of `iterable` into set `s` in-place.
-"""
-union!
-
-"""
     deepcopy(x)
 
 Create a deep copy of `x`: everything is copied recursively, resulting in a fully
@@ -2315,6 +2398,7 @@ If `x` is a type, return a "larger" type (for numeric types, this will be
 a type with at least as much range and precision as the argument, and usually more).
 Otherwise `x` is converted to `widen(typeof(x))`.
 
+# Examples
 ```jldoctest
 julia> widen(Int32)
 Int64
@@ -2324,15 +2408,6 @@ julia> widen(1.5f0)
 ```
 """
 widen
-
-"""
-    Set([itr])
-
-Construct a [`Set`](@ref) of the values generated by the given iterable object, or an
-empty set. Should be used instead of [`IntSet`](@ref) for sparse integer sets, or
-for sets of arbitrary objects.
-"""
-Set
 
 """
     signed(x)
@@ -2357,6 +2432,7 @@ Val
 
 Bitwise or.
 
+# Examples
 ```jldoctest
 julia> 4 | 10
 14
@@ -2373,6 +2449,7 @@ Base.:(|)
 Delete and return the mapping for `key` if it exists in `collection`, otherwise return
 `default`, or throw an error if `default` is not specified.
 
+# Examples
 ```jldoctest
 julia> d = Dict("a"=>1, "b"=>2, "c"=>3);
 
@@ -2396,6 +2473,7 @@ pop!(collection,key,?)
 Remove an item in `collection` and return it. If `collection` is an
 ordered container, the last item is returned.
 
+# Examples
 ```jldoctest
 julia> A=[1, 2, 3]
 3-element Array{Int64,1}:
@@ -2437,6 +2515,17 @@ seekend
     DivideError()
 
 Integer division was attempted with a denominator value of 0.
+
+# Examples
+```jldoctest
+julia> 2/0
+Inf
+
+julia> div(2, 0)
+ERROR: DivideError: integer division error
+Stacktrace:
+ [1] div(::Int64, ::Int64) at ./int.jl:183
+```
 """
 DivideError
 

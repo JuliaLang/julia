@@ -146,6 +146,7 @@ as well as whether hooks to various optimized methods for them in LAPACK are ava
 
 | Type                      | Description                                                                      |
 |:------------------------- |:-------------------------------------------------------------------------------- |
+| [`Symmetric`](@ref)       | [Symmetric matrix](https://en.wikipedia.org/wiki/Symmetric_matrix)               |
 | [`Hermitian`](@ref)       | [Hermitian matrix](https://en.wikipedia.org/wiki/Hermitian_matrix)               |
 | [`UpperTriangular`](@ref) | Upper [triangular matrix](https://en.wikipedia.org/wiki/Triangular_matrix)       |
 | [`LowerTriangular`](@ref) | Lower [triangular matrix](https://en.wikipedia.org/wiki/Triangular_matrix)       |
@@ -153,20 +154,21 @@ as well as whether hooks to various optimized methods for them in LAPACK are ava
 | [`SymTridiagonal`](@ref)  | Symmetric tridiagonal matrix                                                     |
 | [`Bidiagonal`](@ref)      | Upper/lower [bidiagonal matrix](https://en.wikipedia.org/wiki/Bidiagonal_matrix) |
 | [`Diagonal`](@ref)        | [Diagonal matrix](https://en.wikipedia.org/wiki/Diagonal_matrix)                 |
-| `UniformScaling`          | [Uniform scaling operator](https://en.wikipedia.org/wiki/Uniform_scaling)        |
+| [`UniformScaling`](@ref)  | [Uniform scaling operator](https://en.wikipedia.org/wiki/Uniform_scaling)        |
 
 ### Elementary operations
 
 | Matrix type               | `+` | `-` | `*` | `\` | Other functions with optimized methods                              |
 |:------------------------- |:--- |:--- |:--- |:--- |:------------------------------------------------------------------- |
-| [`Hermitian`](@ref)       |     |     |     | MV  | [`inv()`](@ref), [`sqrtm()`](@ref), [`expm()`](@ref)                |
-| [`UpperTriangular`](@ref) |     |     | MV  | MV  | [`inv()`](@ref), [`det()`](@ref)                                    |
-| [`LowerTriangular`](@ref) |     |     | MV  | MV  | [`inv()`](@ref), [`det()`](@ref)                                    |
+| [`Symmetric`](@ref)       |     |     |     | MV  | [`inv()`](@ref), [`sqrtm()`](@ref), [`expm()`](@ref)                |
+| [`Hermitian`](@ref)       |     |     |     | MV  | [`inv()`](@ref), [`sqrtm()`](@ref), [`expm()`](@ref)                |
+| [`UpperTriangular`](@ref) |     |     | MV  | MV  | [`inv()`](@ref), [`det()`](@ref)                                    |
+| [`LowerTriangular`](@ref) |     |     | MV  | MV  | [`inv()`](@ref), [`det()`](@ref)                                    |
 | [`SymTridiagonal`](@ref)  | M   | M   | MS  | MV  | [`eigmax()`](@ref), [`eigmin()`](@ref)                              |
-| [`Tridiagonal`](@ref)     | M   | M   | MS  | MV  |                                                                     |
-| [`Bidiagonal`](@ref)      | M   | M   | MS  | MV  |                                                                     |
+| [`Tridiagonal`](@ref)     | M   | M   | MS  | MV  |                                                                     |
+| [`Bidiagonal`](@ref)      | M   | M   | MS  | MV  |                                                                     |
 | [`Diagonal`](@ref)        | M   | M   | MV  | MV  | [`inv()`](@ref), [`det()`](@ref), [`logdet()`](@ref), [`/()`](@ref) |
-| `UniformScaling`          | M   | M   | MVS | MVS | [`/()`](@ref)                                                       |
+| [`UniformScaling`](@ref)  | M   | M   | MVS | MVS | [`/()`](@ref)                                                       |
 
 Legend:
 
@@ -180,6 +182,7 @@ Legend:
 
 | Matrix type               | LAPACK | [`eig()`](@ref) | [`eigvals()`](@ref) | [`eigvecs()`](@ref) | [`svd()`](@ref) | [`svdvals()`](@ref) |
 |:------------------------- |:------ |:--------------- |:------------------- |:------------------- |:--------------- |:------------------- |
+| [`Symmetric`](@ref)       | SY     |                 | ARI                 |                     |                 |                     |
 | [`Hermitian`](@ref)       | HE     |                 | ARI                 |                     |                 |                     |
 | [`UpperTriangular`](@ref) | TR     | A               | A                   | A                   |                 |                     |
 | [`LowerTriangular`](@ref) | TR     | A               | A                   | A                   |                 |                     |
@@ -199,8 +202,8 @@ Legend:
 
 ### The uniform scaling operator
 
-A `UniformScaling` operator represents a scalar times the identity operator, `λ*I`. The identity
-operator  `I` is defined as a constant and is an instance of `UniformScaling`. The size of these
+A [`UniformScaling`](@ref) operator represents a scalar times the identity operator, `λ*I`. The identity
+operator `I` is defined as a constant and is an instance of `UniformScaling`. The size of these
 operators are generic and match the other matrix in the binary operations [`+`](@ref), [`-`](@ref),
 [`*`](@ref) and [`\`](@ref). For `A+I` and `A-I` this means that `A` must be square. Multiplication
 with the identity operator `I` is a noop (except for checking that the scaling factor is one)

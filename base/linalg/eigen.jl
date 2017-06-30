@@ -117,8 +117,8 @@ end
 Computes eigenvalues (`D`) and eigenvectors (`V`) of `A`.
 See [`eigfact`](@ref) for details on the
 `irange`, `vl`, and `vu` arguments
-(for [`SymTridiagonal`](@ref), `Hermitian`, and
-`Symmetric` matrices)
+(for [`SymTridiagonal`](@ref), [`Hermitian`](@ref), and
+[`Symmetric`](@ref) matrices)
 and the `permute` and `scale` keyword arguments.
 The eigenvectors are returned columnwise.
 
@@ -228,7 +228,7 @@ julia> A = [0 im; -1 0]
 julia> eigmax(A)
 ERROR: DomainError:
 Stacktrace:
- [1] #eigmax#46(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:238
+ [1] #eigmax#52(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:238
  [2] eigmax(::Array{Complex{Int64},2}) at ./linalg/eigen.jl:236
 ```
 """
@@ -270,7 +270,7 @@ julia> A = [0 im; -1 0]
 julia> eigmin(A)
 ERROR: DomainError:
 Stacktrace:
- [1] #eigmin#47(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:280
+ [1] #eigmin#53(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:280
  [2] eigmin(::Array{Complex{Int64},2}) at ./linalg/eigen.jl:278
 ```
 """

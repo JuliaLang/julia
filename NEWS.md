@@ -10,6 +10,8 @@ New language features
 Language changes
 ----------------
 
+  * The syntax `1.+2` is deprecated, since it is ambiguous: it could mean either
+    `1 .+ 2` (the current meaning) or `1. + 2` ([#19089]).
 
 Breaking changes
 ----------------
@@ -46,6 +48,8 @@ This section lists changes that do not have deprecation warnings.
 
 Library improvements
 --------------------
+
+  * The functions `strip`, `lstrip` and `rstrip` now return `SubString` ([#22496]).
 
   * The functions `base` and `digits` digits now accept a negative
     base (like `ndigits` did) ([#21692]).
@@ -112,6 +116,13 @@ Deprecated or removed
   * Bindings to the FFTW library have been removed from Base. The DFT framework for building FFT
     implementations is now in AbstractFFTs.jl, the bindings to the FFTW library are in FFTW.jl,
     and the Base signal processing functions which used FFTs are now in DSP.jl ([#21956]).
+
+  * The `corrected` positional argument to `cov` has been deprecated in favor of
+    a keyword argument with the same name (#21709).
+
+  * Omitting a space between the condition and `?` in a ternary expression has been deprecated.
+    Ternaries must now include some amount of whitespace, e.g. `x ? a : b` rather than
+    `x? a : b` ([#22523]).
 
 
 Julia v0.6.0 Release Notes
@@ -912,3 +923,4 @@ Command-line option changes
 [#22228]: https://github.com/JuliaLang/julia/issues/22228
 [#22245]: https://github.com/JuliaLang/julia/issues/22245
 [#22310]: https://github.com/JuliaLang/julia/issues/22310
+[#22523]: https://github.com/JuliaLang/julia/issues/22523

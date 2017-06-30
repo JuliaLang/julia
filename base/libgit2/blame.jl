@@ -24,14 +24,13 @@ end
 
 function Base.show(io::IO, blame_hunk::BlameHunk)
     println(io, "GitBlameHunk:")
-    println(io, "Original path: ", blame_hunk.orig.path)
+    println(io, "Original path: ", unsafe_string(blame_hunk.orig_path))
     println(io, "Lines in hunk: ", blame_hunk.lines_in_hunk)
     println(io, "Final commit oid: ", blame_hunk.final_commit_id)
     print(io, "Final signature: ")
-    show(io, blame_hunk.final_signature)
-    println()
+    show(io, Signature(blame_hunk.final_signature))
+    println(io)
     println(io, "Original commit oid: ", blame_hunk.orig_commit_id)
     print(io, "Original signature: ")
-    show(io, blame_hunk.orig_signature)
-    println()
+    show(io, Signature(blame_hunk.orig_signature))
 end

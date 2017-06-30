@@ -31,6 +31,13 @@ function wait_readnb end
 function wait_readbyte end
 function wait_close end
 function nb_available end
+
+"""
+    readavailable(stream)
+
+Read all available data on the stream, blocking the task only if no data is available. The
+result is a `Vector{UInt8,1}`.
+"""
 function readavailable end
 
 """

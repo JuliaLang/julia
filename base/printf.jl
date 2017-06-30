@@ -299,8 +299,8 @@ function gen_d(flags::String, width::Int, precision::Int, c::Char)
         push!(blk.args, pad(width-precision, padding, ' '))
     end
     # print sign
-    '+' in flags ? push!(blk.args, :(write(out, neg?'-':'+'))) :
-    ' ' in flags ? push!(blk.args, :(write(out, neg?'-':' '))) :
+    '+' in flags ? push!(blk.args, :(write(out, neg ? '-' : '+'))) :
+    ' ' in flags ? push!(blk.args, :(write(out, neg ? '-' : ' '))) :
                    push!(blk.args, :(neg && write(out, '-')))
     # print prefix
     for ch in prefix
@@ -362,8 +362,8 @@ function gen_f(flags::String, width::Int, precision::Int, c::Char)
         push!(blk.args, pad(width-1, padding, ' '))
     end
     # print sign
-    '+' in flags ? push!(blk.args, :(write(out, neg?'-':'+'))) :
-    ' ' in flags ? push!(blk.args, :(write(out, neg?'-':' '))) :
+    '+' in flags ? push!(blk.args, :(write(out, neg ? '-' : '+'))) :
+    ' ' in flags ? push!(blk.args, :(write(out, neg ? '-' : ' '))) :
                    push!(blk.args, :(neg && write(out, '-')))
     # print zero padding
     if padding !== nothing && !('-' in flags) && '0' in flags
@@ -456,8 +456,8 @@ function gen_e(flags::String, width::Int, precision::Int, c::Char, inside_g::Boo
         push!(blk.args, pad(width, padding, ' '))
     end
     # print sign
-    '+' in flags ? push!(blk.args, :(write(out, neg?'-':'+'))) :
-    ' ' in flags ? push!(blk.args, :(write(out, neg?'-':' '))) :
+    '+' in flags ? push!(blk.args, :(write(out, neg ? '-' : '+'))) :
+    ' ' in flags ? push!(blk.args, :(write(out, neg ? '-' : ' '))) :
                    push!(blk.args, :(neg && write(out, '-')))
     # print zero padding
     if padding !== nothing && !('-' in flags) && '0' in flags
@@ -554,7 +554,7 @@ function gen_a(flags::String, width::Int, precision::Int, c::Char)
         if '#' in flags
             padding = :($padding - (len-1))
         else
-            padding = :($padding - (len>1?len:0))
+            padding = :($padding - (len>1 ? len : 0))
         end
     end
     # print space padding
@@ -562,8 +562,8 @@ function gen_a(flags::String, width::Int, precision::Int, c::Char)
         push!(blk.args, pad(width, padding, ' '))
     end
     # print sign
-    '+' in flags ? push!(blk.args, :(write(out, neg?'-':'+'))) :
-    ' ' in flags ? push!(blk.args, :(write(out, neg?'-':' '))) :
+    '+' in flags ? push!(blk.args, :(write(out, neg ? '-' : '+'))) :
+    ' ' in flags ? push!(blk.args, :(write(out, neg ? '-' : ' '))) :
                     push!(blk.args, :(neg && write(out, '-')))
     # hex prefix
     for ch in hexmark
@@ -630,7 +630,7 @@ function _limit(s, prec)
     prec >= sizeof(s) && return s
     p = prevind(s, prec+1)
     n = nextind(s, p)-1
-    s[1:(prec>=n?n:prevind(s,p))]
+    s[1:(prec>=n ? n : prevind(s,p))]
 end
 
 function gen_s(flags::String, width::Int, precision::Int, c::Char)
@@ -755,8 +755,8 @@ function gen_g(flags::String, width::Int, precision::Int, c::Char)
                           $padexpr; end))
     end
     # print sign
-    '+' in flags ? push!(blk.args, :(write(out, neg?'-':'+'))) :
-    ' ' in flags ? push!(blk.args, :(write(out, neg?'-':' '))) :
+    '+' in flags ? push!(blk.args, :(write(out, neg ? '-' : '+'))) :
+    ' ' in flags ? push!(blk.args, :(write(out, neg ? '-' : ' '))) :
                    push!(blk.args, :(neg && write(out, '-')))
     # print zero padding
     if !('-' in flags) && '0' in flags

@@ -84,12 +84,12 @@ srand(1)
         @testset "Constructor and basic properties" begin
             @test size(T, 1) == size(T, 2) == n
             @test size(T) == (n, n)
-            @test Array(T) == diagm(dv) + diagm(ev, isupper?1:-1)
+            @test Array(T) == diagm(dv) + diagm(ev, isupper ? 1 : -1)
             @test Bidiagonal(Array(T), isupper) == T
             @test big.(T) == T
-            @test Array(abs.(T)) == abs.(diagm(dv)) + abs.(diagm(ev, isupper?1:-1))
-            @test Array(real(T)) == real(diagm(dv)) + real(diagm(ev, isupper?1:-1))
-            @test Array(imag(T)) == imag(diagm(dv)) + imag(diagm(ev, isupper?1:-1))
+            @test Array(abs.(T)) == abs.(diagm(dv)) + abs.(diagm(ev, isupper ? 1 : -1))
+            @test Array(real(T)) == real(diagm(dv)) + real(diagm(ev, isupper ? 1 : -1))
+            @test Array(imag(T)) == imag(diagm(dv)) + imag(diagm(ev, isupper ? 1 : -1))
         end
         z = zeros(elty, n)
 

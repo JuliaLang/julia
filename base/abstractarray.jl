@@ -799,7 +799,7 @@ A[iter] = 0
 
 If you supply more than one `AbstractArray` argument, `eachindex` will create an
 iterable object that is fast for all arguments (a `UnitRange`
-if all inputs have fast linear indexing, a `CartesianRange`
+if all inputs have fast linear indexing, a [`CartesianRange`](@ref)
 otherwise).
 If the arrays have different sizes and/or dimensionalities, `eachindex` returns an
 iterable that spans the largest range along each dimension.
@@ -873,7 +873,35 @@ end
 #       getindex(::A{T,N}, ::Vararg{Int, N}) where {T,N} # if IndexCartesian()
 # If the subtype hasn't defined the required method, it falls back to the
 # _getindex function again where an error is thrown to prevent stack overflows.
+"""
+    getindex(A, inds...)
 
+Return a subset of array `A` as specified by `inds`, where each `ind` may be an
+`Int`, a `Range`, or a `Vector`. See the manual section on
+[array indexing](@ref man-array-indexing) for details.
+
+# Examples
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> getindex(A, 1)
+1
+
+julia> getindex(A, [2, 1])
+2-element Array{Int64,1}:
+ 3
+ 1
+
+julia> getindex(A, 2:4)
+3-element Array{Int64,1}:
+ 3
+ 2
+ 4
+```
+"""
 function getindex(A::AbstractArray, I...)
     @_propagate_inbounds_meta
     error_if_canonical_indexing(IndexStyle(A), A, I...)
@@ -959,6 +987,12 @@ _unsafe_ind2sub(sz, i) = (@_inline_meta; ind2sub(sz, i))
 
 ## Setindex! is defined similarly. We first dispatch to an internal _setindex!
 # function that allows dispatch on array storage
+
+"""
+    setindex!(A, X, inds...)
+
+Store values from array `X` within some subset of `A` as specified by `inds`.
+"""
 function setindex!(A::AbstractArray, v, I...)
     @_propagate_inbounds_meta
     error_if_canonical_indexing(IndexStyle(A), A, I...)
@@ -1718,6 +1752,7 @@ For multiple iterable arguments, `f` is called elementwise.
 `foreach` should be used instead of `map` when the results of `f` are not
 needed, for example in `foreach(println, array)`.
 
+# Example
 ```jldoctest
 julia> a = 1:3:7;
 
@@ -1745,6 +1780,7 @@ colons go in this expression. The results are concatenated along the remaining d
 For example, if `dims` is `[1,2]` and `A` is 4-dimensional, `f` is called on `A[:,:,i,j]`
 for all `i` and `j`.
 
+# Examples
 ```jldoctest
 julia> a = reshape(collect(1:16),(2,2,2,2))
 2×2×2×2 Array{Int64,4}:
@@ -1879,6 +1915,7 @@ map(f, A::Union{AbstractArray,AbstractSet,Associative}) = collect_similar(A, Gen
 Transform collection `c` by applying `f` to each element. For multiple collection arguments,
 apply `f` elementwise.
 
+# Examples
 ```jldoctest
 julia> map(x -> x * 2, [1, 2, 3])
 3-element Array{Int64,1}:
@@ -1921,6 +1958,7 @@ end
 Like [`map`](@ref), but stores the result in `destination` rather than a new
 collection. `destination` must be at least as large as the first collection.
 
+# Example
 ```jldoctest
 julia> x = zeros(3);
 

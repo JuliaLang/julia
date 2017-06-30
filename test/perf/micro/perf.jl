@@ -101,7 +101,7 @@ function pisumvec()
     s = 0.0
     a = [1:10000]
     for j = 1:500
-        s = sum(1./(a.^2))
+        s = sum(1 ./ (a.^2))
     end
     s
 end

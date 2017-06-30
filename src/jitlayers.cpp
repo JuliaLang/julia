@@ -244,6 +244,11 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level)
 #endif
 }
 
+extern "C" JL_DLLEXPORT
+void jl_add_optimization_passes(LLVMPassManagerRef PM, int opt_level) {
+    addOptimizationPasses(unwrap(PM), opt_level);
+}
+
 // ------------------------ TEMPORARILY COPIED FROM LLVM -----------------
 // This must be kept in sync with gdb/gdb/jit.h .
 extern "C" {
@@ -1038,9 +1043,9 @@ static void jl_gen_llvm_globaldata(Module *mod, const char *sysimg_data, size_t 
     if (sysimg_data) {
         Constant *data = ConstantDataArray::get(jl_LLVMContext,
             ArrayRef<uint8_t>((const unsigned char*)sysimg_data, sysimg_len));
-        addComdat(new GlobalVariable(*mod, data->getType(), true,
+        addComdat(new GlobalVariable(*mod, data->getType(), false,
                                      GlobalVariable::ExternalLinkage,
-                                     data, "jl_system_image_data"));
+                                     data, "jl_system_image_data"))->setAlignment(64);
         Constant *len = ConstantInt::get(T_size, sysimg_len);
         addComdat(new GlobalVariable(*mod, len->getType(), true,
                                      GlobalVariable::ExternalLinkage,

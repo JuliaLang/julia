@@ -399,10 +399,10 @@ typedef struct {
     jl_value_t *value;
     jl_value_t *globalref;  // cached GlobalRef for this binding
     struct _jl_module_t *owner;  // for individual imported bindings
-    unsigned constp:1;
-    unsigned exportp:1;
-    unsigned imported:1;
-    unsigned deprecated:1;
+    uint8_t constp:1;
+    uint8_t exportp:1;
+    uint8_t imported:1;
+    uint8_t deprecated:1;
 } jl_binding_t;
 
 typedef struct _jl_module_t {
@@ -411,10 +411,10 @@ typedef struct _jl_module_t {
     struct _jl_module_t *parent;
     htable_t bindings;
     arraylist_t usings;  // modules with all bindings potentially imported
-    uint8_t istopmod;
     uint64_t uuid;
     size_t primary_world;
     uint32_t counter;
+    uint8_t istopmod;
 } jl_module_t;
 
 // one Type-to-Value entry
@@ -834,6 +834,11 @@ static inline uint32_t jl_fielddesc_size(int8_t fielddesc_type)
 }
 
 #undef DEFINE_FIELD_ACCESSORS
+
+static inline int jl_is_layout_opaque(const jl_datatype_layout_t *l)
+{
+    return l->nfields == 0 && l->npointers > 0;
+}
 
 // basic predicates -----------------------------------------------------------
 #define jl_is_nothing(v)     (((jl_value_t*)(v)) == ((jl_value_t*)jl_nothing))

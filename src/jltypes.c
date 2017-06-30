@@ -1665,15 +1665,15 @@ void jl_init_types(void)
     jl_simplevector_type->name->mt = jl_new_method_table(jl_simplevector_type->name->name, core);
     jl_simplevector_type->super = jl_any_type;
     jl_simplevector_type->parameters = jl_emptysvec;
-    jl_simplevector_type->name->names = jl_perm_symsvec(1, "length");
-    jl_simplevector_type->types = jl_svec(1, jl_any_type);
+    jl_simplevector_type->name->names = jl_emptysvec;
+    jl_simplevector_type->types = jl_emptysvec;
     jl_simplevector_type->uid = jl_assign_type_uid();
     jl_simplevector_type->instance = NULL;
     jl_simplevector_type->struct_decl = NULL;
     jl_simplevector_type->ditype = NULL;
     jl_simplevector_type->abstract = 0;
     jl_simplevector_type->mutabl = 1;
-    jl_simplevector_type->ninitialized = 1;
+    jl_simplevector_type->ninitialized = 0;
 
     // now they can be used to create the remaining base kinds and types
     jl_void_type = jl_new_datatype(jl_symbol("Void"), core, jl_any_type, jl_emptysvec,
@@ -1834,8 +1834,7 @@ void jl_init_types(void)
                         tv,
                         jl_emptysvec, jl_emptysvec, 0, 1, 0)->name->wrapper;
     jl_array_typename = ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_array_type))->name;
-    static const jl_datatype_layout_t _jl_array_layout = { 0, sizeof(void*), 0, 1, 0 };
-    ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_array_type))->layout = &_jl_array_layout;
+    jl_compute_field_offsets((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_array_type));
 
     jl_array_any_type = jl_apply_type2((jl_value_t*)jl_array_type, (jl_value_t*)jl_any_type, jl_box_long(1));
 
@@ -2028,8 +2027,8 @@ void jl_init_types(void)
 
     jl_abstractstring_type = jl_new_abstracttype((jl_value_t*)jl_symbol("AbstractString"), core, jl_any_type, jl_emptysvec);
     jl_string_type = jl_new_datatype(jl_symbol("String"), core, jl_abstractstring_type, jl_emptysvec,
-                                     jl_perm_symsvec(1, "len"), jl_svec1(jl_long_type),
-                                     0, 1, 1);
+                                     jl_emptysvec, jl_emptysvec, 0, 1, 0);
+    jl_compute_field_offsets(jl_string_type);
 
     // complete builtin type metadata
     jl_value_t *pointer_void = jl_apply_type1((jl_value_t*)jl_pointer_type, (jl_value_t*)jl_void_type);
@@ -2045,7 +2044,6 @@ void jl_init_types(void)
     jl_svecset(jl_datatype_type->types, 13, jl_int32_type);
     jl_svecset(jl_datatype_type->types, 14, jl_bool_type);
     jl_svecset(jl_datatype_type->types, 15, jl_bool_type);
-    jl_svecset(jl_simplevector_type->types, 0, jl_long_type);
     jl_svecset(jl_typename_type->types, 1, jl_module_type);
     jl_svecset(jl_typename_type->types, 6, jl_long_type);
     jl_svecset(jl_typename_type->types, 3, jl_type_type);
@@ -2080,10 +2078,6 @@ void jl_init_types(void)
     jl_compute_field_offsets(jl_unionall_type);
     jl_compute_field_offsets(jl_simplevector_type);
     jl_compute_field_offsets(jl_sym_type);
-
-    // TODO: don't modify layout objects
-    ((jl_datatype_layout_t*)jl_sym_type->layout)->npointers = 1;
-    ((jl_datatype_layout_t*)jl_simplevector_type->layout)->npointers = 1;
 
     jl_cfunction_list.unknown = jl_nothing;
 }

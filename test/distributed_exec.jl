@@ -902,9 +902,9 @@ function testmap_equivalence(f, c...)
 end
 
 testmap_equivalence(identity, (1,2,3,4))
-testmap_equivalence(x->x>0?1.0:0.0, sparse(eye(5)))
+testmap_equivalence(x->x>0 ? 1.0 : 0.0, sparse(eye(5)))
 testmap_equivalence((x,y,z)->x+y+z, 1,2,3)
-testmap_equivalence(x->x?false:true, BitArray(10,10))
+testmap_equivalence(x->x ? false : true, BitArray(10,10))
 testmap_equivalence(x->"foobar", BitArray(10,10))
 testmap_equivalence((x,y,z)->string(x,y,z), BitArray(10), ones(10), "1234567890")
 
@@ -1643,6 +1643,47 @@ catch ex
     @test contains(ex.captured.ex.exceptions[1].ex.msg, "BoundsError")
     @test ex.captured.ex.exceptions[2].ex == UndefVarError(:DontExistOn1)
 end
+
+@test let
+    # creates a new worker in the same folder and tries to include file
+    tmp_file, temp_file_stream = mktemp()
+    close(temp_file_stream)
+    tmp_file = relpath(tmp_file)
+    try
+        proc = addprocs_with_testenv(1)
+        include(tmp_file)
+        remotecall_fetch(include, proc[1], tmp_file)
+        rmprocs(proc)
+        rm(tmp_file)
+        return true
+    catch e
+        println(e)
+        rm(tmp_file, force=true)
+        return false
+    end
+end == true
+
+@test let
+    # creates a new worker in the different folder and tries to include file
+    tmp_file, temp_file_stream = mktemp()
+    close(temp_file_stream)
+    tmp_file = relpath(tmp_file)
+    tmp_dir = relpath(mktempdir())
+    try
+        proc = addprocs_with_testenv(1, dir=tmp_dir)
+        include(tmp_file)
+        remotecall_fetch(include, proc[1], tmp_file)
+        rmprocs(proc)
+        rm(tmp_dir)
+        rm(tmp_file)
+        return true
+    catch e
+        println(e)
+        rm(tmp_dir, force=true)
+        rm(tmp_file, force=true)
+        return false
+    end
+end == true
 
 # Run topology tests last after removing all workers, since a given
 # cluster at any time only supports a single topology.

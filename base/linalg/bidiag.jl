@@ -142,7 +142,7 @@ julia> Bidiagonal(A, false) #contains the main diagonal and first subdiagonal of
  ⋅  ⋅  4  4
 ```
 """
-Bidiagonal(A::AbstractMatrix, isupper::Bool)=Bidiagonal(diag(A), diag(A, isupper?1:-1), isupper)
+Bidiagonal(A::AbstractMatrix, isupper::Bool)=Bidiagonal(diag(A), diag(A, isupper ? 1 : -1), isupper)
 
 function getindex(A::Bidiagonal{T}, i::Integer, j::Integer) where T
     if !((1 <= i <= size(A,2)) && (1 <= j <= size(A,2)))
@@ -241,7 +241,7 @@ function show(io::IO, M::Bidiagonal)
     println(io, summary(M), ":")
     print(io, " diag:")
     print_matrix(io, (M.dv)')
-    print(io, M.isupper?"\n super:":"\n sub:")
+    print(io, M.isupper ? "\n super:" : "\n sub:")
     print_matrix(io, (M.ev)')
 end
 

@@ -107,6 +107,21 @@ end
 @test SubString("", 1, 6)[10:9] == ""
 @test SubString("", 1, 0)[10:9] == ""
 
+# issue #22500 (using `get()` to index strings with default returns)
+let
+    utf8_str = "我很喜欢Julia"
+
+    # Test that we can index in at valid locations
+    @test get(utf8_str, 1, 'X') == '我'
+    @test get(utf8_str, 13, 'X') == 'J'
+
+    # Test that obviously incorrect locations return the default
+    @test get(utf8_str, -1, 'X') == 'X'
+    @test get(utf8_str, 1000, 'X') == 'X'
+
+    # Test that indexing into the middle of a character returns the default
+    @test get(utf8_str, 2, 'X') == 'X'
+end
 
 #=
 # issue #7764

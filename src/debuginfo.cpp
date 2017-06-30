@@ -725,19 +725,20 @@ static inline void ignoreError(T &err)
 
 static void get_function_name_and_base(const object::ObjectFile *object, bool insysimage,
                                        void **saddr, char **name, size_t pointer,
-                                       int64_t slide)
+                                       int64_t slide, bool untrusted_dladdr)
 {
-    if (!object)
-        return;
     // Assume we only need base address for sysimg for now
     if (!insysimage || !sysimg_fvars_base)
         saddr = nullptr;
+    bool needs_saddr = saddr && (!*saddr || untrusted_dladdr);
+    bool needs_name = name && (!*name || untrusted_dladdr);
     // Try platform specific methods first since they are usually faster
-    if (saddr && !*saddr) {
-#if defined(_OS_LINUX_) && !defined(JL_DISABLE_LIBUNWIND)
+    if (needs_saddr) {
+#if (defined(_OS_LINUX_) || defined(_OS_FREEBSD_)) && !defined(JL_DISABLE_LIBUNWIND)
         unw_proc_info_t pip;
         if (unw_get_proc_info_by_ip(unw_local_addr_space, pointer, &pip, NULL) == 0) {
             *saddr = (void*)pip.start_ip;
+            needs_saddr = false;
         }
 #endif
 #if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
@@ -745,10 +746,11 @@ static void get_function_name_and_base(const object::ObjectFile *object, bool in
         PRUNTIME_FUNCTION fn = RtlLookupFunctionEntry(pointer, &ImageBase, NULL);
         if (fn) {
             *saddr = (void*)(ImageBase + fn->BeginAddress);
+            needs_saddr = false;
         }
 #endif
     }
-    if ((saddr && !*saddr) || (name && !*name)) {
+    if (object && (needs_saddr || needs_name)) {
         size_t distance = (size_t)-1;
         SymRef sym_found;
         for (auto sym: object->symbols()) {
@@ -765,25 +767,27 @@ static void get_function_name_and_base(const object::ObjectFile *object, bool in
             sym_found = sym;
         }
         if (distance != (size_t)-1) {
-            if (saddr && !*saddr) {
+            if (needs_saddr) {
                 auto addr = sym_found.getAddress();
                 assert(addr);
                 *saddr = (void*)(uintptr_t)(addr.get() - slide);
+                needs_saddr = false;
             }
-            if (name && !*name) {
+            if (needs_name) {
                 if (auto name_or_err = sym_found.getName()) {
                     auto nameref = name_or_err.get();
                     size_t len = nameref.size();
-                    *name = (char*)malloc(len + 1);
+                    *name = (char*)realloc(*name, len + 1);
                     (*name)[len] = 0;
                     memcpy(*name, nameref.data(), len);
+                    needs_name = false;
                 }
             }
         }
     }
 #ifdef _OS_WINDOWS_
     // For ntdll and msvcrt since we are currently only parsing DWARF debug info through LLVM
-    if (!insysimage && name && !*name) {
+    if (!insysimage && needs_name) {
         static char frame_info_func[
             sizeof(SYMBOL_INFO) +
             MAX_SYM_NAME * sizeof(TCHAR)];
@@ -802,80 +806,8 @@ static void get_function_name_and_base(const object::ObjectFile *object, bool in
 #endif
 }
 
-extern "C" void jl_refresh_dbg_module_list(void);
-bool jl_dylib_DI_for_fptr(size_t pointer, const llvm::object::ObjectFile **obj, llvm::DIContext **context, int64_t *slide, int64_t *section_slide,
-    bool onlySysImg, bool *isSysImg, void **saddr, char **name, char **filename)
+static objfileentry_t &find_object_file(uint64_t fbase, StringRef fname)
 {
-    *obj = NULL;
-    *context = NULL;
-    *slide = 0;
-    *section_slide = 0;
-
-// GOAL: Determine containing Library
-// Assigning fname, fbase
-#ifdef _OS_WINDOWS_
-    IMAGEHLP_MODULE64 ModuleInfo;
-    ModuleInfo.SizeOfStruct = sizeof(IMAGEHLP_MODULE64);
-    jl_refresh_dbg_module_list();
-    jl_in_stackwalk = 1;
-    bool isvalid = SymGetModuleInfo64(GetCurrentProcess(), (DWORD64)pointer, &ModuleInfo);
-    jl_in_stackwalk = 0;
-    if (!isvalid) return false;
-
-    StringRef fname = ModuleInfo.LoadedImageName;
-    if (fname.empty()) // empirically, LoadedImageName might be missing
-        fname = ModuleInfo.ImageName;
-    DWORD64 fbase = ModuleInfo.BaseOfImage;
-    bool insysimage = (fbase == jl_sysimage_base);
-    if (isSysImg)
-        *isSysImg = insysimage;
-    if (onlySysImg && !insysimage) {
-        return false;
-    }
-    // If we didn't find the filename before in the debug
-    // info, use the dll name
-    if (filename && !*filename)
-        jl_copy_str(filename, fname.data());
-    if (saddr)
-        *saddr = NULL;
-
-#else // ifdef _OS_WINDOWS_
-    Dl_info dlinfo;
-    int dladdr_success;
-    uint64_t fbase;
-#ifdef __GLIBC__
-    struct link_map *extra_info;
-    dladdr_success = dladdr1((void*)pointer, &dlinfo, (void**)&extra_info, RTLD_DL_LINKMAP) != 0;
-#else
-    dladdr_success = dladdr((void*)pointer, &dlinfo) != 0;
-#endif
-    if (!dladdr_success || !dlinfo.dli_fname)
-        return false;
-
-#ifdef __GLIBC__
-    // dlinfo.dli_fbase is not the right value for the main executable on linux
-    fbase = (uintptr_t)extra_info->l_addr;
-#else
-    fbase = (uintptr_t)dlinfo.dli_fbase;
-#endif
-    StringRef fname;
-    if (saddr)
-        *saddr = dlinfo.dli_saddr;
-    bool insysimage = (fbase == jl_sysimage_base);
-    if (isSysImg)
-        *isSysImg = insysimage;
-    if (onlySysImg && !insysimage) {
-        return false;
-    }
-    // In case we fail with the debug info lookup, we at least still
-    // have the function name, even if we don't have line numbers
-    if (name)
-        jl_copy_str(name, dlinfo.dli_sname);
-    if (filename)
-        jl_copy_str(filename, dlinfo.dli_fname);
-    fname = dlinfo.dli_fname;
-#endif // ifdef _OS_WINDOWS_
-
     int isdarwin = 0, islinux = 0, iswindows = 0;
 #if defined(_OS_DARWIN_)
     isdarwin = 1;
@@ -889,15 +821,10 @@ bool jl_dylib_DI_for_fptr(size_t pointer, const llvm::object::ObjectFile **obj, 
 // GOAL: Read debuginfo from file
     // TODO: need read/write lock here for objfilemap synchronization
     obfiletype::iterator it = objfilemap.find(fbase);
-    if (it != objfilemap.end()) {
+    if (it != objfilemap.end())
         // Return cached value
-        *obj = it->second.obj;
-        *context = it->second.ctx;
-        *slide = it->second.slide;
-        *section_slide = it->second.section_slide;
-        get_function_name_and_base(*obj, insysimage, saddr, name, pointer, *slide);
-        return true;
-    }
+        return it->second;
+    auto &entry = objfilemap[fbase]; // default initialized
 
 // GOAL: Assign errorobj
     StringRef objpath;
@@ -909,22 +836,16 @@ bool jl_dylib_DI_for_fptr(size_t pointer, const llvm::object::ObjectFile **obj, 
                 StringRef((const char *)fbase, msize), "", false);
         auto origerrorobj = llvm::object::ObjectFile::createObjectFile(
             membuf->getMemBufferRef(), llvm_file_magic::unknown);
-        if (!origerrorobj) {
-            objfileentry_t entry = {};
-            objfilemap[fbase] = entry;
-            return true;
-        }
+        if (!origerrorobj)
+            return entry;
 
         llvm::object::MachOObjectFile *morigobj = (llvm::object::MachOObjectFile*)
             origerrorobj.get().get();
 
         // First find the uuid of the object file (we'll use this to make sure we find the
         // correct debug symbol file).
-        if (!getObjUUID(morigobj, uuid)) {
-            objfileentry_t entry = {};
-            objfilemap[fbase] = entry;
-            return true;
-        }
+        if (!getObjUUID(morigobj, uuid))
+            return entry;
 
         // On OS X debug symbols are not contained in the dynamic library.
         // For now we only support .dSYM files in the same directory
@@ -943,7 +864,7 @@ bool jl_dylib_DI_for_fptr(size_t pointer, const llvm::object::ObjectFile **obj, 
     }
     auto errorobj = llvm::object::ObjectFile::createObjectFile(objpath);
 
-// GOAL: Assign *obj, *context, *slide (if above succeeded)
+// GOAL: Find obj, context, slide (if above succeeded)
     if (errorobj) {
         auto *debugobj = errorobj->getBinary();
 
@@ -995,37 +916,127 @@ bool jl_dylib_DI_for_fptr(size_t pointer, const llvm::object::ObjectFile **obj, 
             // verify the UUID matches
             if (!getObjUUID((llvm::object::MachOObjectFile*)debugobj, uuid2) ||
                     memcmp(uuid, uuid2, sizeof(uuid)) != 0) {
-                objfileentry_t entry = {};
-                objfilemap[fbase] = entry;
-                return true;
+                return entry;
             }
         }
 
+        int64_t slide = 0;
+        int64_t section_slide = 0;
         if (auto *OF = dyn_cast<const object::COFFObjectFile>(debugobj)) {
             assert(iswindows);
-            *slide = OF->getImageBase() - fbase;
-            *section_slide = 0; // Since LLVM 3.8+ addresses are adjusted correctly
+            slide = OF->getImageBase() - fbase;
+            section_slide = 0; // Since LLVM 3.8+ addresses are adjusted correctly
         }
         else {
-            *slide = -(int64_t)fbase;
+            slide = -(int64_t)fbase;
         }
 
-        *context = new DWARFContextInMemory(*debugobj);
-        *obj = debugobj;
+        auto context = new DWARFContextInMemory(*debugobj);
         auto binary = errorobj->takeBinary();
         binary.first.release();
         binary.second.release();
+        // update cache
+        entry = {debugobj, context, slide, section_slide};
     }
     else {
         // TODO: report the error instead of silently consuming it?
         //       jl_error might run into the same error again...
         ignoreError(errorobj);
     }
+    return entry;
+}
 
-    // update cache
-    objfileentry_t entry = {*obj, *context, *slide, *section_slide};
-    objfilemap[fbase] = entry;
-    get_function_name_and_base(*obj, insysimage, saddr, name, pointer, *slide);
+extern "C" void jl_refresh_dbg_module_list(void);
+bool jl_dylib_DI_for_fptr(size_t pointer, const llvm::object::ObjectFile **obj, llvm::DIContext **context, int64_t *slide, int64_t *section_slide,
+    bool onlySysImg, bool *isSysImg, void **saddr, char **name, char **filename)
+{
+    *obj = NULL;
+    *context = NULL;
+    *slide = 0;
+    *section_slide = 0;
+    // On Windows and FreeBSD, `dladdr` (or its equivalent) returns the closest exported symbol
+    // without checking the size.
+    // This causes the lookup to return incorrect non-NULL result for local functions
+    // when better result is available through other methods.
+    // macOS's `dladdr` returns local symbols and Linux's `dladdr`
+    // checks the symbol size so they do not have this problem.
+    // On systems with an untrusted dladdr, the result cannot be used for sysimg
+    // (it's always wrong) and should in general be used only as the last fallback.
+#if defined(_OS_FREEBSD_) || defined(_OS_WINDOWS_)
+    bool untrusted_dladdr = true;
+#else
+    bool untrusted_dladdr = false;
+#endif
+
+// GOAL: Determine containing Library
+// Assigning fname, fbase
+#ifdef _OS_WINDOWS_
+    IMAGEHLP_MODULE64 ModuleInfo;
+    ModuleInfo.SizeOfStruct = sizeof(IMAGEHLP_MODULE64);
+    jl_refresh_dbg_module_list();
+    jl_in_stackwalk = 1;
+    bool isvalid = SymGetModuleInfo64(GetCurrentProcess(), (DWORD64)pointer, &ModuleInfo);
+    jl_in_stackwalk = 0;
+    if (!isvalid) return false;
+
+    StringRef fname = ModuleInfo.LoadedImageName;
+    if (fname.empty()) // empirically, LoadedImageName might be missing
+        fname = ModuleInfo.ImageName;
+    DWORD64 fbase = ModuleInfo.BaseOfImage;
+    bool insysimage = (fbase == jl_sysimage_base);
+    if (isSysImg)
+        *isSysImg = insysimage;
+    if (onlySysImg && !insysimage)
+        return false;
+    // If we didn't find the filename before in the debug
+    // info, use the dll name
+    if (filename && !*filename)
+        jl_copy_str(filename, fname.data());
+    if (saddr)
+        *saddr = NULL;
+
+#else // ifdef _OS_WINDOWS_
+    Dl_info dlinfo;
+    int dladdr_success;
+    uint64_t fbase;
+#ifdef __GLIBC__
+    struct link_map *extra_info;
+    dladdr_success = dladdr1((void*)pointer, &dlinfo, (void**)&extra_info, RTLD_DL_LINKMAP) != 0;
+#else
+    dladdr_success = dladdr((void*)pointer, &dlinfo) != 0;
+#endif
+    if (!dladdr_success || !dlinfo.dli_fname)
+        return false;
+
+#ifdef __GLIBC__
+    // dlinfo.dli_fbase is not the right value for the main executable on linux
+    fbase = (uintptr_t)extra_info->l_addr;
+#else
+    fbase = (uintptr_t)dlinfo.dli_fbase;
+#endif
+    StringRef fname;
+    bool insysimage = (fbase == jl_sysimage_base);
+    if (saddr && !(insysimage && untrusted_dladdr))
+        *saddr = dlinfo.dli_saddr;
+    if (isSysImg)
+        *isSysImg = insysimage;
+    if (onlySysImg && !insysimage)
+        return false;
+    // In case we fail with the debug info lookup, we at least still
+    // have the function name, even if we don't have line numbers
+    if (name && !(insysimage && untrusted_dladdr))
+        jl_copy_str(name, dlinfo.dli_sname);
+    if (filename)
+        jl_copy_str(filename, dlinfo.dli_fname);
+    fname = dlinfo.dli_fname;
+#endif // ifdef _OS_WINDOWS_
+    auto &entry = find_object_file(fbase, fname);
+    *obj = entry.obj;
+    *context = entry.ctx;
+    *slide = entry.slide;
+    *section_slide = entry.section_slide;
+    get_function_name_and_base(entry.obj, insysimage, saddr, name, pointer, entry.slide,
+                               untrusted_dladdr);
     return true;
 }
 
