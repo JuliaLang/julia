@@ -168,6 +168,7 @@ float(x::AbstractString) = parse(Float64,x)
 float{S<:AbstractString}(a::AbstractArray{S}) = map!(float, similar(a,typeof(float(0))), a)
 
 function parse{T<:AbstractFloat}(::Type{T}, s::AbstractString, base::Integer)
+    s = strip(s, ' ')
     sign = s[1] == '-' ? -1 : 1
     sign == -1 && (s = s[2:end])
     s == "NaN" && return T(NaN)
