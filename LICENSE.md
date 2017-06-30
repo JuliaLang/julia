@@ -34,7 +34,6 @@ Julia includes code from the following projects, which have their own licenses:
 - [LLVM](http://releases.llvm.org/3.9.0/LICENSE.TXT) (for parts of src/jitlayers.cpp and src/disasm.cpp) [BSD-3, effectively]
 - [MUSL](http://git.musl-libc.org/cgit/musl/tree/COPYRIGHT) (for getopt implementation on Windows) [MIT]
 - [MINGW](https://sourceforge.net/p/mingw/mingw-org-wsl/ci/legacy/tree/mingwrt/mingwex/dirname.c) (for dirname implementation on Windows) [MIT]
-- [FDLIBM](http://www.netlib.org/fdlibm/readme) [Freely distributable with preserved copyright notice]
 - [NetBSD](http://www.netbsd.org/about/redistribution.html) (for setjmp, longjmp, and strptime implementations on Windows) [BSD-3]
 - [Python](https://docs.python.org/2/license.html) (for strtod implementation on Windows) [BSD-3, effectively]
 - [randmtzig.c](https://github.com/JuliaLang/julia/blob/master/test/perf/micro/randmtzig.c) for Gaussian random number generation (for C benchmarks only) [BSD-3]
@@ -74,7 +73,7 @@ The following components of Julia's standard library have separate licenses:
 - base/grisu/* (see [double-conversion](https://github.com/google/double-conversion/blob/master/LICENSE))
 - base/sparse/umfpack.jl (see [SUITESPARSE](http://faculty.cse.tamu.edu/davis/suitesparse.html))
 - base/sparse/cholmod.jl (see [SUITESPARSE](http://faculty.cse.tamu.edu/davis/suitesparse.html))
-- base/special/exp.jl (see [FREEBSD MSUN](https://github.com/freebsd/freebsd) [FreeBSD/2-clause BSD/Simplified BSD License])
+- base/special/exp.jl (see [FDLIBM](http://www.netlib.org/fdlibm/e_rem_pio2.c) [Freely distributable with preserved copyright notice])
 - base/special/rem_pio2.jl (see [FDLIBM](http://www.netlib.org/fdlibm/e_rem_pio2.c) [Freely distributable with preserved copyright notice])
 
 
