@@ -1610,8 +1610,8 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
             m, n   = size(A)
             minmn  = min(m, n)
             S      = similar(A, $relty, minmn)
-            U      = similar(A, $elty, jobu  == 'A'? (m, m):(jobu  == 'S'? (m, minmn) : (m, 0)))
-            VT     = similar(A, $elty, jobvt == 'A'? (n, n):(jobvt == 'S'? (minmn, n) : (n, 0)))
+            U      = similar(A, $elty, jobu  == 'A' ? (m, m) : (jobu  == 'S' ? (m, minmn) : (m, 0)))
+            VT     = similar(A, $elty, jobvt == 'A' ? (n, n) : (jobvt == 'S' ? (minmn, n) : (n, 0)))
             work   = Vector{$elty}(1)
             cmplx  = eltype(A) <: Complex
             if cmplx
