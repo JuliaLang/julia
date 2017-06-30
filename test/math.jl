@@ -670,6 +670,6 @@ end
 
     n, y1, y2 = Base.Math.rem_pio2_kernel(x)
     y=y1+y2
-    @test a-y<nextfloat(y)
+    @test a-y<nextfloat(y)/2
     # add more tests
 end
