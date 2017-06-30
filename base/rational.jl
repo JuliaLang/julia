@@ -255,7 +255,7 @@ function *(x::Rational, y::Rational)
 end
 /(x::Rational, y::Rational) = x//y
 /(x::Rational, y::Complex{<:Union{Integer,Rational}}) = x//y
-inv(x::Rational) = Rational(x.den,x.num)
+inv(x::Rational) = Rational(x.den, x.num)
 
 fma(x::Rational, y::Rational, z::Rational) = x*y+z
 
