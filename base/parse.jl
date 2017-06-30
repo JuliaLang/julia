@@ -168,11 +168,15 @@ float(x::AbstractString) = parse(Float64,x)
 float{S<:AbstractString}(a::AbstractArray{S}) = map!(float, similar(a,typeof(float(0))), a)
 
 function parse{T<:AbstractFloat}(::Type{T}, s::AbstractString, base::Integer)
+    sign = s[1] == '-' ? -1 : 1
+    sign == -1 && (s = s[2:end])
+    s == "NaN" && return T(NaN)
+    s == "Inf" && return T(Inf)
     res = zero(T)
-    2 <= base <= 9 || throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 9, got $base"))
-    b = Float64(base)
-    n, Exponent = 0,0
+    Exponent = length(s)
+    b = T(base)
     pointfound = false
+    n = 0
     for i in eachindex(s)
         if s[i] == '.' 
             Exponent = i-1
@@ -180,12 +184,10 @@ function parse{T<:AbstractFloat}(::Type{T}, s::AbstractString, base::Integer)
             continue
         end
         n += 1
-        d = parse(Int,s[i])
-        d < base || throw(ArgumentError("invalid base $base digit $d"))
+        d = parse(Int,s[i], base)
         res += d*b^(-n)
     end
-    !pointfound && throw(ArgumentError("String must contain '.'"))
-    res*b^Exponent
+    sign*res*b^Exponent
 end
 
 float(x::AbstractString, base::Integer) = parse(Float64,x,base)
