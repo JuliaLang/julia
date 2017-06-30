@@ -330,7 +330,6 @@ for T in (:Symmetric, :Hermitian), op in (:+, :-, :*, :/)
     @eval ($op)(A::$T, x::$S) = ($T)(($op)(A.data, x), Symbol(A.uplo))
 end
 
-bkfact(A::HermOrSym) = bkfact(A.data, Symbol(A.uplo), issymmetric(A))
 factorize(A::HermOrSym) = bkfact(A)
 
 det(A::RealHermSymComplexHerm) = real(det(bkfact(A)))
