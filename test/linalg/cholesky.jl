@@ -59,6 +59,9 @@ using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted, PosDefException
         @test all(x -> x ≈ √apos, cholfact(apos).factors)
         @test_throws PosDefException chol(-one(eltya))
 
+        @test  √apos*I ≈ chol(apos*I)
+        @test_throws PosDefException chol(-one(eltya)*I)
+
         # Test cholfact with Symmetric/Hermitian upper/lower
         apds  = Symmetric(apd)
         apdsL = Symmetric(apd, :L)
