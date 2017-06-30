@@ -73,7 +73,7 @@ function _ipiv2perm_bk(v::AbstractVector{T}, maxi::Integer, uplo::Char) where T
     p = T[1:maxi;]
     uploL = uplo == 'L'
     i = uploL ? 1 : maxi
-    # if uplo == 'U' we construct the permution backwards
+    # if uplo == 'U' we construct the permutation backwards
     @inbounds while 1 <= i <= length(v)
         vi = v[i]
         if vi > 0 # the 1x1 blocks
@@ -96,15 +96,16 @@ end
     getindex(B::BunchKaufman, d::Symbol)
 
 Extract the factors of the Bunch-Kaufman factorization `B`. The factorization can take the
-two forms `L*D*L.'` or `U*D*U.'` where `L` is a `UnitLowerTriangular` matrix, `U` is a
-`UnitUpperTriangular`, and `D` is a block diagonal matrix with 1x1 or 2x2 blocks. The argument
-`d` can be
+two forms `L*D*L'` or `U*D*U'` (or `.'` in the complex symmetric case) where `L` is a
+`UnitLowerTriangular` matrix, `U` is a `UnitUpperTriangular`, and `D` is a block diagonal
+symmetric or Hermitian matrix with 1x1 or 2x2 blocks. The argument `d` can be
 - `:D`: the block diagonal matrix
-- `:L`: the lower triangular factor (if factorization is `L*D*L.'`)
-- `:U`: the lower triangular factor (if factorization is `U*D*U.'`)
+- `:U`: the upper triangular factor (if factorization is `U*D*U'`)
+- `:L`: the lower triangular factor (if factorization is `L*D*L'`)
 - `:p`: permutation vector
 - `:P`: permutation matrix
 
+# Examples
 ```jldoctest
 julia> A = [1 2 3; 2 1 2; 3 2 1]
 3×3 Array{Int64,2}:
@@ -112,7 +113,24 @@ julia> A = [1 2 3; 2 1 2; 3 2 1]
  2  1  2
  3  2  1
 
-julia> F = bkfact(Symmetric(A, :L));
+julia> F = bkfact(Symmetric(A, :L))
+Base.LinAlg.BunchKaufman{Float64,Array{Float64,2}}
+D factor:
+3×3 Tridiagonal{Float64}:
+ 1.0  3.0    ⋅
+ 3.0  1.0   0.0
+  ⋅   0.0  -1.0
+L factor:
+3×3 Base.LinAlg.UnitLowerTriangular{Float64,Array{Float64,2}}:
+ 1.0  0.0  0.0
+ 0.0  1.0  0.0
+ 0.5  0.5  1.0
+permutation:
+3-element Array{Int64,1}:
+ 1
+ 3
+ 2
+successful: true
 
 julia> F[:L]*F[:D]*F[:L].' - A[F[:p], F[:p]]
 3×3 Array{Float64,2}:
@@ -144,20 +162,13 @@ function getindex(B::BunchKaufman{T}, d::Symbol) where {T<:BlasFloat}
             LUD, od = LAPACK.syconv!(B.uplo, copy(B.LD), B.ipiv)
         end
         if d == :D
-            D = diagm(diag(LUD))
-            for i in 1:n
-                if !iszero(od[i])
-                    odi = od[i]
-                    if B.uplo == 'L'
-                        D[i, i + 1] = B.symmetric ? odi : odi'
-                        D[i + 1, i] = odi
-                    else # 'U'
-                        D[i, i - 1] = B.symmetric ? odi : odi'
-                        D[i - 1, i] = odi
-                    end
-                end
+            if B.uplo == 'L'
+                odl = od[1:n - 1]
+                return Tridiagonal(odl, diag(LUD), B.symmetric ? odl : conj.(odl))
+            else # 'U'
+                odu = od[2:n]
+                return Tridiagonal(B.symmetric ? odu : conj.(odu), diag(LUD), odu)
             end
-            return D
         elseif d == :L
             if B.uplo == 'L'
                 return UnitLowerTriangular(LUD)
