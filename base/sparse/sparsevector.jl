@@ -43,7 +43,7 @@ countnz(x::SparseVector) = countnz(x.nzval)
 count(x::SparseVector) = count(x.nzval)
 
 nonzeros(x::SparseVector) = x.nzval
-function nonzeros(x::SubArray{T,1,<:AbstractSparseArray,Tuple{Base.Slice{Base.OneTo{Int64}},Int64},false} where T)
+function nonzeros(x::SubArray{T,1,<:SparseMatrixCSC,Tuple{Base.Slice{Base.OneTo{Int64}},Int64},false} where T)
     rowidx, colidx = parentindexes(x)
     A = parent(x)
     @inbounds y = view(A.nzval, A.colptr[colidx]:A.colptr[colidx + 1] - 1)

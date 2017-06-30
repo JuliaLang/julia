@@ -28,19 +28,16 @@ const NO_TOL      = Int32(-1) # if -2 < tol < 0, then no tol is used
 using ..SparseArrays: SparseMatrixCSC
 using ..SparseArrays.CHOLMOD
 
-import Base: size
-import Base.LinAlg: qr, qrfact
-
 function _qr!(ordering, tol, econ, getCTX, A::Ptr{CHOLMOD.C_Sparse{Tv}},
-    Bsparse::Ptr{CHOLMOD.C_Sparse{Tv}}        = Ptr{CHOLMOD.C_Sparse{Tv}}(C_NULL),
-    Bdense::Ptr{CHOLMOD.C_Dense{Tv}}          = Ptr{CHOLMOD.C_Dense{Tv}}(C_NULL),
-    Zsparse::Ref{Ptr{CHOLMOD.C_Sparse{Tv}}}   = Ref{Ptr{CHOLMOD.C_Sparse{Tv}}}(C_NULL),
-    Zdense::Ref{Ptr{CHOLMOD.C_Dense{Tv}}}     = Ref{Ptr{CHOLMOD.C_Dense{Tv}}}(C_NULL),
-    R::Ref{Ptr{CHOLMOD.C_Sparse{Tv}}}         = Ref{Ptr{CHOLMOD.C_Sparse{Tv}}}(C_NULL),
-    E::Ref{Ptr{CHOLMOD.SuiteSparse_long}}     = Ref{Ptr{CHOLMOD.SuiteSparse_long}}(C_NULL),
-    H::Ref{Ptr{CHOLMOD.C_Sparse{Tv}}}         = Ref{Ptr{CHOLMOD.C_Sparse{Tv}}}(C_NULL),
-    HPinv::Ref{Ptr{CHOLMOD.SuiteSparse_long}} = Ref{Ptr{CHOLMOD.SuiteSparse_long}}(C_NULL),
-    HTau::Ref{Ptr{CHOLMOD.C_Dense{Tv}}}       = Ref{Ptr{CHOLMOD.C_Dense{Tv}}}(C_NULL)) where {Tv<:CHOLMOD.VTypes}
+        Bsparse::Ptr{CHOLMOD.C_Sparse{Tv}}        = Ptr{CHOLMOD.C_Sparse{Tv}}(C_NULL),
+        Bdense::Ptr{CHOLMOD.C_Dense{Tv}}          = Ptr{CHOLMOD.C_Dense{Tv}}(C_NULL),
+        Zsparse::Ref{Ptr{CHOLMOD.C_Sparse{Tv}}}   = Ref{Ptr{CHOLMOD.C_Sparse{Tv}}}(C_NULL),
+        Zdense::Ref{Ptr{CHOLMOD.C_Dense{Tv}}}     = Ref{Ptr{CHOLMOD.C_Dense{Tv}}}(C_NULL),
+        R::Ref{Ptr{CHOLMOD.C_Sparse{Tv}}}         = Ref{Ptr{CHOLMOD.C_Sparse{Tv}}}(C_NULL),
+        E::Ref{Ptr{CHOLMOD.SuiteSparse_long}}     = Ref{Ptr{CHOLMOD.SuiteSparse_long}}(C_NULL),
+        H::Ref{Ptr{CHOLMOD.C_Sparse{Tv}}}         = Ref{Ptr{CHOLMOD.C_Sparse{Tv}}}(C_NULL),
+        HPinv::Ref{Ptr{CHOLMOD.SuiteSparse_long}} = Ref{Ptr{CHOLMOD.SuiteSparse_long}}(C_NULL),
+        HTau::Ref{Ptr{CHOLMOD.C_Dense{Tv}}}       = Ref{Ptr{CHOLMOD.C_Dense{Tv}}}(C_NULL)) where {Tv<:CHOLMOD.VTypes}
 
     AA   = unsafe_load(A)
     m, n = AA.nrow, AA.ncol
@@ -214,6 +211,9 @@ end
 
 Base.LinAlg.getq(F::QRSparse) = QRSparseQ(F.factors, F.τ)
 
+"""
+    getindex
+"""
 function Base.getindex(F::QRSparse, d::Symbol)
     if d == :Q
         return LinAlg.getq(F)
@@ -233,12 +233,30 @@ end
 """
     qrfact(A) -> QRSparse
 
-Compute the `QR` factorization of a sparse matrix `A`. A fill-reducing permutation is used.
-The main application of this type is to solve least squares problems with [`\\`](@ref). The function
-calls the C library SPQR and a few additional functions from the library are wrapped but not
-exported.
+Compute the `QR` factorization of a sparse matrix `A`. Fill-reducing row and columns permutations
+are used such that `F[:R] = F[:Q]'*A[F[:prow],F[:pcol]]`. The main application of this type is to
+solve least squares or underdetermined problems with [`\\`](@ref). The function calls the C library SPQR.
+
+# Examples
+```jldoctest
+julia> A = sparse([1,2,3,4], [1,1,2,2], ones(4))
+4×2 SparseMatrixCSC{Float64,Int64} with 4 stored entries:
+  [1, 1]  =  1.0
+  [2, 1]  =  1.0
+  [3, 2]  =  1.0
+  [4, 2]  =  1.0
+
+julia> qrfact(A)
+Base.SparseArrays.SPQR.QRSparse{Float64,Int64}(
+  [1, 1]  =  1.0
+  [4, 1]  =  0.414214
+  [2, 2]  =  1.0
+  [3, 2]  =  0.414214, [1.70711, 1.70711],
+  [1, 1]  =  -1.41421
+  [2, 2]  =  -1.41421, [1, 2], [1, 4, 2, 3])
+```
 """
-qrfact(A::SparseMatrixCSC) = qrfact(A, Val{true})
+Base.LinAlg.qrfact(A::SparseMatrixCSC) = qrfact(A, Val{true})
 
 # With a real lhs and complex rhs with the same precision, we can reinterpret
 # the complex rhs as a real rhs with twice the number of columns
@@ -286,7 +304,7 @@ function _ldiv_basic(F::QRSparse, B::StridedVecOrMat)
         end
     end
 
-    # Make a view into x correstonding to the size of b
+    # Make a view into x corresponding to the size of B
     X0 = view(X, 1:size(B, 1), :)
 
     # Apply Q' to B
@@ -303,6 +321,27 @@ function _ldiv_basic(F::QRSparse, B::StridedVecOrMat)
 end
 
 (\)(F::QRSparse{T}, B::StridedVecOrMat{T}) where {T} = _ldiv_basic(F, B)
+"""
+    (\)(F::QRSparse, B::StridedVecOrMat)
+
+Solve the least squares problem ``\min\|Ax - b\|^2`` or the linear system of equations
+``Ax=b`` when `F` is the sparse QR factorization of ``A``. A basic solution is returned
+when the problem is underdetermined.
+
+# Examples
+```jldoctest
+julia> A = sparse([1,2,4], [1,1,1], ones(3), 4, 2)
+4×2 SparseMatrixCSC{Float64,Int64} with 3 stored entries:
+  [1, 1]  =  1.0
+  [2, 1]  =  1.0
+  [4, 1]  =  1.0
+
+julia> qrfact(A)\ones(4)
+2-element Array{Float64,1}:
+ 1.0
+ 0.0
+```
+"""
 (\)(F::QRSparse, B::StridedVecOrMat) = F\convert(AbstractArray{eltype(F)}, B)
 
 end # module

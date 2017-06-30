@@ -33,6 +33,10 @@ end
 
 size(S::SparseMatrixCSC) = (S.m, S.n)
 
+# Define a union of SparseMatrixCSC and view containing all rows of a SparseMatrixCSC and a contiguous
+# selection of columns. Many methods can be defined efficiently for this union by extracting the fields
+# via the get function: getcolptr, getrowval, and getnzval. The key insight is that getcolptr on a view
+# returns a offset view of the colptr of the underlying SparseMatrixCSC
 const SparseMatrixCSCUnion{Tv,Ti} =
     Union{SparseMatrixCSC{Tv,Ti},
         SubArray{Tv,2,SparseMatrixCSC{Tv,Ti},Tuple{Base.Slice{Base.OneTo{Int64}},I}}} where {I<:AbstractUnitRange}
