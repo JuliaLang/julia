@@ -55,32 +55,48 @@ See also [`code_lowered`](@ref).
 expand(m::Module, x::ANY) = ccall(:jl_expand, Any, (Any, Any), x, m)
 
 """
-    macroexpand(m, x)
+    macroexpand(m::Module, x; recursive=true)
 
 Takes the expression `x` and returns an equivalent expression with all macros removed (expanded)
 for executing in module `m`.
-For non recursive expansion, see [`macroexpand1`](@ref).
-For more convenient interfaces, see [`@macroexpand`](@ref) and [`@macroexpand1`](@ref).
-"""
-macroexpand(m::Module, x::ANY) = ccall(:jl_macroexpand, Any, (Any, Any), x, m)
+The `recursive` keyword controls whether deeper levels of nested macros are also expanded.
+This is demonstrated in the example below:
+```julia
+julia> module M
+           macro m1()
+               42
+           end
+           macro m2()
+               :(@m1())
+           end
+       end
+M
 
-"""
-    macroexpand1(m, x)
+julia> macroexpand(M, :(@m2()), recursive=true)
+42
 
-Like `macroexpand(m, x)`, but only macros that are directly
-called in `x` are expanded. Deeper levels of nested macrocalls are not expanded.
+julia> macroexpand(M, :(@m2()), recursive=false)
+:(#= REPL[16]:6 =# M.@m1)
+```
 """
-macroexpand1(m::Module, x::ANY) = ccall(:jl_macroexpand1, Any, (Any, Any), x, m)
+function macroexpand(m::Module, x::ANY; recursive=true)
+    if recursive
+        ccall(:jl_macroexpand, Any, (Any, Any), x, m)
+    else
+        ccall(:jl_macroexpand1, Any, (Any, Any), x, m)
+    end
+end
 
 """
     @macroexpand
 
 Return equivalent expression with all macros removed (expanded).
 
-There is a difference between `@macroexpand` and `macroexpand` in that the `macroexpand` function
-also takes a module where the expansion takes place.
-This is best seen in the following example:
+There are differences between `@macroexpand` and [`macroexpand`](@ref).
 
+* While [`macroexpand`](@ref) takes a keyword argument `recursive`, `@macroexpand` is always recursive. For a non recursive macro version, see [`@macroexpand1`](@ref).
+
+* While [`macroexpand`](@ref) has an explicit `module` argument, `@macroexpand` always expands with respect to the module in which it is called. This is best seen in the following example:
 ```jldoctest
 julia> module M
            macro m()
@@ -103,21 +119,20 @@ julia> macro m()
 julia> M.f()
 (1, 1, 2)
 ```
-With `@macroexpand` the expression expands where `@macroexpand` appears in the code (module
-`M` in the example). With `macroexpand` the expression expands in the module given as the first argument.
+With `@macroexpand` the expression expands where `@macroexpand` appears in the code (module `M` in the example). With `macroexpand` the expression expands in the module given as the first argument.
 """
 macro macroexpand(code)
-    return :(macroexpand($__module__, $(QuoteNode(code))))
+    return :(macroexpand($__module__, $(QuoteNode(code)), recursive=true))
 end
 
 
 """
     @macroexpand1
 
-Macro version of [`macroexpand1`](@ref). See also [`@macroexpand`](@ref).
+Non recursive version of [`@macroexpand`](@ref).
 """
 macro macroexpand1(code)
-    return :(macroexpand1($__module__, $(QuoteNode(code))))
+    return :(macroexpand($__module__, $(QuoteNode(code)), recursive=false))
 end
 
 ## misc syntax ##

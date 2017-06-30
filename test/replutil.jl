@@ -505,17 +505,18 @@ macro nest2b(code)
     :(@nest1($code); @nest1($code))
 end
 
-@testset "macroexpand1, @macroexpand1" begin
+@testset "@macroexpand1" begin
     M = @__MODULE__
+    _macroexpand1(ex) = macroexpand(M, ex, recursive=false)
     ex = :(@nest1 42)
-    @test macroexpand1(M,ex) == macroexpand(M,ex)
+    @test _macroexpand1(ex) == macroexpand(M,ex)
     ex = :(@nest2 42)
-    @test macroexpand1(M,ex) != macroexpand(M,ex)
-    @test macroexpand1(M,macroexpand1(M,ex)) == macroexpand(M,ex)
+    @test _macroexpand1(ex) != macroexpand(M,ex)
+    @test _macroexpand1(_macroexpand1(ex)) == macroexpand(M,ex)
     ex = :(@nest2b 42)
-    @test macroexpand1(M,ex) != macroexpand(M,ex)
-    @test macroexpand1(M,macroexpand1(M,ex)) == macroexpand(M,ex)
-    @test (@macroexpand1 @nest2b 42) == macroexpand1(M,ex)
+    @test _macroexpand1(ex) != macroexpand(M,ex)
+    @test _macroexpand1(_macroexpand1(ex)) == macroexpand(M, ex)
+    @test (@macroexpand1 @nest2b 42) == _macroexpand1(ex)
 end
 
 foo_9965(x::Float64; w=false) = x
