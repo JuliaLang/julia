@@ -318,7 +318,6 @@ end
 # evaluate each term in the comparison individually so the results
 # can be displayed nicely.
 function get_test_result(ex)
-    orig_ex = Expr(:inert, ex)
     # Normalize non-dot comparison operator calls to :comparison expressions
     is_splat = x -> isa(x, Expr) && x.head == :...
     if isa(ex, Expr) && ex.head == :call && length(ex.args) == 3 &&
