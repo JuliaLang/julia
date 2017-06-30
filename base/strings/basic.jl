@@ -62,7 +62,6 @@ Concatenate strings and/or characters, producing a [`String`](@ref). This is equ
 to calling the [`string`](@ref) function on the arguments.
 
 # Examples
-
 ```jldoctest
 julia> "Hello " * "world"
 "Hello world"
