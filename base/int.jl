@@ -118,6 +118,13 @@ unsigned(x::Signed) = reinterpret(typeof(convert(Unsigned, zero(x))), x)
 unsigned(x::Bool) = convert(Unsigned, x)
 unsigned(x) = convert(Unsigned, x)
 signed(x::Unsigned) = reinterpret(typeof(convert(Signed, zero(x))), x)
+
+"""
+    signed(x)
+
+Convert a number to a signed integer. If the argument is unsigned, it is reinterpreted as
+signed without checking for overflow.
+"""
 signed(x) = convert(Signed, x)
 
 div(x::Signed, y::Unsigned) = flipsign(signed(div(unsigned(abs(x)), y)), x)
@@ -207,6 +214,21 @@ end
 
 (~)(x::BitInteger)             = not_int(x)
 (&)(x::T, y::T) where {T<:BitInteger} = and_int(x, y)
+
+"""
+    |(x, y)
+
+Bitwise or.
+
+# Examples
+```jldoctest
+julia> 4 | 10
+14
+
+julia> 4 | 1
+5
+```
+"""
 (|)(x::T, y::T) where {T<:BitInteger} = or_int(x, y)
 xor(x::T, y::T) where {T<:BitInteger} = xor_int(x, y)
 
