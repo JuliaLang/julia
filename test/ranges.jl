@@ -356,14 +356,17 @@ for T = (Float32, Float64,), i = 1:2^15, n = 1:5
     # FIXME: these fail some small portion of the time
     @test_skip start == first(r)
     @test_skip stop  == last(r)
-    # FIXME: linspace construction fails on 32-bit
-    Sys.WORD_SIZE == 64 || continue
     l = linspace(start,stop,n)
     @test n == length(l)
     # FIXME: these fail some small portion of the time
     @test_skip start == first(l)
     @test_skip stop  == last(l)
 end
+
+# Inexact errors on 32 bit architectures. #22613
+@test first(linspace(log(0.2), log(10.0), 10)) == log(0.2)
+@test last(linspace(log(0.2), log(10.0), 10)) == log(10.0)
+@test length(Base.floatrange(-3e9, 1.0, 1, 1.0)) == 1
 
 # linspace & ranges with very small endpoints
 for T = (Float32, Float64)
