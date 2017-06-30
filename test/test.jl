@@ -106,7 +106,7 @@ fails = @testset NoThrowTestSet begin
     # Error - unexpected pass
     @test_broken true
     # Error - converting a call into a comparison
-    @test ==(1, 1:2...)
+    @test ==(()...)
 end
 for i in 1:length(fails) - 2
     @test isa(fails[i], Base.Test.Fail)
@@ -169,8 +169,8 @@ str = sprint(show, fails[14])
 @test contains(str, "Expression: true")
 
 str = sprint(show, fails[15])
-@test contains(str, "Expression: ==(1, 1:2...)")
-@test contains(str, "MethodError: no method matching ==(::$Int, ::$Int, ::$Int)")
+@test contains(str, "Expression: (==)(()...)")
+@test contains(str, "MethodError: no method matching ==()")
 
 
 # Test printing of a TestSetException

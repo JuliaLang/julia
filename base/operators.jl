@@ -334,6 +334,19 @@ lexless(x, y) = lexcmp(x,y) < 0
 # cmp returns -1, 0, +1 indicating ordering
 cmp(x::Integer, y::Integer) = ifelse(isless(x, y), -1, ifelse(isless(y, x), 1, 0))
 
+## chained comparisons ##
+for op in (:(==), :isequal, :<, :>, :<=, :>=, :isless, :lexless)
+    @eval begin
+        """
+            $($op)(x, y, z, ...)
+
+        Call `$($op)` successively on each pair of arguments
+        (e.g. `$($op)(x, y) && $($op)(y, z) && ...`).
+        """
+        ($op)(a, b, c, args...) = ($op)(a, b) && ($op)(b, c, args...)
+    end
+end
+
 """
     max(x, y, ...)
 

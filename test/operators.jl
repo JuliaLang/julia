@@ -91,7 +91,7 @@ end
 end
 
 # issue #19891
-@testset "chained comparison" begin
+@testset "chained elementwise comparison" begin
     B = 0 .< [1 -1 5] .< 3
     @test B == [true false false]
     B = 3 .> [1 -1 5] .> 0
@@ -111,4 +111,42 @@ Base.:(<)(x::TypeWrapper, y::TypeWrapper) = (x.t <: y.t) & (x.t != y.t)
     @test TypeWrapper(Int) <= TypeWrapper(Int)
     @test TypeWrapper(Int) <= TypeWrapper(Real)
     @test !(TypeWrapper(Int) <= TypeWrapper(Float64))
+end
+
+function test_chained_comparison(op, args)
+    op(args...) === all((tup) -> op(tup...), zip(args[1:end-1], args[2:end]))
+end
+
+let
+    test_cases = [
+        [1, 1, 1],
+        [1, 1, 1, 1, 1],
+        [1, 1, 2],
+        [1, 1, 1, 1, 2],
+        fill(1, 128),
+        push!(fill(1, 127), 2),
+        [1, 2, 1],
+        [1, 1, 2, 1, 1],
+        (x = fill(1, 128); x[64] = 2; x),
+        [2, 1, 1],
+        [2, 1, 1, 1, 1],
+        collect(1:3),
+        collect(1:5),
+        collect(1:128),
+        collect(reverse(1:3)),
+        collect(reverse(1:5)),
+        collect(reverse(1:128)),
+        [div(x, 2) for x in 1:5], # for <=
+        [div(x, 2) for x in 1:128],
+        [div(x, 2) for x in 5:-1:1],
+        [div(x, 2) for x in 128:-1:1],
+    ]
+
+    ops = (==, isequal, <, >, <=, >=, isless, lexless)
+
+    @testset "chained comparisons" begin
+        @testset "chained equality" for op in ops, test_case in test_cases
+            @test test_chained_comparison(op, test_case)
+        end
+    end
 end
