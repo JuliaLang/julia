@@ -365,6 +365,10 @@ for T = (Float32, Float64,), i = 1:2^15, n = 1:5
     @test_skip stop  == last(l)
 end
 
+# Inexact errors on 32 bit architectures. #22613
+@test first(linspace(log(0.2), log(10.0), 10)) == log(0.2)
+@test last(linspace(log(0.2), log(10.0), 10)) == log(10.0)
+
 # linspace & ranges with very small endpoints
 for T = (Float32, Float64)
     z = zero(T)
