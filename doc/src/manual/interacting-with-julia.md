@@ -67,7 +67,7 @@ When the cursor is at the beginning of the line, the prompt can be changed to a 
 julia> ? # upon typing ?, the prompt changes (in place) to: help?>
 
 help?> string
-search: string String stringmime Cstring Cwstring RevString randstring bytestring SubString
+search: string String stringmime Cstring Cwstring randstring bytestring SubString
 
   string(xs...)
 

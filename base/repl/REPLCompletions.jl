@@ -225,13 +225,13 @@ end
 # closed start brace from the end of the string.
 function find_start_brace(s::AbstractString; c_start='(', c_end=')')
     braces = 0
-    r = RevString(s)
-    i = start(r)
+    i = endof(s)
     in_single_quotes = false
     in_double_quotes = false
     in_back_ticks = false
-    while !done(r, i)
-        c, i = next(r, i)
+    while i > 0
+        c = s[i]
+        nexti = prevind(s, i)
         if !in_single_quotes && !in_double_quotes && !in_back_ticks
             if c == c_start
                 braces += 1
@@ -245,18 +245,19 @@ function find_start_brace(s::AbstractString; c_start='(', c_end=')')
                 in_back_ticks = true
             end
         else
-            if !in_back_ticks && !in_double_quotes && c == '\'' && !done(r, i) && next(r, i)[1]!='\\'
+            if !in_back_ticks && !in_double_quotes && c == '\'' && i > 0 && s[nexti] != '\\'
                 in_single_quotes = !in_single_quotes
-            elseif !in_back_ticks && !in_single_quotes && c == '"' && !done(r, i) && next(r, i)[1]!='\\'
+            elseif !in_back_ticks && !in_single_quotes && c == '"' && i > 0 && s[nexti] != '\\'
                 in_double_quotes = !in_double_quotes
-            elseif !in_single_quotes && !in_double_quotes && c == '`' && !done(r, i) && next(r, i)[1]!='\\'
+            elseif !in_single_quotes && !in_double_quotes && c == '`' && i > 0 && s[nexti] != '\\'
                 in_back_ticks = !in_back_ticks
             end
         end
         braces == 1 && break
+        i = nexti
     end
     braces != 1 && return 0:-1, -1
-    method_name_end = reverseind(r, i)
+    method_name_end = i - 1
     startind = nextind(s, rsearch(s, non_identifier_chars, method_name_end))
     return (startind:endof(s), method_name_end)
 end

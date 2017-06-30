@@ -194,12 +194,6 @@ end
 search(s::AbstractString, t::AbstractString, i::Integer=start(s)) = _search(s, t, i)
 search(s::ByteArray, t::ByteArray, i::Integer=start(s)) = _search(s, t, i)
 
-function rsearch(s::AbstractString, c::Chars)
-    j = search(RevString(s), c)
-    j == 0 && return 0
-    endof(s)-j+1
-end
-
 """
     rsearch(s::AbstractString, chars::Chars, [start::Integer])
 
@@ -212,44 +206,52 @@ julia> rsearch("aaabbb","b")
 6:6
 ```
 """
-function rsearch(s::AbstractString, c::Chars, i::Integer)
-    e = endof(s)
-    j = search(RevString(s), c, e-i+1)
-    j == 0 && return 0
-    e-j+1
+function rsearch(s::AbstractString, c::Chars, i::Integer=endof(s))
+    @boundscheck checkbounds(s, i)
+    isempty(c) && return i
+    j = Int(i)
+    @inbounds while j > 0
+        s[j] in c && return j
+        j = prevind(s, j)
+    end
+    return 0
 end
 
 function _rsearchindex(s, t, i)
     if isempty(t)
-        return 1 <= i <= nextind(s,endof(s)) ? i :
-               throw(BoundsError(s, i))
+        @boundscheck checkbounds(s, i)
+        return i
     end
-    t = RevString(t)
-    rs = RevString(s)
     l = endof(s)
-    t1, j2 = next(t,start(t))
+    j2 = endof(t)
+    t1 = t[j2]
     while true
-        i = rsearch(s,t1,i)
-        if i == 0 return 0 end
-        c, ii = next(rs,l-i+1)
-        j = j2; k = ii
+        i = rsearch(s, t1, i)
+        i == 0 && return 0
+        c = s[i]
+        ii = prevind(s, i)
+        j, k = j2, ii
         matched = true
-        while !done(t,j)
-            if done(rs,k)
+        while j > 1
+            if k < 1
                 matched = false
                 break
             end
-            c, k = next(rs,k)
-            d, j = next(t,j)
+            # Using `reverseind` with `prevind` in this way is like calling `nextind`
+            # on the reversed string
+            rk = reverseind(s, k)
+            c = s[rk]
+            k = prevind(s, rk)
+            rj = reverseind(t, j)
+            d = t[rj]
+            j = prevind(t, rj)
             if c != d
                 matched = false
                 break
             end
         end
-        if matched
-            return nextind(s,l-k+1)
-        end
-        i = l-ii+1
+        matched && return nextind(s, k)
+        i = ii
     end
 end
 

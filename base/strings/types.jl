@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# SubString and RevString types
+# SubString type
 
 ## substrings reference original strings ##
 
@@ -109,48 +109,6 @@ function unsafe_convert(::Type{Ptr{R}}, s::SubString{String}) where R<:Union{Int
     convert(Ptr{R}, pointer(s.string)) + s.offset
 end
 
-## reversed strings without data movement ##
-
-struct RevString{T<:AbstractString} <: AbstractString
-    string::T
-end
-
-endof(s::RevString) = endof(s.string)
-length(s::RevString) = length(s.string)
-sizeof(s::RevString) = sizeof(s.string)
-
-function next(s::RevString, i::Int)
-    n = endof(s); j = n-i+1
-    (s.string[j], n-prevind(s.string,j)+1)
-end
-
-"""
-    reverse(s::AbstractString) -> AbstractString
-
-Reverses a string.
-
-Technically, this function reverses the codepoints in a string, and its
-main utility is for reversed-order string processing, especially for reversed
-regular-expression searches.  See also [`reverseind`](@ref) to convert indices
-in `s` to indices in `reverse(s)` and vice-versa, and [`graphemes`](@ref)
-to operate on user-visible "characters" (graphemes) rather than codepoints.
-See also [`Iterators.reverse`](@ref) for reverse-order iteration without making a copy.
-
-# Examples
-```jldoctest
-julia> reverse("JuliaLang")
-"gnaLailuJ"
-
-julia> reverse("ax̂e") # combining characters can lead to surprising results
-"êxa"
-
-julia> join(reverse(collect(graphemes("ax̂e")))) # reverses graphemes
-"ex̂a"
-```
-"""
-reverse(s::AbstractString) = RevString(s)
-reverse(s::RevString) = s.string
-
 ## reverse an index i so that reverse(s)[i] == s[reverseind(s,i)]
 
 """
@@ -172,7 +130,6 @@ Julia
 ```
 """
 reverseind(s::AbstractString, i) = chr2ind(s, length(s) + 1 - ind2chr(reverse(s), i))
-reverseind(s::RevString, i::Integer) = endof(s) - i + 1
 reverseind(s::SubString{String}, i::Integer) =
     reverseind(s.string, nextind(s.string, endof(s.string))-s.offset-s.endof+i-1) - s.offset
 

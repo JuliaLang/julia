@@ -14,21 +14,20 @@ function shell_parse(str::AbstractString, interpolate::Bool=true;
                      special::AbstractString="")
     s = lstrip(str)
     # strips the end but respects the space when the string ends with "\\ "
-    r = RevString(s)
-    i = start(r)
-    c_old = nothing
-    while !done(r,i)
-        c, j = next(r,i)
+    i = endof(s)
+    c_old = '\0' # initialized to a null byte for type stability
+    while i > 0
+        c = s[i]
         if c == '\\' && c_old == ' '
-            i -= 1
+            i += 1
             break
         elseif !(c in _default_delims)
             break
         end
-        i = j
+        i = prevind(s, i)
         c_old = c
     end
-    s = s[1:end-i+1]
+    s = s[1:i]
 
     last_parse = 0:-1
     isempty(s) && return interpolate ? (Expr(:tuple,:()),last_parse) : ([],last_parse)
