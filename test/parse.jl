@@ -905,6 +905,7 @@ end
 # issue #22480
     @test isnan(parse(Float64, "NaN", 16))
     @test parse(Float64, "Inf", 16) === Inf
+    @test parse(Float64, "-Inf", 16) === -Inf
     
     @test parse(Float32, "100.1",2) === 4.5f0
     @test parse(Float32, "-100.1",2) === -4.5f0
