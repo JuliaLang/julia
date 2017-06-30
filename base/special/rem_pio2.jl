@@ -19,6 +19,14 @@ const pio2_2t =  2.02226624879595063154e-21
 const pio2_3  =  2.02226624871116645580e-21
 const pio2_3t =  8.47842766036889956997e-32
 
+"""
+    highword(x)
+
+Return the high word of `x` as a `UInt32`.
+"""
+@inline highword(x::UInt64) = unsafe_trunc(UInt32,x >> 32)
+@inline highword(x::Float64) = highword(reinterpret(UInt64, x))
+
 function cody_waite_2c_pio2(x, signed_k, n)
     z = x - signed_k*pio2_1
     y1 = z - signed_k*pio2_1t
@@ -185,15 +193,6 @@ function paynehanek(x::Float64)
     y_lo = (((z_hi*pio2_hi - y_hi) + z_hi*pio2_lo) + z_lo*pio2_hi) + z_lo*pio2_lo
     return q, y_hi, y_lo
 end
-
-
-"""
-    highword(x)
-
-Return the high word of `x` as a `UInt32`.
-"""
-@inline highword(x::UInt64) = unsafe_trunc(UInt32,x >> 32)
-@inline highword(x::Float64) = unsafe_trunc(UInt32,highword(reinterpret(UInt64, x)))
 
 """
     rem_pio2(x::Float64)
