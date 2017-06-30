@@ -75,6 +75,7 @@ The following components of Julia's standard library have separate licenses:
 - base/sparse/umfpack.jl (see [SUITESPARSE](http://faculty.cse.tamu.edu/davis/suitesparse.html))
 - base/sparse/cholmod.jl (see [SUITESPARSE](http://faculty.cse.tamu.edu/davis/suitesparse.html))
 - base/special/exp.jl (see [FREEBSD MSUN](https://github.com/freebsd/freebsd) [FreeBSD/2-clause BSD/Simplified BSD License])
+- base/special/rem_pio2.jl [FDLIBM](http://www.netlib.org/fdlibm/readme) [Freely distributable]
 
 
 Julia's build process uses the following external tools:

@@ -27,8 +27,8 @@ function cody_waite_2c_pio2(x, signed_k, n)
 end
 
 function cody_waite_ext_pio2(x, xʰ⁺)
-    fn = x*invpio2+0x1.8p52
-    fn = fn-0x1.8p52
+    fn = x*invpio2+6.755399441055744e15
+    fn = fn-6.755399441055744e15
     n  = Int32(fn)
     r  = x-fn*pio2_1
     w  = fn*pio2_1t # 1st round good to 85 bit
@@ -82,8 +82,8 @@ const INV2PI = UInt64[
 """
     fromfraction(f::Int128)
 
-Computes a tuple of values `(y1,y2)` such that
-    y1 + y2 == f / 2^128
+Compute a tuple of values `(y1,y2)` such that
+    ``y1 + y2 == f / 2^128``
 and the significand of `y1` has 27 trailing zeros.
 """
 function fromfraction(f::Int128)
@@ -178,10 +178,10 @@ function paynehanek(x::Float64)
     z_hi,z_lo = fromfraction(f)
 
     # 6. multiply by π/2
+    pio2 = 1.5707963267948966
     pio2_hi = 1.5707963407039642
     pio2_lo = -1.3909067614167116e-8
-
-    y_hi = (z_hi+z_lo)*(pio2_hi+pio2_lo)
+    y_hi = (z_hi+z_lo)*pio2
     y_lo = (((z_hi*pio2_hi - y_hi) + z_hi*pio2_lo) + z_lo*pio2_hi) + z_lo*pio2_lo
     return q, y_hi, y_lo
 end
@@ -190,7 +190,7 @@ end
 """
     highword(x)
 
-returns the high word of x as a UInt32.
+Return the high word of `x` as a `UInt32`.
 """
 @inline highword(x::UInt64) = unsafe_trunc(UInt32,x >> 32)
 @inline highword(x::Float64) = unsafe_trunc(UInt32,highword(reinterpret(UInt64, x)))
@@ -198,15 +198,14 @@ returns the high word of x as a UInt32.
 """
     rem_pio2(x::Float64)
 
-returns the remainder of x modulo π/2 as a TwicePrecision number, along with a k
-such that k mod 3 == K mod 3 where K*π/2 = x -rem.
+Return the remainder of `x` modulo π/2 as a double-double pair, along with a `k`
+such that ``k \mod 3 == K \mod 3`` where ``K*π/2 = x -rem``.
 """
-
 function rem_pio2(x::Float64)
     xh = highword(x)
     xhp = xh & 0x7fffffff # positive part of highword
-
-    if xhp <= 0x3fe921fb #|x| ~<= pi/4, no need for reduction, just return input
+    #  xhp <= highword(pi/4) implies |x| ~<= pi/4
+    if xhp <= 0x3fe921fb # no need for reduction
         return Int(0), x, 0.0
     end
     rem_pio2_kernel(x, xh, xhp)
@@ -215,8 +214,8 @@ end
 """
     rem_pio2_kernel(x, xh, xhp)
 
-returns the remainder of x modulo π/2 as a TwicePrecision number, along with a k
-such that k mod 3 == K mod 3 where K*π/2 = x -rem.
+Return the remainder of `x` modulo π/2 as a double-double pair, along with a k
+such that ``k \mod 3 == K \mod 3`` where ``K*π/2 = x - rem``.
 """
 function rem_pio2_kernel(x::Float64)
     # rem_pio2_kernel essentially computes x mod pi/2 (ie within a quarter circle)
@@ -235,16 +234,22 @@ function rem_pio2_kernel(x::Float64)
 end
 
 function rem_pio2_kernel(x::Float64, xh, xhp)
-    if xhp <= 0x400f6a7a #|x| ~<= 5pi/4, use Cody Waite with two constants
-        if (xhp & 0xfffff) == 0x921fb # |x| ~= pi/2 or 2pi/2, use precise Cody Waite scheme
+    #  xhp <= highword(5pi/4) implies |x| ~<= 5pi/4,
+    if xhp <= 0x400f6a7a
+        #  last five bits of xhp == last five bits of highword(pi/2) or
+        #  highword(2pi/2) implies |x| ~= pi/2 or 2pi/2,
+        if (xhp & 0xfffff) == 0x921fb # use precise Cody Waite scheme
             return cody_waite_ext_pio2(x, xhp)
         end
-        if xhp <= 0x4002d97c # |x| ~<= 3pi/4
+        # use Cody Waite with two constants
+        #  xhp <= highword(3pi/4) implies |x| ~<= 3pi/4
+        if xhp <= 0x4002d97c
             if x > 0
                 return cody_waite_2c_pio2(x, 1.0, 1)
             else
                 return cody_waite_2c_pio2(x, -1.0, -1)
             end
+        # 3pi/4 < |x| <= 5pi/4
         else
             if x > 0
                 return cody_waite_2c_pio2(x, 2.0, 2)
@@ -253,21 +258,27 @@ function rem_pio2_kernel(x::Float64, xh, xhp)
             end
         end
     end
-
-    if xhp <= 0x401c463b # |x| ~<= 9pi/4, use Cody Waite with two constants
-        if (xhp <= 0x4015fdbc) # |x| ~<= 7pi/4
-            if (xhp == 0x4012d97c) # |x| ~= 3pi/2, use precise Cody Waite scheme
+    #  xhp <= highword(9pi/4) implies |x| ~<= 9pi/4
+    if xhp <= 0x401c463b
+        #  xhp <= highword(7pi/4) implies |x| ~<= 7pi/4
+        if xhp <= 0x4015fdbc
+            #  xhp == highword(3pi/2) implies |x| ~= 3pi/2
+            if xhp == 0x4012d97c # use precise Cody Waite scheme
                 return cody_waite_ext_pio2(x, xhp)
             end
+            # use Cody Waite with two constants
             if x > 0
                 return cody_waite_2c_pio2(x, 3.0, 3)
             else
                 return cody_waite_2c_pio2(x, -3.0, -3)
             end
+        # 7pi/4 < |x| =< 9pi/4
         else
-            if xhp == 0x401921fb # |x| ~= 4pi/2, use precise Cody Waite scheme
+            #  xhp == highword(4pi/2) implies |x| ~= 4pi/2
+            if xhp == 0x401921fb # use precise Cody Waite scheme
                 return cody_waite_ext_pio2(x, xhp)
             end
+            # use Cody Waite with two constants
             if x > 0
                 return cody_waite_2c_pio2(x, 4.0, 4)
             else
@@ -275,10 +286,10 @@ function rem_pio2_kernel(x::Float64, xh, xhp)
             end
         end
     end
-    if xhp<0x413921fb # |x| ~< 2^20*pi/2, use precise Cody Waite scheme
+    #  xhp < highword(2.0^20*pi/2) implies |x| ~< 2^20*pi/2
+    if xhp < 0x413921fb # use precise Cody Waite scheme
         return cody_waite_ext_pio2(x, xhp)
     end
-
     # if |x| >= 2^20*pi/2 switch to Payne Hanek
     return paynehanek(x)
 end

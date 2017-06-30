@@ -669,6 +669,7 @@ end
     a = rem(big(x), big(pi)/2, RoundNearest)
 
     n, y1, y2 = Base.Math.rem_pio2_kernel(x)
-    @test a ≈ y1+y2
+    y=y1+y2
+    @test a-y<nextfloat(y)
     # add more tests
 end
