@@ -108,6 +108,7 @@ Base.LibGit2.set_remote_url
 Base.LibGit2.shortname
 Base.LibGit2.snapshot
 Base.LibGit2.status
+Base.LibGit2.stage
 Base.LibGit2.tag_create
 Base.LibGit2.tag_delete
 Base.LibGit2.tag_list
