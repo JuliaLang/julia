@@ -209,7 +209,7 @@ end
     rem_pio2(x::Float64)
 
 Return the remainder of `x` modulo π/2 as a double-double pair, along with a `k`
-such that ``k \mod 3 == K \mod 3`` where ``K*π/2 = x -rem``.
+such that ``k \mod 3 == K \mod 3`` where ``K*π/2 = x - rem``.
 """
 function rem_pio2(x::Float64)
     xh = highword(x)

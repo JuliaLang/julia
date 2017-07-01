@@ -664,6 +664,7 @@ end
 
 @testset "rem_pio2_kernel" begin
     # test worst case
+    old_precision = precision(BigFloat)
     setprecision(BigFloat, 4096)
     x = 6381956970095103.0 * 2.0^797
     a = rem(big(x), big(pi)/2, RoundNearest)
@@ -671,5 +672,6 @@ end
     n, y1, y2 = Base.Math.rem_pio2_kernel(x)
     y=y1+y2
     @test a-y<nextfloat(y)/2
+    setprecision(BigFloat, old_precision)
     # add more tests
 end
