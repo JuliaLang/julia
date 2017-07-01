@@ -116,6 +116,25 @@ abs(x::Signed) = flipsign(x,x)
 
 unsigned(x::Signed) = reinterpret(typeof(convert(Unsigned, zero(x))), x)
 unsigned(x::Bool) = convert(Unsigned, x)
+
+"""
+    unsigned(x) -> Unsigned
+
+Convert a number to an unsigned integer. If the argument is signed, it is reinterpreted as
+unsigned without checking for negative values.
+
+# Examples
+```jldoctest
+julia> unsigned(-2)
+0xfffffffffffffffe
+
+julia> unsigned(2)
+0x0000000000000002
+
+julia> signed(unsigned(-2))
+-2
+```
+"""
 unsigned(x) = convert(Unsigned, x)
 signed(x::Unsigned) = reinterpret(typeof(convert(Signed, zero(x))), x)
 
@@ -212,7 +231,39 @@ end
 
 ## integer bitwise operations ##
 
+"""
+    ~(x)
+
+Bitwise not.
+
+# Examples
+```jldoctest
+julia> ~4
+-5
+
+julia> ~10
+-11
+
+julia> ~true
+false
+```
+"""
 (~)(x::BitInteger)             = not_int(x)
+
+"""
+    &(x, y)
+
+Bitwise and.
+
+# Examples
+```jldoctest
+julia> 4 & 10
+0
+
+julia> 4 & 12
+4
+```
+"""
 (&)(x::T, y::T) where {T<:BitInteger} = and_int(x, y)
 
 """

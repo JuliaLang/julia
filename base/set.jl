@@ -145,6 +145,23 @@ setdiff!(s::Set, xs) = (for x=xs; delete!(s,x); end; s)
 <( l::Set, r::Set) = (length(l) < length(r)) && (l <= r)
 <=(l::Set, r::Set) = issubset(l, r)
 
+"""
+    issubset(a, b)
+    ⊆(a,b) -> Bool
+    ⊈(a,b) -> Bool
+    ⊊(a,b) -> Bool
+
+Determine whether every element of `a` is also in `b`, using [`in`](@ref).
+
+# Examples
+```jldoctest
+julia> issubset([1, 2], [1, 2, 3])
+true
+
+julia> issubset([1, 2, 3], [1, 2])
+false
+```
+"""
 function issubset(l, r)
     for elt in l
         if !in(elt, r)

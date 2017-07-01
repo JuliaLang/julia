@@ -522,22 +522,6 @@ julia> exp10(0.2)
 exp10
 
 """
-    &(x, y)
-
-Bitwise and.
-
-# Examples
-```jldoctest
-julia> 4 & 10
-0
-
-julia> 4 & 12
-4
-```
-"""
-&
-
-"""
     select(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
 Variant of [`select!`](@ref) which copies `v` before partially sorting it, thereby returning the
@@ -1149,25 +1133,6 @@ julia> reinterpret(Float32, UInt32[1 2 3 4 5])
 ```
 """
 reinterpret
-
-"""
-    ~(x)
-
-Bitwise not.
-
-# Examples
-```jldoctest
-julia> ~4
--5
-
-julia> ~10
--11
-
-julia> ~true
-false
-```
-"""
-~
 
 """
     bswap(n)
@@ -2114,33 +2079,6 @@ Throw an object as an exception.
 throw
 
 """
-    issubset(a, b)
-    ⊆(a,b) -> Bool
-    ⊈(a,b) -> Bool
-    ⊊(a,b) -> Bool
-
-Determine whether every element of `a` is also in `b`, using [`in`](@ref).
-
-# Examples
-```jldoctest
-julia> issubset([1, 2], [1, 2, 3])
-true
-
-julia> issubset([1, 2, 3], [1, 2])
-false
-```
-"""
-issubset(a,b)
-
-"""
-    issubset(A, S) -> Bool
-    ⊆(A,S) -> Bool
-
-Return `true` if `A` is a subset of or equal to `S`.
-"""
-issubset
-
-"""
     zeros([A::AbstractArray,] [T=eltype(A)::Type,] [dims=size(A)::Tuple])
 
 Create an array of all zeros with the same layout as `A`, element type `T` and size `dims`.
@@ -2206,26 +2144,6 @@ be either `Char` or `String`. Values for `Char` can be of type `Char` or [`UInt3
 Values for `String` can be of that type, or `Vector{UInt8}`.
 """
 isvalid(T,value)
-
-"""
-    unsigned(x) -> Unsigned
-
-Convert a number to an unsigned integer. If the argument is signed, it is reinterpreted as
-unsigned without checking for negative values.
-
-# Examples
-```jldoctest
-julia> unsigned(-2)
-0xfffffffffffffffe
-
-julia> unsigned(2)
-0x0000000000000002
-
-julia> signed(unsigned(-2))
--2
-```
-"""
-unsigned
 
 """
     reverseind(v, i)
