@@ -1,7 +1,7 @@
 # This file is a part of Julia. Except for the rem_pio2_kernel, and
 # cody_waite_* methods (see below) license is MIT: https://julialang.org/license
 
-# rem_pio2_kernel and cody_waite_* methods are heavily based on openlibm code:
+# rem_pio2_kernel and cody_waite_* methods are heavily based on FDLIBM code:
 # __ieee754_rem_pio2, that is made available under the following licence:
 
 ## Copyright (C) 1993 by Sun Microsystems, Inc. All rights reserved.
@@ -27,17 +27,28 @@ Return the high word of `x` as a `UInt32`.
 @inline highword(x::UInt64) = unsafe_trunc(UInt32,x >> 32)
 @inline highword(x::Float64) = highword(reinterpret(UInt64, x))
 
-function cody_waite_2c_pio2(x, signed_k, n)
-    z = x - signed_k*pio2_1
-    y1 = z - signed_k*pio2_1t
-    y2 = (z - y1) - signed_k*pio2_1t
-    n, y1, y2
-end
-
-function cody_waite_ext_pio2(x, xʰ⁺)
+function cody_waite_2c_pio2(x::Float64)
+    # The three lines below could be replaced with:
+    #     fn = round(x*invpio2, RoundNearestTiesUp)
+    # at a small cost
     fn = x*invpio2+6.755399441055744e15
     fn = fn-6.755399441055744e15
     n  = Int32(fn)
+    cody_waite_2c_pio2(x, fn, n)
+end
+function cody_waite_2c_pio2(x, fn, n)
+    z = x - fn*pio2_1
+    y1 = z - fn*pio2_1t
+    y2 = (z - y1) - fn*pio2_1t
+    n, y1, y2
+end
+
+function cody_waite_ext_pio2(x::Float64, xʰ⁺)
+    # The three lines below could be replaced with:
+    #     fn = round(x*invpio2, RoundNearestTiesUp)
+    # at a small cost
+    fn = x*invpio2+6.755399441055744e15
+    fn = fn-6.755399441055744e15
     r  = x-fn*pio2_1
     w  = fn*pio2_1t # 1st round good to 85 bit
     j  = xʰ⁺>>20
@@ -61,7 +72,7 @@ function cody_waite_ext_pio2(x, xʰ⁺)
         end
     end
     y2 = (r-y1)-w
-    return Int(n), y1, y2
+    return Int(fn), y1, y2
 end
 
 # constants and functions for large (>2.0^20) inputs to rem_pio2_kernel
