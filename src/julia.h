@@ -206,8 +206,8 @@ JL_EXTENSION typedef struct {
 } jl_generic_fptr_t;
 
 typedef struct _jl_llvm_functions_t {
-    void *functionObject;     // jlcall llvm Function
-    void *specFunctionObject; // specialized llvm Function
+    const char *functionObject;     // jlcall llvm Function name
+    const char *specFunctionObject; // specialized llvm Function name
 } jl_llvm_functions_t;
 
 // This type describes a single function body
@@ -287,10 +287,8 @@ typedef struct _jl_method_instance_t {
     jl_fptr_t fptr; // jlcall entry point with api specified by jlcall_api
     jl_fptr_t unspecialized_ducttape; // if template can't be compiled due to intrinsics, an un-inferred fptr may get stored here, jlcall_api = 1
 
-    // On the old JIT, handles to all Functions generated for this linfo
-    // For the new JITs, handles to declarations in the shadow module
-    // with the same name as the generated functions for this linfo, suitable
-    // for referencing in LLVM IR
+    // names of declarations in the JIT,
+    // suitable for referencing in LLVM IR
     jl_llvm_functions_t functionObjectsDecls;
 } jl_method_instance_t;
 

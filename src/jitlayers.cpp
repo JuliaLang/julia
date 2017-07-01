@@ -760,9 +760,9 @@ static void jl_add_to_ee(std::unique_ptr<Module> m)
     jl_ExecutionEngine->addModule(std::move(m));
 }
 
-void jl_finalize_function(Function *F)
+void jl_finalize_function(StringRef F)
 {
-    std::unique_ptr<Module> m(module_for_fname.lookup(F->getName()));
+    std::unique_ptr<Module> m(module_for_fname.lookup(F));
     if (m) {
         jl_merge_recursive(m.get(), m.get());
         jl_add_to_ee(std::move(m));
@@ -801,27 +801,26 @@ static void jl_merge_recursive(Module *m, Module *collector)
 
 // see if any of the functions needed by F are still WIP
 static StringSet<> incomplete_fname;
-static bool jl_can_finalize_function(StringRef F, SmallSet<Module*, 16> &known)
+static bool can_finalize_function(StringRef F, SmallSet<Module*, 16> &known)
 {
     if (incomplete_fname.find(F) != incomplete_fname.end())
         return false;
     Module *M = module_for_fname.lookup(F);
-    if (M && known.insert(M).second)
-    {
+    if (M && known.insert(M).second) {
         for (Module::iterator I = M->begin(), E = M->end(); I != E; ++I) {
             Function *F = &*I;
             if (F->isDeclaration() && !isIntrinsicFunction(F)) {
-                if (!jl_can_finalize_function(F->getName(), known))
+                if (!can_finalize_function(F->getName(), known))
                     return false;
             }
         }
     }
     return true;
 }
-bool jl_can_finalize_function(Function *F)
+bool jl_can_finalize_function(StringRef F)
 {
     SmallSet<Module*, 16> known;
-    return jl_can_finalize_function(F->getName(), known);
+    return can_finalize_function(F, known);
 }
 
 // let the JIT know this function is a WIP
@@ -1162,13 +1161,13 @@ void jl_dump_native(const char *bc_fname, const char *unopt_bc_fname, const char
     imaging_mode = false;
 }
 
-extern "C" int32_t jl_assign_functionID(void *function)
+extern "C" int32_t jl_assign_functionID(const char *fname)
 {
     // give the function an index in the constant lookup table
     assert(imaging_mode);
-    if (function == NULL)
+    if (fname == NULL)
         return 0;
-    jl_sysimg_fvars.push_back(shadow_output->getNamedValue(((Function*)function)->getName()));
+    jl_sysimg_fvars.push_back(shadow_output->getNamedValue(fname));
     return jl_sysimg_fvars.size();
 }
 

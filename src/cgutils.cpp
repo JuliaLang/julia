@@ -8,6 +8,39 @@ static Instruction *tbaa_decorate(MDNode *md, Instruction *load_or_store)
     return load_or_store;
 }
 
+static Function *function_proto(Function *F, Module *M = nullptr)
+{
+    // Copy the declaration characteristics of the Function (not the body)
+    Function *NewF = Function::Create(F->getFunctionType(),
+                                      Function::ExternalLinkage,
+                                      F->getName(),
+                                      M);
+
+    // Declarations are not allowed to have personality routines, but
+    // copyAttributesFrom sets them anyway. Temporarily unset the personality
+    // routine from `F`, since copying it and then resetting is more expensive
+    // as well as introducing an extra use from this unowned function, which
+    // can cause crashes in the LLVMContext's global destructor.
+    llvm::Constant *OldPersonalityFn = nullptr;
+    if (F->hasPersonalityFn()) {
+        OldPersonalityFn = F->getPersonalityFn();
+        F->setPersonalityFn(nullptr);
+    }
+
+     // FunctionType does not include any attributes. Copy them over manually
+     // as codegen may make decisions based on the presence of certain attributes
+     NewF->copyAttributesFrom(F);
+
+    if (OldPersonalityFn)
+        F->setPersonalityFn(OldPersonalityFn);
+
+    // DLLImport only needs to be set for the shadow module
+    // it just gets annoying in the JIT
+    NewF->setDLLStorageClass(GlobalValue::DefaultStorageClass);
+
+    return NewF;
+}
+
 #define prepare_call(Callee) prepare_call_in(jl_Module, (Callee))
 static Value *prepare_call_in(Module *M, Value *Callee)
 {
