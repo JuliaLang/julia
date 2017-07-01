@@ -175,7 +175,7 @@ function Base.show(io::IOContext, S::SparseMatrixCSC)
         print(io, "\n  \u22ee")
         # find the column to start printing in for the last print_count elements
         nextcol = searchsortedfirst(S.colptr, nnz(S) - print_count + 1)
-        for r = nnz(S) - print_count + 1 : S.colptr[nextcol] - 1
+        for r = (nnz(S) - print_count + 1) : (S.colptr[nextcol] - 1)
             print(io, "\n", _format_line(r, nextcol - 1))
         end
         # print all of the remaining columns
