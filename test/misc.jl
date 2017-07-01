@@ -731,6 +731,14 @@ let foo() = begin
     @test foo() == 2
 end
 
+kwargs19774(x, y; z=0) = x * y + z
+let foo() = begin
+        eval(:(kwargs19774(x::Int, y::Int; z=3) = z))
+        return Base.invokelatest(kwargs19774, 2, 3; z=1)
+    end
+    @test foo() == 1
+end
+
 # Endian tests
 # For now, we only support little endian.
 # Add an `Sys.ARCH` test for big endian when/if we add support for that.

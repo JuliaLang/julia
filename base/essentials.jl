@@ -358,13 +358,17 @@ end
 isempty(itr) = done(itr, start(itr))
 
 """
-    invokelatest(f, args...)
+    invokelatest(f, args...; kwargs...)
 
-Calls `f(args...)`, but guarantees that the most recent method of `f`
+Calls `f(args...; kwargs...)`, but guarantees that the most recent method of `f`
 will be executed.   This is useful in specialized circumstances,
 e.g. long-running event loops or callback functions that may
 call obsolete versions of a function `f`.
 (The drawback is that `invokelatest` is somewhat slower than calling
 `f` directly, and the type of the result cannot be inferred by the compiler.)
 """
-invokelatest(f, args...) = Core._apply_latest(f, args)
+function invokelatest(f, args...; kwargs...)
+    # We use a closure (`inner`) to handle kwargs.
+    inner(f, args...) = f(args...; kwargs...)
+    Core._apply_latest(inner, (f, args...))
+end
