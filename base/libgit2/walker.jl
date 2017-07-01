@@ -1,5 +1,31 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+    GitRevWalker(repo::GitRepo)
+
+A `GitRevWalker` *walks* through the *revisions* (i.e. commits) of
+a git repository `repo`. It is a collection of the commits
+in the repository, and supports iteration and calls to [`map`](@ref)
+and [`count`](@ref) (for instance, `count` could be used to determine
+what percentage of commits in a repository were made by a certain
+author).
+
+# Examples
+```julia
+oids = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker
+    LibGit2.map((oid,repo)->string(oid), walker, by = LibGit2.Consts.SORT_TIME)
+end
+```
+Here, `map` visits each commit using the `GitRevWalker` and finds its [`GitHash`](@ref).
+
+```julia
+cnt = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker
+    count((oid,repo)->(oid == commit_oid1), walker, oid=commit_oid1, by=LibGit2.Consts.SORT_TIME)
+end
+```
+Here, `count` finds the number of commits along the walk with a certain `GitHash`.
+Since the `GitHash` is unique to a commit, `cnt` will be `1`.
+"""
 function GitRevWalker(repo::GitRepo)
     w_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_revwalk_new, :libgit2), Cint,
@@ -27,6 +53,13 @@ end
 
 Base.iteratorsize(::Type{GitRevWalker}) = Base.SizeUnknown()
 
+"""
+    push_head!(w::GitRevWalker)
+
+Push the HEAD commit and its ancestors onto the [`GitRevWalker`](@ref)
+`w`. This ensures that HEAD and its ancestor commits will be encountered
+during the walk.
+"""
 function push_head!(w::GitRevWalker)
     @check ccall((:git_revwalk_push_head, :libgit2), Cint, (Ptr{Void},), w.ptr)
     return w

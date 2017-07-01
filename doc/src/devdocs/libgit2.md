@@ -30,6 +30,7 @@ Base.LibGit2.GitRemote
 Base.LibGit2.GitRemoteAnon
 Base.LibGit2.GitRepo
 Base.LibGit2.GitRepoExt
+Base.LibGit2.GitRevWalker
 Base.LibGit2.GitShortHash
 Base.LibGit2.GitSignature
 Base.LibGit2.GitStatus
@@ -100,6 +101,7 @@ Base.LibGit2.path
 Base.LibGit2.peel
 Base.LibGit2.posixpath
 Base.LibGit2.push
+Base.LibGit2.push_head!
 Base.LibGit2.push_refspecs
 Base.LibGit2.read_tree!
 Base.LibGit2.rebase!
