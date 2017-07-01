@@ -842,6 +842,12 @@ Represents the array `y` as an array having the same indices type as `x`.
 """
 of_indices(x, y) = similar(dims->y, oftype(indices(x), indices(y)))
 
+
+"""
+    full(F)
+
+Reconstruct the matrix `A` from the factorization `F=factorize(A)`.
+"""
 full(x::AbstractArray) = x
 
 ## range conversions ##
@@ -1265,6 +1271,7 @@ end
 
 Concatenate along dimension 1.
 
+# Examples
 ```jldoctest
 julia> a = [1 2 3 4 5]
 1×5 Array{Int64,2}:
@@ -1296,6 +1303,7 @@ vcat(X...) = cat(Val{1}, X...)
 
 Concatenate along dimension 2.
 
+# Examples
 ```jldoctest
 julia> a = [1; 2; 3; 4; 5]
 5-element Array{Int64,1}:
@@ -1372,6 +1380,7 @@ Horizontal and vertical concatenation in one call. This function is called for b
 syntax. The first argument specifies the number of arguments to concatenate in each block
 row.
 
+# Examples
 ```jldoctest
 julia> a, b, c, d, e, f = 1, 2, 3, 4, 5, 6
 (1, 2, 3, 4, 5, 6)
@@ -1577,6 +1586,7 @@ end
 
 Returns a tuple of subscripts into array `a` corresponding to the linear index `index`.
 
+# Examples
 ```jldoctest
 julia> A = ones(5,6,7);
 
@@ -1604,6 +1614,7 @@ sub2ind(::Tuple{}, I::Integer...) = (@_inline_meta; _sub2ind((), 1, 1, I...))
 
 The inverse of [`ind2sub`](@ref), returns the linear index corresponding to the provided subscripts.
 
+# Examples
 ```jldoctest
 julia> sub2ind((5,6,7),1,2,3)
 66
@@ -1653,6 +1664,7 @@ i, j, ... = ind2sub(size(A), indmax(A))
 
 provides the indices of the maximum element.
 
+# Examples
 ```jldoctest
 julia> ind2sub((3,4),2)
 (2, 1)

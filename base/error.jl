@@ -16,6 +16,13 @@
 #     rethrow(val)
 # end
 
+"""
+    throw(e)
+
+Throw an object as an exception.
+"""
+throw
+
 ## native julia error handling ##
 
 error(s::AbstractString) = throw(ErrorException(s))

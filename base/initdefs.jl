@@ -18,6 +18,12 @@ An array of the command line arguments passed to Julia, as strings.
 """
 const ARGS = String[]
 
+"""
+    exit([code])
+
+Quit (or control-D at the prompt). The default exit code is zero, indicating that the
+processes completed successfully.
+"""
 exit(n) = ccall(:jl_exit, Void, (Int32,), n)
 exit() = exit(0)
 quit() = exit()

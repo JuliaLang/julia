@@ -2056,29 +2056,6 @@ x` is converted by the compiler to `(setindex!(a, x, i, j, ...); x)`.
 setindex!(collection,value,key...)
 
 """
-    signif(x, digits, [base])
-
-Rounds (in the sense of [`round`](@ref)) `x` so that there are `digits` significant digits, under a
-base `base` representation, default 10. E.g., `signif(123.456, 2)` is `120.0`, and
-`signif(357.913, 4, 2)` is `352.0`.
-"""
-signif
-
-"""
-    full(F)
-
-Reconstruct the matrix `A` from the factorization `F=factorize(A)`.
-"""
-full(F)
-
-"""
-    throw(e)
-
-Throw an object as an exception.
-"""
-throw
-
-"""
     zeros([A::AbstractArray,] [T=eltype(A)::Type,] [dims=size(A)::Tuple])
 
 Create an array of all zeros with the same layout as `A`, element type `T` and size `dims`.
@@ -2144,23 +2121,6 @@ be either `Char` or `String`. Values for `Char` can be of type `Char` or [`UInt3
 Values for `String` can be of that type, or `Vector{UInt8}`.
 """
 isvalid(T,value)
-
-"""
-    reverseind(v, i)
-
-Given an index `i` in `reverse(v)`, return the corresponding index in `v` so that
-`v[reverseind(v,i)] == reverse(v)[i]`. (This can be nontrivial in the case where `v` is a
-Unicode string.)
-"""
-reverseind
-
-"""
-    exit([code])
-
-Quit (or control-D at the prompt). The default exit code is zero, indicating that the
-processes completed successfully.
-"""
-exit
 
 """
     skipchars(stream, predicate; linecomment::Char)
