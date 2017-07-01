@@ -167,7 +167,7 @@ function range(a::T, st::T, len::Integer) where T<:Union{Float16,Float32,Float64
     if start_d != 0 && step_d != 0 &&
             T(start_n/start_d) == a && T(step_n/step_d) == st
         den = lcm(start_d, step_d)
-        m = maxintfloat(T ,Int)
+        m = maxintfloat(T, Int)
         if abs(den*a) <= m && abs(den*st) <= m &&
                 rem(den, start_d) == 0 && rem(den, step_d) == 0
             start_n = round(Int, den*a)
