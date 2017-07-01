@@ -1345,7 +1345,8 @@
                    (let* ((spec (with-space-sensitive (parse-subtype-spec s)))
                           (nb   (with-space-sensitive (parse-cond s)))
                           (al   (if (not (eq? (peek-token s) 'end))
-                                    (with-space-sensitive (parse-cond s)))))
+                                    (with-space-sensitive (parse-cond s))
+                                    'nothing)))
                      (begin0 (list 'bitstype nb spec al)
                              (expect-end (take-lineendings s) "primitive type"))))))
        ;; deprecated type keywords
