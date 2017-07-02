@@ -803,30 +803,6 @@ static inline void dump_cpu_spec(uint32_t cpu, const FeatureList<n> &features,
 
 #else
 
-JL_DLLEXPORT jl_value_t *jl_get_cpu_name(void)
-{
-    return jl_cstr_to_string(jl_get_cpu_name_llvm().c_str());
-}
-
-JL_DLLEXPORT void jl_dump_host_cpu(void)
-{
-    jl_safe_printf("CPU: generic\n");
-    jl_safe_printf("Features:\n");
-}
-
-extern "C" int jl_test_cpu_feature(jl_cpu_feature_t feature)
-{
-    return 0;
-}
-
-extern "C" JL_DLLEXPORT int32_t jl_get_zero_subnormals(void)
-{
-    return 0;
-}
-
-extern "C" JL_DLLEXPORT int32_t jl_set_zero_subnormals(int8_t isZero)
-{
-    return isZero;
-}
+#include "processor_fallback.cpp"
 
 #endif

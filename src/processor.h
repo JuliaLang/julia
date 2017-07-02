@@ -203,4 +203,5 @@ struct jl_target_spec_t {
  */
 std::vector<jl_target_spec_t> jl_get_llvm_clone_targets(void);
 std::string jl_get_cpu_name_llvm(void);
+std::string jl_get_cpu_features_llvm(void);
 #endif
