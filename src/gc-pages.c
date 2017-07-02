@@ -2,7 +2,7 @@
 
 #include "gc.h"
 #ifndef _OS_WINDOWS_
-#  include <sys/resource.h>
+#include <sys/resource.h>
 #endif
 
 #ifdef __cplusplus
@@ -37,22 +37,27 @@ static char *jl_gc_try_alloc_pages(int pg_cnt)
 {
     size_t pages_sz = GC_PAGE_SZ * pg_cnt;
 #ifdef _OS_WINDOWS_
-    char *mem = (char*)VirtualAlloc(NULL, pages_sz + GC_PAGE_SZ,
-                                    MEM_RESERVE, PAGE_READWRITE);
+    char *mem = (char *)VirtualAlloc(
+            NULL, pages_sz + GC_PAGE_SZ, MEM_RESERVE, PAGE_READWRITE);
     if (mem == NULL)
         return NULL;
 #else
     if (GC_PAGE_SZ > jl_page_size)
         pages_sz += GC_PAGE_SZ;
-    char *mem = (char*)mmap(0, pages_sz, PROT_READ | PROT_WRITE,
-                            MAP_NORESERVE | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    char *mem = (char *)mmap(
+            0,
+            pages_sz,
+            PROT_READ | PROT_WRITE,
+            MAP_NORESERVE | MAP_PRIVATE | MAP_ANONYMOUS,
+            -1,
+            0);
     if (mem == MAP_FAILED)
         return NULL;
 #endif
     if (GC_PAGE_SZ > jl_page_size)
         // round data pointer up to the nearest gc_page_data-aligned
         // boundary if mmap didn't already do so.
-        mem = (char*)gc_page_data(mem + GC_PAGE_SZ - 1);
+        mem = (char *)gc_page_data(mem + GC_PAGE_SZ - 1);
     return mem;
 }
 
@@ -88,11 +93,11 @@ static jl_gc_pagemeta_t *jl_gc_alloc_new_page(void)
     }
 
     // now need to insert these pages into the pagetable metadata
-    // if any allocation fails, this just stops recording more pages from that point
+    // if any allocation fails, this just stops recording more pages from that
+    // point
     // and will free (munmap) the remainder
-    jl_gc_pagemeta_t *page_meta =
-        (jl_gc_pagemeta_t*)jl_gc_perm_alloc_nolock(pg_cnt * sizeof(jl_gc_pagemeta_t), 1,
-                                                   sizeof(void*), 0);
+    jl_gc_pagemeta_t *page_meta = (jl_gc_pagemeta_t *)jl_gc_perm_alloc_nolock(
+            pg_cnt * sizeof(jl_gc_pagemeta_t), 1, sizeof(void *), 0);
     pg = 0;
     if (page_meta) {
         for (; pg < pg_cnt; pg++) {
@@ -115,8 +120,8 @@ static jl_gc_pagemeta_t *jl_gc_alloc_new_page(void)
                 memory_map.freemap1[info.pagetable_i32] |= msk; // has free
             info.pagetable1 = *(ppagetable1 = &memory_map.meta1[i]);
             if (!info.pagetable1) {
-                info.pagetable1 = (pagetable1_t*)jl_gc_perm_alloc_nolock(sizeof(pagetable1_t), 1,
-                                                                         sizeof(void*), 0);
+                info.pagetable1 = (pagetable1_t *)jl_gc_perm_alloc_nolock(
+                        sizeof(pagetable1_t), 1, sizeof(void *), 0);
                 *ppagetable1 = info.pagetable1;
                 if (!info.pagetable1)
                     break;
@@ -128,11 +133,12 @@ static jl_gc_pagemeta_t *jl_gc_alloc_new_page(void)
             info.pagetable1_i32 = i / 32;
             msk = (1 << info.pagetable1_i);
             if ((info.pagetable1->freemap0[info.pagetable1_i32] & msk) == 0)
-                info.pagetable1->freemap0[info.pagetable1_i32] |= msk; // has free
+                info.pagetable1->freemap0[info.pagetable1_i32] |=
+                        msk; // has free
             info.pagetable0 = *(ppagetable0 = &info.pagetable1->meta0[i]);
             if (!info.pagetable0) {
-                info.pagetable0 = (pagetable0_t*)jl_gc_perm_alloc_nolock(sizeof(pagetable0_t), 1,
-                                                                         sizeof(void*), 0);
+                info.pagetable0 = (pagetable0_t *)jl_gc_perm_alloc_nolock(
+                        sizeof(pagetable0_t), 1, sizeof(void *), 0);
                 *ppagetable0 = info.pagetable0;
                 if (!info.pagetable0)
                     break;
@@ -154,7 +160,8 @@ static jl_gc_pagemeta_t *jl_gc_alloc_new_page(void)
         // Trim the allocation to only cover the region
         // that we successfully created the metadata for.
         // This is not supported by the Windows kernel,
-        // so we have to just skip it there and just lose these virtual addresses.
+        // so we have to just skip it there and just lose these virtual
+        // addresses.
         munmap(mem + LLT_ALIGN(GC_PAGE_SZ * pg, jl_page_size),
                GC_PAGE_SZ * pg_cnt - LLT_ALIGN(GC_PAGE_SZ * pg, jl_page_size));
 #endif
@@ -174,42 +181,65 @@ NOINLINE jl_gc_pagemeta_t *jl_gc_alloc_page(void)
     JL_LOCK_NOGC(&gc_perm_lock);
 
     // scan over memory_map page-table for existing allocated but unused pages
-    for (info.pagetable_i32 = memory_map.lb; info.pagetable_i32 < (REGION2_PG_COUNT + 31) / 32; info.pagetable_i32++) {
+    for (info.pagetable_i32 = memory_map.lb;
+         info.pagetable_i32 < (REGION2_PG_COUNT + 31) / 32;
+         info.pagetable_i32++) {
         uint32_t freemap1 = memory_map.freemap1[info.pagetable_i32];
-        for (info.pagetable_i = 0; freemap1; info.pagetable_i++, freemap1 >>= 1) {
+        for (info.pagetable_i = 0; freemap1;
+             info.pagetable_i++, freemap1 >>= 1) {
             unsigned next = ffs_u32(freemap1);
             info.pagetable_i += next;
             freemap1 >>= next;
-            info.pagetable1 = memory_map.meta1[info.pagetable_i + info.pagetable_i32 * 32];
+            info.pagetable1 =
+                    memory_map
+                            .meta1[info.pagetable_i + info.pagetable_i32 * 32];
             // repeat over page-table level 1
-            for (info.pagetable1_i32 = info.pagetable1->lb; info.pagetable1_i32 < REGION1_PG_COUNT / 32; info.pagetable1_i32++) {
-                uint32_t freemap0 = info.pagetable1->freemap0[info.pagetable1_i32];
-                for (info.pagetable1_i = 0; freemap0; info.pagetable1_i++, freemap0 >>= 1) {
+            for (info.pagetable1_i32 = info.pagetable1->lb;
+                 info.pagetable1_i32 < REGION1_PG_COUNT / 32;
+                 info.pagetable1_i32++) {
+                uint32_t freemap0 =
+                        info.pagetable1->freemap0[info.pagetable1_i32];
+                for (info.pagetable1_i = 0; freemap0;
+                     info.pagetable1_i++, freemap0 >>= 1) {
                     unsigned next = ffs_u32(freemap0);
                     info.pagetable1_i += next;
                     freemap0 >>= next;
-                    info.pagetable0 = info.pagetable1->meta0[info.pagetable1_i + info.pagetable1_i32 * 32];
+                    info.pagetable0 = info.pagetable1
+                                              ->meta0[info.pagetable1_i +
+                                                      info.pagetable1_i32 * 32];
                     // repeat over page-table level 0
-                    for (info.pagetable0_i32 = info.pagetable0->lb; info.pagetable0_i32 < REGION0_PG_COUNT / 32; info.pagetable0_i32++) {
-                        uint32_t freemap = info.pagetable0->freemap[info.pagetable0_i32];
+                    for (info.pagetable0_i32 = info.pagetable0->lb;
+                         info.pagetable0_i32 < REGION0_PG_COUNT / 32;
+                         info.pagetable0_i32++) {
+                        uint32_t freemap =
+                                info.pagetable0->freemap[info.pagetable0_i32];
                         if (freemap) {
                             info.pagetable0_i = ffs_u32(freemap);
-                            info.meta = info.pagetable0->meta[info.pagetable0_i + info.pagetable0_i32 * 32];
+                            info.meta =
+                                    info.pagetable0
+                                            ->meta[info.pagetable0_i +
+                                                   info.pagetable0_i32 * 32];
                             assert(info.meta->data);
-                            // new pages available starting at min of lb and pagetable_i32
+                            // new pages available starting at min of lb and
+                            // pagetable_i32
                             if (memory_map.lb < info.pagetable_i32)
                                 memory_map.lb = info.pagetable_i32;
                             if (info.pagetable1->lb < info.pagetable1_i32)
                                 info.pagetable1->lb = info.pagetable1_i32;
                             if (info.pagetable0->lb < info.pagetable0_i32)
                                 info.pagetable0->lb = info.pagetable0_i32;
-                            goto have_free_page; // break out of all of these loops
+                            goto have_free_page; // break out of all of these
+                                                 // loops
                         }
                     }
-                    info.pagetable1->freemap0[info.pagetable1_i32] &= ~(uint32_t)(1 << info.pagetable1_i); // record that this was full
+                    info.pagetable1->freemap0[info.pagetable1_i32] &= ~(
+                            uint32_t)(
+                            1
+                            << info.pagetable1_i); // record that this was full
                 }
             }
-            memory_map.freemap1[info.pagetable_i32] &= ~(uint32_t)(1 << info.pagetable_i); // record that this was full
+            memory_map.freemap1[info.pagetable_i32] &= ~(uint32_t)(
+                    1 << info.pagetable_i); // record that this was full
         }
     }
 
@@ -237,10 +267,14 @@ have_free_page:
         info.pagetable0->ub = info.pagetable0_i32;
 
     // mark this entry as in-use and not free
-    info.pagetable0->freemap[info.pagetable0_i32] &= ~(uint32_t)(1 << info.pagetable0_i);
-    info.pagetable0->allocmap[info.pagetable0_i32] |= (uint32_t)(1 << info.pagetable0_i);
-    info.pagetable1->allocmap0[info.pagetable1_i32] |= (uint32_t)(1 << info.pagetable1_i);
-    memory_map.allocmap1[info.pagetable_i32] |= (uint32_t)(1 << info.pagetable_i);
+    info.pagetable0->freemap[info.pagetable0_i32] &=
+            ~(uint32_t)(1 << info.pagetable0_i);
+    info.pagetable0->allocmap[info.pagetable0_i32] |=
+            (uint32_t)(1 << info.pagetable0_i);
+    info.pagetable1->allocmap0[info.pagetable1_i32] |=
+            (uint32_t)(1 << info.pagetable1_i);
+    memory_map.allocmap1[info.pagetable_i32] |=
+            (uint32_t)(1 << info.pagetable_i);
 
 #ifdef _OS_WINDOWS_
     VirtualAlloc(info.meta->data, GC_PAGE_SZ, MEM_COMMIT, PAGE_READWRITE);
@@ -282,14 +316,17 @@ void jl_gc_free_page(void *p)
         // ensure so we don't release more memory than intended
         size_t n_pages = jl_page_size / GC_PAGE_SZ; // exact division
         decommit_size = jl_page_size;
-        void *otherp = (void*)((uintptr_t)p & ~(jl_page_size - 1)); // round down to the nearest physical page
+        void *otherp =
+                (void *)((uintptr_t)p & ~(jl_page_size - 1)); // round down to
+                                                              // the nearest
+                                                              // physical page
         p = otherp;
         while (n_pages--) {
             struct jl_gc_metadata_ext info = page_metadata_ext(otherp);
             msk = (uint32_t)(1 << info.pagetable0_i);
             if (info.pagetable0->allocmap[info.pagetable0_i32] & msk)
                 goto no_decommit;
-            otherp = (void*)((char*)otherp + GC_PAGE_SZ);
+            otherp = (void *)((char *)otherp + GC_PAGE_SZ);
         }
     }
 #ifdef _OS_WINDOWS_

@@ -32,15 +32,19 @@ bool annotateSimdLoop(BasicBlock *incr)
     // Lazy initialization
     if (!simd_loop_mdkind) {
         simd_loop_mdkind = incr->getContext().getMDKindID("simd_loop");
-        simd_loop_md = MDNode::get(incr->getContext(), ArrayRef<Metadata*>());
+        simd_loop_md = MDNode::get(incr->getContext(), ArrayRef<Metadata *>());
     }
-    // Ideally, the decoration would go on the block itself, but LLVM 3.3 does not
-    // support putting metadata on blocks.  So instead, put the decoration on the last
-    // Add instruction, which (somewhat riskily) is assumed to be the loop increment.
-    for (BasicBlock::reverse_iterator ri = incr->rbegin(); ri!=incr->rend(); ++ri) {
-        Instruction& i = *ri;
+    // Ideally, the decoration would go on the block itself, but LLVM 3.3 does
+    // not
+    // support putting metadata on blocks.  So instead, put the decoration on
+    // the last
+    // Add instruction, which (somewhat riskily) is assumed to be the loop
+    // increment.
+    for (BasicBlock::reverse_iterator ri = incr->rbegin(); ri != incr->rend();
+         ++ri) {
+        Instruction &i = *ri;
         unsigned op = i.getOpcode();
-        if (op==Instruction::Add) {
+        if (op == Instruction::Add) {
             if (i.getType()->isIntegerTy()) {
                 DEBUG(dbgs() << "LSL: setting simd_loop metadata\n");
                 i.setMetadata(simd_loop_mdkind, simd_loop_md);
@@ -55,10 +59,11 @@ bool annotateSimdLoop(BasicBlock *incr)
 }
 
 /// Pass that lowers a loop marked by annotateSimdLoop.
-/// This pass should run after reduction variables have been converted to phi nodes,
+/// This pass should run after reduction variables have been converted to phi
+/// nodes,
 /// otherwise floating-point reductions might not be recognized as such and
 /// prevent SIMDization.
-struct LowerSIMDLoop: public LoopPass {
+struct LowerSIMDLoop : public LoopPass {
     static char ID;
     LowerSIMDLoop() : LoopPass(ID) {}
 
@@ -66,8 +71,9 @@ private:
     bool runOnLoop(Loop *, LPPassManager &LPM) override;
 
     /// Check if loop has "simd_loop" annotation.
-    /// If present, the annotation is an MDNode attached to an instruction in the loop's latch.
-    bool hasSIMDLoopMetadata( Loop *L) const;
+    /// If present, the annotation is an MDNode attached to an instruction in
+    /// the loop's latch.
+    bool hasSIMDLoopMetadata(Loop *L) const;
 
     /// If Phi is part of a reduction cycle of FAdd, FSub, FMul or FDiv,
     /// mark the ops as permitting reassociation/commuting.
@@ -77,9 +83,12 @@ private:
 
 bool LowerSIMDLoop::hasSIMDLoopMetadata(Loop *L) const
 {
-    // Note: If a loop has 0 or multiple latch blocks, it's probably not a simd_loop anyway.
+    // Note: If a loop has 0 or multiple latch blocks, it's probably not a
+    // simd_loop anyway.
     if (BasicBlock *latch = L->getLoopLatch())
-        for (BasicBlock::iterator II = latch->begin(), EE = latch->end(); II!=EE; ++II)
+        for (BasicBlock::iterator II = latch->begin(), EE = latch->end();
+             II != EE;
+             ++II)
             if (II->getMetadata(simd_loop_mdkind))
                 return true;
     return false;
@@ -107,25 +116,29 @@ static unsigned getReduceOpcode(Instruction *J, Instruction *operand)
 
 void LowerSIMDLoop::enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop *L) const
 {
-    typedef SmallVector<Instruction*, 8> chainVector;
+    typedef SmallVector<Instruction *, 8> chainVector;
     chainVector chain;
     Instruction *J;
     unsigned opcode = 0;
-    for (Instruction *I = Phi; ; I=J) {
+    for (Instruction *I = Phi;; I = J) {
         J = NULL;
         // Find the user of instruction I that is within loop L.
         for (User *UI : I->users()) { /*}*/
             Instruction *U = cast<Instruction>(UI);
             if (L->contains(U)) {
                 if (J) {
-                    DEBUG(dbgs() << "LSL: not a reduction var because op has two internal uses: " << *I << "\n");
+                    DEBUG(dbgs() << "LSL: not a reduction var because op has "
+                                    "two internal uses: "
+                                 << *I
+                                 << "\n");
                     return;
                 }
                 J = U;
             }
         }
         if (!J) {
-            DEBUG(dbgs() << "LSL: chain prematurely terminated at " << *I << "\n");
+            DEBUG(dbgs() << "LSL: chain prematurely terminated at " << *I
+                         << "\n");
             return;
         }
         if (J == Phi) {
@@ -133,9 +146,11 @@ void LowerSIMDLoop::enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop *L) const
             break;
         }
         if (opcode) {
-            // Check that arithmetic op matches prior arithmetic ops in the chain.
+            // Check that arithmetic op matches prior arithmetic ops in the
+            // chain.
             if (getReduceOpcode(J, I) != opcode) {
-                DEBUG(dbgs() << "LSL: chain broke at " << *J << " because of wrong opcode\n");
+                DEBUG(dbgs() << "LSL: chain broke at " << *J
+                             << " because of wrong opcode\n");
                 return;
             }
         }
@@ -143,13 +158,16 @@ void LowerSIMDLoop::enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop *L) const
             // First arithmetic op in the chain.
             opcode = getReduceOpcode(J, I);
             if (!opcode) {
-                DEBUG(dbgs() << "LSL: first arithmetic op in chain is uninteresting" << *J << "\n");
+                DEBUG(dbgs()
+                      << "LSL: first arithmetic op in chain is uninteresting"
+                      << *J
+                      << "\n");
                 return;
             }
         }
         chain.push_back(J);
     }
-    for (chainVector::const_iterator K=chain.begin(); K!=chain.end(); ++K) {
+    for (chainVector::const_iterator K = chain.begin(); K != chain.end(); ++K) {
         DEBUG(dbgs() << "LSL: marking " << **K << "\n");
         (*K)->setHasUnsafeAlgebra(true);
     }
@@ -158,8 +176,10 @@ void LowerSIMDLoop::enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop *L) const
 bool LowerSIMDLoop::runOnLoop(Loop *L, LPPassManager &LPM)
 {
     if (!simd_loop_mdkind) {
-        simd_loop_mdkind = L->getHeader()->getContext().getMDKindID("simd_loop");
-        simd_loop_md = MDNode::get(L->getHeader()->getContext(), ArrayRef<Metadata*>());
+        simd_loop_mdkind =
+                L->getHeader()->getContext().getMDKindID("simd_loop");
+        simd_loop_md = MDNode::get(
+                L->getHeader()->getContext(), ArrayRef<Metadata *>());
     }
 
     if (!hasSIMDLoopMetadata(L))
@@ -171,32 +191,39 @@ bool LowerSIMDLoop::runOnLoop(Loop *L, LPPassManager &LPM)
     MDNode *n = L->getLoopID();
     if (!n) {
         // Loop does not have a LoopID yet, so give it one.
-        n = MDNode::get(Lh->getContext(), ArrayRef<Metadata*>(NULL));
-        n->replaceOperandWith(0,n);
+        n = MDNode::get(Lh->getContext(), ArrayRef<Metadata *>(NULL));
+        n->replaceOperandWith(0, n);
         L->setLoopID(n);
     }
-    MDNode *m = MDNode::get(Lh->getContext(), ArrayRef<Metadata*>(n));
+    MDNode *m = MDNode::get(Lh->getContext(), ArrayRef<Metadata *>(n));
 
-    // Mark memory references so that Loop::isAnnotatedParallel will return true for this loop.
-    for(Loop::block_iterator BBI = L->block_begin(), E=L->block_end(); BBI!=E; ++BBI)
-        for (BasicBlock::iterator I = (*BBI)->begin(), EE = (*BBI)->end(); I!=EE; ++I)
+    // Mark memory references so that Loop::isAnnotatedParallel will return true
+    // for this loop.
+    for (Loop::block_iterator BBI = L->block_begin(), E = L->block_end();
+         BBI != E;
+         ++BBI)
+        for (BasicBlock::iterator I = (*BBI)->begin(), EE = (*BBI)->end();
+             I != EE;
+             ++I)
             if (I->mayReadOrWriteMemory())
                 I->setMetadata("llvm.mem.parallel_loop_access", m);
     assert(L->isAnnotatedParallel());
 
     // Mark floating-point reductions as okay to reassociate/commute.
-    for (BasicBlock::iterator I = Lh->begin(), E = Lh->end(); I!=E; ++I)
+    for (BasicBlock::iterator I = Lh->begin(), E = Lh->end(); I != E; ++I)
         if (PHINode *Phi = dyn_cast<PHINode>(I))
-            enableUnsafeAlgebraIfReduction(Phi,L);
+            enableUnsafeAlgebraIfReduction(Phi, L);
 
     return true;
 }
 
 char LowerSIMDLoop::ID = 0;
 
-static RegisterPass<LowerSIMDLoop> X("LowerSIMDLoop", "LowerSIMDLoop Pass",
-                                     false /* Only looks at CFG */,
-                                     false /* Analysis Pass */);
+static RegisterPass<LowerSIMDLoop>
+        X("LowerSIMDLoop",
+          "LowerSIMDLoop Pass",
+          false /* Only looks at CFG */,
+          false /* Analysis Pass */);
 
 JL_DLLEXPORT Pass *createLowerSimdLoopPass()
 {

@@ -15,12 +15,12 @@ void libsupport_init(void)
 #ifdef _OS_WINDOWS_
         SetConsoleCP(1252); // ANSI Latin1; Western European (Windows)
 #endif
-        setlocale(LC_ALL, ""); // set to user locale
+        setlocale(LC_ALL, "");      // set to user locale
         setlocale(LC_NUMERIC, "C"); // use locale-independent numeric formats
 
         ios_init_stdstreams();
 
-        isInitialized=1;
+        isInitialized = 1;
     }
 }
 

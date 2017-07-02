@@ -36,36 +36,37 @@
 static bt_context_t *jl_to_bt_context(void *sigctx)
 {
 #ifdef __APPLE__
-    return (bt_context_t*)&((ucontext64_t*)sigctx)->uc_mcontext64->__ss;
+    return (bt_context_t *)&((ucontext64_t *)sigctx)->uc_mcontext64->__ss;
 #elif defined(_CPU_ARM_)
     // libunwind does not use `ucontext_t` on ARM.
     // `unw_context_t` is a struct of 16 `unsigned long` which should
     // have the same layout as the `arm_r0` to `arm_pc` fields in `sigcontext`
-    ucontext_t *ctx = (ucontext_t*)sigctx;
-    return (bt_context_t*)&ctx->uc_mcontext.arm_r0;
+    ucontext_t *ctx = (ucontext_t *)sigctx;
+    return (bt_context_t *)&ctx->uc_mcontext.arm_r0;
 #else
-    return (bt_context_t*)sigctx;
+    return (bt_context_t *)sigctx;
 #endif
 }
 
 static int thread0_exit_count = 0;
 
-static inline __attribute__((unused)) uintptr_t jl_get_rsp_from_ctx(const void *_ctx)
+static inline __attribute__((unused)) uintptr_t
+jl_get_rsp_from_ctx(const void *_ctx)
 {
 #if defined(_OS_LINUX_) && defined(_CPU_X86_64_)
-    const ucontext_t *ctx = (const ucontext_t*)_ctx;
+    const ucontext_t *ctx = (const ucontext_t *)_ctx;
     return ctx->uc_mcontext.gregs[REG_RSP];
 #elif defined(_OS_LINUX_) && defined(_CPU_X86_)
-    const ucontext_t *ctx = (const ucontext_t*)_ctx;
+    const ucontext_t *ctx = (const ucontext_t *)_ctx;
     return ctx->uc_mcontext.gregs[REG_ESP];
 #elif defined(_OS_LINUX_) && defined(_CPU_AARCH64_)
-    const ucontext_t *ctx = (const ucontext_t*)_ctx;
+    const ucontext_t *ctx = (const ucontext_t *)_ctx;
     return ctx->uc_mcontext.sp;
 #elif defined(_OS_LINUX_) && defined(_CPU_ARM_)
-    const ucontext_t *ctx = (const ucontext_t*)_ctx;
+    const ucontext_t *ctx = (const ucontext_t *)_ctx;
     return ctx->uc_mcontext.arm_sp;
 #elif defined(_OS_DARWIN_)
-    const ucontext64_t *ctx = (const ucontext64_t*)_ctx;
+    const ucontext64_t *ctx = (const ucontext64_t *)_ctx;
     return ctx->uc_mcontext64->__ss.__rsp;
 #else
     // TODO Add support for FreeBSD and PowerPC(64)?
@@ -85,36 +86,36 @@ static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), void *_ctx)
     uintptr_t rsp = (uintptr_t)ptls->signal_stack + sig_stack_size;
     assert(rsp % 16 == 0);
 #if defined(_OS_LINUX_) && defined(_CPU_X86_64_)
-    ucontext_t *ctx = (ucontext_t*)_ctx;
-    rsp -= sizeof(void*);
-    *(void**)rsp = NULL;
+    ucontext_t *ctx = (ucontext_t *)_ctx;
+    rsp -= sizeof(void *);
+    *(void **)rsp = NULL;
     ctx->uc_mcontext.gregs[REG_RSP] = rsp;
     ctx->uc_mcontext.gregs[REG_RIP] = (uintptr_t)fptr;
 #elif defined(_OS_FREEBSD_) && defined(_CPU_X86_64_)
-    ucontext_t *ctx = (ucontext_t*)_ctx;
-    rsp -= sizeof(void*);
-    *(void**)rsp = NULL;
+    ucontext_t *ctx = (ucontext_t *)_ctx;
+    rsp -= sizeof(void *);
+    *(void **)rsp = NULL;
     ctx->uc_mcontext.mc_rsp = rsp;
     ctx->uc_mcontext.mc_rip = (uintptr_t)fptr;
 #elif defined(_OS_LINUX_) && defined(_CPU_X86_)
-    ucontext_t *ctx = (ucontext_t*)_ctx;
-    rsp -= sizeof(void*);
-    *(void**)rsp = NULL;
+    ucontext_t *ctx = (ucontext_t *)_ctx;
+    rsp -= sizeof(void *);
+    *(void **)rsp = NULL;
     ctx->uc_mcontext.gregs[REG_ESP] = rsp;
     ctx->uc_mcontext.gregs[REG_EIP] = (uintptr_t)fptr;
 #elif defined(_OS_FREEBSD_) && defined(_CPU_X86_)
-    ucontext_t *ctx = (ucontext_t*)_ctx;
-    rsp -= sizeof(void*);
-    *(void**)rsp = NULL;
+    ucontext_t *ctx = (ucontext_t *)_ctx;
+    rsp -= sizeof(void *);
+    *(void **)rsp = NULL;
     ctx->uc_mcontext.mc_esp = rsp;
     ctx->uc_mcontext.mc_eip = (uintptr_t)fptr;
 #elif defined(_OS_LINUX_) && defined(_CPU_AARCH64_)
-    ucontext_t *ctx = (ucontext_t*)_ctx;
+    ucontext_t *ctx = (ucontext_t *)_ctx;
     ctx->uc_mcontext.sp = rsp;
     ctx->uc_mcontext.regs[29] = 0; // Clear link register (x29)
     ctx->uc_mcontext.pc = (uintptr_t)fptr;
 #elif defined(_OS_LINUX_) && defined(_CPU_ARM_)
-    ucontext_t *ctx = (ucontext_t*)_ctx;
+    ucontext_t *ctx = (ucontext_t *)_ctx;
     uintptr_t target = (uintptr_t)fptr;
     // Apparently some glibc's sigreturn target is running in thumb state.
     // Mimic a `bx` instruction by setting the T(5) bit of CPSR
@@ -138,9 +139,9 @@ static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), void *_ctx)
     // from a divide-by-zero exception, which is now handled by
     // `catch_exception_raise`. It works fine when a signal is recieved
     // due to `kill`/`raise` though.
-    ucontext64_t *ctx = (ucontext64_t*)_ctx;
-    rsp -= sizeof(void*);
-    *(void**)rsp = NULL;
+    ucontext64_t *ctx = (ucontext64_t *)_ctx;
+    rsp -= sizeof(void *);
+    *(void **)rsp = NULL;
     ctx->uc_mcontext64->__ss.__rsp = rsp;
     ctx->uc_mcontext64->__ss.__rip = (uintptr_t)fptr;
 #else
@@ -153,8 +154,8 @@ static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), void *_ctx)
 static void jl_throw_in_ctx(jl_ptls_t ptls, jl_value_t *e, void *sigctx)
 {
     if (!ptls->safe_restore)
-        ptls->bt_size = rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE,
-                                          jl_to_bt_context(sigctx));
+        ptls->bt_size = rec_backtrace_ctx(
+                ptls->bt_data, JL_MAX_BT_SIZE, jl_to_bt_context(sigctx));
     ptls->exception_in_transit = e;
     jl_call_in_ctx(ptls, &jl_rethrow, sigctx);
 }
@@ -164,11 +165,12 @@ static pthread_t signals_thread;
 static int is_addr_on_stack(jl_ptls_t ptls, void *addr)
 {
 #ifdef COPY_STACKS
-    return ((char*)addr > (char*)ptls->stack_lo-3000000 &&
-            (char*)addr < (char*)ptls->stack_hi);
+    return ((char *)addr > (char *)ptls->stack_lo - 3000000 &&
+            (char *)addr < (char *)ptls->stack_hi);
 #else
-    return ((char*)addr > (char*)ptls->current_task->stkbuf &&
-            (char*)addr < (char*)ptls->current_task->stkbuf + ptls->current_task->ssize);
+    return ((char *)addr > (char *)ptls->current_task->stkbuf &&
+            (char *)addr < (char *)ptls->current_task->stkbuf +
+                                   ptls->current_task->ssize);
 #endif
 }
 
@@ -179,17 +181,16 @@ void sigdie_handler(int sig, siginfo_t *info, void *context)
     uv_tty_reset_mode();
     if (sig == SIGILL)
         jl_show_sigill(context);
-    jl_critical_error(sig, jl_to_bt_context(context),
-                      ptls->bt_data, &ptls->bt_size);
+    jl_critical_error(
+            sig, jl_to_bt_context(context), ptls->bt_data, &ptls->bt_size);
     sigfillset(&sset);
     sigprocmask(SIG_UNBLOCK, &sset, NULL);
     signal(sig, SIG_DFL);
-    if (sig != SIGSEGV &&
-        sig != SIGBUS &&
-        sig != SIGILL) {
+    if (sig != SIGSEGV && sig != SIGBUS && sig != SIGILL) {
         raise(sig);
     }
-    // fall-through return to re-execute faulting statement (but without the error handler)
+    // fall-through return to re-execute faulting statement (but without the
+    // error handler)
 }
 
 static void jl_unblock_signal(int sig)
@@ -209,14 +210,15 @@ static void jl_unblock_signal(int sig)
 static int is_addr_on_sigstack(jl_ptls_t ptls, void *ptr)
 {
     // One guard page for signal_stack.
-    return !((char*)ptr < (char*)ptls->signal_stack - jl_page_size ||
-             (char*)ptr > (char*)ptls->signal_stack + sig_stack_size);
+    return !(
+            (char *)ptr < (char *)ptls->signal_stack - jl_page_size ||
+            (char *)ptr > (char *)ptls->signal_stack + sig_stack_size);
 }
 
 static int jl_is_on_sigstack(jl_ptls_t ptls, void *ptr, void *context)
 {
     return (is_addr_on_sigstack(ptls, ptr) &&
-            is_addr_on_sigstack(ptls, (void*)jl_get_rsp_from_ctx(context)));
+            is_addr_on_sigstack(ptls, (void *)jl_get_rsp_from_ctx(context)));
 }
 
 static void segv_handler(int sig, siginfo_t *info, void *context)
@@ -241,7 +243,9 @@ static void segv_handler(int sig, siginfo_t *info, void *context)
         }
         return;
     }
-    if (ptls->safe_restore || is_addr_on_stack(ptls, info->si_addr)) { // stack overflow, or restarting jl_
+    if (ptls->safe_restore ||
+        is_addr_on_stack(
+                ptls, info->si_addr)) { // stack overflow, or restarting jl_
         jl_unblock_signal(sig);
         jl_throw_in_ctx(ptls, jl_stackovf_exception, context);
     }
@@ -254,7 +258,10 @@ static void segv_handler(int sig, siginfo_t *info, void *context)
         jl_safe_printf("ERROR: Signal stack overflow, exit\n");
         _exit(sig + 128);
     }
-    else if (sig == SIGSEGV && info->si_code == SEGV_ACCERR) {  // writing to read-only memory (e.g., mmap)
+    else if (sig == SIGSEGV && info->si_code == SEGV_ACCERR) { // writing to
+                                                               // read-only
+                                                               // memory (e.g.,
+                                                               // mmap)
         jl_unblock_signal(sig);
         jl_throw_in_ctx(ptls, jl_readonlymemory_exception, context);
     }
@@ -296,7 +303,9 @@ static void jl_thread_suspend_and_get_state(int tid, unw_context_t **ctx)
     jl_ptls_t ptls2 = jl_all_tls_states[tid];
     jl_atomic_store_release(&ptls2->signal_request, 1);
     pthread_kill(ptls2->system_id, SIGUSR2);
-    pthread_cond_wait(&signal_caught_cond, &in_signal_lock);  // wait for thread to acknowledge
+    pthread_cond_wait(
+            &signal_caught_cond,
+            &in_signal_lock); // wait for thread to acknowledge
     assert(jl_atomic_load_acquire(&ptls2->signal_request) == 0);
     *ctx = signal_context;
 }
@@ -307,7 +316,9 @@ static void jl_thread_resume(int tid, int sig)
     jl_ptls_t ptls2 = jl_all_tls_states[tid];
     jl_atomic_store_release(&ptls2->signal_request, 1);
     pthread_cond_broadcast(&exit_signal_cond);
-    pthread_cond_wait(&signal_caught_cond, &in_signal_lock); // wait for thread to acknowledge
+    pthread_cond_wait(
+            &signal_caught_cond,
+            &in_signal_lock); // wait for thread to acknowledge
     assert(jl_atomic_load_acquire(&ptls2->signal_request) == 0);
     pthread_mutex_unlock(&in_signal_lock);
 }
@@ -377,7 +388,7 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx)
     }
     else
 #endif
-    if (request == 2) {
+            if (request == 2) {
         jl_unblock_signal(sig);
         int force = jl_check_force_sigint();
         if (force || (!ptls->defer_signal && ptls->io_wait)) {
@@ -398,7 +409,7 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx)
 #if defined(HAVE_TIMER)
 // Linux-style
 #include <time.h>
-#include <string.h>  // for memset
+#include <string.h> // for memset
 
 static timer_t timerprof;
 static struct itimerspec itsprof;
@@ -416,10 +427,10 @@ JL_DLLEXPORT int jl_profile_start_timer(void)
         return -2;
 
     // Start the timer
-    itsprof.it_interval.tv_sec = nsecprof/GIGA;
-    itsprof.it_interval.tv_nsec = nsecprof%GIGA;
-    itsprof.it_value.tv_sec = nsecprof/GIGA;
-    itsprof.it_value.tv_nsec = nsecprof%GIGA;
+    itsprof.it_interval.tv_sec = nsecprof / GIGA;
+    itsprof.it_interval.tv_nsec = nsecprof % GIGA;
+    itsprof.it_value.tv_sec = nsecprof / GIGA;
+    itsprof.it_value.tv_nsec = nsecprof % GIGA;
     if (timer_settime(timerprof, 0, &itsprof, NULL) == -1)
         return -3;
 
@@ -442,10 +453,10 @@ struct itimerval timerprof;
 
 JL_DLLEXPORT int jl_profile_start_timer(void)
 {
-    timerprof.it_interval.tv_sec = nsecprof/GIGA;
-    timerprof.it_interval.tv_usec = (nsecprof%GIGA)/1000;
-    timerprof.it_value.tv_sec = nsecprof/GIGA;
-    timerprof.it_value.tv_usec = (nsecprof%GIGA)/1000;
+    timerprof.it_interval.tv_sec = nsecprof / GIGA;
+    timerprof.it_interval.tv_usec = (nsecprof % GIGA) / 1000;
+    timerprof.it_value.tv_sec = nsecprof / GIGA;
+    timerprof.it_value.tv_usec = (nsecprof % GIGA) / 1000;
     if (setitimer(ITIMER_PROF, &timerprof, 0) == -1)
         return -3;
 
@@ -475,13 +486,19 @@ static void *alloc_sigstack(size_t size)
     size_t pagesz = jl_getpagesize();
     // Add one guard page to catch stack overflow in the signal handler
     size = LLT_ALIGN(size, pagesz) + pagesz;
-    void *stackbuff = mmap(0, size, PROT_READ | PROT_WRITE,
-                           MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    void *stackbuff =
+            mmap(0,
+                 size,
+                 PROT_READ | PROT_WRITE,
+                 MAP_PRIVATE | MAP_ANONYMOUS,
+                 -1,
+                 0);
     if (stackbuff == MAP_FAILED)
-        jl_errorf("fatal error allocating signal stack: mmap: %s",
-                  strerror(errno));
+        jl_errorf(
+                "fatal error allocating signal stack: mmap: %s",
+                strerror(errno));
     mprotect(stackbuff, pagesz, PROT_NONE);
-    return (void*)((char*)stackbuff + pagesz);
+    return (void *)((char *)stackbuff + pagesz);
 }
 
 void jl_install_thread_signal_handler(jl_ptls_t ptls)
@@ -538,26 +555,32 @@ static void *signal_listener(void *arg)
         sig = 0;
         errno = 0;
         if (sigwait(&sset, &sig)) {
-            sig = SIGABRT; // this branch can't occur, unless we had stack memory corruption of sset
+            sig = SIGABRT; // this branch can't occur, unless we had stack
+                           // memory corruption of sset
         }
         if (!sig || errno == EINTR) {
             // This should never happen, but it has been observed to occur
-            // when this thread gets used to handle run a signal handler (without SA_RESTART).
-            // It would be nice to prohibit the kernel from doing that, by blocking signals on this thread,
-            // (so that we aren't temporarily unable to handle the signals that this thread exists to handle)
-            // but that sometimes results in the signals never getting delivered at all.
-            // Apparently the only consistent way to handle signals with sigwait is all-or-nothing :(
+            // when this thread gets used to handle run a signal handler
+            // (without SA_RESTART).
+            // It would be nice to prohibit the kernel from doing that, by
+            // blocking signals on this thread,
+            // (so that we aren't temporarily unable to handle the signals that
+            // this thread exists to handle)
+            // but that sometimes results in the signals never getting delivered
+            // at all.
+            // Apparently the only consistent way to handle signals with sigwait
+            // is all-or-nothing :(
             // And while sigwait handles per-process signals more sanely,
             // it can't really handle thread-targeted signals at all.
             // So signals really do seem to always just be lose-lose.
             continue;
         }
 #ifndef HAVE_MACH
-#  ifdef HAVE_ITIMER
+#ifdef HAVE_ITIMER
         profile = (sig == SIGPROF);
-#  else
+#else
         profile = (sig == SIGUSR1);
-#  endif
+#endif
 #endif
         if (sig == SIGINT) {
             if (jl_ignore_sigint()) {
@@ -598,14 +621,15 @@ static void *signal_listener(void *arg)
         unw_context_t *signal_context;
         // sample each thread, round-robin style in reverse order
         // (so that thread zero gets notified last)
-        for (int i = jl_n_threads; i-- > 0; ) {
+        for (int i = jl_n_threads; i-- > 0;) {
             // notify thread to stop
             jl_thread_suspend_and_get_state(i, &signal_context);
 
             // do backtrace on thread contexts for critical signals
             // this part must be signal-handler safe
             if (critical) {
-                bt_size += rec_backtrace_ctx(bt_data + bt_size,
+                bt_size += rec_backtrace_ctx(
+                        bt_data + bt_size,
                         JL_MAX_BT_SIZE / jl_n_threads - 1,
                         signal_context);
                 bt_data[bt_size++] = 0;
@@ -615,8 +639,10 @@ static void *signal_listener(void *arg)
             if (profile && running) {
                 if (bt_size_cur < bt_size_max - 1) {
                     // Get backtrace data
-                    bt_size_cur += rec_backtrace_ctx((uintptr_t*)bt_data_prof + bt_size_cur,
-                            bt_size_max - bt_size_cur - 1, signal_context);
+                    bt_size_cur += rec_backtrace_ctx(
+                            (uintptr_t *)bt_data_prof + bt_size_cur,
+                            bt_size_max - bt_size_cur - 1,
+                            signal_context);
                     // Mark the end of this block with 0
                     bt_data_prof[bt_size_cur++] = 0;
                 }
@@ -720,7 +746,8 @@ void jl_install_default_signal_handlers(void)
     if (sigaction(SIGSYS, &act_die, NULL) < 0) {
         jl_errorf("fatal error: sigaction: %s", strerror(errno));
     }
-    // need to ensure the following signals are not SIG_IGN, even though they will be blocked
+    // need to ensure the following signals are not SIG_IGN, even though they
+    // will be blocked
     act_die.sa_flags = SA_SIGINFO | SA_RESTART;
 #if defined(HAVE_ITIMER)
     if (sigaction(SIGPROF, &act_die, NULL) < 0) {

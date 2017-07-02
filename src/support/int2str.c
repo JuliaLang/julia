@@ -10,7 +10,7 @@ extern "C" {
 
 char *uint2str(char *dest, size_t len, uint64_t num, uint32_t base)
 {
-    int i = len-1;
+    int i = len - 1;
     uint64_t b = (uint64_t)base;
     char ch;
     dest[i--] = '\0';
@@ -19,22 +19,21 @@ char *uint2str(char *dest, size_t len, uint64_t num, uint32_t base)
         if (ch < 10)
             ch += '0';
         else
-            ch = ch-10+'a';
+            ch = ch - 10 + 'a';
         dest[i--] = ch;
         num /= b;
         if (num == 0)
             break;
     }
-    return &dest[i+1];
+    return &dest[i + 1];
 }
 
 int isdigit_base(char c, int base)
 {
     if (base < 11)
-        return (c >= '0' && c < '0'+base);
-    return ((c >= '0' && c <= '9') ||
-            (c >= 'a' && c < 'a'+base-10) ||
-            (c >= 'A' && c < 'A'+base-10));
+        return (c >= '0' && c < '0' + base);
+    return ((c >= '0' && c <= '9') || (c >= 'a' && c < 'a' + base - 10) ||
+            (c >= 'A' && c < 'A' + base - 10));
 }
 
 /* assumes valid base, returns 1 on error, 0 if OK */

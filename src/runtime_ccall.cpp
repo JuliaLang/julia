@@ -28,14 +28,16 @@ extern "C" void jl_init_runtime_ccall(void)
 // newly installed libraries can be found.
 extern "C" JL_DLLEXPORT void jl_read_sonames(void)
 {
-    char *line=NULL;
-    size_t sz=0;
+    char *line = NULL;
+    size_t sz = 0;
 #if defined(__linux__)
     FILE *ldc = popen("/sbin/ldconfig -p", "r");
 #else
     FILE *ldc = popen("/sbin/ldconfig -r", "r");
 #endif
-    if (ldc == NULL) return; // ignore errors in running ldconfig (other than whatever might have been printed to stderr)
+    if (ldc == NULL)
+        return; // ignore errors in running ldconfig (other than whatever might
+                // have been printed to stderr)
 
     // This loop is not allowed to call julia GC while holding the lock
     uv_rwlock_wrlock(&soname_lock);
@@ -47,13 +49,15 @@ extern "C" JL_DLLEXPORT void jl_read_sonames(void)
         if (n > 2 && isspace((unsigned char)line[0])) {
 #ifdef __linux__
             int i = 0;
-            while (isspace((unsigned char)line[++i])) ;
+            while (isspace((unsigned char)line[++i]))
+                ;
             char *name = &line[i];
             char *dot = strstr(name, ".so");
             i = 0;
 #else
             char *name = strstr(line, ":-l");
-            if (name == NULL) continue;
+            if (name == NULL)
+                continue;
             strncpy(name, "lib", 3);
             char *dot = strchr(name, '.');
 #endif
@@ -63,11 +67,14 @@ extern "C" JL_DLLEXPORT void jl_read_sonames(void)
 
 #ifdef __linux__
             // Detect if this entry is for the current architecture
-            while (!isspace((unsigned char)dot[++i])) ;
-            while (isspace((unsigned char)dot[++i])) ;
+            while (!isspace((unsigned char)dot[++i]))
+                ;
+            while (isspace((unsigned char)dot[++i]))
+                ;
             int j = i;
-            while (!isspace((unsigned char)dot[++j])) ;
-            char *arch = strstr(dot+i,"x86-64");
+            while (!isspace((unsigned char)dot[++j]))
+                ;
+            char *arch = strstr(dot + i, "x86-64");
             if (arch != NULL && arch < dot + j) {
 #ifdef _P32
                 continue;
@@ -84,7 +91,8 @@ extern "C" JL_DLLEXPORT void jl_read_sonames(void)
             if (dot != NULL && abslibpath != NULL) {
                 std::string pfx(name, dot - name);
                 // Do not include ' ' in front and '\n' at the end
-                std::string soname(abslibpath+1, line+n-(abslibpath+1)-1);
+                std::string soname(
+                        abslibpath + 1, line + n - (abslibpath + 1) - 1);
                 sonameMap[pfx] = soname;
             }
         }
@@ -133,10 +141,9 @@ extern "C" void jl_init_runtime_ccall(void)
 #endif
 
 // map from user-specified lib names to handles
-static std::map<std::string, void*> libMap;
+static std::map<std::string, void *> libMap;
 static jl_mutex_t libmap_lock;
-extern "C"
-void *jl_get_library(const char *f_lib)
+extern "C" void *jl_get_library(const char *f_lib)
 {
     void *hnd;
 #ifdef _OS_WINDOWS_
@@ -162,8 +169,8 @@ void *jl_get_library(const char *f_lib)
     return hnd;
 }
 
-extern "C" JL_DLLEXPORT
-void *jl_load_and_lookup(const char *f_lib, const char *f_name, void **hnd)
+extern "C" JL_DLLEXPORT void *
+jl_load_and_lookup(const char *f_lib, const char *f_name, void **hnd)
 {
     void *handle = jl_atomic_load_acquire(hnd);
     if (!handle)
@@ -172,16 +179,14 @@ void *jl_load_and_lookup(const char *f_lib, const char *f_name, void **hnd)
 }
 
 // miscellany
-extern "C" JL_DLLEXPORT
-jl_value_t *jl_get_cpu_name(void)
+extern "C" JL_DLLEXPORT jl_value_t *jl_get_cpu_name(void)
 {
     StringRef HostCPUName = llvm::sys::getHostCPUName();
     return jl_pchar_to_string(HostCPUName.data(), HostCPUName.size());
 }
 
-extern "C" JL_DLLEXPORT
-jl_value_t *jl_get_JIT(void)
+extern "C" JL_DLLEXPORT jl_value_t *jl_get_JIT(void)
 {
-    const std::string& HostJITName = "ORCJIT";
+    const std::string &HostJITName = "ORCJIT";
     return jl_pchar_to_string(HostJITName.data(), HostJITName.size());
 }

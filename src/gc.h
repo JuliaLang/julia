@@ -30,12 +30,13 @@
 extern "C" {
 #endif
 
-#define GC_PAGE_LG2 14 // log2(size of a page)
+#define GC_PAGE_LG2 14                // log2(size of a page)
 #define GC_PAGE_SZ (1 << GC_PAGE_LG2) // 16k
-#define GC_PAGE_OFFSET (JL_HEAP_ALIGNMENT - (sizeof(jl_taggedvalue_t) % JL_HEAP_ALIGNMENT))
+#define GC_PAGE_OFFSET                                                         \
+    (JL_HEAP_ALIGNMENT - (sizeof(jl_taggedvalue_t) % JL_HEAP_ALIGNMENT))
 
-#define jl_malloc_tag ((void*)0xdeadaa01)
-#define jl_singleton_tag ((void*)0xdeadaa02)
+#define jl_malloc_tag ((void *)0xdeadaa01)
+#define jl_singleton_tag ((void *)0xdeadaa02)
 
 // Used by GC_DEBUG_ENV
 typedef struct {
@@ -56,29 +57,30 @@ typedef struct {
     jl_alloc_num_t print;
 } jl_gc_debug_env_t;
 
-// This struct must be kept in sync with the Julia type of the same name in base/util.jl
+// This struct must be kept in sync with the Julia type of the same name in
+// base/util.jl
 typedef struct {
-    int64_t     allocd;
-    int64_t     deferred_alloc;
-    int64_t     freed;
-    uint64_t    malloc;
-    uint64_t    realloc;
-    uint64_t    poolalloc;
-    uint64_t    bigalloc;
-    uint64_t    freecall;
-    uint64_t    total_time;
-    uint64_t    total_allocd;
-    uint64_t    since_sweep;
-    size_t      interval;
-    int         pause;
-    int         full_sweep;
+    int64_t allocd;
+    int64_t deferred_alloc;
+    int64_t freed;
+    uint64_t malloc;
+    uint64_t realloc;
+    uint64_t poolalloc;
+    uint64_t bigalloc;
+    uint64_t freecall;
+    uint64_t total_time;
+    uint64_t total_allocd;
+    uint64_t since_sweep;
+    size_t interval;
+    int pause;
+    int full_sweep;
 } jl_gc_num_t;
 
 typedef struct {
-    void **pc; // Current stack address for the pc (up growing)
-    char *data; // Current stack address for the data (up growing)
+    void **pc;       // Current stack address for the pc (up growing)
+    char *data;      // Current stack address for the data (up growing)
     void **pc_start; // Cached value of `gc_cache->pc_stack`
-    void **pc_end; // Cached value of `gc_cache->pc_stack_end`
+    void **pc_end;   // Cached value of `gc_cache->pc_stack_end`
 } gc_mark_sp_t;
 
 enum {
@@ -95,7 +97,8 @@ enum {
 };
 
 // Pop a data struct from the mark data stack (i.e. decrease the stack pointer)
-// This should be used after dispatch and therefore the pc stack pointer is already popped from
+// This should be used after dispatch and therefore the pc stack pointer is
+// already popped from
 // the stack.
 STATIC_INLINE void *gc_pop_markdata_(gc_mark_sp_t *sp, size_t size)
 {
@@ -103,10 +106,11 @@ STATIC_INLINE void *gc_pop_markdata_(gc_mark_sp_t *sp, size_t size)
     sp->data = data;
     return data;
 }
-#define gc_pop_markdata(sp, type) ((type*)gc_pop_markdata_(sp, sizeof(type)))
+#define gc_pop_markdata(sp, type) ((type *)gc_pop_markdata_(sp, sizeof(type)))
 
 // Re-push a frame to the mark stack (both data and pc)
-// The data and pc are expected to be on the stack (or updated in place) already.
+// The data and pc are expected to be on the stack (or updated in place)
+// already.
 // Mainly useful to pause the current scanning in order to scan an new object.
 STATIC_INLINE void *gc_repush_markdata_(gc_mark_sp_t *sp, size_t size)
 {
@@ -115,11 +119,14 @@ STATIC_INLINE void *gc_repush_markdata_(gc_mark_sp_t *sp, size_t size)
     sp->data = data + size;
     return data;
 }
-#define gc_repush_markdata(sp, type) ((type*)gc_repush_markdata_(sp, sizeof(type)))
+#define gc_repush_markdata(sp, type)                                           \
+    ((type *)gc_repush_markdata_(sp, sizeof(type)))
 
 /**
- * The `nptr` member of marking data records the number of pointers slots referenced by
- * an object to be used in the full collection heuristics as well as whether the object
+ * The `nptr` member of marking data records the number of pointers slots
+ * referenced by
+ * an object to be used in the full collection heuristics as well as whether the
+ * object
  * references young objects.
  * `nptr >> 2` is the number of pointers fields referenced by the object.
  * The lowest bit of `nptr` is set if the object references young object.
@@ -131,46 +138,47 @@ STATIC_INLINE void *gc_repush_markdata_(gc_mark_sp_t *sp, size_t size)
 // The metadata might need update too (depend on the PC)
 typedef struct {
     jl_value_t *obj; // The object
-    uintptr_t tag; // The tag with the GC bits masked out
-    uint8_t bits; // The GC bits after tagging (`bits & 1 == 1`)
+    uintptr_t tag;   // The tag with the GC bits masked out
+    uint8_t bits;    // The GC bits after tagging (`bits & 1 == 1`)
 } gc_mark_marked_obj_t;
 
-// An object array. This can come from an array, svec, or the using array or a module
+// An object array. This can come from an array, svec, or the using array or a
+// module
 typedef struct {
     jl_value_t *parent; // The parent object to trigger write barrier on.
     jl_value_t **begin; // The first slot to be scanned.
-    jl_value_t **end; // The end address (after the last slot to be scanned)
-    uintptr_t nptr; // See notes about `nptr` above.
+    jl_value_t **end;   // The end address (after the last slot to be scanned)
+    uintptr_t nptr;     // See notes about `nptr` above.
 } gc_mark_objarray_t;
 
 // A normal object with 8bits field descriptors
 typedef struct {
-    jl_value_t *parent; // The parent object to trigger write barrier on.
+    jl_value_t *parent;     // The parent object to trigger write barrier on.
     jl_fielddesc8_t *begin; // Current field descriptor.
-    jl_fielddesc8_t *end; // End of field descriptor.
-    uintptr_t nptr; // See notes about `nptr` above.
+    jl_fielddesc8_t *end;   // End of field descriptor.
+    uintptr_t nptr;         // See notes about `nptr` above.
 } gc_mark_obj8_t;
 
 // A normal object with 16bits field descriptors
 typedef struct {
-    jl_value_t *parent; // The parent object to trigger write barrier on.
+    jl_value_t *parent;      // The parent object to trigger write barrier on.
     jl_fielddesc16_t *begin; // Current field descriptor.
-    jl_fielddesc16_t *end; // End of field descriptor.
-    uintptr_t nptr; // See notes about `nptr` above.
+    jl_fielddesc16_t *end;   // End of field descriptor.
+    uintptr_t nptr;          // See notes about `nptr` above.
 } gc_mark_obj16_t;
 
 // A normal object with 32bits field descriptors
 typedef struct {
-    jl_value_t *parent; // The parent object to trigger write barrier on.
+    jl_value_t *parent;      // The parent object to trigger write barrier on.
     jl_fielddesc32_t *begin; // Current field descriptor.
-    jl_fielddesc32_t *end; // End of field descriptor.
-    uintptr_t nptr; // See notes about `nptr` above.
+    jl_fielddesc32_t *end;   // End of field descriptor.
+    uintptr_t nptr;          // See notes about `nptr` above.
 } gc_mark_obj32_t;
 
 // Stack frame
 typedef struct {
     jl_gcframe_t *s; // The current stack frame
-    uint32_t i; // The current slot index in the frame
+    uint32_t i;      // The current slot index in the frame
     uint32_t nroots; // `nroots` fields in the frame
     // Parameters to mark the copy_stack range.
     uintptr_t offset;
@@ -179,13 +187,15 @@ typedef struct {
 } gc_mark_stackframe_t;
 
 // Module bindings. This is also the beginning of module scanning.
-// The loop will start marking other references in a module after the bindings are marked
+// The loop will start marking other references in a module after the bindings
+// are marked
 typedef struct {
-    jl_module_t *parent; // The parent module to trigger write barrier on.
+    jl_module_t *parent;  // The parent module to trigger write barrier on.
     jl_binding_t **begin; // The first slot to be scanned.
-    jl_binding_t **end; // The end address (after the last slot to be scanned)
-    uintptr_t nptr; // See notes about `nptr` above.
-    uint8_t bits; // GC bits of the module (the bits to mark the binding buffer with)
+    jl_binding_t **end;   // The end address (after the last slot to be scanned)
+    uintptr_t nptr;       // See notes about `nptr` above.
+    uint8_t bits; // GC bits of the module (the bits to mark the binding buffer
+                  // with)
 } gc_mark_binding_t;
 
 // Finalizer list
@@ -195,9 +205,12 @@ typedef struct {
 } gc_mark_finlist_t;
 
 // This is used to determine the max size of the data objects on the data stack.
-// We'll use this size to determine the size of the data stack corresponding to a
-// PC stack size. Since the data objects are not all of the same size, we'll waste
-// some memory on the data stack this way but that size is unlikely going to be significant.
+// We'll use this size to determine the size of the data stack corresponding to
+// a
+// PC stack size. Since the data objects are not all of the same size, we'll
+// waste
+// some memory on the data stack this way but that size is unlikely going to be
+// significant.
 typedef union {
     gc_mark_marked_obj_t marked;
     gc_mark_objarray_t objarray;
@@ -225,11 +238,11 @@ JL_EXTENSION typedef struct _bigval_t {
     // (16 pointers of 4 bytes each) - (4 other pointers in struct)
     void *_padding[16 - 4];
 #endif
-    //struct jl_taggedvalue_t <>;
+    // struct jl_taggedvalue_t <>;
     union {
         uintptr_t header;
         struct {
-            uintptr_t gc:2;
+            uintptr_t gc : 2;
         } bits;
     };
     // must be 64-byte aligned here, in 32 & 64 bit modes
@@ -270,7 +283,7 @@ typedef struct {
     // number of free objects in this page.
     // invalid if pool that owns this page is allocating objects from this page.
     uint16_t nfree;
-    uint16_t osize; // size of each object in this page
+    uint16_t osize;           // size of each object in this page
     uint16_t fl_begin_offset; // offset of first free object in this page
     uint16_t fl_end_offset;   // offset of last free object in this page
     uint16_t thread_n;        // thread id of the heap that owns this page
@@ -290,30 +303,34 @@ typedef struct {
 //  The three levels have similar but slightly different structures:
 //    - pagetable0_t: the bottom/leaf level (covers the contiguous addresses)
 //    - pagetable1_t: the middle level
-//    - pagetable2_t: the top/leaf level (covers the entire virtual address space)
+//    - pagetable2_t: the top/leaf level (covers the entire virtual address
+//    space)
 //  Corresponding to these similar structures is a large amount of repetitive
 //  code that is nearly the same but not identical. It could be made less
-//  repetitive with C macros, but only at the cost of debuggability. The specialized
+//  repetitive with C macros, but only at the cost of debuggability. The
+//  specialized
 //  structure of this representation allows us to partially unroll and optimize
 //  various conditions at each level.
 
 //  The following constants define the branching factors at each level.
 //  The constants and GC_PAGE_LG2 must therefore sum to sizeof(void*).
-//  They should all be multiples of 32 (sizeof(uint32_t)) except that REGION2_PG_COUNT may also be 1.
+//  They should all be multiples of 32 (sizeof(uint32_t)) except that
+//  REGION2_PG_COUNT may also be 1.
 #ifdef _P64
 #define REGION0_PG_COUNT (1 << 16)
 #define REGION1_PG_COUNT (1 << 16)
 #define REGION2_PG_COUNT (1 << 18)
-#define REGION0_INDEX(p) (((uintptr_t)(p) >> 14) & 0xFFFF) // shift by GC_PAGE_LG2
+#define REGION0_INDEX(p)                                                       \
+    (((uintptr_t)(p) >> 14) & 0xFFFF) // shift by GC_PAGE_LG2
 #define REGION1_INDEX(p) (((uintptr_t)(p) >> 30) & 0xFFFF)
-#define REGION_INDEX(p)  (((uintptr_t)(p) >> 46) & 0x3FFFF)
+#define REGION_INDEX(p) (((uintptr_t)(p) >> 46) & 0x3FFFF)
 #else
 #define REGION0_PG_COUNT (1 << 8)
 #define REGION1_PG_COUNT (1 << 10)
 #define REGION2_PG_COUNT (1 << 0)
 #define REGION0_INDEX(p) (((uintptr_t)(p) >> 14) & 0xFF) // shift by GC_PAGE_LG2
 #define REGION1_INDEX(p) (((uintptr_t)(p) >> 22) & 0x3FF)
-#define REGION_INDEX(p)  (0)
+#define REGION_INDEX(p) (0)
 #endif
 
 // define the representation of the levels of the page-table (0 to 2)
@@ -375,17 +392,17 @@ STATIC_INLINE bigval_t *bigval_header(jl_taggedvalue_t *o)
 // round an address inside a gcpage's data to its beginning
 STATIC_INLINE char *gc_page_data(void *x)
 {
-    return (char*)(((uintptr_t)x >> GC_PAGE_LG2) << GC_PAGE_LG2);
+    return (char *)(((uintptr_t)x >> GC_PAGE_LG2) << GC_PAGE_LG2);
 }
 
 STATIC_INLINE jl_taggedvalue_t *page_pfl_beg(jl_gc_pagemeta_t *p)
 {
-    return (jl_taggedvalue_t*)(p->data + p->fl_begin_offset);
+    return (jl_taggedvalue_t *)(p->data + p->fl_begin_offset);
 }
 
 STATIC_INLINE jl_taggedvalue_t *page_pfl_end(jl_gc_pagemeta_t *p)
 {
-    return (jl_taggedvalue_t*)(p->data + p->fl_end_offset);
+    return (jl_taggedvalue_t *)(p->data + p->fl_end_offset);
 }
 
 STATIC_INLINE int gc_marked(uintptr_t bits)
@@ -410,7 +427,7 @@ STATIC_INLINE uintptr_t gc_ptr_tag(void *v, uintptr_t mask)
 
 STATIC_INLINE void *gc_ptr_clear_tag(void *v, uintptr_t mask)
 {
-    return (void*)(((uintptr_t)v) & ~mask);
+    return (void *)(((uintptr_t)v) & ~mask);
 }
 
 NOINLINE uintptr_t gc_get_stack_ptr(void);
@@ -478,7 +495,8 @@ STATIC_INLINE void gc_big_object_link(bigval_t *hdr, bigval_t **list)
     *list = hdr;
 }
 
-STATIC_INLINE void gc_mark_sp_init(jl_gc_mark_cache_t *gc_cache, gc_mark_sp_t *sp)
+STATIC_INLINE void
+gc_mark_sp_init(jl_gc_mark_cache_t *gc_cache, gc_mark_sp_t *sp)
 {
     sp->pc = gc_cache->pc_stack;
     sp->data = gc_cache->data_stack;
@@ -487,8 +505,11 @@ STATIC_INLINE void gc_mark_sp_init(jl_gc_mark_cache_t *gc_cache, gc_mark_sp_t *s
 }
 
 void gc_mark_queue_all_roots(jl_ptls_t ptls, gc_mark_sp_t *sp);
-void gc_mark_queue_finlist(jl_gc_mark_cache_t *gc_cache, gc_mark_sp_t *sp,
-                           arraylist_t *list, size_t start);
+void gc_mark_queue_finlist(
+        jl_gc_mark_cache_t *gc_cache,
+        gc_mark_sp_t *sp,
+        arraylist_t *list,
+        size_t start);
 void gc_mark_loop(jl_ptls_t ptls, gc_mark_sp_t sp);
 void gc_debug_init(void);
 
@@ -532,11 +553,14 @@ void gc_time_mallocd_array_start(void);
 void gc_time_count_mallocd_array(int bits);
 void gc_time_mallocd_array_end(void);
 
-void gc_time_mark_pause(int64_t t0, int64_t scanned_bytes,
-                        int64_t perm_scanned_bytes);
-void gc_time_sweep_pause(uint64_t gc_end_t, int64_t actual_allocd,
-                         int64_t live_bytes, int64_t estimate_freed,
-                         int sweep_full);
+void gc_time_mark_pause(
+        int64_t t0, int64_t scanned_bytes, int64_t perm_scanned_bytes);
+void gc_time_sweep_pause(
+        uint64_t gc_end_t,
+        int64_t actual_allocd,
+        int64_t live_bytes,
+        int64_t estimate_freed,
+        int sweep_full);
 #else
 #define gc_time_pool_start()
 STATIC_INLINE void gc_time_count_page(int freedall, int pg_skpd)
@@ -560,8 +584,8 @@ STATIC_INLINE void gc_time_count_mallocd_array(int bits)
 }
 #define gc_time_mallocd_array_end()
 #define gc_time_mark_pause(t0, scanned_bytes, perm_scanned_bytes)
-#define gc_time_sweep_pause(gc_end_t, actual_allocd, live_bytes,        \
-                            estimate_freed, sweep_full)
+#define gc_time_sweep_pause(                                                   \
+        gc_end_t, actual_allocd, live_bytes, estimate_freed, sweep_full)
 #endif
 
 #ifdef MEMFENCE
@@ -577,44 +601,60 @@ static inline void gc_verify_tags(void)
 extern jl_value_t *lostval;
 void gc_verify(jl_ptls_t ptls);
 void add_lostval_parent(jl_value_t *parent);
-#define verify_val(v) do {                                              \
-        if (lostval == (jl_value_t*)(v) && (v) != 0) {                  \
-            jl_printf(JL_STDOUT,                                        \
-                      "Found lostval %p at %s:%d oftype: ",             \
-                      (void*)(lostval), __FILE__, __LINE__);            \
-            jl_static_show(JL_STDOUT, jl_typeof(v));                    \
-            jl_printf(JL_STDOUT, "\n");                                 \
-        }                                                               \
-    } while(0);
+#define verify_val(v)                                                          \
+    do {                                                                       \
+        if (lostval == (jl_value_t *)(v) && (v) != 0) {                        \
+            jl_printf(                                                         \
+                    JL_STDOUT,                                                 \
+                    "Found lostval %p at %s:%d oftype: ",                      \
+                    (void *)(lostval),                                         \
+                    __FILE__,                                                  \
+                    __LINE__);                                                 \
+            jl_static_show(JL_STDOUT, jl_typeof(v));                           \
+            jl_printf(JL_STDOUT, "\n");                                        \
+        }                                                                      \
+    } while (0);
 
-#define verify_parent(ty, obj, slot, args...) do {                      \
-        if (gc_ptr_clear_tag(*(void**)(slot), 3) == (void*)lostval &&   \
-            (jl_value_t*)(obj) != lostval) {                            \
-            jl_printf(JL_STDOUT, "Found parent %p %p at %s:%d\n",       \
-                      (void*)(ty), (void*)(obj), __FILE__, __LINE__);   \
-            jl_printf(JL_STDOUT, "\tloc %p : ", (void*)(slot));         \
-            jl_printf(JL_STDOUT, args);                                 \
-            jl_printf(JL_STDOUT, "\n");                                 \
-            jl_printf(JL_STDOUT, "\ttype: ");                           \
-            jl_static_show(JL_STDOUT, jl_typeof(obj));                  \
-            jl_printf(JL_STDOUT, "\n");                                 \
-            add_lostval_parent((jl_value_t*)(obj));                     \
-        }                                                               \
-    } while(0);
+#define verify_parent(ty, obj, slot, args...)                                  \
+    do {                                                                       \
+        if (gc_ptr_clear_tag(*(void **)(slot), 3) == (void *)lostval &&        \
+            (jl_value_t *)(obj) != lostval) {                                  \
+            jl_printf(                                                         \
+                    JL_STDOUT,                                                 \
+                    "Found parent %p %p at %s:%d\n",                           \
+                    (void *)(ty),                                              \
+                    (void *)(obj),                                             \
+                    __FILE__,                                                  \
+                    __LINE__);                                                 \
+            jl_printf(JL_STDOUT, "\tloc %p : ", (void *)(slot));               \
+            jl_printf(JL_STDOUT, args);                                        \
+            jl_printf(JL_STDOUT, "\n");                                        \
+            jl_printf(JL_STDOUT, "\ttype: ");                                  \
+            jl_static_show(JL_STDOUT, jl_typeof(obj));                         \
+            jl_printf(JL_STDOUT, "\n");                                        \
+            add_lostval_parent((jl_value_t *)(obj));                           \
+        }                                                                      \
+    } while (0);
 
-#define verify_parent1(ty,obj,slot,arg1) verify_parent(ty,obj,slot,arg1)
-#define verify_parent2(ty,obj,slot,arg1,arg2) verify_parent(ty,obj,slot,arg1,arg2)
+#define verify_parent1(ty, obj, slot, arg1) verify_parent(ty, obj, slot, arg1)
+#define verify_parent2(ty, obj, slot, arg1, arg2)                              \
+    verify_parent(ty, obj, slot, arg1, arg2)
 extern int gc_verifying;
 #else
 #define gc_verify(ptls)
 #define verify_val(v)
-#define verify_parent1(ty,obj,slot,arg1) do {} while (0)
-#define verify_parent2(ty,obj,slot,arg1,arg2) do {} while (0)
+#define verify_parent1(ty, obj, slot, arg1)                                    \
+    do {                                                                       \
+    } while (0)
+#define verify_parent2(ty, obj, slot, arg1, arg2)                              \
+    do {                                                                       \
+    } while (0)
 #define gc_verifying (0)
 #endif
 int gc_slot_to_fieldidx(void *_obj, void *slot);
 int gc_slot_to_arrayidx(void *_obj, void *begin);
-NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, gc_mark_sp_t sp, int pc_offset);
+NOINLINE void
+gc_mark_loop_unwind(jl_ptls_t ptls, gc_mark_sp_t sp, int pc_offset);
 
 #ifdef GC_DEBUG_ENV
 JL_DLLEXPORT extern jl_gc_debug_env_t jl_gc_debug_env;

@@ -8,7 +8,7 @@ extern "C" {
 #endif
 
 /* is c the start of a utf8 sequence? */
-#define isutf(c) (((c)&0xC0)!=0x80)
+#define isutf(c) (((c)&0xC0) != 0x80)
 
 #define UEOF ((uint32_t)-1)
 
@@ -72,8 +72,14 @@ int u8_escape_wchar(char *buf, size_t sz, uint32_t ch);
 
    returns number of bytes placed in buf, including a NUL terminator.
 */
-size_t u8_escape(char *buf, size_t sz, const char *src, size_t *pi, size_t end,
-                 int escape_quotes, int ascii);
+size_t u8_escape(
+        char *buf,
+        size_t sz,
+        const char *src,
+        size_t *pi,
+        size_t end,
+        int escape_quotes,
+        int ascii);
 
 /* utility predicates used by the above */
 int octal_digit(char c);

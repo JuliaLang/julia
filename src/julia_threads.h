@@ -17,21 +17,21 @@
 #  error Julia can only be built for architectures above Pentium 4. Pass -march=pentium4, or set MARCH=pentium4 and ensure that -march is not passed separately with an older architecture.
 #endif
 #ifdef _COMPILER_MICROSOFT_
-#  include <intrin.h>
-#  include <type_traits>
+#include <intrin.h>
+#include <type_traits>
 #endif
 #if defined(_CPU_X86_64_) || defined(_CPU_X86_)
-#  include <immintrin.h>
+#include <immintrin.h>
 #endif
 #ifndef _OS_WINDOWS_
-#  include <pthread.h>
+#include <pthread.h>
 #endif
 #include <signal.h>
 
 typedef struct {
-    jl_taggedvalue_t *freelist;   // root of list of free objects
-    jl_taggedvalue_t *newpages;   // root of list of chunks of free objects
-    uint16_t osize;      // size of objects in this pool
+    jl_taggedvalue_t *freelist; // root of list of free objects
+    jl_taggedvalue_t *newpages; // root of list of chunks of free objects
+    uint16_t osize;             // size of objects in this pool
 } jl_gc_pool_t;
 
 // Recursive spin lock
@@ -59,13 +59,13 @@ typedef struct {
     arraylist_t *remset;
     arraylist_t *last_remset;
 
-    // variables for allocating objects from pools
+// variables for allocating objects from pools
 #ifdef _P64
-#  define JL_GC_N_POOLS 41
+#define JL_GC_N_POOLS 41
 #elif defined(_CPU_ARM_) || defined(_CPU_PPC_) || defined(_CPU_X86_)
-#  define JL_GC_N_POOLS 42
+#define JL_GC_N_POOLS 42
 #else
-#  define JL_GC_N_POOLS 43
+#define JL_GC_N_POOLS 43
 #endif
     jl_gc_pool_t norm_pools[JL_GC_N_POOLS];
 } jl_thread_heap_t;
@@ -101,10 +101,10 @@ typedef struct _jl_tls_states_t {
     size_t world_age;
     struct _jl_value_t *exception_in_transit;
     volatile size_t *safepoint;
-    // Whether it is safe to execute GC at the same time.
+// Whether it is safe to execute GC at the same time.
 #define JL_GC_STATE_WAITING 1
-    // gc_state = 1 means the thread is doing GC or is waiting for the GC to
-    //              finish.
+// gc_state = 1 means the thread is doing GC or is waiting for the GC to
+//              finish.
 #define JL_GC_STATE_SAFE 2
     // gc_state = 2 means the thread is running unmanaged code that can be
     //              execute at the same time with the GC.
@@ -151,21 +151,21 @@ typedef jl_tls_states_t *jl_ptls_t;
 
 // Update codegen version in `ccall.cpp` after changing either `pause` or `wake`
 #ifdef __MIC__
-#  define jl_cpu_pause() _mm_delay_64(100)
-#  define jl_cpu_wake() ((void)0)
-#  define JL_CPU_WAKE_NOOP 1
-#elif defined(_CPU_X86_64_) || defined(_CPU_X86_)  /* !__MIC__ */
-#  define jl_cpu_pause() _mm_pause()
-#  define jl_cpu_wake() ((void)0)
-#  define JL_CPU_WAKE_NOOP 1
+#define jl_cpu_pause() _mm_delay_64(100)
+#define jl_cpu_wake() ((void)0)
+#define JL_CPU_WAKE_NOOP 1
+#elif defined(_CPU_X86_64_) || defined(_CPU_X86_) /* !__MIC__ */
+#define jl_cpu_pause() _mm_pause()
+#define jl_cpu_wake() ((void)0)
+#define JL_CPU_WAKE_NOOP 1
 #elif defined(_CPU_AARCH64_) || (defined(_CPU_ARM_) && __ARM_ARCH >= 7)
-#  define jl_cpu_pause() __asm__ volatile ("wfe" ::: "memory")
-#  define jl_cpu_wake() __asm__ volatile ("sev" ::: "memory")
-#  define JL_CPU_WAKE_NOOP 0
+#define jl_cpu_pause() __asm__ volatile("wfe" ::: "memory")
+#define jl_cpu_wake() __asm__ volatile("sev" ::: "memory")
+#define JL_CPU_WAKE_NOOP 0
 #else
-#  define jl_cpu_pause() ((void)0)
-#  define jl_cpu_wake() ((void)0)
-#  define JL_CPU_WAKE_NOOP 1
+#define jl_cpu_pause() ((void)0)
+#define jl_cpu_wake() ((void)0)
+#define JL_CPU_WAKE_NOOP 1
 #endif
 
 // Copied from libuv. Add `JL_CONST_FUNC` so that the compiler
@@ -203,228 +203,226 @@ static inline unsigned long JL_CONST_FUNC jl_thread_self(void)
  *        specified.
  */
 #if defined(__GNUC__)
-#  define jl_signal_fence() __atomic_signal_fence(__ATOMIC_SEQ_CST)
-#  define jl_atomic_fetch_add_relaxed(obj, arg)         \
+#define jl_signal_fence() __atomic_signal_fence(__ATOMIC_SEQ_CST)
+#define jl_atomic_fetch_add_relaxed(obj, arg)                                  \
     __atomic_fetch_add(obj, arg, __ATOMIC_RELAXED)
-#  define jl_atomic_fetch_add(obj, arg)                 \
+#define jl_atomic_fetch_add(obj, arg)                                          \
     __atomic_fetch_add(obj, arg, __ATOMIC_SEQ_CST)
-#  define jl_atomic_fetch_and_relaxed(obj, arg)         \
+#define jl_atomic_fetch_and_relaxed(obj, arg)                                  \
     __atomic_fetch_and(obj, arg, __ATOMIC_RELAXED)
-#  define jl_atomic_fetch_and(obj, arg)                 \
+#define jl_atomic_fetch_and(obj, arg)                                          \
     __atomic_fetch_and(obj, arg, __ATOMIC_SEQ_CST)
-#  define jl_atomic_fetch_or_relaxed(obj, arg)          \
+#define jl_atomic_fetch_or_relaxed(obj, arg)                                   \
     __atomic_fetch_or(obj, arg, __ATOMIC_RELAXED)
-#  define jl_atomic_fetch_or(obj, arg)                  \
+#define jl_atomic_fetch_or(obj, arg)                                           \
     __atomic_fetch_or(obj, arg, __ATOMIC_SEQ_CST)
 // Returns the original value of `obj`
 // Use the legacy __sync builtins for now, this can also be written using
 // the __atomic builtins or c11 atomics with GNU extension or c11 _Generic
-#  define jl_atomic_compare_exchange(obj, expected, desired)    \
+#define jl_atomic_compare_exchange(obj, expected, desired)                     \
     __sync_val_compare_and_swap(obj, expected, desired)
-#  define jl_atomic_exchange(obj, desired)              \
+#define jl_atomic_exchange(obj, desired)                                       \
     __atomic_exchange_n(obj, desired, __ATOMIC_SEQ_CST)
-#  define jl_atomic_exchange_relaxed(obj, desired)      \
+#define jl_atomic_exchange_relaxed(obj, desired)                               \
     __atomic_exchange_n(obj, desired, __ATOMIC_RELAXED)
 // TODO: Maybe add jl_atomic_compare_exchange_weak for spin lock
-#  define jl_atomic_store(obj, val)                     \
-    __atomic_store_n(obj, val, __ATOMIC_SEQ_CST)
-#  if defined(__clang__) || defined(__ICC) || defined(__INTEL_COMPILER) || \
-    !(defined(_CPU_X86_) || defined(_CPU_X86_64_))
+#define jl_atomic_store(obj, val) __atomic_store_n(obj, val, __ATOMIC_SEQ_CST)
+#if defined(__clang__) || defined(__ICC) || defined(__INTEL_COMPILER) ||       \
+        !(defined(_CPU_X86_) || defined(_CPU_X86_64_))
 // ICC and Clang doesn't have this bug...
-#    define jl_atomic_store_release(obj, val)           \
+#define jl_atomic_store_release(obj, val)                                      \
     __atomic_store_n(obj, val, __ATOMIC_RELEASE)
-#  else
+#else
 // Workaround a GCC bug when using store with release order by using the
 // stronger version instead.
 // https://gcc.gnu.org/bugzilla/show_bug.cgi?id=67458
-#    define jl_atomic_store_release(obj, val) do {      \
-        jl_signal_fence();                              \
-        __atomic_store_n(obj, val, __ATOMIC_RELEASE);   \
+#define jl_atomic_store_release(obj, val)                                      \
+    do {                                                                       \
+        jl_signal_fence();                                                     \
+        __atomic_store_n(obj, val, __ATOMIC_RELEASE);                          \
     } while (0)
-#  endif
-#  define jl_atomic_load(obj)                   \
-    __atomic_load_n(obj, __ATOMIC_SEQ_CST)
-#  define jl_atomic_load_acquire(obj)           \
-    __atomic_load_n(obj, __ATOMIC_ACQUIRE)
+#endif
+#define jl_atomic_load(obj) __atomic_load_n(obj, __ATOMIC_SEQ_CST)
+#define jl_atomic_load_acquire(obj) __atomic_load_n(obj, __ATOMIC_ACQUIRE)
 #elif defined(_COMPILER_MICROSOFT_)
-#  define jl_signal_fence() _ReadWriteBarrier()
+#define jl_signal_fence() _ReadWriteBarrier()
 
 // add
-template<typename T, typename T2>
+template <typename T, typename T2>
 static inline typename std::enable_if<sizeof(T) == 1, T>::type
 jl_atomic_fetch_add(T *obj, T2 arg)
 {
-    return (T)_InterlockedExchangeAdd8((volatile char*)obj, (char)arg);
+    return (T)_InterlockedExchangeAdd8((volatile char *)obj, (char)arg);
 }
-template<typename T, typename T2>
+template <typename T, typename T2>
 static inline typename std::enable_if<sizeof(T) == 2, T>::type
 jl_atomic_fetch_add(T *obj, T2 arg)
 {
-    return (T)_InterlockedExchangeAdd16((volatile short*)obj, (short)arg);
+    return (T)_InterlockedExchangeAdd16((volatile short *)obj, (short)arg);
 }
-template<typename T, typename T2>
+template <typename T, typename T2>
 static inline typename std::enable_if<sizeof(T) == 4, T>::type
 jl_atomic_fetch_add(T *obj, T2 arg)
 {
-    return (T)_InterlockedExchangeAdd((volatile LONG*)obj, (LONG)arg);
+    return (T)_InterlockedExchangeAdd((volatile LONG *)obj, (LONG)arg);
 }
-template<typename T, typename T2>
+template <typename T, typename T2>
 static inline typename std::enable_if<sizeof(T) == 8, T>::type
 jl_atomic_fetch_add(T *obj, T2 arg)
 {
-    return (T)_InterlockedExchangeAdd64((volatile __int64*)obj, (__int64)arg);
+    return (T)_InterlockedExchangeAdd64((volatile __int64 *)obj, (__int64)arg);
 }
 #define jl_atomic_fetch_add_relaxed(obj, arg) jl_atomic_fetch_add(obj, arg)
 
 // and
-template<typename T, typename T2>
+template <typename T, typename T2>
 static inline typename std::enable_if<sizeof(T) == 1, T>::type
 jl_atomic_fetch_and(T *obj, T2 arg)
 {
-    return (T)_InterlockedAnd8((volatile char*)obj, (char)arg);
+    return (T)_InterlockedAnd8((volatile char *)obj, (char)arg);
 }
-template<typename T, typename T2>
+template <typename T, typename T2>
 static inline typename std::enable_if<sizeof(T) == 2, T>::type
 jl_atomic_fetch_and(T *obj, T2 arg)
 {
-    return (T)_InterlockedAnd16((volatile short*)obj, (short)arg);
+    return (T)_InterlockedAnd16((volatile short *)obj, (short)arg);
 }
-template<typename T, typename T2>
+template <typename T, typename T2>
 static inline typename std::enable_if<sizeof(T) == 4, T>::type
 jl_atomic_fetch_and(T *obj, T2 arg)
 {
-    return (T)_InterlockedAnd((volatile LONG*)obj, (LONG)arg);
+    return (T)_InterlockedAnd((volatile LONG *)obj, (LONG)arg);
 }
-template<typename T, typename T2>
+template <typename T, typename T2>
 static inline typename std::enable_if<sizeof(T) == 8, T>::type
 jl_atomic_fetch_and(T *obj, T2 arg)
 {
-    return (T)_InterlockedAnd64((volatile __int64*)obj, (__int64)arg);
+    return (T)_InterlockedAnd64((volatile __int64 *)obj, (__int64)arg);
 }
 #define jl_atomic_fetch_and_relaxed(obj, arg) jl_atomic_fetch_and(obj, arg)
 
 // or
-template<typename T, typename T2>
+template <typename T, typename T2>
 static inline typename std::enable_if<sizeof(T) == 1, T>::type
 jl_atomic_fetch_or(T *obj, T2 arg)
 {
-    return (T)_InterlockedOr8((volatile char*)obj, (char)arg);
+    return (T)_InterlockedOr8((volatile char *)obj, (char)arg);
 }
-template<typename T, typename T2>
+template <typename T, typename T2>
 static inline typename std::enable_if<sizeof(T) == 2, T>::type
 jl_atomic_fetch_or(T *obj, T2 arg)
 {
-    return (T)_InterlockedOr16((volatile short*)obj, (short)arg);
+    return (T)_InterlockedOr16((volatile short *)obj, (short)arg);
 }
-template<typename T, typename T2>
+template <typename T, typename T2>
 static inline typename std::enable_if<sizeof(T) == 4, T>::type
 jl_atomic_fetch_or(T *obj, T2 arg)
 {
-    return (T)_InterlockedOr((volatile LONG*)obj, (LONG)arg);
+    return (T)_InterlockedOr((volatile LONG *)obj, (LONG)arg);
 }
-template<typename T, typename T2>
+template <typename T, typename T2>
 static inline typename std::enable_if<sizeof(T) == 8, T>::type
 jl_atomic_fetch_or(T *obj, T2 arg)
 {
-    return (T)_InterlockedOr64((volatile __int64*)obj, (__int64)arg);
+    return (T)_InterlockedOr64((volatile __int64 *)obj, (__int64)arg);
 }
 #define jl_atomic_fetch_or_relaxed(obj, arg) jl_atomic_fetch_or(obj, arg)
 
 // Returns the original value of `obj`
-template<typename T, typename T2, typename T3>
+template <typename T, typename T2, typename T3>
 static inline typename std::enable_if<sizeof(T) == 1, T>::type
 jl_atomic_compare_exchange(volatile T *obj, T2 expected, T3 desired)
 {
-    return (T)_InterlockedCompareExchange8((volatile char*)obj,
-                                           (char)desired, (char)expected);
+    return (T)_InterlockedCompareExchange8(
+            (volatile char *)obj, (char)desired, (char)expected);
 }
-template<typename T, typename T2, typename T3>
+template <typename T, typename T2, typename T3>
 static inline typename std::enable_if<sizeof(T) == 2, T>::type
 jl_atomic_compare_exchange(volatile T *obj, T2 expected, T3 desired)
 {
-    return (T)_InterlockedCompareExchange16((volatile short*)obj,
-                                            (short)desired, (short)expected);
+    return (T)_InterlockedCompareExchange16(
+            (volatile short *)obj, (short)desired, (short)expected);
 }
-template<typename T, typename T2, typename T3>
+template <typename T, typename T2, typename T3>
 static inline typename std::enable_if<sizeof(T) == 4, T>::type
 jl_atomic_compare_exchange(volatile T *obj, T2 expected, T3 desired)
 {
-    return (T)_InterlockedCompareExchange((volatile LONG*)obj,
-                                          (LONG)desired, (LONG)expected);
+    return (T)_InterlockedCompareExchange(
+            (volatile LONG *)obj, (LONG)desired, (LONG)expected);
 }
-template<typename T, typename T2, typename T3>
+template <typename T, typename T2, typename T3>
 static inline typename std::enable_if<sizeof(T) == 8, T>::type
 jl_atomic_compare_exchange(volatile T *obj, T2 expected, T3 desired)
 {
-    return (T)_InterlockedCompareExchange64((volatile __int64*)obj,
-                                            (__int64)desired, (__int64)expected);
+    return (T)_InterlockedCompareExchange64(
+            (volatile __int64 *)obj, (__int64)desired, (__int64)expected);
 }
 // atomic exchange
-template<typename T, typename T2>
+template <typename T, typename T2>
 static inline typename std::enable_if<sizeof(T) == 1, T>::type
 jl_atomic_exchange(volatile T *obj, T2 val)
 {
-    return _InterlockedExchange8((volatile char*)obj, (char)val);
+    return _InterlockedExchange8((volatile char *)obj, (char)val);
 }
-template<typename T, typename T2>
+template <typename T, typename T2>
 static inline typename std::enable_if<sizeof(T) == 2, T>::type
 jl_atomic_exchange(volatile T *obj, T2 val)
 {
-    return _InterlockedExchange16((volatile short*)obj, (short)val);
+    return _InterlockedExchange16((volatile short *)obj, (short)val);
 }
-template<typename T, typename T2>
+template <typename T, typename T2>
 static inline typename std::enable_if<sizeof(T) == 4, T>::type
 jl_atomic_exchange(volatile T *obj, T2 val)
 {
-    return _InterlockedExchange((volatile LONG*)obj, (LONG)val);
+    return _InterlockedExchange((volatile LONG *)obj, (LONG)val);
 }
-template<typename T, typename T2>
+template <typename T, typename T2>
 static inline typename std::enable_if<sizeof(T) == 8, T>::type
 jl_atomic_exchange(volatile T *obj, T2 val)
 {
-    return _InterlockedExchange64((volatile __int64*)obj, (__int64)val);
+    return _InterlockedExchange64((volatile __int64 *)obj, (__int64)val);
 }
 #define jl_atomic_exchange_relaxed(obj, val) jl_atomic_exchange(obj, val)
 // atomic stores
-template<typename T, typename T2>
+template <typename T, typename T2>
 static inline typename std::enable_if<sizeof(T) == 1>::type
 jl_atomic_store(volatile T *obj, T2 val)
 {
-    _InterlockedExchange8((volatile char*)obj, (char)val);
+    _InterlockedExchange8((volatile char *)obj, (char)val);
 }
-template<typename T, typename T2>
+template <typename T, typename T2>
 static inline typename std::enable_if<sizeof(T) == 2>::type
 jl_atomic_store(volatile T *obj, T2 val)
 {
-    _InterlockedExchange16((volatile short*)obj, (short)val);
+    _InterlockedExchange16((volatile short *)obj, (short)val);
 }
-template<typename T, typename T2>
+template <typename T, typename T2>
 static inline typename std::enable_if<sizeof(T) == 4>::type
 jl_atomic_store(volatile T *obj, T2 val)
 {
-    _InterlockedExchange((volatile LONG*)obj, (LONG)val);
+    _InterlockedExchange((volatile LONG *)obj, (LONG)val);
 }
-template<typename T, typename T2>
+template <typename T, typename T2>
 static inline typename std::enable_if<sizeof(T) == 8>::type
 jl_atomic_store(volatile T *obj, T2 val)
 {
-    _InterlockedExchange64((volatile __int64*)obj, (__int64)val);
+    _InterlockedExchange64((volatile __int64 *)obj, (__int64)val);
 }
-template<typename T, typename T2>
+template <typename T, typename T2>
 static inline void jl_atomic_store_release(volatile T *obj, T2 val)
 {
     jl_signal_fence();
     *obj = (T)val;
 }
 // atomic loads
-template<typename T>
+template <typename T>
 static inline T jl_atomic_load(volatile T *obj)
 {
     // Trick to generate cheaper instructions compare to `_InterlockedOr`
     // Note that we don't care whether the exchange succeeded or not...
     return jl_atomic_compare_exchange(obj, T(0), T(0));
 }
-template<typename T>
+template <typename T>
 static inline T jl_atomic_load_acquire(volatile T *obj)
 {
     T val = *obj;
@@ -432,7 +430,7 @@ static inline T jl_atomic_load_acquire(volatile T *obj)
     return val;
 }
 #else
-#  error "No atomic operations supported."
+#error "No atomic operations supported."
 #endif
 
 #ifdef __cplusplus
@@ -442,32 +440,34 @@ extern "C" {
 JL_DLLEXPORT int16_t jl_threadid(void);
 JL_DLLEXPORT void *jl_threadgroup(void);
 JL_DLLEXPORT void jl_threading_profile(void);
-JL_DLLEXPORT void (jl_cpu_pause)(void);
-JL_DLLEXPORT void (jl_cpu_wake)(void);
+JL_DLLEXPORT void(jl_cpu_pause)(void);
+JL_DLLEXPORT void(jl_cpu_wake)(void);
 
 // Accessing the tls variables, gc safepoint and gc states
-JL_DLLEXPORT JL_CONST_FUNC jl_ptls_t (jl_get_ptls_states)(void);
+JL_DLLEXPORT JL_CONST_FUNC jl_ptls_t(jl_get_ptls_states)(void);
 // This triggers a SegFault when we are in GC
 // Assign it to a variable to make sure the compiler emit the load
 // and to avoid Clang warning for -Wunused-volatile-lvalue
-#define jl_gc_safepoint_(ptls) do {                     \
-        jl_signal_fence();                              \
-        size_t safepoint_load = *ptls->safepoint;       \
-        jl_signal_fence();                              \
-        (void)safepoint_load;                           \
+#define jl_gc_safepoint_(ptls)                                                 \
+    do {                                                                       \
+        jl_signal_fence();                                                     \
+        size_t safepoint_load = *ptls->safepoint;                              \
+        jl_signal_fence();                                                     \
+        (void)safepoint_load;                                                  \
     } while (0)
-#define jl_sigint_safepoint(ptls) do {                  \
-        jl_signal_fence();                              \
-        size_t safepoint_load = ptls->safepoint[-1];    \
-        jl_signal_fence();                              \
-        (void)safepoint_load;                           \
+#define jl_sigint_safepoint(ptls)                                              \
+    do {                                                                       \
+        jl_signal_fence();                                                     \
+        size_t safepoint_load = ptls->safepoint[-1];                           \
+        jl_signal_fence();                                                     \
+        (void)safepoint_load;                                                  \
     } while (0)
 #ifndef JULIA_ENABLE_THREADING
 extern JL_DLLEXPORT jl_tls_states_t jl_tls_states;
 #define jl_get_ptls_states() (&jl_tls_states)
 #define jl_gc_state(ptls) ((int8_t)0)
-STATIC_INLINE int8_t jl_gc_state_set(jl_ptls_t ptls, int8_t state,
-                                     int8_t old_state)
+STATIC_INLINE int8_t
+jl_gc_state_set(jl_ptls_t ptls, int8_t state, int8_t old_state)
 {
     (void)ptls;
     (void)state;
@@ -480,8 +480,8 @@ JL_DLLEXPORT void jl_set_ptls_states_getter(jl_get_ptls_states_func f);
 #endif
 // Make sure jl_gc_state() is always a rvalue
 #define jl_gc_state(ptls) ((int8_t)ptls->gc_state)
-STATIC_INLINE int8_t jl_gc_state_set(jl_ptls_t ptls, int8_t state,
-                                     int8_t old_state)
+STATIC_INLINE int8_t
+jl_gc_state_set(jl_ptls_t ptls, int8_t state, int8_t old_state)
 {
     ptls->gc_state = state;
     // A safe point is required if we transition from GC-safe region to
@@ -491,26 +491,29 @@ STATIC_INLINE int8_t jl_gc_state_set(jl_ptls_t ptls, int8_t state,
     return old_state;
 }
 #endif // ifndef JULIA_ENABLE_THREADING
-STATIC_INLINE int8_t jl_gc_state_save_and_set(jl_ptls_t ptls,
-                                              int8_t state)
+STATIC_INLINE int8_t jl_gc_state_save_and_set(jl_ptls_t ptls, int8_t state)
 {
     return jl_gc_state_set(ptls, state, jl_gc_state(ptls));
 }
 #define jl_gc_unsafe_enter(ptls) jl_gc_state_save_and_set(ptls, 0)
-#define jl_gc_unsafe_leave(ptls, state) ((void)jl_gc_state_set(ptls, (state), 0))
+#define jl_gc_unsafe_leave(ptls, state)                                        \
+    ((void)jl_gc_state_set(ptls, (state), 0))
 #define jl_gc_safe_enter(ptls) jl_gc_state_save_and_set(ptls, JL_GC_STATE_SAFE)
-#define jl_gc_safe_leave(ptls, state) ((void)jl_gc_state_set(ptls, (state), JL_GC_STATE_SAFE))
-JL_DLLEXPORT void (jl_gc_safepoint)(void);
+#define jl_gc_safe_leave(ptls, state)                                          \
+    ((void)jl_gc_state_set(ptls, (state), JL_GC_STATE_SAFE))
+JL_DLLEXPORT void(jl_gc_safepoint)(void);
 
-#define JL_SIGATOMIC_BEGIN() do {               \
-        jl_get_ptls_states()->defer_signal++;   \
-        jl_signal_fence();                      \
+#define JL_SIGATOMIC_BEGIN()                                                   \
+    do {                                                                       \
+        jl_get_ptls_states()->defer_signal++;                                  \
+        jl_signal_fence();                                                     \
     } while (0)
-#define JL_SIGATOMIC_END() do {                                 \
-        jl_signal_fence();                                      \
-        if (--jl_get_ptls_states()->defer_signal == 0) {        \
-            jl_sigint_safepoint(jl_get_ptls_states());          \
-        }                                                       \
+#define JL_SIGATOMIC_END()                                                     \
+    do {                                                                       \
+        jl_signal_fence();                                                     \
+        if (--jl_get_ptls_states()->defer_signal == 0) {                       \
+            jl_sigint_safepoint(jl_get_ptls_states());                         \
+        }                                                                      \
     } while (0)
 
 JL_DLLEXPORT void jl_gc_enable_finalizers(jl_ptls_t ptls, int on);
@@ -568,7 +571,8 @@ static inline void jl_mutex_lock_maybe_nogc(jl_mutex_t *lock)
     jl_ptls_t ptls = jl_get_ptls_states();
     if (ptls->safepoint) {
         jl_mutex_lock(lock);
-    } else {
+    }
+    else {
         jl_mutex_lock_nogc(lock);
     }
 }
@@ -592,11 +596,13 @@ static inline void jl_mutex_unlock(jl_mutex_t *lock)
     JL_SIGATOMIC_END();
 }
 
-static inline void jl_mutex_unlock_maybe_nogc(jl_mutex_t *lock) {
+static inline void jl_mutex_unlock_maybe_nogc(jl_mutex_t *lock)
+{
     jl_ptls_t ptls = jl_get_ptls_states();
     if (ptls->safepoint) {
         jl_mutex_unlock(lock);
-    } else {
+    }
+    else {
         jl_mutex_unlock_nogc(lock);
     }
 }
@@ -620,15 +626,17 @@ static inline void jl_mutex_check_type(jl_mutex_t *m)
     (void)m;
 }
 #define JL_MUTEX_INIT(m) jl_mutex_check_type(m)
-#define JL_LOCK(m) do {                                   \
-        JL_SIGATOMIC_BEGIN();                             \
-        jl_gc_enable_finalizers(jl_get_ptls_states(), 0); \
-        jl_mutex_check_type(m);                           \
+#define JL_LOCK(m)                                                             \
+    do {                                                                       \
+        JL_SIGATOMIC_BEGIN();                                                  \
+        jl_gc_enable_finalizers(jl_get_ptls_states(), 0);                      \
+        jl_mutex_check_type(m);                                                \
     } while (0)
-#define JL_UNLOCK(m) do {                                       \
-        jl_gc_enable_finalizers(jl_get_ptls_states(), 1);       \
-        jl_mutex_check_type(m);                                 \
-        JL_SIGATOMIC_END();                                     \
+#define JL_UNLOCK(m)                                                           \
+    do {                                                                       \
+        jl_gc_enable_finalizers(jl_get_ptls_states(), 1);                      \
+        jl_mutex_check_type(m);                                                \
+        JL_SIGATOMIC_END();                                                    \
     } while (0)
 #define JL_LOCK_NOGC(m) jl_mutex_check_type(m)
 #define JL_UNLOCK_NOGC(m) jl_mutex_check_type(m)

@@ -15,7 +15,7 @@
 #include "hashing.h"
 #include "ptrhash.h"
 
-#define OP_EQ(x,y) ((x)==(y))
+#define OP_EQ(x, y) ((x) == (y))
 
 #include "htable.inc"
 

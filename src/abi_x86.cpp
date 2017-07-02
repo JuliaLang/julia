@@ -12,20 +12,27 @@
 //
 //     * Redistributions of source code must retain the above copyright notice,
 //       this list of conditions and the following disclaimer.
-//     * Redistributions in binary form must reproduce the above copyright notice,
-//       this list of conditions and the following disclaimer in the documentation
+//     * Redistributions in binary form must reproduce the above copyright
+//     notice,
+//       this list of conditions and the following disclaimer in the
+//       documentation
 //       and/or other materials provided with the distribution.
-//     * Neither the name of the LDC Team nor the names of its contributors may be
+//     * Neither the name of the LDC Team nor the names of its contributors may
+//     be
 //       used to endorse or promote products derived from this software without
 //       specific prior written permission.
 //
-// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+// AND
 // ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
 // WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
-// ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+// DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE
+// FOR
+// ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+// DAMAGES
 // (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-// LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
+// LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+// ON
 // ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
@@ -39,47 +46,53 @@
 
 struct ABI_x86Layout : AbiLayout {
 
-inline bool is_complex64(jl_datatype_t *dt) const
-{
-    return jl_complex_type != NULL && jl_is_datatype(dt) &&
-        ((jl_datatype_t*)dt)->name == ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_complex_type))->name &&
-        jl_tparam0(dt) == (jl_value_t*)jl_float32_type;
-}
+    inline bool is_complex64(jl_datatype_t *dt) const
+    {
+        return jl_complex_type != NULL && jl_is_datatype(dt) &&
+               ((jl_datatype_t *)dt)->name ==
+                       ((jl_datatype_t *)jl_unwrap_unionall(
+                                (jl_value_t *)jl_complex_type))
+                               ->name &&
+               jl_tparam0(dt) == (jl_value_t *)jl_float32_type;
+    }
 
-inline bool is_complex128(jl_datatype_t *dt) const
-{
-    return jl_complex_type != NULL && jl_is_datatype(dt) &&
-        ((jl_datatype_t*)dt)->name == ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_complex_type))->name &&
-        jl_tparam0(dt) == (jl_value_t*)jl_float64_type;
-}
+    inline bool is_complex128(jl_datatype_t *dt) const
+    {
+        return jl_complex_type != NULL && jl_is_datatype(dt) &&
+               ((jl_datatype_t *)dt)->name ==
+                       ((jl_datatype_t *)jl_unwrap_unionall(
+                                (jl_value_t *)jl_complex_type))
+                               ->name &&
+               jl_tparam0(dt) == (jl_value_t *)jl_float64_type;
+    }
 
-bool use_sret(jl_datatype_t *dt) override
-{
-    size_t size = jl_datatype_size(dt);
-    if (size == 0)
-        return false;
-    if (is_complex64(dt) || (jl_is_primitivetype(dt) && size <= 8))
-        return false;
-    return true;
-}
+    bool use_sret(jl_datatype_t *dt) override
+    {
+        size_t size = jl_datatype_size(dt);
+        if (size == 0)
+            return false;
+        if (is_complex64(dt) || (jl_is_primitivetype(dt) && size <= 8))
+            return false;
+        return true;
+    }
 
-bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab) override
-{
-    size_t size = jl_datatype_size(dt);
-    if (is_complex64(dt) || is_complex128(dt) || (jl_is_primitivetype(dt) && size <= 8))
-        return false;
-    ab.addAttribute(Attribute::ByVal);
-    return true;
-}
+    bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab) override
+    {
+        size_t size = jl_datatype_size(dt);
+        if (is_complex64(dt) || is_complex128(dt) ||
+            (jl_is_primitivetype(dt) && size <= 8))
+            return false;
+        ab.addAttribute(Attribute::ByVal);
+        return true;
+    }
 
-Type *preferred_llvm_type(jl_datatype_t *dt, bool isret) const override
-{
-    if (!isret)
+    Type *preferred_llvm_type(jl_datatype_t *dt, bool isret) const override
+    {
+        if (!isret)
+            return NULL;
+        // special case Complex{Float32} as a return type
+        if (is_complex64(dt))
+            return T_int64;
         return NULL;
-    // special case Complex{Float32} as a return type
-    if (is_complex64(dt))
-        return T_int64;
-    return NULL;
-}
-
+    }
 };

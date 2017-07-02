@@ -11,30 +11,24 @@ extern "C" {
 #include "threadgroup.h"
 #include "julia.h"
 
-#define PROFILE_JL_THREADING            1
+#define PROFILE_JL_THREADING 1
 
 // thread ID
 extern jl_ptls_t *jl_all_tls_states;
-extern JL_DLLEXPORT int jl_n_threads;  // # threads we're actually using
+extern JL_DLLEXPORT int jl_n_threads; // # threads we're actually using
 
 // thread state
-enum {
-    TI_THREAD_INIT,
-    TI_THREAD_WORK
-};
+enum { TI_THREAD_INIT, TI_THREAD_WORK };
 
 // passed to thread function
 typedef struct {
     int16_t volatile state;
-    int16_t          tid;
+    int16_t tid;
     ti_threadgroup_t *tg;
 } ti_threadarg_t;
 
 // commands to thread function
-enum {
-    TI_THREADWORK_DONE,
-    TI_THREADWORK_RUN
-};
+enum { TI_THREADWORK_DONE, TI_THREADWORK_RUN };
 
 // work command to thread function
 typedef struct {
@@ -58,4 +52,4 @@ jl_value_t *ti_runthread(jl_function_t *f, jl_svec_t *args, size_t nargs);
 }
 #endif
 
-#endif  /* THREADING_H */
+#endif /* THREADING_H */

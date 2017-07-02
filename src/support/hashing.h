@@ -27,7 +27,7 @@ JL_DLLEXPORT uint32_t memhash32_seed(const char *buf, size_t n, uint32_t seed);
 #ifdef _P64
 STATIC_INLINE uint64_t bitmix(uint64_t a, uint64_t b)
 {
-    return int64hash(a^bswap_64(b));
+    return int64hash(a ^ bswap_64(b));
 }
 #else
 STATIC_INLINE uint32_t bitmix(uint32_t a, uint32_t b)

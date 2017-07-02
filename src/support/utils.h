@@ -7,7 +7,8 @@
 extern "C" {
 #endif
 
-JL_DLLEXPORT char *uint2str(char *dest, size_t len, uint64_t num, uint32_t base);
+JL_DLLEXPORT char *
+uint2str(char *dest, size_t len, uint64_t num, uint32_t base);
 int str2int(char *str, size_t len, int64_t *res, uint32_t base);
 int isdigit_base(char c, int base);
 
@@ -26,10 +27,15 @@ uint32_t conv_to_uint32(void *data, numerictype_t tag);
 int cmp_same_lt(void *a, void *b, numerictype_t tag);
 int cmp_same_eq(void *a, void *b, numerictype_t tag);
 int cmp_lt(void *a, numerictype_t atag, void *b, numerictype_t btag);
-int cmp_eq(void *a, numerictype_t atag, void *b, numerictype_t btag,
-           int equalnans);
+int cmp_eq(
+        void *a,
+        numerictype_t atag,
+        void *b,
+        numerictype_t btag,
+        int equalnans);
 
-#if defined(__clang__) || (defined(__GNUC__) && (__GNUC__ > 4 || __GNUC_MINOR__ >= 8))
+#if defined(__clang__) ||                                                      \
+        (defined(__GNUC__) && (__GNUC__ > 4 || __GNUC_MINOR__ >= 8))
 #define bswap_16(x) __builtin_bswap16(x)
 #define bswap_32(x) __builtin_bswap32(x)
 #define bswap_64(x) __builtin_bswap64(x)
@@ -42,16 +48,15 @@ int cmp_eq(void *a, numerictype_t atag, void *b, numerictype_t btag,
 #define bswap_32(x) _bswap(x)
 #define bswap_64(x) _bswap64(x)
 #else
-#define bswap_16(x) (((x) & 0x00ff) << 8 | ((x) & 0xff00) >> 8)
-#define bswap_32(x) \
-     ((((x) & 0xff000000) >> 24) | (((x) & 0x00ff0000) >>  8) | \
-      (((x) & 0x0000ff00) <<  8) | (((x) & 0x000000ff) << 24))
+#define bswap_16(x) (((x)&0x00ff) << 8 | ((x)&0xff00) >> 8)
+#define bswap_32(x)                                                            \
+    ((((x)&0xff000000) >> 24) | (((x)&0x00ff0000) >> 8) |                      \
+     (((x)&0x0000ff00) << 8) | (((x)&0x000000ff) << 24))
 STATIC_INLINE uint64_t ByteSwap64(uint64_t x)
 {
-    uint32_t high = (uint32_t) (x >> 32);
-    uint32_t low  = (uint32_t)  x;
-    return  ((uint64_t) bswap_32 (high)) |
-           (((uint64_t) bswap_32 (low)) << 32);
+    uint32_t high = (uint32_t)(x >> 32);
+    uint32_t low = (uint32_t)x;
+    return ((uint64_t)bswap_32(high)) | (((uint64_t)bswap_32(low)) << 32);
 }
 #define bswap_64(x) ByteSwap64(x)
 #endif

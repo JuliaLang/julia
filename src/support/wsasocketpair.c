@@ -15,7 +15,9 @@
 #include <io.h>
 #define AF_UNIX 1
 
-__declspec(dllexport) int wsasocketpair(int domain, int type, int protocol, SOCKET socket_vector[2]) {
+__declspec(dllexport) int wsasocketpair(
+        int domain, int type, int protocol, SOCKET socket_vector[2])
+{
     SOCKET server, client0, client1;
     SOCKADDR_IN name;
     int namelen;
@@ -31,7 +33,7 @@ __declspec(dllexport) int wsasocketpair(int domain, int type, int protocol, SOCK
     name.sin_family = AF_INET;
     name.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     name.sin_port = 0;
-    err = bind(server, (SOCKADDR*)&name, sizeof(name));
+    err = bind(server, (SOCKADDR *)&name, sizeof(name));
     if (err == SOCKET_ERROR) {
         int lasterr = WSAGetLastError();
         closesocket(server);
@@ -46,7 +48,7 @@ __declspec(dllexport) int wsasocketpair(int domain, int type, int protocol, SOCK
         return -1;
     }
     namelen = sizeof(name);
-    err = getsockname(server, (SOCKADDR*)&name, &namelen);
+    err = getsockname(server, (SOCKADDR *)&name, &namelen);
     if (err == SOCKET_ERROR) {
         int lasterr = WSAGetLastError();
         closesocket(server);
@@ -60,7 +62,7 @@ __declspec(dllexport) int wsasocketpair(int domain, int type, int protocol, SOCK
         WSASetLastError(lasterr);
         return -1;
     }
-    err = connect(client0, (SOCKADDR*)&name, sizeof(name));
+    err = connect(client0, (SOCKADDR *)&name, sizeof(name));
     if (err == SOCKET_ERROR) {
         int lasterr = WSAGetLastError();
         closesocket(client0);

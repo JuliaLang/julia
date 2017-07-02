@@ -39,7 +39,8 @@ JL_DLLEXPORT float jl_strtof_c(const char *nptr, char **endptr)
 
 
 #else
-// This code path should be used for systems that do not support the strtod_l function
+// This code path should be used for systems that do not support the strtod_l
+// function
 // Currently this is MinGW/Windows
 
 // The following code is derived from the Python function _PyOS_ascii_strtod
@@ -50,7 +51,8 @@ JL_DLLEXPORT float jl_strtof_c(const char *nptr, char **endptr)
 // The following modifications have been made:
 // - Leading spaces are ignored
 // - Parsing of hex floats is supported in the derived version
-// - Python functions for tolower, isdigit and malloc have been replaced by the respective
+// - Python functions for tolower, isdigit and malloc have been replaced by the
+// respective
 //   C stdlib functions
 
 #include <ctype.h>
@@ -146,7 +148,7 @@ JL_DLLEXPORT double jl_strtod_c(const char *nptr, char **endptr)
     }
 
     /* This code path is used for hex floats */
-    if (*p == '0' && (*(p+1) == 'x' || *(p+1) == 'X')) {
+    if (*p == '0' && (*(p + 1) == 'x' || *(p + 1) == 'X')) {
         digits_pos = p;
         p += 2;
         /* Check that what's left begins with a digit or decimal point */
@@ -221,8 +223,7 @@ JL_DLLEXPORT double jl_strtod_c(const char *nptr, char **endptr)
         char *copy, *c;
         /* Create a copy of the input, with the '.' converted to the
            locale-specific decimal point */
-        copy = (char *)malloc(end - digits_pos +
-                                    1 + decimal_point_len);
+        copy = (char *)malloc(end - digits_pos + 1 + decimal_point_len);
         if (copy == NULL) {
             *endptr = (char *)nptr;
             errno = ENOMEM;
@@ -234,22 +235,18 @@ JL_DLLEXPORT double jl_strtod_c(const char *nptr, char **endptr)
         c += decimal_point_pos - digits_pos;
         memcpy(c, decimal_point, decimal_point_len);
         c += decimal_point_len;
-        memcpy(c, decimal_point_pos + 1,
-               end - (decimal_point_pos + 1));
+        memcpy(c, decimal_point_pos + 1, end - (decimal_point_pos + 1));
         c += end - (decimal_point_pos + 1);
         *c = 0;
 
         val = strtod(copy, &fail_pos);
 
-        if (fail_pos)
-        {
+        if (fail_pos) {
             if (fail_pos > decimal_point_pos)
-                fail_pos = (char *)digits_pos +
-                    (fail_pos - copy) -
-                    (decimal_point_len - 1);
+                fail_pos = (char *)digits_pos + (fail_pos - copy) -
+                           (decimal_point_len - 1);
             else
-                fail_pos = (char *)digits_pos +
-                    (fail_pos - copy);
+                fail_pos = (char *)digits_pos + (fail_pos - copy);
         }
 
         free(copy);
@@ -268,7 +265,7 @@ JL_DLLEXPORT double jl_strtod_c(const char *nptr, char **endptr)
     return val;
 
 invalid_string:
-    *endptr = (char*)nptr;
+    *endptr = (char *)nptr;
     errno = EINVAL;
     return -1.0;
 }
@@ -276,7 +273,7 @@ invalid_string:
 
 JL_DLLEXPORT float jl_strtof_c(const char *nptr, char **endptr)
 {
-    return (float) jl_strtod_c(nptr, endptr);
+    return (float)jl_strtod_c(nptr, endptr);
 }
 
 #endif

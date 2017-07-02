@@ -63,8 +63,7 @@ using namespace llvm;
  */
 struct LowerExcHandlers : public FunctionPass {
     static char ID;
-    LowerExcHandlers() : FunctionPass(ID)
-    {}
+    LowerExcHandlers() : FunctionPass(ID) {}
 
 private:
     Function *except_enter_func;
@@ -84,29 +83,36 @@ private:
  */
 static void ensure_enter_function(Module &M)
 {
-    auto T_int8  = Type::getInt8Ty(M.getContext());
+    auto T_int8 = Type::getInt8Ty(M.getContext());
     auto T_pint8 = PointerType::get(T_int8, 0);
     auto T_void = Type::getVoidTy(M.getContext());
     auto T_int32 = Type::getInt32Ty(M.getContext());
     if (!M.getNamedValue("jl_enter_handler")) {
-        std::vector<Type*> ehargs(0);
+        std::vector<Type *> ehargs(0);
         ehargs.push_back(T_pint8);
-        Function::Create(FunctionType::get(T_void, ehargs, false),
-                         Function::ExternalLinkage, "jl_enter_handler", &M);
+        Function::Create(
+                FunctionType::get(T_void, ehargs, false),
+                Function::ExternalLinkage,
+                "jl_enter_handler",
+                &M);
     }
     if (!M.getNamedValue(jl_setjmp_name)) {
-        std::vector<Type*> args2(0);
+        std::vector<Type *> args2(0);
         args2.push_back(T_pint8);
 #ifndef _OS_WINDOWS_
         args2.push_back(T_int32);
 #endif
-        Function::Create(FunctionType::get(T_int32, args2, false),
-                         Function::ExternalLinkage, jl_setjmp_name, &M)
-            ->addFnAttr(Attribute::ReturnsTwice);
+        Function::Create(
+                FunctionType::get(T_int32, args2, false),
+                Function::ExternalLinkage,
+                jl_setjmp_name,
+                &M)
+                ->addFnAttr(Attribute::ReturnsTwice);
     }
 }
 
-bool LowerExcHandlers::doInitialization(Module &M) {
+bool LowerExcHandlers::doInitialization(Module &M)
+{
     except_enter_func = M.getFunction("julia.except_enter");
     if (!except_enter_func)
         return false;
@@ -117,8 +123,10 @@ bool LowerExcHandlers::doInitialization(Module &M) {
 
 #if JL_LLVM_VERSION >= 50000
     auto T_pint8 = Type::getInt8PtrTy(M.getContext(), 0);
-    lifetime_start = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_start, { T_pint8 });
-    lifetime_end = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_end, { T_pint8 });
+    lifetime_start = Intrinsic::getDeclaration(
+            &M, Intrinsic::lifetime_start, { T_pint8 });
+    lifetime_end =
+            Intrinsic::getDeclaration(&M, Intrinsic::lifetime_end, { T_pint8 });
 #else
     lifetime_start = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_start);
     lifetime_end = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_end);
@@ -126,7 +134,8 @@ bool LowerExcHandlers::doInitialization(Module &M) {
     return true;
 }
 
-bool LowerExcHandlers::runOnFunction(Function &F) {
+bool LowerExcHandlers::runOnFunction(Function &F)
+{
     if (!except_enter_func)
         return false; // No EH frames in this module
 
@@ -137,7 +146,9 @@ bool LowerExcHandlers::runOnFunction(Function &F) {
     int MaxDepth = 0;
     // Compute EH Depth at each basic block using a DFS traversal.
     for (df_iterator<BasicBlock *> I = df_begin(&F.getEntryBlock()),
-            E = df_end(&F.getEntryBlock()); I != E; ++I) {
+                                   E = df_end(&F.getEntryBlock());
+         I != E;
+         ++I) {
         auto *BB = *I;
         int Depth = 0;
         /* Here we use the assumption that all incoming edges have the same
@@ -162,7 +173,8 @@ bool LowerExcHandlers::runOnFunction(Function &F) {
                 EnterDepth[CI] = Depth++;
             else if (Callee == leave_func) {
                 LeaveDepth[CI] = Depth;
-                Depth -= cast<ConstantInt>(CI->getArgOperand(0))->getLimitedValue();
+                Depth -= cast<ConstantInt>(CI->getArgOperand(0))
+                                 ->getLimitedValue();
             }
             assert(Depth >= 0);
             if (Depth > MaxDepth)
@@ -176,18 +188,21 @@ bool LowerExcHandlers::runOnFunction(Function &F) {
     // Allocate stack space for each handler. We allocate these as separate
     // allocas so the optimizer can later merge and reaarange them if it wants
     // to.
-    Value *handler_sz = ConstantInt::get(Type::getInt32Ty(F.getContext()),
-                                         sizeof(jl_handler_t));
-    Value *handler_sz64 = ConstantInt::get(Type::getInt64Ty(F.getContext()),
-                                           sizeof(jl_handler_t));
+    Value *handler_sz = ConstantInt::get(
+            Type::getInt32Ty(F.getContext()), sizeof(jl_handler_t));
+    Value *handler_sz64 = ConstantInt::get(
+            Type::getInt64Ty(F.getContext()), sizeof(jl_handler_t));
     Instruction *firstInst = &F.getEntryBlock().front();
     std::vector<AllocaInst *> buffs;
     for (int i = 0; i < MaxDepth; ++i) {
-        auto *buff = new AllocaInst(Type::getInt8Ty(F.getContext()),
+        auto *buff = new AllocaInst(
+                Type::getInt8Ty(F.getContext()),
 #if JL_LLVM_VERSION >= 50000
-                                       0,
+                0,
 #endif
-                                       handler_sz, "", firstInst);
+                handler_sz,
+                "",
+                firstInst);
         buff->setAlignment(16);
         buffs.push_back(buff);
     }
@@ -198,15 +213,13 @@ bool LowerExcHandlers::runOnFunction(Function &F) {
         AllocaInst *buff = buffs[it.second];
         CallInst *enter = it.first;
         auto new_enter = CallInst::Create(jlenter_func, buff, "", enter);
-        Value *lifetime_args[] = {
-            handler_sz64,
-            buff
-        };
+        Value *lifetime_args[] = { handler_sz64, buff };
         CallInst::Create(lifetime_start, lifetime_args, "", new_enter);
 #ifndef _OS_WINDOWS_
         // For LLVM 3.3 compatibility
-        Value *args[] = {buff,
-                         ConstantInt::get(Type::getInt32Ty(F.getContext()), 0)};
+        Value *args[] = {
+            buff, ConstantInt::get(Type::getInt32Ty(F.getContext()), 0)
+        };
         auto sj = CallInst::Create(setjmp_func, args, "", enter);
 #else
         auto sj = CallInst::Create(setjmp_func, buff, "", enter);
@@ -223,13 +236,11 @@ bool LowerExcHandlers::runOnFunction(Function &F) {
     // Insert lifetime end intrinsics after every leave.
     for (auto it : LeaveDepth) {
         int StartDepth = it.second - 1;
-        int npops = cast<ConstantInt>(it.first->getArgOperand(0))->getLimitedValue();
+        int npops = cast<ConstantInt>(it.first->getArgOperand(0))
+                            ->getLimitedValue();
         for (int i = 0; i < npops; ++i) {
-            assert(StartDepth-i >= 0);
-            Value *lifetime_args[] = {
-                handler_sz64,
-                buffs[StartDepth-i]
-            };
+            assert(StartDepth - i >= 0);
+            Value *lifetime_args[] = { handler_sz64, buffs[StartDepth - i] };
             auto LifetimeEnd = CallInst::Create(lifetime_end, lifetime_args);
             LifetimeEnd->insertAfter(it.first);
         }
@@ -238,9 +249,11 @@ bool LowerExcHandlers::runOnFunction(Function &F) {
 }
 
 char LowerExcHandlers::ID = 0;
-static RegisterPass<LowerExcHandlers> X("LowerExcHandlers", "Lower Julia Exception Handlers",
-                                         false /* Only looks at CFG */,
-                                         false /* Analysis Pass */);
+static RegisterPass<LowerExcHandlers>
+        X("LowerExcHandlers",
+          "Lower Julia Exception Handlers",
+          false /* Only looks at CFG */,
+          false /* Analysis Pass */);
 
 Pass *createLowerExcHandlersPass()
 {

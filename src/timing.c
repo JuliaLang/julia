@@ -12,13 +12,12 @@ extern "C" {
 #include "timing.h"
 
 jl_timing_block_t *jl_root_timing;
-uint64_t jl_timing_data[(int)JL_TIMING_LAST] = {0};
-const char *jl_timing_names[(int)JL_TIMING_LAST] =
-    {
+uint64_t jl_timing_data[(int)JL_TIMING_LAST] = { 0 };
+const char *jl_timing_names[(int)JL_TIMING_LAST] = {
 #define X(name) #name
-        JL_TIMING_OWNERS
+    JL_TIMING_OWNERS
 #undef X
-    };
+};
 
 void jl_print_timings(void)
 {
@@ -28,14 +27,16 @@ void jl_print_timings(void)
     }
     for (int i = 0; i < JL_TIMING_LAST; i++) {
         if (jl_timing_data[i] != 0)
-            printf("%-25s : %.2f %%   %" PRIu64 "\n", jl_timing_names[i],
-                    100 * (((double)jl_timing_data[i]) / total_time), jl_timing_data[i]);
+            printf("%-25s : %.2f %%   %" PRIu64 "\n",
+                   jl_timing_names[i],
+                   100 * (((double)jl_timing_data[i]) / total_time),
+                   jl_timing_data[i]);
     }
 }
 
 void jl_init_timing(void)
 {
-    jl_root_timing = (jl_timing_block_t*)malloc(sizeof(jl_timing_block_t));
+    jl_root_timing = (jl_timing_block_t *)malloc(sizeof(jl_timing_block_t));
     _jl_timing_block_init(jl_root_timing, JL_TIMING_ROOT);
     jl_root_timing->prev = NULL;
 }
@@ -64,8 +65,12 @@ void jl_timing_block_stop(jl_timing_block_t *cur_block)
 
 #else
 
-void jl_init_timing(void) { }
-void jl_destroy_timing(void) { }
+void jl_init_timing(void)
+{
+}
+void jl_destroy_timing(void)
+{
+}
 
 #endif
 

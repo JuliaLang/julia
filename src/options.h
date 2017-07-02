@@ -3,7 +3,8 @@
 #ifndef JL_OPTIONS_H
 #define JL_OPTIONS_H
 
-// Options in here are NOT allowed to affect the jlapi, since that would require this header to be installed
+// Options in here are NOT allowed to affect the jlapi, since that would require
+// this header to be installed
 
 // Build-time options for debugging, tweaking, and selecting alternative
 // implementations of core features.
@@ -14,7 +15,7 @@
 
 // how much space we're willing to waste if an array outgrows its
 // original object
-#define ARRAY_INLINE_NBYTES (2048*sizeof(void*))
+#define ARRAY_INLINE_NBYTES (2048 * sizeof(void *))
 
 // codegen options ------------------------------------------------------------
 
@@ -111,18 +112,18 @@
 // threading options ----------------------------------------------------------
 
 // controls for when threads sleep
-#define THREAD_SLEEP_THRESHOLD_NAME     "JULIA_THREAD_SLEEP_THRESHOLD"
-#define DEFAULT_THREAD_SLEEP_THRESHOLD  1e9    // cycles (1e9==1sec@1GHz)
+#define THREAD_SLEEP_THRESHOLD_NAME "JULIA_THREAD_SLEEP_THRESHOLD"
+#define DEFAULT_THREAD_SLEEP_THRESHOLD 1e9 // cycles (1e9==1sec@1GHz)
 
 // defaults for # threads
-#define NUM_THREADS_NAME                "JULIA_NUM_THREADS"
+#define NUM_THREADS_NAME "JULIA_NUM_THREADS"
 #ifndef JULIA_NUM_THREADS
-#  define JULIA_NUM_THREADS 1
+#define JULIA_NUM_THREADS 1
 #endif
 
 // affinitization behavior
-#define MACHINE_EXCLUSIVE_NAME          "JULIA_EXCLUSIVE"
-#define DEFAULT_MACHINE_EXCLUSIVE       0
+#define MACHINE_EXCLUSIVE_NAME "JULIA_EXCLUSIVE"
+#define DEFAULT_MACHINE_EXCLUSIVE 0
 
 
 // sanitizer defaults ---------------------------------------------------------
@@ -147,7 +148,8 @@
 #define KEEP_BODIES
 #endif
 
-// Memory sanitizer needs TLS, which llvm only supports for the small memory model
+// Memory sanitizer needs TLS, which llvm only supports for the small memory
+// model
 #if defined(JL_MSAN_ENABLED)
 // todo: fix the llvm MemoryManager to work with small memory model
 #endif

@@ -39,51 +39,51 @@
 extern "C" {
 #endif
 
-JL_DLLEXPORT char *dirname( char *path )
+JL_DLLEXPORT char *dirname(char *path)
 {
     size_t len;
-#  if !defined(_COMPILER_MICROSOFT_)
+#if !defined(_COMPILER_MICROSOFT_)
     static __thread char *retfail = NULL;
-#  else
+#else
     static __declspec(thread) char *retfail = NULL;
-#  endif
+#endif
 
     /* to handle path names for files in multibyte character locales,
      * we need to set up LC_CTYPE to match the host file system locale.
      */
 
-    char *locale = setlocale( LC_CTYPE, NULL );
-    if( locale != NULL ) locale = strdup( locale );
-    setlocale( LC_CTYPE, "" );
+    char *locale = setlocale(LC_CTYPE, NULL);
+    if (locale != NULL)
+        locale = strdup(locale);
+    setlocale(LC_CTYPE, "");
 
-    if( path && *path )
-    {
+    if (path && *path) {
         /* allocate sufficient local storage space,
          * in which to create a wide character reference copy of path
          */
 
-        wchar_t* refcopy = (wchar_t*)alloca((1 + (len = mbstowcs(NULL, path, 0)))*sizeof(wchar_t));
+        wchar_t *refcopy = (wchar_t *)alloca(
+                (1 + (len = mbstowcs(NULL, path, 0))) * sizeof(wchar_t));
 
         /* create the wide character reference copy of path */
 
         wchar_t *refpath = refcopy;
-        len = mbstowcs( refpath, path, len );
-        refcopy[ len ] = L'\0';
+        len = mbstowcs(refpath, path, len);
+        refcopy[len] = L'\0';
 
         /* SUSv3 identifies a special case, where path is exactly equal to "//";
          * (we will also accept "\\" in the Win32 context, but not "/\" or "\/",
-         *  and neither will we consider paths with an initial drive designator).
+         *  and neither will we consider paths with an initial drive
+         * designator).
          * For this special case, SUSv3 allows the implementation to choose to
          * return "/" or "//", (or "\" or "\\", since this is Win32); we will
          * simply return the path unchanged, (i.e. "//" or "\\").
          */
 
-        if( (len > 1) && ((refpath[0] == L'/') || (refpath[0] == L'\\')) )
-        {
-            if( (refpath[1] == refpath[0]) && (refpath[2] == L'\0') )
-            {
-                setlocale( LC_CTYPE, locale );
-                free( locale );
+        if ((len > 1) && ((refpath[0] == L'/') || (refpath[0] == L'\\'))) {
+            if ((refpath[1] == refpath[0]) && (refpath[2] == L'\0')) {
+                setlocale(LC_CTYPE, locale);
+                free(locale);
                 return path;
             }
         }
@@ -92,37 +92,35 @@ JL_DLLEXPORT char *dirname( char *path )
          * step over the drive designator, if present ...
          */
 
-        else if( (len > 1) && (refpath[1] == L':') )
-        {
-            /* FIXME: maybe should confirm *refpath is a valid drive designator */
+        else if ((len > 1) && (refpath[1] == L':')) {
+            /* FIXME: maybe should confirm *refpath is a valid drive designator
+             */
 
             refpath += 2;
         }
 
-        /* check again, just to ensure we still have a non-empty path name ... */
+        /* check again, just to ensure we still have a non-empty path name ...
+         */
 
-        if( *refpath )
-        {
+        if (*refpath) {
             /* reproduce the scanning logic of the "basename" function
              * to locate the basename component of the current path string,
              * (but also remember where the dirname component starts).
              */
 
             wchar_t *refname, *basename;
-            for( refname = basename = refpath ; *refpath ; ++refpath )
-            {
-                if( (*refpath == L'/') || (*refpath == L'\\') )
-                {
+            for (refname = basename = refpath; *refpath; ++refpath) {
+                if ((*refpath == L'/') || (*refpath == L'\\')) {
                     /* we found a dir separator ...
                      * step over it, and any others which immediately follow it
                      */
 
-                    while( (*refpath == L'/') || (*refpath == L'\\') )
+                    while ((*refpath == L'/') || (*refpath == L'\\'))
                         ++refpath;
 
                     /* if we didn't reach the end of the path string ... */
 
-                    if( *refpath )
+                    if (*refpath)
 
                         /* then we have a new candidate for the base name */
 
@@ -143,71 +141,75 @@ JL_DLLEXPORT char *dirname( char *path )
              * to confirm that we have distinct dirname and basename components
              */
 
-            if( basename > refname )
-            {
+            if (basename > refname) {
                 /* and, when we do ...
-                 * backtrack over all trailing separators on the dirname component,
-                 * (but preserve exactly two initial dirname separators, if identical),
+                 * backtrack over all trailing separators on the dirname
+                 * component,
+                 * (but preserve exactly two initial dirname separators, if
+                 * identical),
                  * and add a NUL terminator in their place.
                  */
 
-                do --basename;
-                while( (basename > refname) && ((*basename == L'/') || (*basename == L'\\')) );
-                if( (basename == refname) && ((refname[0] == L'/') || (refname[0] == L'\\'))
-                    &&  (refname[1] == refname[0]) && (refname[2] != L'/') && (refname[2] != L'\\') )
+                do
+                    --basename;
+                while ((basename > refname) &&
+                       ((*basename == L'/') || (*basename == L'\\')));
+                if ((basename == refname) &&
+                    ((refname[0] == L'/') || (refname[0] == L'\\')) &&
+                    (refname[1] == refname[0]) && (refname[2] != L'/') &&
+                    (refname[2] != L'\\'))
                     ++basename;
                 *++basename = L'\0';
 
-                /* if the resultant dirname begins with EXACTLY two dir separators,
+                /* if the resultant dirname begins with EXACTLY two dir
+                 * separators,
                  * AND both are identical, then we preserve them.
                  */
 
                 refpath = refcopy;
-                while( ((*refpath == L'/') || (*refpath == L'\\')) )
+                while (((*refpath == L'/') || (*refpath == L'\\')))
                     ++refpath;
-                if( ((refpath - refcopy) > 2) || (refcopy[1] != refcopy[0]) )
+                if (((refpath - refcopy) > 2) || (refcopy[1] != refcopy[0]))
                     refpath = refcopy;
 
                 /* and finally ...
-                 * we remove any residual, redundantly duplicated separators from the dirname,
+                 * we remove any residual, redundantly duplicated separators
+                 * from the dirname,
                  * reterminate, and return it.
                  */
 
                 refname = refpath;
-                while( *refpath )
-                {
-                    if( ((*refname++ = *refpath) == L'/') || (*refpath++ == L'\\') )
-                    {
-                        while( (*refpath == L'/') || (*refpath == L'\\') )
+                while (*refpath) {
+                    if (((*refname++ = *refpath) == L'/') ||
+                        (*refpath++ == L'\\')) {
+                        while ((*refpath == L'/') || (*refpath == L'\\'))
                             ++refpath;
                     }
                 }
                 *refname = L'\0';
 
                 /* finally ...
-                 * transform the resolved dirname back into the multibyte char domain,
+                 * transform the resolved dirname back into the multibyte char
+                 * domain,
                  * restore the caller's locale, and return the resultant dirname
                  */
 
-                if( (len = wcstombs( path, refcopy, len )) != (size_t)(-1) )
-                    path[ len ] = '\0';
+                if ((len = wcstombs(path, refcopy, len)) != (size_t)(-1))
+                    path[len] = '\0';
             }
 
-            else
-            {
+            else {
                 /* either there were no dirname separators in the path name,
                  * or there was nothing else ...
                  */
 
-                if( (*refname == L'/') || (*refname == L'\\') )
-                {
+                if ((*refname == L'/') || (*refname == L'\\')) {
                     /* it was all separators, so return one */
 
                     ++refname;
                 }
 
-                else
-                {
+                else {
                     /* there were no separators, so return '.' */
 
                     *refname++ = L'.';
@@ -219,14 +221,16 @@ JL_DLLEXPORT char *dirname( char *path )
                  */
 
                 *refname = L'\0';
-                retfail = (char*)realloc( retfail, len = 1 + wcstombs( NULL, refcopy, 0 ));
-                wcstombs( path = retfail, refcopy, len );
+                retfail = (char *)realloc(
+                        retfail, len = 1 + wcstombs(NULL, refcopy, 0));
+                wcstombs(path = retfail, refcopy, len);
             }
 
-            /* restore caller's locale, clean up, and return the resolved dirname */
+            /* restore caller's locale, clean up, and return the resolved
+             * dirname */
 
-            setlocale( LC_CTYPE, locale );
-            free( locale );
+            setlocale(LC_CTYPE, locale);
+            free(locale);
             return path;
         }
     }
@@ -236,13 +240,13 @@ JL_DLLEXPORT char *dirname( char *path )
      * in case the caller trashed it after a previous call.
      */
 
-    retfail = (char*)realloc( retfail, len = 1 + wcstombs( NULL, L".", 0 ));
-    wcstombs( retfail, L".", len );
+    retfail = (char *)realloc(retfail, len = 1 + wcstombs(NULL, L".", 0));
+    wcstombs(retfail, L".", len);
 
     /* restore caller's locale, clean up, and return the default dirname */
 
-    setlocale( LC_CTYPE, locale );
-    free( locale );
+    setlocale(LC_CTYPE, locale);
+    free(locale);
     return retfail;
 }
 
