@@ -43,11 +43,6 @@ endif
 # NOTE: Do not make RPATH changes in CMAKE_COMMON on platforms other than FreeBSD, since
 # it will make its way into the LLVM build flags, and LLVM is picky about RPATH (though
 # apparently not on FreeBSD). Ref PR #22352
-ifeq ($(OS),FreeBSD)
-ifneq ($(GCCPATH),)
-CMAKE_COMMON += -DCMAKE_INSTALL_RPATH="\$$ORIGIN:$(GCCPATH)"
-endif
-endif
 
 # For now this is LLVM specific, but I expect it won't be in the future
 ifeq ($(CMAKE_GENERATOR),Ninja)
