@@ -151,6 +151,7 @@ void jl_gc_force_mark_old(jl_ptls_t ptls, jl_value_t *v);
 void gc_sweep_sysimg(void);
 
 
+/* clang-format off */
 // pools are 16376 bytes large (GC_POOL_SZ - GC_PAGE_OFFSET)
 static const int jl_gc_sizeclasses[JL_GC_N_POOLS] = {
 #ifdef _P64
@@ -188,6 +189,7 @@ static const int jl_gc_sizeclasses[JL_GC_N_POOLS] = {
 //    15,   14,   13,   12,   11,   10,    9,    8, /pool
 //    64,   32,  160,   64,   16,   64,  112,  128, bytes lost
 };
+/* clang-format on */
 
 STATIC_INLINE int jl_gc_alignment(size_t sz)
 {

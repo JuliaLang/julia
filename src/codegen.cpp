@@ -217,6 +217,7 @@ static Type *T_pppint8;
 static Type *T_void;
 
 // type-based alias analysis nodes.  Indentation of comments indicates hierarchy.
+/* clang-format off */
 static MDNode *tbaa_gcframe;    // GC frame
 // LLVM should have enough info for alias analysis of non-gcframe stack slot
 // this is mainly a place holder for `jl_cgval_t::tbaa`
@@ -235,6 +236,7 @@ static MDNode *tbaa_arraysize;      // A size in a jl_array_t
 static MDNode *tbaa_arraylen;       // The len in a jl_array_t
 static MDNode *tbaa_arrayflags;     // The flags in a jl_array_t
 static MDNode *tbaa_const;      // Memory that is immutable by the time LLVM can see it
+/* clang-format on */
 
 // Basic DITypes
 static DICompositeType *jl_value_dillvmt;

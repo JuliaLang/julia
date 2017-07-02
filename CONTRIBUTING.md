@@ -232,6 +232,7 @@ Make sure that [Travis](http://www.travis-ci.org) greenlights the pull request w
  - it is generally preferred to use ASCII operators and identifiers over
    Unicode equivalents whenever possible
  - in docstring refer to the language as "Julia" and the executable as "`julia`"
+ - use full words for names, generally; not contractions, acronyms, or single characters
 
 #### General Formatting Guidelines For C code contributions
 
@@ -242,6 +243,8 @@ Make sure that [Travis](http://www.travis-ci.org) greenlights the pull request w
  - newline between } and else instead of } else {
  - if one part of an if..else chain uses { } then all should
  - no whitespace at the end of a line
+ - avoid over-long lines, introduce more variables to make argument lists shorter
+ - if in doubt, run `clang-format -i <filename>` and make the result look nice
 
 ### Git Recommendations For Pull Requests
 

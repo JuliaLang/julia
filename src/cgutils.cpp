@@ -780,7 +780,7 @@ static Value *emit_datatype_size(Value *dt)
     return size;
 }
 
-/* this is valid code, it's simply unused
+#if 0 /* this is valid code, it's simply unused */
 static Value *emit_sizeof(const jl_cgval_t &p, jl_codectx_t *ctx)
 {
     if (p.TIndex) {
@@ -827,7 +827,7 @@ static Value *emit_sizeof(const jl_cgval_t &p, jl_codectx_t *ctx)
         return dyn_size;
     }
 }
-*/
+#endif
 
 static Value *emit_datatype_mutabl(Value *dt)
 {
