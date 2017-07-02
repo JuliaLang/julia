@@ -422,7 +422,7 @@ We can view the quoted return expression using the function [`macroexpand()`](@r
 this is an extremely useful tool for debugging macros):
 
 ```jldoctest sayhello2
-julia> ex = macroexpand( :(@sayhello("human")) )
+julia> ex = macroexpand(@__MODULE__, :(@sayhello("human")) )
 :((println)("Hello, ", "human"))
 
 julia> typeof(ex)
@@ -441,8 +441,8 @@ julia> @macroexpand @sayhello "human"
 
 ### Hold up: why macros?
 
-We have already seen a function `f(::Expr...) -> Expr` in a previous section. In fact, [`macroexpand()`](@ref)
-is also such a function. So, why do macros exist?
+We have already seen a function `f(::Expr...) -> Expr` in a previous section.
+So, why do macros exist?
 
 Macros are necessary because they execute when code is parsed, therefore, macros allow the programmer
 to generate and include fragments of customized code *before* the full program is run. To illustrate
@@ -455,7 +455,7 @@ julia> macro twostep(arg)
        end
 @twostep (macro with 1 method)
 
-julia> ex = macroexpand( :(@twostep :(1, 2, 3)) );
+julia> ex = macroexpand(@__MODULE__, :(@twostep :(1, 2, 3)));
 I execute at parse time. The argument is: $(Expr(:quote, :((1, 2, 3))))
 ```
 
@@ -599,18 +599,18 @@ it is printed in the message body instead of the failing expression. You can ins
 of a macro expansion with the aptly named [`macroexpand()`](@ref) function:
 
 ```jldoctest assert2
-julia> macroexpand(:(@assert a == b))
+julia> macroexpand(Main, :(@assert a == b))
 :(if a == b
         nothing
     else
-        (throw)((AssertionError)("a == b"))
+        (Base.throw)(Base.Main.Base.AssertionError("a == b"))
     end)
 
-julia> macroexpand(:(@assert a==b "a should equal b!"))
+julia> macroexpand(Main, :(@assert a==b "a should equal b!"))
 :(if a == b
         nothing
     else
-        (throw)((AssertionError)("a should equal b!"))
+        (Base.throw)(Base.Main.Base.AssertionError("a should equal b!"))
     end)
 ```
 

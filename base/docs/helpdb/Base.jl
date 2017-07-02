@@ -1049,13 +1049,13 @@ julia> parse("x = 3")
 julia> parse("x = ")
 :($(Expr(:incomplete, "incomplete: premature end of input")))
 
+julia> parse("1.0.2"; raise = false)
+:($(Expr(:error, "invalid numeric constant \"1.0.\"")))
+
 julia> parse("1.0.2")
 ERROR: ParseError("invalid numeric constant \\\"1.0.\\\"")
 Stacktrace:
-  [...]
-
-julia> parse("1.0.2"; raise = false)
-:($(Expr(:error, "invalid numeric constant \"1.0.\"")))
+[...]
 ```
 """
 parse(str)

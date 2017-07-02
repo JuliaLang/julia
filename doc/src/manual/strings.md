@@ -500,7 +500,7 @@ julia> search("xylophone", 'o', 8)
 0
 ```
 
-You can use the [`contains()`](@ref) function to check if a substring is contained in a string:
+You can use the [`contains()`](@ref) function to check if a substring or character is contained in a string:
 
 ```jldoctest
 julia> contains("Hello, world.", "world")
@@ -513,15 +513,8 @@ julia> contains("Xylophon", "a")
 false
 
 julia> contains("Xylophon", 'o')
-ERROR: MethodError: no method matching contains(::String, ::Char)
-Closest candidates are:
-  contains(!Matched::Function, ::Any, !Matched::Any) at reduce.jl:664
-  contains(::AbstractString, !Matched::AbstractString) at strings/search.jl:378
+true
 ```
-
-The last error is because `'o'` is a character literal, and [`contains()`](@ref) is a generic
-function that looks for subsequences. To look for an element in a sequence, you must use [`in()`](@ref)
-instead.
 
 Two other handy string functions are [`repeat()`](@ref) and [`join()`](@ref):
 

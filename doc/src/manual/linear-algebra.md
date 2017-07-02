@@ -62,6 +62,7 @@ julia> factorize(A)
 Base.LinAlg.LU{Float64,Array{Float64,2}} with factors L and U:
 [1.0 0.0 0.0; -0.15 1.0 0.0; -0.3 -0.132196 1.0]
 [-10.0 2.3 4.0; 0.0 2.345 -3.4; 0.0 0.0 -5.24947]
+successful: true
 ```
 
 Since `A` is not Hermitian, symmetric, triangular, tridiagonal, or bidiagonal, an LU factorization may be the
@@ -75,7 +76,8 @@ julia> B = [1.5 2 -4; 2 -1 -3; -4 -3 5]
  -4.0  -3.0   5.0
 
 julia> factorize(B)
-Base.LinAlg.BunchKaufman{Float64,Array{Float64,2}}([-1.64286 0.142857 -0.8; 2.0 -2.8 -0.6; -4.0 -3.0 5.0], [1, 2, 3], 'U', true, false, 0)
+Base.LinAlg.BunchKaufman{Float64,Array{Float64,2}}
+successful: true
 ```
 
 Here, Julia was able to detect that `B` is in fact symmetric, and used a more appropriate factorization.

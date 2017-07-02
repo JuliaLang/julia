@@ -71,7 +71,7 @@ There is a difference between `@macroexpand` and `macroexpand` in that the `macr
 also takes a module where the expansion takes place.
 This is best seen in the following example:
 
-```jldoctest
+```julia-repl
 julia> module M
            macro m()
                1
