@@ -1223,3 +1223,8 @@ end
 # issue #19351
 # adding return type decl should not affect parse of function body
 @test :(t(abc) = 3).args[2] == :(t(abc)::Int = 3).args[2]
+
+# issue #7314
+@test parse("local x, y = 1, 2") == Expr(:local, Expr(:(=),
+                                                      Expr(:tuple, :x, :y),
+                                                      Expr(:tuple, 1, 2)))
