@@ -64,6 +64,7 @@ Base.LibGit2.checkused!
 Base.LibGit2.clone
 Base.LibGit2.commit
 Base.LibGit2.committer
+Base.LibGit2.count
 Base.LibGit2.create_branch
 Base.LibGit2.credentials_callback
 Base.LibGit2.credentials_cb
@@ -91,6 +92,7 @@ Base.LibGit2.isdiff
 Base.LibGit2.isdirty
 Base.LibGit2.isorphan
 Base.LibGit2.lookup_branch
+Base.LibGit2.map
 Base.LibGit2.mirror_callback
 Base.LibGit2.mirror_cb
 Base.LibGit2.message
@@ -101,6 +103,7 @@ Base.LibGit2.path
 Base.LibGit2.peel
 Base.LibGit2.posixpath
 Base.LibGit2.push
+Base.LibGit2.push!
 Base.LibGit2.push_head!
 Base.LibGit2.push_refspecs
 Base.LibGit2.read_tree!

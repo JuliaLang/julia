@@ -5,18 +5,10 @@
 
 A `GitRevWalker` *walks* through the *revisions* (i.e. commits) of
 a git repository `repo`. It is a collection of the commits
-in the repository, and supports iteration and calls to [`map`](@ref)
-and [`count`](@ref) (for instance, `count` could be used to determine
+in the repository, and supports iteration and calls to [`map`](@ref LibGit2.map)
+and [`count`](@ref LibGit2.count) (for instance, `count` could be used to determine
 what percentage of commits in a repository were made by a certain
 author).
-
-# Examples
-```julia
-oids = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker
-    LibGit2.map((oid,repo)->string(oid), walker, by = LibGit2.Consts.SORT_TIME)
-end
-```
-Here, `map` visits each commit using the `GitRevWalker` and finds its [`GitHash`](@ref).
 
 ```julia
 cnt = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker
@@ -54,10 +46,10 @@ end
 Base.iteratorsize(::Type{GitRevWalker}) = Base.SizeUnknown()
 
 """
-    push_head!(w::GitRevWalker)
+    LibGit2.push_head!(w::GitRevWalker)
 
 Push the HEAD commit and its ancestors onto the [`GitRevWalker`](@ref)
-`w`. This ensures that HEAD and its ancestor commits will be encountered
+`w`. This ensures that HEAD and all its ancestor commits will be encountered
 during the walk.
 """
 function push_head!(w::GitRevWalker)
@@ -65,6 +57,13 @@ function push_head!(w::GitRevWalker)
     return w
 end
 
+"""
+    LibGit2.push!(w::GitRevWalker, cid::GitHash)
+
+Start the [`GitRevWalker`](@ref) `walker` at commit `cid`. This function can be used
+to apply a function to all commits since in a certain year, by passing the first commit
+of that year as `cid` and then passing the resulting `w` to [`map`](@ref LibGit2.map).
+"""
 function Base.push!(w::GitRevWalker, cid::GitHash)
     @check ccall((:git_revwalk_push, :libgit2), Cint, (Ptr{Void}, Ptr{GitHash}), w.ptr, Ref(cid))
     return w
@@ -83,6 +82,27 @@ end
 
 repository(w::GitRevWalker) = w.owner
 
+"""
+    LibGit2.map(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), by::Cint = Consts.SORT_NONE, rev::Bool=false)
+
+Using the [`GitRevWalker`](@ref) `walker` to "walk" over every commit in the repository's history,
+apply `f` to each commit in the walk. The keyword arguments are:
+    * `oid`: The [`GitHash`](@ref) of the commit to begin the walk from. The default is to use
+      [`push_head!`](@ref) and therefore the HEAD commit and all its ancestors.
+    * `by`: The sorting method. The default is not to sort. Other options are to sort by
+      topology (`LibGit2.Consts.SORT_TOPOLOGICAL`), to sort forwards in time
+      (`LibGit2.Consts.SORT_TIME`, most ancient first) or to sort backwards in time
+      (`LibGit2.Consts.SORT_REVERSE`, most recent first).
+    * `rev`: Whether to reverse the sorted order (for instance, if topological sorting is used).
+
+# Examples
+```julia
+oids = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker
+    LibGit2.map((oid, repo)->string(oid), walker, by=LibGit2.Consts.SORT_TIME)
+end
+```
+Here, `map` visits each commit using the `GitRevWalker` and finds its `GitHash`.
+"""
 function Base.map(f::Function, walker::GitRevWalker;
                   oid::GitHash=GitHash(),
                   range::AbstractString="",
@@ -112,6 +132,30 @@ function Base.map(f::Function, walker::GitRevWalker;
     return res
 end
 
+"""
+    LibGit2.count(f::Function, walker::GitRevWalker; oid::GitHash=GitHash(), by::Cint = Consts.SORT_NONE, rev::Bool=false)
+
+Using the [`GitRevWalker`](@ref) `walker` to "walk" over every commit in the repository's history,
+find the number of commits which return `true` when `f` is applied to them. The keyword arguments
+are:
+    * `oid`: The [`GitHash`](@ref) of the commit to begin the walk from. The default is to use
+      [`push_head!`](@ref) and therefore the HEAD commit and all its ancestors.
+    * `by`: The sorting method. The default is not to sort. Other options are to sort by
+      topology (`LibGit2.Consts.SORT_TOPOLOGICAL`), to sort forwards in time
+      (`LibGit2.Consts.SORT_TIME`, most ancient first) or to sort backwards in time
+      (`LibGit2.Consts.SORT_REVERSE`, most recent first).
+    * `rev`: Whether to reverse the sorted order (for instance, if topological sorting is used).
+
+# Examples
+```julia
+cnt = LibGit2.with(LibGit2.GitRevWalker(repo)) do walker
+    count((oid, repo)->(oid == commit_oid1), walker, oid=commit_oid1, by=LibGit2.Consts.SORT_TIME)
+end
+```
+`count` finds the number of commits along the walk with a certain `GitHash` `commit_oid1`, starting
+the walk from that commit and moving forwards in time from it. Since the `GitHash` is unique to
+a commit, `cnt` will be `1`.
+"""
 function Base.count(f::Function, walker::GitRevWalker;
                   oid::GitHash=GitHash(),
                   by::Cint = Consts.SORT_NONE,
