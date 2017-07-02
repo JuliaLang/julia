@@ -453,9 +453,7 @@ if Sys.isunix()
             isa(ex, Base.UVError) || rethrow(ex)
             @test ex.code in (Base.UV_EMFILE, Base.UV_ENFILE)
         finally
-            for p in ps
-                close(p)
-            end
+            foreach(close, ps)
         end
     end
 end

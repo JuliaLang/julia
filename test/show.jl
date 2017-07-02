@@ -343,6 +343,7 @@ end"
 
 # issue #9474
 for s in ("(1::Int64 == 1::Int64)::Bool", "(1:2:3) + 4", "x = 1:2:3")
+    local s
     @test sprint(show, parse(s)) == ":("*s*")"
 end
 
@@ -874,7 +875,7 @@ end
                    (Pair{Integer,Int64}(1, 2) => 3)       => "Pair{Integer,Int64}(1, 2) => 3",
                    ((1+2im) => (3+4im))                   => "1+2im => 3+4im",
                    (1 => 2 => Pair{Real,Int64}(3, 4))     => "1 => (2=>Pair{Real,Int64}(3, 4))")
-
+        local s
         @test sprint(show, p) == s
     end
     # - when the context has :compact=>false, print pair's member non-compactly

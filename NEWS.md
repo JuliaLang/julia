@@ -70,6 +70,11 @@ Language changes
     warning, so that this syntax can be disallowed or given a new meaning in a
     future version ([#5148]).
 
+  * In `for i = ...`, if a local variable `i` already existed it would be overwritten
+    during the loop. This behavior is deprecated, and in the future `for` loop variables
+    will always be new variables local to the loop ([#22314]).
+    The old behavior of overwriting an existing variable is available via `for outer i = ...`.
+
   * In `for i in x`, `x` used to be evaluated in a new scope enclosing the `for` loop.
     Now it is evaluated in the scope outside the `for` loop.
 
