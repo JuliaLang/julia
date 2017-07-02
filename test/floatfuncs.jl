@@ -19,6 +19,10 @@ for elty in (Float16,Float32,Float64)
     @test maxintfloat(rand(elty)) == maxintfloat(elty)
 end
 @test maxintfloat() == maxintfloat(Float64)
+@test maxintfloat(Float64, Int32) == 2147483647.0
+@test maxintfloat(Float32, Int32) == maxintfloat(Float32)
+@test maxintfloat(Float64, Int16) == 32767.0
+@test maxintfloat(Float64, Int64) == maxintfloat(Float64)
 
 # isinteger
 for elty in (Float16,Float32,Float64)
