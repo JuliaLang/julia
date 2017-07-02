@@ -7,6 +7,11 @@
       </requestedPrivileges>
     </security>
   </trustInfo>
+  <dependency>
+    <dependentAssembly>
+      <assemblyIdentity type='win32'  name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' language='*' />
+    </dependentAssembly>
+  </dependency>
   <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
     <application>
       <!--The ID below indicates application support for Windows Vista -->
