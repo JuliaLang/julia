@@ -412,6 +412,16 @@ function rehash!(t::ObjectIdDict, newsz = length(t.ht))
     t
 end
 
+function sizehint!(t::ObjectIdDict, newsz)
+    newsz = _tablesz(newsz*2)  # *2 for keys and values in same array
+    oldsz = length(t.ht)
+    # grow at least 25%
+    if newsz < (oldsz*5)>>2
+        return t
+    end
+    rehash!(t, newsz)
+end
+
 function setindex!(t::ObjectIdDict, v::ANY, k::ANY)
     if t.ndel >= ((3*length(t.ht))>>2)
         rehash!(t, max(length(t.ht)>>1, 32))
