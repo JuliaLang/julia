@@ -17,7 +17,7 @@ struct SubString{T<:AbstractString} <: AbstractString
     endof::Int
 
     function SubString{T}(s::T, i::Int, j::Int) where T<:AbstractString
-        i > j && return new(s, 0, 0) # allow i > j as it is consistent with getindex
+        i > j && return new(s, i - 1, 0) # always allow i > j as it is consistent with getindex
         isvalid(s, i) || throw(BoundsError(s, i))
         isvalid(s, j) || throw(BoundsError(s, j))
         new(s, i-1, j-i+1)
@@ -29,10 +29,11 @@ SubString(s::AbstractString, i::Integer, j::Integer=endof(s)) = SubString(s, Int
 SubString(s::AbstractString, r::UnitRange{<:Integer}) = SubString(s, first(r), last(r))
 
 function SubString(s::SubString, i::Int, j::Int)
-    i > j && SubString(s.string, 1, 0) # allow i > j as it is consistent with getindex
+    # always allow i > j as it is consistent with getindex
+    i > j && return SubString(s.string, s.offset + i, s.offset + j)
     i >= 1 || throw(BoundsError(s, i))
     j <= endof(s) || throw(BoundsError(s, j))
-    SubString(s.string, s.offset+i, s.offset+j)
+    SubString(s.string, s.offset + i, s.offset + j)
 end
 
 sizeof(s::SubString{String}) = s.endof == 0 ? 0 : nextind(s, s.endof) - 1

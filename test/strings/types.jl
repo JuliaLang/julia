@@ -25,6 +25,31 @@ for i1 = 1:length(u8str2)
     end
 end
 
+# tests for SubString of a single multibyte `Char` string
+# we are consistent with `getindex` for `String`
+for idx in 0:1
+    @test SubString("∀", 1, idx) == "∀"[1:idx]
+end
+
+# invalid index of start of the index
+@test_throws BoundsError SubString("∀", 1, 2)
+@test_throws BoundsError SubString("∀", 1, 3)
+@test_throws BoundsError SubString("∀", 1, 4)
+@test_throws BoundsError SubString("∀∀", 2:4)
+
+# tests for SubString of more than one multibyte `Char` string
+# we are consistent with `getindex` for `String`
+for idx in [0, 1, 4]
+    @test SubString("∀∀", 1, idx) == "∀∀"[1:idx]
+    @test SubString("∀∀", 4, idx) == "∀∀"[4:idx]
+end
+
+# second index beyond endof("∀∀")
+for idx in 5:8
+    @test_throws BoundsError SubString("∀∀", 1, idx)
+    @test_throws BoundsError SubString("∀∀", 4, idx)
+end
+
 str="tempus fugit"              #length(str)==12
 ss=SubString(str,1,endof(str)) #match source string
 @test length(ss)==length(str)
@@ -38,42 +63,13 @@ ss=SubString(str,1,0)    #empty SubString
 ss=SubString(str,1:0)
 @test length(ss)==0
 
-# tests for SubString of a single multibyte `Char` string
-# we are consistent with `getindex` for `String`
-for idx in 0:1
-    @test SubString("∀", 1, idx) == "∀"[1:idx]
-end
-
-@test_throws BoundsError SubString("∀", 1, 2)
-@test_throws BoundsError SubString("∀", 1, 3)
-@test_throws BoundsError SubString("∀", 1, 4)
-
-# tests for SubString of more than one multibyte `Char` string
-# we are consistent with `getindex` for `String`
-for idx in 0:1
-    @test SubString("∀∀", 1, idx) == "∀∀"[1:idx]
-    @test SubString("∀∀", 4, idx) == "∀∀"[4:idx]
-end
-
-@test SubString("∀∀", 4, 4) == "∀∀"[4:4]
-
-for idx in 5:8
-    @test_throws BoundsError SubString("∀∀", 1, idx)
-    @test_throws BoundsError SubString("∀∀", 4, idx)
-end
-
 @test_throws BoundsError SubString(str,14,20)  #start indexing beyond source string length
-
 @test_throws BoundsError SubString(str,10,16)  #end indexing beyond source string length
-@test_throws BoundsError SubString(str,10:16)
 
-@test_throws BoundsError SubString(str,2:4)
-
-str2=""
-@test_throws BoundsError SubString(str2,1,4)  #empty source string
-@test_throws BoundsError SubString(str2,1,1)  #empty source string, identical start and end index
-@test_throws BoundsError SubString(str2,10,12)
-@test SubString(str2,12,10) == ""
+@test_throws BoundsError SubString("", 1, 4)  #empty source string
+@test_throws BoundsError SubString("", 1, 1)  #empty source string, identical start and end index
+@test_throws BoundsError SubString("", 10, 12)
+@test SubString("",12,10) == ""
 
 @test SubString("foobar",big(1),big(3)) == "foo"
 
@@ -123,6 +119,7 @@ end
 @test SubString(u, 20:15) == ""
 @test_throws BoundsError SubString(u, -1:10)
 @test SubString(u, -1, -10) == ""
+@test SubString(SubString("123", 1, 2), -10, -20) == ""
 
 # sizeof
 @test sizeof(SubString("abc\u2222def",4,4)) == 3
@@ -173,7 +170,7 @@ let s = "Σx + βz - 2"
     for i in -1:length(s)+2
         if isvalid(s, i)
             ss=SubString(s,1,i)
-            # make sure isvalid gives equivalent resutls for SubString and String
+            # make sure isvalid gives equivalent results for SubString and String
             @test isvalid(ss,i)==isvalid(s,i)
         else
             @test_throws BoundsError SubString(s,1,i)
