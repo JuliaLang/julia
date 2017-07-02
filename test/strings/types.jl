@@ -28,39 +28,43 @@ end
 str="tempus fugit"              #length(str)==12
 ss=SubString(str,1,endof(str)) #match source string
 @test length(ss)==length(str)
-ss=SubString(str,1:length(str)) # works as str is all ASCII
+
+ss=SubString(str,1:endof(str))
 @test length(ss)==length(str)
 
 ss=SubString(str,1,0)    #empty SubString
 @test length(ss)==0
+
 ss=SubString(str,1:0)
 @test length(ss)==0
 
-str = "∀"
+# tests for SubString of as single multibyte `Char` string
+# we are consistent with `getindex` for `String`
 for idx in 0:1
-    @test SubString(str, 1, idx) == str[1:idx]
+    @test SubString("∀", 1, idx) == "∀"[1:idx]
 end
 
-@test_throws BoundsError SubString(str, 1, 2)
-@test_throws BoundsError SubString(str, 1, 3)
-@test_throws BoundsError SubString(str, 1, 4)
+@test_throws BoundsError SubString("∀", 1, 2)
+@test_throws BoundsError SubString("∀", 1, 3)
+@test_throws BoundsError SubString("∀", 1, 4)
 
-str = "∀∀"
+# tests for SubString of more than one multibyte `Char` string
+# we are consistent with `getindex` for `String`
 for idx in 0:1
-    @test SubString(str, 1, idx) == str[1:idx]
-    @test SubString(str, 4, idx) == str[4:idx]
+    @test SubString("∀∀", 1, idx) == "∀∀"[1:idx]
+    @test SubString("∀∀", 4, idx) == "∀∀"[4:idx]
 end
 
-@test SubString(str, 4, 4) == str[4:4]
+@test SubString("∀∀", 4, 4) == "∀∀"[4:4]
 
 for idx in 5:8
-    @test_throws BoundsError SubString(str, 1, idx) == str[1:idx]
-    @test_throws BoundsError SubString(str, 4, idx) == str[4:idx]
+    @test_throws BoundsError SubString("∀∀", 1, idx)
+    @test_throws BoundsError SubString("∀∀", 4, idx)
 end
 
-@test_throws BoundsError SubString(str,14,20)  #start indexed beyond source string length
+@test_throws BoundsError SubString(str,14,20)  #start indexing beyond source string length
 
-@test_throws BoundsError SubString(str,10,16)  #end indexed beyond source string length
+@test_throws BoundsError SubString(str,10,16)  #end indexing beyond source string length
 @test_throws BoundsError SubString(str,10:16)
 
 @test_throws BoundsError SubString(str,2:4)
@@ -92,6 +96,7 @@ write(b, u)
 @test Base.cconvert(Ptr{Int8},u) == u
 
 str = "føøbar"
+@test_throws BoundsError SubString(str, 10, 10)
 u = SubString(str, 4, 3)
 @test length(u)==0
 b = IOBuffer()
@@ -114,6 +119,10 @@ for idx in 1:4
 end
 @test_throws BoundsError SubString(u, 1, 10)
 @test_throws BoundsError SubString(u, 1:10)
+@test_throws BoundsError SubString(u, 20:30)
+@test SubString(u, 20:15) == ""
+@test_throws BoundsError SubString(u, -1:10)
+@test SubString(u, -1, -10) == ""
 
 # sizeof
 @test sizeof(SubString("abc\u2222def",4,4)) == 3
@@ -164,7 +173,10 @@ let s = "Σx + βz - 2"
     for i in -1:length(s)+2
         if isvalid(s, i)
             ss=SubString(s,1,i)
+            # make sure isvalid give equivalent resutls for SubString and String
             @test isvalid(ss,i)==isvalid(s,i)
+        else
+            @test_throws BoundsError SubString(s,1,i)
         end
     end
 end
