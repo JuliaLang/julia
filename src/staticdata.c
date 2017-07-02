@@ -1336,11 +1336,6 @@ JL_DLLEXPORT void jl_set_sysimg_so(void *handle)
     void* *jl_RTLD_DEFAULT_handle_pointer = (void**)jl_dlsym_e(handle, "jl_RTLD_DEFAULT_handle_pointer");
     if (!jl_RTLD_DEFAULT_handle_pointer || (void*)&jl_RTLD_DEFAULT_handle != *jl_RTLD_DEFAULT_handle_pointer)
         jl_error("System image file failed consistency check: maybe opened the wrong version?");
-    // TODO make sure the sysimg and the JIT agrees on the ABI.
-    // This shouldn't be a problem for any required C types on any platforms we support
-    // but could be a problem from optional types. In particular, we need to make sure
-    // the two agrees on the usable register sizes so that functions that take
-    // a vector as input can use consistent calling convention.
     if (jl_options.cpu_target == NULL)
         jl_options.cpu_target = "native";
     jl_sysimg_handle = handle;
