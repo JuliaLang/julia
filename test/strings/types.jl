@@ -38,7 +38,7 @@ ss=SubString(str,1,0)    #empty SubString
 ss=SubString(str,1:0)
 @test length(ss)==0
 
-# tests for SubString of as single multibyte `Char` string
+# tests for SubString of a single multibyte `Char` string
 # we are consistent with `getindex` for `String`
 for idx in 0:1
     @test SubString("∀", 1, idx) == "∀"[1:idx]
@@ -173,7 +173,7 @@ let s = "Σx + βz - 2"
     for i in -1:length(s)+2
         if isvalid(s, i)
             ss=SubString(s,1,i)
-            # make sure isvalid give equivalent resutls for SubString and String
+            # make sure isvalid gives equivalent resutls for SubString and String
             @test isvalid(ss,i)==isvalid(s,i)
         else
             @test_throws BoundsError SubString(s,1,i)
