@@ -123,6 +123,16 @@ module IteratorsMD
     _isless(ret, ::Tuple{}, ::Tuple{}) = ifelse(ret==1, true, false)
     icmp(a, b) = ifelse(isless(a,b), 1, ifelse(a==b, 0, -1))
 
+    # hashing
+    const cartindexhash_seed = UInt == UInt64 ? 0xd60ca92f8284b8b0 : 0xf2ea7c2e
+    function Base.hash(ci::CartesianIndex, h::UInt)
+        h += cartindexhash_seed
+        for i in ci.I
+            h = hash(i, h)
+        end
+        return h
+    end
+
     # Iteration
     """
         CartesianRange(Istart::CartesianIndex, Istop::CartesianIndex) -> R

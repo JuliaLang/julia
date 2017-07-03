@@ -1549,6 +1549,11 @@ end
     @test CartesianRange((3,-7:7)) == CartesianRange(CartesianIndex{2}(3,-7),CartesianIndex{2}(3,7))
 end
 
+# All we really care about is that we have an optimized
+# implementation, but the seed is a useful way to check that.
+@test hash(CartesianIndex()) == Base.IteratorsMD.cartindexhash_seed
+@test hash(CartesianIndex(1, 2)) != hash((1, 2))
+
 @testset "itr, start, done, next" begin
     r = 2:3
     itr = eachindex(r)
