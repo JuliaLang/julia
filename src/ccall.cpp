@@ -519,7 +519,6 @@ static void typeassert_input(jl_codectx_t &ctx, const jl_cgval_t &jvinfo, jl_val
                 ctx.builder.SetInsertPoint(failBB);
                 emit_type_error(ctx, mark_julia_type(ctx, vx, true, jl_any_type), boxed(ctx, jlto_runtime), msg.str());
                 ctx.builder.CreateUnreachable();
-
                 ctx.builder.SetInsertPoint(passBB);
             }
         }
