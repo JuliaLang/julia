@@ -39,6 +39,11 @@ bimg  = randn(n,2)/2
 
         @testset for eltyb in (Float32, Float64, Complex64, Complex128, Int)
             b = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex.(breal, bimg) : breal)
+
+            # check that factorize gives a Bunch-Kaufman
+            @test isa(factorize(asym), LinAlg.BunchKaufman)
+            @test isa(factorize(aher), LinAlg.BunchKaufman)
+
             @testset for btype in ("Array", "SubArray")
                 if btype == "Array"
                     b = b
@@ -48,10 +53,6 @@ bimg  = randn(n,2)/2
 
                 εb = eps(abs(float(one(eltyb))))
                 ε = max(εa,εb)
-
-                # check that factorize gives a Bunch-Kaufman
-                @test isa(factorize(asym), LinAlg.BunchKaufman)
-                @test isa(factorize(aher), LinAlg.BunchKaufman)
 
                 @testset "$uplo Bunch-Kaufman factor of indefinite matrix" for uplo in (:L, :U)
                     bc1 = bkfact(Hermitian(aher, uplo))
@@ -72,6 +73,15 @@ bimg  = randn(n,2)/2
                         if eltya <: BlasReal
                             @test_throws ArgumentError bkfact(a)
                         end
+                    end
+                    # Test extraction of factors
+                    # syconvf_rook just added to LAPACK 3.7.0. Test when we distribute LAPACK 3.7.0
+                    @test bc1[uplo]*bc1[:D]*bc1[uplo]' ≈ aher[bc1[:p], bc1[:p]]
+                    @test bc1[uplo]*bc1[:D]*bc1[uplo]' ≈ bc1[:P]*aher*bc1[:P]'
+                    if eltya <: Complex
+                        bc1 = bkfact(Symmetric(asym, uplo))
+                        @test bc1[uplo]*bc1[:D]*bc1[uplo].' ≈ asym[bc1[:p], bc1[:p]]
+                        @test bc1[uplo]*bc1[:D]*bc1[uplo].' ≈ bc1[:P]*asym*bc1[:P]'
                     end
                 end
 
@@ -122,9 +132,7 @@ end
     end
 end
 
-
-# test example due to @timholy in PR 15354
-let
+@testset "test example due to @timholy in PR 15354" begin
     A = rand(6,5); A = complex(A'*A) # to avoid calling the real-lhs-complex-rhs method
     F = cholfact(A);
     v6 = rand(Complex128, 6)
