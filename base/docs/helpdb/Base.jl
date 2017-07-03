@@ -1323,9 +1323,10 @@ maxintfloat(T)
 """
     maxintfloat(T, S)
 
-The largest integer losslessly representable by the given floating-point DataType `T` that also does not exceed the maximum integer representable by the integer data type T.
+The largest integer losslessly representable by the given floating-point DataType `T` that
+also does not exceed the maximum integer representable by the integer DataType `S`.
 """
-maxintfloat(S, T)
+maxintfloat(T, S)
 
 """
     delete!(collection, key)
