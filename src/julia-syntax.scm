@@ -378,6 +378,11 @@
 
 (define (keywords-method-def-expr name sparams argl body isstaged rett)
   (let* ((kargl (cdar argl))  ;; keyword expressions (= k v)
+         (annotations (map (lambda (a) `(meta nospecialize ,(arg-name (cadr (caddr a)))))
+                           (filter nospecialize-meta? kargl)))
+         (kargl (map (lambda (a)
+                       (if (nospecialize-meta? a) (caddr a) a))
+                     kargl))
          (pargl (cdr argl))   ;; positional args
          (body  (if (and (pair? body) (eq? (car body) 'block))
                     body
@@ -463,8 +468,10 @@
                      (decl-var (car not-optional)))
                  (car not-optional))
             ,@(cdr not-optional) ,@vararg)
-          `(block
-            ,@stmts) isstaged rett)
+          (insert-after-meta `(block
+                               ,@stmts)
+                             annotations)
+          isstaged rett)
 
         ;; call with unsorted keyword args. this sorts and re-dispatches.
         ,(method-def-expr-
@@ -621,8 +628,9 @@
       argl))
 
 (define (check-kw-args kw)
-  (let ((invalid (filter (lambda (x) (not (or (kwarg? x)
-                                              (vararg? x))))
+  (let ((invalid (filter (lambda (x) (not (or (kwarg? x) (vararg? x)
+                                              (and (nospecialize-meta? x)
+                                                   (or (kwarg? (caddr x)) (vararg? (caddr x)))))))
                          kw)))
     (if (pair? invalid)
         (if (and (pair? (car invalid)) (eq? 'parameters (caar invalid)))
@@ -1026,6 +1034,12 @@
                                                 (string "function Base.broadcast(::typeof(" (deparse op_) "), ...)")))
                         op_))
                   (name (if op '(|.| Base (inert broadcast)) name))
+                  (annotations (map (lambda (a) `(meta nospecialize ,(arg-name a)))
+                                    (filter nospecialize-meta? argl)))
+                  (body (insert-after-meta (caddr e) annotations))
+                  (argl (map (lambda (a)
+                               (if (nospecialize-meta? a) (caddr a) a))
+                             argl))
                   (argl (if op (cons `(|::| (call (core Typeof) ,op)) argl) argl))
                   (sparams (map analyze-typevar (cond (has-sp (cddr head))
                                                       (where  where)
@@ -1046,7 +1060,7 @@
                   (name    (if (or (decl? name) (and (pair? name) (eq? (car name) 'curly)))
                                #f name)))
              (expand-forms
-              (method-def-expr name sparams argl (caddr e) isstaged rett))))
+              (method-def-expr name sparams argl body isstaged rett))))
           (else
            (error (string "invalid assignment location \"" (deparse name) "\""))))))
 
@@ -1170,7 +1184,7 @@
                              (|::| __module__ (core Module))
                              ,@(map (lambda (v)
                                       (if (symbol? v)
-                                          `(|::| ,v (core ANY))
+                                          `(meta nospecialize ,v)
                                           v))
                                     anames))
                        ,@(cddr e)))))
@@ -2898,13 +2912,15 @@ f(x) = yt(x)
 
 ;; return `body` with `stmts` inserted after any meta nodes
 (define (insert-after-meta body stmts)
-  (let ((meta (take-while (lambda (x) (and (pair? x)
-                                           (memq (car x) '(line meta))))
-                          (cdr body))))
-    `(,(car body)
-      ,@meta
-      ,@stmts
-      ,@(list-tail body (+ 1 (length meta))))))
+  (if (null? stmts)
+      body
+      (let ((meta (take-while (lambda (x) (and (pair? x)
+                                               (memq (car x) '(line meta))))
+                              (cdr body))))
+        `(,(car body)
+          ,@meta
+          ,@stmts
+          ,@(list-tail body (+ 1 (length meta)))))))
 
 (define (add-box-inits-to-body lam body)
   (let ((args (map arg-name (lam:args lam)))
@@ -3780,6 +3796,9 @@ f(x) = yt(x)
           ((and (pair? e) (eq? (car e) 'outerref))
            (let ((idx (get sp-table (cadr e) #f)))
                 (if idx `(static_parameter ,idx) (cadr e))))
+          ((nospecialize-meta? e)
+           ;; convert nospecialize vars to slot numbers
+           `(meta nospecialize ,@(map renumber-slots (cddr e))))
           ((or (atom? e) (quoted? e)) e)
           ((ssavalue? e)
            (let ((idx (or (get ssavalue-table (cadr e) #f)

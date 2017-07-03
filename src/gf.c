@@ -17,7 +17,7 @@
 #include <unistd.h>
 #endif
 
-// ::ANY has no effect if the number of overlapping methods is greater than this
+// @nospecialize has no effect if the number of overlapping methods is greater than this
 #define MAX_UNSPECIALIZED_CONFLICTS 32
 
 #ifdef __cplusplus
@@ -610,8 +610,9 @@ static void jl_cacheable_sig(
 
         int notcalled_func = (i > 0 && i <= 8 && !(definition->called & (1 << (i - 1))) &&
                               jl_subtype(elt, (jl_value_t*)jl_function_type));
-        if (decl_i == jl_ANY_flag) {
-            // don't specialize on slots marked ANY
+        if (i > 0 && i <= sizeof(definition->nospecialize) * 8 &&
+            (definition->nospecialize & (1 << (i - 1))) &&
+            decl_i == (jl_value_t*)jl_any_type) { // TODO: nospecialize with other types
             if (!*newparams) *newparams = jl_svec_copy(type->parameters);
             jl_svecset(*newparams, i, (jl_value_t*)jl_any_type);
             *need_guard_entries = 1;
@@ -666,7 +667,7 @@ static void jl_cacheable_sig(
                  !jl_has_free_typevars(decl_i)) {
             /*
               here's a fairly simple heuristic: if this argument slot's
-              declared type is general (Type, Any, or ANY),
+              declared type is general (Type or Any),
               then don't specialize for every Type that got passed.
 
               Since every type x has its own type Type{x}, this would be
@@ -713,9 +714,10 @@ JL_DLLEXPORT int jl_is_cacheable_sig(
             continue;
         if (jl_is_kind(elt)) // kind slots always need guard entries (checking for subtypes of Type)
             continue;
-        if (decl_i == jl_ANY_flag) {
-            // don't specialize on slots marked ANY
-            if (elt != (jl_value_t*)jl_any_type && elt != jl_ANY_flag)
+        if (i > 0 && i <= sizeof(definition->nospecialize) * 8 &&
+            (definition->nospecialize & (1 << (i - 1))) &&
+            decl_i == (jl_value_t*)jl_any_type) { // TODO: nospecialize with other types
+            if (elt != (jl_value_t*)jl_any_type)
                 return 0;
             continue;
         }
@@ -793,7 +795,7 @@ JL_DLLEXPORT int jl_is_cacheable_sig(
                  !jl_has_free_typevars(decl_i)) {
             /*
               here's a fairly simple heuristic: if this argument slot's
-              declared type is general (Type, Any, or ANY),
+              declared type is general (Type or Any),
               then don't specialize for every Type that got passed.
 
               Since every type x has its own type Type{x}, this would be
@@ -2257,16 +2259,6 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
                 break;
             }
         }
-        // don't analyze slots declared with ANY
-        // TODO
-        /*
-        l = jl_nparams(ml->sig);
-        size_t m = jl_nparams(ti);
-        for(i=0; i < l && i < m; i++) {
-            if (jl_tparam(ml->sig, i) == jl_ANY_flag)
-                jl_tupleset(ti, i, jl_any_type);
-        }
-        */
     }
     if (!skip) {
         /*

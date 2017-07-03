@@ -84,8 +84,8 @@ Edit the definition of a function, optionally specifying a tuple of types to
 indicate which method to edit. The editor can be changed by setting `JULIA_EDITOR`,
 `VISUAL` or `EDITOR` as an environment variable.
 """
-edit(f)          = edit(functionloc(f)...)
-edit(f, t::ANY)  = edit(functionloc(f,t)...)
+edit(f)                   = edit(functionloc(f)...)
+edit(f, @nospecialize t)  = edit(functionloc(f,t)...)
 edit(file, line::Integer) = error("could not find source file for function")
 
 # terminal pager
@@ -117,8 +117,8 @@ less(file::AbstractString) = less(file, 1)
 Show the definition of a function using the default pager, optionally specifying a tuple of
 types to indicate which method to see.
 """
-less(f)          = less(functionloc(f)...)
-less(f, t::ANY)  = less(functionloc(f,t)...)
+less(f)                   = less(functionloc(f)...)
+less(f, @nospecialize t)  = less(functionloc(f,t)...)
 less(file, line::Integer) = error("could not find source file for function")
 
 # clipboard copy and paste
@@ -343,7 +343,7 @@ This serves as a warning of potential type instability. Not all non-leaf types a
 problematic for performance, so the results need to be used judiciously.
 See [`@code_warntype`](@ref man-code-warntype) for more information.
 """
-function code_warntype(io::IO, f, t::ANY)
+function code_warntype(io::IO, f, @nospecialize(t))
     emph_io = IOContext(io, :TYPEEMPHASIZE => true)
     for (src, rettype) in code_typed(f, t)
         println(emph_io, "Variables:")
@@ -367,7 +367,7 @@ function code_warntype(io::IO, f, t::ANY)
     end
     nothing
 end
-code_warntype(f, t::ANY) = code_warntype(STDOUT, f, t)
+code_warntype(f, @nospecialize(t)) = code_warntype(STDOUT, f, t)
 
 typesof(args...) = Tuple{Any[ Core.Typeof(a) for a in args ]...}
 
@@ -525,7 +525,7 @@ Evaluates the arguments to the function or macro call, determines their types, a
 """
 :@code_native
 
-function type_close_enough(x::ANY, t::ANY)
+function type_close_enough(@nospecialize(x), @nospecialize(t))
     x == t && return true
     return (isa(x,DataType) && isa(t,DataType) && x.name === t.name &&
             !isleaftype(t) && x <: t) ||
@@ -551,7 +551,7 @@ function methodswith(t::Type, f::Function, showparents::Bool=false, meths = Meth
                        (type_close_enough(x, t) ||
                         (showparents ? (t <: x && (!isa(x,TypeVar) || x.ub != Any)) :
                          (isa(x,TypeVar) && x.ub != Any && t == x.ub)) &&
-                        x != Any && x != ANY)
+                        x != Any)
                    end
                end,
                unwrap_unionall(d.sig).parameters)

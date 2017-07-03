@@ -39,7 +39,7 @@ macro handle_as(hand, typ)
     end
 end
 
-associate_julia_struct(handle::Ptr{Void}, jlobj::ANY) =
+associate_julia_struct(handle::Ptr{Void}, @nospecialize(jlobj)) =
     ccall(:jl_uv_associate_julia_struct, Void, (Ptr{Void}, Any), handle, jlobj)
 disassociate_julia_struct(uv) = disassociate_julia_struct(uv.handle)
 disassociate_julia_struct(handle::Ptr{Void}) =

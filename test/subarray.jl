@@ -89,10 +89,10 @@ function single_stride_dim(A::Array)
     end
     ld
 end
-single_stride_dim(A::ANY) = single_stride_dim(copy_to_array(A))
+single_stride_dim(@nospecialize(A)) = single_stride_dim(copy_to_array(A))
 
 # Testing equality of AbstractArrays, using several different methods to access values
-function test_cartesian(A::ANY, B::ANY)
+function test_cartesian(@nospecialize(A), @nospecialize(B))
     isgood = true
     for (IA, IB) in zip(eachindex(A), eachindex(B))
         if A[IA] != B[IB]
@@ -108,7 +108,7 @@ function test_cartesian(A::ANY, B::ANY)
     end
 end
 
-function test_linear(A::ANY, B::ANY)
+function test_linear(@nospecialize(A), @nospecialize(B))
     length(A) == length(B) || error("length mismatch")
     isgood = true
     for (iA, iB) in zip(1:length(A), 1:length(B))
@@ -129,7 +129,7 @@ end
 test_mixed{T}(::AbstractArray{T,1}, ::Array) = nothing
 test_mixed{T}(::AbstractArray{T,2}, ::Array) = nothing
 test_mixed(A, B::Array) = _test_mixed(A, reshape(B, size(A)))
-function _test_mixed(A::ANY, B::ANY)
+function _test_mixed(@nospecialize(A), @nospecialize(B))
     m = size(A, 1)
     n = size(A, 2)
     isgood = true
@@ -147,7 +147,7 @@ function _test_mixed(A::ANY, B::ANY)
     nothing
 end
 
-function test_bounds(A::ANY)
+function test_bounds(@nospecialize(A))
     @test_throws BoundsError A[0]
     @test_throws BoundsError A[end+1]
     @test_throws BoundsError A[1, 0]
@@ -183,7 +183,7 @@ function runsubarraytests(A::Array, I...)
     test_mixed(S, C)
 end
 
-function runsubarraytests(A::ANY, I...)
+function runsubarraytests(@nospecialize(A), I...)
     # When A was created with view, we have to check bounds, since some
     # of the "residual" dimensions have size 1. It's possible that we
     # need dedicated tests for view.

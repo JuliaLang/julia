@@ -51,7 +51,7 @@ function deepcopy_internal(x::String, stackdict::ObjectIdDict)
     return y
 end
 
-function deepcopy_internal(x::ANY, stackdict::ObjectIdDict)
+function deepcopy_internal(@nospecialize(x), stackdict::ObjectIdDict)
     T = typeof(x)::DataType
     nf = nfields(x)
     (isbits(T) || nf == 0) && return x
@@ -78,7 +78,7 @@ function deepcopy_internal(x::Array, stackdict::ObjectIdDict)
     _deepcopy_array_t(x, eltype(x), stackdict)
 end
 
-function _deepcopy_array_t(x::ANY, T, stackdict::ObjectIdDict)
+function _deepcopy_array_t(@nospecialize(x), T, stackdict::ObjectIdDict)
     if isbits(T)
         return (stackdict[x]=copy(x))
     end

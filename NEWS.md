@@ -16,6 +16,9 @@ Language changes
   * In string and character literals, backslash `\` may no longer
     precede unrecognized escape characters ([#22800]).
 
+  * Declaring arguments as `x::ANY` to avoid specialization has been replaced
+    by `@nospecialize x`, which needs to be imported from `Base`. ([#22666]).
+
 Breaking changes
 ----------------
 

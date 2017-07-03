@@ -254,7 +254,8 @@ typedef struct _jl_method_t {
     union jl_typemap_t invokes;
 
     int32_t nargs;
-    int32_t called;  // bit flags: whether each of the first 8 arguments is called
+    int32_t called;        // bit flags: whether each of the first 8 arguments is called
+    int32_t nospecialize;  // bit flags: which arguments should not be specialized
     uint8_t isva;
     uint8_t pure;
 

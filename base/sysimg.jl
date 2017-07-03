@@ -64,9 +64,9 @@ if false
     # goes wrong during bootstrap before printing code is available.
     # otherwise, they just just eventually get (noisily) overwritten later
     global show, print, println
-    show(io::IO, x::ANY) = Core.show(io, x)
-    print(io::IO, a::ANY...) = Core.print(io, a...)
-    println(io::IO, x::ANY...) = Core.println(io, x...)
+    show(io::IO, x) = Core.show(io, x)
+    print(io::IO, a...) = Core.print(io, a...)
+    println(io::IO, x...) = Core.println(io, x...)
 end
 
 ## Load essential files and libraries

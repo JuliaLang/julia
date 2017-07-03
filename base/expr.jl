@@ -39,7 +39,7 @@ copy(e::Expr) = (n = Expr(e.head);
 
 # copy parts of an AST that the compiler mutates
 copy_exprs(x::Expr) = copy(x)
-copy_exprs(x::ANY) = x
+copy_exprs(@nospecialize(x)) = x
 copy_exprargs(x::Array{Any,1}) = Any[copy_exprs(a) for a in x]
 
 ==(x::Expr, y::Expr) = x.head === y.head && isequal(x.args, y.args)
@@ -52,7 +52,7 @@ Takes the expression `x` and returns an equivalent expression in lowered form
 for executing in module `m`.
 See also [`code_lowered`](@ref).
 """
-expand(m::Module, x::ANY) = ccall(:jl_expand, Any, (Any, Any), x, m)
+expand(m::Module, @nospecialize(x)) = ccall(:jl_expand, Any, (Any, Any), x, m)
 
 """
     macroexpand(m::Module, x; recursive=true)
@@ -79,7 +79,7 @@ julia> macroexpand(M, :(@m2()), recursive=false)
 :(#= REPL[16]:6 =# M.@m1)
 ```
 """
-function macroexpand(m::Module, x::ANY; recursive=true)
+function macroexpand(m::Module, @nospecialize(x); recursive=true)
     if recursive
         ccall(:jl_macroexpand, Any, (Any, Any), x, m)
     else
