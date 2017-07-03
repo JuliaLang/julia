@@ -109,10 +109,6 @@ void GCInvariantVerifier::visitLoadInst(LoadInst &LI) {
     }
 }
 
-static bool isSpecialAS(unsigned AS) {
-    return AddressSpace::FirstSpecial <= AS && AS <= AddressSpace::LastSpecial;
-}
-
 void GCInvariantVerifier::visitReturnInst(ReturnInst &RI) {
     if (!RI.getReturnValue())
         return;

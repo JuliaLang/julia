@@ -70,10 +70,6 @@ static unsigned getValueAddrSpace(Value *V) {
     return cast<PointerType>(V->getType())->getAddressSpace();
 }
 
-static bool isSpecialAS(unsigned AS) {
-    return AddressSpace::FirstSpecial <= AS && AS <= AddressSpace::LastSpecial;
-}
-
 Value *PropagateJuliaAddrspaces::LiftPointer(Value *V, Type *LocTy, Instruction *InsertPt) {
     SmallVector<Value *, 4> Stack;
     Value *CurrentV = V;

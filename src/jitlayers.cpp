@@ -242,6 +242,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level)
     PM->add(createDeadCodeEliminationPass());
     PM->add(createLowerPTLSPass(imaging_mode));
 #endif
+    PM->add(createStripJuliaAddrspaces());
 }
 
 extern "C" JL_DLLEXPORT

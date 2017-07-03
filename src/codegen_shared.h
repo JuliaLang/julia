@@ -5,5 +5,9 @@ enum AddressSpace {
     LastSpecial = CalleeRooted,
 };
 
+static bool isSpecialAS(unsigned AS) {
+    return AddressSpace::FirstSpecial <= AS && AS <= AddressSpace::LastSpecial;
+}
+
 #define JLCALL_CC (CallingConv::ID)36
 #define JLCALL_F_CC (CallingConv::ID)37
