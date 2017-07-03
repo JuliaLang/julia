@@ -276,6 +276,21 @@ am = map(identity, a)
 @test isa(am, OffsetArray)
 @test am == a
 
+# squeeze
+a0 = rand(1,1,8,8,1)
+a = OffsetArray(a0, (-1,2,3,4,5))
+@test @inferred(squeeze(a, 1)) == @inferred(squeeze(a, (1,))) == OffsetArray(reshape(a, (1,8,8,1)), (2,3,4,5))
+@test @inferred(squeeze(a, 5)) == @inferred(squeeze(a, (5,))) == OffsetArray(reshape(a, (1,1,8,8)), (-1,2,3,4))
+@test @inferred(squeeze(a, (1,5))) == squeeze(a, (5,1)) == OffsetArray(reshape(a, (1,8,8)), (2,3,4))
+@test @inferred(squeeze(a, (1,2,5))) == squeeze(a, (5,2,1)) == OffsetArray(reshape(a, (8,8)), (3,4))
+@test_throws ArgumentError squeeze(a, 0)
+@test_throws ArgumentError squeeze(a, (1,1))
+@test_throws ArgumentError squeeze(a, (1,2,1))
+@test_throws ArgumentError squeeze(a, (1,1,2))
+@test_throws ArgumentError squeeze(a, 3)
+@test_throws ArgumentError squeeze(a, 4)
+@test_throws ArgumentError squeeze(a, 6)
+
 # other functions
 v = OffsetArray(v0, (-3,))
 @test endof(v) == 1
