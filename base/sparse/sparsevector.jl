@@ -30,9 +30,10 @@ end
 SparseVector(n::Integer, nzind::Vector{Ti}, nzval::Vector{Tv}) where {Tv,Ti} =
     SparseVector{Tv,Ti}(n, nzind, nzval)
 
-const AbstractSparseVectorUnion{T<:Number} =
-    Union{AbstractSparseVector{T},
-          SubArray{T,1,<:AbstractSparseArray,Tuple{Base.Slice{Base.OneTo{Int64}},Int64},false}}
+# Define an alias for a view of a whole column of a SparseMatrixCSC. Many methods can be written for the
+# union of such a view and a SparseVector so we define an alias for such a union as well
+const SparseVectorView{T}  = SubArray{T,1,<:SparseMatrixCSC,Tuple{Base.Slice{Base.OneTo{Int64}},Int64},false}
+const SparseVectorUnion{T} = Union{SparseVector{T}, SparseVectorView{T}}
 
 ### Basic properties
 
@@ -43,18 +44,18 @@ countnz(x::SparseVector) = countnz(x.nzval)
 count(x::SparseVector) = count(x.nzval)
 
 nonzeros(x::SparseVector) = x.nzval
-function nonzeros(x::SubArray{T,1,<:SparseMatrixCSC,Tuple{Base.Slice{Base.OneTo{Int64}},Int64},false} where T)
+function nonzeros(x::SparseVectorView)
     rowidx, colidx = parentindexes(x)
     A = parent(x)
-    @inbounds y = view(A.nzval, A.colptr[colidx]:A.colptr[colidx + 1] - 1)
+    @inbounds y = view(A.nzval, nzrange(A, colidx))
     return y
 end
 
 nonzeroinds(x::SparseVector) = x.nzind
-function nonzeroinds(x::SubArray{T,1,<:AbstractSparseArray,Tuple{Base.Slice{Base.OneTo{Int64}},Int64},false} where T)
+function nonzeroinds(x::SparseVectorView)
     rowidx, colidx = parentindexes(x)
     A = parent(x)
-    @inbounds y = view(A.rowval, A.colptr[colidx]:A.colptr[colidx + 1] - 1)
+    @inbounds y = view(A.rowval, nzrange(A, colidx))
     return y
 end
 
@@ -1414,7 +1415,7 @@ for f in [:sum, :maximum, :minimum], op in [:abs, :abs2]
     end
 end
 
-vecnorm(x::AbstractSparseVector, p::Real=2) = vecnorm(nonzeros(x), p)
+vecnorm(x::SparseVectorUnion, p::Real=2) = vecnorm(nonzeros(x), p)
 
 ### linalg.jl
 
@@ -1427,7 +1428,7 @@ vecnorm(x::AbstractSparseVector, p::Real=2) = vecnorm(nonzeros(x), p)
 
 # axpy
 
-function LinAlg.axpy!(a::Number, x::AbstractSparseVectorUnion, y::StridedVector)
+function LinAlg.axpy!(a::Number, x::SparseVectorUnion, y::StridedVector)
     length(x) == length(y) || throw(DimensionMismatch())
     nzind = nonzeroinds(x)
     nzval = nonzeros(x)
@@ -1472,7 +1473,7 @@ broadcast(::typeof(*), a::Number, x::AbstractSparseVector) = a * x
 broadcast(::typeof(/), x::AbstractSparseVector, a::Number) = x / a
 
 # dot
-function dot(x::StridedVector{Tx}, y::AbstractSparseVector{Ty}) where {Tx<:Number,Ty<:Number}
+function dot(x::StridedVector{Tx}, y::SparseVectorUnion{Ty}) where {Tx<:Number,Ty<:Number}
     n = length(x)
     length(y) == n || throw(DimensionMismatch())
     nzind = nonzeroinds(y)
@@ -1484,7 +1485,7 @@ function dot(x::StridedVector{Tx}, y::AbstractSparseVector{Ty}) where {Tx<:Numbe
     return s
 end
 
-function dot(x::AbstractSparseVector{Tx}, y::AbstractVector{Ty}) where {Tx<:Number,Ty<:Number}
+function dot(x::SparseVectorUnion{Tx}, y::AbstractVector{Ty}) where {Tx<:Number,Ty<:Number}
     n = length(y)
     length(x) == n || throw(DimensionMismatch())
     nzind = nonzeroinds(x)
@@ -1517,7 +1518,7 @@ function _spdot(f::Function,
     s
 end
 
-function dot(x::AbstractSparseVectorUnion{<:Number}, y::AbstractSparseVectorUnion{<:Number})
+function dot(x::SparseVectorUnion{<:Number}, y::SparseVectorUnion{<:Number})
     x === y && return sum(abs2, x)
     n = length(x)
     length(y) == n || throw(DimensionMismatch())
@@ -1536,7 +1537,7 @@ end
 ### BLAS-2 / dense A * sparse x -> dense y
 
 # lowrankupdate (BLAS.ger! like)
-function LinAlg.lowrankupdate!(A::StridedMatrix, x::StridedVector, y::AbstractSparseVectorUnion, α::Number = 1)
+function LinAlg.lowrankupdate!(A::StridedMatrix, x::StridedVector, y::SparseVectorUnion, α::Number = 1)
     nzi = nonzeroinds(y)
     nzv = nonzeros(y)
     @inbounds for (j,v) in zip(nzi,nzv)

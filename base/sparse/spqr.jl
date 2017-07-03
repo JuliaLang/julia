@@ -21,10 +21,6 @@ const ORDERING_BESTAMD = Int32(9) # try COLAMD and AMD; pick best#
 # tried.  If there is a high fill-in with AMD then try METIS(A'A) and take
 # the best of AMD and METIS.  METIS is not tried if it isn't installed.
 
-# tol options
-const DEFAULT_TOL = Int32(-2) # if tol <= -2, the default tol is used
-const NO_TOL      = Int32(-1) # if -2 < tol < 0, then no tol is used
-
 using ..SparseArrays: SparseMatrixCSC
 using ..SparseArrays.CHOLMOD
 
@@ -132,7 +128,11 @@ end
 
 Base.size(Q::QRSparseQ) = (size(Q.factors, 1), size(Q.factors, 1))
 
-function Base.LinAlg.qrfact(A::SparseMatrixCSC{Tv}, ::Type{Val{true}}; tol = size(A, 1)*eps()) where {Tv <: CHOLMOD.VTypes}
+# From SPQR manula p. 6
+_default_tol(A::SparseMatrixCSC) =
+    20*sum(size(A))*eps(real(eltype(A)))*maximum(norm(view(A, :, i))^2 for i in 1:size(A, 2))
+
+function Base.LinAlg.qrfact(A::SparseMatrixCSC{Tv}, ::Type{Val{true}}; tol = _default_tol(A)) where {Tv <: CHOLMOD.VTypes}
     R     = Ref{Ptr{CHOLMOD.C_Sparse{Tv}}}()
     E     = Ref{Ptr{CHOLMOD.SuiteSparse_long}}()
     H     = Ref{Ptr{CHOLMOD.C_Sparse{Tv}}}()
@@ -149,7 +149,35 @@ function Base.LinAlg.qrfact(A::SparseMatrixCSC{Tv}, ::Type{Val{true}}; tol = siz
     return QRSparse(SparseMatrixCSC(Sparse(H[])), vec(Array(CHOLMOD.Dense(HTau[]))), SparseMatrixCSC(Sparse(R[])), p, hpinv)
 end
 
-Base.LinAlg.qr(A::SparseMatrixCSC) = qr(A, Val{true})
+"""
+    qrfact(A) -> QRSparse
+
+Compute the `QR` factorization of a sparse matrix `A`. Fill-reducing row and column permutations
+are used such that `F[:R] = F[:Q]'*A[F[:prow],F[:pcol]]`. The main application of this type is to
+solve least squares or underdetermined problems with [`\\`](@ref). The function calls the C library SPQR.
+
+# Examples
+```jldoctest
+julia> A = sparse([1,2,3,4], [1,1,2,2], ones(4))
+4×2 SparseMatrixCSC{Float64,Int64} with 4 stored entries:
+  [1, 1]  =  1.0
+  [2, 1]  =  1.0
+  [3, 2]  =  1.0
+  [4, 2]  =  1.0
+
+julia> qrfact(A)
+Base.SparseArrays.SPQR.QRSparse{Float64,Int64}(
+  [1, 1]  =  1.0
+  [4, 1]  =  0.414214
+  [2, 2]  =  1.0
+  [3, 2]  =  0.414214, [1.70711, 1.70711],
+  [1, 1]  =  -1.41421
+  [2, 2]  =  -1.41421, [1, 2], [1, 4, 2, 3])
+```
+"""
+Base.LinAlg.qrfact(A::SparseMatrixCSC; tol = _default_tol(A)) = qrfact(A, Val{true}, tol = tol)
+
+Base.LinAlg.qr(A::SparseMatrixCSC; tol = _default_tol(A)) = qr(A, Val{true}, tol = tol)
 
 function Base.A_mul_B!(Q::QRSparseQ, A::StridedVecOrMat)
     if size(A, 1) != size(Q, 1)
@@ -227,36 +255,6 @@ function Base.getindex(F::QRSparse, d::Symbol)
         throw(KeyError(d))
     end
 end
-
-### High level API
-
-"""
-    qrfact(A) -> QRSparse
-
-Compute the `QR` factorization of a sparse matrix `A`. Fill-reducing row and columns permutations
-are used such that `F[:R] = F[:Q]'*A[F[:prow],F[:pcol]]`. The main application of this type is to
-solve least squares or underdetermined problems with [`\\`](@ref). The function calls the C library SPQR.
-
-# Examples
-```jldoctest
-julia> A = sparse([1,2,3,4], [1,1,2,2], ones(4))
-4×2 SparseMatrixCSC{Float64,Int64} with 4 stored entries:
-  [1, 1]  =  1.0
-  [2, 1]  =  1.0
-  [3, 2]  =  1.0
-  [4, 2]  =  1.0
-
-julia> qrfact(A)
-Base.SparseArrays.SPQR.QRSparse{Float64,Int64}(
-  [1, 1]  =  1.0
-  [4, 1]  =  0.414214
-  [2, 2]  =  1.0
-  [3, 2]  =  0.414214, [1.70711, 1.70711],
-  [1, 1]  =  -1.41421
-  [2, 2]  =  -1.41421, [1, 2], [1, 4, 2, 3])
-```
-"""
-Base.LinAlg.qrfact(A::SparseMatrixCSC) = qrfact(A, Val{true})
 
 # With a real lhs and complex rhs with the same precision, we can reinterpret
 # the complex rhs as a real rhs with twice the number of columns

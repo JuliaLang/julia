@@ -33,23 +33,22 @@ end
 
 size(S::SparseMatrixCSC) = (S.m, S.n)
 
-# Define a union of SparseMatrixCSC and view containing all rows of a SparseMatrixCSC and a contiguous
-# selection of columns. Many methods can be defined efficiently for this union by extracting the fields
-# via the get function: getcolptr, getrowval, and getnzval. The key insight is that getcolptr on a view
-# returns a offset view of the colptr of the underlying SparseMatrixCSC
-const SparseMatrixCSCUnion{Tv,Ti} =
-    Union{SparseMatrixCSC{Tv,Ti},
-        SubArray{Tv,2,SparseMatrixCSC{Tv,Ti},Tuple{Base.Slice{Base.OneTo{Int64}},I}}} where {I<:AbstractUnitRange}
+# Define an alias for views of a SparseMatrixCSC which include all rows and a unit range of the columns.
+# Also define a union of SparseMatrixCSC and this view since many methods can be defined efficiently for
+# this union by extracting the fields via the get function: getcolptr, getrowval, and getnzval. The key
+# insight is that getcolptr on a SparseMatrixCSCView returns an offset view of the colptr of the
+# underlying SparseMatrixCSC
+const SparseMatrixCSCView{Tv,Ti} =
+    SubArray{Tv,2,SparseMatrixCSC{Tv,Ti},
+        Tuple{Base.Slice{Base.OneTo{Int64}},I}} where {I<:AbstractUnitRange}
+const SparseMatrixCSCUnion{Tv,Ti} = Union{SparseMatrixCSC{Tv,Ti}, SparseMatrixCSCView{Tv,Ti}}
 
-getcolptr(S::SparseMatrixCSC) = S.colptr
-getcolptr(S::SubArray{T,2,<:SparseMatrixCSC,Tuple{Base.Slice{Base.OneTo{Int64}},I}} where {T,I<:AbstractUnitRange}) =
-    view(S.parent.colptr, first(indices(S, 2)):(last(indices(S, 2)) + 1))
-getrowval(S::SparseMatrixCSC) = S.rowval
-getrowval(S::SubArray{T,2,<:SparseMatrixCSC,Tuple{Base.Slice{Base.OneTo{Int64}},I}} where {T,I<:AbstractUnitRange}) =
-    S.parent.rowval
-getnzval(S::SparseMatrixCSC) = S.nzval
-getnzval(S::SubArray{T,2,<:SparseMatrixCSC,Tuple{Base.Slice{Base.OneTo{Int64}},I}} where {T,I<:AbstractUnitRange}) =
-    S.parent.nzval
+getcolptr(S::SparseMatrixCSC)     = S.colptr
+getcolptr(S::SparseMatrixCSCView) = view(S.parent.colptr, first(indices(S, 2)):(last(indices(S, 2)) + 1))
+getrowval(S::SparseMatrixCSC)     = S.rowval
+getrowval(S::SparseMatrixCSCView) = S.parent.rowval
+getnzval( S::SparseMatrixCSC)     = S.nzval
+getnzval( S::SparseMatrixCSCView) = S.parent.nzval
 
 
 """
