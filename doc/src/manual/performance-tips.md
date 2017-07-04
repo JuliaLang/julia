@@ -806,7 +806,7 @@ is that with column-major arrays, the first index changes most rapidly. Essentia
 that looping will be faster if the inner-most loop index is the first to appear in a slice expression.
 
 Consider the following contrived example. Imagine we wanted to write a function that accepts a
-`Vector` and returns a square `Matrix` with either the rows or the columns filled with copies
+[`Vector`](@ref) and returns a square [`Matrix`](@ref) with either the rows or the columns filled with copies
 of the input vector. Assume that it is not important whether rows or columns are filled with these
 copies (perhaps the rest of the code can be easily adapted accordingly). We could conceivably
 do this in at least four ways (in addition to the recommended call to the built-in [`repmat()`](@ref)):

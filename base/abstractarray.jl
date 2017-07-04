@@ -3,9 +3,10 @@
 ## Basic functions ##
 
 """
-    AbstractArray{T, N}
+    AbstractArray{T,N}
 
-Abstract array supertype which arrays inherit from.
+Abstract `N`-dimensional array supertype containing elements of type `T`.
+[`Array`](@ref)s and some array-like objects inherit from this type.
 """
 AbstractArray
 
@@ -877,7 +878,7 @@ end
     getindex(A, inds...)
 
 Return a subset of array `A` as specified by `inds`, where each `ind` may be an
-`Int`, a `Range`, or a `Vector`. See the manual section on
+`Int`, a `Range`, or a [`Vector`](@ref). See the manual section on
 [array indexing](@ref man-array-indexing) for details.
 
 # Examples
