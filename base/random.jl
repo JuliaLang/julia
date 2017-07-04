@@ -1628,8 +1628,8 @@ and the digits 0-9. The optional `rng` argument specifies a random
 number generator, see [Random Numbers](@ref).
 
 # Examples
-```julia-repl
-julia> randstring()
+```jldoctest
+julia> srand(0); randstring()
 "c03rgKi1"
 
 julia> randstring(MersenneTwister(0), 'a':'z', 6)
