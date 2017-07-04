@@ -5,12 +5,18 @@
 # Assumes that row values in rowval for each column are sorted
 #      issorted(rowval[colptr[i]:(colptr[i+1]-1)]) == true
 
+"""
+    SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}
+
+Matrix type for storing sparse matrices in the
+[Compressed Sparse Column](@ref man-csc) format.
+"""
 struct SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}
     m::Int                  # Number of rows
     n::Int                  # Number of columns
     colptr::Vector{Ti}      # Column i is in colptr[i]:(colptr[i+1]-1)
-    rowval::Vector{Ti}      # Row values of nonzeros
-    nzval::Vector{Tv}       # Nonzero values
+    rowval::Vector{Ti}      # Row indices of stored values
+    nzval::Vector{Tv}       # Stored values, typically nonzeros
 
     function SparseMatrixCSC{Tv,Ti}(m::Integer, n::Integer, colptr::Vector{Ti}, rowval::Vector{Ti},
                                     nzval::Vector{Tv}) where {Tv,Ti<:Integer}
@@ -530,8 +536,8 @@ Parent of and expert driver for [`sparse`](@ref);
 see [`sparse`](@ref) for basic usage. This method
 allows the user to provide preallocated storage for `sparse`'s intermediate objects and
 result as described below. This capability enables more efficient successive construction
-of `SparseMatrixCSC`s from coordinate representations, and also enables extraction of an
-unsorted-column representation of the result's transpose at no additional cost.
+of [`SparseMatrixCSC`](@ref)s from coordinate representations, and also enables extraction
+of an unsorted-column representation of the result's transpose at no additional cost.
 
 This method consists of three major steps: (1) Counting-sort the provided coordinate
 representation into an unsorted-row CSR form including repeated entries. (2) Sweep through
@@ -731,8 +737,8 @@ and  `length(X.nzval) >= nnz(A)`). Column-permutation `q`'s length must match `A
 count (`length(q) == A.n`).
 
 This method is the parent of several methods performing transposition and permutation
-operations on `SparseMatrixCSC`s. As this method performs no argument checking, prefer
-the safer child methods (`[c]transpose[!]`, `permute[!]`) to direct use.
+operations on [`SparseMatrixCSC`](@ref)s. As this method performs no argument checking,
+prefer the safer child methods (`[c]transpose[!]`, `permute[!]`) to direct use.
 
 This method implements the `HALFPERM` algorithm described in F. Gustavson, "Two fast
 algorithms for sparse matrices: multiplication and permuted transposition," ACM TOMS 4(3),
@@ -850,8 +856,8 @@ end
         C::SparseMatrixCSC{Tv,Ti}, workcolptr::Vector{Ti})
 
 See [`permute!`](@ref) for basic usage. Parent of `permute!`
-methods operating on `SparseMatrixCSC`s where the source and destination matrices are the
-same. See `unchecked_noalias_permute!`
+methods operating on [`SparseMatrixCSC`](@ref)s where the source and destination matrices
+are the same. See `unchecked_noalias_permute!`
 for additional information; these methods are identical but for this method's requirement of
 the additional `workcolptr`, `length(workcolptr) >= A.n + 1`, which enables efficient
 handling of the source-destination aliasing.
