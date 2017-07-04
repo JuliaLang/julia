@@ -399,7 +399,7 @@ end
 
 Search for the given pattern `pat` in `s`, and replace each occurrence with `r`.
 If `count` is provided, replace at most `count` occurrences.
-As with search, the second argument may be a
+As with [`search`](@ref), the second argument may be a
 single character, a vector or a set of characters, a string, or a regular expression. If `r`
 is a function, each occurrence is replaced with `r(s)` where `s` is the matched substring.
 If `pat` is a regular expression and `r` is a `SubstitutionString`, then capture group
