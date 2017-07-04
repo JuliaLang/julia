@@ -3,13 +3,9 @@
 
 # Build a system image binary at sysimg_path.dlext. Allow insertion of a userimg via
 # userimg_path.  If sysimg_path.dlext is currently loaded into memory, don't continue
-# unless force is set to true.  Allow targeting of a CPU architecture via cpu_target.
+# unless force is set to true. Allow targeting of a CPU architecture via cpu_target.
 function default_sysimg_path(debug=false)
-    if is_unix()
-        splitext(Libdl.dlpath(debug ? "sys-debug" : "sys"))[1]
-    else
-        joinpath(dirname(JULIA_HOME), "lib", "julia", debug ? "sys-debug" : "sys")
-    end
+    joinpath(dirname(JULIA_HOME), "lib", "julia", debug ? "sys-debug" : "sys")
 end
 
 """
@@ -104,7 +100,7 @@ function build_sysimg(sysimg_path=nothing, cpu_target="native", userimg_path=not
     end
 end
 
-# Search for a compiler to link sys.o into sys.dl_ext.  Honor LD environment variable.
+# Search for a compiler to link sys.o into sys.dl_ext. Honor LD environment variable.
 function find_system_compiler()
     if haskey(ENV, "CC")
         if !success(`$(ENV["CC"]) -v`)
@@ -170,7 +166,7 @@ function link_sysimg(sysimg_path=nothing, cc=find_system_compiler(), debug=false
     info("System image successfully built at $sysimg_path.$(Libdl.dlext)")
 end
 
-# When running this file as a script, try to do so with default values.  If arguments are passed
+# When running this file as a script, try to do so with default values. If arguments are passed
 # in, use them as the arguments to build_sysimg above.
 #
 # Also check whether we are running `genstdlib.jl`, in which case we don't want to build a
