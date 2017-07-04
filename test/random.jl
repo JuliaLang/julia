@@ -543,3 +543,23 @@ let r = MersenneTwister(0)
     @inferred Base.Random.reserve_1(r)
     @inferred Base.Random.reserve(r, 1)
 end
+
+# test randstring API
+let b = ['0':'9';'A':'Z';'a':'z']
+    for rng = [[], [MersenneTwister(0)]]
+        @test length(randstring(rng...)) == 8
+        @test length(randstring(rng..., 20)) == 20
+        @test issubset(randstring(rng...), b)
+        for c = ['a':'z', "qwèrtï", Set(Vector{UInt8}("gcat"))],
+                len = [8, 20]
+            s = len == 8 ? randstring(rng..., c) : randstring(rng..., c, len)
+            @test length(s) == len
+            if eltype(c) == Char
+                @test issubset(s, c)
+            else # UInt8
+                @test issubset(s, map(Char, c))
+            end
+        end
+    end
+    @test randstring(MersenneTwister(0)) == randstring(MersenneTwister(0), b)
+end
