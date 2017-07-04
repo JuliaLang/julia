@@ -3917,12 +3917,12 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr)
         }
     }
     else if (head == new_sym) {
-        jl_value_t *ty = expr_type(ctx, args[0]);
         size_t nargs = jl_array_len(ex->args);
         jl_cgval_t *argv = (jl_cgval_t*)alloca(sizeof(jl_cgval_t) * nargs);
         for (size_t i = 0; i < nargs; ++i) {
             argv[i] = emit_expr(ctx, args[i]);
         }
+        jl_value_t *ty = argv[0].typ;
         if (jl_is_type_type(ty) &&
                 jl_is_datatype(jl_tparam0(ty)) &&
                 jl_is_leaf_type(jl_tparam0(ty))) {
