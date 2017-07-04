@@ -17,7 +17,7 @@ empty set. Should be used instead of [`IntSet`](@ref) for sparse integer sets, o
 for sets of arbitrary objects.
 
 # Examples
-```
+```jldoctest
 julia> Set()
 Set{Any}()
 

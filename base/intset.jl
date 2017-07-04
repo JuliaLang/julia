@@ -14,7 +14,7 @@ empty set. Implemented as a bit string, and therefore designed for dense integer
 very large integers), use [`Set`](@ref) instead.
 
 # Examples
-```
+```jldoctest
 julia> IntSet()
 IntSet([])
 
