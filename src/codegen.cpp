@@ -549,7 +549,7 @@ public:
     Value *argArray = NULL;
     Value *argCount = NULL;
     std::string funcName;
-    int vaSlot = 0;        // name of vararg argument
+    int vaSlot = -1;        // name of vararg argument
     bool vaStack = false;      // varargs stack-allocated
     bool has_sret = false;
     int nReqArgs = 0;
@@ -2434,23 +2434,23 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         }
     }
 
-    // TODO: optimize VA tuple __apply
-//    else if (f == jl_builtin__apply && nargs == 2 && ctx.vaStack && slot_eq(args[2], ctx.vaSlot)) {
-//        // turn Core._apply(f, Tuple) ==> f(Tuple...) using the jlcall calling convention if Tuple is the vaStack allocation
-//        Value *theF = maybe_decay_untracked(boxed(ctx, argv[1]));
-//        Value *nva = emit_n_varargs(ctx);
-//#ifdef _P64
-//        nva = ctx.builder.CreateTrunc(nva, T_int32);
-//#endif
-//        JL_FEAT_REQUIRE(ctx, runtime);
-//        Value *r =
-//            ctx.builder.CreateCall(prepare_call(jlapply2va_func), {theF,
-//                                ctx.builder.CreateGEP(ctx.argArray,
-//                                                  ConstantInt::get(T_size, ctx.nReqArgs)),
-//                                nva});
-//        *ret = mark_julia_type(ctx, r, true, jl_any_type);
-//        return true;
-//    }
+    else if (f == jl_builtin__apply && nargs == 2 && ctx.vaSlot > 0) {
+        // turn Core._apply(f, Tuple) ==> f(Tuple...) using the jlcall calling convention if Tuple is the vaStack allocation
+        if (LoadInst *load = dyn_cast_or_null<LoadInst>(argv[2].V)) {
+            if (load->getPointerOperand() == ctx.slots[ctx.vaSlot].boxroot) {
+                Value *theF = maybe_decay_untracked(boxed(ctx, argv[1]));
+                Value *nva = emit_n_varargs(ctx);
+#ifdef _P64
+                nva = ctx.builder.CreateTrunc(nva, T_int32);
+#endif
+                Value *theArgs = ctx.builder.CreateGEP(ctx.argArray, ConstantInt::get(T_size, ctx.nReqArgs));
+                JL_FEAT_REQUIRE(ctx, runtime);
+                Value *r = ctx.builder.CreateCall(prepare_call(jlapply2va_func), { theF, theArgs, nva });
+                *ret = mark_julia_type(ctx, r, true, jl_any_type);
+                return true;
+            }
+        }
+    }
 
     else if (f == jl_builtin_tuple) {
         if (nargs == 0) {
@@ -2635,17 +2635,23 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         }
 
         if (fld.typ == (jl_value_t*)jl_long_type) {
-            // TODO: optimize VA tuple
-//            if (ctx.vaStack && slot_eq(args[1], ctx.vaSlot)) {
-//                Value *valen = emit_n_varargs(ctx);
-//                Value *va_ary = jl_cgval_t(ctx.builder.CreateGEP(ctx.argArray, ConstantInt::get(T_size, ctx.nReqArgs)), NULL, false, NULL, NULL);
-//                Value *idx = emit_unbox(ctx, T_size, fld, (jl_value_t*)jl_long_type);
-//                idx = emit_bounds_check(ctx, va_ary, NULL, idx, valen);
-//                idx = ctx.builder.CreateAdd(idx, ConstantInt::get(T_size, ctx.nReqArgs));
-//                Value *v = tbaa_decorate(tbaa_value, ctx.builder.CreateLoad(ctx.builder.CreateGEP(ctx.argArray, idx))),
-//                *ret = mark_julia_type(ctx, v, /*boxed*/ true, jl_any_type, /*needsgcroot*/ false);
-//                return true;
-//            }
+            if (ctx.vaSlot > 0) {
+                // optimize VA tuple
+                if (LoadInst *load = dyn_cast_or_null<LoadInst>(obj.V)) {
+                    if (load->getPointerOperand() == ctx.slots[ctx.vaSlot].boxroot) {
+                        Value *valen = emit_n_varargs(ctx);
+                        jl_cgval_t va_ary( // fake instantiation of a cgval, in order to call emit_bounds_check
+                                ctx.builder.CreateGEP(ctx.argArray, ConstantInt::get(T_size, ctx.nReqArgs)),
+                                NULL, false, NULL, NULL);
+                        Value *idx = emit_unbox(ctx, T_size, fld, (jl_value_t*)jl_long_type);
+                        idx = emit_bounds_check(ctx, va_ary, NULL, idx, valen);
+                        idx = ctx.builder.CreateAdd(idx, ConstantInt::get(T_size, ctx.nReqArgs));
+                        Value *v = tbaa_decorate(tbaa_value, ctx.builder.CreateLoad(ctx.builder.CreateGEP(ctx.argArray, idx)));
+                        *ret = mark_julia_type(ctx, v, /*boxed*/ true, jl_any_type, /*needsgcroot*/ false);
+                        return true;
+                    }
+                }
+            }
 
             jl_datatype_t *utt = (jl_datatype_t*)jl_unwrap_unionall(obj.typ);
             if (jl_is_datatype(utt) && utt->layout) {
@@ -2725,11 +2731,15 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
 
     else if (f == jl_builtin_nfields && nargs == 1) {
         const jl_cgval_t &obj = argv[1];
-        // TODO: optimize VA tuple
-//        if (ctx.vaStack && slot_eq(args[1], ctx.vaSlot)) {
-//            *ret = mark_julia_type(ctx, emit_n_varargs(ctx), false, jl_long_type);
-//            return true;
-//        }
+        if (ctx.vaSlot > 0) {
+            // optimize VA tuple
+            if (LoadInst *load = dyn_cast_or_null<LoadInst>(obj.V)) {
+                if (load->getPointerOperand() == ctx.slots[ctx.vaSlot].boxroot) {
+                    *ret = mark_julia_type(ctx, emit_n_varargs(ctx), false, jl_long_type);
+                    return true;
+                }
+            }
+        }
         if (jl_is_type_type(obj.typ)) {
             jl_value_t *tp0 = jl_tparam0(obj.typ);
             if (jl_is_leaf_type(tp0)) {
@@ -4830,7 +4840,6 @@ static std::unique_ptr<Module> emit_function(
     ctx.world = world;
     ctx.name = jl_symbol_name(jl_is_method(lam->def.method) ? lam->def.method->name : anonymous_sym);
     ctx.funcName = ctx.name;
-    ctx.vaSlot = -1;
     ctx.vaStack = false;
     ctx.params = params;
     ctx.spvals_ptr = NULL;
@@ -5352,13 +5361,14 @@ static std::unique_ptr<Module> emit_function(
         }
         else {
             // restarg = jl_f_tuple(NULL, &args[nreq], nargs - nreq)
-            Value *restTuple =
+            CallInst *restTuple =
                 ctx.builder.CreateCall(prepare_call(jltuple_func),
                         { maybe_decay_untracked(V_null),
                           ctx.builder.CreateGEP(argArray,
                                   ConstantInt::get(T_size, nreq - 1)),
                           ctx.builder.CreateSub(argCount,
                                   ConstantInt::get(T_int32, nreq - 1)) });
+            restTuple->setAttributes(jltuple_func->getAttributes());
             ctx.builder.CreateStore(restTuple, vi.boxroot);
             emit_local_root(ctx, &vi); // create a root for vi
         }
@@ -5806,6 +5816,39 @@ static std::unique_ptr<Module> emit_function(
     // step 13. Perform any delayed instantiations
     if (ctx.debug_enabled) {
         dbuilder.finalize();
+    }
+
+    if (ctx.vaSlot > 0) {
+        // remove VA allocation if we never referenced it
+        Instruction *root = cast_or_null<Instruction>(ctx.slots[ctx.vaSlot].boxroot);
+        if (root) {
+            Instruction *store_value = NULL;
+            bool have_real_use = false;
+            for (Use &U : root->uses()) {
+                User *RU = U.getUser();
+                if (StoreInst *SRU = dyn_cast<StoreInst>(RU)) {
+                    if (!store_value)
+                        store_value = dyn_cast<Instruction>(SRU->getValueOperand());
+                }
+                else if (isa<DbgInfoIntrinsic>(RU)) {
+                }
+                else if (isa<LoadInst>(RU) && RU->use_empty()) {
+                }
+                else {
+                    have_real_use = true;
+                    break;
+                }
+            }
+            if (!have_real_use) {
+                for (Use &U : root->uses()) {
+                    User *RU = U.getUser();
+                    cast<Instruction>(RU)->eraseFromParent();
+                }
+                root->eraseFromParent();
+                if (store_value)
+                    store_value->eraseFromParent();
+            }
+        }
     }
 
     // copy ctx.roots into m->roots
