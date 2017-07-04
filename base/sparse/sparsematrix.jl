@@ -149,7 +149,7 @@ function Base.show(io::IOContext, S::SparseMatrixCSC)
 
     function _format_line(r, col)
         pad = ndigits(max(S.m, S.n))
-        print(ioc, "  ", '[', rpad(S.rowval[r], pad), ", ", lpad(col, pad), "]  =  ")
+        print(ioc, "  [", rpad(S.rowval[r], pad), ", ", lpad(col, pad), "]  =  ")
         if isassigned(S.nzval, Int(r))
             show(ioc, S.nzval[r])
         else
@@ -171,19 +171,17 @@ function Base.show(io::IOContext, S::SparseMatrixCSC)
         count == print_count && break
     end
 
-    lines_bottom = String[]
     if !will_fit
-        count = 0
-        for col = reverse(1:S.n), r = reverse(nzrange(S, col))
-            count += 1
-            push!(lines_bottom, _format_line(r, col))
-            count == print_count && break
+        print(io, "\n  \u22ee")
+        # find the column to start printing in for the last print_count elements
+        nextcol = searchsortedfirst(S.colptr, nnz(S) - print_count + 1)
+        for r = (nnz(S) - print_count + 1) : (S.colptr[nextcol] - 1)
+            print(io, "\n", _format_line(r, nextcol - 1))
         end
-    end
-
-    if !will_fit
-        print(io, "\n  ", '\u22ee', "\n")
-        print(io, join(reverse(lines_bottom), '\n'))
+        # print all of the remaining columns
+        for col = nextcol:S.n, r = nzrange(S, col)
+            print(io, "\n", _format_line(r, col))
+        end
     end
 end
 

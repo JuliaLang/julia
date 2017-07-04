@@ -308,8 +308,8 @@ function A_rdiv_B!(A::SparseMatrixCSC{T}, D::Diagonal{T}) where T
     A
 end
 
-A_rdiv_Bc!(A::SparseMatrixCSC{T}, D::Diagonal{T}) where T = A_rdiv_B!(A, conj(D))
-A_rdiv_Bt!(A::SparseMatrixCSC{T}, D::Diagonal{T}) where T = A_rdiv_B!(A, D)
+A_rdiv_Bc!(A::SparseMatrixCSC{T}, D::Diagonal{T}) where {T} = A_rdiv_B!(A, conj(D))
+A_rdiv_Bt!(A::SparseMatrixCSC{T}, D::Diagonal{T}) where {T} = A_rdiv_B!(A, D)
 
 ## triu, tril
 

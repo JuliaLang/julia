@@ -1664,7 +1664,7 @@ end
 end == true
 
 @test let
-    # creates a new worker in the different folder and tries to include file
+    # creates a new worker in a different folder and tries to include file
     tmp_file, temp_file_stream = mktemp()
     close(temp_file_stream)
     tmp_file = relpath(tmp_file)
