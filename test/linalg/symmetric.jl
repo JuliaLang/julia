@@ -336,3 +336,12 @@ end
     @test ishermitian(Symmetric(B, :L))
     @test issymmetric(Hermitian(B, :L))
 end
+
+@testset "$HS solver with $RHS RHS - $T" for HS  in (Hermitian, Symmetric),
+        RHS in (Hermitian, Symmetric, Diagonal, UpperTriangular, LowerTriangular),
+        T   in (Float64, Complex128)
+    D = rand(T, 10, 10); D = D'D
+    A = HS(D)
+    B = RHS(D)
+    @test A\B ≈ Matrix(A)\Matrix(B)
+end

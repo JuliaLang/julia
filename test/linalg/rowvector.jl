@@ -236,6 +236,14 @@ end
     @test_throws DimensionMismatch ut\rv
 end
 
+@testset "Symmetric/Hermitian ambiguity methods" begin
+    S = Symmetric(rand(3, 3))
+    H = Hermitian(rand(3, 3))
+    v = (rand(3)')::RowVector
+    @test_throws DimensionMismatch S\v
+    @test_throws DimensionMismatch H\v
+end
+
 # issue #20389
 @testset "1 row/col vec*mat" begin
     let x=[1,2,3], A=ones(1,4), y=x', B=A', C=x.*A
