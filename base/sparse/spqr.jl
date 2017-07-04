@@ -240,7 +240,47 @@ end
 Base.LinAlg.getq(F::QRSparse) = QRSparseQ(F.factors, F.τ)
 
 """
-    getindex
+    getindex(F::QRSparse, d::Symbol)
+
+Extract factors of a QRSparse factorization. Possible values of `d` are
+- :Q : `QRSparseQ` matrix of the ``Q`` factor in Householder form
+- :R : `UpperTriangular` ``R`` factor
+- :prow : Vector of the row permutations applied to the factorized matrix
+- :pcol : Vector of the column permutations applied to the factorized matrix
+
+# Examples
+```jldoctest
+julia> F = qrfact(sparse([1,3,2,3,4], [1,1,2,3,4], [1.0,2.0,3.0,4.0,5.0]));
+
+julia> F[:Q]
+4×4 Base.SparseArrays.SPQR.QRSparseQ{Float64,Int64}:
+ 1.0  0.0  0.0  0.0
+ 0.0  1.0  0.0  0.0
+ 0.0  0.0  1.0  0.0
+ 0.0  0.0  0.0  1.0
+
+julia> F[:R]
+4×4 SparseMatrixCSC{Float64,Int64} with 5 stored entries:
+  [1, 1]  =  3.0
+  [2, 2]  =  4.0
+  [3, 3]  =  5.0
+  [2, 4]  =  2.0
+  [4, 4]  =  1.0
+
+julia> F[:prow]
+4-element Array{Int64,1}:
+ 2
+ 3
+ 4
+ 1
+
+julia> F[:pcol]
+4-element Array{Int64,1}:
+ 2
+ 3
+ 4
+ 1
+```
 """
 function Base.getindex(F::QRSparse, d::Symbol)
     if d == :Q

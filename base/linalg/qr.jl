@@ -643,7 +643,7 @@ A_mul_Bc!(A::StridedVecOrMat{T}, B::QRCompactWYQ{T}) where {T<:BlasReal} = LAPAC
 A_mul_Bc!(A::StridedVecOrMat{T}, B::QRCompactWYQ{T}) where {T<:BlasComplex} = LAPACK.gemqrt!('R','C',B.factors,B.T,A)
 A_mul_Bc!(A::StridedVecOrMat{T}, B::QRPackedQ{T}) where {T<:BlasReal} = LAPACK.ormqr!('R','T',B.factors,B.τ,A)
 A_mul_Bc!(A::StridedVecOrMat{T}, B::QRPackedQ{T}) where {T<:BlasComplex} = LAPACK.ormqr!('R','C',B.factors,B.τ,A)
-function A_mul_Bc!(A::AbstractMatrix,Q::QRPackedQ)
+function A_mul_Bc!(A::StridedMatrix,Q::QRPackedQ)
     mQ, nQ = size(Q.factors)
     mA, nA = size(A,1), size(A,2)
     if nA != mQ
@@ -667,7 +667,7 @@ function A_mul_Bc!(A::AbstractMatrix,Q::QRPackedQ)
     end
     A
 end
-function A_mul_Bc(A::AbstractMatrix, B::AbstractQ)
+function A_mul_Bc(A::StridedMatrix, B::AbstractQ)
     TAB = promote_type(eltype(A),eltype(B))
     BB = convert(AbstractMatrix{TAB}, B)
     if size(A,2) == size(B.factors, 1)
