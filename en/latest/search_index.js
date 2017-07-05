@@ -10197,7 +10197,23 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Core.AbstractArray",
     "category": "Type",
-    "text": "AbstractArray{T, N}\n\nAbstract array supertype which arrays inherit from.\n\n\n\n"
+    "text": "AbstractArray{T,N}\n\nAbstract N-dimensional array supertype containing elements of type T. Arrays and some array-like objects inherit from this type.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/arrays/#Base.AbstractVector",
+    "page": "Arrays",
+    "title": "Base.AbstractVector",
+    "category": "Type",
+    "text": "AbstractVector{T}\n\nAbstract vector supertype containing elements of type T. Alias for AbstractArray{T,1}.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/arrays/#Base.AbstractMatrix",
+    "page": "Arrays",
+    "title": "Base.AbstractMatrix",
+    "category": "Type",
+    "text": "AbstractMatrix{T}\n\nAbstract matrix supertype containing elements of type T. Alias for AbstractArray{T,2}.\n\n\n\n"
 },
 
 {
@@ -10206,6 +10222,22 @@ var documenterSearchIndex = {"docs": [
     "title": "Core.Array",
     "category": "Type",
     "text": "Array{T}(dims)\nArray{T,N}(dims)\n\nConstruct an uninitialized N-dimensional dense array with element type T, where N is determined from the length or number of dims. dims may be a tuple or a series of integer arguments corresponding to the lengths in each dimension. If the rank N is supplied explicitly as in Array{T,N}(dims), then it must match the length or number of dims.\n\nExamples\n\njulia> A = Array{Float64, 2}(2, 2);\n\njulia> ndims(A)\n2\n\njulia> eltype(A)\nFloat64\n\n\n\n"
+},
+
+{
+    "location": "stdlib/arrays/#Base.Vector",
+    "page": "Arrays",
+    "title": "Base.Vector",
+    "category": "Type",
+    "text": "Vector{T}\n\nVector type containing elements of type T. Alias for Array{T,1}.\n\n\n\n"
+},
+
+{
+    "location": "stdlib/arrays/#Base.Matrix",
+    "page": "Arrays",
+    "title": "Base.Matrix",
+    "category": "Type",
+    "text": "Matrix{T}\n\nMatrix type containing elements of type T. Alias for Array{T,2}.\n\n\n\n"
 },
 
 {
@@ -10333,7 +10365,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Constructors and Types",
     "category": "section",
-    "text": "Core.AbstractArray\nCore.Array\nBase.getindex(::Type, ::Any...)\nBase.zeros\nBase.ones\nBase.BitArray\nBase.trues\nBase.falses\nBase.fill\nBase.fill!\nBase.similar(::AbstractArray)\nBase.similar(::Any, ::Tuple)\nBase.eye\nBase.linspace\nBase.logspace\nBase.Random.randsubseq\nBase.Random.randsubseq!"
+    "text": "Core.AbstractArray\nBase.AbstractVector\nBase.AbstractMatrix\nCore.Array\nBase.Vector\nBase.Matrix\nBase.getindex(::Type, ::Any...)\nBase.zeros\nBase.ones\nBase.BitArray\nBase.trues\nBase.falses\nBase.fill\nBase.fill!\nBase.similar(::AbstractArray)\nBase.similar(::Any, ::Tuple)\nBase.eye\nBase.linspace\nBase.logspace\nBase.Random.randsubseq\nBase.Random.randsubseq!"
 },
 
 {
