@@ -3,8 +3,20 @@
 ## array.jl: Dense arrays
 
 ## Type aliases for convenience ##
+"""
+    AbstractVector{T}
 
+Abstract vector supertype containing elements of type `T`.
+Alias for [`AbstractArray{T,1}`](@ref).
+"""
 const AbstractVector{T} = AbstractArray{T,1}
+
+"""
+    AbstractMatrix{T}
+
+Abstract matrix supertype containing elements of type `T`.
+Alias for [`AbstractArray{T,2}`](@ref).
+"""
 const AbstractMatrix{T} = AbstractArray{T,2}
 const AbstractVecOrMat{T} = Union{AbstractVector{T}, AbstractMatrix{T}}
 const RangeIndex = Union{Int, Range{Int}, AbstractUnitRange{Int}}
@@ -13,7 +25,18 @@ const IntOrInd = Union{Int, AbstractUnitRange}
 const DimsOrInds{N} = NTuple{N,DimOrInd}
 const NeedsShaping = Union{Tuple{Integer,Vararg{Integer}}, Tuple{OneTo,Vararg{OneTo}}}
 
+"""
+    Vector{T}
+
+Vector type containing elements of type `T`. Alias for [`Array{T,1}`](@ref).
+"""
 const Vector{T} = Array{T,1}
+
+"""
+    Matrix{T}
+
+Matrix type containing elements of type `T`. Alias for [`Array{T,2}`](@ref).
+"""
 const Matrix{T} = Array{T,2}
 const VecOrMat{T} = Union{Vector{T}, Matrix{T}}
 

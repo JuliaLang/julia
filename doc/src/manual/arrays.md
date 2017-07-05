@@ -617,8 +617,8 @@ julia> string.(1:3, ". ", ["First", "Second", "Third"])
 
 ### Implementation
 
-The base array type in Julia is the abstract type `AbstractArray{T,N}`. It is parametrized by
-the number of dimensions `N` and the element type `T`. `AbstractVector` and `AbstractMatrix` are
+The base array type in Julia is the abstract type [`AbstractArray{T,N}`](@ref). It is parametrized by
+the number of dimensions `N` and the element type `T`. [`AbstractVector`](@ref) and [`AbstractMatrix`](@ref) are
 aliases for the 1-d and 2-d cases. Operations on `AbstractArray` objects are defined using higher
 level operators and functions, in a way that is independent of the underlying storage. These operations
 generally work correctly as a fallback for any specific array implementation.
@@ -644,7 +644,7 @@ method [`Base.unsafe_convert(Ptr{T}, A)`](@ref) is provided, the memory layout s
 in the same way to these strides.
 
 The [`Array`](@ref) type is a specific instance of `DenseArray` where elements are stored in column-major
-order (see additional notes in [Performance Tips](@ref man-performance-tips)). `Vector` and `Matrix` are aliases for
+order (see additional notes in [Performance Tips](@ref man-performance-tips)). [`Vector`](@ref) and [`Matrix`](@ref) are aliases for
 the 1-d and 2-d cases. Specific operations such as scalar indexing, assignment, and a few other
 basic storage-specific operations are all that have to be implemented for [`Array`](@ref), so
 that the rest of the array library can be implemented in a generic manner.

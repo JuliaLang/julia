@@ -4,7 +4,11 @@
 
 ```@docs
 Core.AbstractArray
+Base.AbstractVector
+Base.AbstractMatrix
 Core.Array
+Base.Vector
+Base.Matrix
 Base.getindex(::Type, ::Any...)
 Base.zeros
 Base.ones
