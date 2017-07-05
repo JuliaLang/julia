@@ -1,6 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include <llvm/IR/Module.h>
+#include <llvm/IR/Verifier.h>
 #include <llvm/Support/Debug.h>
 #include <llvm/Transforms/Utils/Cloning.h>
 #include <llvm/Transforms/Utils/ValueMapper.h>
@@ -24,7 +25,6 @@ public:
 
 template<typename T>
 void unsafeReplaceAllUsesWith(T *from, T *to) {
-
   while (!from->use_empty()) {
     auto &U = *from->use_begin();
     U.set(to);
@@ -173,8 +173,10 @@ bool StripJuliaAddrspaces::runOnModule(Module &M) {
 
         // rewrite the function IR
         Changed |= runOnFunction(F);
-        if (Changed)
+        if (Changed) {
             F.dump();
+            verifyFunction(F);
+        }
 
         // replace the function definition
         auto *FTy = F.getFunctionType();
