@@ -2,9 +2,8 @@
 
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Verifier.h>
+#include <llvm/IR/Instructions.h>
 #include <llvm/Support/Debug.h>
-#include <llvm/Transforms/Utils/Cloning.h>
-#include <llvm/Transforms/Utils/ValueMapper.h>
 
 #include "llvm-version.h"
 #include "codegen_shared.h"
@@ -38,10 +37,10 @@ unsigned remapAS(unsigned AS) {
         return AS;
 }
 
-class TypeStripper: public ValueMapTypeRemapper
+class TypeStripper
 {
 public:
-    Type *remapType(Type *SrcTy) override
+    Type *remapType(Type *SrcTy)
     {
         // process all descendants from llvm::Type that contain other types
         if (auto Ty = dyn_cast<PointerType>(SrcTy))
@@ -59,9 +58,17 @@ public:
         return SrcTy;
     }
 
+    bool isSafeType(Type *SrcTy) {
+        auto *DstTy = remapType(SrcTy);
+        return (SrcTy == DstTy);
+    }
+
     PointerType* remapType(PointerType* SrcTy) {
         Type* ElTy = remapType(SrcTy->getElementType());
-        return PointerType::get(ElTy, remapAS(SrcTy->getAddressSpace()));
+        bool Changed = (ElTy != SrcTy->getElementType());
+        unsigned AS = remapAS(SrcTy->getAddressSpace());
+        Changed |= (AS != SrcTy->getAddressSpace());
+        return Changed ? PointerType::get(ElTy, remapAS(SrcTy->getAddressSpace())) : SrcTy;
     }
 
     FunctionType* remapType(FunctionType *SrcTy) {
@@ -69,29 +76,37 @@ public:
 
         auto Params = SrcTy->getNumParams();
         SmallVector<Type*,4> ParamTys(Params);
-        for (unsigned i = 0; i < Params; ++i)
+        bool Changed = false;
+        for (unsigned i = 0; i < Params; ++i) {
             ParamTys[i] = remapType(SrcTy->getParamType(i));
+            Changed |= (ParamTys[i] != SrcTy->getParamType(i));
+        }
 
-        return FunctionType::get(RetTy, ParamTys, SrcTy->isVarArg());
+        return Changed ? FunctionType::get(RetTy, ParamTys, SrcTy->isVarArg()) : SrcTy;
     }
 
     VectorType* remapType(VectorType* SrcTy) {
         Type* ElTy = remapType(SrcTy->getElementType());
-        return VectorType::get(ElTy, SrcTy->getNumElements());
+        bool Changed = (ElTy != SrcTy->getElementType());
+        return Changed ? VectorType::get(ElTy, SrcTy->getNumElements()) : SrcTy;
     }
 
     ArrayType* remapType(ArrayType* SrcTy) {
         Type* ElTy = remapType(SrcTy->getElementType());
-        return ArrayType::get(ElTy, SrcTy->getNumElements());
+        bool Changed = (ElTy != SrcTy->getElementType());
+        return Changed ? ArrayType::get(ElTy, SrcTy->getNumElements()) : SrcTy;
     }
 
     StructType* remapType(StructType* SrcTy) {
         auto Els = SrcTy->getNumElements();
         SmallVector<Type*,4> NewElTys(Els);
-        for (unsigned i = 0; i < Els; ++i)
+        bool Changed = false;
+        for (unsigned i = 0; i < Els; ++i) {
             NewElTys[i] = remapType(SrcTy->getElementType(i));
+            Changed |= (NewElTys[i] != SrcTy->getElementType(i));
+        }
 
-        return StructType::create(SrcTy->getContext(), NewElTys, SrcTy->getName(), SrcTy->isPacked());
+        return Changed ? StructType::create(SrcTy->getContext(), NewElTys, SrcTy->getName(), SrcTy->isPacked()) : SrcTy;
     }
 };
 
@@ -100,28 +115,53 @@ class InstrStripper
 public:
     // returns bool indicating whether the instruction has been remapped,
     // either returning through DstI, or setting it to null and modifying SrcI in-place
-    bool remapInstr(Instruction *SrcI, Instruction *&DstI)
+    Instruction *remapInstr(Instruction *SrcI)
     {
-        DstI = nullptr;
         auto Ty = SrcI->getType();
         auto NewTy = TypeMapper.remapType(Ty);
         if (Ty != NewTy) {
+            SrcI->dump();
             if (auto I = dyn_cast<AllocaInst>(SrcI))
-                DstI = remapInstr(I);
-            else
+                return remapInstr(I);
+            else if (auto I = dyn_cast<GetElementPtrInst>(SrcI))
+                return remapInstr(I);
+            else if (auto I = dyn_cast<BitCastInst>(SrcI))
+                return remapInstr(I);
+            else {
                 dbgs() << "ERROR: unhandled instruction " << *SrcI << " produces value " << *Ty << " that needs rewriting\n";
-            return true;
+                return nullptr;
+            }
         } else {
-            return false;
+            return nullptr;
         }
     }
 
+    bool isSafeInstr(Instruction *SrcI) {
+        return TypeMapper.isSafeType(SrcI->getType());
+    }
+
 private:
-    // in-place modification of AllocaInst
     AllocaInst *remapInstr(AllocaInst *SrcI) {
-        auto *Ty = SrcI->getAllocatedType();
-        SrcI->setAllocatedType(TypeMapper.remapType(Ty));
-        return nullptr;
+        auto Ty = TypeMapper.remapType(SrcI->getAllocatedType());
+        auto I = new AllocaInst(Ty, SrcI->getArraySize());
+        I->setAlignment(SrcI->getAlignment());
+        return I;
+    }
+
+    GetElementPtrInst *remapInstr(GetElementPtrInst *SrcI) {
+        auto Ty = TypeMapper.remapType(SrcI->getSourceElementType());
+        SmallVector<Value *, 4> Operands(SrcI->idx_begin(), SrcI->idx_end());
+        if (SrcI->isInBounds())
+            return GetElementPtrInst::CreateInBounds(Ty, SrcI->getPointerOperand(), Operands);
+        else
+            return GetElementPtrInst::Create(Ty, SrcI->getPointerOperand(), Operands);
+    }
+
+    BitCastInst *remapInstr(BitCastInst *SrcI) {
+        assert(TypeMapper.isSafeType(SrcI->getOperand(0)->getType()));
+        auto Ty = TypeMapper.remapType(SrcI->getDestTy());
+        dbgs() << "New bitcast will target " << *Ty << "\n";
+        return new BitCastInst(SrcI->getOperand(0), Ty);
     }
 
     TypeStripper TypeMapper;
@@ -129,35 +169,36 @@ private:
 
 bool StripJuliaAddrspaces::runOnFunction(Function &F) {
     bool Changed = false;
+    F.dump();
 
     SmallVector<std::pair<Instruction*,Instruction*>,4> Replacements;
 
     for (auto &BB: F) {
         for (auto &I: BB) {
             InstrStripper InstrMapper;
-            Instruction *NewI;
-            if (InstrMapper.remapInstr(&I, NewI)) {
-                if (NewI) {
-                    Replacements.push_back({&I, NewI});
-                    dbgs() << "Rewriting instruction " << I << " with " << *NewI << "\n";
-                    // NOTE: need to RAUW early, because the value might be used in future instrs
-                    unsafeReplaceAllUsesWith(&I, NewI);
-                } else {
-                    dbgs() << "Rewriting instruction " << I << " in-place\n";
-                    Changed = true;
-                }
+            Instruction *NewI = InstrMapper.remapInstr(&I);
+            if (NewI) {
+                assert(InstrMapper.isSafeInstr(NewI));
+                dbgs() << "Rewriting instruction " << I << " with " << *NewI << "\n";
+
+                unsafeReplaceAllUsesWith(&I, NewI);
+                NewI->setDebugLoc(I.getDebugLoc());
+                Changed = true;
+
+                Replacements.push_back({&I, NewI});
             }
         }
     }
 
+    // final modifications (to avoid iterator invalidation)
     for (auto &Is: Replacements) {
         auto *I = Is.first;
         auto *NewI = Is.second;
 
+        std::string NewIName = I->getName();
         NewI->insertBefore(I);
         I->eraseFromParent();
-
-        Changed = true;
+        NewI->setName(NewIName);
     }
 
     return Changed;
@@ -170,50 +211,52 @@ bool StripJuliaAddrspaces::runOnModule(Module &M) {
 
     for (auto &F: M) {
         TypeStripper TypeMapper;
+        Function *NewF = &F;
 
-        // rewrite the function IR
-        Changed |= runOnFunction(F);
-        if (Changed) {
-            F.dump();
-            verifyFunction(F);
-        }
-
-        // replace the function definition
+        // replace function definitions
         auto *FTy = F.getFunctionType();
         auto *NewFTy = TypeMapper.remapType(FTy);
         if (FTy != NewFTy) {
-            dbgs() << "Changing function " << F.getName() << " from " << *FTy << " to " << *NewFTy << "\n";
-            ValueToValueMapTy VMap;
+            dbgs() << "Redefining function " << F.getName() << " " << *FTy << " as " << *NewFTy << "\n";
 
             // Create the new function...
-            auto *NewF = Function::Create(NewFTy, F.getLinkage(), F.getName(), F.getParent());
+            NewF = Function::Create(NewFTy, F.getLinkage(), F.getName(), F.getParent());
 
-            // Loop over the arguments, copying the names of the mapped arguments over...
-            Function::arg_iterator DestI = NewF->arg_begin();
-            for (Function::const_arg_iterator I = F.arg_begin(), E = F.arg_end(); I != E; ++I) {
-                DestI->setName(I->getName());   // Copy the name over...
-                VMap[&*I] = &*(DestI++);        // Add mapping to VMap
+            // splice in basic blocks
+            NewF->getBasicBlockList().splice(NewF->begin(), F.getBasicBlockList());
+
+            // update arguments
+            auto NewArg = NewF->arg_begin();
+            for (auto Arg = F.arg_begin(), E = F.arg_end(); Arg != E; ++Arg) {
+                unsafeReplaceAllUsesWith(&*Arg, &*(NewArg++));
             }
 
-            SmallVector<ReturnInst*, 8> Returns;  // Ignore returns cloned.
-            CloneFunctionInto(NewF, &F, VMap, /*ModuleLevelChanges=*/false, Returns,
-                              "", NULL, &TypeMapper);
-
-            Replacements.push_back({&F, NewF});
+            unsafeReplaceAllUsesWith(&F, NewF);
+            Changed = true;
         }
+
+        // rewrite function IR
+        Changed |= runOnFunction(*NewF);
+
+        if (Changed)
+            Replacements.push_back({&F, NewF});
     }
 
+    // final modifications (to avoid iterator invalidation)
     for (auto &Fs: Replacements) {
         auto *F = Fs.first;
         auto *NewF = Fs.second;
 
-        std::string NewFName = F->getName();
-        F->setName("");
-        NewF->setName(NewFName);
-        F->replaceAllUsesWith(NewF);
-        F->eraseFromParent();
+        if (F != NewF) {
+            std::string NewFName = F->getName();
+            F->setName("");
+            NewF->setName(NewFName);
+            F->eraseFromParent();
+        }
 
-        Changed = true;
+        // DEBUG
+        NewF->dump();
+        verifyFunction(*NewF);
     }
 
     return Changed;
