@@ -196,12 +196,14 @@ end
             @test Symmetric(asym)\x ≈ asym\x
         end
 
-        #inversion
-        @test inv(Hermitian(asym)) ≈ inv(asym)
-        if eltya <: Real && eltya != Int
-            @test inv(Symmetric(asym)) ≈ inv(asym)
-            @test inv(Hermitian(a)) ≈ inv(full(Hermitian(a)))
-            @test inv(Symmetric(a)) ≈ inv(full(Symmetric(a)))
+        # inversion
+        for uplo in (:U, :L)
+            @test inv(Hermitian(asym, uplo)) ≈ inv(full(Hermitian(asym, uplo)))
+            @test inv(Symmetric(asym, uplo)) ≈ inv(full(Symmetric(asym, uplo)))
+            if eltya <: Real
+                @test inv(Hermitian(a, uplo)) ≈ inv(full(Hermitian(a, uplo)))
+            end
+            @test inv(Symmetric(a, uplo)) ≈ inv(full(Symmetric(a, uplo)))
         end
 
         # conversion
@@ -337,11 +339,29 @@ end
     @test issymmetric(Hermitian(B, :L))
 end
 
-@testset "$HS solver with $RHS RHS - $T" for HS  in (Hermitian, Symmetric),
+@testset "$HS solver with $RHS RHS - $T" for HS in (Hermitian, Symmetric),
         RHS in (Hermitian, Symmetric, Diagonal, UpperTriangular, LowerTriangular),
         T   in (Float64, Complex128)
     D = rand(T, 10, 10); D = D'D
     A = HS(D)
     B = RHS(D)
     @test A\B ≈ Matrix(A)\Matrix(B)
+end
+
+@testset "inversion of Hilbert matrix" begin
+    for T in (Float64, Complex128)
+        H = T[1/(i + j - 1) for i in 1:8, j in 1:8]
+        @test norm(inv(Symmetric(H))*(H*ones(8))-1) ≈ 0 atol = 1e-5
+        @test norm(inv(Hermitian(H))*(H*ones(8))-1) ≈ 0 atol = 1e-5
+    end
+end
+
+@testset "inverse edge case with complex Hermitian" begin
+    # Hermitian matrix, where inv(lufact(A)) generates non-real diagonal elements
+    for T in (Complex64, Complex128)
+        A = T[0.650488+0.0im 0.826686+0.667447im; 0.826686-0.667447im 1.81707+0.0im]
+        H = Hermitian(A)
+        @test inv(H) ≈ inv(A)
+        @test ishermitian(full(inv(H)))
+    end
 end
