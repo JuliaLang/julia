@@ -19,63 +19,8 @@ const pio2_2t =  2.02226624879595063154e-21
 const pio2_3  =  2.02226624871116645580e-21
 const pio2_3t =  8.47842766036889956997e-32
 
-"""
-    highword(x)
-
-Return the high word of `x` as a `UInt32`.
-"""
-@inline highword(x::UInt64) = unsafe_trunc(UInt32,x >> 32)
-@inline highword(x::Float64) = highword(reinterpret(UInt64, x))
-
-function cody_waite_2c_pio2(x::Float64)
-    # The three lines below could be replaced with:
-    #     fn = round(x*invpio2, RoundNearestTiesUp)
-    # at a small cost
-    fn = x*invpio2+6.755399441055744e15
-    fn = fn-6.755399441055744e15
-    n  = Int32(fn)
-    cody_waite_2c_pio2(x, fn, n)
-end
-function cody_waite_2c_pio2(x, fn, n)
-    z = x - fn*pio2_1
-    y1 = z - fn*pio2_1t
-    y2 = (z - y1) - fn*pio2_1t
-    n, y1, y2
-end
-
-function cody_waite_ext_pio2(x::Float64, xʰ⁺)
-    # The three lines below could be replaced with:
-    #     fn = round(x*invpio2, RoundNearestTiesUp)
-    # at a small cost
-    fn = x*invpio2+6.755399441055744e15
-    fn = fn-6.755399441055744e15
-    r  = x-fn*pio2_1
-    w  = fn*pio2_1t # 1st round good to 85 bit
-    j  = xʰ⁺>>20
-    y1 = r-w
-    high = highword(y1)
-    i = j-((high>>20)&0x7ff)
-    if i>16  # 2nd iteration needed, good to 118
-        t  = r
-        w  = fn*pio2_2
-        r  = t-w
-        w  = fn*pio2_2t-((t-r)-w)
-        y1 = r-w
-        high = highword(y1)
-        i = j-((high>>20)&0x7ff)
-        if i>49 # 3rd iteration need, 151 bits acc
-            t  = r # will cover all possible cases
-            w  = fn*pio2_3
-            r  = t-w
-            w  = fn*pio2_3t-((t-r)-w)
-            y1 = r-w
-        end
-    end
-    y2 = (r-y1)-w
-    return Int(fn), y1, y2
-end
-
-# constants and functions for large (>2.0^20) inputs to rem_pio2_kernel
+# constants and functions for large (>2.0^20) inputs to rem_pio2_kernel, used
+# in paynehanek(x).
 const INV2PI = UInt64[
     0x28be_60db_9391_054a,
     0x7f09_d5f4_7d4d_3770,
@@ -97,13 +42,83 @@ const INV2PI = UInt64[
     0x9afe_d7ec_47e3_5742,
     0x1580_cc11_bf1e_daea]
 
+"""
+    highword(x)
+
+Return the high word of `x` as a `UInt32`.
+"""
+@inline highword(x::UInt64) = unsafe_trunc(UInt32,x >> 32)
+@inline highword(x::Float64) = highword(reinterpret(UInt64, x))
+
+"""
+    poshighword(x)
+
+Return positive part of the high word of `x` as a `UInt32`.
+"""
+@inline poshighword(x::UInt64) = unsafe_trunc(UInt32,x >> 32)&0x7fffffff
+@inline poshighword(x::Float64) = poshighword(reinterpret(UInt64, x))
+
+"""
+    rint(x::Float64)
+
+Rounds `x` to the nearest integer, tie-breaking towards zero. Used internally
+in rem_pio2_kernel.
+"""
+# This could be replaced with:
+#     fn = round(x*invpio2, RoundNearest)
+# at a cost.
+rint(x::Float64) = (x+6.755399441055744e15)-6.755399441055744e15
+
+function cody_waite_2c_pio2(x::Float64)
+    fn = rint(x*invpio2) # round to integer
+    n  = Int(fn)
+    cody_waite_2c_pio2(x, fn, n)
+end
+function cody_waite_2c_pio2(x, fn, n)
+    z = muladd(-fn, pio2_1, x) # x - fn*pio2_1
+    y1 = muladd(-fn, pio2_1t, z) # z - fn*pio2_1t
+    y2 = muladd(-fn, pio2_1t, (z - y1)) # (z - y1) - fn*pio2_1t
+    n, y1, y2
+end
+
+function cody_waite_ext_pio2(x::Float64)
+    cody_waite_ext_pio2(x, poshighword(x))
+end
+function cody_waite_ext_pio2(x::Float64, xhp)
+    fn = rint(x*invpio2) # round to integer
+
+    r  = muladd(-fn, pio2_1, x) # x - fn*pio2_1
+    w  = fn*pio2_1t # 1st round good to 85 bit
+    j  = xhp>>20
+    y1 = r-w
+    high = highword(y1)
+    i = j-((high>>20)&0x7ff)
+    if i>16  # 2nd iteration needed, good to 118
+        t  = r
+        w  = fn*pio2_2
+        r  = t-w
+        w  = muladd(fn, pio2_2t,-((t-r)-w))
+        y1 = r-w
+        high = highword(y1)
+        i = j-((high>>20)&0x7ff)
+        if i>49 # 3rd iteration need, 151 bits acc
+            t  = r # will cover all possible cases
+            w  = fn*pio2_3
+            r  = t-w
+            w  = muladd(fn, pio2_3t, -((t-r)-w))
+            y1 = r-w
+        end
+    end
+    y2 = (r-y1)-w
+    return Int(fn), y1, y2
+end
 
 """
     fromfraction(f::Int128)
 
-Compute a tuple of values `(y1,y2)` such that
-    ``y1 + y2 == f / 2^128``
-and the significand of `y1` has 27 trailing zeros.
+Compute a tuple of values `(z1,z2)` such that
+    ``z1 + z2 == f / 2^128``
+and the significand of `z1` has 27 trailing zeros.
 """
 function fromfraction(f::Int128)
     if f == 0
@@ -137,8 +152,12 @@ function paynehanek(x::Float64)
     #
     # where 2^(n-1) <= X < 2^n  is an n-bit integer (n = 53, k = exponent(x)-52 )
 
+    # Computations are integer based, so reinterpret x as UInt64
     u = reinterpret(UInt64, x)
+    # Strip x of exponent bits and replace with ^1
     X = (u & significand_mask(Float64)) | (one(UInt64) << significand_bits(Float64))
+    # Get k from formula above
+    # k = exponent(x)-52
     k = Int((u & exponent_mask(Float64)) >> significand_bits(Float64)) - exponent_bias(Float64) - significand_bits(Float64)
 
     # 2. Let α = 1/2π, then:
@@ -158,8 +177,11 @@ function paynehanek(x::Float64)
     #     z3 = ldexp(z2-a2, 64)
     #     a3 = trunc(UInt64, z3)
 
-    # idx, shift = divrem(k, 64), but divrem is slower
+    # This is equivalent to
+    #     idx, shift = divrem(k, 64)
+    # but divrem is slower.
     idx = k >> 6
+
     shift = k - (idx << 6)
     if shift == 0
         a1 = INV2PI[idx+1]
@@ -197,10 +219,9 @@ function paynehanek(x::Float64)
     z_hi,z_lo = fromfraction(f)
 
     # 6. multiply by π/2
-    pio2 = 1.5707963267948966
     pio2_hi = 1.5707963407039642
     pio2_lo = -1.3909067614167116e-8
-    y_hi = (z_hi+z_lo)*pio2
+    y_hi = (z_hi+z_lo)*(pio2_hi+pio2_lo)
     y_lo = (((z_hi*pio2_hi - y_hi) + z_hi*pio2_lo) + z_lo*pio2_hi) + z_lo*pio2_lo
     return q, y_hi, y_lo
 end
@@ -212,13 +233,12 @@ Return the remainder of `x` modulo π/2 as a double-double pair, along with a `k
 such that ``k \mod 3 == K \mod 3`` where ``K*π/2 = x - rem``.
 """
 function rem_pio2(x::Float64)
-    xh = highword(x)
-    xhp = xh & 0x7fffffff # positive part of highword
+    xhp = poshighword(x) # positive part of highword
     #  xhp <= highword(pi/4) implies |x| ~<= pi/4
     if xhp <= 0x3fe921fb # no need for reduction
         return Int(0), x, 0.0
     end
-    rem_pio2_kernel(x, xh, xhp)
+    rem_pio2_kernel(x, xhp)
 end
 
 """
@@ -238,12 +258,11 @@ function rem_pio2_kernel(x::Float64)
     # Note: for very large x (thus n), the invariant might hold only modulo 2pi
     # (in other words, n might be off by a multiple of 4, or a multiple of 100)
 
-    xh = highword(x)
-    xhp = xh & 0x7fffffff # positive part of highword
-    rem_pio2_kernel(x, xh, xhp)
+    xhp = poshighword(x) # positive part of highword
+    rem_pio2_kernel(x, xhp)
 end
 
-function rem_pio2_kernel(x::Float64, xh, xhp)
+function rem_pio2_kernel(x::Float64, xhp)
     #  xhp <= highword(5pi/4) implies |x| ~<= 5pi/4,
     if xhp <= 0x400f6a7a
         #  last five bits of xhp == last five bits of highword(pi/2) or
@@ -254,14 +273,14 @@ function rem_pio2_kernel(x::Float64, xh, xhp)
         # use Cody Waite with two constants
         #  xhp <= highword(3pi/4) implies |x| ~<= 3pi/4
         if xhp <= 0x4002d97c
-            if x > 0
+            if x > 0.0
                 return cody_waite_2c_pio2(x, 1.0, 1)
             else
                 return cody_waite_2c_pio2(x, -1.0, -1)
             end
         # 3pi/4 < |x| <= 5pi/4
         else
-            if x > 0
+            if x > 0.0
                 return cody_waite_2c_pio2(x, 2.0, 2)
             else
                 return cody_waite_2c_pio2(x, -2.0, -2)
@@ -277,7 +296,7 @@ function rem_pio2_kernel(x::Float64, xh, xhp)
                 return cody_waite_ext_pio2(x, xhp)
             end
             # use Cody Waite with two constants
-            if x > 0
+            if x > 0.0
                 return cody_waite_2c_pio2(x, 3.0, 3)
             else
                 return cody_waite_2c_pio2(x, -3.0, -3)
@@ -289,7 +308,7 @@ function rem_pio2_kernel(x::Float64, xh, xhp)
                 return cody_waite_ext_pio2(x, xhp)
             end
             # use Cody Waite with two constants
-            if x > 0
+            if x > 0.0
                 return cody_waite_2c_pio2(x, 4.0, 4)
             else
                 return cody_waite_2c_pio2(x, -4.0, -4)

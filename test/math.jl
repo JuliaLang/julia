@@ -661,16 +661,3 @@ end
     @test sincos(big(1)) == (sin(big(1)), cos(big(1)))
     @test sincos(big(1.0)) == (sin(big(1.0)), cos(big(1.0)))
 end
-
-@testset "rem_pio2_kernel" begin
-    # test worst case
-    x = 6381956970095103.0 * 2.0^797
-    a = setprecision(BigFloat, 4096) do
-        rem(big(x), big(pi)/2, RoundNearest)
-    end
-
-    n, y1, y2 = Base.Math.rem_pio2_kernel(x)
-    y=y1+y2
-    @test a-y<nextfloat(y)/2
-    # add more tests
-end
