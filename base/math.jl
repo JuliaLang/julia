@@ -795,7 +795,7 @@ function rem2pi(x::Float64, ::RoundingMode{:Nearest})
                 return add22condh(y1,y2,-pi2o2_h,-pi2o2_l)
             end
         else          # n % 4 == 0: add 0
-            return y1
+            return y1+y2
         end
     else
         if n & 2 == 2 # n % 4 == 3: subtract pi/2
@@ -816,7 +816,7 @@ function rem2pi(x::Float64, ::RoundingMode{:ToZero})
             z = add22condh(y1,y2,pi2o2_h,pi2o2_l)
         else          # n % 4 == 0: add 0 or 2pi
             if y1 > 0
-                z = y1
+                z = y1+y2
             else      # negative: add 2pi
                 z = add22condh(y1,y2,pi4o2_h,pi4o2_l)
             end
@@ -846,7 +846,7 @@ function rem2pi(x::Float64, ::RoundingMode{:Down})
             return add22condh(y1,y2,pi2o2_h,pi2o2_l)
         else          # n % 4 == 0: add 0 or 2pi
             if y1 > 0
-                return y1
+                return y1+y2
             else      # negative: add 2pi
                 return add22condh(y1,y2,pi4o2_h,pi4o2_l)
             end
@@ -875,7 +875,7 @@ function rem2pi(x::Float64, ::RoundingMode{:Up})
             return add22condh(y1,y2,-pi2o2_h,-pi2o2_l)
         else          # n % 4 == 0: sub 0 or 2pi
             if y1 < 0
-                return y1
+                return y1+y2
             else      # positive: sub 2pi
                 return add22condh(y1,y2,-pi4o2_h,-pi4o2_l)
             end
