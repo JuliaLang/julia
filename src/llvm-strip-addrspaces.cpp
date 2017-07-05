@@ -98,27 +98,30 @@ public:
 class InstrStripper
 {
 public:
-    Instruction *remapInstr(Instruction *SrcI)
+    // returns bool indicating whether the instruction has been remapped,
+    // either returning through DstI, or setting it to null and modifying SrcI in-place
+    bool remapInstr(Instruction *SrcI, Instruction *&DstI)
     {
+        DstI = nullptr;
         auto Ty = SrcI->getType();
         auto NewTy = TypeMapper.remapType(Ty);
         if (Ty != NewTy) {
             if (auto I = dyn_cast<AllocaInst>(SrcI))
-                return remapInstr(I);
-            else {
+                DstI = remapInstr(I);
+            else
                 dbgs() << "ERROR: unhandled instruction " << *SrcI << " produces value " << *Ty << " that needs rewriting\n";
-                return nullptr;
-            }
+            return true;
         } else {
-            return nullptr;
+            return false;
         }
     }
 
 private:
+    // in-place modification of AllocaInst
     AllocaInst *remapInstr(AllocaInst *SrcI) {
-        auto I = new AllocaInst(TypeMapper.remapType(SrcI->getType()), SrcI->getArraySize(), SrcI->getName());
-        I->setAlignment(SrcI->getAlignment());
-        return I;
+        auto *Ty = SrcI->getAllocatedType();
+        SrcI->setAllocatedType(TypeMapper.remapType(Ty));
+        return nullptr;
     }
 
     TypeStripper TypeMapper;
@@ -132,10 +135,17 @@ bool StripJuliaAddrspaces::runOnFunction(Function &F) {
     for (auto &BB: F) {
         for (auto &I: BB) {
             InstrStripper InstrMapper;
-            auto *NewI = InstrMapper.remapInstr(&I);
-            if (NewI) {
-                Replacements.push_back({&I, NewI});
-                dbgs() << "Rewriting instruction " << I << " with " << *NewI << "\n";
+            Instruction *NewI;
+            if (InstrMapper.remapInstr(&I, NewI)) {
+                if (NewI) {
+                    Replacements.push_back({&I, NewI});
+                    dbgs() << "Rewriting instruction " << I << " with " << *NewI << "\n";
+                    // NOTE: need to RAUW early, because the value might be used in future instrs
+                    unsafeReplaceAllUsesWith(&I, NewI);
+                } else {
+                    dbgs() << "Rewriting instruction " << I << " in-place\n";
+                    Changed = true;
+                }
             }
         }
     }
@@ -145,7 +155,6 @@ bool StripJuliaAddrspaces::runOnFunction(Function &F) {
         auto *NewI = Is.second;
 
         NewI->insertBefore(I);
-        unsafeReplaceAllUsesWith(I, NewI);
         I->eraseFromParent();
 
         Changed = true;
