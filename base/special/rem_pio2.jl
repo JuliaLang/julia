@@ -71,7 +71,7 @@ rint(x::Float64) = (x+6.755399441055744e15)-6.755399441055744e15
 
 function cody_waite_2c_pio2(x::Float64)
     fn = rint(x*invpio2) # round to integer
-    n  = Int(fn)
+    n  = unsafe_trunc(Int, fn)
     cody_waite_2c_pio2(x, fn, n)
 end
 function cody_waite_2c_pio2(x, fn, n)
@@ -184,14 +184,14 @@ function paynehanek(x::Float64)
 
     shift = k - (idx << 6)
     if shift == 0
-        a1 = INV2PI[idx+1]
-        a2 = INV2PI[idx+2]
-        a3 = INV2PI[idx+3]
+        @inbounds a1 = INV2PI[idx+1]
+        @inbounds a2 = INV2PI[idx+2]
+        @inbounds a3 = INV2PI[idx+3]
     else
         # use shifts to extract the relevant 64 bit window
-        a1 = (idx < 0 ? zero(UInt64) : INV2PI[idx+1] << shift) | (INV2PI[idx+2] >> (64 - shift))
-        a2 = (INV2PI[idx+2] << shift) | (INV2PI[idx+3] >> (64 - shift))
-        a3 = (INV2PI[idx+3] << shift) | (INV2PI[idx+4] >> (64 - shift))
+        @inbounds a1 = (idx < 0 ? zero(UInt64) : INV2PI[idx+1] << shift) | (INV2PI[idx+2] >> (64 - shift))
+        @inbounds a2 = (INV2PI[idx+2] << shift) | (INV2PI[idx+3] >> (64 - shift))
+        @inbounds a3 = (INV2PI[idx+3] << shift) | (INV2PI[idx+4] >> (64 - shift))
     end
 
     # 3. Perform the multiplication:
@@ -219,9 +219,10 @@ function paynehanek(x::Float64)
     z_hi,z_lo = fromfraction(f)
 
     # 6. multiply by π/2
+    pio2 = 1.5707963267948966
     pio2_hi = 1.5707963407039642
     pio2_lo = -1.3909067614167116e-8
-    y_hi = (z_hi+z_lo)*(pio2_hi+pio2_lo)
+    y_hi = (z_hi+z_lo)*pio2
     y_lo = (((z_hi*pio2_hi - y_hi) + z_hi*pio2_lo) + z_lo*pio2_hi) + z_lo*pio2_lo
     return q, y_hi, y_lo
 end
@@ -236,7 +237,7 @@ function rem_pio2(x::Float64)
     xhp = poshighword(x) # positive part of highword
     #  xhp <= highword(pi/4) implies |x| ~<= pi/4
     if xhp <= 0x3fe921fb # no need for reduction
-        return Int(0), x, 0.0
+        return 0, x, 0.0
     end
     rem_pio2_kernel(x, xhp)
 end
