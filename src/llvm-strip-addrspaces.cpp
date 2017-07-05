@@ -2,6 +2,7 @@
 
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Verifier.h>
+#include <llvm/IR/Constants.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/Support/Debug.h>
 
@@ -15,10 +16,10 @@ using namespace llvm;
 
 template<typename T>
 void unsafeReplaceAllUsesWith(T *from, T *to) {
-  while (!from->use_empty()) {
-    auto &U = *from->use_begin();
-    U.set(to);
-  }
+    while (!from->use_empty()) {
+        auto &U = *from->use_begin();
+        U.set(to);
+    }
 }
 
 unsigned remapAS(unsigned AS) {
@@ -27,6 +28,7 @@ unsigned remapAS(unsigned AS) {
     else
         return AS;
 }
+
 
 
 //
@@ -57,16 +59,11 @@ FunctionType* remapFunctionType(FunctionType *SrcTy) {
     return Changed ? FunctionType::get(RetTy, Params, SrcTy->isVarArg()) : SrcTy;
 }
 
-VectorType* remapVectorType(VectorType* SrcTy) {
+template <typename T>
+T* remapSequentialType(T* SrcTy) {
     Type* ElTy = remapType(SrcTy->getElementType());
     bool Changed = (ElTy != SrcTy->getElementType());
-    return Changed ? VectorType::get(ElTy, SrcTy->getNumElements()) : SrcTy;
-}
-
-ArrayType* remapArrayType(ArrayType* SrcTy) {
-    Type* ElTy = remapType(SrcTy->getElementType());
-    bool Changed = (ElTy != SrcTy->getElementType());
-    return Changed ? ArrayType::get(ElTy, SrcTy->getNumElements()) : SrcTy;
+    return Changed ? T::get(ElTy, SrcTy->getNumElements()) : SrcTy;
 }
 
 StructType* remapStructType(StructType* SrcTy) {
@@ -83,19 +80,20 @@ StructType* remapStructType(StructType* SrcTy) {
 
 Type *remapType(Type *SrcTy)
 {
-    // process all descendants from llvm::Type that contain other types
     if (auto Ty = dyn_cast<PointerType>(SrcTy))
         return remapPointerType(Ty);
-    if (auto Ty = dyn_cast<FunctionType>(SrcTy))
+    else if (auto Ty = dyn_cast<FunctionType>(SrcTy))
         return remapFunctionType(Ty);
-    if (auto Ty = dyn_cast<VectorType>(SrcTy))
-        return remapVectorType(Ty);
-    if (auto Ty = dyn_cast<ArrayType>(SrcTy))
-        return remapArrayType(Ty);
-    if (auto Ty = dyn_cast<StructType>(SrcTy))
+    else if (auto Ty = dyn_cast<VectorType>(SrcTy))
+        return remapSequentialType(Ty);
+    else if (auto Ty = dyn_cast<ArrayType>(SrcTy))
+        return remapSequentialType(Ty);
+    else if (auto Ty = dyn_cast<StructType>(SrcTy))
         return remapStructType(Ty);
-    else if (isa<CompositeType>(SrcTy))
-        dbgs() << "WARNING: unhandled type " << SrcTy->getTypeID() << ": " << *SrcTy << "\n";
+    else if (isa<CompositeType>(SrcTy)) {
+        SrcTy->dump();
+        report_fatal_error("FATAL: unhandled composite type");
+    }
     return SrcTy;
 }
 
@@ -104,60 +102,146 @@ bool isSafeType(Type *SrcTy) {
     return (SrcTy == DstTy);
 }
 
+bool isSafeValue(Value *V) {
+    return isSafeType(V->getType());
+}
+
+
 
 //
-// Instruction rewriting
+// Value rewriting
 //
 
-Instruction *rewriteInst(Instruction *SrcI);
+Constant *remapConst(Constant *SrcC);
+Instruction *remapInst(Instruction *SrcI);
 
-AllocaInst *rewriteAllocaInst(AllocaInst *SrcI) {
+Value* remapValue(Value *SrcV)
+{
+    if (isSafeValue(SrcV))
+        return SrcV;
+    else if (auto V = dyn_cast<Instruction>(SrcV))
+        return remapInst(V);
+    else if (auto V = dyn_cast<Constant>(SrcV))
+        return remapConst(V);
+    else {
+        SrcV->dump();
+        report_fatal_error("FATAL: unhandled value that needs rewriting");
+    }
+}
+
+
+// Constants
+
+Constant *remapConstantExpr(ConstantExpr *SrcC)
+{
+    auto *Inst = remapInst(SrcC->getAsInstruction());
+    assert(isSafeValue(Inst));
+    // TODO: is there an easy way to reconstruct a ConstExpr from its equivalent Instr?
+    if (auto I = dyn_cast<IntToPtrInst>(Inst))
+        return ConstantExpr::getIntToPtr(cast<Constant>(I->getOperand(0)), I->getDestTy());
+    else if (auto I = dyn_cast<AddrSpaceCastInst>(Inst))
+        return ConstantExpr::getAddrSpaceCast(cast<Constant>(I->getOperand(0)), I->getDestTy());
+    else if (auto I = dyn_cast<BitCastInst>(Inst))
+        return ConstantExpr::getBitCast(cast<Constant>(I->getOperand(0)), I->getDestTy());
+    else {
+        Inst->dump();
+        report_fatal_error("FATAL: unhandled constant expression type");
+    }
+}
+
+Constant *remapConst(Constant *SrcC)
+{
+    if (isSafeValue(SrcC))
+        return nullptr;
+    else if (auto C = dyn_cast<ConstantExpr>(SrcC))
+        return remapConstantExpr(C);
+    else {
+        SrcC->dump();
+        report_fatal_error("FATAL: unhandled constant containing value that needs rewriting");
+    }
+}
+
+
+// Instructions
+
+AllocaInst *remapAllocaInst(AllocaInst *SrcI) {
     auto Ty = remapType(SrcI->getAllocatedType());
     auto I = new AllocaInst(Ty, SrcI->getArraySize());
     I->setAlignment(SrcI->getAlignment());
     return I;
 }
 
-GetElementPtrInst *rewriteGetElementPtrInst(GetElementPtrInst *SrcI) {
+GetElementPtrInst *remapGetElementPtrInst(GetElementPtrInst *SrcI) {
     auto Ty = remapType(SrcI->getSourceElementType());
-    SmallVector<Value *, 4> Operands(SrcI->idx_begin(), SrcI->idx_end());
+    SmallVector<Value *, 4> Idxs(SrcI->idx_begin(), SrcI->idx_end());
     if (SrcI->isInBounds())
-        return GetElementPtrInst::CreateInBounds(Ty, SrcI->getPointerOperand(), Operands);
+        return GetElementPtrInst::CreateInBounds(Ty, SrcI->getPointerOperand(), Idxs);
     else
-        return GetElementPtrInst::Create(Ty, SrcI->getPointerOperand(), Operands);
+        return GetElementPtrInst::Create(Ty, SrcI->getPointerOperand(), Idxs);
 }
 
-BitCastInst *rewriteBitCastInst(BitCastInst *SrcI) {
-    assert(isSafeType(SrcI->getOperand(0)->getType()));
-    auto Ty = remapType(SrcI->getDestTy());
-    dbgs() << "New bitcast will target " << *Ty << "\n";
-    return new BitCastInst(SrcI->getOperand(0), Ty);
+LoadInst *remapLoadInst(LoadInst *SrcI) {
+    auto Op = SrcI->getOperand(0);
+    assert(isSafeValue(Op));
+    auto Ty = remapType(SrcI->getType());
+    return new LoadInst(Ty, Op, "", SrcI->isVolatile(), SrcI->getAlignment(), SrcI->getOrdering(), SrcI->getSynchScope());
 }
 
-Instruction *rewriteInst(Instruction *SrcI)
+template <typename T>
+T *remapCastInst(T *SrcI) {
+    auto Op = SrcI->getOperand(0);
+    assert(isSafeValue(Op));
+    auto DstTy = remapType(SrcI->getDestTy());
+    return new T(Op, DstTy);
+}
+
+CastInst *remapAddrSpaceCastInst(AddrSpaceCastInst *SrcI) {
+    auto Op = SrcI->getOperand(0);
+    auto SrcTy = Op->getType();
+    assert(isSafeType(SrcTy));
+    auto DstTy = remapType(SrcI->getDestTy());
+    PointerType *SrcPtrTy = cast<PointerType>(SrcTy->getScalarType());
+    PointerType *DstPtrTy = cast<PointerType>(DstTy->getScalarType());
+    if (SrcPtrTy->getAddressSpace() == DstPtrTy->getAddressSpace())
+        return new BitCastInst(Op, DstTy);
+    else
+        return new AddrSpaceCastInst(Op, DstTy);
+}
+
+CallInst *remapCallInst(CallInst *SrcI) {
+    auto F = remapValue(SrcI->getCalledValue());
+    auto FT = remapFunctionType(SrcI->getFunctionType());
+    unsigned NumArgs = SrcI->getNumArgOperands();
+    SmallVector<Value *, 4> Args(NumArgs);
+    for (unsigned i = 0; i < NumArgs; ++i)
+        Args[i] = remapValue(SrcI->getArgOperand(i));
+    return CallInst::Create(FT, F, Args);   // TODO: OperandBundle?
+}
+
+Instruction *remapInst(Instruction *SrcI)
 {
-    auto Ty = SrcI->getType();
-    auto NewTy = remapType(Ty);
-    if (Ty != NewTy) {
+    if (isSafeValue(SrcI))
+        return SrcI;
+    else if (auto I = dyn_cast<AllocaInst>(SrcI))
+        return remapAllocaInst(I);
+    else if (auto I = dyn_cast<GetElementPtrInst>(SrcI))
+        return remapGetElementPtrInst(I);
+    else if (auto I = dyn_cast<LoadInst>(SrcI))
+        return remapLoadInst(I);
+    else if (auto I = dyn_cast<BitCastInst>(SrcI))
+        return remapCastInst(I);
+    else if (auto I = dyn_cast<AddrSpaceCastInst>(SrcI))
+        return remapAddrSpaceCastInst(I);
+    else if (auto I = dyn_cast<IntToPtrInst>(SrcI))
+        return remapCastInst(I);
+    else if (auto I = dyn_cast<CallInst>(SrcI))
+        return remapCallInst(I);
+    else {
         SrcI->dump();
-        if (auto I = dyn_cast<AllocaInst>(SrcI))
-            return rewriteAllocaInst(I);
-        else if (auto I = dyn_cast<GetElementPtrInst>(SrcI))
-            return rewriteGetElementPtrInst(I);
-        else if (auto I = dyn_cast<BitCastInst>(SrcI))
-            return rewriteBitCastInst(I);
-        else {
-            dbgs() << "ERROR: unhandled instruction " << *SrcI << " produces value " << *Ty << " that needs rewriting\n";
-            return nullptr;
-        }
-    } else {
-        return nullptr;
+        report_fatal_error("FATAL: unhandled instruction producing value that needs rewriting");
     }
 }
 
-bool isSafeInst(Instruction *SrcI) {
-    return isSafeType(SrcI->getType());
-}
 
 
 //
@@ -180,11 +264,13 @@ Function* StripJuliaAddrspaces::redefine(Function* F) {
     auto *FTy = F->getFunctionType();
     auto *NFTy = remapFunctionType(FTy);
     if (FTy != NFTy) {
-        dbgs() << "Redefining function " << F->getName() << " " << *FTy << " as " << *NFTy << "\n";
+        dbgs() << "Redefining " << F->getName() << " " << *FTy << " as " << *NFTy << "\n";
 
-        // Create the new function...
+        // create the new function
         Function *NF = Function::Create(NFTy, F->getLinkage(), F->getName(), F->getParent());
         NF->copyAttributesFrom(F);
+        if (F->hasPersonalityFn())
+            NF->setPersonalityFn(F->getPersonalityFn());
 
         // splice in basic blocks
         NF->getBasicBlockList().splice(NF->begin(), F->getBasicBlockList());
@@ -210,15 +296,18 @@ bool StripJuliaAddrspaces::rewrite(Function *F) {
     bool Changed = false;
 
     for (auto &BB: *F) {
+        dbgs() << "Rewriting " << F->getName() << "\n";
         for (auto &I: BB) {
-            Instruction *NI = rewriteInst(&I);
-            if (NI) {
-                assert(isSafeInst(NI));
+            I.dump();
+            Instruction *NI = remapInst(&I);
+            if (NI != &I) {
+                assert(isSafeValue(NI));
                 NI->setDebugLoc(I.getDebugLoc());
                 unsafeReplaceAllUsesWith(&I, NI);
                 Removals.push_back(&I);
                 NI->insertBefore(&I);
                 NI->takeName(&I);
+                dbgs() << "  ->" << *NI << "\n";
                 Changed = true;
             }
         }
