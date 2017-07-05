@@ -314,8 +314,7 @@ static Function *jlgenericfunction_func;
 static Function *jlenter_func;
 static Function *jlleave_func;
 static Function *jlegal_func;
-static Function *jlalloc_pool_func;
-static Function *jlalloc_big_func;
+static Function *jl_alloc_obj_func;
 static Function *jlisa_func;
 static Function *jlsubtype_func;
 static Function *jlapplytype_func;
@@ -6372,24 +6371,19 @@ static void init_julia_llvm_env(Module *m)
                          "jl_instantiate_type_in_env", m);
     add_named_global(jlapplytype_func, &jl_instantiate_type_in_env);
 
-    std::vector<Type*> alloc_pool_args(0);
-    alloc_pool_args.push_back(T_pint8);
-    alloc_pool_args.push_back(T_int32);
-    alloc_pool_args.push_back(T_int32);
-    jlalloc_pool_func =
-        Function::Create(FunctionType::get(T_prjlvalue, alloc_pool_args, false),
-                         Function::ExternalLinkage,
-                         "jl_gc_pool_alloc", m);
-    add_named_global(jlalloc_pool_func, &jl_gc_pool_alloc);
-
-    std::vector<Type*> alloc_big_args(0);
-    alloc_big_args.push_back(T_pint8);
-    alloc_big_args.push_back(T_size);
-    jlalloc_big_func =
-        Function::Create(FunctionType::get(T_prjlvalue, alloc_big_args, false),
-                         Function::ExternalLinkage,
-                         "jl_gc_big_alloc", m);
-    add_named_global(jlalloc_big_func, &jl_gc_big_alloc);
+    std::vector<Type*> gc_alloc_args(0);
+    gc_alloc_args.push_back(T_pint8);
+    gc_alloc_args.push_back(T_size);
+    gc_alloc_args.push_back(T_prjlvalue);
+    jl_alloc_obj_func = Function::Create(FunctionType::get(T_prjlvalue, gc_alloc_args, false),
+                                         Function::ExternalLinkage,
+                                         "julia.gc_alloc_obj");
+#if JL_LLVM_VERSION >= 50000
+    jl_alloc_obj_func->addAttribute(AttributeList::ReturnIndex, Attribute::NoAlias);
+#else
+    jl_alloc_obj_func->addAttribute(AttributeSet::ReturnIndex, Attribute::NoAlias);
+#endif
+    add_named_global(jl_alloc_obj_func, (void*)NULL, /*dllimport*/false);
 
     std::vector<Type *> dlsym_args(0);
     dlsym_args.push_back(T_pint8);

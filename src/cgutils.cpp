@@ -2097,25 +2097,12 @@ static Value *emit_allocobj(jl_codectx_t &ctx, size_t static_size, Value *jt)
 {
     JL_FEAT_REQUIRE(ctx, dynamic_alloc);
     JL_FEAT_REQUIRE(ctx, runtime);
-
-    int osize;
-    int offset = jl_gc_classify_pools(static_size, &osize);
     Value *ptls_ptr = emit_bitcast(ctx, ctx.ptlsStates, T_pint8);
-    Value *v;
-    if (offset < 0) {
-        Value *args[] = {ptls_ptr,
-                         ConstantInt::get(T_size, static_size + sizeof(void*))};
-        v = ctx.builder.CreateCall(prepare_call(jlalloc_big_func),
-                               ArrayRef<Value*>(args, 2));
-    }
-    else {
-        Value *pool_offs = ConstantInt::get(T_int32, offset);
-        Value *args[] = {ptls_ptr, pool_offs, ConstantInt::get(T_int32, osize)};
-        v = ctx.builder.CreateCall(prepare_call(jlalloc_pool_func),
-                               ArrayRef<Value*>(args, 3));
-    }
-    tbaa_decorate(tbaa_tag, ctx.builder.CreateStore(maybe_decay_untracked(jt), emit_typeptr_addr(ctx, v)));
-    return v;
+    auto call = ctx.builder.CreateCall(prepare_call(jl_alloc_obj_func),
+                                       {ptls_ptr, ConstantInt::get(T_size, static_size),
+                                               maybe_decay_untracked(jt)});
+    call->setAttributes(jl_alloc_obj_func->getAttributes());
+    return call;
 }
 
 // if ptr is NULL this emits a write barrier _back_
