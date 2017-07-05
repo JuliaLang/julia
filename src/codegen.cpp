@@ -4160,10 +4160,10 @@ static void emit_cfunc_invalidate(
 #if JL_LLVM_VERSION >= 50000
         0,
 #endif
-        ConstantInt::get(T_int32, nargs + 1), "jlcall", ctx.ptlsStates);
+        ConstantInt::get(T_int32, nargs), "jlcall", ctx.ptlsStates);
     if (cc == jl_returninfo_t::SRet || cc == jl_returninfo_t::Union)
         ++AI;
-    for (size_t i = 0; i < nargs + 1; i++) {
+    for (size_t i = 0; i < nargs; i++) {
         jl_value_t *jt = jl_nth_slot_type(lam->specTypes, i);
         bool isboxed;
         Type *et = julia_type_to_llvm(jt, &isboxed);
@@ -4193,7 +4193,7 @@ static void emit_cfunc_invalidate(
         ctx.builder.CreateStore(maybe_decay_untracked(arg_box), argn);
     }
     assert(AI == gf_thunk->arg_end());
-    Value *nargs_v = ConstantInt::get(T_int32, nargs + 1);
+    Value *nargs_v = ConstantInt::get(T_int32, nargs);
     Value *gf_ret = ctx.builder.CreateCall(prepare_call(jlapplygeneric_func), { myargs, nargs_v });
     jl_cgval_t gf_retbox = mark_julia_type(ctx, gf_ret, true, jl_any_type, /*needsroot*/false);
     jl_value_t *astrt = lam->rettype;
@@ -4343,73 +4343,16 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
     sf->func.value = jl_box_voidpointer((void*)cw_proto);
     jl_gc_wb(sf, sf->func.value);
 
-    // See whether this function is specsig or jlcall or generic (unknown)
-    bool specsig, jlfunc_sret;
-    jl_returninfo_t::CallingConv cc = jl_returninfo_t::Boxed;
-    Function *theFptr;
-    Value *result;
-    Value *myargs;
-    size_t FParamIndex = 0;
-    std::vector<Value*> args;
+    // first emit code to record the arguments
     Function::arg_iterator AI = cw->arg_begin();
     Value *sretPtr = sig.sret ? &*AI++ : NULL;
-    if (lam && lam->jlcall_api == 2) {
-        nargs = 0; // arguments not needed
-        specsig = true;
-        jlfunc_sret = false;
-        myargs = NULL;
-        theFptr = NULL;
-    }
-    else if (lam && lam->functionObjectsDecls.specFunctionObject != NULL) {
-        const char *protoname = lam->functionObjectsDecls.specFunctionObject;
-        jl_returninfo_t returninfo = get_specsig_function(M, protoname, lam->specTypes, lam->rettype);
-        FunctionType *cft = returninfo.decl->getFunctionType();
-        theFptr = returninfo.decl;
-        specsig = true;
-        cc = returninfo.cc;
-        jlfunc_sret = cc == jl_returninfo_t::SRet;
-        if (jlfunc_sret || cc == jl_returninfo_t::Union) {
-            // fuse the two sret together, or emit an alloca to hold it
-            if (sig.sret && jlfunc_sret)
-                result = emit_bitcast(ctx, sretPtr, cft->getParamType(0));
-            else
-                result = decay_derived(ctx.builder.CreateAlloca(cft->getParamType(0)->getContainedType(0)));
-            args.push_back(result);
-            FParamIndex++;
-        }
-        myargs = NULL;
-    }
-    else {
-        theFptr = NULL;
-        if (lam) {
-            const char *fname = lam->functionObjectsDecls.functionObject;
-            if (fname) {
-                theFptr = cast_or_null<Function>(jl_Module->getNamedValue(fname));
-                if (!theFptr) {
-                    theFptr = Function::Create(jl_func_sig, GlobalVariable::ExternalLinkage,
-                                               fname, jl_Module);
-                }
-                else {
-                    assert(theFptr->getFunctionType() == jl_func_sig);
-                }
-            }
-        }
-        specsig = false;
-        jlfunc_sret = false;
-        myargs = new AllocaInst(T_prjlvalue,
-#if JL_LLVM_VERSION >= 50000
-            0,
-#endif
-            ConstantInt::get(T_int32, nargs + 1), "jlcall", /*InsertBefore*/ctx.ptlsStates);
-        FParamIndex++; // leave room for writing the ff object at the beginning
-    }
-
-    // first emit the arguments
-    for (size_t i = 0; i < nargs; i++) {
-        Value *val = &*AI++;
+    jl_cgval_t *inputargs = (jl_cgval_t*)alloca(sizeof(jl_cgval_t) * (nargs + 1));
+    inputargs[0] = mark_julia_const(ff); // we need to pass the function object even if (even though) it is a ghost
+    for (size_t i = 0; i < nargs; ++i, ++AI) {
+        Value *val = &*AI;
         jl_value_t *jargty = jl_nth_slot_type((jl_value_t*)argt, i);
         // figure out how to unpack this type
-        jl_cgval_t inputarg;
+        jl_cgval_t &inputarg = inputargs[i + 1];
         if (jl_is_abstract_ref_type(jargty)) {
             // a pointer to a value
             jargty = jl_tparam0(jargty);
@@ -4473,18 +4416,39 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
                 }
             }
         }
+    }
+    assert(AI == cw->arg_end());
 
-        // figure out how to repack this type
-        if (!specsig) {
-            Value *arg = boxed(ctx, inputarg, false); // don't want a gcroot, since it's about to be put into the jlcall frame anyways
-            GetElementPtrInst *slot = GetElementPtrInst::Create(T_prjlvalue, myargs,
-                    ArrayRef<Value*>(ConstantInt::get(T_int32, FParamIndex)));
-            slot->insertAfter(ctx.ptlsStates);
-            ctx.builder.CreateStore(arg, slot);
+    // Create the call
+    bool jlfunc_sret;
+    jl_cgval_t retval;
+    if (lam && lam->jlcall_api == 2) {
+        nargs = 0; // arguments not needed -- TODO: not really true, should emit an age_ok test and jlcall
+        jlfunc_sret = false;
+        retval = mark_julia_const(lam->inferred_const);
+    }
+    else if (lam && lam->functionObjectsDecls.specFunctionObject != NULL) {
+        // emit a specsig call
+        const char *protoname = lam->functionObjectsDecls.specFunctionObject;
+        jl_returninfo_t returninfo = get_specsig_function(M, protoname, lam->specTypes, lam->rettype);
+        FunctionType *cft = returninfo.decl->getFunctionType();
+        jlfunc_sret = (returninfo.cc == jl_returninfo_t::SRet);
+
+        std::vector<Value*> args;
+        Value *result;
+        if (jlfunc_sret || returninfo.cc == jl_returninfo_t::Union) {
+            // fuse the two sret together, or emit an alloca to hold it
+            if (sig.sret && jlfunc_sret)
+                result = emit_bitcast(ctx, sretPtr, cft->getParamType(0));
+            else
+                result = decay_derived(emit_static_alloca(ctx, cft->getParamType(0)->getContainedType(0)));
+            args.push_back(result);
         }
-        else {
+        for (size_t i = 0; i < nargs + 1; i++) {
+            // figure out how to repack the arguments
+            const jl_cgval_t &inputarg = inputargs[i];
             Value *arg;
-            jl_value_t *spect = jl_nth_slot_type(lam->specTypes, i + 1); // +1 because argt excludes function
+            jl_value_t *spect = jl_nth_slot_type(lam->specTypes, i);
             bool isboxed;
             Type *T = julia_type_to_llvm(spect, &isboxed);
             if (isboxed) {
@@ -4505,63 +4469,62 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
             // add to argument list
             args.push_back(arg);
         }
-        FParamIndex++;
-    }
-
-    // Create the call
-    jl_cgval_t retval;
-    Function *gf_thunk = NULL;
-    if (specsig) {
-        if (lam->jlcall_api == 2) {
-            retval = mark_julia_const(lam->inferred_const);
+        Value *theFptr = returninfo.decl;
+        assert(theFptr);
+        if (age_ok) {
+            funcName << "_gfthunk";
+            Function *gf_thunk = Function::Create(returninfo.decl->getFunctionType(),
+                    GlobalVariable::InternalLinkage, funcName.str(), M);
+            jl_init_function(gf_thunk);
+            gf_thunk->setAttributes(returninfo.decl->getAttributes());
+            gf_thunk->addFnAttr("no-frame-pointer-elim", "true");
+            // build a  specsig -> jl_apply_generic converter thunk
+            // this builds a method that calls jl_apply_generic (as a closure over a singleton function pointer),
+            // but which has the signature of a specsig
+            emit_cfunc_invalidate(gf_thunk, returninfo.cc, lam, nargs + 1, world);
+            theFptr = ctx.builder.CreateSelect(age_ok, theFptr, gf_thunk);
         }
-        else {
-            assert(theFptr);
-            Value *call_v = prepare_call(theFptr);
-            if (age_ok) {
-                funcName << "_gfthunk";
-                gf_thunk = Function::Create(theFptr->getFunctionType(),
-                                GlobalVariable::InternalLinkage,
-                                funcName.str(), M);
-                jl_init_function(gf_thunk);
-                gf_thunk->setAttributes(theFptr->getAttributes());
-                gf_thunk->addFnAttr("no-frame-pointer-elim", "true");
-                call_v = ctx.builder.CreateSelect(age_ok, call_v, gf_thunk);
-            }
-            CallInst *call = ctx.builder.CreateCall(call_v, ArrayRef<Value*>(args));
-            call->setAttributes(theFptr->getAttributes());
-            switch (cc) {
-                case jl_returninfo_t::Boxed:
-                    retval = mark_julia_type(ctx, call, true, astrt);
-                    break;
-                case jl_returninfo_t::Register:
-                    retval = mark_julia_type(ctx, call, false, astrt);
-                    break;
-                case jl_returninfo_t::SRet:
-                    retval = mark_julia_slot(result, astrt, NULL, tbaa_stack);
-                    break;
-                case jl_returninfo_t::Union:
-                    retval = mark_julia_slot(ctx.builder.CreateExtractValue(call, 0),
-                                             astrt,
-                                             ctx.builder.CreateExtractValue(call, 1),
-                                             tbaa_stack);
-                    // note that the value may not be rooted here (on the return path)
-                    break;
-                case jl_returninfo_t::Ghosts:
-                    retval = mark_julia_slot(NULL, astrt, call, tbaa_stack);
-                    break;
-            }
+        CallInst *call = ctx.builder.CreateCall(theFptr, ArrayRef<Value*>(args));
+        call->setAttributes(returninfo.decl->getAttributes());
+        switch (returninfo.cc) {
+            case jl_returninfo_t::Boxed:
+                retval = mark_julia_type(ctx, call, true, astrt);
+                break;
+            case jl_returninfo_t::Register:
+                retval = mark_julia_type(ctx, call, false, astrt);
+                break;
+            case jl_returninfo_t::SRet:
+                retval = mark_julia_slot(result, astrt, NULL, tbaa_stack);
+                break;
+            case jl_returninfo_t::Union:
+                retval = mark_julia_slot(ctx.builder.CreateExtractValue(call, 0),
+                                         astrt,
+                                         ctx.builder.CreateExtractValue(call, 1),
+                                         tbaa_stack);
+                // note that the value may not be rooted here (on the return path)
+                break;
+            case jl_returninfo_t::Ghosts:
+                retval = mark_julia_slot(NULL, astrt, call, tbaa_stack);
+                break;
         }
     }
     else {
-        // for jlcall, we need to pass the function object even if it is a ghost.
-        // here we reconstruct the function instance from its type (first elt of argt)
-        Value *theF = literal_pointer_val(ctx, (jl_value_t*)ff);
-        GetElementPtrInst *slot = GetElementPtrInst::Create(T_prjlvalue, myargs,
-                ArrayRef<Value*>(ConstantInt::get(T_int32, 0)));
-        slot->insertAfter(ctx.ptlsStates);
-        ctx.builder.CreateStore(theF, slot);
-
+        // emit a jlcall
+        jlfunc_sret = false;
+        Function *theFptr = NULL;
+        if (lam) {
+            const char *fname = lam->functionObjectsDecls.functionObject;
+            if (fname) {
+                theFptr = cast_or_null<Function>(jl_Module->getNamedValue(fname));
+                if (!theFptr) {
+                    theFptr = Function::Create(jl_func_sig, GlobalVariable::ExternalLinkage,
+                                               fname, jl_Module);
+                }
+                else {
+                    assert(theFptr->getFunctionType() == jl_func_sig);
+                }
+            }
+        }
         BasicBlock *b_generic, *b_jlcall, *b_after;
         Value *ret_jlcall;
         if (age_ok) {
@@ -4571,19 +4534,18 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
             b_after = BasicBlock::Create(jl_LLVMContext, "after", cw);
             ctx.builder.CreateCondBr(age_ok, b_jlcall, b_generic);
             ctx.builder.SetInsertPoint(b_jlcall);
-            Value *nargs_v = ConstantInt::get(T_int32, nargs);
-            Value *myargs1 = ctx.builder.CreateConstInBoundsGEP1_32(T_prjlvalue, myargs, 1);
-            ret_jlcall = ctx.builder.CreateCall(prepare_call(theFptr), {theF, myargs1, nargs_v});
+            // for jlcall, we need to pass the function object even if it is a ghost.
+            Value *theF = boxed(ctx, inputargs[0]);
+            assert(theF);
+            ret_jlcall = emit_jlcall(ctx, theFptr, theF, &inputargs[1], nargs);
             ctx.builder.CreateBr(b_after);
             ctx.builder.SetInsertPoint(b_generic);
         }
-
-        Value *nargs_v = ConstantInt::get(T_int32, nargs + 1);
-        Value *ret = ctx.builder.CreateCall(prepare_call(jlapplygeneric_func), {myargs, nargs_v});
+        Value *ret = emit_jlcall(ctx, prepare_call(jlapplygeneric_func), NULL, inputargs, nargs + 1);
         if (age_ok) {
             ctx.builder.CreateBr(b_after);
             ctx.builder.SetInsertPoint(b_after);
-            PHINode *retphi = ctx.builder.CreatePHI(T_pjlvalue, 2);
+            PHINode *retphi = ctx.builder.CreatePHI(T_prjlvalue, 2);
             retphi->addIncoming(ret_jlcall, b_jlcall);
             retphi->addIncoming(ret, b_generic);
             ret = retphi;
@@ -4626,14 +4588,6 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
 
     ctx.builder.CreateStore(last_age, ctx.world_age_field);
     ctx.builder.CreateRet(r);
-
-    // also need to finish emission of our specsig -> jl_apply_generic converter thunk
-    // this builds a method that calls jl_apply_generic (as a closure over a singleton function pointer),
-    // but which has the signature of a specsig
-    if (gf_thunk) {
-        assert(lam && specsig);
-        emit_cfunc_invalidate(gf_thunk, cc, lam, nargs, world);
-    }
 
     ctx.builder.SetCurrentDebugLocation(noDbg);
     ctx.builder.ClearInsertionPoint();
