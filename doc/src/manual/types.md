@@ -877,6 +877,25 @@ false
 Intuitively, this corresponds to the type of a function's arguments being a subtype of the function's
 signature (when the signature matches).
 
+You can inspect the component types of a tuple type `T` almost
+as if `T` were an array or tuple of types:
+```jldoctest
+julia> T = Tuple{Int8,String,Float32}
+Tuple{Int8,String,Float32}
+
+julia> length(T)
+3
+
+julia> T[2]
+String
+
+julia> collect(Type, T)
+3-element Array{Type,1}:
+ Int8
+ String
+ Float32
+```
+
 ### Vararg Tuple Types
 
 The last parameter of a tuple type can be the special type `Vararg`, which denotes any number
@@ -904,6 +923,9 @@ used to represent the arguments accepted by varargs methods (see [Varargs Functi
 
 The type `Vararg{T,N}` corresponds to exactly `N` elements of type `T`.  `NTuple{N,T}` is a convenient
 alias for `Tuple{Vararg{T,N}}`, i.e. a tuple type containing exactly `N` elements of type `T`.
+
+For introspection/indexing purposes, a `Vararg` tuple type behaves like an "array" of
+an unbounded number of types (its [`length`](@ref) is `typemax(Int)`).
 
 #### [Singleton Types](@id man-singleton-types)
 

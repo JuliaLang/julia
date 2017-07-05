@@ -310,3 +310,23 @@ any(x::Tuple{}) = false
 any(x::Tuple{Bool}) = x[1]
 any(x::Tuple{Bool, Bool}) = x[1]|x[2]
 any(x::Tuple{Bool, Bool, Bool}) = x[1]|x[2]|x[3]
+
+## tuple-type introspection as array/iterator ##
+# ... we can't define iteratorsize/iteratoreltype, however, because
+#     typeof(Tuple) is simply DataType
+_iteratorsize(::Type{T}) where {T<:Tuple} = (@_pure_meta; isvatuple(T) ? IsInfinite() : HasLength())
+_length(::HasLength, T::Type{<:Tuple}) = length(T.types)
+_length(::IsInfinite, T::Type{<:Tuple}) = typemax(Int)
+length(T::Type{<:Tuple}) = (@_inline_meta; _length(_iteratorsize(T), T))
+endof(T::Type{<:Tuple}) = (@_inline_meta; length(T))
+getindex(::Type{T}, i::Integer) where {T<:Tuple} = _getindex(_iteratorsize(T), T, i)
+_getindex(::HasLength, T::Type{<:Tuple}, i::Integer) = (@_propagate_inbounds_meta; T.types[i])
+function _getindex(::IsInfinite, T::Type{<:Tuple}, i::Integer)
+    @_propagate_inbounds_meta
+    return i ≥ length(T.types) ? unwrapva(T.types[end]) : T.types[i]
+end
+start(::Type{<:Tuple}) = 1
+next(T::Type{<:Tuple}, i::Int) = (@_propagate_inbounds_meta; (T[i],i+1))
+done(T::Type{<:Tuple}, i::Int) = (@_inline_meta; i == length(T)+1)
+first(T::Type{<:Tuple}) = T[1]
+last(T::Type{<:Tuple}) = T[end]
