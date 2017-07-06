@@ -976,7 +976,7 @@ if !isdefined(Base, :pointer_to_string)
     function pointer_to_string(p::Ptr{UInt8}, len::Integer, own::Bool=false)
         a = ccall(:jl_ptr_to_array_1d, Vector{UInt8},
                   (Any, Ptr{UInt8}, Csize_t, Cint), Vector{UInt8}, p, len, own)
-        ccall(:jl_array_to_string, String, (Any,), a)
+        ccall(:jl_array_to_string, Ref{String}, (Any,), a)
     end
 
     pointer_to_string(p::Ptr{UInt8}, own::Bool=false) =
