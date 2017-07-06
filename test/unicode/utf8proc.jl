@@ -314,3 +314,9 @@ end
         @test repr(g) == "length-14 GraphemeIterator{String} for \"$str\""
     end
 end
+
+@testset "#22693: substring graphemes" begin
+    g = graphemes(SubString("123α56789", 1, 6))
+    @test eltype(g) == SubString{String}
+    @test collect(g) == ["1","2","3","α","5"]
+end
