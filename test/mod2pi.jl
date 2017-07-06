@@ -207,3 +207,12 @@ testModPi()
     @test a-y<nextfloat(y)/2
     # add more tests
 end
+
+@testset "rem_pio2_kernel and rem2pi" begin
+    for int in (3632982096228748, 1135326194816)
+        bignum = int*big(pi)/2+0.00001
+        bigrem = rem(bignum, big(pi)/2, RoundDown)
+        fnum = Float64(bignum)
+        @test mod2pi(fnum) == sum(Base.Math.rem_pio2_kernel(fnum)[2:3])
+    end
+end

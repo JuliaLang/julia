@@ -64,10 +64,10 @@ Return positive part of the high word of `x` as a `UInt32`.
 Rounds `x` to the nearest integer, tie-breaking towards zero. Used internally
 in rem_pio2_kernel.
 """
+rint(x::Float64) = (x+6.755399441055744e15)-6.755399441055744e15
 # This could be replaced with:
 #     fn = round(x*invpio2, RoundNearest)
 # at a cost.
-rint(x::Float64) = (x+6.755399441055744e15)-6.755399441055744e15
 
 function cody_waite_2c_pio2(x::Float64)
     fn = rint(x*invpio2) # round to integer
