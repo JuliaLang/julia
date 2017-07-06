@@ -23,19 +23,21 @@ const ORDERING_BESTAMD = Int32(9) # try COLAMD and AMD; pick best#
 
 using ..SparseArrays: SparseMatrixCSC
 using ..SparseArrays.CHOLMOD
+using ..SparseArrays.CHOLMOD: change_stype!, free!
 
-function _qr!(ordering, tol, econ, getCTX, A::Ptr{CHOLMOD.C_Sparse{Tv}},
-        Bsparse::Ptr{CHOLMOD.C_Sparse{Tv}}        = Ptr{CHOLMOD.C_Sparse{Tv}}(C_NULL),
-        Bdense::Ptr{CHOLMOD.C_Dense{Tv}}          = Ptr{CHOLMOD.C_Dense{Tv}}(C_NULL),
-        Zsparse::Ref{Ptr{CHOLMOD.C_Sparse{Tv}}}   = Ref{Ptr{CHOLMOD.C_Sparse{Tv}}}(C_NULL),
-        Zdense::Ref{Ptr{CHOLMOD.C_Dense{Tv}}}     = Ref{Ptr{CHOLMOD.C_Dense{Tv}}}(C_NULL),
-        R::Ref{Ptr{CHOLMOD.C_Sparse{Tv}}}         = Ref{Ptr{CHOLMOD.C_Sparse{Tv}}}(C_NULL),
-        E::Ref{Ptr{CHOLMOD.SuiteSparse_long}}     = Ref{Ptr{CHOLMOD.SuiteSparse_long}}(C_NULL),
-        H::Ref{Ptr{CHOLMOD.C_Sparse{Tv}}}         = Ref{Ptr{CHOLMOD.C_Sparse{Tv}}}(C_NULL),
-        HPinv::Ref{Ptr{CHOLMOD.SuiteSparse_long}} = Ref{Ptr{CHOLMOD.SuiteSparse_long}}(C_NULL),
-        HTau::Ref{Ptr{CHOLMOD.C_Dense{Tv}}}       = Ref{Ptr{CHOLMOD.C_Dense{Tv}}}(C_NULL)) where {Tv<:CHOLMOD.VTypes}
+function _qr!(ordering::Integer, tol::Real, econ::Integer, getCTX::Integer,
+        A::Sparse{Tv},
+        Bsparse::Union{Sparse{Tv}                      , Ptr{Void}} = C_NULL,
+        Bdense::Union{Dense{Tv}                        , Ptr{Void}} = C_NULL,
+        Zsparse::Union{Ref{Ptr{CHOLMOD.C_Sparse{Tv}}}  , Ptr{Void}} = C_NULL,
+        Zdense::Union{Ref{Ptr{CHOLMOD.C_Dense{Tv}}}    , Ptr{Void}} = C_NULL,
+        R::Union{Ref{Ptr{CHOLMOD.C_Sparse{Tv}}}        , Ptr{Void}} = C_NULL,
+        E::Union{Ref{Ptr{CHOLMOD.SuiteSparse_long}}    , Ptr{Void}} = C_NULL,
+        H::Union{Ref{Ptr{CHOLMOD.C_Sparse{Tv}}}        , Ptr{Void}} = C_NULL,
+        HPinv::Union{Ref{Ptr{CHOLMOD.SuiteSparse_long}}, Ptr{Void}} = C_NULL,
+        HTau::Union{Ref{Ptr{CHOLMOD.C_Dense{Tv}}}      , Ptr{Void}} = C_NULL) where {Tv<:CHOLMOD.VTypes}
 
-    AA   = unsafe_load(A)
+    AA   = unsafe_load(pointer(A))
     m, n = AA.nrow, AA.ncol
     rnk  = ccall((:SuiteSparseQR_C, :libspqr), CHOLMOD.SuiteSparse_long,
         (Cint, Cdouble, CHOLMOD.SuiteSparse_long, Cint,
@@ -132,21 +134,32 @@ Base.size(Q::QRSparseQ) = (size(Q.factors, 1), size(Q.factors, 1))
 _default_tol(A::SparseMatrixCSC) =
     20*sum(size(A))*eps(real(eltype(A)))*maximum(norm(view(A, :, i))^2 for i in 1:size(A, 2))
 
-function Base.LinAlg.qrfact(A::SparseMatrixCSC{Tv}, ::Type{Val{true}}; tol = _default_tol(A)) where {Tv <: CHOLMOD.VTypes}
+function Base.LinAlg.qrfact(A::SparseMatrixCSC{Tv}; tol = _default_tol(A)) where {Tv <: CHOLMOD.VTypes}
     R     = Ref{Ptr{CHOLMOD.C_Sparse{Tv}}}()
     E     = Ref{Ptr{CHOLMOD.SuiteSparse_long}}()
     H     = Ref{Ptr{CHOLMOD.C_Sparse{Tv}}}()
     HPinv = Ref{Ptr{CHOLMOD.SuiteSparse_long}}()
     HTau  = Ref{Ptr{CHOLMOD.C_Dense{Tv}}}(C_NULL)
 
-    # SPQR doesn't accept symmetric matrices so we explicitly call the Sparse constructor with 0
-    r, p, hpinv = _qr!(ORDERING_DEFAULT, tol, 0, 0, CHOLMOD.Sparse(A, 0).p,
-        Ptr{CHOLMOD.C_Sparse{Tv}}(C_NULL),
-        Ptr{CHOLMOD.C_Dense{Tv}}(C_NULL),
-        Ref{Ptr{CHOLMOD.C_Sparse{Tv}}}(C_NULL),
-        Ref{Ptr{CHOLMOD.C_Dense{Tv}}}(C_NULL),
+    # SPQR doesn't accept symmetric matrices so we explicitly set the stype
+    r, p, hpinv = _qr!(ORDERING_DEFAULT, tol, 0, 0, Sparse(A, 0),
+        C_NULL, C_NULL, C_NULL, C_NULL,
         R, E, H, HPinv, HTau)
-    return QRSparse(SparseMatrixCSC(Sparse(H[])), vec(Array(CHOLMOD.Dense(HTau[]))), SparseMatrixCSC(Sparse(R[])), p, hpinv)
+
+    # convert to Julia managed memory and free memory from SuiteSparse
+    tmpH = Sparse(H[])
+    HCSC = SparseMatrixCSC(tmpH)
+    free!(tmpH)
+
+    tmpHTau    = CHOLMOD.Dense(HTau[])
+    HTauVector = vec(Array(tmpHTau))
+    free!(tmpHTau)
+
+    tmpR = Sparse(R[])
+    RCSC = SparseMatrixCSC(tmpR)
+    free!(tmpR)
+
+    return QRSparse(HCSC, HTauVector, RCSC, p, hpinv)
 end
 
 """

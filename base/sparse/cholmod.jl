@@ -248,6 +248,8 @@ mutable struct Sparse{Tv<:VTypes} <: AbstractSparseMatrix{Tv,SuiteSparse_long}
 end
 Sparse(p::Ptr{C_Sparse{Tv}}) where {Tv<:VTypes} = Sparse{Tv}(p)
 
+Base.unsafe_convert(::Type{Ptr{Tv}}, A::Sparse{Tv}) where {Tv} = A.p
+
 # Factor
 
 if build_version >= v"2.1.0" # CHOLMOD version 2.1.0 or later
