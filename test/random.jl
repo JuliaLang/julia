@@ -565,4 +565,4 @@ let b = ['0':'9';'A':'Z';'a':'z']
 end
 
 # this shouldn't crash (#22403)
-@test_throws MethodError rand!(Union{UInt,Int}[1, 2, 3]) isa Vector{Union{UInt,Int}}
+@test_throws MethodError rand!(Union{UInt,Int}[1, 2, 3])
