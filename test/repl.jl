@@ -665,3 +665,111 @@ let term = Base.Terminals.TTYTerminal("dumb",IOBuffer("1+2\n"),IOBuffer(),IOBuff
     REPL.run_repl(r)
     @test String(take!(term.out_stream)) == "julia> 3\n\njulia> \n"
 end
+
+
+# a small module for alternative keymap tests
+module AltLE
+import Base: LineEdit, REPL
+
+function history_move_prefix(s::LineEdit.MIState,
+                             hist::REPL.REPLHistoryProvider,
+                             backwards::Bool)
+    buf = LineEdit.buffer(s)
+    pos = position(buf)
+    prefix = REPL.beforecursor(buf)
+    allbuf = String(buf)
+    cur_idx = hist.cur_idx
+    # when searching forward, start at last_idx
+    if !backwards && hist.last_idx > 0
+        cur_idx = hist.last_idx
+    end
+    hist.last_idx = -1
+    idxs = backwards ? ((cur_idx-1):-1:1) : ((cur_idx+1):length(hist.history))
+    for idx in idxs
+        if startswith(hist.history[idx], prefix) && hist.history[idx] != allbuf
+            REPL.history_move(s, hist, idx)
+            seek(LineEdit.buffer(s), pos)
+            LineEdit.refresh_line(s)
+            return :ok
+        end
+    end
+    REPL.Terminals.beep(LineEdit.terminal(s))
+end
+history_next_prefix(s::LineEdit.MIState, hist::REPL.REPLHistoryProvider) =
+    history_move_prefix(s, hist, false)
+history_prev_prefix(s::LineEdit.MIState, hist::REPL.REPLHistoryProvider) =
+    history_move_prefix(s, hist, true)
+
+end # module
+
+# Test alternative keymaps and prompt
+# (Alt. keymaps may be passed as a Vector{<:Dict} or as a Dict)
+
+const altkeys = [Dict{Any,Any}("\e[A" => (s,o...)->(LineEdit.edit_move_up(s) || LineEdit.history_prev(s, LineEdit.mode(s).hist))), # Up Arrow
+                 Dict{Any,Any}("\e[B" => (s,o...)->(LineEdit.edit_move_down(s) || LineEdit.history_next(s, LineEdit.mode(s).hist))), # Down Arrow
+                 Dict{Any,Any}("\e[5~" => (s,o...)->(AltLE.history_prev_prefix(s, LineEdit.mode(s).hist))), # Page Up
+                 Dict{Any,Any}("\e[6~" => (s,o...)->(AltLE.history_next_prefix(s, LineEdit.mode(s).hist))), # Page Down
+                ]
+
+
+if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
+    for keys = [altkeys, merge(altkeys...)]
+        histfile = tempname()
+        try
+            stdin_write, stdout_read, stderr_read, repl = fake_repl()
+
+            repl.specialdisplay = Base.REPL.REPLDisplay(repl)
+            repl.history_file = true
+            altprompt = "julia-$(VERSION.major).$(VERSION.minor)> "
+            withenv("JULIA_HISTORY" => histfile) do
+                repl.interface = REPL.setup_interface(repl, extra_repl_keymap = altkeys)
+            end
+            repl.interface.modes[1].prompt = altprompt
+
+            repltask = @async begin
+                Base.REPL.run_repl(repl)
+            end
+
+            sendrepl3(cmd) = write(stdin_write,"$cmd\n")
+
+            sendrepl3("1 + 1;")                        # a simple line
+            sendrepl3("multi=2;\e\nline=2;")           # a multiline input
+            sendrepl3("ignoreme\e[A\b\b3;\e[B\b\b1;")  # edit the previous multiline input
+            sendrepl3("1 +\e[5~\b*")                   # use prefix search to edit the 1st input
+
+            # Close REPL ^D
+            write(stdin_write, '\x04')
+            wait(repltask)
+
+            # Close the history file
+            # (otherwise trying to delete it fails on Windows)
+            close(repl.interface.modes[1].hist.history_file)
+
+            # Check that the correct prompt was displayed
+            output = readuntil(stdout_read, "1 * 1;")
+            @test !isempty(search(output, altprompt))
+            @test isempty(search(output, "julia> "))
+
+            # Check the history file
+            history = readstring(histfile)
+            @test ismatch(r"""
+                          ^\#\ time:\ .*\n
+                           \#\ mode:\ julia\n
+                           \t1\ \+\ 1;\n
+                           \#\ time:\ .*\n
+                           \#\ mode:\ julia\n
+                           \tmulti=2;\n
+                           \tline=2;\n
+                           \#\ time:\ .*\n
+                           \#\ mode:\ julia\n
+                           \tmulti=3;\n
+                           \tline=1;\n
+                           \#\ time:\ .*\n
+                           \#\ mode:\ julia\n
+                           \t1\ \*\ 1;\n$
+                          """xm, history)
+        finally
+            rm(histfile, force=true)
+        end
+    end
+end
