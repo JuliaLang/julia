@@ -61,10 +61,13 @@ Return positive part of the high word of `x` as a `UInt32`.
 """
     rint(x::Float64)
 
-Rounds `x` to the nearest integer, tie-breaking towards zero. Used internally
+Rounds `x` to the nearest integer, tie-breaking to even. Used internally
 in rem_pio2_kernel.
 """
-rint(x::Float64) = (x+6.755399441055744e15)-6.755399441055744e15
+function rint(x::Float64)
+    rf = 1.5/eps(Float64)
+    (x+rf)-rf
+end
 # This could be replaced with:
 #     fn = round(x*invpio2, RoundNearest)
 # at a cost.
