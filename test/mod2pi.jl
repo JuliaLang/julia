@@ -208,7 +208,7 @@ testModPi()
     # add more tests
 end
 
-@testset "rem_pio2_kernel and rem2pi" begin
+@testset "rem_pio2_kernel and mod2pi" begin
     for int in (3632982096228748, 1135326194816)
         bignum = int*big(pi)/2+0.00001
         bigrem = rem(bignum, big(pi)/2, RoundDown)
