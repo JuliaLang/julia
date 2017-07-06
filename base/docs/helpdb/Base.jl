@@ -2317,3 +2317,19 @@ for bit in (8, 16, 32, 64, 128)
         $(Symbol("UInt", bit))
     end
 end
+
+"""
+    Vector{T}(n)
+
+Construct an uninitialized [`Vector{T}`](@ref) of length `n`.
+
+# Examples
+```julia-repl
+julia> Vector{Float64}(3)
+3-element Array{Float64,1}:
+ 6.90966e-310
+ 6.90966e-310
+ 6.90966e-310
+```
+"""
+Vector{T}(n)

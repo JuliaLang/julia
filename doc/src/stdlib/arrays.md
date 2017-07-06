@@ -8,6 +8,7 @@ Base.AbstractVector
 Base.AbstractMatrix
 Core.Array
 Base.Vector
+Base.Vector(::Any)
 Base.Matrix
 Base.getindex(::Type, ::Any...)
 Base.zeros
