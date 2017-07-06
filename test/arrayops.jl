@@ -2155,3 +2155,19 @@ Base.:(==)(a::T11053, b::T11053) = a.a == b.a
 
 #15907
 @test typeof(Array{Int,0}()) == Array{Int,0}
+
+# check a == b for arrays of Union type (#22403)
+let TT = Union{UInt8, Int8}
+    a = TT[0x0, 0x1]
+    b = TT[0x0, 0x0]
+    pa = pointer(a)
+    pb = pointer(b)
+    resize!(a, 1) # sets a[2] = 0
+    resize!(b, 1)
+    @assert pointer(a) == pa
+    @assert pointer(b) == pb
+    unsafe_store!(pa, 0x1, 2) # reset a[2] to 1
+    @test length(a) == length(b) == 1
+    @test a[1] == b[1] == 0x0
+    @test a == b
+end

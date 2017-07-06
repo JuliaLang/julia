@@ -1142,17 +1142,18 @@ function lexcmp(a::Array{UInt8,1}, b::Array{UInt8,1})
     return c < 0 ? -1 : c > 0 ? +1 : cmp(length(a),length(b))
 end
 
+const BitIntegerArray{N} = Union{map(T->Array{T,N}, BitInteger_types)...} where N
 # use memcmp for == on bit integer types
-function ==(a::Array{T,N}, b::Array{T,N}) where T<:BitInteger where N
+function ==(a::Arr, b::Arr) where Arr <: BitIntegerArray
     size(a) == size(b) && 0 == ccall(
-        :memcmp, Int32, (Ptr{T}, Ptr{T}, UInt), a, b, sizeof(T) * length(a))
+        :memcmp, Int32, (Ptr{Void}, Ptr{Void}, UInt), a, b, sizeof(eltype(Arr)) * length(a))
 end
 
 # this is ~20% faster than the generic implementation above for very small arrays
-function ==(a::Array{T,1}, b::Array{T,1}) where T<:BitInteger
+function ==(a::Arr, b::Arr) where Arr <: BitIntegerArray{1}
     len = length(a)
     len == length(b) && 0 == ccall(
-        :memcmp, Int32, (Ptr{T}, Ptr{T}, UInt), a, b, sizeof(T) * len)
+        :memcmp, Int32, (Ptr{Void}, Ptr{Void}, UInt), a, b, sizeof(eltype(Arr)) * len)
 end
 
 function reverse(A::AbstractVector, s=first(linearindices(A)), n=last(linearindices(A)))

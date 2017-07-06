@@ -563,3 +563,6 @@ let b = ['0':'9';'A':'Z';'a':'z']
     end
     @test randstring(MersenneTwister(0)) == randstring(MersenneTwister(0), b)
 end
+
+# this shouldn't crash (#22403)
+@test_throws MethodError rand!(Union{UInt,Int}[1, 2, 3])
