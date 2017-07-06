@@ -133,18 +133,15 @@ static Value *stringConstPtr(IRBuilder<> &irbuilder, const std::string &txt)
 
 static DIType *julia_type_to_di(jl_value_t *jt, DIBuilder *dbuilder, bool isboxed = false)
 {
-    if (isboxed)
+    if (isboxed || !jl_is_datatype(jt))
         return jl_pvalue_dillvmt;
+    jl_datatype_t *jdt = (jl_datatype_t*)jt;
     // always return the boxed representation for types with hidden content
-    if (jl_is_abstracttype(jt) || !jl_is_datatype(jt) || jl_is_array_type(jt) ||
+    if (jl_is_abstracttype(jt) || jl_is_array_type(jt) ||
         jt == (jl_value_t*)jl_sym_type || jt == (jl_value_t*)jl_module_type ||
         jt == (jl_value_t*)jl_simplevector_type || jt == (jl_value_t*)jl_datatype_type ||
         jt == (jl_value_t*)jl_method_instance_type)
         return jl_pvalue_dillvmt;
-    if (jl_is_unionall(jt) || jl_is_typevar(jt))
-        return jl_pvalue_dillvmt;
-    assert(jl_is_datatype(jt));
-    jl_datatype_t *jdt = (jl_datatype_t*)jt;
     if (jdt->ditype != NULL) {
         DIType* t = (DIType*)jdt->ditype;
         return t;
@@ -168,45 +165,35 @@ static DIType *julia_type_to_di(jl_value_t *jt, DIBuilder *dbuilder, bool isboxe
         return t;
 #endif
     }
-    else if (!jl_is_leaf_type(jt)) {
-        jdt->ditype = jl_pvalue_dillvmt;
-        return jl_pvalue_dillvmt;
-    }
-    else if (jl_is_structtype(jt)) {
-        jl_datatype_t *jst = (jl_datatype_t*)jt;
-        size_t ntypes = jl_datatype_nfields(jst);
+    if (jl_is_structtype(jt) && jdt->layout) {
+        size_t ntypes = jl_datatype_nfields(jdt);
         const char *tname = jl_symbol_name(jdt->name->name);
         std::stringstream unique_name;
         unique_name << tname << "_" << globalUnique++;
         llvm::DICompositeType *ct = dbuilder->createStructType(
-            NULL,                       // Scope
-            tname,                      // Name
-            NULL,                       // File
-            0,                          // LineNumber
-            jl_datatype_nbits(jdt),     // SizeInBits
-            8 * jl_datatype_align(jdt), // AlignInBits
-            DIFlagZero,                 // Flags
-            NULL,                       // DerivedFrom
-            DINodeArray(),              // Elements
-            dwarf::DW_LANG_Julia,       // RuntimeLanguage
-            nullptr,                    // VTableHolder
-            unique_name.str()           // UniqueIdentifier
-            );
+                NULL,                       // Scope
+                tname,                      // Name
+                NULL,                       // File
+                0,                          // LineNumber
+                jl_datatype_nbits(jdt),     // SizeInBits
+                8 * jl_datatype_align(jdt), // AlignInBits
+                DIFlagZero,                 // Flags
+                NULL,                       // DerivedFrom
+                DINodeArray(),              // Elements
+                dwarf::DW_LANG_Julia,       // RuntimeLanguage
+                nullptr,                    // VTableHolder
+                unique_name.str()           // UniqueIdentifier
+                );
         jdt->ditype = ct;
         std::vector<llvm::Metadata*> Elements;
-        for(unsigned i = 0; i < ntypes; i++)
-            Elements.push_back(julia_type_to_di(jl_svecref(jst->types,i),dbuilder,false));
+        for (unsigned i = 0; i < ntypes; i++)
+            Elements.push_back(julia_type_to_di(jl_svecref(jdt->types, i), dbuilder, false));
         dbuilder->replaceArrays(ct, dbuilder->getOrCreateArray(ArrayRef<Metadata*>(Elements)));
         return ct;
     }
-    else {
-        assert(jl_is_datatype(jt));
-        jdt->ditype = dbuilder->createTypedef(jl_pvalue_dillvmt,
+    jdt->ditype = dbuilder->createTypedef(jl_pvalue_dillvmt,
             jl_symbol_name(jdt->name->name), NULL, 0, NULL);
-        return (llvm::DIType*)jdt->ditype;
-    }
-    // TODO: Fixme
-    return jl_pvalue_dillvmt;
+    return (llvm::DIType*)jdt->ditype;
 }
 
 static Value *emit_pointer_from_objref(jl_codectx_t &ctx, Value *V)
@@ -452,8 +439,8 @@ static Type *julia_struct_to_llvm(jl_value_t *jt, jl_unionall_t *ua, bool *isbox
     if (jl_is_primitivetype(jt))
         return bitstype_to_llvm(jt);
     bool isTuple = jl_is_tuple_type(jt);
-    if ((isTuple || jl_is_structtype(jt)) && !jl_is_array_type(jt)) {
-        jl_datatype_t *jst = (jl_datatype_t*)jt;
+    jl_datatype_t *jst = (jl_datatype_t*)jt;
+    if (jl_is_structtype(jt) && !(jst->layout && jl_is_layout_opaque(jst->layout))) {
         if (jst->struct_decl == NULL) {
             size_t i, ntypes = jl_svec_len(jst->types);
             if (ntypes == 0 || (jst->layout && jl_datatype_nbits(jst) == 0))
@@ -1069,7 +1056,7 @@ static void emit_typecheck(jl_codectx_t &ctx, const jl_cgval_t &x, jl_value_t *t
 
 static void emit_leafcheck(jl_codectx_t &ctx, Value *typ, const std::string &msg)
 {
-    assert(typ->getType() == T_pjlvalue);
+    assert(typ->getType() == T_prjlvalue);
     emit_typecheck(ctx, mark_julia_type(ctx, typ, true, jl_any_type, false), (jl_value_t*)jl_datatype_type, msg);
     Value *isleaf;
     isleaf = ctx.builder.CreateConstInBoundsGEP1_32(T_int8, emit_bitcast(ctx, decay_derived(typ), T_pint8), offsetof(jl_datatype_t, isleaftype));

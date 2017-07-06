@@ -966,8 +966,8 @@ STATIC_INLINE void *jl_get_frame_addr(void)
 }
 
 JL_DLLEXPORT jl_array_t *jl_array_cconvert_cstring(jl_array_t *a);
+JL_DLLEXPORT void jl_depwarn_partial_indexing(size_t n);
 void jl_depwarn(const char *msg, jl_value_t *sym);
-void jl_depwarn_partial_indexing(size_t n);
 
 int isabspath(const char *in);
 

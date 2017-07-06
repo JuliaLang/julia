@@ -3335,8 +3335,9 @@ static jl_cgval_t emit_sparam(jl_codectx_t &ctx, size_t i)
         }
     }
     assert(ctx.spvals_ptr != NULL);
-    Value *bp = ctx.builder.CreateConstInBoundsGEP1_32(T_prjlvalue,
-            emit_bitcast(ctx, decay_derived(ctx.spvals_ptr), T_pprjlvalue),
+    Value *bp = ctx.builder.CreateConstInBoundsGEP1_32(
+            T_prjlvalue,
+            ctx.spvals_ptr,
             i + sizeof(jl_svec_t) / sizeof(jl_value_t*));
     return mark_julia_type(ctx, tbaa_decorate(tbaa_const, ctx.builder.CreateLoad(bp)), true, jl_any_type, false);
 }
@@ -4923,9 +4924,14 @@ static jl_returninfo_t get_specsig_function(Module *M, const std::string &name, 
 }
 
 static DISubroutineType *
-get_specsig_di(jl_value_t *sig, DIFile *topfile, DIBuilder &dbuilder)
+get_specsig_di(jl_value_t *rt, jl_value_t *sig, DIFile *topfile, DIBuilder &dbuilder)
 {
     std::vector<Metadata*> ditypes(0);
+    Type *ty = julia_type_to_llvm(rt);
+    if (type_is_ghost(ty))
+        ditypes.push_back(nullptr);
+    else
+        ditypes.push_back(julia_type_to_di(rt, &dbuilder, false));
     for (size_t i = 0; i < jl_nparams(sig); i++) {
         jl_value_t *jt = jl_tparam(sig, i);
         Type *ty = julia_type_to_llvm(jt);
@@ -5188,7 +5194,7 @@ static std::unique_ptr<Module> emit_function(
             subrty = jl_di_func_sig;
         }
         else {
-            subrty = get_specsig_di(lam->specTypes, topfile, dbuilder);
+            subrty = get_specsig_di(lam->rettype, lam->specTypes, topfile, dbuilder);
         }
         SP = dbuilder.createFunction(CU,
                                      dbgFuncName,      // Name
@@ -5264,7 +5270,8 @@ static std::unique_ptr<Module> emit_function(
     if (!specsig) {
         Function::arg_iterator AI = f->arg_begin();
         if (needsparams) {
-            ctx.spvals_ptr = &*AI++;
+            ctx.spvals_ptr = &*AI;
+            ++AI;
         }
         fArg = &*AI++;
         argArray = &*AI++;
@@ -6191,8 +6198,8 @@ static void init_julia_llvm_env(Module *m)
     jl_init_jit(T_pjlvalue);
 
     std::vector<Type*> ftargs(0);
-    ftargs.push_back(T_prjlvalue);   // linfo->sparam_vals
-    ftargs.push_back(T_prjlvalue);   // function
+    ftargs.push_back(T_pprjlvalue); // linfo->sparam_vals
+    ftargs.push_back(T_prjlvalue);  // function
     ftargs.push_back(T_pprjlvalue); // args[]
     ftargs.push_back(T_int32);      // nargs
     jl_func_sig_sparams = FunctionType::get(T_prjlvalue, ftargs, false);
@@ -6624,9 +6631,9 @@ static void init_julia_llvm_env(Module *m)
     std::vector<Type *> applytype_args(0);
     applytype_args.push_back(T_prjlvalue);
     applytype_args.push_back(T_prjlvalue);
-    applytype_args.push_back(PointerType::get(T_prjlvalue, AddressSpace::Derived));
+    applytype_args.push_back(T_pprjlvalue);
     jlapplytype_func =
-        Function::Create(FunctionType::get(T_pjlvalue, applytype_args, false),
+        Function::Create(FunctionType::get(T_prjlvalue, applytype_args, false),
                          Function::ExternalLinkage,
                          "jl_instantiate_type_in_env", m);
     add_named_global(jlapplytype_func, &jl_instantiate_type_in_env);
