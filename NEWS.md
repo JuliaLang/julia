@@ -49,6 +49,9 @@ This section lists changes that do not have deprecation warnings.
 Library improvements
 --------------------
 
+  * The components of a tuple type `T` may now be iterated over and indexed
+    as if `T` were a tuple of types ([#22687]).
+
   * The functions `strip`, `lstrip` and `rstrip` now return `SubString` ([#22496]).
 
   * The functions `base` and `digits` digits now accept a negative

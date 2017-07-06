@@ -291,3 +291,25 @@ let
 
     test_15703()
 end
+
+@testset "tuple type introspection" begin
+    for (T,a) in ((Tuple{}, Type[]),
+                  (Tuple{Int,String,Int8}, [Int,String,Int8]),
+                  (NTuple{4,Int}, [Int,Int,Int,Int]),
+                  (Tuple{Int,String,Vararg{Int8}}, [Int,String,Int8,Int8,Int8]))
+        @test isempty(T) == isempty(a)
+        if Base._iteratorsize(T) isa Base.HasLength
+            @test length(T) == endof(T) == length(a)
+            @test collect(Type, T) == a == [T[i] for i = 1:length(T)]
+            @test_throws BoundsError T[length(T)+1]
+        else
+            @test length(T) == endof(T) == typemax(Int)
+        end
+        if !isempty(T)
+            @test first(T) == first(a)
+            @test last(T) == last(a) == T[end]
+        end
+        @test collect(Type, Base.Iterators.take(T, length(a))) == a == [T[i] for i = 1:length(a)]
+        @test_throws BoundsError T[0]
+    end
+end
