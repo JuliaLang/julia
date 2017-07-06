@@ -14,6 +14,8 @@ const BitSigned_types     = (BitSigned64_types..., Int128)
 const BitUnsigned_types   = (BitUnsigned64_types..., UInt128)
 const BitInteger_types    = (BitSigned_types..., BitUnsigned_types...)
 
+const BitSigned32    = Union{Int8,Int16,Int32}
+const BitUnsigned32  = Union{UInt8,UInt16,UInt32}
 const BitSigned64    = Union{BitSigned64_types...}
 const BitUnsigned64  = Union{BitUnsigned64_types...}
 const BitInteger64   = Union{BitInteger64_types...}
@@ -511,15 +513,15 @@ promote_rule(::Type{Int8}, ::Type{Int16})   = Int16
 promote_rule(::Type{UInt8}, ::Type{UInt16}) = UInt16
 promote_rule(::Type{Int32}, ::Type{<:Union{Int8,Int16}})    = Int32
 promote_rule(::Type{UInt32}, ::Type{<:Union{UInt8,UInt16}}) = UInt32
-promote_rule(::Type{Int64}, ::Type{<:Union{Int8,Int16,Int32}})     = Int64
-promote_rule(::Type{UInt64}, ::Type{<:Union{UInt8,UInt16,UInt32}}) = UInt64
+promote_rule(::Type{Int64}, ::Type{<:BitSigned32})     = Int64
+promote_rule(::Type{UInt64}, ::Type{<:BitUnsigned32}) = UInt64
 promote_rule(::Type{Int128}, ::Type{<:BitSigned64})    = Int128
 promote_rule(::Type{UInt128}, ::Type{<:BitUnsigned64}) = UInt128
 for T in BitSigned_types
     @eval promote_rule(::Type{<:Union{UInt8,UInt16}}, ::Type{$T}) =
         $(sizeof(T) < sizeof(Int) ? Int : T)
 end
-@eval promote_rule(::Type{UInt32}, ::Type{<:Union{Int8,Int16,Int32}}) =
+@eval promote_rule(::Type{UInt32}, ::Type{<:BitSigned32}) =
     $(Core.sizeof(Int) == 8 ? Int : UInt)
 promote_rule(::Type{UInt32}, ::Type{Int64}) = Int64
 promote_rule(::Type{UInt64}, ::Type{<:BitSigned64}) = UInt64
@@ -651,4 +653,16 @@ else
 
     rem(x::Int128,  y::Int128)  = checked_srem_int(x, y)
     rem(x::UInt128, y::UInt128) = checked_urem_int(x, y)
+end
+
+# operations where we want to preserve sign (#9292) for unsigned ⋆ signed:
+for op in (:*, :+, :-, :div, :rem, :mod, ://)
+    @eval $op(x::UInt64, y::BitSigned64) = $op(Int64(x), y)
+    @eval $op(x::BitSigned64, y::UInt64) = $op(x, Int64(y))
+    @eval $op(x::UInt128, y::BitSigned)  = $op(Int128(x), y)
+    @eval $op(x::BitSigned, y::UInt128)  = $op(x, Int128(y))
+    if Core.sizeof(Int) == 4
+        @eval $op(x::UInt32, y::BitSigned32) = $op(Int32(x), y)
+        @eval $op(x::BitSigned32, y::UInt32) = $op(x, Int32(y))
+    end
 end

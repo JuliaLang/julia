@@ -3,7 +3,7 @@
 ## hashing small, built-in numeric types
 ## for a system image built without floating point support
 
-hx(a::UInt64, b::UInt64, h::UInt) = hash_uint64(3a + b - h)
+hx(a::UInt64, b::UInt64, h::UInt) = hash_uint64(0x03a + b - h)
 
 hash(x::UInt64,  h::UInt) = hx(x, x, h)
 hash(x::Int64,   h::UInt) = hx(reinterpret(UInt64,abs(x)), reinterpret(UInt64,x), h)

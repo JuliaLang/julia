@@ -79,7 +79,7 @@ function convert(::Type{Float64}, x::UInt128)
         y = ((x % UInt64) << (53-n)) & 0x000f_ffff_ffff_ffff
     else
         y = ((x >> (n-54)) % UInt64) & 0x001f_ffff_ffff_ffff # keep 1 extra bit
-        y = (y+1)>>1 # round, ties up (extra leading bit in case of next exponent)
+        y = (y+0x01)>>1 # round, ties up (extra leading bit in case of next exponent)
         y &= ~UInt64(trailing_zeros(x) == (n-54)) # fix last bit to round to even
     end
     d = ((n+1022) % UInt64) << 52
@@ -95,7 +95,7 @@ function convert(::Type{Float64}, x::Int128)
         y = ((x % UInt64) << (53-n)) & 0x000f_ffff_ffff_ffff
     else
         y = ((x >> (n-54)) % UInt64) & 0x001f_ffff_ffff_ffff # keep 1 extra bit
-        y = (y+1)>>1 # round, ties up (extra leading bit in case of next exponent)
+        y = (y+0x01)>>1 # round, ties up (extra leading bit in case of next exponent)
         y &= ~UInt64(trailing_zeros(x) == (n-54)) # fix last bit to round to even
     end
     d = ((n+1022) % UInt64) << 52
@@ -134,7 +134,7 @@ end
 
 function convert(::Type{Float16}, val::Float32)
     f = reinterpret(UInt32, val)
-    i = (f >> 23) & 0x1ff + 1
+    i = (f >> 23) & 0x1ff + 0x01
     sh = shifttable[i]
     f &= 0x007fffff
     h::UInt16 = basetable[i] + (f >> sh)
@@ -145,7 +145,7 @@ function convert(::Type{Float16}, val::Float32)
     if nextbit != 0
         # Round halfway to even or check lower bits
         if h&1 == 1 || (f & ((1<<(sh-1))-1)) != 0
-            h += 1
+            h += 0x01
         end
     end
     reinterpret(Float16, h)
@@ -158,7 +158,7 @@ function convert(::Type{Float32}, val::Float16)
     local sig::UInt32  = (ival & 0x3ff) >> 0
     local ret::UInt32
 
-    if exp == 0
+    if exp == 0x00
         if sig == 0
             sign = sign << 31
             ret = sign | exp | sig
@@ -186,7 +186,7 @@ function convert(::Type{Float32}, val::Float16)
         end
     else
         sign = sign << 31
-        exp  = (exp - 15 + 127) << 23
+        exp  = (exp + 0x70) << 23
         sig  = sig << (23 - 10)
         ret = sign | exp | sig
     end
@@ -550,7 +550,7 @@ isinf(x::Real) = !isnan(x) & !isfinite(x)
 
 ## hashing small, built-in numeric types ##
 
-hx(a::UInt64, b::Float64, h::UInt) = hash_uint64((3a + reinterpret(UInt64,b)) - h)
+hx(a::UInt64, b::Float64, h::UInt) = hash_uint64((0x03a + reinterpret(UInt64,b)) - h)
 const hx_NaN = hx(UInt64(0), NaN, UInt(0  ))
 
 hash(x::UInt64,  h::UInt) = hx(x, Float64(x), h)
