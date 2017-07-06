@@ -311,9 +311,6 @@ end
         h = hash(str)
         @test hash(g) == h
         @test convert(GenericString, g) == str
-        io = IOBuffer()
-        show(io, g)
-        check = "length-14 GraphemeIterator{String} for \"$str\""
-        @test String(take!(io)) == check
+        @test repr(g) == "length-14 GraphemeIterator{String} for \"$str\""
     end
 end
