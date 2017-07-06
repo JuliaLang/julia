@@ -19,8 +19,18 @@ const pio2_2t =  2.02226624879595063154e-21
 const pio2_3  =  2.02226624871116645580e-21
 const pio2_3t =  8.47842766036889956997e-32
 
-# constants and functions for large (>2.0^20) inputs to rem_pio2_kernel, used
-# in paynehanek(x).
+# Bits of 1/2π
+#   1/2π == sum(x / 0x1p64^i for i,x = enumerate(INV2PI))
+# Can be obtained by:
+#
+#    setprecision(BigFloat, 4096)
+#    I = 0.5/big(pi)
+#    for i = 1:19
+#        I *= 0x1p64
+#        k = trunc(UInt64, I)
+#        @printf "0x%016x,\n" k
+#        I -= k
+#    end
 const INV2PI = UInt64[
     0x28be_60db_9391_054a,
     0x7f09_d5f4_7d4d_3770,
