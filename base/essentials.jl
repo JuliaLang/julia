@@ -313,17 +313,32 @@ struct Colon
 end
 const (:) = Colon()
 
-# For passing constants through type inference
 """
-    Val{c}
+    Val(c)
 
-Create a "value type" out of `c`, which must be an `isbits` value. The intent of this
-construct is to be able to dispatch on constants, e.g., `f(Val{false})` allows you to
-dispatch directly (at compile-time) to an implementation `f(::Type{Val{false}})`, without
-having to test the boolean value at runtime.
+Return `Val{c}()`, which contains no run-time data. Types like this can be used to
+pass the information between functions through the value `c`, which must be an `isbits`
+value. The intent of this construct is to be able to dispatch on constants directly (at
+compile time) without having to test the value of the constant at run time.
+
+# Examples
+```jldoctest
+julia> f(::Val{true}) = "Good"
+f (generic function with 1 method)
+
+julia> f(::Val{false}) = "Bad"
+f (generic function with 2 methods)
+
+julia> f(Val(true))
+"Good"
+```
 """
-struct Val{T}
+struct Val{x}
 end
+
+Val(x) = (@_pure_meta; Val{x}())
+
+show(io::IO, ::Val{x}) where {x} = print(io, "Val($x)")
 
 # used by interpolating quote and some other things in the front end
 function vector_any(xs::ANY...)

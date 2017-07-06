@@ -1354,12 +1354,12 @@ end
 @deprecate versioninfo(io::IO, verbose::Bool) versioninfo(io, verbose=verbose)
 
 # PR #22188
-@deprecate cholfact!(A::StridedMatrix, uplo::Symbol, ::Type{Val{false}}) cholfact!(Hermitian(A, uplo), Val{false})
+@deprecate cholfact!(A::StridedMatrix, uplo::Symbol, ::Type{Val{false}}) cholfact!(Hermitian(A, uplo), Val(false))
 @deprecate cholfact!(A::StridedMatrix, uplo::Symbol) cholfact!(Hermitian(A, uplo))
-@deprecate cholfact(A::StridedMatrix, uplo::Symbol, ::Type{Val{false}}) cholfact(Hermitian(A, uplo), Val{false})
+@deprecate cholfact(A::StridedMatrix, uplo::Symbol, ::Type{Val{false}}) cholfact(Hermitian(A, uplo), Val(false))
 @deprecate cholfact(A::StridedMatrix, uplo::Symbol) cholfact(Hermitian(A, uplo))
-@deprecate cholfact!(A::StridedMatrix, uplo::Symbol, ::Type{Val{true}}; tol = 0.0) cholfact!(Hermitian(A, uplo), Val{true}, tol = tol)
-@deprecate cholfact(A::StridedMatrix, uplo::Symbol, ::Type{Val{true}}; tol = 0.0) cholfact(Hermitian(A, uplo), Val{true}, tol = tol)
+@deprecate cholfact!(A::StridedMatrix, uplo::Symbol, ::Type{Val{true}}; tol = 0.0) cholfact!(Hermitian(A, uplo), Val(true), tol = tol)
+@deprecate cholfact(A::StridedMatrix, uplo::Symbol, ::Type{Val{true}}; tol = 0.0) cholfact(Hermitian(A, uplo), Val(true), tol = tol)
 
 # PR #22245
 @deprecate isposdef(A::AbstractMatrix, UL::Symbol) isposdef(Hermitian(A, UL))
@@ -1518,6 +1518,30 @@ function replace(s::AbstractString, pat, f, n::Integer)
         replace_new(String(s), pat, f, n)
     end
 end
+
+# PR #22475
+@deprecate ntuple{N}(f, ::Type{Val{N}}) ntuple(f, Val(N))
+@deprecate fill_to_length{N}(t, val, ::Type{Val{N}}) fill_to_length(t, val, Val(N)) false
+@deprecate literal_pow{N}(a, b, ::Type{Val{N}}) literal_pow(a, b, Val(N)) false
+@eval IteratorsMD @deprecate split{n}(t, V::Type{Val{n}}) split(t, Val(n)) false
+@deprecate sqrtm{T,realmatrix}(A::UpperTriangular{T},::Type{Val{realmatrix}}) sqrtm(A, Val(realmatrix))
+@deprecate lufact(A::AbstractMatrix, ::Type{Val{false}}) lufact(A, Val(false))
+@deprecate lufact(A::AbstractMatrix, ::Type{Val{true}}) lufact(A, Val(true))
+@deprecate lufact!(A::AbstractMatrix, ::Type{Val{false}}) lufact!(A, Val(false))
+@deprecate lufact!(A::AbstractMatrix, ::Type{Val{true}}) lufact!(A, Val(true))
+@deprecate qrfact(A::AbstractMatrix, ::Type{Val{false}}) qrfact(A, Val(false))
+@deprecate qrfact(A::AbstractMatrix, ::Type{Val{true}}) qrfact(A, Val(true))
+@deprecate qrfact!(A::AbstractMatrix, ::Type{Val{false}}) qrfact!(A, Val(false))
+@deprecate qrfact!(A::AbstractMatrix, ::Type{Val{true}}) qrfact!(A, Val(true))
+@deprecate cholfact(A::AbstractMatrix, ::Type{Val{false}}) cholfact(A, Val(false))
+@deprecate cholfact(A::AbstractMatrix, ::Type{Val{true}}; tol = 0.0) cholfact(A, Val(true); tol = tol)
+@deprecate cholfact!(A::AbstractMatrix, ::Type{Val{false}}) cholfact!(A, Val(false))
+@deprecate cholfact!(A::AbstractMatrix, ::Type{Val{true}}; tol = 0.0) cholfact!(A, Val(true); tol = tol)
+@deprecate cat{N}(::Type{Val{N}}, A::AbstractArray...) cat(Val(N), A...)
+@deprecate cat{N}(::Type{Val{N}}, A::SparseArrays._SparseConcatGroup...) cat(Val(N), A...)
+@deprecate cat{N}(::Type{Val{N}}, A::SparseArrays._DenseConcatGroup...) cat(Val(N), A...)
+@deprecate cat_t{N,T}(::Type{Val{N}}, ::Type{T}, A, B) cat_t(Val(N), T, A, B) false
+@deprecate reshape{N}(A::AbstractArray, ::Type{Val{N}}) reshape(A, Val(N))
 
 # END 0.7 deprecations
 

@@ -710,7 +710,7 @@ end
 @inline ^(x::Float64, y::Integer) = x ^ Float64(y)
 @inline ^(x::Float32, y::Integer) = x ^ Float32(y)
 @inline ^(x::Float16, y::Integer) = Float16(Float32(x) ^ Float32(y))
-@inline literal_pow(::typeof(^), x::Float16, ::Type{Val{p}}) where {p} = Float16(literal_pow(^,Float32(x),Val{p}))
+@inline literal_pow(::typeof(^), x::Float16, ::Val{p}) where {p} = Float16(literal_pow(^,Float32(x),Val(p)))
 
 function angle_restrict_symm(theta)
     const P1 = 4 * 7.8539812564849853515625e-01

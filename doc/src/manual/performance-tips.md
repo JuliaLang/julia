@@ -645,7 +645,7 @@ loaded from an input file that might contain either integers, floats, strings, o
 
 ## Types with values-as-parameters
 
-Let's say you want to create an `N`-dimensional array that has size 3 along each axis.  Such arrays
+Let's say you want to create an `N`-dimensional array that has size 3 along each axis. Such arrays
 can be created like this:
 
 ```jldoctest
@@ -685,37 +685,37 @@ slow.
 
 Now, one very good way to solve such problems is by using the [function-barrier technique](@ref kernal-functions).
 However, in some cases you might want to eliminate the type-instability altogether.  In such cases,
-one approach is to pass the dimensionality as a parameter, for example through `Val{T}` (see
+one approach is to pass the dimensionality as a parameter, for example through `Val{T}()` (see
 ["Value types"](@ref)):
 
 ```jldoctest
-julia> function array3(fillval, ::Type{Val{N}}) where N
-           fill(fillval, ntuple(d->3, Val{N}))
+julia> function array3(fillval, ::Val{N}) where N
+           fill(fillval, ntuple(d->3, Val(N)))
        end
 array3 (generic function with 1 method)
 
-julia> array3(5.0, Val{2})
+julia> array3(5.0, Val(2))
 3×3 Array{Float64,2}:
  5.0  5.0  5.0
  5.0  5.0  5.0
  5.0  5.0  5.0
 ```
 
-Julia has a specialized version of `ntuple` that accepts a `Val{::Int}` as the second parameter;
-by passing `N` as a type-parameter, you make its "value" known to the compiler. Consequently,
-this version of `array3` allows the compiler to predict the return type.
+Julia has a specialized version of `ntuple` that accepts a `Val{::Int}` instance as the second
+parameter; by passing `N` as a type-parameter, you make its "value" known to the compiler.
+Consequently, this version of `array3` allows the compiler to predict the return type.
 
 However, making use of such techniques can be surprisingly subtle. For example, it would be of
 no help if you called `array3` from a function like this:
 
 ```julia
 function call_array3(fillval, n)
-    A = array3(fillval, Val{n})
+    A = array3(fillval, Val(n))
 end
 ```
 
-Here, you've created the same problem all over again: the compiler can't guess the type of `n`,
-so it doesn't know the type of `Val{n}`.  Attempting to use `Val`, but doing so incorrectly, can
+Here, you've created the same problem all over again: the compiler can't guess what `n` is,
+so it doesn't know the *type* of `Val(n)`.  Attempting to use `Val`, but doing so incorrectly, can
 easily make performance *worse* in many situations.  (Only in situations where you're effectively
 combining `Val` with the function-barrier trick, to make the kernel function more efficient, should
 code like the above be used.)
@@ -724,13 +724,14 @@ An example of correct usage of `Val` would be:
 
 ```julia
 function filter3(A::AbstractArray{T,N}) where {T,N}
-    kernel = array3(1, Val{N})
+    kernel = array3(1, Val(N))
     filter(A, kernel)
 end
 ```
 
 In this example, `N` is passed as a parameter, so its "value" is known to the compiler.  Essentially,
-`Val{T}` works only when `T` is either hard-coded (`Val{3}`) or already specified in the type-domain.
+`Val(T)` works only when `T` is either hard-coded/literal (`Val(3)`) or already specified in the
+type-domain.
 
 ## The dangers of abusing multiple dispatch (aka, more on types with values-as-parameters)
 

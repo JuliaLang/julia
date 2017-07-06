@@ -1018,7 +1018,7 @@ void jl_depwarn_partial_indexing(size_t n)
     }
     if (!depwarn_func) {
         jl_safe_printf("WARNING: Partial linear indexing is deprecated. Use "
-            "`reshape(A, Val{%zd})` to make the dimensionality of the array match "
+            "`reshape(A, Val(%zd))` to make the dimensionality of the array match "
             "the number of indices\n", n);
         return;
     }

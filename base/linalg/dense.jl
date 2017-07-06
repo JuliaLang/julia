@@ -780,7 +780,7 @@ function factorize(A::StridedMatrix{T}) where T
         end
         return lufact(A)
     end
-    qrfact(A, Val{true})
+    qrfact(A, Val(true))
 end
 
 ## Moore-Penrose pseudoinverse

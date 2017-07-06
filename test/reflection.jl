@@ -501,9 +501,9 @@ fLargeTable() = 4
 @test length(methods(fLargeTable, Tuple{})) == 1
 @test fLargeTable(1im, 2im) == 4
 @test fLargeTable(1.0im, 2.0im) == 5
-@test_throws MethodError fLargeTable(Val{1}(), Val{1}())
-@test fLargeTable(Val{1}(), 1) == 1
-@test fLargeTable(1, Val{1}()) == 2
+@test_throws MethodError fLargeTable(Val(1), Val(1))
+@test fLargeTable(Val(1), 1) == 1
+@test fLargeTable(1, Val(1)) == 2
 
 # issue #15280
 function f15280(x) end

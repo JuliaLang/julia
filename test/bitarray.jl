@@ -140,9 +140,9 @@ timesofar("conversions")
         @check_bit_operation reshape(b1, (n2,n1)) BitMatrix
         @test_throws DimensionMismatch reshape(b1, (1,n1))
 
-        @test @inferred(reshape(b1, n1*n2)) == @inferred(reshape(b1, (n1*n2,))) == @inferred(reshape(b1, Val{1})) == @inferred(reshape(b1, :))
-        @test @inferred(reshape(b1, n1, n2)) === @inferred(reshape(b1, Val{2})) === b1
-        @test @inferred(reshape(b1, n2, :)) == @inferred(reshape(b1, (n2, n1))) != @inferred(reshape(b1, Val{2}))
+        @test @inferred(reshape(b1, n1*n2)) == @inferred(reshape(b1, (n1*n2,))) == @inferred(reshape(b1, Val(1))) == @inferred(reshape(b1, :))
+        @test @inferred(reshape(b1, n1, n2)) === @inferred(reshape(b1, Val(2))) === b1
+        @test @inferred(reshape(b1, n2, :)) == @inferred(reshape(b1, (n2, n1))) != @inferred(reshape(b1, Val(2)))
 
         b1 = bitrand(s1, s2, s3, s4)
         @check_bit_operation reshape(b1, (s3,s1,s2,s4)) BitArray{4}

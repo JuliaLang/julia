@@ -344,7 +344,7 @@ end
     D = Diagonal(randn(5))
     Q = qrfact(randn(5, 5))[:Q]
     @test D * Q' == Array(D) * Q'
-    Q = qrfact(randn(5, 5), Val{true})[:Q]
+    Q = qrfact(randn(5, 5), Val(true))[:Q]
     @test_throws MethodError A_mul_B!(Q, D)
 end
 
