@@ -7,6 +7,7 @@ Core.AbstractArray
 Base.AbstractVector
 Base.AbstractMatrix
 Core.Array
+Core.Array(::Any)
 Base.Vector
 Base.Vector(::Any)
 Base.Matrix
