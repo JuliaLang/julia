@@ -2333,3 +2333,18 @@ julia> Vector{Float64}(3)
 ```
 """
 Vector{T}(n)
+
+"""
+    Matrix{T}(m, n)
+
+Construct an uninitialized [`Matrix{T}`](@ref) of size `m`×`n`.
+
+# Examples
+```julia-repl
+julia> Matrix{Float64}(2, 3)
+2×3 Array{Float64,2}:
+ 6.93517e-310  6.93517e-310  6.93517e-310
+ 6.93517e-310  6.93517e-310  1.29396e-320
+```
+"""
+Matrix{T}(m, n)

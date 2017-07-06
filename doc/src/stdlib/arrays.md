@@ -10,6 +10,7 @@ Core.Array
 Base.Vector
 Base.Vector(::Any)
 Base.Matrix
+Base.Matrix(::Any, ::Any)
 Base.getindex(::Type, ::Any...)
 Base.zeros
 Base.ones
