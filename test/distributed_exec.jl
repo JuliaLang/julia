@@ -1590,6 +1590,20 @@ let thrown = false
     @test thrown
 end
 
+#19463
+function foo19463()
+    w1 = workers()[1]
+    w2 = workers()[2]
+    w3 = workers()[3]
+
+    b1 = () -> 1
+    b2 = () -> fetch(@spawnat w1 b1()) + 1
+    b3 = () -> fetch(@spawnat w2 b2()) + 1
+    b4 = () -> fetch(@spawnat w3 b3()) + 1
+    b4()
+end
+@test foo19463() == 4
+
 # Testing clear!
 function setup_syms(n, pids)
     syms = []

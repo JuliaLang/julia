@@ -435,7 +435,9 @@ function serialize(s::AbstractSerializer, t::Task)
 end
 
 function serialize(s::AbstractSerializer, g::GlobalRef)
-    if g.mod === Main && isdefined(g.mod, g.name) && isconst(g.mod, g.name)
+    if (g.mod === __deserialized_types__ ) ||
+        (g.mod === Main && isdefined(g.mod, g.name) && isconst(g.mod, g.name))
+
         v = getfield(g.mod, g.name)
         unw = unwrap_unionall(v)
         if isa(unw,DataType) && v === unw.name.wrapper && should_send_whole_type(s, unw)
