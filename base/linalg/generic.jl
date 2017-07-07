@@ -1261,6 +1261,8 @@ function logdet(A::AbstractMatrix)
     return d + log(s)
 end
 
+logdet(A) = log(det(A))
+
 const NumberArray{T<:Number} = AbstractArray{T}
 
 """
