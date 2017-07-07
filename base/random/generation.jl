@@ -10,11 +10,11 @@
 
 ### random floats
 
-@inline rand(r::AbstractRNG=GLOBAL_RNG) = rand(r, CloseOpen)
+@inline rand(r::AbstractRNG=GLOBAL_RNG) = rand(r, CloseOpen())
 
 # generic random generation function which can be used by RNG implementors
 # it is not defined as a fallback rand method as this could create ambiguities
-@inline rand_generic(r::AbstractRNG, ::Type{Float64}) = rand(r, CloseOpen)
+@inline rand_generic(r::AbstractRNG, ::Type{Float64}) = rand(r, CloseOpen())
 
 rand_generic(r::AbstractRNG, ::Type{Float16}) =
     Float16(reinterpret(Float32,
@@ -28,7 +28,7 @@ rand_generic(r::AbstractRNG, ::Type{Float32}) =
 rand_ui10_raw(r::AbstractRNG) = rand(r, UInt16)
 rand_ui23_raw(r::AbstractRNG) = rand(r, UInt32)
 
-@inline rand_ui52_raw(r::AbstractRNG) = reinterpret(UInt64, rand(r, Close1Open2))
+@inline rand_ui52_raw(r::AbstractRNG) = reinterpret(UInt64, rand(r, Close1Open2()))
 @inline rand_ui52(r::AbstractRNG) = rand_ui52_raw(r) & 0x000fffffffffffff
 
 ### random complex numbers

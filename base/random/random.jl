@@ -22,9 +22,17 @@ export srand,
 
 abstract type AbstractRNG end
 
-abstract type FloatInterval end
-mutable struct CloseOpen <: FloatInterval end
-mutable struct Close1Open2 <: FloatInterval end
+abstract type FloatInterval{T<:AbstractFloat} end
+
+struct CloseOpen{  T<:AbstractFloat} <: FloatInterval{T} end # interval [0,1)
+struct Close1Open2{T<:AbstractFloat} <: FloatInterval{T} end # interval [1,2)
+
+const FloatInterval_64 = FloatInterval{Float64}
+const CloseOpen_64     = CloseOpen{Float64}
+const Close1Open2_64   = Close1Open2{Float64}
+
+CloseOpen()   = CloseOpen{Float64}()
+Close1Open2() = Close1Open2{Float64}()
 
 const BitFloatType = Union{Type{Float16},Type{Float32},Type{Float64}}
 
