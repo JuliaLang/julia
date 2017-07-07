@@ -446,7 +446,9 @@ function test_Type()
     @test isa(Int, @UnionAll T<:Number Type{T})
     @test !isa(DataType, @UnionAll T<:Number Type{T})
 
-    @test DataType <: (@UnionAll T<:Type Type{T})
+    @test !(DataType <: (@UnionAll T<:Type Type{T}))
+    @test isa(DataType, (@UnionAll T<:Type Type{T}))
+
     @test isa(Tuple{},Type{Tuple{}})
     @test !(Tuple{Int,} <: (@UnionAll T<:Tuple Type{T}))
     @test isa(Tuple{Int}, (@UnionAll T<:Tuple Type{T}))
