@@ -150,11 +150,11 @@ bimg  = randn(n,2)/2
         A = diagm(d)
         @test factorize(A) == Diagonal(d)
         A += diagm(e,-1)
-        @test factorize(A) == Bidiagonal(d,e,false)
+        @test factorize(A) == Bidiagonal(d,e,:L)
         A += diagm(f,-2)
         @test factorize(A) == LowerTriangular(A)
         A = diagm(d) + diagm(e,1)
-        @test factorize(A) == Bidiagonal(d,e,true)
+        @test factorize(A) == Bidiagonal(d,e,:U)
         if eltya <: Real
             A = diagm(d) + diagm(e,1) + diagm(e,-1)
             @test full(factorize(A)) ≈ full(factorize(SymTridiagonal(d,e)))

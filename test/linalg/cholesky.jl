@@ -101,7 +101,7 @@ using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted, PosDefException
 
         # test chol of 2x2 Strang matrix
         S = convert(AbstractMatrix{eltya},full(SymTridiagonal([2,2],[-1])))
-        U = Bidiagonal([2,sqrt(eltya(3))],[-1],true) / sqrt(eltya(2))
+        U = Bidiagonal([2,sqrt(eltya(3))],[-1],:U) / sqrt(eltya(2))
         @test full(chol(S)) ≈ full(U)
 
         # test extraction of factor and re-creating original matrix

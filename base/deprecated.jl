@@ -1555,6 +1555,11 @@ function CartesianRange{N}(start::CartesianIndex{N}, stop::CartesianIndex{N})
     CartesianRange(inds)
 end
 
+# PR #22703
+@deprecate Bidiagonal(dv::AbstractVector, ev::AbstractVector, isupper::Bool) Bidiagonal(dv, ev, ifelse(isupper, :U, :L))
+@deprecate Bidiagonal(dv::AbstractVector, ev::AbstractVector, uplo::Char) Bidiagonal(dv, ev, ifelse(uplo == 'U', :U, :L))
+@deprecate Bidiagonal(A::AbstractMatrix, isupper::Bool) Bidiagonal(A, ifelse(isupper, :U, :L))
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

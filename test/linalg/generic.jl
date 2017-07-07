@@ -142,7 +142,7 @@ y = ['a','b','c','d','e']
 @test !ishermitian(ones(5,3))
 @test cross(ones(3),ones(3)) == zeros(3)
 
-@test trace(Bidiagonal(ones(5),zeros(4),true)) == 5
+@test trace(Bidiagonal(ones(5),zeros(4),:U)) == 5
 
 
 # array and subarray tests
