@@ -29,6 +29,67 @@ rand_generic(r::AbstractRNG, ::Close1Open2_64) =
 
 rand_generic(r::AbstractRNG, ::CloseOpen_64) = rand(r, Close1Open2()) - 1.0
 
+#### BigFloat
+
+const bits_in_Limb = sizeof(Limb) << 3
+const Limb_high_bit = one(Limb) << (bits_in_Limb-1)
+
+struct BigFloatRandGenerator
+    prec::Int
+    nlimbs::Int
+    limbs::Vector{Limb}
+    shift::UInt
+
+    function BigFloatRandGenerator(prec::Int=precision(BigFloat))
+        nlimbs = (prec-1) ÷ bits_in_Limb + 1
+        limbs = Vector{Limb}(nlimbs)
+        shift = nlimbs * bits_in_Limb - prec
+        new(prec, nlimbs, limbs, shift)
+    end
+end
+
+function _rand(rng::AbstractRNG, gen::BigFloatRandGenerator)
+    z = BigFloat()
+    limbs = gen.limbs
+    rand!(rng, limbs)
+    @inbounds begin
+        limbs[1] <<= gen.shift
+        randbool = iszero(limbs[end] & Limb_high_bit)
+        limbs[end] |= Limb_high_bit
+    end
+    z.sign = 1
+    unsafe_copy!(z.d, pointer(limbs), gen.nlimbs)
+    (z, randbool)
+end
+
+function rand(rng::AbstractRNG, gen::BigFloatRandGenerator, ::Close1Open2{BigFloat})
+    z = _rand(rng, gen)[1]
+    z.exp = 1
+    z
+end
+
+function rand(rng::AbstractRNG, gen::BigFloatRandGenerator, ::CloseOpen{BigFloat})
+    z, randbool = _rand(rng, gen)
+    z.exp = 0
+    randbool &&
+        ccall((:mpfr_sub_d, :libmpfr), Int32,
+              (Ptr{BigFloat}, Ptr{BigFloat}, Cdouble, Int32),
+              &z, &z, 0.5, Base.MPFR.ROUNDING_MODE[])
+    z
+end
+
+# alternative, with 1 bit less of precision
+# TODO: make an API for requesting full or not-full precision
+function rand(rng::AbstractRNG, gen::BigFloatRandGenerator, ::CloseOpen{BigFloat}, ::Void)
+    z = rand(rng, Close1Open2(BigFloat), gen)
+    ccall((:mpfr_sub_ui, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Culong, Int32),
+          &z, &z, 1, Base.MPFR.ROUNDING_MODE[])
+    z
+end
+
+rand_generic(rng::AbstractRNG, I::FloatInterval{BigFloat}) =
+    rand(rng, BigFloatRandGenerator(), I)
+
 ### random integers
 
 rand_ui10_raw(r::AbstractRNG) = rand(r, UInt16)
@@ -86,6 +147,14 @@ rand!(r::AbstractRNG, A::AbstractArray, ::Type{T}) where {T<:AbstractFloat} =
 function rand!(r::AbstractRNG, A::AbstractArray, I::FloatInterval)
     for i in eachindex(A)
         @inbounds A[i] = rand(r, I)
+    end
+    A
+end
+
+function rand!(rng::AbstractRNG, A::AbstractArray, I::FloatInterval{BigFloat})
+    gen = BigFloatRandGenerator()
+    for i in eachindex(A)
+        @inbounds A[i] = rand(rng, gen, I)
     end
     A
 end
