@@ -372,7 +372,7 @@ end
 # blas.jl defines matmul for floats; other integer and mixed precision
 # cases are handled here
 
-lapack_size(t::Char, M::AbstractVecOrMat) = (size(M, t=='N' ? 1:2), size(M, t=='N' ? 2:1))
+lapack_size(t::Char, M::AbstractVecOrMat) = (size(M, t=='N' ? 1 : 2), size(M, t=='N' ? 2 : 1))
 
 function copy!(B::AbstractVecOrMat, ir_dest::UnitRange{Int}, jr_dest::UnitRange{Int}, tM::Char, M::AbstractVecOrMat, ir_src::UnitRange{Int}, jr_src::UnitRange{Int})
     if tM == 'N'
