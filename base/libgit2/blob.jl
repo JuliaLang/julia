@@ -5,7 +5,7 @@ function Base.length(blob::GitBlob)
 end
 
 """
-    rawcontent(blob::GitBlob) -> Array
+    rawcontent(blob::GitBlob) -> Vector{UInt8}
 
 Fetch the *raw* contents of the [`GitBlob`](@ref) `blob`. This is an
 `Array` containing the contents of the blob, which may be binary or may be Unicode.
