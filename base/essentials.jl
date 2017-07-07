@@ -369,6 +369,6 @@ call obsolete versions of a function `f`.
 """
 function invokelatest(f, args...; kwargs...)
     # We use a closure (`inner`) to handle kwargs.
-    inner(f, args...) = f(args...; kwargs...)
-    Core._apply_latest(inner, (f, args...))
+    inner() = f(args...; kwargs...)
+    Core._apply_latest(inner)
 end
