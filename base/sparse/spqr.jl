@@ -344,7 +344,7 @@ function _ldiv_basic(F::QRSparse, B::StridedVecOrMat)
 
     # allocate an array for the return value large enough to hold B and X
     # For overdetermined problem, B is larger than X and vice versa
-    X   = similar(B, ntuple(i -> i == 1 ? max(size(F, 2), size(B, 1)) : size(B, 2), Val{ndims(B)}))
+    X   = similar(B, ntuple(i -> i == 1 ? max(size(F, 2), size(B, 1)) : size(B, 2), Val(ndims(B))))
 
     # Fill will zeros. These will eventually become the zeros in the basic solution
     # fill!(X, 0)
@@ -368,7 +368,7 @@ function _ldiv_basic(F::QRSparse, B::StridedVecOrMat)
     A_ldiv_B!(UpperTriangular(view(F.R, :, Base.OneTo(rnk))), view(X0, Base.OneTo(rnk), :))
 
     # Apply right permutation and extract solution from x
-    return getindex(X, ntuple(i -> i == 1 ? invperm(F.cpiv) : :, Val{ndims(B)})...)
+    return getindex(X, ntuple(i -> i == 1 ? invperm(F.cpiv) : :, Val(ndims(B)))...)
 end
 
 (\)(F::QRSparse{T}, B::StridedVecOrMat{T}) where {T} = _ldiv_basic(F, B)
