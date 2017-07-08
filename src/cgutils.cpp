@@ -913,13 +913,6 @@ static void raise_exception_unless(jl_codectx_t &ctx, Value *cond, Value *exc)
     raise_exception(ctx, exc, passBB);
 }
 
-// DO NOT PASS IN A CONST CONDITION!
-static void raise_exception_if(jl_codectx_t &ctx, Value *cond, Value *exc)
-{
-    raise_exception_unless(ctx, ctx.builder.CreateXor(cond, ConstantInt::get(T_int1,-1)),
-                           exc);
-}
-
 static size_t dereferenceable_size(jl_value_t *jt) {
     size_t size = 0;
     if (jl_is_array_type(jt)) {

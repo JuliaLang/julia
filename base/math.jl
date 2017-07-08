@@ -431,8 +431,10 @@ Compute sine and cosine of `x`, where `x` is in radians.
     return res
 end
 
-sqrt(x::Float64) = sqrt_llvm(x)
-sqrt(x::Float32) = sqrt_llvm(x)
+@inline function sqrt(x::Union{Float32,Float64})
+    x < zero(x) && throw(DomainError())
+    sqrt_llvm(x)
+end
 
 """
     sqrt(x)

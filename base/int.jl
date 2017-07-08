@@ -395,7 +395,33 @@ trailing_ones(x::Integer) = trailing_zeros(~x)
 >>>(x::BitInteger, y::Int) =
     select_value(0 <= y, x >>> unsigned(y), x << unsigned(-y))
 
+function is_top_bit_set(x::BitInteger)
+    @_inline_meta
+    lshr_int(x, (sizeof(x) << 0x03) - 1) == rem(0x01, typeof(x))
+end
+function check_top_bit(x::BitInteger)
+    @_inline_meta
+    is_top_bit_set(x) && throw(InexactError())
+    x
+end
+
 ## integer conversions ##
+
+function checked_trunc_sint{To,From}(::Type{To}, x::From)
+    @_inline_meta
+    y = trunc_int(To, x)
+    back = sext_int(From, y)
+    x == back || throw(InexactError())
+    y
+end
+
+function checked_trunc_uint{To,From}(::Type{To}, x::From)
+    @_inline_meta
+    y = trunc_int(To, x)
+    back = zext_int(From, y)
+    x == back || throw(InexactError())
+    y
+end
 
 for to in BitInteger_types, from in (BitInteger_types..., Bool)
     if !(to === from)
