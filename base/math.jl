@@ -781,7 +781,7 @@ function add22condh(xh::Float64, xl::Float64, yh::Float64, yl::Float64)
     return zh
 end
 
-function ieee754_rem_pio2(x::Float64)
+@inline function ieee754_rem_pio2(x::Float64)
     # rem_pio2 essentially computes x mod pi/2 (ie within a quarter circle)
     # and returns the result as
     # y between + and - pi/4 (for maximal accuracy (as the sign bit is exploited)), and
@@ -795,9 +795,9 @@ function ieee754_rem_pio2(x::Float64)
     # this is just wrapping up
     # https://github.com/JuliaLang/openspecfun/blob/master/rem_pio2/e_rem_pio2.c
 
-    y = [0.0,0.0]
-    n = ccall((:__ieee754_rem_pio2, openspecfun), Cint, (Float64,Ptr{Float64}), x, y)
-    return (n,y)
+    y = Ref{NTuple{2,Float64}}()
+    n = ccall((:__ieee754_rem_pio2, openspecfun), Cint, (Float64, Ptr{Void}), x, y)
+    return (n, y[])
 end
 
 # multiples of pi/2, as double-double (ie with "tail")
