@@ -927,7 +927,7 @@ _getindex(::IndexStyle, A::AbstractArray, I...) =
 ## IndexLinear Scalar indexing: canonical method is one Int
 _getindex(::IndexLinear, A::AbstractArray, i::Int) = (@_propagate_inbounds_meta; getindex(A, i))
 _getindex(::IndexLinear, A::AbstractArray) = (@_propagate_inbounds_meta; getindex(A, _to_linear_index(A)))
-function _getindex(::IndexLinear, A::AbstractArray, I::Int...)
+function _getindex(::IndexLinear, A::AbstractArray, I::Vararg{Int,M}) where M
     @_inline_meta
     @boundscheck checkbounds(A, I...) # generally _to_linear_index requires bounds checking
     @inbounds r = getindex(A, _to_linear_index(A, I...))
@@ -944,7 +944,7 @@ function _getindex(::IndexCartesian, A::AbstractArray)
     @_propagate_inbounds_meta
     getindex(A, _to_subscript_indices(A)...)
 end
-function _getindex(::IndexCartesian, A::AbstractArray, I::Int...)
+function _getindex(::IndexCartesian, A::AbstractArray, I::Vararg{Int,M}) where M
     @_inline_meta
     @boundscheck checkbounds(A, I...) # generally _to_subscript_indices requires bounds checking
     @inbounds r = getindex(A, _to_subscript_indices(A, I...)...)
@@ -1011,7 +1011,7 @@ _setindex!(::IndexStyle, A::AbstractArray, v, I...) =
 ## IndexLinear Scalar indexing
 _setindex!(::IndexLinear, A::AbstractArray, v, i::Int) = (@_propagate_inbounds_meta; setindex!(A, v, i))
 _setindex!(::IndexLinear, A::AbstractArray, v) = (@_propagate_inbounds_meta; setindex!(A, v, _to_linear_index(A)))
-function _setindex!(::IndexLinear, A::AbstractArray, v, I::Int...)
+function _setindex!(::IndexLinear, A::AbstractArray, v, I::Vararg{Int,M}) where M
     @_inline_meta
     @boundscheck checkbounds(A, I...)
     @inbounds r = setindex!(A, v, _to_linear_index(A, I...))
@@ -1027,7 +1027,7 @@ function _setindex!(::IndexCartesian, A::AbstractArray, v)
     @_propagate_inbounds_meta
     setindex!(A, v, _to_subscript_indices(A)...)
 end
-function _setindex!(::IndexCartesian, A::AbstractArray, v, I::Int...)
+function _setindex!(::IndexCartesian, A::AbstractArray, v, I::Vararg{Int,M}) where M
     @_inline_meta
     @boundscheck checkbounds(A, I...)
     @inbounds r = setindex!(A, v, _to_subscript_indices(A, I...)...)

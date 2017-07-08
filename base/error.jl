@@ -27,7 +27,10 @@ Raise an `ErrorException` with the given message.
 
 See also [`logging`](@ref).
 """
-error(s...) = throw(ErrorException(Main.Base.string(s...)))
+function error(s::Vararg{Any,N}) where {N}
+    @_noinline_meta
+    throw(ErrorException(Main.Base.string(s...)))
+end
 
 """
     rethrow([e])
@@ -53,7 +56,10 @@ Get the backtrace of the current exception, for use within `catch` blocks.
 catch_backtrace() = ccall(:jl_get_backtrace, Array{Ptr{Void},1}, ())
 
 ## keyword arg lowering generates calls to this ##
-kwerr(kw, args...) = throw(MethodError(typeof(args[1]).name.mt.kwsorter, (kw,args...)))
+function kwerr(kw, args::Vararg{Any,N}) where {N}
+    @_noinline_meta
+    throw(MethodError(typeof(args[1]).name.mt.kwsorter, (kw,args...)))
+end
 
 ## system error handling ##
 """

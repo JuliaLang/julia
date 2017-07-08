@@ -397,7 +397,7 @@ _rshps(shp, shp_i, sz, i, ::Tuple{}) =
 _reperr(s, n, N) = throw(ArgumentError("number of " * s * " repetitions " *
     "($n) cannot be less than number of dimensions of input ($N)"))
 
-@propagate_inbounds function _repeat(A::AbstractArray, inner, outer)
+@noinline function _repeat(A::AbstractArray, inner, outer)
     shape, inner_shape = rep_shapes(A, inner, outer)
 
     R = similar(A, shape)

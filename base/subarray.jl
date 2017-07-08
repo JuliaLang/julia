@@ -107,14 +107,14 @@ julia> A # Note A has changed even though we modified b
  0  4
 ```
 """
-function view(A::AbstractArray, I...)
+function view(A::AbstractArray, I::Vararg{Any,N}) where {N}
     @_inline_meta
     J = to_indices(A, I)
     @boundscheck checkbounds(A, J...)
     unsafe_view(_maybe_reshape_parent(A, index_ndims(J...)), J...)
 end
 
-function unsafe_view(A::AbstractArray, I::ViewIndex...)
+function unsafe_view(A::AbstractArray, I::Vararg{ViewIndex,N}) where {N}
     @_inline_meta
     SubArray(A, I)
 end
@@ -124,7 +124,8 @@ end
 # might span multiple parent indices, making the reindex calculation very hard.
 # So we use _maybe_reindex to figure out if there are any arrays of
 # `CartesianIndex`, and if so, we punt and keep two layers of indirection.
-unsafe_view(V::SubArray, I::ViewIndex...) = (@_inline_meta; _maybe_reindex(V, I))
+unsafe_view(V::SubArray, I::Vararg{ViewIndex,N}) where {N} =
+    (@_inline_meta; _maybe_reindex(V, I))
 _maybe_reindex(V, I) = (@_inline_meta; _maybe_reindex(V, I, I))
 _maybe_reindex(V, I, ::Tuple{AbstractArray{<:AbstractCartesianIndex}, Vararg{Any}}) =
     (@_inline_meta; SubArray(V, I))
