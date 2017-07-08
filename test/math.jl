@@ -661,3 +661,17 @@ end
     @test sincos(big(1)) == (sin(big(1)), cos(big(1)))
     @test sincos(big(1.0)) == (sin(big(1.0)), cos(big(1.0)))
 end
+
+@testset "Float16 fallbacks" begin
+    @test exp2(Float16(1.0)) === Float16(exp2(1.0))
+    @test exp10(Float16(1.0)) === Float16(exp10(1.0))
+end
+
+# test AbstractFloat fallback
+struct Float32432{T<:AbstractFloat} <: AbstractFloat
+    x::T
+end
+Base.:^(x::Number, y::Float32432) = x^(y.x)
+let x = 2.0
+    @test exp2(TestFloat324(x)) == 2^x
+end
