@@ -256,22 +256,14 @@ function rem_pio2(x::Float64)
 end
 
 """
-    rem_pio2_kernel(x, xh, xhp)
+    rem_pio2_kernel(x, xhp)
 
-Return the remainder of `x` modulo π/2 as a double-double pair, along with a k
-such that ``k \mod 3 == K \mod 3`` where ``K*π/2 = x - rem``.
+Return the remainder of `x` modulo π/2 as a double-double pair, along with a `k`
+such that ``k \mod 3 == K \mod 3`` where ``K*π/2 = x - rem``. Note, that it is
+only meant for use when ``|x|>=π/4``, and that ``π/2`` is always subtracted or
+added for ``π/4<|x|<=π/2`` instead of simply returning `x`.
 """
 function rem_pio2_kernel(x::Float64)
-    # rem_pio2_kernel essentially computes x mod pi/2 (ie within a quarter circle)
-    # and returns the result as
-    # y between + and - pi/4 (for maximal accuracy (as the sign bit is exploited)), and
-    # n, where n specifies the integer part of the division, or, at any rate,
-    # in which quadrant we are.
-    # The invariant fulfilled by the returned values seems to be
-    #  x = y + n*pi/2 (where y = y1+y2 is a double-double and y2 is the "tail" of y).
-    # Note: for very large x (thus n), the invariant might hold only modulo 2pi
-    # (in other words, n might be off by a multiple of 4, or a multiple of 100)
-
     xhp = poshighword(x) # positive part of highword
     rem_pio2_kernel(x, xhp)
 end
