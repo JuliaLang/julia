@@ -19,7 +19,7 @@ const ORDERING_BESTAMD = Int32(9) # try COLAMD and AMD; pick best#
 # Let [m n] = size of the matrix after pruning singletons.  The default
 # ordering strategy is to use COLAMD if m <= 2*n.  Otherwise, AMD(A'A) is
 # tried.  If there is a high fill-in with AMD then try METIS(A'A) and take
-# the best of AMD and METIS.  METIS is not tried if it isn't installed.
+# the best of AMD and METIS. METIS is not tried if it isn't installed.
 
 using ..SparseArrays: SparseMatrixCSC
 using ..SparseArrays.CHOLMOD
@@ -100,8 +100,9 @@ function _qr!(ordering::Integer, tol::Real, econ::Integer, getCTX::Integer,
     return rnk, _E, _HPinv
 end
 
-# Such that A[invperm(p), q] = (I - H[:,1]*τ[1]*H[:,1]')*...*(I - H[:,k]*τ[k]*H[:,k]')*R
-# with k=size(H,2).
+# Struct for storing sparse QR from SPQR such that
+# A[invperm(rpivinv), cpiv] = (I - factors[:,1]*τ[1]*factors[:,1]')*...*(I - factors[:,k]*τ[k]*factors[:,k]')*R
+# with k = size(factors, 2).
 struct QRSparse{Tv,Ti} <: LinAlg.Factorization{Tv}
     factors::SparseMatrixCSC{Tv,Ti}
     τ::Vector{Tv}
@@ -119,7 +120,7 @@ function Base.size(F::QRSparse, i::Integer)
     elseif i > 2
         return 1
     else
-        throw(ArgumentError("second argument must be 1 or 2"))
+        throw(ArgumentError("second argument must be positive"))
     end
 end
 
@@ -130,7 +131,7 @@ end
 
 Base.size(Q::QRSparseQ) = (size(Q.factors, 1), size(Q.factors, 1))
 
-# From SPQR manula p. 6
+# From SPQR manual p. 6
 _default_tol(A::SparseMatrixCSC) =
     20*sum(size(A))*eps(real(eltype(A)))*maximum(norm(view(A, :, i))^2 for i in 1:size(A, 2))
 
@@ -179,13 +180,27 @@ julia> A = sparse([1,2,3,4], [1,1,2,2], ones(4))
   [4, 2]  =  1.0
 
 julia> qrfact(A)
-Base.SparseArrays.SPQR.QRSparse{Float64,Int64}(
-  [1, 1]  =  1.0
-  [4, 1]  =  0.414214
-  [2, 2]  =  1.0
-  [3, 2]  =  0.414214, [1.70711, 1.70711],
+Base.SparseArrays.SPQR.QRSparse{Float64,Int64}
+Q factor:
+4×4 Base.SparseArrays.SPQR.QRSparseQ{Float64,Int64}:
+ -0.707107   0.0        0.0       -0.707107
+  0.0       -0.707107  -0.707107   0.0
+  0.0       -0.707107   0.707107   0.0
+ -0.707107   0.0        0.0        0.707107
+R factor:
+2×2 SparseMatrixCSC{Float64,Int64} with 2 stored entries:
   [1, 1]  =  -1.41421
-  [2, 2]  =  -1.41421, [1, 2], [1, 4, 2, 3])
+  [2, 2]  =  -1.41421
+Row permutation:
+4-element Array{Int64,1}:
+ 1
+ 3
+ 4
+ 2
+Columns permutation:
+2-element Array{Int64,1}:
+ 1
+ 2
 ```
 """
 Base.LinAlg.qrfact(A::SparseMatrixCSC; tol = _default_tol(A)) = qrfact(A, Val{true}, tol = tol)
@@ -256,10 +271,10 @@ Base.LinAlg.getq(F::QRSparse) = QRSparseQ(F.factors, F.τ)
     getindex(F::QRSparse, d::Symbol)
 
 Extract factors of a QRSparse factorization. Possible values of `d` are
-- :Q : `QRSparseQ` matrix of the ``Q`` factor in Householder form
-- :R : `UpperTriangular` ``R`` factor
-- :prow : Vector of the row permutations applied to the factorized matrix
-- :pcol : Vector of the column permutations applied to the factorized matrix
+- `:Q` : `QRSparseQ` matrix of the ``Q`` factor in Householder form
+- `:R` : `UpperTriangular` ``R`` factor
+- `:prow` : Vector of the row permutations applied to the factorized matrix
+- `:pcol` : Vector of the column permutations applied to the factorized matrix
 
 # Examples
 ```jldoctest
@@ -309,6 +324,18 @@ function Base.getindex(F::QRSparse, d::Symbol)
     end
 end
 
+function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, F::QRSparse)
+    println(io, summary(F))
+    println(io, "Q factor:")
+    show(io, mime, F[:Q])
+    println(io, "\nR factor:")
+    show(io, mime, F[:R])
+    println(io, "\nRow permutation:")
+    show(io, mime, F[:prow])
+    println(io, "\nColumn permutation:")
+    show(io, mime, F[:pcol])
+end
+
 # With a real lhs and complex rhs with the same precision, we can reinterpret
 # the complex rhs as a real rhs with twice the number of columns
 #
@@ -340,7 +367,7 @@ function _ldiv_basic(F::QRSparse, B::StridedVecOrMat)
     end
 
     # The rank of F equal to the number of rows in R
-    rnk = size(F.R,1)
+    rnk = size(F.R, 1)
 
     # allocate an array for the return value large enough to hold B and X
     # For overdetermined problem, B is larger than X and vice versa
@@ -355,7 +382,7 @@ function _ldiv_basic(F::QRSparse, B::StridedVecOrMat)
         end
     end
 
-    # Make a view into x corresponding to the size of B
+    # Make a view into X corresponding to the size of B
     X0 = view(X, 1:size(B, 1), :)
 
     # Apply Q' to B
@@ -367,7 +394,7 @@ function _ldiv_basic(F::QRSparse, B::StridedVecOrMat)
     # Solve R*X = B
     A_ldiv_B!(UpperTriangular(view(F.R, :, Base.OneTo(rnk))), view(X0, Base.OneTo(rnk), :))
 
-    # Apply right permutation and extract solution from x
+    # Apply right permutation and extract solution from X
     return getindex(X, ntuple(i -> i == 1 ? invperm(F.cpiv) : :, Val(ndims(B)))...)
 end
 

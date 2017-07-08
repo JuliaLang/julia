@@ -32,8 +32,8 @@ SparseVector(n::Integer, nzind::Vector{Ti}, nzval::Vector{Tv}) where {Tv,Ti} =
 
 # Define an alias for a view of a whole column of a SparseMatrixCSC. Many methods can be written for the
 # union of such a view and a SparseVector so we define an alias for such a union as well
-const SparseVectorView{T}  = SubArray{T,1,<:SparseMatrixCSC,Tuple{Base.Slice{Base.OneTo{Int64}},Int64},false}
-const SparseVectorUnion{T} = Union{SparseVector{T}, SparseVectorView{T}}
+const SparseColumnView{T}  = SubArray{T,1,<:SparseMatrixCSC,Tuple{Base.Slice{Base.OneTo{Int}},Int},false}
+const SparseVectorUnion{T} = Union{SparseVector{T}, SparseColumnView{T}}
 
 ### Basic properties
 
@@ -44,7 +44,7 @@ countnz(x::SparseVector) = countnz(x.nzval)
 count(x::SparseVector) = count(x.nzval)
 
 nonzeros(x::SparseVector) = x.nzval
-function nonzeros(x::SparseVectorView)
+function nonzeros(x::SparseColumnView)
     rowidx, colidx = parentindexes(x)
     A = parent(x)
     @inbounds y = view(A.nzval, nzrange(A, colidx))
@@ -52,7 +52,7 @@ function nonzeros(x::SparseVectorView)
 end
 
 nonzeroinds(x::SparseVector) = x.nzind
-function nonzeroinds(x::SparseVectorView)
+function nonzeroinds(x::SparseColumnView)
     rowidx, colidx = parentindexes(x)
     A = parent(x)
     @inbounds y = view(A.rowval, nzrange(A, colidx))
