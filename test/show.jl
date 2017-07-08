@@ -417,12 +417,19 @@ let filename = tempname()
         end
     end
     @test ret == [2]
+
+    # STDIN is unavailable on the workers. Run test on master.
     @test contains(readstring(filename), "WARNING: hello")
-    ret = open(filename) do f
-        redirect_stdin(f) do
-            readline()
+    ret = eval(Main, quote
+        remotecall_fetch(1, $filename) do fname
+            open(fname) do f
+                redirect_stdin(f) do
+                    readline()
+                end
+            end
         end
-    end
+    end)
+
     @test contains(ret, "WARNING: hello")
     rm(filename)
 end

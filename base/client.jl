@@ -265,8 +265,13 @@ function process_options(opts::JLOptions)
     while true
         # startup worker.
         # opts.startupfile, opts.load, etc should should not be processed for workers.
-        if opts.worker != C_NULL
-            start_worker(unsafe_string(opts.worker)) # does not return
+        if opts.worker == 1
+            # does not return
+            if opts.cookie != C_NULL
+                start_worker(unsafe_string(opts.cookie))
+            else
+                start_worker()
+            end
         end
 
         # add processors

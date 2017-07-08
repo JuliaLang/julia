@@ -136,19 +136,36 @@ worker_timeout() = parse(Float64, get(ENV, "JULIA_WORKER_TIMEOUT", "60.0"))
 
 
 ## worker creation and setup ##
+"""
+    start_worker(out::IO=STDOUT)
+    start_worker(cookie::AbstractString)
+    start_worker(out::IO, cookie::AbstractString)
 
-# The entry point for julia worker processes. does not return. Used for TCP transport.
-# Cluster managers implementing their own transport will provide their own.
-# Argument is descriptor to write listening port # to.
-start_worker(cookie::AbstractString) = start_worker(STDOUT, cookie)
-function start_worker(out::IO, cookie::AbstractString)
-    # we only explicitly monitor worker STDOUT on the console, so redirect
-    # stderr to stdout so we can see the output.
-    # at some point we might want some or all worker output to go to log
-    # files instead.
-    # Currently disabled since this caused processes to spin instead of
-    # exit when process 1 shut down. Don't yet know why.
-    #redirect_stderr(STDOUT)
+`Base.start_worker` is an internal function which is the default entry point for
+worker processes connecting via TCP/IP. It sets up the process as a Julia cluster
+worker.
+
+If the cookie is unspecified, the worker tries to read it from its STDIN.
+
+host:port information is written to stream `out` (defaults to STDOUT).
+
+The function closes STDIN (after reading the cookie if required), redirects STDERR to STDOUT,
+listens on a free port (or if specified, the port in the `--bind-to` command
+line option) and schedules tasks to process incoming TCP connections and requests.
+
+It does not return.
+"""
+start_worker(out::IO=STDOUT) = start_worker(out, Nullable{AbstractString}())
+start_worker(cookie::AbstractString) = start_worker(STDOUT, Nullable{AbstractString}(cookie))
+start_worker(out::IO, cookie::AbstractString) = start_worker(out, Nullable{AbstractString}(cookie))
+function start_worker(out::IO, cookie_in::Nullable{AbstractString})
+    if isnull(cookie_in)
+        cookie = readline(STDIN)
+    else
+        cookie = get(cookie_in)
+    end
+    close(STDIN) # workers will not use it
+    redirect_stderr(STDOUT)
 
     init_worker(cookie)
     interface = IPv4(LPROC.bind_addr)
@@ -167,8 +184,6 @@ function start_worker(out::IO, cookie::AbstractString)
     print(out, LPROC.bind_addr)
     print(out, '\n')
     flush(out)
-    # close STDIN; workers will not use it
-    #close(STDIN)
 
     disable_nagle(sock)
 
@@ -179,7 +194,6 @@ function start_worker(out::IO, cookie::AbstractString)
     try
         # To prevent hanging processes on remote machines, newly launched workers exit if the
         # master process does not connect in time.
-        # TODO : Make timeout configurable.
         check_master_connect()
         while true; wait(); end
     catch err
@@ -266,7 +280,7 @@ end
     init_worker(cookie::AbstractString, manager::ClusterManager=DefaultClusterManager())
 
 Called by cluster managers implementing custom transports. It initializes a newly launched
-process as a worker. Command line argument `--worker` has the effect of initializing a
+process as a worker. Command line argument `--worker[=<cookie>]` has the effect of initializing a
 process as a worker using TCP/IP sockets for transport.
 `cookie` is a [`cluster_cookie`](@ref).
 """
@@ -525,7 +539,8 @@ function launch_additional(np::Integer, cmd::Cmd)
     addresses = Vector{Any}(np)
 
     for i in 1:np
-        io = open(detach(cmd))
+        io = open(detach(cmd), "r+")
+        write_cookie(io)
         io_objs[i] = io.out
     end
 
@@ -1043,3 +1058,5 @@ function init_parallel()
     assert(isempty(PGRP.workers))
     register_worker(LPROC)
 end
+
+write_cookie(io::IO) = write(io.in, string(cluster_cookie(), "\n"))
