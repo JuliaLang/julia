@@ -1543,6 +1543,12 @@ end
 @deprecate cat_t{N,T}(::Type{Val{N}}, ::Type{T}, A, B) cat_t(Val(N), T, A, B) false
 @deprecate reshape{N}(A::AbstractArray, ::Type{Val{N}}) reshape(A, Val(N))
 
+# PR #22388: also remove corresonding code in ordering.jl and sort.jl
+function Base.Order.ord_deprecated(lt, by, rev::Bool, order::Ordering)
+    depwarn("`order` keyword argument is deprecated, use `lt`, `by` and `rev` instead", :ord_deprecated)
+    ord(lt, by, rev, order)
+end
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations
