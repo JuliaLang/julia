@@ -729,6 +729,12 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                 if (CI->canReturnTwice()) {
                     S.ReturnsTwice.push_back(CI);
                 }
+                if (auto callee = CI->getCalledFunction()) {
+                    // Known functions emitted in codegen that are not safepoints
+                    if (callee == pointer_from_objref_func || callee->getName() == "memcmp") {
+                        continue;
+                    }
+                }
                 int SafepointNumber = NoteSafepoint(S, BBS, CI);
                 BBS.HasSafepoint = true;
                 BBS.TopmostSafepoint = SafepointNumber;

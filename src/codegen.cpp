@@ -321,7 +321,7 @@ static Function *jlisa_func;
 static Function *jlsubtype_func;
 static Function *jlapplytype_func;
 static Function *setjmp_func;
-static Function *memcmp_func;
+static Function *memcmp_derived_func;
 static Function *box_int8_func;
 static Function *box_uint8_func;
 static Function *box_int16_func;
@@ -2280,7 +2280,7 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const
         assert(arg1.ispointer() && arg2.ispointer());
         size_t sz = jl_datatype_size(arg1.typ);
         if (sz > 512 && !((jl_datatype_t*)arg1.typ)->layout->haspadding) {
-            Value *answer = ctx.builder.CreateCall(prepare_call(memcmp_func),
+            Value *answer = ctx.builder.CreateCall(prepare_call(memcmp_derived_func),
                             {
                             data_pointer(ctx, arg1, T_pint8),
                             data_pointer(ctx, arg2, T_pint8),
@@ -6138,6 +6138,8 @@ static void init_julia_llvm_env(Module *m)
     T_void = Type::getVoidTy(jl_LLVMContext);
     T_pvoidfunc = FunctionType::get(T_void, /*isVarArg*/false)->getPointerTo();
 
+    auto T_pint8_derived = PointerType::get(T_int8, AddressSpace::Derived);
+
     // This type is used to create undef Values for use in struct declarations to skip indices
     NoopType = ArrayType::get(T_int1, 0);
 
@@ -6352,7 +6354,7 @@ static void init_julia_llvm_env(Module *m)
     add_named_global(jlvboundserror_func, &jl_bounds_error_tuple_int);
 
     std::vector<Type*> args3_uboundserror(0);
-    args3_uboundserror.push_back(PointerType::get(T_int8, AddressSpace::Derived));
+    args3_uboundserror.push_back(T_pint8_derived);
     args3_uboundserror.push_back(T_prjlvalue);
     args3_uboundserror.push_back(T_size);
     jluboundserror_func =
@@ -6379,13 +6381,13 @@ static void init_julia_llvm_env(Module *m)
     add_named_global(setjmp_func, &jl_setjmp_f);
 
     std::vector<Type*> args_memcmp(0);
-    args_memcmp.push_back(T_pint8);
-    args_memcmp.push_back(T_pint8);
+    args_memcmp.push_back(T_pint8_derived);
+    args_memcmp.push_back(T_pint8_derived);
     args_memcmp.push_back(T_size);
-    memcmp_func =
+    memcmp_derived_func =
         Function::Create(FunctionType::get(T_int32, args_memcmp, false),
                          Function::ExternalLinkage, "memcmp", m);
-    add_named_global(memcmp_func, &memcmp);
+    add_named_global(memcmp_derived_func, &memcmp);
 
     std::vector<Type*> te_args(0);
     te_args.push_back(T_pint8);
