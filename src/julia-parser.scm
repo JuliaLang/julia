@@ -2005,8 +2005,10 @@
      (read (open-input-string (string #\" s #\"))))))
 
 (define-macro (check-identifier ex)
-  `(if (or (syntactic-op? ,ex) (eq? ,ex '....))
-       (error (string "invalid identifier name \"" ,ex "\""))))
+  `(begin (if (or (syntactic-op? ,ex) (eq? ,ex '....))
+              (error (string "invalid identifier name \"" ,ex "\"")))
+          (if (eq? ,ex '?)
+              (syntax-deprecation s "`?` used as an identifier" "")))) ; merge with above check in v1.0
 
 ;; parse numbers, identifiers, parenthesized expressions, lists, vectors, etc.
 (define (parse-atom s (checked #t))
