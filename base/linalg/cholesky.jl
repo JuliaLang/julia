@@ -236,7 +236,7 @@ julia> A = [1 2; 2 50]
  2  50
 
 julia> cholfact!(A)
-ERROR: InexactError()
+ERROR: InexactError: convert(Int64, 6.782329983125268)
 ```
 """
 function cholfact!(A::StridedMatrix, ::Val{false}=Val(false))

@@ -401,7 +401,7 @@ function is_top_bit_set(x::BitInteger)
 end
 function check_top_bit(x::BitInteger)
     @_inline_meta
-    is_top_bit_set(x) && throw(InexactError())
+    is_top_bit_set(x) && throw(InexactError(:check_top_bit, Integer, x))
     x
 end
 
@@ -411,7 +411,7 @@ function checked_trunc_sint{To,From}(::Type{To}, x::From)
     @_inline_meta
     y = trunc_int(To, x)
     back = sext_int(From, y)
-    x == back || throw(InexactError())
+    x == back || throw(InexactError(:trunc, To, x))
     y
 end
 
@@ -419,7 +419,7 @@ function checked_trunc_uint{To,From}(::Type{To}, x::From)
     @_inline_meta
     y = trunc_int(To, x)
     back = zext_int(From, y)
-    x == back || throw(InexactError())
+    x == back || throw(InexactError(:trunc, To, x))
     y
 end
 

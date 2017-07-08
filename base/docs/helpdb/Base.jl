@@ -1380,16 +1380,16 @@ Convert a hexadecimal string to the floating point number it represents.
 hex2num
 
 """
-    InexactError()
+    InexactError(name::Symbol, T, val)
 
-Type conversion cannot be done exactly.
+Cannot exactly convert `val` to type `T` in a method of function `name`.
 
 # Examples
 ```jldoctest
 julia> convert(Float64, 1+2im)
-ERROR: InexactError()
+ERROR: InexactError: convert(Float64, 1 + 2im)
 Stacktrace:
- [1] convert(::Type{Float64}, ::Complex{Int64}) at ./complex.jl:31
+ [1] convert(::Type{Float64}, ::Complex{Int64}) at ./complex.jl:37
 ```
 """
 InexactError
@@ -1929,7 +1929,7 @@ julia> convert(Int, 3.0)
 3
 
 julia> convert(Int, 3.5)
-ERROR: InexactError()
+ERROR: InexactError: convert(Int64, 3.5)
 Stacktrace:
  [1] convert(::Type{Int64}, ::Float64) at ./float.jl:680
 ```

@@ -157,6 +157,8 @@ Deprecated or removed
   * `fieldnames` now operates only on types. To get the names of fields in an object, use
     `fieldnames(typeof(x))` ([#22350]).
 
+  * `InexactError` now takes arguments: `InexactError(func::Symbol,
+    type, -3)` now prints as `ERROR: InexactError: func(type, -3)`. ([#20005])
 
 Julia v0.6.0 Release Notes
 ==========================
@@ -902,6 +904,7 @@ Command-line option changes
 [#19949]: https://github.com/JuliaLang/julia/issues/19949
 [#19950]: https://github.com/JuliaLang/julia/issues/19950
 [#19989]: https://github.com/JuliaLang/julia/issues/19989
+[#20005]: https://github.com/JuliaLang/julia/issues/20005
 [#20009]: https://github.com/JuliaLang/julia/issues/20009
 [#20047]: https://github.com/JuliaLang/julia/issues/20047
 [#20058]: https://github.com/JuliaLang/julia/issues/20058

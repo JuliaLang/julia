@@ -263,12 +263,12 @@ convert(::Type{BigInt}, x::Bool) = BigInt(UInt(x))
 unsafe_trunc(::Type{BigInt}, x::Union{Float32,Float64}) = MPZ.set_d(x)
 
 function convert(::Type{BigInt}, x::Union{Float32,Float64})
-    isinteger(x) || throw(InexactError())
+    isinteger(x) || throw(InexactError(:convert, BigInt, x))
     unsafe_trunc(BigInt,x)
 end
 
 function trunc(::Type{BigInt}, x::Union{Float32,Float64})
-    isfinite(x) || throw(InexactError())
+    isfinite(x) || throw(InexactError(:trunc, BigInt, x))
     unsafe_trunc(BigInt,x)
 end
 
@@ -319,7 +319,7 @@ function convert(::Type{T}, x::BigInt) where T<:Unsigned
     if sizeof(T) < sizeof(Limb)
         convert(T, convert(Limb,x))
     else
-        0 <= x.size <= cld(sizeof(T),sizeof(Limb)) || throw(InexactError())
+        0 <= x.size <= cld(sizeof(T),sizeof(Limb)) || throw(InexactError(:convert, T, x))
         x % T
     end
 end
@@ -330,9 +330,9 @@ function convert(::Type{T}, x::BigInt) where T<:Signed
         SLimb = typeof(Signed(one(Limb)))
         convert(T, convert(SLimb, x))
     else
-        0 <= n <= cld(sizeof(T),sizeof(Limb)) || throw(InexactError())
+        0 <= n <= cld(sizeof(T),sizeof(Limb)) || throw(InexactError(:convert, T, x))
         y = x % T
-        ispos(x) ⊻ (y > 0) && throw(InexactError()) # catch overflow
+        ispos(x) ⊻ (y > 0) && throw(InexactError(:convert, T, x)) # catch overflow
         y
     end
 end

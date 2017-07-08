@@ -132,9 +132,10 @@ export
     # string types
     Char, DirectIndexString, AbstractString, String, IO,
     # errors
-    ErrorException, BoundsError, DivideError, DomainError, Exception, InexactError,
-    InterruptException, OutOfMemoryError, ReadOnlyMemoryError, OverflowError,
-    StackOverflowError, SegmentationFault, UndefRefError, UndefVarError, TypeError,
+    ErrorException, BoundsError, DivideError, DomainError, Exception,
+    InterruptException, InexactError, OutOfMemoryError, ReadOnlyMemoryError,
+    OverflowError, StackOverflowError, SegmentationFault, UndefRefError, UndefVarError,
+    TypeError,
     # AST representation
     Expr, GotoNode, LabelNode, LineNumberNode, QuoteNode,
     GlobalRef, NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot,
@@ -206,7 +207,6 @@ end
 struct DivideError        <: Exception end
 struct DomainError        <: Exception end
 struct OverflowError      <: Exception end
-struct InexactError       <: Exception end
 struct OutOfMemoryError   <: Exception end
 struct ReadOnlyMemoryError<: Exception end
 struct SegmentationFault  <: Exception end
@@ -221,6 +221,13 @@ mutable struct TypeError <: Exception
     context::AbstractString
     expected::Type
     got
+end
+struct InexactError <: Exception
+    func::Symbol
+    T::Type
+    val
+
+    InexactError(f::Symbol, T::ANY, val::ANY) = (@_noinline_meta; new(f, T, val))
 end
 
 abstract type DirectIndexString <: AbstractString end
