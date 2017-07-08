@@ -44,6 +44,43 @@ function test_loads_no_call(ir, load_types)
         @test load_idx == length(load_types) + 1
     end
 end
+
+# This function tests if functions are output when compiled if jl_dump_compiles is enabled.
+# Have to go through pains with recursive function (eval probably not required) to make sure
+# that inlining won't happen.
+function test_jl_dump_compiles()
+    tfile = tempname()
+    io = open(tfile, "w")
+    ccall(:jl_dump_compiles, Void, (Ptr{Void},), io.handle)
+    eval(@noinline function test_jl_dump_compiles_internal(x)
+        if x > 0
+            test_jl_dump_compiles_internal(x-1)
+        end
+        end)
+    test_jl_dump_compiles_internal(1)
+    ccall(:jl_dump_compiles, Void, (Ptr{Void},), C_NULL)
+    close(io)
+    tstats = stat(tfile)
+    tempty = tstats.size == 0
+    rm(tfile)
+    @test tempty == false
+end
+
+# This function tests if a toplevel thunk is output if jl_dump_compiles is enabled.
+# The eval statement creates the toplevel thunk.
+function test_jl_dump_compiles_toplevel_thunks()
+    tfile = tempname()
+    io = open(tfile, "w")
+    ccall(:jl_dump_compiles, Void, (Ptr{Void},), io.handle)
+    eval(expand(Main, :(for i in 1:10 end)))
+    ccall(:jl_dump_compiles, Void, (Ptr{Void},), C_NULL)
+    close(io)
+    tstats = stat(tfile)
+    tempty = tstats.size == 0
+    rm(tfile)
+    @test tempty == true
+end
+
 if opt_level > 0
     # Make sure `jl_string_ptr` is inlined
     @test !contains(get_llvm(jl_string_ptr, Tuple{String}), " call ")
@@ -59,6 +96,9 @@ if opt_level > 0
     test_loads_no_call(get_llvm(core_sizeof, Tuple{Array{Any}}), [Iptr])
     # Check that we load the elsize
     test_loads_no_call(get_llvm(core_sizeof, Tuple{Vector}), [Iptr, "i16"])
+
+    test_jl_dump_compiles()
+    test_jl_dump_compiles_toplevel_thunks()
 end
 
 @test !contains(get_llvm(isequal, Tuple{Nullable{BigFloat}, Nullable{BigFloat}}), "%gcframe")
