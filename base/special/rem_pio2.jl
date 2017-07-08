@@ -87,7 +87,7 @@ function cody_waite_2c_pio2(x::Float64)
     n  = unsafe_trunc(Int, fn)
     cody_waite_2c_pio2(x, fn, n)
 end
-function cody_waite_2c_pio2(x, fn, n)
+@inline function cody_waite_2c_pio2(x, fn, n)
     z = muladd(-fn, pio2_1, x) # x - fn*pio2_1
     y1 = muladd(-fn, pio2_1t, z) # z - fn*pio2_1t
     y2 = muladd(-fn, pio2_1t, (z - y1)) # (z - y1) - fn*pio2_1t
@@ -97,7 +97,7 @@ end
 function cody_waite_ext_pio2(x::Float64)
     cody_waite_ext_pio2(x, poshighword(x))
 end
-function cody_waite_ext_pio2(x::Float64, xhp)
+@inline function cody_waite_ext_pio2(x::Float64, xhp)
     fn = rint(x*invpio2) # round to integer
 
     r  = muladd(-fn, pio2_1, x) # x - fn*pio2_1
