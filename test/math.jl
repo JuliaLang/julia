@@ -667,12 +667,12 @@ end
     @test exp10(Float16(1.0)) === Float16(exp10(1.0))
 end
 
-# test AbstractFloat fallback
-struct Float32432{T<:AbstractFloat} <: AbstractFloat
+# test AbstractFloat fallback pr22716
+struct Float22716{T<:AbstractFloat} <: AbstractFloat
     x::T
 end
-Base.:^(x::Number, y::Float32432) = x^(y.x)
+Base.:^(x::Number, y::Float22716) = x^(y.x)
 let x = 2.0
-    @test exp2(Float32432(x)) === 2^x
-    @test exp10(Float32432(x)) === 10^x
+    @test exp2(Float22716(x)) === 2^x
+    @test exp10(Float22716(x)) === 10^x
 end
