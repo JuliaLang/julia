@@ -101,4 +101,37 @@ if opt_level > 0
     test_jl_dump_compiles_toplevel_thunks()
 end
 
-@test !contains(get_llvm(isequal, Tuple{Nullable{BigFloat}, Nullable{BigFloat}}), "%gcframe")
+# Make sure we will not elide the allocation
+@noinline create_ref1() = Ref(1)
+function pointer_not_safepoint()
+    a = create_ref1()
+    unsafe_store!(Ptr{Int}(pointer_from_objref(a)), 3)
+    return a[]
+end
+@test pointer_not_safepoint() == 3
+
+# The current memcmp threshold is 512bytes, make sure this struct has the same size on
+# 32bits and 64bits
+struct LargeStruct
+    x::NTuple{1024,Int8}
+    LargeStruct() = new()
+end
+
+const large_struct = LargeStruct()
+@noinline create_ref_struct() = Ref(large_struct)
+function compare_large_struct(a)
+    b = create_ref_struct()
+    if a[] === b[]
+        b[].x[1]
+    else
+        a[].x[2]
+    end
+end
+
+if opt_level > 0
+    @test !contains(get_llvm(isequal, Tuple{Nullable{BigFloat}, Nullable{BigFloat}}), "%gcframe")
+    @test !contains(get_llvm(pointer_not_safepoint, Tuple{}), "%gcframe")
+    compare_large_struct_ir = get_llvm(compare_large_struct, Tuple{typeof(create_ref_struct())})
+    @test contains(compare_large_struct_ir, "call i32 @memcmp")
+    @test !contains(compare_large_struct_ir, "%gcframe")
+end
