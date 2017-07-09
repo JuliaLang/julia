@@ -978,7 +978,6 @@ isodd(x::AbstractFloat) = isinteger(x) && abs(x) ≤ maxintfloat(x) && isodd(Int
     eps(::Type{Float32}) = $(bitcast(Float32, 0x34000000))
     eps(::Type{Float64}) = $(bitcast(Float64, 0x3cb0000000000000))
     eps(::Type{Complex{T}}) where {T<:AbstractFloat} = eps(T)
-    eps(z::Complex{T}) where {T<:AbstractFloat} = hypot(eps(real(z)), eps(imag(z)))
     eps() = eps(Float64)
 end
 
@@ -1066,6 +1065,14 @@ julia> 1.0 + eps()
 julia> 1.0 + eps()/2
 1.0
 ```
+
+For complex inputs `T`, `eps(T)` is defined as the distance bound to the nearest
+floating-point complex value, i.e. for z=a+ib and the closest floating-point
+complex value z̃=ã+ib̃=fl(a)+ifl(b), |z - z̃| ≤ ε/2.
+```jldoctest
+
+```
+
 """
 eps(::Type{<:AbstractFloat})
 
