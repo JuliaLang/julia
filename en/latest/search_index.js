@@ -7205,7 +7205,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.muladd",
     "category": "Function",
-    "text": "muladd(x, y, z)\n\nCombined multiply-add, computes x*y+z in an efficient manner. This may on some systems be equivalent to x*y+z, or to fma(x,y,z). muladd is used to improve performance. See fma.\n\nExample\n\njulia> muladd(3, 2, 1)\n7\n\njulia> 3 * 2 + 1\n7\n\n\n\n"
+    "text": "muladd(x, y, z)\n\nCombined multiply-add, computes x*y+z allowing the add and multiply to be contracted with each other or ones from other muladd and @fastmath to form fma if the transformation can improve performance. The result can be different on different machines and can also be different on the same machine due to constant propagation or other optimizations. See fma.\n\nExample\n\njulia> muladd(3, 2, 1)\n7\n\njulia> 3 * 2 + 1\n7\n\n\n\n"
 },
 
 {
