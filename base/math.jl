@@ -265,6 +265,7 @@ cbrt(x::AbstractFloat) = x < 0 ? -(-x)^(1//3) : x^(1//3)
 
 Compute the base `2` exponential of `x`, in other words ``2^x``.
 
+# Examples
 ```jldoctest
 julia> exp2(5)
 32.0
@@ -277,6 +278,7 @@ exp2(x::AbstractFloat) = 2^x
 
 Compute the base `10` exponential of `x`, in other words ``10^x``.
 
+# Examples
 ```jldoctest
 julia> exp10(2)
 100.0
