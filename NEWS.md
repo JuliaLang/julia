@@ -60,6 +60,9 @@ This section lists changes that do not have deprecation warnings.
     longer present. Use `first(R)` and `last(R)` to obtain
     start/stop. ([#20974])
 
+  * The `Diagonal` type definition has changed from `Diagonal{T}` to
+    `Diagonal{T,V<:AbstractVector{T}}` ([#22718]).
+
 Library improvements
 --------------------
 
@@ -109,6 +112,9 @@ Library improvements
   * A new `@macroexpand1` macro for non recursive macro expansion ([#21662]).
 
   * `Char`s can now be concatenated with `String`s and/or other `Char`s using `*` ([#22532]).
+
+  * `Diagonal` is now parameterized on the type of the wrapped vector. This allows
+    for `Diagonal` matrices with arbitrary `AbstractVector`s ([#22718]).
 
 Compiler/Runtime improvements
 -----------------------------
