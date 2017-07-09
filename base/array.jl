@@ -6,16 +6,16 @@
 """
     AbstractVector{T}
 
-Abstract vector supertype containing elements of type `T`.
-Alias for [`AbstractArray{T,1}`](@ref).
+Supertype for one-dimensional arrays (or array-like types) with
+elements of type `T`. Alias for [`AbstractArray{T,1}`](@ref).
 """
 const AbstractVector{T} = AbstractArray{T,1}
 
 """
     AbstractMatrix{T}
 
-Abstract matrix supertype containing elements of type `T`.
-Alias for [`AbstractArray{T,2}`](@ref).
+Supertype for two-dimensional arrays (or array-like types) with
+elements of type `T`. Alias for [`AbstractArray{T,2}`](@ref).
 """
 const AbstractMatrix{T} = AbstractArray{T,2}
 const AbstractVecOrMat{T} = Union{AbstractVector{T}, AbstractMatrix{T}}
@@ -28,14 +28,16 @@ const NeedsShaping = Union{Tuple{Integer,Vararg{Integer}}, Tuple{OneTo,Vararg{On
 """
     Vector{T}
 
-Vector type containing elements of type `T`. Alias for [`Array{T,1}`](@ref).
+One-dimensional dense array with elements of type `T`, often used to represent
+a mathematical vector. Alias for [`Array{T,1}`](@ref).
 """
 const Vector{T} = Array{T,1}
 
 """
     Matrix{T}
 
-Matrix type containing elements of type `T`. Alias for [`Array{T,2}`](@ref).
+Two-dimensional dense array with elements of type `T`, often used to represent
+a mathematical matrix. Alias for [`Array{T,2}`](@ref).
 """
 const Matrix{T} = Array{T,2}
 const VecOrMat{T} = Union{Vector{T}, Matrix{T}}
