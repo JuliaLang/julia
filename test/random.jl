@@ -461,7 +461,13 @@ let mta = MersenneTwister(42), mtb = MersenneTwister(42)
     @test randperm(0) == []
     @test_throws ErrorException randperm(-1)
 
+    A, B = Vector{Int}(10), Vector{Int}(10)
+    @test randperm!(mta, A) == randperm!(mtb, B)
+    @test randperm!(A) === A
+
     @test randcycle(mta,10) == randcycle(mtb,10)
+    @test randcycle!(mta, A) == randcycle!(mtb, B)
+    @test randcycle!(A) === A
 
     @test sprand(mta,1,1,0.9) == sprand(mtb,1,1,0.9)
     @test sprand(mta,10,10,0.3) == sprand(mtb,10,10,0.3)
