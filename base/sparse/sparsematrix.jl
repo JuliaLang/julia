@@ -543,7 +543,7 @@ function sparse(I::AbstractVector{Ti}, J::AbstractVector{Ti}, V::AbstractVector{
                 throw(ArgumentError("row indices I[k] must satisfy 1 <= I[k] <= m"))
             end
         end
-        SparseMatrixCSC(m, n, ones(Ti, n+1), Vector{Ti}(), Vector{Tv}())
+        SparseMatrixCSC(m, n, ones(Ti, n+1), Ti[], Tv[])
     else
         # Allocate storage for CSR form
         csrrowptr = Vector{Ti}(m+1)
@@ -556,8 +556,8 @@ function sparse(I::AbstractVector{Ti}, J::AbstractVector{Ti}, V::AbstractVector{
 
         # Allocate empty arrays for the CSC form's row and nonzero value arrays
         # The parent method called below automagically resizes these arrays
-        cscrowval = Vector{Ti}()
-        cscnzval = Vector{Tv}()
+        cscrowval = Ti[]
+        cscnzval = Tv[]
 
         sparse!(I, J, V, m, n, combine, klasttouch,
                 csrrowptr, csrcolval, csrnzval,
@@ -596,8 +596,8 @@ Optional input arrays `csccolptr`, `cscrowval`, and `cscnzval` constitute storag
 returned CSC form `S`. `csccolptr` requires `length(csccolptr) >= n + 1`. If necessary,
 `cscrowval` and `cscnzval` are automatically resized to satisfy
 `length(cscrowval) >= nnz(S)` and `length(cscnzval) >= nnz(S)`; hence, if `nnz(S)` is
-unknown at the outset, passing in empty vectors of the appropriate type (`Vector{Ti}()`
-and `Vector{Tv}()` respectively) suffices, or calling the `sparse!` method
+unknown at the outset, passing in empty vectors of the appropriate type (`Ti[]`
+and `Tv[]` respectively) suffices, or calling the `sparse!` method
 neglecting `cscrowval` and `cscnzval`.
 
 On return, `csrrowptr`, `csrcolval`, and `csrnzval` contain an unsorted-column
@@ -724,14 +724,14 @@ function sparse!(I::AbstractVector{Ti}, J::AbstractVector{Ti},
         csccolptr::Vector{Ti}) where {Tv,Ti<:Integer}
     sparse!(I, J, V, m, n, combine, klasttouch,
             csrrowptr, csrcolval, csrnzval,
-            csccolptr, Vector{Ti}(), Vector{Tv}())
+            csccolptr, Ti[], Tv[])
 end
 function sparse!(I::AbstractVector{Ti}, J::AbstractVector{Ti},
         V::AbstractVector{Tv}, m::Integer, n::Integer, combine, klasttouch::Vector{Ti},
         csrrowptr::Vector{Ti}, csrcolval::Vector{Ti}, csrnzval::Vector{Tv}) where {Tv,Ti<:Integer}
     sparse!(I, J, V, m, n, combine, klasttouch,
             csrrowptr, csrcolval, csrnzval,
-            Vector{Ti}(n+1), Vector{Ti}(), Vector{Tv}())
+            Vector{Ti}(n+1), Ti[], Tv[])
 end
 
 dimlub(I) = isempty(I) ? 0 : Int(maximum(I)) #least upper bound on required sparse matrix dimension
@@ -1339,7 +1339,7 @@ function sprand_IJ(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloa
     0 <= density <= 1 || throw(ArgumentError("$density not in [0,1]"))
     N = n*m
 
-    I, J = Vector{Int}(0), Vector{Int}(0) # indices of nonzero elements
+    I, J = Int[], Int[] # indices of nonzero elements
     sizehint!(I, round(Int,N*density))
     sizehint!(J, round(Int,N*density))
 
@@ -1349,7 +1349,7 @@ function sprand_IJ(r::AbstractRNG, m::Integer, n::Integer, density::AbstractFloa
     colsparsity = exp(m*L) # = 1 - coldensity
     iL = 1/L
 
-    rows = Vector{Int}(0)
+    rows = Int[]
     for j in randsubseq(r, 1:n, coldensity)
         # To get the right statistics, we *must* have a nonempty column j
         # even if p*m << 1.   To do this, we use an approach similar to
@@ -1497,7 +1497,7 @@ spzeros(m::Integer, n::Integer) = spzeros(Float64, m, n)
 spzeros(::Type{Tv}, m::Integer, n::Integer) where {Tv} = spzeros(Tv, Int, m, n)
 function spzeros(::Type{Tv}, ::Type{Ti}, m::Integer, n::Integer) where {Tv, Ti}
     ((m < 0) || (n < 0)) && throw(ArgumentError("invalid Array dimensions"))
-    SparseMatrixCSC(m, n, ones(Ti, n+1), Vector{Ti}(0), Vector{Tv}(0))
+    SparseMatrixCSC(m, n, ones(Ti, n+1), Ti[], Tv[])
 end
 # de-splatting variant
 function spzeros(::Type{Tv}, ::Type{Ti}, sz::Tuple{Integer,Integer}) where {Tv, Ti}
@@ -1559,7 +1559,7 @@ speye_scaled(diag, m::Integer, n::Integer) = speye_scaled(typeof(diag), diag, m,
 function speye_scaled(::Type{T}, diag, m::Integer, n::Integer) where T
     ((m < 0) || (n < 0)) && throw(ArgumentError("invalid array dimensions"))
     if iszero(diag)
-        return SparseMatrixCSC(m, n, ones(Int, n+1), Vector{Int}(0), Vector{T}(0))
+        return SparseMatrixCSC(m, n, ones(Int, n+1), Int[], T[])
     end
     nnz = min(m,n)
     colptr = Vector{Int}(1+n)

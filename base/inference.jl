@@ -276,8 +276,8 @@ mutable struct InferenceState
             Union{}, W, 1, n,
             cur_hand, handler_at, n_handlers,
             ssavalue_uses, ssavalue_defs,
-            Vector{Tuple{InferenceState,LineNum}}(), # backedges
-            Vector{InferenceState}(), # callers_in_cycle
+            Vector{Tuple{InferenceState,LineNum}}(0), # backedges
+            Vector{InferenceState}(0), # callers_in_cycle
             #=parent=#nothing,
             false, false, optimize, cached, false, false)
         return frame

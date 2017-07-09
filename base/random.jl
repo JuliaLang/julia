@@ -116,7 +116,7 @@ julia> x1 == x2
 true
 ```
 """
-MersenneTwister(seed) = srand(MersenneTwister(Vector{UInt32}(), DSFMT_state()), seed)
+MersenneTwister(seed) = srand(MersenneTwister(UInt32[], DSFMT_state()), seed)
 
 function copy!(dst::MersenneTwister, src::MersenneTwister)
     copy!(resize!(dst.seed, length(src.seed)), src.seed)

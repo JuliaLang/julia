@@ -173,7 +173,7 @@ function _require_from_serialized(node::Int, mod::Symbol, path_to_try::String, t
         restored = _include_from_serialized(content)
         isa(restored, Exception) && return restored
 
-        results = sizehint!(Vector{Tuple{Int,Any}}(), nprocs())
+        results = sizehint!(Vector{Tuple{Int,Any}}(0), nprocs())
         @sync for p in procs()
             if p != myid()
                 @async begin

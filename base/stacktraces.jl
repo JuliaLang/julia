@@ -148,7 +148,7 @@ doesn't return C functions, but this can be enabled.) When called without specif
 trace, `stacktrace` first calls `backtrace`.
 """
 function stacktrace(trace::Vector{Ptr{Void}}, c_funcs::Bool=false)
-    stack = vcat(StackTrace(), map(lookup, trace)...)::StackTrace
+    stack = vcat(StackTrace(0), map(lookup, trace)...)::StackTrace
 
     # Remove frames that come from C calls.
     if !c_funcs

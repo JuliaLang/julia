@@ -293,16 +293,16 @@ end
 end
 @testset "construction" begin
     @test typeof(Vector{Int}(3)) == Vector{Int}
-    @test typeof(Vector{Int}()) == Vector{Int}
+    @test typeof(Vector{Int}(0)) == Vector{Int}
     @test typeof(Vector(3)) == Vector{Any}
-    @test typeof(Vector()) == Vector{Any}
+    @test typeof(Vector(0)) == Vector{Any}
     @test typeof(Matrix{Int}(2,3)) == Matrix{Int}
     @test typeof(Matrix(2,3)) == Matrix{Any}
 
     @test size(Vector{Int}(3)) == (3,)
-    @test size(Vector{Int}()) == (0,)
+    @test size(Vector{Int}(0)) == (0,)
     @test size(Vector(3)) == (3,)
-    @test size(Vector()) == (0,)
+    @test size(Vector(0)) == (0,)
     @test size(Matrix{Int}(2,3)) == (2,3)
     @test size(Matrix(2,3)) == (2,3)
 

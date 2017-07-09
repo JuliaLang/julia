@@ -104,7 +104,7 @@ mutable struct _FDWatcher
     active::Tuple{Bool, Bool}
     events::Int32
 
-    let FDWatchers = Vector{Any}()
+    let FDWatchers = []
         global _FDWatcher
         @static if is_unix()
             function _FDWatcher(fd::RawFD, readable::Bool, writable::Bool)
