@@ -1,10 +1,11 @@
 # Networking and Streams
 
 Julia provides a rich interface to deal with streaming I/O objects such as terminals, pipes and
-TCP sockets. This interface, though asynchronous at the system level, is presented in a synchronous
-manner to the programmer and it is usually unnecessary to think about the underlying asynchronous
-operation. This is achieved by making heavy use of Julia cooperative threading ([coroutine](@ref man-tasks))
-functionality.
+TCP sockets. File I/O (`::IOStream` type), is synchronous at the system level, and thus
+process-blocking. All other operations are are asynchronous at the system level, but presented
+in a synchronous manner to the programmer; thus it is usually unnecessary to think about the underlying
+asynchronous operation. This is achieved by making heavy use of Julia cooperative threading
+([coroutine](@ref man-tasks)) functionality.
 
 ## Basic Stream I/O
 
