@@ -68,25 +68,6 @@ Return positive part of the high word of `x` as a `UInt32`.
 @inline poshighword(x::UInt64) = unsafe_trunc(UInt32,x >> 32)&0x7fffffff
 @inline poshighword(x::Float64) = poshighword(reinterpret(UInt64, x))
 
-"""
-    rint(x::Float64)
-
-Rounds `x` to the nearest integer, tie-breaking to even. Used internally
-in rem_pio2_kernel.
-"""
-function rint(x::Float64)
-    rf = 1.5/eps(Float64)
-    (x+rf)-rf
-end
-# This could be replaced with:
-#     fn = round(x*invpio2, RoundNearest)
-# at a cost.
-
-function cody_waite_2c_pio2(x::Float64)
-    fn = rint(x*invpio2) # round to integer
-    n  = unsafe_trunc(Int, fn)
-    cody_waite_2c_pio2(x, fn, n)
-end
 @inline function cody_waite_2c_pio2(x, fn, n)
     z = muladd(-fn, pio2_1, x) # x - fn*pio2_1
     y1 = muladd(-fn, pio2_1t, z) # z - fn*pio2_1t
@@ -94,11 +75,11 @@ end
     n, y1, y2
 end
 
-function cody_waite_ext_pio2(x::Float64)
-    cody_waite_ext_pio2(x, poshighword(x))
-end
 @inline function cody_waite_ext_pio2(x::Float64, xhp)
-    fn = rint(x*invpio2) # round to integer
+    fn = round(x*invpio2) # round to integer
+    # on older systems, the above could be faster with
+    # rf = 1.5/eps(Float64)
+    # (x+rf)-rf
 
     r  = muladd(-fn, pio2_1, x) # x - fn*pio2_1
     w  = fn*pio2_1t # 1st round good to 85 bit
@@ -123,7 +104,7 @@ end
         end
     end
     y2 = (r-y1)-w
-    return Int(fn), y1, y2
+    return unsafe_trunc(Int, fn), y1, y2
 end
 
 """
