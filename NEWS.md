@@ -75,6 +75,10 @@ This section lists changes that do not have deprecation warnings.
     `@everywhere include_string(Main, $(read("filename", String)), "filename")`.
     Improving upon this API is left as an opportunity for packages.
 
+  * `randperm(n)` and `randcycle(n)` now always return a `Vector{Int}` (independent of
+    the type of `n`). Use the corresponding mutating functions `randperm!` and `randcycle!`
+    to control the array type ([#22723]).
+
 Library improvements
 --------------------
 
@@ -127,6 +131,9 @@ Library improvements
 
   * `Diagonal` is now parameterized on the type of the wrapped vector. This allows
     for `Diagonal` matrices with arbitrary `AbstractVector`s ([#22718]).
+
+  * Mutating versions of `randperm` and `randcycle` have been added:
+    `randperm!` and `randcycle!` ([#22723]).
 
 Compiler/Runtime improvements
 -----------------------------

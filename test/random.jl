@@ -459,6 +459,7 @@ let mta = MersenneTwister(42), mtb = MersenneTwister(42)
     @test sort!(randperm(10)) == sort!(shuffle(1:10)) == collect(1:10)
     @test randperm(mta,big(10)) == randperm(mtb,big(10)) # cf. #16376
     @test randperm(0) == []
+    @test eltype(randperm(UInt(1))) === Int
     @test_throws ErrorException randperm(-1)
 
     A, B = Vector{Int}(10), Vector{Int}(10)
@@ -466,6 +467,7 @@ let mta = MersenneTwister(42), mtb = MersenneTwister(42)
     @test randperm!(A) === A
 
     @test randcycle(mta,10) == randcycle(mtb,10)
+    @test eltype(randcycle(UInt(1))) === Int
     @test randcycle!(mta, A) == randcycle!(mtb, B)
     @test randcycle!(A) === A
 

@@ -1803,7 +1803,7 @@ julia> randperm(MersenneTwister(1234), 4)
  3
 ```
 """
-randperm(r::AbstractRNG, n::Integer) = randperm!(r, Vector{typeof(n)}(n))
+randperm(r::AbstractRNG, n::Integer) = randperm!(r, Vector{Int}(n))
 randperm(n::Integer) = randperm(GLOBAL_RNG, n)
 
 """
@@ -1831,7 +1831,7 @@ function randperm!(r::AbstractRNG, a::Array{<:Integer})
     n == 0 && return a
     a[1] = 1
     mask = 3
-    @inbounds for i = 2:Int(n)
+    @inbounds for i = 2:n
         j = 1 + rand_lt(r, i, mask)
         if i != j # a[i] is uninitialized (and could be #undef)
             a[i] = a[j]
@@ -1863,7 +1863,7 @@ julia> randcycle(MersenneTwister(1234), 6)
  2
 ```
 """
-randcycle(r::AbstractRNG, n::Integer) = randcycle!(r, Vector{typeof(n)}(n))
+randcycle(r::AbstractRNG, n::Integer) = randcycle!(r, Vector{Int}(n))
 randcycle(n::Integer) = randcycle(GLOBAL_RNG, n)
 
 """
@@ -1892,7 +1892,7 @@ function randcycle!(r::AbstractRNG, a::Array{<:Integer})
     @assert n <= Int64(2)^52
     a[1] = 1
     mask = 3
-    @inbounds for i = 2:Int(n)
+    @inbounds for i = 2:n
         j = 1 + rand_lt(r, i-1, mask)
         a[i] = a[j]
         a[j] = i
