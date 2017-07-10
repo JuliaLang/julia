@@ -772,6 +772,7 @@ end
 @test static_shown(Symbol("a/b")) == "Symbol(\"a/b\")"
 @test static_shown(Symbol("a-b")) == "Symbol(\"a-b\")"
 
+@test static_shown(QuoteNode(:x)) == ":(:x)"
 
 # Test @show
 let fname = tempname()
