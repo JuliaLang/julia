@@ -338,8 +338,6 @@ end
 
 Val(x) = (@_pure_meta; Val{x}())
 
-show(io::IO, ::Val{x}) where {x} = print(io, "Val($x)")
-
 # used by interpolating quote and some other things in the front end
 function vector_any(xs::ANY...)
     n = length(xs)
