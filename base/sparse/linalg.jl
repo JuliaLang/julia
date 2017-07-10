@@ -941,3 +941,26 @@ end
 chol(A::SparseMatrixCSC) = error("Use cholfact() instead of chol() for sparse matrices.")
 lu(A::SparseMatrixCSC) = error("Use lufact() instead of lu() for sparse matrices.")
 eig(A::SparseMatrixCSC) = error("Use eigs() instead of eig() for sparse matrices.")
+
+function spcov(X::SparseMatrixCSC{Tv1,Ti1} where {Tv1,Ti1})
+    n,p = size(X)
+    means = mean(X, 1)
+
+    #Part 1 compute X'X
+    part1 = X'X
+
+    #Part 2 compute X'μ
+    sums = sum(X, 1)
+    part2 = sums'means
+
+    #Part 3 compute μ'μ
+    part3 = zeros(p,p)
+    for i in 1:p
+        for j in i:p
+            part3[i,j] = means[i] * means[j] * n
+            part3[j,i] = part3[i,j]
+        end
+    end
+
+    return (part1 - part2 - part2' + part3) ./ (n-1)
+end
