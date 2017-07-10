@@ -477,7 +477,7 @@ function _collect(cont, itr, ::HasEltype, isz::SizeUnknown)
     return a
 end
 
-_collect_indices(::Tuple{}, A) = copy!(Vector{eltype(A)}(), A)
+_collect_indices(::Tuple{}, A) = copy!(eltype(A)[], A)
 _collect_indices(indsA::Tuple{Vararg{OneTo}}, A) =
     copy!(Array{eltype(A)}(length.(indsA)), A)
 function _collect_indices(indsA, A)

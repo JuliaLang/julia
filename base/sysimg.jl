@@ -123,7 +123,6 @@ Array{T}(m::Integer, n::Integer) where {T} = Array{T,2}(Int(m), Int(n))
 Array{T}(m::Integer, n::Integer, o::Integer) where {T} = Array{T,3}(Int(m), Int(n), Int(o))
 Array{T}(d::Integer...) where {T} = Array{T}(convert(Tuple{Vararg{Int}}, d))
 
-Vector() = Array{Any,1}(0)
 Vector{T}(m::Integer) where {T} = Array{T,1}(Int(m))
 Vector(m::Integer) = Array{Any,1}(Int(m))
 Matrix{T}(m::Integer, n::Integer) where {T} = Matrix{T}(Int(m), Int(n))

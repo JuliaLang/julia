@@ -1555,6 +1555,13 @@ function CartesianRange{N}(start::CartesianIndex{N}, stop::CartesianIndex{N})
     CartesianRange(inds)
 end
 
+# PR #22717
+@noinline zero_arg_vector_constructor(T::Bool) =
+    depwarn(string("Vector$(T ? "{T}" : "")() is deprecated, ",
+        "use Vector$(T ? "{T}" : "")(0) or $(T ? "T" : "")[] instead."), :zero_arg_vector_constructor)
+(::Type{Vector{T}}){T}() = (zero_arg_vector_constructor(true); Vector{T}(0))
+(::Type{Vector})() = (zero_arg_vector_constructor(false); Vector(0))
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

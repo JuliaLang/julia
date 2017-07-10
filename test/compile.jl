@@ -113,9 +113,9 @@ try
               end
               (::Union{Type{NominalValue}, Type{OrdinalValue}})() = 1
               (::Union{Type{NominalValue{T}}, Type{OrdinalValue{T}}}){T}() = 2
-              (::Type{Vector{NominalValue{T, R}}}){T, R}() = 3
-              (::Type{Vector{NominalValue{T, T}}}){T}() = 4
-              (::Type{Vector{NominalValue{Int, Int}}})() = 5
+              (::Type{Vector{NominalValue{T, R}}}){T, R}(x::Int) = 3
+              (::Type{Vector{NominalValue{T, T}}}){T}(x::Int) = 4
+              (::Type{Vector{NominalValue{Int, Int}}})(x::Int) = 5
 
               # more tests for method signature involving a complicated type
               # issue 18343
@@ -217,11 +217,11 @@ try
         @test Foo.NominalValue{Int}() == 2
         @test Foo.OrdinalValue{Int}() == 2
         let T = Vector{Foo.NominalValue{Int}}
-            @test isa(T(), T)
+            @test isa(T(0), T)
         end
-        @test Vector{Foo.NominalValue{Int32, Int64}}() == 3
-        @test Vector{Foo.NominalValue{UInt, UInt}}() == 4
-        @test Vector{Foo.NominalValue{Int, Int}}() == 5
+        @test Vector{Foo.NominalValue{Int32, Int64}}(0) == 3
+        @test Vector{Foo.NominalValue{UInt, UInt}}(0) == 4
+        @test Vector{Foo.NominalValue{Int, Int}}(0) == 5
         @test all(i -> Foo.t17809s[i + 1] ===
             Tuple{
                 Type{Ptr{Foo.MyType{i}}},

@@ -203,7 +203,7 @@ julia> unique([1, 2, 6, 2])
 """
 function unique(itr)
     T = _default_eltype(typeof(itr))
-    out = Vector{T}()
+    out = T[]
     seen = Set{T}()
     i = start(itr)
     if done(itr, i)
@@ -259,7 +259,7 @@ julia> unique(x -> x^2, [1, -1, 3, -3, 4])
 ```
 """
 function unique(f::Callable, C)
-    out = Vector{eltype(C)}()
+    out = eltype(C)[]
     seen = Set()
     for x in C
         y = f(x)

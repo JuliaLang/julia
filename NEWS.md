@@ -148,6 +148,9 @@ Deprecated or removed
 
   * `read(::IO, ::Ref)` is now a method of `read!`, since it mutates its `Ref` argument ([#21592]).
 
+  * `Vector()` and `Vector{T}()` have been deprecated in favor of the explicit forms
+    `Vector(0)`/`[]` and `Vector{T}(0)`/`T[]` ([#22717]).
+
 
 Julia v0.6.0 Release Notes
 ==========================

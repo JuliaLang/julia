@@ -9,7 +9,7 @@ filename = joinpath(dir, "file.txt")
 text = "C1,C2\n1,2\na,b\n"
 
 # List of IO producers
-l = Vector{Tuple{AbstractString,Function}}()
+l = Vector{Tuple{AbstractString,Function}}(0)
 
 
 # File

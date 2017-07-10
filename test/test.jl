@@ -174,7 +174,7 @@ str = sprint(show, fails[15])
 
 
 # Test printing of a TestSetException
-tse_str = sprint(show, Test.TestSetException(1,2,3,4,Vector{Union{Base.Test.Error, Base.Test.Fail}}()))
+tse_str = sprint(show, Test.TestSetException(1,2,3,4,Vector{Union{Base.Test.Error, Base.Test.Fail}}(0)))
 @test contains(tse_str, "1 passed")
 @test contains(tse_str, "2 failed")
 @test contains(tse_str, "3 errored")
@@ -524,14 +524,14 @@ str = String(take!(io))
 @test !contains(str, "boot.jl")
 
 let io = IOBuffer()
-    exc = Test.TestSetException(1,2,3,4,Vector{Union{Base.Test.Error, Base.Test.Fail}}())
+    exc = Test.TestSetException(1,2,3,4,Vector{Union{Base.Test.Error, Base.Test.Fail}}(0))
     Base.showerror(io, exc, backtrace())
     @test !contains(String(take!(io)), "backtrace()")
 end
 
 # 19750
 let io = IOBuffer()
-    exc = Test.TestSetException(1,2,3,4,Vector{Union{Base.Test.Error, Base.Test.Fail}}())
+    exc = Test.TestSetException(1,2,3,4,Vector{Union{Base.Test.Error, Base.Test.Fail}}(0))
     Base.showerror(io, exc, backtrace())
     @test !contains(String(take!(io)), "backtrace()")
 
