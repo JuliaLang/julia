@@ -118,18 +118,6 @@ ndims(::AbstractArray{T,N}) where {T,N} = N
 ndims(::Type{AbstractArray{T,N}}) where {T,N} = N
 ndims(::Type{T}) where {T<:AbstractArray} = ndims(supertype(T))
 
-"""
-    length(A::AbstractArray) -> Integer
-
-Returns the number of elements in `A`.
-
-```jldoctest
-julia> A = ones(3,4,5);
-
-julia> length(A)
-60
-```
-"""
 length(t::AbstractArray) = (@_inline_meta; prod(size(t)))
 _length(A::AbstractArray) = (@_inline_meta; prod(map(unsafe_length, indices(A)))) # circumvent missing size
 _length(A) = (@_inline_meta; length(A))

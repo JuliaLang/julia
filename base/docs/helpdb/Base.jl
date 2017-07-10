@@ -1767,16 +1767,19 @@ deserialize
 """
     length(collection) -> Integer
 
-For ordered, indexable collections, returns the maximum index `i` for which `getindex(collection, i)`
-is valid.
-For unordered collections, returns the number of elements.
+Return the number of elements in the collection.
+
+Use [`endof`](@ref) to get the last valid index of an indexable collection.
 
 # Examples
 ```jldoctest
 julia> length(1:5)
 5
 
-julia> length([1; 2; 3; 4])
+julia> length([1, 2, 3, 4])
+4
+
+julia> length([1 2; 3 4])
 4
 ```
 """
