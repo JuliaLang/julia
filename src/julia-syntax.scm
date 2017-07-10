@@ -543,9 +543,10 @@
                                            (list `(... ,(arg-name (car vararg))))))
                               ;; otherwise add to rest keywords
                               `(foreigncall 'jl_array_ptr_1d_push (core Void) (call (core svec) Any Any)
-                                            ,rkw 0 (tuple ,elt
-                                                          (call (core arrayref) ,kw
-                                                                (call (top +) ,ii 1))) 0))
+                                            'ccall 2
+                                            ,rkw (tuple ,elt
+                                                        (call (core arrayref) ,kw
+                                                              (call (top +) ,ii 1)))))
                           (map list vars vals flags))))
             ;; set keywords that weren't present to their default values
             ,@(apply append
@@ -963,29 +964,31 @@
   (let loop ((F atypes)  ;; formals
              (A args)    ;; actuals
              (stmts '()) ;; initializers
-             (C '()))    ;; converted
+             (C '())     ;; converted
+             (GC '()))   ;; GC roots
     (if (and (null? F) (not (null? A))) (error "more arguments than types for ccall"))
     (if (and (null? A) (not (or (null? F) (and (pair? F) (vararg? (car F)) (null? (cdr F)))))) (error "more types than arguments for ccall"))
     (if (null? A)
         `(block
           ,.(reverse! stmts)
           (foreigncall ,name ,RT (call (core svec) ,@(dots->vararg atypes))
-                ,.(reverse! C)
-                ,@A
-                ,@cconv))
+                       ',cconv
+                       ,(length C)
+                       ,.(reverse! C)
+                       ,@GC)) ; GC root ordering is arbitrary
         (let* ((a     (car A))
                (isseq (and (vararg? (car F))))
                (ty    (if isseq (cadar F) (car F))))
           (if (and isseq (not (null? (cdr F)))) (error "only the trailing ccall argument type should have '...'"))
           (if (eq? ty 'Any)
-              (loop (if isseq F (cdr F)) (cdr A) stmts (list* 0 a C))
+              (loop (if isseq F (cdr F)) (cdr A) stmts (list* a C) GC)
               (let* ((g (make-ssavalue))
                      (isamp (and (pair? a) (eq? (car a) '&)))
                      (a (if isamp (cadr a) a))
                      (stmts (cons `(= ,g (call (top ,(if isamp 'ptr_arg_cconvert 'cconvert)) ,ty ,a)) stmts))
                      (ca `(call (top ,(if isamp 'ptr_arg_unsafe_convert 'unsafe_convert)) ,ty ,g)))
                 (loop (if isseq F (cdr F)) (cdr A) stmts
-                      (list* g (if isamp `(& ,ca) ca) C))))))))
+                      (list* (if isamp `(& ,ca) ca) C) (list* g GC))))))))
 
 (define (expand-function-def e)   ;; handle function or stagedfunction
   (define (just-arglist? ex)
@@ -1289,7 +1292,8 @@
                         (= ,err true)))
                   (= ,finally-exception (the_exception))
                   ,finalb
-                  (if ,err (foreigncall 'jl_rethrow_other (core Void) (call (core svec) Any) ,finally-exception 0))
+                  (if ,err (foreigncall 'jl_rethrow_other (core Void) (call (core svec) Any)
+                                        'ccall 1 ,finally-exception))
                   ,(if hasret
                        (if ret
                            `(if ,ret (return ,retval) ,val)
@@ -1519,9 +1523,10 @@
                              (loop (cdr kw) (list* (caddr arg) `(quote ,(cadr arg)) initial-kw) stmts #t)
                              (loop (cdr kw) initial-kw
                                    (cons `(foreigncall 'jl_array_ptr_1d_push2 (core Void) (call (core svec) Any Any Any)
-                                                       ,container 0
-                                                       (|::| (quote ,(cadr arg)) (core Symbol)) 0
-                                                       ,(caddr arg) 0)
+                                                       'ccall 3
+                                                       ,container
+                                                       (|::| (quote ,(cadr arg)) (core Symbol))
+                                                       ,(caddr arg))
                                          stmts)
                                    #t)))
                         (else
@@ -1529,9 +1534,10 @@
                                (cons (let* ((k (make-ssavalue))
                                             (v (make-ssavalue))
                                             (push-expr `(foreigncall 'jl_array_ptr_1d_push2 (core Void) (call (core svec) Any Any Any)
-                                                                     ,container 0
-                                                                     (|::| ,k (core Symbol)) 0
-                                                                     ,v 0)))
+                                                                     'ccall 3
+                                                                     ,container
+                                                                     (|::| ,k (core Symbol))
+                                                                     ,v)))
                                        (if (vararg? arg)
                                            `(for (= (tuple ,k ,v) ,(cadr arg))
                                                  ,push-expr)
@@ -2111,7 +2117,7 @@
                                   (error "ccall argument types must be a tuple; try \"(T,)\"")))
                           (expand-forms
                            (lower-ccall name RT (cdr argtypes) args
-                            (if have-cconv (list (list cconv)) '()))))))
+                                        (if have-cconv cconv 'ccall))))))
                  ((and (pair? (caddr e))
                        (eq? (car (caddr e)) 'parameters))
                   ;; (call f (parameters . kwargs) ...)
@@ -3408,13 +3414,13 @@ f(x) = yt(x)
           (case (car e)
             ((call new foreigncall)
              (let* ((args (if (eq? (car e) 'foreigncall)
-                              ;; NOTE: 2nd and 3rd arguments of ccall must be left in place
+                              ;; NOTE: 2nd to 5th arguments of ccall must be left in place
                               ;;       the 1st should be compiled if an atom.
                               (append (list)
                                       (cond (atom? (cadr e) (compile-args (list (cadr e)) break-labels linearize-args))
                                             (else (cadr e)))
-                                      (list-head (cddr e) 2)
-                                      (compile-args (list-tail e 4) break-labels linearize-args))
+                                      (list-head (cddr e) 4)
+                                      (compile-args (list-tail e 6) break-labels linearize-args))
                               (compile-args (cdr e) break-labels linearize-args)))
                     (callex (cons (car e) args)))
                (cond (tail (emit-return callex))

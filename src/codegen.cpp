@@ -2129,10 +2129,10 @@ static void simple_escape_analysis(jl_codectx_t &ctx, jl_value_t *expr, bool esc
         }
         else if (e->head == foreigncall_sym) {
             simple_escape_analysis(ctx, jl_exprarg(e, 0), esc);
-            // 2nd and 3d arguments are static
-            size_t alen = jl_array_dim0(e->args);
-            for (i = 3; i < alen; i += 2) {
-                simple_escape_analysis(ctx, jl_exprarg(e, i), esc);
+            // 2nd to 5th arguments are static
+            size_t nccallargs = jl_unbox_long(jl_exprarg(e, 4));
+            for (i = 0; i < nccallargs; i++) {
+                simple_escape_analysis(ctx, jl_exprarg(e, i + 5), esc);
             }
         }
         else if (e->head == method_sym) {

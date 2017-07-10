@@ -3687,6 +3687,10 @@ function substitute!(@nospecialize(e), na::Int, argexprs::Vector{Any}, @nospecia
                         for argt
                         in e.args[3] ]
                     e.args[3] = svec(argtuple...)
+                elseif i == 4
+                    @assert isa((e.args[4]::QuoteNode).value, Symbol)
+                elseif i == 5
+                    @assert isa(e.args[5], Int)
                 else
                     e.args[i] = substitute!(e.args[i], na, argexprs, spsig, spvals, offset)
                 end
@@ -4766,8 +4770,8 @@ function inlining_pass(e::Expr, sv::InferenceState, stmts, ins)
     # by the interpreter and inlining might put in something it can't handle,
     # like another ccall (or try to move the variables out into the function)
     if e.head === :foreigncall
-        # 3 is rewritten to 1 below to handle the callee.
-        i0 = 3
+        # 5 is rewritten to 1 below to handle the callee.
+        i0 = 5
         isccall = true
     elseif is_known_call(e, Core.Intrinsics.llvmcall, sv.src, sv.mod)
         i0 = 5
@@ -4775,7 +4779,7 @@ function inlining_pass(e::Expr, sv::InferenceState, stmts, ins)
     has_stmts = false # needed to preserve order-of-execution
     prev_stmts_length = length(stmts)
     for _i = length(eargs):-1:i0
-        if isccall && _i == 3
+        if isccall && _i == 5
             i = 1
             isccallee = true
         else
@@ -4830,10 +4834,21 @@ function inlining_pass(e::Expr, sv::InferenceState, stmts, ins)
     end
     if isccall
         le = length(eargs)
-        for i = 4:2:(le - 1)
-            if eargs[i] === eargs[i + 1]
-                eargs[i + 1] = 0
+        nccallargs = eargs[5]::Int
+        ccallargs = ObjectIdDict()
+        for i in 6:(5 + nccallargs)
+            ccallargs[eargs[i]] = nothing
+        end
+        i = 6 + nccallargs
+        while i <= le
+            rootarg = eargs[i]
+            if haskey(ccallargs, rootarg)
+                deleteat!(eargs, i)
+                le -= 1
+            elseif i < le
+                ccallargs[rootarg] = nothing
             end
+            i += 1
         end
     end
     if e.head !== :call
