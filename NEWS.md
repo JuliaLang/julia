@@ -120,6 +120,9 @@ This section lists changes that do not have deprecation warnings.
     `Bidiagonal{T,V<:AbstractVector{T}}` and `SymTridiagonal{T,V<:AbstractVector{T}}`
     respectively ([#22718], [#22925], [#23035]).
 
+  * `isapprox(x,y)` now tests `norm(x-y) <= max(atol, rtol*max(norm(x), norm(y)))`
+    rather than `norm(x-y) <= atol + ...` ([#22742]).
+
   * Spaces are no longer allowed between `@` and the name of a macro in a macro call ([#22868]).
 
   * Juxtaposition of a non-literal with a macro call (`x@macro`) is no longer valid syntax ([#22868]).
@@ -175,9 +178,6 @@ Library improvements
 
   * `@test isequal(x, y)` and `@test isapprox(x, y)` now prints an evaluated expression when
     the test fails ([#22296]).
-
-  * `isapprox(x,y)` now tests `norm(x-y) <= max(atol, rtol*max(norm(x), norm(y)))`
-    rather than `norm(x-y) <= atol + ...`.
 
   * Uses of `Val{c}` in `Base` has been replaced with `Val{c}()`, which is now easily
     accessible via the `@pure` constructor `Val(c)`. Functions are defined as
