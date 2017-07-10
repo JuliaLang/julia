@@ -16,7 +16,7 @@ let a=[1.0:n;]
 
    for isupper in (true, false)
        debug && println("isupper is $(isupper)")
-       A=Bidiagonal(a, [1.0:n-1;], isupper)
+       A=Bidiagonal(a, [1.0:n-1;], ifelse(isupper, :U, :L))
        for newtype in [Bidiagonal, Tridiagonal, Matrix]
            debug && println("newtype is $(newtype)")
            @test full(convert(newtype, A)) == full(A)
@@ -26,7 +26,7 @@ let a=[1.0:n;]
        tritype = isupper ? UpperTriangular : LowerTriangular
        @test full(tritype(A)) == full(A)
 
-       A=Bidiagonal(a, zeros(n-1), isupper) #morally Diagonal
+       A=Bidiagonal(a, zeros(n-1), ifelse(isupper, :U, :L)) #morally Diagonal
        for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Tridiagonal, Matrix]
            debug && println("newtype is $(newtype)")
            @test full(convert(newtype, A)) == full(A)
@@ -129,7 +129,7 @@ end
 let N = 4
     # Test concatenating pairwise combinations of special matrices
     diagmat = Diagonal(ones(N))
-    bidiagmat = Bidiagonal(ones(N), ones(N-1), true)
+    bidiagmat = Bidiagonal(ones(N), ones(N-1), :U)
     tridiagmat = Tridiagonal(ones(N-1), ones(N), ones(N-1))
     symtridiagmat = SymTridiagonal(ones(N), ones(N-1))
     specialmats = (diagmat, bidiagmat, tridiagmat, symtridiagmat)
@@ -182,7 +182,7 @@ let
     spvec = spzeros(N)
     spmat = speye(N)
     diagmat = Diagonal(ones(N))
-    bidiagmat = Bidiagonal(ones(N), ones(N-1), true)
+    bidiagmat = Bidiagonal(ones(N), ones(N-1), :U)
     tridiagmat = Tridiagonal(ones(N-1), ones(N), ones(N-1))
     symtridiagmat = SymTridiagonal(ones(N), ones(N-1))
     sparseconcatmats = testfull ? (spmat, diagmat, bidiagmat, tridiagmat, symtridiagmat) : (spmat, diagmat)

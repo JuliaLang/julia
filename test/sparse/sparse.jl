@@ -1192,10 +1192,10 @@ end
     T = SymTridiagonal(randn(5),rand(4))
     S = sparse(T)
     @test norm(Array(T) - Array(S)) == 0.0
-    B = Bidiagonal(randn(5),randn(4),true)
+    B = Bidiagonal(randn(5),randn(4),:U)
     S = sparse(B)
     @test norm(Array(B) - Array(S)) == 0.0
-    B = Bidiagonal(randn(5),randn(4),false)
+    B = Bidiagonal(randn(5),randn(4),:L)
     S = sparse(B)
     @test norm(Array(B) - Array(S)) == 0.0
 end
