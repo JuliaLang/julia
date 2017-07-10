@@ -160,6 +160,7 @@ abstract type Unsigned <: Integer end
 primitive type Float16 <: AbstractFloat 16 end
 primitive type Float32 <: AbstractFloat 32 end
 primitive type Float64 <: AbstractFloat 64 end
+primitive type Float128 <: AbstractFloat 128 16 end
 
 #primitive type Bool <: Integer 8 end
 primitive type Char 32 end

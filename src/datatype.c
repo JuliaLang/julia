@@ -412,14 +412,24 @@ JL_DLLEXPORT jl_datatype_t *jl_new_primitivetype(jl_value_t *name, jl_module_t *
                                                  jl_datatype_t *super,
                                                  jl_svec_t *parameters, size_t nbits)
 {
-    jl_datatype_t *bt = jl_new_datatype((jl_sym_t*)name, module, super, parameters,
-                                        jl_emptysvec, jl_emptysvec, 0, 0, 0);
     uint32_t nbytes = (nbits + 7) / 8;
     uint32_t alignm = next_power_of_two(nbytes);
     if (alignm > MAX_ALIGN)
         alignm = MAX_ALIGN;
+
+    return jl_new_primitivetype_aligned(name, module, super, parameters, nbits, alignm);
+}
+
+JL_DLLEXPORT jl_datatype_t *jl_new_primitivetype_aligned(jl_value_t *name, jl_module_t *module,
+                                                         jl_datatype_t *super,
+                                                         jl_svec_t *parameters, size_t nbits,
+                                                         size_t alignment)
+{
+    uint32_t nbytes = (nbits + 7) / 8;
+    jl_datatype_t *bt = jl_new_datatype((jl_sym_t*)name, module, super, parameters,
+                                        jl_emptysvec, jl_emptysvec, 0, 0, 0);
     bt->size = nbytes;
-    bt->layout = jl_get_layout(0, alignm, 0, NULL);
+    bt->layout = jl_get_layout(0, alignment, 0, NULL);
     return bt;
 }
 

@@ -380,7 +380,7 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
         if (inside_typedef)
             jl_error("cannot eval a new bits type definition while defining another type");
         jl_value_t *name = args[0];
-        jl_value_t *super = NULL, *para = NULL, *vnb = NULL, *temp = NULL;
+        jl_value_t *super = NULL, *para = NULL, *vnb = NULL, *temp = NULL, *valign = NULL;
         jl_datatype_t *dt = NULL;
         jl_value_t *w = NULL;
         JL_GC_PUSH4(&para, &super, &temp, &w);
@@ -399,7 +399,13 @@ static jl_value_t *eval(jl_value_t *e, interpreter_state *s)
         if (nb < 1 || nb>=(1<<23) || (nb&7) != 0)
             jl_errorf("invalid number of bits in type %s",
                       jl_symbol_name((jl_sym_t*)name));
-        dt = jl_new_primitivetype(name, modu, NULL, (jl_svec_t*)para, nb);
+        valign = eval(args[4], s);
+        if (jl_is_long(valign)) {
+            ssize_t align = jl_unbox_long(valign);
+            dt = jl_new_primitivetype_aligned(name, modu, NULL, (jl_svec_t*)para, nb, align);
+        } else {
+            dt = jl_new_primitivetype(name, modu, NULL, (jl_svec_t*)para, nb);
+        }
         w = dt->name->wrapper;
         jl_binding_t *b = jl_get_binding_wr(modu, (jl_sym_t*)name);
         temp = b->value;
