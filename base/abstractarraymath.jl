@@ -415,7 +415,7 @@ _reperr(s, n, N) = throw(ArgumentError("number of " * s * " repetitions " *
                 n = inner[i]
                 inner_indices[i] = (1:n) + ((c[i] - 1) * n)
             end
-            R[inner_indices...] = A[c]
+            fill!(view(R, inner_indices...), A[c])
         end
     end
 

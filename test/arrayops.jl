@@ -793,6 +793,11 @@ end
     R = repeat(1:2, inner=(3,), outer=(2,))
     @test R == [1, 1, 1, 2, 2, 2, 1, 1, 1, 2, 2, 2]
 
+    # Arrays of arrays
+    @test repeat([[1], [2]], inner=2) == [[1], [1], [2], [2]]
+    @test repeat([[1], [2]], outer=2) == [[1], [2], [1], [2]]
+    @test repeat([[1], [2]], inner=2, outer=2) == [[1], [1], [2], [2], [1], [1], [2], [2]]
+
     @test size(repeat([1], inner=(0,))) == (0,)
     @test size(repeat([1], outer=(0,))) == (0,)
     @test size(repeat([1 1], inner=(0, 1))) == (0, 2)
