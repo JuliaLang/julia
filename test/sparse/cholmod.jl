@@ -102,7 +102,7 @@ A = CHOLMOD.Sparse(48, 48,
 B = A * ones(size(A,2))
 chma = ldltfact(A)                      # LDL' form
 @test CHOLMOD.isvalid(chma)
-@test unsafe_load(chma.p).is_ll == 0    # check that it is in fact an LDLt
+@test unsafe_load(pointer(chma)).is_ll == 0    # check that it is in fact an LDLt
 x = chma\B
 @test x ≈ ones(size(x))
 @test nnz(ldltfact(A, perm=1:size(A,1))) > nnz(chma)
@@ -113,7 +113,7 @@ chmal = CHOLMOD.FactorComponent(chma, :L)
 
 chma = cholfact(A)                      # LL' form
 @test CHOLMOD.isvalid(chma)
-@test unsafe_load(chma.p).is_ll == 1    # check that it is in fact an LLt
+@test unsafe_load(pointer(chma)).is_ll == 1    # check that it is in fact an LLt
 x = chma\B
 @test x ≈ ones(size(x))
 @test nnz(chma) == 489
@@ -279,7 +279,7 @@ for elty in (Float64, Complex{Float64})
     @test CHOLMOD.check_dense(bDense)
 
     AA = CHOLMOD.eye(3)
-    unsafe_store!(convert(Ptr{Csize_t}, AA.p), 2, 1) # change size, but not stride, of Dense
+    unsafe_store!(convert(Ptr{Csize_t}, pointer(AA)), 2, 1) # change size, but not stride, of Dense
     @test convert(Matrix, AA) == eye(2, 3)
 end
 
@@ -409,7 +409,7 @@ for elty in (Float64, Complex{Float64})
     ### cholfact!/ldltfact!
     F = cholfact(A1pd)
     CHOLMOD.change_factor!(elty, false, false, true, true, F)
-    @test unsafe_load(F.p).is_ll == 0
+    @test unsafe_load(pointer(F)).is_ll == 0
     CHOLMOD.change_factor!(elty, true, false, true, true, F)
     @test CHOLMOD.Sparse(cholfact!(copy(F), A1pd)) ≈ CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
     @test size(F, 2) == 5
@@ -656,7 +656,7 @@ let m = 400, n = 500
     M = [speye(n) A'; A -speye(m)]
     b = M*ones(m + n)
     F = ldltfact(M)
-    s = unsafe_load(get(F.p))
+    s = unsafe_load(pointer(F))
     @test s.is_super == 0
     @test F\b ≈ ones(m + n)
 end
@@ -682,7 +682,7 @@ let A = sprandn(10, 10, 0.1)
     # Change internal representation to symmetric (upper/lower)
     o = fieldoffset(CHOLMOD.C_Sparse{eltype(C)}, find(fieldnames(CHOLMOD.C_Sparse{eltype(C)}) .== :stype)[1])
     for uplo in (1, -1)
-        unsafe_store!(Ptr{Int8}(C.p), uplo, Int(o) + 1)
+        unsafe_store!(Ptr{Int8}(pointer(C)), uplo, Int(o) + 1)
         @test convert(Symmetric{Float64,SparseMatrixCSC{Float64,Int}}, C) == Symmetric(A'A)
     end
 end

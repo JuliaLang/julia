@@ -10,7 +10,7 @@ import Base.Broadcast: _containertype, promote_containertype,
 
 using Base: front, tail, to_shape
 using ..SparseArrays: SparseVector, SparseMatrixCSC, AbstractSparseVector,
-                      AbstractSparseMatrix, AbstractSparseArray, indtype
+                      AbstractSparseMatrix, AbstractSparseArray, indtype, nnz, nzrange
 
 # This module is organized as follows:
 # (1) Define a common interface to SparseVectors and SparseMatrixCSCs sufficient for
