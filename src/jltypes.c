@@ -1017,7 +1017,6 @@ static jl_value_t *normalize_vararg(jl_value_t *va)
 static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value_t **iparams, size_t ntp,
                                        int cacheable, jl_typestack_t *stack, jl_typeenv_t *env)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
     jl_typestack_t top;
     jl_typename_t *tn = dt->name;
     int istuple = (tn == jl_tuple_typename);
@@ -1165,16 +1164,6 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
         jl_gc_wb(ndt, ndt->super);
     }
     jl_svec_t *ftypes = dt->types;
-    if (!istuple && ndt->name->names == jl_emptysvec) {
-        assert(ftypes == NULL || ftypes == jl_emptysvec);
-        ndt->size = dt->size;
-        ndt->layout = dt->layout;
-        ndt->types = jl_emptysvec;
-        if (jl_is_datatype_make_singleton(ndt)) {
-            ndt->instance = jl_gc_alloc(ptls, 0, ndt);
-            jl_gc_wb(ndt, ndt->instance);
-        }
-    }
     if (ftypes == NULL || dt->super == NULL) {
         // in the process of creating this type definition:
         // need to instantiate the super and types fields later
@@ -1182,25 +1171,22 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
         arraylist_push(&partial_inst, ndt);
     }
     else {
-        if (ftypes != jl_emptysvec) {
-            assert(!ndt->abstract);
-            if (!istuple) {
-                // recursively instantiate the types of the fields
-                ndt->types = inst_all(ftypes, env, stack, 1);
-                jl_gc_wb(ndt, ndt->types);
-            }
-            if (cacheable) {
-                jl_compute_field_offsets(ndt);
-                if (jl_is_datatype_make_singleton(ndt)) {
-                    ndt->instance = jl_gc_alloc(ptls, 0, ndt);
-                    jl_gc_wb(ndt, ndt->instance);
-                }
-            }
-        }
-        else {
-            assert(ndt->name->names == jl_emptysvec);
+        assert(ftypes != jl_emptysvec || jl_field_names(ndt) == jl_emptysvec);
+        assert(ftypes == jl_emptysvec || !ndt->abstract);
+        if (!istuple) {
+            // recursively instantiate the types of the fields
+            ndt->types = inst_all(ftypes, env, stack, 1);
+            jl_gc_wb(ndt, ndt->types);
         }
     }
+    if (jl_is_primitivetype(dt)) {
+        ndt->size = dt->size;
+        ndt->layout = dt->layout;
+    }
+    else if (cacheable && ndt->types != NULL && !ndt->abstract) {
+        jl_compute_field_offsets(ndt);
+    }
+
     if (istuple)
         ndt->ninitialized = ntp - isvatuple;
     else
@@ -1486,7 +1472,6 @@ jl_value_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n)
 
 void jl_reinstantiate_inner_types(jl_datatype_t *t) // can throw!
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
     inside_typedef = 0;
     assert(jl_is_datatype(t));
     jl_typestack_t top;
@@ -1514,7 +1499,7 @@ void jl_reinstantiate_inner_types(jl_datatype_t *t) // can throw!
         jl_gc_wb(ndt, ndt->super);
     }
 
-    if (t->name->names != jl_emptysvec) {
+    if (t->types != jl_emptysvec) {
         for (j = 0; j < partial_inst.len; j++) {
             jl_datatype_t *ndt = (jl_datatype_t*)partial_inst.items[j];
             for (i = 0; i < n; i++)
@@ -1529,15 +1514,11 @@ void jl_reinstantiate_inner_types(jl_datatype_t *t) // can throw!
             }
             if (ndt->uid) { // cacheable
                 jl_compute_field_offsets(ndt);
-                if (jl_is_datatype_make_singleton(ndt)) {
-                    ndt->instance = jl_gc_alloc(ptls, 0, ndt);
-                    jl_gc_wb(ndt, ndt->instance);
-                }
             }
         }
     }
     else {
-        assert(t->types == jl_emptysvec);
+        assert(jl_field_names(t) == jl_emptysvec);
     }
     partial_inst.len = 0;
 }
@@ -1740,6 +1721,7 @@ void jl_init_types(void)
     jl_anytuple_type->parameters = jl_svec(1, jl_wrap_vararg((jl_value_t*)jl_any_type, (jl_value_t*)NULL));
     jl_anytuple_type->types = jl_anytuple_type->parameters;
     jl_anytuple_type->layout = NULL;
+    jl_anytuple_type->instance = NULL;
     jl_anytuple_type->hasfreetypevars = 0;
     jl_anytuple_type->isleaftype = 0;
 
@@ -2053,6 +2035,7 @@ void jl_init_types(void)
     jl_abstractstring_type = jl_new_abstracttype((jl_value_t*)jl_symbol("AbstractString"), core, jl_any_type, jl_emptysvec);
     jl_string_type = jl_new_datatype(jl_symbol("String"), core, jl_abstractstring_type, jl_emptysvec,
                                      jl_emptysvec, jl_emptysvec, 0, 1, 0);
+    jl_string_type->instance = NULL;
     jl_compute_field_offsets(jl_string_type);
 
     // complete builtin type metadata

@@ -53,7 +53,7 @@ end
 
 function deepcopy_internal(x::ANY, stackdict::ObjectIdDict)
     T = typeof(x)::DataType
-    nf = nfields(T)
+    nf = nfields(x)
     (isbits(T) || nf == 0) && return x
     if haskey(stackdict, x)
         return stackdict[x]

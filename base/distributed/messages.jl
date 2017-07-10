@@ -95,7 +95,7 @@ let msg_cases = :(assert(false))
     for i = length(msgtypes):-1:1
         mti = msgtypes[i]
         msg_cases = :(if idx == $i
-                          return $(Expr(:call, QuoteNode(mti), fill(:(deserialize(s)), nfields(mti))...))
+                          return $(Expr(:call, QuoteNode(mti), fill(:(deserialize(s)), fieldcount(mti))...))
                       else
                           $msg_cases
                       end)

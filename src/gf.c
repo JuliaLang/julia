@@ -2120,8 +2120,8 @@ jl_function_t *jl_new_generic_function_with_supertype(jl_sym_t *name, jl_module_
 
 JL_DLLEXPORT jl_function_t *jl_get_kwsorter(jl_value_t *ty)
 {
-    jl_datatype_t *dt = jl_argument_datatype(ty);
-    if (dt == NULL)
+    jl_datatype_t *dt = (jl_datatype_t*)jl_argument_datatype(ty);
+    if ((jl_value_t*)dt == jl_nothing)
         jl_error("cannot get keyword sorter for abstract type");
     jl_typename_t *tn = dt->name;
     jl_methtable_t *mt = tn->mt;

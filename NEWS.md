@@ -151,6 +151,12 @@ Deprecated or removed
   * `Bidiagonal` constructors now use a `Symbol` (`:U` or `:L`) for the upper/lower
     argument, instead of a `Bool` or a `Char` ([#22703]).
 
+  * Calling `nfields` on a type to find out how many fields its instances have is deprecated.
+    Use `fieldcount` instead. Use `nfields` only to get the number of fields in a specific object ([#22350]).
+
+  * `fieldnames` now operates only on types. To get the names of fields in an object, use
+    `fieldnames(typeof(x))` ([#22350]).
+
 
 Julia v0.6.0 Release Notes
 ==========================

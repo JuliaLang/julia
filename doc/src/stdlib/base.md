@@ -257,6 +257,7 @@ Base.names
 Core.nfields
 Base.fieldnames
 Base.fieldname
+Base.fieldcount
 Base.datatype_module
 Base.datatype_name
 Base.isconst

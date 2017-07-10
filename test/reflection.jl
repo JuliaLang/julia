@@ -293,8 +293,8 @@ mutable struct TLayout
     z::Int32
 end
 tlayout = TLayout(5,7,11)
-@test fieldnames(tlayout) == fieldnames(TLayout) == [:x, :y, :z]
-@test [(fieldoffset(TLayout,i), fieldname(TLayout,i), fieldtype(TLayout,i)) for i = 1:nfields(TLayout)] ==
+@test fieldnames(TLayout) == [:x, :y, :z]
+@test [(fieldoffset(TLayout,i), fieldname(TLayout,i), fieldtype(TLayout,i)) for i = 1:fieldcount(TLayout)] ==
     [(0, :x, Int8), (2, :y, Int16), (4, :z, Int32)]
 @test_throws BoundsError fieldtype(TLayout, 0)
 @test_throws BoundsError fieldname(TLayout, 0)
@@ -307,7 +307,7 @@ tlayout = TLayout(5,7,11)
 @test fieldtype(Tuple{Vararg{Int8}}, 10) === Int8
 @test_throws BoundsError fieldtype(Tuple{Vararg{Int8}}, 0)
 
-@test fieldnames((1,2,3)) == fieldnames(NTuple{3, Int}) == [fieldname(NTuple{3, Int}, i) for i = 1:3] == [1, 2, 3]
+@test fieldnames(NTuple{3, Int}) == [fieldname(NTuple{3, Int}, i) for i = 1:3] == [1, 2, 3]
 @test_throws BoundsError fieldname(NTuple{3, Int}, 0)
 @test_throws BoundsError fieldname(NTuple{3, Int}, 4)
 
@@ -649,3 +649,44 @@ struct B20086{T,N} <: A20086{T,N} end
 @test subtypes(A20086{Int}) == [B20086{Int}]
 @test subtypes(A20086{T,3} where T) == [B20086{T,3} where T]
 @test subtypes(A20086{Int,3}) == [B20086{Int,3}]
+
+# sizeof and nfields
+@test sizeof(Int16) == 2
+@test sizeof(Complex128) == 16
+primitive type ParameterizedByte__{A,B} 8 end
+@test sizeof(ParameterizedByte__) == 1
+@test sizeof(nothing) == 0
+@test sizeof(()) == 0
+struct TypeWithIrrelevantParameter{T}
+    x::Int32
+end
+@test sizeof(TypeWithIrrelevantParameter) == sizeof(Int32)
+@test sizeof(TypeWithIrrelevantParameter{Int8}) == sizeof(Int32)
+@test sizeof(:abc) == 3
+@test sizeof(Symbol("")) == 0
+@test_throws(ErrorException("argument is an abstract type; size is indeterminate"),
+             sizeof(Real))
+@test_throws ErrorException sizeof(Union{Complex64,Complex128})
+@test_throws ErrorException sizeof(Union{Int8,UInt8})
+@test_throws ErrorException sizeof(AbstractArray)
+@test_throws ErrorException sizeof(Tuple)
+@test_throws ErrorException sizeof(Tuple{Any,Any})
+@test_throws ErrorException sizeof(String)
+@test_throws ErrorException sizeof(Vector{Int})
+@test_throws ErrorException sizeof(Symbol)
+@test_throws ErrorException sizeof(SimpleVector)
+
+@test nfields((1,2)) == 2
+@test nfields(()) == 0
+@test nfields(nothing) == fieldcount(Void) == 0
+@test nfields(1) == 0
+@test fieldcount(Union{}) == 0
+@test fieldcount(Tuple{Any,Any,T} where T) == 3
+@test fieldcount(Complex) == fieldcount(Complex64) == 2
+@test fieldcount(Union{Complex64,Complex128}) == 2
+@test fieldcount(Int) == 0
+@test_throws(ErrorException("type does not have a definite number of fields"),
+             fieldcount(Union{Complex,Pair}))
+@test_throws ErrorException fieldcount(Real)
+@test_throws ErrorException fieldcount(AbstractArray)
+@test_throws ErrorException fieldcount(Tuple{Any,Vararg{Any}})

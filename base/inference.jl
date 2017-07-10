@@ -597,7 +597,7 @@ function isdefined_tfunc(args...)
             end
             if 1 <= idx <= a1.ninitialized
                 return Const(true)
-            elseif idx <= 0 || (idx > nfields(a1) && !isvatuple(a1))
+            elseif idx <= 0 || (!isvatuple(a1) && idx > fieldcount(a1))
                 return Const(false)
             end
         end
@@ -617,16 +617,18 @@ add_tfunc(Core.sizeof, 1, 1,
           function (x::ANY)
               isa(x, Const) && return _const_sizeof(x.val)
               isa(x, Conditional) && return _const_sizeof(Bool)
-              isType(x) && return _const_sizeof(x.parameters[1])
+              isconstType(x) && return _const_sizeof(x.parameters[1])
               x !== DataType && isleaftype(x) && return _const_sizeof(x)
               return Int
           end, 0)
+old_nfields(x::ANY) = length((isa(x,DataType) ? x : typeof(x)).types)
 add_tfunc(nfields, 1, 1,
     function (x::ANY)
-        isa(x,Const) && return Const(nfields(x.val))
-        isa(x,Conditional) && return Const(nfields(Bool))
+        isa(x,Const) && return Const(old_nfields(x.val))
+        isa(x,Conditional) && return Const(old_nfields(Bool))
         if isType(x)
-            isleaftype(x.parameters[1]) && return Const(nfields(x.parameters[1]))
+            # TODO: remove with deprecation in builtins.c for nfields(::Type)
+            isleaftype(x.parameters[1]) && return Const(old_nfields(x.parameters[1]))
         elseif isa(x,DataType) && !x.abstract && !(x.name === Tuple.name && isvatuple(x)) && x !== DataType
             return Const(length(x.types))
         end
@@ -5598,8 +5600,8 @@ function is_allocation(e::ANY, sv::InferenceState)
         if isa(typ, DataType) && isleaftype(typ)
             nf = length(e.args) - 1
             names = fieldnames(typ)
-            @assert(nf <= nfields(typ))
-            if nf < nfields(typ)
+            @assert(nf <= length(names))
+            if nf < length(names)
                 # some fields were left undef
                 # we could potentially propagate Bottom
                 # for pointer fields

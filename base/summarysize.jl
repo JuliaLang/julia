@@ -8,6 +8,7 @@ struct SummarySize
     chargeall::Any
 end
 
+_nfields(x::ANY) = length(typeof(x).types)
 
 """
     Base.summarysize(obj; exclude=Union{...}, chargeall=Union{...}) -> Int
@@ -41,7 +42,7 @@ function summarysize(obj::ANY;
                 val = x[i]
             end
         else
-            nf = nfields(x)
+            nf = _nfields(x)
             ft = typeof(x).types
             if !isbits(ft[i]) && isdefined(x, i)
                 val = getfield(x, i)
@@ -65,11 +66,11 @@ end
 @noinline function _summarysize(ss::SummarySize, obj::ANY)
     key = pointer_from_objref(obj)
     haskey(ss.seen, key) ? (return 0) : (ss.seen[key] = true)
-    if nfields(obj) > 0
+    if _nfields(obj) > 0
         push!(ss.frontier_x, obj)
         push!(ss.frontier_i, 1)
     end
-    if isa(obj, UnionAll)
+    if isa(obj, UnionAll) || isa(obj, Union)
         # black-list of items that don't have a Core.sizeof
         return 2 * sizeof(Int)
     end
@@ -84,7 +85,7 @@ function (ss::SummarySize)(obj::DataType)
     key = pointer_from_objref(obj)
     haskey(ss.seen, key) ? (return 0) : (ss.seen[key] = true)
     size::Int = 7 * Core.sizeof(Int) + 6 * Core.sizeof(Int32)
-    size += 4 * nfields(obj) + ifelse(Sys.WORD_SIZE == 64, 4, 0)
+    size += 4 * _nfields(obj) + ifelse(Sys.WORD_SIZE == 64, 4, 0)
     size += ss(obj.parameters)::Int
     size += ss(obj.types)::Int
     return size

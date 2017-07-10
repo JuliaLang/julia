@@ -608,7 +608,7 @@ function serialize_any(s::AbstractSerializer, x::ANY)
         return write_as_tag(s.io, tag)
     end
     t = typeof(x)::DataType
-    nf = nfields(t)
+    nf = nfields(x)
     if nf == 0 && t.size > 0
         serialize_type(s, t)
         write(s.io, x)
@@ -721,7 +721,7 @@ function handle_deserialize(s::AbstractSerializer, b::Int32)
         return deserialize_symbol(s, Int(read(s.io, Int32)::Int32))
     end
     t = desertag(b)
-    if t.mutable && nfields(t) > 0
+    if t.mutable && length(t.types) > 0  # manual specialization of fieldcount
         slot = s.counter; s.counter += 1
         push!(s.pending_refs, slot)
     end
@@ -1050,7 +1050,7 @@ end
 
 # default DataType deserializer
 function deserialize(s::AbstractSerializer, t::DataType)
-    nf = nfields(t)
+    nf = length(t.types)
     if nf == 0 && t.size > 0
         # bits type
         return read(s.io, t)

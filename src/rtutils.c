@@ -559,7 +559,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         jl_sym_t *globname = dv->name->mt != NULL ? dv->name->mt->name : NULL;
         int globfunc = 0;
         if (globname && !strchr(jl_symbol_name(globname), '#') &&
-            !strchr(jl_symbol_name(globname), '@') &&
+            !strchr(jl_symbol_name(globname), '@') && dv->name->module &&
             jl_binding_resolved_p(dv->name->module, globname)) {
             jl_binding_t *b = jl_get_binding(dv->name->module, globname);
             if (b && jl_typeof(b->value) == v)
@@ -874,7 +874,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
                 i = 1;
             for (; i < tlen; i++) {
                 if (!istuple) {
-                    n += jl_printf(out, "%s", jl_symbol_name((jl_sym_t*)jl_svecref(vt->name->names, i)));
+                    n += jl_printf(out, "%s", jl_symbol_name(jl_field_name(vt, i)));
                     n += jl_printf(out, "=");
                 }
                 size_t offs = jl_field_offset(vt, i);
