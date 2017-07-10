@@ -7,12 +7,17 @@ Core.AbstractArray
 Base.AbstractVector
 Base.AbstractMatrix
 Core.Array
+Core.Array(::Any)
 Base.Vector
+Base.Vector(::Any)
 Base.Matrix
+Base.Matrix(::Any, ::Any)
 Base.getindex(::Type, ::Any...)
 Base.zeros
 Base.ones
 Base.BitArray
+Base.BitArray(::Integer...)
+Base.BitArray(::Any)
 Base.trues
 Base.falses
 Base.fill
@@ -165,8 +170,8 @@ Base.reverse!
 
 ## BitArrays
 
-`BitArray`s are space-efficient "packed" boolean arrays, which store one bit per boolean value.
- They can be used similarly to `Array{Bool}` arrays (which store one byte per boolean value),
+[`BitArray`](@ref)s are space-efficient "packed" boolean arrays, which store one bit per boolean value.
+They can be used similarly to `Array{Bool}` arrays (which store one byte per boolean value),
 and can be converted to/from the latter via `Array(bitarray)` and `BitArray(array)`, respectively.
 
 ```@docs

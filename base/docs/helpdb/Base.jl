@@ -2317,3 +2317,60 @@ for bit in (8, 16, 32, 64, 128)
         $(Symbol("UInt", bit))
     end
 end
+
+"""
+    Vector{T}(n)
+
+Construct an uninitialized [`Vector{T}`](@ref) of length `n`.
+
+# Examples
+```julia-repl
+julia> Vector{Float64}(3)
+3-element Array{Float64,1}:
+ 6.90966e-310
+ 6.90966e-310
+ 6.90966e-310
+```
+"""
+Vector{T}(n)
+
+"""
+    Matrix{T}(m, n)
+
+Construct an uninitialized [`Matrix{T}`](@ref) of size `m`×`n`.
+
+# Examples
+```julia-repl
+julia> Matrix{Float64}(2, 3)
+2×3 Array{Float64,2}:
+ 6.93517e-310  6.93517e-310  6.93517e-310
+ 6.93517e-310  6.93517e-310  1.29396e-320
+```
+"""
+Matrix{T}(m, n)
+
+"""
+    Array{T}(dims)
+    Array{T,N}(dims)
+
+Construct an uninitialized `N`-dimensional [`Array`](@ref)
+containing elements of type `T`. `N` can either be supplied explicitly,
+as in `Array{T,N}(dims)`, or be determined by the length or number of `dims`.
+`dims` may be a tuple or a series of integer arguments corresponding to the lengths
+in each dimension. If the rank `N` is supplied explicitly, then it must
+match the length or number of `dims`.
+
+# Examples
+```julia-repl
+julia> A = Array{Float64,2}(2, 3) # N given explicitly
+2×3 Array{Float64,2}:
+ 6.90198e-310  6.90198e-310  6.90198e-310
+ 6.90198e-310  6.90198e-310  0.0
+
+julia> B = Array{Float64}(2) # N determined by the input
+2-element Array{Float64,1}:
+ 1.87103e-320
+ 0.0
+```
+"""
+Array{T,N}(dims)

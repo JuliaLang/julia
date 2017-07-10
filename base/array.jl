@@ -26,7 +26,14 @@ const DimsOrInds{N} = NTuple{N,DimOrInd}
 const NeedsShaping = Union{Tuple{Integer,Vararg{Integer}}, Tuple{OneTo,Vararg{OneTo}}}
 
 """
-    Vector{T}
+    Array{T,N} <: AbstractArray{T,N}
+
+`N`-dimensional dense array with elements of type `T`.
+"""
+Array
+
+"""
+    Vector{T} <: AbstractVector{T}
 
 One-dimensional dense array with elements of type `T`, often used to represent
 a mathematical vector. Alias for [`Array{T,1}`](@ref).
@@ -34,7 +41,7 @@ a mathematical vector. Alias for [`Array{T,1}`](@ref).
 const Vector{T} = Array{T,1}
 
 """
-    Matrix{T}
+    Matrix{T} <: AbstractMatrix{T}
 
 Two-dimensional dense array with elements of type `T`, often used to represent
 a mathematical matrix. Alias for [`Array{T,2}`](@ref).
@@ -73,29 +80,6 @@ eltype(t::DataType) = eltype(supertype(t))
 eltype(x) = eltype(typeof(x))
 
 import Core: arraysize, arrayset, arrayref
-
-"""
-    Array{T}(dims)
-    Array{T,N}(dims)
-
-Construct an uninitialized `N`-dimensional dense array with element type `T`,
-where `N` is determined from the length or number of `dims`. `dims` may
-be a tuple or a series of integer arguments corresponding to the lengths in each dimension.
-If the rank `N` is supplied explicitly as in `Array{T,N}(dims)`, then it must
-match the length or number of `dims`.
-
-# Examples
-```jldoctest
-julia> A = Array{Float64, 2}(2, 2);
-
-julia> ndims(A)
-2
-
-julia> eltype(A)
-Float64
-```
-"""
-Array
 
 vect() = Array{Any,1}(0)
 vect(X::T...) where {T} = T[ X[i] for i = 1:length(X) ]
