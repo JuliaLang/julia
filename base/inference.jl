@@ -4648,8 +4648,13 @@ function statement_cost(ex::Expr, src::CodeInfo, mod::Module, params::InferenceP
             end
         end
         return plus_saturate(argcost, params.inline_nonleaf_penalty)
-    elseif head == :foreigncall || ex.head == :invoke
-        return plus_saturate(20, argcost)
+    elseif head == :foreigncall || head == :invoke
+        # Calls whose "return type" is Union{} do not actually return:
+        # they are errors. Since these are not part of the typical
+        # run-time of the function, we omit them from
+        # consideration. This way, non-inlined error branches do not
+        # prevent inlining.
+        return ex.typ == Union{} ? 0 : plus_saturate(20, argcost)
     elseif head == :llvmcall
         return plus_saturate(10, argcost) # a wild guess at typical cost
     elseif (head == :&)
