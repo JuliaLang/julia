@@ -1285,3 +1285,21 @@ evalf_callback_c_19805{FUNC_FT}(ci::callinfos_19805{FUNC_FT}) = cfunction(
 
 @test_throws(ErrorException("ccall: the type of argument 1 doesn't correspond to a C type"),
              evalf_callback_c_19805( callinfos_19805(sin) ))
+
+# test Ref{abstract_type} calling parameter passes a heap box
+abstract type Abstract22734 end
+struct Bits22734 <: Abstract22734
+    x::Int
+    y::Float64
+end
+function cb22734(ptr::Ptr{Void})
+    gc()
+    obj = unsafe_pointer_to_objref(ptr)::Bits22734
+    obj.x + obj.y
+end
+ptr22734 = cfunction(cb22734, Float64, Tuple{Ptr{Void}})
+function caller22734(ptr)
+    obj = Bits22734(12, 20)
+    ccall(ptr, Float64, (Ref{Abstract22734},), obj)
+end
+@test caller22734(ptr22734) === 32.0

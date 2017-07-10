@@ -5231,6 +5231,27 @@ function occurs_outside_getfield(@nospecialize(e), @nospecialize(sym),
         if head === :(=)
             return occurs_outside_getfield(e.args[2], sym, sv,
                                            field_count, field_names)
+        elseif head === :foreigncall
+            args = e.args
+            nccallargs = args[5]::Int
+            # Only arguments escape the structure/layout of the object,
+            # GC root arguments do not.
+            # Also note that only being used in the root slot for this ccall itself
+            # does **not** mean that the object is not needed during the ccall.
+            # However, if its address is never taken
+            # and the object is never used in a way that escapes its layout, we can be sure
+            # that there's no way the user code can rely on the heap allocation of this object.
+            for i in 1:length(args)
+                a = args[i]
+                if i > 5 + nccallargs && symequal(a, sym)
+                    # No need to verify indices, uninitialized members can be
+                    # ignored in root slot.
+                    continue
+                end
+                if occurs_outside_getfield(a, sym, sv, field_count, field_names)
+                    return true
+                end
+            end
         else
             if (head === :block && isa(sym, Slot) &&
                 sv.src.slotflags[slot_id(sym)] & Slot_UsedUndef == 0)
@@ -5814,8 +5835,11 @@ end
 function replace_getfield!(e::Expr, tupname, vals, field_names, sv::InferenceState)
     for i = 1:length(e.args)
         a = e.args[i]
-        if isa(a,Expr) && is_known_call(a, getfield, sv.src, sv.mod) &&
-            symequal(a.args[2],tupname)
+        if !isa(a, Expr)
+            continue
+        end
+        a = a::Expr
+        if is_known_call(a, getfield, sv.src, sv.mod) && symequal(a.args[2], tupname)
             idx = if isa(a.args[3], Int)
                 a.args[3]
             else
@@ -5844,8 +5868,23 @@ function replace_getfield!(e::Expr, tupname, vals, field_names, sv::InferenceSta
                 end
             end
             e.args[i] = val
-        elseif isa(a, Expr)
-            replace_getfield!(a::Expr, tupname, vals, field_names, sv)
+        else
+            if a.head === :foreigncall
+                args = a.args
+                nccallargs = args[5]::Int
+                le = length(args)
+                next_i = 6 + nccallargs
+                while next_i <= le
+                    i = next_i
+                    next_i += 1
+
+                    symequal(args[i], tupname) || continue
+                    # Replace the gc root argument with its fields
+                    splice!(args, i, vals)
+                    next_i += length(vals) - 1
+                end
+            end
+            replace_getfield!(a, tupname, vals, field_names, sv)
         end
     end
 end
