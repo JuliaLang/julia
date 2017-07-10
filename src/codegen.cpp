@@ -1301,7 +1301,7 @@ static jl_method_instance_t *jl_get_unspecialized(jl_method_instance_t *method)
 {
     // one unspecialized version of a function can be shared among all cached specializations
     jl_method_t *def = method->def.method;
-    if (def->isstaged) {
+    if (def->source == NULL) {
         return method;
     }
     if (def->unspecialized == NULL) {
@@ -1340,7 +1340,7 @@ jl_generic_fptr_t jl_generate_fptr(jl_method_instance_t *li, void *_F, size_t wo
     }
     jl_method_instance_t *unspec = NULL;
     if (jl_is_method(li->def.method)) {
-        if (!li->def.method->isstaged && li->def.method->unspecialized) {
+        if (li->def.method->unspecialized) {
             unspec = li->def.method->unspecialized;
         }
         if (!F || !jl_can_finalize_function(F)) {
@@ -1349,7 +1349,11 @@ jl_generic_fptr_t jl_generate_fptr(jl_method_instance_t *li, void *_F, size_t wo
             // and return its fptr instead
             if (!unspec)
                 unspec = jl_get_unspecialized(li); // get-or-create the unspecialized version to cache the result
-            jl_code_info_t *src = unspec->def.method->isstaged ? jl_code_for_staged(unspec) : (jl_code_info_t*)unspec->def.method->source;
+            jl_code_info_t *src = (jl_code_info_t*)unspec->def.method->source;
+            if (src == NULL) {
+                assert(unspec->def.method->generator);
+                src = jl_code_for_staged(unspec);
+            }
             fptr.fptr = unspec->fptr;
             fptr.jlcall_api = unspec->jlcall_api;
             if (fptr.fptr && fptr.jlcall_api) {
@@ -1466,7 +1470,8 @@ void jl_extern_c(jl_function_t *f, jl_value_t *rt, jl_value_t *argt, char *name)
 extern "C" JL_DLLEXPORT
 void *jl_get_llvmf_defn(jl_method_instance_t *linfo, size_t world, bool getwrapper, bool optimize, const jl_cgparams_t params)
 {
-    if (jl_is_method(linfo->def.method) && linfo->def.method->source == NULL) {
+    if (jl_is_method(linfo->def.method) && linfo->def.method->source == NULL &&
+        linfo->def.method->generator == NULL) {
         // not a generic function
         return NULL;
     }
@@ -1476,7 +1481,7 @@ void *jl_get_llvmf_defn(jl_method_instance_t *linfo, size_t world, bool getwrapp
     if (!src || (jl_value_t*)src == jl_nothing) {
         src = jl_type_infer(&linfo, world, 0);
         if (!src && jl_is_method(linfo->def.method))
-            src = linfo->def.method->isstaged ? jl_code_for_staged(linfo) : (jl_code_info_t*)linfo->def.method->source;
+            src = linfo->def.method->generator ? jl_code_for_staged(linfo) : (jl_code_info_t*)linfo->def.method->source;
     }
     if ((jl_value_t*)src == jl_nothing)
         src = NULL;
@@ -1546,7 +1551,8 @@ void *jl_get_llvmf_defn(jl_method_instance_t *linfo, size_t world, bool getwrapp
 extern "C" JL_DLLEXPORT
 void *jl_get_llvmf_decl(jl_method_instance_t *linfo, size_t world, bool getwrapper, const jl_cgparams_t params)
 {
-    if (jl_is_method(linfo->def.method) && linfo->def.method->source == NULL) {
+    if (jl_is_method(linfo->def.method) && linfo->def.method->source == NULL &&
+        linfo->def.method->generator == NULL) {
         // not a generic function
         return NULL;
     }
@@ -1563,7 +1569,7 @@ void *jl_get_llvmf_decl(jl_method_instance_t *linfo, size_t world, bool getwrapp
             jl_code_info_t *src = NULL;
             src = jl_type_infer(&linfo, world, 0);
             if (!src) {
-                src = linfo->def.method->isstaged ? jl_code_for_staged(linfo) : (jl_code_info_t*)linfo->def.method->source;
+                src = linfo->def.method->generator ? jl_code_for_staged(linfo) : (jl_code_info_t*)linfo->def.method->source;
             }
             decls = jl_compile_linfo(&linfo, src, world, &params);
             linfo->functionObjectsDecls = decls;

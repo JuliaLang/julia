@@ -580,7 +580,6 @@ static void jl_cacheable_sig(
     int *const need_guard_entries,
     int *const makesimplesig)
 {
-    int8_t isstaged = definition->isstaged;
     assert(jl_is_tuple_type(type));
     size_t i, np = jl_nparams(type);
     for (i = 0; i < np; i++) {
@@ -593,7 +592,7 @@ static void jl_cacheable_sig(
             continue;
         }
 
-        if (isstaged) {
+        if (definition->generator) {
             // staged functions can't be optimized
             continue;
         }
@@ -697,7 +696,7 @@ JL_DLLEXPORT int jl_is_cacheable_sig(
     // compute whether this type signature is a possible return value from jl_cacheable_sig
     //return jl_cacheable_sig(type, NULL, definition->sig, definition, NULL, NULL);
 
-    if (definition->isstaged)
+    if (definition->generator)
         // staged functions can't be optimized
         // so assume the caller was intelligent about calling us
         return 1;
@@ -847,7 +846,7 @@ static jl_method_instance_t *cache_method(jl_methtable_t *mt, union jl_typemap_t
     // in general, here we want to find the biggest type that's not a
     // supertype of any other method signatures. so far we are conservative
     // and the types we find should be bigger.
-    if (!definition->isstaged && jl_nparams(type) > mt->max_args
+    if (definition->generator == NULL && jl_nparams(type) > mt->max_args
         && jl_va_tuple_kind((jl_datatype_t*)decl) == JL_VARARG_UNBOUND) {
         size_t i, nspec = mt->max_args + 2;
         jl_svec_t *limited = jl_alloc_svec(nspec);
@@ -1625,7 +1624,7 @@ jl_llvm_functions_t jl_compile_for_dispatch(jl_method_instance_t **pli, size_t w
         jl_options.compile_enabled == JL_OPTIONS_COMPILE_MIN) {
         // copy fptr from the template method definition
         jl_method_t *def = li->def.method;
-        if (jl_is_method(def) && !def->isstaged && def->unspecialized) {
+        if (jl_is_method(def) && def->unspecialized) {
             if (def->unspecialized->jlcall_api == 2) {
                 li->functionObjectsDecls.functionObject = NULL;
                 li->functionObjectsDecls.specFunctionObject = NULL;

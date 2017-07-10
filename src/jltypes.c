@@ -1938,7 +1938,7 @@ void jl_init_types(void)
     jl_method_type =
         jl_new_datatype(jl_symbol("Method"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(19,
+                        jl_perm_symsvec(18,
                             "name",
                             "module",
                             "file",
@@ -1956,9 +1956,8 @@ void jl_init_types(void)
                             "nargs",
                             "called",
                             "isva",
-                            "isstaged",
                             "pure"),
-                        jl_svec(19,
+                        jl_svec(18,
                             jl_sym_type,
                             jl_module_type,
                             jl_sym_type,
@@ -1975,7 +1974,6 @@ void jl_init_types(void)
                             jl_any_type,
                             jl_int32_type,
                             jl_int32_type,
-                            jl_bool_type,
                             jl_bool_type,
                             jl_bool_type),
                         0, 1, 9);
