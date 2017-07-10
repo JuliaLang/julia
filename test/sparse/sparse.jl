@@ -1843,3 +1843,13 @@ end
     B = A[5:-1:1, 5:-1:1]
     @test issymmetric(B)
 end
+
+@testset "optimizing sparse covariance" begin
+    n = 10000
+    p = 50
+    x_sparse = sprand(n, p, .05)
+    x_dense = convert(Matrix{Float64}, x_sparse)
+    cov1 = cov(x_dense)
+    cov2 = spcov(x_sparse)
+    @test cov1 \approx cov2
+end
