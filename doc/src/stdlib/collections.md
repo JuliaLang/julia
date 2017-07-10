@@ -54,7 +54,6 @@ Fully implemented by:
 Base.isempty
 Base.empty!
 Base.length(::Any)
-Base.endof
 ```
 
 Fully implemented by:
@@ -140,6 +139,7 @@ Base.filter!
 ```@docs
 Base.getindex(::Any, ::Any...)
 Base.setindex!(::Any, ::Any, ::Any...)
+Base.endof
 ```
 
 Fully implemented by:
@@ -148,16 +148,16 @@ Fully implemented by:
   * [`BitArray`](@ref)
   * [`AbstractArray`](@ref)
   * `SubArray`
-  * [`ObjectIdDict`](@ref)
-  * [`Dict`](@ref)
-  * [`WeakKeyDict`](@ref)
-  * `AbstractString`
 
 Partially implemented by:
 
   * `Range`
   * `UnitRange`
   * `Tuple`
+  * `AbstractString`
+  * [`Dict`](@ref)
+  * [`ObjectIdDict`](@ref)
+  * [`WeakKeyDict`](@ref)
 
 ## Associative Collections
 
