@@ -762,9 +762,15 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         if (!jl_is_symbol(qv)) {
             n += jl_printf(out, "quote ");
         }
+        else {
+            n += jl_printf(out, ":(");
+        }
         n += jl_static_show_x(out, qv, depth);
         if (!jl_is_symbol(qv)) {
             n += jl_printf(out, " end");
+        }
+        else {
+            n += jl_printf(out, ")");
         }
     }
     else if (vt == jl_newvarnode_type) {
