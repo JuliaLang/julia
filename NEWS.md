@@ -49,6 +49,11 @@ This section lists changes that do not have deprecation warnings.
   * The format for a `ClusterManager` specifying the cookie on the command line is now
     `--worker=<cookie>`. `--worker <cookie>` will not work as it is now an optional argument.
 
+  * The representation of `CartesianRange` has changed to a
+    tuple-of-AbstractUnitRanges; the `start` and `stop` fields are no
+    longer present. Use `first(R)` and `last(R)` to obtain
+    start/stop. ([#20974])
+
 Library improvements
 --------------------
 
@@ -920,6 +925,7 @@ Command-line option changes
 [#20609]: https://github.com/JuliaLang/julia/issues/20609
 [#20889]: https://github.com/JuliaLang/julia/issues/20889
 [#20952]: https://github.com/JuliaLang/julia/issues/20952
+[#20974]: https://github.com/JuliaLang/julia/issues/20974
 [#21183]: https://github.com/JuliaLang/julia/issues/21183
 [#21359]: https://github.com/JuliaLang/julia/issues/21359
 [#21692]: https://github.com/JuliaLang/julia/issues/21692
