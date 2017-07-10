@@ -1814,8 +1814,7 @@ optional `rng` argument specifies a random number generator (see
 [Random Numbers](@ref)). To randomly permute an arbitrary vector, see
 [`shuffle`](@ref) or [`shuffle!`](@ref).
 
-# Example
-
+# Examples
 ```jldoctest
 julia> randperm!(MersenneTwister(1234), Vector{Int}(4))
 4-element Array{Int64,1}:
@@ -1873,8 +1872,7 @@ Construct in `A` a random cyclic permutation of length `length(A)`.
 The optional `rng` argument specifies a random number generator, see
 [Random Numbers](@ref).
 
-# Example
-
+# Examples
 ```jldoctest
 julia> randcycle!(MersenneTwister(1234), Vector{Int}(6))
 6-element Array{Int64,1}:
