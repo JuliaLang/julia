@@ -28,7 +28,7 @@ end
 @test (@static false || 1) === 1
 
 # test that path variables use correct path delimiters on windows
-if is_windows()
+if Sys.iswindows()
     @test !contains(Base.SYSCONFDIR, "/")
     @test !contains(Base.DATAROOTDIR, "/")
     @test !contains(Base.DOCDIR, "/")
