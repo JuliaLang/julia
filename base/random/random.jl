@@ -46,7 +46,8 @@ include("misc.jl")
 """
     rand([rng=GLOBAL_RNG], [S], [dims...])
 
-Pick a random element or array of random elements from the set of values specified by `S`; `S` can be
+Pick a random element or array of random elements from the set of values specified by `S`;
+`S` can be
 
 * an indexable collection (for example `1:n` or `['x','y','z']`),
 * an `Associative` or `AbstractSet` object,

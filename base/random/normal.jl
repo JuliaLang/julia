@@ -12,7 +12,8 @@
 """
     randn([rng=GLOBAL_RNG], [T=Float64], [dims...])
 
-Generate a normally-distributed random number of type `T` with mean 0 and standard deviation 1.
+Generate a normally-distributed random number of type `T`
+with mean 0 and standard deviation 1.
 Optionally generate an array of normally-distributed random numbers.
 The `Base` module currently provides an implementation for the types
 [`Float16`](@ref), [`Float32`](@ref), and [`Float64`](@ref) (the default), and their
@@ -49,7 +50,8 @@ function randn_unlikely(rng, idx, rabs, x)
         while true
             xx = -ziggurat_nor_inv_r*log(rand(rng))
             yy = -log(rand(rng))
-            yy+yy > xx*xx && return (rabs >> 8) % Bool ? -ziggurat_nor_r-xx : ziggurat_nor_r+xx
+            yy+yy > xx*xx &&
+                return (rabs >> 8) % Bool ? -ziggurat_nor_r-xx : ziggurat_nor_r+xx
         end
     elseif (fi[idx] - fi[idx+1])*rand(rng) + fi[idx+1] < exp(-0.5*x*x)
         return x # return from the triangular area
@@ -71,7 +73,8 @@ randn(rng::AbstractRNG, ::Type{Complex{T}}) where {T<:AbstractFloat} =
 """
     randexp([rng=GLOBAL_RNG], [T=Float64], [dims...])
 
-Generate a random number of type `T` according to the exponential distribution with scale 1.
+Generate a random number of type `T` according to the
+exponential distribution with scale 1.
 Optionally generate an array of such random numbers.
 The `Base` module currently provides an implementation for the types
 [`Float16`](@ref), [`Float32`](@ref), and [`Float64`](@ref) (the default).
@@ -137,7 +140,8 @@ function randn! end
 """
     randexp!([rng=GLOBAL_RNG], A::AbstractArray) -> A
 
-Fill the array `A` with random numbers following the exponential distribution (with scale 1).
+Fill the array `A` with random numbers following the exponential distribution
+(with scale 1).
 
 # Examples
 ```jldoctest
@@ -174,7 +178,8 @@ for randfun in [:randn, :randexp]
 
         # generating arrays
         $randfun(rng::AbstractRNG, ::Type{T}, dims::Dims                     ) where {T} = $randfun!(rng, Array{T}(dims))
-        # Note that this method explicitly does not define $randfun(rng, T), in order to prevent an infinite recursion.
+        # Note that this method explicitly does not define $randfun(rng, T),
+        # in order to prevent an infinite recursion.
         $randfun(rng::AbstractRNG, ::Type{T}, dim1::Integer, dims::Integer...) where {T} = $randfun!(rng, Array{T}(dim1, dims...))
         $randfun(                  ::Type{T}, dims::Dims                     ) where {T} = $randfun(GLOBAL_RNG, T, dims)
         $randfun(                  ::Type{T}, dims::Integer...               ) where {T} = $randfun(GLOBAL_RNG, T, dims...)

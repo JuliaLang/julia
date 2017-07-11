@@ -15,7 +15,8 @@ const MEXP = 19937
 "DSFMT internal state array size of N 128-bit integers."
 const N = floor(Int, ((MEXP - 128) / 104 + 1))
 
-"""Julia DSFMT state representation size counted in 32-bit integers.
+"""
+Julia DSFMT state representation size counted in 32-bit integers.
 
 Size: (DSFMT state array of Int128 + 1)*4 + Int32 index + Int32 padding
 """
@@ -25,8 +26,11 @@ const JN32 = (N+1)*4+1+1
 mutable struct DSFMT_state
     val::Vector{Int32}
 
-    DSFMT_state(val::Vector{Int32} = zeros(Int32, JN32)) =
-        new(length(val) == JN32 ? val : throw(DomainError(length(val), string("Expected length ", JN32, '.'))))
+    function DSFMT_state(val::Vector{Int32} = zeros(Int32, JN32))
+        length(val) == JN32 ||
+            throw(DomainError(length(val), "Expected length: $JN32."))
+        new(val)
+    end
 end
 
 copy!(dst::DSFMT_state, src::DSFMT_state) = (copy!(dst.val, src.val); dst)

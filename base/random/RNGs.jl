@@ -27,7 +27,8 @@ else # !windows
         file::IOStream
         unlimited::Bool
 
-        RandomDevice(unlimited::Bool=true) = new(open(unlimited ? "/dev/urandom" : "/dev/random"), unlimited)
+        RandomDevice(unlimited::Bool=true) =
+            new(open(unlimited ? "/dev/urandom" : "/dev/random"), unlimited)
     end
 
     rand(rd::RandomDevice, T::BoolBitIntegerType)   = read( rd.file, T)
@@ -37,7 +38,8 @@ end # os-test
 """
     RandomDevice()
 
-Create a `RandomDevice` RNG object. Two such objects will always generate different streams of random numbers.
+Create a `RandomDevice` RNG object.
+Two such objects will always generate different streams of random numbers.
 """
 RandomDevice
 
@@ -51,7 +53,8 @@ rand(rng::RandomDevice, ::Type{CloseOpen}) = rand(rng, Close1Open2) - 1.0
 @inline rand(r::RandomDevice, ::Type{Float64}) = rand(r, CloseOpen)
 
 rand(r::RandomDevice, ::Type{Float16}) =
-    Float16(reinterpret(Float32, (rand_ui10_raw(r) % UInt32 << 13) & 0x007fe000 | 0x3f800000) - 1)
+    Float16(reinterpret(Float32,
+                        (rand_ui10_raw(r) % UInt32 << 13) & 0x007fe000 | 0x3f800000) - 1)
 
 rand(r::RandomDevice, ::Type{Float32}) =
     reinterpret(Float32, rand_ui23_raw(r) % UInt32 & 0x007fffff | 0x3f800000) - 1
@@ -68,9 +71,9 @@ mutable struct MersenneTwister <: AbstractRNG
     idx::Int
 
     function MersenneTwister(seed, state, vals, idx)
-        if !(length(vals) == MTCacheLength &&  0 <= idx <= MTCacheLength)
-            throw(DomainError(idx, "`length(vals)` and `idx` must be consistent with $MTCacheLength"))
-        end
+        length(vals) == MTCacheLength && 0 <= idx <= MTCacheLength ||
+            throw(DomainError((length(vals), idx),
+                      "`length(vals)` and `idx` must be consistent with $MTCacheLength"))
         new(seed, state, vals, idx)
     end
 end
@@ -81,8 +84,9 @@ MersenneTwister(seed::Vector{UInt32}, state::DSFMT_state) =
 """
     MersenneTwister(seed)
 
-Create a `MersenneTwister` RNG object. Different RNG objects can have their own seeds, which
-may be useful for generating different streams of random numbers.
+Create a `MersenneTwister` RNG object. Different RNG objects can have
+their own seeds, which may be useful for generating different streams
+of random numbers.
 
 # Examples
 ```jldoctest
@@ -118,7 +122,8 @@ copy(src::MersenneTwister) =
     MersenneTwister(copy(src.seed), copy(src.state), copy(src.vals), src.idx)
 
 ==(r1::MersenneTwister, r2::MersenneTwister) =
-    r1.seed == r2.seed && r1.state == r2.state && isequal(r1.vals, r2.vals) && r1.idx == r2.idx
+    r1.seed == r2.seed && r1.state == r2.state && isequal(r1.vals, r2.vals) &&
+    r1.idx == r2.idx
 
 hash(r::MersenneTwister, h::UInt) = foldr(hash, h, (r.seed, r.state, r.vals, r.idx))
 
@@ -146,16 +151,19 @@ end
 
 #### make_seed()
 
-# make_seed methods produce values of type Array{UInt32}, suitable for MersenneTwister seeding
+# make_seed produces values of type Vector{UInt32}, suitable for MersenneTwister seeding
 function make_seed()
     try
         return rand(RandomDevice(), UInt32, 4)
     catch
-        println(STDERR, "Entropy pool not available to seed RNG; using ad-hoc entropy sources.")
+        println(STDERR,
+                "Entropy pool not available to seed RNG; using ad-hoc entropy sources.")
         seed = reinterpret(UInt64, time())
         seed = hash(seed, UInt64(getpid()))
         try
-        seed = hash(seed, parse(UInt64, read(pipeline(`ifconfig`, `sha1sum`), String)[1:40], 16))
+            seed = hash(seed, parse(UInt64,
+                                    read(pipeline(`ifconfig`, `sha1sum`), String)[1:40],
+                                    16))
         end
         return make_seed(seed)
     end
@@ -198,10 +206,12 @@ const GLOBAL_RNG = MersenneTwister(0)
 
 # precondition: !mt_empty(r)
 @inline rand_inbounds(r::MersenneTwister, ::Type{Close1Open2}) = mt_pop!(r)
-@inline rand_inbounds(r::MersenneTwister, ::Type{CloseOpen}) = rand_inbounds(r, Close1Open2) - 1.0
+@inline rand_inbounds(r::MersenneTwister, ::Type{CloseOpen}) =
+    rand_inbounds(r, Close1Open2) - 1.0
 @inline rand_inbounds(r::MersenneTwister) = rand_inbounds(r, CloseOpen)
 
-@inline rand_ui52_raw_inbounds(r::MersenneTwister) = reinterpret(UInt64, rand_inbounds(r, Close1Open2))
+@inline rand_ui52_raw_inbounds(r::MersenneTwister) =
+    reinterpret(UInt64, rand_inbounds(r, Close1Open2))
 @inline rand_ui52_raw(r::MersenneTwister) = (reserve_1(r); rand_ui52_raw_inbounds(r))
 
 @inline function rand_ui2x52_raw(r::MersenneTwister)
@@ -219,20 +229,23 @@ rand_ui23_raw(r::MersenneTwister) = rand_ui52_raw(r)
 
 #### floats
 
-@inline rand(r::MersenneTwister, ::Type{I}) where {I<:FloatInterval} = (reserve_1(r); rand_inbounds(r, I))
+@inline rand(r::MersenneTwister, ::Type{I}) where {I<:FloatInterval} =
+    (reserve_1(r); rand_inbounds(r, I))
 
 @inline rand(r::MersenneTwister, ::Type{Float64}) = rand(r, CloseOpen)
 
 rand(r::MersenneTwister, ::Type{Float16}) =
-    Float16(reinterpret(Float32, (rand_ui10_raw(r) % UInt32 << 13) & 0x007fe000 | 0x3f800000) - 1)
+    Float16(reinterpret(Float32,
+                        (rand_ui10_raw(r) % UInt32 << 13) & 0x007fe000 | 0x3f800000) - 1)
 
 rand(r::MersenneTwister, ::Type{Float32}) =
     reinterpret(Float32, rand_ui23_raw(r) % UInt32 & 0x007fffff | 0x3f800000) - 1
 
 #### integers
 
-@inline rand(r::MersenneTwister, ::Type{T}) where {T<:Union{Bool,Int8,UInt8,Int16,UInt16,Int32,UInt32}} =
-    rand_ui52_raw(r) % T
+@inline rand(r::MersenneTwister,
+             ::Type{T}) where {T<:Union{Bool,Int8,UInt8,Int16,UInt16,Int32,UInt32}} =
+                 rand_ui52_raw(r) % T
 
 function rand(r::MersenneTwister, ::Type{UInt64})
     reserve(r, 2)
@@ -252,7 +265,8 @@ rand(r::MersenneTwister, ::Type{Int128}) = reinterpret(Int128, rand(r, UInt128))
 #### arrays of floats
 
 function rand_AbstractArray_Float64!(r::MersenneTwister, A::AbstractArray{Float64},
-                                     n=length(A), ::Type{I}=CloseOpen) where I<:FloatInterval
+                                     n=length(A),
+                                     ::Type{I}=CloseOpen) where I<:FloatInterval
     # what follows is equivalent to this simple loop but more efficient:
     # for i=1:n
     #     @inbounds A[i] = rand(r, I)
@@ -275,10 +289,14 @@ end
 
 rand!(r::MersenneTwister, A::AbstractArray{Float64}) = rand_AbstractArray_Float64!(r, A)
 
-fill_array!(s::DSFMT_state, A::Ptr{Float64}, n::Int, ::Type{CloseOpen}) = dsfmt_fill_array_close_open!(s, A, n)
-fill_array!(s::DSFMT_state, A::Ptr{Float64}, n::Int, ::Type{Close1Open2}) = dsfmt_fill_array_close1_open2!(s, A, n)
+fill_array!(s::DSFMT_state, A::Ptr{Float64}, n::Int, ::Type{CloseOpen}) =
+    dsfmt_fill_array_close_open!(s, A, n)
 
-function rand!(r::MersenneTwister, A::Array{Float64}, n::Int=length(A), ::Type{I}=CloseOpen) where I<:FloatInterval
+fill_array!(s::DSFMT_state, A::Ptr{Float64}, n::Int, ::Type{Close1Open2}) =
+    dsfmt_fill_array_close1_open2!(s, A, n)
+
+function rand!(r::MersenneTwister, A::Array{Float64}, n::Int=length(A),
+               ::Type{I}=CloseOpen) where I<:FloatInterval
     # depending on the alignment of A, the data written by fill_array! may have
     # to be left-shifted by up to 15 bytes (cf. unsafe_copy! below) for
     # reproducibility purposes;
@@ -308,25 +326,32 @@ function rand!(r::MersenneTwister, A::Array{Float64}, n::Int=length(A), ::Type{I
     A
 end
 
-@inline mask128(u::UInt128, ::Type{Float16}) = (u & 0x03ff03ff03ff03ff03ff03ff03ff03ff) | 0x3c003c003c003c003c003c003c003c00
-@inline mask128(u::UInt128, ::Type{Float32}) = (u & 0x007fffff007fffff007fffff007fffff) | 0x3f8000003f8000003f8000003f800000
+@inline mask128(u::UInt128, ::Type{Float16}) =
+    (u & 0x03ff03ff03ff03ff03ff03ff03ff03ff) | 0x3c003c003c003c003c003c003c003c00
 
-function rand!(r::MersenneTwister, A::Union{Array{Float16},Array{Float32}}, ::Type{Close1Open2})
+@inline mask128(u::UInt128, ::Type{Float32}) =
+    (u & 0x007fffff007fffff007fffff007fffff) | 0x3f8000003f8000003f8000003f800000
+
+function rand!(r::MersenneTwister, A::Union{Array{Float16},Array{Float32}},
+               ::Type{Close1Open2})
     T = eltype(A)
     n = length(A)
     n128 = n * sizeof(T) ÷ 16
-    rand!(r, unsafe_wrap(Array, convert(Ptr{Float64}, pointer(A)), 2*n128), 2*n128, Close1Open2)
+    rand!(r, unsafe_wrap(Array, convert(Ptr{Float64}, pointer(A)), 2*n128),
+          2*n128, Close1Open2)
     A128 = unsafe_wrap(Array, convert(Ptr{UInt128}, pointer(A)), n128)
     @inbounds for i in 1:n128
         u = A128[i]
         u ⊻= u << 26
-        # at this point, the 64 low bits of u, "k" being the k-th bit of A128[i] and "+" the bit xor, are:
+        # at this point, the 64 low bits of u, "k" being the k-th bit of A128[i] and "+"
+        # the bit xor, are:
         # [..., 58+32,..., 53+27, 52+26, ..., 33+7, 32+6, ..., 27+1, 26, ..., 1]
         # the bits needing to be random are
         # [1:10, 17:26, 33:42, 49:58] (for Float16)
         # [1:23, 33:55] (for Float32)
-        # this is obviously satisfied on the 32 low bits side, and on the high side, the entropy comes
-        # from bits 33:52 of A128[i] and then from bits 27:32 (which are discarded on the low side)
+        # this is obviously satisfied on the 32 low bits side, and on the high side,
+        # the entropy comes from bits 33:52 of A128[i] and then from bits 27:32
+        # (which are discarded on the low side)
         # this is similar for the 64 high bits of u
         A128[i] = mask128(u, T)
     end
@@ -336,7 +361,8 @@ function rand!(r::MersenneTwister, A::Union{Array{Float16},Array{Float32}}, ::Ty
     A
 end
 
-function rand!(r::MersenneTwister, A::Union{Array{Float16},Array{Float32}}, ::Type{CloseOpen})
+function rand!(r::MersenneTwister, A::Union{Array{Float16},Array{Float32}},
+               ::Type{CloseOpen})
     rand!(r, A, Close1Open2)
     I32 = one(Float32)
     for i in eachindex(A)
@@ -423,7 +449,8 @@ end
 ### randjump
 
 """
-    randjump(r::MersenneTwister, jumps::Integer, [jumppoly::AbstractString=dSFMT.JPOLY1e21]) -> Vector{MersenneTwister}
+    randjump(r::MersenneTwister, jumps::Integer,
+             [jumppoly::AbstractString=dSFMT.JPOLY1e21]) -> Vector{MersenneTwister}
 
 Create an array of the size `jumps` of initialized `MersenneTwister` RNG objects. The
 first RNG object given as a parameter and following `MersenneTwister` RNGs in the array are
