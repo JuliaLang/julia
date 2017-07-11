@@ -586,18 +586,16 @@ hex(n::BigInt, pad::Int) = base(16, n, pad)
 function base(b::Integer, n::BigInt, pad::Integer=1)
     b < 0 && return base(Int(b), n, pad, (b>0) & (n.size<0))
     2 <= b <= 62 || throw(ArgumentError("base must be 2 ≤ base ≤ 62, got $b"))
+    iszero(n) && pad < 1 && return ""
     nd1 = ndigits(n, b)
     nd  = max(nd1, pad)
-    str = Base._string_n(nd + isneg(n) + 1) # +1 for final '\0'
-    ptr = pointer(str)
-    MPZ.get_str!(ptr + nd - nd1, b, n)
-    for i = (0:nd-nd1-1) + isneg(n)
-        unsafe_store!(ptr+i, '0' % UInt8)
+    sv  = Base.StringVector(nd + isneg(n))
+    MPZ.get_str!(pointer(sv) + nd - nd1, b, n)
+    @inbounds for i = (1:nd-nd1) + isneg(n)
+        sv[i] = '0' % UInt8
     end
-    isneg(n) && unsafe_store!(ptr, '-' % UInt8)
-    str.len -= 1 # final '\0'
-    iszero(n) && pad < 1 && (str.len -= 1)
-    str
+    isneg(n) && (sv[1] = '-' % UInt8)
+    String(sv)
 end
 
 function ndigits0zpb(x::BigInt, b::Integer)
