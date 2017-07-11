@@ -103,7 +103,7 @@ function firstcaller(bt::Array{Ptr{Void},1}, funcsyms)
     return lkup
 end
 
-deprecate(m::Module, s::Symbol, val=1) = ccall(:jl_deprecate_binding, Void, (Any, Any, Cint), m, s, val)
+deprecate(m::Module, s::Symbol, flag=1) = ccall(:jl_deprecate_binding, Void, (Any, Any, Cint), m, s, flag)
 
 macro deprecate_binding(old, new, export_old=true)
     return Expr(:toplevel,
