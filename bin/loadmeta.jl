@@ -93,8 +93,8 @@ function load_packages(dir::String)
         Dict(
             v"0.1.1"  => Version("bddb70374fdbb2256782398c13430fa4d8b55d0b"),
             v"0.1.2"  => Version("1187040d027210cc466f0b6a6d54118fd692cf2d"),
-            v"0.2.0"  => Version("68e4f269049b3a77eee1e185e619c3513034b3a6"),
-            v"0.2.1"  => Version("7c5dea64f55afb7d9a7224a337d3c0bd5a707c50"),
+            v"0.2.0"  => Version("05c6461b55d9a66f05ead24926f5ee062b920d6b"),
+            v"0.2.1"  => Version("e44b5939057d87c1e854077108a1a6d66203f4fa"),
             v"0.3.0"  => Version("768187890c2709bf2ff06818f40e1cdc79bd44b0"),
             v"0.3.1"  => Version("c03f413bbdb46c00033f4eaad402995cfe3b7be5"),
             v"0.3.2"  => Version("8227746b95146c2921f83d2ae5f37ecd146592d8"),
