@@ -320,7 +320,7 @@ end
 function show(io::IO, l::Core.MethodInstance)
     def = l.def
     if isa(def, Method)
-        if def.isstaged && l === def.generator
+        if isdefined(def, :generator) && l === def.generator
             print(io, "MethodInstance generator for ")
             show(io, def)
         else

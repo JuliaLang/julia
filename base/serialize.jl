@@ -398,8 +398,16 @@ function serialize(s::AbstractSerializer, meth::Method)
     serialize(s, meth.ambig)
     serialize(s, meth.nargs)
     serialize(s, meth.isva)
-    serialize(s, meth.isstaged)
-    serialize(s, uncompressed_ast(meth, meth.source))
+    if isdefined(meth, :source)
+        serialize(s, uncompressed_ast(meth, meth.source))
+    else
+        serialize(s, nothing)
+    end
+    if isdefined(meth, :generator)
+        serialize(s, uncompressed_ast(meth, meth.generator.inferred))
+    else
+        serialize(s, nothing)
+    end
     nothing
 end
 
@@ -783,8 +791,8 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
     ambig = deserialize(s)::Union{Array{Any,1}, Void}
     nargs = deserialize(s)::Int32
     isva = deserialize(s)::Bool
-    isstaged = deserialize(s)::Bool
-    template = deserialize(s)::CodeInfo
+    template = deserialize(s)
+    generator = deserialize(s)
     if makenew
         meth.module = mod
         meth.name = name
@@ -793,16 +801,17 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
         meth.sig = sig
         meth.sparam_syms = sparam_syms
         meth.ambig = ambig
-        meth.isstaged = isstaged
         meth.nargs = nargs
         meth.isva = isva
         # TODO: compress template
-        meth.source = template
-        meth.pure = template.pure
-        if isstaged
+        if template !== nothing
+            meth.source = template
+            meth.pure = template.pure
+        end
+        if generator !== nothing
             linfo = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, ())
             linfo.specTypes = Tuple
-            linfo.inferred = template
+            linfo.inferred = generator
             linfo.def = meth
             meth.generator = linfo
         end

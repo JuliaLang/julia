@@ -289,7 +289,7 @@ function InferenceState(linfo::MethodInstance,
     # prepare an InferenceState object for inferring lambda
     # create copies of the CodeInfo definition, and any fields that type-inference might modify
     m = linfo.def::Method
-    if m.isstaged
+    if isdefined(m, :generator)
         try
             # user code might throw errors – ignore them
             src = get_staged(linfo)
@@ -1996,7 +1996,7 @@ function pure_eval_call(f::ANY, argtypes::ANY, atype::ANY, sv::InferenceState)
     meth = meth[1]::SimpleVector
     method = meth[3]::Method
     # TODO: check pure on the inferred thunk
-    if method.isstaged || !method.pure
+    if isdefined(method, :generator) || !method.pure
         return false
     end
 
@@ -2790,7 +2790,7 @@ function code_for_method(method::Method, atypes::ANY, sparams::SimpleVector, wor
     if world < min_world(method)
         return nothing
     end
-    if method.isstaged && !isleaftype(atypes)
+    if isdefined(method, :generator) && !isleaftype(atypes)
         # don't call staged functions on abstract types.
         # (see issues #8504, #10230)
         # we can't guarantee that their type behavior is monotonic.
@@ -4208,7 +4208,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
     end
 
     # check whether call can be inlined to just a quoted constant value
-    if isa(f, widenconst(ft)) && !method.isstaged
+    if isa(f, widenconst(ft)) && !isdefined(method, :generator)
         if f === return_type
             if isconstType(e.typ)
                 return inline_as_constant(e.typ.parameters[1], argexprs, sv, invoke_data)
@@ -4250,7 +4250,7 @@ function inlineable(f::ANY, ft::ANY, e::Expr, atypes::Vector{Any}, sv::Inference
     # some gf have special tfunc, meaning they wouldn't have been inferred yet
     # check the same conditions from abstract_call to detect this case
     force_infer = false
-    if !method.isstaged
+    if !isdefined(method, :generator)
         if method.module == _topmod(method.module) || (isdefined(Main, :Base) && method.module == Main.Base)
             la = length(atypes)
             if (la==3 && (method.name == :getindex || method.name == :next)) ||

@@ -245,7 +245,7 @@ typedef struct _jl_method_t {
     jl_svec_t *sparam_syms;  // symbols giving static parameter names
     jl_value_t *source;  // original code template (jl_code_info_t, but may be compressed), null for builtins
     struct _jl_method_instance_t *unspecialized;  // unspecialized executable method instance, or null
-    struct _jl_method_instance_t *generator;  // executable code-generating function if isstaged
+    struct _jl_method_instance_t *generator;  // executable code-generating function if available
     jl_array_t *roots;  // pointers in generated code (shared to reduce memory), or null
 
     // cache of specializations of this method for invoke(), i.e.
@@ -256,7 +256,6 @@ typedef struct _jl_method_t {
     int32_t nargs;
     int32_t called;  // bit flags: whether each of the first 8 arguments is called
     uint8_t isva;
-    uint8_t isstaged;
     uint8_t pure;
 
 // hidden fields:

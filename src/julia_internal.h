@@ -342,7 +342,7 @@ STATIC_INLINE jl_value_t *jl_compile_method_internal(jl_generic_fptr_t *fptr,
             fptr->fptr = meth->unspecialized_ducttape;
             fptr->jlcall_api = 1;
             if (!fptr->fptr) {
-                if (jl_is_method(meth->def.method) && !meth->def.method->isstaged && meth->def.method->unspecialized) {
+                if (jl_is_method(meth->def.method) && meth->def.method->unspecialized) {
                     fptr->fptr = meth->def.method->unspecialized->fptr;
                     fptr->jlcall_api = meth->def.method->unspecialized->jlcall_api;
                     if (fptr->jlcall_api == 2) {
