@@ -295,6 +295,10 @@ function showerror(io::IO, ex::UndefVarError)
     print(io, "UndefVarError: $(ex.var) not defined")
 end
 
+function showerror(io::IO, ex::InexactError)
+    print(io, "InexactError: ", ex.func, '(', ex.T, ", ", ex.val, ')')
+end
+
 function showerror(io::IO, ex::MethodError)
     # ex.args is a tuple type if it was thrown from `invoke` and is
     # a tuple of the arguments otherwise.

@@ -108,14 +108,17 @@ for (tok, fn) in zip("uUeE", [monthabbr_to_value, monthname_to_value, dayabbr_to
     end
 end
 
+# 3-digit (base 10) number following a decimal point. For InexactError below.
+struct Decimal3 end
+
 @inline function tryparsenext(d::DatePart{'s'}, str, i, len)
     ms, ii = tryparsenext_base10(str, i, len, min_width(d), max_width(d))
     if !isnull(ms)
-        val = get(ms)
+        val0 = val = get(ms)
         len = ii - i
         if len > 3
             val, r = divrem(val, Int64(10) ^ (len - 3))
-            r == 0 || throw(InexactError())
+            r == 0 || throw(InexactError(:convert, Decimal3, val0))
         else
             val *= Int64(10) ^ (3 - len)
         end

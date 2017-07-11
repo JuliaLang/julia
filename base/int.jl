@@ -29,6 +29,9 @@ const BitIntegerSmall  = Union{BitIntegerSmall_types...}
 const BitSigned64T     = Union{Type{Int8}, Type{Int16}, Type{Int32}, Type{Int64}}
 const BitUnsigned64T   = Union{Type{UInt8}, Type{UInt16}, Type{UInt32}, Type{UInt64}}
 
+throw_inexacterror(f::Symbol, ::Type{T}, val) where T =
+    (@_noinline_meta; throw(InexactError(f, T, val)))
+
 ## integer comparisons ##
 
 (<)(x::T, y::T) where {T<:BitSigned}  = slt_int(x, y)
@@ -401,7 +404,7 @@ function is_top_bit_set(x::BitInteger)
 end
 function check_top_bit(x::BitInteger)
     @_inline_meta
-    is_top_bit_set(x) && throw(InexactError())
+    is_top_bit_set(x) && throw_inexacterror(:check_top_bit, typeof(x), x)
     x
 end
 
@@ -411,7 +414,7 @@ function checked_trunc_sint{To,From}(::Type{To}, x::From)
     @_inline_meta
     y = trunc_int(To, x)
     back = sext_int(From, y)
-    x == back || throw(InexactError())
+    x == back || throw_inexacterror(:trunc, To, x)
     y
 end
 
@@ -419,7 +422,7 @@ function checked_trunc_uint{To,From}(::Type{To}, x::From)
     @_inline_meta
     y = trunc_int(To, x)
     back = zext_int(From, y)
-    x == back || throw(InexactError())
+    x == back || throw_inexacterror(:trunc, To, x)
     y
 end
 

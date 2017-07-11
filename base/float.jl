@@ -649,14 +649,14 @@ for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UIn
                     if $(Tf(typemin(Ti))-one(Tf)) < x < $(Tf(typemax(Ti))+one(Tf))
                         return unsafe_trunc($Ti,x)
                     else
-                        throw(InexactError())
+                        throw(InexactError(:trunc, $Ti, x))
                     end
                 end
                 function convert(::Type{$Ti}, x::$Tf)
                     if ($(Tf(typemin(Ti))) <= x <= $(Tf(typemax(Ti)))) && (trunc(x) == x)
                         return unsafe_trunc($Ti,x)
                     else
-                        throw(InexactError())
+                        throw(InexactError(:convert, $Ti, x))
                     end
                 end
             end
@@ -670,14 +670,14 @@ for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UIn
                     if $(Tf(typemin(Ti))) <= x < $(Tf(typemax(Ti)))
                         return unsafe_trunc($Ti,x)
                     else
-                        throw(InexactError())
+                        throw(InexactError(:trunc, $Ti, x))
                     end
                 end
                 function convert(::Type{$Ti}, x::$Tf)
                     if ($(Tf(typemin(Ti))) <= x < $(Tf(typemax(Ti)))) && (trunc(x) == x)
                         return unsafe_trunc($Ti,x)
                     else
-                        throw(InexactError())
+                        throw(InexactError(:convert, $Ti, x))
                     end
                 end
             end

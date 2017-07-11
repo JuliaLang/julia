@@ -1555,6 +1555,12 @@ function CartesianRange{N}(start::CartesianIndex{N}, stop::CartesianIndex{N})
     CartesianRange(inds)
 end
 
+# PR #20005
+function InexactError()
+    depwarn("InexactError now supports arguments, use `InexactError(funcname::Symbol, ::Type, value)` instead.", :InexactError)
+    InexactError(:none, Any, nothing)
+end
+
 # PR #22703
 @deprecate Bidiagonal(dv::AbstractVector, ev::AbstractVector, isupper::Bool) Bidiagonal(dv, ev, ifelse(isupper, :U, :L))
 @deprecate Bidiagonal(dv::AbstractVector, ev::AbstractVector, uplo::Char) Bidiagonal(dv, ev, ifelse(uplo == 'U', :U, :L))

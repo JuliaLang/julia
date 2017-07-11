@@ -202,20 +202,20 @@ unsafe_cast(::Type{T}, x::BigFloat, r::RoundingMode) where {T<:Integer} = unsafe
 unsafe_trunc(::Type{T}, x::BigFloat) where {T<:Integer} = unsafe_cast(T,x,RoundToZero)
 
 function trunc(::Type{T}, x::BigFloat) where T<:Union{Signed,Unsigned}
-    (typemin(T) <= x <= typemax(T)) || throw(InexactError())
+    (typemin(T) <= x <= typemax(T)) || throw(InexactError(:trunc, T, x))
     unsafe_cast(T,x,RoundToZero)
 end
 function floor(::Type{T}, x::BigFloat) where T<:Union{Signed,Unsigned}
-    (typemin(T) <= x <= typemax(T)) || throw(InexactError())
+    (typemin(T) <= x <= typemax(T)) || throw(InexactError(:floor, T, x))
     unsafe_cast(T,x,RoundDown)
 end
 function ceil(::Type{T}, x::BigFloat) where T<:Union{Signed,Unsigned}
-    (typemin(T) <= x <= typemax(T)) || throw(InexactError())
+    (typemin(T) <= x <= typemax(T)) || throw(InexactError(:ceil, T, x))
     unsafe_cast(T,x,RoundUp)
 end
 
 function round(::Type{T}, x::BigFloat) where T<:Union{Signed,Unsigned}
-    (typemin(T) <= x <= typemax(T)) || throw(InexactError())
+    (typemin(T) <= x <= typemax(T)) || throw(InexactError(:round, T, x))
     unsafe_cast(T,x,ROUNDING_MODE[])
 end
 
@@ -230,18 +230,19 @@ floor(::Type{Integer}, x::BigFloat) = floor(BigInt, x)
 ceil(::Type{Integer}, x::BigFloat) = ceil(BigInt, x)
 round(::Type{Integer}, x::BigFloat) = round(BigInt, x)
 
-convert(::Type{Bool}, x::BigFloat) = x==0 ? false : x==1 ? true : throw(InexactError())
+convert(::Type{Bool}, x::BigFloat) = x==0 ? false : x==1 ? true :
+    throw(InexactError(:convert, Bool, x))
 function convert(::Type{BigInt},x::BigFloat)
-    isinteger(x) || throw(InexactError())
+    isinteger(x) || throw(InexactError(:convert, BigInt, x))
     trunc(BigInt,x)
 end
 
 function convert(::Type{Integer}, x::BigFloat)
-    isinteger(x) || throw(InexactError())
+    isinteger(x) || throw(InexactError(:convert, Integer, x))
     trunc(Integer,x)
 end
 function convert(::Type{T},x::BigFloat) where T<:Integer
-    isinteger(x) || throw(InexactError())
+    isinteger(x) || throw(InexactError(:convert, T, x))
     trunc(T,x)
 end
 
