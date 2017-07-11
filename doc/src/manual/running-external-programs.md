@@ -313,7 +313,7 @@ will attempt to store the data in the kernel's buffers while waiting for a reade
 Another common solution is to separate the reader and writer of the pipeline into separate Tasks:
 
 ```julia
-writer = @async writeall(process, "data")
+writer = @async write(process, "data")
 reader = @async do_compute(readstring(process))
 wait(process)
 fetch(reader)
