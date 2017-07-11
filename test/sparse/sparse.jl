@@ -1845,11 +1845,12 @@ end
 end
 
 @testset "optimizing sparse covariance" begin
-    n = 10000
-    p = 50
-    x_sparse = sprand(n, p, .05)
+    n = 1000
+    p = 5
+    srand(1)
+    x_sparse = sprand(n, p, .25)
     x_dense = convert(Matrix{Float64}, x_sparse)
     cov1 = cov(x_dense)
-    cov2 = spcov(x_sparse)
-    @test cov1 \approx cov2
+    cov2 = cov(x_sparse)
+    @test cov1 ≈ cov2
 end
