@@ -820,7 +820,7 @@ JL_DLLEXPORT void jl_set_nth_field(jl_value_t *v, size_t i, jl_value_t *rhs)
             if (!jl_find_union_component(ty, jl_typeof(rhs), &nth))
                 assert(0 && "invalid field assignment to isbits union");
             *psel = nth;
-            if (jl_is_datatype_singleton((jl_datatype_t*)ty))
+            if (jl_is_datatype_singleton((jl_datatype_t*)jl_typeof(rhs)))
                 return;
         }
         jl_assign_bits((char*)v + offs, rhs);

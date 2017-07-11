@@ -1193,10 +1193,9 @@ static jl_cgval_t typed_load(jl_codectx_t &ctx, Value *ptr, Value *idx_0based, j
     Type *elty = julia_type_to_llvm(jltype, &isboxed);
     if (type_is_ghost(elty))
         return ghostValue(jltype);
-    Value *data;
     if (isboxed)
         elty = T_prjlvalue;
-    // TODO: preserving_pointercast?
+    Value *data = ptr;
     if (ptr->getType()->getContainedType(0) != elty)
         data = emit_bitcast(ctx, ptr, PointerType::get(elty, 0));
     else
@@ -1445,9 +1444,6 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
             fieldval.gcroot = strct.gcroot;
             return fieldval;
         }
-        int align = jl_field_offset(jt, idx);
-        align |= 16;
-        align &= -align;
         return typed_load(ctx, addr, ConstantInt::get(T_size, 0), jfty, strct.tbaa, true, align);
     }
     else if (isa<UndefValue>(strct.V)) {
@@ -2059,7 +2055,7 @@ static void emit_unionmove(jl_codectx_t &ctx, Value *dest, const jl_cgval_t &src
         jl_value_t *typ = src.constant ? jl_typeof(src.constant) : src.typ;
         Type *store_ty = julia_type_to_llvm(typ);
         assert(skip || jl_isbits(typ));
-        if (jl_isbits(typ) && jl_datatype_size(typ) > 0) {
+        if (jl_isbits(typ)) {
             if (!src.ispointer() || src.constant) {
                 emit_unbox(ctx, store_ty, src, typ, dest, isVolatile);
             }
@@ -2226,7 +2222,9 @@ static void emit_setfield(jl_codectx_t &ctx,
                 Value *ptindex = ctx.builder.CreateGEP(T_int8, emit_bitcast(ctx, addr, T_pint8), ConstantInt::get(T_size, fsz - 1));
                 ctx.builder.CreateStore(tindex, ptindex);
                 // copy data
-                emit_unionmove(addr, rhs, NULL, false, NULL, ctx);
+                if (!rhs.isghost) {
+                    emit_unionmove(ctx, addr, rhs, NULL, false, NULL);
+                }
             }
             else {
                 int align = jl_field_offset(sty, idx0);
