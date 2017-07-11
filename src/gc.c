@@ -857,6 +857,9 @@ static size_t array_nbytes(jl_array_t *a)
         sz = a->elsize * a->maxsize + (a->elsize == 1 ? 1 : 0);
     else
         sz = a->elsize * jl_array_len(a);
+    if (!a->flags.ptrarray && jl_is_uniontype(jl_tparam0(jl_typeof(a))))
+        // account for isbits Union array selector bytes
+        sz += jl_array_len(a);
     return sz;
 }
 

@@ -589,7 +589,8 @@ static void jl_write_values(jl_serializer_state *s)
             // make some header modifications in-place
             jl_array_t *newa = (jl_array_t*)&s->s->buf[reloc_offset];
             size_t alen = jl_array_len(ar);
-            size_t tot = alen * ar->elsize;
+            size_t extra = (!ar->flags.ptrarray && jl_is_uniontype(jl_tparam0(jl_typeof(ar)))) ? alen : 0;
+            size_t tot = alen * ar->elsize + extra;
             if (newa->flags.ndims == 1)
                 newa->maxsize = alen;
             newa->offset = 0;

@@ -239,20 +239,20 @@ static int jl_layout_isbits(jl_value_t *ty)
     return 0;
 }
 
-static unsigned jl_union_isbits(jl_value_t *ty, size_t *nbytes, size_t *align)
+static unsigned union_isbits(jl_value_t *ty, size_t *nbytes, size_t *align)
 {
     if (jl_is_uniontype(ty)) {
-        unsigned na = jl_union_isbits(((jl_uniontype_t*)ty)->a, nbytes, align);
+        unsigned na = union_isbits(((jl_uniontype_t*)ty)->a, nbytes, align);
         if (na == 0)
             return 0;
-        unsigned nb = jl_union_isbits(((jl_uniontype_t*)ty)->b, nbytes, align);
+        unsigned nb = union_isbits(((jl_uniontype_t*)ty)->b, nbytes, align);
         if (nb == 0)
             return 0;
         return na + nb;
     }
     if (jl_layout_isbits(ty)) {
         size_t sz = jl_datatype_size(ty);
-        size_t al = ((jl_datatype_t*)ty)->layout->alignment;
+        size_t al = jl_datatype_align(ty);
         if (*nbytes < sz)
             *nbytes = sz;
         if (*align < al)
@@ -260,6 +260,12 @@ static unsigned jl_union_isbits(jl_value_t *ty, size_t *nbytes, size_t *align)
         return 1;
     }
     return 0;
+}
+
+JL_DLLEXPORT int jl_islayout_inline(jl_value_t *eltype, size_t *fsz, size_t *al)
+{
+    unsigned countbits = union_isbits(eltype, fsz, al);
+    return countbits > 0 && countbits < 127;
 }
 
 void jl_compute_field_offsets(jl_datatype_t *st)
@@ -326,12 +332,10 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     for (size_t i = 0; i < nfields; i++) {
         jl_value_t *ty = jl_field_type(st, i);
         size_t fsz = 0, al = 0;
-        unsigned countbits = jl_union_isbits(ty, &fsz, &al);
-        if (countbits > 0 && countbits < 127) {
-            // Should never happen
+        if (jl_islayout_inline(ty, &fsz, &al)) {
             if (__unlikely(fsz > max_size))
+                // Should never happen
                 goto throw_ovf;
-            al = jl_datatype_align(ty);
             desc[i].isptr = 0;
             if (jl_is_uniontype(ty)) {
                 haspadding = 1;

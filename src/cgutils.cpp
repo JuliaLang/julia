@@ -1139,35 +1139,6 @@ static Value *emit_bounds_check(jl_codectx_t &ctx, const jl_cgval_t &ainfo, jl_v
     return im1;
 }
 
-// --- loading and storing ---
-
-static Value *compute_box_tindex(Value *datatype, jl_value_t *supertype, jl_value_t *ut, jl_codectx_t *ctx)
-{
-    Value *tindex = ConstantInt::get(T_int8, 0);
-    unsigned counter = 0;
-    for_each_uniontype_small(
-            [&](unsigned idx, jl_datatype_t *jt) {
-                if (jl_subtype((jl_value_t*)jt, supertype)) {
-                    Value *cmp = builder.CreateICmpEQ(literal_pointer_val((jl_value_t*)jt), datatype);
-                    tindex = builder.CreateSelect(cmp, ConstantInt::get(T_int8, idx), tindex);
-                }
-            },
-            ut,
-            counter);
-    return tindex;
-}
-
-// get the runtime tindex value
-static Value *compute_tindex_unboxed(const jl_cgval_t &val, jl_value_t *typ, jl_codectx_t *ctx)
-{
-    if (val.constant)
-        return ConstantInt::get(T_int8, get_box_tindex((jl_datatype_t*)jl_typeof(val.constant), typ));
-    if (val.isboxed)
-        return compute_box_tindex(emit_typeof_boxed(val, ctx), val.typ, typ, ctx);
-    assert(val.TIndex);
-    return builder.CreateAnd(val.TIndex, ConstantInt::get(T_int8, 0x7f));
-}
-
 // If given alignment is 0 and LLVM's assumed alignment for a load/store via ptr
 // might be stricter than the Julia alignment for jltype, return the alignment of jltype.
 // Otherwise return the given alignment.
@@ -1925,7 +1896,32 @@ static Value *_boxed_special(jl_codectx_t &ctx, const jl_cgval_t &vinfo, Type *t
     return box;
 }
 
+static Value *compute_box_tindex(jl_codectx_t &ctx, Value *datatype, jl_value_t *supertype, jl_value_t *ut)
+{
+    Value *tindex = ConstantInt::get(T_int8, 0);
+    unsigned counter = 0;
+    for_each_uniontype_small(
+            [&](unsigned idx, jl_datatype_t *jt) {
+                if (jl_subtype((jl_value_t*)jt, supertype)) {
+                    Value *cmp = ctx.builder.CreateICmpEQ(maybe_decay_untracked(literal_pointer_val(ctx, (jl_value_t*)jt)), datatype);
+                    tindex = ctx.builder.CreateSelect(cmp, ConstantInt::get(T_int8, idx), tindex);
+                }
+            },
+            ut,
+            counter);
+    return tindex;
+}
 
+// get the runtime tindex value
+static Value *compute_tindex_unboxed(jl_codectx_t &ctx, const jl_cgval_t &val, jl_value_t *typ)
+{
+    if (val.constant)
+        return ConstantInt::get(T_int8, get_box_tindex((jl_datatype_t*)jl_typeof(val.constant), typ));
+    if (val.isboxed)
+        return compute_box_tindex(ctx, emit_typeof_boxed(ctx, val), val.typ, typ);
+    assert(val.TIndex);
+    return ctx.builder.CreateAnd(val.TIndex, ConstantInt::get(T_int8, 0x7f));
+}
 
 static Value *box_union(jl_codectx_t &ctx, const jl_cgval_t &vinfo, const SmallBitVector &skip)
 {
