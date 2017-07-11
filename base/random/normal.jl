@@ -7,6 +7,184 @@
 
 # randmtzig (covers also exponential variates)
 
+## randn
+
+"""
+    randn([rng=GLOBAL_RNG], [T=Float64], [dims...])
+
+Generate a normally-distributed random number of type `T` with mean 0 and standard deviation 1.
+Optionally generate an array of normally-distributed random numbers.
+The `Base` module currently provides an implementation for the types
+[`Float16`](@ref), [`Float32`](@ref), and [`Float64`](@ref) (the default), and their
+[`Complex`](@ref) counterparts. When the type argument is complex, the values are drawn
+from the circularly symmetric complex normal distribution.
+
+# Examples
+```jldoctest
+julia> rng = MersenneTwister(1234);
+
+julia> randn(rng, Complex128)
+0.6133070881429037 - 0.6376291670853887im
+
+julia> randn(rng, Complex64, (2, 3))
+2×3 Array{Complex{Float32},2}:
+ -0.349649-0.638457im  0.376756-0.192146im  -0.396334-0.0136413im
+  0.611224+1.56403im   0.355204-0.365563im  0.0905552+1.31012im
+```
+"""
+@inline function randn(rng::AbstractRNG=GLOBAL_RNG)
+    @inbounds begin
+        r = rand_ui52(rng)
+        rabs = Int64(r>>1) # One bit for the sign
+        idx = rabs & 0xFF
+        x = ifelse(r % Bool, -rabs, rabs)*wi[idx+1]
+        rabs < ki[idx+1] && return x # 99.3% of the time we return here 1st try
+        return randn_unlikely(rng, idx, rabs, x)
+    end
+end
+
+# this unlikely branch is put in a separate function for better efficiency
+function randn_unlikely(rng, idx, rabs, x)
+    @inbounds if idx == 0
+        while true
+            xx = -ziggurat_nor_inv_r*log(rand(rng))
+            yy = -log(rand(rng))
+            yy+yy > xx*xx && return (rabs >> 8) % Bool ? -ziggurat_nor_r-xx : ziggurat_nor_r+xx
+        end
+    elseif (fi[idx] - fi[idx+1])*rand(rng) + fi[idx+1] < exp(-0.5*x*x)
+        return x # return from the triangular area
+    else
+        return randn(rng)
+    end
+end
+
+### complex randn
+
+Base.@irrational SQRT_HALF 0.7071067811865475244008  sqrt(big(0.5))
+
+randn(rng::AbstractRNG, ::Type{Complex{T}}) where {T<:AbstractFloat} =
+    Complex{T}(SQRT_HALF * randn(rng, T), SQRT_HALF * randn(rng, T))
+
+
+## randexp
+
+"""
+    randexp([rng=GLOBAL_RNG], [T=Float64], [dims...])
+
+Generate a random number of type `T` according to the exponential distribution with scale 1.
+Optionally generate an array of such random numbers.
+The `Base` module currently provides an implementation for the types
+[`Float16`](@ref), [`Float32`](@ref), and [`Float64`](@ref) (the default).
+
+# Examples
+```jldoctest
+julia> rng = MersenneTwister(1234);
+
+julia> randexp(rng, Float32)
+2.4835055f0
+
+julia> randexp(rng, 3, 3)
+3×3 Array{Float64,2}:
+ 1.5167    1.30652   0.344435
+ 0.604436  2.78029   0.418516
+ 0.695867  0.693292  0.643644
+```
+"""
+@inline function randexp(rng::AbstractRNG=GLOBAL_RNG)
+    @inbounds begin
+        ri = rand_ui52(rng)
+        idx = ri & 0xFF
+        x = ri*we[idx+1]
+        ri < ke[idx+1] && return x # 98.9% of the time we return here 1st try
+        return randexp_unlikely(rng, idx, x)
+    end
+end
+
+function randexp_unlikely(rng, idx, x)
+    @inbounds if idx == 0
+        return ziggurat_exp_r - log(rand(rng))
+    elseif (fe[idx] - fe[idx+1])*rand(rng) + fe[idx+1] < exp(-x)
+        return x # return from the triangular area
+    else
+        return randexp(rng)
+    end
+end
+
+
+## arrays & other scalar methods
+
+"""
+    randn!([rng=GLOBAL_RNG], A::AbstractArray) -> A
+
+Fill the array `A` with normally-distributed (mean 0, standard deviation 1) random numbers.
+Also see the [`rand`](@ref) function.
+
+# Examples
+```jldoctest
+julia> rng = MersenneTwister(1234);
+
+julia> randn!(rng, zeros(5))
+5-element Array{Float64,1}:
+  0.867347
+ -0.901744
+ -0.494479
+ -0.902914
+  0.864401
+```
+"""
+function randn! end
+
+"""
+    randexp!([rng=GLOBAL_RNG], A::AbstractArray) -> A
+
+Fill the array `A` with random numbers following the exponential distribution (with scale 1).
+
+# Examples
+```jldoctest
+julia> rng = MersenneTwister(1234);
+
+julia> randexp!(rng, zeros(5))
+5-element Array{Float64,1}:
+ 2.48351
+ 1.5167
+ 0.604436
+ 0.695867
+ 1.30652
+```
+"""
+function randexp! end
+
+for randfun in [:randn, :randexp]
+    randfun! = Symbol(randfun, :!)
+    @eval begin
+        # scalars
+        $randfun(rng::AbstractRNG, T::Union{Type{Float16},Type{Float32},Type{Float64}}) =
+            convert(T, $randfun(rng))
+        $randfun(::Type{T}) where {T} = $randfun(GLOBAL_RNG, T)
+
+        # filling arrays
+        function $randfun!(rng::AbstractRNG, A::AbstractArray{T}) where T
+            for i in eachindex(A)
+                @inbounds A[i] = $randfun(rng, T)
+            end
+            A
+        end
+
+        $randfun!(A::AbstractArray) = $randfun!(GLOBAL_RNG, A)
+
+        # generating arrays
+        $randfun(rng::AbstractRNG, ::Type{T}, dims::Dims                     ) where {T} = $randfun!(rng, Array{T}(dims))
+        # Note that this method explicitly does not define $randfun(rng, T), in order to prevent an infinite recursion.
+        $randfun(rng::AbstractRNG, ::Type{T}, dim1::Integer, dims::Integer...) where {T} = $randfun!(rng, Array{T}(dim1, dims...))
+        $randfun(                  ::Type{T}, dims::Dims                     ) where {T} = $randfun(GLOBAL_RNG, T, dims)
+        $randfun(                  ::Type{T}, dims::Integer...               ) where {T} = $randfun(GLOBAL_RNG, T, dims...)
+        $randfun(rng::AbstractRNG,            dims::Dims                     )           = $randfun(rng, Float64, dims)
+        $randfun(rng::AbstractRNG,            dims::Integer...               )           = $randfun(rng, Float64, dims...)
+        $randfun(                             dims::Dims                     )           = $randfun(GLOBAL_RNG, Float64, dims)
+        $randfun(                             dims::Integer...               )           = $randfun(GLOBAL_RNG, Float64, dims...)
+    end
+end
+
 ## Tables for normal variates
 
 const ki =
@@ -497,182 +675,3 @@ const fe =
 const ziggurat_nor_r      = 3.6541528853610087963519472518
 const ziggurat_nor_inv_r  = inv(ziggurat_nor_r)
 const ziggurat_exp_r      = 7.6971174701310497140446280481
-
-
-## randn
-
-"""
-    randn([rng=GLOBAL_RNG], [T=Float64], [dims...])
-
-Generate a normally-distributed random number of type `T` with mean 0 and standard deviation 1.
-Optionally generate an array of normally-distributed random numbers.
-The `Base` module currently provides an implementation for the types
-[`Float16`](@ref), [`Float32`](@ref), and [`Float64`](@ref) (the default), and their
-[`Complex`](@ref) counterparts. When the type argument is complex, the values are drawn
-from the circularly symmetric complex normal distribution.
-
-# Examples
-```jldoctest
-julia> rng = MersenneTwister(1234);
-
-julia> randn(rng, Complex128)
-0.6133070881429037 - 0.6376291670853887im
-
-julia> randn(rng, Complex64, (2, 3))
-2×3 Array{Complex{Float32},2}:
- -0.349649-0.638457im  0.376756-0.192146im  -0.396334-0.0136413im
-  0.611224+1.56403im   0.355204-0.365563im  0.0905552+1.31012im
-```
-"""
-@inline function randn(rng::AbstractRNG=GLOBAL_RNG)
-    @inbounds begin
-        r = rand_ui52(rng)
-        rabs = Int64(r>>1) # One bit for the sign
-        idx = rabs & 0xFF
-        x = ifelse(r % Bool, -rabs, rabs)*wi[idx+1]
-        rabs < ki[idx+1] && return x # 99.3% of the time we return here 1st try
-        return randn_unlikely(rng, idx, rabs, x)
-    end
-end
-
-# this unlikely branch is put in a separate function for better efficiency
-function randn_unlikely(rng, idx, rabs, x)
-    @inbounds if idx == 0
-        while true
-            xx = -ziggurat_nor_inv_r*log(rand(rng))
-            yy = -log(rand(rng))
-            yy+yy > xx*xx && return (rabs >> 8) % Bool ? -ziggurat_nor_r-xx : ziggurat_nor_r+xx
-        end
-    elseif (fi[idx] - fi[idx+1])*rand(rng) + fi[idx+1] < exp(-0.5*x*x)
-        return x # return from the triangular area
-    else
-        return randn(rng)
-    end
-end
-
-### complex randn
-
-Base.@irrational SQRT_HALF 0.7071067811865475244008  sqrt(big(0.5))
-
-randn(rng::AbstractRNG, ::Type{Complex{T}}) where {T<:AbstractFloat} =
-    Complex{T}(SQRT_HALF * randn(rng, T), SQRT_HALF * randn(rng, T))
-
-
-## randexp
-
-"""
-    randexp([rng=GLOBAL_RNG], [T=Float64], [dims...])
-
-Generate a random number of type `T` according to the exponential distribution with scale 1.
-Optionally generate an array of such random numbers.
-The `Base` module currently provides an implementation for the types
-[`Float16`](@ref), [`Float32`](@ref), and [`Float64`](@ref) (the default).
-
-# Examples
-```jldoctest
-julia> rng = MersenneTwister(1234);
-
-julia> randexp(rng, Float32)
-2.4835055f0
-
-julia> randexp(rng, 3, 3)
-3×3 Array{Float64,2}:
- 1.5167    1.30652   0.344435
- 0.604436  2.78029   0.418516
- 0.695867  0.693292  0.643644
-```
-"""
-@inline function randexp(rng::AbstractRNG=GLOBAL_RNG)
-    @inbounds begin
-        ri = rand_ui52(rng)
-        idx = ri & 0xFF
-        x = ri*we[idx+1]
-        ri < ke[idx+1] && return x # 98.9% of the time we return here 1st try
-        return randexp_unlikely(rng, idx, x)
-    end
-end
-
-function randexp_unlikely(rng, idx, x)
-    @inbounds if idx == 0
-        return ziggurat_exp_r - log(rand(rng))
-    elseif (fe[idx] - fe[idx+1])*rand(rng) + fe[idx+1] < exp(-x)
-        return x # return from the triangular area
-    else
-        return randexp(rng)
-    end
-end
-
-
-## arrays & other scalar methods
-
-"""
-    randn!([rng=GLOBAL_RNG], A::AbstractArray) -> A
-
-Fill the array `A` with normally-distributed (mean 0, standard deviation 1) random numbers.
-Also see the [`rand`](@ref) function.
-
-# Examples
-```jldoctest
-julia> rng = MersenneTwister(1234);
-
-julia> randn!(rng, zeros(5))
-5-element Array{Float64,1}:
-  0.867347
- -0.901744
- -0.494479
- -0.902914
-  0.864401
-```
-"""
-function randn! end
-
-"""
-    randexp!([rng=GLOBAL_RNG], A::AbstractArray) -> A
-
-Fill the array `A` with random numbers following the exponential distribution (with scale 1).
-
-# Examples
-```jldoctest
-julia> rng = MersenneTwister(1234);
-
-julia> randexp!(rng, zeros(5))
-5-element Array{Float64,1}:
- 2.48351
- 1.5167
- 0.604436
- 0.695867
- 1.30652
-```
-"""
-function randexp! end
-
-for randfun in [:randn, :randexp]
-    randfun! = Symbol(randfun, :!)
-    @eval begin
-        # scalars
-        $randfun(rng::AbstractRNG, T::Union{Type{Float16},Type{Float32},Type{Float64}}) =
-            convert(T, $randfun(rng))
-        $randfun(::Type{T}) where {T} = $randfun(GLOBAL_RNG, T)
-
-        # filling arrays
-        function $randfun!(rng::AbstractRNG, A::AbstractArray{T}) where T
-            for i in eachindex(A)
-                @inbounds A[i] = $randfun(rng, T)
-            end
-            A
-        end
-
-        $randfun!(A::AbstractArray) = $randfun!(GLOBAL_RNG, A)
-
-        # generating arrays
-        $randfun(rng::AbstractRNG, ::Type{T}, dims::Dims                     ) where {T} = $randfun!(rng, Array{T}(dims))
-        # Note that this method explicitly does not define $randfun(rng, T), in order to prevent an infinite recursion.
-        $randfun(rng::AbstractRNG, ::Type{T}, dim1::Integer, dims::Integer...) where {T} = $randfun!(rng, Array{T}(dim1, dims...))
-        $randfun(                  ::Type{T}, dims::Dims                     ) where {T} = $randfun(GLOBAL_RNG, T, dims)
-        $randfun(                  ::Type{T}, dims::Integer...               ) where {T} = $randfun(GLOBAL_RNG, T, dims...)
-        $randfun(rng::AbstractRNG,            dims::Dims                     )           = $randfun(rng, Float64, dims)
-        $randfun(rng::AbstractRNG,            dims::Integer...               )           = $randfun(rng, Float64, dims...)
-        $randfun(                             dims::Dims                     )           = $randfun(GLOBAL_RNG, Float64, dims)
-        $randfun(                             dims::Integer...               )           = $randfun(GLOBAL_RNG, Float64, dims...)
-    end
-end
