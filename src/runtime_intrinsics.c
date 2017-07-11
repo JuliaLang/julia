@@ -843,16 +843,6 @@ cvt_iintrinsic(LLVMFPtoUI, fptoui)
 un_fintrinsic_withtype(fpcvt,fptrunc)
 un_fintrinsic_withtype(fpcvt,fpext)
 
-// checked conversion
-static inline int all_eq(char *p, char n, char v)
-{
-    // computes p[0:n] == v
-    while (n--)
-        if (*p++ != v)
-            return 0;
-    return 1;
-}
-
 // checked arithmetic
 #define check_sadd_int(a,b) \
         /* this test is a reduction of (b > 0) ? (a + b > typemax(a)) : (a + b < typemin(a)) ==> overflow \
