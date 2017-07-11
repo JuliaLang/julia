@@ -942,25 +942,16 @@ chol(A::SparseMatrixCSC) = error("Use cholfact() instead of chol() for sparse ma
 lu(A::SparseMatrixCSC) = error("Use lufact() instead of lu() for sparse matrices.")
 eig(A::SparseMatrixCSC) = error("Use eigs() instead of eig() for sparse matrices.")
 
-function spcov(X::SparseMatrixCSC{Tv1,Ti1} where {Tv1,Ti1})
-    n,p = size(X)
-    means = mean(X, 1)
-
-    #Part 1 compute X'X
-    part1 = X'X
-
-    #Part 2 compute X'μ
-    sums = sum(X, 1)
-    part2 = sums'means
-
-    #Part 3 compute μ'μ
-    part3 = zeros(p,p)
-    for i in 1:p
-        for j in i:p
-            part3[i,j] = means[i] * means[j] * n
-            part3[j,i] = part3[i,j]
-        end
+function Base.cov(X::SparseMatrixCSC, vardim::Int=1; corrected::Bool=true)
+    a, b = size(X)
+    n, p = vardim == 1 ? (a, b) : (b, a)
+    out = Matrix(Base.unscaled_covzm(X,vardim)) # part1
+    sums = sum(X, vardim)
+    means = mean(X, vardim)
+    for j in 1:p, i in 1:p
+        part2 = sums[i]*means[j]
+        part3 = means[i] * means[j] * n
+        out[i,j] += - part2 - conj(part2) + part3
     end
-
-    return (part1 - part2 - part2' + part3) ./ (n-1)
+    return scale!(out, inv(n-Int(corrected)))
 end
