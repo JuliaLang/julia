@@ -190,7 +190,8 @@ static jl_binding_t *jl_get_binding_(jl_module_t *m, jl_sym_t *var, modstack_t *
                 if (tempb == NULL || tempb->owner == NULL)
                     // couldn't resolve; try next using (see issue #6105)
                     continue;
-                if (owner != NULL && tempb->owner != b->owner && !tempb->deprecated &&
+                if (owner != NULL && tempb->owner != b->owner &&
+                    !tempb->deprecated && !b->deprecated &&
                     !(tempb->constp && tempb->value && b->constp && b->value == tempb->value)) {
                     jl_printf(JL_STDERR,
                               "WARNING: both %s and %s export \"%s\"; uses of it in module %s must be qualified\n",
