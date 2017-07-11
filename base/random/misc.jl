@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-## random BitArrays (AbstractRNG)
+## rand!(::BitArray) && bitrand
 
 function rand!(rng::AbstractRNG, B::BitArray)
     isempty(B) && return B
@@ -40,7 +40,7 @@ bitrand(dims::Dims)   = rand!(BitArray(dims))
 bitrand(dims::Integer...) = rand!(BitArray(convert(Dims, dims)))
 
 
-# return a random string (often useful for temporary filenames/dirnames)
+## randstring (often useful for temporary filenames/dirnames)
 
 """
     randstring([rng=GLOBAL_RNG], [chars], [len=8])
@@ -77,6 +77,8 @@ let b = UInt8['0':'9';'A':'Z';'a':'z']
     randstring(n::Integer) = randstring(GLOBAL_RNG, b, n)
 end
 
+
+## randsubseq & randsubseq!
 
 # Fill S (resized as needed) with a random subsequence of A, where
 # each element of A is included in S with independent probability p.
@@ -137,6 +139,9 @@ large.) Technically, this process is known as "Bernoulli sampling" of `A`.
 """
 randsubseq(A::AbstractArray, p::Real) = randsubseq(GLOBAL_RNG, A, p)
 
+
+## rand_lt (helper function)
+
 "Return a random `Int` (masked with `mask`) in ``[0, n)``, when `n <= 2^52`."
 @inline function rand_lt(r::AbstractRNG, n::Int, mask::Int=nextpow2(n)-1)
     # this duplicates the functionality of RangeGenerator objects,
@@ -146,6 +151,9 @@ randsubseq(A::AbstractArray, p::Real) = randsubseq(GLOBAL_RNG, A, p)
         x < n && return x
     end
 end
+
+
+## shuffle & shuffle!
 
 """
     shuffle!([rng=GLOBAL_RNG,] v::AbstractArray)
@@ -220,6 +228,9 @@ julia> shuffle(rng, collect(1:10))
 shuffle(r::AbstractRNG, a::AbstractArray) = shuffle!(r, copymutable(a))
 shuffle(a::AbstractArray) = shuffle(GLOBAL_RNG, a)
 
+
+## randperm & randperm!
+
 """
     randperm([rng=GLOBAL_RNG,] n::Integer)
 
@@ -278,6 +289,8 @@ end
 
 randperm!(a::Array{<:Integer}) = randperm!(GLOBAL_RNG, a)
 
+
+## randcycle & randcycle!
 
 """
     randcycle([rng=GLOBAL_RNG,] n::Integer)

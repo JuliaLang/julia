@@ -1,12 +1,14 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-## randn() - Normally distributed random numbers using Ziggurat algorithm
+# Normally distributed random numbers using Ziggurat algorithm
 
 # The Ziggurat Method for generating random variables - Marsaglia and Tsang
 # Paper and reference code: http://www.jstatsoft.org/v05/i08/
 
 # randmtzig (covers also exponential variates)
+
 ## Tables for normal variates
+
 const ki =
     UInt64[0x0007799ec012f7b2,0x0000000000000000,0x0006045f4c7de363,0x0006d1aa7d5ec0a5,
            0x000728fb3f60f777,0x0007592af4e9fbc0,0x000777a5c0bf655d,0x00078ca3857d2256,
@@ -248,6 +250,7 @@ const fi =
      1.2602859304985975e-03]
 
 ## Tables for exponential variates
+
 const ke =
     UInt64[0x000e290a13924be3,0x0000000000000000,0x0009beadebce18bf,0x000c377ac71f9e08,
            0x000d4ddb99075857,0x000de893fb8ca23e,0x000e4a8e87c4328d,0x000e8dff16ae1cb9,
@@ -489,10 +492,14 @@ const fe =
      2.1459677437189063e-03,1.5362997803015724e-03,9.6726928232717454e-04,
      4.5413435384149677e-04]
 
+## Constants
 
 const ziggurat_nor_r      = 3.6541528853610087963519472518
 const ziggurat_nor_inv_r  = inv(ziggurat_nor_r)
 const ziggurat_exp_r      = 7.6971174701310497140446280481
+
+
+## randn
 
 """
     randn([rng=GLOBAL_RNG], [T=Float64], [dims...])
@@ -543,6 +550,16 @@ function randn_unlikely(rng, idx, rabs, x)
     end
 end
 
+### complex randn
+
+Base.@irrational SQRT_HALF 0.7071067811865475244008  sqrt(big(0.5))
+
+randn(rng::AbstractRNG, ::Type{Complex{T}}) where {T<:AbstractFloat} =
+    Complex{T}(SQRT_HALF * randn(rng, T), SQRT_HALF * randn(rng, T))
+
+
+## randexp
+
 """
     randexp([rng=GLOBAL_RNG], [T=Float64], [dims...])
 
@@ -584,6 +601,9 @@ function randexp_unlikely(rng, idx, x)
         return randexp(rng)
     end
 end
+
+
+## arrays & other scalar methods
 
 """
     randn!([rng=GLOBAL_RNG], A::AbstractArray) -> A
@@ -656,8 +676,3 @@ for randfun in [:randn, :randexp]
         $randfun(                             dims::Integer...               )           = $randfun(GLOBAL_RNG, Float64, dims...)
     end
 end
-
-# complex randn
-Base.@irrational SQRT_HALF 0.7071067811865475244008  sqrt(big(0.5))
-randn(rng::AbstractRNG, ::Type{Complex{T}}) where {T<:AbstractFloat} =
-    Complex{T}(SQRT_HALF * randn(rng, T), SQRT_HALF * randn(rng, T))
