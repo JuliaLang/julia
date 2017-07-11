@@ -147,20 +147,10 @@ function Base.LinAlg.qrfact(A::SparseMatrixCSC{Tv}; tol = _default_tol(A)) where
         C_NULL, C_NULL, C_NULL, C_NULL,
         R, E, H, HPinv, HTau)
 
-    # convert to Julia managed memory and free memory from SuiteSparse
-    tmpH = Sparse(H[])
-    HCSC = SparseMatrixCSC(tmpH)
-    free!(tmpH)
-
-    tmpHTau    = CHOLMOD.Dense(HTau[])
-    HTauVector = vec(Array(tmpHTau))
-    free!(tmpHTau)
-
-    tmpR = Sparse(R[])
-    RCSC = SparseMatrixCSC(tmpR)
-    free!(tmpR)
-
-    return QRSparse(HCSC, HTauVector, RCSC, p, hpinv)
+    return QRSparse(SparseMatrixCSC(Sparse(H[])),
+                    vec(Array(CHOLMOD.Dense(HTau[]))),
+                    SparseMatrixCSC(Sparse(R[])),
+                    p, hpinv)
 end
 
 """
