@@ -31,7 +31,7 @@ ccall(:jl_exit_on_sigint, Void, (Cint,), 0)
 # in the mix. If verification needs to be done, keep it to the bare minimum. Basically
 # this should make sure nothing crashes without depending on how exactly the control
 # characters are being used.
-if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
+if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     stdin_write, stdout_read, stderr_read, repl = fake_repl()
 
     repl.specialdisplay = Base.REPL.REPLDisplay(repl)
@@ -100,7 +100,7 @@ if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     cd(origpwd)
 
     # issue #20482
-    if !is_windows()
+    if !Sys.iswindows()
         write(stdin_write, ";")
         readuntil(stdout_read, "shell> ")
         write(stdin_write, "echo hello >/dev/null\n")
@@ -126,7 +126,7 @@ if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
 
     # issues #22176 & #20482
     # TODO: figure out how to test this on Windows
-    is_windows() || let tmp = tempname()
+    Sys.iswindows() || let tmp = tempname()
         try
             write(stdin_write, ";")
             readuntil(stdout_read, "shell> ")
@@ -534,7 +534,7 @@ begin
 end
 
 # Simple non-standard REPL tests
-if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
+if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     stdin_write, stdout_read, stdout_read, repl = fake_repl()
     panel = LineEdit.Prompt("testπ";
         prompt_prefix="\e[38;5;166m",
@@ -579,7 +579,7 @@ ccall(:jl_exit_on_sigint, Void, (Cint,), 1)
 let exename = Base.julia_cmd()
 
 # Test REPL in dumb mode
-if !is_windows()
+if !Sys.iswindows()
     TestHelpers.with_fake_pty() do slave, master
         nENV = copy(ENV)
         nENV["TERM"] = "dumb"
@@ -600,7 +600,7 @@ if !is_windows()
 end
 
 # Test stream mode
-if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
+if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     outs, ins, p = readandwrite(`$exename --startup-file=no --quiet`)
     write(ins,"1\nquit()\n")
     @test readstring(outs) == "1\n"
@@ -712,7 +712,7 @@ const altkeys = [Dict{Any,Any}("\e[A" => (s,o...)->(LineEdit.edit_move_up(s) || 
                 ]
 
 
-if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
+if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     for keys = [altkeys, merge(altkeys...)]
         histfile = tempname()
         try

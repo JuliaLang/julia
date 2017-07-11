@@ -891,7 +891,7 @@ function __init__()
 
     # Look for OpenSSL env variable for CA bundle (linux only)
     # windows and macOS use the OS native security backends
-    @static if is_linux()
+    @static if Sys.islinux()
         cert_loc = if "SSL_CERT_DIR" in keys(ENV)
             ENV["SSL_CERT_DIR"]
         elseif "SSL_CERT_FILE" in keys(ENV)

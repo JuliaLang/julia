@@ -201,7 +201,7 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
     write_prompt(termbuf, prompt)
     prompt = prompt_string(prompt)
     # Count the '\n' at the end of the line if the terminal emulator does (specific to DOS cmd prompt)
-    miscountnl = @static is_windows() ? (isa(Terminals.pipe_reader(terminal), Base.TTY) && !Base.ispty(Terminals.pipe_reader(terminal))) : false
+    miscountnl = @static Sys.iswindows() ? (isa(Terminals.pipe_reader(terminal), Base.TTY) && !Base.ispty(Terminals.pipe_reader(terminal))) : false
     lindent = strwidth(prompt)
 
     # Now go through the buffer line by line
@@ -1574,7 +1574,7 @@ function run_interface(terminal, m::ModalInterface)
     while !s.aborted
         buf, ok, suspend = prompt!(terminal, m, s)
         while suspend
-            @static if is_unix(); ccall(:jl_repl_raise_sigtstp, Cint, ()); end
+            @static if Sys.isunix(); ccall(:jl_repl_raise_sigtstp, Cint, ()); end
             buf, ok, suspend = prompt!(terminal, m, s)
         end
         eval(Main,
@@ -1626,7 +1626,7 @@ function prompt!(term, prompt, s = init_state(term, prompt))
             elseif state === :done
                 return buffer(s), true, false
             elseif state === :suspend
-                if is_unix()
+                if Sys.isunix()
                     return buffer(s), true, true
                 end
             else

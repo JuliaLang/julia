@@ -32,7 +32,7 @@ const BitIntegerType = Union{map(T->Type{T}, Base.BitInteger_types)...}
 const BoolBitIntegerType = Union{Type{Bool},BitIntegerType}
 const BoolBitIntegerArray = Union{Array{Bool},Base.BitIntegerArray}
 
-if is_windows()
+if Sys.iswindows()
     struct RandomDevice <: AbstractRNG
         buffer::Vector{UInt128}
 

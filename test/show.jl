@@ -372,7 +372,7 @@ let oldout = STDOUT, olderr = STDERR
         @test wrerr === STDERR
         err = @async readstring(rderr)
         @test dump(Int64) === nothing
-        if !is_windows()
+        if !Sys.iswindows()
             close(wrout)
             close(wrerr)
         end

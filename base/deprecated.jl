@@ -1570,6 +1570,13 @@ end
 # nfields(::Type) deprecation in builtins.c: update nfields tfunc in inference.jl when it is removed.
 # also replace `_nfields` with `nfields` in summarysize.c when this is removed.
 
+# PR #22182
+@deprecate is_apple   Sys.isapple
+@deprecate is_bsd     Sys.isbsd
+@deprecate is_linux   Sys.islinux
+@deprecate is_unix    Sys.isunix
+@deprecate is_windows Sys.iswindows
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

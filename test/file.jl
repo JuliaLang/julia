@@ -26,7 +26,7 @@ let err = nothing
     end
 end
 
-if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
+if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     dirlink = joinpath(dir, "dirlink")
     symlink(subdir, dirlink)
     # relative link
@@ -37,7 +37,7 @@ if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     cd(pwd_)
 end
 
-if !is_windows()
+if !Sys.iswindows()
     link = joinpath(dir, "afilelink.txt")
     symlink(file, link)
     # relative link
@@ -67,7 +67,7 @@ chmod(file, filemode(file) | 0o222)
 @test filemode(file) & 0o111 == 0
 @test filesize(file) == 0
 
-if is_windows()
+if Sys.iswindows()
     permissions = 0o444
     @test filemode(dir) & 0o777 != permissions
     @test filemode(subdir) & 0o777 != permissions
@@ -103,7 +103,7 @@ end
 
 # On windows the filesize of a folder is the accumulation of all the contained
 # files and is thus zero in this case.
-if is_windows()
+if Sys.iswindows()
     @test filesize(dir) == 0
 else
     @test filesize(dir) > 0
@@ -118,15 +118,15 @@ end
 #@test Int(time()) >= Int(mtime(file)) >= Int(mtime(dir)) >= 0 # 1 second accuracy should be sufficient
 
 # test links
-if is_unix()
+if Sys.isunix()
     @test islink(link) == true
     @test readlink(link) == file
 end
 
-if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
+if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     @test islink(dirlink) == true
     @test isdir(dirlink) == true
-    @test readlink(dirlink) == subdir * (is_windows() ? "\\" : "")
+    @test readlink(dirlink) == subdir * (Sys.iswindows() ? "\\" : "")
 end
 
 # rm recursive TODO add links
@@ -162,7 +162,7 @@ rm(c_tmpdir, recursive=true)
 @test_throws Base.UVError rm(c_tmpdir, recursive=true)
 @test rm(c_tmpdir, force=true, recursive=true) === nothing
 
-if !is_windows()
+if !Sys.iswindows()
     # chown will give an error if the user does not have permissions to change files
     if get(ENV, "USER", "") == "root" || get(ENV, "HOME", "") == "/root"
         chown(file, -2, -1)  # Change the file owner to nobody
@@ -236,7 +236,7 @@ function test_monitor_wait(tval)
     end
     fname, events = wait(fm)
     close(fm)
-    if is_linux() || is_windows() || is_apple()
+    if Sys.islinux() || Sys.iswindows() || Sys.isapple()
         @test fname == basename(file)
     else
         @test fname == ""  # platforms where F_GETPATH is not available
@@ -307,7 +307,7 @@ my_tempdir = tempdir()
 
 path = tempname()
 # Issue #9053.
-@test ispath(path) == is_windows()
+@test ispath(path) == Sys.iswindows()
 ispath(path) && rm(path)
 
 (p, f) = mktemp()
@@ -476,7 +476,7 @@ end
 
 # issue #10506 #10434
 ## Tests for directories and links to directories
-if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
+if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     function setup_dirs(tmpdir)
         srcdir = joinpath(tmpdir, "src")
         hidden_srcdir = joinpath(tmpdir, ".hidden_srcdir")
@@ -686,7 +686,7 @@ end
 
 # issue #10506 #10434
 ## Tests for files and links to files as well as directories and links to directories
-if !is_windows()
+if !Sys.iswindows()
     function setup_files(tmpdir)
         srcfile = joinpath(tmpdir, "srcfile.txt")
         hidden_srcfile = joinpath(tmpdir, ".hidden_srcfile.txt")
@@ -918,7 +918,7 @@ let f = open(file, "w")
     f = open(file, "r")
     test_LibcFILE(convert(Libc.FILE, f))
     close(f)
-    if is_windows()
+    if Sys.iswindows()
         f = RawFD(ccall(:_open, Cint, (Cstring, Cint), file, Base.Filesystem.JL_O_RDONLY))
     else
         f = RawFD(ccall(:open, Cint, (Cstring, Cint), file, Base.Filesystem.JL_O_RDONLY))
@@ -937,7 +937,7 @@ end
 @test_throws ArgumentError open("ba\0d", "w")
 @test_throws ArgumentError cp(file, "ba\0d")
 @test_throws ArgumentError mv(file, "ba\0d")
-if !is_windows() || (Sys.windows_version() >= Sys.WINDOWS_VISTA_VER)
+if !Sys.iswindows() || (Sys.windows_version() >= Sys.WINDOWS_VISTA_VER)
     @test_throws ArgumentError symlink(file, "ba\0d")
 else
     @test_throws ErrorException symlink(file, "ba\0d")
@@ -959,7 +959,7 @@ cd(dirwalk) do
         touch(joinpath("sub_dir1", "file$i"))
     end
     touch(joinpath("sub_dir2", "file_dir2"))
-    has_symlinks = !is_windows() || (Sys.windows_version() >= Sys.WINDOWS_VISTA_VER)
+    has_symlinks = !Sys.iswindows() || (Sys.windows_version() >= Sys.WINDOWS_VISTA_VER)
     follow_symlink_vec = has_symlinks ? [true, false] : [false]
     has_symlinks && symlink(abspath("sub_dir2"), joinpath("sub_dir1", "link"))
     for follow_symlinks in follow_symlink_vec
@@ -1048,11 +1048,11 @@ rm(dirwalk, recursive=true)
 ############
 # Clean up #
 ############
-if !is_windows()
+if !Sys.iswindows()
     rm(link)
     rm(rellink)
 end
-if !is_windows() || (Sys.windows_version() >= Sys.WINDOWS_VISTA_VER)
+if !Sys.iswindows() || (Sys.windows_version() >= Sys.WINDOWS_VISTA_VER)
     rm(dirlink)
     rm(relsubdirlink)
 end
@@ -1113,7 +1113,7 @@ test2_12992()
 test2_12992()
 
 # issue 13559
-if !is_windows()
+if !Sys.iswindows()
 function test_13559()
     fn = tempname()
     run(`mkfifo $fn`)

@@ -16,7 +16,7 @@ export
     splitdrive,
     splitext
 
-if is_unix()
+if Sys.isunix()
     const path_separator    = "/"
     const path_separator_re = r"/+"
     const path_directory_re = r"(?:^|/)\.{0,2}$"
@@ -24,7 +24,7 @@ if is_unix()
     const path_ext_splitter = r"^((?:.*/)?(?:\.|[^/\.])[^/]*?)(\.[^/\.]*|)$"
 
     splitdrive(path::String) = ("",path)
-elseif is_windows()
+elseif Sys.iswindows()
     const path_separator    = "\\"
     const path_separator_re = r"[/\\]+"
     const path_absolute_re  = r"^(?:\w+:)?[/\\]"
@@ -77,7 +77,7 @@ function homedir()
 end
 
 
-if is_windows()
+if Sys.iswindows()
     isabspath(path::String) = ismatch(path_absolute_re, path)
 else
     isabspath(path::String) = startswith(path, '/')
@@ -276,7 +276,7 @@ current directory if necessary. Equivalent to `abspath(joinpath(path, paths...))
 """
 abspath(a::AbstractString, b::AbstractString...) = abspath(joinpath(a,b...))
 
-if is_windows()
+if Sys.iswindows()
 function realpath(path::AbstractString)
     p = cwstring(path)
     buf = zeros(UInt16, length(p))
@@ -324,7 +324,7 @@ Canonicalize a path by expanding symbolic links and removing "." and ".." entrie
 realpath(path::AbstractString)
 
 
-if is_windows()
+if Sys.iswindows()
 expanduser(path::AbstractString) = path # on windows, ~ means "temporary file"
 else
 function expanduser(path::AbstractString)

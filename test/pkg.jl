@@ -322,7 +322,7 @@ temp_pkg_dir() do
         include(Pkg.dir("Example","src","Example.jl"))
         meth = first(methods(Example.domath))
         fname = string(meth.file)
-        @test ('\\' in fname) == is_windows()
+        @test ('\\' in fname) == Sys.iswindows()
         @test startswith(Base.url(meth), "https://github.com/JuliaLang/Example.jl/tree")
     end
 
@@ -556,7 +556,7 @@ temp_pkg_dir() do
         mkdir(home)
         write(joinpath(home, ".juliarc.jl"), "const JULIA_RC_LOADED = true")
 
-        withenv((is_windows() ? "USERPROFILE" : "HOME") => home) do
+        withenv((Sys.iswindows() ? "USERPROFILE" : "HOME") => home) do
             code = "redirect_stderr(STDOUT); Pkg.build(\"$package\")"
 
             msg = readstring(`$(Base.julia_cmd()) --startup-file=no -e $code`)
