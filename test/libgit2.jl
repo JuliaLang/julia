@@ -1905,7 +1905,8 @@ mktempdir() do dir
                         deserialize(f)
                     end
                     @test err.code == LibGit2.Error.ECERTIFICATE
-                    @test startswith(err.msg, "The SSL certificate is invalid")
+                    @test startswith(lowercase(err.msg),
+                                     lowercase("The SSL certificate is invalid"))
 
                     rm(errfile)
 
