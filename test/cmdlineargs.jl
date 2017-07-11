@@ -332,7 +332,7 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes --startup-file=no`
             end
             """)
 
-        withenv((is_windows() ? "USERPROFILE" : "HOME") => dir) do
+        withenv((Sys.is_windows() ? "USERPROFILE" : "HOME") => dir) do
             @test readchomp(`$exename $file foo`) == file
         end
     end
