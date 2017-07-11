@@ -1417,18 +1417,18 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
         }
         else if (jl_is_uniontype(jfty)) {
             int fsz = jl_field_size(jt, idx);
-            Value *ptindex = builder.CreateGEP(LLVM37_param(T_int8) emit_bitcast(addr, T_pint8), ConstantInt::get(T_size, fsz - 1));
-            Value *tindex = builder.CreateNUWAdd(ConstantInt::get(T_int8, 1), builder.CreateLoad(ptindex));
+            Value *ptindex = ctx.builder.CreateGEP(T_int8, emit_bitcast(ctx, addr, T_pint8), ConstantInt::get(T_size, fsz - 1));
+            Value *tindex = ctx.builder.CreateNUWAdd(ConstantInt::get(T_int8, 1), ctx.builder.CreateLoad(ptindex));
             bool isimmutable = strct.isimmutable;
             Value *gcroot = strct.gcroot;
             if (jt->mutabl) {
                 // move value to an immutable stack slot
                 Type *AT = ArrayType::get(IntegerType::get(jl_LLVMContext, 8 * align), (fsz + align - 2) / align);
-                AllocaInst *lv = emit_static_alloca(AT, ctx);
+                AllocaInst *lv = emit_static_alloca(ctx, AT);
                 if (align > 1)
                     lv->setAlignment(align);
                 Value *nbytes = ConstantInt::get(T_size, fsz - 1);
-                builder.CreateMemCpy(lv, addr, nbytes, align);
+                ctx.builder.CreateMemCpy(lv, addr, nbytes, align);
                 addr = lv;
                 isimmutable = true;
                 gcroot = NULL;
@@ -2220,11 +2220,11 @@ static void emit_setfield(jl_codectx_t &ctx,
             if (jl_is_uniontype(jfty)) {
                 int fsz = jl_field_size(sty, idx0);
                 // compute tindex from rhs
-                jl_cgval_t rhs_union = convert_julia_type(rhs, jfty, ctx);
-                Value *ptindex = builder.CreateGEP(LLVM37_param(T_int8) emit_bitcast(addr, T_pint8), ConstantInt::get(T_size, fsz - 1));
-                Value *tindex = compute_tindex_unboxed(rhs_union, jfty, ctx);
-                tindex = builder.CreateNUWSub(tindex, ConstantInt::get(T_int8, 1));
-                builder.CreateStore(tindex, ptindex);
+                jl_cgval_t rhs_union = convert_julia_type(ctx, rhs, jfty);
+                Value *tindex = compute_tindex_unboxed(ctx, rhs_union, jfty);
+                tindex = ctx.builder.CreateNUWSub(tindex, ConstantInt::get(T_int8, 1));
+                Value *ptindex = ctx.builder.CreateGEP(T_int8, emit_bitcast(ctx, addr, T_pint8), ConstantInt::get(T_size, fsz - 1));
+                ctx.builder.CreateStore(tindex, ptindex);
                 // copy data
                 emit_unionmove(addr, rhs, NULL, false, NULL, ctx);
             }
@@ -2232,7 +2232,7 @@ static void emit_setfield(jl_codectx_t &ctx,
                 int align = jl_field_offset(sty, idx0);
                 align |= 16;
                 align &= -align;
-                typed_store(addr, ConstantInt::get(T_size, 0), rhs, jfty, ctx,
+                typed_store(ctx, addr, ConstantInt::get(T_size, 0), rhs, jfty,
                     strct.tbaa, data_pointer(ctx, strct, T_pjlvalue), align);
             }
         }

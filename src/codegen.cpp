@@ -738,7 +738,7 @@ static inline jl_cgval_t update_julia_type(jl_codectx_t &ctx, const jl_cgval_t &
     return jl_cgval_t(v, typ, NULL);
 }
 
-static jl_cgval_t convert_julia_type(const jl_cgval_t &v, jl_value_t *typ, jl_codectx_t *ctx, bool needsroot = true);
+static jl_cgval_t convert_julia_type(jl_codectx_t &ctx, const jl_cgval_t &v, jl_value_t *typ, bool needsroot = true);
 
 // --- allocating local variables ---
 
@@ -5998,7 +5998,7 @@ static void init_julia_llvm_env(Module *m)
         StructType::create(jl_LLVMContext,
                            ArrayRef<Type*>(vaelts,sizeof(vaelts)/sizeof(vaelts[0])),
                            "jl_array_t");
-    jl_parray_llvmt = PointerType::get(jl_array_llvmt,0);
+    jl_parray_llvmt = PointerType::get(jl_array_llvmt, 0);
 
     global_to_llvm("__stack_chk_guard", (void*)&__stack_chk_guard, m);
     Function *jl__stack_chk_fail =
