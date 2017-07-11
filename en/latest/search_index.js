@@ -7541,7 +7541,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.isapprox",
     "category": "Function",
-    "text": "isapprox(x, y; rtol::Real=sqrt(eps), atol::Real=0, nans::Bool=false, norm::Function)\n\nInexact equality comparison: true if norm(x-y) <= atol + rtol*max(norm(x), norm(y)). The default atol is zero and the default rtol depends on the types of x and y. The keyword argument nans determines whether or not NaN values are considered equal (defaults to false).\n\nFor real or complex floating-point values, rtol defaults to sqrt(eps(typeof(real(x-y)))). This corresponds to requiring equality of about half of the significand digits. For other types, rtol defaults to zero.\n\nx and y may also be arrays of numbers, in which case norm defaults to vecnorm but may be changed by passing a norm::Function keyword argument. (For numbers, norm is the same thing as abs.) When x and y are arrays, if norm(x-y) is not finite (i.e. ±Inf or NaN), the comparison falls back to checking whether all elements of x and y are approximately equal component-wise.\n\nThe binary operator ≈ is equivalent to isapprox with the default arguments, and x ≉ y is equivalent to !isapprox(x,y).\n\njulia> 0.1 ≈ (0.1 - 1e-10)\ntrue\n\njulia> isapprox(10, 11; atol = 2)\ntrue\n\njulia> isapprox([10.0^9, 1.0], [10.0^9, 2.0])\ntrue\n\n\n\n"
+    "text": "isapprox(x, y; rtol::Real=sqrt(eps), atol::Real=0, nans::Bool=false, norm::Function)\n\nInexact equality comparison: true if norm(x-y) <= atol + rtol*max(norm(x), norm(y)). The default atol is zero and the default rtol depends on the types of x and y. The keyword argument nans determines whether or not NaN values are considered equal (defaults to false).\n\nFor real or complex floating-point values, rtol defaults to sqrt(eps(typeof(real(x-y)))). This corresponds to requiring equality of about half of the significand digits. For other types, rtol defaults to zero.\n\nx and y may also be arrays of numbers, in which case norm defaults to vecnorm but may be changed by passing a norm::Function keyword argument. (For numbers, norm is the same thing as abs.) When x and y are arrays, if norm(x-y) is not finite (i.e. ±Inf or NaN), the comparison falls back to checking whether all elements of x and y are approximately equal component-wise.\n\nThe binary operator ≈ is equivalent to isapprox with the default arguments, and x ≉ y is equivalent to !isapprox(x,y).\n\nExamples\n\njulia> 0.1 ≈ (0.1 - 1e-10)\ntrue\n\njulia> isapprox(10, 11; atol = 2)\ntrue\n\njulia> isapprox([10.0^9, 1.0], [10.0^9, 2.0])\ntrue\n\n\n\n"
 },
 
 {
@@ -8005,7 +8005,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.round",
     "category": "Method",
-    "text": "round([T,] x, [digits, [base]], [r::RoundingMode])\n\nRounds x to an integer value according to the provided RoundingMode, returning a value of the same type as x. When not specifying a rounding mode the global mode will be used (see rounding), which by default is round to the nearest integer (RoundNearest mode), with ties (fractional values of 0.5) being rounded to the nearest even integer.\n\njulia> round(1.7)\n2.0\n\njulia> round(1.5)\n2.0\n\njulia> round(2.5)\n2.0\n\nThe optional RoundingMode argument will change how the number gets rounded.\n\nround(T, x, [r::RoundingMode]) converts the result to type T, throwing an InexactError if the value is not representable.\n\nround(x, digits) rounds to the specified number of digits after the decimal place (or before if negative). round(x, digits, base) rounds using a base other than 10.\n\njulia> round(pi, 2)\n3.14\n\njulia> round(pi, 3, 2)\n3.125\n\nnote: Note\nRounding to specified digits in bases other than 2 can be inexact when operating on binary floating point numbers. For example, the Float64 value represented by 1.15 is actually less than 1.15, yet will be rounded to 1.2.julia> x = 1.15\n1.15\n\njulia> @sprintf \"%.20f\" x\n\"1.14999999999999991118\"\n\njulia> x < 115//100\ntrue\n\njulia> round(x, 1)\n1.2\n\n\n\n"
+    "text": "round([T,] x, [digits, [base]], [r::RoundingMode])\n\nRounds x to an integer value according to the provided RoundingMode, returning a value of the same type as x. When not specifying a rounding mode the global mode will be used (see rounding), which by default is round to the nearest integer (RoundNearest mode), with ties (fractional values of 0.5) being rounded to the nearest even integer.\n\nExamples\n\njulia> round(1.7)\n2.0\n\njulia> round(1.5)\n2.0\n\njulia> round(2.5)\n2.0\n\nThe optional RoundingMode argument will change how the number gets rounded.\n\nround(T, x, [r::RoundingMode]) converts the result to type T, throwing an InexactError if the value is not representable.\n\nround(x, digits) rounds to the specified number of digits after the decimal place (or before if negative). round(x, digits, base) rounds using a base other than 10.\n\nExamples\n\njulia> round(pi, 2)\n3.14\n\njulia> round(pi, 3, 2)\n3.125\n\nnote: Note\nRounding to specified digits in bases other than 2 can be inexact when operating on binary floating point numbers. For example, the Float64 value represented by 1.15 is actually less than 1.15, yet will be rounded to 1.2.Examplesjulia> x = 1.15\n1.15\n\njulia> @sprintf \"%.20f\" x\n\"1.14999999999999991118\"\n\njulia> x < 115//100\ntrue\n\njulia> round(x, 1)\n1.2\n\n\n\n"
 },
 
 {
@@ -8109,7 +8109,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.signif",
     "category": "Function",
-    "text": "signif(x, digits, [base])\n\nRounds (in the sense of round) x so that there are digits significant digits, under a base base representation, default 10. E.g., signif(123.456, 2) is 120.0, and signif(357.913, 4, 2) is 352.0.\n\n\n\n"
+    "text": "signif(x, digits, [base])\n\nRounds (in the sense of round) x so that there are digits significant digits, under a base base representation, default 10.\n\nExamples\n\njulia> signif(123.456, 2)\n120.0\n\njulia> signif(357.913, 4, 2)\n352.0\n\n\n\n"
 },
 
 {
@@ -8357,7 +8357,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.conj",
     "category": "Function",
-    "text": "conj(z)\n\nCompute the complex conjugate of a complex number z.\n\nExamples\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\nconj(v::RowVector)\n\nReturns a ConjArray lazy view of the input, where each element is conjugated.\n\nExample\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\n"
+    "text": "conj(v::RowVector)\n\nReturns a ConjArray lazy view of the input, where each element is conjugated.\n\nExample\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\nconj(z)\n\nCompute the complex conjugate of a complex number z.\n\nExamples\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\n"
 },
 
 {
@@ -9637,7 +9637,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.:^",
     "category": "Method",
-    "text": "^(s::AbstractString, n::Integer)\n\nRepeat n times the string s. The repeat function is an alias to this operator.\n\njulia> \"Test \"^3\n\"Test Test Test \"\n\n\n\n"
+    "text": "^(s::AbstractString, n::Integer)\n\nRepeat n times the string s. The repeat function is an alias to this operator.\n\nExamples\n\njulia> \"Test \"^3\n\"Test Test Test \"\n\n\n\n"
 },
 
 {
@@ -9861,7 +9861,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.reverse",
     "category": "Method",
-    "text": "reverse(s::AbstractString) -> AbstractString\n\nReverses a string.\n\njulia> reverse(\"JuliaLang\")\n\"gnaLailuJ\"\n\n\n\n"
+    "text": "reverse(s::AbstractString) -> AbstractString\n\nReverses a string.\n\nExamples\n\njulia> reverse(\"JuliaLang\")\n\"gnaLailuJ\"\n\n\n\n"
 },
 
 {
@@ -10517,7 +10517,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.ind2sub",
     "category": "Function",
-    "text": "ind2sub(a, index) -> subscripts\n\nReturns a tuple of subscripts into array a corresponding to the linear index index.\n\njulia> A = ones(5,6,7);\n\njulia> ind2sub(A,35)\n(5, 1, 2)\n\njulia> ind2sub(A,70)\n(5, 2, 3)\n\n\n\nind2sub(dims, index) -> subscripts\n\nReturns a tuple of subscripts into an array with dimensions dims, corresponding to the linear index index.\n\nExample:\n\ni, j, ... = ind2sub(size(A), indmax(A))\n\nprovides the indices of the maximum element.\n\njulia> ind2sub((3,4),2)\n(2, 1)\n\njulia> ind2sub((3,4),3)\n(3, 1)\n\njulia> ind2sub((3,4),4)\n(1, 2)\n\n\n\n"
+    "text": "ind2sub(a, index) -> subscripts\n\nReturns a tuple of subscripts into array a corresponding to the linear index index.\n\nExamples\n\njulia> A = ones(5,6,7);\n\njulia> ind2sub(A,35)\n(5, 1, 2)\n\njulia> ind2sub(A,70)\n(5, 2, 3)\n\n\n\nind2sub(dims, index) -> subscripts\n\nReturns a tuple of subscripts into an array with dimensions dims, corresponding to the linear index index.\n\nExample:\n\ni, j, ... = ind2sub(size(A), indmax(A))\n\nprovides the indices of the maximum element.\n\nExamples\n\njulia> ind2sub((3,4),2)\n(2, 1)\n\njulia> ind2sub((3,4),3)\n(3, 1)\n\njulia> ind2sub((3,4),4)\n(1, 2)\n\n\n\n"
 },
 
 {
@@ -10525,7 +10525,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.sub2ind",
     "category": "Function",
-    "text": "sub2ind(dims, i, j, k...) -> index\n\nThe inverse of ind2sub, returns the linear index corresponding to the provided subscripts.\n\njulia> sub2ind((5,6,7),1,2,3)\n66\n\njulia> sub2ind((5,6,7),1,6,3)\n86\n\n\n\n"
+    "text": "sub2ind(dims, i, j, k...) -> index\n\nThe inverse of ind2sub, returns the linear index corresponding to the provided subscripts.\n\nExamples\n\njulia> sub2ind((5,6,7),1,2,3)\n66\n\njulia> sub2ind((5,6,7),1,6,3)\n86\n\n\n\n"
 },
 
 {
@@ -10781,7 +10781,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.vcat",
     "category": "Function",
-    "text": "vcat(A...)\n\nConcatenate along dimension 1.\n\njulia> a = [1 2 3 4 5]\n1×5 Array{Int64,2}:\n 1  2  3  4  5\n\njulia> b = [6 7 8 9 10; 11 12 13 14 15]\n2×5 Array{Int64,2}:\n  6   7   8   9  10\n 11  12  13  14  15\n\njulia> vcat(a,b)\n3×5 Array{Int64,2}:\n  1   2   3   4   5\n  6   7   8   9  10\n 11  12  13  14  15\n\njulia> c = ([1 2 3], [4 5 6])\n([1 2 3], [4 5 6])\n\njulia> vcat(c...)\n2×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n\n\n\n"
+    "text": "vcat(A...)\n\nConcatenate along dimension 1.\n\nExamples\n\njulia> a = [1 2 3 4 5]\n1×5 Array{Int64,2}:\n 1  2  3  4  5\n\njulia> b = [6 7 8 9 10; 11 12 13 14 15]\n2×5 Array{Int64,2}:\n  6   7   8   9  10\n 11  12  13  14  15\n\njulia> vcat(a,b)\n3×5 Array{Int64,2}:\n  1   2   3   4   5\n  6   7   8   9  10\n 11  12  13  14  15\n\njulia> c = ([1 2 3], [4 5 6])\n([1 2 3], [4 5 6])\n\njulia> vcat(c...)\n2×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n\n\n\n"
 },
 
 {
@@ -10789,7 +10789,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.hcat",
     "category": "Function",
-    "text": "hcat(A...)\n\nConcatenate along dimension 2.\n\njulia> a = [1; 2; 3; 4; 5]\n5-element Array{Int64,1}:\n 1\n 2\n 3\n 4\n 5\n\njulia> b = [6 7; 8 9; 10 11; 12 13; 14 15]\n5×2 Array{Int64,2}:\n  6   7\n  8   9\n 10  11\n 12  13\n 14  15\n\njulia> hcat(a,b)\n5×3 Array{Int64,2}:\n 1   6   7\n 2   8   9\n 3  10  11\n 4  12  13\n 5  14  15\n\njulia> c = ([1; 2; 3], [4; 5; 6])\n([1, 2, 3], [4, 5, 6])\n\njulia> hcat(c...)\n3×2 Array{Int64,2}:\n 1  4\n 2  5\n 3  6\n\n\n\n"
+    "text": "hcat(A...)\n\nConcatenate along dimension 2.\n\nExamples\n\njulia> a = [1; 2; 3; 4; 5]\n5-element Array{Int64,1}:\n 1\n 2\n 3\n 4\n 5\n\njulia> b = [6 7; 8 9; 10 11; 12 13; 14 15]\n5×2 Array{Int64,2}:\n  6   7\n  8   9\n 10  11\n 12  13\n 14  15\n\njulia> hcat(a,b)\n5×3 Array{Int64,2}:\n 1   6   7\n 2   8   9\n 3  10  11\n 4  12  13\n 5  14  15\n\njulia> c = ([1; 2; 3], [4; 5; 6])\n([1, 2, 3], [4, 5, 6])\n\njulia> hcat(c...)\n3×2 Array{Int64,2}:\n 1  4\n 2  5\n 3  6\n\n\n\n"
 },
 
 {
@@ -10797,7 +10797,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.hvcat",
     "category": "Function",
-    "text": "hvcat(rows::Tuple{Vararg{Int}}, values...)\n\nHorizontal and vertical concatenation in one call. This function is called for block matrix syntax. The first argument specifies the number of arguments to concatenate in each block row.\n\njulia> a, b, c, d, e, f = 1, 2, 3, 4, 5, 6\n(1, 2, 3, 4, 5, 6)\n\njulia> [a b c; d e f]\n2×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n\njulia> hvcat((3,3), a,b,c,d,e,f)\n2×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n\njulia> [a b;c d; e f]\n3×2 Array{Int64,2}:\n 1  2\n 3  4\n 5  6\n\njulia> hvcat((2,2,2), a,b,c,d,e,f)\n3×2 Array{Int64,2}:\n 1  2\n 3  4\n 5  6\n\nIf the first argument is a single integer n, then all block rows are assumed to have n block columns.\n\n\n\n"
+    "text": "hvcat(rows::Tuple{Vararg{Int}}, values...)\n\nHorizontal and vertical concatenation in one call. This function is called for block matrix syntax. The first argument specifies the number of arguments to concatenate in each block row.\n\nExamples\n\njulia> a, b, c, d, e, f = 1, 2, 3, 4, 5, 6\n(1, 2, 3, 4, 5, 6)\n\njulia> [a b c; d e f]\n2×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n\njulia> hvcat((3,3), a,b,c,d,e,f)\n2×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n\njulia> [a b;c d; e f]\n3×2 Array{Int64,2}:\n 1  2\n 3  4\n 5  6\n\njulia> hvcat((2,2,2), a,b,c,d,e,f)\n3×2 Array{Int64,2}:\n 1  2\n 3  4\n 5  6\n\nIf the first argument is a single integer n, then all block rows are assumed to have n block columns.\n\n\n\n"
 },
 
 {
@@ -11229,7 +11229,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.reverseind",
     "category": "Function",
-    "text": "reverseind(v, i)\n\nGiven an index i in reverse(v), return the corresponding index in v so that v[reverseind(v,i)] == reverse(v)[i]. (This can be nontrivial in the case where v is a Unicode string.)\n\n\n\n"
+    "text": "reverseind(v, i)\n\nGiven an index i in reverse(v), return the corresponding index in v so that v[reverseind(v,i)] == reverse(v)[i]. (This can be nontrivial in the case where v is a Unicode string.)\n\nExamples\n\njulia> r = reverse(\"Julia\")\n\"ailuJ\"\n\njulia> for i in 1:length(r)\n           print(r[reverseind(\"Julia\", i)])\n       end\nJulia\n\n\n\n"
 },
 
 {
@@ -12613,7 +12613,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.lufact",
     "category": "Function",
-    "text": "lufact(A::SparseMatrixCSC) -> F::UmfpackLU\n\nCompute the LU factorization of a sparse matrix A.\n\nFor sparse A with real or complex element type, the return type of F is UmfpackLU{Tv, Ti}, with Tv = Float64 or Complex128 respectively and Ti is an integer type (Int32 or Int64).\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] right permutation Vector\nF[:q] left permutation Vector\nF[:Rs] Vector of scaling factors\nF[:(:)] (L,U,p,q,Rs) components\n\nThe relation between F and A is\n\nF[:L]*F[:U] == (F[:Rs] .* A)[F[:p], F[:q]]\n\nF further supports the following functions:\n\n\\\ncond\ndet\n\nnote: Note\nlufact(A::SparseMatrixCSC) uses the UMFPACK library that is part of SuiteSparse. As this library only supports sparse matrices with Float64 or Complex128 elements, lufact converts A into a copy that is of type SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\nlufact(A [,pivot=Val(true)]) -> F::LU\n\nCompute the LU factorization of A.\n\nIn most cases, if A is a subtype S of AbstractMatrix{T} with an element type T supporting +, -, * and /, the return type is LU{T,S{T}}. If pivoting is chosen (default) the element type should also support abs and <.\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] (right) permutation Vector\nF[:P] (right) permutation Matrix\n\nThe relationship between F and A is\n\nF[:L]*F[:U] == A[F[:p], :]\n\nF further supports the following functions:\n\nSupported function LU LU{T,Tridiagonal{T}}\n/ ✓ \n\\ ✓ ✓\ninv ✓ ✓\ndet ✓ ✓\nlogdet ✓ ✓\nlogabsdet ✓ ✓\nsize ✓ ✓\n\nExample\n\njulia> A = [4 3; 6 3]\n2×2 Array{Int64,2}:\n 4  3\n 6  3\n\njulia> F = lufact(A)\nBase.LinAlg.LU{Float64,Array{Float64,2}} with factors L and U:\n[1.0 0.0; 1.5 1.0]\n[4.0 3.0; 0.0 -1.5]\n\njulia> F[:L] * F[:U] == A[F[:p], :]\ntrue\n\n\n\n"
+    "text": "lufact(A [,pivot=Val(true)]) -> F::LU\n\nCompute the LU factorization of A.\n\nIn most cases, if A is a subtype S of AbstractMatrix{T} with an element type T supporting +, -, * and /, the return type is LU{T,S{T}}. If pivoting is chosen (default) the element type should also support abs and <.\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] (right) permutation Vector\nF[:P] (right) permutation Matrix\n\nThe relationship between F and A is\n\nF[:L]*F[:U] == A[F[:p], :]\n\nF further supports the following functions:\n\nSupported function LU LU{T,Tridiagonal{T}}\n/ ✓ \n\\ ✓ ✓\ninv ✓ ✓\ndet ✓ ✓\nlogdet ✓ ✓\nlogabsdet ✓ ✓\nsize ✓ ✓\n\nExample\n\njulia> A = [4 3; 6 3]\n2×2 Array{Int64,2}:\n 4  3\n 6  3\n\njulia> F = lufact(A)\nBase.LinAlg.LU{Float64,Array{Float64,2}} with factors L and U:\n[1.0 0.0; 1.5 1.0]\n[4.0 3.0; 0.0 -1.5]\n\njulia> F[:L] * F[:U] == A[F[:p], :]\ntrue\n\n\n\nlufact(A::SparseMatrixCSC) -> F::UmfpackLU\n\nCompute the LU factorization of a sparse matrix A.\n\nFor sparse A with real or complex element type, the return type of F is UmfpackLU{Tv, Ti}, with Tv = Float64 or Complex128 respectively and Ti is an integer type (Int32 or Int64).\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] right permutation Vector\nF[:q] left permutation Vector\nF[:Rs] Vector of scaling factors\nF[:(:)] (L,U,p,q,Rs) components\n\nThe relation between F and A is\n\nF[:L]*F[:U] == (F[:Rs] .* A)[F[:p], F[:q]]\n\nF further supports the following functions:\n\n\\\ncond\ndet\n\nnote: Note\nlufact(A::SparseMatrixCSC) uses the UMFPACK library that is part of SuiteSparse. As this library only supports sparse matrices with Float64 or Complex128 elements, lufact converts A into a copy that is of type SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\n"
 },
 
 {
@@ -12717,7 +12717,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.qrfact",
     "category": "Function",
-    "text": "qrfact(A) -> QRSparse\n\nCompute the QR factorization of a sparse matrix A. Fill-reducing row and column permutations are used such that F[:R] = F[:Q]'*A[F[:prow],F[:pcol]]. The main application of this type is to solve least squares or underdetermined problems with \\. The function calls the C library SPQR.\n\nExamples\n\njulia> A = sparse([1,2,3,4], [1,1,2,2], ones(4))\n4×2 SparseMatrixCSC{Float64,Int64} with 4 stored entries:\n  [1, 1]  =  1.0\n  [2, 1]  =  1.0\n  [3, 2]  =  1.0\n  [4, 2]  =  1.0\n\njulia> qrfact(A)\nBase.SparseArrays.SPQR.QRSparse{Float64,Int64}\nQ factor:\n4×4 Base.SparseArrays.SPQR.QRSparseQ{Float64,Int64}:\n -0.707107   0.0        0.0       -0.707107\n  0.0       -0.707107  -0.707107   0.0\n  0.0       -0.707107   0.707107   0.0\n -0.707107   0.0        0.0        0.707107\nR factor:\n2×2 SparseMatrixCSC{Float64,Int64} with 2 stored entries:\n  [1, 1]  =  -1.41421\n  [2, 2]  =  -1.41421\nRow permutation:\n4-element Array{Int64,1}:\n 1\n 3\n 4\n 2\nColumns permutation:\n2-element Array{Int64,1}:\n 1\n 2\n\n\n\nqrfact(A, pivot=Val(false)) -> F\n\nCompute the QR factorization of the matrix A: an orthogonal (or unitary if A is complex-valued) matrix Q, and an upper triangular matrix R such that\n\nA = Q R\n\nThe returned object F stores the factorization in a packed format:\n\nif pivot == Val(true) then F is a QRPivoted object,\notherwise if the element type of A is a BLAS type (Float32, Float64, Complex64 or Complex128), then F is a QRCompactWY object,\notherwise F is a QR object.\n\nThe individual components of the factorization F can be accessed by indexing with a symbol:\n\nF[:Q]: the orthogonal/unitary matrix Q\nF[:R]: the upper triangular matrix R\nF[:p]: the permutation vector of the pivot (QRPivoted only)\nF[:P]: the permutation matrix of the pivot (QRPivoted only)\n\nThe following functions are available for the QR objects: inv, size, and \\. When A is rectangular, \\ will return a least squares solution and if the solution is not unique, the one with smallest norm is returned.\n\nMultiplication with respect to either thin or full Q is allowed, i.e. both F[:Q]*F[:R] and F[:Q]*A are supported. A Q matrix can be converted into a regular matrix with full which has a named argument thin.\n\nExample\n\njulia> A = [3.0 -6.0; 4.0 -8.0; 0.0 1.0]\n3×2 Array{Float64,2}:\n 3.0  -6.0\n 4.0  -8.0\n 0.0   1.0\n\njulia> F = qrfact(A)\nBase.LinAlg.QRCompactWY{Float64,Array{Float64,2}} with factors Q and R:\n[-0.6 0.0 0.8; -0.8 0.0 -0.6; 0.0 -1.0 0.0]\n[-5.0 10.0; 0.0 -1.0]\n\njulia> F[:Q] * F[:R] == A\ntrue\n\nnote: Note\nqrfact returns multiple types because LAPACK uses several representations that minimize the memory storage requirements of products of Householder elementary reflectors, so that the Q and R matrices can be stored compactly rather as two separate dense matrices.\n\n\n\n"
+    "text": "qrfact(A, pivot=Val(false)) -> F\n\nCompute the QR factorization of the matrix A: an orthogonal (or unitary if A is complex-valued) matrix Q, and an upper triangular matrix R such that\n\nA = Q R\n\nThe returned object F stores the factorization in a packed format:\n\nif pivot == Val(true) then F is a QRPivoted object,\notherwise if the element type of A is a BLAS type (Float32, Float64, Complex64 or Complex128), then F is a QRCompactWY object,\notherwise F is a QR object.\n\nThe individual components of the factorization F can be accessed by indexing with a symbol:\n\nF[:Q]: the orthogonal/unitary matrix Q\nF[:R]: the upper triangular matrix R\nF[:p]: the permutation vector of the pivot (QRPivoted only)\nF[:P]: the permutation matrix of the pivot (QRPivoted only)\n\nThe following functions are available for the QR objects: inv, size, and \\. When A is rectangular, \\ will return a least squares solution and if the solution is not unique, the one with smallest norm is returned.\n\nMultiplication with respect to either thin or full Q is allowed, i.e. both F[:Q]*F[:R] and F[:Q]*A are supported. A Q matrix can be converted into a regular matrix with full which has a named argument thin.\n\nExample\n\njulia> A = [3.0 -6.0; 4.0 -8.0; 0.0 1.0]\n3×2 Array{Float64,2}:\n 3.0  -6.0\n 4.0  -8.0\n 0.0   1.0\n\njulia> F = qrfact(A)\nBase.LinAlg.QRCompactWY{Float64,Array{Float64,2}} with factors Q and R:\n[-0.6 0.0 0.8; -0.8 0.0 -0.6; 0.0 -1.0 0.0]\n[-5.0 10.0; 0.0 -1.0]\n\njulia> F[:Q] * F[:R] == A\ntrue\n\nnote: Note\nqrfact returns multiple types because LAPACK uses several representations that minimize the memory storage requirements of products of Householder elementary reflectors, so that the Q and R matrices can be stored compactly rather as two separate dense matrices.\n\n\n\nqrfact(A) -> QRSparse\n\nCompute the QR factorization of a sparse matrix A. Fill-reducing row and column permutations are used such that F[:R] = F[:Q]'*A[F[:prow],F[:pcol]]. The main application of this type is to solve least squares or underdetermined problems with \\. The function calls the C library SPQR.\n\nExamples\n\njulia> A = sparse([1,2,3,4], [1,1,2,2], ones(4))\n4×2 SparseMatrixCSC{Float64,Int64} with 4 stored entries:\n  [1, 1]  =  1.0\n  [2, 1]  =  1.0\n  [3, 2]  =  1.0\n  [4, 2]  =  1.0\n\njulia> qrfact(A)\nBase.SparseArrays.SPQR.QRSparse{Float64,Int64}\nQ factor:\n4×4 Base.SparseArrays.SPQR.QRSparseQ{Float64,Int64}:\n -0.707107   0.0        0.0       -0.707107\n  0.0       -0.707107  -0.707107   0.0\n  0.0       -0.707107   0.707107   0.0\n -0.707107   0.0        0.0        0.707107\nR factor:\n2×2 SparseMatrixCSC{Float64,Int64} with 2 stored entries:\n  [1, 1]  =  -1.41421\n  [2, 2]  =  -1.41421\nRow permutation:\n4-element Array{Int64,1}:\n 1\n 3\n 4\n 2\nColumns permutation:\n2-element Array{Int64,1}:\n 1\n 2\n\n\n\n"
 },
 
 {
