@@ -769,10 +769,22 @@ module DeprecationTests # to test @deprecate
     # test deprecation of a constructor
     struct A{T} end
     @deprecate A{T}(x::S) where {T, S} f()
+
+    # test that @deprecate_moved can be overridden by an import
+    Base.@deprecate_moved foo1234 "Foo"
+    Base.@deprecate_moved bar "Bar" false
 end # module
+module Foo1234
+    export foo1234
+    foo1234(x) = x+1
+end
 
 @testset "@deprecate" begin
     using .DeprecationTests
+    using .Foo1234
+    @test foo1234(3) == 4
+    @test_throws ErrorException DeprecationTests.bar(3)
+
     # enable when issue #22043 is fixed
     # @test @test_warn "f1 is deprecated, use f instead." f1()
     # @test @test_nowarn f1()

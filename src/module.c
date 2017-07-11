@@ -190,7 +190,7 @@ static jl_binding_t *jl_get_binding_(jl_module_t *m, jl_sym_t *var, modstack_t *
                 if (tempb == NULL || tempb->owner == NULL)
                     // couldn't resolve; try next using (see issue #6105)
                     continue;
-                if (owner != NULL && tempb->owner != b->owner &&
+                if (owner != NULL && tempb->owner != b->owner && !tempb->deprecated &&
                     !(tempb->constp && tempb->value && b->constp && b->value == tempb->value)) {
                     jl_printf(JL_STDERR,
                               "WARNING: both %s and %s export \"%s\"; uses of it in module %s must be qualified\n",
@@ -461,10 +461,10 @@ JL_DLLEXPORT int jl_is_const(jl_module_t *m, jl_sym_t *var)
     return b && b->constp;
 }
 
-JL_DLLEXPORT void jl_deprecate_binding(jl_module_t *m, jl_sym_t *var)
+JL_DLLEXPORT void jl_deprecate_binding(jl_module_t *m, jl_sym_t *var, int val)
 {
     jl_binding_t *b = jl_get_binding(m, var);
-    if (b) b->deprecated = 1;
+    if (b) b->deprecated = val;
 }
 
 JL_DLLEXPORT int jl_is_binding_deprecated(jl_module_t *m, jl_sym_t *var)
@@ -478,7 +478,10 @@ extern int jl_lineno;
 
 void jl_binding_deprecation_warning(jl_binding_t *b)
 {
-    if (b->deprecated && jl_options.depwarn) {
+    // Only print a warning for deprecated == 1 (renamed).
+    // For deprecated == 2 (moved to a package) the binding is to a function
+    // that throws an error, so we don't want to print a warning too.
+    if (b->deprecated == 1 && jl_options.depwarn) {
         if (jl_options.depwarn != JL_OPTIONS_DEPWARN_ERROR)
             jl_printf(JL_STDERR, "WARNING: ");
         if (b->owner)
