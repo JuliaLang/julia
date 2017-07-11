@@ -659,20 +659,14 @@ catch ex
     @test length(ex) == 5
     @test typeof(ex.exceptions[1]) == CapturedException
     @test typeof(ex.exceptions[1].ex) == ErrorException
-    errors = map(x->x.ex.msg, ex.exceptions)
-    @test collect(1:5) == sort(map(x->parse(Int, x), errors))
     # test start, next, and done
     for (i, i_ex) in enumerate(ex)
         @test i == parse(Int, i_ex.ex.msg)
     end
     # test showerror
-    err_strs = split(sprint(showerror, ex), "\n")
-    err_one_strs = split(sprint(showerror, ex.exceptions[1]), "\n")
-    @test err_strs[1] == err_one_strs[1]
-    @test err_strs[2] == err_one_strs[2]
-    @test err_strs[3] == err_one_strs[3]
-    @test err_strs[4] == ""
-    @test err_strs[5] == "...and 4 more exception(s)."
+    err_str = sprint(showerror, ex)
+    err_one_str = sprint(showerror, ex.exceptions[1])
+    @test err_str == err_one_str * "\n\n...and 4 more exception(s).\n"
 end
 @test sprint(showerror, CompositeException()) == "CompositeException()\n"
 
