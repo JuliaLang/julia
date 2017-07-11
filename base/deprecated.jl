@@ -116,7 +116,7 @@ macro deprecate_moved(old, new, export_old=true)
     eold = esc(old)
     return Expr(:toplevel,
          :(function $eold(args...; kwargs...)
-               error($eold, args, " has been moved to the package ", $new, ".jl.\n",
+               error($eold, " has been moved to the package ", $new, ".jl.\n",
                      "Run `Pkg.add(\"", $new, "\")` to install it and then run `using ",
                      $new, "` to load it.")
            end),
