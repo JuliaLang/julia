@@ -168,7 +168,7 @@ end
             @test Hermitian(asym)*x+y ≈ asym*x+y
             @test x' * Hermitian(asym) ≈ x' * asym
         end
-        if eltya <: Real && eltya != Int
+        if eltya <: Real
             @test Symmetric(asym)*x+y ≈ asym*x+y
             @test x' * Symmetric(asym) ≈ x' * asym
         end
@@ -183,7 +183,7 @@ end
             Base.LinAlg.A_mul_B!(C,a,Hermitian(asym))
             @test C ≈ a*asym
         end
-        if eltya <: Real && eltya != Int
+        if eltya <: Real
             @test Symmetric(asym) * Symmetric(asym) ≈ asym*asym
             @test Symmetric(asym) * a ≈ asym * a
             @test a * Symmetric(asym) ≈ a * asym
