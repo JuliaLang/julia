@@ -117,6 +117,7 @@ end
     reverse(s::AbstractString) -> AbstractString
 
 Reverses a string.
+# Examples
 ```jldoctest
 julia> reverse("JuliaLang")
 "gnaLailuJ"
@@ -127,6 +128,24 @@ reverse(s::RevString) = s.string
 
 ## reverse an index i so that reverse(s)[i] == s[reverseind(s,i)]
 
+"""
+    reverseind(v, i)
+
+Given an index `i` in `reverse(v)`, return the corresponding index in `v` so that
+`v[reverseind(v,i)] == reverse(v)[i]`. (This can be nontrivial in the case where `v` is a
+Unicode string.)
+
+# Examples
+```jldoctest
+julia> r = reverse("Julia")
+"ailuJ"
+
+julia> for i in 1:length(r)
+           print(r[reverseind("Julia", i)])
+       end
+Julia
+```
+"""
 reverseind(s::AbstractString, i) = chr2ind(s, length(s) + 1 - ind2chr(reverse(s), i))
 reverseind(s::Union{DirectIndexString,SubString{DirectIndexString}}, i::Integer) = length(s) + 1 - i
 reverseind(s::RevString, i::Integer) = endof(s) - i + 1
@@ -146,6 +165,7 @@ end
 Repeat `n` times the string `s`.
 The [`repeat`](@ref) function is an alias to this operator.
 
+# Examples
 ```jldoctest
 julia> "Test "^3
 "Test Test Test "
