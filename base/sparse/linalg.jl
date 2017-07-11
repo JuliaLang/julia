@@ -948,7 +948,7 @@ function Base.cov(X::SparseMatrixCSC, vardim::Int=1; corrected::Bool=true)
     out = Matrix(Base.unscaled_covzm(X,vardim)) # part1
     sums = sum(X, vardim)
     means = mean(X, vardim)
-    for j in 1:p, i in 1:p
+    @inbounds for j in 1:p, i in 1:p
         part2 = sums[i]*means[j]
         part3 = means[i] * means[j] * n
         out[i,j] += - part2 - conj(part2) + part3
