@@ -117,8 +117,8 @@ macro deprecate_moved(old, new, export_old=true)
     return Expr(:toplevel,
          :(function $eold(args...; kwargs...)
                error($eold, " has been moved to the package ", $new, ".jl.\n",
-                     "Run `Pkg.add(\"", $new, "\")` to install it and then run `using ",
-                     $new, "` to load it.")
+                     "Run `Pkg.add(\"", $new, "\")` to install it, restart Julia,\n",
+                     "and then run `using ", $new, "` to load it.")
            end),
          export_old ? Expr(:export, eold) : nothing,
          Expr(:call, :deprecate, __module__, Expr(:quote, old), 2))
