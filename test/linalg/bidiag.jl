@@ -261,7 +261,7 @@ srand(1)
             # test pass-through of A_mul_B! for SymTridiagonal*Bidiagonal
             TriSym = SymTridiagonal(T.dv, T.ev)
             @test Array(TriSym*T) ≈ Array(TriSym)*Array(T)
-            # test pass-through of A_mul_B! for AbstractTridiagonal*Bidiagonal
+            # test pass-through of A_mul_B! for AbstractTriangular*Bidiagonal
             Tri = UpperTriangular(diagm(T.ev, 1))
             @test Array(Tri*T) ≈ Array(Tri)*Array(T)
         end
