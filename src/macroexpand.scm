@@ -484,10 +484,9 @@
                  (m    (cdr form)))
              ;; m is the macro's def module
              (rename-symbolic-labels
-              (julia-expand-macros-limited (resolve-expansion-vars form m) (- max-depth 1))
-               ))))
+              (julia-expand-macros-limited (resolve-expansion-vars form m) (- max-depth 1))))))
         ((eq? (car e) 'module) e)
         (else
-         (map (lambda (ex) (julia-expand-macros-limited ex max-depth) ) e))))
+         (map (lambda (ex) (julia-expand-macros-limited ex max-depth)) e))))
 
 (define (julia-expand-macros e) (julia-expand-macros-limited e -1))
