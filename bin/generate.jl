@@ -43,21 +43,24 @@ for (pkg, p) in pkgs
 end
 
 include("utils.jl")
+include("sha1map.jl")
+const trees = sha1map(pkgs)
 
 for (bucket, b_pkgs) in buckets
     for (pkg, p) in b_pkgs
         url = p.url
+        uuid = string(p.uuid)
         startswith(url, "git://github.com") && (url = "https"*url[4:end])
         write_toml(prefix, bucket, pkg, "package") do io
             println(io, "name = ", repr(pkg))
-            println(io, "uuid = ", repr(string(p.uuid)))
+            println(io, "uuid = ", repr(uuid))
             println(io, "repo = ", repr(url))
         end
         write_toml(prefix, bucket, pkg, "versions") do io
             for (i, (ver, v)) in enumerate(sort!(collect(p.versions), by=first))
                 i > 1 && println(io)
                 println(io, "[", toml_key(string(ver)), "]")
-                println(io, "hash-sha1 = ", repr(v.sha1))
+                println(io, "hash-sha1 = ", repr(trees[uuid][v.sha1]))
             end
         end
         verv = filter(vv->!isempty(vv[end].requires), collect(p.versions))
