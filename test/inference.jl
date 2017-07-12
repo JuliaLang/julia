@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # tests for Core.Inference correctness and precision
+import Core.Inference: Const, Conditional, ⊑
 
 # issue 9770
 @noinline x9770() = false
@@ -877,7 +878,7 @@ let f(x) = isdefined(x, :NonExistentField) ? 1 : ""
     @test Base.return_types(f, (Complex64,)) == Any[String]
     @test Union{Int,String} <: Base.return_types(f, (AbstractArray,))[1]
 end
-import Core.Inference: Const, isdefined_tfunc, ⊑
+import Core.Inference: isdefined_tfunc
 @test isdefined_tfunc(Complex64, Const(())) === Union{}
 @test isdefined_tfunc(Complex64, Const(1)) === Const(true)
 @test isdefined_tfunc(Complex64, Const(2)) === Const(true)
@@ -1049,3 +1050,35 @@ end
 @test find_core_sizeof_call(first(@code_typed sizeof_constvec()).code)
 push!(constvec, 10)
 @test @inferred(sizeof_constvec()) == sizeof(Int) * 4
+
+let isa_tfunc = Core.Inference.t_ffunc_val[
+        findfirst(Core.Inference.t_ffunc_key, isa)][3]
+    @test isa_tfunc(Array, Const(AbstractArray)) === Const(true)
+    @test isa_tfunc(Array, Type{AbstractArray}) === Const(true)
+    @test isa_tfunc(Array, Type{AbstractArray{Int}}) == Bool
+    @test isa_tfunc(Array{Real}, Type{AbstractArray{Int}}) === Bool # could be improved
+    @test isa_tfunc(Array{Real, 2}, Const(AbstractArray{Real, 2})) === Const(true)
+    @test isa_tfunc(Array{Real, 2}, Const(AbstractArray{Int, 2})) === Const(false)
+    @test isa_tfunc(DataType, Int) === Bool # could be improved
+    @test isa_tfunc(DataType, Const(Type{Int})) === Bool
+    @test isa_tfunc(DataType, Const(Type{Array})) === Bool
+    @test isa_tfunc(UnionAll, Const(Type{Int})) === Bool # could be improved
+    @test isa_tfunc(UnionAll, Const(Type{Array})) === Bool
+    @test isa_tfunc(Union, Const(Union{Float32, Float64})) === Bool
+    @test isa_tfunc(Union, Type{Union}) === Const(true)
+    @test isa_tfunc(typeof(Union{}), Const(Int)) === Bool # any result is ok
+    @test isa_tfunc(typeof(Union{}), Const(Union{})) === Bool # could be improved
+    @test isa_tfunc(typeof(Union{}), typeof(Union{})) === Bool # could be improved
+    @test isa_tfunc(typeof(Union{}), Union{}) === Bool # could be improved
+    @test isa_tfunc(typeof(Union{}), Type{typeof(Union{})}) === Const(true)
+    @test isa_tfunc(typeof(Union{}), Const(typeof(Union{}))) === Const(true)
+    let c = Conditional(Core.SlotNumber(0), Const(Union{}), Const(Union{}))
+        @test isa_tfunc(c, Const(Bool)) === Const(true)
+        @test isa_tfunc(c, Type{Bool}) === Const(true)
+        @test isa_tfunc(c, Const(Real)) === Const(true)
+        @test isa_tfunc(c, Type{Real}) === Const(true)
+        @test isa_tfunc(c, Const(Signed)) === Const(false)
+        @test isa_tfunc(c, Type{Complex}) === Const(false)
+        @test isa_tfunc(c, Type{Complex{T}} where T) === Const(false)
+    end
+end
