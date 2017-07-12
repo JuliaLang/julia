@@ -318,6 +318,25 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes --startup-file=no`
         end
     end
 
+    # Running `Base.process_options` more than once should not update PROGRAM_FILE
+    @test isconst(Base, :PROGRAM_FILE)
+
+    mktempdir() do dir
+        file = joinpath(dir, "file.jl")
+
+        write(file, """
+            if !isdefined(Main, :processed)
+                processed = true
+                Base.process_options(Base.JLOptions())
+                println(PROGRAM_FILE)
+            end
+            """)
+
+        withenv((Sys.is_windows() ? "USERPROFILE" : "HOME") => dir) do
+            @test readchomp(`$exename $file foo`) == file
+        end
+    end
+
     # issue #10562
     @test readchomp(`$exename -e 'println(ARGS);' ''`) == "String[\"\"]"
 

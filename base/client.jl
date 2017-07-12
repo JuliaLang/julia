@@ -259,8 +259,10 @@ function process_options(opts::JLOptions)
     global is_interactive = (opts.isinteractive != 0)
 
     # remove filename from ARGS
-    arg_is_program = opts.eval == C_NULL && opts.print == C_NULL && !isempty(ARGS)
-    global const PROGRAM_FILE = arg_is_program ? shift!(ARGS) : ""
+    if !isdefined(Base, :PROGRAM_FILE)
+        arg_is_program = opts.eval == C_NULL && opts.print == C_NULL && !isempty(ARGS)
+        global const PROGRAM_FILE = arg_is_program ? shift!(ARGS) : ""
+    end
 
     while true
         # startup worker.
