@@ -443,17 +443,18 @@ for op in (:<, :<=, :isless)
 end
 
 function cmp(x::AbstractFloat, y::AbstractFloat)
-    (isnan(x) || isnan(y)) && throw(DomainError())
+    isnan(x) && throw(DomainError(x, "`x` cannot be NaN."))
+    isnan(y) && throw(DomainError(y, "`y` cannot be NaN."))
     ifelse(x<y, -1, ifelse(x>y, 1, 0))
 end
 
 function cmp(x::Real, y::AbstractFloat)
-    isnan(y) && throw(DomainError())
+    isnan(y) && throw(DomainError(y, "`y` cannot be NaN."))
     ifelse(x<y, -1, ifelse(x>y, 1, 0))
 end
 
 function cmp(x::AbstractFloat, y::Real)
-    isnan(x) && throw(DomainError())
+    isnan(x) && throw(DomainError(x, "`x` cannot be NaN."))
     ifelse(x<y, -1, ifelse(x>y, 1, 0))
 end
 

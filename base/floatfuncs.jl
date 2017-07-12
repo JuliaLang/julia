@@ -150,7 +150,7 @@ julia> signif(357.913, 4, 2)
 ```
 """
 function signif(x::Real, digits::Integer, base::Integer=10)
-    digits < 1 && throw(DomainError())
+    digits < 1 && throw(DomainError(digits, "`digits` cannot be less than 1."))
 
     x = float(x)
     (x == 0 || !isfinite(x)) && return x

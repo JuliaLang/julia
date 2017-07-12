@@ -1402,14 +1402,15 @@ The highest value representable by the given (real) numeric `DataType`.
 typemax
 
 """
-    DomainError()
+    DomainError(val)
+    DomainError(val, msg)
 
-The arguments to a function or constructor are outside the valid domain.
+The argument `val` to a function or constructor is outside the valid domain.
 
 # Examples
 ```jldoctest
 julia> sqrt(-1)
-ERROR: DomainError:
+ERROR: DomainError with -1:
 sqrt will only return a complex result if called with a complex argument. Try sqrt(complex(x)).
 Stacktrace:
  [1] sqrt(::Int64) at ./math.jl:443

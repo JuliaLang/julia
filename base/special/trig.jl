@@ -106,7 +106,7 @@ Compute ``\\sin(\\pi x)`` more accurately than `sin(pi*x)`, especially for large
 function sinpi(x::T) where T<:AbstractFloat
     if !isfinite(x)
         isnan(x) && return x
-        throw(DomainError())
+        throw(DomainError(x, "`x` cannot be infinite."))
     end
 
     ax = abs(x)
@@ -136,7 +136,7 @@ end
 function sinpi(x::T) where T<:Union{Integer,Rational}
     Tf = float(T)
     if !isfinite(x)
-        throw(DomainError())
+        throw(DomainError(x, "`x` must be finite."))
     end
 
     # until we get an IEEE remainder function (#9283)
@@ -169,7 +169,7 @@ Compute ``\\cos(\\pi x)`` more accurately than `cos(pi*x)`, especially for large
 function cospi(x::T) where T<:AbstractFloat
     if !isfinite(x)
         isnan(x) && return x
-        throw(DomainError())
+        throw(DomainError(x, "`x` cannot be infinite."))
     end
 
     ax = abs(x)
@@ -194,7 +194,7 @@ end
 # Integers and Rationals
 function cospi(x::T) where T<:Union{Integer,Rational}
     if !isfinite(x)
-        throw(DomainError())
+        throw(DomainError(x, "`x` must be finite."))
     end
 
     ax = abs(x)
@@ -371,7 +371,7 @@ deg2rad_ext(x::Real) = deg2rad(x) # Fallback
 
 function sind(x::Real)
     if isinf(x)
-        return throw(DomainError())
+        return throw(DomainError(x, "`x` cannot be infinite."))
     elseif isnan(x)
         return oftype(x,NaN)
     end
@@ -402,7 +402,7 @@ end
 
 function cosd(x::Real)
     if isinf(x)
-        return throw(DomainError())
+        return throw(DomainError(x, "`x` cannot be infinite."))
     elseif isnan(x)
         return oftype(x,NaN)
     end

@@ -15,7 +15,7 @@ for n in 2:34
 end
 
 function factorial_lookup(n::Integer, table, lim)
-    n < 0 && throw(DomainError())
+    n < 0 && throw(DomainError(n, "`n` must not be negative."))
     n > lim && throw(OverflowError())
     n == 0 && return one(n)
     @inbounds f = table[n]
@@ -34,7 +34,7 @@ else
 end
 
 function gamma(n::Union{Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64})
-    n < 0 && throw(DomainError())
+    n < 0 && throw(DomainError(n, "`n` must not be negative."))
     n == 0 && return Inf
     n <= 2 && return 1.0
     n > 20 && return gamma(Float64(n))

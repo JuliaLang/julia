@@ -290,7 +290,8 @@ for rel in (:<,:<=,:cmp)
     for (Tx,Ty) in ((Rational,AbstractFloat), (AbstractFloat,Rational))
         @eval function ($rel)(x::$Tx, y::$Ty)
             if isnan(x) || isnan(y)
-                $(rel == :cmp ? :(throw(DomainError())) : :(return false))
+                $(rel == :cmp ? :(throw(DomainError((x,y), "Inputs cannot be NaN."))) :
+                                :(return false))
             end
 
             xn, xp, xd = decompose(x)

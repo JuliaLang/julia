@@ -157,8 +157,11 @@ Deprecated or removed
   * `fieldnames` now operates only on types. To get the names of fields in an object, use
     `fieldnames(typeof(x))` ([#22350]).
 
-  * `InexactError` now takes arguments: `InexactError(func::Symbol,
-    type, -3)` now prints as `ERROR: InexactError: func(type, -3)`. ([#20005])
+  * `InexactError` and `DomainError` now take
+    arguments. `InexactError(func::Symbol, type, -3)` now prints as
+    `ERROR: InexactError: func(type, -3)`, and `DomainError(val,
+    [msg])` prints as `ERROR: DomainError with val:\nmsg`. ([#20005],
+    [#22751])
 
   * The operating system identification functions: `is_linux`, `is_bsd`, `is_apple`, `is_unix`,
     and `is_windows`, have been deprecated in favor of `Sys.islinux`, `Sys.isbsd`, `Sys.isapple`,

@@ -27,6 +27,16 @@ using Core.Intrinsics: sqrt_llvm
 
 const IEEEFloat = Union{Float16, Float32, Float64}
 
+@noinline function throw_complex_domainerror(f, x)
+    throw(DomainError(x, string("$f will only return a complex result if called with a ",
+                                "complex argument. Try $f(Complex(x)).")))
+end
+@noinline function throw_exp_domainerror(x)
+    throw(DomainError(x, string("Exponentiation yielding a complex result requires a ",
+                                "complex argument.\nReplace x^y with (x+0im)^y, ",
+                                "Complex(x)^y, or similar.")))
+end
+
 for T in (Float16, Float32, Float64)
     @eval significand_bits(::Type{$T}) = $(trailing_ones(significand_mask(T)))
     @eval exponent_bits(::Type{$T}) = $(sizeof(T)*8 - significand_bits(T) - 1)
@@ -293,7 +303,7 @@ end
 # utility for converting NaN return to DomainError
 # the branch in nan_dom_err prevents its callers from inlining, so be sure to force it
 # until the heuristics can be improved
-@inline nan_dom_err(f, x) = isnan(f) & !isnan(x) ? throw(DomainError()) : f
+@inline nan_dom_err(out, x) = isnan(out) & !isnan(x) ? throw(DomainError(x, "NaN result for non-NaN input.")) : out
 
 # functions that return NaN on non-NaN argument for domain error
 """
@@ -426,13 +436,13 @@ Compute sine and cosine of `x`, where `x` is in radians.
 @inline function sincos(x)
     res = Base.FastMath.sincos_fast(x)
     if (isnan(res[1]) | isnan(res[2])) & !isnan(x)
-        throw(DomainError())
+        throw(DomainError(x, "NaN result for non-NaN input."))
     end
     return res
 end
 
 @inline function sqrt(x::Union{Float32,Float64})
-    x < zero(x) && throw(DomainError())
+    x < zero(x) && throw_complex_domainerror(:sqrt, x)
     sqrt_llvm(x)
 end
 
@@ -457,7 +467,7 @@ julia> hypot(a, a)
 1.4142135623730951e10
 
 julia> √(a^2 + a^2) # a^2 overflows
-ERROR: DomainError:
+ERROR: DomainError with -2914184810805067776:
 sqrt will only return a complex result if called with a complex argument. Try sqrt(complex(x)).
 Stacktrace:
  [1] sqrt(::Int64) at ./math.jl:447
@@ -581,11 +591,13 @@ ldexp(x::Float16, q::Integer) = Float16(ldexp(Float32(x), q))
 Get the exponent of a normalized floating-point number.
 """
 function exponent(x::T) where T<:IEEEFloat
+    @noinline throw1(x) = throw(DomainError(x, "Cannot be NaN or Inf."))
+    @noinline throw2(x) = throw(DomainError(x, "Cannot be subnormal converted to 0."))
     xs = reinterpret(Unsigned, x) & ~sign_mask(T)
-    xs >= exponent_mask(T) && return throw(DomainError()) # NaN or Inf
+    xs >= exponent_mask(T) && throw1(x)
     k = Int(xs >> significand_bits(T))
     if k == 0 # x is subnormal
-        xs == 0 && throw(DomainError())
+        xs == 0 && throw2(x)
         m = leading_zeros(xs) - exponent_bits(T)
         k = 1 - m
     end
@@ -707,8 +719,20 @@ function modf(x::Float64)
     f, _modf_temp[]
 end
 
-@inline ^(x::Float64, y::Float64) = nan_dom_err(ccall("llvm.pow.f64", llvmcall, Float64, (Float64, Float64), x, y), x + y)
-@inline ^(x::Float32, y::Float32) = nan_dom_err(ccall("llvm.pow.f32", llvmcall, Float32, (Float32, Float32), x, y), x + y)
+@inline function ^(x::Float64, y::Float64)
+    z = ccall("llvm.pow.f64", llvmcall, Float64, (Float64, Float64), x, y)
+    if isnan(z) & !isnan(x+y)
+        throw_exp_domainerror(x)
+    end
+    z
+end
+@inline function ^(x::Float32, y::Float32)
+    z = ccall("llvm.pow.f32", llvmcall, Float32, (Float32, Float32), x, y)
+    if isnan(z) & !isnan(x+y)
+        throw_exp_domainerror(x)
+    end
+    z
+end
 @inline ^(x::Float64, y::Integer) = x ^ Float64(y)
 @inline ^(x::Float32, y::Integer) = x ^ Float32(y)
 @inline ^(x::Float16, y::Integer) = Float16(Float32(x) ^ Float32(y))
