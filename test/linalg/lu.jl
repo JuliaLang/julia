@@ -84,10 +84,8 @@ dimg  = randn(n)/2
                     @test norm(a*(lua\c) - c, 1) < ε*κ*n # c is a vector
                     @test norm(a'*(lua'\c) - c, 1) < ε*κ*n # c is a vector
                     @test AbstractArray(lua) ≈ a
-                    if eltya <: Real && eltyb <: Real
-                        @test norm(a.'*(lua.'\b) - b,1) < ε*κ*n*2 # Two because the right hand side has two columns
-                        @test norm(a.'*(lua.'\c) - c,1) < ε*κ*n
-                    end
+                    @test norm(a.'*(lua.'\b) - b,1) < ε*κ*n*2 # Two because the right hand side has two columns
+                    @test norm(a.'*(lua.'\c) - c,1) < ε*κ*n
                 end
 
                 # Test whether Ax_ldiv_B!(y, LU, x) indeed overwrites y
