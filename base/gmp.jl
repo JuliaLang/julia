@@ -403,7 +403,7 @@ function invmod(x::BigInt, y::BigInt)
         return z
     end
     if (y==0 || MPZ.invert!(z, x, ya) == 0)
-        throw(DomainError())
+        throw(DomainError(y))
     end
     # GMP always returns a positive inverse; we instead want to
     # normalize such that div(z, y) == 0, i.e. we want a negative z
@@ -474,7 +474,7 @@ cmp(x::BigInt, y::CulongMax) = MPZ.cmp_ui(x, y)
 cmp(x::BigInt, y::Integer) = cmp(x, big(y))
 cmp(x::Integer, y::BigInt) = -cmp(y, x)
 
-cmp(x::BigInt, y::CdoubleMax) = isnan(y) ? throw(DomainError()) : MPZ.cmp_d(x, y)
+cmp(x::BigInt, y::CdoubleMax) = isnan(y) ? throw(DomainError(y, "`y` cannot be NaN.")) : MPZ.cmp_d(x, y)
 cmp(x::CdoubleMax, y::BigInt) = -cmp(y, x)
 
 isqrt(x::BigInt) = MPZ.sqrt(x)
@@ -482,7 +482,7 @@ isqrt(x::BigInt) = MPZ.sqrt(x)
 ^(x::BigInt, y::Culong) = MPZ.pow_ui(x, y)
 
 function bigint_pow(x::BigInt, y::Integer)
-    if y<0; throw(DomainError()); end
+    if y<0; throw(DomainError(y, "`y` cannot be negative.")); end
     if x== 1; return x; end
     if x==-1; return isodd(y) ? x : -x; end
     if y>typemax(Culong)
@@ -607,7 +607,7 @@ function base(b::Integer, n::BigInt, pad::Integer)
 end
 
 function ndigits0zpb(x::BigInt, b::Integer)
-    b < 2 && throw(DomainError())
+    b < 2 && throw(DomainError(b, "`b` cannot be less than 2."))
     x.size == 0 && return 0 # for consistency with other ndigits0z methods
     if ispow2(b) && 2 <= b <= 62 # GMP assumes b is in this range
         MPZ.sizeinbase(x, b)

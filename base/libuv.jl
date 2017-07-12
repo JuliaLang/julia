@@ -7,14 +7,14 @@ include(string(length(Core.ARGS) >= 2 ? Core.ARGS[2] : "", "uv_constants.jl"))  
 # convert UV handle data to julia object, checking for null
 function uv_sizeof_handle(handle)
     if !(UV_UNKNOWN_HANDLE < handle < UV_HANDLE_TYPE_MAX)
-        throw(DomainError())
+        throw(DomainError(handle))
     end
     ccall(:uv_handle_size,Csize_t,(Int32,),handle)
 end
 
 function uv_sizeof_req(req)
     if !(UV_UNKNOWN_REQ < req < UV_REQ_TYPE_MAX)
-        throw(DomainError())
+        throw(DomainError(req))
     end
     ccall(:uv_req_size,Csize_t,(Int32,),req)
 end

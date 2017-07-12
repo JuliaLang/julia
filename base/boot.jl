@@ -205,7 +205,6 @@ struct BoundsError        <: Exception
     BoundsError(a::ANY, i) = (@_noinline_meta; new(a,i))
 end
 struct DivideError        <: Exception end
-struct DomainError        <: Exception end
 struct OverflowError      <: Exception end
 struct OutOfMemoryError   <: Exception end
 struct ReadOnlyMemoryError<: Exception end
@@ -216,6 +215,12 @@ struct UndefVarError      <: Exception
     var::Symbol
 end
 struct InterruptException <: Exception end
+struct DomainError <: Exception
+    val
+    msg
+    DomainError(val::ANY) = (@_noinline_meta; new(val))
+    DomainError(val::ANY, msg::ANY) = (@_noinline_meta; new(val, msg))
+end
 mutable struct TypeError <: Exception
     func::Symbol
     context::AbstractString

@@ -362,7 +362,7 @@ _replace(io, repl::Function, str, r, pattern) =
 # TODO: rename to `replace` when `replace` is removed from deprecated.jl
 function replace_new(str::String, pattern, repl, count::Integer)
     count == 0 && return str
-    count < 0 && throw(DomainError())
+    count < 0 && throw(DomainError(count, "`count` must be non-negative."))
     n = 1
     e = endof(str)
     i = a = start(str)

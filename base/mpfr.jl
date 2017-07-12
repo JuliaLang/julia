@@ -485,7 +485,7 @@ function sqrt(x::BigFloat)
     z = BigFloat()
     ccall((:mpfr_sqrt, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[])
     if isnan(z)
-        throw(DomainError())
+        throw(DomainError(x, "NaN result for non-NaN input."))
     end
     return z
 end
@@ -560,7 +560,7 @@ ldexp(x::BigFloat, n::Integer) = x*exp2(BigFloat(n))
 
 function factorial(x::BigFloat)
     if x < 0 || !isinteger(x)
-        throw(DomainError())
+        throw(DomainError(x, "Must be a non-negative integer."))
     end
     ui = convert(Culong, x)
     z = BigFloat()
@@ -577,7 +577,8 @@ end
 for f in (:log, :log2, :log10)
     @eval function $f(x::BigFloat)
         if x < 0
-            throw(DomainError())
+            throw(DomainError(x, string($f, " will only return a complex result if called ",
+                              "with a complex argument. Try ", $f, "(complex(x)).")))
         end
         z = BigFloat()
         ccall(($(string(:mpfr_,f)), :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[])
@@ -587,7 +588,8 @@ end
 
 function log1p(x::BigFloat)
     if x < -1
-        throw(DomainError())
+        throw(DomainError(x, string("log1p will only return a complex result if called ",
+                                    "with a complex argument. Try log1p(complex(x)).")))
     end
     z = BigFloat()
     ccall((:mpfr_log1p, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[])
@@ -656,7 +658,7 @@ for f in (:sin,:cos,:tan,:sec,:csc,
             z = BigFloat()
             ccall(($(string(:mpfr_,f)), :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[])
             if isnan(z)
-                throw(DomainError())
+                throw(DomainError(x, "NaN result for non-NaN input."))
             end
             return z
         end
@@ -687,22 +689,23 @@ end
 >(x::BigFloat, y::BigFloat) = ccall((:mpfr_greater_p, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}), &x, &y) != 0
 
 function cmp(x::BigFloat, y::BigInt)
-    isnan(x) && throw(DomainError())
+    isnan(x) && throw(DomainError(x, "`x` cannot be NaN."))
     ccall((:mpfr_cmp_z, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigInt}), &x, &y)
 end
 function cmp(x::BigFloat, y::ClongMax)
-    isnan(x) && throw(DomainError())
+    isnan(x) && throw(DomainError(x, "`x` cannot be NaN."))
     ccall((:mpfr_cmp_si, :libmpfr), Int32, (Ptr{BigFloat}, Clong), &x, y)
 end
 function cmp(x::BigFloat, y::CulongMax)
-    isnan(x) && throw(DomainError())
+    isnan(x) && throw(DomainError(x, "`x` cannot be NaN."))
     ccall((:mpfr_cmp_ui, :libmpfr), Int32, (Ptr{BigFloat}, Culong), &x, y)
 end
 cmp(x::BigFloat, y::Integer) = cmp(x,big(y))
 cmp(x::Integer, y::BigFloat) = -cmp(y,x)
 
 function cmp(x::BigFloat, y::CdoubleMax)
-    (isnan(x) || isnan(y)) && throw(DomainError())
+    isnan(x) && throw(DomainError(x, "`x` cannot be NaN."))
+    isnan(y) && throw(DomainError(y, "`y` cannot be NaN."))
     ccall((:mpfr_cmp_d, :libmpfr), Int32, (Ptr{BigFloat}, Cdouble), &x, y)
 end
 cmp(x::CdoubleMax, y::BigFloat) = -cmp(y,x)
@@ -742,7 +745,7 @@ Set the precision (in bits) to be used for `T` arithmetic.
 """
 function setprecision(::Type{BigFloat}, precision::Int)
     if precision < 2
-        throw(DomainError())
+        throw(DomainError(precision, "`precision` cannot be less than 2."))
     end
     DEFAULT_PRECISION[end] = precision
 end
@@ -789,7 +792,7 @@ end
 
 function exponent(x::BigFloat)
     if x == 0 || !isfinite(x)
-        throw(DomainError())
+        throw(DomainError(x, "`x` must be non-zero and finite."))
     end
     # The '- 1' is to make it work as Base.exponent
     return ccall((:mpfr_get_exp, :libmpfr), Clong, (Ptr{BigFloat},), &x) - 1

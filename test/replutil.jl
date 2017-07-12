@@ -254,11 +254,16 @@ end
 struct TypeWithIntParam{T <: Integer} end
 let undefvar
     err_str = @except_strbt sqrt(-1) DomainError
-    @test contains(err_str, "Try sqrt(complex(x)).")
+    @test contains(err_str, "Try sqrt(Complex(x)).")
     err_str = @except_strbt 2^(-1) DomainError
-    @test contains(err_str, "Cannot raise an integer x to a negative power -n")
+    @test contains(err_str, "Cannot raise an integer x to a negative power -1")
     err_str = @except_strbt (-1)^0.25 DomainError
     @test contains(err_str, "Exponentiation yielding a complex result requires a complex argument")
+    A = zeros(10, 10)
+    A[2,1] = 1
+    A[1,2] = -1
+    err_str = @except_strbt eigmax(A) DomainError
+    @test contains(err_str, "DomainError with [0.0 -1.0 …")
 
     err_str = @except_str (1, 2, 3)[4] BoundsError
     @test err_str == "BoundsError: attempt to access (1, 2, 3)\n  at index [4]"

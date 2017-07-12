@@ -82,7 +82,9 @@ mutable struct MersenneTwister <: AbstractRNG
     idx::Int
 
     function MersenneTwister(seed, state, vals, idx)
-        length(vals) == MTCacheLength &&  0 <= idx <= MTCacheLength || throw(DomainError())
+        if !(length(vals) == MTCacheLength &&  0 <= idx <= MTCacheLength)
+            throw(DomainError(idx, "`length(vals)` and `idx` must be consistent with $MTCacheLength"))
+        end
         new(seed, state, vals, idx)
     end
 end
@@ -224,7 +226,7 @@ function make_seed()
 end
 
 function make_seed(n::Integer)
-    n < 0 && throw(DomainError())
+    n < 0 && throw(DomainError(n, "`n` must be non-negative."))
     seed = UInt32[]
     while true
         push!(seed, n & 0xffffffff)
