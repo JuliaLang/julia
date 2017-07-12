@@ -182,13 +182,14 @@ macro except_str(expr, err_type)
 end
 
 macro except_strbt(expr, err_type)
+    errmsg = "expected failure, but no exception thrown for $expr"
     return quote
         let err = nothing
             try
                 $(esc(expr))
             catch err
             end
-            err === nothing && error("expected failure, but no exception thrown")
+            err === nothing && error($errmsg)
             @test typeof(err) === $(esc(err_type))
             buf = IOBuffer()
             showerror(buf, err, catch_backtrace())
