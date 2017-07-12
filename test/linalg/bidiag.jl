@@ -183,6 +183,10 @@ srand(1)
                         @test T/b' ≈ Tfull/b'
                     end
                 end
+                # test DimensionMismatch for RowVectors
+                @test_throws DimensionMismatch T \ b'
+                @test_throws DimensionMismatch T.' \ b'
+                @test_throws DimensionMismatch T' \ b'
             end
         end
 
@@ -239,6 +243,12 @@ srand(1)
                     @test Array(op(T, T2)) ≈ op(Tfull, Tfull2)
                 end
             end
+            # test pass-through of A_mul_B! for SymTridiagonal*Bidiagonal
+            TriSym = SymTridiagonal(T.dv, T.ev)
+            @test Array(TriSym*T) ≈ Array(TriSym)*Array(T)
+            # test pass-through of A_mul_B! for AbstractTriangular*Bidiagonal
+            Tri = UpperTriangular(diagm(T.ev, 1))
+            @test Array(Tri*T) ≈ Array(Tri)*Array(T)
         end
 
         @test inv(T)*Tfull ≈ eye(elty,n)
