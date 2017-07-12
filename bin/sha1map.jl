@@ -5,7 +5,7 @@ using Base: LibGit2
 
 function sha1map(pkgs::Dict{String,Package})
     f = joinpath(@__DIR__, "sha1map.toml")
-    d = ispath(f) ? TOML.parse(f) : Dict()
+    d = ispath(f) ? TOML.parsefile(f) : Dict()
     for (pkg, p) in pkgs
         isempty(p.versions) && continue
         uuid = string(p.uuid)
