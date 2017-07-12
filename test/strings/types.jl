@@ -188,6 +188,14 @@ for T in (String, GenericString)
     end
 end
 
+## Reference strings ##
+
+ref = RefString("")
+@test length(ref) == 0
+
+ref[] = "foobar"
+@test length(ref) == 6
+
 ## Cstring tests ##
 
 # issue #13974: comparison against pointers

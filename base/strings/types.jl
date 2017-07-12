@@ -175,3 +175,16 @@ julia> "Test "^3
 
 pointer(x::SubString{String}) = pointer(x.string) + x.offset
 pointer(x::SubString{String}, i::Integer) = pointer(x.string) + x.offset + (i-1)
+
+## reference string ##
+
+struct RefString{T<:AbstractString} <: AbstractString
+    string::Ref{T}
+end
+
+RefString(s::T) where {T<:AbstractString} = RefString{T}(Ref{T}(s))
+
+endof(ref::RefString) = endof(ref.string[])
+next(ref::RefString, state::Int) = next(ref.string[], state)
+
+setindex!(ref::RefString{T}, s::T) where {T<:AbstractString} = (ref.string[] = s)
