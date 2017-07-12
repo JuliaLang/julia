@@ -335,19 +335,13 @@ function add(pkgs::Dict{String})
             info("Updating $name from $(urls[1])")
             LibGit2.fetch(repo, remoteurl=shift!(urls), refspecs=refspecs)
         end
-        obj = try LibGit2.GitObject(repo, git_hash)
+        tree = try LibGit2.GitObject(repo, git_hash)
         catch err
             err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
             error("$name: git object $(string(sha1)) could not be found")
         end
-        tree = LibGit2.peel(LibGit2.GitTree, obj)
-        sha1′ = SHA1(string(LibGit2.GitHash(tree)))
-        if sha1 != sha1′
-            # SHA1 was a commit instead of tree
-            sha1 = hashes[name] = sha1′
-            version_path = find_installed(uuid, sha1)
-            ispath(version_path) && continue
-        end
+        tree isa LibGit2.GitTree ||
+            error("$name: git object $(string(sha1)) should be a tree, not $(typeof(tree))")
         mkpath(version_path)
         opts = LibGit2.CheckoutOptions(
             checkout_strategy = LibGit2.Consts.CHECKOUT_FORCE,
