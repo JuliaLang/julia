@@ -167,6 +167,9 @@ Deprecated or removed
     and `is_windows`, have been deprecated in favor of `Sys.islinux`, `Sys.isbsd`, `Sys.isapple`,
     `Sys.isunix`, and `Sys.iswindows`, respectively ([#22182]).
 
+  * The forms of `read`, `readstring`, and `eachline` that accepted both a `Cmd` object and an
+    input stream are deprecated. Use e.g. `read(pipeline(stdin, cmd))` instead ([#22762]).
+
 
 Julia v0.6.0 Release Notes
 ==========================

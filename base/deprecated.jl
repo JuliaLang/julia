@@ -1583,6 +1583,10 @@ end
 @deprecate is_unix    Sys.isunix
 @deprecate is_windows Sys.iswindows
 
+@deprecate read(cmd::AbstractCmd, stdin::Redirectable) read(pipeline(stdin, cmd))
+@deprecate readstring(cmd::AbstractCmd, stdin::Redirectable) readstring(pipeline(stdin, cmd))
+@deprecate eachline(cmd::AbstractCmd, stdin; chomp::Bool=true) eachline(pipeline(stdin, cmd), chomp=chomp)
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations
