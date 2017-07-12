@@ -2845,7 +2845,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Handling Operating System Variation",
     "title": "Handling Operating System Variation",
     "category": "section",
-    "text": "When dealing with platform libraries, it is often necessary to provide special cases for various platforms. The variable Sys.KERNEL can be used to write these special cases. There are several functions intended to make this easier: is_unix, is_linux, is_apple, is_bsd, and is_windows. These may be used as follows:if is_windows()\n    some_complicated_thing(a)\nendNote that is_linux and is_apple are mutually exclusive subsets of is_unix. Additionally, there is a macro @static which makes it possible to use these functions to conditionally hide invalid code, as demonstrated in the following examples.Simple blocks:ccall( (@static is_windows() ? :_fopen : :fopen), ...)Complex blocks:@static if is_linux()\n    some_complicated_thing(a)\nelse\n    some_different_thing(a)\nendWhen chaining conditionals (including if/elseif/end), the @static must be repeated for each level (parentheses optional, but recommended for readability):@static is_windows() ? :a : (@static is_apple() ? :b : :c)"
+    "text": "When dealing with platform libraries, it is often necessary to provide special cases for various platforms. The variable Sys.KERNEL can be used to write these special cases. There are several functions in the Sys module intended to make this easier: isunix, islinux, isapple, isbsd, and iswindows. These may be used as follows:if Sys.iswindows()\n    some_complicated_thing(a)\nendNote that islinux and isapple are mutually exclusive subsets of isunix. Additionally, there is a macro @static which makes it possible to use these functions to conditionally hide invalid code, as demonstrated in the following examples.Simple blocks:ccall((@static Sys.iswindows() ? :_fopen : :fopen), ...)Complex blocks:@static if Sys.islinux()\n    some_complicated_thing(a)\nelse\n    some_different_thing(a)\nendWhen chaining conditionals (including if/elseif/end), the @static must be repeated for each level (parentheses optional, but recommended for readability):@static Sys.iswindows() ? :a : (@static Sys.isapple() ? :b : :c)"
 },
 
 {
@@ -5489,43 +5489,43 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/base/#Base.is_unix",
+    "location": "stdlib/base/#Base.Sys.isunix",
     "page": "Essentials",
-    "title": "Base.is_unix",
+    "title": "Base.Sys.isunix",
     "category": "Function",
-    "text": "is_unix([os])\n\nPredicate for testing if the OS provides a Unix-like interface. See documentation in Handling Operating System Variation.\n\n\n\n"
+    "text": "Sys.isunix([os])\n\nPredicate for testing if the OS provides a Unix-like interface. See documentation in Handling Operating System Variation.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/base/#Base.is_apple",
+    "location": "stdlib/base/#Base.Sys.isapple",
     "page": "Essentials",
-    "title": "Base.is_apple",
+    "title": "Base.Sys.isapple",
     "category": "Function",
-    "text": "is_apple([os])\n\nPredicate for testing if the OS is a derivative of Apple Macintosh OS X or Darwin. See documentation in Handling Operating System Variation.\n\n\n\n"
+    "text": "Sys.isapple([os])\n\nPredicate for testing if the OS is a derivative of Apple Macintosh OS X or Darwin. See documentation in Handling Operating System Variation.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/base/#Base.is_linux",
+    "location": "stdlib/base/#Base.Sys.islinux",
     "page": "Essentials",
-    "title": "Base.is_linux",
+    "title": "Base.Sys.islinux",
     "category": "Function",
-    "text": "is_linux([os])\n\nPredicate for testing if the OS is a derivative of Linux. See documentation in Handling Operating System Variation.\n\n\n\n"
+    "text": "Sys.islinux([os])\n\nPredicate for testing if the OS is a derivative of Linux. See documentation in Handling Operating System Variation.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/base/#Base.is_bsd",
+    "location": "stdlib/base/#Base.Sys.isbsd",
     "page": "Essentials",
-    "title": "Base.is_bsd",
+    "title": "Base.Sys.isbsd",
     "category": "Function",
-    "text": "is_bsd([os])\n\nPredicate for testing if the OS is a derivative of BSD. See documentation in Handling Operating System Variation.\n\n\n\n"
+    "text": "Sys.isbsd([os])\n\nPredicate for testing if the OS is a derivative of BSD. See documentation in Handling Operating System Variation.\n\n\n\n"
 },
 
 {
-    "location": "stdlib/base/#Base.is_windows",
+    "location": "stdlib/base/#Base.Sys.iswindows",
     "page": "Essentials",
-    "title": "Base.is_windows",
+    "title": "Base.Sys.iswindows",
     "category": "Function",
-    "text": "is_windows([os])\n\nPredicate for testing if the OS is a derivative of Microsoft Windows NT. See documentation in Handling Operating System Variation.\n\n\n\n"
+    "text": "Sys.iswindows([os])\n\nPredicate for testing if the OS is a derivative of Microsoft Windows NT. See documentation in Handling Operating System Variation.\n\n\n\n"
 },
 
 {
@@ -5541,7 +5541,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.@static",
     "category": "Macro",
-    "text": "@static\n\nPartially evaluates an expression at parse time.\n\nFor example, @static is_windows() ? foo : bar will evaluate is_windows() and insert either foo or bar into the expression. This is useful in cases where a construct would be invalid on other platforms, such as a ccall to a non-existent function. @static if is_apple() foo end and @static foo <&&,||> bar are also valid syntax.\n\n\n\n"
+    "text": "@static\n\nPartially evaluate an expression at parse time.\n\nFor example, @static Sys.iswindows() ? foo : bar will evaluate Sys.iswindows() and insert either foo or bar into the expression. This is useful in cases where a construct would be invalid on other platforms, such as a ccall to a non-existent function. @static if Sys.isapple() foo end and @static foo <&&,||> bar are also valid syntax.\n\n\n\n"
 },
 
 {
@@ -5549,7 +5549,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "System",
     "category": "section",
-    "text": "Base.run\nBase.spawn\nBase.DevNull\nBase.success\nBase.process_running\nBase.process_exited\nBase.kill(::Base.Process, ::Integer)\nBase.Sys.set_process_title\nBase.Sys.get_process_title\nBase.readandwrite\nBase.ignorestatus\nBase.detach\nBase.Cmd\nBase.setenv\nBase.withenv\nBase.pipeline(::Any, ::Any, ::Any, ::Any...)\nBase.pipeline(::Base.AbstractCmd)\nBase.Libc.gethostname\nBase.getipaddr\nBase.Libc.getpid\nBase.Libc.time()\nBase.time_ns\nBase.tic\nBase.toc\nBase.toq\nBase.@time\nBase.@timev\nBase.@timed\nBase.@elapsed\nBase.@allocated\nBase.EnvHash\nBase.ENV\nBase.is_unix\nBase.is_apple\nBase.is_linux\nBase.is_bsd\nBase.is_windows\nBase.Sys.windows_version\nBase.@static"
+    "text": "Base.run\nBase.spawn\nBase.DevNull\nBase.success\nBase.process_running\nBase.process_exited\nBase.kill(::Base.Process, ::Integer)\nBase.Sys.set_process_title\nBase.Sys.get_process_title\nBase.readandwrite\nBase.ignorestatus\nBase.detach\nBase.Cmd\nBase.setenv\nBase.withenv\nBase.pipeline(::Any, ::Any, ::Any, ::Any...)\nBase.pipeline(::Base.AbstractCmd)\nBase.Libc.gethostname\nBase.getipaddr\nBase.Libc.getpid\nBase.Libc.time()\nBase.time_ns\nBase.tic\nBase.toc\nBase.toq\nBase.@time\nBase.@timev\nBase.@timed\nBase.@elapsed\nBase.@allocated\nBase.EnvHash\nBase.ENV\nBase.Sys.isunix\nBase.Sys.isapple\nBase.Sys.islinux\nBase.Sys.isbsd\nBase.Sys.iswindows\nBase.Sys.windows_version\nBase.@static"
 },
 
 {
@@ -6249,19 +6249,11 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/collections/#Base.endof",
-    "page": "Collections and Data Structures",
-    "title": "Base.endof",
-    "category": "Function",
-    "text": "endof(collection) -> Integer\n\nReturns the last index of the collection.\n\nExample\n\njulia> endof([1,2,4])\n3\n\n\n\n"
-},
-
-{
     "location": "stdlib/collections/#General-Collections-1",
     "page": "Collections and Data Structures",
     "title": "General Collections",
     "category": "section",
-    "text": "Base.isempty\nBase.empty!\nBase.length(::Any)\nBase.endofFully implemented by:Range\nUnitRange\nTuple\nNumber\nAbstractArray\nIntSet\nObjectIdDict\nDict\nWeakKeyDict\nAbstractString\nSet"
+    "text": "Base.isempty\nBase.empty!\nBase.length(::Any)Fully implemented by:Range\nUnitRange\nTuple\nNumber\nAbstractArray\nIntSet\nObjectIdDict\nDict\nWeakKeyDict\nAbstractString\nSet"
 },
 
 {
@@ -6761,11 +6753,19 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
+    "location": "stdlib/collections/#Base.endof",
+    "page": "Collections and Data Structures",
+    "title": "Base.endof",
+    "category": "Function",
+    "text": "endof(collection) -> Integer\n\nReturns the last index of the collection.\n\nExample\n\njulia> endof([1,2,4])\n3\n\n\n\n"
+},
+
+{
     "location": "stdlib/collections/#Indexable-Collections-1",
     "page": "Collections and Data Structures",
     "title": "Indexable Collections",
     "category": "section",
-    "text": "Base.getindex(::Any, ::Any...)\nBase.setindex!(::Any, ::Any, ::Any...)Fully implemented by:Array\nBitArray\nAbstractArray\nSubArray\nObjectIdDict\nDict\nWeakKeyDict\nAbstractStringPartially implemented by:Range\nUnitRange\nTuple"
+    "text": "Base.getindex(::Any, ::Any...)\nBase.setindex!(::Any, ::Any, ::Any...)\nBase.endofFully implemented by:Array\nBitArray\nAbstractArray\nSubArrayPartially implemented by:Range\nUnitRange\nTuple\nAbstractString\nDict\nObjectIdDict\nWeakKeyDict"
 },
 
 {
@@ -8357,7 +8357,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.conj",
     "category": "Function",
-    "text": "conj(z)\n\nCompute the complex conjugate of a complex number z.\n\nExamples\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\nconj(v::RowVector)\n\nReturns a ConjArray lazy view of the input, where each element is conjugated.\n\nExample\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\n"
+    "text": "conj(v::RowVector)\n\nReturns a ConjArray lazy view of the input, where each element is conjugated.\n\nExample\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\nconj(z)\n\nCompute the complex conjugate of a complex number z.\n\nExamples\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\n"
 },
 
 {
@@ -12637,7 +12637,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.cholfact",
     "category": "Function",
-    "text": "cholfact(A, Val(false)) -> Cholesky\n\nCompute the Cholesky factorization of a dense symmetric positive definite matrix A and return a Cholesky factorization. The matrix A can either be a Symmetric or Hermitian StridedMatrix or a perfectly symmetric or Hermitian StridedMatrix. The triangular Cholesky factor can be obtained from the factorization F with: F[:L] and F[:U]. The following functions are available for Cholesky objects: size, \\, inv, det, logdet and isposdef.\n\nExample\n\njulia> A = [4. 12. -16.; 12. 37. -43.; -16. -43. 98.]\n3×3 Array{Float64,2}:\n   4.0   12.0  -16.0\n  12.0   37.0  -43.0\n -16.0  -43.0   98.0\n\njulia> C = cholfact(A)\nBase.LinAlg.Cholesky{Float64,Array{Float64,2}} with factor:\n[2.0 6.0 -8.0; 0.0 1.0 5.0; 0.0 0.0 3.0]\n\njulia> C[:U]\n3×3 UpperTriangular{Float64,Array{Float64,2}}:\n 2.0  6.0  -8.0\n  ⋅   1.0   5.0\n  ⋅    ⋅    3.0\n\njulia> C[:L]\n3×3 LowerTriangular{Float64,Array{Float64,2}}:\n  2.0   ⋅    ⋅\n  6.0  1.0   ⋅\n -8.0  5.0  3.0\n\njulia> C[:L] * C[:U] == A\ntrue\n\n\n\ncholfact(A, Val(true); tol = 0.0) -> CholeskyPivoted\n\nCompute the pivoted Cholesky factorization of a dense symmetric positive semi-definite matrix A and return a CholeskyPivoted factorization. The matrix A can either be a Symmetric or Hermitian StridedMatrix or a perfectly symmetric or Hermitian StridedMatrix. The triangular Cholesky factor can be obtained from the factorization F with: F[:L] and F[:U]. The following functions are available for PivotedCholesky objects: size, \\, inv, det, and rank. The argument tol determines the tolerance for determining the rank. For negative values, the tolerance is the machine precision.\n\n\n\ncholfact(A; shift = 0.0, perm = Int[]) -> CHOLMOD.Factor\n\nCompute the Cholesky factorization of a sparse positive definite matrix A. A must be a SparseMatrixCSC or a Symmetric/Hermitian view of a SparseMatrixCSC. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian. A fill-reducing permutation is used. F = cholfact(A) is most frequently used to solve systems of equations with F\\b, but also the methods diag, det, and logdet are defined for F. You can also extract individual factors from F, using F[:L]. However, since pivoting is on by default, the factorization is internally represented as A == P'*L*L'*P with a permutation matrix P; using just L without accounting for P will give incorrect answers. To include the effects of permutation, it's typically preferable to extract \"combined\" factors like PtL = F[:PtL] (the equivalent of P'*L) and LtP = F[:UP] (the equivalent of L'*P).\n\nSetting the optional shift keyword argument computes the factorization of A+shift*I instead of A. If the perm argument is nonempty, it should be a permutation of 1:size(A,1) giving the ordering to use (instead of CHOLMOD's default AMD ordering).\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.Many other functions from CHOLMOD are wrapped but not exported from the Base.SparseArrays.CHOLMOD module.\n\n\n\n"
+    "text": "cholfact(A; shift = 0.0, perm = Int[]) -> CHOLMOD.Factor\n\nCompute the Cholesky factorization of a sparse positive definite matrix A. A must be a SparseMatrixCSC or a Symmetric/Hermitian view of a SparseMatrixCSC. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian. A fill-reducing permutation is used. F = cholfact(A) is most frequently used to solve systems of equations with F\\b, but also the methods diag, det, and logdet are defined for F. You can also extract individual factors from F, using F[:L]. However, since pivoting is on by default, the factorization is internally represented as A == P'*L*L'*P with a permutation matrix P; using just L without accounting for P will give incorrect answers. To include the effects of permutation, it's typically preferable to extract \"combined\" factors like PtL = F[:PtL] (the equivalent of P'*L) and LtP = F[:UP] (the equivalent of L'*P).\n\nSetting the optional shift keyword argument computes the factorization of A+shift*I instead of A. If the perm argument is nonempty, it should be a permutation of 1:size(A,1) giving the ordering to use (instead of CHOLMOD's default AMD ordering).\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.Many other functions from CHOLMOD are wrapped but not exported from the Base.SparseArrays.CHOLMOD module.\n\n\n\ncholfact(A, Val(false)) -> Cholesky\n\nCompute the Cholesky factorization of a dense symmetric positive definite matrix A and return a Cholesky factorization. The matrix A can either be a Symmetric or Hermitian StridedMatrix or a perfectly symmetric or Hermitian StridedMatrix. The triangular Cholesky factor can be obtained from the factorization F with: F[:L] and F[:U]. The following functions are available for Cholesky objects: size, \\, inv, det, logdet and isposdef.\n\nExample\n\njulia> A = [4. 12. -16.; 12. 37. -43.; -16. -43. 98.]\n3×3 Array{Float64,2}:\n   4.0   12.0  -16.0\n  12.0   37.0  -43.0\n -16.0  -43.0   98.0\n\njulia> C = cholfact(A)\nBase.LinAlg.Cholesky{Float64,Array{Float64,2}} with factor:\n[2.0 6.0 -8.0; 0.0 1.0 5.0; 0.0 0.0 3.0]\n\njulia> C[:U]\n3×3 UpperTriangular{Float64,Array{Float64,2}}:\n 2.0  6.0  -8.0\n  ⋅   1.0   5.0\n  ⋅    ⋅    3.0\n\njulia> C[:L]\n3×3 LowerTriangular{Float64,Array{Float64,2}}:\n  2.0   ⋅    ⋅\n  6.0  1.0   ⋅\n -8.0  5.0  3.0\n\njulia> C[:L] * C[:U] == A\ntrue\n\n\n\ncholfact(A, Val(true); tol = 0.0) -> CholeskyPivoted\n\nCompute the pivoted Cholesky factorization of a dense symmetric positive semi-definite matrix A and return a CholeskyPivoted factorization. The matrix A can either be a Symmetric or Hermitian StridedMatrix or a perfectly symmetric or Hermitian StridedMatrix. The triangular Cholesky factor can be obtained from the factorization F with: F[:L] and F[:U]. The following functions are available for PivotedCholesky objects: size, \\, inv, det, and rank. The argument tol determines the tolerance for determining the rank. For negative values, the tolerance is the machine precision.\n\n\n\n"
 },
 
 {
@@ -12645,7 +12645,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.cholfact!",
     "category": "Function",
-    "text": "cholfact!(A, Val(false)) -> Cholesky\n\nThe same as cholfact, but saves space by overwriting the input A, instead of creating a copy. An InexactError exception is thrown if the factorization produces a number not representable by the element type of A, e.g. for integer types.\n\nExample\n\njulia> A = [1 2; 2 50]\n2×2 Array{Int64,2}:\n 1   2\n 2  50\n\njulia> cholfact!(A)\nERROR: InexactError: convert(Int64, 6.782329983125268)\n\n\n\ncholfact!(A, Val(true); tol = 0.0) -> CholeskyPivoted\n\nThe same as cholfact, but saves space by overwriting the input A, instead of creating a copy. An InexactError exception is thrown if the factorization produces a number not representable by the element type of A, e.g. for integer types.\n\n\n\ncholfact!(F::Factor, A; shift = 0.0) -> CHOLMOD.Factor\n\nCompute the Cholesky (LL) factorization of A, reusing the symbolic factorization F. A must be a SparseMatrixCSC or a Symmetric/ Hermitian view of a SparseMatrixCSC. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian.\n\nSee also cholfact.\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\n"
+    "text": "cholfact!(F::Factor, A; shift = 0.0) -> CHOLMOD.Factor\n\nCompute the Cholesky (LL) factorization of A, reusing the symbolic factorization F. A must be a SparseMatrixCSC or a Symmetric/ Hermitian view of a SparseMatrixCSC. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian.\n\nSee also cholfact.\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\ncholfact!(A, Val(false)) -> Cholesky\n\nThe same as cholfact, but saves space by overwriting the input A, instead of creating a copy. An InexactError exception is thrown if the factorization produces a number not representable by the element type of A, e.g. for integer types.\n\nExample\n\njulia> A = [1 2; 2 50]\n2×2 Array{Int64,2}:\n 1   2\n 2  50\n\njulia> cholfact!(A)\nERROR: InexactError: convert(Int64, 6.782329983125268)\n\n\n\ncholfact!(A, Val(true); tol = 0.0) -> CholeskyPivoted\n\nThe same as cholfact, but saves space by overwriting the input A, instead of creating a copy. An InexactError exception is thrown if the factorization produces a number not representable by the element type of A, e.g. for integer types.\n\n\n\n"
 },
 
 {
@@ -12685,7 +12685,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.ldltfact",
     "category": "Function",
-    "text": "ldltfact(S::SymTridiagonal) -> LDLt\n\nCompute an LDLt factorization of a real symmetric tridiagonal matrix such that A = L*Diagonal(d)*L' where L is a unit lower triangular matrix and d is a vector. The main use of an LDLt factorization F = ldltfact(A) is to solve the linear system of equations Ax = b with F\\b.\n\n\n\nldltfact(A; shift = 0.0, perm=Int[]) -> CHOLMOD.Factor\n\nCompute the LDL factorization of a sparse matrix A. A must be a SparseMatrixCSC or a Symmetric/Hermitian view of a SparseMatrixCSC. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian. A fill-reducing permutation is used. F = ldltfact(A) is most frequently used to solve systems of equations A*x = b with F\\b. The returned factorization object F also supports the methods diag, det, logdet, and inv. You can extract individual factors from F using F[:L]. However, since pivoting is on by default, the factorization is internally represented as A == P'*L*D*L'*P with a permutation matrix P; using just L without accounting for P will give incorrect answers. To include the effects of permutation, it is typically preferable to extract \"combined\" factors like PtL = F[:PtL] (the equivalent of P'*L) and LtP = F[:UP] (the equivalent of L'*P). The complete list of supported factors is :L, :PtL, :D, :UP, :U, :LD, :DU, :PtLD, :DUP.\n\nSetting the optional shift keyword argument computes the factorization of A+shift*I instead of A. If the perm argument is nonempty, it should be a permutation of 1:size(A,1) giving the ordering to use (instead of CHOLMOD's default AMD ordering).\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.Many other functions from CHOLMOD are wrapped but not exported from the Base.SparseArrays.CHOLMOD module.\n\n\n\n"
+    "text": "ldltfact(A; shift = 0.0, perm=Int[]) -> CHOLMOD.Factor\n\nCompute the LDL factorization of a sparse matrix A. A must be a SparseMatrixCSC or a Symmetric/Hermitian view of a SparseMatrixCSC. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian. A fill-reducing permutation is used. F = ldltfact(A) is most frequently used to solve systems of equations A*x = b with F\\b. The returned factorization object F also supports the methods diag, det, logdet, and inv. You can extract individual factors from F using F[:L]. However, since pivoting is on by default, the factorization is internally represented as A == P'*L*D*L'*P with a permutation matrix P; using just L without accounting for P will give incorrect answers. To include the effects of permutation, it is typically preferable to extract \"combined\" factors like PtL = F[:PtL] (the equivalent of P'*L) and LtP = F[:UP] (the equivalent of L'*P). The complete list of supported factors is :L, :PtL, :D, :UP, :U, :LD, :DU, :PtLD, :DUP.\n\nSetting the optional shift keyword argument computes the factorization of A+shift*I instead of A. If the perm argument is nonempty, it should be a permutation of 1:size(A,1) giving the ordering to use (instead of CHOLMOD's default AMD ordering).\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.Many other functions from CHOLMOD are wrapped but not exported from the Base.SparseArrays.CHOLMOD module.\n\n\n\nldltfact(S::SymTridiagonal) -> LDLt\n\nCompute an LDLt factorization of a real symmetric tridiagonal matrix such that A = L*Diagonal(d)*L' where L is a unit lower triangular matrix and d is a vector. The main use of an LDLt factorization F = ldltfact(A) is to solve the linear system of equations Ax = b with F\\b.\n\n\n\n"
 },
 
 {
@@ -12693,7 +12693,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.ldltfact!",
     "category": "Function",
-    "text": "ldltfact!(S::SymTridiagonal) -> LDLt\n\nSame as ldltfact, but saves space by overwriting the input A, instead of creating a copy.\n\n\n\nldltfact!(F::Factor, A; shift = 0.0) -> CHOLMOD.Factor\n\nCompute the LDL factorization of A, reusing the symbolic factorization F. A must be a SparseMatrixCSC or a Symmetric/Hermitian view of a SparseMatrixCSC. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian.\n\nSee also ldltfact.\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\n"
+    "text": "ldltfact!(F::Factor, A; shift = 0.0) -> CHOLMOD.Factor\n\nCompute the LDL factorization of A, reusing the symbolic factorization F. A must be a SparseMatrixCSC or a Symmetric/Hermitian view of a SparseMatrixCSC. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian.\n\nSee also ldltfact.\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\nldltfact!(S::SymTridiagonal) -> LDLt\n\nSame as ldltfact, but saves space by overwriting the input A, instead of creating a copy.\n\n\n\n"
 },
 
 {
