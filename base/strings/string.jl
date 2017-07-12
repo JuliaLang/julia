@@ -438,3 +438,25 @@ function repeat(s::String, r::Integer)
     end
     return out
 end
+
+"""
+    repeat(c::Char, r::Integer) -> String
+
+Repeat a character `r` times.
+
+# Examples
+```jldoctest
+julia> repeat('A', 3)
+"AAA"
+```
+"""
+function repeat(c::Char, r::Integer)
+    if isascii(c)
+        r < 0 && throw(ArgumentError("can't repeat a character $r times"))
+        out = _string_n(r)
+        ccall(:memset, Ptr{Void}, (Ptr{UInt8}, Cint, Csize_t), out, c, r)
+        return out
+    else
+        return repeat(string(c), r)
+    end
+end
