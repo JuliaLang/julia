@@ -260,7 +260,7 @@ function process_options(opts::JLOptions)
 
     # remove filename from ARGS
     arg_is_program = opts.eval == C_NULL && opts.print == C_NULL && !isempty(ARGS)
-    global const PROGRAM_FILE = arg_is_program ? shift!(ARGS) : ""
+    PROGRAM_FILE[] = arg_is_program ? shift!(ARGS) : ""
 
     while true
         # startup worker.
