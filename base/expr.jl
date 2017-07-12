@@ -61,7 +61,7 @@ Takes the expression `x` and returns an equivalent expression with all macros re
 for executing in module `m`.
 The `recursive` keyword controls whether deeper levels of nested macros are also expanded.
 This is demonstrated in the example below:
-```julia
+```julia-repl
 julia> module M
            macro m1()
                42

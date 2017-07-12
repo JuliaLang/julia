@@ -228,7 +228,7 @@
 (define (jl-macroexpand-1 expr)
   (reset-gensyms)
   (parser-wrap (lambda ()
-                 (julia-expand-macros-limited expr 1))))
+                 (julia-expand-macros expr 1))))
 
 ; run whole frontend on a string. useful for testing.
 (define (fe str)
