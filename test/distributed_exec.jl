@@ -659,9 +659,16 @@ catch ex
     @test length(ex) == 5
     @test typeof(ex.exceptions[1]) == CapturedException
     @test typeof(ex.exceptions[1].ex) == ErrorException
-    errors = map(x->x.ex.msg, ex.exceptions)
-    @test collect(1:5) == sort(map(x->parse(Int, x), errors))
+    # test start, next, and done
+    for (i, i_ex) in enumerate(ex)
+        @test i == parse(Int, i_ex.ex.msg)
+    end
+    # test showerror
+    err_str = sprint(showerror, ex)
+    err_one_str = sprint(showerror, ex.exceptions[1])
+    @test err_str == err_one_str * "\n\n...and 4 more exception(s).\n"
 end
+@test sprint(showerror, CompositeException()) == "CompositeException()\n"
 
 function test_remoteexception_thrown(expr)
     try
