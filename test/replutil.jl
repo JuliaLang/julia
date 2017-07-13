@@ -575,3 +575,10 @@ end
         @test !contains(str, "The applicable method may be too new")
     end
 end
+
+# issue #22798
+@generated f22798(x::Integer, y) = :x
+let buf = IOBuffer()
+    show(buf, methods(f22798))
+    @test contains(String(take!(buf)), "f22798(x::Integer, y)")
+end
