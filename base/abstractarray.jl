@@ -1938,6 +1938,23 @@ unshift!(A, a, b, c...) = unshift!(unshift!(A, c...), a, b)
 
 const hashaa_seed = UInt === UInt64 ? 0x7f53e68ceb575e76 : 0xeb575e76
 const hashrle_seed = UInt === UInt64 ? 0x2aab8909bfea414c : 0xbfea414c
+const hashr_seed   = UInt === UInt64 ? 0x80707b6821b70087 : 0x21b70087
+
+# Efficient O(1) method equivalent to the O(N) AbstractArray fallback,
+# which works only for ranges with regular step (RangeStepRegular)
+function hash_range(r::Range, h::UInt)
+    h += hashaa_seed
+    h += hash(size(r))
+
+    length(r) == 0 && return h
+    h = hash(first(r), h)
+    length(r) == 1 && return h
+    length(r) == 2 && return hash(last(r), h)
+
+    h += hashr_seed
+    h = hash(step(r), h)
+    h = hash(last(r), h)
+end
 
 function hash(a::AbstractArray{T}, h::UInt) where T
     # O(1) hashing for types with regular step
@@ -1945,57 +1962,106 @@ function hash(a::AbstractArray{T}, h::UInt) where T
         return hash_range(a, h)
     end
 
-    if isleaftype(T)
-        if method_exists(-, Tuple{T, T})
-            hashdiff = (x1, x2) -> x2 - x1
-        else
-            hashdiff = (x1, x2) -> x2
-        end
-    else
-        hashdiff = (x1, x2) -> applicable(-, x2, x1) ? x2 - x1 : x2
-    end
-
-    _hash(a, h, hashdiff)
-end
-
-function _hash(a::AbstractArray, h::UInt, hashdiff::Function)
     h += hashaa_seed
     h += hash(size(a))
 
     state = start(a)
     done(a, state) && return h
-    x1, state = next(a, state)
-    # Always hash the first element
-    h = hash(x1, h)
-    done(a, state) && return h
-
-    # Then hash the difference between two subsequent elements when - is supported,
-    # or the elements themselves when not
     x2, state = next(a, state)
-    v1 = v2 = hashdiff(x1, x2)
-    done(a, state) && return hash(v2, h)
+    done(a, state) && return hash(x2, h)
 
+    # Check whether the array is equal to a range, and hash the elements
+    # at the beginning of the array as such as long as they match this assumption
+    # This needs to be done even for non-RangeStepRegular types since they may still be equal
+    # to RangeStepRegular values (e.g. 1.0:3.0 == 1:3)
+    if isa(a, AbstractVector) && (!isleaftype(T) || method_exists(-, Tuple{T, T}))
+        firstval = x2
+        lastval = last(a)
+        x2, state = next(a, state)
+        second = x2
+        if length(a) == 2
+            h = hash(first, h)
+            return hash(x2, h)
+        end
+        secondstate = state
+
+        # Try to compute the step between two subsequent elements.
+        # If this fails (e.g. type does not support subtraction, or overflow error
+        # for a checked arithmetic type), a cannot be equal to a range.
+        # promote() ensures no overflow can happen for heterogeneous arrays
+        # which are equal to a range
+        local step
+        firstp, lastp = promote(firstval, lastval)
+        try
+            step = x2p - firstp
+        catch err
+            isa(err, OverflowError) || isa(err, MethodError) || rethrow(err)
+            @goto nonrange
+        end
+        iszero(step) && @goto nonrange
+        r = first:step:last(a)
+        @show r
+        state = start(a)
+        rstate = start(r)
+        while !done(a, state) && !done(r, rstate)
+            x2, state = next(a, state)
+            y, rstate = next(r, rstate)
+            # When encountering an element with a wider type than previous ones, restart
+            # from first element using the widest type to avoid overflow
+            U = promote_type(typeof(x2), S)
+            if U !== S
+                first = convert(U, first)
+                state = secondstate
+                x2 = second
+                @goto first
+            end
+            @show x2, y
+            isequal(x2, y) || break
+        end
+        # If overflow happened when computing step, loop can have failed to detect
+        # that next element was in a range if type changes
+        if !done(a, state)
+            x2, _ = next(a, state)
+            U = promote_type(typeof(x2), S)
+            if U !== S
+                first = convert(U, first)
+                state = secondstate
+                x2 = second
+                @goto first
+            end
+        end
+        # If at least one element in addition to the first one matched range,
+        # hash these elements as a range; else, leave them to the fallback below
+        if state != secondstate
+            h = hash(first, h)
+            h += hashr_seed
+            h = hash(step, h)
+            h = hash(x2, h)
+            @show first, step, x2
+        end
+    end
+
+    @label nonrange
+
+    # Hash elements which do not correspond to a range (if any)
+    x1 = x2
     while !done(a, state)
         x1 = x2
         x2, state = next(a, state)
-        v1 = v2
-        v2 = hashdiff(x1, x2)
-        if isequal(v1, v2)
-            # For repeated differences, use run length encoding
-            # This allows efficient hashing of sparse arrays and ranges
+        if isequal(x2, x1)
+            # For repeated elements, use run length encoding
+            # This allows efficient hashing of sparse arrays
             runlength = 2
             while !done(a, state)
-                x1 = x2
                 x2, state = next(a, state)
-                v2 = hashdiff(x1, x2)
-                isequal(v1, v2) || break
+                isequal(x1, x2) || break
                 runlength += 1
             end
             h += hashrle_seed
             h = hash(runlength, h)
         end
-        h = hash(v1, h)
+        h = hash(x1, h)
     end
-    !isequal(v1, v2) && (h = hash(v2, h))
+    !isequal(x2, x1) && (h = hash(x2, h))
     return h
 end

@@ -3414,93 +3414,48 @@ end
 
 ## hashing
 
-# Increase length of current run or hash last run and start new one,
-# returning updated hash and run length for 'diff'
-@inline function hashrun(diff, lastdiff, runlength::Int, n::Int, h::UInt)
-    if isequal(diff, lastdiff) # Diff did not change, increment run length
-        return h, runlength + n
-    elseif runlength > 0 # Diff changed, hash last run and start new one
-        if runlength > 1
-            h += Base.hashrle_seed
-            h = hash(runlength, h)
-        end
-        return hash(lastdiff, h), n
-    else # Diff changed but no last run, nothing to do
-        return h, n
+# End the run and return the current hash
+@inline function hashrun(val, runlength::Int, h::UInt)
+    if runlength == 0
+        return h
+    elseif runlength > 1
+        h += Base.hashrle_seed
+        h = hash(runlength, h)
     end
+    hash(val, h)
 end
 
-function Base._hash(A::SparseMatrixCSC{T}, h::UInt, hashdiff::Function) where T
+function hash(A::SparseMatrixCSC{T}, h::UInt) where T
     h += Base.hashaa_seed
     sz = size(A)
     h += hash(sz)
 
-    isempty(A) && return h
-
-    last = first(A)
-    # Always hash the first element separately
-    h = hash(last, h)
-    length(A) == 1 && return h
-
     colptr = A.colptr
     rowval = A.rowval
     nzval = A.nzval
-    lastidx = 1
+    lastidx = 0
     runlength = 0
-    diff = lastdiff = zero(T)
+    lastnz = zero(T)
     @inbounds for col = 1:size(A, 2)
         for j = colptr[col]:colptr[col+1]-1
             nz = nzval[j]
+            isequal(nz, zero(T)) && continue
             idx = Base._sub2ind(sz, rowval[j], col)
-            idx == 1 && continue # First element is hashed separately
+            if idx != lastidx+1 || !isequal(nz, lastnz)  # Run is over
+                h = hashrun(lastnz, runlength, h)        # Hash previous run
+                h = hashrun(0, idx-lastidx-1, h)         # Hash intervening zeros
 
-            # Hash non-stored zeros (if any)
-            if idx-lastidx > 1 # One or more zeros since previous stored entry
-                # Hash difference between first zero and last stored entry
-                diff = hashdiff(last, zero(T))
-                h, runlength = hashrun(diff, lastdiff, runlength, 1, h)
-                last = zero(T)
-                lastdiff = diff
-
-                # Hash difference between remaining zeros (if any)
-                if idx-lastidx > 2 # Two or more zeros since previous stored entry
-                    diff = hashdiff(zero(T), zero(T))
-                    h, runlength = hashrun(diff, lastdiff, runlength, idx-lastidx-2, h)
-                end
-                last = zero(T)
-                lastdiff = diff
+                runlength = 1
+                lastnz = nz
+            else
+                runlength += 1
             end
-
-            # Hash stored entry
-            diff = hashdiff(last, nz)
-            h, runlength = hashrun(diff, lastdiff, runlength, 1, h)
-            last = nz
-            lastdiff = diff
             lastidx = idx
         end
     end
-
-    # Hash difference between first zero at end and last stored entry (i fany)
-    if length(A)-lastidx > 0
-        diff = hashdiff(last, zero(T))
-        h, runlength = hashrun(diff, lastdiff, runlength, 1, h)
-
-        # Hash difference between remaining zeros (if any)
-        if length(A)-lastidx > 1
-            lastdiff = diff
-            diff = hashdiff(zero(T), zero(T))
-            h, runlength = hashrun(diff, lastdiff, runlength, length(A)-lastidx-1, h)
-        end
-    end
-
-    # Hash last run
-    if runlength > 1
-        h += Base.hashrle_seed
-        h = hash(runlength, h)
-    end
-    return hash(diff, h)
+    h = hashrun(lastnz, runlength, h) # Hash previous run
+    hashrun(0, length(A)-lastidx, h)  # Hash zeros at end
 end
-
 
 ## Statistics
 

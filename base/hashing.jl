@@ -73,20 +73,3 @@ else
 end
 
 hash(x::QuoteNode, h::UInt) = hash(x.value, hash(QuoteNode, h))
-
-# Efficient O(1) method equivalent to the O(N) AbstractArray fallback,
-# which works only for ranges with regular step (RangeStepRegular)
-function hash_range(r::AbstractRange, h::UInt)
-    h += hashaa_seed
-    h += hash(size(r))
-
-    length(r) == 0 && return h
-
-    h = hash(first(r), h)
-    length(r) == 1 && return h
-    length(r) == 2 && return hash(step(r), h)
-
-    h += hashrle_seed
-    h = hash(length(r)-1, h)
-    hash(step(r), h)
-end

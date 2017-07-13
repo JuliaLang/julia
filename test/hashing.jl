@@ -86,21 +86,28 @@ vals = Any[
 ]
 
 for a in vals, b in vals
+@show a, b
     @test isequal(a,b) == (hash(a)==hash(b))
 end
 
 vals = Any[
     Int[], Float64[],
     [0], [1], [2],
-    # test various sparsity patterns with repetitions of steps
+    # test vectors starting with ranges
+    [1, 2], [1, 2, 3], [1, 2, 3, 4], [1, 2, 3, 4, 5], [1, 2, 3, 4, 5, 6],
+    [2, 1], [3, 2, 1], [4, 3, 2, 1], [5, 4, 3, 2, 1], [5, 4, 3, 2, 1, 0, -1],
+    # test vectors starting with ranges which trigger overflow with Int8
+    [124, 125, 126, 127], [124, 125, 126, 127, -128], [-128, 127, -128],
+    [2^53, 2^53+1, 2^53+2], Float64[2^53, 2^53+1, 2^53+2],
+    # test vectors including ranges
+    [2, 1, 2, 3], [2, 3, 2, 1], [2, 1, 2, 3, 2], [2, 3, 2, 1, 2],
+    # test various sparsity patterns
     [0, 0], [0, 0, 0], [0, 1], [1, 0],
     [0, 0, 1], [0, 1, 0], [1, 0, 0], [0, 1, 2],
     [0 0; 0 0], [1 0; 0 0], [0 1; 0 0], [0 0; 1 0], [0 0; 0 1],
     [5 1; 0 0], [1 1; 0 1], [0 2; 3 0], [0 2; 4 6], [4 0; 0 1],
     [0 0 0; 0 0 0], [1 0 0; 0 0 1], [0 0 2; 3 0 0], [0 0 7; 6 1 2],
     [4 0 0; 3 0 1], [0 2 4; 6 0 0],
-    # run of equal steps that crosses a zero
-    [0 3 2 1 0 -1], [0 1 0 -1 0],
     # various stored zeros patterns
     sparse([1], [1], [0]), sparse([1], [1], [-0.0]),
     sparse([1, 2], [1, 1], [-0.0, 0.0]), sparse([1, 2], [1, 1], [0.0, -0.0]),
@@ -111,11 +118,22 @@ vals = Any[
 ]
 
 for a in vals
+@show a
     b = Array(a)
     @test hash(convert(Array{Any}, a)) == hash(b)
     @test hash(convert(Array{supertype(eltype(a))}, a)) == hash(b)
+    @test hash(convert(Array{Float64}, a)) == hash(b)
     @test hash(sparse(a)) == hash(b)
+    if !any(x -> isequal(x, -0.0), a)
+        @test hash(convert(Array{Int}, a)) == hash(b)
+        @test hash(convert(Array{Int8}, a)) == hash(b)
+    end
 end
+
+# Test that no overflows give inconsistent hashes with heterogeneous arrays
+@test hash(Any[Int8(1), Int8(2), 255]) == hash([1, 2, 255])
+@test hash(Any[Int8(127), Int8(-128), 129, 130]) ==
+    hash([127, -128, 129, 130]) != hash([127,  128, 129, 130])
 
 # Test hashing sparse matrix with type which does not support -
 struct CustomHashReal
