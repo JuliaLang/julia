@@ -175,6 +175,8 @@ Deprecated or removed
   * The forms of `read`, `readstring`, and `eachline` that accepted both a `Cmd` object and an
     input stream are deprecated. Use e.g. `read(pipeline(stdin, cmd))` instead ([#22762]).
 
+  * The unexported type `AbstractIOBuffer` has been renamed to `GenericIOBuffer` ([##17360] [#22796]).
+
 
 Julia v0.6.0 Release Notes
 ==========================
