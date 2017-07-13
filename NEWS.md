@@ -13,6 +13,9 @@ Language changes
   * The syntax `1.+2` is deprecated, since it is ambiguous: it could mean either
     `1 .+ 2` (the current meaning) or `1. + 2` ([#19089]).
 
+  * In string and character literals, backslash `\` may no longer
+    precede unrecognized escape characters ([#22800]).
+
 Breaking changes
 ----------------
 
