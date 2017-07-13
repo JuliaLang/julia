@@ -276,6 +276,7 @@ Base.gc
 Base.gc_enable
 Base.macroexpand
 Base.@macroexpand
+Base.@macroexpand1
 Base.expand
 Base.code_lowered
 Base.@code_lowered

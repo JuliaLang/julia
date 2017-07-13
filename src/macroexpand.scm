@@ -466,11 +466,12 @@
 
 ;; macro expander entry point
 
-(define (julia-expand-macros e)
-  (cond ((not (pair? e))     e)
+(define (julia-expand-macros e (max-depth -1))
+  (cond ((= max-depth 0)   e)
+        ((not (pair? e))     e)
         ((eq? (car e) 'quote)
          ;; backquote is essentially a built-in macro at the moment
-         (julia-expand-macros (julia-bq-expand (cadr e) 0)))
+         (julia-expand-macros (julia-bq-expand (cadr e) 0) max-depth))
         ((eq? (car e) 'inert) e)
         ((eq? (car e) 'macrocall)
          ;; expand macro
@@ -483,8 +484,7 @@
                  (m    (cdr form)))
              ;; m is the macro's def module
              (rename-symbolic-labels
-              (julia-expand-macros
-               (resolve-expansion-vars form m))))))
+              (julia-expand-macros (resolve-expansion-vars form m) (- max-depth 1))))))
         ((eq? (car e) 'module) e)
         (else
-         (map julia-expand-macros e))))
+         (map (lambda (ex) (julia-expand-macros ex max-depth)) e))))
