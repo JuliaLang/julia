@@ -831,7 +831,7 @@ function (\)(A::AbstractMatrix, B::AbstractVecOrMat)
         end
         return lufact(A) \ B
     end
-    return qrfact(A,Val{true}) \ B
+    return qrfact(A,Val(true)) \ B
 end
 
 (\)(a::AbstractVector, b::AbstractArray) = reshape(a, length(a), 1) \ b
@@ -1260,6 +1260,8 @@ function logdet(A::AbstractMatrix)
     d,s = logabsdet(A)
     return d + log(s)
 end
+
+logdet(A) = log(det(A))
 
 const NumberArray{T<:Number} = AbstractArray{T}
 

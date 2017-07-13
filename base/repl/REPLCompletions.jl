@@ -101,7 +101,7 @@ function complete_keyword(s::String)
 end
 
 function complete_path(path::AbstractString, pos; use_envpath=false)
-    if Base.is_unix() && ismatch(r"^~(?:/|$)", path)
+    if Base.Sys.isunix() && ismatch(r"^~(?:/|$)", path)
         # if the path is just "~", don't consider the expanded username as a prefix
         if path == "~"
             dir, prefix = homedir(), ""
@@ -129,13 +129,13 @@ function complete_path(path::AbstractString, pos; use_envpath=false)
         if startswith(file, prefix)
             id = try isdir(joinpath(dir, file)) catch; false end
             # joinpath is not used because windows needs to complete with double-backslash
-            push!(matches, id ? file * (@static is_windows() ? "\\\\" : "/") : file)
+            push!(matches, id ? file * (@static Sys.iswindows() ? "\\\\" : "/") : file)
         end
     end
 
     if use_envpath && length(dir) == 0
         # Look for files in PATH as well
-        local pathdirs = split(ENV["PATH"], @static is_windows() ? ";" : ":")
+        local pathdirs = split(ENV["PATH"], @static Sys.iswindows() ? ";" : ":")
 
         for pathdir in pathdirs
             local actualpath

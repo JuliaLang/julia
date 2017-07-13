@@ -342,7 +342,7 @@ STATIC_INLINE jl_value_t *jl_compile_method_internal(jl_generic_fptr_t *fptr,
             fptr->fptr = meth->unspecialized_ducttape;
             fptr->jlcall_api = 1;
             if (!fptr->fptr) {
-                if (jl_is_method(meth->def.method) && !meth->def.method->isstaged && meth->def.method->unspecialized) {
+                if (jl_is_method(meth->def.method) && meth->def.method->unspecialized) {
                     fptr->fptr = meth->def.method->unspecialized->fptr;
                     fptr->jlcall_api = meth->def.method->unspecialized->jlcall_api;
                     if (fptr->jlcall_api == 2) {
@@ -510,7 +510,7 @@ JL_DLLEXPORT jl_value_t *jl_matching_methods(jl_tupletype_t *types, int lim, int
                                              size_t world, size_t *min_valid, size_t *max_valid);
 
 JL_DLLEXPORT jl_datatype_t *jl_first_argument_datatype(jl_value_t *argtypes);
-jl_datatype_t *jl_argument_datatype(jl_value_t *argt);
+JL_DLLEXPORT jl_value_t *jl_argument_datatype(jl_value_t *argt);
 
 jl_value_t *jl_nth_slot_type(jl_value_t *sig, size_t i);
 void jl_compute_field_offsets(jl_datatype_t *st);
@@ -807,10 +807,6 @@ JL_DLLEXPORT jl_value_t *jl_fptosi(jl_value_t *ty, jl_value_t *a);
 JL_DLLEXPORT jl_value_t *jl_fptrunc(jl_value_t *ty, jl_value_t *a);
 JL_DLLEXPORT jl_value_t *jl_fpext(jl_value_t *ty, jl_value_t *a);
 
-JL_DLLEXPORT jl_value_t *jl_checked_trunc_sint(jl_value_t *ty, jl_value_t *a);
-JL_DLLEXPORT jl_value_t *jl_checked_trunc_uint(jl_value_t *ty, jl_value_t *a);
-
-JL_DLLEXPORT jl_value_t *jl_check_top_bit(jl_value_t *a);
 JL_DLLEXPORT jl_value_t *jl_checked_sadd_int(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT jl_value_t *jl_checked_uadd_int(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT jl_value_t *jl_checked_ssub_int(jl_value_t *a, jl_value_t *b);

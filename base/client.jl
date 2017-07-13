@@ -102,7 +102,7 @@ function repl_cmd(cmd, out)
                 end
                 cd(ENV["OLDPWD"])
             else
-                cd(@static is_windows() ? dir : readchomp(`$shell -c "echo $(shell_escape(dir))"`))
+                cd(@static Sys.iswindows() ? dir : readchomp(`$shell -c "echo $(shell_escape(dir))"`))
             end
         else
             cd()
@@ -110,7 +110,7 @@ function repl_cmd(cmd, out)
         ENV["OLDPWD"] = new_oldpwd
         println(out, pwd())
     else
-        run(ignorestatus(@static is_windows() ? cmd : (isa(STDIN, TTY) ? `$shell -i -c "$(shell_wrap_true(shell_name, cmd))"` : `$shell -c "$(shell_wrap_true(shell_name, cmd))"`)))
+        run(ignorestatus(@static Sys.iswindows() ? cmd : (isa(STDIN, TTY) ? `$shell -i -c "$(shell_wrap_true(shell_name, cmd))"` : `$shell -c "$(shell_wrap_true(shell_name, cmd))"`)))
     end
     nothing
 end
@@ -265,8 +265,13 @@ function process_options(opts::JLOptions)
     while true
         # startup worker.
         # opts.startupfile, opts.load, etc should should not be processed for workers.
-        if opts.worker != C_NULL
-            start_worker(unsafe_string(opts.worker)) # does not return
+        if opts.worker == 1
+            # does not return
+            if opts.cookie != C_NULL
+                start_worker(unsafe_string(opts.cookie))
+            else
+                start_worker()
+            end
         end
 
         # add processors
@@ -385,7 +390,7 @@ function _start()
                 global is_interactive |= !isa(STDIN, Union{File, IOStream})
                 color_set || (global have_color = false)
             else
-                term = Terminals.TTYTerminal(get(ENV, "TERM", @static is_windows() ? "" : "dumb"), STDIN, STDOUT, STDERR)
+                term = Terminals.TTYTerminal(get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb"), STDIN, STDOUT, STDERR)
                 global is_interactive = true
                 color_set || (global have_color = Terminals.hascolor(term))
                 quiet || REPL.banner(term,term)

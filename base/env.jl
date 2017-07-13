@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-if is_windows()
+if Sys.iswindows()
     const ERROR_ENVVAR_NOT_FOUND = UInt32(203)
 
     _getenvlen(var::Vector{UInt16}) = ccall(:GetEnvironmentVariableW,stdcall,UInt32,(Ptr{UInt16},Ptr{UInt16},UInt32),var,C_NULL,0)
@@ -84,7 +84,7 @@ delete!(::EnvHash, k::AbstractString) = (_unsetenv(k); ENV)
 setindex!(::EnvHash, v, k::AbstractString) = _setenv(k,string(v))
 push!(::EnvHash, k::AbstractString, v) = setindex!(ENV, v, k)
 
-if is_windows()
+if Sys.iswindows()
     start(hash::EnvHash) = (pos = ccall(:GetEnvironmentStringsW,stdcall,Ptr{UInt16},()); (pos,pos))
     function done(hash::EnvHash, block::Tuple{Ptr{UInt16},Ptr{UInt16}})
         if unsafe_load(block[1]) == 0

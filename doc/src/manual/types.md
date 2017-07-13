@@ -352,7 +352,7 @@ Stacktrace:
 You may find a list of field names using the `fieldnames` function.
 
 ```jldoctest footype
-julia> fieldnames(foo)
+julia> fieldnames(Foo)
 3-element Array{Symbol,1}:
  :bar
  :baz
@@ -1260,37 +1260,38 @@ floating-point numbers, tuples, etc.) as type parameters.  A common example is t
 parameter in `Array{T,N}`, where `T` is a type (e.g., [`Float64`](@ref)) but `N` is just an `Int`.
 
 You can create your own custom types that take values as parameters, and use them to control dispatch
-of custom types. By way of illustration of this idea, let's introduce a parametric type, `Val{T}`,
-which serves as a customary way to exploit this technique for cases where you don't need a more
-elaborate hierarchy.
+of custom types. By way of illustration of this idea, let's introduce a parametric type, `Val{x}`,
+and a constructor `Val(x) = Val{x}()`, which serves as a customary way to exploit this technique
+for cases where you don't need a more elaborate hierarchy.
 
 `Val` is defined as:
 
 ```jldoctest valtype
-julia> struct Val{T}
+julia> struct Val{x}
        end
+Base.@pure Val(x) = Val{x}()
 ```
 
 There is no more to the implementation of `Val` than this.  Some functions in Julia's standard
-library accept `Val` types as arguments, and you can also use it to write your own functions.
+library accept `Val` instances as arguments, and you can also use it to write your own functions.
  For example:
 
 ```jldoctest valtype
-julia> firstlast(::Type{Val{true}}) = "First"
+julia> firstlast(::Val{true}) = "First"
 firstlast (generic function with 1 method)
 
-julia> firstlast(::Type{Val{false}}) = "Last"
+julia> firstlast(::Val{false}) = "Last"
 firstlast (generic function with 2 methods)
 
-julia> firstlast(Val{true})
+julia> firstlast(Val(true))
 "First"
 
-julia> firstlast(Val{false})
+julia> firstlast(Val(false))
 "Last"
 ```
 
-For consistency across Julia, the call site should always pass a `Val`*type* rather than creating
-an *instance*, i.e., use `foo(Val{:bar})` rather than `foo(Val{:bar}())`.
+For consistency across Julia, the call site should always pass a `Val`*instance* rather than using
+a *type*, i.e., use `foo(Val(:bar))` rather than `foo(Val{:bar})`.
 
 It's worth noting that it's extremely easy to mis-use parametric "value" types, including `Val`;
 in unfavorable cases, you can easily end up making the performance of your code much *worse*.

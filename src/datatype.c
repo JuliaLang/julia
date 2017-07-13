@@ -216,6 +216,20 @@ unsigned jl_special_vector_alignment(size_t nfields, jl_value_t *t)
     return alignment;
 }
 
+STATIC_INLINE int jl_is_datatype_make_singleton(jl_datatype_t *d)
+{
+    return (!d->abstract && jl_datatype_size(d) == 0 && d != jl_sym_type && d->name != jl_array_typename &&
+            d->uid != 0 && (d->types == jl_emptysvec || !d->mutabl));
+}
+
+STATIC_INLINE void jl_allocate_singleton_instance(jl_datatype_t *st)
+{
+    if (jl_is_datatype_make_singleton(st)) {
+        st->instance = jl_gc_alloc(jl_get_ptls_states(), 0, st);
+        jl_gc_wb(st, st->instance);
+    }
+}
+
 void jl_compute_field_offsets(jl_datatype_t *st)
 {
     size_t sz = 0, alignm = 1;
@@ -232,6 +246,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             w->layout) {
             st->layout = w->layout;
             st->size = w->size;
+            jl_allocate_singleton_instance(st);
             return;
         }
     }
@@ -252,6 +267,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             // reuse the same layout for all singletons
             static const jl_datatype_layout_t singleton_layout = {0, 1, 0, 0, 0};
             st->layout = &singleton_layout;
+            jl_allocate_singleton_instance(st);
         }
         return;
     }
@@ -327,6 +343,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         haspadding = 1;
     st->layout = jl_get_layout(nfields, alignm, haspadding, desc);
     if (descsz >= jl_page_size) free(desc);
+    jl_allocate_singleton_instance(st);
     return;
  throw_ovf:
     if (descsz >= jl_page_size) free(desc);
@@ -420,6 +437,7 @@ JL_DLLEXPORT jl_datatype_t *jl_new_primitivetype(jl_value_t *name, jl_module_t *
         alignm = MAX_ALIGN;
     bt->size = nbytes;
     bt->layout = jl_get_layout(0, alignm, 0, NULL);
+    bt->instance = NULL;
     return bt;
 }
 
@@ -688,7 +706,7 @@ JL_DLLEXPORT jl_value_t *jl_new_struct_uninit(jl_datatype_t *type)
 
 JL_DLLEXPORT int jl_field_index(jl_datatype_t *t, jl_sym_t *fld, int err)
 {
-    jl_svec_t *fn = t->name->names;
+    jl_svec_t *fn = jl_field_names(t);
     for(size_t i=0; i < jl_svec_len(fn); i++) {
         if (jl_svecref(fn,i) == (jl_value_t*)fld) {
             return (int)i;

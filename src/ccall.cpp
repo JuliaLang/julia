@@ -1963,13 +1963,11 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         else {
             if (jl_is_abstract_ref_type(jargty)) {
                 emit_error(ctx, "ccall: & on a Ref{T} argument is invalid");
-                JL_GC_POP();
                 return jl_cgval_t();
             }
             v = julia_to_address(ctx, largty, jargty_in_env, unionall_env, arg,
                                  ai + 1, &needStackRestore);
             if (isa<UndefValue>(v)) {
-                JL_GC_POP();
                 return jl_cgval_t();
             }
             // A bit of a hack, but we're trying to get rid of this feature
@@ -1979,7 +1977,6 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         }
 
         if (isa<UndefValue>(v)) {
-            JL_GC_POP();
             return jl_cgval_t();
         }
         assert(v->getType() == pargty);

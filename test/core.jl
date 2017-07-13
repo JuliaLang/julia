@@ -660,14 +660,14 @@ let
     @test ===(g(a),a)
 end
 
-# dispatch using Val{T}. See discussion in #9452 for instances vs types
+# dispatch using Val{T}. See discussion in #9452, #22475 for instances vs types
 let
     local firstlast
-    firstlast(::Type{Val{true}}) = "First"
-    firstlast(::Type{Val{false}}) = "Last"
+    firstlast(::Val{true}) = "First"
+    firstlast(::Val{false}) = "Last"
 
-    @test firstlast(Val{true}) == "First"
-    @test firstlast(Val{false}) == "Last"
+    @test firstlast(Val(true)) == "First"
+    @test firstlast(Val(false)) == "Last"
 end
 
 # x::Vararg{Any} declarations
@@ -2149,7 +2149,7 @@ let x = [1,2,3]
 end
 
 # sig 2 is SIGINT per the POSIX.1-1990 standard
-if !is_windows()
+if !Sys.iswindows()
     ccall(:jl_exit_on_sigint, Void, (Cint,), 0)
     @test_throws InterruptException begin
         ccall(:kill, Void, (Cint, Cint,), getpid(), 2)

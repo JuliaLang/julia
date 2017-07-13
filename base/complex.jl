@@ -35,7 +35,7 @@ const Complex32  = Complex{Float16}
 convert(::Type{Complex{T}}, x::Real) where {T<:Real} = Complex{T}(x,0)
 convert(::Type{Complex{T}}, z::Complex) where {T<:Real} = Complex{T}(real(z),imag(z))
 convert(::Type{T}, z::Complex) where {T<:Real} =
-    isreal(z) ? convert(T,real(z)) : throw(InexactError())
+    isreal(z) ? convert(T,real(z)) : throw(InexactError(:convert, T, z))
 
 convert(::Type{Complex}, z::Complex) = z
 convert(::Type{Complex}, x::Real) = Complex(x)

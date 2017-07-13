@@ -20,7 +20,7 @@ Base.Terminals.raw!(t::FakeTerminal, raw::Bool) = t.raw = raw
 Base.Terminals.size(t::FakeTerminal) = (24, 80)
 
 function open_fake_pty()
-    @static if is_windows()
+    @static if Sys.iswindows()
         error("Unable to create a fake PTY in Windows")
     end
 

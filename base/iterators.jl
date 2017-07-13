@@ -799,6 +799,11 @@ mutable struct PartitionIterator{T}
 end
 
 eltype(::Type{PartitionIterator{T}}) where {T} = Vector{eltype(T)}
+partition_iteratorsize(::HasShape) = HasLength()
+partition_iteratorsize(isz) = isz
+function iteratorsize(::Type{PartitionIterator{T}}) where {T}
+    partition_iteratorsize(iteratorsize(T))
+end
 
 function length(itr::PartitionIterator)
     l = length(itr.c)

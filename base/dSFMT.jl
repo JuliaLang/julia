@@ -25,7 +25,7 @@ mutable struct DSFMT_state
     val::Vector{Int32}
 
     DSFMT_state(val::Vector{Int32} = zeros(Int32, JN32)) =
-        new(length(val) == JN32 ? val : throw(DomainError()))
+        new(length(val) == JN32 ? val : throw(DomainError(length(val), string("Expected length ", JN32, '.'))))
 end
 
 copy!(dst::DSFMT_state, src::DSFMT_state) = (copy!(dst.val, src.val); dst)
@@ -163,7 +163,7 @@ end
 
 ## Windows entropy
 
-if is_windows()
+if Sys.iswindows()
     function win32_SystemFunction036!(a::Array)
         ccall((:SystemFunction036, :Advapi32), stdcall, UInt8, (Ptr{Void}, UInt32), a, sizeof(a))
     end

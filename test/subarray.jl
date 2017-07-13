@@ -47,7 +47,7 @@ ensure_iterable(t::Tuple{Union{Number, CartesianIndex}, Vararg{Any}}) = ((t[1],)
 ensure_iterable(t::Tuple{Any, Vararg{Any}}) = (t[1], ensure_iterable(Base.tail(t))...)
 
 index_ndims(t::Tuple) = tup2val(Base.index_ndims(t))
-tup2val{N}(::NTuple{N}) = Val{N}
+tup2val{N}(::NTuple{N}) = Val(N)
 
 # To avoid getting confused by manipulations that are implemented for SubArrays,
 # it's good to copy the contents to an Array. This version protects against

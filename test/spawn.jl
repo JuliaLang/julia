@@ -16,7 +16,7 @@ catcmd = `cat`
 shcmd = `sh`
 sleepcmd = `sleep`
 lscmd = `ls`
-if is_windows()
+if Sys.iswindows()
     try # use busybox-w32 on windows
         success(`busybox`)
         yescmd = `busybox yes`
@@ -46,7 +46,7 @@ out = readstring(`$echocmd hello` & `$echocmd world`)
 @test (run(`$printfcmd "       \033[34m[stdio passthrough ok]\033[0m\n"`); true)
 
 # Test for SIGPIPE being treated as normal termination (throws an error if broken)
-is_unix() && run(pipeline(yescmd, `head`, DevNull))
+Sys.isunix() && run(pipeline(yescmd, `head`, DevNull))
 
 begin
     a = Base.Condition()
@@ -65,7 +65,7 @@ if valgrind_off
     @test_throws Base.UVError run(`foo_is_not_a_valid_command`)
 end
 
-if is_unix()
+if Sys.isunix()
     prefixer(prefix, sleep) = `sh -c "while IFS= read REPLY; do echo '$prefix ' \$REPLY; sleep $sleep; done"`
     @test success(pipeline(`sh -c "for i in 1 2 3 4 5 6 7 8 9 10; do echo \$i; sleep 0.1; done"`,
                        prefixer("A", 0.2) & prefixer("B", 0.2)))
@@ -93,7 +93,7 @@ let file = tempname()
 end
 
 # Stream Redirection
-if !is_windows() # WINNT reports operation not supported on socket (ENOTSUP) for this test
+if !Sys.iswindows() # WINNT reports operation not supported on socket (ENOTSUP) for this test
     local r = Channel(1)
     local port, server, sock, client, t1, t2
     t1 = @async begin
@@ -121,7 +121,7 @@ end
        readstring(`$shcmd -c "echo \$TEST"`); end) == "Hello World\n"
 let pathA = readchomp(setenv(`$shcmd -c "pwd -P"`;dir="..")),
     pathB = readchomp(setenv(`$shcmd -c "cd .. && pwd -P"`))
-    if is_windows()
+    if Sys.iswindows()
         # on windows, sh returns posix-style paths that are not valid according to ispath
         @test pathA == pathB
     else
@@ -298,11 +298,11 @@ let out = Pipe(), echo = `$exename --startup-file=no -e 'print(STDOUT, " 1\t", r
         @test iswritable(out)
         close(out.in)
         @test !isopen(out.in)
-        is_windows() || @test !isopen(out.out) # it takes longer to propagate EOF through the Windows event system
+        Sys.iswindows() || @test !isopen(out.out) # it takes longer to propagate EOF through the Windows event system
         @test_throws ArgumentError write(out, "now closed error")
         @test isreadable(out)
         @test !iswritable(out)
-        if is_windows()
+        if Sys.iswindows()
             # WINNT kernel does not provide a fast mechanism for async propagation
             # of EOF for a blocking stream, so just wait for it to catch up.
             # This shouldn't take much more than 32ms.
@@ -341,7 +341,7 @@ let fname = tempname()
     write(fname, "test\n")
     code = """
     cmd = pipeline(`echo asdf`,`cat`)
-    if is_windows()
+    if Sys.iswindows()
         try
             success(`busybox`)
             cmd = pipeline(`busybox echo asdf`,`busybox cat`)
@@ -383,7 +383,7 @@ end
 @test_throws ErrorException collect(eachline(pipeline(`$catcmd _doesnt_exist__111_`, stderr=DevNull)))
 
 # make sure windows_verbatim strips quotes
-if is_windows()
+if Sys.iswindows()
     readstring(`cmd.exe /c dir /b spawn.jl`) == readstring(Cmd(`cmd.exe /c dir /b "\"spawn.jl\""`, windows_verbatim=true))
 end
 
@@ -422,7 +422,7 @@ end
 @test reduce(&, [`$echocmd abc`, `$echocmd def`, `$echocmd hij`]) == `$echocmd abc` & `$echocmd def` & `$echocmd hij`
 
 # test for proper handling of FD exhaustion
-if is_unix()
+if Sys.isunix()
     let ps = Pipe[]
         ulimit_n = tryparse(Int, readchomp(`sh -c 'ulimit -n'`))
         try

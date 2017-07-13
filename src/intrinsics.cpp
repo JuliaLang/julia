@@ -70,7 +70,6 @@ static void jl_init_intrinsic_functions_codegen(Module *m)
     float_func[trunc_llvm] = true;
     float_func[rint_llvm] = true;
     float_func[sqrt_llvm] = true;
-    float_func[sqrt_llvm_fast] = true;
 }
 
 extern "C"
@@ -499,24 +498,6 @@ static Value *generic_trunc(jl_codectx_t &ctx, Type *to, Value *x)
     return ctx.builder.CreateTrunc(x, to);
 }
 
-static Value *generic_trunc_uchecked(jl_codectx_t &ctx, Type *to, Value *x)
-{
-    Value *ans = ctx.builder.CreateTrunc(x, to);
-    Value *back = ctx.builder.CreateZExt(ans, x->getType());
-    raise_exception_unless(ctx, ctx.builder.CreateICmpEQ(back, x),
-                           literal_pointer_val(ctx, jl_inexact_exception));
-    return ans;
-}
-
-static Value *generic_trunc_schecked(jl_codectx_t &ctx, Type *to, Value *x)
-{
-    Value *ans = ctx.builder.CreateTrunc(x, to);
-    Value *back = ctx.builder.CreateSExt(ans, x->getType());
-    raise_exception_unless(ctx, ctx.builder.CreateICmpEQ(back, x),
-                           literal_pointer_val(ctx, jl_inexact_exception));
-    return ans;
-}
-
 static Value *generic_sext(jl_codectx_t &ctx, Type *to, Value *x)
 {
     return ctx.builder.CreateSExt(x, to);
@@ -723,17 +704,23 @@ static Value *emit_checked_srem_int(jl_codectx_t &ctx, Value *x, Value *den)
 struct math_builder {
     IRBuilder<> &ctxbuilder;
     FastMathFlags old_fmf;
-    math_builder(jl_codectx_t &ctx, bool always_fast = false)
+    math_builder(jl_codectx_t &ctx, bool always_fast = false, bool contract = false)
       : ctxbuilder(ctx.builder),
         old_fmf(ctxbuilder.getFastMathFlags())
     {
+        FastMathFlags fmf;
         if (jl_options.fast_math != JL_OPTIONS_FAST_MATH_OFF &&
             (always_fast ||
              jl_options.fast_math == JL_OPTIONS_FAST_MATH_ON)) {
-            FastMathFlags fmf;
             fmf.setUnsafeAlgebra();
-            ctxbuilder.setFastMathFlags(fmf);
         }
+#if JL_LLVM_VERSION >= 50000
+        if (contract)
+            fmf.setAllowContract(true);
+#else
+        assert(!contract);
+#endif
+        ctxbuilder.setFastMathFlags(fmf);
     }
     IRBuilder<>& operator()() const { return ctxbuilder; }
     ~math_builder() {
@@ -778,10 +765,6 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
         return generic_bitcast(ctx, argv);
     case trunc_int:
         return generic_cast(ctx, f, generic_trunc, argv, true, true);
-    case checked_trunc_uint:
-        return generic_cast(ctx, f, generic_trunc_uchecked, argv, true, true);
-    case checked_trunc_sint:
-        return generic_cast(ctx, f, generic_trunc_schecked, argv, true, true);
     case sext_int:
         return generic_cast(ctx, f, generic_sext, argv, true, true);
     case zext_int:
@@ -936,10 +919,18 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
         return ctx.builder.CreateCall(fmaintr, {x, y, z});
     }
     case muladd_float: {
+#if JL_LLVM_VERSION >= 50000
+        // LLVM 5.0 can create FMA in the backend for contractable fmul and fadd
+        // Emitting fmul and fadd here since they are easier for other LLVM passes to
+        // optimize.
+        auto mathb = math_builder(ctx, false, true);
+        return mathb().CreateFAdd(mathb().CreateFMul(x, y), z);
+#else
         assert(y->getType() == x->getType());
         assert(z->getType() == y->getType());
         Value *muladdintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::fmuladd, makeArrayRef(t));
         return ctx.builder.CreateCall(muladdintr, {x, y, z});
+#endif
     }
 
     case checked_sadd_int:
@@ -1006,15 +997,6 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
                 ctx.builder.CreateICmpNE(y, ConstantInt::get(t, 0)),
                 literal_pointer_val(ctx, jl_diverror_exception));
         return ctx.builder.CreateURem(x, y);
-
-    case check_top_bit:
-        // raise InexactError if argument's top bit is set
-        raise_exception_if(ctx,
-                ctx.builder.CreateTrunc(
-                    ctx.builder.CreateLShr(x, ConstantInt::get(t, t->getPrimitiveSizeInBits() - 1)),
-                    T_int1),
-                literal_pointer_val(ctx, jl_inexact_exception));
-        return x;
 
     case eq_int:  *newtyp = jl_bool_type; return ctx.builder.CreateICmpEQ(x, y);
     case ne_int:  *newtyp = jl_bool_type; return ctx.builder.CreateICmpNE(x, y);
@@ -1150,12 +1132,7 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
         Value *rintintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::rint, makeArrayRef(t));
         return ctx.builder.CreateCall(rintintr, x);
     }
-    case sqrt_llvm:
-        raise_exception_unless(ctx,
-                ctx.builder.CreateFCmpUGE(x, ConstantFP::get(t, 0.0)),
-                literal_pointer_val(ctx, jl_domain_exception));
-        // fall-through
-    case sqrt_llvm_fast: {
+    case sqrt_llvm: {
         Value *sqrtintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::sqrt, makeArrayRef(t));
         return ctx.builder.CreateCall(sqrtintr, x);
     }

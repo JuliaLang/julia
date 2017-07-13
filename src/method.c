@@ -267,8 +267,8 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
     jl_value_t *linenum = NULL;
     jl_svec_t *sparam_vals = env;
     jl_method_instance_t *generator = linfo->def.method->generator;
+    assert(generator != NULL);
     assert(linfo != generator);
-    assert(linfo->def.method->isstaged);
     jl_code_info_t *func = NULL;
     JL_GC_PUSH4(&ex, &linenum, &sparam_vals, &func);
     jl_ptls_t ptls = jl_get_ptls_states();
@@ -289,7 +289,7 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
 
         jl_array_t *argnames = jl_alloc_vec_any(linfo->def.method->nargs);
         jl_array_ptr_set(ex->args, 0, argnames);
-        jl_fill_argnames((jl_array_t*)linfo->def.method->source, argnames);
+        jl_fill_argnames((jl_array_t*)generator->inferred, argnames);
 
         // build the rest of the body to pass to expand
         jl_expr_t *scopeblock = jl_exprn(jl_symbol("scope-block"), 1);
@@ -466,7 +466,6 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->line = 0;
     m->called = 0xff;
     m->invokes.unknown = NULL;
-    m->isstaged = 0;
     m->isva = 0;
     m->nargs = 0;
     m->traced = 0;
@@ -499,7 +498,6 @@ static jl_method_t *jl_new_method(
     m->sparam_syms = sparam_syms;
     root = (jl_value_t*)m;
     m->min_world = ++jl_world_counter;
-    m->isstaged = isstaged;
     m->name = name;
     m->sig = (jl_value_t*)sig;
     m->isva = isva;
@@ -510,6 +508,7 @@ static jl_method_t *jl_new_method(
         m->generator = jl_get_specialized(m, (jl_value_t*)jl_anytuple_type, jl_emptysvec);
         jl_gc_wb(m, m->generator);
         m->generator->inferred = (jl_value_t*)m->source;
+        m->source = NULL;
     }
 
 #ifdef RECORD_METHOD_ORDER
@@ -617,10 +616,13 @@ JL_DLLEXPORT jl_datatype_t *jl_first_argument_datatype(jl_value_t *argtypes)
     return first_arg_datatype(argtypes, 0);
 }
 
-// get DataType implied by a single given type
-jl_datatype_t *jl_argument_datatype(jl_value_t *argt)
+// get DataType implied by a single given type, or `nothing`
+JL_DLLEXPORT jl_value_t *jl_argument_datatype(jl_value_t *argt)
 {
-    return first_arg_datatype(argt, 1);
+    jl_datatype_t *dt = first_arg_datatype(argt, 1);
+    if (dt == NULL)
+        return jl_nothing;
+    return (jl_value_t*)dt;
 }
 
 extern tracer_cb jl_newmeth_tracer;

@@ -73,7 +73,7 @@ end
 end
 
 @testset "Bidiagonal ambiguity methods" begin
-    bd = Bidiagonal([1,2,3], [0,0], true)
+    bd = Bidiagonal([1,2,3], [0,0], :U)
     v = [2,3,4]
     rv = v.'
 

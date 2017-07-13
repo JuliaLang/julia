@@ -132,9 +132,10 @@ export
     # string types
     Char, DirectIndexString, AbstractString, String, IO,
     # errors
-    ErrorException, BoundsError, DivideError, DomainError, Exception, InexactError,
-    InterruptException, OutOfMemoryError, ReadOnlyMemoryError, OverflowError,
-    StackOverflowError, SegmentationFault, UndefRefError, UndefVarError, TypeError,
+    ErrorException, BoundsError, DivideError, DomainError, Exception,
+    InterruptException, InexactError, OutOfMemoryError, ReadOnlyMemoryError,
+    OverflowError, StackOverflowError, SegmentationFault, UndefRefError, UndefVarError,
+    TypeError,
     # AST representation
     Expr, GotoNode, LabelNode, LineNumberNode, QuoteNode,
     GlobalRef, NewvarNode, SSAValue, Slot, SlotNumber, TypedSlot,
@@ -204,9 +205,7 @@ struct BoundsError        <: Exception
     BoundsError(a::ANY, i) = (@_noinline_meta; new(a,i))
 end
 struct DivideError        <: Exception end
-struct DomainError        <: Exception end
 struct OverflowError      <: Exception end
-struct InexactError       <: Exception end
 struct OutOfMemoryError   <: Exception end
 struct ReadOnlyMemoryError<: Exception end
 struct SegmentationFault  <: Exception end
@@ -216,11 +215,24 @@ struct UndefVarError      <: Exception
     var::Symbol
 end
 struct InterruptException <: Exception end
+struct DomainError <: Exception
+    val
+    msg
+    DomainError(val::ANY) = (@_noinline_meta; new(val))
+    DomainError(val::ANY, msg::ANY) = (@_noinline_meta; new(val, msg))
+end
 mutable struct TypeError <: Exception
     func::Symbol
     context::AbstractString
     expected::Type
     got
+end
+struct InexactError <: Exception
+    func::Symbol
+    T::Type
+    val
+
+    InexactError(f::Symbol, T::ANY, val::ANY) = (@_noinline_meta; new(f, T, val))
 end
 
 abstract type DirectIndexString <: AbstractString end

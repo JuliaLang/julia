@@ -1143,7 +1143,15 @@ bswap
 
 The largest integer losslessly representable by the given floating-point DataType `T`.
 """
-maxintfloat
+maxintfloat(T)
+
+"""
+    maxintfloat(T, S)
+
+The largest integer losslessly representable by the given floating-point DataType `T` that
+also does not exceed the maximum integer representable by the integer DataType `S`.
+"""
+maxintfloat(T, S)
 
 """
     delete!(collection, key)
@@ -1380,16 +1388,16 @@ Convert a hexadecimal string to the floating point number it represents.
 hex2num
 
 """
-    InexactError()
+    InexactError(name::Symbol, T, val)
 
-Type conversion cannot be done exactly.
+Cannot exactly convert `val` to type `T` in a method of function `name`.
 
 # Examples
 ```jldoctest
 julia> convert(Float64, 1+2im)
-ERROR: InexactError()
+ERROR: InexactError: convert(Float64, 1 + 2im)
 Stacktrace:
- [1] convert(::Type{Float64}, ::Complex{Int64}) at ./complex.jl:31
+ [1] convert(::Type{Float64}, ::Complex{Int64}) at ./complex.jl:37
 ```
 """
 InexactError
@@ -1402,14 +1410,15 @@ The highest value representable by the given (real) numeric `DataType`.
 typemax
 
 """
-    DomainError()
+    DomainError(val)
+    DomainError(val, msg)
 
-The arguments to a function or constructor are outside the valid domain.
+The argument `val` to a function or constructor is outside the valid domain.
 
 # Examples
 ```jldoctest
 julia> sqrt(-1)
-ERROR: DomainError:
+ERROR: DomainError with -1:
 sqrt will only return a complex result if called with a complex argument. Try sqrt(complex(x)).
 Stacktrace:
  [1] sqrt(::Int64) at ./math.jl:443
@@ -1476,9 +1485,9 @@ Seek a stream to its beginning.
 seekstart
 
 """
-    nfields(x::DataType) -> Int
+    nfields(x) -> Int
 
-Get the number of fields of a `DataType`.
+Get the number of fields in the given object.
 """
 nfields
 
@@ -1929,7 +1938,7 @@ julia> convert(Int, 3.0)
 3
 
 julia> convert(Int, 3.5)
-ERROR: InexactError()
+ERROR: InexactError: convert(Int64, 3.5)
 Stacktrace:
  [1] convert(::Type{Int64}, ::Float64) at ./float.jl:680
 ```
@@ -2038,29 +2047,6 @@ x` is converted by the compiler to `(setindex!(a, x, i, j, ...); x)`.
 setindex!(collection,value,key...)
 
 """
-    signif(x, digits, [base])
-
-Rounds (in the sense of [`round`](@ref)) `x` so that there are `digits` significant digits, under a
-base `base` representation, default 10. E.g., `signif(123.456, 2)` is `120.0`, and
-`signif(357.913, 4, 2)` is `352.0`.
-"""
-signif
-
-"""
-    full(F)
-
-Reconstruct the matrix `A` from the factorization `F=factorize(A)`.
-"""
-full(F)
-
-"""
-    throw(e)
-
-Throw an object as an exception.
-"""
-throw
-
-"""
     zeros([A::AbstractArray,] [T=eltype(A)::Type,] [dims=size(A)::Tuple])
 
 Create an array of all zeros with the same layout as `A`, element type `T` and size `dims`.
@@ -2126,23 +2112,6 @@ be either `Char` or `String`. Values for `Char` can be of type `Char` or [`UInt3
 Values for `String` can be of that type, or `Vector{UInt8}`.
 """
 isvalid(T,value)
-
-"""
-    reverseind(v, i)
-
-Given an index `i` in `reverse(v)`, return the corresponding index in `v` so that
-`v[reverseind(v,i)] == reverse(v)[i]`. (This can be nontrivial in the case where `v` is a
-Unicode string.)
-"""
-reverseind
-
-"""
-    exit([code])
-
-Quit (or control-D at the prompt). The default exit code is zero, indicating that the
-processes completed successfully.
-"""
-exit
 
 """
     skipchars(stream, predicate; linecomment::Char)
@@ -2317,3 +2286,60 @@ for bit in (8, 16, 32, 64, 128)
         $(Symbol("UInt", bit))
     end
 end
+
+"""
+    Vector{T}(n)
+
+Construct an uninitialized [`Vector{T}`](@ref) of length `n`.
+
+# Examples
+```julia-repl
+julia> Vector{Float64}(3)
+3-element Array{Float64,1}:
+ 6.90966e-310
+ 6.90966e-310
+ 6.90966e-310
+```
+"""
+Vector{T}(n)
+
+"""
+    Matrix{T}(m, n)
+
+Construct an uninitialized [`Matrix{T}`](@ref) of size `m`×`n`.
+
+# Examples
+```julia-repl
+julia> Matrix{Float64}(2, 3)
+2×3 Array{Float64,2}:
+ 6.93517e-310  6.93517e-310  6.93517e-310
+ 6.93517e-310  6.93517e-310  1.29396e-320
+```
+"""
+Matrix{T}(m, n)
+
+"""
+    Array{T}(dims)
+    Array{T,N}(dims)
+
+Construct an uninitialized `N`-dimensional [`Array`](@ref)
+containing elements of type `T`. `N` can either be supplied explicitly,
+as in `Array{T,N}(dims)`, or be determined by the length or number of `dims`.
+`dims` may be a tuple or a series of integer arguments corresponding to the lengths
+in each dimension. If the rank `N` is supplied explicitly, then it must
+match the length or number of `dims`.
+
+# Examples
+```julia-repl
+julia> A = Array{Float64,2}(2, 3) # N given explicitly
+2×3 Array{Float64,2}:
+ 6.90198e-310  6.90198e-310  6.90198e-310
+ 6.90198e-310  6.90198e-310  0.0
+
+julia> B = Array{Float64}(2) # N determined by the input
+2-element Array{Float64,1}:
+ 1.87103e-320
+ 0.0
+```
+"""
+Array{T,N}(dims)

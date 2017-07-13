@@ -1354,12 +1354,12 @@ end
 @deprecate versioninfo(io::IO, verbose::Bool) versioninfo(io, verbose=verbose)
 
 # PR #22188
-@deprecate cholfact!(A::StridedMatrix, uplo::Symbol, ::Type{Val{false}}) cholfact!(Hermitian(A, uplo), Val{false})
+@deprecate cholfact!(A::StridedMatrix, uplo::Symbol, ::Type{Val{false}}) cholfact!(Hermitian(A, uplo), Val(false))
 @deprecate cholfact!(A::StridedMatrix, uplo::Symbol) cholfact!(Hermitian(A, uplo))
-@deprecate cholfact(A::StridedMatrix, uplo::Symbol, ::Type{Val{false}}) cholfact(Hermitian(A, uplo), Val{false})
+@deprecate cholfact(A::StridedMatrix, uplo::Symbol, ::Type{Val{false}}) cholfact(Hermitian(A, uplo), Val(false))
 @deprecate cholfact(A::StridedMatrix, uplo::Symbol) cholfact(Hermitian(A, uplo))
-@deprecate cholfact!(A::StridedMatrix, uplo::Symbol, ::Type{Val{true}}; tol = 0.0) cholfact!(Hermitian(A, uplo), Val{true}, tol = tol)
-@deprecate cholfact(A::StridedMatrix, uplo::Symbol, ::Type{Val{true}}; tol = 0.0) cholfact(Hermitian(A, uplo), Val{true}, tol = tol)
+@deprecate cholfact!(A::StridedMatrix, uplo::Symbol, ::Type{Val{true}}; tol = 0.0) cholfact!(Hermitian(A, uplo), Val(true), tol = tol)
+@deprecate cholfact(A::StridedMatrix, uplo::Symbol, ::Type{Val{true}}; tol = 0.0) cholfact(Hermitian(A, uplo), Val(true), tol = tol)
 
 # PR #22245
 @deprecate isposdef(A::AbstractMatrix, UL::Symbol) isposdef(Hermitian(A, UL))
@@ -1519,7 +1519,76 @@ function replace(s::AbstractString, pat, f, n::Integer)
     end
 end
 
+# PR #22475
+@deprecate ntuple{N}(f, ::Type{Val{N}}) ntuple(f, Val(N))
+@deprecate fill_to_length{N}(t, val, ::Type{Val{N}}) fill_to_length(t, val, Val(N)) false
+@deprecate literal_pow{N}(a, b, ::Type{Val{N}}) literal_pow(a, b, Val(N)) false
+@eval IteratorsMD @deprecate split{n}(t, V::Type{Val{n}}) split(t, Val(n)) false
+@deprecate sqrtm{T,realmatrix}(A::UpperTriangular{T},::Type{Val{realmatrix}}) sqrtm(A, Val(realmatrix))
+@deprecate lufact(A::AbstractMatrix, ::Type{Val{false}}) lufact(A, Val(false))
+@deprecate lufact(A::AbstractMatrix, ::Type{Val{true}}) lufact(A, Val(true))
+@deprecate lufact!(A::AbstractMatrix, ::Type{Val{false}}) lufact!(A, Val(false))
+@deprecate lufact!(A::AbstractMatrix, ::Type{Val{true}}) lufact!(A, Val(true))
+@deprecate qrfact(A::AbstractMatrix, ::Type{Val{false}}) qrfact(A, Val(false))
+@deprecate qrfact(A::AbstractMatrix, ::Type{Val{true}}) qrfact(A, Val(true))
+@deprecate qrfact!(A::AbstractMatrix, ::Type{Val{false}}) qrfact!(A, Val(false))
+@deprecate qrfact!(A::AbstractMatrix, ::Type{Val{true}}) qrfact!(A, Val(true))
+@deprecate cholfact(A::AbstractMatrix, ::Type{Val{false}}) cholfact(A, Val(false))
+@deprecate cholfact(A::AbstractMatrix, ::Type{Val{true}}; tol = 0.0) cholfact(A, Val(true); tol = tol)
+@deprecate cholfact!(A::AbstractMatrix, ::Type{Val{false}}) cholfact!(A, Val(false))
+@deprecate cholfact!(A::AbstractMatrix, ::Type{Val{true}}; tol = 0.0) cholfact!(A, Val(true); tol = tol)
+@deprecate cat{N}(::Type{Val{N}}, A::AbstractArray...) cat(Val(N), A...)
+@deprecate cat{N}(::Type{Val{N}}, A::SparseArrays._SparseConcatGroup...) cat(Val(N), A...)
+@deprecate cat{N}(::Type{Val{N}}, A::SparseArrays._DenseConcatGroup...) cat(Val(N), A...)
+@deprecate cat_t{N,T}(::Type{Val{N}}, ::Type{T}, A, B) cat_t(Val(N), T, A, B) false
+@deprecate reshape{N}(A::AbstractArray, ::Type{Val{N}}) reshape(A, Val(N))
+
+@deprecate read(s::IO, x::Ref) read!(s, x)
+
+@deprecate read(s::IO, t::Type, d1::Int, dims::Int...) read!(s, Array{t}(tuple(d1,dims...)))
+@deprecate read(s::IO, t::Type, d1::Integer, dims::Integer...) read!(s, Array{t}(convert(Tuple{Vararg{Int}},tuple(d1,dims...))))
+@deprecate read(s::IO, t::Type, dims::Dims) read!(s, Array{t}(dims))
+
+function CartesianRange{N}(start::CartesianIndex{N}, stop::CartesianIndex{N})
+    inds = map((f,l)->f:l, start.I, stop.I)
+    depwarn("the internal representation of CartesianRange has changed, use CartesianRange($inds) (or other more approriate AbstractUnitRange type) instead.", :CartesianRange)
+    CartesianRange(inds)
+end
+
+# PR #20005
+function InexactError()
+    depwarn("InexactError now supports arguments, use `InexactError(funcname::Symbol, ::Type, value)` instead.", :InexactError)
+    InexactError(:none, Any, nothing)
+end
+
+# PR #22751
+function DomainError()
+    depwarn("DomainError now supports arguments, use `DomainError(value)` or `DomainError(value, msg)` instead.", :DomainError)
+    DomainError(nothing)
+end
+
+# PR #22703
+@deprecate Bidiagonal(dv::AbstractVector, ev::AbstractVector, isupper::Bool) Bidiagonal(dv, ev, ifelse(isupper, :U, :L))
+@deprecate Bidiagonal(dv::AbstractVector, ev::AbstractVector, uplo::Char) Bidiagonal(dv, ev, ifelse(uplo == 'U', :U, :L))
+@deprecate Bidiagonal(A::AbstractMatrix, isupper::Bool) Bidiagonal(A, ifelse(isupper, :U, :L))
+
+@deprecate fieldnames(v) fieldnames(typeof(v))
+# nfields(::Type) deprecation in builtins.c: update nfields tfunc in inference.jl when it is removed.
+# also replace `_nfields` with `nfields` in summarysize.c when this is removed.
+
+# PR #22182
+@deprecate is_apple   Sys.isapple
+@deprecate is_bsd     Sys.isbsd
+@deprecate is_linux   Sys.islinux
+@deprecate is_unix    Sys.isunix
+@deprecate is_windows Sys.iswindows
+
+@deprecate read(cmd::AbstractCmd, stdin::Redirectable) read(pipeline(stdin, cmd))
+@deprecate readstring(cmd::AbstractCmd, stdin::Redirectable) readstring(pipeline(stdin, cmd))
+@deprecate eachline(cmd::AbstractCmd, stdin; chomp::Bool=true) eachline(pipeline(stdin, cmd), chomp=chomp)
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations
+
 # END 1.0 deprecations

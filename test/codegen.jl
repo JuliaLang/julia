@@ -44,6 +44,43 @@ function test_loads_no_call(ir, load_types)
         @test load_idx == length(load_types) + 1
     end
 end
+
+# This function tests if functions are output when compiled if jl_dump_compiles is enabled.
+# Have to go through pains with recursive function (eval probably not required) to make sure
+# that inlining won't happen.
+function test_jl_dump_compiles()
+    tfile = tempname()
+    io = open(tfile, "w")
+    ccall(:jl_dump_compiles, Void, (Ptr{Void},), io.handle)
+    eval(@noinline function test_jl_dump_compiles_internal(x)
+        if x > 0
+            test_jl_dump_compiles_internal(x-1)
+        end
+        end)
+    test_jl_dump_compiles_internal(1)
+    ccall(:jl_dump_compiles, Void, (Ptr{Void},), C_NULL)
+    close(io)
+    tstats = stat(tfile)
+    tempty = tstats.size == 0
+    rm(tfile)
+    @test tempty == false
+end
+
+# This function tests if a toplevel thunk is output if jl_dump_compiles is enabled.
+# The eval statement creates the toplevel thunk.
+function test_jl_dump_compiles_toplevel_thunks()
+    tfile = tempname()
+    io = open(tfile, "w")
+    ccall(:jl_dump_compiles, Void, (Ptr{Void},), io.handle)
+    eval(expand(Main, :(for i in 1:10 end)))
+    ccall(:jl_dump_compiles, Void, (Ptr{Void},), C_NULL)
+    close(io)
+    tstats = stat(tfile)
+    tempty = tstats.size == 0
+    rm(tfile)
+    @test tempty == true
+end
+
 if opt_level > 0
     # Make sure `jl_string_ptr` is inlined
     @test !contains(get_llvm(jl_string_ptr, Tuple{String}), " call ")
@@ -59,6 +96,42 @@ if opt_level > 0
     test_loads_no_call(get_llvm(core_sizeof, Tuple{Array{Any}}), [Iptr])
     # Check that we load the elsize
     test_loads_no_call(get_llvm(core_sizeof, Tuple{Vector}), [Iptr, "i16"])
+
+    test_jl_dump_compiles()
+    test_jl_dump_compiles_toplevel_thunks()
 end
 
-@test !contains(get_llvm(isequal, Tuple{Nullable{BigFloat}, Nullable{BigFloat}}), "%gcframe")
+# Make sure we will not elide the allocation
+@noinline create_ref1() = Ref(1)
+function pointer_not_safepoint()
+    a = create_ref1()
+    unsafe_store!(Ptr{Int}(pointer_from_objref(a)), 3)
+    return a[]
+end
+@test pointer_not_safepoint() == 3
+
+# The current memcmp threshold is 512bytes, make sure this struct has the same size on
+# 32bits and 64bits
+struct LargeStruct
+    x::NTuple{1024,Int8}
+    LargeStruct() = new()
+end
+
+const large_struct = LargeStruct()
+@noinline create_ref_struct() = Ref(large_struct)
+function compare_large_struct(a)
+    b = create_ref_struct()
+    if a[] === b[]
+        b[].x[1]
+    else
+        a[].x[2]
+    end
+end
+
+if opt_level > 0
+    @test !contains(get_llvm(isequal, Tuple{Nullable{BigFloat}, Nullable{BigFloat}}), "%gcframe")
+    @test !contains(get_llvm(pointer_not_safepoint, Tuple{}), "%gcframe")
+    compare_large_struct_ir = get_llvm(compare_large_struct, Tuple{typeof(create_ref_struct())})
+    @test contains(compare_large_struct_ir, "call i32 @memcmp")
+    @test !contains(compare_large_struct_ir, "%gcframe")
+end

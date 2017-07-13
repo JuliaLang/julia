@@ -883,21 +883,9 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
         }
         if (jl_is_type_type(y) && !jl_is_type_type(x) && x != (jl_value_t*)jl_typeofbottom_type) {
             jl_value_t *tp0 = jl_tparam0(yd);
-            if (!jl_is_typevar(tp0))
+            if (!jl_is_typevar(tp0) || !jl_is_kind(x))
                 return 0;
-            if (!jl_is_kind(x)) return 0;
-            jl_varbinding_t *yy = lookup(e, (jl_tvar_t*)tp0);
-            jl_value_t *ub = yy ? yy->ub : ((jl_tvar_t*)tp0)->ub;
-            int ans;
-            if (ub == (jl_value_t*)jl_any_type) {
-                ans = subtype((jl_value_t*)jl_type_type, y, e, param);
-            }
-            else {
-                e->invdepth++;
-                ans = forall_exists_equal(x, tp0, e);
-                e->invdepth--;
-            }
-            return ans;
+            return subtype((jl_value_t*)jl_type_type, y, e, param);
         }
         while (xd != jl_any_type && xd->name != yd->name) {
             if (xd->super == NULL)

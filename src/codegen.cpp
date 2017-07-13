@@ -321,7 +321,7 @@ static Function *jlisa_func;
 static Function *jlsubtype_func;
 static Function *jlapplytype_func;
 static Function *setjmp_func;
-static Function *memcmp_func;
+static Function *memcmp_derived_func;
 static Function *box_int8_func;
 static Function *box_uint8_func;
 static Function *box_int16_func;
@@ -1219,7 +1219,11 @@ jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t **pli, jl_code_info_t 
 
     JL_UNLOCK(&codegen_lock); // Might GC
 
-    if (dump_compiles_stream != NULL) {
+    // If logging of the compilation stream is enabled then dump the function to the stream
+    // ... unless li->def isn't defined here meaning the function is a toplevel thunk and
+    // would have its CodeInfo printed in the stream, which might contain double-quotes that
+    // would not be properly escaped given the double-quotes added to the stream below.
+    if (dump_compiles_stream != NULL && jl_is_method(li->def.method)) {
         uint64_t this_time = jl_hrtime();
         jl_printf(dump_compiles_stream, "%" PRIu64 "\t\"", this_time - last_time);
         jl_static_show(dump_compiles_stream, (jl_value_t*)li);
@@ -1297,7 +1301,7 @@ static jl_method_instance_t *jl_get_unspecialized(jl_method_instance_t *method)
 {
     // one unspecialized version of a function can be shared among all cached specializations
     jl_method_t *def = method->def.method;
-    if (def->isstaged) {
+    if (def->source == NULL) {
         return method;
     }
     if (def->unspecialized == NULL) {
@@ -1336,7 +1340,7 @@ jl_generic_fptr_t jl_generate_fptr(jl_method_instance_t *li, void *_F, size_t wo
     }
     jl_method_instance_t *unspec = NULL;
     if (jl_is_method(li->def.method)) {
-        if (!li->def.method->isstaged && li->def.method->unspecialized) {
+        if (li->def.method->unspecialized) {
             unspec = li->def.method->unspecialized;
         }
         if (!F || !jl_can_finalize_function(F)) {
@@ -1345,7 +1349,11 @@ jl_generic_fptr_t jl_generate_fptr(jl_method_instance_t *li, void *_F, size_t wo
             // and return its fptr instead
             if (!unspec)
                 unspec = jl_get_unspecialized(li); // get-or-create the unspecialized version to cache the result
-            jl_code_info_t *src = unspec->def.method->isstaged ? jl_code_for_staged(unspec) : (jl_code_info_t*)unspec->def.method->source;
+            jl_code_info_t *src = (jl_code_info_t*)unspec->def.method->source;
+            if (src == NULL) {
+                assert(unspec->def.method->generator);
+                src = jl_code_for_staged(unspec);
+            }
             fptr.fptr = unspec->fptr;
             fptr.jlcall_api = unspec->jlcall_api;
             if (fptr.fptr && fptr.jlcall_api) {
@@ -1462,7 +1470,8 @@ void jl_extern_c(jl_function_t *f, jl_value_t *rt, jl_value_t *argt, char *name)
 extern "C" JL_DLLEXPORT
 void *jl_get_llvmf_defn(jl_method_instance_t *linfo, size_t world, bool getwrapper, bool optimize, const jl_cgparams_t params)
 {
-    if (jl_is_method(linfo->def.method) && linfo->def.method->source == NULL) {
+    if (jl_is_method(linfo->def.method) && linfo->def.method->source == NULL &&
+        linfo->def.method->generator == NULL) {
         // not a generic function
         return NULL;
     }
@@ -1472,7 +1481,7 @@ void *jl_get_llvmf_defn(jl_method_instance_t *linfo, size_t world, bool getwrapp
     if (!src || (jl_value_t*)src == jl_nothing) {
         src = jl_type_infer(&linfo, world, 0);
         if (!src && jl_is_method(linfo->def.method))
-            src = linfo->def.method->isstaged ? jl_code_for_staged(linfo) : (jl_code_info_t*)linfo->def.method->source;
+            src = linfo->def.method->generator ? jl_code_for_staged(linfo) : (jl_code_info_t*)linfo->def.method->source;
     }
     if ((jl_value_t*)src == jl_nothing)
         src = NULL;
@@ -1542,7 +1551,8 @@ void *jl_get_llvmf_defn(jl_method_instance_t *linfo, size_t world, bool getwrapp
 extern "C" JL_DLLEXPORT
 void *jl_get_llvmf_decl(jl_method_instance_t *linfo, size_t world, bool getwrapper, const jl_cgparams_t params)
 {
-    if (jl_is_method(linfo->def.method) && linfo->def.method->source == NULL) {
+    if (jl_is_method(linfo->def.method) && linfo->def.method->source == NULL &&
+        linfo->def.method->generator == NULL) {
         // not a generic function
         return NULL;
     }
@@ -1559,7 +1569,7 @@ void *jl_get_llvmf_decl(jl_method_instance_t *linfo, size_t world, bool getwrapp
             jl_code_info_t *src = NULL;
             src = jl_type_infer(&linfo, world, 0);
             if (!src) {
-                src = linfo->def.method->isstaged ? jl_code_for_staged(linfo) : (jl_code_info_t*)linfo->def.method->source;
+                src = linfo->def.method->generator ? jl_code_for_staged(linfo) : (jl_code_info_t*)linfo->def.method->source;
             }
             decls = jl_compile_linfo(&linfo, src, world, &params);
             linfo->functionObjectsDecls = decls;
@@ -2276,7 +2286,7 @@ static Value *emit_bits_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, const
         assert(arg1.ispointer() && arg2.ispointer());
         size_t sz = jl_datatype_size(arg1.typ);
         if (sz > 512 && !((jl_datatype_t*)arg1.typ)->layout->haspadding) {
-            Value *answer = ctx.builder.CreateCall(prepare_call(memcmp_func),
+            Value *answer = ctx.builder.CreateCall(prepare_call(memcmp_derived_func),
                             {
                             data_pointer(ctx, arg1, T_pint8),
                             data_pointer(ctx, arg2, T_pint8),
@@ -2915,7 +2925,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             // this is issue #8798
             sty != (jl_value_t*)jl_datatype_type) {
             if (jl_is_leaf_type(sty) ||
-                (((jl_datatype_t*)sty)->name->names == jl_emptysvec && jl_datatype_size(sty) > 0)) {
+                (jl_field_names((jl_datatype_t*)sty) == jl_emptysvec && jl_datatype_size(sty) > 0)) {
                 *ret = mark_julia_type(ctx, ConstantInt::get(T_size, jl_datatype_size(sty)), false, jl_long_type);
                 JL_GC_POP();
                 return true;
@@ -6134,6 +6144,8 @@ static void init_julia_llvm_env(Module *m)
     T_void = Type::getVoidTy(jl_LLVMContext);
     T_pvoidfunc = FunctionType::get(T_void, /*isVarArg*/false)->getPointerTo();
 
+    auto T_pint8_derived = PointerType::get(T_int8, AddressSpace::Derived);
+
     // This type is used to create undef Values for use in struct declarations to skip indices
     NoopType = ArrayType::get(T_int1, 0);
 
@@ -6230,9 +6242,7 @@ static void init_julia_llvm_env(Module *m)
     global_jlvalue_to_llvm("jl_emptytuple", &jl_emptytuple, m);
     global_jlvalue_to_llvm("jl_diverror_exception", &jl_diverror_exception, m);
     global_jlvalue_to_llvm("jl_undefref_exception", &jl_undefref_exception, m);
-    global_jlvalue_to_llvm("jl_domain_exception", &jl_domain_exception, m);
     global_jlvalue_to_llvm("jl_overflow_exception", &jl_overflow_exception, m);
-    global_jlvalue_to_llvm("jl_inexact_exception", &jl_inexact_exception, m);
 
     jlRTLD_DEFAULT_var =
         new GlobalVariable(*m, T_pint8,
@@ -6350,7 +6360,7 @@ static void init_julia_llvm_env(Module *m)
     add_named_global(jlvboundserror_func, &jl_bounds_error_tuple_int);
 
     std::vector<Type*> args3_uboundserror(0);
-    args3_uboundserror.push_back(PointerType::get(T_int8, AddressSpace::Derived));
+    args3_uboundserror.push_back(T_pint8_derived);
     args3_uboundserror.push_back(T_prjlvalue);
     args3_uboundserror.push_back(T_size);
     jluboundserror_func =
@@ -6377,13 +6387,13 @@ static void init_julia_llvm_env(Module *m)
     add_named_global(setjmp_func, &jl_setjmp_f);
 
     std::vector<Type*> args_memcmp(0);
-    args_memcmp.push_back(T_pint8);
-    args_memcmp.push_back(T_pint8);
+    args_memcmp.push_back(T_pint8_derived);
+    args_memcmp.push_back(T_pint8_derived);
     args_memcmp.push_back(T_size);
-    memcmp_func =
+    memcmp_derived_func =
         Function::Create(FunctionType::get(T_int32, args_memcmp, false),
                          Function::ExternalLinkage, "memcmp", m);
-    add_named_global(memcmp_func, &memcmp);
+    add_named_global(memcmp_derived_func, &memcmp);
 
     std::vector<Type*> te_args(0);
     te_args.push_back(T_pint8);

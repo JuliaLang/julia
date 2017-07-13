@@ -4,9 +4,8 @@
 # Build a system image binary at sysimg_path.dlext. Allow insertion of a userimg via
 # userimg_path.  If sysimg_path.dlext is currently loaded into memory, don't continue
 # unless force is set to true. Allow targeting of a CPU architecture via cpu_target.
-function default_sysimg_path(debug=false)
-    joinpath(dirname(JULIA_HOME), "lib", "julia", debug ? "sys-debug" : "sys")
-end
+
+default_sysimg_path(debug=false) = joinpath(dirname(JULIA_HOME), "lib", "julia", debug ? "sys-debug" : "sys")
 
 """
     build_sysimg(sysimg_path=default_sysimg_path(), cpu_target="native", userimg_path=nothing; force=false)
@@ -110,7 +109,7 @@ function find_system_compiler()
     end
 
     # On Windows, check to see if WinRPM is installed, and if so, see if gcc is installed
-    if is_windows()
+    if Sys.iswindows()
         try
             eval(Main, :(using WinRPM))
             winrpmgcc = joinpath(WinRPM.installdir, "usr", "$(Sys.ARCH)-w64-mingw32",
@@ -147,7 +146,7 @@ function link_sysimg(sysimg_path=nothing, cc=find_system_compiler(), debug=false
 
     push!(FLAGS, "-shared")
     push!(FLAGS, debug ? "-ljulia-debug" : "-ljulia")
-    if is_windows()
+    if Sys.iswindows()
         push!(FLAGS, "-lssp")
     end
 
@@ -155,7 +154,7 @@ function link_sysimg(sysimg_path=nothing, cc=find_system_compiler(), debug=false
     info("Linking sys.$(Libdl.dlext)")
     info("$cc $(join(FLAGS, ' ')) -o $sysimg_file $sysimg_path.o")
     # Windows has difficulties overwriting a file in use so we first link to a temp file
-    if is_windows() && isfile(sysimg_file)
+    if Sys.iswindows() && isfile(sysimg_file)
         if success(pipeline(`$cc $FLAGS -o $sysimg_path.tmp $sysimg_path.o`; stdout=STDOUT, stderr=STDERR))
             mv(sysimg_file, "$sysimg_file.old"; remove_destination=true)
             mv("$sysimg_path.tmp", sysimg_file; remove_destination=true)

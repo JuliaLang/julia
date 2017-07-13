@@ -242,6 +242,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level)
     PM->add(createDeadCodeEliminationPass());
     PM->add(createLowerPTLSPass(imaging_mode));
 #endif
+    PM->add(createCombineMulAddPass());
 }
 
 extern "C" JL_DLLEXPORT
@@ -1069,6 +1070,7 @@ void jl_dump_native(const char *bc_fname, const char *unopt_bc_fname, const char
     TheTriple.setObjectFormat(Triple::COFF);
 #elif defined(_OS_DARWIN_)
     TheTriple.setObjectFormat(Triple::MachO);
+    TheTriple.setOS(llvm::Triple::MacOSX);
 #endif
     std::unique_ptr<TargetMachine>
     TM(jl_TargetMachine->getTarget().createTargetMachine(

@@ -83,7 +83,7 @@ push!(l, ("TCPSocket", io))
 io = (text) -> begin
     a = "\\\\.\\pipe\\uv-test-$(randstring(6))"
     b = joinpath(dir, "socket-$(randstring(6))")
-    socketname = is_windows() ? a : b
+    socketname = Sys.iswindows() ? a : b
     srv = listen(socketname)
     run_test_server(srv, text)
     connect(socketname)
@@ -98,7 +98,7 @@ push!(l, ("PipeEndpoint", io))
 #FIXME See https://github.com/JuliaLang/julia/issues/14747
 #      Reading from open(::Command) seems to deadlock on Linux/Travis
 #=
-if !is_windows()
+if !Sys.iswindows()
 
 # Windows type command not working?
 # See "could not spawn `type 'C:\Users\appveyor\AppData\Local\Temp\1\jul3516.tmp\file.txt'`"
@@ -107,7 +107,7 @@ if !is_windows()
 # Pipe
 io = (text) -> begin
     write(filename, text)
-    open(`$(is_windows() ? "type" : "cat") $filename`)[1]
+    open(`$(Sys.iswindows() ? "type" : "cat") $filename`)[1]
 #    Was open(`echo -n $text`)[1]
 #    See https://github.com/JuliaLang/julia/issues/14747
 end
@@ -149,11 +149,11 @@ for (name, f) in l
     @test read(io(), Int) == read(filename,Int)
     s1 = io()
     s2 = IOBuffer(text)
-    @test read(s1, UInt32, 2) == read(s2, UInt32, 2)
+    @test read!(s1, Array{UInt32}(2)) == read!(s2, Array{UInt32}(2))
     @test !eof(s1)
-    @test read(s1, UInt8, 5) == read(s2, UInt8, 5)
+    @test read!(s1, Array{UInt8}(5)) == read!(s2, Array{UInt8}(5))
     @test !eof(s1)
-    @test read(s1, UInt8, 1) == read(s2, UInt8, 1)
+    @test read!(s1, Array{UInt8}(1)) == read!(s2, Array{UInt8}(1))
     @test eof(s1)
     @test_throws EOFError read(s1, UInt8)
     @test eof(s1)
@@ -415,13 +415,13 @@ rm(f)
 io = Base.Filesystem.open(f, Base.Filesystem.JL_O_WRONLY | Base.Filesystem.JL_O_CREAT | Base.Filesystem.JL_O_EXCL, 0o000)
 @test write(io, "abc") == 3
 close(io)
-if !is_windows() && get(ENV, "USER", "") != "root" && get(ENV, "HOME", "") != "/root"
+if !Sys.iswindows() && get(ENV, "USER", "") != "root" && get(ENV, "HOME", "") != "/root"
     # msvcrt _wchmod documentation states that all files are readable,
     # so we don't test that it correctly set the umask on windows
     @test_throws SystemError open(f)
     @test_throws Base.UVError Base.Filesystem.open(f, Base.Filesystem.JL_O_RDONLY)
 else
-    is_windows() || warn("file permissions tests skipped due to running tests as root (not recommended)")
+    Sys.iswindows() || warn("file permissions tests skipped due to running tests as root (not recommended)")
     close(open(f))
 end
 chmod(f, 0o400)

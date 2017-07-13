@@ -368,8 +368,8 @@ julia> repeat([1 2; 3 4], inner=(2, 1), outer=(1, 3))
 ```
 """
 function repeat(A::AbstractArray;
-                inner=ntuple(n->1, Val{ndims(A)}),
-                outer=ntuple(n->1, Val{ndims(A)}))
+                inner=ntuple(n->1, Val(ndims(A))),
+                outer=ntuple(n->1, Val(ndims(A))))
     return _repeat(A, rep_kw2tup(inner), rep_kw2tup(outer))
 end
 
@@ -397,7 +397,7 @@ _rshps(shp, shp_i, sz, i, ::Tuple{}) =
 _reperr(s, n, N) = throw(ArgumentError("number of " * s * " repetitions " *
     "($n) cannot be less than number of dimensions of input ($N)"))
 
-@propagate_inbounds function _repeat(A::AbstractArray, inner, outer)
+@noinline function _repeat(A::AbstractArray, inner, outer)
     shape, inner_shape = rep_shapes(A, inner, outer)
 
     R = similar(A, shape)
@@ -415,7 +415,7 @@ _reperr(s, n, N) = throw(ArgumentError("number of " * s * " repetitions " *
                 n = inner[i]
                 inner_indices[i] = (1:n) + ((c[i] - 1) * n)
             end
-            R[inner_indices...] = A[c]
+            fill!(view(R, inner_indices...), A[c])
         end
     end
 

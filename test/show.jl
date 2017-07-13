@@ -372,7 +372,7 @@ let oldout = STDOUT, olderr = STDERR
         @test wrerr === STDERR
         err = @async readstring(rderr)
         @test dump(Int64) === nothing
-        if !is_windows()
+        if !Sys.iswindows()
             close(wrout)
             close(wrerr)
         end
@@ -417,12 +417,19 @@ let filename = tempname()
         end
     end
     @test ret == [2]
+
+    # STDIN is unavailable on the workers. Run test on master.
     @test contains(readstring(filename), "WARNING: hello")
-    ret = open(filename) do f
-        redirect_stdin(f) do
-            readline()
+    ret = eval(Main, quote
+        remotecall_fetch(1, $filename) do fname
+            open(fname) do f
+                redirect_stdin(f) do
+                    readline()
+                end
+            end
         end
-    end
+    end)
+
     @test contains(ret, "WARNING: hello")
     rm(filename)
 end
@@ -541,8 +548,8 @@ end
 # test structured zero matrix printing for select structured types
 A = reshape(1:16,4,4)
 @test replstr(Diagonal(A)) == "4×4 Diagonal{$Int}:\n 1  ⋅   ⋅   ⋅\n ⋅  6   ⋅   ⋅\n ⋅  ⋅  11   ⋅\n ⋅  ⋅   ⋅  16"
-@test replstr(Bidiagonal(A,true)) == "4×4 Bidiagonal{$Int}:\n 1  5   ⋅   ⋅\n ⋅  6  10   ⋅\n ⋅  ⋅  11  15\n ⋅  ⋅   ⋅  16"
-@test replstr(Bidiagonal(A,false)) == "4×4 Bidiagonal{$Int}:\n 1  ⋅   ⋅   ⋅\n 2  6   ⋅   ⋅\n ⋅  7  11   ⋅\n ⋅  ⋅  12  16"
+@test replstr(Bidiagonal(A,:U)) == "4×4 Bidiagonal{$Int}:\n 1  5   ⋅   ⋅\n ⋅  6  10   ⋅\n ⋅  ⋅  11  15\n ⋅  ⋅   ⋅  16"
+@test replstr(Bidiagonal(A,:L)) == "4×4 Bidiagonal{$Int}:\n 1  ⋅   ⋅   ⋅\n 2  6   ⋅   ⋅\n ⋅  7  11   ⋅\n ⋅  ⋅  12  16"
 @test replstr(SymTridiagonal(A+A')) == "4×4 SymTridiagonal{$Int}:\n 2   7   ⋅   ⋅\n 7  12  17   ⋅\n ⋅  17  22  27\n ⋅   ⋅  27  32"
 @test replstr(Tridiagonal(diag(A,-1),diag(A),diag(A,+1))) == "4×4 Tridiagonal{$Int}:\n 1  5   ⋅   ⋅\n 2  6  10   ⋅\n ⋅  7  11  15\n ⋅  ⋅  12  16"
 @test replstr(UpperTriangular(copy(A))) == "4×4 UpperTriangular{$Int,Array{$Int,2}}:\n 1  5   9  13\n ⋅  6  10  14\n ⋅  ⋅  11  15\n ⋅  ⋅   ⋅  16"
@@ -765,6 +772,7 @@ end
 @test static_shown(Symbol("a/b")) == "Symbol(\"a/b\")"
 @test static_shown(Symbol("a-b")) == "Symbol(\"a-b\")"
 
+@test static_shown(QuoteNode(:x)) == ":(:x)"
 
 # Test @show
 let fname = tempname()
@@ -788,4 +796,10 @@ end
 let io = IOBuffer()
     show(io, MIME"text/html"(), f_with_params.body.name.mt)
     @test contains(String(take!(io)), "f_with_params")
+end
+
+@testset "printing of Val's" begin
+    @test sprint(show, Val(Float64))  == "Val{Float64}()"  # Val of a type
+    @test sprint(show, Val(:Float64)) == "Val{:Float64}()" # Val of a symbol
+    @test sprint(show, Val(true))     == "Val{true}()"     # Val of a value
 end

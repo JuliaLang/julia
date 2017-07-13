@@ -18,7 +18,7 @@ function mkcachedir()
         return
     end
 
-    @static if is_unix()
+    @static if Sys.isunix()
         if Dir.isversioned(pwd())
             rootcache = joinpath(realpath(".."), ".cache")
             if !isdir(rootcache)

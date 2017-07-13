@@ -349,8 +349,8 @@ let
     eltypes = [Float32, Float64, Int64]
     for k in [3, 4, 10]
         T = rand(eltypes)
-        bi1 = Bidiagonal(rand(T, k), rand(T, k-1), rand(Bool))
-        bi2 = Bidiagonal(rand(T, k), rand(T, k-1), rand(Bool))
+        bi1 = Bidiagonal(rand(T, k), rand(T, k-1), rand([:U, :L]))
+        bi2 = Bidiagonal(rand(T, k), rand(T, k-1), rand([:U, :L]))
         tri1 = Tridiagonal(rand(T,k-1), rand(T, k), rand(T, k-1))
         tri2 = Tridiagonal(rand(T,k-1), rand(T, k), rand(T, k-1))
         stri1 = SymTridiagonal(rand(T, k), rand(T, k-1))
@@ -372,8 +372,8 @@ let
         end
     end
     for T in eltypes
-        A = Bidiagonal(rand(T, 2), rand(T, 1), rand(Bool))
-        B = Bidiagonal(rand(T, 2), rand(T, 1), rand(Bool))
+        A = Bidiagonal(rand(T, 2), rand(T, 1), rand([:U, :L]))
+        B = Bidiagonal(rand(T, 2), rand(T, 1), rand([:U, :L]))
         C = randn(2,2)
         test_mul(C, A, B)
         B = randn(2, 9)

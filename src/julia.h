@@ -245,7 +245,7 @@ typedef struct _jl_method_t {
     jl_svec_t *sparam_syms;  // symbols giving static parameter names
     jl_value_t *source;  // original code template (jl_code_info_t, but may be compressed), null for builtins
     struct _jl_method_instance_t *unspecialized;  // unspecialized executable method instance, or null
-    struct _jl_method_instance_t *generator;  // executable code-generating function if isstaged
+    struct _jl_method_instance_t *generator;  // executable code-generating function if available
     jl_array_t *roots;  // pointers in generated code (shared to reduce memory), or null
 
     // cache of specializations of this method for invoke(), i.e.
@@ -256,7 +256,6 @@ typedef struct _jl_method_t {
     int32_t nargs;
     int32_t called;  // bit flags: whether each of the first 8 arguments is called
     uint8_t isva;
-    uint8_t isstaged;
     uint8_t pure;
 
 // hidden fields:
@@ -529,9 +528,7 @@ extern JL_DLLEXPORT jl_value_t *jl_stackovf_exception;
 extern JL_DLLEXPORT jl_value_t *jl_memory_exception;
 extern JL_DLLEXPORT jl_value_t *jl_readonlymemory_exception;
 extern JL_DLLEXPORT jl_value_t *jl_diverror_exception;
-extern JL_DLLEXPORT jl_value_t *jl_domain_exception;
 extern JL_DLLEXPORT jl_value_t *jl_overflow_exception;
-extern JL_DLLEXPORT jl_value_t *jl_inexact_exception;
 extern JL_DLLEXPORT jl_value_t *jl_undefref_exception;
 extern JL_DLLEXPORT jl_value_t *jl_interrupt_exception;
 extern JL_DLLEXPORT jl_datatype_t *jl_boundserror_type;
@@ -778,7 +775,14 @@ STATIC_INLINE void jl_array_uint8_set(void *a, size_t i, uint8_t x)
 #define jl_gf_name(f)   (jl_gf_mtable(f)->name)
 
 // struct type info
-#define jl_field_name(st,i)    (jl_sym_t*)jl_svecref(((jl_datatype_t*)st)->name->names, (i))
+STATIC_INLINE jl_svec_t *jl_field_names(jl_datatype_t *st)
+{
+    return st->name->names;
+}
+STATIC_INLINE jl_sym_t *jl_field_name(jl_datatype_t *st, size_t i)
+{
+    return (jl_sym_t*)jl_svecref(jl_field_names(st), i);
+}
 #define jl_field_type(st,i)    jl_svecref(((jl_datatype_t*)st)->types, (i))
 #define jl_field_count(st)     jl_svec_len(((jl_datatype_t*)st)->types)
 #define jl_datatype_size(t)    (((jl_datatype_t*)t)->size)
@@ -908,9 +912,8 @@ STATIC_INLINE int jl_is_primitivetype(void *v)
 STATIC_INLINE int jl_is_structtype(void *v)
 {
     return (jl_is_datatype(v) &&
-            (jl_field_count(v) > 0 ||
-             jl_datatype_size(v) == 0) &&
-            !((jl_datatype_t*)(v))->abstract);
+            !((jl_datatype_t*)(v))->abstract &&
+            !jl_is_primitivetype(v));
 }
 
 STATIC_INLINE int jl_isbits(void *t)   // corresponding to isbits() in julia
@@ -923,12 +926,6 @@ STATIC_INLINE int jl_isbits(void *t)   // corresponding to isbits() in julia
 STATIC_INLINE int jl_is_datatype_singleton(jl_datatype_t *d)
 {
     return (d->instance != NULL);
-}
-
-STATIC_INLINE int jl_is_datatype_make_singleton(jl_datatype_t *d)
-{
-    return (!d->abstract && jl_datatype_size(d) == 0 && d != jl_sym_type && d->name != jl_array_typename &&
-            d->uid != 0 && (d->name->names == jl_emptysvec || !d->mutabl));
 }
 
 STATIC_INLINE int jl_is_abstracttype(void *v)
@@ -1730,7 +1727,8 @@ typedef struct {
     int8_t can_inline;
     int8_t polly;
     int8_t fast_math;
-    const char *worker;
+    int8_t worker;
+    const char *cookie;
     int8_t handle_signals;
     int8_t use_precompiled;
     int8_t use_compilecache;

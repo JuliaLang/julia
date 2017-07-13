@@ -946,6 +946,7 @@ export
     fieldoffset,
     fieldname,
     fieldnames,
+    fieldcount,
     isleaftype,
     oftype,
     promote,
@@ -1257,14 +1258,6 @@ export
     @code_llvm,
     @code_native,
 
-    # platform-conditional code
-    @static,
-    is_windows,
-    is_linux,
-    is_apple,
-    is_bsd,
-    is_unix,
-
     # tasks
     @schedule,
     @sync,
@@ -1294,6 +1287,7 @@ export
     @goto,
     @view,
     @views,
+    @static,
 
 # SparseArrays module re-exports
     SparseArrays,

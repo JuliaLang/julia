@@ -154,11 +154,15 @@ typedef returntype (*functiontype)(argumenttype,...)
 ```
 
 The function [`cfunction()`](@ref) generates the C-compatible function pointer for a call to a
-Julia library function. Arguments to [`cfunction()`](@ref) are as follows:
+Julia function. Arguments to [`cfunction()`](@ref) are as follows:
 
 1. A Julia Function
 2. Return type
 3. A tuple of input types
+
+Only platform-default C calling convention is supported. `cfunction`-generated pointers cannot
+be used in calls where WINAPI expects `stdcall` function on 32-bit windows, but can be used on WIN64
+(where `stdcall` is unified with C calling convention).
 
 A classic example is the standard C library `qsort` function, declared as:
 
@@ -872,7 +876,7 @@ ccall(@dlsym("myfunc", mylibvar), Void, ())
 
 The second argument to [`ccall`](@ref) can optionally be a calling convention specifier (immediately
 preceding return type). Without any specifier, the platform-default C calling convention is used.
-Other supported conventions are: `stdcall`, `cdecl`, `fastcall`, and `thiscall`. For example (from
+Other supported conventions are: `stdcall`, `cdecl`, `fastcall`, and `thiscall` (no-op on 64-bit Windows). For example (from
 `base/libc.jl`) we see the same `gethostname`[`ccall`](@ref) as above, but with the correct
 signature for Windows:
 

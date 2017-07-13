@@ -18,7 +18,8 @@ Equivalent to the native `char` c-type.
 """
 Cchar
 
-if is_windows()
+# The ccall here is equivalent to Sys.iswindows(), but that's not defined yet
+@static if ccall(:jl_get_UNAME, Any, ()) === :NT
     const Clong = Int32
     const Culong = UInt32
     const Cwchar_t = UInt16
@@ -49,7 +50,7 @@ Equivalent to the native `wchar_t` c-type ([`Int32`](@ref)).
 """
 Cwchar_t
 
-if !is_windows()
+@static if ccall(:jl_get_UNAME, Any, ()) !== :NT
     const sizeof_mode_t = ccall(:jl_sizeof_mode_t, Cint, ())
     if sizeof_mode_t == 2
         const Cmode_t = Int16
@@ -118,7 +119,7 @@ end
 # symbols are guaranteed not to contain embedded NUL
 convert(::Type{Cstring}, s::Symbol) = Cstring(unsafe_convert(Ptr{Cchar}, s))
 
-if is_windows()
+@static if ccall(:jl_get_UNAME, Any, ()) === :NT
 """
     Base.cwstring(s)
 

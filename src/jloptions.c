@@ -62,6 +62,7 @@ jl_options_t jl_options = { 0,    // quiet
                             JL_OPTIONS_POLLY_ON, // polly
                             JL_OPTIONS_FAST_MATH_DEFAULT,
                             0,    // worker
+                            NULL, // cookie
                             JL_OPTIONS_HANDLE_SIGNALS_ON,
                             JL_OPTIONS_USE_PRECOMPILED_YES,
                             JL_OPTIONS_USE_COMPILECACHE_YES,
@@ -199,7 +200,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "math-mode",       required_argument, 0, opt_math_mode },
         { "handle-signals",  required_argument, 0, opt_handle_signals },
         // hidden command line options
-        { "worker",          required_argument, 0, opt_worker },
+        { "worker",          optional_argument, 0, opt_worker },
         { "bind-to",         required_argument, 0, opt_bind_to },
         { "lisp",            no_argument,       0, 1 },
         { 0, 0, 0, 0 }
@@ -497,7 +498,8 @@ restart_switch:
                 jl_errorf("julia: invalid argument to --math-mode (%s)", optarg);
             break;
         case opt_worker:
-            jl_options.worker = strdup(optarg);
+            jl_options.worker = 1;
+            if (optarg != NULL) jl_options.cookie = strdup(optarg);
             break;
         case opt_bind_to:
             jl_options.bindto = strdup(optarg);

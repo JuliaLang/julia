@@ -258,7 +258,7 @@ let s = normalize_string("tést",:NFKC)
 end
 @test_throws ArgumentError Base.unsafe_convert(Cstring, Base.cconvert(Cstring, "ba\0d"))
 
-cstrdup(s) = @static is_windows() ? ccall(:_strdup, Cstring, (Cstring,), s) : ccall(:strdup, Cstring, (Cstring,), s)
+cstrdup(s) = @static Sys.iswindows() ? ccall(:_strdup, Cstring, (Cstring,), s) : ccall(:strdup, Cstring, (Cstring,), s)
 let p = cstrdup("hello")
     @test unsafe_string(p) == "hello"
     Libc.free(p)
@@ -484,3 +484,10 @@ Base.endof(x::CharStr) = endof(x.chars)
 # issue #12495: check that logical indexing attempt raises ArgumentError
 @test_throws ArgumentError "abc"[[true, false, true]]
 @test_throws ArgumentError "abc"[BitArray([true, false, true])]
+
+@test "ab" * "cd" == "abcd"
+@test 'a' * "bc" == "abc"
+@test "ab" * 'c' == "abc"
+@test 'a' * 'b' == "ab"
+@test 'a' * "b" * 'c' == "abc"
+@test "a" * 'b' * 'c' == "abc"

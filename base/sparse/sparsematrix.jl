@@ -20,8 +20,10 @@ struct SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}
 
     function SparseMatrixCSC{Tv,Ti}(m::Integer, n::Integer, colptr::Vector{Ti}, rowval::Vector{Ti},
                                     nzval::Vector{Tv}) where {Tv,Ti<:Integer}
-        m < 0 && throw(ArgumentError("number of rows (m) must be ≥ 0, got $m"))
-        n < 0 && throw(ArgumentError("number of columns (n) must be ≥ 0, got $n"))
+        @noinline throwsz(str, lbl, k) =
+            throw(ArgumentError("number of $str ($lbl) must be ≥ 0, got $k"))
+        m < 0 && throwsz("rows", 'm', m)
+        n < 0 && throwsz("columns", 'n', n)
         new(Int(m), Int(n), colptr, rowval, nzval)
     end
 end
@@ -32,6 +34,24 @@ function SparseMatrixCSC(m::Integer, n::Integer, colptr::Vector, rowval::Vector,
 end
 
 size(S::SparseMatrixCSC) = (S.m, S.n)
+
+# Define an alias for views of a SparseMatrixCSC which include all rows and a unit range of the columns.
+# Also define a union of SparseMatrixCSC and this view since many methods can be defined efficiently for
+# this union by extracting the fields via the get function: getcolptr, getrowval, and getnzval. The key
+# insight is that getcolptr on a SparseMatrixCSCView returns an offset view of the colptr of the
+# underlying SparseMatrixCSC
+const SparseMatrixCSCView{Tv,Ti} =
+    SubArray{Tv,2,SparseMatrixCSC{Tv,Ti},
+        Tuple{Base.Slice{Base.OneTo{Int}},I}} where {I<:AbstractUnitRange}
+const SparseMatrixCSCUnion{Tv,Ti} = Union{SparseMatrixCSC{Tv,Ti}, SparseMatrixCSCView{Tv,Ti}}
+
+getcolptr(S::SparseMatrixCSC)     = S.colptr
+getcolptr(S::SparseMatrixCSCView) = view(S.parent.colptr, first(indices(S, 2)):(last(indices(S, 2)) + 1))
+getrowval(S::SparseMatrixCSC)     = S.rowval
+getrowval(S::SparseMatrixCSCView) = S.parent.rowval
+getnzval( S::SparseMatrixCSC)     = S.nzval
+getnzval( S::SparseMatrixCSCView) = S.parent.nzval
+
 
 """
     nnz(A)
@@ -740,7 +760,7 @@ end
 
 function sparse(B::Bidiagonal)
     m = length(B.dv)
-    B.isupper || return sparse([1:m;2:m],[1:m;1:m-1],[B.dv;B.ev], Int(m), Int(m)) # lower bidiagonal
+    B.uplo == 'U' || return sparse([1:m;2:m],[1:m;1:m-1],[B.dv;B.ev], Int(m), Int(m)) # lower bidiagonal
     return sparse([1:m;1:m-1],[1:m;2:m],[B.dv;B.ev], Int(m), Int(m)) # upper bidiagonal
 end
 
@@ -798,7 +818,7 @@ position forward in `X.colptr`, computes `map(f, transpose(A[:,q]))` by appropri
 distributing `A.rowval` and `f`-transformed `A.nzval` into `X.rowval` and `X.nzval`
 respectively. Simultaneously fixes the one-position-forward shift in `X.colptr`.
 """
-function _distributevals_halfperm!(X::SparseMatrixCSC{Tv,Ti},
+@noinline function _distributevals_halfperm!(X::SparseMatrixCSC{Tv,Ti},
         A::SparseMatrixCSC{Tv,Ti}, q::AbstractVector{<:Integer}, f::Function) where {Tv,Ti}
     @inbounds for Xi in 1:A.n
         Aj = q[Xi]

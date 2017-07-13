@@ -124,7 +124,8 @@ julia> fieldname(SparseMatrixCSC, 5)
 """
 fieldname(t::DataType, i::Integer) = t.name.names[i]::Symbol
 fieldname(t::UnionAll, i::Integer) = fieldname(unwrap_unionall(t), i)
-fieldname(t::Type{<:Tuple}, i::Integer) = i < 1 || i > nfields(t) ? throw(BoundsError(t, i)) : Int(i)
+fieldname(t::Type{<:Tuple}, i::Integer) =
+    i < 1 || i > fieldcount(t) ? throw(BoundsError(t, i)) : Int(i)
 
 """
     fieldnames(x::DataType)
@@ -139,16 +140,9 @@ julia> fieldnames(Hermitian)
  :uplo
 ```
 """
-function fieldnames(v)
-    t = typeof(v)
-    if !isa(t,DataType)
-        throw(ArgumentError("cannot call fieldnames() on a non-composite type"))
-    end
-    return fieldnames(t)
-end
-fieldnames(t::DataType) = Symbol[fieldname(t, n) for n in 1:nfields(t)]
+fieldnames(t::DataType) = Symbol[fieldname(t, n) for n in 1:fieldcount(t)]
 fieldnames(t::UnionAll) = fieldnames(unwrap_unionall(t))
-fieldnames(t::Type{<:Tuple}) = Int[n for n in 1:nfields(t)]
+fieldnames(t::Type{<:Tuple}) = Int[n for n in 1:fieldcount(t)]
 
 """
     Base.datatype_name(t) -> Symbol
@@ -265,7 +259,7 @@ false
 ```
 """
 isimmutable(x::ANY) = (@_pure_meta; (isa(x,Tuple) || !typeof(x).mutable))
-isstructtype(t::DataType) = (@_pure_meta; nfields(t) != 0 || (t.size==0 && !t.abstract))
+isstructtype(t::DataType) = (@_pure_meta; length(t.types) != 0 || (t.size==0 && !t.abstract))
 isstructtype(x) = (@_pure_meta; false)
 
 """
@@ -371,7 +365,7 @@ The byte offset of field `i` of a type relative to the data start. For example, 
 use it in the following manner to summarize information about a struct:
 
 ```jldoctest
-julia> structinfo(T) = [(fieldoffset(T,i), fieldname(T,i), fieldtype(T,i)) for i = 1:nfields(T)];
+julia> structinfo(T) = [(fieldoffset(T,i), fieldname(T,i), fieldtype(T,i)) for i = 1:fieldcount(T)];
 
 julia> structinfo(Base.Filesystem.StatStruct)
 12-element Array{Tuple{UInt64,Symbol,DataType},1}:
@@ -439,6 +433,31 @@ function fieldindex(T::DataType, name::Symbol, err::Bool=true)
 end
 
 type_alignment(x::DataType) = (@_pure_meta; ccall(:jl_get_alignment, Csize_t, (Any,), x))
+
+"""
+    fieldcount(t::Type)
+
+Get the number of fields that an instance of the given type would have.
+An error is thrown if the type is too abstract to determine this.
+"""
+function fieldcount(t::ANY)
+    if t isa UnionAll || t isa Union
+        t = ccall(:jl_argument_datatype, Any, (Any,), t)
+        if t === nothing
+            error("type does not have a definite number of fields")
+        end
+        t = t::DataType
+    elseif t == Union{}
+        return 0
+    end
+    if !(t isa DataType)
+        throw(TypeError(:fieldcount, "", Type, t))
+    end
+    if t.abstract || (t.name === Tuple.name && isvatuple(t))
+        error("type does not have a definite number of fields")
+    end
+    return length(t.types)
+end
 
 # return all instances, for types that can be enumerated
 
@@ -663,7 +682,7 @@ function length(mt::MethodTable)
 end
 isempty(mt::MethodTable) = (mt.defs === nothing)
 
-uncompressed_ast(m::Method) = uncompressed_ast(m, m.source)
+uncompressed_ast(m::Method) = uncompressed_ast(m, isdefined(m,:source) ? m.source : m.generator.inferred)
 uncompressed_ast(m::Method, s::CodeInfo) = s
 uncompressed_ast(m::Method, s::Array{UInt8,1}) = ccall(:jl_uncompress_ast, Any, (Any, Any), m, s)::CodeInfo
 
@@ -780,7 +799,7 @@ code_native(::IO, ::ANY, ::Symbol) = error("illegal code_native call") # resolve
 
 # give a decent error message if we try to instantiate a staged function on non-leaf types
 function func_for_method_checked(m::Method, types::ANY)
-    if m.isstaged && !isleaftype(types)
+    if isdefined(m,:generator) && !isdefined(m,:source) && !isleaftype(types)
         error("cannot call @generated function `", m, "` ",
               "with abstract argument types: ", types)
     end

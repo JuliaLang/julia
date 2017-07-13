@@ -693,7 +693,7 @@ enable_promptpaste(v::Bool) = JL_PROMPT_PASTE[] = v
 function setup_interface(
     repl::LineEditREPL;
     hascolor::Bool = repl.hascolor,
-    extra_repl_keymap::Vector{<:Dict} = Dict{Any,Any}[]
+    extra_repl_keymap::Union{Dict,Vector{<:Dict}} = Dict{Any,Any}[]
 )
     ###
     #
