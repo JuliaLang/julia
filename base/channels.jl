@@ -330,10 +330,10 @@ function take_unbuffered(c::Channel{T}) where T
     push!(c.takers, current_task())
     try
         if length(c.putters) > 0
-            let putter = shift!(c.putters)
-                return Base.try_yieldto(putter) do
+            let refputter = Ref(shift!(c.putters))
+                return Base.try_yieldto(refputter) do putter
                     # if we fail to start putter, put it back in the queue
-                    unshift!(c.putters, putter)
+                    putter === current_task || unshift!(c.putters, putter)
                 end::T
             end
         else

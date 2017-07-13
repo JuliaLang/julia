@@ -159,7 +159,7 @@ function yield(t::Task, x::ANY = nothing)
     t.state == :runnable || error("schedule: Task not runnable")
     t.result = x
     enq_work(current_task())
-    return try_yieldto(ensure_self_descheduled, t)
+    return try_yieldto(ensure_rescheduled, Ref(t))
 end
 
 """
@@ -172,14 +172,14 @@ or scheduling in any way. Its use is discouraged.
 """
 function yieldto(t::Task, x::ANY = nothing)
     t.result = x
-    return try_yieldto(Void, t)
+    return try_yieldto(identity, Ref(t))
 end
 
-function try_yieldto(undo::F, t::Task) where F
+function try_yieldto(undo, reftask::Ref{Task})
     try
-        ccall(:jl_switchto, Void, (Any,), t)
+        ccall(:jl_switchto, Void, (Any,), reftask)
     catch e
-        undo()
+        undo(reftask[])
         rethrow(e)
     end
     ct = current_task()
@@ -199,10 +199,18 @@ function throwto(t::Task, exc::ANY)
     return yieldto(t)
 end
 
-function ensure_self_descheduled()
-    # return a queued task to the runnable state
+function ensure_rescheduled(othertask::Task)
     ct = current_task()
+    if ct !== othertask && othertask.state == :runnable
+        # we failed to yield to othertask
+        # return it to the head of the queue to be scheduled later
+        unshift!(Workqueue, othertask)
+        othertask.state = :queued
+    end
     if ct.state == :queued
+        # if the current task was queued,
+        # also need to return it to the runnable state
+        # before throwing an error
         i = findfirst(Workqueue, ct)
         i == 0 || deleteat!(Workqueue, i)
         ct.state = :runnable
@@ -210,34 +218,34 @@ function ensure_self_descheduled()
     nothing
 end
 
+@noinline function poptask()
+    t = shift!(Workqueue)
+    if t.state != :queued
+        # assume this somehow got queued twice,
+        # probably broken now, but try discarding this switch and keep going
+        # can't throw here, because it's probably not the fault of the caller to wait
+        # and don't want to use print() here, because that may try to incur a task switch
+        ccall(:jl_safe_printf, Void, (Ptr{UInt8}, Int32...),
+            "\nWARNING: Workqueue inconsistency detected: shift!(Workqueue).state != :queued\n")
+        return
+    end
+    t.state = :runnable
+    return Ref(t)
+end
+
 function wait()
     while true
         if isempty(Workqueue)
             c = process_events(true)
-            if c==0 && eventloop()!=C_NULL && isempty(Workqueue)
+            if c == 0 && eventloop() != C_NULL && isempty(Workqueue)
                 # if there are no active handles and no runnable tasks, just
                 # wait for signals.
                 pause()
             end
         else
-            let t = shift!(Workqueue)
-                if t.state != :queued
-                    # assume this somehow got queued twice,
-                    # probably broken now, but try discarding this switch and keep going
-                    # can't throw here, because it's probably not the fault of the caller to wait
-                    # and don't want to use print() here, because that may try to incur a task switch
-                    ccall(:jl_safe_printf, Void, (Ptr{UInt8}, Int32...),
-                        "\nWARNING: Workqueue inconsistency detected: shift!(Workqueue).state != :queued\n")
-                    continue
-                end
-                t.state = :runnable
-                result = try_yieldto(t) do
-                    # we failed to yield to t
-                    # return it to the head of the queue to be scheduled later
-                    unshift!(Workqueue, t)
-                    t.state = :queued
-                    ensure_self_descheduled()
-                end
+            reftask = poptask()
+            if reftask !== nothing
+                result = try_yieldto(ensure_rescheduled, reftask)
                 process_events(false)
                 # return when we come out of the queue
                 return result

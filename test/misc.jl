@@ -265,6 +265,29 @@ let l = ReentrantLock()
     @test_throws ErrorException unlock(l)
 end
 
+# task switching
+
+@noinline function f6597(c)
+    t = @schedule nothing
+    finalizer(t, t -> c[] += 1)
+    wait(t)
+    @test c[] == 0
+    wait(t)
+    nothing
+end
+let c = Ref(0),
+    t2 = @schedule (wait(); c[] += 99)
+    @test c[] == 0
+    f6597(c)
+    gc() # this should run the finalizer for t
+    @test c[] == 1
+    yield()
+    @test c[] == 1
+    yield(t2)
+    @test c[] == 100
+end
+
+
 # timing macros
 
 # test that they don't introduce global vars

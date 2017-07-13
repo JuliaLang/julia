@@ -218,7 +218,8 @@ static void JL_NORETURN finish_task(jl_task_t *t, jl_value_t *resultval)
         // For now, only thread 0 runs the task scheduler.
         // The others return to the thread loop
         ptls->root_task->result = jl_nothing;
-        jl_switchto(ptls->root_task);
+        jl_task_t *task = ptls->root_task;
+        jl_switchto(&task);
         gc_debug_critical_error();
         abort();
     }
@@ -303,8 +304,7 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
 
 static void ctx_switch(jl_ptls_t ptls, jl_task_t *t, jl_jmp_buf *where)
 {
-    if (t == ptls->current_task)
-        return;
+    assert(t != ptls->current_task);
 #ifdef ENABLE_TIMINGS
     jl_timing_block_t *blk = ptls->current_task->timing_stack;
     if (blk)
@@ -395,9 +395,10 @@ static void ctx_switch(jl_ptls_t ptls, jl_task_t *t, jl_jmp_buf *where)
 #endif
 }
 
-JL_DLLEXPORT void jl_switchto(jl_task_t *t)
+JL_DLLEXPORT void jl_switchto(jl_task_t **pt)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *t = *pt;
     if (t == ptls->current_task) {
         return;
     }
@@ -413,6 +414,7 @@ JL_DLLEXPORT void jl_switchto(jl_task_t *t)
         jl_error("task switch not allowed from inside staged nor pure functions");
     sig_atomic_t defer_signal = ptls->defer_signal;
     int8_t gc_state = jl_gc_unsafe_enter(ptls);
+    *pt = ptls->current_task; // clear the gc-root for the target task
     ctx_switch(ptls, t, &t->ctx);
     jl_gc_unsafe_leave(ptls, gc_state);
     sig_atomic_t other_defer_signal = ptls->defer_signal;
