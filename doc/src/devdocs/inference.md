@@ -1,4 +1,3 @@
-
 # Inference
 
 ## How inference works
