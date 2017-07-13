@@ -11,13 +11,13 @@
 ## software is freely granted, provided that this notice
 ## is preserved.
 
-const invpio2 =  6.36619772367581382433e-01
-const pio2_1  =  1.57079632673412561417e+00
-const pio2_1t =  6.07710050650619224932e-11
-const pio2_2  =  6.07710050630396597660e-11
-const pio2_2t =  2.02226624879595063154e-21
-const pio2_3  =  2.02226624871116645580e-21
-const pio2_3t =  8.47842766036889956997e-32
+const invpio2 = 6.36619772367581382433e-01
+pio2_1(::Type{Float64}) = 1.57079632673412561417e+00
+pio2_1t(::Type{Float64}) = 6.07710050650619224932e-11
+const pio2_2 = 6.07710050630396597660e-11
+const pio2_2t = 2.02226624879595063154e-21
+const pio2_3 = 2.02226624871116645580e-21
+const pio2_3t = 8.47842766036889956997e-32
 
 # Bits of 1/2π
 #   1/2π == sum(x / 0x1p64^i for i,x = enumerate(INV2PI))
@@ -68,10 +68,10 @@ Return positive part of the high word of `x` as a `UInt32`.
 @inline poshighword(x::UInt64) = unsafe_trunc(UInt32,x >> 32)&0x7fffffff
 @inline poshighword(x::Float64) = poshighword(reinterpret(UInt64, x))
 
-@inline function cody_waite_2c_pio2(x, fn, n)
-    z = muladd(-fn, pio2_1, x) # x - fn*pio2_1
-    y1 = muladd(-fn, pio2_1t, z) # z - fn*pio2_1t
-    y2 = muladd(-fn, pio2_1t, (z - y1)) # (z - y1) - fn*pio2_1t
+@inline function cody_waite_2c_pio2(x::Float64, fn, n)
+    z = muladd(-fn, pio2_1(Float64), x) # x - fn*pio2_1
+    y1 = muladd(-fn, pio2_1t(Float64), z) # z - fn*pio2_1t
+    y2 = muladd(-fn, pio2_1t(Float64), (z - y1)) # (z - y1) - fn*pio2_1t
     n, y1, y2
 end
 
@@ -79,10 +79,10 @@ end
     fn = round(x*invpio2) # round to integer
     # on older systems, the above could be faster with
     # rf = 1.5/eps(Float64)
-    # (x+rf)-rf
+    # fn = (x*invpio2+rf)-rf
 
-    r  = muladd(-fn, pio2_1, x) # x - fn*pio2_1
-    w  = fn*pio2_1t # 1st round good to 85 bit
+    r  = muladd(-fn, pio2_1(Float64), x) # x - fn*pio2_1
+    w  = fn*pio2_1t(Float64) # 1st round good to 85 bit
     j  = xhp>>20
     y1 = r-w
     high = highword(y1)
@@ -228,12 +228,11 @@ Return the remainder of `x` modulo π/2 as a double-double pair, along with a `k
 such that ``k \mod 3 == K \mod 3`` where ``K*π/2 = x - rem``.
 """
 function rem_pio2(x::Float64)
-    xhp = poshighword(x) # positive part of highword
-    #  xhp <= highword(pi/4) implies |x| ~<= pi/4
-    if xhp <= 0x3fe921fb # no need for reduction
+    # Assumptions: NaN and Infs have been checked
+    if x <= pi/4 # no need for reduction
         return 0, x, 0.0
     end
-    rem_pio2_kernel(x, xhp)
+    rem_pio2(x, xhp)
 end
 
 """
@@ -244,12 +243,8 @@ such that ``k \mod 3 == K \mod 3`` where ``K*π/2 = x - rem``. Note, that it is
 only meant for use when ``|x|>=π/4``, and that ``π/2`` is always subtracted or
 added for ``π/4<|x|<=π/2`` instead of simply returning `x`.
 """
-function rem_pio2_kernel(x::Float64)
-    xhp = poshighword(x) # positive part of highword
-    rem_pio2_kernel(x, xhp)
-end
-
-function rem_pio2_kernel(x::Float64, xhp)
+@inline function rem_pio2_kernel(x::Float64)
+    xhp = poshighword(x)
     #  xhp <= highword(5pi/4) implies |x| ~<= 5pi/4,
     if xhp <= 0x400f6a7a
         #  last five bits of xhp == last five bits of highword(pi/2) or
