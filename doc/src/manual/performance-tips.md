@@ -1022,11 +1022,11 @@ of the `fview` version of the function.
 
 Arrays are stored contiguously in memory, lending themselves to CPU vectorization
 and fewer memory accesses due to caching. These are the same reasons that it is recommended
-to access arrays in column-major order (see above). Irregular access patterns and non-contiguous views 
+to access arrays in column-major order (see above). Irregular access patterns and non-contiguous views
 can drastically slow down computations on arrays because of non-sequential memory access.
 
 Copying irregularly-accessed data into a contiguous array before operating on it can result
-in a large speedup, such as in the example below. Here, a matrix and a vector are being accessed at 
+in a large speedup, such as in the example below. Here, a matrix and a vector are being accessed at
 800,000 of their randomly-shuffled indices before being multiplied. Copying the views into
 plain arrays speeds the multiplication by more than a factor of 2 even with the cost of the copying operation.
 
