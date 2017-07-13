@@ -103,6 +103,11 @@ Library improvements
 Compiler/Runtime improvements
 -----------------------------
 
+  * The inlining heuristic now models the approximate runtime cost of
+    a method (using some strongly-simplifying assumptions). Functions
+    are inlined unless their estimated runtime cost substantially
+    exceeds the cost of setting up and issuing a subroutine
+    call. ([#22210], [#22732])
 
 Deprecated or removed
 ---------------------
@@ -962,8 +967,10 @@ Command-line option changes
 [#22182]: https://github.com/JuliaLang/julia/issues/22182
 [#22187]: https://github.com/JuliaLang/julia/issues/22187
 [#22188]: https://github.com/JuliaLang/julia/issues/22188
+[#22210]: https://github.com/JuliaLang/julia/issues/22210
 [#22224]: https://github.com/JuliaLang/julia/issues/22224
 [#22228]: https://github.com/JuliaLang/julia/issues/22228
 [#22245]: https://github.com/JuliaLang/julia/issues/22245
 [#22310]: https://github.com/JuliaLang/julia/issues/22310
 [#22523]: https://github.com/JuliaLang/julia/issues/22523
+[#22732]: https://github.com/JuliaLang/julia/issues/22732
