@@ -84,7 +84,7 @@ endif
 julia-deps: | $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/julia/test
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/deps
 
-julia-base: julia-deps $(build_sysconfdir)/julia/juliarc.jl $(build_man1dir)/julia.1 $(build_datarootdir)/julia/julia-config.jl
+julia-base: julia-deps $(build_sysconfdir)/julia/juliarc.jl $(build_sysconfdir)/julia/REQUIRE $(build_man1dir)/julia.1 $(build_datarootdir)/julia/julia-config.jl
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/base
 
 julia-libccalltest: julia-deps
@@ -173,6 +173,10 @@ ifeq ($(OS), WINNT)
 	@cat $(JULIAHOME)/contrib/windows/juliarc.jl >> $(build_sysconfdir)/julia/juliarc.jl
 $(build_sysconfdir)/julia/juliarc.jl: $(JULIAHOME)/contrib/windows/juliarc.jl
 endif
+
+$(build_sysconfdir)/julia/REQUIRE: $(JULIAHOME)/etc/REQUIRE | $(build_sysconfdir)/julia
+	@echo Creating usr/etc/julia/REQUIRE
+	@cp $< $@
 
 $(build_datarootdir)/julia/julia-config.jl : $(JULIAHOME)/contrib/julia-config.jl | $(build_datarootdir)/julia
 	$(INSTALL_M) $< $(dir $@)
