@@ -1589,6 +1589,8 @@ end
 
 @deprecate_binding AbstractIOBuffer GenericIOBuffer false
 
+@deprecate String(io::GenericIOBuffer) String(take!(copy(io)))
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

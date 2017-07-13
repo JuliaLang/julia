@@ -677,7 +677,7 @@ function history_move_prefix(s::LineEdit.MIState,
     buf = LineEdit.buffer(s)
     pos = position(buf)
     prefix = REPL.beforecursor(buf)
-    allbuf = String(buf)
+    allbuf = String(take!(copy(buf)))
     cur_idx = hist.cur_idx
     # when searching forward, start at last_idx
     if !backwards && hist.last_idx > 0

@@ -257,12 +257,6 @@ end
 
 isopen(io::GenericIOBuffer) = io.readable || io.writable || io.seekable || nb_available(io) > 0
 
-function String(io::GenericIOBuffer)
-    io.readable || throw(ArgumentError("IOBuffer is not readable"))
-    io.seekable || throw(ArgumentError("IOBuffer is not seekable"))
-    return unsafe_string(pointer(io.data), io.size)
-end
-
 """
     take!(b::IOBuffer)
 
