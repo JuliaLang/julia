@@ -20,7 +20,7 @@ export @testset
 # Legacy approximate testing functions, yet to be included
 export @inferred
 export detect_ambiguities
-export GenericString, GenericSet, GenericDict
+export GenericString, GenericSet, GenericDict, GenericArray
 
 #-----------------------------------------------------------------------
 
@@ -1302,5 +1302,24 @@ for (G, A) in ((GenericSet, AbstractSet),
 end
 
 Base.get(s::GenericDict, x, y) = get(s.s, x, y)
+
+"""
+The `GenericArray` can be used to test generic array APIs that program to
+the `AbstractArray` interface, in order to ensure that functions can work
+with array types besides the standard `Array` type.
+"""
+struct GenericArray{T,N} <: AbstractArray{T,N}
+    a::Array{T,N}
+end
+
+GenericArray{T}(args...) where {T} = GenericArray(Array{T}(args...))
+GenericArray{T,N}(args...) where {T,N} = GenericArray(Array{T,N}(args...))
+
+Base.eachindex(a::GenericArray) = eachindex(a.a)
+Base.indices(a::GenericArray) = indices(a.a)
+Base.length(a::GenericArray) = length(a.a)
+Base.size(a::GenericArray) = size(a.a)
+Base.getindex(a::GenericArray, i...) = a.a[i...]
+Base.setindex!(a::GenericArray, x, i...) = a.a[i...] = x
 
 end # module
