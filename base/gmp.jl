@@ -313,14 +313,14 @@ end
 rem(x::BigInt, ::Type{Bool}) = !iszero(x) & unsafe_load(x.d) % Bool # never unsafe here
 
 rem(x::BigInt, ::Type{T}) where T<:Union{SLimbMax,ULimbMax} =
-    iszero(x) ? zero(T) : flipsign(unsafe_load(x.d) % T, x)
+    iszero(x) ? zero(T) : flipsign(unsafe_load(x.d) % T, x.size)
 
 function rem(x::BigInt, ::Type{T}) where T<:Union{Unsigned,Signed}
     u = zero(T)
     for l = 1:min(abs(x.size), cld(sizeof(T), sizeof(Limb)))
         u += (unsafe_load(x.d, l) % T) << ((sizeof(Limb)<<3)*(l-1))
     end
-    flipsign(u, x)
+    flipsign(u, x.size)
 end
 
 rem(x::Integer, ::Type{BigInt}) = convert(BigInt, x)
@@ -579,7 +579,6 @@ ispos(x::BigInt) = x.size > 0
 signbit(x::BigInt) = isneg(x)
 flipsign!(x::BigInt,  y::Integer) = (signbit(y) && (x.size = -x.size); x)
 flipsign( x::BigInt,  y::Integer) = signbit(y) ? -x : x
-flipsign( x::Integer, y::BigInt)  = flipsign(x, y.size)
 
 string(x::BigInt) = dec(x)
 show(io::IO, x::BigInt) = print(io, string(x))
