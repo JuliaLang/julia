@@ -152,12 +152,7 @@ reverseind(s::RevString, i::Integer) = endof(s) - i + 1
 reverseind(s::SubString{String}, i::Integer) =
     reverseind(s.string, nextind(s.string, endof(s.string))-s.offset-s.endof+i-1) - s.offset
 
-function repeat(s::AbstractString, r::Integer)
-    r <  0 ? throw(ArgumentError("can't repeat a string $r times")) :
-    r == 0 ? "" :
-    r == 1 ? s  :
-    repeat(convert(String, s), r)
-end
+repeat(s::AbstractString, r::Integer) = repeat(convert(String, s), r)
 
 """
     ^(s::AbstractString, n::Integer)
