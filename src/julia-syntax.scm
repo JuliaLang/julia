@@ -1104,6 +1104,18 @@
                    (eq? (caar binds) '=))
               ;; some kind of assignment
               (cond
+               ((eventually-call (cadar binds))
+                ;; f()=c
+                (let ((asgn (butlast (expand-forms (car binds))))
+                      (name (assigned-name (cadar binds))))
+                  (if (not (symbol? name))
+                      (error "invalid let syntax"))
+                  (loop (cdr binds)
+                        `(scope-block
+                          (block
+                           (local-def ,name)
+                           ,asgn
+                           ,blk)))))
                ((or (symbol? (cadar binds))
                     (decl?   (cadar binds)))
                 (let ((vname (decl-var (cadar binds))))
@@ -1123,23 +1135,6 @@
                                (local-def ,(cadar binds))
                                (= ,vname ,(caddar binds))
                                ,blk))))))
-               ((and (pair? (cadar binds))
-                     (or (eq? (caadar binds) 'call)
-                         (and (eq? (caadar binds) 'comparison)
-                              (length= (cadar binds) 4))))
-                ;; f()=c
-                (let* ((asgn (butlast (expand-forms (car binds))))
-                       (name (cadr (cadar binds)))
-                       (name (cond ((symbol? name) name)
-                                   ((and (pair? name) (eq? (car name) 'curly))
-                                    (cadr name))
-                                   (else (error "invalid let syntax")))))
-                  (loop (cdr binds)
-                        `(scope-block
-                          (block
-                           (local-def ,name)
-                           ,asgn
-                           ,blk)))))
                ;; (a, b, c, ...) = rhs
                ((and (pair? (cadar binds))
                      (eq? (caadar binds) 'tuple))

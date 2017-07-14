@@ -107,8 +107,7 @@
                              ;; a=b -> add argument
                              (loop (cdr binds)
                                    (cons (decl-var (cadar binds)) vars)))
-                            ((and (pair? (cadar binds))
-                                  (eq? (caadar binds) 'call))
+                            ((eventually-call (cadar binds))
                              ;; f()=c
                              (let ((asgn (cadr (julia-expand0 (car binds)))))
                                (loop (cdr binds)
