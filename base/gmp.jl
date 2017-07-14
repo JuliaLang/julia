@@ -312,7 +312,7 @@ end
 
 rem(x::BigInt, ::Type{Bool}) = !iszero(x) & unsafe_load(x.d) % Bool # never unsafe here
 
-rem(x::BigInt, ::Type{T}) where T <:Union{SLimbMax,ULimbMax} =
+rem(x::BigInt, ::Type{T}) where T<:Union{SLimbMax,ULimbMax} =
     iszero(x) ? zero(T) : flipsign(unsafe_load(x.d) % T, x)
 
 function rem(x::BigInt, ::Type{T}) where T<:Union{Unsigned,Signed}
