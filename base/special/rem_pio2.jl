@@ -232,7 +232,7 @@ function rem_pio2(x::Float64)
     if x <= pi/4 # no need for reduction
         return 0, x, 0.0
     end
-    rem_pio2(x, xhp)
+    rem_pio2_kernel(x)
 end
 
 """
