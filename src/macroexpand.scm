@@ -192,6 +192,10 @@
          (case (car v)
            ((... kw |::|) (try-arg-name (cadr v)))
            ((escape) (list v))
+           ((meta)  ;; allow certain per-argument annotations
+            (if (nospecialize-meta? v #t)
+                (try-arg-name (caddr v))
+                '()))
            (else '())))))
 
 ;; get names from a formal argument list, specifying whether to include escaped ones

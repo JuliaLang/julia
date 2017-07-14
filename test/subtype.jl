@@ -8,13 +8,13 @@ macro UnionAll(var, expr)
 end
 
 const issub = issubtype
-issub_strict(x::ANY,y::ANY) = issub(x,y) && !issub(y,x)
-isequal_type(x::ANY,y::ANY) = issub(x,y) && issub(y,x)
-notequal_type(x::ANY,y::ANY) = !isequal_type(x, y)
+issub_strict(@nospecialize(x),@nospecialize(y)) = issub(x,y) && !issub(y,x)
+isequal_type(@nospecialize(x),@nospecialize(y)) = issub(x,y) && issub(y,x)
+notequal_type(@nospecialize(x),@nospecialize(y)) = !isequal_type(x, y)
 
-_type_intersect(x::ANY, y::ANY) = ccall(:jl_intersect_types, Any, (Any, Any), x, y)
+_type_intersect(@nospecialize(x), @nospecialize(y)) = ccall(:jl_intersect_types, Any, (Any, Any), x, y)
 
-intersection_env(x::ANY, y::ANY) = ccall(:jl_env_from_type_intersection, Any, (Any,Any), x, y)
+intersection_env(@nospecialize(x), @nospecialize(y)) = ccall(:jl_env_from_type_intersection, Any, (Any,Any), x, y)
 
 # level 1: no varags, union, UnionAll
 function test_1()

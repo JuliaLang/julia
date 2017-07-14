@@ -434,6 +434,29 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
                 set_lineno = 1;
             }
         }
+        else if (jl_is_expr(st) && ((jl_expr_t*)st)->head == meta_sym &&
+                 jl_expr_nargs(st) > 1 && jl_exprarg(st, 0) == (jl_value_t*)nospecialize_sym) {
+            for (size_t j=1; j < jl_expr_nargs(st); j++) {
+                jl_value_t *aj = jl_exprarg(st, j);
+                if (jl_is_slot(aj)) {
+                    int sn = (int)jl_slot_number(aj) - 2;
+                    if (sn >= 0) {  // @nospecialize on self is valid but currently ignored
+                        if (sn > (m->nargs - 2)) {
+                            jl_error("@nospecialize annotation applied to a non-argument");
+                        }
+                        else if (sn >= sizeof(m->nospecialize) * 8) {
+                            jl_printf(JL_STDERR,
+                                      "WARNING: @nospecialize annotation only supported on the first %d arguments.\n",
+                                      (int)(sizeof(m->nospecialize) * 8));
+                        }
+                        else {
+                            m->nospecialize |= (1 << sn);
+                        }
+                    }
+                }
+            }
+            st = jl_nothing;
+        }
         else {
             st = jl_resolve_globals(st, m->module, sparam_vars);
         }
@@ -465,6 +488,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->file = empty_sym;
     m->line = 0;
     m->called = 0xff;
+    m->nospecialize = 0;
     m->invokes.unknown = NULL;
     m->isva = 0;
     m->nargs = 0;
@@ -644,6 +668,19 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
     jl_methtable_t *mt;
     jl_sym_t *name;
     jl_method_t *m = NULL;
+    size_t i, na = jl_svec_len(atypes);
+    int32_t nospec = 0;
+    for (i=1; i < na; i++) {
+        jl_value_t *ti = jl_svecref(atypes, i);
+        if (ti == jl_ANY_flag ||
+            (jl_is_vararg_type(ti) && jl_tparam0(jl_unwrap_unionall(ti)) == jl_ANY_flag)) {
+            jl_depwarn("`x::ANY` is deprecated, use `@nospecialize(x)` instead.",
+                       (jl_value_t*)jl_symbol("ANY"));
+            if (i <= 32)
+                nospec |= (1 << (i - 1));
+            jl_svecset(atypes, i, jl_substitute_var(ti, (jl_tvar_t*)jl_ANY_flag, (jl_value_t*)jl_any_type));
+        }
+    }
     jl_value_t *argtype = (jl_value_t*)jl_apply_tuple_type(atypes);
     JL_GC_PUSH3(&f, &m, &argtype);
 
@@ -677,6 +714,7 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
     }
 
     m = jl_new_method(f, name, module, (jl_tupletype_t*)argtype, nargs, isva, tvars, isstaged == jl_true);
+    m->nospecialize |= nospec;
 
     if (jl_has_free_typevars(argtype)) {
         jl_exceptionf(jl_argumenterror_type,
@@ -688,7 +726,6 @@ JL_DLLEXPORT void jl_method_def(jl_svec_t *argdata,
 
     jl_check_static_parameter_conflicts(m, f, tvars);
 
-    size_t i, na = jl_svec_len(atypes);
     for (i = 0; i < na; i++) {
         jl_value_t *elt = jl_svecref(atypes, i);
         if (!jl_is_type(elt) && !jl_is_typevar(elt)) {

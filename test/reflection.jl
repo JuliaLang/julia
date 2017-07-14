@@ -395,7 +395,7 @@ end
 
 used_dup_var_tested15714 = false
 used_unique_var_tested15714 = false
-function test_typed_ast_printing(f::ANY, types::ANY, must_used_vars)
+function test_typed_ast_printing(Base.@nospecialize(f), Base.@nospecialize(types), must_used_vars)
     src, rettype = code_typed(f, types)[1]
     dupnames = Set()
     slotnames = Set()

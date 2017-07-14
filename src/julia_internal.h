@@ -997,7 +997,7 @@ extern jl_sym_t *meta_sym; extern jl_sym_t *list_sym;
 extern jl_sym_t *inert_sym; extern jl_sym_t *static_parameter_sym;
 extern jl_sym_t *polly_sym; extern jl_sym_t *inline_sym;
 extern jl_sym_t *propagate_inbounds_sym;
-extern jl_sym_t *isdefined_sym;
+extern jl_sym_t *isdefined_sym; extern jl_sym_t *nospecialize_sym;
 
 void jl_register_fptrs(uint64_t sysimage_base, const char *base, const int32_t *offsets,
                        jl_method_instance_t **linfos, size_t n);

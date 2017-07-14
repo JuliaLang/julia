@@ -25,7 +25,7 @@ const (<:) = issubtype
 
 Supertype operator, equivalent to `issubtype(T2, T1)`.
 """
-const (>:)(a::ANY, b::ANY) = issubtype(b, a)
+const (>:)(@nospecialize(a), @nospecialize(b)) = issubtype(b, a)
 
 """
     supertype(T::DataType)

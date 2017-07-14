@@ -107,8 +107,8 @@ get(io::IO, key, default) = default
 
 displaysize(io::IOContext) = haskey(io, :displaysize) ? io[:displaysize] : displaysize(io.io)
 
-show_circular(io::IO, x::ANY) = false
-function show_circular(io::IOContext, x::ANY)
+show_circular(io::IO, @nospecialize(x)) = false
+function show_circular(io::IOContext, @nospecialize(x))
     d = 1
     for (k, v) in io.dict
         if k === :SHOWN_SET
@@ -122,8 +122,8 @@ function show_circular(io::IOContext, x::ANY)
     return false
 end
 
-show(io::IO, x::ANY) = show_default(io, x)
-function show_default(io::IO, x::ANY)
+show(io::IO, @nospecialize(x)) = show_default(io, x)
+function show_default(io::IO, @nospecialize(x))
     t = typeof(x)::DataType
     show(io, t)
     print(io, '(')
@@ -191,7 +191,7 @@ function show(io::IO, x::Union)
     show_comma_array(io, sorted_types, '{', '}')
 end
 
-function print_without_params(x::ANY)
+function print_without_params(@nospecialize(x))
     if isa(x,UnionAll)
         b = unwrap_unionall(x)
         return isa(b,DataType) && b.name.wrapper === x
@@ -520,7 +520,7 @@ typeemphasize(io::IO) = get(io, :TYPEEMPHASIZE, false) === true
 
 const indent_width = 4
 
-function show_expr_type(io::IO, ty::ANY, emph::Bool)
+function show_expr_type(io::IO, @nospecialize(ty), emph::Bool)
     if ty === Function
         print(io, "::F")
     elseif ty === Core.IntrinsicFunction
@@ -1099,7 +1099,7 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type)
     nothing
 end
 
-resolvebinding(ex::ANY) = ex
+resolvebinding(@nospecialize(ex)) = ex
 resolvebinding(ex::QuoteNode) = ex.value
 resolvebinding(ex::Symbol) = resolvebinding(GlobalRef(Main, ex))
 function resolvebinding(ex::Expr)
@@ -1132,7 +1132,7 @@ function show(io::IO, tv::TypeVar)
     # Otherwise, the lower bound should be printed if it is not `Bottom`
     # and the upper bound should be printed if it is not `Any`.
     in_env = (:unionall_env => tv) in io
-    function show_bound(io::IO, b::ANY)
+    function show_bound(io::IO, @nospecialize(b))
         parens = isa(b,UnionAll) && !print_without_params(b)
         parens && print(io, "(")
         show(io, b)
@@ -1179,7 +1179,7 @@ function dump(io::IO, x::SimpleVector, n::Int, indent)
     nothing
 end
 
-function dump(io::IO, x::ANY, n::Int, indent)
+function dump(io::IO, @nospecialize(x), n::Int, indent)
     T = typeof(x)
     if isa(x, Function)
         print(io, x, " (function of type ", T, ")")
@@ -1272,7 +1272,7 @@ end
 
 # dumptype is for displaying abstract type hierarchies,
 # based on Jameson Nash's examples/typetree.jl
-function dumptype(io::IO, x::ANY, n::Int, indent)
+function dumptype(io::IO, @nospecialize(x), n::Int, indent)
     print(io, x)
     n == 0 && return  # too deeply nested
     isa(x, DataType) && x.abstract && dumpsubtypes(io, x, Main, n, indent)

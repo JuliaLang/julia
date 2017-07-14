@@ -270,7 +270,7 @@ for code in Any[
         @code_typed(f18679())[1]
         @code_typed(g18679())[1]]
     @test all(x->isa(x, Type), code.slottypes)
-    local notconst(other::ANY) = true
+    local notconst(@nospecialize(other)) = true
     notconst(slot::TypedSlot) = @test isa(slot.typ, Type)
     function notconst(expr::Expr)
         @test isa(expr.typ, Type)
@@ -443,7 +443,7 @@ function is_typed_expr(e::Expr)
     end
     return false
 end
-test_inferred_static(other::ANY) = true
+test_inferred_static(@nospecialize(other)) = true
 test_inferred_static(slot::TypedSlot) = @test isleaftype(slot.typ)
 function test_inferred_static(expr::Expr)
     if is_typed_expr(expr)
@@ -664,7 +664,7 @@ end
 
 # issue #20704
 f20704(::Int) = 1
-Base.@pure b20704(x::ANY) = f20704(x)
+Base.@pure b20704(@nospecialize(x)) = f20704(x)
 @test b20704(42) === 1
 @test_throws MethodError b20704(42.0)
 
@@ -676,7 +676,7 @@ v20704() = Val{b20704(Any[1.0][1])}
 @test Base.return_types(v20704, ()) == Any[Type{Val{1}}]
 
 Base.@pure g20704(::Int) = 1
-h20704(x::ANY) = g20704(x)
+h20704(@nospecialize(x)) = g20704(x)
 @test g20704(1) === 1
 @test_throws MethodError h20704(1.2)
 
@@ -957,7 +957,7 @@ g22364(x) = f22364(x, Any[[]][1]...)
 @test @inferred(g22364(1)) === 0
 @test @inferred(g22364("1")) === 0.0
 
-function get_linfo(f::ANY, t::ANY)
+function get_linfo(@nospecialize(f), @nospecialize(t))
     if isa(f, Core.Builtin)
         throw(ArgumentError("argument is not a generic function"))
     end
@@ -974,7 +974,7 @@ function get_linfo(f::ANY, t::ANY)
                  (Any, Any, Any, UInt), meth, tt, env, world)
 end
 
-function test_const_return(f::ANY, t::ANY, val::ANY)
+function test_const_return(@nospecialize(f), @nospecialize(t), @nospecialize(val))
     linfo = get_linfo(f, t)
     # If coverage is not enabled, make the check strict by requiring constant ABI
     # Otherwise, check the typed AST to make sure we return a constant.

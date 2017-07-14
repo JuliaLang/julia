@@ -53,7 +53,7 @@ mutable struct REPLBackend
         new(repl_channel, response_channel, in_eval)
 end
 
-function eval_user_input(ast::ANY, backend::REPLBackend)
+function eval_user_input(@nospecialize(ast), backend::REPLBackend)
     iserr, lasterr = false, ((), nothing)
     Base.sigatomic_begin()
     while true
@@ -125,11 +125,11 @@ function display(d::REPLDisplay, mime::MIME"text/plain", x)
 end
 display(d::REPLDisplay, x) = display(d, MIME("text/plain"), x)
 
-function print_response(repl::AbstractREPL, val::ANY, bt, show_value::Bool, have_color::Bool)
+function print_response(repl::AbstractREPL, @nospecialize(val), bt, show_value::Bool, have_color::Bool)
     repl.waserror = bt !== nothing
     print_response(outstream(repl), val, bt, show_value, have_color, specialdisplay(repl))
 end
-function print_response(errio::IO, val::ANY, bt, show_value::Bool, have_color::Bool, specialdisplay=nothing)
+function print_response(errio::IO, @nospecialize(val), bt, show_value::Bool, have_color::Bool, specialdisplay=nothing)
     Base.sigatomic_begin()
     while true
         try

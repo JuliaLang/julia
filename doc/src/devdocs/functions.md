@@ -223,8 +223,8 @@ Performance-critical higher-order functions like `map` certainly call their argu
 and so will still be specialized as expected. This optimization is implemented by recording which
 arguments are called during the `analyze-variables` pass in the front end. When `cache_method`
 sees an argument in the `Function` type hierarchy passed to a slot declared as `Any` or `Function`,
-it pretends the slot was declared as `ANY` (the "don't specialize" hint). This heuristic seems
-to be extremely effective in practice.
+it behaves as if the `@nospecialize` annotation were applied. This heuristic seems to be extremely
+effective in practice.
 
 The next issue concerns the structure of method cache hash tables. Empirical studies show that
 the vast majority of dynamically-dispatched calls involve one or two arguments. In turn, many

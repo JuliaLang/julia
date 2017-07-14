@@ -890,7 +890,7 @@ in(x::Char, r::Range{Char}) =
 
 # Addition/subtraction of ranges
 
-function _define_range_op(f::ANY)
+function _define_range_op(@nospecialize f)
     @eval begin
         function $f(r1::OrdinalRange, r2::OrdinalRange)
             r1l = length(r1)

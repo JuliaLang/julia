@@ -7,7 +7,7 @@ const coverage = (Base.JLOptions().code_coverage > 0) || (Base.JLOptions().mallo
 const Iptr = sizeof(Int) == 8 ? "i64" : "i32"
 
 # `_dump_function` might be more efficient but it doesn't really matter here...
-get_llvm(f::ANY, t::ANY, strip_ir_metadata=true, dump_module=false) =
+get_llvm(@nospecialize(f), @nospecialize(t), strip_ir_metadata=true, dump_module=false) =
     sprint(code_llvm, f, t, strip_ir_metadata, dump_module)
 
 if opt_level > 0
