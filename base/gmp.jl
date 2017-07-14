@@ -577,8 +577,8 @@ isneg(x::BigInt) = x.size < 0
 ispos(x::BigInt) = x.size > 0
 
 signbit(x::BigInt) = isneg(x)
-flipsign!(x::BigInt,  y::Integer) = (signbit(y) && (x.size = -x.size); x)
-flipsign( x::BigInt,  y::Integer) = signbit(y) ? -x : x
+flipsign!(x::BigInt, y::Integer) = (signbit(y) && (x.size = -x.size); x)
+flipsign( x::BigInt, y::Integer) = signbit(y) ? -x : x
 
 string(x::BigInt) = dec(x)
 show(io::IO, x::BigInt) = print(io, string(x))
