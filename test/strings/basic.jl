@@ -491,3 +491,7 @@ Base.endof(x::CharStr) = endof(x.chars)
 @test 'a' * 'b' == "ab"
 @test 'a' * "b" * 'c' == "abc"
 @test "a" * 'b' * 'c' == "abc"
+
+# unrecognized escapes in string/char literals
+@test_throws ParseError parse("\"\\.\"")
+@test_throws ParseError parse("\'\\.\'")

@@ -361,7 +361,7 @@ cov(X::AbstractMatrix, vardim::Int=1; corrected::Bool=true) =
 Compute the covariance between the vectors `x` and `y`. If `corrected` is `true` (the
 default), computes ``\\frac{1}{n-1}\\sum_{i=1}^n (x_i-\\bar x) (y_i-\\bar y)^*`` where
 ``*`` denotes the complex conjugate and `n = length(x) = length(y)`. If `corrected` is
-`false`, computes ``\frac{1}{n}\sum_{i=1}^n (x_i-\\bar x) (y_i-\\bar y)^*``.
+`false`, computes ``\\frac{1}{n}\\sum_{i=1}^n (x_i-\\bar x) (y_i-\\bar y)^*``.
 """
 cov(x::AbstractVector, y::AbstractVector; corrected::Bool=true) =
     covm(x, Base.mean(x), y, Base.mean(y); corrected=corrected)
