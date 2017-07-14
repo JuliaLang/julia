@@ -331,6 +331,8 @@ end
         @test rad2deg(T(1)) ≈ rad2deg(true)
         @test deg2rad(T(1)) ≈ deg2rad(true)
     end
+    @test deg2rad(180 + 60im) ≈ pi + (pi/3)*im
+    @test rad2deg(pi + (pi/3)*im) ≈ 180 + 60im
 end
 
 @testset "degree-based trig functions" begin
