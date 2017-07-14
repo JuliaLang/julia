@@ -155,7 +155,7 @@ reverseind(s::SubString{String}, i::Integer) =
 """
     repeat(s::AbstractString, r::Integer)
 
-Repeat a string `r` times. This can equivalently be accomplished by calling [`^`](@ref).
+Repeat a string `r` times. This can equivalently be accomplished by calling [`s^r`](@ref ^).
 
 # Examples
 ```jldoctest

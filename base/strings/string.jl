@@ -442,7 +442,7 @@ end
 """
     repeat(c::Char, r::Integer) -> String
 
-Repeat a character `r` times. This can equivalently be accomplished by calling [`^`](@ref).
+Repeat a character `r` times. This can equivalently be accomplished by calling [`c^r`](@ref ^).
 
 # Examples
 ```jldoctest
