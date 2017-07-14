@@ -255,8 +255,9 @@ ccall((:foo, "libfoo"), Void, (Int32, Float64),
 ```
 
 [`Base.cconvert()`](@ref) normally just calls [`convert()`](@ref), but can be defined to return an
-arbitrary new object more appropriate for passing to C. For example, this is used to convert an
-`Array` of objects (e.g. strings) to an array of pointers.
+arbitrary new object more appropriate for passing to C.
+This should be used to perform all allocations of memory that will be accessed by the C code.
+For example, this is used to convert an `Array` of objects (e.g. strings) to an array of pointers.
 
 [`Base.unsafe_convert()`](@ref) handles conversion to `Ptr` types. It is considered unsafe because
 converting an object to a native pointer can hide the object from the garbage collector, causing
