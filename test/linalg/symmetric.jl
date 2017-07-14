@@ -166,9 +166,11 @@ end
         # mat * vec
         if eltya <: Complex
             @test Hermitian(asym)*x+y ≈ asym*x+y
+            @test x' * Hermitian(asym) ≈ x' * asym
         end
-        if eltya <: Real && eltya != Int
+        if eltya <: Real
             @test Symmetric(asym)*x+y ≈ asym*x+y
+            @test x' * Symmetric(asym) ≈ x' * asym
         end
 
         C = zeros(eltya,n,n)
@@ -181,7 +183,7 @@ end
             Base.LinAlg.A_mul_B!(C,a,Hermitian(asym))
             @test C ≈ a*asym
         end
-        if eltya <: Real && eltya != Int
+        if eltya <: Real
             @test Symmetric(asym) * Symmetric(asym) ≈ asym*asym
             @test Symmetric(asym) * a ≈ asym * a
             @test a * Symmetric(asym) ≈ a * asym
@@ -189,6 +191,11 @@ end
             Base.LinAlg.A_mul_B!(C,a,Symmetric(asym))
             @test C ≈ a*asym
         end
+        tri_b = UpperTriangular(triu(rand(eltya, n, n)))
+        @test Array(Hermitian(asym).' * tri_b) ≈ asym.' * Array(tri_b)
+        @test Array(tri_b * Hermitian(asym).') ≈ Array(tri_b) * asym.'
+        @test Array(Hermitian(asym)' * tri_b) ≈ asym' * Array(tri_b)
+        @test Array(tri_b * Hermitian(asym)') ≈ Array(tri_b) * asym'
 
         # solver
         @test Hermitian(asym)\x ≈ asym\x
