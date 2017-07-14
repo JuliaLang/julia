@@ -185,6 +185,8 @@ Deprecated or removed
 
   * The unexported type `AbstractIOBuffer` has been renamed to `GenericIOBuffer` ([#17360] [#22796]).
 
+  * The method `String(io::IOBuffer)` is deprecated to `String(take!(copy(io)))` ([#21438]).
+
 
 Julia v0.6.0 Release Notes
 ==========================

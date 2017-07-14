@@ -2,6 +2,8 @@
 
 ioslength(io::IOBuffer) = (io.seekable ? io.size : nb_available(io))
 
+bufcontents(io::Base.GenericIOBuffer) = unsafe_string(pointer(io.data), io.size)
+
 let io = IOBuffer()
 @test eof(io)
 @test_throws EOFError read(io,UInt8)
@@ -17,7 +19,7 @@ seek(io, 0)
 a = Array{UInt8}(2)
 @test read!(io, a) == a
 @test a == UInt8['b','c']
-@test String(io) == "abc"
+@test bufcontents(io) == "abc"
 seek(io, 1)
 truncate(io, 2)
 @test position(io) == 1
@@ -178,7 +180,7 @@ let io=IOBuffer(SubString("***αhelloworldω***",4,16)), io2 = IOBuffer(b"goodni
     @test_throws EOFError read(io,UInt8)
     skip(io, -3)
     @test readstring(io) == "dω"
-    @test String(io) == "αhelloworldω"
+    @test bufcontents(io) == "αhelloworldω"
     @test_throws ArgumentError write(io,"!")
     @test take!(io) == b"αhelloworldω"
     seek(io, 2)
@@ -193,7 +195,7 @@ let io=IOBuffer(SubString("***αhelloworldω***",4,16)), io2 = IOBuffer(b"goodni
     seek(io2, 0)
     write(io2, io2)
     @test readstring(io2) == ""
-    @test String(io2) == "goodnightmoonhelloworld"
+    @test bufcontents(io2) == "goodnightmoonhelloworld"
 end
 
 # issue #11917
