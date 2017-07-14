@@ -1018,6 +1018,44 @@ julia> @time fview(x);
 Notice both the 3× speedup and the decreased memory allocation
 of the `fview` version of the function.
 
+## Copying data is not always bad
+
+Arrays are stored contiguously in memory, lending themselves to CPU vectorization
+and fewer memory accesses due to caching. These are the same reasons that it is recommended
+to access arrays in column-major order (see above). Irregular access patterns and non-contiguous views
+can drastically slow down computations on arrays because of non-sequential memory access.
+
+Copying irregularly-accessed data into a contiguous array before operating on it can result
+in a large speedup, such as in the example below. Here, a matrix and a vector are being accessed at
+800,000 of their randomly-shuffled indices before being multiplied. Copying the views into
+plain arrays speeds the multiplication by more than a factor of 2 even with the cost of the copying operation.
+
+```julia-repl
+julia> x = randn(1_000_000);
+
+julia> inds = shuffle(1:1_000_000)[1:800000];
+
+julia> A = randn(50, 1_000_000);
+
+julia> xtmp = zeros(800_000);
+
+julia> Atmp = zeros(50, 800_000);
+
+julia> @time sum(view(A, :, inds) * view(x, inds))
+  0.640320 seconds (41 allocations: 1.391 KiB)
+7253.242699002263
+
+julia> @time begin
+           copy!(xtmp, view(x, inds))
+           copy!(Atmp, view(A, :, inds))
+           sum(Atmp * xtmp)
+       end
+  0.261294 seconds (41 allocations: 1.391 KiB)
+7253.242699002323
+```
+Provided there is enough memory for the copies, the cost of copying the view to an array is
+far outweighed by the speed boost from doing the matrix multiplication on a contiguous array.
+
 ## Avoid string interpolation for I/O
 
 When writing data to a file (or other I/O device), forming extra intermediate strings is a source
