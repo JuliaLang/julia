@@ -439,7 +439,7 @@ if Sys.isunix()
             end
         catch ex
             isa(ex, Base.UVError) || rethrow(ex)
-            @test ex.code == Base.UV_EMFILE
+            @test ex.code in (Base.UV_EMFILE, Base.UV_ENFILE)
         finally
             for p in ps
                 close(p)
