@@ -19,7 +19,8 @@ struct ModalInterface <: TextInterface
 end
 
 mutable struct Prompt <: TextInterface
-    prompt::String
+    # A string or function to be printed as the prompt.
+    prompt::Union{String,Function}
     # A string or function to be printed before the prompt. May not change the length of the prompt.
     # This may be used for changing the color, issuing other terminal escape codes, etc.
     prompt_prefix::Union{String,Function}
@@ -34,7 +35,7 @@ mutable struct Prompt <: TextInterface
     sticky::Bool
 end
 
-show(io::IO, x::Prompt) = show(io, string("Prompt(\"", x.prompt, "\",...)"))
+show(io::IO, x::Prompt) = show(io, string("Prompt(\"", prompt_string(x.prompt), "\",...)"))
 
 mutable struct MIState
     interface::ModalInterface
@@ -182,8 +183,10 @@ function _clear_input_area(terminal, state::InputAreaState)
     clear_line(terminal)
 end
 
-prompt_string(s::PromptState) = s.p.prompt
+prompt_string(s::PromptState) = prompt_string(s.p)
+prompt_string(p::Prompt) = prompt_string(p.prompt)
 prompt_string(s::AbstractString) = s
+prompt_string(f::Function) = eval(Expr(:call, f))
 
 refresh_multi_line(s::ModeState) = refresh_multi_line(terminal(s), s)
 refresh_multi_line(termbuf::TerminalBuffer, s::ModeState) = refresh_multi_line(termbuf, terminal(s), s)
@@ -454,7 +457,7 @@ function edit_insert(s::PromptState, c)
     end
     str = string(c)
     edit_insert(buf, str)
-    offset = s.ias.curs_row == 1 ? sizeof(s.p.prompt) : s.indent
+    offset = s.ias.curs_row == 1 ? sizeof(prompt_string(s.p.prompt)) : s.indent
     if !('\n' in str) && eof(buf) &&
         ((line_size() + offset + sizeof(str) - 1) < width(terminal(s)))
         # Avoid full update when appending characters to the end
@@ -627,11 +630,11 @@ function write_prompt(terminal, p::Prompt)
     suffix = isa(p.prompt_suffix,Function) ? eval(Expr(:call, p.prompt_suffix)) : p.prompt_suffix
     write(terminal, prefix)
     write(terminal, Base.text_colors[:bold])
-    write(terminal, p.prompt)
+    write(terminal, prompt_string(p.prompt))
     write(terminal, Base.text_colors[:normal])
     write(terminal, suffix)
 end
-write_prompt(terminal, s::String) = write(terminal, s)
+write_prompt(terminal, s::Union{AbstractString,Function}) = write(terminal, prompt_string(s))
 
 ### Keymap Support
 
@@ -1062,7 +1065,7 @@ PrefixHistoryPrompt(hp::T, parent_prompt) where T<:HistoryProvider = PrefixHisto
 init_state(terminal, p::PrefixHistoryPrompt) = PrefixSearchState(terminal, p, "", IOBuffer())
 
 write_prompt(terminal, s::PrefixSearchState) = write_prompt(terminal, s.histprompt.parent_prompt)
-prompt_string(s::PrefixSearchState) = s.histprompt.parent_prompt.prompt
+prompt_string(s::PrefixSearchState) = prompt_string(s.histprompt.parent_prompt.prompt)
 
 terminal(s::PrefixSearchState) = s.terminal
 
@@ -1559,7 +1562,9 @@ end
 
 run_interface(::Prompt) = nothing
 
-init_state(terminal, prompt::Prompt) = PromptState(terminal, prompt, IOBuffer(), InputAreaState(1, 1), #=indent(spaces)=#strwidth(prompt.prompt))
+init_state(terminal, prompt::Prompt) =
+    PromptState(terminal, prompt, IOBuffer(), InputAreaState(1, 1),
+    #=indent(spaces)=# strwidth(prompt_string(prompt.prompt)))
 
 function init_state(terminal, m::ModalInterface)
     s = MIState(m, m.modes[1], false, Dict{Any,Any}())
