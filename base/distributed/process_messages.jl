@@ -310,14 +310,22 @@ function handle_msg(msg::JoinPGRPMsg, header, r_stream, w_stream, version)
         disable_threaded_libs()
     end
 
+    lazy = msg.lazy
+    PGRP.lazy = Nullable{Bool}(lazy)
+
     wait_tasks = Task[]
     for (connect_at, rpid) in msg.other_workers
         wconfig = WorkerConfig()
         wconfig.connect_at = connect_at
 
         let rpid=rpid, wconfig=wconfig
-            t = @async connect_to_peer(cluster_manager, rpid, wconfig)
-            push!(wait_tasks, t)
+            if lazy
+                # The constructor registers the object with a global registry.
+                Worker(rpid, Nullable{Function}(()->connect_to_peer(cluster_manager, rpid, wconfig)))
+            else
+                t = @async connect_to_peer(cluster_manager, rpid, wconfig)
+                push!(wait_tasks, t)
+            end
         end
     end
 

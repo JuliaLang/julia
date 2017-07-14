@@ -13,47 +13,6 @@ include("testenv.jl")
 addprocs_with_testenv(4)
 @test nprocs() == 5
 
-function reuseport_tests()
-    # Run the test on all processes.
-    results = asyncmap(procs()) do p
-        remotecall_fetch(p) do
-            ports_lower = []        # ports of pids lower than myid()
-            ports_higher = []       # ports of pids higher than myid()
-            for w in Base.Distributed.PGRP.workers
-                w.id == myid() && continue
-                port = Base._sockname(w.r_stream, true)[2]
-                if (w.id == 1)
-                    # master connects to workers
-                    push!(ports_higher, port)
-                elseif w.id < myid()
-                    push!(ports_lower, port)
-                elseif w.id > myid()
-                    push!(ports_higher, port)
-                end
-            end
-            @assert (length(ports_lower) + length(ports_higher)) == nworkers()
-            for portset in [ports_lower, ports_higher]
-                if (length(portset) > 0) && (length(unique(portset)) != 1)
-                    warn("SO_REUSEPORT TESTS FAILED. UNSUPPORTED/OLDER UNIX VERSION?")
-                    return 0
-                end
-            end
-            return myid()
-        end
-    end
-
-    # Ensure that the code has indeed been successfully executed everywhere
-    @test all(p -> p in results, procs())
-end
-
-# Test that the client port is reused. SO_REUSEPORT may not be supported on
-# all UNIX platforms, Linux kernels prior to 3.9 and older versions of OSX
-if ccall(:jl_has_so_reuseport, Int32, ()) == 1
-    reuseport_tests()
-else
-    info("SO_REUSEPORT is unsupported, skipping reuseport tests.")
-end
-
 id_me = myid()
 id_other = filter(x -> x != id_me, procs())[rand(1:(nprocs()-1))]
 
@@ -1816,6 +1775,49 @@ rmprocs(workers())
 p1,p2 = addprocs_with_testenv(2)
 @everywhere f22865(p) = remotecall_fetch(x->x.*2, p, ones(2))
 @test ones(2).*2 == remotecall_fetch(f22865, p1, p2)
+
+function reuseport_tests()
+    # Run the test on all processes.
+    results = asyncmap(procs()) do p
+        remotecall_fetch(p) do
+            ports_lower = []        # ports of pids lower than myid()
+            ports_higher = []       # ports of pids higher than myid()
+            for w in Base.Distributed.PGRP.workers
+                w.id == myid() && continue
+                port = Base._sockname(w.r_stream, true)[2]
+                if (w.id == 1)
+                    # master connects to workers
+                    push!(ports_higher, port)
+                elseif w.id < myid()
+                    push!(ports_lower, port)
+                elseif w.id > myid()
+                    push!(ports_higher, port)
+                end
+            end
+            @assert (length(ports_lower) + length(ports_higher)) == nworkers()
+            for portset in [ports_lower, ports_higher]
+                if (length(portset) > 0) && (length(unique(portset)) != 1)
+                    warn("SO_REUSEPORT TESTS FAILED. UNSUPPORTED/OLDER UNIX VERSION?")
+                    return 0
+                end
+            end
+            return myid()
+        end
+    end
+
+    # Ensure that the code has indeed been successfully executed everywhere
+    @test all(p -> p in results, procs())
+end
+
+# Test that the client port is reused. SO_REUSEPORT may not be supported on
+# all UNIX platforms, Linux kernels prior to 3.9 and older versions of OSX
+if ccall(:jl_has_so_reuseport, Int32, ()) == 1
+    rmprocs(workers())
+    addprocs_with_testenv(4; lazy=false)
+    reuseport_tests()
+else
+    info("SO_REUSEPORT is unsupported, skipping reuseport tests.")
+end
 
 # Run topology tests last after removing all workers, since a given
 # cluster at any time only supports a single topology.

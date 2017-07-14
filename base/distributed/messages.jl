@@ -68,6 +68,7 @@ struct JoinPGRPMsg <: AbstractMsg
     other_workers::Array
     topology::Symbol
     enable_threaded_blas::Bool
+    lazy::Bool
 end
 struct JoinCompleteMsg <: AbstractMsg
     cpu_cores::Int

@@ -1300,6 +1300,12 @@ connected to each other:
     fields `ident` and `connect_idents` in `WorkerConfig`. A worker with a cluster-manager-provided
     identity `ident` will connect to all workers specified in `connect_idents`.
 
+Keyword argument `lazy=true|false` only affects `topology` option `:all_to_all`. If `true`, the cluster
+starts off with the master connected to all workers. Specific worker-worker connections are established
+at the first remote invocation between two workers. This helps in reducing initial resources allocated for
+intra-cluster communication. Connections are setup depending on the runtime requirements of a parallel
+program. Default value for `lazy` is `true`.
+
 Currently, sending a message between unconnected workers results in an error. This behaviour,
 as with the functionality and interface, should be considered experimental in nature and may change
 in future releases.
