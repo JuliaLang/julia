@@ -404,18 +404,25 @@ You can read about [getting started](https://julialang.org/manual/getting-starte
 
 The following distributions include julia, but the versions may be out of date due to rapid development:
 
+<a href="https://repology.org/metapackage/julia">
+    <img src="https://repology.org/badge/vertical-allrepos/julia.svg" alt="Packaging status" align="right">
+</a>
+
 * [Alpine Linux](http://pkgs.alpinelinux.org/package/edge/testing/x86_64/julia)
 * [Arch Linux](https://www.archlinux.org/packages/community/i686/julia/)
+* [Chocolatey](https://chocolatey.org/packages/Julia)
 * [Debian GNU/Linux](http://packages.debian.org/sid/julia)
 * [Fedora Linux](https://admin.fedoraproject.org/pkgdb/package/julia/), RHEL/CentOS/OEL/Scientific Linux (EPEL)
   * [Current stable release for Fedora/EPEL](https://copr.fedoraproject.org/coprs/nalimilan/julia/)
   * [Nightly builds for Fedora/EPEL](https://copr.fedoraproject.org/coprs/nalimilan/julia-nightlies/)
 * [Gentoo Linux](https://packages.gentoo.org/package/dev-lang/julia)
   * Git Package in the [Science overlay](https://wiki.gentoo.org/wiki/Project:Science/Overlay)
+* [GNU Guix](https://www.gnu.org/software/guix/packages/j.html#julia)
 * openSUSE
   * Stable package for openSUSE: [OBS page](https://build.opensuse.org/package/show/science/julia), [1 Click Install](http://software.opensuse.org/download.html?project=science&package=julia)
   * Git package for openSUSE: [OBS page](https://build.opensuse.org/package/show/science/julia-unstable), [1 Click Install](http://software.opensuse.org/download.html?project=science&package=julia-unstable)
 * [NixOS](https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/compilers/julia)
+* [SlackBuild](https://slackbuilds.org/repository/14.2/development/julia/)
 * Ubuntu
   * [Ubuntu](http://packages.ubuntu.com/search?keywords=julia)
   * [Nightly builds PPA](https://launchpad.net/~staticfloat/+archive/julianightlies) (depends on the [julia-deps PPA](https://launchpad.net/~staticfloat/+archive/julia-deps/))
