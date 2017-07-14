@@ -244,13 +244,12 @@ static DISubroutineType *jl_di_func_sig;
 static DISubroutineType *jl_di_func_null_sig;
 
 extern "C"
-int32_t jl_jlcall_api(const void *function)
+int32_t jl_jlcall_api(const char *fname)
 {
     // give the function an index in the constant lookup table
-    if (function == NULL)
+    if (fname == NULL)
         return 0;
-    const Function *F = cast<const Function>((const Value*)function);
-    StringRef Name = F->getName();
+    StringRef Name(fname);
     if (Name.startswith("japi3_")) // jlcall abi 3 from JIT
         return 3;
     assert(Name.startswith("japi1_") || // jlcall abi 1 from JIT
@@ -1170,8 +1169,8 @@ jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t **pli, jl_code_info_t 
             const char *mname = jl_symbol_name(jl_is_method(li->def.method) ? li->def.method->name : anonymous_sym);
             jl_rethrow_with_add("error compiling %s", mname);
         }
-        Function *f = (Function*)decls.functionObject;
-        Function *specf = (Function*)decls.specFunctionObject;
+        const char *f = decls.functionObject;
+        const char *specf = decls.specFunctionObject;
 
         if (JL_HOOK_TEST(params, module_activation)) {
             JL_HOOK_CALL(params, module_activation, 1, jl_box_voidpointer(wrap(m.release())));
@@ -1185,7 +1184,7 @@ jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t **pli, jl_code_info_t 
                 // but don't remember toplevel thunks because
                 // they may not be rooted in the gc for the life of the program,
                 // and the runtime doesn't notify us when the code becomes unreachable :(
-                jl_add_linfo_in_flight((specf ? specf : f)->getName(), li, DL);
+                jl_add_linfo_in_flight(StringRef(specf ? specf : f), li, DL);
             }
 
             // Step 5. Add the result to the execution engine now
@@ -1274,26 +1273,28 @@ static void jl_setup_module(Module *m, const jl_cgparams_t *params = &jl_default
 // this ensures that llvmf has been emitted to the execution engine,
 // returning the function pointer to it
 extern void jl_callback_triggered_linfos(void);
-static uint64_t getAddressForFunction(llvm::Function *llvmf)
+static uint64_t getAddressForFunction(StringRef fname)
 {
     JL_TIMING(LLVM_EMIT);
 #ifdef JL_DEBUG_BUILD
-    llvm::raw_fd_ostream out(1,false);
+    llvm::raw_fd_ostream out(1, false);
 #endif
-    jl_finalize_function(llvmf);
-    uint64_t ret = jl_ExecutionEngine->getFunctionAddress(llvmf->getName());
+    jl_finalize_function(fname);
+    uint64_t ret = jl_ExecutionEngine->getFunctionAddress(fname);
     // delay executing trace callbacks until here to make sure there's no
     // recursive compilation.
     jl_callback_triggered_linfos();
     return ret;
 }
 
+// convenience helper exported for usage from gdb
 extern "C" JL_DLLEXPORT
-uint64_t jl_get_llvm_fptr(llvm::Function *llvmf)
+uint64_t jl_get_llvm_fptr(void *function)
 {
-    uint64_t addr = getAddressForFunction(llvmf);
+    Function *F = (Function*)function;
+    uint64_t addr = getAddressForFunction(F->getName());
     if (!addr)
-        addr = jl_ExecutionEngine->findUnmangledSymbol(llvmf->getName()).getAddress();
+        addr = jl_ExecutionEngine->findUnmangledSymbol(F->getName()).getAddress();
     return addr;
 }
 
@@ -1317,9 +1318,8 @@ static jl_method_instance_t *jl_get_unspecialized(jl_method_instance_t *method)
 
 // this compiles li and emits fptr
 extern "C"
-jl_generic_fptr_t jl_generate_fptr(jl_method_instance_t *li, void *_F, size_t world)
+jl_generic_fptr_t jl_generate_fptr(jl_method_instance_t *li, const char *F, size_t world)
 {
-    Function *F = (Function*)_F;
     jl_generic_fptr_t fptr;
     fptr.fptr = li->fptr;
     fptr.jlcall_api = li->jlcall_api;
@@ -1367,7 +1367,7 @@ jl_generic_fptr_t jl_generate_fptr(jl_method_instance_t *li, void *_F, size_t wo
                 unspec->functionObjectsDecls.specFunctionObject = NULL;
             }
             assert(src);
-            F = (Function*)jl_compile_linfo(&unspec, src, unspec->min_world, &jl_default_cgparams).functionObject; // this does not change unspec
+            F = jl_compile_linfo(&unspec, src, unspec->min_world, &jl_default_cgparams).functionObject; // this does not change unspec
             if (unspec == li) {
                 unspec->functionObjectsDecls = decls;
             }
@@ -1423,7 +1423,7 @@ void *jl_function_ptr(jl_function_t *f, jl_value_t *rt, jl_value_t *argt)
     JL_LOCK(&codegen_lock);
     Function *llvmf = jl_cfunction_object(f, rt, (jl_tupletype_t*)argt);
     JL_GC_POP();
-    void *ptr = (void*)getAddressForFunction(llvmf);
+    void *ptr = (void*)getAddressForFunction(llvmf->getName());
     JL_UNLOCK(&codegen_lock);
     return ptr;
 }
@@ -1436,7 +1436,7 @@ void *jl_function_ptr_by_llvm_name(char *name) {
 #ifdef JL_MSAN_ENABLED
     __msan_unpoison_string(name);
 #endif
-    return (void*)(intptr_t)jl_ExecutionEngine->FindFunctionNamed(name);
+    return (void*)jl_ExecutionEngine->FindFunctionNamed(name); // returns an llvm::Function*
 }
 
 // export a C-callable entry point for a function (dllexport'ed dlsym), with a given name
@@ -1447,7 +1447,7 @@ void jl_extern_c(jl_function_t *f, jl_value_t *rt, jl_value_t *argt, char *name)
     JL_LOCK(&codegen_lock);
     Function *llvmf = jl_cfunction_object(f, rt, (jl_tupletype_t*)argt);
     // force eager emission of the function (llvm 3.3 gets confused otherwise and tries to do recursive compilation)
-    uint64_t Addr = getAddressForFunction(llvmf);
+    uint64_t Addr = getAddressForFunction(llvmf->getName());
 
     if (imaging_mode)
         llvmf = cast<Function>(shadow_output->getNamedValue(llvmf->getName()));
@@ -1515,28 +1515,28 @@ void *jl_get_llvmf_defn(jl_method_instance_t *linfo, size_t world, bool getwrapp
 
     if (optimize)
         jl_globalPM->run(*m.get());
-    Function *f = (llvm::Function*)declarations.functionObject;
-    Function *specf = (llvm::Function*)declarations.specFunctionObject;
+    const char *fname = declarations.functionObject;
+    const char *specfname = declarations.specFunctionObject;
+    Function *f = NULL;
+    Function *specf = NULL;
     // swap declarations for definitions and destroy declarations
-    if (specf) {
-        Function *tempf = cast<Function>(m->getNamedValue(specf->getName()));
-        delete specf;
-        specf = tempf;
+    if (specfname) {
+        specf = cast<Function>(m->getNamedValue(specfname));
+        free(const_cast<char*>(specfname));
     }
-    if (f) {
-        Function *tempf = cast<Function>(m->getNamedValue(f->getName()));
-        delete f;
-        f = tempf;
+    if (fname) {
+        f = cast<Function>(m->getNamedValue(fname));
+        free(const_cast<char*>(fname));
     }
     // clone the name from the runtime linfo, if it exists
     // to give the user a (false) sense of stability
-    Function *specf_decl = (Function*)linfo->functionObjectsDecls.specFunctionObject;
-    if (specf_decl) {
-        specf->setName(specf_decl->getName());
+    specfname = linfo->functionObjectsDecls.specFunctionObject;
+    if (specfname) {
+        specf->setName(specfname);
     }
-    Function *f_decl = (Function*)linfo->functionObjectsDecls.functionObject;
-    if (f_decl) {
-        f->setName(f_decl->getName());
+    fname = linfo->functionObjectsDecls.functionObject;
+    if (fname) {
+        f->setName(fname);
     }
     m.release(); // the return object `llvmf` will be the owning pointer
     JL_UNLOCK(&codegen_lock); // Might GC
@@ -1577,10 +1577,13 @@ void *jl_get_llvmf_decl(jl_method_instance_t *linfo, size_t world, bool getwrapp
         JL_UNLOCK(&codegen_lock);
     }
 
-    if (getwrapper || !decls.specFunctionObject)
-        return decls.functionObject;
-    else
-        return decls.specFunctionObject;
+    if (getwrapper || !decls.specFunctionObject) {
+        return Function::Create(jl_func_sig, GlobalVariable::ExternalLinkage, decls.functionObject);
+    }
+    else {
+        jl_returninfo_t returninfo = get_specsig_function(NULL, decls.specFunctionObject, linfo->specTypes, linfo->rettype);
+        return returninfo.decl;
+    }
 }
 
 
@@ -1592,7 +1595,7 @@ const jl_value_t *jl_dump_function_ir(void *f, bool strip_ir_metadata, bool dump
     std::string code;
     llvm::raw_string_ostream stream(code);
 
-    Function *llvmf = dyn_cast<Function>((Function*)f);
+    Function *llvmf = dyn_cast_or_null<Function>((Function*)f);
     if (!llvmf || (!llvmf->isDeclaration() && !llvmf->getParent()))
         jl_error("jl_dump_function_ir: Expected Function* in a temporary Module");
 
@@ -1600,6 +1603,7 @@ const jl_value_t *jl_dump_function_ir(void *f, bool strip_ir_metadata, bool dump
     if (!llvmf->getParent()) {
         // print the function declaration as-is
         llvmf->print(stream);
+        delete llvmf;
     }
     else {
         Module *m = llvmf->getParent();
@@ -1642,7 +1646,7 @@ const jl_value_t *jl_dump_function_ir(void *f, bool strip_ir_metadata, bool dump
     }
     JL_UNLOCK(&codegen_lock); // Might GC
 
-    return jl_cstr_to_string(const_cast<char*>(stream.str().c_str()));
+    return jl_pchar_to_string(stream.str().data(), stream.str().size());
 }
 
 // This isn't particularly fast, but it's only used for interactive mode
@@ -1691,6 +1695,7 @@ static uint64_t compute_obj_symsize(const object::ObjectFile *obj, uint64_t offs
 }
 
 // print a native disassembly for f (an LLVM function)
+// warning: this takes ownership of, and destroys, f
 extern "C" JL_DLLEXPORT
 const jl_value_t *jl_dump_function_asm(void *f, int raw_mc, const char* asm_variant="att")
 {
@@ -1698,17 +1703,19 @@ const jl_value_t *jl_dump_function_asm(void *f, int raw_mc, const char* asm_vari
     std::string code;
     llvm::raw_string_ostream stream(code);
 
-    Function *llvmf = dyn_cast<Function>((Function*)f);
+    Function *llvmf = dyn_cast_or_null<Function>((Function*)f);
     if (!llvmf)
         jl_error("jl_dump_function_asm: Expected Function*");
 
     // Dump assembly code
     uint64_t symsize = 0;
     int64_t slide = 0, section_slide = 0;
-    uint64_t fptr = getAddressForFunction(llvmf);
+    uint64_t fptr = getAddressForFunction(llvmf->getName());
     // Look in the system image as well
     if (fptr == 0)
         fptr = (uintptr_t)jl_ExecutionEngine->getPointerToGlobalIfAvailable(llvmf);
+    delete llvmf;
+
     llvm::DIContext *context = NULL;
     llvm::DIContext *&objcontext = context;
     const object::ObjectFile *object = NULL;
@@ -1717,14 +1724,14 @@ const jl_value_t *jl_dump_function_asm(void *f, int raw_mc, const char* asm_vari
         if (!jl_dylib_DI_for_fptr(fptr, &object, &objcontext, &slide, &section_slide, false,
             NULL, NULL, NULL, NULL)) {
                 jl_printf(JL_STDERR, "WARNING: Unable to find function pointer\n");
-                return jl_cstr_to_string("");
+                return jl_pchar_to_string("", 0);
         }
     }
     if (symsize == 0 && object != NULL)
         symsize = compute_obj_symsize(object, fptr + slide + section_slide);
     if (symsize == 0) {
         jl_printf(JL_STDERR, "WARNING: Could not determine size of symbol\n");
-        return jl_cstr_to_string("");
+        return jl_pchar_to_string("", 0);
     }
 
     if (raw_mc) {
@@ -1740,7 +1747,7 @@ const jl_value_t *jl_dump_function_asm(void *f, int raw_mc, const char* asm_vari
 
     jl_gc_safe_leave(ptls, gc_state);
 
-    return jl_cstr_to_string(const_cast<char*>(stream.str().c_str()));
+    return jl_pchar_to_string(stream.str().data(), stream.str().size());
 }
 
 // Logging for code coverage and memory allocation
@@ -3004,12 +3011,12 @@ static Value *emit_jlcall(jl_codectx_t &ctx, Value *theFptr, Value *theF,
     SmallVector<Value*, 3> theArgs;
     if (theF)
         theArgs.push_back(theF);
-    for(size_t i=0; i < nargs; i++) {
+    for (size_t i = 0; i < nargs; i++) {
         Value *arg = maybe_decay_untracked(boxed(ctx, args[i], false));
         theArgs.push_back(arg);
     }
     SmallVector<Type *, 3> argsT;
-    for(size_t i=0; i < nargs + (theF != nullptr); i++) {
+    for (size_t i = 0; i < nargs + (theF != nullptr); i++) {
         argsT.push_back(T_prjlvalue);
     }
     FunctionType *FTy = FunctionType::get(T_prjlvalue, argsT, false);
@@ -3036,23 +3043,12 @@ static Value *emit_jlcall(jl_codectx_t &ctx, Value *theFptr, Value *theF,
 static jl_cgval_t emit_call_function_object(jl_method_instance_t *li, const jl_cgval_t &theF, jl_llvm_functions_t decls,
                                             jl_value_t **args, size_t nargs, jl_value_t *callexpr, jl_codectx_t &ctx)
 {
-    Value *theFptr = (Value*)decls.functionObject;
     jl_value_t *inferred_retty = expr_type(ctx, callexpr);
     if (decls.specFunctionObject != NULL) {
         // emit specialized call site
         jl_value_t *jlretty = li->rettype;
-        Function *proto = (Function*)decls.specFunctionObject;
-        jl_returninfo_t returninfo = get_specsig_function(jl_Module, proto->getName(), li->specTypes, jlretty);
+        jl_returninfo_t returninfo = get_specsig_function(jl_Module, decls.specFunctionObject, li->specTypes, jlretty);
         FunctionType *cft = returninfo.decl->getFunctionType();
-        assert(proto->getFunctionType() == cft);
-
-        proto = cast<Function>(prepare_call(proto));
-        if (proto != returninfo.decl) {
-            assert(proto->getFunctionType() == cft);
-            returninfo.decl->replaceAllUsesWith(proto);
-            returninfo.decl->eraseFromParent();
-            returninfo.decl = proto;
-        }
 
         size_t nfargs = cft->getNumParams();
         Value **argvals = (Value**)alloca(nfargs * sizeof(Value*));
@@ -3153,6 +3149,7 @@ static jl_cgval_t emit_call_function_object(jl_method_instance_t *li, const jl_c
             retval = update_julia_type(ctx, retval, inferred_retty);
         return retval;
     }
+    Value *theFptr = jl_Module->getOrInsertFunction(decls.functionObject, jl_func_sig);
     Value *ret = emit_jlcall(ctx, theFptr, boxed(ctx, theF), &args[1], nargs);
     return mark_julia_type(ctx, ret, true, inferred_retty);
 }
@@ -4173,10 +4170,10 @@ static void emit_cfunc_invalidate(
 #if JL_LLVM_VERSION >= 50000
         0,
 #endif
-        ConstantInt::get(T_int32, nargs + 1), "jlcall", ctx.ptlsStates);
+        ConstantInt::get(T_int32, nargs), "jlcall", ctx.ptlsStates);
     if (cc == jl_returninfo_t::SRet || cc == jl_returninfo_t::Union)
         ++AI;
-    for (size_t i = 0; i < nargs + 1; i++) {
+    for (size_t i = 0; i < nargs; i++) {
         jl_value_t *jt = jl_nth_slot_type(lam->specTypes, i);
         bool isboxed;
         Type *et = julia_type_to_llvm(jt, &isboxed);
@@ -4206,7 +4203,7 @@ static void emit_cfunc_invalidate(
         ctx.builder.CreateStore(maybe_decay_untracked(arg_box), argn);
     }
     assert(AI == gf_thunk->arg_end());
-    Value *nargs_v = ConstantInt::get(T_int32, nargs + 1);
+    Value *nargs_v = ConstantInt::get(T_int32, nargs);
     Value *gf_ret = ctx.builder.CreateCall(prepare_call(jlapplygeneric_func), { myargs, nargs_v });
     jl_cgval_t gf_retbox = mark_julia_type(ctx, gf_ret, true, jl_any_type, /*needsroot*/false);
     jl_value_t *astrt = lam->rettype;
@@ -4356,68 +4353,16 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
     sf->func.value = jl_box_voidpointer((void*)cw_proto);
     jl_gc_wb(sf, sf->func.value);
 
-    // See whether this function is specsig or jlcall or generic (unknown)
-    bool specsig, jlfunc_sret;
-    jl_returninfo_t::CallingConv cc = jl_returninfo_t::Boxed;
-    Function *theFptr;
-    Value *result;
-    Value *myargs;
-    size_t FParamIndex = 0;
-    std::vector<Value*> args;
+    // first emit code to record the arguments
     Function::arg_iterator AI = cw->arg_begin();
     Value *sretPtr = sig.sret ? &*AI++ : NULL;
-    if (lam && lam->jlcall_api == 2) {
-        nargs = 0; // arguments not needed
-        specsig = true;
-        jlfunc_sret = false;
-        myargs = NULL;
-        theFptr = NULL;
-    }
-    else if (lam && lam->functionObjectsDecls.specFunctionObject != NULL) {
-        Function *proto = (Function*)lam->functionObjectsDecls.specFunctionObject;
-        jl_returninfo_t returninfo = get_specsig_function(M, proto->getName(), lam->specTypes, lam->rettype);
-        FunctionType *cft = returninfo.decl->getFunctionType();
-        assert(proto->getFunctionType() == cft);
-        proto = cast<Function>(prepare_call(proto));
-        if (proto != returninfo.decl) {
-            assert(proto->getFunctionType() == cft);
-            returninfo.decl->replaceAllUsesWith(proto);
-            returninfo.decl->eraseFromParent();
-            returninfo.decl = proto;
-        }
-        theFptr = returninfo.decl;
-        specsig = true;
-        cc = returninfo.cc;
-        jlfunc_sret = cc == jl_returninfo_t::SRet;
-        if (jlfunc_sret || cc == jl_returninfo_t::Union) {
-            // fuse the two sret together, or emit an alloca to hold it
-            if (sig.sret && jlfunc_sret)
-                result = emit_bitcast(ctx, sretPtr, cft->getParamType(0));
-            else
-                result = decay_derived(ctx.builder.CreateAlloca(cft->getParamType(0)->getContainedType(0)));
-            args.push_back(result);
-            FParamIndex++;
-        }
-        myargs = NULL;
-    }
-    else {
-        theFptr = lam ? (Function*)lam->functionObjectsDecls.functionObject : NULL;
-        specsig = false;
-        jlfunc_sret = false;
-        myargs = new AllocaInst(T_prjlvalue,
-#if JL_LLVM_VERSION >= 50000
-            0,
-#endif
-            ConstantInt::get(T_int32, nargs + 1), "jlcall", /*InsertBefore*/ctx.ptlsStates);
-        FParamIndex++; // leave room for writing the ff object at the beginning
-    }
-
-    // first emit the arguments
-    for (size_t i = 0; i < nargs; i++) {
-        Value *val = &*AI++;
+    jl_cgval_t *inputargs = (jl_cgval_t*)alloca(sizeof(jl_cgval_t) * (nargs + 1));
+    inputargs[0] = mark_julia_const(ff); // we need to pass the function object even if (even though) it is a ghost
+    for (size_t i = 0; i < nargs; ++i, ++AI) {
+        Value *val = &*AI;
         jl_value_t *jargty = jl_nth_slot_type((jl_value_t*)argt, i);
         // figure out how to unpack this type
-        jl_cgval_t inputarg;
+        jl_cgval_t &inputarg = inputargs[i + 1];
         if (jl_is_abstract_ref_type(jargty)) {
             // a pointer to a value
             jargty = jl_tparam0(jargty);
@@ -4481,18 +4426,39 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
                 }
             }
         }
+    }
+    assert(AI == cw->arg_end());
 
-        // figure out how to repack this type
-        if (!specsig) {
-            Value *arg = boxed(ctx, inputarg, false); // don't want a gcroot, since it's about to be put into the jlcall frame anyways
-            GetElementPtrInst *slot = GetElementPtrInst::Create(T_prjlvalue, myargs,
-                    ArrayRef<Value*>(ConstantInt::get(T_int32, FParamIndex)));
-            slot->insertAfter(ctx.ptlsStates);
-            ctx.builder.CreateStore(arg, slot);
+    // Create the call
+    bool jlfunc_sret;
+    jl_cgval_t retval;
+    if (lam && lam->jlcall_api == 2) {
+        nargs = 0; // arguments not needed -- TODO: not really true, should emit an age_ok test and jlcall
+        jlfunc_sret = false;
+        retval = mark_julia_const(lam->inferred_const);
+    }
+    else if (lam && lam->functionObjectsDecls.specFunctionObject != NULL) {
+        // emit a specsig call
+        const char *protoname = lam->functionObjectsDecls.specFunctionObject;
+        jl_returninfo_t returninfo = get_specsig_function(M, protoname, lam->specTypes, lam->rettype);
+        FunctionType *cft = returninfo.decl->getFunctionType();
+        jlfunc_sret = (returninfo.cc == jl_returninfo_t::SRet);
+
+        std::vector<Value*> args;
+        Value *result;
+        if (jlfunc_sret || returninfo.cc == jl_returninfo_t::Union) {
+            // fuse the two sret together, or emit an alloca to hold it
+            if (sig.sret && jlfunc_sret)
+                result = emit_bitcast(ctx, sretPtr, cft->getParamType(0));
+            else
+                result = decay_derived(emit_static_alloca(ctx, cft->getParamType(0)->getContainedType(0)));
+            args.push_back(result);
         }
-        else {
+        for (size_t i = 0; i < nargs + 1; i++) {
+            // figure out how to repack the arguments
+            const jl_cgval_t &inputarg = inputargs[i];
             Value *arg;
-            jl_value_t *spect = jl_nth_slot_type(lam->specTypes, i + 1); // +1 because argt excludes function
+            jl_value_t *spect = jl_nth_slot_type(lam->specTypes, i);
             bool isboxed;
             Type *T = julia_type_to_llvm(spect, &isboxed);
             if (isboxed) {
@@ -4513,63 +4479,62 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
             // add to argument list
             args.push_back(arg);
         }
-        FParamIndex++;
-    }
-
-    // Create the call
-    jl_cgval_t retval;
-    Function *gf_thunk = NULL;
-    if (specsig) {
-        if (lam->jlcall_api == 2) {
-            retval = mark_julia_const(lam->inferred_const);
+        Value *theFptr = returninfo.decl;
+        assert(theFptr);
+        if (age_ok) {
+            funcName << "_gfthunk";
+            Function *gf_thunk = Function::Create(returninfo.decl->getFunctionType(),
+                    GlobalVariable::InternalLinkage, funcName.str(), M);
+            jl_init_function(gf_thunk);
+            gf_thunk->setAttributes(returninfo.decl->getAttributes());
+            gf_thunk->addFnAttr("no-frame-pointer-elim", "true");
+            // build a  specsig -> jl_apply_generic converter thunk
+            // this builds a method that calls jl_apply_generic (as a closure over a singleton function pointer),
+            // but which has the signature of a specsig
+            emit_cfunc_invalidate(gf_thunk, returninfo.cc, lam, nargs + 1, world);
+            theFptr = ctx.builder.CreateSelect(age_ok, theFptr, gf_thunk);
         }
-        else {
-            assert(theFptr);
-            Value *call_v = prepare_call(theFptr);
-            if (age_ok) {
-                funcName << "_gfthunk";
-                gf_thunk = Function::Create(theFptr->getFunctionType(),
-                                GlobalVariable::InternalLinkage,
-                                funcName.str(), M);
-                jl_init_function(gf_thunk);
-                gf_thunk->setAttributes(theFptr->getAttributes());
-                gf_thunk->addFnAttr("no-frame-pointer-elim", "true");
-                call_v = ctx.builder.CreateSelect(age_ok, call_v, gf_thunk);
-            }
-            CallInst *call = ctx.builder.CreateCall(call_v, ArrayRef<Value*>(args));
-            call->setAttributes(theFptr->getAttributes());
-            switch (cc) {
-                case jl_returninfo_t::Boxed:
-                    retval = mark_julia_type(ctx, call, true, astrt);
-                    break;
-                case jl_returninfo_t::Register:
-                    retval = mark_julia_type(ctx, call, false, astrt);
-                    break;
-                case jl_returninfo_t::SRet:
-                    retval = mark_julia_slot(result, astrt, NULL, tbaa_stack);
-                    break;
-                case jl_returninfo_t::Union:
-                    retval = mark_julia_slot(ctx.builder.CreateExtractValue(call, 0),
-                                             astrt,
-                                             ctx.builder.CreateExtractValue(call, 1),
-                                             tbaa_stack);
-                    // note that the value may not be rooted here (on the return path)
-                    break;
-                case jl_returninfo_t::Ghosts:
-                    retval = mark_julia_slot(NULL, astrt, call, tbaa_stack);
-                    break;
-            }
+        CallInst *call = ctx.builder.CreateCall(theFptr, ArrayRef<Value*>(args));
+        call->setAttributes(returninfo.decl->getAttributes());
+        switch (returninfo.cc) {
+            case jl_returninfo_t::Boxed:
+                retval = mark_julia_type(ctx, call, true, astrt);
+                break;
+            case jl_returninfo_t::Register:
+                retval = mark_julia_type(ctx, call, false, astrt);
+                break;
+            case jl_returninfo_t::SRet:
+                retval = mark_julia_slot(result, astrt, NULL, tbaa_stack);
+                break;
+            case jl_returninfo_t::Union:
+                retval = mark_julia_slot(ctx.builder.CreateExtractValue(call, 0),
+                                         astrt,
+                                         ctx.builder.CreateExtractValue(call, 1),
+                                         tbaa_stack);
+                // note that the value may not be rooted here (on the return path)
+                break;
+            case jl_returninfo_t::Ghosts:
+                retval = mark_julia_slot(NULL, astrt, call, tbaa_stack);
+                break;
         }
     }
     else {
-        // for jlcall, we need to pass the function object even if it is a ghost.
-        // here we reconstruct the function instance from its type (first elt of argt)
-        Value *theF = literal_pointer_val(ctx, (jl_value_t*)ff);
-        GetElementPtrInst *slot = GetElementPtrInst::Create(T_prjlvalue, myargs,
-                ArrayRef<Value*>(ConstantInt::get(T_int32, 0)));
-        slot->insertAfter(ctx.ptlsStates);
-        ctx.builder.CreateStore(theF, slot);
-
+        // emit a jlcall
+        jlfunc_sret = false;
+        Function *theFptr = NULL;
+        if (lam) {
+            const char *fname = lam->functionObjectsDecls.functionObject;
+            if (fname) {
+                theFptr = cast_or_null<Function>(jl_Module->getNamedValue(fname));
+                if (!theFptr) {
+                    theFptr = Function::Create(jl_func_sig, GlobalVariable::ExternalLinkage,
+                                               fname, jl_Module);
+                }
+                else {
+                    assert(theFptr->getFunctionType() == jl_func_sig);
+                }
+            }
+        }
         BasicBlock *b_generic, *b_jlcall, *b_after;
         Value *ret_jlcall;
         if (age_ok) {
@@ -4579,19 +4544,18 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
             b_after = BasicBlock::Create(jl_LLVMContext, "after", cw);
             ctx.builder.CreateCondBr(age_ok, b_jlcall, b_generic);
             ctx.builder.SetInsertPoint(b_jlcall);
-            Value *nargs_v = ConstantInt::get(T_int32, nargs);
-            Value *myargs1 = ctx.builder.CreateConstInBoundsGEP1_32(T_prjlvalue, myargs, 1);
-            ret_jlcall = ctx.builder.CreateCall(prepare_call(theFptr), {theF, myargs1, nargs_v});
+            // for jlcall, we need to pass the function object even if it is a ghost.
+            Value *theF = boxed(ctx, inputargs[0]);
+            assert(theF);
+            ret_jlcall = emit_jlcall(ctx, theFptr, theF, &inputargs[1], nargs);
             ctx.builder.CreateBr(b_after);
             ctx.builder.SetInsertPoint(b_generic);
         }
-
-        Value *nargs_v = ConstantInt::get(T_int32, nargs + 1);
-        Value *ret = ctx.builder.CreateCall(prepare_call(jlapplygeneric_func), {myargs, nargs_v});
+        Value *ret = emit_jlcall(ctx, prepare_call(jlapplygeneric_func), NULL, inputargs, nargs + 1);
         if (age_ok) {
             ctx.builder.CreateBr(b_after);
             ctx.builder.SetInsertPoint(b_after);
-            PHINode *retphi = ctx.builder.CreatePHI(T_pjlvalue, 2);
+            PHINode *retphi = ctx.builder.CreatePHI(T_prjlvalue, 2);
             retphi->addIncoming(ret_jlcall, b_jlcall);
             retphi->addIncoming(ret, b_generic);
             ret = retphi;
@@ -4634,14 +4598,6 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
 
     ctx.builder.CreateStore(last_age, ctx.world_age_field);
     ctx.builder.CreateRet(r);
-
-    // also need to finish emission of our specsig -> jl_apply_generic converter thunk
-    // this builds a method that calls jl_apply_generic (as a closure over a singleton function pointer),
-    // but which has the signature of a specsig
-    if (gf_thunk) {
-        assert(lam && specsig);
-        emit_cfunc_invalidate(gf_thunk, cc, lam, nargs, world);
-    }
 
     ctx.builder.SetCurrentDebugLocation(noDbg);
     ctx.builder.ClearInsertionPoint();
@@ -4853,6 +4809,36 @@ static Function *gen_jlcall_wrapper(jl_method_instance_t *lam, const jl_returnin
     return w;
 }
 
+static bool uses_specsig(jl_value_t *sig, jl_value_t *rettype, bool needsparam, bool va, jl_code_info_t *src)
+{
+    if (va || needsparam)
+        return false;
+    if (!src || !jl_ast_flag_inferred((jl_array_t*)src))
+        return false;
+    if (sig == (jl_value_t*)jl_anytuple_type)
+        return false;
+    if (!jl_is_datatype(sig))
+        return false;
+    if (jl_nparams(sig) == 0)
+        return false;
+    // not invalid, consider if specialized signature is worthwhile
+    if (isbits_spec(rettype, false))
+        return true;
+    if (jl_is_uniontype(rettype)) {
+        bool allunbox;
+        size_t nbytes, align, min_align;
+        union_alloca_type((jl_uniontype_t*)rettype, allunbox, nbytes, align, min_align);
+        if (nbytes > 0)
+            return true; // some elements of the union could be returned unboxed avoiding allocation
+    }
+    for (size_t i = 0; i < jl_nparams(sig); i++) {
+        if (isbits_spec(jl_tparam(sig, i), false)) { // assumes !va
+            return true;
+        }
+    }
+    return false; // jlcall sig won't require any box allocations
+}
+
 static jl_returninfo_t get_specsig_function(Module *M, const std::string &name, jl_value_t *sig, jl_value_t *jlrettype)
 {
     jl_returninfo_t props = {};
@@ -4926,8 +4912,14 @@ static jl_returninfo_t get_specsig_function(Module *M, const std::string &name, 
         fsig.push_back(ty);
     }
     FunctionType *ftype = FunctionType::get(rt, fsig, false);
-    Function *f = Function::Create(ftype, GlobalVariable::ExternalLinkage, name, M);
-    f->setAttributes(attributes);
+    Function *f = M ? cast_or_null<Function>(M->getNamedValue(name)) : NULL;
+    if (f == NULL) {
+        f = Function::Create(ftype, GlobalVariable::ExternalLinkage, name, M);
+        f->setAttributes(attributes);
+    }
+    else {
+        assert(f->getFunctionType() == ftype);
+    }
     props.decl = f;
     return props;
 }
@@ -5070,9 +5062,6 @@ static std::unique_ptr<Module> emit_function(
     mark_volatile_vars(stmts, ctx.slots);
 
     // step 4. determine function signature
-    jl_value_t *jlrettype = lam->rettype;
-
-    bool specsig = false;
     bool needsparams = jl_is_method(lam->def.method)
         ? jl_svec_len(lam->def.method->sparam_syms) != jl_svec_len(lam->sparam_vals)
         : false;
@@ -5081,20 +5070,9 @@ static std::unique_ptr<Module> emit_function(
         if (jl_is_typevar(e))
             needsparams = true;
     }
-    if (!va && ctx.nargs > 0 && !needsparams && lam->specTypes != (jl_value_t*)jl_anytuple_type && src->inferred) {
-        assert(jl_is_datatype(lam->specTypes));
-        // not vararg, consider specialized signature
-        for (size_t i = 0; i < jl_nparams(lam->specTypes); i++) {
-            if (isbits_spec(jl_tparam(lam->specTypes, i))) { // assumes !va
-                specsig = true;
-                break;
-            }
-        }
-        if (jl_nparams(lam->specTypes) == 0)
-            specsig = true;
-        if (isbits_spec(jlrettype))
-            specsig = true;
-    }
+
+    jl_value_t *jlrettype = lam->rettype;
+    bool specsig = uses_specsig(lam->specTypes, jlrettype, needsparams, va, src);
     if (!specsig)
         ctx.nReqArgs--;  // function not part of argArray in jlcall
 
@@ -5128,8 +5106,8 @@ static std::unique_ptr<Module> emit_function(
         jl_init_function(f);
 
         fwrap = gen_jlcall_wrapper(lam, returninfo, funcName.str(), M);
-        declarations->functionObject = function_proto(fwrap);
-        declarations->specFunctionObject = function_proto(f);
+        declarations->functionObject = strdup(fwrap->getName().str().c_str());
+        declarations->specFunctionObject = strdup(f->getName().str().c_str());
     }
     else {
         f = Function::Create(needsparams ? jl_func_sig_sparams : jl_func_sig,
@@ -5137,7 +5115,7 @@ static std::unique_ptr<Module> emit_function(
                              funcName.str(), M);
         returninfo.decl = f;
         jl_init_function(f);
-        declarations->functionObject = function_proto(f);
+        declarations->functionObject = strdup(f->getName().str().c_str());
         declarations->specFunctionObject = NULL;
     }
 
@@ -6063,27 +6041,22 @@ extern "C" void jl_fptr_to_llvm(jl_fptr_t fptr, jl_method_instance_t *lam, int s
             funcName << "jsys1_"; // it's a jlcall without a specsig
         const char* unadorned_name = jl_symbol_name(lam->def.method->name);
         funcName << unadorned_name << "_" << globalUnique++;
-        if (specsig) { // assumes !va
-            Function *f = get_specsig_function(shadow_output, funcName.str(), lam->specTypes, lam->rettype).decl;
+        Function *f = jlcall_func_to_llvm(funcName.str(), fptr, NULL);
+        if (specsig) {
             if (lam->functionObjectsDecls.specFunctionObject == NULL) {
-                lam->functionObjectsDecls.specFunctionObject = (void*)f;
+                lam->functionObjectsDecls.specFunctionObject = strdup(f->getName().str().c_str());
             }
-            add_named_global(f, fptr);
         }
         else {
-            if (lam->jlcall_api != 1) { // jl_func_sig_sparams -- don't bother emitting the FunctionObject (since can't be used right now)
-                assert(lam->fptr == NULL);
-                lam->fptr = fptr;
-            }
-            else {
-                Function *f = jlcall_func_to_llvm(funcName.str(), fptr, shadow_output);
+            assert(lam->fptr == NULL);
+            lam->fptr = fptr;
+            if (lam->jlcall_api == 1) {
                 if (lam->functionObjectsDecls.functionObject == NULL) {
-                    lam->functionObjectsDecls.functionObject = (void*)f;
-                    assert(lam->fptr == NULL);
-                    lam->fptr = fptr;
+                    lam->functionObjectsDecls.functionObject = strdup(f->getName().str().c_str());
                 }
             }
         }
+        delete f;
     }
 }
 

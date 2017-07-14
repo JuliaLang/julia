@@ -312,7 +312,7 @@ jl_svec_t *jl_perm_symsvec(size_t n, ...);
 jl_value_t *jl_gc_realloc_string(jl_value_t *s, size_t sz);
 
 jl_code_info_t *jl_type_infer(jl_method_instance_t **li, size_t world, int force);
-jl_generic_fptr_t jl_generate_fptr(jl_method_instance_t *li, void *F, size_t world);
+jl_generic_fptr_t jl_generate_fptr(jl_method_instance_t *li, const char *F, size_t world);
 jl_llvm_functions_t jl_compile_linfo(
         jl_method_instance_t **pli,
         jl_code_info_t *src,
@@ -332,7 +332,7 @@ STATIC_INLINE jl_value_t *jl_compile_method_internal(jl_generic_fptr_t *fptr,
     if (__unlikely(fptr->fptr == NULL || fptr->jlcall_api == 0)) {
         size_t world = jl_get_ptls_states()->world_age;
         // first see if it likely needs to be compiled
-        void *F = meth->functionObjectsDecls.functionObject;
+        const char *F = meth->functionObjectsDecls.functionObject;
         if (!F) // ask codegen to try to turn it into llvm code
             F = jl_compile_for_dispatch(&meth, world).functionObject;
         if (meth->jlcall_api == 2)
@@ -616,8 +616,8 @@ static inline void jl_set_gc_and_wait(void)
 
 void jl_dump_native(const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *sysimg_data, size_t sysimg_len);
 int32_t jl_get_llvm_gv(jl_value_t *p);
-int32_t jl_assign_functionID(/*llvm::Function*/void *function);
-int32_t jl_jlcall_api(/*llvm::Function*/const void *function);
+int32_t jl_assign_functionID(const char *fname);
+int32_t jl_jlcall_api(const char *fname);
 // the first argument to jl_idtable_rehash is used to return a value
 // make sure it is rooted if it is used after the function returns
 JL_DLLEXPORT jl_array_t *jl_idtable_rehash(jl_array_t *a, size_t newsz);
