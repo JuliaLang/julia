@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-    GitConfig(path::AbstractString, level::Consts.GIT_CONFIG = Consts.CONFIG_LEVEL_APP, force::Bool=false)
+    GitConfig(path::AbstractString, level::Consts.GIT_CONFIG=Consts.CONFIG_LEVEL_APP, force::Bool=false)
 
 Create a new `GitConfig` by loading configuration information from the file at
 `path`. See [`addfile`](@ref) for more information about the `level` and `force`
@@ -38,7 +38,7 @@ function GitConfig(repo::GitRepo)
 end
 
 """
-    GitConfig(level::Consts.GIT_CONFIG = Consts.CONFIG_LEVEL_DEFAULT)
+    GitConfig(level::Consts.GIT_CONFIG=Consts.CONFIG_LEVEL_DEFAULT)
 
 Get the default git configuration by loading the global and system configuration
 files into a prioritized configuration. This can be used to access default configuration
@@ -65,7 +65,7 @@ function GitConfig(level::Consts.GIT_CONFIG = Consts.CONFIG_LEVEL_DEFAULT)
 end
 
 """
-    addfile(cfg::GitConfig, path::AbstractString, level::Consts.GIT_CONFIG = Consts.CONFIG_LEVEL_APP, force::Bool=false)
+    addfile(cfg::GitConfig, path::AbstractString, level::Consts.GIT_CONFIG=Consts.CONFIG_LEVEL_APP, force::Bool=false)
 
 Add an existing git configuration file located at `path` to the current
 [`GitConfig`](@ref) `cfg`. If the file does not exist, it will be created.
