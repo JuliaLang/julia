@@ -400,7 +400,7 @@ typedef struct {
     uint8_t constp:1;
     uint8_t exportp:1;
     uint8_t imported:1;
-    uint8_t deprecated:1;
+    uint8_t deprecated:2; // 0=not deprecated, 1=renamed, 2=moved to another package
 } jl_binding_t;
 
 typedef struct _jl_module_t {
