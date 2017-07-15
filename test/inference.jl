@@ -1011,6 +1011,29 @@ function test_const_return(@nospecialize(f), @nospecialize(t), @nospecialize(val
     end
 end
 
+function find_call(code, func, narg)
+    for ex in code
+        isa(ex, Expr) || continue
+        ex = ex::Expr
+        if ex.head === :call && length(ex.args) == narg
+            farg = ex.args[1]
+            if isa(farg, GlobalRef)
+                farg = farg::GlobalRef
+                if isdefined(farg.mod, farg.name) && isconst(farg.mod, farg.name)
+                    farg = getfield(farg.mod, farg.name)
+                end
+            end
+            if farg === func
+                return true
+            end
+        elseif Core.Inference.is_meta_expr(ex)
+            continue
+        end
+        find_call(ex.args, func, narg) && return true
+    end
+    return false
+end
+
 test_const_return(()->1, Tuple{}, 1)
 test_const_return(()->sizeof(Int), Tuple{}, sizeof(Int))
 test_const_return(()->sizeof(1), Tuple{}, sizeof(Int))
@@ -1019,37 +1042,26 @@ test_const_return(()->sizeof(1 < 2), Tuple{}, 1)
 @eval test_const_return(()->Core.sizeof($(Array{Int}())), Tuple{}, sizeof(Int))
 @eval test_const_return(()->Core.sizeof($(Matrix{Float32}(2, 2))), Tuple{}, 4 * 2 * 2)
 
-function find_core_sizeof_call(code)
-    for ex in code
-        isa(ex, Expr) || continue
-        ex = ex::Expr
-        if ex.head === :call && length(ex.args) == 2
-            if ex.args[1] === Core.sizeof || ex.args[1] == GlobalRef(Core, :sizeof)
-                return true
-            end
-        elseif Core.Inference.is_meta_expr(ex)
-            continue
-        end
-        find_core_sizeof_call(ex.args) && return true
-    end
-    return false
-end
-
 # Make sure Core.sizeof with a ::DataType as inferred input type is inferred but not constant.
 function sizeof_typeref(typeref)
     Core.sizeof(typeref[])
 end
 @test @inferred(sizeof_typeref(Ref{DataType}(Int))) == sizeof(Int)
-@test find_core_sizeof_call(first(@code_typed sizeof_typeref(Ref{DataType}())).code)
+@test find_call(first(@code_typed sizeof_typeref(Ref{DataType}())).code, Core.sizeof, 2)
 # Constant `Vector` can be resized and shouldn't be optimized to a constant.
 const constvec = [1, 2, 3]
 @eval function sizeof_constvec()
     Core.sizeof($constvec)
 end
 @test @inferred(sizeof_constvec()) == sizeof(Int) * 3
-@test find_core_sizeof_call(first(@code_typed sizeof_constvec()).code)
+@test find_call(first(@code_typed sizeof_constvec()).code, Core.sizeof, 2)
 push!(constvec, 10)
 @test @inferred(sizeof_constvec()) == sizeof(Int) * 4
+
+test_const_return((x)->isdefined(x, :re), Tuple{Complex128}, true)
+isdefined_f3(x) = isdefined(x, 3)
+@test @inferred(isdefined_f3(())) == false
+@test find_call(first(code_typed(isdefined_f3, Tuple{Tuple{Vararg{Int}}})[1]).code, isdefined, 3)
 
 let isa_tfunc = Core.Inference.t_ffunc_val[
         findfirst(Core.Inference.t_ffunc_key, isa)][3]

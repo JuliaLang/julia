@@ -602,6 +602,10 @@ function isdefined_tfunc(args...)
                 return Const(true)
             elseif idx <= 0 || (!isvatuple(a1) && idx > fieldcount(a1))
                 return Const(false)
+            elseif !isvatuple(a1) && isbits(fieldtype(a1, idx))
+                return Const(true)
+            elseif isa(arg1, Const) && isimmutable((arg1::Const).val)
+                return Const(isdefined((arg1::Const).val, idx))
             end
         end
     end
@@ -4084,7 +4088,7 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
         if isa(e.typ, Const) # || isconstType(e.typ)
             val = e.typ.val
             if (f === apply_type || f === fieldtype || f === typeof || f === (===) ||
-                f === Core.sizeof ||
+                f === Core.sizeof || f === isdefined ||
                 istopfunction(topmod, f, :typejoin) ||
                 istopfunction(topmod, f, :isbits) ||
                 istopfunction(topmod, f, :promote_type) ||
