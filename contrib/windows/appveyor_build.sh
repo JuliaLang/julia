@@ -67,8 +67,7 @@ case $(uname) in
     if [ -z "`which gcc 2>/dev/null`" ]; then
       echo 'override HOSTCC = $(CROSS_COMPILE)gcc' >> Make.user
     fi
-    make win-extras >> get-deps.log
-    SEVENZIP="dist-extras/7z"
+    SEVENZIP="7z"
     ;;
   Linux)
     if [ -z "$XC_HOST" ]; then
@@ -93,6 +92,7 @@ if ! [ -e julia-installer.exe ]; then
   echo "Extracting $f"
   $SEVENZIP x -y $f >> get-deps.log
 fi
+mkdir -p usr
 for i in bin/*.dll; do
   $SEVENZIP e -y julia-installer.exe "$i" \
     -ousr\\`dirname $i | sed -e 's|/julia||' -e 's|/|\\\\|g'` >> get-deps.log
@@ -111,7 +111,7 @@ rm -f usr/bin/libssp-0.dll
 rm -f usr/bin/libstdc++-6.dll
 
 if [ -z "$USEMSVC" ]; then
-  if [ -z "`which ${CROSS_COMPILE}gcc 2>/dev/null`" -o -n "$APPVEYOR" ]; then
+  if [ -z "`which ${CROSS_COMPILE}gcc 2>/dev/null`" ]; then
     f=$ARCH-4.9.2-release-win32-$exc-rt_v4-rev3.7z
     checksum_download \
         "$f" "https://bintray.com/artifact/download/tkelman/generic/$f"
@@ -164,6 +164,7 @@ if ! [ -e usr/bin/busybox.exe ]; then
   echo "Downloading $f"
   $curlflags -o usr/bin/busybox.exe http://frippery.org/files/busybox/$f
 fi
+chmod +x usr/bin/* usr/tools/*
 
 for lib in SUITESPARSE ARPACK BLAS LAPACK \
     GMP MPFR PCRE LIBUNWIND OPENSPECFUN; do
