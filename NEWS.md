@@ -108,6 +108,8 @@ Library improvements
 
   * A new `@macroexpand1` macro for non recursive macro expansion ([#21662]).
 
+  * `Char`s can now be concatenated with `String`s and/or other `Char`s using `*` ([#22532]).
+
 Compiler/Runtime improvements
 -----------------------------
 
@@ -991,4 +993,5 @@ Command-line option changes
 [#22245]: https://github.com/JuliaLang/julia/issues/22245
 [#22310]: https://github.com/JuliaLang/julia/issues/22310
 [#22523]: https://github.com/JuliaLang/julia/issues/22523
+[#22532]: https://github.com/JuliaLang/julia/issues/22532
 [#22732]: https://github.com/JuliaLang/julia/issues/22732
