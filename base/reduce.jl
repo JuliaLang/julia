@@ -12,15 +12,18 @@ const SmallSigned = Union{Int8,Int16,Int32}
 const SmallUnsigned = Union{UInt8,UInt16,UInt32}
 end
 
-const CommonReduceResult = Union{UInt64,UInt128,Int64,Int128,Float32,Float64}
-const WidenReduceResult = Union{SmallSigned, SmallUnsigned, Float16}
+const CommonReduceResult = Union{UInt64,UInt128,Int64,Int128,Float16,Float32,Float64}
+const WidenReduceResult = Union{SmallSigned, SmallUnsigned}
 
+promote_sys_size{T}(::Type{T}) = T
+promote_sys_size{T<:SmallSigned}(::Type{T}) = Int
+promote_sys_size{T<:SmallUnsigned}(::Type{T}) = UInt
 # r_promote_type: promote T to the type of reduce(op, ::Array{T})
 # (some "extra" methods are required here to avoid ambiguity warnings)
 r_promote_type(op, ::Type{T}) where {T} = T
-r_promote_type(op, ::Type{T}) where {T<:WidenReduceResult} = widen(T)
-r_promote_type(::typeof(+), ::Type{T}) where {T<:WidenReduceResult} = widen(T)
-r_promote_type(::typeof(*), ::Type{T}) where {T<:WidenReduceResult} = widen(T)
+r_promote_type(op, ::Type{T}) where {T<:WidenReduceResult} = promote_sys_size(T)
+r_promote_type(::typeof(+), ::Type{T}) where {T<:WidenReduceResult} = promote_sys_size(T)
+r_promote_type(::typeof(*), ::Type{T}) where {T<:WidenReduceResult} = promote_sys_size(T)
 r_promote_type(::typeof(+), ::Type{T}) where {T<:Number} = typeof(zero(T)+zero(T))
 r_promote_type(::typeof(*), ::Type{T}) where {T<:Number} = typeof(one(T)*one(T))
 r_promote_type(::typeof(scalarmax), ::Type{T}) where {T<:WidenReduceResult} = T
@@ -296,21 +299,24 @@ mapreduce(f, op, a::Number) = f(a)
 """
     reduce(op, v0, itr)
 
-Reduce the given collection `ìtr` with the given binary operator `op`. `v0` must be a
+Reduce the given collection `itr` with the given binary operator `op`. `v0` must be a
 neutral element for `op` that will be returned for empty collections. It is unspecified
 whether `v0` is used for non-empty collections.
 
-Reductions for certain commonly-used operators have special implementations which should be
-used instead: `maximum(itr)`, `minimum(itr)`, `sum(itr)`, `prod(itr)`, `any(itr)`,
-`all(itr)`.
+The return type is `Int` (`UInt`) for (un)signed integers of less than system word size.
+For all other arguments, a common return type is found to which all arguments are promoted.
+
+Reductions for certain commonly-used operators may have special implementations, and
+should be used instead: `maximum(itr)`, `minimum(itr)`, `sum(itr)`, `prod(itr)`,
+ `any(itr)`, `all(itr)`.
 
 The associativity of the reduction is implementation dependent. This means that you can't
 use non-associative operations like `-` because it is undefined whether `reduce(-,[1,2,3])`
 should be evaluated as `(1-2)-3` or `1-(2-3)`. Use [`foldl`](@ref) or
 [`foldr`](@ref) instead for guaranteed left or right associativity.
 
-Some operations accumulate error, and parallelism will also be easier if the reduction can
-be executed in groups. Future versions of Julia might change the algorithm. Note that the
+Some operations accumulate error. Parallelism will be easier if the reduction can be
+executed in groups. Future versions of Julia might change the algorithm. Note that the
 elements are not reordered if you use an ordered collection.
 
 # Examples
