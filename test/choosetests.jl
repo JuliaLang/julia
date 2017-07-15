@@ -34,7 +34,7 @@ in the `choices` argument:
 function choosetests(choices = [])
     testnames = [
         "subarray", "core", "compiler", "worlds",
-        "keywordargs", "numbers", "subtype",
+        "keywordargs", "numbers", "subtype", "type_redefinition",
         "char", "strings", "triplequote", "unicode", "intrinsics",
         "dict", "hashing", "iobuffer", "staged", "offsetarray",
         "arrayops", "tuple", "reduce", "reducedim", "abstractarray",

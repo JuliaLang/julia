@@ -682,6 +682,16 @@ void jl_binding_deprecation_warning(jl_module_t *m, jl_binding_t *b)
     }
 }
 
+JL_DLLEXPORT void jl_rename_binding(jl_module_t *m, jl_sym_t *oldvar, jl_sym_t *newvar)
+{
+    jl_binding_t *b = jl_get_binding(m, oldvar);
+    if (b) {
+        b->name = newvar;
+        ptrhash_remove(&m->bindings, oldvar);
+        ptrhash_put(&m->bindings, newvar, b);
+    }
+}
+
 JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs)
 {
     if (b->constp && b->value != NULL) {

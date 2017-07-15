@@ -115,6 +115,13 @@ function resolve(g::GlobalRef; force::Bool=false)
     return g
 end
 
+function rename_binding(m::Module, oldname::Symbol, newname::Symbol)
+    T = unwrap_unionall(getfield(m, oldname))
+    ccall(:jl_rename_binding, Cvoid, (Any, Any, Any), m, oldname, newname)
+    T.name.name = newname
+    T
+end
+
 const NamedTuple_typename = NamedTuple.body.body.name
 
 function _fieldnames(@nospecialize t)
