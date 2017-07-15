@@ -614,6 +614,8 @@ static inline void jl_set_gc_and_wait(void)
 }
 #endif
 
+JL_DLLEXPORT jl_value_t *jl_dump_fptr_asm(uint64_t fptr, int raw_mc, const char* asm_variant);
+
 void jl_dump_native(const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *sysimg_data, size_t sysimg_len);
 int32_t jl_get_llvm_gv(jl_value_t *p);
 int32_t jl_assign_functionID(const char *fname);

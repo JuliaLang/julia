@@ -65,14 +65,253 @@
 #include <llvm/DebugInfo/DIContext.h>
 #include "llvm/DebugInfo/DWARF/DWARFContext.h"
 #include <llvm/IR/DebugInfo.h>
+#include <llvm/IR/Function.h>
+#include <llvm/IR/Module.h>
+#include <llvm/IR/IntrinsicInst.h>
+#include "llvm/IR/AssemblyAnnotationWriter.h"
 #include "fix_llvm_assert.h"
 
 #include "julia.h"
 #include "julia_internal.h"
 
 using namespace llvm;
+#include "debuginfo.h"
 
-extern JL_DLLEXPORT LLVMContext &jl_LLVMContext;
+class LineNumberAnnotatedWriter : public AssemblyAnnotationWriter {
+    DILocation *InstrLoc = nullptr;
+    DenseMap<const Instruction *, DILocation *> DebugLoc;
+    DenseMap<const Function *, DISubprogram *> Subprogram;
+public:
+    LineNumberAnnotatedWriter() {}
+    virtual void emitFunctionAnnot(const Function *, formatted_raw_ostream &);
+    virtual void emitInstructionAnnot(const Instruction *, formatted_raw_ostream &);
+    // virtual void printInfoComment(const Value &, formatted_raw_ostream &) {}
+
+    void addSubprogram(const Function *F, DISubprogram *SP)
+    {
+      Subprogram[F] = SP;
+    }
+
+    void addDebugLoc(const Instruction *I, DILocation *Loc)
+    {
+      DebugLoc[I] = Loc;
+    }
+};
+
+void LineNumberAnnotatedWriter::emitFunctionAnnot(
+      const Function *F, formatted_raw_ostream &Out)
+{
+    InstrLoc = nullptr;
+    DISubprogram *FuncLoc = F->getSubprogram();
+    if (!FuncLoc) {
+        auto SP = Subprogram.find(F);
+        if (SP != Subprogram.end())
+            FuncLoc = SP->second;
+    }
+    if (!FuncLoc)
+        return;
+    StringRef Name = FuncLoc->getName();
+    StringRef Filename = FuncLoc->getFilename();
+    unsigned Line = FuncLoc->getLine();
+    if (!Name.empty())
+        Out << "; Function: " << Name << '\n';
+    if (!Filename.empty())
+        Out << "; Filename: " << Filename << '\n';
+    if (Line != UINT_MAX && Line != 0)
+        Out << "; Source line: " << Line << '\n';
+}
+
+void LineNumberAnnotatedWriter::emitInstructionAnnot(
+      const Instruction *I, formatted_raw_ostream &Out)
+{
+    DILocation *NewInstrLoc = I->getDebugLoc();
+    if (!NewInstrLoc) {
+        auto Loc = DebugLoc.find(I);
+        if (Loc != DebugLoc.end())
+            NewInstrLoc = Loc->second;
+    }
+    if (!NewInstrLoc || NewInstrLoc == InstrLoc)
+        return;
+    bool NewFile = false;
+    if (InstrLoc == nullptr || NewInstrLoc->getFilename() != InstrLoc->getFilename()) {
+        Out << "    ; Filename: " << NewInstrLoc->getFilename() << '\n';
+        NewFile = true;
+    }
+    if (NewInstrLoc->getLine() != UINT_MAX &&
+        (NewFile || NewInstrLoc->getLine() != InstrLoc->getLine()))
+            Out << "    ; Source line: " << NewInstrLoc->getLine() << '\n';
+    InstrLoc = NewInstrLoc;
+}
+
+
+// print an llvm IR acquired from jl_get_llvmf
+// warning: this takes ownership of, and destroys, f->getParent()
+extern "C" JL_DLLEXPORT
+jl_value_t *jl_dump_function_ir(void *f, bool strip_ir_metadata, bool dump_module)
+{
+    std::string code;
+    llvm::raw_string_ostream stream(code);
+
+    Function *llvmf = dyn_cast_or_null<Function>((Function*)f);
+    if (!llvmf || (!llvmf->isDeclaration() && !llvmf->getParent()))
+        jl_error("jl_dump_function_ir: Expected Function* in a temporary Module");
+
+    JL_LOCK(&codegen_lock); // Might GC
+    LineNumberAnnotatedWriter AAW;
+    if (!llvmf->getParent()) {
+        // print the function declaration as-is
+        llvmf->print(stream, &AAW);
+        delete llvmf;
+    }
+    else {
+        Module *m = llvmf->getParent();
+        if (strip_ir_metadata) {
+            // strip metadata from all instructions in all functions in the module
+            Instruction *deletelast = nullptr; // can't actually delete until the iterator advances
+            for (Function &f2 : m->functions()) {
+                AAW.addSubprogram(&f2, f2.getSubprogram());
+                for (BasicBlock &f2_bb : f2) {
+                    for (Instruction &inst : f2_bb) {
+                        if (deletelast) {
+                            deletelast->eraseFromParent();
+                            deletelast = nullptr;
+                        }
+                        // remove dbg.declare and dbg.value calls
+                        if (isa<DbgDeclareInst>(inst) || isa<DbgValueInst>(inst)) {
+                            deletelast = &inst;
+                            continue;
+                        }
+
+                        // iterate over all metadata kinds and set to NULL to remove
+                        SmallVector<std::pair<unsigned, MDNode*>, 4> MDForInst;
+                        inst.getAllMetadataOtherThanDebugLoc(MDForInst);
+                        for (const auto &md_iter : MDForInst) {
+                            inst.setMetadata(md_iter.first, NULL);
+                        }
+                        // record debug location before erasing it
+                        AAW.addDebugLoc(&inst, inst.getDebugLoc());
+                        inst.setDebugLoc(DebugLoc());
+                    }
+                    if (deletelast) {
+                        deletelast->eraseFromParent();
+                        deletelast = nullptr;
+                    }
+                }
+            }
+            for (GlobalObject &g2 : m->global_objects()) {
+                g2.clearMetadata();
+            }
+        }
+        if (dump_module) {
+            m->print(stream, &AAW);
+        }
+        else {
+            llvmf->print(stream, &AAW);
+        }
+        delete m;
+    }
+    JL_UNLOCK(&codegen_lock); // Might GC
+
+    return jl_pchar_to_string(stream.str().data(), stream.str().size());
+}
+
+static void jl_dump_asm_internal(
+        uintptr_t Fptr, size_t Fsize, int64_t slide,
+        const object::ObjectFile *object,
+        DIContext *di_ctx,
+        raw_ostream &rstream,
+        const char* asm_variant);
+
+// This isn't particularly fast, but neither is printing assembly, and they're only used for interactive mode
+static uint64_t compute_obj_symsize(const object::ObjectFile *obj, uint64_t offset)
+{
+    // Scan the object file for the closest symbols above and below offset in the .text section
+    uint64_t lo = 0;
+    uint64_t hi = 0;
+    bool setlo = false;
+    for (const object::SectionRef &Section : obj->sections()) {
+        uint64_t SAddr, SSize;
+        if (!Section.isText()) continue;
+        SAddr = Section.getAddress();
+        SSize = Section.getSize();
+        if (offset < SAddr || offset >= SAddr + SSize) continue;
+        assert(hi == 0);
+
+        // test for lower and upper symbol bounds relative to other symbols
+        hi = SAddr + SSize;
+        object::section_iterator ESection = obj->section_end();
+        for (const object::SymbolRef &Sym : obj->symbols()) {
+            uint64_t Addr;
+            object::section_iterator Sect = ESection;
+            auto SectOrError = Sym.getSection();
+            assert(SectOrError);
+            Sect = SectOrError.get();
+            if (Sect == ESection) continue;
+            if (Sect != Section) continue;
+            auto AddrOrError = Sym.getAddress();
+            assert(AddrOrError);
+            Addr = AddrOrError.get();
+            if (Addr <= offset && Addr >= lo) {
+                // test for lower bound on symbol
+                lo = Addr;
+                setlo = true;
+            }
+            if (Addr > offset && Addr < hi) {
+                // test for upper bound on symbol
+                hi = Addr;
+            }
+        }
+    }
+    if (setlo)
+        return hi - lo;
+    return 0;
+}
+
+// print a native disassembly for the function starting at fptr
+extern "C" JL_DLLEXPORT
+jl_value_t *jl_dump_fptr_asm(uint64_t fptr, int raw_mc, const char* asm_variant)
+{
+    assert(fptr != 0);
+    jl_ptls_t ptls = jl_get_ptls_states();
+    std::string code;
+    llvm::raw_string_ostream stream(code);
+
+    // Find debug info (line numbers) to print alongside
+    uint64_t symsize = 0;
+    int64_t slide = 0, section_slide = 0;
+    llvm::DIContext *context = NULL;
+    llvm::DIContext *&objcontext = context;
+    const object::ObjectFile *object = NULL;
+    if (!jl_DI_for_fptr(fptr, &symsize, &slide, &section_slide, &object, &context)) {
+        if (!jl_dylib_DI_for_fptr(fptr, &object, &objcontext, &slide, &section_slide, false,
+            NULL, NULL, NULL, NULL)) {
+                jl_printf(JL_STDERR, "WARNING: Unable to find function pointer\n");
+                return jl_pchar_to_string("", 0);
+        }
+    }
+    if (symsize == 0 && object != NULL)
+        symsize = compute_obj_symsize(object, fptr + slide + section_slide);
+    if (symsize == 0) {
+        jl_printf(JL_STDERR, "WARNING: Could not determine size of symbol\n");
+        return jl_pchar_to_string("", 0);
+    }
+
+    if (raw_mc) {
+        return (jl_value_t*)jl_pchar_to_array((char*)fptr, symsize);
+    }
+
+    // Dump assembly code
+    int8_t gc_state = jl_gc_safe_enter(ptls);
+    jl_dump_asm_internal(
+            fptr, symsize, slide,
+            object, objcontext,
+            stream,
+            asm_variant);
+    jl_gc_safe_leave(ptls, gc_state);
+
+    return jl_pchar_to_string(stream.str().data(), stream.str().size());
+}
+
 
 namespace {
 #define FuncMCView ArrayRef<uint8_t>
@@ -271,23 +510,12 @@ static int OpInfoLookup(void *DisInfo, uint64_t PC, uint64_t Offset, uint64_t Si
 }
 } // namespace
 
-extern "C" {
-JL_DLLEXPORT LLVMDisasmContextRef jl_LLVMCreateDisasm(const char *TripleName, void *DisInfo, int TagType, LLVMOpInfoCallback GetOpInfo, LLVMSymbolLookupCallback SymbolLookUp)
-{
-    return LLVMCreateDisasm(TripleName, DisInfo, TagType, GetOpInfo, SymbolLookUp);
-}
-
-JL_DLLEXPORT size_t jl_LLVMDisasmInstruction(LLVMDisasmContextRef DC, uint8_t *Bytes, uint64_t BytesSize, uint64_t PC, char *OutString, size_t OutStringSize)
-{
-    return LLVMDisasmInstruction(DC, Bytes, BytesSize, PC, OutString, OutStringSize);
-}
-
-void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, int64_t slide,
-                          const object::ObjectFile *object,
-                          DIContext *di_ctx,
-                          raw_ostream &rstream,
-                          const char* asm_variant="att"
-                          )
+static void jl_dump_asm_internal(
+        uintptr_t Fptr, size_t Fsize, int64_t slide,
+        const object::ObjectFile *object,
+        DIContext *di_ctx,
+        raw_ostream &rstream,
+        const char* asm_variant)
 {
     // GC safe
     // Get the host information
@@ -433,7 +661,6 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, int64_t slide,
                 MCSymbol *symbol = DisInfo.lookupSymbol(Fptr+Index);
                 if (symbol)
                     Streamer->EmitLabel(symbol);
-                    // emitInstructionAnnot
             }
 
             MCInst Inst;
@@ -494,4 +721,19 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, int64_t slide,
             DisInfo.createSymbols();
     }
 }
+
+extern "C" JL_DLLEXPORT
+LLVMDisasmContextRef jl_LLVMCreateDisasm(
+        const char *TripleName, void *DisInfo, int TagType,
+        LLVMOpInfoCallback GetOpInfo, LLVMSymbolLookupCallback SymbolLookUp)
+{
+    return LLVMCreateDisasm(TripleName, DisInfo, TagType, GetOpInfo, SymbolLookUp);
+}
+
+extern "C" JL_DLLEXPORT
+JL_DLLEXPORT size_t jl_LLVMDisasmInstruction(
+        LLVMDisasmContextRef DC, uint8_t *Bytes, uint64_t BytesSize,
+        uint64_t PC, char *OutString, size_t OutStringSize)
+{
+    return LLVMDisasmInstruction(DC, Bytes, BytesSize, PC, OutString, OutStringSize);
 }
