@@ -1,15 +1,32 @@
 # Vagrantfile for building Windows Julia via MSYS2 or Cygwin
 
+$script_cygwin = <<SCRIPT
+# change the following to 32 for 32 bit Julia
+$bits = "64"
+$arch = "x86_$bits".Replace("x86_32", "i686")
+$setup = "setup-$arch.exe".Replace("i686", "x86")
+
+mkdir -Force C:\\cygwin$bits | Out-Null
+(new-object net.webclient).DownloadFile(
+  "http://cygwin.com/$setup", "C:\\cygwin$bits\\$setup")
+foreach ($pkg in @("git,make,curl,patch,python,gcc-g++,m4,cmake,p7zip",
+    "mingw64-$arch-gcc-g++,mingw64-$arch-gcc-fortran")) {
+  & "C:\\cygwin$bits\\$setup" -q -n -R C:\\cygwin$bits -l C:\\cygwin$bits\\packages `
+    -s http://mirrors.mit.edu/cygwin -g -P $pkg | Where-Object `
+    -FilterScript {$_ -notlike "Installing file *"} | Write-Output
+}
+& "C:\\cygwin$bits\\bin\\sh" -lc "if ! [ -e julia$bits ]; then git clone \\
+  git://github.com/JuliaLang/julia.git julia$bits; fi && cd julia$bits && git pull && \\
+  echo 'XC_HOST = $arch-w64-mingw32' > Make.user && make cleanall && \\
+  make -j2 testall && make win-extras binary-dist"
+SCRIPT
+
 $script_msys2 = <<SCRIPT
 # change the following to 32 for 32 bit Julia
 $bits = "64"
 $arch = "x86_$bits".Replace("x86_32", "i686")
 # change the date in the following for future msys2 releases
 $msys2tarball = "msys2-base-$arch-20150916.tar"
-
-# these environment variables need to be set, or Julia gets confused
-[Environment]::SetEnvironmentVariable("HOMEDRIVE", "C:")
-[Environment]::SetEnvironmentVariable("HOMEPATH", "\\Users\\vagrant")
 
 # install chocolatey, cmake, and python2
 iex ((new-object net.webclient).DownloadString("https://chocolatey.org/install.ps1"))
@@ -44,29 +61,6 @@ rm $msys2tarball, msys$bits\\$msys2tarball.xz, msys$bits\\7za.exe
   export PATH=`$PWD/usr/$arch-w64-mingw32/sys-root/mingw/bin:`$PATH:/c/tools/python2 && \\
   echo 'override CMAKE=/c/Program\\ Files\\ \\(x86\\)/CMake/bin/cmake' > Make.user && \\
   make cleanall && make -j2 testall && make win-extras binary-dist"
-SCRIPT
-
-$script_cygwin = <<SCRIPT
-# change the following to 32 for 32 bit Julia
-$bits = "64"
-$arch = "x86_$bits".Replace("x86_32", "i686")
-$setup = "setup-$arch.exe".Replace("i686", "x86")
-
-mkdir -Force C:\\cygwin$bits | Out-Null
-(new-object net.webclient).DownloadFile(
-  "http://cygwin.com/$setup", "C:\\cygwin$bits\\$setup")
-foreach ($pkg in @("git,make,curl,patch,python,gcc-g++,m4,cmake,p7zip",
-    "mingw64-$arch-gcc-g++,mingw64-$arch-gcc-fortran")) {
-  & "C:\\cygwin$bits\\$setup" -q -n -R C:\\cygwin$bits -l C:\\cygwin$bits\\packages `
-    -s http://mirrors.mit.edu/cygwin -g -P $pkg | Where-Object `
-    -FilterScript {$_ -notlike "Installing file *"} | Write-Output
-}
-[Environment]::SetEnvironmentVariable("HOMEDRIVE", "C:")
-[Environment]::SetEnvironmentVariable("HOMEPATH", "\\Users\\vagrant")
-& "C:\\cygwin$bits\\bin\\sh" -lc "if ! [ -e julia$bits ]; then git clone \\
-  git://github.com/JuliaLang/julia.git julia$bits; fi && cd julia$bits && git pull && \\
-  echo 'XC_HOST = $arch-w64-mingw32' > Make.user && make cleanall && \\
-  make -j2 testall && make win-extras binary-dist"
 SCRIPT
 
 Vagrant.configure("2") do |config|
