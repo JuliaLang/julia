@@ -154,6 +154,10 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `takebuf_array` is now a method of `take!`. `takebuf_string(io)` becomes `String(take!(io))` ([#19088])
 
+* `is_apple`, `is_bsd`, `is_linux`, `is_unix`, and `is_windows` are now `Sys.isapple`, `Sys.isbsd`,
+  `Sys.islinux`, `Sys.isunix`, and `Sys.iswindows`, respectively. These are available in the `Compat.Sys`
+  submodule. ([#22182])
+
 ## New macros
 
 * `@__DIR__` has been added ([#18380])
@@ -285,4 +289,5 @@ includes this fix. Find the minimum version from there.
 [#21257]: https://github.com/JuliaLang/julia/issues/21257
 [#21346]: https://github.com/JuliaLang/julia/issues/21346
 [#22064]: https://github.com/JuliaLang/julia/issues/22064
+[#22182]: https://github.com/JuliaLang/julia/issues/22182
 [#22475]: https://github.com/JuliaLang/julia/issues/22475

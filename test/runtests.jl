@@ -138,11 +138,11 @@ let x = rand(rng, Int64, 3,4)
     @test x == rand(rng, Int64, (3,4))
 end
 
-extrapath = is_windows() ? joinpath(JULIA_HOME,"..","Git","usr","bin")*";" : ""
+extrapath = Compat.Sys.iswindows() ? joinpath(JULIA_HOME,"..","Git","usr","bin")*";" : ""
 @compat withenv("PATH" => extrapath * ENV["PATH"]) do
     cmd1 = pipeline(`echo hello`, `sort`)
     cmd2 = pipeline(`true`, `true`)
-    if is_windows()
+    if Compat.Sys.iswindows()
         try # use busybox-w32
             success(`busybox`)
             cmd1 = pipeline(`busybox echo hello`, `busybox sort`)
@@ -921,7 +921,7 @@ cd(dirwalk) do
         touch(joinpath("sub_dir1", "file$i"))
     end
     touch(joinpath("sub_dir2", "file_dir2"))
-    has_symlinks = is_unix() ? true : (isdefined(Base, :WINDOWS_VISTA_VER) && Base.windows_version() >= Base.WINDOWS_VISTA_VER)
+    has_symlinks = Compat.Sys.isunix() ? true : (isdefined(Base, :WINDOWS_VISTA_VER) && Base.windows_version() >= Base.WINDOWS_VISTA_VER)
     follow_symlink_vec = has_symlinks ? [true, false] : [false]
     has_symlinks && symlink(abspath("sub_dir2"), joinpath("sub_dir1", "link"))
     for follow_symlinks in follow_symlink_vec
@@ -1227,6 +1227,15 @@ end
 @test Compat.repeat(1:2, inner=2) == [1, 1, 2, 2]
 @test Compat.repeat(1:2, outer=[2]) == [1, 2, 1, 2]
 @test Compat.repeat([1,2], inner=(2,)) == [1, 1, 2, 2]
+
+for os in [:apple, :bsd, :linux, :unix, :windows]
+    from_base = if VERSION >= v"0.7.0-DEV.914"
+        Expr(:., Expr(:., :Base, Base.Meta.quot(:Sys)), Base.Meta.quot(Symbol("is", os)))
+    else # VERSION >= v"0.5.0-dev+4267"
+        Expr(:., :Base, Base.Meta.quot(Symbol("is_", os)))
+    end
+    @eval @test Compat.Sys.$(Symbol("is", os))() == $from_base()
+end
 
 io = IOBuffer()
 @test @compat(get(io, :limit, false)) == false
