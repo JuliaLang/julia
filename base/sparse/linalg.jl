@@ -945,13 +945,33 @@ eig(A::SparseMatrixCSC) = error("Use eigs() instead of eig() for sparse matrices
 function Base.cov(X::SparseMatrixCSC, vardim::Int=1; corrected::Bool=true)
     a, b = size(X)
     n, p = vardim == 1 ? (a, b) : (b, a)
-    out = Matrix(Base.unscaled_covzm(X,vardim)) # part1
+
+    # Cov(X) = E[(X-μ)'(X-μ)]
+    # = X'X - X'u - μ'X + μ'μ
+
+    # Part1
+    # Compute X'X using sparse matrix operations
+    out = Matrix(Base.unscaled_covzm(X,vardim))
+
+    # Part 2
+    # Compute X'μ
+
+    # Part 3
+    # Compute μ'μ
+
+    # Note that part3 = part2 !
+    # X = [a c]    \mu = [k1 k2]
+    #     [b d]          [k1 k2]
+    # part2 = [(a+b)k1 (a+b)k2]
+    #         [(c+d)k1 (c+d)k2]
+    # part3 = [k1*k1*n k1*k2*n]
+    #         [k1*k2*n k2*k2*n]
+    # but k1*n = a+b, and k2*n = c+d
     sums = sum(X, vardim)
-    means = mean(X, vardim)
+    means = sums ./ n
     @inbounds for j in 1:p, i in 1:p
         part2 = sums[i]*means[j]
-        part3 = means[i] * means[j] * n
-        out[i,j] += - part2 - conj(part2) + part3
+        out[i,j] -= part2
     end
     return scale!(out, inv(n-Int(corrected)))
 end
