@@ -32,8 +32,8 @@ init:
 cache:
 # Cache large downloads to avoid network unreliability
   - C:\cygdownloads
-  - llvm-3.9.1-i686-w64-mingw32-juliadeps-r06.7z
-  - llvm-3.9.1-x86_64-w64-mingw32-juliadeps-r06.7z
+  - llvm-3.9.1-i686-w64-mingw32-juliadeps-r07.7z
+  - llvm-3.9.1-x86_64-w64-mingw32-juliadeps-r07.7z
   - usr/bin/busybox.exe
 
 build_script:
