@@ -11,7 +11,9 @@ ifeq ($(OPENBLAS_USE_THREAD), 1)
 OPENBLAS_BUILD_OPTS += USE_THREAD=1
 OPENBLAS_BUILD_OPTS += GEMM_MULTITHREADING_THRESHOLD=50
 # Maximum number of threads for parallelism
-ifneq ($(ARCH),x86_64)
+ifneq (, $(filter $(ARCH), powerpc64le ppc64le))
+OPENBLAS_BUILD_OPTS += NUM_THREADS=24
+else ifneq ($(ARCH),x86_64)
 # Assume we can't address much memory to spawn many threads
 # It is also unlikely that 32-bit architectures have too many cores
 OPENBLAS_BUILD_OPTS += NUM_THREADS=8
