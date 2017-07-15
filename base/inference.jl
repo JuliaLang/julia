@@ -3568,6 +3568,7 @@ function optimize(me::InferenceState)
         alloc_elim_pass!(opt)
         getfield_elim_pass!(opt)
         copy_duplicated_expr_pass!(opt)
+        linearize_pass!(opt)
         # Clean up for `alloc_elim_pass!` and `getfield_elim_pass!`
         void_use_elim_pass!(opt)
         # Pop metadata before label reindexing
@@ -6164,6 +6165,120 @@ function replace_getfield!(e::Expr, tupname, vals, field_names, sv::Optimization
             end
             replace_getfield!(a, tupname, vals, field_names, sv)
         end
+    end
+end
+
+function is_ccall_static(e::Expr, sv::OptimizationState)
+    if e.head === :call
+        is_known_call(e, tuple, sv.src, sv.mod) || return false
+        length(e.args) == 3 || return false
+        for i in 2:3
+            a = e.args[i]
+            (isa(a, Expr) || isa(a, Slot) || isa(a, SSAValue)) && return false
+        end
+        return true
+    elseif e.head === :static_parameter
+        return true
+    end
+    return false
+end
+
+function linearize_arg!(args, i, stmts, sv::OptimizationState)
+    a = args[i]
+    if isa(a, Symbol)
+        a = a::Symbol
+        isdefined(sv.mod, a) && isconst(sv.mod, a) && return
+        typ = Any
+    elseif isa(a, GlobalRef)
+        a = a::GlobalRef
+        isdefined(a.mod, a.name) && isconst(a.mod, a.name) && return
+        typ = Any
+    elseif isa(a, Expr)
+        if a.head === :boundscheck
+            # Allow `Expr(:boundscheck)` to be nested, this affects DCE
+            # TODO: make the DCE/alloc_elim smarter to not need this hack
+            return
+        end
+        typ = (a::Expr).typ
+    else
+        return
+    end
+    ssa = newvar!(sv, typ)
+    push!(stmts, :($ssa = $a))
+    args[i] = ssa
+    return
+end
+
+# Temporary pass to linearize the IR before `alloc_elim_pass!` before we do so in lowering
+function linearize_pass!(sv::OptimizationState)
+    body = sv.src.code
+    len = length(body)
+    next_i = 1
+    stmts = []
+    while next_i <= len
+        i = next_i
+        next_i += 1
+        ex = body[i]
+        isa(ex, Expr) || continue
+        ex = ex::Expr
+        head = ex.head
+        is_meta_expr_head(head) && continue
+        if head === :(=)
+            ex = ex.args[2]
+            isa(ex, Expr) || continue
+            ex = ex::Expr
+            head = ex.head
+        end
+        args = ex.args
+        if head === :foreigncall
+            if isa(args[1], Expr) && !is_ccall_static(args[1]::Expr, sv)
+                linearize_arg!(args, 1, stmts, sv)
+            end
+            for j in 2:length(args)
+                a = args[j]
+                isa(a, Expr) || continue
+                if a.head === :&
+                    linearize_arg!(a.args, 1, stmts, sv)
+                else
+                    linearize_arg!(args, j, stmts, sv)
+                end
+            end
+        elseif (head === :import || head === :using || head === :importall || head === :export ||
+                head === :isdefined || head === :const || is_meta_expr_head(head))
+            continue
+        elseif head === :call
+            if is_known_call(ex, Intrinsics.llvmcall, sv.src, sv.mod)
+                for j in 5:length(args)
+                    linearize_arg!(args, j, stmts, sv)
+                end
+            elseif is_known_call(ex, Intrinsics.cglobal, sv.src, sv.mod)
+                if isa(args[2], Expr) && !is_ccall_static(args[2]::Expr, sv)
+                    linearize_arg!(args, 2, stmts, sv)
+                end
+                for j in 3:length(args)
+                    linearize_arg!(args, j, stmts, sv)
+                end
+            else
+                for j in 1:length(args)
+                    linearize_arg!(args, j, stmts, sv)
+                end
+            end
+        else
+            for j in 1:length(args)
+                if j == 1 && head === :method
+                    argj = args[j]
+                    if isa(argj, Slot) || isa(argj, Symbol) || isa(argj, GlobalRef)
+                        continue
+                    end
+                end
+                linearize_arg!(args, j, stmts, sv)
+            end
+        end
+        isempty(stmts) && continue
+        next_i = i
+        splice!(body, i:(i - 1), stmts)
+        len += length(stmts)
+        empty!(stmts)
     end
 end
 
