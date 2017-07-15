@@ -590,7 +590,7 @@ function methodswith(t::Type, showparents::Bool=false)
 end
 
 # file downloading
-
+downloadcmd = nothing
 if Sys.iswindows()
     downloadcmd = :powershell
     function download(url::AbstractString, filename::AbstractString)
@@ -603,7 +603,6 @@ if Sys.iswindows()
         filename
     end
 else
-    downloadcmd = nothing
     function download(url::AbstractString, filename::AbstractString)
         global downloadcmd
         if downloadcmd === nothing
