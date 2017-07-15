@@ -2,7 +2,7 @@
 
 # fold(l|r) & mapfold(l|r)
 @test foldl(+, Int64[]) === Int64(0) # In reference to issues #7465/#20144 (PR #20160)
-@test foldl(+, Int16[]) === Int32(0)
+@test foldl(+, Int16[]) === Int(0)
 @test foldl(-, 1:5) == -13
 @test foldl(-, 10, 1:5) == -5
 
@@ -19,7 +19,7 @@
 @test Base.mapfoldl((x)-> x ⊻ true, |, false, [true false true false false]) == true
 
 @test foldr(+, Int64[]) === Int64(0) # In reference to issue #20144 (PR #20160)
-@test foldr(+, Int16[]) === Int32(0)
+@test foldr(+, Int16[]) === Int(0)
 @test foldr(-, 1:5) == 3
 @test foldr(-, 10, 1:5) == -7
 @test foldr(+, [1]) == 1 # Issue #21493
@@ -29,7 +29,7 @@
 
 # reduce
 @test reduce(+, Int64[]) === Int64(0) # In reference to issue #20144 (PR #20160)
-@test reduce(+, Int16[]) === Int32(0)
+@test reduce(+, Int16[]) === Int(0)
 @test reduce((x,y)->"($x+$y)", 9:11) == "((9+10)+11)"
 @test reduce(max, [8 6 7 5 3 0 9]) == 9
 @test reduce(+, 1000, 1:5) == (1000 + 1 + 2 + 3 + 4 + 5)
@@ -70,7 +70,7 @@
 
 # sum
 
-@test sum(Int8[]) === Int32(0)
+@test sum(Int8[]) === Int(0)
 @test sum(Int[]) === Int(0)
 @test sum(Float64[]) === 0.0
 
@@ -78,7 +78,7 @@
 @test sum(3) === 3
 @test sum(3.0) === 3.0
 
-@test sum([Int8(3)]) === Int32(3)
+@test sum([Int8(3)]) === Int(3)
 @test sum([3]) === 3
 @test sum([3.0]) === 3.0
 
@@ -138,11 +138,11 @@ end
 # prod
 
 @test prod(Int[]) === 1
-@test prod(Int8[]) === Int32(1)
+@test prod(Int8[]) === Int(1)
 @test prod(Float64[]) === 1.0
 
 @test prod([3]) === 3
-@test prod([Int8(3)]) === Int32(3)
+@test prod([Int8(3)]) === Int(3)
 @test prod([3.0]) === 3.0
 
 @test prod(z) === 120
@@ -157,8 +157,8 @@ end
 prod2(itr) = invoke(prod, Tuple{Any}, itr)
 @test prod(Int[]) === prod2(Int[]) === 1
 @test prod(Int[7]) === prod2(Int[7]) === 7
-@test typeof(prod(Int8[])) == typeof(prod(Int8[1])) == typeof(prod(Int8[1, 7])) == Int32
-@test typeof(prod2(Int8[])) == typeof(prod2(Int8[1])) == typeof(prod2(Int8[1 7])) == Int32
+@test typeof(prod(Int8[])) == typeof(prod(Int8[1])) == typeof(prod(Int8[1, 7])) == Int
+@test typeof(prod2(Int8[])) == typeof(prod2(Int8[1])) == typeof(prod2(Int8[1 7])) == Int
 
 # maximum & minimum & extrema
 
