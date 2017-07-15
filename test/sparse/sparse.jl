@@ -1845,12 +1845,37 @@ end
 end
 
 @testset "optimizing sparse covariance" begin
-    n = 1000
+    n = 10
     p = 5
     srand(1)
-    x_sparse = sprand(n, p, .25)
+    x_sparse = sprand(n, p, .50)
     x_dense = convert(Matrix{Float64}, x_sparse)
-    cov1 = cov(x_dense)
-    cov2 = cov(x_sparse)
-    @test cov1 ≈ cov2
+    @test cov(x_sparse, 1, true)  ≈ cov(x_dense, 1, true)
+    @test cov(x_sparse, 1, false) ≈ cov(x_dense, 1, false)
+    @test cov(x_sparse, 2, true)  ≈ cov(x_dense, 2, true)
+    @test cov(x_sparse, 2, false) ≈ cov(x_dense, 2, false)
+
+    # Test with NaN
+    x_sparse[1,1] = NaN
+    x_dense[1,1]  = NaN
+    @test cov(x_sparse, 1, true)  ≈ cov(x_dense, 1, true)
+    @test cov(x_sparse, 1, false) ≈ cov(x_dense, 1, false)
+    @test cov(x_sparse, 2, true)  ≈ cov(x_dense, 2, true)
+    @test cov(x_sparse, 2, false) ≈ cov(x_dense, 2, false)
+
+    # Test with Inf
+    x_sparse[1,1] = Inf
+    x_dense[1,1]  = Inf
+    @test cov(x_sparse, 1, true)  ≈ cov(x_dense, 1, true)
+    @test cov(x_sparse, 1, false) ≈ cov(x_dense, 1, false)
+    @test cov(x_sparse, 2, true)  ≈ cov(x_dense, 2, true)
+    @test cov(x_sparse, 2, false) ≈ cov(x_dense, 2, false)
+
+    # Test with NaN and Inf
+    x_sparse[2,1] = NaN
+    x_dense[2,1]  = NaN
+    @test cov(x_sparse, 1, true)  ≈ cov(x_dense, 1, true)
+    @test cov(x_sparse, 1, false) ≈ cov(x_dense, 1, false)
+    @test cov(x_sparse, 2, true)  ≈ cov(x_dense, 2, true)
+    @test cov(x_sparse, 2, false) ≈ cov(x_dense, 2, false)
 end
