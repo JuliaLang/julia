@@ -230,8 +230,6 @@ setenv(cmd::Cmd; dir="") = Cmd(cmd; dir=dir)
 (&)(left::AbstractCmd, right::AbstractCmd) = AndCmds(left, right)
 redir_out(src::AbstractCmd, dest::AbstractCmd) = OrCmds(src, dest)
 redir_err(src::AbstractCmd, dest::AbstractCmd) = ErrOrCmds(src, dest)
-Base.mr_empty(f, op::typeof(&), T::Type{<:Base.AbstractCmd}) =
-    throw(ArgumentError("reducing over an empty collection of type $T with operator & is not allowed"))
 
 # Stream Redirects
 redir_out(dest::Redirectable, src::AbstractCmd) = CmdRedirect(src, dest, STDIN_NO)
