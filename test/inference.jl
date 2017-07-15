@@ -37,13 +37,13 @@ let
 end
 
 let
-    fT{T}(x::T) = T
+    fT(x::T) where {T} = T
     @test fT(Any) === DataType
     @test fT(Int) === DataType
     @test fT(Type{Any}) === DataType
     @test fT(Type{Int}) === DataType
 
-    ff{T}(x::Type{T}) = T
+    ff(x::Type{T}) where {T} = T
     @test ff(Type{Any}) === Type{Any}
     @test ff(Type{Int}) === Type{Int}
     @test ff(Any) === Any
@@ -52,7 +52,7 @@ end
 
 
 # issue #3182
-f3182{T}(::Type{T}) = 0
+f3182(::Type{T}) where {T} = 0
 f3182(x) = 1
 function g3182(t::DataType)
     # tricky thing here is that DataType is a concrete type, and a
@@ -81,7 +81,7 @@ struct Hanoi5906{T} <: Outer5906{T}
     Hanoi5906{T}(a) where T = new(a, Empty5906{Inner5906{T}}())
 end
 
-function f5906{T}(h::Hanoi5906{T})
+function f5906(h::Hanoi5906{T}) where T
     if isa(h.succ, Empty5906) return end
     f5906(h.succ)
 end
@@ -132,8 +132,8 @@ struct RGB{T<:AbstractFloat} <: Paint{T}
     b::T
 end
 
-myeltype{T}(::Type{Paint{T}}) = T
-myeltype{P<:Paint}(::Type{P}) = myeltype(supertype(P))
+myeltype(::Type{Paint{T}}) where {T} = T
+myeltype(::Type{P}) where {P<:Paint} = myeltype(supertype(P))
 myeltype(::Type{Any}) = Any
 
 end
@@ -143,14 +143,14 @@ end
 
 
 # issue #12826
-f12826{I<:Integer}(v::Vector{I}) = v[1]
+f12826(v::Vector{I}) where {I<:Integer} = v[1]
 @test Base.return_types(f12826,Tuple{Array{I,1} where I<:Integer})[1] == Integer
 
 
 # non-terminating inference, issue #14009
 # non-terminating codegen, issue #16201
 mutable struct A14009{T}; end
-A14009{T}(a::T) = A14009{T}()
+A14009(a::T) where {T} = A14009{T}()
 f14009(a) = rand(Bool) ? f14009(A14009(a)) : a
 code_typed(f14009, (Int,))
 code_llvm(DevNull, f14009, (Int,))
@@ -162,8 +162,8 @@ code_llvm(DevNull, f14009, (Int,))
 
 
 # issue #9232
-arithtype9232{T<:Real}(::Type{T},::Type{T}) = arithtype9232(T)
-result_type9232{T1<:Number,T2<:Number}(::Type{T1}, ::Type{T2}) = arithtype9232(T1, T2)
+arithtype9232(::Type{T},::Type{T}) where {T<:Real} = arithtype9232(T)
+result_type9232(::Type{T1}, ::Type{T2}) where {T1<:Number,T2<:Number} = arithtype9232(T1, T2)
 # this gave a "type too large", but not reliably
 @test length(code_typed(result_type9232, Tuple{(Type{x} where x<:Union{Float32,Float64}), Type{T2} where T2<:Number})) == 1
 
@@ -177,7 +177,7 @@ code_llvm(DevNull, invoke_g10878, ())
 
 # issue #10930
 @test isa(code_typed(promote,(Any,Any,Vararg{Any})), Array)
-find_tvar10930{T<:Tuple}(sig::Type{T}) = 1
+find_tvar10930(sig::Type{T}) where {T<:Tuple} = 1
 function find_tvar10930(arg)
     if arg<:Tuple
         find_tvar10930(arg[random_var_name])
@@ -226,7 +226,7 @@ bar7810() = [Foo7810([(a,b) for a in 1:2]) for b in 3:4]
 
 
 # issue #11366
-f11366{T}(x::Type{Ref{T}}) = Ref{x}
+f11366(x::Type{Ref{T}}) where {T} = Ref{x}
 @test !isleaftype(Base.return_types(f11366, (Any,))[1])
 
 
@@ -235,14 +235,14 @@ let f(T) = Type{T}
 end
 
 # issue #9222
-function SimpleTest9222{T1<:Real}(pdedata, mu_actual::Vector{T1},
+function SimpleTest9222(pdedata, mu_actual::Vector{T1},
         nu_actual::Vector{T1}, v0::Vector{T1}, epsilon::T1, beta::Vector{T1},
-        delta::T1, l::T1, R::T1, s0::T1, show_trace::Bool = true)
+        delta::T1, l::T1, R::T1, s0::T1, show_trace::Bool = true) where T1<:Real
     return 0.0
 end
-function SimpleTest9222{T1<:Real}(pdedata, mu_actual::Vector{T1},
+function SimpleTest9222(pdedata, mu_actual::Vector{T1},
         nu_actual::Vector{T1}, v0::Vector{T1}, epsilon::T1, beta::Vector{T1},
-        delta::T1, l::T1, R::T1)
+        delta::T1, l::T1, R::T1) where T1<:Real
     return SimpleTest9222(pdedata, mu_actual, nu_actual, v0, epsilon,
         beta, delta, l, R, v0[1])
 end
@@ -300,7 +300,7 @@ gNInt() = fNInt(x)
 @test Base.return_types(gNInt, ()) == Any[NInt]
 
 # issue #17572
-function f17572{A}(::Type{Val{A}})
+function f17572(::Type{Val{A}}) where A
     return Tuple{Int}(Tuple{A}((1,)))
 end
 # test that inference doesn't error
@@ -365,7 +365,7 @@ let tri = Triple18015(1, 2, 3)
 end
 
 # issue #18222
-f18222{T<:AbstractFloat}(::Union{T, Int}) = false
+f18222(::Union{T, Int}) where {T<:AbstractFloat} = false
 f18222(x) = true
 g18222(x) = f18222(x)
 @test f18222(1) == g18222(1) == true
@@ -532,8 +532,8 @@ test_fast_le(a, b) = @fastmath a <= b
 
 abstract type AbstractMyType18457{T,F,G} end
 struct MyType18457{T,F,G}<:AbstractMyType18457{T,F,G} end
-tpara18457{I}(::Type{AbstractMyType18457{I}}) = I
-tpara18457{A<:AbstractMyType18457}(::Type{A}) = tpara18457(supertype(A))
+tpara18457(::Type{AbstractMyType18457{I}}) where {I} = I
+tpara18457(::Type{A}) where {A<:AbstractMyType18457} = tpara18457(supertype(A))
 @test tpara18457(MyType18457{true}) === true
 
 @testset "type inference error #19322" begin
@@ -585,7 +585,7 @@ mutable struct AT11015
     f::Union{Bool,Function}
 end
 
-g11015{S}(::Type{S}, ::S) = 1
+g11015(::Type{S}, ::S) where {S} = 1
 f11015(a::AT11015) = g11015(Base.fieldtype(typeof(a), :f), true)
 g11015(::Type{Bool}, ::Bool) = 2.0
 @test Int <: Base.return_types(f11015, (AT11015,))[1]
@@ -627,11 +627,11 @@ g19957(x) = f19957(x...)
 @test all(t -> t<:Union{Int8,Int16}, Base.return_types(g19957, (Int,))) # with a full fix, this should just be Int8
 
 # Inference for some type-level computation
-fUnionAll{T}(::Type{T}) = Type{S} where S <: T
+fUnionAll(::Type{T}) where {T} = Type{S} where S <: T
 @inferred fUnionAll(Real) == Type{T} where T <: Real
 @inferred fUnionAll(Rational{T} where T <: AbstractFloat) == Type{T} where T<:(Rational{S} where S <: AbstractFloat)
 
-fComplicatedUnionAll{T}(::Type{T}) = Type{Tuple{S,rand() >= 0.5 ? Int : Float64}} where S <: T
+fComplicatedUnionAll(::Type{T}) where {T} = Type{Tuple{S,rand() >= 0.5 ? Int : Float64}} where S <: T
 let pub = Base.parameter_upper_bound, x = fComplicatedUnionAll(Real)
     @test pub(pub(x, 1), 1) == Real
     @test pub(pub(x, 1), 2) == Int || pub(pub(x, 1), 2) == Float64
@@ -789,7 +789,7 @@ end
 struct NArray_17003{T,N} <: AArray_17003{Nable_17003{T},N}
 end
 
-(::Type{NArray_17003}){T,N}(::Array{T,N}) = NArray_17003{T,N}()
+(::Type{NArray_17003})(::Array{T,N}) where {T,N} = NArray_17003{T,N}()
 
 gl_17003 = [1, 2, 3]
 
@@ -799,7 +799,7 @@ f2_17003(::Any) = f2_17003(NArray_17003(gl_17003))
 @test f2_17003(1) == nothing
 
 # issue #20847
-function segfaultfunction_20847{N, T}(A::Vector{NTuple{N, T}})
+function segfaultfunction_20847(A::Vector{NTuple{N, T}}) where {N, T}
     B = reinterpret(T, A, (N, length(A)))
     return nothing
 end

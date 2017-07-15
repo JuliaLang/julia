@@ -1528,7 +1528,7 @@ factor will be `L*L' == P*A*P' + C'*C`
 
 update: `Cint(1)` for `A + CC'`, `Cint(0)` for `A - CC'`
 """
-function lowrankupdowndate!{Tv<:VTypes}(F::Factor{Tv}, C::Sparse{Tv}, update::Cint)
+function lowrankupdowndate!(F::Factor{Tv}, C::Sparse{Tv}, update::Cint) where Tv<:VTypes
     lF = unsafe_load(pointer(F))
     lC = unsafe_load(pointer(C))
     if lF.n != lC.nrow
@@ -1553,7 +1553,7 @@ Update an `LDLt` or `LLt` Factorization `F` of `A` to a factorization of `A + C*
 
 See also [`lowrankupdate`](@ref), [`lowrankdowndate`](@ref), [`lowrankdowndate!`](@ref).
 """
-function lowrankupdate!{Tv<:VTypes}(F::Factor{Tv}, V::AbstractArray{Tv})
+function lowrankupdate!(F::Factor{Tv}, V::AbstractArray{Tv}) where Tv<:VTypes
     #Reorder and copy V to account for permutation
     C = lowrank_reorder(V, get_perm(F))
     lowrankupdowndate!(F, C, Cint(1))
@@ -1568,7 +1568,7 @@ Update an `LDLt` or `LLt` Factorization `F` of `A` to a factorization of `A - C*
 
 See also [`lowrankdowndate`](@ref), [`lowrankupdate`](@ref), [`lowrankupdate!`](@ref).
 """
-function lowrankdowndate!{Tv<:VTypes}(F::Factor{Tv}, V::AbstractArray{Tv})
+function lowrankdowndate!(F::Factor{Tv}, V::AbstractArray{Tv}) where Tv<:VTypes
     #Reorder and copy V to account for permutation
     C = lowrank_reorder(V, get_perm(F))
     lowrankupdowndate!(F, C, Cint(0))
@@ -1583,7 +1583,7 @@ The returned factor is always an `LDLt` factorization.
 
 See also [`lowrankupdate!`](@ref), [`lowrankdowndate`](@ref), [`lowrankdowndate!`](@ref).
 """
-lowrankupdate{Tv<:VTypes}(F::Factor{Tv}, V::AbstractArray{Tv}) =
+lowrankupdate(F::Factor{Tv}, V::AbstractArray{Tv}) where {Tv<:VTypes} =
     lowrankupdate!(copy(F), V)
 
 """
@@ -1595,7 +1595,7 @@ The returned factor is always an `LDLt` factorization.
 
 See also [`lowrankdowndate!`](@ref), [`lowrankupdate`](@ref), [`lowrankupdate!`](@ref).
 """
-lowrankdowndate{Tv<:VTypes}(F::Factor{Tv}, V::AbstractArray{Tv}) =
+lowrankdowndate(F::Factor{Tv}, V::AbstractArray{Tv}) where {Tv<:VTypes} =
     lowrankdowndate!(copy(F), V)
 
 ## Solvers
