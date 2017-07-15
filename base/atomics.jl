@@ -70,7 +70,7 @@ end
 Atomic() = Atomic{Int}()
 
 """
-    Threads.atomic_cas!{T}(x::Atomic{T}, cmp::T, newval::T)
+    Threads.atomic_cas!(x::Atomic{T}, cmp::T, newval::T) where T
 
 Atomically compare-and-set `x`
 
@@ -104,7 +104,7 @@ Base.Threads.Atomic{Int64}(2)
 function atomic_cas! end
 
 """
-    Threads.atomic_xchg!{T}(x::Atomic{T}, newval::T)
+    Threads.atomic_xchg!(x::Atomic{T}, newval::T) where T
 
 Atomically exchange the value in `x`
 
@@ -127,7 +127,7 @@ julia> x[]
 function atomic_xchg! end
 
 """
-    Threads.atomic_add!{T}(x::Atomic{T}, val::T)
+    Threads.atomic_add!(x::Atomic{T}, val::T) where T
 
 Atomically add `val` to `x`
 
@@ -149,7 +149,7 @@ julia> x[]
 function atomic_add! end
 
 """
-    Threads.atomic_sub!{T}(x::Atomic{T}, val::T)
+    Threads.atomic_sub!(x::Atomic{T}, val::T) where T
 
 Atomically subtract `val` from `x`
 
@@ -171,7 +171,7 @@ julia> x[]
 function atomic_sub! end
 
 """
-    Threads.atomic_and!{T}(x::Atomic{T}, val::T)
+    Threads.atomic_and!(x::Atomic{T}, val::T) where T
 
 Atomically bitwise-and `x` with `val`
 
@@ -193,7 +193,7 @@ julia> x[]
 function atomic_and! end
 
 """
-    Threads.atomic_nand!{T}(x::Atomic{T}, val::T)
+    Threads.atomic_nand!(x::Atomic{T}, val::T) where T
 
 Atomically bitwise-nand (not-and) `x` with `val`
 
@@ -215,7 +215,7 @@ julia> x[]
 function atomic_nand! end
 
 """
-    Threads.atomic_or!{T}(x::Atomic{T}, val::T)
+    Threads.atomic_or!(x::Atomic{T}, val::T) where T
 
 Atomically bitwise-or `x` with `val`
 
@@ -237,7 +237,7 @@ julia> x[]
 function atomic_or! end
 
 """
-    Threads.atomic_xor!{T}(x::Atomic{T}, val::T)
+    Threads.atomic_xor!(x::Atomic{T}, val::T) where T
 
 Atomically bitwise-xor (exclusive-or) `x` with `val`
 
@@ -259,7 +259,7 @@ julia> x[]
 function atomic_xor! end
 
 """
-    Threads.atomic_max!{T}(x::Atomic{T}, val::T)
+    Threads.atomic_max!(x::Atomic{T}, val::T) where T
 
 Atomically store the maximum of `x` and `val` in `x`
 
@@ -281,7 +281,7 @@ julia> x[]
 function atomic_max! end
 
 """
-    Threads.atomic_min!{T}(x::Atomic{T}, val::T)
+    Threads.atomic_min!(x::Atomic{T}, val::T) where T
 
 Atomically store the minimum of `x` and `val` in `x`
 
@@ -332,90 +332,40 @@ for typ in atomictypes
     ilt = llvmtypes[inttype(typ)]
     rt = Base.libllvm_version >= v"3.6" ? "$lt, $lt*" : "$lt*"
     irt = Base.libllvm_version >= v"3.6" ? "$ilt, $ilt*" : "$ilt*"
-    if VersionNumber(Base.libllvm_version) >= v"3.8"
-        @eval getindex(x::Atomic{$typ}) =
-            llvmcall($"""
-                     %rv = load atomic $rt %0 acquire, align $(alignment(typ))
-                     ret $lt %rv
-                     """, $typ, Tuple{Ptr{$typ}}, unsafe_convert(Ptr{$typ}, x))
-        @eval setindex!(x::Atomic{$typ}, v::$typ) =
-            llvmcall($"""
-                     store atomic $lt %1, $lt* %0 release, align $(alignment(typ))
-                     ret void
-                     """, Void, Tuple{Ptr{$typ},$typ}, unsafe_convert(Ptr{$typ}, x), v)
-    else
-        if typ <: Integer
-            @eval getindex(x::Atomic{$typ}) =
-                llvmcall($"""
-                         %rv = load atomic $rt %0 acquire, align $(alignment(typ))
-                         ret $lt %rv
-                         """, $typ, Tuple{Ptr{$typ}}, unsafe_convert(Ptr{$typ}, x))
-            @eval setindex!(x::Atomic{$typ}, v::$typ) =
-                llvmcall($"""
-                         store atomic $lt %1, $lt* %0 release, align $(alignment(typ))
-                         ret void
-                         """, Void, Tuple{Ptr{$typ},$typ}, unsafe_convert(Ptr{$typ}, x), v)
-        else
-            @eval getindex(x::Atomic{$typ}) =
-                llvmcall($"""
-                         %iptr = bitcast $lt* %0 to $ilt*
-                         %irv = load atomic $irt %iptr acquire, align $(alignment(typ))
-                         %rv = bitcast $ilt %irv to $lt
-                         ret $lt %rv
-                         """, $typ, Tuple{Ptr{$typ}}, unsafe_convert(Ptr{$typ}, x))
-            @eval setindex!(x::Atomic{$typ}, v::$typ) =
-                llvmcall($"""
-                         %iptr = bitcast $lt* %0 to $ilt*
-                         %ival = bitcast $lt %1 to $ilt
-                         store atomic $ilt %ival, $ilt* %iptr release, align $(alignment(typ))
-                         ret void
-                         """, Void, Tuple{Ptr{$typ},$typ}, unsafe_convert(Ptr{$typ}, x), v)
-        end
-    end
+    @eval getindex(x::Atomic{$typ}) =
+        llvmcall($"""
+                 %rv = load atomic $rt %0 acquire, align $(alignment(typ))
+                 ret $lt %rv
+                 """, $typ, Tuple{Ptr{$typ}}, unsafe_convert(Ptr{$typ}, x))
+    @eval setindex!(x::Atomic{$typ}, v::$typ) =
+        llvmcall($"""
+                 store atomic $lt %1, $lt* %0 release, align $(alignment(typ))
+                 ret void
+                 """, Void, Tuple{Ptr{$typ},$typ}, unsafe_convert(Ptr{$typ}, x), v)
+
     # Note: atomic_cas! succeeded (i.e. it stored "new") if and only if the result is "cmp"
-    if VersionNumber(Base.libllvm_version) >= v"3.5"
-        if typ <: Integer
-            @eval atomic_cas!(x::Atomic{$typ}, cmp::$typ, new::$typ) =
-                llvmcall($"""
-                         %rs = cmpxchg $lt* %0, $lt %1, $lt %2 acq_rel acquire
-                         %rv = extractvalue { $lt, i1 } %rs, 0
-                         ret $lt %rv
-                         """, $typ, Tuple{Ptr{$typ},$typ,$typ},
-                         unsafe_convert(Ptr{$typ}, x), cmp, new)
-        else
-            @eval atomic_cas!(x::Atomic{$typ}, cmp::$typ, new::$typ) =
-                llvmcall($"""
-                         %iptr = bitcast $lt* %0 to $ilt*
-                         %icmp = bitcast $lt %1 to $ilt
-                         %inew = bitcast $lt %2 to $ilt
-                         %irs = cmpxchg $ilt* %iptr, $ilt %icmp, $ilt %inew acq_rel acquire
-                         %irv = extractvalue { $ilt, i1 } %irs, 0
-                         %rv = bitcast $ilt %irv to $lt
-                         ret $lt %rv
-                         """, $typ, Tuple{Ptr{$typ},$typ,$typ},
-                         unsafe_convert(Ptr{$typ}, x), cmp, new)
-        end
+    if typ <: Integer
+        @eval atomic_cas!(x::Atomic{$typ}, cmp::$typ, new::$typ) =
+            llvmcall($"""
+                     %rs = cmpxchg $lt* %0, $lt %1, $lt %2 acq_rel acquire
+                     %rv = extractvalue { $lt, i1 } %rs, 0
+                     ret $lt %rv
+                     """, $typ, Tuple{Ptr{$typ},$typ,$typ},
+                     unsafe_convert(Ptr{$typ}, x), cmp, new)
     else
-        if typ <: Integer
-            @eval atomic_cas!(x::Atomic{$typ}, cmp::$typ, new::$typ) =
-                llvmcall($"""
-                         %rv = cmpxchg $lt* %0, $lt %1, $lt %2 acq_rel
-                         ret $lt %rv
-                         """, $typ, Tuple{Ptr{$typ},$typ,$typ},
-                         unsafe_convert(Ptr{$typ}, x), cmp, new)
-        else
-            @eval atomic_cas!(x::Atomic{$typ}, cmp::$typ, new::$typ) =
-                llvmcall($"""
-                         %iptr = bitcast $lt* %0 to $ilt*
-                         %icmp = bitcast $lt %1 to $ilt
-                         %inew = bitcast $lt %2 to $ilt
-                         %irv = cmpxchg $ilt* %iptr, $ilt %icmp, $ilt %inew acq_rel
-                         %rv = bitcast $ilt %irv to $lt
-                         ret $lt %rv
-                         """, $typ, Tuple{Ptr{$typ},$typ,$typ},
-                         unsafe_convert(Ptr{$typ}, x), cmp, new)
-        end
+        @eval atomic_cas!(x::Atomic{$typ}, cmp::$typ, new::$typ) =
+            llvmcall($"""
+                     %iptr = bitcast $lt* %0 to $ilt*
+                     %icmp = bitcast $lt %1 to $ilt
+                     %inew = bitcast $lt %2 to $ilt
+                     %irs = cmpxchg $ilt* %iptr, $ilt %icmp, $ilt %inew acq_rel acquire
+                     %irv = extractvalue { $ilt, i1 } %irs, 0
+                     %rv = bitcast $ilt %irv to $lt
+                     ret $lt %rv
+                     """, $typ, Tuple{Ptr{$typ},$typ,$typ},
+                     unsafe_convert(Ptr{$typ}, x), cmp, new)
     end
+
     for rmwop in [:xchg, :add, :sub, :and, :nand, :or, :xor, :max, :min]
         rmw = string(rmwop)
         fn = Symbol("atomic_", rmw, "!")

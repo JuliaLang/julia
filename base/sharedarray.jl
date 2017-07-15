@@ -579,9 +579,9 @@ end
 
 function print_shmem_limits(slen)
     try
-        if is_linux()
+        if Sys.islinux()
             pfx = "kernel"
-        elseif is_apple()
+        elseif Sys.isapple()
             pfx = "kern.sysv"
         elseif Sys.KERNEL == :FreeBSD || Sys.KERNEL == :DragonFly
             pfx = "kern.ipc"
@@ -633,7 +633,7 @@ end
 
 # platform-specific code
 
-if is_windows()
+if Sys.iswindows()
 function _shm_mmap_array(T, dims, shm_seg_name, mode)
     readonly = !((mode & JL_O_RDWR) == JL_O_RDWR)
     create = (mode & JL_O_CREAT) == JL_O_CREAT

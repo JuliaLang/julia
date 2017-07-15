@@ -189,7 +189,7 @@ Whoa there, Nelly.
 ```
 
 This catch-all is less specific than any other possible method definition for a pair of parameter
-values, so it is only be called on pairs of arguments to which no other method definition applies.
+values, so it will only be called on pairs of arguments to which no other method definition applies.
 
 Although it seems a simple concept, multiple dispatch on the types of values is perhaps the single
 most powerful and central feature of the Julia language. Core operations typically have dozens
@@ -546,6 +546,9 @@ function getindex(A::AbstractArray{T,N}, indexes::Vararg{Number,N}) where {T,N}
 ```
 
 would be called only when the number of `indexes` matches the dimensionality of the array.
+
+When only the type of supplied arguments needs to be constrained `Vararg{T}` can be equivalently
+written as `T...`. For instance `f(x::Int...) = x` is a shorthand for `f(x::Vararg{Int}) = x`.
 
 ## Note on Optional and keyword Arguments
 

@@ -378,6 +378,11 @@
 
 (define (keywords-method-def-expr name sparams argl body isstaged rett)
   (let* ((kargl (cdar argl))  ;; keyword expressions (= k v)
+         (annotations (map (lambda (a) `(meta nospecialize ,(arg-name (cadr (caddr a)))))
+                           (filter nospecialize-meta? kargl)))
+         (kargl (map (lambda (a)
+                       (if (nospecialize-meta? a) (caddr a) a))
+                     kargl))
          (pargl (cdr argl))   ;; positional args
          (body  (if (and (pair? body) (eq? (car body) 'block))
                     body
@@ -463,8 +468,10 @@
                      (decl-var (car not-optional)))
                  (car not-optional))
             ,@(cdr not-optional) ,@vararg)
-          `(block
-            ,@stmts) isstaged rett)
+          (insert-after-meta `(block
+                               ,@stmts)
+                             annotations)
+          isstaged rett)
 
         ;; call with unsorted keyword args. this sorts and re-dispatches.
         ,(method-def-expr-
@@ -621,8 +628,9 @@
       argl))
 
 (define (check-kw-args kw)
-  (let ((invalid (filter (lambda (x) (not (or (kwarg? x)
-                                              (vararg? x))))
+  (let ((invalid (filter (lambda (x) (not (or (kwarg? x) (vararg? x)
+                                              (and (nospecialize-meta? x)
+                                                   (or (kwarg? (caddr x)) (vararg? (caddr x)))))))
                          kw)))
     (if (pair? invalid)
         (if (and (pair? (car invalid)) (eq? 'parameters (caar invalid)))
@@ -951,20 +959,24 @@
 
 ;; insert calls to convert() in ccall, and pull out expressions that might
 ;; need to be rooted before conversion.
-(define (lower-ccall name RT atypes args)
+(define (lower-ccall name RT atypes args cconv)
   (let loop ((F atypes)  ;; formals
              (A args)    ;; actuals
              (stmts '()) ;; initializers
              (C '()))    ;; converted
-    (if (or (null? F) (null? A))
+    (if (and (null? F) (not (null? A))) (error "more arguments than types for ccall"))
+    (if (and (null? A) (not (or (null? F) (and (pair? F) (vararg? (car F)) (null? (cdr F)))))) (error "more types than arguments for ccall"))
+    (if (null? A)
         `(block
           ,.(reverse! stmts)
           (foreigncall ,name ,RT (call (core svec) ,@(dots->vararg atypes))
                 ,.(reverse! C)
-                ,@A))
+                ,@A
+                ,@cconv))
         (let* ((a     (car A))
-               (isseq (and (pair? (car F)) (eq? (caar F) '...)))
+               (isseq (and (vararg? (car F))))
                (ty    (if isseq (cadar F) (car F))))
+          (if (and isseq (not (null? (cdr F)))) (error "only the trailing ccall argument type should have '...'"))
           (if (eq? ty 'Any)
               (loop (if isseq F (cdr F)) (cdr A) stmts (list* 0 a C))
               (let* ((g (make-ssavalue))
@@ -1022,6 +1034,12 @@
                                                 (string "function Base.broadcast(::typeof(" (deparse op_) "), ...)")))
                         op_))
                   (name (if op '(|.| Base (inert broadcast)) name))
+                  (annotations (map (lambda (a) `(meta nospecialize ,(arg-name a)))
+                                    (filter nospecialize-meta? argl)))
+                  (body (insert-after-meta (caddr e) annotations))
+                  (argl (map (lambda (a)
+                               (if (nospecialize-meta? a) (caddr a) a))
+                             argl))
                   (argl (if op (cons `(|::| (call (core Typeof) ,op)) argl) argl))
                   (sparams (map analyze-typevar (cond (has-sp (cddr head))
                                                       (where  where)
@@ -1042,7 +1060,7 @@
                   (name    (if (or (decl? name) (and (pair? name) (eq? (car name) 'curly)))
                                #f name)))
              (expand-forms
-              (method-def-expr name sparams argl (caddr e) isstaged rett))))
+              (method-def-expr name sparams argl body isstaged rett))))
           (else
            (error (string "invalid assignment location \"" (deparse name) "\""))))))
 
@@ -1104,6 +1122,18 @@
                    (eq? (caar binds) '=))
               ;; some kind of assignment
               (cond
+               ((eventually-call (cadar binds))
+                ;; f()=c
+                (let ((asgn (butlast (expand-forms (car binds))))
+                      (name (assigned-name (cadar binds))))
+                  (if (not (symbol? name))
+                      (error "invalid let syntax"))
+                  (loop (cdr binds)
+                        `(scope-block
+                          (block
+                           (local-def ,name)
+                           ,asgn
+                           ,blk)))))
                ((or (symbol? (cadar binds))
                     (decl?   (cadar binds)))
                 (let ((vname (decl-var (cadar binds))))
@@ -1123,23 +1153,6 @@
                                (local-def ,(cadar binds))
                                (= ,vname ,(caddar binds))
                                ,blk))))))
-               ((and (pair? (cadar binds))
-                     (or (eq? (caadar binds) 'call)
-                         (and (eq? (caadar binds) 'comparison)
-                              (length= (cadar binds) 4))))
-                ;; f()=c
-                (let* ((asgn (butlast (expand-forms (car binds))))
-                       (name (cadr (cadar binds)))
-                       (name (cond ((symbol? name) name)
-                                   ((and (pair? name) (eq? (car name) 'curly))
-                                    (cadr name))
-                                   (else (error "invalid let syntax")))))
-                  (loop (cdr binds)
-                        `(scope-block
-                          (block
-                           (local-def ,name)
-                           ,asgn
-                           ,blk)))))
                ;; (a, b, c, ...) = rhs
                ((and (pair? (cadar binds))
                      (eq? (caadar binds) 'tuple))
@@ -1163,9 +1176,10 @@
            (expand-forms
             `(function (call ,(symbol (string #\@ (cadr (cadr e))))
                              (|::| __source__ (core LineNumberNode))
+                             (|::| __module__ (core Module))
                              ,@(map (lambda (v)
                                       (if (symbol? v)
-                                          `(|::| ,v (core ANY))
+                                          `(meta nospecialize ,v)
                                           v))
                                     anames))
                        ,@(cddr e)))))
@@ -2079,7 +2093,8 @@
          (let ((f (cadr e)))
            (cond ((dotop? f)
                   (expand-fuse-broadcast '() `(|.| ,(undotop f) (tuple ,@(cddr e)))))
-                 ((and (eq? f 'ccall) (length> e 4))
+                 ((eq? f 'ccall)
+                  (if (not (length> e 4)) (error "too few arguments to ccall"))
                   (let* ((cconv (cadddr e))
                          (have-cconv (memq cconv '(cdecl stdcall fastcall thiscall llvmcall)))
                          (after-cconv (if have-cconv (cddddr e) (cdddr e)))
@@ -2095,8 +2110,8 @@
                                   (error "ccall argument types must be a tuple; try \"(T,)\" and check if you specified a correct return type")
                                   (error "ccall argument types must be a tuple; try \"(T,)\"")))
                           (expand-forms
-                           (lower-ccall name RT (cdr argtypes)
-                            (if have-cconv (append args (list (list cconv))) args)))))) ;; place (callingconv) at end of arglist
+                           (lower-ccall name RT (cdr argtypes) args
+                            (if have-cconv (list (list cconv)) '()))))))
                  ((and (pair? (caddr e))
                        (eq? (car (caddr e)) 'parameters))
                   ;; (call f (parameters . kwargs) ...)
@@ -2137,7 +2152,7 @@
 
                  ((and (eq? f '^) (length= e 4) (integer? (cadddr e)))
                   (expand-forms
-                   `(call (top literal_pow) ^ ,(caddr e) (call (core apply_type) (top Val) ,(cadddr e)))))
+                   `(call (top literal_pow) ^ ,(caddr e) (call (call (core apply_type) (top Val) ,(cadddr e))))))
 
                  ((and (eq? f '*) (length= e 4))
                   (expand-transposed-op
@@ -2314,25 +2329,6 @@
 
    '|'|  (lambda (e) `(call ctranspose ,(expand-forms (cadr e))))
    '|.'| (lambda (e) `(call  transpose ,(expand-forms (cadr e))))
-
-   'ccall
-   (lambda (e)
-     (syntax-deprecation #f "Expr(:ccall)" "Expr(:call, :ccall)")
-     (if (length> e 3)
-         (let ((name (cadr e))
-               (RT   (caddr e))
-               (argtypes (cadddr e))
-               (args (cddddr e)))
-           (begin
-             (if (not (and (pair? argtypes)
-                           (eq? (car argtypes) 'tuple)))
-                 (if (and (pair? RT)
-                          (eq? (car RT) 'tuple))
-                     (error "ccall argument types must be a tuple; try \"(T,)\" and check if you specified a correct return type")
-                     (error "ccall argument types must be a tuple; try \"(T,)\"")))
-             (expand-forms
-              (lower-ccall name RT (cdr argtypes) args))))
-         e))
 
    'generator
    (lambda (e)
@@ -2911,13 +2907,15 @@ f(x) = yt(x)
 
 ;; return `body` with `stmts` inserted after any meta nodes
 (define (insert-after-meta body stmts)
-  (let ((meta (take-while (lambda (x) (and (pair? x)
-                                           (memq (car x) '(line meta))))
-                          (cdr body))))
-    `(,(car body)
-      ,@meta
-      ,@stmts
-      ,@(list-tail body (+ 1 (length meta))))))
+  (if (null? stmts)
+      body
+      (let ((meta (take-while (lambda (x) (and (pair? x)
+                                               (memq (car x) '(line meta))))
+                              (cdr body))))
+        `(,(car body)
+          ,@meta
+          ,@stmts
+          ,@(list-tail body (+ 1 (length meta)))))))
 
 (define (add-box-inits-to-body lam body)
   (let ((args (map arg-name (lam:args lam)))
@@ -3072,6 +3070,24 @@ f(x) = yt(x)
                    (assq (cadr e) (cadr (lam:vinfo lam))))
                '(null)
                e))
+          ((isdefined) ;; convert isdefined expr to function for closure converted variables
+           (let* ((sym (cadr e))
+                  (vi (and (symbol? sym) (assq sym (car  (lam:vinfo lam)))))
+                  (cv (and (symbol? sym) (assq sym (cadr (lam:vinfo lam))))))
+             (cond ((eq? sym fname) e)
+                   ((memq sym (lam:sp lam)) e)
+                   (cv
+                    (if (and (vinfo:asgn cv) (vinfo:capt cv))
+                      (let ((access (if interp
+                                      `($ (call (core QuoteNode) ,sym))
+                                      `(call (core getfield) ,fname (inert ,sym)))))
+                          `(call (core isdefined) ,access (inert contents)))
+                      'true))
+                   (vi
+                    (if (and (vinfo:asgn vi) (vinfo:capt vi))
+                        `(call (core isdefined) ,sym (inert contents))
+                        e))
+                   (else e))))
           ((method)
            (let* ((name  (method-expr-name e))
                   (short (length= e 2))  ;; function f end
@@ -3596,6 +3612,7 @@ f(x) = yt(x)
             ((local) #f)
             ((implicit-global) #f)
             ((const) (emit e))
+            ((isdefined) (if tail (emit-return e) e))
 
             ;; top level expressions returning values
             ((abstract_type bits_type composite_type thunk toplevel module)
@@ -3774,6 +3791,9 @@ f(x) = yt(x)
           ((and (pair? e) (eq? (car e) 'outerref))
            (let ((idx (get sp-table (cadr e) #f)))
                 (if idx `(static_parameter ,idx) (cadr e))))
+          ((nospecialize-meta? e)
+           ;; convert nospecialize vars to slot numbers
+           `(meta nospecialize ,@(map renumber-slots (cddr e))))
           ((or (atom? e) (quoted? e)) e)
           ((ssavalue? e)
            (let ((idx (or (get ssavalue-table (cadr e) #f)

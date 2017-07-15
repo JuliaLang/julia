@@ -9,7 +9,7 @@ import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor,
              ndigits, promote_rule, rem, show, isqrt, string, powermod,
              sum, trailing_zeros, trailing_ones, count_ones, base, tryparse_internal,
              bin, oct, dec, hex, isequal, invmod, prevpow2, nextpow2, ndigits0zpb,
-             widen, signed, unsafe_trunc, trunc, iszero, big, flipsign, signbit
+             widen, signed, unsafe_trunc, trunc, iszero, big, flipsign, signbit, hastypemax
 
 if Clong == Int32
     const ClongMax = Union{Int8, Int16, Int32}
@@ -46,6 +46,7 @@ mutable struct BigInt <: Integer
     alloc::Cint
     size::Cint
     d::Ptr{Limb}
+
     function BigInt()
         b = new(zero(Cint), zero(Cint), C_NULL)
         MPZ.init!(b)
@@ -77,9 +78,10 @@ BigInt(x)
 function __init__()
     try
         if gmp_version().major != GMP_VERSION.major || gmp_bits_per_limb() != GMP_BITS_PER_LIMB
-            error(string("The dynamically loaded GMP library (version $(gmp_version()) with __gmp_bits_per_limb == $(gmp_bits_per_limb()))\n",
-                         "does not correspond to the compile time version (version $GMP_VERSION with __gmp_bits_per_limb == $GMP_BITS_PER_LIMB).\n",
-                         "Please rebuild Julia."))
+            msg = gmp_bits_per_limb() != GMP_BITS_PER_LIMB ? error : warn
+            msg(string("The dynamically loaded GMP library (version $(gmp_version()) with __gmp_bits_per_limb == $(gmp_bits_per_limb()))\n",
+                       "does not correspond to the compile time version (version $GMP_VERSION with __gmp_bits_per_limb == $GMP_BITS_PER_LIMB).\n",
+                       "Please rebuild Julia."))
         end
 
         ccall((:__gmp_set_memory_functions, :libgmp), Void,
@@ -113,6 +115,9 @@ gmpz(op::Symbol) = (Symbol(:__gmpz_, op), :libgmp)
 
 init!(x::BigInt) = (ccall((:__gmpz_init, :libgmp), Void, (mpz_t,), &x); x)
 init2!(x::BigInt, a) = (ccall((:__gmpz_init2, :libgmp), Void, (mpz_t, bitcnt_t), &x, a); x)
+
+realloc2!(x, a) = (ccall((:__gmpz_realloc2, :libgmp), Void, (mpz_t, bitcnt_t), &x, a); x)
+realloc2(a) = realloc2!(BigInt(), a)
 
 sizeinbase(a::BigInt, b) = Int(ccall((:__gmpz_sizeinbase, :libgmp), Csize_t, (mpz_t, Cint), &a, b))
 
@@ -196,6 +201,9 @@ cmp_si(a::BigInt, b) = ccall((:__gmpz_cmp_si, :libgmp), Cint, (mpz_t, Clong), &a
 cmp_ui(a::BigInt, b) = ccall((:__gmpz_cmp_ui, :libgmp), Cint, (mpz_t, Culong), &a, b) % Int
 cmp_d(a::BigInt, b) = ccall((:__gmpz_cmp_d, :libgmp), Cint, (mpz_t, Cdouble), &a, b) % Int
 
+mpn_cmp(a::Ptr{Limb}, b::Ptr{Limb}, c) = ccall((:__gmpn_cmp, :libgmp), Cint, (Ptr{Limb}, Ptr{Limb}, Clong), a, b, c)
+mpn_cmp(a::BigInt, b::BigInt, c) = mpn_cmp(a.d, b.d, c)
+
 get_str!(x, a, b::BigInt) = (ccall((:__gmpz_get_str,:libgmp), Ptr{Cchar}, (Ptr{Cchar}, Cint, mpz_t), x, a, &b); x)
 set_str!(x::BigInt, a, b) = ccall((:__gmpz_set_str, :libgmp), Cint, (mpz_t, Ptr{UInt8}, Cint), &x, a, b) % Int
 get_d(a::BigInt) = ccall((:__gmpz_get_d, :libgmp), Cdouble, (mpz_t,), &a)
@@ -219,6 +227,8 @@ widen(::Type{BigInt})  = BigInt
 signed(x::BigInt) = x
 
 convert(::Type{BigInt}, x::BigInt) = x
+
+hastypemax(::Type{BigInt}) = false
 
 function tryparse_internal(::Type{BigInt}, s::AbstractString, startpos::Int, endpos::Int, base_::Integer, raise::Bool)
     _n = Nullable{BigInt}()
@@ -255,12 +265,12 @@ convert(::Type{BigInt}, x::Bool) = BigInt(UInt(x))
 unsafe_trunc(::Type{BigInt}, x::Union{Float32,Float64}) = MPZ.set_d(x)
 
 function convert(::Type{BigInt}, x::Union{Float32,Float64})
-    isinteger(x) || throw(InexactError())
+    isinteger(x) || throw(InexactError(:convert, BigInt, x))
     unsafe_trunc(BigInt,x)
 end
 
 function trunc(::Type{BigInt}, x::Union{Float32,Float64})
-    isfinite(x) || throw(InexactError())
+    isfinite(x) || throw(InexactError(:trunc, BigInt, x))
     unsafe_trunc(BigInt,x)
 end
 
@@ -297,7 +307,7 @@ end
 
 
 rem(x::BigInt, ::Type{Bool}) = ((x&1)!=0)
-function rem{T<:Union{Unsigned,Signed}}(x::BigInt, ::Type{T})
+function rem(x::BigInt, ::Type{T}) where T<:Union{Unsigned,Signed}
     u = zero(T)
     for l = 1:min(abs(x.size), cld(sizeof(T),sizeof(Limb)))
         u += (unsafe_load(x.d,l)%T) << ((sizeof(Limb)<<3)*(l-1))
@@ -311,7 +321,7 @@ function convert(::Type{T}, x::BigInt) where T<:Unsigned
     if sizeof(T) < sizeof(Limb)
         convert(T, convert(Limb,x))
     else
-        0 <= x.size <= cld(sizeof(T),sizeof(Limb)) || throw(InexactError())
+        0 <= x.size <= cld(sizeof(T),sizeof(Limb)) || throw(InexactError(:convert, T, x))
         x % T
     end
 end
@@ -322,9 +332,9 @@ function convert(::Type{T}, x::BigInt) where T<:Signed
         SLimb = typeof(Signed(one(Limb)))
         convert(T, convert(SLimb, x))
     else
-        0 <= n <= cld(sizeof(T),sizeof(Limb)) || throw(InexactError())
+        0 <= n <= cld(sizeof(T),sizeof(Limb)) || throw(InexactError(:convert, T, x))
         y = x % T
-        ispos(x) ⊻ (y > 0) && throw(InexactError()) # catch overflow
+        ispos(x) ⊻ (y > 0) && throw(InexactError(:convert, T, x)) # catch overflow
         y
     end
 end
@@ -395,7 +405,7 @@ function invmod(x::BigInt, y::BigInt)
         return z
     end
     if (y==0 || MPZ.invert!(z, x, ya) == 0)
-        throw(DomainError())
+        throw(DomainError(y))
     end
     # GMP always returns a positive inverse; we instead want to
     # normalize such that div(z, y) == 0, i.e. we want a negative z
@@ -466,7 +476,7 @@ cmp(x::BigInt, y::CulongMax) = MPZ.cmp_ui(x, y)
 cmp(x::BigInt, y::Integer) = cmp(x, big(y))
 cmp(x::Integer, y::BigInt) = -cmp(y, x)
 
-cmp(x::BigInt, y::CdoubleMax) = isnan(y) ? throw(DomainError()) : MPZ.cmp_d(x, y)
+cmp(x::BigInt, y::CdoubleMax) = isnan(y) ? throw(DomainError(y, "`y` cannot be NaN.")) : MPZ.cmp_d(x, y)
 cmp(x::CdoubleMax, y::BigInt) = -cmp(y, x)
 
 isqrt(x::BigInt) = MPZ.sqrt(x)
@@ -474,7 +484,7 @@ isqrt(x::BigInt) = MPZ.sqrt(x)
 ^(x::BigInt, y::Culong) = MPZ.pow_ui(x, y)
 
 function bigint_pow(x::BigInt, y::Integer)
-    if y<0; throw(DomainError()); end
+    if y<0; throw(DomainError(y, "`y` cannot be negative.")); end
     if x== 1; return x; end
     if x==-1; return isodd(y) ? x : -x; end
     if y>typemax(Culong)
@@ -575,31 +585,23 @@ oct(n::BigInt, pad::Int) = base( 8, n, pad)
 dec(n::BigInt, pad::Int) = base(10, n, pad)
 hex(n::BigInt, pad::Int) = base(16, n, pad)
 
-function base(b::Integer, n::BigInt)
-    b < 0 && return base(Int(b), n, 1, (b>0) & (n.size<0))
-    2 <= b <= 62 || throw(ArgumentError("base must be 2 ≤ base ≤ 62, got $b"))
-    nd = ndigits(n, b)
-    str = Base._string_n(n < 0 ? nd+1 : nd)
-    MPZ.get_str!(str, b, n)
-end
-
-function base(b::Integer, n::BigInt, pad::Integer)
+function base(b::Integer, n::BigInt, pad::Integer=1)
     b < 0 && return base(Int(b), n, pad, (b>0) & (n.size<0))
-    s = base(b, n)
-    buf = IOBuffer()
-    if n < 0
-        s = s[2:end]
-        write(buf, '-')
+    2 <= b <= 62 || throw(ArgumentError("base must be 2 ≤ base ≤ 62, got $b"))
+    iszero(n) && pad < 1 && return ""
+    nd1 = ndigits(n, b)
+    nd  = max(nd1, pad)
+    sv  = Base.StringVector(nd + isneg(n))
+    MPZ.get_str!(pointer(sv) + nd - nd1, b, n)
+    @inbounds for i = (1:nd-nd1) + isneg(n)
+        sv[i] = '0' % UInt8
     end
-    for i in 1:pad-sizeof(s) # `s` is known to be ASCII, and `length` is slower
-        write(buf, '0')
-    end
-    write(buf, s)
-    String(buf)
+    isneg(n) && (sv[1] = '-' % UInt8)
+    String(sv)
 end
 
 function ndigits0zpb(x::BigInt, b::Integer)
-    b < 2 && throw(DomainError())
+    b < 2 && throw(DomainError(b, "`b` cannot be less than 2."))
     x.size == 0 && return 0 # for consistency with other ndigits0z methods
     if ispow2(b) && 2 <= b <= 62 # GMP assumes b is in this range
         MPZ.sizeinbase(x, b)

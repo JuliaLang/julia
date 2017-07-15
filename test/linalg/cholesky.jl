@@ -23,14 +23,11 @@ using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted, PosDefException
     for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
         a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
         a2 = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(a2real, a2img) : a2real)
-        apd  = a'*a                  # symmetric positive-definite
 
-        apds  = Symmetric(apd)
-        apdsL = Symmetric(apd, :L)
-        apdh  = Hermitian(apd)
-        apdhL = Hermitian(apd, :L)
         ε = εa = eps(abs(float(one(eltya))))
 
+        # Test of symmetric pos. def. strided matrix
+        apd  = a'*a
         @inferred cholfact(apd)
         @inferred chol(apd)
         capd  = factorize(apd)
@@ -54,6 +51,7 @@ using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted, PosDefException
             @test E[i,j] <= (n+1)ε/(1-(n+1)ε)*real(sqrt(apd[i,i]*apd[j,j]))
         end
         @test apd*inv(capd) ≈ eye(n)
+        @test LinAlg.issuccess(capd)
         @test abs((det(capd) - det(apd))/det(capd)) <= ε*κ*n # Ad hoc, but statistically verified, revisit
         @test @inferred(logdet(capd)) ≈ log(det(capd)) # logdet is less likely to overflow
 
@@ -61,51 +59,58 @@ using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted, PosDefException
         @test all(x -> x ≈ √apos, cholfact(apos).factors)
         @test_throws PosDefException chol(-one(eltya))
 
+        # Test cholfact with Symmetric/Hermitian upper/lower
+        apds  = Symmetric(apd)
+        apdsL = Symmetric(apd, :L)
+        apdh  = Hermitian(apd)
+        apdhL = Hermitian(apd, :L)
         if eltya <: Real
             capds = cholfact(apds)
             @test inv(capds)*apds ≈ eye(n)
             @test abs((det(capds) - det(apd))/det(capds)) <= ε*κ*n
+            @test logdet(capds) ≈ log(det(capds))
+            @test isposdef(capds)
             if eltya <: BlasReal
                 capds = cholfact!(copy(apds))
                 @test inv(capds)*apds ≈ eye(n)
                 @test abs((det(capds) - det(apd))/det(capds)) <= ε*κ*n
+                @test logdet(capds) ≈ log(det(capds))
+                @test isposdef(capds)
             end
             ulstring = sprint(show,capds[:UL])
-            @test sprint(show,capds) == "$(typeof(capds)) with factor:\n$ulstring"
+            @test sprint(show,capds) == "$(typeof(capds)) with factor:\n$ulstring\nsuccessful: true"
         else
             capdh = cholfact(apdh)
             @test inv(capdh)*apdh ≈ eye(n)
             @test abs((det(capdh) - det(apd))/det(capdh)) <= ε*κ*n
+            @test logdet(capdh) ≈ log(det(capdh))
+            @test isposdef(capdh)
             capdh = cholfact!(copy(apdh))
             @test inv(capdh)*apdh ≈ eye(n)
             @test abs((det(capdh) - det(apd))/det(capdh)) <= ε*κ*n
+            @test logdet(capdh) ≈ log(det(capdh))
+            @test isposdef(capdh)
             capdh = cholfact!(copy(apd))
             @test inv(capdh)*apdh ≈ eye(n)
             @test abs((det(capdh) - det(apd))/det(capdh)) <= ε*κ*n
-            capdh = cholfact!(copy(apd), :L)
-            @test inv(capdh)*apdh ≈ eye(n)
-            @test abs((det(capdh) - det(apd))/det(capdh)) <= ε*κ*n
+            @test logdet(capdh) ≈ log(det(capdh))
+            @test isposdef(capdh)
             ulstring = sprint(show,capdh[:UL])
-            @test sprint(show,capdh) == "$(typeof(capdh)) with factor:\n$ulstring"
+            @test sprint(show,capdh) == "$(typeof(capdh)) with factor:\n$ulstring\nsuccessful: true"
         end
 
         # test chol of 2x2 Strang matrix
         S = convert(AbstractMatrix{eltya},full(SymTridiagonal([2,2],[-1])))
-        U = Bidiagonal([2,sqrt(eltya(3))],[-1],true) / sqrt(eltya(2))
+        U = Bidiagonal([2,sqrt(eltya(3))],[-1],:U) / sqrt(eltya(2))
         @test full(chol(S)) ≈ full(U)
 
-        #lower Cholesky factor
-        lapd = cholfact(apd, :L)
-        @test full(lapd) ≈ apd
-        l = lapd[:L]
-        @test l*l' ≈ apd
-        @test triu(capd.factors) ≈ lapd[:U]
-        @test tril(lapd.factors) ≈ capd[:L]
+        # test extraction of factor and re-creating original matrix
         if eltya <: Real
             capds = cholfact(apds)
             lapds = cholfact(apdsL)
             cl    = chol(apdsL)
             ls = lapds[:L]
+            @test full(capds) ≈ full(lapds) ≈ apd
             @test ls*ls' ≈ apd
             @test triu(capds.factors) ≈ lapds[:U]
             @test tril(lapds.factors) ≈ capds[:L]
@@ -117,6 +122,7 @@ using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted, PosDefException
             lapdh = cholfact(apdhL)
             cl    = chol(apdhL)
             ls = lapdh[:L]
+            @test full(capdh) ≈ full(lapdh) ≈ apd
             @test ls*ls' ≈ apd
             @test triu(capdh.factors) ≈ lapdh[:U]
             @test tril(lapdh.factors) ≈ capdh[:L]
@@ -127,9 +133,9 @@ using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted, PosDefException
 
         #pivoted upper Cholesky
         if eltya != BigFloat
-            cz = cholfact(zeros(eltya,n,n), :U, Val{true})
+            cz = cholfact(Hermitian(zeros(eltya,n,n)), Val(true))
             @test_throws Base.LinAlg.RankDeficientException Base.LinAlg.chkfullrank(cz)
-            cpapd = cholfact(apd, :U, Val{true})
+            cpapd = cholfact(apdh, Val(true))
             @test rank(cpapd) == n
             @test all(diff(diag(real(cpapd.factors))).<=0.) # diagonal should be non-increasing
             if isreal(apd)
@@ -162,17 +168,19 @@ using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted, PosDefException
                 @test norm(a*(capd\(a'*b)) - b,1)/norm(b,1) <= ε*κ*n # Ad hoc, revisit
 
                 if eltya != BigFloat && eltyb != BigFloat
+                    lapd = cholfact(apdhL)
                     @test norm(apd * (lapd\b) - b)/norm(b) <= ε*κ*n
                     @test norm(apd * (lapd\b[1:n]) - b[1:n])/norm(b[1:n]) <= ε*κ*n
                 end
-                @test_throws DimensionMismatch lapd\RowVector(ones(n))
+                @test_throws DimensionMismatch cholfact(apdhL)\RowVector(ones(n))
 
                 if eltya != BigFloat && eltyb != BigFloat # Note! Need to implement pivoted Cholesky decomposition in julia
 
+                    cpapd = cholfact(apdh, Val(true))
                     @test norm(apd * (cpapd\b) - b)/norm(b) <= ε*κ*n # Ad hoc, revisit
                     @test norm(apd * (cpapd\b[1:n]) - b[1:n])/norm(b[1:n]) <= ε*κ*n
 
-                    lpapd = cholfact(apd, :L, Val{true})
+                    lpapd = cholfact(apdhL, Val(true))
                     @test norm(apd * (lpapd\b) - b)/norm(b) <= ε*κ*n # Ad hoc, revisit
                     @test norm(apd * (lpapd\b[1:n]) - b[1:n])/norm(b[1:n]) <= ε*κ*n
 
@@ -214,8 +222,8 @@ end
         AcA = A'A
         BcB = AcA + v*v'
         BcB = (BcB + BcB')/2
-        F = cholfact(AcA, uplo)
-        G = cholfact(BcB, uplo)
+        F = cholfact(Hermitian(AcA, uplo))
+        G = cholfact(Hermitian(BcB, uplo))
         @test LinAlg.lowrankupdate(F, v)[uplo] ≈ G[uplo]
         @test_throws DimensionMismatch LinAlg.lowrankupdate(F, ones(eltype(v), length(v)+1))
         @test LinAlg.lowrankdowndate(G, v)[uplo] ≈ F[uplo]
@@ -244,7 +252,7 @@ end
         0.25336108035924787 + 0.975317836492159im 0.0628393808469436 - 0.1253397353973715im
         0.11192755545114 - 0.1603741874112385im 0.8439562576196216 + 1.0850814110398734im
         -1.0568488936791578 - 0.06025820467086475im 0.12696236014017806 - 0.09853584666755086im]
-    cholfact(apd, :L, Val{true}) \ b
+    cholfact(Hermitian(apd, :L), Val(true)) \ b
     r = factorize(apd)[:U]
     E = abs.(apd - r'*r)
     ε = eps(abs(float(one(Complex64))))
@@ -255,22 +263,26 @@ end
 end
 
 @testset "throw if non-Hermitian" begin
-    @test_throws ArgumentError cholfact(randn(5,5))
-    @test_throws ArgumentError cholfact(complex.(randn(5,5), randn(5,5)))
-    @test_throws ArgumentError Base.LinAlg.chol!(randn(5,5))
-    @test_throws ArgumentError Base.LinAlg.cholfact!(randn(5,5),:U,Val{false})
-    @test_throws ArgumentError Base.LinAlg.cholfact!(randn(5,5),:U,Val{true})
-    @test_throws ArgumentError cholfact(randn(5,5),:U,Val{false})
+    R = randn(5, 5)
+    C = complex.(R, R)
+    for A in (R, C)
+        @test_throws ArgumentError cholfact(A)
+        @test_throws ArgumentError cholfact!(copy(A))
+        @test_throws ArgumentError chol(A)
+        @test_throws ArgumentError Base.LinAlg.chol!(copy(A))
+    end
 end
 
 @testset "fail for non-BLAS element types" begin
-    @test_throws ArgumentError cholfact!(Hermitian(rand(Float16, 5,5)), Val{true})
+    @test_throws ArgumentError cholfact!(Hermitian(rand(Float16, 5,5)), Val(true))
 end
 
 @testset "throw for non positive definite matrix" begin
     for T in (Float32, Float64, Complex64, Complex128)
         A = T[1 2; 2 1]; B = T[1, 1]
         C = cholfact(A)
+        @test !isposdef(C)
+        @test !LinAlg.issuccess(C)
         @test_throws PosDefException C\B
         @test_throws PosDefException det(C)
         @test_throws PosDefException logdet(C)

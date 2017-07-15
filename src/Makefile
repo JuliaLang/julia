@@ -6,11 +6,7 @@ include $(JULIAHOME)/Make.inc
 include $(JULIAHOME)/deps/llvm-ver.make
 
 override CFLAGS += $(JCFLAGS)
-ifeq ($(LLVM_VER),3.3)
-override CXXFLAGS += $(JCXXFLAGS) -std=c++11
-else
 override CXXFLAGS += $(JCXXFLAGS)
-endif
 override CPPFLAGS += $(JCPPFLAGS)
 
 # -I BUILDDIR comes before -I SRCDIR so that the user can override <options.h> on a per-build-directory basis
@@ -41,10 +37,11 @@ endif
 
 SRCS := \
 	jltypes gf typemap ast builtins module interpreter symbol \
-	dlload sys init task array dump toplevel jl_uv datatype \
+	dlload sys init task array dump staticdata toplevel jl_uv datatype \
 	simplevector APInt-C runtime_intrinsics runtime_ccall precompile \
 	threadgroup threading stackwalk gc gc-debug gc-pages method \
-	jlapi signal-handling safepoint jloptions timing subtype rtutils
+	jlapi signal-handling safepoint jloptions timing subtype rtutils \
+	crc32c
 
 ifeq ($(USEMSVC), 1)
 SRCS += getopt
@@ -53,7 +50,7 @@ endif
 LLVMLINK :=
 
 ifeq ($(JULIACODEGEN),LLVM)
-SRCS += codegen jitlayers disasm debuginfo llvm-simdloop llvm-ptls llvm-gcroot llvm-lower-handlers cgmemmgr
+SRCS += codegen jitlayers disasm debuginfo llvm-simdloop llvm-ptls llvm-muladd llvm-late-gc-lowering llvm-lower-handlers llvm-gc-invariant-verifier llvm-propagate-addrspaces cgmemmgr
 FLAGS += -I$(shell $(LLVM_CONFIG_HOST) --includedir)
 LLVM_LIBS := all
 ifeq ($(USE_POLLY),1)
@@ -65,13 +62,9 @@ ifeq ($(USE_POLLY_OPENMP),1)
 FLAGS += -fopenmp
 endif
 ifeq ($(USE_POLLY_ACC),1)
-LLVMLINK += -lPollyPPCG
+LLVMLINK += -lPollyPPCG -lGPURuntime
 FLAGS += -DUSE_POLLY_ACC
-ifeq ($(CUDALIB_INCLUDE_DIR),)
-$(error CUDALIB_INCLUDE_DIR not set: If compiling with USE_POLLY_ACC, user must provide the path to CUDA header files)
-endif
-FLAGS += -I$(CUDALIB_INCLUDE_DIR)
-FLAGS += -I$(shell $(LLVM_CONFIG_HOST) --src-root)/tools/polly/tools
+FLAGS += -I$(shell $(LLVM_CONFIG_HOST) --src-root)/tools/polly/tools # Required to find GPURuntime/GPUJIT.h
 endif
 endif
 else
@@ -97,15 +90,7 @@ PUBLIC_HEADER_TARGETS := $(addprefix $(build_includedir)/julia/,$(notdir $(PUBLI
 ifneq ($(USE_LLVM_SHLIB),1)
 LLVMLINK += $(shell $(LLVM_CONFIG_HOST) --ldflags) $(shell $(LLVM_CONFIG_HOST) --libs $(LLVM_LIBS)) $(shell $(LLVM_CONFIG_HOST) --ldflags) $(shell $(LLVM_CONFIG_HOST) --system-libs 2> /dev/null)
 else
-ifeq ($(LLVM_USE_CMAKE),1)
 LLVMLINK += $(shell $(LLVM_CONFIG_HOST) --ldflags) -lLLVM
-else
-ifeq ($(OS),WINNT)
-LLVMLINK += $(shell $(LLVM_CONFIG_HOST) --ldflags) -lLLVM-$(LLVM_VER_SHORT)
-else
-LLVMLINK += $(shell $(LLVM_CONFIG_HOST) --ldflags) -lLLVM-$(shell $(LLVM_CONFIG_HOST) --version)
-endif # OS == WINNT
-endif # LLVM_USE_CMAKE == 1
 FLAGS += -DLLVM_SHLIB
 endif # USE_LLVM_SHLIB == 1
 

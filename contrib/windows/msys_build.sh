@@ -123,7 +123,7 @@ if [ -z "$USEMSVC" ]; then
   fi
   export AR=${CROSS_COMPILE}ar
 
-  f=llvm-3.9.1-$ARCH-w64-mingw32-juliadeps-r04.7z
+  f=llvm-3.9.1-$ARCH-w64-mingw32-juliadeps-r06.7z
 else
   echo "override USEMSVC = 1" >> Make.user
   echo "override ARCH = $ARCH" >> Make.user
@@ -165,7 +165,7 @@ if ! [ -e usr/bin/busybox.exe ]; then
   $curlflags -o usr/bin/busybox.exe http://frippery.org/files/busybox/$f
 fi
 
-for lib in SUITESPARSE ARPACK BLAS LAPACK FFTW \
+for lib in SUITESPARSE ARPACK BLAS LAPACK \
     GMP MPFR PCRE LIBUNWIND OPENSPECFUN; do
   echo "USE_SYSTEM_$lib = 1" >> Make.user
 done

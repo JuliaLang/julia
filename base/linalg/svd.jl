@@ -102,10 +102,11 @@ julia> U*diagm(S)*V'
  0.0  2.0  0.0  0.0  0.0
 ```
 """
-function svd(A::Union{Number, AbstractArray}; thin::Bool=true)
+function svd(A::AbstractArray; thin::Bool=true)
     F = svdfact(A, thin=thin)
     F.U, F.S, F.Vt'
 end
+svd(x::Number; thin::Bool=true) = first.(svd(fill(x, 1, 1)))
 
 function getindex(F::SVD, d::Symbol)
     if d == :U
@@ -127,7 +128,7 @@ end
 Returns the singular values of `A`, saving space by overwriting the input.
 See also [`svdvals`](@ref).
 """
-svdvals!(A::StridedMatrix{T}) where {T<:BlasFloat} = findfirst(size(A), 0) > 0 ? zeros(T, 0) : LAPACK.gesdd!('N', A)[2]
+svdvals!(A::StridedMatrix{T}) where {T<:BlasFloat} = isempty(A) ? zeros(real(T), 0) : LAPACK.gesdd!('N', A)[2]
 svdvals(A::AbstractMatrix{<:BlasFloat}) = svdvals!(copy(A))
 
 """
@@ -161,7 +162,7 @@ svdvals(x::Number) = abs(x)
 svdvals(S::SVD{<:Any,T}) where {T} = (S[:S])::Vector{T}
 
 # SVD least squares
-function A_ldiv_B!{T}(A::SVD{T}, B::StridedVecOrMat)
+function A_ldiv_B!(A::SVD{T}, B::StridedVecOrMat) where T
     k = searchsortedlast(A.S, eps(real(T))*A.S[1], rev=true)
     view(A.Vt,1:k,:)' * (view(A.S,1:k) .\ (view(A.U,:,1:k)' * B))
 end
@@ -231,6 +232,10 @@ function svdfact(A::StridedMatrix{TA}, B::StridedMatrix{TB}) where {TA,TB}
     S = promote_type(Float32, typeof(one(TA)/norm(one(TA))),TB)
     return svdfact!(copy_oftype(A, S), copy_oftype(B, S))
 end
+# This method can be heavily optimized but it is probably not critical
+# and might introduce bugs or inconsistencies relative to the 1x1 matrix
+# version
+svdfact(x::Number, y::Number) = svdfact(fill(x, 1, 1), fill(y, 1, 1))
 
 """
     svd(A, B) -> U, V, Q, D1, D2, R0
@@ -245,6 +250,7 @@ function svd(A::AbstractMatrix, B::AbstractMatrix)
     F = svdfact(A, B)
     F[:U], F[:V], F[:Q], F[:D1], F[:D2], F[:R0]
 end
+svd(x::Number, y::Number) = first.(svd(fill(x, 1, 1), fill(y, 1, 1)))
 
 function getindex(obj::GeneralizedSVD{T}, d::Symbol) where T
     if d == :U
@@ -305,6 +311,7 @@ function svdvals(A::StridedMatrix{TA}, B::StridedMatrix{TB}) where {TA,TB}
     S = promote_type(Float32, typeof(one(TA)/norm(one(TA))), TB)
     return svdvals!(copy_oftype(A, S), copy_oftype(B, S))
 end
+svdvals(x::Number, y::Number) = abs(x/y)
 
 # Conversion
 convert(::Type{AbstractMatrix}, F::SVD) = (F.U * Diagonal(F.S)) * F.Vt

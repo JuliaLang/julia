@@ -18,7 +18,8 @@ Equivalent to the native `char` c-type.
 """
 Cchar
 
-if is_windows()
+# The ccall here is equivalent to Sys.iswindows(), but that's not defined yet
+@static if ccall(:jl_get_UNAME, Any, ()) === :NT
     const Clong = Int32
     const Culong = UInt32
     const Cwchar_t = UInt16
@@ -49,7 +50,7 @@ Equivalent to the native `wchar_t` c-type ([`Int32`](@ref)).
 """
 Cwchar_t
 
-if !is_windows()
+@static if ccall(:jl_get_UNAME, Any, ()) !== :NT
     const sizeof_mode_t = ccall(:jl_sizeof_mode_t, Cint, ())
     if sizeof_mode_t == 2
         const Cmode_t = Int16
@@ -118,7 +119,7 @@ end
 # symbols are guaranteed not to contain embedded NUL
 convert(::Type{Cstring}, s::Symbol) = Cstring(unsafe_convert(Ptr{Cchar}, s))
 
-if is_windows()
+@static if ccall(:jl_get_UNAME, Any, ()) === :NT
 """
     Base.cwstring(s)
 
@@ -344,9 +345,18 @@ function ccallable(f::Function, rt::Type, argt::Type, name::Union{AbstractString
     ccall(:jl_extern_c, Void, (Any, Any, Any, Cstring), f, rt, argt, name)
 end
 
-macro ccallable(rt, def)
+function expand_ccallable(rt, def)
     if isa(def,Expr) && (def.head === :(=) || def.head === :function)
         sig = def.args[1]
+        if sig.head === :(::)
+            if rt === nothing
+                rt = sig.args[2]
+            end
+            sig = sig.args[1]
+        end
+        if rt === nothing
+            error("@ccallable requires a return type")
+        end
         if sig.head === :call
             name = sig.args[1]
             at = map(sig.args[2:end]) do a
@@ -363,4 +373,11 @@ macro ccallable(rt, def)
         end
     end
     error("expected method definition in @ccallable")
+end
+
+macro ccallable(def)
+    expand_ccallable(nothing, def)
+end
+macro ccallable(rt, def)
+    expand_ccallable(rt, def)
 end

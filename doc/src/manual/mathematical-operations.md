@@ -169,6 +169,11 @@ For example, if you define `⊗(A,B) = kron(A,B)` to give a convenient
 infix syntax `A ⊗ B` for Kronecker products ([`kron`](@ref)), then
 `[A,B] .⊗ [C,D]` will compute `[A⊗C, B⊗D]` with no additional coding.
 
+Combining dot operators with numeric literals can be ambiguous.
+For example, it is not clear whether `1.+x` means `1. + x` or `1 .+ x`.
+Therefore this syntax is disallowed, and spaces must be used around
+the operator in such cases.
+
 ## Numeric Comparisons
 
 Standard comparison operations are defined for all the primitive numeric types:
@@ -397,7 +402,7 @@ julia> Int8(127)
 julia> Int8(128)
 ERROR: InexactError()
 Stacktrace:
- [1] Int8(::Int64) at ./sysimg.jl:77
+ [1] Int8(::Int64) at ./sysimg.jl:102
 
 julia> Int8(127.0)
 127
@@ -406,13 +411,13 @@ julia> Int8(3.14)
 ERROR: InexactError()
 Stacktrace:
  [1] convert(::Type{Int8}, ::Float64) at ./float.jl:659
- [2] Int8(::Float64) at ./sysimg.jl:77
+ [2] Int8(::Float64) at ./sysimg.jl:102
 
 julia> Int8(128.0)
 ERROR: InexactError()
 Stacktrace:
  [1] convert(::Type{Int8}, ::Float64) at ./float.jl:659
- [2] Int8(::Float64) at ./sysimg.jl:77
+ [2] Int8(::Float64) at ./sysimg.jl:102
 
 julia> 127 % Int8
 127

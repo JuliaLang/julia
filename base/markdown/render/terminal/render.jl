@@ -77,7 +77,7 @@ end
 const _header_underlines = collect("≡=–-⋅ ")
 # TODO settle on another option with unicode e.g. "≡=≃–∼⋅" ?
 
-function term{l}(io::IO, md::Header{l}, columns)
+function term(io::IO, md::Header{l}, columns) where l
     underline = _header_underlines[l]
     _term_header(io, md, underline, columns)
 end

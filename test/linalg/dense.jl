@@ -49,7 +49,12 @@ bimg  = randn(n,2)/2
 
     apd  = ainit'*ainit # symmetric positive-definite
     @testset "Positive definiteness" begin
-        @test isposdef(apd,:U)
+        @test !isposdef(ainit)
+        @test isposdef(apd)
+        if eltya != Int # cannot perform cholfact! for Matrix{Int}
+            @test !isposdef!(copy(ainit))
+            @test isposdef!(copy(apd))
+        end
     end
     @testset "For b containing $eltyb" for eltyb in (Float32, Float64, Complex64, Complex128, Int)
         binit = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex.(breal, bimg) : breal)
@@ -145,11 +150,11 @@ bimg  = randn(n,2)/2
         A = diagm(d)
         @test factorize(A) == Diagonal(d)
         A += diagm(e,-1)
-        @test factorize(A) == Bidiagonal(d,e,false)
+        @test factorize(A) == Bidiagonal(d,e,:L)
         A += diagm(f,-2)
         @test factorize(A) == LowerTriangular(A)
         A = diagm(d) + diagm(e,1)
-        @test factorize(A) == Bidiagonal(d,e,true)
+        @test factorize(A) == Bidiagonal(d,e,:U)
         if eltya <: Real
             A = diagm(d) + diagm(e,1) + diagm(e,-1)
             @test full(factorize(A)) ≈ full(factorize(SymTridiagonal(d,e)))
@@ -273,7 +278,7 @@ end
 
                     # Against vectorized versions
                     @test norm(x,-Inf) ≈ minimum(abs.(x))
-                    @test norm(x,-1) ≈ inv(sum(1./abs.(x)))
+                    @test norm(x,-1) ≈ inv(sum(1 ./ abs.(x)))
                     @test norm(x,0) ≈ sum(x .!= 0)
                     @test norm(x,1) ≈ sum(abs.(x))
                     @test norm(x) ≈ sqrt(sum(abs2.(x)))
@@ -357,7 +362,7 @@ end
 
 ## Issue related tests
 @testset "issue #1447" begin
-    A = [1.+0.0im 0; 0 1]
+    A = [1.0+0.0im 0; 0 1]
     B = pinv(A)
     for i = 1:4
         @test A[i] ≈ B[i]

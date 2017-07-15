@@ -4,6 +4,29 @@ import Base: copy, ctranspose, getindex, show, transpose, one, zero, inv,
              hcat, vcat, hvcat
 import Base.LinAlg: SingularException
 
+"""
+    UniformScaling{T<:Number}
+
+Generically sized uniform scaling operator defined as a scalar times the
+identity operator, `λ*I`. See also [`I`](@ref).
+
+# Example
+```jldoctest
+julia> J = UniformScaling(2.)
+UniformScaling{Float64}
+2.0*I
+
+julia> A = [1. 2.; 3. 4.]
+2×2 Array{Float64,2}:
+ 1.0  2.0
+ 3.0  4.0
+
+julia> J*A
+2×2 Array{Float64,2}:
+ 2.0  4.0
+ 6.0  8.0
+```
+"""
 struct UniformScaling{T<:Number}
     λ::T
 end
@@ -11,7 +34,7 @@ end
 """
     I
 
-An object of type `UniformScaling`, representing an identity matrix of any size.
+An object of type [`UniformScaling`](@ref), representing an identity matrix of any size.
 
 # Example
 
@@ -31,7 +54,13 @@ eltype(::Type{UniformScaling{T}}) where {T} = T
 ndims(J::UniformScaling) = 2
 getindex(J::UniformScaling, i::Integer,j::Integer) = ifelse(i==j,J.λ,zero(J.λ))
 
-show(io::IO, J::UniformScaling) = print(io, "$(typeof(J))\n$(J.λ)*I")
+function show(io::IO, J::UniformScaling)
+    s = "$(J.λ)"
+    if ismatch(r"\w+\s*[\+\-]\s*\w+", s)
+        s = "($s)"
+    end
+    print(io, "$(typeof(J))\n$s*I")
+end
 copy(J::UniformScaling) = UniformScaling(J.λ)
 
 transpose(J::UniformScaling) = J
@@ -138,6 +167,7 @@ function (-)(J::UniformScaling{TJ}, A::AbstractMatrix{TA}) where {TA,TJ<:Number}
 end
 
 inv(J::UniformScaling) = UniformScaling(inv(J.λ))
+norm(J::UniformScaling, p::Real=2) = abs(J.λ)
 
 *(J1::UniformScaling, J2::UniformScaling) = UniformScaling(J1.λ*J2.λ)
 *(B::BitArray{2}, J::UniformScaling) = *(Array(B), J::UniformScaling)
@@ -171,6 +201,14 @@ function isapprox(J1::UniformScaling{T}, J2::UniformScaling{S};
             rtol::Real=Base.rtoldefault(T,S), atol::Real=0, nans::Bool=false) where {T<:Number,S<:Number}
     isapprox(J1.λ, J2.λ, rtol=rtol, atol=atol, nans=nans)
 end
+function isapprox(J::UniformScaling,A::AbstractMatrix;
+                  rtol::Real=rtoldefault(promote_leaf_eltypes(A),eltype(J)),
+                  atol::Real=0, nans::Bool=false, norm::Function=vecnorm)
+    n = checksquare(A)
+    Jnorm = norm === vecnorm ? abs(J.λ)*sqrt(n) : (norm === Base.norm ? abs(J.λ) : norm(diagm(fill(J.λ, n))))
+    return norm(A - J) <= atol + rtol*max(norm(A), Jnorm)
+end
+isapprox(A::AbstractMatrix,J::UniformScaling;kwargs...) = isapprox(J,A;kwargs...)
 
 function copy!(A::AbstractMatrix, J::UniformScaling)
     size(A,1)==size(A,2) || throw(DimensionMismatch("a UniformScaling can only be copied to a square matrix"))

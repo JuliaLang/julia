@@ -41,10 +41,12 @@ function Base.launch(manager::TopoTestManager, params::Dict, launched::Array, c:
     exename = params[:exename]
     exeflags = params[:exeflags]
 
-    cmd = `$exename $exeflags --bind-to $(Base.Distributed.LPROC.bind_addr) --worker $(Base.cluster_cookie())`
+    cmd = `$exename $exeflags --bind-to $(Base.Distributed.LPROC.bind_addr) --worker`
     cmd = pipeline(detach(setenv(cmd, dir=dir)))
     for i in 1:manager.np
-        io = open(cmd)
+        io = open(cmd, "r+")
+        Base.Distributed.write_cookie(io)
+
         wconfig = WorkerConfig()
         wconfig.process = io
         wconfig.io = io.out

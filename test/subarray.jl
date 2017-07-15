@@ -47,7 +47,7 @@ ensure_iterable(t::Tuple{Union{Number, CartesianIndex}, Vararg{Any}}) = ((t[1],)
 ensure_iterable(t::Tuple{Any, Vararg{Any}}) = (t[1], ensure_iterable(Base.tail(t))...)
 
 index_ndims(t::Tuple) = tup2val(Base.index_ndims(t))
-tup2val{N}(::NTuple{N}) = Val{N}
+tup2val{N}(::NTuple{N}) = Val(N)
 
 # To avoid getting confused by manipulations that are implemented for SubArrays,
 # it's good to copy the contents to an Array. This version protects against
@@ -89,10 +89,10 @@ function single_stride_dim(A::Array)
     end
     ld
 end
-single_stride_dim(A::ANY) = single_stride_dim(copy_to_array(A))
+single_stride_dim(@nospecialize(A)) = single_stride_dim(copy_to_array(A))
 
 # Testing equality of AbstractArrays, using several different methods to access values
-function test_cartesian(A::ANY, B::ANY)
+function test_cartesian(@nospecialize(A), @nospecialize(B))
     isgood = true
     for (IA, IB) in zip(eachindex(A), eachindex(B))
         if A[IA] != B[IB]
@@ -108,7 +108,7 @@ function test_cartesian(A::ANY, B::ANY)
     end
 end
 
-function test_linear(A::ANY, B::ANY)
+function test_linear(@nospecialize(A), @nospecialize(B))
     length(A) == length(B) || error("length mismatch")
     isgood = true
     for (iA, iB) in zip(1:length(A), 1:length(B))
@@ -129,7 +129,7 @@ end
 test_mixed{T}(::AbstractArray{T,1}, ::Array) = nothing
 test_mixed{T}(::AbstractArray{T,2}, ::Array) = nothing
 test_mixed(A, B::Array) = _test_mixed(A, reshape(B, size(A)))
-function _test_mixed(A::ANY, B::ANY)
+function _test_mixed(@nospecialize(A), @nospecialize(B))
     m = size(A, 1)
     n = size(A, 2)
     isgood = true
@@ -147,7 +147,7 @@ function _test_mixed(A::ANY, B::ANY)
     nothing
 end
 
-function test_bounds(A::ANY)
+function test_bounds(@nospecialize(A))
     @test_throws BoundsError A[0]
     @test_throws BoundsError A[end+1]
     @test_throws BoundsError A[1, 0]
@@ -183,7 +183,7 @@ function runsubarraytests(A::Array, I...)
     test_mixed(S, C)
 end
 
-function runsubarraytests(A::ANY, I...)
+function runsubarraytests(@nospecialize(A), I...)
     # When A was created with view, we have to check bounds, since some
     # of the "residual" dimensions have size 1. It's possible that we
     # need dedicated tests for view.
@@ -554,12 +554,4 @@ let
     a = ImmutableTestArray{Float64, 2}()
     @test Base.IndexStyle(view(a, :, :)) == Base.IndexLinear()
     @test isbits(view(a, :, :))
-end
-
-# Issue #17351
-let
-    x = rand(10)
-    u = rand(10, 3)
-    su = view(u, :, 1)
-    @test size(@inferred(xcorr(x, su))) == (19,)
 end

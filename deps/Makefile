@@ -19,7 +19,7 @@ include $(SRCDIR)/tools/git-external.mk
 # additionally all targets should be listed in the getall target for easier off-line compilation
 # if you are adding a new target, it can help to copy an similar, existing target
 #
-# autoconf configure-driven scripts: llvm pcre arpack fftw unwind gmp mpfr patchelf libuv curl
+# autoconf configure-driven scripts: llvm pcre arpack unwind gmp mpfr patchelf libuv curl
 # custom Makefile rules: openlibm dsfmt suitesparse-wrapper suitesparse lapack openblas utf8proc objconv osxunwind
 # CMake libs: libgit2 libssh2 mbedtls
 #
@@ -48,6 +48,7 @@ ifeq ($(USE_SYSTEM_LIBUV), 0)
 DEP_LIBS += libuv
 endif
 
+ifeq ($(DISABLE_LIBUNWIND), 0)
 ifeq ($(USE_SYSTEM_LIBUNWIND), 0)
 ifeq ($(OS), Linux)
 DEP_LIBS += unwind
@@ -55,6 +56,7 @@ else ifeq ($(OS), FreeBSD)
 DEP_LIBS += unwind
 else ifeq ($(OS), Darwin)
 DEP_LIBS += osxunwind
+endif
 endif
 endif
 
@@ -98,12 +100,6 @@ ifeq ($(USE_BLAS64), 1)
 ifeq ($(OS), Darwin)
 DEP_LIBS += objconv
 endif
-endif
-endif
-
-ifeq ($(USE_GPL_LIBS), 1)
-ifeq ($(USE_SYSTEM_FFTW), 0)
-DEP_LIBS += fftw
 endif
 endif
 
@@ -175,7 +171,7 @@ uninstall: $(addprefix uninstall-, $(DEP_LIBS_STAGED))
 cleanall: $(addprefix clean-, $(DEP_LIBS))
 distcleanall: $(addprefix distclean-, $(DEP_LIBS))
 	rm -rf $(build_prefix)
-getall: get-llvm get-libuv get-pcre get-openlibm get-openspecfun get-dsfmt get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-patchelf get-utf8proc get-objconv get-mbedtls get-libssh2 get-curl get-libgit2
+getall: get-llvm get-libuv get-pcre get-openlibm get-openspecfun get-dsfmt get-openblas get-lapack get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-patchelf get-utf8proc get-objconv get-mbedtls get-libssh2 get-curl get-libgit2
 
 include $(SRCDIR)/llvm.mk
 include $(SRCDIR)/libuv.mk
@@ -186,7 +182,6 @@ include $(SRCDIR)/dsfmt.mk
 include $(SRCDIR)/objconv.mk
 include $(SRCDIR)/blas.mk
 include $(SRCDIR)/arpack.mk
-include $(SRCDIR)/fftw.mk
 include $(SRCDIR)/utf8proc.mk
 include $(SRCDIR)/suitesparse.mk
 include $(SRCDIR)/unwind.mk

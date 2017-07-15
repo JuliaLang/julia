@@ -244,34 +244,30 @@ JL_CALLABLE(jl_f_sizeof)
 {
     JL_NARGS(sizeof, 1, 1);
     jl_value_t *x = args[0];
-    if (jl_is_unionall(x)) {
+    if (jl_is_unionall(x) || jl_is_uniontype(x)) {
         x = jl_unwrap_unionall(x);
         if (!jl_is_datatype(x))
             jl_error("argument is an abstract type; size is indeterminate");
     }
     if (jl_is_datatype(x)) {
         jl_datatype_t *dx = (jl_datatype_t*)x;
-        if (dx->name == jl_array_typename || dx == jl_symbol_type || dx == jl_simplevector_type ||
-            dx == jl_string_type)
-            jl_error("type does not have a canonical binary representation");
-        if (!(dx->name->names == jl_emptysvec && jl_datatype_size(dx) > 0)) {
-            // names===() and size > 0  =>  bitstype, size always known
-            if (dx->abstract || !jl_is_leaf_type(x))
-                jl_error("argument is an abstract type; size is indeterminate");
-        }
+        if (dx->layout == NULL)
+            jl_error("argument is an abstract type; size is indeterminate");
+        if (jl_is_layout_opaque(dx->layout))
+            jl_error("type does not have a fixed size");
         return jl_box_long(jl_datatype_size(x));
     }
     if (jl_is_array(x))
         return jl_box_long(jl_array_len(x) * ((jl_array_t*)x)->elsize);
     if (jl_is_string(x))
         return jl_box_long(jl_string_len(x));
+    if (jl_is_symbol(x))
+        return jl_box_long(strlen(jl_symbol_name((jl_sym_t*)x)));
+    if (jl_is_svec(x))
+        return jl_box_long((1+jl_svec_len(x))*sizeof(void*));
     jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(x);
     assert(jl_is_datatype(dt));
     assert(!dt->abstract);
-    if (dt == jl_symbol_type)
-        jl_error("value does not have a canonical binary representation");
-    if (dt == jl_simplevector_type)
-        return jl_box_long((1+jl_svec_len(x))*sizeof(void*));
     return jl_box_long(jl_datatype_size(dt));
 }
 
@@ -493,7 +489,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
     JL_TRY {
         ptls->current_task->current_module = ptls->current_module = m;
         ptls->world_age = jl_world_counter;
-        v = jl_toplevel_eval(ex);
+        v = jl_toplevel_eval(m, ex);
     }
     JL_CATCH {
         jl_lineno = last_lineno;
@@ -511,9 +507,8 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
 
 JL_CALLABLE(jl_f_isdefined)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
-    jl_module_t *m = ptls->current_module;
-    jl_sym_t *s=NULL;
+    jl_module_t *m = NULL;
+    jl_sym_t *s = NULL;
     JL_NARGSV(isdefined, 1);
     if (jl_is_array(args[0])) {
         return jl_array_isdefined(args, nargs) ? jl_true : jl_false;
@@ -524,13 +519,16 @@ JL_CALLABLE(jl_f_isdefined)
     }
     if (nargs != 2) {
         JL_NARGS(isdefined, 1, 1);
+        jl_depwarn("`isdefined(:symbol)` is deprecated, "
+                   "use `@isdefined symbol` instead",
+                   (jl_value_t*)jl_symbol("isdefined"));
+        jl_ptls_t ptls = jl_get_ptls_states();
+        m = ptls->current_module;
     }
     else {
         if (!jl_is_module(args[0])) {
             jl_datatype_t *vt = (jl_datatype_t*)jl_typeof(args[0]);
-            if (!jl_is_datatype(vt)) {
-                jl_type_error("isdefined", (jl_value_t*)jl_datatype_type, args[0]);
-            }
+            assert(jl_is_datatype(vt));
             size_t idx;
             if (jl_is_long(args[1])) {
                 idx = jl_unbox_long(args[1])-1;
@@ -695,7 +693,10 @@ JL_CALLABLE(jl_f_nfields)
 {
     JL_NARGS(nfields, 1, 1);
     jl_value_t *x = args[0];
-    if (!jl_is_datatype(x))
+    if (jl_is_datatype(x))
+        jl_depwarn("`nfields(::DataType)` is deprecated, use `fieldcount` instead",
+                   (jl_value_t*)jl_symbol("nfields"));
+    else
         x = jl_typeof(x);
     return jl_box_long(jl_field_count(x));
 }
@@ -1151,6 +1152,10 @@ void jl_init_primitives(void)
     add_builtin("NewvarNode", (jl_value_t*)jl_newvarnode_type);
     add_builtin("GlobalRef", (jl_value_t*)jl_globalref_type);
 
+    add_builtin("Bool", (jl_value_t*)jl_bool_type);
+    add_builtin("UInt8", (jl_value_t*)jl_uint8_type);
+    add_builtin("Int32", (jl_value_t*)jl_int32_type);
+    add_builtin("Int64", (jl_value_t*)jl_int64_type);
 #ifdef _P64
     add_builtin("Int", (jl_value_t*)jl_int64_type);
 #else

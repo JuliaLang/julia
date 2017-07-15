@@ -20,11 +20,7 @@ else
 LIBSSH2_OPTS += -DCRYPTO_BACKEND=mbedTLS -DENABLE_ZLIB_COMPRESSION=OFF
 endif
 
-ifeq ($(OS),Linux)
-LIBSSH2_OPTS += -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
-endif
-
-ifeq ($(OS),FreeBSD)
+ifneq (,$(findstring $(OS),Linux FreeBSD))
 LIBSSH2_OPTS += -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
 endif
 

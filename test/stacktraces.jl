@@ -98,12 +98,13 @@ for (frame, func, inlined) in zip(trace, [g,h,f], (can_inline, can_inline, false
 end
 end
 
-let src = expand(quote let x = 1 end end).args[1]::CodeInfo,
+let src = expand(Main, quote let x = 1 end end).args[1]::CodeInfo,
     li = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, ()),
     sf
 
     li.inferred = src
     li.specTypes = Tuple{}
+    li.def = @__MODULE__
     sf = StackFrame(:a, :b, 3, li, false, false, 0)
     repr = string(sf)
     @test repr == "Toplevel MethodInstance thunk at b:3"

@@ -233,7 +233,7 @@ end
 
 """
 
-    givens{T}(f::T, g::T, i1::Integer, i2::Integer) -> (G::Givens, r::T)
+    givens(f::T, g::T, i1::Integer, i2::Integer) where {T} -> (G::Givens, r::T)
 
 Computes the Givens rotation `G` and scalar `r` such that for any vector `x` where
 ```

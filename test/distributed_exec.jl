@@ -48,15 +48,10 @@ end
 
 # Test that the client port is reused. SO_REUSEPORT may not be supported on
 # all UNIX platforms, Linux kernels prior to 3.9 and older versions of OSX
-if is_unix()
-    # Run reuse client port tests only if SO_REUSEPORT is supported.
-    s = TCPSocket(delay = false)
-    is_linux() && Base.Distributed.bind_client_port(s)
-    if ccall(:jl_tcp_reuseport, Int32, (Ptr{Void},), s.handle) == 0
-        reuseport_tests()
-    else
-        info("SO_REUSEPORT is unsupported, skipping reuseport tests.")
-    end
+if ccall(:jl_has_so_reuseport, Int32, ()) == 1
+    reuseport_tests()
+else
+    info("SO_REUSEPORT is unsupported, skipping reuseport tests.")
 end
 
 id_me = myid()
@@ -275,7 +270,7 @@ test_indexing(RemoteChannel(id_other))
 
 dims = (20,20,20)
 
-if is_linux()
+if Sys.islinux()
     S = SharedArray{Int64,3}(dims)
     @test startswith(S.segname, "/jl")
     @test !ispath("/dev/shm" * S.segname)
@@ -664,9 +659,16 @@ catch ex
     @test length(ex) == 5
     @test typeof(ex.exceptions[1]) == CapturedException
     @test typeof(ex.exceptions[1].ex) == ErrorException
-    errors = map(x->x.ex.msg, ex.exceptions)
-    @test collect(1:5) == sort(map(x->parse(Int, x), errors))
+    # test start, next, and done
+    for (i, i_ex) in enumerate(ex)
+        @test i == parse(Int, i_ex.ex.msg)
+    end
+    # test showerror
+    err_str = sprint(showerror, ex)
+    err_one_str = sprint(showerror, ex.exceptions[1])
+    @test err_str == err_one_str * "\n\n...and 4 more exception(s).\n"
 end
+@test sprint(showerror, CompositeException()) == "CompositeException()\n"
 
 function test_remoteexception_thrown(expr)
     try
@@ -907,9 +909,9 @@ function testmap_equivalence(f, c...)
 end
 
 testmap_equivalence(identity, (1,2,3,4))
-testmap_equivalence(x->x>0?1.0:0.0, sparse(eye(5)))
+testmap_equivalence(x->x>0 ? 1.0 : 0.0, sparse(eye(5)))
 testmap_equivalence((x,y,z)->x+y+z, 1,2,3)
-testmap_equivalence(x->x?false:true, BitArray(10,10))
+testmap_equivalence(x->x ? false : true, BitArray(10,10))
 testmap_equivalence(x->"foobar", BitArray(10,10))
 testmap_equivalence((x,y,z)->string(x,y,z), BitArray(10), ones(10), "1234567890")
 
@@ -967,7 +969,7 @@ if DoFullTest
     @test workers() == all_w
     @test all([p == remotecall_fetch(myid, p) for p in all_w])
 
-if is_unix() # aka have ssh
+if Sys.isunix() # aka have ssh
     function test_n_remove_pids(new_pids)
         for p in new_pids
             w_in_remote = sort(remotecall_fetch(workers, p))
@@ -1238,7 +1240,7 @@ const get_num_threads = function() # anonymous so it will be serialized when cal
         end
 
         # OSX BLAS looks at an environment variable
-        if is_apple()
+        if Sys.isapple()
             return ENV["VECLIB_MAXIMUM_THREADS"]
         end
     end
@@ -1590,6 +1592,20 @@ let thrown = false
     @test thrown
 end
 
+#19463
+function foo19463()
+    w1 = workers()[1]
+    w2 = workers()[2]
+    w3 = workers()[3]
+
+    b1 = () -> 1
+    b2 = () -> fetch(@spawnat w1 b1()) + 1
+    b3 = () -> fetch(@spawnat w2 b2()) + 1
+    b4 = () -> fetch(@spawnat w3 b3()) + 1
+    b4()
+end
+@test foo19463() == 4
+
 # Testing clear!
 function setup_syms(n, pids)
     syms = []
@@ -1599,7 +1615,7 @@ function setup_syms(n, pids)
         eval(:(global $sym = rand()))
         for p in pids
             eval(:(@test $sym == remotecall_fetch(()->$sym, $p)))
-            eval(:(@test remotecall_fetch(isdefined, $p, Symbol($symstr))))
+            eval(:(@test remotecall_fetch(isdefined, $p, Main, Symbol($symstr))))
         end
         push!(syms, sym)
     end
@@ -1648,6 +1664,86 @@ catch ex
     @test contains(ex.captured.ex.exceptions[1].ex.msg, "BoundsError")
     @test ex.captured.ex.exceptions[2].ex == UndefVarError(:DontExistOn1)
 end
+
+@test let
+    # creates a new worker in the same folder and tries to include file
+    tmp_file, temp_file_stream = mktemp()
+    close(temp_file_stream)
+    tmp_file = relpath(tmp_file)
+    try
+        proc = addprocs_with_testenv(1)
+        include(tmp_file)
+        remotecall_fetch(include, proc[1], tmp_file)
+        rmprocs(proc)
+        rm(tmp_file)
+        return true
+    catch e
+        println(e)
+        rm(tmp_file, force=true)
+        return false
+    end
+end == true
+
+@test let
+    # creates a new worker in a different folder and tries to include file
+    tmp_file, temp_file_stream = mktemp()
+    close(temp_file_stream)
+    tmp_file = relpath(tmp_file)
+    tmp_dir = relpath(mktempdir())
+    try
+        proc = addprocs_with_testenv(1, dir=tmp_dir)
+        include(tmp_file)
+        remotecall_fetch(include, proc[1], tmp_file)
+        rmprocs(proc)
+        rm(tmp_dir)
+        rm(tmp_file)
+        return true
+    catch e
+        println(e)
+        rm(tmp_dir, force=true)
+        rm(tmp_file, force=true)
+        return false
+    end
+end == true
+# cookie and comand line option `--worker` tests. remove workers, set cookie and test
+struct WorkerArgTester <: ClusterManager
+    worker_opt
+    write_cookie
+end
+
+function Base.launch(manager::WorkerArgTester, params::Dict, launched::Array, c::Condition)
+    dir = params[:dir]
+    exename = params[:exename]
+    exeflags = params[:exeflags]
+
+    cmd = `$exename $exeflags --bind-to $(Base.Distributed.LPROC.bind_addr) $(manager.worker_opt)`
+    cmd = pipeline(detach(setenv(cmd, dir=dir)))
+    io = open(cmd, "r+")
+    manager.write_cookie && Base.Distributed.write_cookie(io)
+
+    wconfig = WorkerConfig()
+    wconfig.process = io
+    wconfig.io = io.out
+    push!(launched, wconfig)
+
+    notify(c)
+end
+Base.manage(::WorkerArgTester, ::Integer, ::WorkerConfig, ::Symbol) = nothing
+
+nprocs()>1 && rmprocs(workers())
+
+npids = addprocs_with_testenv(WorkerArgTester(`--worker`, true))
+@test remotecall_fetch(myid, npids[1]) == npids[1]
+rmprocs(npids)
+
+Base.cluster_cookie("")  # An empty string is a valid cookie
+npids = addprocs_with_testenv(WorkerArgTester(`--worker=`, false))
+@test remotecall_fetch(myid, npids[1]) == npids[1]
+rmprocs(npids)
+
+Base.cluster_cookie("foobar") # custom cookie
+npids = addprocs_with_testenv(WorkerArgTester(`--worker=foobar`, false))
+@test remotecall_fetch(myid, npids[1]) == npids[1]
 
 # Run topology tests last after removing all workers, since a given
 # cluster at any time only supports a single topology.

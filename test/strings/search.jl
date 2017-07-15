@@ -354,6 +354,10 @@ end
 @test searchindex("\U1f596\U1f596", "\U1f596\U1f596") == 1
 @test searchindex("\U1f596\U1f596", "\U1f596\U1f596", 1) == 1
 
+# contains with a String and Char needle
+@test contains("foo", "o")
+@test contains("foo", 'o')
+
 # string rsearchindex with a two-char UTF-8 (2 byte) string literal
 @test rsearchindex("ééé", "éé") == 3
 @test rsearchindex("ééé", "éé", endof("ééé")) == 3

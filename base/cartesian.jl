@@ -417,7 +417,7 @@ function exprresolve(ex::Expr)
     if ex.head == :if
         can_eval, tf = exprresolve_conditional(ex.args[1])
         if can_eval
-            ex = tf?ex.args[2]:ex.args[3]
+            ex = tf ? ex.args[2] : ex.args[3]
         end
     end
     ex

@@ -53,7 +53,7 @@ let
     sym = Symbol(Char(0xdcdb))
     @test string(sym) == string(Char(0xdcdb))
     @test String(sym) == string(Char(0xdcdb))
-    @test expand(sym) === sym
+    @test expand(Main, sym) === sym
     res = string(parse(string(Char(0xdcdb)," = 1"),1,raise=false)[1])
     @test res == """\$(Expr(:error, "invalid character \\\"\\udcdb\\\"\"))"""
 end
@@ -107,6 +107,21 @@ end
 @test SubString("", 1, 6)[10:9] == ""
 @test SubString("", 1, 0)[10:9] == ""
 
+# issue #22500 (using `get()` to index strings with default returns)
+let
+    utf8_str = "我很喜欢Julia"
+
+    # Test that we can index in at valid locations
+    @test get(utf8_str, 1, 'X') == '我'
+    @test get(utf8_str, 13, 'X') == 'J'
+
+    # Test that obviously incorrect locations return the default
+    @test get(utf8_str, -1, 'X') == 'X'
+    @test get(utf8_str, 1000, 'X') == 'X'
+
+    # Test that indexing into the middle of a character returns the default
+    @test get(utf8_str, 2, 'X') == 'X'
+end
 
 #=
 # issue #7764
@@ -243,7 +258,7 @@ let s = normalize_string("tést",:NFKC)
 end
 @test_throws ArgumentError Base.unsafe_convert(Cstring, Base.cconvert(Cstring, "ba\0d"))
 
-cstrdup(s) = @static is_windows() ? ccall(:_strdup, Cstring, (Cstring,), s) : ccall(:strdup, Cstring, (Cstring,), s)
+cstrdup(s) = @static Sys.iswindows() ? ccall(:_strdup, Cstring, (Cstring,), s) : ccall(:strdup, Cstring, (Cstring,), s)
 let p = cstrdup("hello")
     @test unsafe_string(p) == "hello"
     Libc.free(p)
@@ -462,6 +477,21 @@ Base.endof(x::CharStr) = endof(x.chars)
 @test cmp("\U1f596\U1f596", CharStr("\U1f596")) == 1   # Gives BoundsError with bug
 @test cmp(CharStr("\U1f596"), "\U1f596\U1f596") == -1
 
+# repeat function
+@test repeat("xx",3) == repeat("x",6) == "xxxxxx"
+@test repeat("αα",3) == repeat("α",6) == "αααααα"
+
 # issue #12495: check that logical indexing attempt raises ArgumentError
 @test_throws ArgumentError "abc"[[true, false, true]]
 @test_throws ArgumentError "abc"[BitArray([true, false, true])]
+
+@test "ab" * "cd" == "abcd"
+@test 'a' * "bc" == "abc"
+@test "ab" * 'c' == "abc"
+@test 'a' * 'b' == "ab"
+@test 'a' * "b" * 'c' == "abc"
+@test "a" * 'b' * 'c' == "abc"
+
+# unrecognized escapes in string/char literals
+@test_throws ParseError parse("\"\\.\"")
+@test_throws ParseError parse("\'\\.\'")

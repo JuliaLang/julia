@@ -57,7 +57,7 @@
   * [Punctuation](@ref)
   * [Sorting and Related Functions](@ref)
   * [Package Manager Functions](@ref)
-  * [Dates and Time](@ref)
+  * [Dates and Time](@ref stdlib-dates)
   * [Iteration utilities](@ref)
   * [Unit Testing](@ref)
   * [C Interface](@ref)
@@ -90,6 +90,7 @@
       * [Arrays with custom indices](@ref)
       * [Base.LibGit2](@ref)
       * [Module loading](@ref)
+      * [Inference](@ref)
   * Developing/debugging Julia's C code
       * [Reporting and analyzing crashes (segfaults)](@ref)
       * [gdb debugging tips](@ref)

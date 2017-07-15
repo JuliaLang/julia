@@ -29,13 +29,12 @@ function scale!(X::Array{T}, s::Real) where T<:BlasComplex
     X
 end
 
-# Test whether a matrix is positive-definite
-isposdef!(A::StridedMatrix{<:BlasFloat}, UL::Symbol) = LAPACK.potrf!(char_uplo(UL), A)[2] == 0
-
 """
     isposdef!(A) -> Bool
 
-Test whether a matrix is positive definite, overwriting `A` in the process.
+Test whether a matrix is positive definite by trying to perform a
+Cholesky factorization of `A`, overwriting `A` in the process.
+See also [`isposdef`](@ref).
 
 # Example
 
@@ -51,16 +50,14 @@ julia> A
  2.0  6.78233
 ```
 """
-isposdef!(A::StridedMatrix) = ishermitian(A) && isposdef!(A, :U)
+isposdef!(A::AbstractMatrix) = ishermitian(A) && isposdef(cholfact!(Hermitian(A)))
 
-function isposdef(A::AbstractMatrix{T}, UL::Symbol) where T
-    S = typeof(sqrt(one(T)))
-    isposdef!(S == T ? copy(A) : convert(AbstractMatrix{S}, A), UL)
-end
 """
     isposdef(A) -> Bool
 
-Test whether a matrix is positive definite.
+Test whether a matrix is positive definite by trying to perform a
+Cholesky factorization of `A`.
+See also [`isposdef!`](@ref)
 
 # Example
 
@@ -74,10 +71,7 @@ julia> isposdef(A)
 true
 ```
 """
-function isposdef(A::AbstractMatrix{T}) where T
-    S = typeof(sqrt(one(T)))
-    isposdef!(S == T ? copy(A) : convert(AbstractMatrix{S}, A))
-end
+isposdef(A::AbstractMatrix) = ishermitian(A) && isposdef(cholfact(Hermitian(A)))
 isposdef(x::Number) = imag(x)==0 && real(x) > 0
 
 stride1(x::Array) = 1
@@ -252,7 +246,8 @@ diag(A::AbstractMatrix, k::Integer=0) = A[diagind(A,k)]
 """
     diagm(v, k::Integer=0)
 
-Construct a matrix by placing `v` on the `k`th diagonal.
+Construct a matrix by placing `v` on the `k`th diagonal. This constructs a full matrix; if
+you want a storage-efficient version with fast arithmetic, use [`Diagonal`](@ref) instead.
 
 # Example
 
@@ -653,12 +648,15 @@ function inv(A::StridedMatrix{T}) where T
     AA = convert(AbstractArray{S}, A)
     if istriu(AA)
         Ai = inv(UpperTriangular(AA))
+        Ai = convert(typeof(parent(Ai)), Ai)
     elseif istril(AA)
         Ai = inv(LowerTriangular(AA))
+        Ai = convert(typeof(parent(Ai)), Ai)
     else
         Ai = inv(lufact(AA))
+        Ai = convert(typeof(parent(Ai)), Ai)
     end
-    return convert(typeof(parent(Ai)), Ai)
+    return Ai
 end
 
 """
@@ -690,7 +688,7 @@ will return a Cholesky factorization.
 # Example
 
 ```jldoctest
-julia> A = Array(Bidiagonal(ones(5, 5), true))
+julia> A = Array(Bidiagonal(ones(5, 5), :U))
 5×5 Array{Float64,2}:
  1.0  1.0  0.0  0.0  0.0
  0.0  1.0  1.0  0.0  0.0
@@ -750,12 +748,12 @@ function factorize(A::StridedMatrix{T}) where T
                     return Diagonal(A)
                 end
                 if utri1
-                    return Bidiagonal(diag(A), diag(A, -1), false)
+                    return Bidiagonal(diag(A), diag(A, -1), :L)
                 end
                 return LowerTriangular(A)
             end
             if utri
-                return Bidiagonal(diag(A), diag(A, 1), true)
+                return Bidiagonal(diag(A), diag(A, 1), :U)
             end
             if utri1
                 if (herm & (T <: Complex)) | sym
@@ -782,7 +780,7 @@ function factorize(A::StridedMatrix{T}) where T
         end
         return lufact(A)
     end
-    qrfact(A, Val{true})
+    qrfact(A, Val(true))
 end
 
 ## Moore-Penrose pseudoinverse

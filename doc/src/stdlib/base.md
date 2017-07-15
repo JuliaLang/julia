@@ -76,6 +76,7 @@ Base.finalize
 Base.copy
 Base.deepcopy
 Core.isdefined
+Base.@isdefined
 Base.convert
 Base.promote
 Base.oftype
@@ -137,6 +138,7 @@ Base.esc
 Base.@inbounds
 Base.@inline
 Base.@noinline
+Base.@nospecialize
 Base.gensym
 Base.@gensym
 Base.@polly
@@ -188,11 +190,11 @@ Base.@elapsed
 Base.@allocated
 Base.EnvHash
 Base.ENV
-Base.is_unix
-Base.is_apple
-Base.is_linux
-Base.is_bsd
-Base.is_windows
+Base.Sys.isunix
+Base.Sys.isapple
+Base.Sys.islinux
+Base.Sys.isbsd
+Base.Sys.iswindows
 Base.Sys.windows_version
 Base.@static
 ```
@@ -250,12 +252,13 @@ Base.AsyncCondition(::Function)
 ```@docs
 Base.module_name
 Base.module_parent
-Base.current_module
+Base.@__MODULE__
 Base.fullname
 Base.names
 Core.nfields
 Base.fieldnames
 Base.fieldname
+Base.fieldcount
 Base.datatype_module
 Base.datatype_name
 Base.isconst
@@ -274,6 +277,7 @@ Base.gc
 Base.gc_enable
 Base.macroexpand
 Base.@macroexpand
+Base.@macroexpand1
 Base.expand
 Base.code_lowered
 Base.@code_lowered

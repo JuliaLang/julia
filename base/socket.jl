@@ -3,7 +3,7 @@
 ## IP ADDRESS HANDLING ##
 abstract type IPAddr end
 
-Base.isless{T<:IPAddr}(a::T, b::T) = isless(a.host, b.host)
+Base.isless(a::T, b::T) where {T<:IPAddr} = isless(a.host, b.host)
 Base.convert(dt::Type{<:Integer}, ip::IPAddr) = dt(ip.host)
 
 struct IPv4 <: IPAddr
@@ -875,9 +875,9 @@ function _sockname(sock, self=true)
     uv_error("cannot obtain socket name", r)
     if r == 0
         port = ntoh(rport[])
-        af_inet6 = @static if is_windows() # AF_INET6 in <sys/socket.h>
+        af_inet6 = @static if Sys.iswindows() # AF_INET6 in <sys/socket.h>
             23
-        elseif is_apple()
+        elseif Sys.isapple()
             30
         elseif Sys.KERNEL ∈ (:FreeBSD, :DragonFly)
             28

@@ -193,7 +193,7 @@ function clone(url::AbstractString, pkg::AbstractString)
     ispath(pkg) && throw(PkgError("$pkg already exists"))
     try
         LibGit2.with(LibGit2.clone(url, pkg)) do repo
-            LibGit2.set_remote_url(repo, url)
+            LibGit2.set_remote_url(repo, "origin", url)
         end
     catch err
         isdir(pkg) && Base.rm(pkg, recursive=true)
@@ -604,14 +604,15 @@ function build(pkg::AbstractString, build_file::AbstractString, errfile::Abstrac
                 serialize(f, err)
             end
         end
-    """
+        """
     cmd = ```
         $(Base.julia_cmd()) -O0
+        --color=$(Base.have_color ? "yes" : "no")
         --compilecache=$(Bool(Base.JLOptions().use_compilecache) ? "yes" : "no")
         --history-file=no
-        --color=$(Base.have_color ? "yes" : "no")
+        --startup-file=$(Base.JLOptions().startupfile != 2 ? "yes" : "no")
         --eval $code
-    ```
+        ```
 
     success(pipeline(cmd, stderr=STDERR))
 end
@@ -711,11 +712,16 @@ function test!(pkg::AbstractString,
         info("Testing $pkg")
         cd(dirname(test_path)) do
             try
-                color = Base.have_color? "--color=yes" : "--color=no"
-                codecov = coverage? ["--code-coverage=user"] : ["--code-coverage=none"]
-                compilecache = "--compilecache=" * (Bool(Base.JLOptions().use_compilecache) ? "yes" : "no")
-                julia_exe = Base.julia_cmd()
-                run(`$julia_exe --check-bounds=yes $codecov $color $compilecache $test_path`)
+                cmd = ```
+                    $(Base.julia_cmd())
+                    --code-coverage=$(coverage ? "user" : "none")
+                    --color=$(Base.have_color ? "yes" : "no")
+                    --compilecache=$(Bool(Base.JLOptions().use_compilecache) ? "yes" : "no")
+                    --check-bounds=yes
+                    --startup-file=$(Base.JLOptions().startupfile != 2 ? "yes" : "no")
+                    $test_path
+                    ```
+                run(cmd)
                 info("$pkg tests passed")
             catch err
                 warnbanner(err, label="[ ERROR: $pkg ]")

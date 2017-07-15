@@ -26,12 +26,14 @@ struct JLOptions
     can_inline::Int8
     polly::Int8
     fast_math::Int8
-    worker::Ptr{UInt8}
+    worker::Int8
+    cookie::Ptr{UInt8}
     handle_signals::Int8
     use_precompiled::Int8
     use_compilecache::Int8
     bindto::Ptr{UInt8}
     outputbc::Ptr{UInt8}
+    outputunoptbc::Ptr{UInt8}
     outputo::Ptr{UInt8}
     outputji::Ptr{UInt8}
     incremental::Int8
@@ -41,7 +43,7 @@ JLOptions() = unsafe_load(cglobal(:jl_options, JLOptions))
 
 function show(io::IO, opt::JLOptions)
     print(io, "JLOptions(")
-    fields = fieldnames(opt)
+    fields = fieldnames(JLOptions)
     nfields = length(fields)
     for (i, f) in enumerate(fields)
         v = getfield(opt, i)

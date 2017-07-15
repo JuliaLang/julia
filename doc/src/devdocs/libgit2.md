@@ -69,6 +69,7 @@ Base.LibGit2.diff_files
 Base.LibGit2.fetch
 Base.LibGit2.fetch_refspecs
 Base.LibGit2.fetchhead_foreach_cb
+Base.LibGit2.merge!(::Base.LibGit2.GitRepo; ::Any...)
 Base.LibGit2.ffmerge!
 Base.LibGit2.fullname
 Base.LibGit2.get_creds!
@@ -107,6 +108,7 @@ Base.LibGit2.set_remote_url
 Base.LibGit2.shortname
 Base.LibGit2.snapshot
 Base.LibGit2.status
+Base.LibGit2.stage
 Base.LibGit2.tag_create
 Base.LibGit2.tag_delete
 Base.LibGit2.tag_list

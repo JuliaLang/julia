@@ -15,14 +15,9 @@
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/LLVMContext.h>
-#if JL_LLVM_VERSION >= 30700
-#include <llvm/IR/LegacyPassManager.h>
-#else
-#include <llvm/PassManager.h>
-#endif
 #include <llvm/IR/MDBuilder.h>
 
-#if JL_LLVM_VERSION >= 30700 && defined(JULIA_ENABLE_THREADING)
+#if defined(JULIA_ENABLE_THREADING)
 #  include <llvm/IR/InlineAsm.h>
 #  include <llvm/Transforms/Utils/BasicBlockUtils.h>
 #endif
@@ -63,12 +58,8 @@ static void ensure_global(const char *name, Type *t, Module &M,
     // setting JL_DLLEXPORT correctly only matters when building a binary
     // (global_proto will strip this from the JIT)
     if (dllimport) {
-#if JL_LLVM_VERSION >= 30500
         // add the __declspec(dllimport) attribute
         proto->setDLLStorageClass(GlobalValue::DLLImportStorageClass);
-#else
-        proto->setLinkage(GlobalValue::DLLImportLinkage);
-#endif
     }
 #else // _OS_WINDOWS_
     (void)proto;
@@ -87,7 +78,6 @@ static void setCallPtlsAttrs(CallInst *ptlsStates)
 #endif
 }
 
-#if JL_LLVM_VERSION >= 30700
 static Instruction *emit_ptls_tp(LLVMContext &ctx, Value *offset, Type *T_ppjlvalue,
                                  Instruction *insertBefore)
 {
@@ -153,7 +143,6 @@ static Instruction *emit_ptls_tp(LLVMContext &ctx, Value *offset, Type *T_ppjlva
     return nullptr;
 #  endif
 }
-#endif
 
 #endif
 
@@ -182,7 +171,6 @@ void LowerPTLS::runOnFunction(LLVMContext &ctx, Module &M, Function *F,
     if (imaging_mode) {
         GlobalVariable *GV = cast<GlobalVariable>(
             M.getNamedValue("jl_get_ptls_states.ptr"));
-#if JL_LLVM_VERSION >= 30700
         if (jl_tls_elf_support) {
             GlobalVariable *OffsetGV = cast<GlobalVariable>(
                 M.getNamedValue("jl_tls_offset.val"));
@@ -215,18 +203,15 @@ void LowerPTLS::runOnFunction(LLVMContext &ctx, Module &M, Function *F,
 
             return;
         }
-#endif
         auto getter = new LoadInst(GV, "", ptlsStates);
         getter->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
         ptlsStates->setCalledFunction(getter);
         setCallPtlsAttrs(ptlsStates);
     }
-#if JL_LLVM_VERSION >= 30700
     else if (jl_tls_offset != -1) {
         ptlsStates->replaceAllUsesWith(emit_ptls_tp(ctx, nullptr, T_ppjlvalue, ptlsStates));
         ptlsStates->eraseFromParent();
     }
-#endif
     else {
         setCallPtlsAttrs(ptlsStates);
     }
@@ -278,9 +263,4 @@ static RegisterPass<LowerPTLS> X("LowerPTLS", "LowerPTLS Pass",
 Pass *createLowerPTLSPass(bool imaging_mode)
 {
     return new LowerPTLS(imaging_mode);
-}
-
-extern "C" JL_DLLEXPORT
-void LLVMAddLowerPTLSPass(LLVMPassManagerRef PM, int imaging_mode) {
-    unwrap(PM)->add(createLowerPTLSPass(imaging_mode != 0));
 }

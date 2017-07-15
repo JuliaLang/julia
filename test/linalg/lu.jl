@@ -67,7 +67,7 @@ debug && println("(Automatic) Square LU decomposition. eltya: $eltya, eltyb: $el
 
         lstring = sprint(show,l)
         ustring = sprint(show,u)
-        @test sprint(show,lua) == "$(typeof(lua)) with factors L and U:\n$lstring\n$ustring"
+        @test sprint(show,lua) == "$(typeof(lua)) with factors L and U:\n$lstring\n$ustring\nsuccessful: true"
         let Bs = b, Cs = c
             for atype in ("Array", "SubArray")
                 if atype == "Array"
@@ -97,6 +97,7 @@ debug && println("(Automatic) Square LU decomposition. eltya: $eltya, eltyb: $el
 debug && println("Tridiagonal LU")
         κd    = cond(Array(d),1)
         lud   = lufact(d)
+        @test LinAlg.issuccess(lud)
         @test lufact(lud) == lud
         @test_throws KeyError lud[:Z]
         @test lud[:L]*lud[:U] ≈ lud[:P]*Array(d)
@@ -139,7 +140,7 @@ debug && println("Tridiagonal LU")
             du[1] = zero(eltya)
             dl[1] = zero(eltya)
             zT = Tridiagonal(dl,dd,du)
-            @test lufact(zT).info == 1
+            @test !LinAlg.issuccess(lufact(zT))
         end
 
 debug && println("Thin LU")
@@ -149,6 +150,12 @@ debug && println("Thin LU")
 debug && println("Fat LU")
         lua   = lufact(a[1:n1,:])
         @test lua[:L]*lua[:U] ≈ lua[:P]*a[1:n1,:]
+    end
+
+debug && println("LU of Symmetric/Hermitian")
+    for HS in (Hermitian(a'a), Symmetric(a'a))
+        luhs = lufact(HS)
+        @test luhs[:L]*luhs[:U] ≈ luhs[:P]*Matrix(HS)
     end
 end
 
@@ -211,3 +218,6 @@ end
 
 # Issue 21453.
 @test_throws ArgumentError LinAlg._cond1Inf(lufact(randn(5,5)), 2, 2.0)
+
+# Singular LU
+@test !LinAlg.issuccess(lufact(zeros(3,3)))

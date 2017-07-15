@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 import Base.@kwdef
-import .Consts: GIT_SUBMODULE_IGNORE, GIT_MERGE_FILE_FAVOR, GIT_MERGE_FILE
+import .Consts: GIT_SUBMODULE_IGNORE, GIT_MERGE_FILE_FAVOR, GIT_MERGE_FILE, GIT_CONFIG
 
 const OID_RAWSZ = 20
 const OID_HEXSZ = OID_RAWSZ * 2
@@ -22,13 +22,11 @@ end
 GitHash() = GitHash(ntuple(i->zero(UInt8), OID_RAWSZ))
 
 """
-    GitShortHash
+    GitShortHash(hash::GitHash, len::Integer)
 
-This is a shortened form of `GitHash`, which can be used to identify a git object when it
-is unique.
-
-Internally it is stored as two fields: a full-size `GitHash` (`hash`) and a length
-(`len`). Only the initial `len` hex digits of `hash` are used.
+A shortened git object identifier, which can be used to identify a git object when it is
+unique, consisting of the initial `len` hexadecimal digits of `hash` (the remaining digits
+are ignored).
 """
 struct GitShortHash <: AbstractGitHash
     hash::GitHash   # underlying hash: unused digits are ignored
@@ -195,6 +193,33 @@ end
 Options for connecting through a proxy.
 
 Matches the [`git_proxy_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_proxy_options) struct.
+
+The fields represent:
+  * `version`: version of the struct in use, in case this changes later. For now, always `1`.
+  * `proxytype`: an `enum` for the type of proxy to use.
+     Defined in [`git_proxy_t`](https://libgit2.github.com/libgit2/#HEAD/type/git_proxy_t).
+     The corresponding Julia enum is `GIT_PROXY` and has values:
+     - `PROXY_NONE`: do not attempt the connection through a proxy.
+     - `PROXY_AUTO`: attempt to figure out the proxy configuration from the git configuration.
+     - `PROXY_SPECIFIED`: connect using the URL given in the `url` field of this struct.
+     Default is to auto-detect the proxy type.
+  * `url`: the URL of the proxy.
+  * `credential_cb`: a pointer to a callback function which will be called if the remote
+    requires authentication to connect.
+  * `certificate_cb`: a pointer to a callback function which will be called if certificate
+    verification fails. This lets the user decide whether or not to keep connecting. If
+    the function returns `1`, connecting will be allowed. If it returns `0`, the connection
+    will not be allowed. A negative value can be used to return errors.
+  * `payload`: the payload to be provided to the two callback functions.
+
+# Examples
+```julia-repl
+julia> fo = LibGit2.FetchOptions();
+
+julia> fo.proxy_opts = LibGit2.ProxyOptions(url=Cstring("https://my_proxy_url.com"))
+
+julia> fetch(remote, "master", options=fo)
+```
 """
 @kwdef struct ProxyOptions
     version::Cuint               = 1
@@ -289,6 +314,12 @@ end
     LibGit2.DescribeFormatOptions
 
 Matches the [`git_describe_format_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_describe_format_options) struct.
+
+The fields represent:
+  * `version`: version of the struct in use, in case this changes later. For now, always `1`.
+  * `abbreviated_size`: lower bound on the size of the abbreviated `GitHash` to use, defaulting to `7`.
+  * `always_use_long_format`: set to `1` to use the long format for strings even if a short format can be used.
+  * `dirty_suffix`: if set, this will be appended to the end of the description string if the [`workdir`](@ref) is dirty.
 """
 @kwdef struct DescribeFormatOptions
     version::Cuint          = 1
@@ -302,6 +333,18 @@ end
 
 Description of one side of a delta.
 Matches the [`git_diff_file`](https://libgit2.github.com/libgit2/#HEAD/type/git_diff_file) struct.
+
+The fields represent:
+  * `id`: the [`GitHash`](@ref) of the item in the diff. If the item is empty on this
+     side of the diff (for instance, if the diff is of the removal of a file), this will
+     be `GitHash(0)`.
+  * `path`: a `NULL` terminated path to the item relative to the working directory of the repository.
+  * `size`: the size of the item in bytes.
+  * `flags`: a combination of the [`git_diff_flag_t`](https://libgit2.github.com/libgit2/#HEAD/type/git_diff_flag_t)
+     flags. The `i`th bit of this integer sets the `i`th flag.
+  * `mode`: the [`stat`](@ref) mode for the item.
+  * `id_abbrev`: only present in LibGit2 versions newer than or equal to `0.25.0`.
+     The length of the `id` field when converted using [`hex`](@ref). Usually equal to `OID_HEXSZ` ($OID_HEXSZ).
 """
 struct DiffFile
     id::GitHash
@@ -377,9 +420,36 @@ Matches the [`git_merge_options`](https://libgit2.github.com/libgit2/#HEAD/type/
 end
 
 """
+    LibGit2.BlameOptions
+
+Matches the [`git_blame_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_blame_options) struct.
+"""
+@kwdef struct BlameOptions
+    version::Cuint                    = 1
+    flags::UInt32                     = 0
+    min_match_characters::UInt16      = 20
+    newest_commit::GitHash
+    oldest_commit::GitHash
+    min_line::Csize_t                 = 1
+    max_line::Csize_t                 = 0
+end
+
+"""
     LibGit2.PushOptions
 
 Matches the [`git_push_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_push_options) struct.
+
+The fields represent:
+  * `version`: version of the struct in use, in case this changes later. For now, always `1`.
+  * `parallelism`: if a pack file must be created, this variable sets the number of worker
+     threads which will be spawned by the packbuilder. If `0`, the packbuilder will auto-set
+     the number of threads to use. The default is `1`.
+  * `callbacks`: the callbacks (e.g. for authentication with the remote) to use for the push.
+  * `proxy_opts`: only relevant if the LibGit2 version is greater than or equal to `0.25.0`.
+     Sets options for using a proxy to communicate with a remote. See [`ProxyOptions`](@ref)
+     for more information.
+  * `custom_headers`: only relevant if the LibGit2 version is greater than or equal to `0.24.0`.
+     Extra headers needed for the push operation.
 """
 @kwdef struct PushOptions
     version::Cuint                     = 1
@@ -392,6 +462,19 @@ Matches the [`git_push_options`](https://libgit2.github.com/libgit2/#HEAD/type/g
         custom_headers::StrArrayStruct
     end
 end
+
+"""
+    LibGit2.CherrypickOptions
+
+Matches the [`git_cherrypick_options`](https://libgit2.github.com/libgit2/#HEAD/type/git_cherrypick_options) struct.
+"""
+@kwdef struct CherrypickOptions
+    version::Cuint = 1
+    mainline::Cuint = 0
+    merge_opts::MergeOptions=MergeOptions()
+    checkout_opts::CheckoutOptions=CheckoutOptions()
+end
+
 
 """
     LibGit2.IndexTime
@@ -516,6 +599,23 @@ function Base.show(io::IO, fh::FetchHead)
     println(io, "Merged: $(fh.ismerge)")
 end
 
+"""
+    LibGit2.ConfigEntry
+
+Matches the [`git_config_entry`](https://libgit2.github.com/libgit2/#HEAD/type/git_config_entry) struct.
+"""
+@kwdef struct ConfigEntry
+    name::Cstring
+    value::Cstring
+    level::GIT_CONFIG = Consts.CONFIG_LEVEL_DEFAULT
+    free::Ptr{Void}
+    payload::Ptr{Void}
+end
+
+function Base.show(io::IO, ce::ConfigEntry)
+    print(io, "ConfigEntry(\"", unsafe_string(ce.name), "\", \"", unsafe_string(ce.value), "\")")
+end
+
 # Abstract object types
 abstract type AbstractGitObject end
 Base.isempty(obj::AbstractGitObject) = (obj.ptr == C_NULL)
@@ -534,8 +634,10 @@ for (typ, owntyp, sup, cname) in [
     (:GitDiffStats,      :GitRepo,              :AbstractGitObject, :git_diff_stats),
     (:GitAnnotated,      :GitRepo,              :AbstractGitObject, :git_annotated_commit),
     (:GitRebase,         :GitRepo,              :AbstractGitObject, :git_rebase),
+    (:GitBlame,          :GitRepo,              :AbstractGitObject, :git_blame),
     (:GitStatus,         :GitRepo,              :AbstractGitObject, :git_status_list),
     (:GitBranchIter,     :GitRepo,              :AbstractGitObject, :git_branch_iterator),
+    (:GitConfigIter,     nothing,               :AbstractGitObject, :git_config_iterator),
     (:GitUnknownObject,  :GitRepo,              :GitObject,         :git_object),
     (:GitCommit,         :GitRepo,              :GitObject,         :git_commit),
     (:GitBlob,           :GitRepo,              :GitObject,         :git_blob),
@@ -629,6 +731,43 @@ mutable struct Signature
     time_offset::Cint
 end
 
+"""
+    LibGit2.BlameHunk
+
+Matches the [`git_blame_hunk`](https://libgit2.github.com/libgit2/#HEAD/type/git_blame_hunk) struct.
+The fields represent:
+    * `lines_in_hunk`: the number of lines in this hunk of the blame.
+    * `final_commit_id`: the [`GitHash`](@ref) of the commit where this section was last changed.
+    * `final_start_line_number`: the *one based* line number in the file where the
+       hunk starts, in the *final* version of the file.
+    * `final_signature`: the signature of the person who last modified this hunk. You will
+       need to pass this to [`Signature`](@ref) to access its fields.
+    * `orig_commit_id`: the [`GitHash`](@ref) of the commit where this hunk was first found.
+    * `orig_path`: the path to the file where the hunk originated. This may be different
+       than the current/final path, for instance if the file has been moved.
+    * `orig_start_line_number`: the *one based* line number in the file where the
+       hunk starts, in the *original* version of the file at `orig_path`.
+    * `orig_signature`: the signature of the person who introduced this hunk. You will
+       need to pass this to [`Signature`](@ref) to access its fields.
+    * `boundary`: `'1'` if the original commit is a "boundary" commit (for instance, if it's
+       equal to an oldest commit set in `options`).
+"""
+@kwdef struct BlameHunk
+    lines_in_hunk::Csize_t
+
+    final_commit_id::GitHash
+    final_start_line_number::Csize_t
+    final_signature::Ptr{SignatureStruct}
+
+    orig_commit_id::GitHash
+    orig_path::Cstring
+    orig_start_line_number::Csize_t
+    orig_signature::Ptr{SignatureStruct}
+
+    boundary::Char
+end
+
+
 """ Resource management helper function
 """
 function with(f::Function, obj)
@@ -639,9 +778,9 @@ function with(f::Function, obj)
     end
 end
 
-with{T}(f::Function, ::Type{T}, args...) = with(f, T(args...))
+with(f::Function, ::Type{T}, args...) where {T} = with(f, T(args...))
 
-function with_warn{T}(f::Function, ::Type{T}, args...)
+function with_warn(f::Function, ::Type{T}, args...) where T
     obj = T(args...)
     try
         with(f, obj)
@@ -651,7 +790,7 @@ function with_warn{T}(f::Function, ::Type{T}, args...)
 end
 
 """
-    LibGit2.Consts.OBJECT{T<:GitObject}(::Type{T})
+    LibGit2.Consts.OBJECT(::Type{T}) where T<:GitObject
 
 The `OBJECT` enum value corresponding to type `T`.
 """

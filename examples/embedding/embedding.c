@@ -4,6 +4,8 @@
 #include <stdio.h>
 #include <math.h>
 
+JULIA_DEFINE_FAST_TLS() // only define this once, in an executable
+
 #ifdef _OS_WINDOWS_
 __declspec(dllexport) __cdecl
 #endif

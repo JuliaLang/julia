@@ -98,7 +98,7 @@ table for `DataType` contains most constructor definitions. One wrinkle is the f
 that makes all types callable via `convert`:
 
 ```julia
-(::Type{T}){T}(args...) = convert(T, args...)::T
+(::Type{T})(args...) where {T} = convert(T, args...)::T
 ```
 
 In this definition the function type is abstract, which is not normally supported. To make this
@@ -223,8 +223,8 @@ Performance-critical higher-order functions like `map` certainly call their argu
 and so will still be specialized as expected. This optimization is implemented by recording which
 arguments are called during the `analyze-variables` pass in the front end. When `cache_method`
 sees an argument in the `Function` type hierarchy passed to a slot declared as `Any` or `Function`,
-it pretends the slot was declared as `ANY` (the "don't specialize" hint). This heuristic seems
-to be extremely effective in practice.
+it behaves as if the `@nospecialize` annotation were applied. This heuristic seems to be extremely
+effective in practice.
 
 The next issue concerns the structure of method cache hash tables. Empirical studies show that
 the vast majority of dynamically-dispatched calls involve one or two arguments. In turn, many
@@ -251,54 +251,3 @@ The next problem was the `@test` macro, which generated a 0-argument closure for
 This is not really necessary, since each test case is simply run once in place. Therefore I modified
 `@test` to expand to a try-catch block that records the test result (true, false, or exception
 raised) and calls the test suite handler on it.
-
-However this caused a new problem. When many tests are grouped together in a single function,
-e.g. a single top level expression, or some other test grouping function, that function could
-have a very large number of exception handlers. This triggered a kind of dataflow analysis worst
-case, where type inference spun around for minutes enumerating possible paths through the forest
-of handlers. This was fixed by simply bailing out of type inference when it encounters more than
-some number of handlers (currently 25). Presumably no performance-critical function will have
-more than 25 exception handlers. If one ever does, I'm willing to raise the limit to 26.
-
-A minor issue occurs during the bootstrap process due to storing all constructors in a single
-method table. In the second bootstrap step, where `inference.ji` is compiled using `inference0.ji`,
-constructors for `inference0`'s types remain in the table, so there are still references to the
-old inference module and `inference.ji` is 2x the size it should be. This was fixed in `dump.c` by
-filtering definitions from "replaced modules" out of method tables and caches before saving a
-system image. A "replaced module" is one that satisfies the condition `m != jl_get_global(m->parent, m->name)`
--- in other words, some newer module has taken its name and place.
-
-Another type inference worst case was triggered by the following code from the [QuadGK.jl package](https://github.com/JuliaMath/QuadGK.jl),
-formerly part of Base:
-
-```julia
-function do_quadgk(f, s, n, ::Type{Tw}, abstol, reltol, maxevals, nrm) where Tw
-    if eltype(s) <: Real # check for infinite or semi-infinite intervals
-        s1 = s[1]; s2 = s[end]; inf1 = isinf(s1); inf2 = isinf(s2)
-        if inf1 || inf2
-            if inf1 && inf2 # x = t/(1-t^2) coordinate transformation
-                return do_quadgk(t -> begin t2 = t*t; den = 1 / (1 - t2);
-                                            f(t*den) * (1+t2)*den*den; end,
-                                 map(x -> isinf(x) ? copysign(one(x), x) : 2x / (1+hypot(1,2x)), s),
-                                 n, Tw, abstol, reltol, maxevals, nrm)
-            end
-            s0,si = inf1 ? (s2,s1) : (s1,s2)
-            if si < 0 # x = s0 - t/(1-t)
-                return do_quadgk(t -> begin den = 1 / (1 - t);
-                                            f(s0 - t*den) * den*den; end,
-                                 reverse!(map(x -> 1 / (1 + 1 / (s0 - x)), s)),
-                                 n, Tw, abstol, reltol, maxevals, nrm)
-            else # x = s0 + t/(1-t)
-                return do_quadgk(t -> begin den = 1 / (1 - t);
-                                            f(s0 + t*den) * den*den; end,
-                                 map(x -> 1 / (1 + 1 / (x - s0)), s),
-                                 n, Tw, abstol, reltol, maxevals, nrm)
-            end
-        end
-    end
-```
-
-This code has a 3-way tail recursion, where each call wraps the current function argument `f`
-in a different new closure. Inference must consider 3^n (where n is the call depth) possible signatures.
-This blows up way too quickly, so logic was added to `typeinf_uncached` to immediately widen any
-argument that is a subtype of `Function` and that grows in depth down the stack.

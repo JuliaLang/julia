@@ -152,8 +152,8 @@ end
 
 Starting Julia with `julia -p 2`, you can use this to verify the following:
 
-  * [`include("DummyModule.jl")`](@ref) loads the file on just a single process (whichever one executes
-    the statement).
+  * `include("DummyModule.jl")` loads the file on just a single process
+    (whichever one executes the statement).
   * `using DummyModule` causes the module to be loaded on all processes; however, the module is brought
     into scope only on the one executing the statement.
   * As long as `DummyModule` is loaded on process 2, commands like
@@ -258,11 +258,15 @@ snippet:
 
 ```julia-repl
 A = rand(10,10)
-remotecall_fetch(()->foo(A), 2)
+remotecall_fetch(()->norm(A), 2)
 ```
 
+In this case [`norm`](@ref) is a function that takes 2D array as a parameter, and MUST be defined in
+the remote process.  You could use any function other than `norm` as long as it is defined in the remote
+process and accepts the appropriate parameter.
+
 Note that `A` is a global variable defined in the local workspace. Worker 2 does not have a variable called
-`A` under `Main`. The act of shipping the closure `()->foo(A)` to worker 2 results in `Main.A` being defined
+`A` under `Main`. The act of shipping the closure `()->norm(A)` to worker 2 results in `Main.A` being defined
 on 2. `Main.A` continues to exist on worker 2 even after the call `remotecall_fetch` returns. Remote calls
 with embedded global references (under `Main` module only) manage globals as follows:
 
@@ -276,9 +280,9 @@ with embedded global references (under `Main` module only) manage globals as fol
 
   ```julia
   A = rand(10,10)
-  remotecall_fetch(()->foo(A), 2) # worker 2
+  remotecall_fetch(()->norm(A), 2) # worker 2
   A = rand(10,10)
-  remotecall_fetch(()->foo(A), 3) # worker 3
+  remotecall_fetch(()->norm(A), 3) # worker 3
   A = nothing
   ```
 
@@ -1099,11 +1103,18 @@ The [`launch()`](@ref) method is called asynchronously in a separate task. The t
 this task signals that all requested workers have been launched. Hence the [`launch()`](@ref)
 function MUST exit as soon as all the requested workers have been launched.
 
-Newly launched workers are connected to each other, and the master process, in an all-to-all manner.
-Specifying the command argument `--worker <cookie>` results in the launched processes initializing
-themselves as workers and connections being set up via TCP/IP sockets. Optionally, `--bind-to bind_addr[:port]`
-may also be specified to enable other workers to connect to it at the specified `bind_addr` and
-`port`. This is useful for multi-homed hosts.
+Newly launched workers are connected to each other and the master process in an all-to-all manner.
+Specifying the command line argument `--worker[=<cookie>]` results in the launched processes
+initializing themselves as workers and connections being set up via TCP/IP sockets.
+
+All workers in a cluster share the same [cookie](#cluster-cookie) as the master. When the cookie is
+unspecified, i.e, with the `--worker` option, the worker tries to read it from its standard input.
+ `LocalManager` and `SSHManager` both pass the cookie to newly launched workers via their
+ standard inputs.
+
+By default a worker will listen on a free port at the address returned by a call to `getipaddr()`.
+A specific address to listen on may be specified by optional argument `--bind-to bind_addr[:port]`.
+This is useful for multi-homed hosts.
 
 As an example of a non-TCP/IP transport, an implementation may choose to use MPI, in which case
 `--worker` must NOT be specified. Instead, newly launched workers should call `init_worker(cookie)`
@@ -1266,10 +1277,12 @@ on the master process:
     it and returns the new cookie.
   * All connections are authenticated on both sides to ensure that only workers started by the master
     are allowed to connect to each other.
-  * The cookie must be passed to the workers at startup via argument `--worker <cookie>`. Custom ClusterManagers
-    can retrieve the cookie on the master by calling [`Base.cluster_cookie()`](@ref). Cluster managers
-    not using the default TCP/IP transport (and hence not specifying `--worker`) must call `init_worker(cookie, manager)`
-    with the same cookie as on the master.
+  * The cookie may be passed to the workers at startup via argument `--worker=<cookie>`. If argument
+    `--worker` is specified without the cookie, the worker tries to read the cookie from its
+    standard input (STDIN). The STDIN is closed immediately after the cookie is retrieved.
+  * ClusterManagers can retrieve the cookie on the master by calling [`Base.cluster_cookie()`](@ref).
+    Cluster managers not using the default TCP/IP transport (and hence not specifying `--worker`)
+    must call `init_worker(cookie, manager)` with the same cookie as on the master.
 
 Note that environments requiring higher levels of security can implement this via a custom `ClusterManager`.
 For example, cookies can be pre-shared and hence not specified as a startup argument.

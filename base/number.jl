@@ -69,6 +69,27 @@ divrem(x,y) = (div(x,y),rem(x,y))
 The floored quotient and modulus after division. Equivalent to `(fld(x,y), mod(x,y))`.
 """
 fldmod(x,y) = (fld(x,y),mod(x,y))
+
+"""
+    signbit(x)
+
+Returns `true` if the value of the sign of `x` is negative, otherwise `false`.
+
+# Examples
+```jldoctest
+julia> signbit(-4)
+true
+
+julia> signbit(5)
+false
+
+julia> signbit(5.5)
+false
+
+julia> signbit(-4.1)
+true
+```
+"""
 signbit(x::Real) = x < 0
 
 """
@@ -85,6 +106,11 @@ abs(x::Real) = ifelse(signbit(x), -x, x)
     abs2(x)
 
 Squared absolute value of `x`.
+
+```jldoctest
+julia> abs2(-3)
+9
+```
 """
 abs2(x::Real) = x*x
 
@@ -92,6 +118,14 @@ abs2(x::Real) = x*x
     flipsign(x, y)
 
 Return `x` with its sign flipped if `y` is negative. For example `abs(x) = flipsign(x,x)`.
+
+```jldoctest
+julia> flipsign(5, 3)
+5
+
+julia> flipsign(5, -3)
+-5
+```
 """
 flipsign(x::Real, y::Real) = ifelse(signbit(y), -x, +x) # the + is for type-stability on Bool
 copysign(x::Real, y::Real) = ifelse(signbit(x)!=signbit(y), -x, +x)
@@ -99,8 +133,34 @@ copysign(x::Real, y::Real) = ifelse(signbit(x)!=signbit(y), -x, +x)
 conj(x::Real) = x
 transpose(x::Number) = x
 ctranspose(x::Number) = conj(x)
-inv(x::Number) = one(x)/x
 angle(z::Real) = atan2(zero(z), z)
+
+"""
+    inv(x)
+
+Return the multiplicative inverse of `x`, such that `x*inv(x)` or `inv(x)*x`
+yields [`one(x)`](@ref) (the multiplicative identity) up to roundoff errors.
+
+If `x` is a number, this is essentially the same as `one(x)/x`, but for
+some types `inv(x)` may be slightly more efficient.
+
+# Examples
+```jldoctest
+julia> inv(2)
+0.5
+
+julia> inv(1 + 2im)
+0.2 - 0.4im
+
+julia> inv(1 + 2im) * (1 + 2im)
+1.0 + 0.0im
+
+julia> inv(2//3)
+3//2
+```
+"""
+inv(x::Number) = one(x)/x
+
 
 """
     widemul(x, y)
@@ -126,6 +186,19 @@ map(f, x::Number, ys::Number...) = f(x, ys...)
     zero(x)
 
 Get the additive identity element for the type of `x` (`x` can also specify the type itself).
+
+```jldoctest
+julia> zero(1)
+0
+
+julia> zero(big"2.0")
+0.000000000000000000000000000000000000000000000000000000000000000000000000000000
+
+julia> zero(rand(2,2))
+2×2 Array{Float64,2}:
+ 0.0  0.0
+ 0.0  0.0
+```
 """
 zero(x::Number) = oftype(x,0)
 zero(::Type{T}) where {T<:Number} = convert(T,0)

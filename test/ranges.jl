@@ -356,14 +356,17 @@ for T = (Float32, Float64,), i = 1:2^15, n = 1:5
     # FIXME: these fail some small portion of the time
     @test_skip start == first(r)
     @test_skip stop  == last(r)
-    # FIXME: linspace construction fails on 32-bit
-    Sys.WORD_SIZE == 64 || continue
     l = linspace(start,stop,n)
     @test n == length(l)
     # FIXME: these fail some small portion of the time
     @test_skip start == first(l)
     @test_skip stop  == last(l)
 end
+
+# Inexact errors on 32 bit architectures. #22613
+@test first(linspace(log(0.2), log(10.0), 10)) == log(0.2)
+@test last(linspace(log(0.2), log(10.0), 10)) == log(10.0)
+@test length(Base.floatrange(-3e9, 1.0, 1, 1.0)) == 1
 
 # linspace & ranges with very small endpoints
 for T = (Float32, Float64)
@@ -911,3 +914,21 @@ using TestHelpers.Furlong
 @test collect(Furlong(2):Furlong(1):Furlong(10)) == collect(range(Furlong(2),Furlong(1),9)) == Furlong.(2:10)
 @test collect(Furlong(1.0):Furlong(0.5):Furlong(10.0)) ==
       collect(Furlong(1):Furlong(0.5):Furlong(10)) == Furlong.(1:0.5:10)
+
+# issue #22270
+let linsp = linspace(1.0, 2.0, 10)
+    @test typeof(linsp.ref) == Base.TwicePrecision{Float64}
+    @test Float32(linsp.ref) === convert(Float32, linsp.ref)
+    @test Float32(linsp.ref) ≈ linsp.ref.hi + linsp.ref.lo
+end
+
+@testset "logspace" begin
+    n = 10; a = 2; b = 4
+    # test default values; n = 50, base = 10
+    @test logspace(a, b) == logspace(a, b, 50) == 10 .^ linspace(a, b, 50)
+    @test logspace(a, b, n) == 10 .^ linspace(a, b, n)
+    for base in (10, 2, e)
+        @test logspace(a, b, base=base) == logspace(a, b, 50, base=base) == base.^linspace(a, b, 50)
+        @test logspace(a, b, n, base=base) == base.^linspace(a, b, n)
+    end
+end

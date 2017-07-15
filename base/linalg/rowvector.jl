@@ -3,7 +3,7 @@
 """
     RowVector(vector)
 
-A lazy-view wrapper of an `AbstractVector`, which turns a length-`n` vector into a `1×n`
+A lazy-view wrapper of an [`AbstractVector`](@ref), which turns a length-`n` vector into a `1×n`
 shaped row vector and represents the transpose of a vector (the elements are also transposed
 recursively). This type is usually constructed (and unwrapped) via the [`transpose`](@ref)
 function or `.'` operator (or related [`ctranspose`](@ref) or `'` operator).
@@ -28,7 +28,7 @@ end
 const ConjRowVector{T,CV<:ConjVector} = RowVector{T,CV}
 
 # The element type may be transformed as transpose is recursive
-@inline transpose_type{T}(::Type{T}) = promote_op(transpose, T)
+@inline transpose_type(::Type{T}) where {T} = promote_op(transpose, T)
 
 # Constructors that take a vector
 @inline RowVector(vec::AbstractVector{T}) where {T} = RowVector{transpose_type(T),typeof(vec)}(vec)

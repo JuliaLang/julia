@@ -272,7 +272,7 @@ end
 @test g21147(((1,),), 2) === Int
 
 # issue #21510
-f21510(; a::ANY = 2) = a
+f21510(; Base.@nospecialize a = 2) = a
 @test f21510(a=:b) == :b
 @test f21510() == 2
 

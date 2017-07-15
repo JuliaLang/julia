@@ -80,9 +80,12 @@ convert(::Type{Rational{T}}, x::Integer) where {T<:Integer} = Rational{T}(conver
 convert(::Type{Rational}, x::Rational) = x
 convert(::Type{Rational}, x::Integer) = convert(Rational{typeof(x)},x)
 
-convert(::Type{Bool}, x::Rational) = x==0 ? false : x==1 ? true : throw(InexactError()) # to resolve ambiguity
-convert(::Type{Integer}, x::Rational) = (isinteger(x) ? convert(Integer, x.num) : throw(InexactError()))
-convert(::Type{T}, x::Rational) where {T<:Integer} = (isinteger(x) ? convert(T, x.num) : throw(InexactError()))
+convert(::Type{Bool}, x::Rational) = x==0 ? false : x==1 ? true :
+    throw(InexactError(:convert, Bool, x)) # to resolve ambiguity
+convert(::Type{Integer}, x::Rational) = (isinteger(x) ? convert(Integer, x.num) :
+    throw(InexactError(:convert, Integer, x)))
+convert(::Type{T}, x::Rational) where {T<:Integer} = (isinteger(x) ? convert(T, x.num) :
+    throw(InexactError(:convert, T, x)))
 
 convert(::Type{AbstractFloat}, x::Rational) = float(x.num)/float(x.den)
 function convert(::Type{T}, x::Rational{S}) where T<:AbstractFloat where S
@@ -92,7 +95,7 @@ end
 
 function convert(::Type{Rational{T}}, x::AbstractFloat) where T<:Integer
     r = rationalize(T, x, tol=0)
-    x == convert(typeof(x), r) || throw(InexactError())
+    x == convert(typeof(x), r) || throw(InexactError(:convert, Rational{T}, x))
     r
 end
 convert(::Type{Rational}, x::Float64) = convert(Rational{Int64}, x)
@@ -255,6 +258,7 @@ function *(x::Rational, y::Rational)
 end
 /(x::Rational, y::Rational) = x//y
 /(x::Rational, y::Complex{<:Union{Integer,Rational}}) = x//y
+inv(x::Rational) = Rational(x.den, x.num)
 
 fma(x::Rational, y::Rational, z::Rational) = x*y+z
 
@@ -286,7 +290,8 @@ for rel in (:<,:<=,:cmp)
     for (Tx,Ty) in ((Rational,AbstractFloat), (AbstractFloat,Rational))
         @eval function ($rel)(x::$Tx, y::$Ty)
             if isnan(x) || isnan(y)
-                $(rel == :cmp ? :(throw(DomainError())) : :(return false))
+                $(rel == :cmp ? :(throw(DomainError((x,y), "Inputs cannot be NaN."))) :
+                                :(return false))
             end
 
             xn, xp, xd = decompose(x)

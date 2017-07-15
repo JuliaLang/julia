@@ -88,7 +88,7 @@ tag = Base.have_color ? Base.error_color() : "ARRAY{FLOAT64,N}"
 # Make sure emphasis is not used for other functions
 tag = Base.have_color ? Base.error_color() : "ANY"
 iob = IOBuffer()
-show(iob, expand(:(x->x^2)))
+show(iob, expand(Main, :(x -> x^2)))
 str = String(take!(iob))
 @test isempty(search(str, tag))
 
@@ -151,11 +151,11 @@ i10165{T,n}(::Type{AbstractArray{T,n}}) = 1
 
 const a_const = 1
 not_const = 1
-@test isconst(:a_const) == true
+@test isconst(@__MODULE__, :a_const) == true
 @test isconst(Base, :pi) == true
-@test isconst(:pi) == true
-@test isconst(:not_const) == false
-@test isconst(:is_not_defined) == false
+@test isconst(@__MODULE__, :pi) == true
+@test isconst(@__MODULE__, :not_const) == false
+@test isconst(@__MODULE__, :is_not_defined) == false
 
 @test isimmutable(1) == true
 @test isimmutable([]) == false
@@ -188,22 +188,21 @@ module TestModSub9475
     b9475 = 7
     foo9475(x) = x
     let
-        @test Base.binding_module(:a9475) == current_module()
-        @test Base.binding_module(:c7648) == TestMod7648
-        @test Base.module_name(current_module()) == :TestModSub9475
-        @test Base.fullname(current_module()) == (curmod_name..., :TestMod7648,
-                                                  :TestModSub9475)
-        @test Base.module_parent(current_module()) == TestMod7648
+        @test Base.binding_module(@__MODULE__, :a9475) == @__MODULE__
+        @test Base.binding_module(@__MODULE__, :c7648) == TestMod7648
+        @test Base.module_name(@__MODULE__) == :TestModSub9475
+        @test Base.fullname(@__MODULE__) == (curmod_name..., :TestMod7648, :TestModSub9475)
+        @test Base.module_parent(@__MODULE__) == TestMod7648
     end
 end # module TestModSub9475
 
 using .TestModSub9475
 
 let
-    @test Base.binding_module(:d7648) == current_module()
-    @test Base.binding_module(:a9475) == TestModSub9475
-    @test Base.module_name(current_module()) == :TestMod7648
-    @test Base.module_parent(current_module()) == curmod
+    @test Base.binding_module(@__MODULE__, :d7648) == @__MODULE__
+    @test Base.binding_module(@__MODULE__, :a9475) == TestModSub9475
+    @test Base.module_name(@__MODULE__) == :TestMod7648
+    @test Base.module_parent(@__MODULE__) == curmod
 end
 end # module TestMod7648
 
@@ -214,18 +213,19 @@ let
     @test Set(names(TestMod7648))==Set([:TestMod7648, :a9475, :foo9475, :c7648, :foo7648, :foo7648_nomethods, :Foo7648])
     @test Set(names(TestMod7648, true)) == Set([:TestMod7648, :TestModSub9475, :a9475, :foo9475, :c7648, :d7648, :f7648,
                                                 :foo7648, Symbol("#foo7648"), :foo7648_nomethods, Symbol("#foo7648_nomethods"),
-                                                :Foo7648, :eval, Symbol("#eval")])
+                                                :Foo7648, :eval, Symbol("#eval"), :include, Symbol("#include")])
     @test Set(names(TestMod7648, true, true)) == Set([:TestMod7648, :TestModSub9475, :a9475, :foo9475, :c7648, :d7648, :f7648,
                                                       :foo7648, Symbol("#foo7648"), :foo7648_nomethods, Symbol("#foo7648_nomethods"),
-                                                      :Foo7648, :eval, Symbol("#eval"), :convert, :curmod_name, :curmod])
+                                                      :Foo7648, :eval, Symbol("#eval"), :include, Symbol("#include"),
+                                                      :convert, :curmod_name, :curmod])
     @test isconst(TestMod7648, :c7648)
     @test !isconst(TestMod7648, :d7648)
 end
 
 let
     using .TestMod7648
-    @test Base.binding_module(:a9475) == TestMod7648.TestModSub9475
-    @test Base.binding_module(:c7648) == TestMod7648
+    @test Base.binding_module(@__MODULE__, :a9475) == TestMod7648.TestModSub9475
+    @test Base.binding_module(@__MODULE__, :c7648) == TestMod7648
     @test Base.function_name(foo7648) == :foo7648
     @test Base.function_module(foo7648, (Any,)) == TestMod7648
     @test Base.function_module(foo7648) == TestMod7648
@@ -254,11 +254,14 @@ export this_is_not_defined
 @test_throws ErrorException which(:this_is_not_defined)
 @test_throws ErrorException @which this_is_not_defined
 @test_throws ErrorException which(:this_is_not_exported)
-@test isexported(current_module(), :this_is_not_defined)
-@test !isexported(current_module(), :this_is_not_exported)
+@test isexported(@__MODULE__, :this_is_not_defined)
+@test !isexported(@__MODULE__, :this_is_not_exported)
 const a_value = 1
-@test which(:a_value) == current_module()
-@test !isexported(current_module(), :a_value)
+@test Base.which_module(@__MODULE__, :a_value) === @__MODULE__
+@test @which(a_value) === @__MODULE__
+@test_throws ErrorException which(:a_value)
+@test which(:Core) === Main
+@test !isexported(@__MODULE__, :a_value)
 end
 
 # issue #13264
@@ -290,8 +293,8 @@ mutable struct TLayout
     z::Int32
 end
 tlayout = TLayout(5,7,11)
-@test fieldnames(tlayout) == fieldnames(TLayout) == [:x, :y, :z]
-@test [(fieldoffset(TLayout,i), fieldname(TLayout,i), fieldtype(TLayout,i)) for i = 1:nfields(TLayout)] ==
+@test fieldnames(TLayout) == [:x, :y, :z]
+@test [(fieldoffset(TLayout,i), fieldname(TLayout,i), fieldtype(TLayout,i)) for i = 1:fieldcount(TLayout)] ==
     [(0, :x, Int8), (2, :y, Int16), (4, :z, Int32)]
 @test_throws BoundsError fieldtype(TLayout, 0)
 @test_throws BoundsError fieldname(TLayout, 0)
@@ -304,7 +307,7 @@ tlayout = TLayout(5,7,11)
 @test fieldtype(Tuple{Vararg{Int8}}, 10) === Int8
 @test_throws BoundsError fieldtype(Tuple{Vararg{Int8}}, 0)
 
-@test fieldnames((1,2,3)) == fieldnames(NTuple{3, Int}) == [fieldname(NTuple{3, Int}, i) for i = 1:3] == [1, 2, 3]
+@test fieldnames(NTuple{3, Int}) == [fieldname(NTuple{3, Int}, i) for i = 1:3] == [1, 2, 3]
 @test_throws BoundsError fieldname(NTuple{3, Int}, 0)
 @test_throws BoundsError fieldname(NTuple{3, Int}, 4)
 
@@ -365,11 +368,11 @@ end
 let
     using .MacroTest
     a = 1
-    m = getfield(current_module(), Symbol("@macrotest"))
-    @test which(m, Tuple{LineNumberNode, Int, Symbol}) == @which @macrotest 1 a
-    @test which(m, Tuple{LineNumberNode, Int, Int}) == @which @macrotest 1 1
+    m = getfield(@__MODULE__, Symbol("@macrotest"))
+    @test which(m, Tuple{LineNumberNode, Module, Int, Symbol}) == @which @macrotest 1 a
+    @test which(m, Tuple{LineNumberNode, Module, Int, Int}) == @which @macrotest 1 1
 
-    @test first(methods(m, Tuple{LineNumberNode, Int, Int})) == @which MacroTest.@macrotest 1 1
+    @test first(methods(m, Tuple{LineNumberNode, Module, Int, Int})) == @which MacroTest.@macrotest 1 1
     @test functionloc(@which @macrotest 1 1) == @functionloc @macrotest 1 1
 end
 
@@ -392,7 +395,7 @@ end
 
 used_dup_var_tested15714 = false
 used_unique_var_tested15714 = false
-function test_typed_ast_printing(f::ANY, types::ANY, must_used_vars)
+function test_typed_ast_printing(Base.@nospecialize(f), Base.@nospecialize(types), must_used_vars)
     src, rettype = code_typed(f, types)[1]
     dupnames = Set()
     slotnames = Set()
@@ -498,9 +501,9 @@ fLargeTable() = 4
 @test length(methods(fLargeTable, Tuple{})) == 1
 @test fLargeTable(1im, 2im) == 4
 @test fLargeTable(1.0im, 2.0im) == 5
-@test_throws MethodError fLargeTable(Val{1}(), Val{1}())
-@test fLargeTable(Val{1}(), 1) == 1
-@test fLargeTable(1, Val{1}()) == 2
+@test_throws MethodError fLargeTable(Val(1), Val(1))
+@test fLargeTable(Val(1), 1) == 1
+@test fLargeTable(1, Val(1)) == 2
 
 # issue #15280
 function f15280(x) end
@@ -543,7 +546,7 @@ function has_backslashes(meth::Method)
 end
 has_backslashes(x) = Nullable{Method}()
 h16850 = has_backslashes(Base)
-if is_windows()
+if Sys.iswindows()
     if isnull(h16850)
         warn("No methods found in Base with backslashes in file name, ",
              "skipping test for Base.url")
@@ -646,3 +649,44 @@ struct B20086{T,N} <: A20086{T,N} end
 @test subtypes(A20086{Int}) == [B20086{Int}]
 @test subtypes(A20086{T,3} where T) == [B20086{T,3} where T]
 @test subtypes(A20086{Int,3}) == [B20086{Int,3}]
+
+# sizeof and nfields
+@test sizeof(Int16) == 2
+@test sizeof(Complex128) == 16
+primitive type ParameterizedByte__{A,B} 8 end
+@test sizeof(ParameterizedByte__) == 1
+@test sizeof(nothing) == 0
+@test sizeof(()) == 0
+struct TypeWithIrrelevantParameter{T}
+    x::Int32
+end
+@test sizeof(TypeWithIrrelevantParameter) == sizeof(Int32)
+@test sizeof(TypeWithIrrelevantParameter{Int8}) == sizeof(Int32)
+@test sizeof(:abc) == 3
+@test sizeof(Symbol("")) == 0
+@test_throws(ErrorException("argument is an abstract type; size is indeterminate"),
+             sizeof(Real))
+@test_throws ErrorException sizeof(Union{Complex64,Complex128})
+@test_throws ErrorException sizeof(Union{Int8,UInt8})
+@test_throws ErrorException sizeof(AbstractArray)
+@test_throws ErrorException sizeof(Tuple)
+@test_throws ErrorException sizeof(Tuple{Any,Any})
+@test_throws ErrorException sizeof(String)
+@test_throws ErrorException sizeof(Vector{Int})
+@test_throws ErrorException sizeof(Symbol)
+@test_throws ErrorException sizeof(SimpleVector)
+
+@test nfields((1,2)) == 2
+@test nfields(()) == 0
+@test nfields(nothing) == fieldcount(Void) == 0
+@test nfields(1) == 0
+@test fieldcount(Union{}) == 0
+@test fieldcount(Tuple{Any,Any,T} where T) == 3
+@test fieldcount(Complex) == fieldcount(Complex64) == 2
+@test fieldcount(Union{Complex64,Complex128}) == 2
+@test fieldcount(Int) == 0
+@test_throws(ErrorException("type does not have a definite number of fields"),
+             fieldcount(Union{Complex,Pair}))
+@test_throws ErrorException fieldcount(Real)
+@test_throws ErrorException fieldcount(AbstractArray)
+@test_throws ErrorException fieldcount(Tuple{Any,Vararg{Any}})

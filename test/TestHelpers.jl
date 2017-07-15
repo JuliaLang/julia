@@ -20,7 +20,7 @@ Base.Terminals.raw!(t::FakeTerminal, raw::Bool) = t.raw = raw
 Base.Terminals.size(t::FakeTerminal) = (24, 80)
 
 function open_fake_pty()
-    @static if is_windows()
+    @static if Sys.iswindows()
         error("Unable to create a fake PTY in Windows")
     end
 
@@ -223,6 +223,8 @@ _offset(out, ::Tuple{}, ::Tuple{}) = out
 
 indsoffset(r::Range) = first(r) - 1
 indsoffset(i::Integer) = 0
+
+Base.resize!(A::OffsetVector, nl::Integer) = (resize!(A.parent, nl); A)
 
 end
 

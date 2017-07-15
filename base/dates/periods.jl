@@ -65,7 +65,6 @@ Base.isless(x::P, y::P) where {P<:Period} = isless(value(x), value(y))
 Base.isless(x::Period, y::Period) = isless(promote(x, y)...)
 
 # Period Arithmetic, grouped by dimensionality:
-import Base: div, fld, mod, rem, gcd, lcm, +, -, *, /, %
 for op in (:+, :-, :lcm, :gcd)
     @eval ($op)(x::P, y::P) where {P<:Period} = P(($op)(value(x), value(y)))
 end
@@ -89,7 +88,7 @@ end
 for (op, Ty, Tz) in ((:*, Real, :P),
                    (:/, :P, Float64), (:/, Real, :P))
     @eval begin
-        function ($op){P<:Period}(X::StridedArray{P}, y::$Ty)
+        function ($op)(X::StridedArray{P}, y::$Ty) where P<:Period
             Z = similar(X, $Tz)
             for (Idst, Isrc) in zip(eachindex(Z), eachindex(X))
                 @inbounds Z[Idst] = ($op)(X[Isrc], y)
@@ -100,8 +99,8 @@ for (op, Ty, Tz) in ((:*, Real, :P),
 end
 
 # intfuncs
-Base.gcdx{T<:Period}(a::T, b::T) = ((g, x, y) = gcdx(value(a), value(b)); return T(g), x, y)
-Base.abs{T<:Period}(a::T) = T(abs(value(a)))
+Base.gcdx(a::T, b::T) where {T<:Period} = ((g, x, y) = gcdx(value(a), value(b)); return T(g), x, y)
+Base.abs(a::T) where {T<:Period} = T(abs(value(a)))
 
 periodisless(::Period,::Year)        = true
 periodisless(::Period,::Month)       = true
@@ -136,7 +135,7 @@ periodisless(::Nanosecond,::Microsecond)  = true
 periodisless(::Period,::Nanosecond)       = false
 
 # return (next coarser period, conversion factor):
-coarserperiod{P<:Period}(::Type{P}) = (P, 1)
+coarserperiod(::Type{P}) where {P<:Period} = (P, 1)
 coarserperiod(::Type{Nanosecond})  = (Microsecond, 1000)
 coarserperiod(::Type{Microsecond}) = (Millisecond, 1000)
 coarserperiod(::Type{Millisecond}) = (Second, 1000)
@@ -400,7 +399,7 @@ const FixedPeriod = Union{Week, Day, Hour, Minute, Second, Millisecond, Microsec
 # like div but throw an error if remainder is nonzero
 function divexact(x, y)
     q, r = divrem(x, y)
-    r == 0 || throw(InexactError())
+    r == 0 || throw(InexactError(:divexact, Int, x/y))
     return q
 end
 
@@ -415,7 +414,7 @@ for i = 1:length(fixedperiod_conversions)
         vmax = typemax(Int64) ÷ N
         vmin = typemin(Int64) ÷ N
         @eval function Base.convert(::Type{$T}, x::$Tc)
-            $vmin ≤ value(x) ≤ $vmax || throw(InexactError())
+            $vmin ≤ value(x) ≤ $vmax || throw(InexactError(:convert, $T, x))
             return $T(value(x) * $N)
         end
     end
@@ -432,7 +431,7 @@ end
 const OtherPeriod = Union{Month, Year}
 let vmax = typemax(Int64) ÷ 12, vmin = typemin(Int64) ÷ 12
     @eval function Base.convert(::Type{Month}, x::Year)
-        $vmin ≤ value(x) ≤ $vmax || throw(InexactError())
+        $vmin ≤ value(x) ≤ $vmax || throw(InexactError(:convert, Month, x))
         Month(value(x) * 12)
     end
 end

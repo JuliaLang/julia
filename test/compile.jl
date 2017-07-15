@@ -30,6 +30,14 @@ try
           __precompile__(true)
 
           module $FooBase_module
+              import Base: hash, >
+              struct fmpz end
+              struct typeA end
+              >(x::fmpz, y::Int) = Base.cmp(x, y) > 0
+              function hash(a::typeA, h::UInt)
+                  d = den(a)
+                  return h
+              end
           end
           """)
     write(Foo2_file,
@@ -47,8 +55,14 @@ try
           __precompile__(true)
 
           module $Foo_module
-              using $FooBase_module
+              using $FooBase_module, $FooBase_module.typeA
               import $Foo2_module: $Foo2_module, override
+              import $FooBase_module.hash
+
+              struct typeB
+                  y::typeA
+              end
+              hash(x::typeB) = hash(x.y)
 
               # test that docs get reconnected
               @doc "foo function" foo(x) = x + 1
@@ -157,7 +171,7 @@ try
     cachefile = joinpath(dir, "$Foo_module.ji")
     # use _require_from_serialized to ensure that the test fails if
     # the module doesn't reload from the image:
-    @test_warn "WARNING: replacing module Foo4b3a94a1a081a8cb.\nWARNING: Method definition " begin
+    @test_warn "WARNING: replacing module $Foo_module." begin
         @test isa(Base._require_from_serialized(myid(), Foo_module, cachefile, #=broadcast-load=#false), Array{Any,1})
     end
 
@@ -272,7 +286,7 @@ try
     @test !isdefined(Main, :FooBar1)
 
     relFooBar_file = joinpath(dir, "subfolder", "..", "FooBar.jl")
-    @test Base.stale_cachefile(relFooBar_file, joinpath(dir, "FooBar.ji")) == !is_windows() # `..` is not a symlink on Windows
+    @test Base.stale_cachefile(relFooBar_file, joinpath(dir, "FooBar.ji")) == !Sys.iswindows() # `..` is not a symlink on Windows
     mkdir(joinpath(dir, "subfolder"))
     @test !Base.stale_cachefile(relFooBar_file, joinpath(dir, "FooBar.ji"))
 
@@ -309,6 +323,12 @@ try
     @test Base.stale_cachefile(FooBar_file, joinpath(dir, "FooBar.ji"))
     @test !Base.stale_cachefile(FooBar_file, joinpath(dir2, "FooBar.ji"))
     @test !Base.stale_cachefile(FooBar1_file, joinpath(dir2, "FooBar1.ji"))
+
+    # test checksum
+    open(joinpath(dir2, "FooBar1.ji"), "a") do f
+        write(f, 0x076cac96) # append 4 random bytes
+    end
+    @test Base.stale_cachefile(FooBar1_file, joinpath(dir2, "FooBar1.ji"))
 
     # test behavior of precompile modules that throw errors
     write(FooBar_file,

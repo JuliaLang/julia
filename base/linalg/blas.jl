@@ -2,13 +2,15 @@
 
 module BLAS
 
+import ..axpy!
 import Base: copy!
-import Base.LinAlg: axpy!, dot
 
 export
 # Level 1
     asum,
+    axpy!,
     blascopy!,
+    dot,
     dotc,
     dotu,
     scal!,
@@ -103,7 +105,7 @@ function set_num_threads(n::Integer)
     end
 
     # OSX BLAS looks at an environment variable
-    @static if is_apple()
+    @static if Sys.isapple()
         ENV["VECLIB_MAXIMUM_THREADS"] = n
     end
 

@@ -2,9 +2,7 @@
 
 export
 # Modules
-    FFTW,
     Meta,
-    Operators,
     Pkg,
     LibGit2,
     StackTraces,
@@ -720,6 +718,7 @@ export
     symdiff,
     union!,
     union,
+    unique!,
     unique,
     values,
     valtype,
@@ -863,42 +862,6 @@ export
     var,
     varm,
 
-# signal processing
-    bfft!,
-    bfft,
-    brfft,
-    conv,
-    conv2,
-    dct!,
-    dct,
-    deconv,
-    fft!,
-    fft,
-    fftshift,
-    filt,
-    filt!,
-    idct!,
-    idct,
-    ifft!,
-    ifft,
-    ifftshift,
-    irfft,
-    plan_bfft!,
-    plan_bfft,
-    plan_brfft,
-    plan_dct!,
-    plan_dct,
-    plan_fft!,
-    plan_fft,
-    plan_idct!,
-    plan_idct,
-    plan_ifft!,
-    plan_ifft,
-    plan_irfft,
-    plan_rfft,
-    rfft,
-    xcorr,
-
 # iteration
     done,
     next,
@@ -983,6 +946,7 @@ export
     fieldoffset,
     fieldname,
     fieldnames,
+    fieldcount,
     isleaftype,
     oftype,
     promote,
@@ -1000,12 +964,12 @@ export
     expand,
     gensym,
     macroexpand,
+    @macroexpand1,
     @macroexpand,
     parse,
 
 # help and reflection
     apropos,
-    current_module,
     edit,
     code_typed,
     code_warntype,
@@ -1027,6 +991,7 @@ export
     which,
     whos,
     workspace,
+    @isdefined,
 
 # loading source files
     __precompile__,
@@ -1047,6 +1012,7 @@ export
     atexit,
     atreplinit,
     clipboard,
+    crc32c,
     exit,
     ntuple,
     quit,
@@ -1250,6 +1216,7 @@ export
     @__FILE__,
     @__DIR__,
     @__LINE__,
+    @__MODULE__,
     @int128_str,
     @uint128_str,
     @big_str,
@@ -1292,14 +1259,6 @@ export
     @code_llvm,
     @code_native,
 
-    # platform-conditional code
-    @static,
-    is_windows,
-    is_linux,
-    is_apple,
-    is_bsd,
-    is_unix,
-
     # tasks
     @schedule,
     @sync,
@@ -1320,6 +1279,7 @@ export
     @simd,
     @inline,
     @noinline,
+    @nospecialize,
     @polly,
 
     @assert,
@@ -1329,6 +1289,7 @@ export
     @goto,
     @view,
     @views,
+    @static,
 
 # SparseArrays module re-exports
     SparseArrays,

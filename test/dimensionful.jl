@@ -57,7 +57,7 @@ for op in (:(==), :(!=), :<, :<=, :isless, :isequal)
 end
 # generated functions to allow type inference of the value of the exponent:
 for (f,op) in ((:_plus,:+),(:_minus,:-),(:_times,:*),(:_div,://))
-    @eval @generated function $f{T,p,q}(v::T, ::Furlong{p}, ::Union{Furlong{q},Type{Val{q}}})
+    @eval @generated function $f{T,p,q}(v::T, ::Furlong{p}, ::Union{Furlong{q},Val{q}})
         s = $op(p, q)
         :(Furlong{$(canonical_p(s)),$T}(v))
     end
@@ -76,4 +76,4 @@ for op in (:rem, :mod)
         $op{p}(x::Furlong{p}, y::Number) = Furlong{p}($op(x.val, y))
     end
 end
-Base.sqrt(x::Furlong) = _div(sqrt(x.val), x, Val{2})
+Base.sqrt(x::Furlong) = _div(sqrt(x.val), x, Val(2))

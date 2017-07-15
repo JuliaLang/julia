@@ -182,13 +182,14 @@ macro except_str(expr, err_type)
 end
 
 macro except_strbt(expr, err_type)
+    errmsg = "expected failure, but no exception thrown for $expr"
     return quote
         let err = nothing
             try
                 $(esc(expr))
             catch err
             end
-            err === nothing && error("expected failure, but no exception thrown")
+            err === nothing && error($errmsg)
             @test typeof(err) === $(esc(err_type))
             buf = IOBuffer()
             showerror(buf, err, catch_backtrace())
@@ -254,11 +255,16 @@ end
 struct TypeWithIntParam{T <: Integer} end
 let undefvar
     err_str = @except_strbt sqrt(-1) DomainError
-    @test contains(err_str, "Try sqrt(complex(x)).")
+    @test contains(err_str, "Try sqrt(Complex(x)).")
     err_str = @except_strbt 2^(-1) DomainError
-    @test contains(err_str, "Cannot raise an integer x to a negative power -n")
+    @test contains(err_str, "Cannot raise an integer x to a negative power -1")
     err_str = @except_strbt (-1)^0.25 DomainError
     @test contains(err_str, "Exponentiation yielding a complex result requires a complex argument")
+    A = zeros(10, 10)
+    A[2,1] = 1
+    A[1,2] = -1
+    err_str = @except_strbt eigmax(A) DomainError
+    @test contains(err_str, "DomainError with [0.0 -1.0 …")
 
     err_str = @except_str (1, 2, 3)[4] BoundsError
     @test err_str == "BoundsError: attempt to access (1, 2, 3)\n  at index [4]"
@@ -375,8 +381,8 @@ let err_str,
         "(::Type{$(curmod_prefix)EightBitTypeT{T}})() where T in $curmod_str at $sp:$(method_defs_lineno + 5)"
     @test sprint(show, which(reinterpret(EightBitTypeT{Int32}, 0x54), Tuple{})) ==
         "(::$(curmod_prefix)EightBitTypeT)() in $curmod_str at $sp:$(method_defs_lineno + 6)"
-    @test startswith(sprint(show, which(getfield(Base, Symbol("@doc")), Tuple{LineNumberNode, Vararg{Any}})),
-                     "@doc(__source__::LineNumberNode, x...) in Core at boot.jl:")
+    @test startswith(sprint(show, which(getfield(Base, Symbol("@doc")), Tuple{LineNumberNode, Module, Vararg{Any}})),
+                     "@doc(__source__::LineNumberNode, __module__::Module, x...) in Core at boot.jl:")
     @test startswith(sprint(show, which(FunctionLike(), Tuple{})),
                      "(::$(curmod_prefix)FunctionLike)() in $curmod_str at $sp:$(method_defs_lineno + 7)")
     @test stringmime("text/plain", FunctionLike()) == "(::FunctionLike) (generic function with 1 method)"
@@ -444,7 +450,7 @@ let d = Dict(1 => 2, 3 => 45)
     buf = IOBuffer()
     td = TextDisplay(buf)
     display(td, d)
-    result = String(td.io)
+    result = String(take!(td.io))
 
     @test contains(result, summary(d))
 
@@ -460,13 +466,13 @@ let err, buf = IOBuffer()
     try Array() catch err end
     Base.show_method_candidates(buf,err)
     @test isa(err, MethodError)
-    @test contains(String(buf), "Closest candidates are:")
+    @test contains(String(take!(buf)), "Closest candidates are:")
 end
 
 # Issue 20111
 let K20111(x) = y -> x, buf = IOBuffer()
     show(buf, methods(K20111(1)))
-    @test contains(String(buf), " 1 method for generic function")
+    @test contains(String(take!(buf)), " 1 method for generic function")
 end
 
 # @macroexpand tests
@@ -476,8 +482,8 @@ macro seven_dollar(ex)
 end
 
 let
-    @test (@macroexpand @macroexpand x) == macroexpand(:(@macroexpand x))
-    @test (@macroexpand  :(1+$y) ) == macroexpand(:( :(1+ $y)))
+    @test (@macroexpand @macroexpand x) == macroexpand(@__MODULE__, :(@macroexpand x))
+    @test (@macroexpand  :(1+$y) ) == macroexpand(@__MODULE__, :( :(1+ $y) ))
     @test (@macroexpand @fastmath 1+2    ) == :(Base.FastMath.add_fast(1,2))
     @test (@macroexpand @fastmath +      ) == :(Base.FastMath.add_fast)
     @test (@macroexpand @fastmath min(1) ) == :(Base.FastMath.min_fast(1))
@@ -485,6 +491,32 @@ let
     @test (@macroexpand @seven_dollar $bar) == 7
     x = 2
     @test (@macroexpand @seven_dollar 1+$x) == :(1 + $(Expr(:$, :x)))
+end
+
+macro nest1(code)
+    code
+end
+
+macro nest2(code)
+    :(@nest1 $code)
+end
+
+macro nest2b(code)
+    :(@nest1($code); @nest1($code))
+end
+
+@testset "@macroexpand1" begin
+    M = @__MODULE__
+    _macroexpand1(ex) = macroexpand(M, ex, recursive=false)
+    ex = :(@nest1 42)
+    @test _macroexpand1(ex) == macroexpand(M,ex)
+    ex = :(@nest2 42)
+    @test _macroexpand1(ex) != macroexpand(M,ex)
+    @test _macroexpand1(_macroexpand1(ex)) == macroexpand(M,ex)
+    ex = :(@nest2b 42)
+    @test _macroexpand1(ex) != macroexpand(M,ex)
+    @test _macroexpand1(_macroexpand1(ex)) == macroexpand(M, ex)
+    @test (@macroexpand1 @nest2b 42) == _macroexpand1(ex)
 end
 
 foo_9965(x::Float64; w=false) = x
@@ -568,4 +600,11 @@ end
         @test startswith(str, "MethodError: no method matching f21006(::Tuple{})")
         @test !contains(str, "The applicable method may be too new")
     end
+end
+
+# issue #22798
+@generated f22798(x::Integer, y) = :x
+let buf = IOBuffer()
+    show(buf, methods(f22798))
+    @test contains(String(take!(buf)), "f22798(x::Integer, y)")
 end

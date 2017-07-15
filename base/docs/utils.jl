@@ -186,7 +186,9 @@ function repl(io::IO, s::Symbol)
     quote
         repl_latex($io, $str)
         repl_search($io, $str)
-        ($(isdefined(s) || haskey(keywords, s))) || repl_corrections($io, $str)
+        $(if !isdefined(Main, s) && !haskey(keywords, s)
+               :(repl_corrections($io, $str))
+          end)
         $(_repl(s))
     end
 end
@@ -251,7 +253,7 @@ avgdistance(xs) =
 function fuzzyscore(needle, haystack)
     score = 0.
     is, acro = bestmatch(needle, haystack)
-    score += (acro?2:1)*length(is) # Matched characters
+    score += (acro ? 2 : 1)*length(is) # Matched characters
     score -= 2(length(needle)-length(is)) # Missing characters
     !acro && (score -= avgdistance(is)/10) # Contiguous
     !isempty(is) && (score -= mean(is)/100) # Closer to beginning
@@ -328,7 +330,7 @@ function print_joined_cols(io::IO, ss, delim = "", last = delim; cols = displays
     total = 0
     for i = 1:length(ss)
         total += length(ss[i])
-        total + max(i-2,0)*length(delim) + (i>1?1:0)*length(last) > cols && (i-=1; break)
+        total + max(i-2,0)*length(delim) + (i>1 ? 1 : 0)*length(last) > cols && (i-=1; break)
     end
     join(io, ss[1:i], delim, last)
 end
@@ -336,7 +338,7 @@ end
 print_joined_cols(args...; cols = displaysize(STDOUT)[2]) = print_joined_cols(STDOUT, args...; cols=cols)
 
 function print_correction(io, word)
-    cors = levsort(word, accessible(current_module()))
+    cors = levsort(word, accessible(Main))
     pre = "Perhaps you meant "
     print(io, pre)
     print_joined_cols(io, cors, ", ", " or "; cols = displaysize(io)[2] - length(pre))
@@ -364,7 +366,7 @@ accessible(mod::Module) =
      map(names, moduleusings(mod))...;
      builtins] |> unique |> filtervalid
 
-completions(name) = fuzzysort(name, accessible(current_module()))
+completions(name) = fuzzysort(name, accessible(Main))
 completions(name::Symbol) = completions(string(name))
 
 
@@ -414,7 +416,7 @@ Strip all Markdown markup from x, leaving the result in plain text. Used
 internally by apropos to make docstrings containing more than one markdown
 element searchable.
 """
-stripmd(x::ANY) = string(x) # for random objects interpolated into the docstring
+stripmd(@nospecialize x) = string(x) # for random objects interpolated into the docstring
 stripmd(x::AbstractString) = x  # base case
 stripmd(x::Void) = " "
 stripmd(x::Vector) = string(map(stripmd, x)...)

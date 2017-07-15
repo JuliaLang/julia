@@ -71,9 +71,9 @@ The 64-bit (x86_64) binary will only run on 64-bit Windows and will otherwise re
 ### Supported build platforms
 
  -  Windows 10: supported (32 and 64 bits)
+    - **note: cross-compiling from WSL (Windows Subsystem for Linux) is currently discouraged due to WSL time stamp problems. See discussion and links in [#22074](https://github.com/JuliaLang/julia/pull/22074).**
  -  Windows 8: supported (32 and 64 bits)
  -  Windows 7: supported (32 and 64 bits)
-
 
 ### Compiling with MinGW/MSYS2
 
@@ -275,7 +275,7 @@ export BITS=64
 zypper addrepo http://download.opensuse.org/repositories/windows:mingw:win$BITS/openSUSE_13.2/windows:mingw:win$BITS.repo
 zypper --gpg-auto-import-keys refresh
 zypper -n install --no-recommends git make cmake tar wine which curl \
-    python python-xml patch gcc-c++ m4 p7zip.i586 libxml2-tools
+    python python-xml patch gcc-c++ m4 p7zip.i586 libxml2-tools winbind
 zypper -n install mingw$BITS-cross-gcc-c++ mingw$BITS-cross-gcc-fortran \
     mingw$BITS-libstdc++6 mingw$BITS-libgfortran3 mingw$BITS-libssp0
 # opensuse packages the mingw runtime dlls under sys-root/mingw/bin, not /usr/lib64/gcc
@@ -310,9 +310,7 @@ need wine (>=1.7.5), a system compiler, and some downloaders.
 
 **On Ubuntu** (on other linux systems, the dependency names are likely to be similar):
 ```sh
-apt-add-repository ppa:ubuntu-wine/ppa
-apt-get update
-apt-get install wine1.7 subversion cvs gcc wget p7zip-full
+apt-get install wine subversion cvs gcc wget p7zip-full winbind
 ```
 
 **On Mac**: Install XCode, XCode command line tools, X11 (now [XQuartz](

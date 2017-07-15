@@ -2,8 +2,6 @@
 
 module VersionWeights
 
-importall ....Base.Operators
-
 export VersionWeight
 
 struct HierarchicalValue{T}
@@ -11,7 +9,7 @@ struct HierarchicalValue{T}
     rest::T
 end
 
-HierarchicalValue{T}(v::Vector{T}) = HierarchicalValue{T}(v, zero(T))
+HierarchicalValue(v::Vector{T}) where {T} = HierarchicalValue{T}(v, zero(T))
 HierarchicalValue(T::Type) = HierarchicalValue(T[])
 
 Base.zero(::Type{HierarchicalValue{T}}) where {T} = HierarchicalValue(T)

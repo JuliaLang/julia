@@ -102,7 +102,7 @@ A = CHOLMOD.Sparse(48, 48,
 B = A * ones(size(A,2))
 chma = ldltfact(A)                      # LDL' form
 @test CHOLMOD.isvalid(chma)
-@test unsafe_load(chma.p).is_ll == 0    # check that it is in fact an LDLt
+@test unsafe_load(pointer(chma)).is_ll == 0    # check that it is in fact an LDLt
 x = chma\B
 @test x ≈ ones(size(x))
 @test nnz(ldltfact(A, perm=1:size(A,1))) > nnz(chma)
@@ -113,7 +113,7 @@ chmal = CHOLMOD.FactorComponent(chma, :L)
 
 chma = cholfact(A)                      # LL' form
 @test CHOLMOD.isvalid(chma)
-@test unsafe_load(chma.p).is_ll == 1    # check that it is in fact an LLt
+@test unsafe_load(pointer(chma)).is_ll == 1    # check that it is in fact an LLt
 x = chma\B
 @test x ≈ ones(size(x))
 @test nnz(chma) == 489
@@ -279,7 +279,7 @@ for elty in (Float64, Complex{Float64})
     @test CHOLMOD.check_dense(bDense)
 
     AA = CHOLMOD.eye(3)
-    unsafe_store!(convert(Ptr{Csize_t}, AA.p), 2, 1) # change size, but not stride, of Dense
+    unsafe_store!(convert(Ptr{Csize_t}, pointer(AA)), 2, 1) # change size, but not stride, of Dense
     @test convert(Matrix, AA) == eye(2, 3)
 end
 
@@ -348,14 +348,18 @@ for elty in (Float64, Complex{Float64})
 
     # Factor
     @test_throws ArgumentError cholfact(A1)
-    @test_throws Base.LinAlg.PosDefException cholfact(A1 + A1' - 2eigmax(Array(A1 + A1'))I)
-    @test_throws Base.LinAlg.PosDefException cholfact(A1 + A1', shift=-2eigmax(Array(A1 + A1')))
-    @test_throws ArgumentError ldltfact(A1 + A1' - 2real(A1[1,1])I)
-    @test_throws ArgumentError ldltfact(A1 + A1', shift=-2real(A1[1,1]))
     @test_throws ArgumentError cholfact(A1)
     @test_throws ArgumentError cholfact(A1, shift=1.0)
     @test_throws ArgumentError ldltfact(A1)
     @test_throws ArgumentError ldltfact(A1, shift=1.0)
+    @test_throws LinAlg.PosDefException cholfact(A1 + A1' - 2eigmax(Array(A1 + A1'))*I)\ones(size(A1, 1))
+    @test_throws LinAlg.PosDefException cholfact(A1 + A1', shift=-2eigmax(Array(A1 + A1')))\ones(size(A1, 1))
+    @test_throws ArgumentError ldltfact(A1 + A1' - 2real(A1[1,1])*I)\ones(size(A1, 1))
+    @test_throws ArgumentError ldltfact(A1 + A1', shift=-2real(A1[1,1]))\ones(size(A1, 1))
+    @test !isposdef(cholfact(A1 + A1' - 2eigmax(Array(A1 + A1'))*I))
+    @test !isposdef(cholfact(A1 + A1', shift=-2eigmax(Array(A1 + A1'))))
+    @test !LinAlg.issuccess(ldltfact(A1 + A1' - 2real(A1[1,1])*I))
+    @test !LinAlg.issuccess(ldltfact(A1 + A1', shift=-2real(A1[1,1])))
     F = cholfact(A1pd)
     tmp = IOBuffer()
     show(tmp, F)
@@ -405,7 +409,7 @@ for elty in (Float64, Complex{Float64})
     ### cholfact!/ldltfact!
     F = cholfact(A1pd)
     CHOLMOD.change_factor!(elty, false, false, true, true, F)
-    @test unsafe_load(F.p).is_ll == 0
+    @test unsafe_load(pointer(F)).is_ll == 0
     CHOLMOD.change_factor!(elty, true, false, true, true, F)
     @test CHOLMOD.Sparse(cholfact!(copy(F), A1pd)) ≈ CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
     @test size(F, 2) == 5
@@ -652,7 +656,7 @@ let m = 400, n = 500
     M = [speye(n) A'; A -speye(m)]
     b = M*ones(m + n)
     F = ldltfact(M)
-    s = unsafe_load(get(F.p))
+    s = unsafe_load(pointer(F))
     @test s.is_super == 0
     @test F\b ≈ ones(m + n)
 end
@@ -678,7 +682,7 @@ let A = sprandn(10, 10, 0.1)
     # Change internal representation to symmetric (upper/lower)
     o = fieldoffset(CHOLMOD.C_Sparse{eltype(C)}, find(fieldnames(CHOLMOD.C_Sparse{eltype(C)}) .== :stype)[1])
     for uplo in (1, -1)
-        unsafe_store!(Ptr{Int8}(C.p), uplo, Int(o) + 1)
+        unsafe_store!(Ptr{Int8}(pointer(C)), uplo, Int(o) + 1)
         @test convert(Symmetric{Float64,SparseMatrixCSC{Float64,Int}}, C) == Symmetric(A'A)
     end
 end
@@ -701,3 +705,52 @@ end
         @test issparse((speye(2)*T(speye(2)))*speye(2))
     end
 end
+
+#Test sparse low rank update for cholesky decomposion
+A = SparseMatrixCSC{Float64,CHOLMOD.SuiteSparse_long}(10, 5, [1,3,6,8,10,13], [6,7,1,2,9,3,5,1,7,6,7,9],
+    [-0.138843, 2.99571, -0.556814, 0.669704, -1.39252, 1.33814,
+    1.02371, -0.502384, 1.10686, 0.262229, -1.6935, 0.525239])
+AtA = A'*A;
+C0 = [1., 2., 0, 0, 0]
+#Test both cholfact and LDLt with and without automatic permutations
+for F in (cholfact(AtA), cholfact(AtA, perm=1:5), ldltfact(AtA), ldltfact(AtA, perm=1:5))
+    B0 = F\ones(5)
+    #Test both sparse/dense and vectors/matrices
+    for Ctest in (C0, sparse(C0), [C0 2*C0], sparse([C0 2*C0]))
+        C = copy(Ctest)
+        F1 = copy(F)
+        B = (AtA+C*C')\ones(5)
+
+        #Test update
+        F11 = CHOLMOD.lowrankupdate(F1, C)
+        @test full(sparse(F11)) ≈ AtA+C*C'
+        @test F11\ones(5) ≈ B
+        #Make sure we get back the same factor again
+        F10 = CHOLMOD.lowrankdowndate(F11, C)
+        @test full(sparse(F10)) ≈ AtA
+        @test F10\ones(5) ≈ B0
+
+        #Test in-place update
+        CHOLMOD.lowrankupdate!(F1, C)
+        @test full(sparse(F1)) ≈ AtA+C*C'
+        @test F1\ones(5) ≈ B
+        #Test in-place downdate
+        CHOLMOD.lowrankdowndate!(F1, C)
+        @test full(sparse(F1)) ≈ AtA
+        @test F1\ones(5) ≈ B0
+
+        @test C == Ctest    #Make sure C didn't change
+    end
+end
+
+@testset "Issue #22335" begin
+    A = speye(3)
+    @test LinAlg.issuccess(cholfact(A))
+    A[3, 3] = -1
+    F = cholfact(A)
+    @test !LinAlg.issuccess(F)
+    @test LinAlg.issuccess(ldltfact!(F, A))
+    A[3, 3] = 1
+    @test A[:, 3:-1:1]\ones(3) == [1, 1, 1]
+end
+

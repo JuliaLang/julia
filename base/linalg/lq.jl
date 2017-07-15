@@ -90,7 +90,7 @@ convert(::Type{LQPackedQ{T}}, Q::LQPackedQ) where {T} = LQPackedQ(convert(Abstra
 convert(::Type{AbstractMatrix{T}}, Q::LQPackedQ) where {T} = convert(LQPackedQ{T}, Q)
 convert(::Type{Matrix}, A::LQPackedQ) = LAPACK.orglq!(copy(A.factors),A.τ)
 convert(::Type{Array}, A::LQPackedQ) = convert(Matrix, A)
-function full{T}(A::LQPackedQ{T}; thin::Bool = true)
+function full(A::LQPackedQ{T}; thin::Bool = true) where T
     #= We construct the full eye here, even though it seems inefficient, because
     every element in the output matrix is a function of all the elements of
     the input matrix. The eye is modified by the elementary reflectors held

@@ -4,11 +4,20 @@
 
 ```@docs
 Core.AbstractArray
+Base.AbstractVector
+Base.AbstractMatrix
 Core.Array
+Core.Array(::Any)
+Base.Vector
+Base.Vector(::Any)
+Base.Matrix
+Base.Matrix(::Any, ::Any)
 Base.getindex(::Type, ::Any...)
 Base.zeros
 Base.ones
 Base.BitArray
+Base.BitArray(::Integer...)
+Base.BitArray(::Any)
 Base.trues
 Base.falses
 Base.fill
@@ -131,6 +140,7 @@ Base.cumprod!
 Base.cumsum
 Base.cumsum!
 Base.cumsum_kbn
+Base.crc32c
 Base.LinAlg.diff
 Base.LinAlg.gradient
 Base.rot180
@@ -160,8 +170,8 @@ Base.reverse!
 
 ## BitArrays
 
-`BitArray`s are space-efficient "packed" boolean arrays, which store one bit per boolean value.
- They can be used similarly to `Array{Bool}` arrays (which store one byte per boolean value),
+[`BitArray`](@ref)s are space-efficient "packed" boolean arrays, which store one bit per boolean value.
+They can be used similarly to `Array{Bool}` arrays (which store one byte per boolean value),
 and can be converted to/from the latter via `Array(bitarray)` and `BitArray(array)`, respectively.
 
 ```@docs
@@ -172,12 +182,14 @@ Base.ror!
 Base.ror
 ```
 
-## Sparse Vectors and Matrices
+## [Sparse Vectors and Matrices](@id stdlib-sparse-arrays)
 
 Sparse vectors and matrices largely support the same set of operations as their dense counterparts.
 The following functions are specific to sparse arrays.
 
 ```@docs
+Base.SparseArrays.SparseVector
+Base.SparseArrays.SparseMatrixCSC
 Base.SparseArrays.sparse
 Base.SparseArrays.sparsevec
 Base.SparseArrays.issparse

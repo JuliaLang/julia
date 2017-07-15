@@ -242,8 +242,8 @@ for important details on how to modify these fields safely.
 
   * `def`
 
-    The `Method` that this function describes a specialization of. Or `#undef`, if this is
-    a top-level Lambda that is not part of a Method.
+    The `Method` that this function describes a specialization of. Or a `Module`,
+    if this is a top-level Lambda expanded in Module, and which is not part of a Method.
 
   * `sparam_vals`
 
@@ -476,7 +476,8 @@ parses as:
 ```
 (if a (block (line 2) b)
     (block (line 3) (if c (block (line 4) d)
-                        (block (line 5) e (line 6) f))))
+                             (block (line 5) e
+                                    (line 6) f))))
 ```
 
 A `while` loop parses as `(while condition body)`.
@@ -491,7 +492,7 @@ they are parsed as a block: `(for (block (= v1 iter1) (= v2 iter2)) body)`.
 A basic function definition is parsed as `(function (call f x) body)`. A more complex example:
 
 ```julia
-function f{T}(x::T; k = 1)
+function f(x::T; k = 1) where T
     return x+1
 end
 ```
@@ -499,9 +500,10 @@ end
 parses as:
 
 ```
-(function (call (curly f T) (parameters (kw k 1))
-                (:: x T))
-          (block (line 2 file.jl) (return (call + x 1))))
+(function (where (call f (parameters (kw k 1))
+                       (:: x T))
+                 T)
+          (block (line 2) (return (call + x 1))))
 ```
 
 Type definition:
@@ -515,8 +517,8 @@ end
 parses as:
 
 ```
-(type #t (curly Foo (<: T S))
-      (block (line 2 none) (:: x T)))
+(type true (curly Foo (<: T S))
+      (block (line 2) (:: x T)))
 ```
 
 The first argument is a boolean telling whether the type is mutable.

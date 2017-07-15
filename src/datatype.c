@@ -66,17 +66,11 @@ JL_DLLEXPORT jl_typename_t *jl_new_typename_in(jl_sym_t *name, jl_module_t *modu
     return tn;
 }
 
-JL_DLLEXPORT jl_typename_t *jl_new_typename(jl_sym_t *name)
-{
-    jl_ptls_t ptls = jl_get_ptls_states();
-    return jl_new_typename_in(name, ptls->current_module);
-}
-
 // allocating DataTypes -----------------------------------------------------------
 
-jl_datatype_t *jl_new_abstracttype(jl_value_t *name, jl_datatype_t *super, jl_svec_t *parameters)
+jl_datatype_t *jl_new_abstracttype(jl_value_t *name, jl_module_t *module, jl_datatype_t *super, jl_svec_t *parameters)
 {
-    return jl_new_datatype((jl_sym_t*)name, super, parameters, jl_emptysvec, jl_emptysvec, 1, 0, 0);
+    return jl_new_datatype((jl_sym_t*)name, module, super, parameters, jl_emptysvec, jl_emptysvec, 1, 0, 0);
 }
 
 jl_datatype_t *jl_new_uninitialized_datatype(void)
@@ -222,6 +216,20 @@ unsigned jl_special_vector_alignment(size_t nfields, jl_value_t *t)
     return alignment;
 }
 
+STATIC_INLINE int jl_is_datatype_make_singleton(jl_datatype_t *d)
+{
+    return (!d->abstract && jl_datatype_size(d) == 0 && d != jl_sym_type && d->name != jl_array_typename &&
+            d->uid != 0 && (d->types == jl_emptysvec || !d->mutabl));
+}
+
+STATIC_INLINE void jl_allocate_singleton_instance(jl_datatype_t *st)
+{
+    if (jl_is_datatype_make_singleton(st)) {
+        st->instance = jl_gc_alloc(jl_get_ptls_states(), 0, st);
+        jl_gc_wb(st, st->instance);
+    }
+}
+
 void jl_compute_field_offsets(jl_datatype_t *st)
 {
     size_t sz = 0, alignm = 1;
@@ -238,16 +246,29 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             w->layout) {
             st->layout = w->layout;
             st->size = w->size;
+            jl_allocate_singleton_instance(st);
             return;
         }
     }
     if (st->types == NULL)
         return;
     uint32_t nfields = jl_svec_len(st->types);
-    if (nfields == 0 && st != jl_sym_type && st != jl_simplevector_type) {
-        // reuse the same layout for all singletons
-        static const jl_datatype_layout_t singleton_layout = {0, 1, 0, 0, 0};
-        st->layout = &singleton_layout;
+    if (nfields == 0) {
+        if (st == jl_sym_type || st == jl_string_type) {
+            // opaque layout - heap-allocated blob
+            static const jl_datatype_layout_t opaque_byte_layout = {0, 1, 0, 1, 0};
+            st->layout = &opaque_byte_layout;
+        }
+        else if (st == jl_simplevector_type || st->name == jl_array_typename) {
+            static const jl_datatype_layout_t opaque_ptr_layout = {0, sizeof(void*), 0, 1, 0};
+            st->layout = &opaque_ptr_layout;
+        }
+        else {
+            // reuse the same layout for all singletons
+            static const jl_datatype_layout_t singleton_layout = {0, 1, 0, 0, 0};
+            st->layout = &singleton_layout;
+            jl_allocate_singleton_instance(st);
+        }
         return;
     }
     if (!jl_is_leaf_type((jl_value_t*)st)) {
@@ -322,6 +343,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         haspadding = 1;
     st->layout = jl_get_layout(nfields, alignm, haspadding, desc);
     if (descsz >= jl_page_size) free(desc);
+    jl_allocate_singleton_instance(st);
     return;
  throw_ovf:
     if (descsz >= jl_page_size) free(desc);
@@ -330,34 +352,25 @@ void jl_compute_field_offsets(jl_datatype_t *st)
 
 extern int jl_boot_file_loaded;
 
-JL_DLLEXPORT jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super,
-                                            jl_svec_t *parameters,
-                                            jl_svec_t *fnames, jl_svec_t *ftypes,
-                                            int abstract, int mutabl,
-                                            int ninitialized)
+JL_DLLEXPORT jl_datatype_t *jl_new_datatype(
+        jl_sym_t *name,
+        jl_module_t *module,
+        jl_datatype_t *super,
+        jl_svec_t *parameters,
+        jl_svec_t *fnames,
+        jl_svec_t *ftypes,
+        int abstract, int mutabl,
+        int ninitialized)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
-    jl_datatype_t *t=NULL;
-    jl_typename_t *tn=NULL;
+    jl_datatype_t *t = NULL;
+    jl_typename_t *tn = NULL;
     JL_GC_PUSH2(&t, &tn);
 
-    if (!jl_boot_file_loaded && jl_is_symbol(name)) {
-        // hack to avoid making two versions of basic types needed
-        // during bootstrapping
-        if (!strcmp(jl_symbol_name((jl_sym_t*)name), "Int32"))
-            t = jl_int32_type;
-        else if (!strcmp(jl_symbol_name((jl_sym_t*)name), "Int64"))
-            t = jl_int64_type;
-        else if (!strcmp(jl_symbol_name((jl_sym_t*)name), "Bool"))
-            t = jl_bool_type;
-        else if (!strcmp(jl_symbol_name((jl_sym_t*)name), "UInt8"))
-            t = jl_uint8_type;
-    }
     if (t == NULL)
         t = jl_new_uninitialized_datatype();
     else
         tn = t->name;
-    // init before possibly calling jl_new_typename
+    // init before possibly calling jl_new_typename_in
     t->super = super;
     if (super != NULL) jl_gc_wb(t, t->super);
     t->parameters = parameters;
@@ -378,9 +391,9 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super
             tn = (jl_typename_t*)name;
         }
         else {
-            tn = jl_new_typename((jl_sym_t*)name);
+            tn = jl_new_typename_in((jl_sym_t*)name, module);
             if (!abstract) {
-                tn->mt = jl_new_method_table(name, ptls->current_module);
+                tn->mt = jl_new_method_table(name, module);
                 jl_gc_wb(tn, tn->mt);
             }
         }
@@ -412,10 +425,11 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super
     return t;
 }
 
-JL_DLLEXPORT jl_datatype_t *jl_new_primitivetype(jl_value_t *name, jl_datatype_t *super,
+JL_DLLEXPORT jl_datatype_t *jl_new_primitivetype(jl_value_t *name, jl_module_t *module,
+                                                 jl_datatype_t *super,
                                                  jl_svec_t *parameters, size_t nbits)
 {
-    jl_datatype_t *bt = jl_new_datatype((jl_sym_t*)name, super, parameters,
+    jl_datatype_t *bt = jl_new_datatype((jl_sym_t*)name, module, super, parameters,
                                         jl_emptysvec, jl_emptysvec, 0, 0, 0);
     uint32_t nbytes = (nbits + 7) / 8;
     uint32_t alignm = next_power_of_two(nbytes);
@@ -423,6 +437,7 @@ JL_DLLEXPORT jl_datatype_t *jl_new_primitivetype(jl_value_t *name, jl_datatype_t
         alignm = MAX_ALIGN;
     bt->size = nbytes;
     bt->layout = jl_get_layout(0, alignm, 0, NULL);
+    bt->instance = NULL;
     return bt;
 }
 
@@ -691,7 +706,7 @@ JL_DLLEXPORT jl_value_t *jl_new_struct_uninit(jl_datatype_t *type)
 
 JL_DLLEXPORT int jl_field_index(jl_datatype_t *t, jl_sym_t *fld, int err)
 {
-    jl_svec_t *fn = t->name->names;
+    jl_svec_t *fn = jl_field_names(t);
     for(size_t i=0; i < jl_svec_len(fn); i++) {
         if (jl_svecref(fn,i) == (jl_value_t*)fld) {
             return (int)i;

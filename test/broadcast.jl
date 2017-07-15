@@ -200,7 +200,7 @@ end
 
 # issue #4883
 @test isa(broadcast(tuple, [1 2 3], ["a", "b", "c"]), Matrix{Tuple{Int,String}})
-@test isa(broadcast((x,y)->(x==1?1.0:x,y), [1 2 3], ["a", "b", "c"]), Matrix{Tuple{Real,String}})
+@test isa(broadcast((x,y)->(x==1 ? 1.0 : x, y), [1 2 3], ["a", "b", "c"]), Matrix{Tuple{Real,String}})
 let a = length.(["foo", "bar"])
     @test isa(a, Vector{Int})
     @test a == [3, 3]
@@ -312,12 +312,12 @@ end
 
 # make sure scalars are inlined, which causes f.(x,scalar) to lower to a "thunk"
 import Base.Meta: isexpr
-@test isexpr(expand(:(f.(x,y))), :call)
-@test isexpr(expand(:(f.(x,1))), :thunk)
-@test isexpr(expand(:(f.(x,1.0))), :thunk)
-@test isexpr(expand(:(f.(x,$π))), :thunk)
-@test isexpr(expand(:(f.(x,"hello"))), :thunk)
-@test isexpr(expand(:(f.(x,$("hello")))), :thunk)
+@test isexpr(expand(Main, :(f.(x,y))), :call)
+@test isexpr(expand(Main, :(f.(x,1))), :thunk)
+@test isexpr(expand(Main, :(f.(x,1.0))), :thunk)
+@test isexpr(expand(Main, :(f.(x,$π))), :thunk)
+@test isexpr(expand(Main, :(f.(x,"hello"))), :thunk)
+@test isexpr(expand(Main, :(f.(x,$("hello")))), :thunk)
 
 # PR #17623: Fused binary operators
 @test [true] .* [true] == [true]
@@ -346,7 +346,7 @@ end
 let f17314 = x -> x < 0 ? false : x
     @test eltype(broadcast(f17314, 1:3)) === Int
     @test eltype(broadcast(f17314, -1:1)) === Integer
-    @test eltype(broadcast(f17314, Int[])) === Union{Bool,Int}
+    @test eltype(broadcast(f17314, Int[])) == Union{Bool,Int}
 end
 let io = IOBuffer()
     broadcast(x->print(io,x), 1:5) # broadcast with side effects

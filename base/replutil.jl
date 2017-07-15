@@ -153,7 +153,7 @@ end
 
 function show(io::IO, ::MIME"text/plain", opt::JLOptions)
     println(io, "JLOptions(")
-    fields = fieldnames(opt)
+    fields = fieldnames(JLOptions)
     nfields = length(fields)
     for (i, f) in enumerate(fields)
         v = getfield(opt, i)
@@ -232,31 +232,16 @@ end
 showerror(io::IO, ex::InitError) = showerror(io, ex, [])
 
 function showerror(io::IO, ex::DomainError, bt; backtrace=true)
-    print(io, "DomainError:")
-    for b in bt
-        for code in StackTraces.lookup(b)
-            if code.from_c
-                continue
-            elseif code.func === :nan_dom_err
-                continue
-            elseif code.func in (:log, :log2, :log10, :sqrt)
-                print(io, "\n$(code.func) will only return a complex result if called ",
-                    "with a complex argument. Try $(string(code.func))(complex(x)).")
-            elseif (code.func === :^ &&
-                    (code.file === Symbol("intfuncs.jl") || code.file === Symbol(joinpath(".", "intfuncs.jl")))) ||
-                   code.func === :power_by_squaring #3024
-                print(io, "\nCannot raise an integer x to a negative power -n. ",
-                    "\nMake x a float by adding a zero decimal (e.g. 2.0^-n instead ",
-                    "of 2^-n), or write 1/x^n, float(x)^-n, or (x//1)^-n.")
-            elseif code.func === :^ &&
-                    (code.file === Symbol("math.jl") || code.file === Symbol(joinpath(".", "math.jl")))
-                print(io, "\nExponentiation yielding a complex result requires a complex ",
-                    "argument.\nReplace x^y with (x+0im)^y, Complex(x)^y, or similar.")
-            end
-            @goto showbacktrace
-        end
+    if isa(ex.val, AbstractArray)
+        compact = get(io, :compact, true)
+        limit = get(io, :limit, true)
+        print(IOContext(io, compact=compact, limit=limit), "DomainError with ", ex.val)
+    else
+        print(io, "DomainError with ", ex.val)
     end
-    @label showbacktrace
+    if isdefined(ex, :msg)
+        print(io, ":\n", ex.msg)
+    end
     backtrace && show_backtrace(io, bt)
     nothing
 end
@@ -293,6 +278,10 @@ function showerror(io::IO, ex::UndefVarError)
         """))
     end
     print(io, "UndefVarError: $(ex.var) not defined")
+end
+
+function showerror(io::IO, ex::InexactError)
+    print(io, "InexactError: ", ex.func, '(', ex.T, ", ", ex.val, ')')
 end
 
 function showerror(io::IO, ex::MethodError)

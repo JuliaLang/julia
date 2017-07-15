@@ -20,84 +20,6 @@ f47{T}(x::Vector{Vector{T}}) = 0
 @test_throws TypeError (Array{T} where T<:Vararg{Int})
 @test_throws TypeError (Array{T} where T<:Vararg{Int,2})
 
-# issue #8652
-function args_morespecific(a, b)
-    sp = (ccall(:jl_type_morespecific, Cint, (Any,Any), a, b) != 0)
-    if sp  # make sure morespecific(a,b) implies !morespecific(b,a)
-        @test ccall(:jl_type_morespecific, Cint, (Any,Any), b, a) == 0
-    end
-    return sp
-end
-let
-    a  = Tuple{Type{T1}, T1} where T1<:Integer
-    b2 = Tuple{Type{T2}, Integer} where T2<:Integer
-    @test args_morespecific(a, b2)
-    @test !args_morespecific(b2, a)
-    a  = Tuple{Type{T1}, Ptr{T1}} where T1<:Integer
-    b2 = Tuple{Type{T2}, Ptr{Integer}} where T2<:Integer
-    @test args_morespecific(a, b2)
-    @test !args_morespecific(b2, a)
-end
-
-# issue #11534
-let
-    t1 = Tuple{AbstractArray, Tuple{Vararg{RangeIndex}}}
-    t2 = Tuple{Array, T} where T<:Tuple{Vararg{RangeIndex}}
-    @test !args_morespecific(t1, t2)
-    @test  args_morespecific(t2, t1)
-end
-
-let
-    a = Tuple{Array{T,N}, Vararg{Int,N}} where T where N
-    b = Tuple{Array,Int}
-    @test  args_morespecific(a, b)
-    @test !args_morespecific(b, a)
-    a = Tuple{Array, Vararg{Int,N}} where N
-    @test !args_morespecific(a, b)
-    @test  args_morespecific(b, a)
-end
-
-# another specificity issue
-_z_z_z_(x, y) = 1
-_z_z_z_(::Int, ::Int, ::Vector) = 2
-_z_z_z_(::Int, c...) = 3
-@test _z_z_z_(1, 1, []) == 2
-
-@test  args_morespecific(Tuple{T,Vararg{T}} where T<:Number,  Tuple{Number,Number,Vararg{Number}})
-@test !args_morespecific(Tuple{Number,Number,Vararg{Number}}, Tuple{T,Vararg{T}} where T<:Number)
-
-@test args_morespecific(Tuple{Array{T} where T<:Union{Float32,Float64,Complex64,Complex128}, Any},
-                        Tuple{Array{T} where T<:Real, Any})
-
-@test args_morespecific(Tuple{1,T} where T, Tuple{Any})
-
-# issue #21016
-@test args_morespecific(Tuple{IO, Core.TypeofBottom}, Tuple{IO, Type{T}} where T<:Number)
-
-# issue #21382
-@test args_morespecific(Tuple{Type{Pair{A,B} where B}} where A, Tuple{DataType})
-@test args_morespecific(Tuple{Union{Int,String},Type{Pair{A,B} where B}} where A, Tuple{Integer,UnionAll})
-
-# PR #21750
-let A = Tuple{Any, Tuple{Vararg{Integer,N} where N}},
-    B = Tuple{Any, Tuple{Any}},
-    C = Tuple{Any, Tuple{}}
-    @test args_morespecific(A, B)
-    @test args_morespecific(C, A)
-    @test args_morespecific(C, B)
-end
-
-# with bound varargs
-
-_bound_vararg_specificity_1{T,N}(::Type{Array{T,N}}, d::Vararg{Int, N}) = 0
-_bound_vararg_specificity_1{T}(::Type{Array{T,1}}, d::Int) = 1
-@test _bound_vararg_specificity_1(Array{Int,1}, 1) == 1
-@test _bound_vararg_specificity_1(Array{Int,2}, 1, 1) == 0
-
-# issue #21710
-@test args_morespecific(Tuple{Array}, Tuple{AbstractVector})
-@test args_morespecific(Tuple{Matrix}, Tuple{AbstractVector})
-
 # issue #12939
 module Issue12939
 abstract type Abs; end
@@ -254,6 +176,16 @@ struct C21923{T,N}; v::C21923{T,M} where M; end
 @test fieldtype(C21923, 1) == C21923
 struct D21923{T,N}; v::D21923{T}; end
 @test fieldtype(D21923, 1) == D21923
+
+# issue #22624, more circular definitions
+struct T22624{A,B,C}; v::Vector{T22624{Int64,A}}; end
+let elT = T22624.body.body.body.types[1].parameters[1]
+    @test elT == T22624{Int64, T22624.var, C} where C
+    elT2 = elT.body.types[1].parameters[1]
+    @test elT2 == T22624{Int64, Int64, C} where C
+    @test elT2.body.types[1].parameters[1] === elT2
+    @test isleaftype(elT2.body.types[1])
+end
 
 # issue #3890
 mutable struct A3890{T1}
@@ -454,7 +386,7 @@ begin
     function f7234_b()
         global f7234_cnt += 1
         glob_x2 += 1
-        global f7235_cnt += -10000
+        global f7234_cnt += -10000
     end
 end
 @test_throws UndefVarError f7234_b()
@@ -577,8 +509,8 @@ end
         bar21900 = foo21900 + 1
     end
 end
-@test !isdefined(:foo21900)
-@test !isdefined(:bar21900)
+@test !@isdefined(foo21900)
+@test !@isdefined(bar21900)
 bar21900 = 0
 @test_throws UndefVarError @eval begin
     for i21900 = 1:10
@@ -590,7 +522,7 @@ bar21900 = 0
     end
 end
 @test bar21900 == -1
-@test !isdefined(:foo21900)
+@test !@isdefined foo21900
 foo21900 = 0
 @test nothing === @eval begin
     for i21900 = 1:10
@@ -728,29 +660,14 @@ let
     @test ===(g(a),a)
 end
 
-# Method specificity
-begin
-    local f, A
-    f{T}(dims::Tuple{}, A::AbstractArray{T,0}) = 1
-    f{T,N}(dims::NTuple{N,Int}, A::AbstractArray{T,N}) = 2
-    f{T,M,N}(dims::NTuple{M,Int}, A::AbstractArray{T,N}) = 3
-    A = zeros(2,2)
-    @test f((1,2,3), A) == 3
-    @test f((1,2), A) == 2
-    @test f((), reshape([1])) == 1
-    f{T,N}(dims::NTuple{N,Int}, A::AbstractArray{T,N}) = 4
-    @test f((1,2), A) == 4
-    @test f((1,2,3), A) == 3
-end
-
-# dispatch using Val{T}. See discussion in #9452 for instances vs types
+# dispatch using Val{T}. See discussion in #9452, #22475 for instances vs types
 let
     local firstlast
-    firstlast(::Type{Val{true}}) = "First"
-    firstlast(::Type{Val{false}}) = "Last"
+    firstlast(::Val{true}) = "First"
+    firstlast(::Val{false}) = "Last"
 
-    @test firstlast(Val{true}) == "First"
-    @test firstlast(Val{false}) == "Last"
+    @test firstlast(Val(true)) == "First"
+    @test firstlast(Val(false)) == "Last"
 end
 
 # x::Vararg{Any} declarations
@@ -832,6 +749,7 @@ end
 let didthrow =
     try
         include_string(
+            @__MODULE__,
             """
             module TestInitError
                 __init__() = error()
@@ -1384,7 +1302,7 @@ mutable struct Baz4129
     b::Bar4129
 end
 
-foo4129(a::Baz4129,c::Foo4129,b::Bar4129,x::ANY,y) = (a,b,c,x,y)
+foo4129(a::Baz4129,c::Foo4129,b::Bar4129,@nospecialize(x),y) = (a,b,c,x,y)
 foo4129(a::Baz4129,b::Bar41291,args...) = foo4129(a,b.f,b,args...)
 foo4129(a::Baz4129,b::Bar41292,args...) = foo4129(a,b.f,b,args...)
 foo4129(a::Baz4129,args...)         = foo4129(a,a.b,args...)
@@ -1506,7 +1424,8 @@ let
     g4505{X}(::X) = 0
     @test g4505(0) == 0
 end
-@test !isdefined(:g4505)
+@test !@isdefined g4505
+@test !isdefined(@__MODULE__, :g4505)
 
 # issue #4681
 # ccall should error if convert() returns something of the wrong type
@@ -1804,9 +1723,15 @@ test5536(a::Union{Real, AbstractArray}) = "Non-splatting"
 @test test5536(5) == "Non-splatting"
 
 # multiline comments (#6139 and others raised in #6128) and embedded NUL chars (#10994)
-@test 3 == include_string("1 + 2") == include_string("1 + #==# 2") == include_string("1 + #===# 2") == include_string("1 + #= #= blah =# =# 2") == include_string("1 + #= #= #= nested =# =# =# 2") == include_string("1 + #= \0 =# 2")
-@test_throws LoadError include_string("#=")
-@test_throws LoadError include_string("#= #= #= =# =# =")
+@test 3 ==
+    include_string(@__MODULE__, "1 + 2") ==
+    include_string(@__MODULE__, "1 + #==# 2") ==
+    include_string(@__MODULE__, "1 + #===# 2") ==
+    include_string(@__MODULE__, "1 + #= #= blah =# =# 2") ==
+    include_string(@__MODULE__, "1 + #= #= #= nested =# =# =# 2") ==
+    include_string(@__MODULE__, "1 + #= \0 =# 2")
+@test_throws LoadError include_string(@__MODULE__, "#=")
+@test_throws LoadError include_string(@__MODULE__, "#= #= #= =# =# =")
 
 # issue #6142
 import Base: +
@@ -1922,7 +1847,7 @@ macro m20524(ex)
 end
 @m20524 ((a,(b20524,c)) = (8,(1,5)); (a,b20524,c))
 @test f20524() === (8,1,5)
-@test !isdefined(:b20524)  # should not assign to a global
+@test !@isdefined b20524 # should not assign to a global
 
 # issue #6387
 primitive type Date6387{C} 64 end
@@ -2137,19 +2062,6 @@ let x = Issue2403(20)
     @test issue2403func(x) == 34
 end
 
-# a method specificity issue
-c99991{T}(::Type{T},x::T) = 0
-c99991{T}(::Type{UnitRange{T}},x::StepRangeLen{T}) = 1
-c99991{T}(::Type{UnitRange{T}},x::Range{T}) = 2
-@test c99991(UnitRange{Float64}, 1.0:2.0) == 1
-@test c99991(UnitRange{Int}, 1:2) == 2
-
-# issue #17016, method specificity involving vararg tuples
-T_17016{N} = Tuple{Any,Any,Vararg{Any,N}}
-f17016(f, t::T_17016) = 0
-f17016(f, t1::Tuple) = 1
-@test f17016(0, (1,2,3)) == 0
-
 # issue #8798
 let
     const npy_typestrs = Dict("b1"=>Bool,
@@ -2237,7 +2149,7 @@ let x = [1,2,3]
 end
 
 # sig 2 is SIGINT per the POSIX.1-1990 standard
-if !is_windows()
+if !Sys.iswindows()
     ccall(:jl_exit_on_sigint, Void, (Cint,), 0)
     @test_throws InterruptException begin
         ccall(:kill, Void, (Cint, Cint,), getpid(), 2)
@@ -3315,7 +3227,7 @@ cycle_in_solve_tvar_constraints{T}(::Type{T}, x::Val{T}) = 1
 @test length(methods(cycle_in_solve_tvar_constraints)) == 2
 
 # issue #12967
-foo12967(x, ::ANY) = 1
+foo12967(x, @nospecialize y) = 1
 TupleType12967{T<:Tuple} = Type{T}
 foo12967(x, ::TupleType12967) = 2
 @test foo12967(1, Int) == 1
@@ -3840,7 +3752,7 @@ let
     k15283 = j15283+=1
 end
 @test j15283 == 1
-@test !isdefined(:k15283)
+@test !@isdefined k15283
 
 # issue #15264
 module Test15264
@@ -4068,7 +3980,7 @@ function metadata_matches(ast::CodeInfo)
     @test boundscheck_cnt[] == 0
 end
 
-function test_metadata_matches(f::ANY, tt::ANY)
+function test_metadata_matches(@nospecialize(f), @nospecialize(tt))
     metadata_matches(code_typed(f, tt)[1][1])
 end
 
@@ -4276,16 +4188,16 @@ end
 
 # issue #16153
 f16153(x) = 1
-f16153(x::ANY, y...) = 2
+f16153(@nospecialize(x), y...) = 2
 @test f16153("") == 1
-ff16153(x::ANY, y...) = 2
+ff16153(@nospecialize(x), y...) = 2
 ff16153(x) = 1
 @test ff16153("") == 1
-g16153(x::ANY, y...) = 1
-g16153(x::ANY, y::ANY) = 2
+g16153(@nospecialize(x), y...) = 1
+g16153(@nospecialize(x), @nospecialize(y)) = 2
 @test g16153(1, 1) == 2
-gg16153(x::ANY, y::ANY) = 2
-gg16153(x::ANY, y...) = 1
+gg16153(@nospecialize(x), @nospecialize(y)) = 2
+gg16153(@nospecialize(x), y...) = 1
 @test gg16153(1, 1) == 2
 
 # don't remove global variable accesses even if we "know" their type
@@ -4643,7 +4555,7 @@ bad_tvars{T}() = 1
 
 # issue #19059 - test for lowering of `let` with assignment not adding Box in simple cases
 contains_Box(e::GlobalRef) = (e.name === :Box)
-contains_Box(e::ANY) = false
+contains_Box(@nospecialize(e)) = false
 contains_Box(e::Expr) = any(contains_Box, e.args)
 
 function let_noBox()
@@ -5071,6 +4983,20 @@ let
 end
 @test f22122(1) === Int
 
+# issue #22256
+mutable struct Bar22256{AParameter}
+    inner::Int
+end
+mutable struct Foo22256
+    bar::Bar22256
+end
+setbar22256_inner(a) = (a.bar.inner = 3; nothing)
+let a_foo = Foo22256(Bar22256{true}(2))
+    @test a_foo.bar.inner == 2
+    setbar22256_inner(a_foo)
+    @test a_foo.bar.inner == 3
+end
+
 # issue #22026
 module M22026
 
@@ -5095,3 +5021,57 @@ end
 end
 @test M22026.foofunction(Int16) === Int16
 @test M22026.foofunction2(3) === 6.0f0
+
+# tests for isdefined behavior and code generation
+global undefined_variable
+@test @isdefined Test
+@test !@isdefined undefined_variable
+@test !@isdefined undefined_variable2
+@test let local_undef, local_def = 1
+    !@isdefined local_undef
+    @isdefined local_def
+end
+f_isdefined_latedef() = @isdefined f_isdefined_def
+@test !f_isdefined_latedef()
+f_isdefined(x) = @isdefined x
+f_isdefined_undef() = @isdefined x_isundef
+f_isdefined_def() = @isdefined f_isdefined_def
+@test f_isdefined(1)
+@test f_isdefined("")
+@test !f_isdefined_undef()
+@test f_isdefined_def()
+@test f_isdefined_latedef()
+f_isdefined_defvarI() = (x = rand(Int); @isdefined x)
+f_isdefined_defvarS() = (x = randstring(1); @isdefined x)
+@test f_isdefined_defvarI()
+@test f_isdefined_defvarS()
+f_isdefined_undefvar() = (local x; @isdefined x)
+@test !f_isdefined_undefvar()
+f_isdefined_unionvar(y, t) = (t > 0 && (x = (t == 1 ? 1 : y)); @isdefined x)
+@test f_isdefined_unionvar(nothing, 1)
+@test f_isdefined_unionvar("", 1)
+@test f_isdefined_unionvar(1.0, 1)
+@test f_isdefined_unionvar(1, 1)
+@test !f_isdefined_unionvar(nothing, 0)
+@test !f_isdefined_unionvar("", 0)
+@test !f_isdefined_unionvar(1.0, 0)
+@test !f_isdefined_unionvar(1, 0)
+f_isdefined_splat(x...) = @isdefined x
+@test f_isdefined_splat(1, 2, 3)
+@test let err = @macroexpand @isdefined :x
+    isa(err, Expr) && err.head === :error && isa(err.args[1], MethodError)
+end
+f_isdefined_cl_1(y) = (local x; for i = 1:y; x = 2; end; () -> x; @isdefined x)
+f_isdefined_cl_2(y) = (local x; for i = 1:y; x = 2; end; () -> @isdefined x)
+f_isdefined_cl_3() = (x = 2; () -> x; @isdefined x)
+f_isdefined_cl_4() = (local x; () -> x; @isdefined x)
+f_isdefined_cl_5() = (x = 2; () -> @isdefined x)
+f_isdefined_cl_6() = (local x; () -> @isdefined x)
+@test f_isdefined_cl_1(1)
+@test !f_isdefined_cl_1(0)
+@test f_isdefined_cl_2(1)()
+@test !f_isdefined_cl_2(0)()
+@test f_isdefined_cl_3()
+@test !f_isdefined_cl_4()
+@test f_isdefined_cl_5()()
+@test !f_isdefined_cl_6()()

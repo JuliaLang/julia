@@ -149,24 +149,14 @@ jl_get_ptls_states_func jl_get_ptls_states_getter(void)
 // However, since the detection of the static version in `ifunc`
 // is not guaranteed to be reliable, we still need to fallback to the wrapper
 // version as the symbol address if we didn't find the static version in `ifunc`.
-#if defined(__GLIBC__) && defined(JULIA_HAS_IFUNC_SUPPORT)
-// Make sure both the compiler and the glibc supports it.
-// Only enable this on known working glibc versions.
-#  if (defined(_CPU_X86_) || defined(_CPU_X86_64_)) && __GLIBC_PREREQ(2, 12)
-#    define JL_TLS_USE_IFUNC
-#  elif (defined(_CPU_ARM_) || defined(_CPU_AARCH64_)) && __GLIBC_PREREQ(2, 18)
-// This is the oldest tested version that supports ifunc.
-#    define JL_TLS_USE_IFUNC
-#  endif
-// TODO: PPC probably supports ifunc on some glibc versions too
-#endif
+
 // fallback provided for embedding
 static JL_CONST_FUNC jl_ptls_t jl_get_ptls_states_fallback(void)
 {
     static __thread jl_tls_states_t tls_states;
     return &tls_states;
 }
-#ifdef JL_TLS_USE_IFUNC
+#if JL_USE_IFUNC
 JL_DLLEXPORT JL_CONST_FUNC __attribute__((weak))
 jl_ptls_t jl_get_ptls_states_static(void);
 #endif
@@ -183,7 +173,7 @@ static jl_ptls_t jl_get_ptls_states_init(void)
     // make sure the tls states callback is finalized before adding
     // multiple threads
     jl_get_ptls_states_func cb = jl_get_ptls_states_fallback;
-#ifdef JL_TLS_USE_IFUNC
+#if JL_USE_IFUNC
     if (jl_get_ptls_states_static)
         cb = jl_get_ptls_states_static;
 #endif
@@ -210,7 +200,7 @@ JL_DLLEXPORT void jl_set_ptls_states_getter(jl_get_ptls_states_func f)
     }
 }
 
-#ifdef JL_TLS_USE_IFUNC
+#if JL_USE_IFUNC
 static jl_get_ptls_states_func jl_get_ptls_states_resolve(void)
 {
     if (jl_tls_states_cb != jl_get_ptls_states_init)

@@ -4,16 +4,16 @@
 
 # Cross-platform case-sensitive path canonicalization
 
-if is_unix() && !is_apple()
+if Sys.isunix() && !Sys.isapple()
     # assume case-sensitive filesystems, don't have to do anything
     isfile_casesensitive(path) = isfile(path)
-elseif is_windows()
+elseif Sys.iswindows()
     # GetLongPathName Win32 function returns the case-preserved filename on NTFS.
     function isfile_casesensitive(path)
         isfile(path) || return false  # Fail fast
         basename(Filesystem.longpath(path)) == basename(path)
     end
-elseif is_apple()
+elseif Sys.isapple()
     # HFS+ filesystem is case-preserving. The getattrlist API returns
     # a case-preserved filename. In the rare event that HFS+ is operating
     # in case-sensitive mode, this will still work but will be redundant.
@@ -269,10 +269,17 @@ const _require_dependencies = Any[] # a list of (path, mtime) tuples that are th
 const _track_dependencies = Ref(false) # set this to true to track the list of file dependencies
 function _include_dependency(_path::AbstractString)
     prev = source_path(nothing)
-    path = (prev === nothing) ? abspath(_path) : joinpath(dirname(prev), _path)
+    if prev === nothing
+        if myid() == 1
+            path = abspath(_path)
+        else
+            path = joinpath(remotecall_fetch(abspath, 1, "."), _path)
+        end
+    else
+        path = joinpath(dirname(prev), _path)
+    end
     if myid() == 1 && _track_dependencies[]
-        apath = abspath(path)
-        push!(_require_dependencies, (apath, mtime(apath)))
+        push!(_require_dependencies, (path, mtime(path)))
     end
     return path, prev
 end
@@ -318,8 +325,7 @@ Specify whether the file calling this function is precompilable. If `isprecompil
 `true`, then `__precompile__` throws an exception when the file is loaded by
 `using`/`import`/`require` *unless* the file is being precompiled, and in a module file it
 causes the module to be automatically precompiled when it is imported. Typically,
-`__precompile__()` should occur before the `module` declaration in the file, or better yet
-`VERSION >= v"0.4" && __precompile__()` in order to be backward-compatible with Julia 0.3.
+`__precompile__()` should occur before the `module` declaration in the file.
 
 If a module or file is *not* safely precompilable, it should call `__precompile__(false)` in
 order to throw an error if Julia attempts to precompile it.
@@ -467,20 +473,19 @@ function _require(mod::Symbol)
         # just load the file normally via include
         # for unknown dependencies
         try
-            if last && myid() == 1 && nprocs() > 1
-                # include on node 1 first to check for PrecompilableErrors
-                eval(Main, :(Base.include_from_node1($path)))
+            # include on node 1 first to check for PrecompilableErrors
+            Base.include_from_node1(Main, path)
 
+            if last && myid() == 1 && nprocs() > 1
                 # broadcast top-level import/using from node 1 (only)
                 @sync begin
                     for p in filter(x -> x != 1, procs())
                         @async remotecall_fetch(p) do
-                            eval(Main, :(Base.include_from_node1($path); nothing))
+                            Base.include_from_node1(Main, path)
+                            nothing
                         end
                     end
                 end
-            else
-                eval(Main, :(Base.include_from_node1($path)))
             end
         catch ex
             if doneprecompile === true || JLOptions().use_compilecache == 0 || !precompilableerror(ex, true)
@@ -507,17 +512,17 @@ end
 # remote/parallel load
 
 """
-    include_string(code::AbstractString, filename::AbstractString="string")
+    include_string(m::Module, code::AbstractString, filename::AbstractString="string")
 
 Like `include`, except reads code from the given string rather than from a file. Since there
 is no file path involved, no path processing or fetching from node 1 is done.
 """
-include_string(txt::String, fname::String) =
-    ccall(:jl_load_file_string, Any, (Ptr{UInt8},Csize_t,Cstring),
-          txt, sizeof(txt), fname)
+include_string(m::Module, txt::String, fname::String) =
+    ccall(:jl_load_file_string, Any, (Ptr{UInt8}, Csize_t, Cstring, Any),
+          txt, sizeof(txt), fname, m)
 
-include_string(txt::AbstractString, fname::AbstractString="string") =
-    include_string(String(txt), String(fname))
+include_string(m::Module, txt::AbstractString, fname::AbstractString="string") =
+    include_string(m, String(txt), String(fname))
 
 function source_path(default::Union{AbstractString,Void}="")
     t = current_task()
@@ -538,8 +543,8 @@ function source_dir()
     p === nothing ? pwd() : dirname(p)
 end
 
-include_from_node1(path::AbstractString) = include_from_node1(String(path))
-function include_from_node1(_path::String)
+include_from_node1(mod::Module, path::AbstractString) = include_from_node1(mod, String(path))
+function include_from_node1(mod::Module, _path::String)
     path, prev = _include_dependency(_path)
     tls = task_local_storage()
     tls[:SOURCE_PATH] = path
@@ -548,10 +553,10 @@ function include_from_node1(_path::String)
         if myid()==1
             # sleep a bit to process file requests from other nodes
             nprocs()>1 && sleep(0.005)
-            result = Core.include(path)
+            result = Core.include(mod, path)
             nprocs()>1 && sleep(0.005)
         else
-            result = include_string(remotecall_fetch(readstring, 1, path), path)
+            result = include_string(mod, remotecall_fetch(readstring, 1, path), path)
         end
     finally
         if prev === nothing
@@ -564,9 +569,9 @@ function include_from_node1(_path::String)
 end
 
 """
-    include(path::AbstractString)
+    include(m::Module, path::AbstractString)
 
-Evaluate the contents of the input source file in the current context. Returns the result
+Evaluate the contents of the input source file into module `m`. Returns the result
 of the last evaluated expression of the input file. During including, a task-local include
 path is set to the directory containing the file. Nested calls to `include` will search
 relative to that path. All paths refer to files on node 1 when running in parallel, and
@@ -585,9 +590,10 @@ function evalfile(path::AbstractString, args::Vector{String}=String[])
     return eval(Module(:__anon__),
                 Expr(:toplevel,
                      :(const ARGS = $args),
-                     :(eval(x) = Main.Core.eval(__anon__,x)),
-                     :(eval(m,x) = Main.Core.eval(m,x)),
-                     :(Main.Base.include($path))))
+                     :(eval(x) = $(Expr(:core, :eval))(__anon__, x)),
+                     :(eval(m, x) = $(Expr(:core, :eval))(m, x)),
+                     :(include(x) = $(Expr(:top, :include))(__anon__, x)),
+                     :(include($path))))
 end
 evalfile(path::AbstractString, args::Vector) = evalfile(path, String[args...])
 
@@ -623,7 +629,7 @@ function create_expr_cache(input::String, output::String, concrete_deps::Vector{
                       task_local_storage()[:SOURCE_PATH] = $(source)
                       end)
         end
-        serialize(in, :(Base.include($(abspath(input)))))
+        serialize(in, :(Base.include(Main, $(abspath(input)))))
         if source !== nothing
             serialize(in, :(delete!(task_local_storage(), :SOURCE_PATH)))
         end
@@ -681,7 +687,12 @@ function compilecache(name::String)
             info("Precompiling module $name.")
         end
     end
-    if !success(create_expr_cache(path, cachefile, concrete_deps))
+    if success(create_expr_cache(path, cachefile, concrete_deps))
+        # append checksum to the end of the .ji file:
+        open(cachefile, "a+") do f
+            write(f, hton(crc32c(seekstart(f))))
+        end
+    else
         error("Failed to precompile $name to $cachefile.")
     end
     return cachefile
@@ -800,6 +811,14 @@ function stale_cachefile(modpath::String, cachefile::String)
                 return true
             end
         end
+
+        # finally, verify that the cache file has a valid checksum
+        crc = crc32c(seekstart(io), filesize(io)-4)
+        if crc != ntoh(read(io, UInt32))
+            DEBUG_LOADING[] && info("JL_DEBUG_LOADING: Rejecting cache file $cachefile because it has an invalid checksum.")
+            return true
+        end
+
         return false # fresh cachefile
     finally
         close(io)

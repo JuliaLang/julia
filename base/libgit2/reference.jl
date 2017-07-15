@@ -171,7 +171,7 @@ then `ref` will be peeled until an object other than a [`GitTag`](@ref) is obtai
     Only annotated tags can be peeled to `GitTag` objects. Lightweight tags (the default)
     are references under `refs/tags/` which point directly to `GitCommit` objects.
 """
-function peel{T<:GitObject}(::Type{T}, ref::GitReference)
+function peel(::Type{T}, ref::GitReference) where T<:GitObject
     obj_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_reference_peel, :libgit2), Cint,
                  (Ptr{Ptr{Void}}, Ptr{Void}, Cint), obj_ptr_ptr, ref.ptr, Consts.OBJECT(T))

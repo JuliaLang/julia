@@ -31,6 +31,13 @@ function wait_readnb end
 function wait_readbyte end
 function wait_close end
 function nb_available end
+
+"""
+    readavailable(stream)
+
+Read all available data on the stream, blocking the task only if no data is available. The
+result is a `Vector{UInt8,1}`.
+"""
 function readavailable end
 
 """
@@ -290,9 +297,10 @@ function write(io::IO, xs...)
     return written
 end
 
-@noinline unsafe_write{T}(s::IO, p::Ref{T}, n::Integer) = unsafe_write(s, unsafe_convert(Ref{T}, p)::Ptr, n) # mark noinline to ensure ref is gc-rooted somewhere (by the caller)
+@noinline unsafe_write(s::IO, p::Ref{T}, n::Integer) where {T} =
+    unsafe_write(s, unsafe_convert(Ref{T}, p)::Ptr, n) # mark noinline to ensure ref is gc-rooted somewhere (by the caller)
 unsafe_write(s::IO, p::Ptr, n::Integer) = unsafe_write(s, convert(Ptr{UInt8}, p), convert(UInt, n))
-write{T}(s::IO, x::Ref{T}) = unsafe_write(s, x, Core.sizeof(T))
+write(s::IO, x::Ref{T}) where {T} = unsafe_write(s, x, Core.sizeof(T))
 write(s::IO, x::Int8) = write(s, reinterpret(UInt8, x))
 function write(s::IO, x::Union{Int16,UInt16,Int32,UInt32,Int64,UInt64,Int128,UInt128,Float16,Float32,Float64})
     return write(s, Ref(x))
@@ -313,7 +321,7 @@ end
     return unsafe_write(s, pointer(a), sizeof(a))
 end
 
-@noinline function write{T}(s::IO, a::Array{T}) # mark noinline to ensure the array is gc-rooted somewhere (by the caller)
+@noinline function write(s::IO, a::Array{T}) where T # mark noinline to ensure the array is gc-rooted somewhere (by the caller)
     if isbits(T)
         return unsafe_write(s, pointer(a), sizeof(a))
     else
@@ -360,28 +368,15 @@ end
 
 @noinline unsafe_read(s::IO, p::Ref{T}, n::Integer) where {T} = unsafe_read(s, unsafe_convert(Ref{T}, p)::Ptr, n) # mark noinline to ensure ref is gc-rooted somewhere (by the caller)
 unsafe_read(s::IO, p::Ptr, n::Integer) = unsafe_read(s, convert(Ptr{UInt8}, p), convert(UInt, n))
-read(s::IO, x::Ref{T}) where {T} = (unsafe_read(s, x, Core.sizeof(T)); x)
+read!(s::IO, x::Ref{T}) where {T} = (unsafe_read(s, x, Core.sizeof(T)); x)
 
 read(s::IO, ::Type{Int8}) = reinterpret(Int8, read(s, UInt8))
 function read(s::IO, T::Union{Type{Int16},Type{UInt16},Type{Int32},Type{UInt32},Type{Int64},Type{UInt64},Type{Int128},Type{UInt128},Type{Float16},Type{Float32},Type{Float64}})
-    return read(s, Ref{T}(0))[]::T
+    return read!(s, Ref{T}(0))[]::T
 end
 
 read(s::IO, ::Type{Bool}) = (read(s, UInt8) != 0)
 read(s::IO, ::Type{Ptr{T}}) where {T} = convert(Ptr{T}, read(s, UInt))
-
-read(s::IO, t::Type{T}, d1::Int, dims::Int...) where {T} = read(s, t, tuple(d1,dims...))
-read(s::IO, t::Type{T}, d1::Integer, dims::Integer...) where {T} =
-    read(s, t, convert(Tuple{Vararg{Int}},tuple(d1,dims...)))
-
-"""
-    read(stream::IO, T, dims)
-
-Read a series of values of type `T` from `stream`, in canonical binary representation.
-`dims` is either a tuple or a series of integer arguments specifying the size of the `Array{T}`
-to return.
-"""
-read(s::IO, ::Type{T}, dims::Dims) where {T} = read!(s, Array{T}(dims))
 
 @noinline function read!(s::IO, a::Array{UInt8}) # mark noinline to ensure the array is gc-rooted somewhere (by the caller)
     unsafe_read(s, pointer(a), sizeof(a))
@@ -437,7 +432,7 @@ function readuntil(s::IO, delim::Char)
     return String(take!(out))
 end
 
-function readuntil{T}(s::IO, delim::T)
+function readuntil(s::IO, delim::T) where T
     out = T[]
     while !eof(s)
         c = read(s, T)
@@ -522,7 +517,7 @@ end
 
 Read at most `nb` bytes from `s`, returning a `Vector{UInt8}` of the bytes read.
 """
-function read(s::IO, nb=typemax(Int))
+function read(s::IO, nb::Integer = typemax(Int))
     # Let readbytes! grow the array progressively by default
     # instead of taking of risk of over-allocating
     b = Vector{UInt8}(nb == typemax(Int) ? 1024 : nb)
@@ -644,3 +639,34 @@ ismarked(io::IO) = io.mark >= 0
 Commit all currently buffered writes to the given stream.
 """
 flush(io::IO) = nothing
+
+"""
+    skipchars(io::IO, predicate; linecomment=nothing)
+
+Skip forward in `io` until `predicate` returns `false`. If `linecomment`
+is defined, all characters after the `linecomment` character are ignored
+until the next line.
+
+```jldoctext
+julia> buf = IOBuffer("    text")
+IOBuffer(data=UInt8[...], readable=true, writable=false, seekable=true, append=false, size=8, maxsize=Inf, ptr=1, mark=-1)
+
+julia> skipchars(buf, isspace)
+IOBuffer(data=UInt8[...], readable=true, writable=false, seekable=true, append=false, size=8, maxsize=Inf, ptr=5, mark=-1)
+
+julia> String(readavailable(buf))
+"text"
+```
+"""
+function skipchars(io::IO, pred; linecomment=nothing)
+    while !eof(io)
+        c = read(io, Char)
+        if c === linecomment
+            readline(io)
+        elseif !pred(c)
+            skip(io, -codelen(c))
+            break
+        end
+    end
+    return io
+end

@@ -82,6 +82,22 @@ static inline void jl_assume_(int cond)
 #define jl_assume(cond) (cond)
 #endif
 
+#if defined(__GLIBC__) && defined(JULIA_HAS_IFUNC_SUPPORT)
+// Make sure both the compiler and the glibc supports it.
+// Only enable this on known working glibc versions.
+#  if (defined(_CPU_X86_) || defined(_CPU_X86_64_)) && __GLIBC_PREREQ(2, 12)
+#    define JL_USE_IFUNC 1
+#  elif (defined(_CPU_ARM_) || defined(_CPU_AARCH64_)) && __GLIBC_PREREQ(2, 18)
+// This is the oldest tested version that supports ifunc.
+#    define JL_USE_IFUNC 1
+#  endif
+// TODO: PPC probably supports ifunc on some glibc versions too
+#endif
+// Make sure JL_USE_IFUNC is always defined to catch include errors.
+#ifndef JL_USE_IFUNC
+#  define JL_USE_IFUNC 0
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -131,6 +147,9 @@ int jl_gc_classify_pools(size_t sz, int *osize);
 extern jl_mutex_t gc_perm_lock;
 void *jl_gc_perm_alloc_nolock(size_t sz, int zero, unsigned align, unsigned offset);
 void *jl_gc_perm_alloc(size_t sz, int zero, unsigned align, unsigned offset);
+void jl_gc_force_mark_old(jl_ptls_t ptls, jl_value_t *v);
+void gc_sweep_sysimg(void);
+
 
 // pools are 16376 bytes large (GC_POOL_SZ - GC_PAGE_OFFSET)
 static const int jl_gc_sizeclasses[JL_GC_N_POOLS] = {
@@ -293,18 +312,15 @@ jl_svec_t *jl_perm_symsvec(size_t n, ...);
 jl_value_t *jl_gc_realloc_string(jl_value_t *s, size_t sz);
 
 jl_code_info_t *jl_type_infer(jl_method_instance_t **li, size_t world, int force);
-jl_generic_fptr_t jl_generate_fptr(jl_method_instance_t *li, void *F, size_t world);
-jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t **pli, jl_code_info_t *src, size_t world, const jl_cgparams_t *params);
+jl_generic_fptr_t jl_generate_fptr(jl_method_instance_t *li, const char *F, size_t world);
+jl_llvm_functions_t jl_compile_linfo(
+        jl_method_instance_t **pli,
+        jl_code_info_t *src,
+        size_t world,
+        const jl_cgparams_t *params);
 jl_llvm_functions_t jl_compile_for_dispatch(jl_method_instance_t **li, size_t world);
 JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types);
 jl_code_info_t *jl_new_code_info_from_ast(jl_expr_t *ast);
-jl_method_t *jl_new_method(jl_code_info_t *definition,
-                           jl_sym_t *name,
-                           jl_tupletype_t *sig,
-                           size_t nargs,
-                           int isva,
-                           jl_svec_t *tvars,
-                           int isstaged);
 
 STATIC_INLINE jl_value_t *jl_compile_method_internal(jl_generic_fptr_t *fptr,
                                                      jl_method_instance_t *meth)
@@ -316,7 +332,7 @@ STATIC_INLINE jl_value_t *jl_compile_method_internal(jl_generic_fptr_t *fptr,
     if (__unlikely(fptr->fptr == NULL || fptr->jlcall_api == 0)) {
         size_t world = jl_get_ptls_states()->world_age;
         // first see if it likely needs to be compiled
-        void *F = meth->functionObjectsDecls.functionObject;
+        const char *F = meth->functionObjectsDecls.functionObject;
         if (!F) // ask codegen to try to turn it into llvm code
             F = jl_compile_for_dispatch(&meth, world).functionObject;
         if (meth->jlcall_api == 2)
@@ -326,11 +342,11 @@ STATIC_INLINE jl_value_t *jl_compile_method_internal(jl_generic_fptr_t *fptr,
             fptr->fptr = meth->unspecialized_ducttape;
             fptr->jlcall_api = 1;
             if (!fptr->fptr) {
-                if (meth->def && !meth->def->isstaged && meth->def->unspecialized) {
-                    fptr->fptr = meth->def->unspecialized->fptr;
-                    fptr->jlcall_api = meth->def->unspecialized->jlcall_api;
+                if (jl_is_method(meth->def.method) && meth->def.method->unspecialized) {
+                    fptr->fptr = meth->def.method->unspecialized->fptr;
+                    fptr->jlcall_api = meth->def.method->unspecialized->jlcall_api;
                     if (fptr->jlcall_api == 2) {
-                        return jl_assume(meth->def->unspecialized->inferred_const);
+                        return jl_assume(meth->def.method->unspecialized->inferred_const);
                     }
                 }
             }
@@ -461,8 +477,6 @@ jl_svec_t *jl_outer_unionall_vars(jl_value_t *u);
 int jl_count_union_components(jl_value_t *v);
 jl_value_t *jl_nth_union_component(jl_value_t *v, int i);
 jl_datatype_t *jl_new_uninitialized_datatype(void);
-jl_datatype_t *jl_new_abstracttype(jl_value_t *name, jl_datatype_t *super,
-                                   jl_svec_t *parameters);
 void jl_precompute_memoized_dt(jl_datatype_t *dt);
 jl_datatype_t *jl_wrap_Type(jl_value_t *t);  // x -> Type{x}
 jl_value_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n);
@@ -473,28 +487,30 @@ jl_function_t *jl_new_generic_function_with_supertype(jl_sym_t *name, jl_module_
 jl_function_t *jl_module_call_func(jl_module_t *m);
 int jl_is_submodule(jl_module_t *child, jl_module_t *parent);
 
-jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast, int expanded);
+jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int expanded);
 
 jl_code_info_t *jl_wrap_expr(jl_value_t *expr);
 jl_value_t *jl_eval_global_var(jl_module_t *m, jl_sym_t *e);
 jl_value_t *jl_parse_eval_all(const char *fname,
-                              const char *content, size_t contentlen);
-jl_value_t *jl_interpret_toplevel_thunk(jl_code_info_t *src);
-jl_value_t *jl_interpret_toplevel_expr(jl_value_t *e);
+                              const char *content, size_t contentlen,
+                              jl_module_t *inmodule);
+jl_value_t *jl_interpret_toplevel_thunk(jl_module_t *m, jl_code_info_t *src);
 jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e,
                                           jl_code_info_t *src,
                                           jl_svec_t *sparam_vals);
 int jl_is_toplevel_only_expr(jl_value_t *e);
-jl_value_t *jl_call_scm_on_ast(const char *funcname, jl_value_t *expr);
+jl_value_t *jl_call_scm_on_ast(const char *funcname, jl_value_t *expr, jl_module_t *inmodule);
 
 jl_method_instance_t *jl_method_lookup_by_type(jl_methtable_t *mt, jl_tupletype_t *types,
                                                int cache, int inexact, int allow_exec, size_t world);
 jl_method_instance_t *jl_method_lookup(jl_methtable_t *mt, jl_value_t **args, size_t nargs, int cache, size_t world);
 jl_value_t *jl_gf_invoke(jl_tupletype_t *types, jl_value_t **args, size_t nargs);
 jl_method_instance_t *jl_lookup_generic(jl_value_t **args, uint32_t nargs, uint32_t callsite, size_t world);
+JL_DLLEXPORT jl_value_t *jl_matching_methods(jl_tupletype_t *types, int lim, int include_ambiguous,
+                                             size_t world, size_t *min_valid, size_t *max_valid);
 
 JL_DLLEXPORT jl_datatype_t *jl_first_argument_datatype(jl_value_t *argtypes);
-jl_datatype_t *jl_argument_datatype(jl_value_t *argt);
+JL_DLLEXPORT jl_value_t *jl_argument_datatype(jl_value_t *argt);
 
 jl_value_t *jl_nth_slot_type(jl_value_t *sig, size_t i);
 void jl_compute_field_offsets(jl_datatype_t *st);
@@ -516,6 +532,7 @@ void jl_init_types(void);
 void jl_init_box_caches(void);
 void jl_init_frontend(void);
 void jl_init_primitives(void);
+void *jl_init_llvm(void);
 void jl_init_codegen(void);
 void jl_init_intrinsic_functions(void);
 void jl_init_intrinsic_properties(void);
@@ -597,10 +614,10 @@ static inline void jl_set_gc_and_wait(void)
 }
 #endif
 
-void jl_dump_native(const char *bc_fname, const char *obj_fname, const char *sysimg_data, size_t sysimg_len);
+void jl_dump_native(const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *sysimg_data, size_t sysimg_len);
 int32_t jl_get_llvm_gv(jl_value_t *p);
-int32_t jl_assign_functionID(/*llvm::Function*/void *function);
-int32_t jl_jlcall_api(/*llvm::Function*/const void *function);
+int32_t jl_assign_functionID(const char *fname);
+int32_t jl_jlcall_api(const char *fname);
 // the first argument to jl_idtable_rehash is used to return a value
 // make sure it is rooted if it is used after the function returns
 JL_DLLEXPORT jl_array_t *jl_idtable_rehash(jl_array_t *a, size_t newsz);
@@ -648,7 +665,7 @@ typedef struct {
 } bt_cursor_t;
 #endif
 extern volatile int jl_in_stackwalk;
-#else
+#elif !defined(JL_DISABLE_LIBUNWIND)
 // This gives unwind only local unwinding options ==> faster code
 #  define UNW_LOCAL_ONLY
 #  include <libunwind.h>
@@ -660,6 +677,10 @@ typedef unw_cursor_t bt_cursor_t;
 // on a newer release
 #    define JL_UNW_HAS_FORMAT_IP 1
 #  endif
+#else
+// Unwinding is disabled
+typedef int bt_context_t;
+typedef int bt_cursor_t;
 #endif
 size_t rec_backtrace(uintptr_t *data, size_t maxsize);
 size_t rec_backtrace_ctx(uintptr_t *data, size_t maxsize, bt_context_t *ctx);
@@ -667,7 +688,7 @@ size_t rec_backtrace_ctx(uintptr_t *data, size_t maxsize, bt_context_t *ctx);
 size_t rec_backtrace_ctx_dwarf(uintptr_t *data, size_t maxsize, bt_context_t *ctx);
 #endif
 JL_DLLEXPORT jl_value_t *jl_get_backtrace(void);
-JL_DLLEXPORT jl_value_t *jl_apply_with_saved_exception_state(jl_value_t **args, uint32_t nargs, int catch_exceptions);
+JL_DLLEXPORT jl_value_t *jl_apply_with_saved_exception_state(jl_value_t **args, uint32_t nargs, int drop_exceptions);
 void jl_critical_error(int sig, bt_context_t *context, uintptr_t *bt_data, size_t *bt_size);
 JL_DLLEXPORT void jl_raise_debugger(void);
 int jl_getFunctionInfo(jl_frame_t **frames, uintptr_t pointer, int skipC, int noInline);
@@ -786,10 +807,6 @@ JL_DLLEXPORT jl_value_t *jl_fptosi(jl_value_t *ty, jl_value_t *a);
 JL_DLLEXPORT jl_value_t *jl_fptrunc(jl_value_t *ty, jl_value_t *a);
 JL_DLLEXPORT jl_value_t *jl_fpext(jl_value_t *ty, jl_value_t *a);
 
-JL_DLLEXPORT jl_value_t *jl_checked_trunc_sint(jl_value_t *ty, jl_value_t *a);
-JL_DLLEXPORT jl_value_t *jl_checked_trunc_uint(jl_value_t *ty, jl_value_t *a);
-
-JL_DLLEXPORT jl_value_t *jl_check_top_bit(jl_value_t *a);
 JL_DLLEXPORT jl_value_t *jl_checked_sadd_int(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT jl_value_t *jl_checked_uadd_int(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT jl_value_t *jl_checked_ssub_int(jl_value_t *a, jl_value_t *b);
@@ -980,6 +997,10 @@ extern jl_sym_t *meta_sym; extern jl_sym_t *list_sym;
 extern jl_sym_t *inert_sym; extern jl_sym_t *static_parameter_sym;
 extern jl_sym_t *polly_sym; extern jl_sym_t *inline_sym;
 extern jl_sym_t *propagate_inbounds_sym;
+extern jl_sym_t *isdefined_sym; extern jl_sym_t *nospecialize_sym;
+
+void jl_register_fptrs(uint64_t sysimage_base, const char *base, const int32_t *offsets,
+                       jl_method_instance_t **linfos, size_t n);
 
 #ifdef __cplusplus
 }

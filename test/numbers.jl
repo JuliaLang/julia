@@ -2916,7 +2916,7 @@ struct PR20889; x; end
 ^(::PR20530, p::Int) = 1
 ^(t::PR20889, b) = t.x + b
 ^(t::PR20889, b::Integer) = t.x + b
-Base.literal_pow{p}(::typeof(^), ::PR20530, ::Type{Val{p}}) = 2
+Base.literal_pow{p}(::typeof(^), ::PR20530, ::Val{p}) = 2
 @testset "literal powers" begin
     x = PR20530()
     p = 2
@@ -2965,3 +2965,16 @@ end
     @test !iszero([0, 1, 2, 3])
     @test iszero(zeros(Int, 5))
 end
+
+f20065(B, i) = UInt8(B[i])
+@testset "issue 20065" begin
+    # f20065 must be called from global scope to exhibit the buggy behavior
+    for B in (Array{Bool}(10), Array{Bool}(10,10), reinterpret(Bool, rand(UInt8, 10)))
+        @test all(x-> x <= 1, (f20065(B, i) for i in eachindex(B)))
+        for i in 1:length(B)
+            @test (@eval f20065($B, $i) <= 1)
+        end
+    end
+end
+
+@test inv(3//4) === 4//3 === 1 / (3//4) === 1 // (3//4)

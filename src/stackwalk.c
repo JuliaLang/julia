@@ -13,8 +13,10 @@
 // returning from the callee function will invalidate the context
 #ifdef _OS_WINDOWS_
 #define jl_unw_get(context) RtlCaptureContext(context)
-#else
+#elif !defined(JL_DISABLE_LIBUNWIND)
 #define jl_unw_get(context) unw_getcontext(context)
+#else
+void jl_unw_get(void *context) {};
 #endif
 
 #ifdef __cplusplus
@@ -302,7 +304,7 @@ static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp)
 #endif
 }
 
-#else
+#elif !defined(JL_DISABLE_LIBUNWIND)
 // stacktrace using libunwind
 
 static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context)
@@ -338,6 +340,18 @@ size_t rec_backtrace_ctx_dwarf(uintptr_t *data, size_t maxsize,
     return n > maxsize ? maxsize : n;
 }
 #endif
+
+#else
+// stacktraces are disabled
+static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context)
+{
+    return 0;
+}
+
+static int jl_unw_step(bt_cursor_t *cursor, uintptr_t *ip, uintptr_t *sp)
+{
+    return 0;
+}
 #endif
 
 JL_DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip, int skipC)
