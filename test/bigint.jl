@@ -289,6 +289,9 @@ end
 
 @test Base.ndigits0zpb(big(0), big(rand(2:100))) == 0
 
+# digits with BigInt bases (#16844)
+@test digits(big(2)^256, big(2)^128) == [0, 0, 1]
+
 # conversion from float
 @test BigInt(2.0) == BigInt(2.0f0) == BigInt(big(2.0)) == 2
 @test_throws InexactError convert(BigInt, 2.1)

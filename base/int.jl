@@ -29,6 +29,8 @@ const BitIntegerSmall  = Union{BitIntegerSmall_types...}
 const BitSigned64T     = Union{Type{Int8}, Type{Int16}, Type{Int32}, Type{Int64}}
 const BitUnsigned64T   = Union{Type{UInt8}, Type{UInt16}, Type{UInt32}, Type{UInt64}}
 
+const BitIntegerType = Union{map(T->Type{T}, BitInteger_types)...}
+
 throw_inexacterror(f::Symbol, ::Type{T}, val) where T =
     (@_noinline_meta; throw(InexactError(f, T, val)))
 

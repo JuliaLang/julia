@@ -9,7 +9,7 @@ import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor,
              ndigits, promote_rule, rem, show, isqrt, string, powermod,
              sum, trailing_zeros, trailing_ones, count_ones, base, tryparse_internal,
              bin, oct, dec, hex, isequal, invmod, prevpow2, nextpow2, ndigits0zpb,
-             widen, signed, unsafe_trunc, trunc, iszero, big, flipsign, signbit
+             widen, signed, unsafe_trunc, trunc, iszero, big, flipsign, signbit, hastypemax
 
 if Clong == Int32
     const ClongMax = Union{Int8, Int16, Int32}
@@ -227,6 +227,8 @@ widen(::Type{BigInt})  = BigInt
 signed(x::BigInt) = x
 
 convert(::Type{BigInt}, x::BigInt) = x
+
+hastypemax(::Type{BigInt}) = false
 
 function tryparse_internal(::Type{BigInt}, s::AbstractString, startpos::Int, endpos::Int, base_::Integer, raise::Bool)
     _n = Nullable{BigInt}()
