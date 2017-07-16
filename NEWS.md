@@ -152,9 +152,11 @@ Deprecated or removed
   * The `corrected` positional argument to `cov` has been deprecated in favor of
     a keyword argument with the same name (#21709).
 
-  * Omitting a space between the condition and `?` in a ternary expression has been deprecated.
+  * Omitting spaces around the `?` and the `:` tokens in a ternary expression has been deprecated.
     Ternaries must now include some amount of whitespace, e.g. `x ? a : b` rather than
-    `x? a : b` ([#22523]).
+    `x?a:b` ([#22523] and [#22712]).
+
+  * `?` can no longer be used as an identifier name ([#22712])
 
   * The method `replace(s::AbstractString, pat, r, count)` with `count <= 0` is deprecated
     in favor of `replace(s::AbstractString, pat, r, typemax(Int))` ([#22325]).
@@ -994,4 +996,5 @@ Command-line option changes
 [#22310]: https://github.com/JuliaLang/julia/issues/22310
 [#22523]: https://github.com/JuliaLang/julia/issues/22523
 [#22532]: https://github.com/JuliaLang/julia/issues/22532
+[#22712]: https://github.com/JuliaLang/julia/issues/22712
 [#22732]: https://github.com/JuliaLang/julia/issues/22732
