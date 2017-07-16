@@ -1266,7 +1266,7 @@ end
 
 @noinline zero_arg_matrix_constructor(prefix::String) =
     depwarn("$prefix() is deprecated, use $prefix(0, 0) instead.", :zero_arg_matrix_constructor)
-function (::Type{Matrix{T}}){T}()
+function (::Type{Matrix{T}})() where T
     zero_arg_matrix_constructor("Matrix{T}")
     return Matrix{T}(0, 0)
 end
@@ -1495,11 +1495,11 @@ function replace(s::AbstractString, pat, f, n::Integer)
 end
 
 # PR #22475
-@deprecate ntuple{N}(f, ::Type{Val{N}}) ntuple(f, Val(N))
-@deprecate fill_to_length{N}(t, val, ::Type{Val{N}}) fill_to_length(t, val, Val(N)) false
-@deprecate literal_pow{N}(a, b, ::Type{Val{N}}) literal_pow(a, b, Val(N)) false
-@eval IteratorsMD @deprecate split{n}(t, V::Type{Val{n}}) split(t, Val(n)) false
-@deprecate sqrtm{T,realmatrix}(A::UpperTriangular{T},::Type{Val{realmatrix}}) sqrtm(A, Val(realmatrix))
+@deprecate ntuple(f, ::Type{Val{N}}) where {N}  ntuple(f, Val(N))
+@deprecate fill_to_length(t, val, ::Type{Val{N}}) where {N} fill_to_length(t, val, Val(N)) false
+@deprecate literal_pow(a, b, ::Type{Val{N}}) where {N} literal_pow(a, b, Val(N)) false
+@eval IteratorsMD @deprecate split(t, V::Type{Val{n}}) where {n} split(t, Val(n)) false
+@deprecate sqrtm(A::UpperTriangular{T},::Type{Val{realmatrix}}) where {T,realmatrix} sqrtm(A, Val(realmatrix))
 @deprecate lufact(A::AbstractMatrix, ::Type{Val{false}}) lufact(A, Val(false))
 @deprecate lufact(A::AbstractMatrix, ::Type{Val{true}}) lufact(A, Val(true))
 @deprecate lufact!(A::AbstractMatrix, ::Type{Val{false}}) lufact!(A, Val(false))
@@ -1512,11 +1512,11 @@ end
 @deprecate cholfact(A::AbstractMatrix, ::Type{Val{true}}; tol = 0.0) cholfact(A, Val(true); tol = tol)
 @deprecate cholfact!(A::AbstractMatrix, ::Type{Val{false}}) cholfact!(A, Val(false))
 @deprecate cholfact!(A::AbstractMatrix, ::Type{Val{true}}; tol = 0.0) cholfact!(A, Val(true); tol = tol)
-@deprecate cat{N}(::Type{Val{N}}, A::AbstractArray...) cat(Val(N), A...)
-@deprecate cat{N}(::Type{Val{N}}, A::SparseArrays._SparseConcatGroup...) cat(Val(N), A...)
-@deprecate cat{N}(::Type{Val{N}}, A::SparseArrays._DenseConcatGroup...) cat(Val(N), A...)
-@deprecate cat_t{N,T}(::Type{Val{N}}, ::Type{T}, A, B) cat_t(Val(N), T, A, B) false
-@deprecate reshape{N}(A::AbstractArray, ::Type{Val{N}}) reshape(A, Val(N))
+@deprecate cat(::Type{Val{N}}, A::AbstractArray...) where {N} cat(Val(N), A...)
+@deprecate cat(::Type{Val{N}}, A::SparseArrays._SparseConcatGroup...) where {N} cat(Val(N), A...)
+@deprecate cat(::Type{Val{N}}, A::SparseArrays._DenseConcatGroup...) where {N} cat(Val(N), A...)
+@deprecate cat_t(::Type{Val{N}}, ::Type{T}, A, B) where {N,T} cat_t(Val(N), T, A, B) false
+@deprecate reshape(A::AbstractArray, ::Type{Val{N}}) where {N} reshape(A, Val(N))
 
 @deprecate read(s::IO, x::Ref) read!(s, x)
 
@@ -1524,7 +1524,7 @@ end
 @deprecate read(s::IO, t::Type, d1::Integer, dims::Integer...) read!(s, Array{t}(convert(Tuple{Vararg{Int}},tuple(d1,dims...))))
 @deprecate read(s::IO, t::Type, dims::Dims) read!(s, Array{t}(dims))
 
-function CartesianRange{N}(start::CartesianIndex{N}, stop::CartesianIndex{N})
+function CartesianRange(start::CartesianIndex{N}, stop::CartesianIndex{N}) where N
     inds = map((f,l)->f:l, start.I, stop.I)
     depwarn("the internal representation of CartesianRange has changed, use CartesianRange($inds) (or other more approriate AbstractUnitRange type) instead.", :CartesianRange)
     CartesianRange(inds)

@@ -56,7 +56,7 @@ splat2(3, 3:5)
 @test String(take!(stagediobuf)) == "($intstr, UnitRange{$intstr})"
 
 # varargs specialization with parametric @generated functions (issue #8944)
-@generated function splat3{T,N}(A::AbstractArray{T,N}, indx::RangeIndex...)
+@generated function splat3(A::AbstractArray{T,N}, indx::RangeIndex...) where {T,N}
     print(stagediobuf, indx)
     :(nothing)
 end
@@ -101,10 +101,10 @@ end
 @test MyTest8497.h(3) == 4
 
 # static parameters (issue #8505)
-@generated function foo1{N,T}(a::Array{T,N})
+@generated function foo1(a::Array{T,N}) where {N,T}
     "N = $N, T = $T"
 end
-@generated function foo2{T,N}(a::Array{T,N})
+@generated function foo2(a::Array{T,N}) where {T,N}
     "N = $N, T = $T"
 end
 @test foo1(randn(3,3)) == "N = 2, T = Float64"
@@ -179,7 +179,7 @@ end
 
 gf_err_ref[] = 0
 let gf_err2
-    @generated function gf_err2{f}(::f)
+    @generated function gf_err2(::f) where {f}
         gf_err_ref[] += 1
         reflect = f.instance
         gf_err_ref[] += 1

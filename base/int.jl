@@ -412,7 +412,7 @@ end
 
 ## integer conversions ##
 
-function checked_trunc_sint{To,From}(::Type{To}, x::From)
+function checked_trunc_sint(::Type{To}, x::From) where {To,From}
     @_inline_meta
     y = trunc_int(To, x)
     back = sext_int(From, y)
@@ -420,7 +420,7 @@ function checked_trunc_sint{To,From}(::Type{To}, x::From)
     y
 end
 
-function checked_trunc_uint{To,From}(::Type{To}, x::From)
+function checked_trunc_uint(::Type{To}, x::From) where {To,From}
     @_inline_meta
     y = trunc_int(To, x)
     back = zext_int(From, y)

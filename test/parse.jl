@@ -701,7 +701,7 @@ let m_error, error_out, filename = Base.source_path()
     @test error_out == "syntax: keyword argument \"B\" needs a default value"
 
     # issue #20614
-    m_error = try @eval foo{N}(types::NTuple{N}, values::Vararg{Any,N}, c) = nothing; catch e; e; end
+    m_error = try @eval foo(types::NTuple{N}, values::Vararg{Any,N}, c) where {N} = nothing; catch e; e; end
     error_out = sprint(showerror, m_error)
     @test startswith(error_out, "ArgumentError: Vararg on non-final argument")
 end
