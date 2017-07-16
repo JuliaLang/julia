@@ -872,7 +872,6 @@ precompile(Tuple{typeof(Core.Inference.record_slot_assign!), Core.Inference.Infe
 precompile(Tuple{typeof(Core.Inference.type_annotate!), Core.Inference.InferenceState})
 precompile(Tuple{typeof(Core.Inference.inlining_pass!), Core.Inference.InferenceState})
 precompile(Tuple{typeof(Core.Inference.alloc_elim_pass!), Core.Inference.InferenceState})
-precompile(Tuple{typeof(Core.Inference.getfield_elim_pass!), Core.Inference.InferenceState})
 precompile(Tuple{typeof(Core.Inference.popmeta!), Array{Any, 1}, Symbol})
 precompile(Tuple{typeof(Core.Inference.widen_all_consts!), CodeInfo})
 precompile(Tuple{typeof(Core.Inference.stupdate!), Array{Any, 1}, Array{Any, 1}})
