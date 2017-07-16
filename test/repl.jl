@@ -336,6 +336,20 @@ begin
     @test LineEdit.mode(s) == repl_mode
     @test buffercontents(LineEdit.buffer(s)) == "wip"
     @test position(LineEdit.buffer(s)) == 3
+    LineEdit.history_next(s, hp)
+    @test buffercontents(LineEdit.buffer(s)) == "wip"
+    LineEdit.history_prev(s, hp, 2)
+    @test LineEdit.mode(s) == shell_mode
+    @test buffercontents(LineEdit.buffer(s)) == "ls"
+    LineEdit.history_first(s, hp)
+    @test LineEdit.mode(s) == repl_mode
+    @test buffercontents(LineEdit.buffer(s)) == "é"
+    LineEdit.history_next(s, hp, 6)
+    @test LineEdit.mode(s) == shell_mode
+    @test buffercontents(LineEdit.buffer(s)) == "ls"
+    LineEdit.history_last(s, hp)
+    @test buffercontents(LineEdit.buffer(s)) == "wip"
+    @test position(LineEdit.buffer(s)) == 3
     LineEdit.move_line_start(s)
     @test position(LineEdit.buffer(s)) == 0
 
