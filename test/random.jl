@@ -372,7 +372,7 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()])
     for f! in [rand!, randn!, randexp!]
         for T in (f! === rand! ? types : f! === randn! ? cftypes : ftypes)
             X = T == Bool ? T[0,1] : T[0,1,2]
-            for A in [Array{T}(5), Array{T}(2, 3), GenericArray{T}(5), GenericArray{T}(2, 3)]
+            for A in (Array{T}(5), Array{T}(2, 3), GenericArray{T}(5), GenericArray{T}(2, 3))
                 f!(rng..., A)                    ::typeof(A)
                 if f! === rand!
                     f!(rng..., A, X)             ::typeof(A)
