@@ -13,6 +13,12 @@ Language changes
   * The syntax `1.+2` is deprecated, since it is ambiguous: it could mean either
     `1 .+ 2` (the current meaning) or `1. + 2` ([#19089]).
 
+  * In string and character literals, backslash `\` may no longer
+    precede unrecognized escape characters ([#22800]).
+
+  * Declaring arguments as `x::ANY` to avoid specialization has been replaced
+    by `@nospecialize x`, which needs to be imported from `Base`. ([#22666]).
+
 Breaking changes
 ----------------
 
@@ -100,6 +106,10 @@ Library improvements
     `ntuple`, `Base.literal_pow`, `sqrtm`, `lufact`, `lufact!`, `qrfact`, `qrfact!`,
     `cholfact`, `cholfact!`, `_broadcast!`, `reshape`, `cat` and `cat_t`.
 
+  * A new `@macroexpand1` macro for non recursive macro expansion ([#21662]).
+
+  * `Char`s can now be concatenated with `String`s and/or other `Char`s using `*` ([#22532]).
+
 Compiler/Runtime improvements
 -----------------------------
 
@@ -174,6 +184,10 @@ Deprecated or removed
 
   * The forms of `read`, `readstring`, and `eachline` that accepted both a `Cmd` object and an
     input stream are deprecated. Use e.g. `read(pipeline(stdin, cmd))` instead ([#22762]).
+
+  * The unexported type `AbstractIOBuffer` has been renamed to `GenericIOBuffer` ([#17360] [#22796]).
+
+  * The method `String(io::IOBuffer)` is deprecated to `String(take!(copy(io)))` ([#21438]).
 
 
 Julia v0.6.0 Release Notes
@@ -979,4 +993,5 @@ Command-line option changes
 [#22245]: https://github.com/JuliaLang/julia/issues/22245
 [#22310]: https://github.com/JuliaLang/julia/issues/22310
 [#22523]: https://github.com/JuliaLang/julia/issues/22523
+[#22532]: https://github.com/JuliaLang/julia/issues/22532
 [#22732]: https://github.com/JuliaLang/julia/issues/22732

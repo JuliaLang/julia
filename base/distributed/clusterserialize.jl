@@ -32,7 +32,7 @@ function lookup_object_number(s::ClusterSerializer, n::UInt64)
     return get(known_object_data, n, nothing)
 end
 
-function remember_object(s::ClusterSerializer, o::ANY, n::UInt64)
+function remember_object(s::ClusterSerializer, @nospecialize(o), n::UInt64)
     known_object_data[n] = o
     if isa(o, TypeName) && !haskey(object_numbers, o)
         # set up reverse mapping for serialize

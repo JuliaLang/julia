@@ -484,7 +484,7 @@ Waits and fetches a value from `x` depending on the type of `x`:
 
 Does not remove the item fetched.
 """
-fetch(x::ANY) = x
+fetch(@nospecialize x) = x
 
 isready(rv::RemoteValue, args...) = isready(rv.c, args...)
 

@@ -64,7 +64,7 @@ mutable struct PromptState <: ModeState
     indent::Int
 end
 
-input_string(s::PromptState) = String(s.input_buffer)
+input_string(s::PromptState) = String(take!(copy(s.input_buffer)))
 
 input_string_newlines(s::PromptState) = count(c->(c == '\n'), input_string(s))
 function input_string_newlines_aftercursor(s::PromptState)
@@ -1045,7 +1045,7 @@ refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal,
     s::Union{PromptState,PrefixSearchState}) = s.ias =
     refresh_multi_line(termbuf, terminal, buffer(s), s.ias, s, indent = s.indent)
 
-input_string(s::PrefixSearchState) = String(s.response_buffer)
+input_string(s::PrefixSearchState) = String(take!(copy(s.response_buffer)))
 
 # a meta-prompt that presents itself as parent_prompt, but which has an independent keymap
 # for prefix searching

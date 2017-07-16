@@ -103,13 +103,25 @@ function firstcaller(bt::Array{Ptr{Void},1}, funcsyms)
     return lkup
 end
 
-deprecate(m::Module, s::Symbol) = ccall(:jl_deprecate_binding, Void, (Any, Any), m, s)
+deprecate(m::Module, s::Symbol, flag=1) = ccall(:jl_deprecate_binding, Void, (Any, Any, Cint), m, s, flag)
 
 macro deprecate_binding(old, new, export_old=true)
     return Expr(:toplevel,
          export_old ? Expr(:export, esc(old)) : nothing,
          Expr(:const, Expr(:(=), esc(old), esc(new))),
          Expr(:call, :deprecate, __module__, Expr(:quote, old)))
+end
+
+macro deprecate_moved(old, new, export_old=true)
+    eold = esc(old)
+    return Expr(:toplevel,
+         :(function $eold(args...; kwargs...)
+               error($eold, " has been moved to the package ", $new, ".jl.\n",
+                     "Run `Pkg.add(\"", $new, "\")` to install it, restart Julia,\n",
+                     "and then run `using ", $new, "` to load it.")
+           end),
+         export_old ? Expr(:export, eold) : nothing,
+         Expr(:call, :deprecate, __module__, Expr(:quote, old), 2))
 end
 
 # BEGIN 0.6-alpha deprecations (delete when 0.6 is released)
@@ -684,21 +696,12 @@ end
 @deprecate xor(A::AbstractArray, B::AbstractArray)  xor.(A, B)
 
 # QuadGK moved to a package (#19741)
-function quadgk(args...; kwargs...)
-    error(string(quadgk, args, " has been moved to the package QuadGK.jl.\n",
-                 "Run Pkg.add(\"QuadGK\") to install QuadGK on Julia v0.6 and later, and then run `using QuadGK`."))
-end
-export quadgk
+@deprecate_moved quadgk "QuadGK"
 
 # Collections functions moved to a package (#19800)
 module Collections
-    export PriorityQueue, enqueue!, dequeue!, heapify!, heapify, heappop!, heappush!, isheap, peek
     for f in (:PriorityQueue, :enqueue!, :dequeue!, :heapify!, :heapify, :heappop!, :heappush!, :isheap, :peek)
-        @eval function ($f)(args...; kwargs...)
-            error(string($f, args, " has been moved to the package DataStructures.jl.\n",
-                         "Run Pkg.add(\"DataStructures\") to install DataStructures on Julia v0.6 and later, ",
-                         "and then run `using DataStructures`."))
-        end
+        @eval Base.@deprecate_moved $f "DataStructures"
     end
 end
 export Collections
@@ -1114,7 +1117,7 @@ end
 @deprecate(SharedArray(filename::AbstractString, ::Type{T}, dims::NTuple, offset; kwargs...) where {T},
            SharedArray{T}(filename, dims, offset; kwargs...))
 
-@noinline function is_intrinsic_expr(x::ANY)
+@noinline function is_intrinsic_expr(@nospecialize(x))
     Base.depwarn("is_intrinsic_expr is deprecated. There are no intrinsic functions anymore.", :is_intrinsic_expr)
     return false
 end
@@ -1263,7 +1266,7 @@ end
 
 @noinline zero_arg_matrix_constructor(prefix::String) =
     depwarn("$prefix() is deprecated, use $prefix(0, 0) instead.", :zero_arg_matrix_constructor)
-function (::Type{Matrix{T}}){T}()
+function (::Type{Matrix{T}})() where T
     zero_arg_matrix_constructor("Matrix{T}")
     return Matrix{T}(0, 0)
 end
@@ -1288,14 +1291,7 @@ for f in (:airyai, :airyaiprime, :airybi, :airybiprime, :airyaix, :airyaiprimex,
           :eta, :zeta, :digamma, :invdigamma, :polygamma, :trigamma,
           :hankelh1, :hankelh1x, :hankelh2, :hankelh2x,
           :airy, :airyx, :airyprime)
-    @eval begin
-        function $f(args...; kwargs...)
-            error(string($f, args, " has been moved to the package SpecialFunctions.jl.\n",
-                         "Run Pkg.add(\"SpecialFunctions\") to install SpecialFunctions on Julia v0.6 and later,\n",
-                         "and then run `using SpecialFunctions`."))
-        end
-        export $f
-    end
+    @eval @deprecate_moved $f "SpecialFunctions"
 end
 
 @deprecate_binding LinearIndexing IndexStyle false
@@ -1372,11 +1368,11 @@ _current_module() = ccall(:jl_get_current_module, Ref{Module}, ())
     depwarn("binding_module(symbol) is deprecated, use `binding_module(module, symbol)` instead.", :binding_module)
     return binding_module(_current_module(), s)
 end
-@noinline function expand(x::ANY)
+@noinline function expand(@nospecialize(x))
     depwarn("expand(x) is deprecated, use `expand(module, x)` instead.", :expand)
     return expand(_current_module(), x)
 end
-@noinline function macroexpand(x::ANY)
+@noinline function macroexpand(@nospecialize(x))
     depwarn("macroexpand(x) is deprecated, use `macroexpand(module, x)` instead.", :macroexpand)
     return macroexpand(_current_module(), x)
 end
@@ -1443,43 +1439,22 @@ module DFT
               :plan_dct, :plan_dct!, :plan_fft, :plan_fft!, :plan_idct, :plan_idct!,
               :plan_ifft, :plan_ifft!, :plan_irfft, :plan_rfft, :rfft]
         pkg = endswith(String(f), "shift") ? "AbstractFFTs" : "FFTW"
-        @eval begin
-            function $f(args...; kwargs...)
-                error($f, " has been moved to the package $($pkg).jl.\n",
-                      "Run `Pkg.add(\"$($pkg)\")` to install $($pkg) then run `using $($pkg)` ",
-                      "to load it.")
-            end
-            export $f
-        end
+        @eval Base.@deprecate_moved $f $pkg
     end
     module FFTW
         for f in [:r2r, :r2r!, :plan_r2r, :plan_r2r!]
-            @eval begin
-                function $f(args...; kwargs...)
-                    error($f, " has been moved to the package FFTW.jl.\n",
-                          "Run `Pkg.add(\"FFTW\")` to install FFTW then run `using FFTW` ",
-                          "to load it.")
-                end
-                export $f
-            end
+            @eval Base.@deprecate_moved $f "FFTW"
         end
     end
     export FFTW
 end
 using .DFT
-for f in names(DFT)
+for f in filter(s -> isexported(DFT, s), names(DFT, true))
     @eval export $f
 end
 module DSP
     for f in [:conv, :conv2, :deconv, :filt, :filt!, :xcorr]
-        @eval begin
-            function $f(args...; kwargs...)
-                error($f, " has been moved to the package DSP.jl.\n",
-                      "Run `Pkg.add(\"DSP\")` to install DSP then run `using DSP` ",
-                      "to load it.")
-            end
-            export $f
-        end
+        @eval Base.@deprecate_moved $f "DSP"
     end
 end
 using .DSP
@@ -1520,11 +1495,11 @@ function replace(s::AbstractString, pat, f, n::Integer)
 end
 
 # PR #22475
-@deprecate ntuple{N}(f, ::Type{Val{N}}) ntuple(f, Val(N))
-@deprecate fill_to_length{N}(t, val, ::Type{Val{N}}) fill_to_length(t, val, Val(N)) false
-@deprecate literal_pow{N}(a, b, ::Type{Val{N}}) literal_pow(a, b, Val(N)) false
-@eval IteratorsMD @deprecate split{n}(t, V::Type{Val{n}}) split(t, Val(n)) false
-@deprecate sqrtm{T,realmatrix}(A::UpperTriangular{T},::Type{Val{realmatrix}}) sqrtm(A, Val(realmatrix))
+@deprecate ntuple(f, ::Type{Val{N}}) where {N}  ntuple(f, Val(N))
+@deprecate fill_to_length(t, val, ::Type{Val{N}}) where {N} fill_to_length(t, val, Val(N)) false
+@deprecate literal_pow(a, b, ::Type{Val{N}}) where {N} literal_pow(a, b, Val(N)) false
+@eval IteratorsMD @deprecate split(t, V::Type{Val{n}}) where {n} split(t, Val(n)) false
+@deprecate sqrtm(A::UpperTriangular{T},::Type{Val{realmatrix}}) where {T,realmatrix} sqrtm(A, Val(realmatrix))
 @deprecate lufact(A::AbstractMatrix, ::Type{Val{false}}) lufact(A, Val(false))
 @deprecate lufact(A::AbstractMatrix, ::Type{Val{true}}) lufact(A, Val(true))
 @deprecate lufact!(A::AbstractMatrix, ::Type{Val{false}}) lufact!(A, Val(false))
@@ -1537,11 +1512,11 @@ end
 @deprecate cholfact(A::AbstractMatrix, ::Type{Val{true}}; tol = 0.0) cholfact(A, Val(true); tol = tol)
 @deprecate cholfact!(A::AbstractMatrix, ::Type{Val{false}}) cholfact!(A, Val(false))
 @deprecate cholfact!(A::AbstractMatrix, ::Type{Val{true}}; tol = 0.0) cholfact!(A, Val(true); tol = tol)
-@deprecate cat{N}(::Type{Val{N}}, A::AbstractArray...) cat(Val(N), A...)
-@deprecate cat{N}(::Type{Val{N}}, A::SparseArrays._SparseConcatGroup...) cat(Val(N), A...)
-@deprecate cat{N}(::Type{Val{N}}, A::SparseArrays._DenseConcatGroup...) cat(Val(N), A...)
-@deprecate cat_t{N,T}(::Type{Val{N}}, ::Type{T}, A, B) cat_t(Val(N), T, A, B) false
-@deprecate reshape{N}(A::AbstractArray, ::Type{Val{N}}) reshape(A, Val(N))
+@deprecate cat(::Type{Val{N}}, A::AbstractArray...) where {N} cat(Val(N), A...)
+@deprecate cat(::Type{Val{N}}, A::SparseArrays._SparseConcatGroup...) where {N} cat(Val(N), A...)
+@deprecate cat(::Type{Val{N}}, A::SparseArrays._DenseConcatGroup...) where {N} cat(Val(N), A...)
+@deprecate cat_t(::Type{Val{N}}, ::Type{T}, A, B) where {N,T} cat_t(Val(N), T, A, B) false
+@deprecate reshape(A::AbstractArray, ::Type{Val{N}}) where {N} reshape(A, Val(N))
 
 @deprecate read(s::IO, x::Ref) read!(s, x)
 
@@ -1549,7 +1524,7 @@ end
 @deprecate read(s::IO, t::Type, d1::Integer, dims::Integer...) read!(s, Array{t}(convert(Tuple{Vararg{Int}},tuple(d1,dims...))))
 @deprecate read(s::IO, t::Type, dims::Dims) read!(s, Array{t}(dims))
 
-function CartesianRange{N}(start::CartesianIndex{N}, stop::CartesianIndex{N})
+function CartesianRange(start::CartesianIndex{N}, stop::CartesianIndex{N}) where N
     inds = map((f,l)->f:l, start.I, stop.I)
     depwarn("the internal representation of CartesianRange has changed, use CartesianRange($inds) (or other more approriate AbstractUnitRange type) instead.", :CartesianRange)
     CartesianRange(inds)
@@ -1576,6 +1551,9 @@ end
 # nfields(::Type) deprecation in builtins.c: update nfields tfunc in inference.jl when it is removed.
 # also replace `_nfields` with `nfields` in summarysize.c when this is removed.
 
+# ::ANY is deprecated in src/method.c
+# also remove all instances of `jl_ANY_flag` in src/
+
 # PR #22182
 @deprecate is_apple   Sys.isapple
 @deprecate is_bsd     Sys.isbsd
@@ -1586,6 +1564,10 @@ end
 @deprecate read(cmd::AbstractCmd, stdin::Redirectable) read(pipeline(stdin, cmd))
 @deprecate readstring(cmd::AbstractCmd, stdin::Redirectable) readstring(pipeline(stdin, cmd))
 @deprecate eachline(cmd::AbstractCmd, stdin; chomp::Bool=true) eachline(pipeline(stdin, cmd), chomp=chomp)
+
+@deprecate_binding AbstractIOBuffer GenericIOBuffer false
+
+@deprecate String(io::GenericIOBuffer) String(take!(copy(io)))
 
 # END 0.7 deprecations
 

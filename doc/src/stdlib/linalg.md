@@ -89,7 +89,6 @@ Base.inv(::AbstractMatrix)
 Base.LinAlg.pinv
 Base.LinAlg.nullspace
 Base.repmat
-Base.repeat
 Base.kron
 Base.SparseArrays.blkdiag
 Base.LinAlg.linreg

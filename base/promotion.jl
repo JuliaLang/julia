@@ -3,9 +3,9 @@
 ## type join (closest common ancestor, or least upper bound) ##
 
 typejoin() = (@_pure_meta; Bottom)
-typejoin(t::ANY) = (@_pure_meta; t)
-typejoin(t::ANY, ts...) = (@_pure_meta; typejoin(t, typejoin(ts...)))
-function typejoin(a::ANY, b::ANY)
+typejoin(@nospecialize(t)) = (@_pure_meta; t)
+typejoin(@nospecialize(t), ts...) = (@_pure_meta; typejoin(t, typejoin(ts...)))
+function typejoin(@nospecialize(a), @nospecialize(b))
     @_pure_meta
     if a <: b
         return b
@@ -312,7 +312,7 @@ _default_type(T::Type) = (@_inline_meta; T)
 if isdefined(Core, :Inference)
     const _return_type = Core.Inference.return_type
 else
-    _return_type(f::ANY, t::ANY) = Any
+    _return_type(@nospecialize(f), @nospecialize(t)) = Any
 end
 
 promote_op(::Any...) = (@_inline_meta; Any)

@@ -238,7 +238,7 @@ getindex(::Type{T}, x) where {T} = (@_inline_meta; a = Array{T,1}(1); @inbounds 
 getindex(::Type{T}, x, y) where {T} = (@_inline_meta; a = Array{T,1}(2); @inbounds (a[1] = x; a[2] = y); a)
 getindex(::Type{T}, x, y, z) where {T} = (@_inline_meta; a = Array{T,1}(3); @inbounds (a[1] = x; a[2] = y; a[3] = z); a)
 
-function getindex(::Type{Any}, vals::ANY...)
+function getindex(::Type{Any}, @nospecialize vals...)
     a = Array{Any,1}(length(vals))
     @inbounds for i = 1:length(vals)
         a[i] = vals[i]
@@ -486,9 +486,9 @@ function _collect_indices(indsA, A)
 end
 
 if isdefined(Core, :Inference)
-    _default_eltype(itrt::ANY) = Core.Inference.return_type(first, Tuple{itrt})
+    _default_eltype(@nospecialize itrt) = Core.Inference.return_type(first, Tuple{itrt})
 else
-    _default_eltype(itr::ANY) = Any
+    _default_eltype(@nospecialize itr) = Any
 end
 
 _array_for(::Type{T}, itr, ::HasLength) where {T} = Array{T,1}(Int(length(itr)::Integer))
@@ -694,7 +694,7 @@ function push!(a::Array{T,1}, item) where T
     return a
 end
 
-function push!(a::Array{Any,1}, item::ANY)
+function push!(a::Array{Any,1}, @nospecialize item)
     _growend!(a, 1)
     arrayset(a, item, length(a))
     return a

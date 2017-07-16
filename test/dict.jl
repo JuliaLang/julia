@@ -301,7 +301,7 @@ let d = Dict((1=>2) => (3=>45), (3=>10) => (10=>11))
 
     # Check explicitly for the expected strings, since the CPU bitness effects
     # dictionary ordering.
-    result = String(buf)
+    result = String(take!(buf))
     @test contains(result, "Dict")
     @test contains(result, "(1=>2)=>(3=>45)")
     @test contains(result, "(3=>10)=>(10=>11)")
@@ -314,8 +314,9 @@ let sbuff = IOBuffer(),
     io = Base.IOContext(Base.IOContext(sbuff, :limit => true), :displaysize => (10, 20))
 
     Base.show(io, MIME("text/plain"), Dict(Alpha()=>1))
-    @test !contains(String(sbuff), "…")
-    @test endswith(String(sbuff), "α => 1")
+    local str = String(take!(sbuff))
+    @test !contains(str, "…")
+    @test endswith(str, "α => 1")
 end
 
 # issue #2540

@@ -450,7 +450,7 @@ let d = Dict(1 => 2, 3 => 45)
     buf = IOBuffer()
     td = TextDisplay(buf)
     display(td, d)
-    result = String(td.io)
+    result = String(take!(td.io))
 
     @test contains(result, summary(d))
 
@@ -466,13 +466,13 @@ let err, buf = IOBuffer()
     try Array() catch err end
     Base.show_method_candidates(buf,err)
     @test isa(err, MethodError)
-    @test contains(String(buf), "Closest candidates are:")
+    @test contains(String(take!(buf)), "Closest candidates are:")
 end
 
 # Issue 20111
 let K20111(x) = y -> x, buf = IOBuffer()
     show(buf, methods(K20111(1)))
-    @test contains(String(buf), " 1 method for generic function")
+    @test contains(String(take!(buf)), " 1 method for generic function")
 end
 
 # @macroexpand tests
@@ -491,6 +491,32 @@ let
     @test (@macroexpand @seven_dollar $bar) == 7
     x = 2
     @test (@macroexpand @seven_dollar 1+$x) == :(1 + $(Expr(:$, :x)))
+end
+
+macro nest1(code)
+    code
+end
+
+macro nest2(code)
+    :(@nest1 $code)
+end
+
+macro nest2b(code)
+    :(@nest1($code); @nest1($code))
+end
+
+@testset "@macroexpand1" begin
+    M = @__MODULE__
+    _macroexpand1(ex) = macroexpand(M, ex, recursive=false)
+    ex = :(@nest1 42)
+    @test _macroexpand1(ex) == macroexpand(M,ex)
+    ex = :(@nest2 42)
+    @test _macroexpand1(ex) != macroexpand(M,ex)
+    @test _macroexpand1(_macroexpand1(ex)) == macroexpand(M,ex)
+    ex = :(@nest2b 42)
+    @test _macroexpand1(ex) != macroexpand(M,ex)
+    @test _macroexpand1(_macroexpand1(ex)) == macroexpand(M, ex)
+    @test (@macroexpand1 @nest2b 42) == _macroexpand1(ex)
 end
 
 foo_9965(x::Float64; w=false) = x
@@ -574,4 +600,11 @@ end
         @test startswith(str, "MethodError: no method matching f21006(::Tuple{})")
         @test !contains(str, "The applicable method may be too new")
     end
+end
+
+# issue #22798
+@generated f22798(x::Integer, y) = :x
+let buf = IOBuffer()
+    show(buf, methods(f22798))
+    @test contains(String(take!(buf)), "f22798(x::Integer, y)")
 end

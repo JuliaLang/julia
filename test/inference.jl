@@ -37,13 +37,13 @@ let
 end
 
 let
-    fT{T}(x::T) = T
+    fT(x::T) where {T} = T
     @test fT(Any) === DataType
     @test fT(Int) === DataType
     @test fT(Type{Any}) === DataType
     @test fT(Type{Int}) === DataType
 
-    ff{T}(x::Type{T}) = T
+    ff(x::Type{T}) where {T} = T
     @test ff(Type{Any}) === Type{Any}
     @test ff(Type{Int}) === Type{Int}
     @test ff(Any) === Any
@@ -52,7 +52,7 @@ end
 
 
 # issue #3182
-f3182{T}(::Type{T}) = 0
+f3182(::Type{T}) where {T} = 0
 f3182(x) = 1
 function g3182(t::DataType)
     # tricky thing here is that DataType is a concrete type, and a
@@ -81,7 +81,7 @@ struct Hanoi5906{T} <: Outer5906{T}
     Hanoi5906{T}(a) where T = new(a, Empty5906{Inner5906{T}}())
 end
 
-function f5906{T}(h::Hanoi5906{T})
+function f5906(h::Hanoi5906{T}) where T
     if isa(h.succ, Empty5906) return end
     f5906(h.succ)
 end
@@ -132,8 +132,8 @@ struct RGB{T<:AbstractFloat} <: Paint{T}
     b::T
 end
 
-myeltype{T}(::Type{Paint{T}}) = T
-myeltype{P<:Paint}(::Type{P}) = myeltype(supertype(P))
+myeltype(::Type{Paint{T}}) where {T} = T
+myeltype(::Type{P}) where {P<:Paint} = myeltype(supertype(P))
 myeltype(::Type{Any}) = Any
 
 end
@@ -143,14 +143,14 @@ end
 
 
 # issue #12826
-f12826{I<:Integer}(v::Vector{I}) = v[1]
+f12826(v::Vector{I}) where {I<:Integer} = v[1]
 @test Base.return_types(f12826,Tuple{Array{I,1} where I<:Integer})[1] == Integer
 
 
 # non-terminating inference, issue #14009
 # non-terminating codegen, issue #16201
 mutable struct A14009{T}; end
-A14009{T}(a::T) = A14009{T}()
+A14009(a::T) where {T} = A14009{T}()
 f14009(a) = rand(Bool) ? f14009(A14009(a)) : a
 code_typed(f14009, (Int,))
 code_llvm(DevNull, f14009, (Int,))
@@ -162,8 +162,8 @@ code_llvm(DevNull, f14009, (Int,))
 
 
 # issue #9232
-arithtype9232{T<:Real}(::Type{T},::Type{T}) = arithtype9232(T)
-result_type9232{T1<:Number,T2<:Number}(::Type{T1}, ::Type{T2}) = arithtype9232(T1, T2)
+arithtype9232(::Type{T},::Type{T}) where {T<:Real} = arithtype9232(T)
+result_type9232(::Type{T1}, ::Type{T2}) where {T1<:Number,T2<:Number} = arithtype9232(T1, T2)
 # this gave a "type too large", but not reliably
 @test length(code_typed(result_type9232, Tuple{(Type{x} where x<:Union{Float32,Float64}), Type{T2} where T2<:Number})) == 1
 
@@ -177,7 +177,7 @@ code_llvm(DevNull, invoke_g10878, ())
 
 # issue #10930
 @test isa(code_typed(promote,(Any,Any,Vararg{Any})), Array)
-find_tvar10930{T<:Tuple}(sig::Type{T}) = 1
+find_tvar10930(sig::Type{T}) where {T<:Tuple} = 1
 function find_tvar10930(arg)
     if arg<:Tuple
         find_tvar10930(arg[random_var_name])
@@ -226,7 +226,7 @@ bar7810() = [Foo7810([(a,b) for a in 1:2]) for b in 3:4]
 
 
 # issue #11366
-f11366{T}(x::Type{Ref{T}}) = Ref{x}
+f11366(x::Type{Ref{T}}) where {T} = Ref{x}
 @test !isleaftype(Base.return_types(f11366, (Any,))[1])
 
 
@@ -235,14 +235,14 @@ let f(T) = Type{T}
 end
 
 # issue #9222
-function SimpleTest9222{T1<:Real}(pdedata, mu_actual::Vector{T1},
+function SimpleTest9222(pdedata, mu_actual::Vector{T1},
         nu_actual::Vector{T1}, v0::Vector{T1}, epsilon::T1, beta::Vector{T1},
-        delta::T1, l::T1, R::T1, s0::T1, show_trace::Bool = true)
+        delta::T1, l::T1, R::T1, s0::T1, show_trace::Bool = true) where T1<:Real
     return 0.0
 end
-function SimpleTest9222{T1<:Real}(pdedata, mu_actual::Vector{T1},
+function SimpleTest9222(pdedata, mu_actual::Vector{T1},
         nu_actual::Vector{T1}, v0::Vector{T1}, epsilon::T1, beta::Vector{T1},
-        delta::T1, l::T1, R::T1)
+        delta::T1, l::T1, R::T1) where T1<:Real
     return SimpleTest9222(pdedata, mu_actual, nu_actual, v0, epsilon,
         beta, delta, l, R, v0[1])
 end
@@ -270,7 +270,7 @@ for code in Any[
         @code_typed(f18679())[1]
         @code_typed(g18679())[1]]
     @test all(x->isa(x, Type), code.slottypes)
-    local notconst(other::ANY) = true
+    local notconst(@nospecialize(other)) = true
     notconst(slot::TypedSlot) = @test isa(slot.typ, Type)
     function notconst(expr::Expr)
         @test isa(expr.typ, Type)
@@ -300,7 +300,7 @@ gNInt() = fNInt(x)
 @test Base.return_types(gNInt, ()) == Any[NInt]
 
 # issue #17572
-function f17572{A}(::Type{Val{A}})
+function f17572(::Type{Val{A}}) where A
     return Tuple{Int}(Tuple{A}((1,)))
 end
 # test that inference doesn't error
@@ -365,7 +365,7 @@ let tri = Triple18015(1, 2, 3)
 end
 
 # issue #18222
-f18222{T<:AbstractFloat}(::Union{T, Int}) = false
+f18222(::Union{T, Int}) where {T<:AbstractFloat} = false
 f18222(x) = true
 g18222(x) = f18222(x)
 @test f18222(1) == g18222(1) == true
@@ -443,7 +443,7 @@ function is_typed_expr(e::Expr)
     end
     return false
 end
-test_inferred_static(other::ANY) = true
+test_inferred_static(@nospecialize(other)) = true
 test_inferred_static(slot::TypedSlot) = @test isleaftype(slot.typ)
 function test_inferred_static(expr::Expr)
     if is_typed_expr(expr)
@@ -532,8 +532,8 @@ test_fast_le(a, b) = @fastmath a <= b
 
 abstract type AbstractMyType18457{T,F,G} end
 struct MyType18457{T,F,G}<:AbstractMyType18457{T,F,G} end
-tpara18457{I}(::Type{AbstractMyType18457{I}}) = I
-tpara18457{A<:AbstractMyType18457}(::Type{A}) = tpara18457(supertype(A))
+tpara18457(::Type{AbstractMyType18457{I}}) where {I} = I
+tpara18457(::Type{A}) where {A<:AbstractMyType18457} = tpara18457(supertype(A))
 @test tpara18457(MyType18457{true}) === true
 
 @testset "type inference error #19322" begin
@@ -585,7 +585,7 @@ mutable struct AT11015
     f::Union{Bool,Function}
 end
 
-g11015{S}(::Type{S}, ::S) = 1
+g11015(::Type{S}, ::S) where {S} = 1
 f11015(a::AT11015) = g11015(Base.fieldtype(typeof(a), :f), true)
 g11015(::Type{Bool}, ::Bool) = 2.0
 @test Int <: Base.return_types(f11015, (AT11015,))[1]
@@ -627,11 +627,11 @@ g19957(x) = f19957(x...)
 @test all(t -> t<:Union{Int8,Int16}, Base.return_types(g19957, (Int,))) # with a full fix, this should just be Int8
 
 # Inference for some type-level computation
-fUnionAll{T}(::Type{T}) = Type{S} where S <: T
+fUnionAll(::Type{T}) where {T} = Type{S} where S <: T
 @inferred fUnionAll(Real) == Type{T} where T <: Real
 @inferred fUnionAll(Rational{T} where T <: AbstractFloat) == Type{T} where T<:(Rational{S} where S <: AbstractFloat)
 
-fComplicatedUnionAll{T}(::Type{T}) = Type{Tuple{S,rand() >= 0.5 ? Int : Float64}} where S <: T
+fComplicatedUnionAll(::Type{T}) where {T} = Type{Tuple{S,rand() >= 0.5 ? Int : Float64}} where S <: T
 let pub = Base.parameter_upper_bound, x = fComplicatedUnionAll(Real)
     @test pub(pub(x, 1), 1) == Real
     @test pub(pub(x, 1), 2) == Int || pub(pub(x, 1), 2) == Float64
@@ -664,7 +664,7 @@ end
 
 # issue #20704
 f20704(::Int) = 1
-Base.@pure b20704(x::ANY) = f20704(x)
+Base.@pure b20704(@nospecialize(x)) = f20704(x)
 @test b20704(42) === 1
 @test_throws MethodError b20704(42.0)
 
@@ -676,7 +676,7 @@ v20704() = Val{b20704(Any[1.0][1])}
 @test Base.return_types(v20704, ()) == Any[Type{Val{1}}]
 
 Base.@pure g20704(::Int) = 1
-h20704(x::ANY) = g20704(x)
+h20704(@nospecialize(x)) = g20704(x)
 @test g20704(1) === 1
 @test_throws MethodError h20704(1.2)
 
@@ -789,7 +789,7 @@ end
 struct NArray_17003{T,N} <: AArray_17003{Nable_17003{T},N}
 end
 
-(::Type{NArray_17003}){T,N}(::Array{T,N}) = NArray_17003{T,N}()
+(::Type{NArray_17003})(::Array{T,N}) where {T,N} = NArray_17003{T,N}()
 
 gl_17003 = [1, 2, 3]
 
@@ -799,7 +799,7 @@ f2_17003(::Any) = f2_17003(NArray_17003(gl_17003))
 @test f2_17003(1) == nothing
 
 # issue #20847
-function segfaultfunction_20847{N, T}(A::Vector{NTuple{N, T}})
+function segfaultfunction_20847(A::Vector{NTuple{N, T}}) where {N, T}
     B = reinterpret(T, A, (N, length(A)))
     return nothing
 end
@@ -859,9 +859,9 @@ let f, m
 end
 
 # issue #22290
-f22290() = return nothing
+f22290() = return 3
 for i in 1:3
-    ir = sprint(io->code_llvm(io, f22290, Tuple{}))
+    ir = sprint(io -> code_llvm(io, f22290, Tuple{}))
     @test contains(ir, "julia_f22290")
 end
 
@@ -957,7 +957,7 @@ g22364(x) = f22364(x, Any[[]][1]...)
 @test @inferred(g22364(1)) === 0
 @test @inferred(g22364("1")) === 0.0
 
-function get_linfo(f::ANY, t::ANY)
+function get_linfo(@nospecialize(f), @nospecialize(t))
     if isa(f, Core.Builtin)
         throw(ArgumentError("argument is not a generic function"))
     end
@@ -974,7 +974,7 @@ function get_linfo(f::ANY, t::ANY)
                  (Any, Any, Any, UInt), meth, tt, env, world)
 end
 
-function test_const_return(f::ANY, t::ANY, val::ANY)
+function test_const_return(@nospecialize(f), @nospecialize(t), @nospecialize(val))
     linfo = get_linfo(f, t)
     # If coverage is not enabled, make the check strict by requiring constant ABI
     # Otherwise, check the typed AST to make sure we return a constant.
@@ -1011,6 +1011,29 @@ function test_const_return(f::ANY, t::ANY, val::ANY)
     end
 end
 
+function find_call(code, func, narg)
+    for ex in code
+        isa(ex, Expr) || continue
+        ex = ex::Expr
+        if ex.head === :call && length(ex.args) == narg
+            farg = ex.args[1]
+            if isa(farg, GlobalRef)
+                farg = farg::GlobalRef
+                if isdefined(farg.mod, farg.name) && isconst(farg.mod, farg.name)
+                    farg = getfield(farg.mod, farg.name)
+                end
+            end
+            if farg === func
+                return true
+            end
+        elseif Core.Inference.is_meta_expr(ex)
+            continue
+        end
+        find_call(ex.args, func, narg) && return true
+    end
+    return false
+end
+
 test_const_return(()->1, Tuple{}, 1)
 test_const_return(()->sizeof(Int), Tuple{}, sizeof(Int))
 test_const_return(()->sizeof(1), Tuple{}, sizeof(Int))
@@ -1019,37 +1042,26 @@ test_const_return(()->sizeof(1 < 2), Tuple{}, 1)
 @eval test_const_return(()->Core.sizeof($(Array{Int}())), Tuple{}, sizeof(Int))
 @eval test_const_return(()->Core.sizeof($(Matrix{Float32}(2, 2))), Tuple{}, 4 * 2 * 2)
 
-function find_core_sizeof_call(code)
-    for ex in code
-        isa(ex, Expr) || continue
-        ex = ex::Expr
-        if ex.head === :call && length(ex.args) == 2
-            if ex.args[1] === Core.sizeof || ex.args[1] == GlobalRef(Core, :sizeof)
-                return true
-            end
-        elseif Core.Inference.is_meta_expr(ex)
-            continue
-        end
-        find_core_sizeof_call(ex.args) && return true
-    end
-    return false
-end
-
 # Make sure Core.sizeof with a ::DataType as inferred input type is inferred but not constant.
 function sizeof_typeref(typeref)
     Core.sizeof(typeref[])
 end
 @test @inferred(sizeof_typeref(Ref{DataType}(Int))) == sizeof(Int)
-@test find_core_sizeof_call(first(@code_typed sizeof_typeref(Ref{DataType}())).code)
+@test find_call(first(@code_typed sizeof_typeref(Ref{DataType}())).code, Core.sizeof, 2)
 # Constant `Vector` can be resized and shouldn't be optimized to a constant.
 const constvec = [1, 2, 3]
 @eval function sizeof_constvec()
     Core.sizeof($constvec)
 end
 @test @inferred(sizeof_constvec()) == sizeof(Int) * 3
-@test find_core_sizeof_call(first(@code_typed sizeof_constvec()).code)
+@test find_call(first(@code_typed sizeof_constvec()).code, Core.sizeof, 2)
 push!(constvec, 10)
 @test @inferred(sizeof_constvec()) == sizeof(Int) * 4
+
+test_const_return((x)->isdefined(x, :re), Tuple{Complex128}, true)
+isdefined_f3(x) = isdefined(x, 3)
+@test @inferred(isdefined_f3(())) == false
+@test find_call(first(code_typed(isdefined_f3, Tuple{Tuple{Vararg{Int}}})[1]).code, isdefined, 3)
 
 let isa_tfunc = Core.Inference.t_ffunc_val[
         findfirst(Core.Inference.t_ffunc_key, isa)][3]

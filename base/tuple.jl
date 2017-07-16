@@ -219,7 +219,7 @@ end
 
 _totuple(::Type{Tuple{}}, itr, s) = ()
 
-function _totuple_err(T::ANY)
+function _totuple_err(@nospecialize T)
     @_noinline_meta
     throw(ArgumentError("too few elements for tuple type $T"))
 end

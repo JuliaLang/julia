@@ -143,6 +143,7 @@ Base.cumsum_kbn
 Base.crc32c
 Base.LinAlg.diff
 Base.LinAlg.gradient
+Base.repeat(::AbstractArray)
 Base.rot180
 Base.rotl90
 Base.rotr90

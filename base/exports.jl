@@ -964,6 +964,7 @@ export
     expand,
     gensym,
     macroexpand,
+    @macroexpand1,
     @macroexpand,
     parse,
 
@@ -1278,6 +1279,7 @@ export
     @simd,
     @inline,
     @noinline,
+    @nospecialize,
     @polly,
 
     @assert,

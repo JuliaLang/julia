@@ -1617,6 +1617,7 @@
                       ((eqv? c #\;)     (loop (cons nxt lst)))
                       ((eqv? c closer)  (loop (cons nxt lst)))
                       ((eq? c 'for)
+                       (expect-space-before s 'for)
                        (take-token s)
                        (loop (cons (parse-generator s nxt) lst)))
                       ;; newline character isn't detectable here
@@ -1660,7 +1661,8 @@
                             (list `(filter ,(parse-cond s) ,@iters)))
                      iters)))
       (if (eq? (peek-token s) 'for)
-          (begin (take-token s)
+          (begin (expect-space-before s 'for)
+                 (take-token s)
                  `(flatten (generator ,(parse-generator s first) ,@iters)))
           `(generator ,first ,@iters)))))
 
@@ -1704,10 +1706,14 @@
              (if (and (not semicolon)
                       (length= outer 1)
                       (null? vec))
-                 (begin (take-token s)
+                 (begin (expect-space-before s 'for)
+                        (take-token s)
                         (parse-comprehension s (car outer) closer))
                  (error "invalid comprehension syntax")))
             (else
+             (if (and (pair? vec) (not (ts:space? s)))
+                 (error (string "expected separator between arguments to \"[ ]\"; got \""
+                                (deparse (last vec)) t "\"")))
              (loop (cons (parse-eq* s) vec) outer)))))))
 
 (define (peek-non-newline-token s)
@@ -1716,6 +1722,10 @@
         (begin (take-token s)
                (loop (peek-token s)))
         t)))
+
+(define (expect-space-before s t)
+  (if (not (ts:space? s))
+      (error (string "expected space before \"" t "\""))))
 
 (define (parse-cat s closer)
   (with-normal-ops
@@ -1728,6 +1738,7 @@
           (cond ((or (eqv? t #\,) (eqv? t closer))
                  (parse-vect s first closer))
                 ((eq? t 'for)
+                 (expect-space-before s 'for)
                  (take-token s)
                  (parse-comprehension s first closer))
                 ((eqv? t #\newline)
@@ -2075,6 +2086,7 @@
                             ;; value in parentheses (x)
                             ex))
                        ((eq? t 'for)
+                        (expect-space-before s 'for)
                         (take-token s)
                         (let ((gen (parse-generator s ex)))
                           (if (eqv? (require-token s) #\) )

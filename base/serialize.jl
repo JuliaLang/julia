@@ -70,7 +70,7 @@ const ser_version = 6 # do not make changes without bumping the version #!
 
 const NTAGS = length(TAGS)
 
-function sertag(v::ANY)
+function sertag(@nospecialize(v))
     ptr = pointer_from_objref(v)
     ptags = convert(Ptr{Ptr{Void}}, pointer(TAGS))
     # note: constant ints & reserved slots never returned here
@@ -149,7 +149,7 @@ function serialize_cycle(s::AbstractSerializer, x)
     return false
 end
 
-function serialize_cycle_header(s::AbstractSerializer, x::ANY)
+function serialize_cycle_header(s::AbstractSerializer, @nospecialize(x))
     serialize_cycle(s, x) && return true
     serialize_type(s, typeof(x), true)
     return false
@@ -359,7 +359,7 @@ end
 # TODO: make this bidirectional, so objects can be sent back via the same key
 const object_numbers = WeakKeyDict()
 const obj_number_salt = Ref(0)
-function object_number(l::ANY)
+function object_number(@nospecialize(l))
     global obj_number_salt, object_numbers
     if haskey(object_numbers, l)
         return object_numbers[l]
@@ -374,13 +374,13 @@ end
 
 lookup_object_number(s::AbstractSerializer, n::UInt64) = nothing
 
-remember_object(s::AbstractSerializer, o::ANY, n::UInt64) = nothing
+remember_object(s::AbstractSerializer, @nospecialize(o), n::UInt64) = nothing
 
 function lookup_object_number(s::SerializationState, n::UInt64)
     return get(s.known_object_data, n, nothing)
 end
 
-function remember_object(s::SerializationState, o::ANY, n::UInt64)
+function remember_object(s::SerializationState, @nospecialize(o), n::UInt64)
     s.known_object_data[n] = o
     return nothing
 end
@@ -608,9 +608,9 @@ function serialize(s::AbstractSerializer, u::UnionAll)
     end
 end
 
-serialize(s::AbstractSerializer, x::ANY) = serialize_any(s, x)
+serialize(s::AbstractSerializer, @nospecialize(x)) = serialize_any(s, x)
 
-function serialize_any(s::AbstractSerializer, x::ANY)
+function serialize_any(s::AbstractSerializer, @nospecialize(x))
     tag = sertag(x)
     if tag > 0
         return write_as_tag(s.io, tag)
@@ -647,7 +647,7 @@ function deserialize(s::AbstractSerializer)
     handle_deserialize(s, Int32(read(s.io, UInt8)::UInt8))
 end
 
-function deserialize_cycle(s::AbstractSerializer, x::ANY)
+function deserialize_cycle(s::AbstractSerializer, @nospecialize(x))
     slot = pop!(s.pending_refs)
     s.table[slot] = x
     nothing
@@ -658,7 +658,7 @@ end
 #     push!(s.pending_refs, slot)
 #     slot = pop!(s.pending_refs)
 #     s.table[slot] = x
-function resolve_ref_immediately(s::AbstractSerializer, x::ANY)
+function resolve_ref_immediately(s::AbstractSerializer, @nospecialize(x))
     s.table[s.counter] = x
     s.counter += 1
     nothing

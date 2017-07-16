@@ -17,6 +17,42 @@ end
 macro _noinline_meta()
     Expr(:meta, :noinline)
 end
+
+"""
+    @nospecialize
+
+Applied to a function argument name, hints to the compiler that the method
+should not be specialized for different types of that argument.
+This is only a hint for avoiding excess code generation.
+Can be applied to an argument within a formal argument list, or in the
+function body.
+When applied to an argument, the macro must wrap the entire argument
+expression.
+When used in a function body, the macro must occur in statement position and
+before any code.
+
+```julia
+function example_function(@nospecialize x)
+    ...
+end
+
+function example_function(@nospecialize(x = 1), y)
+    ...
+end
+
+function example_function(x, y, z)
+    @nospecialize x y
+    ...
+end
+```
+"""
+macro nospecialize(var, vars...)
+    if isa(var, Expr) && var.head === :(=)
+        var.head = :kw
+    end
+    Expr(:meta, :nospecialize, var, vars...)
+end
+
 macro _pure_meta()
     Expr(:meta, :pure)
 end
@@ -25,7 +61,7 @@ macro _propagate_inbounds_meta()
     Expr(:meta, :inline, :propagate_inbounds)
 end
 
-convert(::Type{Any}, x::ANY) = x
+convert(::Type{Any}, @nospecialize(x)) = x
 convert(::Type{T}, x::T) where {T} = x
 
 convert(::Type{Tuple{}}, ::Tuple{}) = ()
@@ -72,14 +108,14 @@ function tuple_type_cons(::Type{S}, ::Type{T}) where T<:Tuple where S
     Tuple{S, T.parameters...}
 end
 
-function unwrap_unionall(a::ANY)
+function unwrap_unionall(@nospecialize(a))
     while isa(a,UnionAll)
         a = a.body
     end
     return a
 end
 
-function rewrap_unionall(t::ANY, u::ANY)
+function rewrap_unionall(@nospecialize(t), @nospecialize(u))
     if !isa(u, UnionAll)
         return t
     end
@@ -87,7 +123,7 @@ function rewrap_unionall(t::ANY, u::ANY)
 end
 
 # replace TypeVars in all enclosing UnionAlls with fresh TypeVars
-function rename_unionall(u::ANY)
+function rename_unionall(@nospecialize(u))
     if !isa(u,UnionAll)
         return u
     end
@@ -103,13 +139,13 @@ function rename_unionall(u::ANY)
 end
 
 const _va_typename = Vararg.body.body.name
-function isvarargtype(t::ANY)
+function isvarargtype(@nospecialize(t))
     t = unwrap_unionall(t)
     isa(t, DataType) && (t::DataType).name === _va_typename
 end
 
 isvatuple(t::DataType) = (n = length(t.parameters); n > 0 && isvarargtype(t.parameters[n]))
-function unwrapva(t::ANY)
+function unwrapva(@nospecialize(t))
     t2 = unwrap_unionall(t)
     isvarargtype(t2) ? t2.parameters[1] : t
 end
@@ -171,9 +207,9 @@ function append_any(xs...)
 end
 
 # simple Array{Any} operations needed for bootstrap
-setindex!(A::Array{Any}, x::ANY, i::Int) = Core.arrayset(A, x, i)
+setindex!(A::Array{Any}, @nospecialize(x), i::Int) = Core.arrayset(A, x, i)
 
-function precompile(f::ANY, args::Tuple)
+function precompile(@nospecialize(f), args::Tuple)
     ccall(:jl_compile_hint, Int32, (Any,), Tuple{Core.Typeof(f), args...}) != 0
 end
 
@@ -182,13 +218,13 @@ function precompile(argt::Type)
 end
 
 """
-    esc(e::ANY)
+    esc(e)
 
 Only valid in the context of an `Expr` returned from a macro. Prevents the macro hygiene
 pass from turning embedded variables into gensym variables. See the [Macros](@ref man-macros)
 section of the Metaprogramming chapter of the manual for more details and examples.
 """
-esc(e::ANY) = Expr(:escape, e)
+esc(@nospecialize(e)) = Expr(:escape, e)
 
 macro boundscheck(blk)
     # hack: use this syntax since it avoids introducing line numbers
@@ -339,7 +375,7 @@ end
 Val(x) = (@_pure_meta; Val{x}())
 
 # used by interpolating quote and some other things in the front end
-function vector_any(xs::ANY...)
+function vector_any(@nospecialize xs...)
     n = length(xs)
     a = Vector{Any}(n)
     @inbounds for i = 1:n

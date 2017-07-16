@@ -145,7 +145,6 @@ static int typeenv_has(jl_typeenv_t *env, jl_tvar_t *v)
 static int has_free_typevars(jl_value_t *v, jl_typeenv_t *env)
 {
     if (jl_typeis(v, jl_tvar_type)) {
-        if (v == jl_ANY_flag) return 0;
         return !typeenv_has(env, (jl_tvar_t*)v);
     }
     if (jl_is_uniontype(v))
@@ -180,7 +179,6 @@ JL_DLLEXPORT int jl_has_free_typevars(jl_value_t *v)
 static void find_free_typevars(jl_value_t *v, jl_typeenv_t *env, jl_array_t *out)
 {
     if (jl_typeis(v, jl_tvar_type)) {
-        if (v == jl_ANY_flag) return;
         if (!typeenv_has(env, (jl_tvar_t*)v))
             jl_array_ptr_1d_push(out, v);
     }
@@ -237,7 +235,7 @@ static int jl_has_bound_typevars(jl_value_t *v, jl_typeenv_t *env)
         return ans;
     }
     if (jl_is_datatype(v)) {
-        if (!((jl_datatype_t*)v)->hasfreetypevars && !(env && env->var == (jl_tvar_t*)jl_ANY_flag))
+        if (!((jl_datatype_t*)v)->hasfreetypevars)
             return 0;
         size_t i;
         for (i=0; i < jl_nparams(v); i++) {
@@ -668,8 +666,6 @@ static int is_cacheable(jl_datatype_t *type)
     assert(jl_is_datatype(type));
     jl_svec_t *t = type->parameters;
     if (jl_svec_len(t) == 0) return 0;
-    if (jl_has_typevar((jl_value_t*)type, (jl_tvar_t*)jl_ANY_flag))
-        return 0;
     // cache abstract types with no free type vars
     if (jl_is_abstracttype(type))
         return !jl_has_free_typevars((jl_value_t*)type);
@@ -1920,7 +1916,7 @@ void jl_init_types(void)
     jl_method_type =
         jl_new_datatype(jl_symbol("Method"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(18,
+                        jl_perm_symsvec(19,
                             "name",
                             "module",
                             "file",
@@ -1937,9 +1933,10 @@ void jl_init_types(void)
                             "invokes",
                             "nargs",
                             "called",
+                            "nospecialize",
                             "isva",
                             "pure"),
-                        jl_svec(18,
+                        jl_svec(19,
                             jl_sym_type,
                             jl_module_type,
                             jl_sym_type,
@@ -1954,6 +1951,7 @@ void jl_init_types(void)
                             jl_any_type, // jl_method_instance_type
                             jl_array_any_type,
                             jl_any_type,
+                            jl_int32_type,
                             jl_int32_type,
                             jl_int32_type,
                             jl_bool_type,

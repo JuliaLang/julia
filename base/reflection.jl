@@ -217,7 +217,7 @@ macro isdefined(s::Symbol)
 end
 
 # return an integer such that object_id(x)==object_id(y) if x===y
-object_id(x::ANY) = ccall(:jl_object_id, UInt, (Any,), x)
+object_id(@nospecialize(x)) = ccall(:jl_object_id, UInt, (Any,), x)
 
 struct DataTypeLayout
     nfields::UInt32
@@ -258,7 +258,7 @@ julia> isimmutable([1,2])
 false
 ```
 """
-isimmutable(x::ANY) = (@_pure_meta; (isa(x,Tuple) || !typeof(x).mutable))
+isimmutable(@nospecialize(x)) = (@_pure_meta; (isa(x,Tuple) || !typeof(x).mutable))
 isstructtype(t::DataType) = (@_pure_meta; length(t.types) != 0 || (t.size==0 && !t.abstract))
 isstructtype(x) = (@_pure_meta; false)
 
@@ -303,7 +303,7 @@ julia> isleaftype(Vector{Complex{Float32}})
 true
 ```
 """
-isleaftype(t::ANY) = (@_pure_meta; isa(t, DataType) && t.isleaftype)
+isleaftype(@nospecialize(t)) = (@_pure_meta; isa(t, DataType) && t.isleaftype)
 
 """
     Base.isabstract(T)
@@ -320,7 +320,7 @@ julia> Base.isabstract(Vector)
 false
 ```
 """
-function isabstract(t::ANY)
+function isabstract(@nospecialize(t))
     @_pure_meta
     t = unwrap_unionall(t)
     isa(t,DataType) && t.abstract
@@ -355,8 +355,8 @@ end
 Compute a type that contains the intersection of `T` and `S`. Usually this will be the
 smallest such type or one close to it.
 """
-typeintersect(a::ANY,b::ANY) = (@_pure_meta; ccall(:jl_type_intersection, Any, (Any,Any), a, b))
-typeseq(a::ANY,b::ANY) = (@_pure_meta; a<:b && b<:a)
+typeintersect(@nospecialize(a),@nospecialize(b)) = (@_pure_meta; ccall(:jl_type_intersection, Any, (Any,Any), a, b))
+typeseq(@nospecialize(a),@nospecialize(b)) = (@_pure_meta; a<:b && b<:a)
 
 """
     fieldoffset(type, i)
@@ -440,7 +440,7 @@ type_alignment(x::DataType) = (@_pure_meta; ccall(:jl_get_alignment, Csize_t, (A
 Get the number of fields that an instance of the given type would have.
 An error is thrown if the type is too abstract to determine this.
 """
-function fieldcount(t::ANY)
+function fieldcount(@nospecialize t)
     if t isa UnionAll || t isa Union
         t = ccall(:jl_argument_datatype, Any, (Any,), t)
         if t === nothing
@@ -539,7 +539,7 @@ julia> subtypes(Integer)
 """
 subtypes(x::Union{DataType,UnionAll}) = subtypes(Main, x)
 
-function to_tuple_type(t::ANY)
+function to_tuple_type(@nospecialize(t))
     @_pure_meta
     if isa(t,Tuple) || isa(t,AbstractArray) || isa(t,SimpleVector)
         t = Tuple{t...}
@@ -554,14 +554,14 @@ function to_tuple_type(t::ANY)
     t
 end
 
-tt_cons(t::ANY, tup::ANY) = (@_pure_meta; Tuple{t, (isa(tup, Type) ? tup.parameters : tup)...})
+tt_cons(@nospecialize(t), @nospecialize(tup)) = (@_pure_meta; Tuple{t, (isa(tup, Type) ? tup.parameters : tup)...})
 
 """
     code_lowered(f, types)
 
 Returns an array of lowered ASTs for the methods matching the given generic function and type signature.
 """
-function code_lowered(f::ANY, t::ANY=Tuple)
+function code_lowered(@nospecialize(f), @nospecialize t = Tuple)
     asts = map(methods(f, t)) do m
         return uncompressed_ast(m::Method)
     end
@@ -571,22 +571,22 @@ end
 # low-level method lookup functions used by the compiler
 
 unionlen(x::Union) = unionlen(x.a) + unionlen(x.b)
-unionlen(x::ANY) = 1
+unionlen(@nospecialize(x)) = 1
 
 _uniontypes(x::Union, ts) = (_uniontypes(x.a,ts); _uniontypes(x.b,ts); ts)
-_uniontypes(x::ANY, ts) = (push!(ts, x); ts)
-uniontypes(x::ANY) = _uniontypes(x, Any[])
+_uniontypes(@nospecialize(x), ts) = (push!(ts, x); ts)
+uniontypes(@nospecialize(x)) = _uniontypes(x, Any[])
 
-function _methods(f::ANY, t::ANY, lim::Int, world::UInt)
+function _methods(@nospecialize(f), @nospecialize(t), lim::Int, world::UInt)
     ft = isa(f,Type) ? Type{f} : typeof(f)
     tt = isa(t,Type) ? Tuple{ft, t.parameters...} : Tuple{ft, t...}
     return _methods_by_ftype(tt, lim, world)
 end
 
-function _methods_by_ftype(t::ANY, lim::Int, world::UInt)
+function _methods_by_ftype(@nospecialize(t), lim::Int, world::UInt)
     return _methods_by_ftype(t, lim, world, UInt[typemin(UInt)], UInt[typemax(UInt)])
 end
-function _methods_by_ftype(t::ANY, lim::Int, world::UInt, min::Array{UInt,1}, max::Array{UInt,1})
+function _methods_by_ftype(@nospecialize(t), lim::Int, world::UInt, min::Array{UInt,1}, max::Array{UInt,1})
     return ccall(:jl_matching_methods, Any, (Any, Cint, Cint, UInt, Ptr{UInt}, Ptr{UInt}), t, lim, 0, world, min, max)
 end
 
@@ -619,7 +619,7 @@ Returns the method table for `f`.
 
 If `types` is specified, returns an array of methods whose types match.
 """
-function methods(f::ANY, t::ANY)
+function methods(@nospecialize(f), @nospecialize(t))
     if isa(f, Core.Builtin)
         throw(ArgumentError("argument is not a generic function"))
     end
@@ -630,7 +630,7 @@ end
 
 methods(f::Core.Builtin) = MethodList(Method[], typeof(f).name.mt)
 
-function methods_including_ambiguous(f::ANY, t::ANY)
+function methods_including_ambiguous(@nospecialize(f), @nospecialize(t))
     ft = isa(f,Type) ? Type{f} : typeof(f)
     tt = isa(t,Type) ? Tuple{ft, t.parameters...} : Tuple{ft, t...}
     world = typemax(UInt)
@@ -639,7 +639,7 @@ function methods_including_ambiguous(f::ANY, t::ANY)
     ms = ccall(:jl_matching_methods, Any, (Any, Cint, Cint, UInt, Ptr{UInt}, Ptr{UInt}), tt, -1, 1, world, min, max)::Array{Any,1}
     return MethodList(Method[m[3] for m in ms], typeof(f).name.mt)
 end
-function methods(f::ANY)
+function methods(@nospecialize(f))
     # return all matches
     return methods(f, Tuple{Vararg{Any}})
 end
@@ -724,7 +724,7 @@ struct CodegenParams
 end
 
 # Printing code representations in IR and assembly
-function _dump_function(f::ANY, t::ANY, native::Bool, wrapper::Bool,
+function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrapper::Bool,
                         strip_ir_metadata::Bool, dump_module::Bool, syntax::Symbol=:att,
                         optimize::Bool=true, params::CodegenParams=CodegenParams())
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
@@ -780,10 +780,10 @@ function and type signature to `io` which defaults to `STDOUT`.
 
 All metadata and dbg.* calls are removed from the printed bitcode. Use code_llvm_raw for the full IR.
 """
-code_llvm(io::IO, f::ANY, types::ANY=Tuple, strip_ir_metadata=true, dump_module=false) =
+code_llvm(io::IO, @nospecialize(f), @nospecialize(types=Tuple), strip_ir_metadata=true, dump_module=false) =
     print(io, _dump_function(f, types, false, false, strip_ir_metadata, dump_module))
-code_llvm(f::ANY, types::ANY=Tuple) = code_llvm(STDOUT, f, types)
-code_llvm_raw(f::ANY, types::ANY=Tuple) = code_llvm(STDOUT, f, types, false)
+code_llvm(@nospecialize(f), @nospecialize(types=Tuple)) = code_llvm(STDOUT, f, types)
+code_llvm_raw(@nospecialize(f), @nospecialize(types=Tuple)) = code_llvm(STDOUT, f, types, false)
 
 """
     code_native([io], f, types, [syntax])
@@ -792,13 +792,13 @@ Prints the native assembly instructions generated for running the method matchin
 generic function and type signature to `io` which defaults to `STDOUT`.
 Switch assembly syntax using `syntax` symbol parameter set to `:att` for AT&T syntax or `:intel` for Intel syntax. Output is AT&T syntax by default.
 """
-code_native(io::IO, f::ANY, types::ANY=Tuple, syntax::Symbol=:att) =
+code_native(io::IO, @nospecialize(f), @nospecialize(types=Tuple), syntax::Symbol=:att) =
     print(io, _dump_function(f, types, true, false, false, false, syntax))
-code_native(f::ANY, types::ANY=Tuple, syntax::Symbol=:att) = code_native(STDOUT, f, types, syntax)
-code_native(::IO, ::ANY, ::Symbol) = error("illegal code_native call") # resolve ambiguous call
+code_native(@nospecialize(f), @nospecialize(types=Tuple), syntax::Symbol=:att) = code_native(STDOUT, f, types, syntax)
+code_native(::IO, ::Any, ::Symbol) = error("illegal code_native call") # resolve ambiguous call
 
 # give a decent error message if we try to instantiate a staged function on non-leaf types
-function func_for_method_checked(m::Method, types::ANY)
+function func_for_method_checked(m::Method, @nospecialize types)
     if isdefined(m,:generator) && !isdefined(m,:source) && !isleaftype(types)
         error("cannot call @generated function `", m, "` ",
               "with abstract argument types: ", types)
@@ -813,7 +813,7 @@ Returns an array of lowered and type-inferred ASTs for the methods matching the 
 generic function and type signature. The keyword argument `optimize` controls whether
 additional optimizations, such as inlining, are also applied.
 """
-function code_typed(f::ANY, types::ANY=Tuple; optimize=true)
+function code_typed(@nospecialize(f), @nospecialize(types=Tuple); optimize=true)
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
     if isa(f, Core.Builtin)
         throw(ArgumentError("argument is not a generic function"))
@@ -831,7 +831,7 @@ function code_typed(f::ANY, types::ANY=Tuple; optimize=true)
     return asts
 end
 
-function return_types(f::ANY, types::ANY=Tuple)
+function return_types(@nospecialize(f), @nospecialize(types=Tuple))
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
     if isa(f, Core.Builtin)
         throw(ArgumentError("argument is not a generic function"))
@@ -856,7 +856,7 @@ Returns the method of `f` (a `Method` object) that would be called for arguments
 
 If `types` is an abstract type, then the method that would be called by `invoke` is returned.
 """
-function which(f::ANY, t::ANY)
+function which(@nospecialize(f), @nospecialize(t))
     if isa(f, Core.Builtin)
         throw(ArgumentError("argument is not a generic function"))
     end
@@ -923,9 +923,9 @@ end
 
 Returns a tuple `(filename,line)` giving the location of a generic `Function` definition.
 """
-functionloc(f::ANY, types::ANY) = functionloc(which(f,types))
+functionloc(@nospecialize(f), @nospecialize(types)) = functionloc(which(f,types))
 
-function functionloc(f::ANY)
+function functionloc(@nospecialize(f))
     mt = methods(f)
     if isempty(mt)
         if isa(f, Function)
@@ -953,7 +953,7 @@ function_module(f::Function) = datatype_module(typeof(f))
 
 Determine the module containing a given definition of a generic function.
 """
-function function_module(f::ANY, types::ANY)
+function function_module(@nospecialize(f), @nospecialize(types))
     m = methods(f, types)
     if isempty(m)
         error("no matching methods")
@@ -973,7 +973,7 @@ julia> method_exists(length, Tuple{Array})
 true
 ```
 """
-function method_exists(f::ANY, t::ANY, world=typemax(UInt))
+function method_exists(@nospecialize(f), @nospecialize(t), world=typemax(UInt))
     t = to_tuple_type(t)
     t = Tuple{isa(f,Type) ? Type{f} : typeof(f), t.parameters...}
     return ccall(:jl_method_exists, Cint, (Any, Any, UInt), typeof(f).name.mt, t, world) != 0
