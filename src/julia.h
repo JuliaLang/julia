@@ -1427,10 +1427,6 @@ JL_DLLEXPORT int jl_dlclose(jl_uv_libhandle handle);
 JL_DLLEXPORT void *jl_dlsym_e(jl_uv_libhandle handle, const char *symbol);
 JL_DLLEXPORT void *jl_dlsym(jl_uv_libhandle handle, const char *symbol);
 
-#if defined(__linux__) || defined(__FreeBSD__)
-JL_DLLEXPORT const char *jl_lookup_soname(const char *pfx, size_t n);
-#endif
-
 // compiler
 JL_DLLEXPORT jl_value_t *jl_toplevel_eval(jl_module_t *m, jl_value_t *v);
 JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex);

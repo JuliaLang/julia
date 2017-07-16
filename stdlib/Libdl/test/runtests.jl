@@ -199,8 +199,4 @@ let dl = C_NULL
     @test_skip !Libdl.dlclose(dl)   # Syscall doesn't fail on Win32
 end
 
-if Sys.KERNEL in (:Linux, :FreeBSD)
-    ccall(:jl_read_sonames, Cvoid, ())
-end
-
 end
