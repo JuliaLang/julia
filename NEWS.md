@@ -150,7 +150,7 @@ Deprecated or removed
     and the Base signal processing functions which used FFTs are now in DSP.jl ([#21956]).
 
   * The `corrected` positional argument to `cov` has been deprecated in favor of
-    a keyword argument with the same name (#21709).
+    a keyword argument with the same name ([#21709]).
 
   * Omitting spaces around the `?` and the `:` tokens in a ternary expression has been deprecated.
     Ternaries must now include some amount of whitespace, e.g. `x ? a : b` rather than
@@ -996,5 +996,6 @@ Command-line option changes
 [#22310]: https://github.com/JuliaLang/julia/issues/22310
 [#22523]: https://github.com/JuliaLang/julia/issues/22523
 [#22532]: https://github.com/JuliaLang/julia/issues/22532
+[#22709]: https://github.com/JuliaLang/julia/issues/22709
 [#22712]: https://github.com/JuliaLang/julia/issues/22712
 [#22732]: https://github.com/JuliaLang/julia/issues/22732
