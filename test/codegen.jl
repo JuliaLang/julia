@@ -162,3 +162,24 @@ if opt_level > 0
     @test !contains(breakpoint_badref_ir, "%gcframe")
     @test !contains(breakpoint_badref_ir, "jl_gc_pool_alloc")
 end
+
+# Issue 22770
+let was_gced = false
+    @noinline make_tuple(x) = tuple(x)
+    @noinline use(x) = ccall(:jl_breakpoint, Void, ())
+    @noinline assert_not_gced() = @assert !was_gced
+
+    function foo22770()
+        b = Ref(2)
+        finalizer(b, x->(global was_gced; was_gced=true))
+        y = make_tuple(b)
+        x = y[1]
+        a = Ref(1)
+        use(x); use(a); use(y)
+        c = Ref(3)
+        gc(); assert_not_gced();
+        use(x)
+        use(c)
+    end
+    foo22770()
+end
