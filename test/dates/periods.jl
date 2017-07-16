@@ -249,7 +249,7 @@ let
     Dates.toms(b::Beat) = Dates.value(b) * 86400
     Dates._units(b::Beat) = " beat" * (abs(Dates.value(b)) == 1 ? "" : "s")
     Base.promote_rule(::Type{Dates.Day}, ::Type{Beat}) = Dates.Millisecond
-    Base.convert{T<:Dates.Millisecond}(::Type{T}, b::Beat) = T(Dates.toms(b))
+    Base.convert(::Type{T}, b::Beat) where {T<:Dates.Millisecond} = T(Dates.toms(b))
 
     @test Beat(1000) == Dates.Day(1)
     @test Beat(1) < Dates.Day(1)

@@ -112,9 +112,9 @@ try
                   pool::NominalPool{T, R, NominalValue{T, R}}
               end
               (::Union{Type{NominalValue}, Type{OrdinalValue}})() = 1
-              (::Union{Type{NominalValue{T}}, Type{OrdinalValue{T}}}){T}() = 2
-              (::Type{Vector{NominalValue{T, R}}}){T, R}() = 3
-              (::Type{Vector{NominalValue{T, T}}}){T}() = 4
+              (::Union{Type{NominalValue{T}}, Type{OrdinalValue{T}}})() where {T} = 2
+              (::Type{Vector{NominalValue{T, R}}})() where {T, R} = 3
+              (::Type{Vector{NominalValue{T, T}}})() where {T} = 4
               (::Type{Vector{NominalValue{Int, Int}}})() = 5
 
               # more tests for method signature involving a complicated type
@@ -125,9 +125,9 @@ try
               struct Value18343{T, R}
                   pool::Pool18343{R, Value18343{T, R}}
               end
-              Base.convert{S}(::Type{Nullable{S}}, ::Value18343{Nullable}) = 2
+              Base.convert(::Type{Nullable{S}}, ::Value18343{Nullable}) where {S} = 2
               Base.convert(::Type{Nullable{Value18343}}, ::Value18343{Nullable}) = 2
-              Base.convert{T}(::Type{Ref}, ::Value18343{T}) = 3
+              Base.convert(::Type{Ref}, ::Value18343{T}) where {T} = 3
 
 
               let some_method = @which Base.include("string")
