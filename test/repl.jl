@@ -214,9 +214,9 @@ function buffercontents(buf::IOBuffer)
     c
 end
 
-function AddCustomMode(repl)
+function AddCustomMode(repl, prompt)
     # Custom REPL mode tests
-    foobar_mode = LineEdit.Prompt("TestΠ";
+    foobar_mode = LineEdit.Prompt(prompt;
         prompt_prefix="\e[38;5;166m",
         prompt_suffix=Base.text_colors[:white],
         on_enter = s->true,
@@ -289,7 +289,7 @@ fakehistory = """
 """
 
 # Test various history related issues
-begin
+for prompt = ["TestΠ", () -> randstring(rand(1:10))]
     stdin_write, stdout_read, stdout_read, repl = fake_repl()
     # In the future if we want we can add a test that the right object
     # gets displayed by intercepting the display
@@ -438,7 +438,7 @@ begin
 
     # Test that new modes can be dynamically added to the REPL and will
     # integrate nicely
-    foobar_mode, custom_histp = AddCustomMode(repl)
+    foobar_mode, custom_histp = AddCustomMode(repl, prompt)
 
     # ^R l, should now find `ls` in foobar mode
     LineEdit.enter_search(s, histp, true)
@@ -535,43 +535,46 @@ end
 
 # Simple non-standard REPL tests
 if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
-    stdin_write, stdout_read, stdout_read, repl = fake_repl()
-    panel = LineEdit.Prompt("testπ";
-        prompt_prefix="\e[38;5;166m",
-        prompt_suffix=Base.text_colors[:white],
-        on_enter = s->true)
+    for prompt = ["testπ", () -> randstring(rand(1:10))]
+        stdin_write, stdout_read, stdout_read, repl = fake_repl()
+        panel = LineEdit.Prompt(prompt;
+            prompt_prefix="\e[38;5;166m",
+            prompt_suffix=Base.text_colors[:white],
+            on_enter = s->true)
 
-    hp = REPL.REPLHistoryProvider(Dict{Symbol,Any}(:parse => panel))
-    search_prompt, skeymap = LineEdit.setup_prefix_keymap(hp, panel)
-    REPL.history_reset_state(hp)
+        hp = REPL.REPLHistoryProvider(Dict{Symbol,Any}(:parse => panel))
+        search_prompt, skeymap = LineEdit.setup_prefix_keymap(hp, panel)
+        REPL.history_reset_state(hp)
 
-    panel.hist = hp
-    panel.keymap_dict = LineEdit.keymap(Dict{Any,Any}[skeymap,
-        LineEdit.default_keymap, LineEdit.escape_defaults])
+        panel.hist = hp
+        panel.keymap_dict = LineEdit.keymap(Dict{Any,Any}[skeymap,
+            LineEdit.default_keymap, LineEdit.escape_defaults])
 
-    c = Condition()
-    panel.on_done = (s,buf,ok)->begin
-        if !ok
-            LineEdit.transition(s,:abort)
+        c = Condition()
+        panel.on_done = (s,buf,ok)->begin
+            if !ok
+                LineEdit.transition(s,:abort)
+            end
+            line = strip(String(take!(buf)))
+            LineEdit.reset_state(s)
+            return notify(c,line)
         end
-        line = strip(String(take!(buf)))
-        LineEdit.reset_state(s)
-        return notify(c,line)
+
+        repltask = @async Base.REPL.run_interface(repl.t,
+                              LineEdit.ModalInterface([panel,search_prompt]))
+
+        write(stdin_write,"a\n")
+        @test wait(c) == "a"
+        # Up arrow enter should recall history even at the start
+        write(stdin_write,"\e[A\n")
+        @test wait(c) == "a"
+        # And again
+        write(stdin_write,"\e[A\n")
+        @test wait(c) == "a"
+        # Close REPL ^D
+        write(stdin_write, '\x04')
+        wait(repltask)
     end
-
-    repltask = @async Base.REPL.run_interface(repl.t, LineEdit.ModalInterface([panel,search_prompt]))
-
-    write(stdin_write,"a\n")
-    @test wait(c) == "a"
-    # Up arrow enter should recall history even at the start
-    write(stdin_write,"\e[A\n")
-    @test wait(c) == "a"
-    # And again
-    write(stdin_write,"\e[A\n")
-    @test wait(c) == "a"
-    # Close REPL ^D
-    write(stdin_write, '\x04')
-    wait(repltask)
 end
 
 ccall(:jl_exit_on_sigint, Void, (Cint,), 1)
@@ -713,14 +716,15 @@ const altkeys = [Dict{Any,Any}("\e[A" => (s,o...)->(LineEdit.edit_move_up(s) || 
 
 
 if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
-    for keys = [altkeys, merge(altkeys...)]
+    for keys = [altkeys, merge(altkeys...)],
+            altprompt = ["julia-$(VERSION.major).$(VERSION.minor)> ",
+                         () -> "julia-$(Base.GIT_VERSION_INFO.commit_short)"]
         histfile = tempname()
         try
             stdin_write, stdout_read, stderr_read, repl = fake_repl()
 
             repl.specialdisplay = Base.REPL.REPLDisplay(repl)
             repl.history_file = true
-            altprompt = "julia-$(VERSION.major).$(VERSION.minor)> "
             withenv("JULIA_HISTORY" => histfile) do
                 repl.interface = REPL.setup_interface(repl, extra_repl_keymap = altkeys)
             end
@@ -747,7 +751,7 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
 
             # Check that the correct prompt was displayed
             output = readuntil(stdout_read, "1 * 1;")
-            @test !isempty(search(output, altprompt))
+            @test !isempty(search(output, LineEdit.prompt_string(altprompt)))
             @test isempty(search(output, "julia> "))
 
             # Check the history file
