@@ -226,7 +226,7 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
 end
 
 #Test equivalence of eigenvectors/singular vectors taking into account possible phase (sign) differences
-function test_approx_eq_vecs{S<:Real,T<:Real}(a::StridedVecOrMat{S}, b::StridedVecOrMat{T}, error=nothing)
+function test_approx_eq_vecs(a::StridedVecOrMat{S}, b::StridedVecOrMat{T}, error=nothing) where {S<:Real,T<:Real}
     n = size(a, 1)
     @test n==size(b,1) && size(a,2)==size(b,2)
     error===nothing && (error=n^3*(eps(S)+eps(T)))

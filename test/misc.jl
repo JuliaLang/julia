@@ -681,7 +681,7 @@ let
 end
 
 abstract type DA_19281{T, N} <: AbstractArray{T, N} end
-Base.convert{S,T,N}(::Type{Array{S, N}}, ::DA_19281{T, N}) = error()
+Base.convert(::Type{Array{S, N}}, ::DA_19281{T, N}) where {S,T,N} = error()
 x_19281 = [(), (1,)]
 mutable struct Foo_19281
     f::Vector{Tuple}

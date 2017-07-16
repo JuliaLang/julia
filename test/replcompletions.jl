@@ -29,9 +29,9 @@ ex = quote
     Base.keys(d::CustomDict) = collect(keys(d.mydict))
     Base.length(d::CustomDict) = length(d.mydict)
 
-    test{T<:Real}(x::T, y::T) = pass
+    test(x::T, y::T) where {T<:Real} = pass
     test(x::Real, y::Real) = pass
-    test{T<:Real}(x::AbstractArray{T}, y) = pass
+    test(x::AbstractArray{T}, y) where {T<:Real} = pass
     test(args...) = pass
 
     test1(x::Type{Float64}) = pass

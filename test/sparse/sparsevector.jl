@@ -656,7 +656,7 @@ end
 
 ### Zero-preserving math functions: sparse -> sparse
 
-function check_nz2z_z2z{T}(f::Function, x::SparseVector{T}, xf::Vector{T})
+function check_nz2z_z2z(f::Function, x::SparseVector{T}, xf::Vector{T}) where T
     R = typeof(f(zero(T)))
     r = f(x)
     isa(r, AbstractSparseVector) || error("$f(x) is not a sparse vector.")
@@ -678,7 +678,7 @@ end
 
 ### Non-zero-preserving math functions: sparse -> dense
 
-function check_z2nz{T}(f::Function, x::SparseVector{T}, xf::Vector{T})
+function check_z2nz(f::Function, x::SparseVector{T}, xf::Vector{T}) where T
     R = typeof(f(zero(T)))
     r = f(x)
     isa(r, Vector) || error("$f(x) is not a dense vector.")

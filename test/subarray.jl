@@ -47,7 +47,7 @@ ensure_iterable(t::Tuple{Union{Number, CartesianIndex}, Vararg{Any}}) = ((t[1],)
 ensure_iterable(t::Tuple{Any, Vararg{Any}}) = (t[1], ensure_iterable(Base.tail(t))...)
 
 index_ndims(t::Tuple) = tup2val(Base.index_ndims(t))
-tup2val{N}(::NTuple{N}) = Val(N)
+tup2val(::NTuple{N}) where {N} = Val(N)
 
 # To avoid getting confused by manipulations that are implemented for SubArrays,
 # it's good to copy the contents to an Array. This version protects against
@@ -126,8 +126,8 @@ function test_linear(@nospecialize(A), @nospecialize(B))
 end
 
 # "mixed" means 2 indexes even for N-dimensional arrays
-test_mixed{T}(::AbstractArray{T,1}, ::Array) = nothing
-test_mixed{T}(::AbstractArray{T,2}, ::Array) = nothing
+test_mixed(::AbstractArray{T,1}, ::Array) where {T} = nothing
+test_mixed(::AbstractArray{T,2}, ::Array) where {T} = nothing
 test_mixed(A, B::Array) = _test_mixed(A, reshape(B, size(A)))
 function _test_mixed(@nospecialize(A), @nospecialize(B))
     m = size(A, 1)
@@ -238,7 +238,7 @@ function runviews(SB::AbstractArray, indexN, indexNN, indexNNN)
     end
 end
 
-function runviews{T}(SB::AbstractArray{T,2}, indexN, indexNN, indexNNN)
+function runviews(SB::AbstractArray{T,2}, indexN, indexNN, indexNNN) where T
     for i2 in indexN, i1 in indexN
         runsubarraytests(SB, i1, i2)
     end
@@ -247,13 +247,13 @@ function runviews{T}(SB::AbstractArray{T,2}, indexN, indexNN, indexNNN)
     end
 end
 
-function runviews{T}(SB::AbstractArray{T,1}, indexN, indexNN, indexNNN)
+function runviews(SB::AbstractArray{T,1}, indexN, indexNN, indexNNN) where T
     for i1 in indexN
         runsubarraytests(SB, i1)
     end
 end
 
-runviews{T}(SB::AbstractArray{T,0}, indexN, indexNN, indexNNN) = nothing
+runviews(SB::AbstractArray{T,0}, indexN, indexNN, indexNNN) where {T} = nothing
 
 ######### Tests #########
 
@@ -276,7 +276,7 @@ end
 # with the exception of Int-slicing
 oindex = (:, 6, 3:7, reshape([12]), [8,4,6,12,5,7], [3:7 1:5 2:6 4:8 5:9])
 
-_ndims{T,N}(::AbstractArray{T,N}) = N
+_ndims(::AbstractArray{T,N}) where {T,N} = N
 _ndims(x) = 1
 
 if testfull

@@ -2,10 +2,10 @@
 
 using Base: findprevnot, findnextnot
 
-tc{N}(r1::NTuple{N,Any}, r2::NTuple{N,Any}) = all(x->tc(x...), [zip(r1,r2)...])
-tc{N}(r1::BitArray{N}, r2::Union{BitArray{N},Array{Bool,N}}) = true
+tc(r1::NTuple{N,Any}, r2::NTuple{N,Any}) where {N} = all(x->tc(x...), [zip(r1,r2)...])
+tc(r1::BitArray{N}, r2::Union{BitArray{N},Array{Bool,N}}) where {N} = true
 tc(r1::RowVector{Bool,BitVector}, r2::Union{RowVector{Bool,BitVector},RowVector{Bool,Vector{Bool}}}) = true
-tc{T}(r1::T, r2::T) = true
+tc(r1::T, r2::T) where {T} = true
 tc(r1,r2) = false
 
 bitcheck(b::BitArray) = Base._check_bitarray_consistency(b)

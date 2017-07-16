@@ -52,7 +52,7 @@ method_c2(x::Int32, args...) = true
 method_c2(x::Int32, y::Float64, args...) = true
 method_c2(x::Int32, y::Float64) = true
 method_c2(x::Int32, y::Int32, z::Int32) = true
-method_c2{T<:Real}(x::T, y::T, z::T) = true
+method_c2(x::T, y::T, z::T) where {T<:Real} = true
 
 Base.show_method_candidates(buf, Base.MethodError(method_c2,(1., 1., 2)))
 color = "\e[0m\nClosest candidates are:\n  method_c2(\e[1m\e[31m::Int32\e[0m, ::Float64, ::Any...)$cfile$(c2line+2)\n  method_c2(\e[1m\e[31m::Int32\e[0m, ::Any...)$cfile$(c2line+1)\n  method_c2(::T<:Real, ::T<:Real, \e[1m\e[31m::T<:Real\e[0m)$cfile$(c2line+5)\n  ...\e[0m"
@@ -98,7 +98,7 @@ mutable struct PR16155
     b
 end
 PR16155line2 = @__LINE__() + 1
-(::Type{T}){T<:PR16155}(arg::Any) = "replace call-to-convert method from sysimg"
+(::Type{T})(arg::Any) where {T<:PR16155} = "replace call-to-convert method from sysimg"
 
 Base.show_method_candidates(buf, MethodError(PR16155,(1.0, 2.0, Int64(3))))
 test_have_color(buf, "\e[0m\nClosest candidates are:\n  $(curmod_prefix)PR16155(::Any, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(\e[1m\e[31m::Int64\e[0m, ::Any)$cfile$PR16155line\n  $(curmod_prefix)PR16155(::Any) where T<:$(curmod_prefix)PR16155$cfile$PR16155line2\e[0m",
@@ -356,7 +356,7 @@ Base.Symbol() = throw(ErrorException("1"))
 EightBitType() = throw(ErrorException("3"))
 (::EightBitType)() = throw(ErrorException("4"))
 EightBitTypeT() = throw(ErrorException("5"))
-(::Type{EightBitTypeT{T}}){T}() = throw(ErrorException("6"))
+(::Type{EightBitTypeT{T}})() where {T} = throw(ErrorException("6"))
 (::EightBitTypeT)() = throw(ErrorException("7"))
 (::FunctionLike)() = throw(ErrorException("8"))
 
