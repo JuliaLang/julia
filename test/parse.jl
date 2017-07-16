@@ -1236,3 +1236,11 @@ end === (3, String)
 @test parse("local x, y = 1, 2") == Expr(:local, Expr(:(=),
                                                       Expr(:tuple, :x, :y),
                                                       Expr(:tuple, 1, 2)))
+
+@test_throws ParseError parse("[2for i=1:10]")
+@test_throws ParseError parse("[1 for i in 1:2for j in 2]")
+@test_throws ParseError parse("(1 for i in 1:2for j in 2)")
+# issue #20441
+@test_throws ParseError parse("[x.2]")
+@test_throws ParseError parse("x.2")
+@test parse("[x;.2]") == Expr(:vcat, :x, 0.2)
