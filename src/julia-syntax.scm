@@ -810,13 +810,15 @@
                   (sig    (car temp))
                   (params (cdr temp)))
              (if (pair? params)
-                 (let* ((lnos (filter (lambda (e) (and (pair? e) (eq? (car e) 'line)))
-                                      body))
-                        (lno (if (null? lnos) '() (car lnos))))
-                   (syntax-deprecation #f
-                                       (string "inner constructor " name "(...)" (linenode-string lno))
-                                       (deparse `(where (call (curly ,name ,@params) ...) ,@params)))))
+                 (syntax-deprecation #f
+                                     (string "inner constructor " name "(...)" (linenode-string (function-body-lineno body)))
+                                     (deparse `(where (call (curly ,name ,@params) ...) ,@params))))
              `(,keyword ,sig ,(ctor-body body params)))))))
+
+(define (function-body-lineno body)
+  (let ((lnos (filter (lambda (e) (and (pair? e) (eq? (car e) 'line)))
+                      body)))
+    (if (null? lnos) '() (car lnos))))
 
 ;; rewrite calls to `new( ... )` to `new` expressions on the appropriate
 ;; type, determined by the containing constructor definition.
@@ -1062,6 +1064,11 @@
                                                                    (eq? (caar argl) 'parameters))))))
                   (name    (if (or (decl? name) (and (pair? name) (eq? (car name) 'curly)))
                                #f name)))
+             (if has-sp
+                 (syntax-deprecation #f
+                                     (string "parametric method syntax " (deparse (cadr e))
+                                             (linenode-string (function-body-lineno body)))
+                                     (deparse `(where (call ,name ,@(cdr argl)) ,@(map car sparams)))))
              (expand-forms
               (method-def-expr name sparams argl body isstaged rett))))
           (else

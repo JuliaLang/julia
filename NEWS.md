@@ -10,6 +10,9 @@ New language features
 Language changes
 ----------------
 
+  * The syntax for parametric methods, `function f{T}(x::T)`, has been
+    changed to `function f(x::T) where {T}` ([#11310]).
+
   * The syntax `1.+2` is deprecated, since it is ambiguous: it could mean either
     `1 .+ 2` (the current meaning) or `1. + 2` ([#19089]).
 
