@@ -152,12 +152,23 @@ reverseind(s::RevString, i::Integer) = endof(s) - i + 1
 reverseind(s::SubString{String}, i::Integer) =
     reverseind(s.string, nextind(s.string, endof(s.string))-s.offset-s.endof+i-1) - s.offset
 
+"""
+    repeat(s::AbstractString, r::Integer)
+
+Repeat a string `r` times. This can equivalently be accomplished by calling [`s^r`](@ref ^).
+
+# Examples
+```jldoctest
+julia> repeat("ha", 3)
+"hahaha"
+```
+"""
 repeat(s::AbstractString, r::Integer) = repeat(convert(String, s), r)
 
 """
-    ^(s::AbstractString, n::Integer)
+    ^(s::Union{AbstractString,Char}, n::Integer)
 
-Repeat `n` times the string `s`.
+Repeat a string or character `n` times.
 The [`repeat`](@ref) function is an alias to this operator.
 
 # Examples
@@ -166,7 +177,7 @@ julia> "Test "^3
 "Test Test Test "
 ```
 """
-(^)(s::AbstractString, r::Integer) = repeat(s,r)
+(^)(s::Union{AbstractString,Char}, r::Integer) = repeat(s,r)
 
 pointer(x::SubString{String}) = pointer(x.string) + x.offset
 pointer(x::SubString{String}, i::Integer) = pointer(x.string) + x.offset + (i-1)

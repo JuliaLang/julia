@@ -416,7 +416,7 @@ Strip all Markdown markup from x, leaving the result in plain text. Used
 internally by apropos to make docstrings containing more than one markdown
 element searchable.
 """
-stripmd(x::ANY) = string(x) # for random objects interpolated into the docstring
+stripmd(@nospecialize x) = string(x) # for random objects interpolated into the docstring
 stripmd(x::AbstractString) = x  # base case
 stripmd(x::Void) = " "
 stripmd(x::Vector) = string(map(stripmd, x)...)

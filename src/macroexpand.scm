@@ -107,8 +107,7 @@
                              ;; a=b -> add argument
                              (loop (cdr binds)
                                    (cons (decl-var (cadar binds)) vars)))
-                            ((and (pair? (cadar binds))
-                                  (eq? (caadar binds) 'call))
+                            ((eventually-call (cadar binds))
                              ;; f()=c
                              (let ((asgn (cadr (julia-expand0 (car binds)))))
                                (loop (cdr binds)
@@ -192,6 +191,10 @@
          (case (car v)
            ((... kw |::|) (try-arg-name (cadr v)))
            ((escape) (list v))
+           ((meta)  ;; allow certain per-argument annotations
+            (if (nospecialize-meta? v #t)
+                (try-arg-name (caddr v))
+                '()))
            (else '())))))
 
 ;; get names from a formal argument list, specifying whether to include escaped ones

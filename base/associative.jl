@@ -461,7 +461,7 @@ function sizehint!(t::ObjectIdDict, newsz)
     rehash!(t, newsz)
 end
 
-function setindex!(t::ObjectIdDict, v::ANY, k::ANY)
+function setindex!(t::ObjectIdDict, @nospecialize(v), @nospecialize(k))
     if t.ndel >= ((3*length(t.ht))>>2)
         rehash!(t, max(length(t.ht)>>1, 32))
         t.ndel = 0
@@ -470,22 +470,22 @@ function setindex!(t::ObjectIdDict, v::ANY, k::ANY)
     return t
 end
 
-get(t::ObjectIdDict, key::ANY, default::ANY) =
+get(t::ObjectIdDict, @nospecialize(key), @nospecialize(default)) =
     ccall(:jl_eqtable_get, Any, (Any, Any, Any), t.ht, key, default)
 
-function pop!(t::ObjectIdDict, key::ANY, default::ANY)
+function pop!(t::ObjectIdDict, @nospecialize(key), @nospecialize(default))
     val = ccall(:jl_eqtable_pop, Any, (Any, Any, Any), t.ht, key, default)
     # TODO: this can underestimate `ndel`
     val === default || (t.ndel += 1)
     return val
 end
 
-function pop!(t::ObjectIdDict, key::ANY)
+function pop!(t::ObjectIdDict, @nospecialize(key))
     val = pop!(t, key, secret_table_token)
     val !== secret_table_token ? val : throw(KeyError(key))
 end
 
-function delete!(t::ObjectIdDict, key::ANY)
+function delete!(t::ObjectIdDict, @nospecialize(key))
     pop!(t, key, secret_table_token)
     t
 end

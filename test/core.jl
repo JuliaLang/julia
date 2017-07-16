@@ -1302,7 +1302,7 @@ mutable struct Baz4129
     b::Bar4129
 end
 
-foo4129(a::Baz4129,c::Foo4129,b::Bar4129,x::ANY,y) = (a,b,c,x,y)
+foo4129(a::Baz4129,c::Foo4129,b::Bar4129,@nospecialize(x),y) = (a,b,c,x,y)
 foo4129(a::Baz4129,b::Bar41291,args...) = foo4129(a,b.f,b,args...)
 foo4129(a::Baz4129,b::Bar41292,args...) = foo4129(a,b.f,b,args...)
 foo4129(a::Baz4129,args...)         = foo4129(a,a.b,args...)
@@ -3227,7 +3227,7 @@ cycle_in_solve_tvar_constraints{T}(::Type{T}, x::Val{T}) = 1
 @test length(methods(cycle_in_solve_tvar_constraints)) == 2
 
 # issue #12967
-foo12967(x, ::ANY) = 1
+foo12967(x, @nospecialize y) = 1
 TupleType12967{T<:Tuple} = Type{T}
 foo12967(x, ::TupleType12967) = 2
 @test foo12967(1, Int) == 1
@@ -3980,7 +3980,7 @@ function metadata_matches(ast::CodeInfo)
     @test boundscheck_cnt[] == 0
 end
 
-function test_metadata_matches(f::ANY, tt::ANY)
+function test_metadata_matches(@nospecialize(f), @nospecialize(tt))
     metadata_matches(code_typed(f, tt)[1][1])
 end
 
@@ -4188,16 +4188,16 @@ end
 
 # issue #16153
 f16153(x) = 1
-f16153(x::ANY, y...) = 2
+f16153(@nospecialize(x), y...) = 2
 @test f16153("") == 1
-ff16153(x::ANY, y...) = 2
+ff16153(@nospecialize(x), y...) = 2
 ff16153(x) = 1
 @test ff16153("") == 1
-g16153(x::ANY, y...) = 1
-g16153(x::ANY, y::ANY) = 2
+g16153(@nospecialize(x), y...) = 1
+g16153(@nospecialize(x), @nospecialize(y)) = 2
 @test g16153(1, 1) == 2
-gg16153(x::ANY, y::ANY) = 2
-gg16153(x::ANY, y...) = 1
+gg16153(@nospecialize(x), @nospecialize(y)) = 2
+gg16153(@nospecialize(x), y...) = 1
 @test gg16153(1, 1) == 2
 
 # don't remove global variable accesses even if we "know" their type
@@ -4555,7 +4555,7 @@ bad_tvars{T}() = 1
 
 # issue #19059 - test for lowering of `let` with assignment not adding Box in simple cases
 contains_Box(e::GlobalRef) = (e.name === :Box)
-contains_Box(e::ANY) = false
+contains_Box(@nospecialize(e)) = false
 contains_Box(e::Expr) = any(contains_Box, e.args)
 
 function let_noBox()

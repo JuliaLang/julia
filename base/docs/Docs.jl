@@ -146,7 +146,7 @@ mutable struct DocStr
     data   :: Dict{Symbol, Any}
 end
 
-function docstr(binding::Binding, typesig::ANY = Union{})
+function docstr(binding::Binding, @nospecialize typesig = Union{})
     for m in modules
         dict = meta(m)
         if haskey(dict, binding)
@@ -229,7 +229,7 @@ end
 
 Adds a new docstring `str` to the docsystem of `__module__` for `binding` and signature `sig`.
 """
-function doc!(__module__::Module, b::Binding, str::DocStr, sig::ANY = Union{})
+function doc!(__module__::Module, b::Binding, str::DocStr, @nospecialize sig = Union{})
     initmeta(__module__)
     m = get!(meta(__module__), b, MultiDoc())
     if haskey(m.docs, sig)

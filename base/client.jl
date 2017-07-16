@@ -142,7 +142,7 @@ end
 display_error(er, bt) = display_error(STDERR, er, bt)
 display_error(er) = display_error(er, [])
 
-function eval_user_input(ast::ANY, show_value)
+function eval_user_input(@nospecialize(ast), show_value)
     errcount, lasterr, bt = 0, (), nothing
     while true
         try

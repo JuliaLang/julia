@@ -1380,7 +1380,10 @@ static std::pair<CallingConv::ID, bool> convert_cconv(jl_sym_t *lhd)
     if (lhd == jl_symbol("stdcall")) {
         return std::make_pair(CallingConv::X86_StdCall, false);
     }
-    else if (lhd == jl_symbol("cdecl")) {
+    else if (lhd == jl_symbol("cdecl") || lhd == jl_symbol("ccall")) {
+        // `ccall` calling convention is a placeholder for when there isn't one provided
+        // it is not by itself a valid calling convention name to be specified in the surface
+        // syntax.
         return std::make_pair(CallingConv::C, false);
     }
     else if (lhd == jl_symbol("fastcall")) {
@@ -1395,7 +1398,7 @@ static std::pair<CallingConv::ID, bool> convert_cconv(jl_sym_t *lhd)
     jl_errorf("ccall: invalid calling convention %s", jl_symbol_name(lhd));
 }
 
-static const std::string verify_ccall_sig(size_t nargs, jl_value_t *&rt, jl_value_t *at,
+static const std::string verify_ccall_sig(size_t nccallargs, jl_value_t *&rt, jl_value_t *at,
                                           jl_unionall_t *unionall_env, jl_svec_t *sparam_vals, const char *funcName,
                                           size_t &nargt, bool &isVa, Type *&lrt, bool &retboxed, bool &static_rt)
 {
@@ -1438,8 +1441,8 @@ static const std::string verify_ccall_sig(size_t nargs, jl_value_t *&rt, jl_valu
 
     nargt = jl_svec_len(at);
     isVa = (nargt > 0 && jl_is_vararg_type(jl_svecref(at, nargt - 1)));
-    if ((!isVa && nargt    != (nargs - 2) / 2) ||
-        ( isVa && nargt - 1 > (nargs - 2) / 2))
+    if ((!isVa && nargt    != nccallargs) ||
+        ( isVa && nargt - 1 > nccallargs))
         return "ccall: wrong number of arguments to C function";
 
     return "";
@@ -1448,21 +1451,20 @@ static const std::string verify_ccall_sig(size_t nargs, jl_value_t *&rt, jl_valu
 // Expr(:foreigncall, pointer, rettype, (argtypes...), args...)
 static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
 {
-    JL_NARGSV(ccall, 3);
+    JL_NARGSV(ccall, 5);
     args -= 1;
     jl_value_t *rt = args[2];
     jl_value_t *at = args[3];
+    assert(jl_is_quotenode(args[4]));
+    jl_sym_t *cc_sym = *(jl_sym_t**)args[4];
+    size_t nccallargs = jl_unbox_long(args[5]);
+    assert(jl_is_symbol(cc_sym));
     native_sym_arg_t symarg = {};
     JL_GC_PUSH3(&rt, &at, &symarg.gcroot);
 
     CallingConv::ID cc = CallingConv::C;
     bool llvmcall = false;
-    if (nargs % 2 == 0) {
-        jl_value_t *last = args[nargs];
-        JL_TYPECHK(ccall, expr, last);
-        std::tie(cc, llvmcall) = convert_cconv(((jl_expr_t*)last)->head);
-        nargs -= 1;
-    }
+    std::tie(cc, llvmcall) = convert_cconv(cc_sym);
 
     interpret_symbol_arg(ctx, symarg, args[1], "ccall", llvmcall);
     Value *&jl_ptr = symarg.jl_ptr;
@@ -1475,6 +1477,11 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         JL_GC_POP();
         return jl_cgval_t();
     }
+
+    auto ccallarg = [=] (size_t i) {
+        assert(i < nccallargs);
+        return args[6 + i];
+    };
 
     jl_unionall_t *unionall = (jl_is_method(ctx.linfo->def.method) && jl_is_unionall(ctx.linfo->def.method->sig))
         ? (jl_unionall_t*)ctx.linfo->def.method->sig
@@ -1533,7 +1540,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
     bool static_rt;
     std::string err = verify_ccall_sig(
             /* inputs:  */
-            nargs, rt, at, unionall,
+            nccallargs, rt, at, unionall,
             ctx.spvals_ptr == NULL ? ctx.linfo->sparam_vals : NULL,
             ctx.funcName.c_str(),
             /* outputs: */
@@ -1566,8 +1573,8 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
     if (is_libjulia_func(jl_array_ptr)) {
         assert(lrt->isPointerTy());
         assert(!isVa && !llvmcall);
-        assert(nargt==1);
-        jl_value_t *argi = args[4];
+        assert(nargt == 1);
+        jl_value_t *argi = ccallarg(0);
         assert(!(jl_is_expr(argi) && ((jl_expr_t*)argi)->head == amp_sym));
         jl_cgval_t ary = emit_expr(ctx, argi);
         JL_GC_POP();
@@ -1578,7 +1585,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         assert(lrt->isPointerTy());
         assert(!isVa && !llvmcall);
         assert(nargt==1);
-        jl_value_t *argi = args[4];
+        jl_value_t *argi = ccallarg(0);
         bool addressOf = false;
         jl_value_t *tti = jl_svecref(at, 0);
         if (jl_is_expr(argi) && ((jl_expr_t*)argi)->head == amp_sym) {
@@ -1739,7 +1746,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
     else if (is_libjulia_func(jl_is_leaf_type)) {
         assert(nargt == 1);
         assert(!isVa && !llvmcall);
-        jl_value_t *arg = args[4];
+        jl_value_t *arg = ccallarg(0);
         jl_value_t *ty = expr_type(ctx, arg);
         if (jl_is_type_type(ty) && !jl_is_typevar(jl_tparam0(ty))) {
             int isleaf = jl_is_leaf_type(jl_tparam0(ty));
@@ -1752,14 +1759,14 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
     else if (is_libjulia_func(jl_function_ptr)) {
         assert(nargt == 3);
         assert(!isVa && !llvmcall);
-        jl_value_t *f = static_eval(ctx, args[4], false, false);
+        jl_value_t *f = static_eval(ctx, ccallarg(0), false, false);
         jl_value_t *fargt = nullptr;
         JL_GC_PUSH2(&f, &fargt);
-        jl_value_t *frt = expr_type(ctx, args[6]);
+        jl_value_t *frt = expr_type(ctx, ccallarg(1));
         if (f && (jl_is_type_type((jl_value_t*)frt) && !jl_has_free_typevars(jl_tparam0(frt)))) {
-            fargt = static_eval(ctx, args[8], true, true);
+            fargt = static_eval(ctx, ccallarg(2), true, true);
             if (!fargt) {
-                fargt = expr_type(ctx, args[8]);
+                fargt = expr_type(ctx, ccallarg(2));
                 if (jl_is_type_type((jl_value_t*)fargt)) {
                     fargt = jl_tparam0(fargt);
                     if (jl_has_free_typevars(fargt) || !jl_is_tuple_type(fargt)) {
@@ -1789,9 +1796,9 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
                 if (llvmf) {
                     llvmf = prepare_call(llvmf);
                     // make sure to emit any side-effects that may have been part of the original expression
-                    emit_expr(ctx, args[4]);
-                    emit_expr(ctx, args[6]);
-                    emit_expr(ctx, args[8]);
+                    emit_expr(ctx, ccallarg(0));
+                    emit_expr(ctx, ccallarg(1));
+                    emit_expr(ctx, ccallarg(2));
                     JL_GC_POP();
                     JL_GC_POP();
                     return mark_or_box_ccall_result(ctx, emit_bitcast(ctx, llvmf, lrt),
@@ -1802,10 +1809,10 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         JL_GC_POP();
     }
     else if (is_libjulia_func(jl_array_isassigned) &&
-             expr_type(ctx, args[6]) == (jl_value_t*)jl_ulong_type) {
+             expr_type(ctx, ccallarg(1)) == (jl_value_t*)jl_ulong_type) {
         assert(nargt == 2);
-        jl_value_t *aryex = args[4];
-        jl_value_t *idxex = args[6];
+        jl_value_t *aryex = ccallarg(0);
+        jl_value_t *idxex = ccallarg(1);
         jl_value_t *aryty = expr_type(ctx, aryex);
         if (jl_is_array_type(aryty)) {
             jl_value_t *ety = jl_tparam0(aryty);
@@ -1832,24 +1839,19 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         assert(lrt == T_pint8);
         assert(!isVa && !llvmcall);
         assert(nargt == 1);
-        auto obj = emit_pointer_from_objref(ctx, boxed(ctx, emit_expr(ctx, args[4])));
+        auto obj = emit_pointer_from_objref(ctx, boxed(ctx, emit_expr(ctx, ccallarg(0))));
         auto strp = ctx.builder.CreateConstGEP1_32(emit_bitcast(ctx, obj, T_pint8), sizeof(void*));
         JL_GC_POP();
         return mark_or_box_ccall_result(ctx, strp, retboxed, rt, unionall, static_rt);
     }
 
     // emit arguments
-    jl_cgval_t *argv = (jl_cgval_t*)alloca(sizeof(jl_cgval_t) * (nargs - 3) / 2);
-    SmallVector<Value*, 16> gc_uses;
+    jl_cgval_t *argv = (jl_cgval_t*)alloca(sizeof(jl_cgval_t) * nccallargs);
     std::vector<bool> addressOf(0);
 
-    size_t i;
-    for (i = 4; i < nargs + 1; i += 2) {
-        // Current C function parameter
-        size_t ai = (i - 4) / 2;
-
+    for (size_t i = 0; i < nccallargs; i++) {
         // Julia (expression) value of current parameter
-        jl_value_t *argi = args[i];
+        jl_value_t *argi = ccallarg(i);
 
         // pass the address of the argument rather than the argument itself
         if (jl_is_expr(argi) && ((jl_expr_t*)argi)->head == amp_sym) {
@@ -1860,20 +1862,24 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
             addressOf.push_back(false);
         }
 
-        jl_cgval_t &arg = argv[ai];
+        jl_cgval_t &arg = argv[i];
         arg = emit_expr(ctx, (jl_value_t*)argi);
-
+    }
+    SmallVector<Value*, 16> gc_uses;
+    for (size_t i = nccallargs + 6; i <= nargs; i++) {
         // Julia (expression) value of current parameter gcroot
-        jl_value_t *argi_root = args[i + 1];
+        jl_value_t *argi_root = args[i];
         if (jl_is_long(argi_root))
             continue;
         jl_cgval_t arg_root = emit_expr(ctx, argi_root);
         Value *gcuse = arg_root.gcroot ? ctx.builder.CreateLoad(arg_root.gcroot) : arg_root.V;
-        if (gcuse)
+        if (gcuse) {
             gc_uses.push_back(gcuse);
+        }
     }
 
-    function_sig_t sig(lrt, rt, retboxed, (jl_svec_t*)at, unionall, (nargs - 3) / 2, isVa, cc, llvmcall);
+    function_sig_t sig(lrt, rt, retboxed, (jl_svec_t*)at, unionall, nccallargs,
+                       isVa, cc, llvmcall);
     jl_cgval_t retval = sig.emit_a_ccall(
             ctx,
             symarg,

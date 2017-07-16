@@ -40,7 +40,7 @@ is raised as an exception in the woken tasks.
 
 Returns the count of tasks woken up. Returns 0 if no tasks are waiting on `condition`.
 """
-notify(c::Condition, arg::ANY=nothing; all=true, error=false) = notify(c, arg, all, error)
+notify(c::Condition, @nospecialize(arg = nothing); all=true, error=false) = notify(c, arg, all, error)
 function notify(c::Condition, arg, all, error)
     cnt = 0
     if all
@@ -155,7 +155,7 @@ yield() = (enq_work(current_task()); wait())
 A fast, unfair-scheduling version of `schedule(t, arg); yield()` which
 immediately yields to `t` before calling the scheduler.
 """
-function yield(t::Task, x::ANY = nothing)
+function yield(t::Task, @nospecialize x = nothing)
     t.state == :runnable || error("schedule: Task not runnable")
     t.result = x
     enq_work(current_task())
@@ -170,7 +170,7 @@ called with no arguments. On subsequent switches, `arg` is returned from the tas
 call to `yieldto`. This is a low-level call that only switches tasks, not considering states
 or scheduling in any way. Its use is discouraged.
 """
-function yieldto(t::Task, x::ANY = nothing)
+function yieldto(t::Task, @nospecialize x = nothing)
     t.result = x
     return try_yieldto(Void, t)
 end
@@ -194,7 +194,7 @@ function try_yieldto(undo::F, t::Task) where F
 end
 
 # yield to a task, throwing an exception in it
-function throwto(t::Task, exc::ANY)
+function throwto(t::Task, @nospecialize exc)
     t.exception = exc
     return yieldto(t)
 end

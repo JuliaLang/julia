@@ -138,6 +138,7 @@ Base.esc
 Base.@inbounds
 Base.@inline
 Base.@noinline
+Base.@nospecialize
 Base.gensym
 Base.@gensym
 Base.@polly

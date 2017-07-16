@@ -450,7 +450,7 @@ let d = Dict(1 => 2, 3 => 45)
     buf = IOBuffer()
     td = TextDisplay(buf)
     display(td, d)
-    result = String(td.io)
+    result = String(take!(td.io))
 
     @test contains(result, summary(d))
 
@@ -466,13 +466,13 @@ let err, buf = IOBuffer()
     try Array() catch err end
     Base.show_method_candidates(buf,err)
     @test isa(err, MethodError)
-    @test contains(String(buf), "Closest candidates are:")
+    @test contains(String(take!(buf)), "Closest candidates are:")
 end
 
 # Issue 20111
 let K20111(x) = y -> x, buf = IOBuffer()
     show(buf, methods(K20111(1)))
-    @test contains(String(buf), " 1 method for generic function")
+    @test contains(String(take!(buf)), " 1 method for generic function")
 end
 
 # @macroexpand tests

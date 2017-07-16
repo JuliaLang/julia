@@ -16,6 +16,9 @@ Language changes
   * In string and character literals, backslash `\` may no longer
     precede unrecognized escape characters ([#22800]).
 
+  * Declaring arguments as `x::ANY` to avoid specialization has been replaced
+    by `@nospecialize x`, which needs to be imported from `Base`. ([#22666]).
+
 Breaking changes
 ----------------
 
@@ -105,6 +108,8 @@ Library improvements
 
   * A new `@macroexpand1` macro for non recursive macro expansion ([#21662]).
 
+  * `Char`s can now be concatenated with `String`s and/or other `Char`s using `*` ([#22532]).
+
 Compiler/Runtime improvements
 -----------------------------
 
@@ -181,6 +186,8 @@ Deprecated or removed
     input stream are deprecated. Use e.g. `read(pipeline(stdin, cmd))` instead ([#22762]).
 
   * The unexported type `AbstractIOBuffer` has been renamed to `GenericIOBuffer` ([#17360] [#22796]).
+
+  * The method `String(io::IOBuffer)` is deprecated to `String(take!(copy(io)))` ([#21438]).
 
 
 Julia v0.6.0 Release Notes
@@ -986,4 +993,5 @@ Command-line option changes
 [#22245]: https://github.com/JuliaLang/julia/issues/22245
 [#22310]: https://github.com/JuliaLang/julia/issues/22310
 [#22523]: https://github.com/JuliaLang/julia/issues/22523
+[#22532]: https://github.com/JuliaLang/julia/issues/22532
 [#22732]: https://github.com/JuliaLang/julia/issues/22732

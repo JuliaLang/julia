@@ -152,6 +152,10 @@
             (if (not (symbol? (cadr v)))
                 (bad-formal-argument (cadr v)))
             (decl-var v))
+           ((meta)  ;; allow certain per-argument annotations
+            (if (nospecialize-meta? v #t)
+                (arg-name (caddr v))
+                (bad-formal-argument v)))
            (else (bad-formal-argument v))))))
 
 (define (arg-type v)
@@ -167,6 +171,10 @@
             (if (not (symbol? (cadr v)))
                 (bad-formal-argument (cadr v)))
             (decl-type v))
+           ((meta)  ;; allow certain per-argument annotations
+            (if (nospecialize-meta? v #t)
+                (arg-type (caddr v))
+                (bad-formal-argument v)))
            (else (bad-formal-argument v))))))
 
 ;; convert a lambda list into a list of just symbols
@@ -309,6 +317,10 @@
 
 (define (kwarg? e)
   (and (pair? e) (eq? (car e) 'kw)))
+
+(define (nospecialize-meta? e (one #f))
+  (and (if one (length= e 3) (length> e 2))
+       (eq? (car e) 'meta) (eq? (cadr e) 'nospecialize)))
 
 ;; flatten nested expressions with the given head
 ;; (op (op a b) c) => (op a b c)
