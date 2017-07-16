@@ -246,11 +246,6 @@ end
         end
     end
 end
-@test exp10(5) ≈ exp10(5.0)
-@test exp10(50//10) ≈ exp10(5.0)
-@test log10(exp10(e)) ≈ e
-@test exp2(Float16(2.)) ≈ exp2(2.)
-@test log(e) == 1
 
 @testset "exp function" for T in (Float64, Float32)
     @testset "$T accuracy" begin
@@ -660,4 +655,24 @@ end
     @test sincos(1) === (sin(1), cos(1))
     @test sincos(big(1)) == (sin(big(1)), cos(big(1)))
     @test sincos(big(1.0)) == (sin(big(1.0)), cos(big(1.0)))
+end
+
+@testset "test fallback definitions" begin
+    @test exp10(5) ≈ exp10(5.0)
+    @test exp10(50//10) ≈ exp10(5.0)
+    @test log10(exp10(e)) ≈ e
+    @test log(e) === 1
+    @test exp2(Float16(2.0)) ≈ exp2(2.0)
+    @test exp2(Float16(1.0)) === Float16(exp2(1.0))
+    @test exp10(Float16(1.0)) === Float16(exp10(1.0))
+end
+
+# test AbstractFloat fallback pr22716
+struct Float22716{T<:AbstractFloat} <: AbstractFloat
+    x::T
+end
+Base.:^(x::Number, y::Float22716) = x^(y.x)
+let x = 2.0
+    @test exp2(Float22716(x)) === 2^x
+    @test exp10(Float22716(x)) === 10^x
 end
