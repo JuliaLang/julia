@@ -89,13 +89,13 @@ end
 
             @testset "conversion" begin
                 @test Symmetric(asym) == convert(Symmetric,Symmetric(asym))
-                if eltya <: Real && eltya != Int
+                if eltya <: Real
                     typs = [Float16,Float32,Float64]
                     for typ in typs
                         @test Symmetric(convert(Matrix{typ},asym)) == convert(Symmetric{typ,Matrix{typ}},Symmetric(asym))
                     end
                 end
-                if eltya <: Complex && eltya != Int
+                if eltya <: Complex
                     typs = [Complex64,Complex128]
                     for typ in typs
                         @test Symmetric(convert(Matrix{typ},asym)) == convert(Symmetric{typ,Matrix{typ}},Symmetric(asym))
@@ -155,10 +155,8 @@ end
                 end
                 
                 @testset "inversion" begin
-                    if eltya != Int
-                        @test inv(Symmetric(asym)) ≈ inv(asym)
-                        @test inv(Hermitian(aherm)) ≈ inv(aherm)
-                    end
+                    @test inv(Symmetric(asym)) ≈ inv(asym)
+                    @test inv(Hermitian(aherm)) ≈ inv(aherm)
                 end
 
                 @testset "symmetric eigendecomposition" begin
@@ -215,22 +213,25 @@ end
                 end
 
                 @testset "pow" begin
-                    if eltya != Int
-                        @test (asym)^2    ≈ Array(Symmetric(asym)^2)
-                        @test (asym)^-2   ≈ Array(Symmetric(asym)^-2)
-                        @test (aherm)^2    ≈ Array(Hermitian(aherm)^2)
-                        @test (aherm)^-2   ≈ Array(Hermitian(aherm)^-2)
-                        if eltya <: Real
-                            @test (asym)^2.0  ≈ real(Array(Symmetric(asym)^2.0)) rtol=100*n^2*eps(real(eltya))
-                            @test (asym)^-2.0 ≈ real(Array(Symmetric(asym)^-2.0)) rtol=100*n^2*eps(real(eltya))
-                            @test (aherm)^2.0  ≈ real(Array(Hermitian(aherm)^2.0)) rtol=100*n^2*eps(real(eltya))
-                            @test (aherm)^-2.0 ≈ real(Array(Hermitian(aherm)^-2.0)) rtol=100*n^2*eps(real(eltya))
-                        else
-                            @test (asym)^2.0  ≈ Array(Symmetric(asym)^2.0) rtol=100*n^2*eps(real(eltya))
-                            @test (asym)^-2.0 ≈ Array(Symmetric(asym)^-2.0) rtol=100*n^2*eps(real(eltya))
-                            @test (aherm)^2.0  ≈ Array(Hermitian(aherm)^2.0) rtol=100*n^2*eps(real(eltya))
-                            @test (aherm)^-2.0 ≈ Array(Hermitian(aherm)^-2.0) rtol=100*n^2*eps(real(eltya))
-                        end
+                    @test (asym)^2     ≈ Array(Symmetric(asym)^2)
+                    @test (asym)^-2    ≈ Array(Symmetric(asym)^-2)
+                    @test (aherm)^2    ≈ Array(Hermitian(aherm)^2)
+                    @test (aherm)^-2   ≈ Array(Hermitian(aherm)^-2)
+                    if eltya == Int
+                        @test (asym)^2.0   ≈ real(Array(Symmetric(asym)^2.0))
+                        @test (asym)^-2.0  ≈ real(Array(Symmetric(asym)^-2.0))
+                        @test (aherm)^2.0  ≈ real(Array(Hermitian(aherm)^2.0))
+                        @test (aherm)^-2.0 ≈ real(Array(Hermitian(aherm)^-2.0))
+                    elseif eltya <: Real
+                        @test (asym)^2.0   ≈ real(Array(Symmetric(asym)^2.0)) rtol=100*n^2*eps(real(eltya))
+                        @test (asym)^-2.0  ≈ real(Array(Symmetric(asym)^-2.0)) rtol=100*n^2*eps(real(eltya))
+                        @test (aherm)^2.0  ≈ real(Array(Hermitian(aherm)^2.0)) rtol=100*n^2*eps(real(eltya))
+                        @test (aherm)^-2.0 ≈ real(Array(Hermitian(aherm)^-2.0)) rtol=100*n^2*eps(real(eltya))
+                    else
+                        @test (asym)^2.0   ≈ Array(Symmetric(asym)^2.0) rtol=100*n^2*eps(real(eltya))
+                        @test (asym)^-2.0  ≈ Array(Symmetric(asym)^-2.0) rtol=100*n^2*eps(real(eltya))
+                        @test (aherm)^2.0  ≈ Array(Hermitian(aherm)^2.0) rtol=100*n^2*eps(real(eltya))
+                        @test (aherm)^-2.0 ≈ Array(Hermitian(aherm)^-2.0) rtol=100*n^2*eps(real(eltya))
                     end
                 end
             end
@@ -238,7 +239,7 @@ end
             @testset "isposdef[!]" begin
                 @test isposdef(Symmetric(asym)) == isposdef(full(Symmetric(asym)))
                 @test isposdef(Hermitian(aherm)) == isposdef(full(Hermitian(aherm)))
-                if eltya != Int
+                if eltya != Int #chol! won't work with Int
                     @test isposdef!(Symmetric(copy(asym))) == isposdef(full(Symmetric(asym)))
                     @test isposdef!(Hermitian(copy(aherm))) == isposdef(full(Hermitian(aherm)))
                 end
