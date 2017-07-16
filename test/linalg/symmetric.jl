@@ -32,7 +32,8 @@ end
     aimg  = randn(n,n)/2
     @testset for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
         a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
-        asym = a'+a                 # symmetric indefinite
+        asym = a.'+a                 # symmetric indefinite
+        aherm = a'+a                 # symmetric indefinite
         ε = εa = eps(abs(float(one(eltya))))
 
         x = randn(n)
@@ -44,42 +45,46 @@ end
         @testset "basic ops" begin
             @testset "constructor" begin
                 @test Symmetric(Symmetric(asym, :U))     === Symmetric(asym, :U)
-                @test Hermitian(Hermitian(asym, :U))     === Hermitian(asym, :U)
+                @test Hermitian(Hermitian(aherm, :U))    === Hermitian(aherm, :U)
                 @test Symmetric(Symmetric(asym, :U), :U) === Symmetric(asym, :U)
-                @test Hermitian(Hermitian(asym, :U), :U) === Hermitian(asym, :U)
+                @test Hermitian(Hermitian(aherm, :U), :U) === Hermitian(aherm, :U)
                 @test_throws ArgumentError Symmetric(Symmetric(asym, :U), :L)
-                @test_throws ArgumentError Hermitian(Hermitian(asym, :U), :L)
+                @test_throws ArgumentError Hermitian(Hermitian(aherm, :U), :L)
                 # mixed cases with Hermitian/Symmetric
-                @test Symmetric(Hermitian(asym, :U))     === Symmetric(asym, :U)
-                @test Hermitian(Symmetric(asym, :U))     === Hermitian(asym, :U)
-                @test Symmetric(Hermitian(asym, :U), :U) === Symmetric(asym, :U)
-                @test Hermitian(Symmetric(asym, :U), :U) === Hermitian(asym, :U)
-                @test_throws ArgumentError Symmetric(Hermitian(asym, :U), :L)
-                @test_throws ArgumentError Hermitian(Symmetric(asym, :U), :L)
+                if eltya <: Real
+                    @test Symmetric(Hermitian(aherm, :U))     === Symmetric(aherm, :U)
+                    @test Hermitian(Symmetric(asym, :U))     === Hermitian(asym, :U)
+                    @test Symmetric(Hermitian(aherm, :U), :U) === Symmetric(aherm, :U)
+                    @test Hermitian(Symmetric(asym, :U), :U) === Hermitian(asym, :U)
+                    @test_throws ArgumentError Symmetric(Hermitian(aherm, :U), :L)
+                    @test_throws ArgumentError Hermitian(Symmetric(aherm, :U), :L)
+                end
             end
             @testset "similar" begin
                 @test isa(similar(Symmetric(asym)), Symmetric{eltya})
-                @test isa(similar(Hermitian(asym)), Hermitian{eltya})
+                @test isa(similar(Hermitian(aherm)), Hermitian{eltya})
                 @test isa(similar(Symmetric(asym), Int), Symmetric{Int})
-                @test isa(similar(Hermitian(asym), Int), Hermitian{Int})
+                @test isa(similar(Hermitian(aherm), Int), Hermitian{Int})
                 @test isa(similar(Symmetric(asym), (3,2)), Matrix{eltya})
-                @test isa(similar(Hermitian(asym), (3,2)), Matrix{eltya})
+                @test isa(similar(Hermitian(aherm), (3,2)), Matrix{eltya})
                 @test isa(similar(Symmetric(asym), Int, (3,2)), Matrix{Int})
-                @test isa(similar(Hermitian(asym), Int, (3,2)), Matrix{Int})
+                @test isa(similar(Hermitian(aherm), Int, (3,2)), Matrix{Int})
             end
-            # full
-            @test asym == full(Hermitian(asym))
+            @testset "full" begin
+                @test asym  == full(Symmetric(asym))
+                @test aherm == full(Hermitian(aherm))
+            end
 
-            # parent
-            @test asym == parent(Hermitian(asym))
+            @testset "parent" begin
+                @test asym == parent(Symmetric(asym))
+                @test aherm == parent(Hermitian(aherm))
+            end
 
             @testset "getindex and unsafe_getindex" begin
-                @test asym[1,1] == Hermitian(asym)[1,1]
+                @test aherm[1,1] == Hermitian(aherm)[1,1]
                 @test asym[1,1] == Symmetric(asym)[1,1]
-                if eltya <: Real
-                    @test Symmetric(asym)[1:2,1:2] == asym[1:2,1:2]
-                end
-                @test Hermitian(asym)[1:2,1:2] == asym[1:2,1:2]
+                @test Symmetric(asym)[1:2,1:2] == asym[1:2,1:2]
+                @test Hermitian(aherm)[1:2,1:2] == aherm[1:2,1:2]
             end
 
             @testset "conversion" begin
@@ -93,97 +98,111 @@ end
                 if eltya <: Complex && eltya != Int
                     typs = [Complex64,Complex128]
                     for typ in typs
-                        @test Hermitian(convert(Matrix{typ},asym)) == convert(Hermitian{typ,Matrix{typ}},Hermitian(asym))
+                        @test Symmetric(convert(Matrix{typ},asym)) == convert(Symmetric{typ,Matrix{typ}},Symmetric(asym))
+                        @test Hermitian(convert(Matrix{typ},aherm)) == convert(Hermitian{typ,Matrix{typ}},Hermitian(aherm))
                     end
                 end
             end
 
             @testset "issymmetric, ishermitian" begin
+                @test issymmetric(Symmetric(asym))
+                @test ishermitian(Hermitian(aherm))
                 if eltya <: Real
-                    @test issymmetric(Symmetric(asym))
                     @test ishermitian(Symmetric(asym))
-                end
-                if eltya <: Complex
-                    @test ishermitian(Symmetric(b + b'))
                 end
             end
 
             @testset "tril/triu" begin
                 for di in -n:n
-                    @test triu(Symmetric(a+a.'),di) == triu(a+a.',di)
-                    @test tril(Symmetric(a+a.'),di) == tril(a+a.',di)
-                    @test triu(Hermitian(asym),di) == triu(asym,di)
-                    @test tril(Hermitian(asym),di) == tril(asym,di)
-                    @test triu(Symmetric(a+a.',:L),di) == triu(a+a.',di)
-                    @test tril(Symmetric(a+a.',:L),di) == tril(a+a.',di)
-                    @test triu(Hermitian(asym,:L),di) == triu(asym,di)
-                    @test tril(Hermitian(asym,:L),di) == tril(asym,di)
+                    @test triu(Symmetric(asym), di) == triu(asym, di)
+                    @test tril(Symmetric(asym), di) == tril(asym, di)
+                    @test triu(Hermitian(aherm), di) == triu(aherm, di)
+                    @test tril(Hermitian(aherm), di) == tril(aherm, di)
+                    @test triu(Symmetric(asym, :L), di) == triu(asym, di)
+                    @test tril(Symmetric(asym, :L), di) == tril(asym, di)
+                    @test triu(Hermitian(aherm, :L), di) == triu(aherm, di)
+                    @test tril(Hermitian(aherm, :L), di) == tril(aherm, di)
                 end
             end
 
             @testset "transpose, ctranspose" begin
                 S = Symmetric(asym)
-                H = Hermitian(asym)
+                H = Hermitian(aherm)
+                @test  transpose(S) === S == asym
+                @test ctranspose(H) === H == aherm
                 if eltya <: Real
-                    @test  transpose(S) === S == asym
                     @test ctranspose(S) === S == asym
-                    @test  transpose(H) === H == asym
-                    @test ctranspose(H) === H == asym
+                    @test  transpose(H) === H == aherm
                 else
-                    @test  transpose(S) === S
                     @test ctranspose(S) ==  Symmetric(conj(asym))
-                    @test  transpose(H) ==  Hermitian(transpose(asym))
-                    @test ctranspose(H) === H == asym
+                    @test  transpose(H) ==  Hermitian(transpose(aherm))
                 end
             end
         end
 
         @testset "linalg unary ops" begin
             # Revisit when implemented in julia
+            @testset "trace" begin
+                @test trace(asym) == trace(Symmetric(asym))
+                @test trace(aherm) == trace(Hermitian(aherm))
+            end
             if eltya != BigFloat
-                @testset "trace" begin
-                    @test trace(asym) == trace(Hermitian(asym))
-                end
                 @testset "cond" begin
-                    @test cond(Hermitian(asym)) ≈ cond(asym)
+                    if eltya <: Real #svdvals! has no method for Symmetric{Complex}
+                        @test cond(Symmetric(asym)) ≈ cond(asym)
+                    end
+                    @test cond(Hermitian(aherm)) ≈ cond(aherm)
                 end
                 
                 @testset "inversion" begin
-                    @test inv(Hermitian(asym)) ≈ inv(asym)
-                    if eltya <: Real && eltya != Int
+                    if eltya != Int
                         @test inv(Symmetric(asym)) ≈ inv(asym)
-                        @test inv(Hermitian(a)) ≈ inv(full(Hermitian(a)))
-                        @test inv(Symmetric(a)) ≈ inv(full(Symmetric(a)))
+                        @test inv(Hermitian(aherm)) ≈ inv(aherm)
                     end
                 end
 
                 @testset "symmetric eigendecomposition" begin
-                    d, v = eig(asym)
-                    @test asym*v[:,1] ≈ d[1]*v[:,1]
-                    @test v*Diagonal(d)*v' ≈ asym
-                    @test isequal(eigvals(asym[1]), eigvals(asym[1:1,1:1]))
-                    @test abs.(eigfact(Hermitian(asym), 1:2)[:vectors]'v[:,1:2]) ≈ eye(eltya, 2)
-                    eig(Hermitian(asym), 1:2) # same result, but checks that method works
-                    @test abs.(eigfact(Hermitian(asym), d[1] - 1, (d[2] + d[3])/2)[:vectors]'v[:,1:2]) ≈ eye(eltya, 2)
-                    eig(Hermitian(asym), d[1] - 1, (d[2] + d[3])/2) # same result, but checks that method works
-                    @test eigvals(Hermitian(asym), 1:2) ≈ d[1:2]
-                    @test eigvals(Hermitian(asym), d[1] - 1, (d[2] + d[3])/2) ≈ d[1:2]
-                    @test full(eigfact(asym)) ≈ asym
-                    @test eigvecs(Hermitian(asym)) ≈ eigvecs(asym)
+                    if eltya <: Real # the eigenvalues are only real and ordered for Hermitian matrices
+                        d, v = eig(asym)
+                        @test asym*v[:,1] ≈ d[1]*v[:,1]
+                        @test v*Diagonal(d)*v.' ≈ asym
+                        @test isequal(eigvals(asym[1]), eigvals(asym[1:1,1:1]))
+                        @test abs.(eigfact(Symmetric(asym), 1:2)[:vectors]'v[:,1:2]) ≈ eye(eltya, 2)
+                        eig(Symmetric(asym), 1:2) # same result, but checks that method works
+                        @test abs.(eigfact(Symmetric(asym), d[1] - 1, (d[2] + d[3])/2)[:vectors]'v[:,1:2]) ≈ eye(eltya, 2)
+                        eig(Symmetric(asym), d[1] - 1, (d[2] + d[3])/2) # same result, but checks that method works
+                        @test eigvals(Symmetric(asym), 1:2) ≈ d[1:2]
+                        @test eigvals(Symmetric(asym), d[1] - 1, (d[2] + d[3])/2) ≈ d[1:2]
+                        # eigfact doesn't support Symmetric{Complex}
+                        @test full(eigfact(asym)) ≈ asym
+                        @test eigvecs(Symmetric(asym)) ≈ eigvecs(asym)
+                    end
+                    
+                    d, v = eig(aherm)
+                    @test aherm*v[:,1] ≈ d[1]*v[:,1]
+                    @test v*Diagonal(d)*v' ≈ aherm
+                    @test isequal(eigvals(aherm[1]), eigvals(aherm[1:1,1:1]))
+                    @test abs.(eigfact(Hermitian(aherm), 1:2)[:vectors]'v[:,1:2]) ≈ eye(eltya, 2)
+                    eig(Hermitian(aherm), 1:2) # same result, but checks that method works
+                    @test abs.(eigfact(Hermitian(aherm), d[1] - 1, (d[2] + d[3])/2)[:vectors]'v[:,1:2]) ≈ eye(eltya, 2)
+                    eig(Hermitian(aherm), d[1] - 1, (d[2] + d[3])/2) # same result, but checks that method works
+                    @test eigvals(Hermitian(aherm), 1:2) ≈ d[1:2]
+                    @test eigvals(Hermitian(aherm), d[1] - 1, (d[2] + d[3])/2) ≈ d[1:2]
+                    @test full(eigfact(aherm)) ≈ aherm
+                    @test eigvecs(Hermitian(aherm)) ≈ eigvecs(aherm)
 
                     # relation to svdvals
-                    @test sum(sort(abs.(eigvals(Hermitian(asym))))) == sum(sort(svdvals(Hermitian(asym))))
+                    if eltya <: Real #svdvals! has no method for Symmetric{Complex}
+                        @test sum(sort(abs.(eigvals(Symmetric(asym))))) == sum(sort(svdvals(Symmetric(asym))))
+                    end
+                    @test sum(sort(abs.(eigvals(Hermitian(aherm))))) == sum(sort(svdvals(Hermitian(aherm))))
                 end
                 
                 @testset "det" begin
-                    @test det(asym) ≈ det(Hermitian(asym, :U))
-                    @test det(asym) ≈ det(Hermitian(asym, :L))
-                    if eltya <: Real
-                        @test det(asym) ≈ det(Symmetric(asym, :U))
-                        @test det(asym) ≈ det(Symmetric(asym, :L))
-                    end
-                    @test det(a + a.') ≈ det(Symmetric(a + a.', :U))
-                    @test det(a + a.') ≈ det(Symmetric(a + a.', :L))
+                    @test det(aherm) ≈ det(Hermitian(aherm, :U))
+                    @test det(aherm) ≈ det(Hermitian(aherm, :L))
+                    @test det(asym)  ≈ det(Symmetric(asym, :U))
+                    @test det(asym)  ≈ det(Symmetric(asym, :L))
                 end
 
                 @testset "rank" begin
@@ -196,72 +215,78 @@ end
                 end
 
                 @testset "pow" begin
-                    if eltya <: Real && eltya != Int
-                        @test (a*a')^2 ≈ Array(Symmetric(a*a')^2)
-                        @test (a*a')^-2 ≈ Array(Symmetric(a*a')^-2)
-                        @test (a*a')^2.0 ≈ real(Array(Symmetric(a*a')^2.0)) rtol=10*n^2*eps(eltya)
-                        @test (a*a')^-2.0 ≈ real(Array(Symmetric(a*a')^-2.0)) rtol=10*n^2*eps(eltya)
-                    elseif eltya <: Complex
-                        @test (a*a')^2 ≈ Array(Hermitian(a*a')^2)
-                        @test (a*a')^-2 ≈ Array(Hermitian(a*a')^-2)
-                        @test (a*a')^2.0 ≈ Array(Hermitian(a*a')^2.0) rtol=10*n^2*eps(real(eltya))
-                        @test (a*a')^-2.0 ≈ Array(Hermitian(a*a')^-2.0) rtol=10*n^2*eps(real(eltya))
+                    if eltya != Int
+                        @test (asym)^2    ≈ Array(Symmetric(asym)^2)
+                        @test (asym)^-2   ≈ Array(Symmetric(asym)^-2)
+                        @test (aherm)^2    ≈ Array(Hermitian(aherm)^2)
+                        @test (aherm)^-2   ≈ Array(Hermitian(aherm)^-2)
+                        if eltya <: Real
+                            @test (asym)^2.0  ≈ real(Array(Symmetric(asym)^2.0)) rtol=100*n^2*eps(real(eltya))
+                            @test (asym)^-2.0 ≈ real(Array(Symmetric(asym)^-2.0)) rtol=100*n^2*eps(real(eltya))
+                            @test (aherm)^2.0  ≈ real(Array(Hermitian(aherm)^2.0)) rtol=100*n^2*eps(real(eltya))
+                            @test (aherm)^-2.0 ≈ real(Array(Hermitian(aherm)^-2.0)) rtol=100*n^2*eps(real(eltya))
+                        else
+                            @test (asym)^2.0  ≈ Array(Symmetric(asym)^2.0) rtol=100*n^2*eps(real(eltya))
+                            @test (asym)^-2.0 ≈ Array(Symmetric(asym)^-2.0) rtol=100*n^2*eps(real(eltya))
+                            @test (aherm)^2.0  ≈ Array(Hermitian(aherm)^2.0) rtol=100*n^2*eps(real(eltya))
+                            @test (aherm)^-2.0 ≈ Array(Hermitian(aherm)^-2.0) rtol=100*n^2*eps(real(eltya))
+                        end
                     end
                 end
             end
 
             @testset "isposdef[!]" begin
                 @test isposdef(Symmetric(asym)) == isposdef(full(Symmetric(asym)))
-                @test isposdef(Hermitian(asym)) == isposdef(full(Hermitian(asym)))
+                @test isposdef(Hermitian(aherm)) == isposdef(full(Hermitian(aherm)))
                 if eltya != Int
                     @test isposdef!(Symmetric(copy(asym))) == isposdef(full(Symmetric(asym)))
-                    @test isposdef!(Hermitian(copy(asym))) == isposdef(full(Hermitian(asym)))
+                    @test isposdef!(Hermitian(copy(aherm))) == isposdef(full(Hermitian(aherm)))
                 end
             end
         end
+
         @testset "linalg binary ops" begin
             @testset "mat * vec" begin
-                if eltya <: Complex
-                    @test Hermitian(asym)*x+y ≈ asym*x+y
-                    @test x' * Hermitian(asym) ≈ x' * asym
-                end
-                if eltya <: Real
-                    @test Symmetric(asym)*x+y ≈ asym*x+y
-                    @test x' * Symmetric(asym) ≈ x' * asym
-                end
+                @test Symmetric(asym)*x+y ≈ asym*x+y
+                @test x' * Symmetric(asym) ≈ x' * asym
+                
+                @test Hermitian(aherm)*x+y ≈ aherm*x+y
+                @test x' * Hermitian(aherm) ≈ x' * aherm
             end
+            
             @testset "mat * mat" begin
                 C = zeros(eltya,n,n)
-                if eltya <: Complex
-                    @test Hermitian(asym) * a ≈ asym * a
-                    @test a * Hermitian(asym) ≈ a * asym
-                    @test Hermitian(asym) * Hermitian(asym) ≈ asym*asym
-                    @test_throws DimensionMismatch Hermitian(asym) * ones(eltya,n+1)
-                    Base.LinAlg.A_mul_B!(C,a,Hermitian(asym))
-                    @test C ≈ a*asym
-                end
-                if eltya <: Real
-                    @test Symmetric(asym) * Symmetric(asym) ≈ asym*asym
-                    @test Symmetric(asym) * a ≈ asym * a
-                    @test a * Symmetric(asym) ≈ a * asym
-                    @test_throws DimensionMismatch Symmetric(asym) * ones(eltya,n+1)
-                    Base.LinAlg.A_mul_B!(C,a,Symmetric(asym))
-                    @test C ≈ a*asym
-                end
+                @test Hermitian(aherm) * a ≈ aherm * a
+                @test a * Hermitian(aherm) ≈ a * aherm
+                @test Hermitian(aherm) * Hermitian(aherm) ≈ aherm*aherm
+                @test_throws DimensionMismatch Hermitian(aherm) * ones(eltya,n+1)
+                Base.LinAlg.A_mul_B!(C,a,Hermitian(aherm))
+                @test C ≈ a*aherm
+                    
+                @test Symmetric(asym) * Symmetric(asym) ≈ asym*asym
+                @test Symmetric(asym) * a ≈ asym * a
+                @test a * Symmetric(asym) ≈ a * asym
+                @test_throws DimensionMismatch Symmetric(asym) * ones(eltya,n+1)
+                Base.LinAlg.A_mul_B!(C,a,Symmetric(asym))
+                @test C ≈ a*asym
+                
                 if eltya != BigFloat
                     tri_b = UpperTriangular(triu(rand(eltya, n, n)))
-                    @test Array(Hermitian(asym).' * tri_b) ≈ asym.' * Array(tri_b)
-                    @test Array(tri_b * Hermitian(asym).') ≈ Array(tri_b) * asym.'
-                    @test Array(Hermitian(asym)' * tri_b) ≈ asym' * Array(tri_b)
-                    @test Array(tri_b * Hermitian(asym)') ≈ Array(tri_b) * asym'
+                    @test Array(Hermitian(aherm).' * tri_b) ≈ aherm.' * Array(tri_b)
+                    @test Array(tri_b * Hermitian(aherm).') ≈ Array(tri_b) * aherm.'
+                    @test Array(Hermitian(aherm)' * tri_b) ≈ aherm' * Array(tri_b)
+                    @test Array(tri_b * Hermitian(aherm)') ≈ Array(tri_b) * aherm'
+                    
+                    @test Array(Symmetric(asym).' * tri_b) ≈ asym.' * Array(tri_b)
+                    @test Array(tri_b * Symmetric(asym).') ≈ Array(tri_b) * asym.'
+                    @test Array(Symmetric(asym)' * tri_b) ≈ asym' * Array(tri_b)
+                    @test Array(tri_b * Symmetric(asym)') ≈ Array(tri_b) * asym'
                 end
             end
             if eltya != BigFloat
                 @testset "solver" begin
-                    @test Hermitian(asym)\x ≈ asym\x
-                    if eltya <: Real
-                        @test Symmetric(asym)\x ≈ asym\x
-                    end
+                    @test Hermitian(aherm)\x ≈ aherm\x
+                    @test Symmetric(asym)\x  ≈ asym\x
                 end
             end
         end
