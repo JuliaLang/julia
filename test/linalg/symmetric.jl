@@ -33,7 +33,7 @@ end
     @testset for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
         a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
         asym = a.'+a                 # symmetric indefinite
-        aherm = a'+a                 # symmetric indefinite
+        aherm = a'+a                 # Hermitian indefinite
         ε = εa = eps(abs(float(one(eltya))))
 
         x = randn(n)
@@ -76,8 +76,8 @@ end
             end
 
             @testset "parent" begin
-                @test asym == parent(Symmetric(asym))
-                @test aherm == parent(Hermitian(aherm))
+                @test asym === parent(Symmetric(asym))
+                @test aherm === parent(Hermitian(aherm))
             end
 
             @testset "getindex and unsafe_getindex" begin
@@ -141,11 +141,12 @@ end
         end
 
         @testset "linalg unary ops" begin
-            # Revisit when implemented in julia
             @testset "trace" begin
                 @test trace(asym) == trace(Symmetric(asym))
                 @test trace(aherm) == trace(Hermitian(aherm))
             end
+
+            # Revisit when implemented in julia
             if eltya != BigFloat
                 @testset "cond" begin
                     if eltya <: Real #svdvals! has no method for Symmetric{Complex}
