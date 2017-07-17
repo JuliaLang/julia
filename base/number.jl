@@ -18,8 +18,26 @@ isinteger(x::Integer) = true
 
 Return `true` if `x == zero(x)`; if `x` is an array, this checks whether
 all of the elements of `x` are zero.
+
+```jldoctest
+julia> iszero(0.0)
+true
+```
 """
 iszero(x) = x == zero(x) # fallback method
+
+"""
+    isone(x)
+
+Return `true` if `x == one(x)`; if `x` is an array, this checks whether
+all of the elements of `x` are one.
+
+```jldoctest
+julia> isone(1.0)
+true
+```
+"""
+isone(x) = x == one(x) # fallback method
 
 size(x::Number) = ()
 size(x::Number,d) = convert(Int,d)<1 ? throw(BoundsError()) : 1

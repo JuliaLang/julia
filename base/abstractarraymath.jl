@@ -4,6 +4,15 @@
 
 isreal(x::AbstractArray) = all(isreal,x)
 iszero(x::AbstractArray) = all(iszero,x)
+isone(x::AbstractVector) = false # vectors are not multiplicative identities
+function isone(x::AbstractMatrix)
+    m, n = size(x)
+    m != n && return false # only square matrices can satisfy x == one(x)
+    @inbounds for i in 1:m
+        !isone(x[i,i]) && return false
+    end
+    return x == one(x)
+end
 isreal(x::AbstractArray{<:Real}) = true
 all(::typeof(isinteger), ::AbstractArray{<:Integer}) = true
 

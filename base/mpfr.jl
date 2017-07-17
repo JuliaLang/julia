@@ -16,7 +16,8 @@ import
         eps, signbit, sin, cos, sincos, tan, sec, csc, cot, acos, asin, atan,
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, atan2,
         cbrt, typemax, typemin, unsafe_trunc, realmin, realmax, rounding,
-        setrounding, maxintfloat, widen, significand, frexp, tryparse, iszero, big
+        setrounding, maxintfloat, widen, significand, frexp, tryparse, iszero,
+        isone, big
 
 import Base.Rounding: rounding_raw, setrounding_raw
 
@@ -850,6 +851,7 @@ end
 isfinite(x::BigFloat) = !isinf(x) && !isnan(x)
 
 iszero(x::BigFloat) = x == Clong(0)
+isone(x::BigFloat) = x == Clong(1)
 
 @eval typemax(::Type{BigFloat}) = $(BigFloat( Inf))
 @eval typemin(::Type{BigFloat}) = $(BigFloat(-Inf))
