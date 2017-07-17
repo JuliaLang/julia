@@ -444,6 +444,7 @@ ndigits0znb(x::Bool, b::Integer) = x % Int
 # TODO: allow b::Integer
 function ndigits0zpb(x::Base.BitUnsigned, b::Int)
     # precondition: b > 1
+    x == 0 && return 0
     b < 0   && return ndigits0znb(signed(x), b)
     b == 2  && return sizeof(x)<<3 - leading_zeros(x)
     b == 8  && return (sizeof(x)<<3 - leading_zeros(x) + 2) ÷ 3
