@@ -478,7 +478,7 @@ Base.endof(x::CharStr) = endof(x.chars)
 @test cmp(CharStr("\U1f596"), "\U1f596\U1f596") == -1
 
 # repeat function
-@inferred repeat(GenericString("x"),1)
+@inferred repeat(GenericString("x"), 1)
 @test repeat("xx",3) == repeat("x",6) == repeat('x',6) == repeat(GenericString("x"), 6) == "xxxxxx"
 @test repeat("αα",3) == repeat("α",6) == repeat('α',6) == repeat(GenericString("α"), 6) == "αααααα"
 @test repeat("x",1) == repeat('x',1) == "x"^1 == 'x'^1 == GenericString("x")^1 == "x"
