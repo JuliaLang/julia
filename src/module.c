@@ -281,7 +281,8 @@ static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *s,
                   jl_symbol_name(to->name));
     }
     else {
-        if (b->deprecated && to != jl_main_module && to != jl_base_module) {
+        if (b->deprecated && to != jl_main_module && to != jl_base_module &&
+            jl_options.depwarn != JL_OPTIONS_DEPWARN_OFF) {
             /* with #22763, external packages wanting to replace
                deprecated Base bindings should simply export the new
                binding */
