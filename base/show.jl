@@ -566,14 +566,14 @@ function show_block(io::IO, head, arg, block, i::Int)
 end
 
 # show an indented list
-function show_list(io::IO, items, sep, indent::Int, prec::Int=0, enclose_operators::Bool=false)
+function show_list(io::IO, items, sep, indent::Int, prec::Int=0, enclose_operators::Bool=false, enclosed_indices::Vector=[])
     n = length(items)
     n == 0 && return
     indent += indent_width
     first = true
-    for item in items
+    for (i, item) in enumerate(items)
         !first && print(io, sep)
-        parens = enclose_operators && isa(item,Symbol) && isoperator(item)
+        parens = (enclose_operators && isa(item,Symbol) && isoperator(item)) || i in enclosed_indices
         parens && print(io, '(')
         show_unquoted(io, item, indent, prec)
         parens && print(io, ')')
@@ -581,9 +581,9 @@ function show_list(io::IO, items, sep, indent::Int, prec::Int=0, enclose_operato
     end
 end
 # show an indented list inside the parens (op, cl)
-function show_enclosed_list(io::IO, op, items, sep, cl, indent, prec=0, encl_ops=false)
+function show_enclosed_list(io::IO, op, items, sep, cl, indent, prec=0, encl_ops=false, encl_inds=[])
     print(io, op)
-    show_list(io, items, sep, indent, prec, encl_ops)
+    show_list(io, items, sep, indent, prec, encl_ops, encl_inds)
     print(io, cl)
 end
 
@@ -802,10 +802,18 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
             if (na == 2 || (na > 2 && func in (:+, :++, :*))) &&
                     all(!isa(a, Expr) || a.head !== :... for a in func_args)
                 sep = " $func "
-                if func_prec <= prec
-                    show_enclosed_list(io, '(', func_args, sep, ')', indent, func_prec, true)
+                # parenthesize (-x) ^ y for negative x
+                if func == :^ && ((func_args[1] isa Expr && func_args[1].head === :call &&
+                                   func_args[1].args[1] === :-) ||
+                                  (func_args[1] isa Real && func_args[1] < 0))
+                    encl_inds = [1]
                 else
-                    show_list(io, func_args, sep, indent, func_prec, true)
+                    encl_inds = []
+                end
+                if func_prec <= prec
+                    show_enclosed_list(io, '(', func_args, sep, ')', indent, func_prec, true, encl_inds)
+                else
+                    show_list(io, func_args, sep, indent, func_prec, true, encl_inds)
                 end
             elseif na == 1
                 # 1-argument call to normally-binary operator

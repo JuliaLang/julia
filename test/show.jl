@@ -94,6 +94,11 @@ end
 @test_repr "(a / b) / (c / d / e)"
 @test_repr "(a == b == c) != (c == d < e)"
 
+# Exponentiation of negative numbers or negated symbols
+@test_repr "(-1)^-1"
+@test_repr "(-2.1)^-1"
+@test_repr "(-a)^-1"
+
 # control structures (shamelessly stolen from base/bitarray.jl)
 @test_repr """mutable struct BitArray{N} <: AbstractArray{Bool, N}
     # line meta
