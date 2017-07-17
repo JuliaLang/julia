@@ -250,7 +250,7 @@ the byte representation is different.
 
 This would create a 25-by-30000 `BitArray`, linked to the file associated with stream `s`.
 """
-Mmap.mmap(io, ::BitArray, dims = ?, offset = ?)
+Mmap.mmap(io, ::BitArray, dims, offset)
 
 """
     sizeof(T)
@@ -2151,7 +2151,7 @@ julia> pop!(d, "e", 4)
 4
 ```
 """
-pop!(collection,key,?)
+pop!(collection,key,default)
 
 """
     pop!(collection) -> item

@@ -244,7 +244,7 @@ function banner(io::IO = STDOUT)
             commit_string = "$(branch)/$(commit) (fork: $(distance) commits, $(days) $(unit))"
         end
     end
-    commit_date = !isempty(GIT_VERSION_INFO.date_string) ? " ($(GIT_VERSION_INFO.date_string))": ""
+    commit_date = !isempty(GIT_VERSION_INFO.date_string) ? " ($(GIT_VERSION_INFO.date_string))" : ""
 
     if have_color
         c = text_colors

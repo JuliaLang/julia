@@ -351,7 +351,7 @@ function reset!(repo::GitRepo, obj::Nullable{<:GitObject}, pathspecs::AbstractSt
     @check ccall((:git_reset_default, :libgit2), Cint,
                  (Ptr{Void}, Ptr{Void}, Ptr{StrArrayStruct}),
                  repo.ptr,
-                 isnull(obj) ? C_NULL: Base.get(obj).ptr,
+                 isnull(obj) ? C_NULL : Base.get(obj).ptr,
                  collect(pathspecs))
     return head_oid(repo)
 end
