@@ -1247,7 +1247,6 @@ void LateLowerGCFrame::PlaceGCFrameStores(Function &F, State &S, unsigned MinCol
 }
 
 void LateLowerGCFrame::PlaceRootsAndUpdateCalls(Function &F, std::vector<int> &Colors, State &S, std::map<Value *, std::pair<int, int>>) {
-    auto &DT = getAnalysis<DominatorTreeWrapperPass>().getDomTree();
     int MaxColor = -1;
     for (auto C : Colors)
         if (C > MaxColor)
