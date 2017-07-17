@@ -11,7 +11,7 @@ function include(mod::Module, path::AbstractString)
     elseif INCLUDE_STATE === 2
         result = _include(mod, path)
     elseif INCLUDE_STATE === 3
-        result = include_from_node1(mod, path)
+        result = include_relative(mod, path)
     end
     result
 end
@@ -24,7 +24,7 @@ function include(path::AbstractString)
     else
         # to help users avoid error (accidentally evaluating into Base), this is deprecated
         depwarn("Base.include(string) is deprecated, use `include(fname)` or `Base.include(@__MODULE__, fname)` instead.", :include)
-        result = include_from_node1(_current_module(), path)
+        result = include_relative(_current_module(), path)
     end
     result
 end
@@ -435,7 +435,7 @@ function __init__()
     init_threadcall()
 end
 
-INCLUDE_STATE = 3 # include = include_from_node1
+INCLUDE_STATE = 3 # include = include_relative
 include(Base, "precompile.jl")
 
 end # baremodule Base
