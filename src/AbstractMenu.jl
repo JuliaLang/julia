@@ -104,7 +104,7 @@ function request(m::AbstractMenu)
 
     menu_header = header(m)
     if menu_header != ""
-        println(header(m))
+        println(menu_header)
     end
 
     printMenu(m, cursor, init=true)
@@ -161,7 +161,7 @@ function request(m::AbstractMenu)
     finally
         # always disable raw mode even even if there is an
         #  exception in the above loop
-        print("\x1b[?25h") #unhide cursor
+        print("\x1b[?25h") # unhide cursor
         disableRawMode()
     end
     println()
@@ -174,7 +174,7 @@ end
 
     request(msg::AbstractString, m::AbstractMenu)
 
-Shorthand for  `println(msg); request(m)`.
+Shorthand for `println(msg); request(m)`.
 """
 function request(msg::AbstractString, m::AbstractMenu)
     println(msg)
@@ -185,20 +185,24 @@ end
 
 # The generic printMenu function is used for displaying the state of a
 #   menu to the screen. Menus must implement `writeLine` and `options`
-#   and have feilds `pagesize::Int` and `pageoffset::Int` as part of
+#   and have fields `pagesize::Int` and `pageoffset::Int` as part of
 #   their type definition
 function printMenu(m::AbstractMenu, cursor::Int; init::Bool=false)
     buf = IOBuffer()
 
-    # Move the cursor to the begining of where it should print
+    # Move the cursor to the beginning of where it should print
     # Don't do this on the initial print
     lines = m.pagesize-1
-    !init && print(buf, "\x1b[999D\x1b[$(lines)A")
+    if init
+        m.pageoffset = 0
+    else
+        print(buf, "\x1b[999D\x1b[$(lines)A")
+    end
 
     for i in (m.pageoffset+1):(m.pageoffset + m.pagesize)
         print(buf, "\x1b[2K")
 
-        if i ==  m.pageoffset+1 && m.pageoffset > 0
+        if i == m.pageoffset+1 && m.pageoffset > 0
             # first line && scrolled past first entry
             print(buf, CONFIG[:up_arrow])
         elseif i == m.pagesize+m.pageoffset && i != length(options(m))
