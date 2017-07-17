@@ -281,6 +281,16 @@ static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *s,
                   jl_symbol_name(to->name));
     }
     else {
+        if (b->deprecated && to != jl_main_module && to != jl_base_module) {
+            /* with #22763, external packages wanting to replace
+               deprecated Base bindings should simply export the new
+               binding */
+            jl_printf(JL_STDERR,
+                      "WARNING: importing deprecated binding %s.%s into %s.\n",
+                      jl_symbol_name(from->name), jl_symbol_name(s),
+                      jl_symbol_name(to->name));
+        }
+
         jl_binding_t **bp = (jl_binding_t**)ptrhash_bp(&to->bindings, s);
         jl_binding_t *bto = *bp;
         if (bto != HT_NOTFOUND) {
