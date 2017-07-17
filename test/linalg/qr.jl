@@ -189,5 +189,5 @@ let
     A = zeros(1, 2)
     B = zeros(1, 1)
     @test A \ B == zeros(2, 1)
-    @test qrfact(A, Val{true}) \ B == zeros(2, 1)
+    @test qrfact(A, Val(true)) \ B == zeros(2, 1)
 end
