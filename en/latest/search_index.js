@@ -12581,7 +12581,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.Diagonal",
     "category": "Type",
-    "text": "Diagonal(A::AbstractMatrix)\n\nConstructs a matrix from the diagonal of A.\n\nExample\n\njulia> A = [1 2 3; 4 5 6; 7 8 9]\n3×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n 7  8  9\n\njulia> Diagonal(A)\n3×3 Diagonal{Int64}:\n 1  ⋅  ⋅\n ⋅  5  ⋅\n ⋅  ⋅  9\n\n\n\nDiagonal(V::AbstractVector)\n\nConstructs a matrix with V as its diagonal.\n\nExample\n\njulia> V = [1; 2]\n2-element Array{Int64,1}:\n 1\n 2\n\njulia> Diagonal(V)\n2×2 Diagonal{Int64}:\n 1  ⋅\n ⋅  2\n\n\n\n"
+    "text": "Diagonal(A::AbstractMatrix)\n\nConstruct a matrix from the diagonal of A.\n\nExamples\n\njulia> A = [1 2 3; 4 5 6; 7 8 9]\n3×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n 7  8  9\n\njulia> Diagonal(A)\n3×3 Diagonal{Int64,Array{Int64,1}}:\n 1  ⋅  ⋅\n ⋅  5  ⋅\n ⋅  ⋅  9\n\n\n\nDiagonal(V::AbstractVector)\n\nConstruct a matrix with V as its diagonal.\n\nExamples\n\njulia> V = [1, 2]\n2-element Array{Int64,1}:\n 1\n 2\n\njulia> Diagonal(V)\n2×2 Diagonal{Int64,Array{Int64,1}}:\n 1  ⋅\n ⋅  2\n\n\n\n"
 },
 
 {
