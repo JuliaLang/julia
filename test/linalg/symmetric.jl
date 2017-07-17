@@ -109,6 +109,10 @@ end
                 @test ishermitian(Hermitian(aherm))
                 if eltya <: Real
                     @test ishermitian(Symmetric(asym))
+                elseif eltya <: Complex
+                    # test that zero imaginary component is
+                    # handled properly
+                    @test ishermitian(Symmetric(b + b'))
                 end
             end
 
@@ -206,7 +210,7 @@ end
 
                 @testset "rank" begin
                     let A = a[:,1:5]*a[:,1:5]'
-                        # Make sure A is Hermitian even in the present of rounding error
+                        # Make sure A is Hermitian even in the presence of rounding error
                         # xianyi/OpenBLAS#729
                         A = (A' + A) / 2
                         @test rank(A) == rank(Hermitian(A))
