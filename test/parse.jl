@@ -1244,3 +1244,6 @@ end === (3, String)
 @test_throws ParseError parse("[x.2]")
 @test_throws ParseError parse("x.2")
 @test parse("[x;.2]") == Expr(:vcat, :x, 0.2)
+
+# issue #22840
+@test parse("[:a :b]") == Expr(:hcat, QuoteNode(:a), QuoteNode(:b))
