@@ -154,7 +154,7 @@ end
                     end
                     @test cond(Hermitian(aherm)) ≈ cond(aherm)
                 end
-                
+
                 @testset "inversion" begin
                     @test inv(Symmetric(asym)) ≈ inv(asym)
                     @test inv(Hermitian(aherm)) ≈ inv(aherm)
@@ -176,7 +176,7 @@ end
                         @test full(eigfact(asym)) ≈ asym
                         @test eigvecs(Symmetric(asym)) ≈ eigvecs(asym)
                     end
-                    
+
                     d, v = eig(aherm)
                     @test aherm*v[:,1] ≈ d[1]*v[:,1]
                     @test v*Diagonal(d)*v' ≈ aherm
@@ -196,7 +196,7 @@ end
                     end
                     @test sum(sort(abs.(eigvals(Hermitian(aherm))))) == sum(sort(svdvals(Hermitian(aherm))))
                 end
-                
+
                 @testset "det" begin
                     @test det(aherm) ≈ det(Hermitian(aherm, :U))
                     @test det(aherm) ≈ det(Hermitian(aherm, :L))
@@ -251,11 +251,11 @@ end
             @testset "mat * vec" begin
                 @test Symmetric(asym)*x+y ≈ asym*x+y
                 @test x' * Symmetric(asym) ≈ x' * asym
-                
+
                 @test Hermitian(aherm)*x+y ≈ aherm*x+y
                 @test x' * Hermitian(aherm) ≈ x' * aherm
             end
-            
+
             @testset "mat * mat" begin
                 C = zeros(eltya,n,n)
                 @test Hermitian(aherm) * a ≈ aherm * a
@@ -264,21 +264,21 @@ end
                 @test_throws DimensionMismatch Hermitian(aherm) * ones(eltya,n+1)
                 Base.LinAlg.A_mul_B!(C,a,Hermitian(aherm))
                 @test C ≈ a*aherm
-                    
+
                 @test Symmetric(asym) * Symmetric(asym) ≈ asym*asym
                 @test Symmetric(asym) * a ≈ asym * a
                 @test a * Symmetric(asym) ≈ a * asym
                 @test_throws DimensionMismatch Symmetric(asym) * ones(eltya,n+1)
                 Base.LinAlg.A_mul_B!(C,a,Symmetric(asym))
                 @test C ≈ a*asym
-                
+
                 if eltya != BigFloat
                     tri_b = UpperTriangular(triu(rand(eltya, n, n)))
                     @test Array(Hermitian(aherm).' * tri_b) ≈ aherm.' * Array(tri_b)
                     @test Array(tri_b * Hermitian(aherm).') ≈ Array(tri_b) * aherm.'
                     @test Array(Hermitian(aherm)' * tri_b) ≈ aherm' * Array(tri_b)
                     @test Array(tri_b * Hermitian(aherm)') ≈ Array(tri_b) * aherm'
-                    
+
                     @test Array(Symmetric(asym).' * tri_b) ≈ asym.' * Array(tri_b)
                     @test Array(tri_b * Symmetric(asym).') ≈ Array(tri_b) * asym.'
                     @test Array(Symmetric(asym)' * tri_b) ≈ asym' * Array(tri_b)
