@@ -1565,6 +1565,9 @@ end
 @deprecate readstring(cmd::AbstractCmd, stdin::Redirectable) readstring(pipeline(stdin, cmd))
 @deprecate eachline(cmd::AbstractCmd, stdin; chomp::Bool=true) eachline(pipeline(stdin, cmd), chomp=chomp)
 
+@deprecate showall(x)     show(x)
+@deprecate showall(io, x) show(IOContext(io, :limit => false), x)
+
 @deprecate_binding AbstractIOBuffer GenericIOBuffer false
 
 @deprecate String(io::GenericIOBuffer) String(take!(copy(io)))

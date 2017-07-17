@@ -809,7 +809,6 @@ export
     search,
     searchindex,
     show,
-    showall,
     showcompact,
     showerror,
     split,

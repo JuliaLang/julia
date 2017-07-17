@@ -139,11 +139,11 @@ end
 """
     repr(x)
 
-Create a string from any value using the [`showall`](@ref) function.
+Create a string from any value using the [`show`](@ref) function.
 """
 function repr(x)
     s = IOBuffer()
-    showall(s, x)
+    show(s, x)
     String(take!(s))
 end
 

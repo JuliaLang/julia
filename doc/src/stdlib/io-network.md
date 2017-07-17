@@ -59,7 +59,6 @@ Base.IOContext(::IO, ::IOContext)
 ```@docs
 Base.show(::Any)
 Base.showcompact
-Base.showall
 Base.summary
 Base.print
 Base.println

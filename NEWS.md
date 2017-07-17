@@ -197,6 +197,9 @@ Deprecated or removed
 
   * The method `String(io::IOBuffer)` is deprecated to `String(take!(copy(io)))` ([#21438]).
 
+  * The function `showall` is deprecated. Showing entire values is the default, unless an
+    `IOContext` specifying `:limit=>true` is in use ([#22847]).
+
 
 Julia v0.6.0 Release Notes
 ==========================
