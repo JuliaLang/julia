@@ -24,7 +24,7 @@ Instructions for adding fonts to the terminal are available at
 Additionally, rather than sticking with the default command prompt, you may want
 to use a different terminal emulator program, such as
 [Conemu](https://code.google.com/p/conemu-maximus5/) or [Mintty](
-https://code.google.com/p/mintty/) (note that running Julia on Mintty needs a
+https://github.com/mintty/mintty) (note that running Julia on Mintty needs a
 copy of `stty.exe` in your `%PATH%` to work properly).  Alternatively, you may
 prefer the features of a more full-function IDE, such as [Juno](http://junolab.org),
 [Sublime-IJulia](https://github.com/quinnj/Sublime-IJulia), or
@@ -36,8 +36,8 @@ prefer the features of a more full-function IDE, such as [Juno](http://junolab.o
 Julia uses binary-mode files exclusively.  Unlike many other Windows programs,
 if you write `\n` to a file, you get a `\n` in the file, not some other bit
 pattern.  This matches the behavior exhibited by other operating systems.  If
-you have installed msysGit, it is suggested, but not required, that you
-configure your system msysGit to use the same convention:
+you have installed Git for Windows, it is suggested, but not required, that you
+configure your system Git to use the same convention:
 ```sh
 git config --global core.eol lf
 git config --global core.autocrlf input
@@ -71,113 +71,14 @@ The 64-bit (x86_64) binary will only run on 64-bit Windows and will otherwise re
 ### Supported build platforms
 
  -  Windows 10: supported (32 and 64 bits)
-    - **note: cross-compiling from WSL (Windows Subsystem for Linux) is currently discouraged due to WSL time stamp problems. See discussion and links in [#22074](https://github.com/JuliaLang/julia/pull/22074).**
  -  Windows 8: supported (32 and 64 bits)
  -  Windows 7: supported (32 and 64 bits)
 
-### Compiling with MinGW/MSYS2
-
-*MSYS2 provides a robust MSYS experience.*
-
- 1. Install [Python 2.x](http://www.python.org/downloads/).
-    Do **not** install Python 3.
-
- 2. Install [CMake](http://www.cmake.org/download/).
-
- 3. Install and configure [MSYS2](https://msys2.github.io), a minimal POSIX-like
-    environment for Windows.
-
-    1. Download and run the latest installer for the [32-bit](
-       http://sourceforge.net/projects/msys2/files/Base/i686/) or [64-bit](
-       http://sourceforge.net/projects/msys2/files/Base/x86_64/) distribution.
-       The installer will have a name like `msys2-i686-yyyymmdd.exe` or
-       `msys2-x86_64-yyyymmdd.exe`.
-
-    2. Double-click `msys2_shell.bat` in the installed msys directory.
-       Initialize the MSYS2 base system using the `pacman` package manager
-       included in MSYS2:
-       ```sh
-       update-core
-       # or, if update-core is not available
-       pacman --needed -Sy bash pacman pacman-mirrors msys2-runtime
-       # update package database and full system upgrade
-       pacman -Syyuu
-       ```
-
-    3. Exit and restart MSYS2, then install packages required to build julia:
-       ```sh
-       pacman -S diffutils git m4 make patch tar p7zip msys/openssh ca-certificates
-       ```
-
-    4. Configure your MSYS2 shell so Python is visible on the path:
-       ```sh
-       echo "export PATH=/usr/local/bin:/usr/bin:/opt/bin:/C/Python27" >> ~/.bashrc
-       ```
-
-       Note, the `export` clobbers whatever `$PATH` is already defined. This is
-       suggested to avoid path-masking. If you use MSYS2 for purposes other than
-       building Julia, you may prefer to append rather than clobber.
-
-       Note, all of the path separators are unix-style. In MSYS2, `/C/` means
-       the root of your `C:\` drive. Replace `/C/Python27` with the location
-       where you installed Python.
-
-    5. Configuration of MSYS2 is complete. Now `exit` the MSYS2 shell.
-
- 4. Build Julia and its dependencies from source.
-
-    1. Open a new MSYS2 shell and clone the Julia sources
-       ```sh
-       git clone https://github.com/JuliaLang/julia.git
-       cd julia
-       ```
-
-    2. Run the following script to download the correct versions of the MinGW-w64 compilers
-       ```sh
-       contrib/windows/get_toolchain.sh 32  # for 32 bit Julia
-       # or
-       contrib/windows/get_toolchain.sh 64  # for 64 bit Julia
-       ```
-
-       Then follow the printed instructions by running either
-       ```sh
-       export PATH=$PWD/usr/i686-w64-mingw32/sys-root/mingw/bin:$PATH    # for 32 bit Julia
-       # or
-       export PATH=$PWD/usr/x86_64-w64-mingw32/sys-root/mingw/bin:$PATH  # for 64 bit Julia
-       ```
-       to add the downloaded MinGW-w64 compilers to your path (temporarily, only
-       needed during the shell session when you build Julia).
-
-    3. Specify the location where you installed CMake
-       ```sh
-       echo 'override CMAKE=/C/path/to/CMake/bin/cmake.exe' > Make.user
-       ```
-
-    4. Start the build
-       ```sh
-       make -j 4   # Adjust the number of cores (4) to match your build environment.
-       ```
-
- 5. Setup Package Development Environment
-
-    1. The `Pkg` module in Base provides many convenient tools for [developing
-       and publishing packages](https://docs.julialang.org/en/latest/manual/packages/).
-       One of the packages added through pacman above was `openssh`, which will
-       allow secure access to GitHub APIs.  Follow GitHub's [guide](
-       https://help.github.com/articles/generating-ssh-keys) to setting up SSH
-       keys to ensure your local machine can communicate with GitHub effectively.
-
-    2. In case of the issues with building packages (i.e. ICU fails to build
-       with the following error message `error compiling xp_parse: error
-       compiling xp_make_parser: could not load module libexpat-1: %`) run
-       `make win-extras` and then copy everything from the `dist-extras` folder
-       into `usr/bin`.
-
-
 ### Cygwin-to-MinGW cross-compiling
 
-Julia can be also compiled from source in [Cygwin](http://www.cygwin.com), using
-versions of the MinGW-w64 compilers available through Cygwin's package manager.
+The recommended way of compiling Julia from source on Windows is by cross
+compiling from [Cygwin](http://www.cygwin.com), using versions of the
+MinGW-w64 compilers available through Cygwin's package manager.
 
  1. Download and run Cygwin setup for [32 bit](http://cygwin.com/setup-x86.exe)
     or [64 bit](http://cygwin.com/setup-x86_64.exe). Note, that you can compile
@@ -253,14 +154,26 @@ versions of the MinGW-w64 compilers available through Cygwin's package manager.
     usr/bin/julia-debug.exe
     ```
 
+### Compiling with MinGW/MSYS2
+
+Compiling Julia from source using [MSYS2](https://msys2.github.io) has worked
+in the past but is not actively supported. Pull requests to restore support
+would be welcome. See a [past version of this file](
+https://github.com/JuliaLang/julia/blob/v0.6.0/README.windows.md)
+for the former instructions for compiling using MSYS2.
+
 
 ### Cross-compiling from Unix
 
-If you prefer to cross-compile, the following steps should get you started.
+You can also use MinGW-w64 cross compilers to build a Windows version of Julia from
+Linux, Mac, or the Windows Subsystem for Linux (WSL). Note that when compiling in
+WSL, you should use the Linux file system environment, not the `/mnt/` emulated Windows
+paths, since time stamps in `/mnt/` do not work properly as required by configure
+scripts and makefiles (see https://github.com/Microsoft/BashOnWindows/issues/1939).
 
 For maximum compatibility with packages that use [WinRPM.jl](
 https://github.com/JuliaLang/WinRPM.jl) for binary dependencies on Windows, it
-is recommended that you use OpenSUSE 13.2 for cross-compiling a Windows build
+is recommended that you use OpenSUSE 42.2 for cross-compiling a Windows build
 of Julia.  If you use a different Linux distribution or OS X, install
 [Vagrant](http://www.vagrantup.com/downloads) and use the following `Vagrantfile`:
 
@@ -272,7 +185,7 @@ $script = <<SCRIPT
 export XC_HOST=x86_64-w64-mingw32
 # Change the following to 32 for 32 bit Julia:
 export BITS=64
-zypper addrepo http://download.opensuse.org/repositories/windows:mingw:win$BITS/openSUSE_13.2/windows:mingw:win$BITS.repo
+zypper addrepo http://download.opensuse.org/repositories/windows:mingw:win$BITS/openSUSE_Leap_42.2/windows:mingw:win$BITS.repo
 zypper --gpg-auto-import-keys refresh
 zypper -n install --no-recommends git make cmake tar wine which curl \
     python python-xml patch gcc-c++ m4 p7zip.i586 libxml2-tools winbind
@@ -289,7 +202,7 @@ make -j4 binary-dist
 SCRIPT
 
 Vagrant.configure("2") do |config|
-  config.vm.box = "bento/opensuse-13.2"
+  config.vm.box = "bento/opensuse-leap-42.2"
   config.vm.provider :virtualbox do |vb|
     # Use VBoxManage to customize the VM. For example to change memory:
     vb.memory = 2048
@@ -310,61 +223,13 @@ need wine (>=1.7.5), a system compiler, and some downloaders.
 
 **On Ubuntu** (on other linux systems, the dependency names are likely to be similar):
 ```sh
-apt-get install wine subversion cvs gcc wget p7zip-full winbind
+apt-get install wine subversion cvs gcc wget p7zip-full winbind mingw-w64
 ```
 
 **On Mac**: Install XCode, XCode command line tools, X11 (now [XQuartz](
 http://xquartz.macosforge.org/)), and [MacPorts](http://www.macports.org/install.php)
-or [Homebrew](http://mxcl.github.io/homebrew/).  Then run `port install wine wget`,
-or `brew install wine wget`, as appropriate.
-
-**On Both:**
-Unfortunately, the version of gcc installed by Ubuntu targets pthreads.  On Mac,
-the situation is similar: the version in MacPorts is very old and Homebrew does
-not have it.  So first we need to get a cross-compile version of gcc.  Most
-binary packages appear to not include gfortran, so we will need to compile it
-from source.  This is typically quite a bit of work, so we will use [this script](
-http://sourceforge.net/projects/mingw-w64-dgn/) to make it easy.
-
-  1. `svn checkout svn://svn.code.sf.net/p/mingw-w64-dgn/code/trunk mingw-w64-dgn`
-  2. `cd mingw-w64-dgn`
-  3. edit `rebuild_cross.sh` and make the following two changes:
-     1. uncomment `export MAKE_OPT="-j 2"`, if appropriate for your machine
-     2. add `fortran` to the end of `--enable-languages=c,c++,objc,obj-c++`
-  4. `bash update_source.sh`
-  5. `bash rebuild_cross.sh`
-  6. `mv cross ~/cross-w64`
-  7. `export PATH=$HOME/cross-w64/bin:$PATH`
-
-     Note, that it is important that you remember to always `export PATH=...`
-     before using `make` in the following steps! You can put this line in your
-     `~/.profile` to make it easy.
-
-Then we can essentially just repeat these steps for the 32-bit compiler, reusing
-some of the work:
-
-  8. `cd ..`
-  9. `cp -a mingw-w64-dgn mingw-w32-dgn`
-  10. `cd mingw-w32-dgn`
-  11. `rm -r cross build`
-  12. `bash rebuild_cross.sh 32r`
-  13. `mv cross ~/cross-w32`
-  14. `export PATH=$HOME/cross-w32/bin:$PATH`
-
-      Note, that it is important that you remember to always `export PATH=...`
-      before using `make` in the following steps! You can put this line in your
-      `~/.profile` to make it easy.
-
-Note: for systems that support rpm-based package managers, the necessary
-dependencies can be downloaded from the OpenSUSE build service (see the Vagrant
-script above).
-
-@vtjnash occassionally upload his builds, so you can also download those to
-save build time:
-
- - [x86_64-w64-mingw64 gcc-5.2.0 MacOS-10.10 (105 MB)](https://onedrive.live.com/redir?resid=BCAF288A35FC4406!1601&authkey=!ANpFOoCqFGYTcHM&ithint=file%2cgz)
- - [i686-w64-mingw64 gcc-5.2.0 MacOS-10.10 (89 MB)](https://onedrive.live.com/redir?resid=BCAF288A35FC4406!1607&authkey=!AFrL8G5G70iYhUU&ithint=file%2cgz)
- - [*-w64-mingw64 gcc-4.9.2 Ubuntu-15.04 (168 MB)](https://onedrive.live.com/redir?resid=BCAF288A35FC4406!1602&authkey=!ABhstrqDG-4zdLo&ithint=file%2cgz)
+or [Homebrew](https://brew.sh/).  Then run `port install wine wget mingw-w64`,
+or `brew install wine wget mingw-w64`, as appropriate.
 
 Then run the build:
 
@@ -395,10 +260,7 @@ be worked around by prepending `wineconsole` to the regular GDB invocation.
 
 [Vagrant](http://www.vagrantup.com/downloads) can also be used with a Windows
 guest VM via the `Vagrantfile` in [contrib/windows](contrib/windows/Vagrantfile),
-just run `vagrant up` from that folder. To build with Cygwin instead of MSYS2,
-replace `config.vm.provision :shell, privileged: false, :inline => $script_msys2`
-(near the end of the file) with `config.vm.provision :shell, privileged: false,
-:inline => $script_cygwin`.
+just run `vagrant up` from that folder.
 
 
 ## After compiling

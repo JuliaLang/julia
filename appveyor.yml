@@ -31,10 +31,9 @@ init:
 
 cache:
 # Cache large downloads to avoid network unreliability
-  - i686-4.9.2-release-win32-sjlj-rt_v4-rev3.7z
-  - x86_64-4.9.2-release-win32-seh-rt_v4-rev3.7z
-  - llvm-3.9.1-i686-w64-mingw32-juliadeps-r06.7z
-  - llvm-3.9.1-x86_64-w64-mingw32-juliadeps-r06.7z
+  - C:\cygdownloads
+  - llvm-3.9.1-i686-w64-mingw32-juliadeps-r07.7z
+  - llvm-3.9.1-x86_64-w64-mingw32-juliadeps-r07.7z
   - usr/bin/busybox.exe
 
 build_script:
@@ -46,11 +45,11 @@ build_script:
 # Remove C:\MinGW\bin from the path, the version of MinGW installed on
 # AppVeyor is not compatible with the cross-compiled Julia Windows binaries
   - set PATH=%PATH:C:\MinGW\bin;=%
-# Remove C:\Perl\bin from the path, otherwise it breaks shasum with an error
-# Unable to find Digest::SHA or Digest::SHA::PurePerl
-  - set PATH=%PATH:C:\Perl\bin;=%
+# Remove git's msys2 from path, since it conflicts with cygwin1.dll
+  - set PATH=%PATH:C:\Program Files\Git\usr\bin;=%
+  - ps: contrib/windows/install-cygwin.ps1
 #  - '"%VS120COMNTOOLS%\..\..\VC\vcvarsall.bat" x86_amd64'
-  - C:\msys64\usr\bin\sh.exe --login /c/projects/julia/contrib/windows/msys_build.sh
+  - C:\cygwin-%ARCH%\bin\sh.exe --login /cygdrive/c/projects/julia/contrib/windows/appveyor_build.sh
 
 test_script:
   - usr\bin\julia -e "versioninfo()"
