@@ -4,13 +4,7 @@
 # Build a system image binary at sysimg_path.dlext. Allow insertion of a userimg via
 # userimg_path.  If sysimg_path.dlext is currently loaded into memory, don't continue
 # unless force is set to true. Allow targeting of a CPU architecture via cpu_target.
-function default_sysimg_path(debug=false)
-    if Sys.isunix()
-        splitext(Libdl.dlpath(debug ? "sys-debug" : "sys"))[1]
-    else
-        joinpath(dirname(JULIA_HOME), "lib", "julia", debug ? "sys-debug" : "sys")
-    end
-end
+default_sysimg_path(debug=false) = joinpath(dirname(JULIA_HOME), "lib", "julia", debug ? "sys-debug" : "sys")
 
 """
     build_sysimg(sysimg_path=default_sysimg_path(), cpu_target="native", userimg_path=nothing; force=false)
