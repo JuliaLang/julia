@@ -803,9 +803,10 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
                     all(!isa(a, Expr) || a.head !== :... for a in func_args)
                 sep = " $func "
                 # parenthesize (-x) ^ y for negative x
-                if func == :^ && ((func_args[1] isa Expr && func_args[1].head === :call &&
-                                   func_args[1].args[1] === :-) ||
-                                  (func_args[1] isa Real && func_args[1] < 0))
+                if (operator_precedence(func) == operator_precedence(:^) &&
+                    ((func_args[1] isa Expr && func_args[1].head === :call &&
+                      func_args[1].args[1] in uni_ops) ||
+                     (func_args[1] isa Real && func_args[1] < 0)))
                     encl_inds = [1]
                 else
                     encl_inds = []
