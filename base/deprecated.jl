@@ -96,6 +96,15 @@ function firstcaller(bt::Array{Ptr{Void},1}, funcsyms)
             end
             found && @goto found
             found = lkup.func in funcsyms
+            # look for constructor type name
+            if !found && !isnull(lkup.linfo)
+                li = get(lkup.linfo)
+                ft = ccall(:jl_first_argument_datatype, Any, (Any,), li.def.sig)
+                if isa(ft,DataType) && ft.name === Type.body.name
+                    ft = unwrap_unionall(ft.parameters[1])
+                    found = (isa(ft,DataType) && ft.name.name in funcsyms)
+                end
+            end
         end
     end
     return StackTraces.UNKNOWN
