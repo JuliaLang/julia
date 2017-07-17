@@ -113,6 +113,18 @@ X = [2 3 1 -1; 7 4 5 -4]
 @test isnan(var(1:1))
 @test isnan(var(1:-1))
 
+@test @inferred(var(1.0:8.0)) == 6.
+@test varm(1.0:8.0,1.0) == varm(collect(1.0:8.0),1)
+@test isnan(varm(1.0:1.0,1.0))
+@test isnan(var(1.0:1.0))
+@test isnan(var(1.0:-1.0))
+
+@test @inferred(var(1.0f0:8.0f0)) === 6.f0
+@test varm(1.0f0:8.0f0,1.0f0) == varm(collect(1.0f0:8.0f0),1)
+@test isnan(varm(1.0f0:1.0f0,1.0f0))
+@test isnan(var(1.0f0:1.0f0))
+@test isnan(var(1.0f0:-1.0f0))
+
 @test varm([1,2,3], 2) ≈ 1.
 @test var([1,2,3]) ≈ 1.
 @test var([1,2,3]; corrected=false) ≈ 2.0/3
