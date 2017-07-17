@@ -268,6 +268,27 @@ test_indexing(Future(id_other))
 test_indexing(RemoteChannel())
 test_indexing(RemoteChannel(id_other))
 
+# Test ser/deser to non-ClusterSerializer objects.
+function test_regular_io_ser(ref::Base.Distributed.AbstractRemoteRef)
+    io = IOBuffer()
+    serialize(io, ref)
+    seekstart(io)
+    ref2 = deserialize(io)
+    for fld in fieldnames(typeof(ref))
+        v = getfield(ref2, fld)
+        if isa(v, Number)
+            @test v === zero(typeof(v))
+        elseif isa(v, Nullable)
+            @test v === Nullable{Any}()
+        else
+            error(string("Add test for field ", fld))
+        end
+    end
+end
+
+test_regular_io_ser(Future())
+test_regular_io_ser(RemoteChannel())
+
 dims = (20,20,20)
 
 if Sys.islinux()
