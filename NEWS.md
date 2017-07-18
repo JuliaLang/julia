@@ -17,7 +17,7 @@ Language changes
     precede unrecognized escape characters ([#22800]).
 
   * Declaring arguments as `x::ANY` to avoid specialization has been replaced
-    by `@nospecialize x`, which needs to be imported from `Base`. ([#22666]).
+    by `@nospecialize x`. ([#22666]).
 
 Breaking changes
 ----------------
@@ -59,6 +59,9 @@ This section lists changes that do not have deprecation warnings.
     tuple-of-AbstractUnitRanges; the `start` and `stop` fields are no
     longer present. Use `first(R)` and `last(R)` to obtain
     start/stop. ([#20974])
+
+  * The `Diagonal` type definition has changed from `Diagonal{T}` to
+    `Diagonal{T,V<:AbstractVector{T}}` ([#22718]).
 
 Library improvements
 --------------------
@@ -108,6 +111,11 @@ Library improvements
 
   * A new `@macroexpand1` macro for non recursive macro expansion ([#21662]).
 
+  * `Char`s can now be concatenated with `String`s and/or other `Char`s using `*` ([#22532]).
+
+  * `Diagonal` is now parameterized on the type of the wrapped vector. This allows
+    for `Diagonal` matrices with arbitrary `AbstractVector`s ([#22718]).
+
 Compiler/Runtime improvements
 -----------------------------
 
@@ -148,11 +156,13 @@ Deprecated or removed
     and the Base signal processing functions which used FFTs are now in DSP.jl ([#21956]).
 
   * The `corrected` positional argument to `cov` has been deprecated in favor of
-    a keyword argument with the same name (#21709).
+    a keyword argument with the same name ([#21709]).
 
-  * Omitting a space between the condition and `?` in a ternary expression has been deprecated.
+  * Omitting spaces around the `?` and the `:` tokens in a ternary expression has been deprecated.
     Ternaries must now include some amount of whitespace, e.g. `x ? a : b` rather than
-    `x? a : b` ([#22523]).
+    `x?a:b` ([#22523] and [#22712]).
+
+  * `?` can no longer be used as an identifier name ([#22712])
 
   * The method `replace(s::AbstractString, pat, r, count)` with `count <= 0` is deprecated
     in favor of `replace(s::AbstractString, pat, r, typemax(Int))` ([#22325]).
@@ -991,4 +1001,7 @@ Command-line option changes
 [#22245]: https://github.com/JuliaLang/julia/issues/22245
 [#22310]: https://github.com/JuliaLang/julia/issues/22310
 [#22523]: https://github.com/JuliaLang/julia/issues/22523
+[#22532]: https://github.com/JuliaLang/julia/issues/22532
+[#22709]: https://github.com/JuliaLang/julia/issues/22709
+[#22712]: https://github.com/JuliaLang/julia/issues/22712
 [#22732]: https://github.com/JuliaLang/julia/issues/22732

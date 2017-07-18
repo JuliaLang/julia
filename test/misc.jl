@@ -681,7 +681,7 @@ let
 end
 
 abstract type DA_19281{T, N} <: AbstractArray{T, N} end
-Base.convert{S,T,N}(::Type{Array{S, N}}, ::DA_19281{T, N}) = error()
+Base.convert(::Type{Array{S, N}}, ::DA_19281{T, N}) where {S,T,N} = error()
 x_19281 = [(), (1,)]
 mutable struct Foo_19281
     f::Vector{Tuple}
@@ -754,49 +754,18 @@ end
 @test ltoh(0x102030405060708) == 0x102030405060708
 @test htol(0x102030405060708) == 0x102030405060708
 
-module DeprecationTests # to test @deprecate
-    f() = true
-
-    # test the Symbol path of @deprecate
-    @deprecate f1 f
-    @deprecate f2 f false # test that f2 is not exported
-
-    # test the Expr path of @deprecate
-    @deprecate f3() f()
-    @deprecate f4() f() false # test that f4 is not exported
-    @deprecate f5(x::T) where T f()
-
-    # test deprecation of a constructor
-    struct A{T} end
-    @deprecate A{T}(x::S) where {T, S} f()
-end # module
-
-@testset "@deprecate" begin
-    using .DeprecationTests
-    # enable when issue #22043 is fixed
-    # @test @test_warn "f1 is deprecated, use f instead." f1()
-    # @test @test_nowarn f1()
-
-    # @test_throws UndefVarError f2() # not exported
-    # @test @test_warn "f2 is deprecated, use f instead." DeprecationTests.f2()
-    # @test @test_nowarn DeprecationTests.f2()
-
-    # @test @test_warn "f3() is deprecated, use f() instead." f3()
-    # @test @test_nowarn f3()
-
-    # @test_throws UndefVarError f4() # not exported
-    # @test @test_warn "f4() is deprecated, use f() instead." DeprecationTests.f4()
-    # @test @test_nowarn DeprecationTests.f4()
-
-    # @test @test_warn "f5(x::T) where T is deprecated, use f() instead." f5(1)
-    # @test @test_nowarn f5(1)
-
-    # @test @test_warn "A{T}(x::S) where {T, S} is deprecated, use f() instead." A{Int}(1.)
-    # @test @test_nowarn A{Int}(1.)
-end
-
 @testset "inline bug #18735" begin
     @noinline f(n) = n ? error() : Int
     g() = Union{f(true)}
     @test_throws ErrorException g()
+end
+
+include("testenv.jl")
+
+let flags = Cmd(filter(a->!contains(a, "depwarn"), collect(test_exeflags)))
+    local cmd = `$test_exename $flags deprecation_exec.jl`
+
+    if !success(pipeline(cmd; stdout=STDOUT, stderr=STDERR))
+        error("Deprecation test failed, cmd : $cmd")
+    end
 end

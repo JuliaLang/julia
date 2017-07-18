@@ -70,7 +70,7 @@ function as_sub(x::AbstractMatrix)
     end
     y
 end
-function as_sub{T}(x::AbstractArray{T,3})
+function as_sub(x::AbstractArray{T,3}) where T
     y = similar(x, eltype(x), tuple(([size(x)...]*2)...))
     y = view(y, 2:2:size(y,1), 2:2:size(y,2), 2:2:size(y,3))
     for k=1:size(x,3)
@@ -422,7 +422,7 @@ Base.getindex(A::Array19745, i::Integer...) = A.data[i...]
 Base.setindex!(A::Array19745, v::Any, i::Integer...) = setindex!(A.data, v, i...)
 Base.size(A::Array19745) = size(A.data)
 
-Base.Broadcast._containertype{T<:Array19745}(::Type{T}) = Array19745
+Base.Broadcast._containertype(::Type{T}) where {T<:Array19745} = Array19745
 
 Base.Broadcast.promote_containertype(::Type{Array19745}, ::Type{Array19745}) = Array19745
 Base.Broadcast.promote_containertype(::Type{Array19745}, ::Type{Array})      = Array19745

@@ -28,8 +28,7 @@ mutable struct Close1Open2 <: FloatInterval end
 
 ## RandomDevice
 
-const BitIntegerType = Union{map(T->Type{T}, Base.BitInteger_types)...}
-const BoolBitIntegerType = Union{Type{Bool},BitIntegerType}
+const BoolBitIntegerType = Union{Type{Bool},Base.BitIntegerType}
 const BoolBitIntegerArray = Union{Array{Bool},Base.BitIntegerArray}
 
 if Sys.iswindows()

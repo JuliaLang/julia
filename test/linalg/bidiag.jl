@@ -27,7 +27,7 @@ srand(1)
         @test Bidiagonal(dv,ev,:U) != Bidiagonal(dv,ev,:L)
         @test_throws ArgumentError Bidiagonal(dv,ev,:R)
         @test_throws DimensionMismatch Bidiagonal(dv,ones(elty,n),:U)
-        @test_throws ArgumentError Bidiagonal(dv,ev)
+        @test_throws MethodError Bidiagonal(dv,ev)
     end
 
     @testset "getindex, setindex!, size, and similar" begin

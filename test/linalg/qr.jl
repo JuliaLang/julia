@@ -183,3 +183,11 @@ B = rand(7,2)
 
 # Issue 16520
 @test_throws DimensionMismatch ones(3,2)\(1:5)
+
+# Issue 22810
+let
+    A = zeros(1, 2)
+    B = zeros(1, 1)
+    @test A \ B == zeros(2, 1)
+    @test qrfact(A, Val(true)) \ B == zeros(2, 1)
+end

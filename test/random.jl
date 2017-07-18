@@ -344,16 +344,18 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()])
         end
     end
     for (C, T) in collections
-        a0 = rand(rng..., C)                  ::T
-        a1 = rand(rng..., C, 5)               ::Vector{T}
-        a2 = rand(rng..., C, 2, 3)            ::Array{T, 2}
-        a3 = rand(rng..., C, (2, 3))          ::Array{T, 2}
-        a4 = rand(rng..., C, b2, u3)          ::Array{T, 2}
-        a5 = rand!(rng..., Array{T}(5), C)    ::Vector{T}
-        a6 = rand!(rng..., Array{T}(2, 3), C) ::Array{T, 2}
+        a0 = rand(rng..., C)                         ::T
+        a1 = rand(rng..., C, 5)                      ::Vector{T}
+        a2 = rand(rng..., C, 2, 3)                   ::Array{T, 2}
+        a3 = rand(rng..., C, (2, 3))                 ::Array{T, 2}
+        a4 = rand(rng..., C, b2, u3)                 ::Array{T, 2}
+        a5 = rand!(rng..., Array{T}(5), C)           ::Vector{T}
+        a6 = rand!(rng..., Array{T}(2, 3), C)        ::Array{T, 2}
+        a7 = rand!(rng..., GenericArray{T}(5), C)    ::GenericArray{T, 1}
+        a8 = rand!(rng..., GenericArray{T}(2, 3), C) ::GenericArray{T, 2}
         @test size(a1) == (5,)
         @test size(a2) == size(a3) == (2, 3)
-        for a in [a0, a1..., a2..., a3..., a4..., a5..., a6...]
+        for a in [a0, a1..., a2..., a3..., a4..., a5..., a6..., a7..., a8...]
             if C isa Type
                 @test a isa C
             else
@@ -370,11 +372,11 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()])
     for f! in [rand!, randn!, randexp!]
         for T in (f! === rand! ? types : f! === randn! ? cftypes : ftypes)
             X = T == Bool ? T[0,1] : T[0,1,2]
-            for A in (Array{T}(5), Array{T}(2, 3))
+            for A in (Array{T}(5), Array{T}(2, 3), GenericArray{T}(5), GenericArray{T}(2, 3))
                 f!(rng..., A)                    ::typeof(A)
                 if f! === rand!
                     f!(rng..., A, X)             ::typeof(A)
-                    if T !== Char # Char/Integer comparison
+                    if A isa Array && T !== Char # Char/Integer comparison
                         f!(rng..., sparse(A))    ::typeof(sparse(A))
                         f!(rng..., sparse(A), X) ::typeof(sparse(A))
                     end

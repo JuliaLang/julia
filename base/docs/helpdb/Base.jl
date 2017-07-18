@@ -115,11 +115,14 @@ getindex(collection, key...)
 """
     cconvert(T,x)
 
-Convert `x` to a value of type `T`, typically by calling `convert(T,x)`
+Convert `x` to a value to be passed to C code as type `T`, typically by calling `convert(T, x)`.
 
 In cases where `x` cannot be safely converted to `T`, unlike [`convert`](@ref), `cconvert` may
 return an object of a type different from `T`, which however is suitable for
-[`unsafe_convert`](@ref) to handle.
+[`unsafe_convert`](@ref) to handle. The result of this function should be kept valid (for the GC)
+until the result of [`unsafe_convert`](@ref) is not needed anymore.
+This can be used to allocate memory that will be accessed by the `ccall`.
+If multiple objects need to be allocated, a tuple of the objects can be used as return value.
 
 Neither `convert` nor `cconvert` should take a Julia object and turn it into a `Ptr`.
 """
@@ -247,7 +250,7 @@ the byte representation is different.
 
 This would create a 25-by-30000 `BitArray`, linked to the file associated with stream `s`.
 """
-Mmap.mmap(io, ::BitArray, dims = ?, offset = ?)
+Mmap.mmap(io, ::BitArray, dims, offset)
 
 """
     sizeof(T)
@@ -881,7 +884,8 @@ trunc
 """
     unsafe_convert(T,x)
 
-Convert `x` to a value of type `T`
+Convert `x` to a C argument of type `T`
+where the input `x` must be the return value of `cconvert(T, ...)`.
 
 In cases where [`convert`](@ref) would need to take a Julia object
 and turn it into a `Ptr`, this function should be used to define and perform
@@ -895,6 +899,8 @@ but `x=[a,b,c]` is not.
 The `unsafe` prefix on this function indicates that using the result of this function after
 the `x` argument to this function is no longer accessible to the program may cause undefined
 behavior, including program corruption or segfaults, at any later time.
+
+See also [`cconvert`](@ref)
 """
 unsafe_convert
 
@@ -2145,7 +2151,7 @@ julia> pop!(d, "e", 4)
 4
 ```
 """
-pop!(collection,key,?)
+pop!(collection,key,default)
 
 """
     pop!(collection) -> item

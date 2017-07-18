@@ -128,10 +128,58 @@ function compare_large_struct(a)
     end
 end
 
+mutable struct MutableStruct
+    a::Int
+    MutableStruct() = new()
+end
+
+breakpoint_mutable(a::MutableStruct) = ccall(:jl_breakpoint, Void, (Ref{MutableStruct},), a)
+
+# Allocation with uninitialized field as gcroot
+mutable struct BadRef
+    x::MutableStruct
+    y::MutableStruct
+    BadRef(x) = new(x)
+end
+Base.cconvert(::Type{Ptr{BadRef}}, a::MutableStruct) = BadRef(a)
+Base.unsafe_convert(::Type{Ptr{BadRef}}, ar::BadRef) = Ptr{BadRef}(pointer_from_objref(ar.x))
+
+breakpoint_badref(a::MutableStruct) = ccall(:jl_breakpoint, Void, (Ptr{BadRef},), a)
+
 if opt_level > 0
     @test !contains(get_llvm(isequal, Tuple{Nullable{BigFloat}, Nullable{BigFloat}}), "%gcframe")
     @test !contains(get_llvm(pointer_not_safepoint, Tuple{}), "%gcframe")
     compare_large_struct_ir = get_llvm(compare_large_struct, Tuple{typeof(create_ref_struct())})
     @test contains(compare_large_struct_ir, "call i32 @memcmp")
     @test !contains(compare_large_struct_ir, "%gcframe")
+
+    @test contains(get_llvm(MutableStruct, Tuple{}), "jl_gc_pool_alloc")
+    breakpoint_mutable_ir = get_llvm(breakpoint_mutable, Tuple{MutableStruct})
+    @test !contains(breakpoint_mutable_ir, "%gcframe")
+    @test !contains(breakpoint_mutable_ir, "jl_gc_pool_alloc")
+
+    breakpoint_badref_ir = get_llvm(breakpoint_badref, Tuple{MutableStruct})
+    @test !contains(breakpoint_badref_ir, "%gcframe")
+    @test !contains(breakpoint_badref_ir, "jl_gc_pool_alloc")
+end
+
+# Issue 22770
+let was_gced = false
+    @noinline make_tuple(x) = tuple(x)
+    @noinline use(x) = ccall(:jl_breakpoint, Void, ())
+    @noinline assert_not_gced() = @assert !was_gced
+
+    function foo22770()
+        b = Ref(2)
+        finalizer(b, x->(global was_gced; was_gced=true))
+        y = make_tuple(b)
+        x = y[1]
+        a = Ref(1)
+        use(x); use(a); use(y)
+        c = Ref(3)
+        gc(); assert_not_gced();
+        use(x)
+        use(c)
+    end
+    foo22770()
 end

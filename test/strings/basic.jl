@@ -478,8 +478,10 @@ Base.endof(x::CharStr) = endof(x.chars)
 @test cmp(CharStr("\U1f596"), "\U1f596\U1f596") == -1
 
 # repeat function
-@test repeat("xx",3) == repeat("x",6) == "xxxxxx"
-@test repeat("αα",3) == repeat("α",6) == "αααααα"
+@test repeat("xx",3) == repeat("x",6) == repeat('x',6) == repeat(GenericString("x"), 6) == "xxxxxx"
+@test repeat("αα",3) == repeat("α",6) == repeat('α',6) == repeat(GenericString("α"), 6) == "αααααα"
+@test repeat("x",1) == repeat('x',1) == "x"^1 == 'x'^1 == GenericString("x")^1 == "x"
+@test repeat("x",0) == repeat('x',0) == "x"^0 == 'x'^0 == GenericString("x")^0 == ""
 
 # issue #12495: check that logical indexing attempt raises ArgumentError
 @test_throws ArgumentError "abc"[[true, false, true]]

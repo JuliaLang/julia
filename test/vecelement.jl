@@ -1,12 +1,12 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-make_value{T<:Integer}(::Type{T}, i::Integer) = 3*i%T
-make_value{T<:AbstractFloat}(::Type{T},i::Integer) = T(3*i)
+make_value(::Type{T}, i::Integer) where {T<:Integer} = 3*i%T
+make_value(::Type{T},i::Integer) where {T<:AbstractFloat} = T(3*i)
 
 Vec{N,T} = NTuple{N,Base.VecElement{T}}
 
 # Crash report for #15244 motivated this test.
-@generated function thrice_iota{N,T}(::Type{Vec{N,T}})
+@generated function thrice_iota(::Type{Vec{N,T}}) where {N,T}
     :(tuple($([:(Base.VecElement(make_value($T,$i))) for i in 1:N]...)))
 end
 
@@ -50,7 +50,7 @@ struct Herd{N,T}
     Herd{N,T}(elts::NTuple{N,T}) where {N,T} = new(ntuple(i->Base.VecElement{T}(elts[i]), N))
 end
 
-function check{N,T}(x::Herd{N,T})
+function check(x::Herd{N,T}) where {N,T}
     for i=1:N
         @test x.elts[i].value === N*N+i-1
     end

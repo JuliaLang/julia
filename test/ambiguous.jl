@@ -181,8 +181,8 @@ let ms = methods(amb_4).ms
     @test Base.isambiguous(ms[3], ms[4])
 end
 
-g16493{T<:Number}(x::T, y::Integer) = 0
-g16493{T}(x::Complex{T}, y) = 1
+g16493(x::T, y::Integer) where {T<:Number} = 0
+g16493(x::Complex{T}, y) where {T} = 1
 let ms = methods(g16493, (Complex, Any))
     @test length(ms) == 1
     @test first(ms).sig == (Tuple{typeof(g16493), Complex{T}, Any} where T)
@@ -191,8 +191,8 @@ end
 # issue #17350
 module Ambig6
 struct ScaleMinMax{To,From} end
-map1{To<:Union{Float32,Float64},From<:Real}(mapi::ScaleMinMax{To,From}, val::From) = 1
-map1{To<:Union{Float32,Float64},From<:Real}(mapi::ScaleMinMax{To,From}, val::Union{Real,Complex}) = 2
+map1(mapi::ScaleMinMax{To,From}, val::From) where {To<:Union{Float32,Float64},From<:Real} = 1
+map1(mapi::ScaleMinMax{To,From}, val::Union{Real,Complex}) where {To<:Union{Float32,Float64},From<:Real} = 2
 end
 
 @test isempty(detect_ambiguities(Ambig6))
@@ -209,17 +209,17 @@ struct MyArray{T,N} <: AbstractArray{T,N}
     data::Array{T,N}
 end
 
-foo{T,N}(::Type{Array{T,N}}, A::MyArray{T,N}) = A.data
-foo{T<:AbstractFloat,N}(::Type{Array{T,N}}, A::MyArray{T,N}) = A.data
-foo{S<:AbstractFloat,N,T<:AbstractFloat}(::Type{Array{S,N}}, A::AbstractArray{T,N}) = copy!(Array{S}(size(A)), A)
-foo{S<:AbstractFloat,N,T<:AbstractFloat}(::Type{Array{S,N}}, A::MyArray{T,N}) = copy!(Array{S}(size(A)), A.data)
+foo(::Type{Array{T,N}}, A::MyArray{T,N}) where {T,N} = A.data
+foo(::Type{Array{T,N}}, A::MyArray{T,N}) where {T<:AbstractFloat,N} = A.data
+foo(::Type{Array{S,N}}, A::AbstractArray{T,N}) where {S<:AbstractFloat,N,T<:AbstractFloat} = copy!(Array{S}(size(A)), A)
+foo(::Type{Array{S,N}}, A::MyArray{T,N}) where {S<:AbstractFloat,N,T<:AbstractFloat} = copy!(Array{S}(size(A)), A.data)
 end
 
 @test isempty(detect_ambiguities(Ambig17648))
 
 module Ambig8
 using Base: DimsInteger, Indices
-g18307{T<:Integer}(::Union{Indices,Dims}, I::AbstractVector{T}...) = 1
+g18307(::Union{Indices,Dims}, I::AbstractVector{T}...) where {T<:Integer} = 1
 g18307(::DimsInteger) = 2
 g18307(::DimsInteger, I::Integer...) = 3
 end

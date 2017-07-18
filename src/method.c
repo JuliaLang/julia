@@ -69,7 +69,7 @@ jl_value_t *jl_resolve_globals(jl_value_t *expr, jl_module_t *module, jl_svec_t 
             }
             size_t i = 0, nargs = jl_array_len(e->args);
             if (e->head == foreigncall_sym) {
-                JL_NARGSV(ccall method definition, 3); // (fptr, rt, at)
+                JL_NARGSV(ccall method definition, 5); // (fptr, rt, at, cc, narg)
                 jl_value_t *rt = jl_exprarg(e, 1);
                 jl_value_t *at = jl_exprarg(e, 2);
                 if (!jl_is_type(rt)) {
@@ -100,6 +100,9 @@ jl_value_t *jl_resolve_globals(jl_value_t *expr, jl_module_t *module, jl_svec_t 
                     jl_error("ccall: missing return type");
                 JL_TYPECHK(ccall method definition, type, rt);
                 JL_TYPECHK(ccall method definition, simplevector, at);
+                JL_TYPECHK(ccall method definition, quotenode, jl_exprarg(e, 3));
+                JL_TYPECHK(ccall method definition, symbol, *(jl_value_t**)jl_exprarg(e, 3));
+                JL_TYPECHK(ccall method definition, long, jl_exprarg(e, 4));
             }
             if (e->head == method_sym || e->head == abstracttype_sym || e->head == compositetype_sym ||
                 e->head == bitstype_sym || e->head == module_sym) {
@@ -244,7 +247,7 @@ STATIC_INLINE jl_value_t *jl_call_staged(jl_svec_t *sparam_vals, jl_method_insta
     fptr.jlcall_api = generator->jlcall_api;
     if (__unlikely(fptr.fptr == NULL || fptr.jlcall_api == 0)) {
         size_t world = generator->def.method->min_world;
-        void *F = jl_compile_linfo(&generator, (jl_code_info_t*)generator->inferred, world, &jl_default_cgparams).functionObject;
+        const char *F = jl_compile_linfo(&generator, (jl_code_info_t*)generator->inferred, world, &jl_default_cgparams).functionObject;
         fptr = jl_generate_fptr(generator, F, world);
     }
     assert(jl_svec_len(generator->def.method->sparam_syms) == jl_svec_len(sparam_vals));

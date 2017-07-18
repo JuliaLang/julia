@@ -680,7 +680,7 @@ test_range_index(linspace(1.0, 1.0, 1), 1:1)
 test_range_index(linspace(1.0, 1.0, 1), 1:0)
 test_range_index(linspace(1.0, 2.0, 0), 1:0)
 
-function test_linspace_identity{T}(r::Range{T}, mr)
+function test_linspace_identity(r::Range{T}, mr) where T
     @test -r == mr
     @test -collect(r) == collect(mr)
     @test isa(-r, typeof(r))

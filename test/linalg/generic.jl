@@ -14,7 +14,7 @@ end
 Quaternion(s::Real, v1::Real, v2::Real, v3::Real) = Quaternion(promote(s, v1, v2, v3)...)
 Base.abs2(q::Quaternion) = q.s*q.s + q.v1*q.v1 + q.v2*q.v2 + q.v3*q.v3
 Base.abs(q::Quaternion) = sqrt(abs2(q))
-Base.real{T}(::Type{Quaternion{T}}) = T
+Base.real(::Type{Quaternion{T}}) where {T} = T
 Base.conj(q::Quaternion) = Quaternion(q.s, -q.v1, -q.v2, -q.v3)
 Base.isfinite(q::Quaternion) = isfinite(q.s) & isfinite(q.v1) & isfinite(q.v2) & isfinite(q.v3)
 

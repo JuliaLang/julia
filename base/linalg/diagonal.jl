@@ -2,16 +2,15 @@
 
 ## Diagonal matrices
 
-struct Diagonal{T} <: AbstractMatrix{T}
-    diag::Vector{T}
+struct Diagonal{T,V<:AbstractVector{T}} <: AbstractMatrix{T}
+    diag::V
 end
 """
     Diagonal(A::AbstractMatrix)
 
-Constructs a matrix from the diagonal of `A`.
+Construct a matrix from the diagonal of `A`.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> A = [1 2 3; 4 5 6; 7 8 9]
 3×3 Array{Int64,2}:
@@ -20,36 +19,38 @@ julia> A = [1 2 3; 4 5 6; 7 8 9]
  7  8  9
 
 julia> Diagonal(A)
-3×3 Diagonal{Int64}:
+3×3 Diagonal{Int64,Array{Int64,1}}:
  1  ⋅  ⋅
  ⋅  5  ⋅
  ⋅  ⋅  9
 ```
 """
 Diagonal(A::AbstractMatrix) = Diagonal(diag(A))
+
 """
     Diagonal(V::AbstractVector)
 
-Constructs a matrix with `V` as its diagonal.
+Construct a matrix with `V` as its diagonal.
 
-# Example
-
+# Examples
 ```jldoctest
-julia> V = [1; 2]
+julia> V = [1, 2]
 2-element Array{Int64,1}:
  1
  2
 
 julia> Diagonal(V)
-2×2 Diagonal{Int64}:
+2×2 Diagonal{Int64,Array{Int64,1}}:
  1  ⋅
  ⋅  2
 ```
 """
-Diagonal(V::AbstractVector) = Diagonal(collect(V))
+Diagonal(V::AbstractVector{T}) where {T} = Diagonal{T,typeof(V)}(V)
+Diagonal{T}(V::AbstractVector{T}) where {T} = Diagonal{T,typeof(V)}(V)
+Diagonal{T}(V::AbstractVector) where {T} = Diagonal{T}(convert(AbstractVector{T}, V))
 
 convert(::Type{Diagonal{T}}, D::Diagonal{T}) where {T} = D
-convert(::Type{Diagonal{T}}, D::Diagonal) where {T} = Diagonal{T}(convert(Vector{T}, D.diag))
+convert(::Type{Diagonal{T}}, D::Diagonal) where {T} = Diagonal{T}(convert(AbstractVector{T}, D.diag))
 convert(::Type{AbstractMatrix{T}}, D::Diagonal) where {T} = convert(Diagonal{T}, D)
 convert(::Type{Matrix}, D::Diagonal) = diagm(D.diag)
 convert(::Type{Array}, D::Diagonal) = convert(Matrix, D)

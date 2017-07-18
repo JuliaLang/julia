@@ -210,22 +210,24 @@ varm(iterable, m::Number; corrected::Bool=true) =
 ## variances over ranges
 
 function varm(v::Range, m::Number)
-    f = first(v) - m
-    s = step(v)
-    l = length(v)
+    f  = first(v) - m
+    s  = step(v)
+    l  = length(v)
+    vv = f^2 * l / (l - 1) + f * s * l + s^2 * l * (2 * l - 1) / 6
     if l == 0 || l == 1
-           return NaN
+        return typeof(vv)(NaN)
     end
-    return f^2 * l / (l - 1) + f * s * l + s^2 * l * (2 * l - 1) / 6
+    return vv
 end
 
 function var(v::Range)
-    s = step(v)
-    l = length(v)
+    s  = step(v)
+    l  = length(v)
+    vv = abs2(s) * (l + 1) * l / 12
     if l == 0 || l == 1
-        return NaN
+        return typeof(vv)(NaN)
     end
-    return abs2(s) * (l + 1) * l / 12
+    return vv
 end
 
 

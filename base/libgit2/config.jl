@@ -1,5 +1,12 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+    GitConfig(path::AbstractString, level::Consts.GIT_CONFIG=Consts.CONFIG_LEVEL_APP, force::Bool=false)
+
+Create a new `GitConfig` by loading configuration information from the file at
+`path`. See [`addfile`](@ref) for more information about the `level` and `force`
+options.
+"""
 function GitConfig(path::AbstractString,
                    level::Consts.GIT_CONFIG = Consts.CONFIG_LEVEL_APP,
                    force::Bool=false)
@@ -16,6 +23,13 @@ function GitConfig(path::AbstractString,
     return cfg
 end
 
+"""
+    GitConfig(repo::GitRepo)
+
+Get the stored configuration for the git repository `repo`. If `repo` does not
+have a specific configuration file set, the default git configuration will be
+used.
+"""
 function GitConfig(repo::GitRepo)
     cfg_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_repository_config, :libgit2), Cint,
@@ -23,6 +37,13 @@ function GitConfig(repo::GitRepo)
     return GitConfig(repo, cfg_ptr_ptr[])
 end
 
+"""
+    GitConfig(level::Consts.GIT_CONFIG=Consts.CONFIG_LEVEL_DEFAULT)
+
+Get the default git configuration by loading the global and system configuration
+files into a prioritized configuration. This can be used to access default configuration
+options outside a specific git repository.
+"""
 function GitConfig(level::Consts.GIT_CONFIG = Consts.CONFIG_LEVEL_DEFAULT)
     cfg_ptr_ptr = Ref{Ptr{Void}}(C_NULL)
     @check ccall((:git_config_open_default, :libgit2), Cint,
@@ -43,6 +64,17 @@ function GitConfig(level::Consts.GIT_CONFIG = Consts.CONFIG_LEVEL_DEFAULT)
     return cfg
 end
 
+"""
+    addfile(cfg::GitConfig, path::AbstractString, level::Consts.GIT_CONFIG=Consts.CONFIG_LEVEL_APP, force::Bool=false)
+
+Add an existing git configuration file located at `path` to the current
+[`GitConfig`](@ref) `cfg`. If the file does not exist, it will be created.
+`level` sets the git configuration priority level and is determined by
+[`Consts.GIT_CONFIG`](@ref). If `force` is `false` and a configuration for
+the given priority level already exists, `addfile` will error. If `force` is
+`true`, the existing configuration will be replaced by the one in the file at
+`path`.
+"""
 function addfile(cfg::GitConfig, path::AbstractString,
                  level::Consts.GIT_CONFIG = Consts.CONFIG_LEVEL_APP,
                  force::Bool=false)

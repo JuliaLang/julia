@@ -261,6 +261,9 @@ struct State {
     // are indices into the next three maps which store safepoint properties
     std::map<Instruction *, int> SafepointNumbering;
 
+    // Reverse mapping index -> safepoint
+    std::vector<Instruction *> ReverseSafepointNumbering;
+
     // Instructions that can return twice. For now, all values live at these
     // instructions will get their own, dedicated GC frame slots, because they
     // have unobservable control flow, so we can't be sure where they're
@@ -269,9 +272,6 @@ struct State {
 
     // The set of values live at a particular safepoint
     std::vector<BitVector> LiveSets;
-    // The set of values for which this is the first safepoint along some
-    // relevant path - i.e. the value needs to be rooted at this safepoint
-    std::vector<std::set<int>> Rootings;
     // Those values that - if live out from our parent basic block - are live
     // at this safepoint.
     std::vector<std::vector<int>> LiveIfLiveOut;
@@ -331,6 +331,8 @@ private:
     void PushGCFrame(AllocaInst *gcframe, unsigned NRoots, Instruction *InsertAfter);
     void PopGCFrame(AllocaInst *gcframe, Instruction *InsertBefore);
     std::vector<int> ColorRoots(const State &S);
+    void PlaceGCFrameStore(State &S, unsigned R, unsigned MinColorRoot, const std::vector<int> &Colors, Value *GCFrame, Instruction *InsertionPoint);
+    void PlaceGCFrameStores(Function &F, State &S, unsigned MinColorRoot, const std::vector<int> &Colors, Value *GCFrame);
     void PlaceRootsAndUpdateCalls(Function &F, std::vector<int> &Colors, State &S, std::map<Value *, std::pair<int, int>>);
     bool doInitialization(Module &M) override;
     bool runOnFunction(Function &F) override;
@@ -418,8 +420,10 @@ static int LiftSelect(State &S, SelectInst *SI) {
     FalseBase = MaybeExtractUnion(FalseBase, SI);
     if (getValueAddrSpace(TrueBase) != AddressSpace::Tracked)
         TrueBase = ConstantPointerNull::get(cast<PointerType>(FalseBase->getType()));
-    else if (getValueAddrSpace(FalseBase) != AddressSpace::Tracked)
+    if (getValueAddrSpace(FalseBase) != AddressSpace::Tracked)
         FalseBase = ConstantPointerNull::get(cast<PointerType>(TrueBase->getType()));
+    if (getValueAddrSpace(TrueBase) != AddressSpace::Tracked)
+        return -1;
     Value *SelectBase = SelectInst::Create(SI->getCondition(),
         TrueBase, FalseBase, "gclift", SI);
     int Number = ++S.MaxPtrNumber;
@@ -541,9 +545,6 @@ static void NoteDef(State &S, BBState &BBS, int Num, const std::vector<int> &Saf
     BBS.UpExposedUsesUnrooted[Num] = 0;
     if (!BBS.HasSafepoint)
         BBS.DownExposedUnrooted[Num] = 1;
-    else if (HasBitSet(S.LiveSets[BBS.TopmostSafepoint], Num)) {
-        S.Rootings[BBS.TopmostSafepoint].insert(Num);
-    }
     // This value could potentially be live at any following safe point
     // if it ends up live out, so add it to the LiveIfLiveOut lists for all
     // following safepoints.
@@ -584,6 +585,7 @@ void LateLowerGCFrame::MaybeNoteDef(State &S, BBState &BBS, Value *Def, const st
 static int NoteSafepoint(State &S, BBState &BBS, CallInst *CI) {
     int Number = ++S.MaxSafepointNumber;
     S.SafepointNumbering[CI] = Number;
+    S.ReverseSafepointNumbering.push_back(CI);
     // Note which pointers are upward exposed live here. They need to be
     // considered live at this safepoint even when they have a def earlier
     // in this BB (i.e. even when they don't participate in the dataflow
@@ -591,7 +593,6 @@ static int NoteSafepoint(State &S, BBState &BBS, CallInst *CI) {
     BBS.UpExposedUses |= BBS.UpExposedUsesUnrooted;
     BBS.UpExposedUsesUnrooted.reset();
     S.LiveSets.push_back(BBS.UpExposedUses);
-    S.Rootings.push_back(std::set<int>{});
     S.LiveIfLiveOut.push_back(std::vector<int>{});
     return Number;
 }
@@ -718,7 +719,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     continue;
                 }
                 MaybeNoteDef(S, BBS, CI, BBS.Safepoints);
-                NoteOperandUses(S, BBS, I);
+                NoteOperandUses(S, BBS, I, BBS.UpExposedUses);
                 for (Use &U : CI->operands()) {
                     Value *V = U;
                     if (isUnionRep(V->getType())) {
@@ -866,6 +867,21 @@ void LateLowerGCFrame::ComputeLiveness(Function &F, State &S) {
     ComputeLiveSets(F, S);
 }
 
+// For debugging
+JL_USED_FUNC static void dumpSafepointsForBBName(Function &F, State &S, const char *BBName) {
+    for (auto it : S.SafepointNumbering) {
+        if (it.first->getParent()->getName() == BBName) {
+            dbgs() << "Live at " << *it.first << "\n";
+            BitVector &LS = S.LiveSets[it.second];
+            for (int Idx = LS.find_first(); Idx >= 0; Idx = LS.find_next(Idx)) {
+                dbgs() << "\t";
+                S.ReversePtrNumbering[Idx]->printAsOperand(dbgs());
+                dbgs() << "\n";
+            }
+        }
+    }
+}
+
 void LateLowerGCFrame::ComputeLiveSets(Function &F, State &S) {
     // Iterate over all safe points. Add to live sets all those variables that
     // are now live across their parent block.
@@ -908,41 +924,6 @@ void LateLowerGCFrame::ComputeLiveSets(Function &F, State &S) {
             Neighbors.insert(Idx);
         }
         S.Neighbors.push_back(Neighbors);
-    }
-    // Compute Rooting Locations
-    for (auto &BB : F) {
-        BBState &BBS = S.BBStates[&BB];
-        if (BBS.HasSafepoint) {
-            BitVector UnrootedIn = BBS.UnrootedIn;
-            // Only those values that have uses after a safepoint or are live
-            // across need to be rooted. N.B. We're explicitly not or-ing in
-            // UpExposedUsesUnrooted
-            BitVector Mask = BBS.UpExposedUses;
-            Mask |= BBS.LiveOut;
-            Mask &= BBS.LiveIn;
-            UnrootedIn &= Mask;
-            for (int Idx = UnrootedIn.find_first(); Idx >= 0; Idx = UnrootedIn.find_next(Idx)) {
-                S.Rootings[BBS.TopmostSafepoint].insert(Idx);
-            }
-            // Backfill any interior rootings
-            BitVector Interior = BBS.UnrootedOut;
-            Interior.flip();
-            Interior &= BBS.LiveOut;
-            Interior &= BBS.Defs;
-            for (int Idx = Interior.find_first(); Idx >= 0; Idx = Interior.find_next(Idx)) {
-                // Needs to be rooted at the first safepoint after the def
-                Instruction *Def = cast<Instruction>(S.ReversePtrNumbering[Idx]);
-                auto it = ++BasicBlock::iterator(Def);
-                while (true) {
-                    auto sit = S.SafepointNumbering.find(&*it++);
-                    if (sit != S.SafepointNumbering.end()) {
-                        S.Rootings[sit->second].insert(Idx);
-                        break;
-                    }
-                    assert(it != Def->getParent()->end());
-                }
-            }
-        }
     }
 }
 
@@ -1007,6 +988,17 @@ struct PEOIterator {
         return NextElement;
     }
 };
+
+JL_USED_FUNC static void dumpColorAssignments(const State &S, std::vector<int> &Colors)
+{
+    for (unsigned i = 0; i < Colors.size(); ++i) {
+        if (Colors[i] == -1)
+            continue;
+        dbgs() << "\tValue ";
+        S.ReversePtrNumbering.at(i)->printAsOperand(dbgs());
+        dbgs() << " assigned color " << Colors[i] << "\n";
+    }
+}
 
 std::vector<int> LateLowerGCFrame::ColorRoots(const State &S) {
     std::vector<int> Colors;
@@ -1186,6 +1178,74 @@ static Value *GetPtrForNumber(State &S, unsigned Num, Instruction *InsertionPoin
     return Val;
 }
 
+static void AddInPredLiveOuts(BasicBlock *BB, BitVector &LiveIn, State &S)
+{
+    bool First = true;
+    std::set<BasicBlock *> Visited;
+    std::vector<BasicBlock *> WorkList;
+    WorkList.push_back(BB);
+    while (!WorkList.empty()) {
+        BB = &*WorkList.back();
+        WorkList.pop_back();
+        for (BasicBlock *Pred : predecessors(BB)) {
+            if (Visited.insert(Pred).second)
+                continue;
+            if (!S.BBStates[Pred].HasSafepoint) {
+                WorkList.push_back(Pred);
+                continue;
+            } else {
+                int LastSP = S.BBStates[Pred].Safepoints.front();
+                if (First) {
+                    LiveIn |= S.LiveSets[LastSP];
+                    First = false;
+                } else {
+                    LiveIn &= S.LiveSets[LastSP];
+                }
+            }
+        }
+    }
+}
+
+void LateLowerGCFrame::PlaceGCFrameStore(State &S, unsigned R, unsigned MinColorRoot, const std::vector<int> &Colors, Value *GCFrame, Instruction *InsertionPoint) {
+    Value *Val = GetPtrForNumber(S, R, InsertionPoint);
+    Value *args[1] = {
+        ConstantInt::get(T_int32, Colors[R]+MinColorRoot)
+    };
+    GetElementPtrInst *gep = GetElementPtrInst::Create(T_prjlvalue, GCFrame, makeArrayRef(args));
+    gep->insertBefore(InsertionPoint);
+    Val = MaybeExtractUnion(Val, InsertionPoint);
+    // Pointee types don't have semantics, so the optimizer is
+    // free to rewrite them if convenient. We need to change
+    // it back here for the store.
+    if (Val->getType() != T_prjlvalue)
+        Val = new BitCastInst(Val, T_prjlvalue, "", InsertionPoint);
+    new StoreInst(Val, gep, InsertionPoint);
+}
+
+void LateLowerGCFrame::PlaceGCFrameStores(Function &F, State &S, unsigned MinColorRoot, const std::vector<int> &Colors, Value *GCFrame)
+{
+    for (auto &BB : F) {
+        if (!S.BBStates[&BB].HasSafepoint) {
+            continue;
+        }
+        BitVector LiveIn;
+        AddInPredLiveOuts(&BB, LiveIn, S);
+        for(auto rit = S.BBStates[&BB].Safepoints.rbegin();
+              rit != S.BBStates[&BB].Safepoints.rend(); ++rit ) {
+            // Find those that become live, but were not before
+            BitVector NowLive = S.LiveSets[*rit];
+            LiveIn.resize(NowLive.size(), 0);
+            LiveIn.flip();
+            NowLive &= LiveIn;
+            for (int Idx = NowLive.find_first(); Idx >= 0; Idx = NowLive.find_next(Idx)) {
+                PlaceGCFrameStore(S, Idx, MinColorRoot, Colors, GCFrame,
+                  S.ReverseSafepointNumbering[*rit]);
+            }
+            LiveIn = S.LiveSets[*rit];
+        }
+    }
+}
+
 void LateLowerGCFrame::PlaceRootsAndUpdateCalls(Function &F, std::vector<int> &Colors, State &S, std::map<Value *, std::pair<int, int>>) {
     auto &DT = getAnalysis<DominatorTreeWrapperPass>().getDomTree();
     int MaxColor = -1;
@@ -1244,40 +1304,7 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(Function &F, std::vector<int> &C
         }
         unsigned MinColorRoot = AllocaSlot;
         // Insert GC frame stores
-        for (auto it : S.SafepointNumbering) {
-            const std::set<int> &Rooting = S.Rootings[it.second];
-            for (int R : Rooting) {
-                if (Colors[R] != -1) {
-                    Instruction *InsertionPoint = it.first;
-                    Value *Val = S.ReversePtrNumbering[R];
-                    /*
-                     * Generally we like doing the rooting late, because it lets
-                     * us avoid doing so on paths that have no safe points.
-                     * However, it is possible for the first safepoint to not
-                     * be dominated by the definition. In that case, just start
-                     * rooting it right after the definition.
-                     */
-                    if (isa<Instruction>(Val) && !DT.dominates(cast<Instruction>(Val), InsertionPoint)) {
-                        InsertionPoint = &*(++(cast<Instruction>(Val)->getIterator()));
-                        // No need to root this anywhere else any more
-                        Colors[R] = -1;
-                    }
-                    Val = GetPtrForNumber(S, R, InsertionPoint);
-                    Value *args[1] = {
-                        ConstantInt::get(T_int32, Colors[R]+MinColorRoot)
-                    };
-                    GetElementPtrInst *gep = GetElementPtrInst::Create(T_prjlvalue, gcframe, makeArrayRef(args));
-                    gep->insertBefore(InsertionPoint);
-                    Val = MaybeExtractUnion(Val, InsertionPoint);
-                    // Pointee types don't have semantics, so the optimizer is
-                    // free to rewrite them if convenient. We need to change
-                    // it back here for the store.
-                    if (Val->getType() != T_prjlvalue)
-                        Val = new BitCastInst(Val, T_prjlvalue, "", InsertionPoint);
-                    new StoreInst(Val, gep, InsertionPoint);
-                }
-            }
-        }
+        PlaceGCFrameStores(F, S, MinColorRoot, Colors, gcframe);
         // Insert GCFrame pops
         for(Function::iterator I = F.begin(), E = F.end(); I != E; ++I) {
             if (isa<ReturnInst>(I->getTerminator())) {
