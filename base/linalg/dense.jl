@@ -5,6 +5,7 @@
 ## BLAS cutoff threshold constants
 
 const SCAL_CUTOFF = 2048
+const TRIA_CUTOFF = 2048
 const DOT_CUTOFF = 128
 const ASUM_CUTOFF = 32
 const NRM2_CUTOFF = 32
@@ -32,17 +33,36 @@ end
 function isone(x::StridedMatrix)
     m, n = size(x)
     m != n && return false # only square matrices can satisfy x == one(x)
-    for i in 1:m
-        for j in i:m
-            if i == j
-                @inbounds !isone(x[i,i]) && return false
-            else
-                @inbounds (!iszero(x[i,j]) || !iszero(x[j,i])) && return false
-            end
+    if m < TRIA_CUTOFF
+        _isone_triacheck(x, m)
+    else
+        _isone_fastcache(x, m)
+    end
+end
+
+@inline function _isone_triacheck(x::StridedMatrix, m::Int)
+    @inbounds for i in 1:m, j in i:m
+        if i == j
+            isone(x[i,i]) || return false
+        else
+            iszero(x[i,j]) || iszero(x[j,i]) || return false
         end
     end
     return true
 end
+
+
+@inline function _isone_fastcache(x::StridedMatrix, m::Int)
+    @inbounds for i in 1:m, j in 1:m
+        if i == j
+            isone(x[i,i]) || return false
+        else
+            iszero(x[j,i]) || return false
+        end
+    end
+    return true
+end
+
 
 """
     isposdef!(A) -> Bool
