@@ -39,6 +39,12 @@ end
     @test foo1234(3) == 4
     @test_throws ErrorException DeprecationTests.bar(3)
 
+    # 22845
+    ex = :(module M22845; import ..DeprecationTests: bar;
+                          bar(x::Number) = x + 3; end)
+    @test_warn "importing deprecated binding" eval(ex)
+    @test @test_nowarn(DeprecationTests.bar(4)) == 7
+
     # enable when issue #22043 is fixed
     # @test @test_warn "f1 is deprecated, use f instead." f1()
     # @test @test_nowarn f1()
