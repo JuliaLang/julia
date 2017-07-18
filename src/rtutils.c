@@ -1016,7 +1016,7 @@ void jl_depwarn(const char *msg, jl_value_t *sym)
     JL_GC_POP();
 }
 
-void jl_depwarn_partial_indexing(size_t n)
+JL_DLLEXPORT void jl_depwarn_partial_indexing(size_t n)
 {
     static jl_value_t *depwarn_func = NULL;
     if (!depwarn_func && jl_base_module) {

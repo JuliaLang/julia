@@ -480,7 +480,7 @@ static Value *runtime_apply_type(jl_codectx_t &ctx, jl_value_t *ty, jl_unionall_
     args[1] = literal_pointer_val(ctx, (jl_value_t*)ctx.linfo->def.method->sig);
     args[2] = ctx.builder.CreateInBoundsGEP(
             T_prjlvalue,
-            emit_bitcast(ctx, decay_derived(ctx.spvals_ptr), T_pprjlvalue),
+            ctx.spvals_ptr,
             ConstantInt::get(T_size, sizeof(jl_svec_t) / sizeof(jl_value_t*)));
     return ctx.builder.CreateCall(prepare_call(jlapplytype_func), makeArrayRef(args));
 }
