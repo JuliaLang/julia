@@ -29,6 +29,21 @@ function scale!(X::Array{T}, s::Real) where T<:BlasComplex
     X
 end
 
+function isone(x::StridedMatrix)
+    m, n = size(x)
+    m != n && return false # only square matrices can satisfy x == one(x)
+    for i in 1:m
+        for j in 1:m
+            if i == j
+                @inbounds !isone(x[i,i]) && return false
+            else
+                @inbounds !iszero(x[i,j]) && return false
+            end
+        end
+    end
+    return true
+end
+
 """
     isposdef!(A) -> Bool
 
