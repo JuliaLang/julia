@@ -178,6 +178,12 @@ done(s::IntSet, i) = i <= 0
 
 
 @noinline _throw_intset_notempty_error() = throw(ArgumentError("collection must be non-empty"))
+
+function first(s::IntSet)
+    idx = findfirst(s.bits)
+    idx == 0 ? _throw_intset_notempty_error() : idx
+end
+
 function last(s::IntSet)
     idx = findprev(s.bits, length(s.bits))
     idx == 0 ? _throw_intset_notempty_error() : idx
@@ -239,3 +245,8 @@ function hash(s::IntSet, h::UInt)
     end
     h
 end
+
+minimum(s::IntSet) = first(s)
+maximum(s::IntSet) = last(s)
+extrema(s::IntSet) = (first(s), last(s))
+issorted(s::IntSet) = true
