@@ -77,24 +77,132 @@
 using namespace llvm;
 #include "debuginfo.h"
 
+// helper class for tracking inlining context while printing debug info
+class DILineInfoPrinter {
+    std::vector<DILineInfo> context;
+    char LineStart;
+    bool bracket_outer;
+public:
+    DILineInfoPrinter(char LineStart, bool bracket_outer)
+        : LineStart(LineStart),
+          bracket_outer(bracket_outer) {};
+    void emit_finish(raw_ostream &Out);
+    void emit_lineinfo(raw_ostream &Out, std::vector<DILineInfo> &DI);
+
+    template<class T>
+    void emit_lineinfo(std::string &Out, T &DI)
+    {
+        raw_string_ostream OS(Out);
+        emit_lineinfo(OS, DI);
+    }
+
+    void emit_lineinfo(raw_ostream &Out, DILineInfo &DI)
+    {
+        std::vector<DILineInfo> DIvec(1);
+        DIvec[0] = DI;
+        emit_lineinfo(Out, DIvec);
+    }
+
+    void emit_lineinfo(raw_ostream &Out, DIInliningInfo &DI)
+    {
+        uint32_t nframes = DI.getNumberOfFrames();
+        std::vector<DILineInfo> DIvec(nframes);
+        for (uint32_t i = 0; i < DI.getNumberOfFrames(); i++) {
+            DIvec[i] = DI.getFrame(i);
+        }
+        emit_lineinfo(Out, DIvec);
+    }
+
+    void emit_finish(std::string &Out)
+    {
+        raw_string_ostream OS(Out);
+        emit_finish(OS);
+    }
+};
+
+void DILineInfoPrinter::emit_finish(raw_ostream &Out)
+{
+    uint32_t npops = context.size();
+    if (!bracket_outer && npops > 0)
+        npops--;
+    if (npops) {
+        Out << LineStart;
+        while (npops--)
+            Out << '}';
+        Out << '\n';
+    }
+    context.clear();
+}
+
+void DILineInfoPrinter::emit_lineinfo(raw_ostream &Out, std::vector<DILineInfo> &DI)
+{
+    bool update_line_only = false;
+    uint32_t nctx = context.size();
+    uint32_t nframes = DI.size();
+    if (nframes == 0)
+        return; // just skip over lines with no debug info at all
+    if (nctx > nframes)
+        context.resize(nframes);
+    for (uint32_t i = 0; i < nctx && i < nframes; i++) {
+        const DILineInfo &CtxLine = context.at(i);
+        const DILineInfo &FrameLine = DI.at(nframes - 1 - i);
+        if (CtxLine != FrameLine) {
+            if (CtxLine.FileName == FrameLine.FileName &&
+                    CtxLine.FunctionName == FrameLine.FunctionName) {
+                update_line_only = true;
+            }
+            context.resize(i);
+            break;
+        }
+    }
+    uint32_t npops = nctx - context.size() - update_line_only;
+    if (npops) {
+        Out << LineStart;
+        while (npops--)
+            Out << '}';
+        Out << '\n';
+    }
+    if (update_line_only) {
+        DILineInfo frame = DI.at(nframes - 1 - context.size());
+        if (frame.Line != UINT_MAX && frame.Line != 0)
+            Out << LineStart << " Location: " << frame.FileName << ":" << frame.Line << '\n';
+        context.push_back(frame);
+    }
+    for (uint32_t i = context.size(); i < nframes; i++) {
+        DILineInfo frame = DI.at(nframes - 1 - i);
+        context.push_back(frame);
+        Out << LineStart << " Function " << frame.FunctionName;
+        if (bracket_outer || i != 0)
+            Out << " {";
+        Out << "\n" << LineStart << " Location: " << frame.FileName;
+        if (frame.Line != UINT_MAX && frame.Line != 0)
+            Out << ":" << frame.Line;
+        Out << "\n";
+    }
+}
+
+
+// adaptor class for printing line numbers before llvm IR lines
 class LineNumberAnnotatedWriter : public AssemblyAnnotationWriter {
     DILocation *InstrLoc = nullptr;
+    DILineInfoPrinter LinePrinter{';', false};
     DenseMap<const Instruction *, DILocation *> DebugLoc;
     DenseMap<const Function *, DISubprogram *> Subprogram;
 public:
     LineNumberAnnotatedWriter() {}
     virtual void emitFunctionAnnot(const Function *, formatted_raw_ostream &);
     virtual void emitInstructionAnnot(const Instruction *, formatted_raw_ostream &);
+    virtual void emitBasicBlockEndAnnot(const BasicBlock *, formatted_raw_ostream &);
     // virtual void printInfoComment(const Value &, formatted_raw_ostream &) {}
 
     void addSubprogram(const Function *F, DISubprogram *SP)
     {
-      Subprogram[F] = SP;
+        Subprogram[F] = SP;
     }
 
     void addDebugLoc(const Instruction *I, DILocation *Loc)
     {
-      DebugLoc[I] = Loc;
+        DebugLoc[I] = Loc;
     }
 };
 
@@ -110,15 +218,12 @@ void LineNumberAnnotatedWriter::emitFunctionAnnot(
     }
     if (!FuncLoc)
         return;
-    StringRef Name = FuncLoc->getName();
-    StringRef Filename = FuncLoc->getFilename();
-    unsigned Line = FuncLoc->getLine();
-    if (!Name.empty())
-        Out << "; Function: " << Name << '\n';
-    if (!Filename.empty())
-        Out << "; Filename: " << Filename << '\n';
-    if (Line != UINT_MAX && Line != 0)
-        Out << "; Source line: " << Line << '\n';
+    std::vector<DILineInfo> DIvec(1);
+    DILineInfo &DI = DIvec.back();
+    DI.FunctionName = FuncLoc->getName();
+    DI.FileName = FuncLoc->getFilename();
+    DI.Line = FuncLoc->getLine();
+    LinePrinter.emit_lineinfo(Out, DIvec);
 }
 
 void LineNumberAnnotatedWriter::emitInstructionAnnot(
@@ -132,17 +237,27 @@ void LineNumberAnnotatedWriter::emitInstructionAnnot(
     }
     if (!NewInstrLoc || NewInstrLoc == InstrLoc)
         return;
-    bool NewFile = false;
-    if (InstrLoc == nullptr || NewInstrLoc->getFilename() != InstrLoc->getFilename()) {
-        Out << "    ; Filename: " << NewInstrLoc->getFilename() << '\n';
-        NewFile = true;
-    }
-    if (NewInstrLoc->getLine() != UINT_MAX &&
-        (NewFile || NewInstrLoc->getLine() != InstrLoc->getLine()))
-            Out << "    ; Source line: " << NewInstrLoc->getLine() << '\n';
     InstrLoc = NewInstrLoc;
+    std::vector<DILineInfo> DIvec;
+    do {
+        DIvec.emplace_back();
+        DILineInfo &DI = DIvec.back();
+        DIScope *scope = NewInstrLoc->getScope();
+        if (scope)
+            DI.FunctionName = scope->getName();
+        DI.FileName = NewInstrLoc->getFilename();
+        DI.Line = NewInstrLoc->getLine();
+        NewInstrLoc = NewInstrLoc->getInlinedAt();
+    } while (NewInstrLoc);
+    LinePrinter.emit_lineinfo(Out, DIvec);
 }
 
+void LineNumberAnnotatedWriter::emitBasicBlockEndAnnot(
+        const BasicBlock *BB, formatted_raw_ostream &Out)
+{
+    if (BB == &BB->getParent()->back())
+        LinePrinter.emit_finish(Out);
+}
 
 // print an llvm IR acquired from jl_get_llvmf
 // warning: this takes ownership of, and destroys, f->getParent()
@@ -280,10 +395,9 @@ jl_value_t *jl_dump_fptr_asm(uint64_t fptr, int raw_mc, const char* asm_variant)
     uint64_t symsize = 0;
     int64_t slide = 0, section_slide = 0;
     llvm::DIContext *context = NULL;
-    llvm::DIContext *&objcontext = context;
     const object::ObjectFile *object = NULL;
     if (!jl_DI_for_fptr(fptr, &symsize, &slide, &section_slide, &object, &context)) {
-        if (!jl_dylib_DI_for_fptr(fptr, &object, &objcontext, &slide, &section_slide, false,
+        if (!jl_dylib_DI_for_fptr(fptr, &object, &context, &slide, &section_slide, false,
             NULL, NULL, NULL, NULL)) {
                 jl_printf(JL_STDERR, "WARNING: Unable to find function pointer\n");
                 return jl_pchar_to_string("", 0);
@@ -304,7 +418,7 @@ jl_value_t *jl_dump_fptr_asm(uint64_t fptr, int raw_mc, const char* asm_variant)
     int8_t gc_state = jl_gc_safe_enter(ptls);
     jl_dump_asm_internal(
             fptr, symsize, slide,
-            object, objcontext,
+            object, context,
             stream,
             asm_variant);
     jl_gc_safe_leave(ptls, gc_state);
@@ -625,13 +739,14 @@ static void jl_dump_asm_internal(
         uint64_t nextLineAddr = -1;
         DILineInfoTable::iterator di_lineIter = di_lineinfo.begin();
         DILineInfoTable::iterator di_lineEnd = di_lineinfo.end();
+        DILineInfoPrinter dbgctx{';', true};
         if (pass != 0) {
             if (di_ctx) {
                 // Set up the line info
                 if (di_lineIter != di_lineEnd) {
-                    std::ostringstream buf;
-                    buf << "Filename: " << di_lineIter->second.FileName << "\n";
-                    Streamer->EmitRawText(buf.str());
+                    std::string buf;
+                    dbgctx.emit_lineinfo(buf, di_lineIter->second);
+                    Streamer->EmitRawText(buf);
                     if (di_lineIter->second.Line <= 0)
                         ++di_lineIter;
                     nextLineAddr = di_lineIter->first;
@@ -645,11 +760,19 @@ static void jl_dump_asm_internal(
         // Do the disassembly
         for (Index = 0; Index < Fsize; Index += insSize) {
 
-            if (nextLineAddr != (uint64_t)-1 && Index + Fptr + slide == nextLineAddr) {
+            if (pass != 0 && nextLineAddr != (uint64_t)-1 && Index + Fptr + slide == nextLineAddr) {
                 if (di_ctx) {
-                    std::ostringstream buf;
-                    buf << "Source line: " << di_lineIter->second.Line << "\n";
-                    Streamer->EmitRawText(buf.str());
+                    std::string buf;
+                    DILineInfoSpecifier infoSpec(DILineInfoSpecifier::FileLineInfoKind::Default,
+                                                 DILineInfoSpecifier::FunctionNameKind::ShortName);
+                    DIInliningInfo dbg = di_ctx->getInliningInfoForAddress(Index + Fptr + slide, infoSpec);
+                    if (dbg.getNumberOfFrames()) {
+                        dbgctx.emit_lineinfo(buf, dbg);
+                    }
+                    else {
+                        dbgctx.emit_lineinfo(buf, di_lineIter->second);
+                    }
+                    Streamer->EmitRawText(buf);
                     nextLineAddr = (++di_lineIter)->first;
                 }
             }
@@ -719,6 +842,12 @@ static void jl_dump_asm_internal(
         DisInfo.setIP(Fptr);
         if (pass == 0)
             DisInfo.createSymbols();
+
+        if (pass != 0 && di_ctx) {
+            std::string buf;
+            dbgctx.emit_finish(buf);
+            Streamer->EmitRawText(buf);
+        }
     }
 }
 
