@@ -2970,7 +2970,8 @@ end
     # Array reduction
     @test !iszero([0, 1, 2, 3])
     @test iszero(zeros(Int, 5))
-    @test !isone(reshape([0, 1, 2, 3], 2, 2))
+    @test !isone(tril(ones(Int, 5, 5)))
+    @test !isone(triu(ones(Int, 5, 5)))
     @test !isone(zeros(Int, 5, 5))
     @test isone(eye(Int, 5, 5))
 end

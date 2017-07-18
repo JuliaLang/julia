@@ -5,10 +5,13 @@
 ## BLAS cutoff threshold constants
 
 const SCAL_CUTOFF = 2048
-const TRIA_CUTOFF = 2048
 const DOT_CUTOFF = 128
 const ASUM_CUTOFF = 32
 const NRM2_CUTOFF = 32
+
+# Cache size
+
+const ISONE_CUTOFF = 16384
 
 function scale!(X::Array{T}, s::T) where T<:BlasFloat
     s == 0 && return fill!(X, zero(T))
@@ -30,10 +33,11 @@ function scale!(X::Array{T}, s::Real) where T<:BlasComplex
     X
 end
 
+
 function isone(x::StridedMatrix)
     m, n = size(x)
     m != n && return false # only square matrices can satisfy x == one(x)
-    if m < TRIA_CUTOFF
+    if m < div(ISONE_CUTOFF * m * m, sizeof(x))
         _isone_triacheck(x, m)
     else
         _isone_fastcache(x, m)
@@ -45,7 +49,7 @@ end
         if i == j
             isone(x[i,i]) || return false
         else
-            iszero(x[i,j]) || iszero(x[j,i]) || return false
+            iszero(x[i,j]) && iszero(x[j,i]) || return false
         end
     end
     return true
