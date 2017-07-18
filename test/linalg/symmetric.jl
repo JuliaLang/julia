@@ -160,13 +160,15 @@ end
                 end
 
                 @testset "inversion" begin
+                    @test inv(Symmetric(asym)) ≈ inv(asym)
+                    @test inv(Hermitian(aherm)) ≈ inv(aherm)
                     for uplo in (:U, :L)
-                        @test inv(Hermitian(asym, uplo)) ≈ inv(full(Hermitian(asym, uplo)))
                         @test inv(Symmetric(asym, uplo)) ≈ inv(full(Symmetric(asym, uplo)))
+                        @test inv(Hermitian(aherm, uplo)) ≈ inv(full(Hermitian(aherm, uplo)))
+                        @test inv(Symmetric(a, uplo)) ≈ inv(full(Symmetric(a, uplo)))
                         if eltya <: Real
                             @test inv(Hermitian(a, uplo)) ≈ inv(full(Hermitian(a, uplo)))
                         end
-                        @test inv(Symmetric(a, uplo)) ≈ inv(full(Symmetric(a, uplo)))
                     end
                 end
 
