@@ -19,6 +19,9 @@ Language changes
   * Declaring arguments as `x::ANY` to avoid specialization has been replaced
     by `@nospecialize x`. ([#22666]).
 
+  * The parsing of `1<<2*3` as `1<<(2*3)` is deprecated, and will change to
+    `(1<<2)*3` in a future version ([#13079]).
+
 Breaking changes
 ----------------
 

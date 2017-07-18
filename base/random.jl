@@ -614,7 +614,7 @@ function rand!(r::MersenneTwister, A::Array{UInt128}, n::Int=length(A))
     if n > 0
         u = rand_ui2x52_raw(r)
         for i = 1:n
-            @inbounds A[i] ⊻= u << 12*i
+            @inbounds A[i] ⊻= u << (12*i)
         end
     end
     A

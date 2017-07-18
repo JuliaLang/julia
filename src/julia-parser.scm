@@ -865,9 +865,48 @@
                   (else
                    (loop (list 'call t ex (down s))))))))))
 
+(define (parse-with-chains-warn s down ops chain-ops)
+  (let loop ((ex (down s))
+             (got #f))
+    (let ((t (peek-token s)))
+      (if (not (ops t))
+          (cons ex got)
+          (let ((spc (ts:space? s)))
+            (take-token s)
+            (cond ((and space-sensitive spc (memq t unary-and-binary-ops)
+                        (not (eqv? (peek-char (ts:port s)) #\ )))
+                   ;; here we have "x -y"
+                   (ts:put-back! s t spc)
+                   (cons ex got))
+                  ((memq t chain-ops)
+                   (loop (list* 'call t ex
+                                (parse-chain s down t))
+                         #t))
+                  (else
+                   (loop (list 'call t ex (down s))
+                         got))))))))
+
 (define (parse-expr s)     (parse-with-chains s parse-shift         is-prec-plus? '(+ ++)))
-(define (parse-shift s)    (parse-LtoR        s parse-term          is-prec-bitshift?))
-(define (parse-term s)     (parse-with-chains s parse-rational      is-prec-times? '(*)))
+
+(define (bitshift-warn s)
+  (syntax-deprecation s (string "call to `*` inside call to bitshift operator")
+                      "parenthesized call to `*`"))
+
+(define (parse-shift s)    #;(parse-LtoR        s parse-term          is-prec-bitshift?)
+  (let loop ((ex (parse-term s))
+             (t  (peek-token s))
+             (warn1 #f))
+    (let ((ex (car ex))
+          (warn (cdr ex)))
+      (if (is-prec-bitshift? t)
+          (begin (if warn (bitshift-warn s))
+                 (take-token s)
+                 (let ((nxt (parse-term s)))
+                   (loop (cons (list 'call t ex (car nxt)) (cdr nxt)) (peek-token s) (cdr nxt))))
+          (begin (if warn1 (bitshift-warn s))
+                 ex)))))
+
+(define (parse-term s)     (parse-with-chains-warn s parse-rational      is-prec-times? '(*)))
 (define (parse-rational s) (parse-LtoR        s parse-unary-subtype is-prec-rational?))
 
 ;; parse `<: A where B` as `<: (A where B)` (issue #21545)
