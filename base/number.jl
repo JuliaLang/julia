@@ -30,7 +30,7 @@ iszero(x) = x == zero(x) # fallback method
     isone(x)
 
 Return `true` if `x == one(x)`; if `x` is an array, this checks whether
-all of the elements of `x` are one.
+`x` is an identity matrix.
 
 ```jldoctest
 julia> isone(1.0)
