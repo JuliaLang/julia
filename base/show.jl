@@ -1758,15 +1758,6 @@ function showarray(io::IO, X::AbstractArray, repr::Bool = true; header = true)
     end
 end
 
-showall(x) = showall(STDOUT, x)
-function showall(io::IO, x)
-    if !get(io, :limit, false)
-        show(io, x)
-    else
-        show(IOContext(io, :limit => false), x)
-    end
-end
-
 showcompact(x) = showcompact(STDOUT, x)
 function showcompact(io::IO, x)
     if get(io, :compact, false)

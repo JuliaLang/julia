@@ -1867,13 +1867,6 @@ it for new types as appropriate.
 promote_rule
 
 """
-    showall(x)
-
-Similar to [`show`](@ref), except shows all elements of arrays.
-"""
-showall
-
-"""
     match(r::Regex, s::AbstractString[, idx::Integer[, addopts]])
 
 Search for the first match of the regular expression `r` in `s` and return a `RegexMatch`
