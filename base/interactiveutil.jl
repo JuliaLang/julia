@@ -40,11 +40,14 @@ function edit(path::AbstractString, line::Integer=0)
     end
     background = true
     line_unsupported = false
-    if startswith(name, "emacs") || name == "gedit" || startswith(name, "gvim")
-        cmd = line != 0 ? `$command +$line $path` : `$command $path`
-    elseif startswith(name, "vim.") || name == "vi" || name == "vim" || name == "nvim" || name == "mvim" || name == "nano"
+    if startswith(name, "vim.") || name == "vi" || name == "vim" || name == "nvim" ||
+            name == "mvim" || name == "nano" ||
+            name == "emacs" && contains(in, command, ["-nw", "--no-window-system" ]) ||
+            name == "emacsclient" && contains(in, command, ["-nw", "-t", "-tty"])
         cmd = line != 0 ? `$command +$line $path` : `$command $path`
         background = false
+    elseif startswith(name, "emacs") || name == "gedit" || startswith(name, "gvim")
+        cmd = line != 0 ? `$command +$line $path` : `$command $path`
     elseif name == "textmate" || name == "mate" || name == "kate"
         cmd = line != 0 ? `$command $path -l $line` : `$command $path`
     elseif startswith(name, "subl") || startswith(name, "atom")
