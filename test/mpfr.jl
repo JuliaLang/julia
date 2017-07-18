@@ -885,3 +885,9 @@ setprecision(256) do
     @test string(big(-Inf)) == "BigFloat(-Inf, 256)"
     @test string(big(NaN)) == "BigFloat(NaN, 256)"
 end
+
+if MPFR.MPFR_VERSION > v"3.1.5" || "r11590" in MPFR.MPFR_PATCHES
+    setprecision(2_000_000) do
+        @test abs(sin(big(pi)/6) - 0.5) < ldexp(big(1.0),-1_999_000)
+    end
+end

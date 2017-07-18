@@ -17,3 +17,7 @@ svn diff -r 11589:11590 https://scm.gforge.inria.fr/anonscm/svn/mpfr/trunk
        /* the next term of the series is divided by Q[k] and multiplied
           by pp^2/2^(2r), thus the mult. factor < 1/2^mult[k] */
        MPFR_MPZ_SIZEINBASE2(mult[k], Q[k]);
+--- PATCHES	2017-07-18 15:55:44.000000000 -0700
++++ PATCHES	2017-07-18 15:55:57.000000000 -0700
+@@ -0,0 +1 @@
++r11590
