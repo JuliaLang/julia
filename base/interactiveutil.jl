@@ -98,7 +98,7 @@ if Sys.iswindows()
     end
 else
     function less(file::AbstractString, line::Integer)
-        pager = get(ENV, "PAGER", "less")
+        pager = split(get(ENV, "PAGER", "less"))
         run(`$pager +$(line)g $file`)
     end
 end
