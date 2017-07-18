@@ -8381,7 +8381,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.conj",
     "category": "Function",
-    "text": "conj(z)\n\nCompute the complex conjugate of a complex number z.\n\nExamples\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\nconj(v::RowVector)\n\nReturns a ConjArray lazy view of the input, where each element is conjugated.\n\nExample\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\n"
+    "text": "conj(v::RowVector)\n\nReturns a ConjArray lazy view of the input, where each element is conjugated.\n\nExample\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\nconj(z)\n\nCompute the complex conjugate of a complex number z.\n\nExamples\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\n"
 },
 
 {
@@ -9693,7 +9693,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.repr",
     "category": "Function",
-    "text": "repr(x)\n\nCreate a string from any value using the showall function.\n\n\n\n"
+    "text": "repr(x)\n\nCreate a string from any value using the show function.\n\n\n\n"
 },
 
 {
@@ -12661,7 +12661,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.lufact",
     "category": "Function",
-    "text": "lufact(A::SparseMatrixCSC) -> F::UmfpackLU\n\nCompute the LU factorization of a sparse matrix A.\n\nFor sparse A with real or complex element type, the return type of F is UmfpackLU{Tv, Ti}, with Tv = Float64 or Complex128 respectively and Ti is an integer type (Int32 or Int64).\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] right permutation Vector\nF[:q] left permutation Vector\nF[:Rs] Vector of scaling factors\nF[:(:)] (L,U,p,q,Rs) components\n\nThe relation between F and A is\n\nF[:L]*F[:U] == (F[:Rs] .* A)[F[:p], F[:q]]\n\nF further supports the following functions:\n\n\\\ncond\ndet\n\nnote: Note\nlufact(A::SparseMatrixCSC) uses the UMFPACK library that is part of SuiteSparse. As this library only supports sparse matrices with Float64 or Complex128 elements, lufact converts A into a copy that is of type SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\nlufact(A [,pivot=Val(true)]) -> F::LU\n\nCompute the LU factorization of A.\n\nIn most cases, if A is a subtype S of AbstractMatrix{T} with an element type T supporting +, -, * and /, the return type is LU{T,S{T}}. If pivoting is chosen (default) the element type should also support abs and <.\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] (right) permutation Vector\nF[:P] (right) permutation Matrix\n\nThe relationship between F and A is\n\nF[:L]*F[:U] == A[F[:p], :]\n\nF further supports the following functions:\n\nSupported function LU LU{T,Tridiagonal{T}}\n/ ✓ \n\\ ✓ ✓\ninv ✓ ✓\ndet ✓ ✓\nlogdet ✓ ✓\nlogabsdet ✓ ✓\nsize ✓ ✓\n\nExample\n\njulia> A = [4 3; 6 3]\n2×2 Array{Int64,2}:\n 4  3\n 6  3\n\njulia> F = lufact(A)\nBase.LinAlg.LU{Float64,Array{Float64,2}} with factors L and U:\n[1.0 0.0; 1.5 1.0]\n[4.0 3.0; 0.0 -1.5]\n\njulia> F[:L] * F[:U] == A[F[:p], :]\ntrue\n\n\n\n"
+    "text": "lufact(A [,pivot=Val(true)]) -> F::LU\n\nCompute the LU factorization of A.\n\nIn most cases, if A is a subtype S of AbstractMatrix{T} with an element type T supporting +, -, * and /, the return type is LU{T,S{T}}. If pivoting is chosen (default) the element type should also support abs and <.\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] (right) permutation Vector\nF[:P] (right) permutation Matrix\n\nThe relationship between F and A is\n\nF[:L]*F[:U] == A[F[:p], :]\n\nF further supports the following functions:\n\nSupported function LU LU{T,Tridiagonal{T}}\n/ ✓ \n\\ ✓ ✓\ninv ✓ ✓\ndet ✓ ✓\nlogdet ✓ ✓\nlogabsdet ✓ ✓\nsize ✓ ✓\n\nExample\n\njulia> A = [4 3; 6 3]\n2×2 Array{Int64,2}:\n 4  3\n 6  3\n\njulia> F = lufact(A)\nBase.LinAlg.LU{Float64,Array{Float64,2}} with factors L and U:\n[1.0 0.0; 1.5 1.0]\n[4.0 3.0; 0.0 -1.5]\n\njulia> F[:L] * F[:U] == A[F[:p], :]\ntrue\n\n\n\nlufact(A::SparseMatrixCSC) -> F::UmfpackLU\n\nCompute the LU factorization of a sparse matrix A.\n\nFor sparse A with real or complex element type, the return type of F is UmfpackLU{Tv, Ti}, with Tv = Float64 or Complex128 respectively and Ti is an integer type (Int32 or Int64).\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] right permutation Vector\nF[:q] left permutation Vector\nF[:Rs] Vector of scaling factors\nF[:(:)] (L,U,p,q,Rs) components\n\nThe relation between F and A is\n\nF[:L]*F[:U] == (F[:Rs] .* A)[F[:p], F[:q]]\n\nF further supports the following functions:\n\n\\\ncond\ndet\n\nnote: Note\nlufact(A::SparseMatrixCSC) uses the UMFPACK library that is part of SuiteSparse. As this library only supports sparse matrices with Float64 or Complex128 elements, lufact converts A into a copy that is of type SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\n"
 },
 
 {
@@ -15681,14 +15681,6 @@ var documenterSearchIndex = {"docs": [
 },
 
 {
-    "location": "stdlib/io-network/#Base.showall",
-    "page": "I/O and Network",
-    "title": "Base.showall",
-    "category": "Function",
-    "text": "showall(x)\n\nSimilar to show, except shows all elements of arrays.\n\n\n\n"
-},
-
-{
     "location": "stdlib/io-network/#Base.summary",
     "page": "I/O and Network",
     "title": "Base.summary",
@@ -15941,7 +15933,7 @@ var documenterSearchIndex = {"docs": [
     "page": "I/O and Network",
     "title": "Text I/O",
     "category": "section",
-    "text": "Base.show(::Any)\nBase.showcompact\nBase.showall\nBase.summary\nBase.print\nBase.println\nBase.print_with_color\nBase.info\nBase.warn\nBase.logging\nBase.Printf.@printf\nBase.Printf.@sprintf\nBase.sprint\nBase.showerror\nBase.dump\nBase.readstring\nBase.readline\nBase.readuntil\nBase.readlines\nBase.eachline\nBase.DataFmt.readdlm(::Any, ::Char, ::Type, ::Char)\nBase.DataFmt.readdlm(::Any, ::Char, ::Char)\nBase.DataFmt.readdlm(::Any, ::Char, ::Type)\nBase.DataFmt.readdlm(::Any, ::Char)\nBase.DataFmt.readdlm(::Any, ::Type)\nBase.DataFmt.readdlm(::Any)\nBase.DataFmt.writedlm\nBase.DataFmt.readcsv\nBase.DataFmt.writecsv\nBase.Base64.Base64EncodePipe\nBase.Base64.Base64DecodePipe\nBase.Base64.base64encode\nBase.Base64.base64decode\nBase.displaysize"
+    "text": "Base.show(::Any)\nBase.showcompact\nBase.summary\nBase.print\nBase.println\nBase.print_with_color\nBase.info\nBase.warn\nBase.logging\nBase.Printf.@printf\nBase.Printf.@sprintf\nBase.sprint\nBase.showerror\nBase.dump\nBase.readstring\nBase.readline\nBase.readuntil\nBase.readlines\nBase.eachline\nBase.DataFmt.readdlm(::Any, ::Char, ::Type, ::Char)\nBase.DataFmt.readdlm(::Any, ::Char, ::Char)\nBase.DataFmt.readdlm(::Any, ::Char, ::Type)\nBase.DataFmt.readdlm(::Any, ::Char)\nBase.DataFmt.readdlm(::Any, ::Type)\nBase.DataFmt.readdlm(::Any)\nBase.DataFmt.writedlm\nBase.DataFmt.readcsv\nBase.DataFmt.writecsv\nBase.Base64.Base64EncodePipe\nBase.Base64.Base64DecodePipe\nBase.Base64.base64encode\nBase.Base64.base64decode\nBase.displaysize"
 },
 
 {
