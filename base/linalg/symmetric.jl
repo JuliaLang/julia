@@ -343,9 +343,24 @@ det(A::Symmetric) = det(bkfact(A))
 # ambiguity with RowVector
 \(A::HermOrSym{<:Any,<:StridedMatrix}, B::RowVector) = invoke(\, Tuple{AbstractMatrix, RowVector}, A, B)
 
-
-inv(A::Hermitian{T,S}) where {T<:BlasFloat,S<:StridedMatrix} = Hermitian{T,S}(inv(bkfact(A)), A.uplo)
-inv(A::Symmetric{T,S}) where {T<:BlasFloat,S<:StridedMatrix} = Symmetric{T,S}(inv(bkfact(A)), A.uplo)
+function _inv(A::HermOrSym)
+    n = checksquare(A)
+    B = inv!(lufact(A))
+    conjugate = isa(A, Hermitian)
+    # symmetrize
+    if A.uplo == 'U' # add to upper triangle
+        @inbounds for i = 1:n, j = i:n
+            B[i,j] = conjugate ? (B[i,j] + conj(B[j,i])) / 2 : (B[i,j] + B[j,i]) / 2
+        end
+    else # A.uplo == 'L', add to lower triangle
+        @inbounds for i = 1:n, j = i:n
+            B[j,i] = conjugate ? (B[j,i] + conj(B[i,j])) / 2 : (B[j,i] + B[i,j]) / 2
+        end
+    end
+    B
+end
+inv(A::Hermitian{T,S}) where {T<:BlasFloat,S<:StridedMatrix} = Hermitian{T,S}(_inv(A), A.uplo)
+inv(A::Symmetric{T,S}) where {T<:BlasFloat,S<:StridedMatrix} = Symmetric{T,S}(_inv(A), A.uplo)
 
 eigfact!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}) = Eigen(LAPACK.syevr!('V', 'A', A.uplo, A.data, 0.0, 0.0, 0, 0, -1.0)...)
 
