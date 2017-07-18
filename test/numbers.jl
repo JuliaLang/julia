@@ -2971,8 +2971,8 @@ end
     @test !iszero([0, 1, 2, 3])
     @test !isone([0, 1, 2, 3])
     @test iszero(zeros(Int, 5))
-    @test !isone(zeros(Int, 5))
-    @test isone(eye(Int, 5))
+    @test !isone(zeros(Int, 5, 5))
+    @test isone(eye(Int, 5, 5))
 end
 
 f20065(B, i) = UInt8(B[i])
