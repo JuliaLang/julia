@@ -35,6 +35,28 @@ mean(iterable) = mean(identity, iterable)
 mean(f::Callable, A::AbstractArray) = sum(f, A) / _length(A)
 mean(A::AbstractArray) = sum(A) / _length(A)
 
+"""
+    mean!(r, v)
+
+Compute the mean of `v` over the singleton dimensions of `r`, and write results to `r`.
+
+# Examples
+```jldoctest
+julia> v = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> mean!([1., 1.], v)
+2-element Array{Float64,1}:
+ 1.5
+ 3.5
+
+julia> mean!([1. 1.], v)
+1×2 Array{Float64,2}:
+ 2.0  3.0
+```
+"""
 function mean!(R::AbstractArray, A::AbstractArray)
     sum!(R, A; init=true)
     scale!(R, _length(R) / _length(A))

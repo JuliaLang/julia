@@ -986,7 +986,29 @@ finalize
 """
     BoundsError([a],[i])
 
-An indexing operation into an array, `a`, tried to access an out-of-bounds element, `i`.
+An indexing operation into an array, `a`, tried to access an out-of-bounds element at index `i`.
+
+# Examples
+```jldoctest
+julia> A = ones(7);
+
+julia> A[8]
+ERROR: BoundsError: attempt to access 7-element Array{Float64,1} at index [8]
+Stacktrace:
+ [1] getindex(::Array{Float64,1}, ::Int64) at ./array.jl:586
+
+julia> B = ones(2, 3);
+
+julia> B[2, 4]
+ERROR: BoundsError: attempt to access 2×3 Array{Float64,2} at index [2, 4]
+Stacktrace:
+ [1] getindex(::Array{Float64,2}, ::Int64, ::Int64) at ./array.jl:587
+
+julia> B[9]
+ERROR: BoundsError: attempt to access 2×3 Array{Float64,2} at index [9]
+Stacktrace:
+ [1] getindex(::Array{Float64,2}, ::Int64) at ./array.jl:586
+```
 """
 BoundsError
 
@@ -1143,21 +1165,6 @@ julia> bin(bswap(1))
 ```
 """
 bswap
-
-"""
-    maxintfloat(T)
-
-The largest integer losslessly representable by the given floating-point DataType `T`.
-"""
-maxintfloat(T)
-
-"""
-    maxintfloat(T, S)
-
-The largest integer losslessly representable by the given floating-point DataType `T` that
-also does not exceed the maximum integer representable by the integer DataType `S`.
-"""
-maxintfloat(T, S)
 
 """
     delete!(collection, key)
@@ -1529,13 +1536,6 @@ See [`IOContext`](@ref) for details.
 show(stream, mime, x)
 
 """
-    mean!(r, v)
-
-Compute the mean of `v` over the singleton dimensions of `r`, and write results to `r`.
-"""
-mean!
-
-"""
     isless(x, y)
 
 Test whether `x` is less than `y`, according to a canonical total order. Values that are
@@ -1595,6 +1595,24 @@ unsafe_trunc
 
 Returns the "parent array" of an array view type (e.g., `SubArray`), or the array itself if
 it is not a view.
+
+# Examples
+```jldoctest
+julia> a = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> s_a = Symmetric(a)
+2×2 Symmetric{Int64,Array{Int64,2}}:
+ 1  2
+ 2  4
+
+julia> parent(s_a)
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+```
 """
 parent
 
@@ -1765,6 +1783,14 @@ get!(f::Function,collection,key)
 
 Throw an `AssertionError` if `cond` is `false`. Preferred syntax for writing assertions.
 Message `text` is optionally displayed upon assertion failure.
+
+# Examples
+```jldoctest
+julia> @assert iseven(3) "3 is an odd number!"
+ERROR: AssertionError: 3 is an odd number!
+
+julia> @assert isodd(3) "What even are numbers?"
+```
 """
 :@assert
 
@@ -1854,6 +1880,19 @@ cfunction
 
 Construct the intersection of two or more sets.
 Maintains order and multiplicity of the first argument for arrays and ranges.
+
+# Examples
+```jldoctest
+julia> intersect([1, 2, 3], [3, 4, 5])
+1-element Array{Int64,1}:
+ 3
+
+julia> intersect([1, 4, 4, 5, 6], [4, 6, 6, 7, 8])
+3-element Array{Int64,1}:
+ 4
+ 4
+ 6
+```
 """
 intersect
 
