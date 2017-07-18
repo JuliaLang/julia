@@ -33,11 +33,11 @@ function isone(x::StridedMatrix)
     m, n = size(x)
     m != n && return false # only square matrices can satisfy x == one(x)
     for i in 1:m
-        for j in 1:m
+        for j in i:m
             if i == j
                 @inbounds !isone(x[i,i]) && return false
             else
-                @inbounds !iszero(x[i,j]) && return false
+                @inbounds (!iszero(x[i,j]) || !iszero(x[j,i])) && return false
             end
         end
     end
