@@ -92,13 +92,13 @@ edit(file, line::Integer) = error("could not find source file for function")
 
 if Sys.iswindows()
     function less(file::AbstractString, line::Integer)
-        pager = get(ENV, "PAGER", "more")
+        pager = shell_split(get(ENV, "PAGER", "more"))
         g = pager == "more" ? "" : "g"
         run(Cmd(`$pager +$(line)$(g) \"$file\"`, windows_verbatim = true))
     end
 else
     function less(file::AbstractString, line::Integer)
-        pager = split(get(ENV, "PAGER", "less"))
+        pager = shell_split(get(ENV, "PAGER", "less"))
         run(`$pager +$(line)g $file`)
     end
 end
