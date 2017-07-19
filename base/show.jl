@@ -566,24 +566,28 @@ function show_block(io::IO, head, arg, block, i::Int)
 end
 
 # show an indented list
-function show_list(io::IO, items, sep, indent::Int, prec::Int=0, enclose_operators::Bool=false, enclosed_indices::IntSet=IntSet())
+function show_list(io::IO, items, sep, indent::Int, prec::Int=0, enclose_operators::Bool=false)
     n = length(items)
     n == 0 && return
     indent += indent_width
     first = true
-    for (i, item) in enumerate(items)
+    for item in items
         !first && print(io, sep)
-        parens = (enclose_operators && isa(item,Symbol) && isoperator(item)) || i in enclosed_indices
+        parens = !is_quoted(item) &&
+            (first && prec >= prec_power &&
+             ((item isa Expr && item.head === :call && item.args[1] in uni_ops) ||
+              (item isa Real && item < 0))) ||
+              (enclose_operators && item isa Symbol && isoperator(item))
         parens && print(io, '(')
-        show_unquoted(io, item, indent, prec)
+        show_unquoted(io, item, indent, parens ? 0 : prec)
         parens && print(io, ')')
         first = false
     end
 end
 # show an indented list inside the parens (op, cl)
-function show_enclosed_list(io::IO, op, items, sep, cl, indent, prec=0, encl_ops=false, encl_inds=IntSet())
+function show_enclosed_list(io::IO, op, items, sep, cl, indent, prec=0, encl_ops=false)
     print(io, op)
-    show_list(io, items, sep, indent, prec, encl_ops, encl_inds)
+    show_list(io, items, sep, indent, prec, encl_ops)
     print(io, cl)
 end
 
@@ -719,15 +723,9 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     end
     # dot (i.e. "x.y"), but not compact broadcast exps
     if head === :(.) && !is_expr(args[2], :tuple)
-        show_unquoted(io, args[1], indent + indent_width)
-        print(io, '.')
-        if is_quoted(args[2])
-            show_unquoted(io, unquoted(args[2]), indent + indent_width)
-        else
-            print(io, '(')
-            show_unquoted(io, args[2], indent + indent_width)
-            print(io, ')')
-        end
+        func_prec = operator_precedence(head)
+        args_ = (args[1], (is_quoted(arg) && !is_quoted(unquoted(arg)) ? unquoted(arg) : arg for arg in args[2:end])...)
+        show_list(io, args_, head, indent, func_prec)
 
     # infix (i.e. "x <: y" or "x = y")
     elseif (head in expr_infix_any && nargs==2) || (head === :(:) && nargs==3)
@@ -793,7 +791,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
             if isa(func_args[1], Expr) || func_args[1] in all_ops
                 show_enclosed_list(io, '(', func_args, ", ", ')', indent, func_prec)
             else
-                show_unquoted(io, func_args[1])
+                show_unquoted(io, func_args[1], indent, func_prec)
             end
 
         # binary operator (i.e. "x + y")
@@ -802,18 +800,11 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
             if (na == 2 || (na > 2 && func in (:+, :++, :*))) &&
                     all(!isa(a, Expr) || a.head !== :... for a in func_args)
                 sep = " $func "
-                encl_inds = IntSet()
-                # parenthesize (UNI x) OP y for ^ and similar operators
-                if (func_prec == operator_precedence(:^) &&
-                    ((func_args[1] isa Expr && func_args[1].head === :call &&
-                      func_args[1].args[1] in uni_ops) ||
-                     (func_args[1] isa Real && func_args[1] < 0)))
-                    push!(encl_inds, 1)
-                end
+
                 if func_prec <= prec
-                    show_enclosed_list(io, '(', func_args, sep, ')', indent, func_prec, true, encl_inds)
+                    show_enclosed_list(io, '(', func_args, sep, ')', indent, func_prec, true)
                 else
-                    show_list(io, func_args, sep, indent, func_prec, true, encl_inds)
+                    show_list(io, func_args, sep, indent, func_prec, true)
                 end
             elseif na == 1
                 # 1-argument call to normally-binary operator
