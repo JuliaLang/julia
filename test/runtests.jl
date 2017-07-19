@@ -338,28 +338,33 @@ end
 # Val
 begin
     local firstlast
-    firstlast(::Type{Val{true}}) = "First"
-    firstlast(::Type{Val{false}}) = "Last"
+    firstlast(::Val{true}) = "First"
+    firstlast(::Val{false}) = "Last"
 
-    @test firstlast(Val{true}) == "First"
-    @test firstlast(Val{false}) == "Last"
+    @test firstlast(Val(true)) == "First"
+    @test firstlast(Val(false)) == "Last"
 end
+
+# The constructors for some linear algebra stuff changed to take Val{x}
+# instead of Type{Val{x}}
+const valtrue = VERSION < v"0.7.0-DEV.843" ? Val{true} : Val(true)
+const valfalse = VERSION < v"0.7.0-DEV.843" ? Val{false} : Val(false)
 
 # qr, qrfact, qrfact!
 let A = [1.0 2.0; 3.0 4.0]
-    Q, R = qr(A, Val{false})
+    Q, R = qr(A, valfalse)
     @test Q*R ≈ A
-    Q, R, p = qr(A, Val{true})
+    Q, R, p = qr(A, valtrue)
     @test Q*R ≈ A[:,p]
-    F = qrfact(A, Val{false})
+    F = qrfact(A, valfalse)
     @test F[:Q]*F[:R] ≈ A
-    F = qrfact(A, Val{true})
+    F = qrfact(A, valtrue)
     @test F[:Q]*F[:R] ≈ A[:,F[:p]]
     A_copy = copy(A)
-    F = qrfact!(A_copy, Val{false})
+    F = qrfact!(A_copy, valfalse)
     @test F[:Q]*F[:R] ≈ A
     A_copy = copy(A)
-    F = qrfact!(A_copy, Val{true})
+    F = qrfact!(A_copy, valtrue)
     @test F[:Q]*F[:R] ≈ A[:,F[:p]]
 end
 
@@ -1397,11 +1402,11 @@ for A in (Hermitian(randn(5,5) + 10I),
     @test istriu(chol(A))
     @test chol(A) ≈ F[:U]
 
-    F = cholfact(A, Val{true})
+    F = cholfact(A, valtrue)
     @test F[:U]'F[:U]  ≈ A[F[:p], F[:p]]
     @test F[:L]*F[:L]' ≈ A[F[:p], F[:p]]
     Ac = copy(A)
-    F = cholfact!(Ac, Val{true})
+    F = cholfact!(Ac, valtrue)
     @test F[:U]'F[:U]  ≈ A[F[:p], F[:p]]
     @test F[:L]*F[:L]' ≈ A[F[:p], F[:p]]
 end

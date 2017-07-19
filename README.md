@@ -143,6 +143,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `@__MODULE__` is aliased to `current_module()` for Julia versions 0.6 and below. Versions of `Base.binding_module`, `expand`, `macroexpand`, and `include_string` were added that accept a module as the first argument. ([#22064])
 
+* `Val(x)` constructs `Val{x}()`. ([#22475])
+
 ## Renamed functions
 
 
@@ -283,3 +285,4 @@ includes this fix. Find the minimum version from there.
 [#21257]: https://github.com/JuliaLang/julia/issues/21257
 [#21346]: https://github.com/JuliaLang/julia/issues/21346
 [#22064]: https://github.com/JuliaLang/julia/issues/22064
+[#22475]: https://github.com/JuliaLang/julia/issues/22475

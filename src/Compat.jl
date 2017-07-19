@@ -607,6 +607,12 @@ if VERSION < v"0.6.0-pre.beta.455"
     isless(x::Dates.OtherPeriod, y::Dates.FixedPeriod) = throw(MethodError(isless, (x, y)))
 end
 
+# https://github.com/JuliaLang/julia/pull/22475
+if VERSION < v"0.7.0-DEV.843"
+    import Base: Val
+    (::Type{Val})(x) = (Base.@_pure_meta; Val{x}())
+end
+
 include("deprecated.jl")
 
 # https://github.com/JuliaLang/julia/pull/21746
