@@ -66,7 +66,6 @@ precompile(Tuple{typeof(Base.Sort.Float.right), Base.Order.ReverseOrdering{Base.
 precompile(Tuple{typeof(Base.stat), Int64})
 precompile(Tuple{typeof(Base.readbytes_all!), Base.IOStream, Array{UInt8, 1}, Int64})
 precompile(Tuple{typeof(Base.read), Base.IOStream})
-precompile(Tuple{typeof(Base.open), typeof(Base.readstring), String})
 precompile(Tuple{typeof(Base.rstrip), Base.SubString{String}, Array{Char, 1}})
 precompile(Tuple{typeof(Base.lstrip), Base.SubString{String}, Array{Char, 1}})
 precompile(Tuple{getfield(Base, Symbol("#kw##split")), Array{Any, 1}, typeof(Base.split), String, Char})
