@@ -66,7 +66,7 @@
 (define (maybe-strip-op-suffix op)
   (if (symbol? op)
       (let ((op_ (strip-op-suffix op)))
-        (if (or (eqv? op op_) (no-suffix? op_))
+        (if (or (eq? op op_) (no-suffix? op_))
             op
             op_))
       op))
