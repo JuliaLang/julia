@@ -670,10 +670,10 @@ mktempdir() do dir
 
         for text in [
             old_text,
-            convert(Compat.UTF8String, Char['A' + i % 52 for i in 1:(div(SZ_UNBUFFERED_IO,2))]),
-            convert(Compat.UTF8String, Char['A' + i % 52 for i in 1:(    SZ_UNBUFFERED_IO -1)]),
-            convert(Compat.UTF8String, Char['A' + i % 52 for i in 1:(    SZ_UNBUFFERED_IO   )]),
-            convert(Compat.UTF8String, Char['A' + i % 52 for i in 1:(    SZ_UNBUFFERED_IO +1)])
+            convert(String, Char['A' + i % 52 for i in 1:(div(SZ_UNBUFFERED_IO,2))]),
+            convert(String, Char['A' + i % 52 for i in 1:(    SZ_UNBUFFERED_IO -1)]),
+            convert(String, Char['A' + i % 52 for i in 1:(    SZ_UNBUFFERED_IO   )]),
+            convert(String, Char['A' + i % 52 for i in 1:(    SZ_UNBUFFERED_IO +1)])
         ]
 
             write(filename, text)
@@ -1177,12 +1177,6 @@ if VERSION ≥ v"0.4.0-dev+3732"
     @test Symbol(1) === Symbol("1")
 end
 
-foostring(::String) = 1
-@test foostring("hello") == 1
-@test foostring("λ") == 1
-@test isa("hello", Compat.ASCIIString)
-@test isa("λ", Compat.UTF8String)
-
 let async, c = false
     run = Condition()
     async = Compat.AsyncCondition(x->(c = true; notify(run)))
@@ -1223,26 +1217,11 @@ let io = IOBuffer(), s = "hello"
     @test unsafe_string(pointer(s),sizeof(s)) == s
     @test string(s, s, s) == "hellohellohello"
     @test @compat(String(s)) == s
-    @test String == @compat(Union{Compat.UTF8String,Compat.ASCIIString})
 end
 
 @test Compat.repeat(1:2, inner=2) == [1, 1, 2, 2]
 @test Compat.repeat(1:2, outer=[2]) == [1, 2, 1, 2]
 @test Compat.repeat([1,2], inner=(2,)) == [1, 1, 2, 2]
-
-if VERSION < v"0.5.0-dev+4267"
-    if OS_NAME == :Windows
-        @test is_windows()
-    elseif OS_NAME == :Darwin
-        @test is_apple() && is_bsd() && is_unix()
-    elseif OS_NAME == :FreeBSD
-        @test is_bsd() && is_unix()
-    elseif OS_NAME == :Linux
-        @test is_linux() && is_unix()
-    end
-else
-    @test Compat.KERNEL == Sys.KERNEL
-end
 
 io = IOBuffer()
 @test @compat(get(io, :limit, false)) == false
@@ -1839,10 +1818,6 @@ using Compat: StringVector
 @test length(StringVector(5)) == 5
 @test String(fill!(StringVector(5), 0x61)) == "aaaaa"
 
-let x = fill!(StringVector(5), 0x61)
-    @test pointer(x) == pointer(Compat.UTF8String(x))
-end
-
 # collect
 if VERSION >= v"0.5.0-rc1+46"
     using OffsetArrays
@@ -1893,6 +1868,6 @@ let
     @test_throws MethodError Dates.Month(1) < Dates.Day(1)
 end
 
-include("to-be-deprecated.jl")
+include("deprecated.jl")
 
 nothing

@@ -1,6 +1,24 @@
-# Uncomment the depwarns when we drop 0.4 support
+function depwarn_ex(msg, name)
+    return quote
+        if VERSION >= v"0.6.0"
+            Base.depwarn($msg, Symbol($name))
+        end
+    end
+end
+
+macro Dict(pairs...)
+    esc(Expr(:block, depwarn_ex("@Dict is deprecated, use Dict instead", "@Dict"),
+                       Expr(:call, :Dict, pairs...)))
+end
+
+macro AnyDict(pairs...)
+    esc(Expr(:block, depwarn_ex("@AnyDict is deprecated, use Dict{Any,Any} instead", "@AnyDict"),
+             Expr(:call, :(Base.AnyDict), pairs...)))
+end
 
 module CompatCartesian
+
+import ..Compat: depwarn_ex
 
 export @ngenerate, @nsplat
 
@@ -9,7 +27,7 @@ macro ngenerate(itersym, returntypeexpr, funcexpr)
         funcexpr = Base._inline(funcexpr.args[2])
     end
     isfuncexpr(funcexpr) || error("Requires a function expression")
-    esc(Expr(:block, # :(Base.depwarn("@ngenerate is deprecated, used @generated function or (preferably) tuples/CartesianIndex instead", Symbol("@ngenerate"))),
+    esc(Expr(:block, depwarn_ex("@ngenerate is deprecated, used @generated function or (preferably) tuples/CartesianIndex instead", "@ngenerate"),
              _ngenerate(itersym, funcexpr)))
 end
 
@@ -44,7 +62,7 @@ macro nsplat(itersym, args...)
     varname, T = get_splatinfo(prototype, itersym)
     isempty(varname) && error("Last argument must be a splat")
     prototype, body = _nsplat(prototype, body, varname, T, itersym)
-        esc(Expr(:block, # :(Base.depwarn("@nsplat is deprecated, using inlining instead", Symbol("@nsplat"))),
+        esc(Expr(:block, depwarn_ex("@nsplat is deprecated, using inlining instead", "@nsplat"),
                  Expr(:stagedfunction, prototype, body)))
 end
 
@@ -121,3 +139,34 @@ end
 sreplace!(s::Symbol, sym, val) = s == sym ? val : s
 
 end
+
+using .CompatCartesian
+export @ngenerate, @nsplat
+
+export @functorize
+macro functorize(f)
+    code = f === :scalarmax          ? :(Base.scalarmax) :
+           f === :scalarmin          ? :(Base.scalarmin) :
+           f === :centralizedabs2fun ? :(primarytype(typeof(Base.centralizedabs2fun(0)))) :
+           f
+    warning = depwarn_ex("@functorize is deprecated as functor objects are no longer supported in julia", "@functorize")
+    return quote
+        $warning
+        $code
+    end
+end
+
+if VERSION >= v"0.6.0"
+    Base.@deprecate_binding KERNEL Sys.KERNEL
+    Base.@deprecate_binding UTF8String Core.String
+    Base.@deprecate_binding ASCIIString Core.String
+else
+    const KERNEL = Sys.KERNEL
+    const UTF8String = Core.String
+    const ASCIIString = Core.String
+end
+
+# More things that could be removed in Compat.jl
+# - new_style_call_overload
+# - import Base.Filesystem
+# - import Base.LinAlg.BLAS.@blasfunc

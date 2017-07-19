@@ -59,3 +59,17 @@ end
 @test CartesianTest.f(1,2,3) == (1,2,3)
 @test CartesianTest.f(1,2,3,4) == (1,2,3,4)
 @test CartesianTest.f(1,2,3,4,5) == (1,2,3,4,5)
+
+@test Compat.KERNEL == Sys.KERNEL
+
+@test String == @compat(Union{Compat.UTF8String,Compat.ASCIIString})
+
+let x = fill!(StringVector(5), 0x61)
+    @test pointer(x) == pointer(Compat.UTF8String(x))
+end
+
+foostring(::String) = 1
+@test foostring("hello") == 1
+@test foostring("λ") == 1
+@test isa("hello", Compat.ASCIIString)
+@test isa("λ", Compat.UTF8String)

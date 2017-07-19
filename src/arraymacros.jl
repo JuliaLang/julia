@@ -68,25 +68,6 @@ if VERSION < v"0.6.0-dev.2406"
     end
 end
 
-# convert x[...] on lhs of .= to a view in broadcast! call
-if VERSION < v"0.5.0-dev+5575" #17510
-    dotview(args...) = getindex(args...)
-    dotview(A::AbstractArray, args...) = view(A, args...)
-    dotview{T<:AbstractArray}(A::AbstractArray{T}, args::Integer...) = getindex(A, args...)
-    todotview(x) = x
-    function todotview(ex::Expr)
-        if ex.head == :ref
-            ex = replace_ref_end!(ex)
-            if Meta.isexpr(ex, :ref)
-                ex = Expr(:call, dotview, ex.args...)
-            else # ex replaced by let ...; foo[...]; end
-                assert(Meta.isexpr(ex, :let) && Meta.isexpr(ex.args[1], :ref))
-                ex.args[1] = Expr(:call, dotview, ex.args[1].args...)
-            end
-        end
-    end
-end
-
 if !isdefined(Base, Symbol("@view"))
     macro view(ex)
         if Meta.isexpr(ex, :ref)
@@ -121,15 +102,6 @@ if !isdefined(Base, Symbol("@views"))
             Expr(ex.head, Meta.isexpr(lhs, :ref) ?
                           Expr(:ref, map(_views, lhs.args)...) : _views(lhs),
                  _views(ex.args[2]))
-        elseif VERSION < v"0.5.0-dev+5575" && isexpr(ex, :comparison) && ex.args[2] == :.= #17510
-            # as above, but in Julia 0.4 a .= produces a comparison expression
-            lhs_ = ex.args[1]
-            lhs = Meta.isexpr(lhs_, :ref) ? Expr(:ref, map(_views, lhs_.args)...) : _views(lhs_)
-            if length(ex.args) == 3
-                Expr(:.=, lhs, _views(ex.args[3]))
-            else
-                Expr(:.=, lhs, _views(Expr(:comparison, ex.args[3:end]...)))
-            end
         elseif ex.head == :ref
             Expr(:call, maybeview, map(_views, ex.args)...)
         else

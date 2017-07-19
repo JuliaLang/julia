@@ -49,17 +49,9 @@ Please check the list below for the specific syntax you need.
 
 Currently, the `@compat` macro supports the following syntaxes:
 
-* `@compat foo.:bar` — `foo.(:bar)` in 0.4 ([#15032])
-
-* `@compat f.(args...)` — `broadcast(f, args...)` in 0.4 ([#15032])
-
 * `@compat (a::B{T}){T}(c) = d` — the Julia 0.5-style call overload
 
 * `@compat(get(io, s, false))`, with `s` equal to `:limit`, `:compact` or `:multiline`, to detect the corresponding print settings (performs useful work only on Julia 0.5, defaults to `false` otherwise)
-
-* `@compat import Base.show` and `@compat function show(args...)` for handling the deprecation of `writemime` in Julia 0.5 ([#16563]). See https://github.com/JuliaLang/Compat.jl/pull/219.
-
-* `@compat @boundscheck checkbounds(...)` rewrites to unconditionally call `checkbounds(...)` in 0.4.  The 0.4-style two-argument form of `@boundscheck` is left unchanged.
 
 * `@compat Nullable(value, hasvalue)` to handle the switch from the `Nullable` `:isnull` field to `:hasvalue` field ([#18510])
 
@@ -70,7 +62,7 @@ Currently, the `@compat` macro supports the following syntaxes:
   assignment operators (`.*=` and so on).
 
 * `@compat Array{<:Real}`, `@compat Array{>:Int}`, and similar uses of `<:T` (resp. `>:T`) to define a set of "covariant" (resp. "contravariant") parameterized types ([#20414]).
-  In 0.4 and 0.5, this only works for non-nested usages (e.g. you can't define `Array{<:Array{<:Real}}`).
+  In 0.5, this only works for non-nested usages (e.g. you can't define `Array{<:Array{<:Real}}`).
 
 * `@compat abstract type T end` and `@compat primitive type T 8 end`
   to declare abstract and primitive types. [#20418]
@@ -81,30 +73,13 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `@compat Base.IndexStyle(::Type{<:MyArray}) = IndexLinear()` and `@compat Base.IndexStyle(::Type{<:MyArray}) = IndexCartesian()` to define traits for abstract arrays, replacing the former `Base.linearindexing{T<:MyArray}(::Type{T}) = Base.LinearFast()` and `Base.linearindexing{T<:MyArray}(::Type{T}) = Base.LinearSlow()`, respectively.
 
-* `Compat.collect(A)` returns an `Array`, no matter what indices the array `A` has (Julia 0.5 and higher). [#21257]
+* `Compat.collect(A)` returns an `Array`, no matter what indices the array `A` has. [#21257]
 
 ## Module Aliases
 
 * In 0.6, some 0.5 iterator functions have been moved to the `Base.Iterators`
   module. Code can be written to work on both 0.5 and 0.6 by `import`ing or
   `using` the `Compat.Iterators` module instead. ([#18839])
-
-* The `Compat.Iterators` module is also available on 0.4, including the
-  iterator functions `partition`, `product`, and `flatten`, which were
-  introduced in Julia 0.5. However, because of a variety of other changes to
-  the iterator system between 0.4 and 0.5, these functions behave slightly
-  differently. For example, the `Iterators.product` function on 0.4 does not
-  return objects with shapes. ([#14596], [#14805], [#15409])
-
-## Type Aliases
-
-* In 0.5, `ASCIIString` and `ByteString` were deprecated, and `UTF8String` was renamed to the (now concrete) type `String`.
-
-    Compat provides unexported `Compat.UTF8String` and `Compat.ASCIIString` type aliases which are equivalent to the same types from Base on Julia 0.4, but to `String` on Julia 0.5. In most cases, using these types by calling `import Compat: UTF8String, ASCIIString` should be enough. Note that `Compat.ASCIIString` does **not** guarantee that the string only contains ASCII characters on Julia 0.5: call `isascii` to check if the string is pure ASCII if needed.
-
-    Compat also provides an unexported `Compat.String` type which is equivalent to `ByteString` on Julia 0.4, and to `String` on Julia 0.5. This type should be used only in places where `ByteString` was used on Julia 0.4, i.e. where either `ASCIIString` or `UTF8String` should be accepted. It should **not** be used as the default type for variables or fields holding strings, as it introduces type-instability in Julia 0.4: use `Compat.UTF8String` or `Compat.ASCIIString` instead.
-
-* `bytestring` has been replaced in most cases with additional `String` construction methods; for 0.4 compatibility, the usage involves replacing `bytestring(args...)` with `Compat.String(args...)`. However, for converting a `Ptr{UInt8}` to a string, use the new `unsafe_string(...)` method to make a copy or `unsafe_wrap(String, ...)` to avoid a copy.
 
 ## New functions, macros, and methods
 
@@ -116,14 +91,6 @@ Currently, the `@compat` macro supports the following syntaxes:
   can be abbreviated `@.`, but that macro name does not parse in earlier Julia versions.
   For this to work in older versions of Julia (prior to 0.5) that don't have dot calls,
   you should instead use `@dotcompat`, which combines the `@__dot__` and `@compat` macros.
-
-* `foreach`, similar to `map` but when the return value is not needed ([#13744])
-
-* `walkdir`, returns an iterator that walks the directory tree of a directory ([#13707])
-
-* `allunique`, checks whether all elements in an iterable appear only once ([#15914])
-
-* `Base.promote_eltype_op` is available as `Compat.promote_eltype_op`
 
 * [`normalize`](http://docs.julialang.org/en/latest/stdlib/linalg/?highlight=normalize#Base.normalize) and [`normalize!`](http://docs.julialang.org/en/latest/stdlib/linalg/?highlight=normalize#Base.normalize!), normalizes a vector with respect to the p-norm ([#13681])
 
@@ -167,7 +134,7 @@ Currently, the `@compat` macro supports the following syntaxes:
 * `bswap` is supported for `Complex` arguments on 0.5 and below. ([#21346])
 
 * `Compat.invokelatest` is equivalent to `Base.invokelatest` in Julia 0.6,
-  but works in Julia 0.4+, and allows you to guarantee that a function call
+  but works in Julia 0.5+, and allows you to guarantee that a function call
   invokes the latest version of a function ([#19784]).
 
 * `Compat.StringVector` is supported on 0.5 and below. On 0.6 and later, it aliases `Base.StringVector`. This function allocates a `Vector{UInt8}` whose data can be made into a `String` in constant time; that is, without copying. On 0.5 and later, use `String(...)` with the vector allocated by `StringVector` as an argument to create a string without copying. Note that if 0.4 support is needed, `Compat.UTF8String(...)` should be used instead. ([#19449])
@@ -178,40 +145,6 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 ## Renamed functions
 
-* `pointer_to_array` and `pointer_to_string` have been replaced with `unsafe_wrap(Array, ...)` and `unsafe_wrap(String, ...)` respectively
-
-* `bytestring(::Ptr, ...)` has been replaced with `unsafe_string`
-
-* `super` is now `supertype` ([#14338])
-
-* `qr(A, pivot=b)` is now `qr(A, Val{b})`, likewise for `qrfact` and `qrfact!`
-
-* `readall` and `readbytes` are now `readstring` and `read` ([#14660])
-
-* `get_bigfloat_precision` is now `precision(BigFloat)`, `set_precision` is `setprecision` and `with_bigfloat_precision` is now also `setprecision`
-([#13232])
-
-* `get_rounding` is now `rounding`. `set_rounding` and `with_rounding` are now `setrounding` ([#13232])
-
-*  `Base.tty_size` (which was not exported) is now `displaysize` in Julia 0.5
-
-* `Compat.LinAlg.checksquare` ([#14601])
-
-* `issym` is now `issymmetric` ([#15192])
-
-* `istext` is now `istextmime` ([#15708])
-
-* `symbol` is now `Symbol` ([#16154])
-
-* `write(::IO, ::Ptr, len)` is now `unsafe_write` ([#14766])
-
-* `slice` is now `view` ([#16972]); do `import Compat.view` and then use `view` normally without the `@compat` macro
-
-* `fieldoffsets` has been deprecated in favor of `fieldoffset` ([#14777])
-
-* `print_escaped` is now another method of `escape_string`, `print_unescaped` a method of `unescape_string`, and `print_joined` a method of `join` ([#16603])
-
-* `writemime` has been merged into `show` ([#16563]). Note that to extend this function requires `@compat`; see the [Supported Syntax](#supported-syntax) section for more information
 
 * `$` is now `xor` or `⊻` ([#18977])
 
@@ -220,12 +153,6 @@ Currently, the `@compat` macro supports the following syntaxes:
 * `takebuf_array` is now a method of `take!`. `takebuf_string(io)` becomes `String(take!(io))` ([#19088])
 
 ## New macros
-
-* `@static` has been added ([#16219])
-
-* `@functorize` (not present in any Julia version) takes a function (or operator) and turns it into a functor object if one is available in the used Julia version. E.g. something like `mapreduce(Base.AbsFun(), Base.MulFun(), x)` can now be written as `mapreduce(@functorize(abs), @functorize(*), x)`, and `f(::Base.AbsFun())` as `f(::typeof(@functorize(abs)))`, to work across different Julia versions. `Func{1}` can be written as `supertype(typeof(@functorize(abs)))` (and so on for `Func{2}`), which will fall back to `Function` on Julia 0.5.
-
-* `Compat.@blasfunc` makes functionality of `Base.LinAlg.BLAS.@blasfunc` available on older Julia versions
 
 * `@__DIR__` has been added ([#18380])
 
@@ -241,31 +168,7 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 ## Other changes
 
-* `remotecall`, `remotecall_fetch`, `remotecall_wait`, and `remote_do` have the function to be executed remotely as the first argument in Julia 0.5. Loading `Compat` defines the same methods in older versions of Julia ([#13338])
-
-* `Base.FS` is now `Base.Filesystem` ([#12819])
-  Compat provides an unexported `Compat.Filesystem` module that is aliased to
-  `Base.FS` on Julia 0.4 and `Base.Filesystem` on Julia 0.5.
-
-* `cov` and `cor` don't allow keyword arguments anymore. Loading Compat defines compatibility methods for the new API ([#13465])
-
 * On versions of Julia that do not contain a Base.Threads module, Compat defines a Threads module containing a no-op `@threads` macro.
-
-* `Base.SingleAsyncWork` is now `Base.AsyncCondition`
-  Compat provides an unexported `Compat.AsyncCondition` type that is aliased to
-  `Base.SingleAsyncWork` on Julia 0.4 and `Base.AsyncCondition` on Julia 0.5.
-
-* `repeat` now accepts any `AbstractArray` ([#14082]): `Compat.repeat` supports this new API on Julia 0.4, and calls `Base.repeat` on 0.5.
-
-* `OS_NAME` is now `Sys.KERNEL`. OS information available as `is_apple`, `is_bsd`, `is_linux`, `is_unix`, and `is_windows` ([#16219])
-
-* `cholfact`, `cholfact!`, and `chol` require that input is either `Hermitian`, `Symmetric`
-or that the elements are perfectly symmetric or Hermitian on 0.5. Compat now defines methods
-for `HermOrSym` such that using the new methods are backward compatible.
-
-* `Diagonal` and `*` methods support `SubArray`s even on 0.4.
-
-* Single-argument `min`, `max` and `minmax` are defined on 0.4.
 
 * The `Expr(:macrocall)` has an extra initial argument `__source__`, which can be tested for with `Compat.macros_have_sourceloc`.
 
