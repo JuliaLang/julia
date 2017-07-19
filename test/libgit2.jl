@@ -299,7 +299,7 @@ mktempdir() do dir
 
                 # test remote's representation in the repo's config
                 config = joinpath(cache_repo, ".git", "config")
-                lines = split(open(readstring, config, "r"), "\n")
+                lines = split(open(x->read(x, String), config, "r"), "\n")
                 @test any(map(x->x == "[remote \"upstream\"]", lines))
 
                 remote = LibGit2.get(LibGit2.GitRemote, repo, branch)
@@ -1101,7 +1101,7 @@ mktempdir() do dir
 
     @testset "Examine test repository" begin
         @testset "files" begin
-            @test read(joinpath(test_repo, test_file), String) == readstring(joinpath(cache_repo, test_file))
+            @test read(joinpath(test_repo, test_file), String) == read(joinpath(cache_repo, test_file), String)
         end
 
         @testset "tags & branches" begin

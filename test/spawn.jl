@@ -34,14 +34,14 @@ end
 
 #### Examples used in the manual ####
 
-@test readstring(`$echocmd hello \| sort`) == "hello | sort\n"
-@test readstring(pipeline(`$echocmd hello`, sortcmd)) == "hello\n"
+@test read(`$echocmd hello \| sort`, String) == "hello | sort\n"
+@test read(pipeline(`$echocmd hello`, sortcmd), String) == "hello\n"
 @test length(spawn(pipeline(`$echocmd hello`, sortcmd)).processes) == 2
 
-out = readstring(`$echocmd hello` & `$echocmd world`)
+out = read(`$echocmd hello` & `$echocmd world`, String)
 @test search(out,"world") != 0:-1
 @test search(out,"hello") != 0:-1
-@test readstring(pipeline(`$echocmd hello` & `$echocmd world`, sortcmd)) == "hello\nworld\n"
+@test read(pipeline(`$echocmd hello` & `$echocmd world`, sortcmd), String) == "hello\nworld\n"
 
 @test (run(`$printfcmd "       \033[34m[stdio passthrough ok]\033[0m\n"`); true)
 
@@ -87,8 +87,8 @@ end
 # STDIN Redirection
 let file = tempname()
     run(pipeline(`$echocmd hello world`, file))
-    @test readstring(pipeline(file, catcmd)) == "hello world\n"
-    @test open(readstring, pipeline(file, catcmd), "r") == "hello world\n"
+    @test read(pipeline(file, catcmd), String) == "hello world\n"
+    @test open(x->read(x,String), pipeline(file, catcmd), "r") == "hello world\n"
     rm(file)
 end
 
@@ -100,7 +100,7 @@ if !Sys.iswindows() # WINNT reports operation not supported on socket (ENOTSUP) 
         port, server = listenany(2326)
         put!(r, port)
         client = accept(server)
-        @test readstring(pipeline(client, catcmd)) == "hello world\n"
+        @test read(pipeline(client, catcmd), String) == "hello world\n"
         close(server)
         return true
     end
@@ -114,11 +114,11 @@ if !Sys.iswindows() # WINNT reports operation not supported on socket (ENOTSUP) 
     @test wait(t2)
 end
 
-@test readstring(setenv(`$shcmd -c "echo \$TEST"`,["TEST=Hello World"])) == "Hello World\n"
-@test readstring(setenv(`$shcmd -c "echo \$TEST"`,Dict("TEST"=>"Hello World"))) == "Hello World\n"
-@test readstring(setenv(`$shcmd -c "echo \$TEST"`,"TEST"=>"Hello World")) == "Hello World\n"
+@test read(setenv(`$shcmd -c "echo \$TEST"`,["TEST=Hello World"]), String) == "Hello World\n"
+@test read(setenv(`$shcmd -c "echo \$TEST"`,Dict("TEST"=>"Hello World")), String) == "Hello World\n"
+@test read(setenv(`$shcmd -c "echo \$TEST"`,"TEST"=>"Hello World"), String) == "Hello World\n"
 @test (withenv("TEST"=>"Hello World") do
-       readstring(`$shcmd -c "echo \$TEST"`); end) == "Hello World\n"
+       read(`$shcmd -c "echo \$TEST"`, String); end) == "Hello World\n"
 let pathA = readchomp(setenv(`$shcmd -c "pwd -P"`;dir="..")),
     pathB = readchomp(setenv(`$shcmd -c "cd .. && pwd -P"`))
     if Sys.iswindows()
@@ -138,7 +138,7 @@ let str = "", stdin, stdout, proc, str2, file
     stdout, stdin, proc = readandwrite(`$catcmd -`)
     write(stdin, str)
     close(stdin)
-    str2 = readstring(stdout)
+    str2 = read(stdout, String)
     @test str2 == str
 
     # This test hangs if the end-of-run-walk-across-uv-streams calls shutdown on a stream that is shutting down.
@@ -205,16 +205,16 @@ exename = Base.julia_cmd()
 if valgrind_off
     # If --trace-children=yes is passed to valgrind, we will get a
     # valgrind banner here, not "Hello World\n".
-    @test readstring(pipeline(`$exename --startup-file=no -e 'println(STDERR,"Hello World")'`, stderr=catcmd)) == "Hello World\n"
+    @test read(pipeline(`$exename --startup-file=no -e 'println(STDERR,"Hello World")'`, stderr=catcmd), String) == "Hello World\n"
     out = Pipe()
     proc = spawn(pipeline(`$exename --startup-file=no -e 'println(STDERR,"Hello World")'`, stderr = out))
     close(out.in)
-    @test readstring(out) == "Hello World\n"
+    @test read(out, String) == "Hello World\n"
     @test success(proc)
 end
 
 # issue #6310
-@test readstring(pipeline(`$echocmd "2+2"`, `$exename --startup-file=no`)) == "4\n"
+@test read(pipeline(`$echocmd "2+2"`, `$exename --startup-file=no`), String) == "4\n"
 
 # issue #5904
 @test run(pipeline(ignorestatus(falsecmd), truecmd)) === nothing
@@ -228,7 +228,7 @@ end
         println("Hello World")
         redirect_stdout(OLD_STDOUT)
         close(f)
-        @test "Hello World\n" == readstring(fname)
+        @test "Hello World\n" == read(fname, String)
         @test OLD_STDOUT === STDOUT
         rm(fname)
     end
@@ -263,7 +263,7 @@ let fname = tempname()
         close(io)
         wait(io)
     catch
-        error("IOStream redirect failed. Child stderr was \n$(readstring(fname))\n")
+        error("IOStream redirect failed. Child stderr was \n$(read(fname, String))\n")
     finally
         rm(fname)
     end
@@ -278,7 +278,7 @@ let bad = "bad\0name"
 end
 
 # issue #12829
-let out = Pipe(), echo = `$exename --startup-file=no -e 'print(STDOUT, " 1\t", readstring(STDIN))'`, ready = Condition(), t, infd, outfd
+let out = Pipe(), echo = `$exename --startup-file=no -e 'print(STDOUT, " 1\t", read(STDIN, String))'`, ready = Condition(), t, infd, outfd
     @test_throws ArgumentError write(out, "not open error")
     t = @async begin # spawn writer task
         open(echo, "w", out) do in1
@@ -320,7 +320,7 @@ let out = Pipe(), echo = `$exename --startup-file=no -e 'print(STDOUT, " 1\t", r
     @test nb_available(out) > 0
     ln1 = readline(out)
     ln2 = readline(out)
-    desc = readstring(out)
+    desc = read(out, String)
     @test !isreadable(out)
     @test !iswritable(out)
     @test !isopen(out)
@@ -384,7 +384,7 @@ end
 
 # make sure windows_verbatim strips quotes
 if Sys.iswindows()
-    readstring(`cmd.exe /c dir /b spawn.jl`) == readstring(Cmd(`cmd.exe /c dir /b "\"spawn.jl\""`, windows_verbatim=true))
+    read(`cmd.exe /c dir /b spawn.jl`, String) == readstring(Cmd(`cmd.exe /c dir /b "\"spawn.jl\""`, windows_verbatim=true))
 end
 
 # make sure Cmd is nestable

@@ -77,7 +77,7 @@ end
 
 function challenge_prompt(cmd::Cmd, challenges; timeout::Integer=10, debug::Bool=true)
     function format_output(output)
-        debug ? "Process output found:\n\"\"\"\n$(readstring(seekstart(out)))\n\"\"\"" : ""
+        debug ? "Process output found:\n\"\"\"\n$(read(seekstart(out), String))\n\"\"\"" : ""
     end
     out = IOBuffer()
     with_fake_pty() do slave, master
