@@ -1584,7 +1584,7 @@ end
 
 @deprecate readstring(s::IO) read(s, String)
 @deprecate readstring(filename::String) read(filename, String)
-
+@deprecate readstring(cmd::AbstractCmd) read(cmd, String)
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations
