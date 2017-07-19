@@ -975,7 +975,8 @@
 (define (juxtapose? s expr t)
   (and (or (number? expr)
            (large-number? expr)
-           (not (number? t))    ;; disallow "x.3" and "sqrt(2)2"
+           (and (not (number? t))    ;; disallow "x.3" and "sqrt(2)2"
+                (not (eqv? t #\@)))  ;; disallow "x@time"
            ;; to allow x'y as a special case
            #;(and (pair? expr) (memq (car expr) '(|'| |.'|))
                 (not (memv t '(#\( #\[ #\{))))
@@ -2160,6 +2161,9 @@
           ;; macro call
           ((eqv? t #\@)
            (take-token s)
+           (let ((nxt (peek-token s)))
+             (if (ts:space? s)
+                 (disallowed-space '@ nxt)))
            (with-space-sensitive
             (let ((startloc  (line-number-node s))
                   (head (if (eq? (peek-token s) '|.|)
