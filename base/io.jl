@@ -525,15 +525,7 @@ function read(s::IO, nb::Integer = typemax(Int))
     return resize!(b, nr)
 end
 
-"""
-    readstring(stream::IO)
-    readstring(filename::AbstractString)
-
-Read the entire contents of an I/O stream or a file as a string.
-The text is assumed to be encoded in UTF-8.
-"""
-readstring(s::IO) = String(read(s))
-readstring(filename::AbstractString) = open(readstring, filename)
+read(s::IO, ::Type{String}) = String(read(s))
 
 ## high-level iterator interfaces ##
 
