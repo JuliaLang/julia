@@ -420,11 +420,6 @@ julia> collect(Float64, 1:2:5)
  1.0
  3.0
  5.0
-
-julia> collect(Dict(1 => 2, 2 => "foo"))
-2-element Array{Pair{Int64,Any},1}:
- Pair{Int64,Any}(2, "foo")
- Pair{Int64,Any}(1, 2)
 ```
 """
 collect(::Type{T}, itr) where {T} = _collect(T, itr, iteratorsize(itr))
