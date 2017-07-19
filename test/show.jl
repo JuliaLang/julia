@@ -94,12 +94,18 @@ end
 @test_repr "(a / b) / (c / d / e)"
 @test_repr "(a == b == c) != (c == d < e)"
 
-# Exponentiation (operator_precedence(:^)) and unary operators
+# Exponentiation (>= operator_precedence(:^)) and unary operators
 @test_repr "(-1)^a"
 @test_repr "(-2.1)^-1"
 @test_repr "(-x)^a"
 @test_repr "(-a)^-1"
 @test_repr "(!x)↑!a"
+@test_repr "(!x).a"
+@test_repr "(!x)::a"
+
+# Complex
+
+@test iszero(eval(eval(parse(repr(:($(1 + 2im) - $(1 + 2im)))))))
 
 
 # control structures (shamelessly stolen from base/bitarray.jl)
