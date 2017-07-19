@@ -1868,6 +1868,20 @@ let
     @test_throws MethodError Dates.Month(1) < Dates.Day(1)
 end
 
+let
+    @compat cr(::CartesianRange{2}) = 2
+    @test cr(CartesianRange((5, 3))) == 2
+    @test_throws MethodError cr(CartesianRange((5, 3, 2)))
+end
+if VERSION < v"0.7.0-DEV.880"
+    # ensure we don't bork any non-updated expressions
+    let
+        @compat cr(::CartesianRange{CartesianIndex{2}}) = 2
+        @test cr(CartesianRange((5, 3))) == 2
+        @test_throws MethodError cr(CartesianRange((5, 3, 2)))
+    end
+end
+
 include("deprecated.jl")
 
 nothing
