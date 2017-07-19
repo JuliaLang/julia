@@ -139,6 +139,7 @@ mutable struct InferenceState
     # ssavalue sparsity and restart info
     ssavalue_uses::Vector{IntSet}
     ssavalue_defs::Vector{LineNum}
+    vararg_type_container #::Type
 
     backedges::Vector{Tuple{InferenceState, LineNum}} # call-graph backedges connecting from callee to caller
     callers_in_cycle::Vector{InferenceState}
@@ -190,6 +191,7 @@ mutable struct InferenceState
         atypes = unwrap_unionall(linfo.specTypes)
         nargs::Int = toplevel ? 0 : linfo.def.nargs
         la = nargs
+        vararg_type_container = nothing
         if la > 0
             if linfo.def.isva
                 if atypes == Tuple
@@ -198,8 +200,8 @@ mutable struct InferenceState
                     end
                     vararg_type = Tuple
                 else
-                    vararg_type = limit_tuple_depth(params, tupletype_tail(atypes, la))
-                    vararg_type = tuple_tfunc(vararg_type) # returns a Const object, if applicable
+                    vararg_type_container = limit_tuple_depth(params, tupletype_tail(atypes, la))
+                    vararg_type = tuple_tfunc(vararg_type_container) # returns a Const object, if applicable
                     vararg_type = rewrap(vararg_type, linfo.specTypes)
                 end
                 s_types[1][la] = VarState(vararg_type, false)
@@ -275,7 +277,7 @@ mutable struct InferenceState
             nargs, s_types, s_edges,
             Union{}, W, 1, n,
             cur_hand, handler_at, n_handlers,
-            ssavalue_uses, ssavalue_defs,
+            ssavalue_uses, ssavalue_defs, vararg_type_container,
             Vector{Tuple{InferenceState,LineNum}}(), # backedges
             Vector{InferenceState}(), # callers_in_cycle
             #=parent=#nothing,
@@ -1432,8 +1434,19 @@ end
 
 function tuple_tfunc(@nospecialize(argtype))
     if isa(argtype, DataType) && argtype.name === Tuple.name
-        p = Any[ isType(x) && !isa(x.parameters[1], TypeVar) ? typeof(x.parameters[1]) : x
-                 for x in argtype.parameters ]
+        p = Vector{Any}()
+        for x in argtype.parameters
+            if isType(x) && !isa(x.parameters[1], TypeVar)
+                xparam = x.parameters[1]
+                if isleaftype(xparam) || xparam === Bottom
+                    push!(p, typeof(xparam))
+                else
+                    push!(p, Type)
+                end
+            else
+                push!(p, x)
+            end
+        end
         t = Tuple{p...}
         # replace a singleton type with its equivalent Const object
         isdefined(t, :instance) && return Const(t.instance)
@@ -1825,6 +1838,10 @@ function precise_container_type(@nospecialize(arg), @nospecialize(typ), vtypes::
         def = sv.ssavalue_defs[arg.id + 1]
         stmt = sv.src.code[def]::Expr
         arg = stmt.args[2]
+    end
+
+    if isa(arg, Slot) && slot_id(arg) == sv.nargs && isa(sv.vararg_type_container, DataType)
+        return Any[rewrap_unionall(p, sv.linfo.specTypes) for p in sv.vararg_type_container.parameters]
     end
 
     tti0 = widenconst(typ)
