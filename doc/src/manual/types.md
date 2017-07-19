@@ -1262,6 +1262,7 @@ representation](@ref)) which takes the square of a specific instance of our `Pol
 julia> a = Polar(3, 4.0)
 Polar{Float64} complex number:
    3.0 * exp(4.0im)
+
 julia> print(:($a^2))
 3.0 * exp(4.0im) ^ 2
 ```
@@ -1282,6 +1283,7 @@ julia> function Base.show_unquoted(io::IO, z::Polar, ::Int, precedence::Int)
                show(io, z)
            end
        end
+
 julia> :($a^2)
 :((3.0 * exp(4.0im)) ^ 2)
 ```
