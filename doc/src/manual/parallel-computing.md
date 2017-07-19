@@ -781,14 +781,16 @@ julia> @elapsed while n > 0 # print out results
 
 ## Remote References and Distributed Garbage Collection
 
-Objects referred to by remote references can be freed only when *all* held references in the cluster
-are deleted.
+Objects referred to by remote references can be freed only when *all* held references
+in the cluster are deleted.
 
 The node where the value is stored keeps track of which of the workers have a reference to it.
 Every time a [`RemoteChannel`](@ref) or a (unfetched) [`Future`](@ref) is serialized to a worker,
 the node pointed to by the reference is notified. And every time a [`RemoteChannel`](@ref) or
 a (unfetched) [`Future`](@ref) is garbage collected locally, the node owning the value is again
-notified.
+notified. This is implemented in an internal cluster aware serializer. Remote references are only
+valid in the context of a running cluster. Serializing and deserializing references to and from
+regular `IO` objects is not supported.
 
 The notifications are done via sending of "tracking" messages--an "add reference" message when
 a reference is serialized to a different process and a "delete reference" message when a reference
