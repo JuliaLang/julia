@@ -371,6 +371,11 @@ isknownlength(t::DataType) = !isvatuple(t) ||
 # t[n:end]
 tupletype_tail(@nospecialize(t), n) = Tuple{t.parameters[n:end]...}
 
+function is_specializable_vararg_slot(arg, sv::InferenceState)
+    return (isa(arg, Slot) && slot_id(arg) == sv.nargs &&
+            isa(sv.vararg_type_container, DataType))
+end
+
 
 #### type-functions for builtins / intrinsics ####
 
@@ -1840,7 +1845,7 @@ function precise_container_type(@nospecialize(arg), @nospecialize(typ), vtypes::
         arg = stmt.args[2]
     end
 
-    if isa(arg, Slot) && slot_id(arg) == sv.nargs && isa(sv.vararg_type_container, DataType)
+    if is_specializable_vararg_slot(arg, sv)
         return Any[rewrap_unionall(p, sv.linfo.specTypes) for p in sv.vararg_type_container.parameters]
     end
 
@@ -4992,7 +4997,7 @@ function inlining_pass(e::Expr, sv::InferenceState, stmts, ins)
                         tmpv = newvar!(sv, t)
                         push!(newstmts, Expr(:(=), tmpv, aarg))
                     end
-                    if isa(aarg, Slot) && slot_id(aarg) == sv.nargs && isa(sv.vararg_type_container, DataType)
+                    if is_specializable_vararg_slot(aarg, sv)
                         tp = sv.vararg_type_container.parameters
                     else
                         tp = t.parameters
