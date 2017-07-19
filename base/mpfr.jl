@@ -26,6 +26,9 @@ import Base.Math.lgamma_r
 
 import Base.FastMath.sincos_fast
 
+get_version() = VersionNumber(unsafe_string(ccall((:mpfr_get_version,:libmpfr), Ptr{Cchar}, ())))
+get_patches() = split(unsafe_string(ccall((:mpfr_get_patches,:libmpfr), Ptr{Cchar}, ())),' ')
+
 function __init__()
     try
         # set exponent to full range by default
