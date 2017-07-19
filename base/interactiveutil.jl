@@ -132,7 +132,7 @@ if Sys.isapple()
             print(io, x)
         end
     end
-    clipboard() = readstring(`pbpaste`)
+    clipboard() = read(`pbpaste`, String)
 
 elseif Sys.islinux()
     _clipboardcmd = nothing
@@ -158,7 +158,7 @@ elseif Sys.islinux()
         cmd = c == :xsel  ? `xsel --nodetach --output --clipboard` :
               c == :xclip ? `xclip -quiet -out -selection clipboard` :
             error("unexpected clipboard command: $c")
-        readstring(pipeline(cmd, stderr=STDERR))
+        read(pipeline(cmd, stderr=STDERR), String)
     end
 
 elseif Sys.iswindows()
@@ -274,7 +274,7 @@ function versioninfo(io::IO=STDOUT; verbose::Bool=false, packages::Bool=false)
             try lsb = readchomp(pipeline(`lsb_release -ds`, stderr=DevNull)) end
         end
         if Sys.iswindows()
-            try lsb = strip(readstring(`$(ENV["COMSPEC"]) /c ver`)) end
+            try lsb = strip(read(`$(ENV["COMSPEC"]) /c ver`, String)) end
         end
         if !isempty(lsb)
             println(io, "      ", lsb)
@@ -694,7 +694,7 @@ function runtests(tests = ["all"], numcores = ceil(Int, Sys.CPU_CORES / 2))
         buf = PipeBuffer()
         versioninfo(buf)
         error("A test has failed. Please submit a bug report (https://github.com/JuliaLang/julia/issues)\n" *
-              "including error messages above and the output of versioninfo():\n$(readstring(buf))")
+              "including error messages above and the output of versioninfo():\n$(read(buf, String))")
     end
 end
 

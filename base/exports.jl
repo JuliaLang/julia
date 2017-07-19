@@ -1069,7 +1069,6 @@ export
     readdlm,
     readline,
     readlines,
-    readstring,
     readuntil,
     redirect_stderr,
     redirect_stdin,

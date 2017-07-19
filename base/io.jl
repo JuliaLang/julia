@@ -481,9 +481,9 @@ end
     readchomp(x)
 
 Read the entirety of `x` as a string and remove a single trailing newline.
-Equivalent to `chomp!(readstring(x))`.
+Equivalent to `chomp!(read(x, String))`.
 """
-readchomp(x) = chomp!(readstring(x))
+readchomp(x) = chomp!(read(x, String))
 
 # read up to nb bytes into nb, returning # bytes read
 

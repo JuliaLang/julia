@@ -513,7 +513,7 @@ macro test_warn(msg, expr)
                         $(esc(expr))
                     end
                 end
-                @test ismatch_warn($(esc(msg)), readstring(fname))
+                @test ismatch_warn($(esc(msg)), read(fname, String))
                 ret
             finally
                 eval(Base, Expr(:(=), :have_color, have_color))
