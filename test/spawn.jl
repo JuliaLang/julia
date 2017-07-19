@@ -384,7 +384,7 @@ end
 
 # make sure windows_verbatim strips quotes
 if Sys.iswindows()
-    read(`cmd.exe /c dir /b spawn.jl`, String) == readstring(Cmd(`cmd.exe /c dir /b "\"spawn.jl\""`, windows_verbatim=true))
+    read(`cmd.exe /c dir /b spawn.jl`, String) == read(Cmd(`cmd.exe /c dir /b "\"spawn.jl\""`, windows_verbatim=true), String)
 end
 
 # make sure Cmd is nestable

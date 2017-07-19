@@ -144,7 +144,7 @@ end
 Apply the function `f` to the result of `open(args...)` and close the resulting file
 descriptor upon completion.
 
-**Example**: `open(readstring, "file.txt")`
+**Example**: `open(f->read(f, String), "file.txt")`
 """
 function open(f::Function, args...)
     io = open(args...)

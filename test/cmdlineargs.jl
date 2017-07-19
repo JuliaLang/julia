@@ -10,15 +10,15 @@ end
 
 let exename = `$(Base.julia_cmd()) --precompiled=yes --startup-file=no`
     # --version
-    let v = split(readstring(`$exename -v`), "julia version ")[end]
+    let v = split(read(`$exename -v`, String), "julia version ")[end]
         @test Base.VERSION_STRING == chomp(v)
     end
-    @test readstring(`$exename -v`) == readstring(`$exename --version`)
+    @test read(`$exename -v`, String) == read(`$exename --version`, String)
 
     # --help
     let header = "julia [switches] -- [programfile] [args...]"
-        @test startswith(readstring(`$exename -h`), header)
-        @test startswith(readstring(`$exename --help`), header)
+        @test startswith(read(`$exename -h`, String), header)
+        @test startswith(read(`$exename --help`, String), header)
     end
 
     # --quiet
@@ -40,8 +40,8 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes --startup-file=no`
     @test !success(`$exename -i -e "exit(1)"`)
 
     # --print
-    @test readstring(`$exename -E "1+1"`) == "2\n"
-    @test readstring(`$exename --print="1+1"`) == "2\n"
+    @test read(`$exename -E "1+1"`, String) == "2\n"
+    @test read(`$exename --print="1+1"`, String) == "2\n"
     @test !success(`$exename -E`)
     @test !success(`$exename --print`)
 
@@ -133,19 +133,19 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes --startup-file=no`
 
     # -g
     @test readchomp(`$exename -E "Base.JLOptions().debug_level" -g`) == "2"
-    let code = readstring(`$exename -g0 -e "code_llvm(STDOUT, +, (Int64, Int64), false, true)"`)
+    let code = read(`$exename -g0 -e "code_llvm(STDOUT, +, (Int64, Int64), false, true)"`, String)
         @test contains(code, "llvm.module.flags")
         @test !contains(code, "llvm.dbg.cu")
         @test !contains(code, "int.jl")
         @test !contains(code, "Int64")
     end
-    let code = readstring(`$exename -g1 -e "code_llvm(STDOUT, +, (Int64, Int64), false, true)"`)
+    let code = read(`$exename -g1 -e "code_llvm(STDOUT, +, (Int64, Int64), false, true)"`, String)
         @test contains(code, "llvm.module.flags")
         @test contains(code, "llvm.dbg.cu")
         @test contains(code, "int.jl")
         @test !contains(code, "Int64")
     end
-    let code = readstring(`$exename -g2 -e "code_llvm(STDOUT, +, (Int64, Int64), false, true)"`)
+    let code = read(`$exename -g2 -e "code_llvm(STDOUT, +, (Int64, Int64), false, true)"`, String)
         @test contains(code, "llvm.module.flags")
         @test contains(code, "llvm.dbg.cu")
         @test contains(code, "int.jl")
@@ -207,7 +207,7 @@ let exename = `$(Base.julia_cmd()) --precompiled=yes --startup-file=no`
 
         let out  = Pipe(),
             proc = spawn(pipeline(`$exename -E "$code" --depwarn=no`, stderr=out))
-            output = @async readstring(out)
+            output = @async read(out, String)
 
             wait(proc)
             close(out.in)
@@ -366,7 +366,7 @@ let exename = joinpath(JULIA_HOME, Base.julia_exename()),
         let stderr = Pipe(),
             p = spawn(pipeline(`$exename --sysimage=$nonexist_image`, stderr=stderr))
             close(stderr.in)
-            let s = readstring(stderr)
+            let s = read(stderr, String)
                 @test contains(s, "ERROR: could not load library \"$nonexist_image\"\n")
                 @test !contains(s, "Segmentation fault")
                 @test !contains(s, "EXCEPTION_ACCESS_VIOLATION")
@@ -379,7 +379,7 @@ let exename = joinpath(JULIA_HOME, Base.julia_exename()),
     let stderr = Pipe(),
         p = spawn(pipeline(`$exename --sysimage=$libjulia`, stderr=stderr))
         close(stderr.in)
-        let s = readstring(stderr)
+        let s = read(stderr, String)
             @test s == "ERROR: System image file failed consistency check: maybe opened the wrong version?\n"
         end
         @test !success(p)
@@ -421,8 +421,8 @@ end
 
 # backtrace contains type and line number info (esp. on windows #17179)
 for precomp in ("yes", "no")
-    bt = readstring(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --precompiled=$precomp
-        -E 'include("____nonexistent_file")'`), stderr=catcmd))
+    bt = read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --precompiled=$precomp
+        -E 'include("____nonexistent_file")'`), stderr=catcmd), String)
     @test contains(bt, "include_relative(::Module, ::String) at $(joinpath(".", "loading.jl"))")
     lno = match(r"at \.[\/\\]loading\.jl:(\d+)", bt)
     @test length(lno.captures) == 1
