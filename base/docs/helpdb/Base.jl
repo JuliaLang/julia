@@ -1843,7 +1843,7 @@ function foo()
 end
 
 bar = cfunction(foo, Float64, ())
-``
+```
 """
 cfunction
 
