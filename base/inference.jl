@@ -4992,7 +4992,11 @@ function inlining_pass(e::Expr, sv::InferenceState, stmts, ins)
                         tmpv = newvar!(sv, t)
                         push!(newstmts, Expr(:(=), tmpv, aarg))
                     end
-                    tp = t.parameters
+                    if isa(aarg, Slot) && slot_id(aarg) == sv.nargs && isa(sv.vararg_type_container, DataType)
+                        tp = sv.vararg_type_container.parameters
+                    else
+                        tp = t.parameters
+                    end
                     newargs[i-2] = Any[ mk_getfield(tmpv,j,tp[j]) for j=1:length(tp) ]
                 else
                     # not all args expandable
