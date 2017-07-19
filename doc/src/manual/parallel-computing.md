@@ -344,7 +344,7 @@ The function `count_heads` simply adds together `n` random bits. Here is how we 
 trials on two machines, and add together the results:
 
 ```julia-repl
-julia> @everywhere include("count_heads.jl")
+julia> @everywhere include_string(Main, $(read("count_heads.jl", String)), "count_heads.jl")
 
 julia> a = @spawn count_heads(100000000)
 Future(2, 1, 6, Nullable{Any}())
