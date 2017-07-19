@@ -16,10 +16,22 @@ signbit(x::Float64) = signbit(bitcast(Int64, x))
 signbit(x::Float32) = signbit(bitcast(Int32, x))
 signbit(x::Float16) = signbit(bitcast(Int16, x))
 
+"""
+    maxintfloat(T)
+
+The largest integer losslessly representable by the given floating-point DataType `T`.
+"""
 maxintfloat(::Type{Float64}) = 9007199254740992.
 maxintfloat(::Type{Float32}) = Float32(16777216.)
 maxintfloat(::Type{Float16}) = Float16(2048f0)
 maxintfloat(x::T) where {T<:AbstractFloat} = maxintfloat(T)
+
+"""
+    maxintfloat(T, S)
+
+The largest integer losslessly representable by the given floating-point DataType `T` that
+also does not exceed the maximum integer representable by the integer DataType `S`.
+"""
 maxintfloat(::Type{S}, ::Type{T}) where {S<:AbstractFloat, T<:Integer} = min(maxintfloat(S), S(typemax(T)))
 maxintfloat() = maxintfloat(Float64)
 
