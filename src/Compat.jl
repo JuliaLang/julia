@@ -618,4 +618,17 @@ include("deprecated.jl")
 # https://github.com/JuliaLang/julia/pull/21746
 const macros_have_sourceloc = VERSION >= v"0.7-" && length(:(@test).args) == 2
 
+# https://github.com/JuliaLang/julia/pull/22182
+module Sys
+    if VERSION < v"0.7.0-DEV.914"
+        isapple(k::Symbol=Base.Sys.KERNEL)   = k in (:Darwin, :Apple)
+        isbsd(k::Symbol=Base.Sys.KERNEL)     = isapple(k) || k in (:FreeBSD, :OpenBSD, :NetBSD, :DragonFly)
+        islinux(k::Symbol=Base.Sys.KERNEL)   = k == :Linux
+        isunix(k::Symbol=Base.Sys.KERNEL)    = isbsd(k) || islinux(k)
+        iswindows(k::Symbol=Base.Sys.KERNEL) = k in (:Windows, :NT)
+    else
+        import Base.Sys: isapple, isbsd, islinux, isunix, iswindows
+    end
+end
+
 end # module Compat
