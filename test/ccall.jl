@@ -888,7 +888,7 @@ let A = [1]
 end
 
 # Pointer finalizer at exit (PR #19911)
-let result = readstring(`$(Base.julia_cmd()) --startup-file=no -e "A = Ref{Cint}(42); finalizer(A, cglobal((:c_exit_finalizer, \"$libccalltest\"), Void))"`)
+let result = read(`$(Base.julia_cmd()) --startup-file=no -e "A = Ref{Cint}(42); finalizer(A, cglobal((:c_exit_finalizer, \"$libccalltest\"), Void))"`, String)
     @test result == "c_exit_finalizer: 42, 0"
 end
 

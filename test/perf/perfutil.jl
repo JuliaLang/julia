@@ -21,7 +21,7 @@ if codespeed
     csdata["project"] = "Julia"
     csdata["branch"] = Base.GIT_VERSION_INFO.branch
     csdata["executable"] = ENV["JULIA_FLAVOR"]
-    csdata["environment"] = chomp(readstring(`hostname`))
+    csdata["environment"] = chomp(read(`hostname`, String))
     csdata["result_date"] = join( split(Base.GIT_VERSION_INFO.date_string)[1:2], " " )    #Cut the timezone out
 end
 
