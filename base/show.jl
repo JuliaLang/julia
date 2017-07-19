@@ -566,7 +566,7 @@ function show_block(io::IO, head, arg, block, i::Int)
 end
 
 # show an indented list
-function show_list(io::IO, items, sep, indent::Int, prec::Int=0, enclose_operators::Bool=false, enclosed_indices::Vector=[])
+function show_list(io::IO, items, sep, indent::Int, prec::Int=0, enclose_operators::Bool=false, enclosed_indices::IntSet=IntSet())
     n = length(items)
     n == 0 && return
     indent += indent_width
@@ -581,7 +581,7 @@ function show_list(io::IO, items, sep, indent::Int, prec::Int=0, enclose_operato
     end
 end
 # show an indented list inside the parens (op, cl)
-function show_enclosed_list(io::IO, op, items, sep, cl, indent, prec=0, encl_ops=false, encl_inds=[])
+function show_enclosed_list(io::IO, op, items, sep, cl, indent, prec=0, encl_ops=false, encl_inds=IntSet())
     print(io, op)
     show_list(io, items, sep, indent, prec, encl_ops, encl_inds)
     print(io, cl)
@@ -802,14 +802,13 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
             if (na == 2 || (na > 2 && func in (:+, :++, :*))) &&
                     all(!isa(a, Expr) || a.head !== :... for a in func_args)
                 sep = " $func "
-                # parenthesize (-x) ^ y for negative x
-                if (operator_precedence(func) == operator_precedence(:^) &&
+                encl_inds = IntSet()
+                # parenthesize (UNI x) OP y for ^ and similar operators
+                if (func_prec == operator_precedence(:^) &&
                     ((func_args[1] isa Expr && func_args[1].head === :call &&
                       func_args[1].args[1] in uni_ops) ||
                      (func_args[1] isa Real && func_args[1] < 0)))
-                    encl_inds = [1]
-                else
-                    encl_inds = []
+                    push!(encl_inds, 1)
                 end
                 if func_prec <= prec
                     show_enclosed_list(io, '(', func_args, sep, ')', indent, func_prec, true, encl_inds)
