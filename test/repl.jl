@@ -535,46 +535,43 @@ end
 
 # Simple non-standard REPL tests
 if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
-    for prompt = ["testπ", () -> randstring(rand(1:10))]
-        stdin_write, stdout_read, stdout_read, repl = fake_repl()
-        panel = LineEdit.Prompt(prompt;
-            prompt_prefix="\e[38;5;166m",
-            prompt_suffix=Base.text_colors[:white],
-            on_enter = s->true)
+    stdin_write, stdout_read, stdout_read, repl = fake_repl()
+    panel = LineEdit.Prompt("testπ";
+        prompt_prefix="\e[38;5;166m",
+        prompt_suffix=Base.text_colors[:white],
+        on_enter = s->true)
 
-        hp = REPL.REPLHistoryProvider(Dict{Symbol,Any}(:parse => panel))
-        search_prompt, skeymap = LineEdit.setup_prefix_keymap(hp, panel)
-        REPL.history_reset_state(hp)
+    hp = REPL.REPLHistoryProvider(Dict{Symbol,Any}(:parse => panel))
+    search_prompt, skeymap = LineEdit.setup_prefix_keymap(hp, panel)
+    REPL.history_reset_state(hp)
 
-        panel.hist = hp
-        panel.keymap_dict = LineEdit.keymap(Dict{Any,Any}[skeymap,
-            LineEdit.default_keymap, LineEdit.escape_defaults])
+    panel.hist = hp
+    panel.keymap_dict = LineEdit.keymap(Dict{Any,Any}[skeymap,
+        LineEdit.default_keymap, LineEdit.escape_defaults])
 
-        c = Condition()
-        panel.on_done = (s,buf,ok)->begin
-            if !ok
-                LineEdit.transition(s,:abort)
-            end
-            line = strip(String(take!(buf)))
-            LineEdit.reset_state(s)
-            return notify(c,line)
+    c = Condition()
+    panel.on_done = (s,buf,ok)->begin
+        if !ok
+            LineEdit.transition(s,:abort)
         end
-
-        repltask = @async Base.REPL.run_interface(repl.t,
-                              LineEdit.ModalInterface([panel,search_prompt]))
-
-        write(stdin_write,"a\n")
-        @test wait(c) == "a"
-        # Up arrow enter should recall history even at the start
-        write(stdin_write,"\e[A\n")
-        @test wait(c) == "a"
-        # And again
-        write(stdin_write,"\e[A\n")
-        @test wait(c) == "a"
-        # Close REPL ^D
-        write(stdin_write, '\x04')
-        wait(repltask)
+        line = strip(String(take!(buf)))
+        LineEdit.reset_state(s)
+        return notify(c,line)
     end
+
+    repltask = @async Base.REPL.run_interface(repl.t, LineEdit.ModalInterface([panel,search_prompt]))
+
+    write(stdin_write,"a\n")
+    @test wait(c) == "a"
+    # Up arrow enter should recall history even at the start
+    write(stdin_write,"\e[A\n")
+    @test wait(c) == "a"
+    # And again
+    write(stdin_write,"\e[A\n")
+    @test wait(c) == "a"
+    # Close REPL ^D
+    write(stdin_write, '\x04')
+    wait(repltask)
 end
 
 ccall(:jl_exit_on_sigint, Void, (Cint,), 1)
