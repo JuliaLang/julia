@@ -105,6 +105,7 @@ end
 
 # Complex
 
+# parse(repr(:(...))) returns a double-quoted block, so we need to eval twice to unquote it
 @test iszero(eval(eval(parse(repr(:($(1 + 2im) - $(1 + 2im)))))))
 
 
