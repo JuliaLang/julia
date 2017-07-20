@@ -1247,3 +1247,7 @@ end === (3, String)
 
 # issue #22840
 @test parse("[:a :b]") == Expr(:hcat, QuoteNode(:a), QuoteNode(:b))
+
+# issue #22868
+@test_throws ParseError parse("x@time 2")
+@test_throws ParseError parse("@ time")

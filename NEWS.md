@@ -63,6 +63,10 @@ This section lists changes that do not have deprecation warnings.
   * The `Diagonal` type definition has changed from `Diagonal{T}` to
     `Diagonal{T,V<:AbstractVector{T}}` ([#22718]).
 
+  * Spaces are no longer allowed between `@` and the name of a macro in a macro call ([#22868]).
+
+  * Juxtaposition of a non-literal with a macro call (`x@macro`) is no longer valid syntax ([#22868]).
+
 Library improvements
 --------------------
 
