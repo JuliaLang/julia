@@ -178,6 +178,14 @@ function _compat(ex::Expr)
             end
         end
     end
+    if VERSION < v"0.7.0-DEV.880"
+        if ex.head == :curly && ex.args[1] == :CartesianRange && length(ex.args) >= 2
+            a = ex.args[2]
+            if a != :CartesianIndex && !(isa(a, Expr) && a.head == :curly && a.args[1] == :CartesianIndex)
+                return Expr(:curly, :CartesianRange, Expr(:curly, :CartesianIndex, ex.args[2]))
+            end
+        end
+    end
     return Expr(ex.head, map(_compat, ex.args)...)
 end
 
