@@ -595,11 +595,11 @@ static void gc_scrub_task(jl_task_t *ta)
 #else
     jl_task_t *thread_task = ptls2->root_task;
 #endif
-    if (ta == thread_task)
-        gc_scrub_range(ptls2->stack_lo, ptls2->stack_hi);
-    if (ta->stkbuf == (void*)(intptr_t)(-1) || !ta->stkbuf)
-        return;
-    gc_scrub_range((char*)ta->stkbuf, (char*)ta->stkbuf + ta->ssize);
+    void *stkbuf = ta->stkbuf;
+    if (ta == thread_task && ptls->copy_stack)
+        gc_scrub_range(ptls2->stackbase, ptls2->stacksize);
+    else if (stkbuf)
+        gc_scrub_range((char*)stkbuf, (char*)stkbuf + ta->bufsz);
 }
 
 void gc_scrub(void)

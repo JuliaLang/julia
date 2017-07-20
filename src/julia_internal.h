@@ -387,7 +387,6 @@ JL_DLLEXPORT void jl_typeassert(jl_value_t *x, jl_value_t *t);
 
 JL_CALLABLE(jl_f_tuple);
 JL_CALLABLE(jl_f_intrinsic_call);
-extern jl_function_t *jl_unprotect_stack_func;
 void jl_install_default_signal_handlers(void);
 void restore_signals(void);
 void jl_install_thread_signal_handler(jl_ptls_t ptls);
@@ -489,8 +488,8 @@ void jl_init_codegen(void);
 void jl_init_intrinsic_functions(void);
 void jl_init_intrinsic_properties(void);
 void jl_init_tasks(void) JL_GC_DISABLED;
-void jl_init_stack_limits(int ismaster);
-void jl_init_root_task(void *stack, size_t ssize);
+void jl_init_stack_limits(int ismaster, void **stack_hi, void **stack_lo);
+void jl_init_root_task(void *stack_lo, void *stack_hi);
 void jl_init_serializer(void);
 void jl_gc_init(void);
 void jl_init_signal_async(void);

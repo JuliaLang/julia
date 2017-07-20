@@ -172,6 +172,8 @@ int main(int argc, char *argv[])
 static void lock_low32() {
 #if defined(_P64) && defined(JL_DEBUG_BUILD)
     // Wine currently has a that causes it to answer VirtualQuery incorrectly.
+    // See https://www.winehq.org/pipermail/wine-devel/2016-March/112188.html for details
+    // Now Windows 10 does too
     // block usage of the 32-bit address space on win64, to catch pointer cast errors
     char *const max32addr = (char*)0xffffffffL;
     SYSTEM_INFO info;
@@ -185,6 +187,7 @@ static void lock_low32() {
         if (meminfo.State == MEM_FREE) { // reserve all free pages in the first 4GB of memory
             char *first = (char*)meminfo.BaseAddress;
             char *last = first + meminfo.RegionSize;
+            void *p;
             if (last > max32addr)
                 last = max32addr;
             // adjust first up to the first allocation granularity boundary

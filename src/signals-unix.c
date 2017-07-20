@@ -182,13 +182,13 @@ static pthread_t signals_thread;
 
 static int is_addr_on_stack(jl_ptls_t ptls, void *addr)
 {
-#ifdef COPY_STACKS
-    return ((char*)addr > (char*)ptls->stack_lo-3000000 &&
-            (char*)addr < (char*)ptls->stack_hi);
-#else
-    return ((char*)addr > (char*)ptls->current_task->stkbuf &&
-            (char*)addr < (char*)ptls->current_task->stkbuf + ptls->current_task->ssize);
-#endif
+    jl_task_t *t = ptls->current_task;
+    if (t->copy_stack)
+        return ((char*)addr > (char*)ptls->stackbase - ptls->stacksize &&
+                (char*)addr < (char*)ptls->stackbase);
+    else
+        return ((char*)addr > (char*)t->stkbuf &&
+                (char*)addr < (char*)t->stkbuf + t->bufsz);
 }
 
 static void sigdie_handler(int sig, siginfo_t *info, void *context)
