@@ -1763,9 +1763,11 @@ function showarray(io::IO, X::AbstractArray, repr::Bool = true; header = true)
 end
 
 """
-    showcompact(io::IO=STDOUT, x)
+    showcompact(x)
+    showcompact(io::IO, x)
 
-Show a compact representation of a value.
+Show a compact representation of a value to `io`. If `io` is not specified, the
+default is to print to [`STDOUT`](@ref).
 
 This is used for printing array elements without repeating type information (which would
 be redundant with that printed once for the whole array), and without line breaks inside
