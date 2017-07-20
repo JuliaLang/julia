@@ -1882,6 +1882,16 @@ let
     @test_throws MethodError Dates.Month(1) < Dates.Day(1)
 end
 
+# PR 22629
+@test logdet(0.5) == log(det(0.5))
+
+# PR 22633
+for T in (Float64, Complex64, BigFloat, Int)
+    λ = T(4)
+    @test chol(λ*I).λ ≈ √λ
+    @test_throws Union{ArgumentError,LinAlg.PosDefException} chol(-λ*I)
+end
+
 let
     @compat cr(::CartesianRange{2}) = 2
     @test cr(CartesianRange((5, 3))) == 2

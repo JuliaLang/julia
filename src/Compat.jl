@@ -621,6 +621,19 @@ if VERSION < v"0.7.0-DEV.843"
     (::Type{Val})(x) = (Base.@_pure_meta; Val{x}())
 end
 
+# https://github.com/JuliaLang/julia/pull/22629
+if VERSION < v"0.7.0-DEV.848"
+    import Base: logdet
+    logdet(A) = log(det(A))
+end
+
+# https://github.com/JuliaLang/julia/pull/22633
+if VERSION < v"0.7.0-DEV.1041"
+    import Base.LinAlg: chol, chol!
+    chol!(J::UniformScaling, uplo) = UniformScaling(chol!(J.λ, uplo))
+    chol(J::UniformScaling, args...) = UniformScaling(chol(J.λ, args...))
+end
+
 include("deprecated.jl")
 
 # https://github.com/JuliaLang/julia/pull/21746
