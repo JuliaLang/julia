@@ -364,8 +364,8 @@ function _inv(A::HermOrSym)
     end
     B
 end
-inv(A::Hermitian{T,S}) where {T<:BlasFloat,S<:StridedMatrix} = Hermitian{T,S}(_inv(A), A.uplo)
-inv(A::Symmetric{T,S}) where {T<:BlasFloat,S<:StridedMatrix} = Symmetric{T,S}(_inv(A), A.uplo)
+inv(A::Hermitian{<:Any,<:StridedMatrix}) = Hermitian(_inv(A), Symbol(A.uplo))
+inv(A::Symmetric{<:Any,<:StridedMatrix}) = Symmetric(_inv(A), Symbol(A.uplo))
 
 eigfact!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}) = Eigen(LAPACK.syevr!('V', 'A', A.uplo, A.data, 0.0, 0.0, 0, 0, -1.0)...)
 
