@@ -653,7 +653,7 @@ function inv(A::StridedMatrix{T}) where T
         Ai = inv(LowerTriangular(AA))
         Ai = convert(typeof(parent(Ai)), Ai)
     else
-        Ai = inv(lufact(AA))
+        Ai = inv!(lufact(AA))
         Ai = convert(typeof(parent(Ai)), Ai)
     end
     return Ai
