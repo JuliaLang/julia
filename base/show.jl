@@ -246,6 +246,11 @@ end
 
 show_supertypes(typ::DataType) = show_supertypes(STDOUT, typ)
 
+"""
+    @show
+
+Show an expression and result, returning the result.
+"""
 macro show(exs...)
     blk = Expr(:block)
     for ex in exs
@@ -1757,6 +1762,18 @@ function showarray(io::IO, X::AbstractArray, repr::Bool = true; header = true)
     end
 end
 
+"""
+    showcompact(io::IO=STDOUT, x)
+
+Show a compact representation of a value.
+
+This is used for printing array elements without repeating type information (which would
+be redundant with that printed once for the whole array), and without line breaks inside
+the representation of an element.
+
+To offer a compact representation different from its standard one, a custom type should
+test `get(io, :compact, false)` in its normal [`show`](@ref) method.
+"""
 showcompact(x) = showcompact(STDOUT, x)
 function showcompact(io::IO, x)
     if get(io, :compact, false)

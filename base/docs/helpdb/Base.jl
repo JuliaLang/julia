@@ -129,14 +129,6 @@ Neither `convert` nor `cconvert` should take a Julia object and turn it into a `
 cconvert
 
 """
-    assert(cond)
-
-Throw an [`AssertionError`](@ref) if `cond` is `false`.
-Also available as the macro `@assert expr`.
-"""
-assert
-
-"""
     unsafe_copy!(dest::Ptr{T}, src::Ptr{T}, N)
 
 Copy `N` elements from a source pointer to a destination, with no checking. The size of an
@@ -431,13 +423,6 @@ Show every part of the representation of a value.
 dump
 
 """
-    isinteractive() -> Bool
-
-Determine whether Julia is running an interactive session.
-"""
-isinteractive
-
-"""
     display(x)
     display(d::Display, x)
     display(mime, x)
@@ -456,14 +441,6 @@ variants, one can also supply the "raw" data in the requested MIME type by passi
 application/postscript) or `x::Vector{UInt8}` (for binary MIME types).
 """
 display
-
-"""
-    print_shortest(io, x)
-
-Print the shortest possible representation, with the minimum number of consecutive non-zero
-digits, of number `x`, ensuring that it would parse to the exact same number.
-"""
-print_shortest
 
 """
     tuple(xs...)
@@ -676,27 +653,6 @@ julia> copysign(-1, 2)
 ```
 """
 copysign
-
-"""
-    @show
-
-Show an expression and result, returning the result.
-"""
-:@show
-
-"""
-    showcompact(x)
-
-Show a compact representation of a value.
-
-This is used for printing array elements without repeating type information (which would
-be redundant with that printed once for the whole array), and without line breaks inside
-the representation of an element.
-
-To offer a compact representation different from its standard one, a custom type should
-test `get(io, :compact, false)` in its normal `show` method.
-"""
-showcompact
 
 """
     getfield(value, name::Symbol)
@@ -1195,14 +1151,6 @@ Convert a number to a maximum precision representation (typically [`BigInt`](@re
 big
 
 """
-    quit()
-
-Quit the program indicating that the processes completed successfully. This function calls
-`exit(0)` (see [`exit`](@ref)).
-"""
-quit
-
-"""
     typejoin(T, S)
 
 Compute a type that contains both `T` and `S`.
@@ -1363,14 +1311,6 @@ Often `wait` is called within a `while` loop to ensure a waited-for condition is
 proceeding.
 """
 wait
-
-"""
-    atexit(f)
-
-Register a zero-argument function `f()` to be called at process exit. `atexit()` hooks are
-called in last in first out (LIFO) order and run before object finalizers.
-"""
-atexit
 
 """
     copy(x)
@@ -1549,13 +1489,6 @@ should implement this function. Numeric types only need to implement it if they 
 values such as `NaN`.
 """
 isless
-
-"""
-    showerror(io, e)
-
-Show a descriptive representation of an exception object.
-"""
-showerror
 
 """
     error(message::AbstractString)
@@ -1781,21 +1714,6 @@ end
 ```
 """
 get!(f::Function,collection,key)
-
-"""
-    @assert cond [text]
-
-Throw an `AssertionError` if `cond` is `false`. Preferred syntax for writing assertions.
-Message `text` is optionally displayed upon assertion failure.
-
-# Examples
-```jldoctest
-julia> @assert iseven(3) "3 is an odd number!"
-ERROR: AssertionError: 3 is an odd number!
-
-julia> @assert isodd(3) "What even are numbers?"
-```
-"""
 :@assert
 
 """
