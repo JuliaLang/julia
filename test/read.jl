@@ -185,10 +185,10 @@ for (name, f) in l
     ]
         write(filename, text)
 
-        verbose && println("$name readstring...")
-        @test readstring(io()) == text
+        verbose && println("$name read(io, String)...")
+        @test read(io(), String) == text
 
-        @test readstring(io()) == readstring(filename)
+        @test read(io(), String) == read(filename, String)
 
 
         verbose && println("$name read...")
@@ -285,7 +285,7 @@ for (name, f) in l
             cleanup()
         end
         verbose && println("$name seekend...")
-        @test readstring(seekend(io())) == ""
+        @test read(seekend(io()), String) == ""
     end
 
 
@@ -293,11 +293,11 @@ for (name, f) in l
     to = open("$filename.to", "w")
     write(to, io())
     close(to)
-    @test readstring("$filename.to") == text
+    @test read("$filename.to", String) == text
 
     verbose && println("$name write(filename, ...)")
     write("$filename.to", io())
-    @test readstring("$filename.to") == text
+    @test read("$filename.to", String) == text
 
     verbose && println("$name write(::IOBuffer, ...)")
     to = IOBuffer(copy(Vector{UInt8}(text)), false, true)
@@ -432,8 +432,8 @@ for i = 1:2
     @test !eof(f2)
     @test position(f1) == 0
     @test position(f2) == 0
-    @test readstring(f1) == readstring(f2) == "abc"
-    @test readstring(f1) == readstring(f2) == ""
+    @test read(f1, String) == read(f2, String) == "abc"
+    @test read(f1, String) == read(f2, String) == ""
     @test position(f1) == 3
     @test position(f2) == 3
     @test eof(f1)
@@ -486,7 +486,7 @@ f2 = Base.Filesystem.open(f, Base.Filesystem.JL_O_RDWR)
 @test !eof(f1)
 @test seekstart(f1) == f1
 @test seekstart(f2) == f2
-@test readstring(f1) == readstring(f2) == "abc\0\0\0\0\0\0\0**"
+@test read(f1, String) == read(f2, String) == "abc\0\0\0\0\0\0\0**"
 close(f1)
 close(f2)
 rm(f)

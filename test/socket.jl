@@ -89,7 +89,7 @@ for testport in [0, defaultport]
         close(sock)
     end
     wait(port)
-    @test readstring(connect(fetch(port))) == "Hello World\n" * ("a1\n"^100)
+    @test read(connect(fetch(port)), String) == "Hello World\n" * ("a1\n"^100)
     wait(tsk)
 end
 
@@ -105,7 +105,7 @@ mktempdir() do tmpdir
         close(sock)
     end
     wait(c)
-    @test readstring(connect(socketname)) == "Hello World\n"
+    @test read(connect(socketname), String) == "Hello World\n"
     wait(tsk)
 end
 

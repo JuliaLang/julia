@@ -367,10 +367,10 @@ let oldout = STDOUT, olderr = STDERR
         # pr 16917
         rdout, wrout = redirect_stdout()
         @test wrout === STDOUT
-        out = @async readstring(rdout)
+        out = @async read(rdout, String)
         rderr, wrerr = redirect_stderr()
         @test wrerr === STDERR
-        err = @async readstring(rderr)
+        err = @async read(rderr, String)
         @test dump(Int64) === nothing
         if !Sys.iswindows()
             close(wrout)
@@ -409,7 +409,7 @@ let filename = tempname()
         end
     end
     @test ret == [1,3]
-    @test chomp(readstring(filename)) == "hello"
+    @test chomp(read(filename, String)) == "hello"
     ret = open(filename, "w") do f
         redirect_stderr(f) do
             warn("hello")
@@ -419,7 +419,7 @@ let filename = tempname()
     @test ret == [2]
 
     # STDIN is unavailable on the workers. Run test on master.
-    @test contains(readstring(filename), "WARNING: hello")
+    @test contains(read(filename, String), "WARNING: hello")
     ret = eval(Main, quote
         remotecall_fetch(1, $filename) do fname
             open(fname) do f
@@ -757,7 +757,7 @@ function static_shown(x)
     Base.link_pipe(p; julia_only_read=true, julia_only_write=true)
     ccall(:jl_static_show, Void, (Ptr{Void}, Any), p.in, x)
     @async close(p.in)
-    return readstring(p.out)
+    return read(p.out, String)
 end
 
 # Test for PR 17803
@@ -782,7 +782,7 @@ let fname = tempname()
                 @show zeros(2, 2)
             end
         end
-        @test readstring(fname) == "zeros(2, 2) = 2×2 Array{Float64,2}:\n 0.0  0.0\n 0.0  0.0\n"
+        @test read(fname, String) == "zeros(2, 2) = 2×2 Array{Float64,2}:\n 0.0  0.0\n 0.0  0.0\n"
     finally
         rm(fname, force=true)
     end

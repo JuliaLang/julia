@@ -163,6 +163,10 @@ write(filename::AbstractString, args...) = open(io->write(io, args...), filename
 
 Open a file and read its contents. `args` is passed to `read`: this is equivalent to
 `open(io->read(io, args...), filename)`.
+
+    read(filename::AbstractString, String)
+
+Read the entire contents of a file as a string.
 """
 read(filename::AbstractString, args...) = open(io->read(io, args...), filename)
 read!(filename::AbstractString, a) = open(io->read!(io, a), filename)
@@ -481,9 +485,9 @@ end
     readchomp(x)
 
 Read the entirety of `x` as a string and remove a single trailing newline.
-Equivalent to `chomp!(readstring(x))`.
+Equivalent to `chomp!(read(x, String))`.
 """
-readchomp(x) = chomp!(readstring(x))
+readchomp(x) = chomp!(read(x, String))
 
 # read up to nb bytes into nb, returning # bytes read
 
@@ -525,15 +529,7 @@ function read(s::IO, nb::Integer = typemax(Int))
     return resize!(b, nr)
 end
 
-"""
-    readstring(stream::IO)
-    readstring(filename::AbstractString)
-
-Read the entire contents of an I/O stream or a file as a string.
-The text is assumed to be encoded in UTF-8.
-"""
-readstring(s::IO) = String(read(s))
-readstring(filename::AbstractString) = open(readstring, filename)
+read(s::IO, ::Type{String}) = String(read(s))
 
 ## high-level iterator interfaces ##
 

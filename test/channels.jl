@@ -235,7 +235,7 @@ let t, run = Ref(0)
     local newstderr, errstream
     try
         newstderr = redirect_stderr()
-        errstream = @async readstring(newstderr[1])
+        errstream = @async read(newstderr[1], String)
         yield(t)
     finally
         redirect_stderr(oldstderr)
@@ -253,7 +253,7 @@ let t, run = Ref(0)
     t.state = :invalid
     try
         newstderr = redirect_stderr()
-        errstream = @async readstring(newstderr[1])
+        errstream = @async read(newstderr[1], String)
         yield()
     finally
         redirect_stderr(oldstderr)

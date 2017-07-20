@@ -648,7 +648,7 @@ function read(cmd::AbstractCmd)
     return bytes
 end
 
-readstring(cmd::AbstractCmd) = String(read(cmd))
+read(cmd::AbstractCmd, ::Type{String}) = String(read(cmd))
 
 """
     run(command, args...)

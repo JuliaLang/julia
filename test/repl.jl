@@ -136,7 +136,7 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
                 @test contains(s, "echo \$123 >$tmp") # make sure we echoed the input
             end
             @test readuntil(stdout_read, "\n") == "\e[0m\n"
-            @test readstring(tmp) == "123\n"
+            @test read(tmp, String) == "123\n"
         finally
             rm(tmp, force=true)
         end
@@ -209,7 +209,7 @@ end
 function buffercontents(buf::IOBuffer)
     p = position(buf)
     seek(buf,0)
-    c = readstring(buf)
+    c = read(buf, String)
     seek(buf,p)
     c
 end
@@ -603,7 +603,7 @@ end
 if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     outs, ins, p = readandwrite(`$exename --startup-file=no --quiet`)
     write(ins,"1\nquit()\n")
-    @test readstring(outs) == "1\n"
+    @test read(outs, String) == "1\n"
 end
 end # let exename
 
@@ -751,7 +751,7 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
             @test isempty(search(output, "julia> "))
 
             # Check the history file
-            history = readstring(histfile)
+            history = read(histfile, String)
             @test ismatch(r"""
                           ^\#\ time:\ .*\n
                            \#\ mode:\ julia\n

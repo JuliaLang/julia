@@ -299,7 +299,7 @@ mktempdir() do dir
 
                 # test remote's representation in the repo's config
                 config = joinpath(cache_repo, ".git", "config")
-                lines = split(open(readstring, config, "r"), "\n")
+                lines = split(open(x->read(x, String), config, "r"), "\n")
                 @test any(map(x->x == "[remote \"upstream\"]", lines))
 
                 remote = LibGit2.get(LibGit2.GitRemote, repo, branch)
@@ -1101,7 +1101,7 @@ mktempdir() do dir
 
     @testset "Examine test repository" begin
         @testset "files" begin
-            @test readstring(joinpath(test_repo, test_file)) == readstring(joinpath(cache_repo, test_file))
+            @test read(joinpath(test_repo, test_file), String) == read(joinpath(cache_repo, test_file), String)
         end
 
         @testset "tags & branches" begin
@@ -1650,7 +1650,7 @@ mktempdir() do dir
         if !Sys.iswindows()
             try
                 # SSHD needs to be executed by its full absolute path
-                sshd_command = strip(readstring(`which sshd`))
+                sshd_command = strip(read(`which sshd`, String))
             catch
                 warn("Skipping SSH tests (Are `which` and `sshd` installed?)")
             end
@@ -1806,7 +1806,7 @@ mktempdir() do dir
                         end
                     catch err
                         println("SSHD logfile contents follows:")
-                        println(readstring(logfile))
+                        println(read(logfile, String))
                         rethrow(err)
                     finally
                         rm(logfile)
@@ -1826,7 +1826,7 @@ mktempdir() do dir
         if Sys.islinux()
             try
                 # OpenSSL needs to be on the path
-                openssl_installed = !isempty(readstring(`openssl version`))
+                openssl_installed = !isempty(read(`openssl version`, String))
             catch
                 warn("Skipping hostname verification tests. Is `openssl` on the path?")
             end

@@ -960,7 +960,7 @@ function write_response_buffer(s::PromptState, data)
     offset = s.input_buffer.ptr
     ptr = data.response_buffer.ptr
     seek(data.response_buffer, 0)
-    write(s.input_buffer, readstring(data.response_buffer))
+    write(s.input_buffer, read(data.response_buffer, String))
     s.input_buffer.ptr = offset + ptr - 2
     data.response_buffer.ptr = ptr
     refresh_line(s)
@@ -1101,7 +1101,7 @@ function refresh_multi_line(termbuf::TerminalBuffer, s::SearchState)
     offset = buf.ptr
     ptr = s.response_buffer.ptr
     seek(s.response_buffer, 0)
-    write(buf, readstring(s.response_buffer))
+    write(buf, read(s.response_buffer, String))
     buf.ptr = offset + ptr - 1
     s.response_buffer.ptr = ptr
     s.ias = refresh_multi_line(termbuf, s.terminal, buf, s.ias, s.backward ? "(reverse-i-search)`" : "(forward-i-search)`")

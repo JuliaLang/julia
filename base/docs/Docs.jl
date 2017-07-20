@@ -419,7 +419,7 @@ function summarize(io::IO, m::Module, binding)
     if isfile(readme)
         println(io, "Displaying the `README.md` for the module instead.\n")
         println(io, "---\n")
-        println(io, readstring(readme))
+        println(io, read(readme, String))
     else
         println(io, "No docstring or `README.md` found for module `", m, "`.\n")
     end

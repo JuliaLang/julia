@@ -362,7 +362,7 @@ function displaysize(io::TTY)
         if ispty(io)
             # io is actually a libuv pipe but a cygwin/msys2 pty
             try
-                h, w = parse.(Int, split(readstring(open(Base.Cmd(String["stty", "size"]), "r", io).out)))
+                h, w = parse.(Int, split(read(open(Base.Cmd(String["stty", "size"]), "r", io).out, String)))
                 h > 0 || (h = default_size[1])
                 w > 0 || (w = default_size[2])
                 return h, w

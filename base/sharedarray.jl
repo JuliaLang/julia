@@ -592,9 +592,9 @@ function print_shmem_limits(slen)
             return
         end
 
-        shmmax_MB = div(parse(Int, split(readstring(`sysctl $(pfx).shmmax`))[end]), 1024*1024)
-        page_size = parse(Int, split(readstring(`getconf PAGE_SIZE`))[end])
-        shmall_MB = div(parse(Int, split(readstring(`sysctl $(pfx).shmall`))[end]) * page_size, 1024*1024)
+        shmmax_MB = div(parse(Int, split(read(`sysctl $(pfx).shmmax`, String))[end]), 1024*1024)
+        page_size = parse(Int, split(read(`getconf PAGE_SIZE`, String))[end])
+        shmall_MB = div(parse(Int, split(read(`sysctl $(pfx).shmall`, String))[end]) * page_size, 1024*1024)
 
         println("System max size of single shmem segment(MB) : ", shmmax_MB,
             "\nSystem max size of all shmem segments(MB) : ", shmall_MB,

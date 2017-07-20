@@ -156,7 +156,7 @@ file as an argument, and then closes it again. For example, given a function:
 
 ```julia
 function read_and_capitalize(f::IOStream)
-    return uppercase(readstring(f))
+    return uppercase(read(f, String))
 end
 ```
 
@@ -175,7 +175,7 @@ anonymous function on the fly:
 
 ```julia-repl
 julia> open("hello.txt") do f
-           uppercase(readstring(f))
+           uppercase(read(f, String))
        end
 "HELLO AGAIN."
 ```

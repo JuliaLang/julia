@@ -314,7 +314,7 @@ ispath(path) && rm(path)
 print(f, "Here is some text")
 close(f)
 @test isfile(p) == true
-@test readstring(p) == "Here is some text"
+@test read(p, String) == "Here is some text"
 rm(p)
 
 let
@@ -382,7 +382,7 @@ function check_cp(orig_path::AbstractString, copied_path::AbstractString, follow
                 # copied_path must also be a file.
                 @test isfile(copied_path)
                 # copied_path must have same content
-                @test readstring(orig_path) == readstring(copied_path)
+                @test read(orig_path, String) == read(copied_path, String)
             end
         end
     elseif isdir(orig_path)
@@ -391,7 +391,7 @@ function check_cp(orig_path::AbstractString, copied_path::AbstractString, follow
         # copied_path must also be a file.
         @test isfile(copied_path)
         # copied_path must have same content
-        @test readstring(orig_path) == readstring(copied_path)
+        @test read(orig_path, String) == read(copied_path, String)
     end
 end
 
@@ -718,7 +718,7 @@ if !Sys.iswindows()
         islink(s) && @test readlink(s) == readlink(d)
         islink(s) && @test isabspath(readlink(s)) == isabspath(readlink(d))
         # all should contain the same
-        @test readstring(s) == readstring(d) == file_txt
+        @test read(s, String) == read(d, String) == file_txt
     end
 
     function mv_check(s, d, d_mv, file_txt; remove_destination=true)
@@ -736,7 +736,7 @@ if !Sys.iswindows()
         islink(s) && @test readlink(s) == readlink(d_mv)
         islink(s) && @test isabspath(readlink(s)) == isabspath(readlink(d_mv))
         # all should contain the same
-        @test readstring(s) == readstring(d_mv) == file_txt
+        @test read(s, String) == read(d_mv, String) == file_txt
         # d => d_mv same file/dir
         @test Base.samefile(stat_d, stat_d_mv)
     end
@@ -780,7 +780,7 @@ if !Sys.iswindows()
             # Expect no link because a file is copied (follow_symlinks=false does not effect this)
             @test isfile(d) && !islink(d)
             # all should contain otherfile_content
-            @test readstring(d) == otherfile_content
+            @test read(d, String) == otherfile_content
         end
     end
     # mv ----------------------------------------------------
@@ -840,7 +840,7 @@ if !Sys.iswindows()
         rel_dl = "rel_linkto_targetdir"
         rel_dir = joinpath("..", "targetdir")
         symlink(rel_dir, rel_dl)
-        rel_file_read_txt = readstring(rel_file)
+        rel_file_read_txt = read(rel_file, String)
         cd(pwd_)
         # Setup copytodir
         copytodir = joinpath(tmpdir, "copytodir")
