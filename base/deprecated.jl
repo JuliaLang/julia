@@ -1563,6 +1563,12 @@ end
 # ::ANY is deprecated in src/method.c
 # also remove all instances of `jl_ANY_flag` in src/
 
+# issue #13079
+# in julia-parser.scm:
+#     move prec-bitshift after prec-rational
+#     remove parse-with-chains-warn and bitshift-warn
+# update precedence table in doc/src/manual/mathematical-operations.md
+
 # PR #22182
 @deprecate is_apple   Sys.isapple
 @deprecate is_bsd     Sys.isbsd
