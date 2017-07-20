@@ -1882,6 +1882,17 @@ let
     @test_throws MethodError Dates.Month(1) < Dates.Day(1)
 end
 
+# PR #21197
+let c = `ls -l "foo bar"`
+    @test collect(c) == ["ls", "-l", "foo bar"]
+    @test first(c) == "ls" == c[1]
+    @test last(c) == "foo bar" == c[3] == c[end]
+    @test c[1:2] == ["ls", "-l"]
+    @test eltype(c) == String
+    @test length(c) == 3
+    @test eachindex(c) == 1:3
+end
+
 # PR 22629
 @test logdet(0.5) == log(det(0.5))
 

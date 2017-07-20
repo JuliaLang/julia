@@ -601,6 +601,17 @@ else
     const collect = Base.collect
 end
 
+# https://github.com/JuliaLang/julia/pull/21197
+if VERSION < v"0.7.0-DEV.257"
+    # allow the elements of the Cmd to be accessed as an array or iterator
+    for f in (:length, :endof, :start, :eachindex, :eltype, :first, :last)
+        @eval Base.$f(cmd::Cmd) = $f(cmd.exec)
+    end
+    for f in (:next, :done, :getindex)
+        @eval Base.$f(cmd::Cmd, i) = $f(cmd.exec, i)
+    end
+end
+
 # https://github.com/JuliaLang/julia/pull/21378
 if VERSION < v"0.6.0-pre.beta.455"
     import Base: ==, isless

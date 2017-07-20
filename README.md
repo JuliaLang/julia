@@ -148,6 +148,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `@__MODULE__` is aliased to `current_module()` for Julia versions 0.6 and below. Versions of `Base.binding_module`, `expand`, `macroexpand`, and `include_string` were added that accept a module as the first argument. ([#22064])
 
+* `Cmd` elements can be accessed as if the `Cmd` were an array of strings for 0.6 and below ([#21197]).
+
 * `Val(x)` constructs `Val{x}()`. ([#22475])
 
 * `chol` and `chol!` for `UniformScalings` ([#22633]).
