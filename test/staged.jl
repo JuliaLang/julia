@@ -228,3 +228,20 @@ g10178(x) = f10178(x)
 # issue #22135
 @generated f22135(x::T) where T = x
 @test f22135(1) === Int
+
+# PR #22440
+
+@generated function f22440(y)
+    sig, spvals, method = Base._methods_by_ftype(Tuple{typeof(one),y}, -1, typemax(UInt))[1]
+    code_info = Base.uncompressed_ast(method)
+    body = Expr(:block, code_info.code...)
+    Base.Core.Inference.substitute!(body, 1, Any[:y], sig, Any[spvals...], 0)
+    return code_info
+end
+
+@test f22440(Int) === one(Int)
+@test f22440(Float64) === one(Float64)
+@test f22440(Float32) === one(Float32)
+@test f22440(0.0) === one(0.0)
+@test f22440(0.0f0) === one(0.0f0)
+@test f22440(0) === one(0)
