@@ -163,6 +163,10 @@ write(filename::AbstractString, args...) = open(io->write(io, args...), filename
 
 Open a file and read its contents. `args` is passed to `read`: this is equivalent to
 `open(io->read(io, args...), filename)`.
+
+    read(filename::AbstractString, String)
+
+Read the entire contents of a file as a string.
 """
 read(filename::AbstractString, args...) = open(io->read(io, args...), filename)
 read!(filename::AbstractString, a) = open(io->read!(io, a), filename)

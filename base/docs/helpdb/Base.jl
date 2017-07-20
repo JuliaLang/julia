@@ -1278,6 +1278,10 @@ hash
     read(stream::IO, T)
 
 Read a single value of type `T` from `stream`, in canonical binary representation.
+
+    read(stream::IO, String)
+
+Read the entirety of `stream`, as a String.
 """
 read(stream, t)
 
