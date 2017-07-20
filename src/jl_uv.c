@@ -197,16 +197,18 @@ JL_DLLEXPORT void jl_close_uv(uv_handle_t *handle)
     }
 
     if (handle->type == UV_NAMED_PIPE || handle->type == UV_TCP) {
+        uv_stream_t *stream = (uv_stream_t*)handle;
 #ifdef _OS_WINDOWS_
-        if (((uv_stream_t*)handle)->stream.conn.shutdown_req) {
+        if (stream->stream.conn.shutdown_req) {
 #else
-        if (((uv_stream_t*)handle)->shutdown_req) {
+        if (stream->shutdown_req) {
 #endif
             // don't close the stream while attempting a graceful shutdown
             return;
         }
-        if (uv_is_writable((uv_stream_t*)handle)) {
+        if (uv_is_writable(stream) && stream->write_queue_size != 0) {
             // attempt graceful shutdown of writable streams to give them a chance to flush first
+            // TODO: introduce a uv_drain cb API instead of abusing uv_shutdown in this way
             uv_shutdown_t *req = (uv_shutdown_t*)malloc(sizeof(uv_shutdown_t));
             req->data = 0;
             /*
@@ -218,12 +220,12 @@ JL_DLLEXPORT void jl_close_uv(uv_handle_t *handle)
              * b) In case the stream is already closed, in which case uv_close would
              *    cause an assertion failure.
              */
-            uv_shutdown(req, (uv_stream_t*)handle, &jl_uv_shutdownCallback);
+            uv_shutdown(req, stream, &jl_uv_shutdownCallback);
             return;
         }
     }
 
-    if (!uv_is_closing((uv_handle_t*)handle)) {
+    if (!uv_is_closing(handle)) {
         // avoid double-closing the stream
         if (handle->type == UV_TTY)
             uv_tty_set_mode((uv_tty_t*)handle, UV_TTY_MODE_NORMAL);

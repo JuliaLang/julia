@@ -298,15 +298,25 @@ let out = Pipe(), echo = `$exename --startup-file=no -e 'print(STDOUT, " 1\t", r
         @test iswritable(out)
         close(out.in)
         @test !isopen(out.in)
-        is_windows() || @test !isopen(out.out) # it takes longer to propagate EOF through the Windows event system
-        @test_throws ArgumentError write(out, "now closed error")
-        @test isreadable(out)
         @test !iswritable(out)
+        if !is_windows()
+            # on UNIX, we expect the pipe buffer is big enough that the write queue was immediately emptied
+            # and so we should already be notified of EPIPE on out.out by now
+            # and the other task should have already managed to consume all of the output
+            # it takes longer to propagate EOF through the Windows event system
+            # since it appears to be unwilling to buffer as much data
+            @test !isopen(out.out)
+            @test !isreadable(out)
+        end
+        @test_throws ArgumentError write(out, "now closed error")
         if is_windows()
-            # WINNT kernel does not provide a fast mechanism for async propagation
+            # WINNT kernel appears to not provide a fast mechanism for async propagation
             # of EOF for a blocking stream, so just wait for it to catch up.
             # This shouldn't take much more than 32ms.
             Base.wait_close(out)
+            # it's closed now, but the other task is expected to be behind this task
+            # in emptying the read buffer
+            @test isreadable(out)
         end
         @test !isopen(out)
     end
@@ -466,3 +476,19 @@ end
             Base.showerror(io::IO, e::Error19864) = print(io, "correct19864")
             throw(Error19864())'`),
     stderr=catcmd)) == "ERROR: correct19864"
+
+## Deadlock in spawning a cmd (#22832)
+# FIXME?
+#let stdout = Pipe(), stdin = Pipe()
+#    Base.link_pipe(stdout, julia_only_read=true)
+#    Base.link_pipe(stdin, julia_only_write=true)
+#    p = spawn(pipeline(catcmd, stdin=stdin, stdout=stdout, stderr=DevNull))
+#    @async begin # feed cat with 2 MB of data (zeros)
+#        write(stdin, zeros(UInt8, 1048576 * 2))
+#        close(stdin)
+#    end
+#    sleep(0.5) # give cat a chance to fill the write buffer for stdout
+#    close(stdout.in) # make sure we can still close the write end
+#    @test sizeof(readstring(stdout)) == 1048576 * 2 # make sure we get all the data
+#    @test success(p)
+#end
