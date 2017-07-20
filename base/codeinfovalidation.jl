@@ -15,9 +15,10 @@ in `code_info.code`):
 - `length(code_info.slotflags) == length(code_info.slotnames) == nslotnums`
 - `code_info.slottypes === nothing || length(code_info.slottypes) == nslotnums`
 - `code_info.ssatypes === nssavals || length(code_info.ssatypes) == nssavals`
-- all `Expr` heads are contained in `Base.Core.VALID_EXPR_HEADS`
-- call arguments are not `:gotoifnot` nodes
-
+- `Expr` heads are contained in `Base.Core.VALID_EXPR_HEADS`
+- slotflags are valid w.r.t. assignments in `code_info.code`
+- LHS objects in assignments are either `SSAValue`s, `SlotNumber`s, or `GlobalRef`s
+- no call arguments are `:gotoifnot` nodes
 """
 function is_valid_code_info(code_info::CodeInfo)
 end
