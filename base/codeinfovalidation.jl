@@ -3,22 +3,95 @@
 const VALID_EXPR_HEADS = Symbol[:call, :invoke, :static_parameter, :line, :gotoifnot, :(=),
                                 :method, :const, :null, :new, :return, :the_exception,
                                 :enter, :leave, :inbounds, :boundscheck, :copyast, :meta]
+
+const ASSIGNED_FLAG = 0x02
+
 """
-    is_valid_code_info(code_info::CodeInfo)
+    validate_code_info(c::CodeInfo)
 
-Returns `true` if `code_info` is valid, and returns `false` otherwise.
+Returns `0` if `c` represents valid IR, or returns a positive integer otherwise.
 
-`code_info` is considered valid if the following properties hold true (where `nslotnums` is
-the number of `SlotNumber`s in `code_info.code` and `nssavals` is the number of `SSAValue`s
-in `code_info.code`):
+Below are the possible non-`0` return values and their conditions. As soon as
+`validate_code_info` encounters a case where one of the below conditions evaluates
+to `true`, it will return the corresponding error code.
 
-- `length(code_info.slotflags) == length(code_info.slotnames) == nslotnums`
-- `code_info.slottypes === nothing || length(code_info.slottypes) == nslotnums`
-- `code_info.ssatypes === nssavals || length(code_info.ssatypes) == nssavals`
-- `Expr` heads are contained in `Base.Core.VALID_EXPR_HEADS`
-- slotflags are valid w.r.t. assignments in `code_info.code`
-- LHS objects in assignments are either `SSAValue`s, `SlotNumber`s, or `GlobalRef`s
-- no call arguments are `:gotoifnot` nodes
+`nslots` = the number of unique `SlotNumber`s in `c.code`
+`nssavals` = the number of unique `SSAValue`s in `c.code`
+
+1:  `length(c.slotflags) != nslots`
+2:  `length(c.slotnames) != nslots`
+3:  `c.inferred && length(c.slottypes) != nslots`
+4:  `c.inferred && length(c.ssatypes) != nssavals`
+5:  `!(c.inferred) && c.slottypes != nothing`
+6:  `!(c.inferred) && c.ssatypes != nssavals`
+7:  `!(in(x.head, Base.Core.VALID_EXPR_HEADS))` for any subexpression `x`
+8:  `length(c.slotnames) < 1 || c.slotnames[1] != Symbol("#self#")`
+9:  `!(isa(x, SSAValue) || isa(x, SlotNumber) || isa(x, GlobalRef))` where `x` is an assignment LHS
+10: `isa(x, Expr) || x.head == :gotoifnot` where `x` is a function call argument
+11:  A slot has an invalid slotflag setting for bit flag 2 (assignment property)
 """
-function is_valid_code_info(code_info::CodeInfo)
+function validate_code_info(c::CodeInfo)
+    !(c.inferred) && (c.slottypes != nothing) && return 5
+    (length(c.slotnames) < 1 || c.slotnames[1] != Symbol("#self#")) && return 8
+    slotnums = SlotNumber[]
+    ssavals = SSAValue[]
+    error_code = 0
+    walkast(c.code) do x
+        if isa(x, Expr)
+            if !(in(x.head, VALID_EXPR_HEADS))
+                error_code = 7
+                return true
+            elseif x.head == :(=) && !(is_valid_lhs(x.args[1]))
+                error_code = 9
+                return true
+            elseif x.head == :call && !(all(is_valid_call_arg.(x.args[2:end])))
+                error_code = 10
+                return true
+            end
+        elseif isa(x, SSAValue) && !(in(x, ssavals))
+            push!(ssavals, x)
+        elseif isa(x, SlotNumber) && !(in(x, slotnums))
+            push!(slotnums, x)
+        end
+        return false
+    end
+    error_code != 0 && return error_code
+    nslots = length(slotnums)
+    nssavals = length(ssavals)
+    length(c.slotflags) != nslots && return 1
+    length(c.slotnames) != nslots && return 2
+    if c.inferred
+        length(c.slottypes) != nslots  && return 3
+        length(c.ssatypes) != nssavals && return 4
+    else
+        c.ssatypes != nssavals && return 6
+    end
+    error_code = 0
+    walkast(c.code) do x
+        if isa(x, Expr) && x.head == :(=)
+            lhs = x.args[1]
+            if isa(lhs, SlotNumber) && !(is_flag_set(c.slotflags[lhs.id], ASSIGNED_FLAG))
+                error_code = 11
+                return true
+            end
+        end
+        return false
+    end
+    return error_code
 end
+
+function walkast(f, stmts::Array)
+    for stmt in stmts
+        f(stmt) && return true
+        if isa(stmt, Expr)
+            walkast(f, stmt.args) && return true
+        end
+    end
+    return false
+end
+
+is_valid_lhs(lhs) = isa(lhs, SlotNumber) || isa(lhs, SSAValue) || isa(lhs, GlobalRef)
+
+is_valid_call_arg(arg) = !(isa(arg, Expr)) || arg.head != :gotoifnot
+
+is_flag_set(byte::UInt8, flag::UInt8) = (byte & flag) == flag
