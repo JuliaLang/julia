@@ -1902,7 +1902,7 @@ extern "C" void jl_binding_deprecation_warning(jl_binding_t *b);
 static void cg_bdw(jl_codectx_t &ctx, jl_binding_t *b)
 {
     jl_binding_deprecation_warning(b);
-    if (jl_options.depwarn) {
+    if (b->deprecated == 1 && jl_options.depwarn) {
         show_source_loc(ctx, JL_STDERR);
         jl_printf(JL_STDERR, "\n");
     }
