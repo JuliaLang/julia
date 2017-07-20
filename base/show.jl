@@ -573,9 +573,13 @@ function show_list(io::IO, items, sep, indent::Int, prec::Int=0, enclose_operato
     first = true
     for item in items
         !first && print(io, sep)
-        parens = enclose_operators && isa(item,Symbol) && isoperator(item)
+        parens = !is_quoted(item) &&
+            (first && prec >= prec_power &&
+             ((item isa Expr && item.head === :call && item.args[1] in uni_ops) ||
+              (item isa Real && item < 0))) ||
+              (enclose_operators && item isa Symbol && isoperator(item))
         parens && print(io, '(')
-        show_unquoted(io, item, indent, prec)
+        show_unquoted(io, item, indent, parens ? 0 : prec)
         parens && print(io, ')')
         first = false
     end
@@ -719,15 +723,9 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     end
     # dot (i.e. "x.y"), but not compact broadcast exps
     if head === :(.) && !is_expr(args[2], :tuple)
-        show_unquoted(io, args[1], indent + indent_width)
-        print(io, '.')
-        if is_quoted(args[2])
-            show_unquoted(io, unquoted(args[2]), indent + indent_width)
-        else
-            print(io, '(')
-            show_unquoted(io, args[2], indent + indent_width)
-            print(io, ')')
-        end
+        func_prec = operator_precedence(head)
+        args_ = (args[1], (is_quoted(arg) && !is_quoted(unquoted(arg)) ? unquoted(arg) : arg for arg in args[2:end])...)
+        show_list(io, args_, head, indent, func_prec)
 
     # infix (i.e. "x <: y" or "x = y")
     elseif (head in expr_infix_any && nargs==2) || (head === :(:) && nargs==3)
@@ -793,7 +791,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
             if isa(func_args[1], Expr) || func_args[1] in all_ops
                 show_enclosed_list(io, '(', func_args, ", ", ')', indent, func_prec)
             else
-                show_unquoted(io, func_args[1])
+                show_unquoted(io, func_args[1], indent, func_prec)
             end
 
         # binary operator (i.e. "x + y")
@@ -802,6 +800,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
             if (na == 2 || (na > 2 && func in (:+, :++, :*))) &&
                     all(!isa(a, Expr) || a.head !== :... for a in func_args)
                 sep = " $func "
+
                 if func_prec <= prec
                     show_enclosed_list(io, '(', func_args, sep, ')', indent, func_prec, true)
                 else

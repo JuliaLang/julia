@@ -1252,6 +1252,55 @@ julia> show(STDOUT, "text/html", Polar(3.0,4.0))
 <p>An HTML renderer would display this as: <code>Polar{Float64}</code> complex number: 3.0 <i>e</i><sup>4.0 <i>i</i></sup></p>
 ```
 
+As a rule of thumb, the single-line `show` method should print a valid Julia expression for creating
+the shown object.  When this `show` method contains infix operators, such as the multiplication
+operator (`*`) in our single-line `show` method for `Polar` above, it may not parse correctly when
+printed as part of another object.  To see this, consider the expression object (see [Program
+representation](@ref)) which takes the square of a specific instance of our `Polar` type:
+
+```jldoctest polartype
+julia> a = Polar(3, 4.0)
+Polar{Float64} complex number:
+   3.0 * exp(4.0im)
+
+julia> print(:($a^2))
+3.0 * exp(4.0im) ^ 2
+```
+
+Because the operator `^` has higher precedence than `*` (see [Operator Precedence](@ref)), this
+output does not faithfully represent the expression `a ^ 2` which should be equal to `(3.0 *
+exp(4.0im)) ^ 2`.  To solve this issue, we must make a custom method for `Base.show_unquoted(io::IO,
+z::Polar, indent::Int, precedence::Int)`, which is called internally by the expression object when
+printing:
+
+```jldoctest polartype
+julia> function Base.show_unquoted(io::IO, z::Polar, ::Int, precedence::Int)
+           if Base.operator_precedence(:*) <= precedence
+               print(io, "(")
+               show(io, z)
+               print(io, ")")
+           else
+               show(io, z)
+           end
+       end
+
+julia> :($a^2)
+:((3.0 * exp(4.0im)) ^ 2)
+```
+
+The method defined above adds parentheses around the call to `show` when the precedence of the
+calling operator is higher than or equal to the precedence of multiplication.  This check allows
+expressions which parse correctly without the parentheses (such as `:($a + 2)` and `:($a == 2)`) to
+omit them when printing:
+
+```jldoctest polartype
+julia> :($a + 2)
+:(3.0 * exp(4.0im) + 2)
+
+julia> :($a == 2)
+:(3.0 * exp(4.0im) == 2)
+```
+
 ## "Value types"
 
 In Julia, you can't dispatch on a *value* such as `true` or `false`. However, you can dispatch
