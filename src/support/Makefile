@@ -9,13 +9,11 @@ override CPPFLAGS += $(JCPPFLAGS)
 SRCS := hashing timefuncs ptrhash operators utf8 ios htable bitvector \
 	int2str libsupportinit arraylist strtod
 ifeq ($(OS),WINNT)
-SRCS += asprintf strptime
+SRCS += asprintf strptime win32_ucontext
 ifeq ($(ARCH),i686)
-SRCS += _setjmp.win32 _longjmp.win32
-else ifeq ($(ARCH),i386)
-SRCS += _setjmp.win32 _longjmp.win32
+SRCS += _setjmp.win32
 else ifeq ($(ARCH),x86_64)
-SRCS += _setjmp.win64 _longjmp.win64
+SRCS += _setjmp.win64
 endif
 endif
 ifeq ($(USEMSVC), 1)

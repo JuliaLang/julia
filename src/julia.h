@@ -29,6 +29,7 @@
 #    define MAX_ALIGN sizeof(void*)
 #  endif
 #else
+#  include "win32_ucontext.h"
 #  define jl_jmp_buf jmp_buf
 #  include <malloc.h> //for _resetstkoflw
 #  define MAX_ALIGN 8
@@ -717,6 +718,8 @@ JL_DLLEXPORT jl_value_t *jl_gc_alloc_1w(void);
 JL_DLLEXPORT jl_value_t *jl_gc_alloc_2w(void);
 JL_DLLEXPORT jl_value_t *jl_gc_alloc_3w(void);
 JL_DLLEXPORT jl_value_t *jl_gc_allocobj(size_t sz);
+JL_DLLEXPORT void *jl_malloc_stack(size_t *bufsz, struct _jl_task_t *owner);
+JL_DLLEXPORT void jl_free_stack(void *stkbuf, size_t bufsz);
 JL_DLLEXPORT void jl_gc_use(jl_value_t *a);
 
 JL_DLLEXPORT void jl_clear_malloc_data(void);
@@ -1577,6 +1580,7 @@ JL_DLLEXPORT void jl_sigatomic_end(void);
 
 // tasks and exceptions -------------------------------------------------------
 
+
 typedef struct _jl_timing_block_t jl_timing_block_t;
 // info describing an exception handler
 typedef struct _jl_handler_t {
@@ -1604,13 +1608,13 @@ typedef struct _jl_task_t {
     jl_value_t *backtrace;
     jl_value_t *logstate;
     jl_function_t *start;
-    jl_jmp_buf ctx;
-    size_t bufsz;
-    void *stkbuf;
 
-// hidden fields:
-    size_t ssize;
-    size_t started:1;
+// hidden state:
+    jl_ucontext_t ctx; // saved thread state
+    void *stkbuf; // malloc'd memory (either copybuf or stack)
+    size_t bufsz; // actual sizeof stkbuf
+    unsigned int copy_stack:31; // sizeof stack for copybuf
+    unsigned int started:1;
 
     // current exception handler
     jl_handler_t *eh;

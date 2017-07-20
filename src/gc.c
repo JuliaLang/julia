@@ -699,7 +699,7 @@ JL_DLLEXPORT jl_weakref_t *jl_gc_new_weakref_th(jl_ptls_t ptls,
 
 static void sweep_weak_refs(void)
 {
-    for (int i = 0;i < jl_n_threads;i++) {
+    for (int i = 0; i < jl_n_threads; i++) {
         jl_ptls_t ptls2 = jl_all_tls_states[i];
         size_t n = 0;
         size_t ndel = 0;
@@ -710,7 +710,8 @@ static void sweep_weak_refs(void)
         while (1) {
             jl_weakref_t *wr = (jl_weakref_t*)lst[n];
             if (gc_marked(jl_astaggedvalue(wr)->bits.gc)) {
-                // weakref itself is alive
+                // weakref itself is alive,
+                // so the user could still re-set it to a new value
                 if (!gc_marked(jl_astaggedvalue(wr->value)->bits.gc))
                     wr->value = (jl_value_t*)jl_nothing;
                 n++;
@@ -722,7 +723,7 @@ static void sweep_weak_refs(void)
                 break;
             void *tmp = lst[n];
             lst[n] = lst[n + ndel];
-            lst[n+ndel] = tmp;
+            lst[n + ndel] = tmp;
         }
         ptls2->heap.weak_refs.len -= ndel;
     }
@@ -1026,7 +1027,7 @@ static jl_taggedvalue_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, jl_t
     int freedall = 1;
     int pg_skpd = 1;
     if (!pg->has_marked) {
-        // lazy version: (empty) if the whole page was already unused, free it
+        // lazy version: (empty) if the whole page was already unused, free it (return it to the pool)
         // eager version: (freedall) free page as soon as possible
         // the eager one uses less memory.
         // FIXME - need to do accounting on a per-thread basis
@@ -2124,19 +2125,13 @@ mark: {
                 objprofile_count(vt, bits == GC_OLD_MARKED, sizeof(jl_task_t));
             jl_task_t *ta = (jl_task_t*)new_obj;
             gc_scrub_record_task(ta);
-            int stkbuf = (ta->stkbuf != (void*)(intptr_t)-1 && ta->stkbuf != NULL);
+            void *stkbuf = ta->stkbuf;
             int16_t tid = ta->tid;
             jl_ptls_t ptls2 = jl_all_tls_states[tid];
-            if (stkbuf) {
 #ifdef COPY_STACKS
-                gc_setmark_buf_(ptls, ta->stkbuf, bits, ta->bufsz);
-#else
-                // stkbuf isn't owned by julia for the root task
-                if (ta != ptls2->root_task) {
-                    gc_setmark_buf_(ptls, ta->stkbuf, bits, ta->ssize);
-                }
+            if (stkbuf && ta->copy_stack)
+                gc_setmark_buf_(ptls, stkbuf, bits, ta->bufsz);
 #endif
-            }
             jl_gcframe_t *s = NULL;
             size_t nroots;
             uintptr_t offset = 0;
@@ -2148,9 +2143,11 @@ mark: {
             else if (stkbuf) {
                 s = ta->gcstack;
 #ifdef COPY_STACKS
-                ub = (uintptr_t)ptls2->stackbase;
-                lb = ub - ta->ssize;
-                offset = (uintptr_t)ta->stkbuf - lb;
+                if (ta->copy_stack) {
+                    ub = (uintptr_t)ptls2->stackbase;
+                    lb = ub - ta->copy_stack;
+                    offset = (uintptr_t)stkbuf - lb;
+                }
 #endif
             }
             if (s) {
@@ -2277,10 +2274,6 @@ static void mark_roots(jl_gc_mark_cache_t *gc_cache, gc_mark_sp_t *sp)
             gc_mark_queue_obj(gc_cache, sp, call_cache[i]);
     if (jl_all_methods != NULL)
         gc_mark_queue_obj(gc_cache, sp, jl_all_methods);
-
-#ifndef COPY_STACKS
-    gc_mark_queue_obj(gc_cache, sp, jl_unprotect_stack_func);
-#endif
 
     // constants
     gc_mark_queue_obj(gc_cache, sp, jl_typetype_type);
@@ -2564,6 +2557,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, int full)
     scanned_bytes = 0;
     // 5. start sweeping
     sweep_weak_refs();
+    sweep_stack_pools();
     gc_sweep_other(ptls, sweep_full);
     gc_scrub();
     gc_verify_tags();
@@ -2687,6 +2681,7 @@ void jl_init_thread_heap(jl_ptls_t ptls)
         p[i].newpages = NULL;
     }
     arraylist_new(&heap->weak_refs, 0);
+    arraylist_new(&heap->live_tasks, 0);
     heap->mallocarrays = NULL;
     heap->mafreelist = NULL;
     heap->big_objects = NULL;
