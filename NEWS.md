@@ -194,6 +194,10 @@ This section lists changes that do not have deprecation warnings.
     This avoids stack overflows in the common case of definitions like
     `f(x, y) = f(promote(x, y)...)` ([#22801]).
 
+  * `findmin`, `findmax`, `indmin`, and `indmax` used to always return linear indices.
+    They now return `CartesianIndex`es for all but 1-d arrays, and in general return
+    the `keys` of indexed collections (e.g. dictionaries) ([#22907]).
+
 Library improvements
 --------------------
 

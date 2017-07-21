@@ -503,7 +503,7 @@ end
     @test indmin(5:-2:1) == 3
 
     #23094
-    @test findmax(Set(["abc"])) === ("abc", 1)
+    @test_throws MethodError findmax(Set(["abc"]))
     @test findmin(["abc", "a"]) === ("a", 2)
     @test_throws MethodError findmax([Set([1]), Set([2])])
     @test findmin([0.0, -0.0]) === (-0.0, 2)
@@ -1813,6 +1813,11 @@ b, bi = findmax(B)
 s, si = findmax(S)
 @test a == b == s
 @test ai == bi == si
+
+for X in (A, B, S)
+    @test findmin(X) == findmin(Dict(pairs(X)))
+    @test findmax(X) == findmax(Dict(pairs(X)))
+end
 
 fill!(B, 2)
 @test all(x->x==2, B)
