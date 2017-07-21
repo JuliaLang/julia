@@ -1481,11 +1481,11 @@ julia> spfill(A, 0.5)
   [2, 4]  =  0.5
 ```
 
-Note the difference from [`speye`](@ref) and [`spfillnz`](@ref).
+Note the difference from [`spfillnz`](@ref).
 """
-spfill(S::SparseMatrixCSC{Tv}, v::T=one(Tv)) where {Tv,T} =
+spfill(S::SparseMatrixCSC{Tv}, v::T = one(Tv)) where {Tv,T} =
      SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval),
-     fill!(Array{T}(size(S.nzval)),v))
+     fill!(Array{T}(S.colptr[end]-1), v))
 
 """
     spfill!(A, v = one(T))
@@ -1530,10 +1530,13 @@ julia> spfillnz(sparse([1,2,3,4],[2,4,3,1],[5.0,4.0,3.0,0.0]))
 
 See also [`spfill`](@ref), [`spfillnz!`](@ref).
 """
-spfillnz(S::SparseMatrixCSC{Tv}, v::T=one(Tv); tol=zero(Tv)) where {Tv,T} =
+spfillnz(S::SparseMatrixCSC{Tv}, v::T = one(Tv); 
+         tol::Ta = zero(typeof(abs(one(Tv))))) where {Tv,T,Ta} =
     SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval),
         map!(x -> abs(x) > tol ? v : zero(T),
-            Array{T}(size(S.nzval)),S.nzval))
+            Array{T}(size(S.nzval)), S.nzval))
+
+# zero(typeof(abs(one(Tv)))) is to enable this to work for Complex{.} values
 
 """
     spfillnz!(A, [v = one(eltype(A))]; [tol = zero(eltype(A))])
@@ -1559,8 +1562,10 @@ julia> spfillnz!(sparse([1,2,3,4],[2,4,3,1],[5.0,4.0,3.0,0.0]); tol=3.0)
 
 See also [`spfill`](@ref), [`spfillnz`](@ref).
 """
-function spfillnz!(S::SparseMatrixCSC{T}, v::T = one(T); tol::T=zero(T)) where {T}
-    map!( x -> abs(x) > tol ? v : zero(T), S.nzval, S.nzval)
+function spfillnz!(S::SparseMatrixCSC{Tv}, v::Tv = one(Tv); 
+                   tol::Ta = zero(typeof(abs(one(Tv))))) where {Tv, Ta}
+    # zero(typeof(abs(one(Tv)))) is to enable this to work for Complex{.} values
+    map!( x -> abs(x) > tol ? v : zero(Tv), S.nzval, S.nzval)
     return S
 end
 
@@ -1591,10 +1596,10 @@ spones(::Type{Tv}, m::Integer, n::Integer) where {Tv} = spones(Tv, Int, m, n)
 function spones(::Type{Tv}, ::Type{Ti}, m::Integer, n::Integer) where {Tv, Ti}
     ((m < 0) || (n < 0)) && throw(ArgumentError("invalid Array dimensions"))
 
-    m == 0 && return spzeros(Tv, Ti, m, n)
+    m == 0 && return spzeros(Tv, Ti, m, n) # would work is 1:0:1 didn't throw an error
 
     SparseMatrixCSC(m, n,
-        collect(Ti, 1:m:(m*n+1)), # need max for n=0 case 1:1:1 gives 1
+        collect(Ti, 1:m:(m*n+1)), 
         repeat(Ti(1):Ti(m), outer=n),
         ones(Tv, m*n))
 end
@@ -1657,6 +1662,8 @@ julia> speye(A)
   [3, 3]  =  1.0
   [4, 4]  =  1.0
 ```
+
+Note the difference from [`spones`](@ref).
 """
 speye(S::SparseMatrixCSC{T}) where {T} = speye(T, size(S, 1), size(S, 2))
 eye(S::SparseMatrixCSC) = speye(S)

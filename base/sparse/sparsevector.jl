@@ -69,8 +69,7 @@ similar(x::SparseVector, ::Type{T}, D::Dims) where {T} = spzeros(T, D...)
 
 spzeros(len::Integer) = spzeros(Float64, len)
 spzeros(::Type{T}, len::Integer) where {T} = SparseVector(len, Int[], T[])
-spzeros(::Type{Tv}, ::Type{Ti}, len::Integer) where {Tv,Ti<:Integer} =
-    SparseVector(len, Ti[], Tv[])
+spzeros(::Type{Tv}, ::Type{Ti}, len::Integer) where {Tv,Ti<:Integer} = SparseVector(len, Ti[], Tv[])
 
 ### Construct dense all ones sparse vector
 

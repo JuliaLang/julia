@@ -1574,7 +1574,12 @@ end
 
     @test Array(spfill(spzeros(5,6))) == zeros(5,6)
     @test Array(spfill(spzeros(0,0))) == zeros(0,0)
-    @test Array(spfill(spzeros(0,0),Int)) == zeros(Int,0,0)
+    @test Array(spfill(spzeros(0,0),1)) == zeros(Int,0,0)
+
+    @test Array(spfill(speye(3,3), 2)) == 2eye(3,3)
+    @test eltype(spfill(speye(3,3), 2)) == Int
+    @test Array(spfill(speye(Int,3,3), 2.0)) == 2eye(3,3)
+    @test eltype(spfill(speye(Int,3,3), 2.0)) == Float64
 end
 
 @testset "spfill!" begin
@@ -1597,6 +1602,8 @@ end
 
     @test spones(5) == sparse(ones(5))
     @test spones(0) == sparse(ones(0))
+
+    @test spones(Float64, Int, (5,6)) == sparse(ones(5,6))
 end
 
 @testset "spfillnz" begin
@@ -1604,6 +1611,11 @@ end
         sparse([1,2,3,4],[2,4,3,1],[1.0,1.0,1.0,0.0])
   @test spfillnz(sparse([1,2,3,4],[2,4,3,1],[5.0,4.0,3.0,0.0]), 2) ==
         sparse([1,2,3,4],[2,4,3,1],[2,2,2,0])
+  @test spfillnz(sparse([1,2,3,4],[2,4,3,1],[5.0,4.0,3.0,0.0]), 2; tol=3.0) ==
+        sparse([1,2,3,4],[2,4,3,1],[2,2,0,0])
+  @test spfillnz(speye(Complex{Float64},3,3), 0.0; tol=1.0) == spzeros(3,3)
+  @test spfillnz(speye(Complex{Float64},3,3), 2.0; tol=0.5) == 2speye(3,3)
+  @test spfillnz(2*speye(Complex{Float64},3,3)) == speye(Complex{Float64},3,3)
 end
 
 @testset "spfillnz!" begin
@@ -1613,6 +1625,11 @@ end
 
   spfillnz!(A, 5.0; tol=5.0)
   @test A == sparse([1,2,3,4],[2,4,3,1],[0.0,0.0,0.0,0.0])
+
+  @test spfillnz!(speye(Complex{Float64},3,3), 0.0+0.0im; tol=1.0) == spzeros(3,3)
+  @test spfillnz!(speye(Complex{Float64},3,3), 2.0+0.0im; tol=0.5) == 2speye(3,3)
+  @test spfillnz!(2*speye(Complex{Float64},3,3)) == speye(Complex{Float64},3,3)
+
 end
 
 @testset "factorization" begin
