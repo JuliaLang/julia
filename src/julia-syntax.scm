@@ -3599,7 +3599,8 @@ f(x) = yt(x)
                    (emit temp))))
 
             ((&)
-             (assert (and value (not tail)))
+             (if (or (not value) tail)
+                 (error "misplaced \"&\" expression"))
              `(& ,(compile (cadr e) break-labels value tail)))
 
             ((newvar)

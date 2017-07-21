@@ -1251,3 +1251,6 @@ end === (3, String)
 # issue #22868
 @test_throws ParseError parse("x@time 2")
 @test_throws ParseError parse("@ time")
+
+# issue #7479
+@test expand(Main, parse("(true &&& false)")) == Expr(:error, "misplaced \"&\" expression")
