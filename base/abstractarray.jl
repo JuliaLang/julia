@@ -69,9 +69,9 @@ function indices(A)
     map(OneTo, size(A))
 end
 
-# Performance optimization: get rid of a branch on `d` in `indices(A,
-# d)` for d=1. 1d arrays are heavily used, and the first dimension
-# comes up in other applications.
+# Performance optimization: get rid of a branch on `d` in `indices(A, d)`
+# for d=1. 1d arrays are heavily used, and the first dimension comes up
+# in other applications.
 indices1(A::AbstractArray{<:Any,0}) = OneTo(1)
 indices1(A::AbstractArray) = (@_inline_meta; indices(A)[1])
 indices1(iter) = OneTo(length(iter))
@@ -103,6 +103,10 @@ julia> extrema(b)
 """
 linearindices(A) = (@_inline_meta; OneTo(_length(A)))
 linearindices(A::AbstractVector) = (@_inline_meta; indices1(A))
+
+keys(a::AbstractArray) = CartesianRange(indices(a))
+keys(a::AbstractVector) = linearindices(a)
+
 eltype(::Type{<:AbstractArray{E}}) where {E} = E
 elsize(::AbstractArray{T}) where {T} = sizeof(T)
 
@@ -756,8 +760,11 @@ start(A::AbstractArray) = (@_inline_meta; itr = eachindex(A); (itr, start(itr)))
 next(A::AbstractArray, i) = (@_propagate_inbounds_meta; (idx, s) = next(i[1], i[2]); (A[idx], (i[1], s)))
 done(A::AbstractArray, i) = (@_propagate_inbounds_meta; done(i[1], i[2]))
 
+# `eachindex` is mostly an optimization of `keys`
+eachindex(itrs...) = keys(itrs...)
+
 # eachindex iterates over all indices. IndexCartesian definitions are later.
-eachindex(A::Union{Number,AbstractVector}) = (@_inline_meta(); indices1(A))
+eachindex(A::AbstractVector) = (@_inline_meta(); indices1(A))
 
 """
     eachindex(A...)
@@ -825,6 +832,9 @@ function _maxlength(A, B, C...)
 end
 
 isempty(a::AbstractArray) = (_length(a) == 0)
+
+# keys with an IndexStyle
+keys(s::IndexStyle, A::AbstractArray, B::AbstractArray...) = eachindex(s, A, B...)
 
 ## Conversions ##
 
@@ -1739,7 +1749,7 @@ _sub2ind_vec(i) = ()
 function ind2sub(inds::Union{DimsInteger{N},Indices{N}}, ind::AbstractVector{<:Integer}) where N
     M = length(ind)
     t = ntuple(n->similar(ind),Val(N))
-    for (i,idx) in enumerate(IndexLinear(), ind)
+    for (i,idx) in pairs(IndexLinear(), ind)
         sub = ind2sub(inds, idx)
         for j = 1:N
             t[j][i] = sub[j]

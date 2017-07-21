@@ -69,11 +69,18 @@ end
 
 in(k, v::KeyIterator) = get(v.dict, k, secret_table_token) !== secret_table_token
 
+"""
+    keys(iterator)
+
+For an iterator or collection that has keys and values (e.g. arrays and dictionaries),
+return an iterator over the keys.
+"""
+function keys end
 
 """
     keys(a::Associative)
 
-Return an iterator over all keys in a collection.
+Return an iterator over all keys in an associative collection.
 `collect(keys(a))` returns an array of keys.
 Since the keys are stored internally in a hash table,
 the order in which they are returned may vary.
@@ -94,7 +101,6 @@ julia> collect(keys(a))
 ```
 """
 keys(a::Associative) = KeyIterator(a)
-eachindex(a::Associative) = KeyIterator(a)
 
 """
     values(a::Associative)
@@ -120,6 +126,15 @@ julia> collect(values(a))
 ```
 """
 values(a::Associative) = ValueIterator(a)
+
+"""
+    pairs(collection)
+
+Return an iterator over `key => value` pairs for any
+collection that maps a set of keys to a set of values.
+This includes arrays, where the keys are the array indices.
+"""
+pairs(collection) = Generator(=>, keys(collection), values(collection))
 
 function copy(a::Associative)
     b = similar(a)
