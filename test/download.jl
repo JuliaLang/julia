@@ -22,7 +22,7 @@ mktempdir() do temp_dir
     # Make sure we properly handle metachar '
     metachar_file = joinpath(temp_dir, "metachar")
     download("https://httpbin.org/get?test='^'", metachar_file)
-    metachar_string = readstring(metachar_file)
+    metachar_string = read(metachar_file, String)
     m = match(r"\"url\"\s*:\s*\"(.*)\"", metachar_string)
     @test m.captures[1] == "https://httpbin.org/get?test='^'"
 
