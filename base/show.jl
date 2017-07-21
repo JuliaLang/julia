@@ -1383,6 +1383,12 @@ function alignment(io::IO, x::Rational)
                    (length(m.captures[1]), length(m.captures[2]))
 end
 
+function alignment(io::IO, x::Pair)
+    m = match(r"^(.*?=)(>.*)$", sprint(0, show, x, env=io))
+    m === nothing ? (length(sprint(0, show, x, env=io)), 0) :
+                    (length(m.captures[1]), length(m.captures[2]))
+end
+
 const undef_ref_str = "#undef"
 const undef_ref_alignment = (3,3)
 
