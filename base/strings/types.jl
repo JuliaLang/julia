@@ -164,12 +164,7 @@ julia> repeat("ha", 3)
 "hahaha"
 ```
 """
-function repeat(s::AbstractString, r::Integer)
-    r <  0 ? throw(ArgumentError("can't repeat a string $r times")) :
-    r == 0 ? "" :
-    r == 1 ? s  :
-    repeat(convert(String, s), r)
-end
+repeat(s::AbstractString, r::Integer) = repeat(convert(String, s), r)
 
 """
     ^(s::Union{AbstractString,Char}, n::Integer)
