@@ -660,9 +660,6 @@ void jl_shutdown_threading(void)
 #endif
 }
 
-// return thread's thread group
-JL_DLLEXPORT void *jl_threadgroup(void) { return (void *)tgworld; }
-
 // interface to user code: specialize and compile the user thread function
 // and run it in all threads
 JL_DLLEXPORT jl_value_t *jl_threading_run(jl_value_t *_args)
