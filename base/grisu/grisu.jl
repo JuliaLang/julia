@@ -182,6 +182,12 @@ function _print_shortest(io::IO, x::AbstractFloat, dot::Bool, mode, n::Int)
     nothing
 end
 
+"""
+    print_shortest(io::IO, x)
+
+Print the shortest possible representation, with the minimum number of consecutive non-zero
+digits, of number `x`, ensuring that it would parse to the exact same number.
+"""
 print_shortest(io::IO, x::AbstractFloat, dot::Bool) = _print_shortest(io, x, dot, SHORTEST, 0)
 print_shortest(io::IO, x::Union{AbstractFloat,Integer}) = print_shortest(io, float(x), false)
 
