@@ -11,7 +11,7 @@ function include(mod::Module, path::AbstractString)
     elseif INCLUDE_STATE === 2
         result = _include(mod, path)
     elseif INCLUDE_STATE === 3
-        result = include_from_node1(mod, path)
+        result = include_relative(mod, path)
     end
     result
 end
@@ -24,7 +24,7 @@ function include(path::AbstractString)
     else
         # to help users avoid error (accidentally evaluating into Base), this is deprecated
         depwarn("Base.include(string) is deprecated, use `include(fname)` or `Base.include(@__MODULE__, fname)` instead.", :include)
-        result = include_from_node1(_current_module(), path)
+        result = include_relative(_current_module(), path)
     end
     result
 end
@@ -64,9 +64,9 @@ if false
     # goes wrong during bootstrap before printing code is available.
     # otherwise, they just just eventually get (noisily) overwritten later
     global show, print, println
-    show(io::IO, x::ANY) = Core.show(io, x)
-    print(io::IO, a::ANY...) = Core.print(io, a...)
-    println(io::IO, x::ANY...) = Core.println(io, x...)
+    show(io::IO, x) = Core.show(io, x)
+    print(io::IO, a...) = Core.print(io, a...)
+    println(io::IO, x...) = Core.println(io, x...)
 end
 
 ## Load essential files and libraries
@@ -169,7 +169,7 @@ using .Iterators: zip, enumerate
 using .Iterators: Flatten, product  # for generators
 
 # Definition of StridedArray
-StridedReshapedArray{T,N,A<:DenseArray} = ReshapedArray{T,N,A}
+StridedReshapedArray{T,N,A<:Union{DenseArray,FastContiguousSubArray}} = ReshapedArray{T,N,A}
 StridedArray{T,N,A<:Union{DenseArray,StridedReshapedArray},
     I<:Tuple{Vararg{Union{RangeIndex, AbstractCartesianIndex}}}} =
     Union{DenseArray{T,N}, SubArray{T,N,A,I}, StridedReshapedArray{T,N}}
@@ -220,7 +220,7 @@ include("broadcast.jl")
 importall .Broadcast
 
 # define the real ntuple functions
-@generated function ntuple(f::F, ::Type{Val{N}}) where {F,N}
+@generated function ntuple(f::F, ::Val{N}) where {F,N}
     Core.typeassert(N, Int)
     (N >= 0) || return :(throw($(ArgumentError(string("tuple length should be ≥0, got ", N)))))
     return quote
@@ -229,7 +229,7 @@ importall .Broadcast
         @ncall $N tuple t
     end
 end
-@generated function fill_to_length(t::Tuple, val, ::Type{Val{N}}) where {N}
+@generated function fill_to_length(t::Tuple, val, ::Val{N}) where {N}
     M = length(t.parameters)
     M > N  && return :(throw($(ArgumentError("input tuple of length $M, requested $N"))))
     return quote
@@ -435,7 +435,7 @@ function __init__()
     init_threadcall()
 end
 
-INCLUDE_STATE = 3 # include = include_from_node1
+INCLUDE_STATE = 3 # include = include_relative
 include(Base, "precompile.jl")
 
 end # baremodule Base

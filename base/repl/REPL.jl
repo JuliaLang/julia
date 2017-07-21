@@ -53,7 +53,7 @@ mutable struct REPLBackend
         new(repl_channel, response_channel, in_eval)
 end
 
-function eval_user_input(ast::ANY, backend::REPLBackend)
+function eval_user_input(@nospecialize(ast), backend::REPLBackend)
     iserr, lasterr = false, ((), nothing)
     Base.sigatomic_begin()
     while true
@@ -125,11 +125,11 @@ function display(d::REPLDisplay, mime::MIME"text/plain", x)
 end
 display(d::REPLDisplay, x) = display(d, MIME("text/plain"), x)
 
-function print_response(repl::AbstractREPL, val::ANY, bt, show_value::Bool, have_color::Bool)
+function print_response(repl::AbstractREPL, @nospecialize(val), bt, show_value::Bool, have_color::Bool)
     repl.waserror = bt !== nothing
     print_response(outstream(repl), val, bt, show_value, have_color, specialdisplay(repl))
 end
-function print_response(errio::IO, val::ANY, bt, show_value::Bool, have_color::Bool, specialdisplay=nothing)
+function print_response(errio::IO, @nospecialize(val), bt, show_value::Bool, have_color::Bool, specialdisplay=nothing)
     Base.sigatomic_begin()
     while true
         try
@@ -392,7 +392,7 @@ function mode_idx(hist::REPLHistoryProvider, mode)
 end
 
 function add_history(hist::REPLHistoryProvider, s)
-    str = rstrip(String(s.input_buffer))
+    str = rstrip(String(take!(copy(s.input_buffer))))
     isempty(strip(str)) && return
     mode = mode_idx(hist, LineEdit.mode(s))
     !isempty(hist.history) &&
@@ -506,7 +506,7 @@ function history_move_prefix(s::LineEdit.PrefixSearchState,
                              prefix::AbstractString,
                              backwards::Bool,
                              cur_idx = hist.cur_idx)
-    cur_response = String(LineEdit.buffer(s))
+    cur_response = String(take!(copy(LineEdit.buffer(s))))
     # when searching forward, start at last_idx
     if !backwards && hist.last_idx > 0
         cur_idx = hist.last_idx
@@ -547,7 +547,7 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
     qpos = position(query_buffer)
     qpos > 0 || return true
     searchdata = beforecursor(query_buffer)
-    response_str = String(response_buffer)
+    response_str = String(take!(copy(response_buffer)))
 
     # Alright, first try to see if the current match still works
     a = position(response_buffer) + 1 # position is zero-indexed
@@ -596,7 +596,7 @@ LineEdit.reset_state(hist::REPLHistoryProvider) = history_reset_state(hist)
 
 function return_callback(s)
     ast = Base.syntax_deprecation_warnings(false) do
-        Base.parse_input_line(String(LineEdit.buffer(s)))
+        Base.parse_input_line(String(take!(copy(LineEdit.buffer(s)))))
     end
     if  !isa(ast, Expr) || (ast.head != :continue && ast.head != :incomplete)
         return true
@@ -693,7 +693,7 @@ enable_promptpaste(v::Bool) = JL_PROMPT_PASTE[] = v
 function setup_interface(
     repl::LineEditREPL;
     hascolor::Bool = repl.hascolor,
-    extra_repl_keymap::Vector{<:Dict} = Dict{Any,Any}[]
+    extra_repl_keymap::Union{Dict,Vector{<:Dict}} = Dict{Any,Any}[]
 )
     ###
     #

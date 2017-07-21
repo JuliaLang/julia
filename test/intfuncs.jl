@@ -214,3 +214,8 @@ end
 
 # issue #15911
 @inferred string(1)
+
+# issue #22837
+for b in [-100:-2; 2:100;]
+    @test Base.ndigits0z(0, b) == 0
+end

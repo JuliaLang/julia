@@ -3,9 +3,9 @@
 
 # Build a system image binary at sysimg_path.dlext. Allow insertion of a userimg via
 # userimg_path.  If sysimg_path.dlext is currently loaded into memory, don't continue
-# unless force is set to true.  Allow targeting of a CPU architecture via cpu_target.
+# unless force is set to true. Allow targeting of a CPU architecture via cpu_target.
 function default_sysimg_path(debug=false)
-    if is_unix()
+    if Sys.isunix()
         splitext(Libdl.dlpath(debug ? "sys-debug" : "sys"))[1]
     else
         joinpath(dirname(JULIA_HOME), "lib", "julia", debug ? "sys-debug" : "sys")
@@ -47,7 +47,7 @@ function build_sysimg(sysimg_path=nothing, cpu_target="native", userimg_path=not
     base_dir = dirname(Base.find_source_file("sysimg.jl"))
     cd(base_dir) do
         julia = joinpath(JULIA_HOME, debug ? "julia-debug" : "julia")
-        cc = find_system_compiler()
+        cc, warn_msg = find_system_compiler()
 
         # Ensure we have write-permissions to wherever we're trying to write to
         try
@@ -64,7 +64,7 @@ function build_sysimg(sysimg_path=nothing, cpu_target="native", userimg_path=not
                 error("$userimg_path is not found, ensure it is an absolute path.")
             end
             if isfile("userimg.jl")
-                error("$base_dir/userimg.jl already exists, delete manually to continue.")
+                error("$(joinpath(base_dir, "userimg.jl")) already exists, delete manually to continue.")
             end
             cp(userimg_path, "userimg.jl")
         end
@@ -82,12 +82,14 @@ function build_sysimg(sysimg_path=nothing, cpu_target="native", userimg_path=not
 
             if cc !== nothing
                 link_sysimg(sysimg_path, cc, debug)
+                !isempty(warn_msg) && foreach(warn, warn_msg)
             else
+                !isempty(warn_msg) && foreach(warn, warn_msg)
                 info("System image successfully built at $sysimg_path.ji.")
             end
 
             if !Base.samefile("$(default_sysimg_path(debug)).ji", "$sysimg_path.ji")
-                if Base.isfile("$sysimg_path.$(Libdl.dlext)")
+                if isfile("$sysimg_path.$(Libdl.dlext)")
                     info("To run Julia with this image loaded, run: `julia -J $sysimg_path.$(Libdl.dlext)`.")
                 else
                     info("To run Julia with this image loaded, run: `julia -J $sysimg_path.ji`.")
@@ -104,40 +106,46 @@ function build_sysimg(sysimg_path=nothing, cpu_target="native", userimg_path=not
     end
 end
 
-# Search for a compiler to link sys.o into sys.dl_ext.  Honor LD environment variable.
+# Search for a compiler to link sys.o into sys.dl_ext. Honor LD environment variable.
 function find_system_compiler()
-    if haskey(ENV, "CC")
-        if !success(`$(ENV["CC"]) -v`)
-            warn("Using compiler override $(ENV["CC"]), but unable to run `$(ENV["CC"]) -v`.")
-        end
-        return ENV["CC"]
-    end
+    cc = nothing
+    warn_msg = String[] # save warning messages into an array
 
     # On Windows, check to see if WinRPM is installed, and if so, see if gcc is installed
-    if is_windows()
+    if Sys.iswindows()
         try
             eval(Main, :(using WinRPM))
             winrpmgcc = joinpath(WinRPM.installdir, "usr", "$(Sys.ARCH)-w64-mingw32",
                 "sys-root", "mingw", "bin", "gcc.exe")
             if success(`$winrpmgcc --version`)
-                return winrpmgcc
+                cc = winrpmgcc
             else
                 throw()
             end
         catch
-            warn("Install GCC via `Pkg.add(\"WinRPM\"); WinRPM.install(\"gcc\")` to generate sys.dll for faster startup times.")
+            push!(warn_msg, "Install GCC via `Pkg.add(\"WinRPM\"); WinRPM.install(\"gcc\")` to generate sys.dll for faster startup times.")
         end
     end
 
+    if haskey(ENV, "CC")
+        if !success(`$(ENV["CC"]) -v`)
+            push!(warn_msg, "Using compiler override $(ENV["CC"]), but unable to run `$(ENV["CC"]) -v`.")
+        end
+        cc = ENV["CC"]
+    end
 
     # See if `cc` exists
     try
         if success(`cc -v`)
-            return "cc"
+            cc = "cc"
         end
     end
 
-    warn("No supported compiler found; startup times will be longer.")
+    if cc === nothing
+        push!(warn_msg, "No supported compiler found; startup times will be longer.")
+    end
+
+    return cc, warn_msg
 end
 
 # Link sys.o into sys.$(dlext)
@@ -151,7 +159,7 @@ function link_sysimg(sysimg_path=nothing, cc=find_system_compiler(), debug=false
 
     push!(FLAGS, "-shared")
     push!(FLAGS, debug ? "-ljulia-debug" : "-ljulia")
-    if is_windows()
+    if Sys.iswindows()
         push!(FLAGS, "-lssp")
     end
 
@@ -159,7 +167,7 @@ function link_sysimg(sysimg_path=nothing, cc=find_system_compiler(), debug=false
     info("Linking sys.$(Libdl.dlext)")
     info("$cc $(join(FLAGS, ' ')) -o $sysimg_file $sysimg_path.o")
     # Windows has difficulties overwriting a file in use so we first link to a temp file
-    if is_windows() && isfile(sysimg_file)
+    if Sys.iswindows() && isfile(sysimg_file)
         if success(pipeline(`$cc $FLAGS -o $sysimg_path.tmp $sysimg_path.o`; stdout=STDOUT, stderr=STDERR))
             mv(sysimg_file, "$sysimg_file.old"; remove_destination=true)
             mv("$sysimg_path.tmp", sysimg_file; remove_destination=true)
@@ -168,11 +176,11 @@ function link_sysimg(sysimg_path=nothing, cc=find_system_compiler(), debug=false
         run(`$cc $FLAGS -o $sysimg_file $sysimg_path.o`)
     end
     info("System image successfully built at $sysimg_path.$(Libdl.dlext)")
+    return
 end
 
-# When running this file as a script, try to do so with default values.  If arguments are passed
+# When running this file as a script, try to do so with default values. If arguments are passed
 # in, use them as the arguments to build_sysimg above.
-#
 # Also check whether we are running `genstdlib.jl`, in which case we don't want to build a
 # system image and instead only need `build_sysimg`'s docstring to be available.
 if !isdefined(Main, :GenStdLib) && !isinteractive()

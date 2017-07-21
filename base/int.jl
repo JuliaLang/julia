@@ -7,21 +7,32 @@
 # they are also used elsewhere where Int128/UInt128 support is separated out,
 # such as in hashing2.jl
 
-const BitSigned64_types   = (Int8, Int16, Int32, Int64)
-const BitUnsigned64_types = (UInt8, UInt16, UInt32, UInt64)
-const BitInteger64_types  = (BitSigned64_types..., BitUnsigned64_types...)
-const BitSigned_types     = (BitSigned64_types..., Int128)
-const BitUnsigned_types   = (BitUnsigned64_types..., UInt128)
-const BitInteger_types    = (BitSigned_types..., BitUnsigned_types...)
+const BitSigned64_types      = (Int8, Int16, Int32, Int64)
+const BitUnsigned64_types    = (UInt8, UInt16, UInt32, UInt64)
+const BitInteger64_types     = (BitSigned64_types..., BitUnsigned64_types...)
+const BitSigned_types        = (BitSigned64_types..., Int128)
+const BitUnsigned_types      = (BitUnsigned64_types..., UInt128)
+const BitInteger_types       = (BitSigned_types..., BitUnsigned_types...)
+const BitSignedSmall_types   = Int === Int64 ? ( Int8,  Int16,  Int32) : ( Int8,  Int16)
+const BitUnsignedSmall_types = Int === Int64 ? (UInt8, UInt16, UInt32) : (UInt8, UInt16)
+const BitIntegerSmall_types  = (BitSignedSmall_types..., BitUnsignedSmall_types...)
 
-const BitSigned64    = Union{BitSigned64_types...}
-const BitUnsigned64  = Union{BitUnsigned64_types...}
-const BitInteger64   = Union{BitInteger64_types...}
-const BitSigned      = Union{BitSigned_types...}
-const BitUnsigned    = Union{BitUnsigned_types...}
-const BitInteger     = Union{BitInteger_types...}
-const BitSigned64T   = Union{Type{Int8}, Type{Int16}, Type{Int32}, Type{Int64}}
-const BitUnsigned64T = Union{Type{UInt8}, Type{UInt16}, Type{UInt32}, Type{UInt64}}
+const BitSigned64      = Union{BitSigned64_types...}
+const BitUnsigned64    = Union{BitUnsigned64_types...}
+const BitInteger64     = Union{BitInteger64_types...}
+const BitSigned        = Union{BitSigned_types...}
+const BitUnsigned      = Union{BitUnsigned_types...}
+const BitInteger       = Union{BitInteger_types...}
+const BitSignedSmall   = Union{BitSignedSmall_types...}
+const BitUnsignedSmall = Union{BitUnsignedSmall_types...}
+const BitIntegerSmall  = Union{BitIntegerSmall_types...}
+const BitSigned64T     = Union{Type{Int8}, Type{Int16}, Type{Int32}, Type{Int64}}
+const BitUnsigned64T   = Union{Type{UInt8}, Type{UInt16}, Type{UInt32}, Type{UInt64}}
+
+const BitIntegerType = Union{map(T->Type{T}, BitInteger_types)...}
+
+throw_inexacterror(f::Symbol, ::Type{T}, val) where T =
+    (@_noinline_meta; throw(InexactError(f, T, val)))
 
 ## integer comparisons ##
 
@@ -116,8 +127,34 @@ abs(x::Signed) = flipsign(x,x)
 
 unsigned(x::Signed) = reinterpret(typeof(convert(Unsigned, zero(x))), x)
 unsigned(x::Bool) = convert(Unsigned, x)
+
+"""
+    unsigned(x) -> Unsigned
+
+Convert a number to an unsigned integer. If the argument is signed, it is reinterpreted as
+unsigned without checking for negative values.
+
+# Examples
+```jldoctest
+julia> unsigned(-2)
+0xfffffffffffffffe
+
+julia> unsigned(2)
+0x0000000000000002
+
+julia> signed(unsigned(-2))
+-2
+```
+"""
 unsigned(x) = convert(Unsigned, x)
 signed(x::Unsigned) = reinterpret(typeof(convert(Signed, zero(x))), x)
+
+"""
+    signed(x)
+
+Convert a number to a signed integer. If the argument is unsigned, it is reinterpreted as
+signed without checking for overflow.
+"""
 signed(x) = convert(Signed, x)
 
 div(x::Signed, y::Unsigned) = flipsign(signed(div(unsigned(abs(x)), y)), x)
@@ -205,8 +242,55 @@ end
 
 ## integer bitwise operations ##
 
+"""
+    ~(x)
+
+Bitwise not.
+
+# Examples
+```jldoctest
+julia> ~4
+-5
+
+julia> ~10
+-11
+
+julia> ~true
+false
+```
+"""
 (~)(x::BitInteger)             = not_int(x)
+
+"""
+    &(x, y)
+
+Bitwise and.
+
+# Examples
+```jldoctest
+julia> 4 & 10
+0
+
+julia> 4 & 12
+4
+```
+"""
 (&)(x::T, y::T) where {T<:BitInteger} = and_int(x, y)
+
+"""
+    |(x, y)
+
+Bitwise or.
+
+# Examples
+```jldoctest
+julia> 4 | 10
+14
+
+julia> 4 | 1
+5
+```
+"""
 (|)(x::T, y::T) where {T<:BitInteger} = or_int(x, y)
 xor(x::T, y::T) where {T<:BitInteger} = xor_int(x, y)
 
@@ -316,7 +400,33 @@ trailing_ones(x::Integer) = trailing_zeros(~x)
 >>>(x::BitInteger, y::Int) =
     select_value(0 <= y, x >>> unsigned(y), x << unsigned(-y))
 
+function is_top_bit_set(x::BitInteger)
+    @_inline_meta
+    lshr_int(x, (sizeof(x) << 0x03) - 1) == rem(0x01, typeof(x))
+end
+function check_top_bit(x::BitInteger)
+    @_inline_meta
+    is_top_bit_set(x) && throw_inexacterror(:check_top_bit, typeof(x), x)
+    x
+end
+
 ## integer conversions ##
+
+function checked_trunc_sint(::Type{To}, x::From) where {To,From}
+    @_inline_meta
+    y = trunc_int(To, x)
+    back = sext_int(From, y)
+    x == back || throw_inexacterror(:trunc, To, x)
+    y
+end
+
+function checked_trunc_uint(::Type{To}, x::From) where {To,From}
+    @_inline_meta
+    y = trunc_int(To, x)
+    back = zext_int(From, y)
+    x == back || throw_inexacterror(:trunc, To, x)
+    y
+end
 
 for to in BitInteger_types, from in (BitInteger_types..., Bool)
     if !(to === from)

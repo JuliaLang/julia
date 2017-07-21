@@ -3,7 +3,7 @@
 ## work with AbstractVector{UInt8} via I/O primitives ##
 
 # Stateful string
-mutable struct AbstractIOBuffer{T<:AbstractVector{UInt8}} <: IO
+mutable struct GenericIOBuffer{T<:AbstractVector{UInt8}} <: IO
     data::T # T should support: getindex, setindex!, length, copy!, and resize!
     readable::Bool
     writable::Bool
@@ -14,16 +14,16 @@ mutable struct AbstractIOBuffer{T<:AbstractVector{UInt8}} <: IO
     ptr::Int # read (and maybe write) pointer
     mark::Int # reset mark location for ptr (or <0 for no mark)
 
-    function AbstractIOBuffer{T}(data::T, readable::Bool, writable::Bool, seekable::Bool, append::Bool,
+    function GenericIOBuffer{T}(data::T, readable::Bool, writable::Bool, seekable::Bool, append::Bool,
                                  maxsize::Int) where T<:AbstractVector{UInt8}
         new(data,readable,writable,seekable,append,length(data),maxsize,1,-1)
     end
 end
-const IOBuffer = AbstractIOBuffer{Vector{UInt8}}
+const IOBuffer = GenericIOBuffer{Vector{UInt8}}
 
-function AbstractIOBuffer(data::T, readable::Bool, writable::Bool, seekable::Bool, append::Bool,
+function GenericIOBuffer(data::T, readable::Bool, writable::Bool, seekable::Bool, append::Bool,
                           maxsize::Int) where T<:AbstractVector{UInt8}
-    AbstractIOBuffer{T}(data, readable, writable, seekable, append, maxsize)
+    GenericIOBuffer{T}(data, readable, writable, seekable, append, maxsize)
 end
 
 # allocate Vector{UInt8}s for IOBuffer storage that can efficiently become Strings
@@ -40,7 +40,7 @@ from or written to respectively. By default the buffer is readable but not writa
 last argument optionally specifies a size beyond which the buffer may not be grown.
 """
 IOBuffer(data::AbstractVector{UInt8}, readable::Bool=true, writable::Bool=false, maxsize::Int=typemax(Int)) =
-    AbstractIOBuffer(data, readable, writable, true, false, maxsize)
+    GenericIOBuffer(data, readable, writable, true, false, maxsize)
 function IOBuffer(readable::Bool, writable::Bool)
     b = IOBuffer(StringVector(32), readable, writable)
     b.data[:] = 0
@@ -74,10 +74,10 @@ If `data` is given, creates a `PipeBuffer` to operate on a data vector,
 optionally specifying a size beyond which the underlying `Array` may not be grown.
 """
 PipeBuffer(data::Vector{UInt8}=UInt8[], maxsize::Int=typemax(Int)) =
-    AbstractIOBuffer(data,true,true,false,true,maxsize)
+    GenericIOBuffer(data,true,true,false,true,maxsize)
 PipeBuffer(maxsize::Int) = (x = PipeBuffer(StringVector(maxsize),maxsize); x.size=0; x)
 
-function copy(b::AbstractIOBuffer)
+function copy(b::GenericIOBuffer)
     ret = typeof(b)(b.writable ? copy(b.data) : b.data,
                     b.readable, b.writable, b.seekable, b.append, b.maxsize)
     ret.size = b.size
@@ -85,7 +85,7 @@ function copy(b::AbstractIOBuffer)
     return ret
 end
 
-show(io::IO, b::AbstractIOBuffer) = print(io, "IOBuffer(data=UInt8[...], ",
+show(io::IO, b::GenericIOBuffer) = print(io, "IOBuffer(data=UInt8[...], ",
                                       "readable=", b.readable, ", ",
                                       "writable=", b.writable, ", ",
                                       "seekable=", b.seekable, ", ",
@@ -95,7 +95,7 @@ show(io::IO, b::AbstractIOBuffer) = print(io, "IOBuffer(data=UInt8[...], ",
                                       "ptr=",      b.ptr, ", ",
                                       "mark=",     b.mark, ")")
 
-function unsafe_read(from::AbstractIOBuffer, p::Ptr{UInt8}, nb::UInt)
+function unsafe_read(from::GenericIOBuffer, p::Ptr{UInt8}, nb::UInt)
     from.readable || throw(ArgumentError("read failed, IOBuffer is not readable"))
     avail = nb_available(from)
     adv = min(avail, nb)
@@ -107,7 +107,7 @@ function unsafe_read(from::AbstractIOBuffer, p::Ptr{UInt8}, nb::UInt)
     nothing
 end
 
-function read_sub(from::AbstractIOBuffer, a::AbstractArray{T}, offs, nel) where T
+function read_sub(from::GenericIOBuffer, a::AbstractArray{T}, offs, nel) where T
     from.readable || throw(ArgumentError("read failed, IOBuffer is not readable"))
     if offs+nel-1 > length(a) || offs < 1 || nel < 0
         throw(BoundsError())
@@ -123,7 +123,7 @@ function read_sub(from::AbstractIOBuffer, a::AbstractArray{T}, offs, nel) where 
     return a
 end
 
-@inline function read(from::AbstractIOBuffer, ::Type{UInt8})
+@inline function read(from::GenericIOBuffer, ::Type{UInt8})
     from.readable || throw(ArgumentError("read failed, IOBuffer is not readable"))
     ptr = from.ptr
     size = from.size
@@ -135,7 +135,7 @@ end
     return byte
 end
 
-function peek(from::AbstractIOBuffer)
+function peek(from::GenericIOBuffer)
     from.readable || throw(ArgumentError("read failed, IOBuffer is not readable"))
     if from.ptr > from.size
         throw(EOFError())
@@ -143,43 +143,43 @@ function peek(from::AbstractIOBuffer)
     return from.data[from.ptr]
 end
 
-read(from::AbstractIOBuffer, ::Type{Ptr{T}}) where {T} = convert(Ptr{T}, read(from, UInt))
+read(from::GenericIOBuffer, ::Type{Ptr{T}}) where {T} = convert(Ptr{T}, read(from, UInt))
 
-isreadable(io::AbstractIOBuffer) = io.readable
-iswritable(io::AbstractIOBuffer) = io.writable
+isreadable(io::GenericIOBuffer) = io.readable
+iswritable(io::GenericIOBuffer) = io.writable
 
-# TODO: AbstractIOBuffer is not iterable, so doesn't really have a length.
+# TODO: GenericIOBuffer is not iterable, so doesn't really have a length.
 # This should maybe be sizeof() instead.
-#length(io::AbstractIOBuffer) = (io.seekable ? io.size : nb_available(io))
-nb_available(io::AbstractIOBuffer) = io.size - io.ptr + 1
-position(io::AbstractIOBuffer) = io.ptr-1
+#length(io::GenericIOBuffer) = (io.seekable ? io.size : nb_available(io))
+nb_available(io::GenericIOBuffer) = io.size - io.ptr + 1
+position(io::GenericIOBuffer) = io.ptr-1
 
-function skip(io::AbstractIOBuffer, n::Integer)
+function skip(io::GenericIOBuffer, n::Integer)
     seekto = io.ptr + n
     n < 0 && return seek(io, seekto-1) # Does error checking
     io.ptr = min(seekto, io.size+1)
     return io
 end
 
-function seek(io::AbstractIOBuffer, n::Integer)
+function seek(io::GenericIOBuffer, n::Integer)
     if !io.seekable
         ismarked(io) || throw(ArgumentError("seek failed, IOBuffer is not seekable and is not marked"))
         n == io.mark || throw(ArgumentError("seek failed, IOBuffer is not seekable and n != mark"))
     end
     # TODO: REPL.jl relies on the fact that this does not throw (by seeking past the beginning or end
-    #       of an AbstractIOBuffer), so that would need to be fixed in order to throw an error here
+    #       of an GenericIOBuffer), so that would need to be fixed in order to throw an error here
     #(n < 0 || n > io.size) && throw(ArgumentError("Attempted to seek outside IOBuffer boundaries."))
     #io.ptr = n+1
     io.ptr = max(min(n+1, io.size+1), 1)
     return io
 end
 
-function seekend(io::AbstractIOBuffer)
+function seekend(io::GenericIOBuffer)
     io.ptr = io.size+1
     return io
 end
 
-function truncate(io::AbstractIOBuffer, n::Integer)
+function truncate(io::GenericIOBuffer, n::Integer)
     io.writable || throw(ArgumentError("truncate failed, IOBuffer is not writeable"))
     io.seekable || throw(ArgumentError("truncate failed, IOBuffer is not seekable"))
     n < 0 && throw(ArgumentError("truncate failed, n bytes must be ≥ 0, got $n"))
@@ -194,7 +194,7 @@ function truncate(io::AbstractIOBuffer, n::Integer)
     return io
 end
 
-function compact(io::AbstractIOBuffer)
+function compact(io::GenericIOBuffer)
     io.writable || throw(ArgumentError("compact failed, IOBuffer is not writeable"))
     io.seekable && throw(ArgumentError("compact failed, IOBuffer is seekable"))
     local ptr::Int, bytes_to_move::Int
@@ -213,8 +213,8 @@ function compact(io::AbstractIOBuffer)
     return io
 end
 
-@inline ensureroom(io::AbstractIOBuffer, nshort::Int) = ensureroom(io, UInt(nshort))
-@inline function ensureroom(io::AbstractIOBuffer, nshort::UInt)
+@inline ensureroom(io::GenericIOBuffer, nshort::Int) = ensureroom(io, UInt(nshort))
+@inline function ensureroom(io::GenericIOBuffer, nshort::UInt)
     io.writable || throw(ArgumentError("ensureroom failed, IOBuffer is not writeable"))
     if !io.seekable
         nshort >= 0 || throw(ArgumentError("ensureroom failed, requested number of bytes must be ≥ 0, got $nshort"))
@@ -239,9 +239,9 @@ end
     return io
 end
 
-eof(io::AbstractIOBuffer) = (io.ptr-1 == io.size)
+eof(io::GenericIOBuffer) = (io.ptr-1 == io.size)
 
-@noinline function close(io::AbstractIOBuffer{T}) where T
+@noinline function close(io::GenericIOBuffer{T}) where T
     io.readable = false
     io.writable = false
     io.seekable = false
@@ -255,13 +255,7 @@ eof(io::AbstractIOBuffer) = (io.ptr-1 == io.size)
     nothing
 end
 
-isopen(io::AbstractIOBuffer) = io.readable || io.writable || io.seekable || nb_available(io) > 0
-
-function String(io::AbstractIOBuffer)
-    io.readable || throw(ArgumentError("IOBuffer is not readable"))
-    io.seekable || throw(ArgumentError("IOBuffer is not seekable"))
-    return unsafe_string(pointer(io.data), io.size)
-end
+isopen(io::GenericIOBuffer) = io.readable || io.writable || io.seekable || nb_available(io) > 0
 
 """
     take!(b::IOBuffer)
@@ -269,7 +263,7 @@ end
 Obtain the contents of an `IOBuffer` as an array, without copying. Afterwards, the
 `IOBuffer` is reset to its initial state.
 """
-function take!(io::AbstractIOBuffer)
+function take!(io::GenericIOBuffer)
     ismarked(io) && unmark(io)
     if io.seekable
         nbytes = io.size
@@ -307,7 +301,7 @@ function take!(io::IOBuffer)
     return data
 end
 
-function write(to::AbstractIOBuffer, from::AbstractIOBuffer)
+function write(to::GenericIOBuffer, from::GenericIOBuffer)
     if to === from
         from.ptr = from.size + 1
         return 0
@@ -317,7 +311,7 @@ function write(to::AbstractIOBuffer, from::AbstractIOBuffer)
     return written
 end
 
-function unsafe_write(to::AbstractIOBuffer, p::Ptr{UInt8}, nb::UInt)
+function unsafe_write(to::GenericIOBuffer, p::Ptr{UInt8}, nb::UInt)
     ensureroom(to, nb)
     ptr = (to.append ? to.size+1 : to.ptr)
     written = Int(min(nb, length(to.data) - ptr + 1))
@@ -336,14 +330,14 @@ function unsafe_write(to::AbstractIOBuffer, p::Ptr{UInt8}, nb::UInt)
     return written
 end
 
-function write_sub(to::AbstractIOBuffer, a::AbstractArray{UInt8}, offs, nel)
+function write_sub(to::GenericIOBuffer, a::AbstractArray{UInt8}, offs, nel)
     if offs+nel-1 > length(a) || offs < 1 || nel < 0
         throw(BoundsError())
     end
     unsafe_write(to, pointer(a, offs), UInt(nel))
 end
 
-@inline function write(to::AbstractIOBuffer, a::UInt8)
+@inline function write(to::GenericIOBuffer, a::UInt8)
     ensureroom(to, UInt(1))
     ptr = (to.append ? to.size+1 : to.ptr)
     if ptr > to.maxsize
@@ -358,8 +352,8 @@ end
     return sizeof(UInt8)
 end
 
-readbytes!(io::AbstractIOBuffer, b::Array{UInt8}, nb=length(b)) = readbytes!(io, b, Int(nb))
-function readbytes!(io::AbstractIOBuffer, b::Array{UInt8}, nb::Int)
+readbytes!(io::GenericIOBuffer, b::Array{UInt8}, nb=length(b)) = readbytes!(io, b, Int(nb))
+function readbytes!(io::GenericIOBuffer, b::Array{UInt8}, nb::Int)
     nr = min(nb, nb_available(io))
     if length(b) < nr
         resize!(b, nr)
@@ -367,9 +361,9 @@ function readbytes!(io::AbstractIOBuffer, b::Array{UInt8}, nb::Int)
     read_sub(io, b, 1, nr)
     return nr
 end
-read(io::AbstractIOBuffer) = read!(io,StringVector(nb_available(io)))
-readavailable(io::AbstractIOBuffer) = read(io)
-read(io::AbstractIOBuffer, nb::Integer) = read!(io,StringVector(min(nb, nb_available(io))))
+read(io::GenericIOBuffer) = read!(io,StringVector(nb_available(io)))
+readavailable(io::GenericIOBuffer) = read(io)
+read(io::GenericIOBuffer, nb::Integer) = read!(io,StringVector(min(nb, nb_available(io))))
 
 function search(buf::IOBuffer, delim::UInt8)
     p = pointer(buf.data, buf.ptr)
@@ -378,7 +372,7 @@ function search(buf::IOBuffer, delim::UInt8)
     return nb
 end
 
-function search(buf::AbstractIOBuffer, delim::UInt8)
+function search(buf::GenericIOBuffer, delim::UInt8)
     data = buf.data
     for i = buf.ptr : buf.size
         @inbounds b = data[i]
@@ -389,7 +383,7 @@ function search(buf::AbstractIOBuffer, delim::UInt8)
     return 0
 end
 
-function readuntil(io::AbstractIOBuffer, delim::UInt8)
+function readuntil(io::GenericIOBuffer, delim::UInt8)
     lb = 70
     A = StringVector(lb)
     n = 0

@@ -627,7 +627,6 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         union jl_typemap_t *tf = &m->specializations;
         jl_serialize_value(s, tf->unknown);
         jl_serialize_value(s, (jl_value_t*)m->name);
-        write_int8(s->s, m->isstaged);
         jl_serialize_value(s, (jl_value_t*)m->file);
         write_int32(s->s, m->line);
         if (external_mt)
@@ -1396,7 +1395,6 @@ static jl_value_t *jl_deserialize_value_method(jl_serializer_state *s, jl_value_
     jl_gc_wb(m, m->specializations.unknown);
     m->name = (jl_sym_t*)jl_deserialize_value(s, NULL);
     jl_gc_wb(m, m->name);
-    m->isstaged = read_int8(s->s);
     m->file = (jl_sym_t*)jl_deserialize_value(s, NULL);
     m->line = read_int32(s->s);
     m->min_world = jl_world_counter;

@@ -13,6 +13,15 @@ Language changes
   * The syntax `1.+2` is deprecated, since it is ambiguous: it could mean either
     `1 .+ 2` (the current meaning) or `1. + 2` ([#19089]).
 
+  * In string and character literals, backslash `\` may no longer
+    precede unrecognized escape characters ([#22800]).
+
+  * Declaring arguments as `x::ANY` to avoid specialization has been replaced
+    by `@nospecialize x`. ([#22666]).
+
+  * The parsing of `1<<2*3` as `1<<(2*3)` is deprecated, and will change to
+    `(1<<2)*3` in a future version ([#13079]).
+
 Breaking changes
 ----------------
 
@@ -45,6 +54,21 @@ This section lists changes that do not have deprecation warnings.
   * Using `ARGS` within the ~/.juliarc.jl or within a .jl file loaded with `--load` will no
     longer contain the script name as the first argument. Instead the script name will be
     assigned to `PROGRAM_FILE`. ([#22092])
+
+  * The format for a `ClusterManager` specifying the cookie on the command line is now
+    `--worker=<cookie>`. `--worker <cookie>` will not work as it is now an optional argument.
+
+  * The representation of `CartesianRange` has changed to a
+    tuple-of-AbstractUnitRanges; the `start` and `stop` fields are no
+    longer present. Use `first(R)` and `last(R)` to obtain
+    start/stop. ([#20974])
+
+  * The `Diagonal` type definition has changed from `Diagonal{T}` to
+    `Diagonal{T,V<:AbstractVector{T}}` ([#22718]).
+
+  * Spaces are no longer allowed between `@` and the name of a macro in a macro call ([#22868]).
+
+  * Juxtaposition of a non-literal with a macro call (`x@macro`) is no longer valid syntax ([#22868]).
 
 Library improvements
 --------------------
@@ -86,9 +110,27 @@ Library improvements
   * `@test isequal(x, y)` and `@test isapprox(x, y)` now prints an evaluated expression when
     the test fails ([#22296]).
 
+  * Uses of `Val{c}` in `Base` has been replaced with `Val{c}()`, which is now easily
+    accessible via the `@pure` constructor `Val(c)`. Functions are defined as
+    `f(::Val{c}) = ...` and called by `f(Val(c))`. Notable affected functions include:
+    `ntuple`, `Base.literal_pow`, `sqrtm`, `lufact`, `lufact!`, `qrfact`, `qrfact!`,
+    `cholfact`, `cholfact!`, `_broadcast!`, `reshape`, `cat` and `cat_t`.
+
+  * A new `@macroexpand1` macro for non recursive macro expansion ([#21662]).
+
+  * `Char`s can now be concatenated with `String`s and/or other `Char`s using `*` ([#22532]).
+
+  * `Diagonal` is now parameterized on the type of the wrapped vector. This allows
+    for `Diagonal` matrices with arbitrary `AbstractVector`s ([#22718]).
+
 Compiler/Runtime improvements
 -----------------------------
 
+  * The inlining heuristic now models the approximate runtime cost of
+    a method (using some strongly-simplifying assumptions). Functions
+    are inlined unless their estimated runtime cost substantially
+    exceeds the cost of setting up and issuing a subroutine
+    call. ([#22210], [#22732])
 
 Deprecated or removed
 ---------------------
@@ -105,6 +147,9 @@ Deprecated or removed
     have been deprecated in favor of `isposdef(Hermitian(A, UL))` and `isposdef!(Hermitian(A, UL))`
     respectively ([#22245]).
 
+  * The `bkfact`/`bkfact!` methods that accepted `uplo` and `issymmetric` symbols have been deprecated
+    in favor of using `Hermitian` (or `Symmetric`) views ([#22605]).
+
   * The function `current_module` is deprecated and replaced with `@__MODULE__` ([#22064]).
     This caused the deprecation of some reflection methods (such as `macroexpand` and `isconst`),
     which now require a module argument.
@@ -118,7 +163,51 @@ Deprecated or removed
     and the Base signal processing functions which used FFTs are now in DSP.jl ([#21956]).
 
   * The `corrected` positional argument to `cov` has been deprecated in favor of
-    a keyword argument with the same name (#21709).
+    a keyword argument with the same name ([#21709]).
+
+  * Omitting spaces around the `?` and the `:` tokens in a ternary expression has been deprecated.
+    Ternaries must now include some amount of whitespace, e.g. `x ? a : b` rather than
+    `x?a:b` ([#22523] and [#22712]).
+
+  * `?` can no longer be used as an identifier name ([#22712])
+
+  * The method `replace(s::AbstractString, pat, r, count)` with `count <= 0` is deprecated
+    in favor of `replace(s::AbstractString, pat, r, typemax(Int))` ([#22325]).
+
+  * `read(io, type, dims)` is deprecated to `read!(io, Array{type}(dims))` ([#21450]).
+
+  * `read(::IO, ::Ref)` is now a method of `read!`, since it mutates its `Ref` argument ([#21592]).
+
+  * `Bidiagonal` constructors now use a `Symbol` (`:U` or `:L`) for the upper/lower
+    argument, instead of a `Bool` or a `Char` ([#22703]).
+
+  * Calling `nfields` on a type to find out how many fields its instances have is deprecated.
+    Use `fieldcount` instead. Use `nfields` only to get the number of fields in a specific object ([#22350]).
+
+  * `fieldnames` now operates only on types. To get the names of fields in an object, use
+    `fieldnames(typeof(x))` ([#22350]).
+
+  * `InexactError` and `DomainError` now take
+    arguments. `InexactError(func::Symbol, type, -3)` now prints as
+    `ERROR: InexactError: func(type, -3)`, and `DomainError(val,
+    [msg])` prints as `ERROR: DomainError with val:\nmsg`. ([#20005],
+    [#22751])
+
+  * The operating system identification functions: `is_linux`, `is_bsd`, `is_apple`, `is_unix`,
+    and `is_windows`, have been deprecated in favor of `Sys.islinux`, `Sys.isbsd`, `Sys.isapple`,
+    `Sys.isunix`, and `Sys.iswindows`, respectively ([#22182]).
+
+  * The forms of `read`, `readstring`, and `eachline` that accepted both a `Cmd` object and an
+    input stream are deprecated. Use e.g. `read(pipeline(stdin, cmd))` instead ([#22762]).
+
+  * The unexported type `AbstractIOBuffer` has been renamed to `GenericIOBuffer` ([#17360] [#22796]).
+
+  * The method `String(io::IOBuffer)` is deprecated to `String(take!(copy(io)))` ([#21438]).
+
+  * The function `readstring` is deprecated in favor of `read(io, String)` ([#22793])
+
+  * The function `showall` is deprecated. Showing entire values is the default, unless an
+    `IOContext` specifying `:limit=>true` is in use ([#22847]).
 
 
 Julia v0.6.0 Release Notes
@@ -865,6 +954,7 @@ Command-line option changes
 [#19949]: https://github.com/JuliaLang/julia/issues/19949
 [#19950]: https://github.com/JuliaLang/julia/issues/19950
 [#19989]: https://github.com/JuliaLang/julia/issues/19989
+[#20005]: https://github.com/JuliaLang/julia/issues/20005
 [#20009]: https://github.com/JuliaLang/julia/issues/20009
 [#20047]: https://github.com/JuliaLang/julia/issues/20047
 [#20058]: https://github.com/JuliaLang/julia/issues/20058
@@ -897,6 +987,7 @@ Command-line option changes
 [#20609]: https://github.com/JuliaLang/julia/issues/20609
 [#20889]: https://github.com/JuliaLang/julia/issues/20889
 [#20952]: https://github.com/JuliaLang/julia/issues/20952
+[#20974]: https://github.com/JuliaLang/julia/issues/20974
 [#21183]: https://github.com/JuliaLang/julia/issues/21183
 [#21359]: https://github.com/JuliaLang/julia/issues/21359
 [#21692]: https://github.com/JuliaLang/julia/issues/21692
@@ -913,9 +1004,16 @@ Command-line option changes
 [#22038]: https://github.com/JuliaLang/julia/issues/22038
 [#22062]: https://github.com/JuliaLang/julia/issues/22062
 [#22064]: https://github.com/JuliaLang/julia/issues/22064
+[#22182]: https://github.com/JuliaLang/julia/issues/22182
 [#22187]: https://github.com/JuliaLang/julia/issues/22187
 [#22188]: https://github.com/JuliaLang/julia/issues/22188
+[#22210]: https://github.com/JuliaLang/julia/issues/22210
 [#22224]: https://github.com/JuliaLang/julia/issues/22224
 [#22228]: https://github.com/JuliaLang/julia/issues/22228
 [#22245]: https://github.com/JuliaLang/julia/issues/22245
 [#22310]: https://github.com/JuliaLang/julia/issues/22310
+[#22523]: https://github.com/JuliaLang/julia/issues/22523
+[#22532]: https://github.com/JuliaLang/julia/issues/22532
+[#22709]: https://github.com/JuliaLang/julia/issues/22709
+[#22712]: https://github.com/JuliaLang/julia/issues/22712
+[#22732]: https://github.com/JuliaLang/julia/issues/22732

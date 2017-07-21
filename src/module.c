@@ -191,6 +191,7 @@ static jl_binding_t *jl_get_binding_(jl_module_t *m, jl_sym_t *var, modstack_t *
                     // couldn't resolve; try next using (see issue #6105)
                     continue;
                 if (owner != NULL && tempb->owner != b->owner &&
+                    !tempb->deprecated && !b->deprecated &&
                     !(tempb->constp && tempb->value && b->constp && b->value == tempb->value)) {
                     jl_printf(JL_STDERR,
                               "WARNING: both %s and %s export \"%s\"; uses of it in module %s must be qualified\n",
@@ -280,6 +281,17 @@ static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *s,
                   jl_symbol_name(to->name));
     }
     else {
+        if (b->deprecated && to != jl_main_module && to != jl_base_module &&
+            jl_options.depwarn != JL_OPTIONS_DEPWARN_OFF) {
+            /* with #22763, external packages wanting to replace
+               deprecated Base bindings should simply export the new
+               binding */
+            jl_printf(JL_STDERR,
+                      "WARNING: importing deprecated binding %s.%s into %s.\n",
+                      jl_symbol_name(from->name), jl_symbol_name(s),
+                      jl_symbol_name(to->name));
+        }
+
         jl_binding_t **bp = (jl_binding_t**)ptrhash_bp(&to->bindings, s);
         jl_binding_t *bto = *bp;
         if (bto != HT_NOTFOUND) {
@@ -461,10 +473,12 @@ JL_DLLEXPORT int jl_is_const(jl_module_t *m, jl_sym_t *var)
     return b && b->constp;
 }
 
-JL_DLLEXPORT void jl_deprecate_binding(jl_module_t *m, jl_sym_t *var)
+// set the deprecated flag for a binding:
+//   0=not deprecated, 1=renamed, 2=moved to another package
+JL_DLLEXPORT void jl_deprecate_binding(jl_module_t *m, jl_sym_t *var, int flag)
 {
     jl_binding_t *b = jl_get_binding(m, var);
-    if (b) b->deprecated = 1;
+    if (b) b->deprecated = flag;
 }
 
 JL_DLLEXPORT int jl_is_binding_deprecated(jl_module_t *m, jl_sym_t *var)
@@ -478,7 +492,10 @@ extern int jl_lineno;
 
 void jl_binding_deprecation_warning(jl_binding_t *b)
 {
-    if (b->deprecated && jl_options.depwarn) {
+    // Only print a warning for deprecated == 1 (renamed).
+    // For deprecated == 2 (moved to a package) the binding is to a function
+    // that throws an error, so we don't want to print a warning too.
+    if (b->deprecated == 1 && jl_options.depwarn) {
         if (jl_options.depwarn != JL_OPTIONS_DEPWARN_ERROR)
             jl_printf(JL_STDERR, "WARNING: ");
         if (b->owner)

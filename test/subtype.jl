@@ -8,13 +8,13 @@ macro UnionAll(var, expr)
 end
 
 const issub = issubtype
-issub_strict(x::ANY,y::ANY) = issub(x,y) && !issub(y,x)
-isequal_type(x::ANY,y::ANY) = issub(x,y) && issub(y,x)
-notequal_type(x::ANY,y::ANY) = !isequal_type(x, y)
+issub_strict(@nospecialize(x),@nospecialize(y)) = issub(x,y) && !issub(y,x)
+isequal_type(@nospecialize(x),@nospecialize(y)) = issub(x,y) && issub(y,x)
+notequal_type(@nospecialize(x),@nospecialize(y)) = !isequal_type(x, y)
 
-_type_intersect(x::ANY, y::ANY) = ccall(:jl_intersect_types, Any, (Any, Any), x, y)
+_type_intersect(@nospecialize(x), @nospecialize(y)) = ccall(:jl_intersect_types, Any, (Any, Any), x, y)
 
-intersection_env(x::ANY, y::ANY) = ccall(:jl_env_from_type_intersection, Any, (Any,Any), x, y)
+intersection_env(@nospecialize(x), @nospecialize(y)) = ccall(:jl_env_from_type_intersection, Any, (Any,Any), x, y)
 
 # level 1: no varags, union, UnionAll
 function test_1()
@@ -446,7 +446,9 @@ function test_Type()
     @test isa(Int, @UnionAll T<:Number Type{T})
     @test !isa(DataType, @UnionAll T<:Number Type{T})
 
-    @test DataType <: (@UnionAll T<:Type Type{T})
+    @test !(DataType <: (@UnionAll T<:Type Type{T}))
+    @test isa(DataType, (@UnionAll T<:Type Type{T}))
+
     @test isa(Tuple{},Type{Tuple{}})
     @test !(Tuple{Int,} <: (@UnionAll T<:Tuple Type{T}))
     @test isa(Tuple{Int}, (@UnionAll T<:Tuple Type{T}))
@@ -940,13 +942,13 @@ test_intersection_properties()
 # Issue #12580
 abstract type AbstractMyType12580{T} end
 struct MyType12580{T}<:AbstractMyType12580{T} end
-tpara{A<:AbstractMyType12580}(::Type{A}) = tpara(supertype(A))
-tpara{I}(::Type{AbstractMyType12580{I}}) = I
+tpara(::Type{A}) where {A<:AbstractMyType12580} = tpara(supertype(A))
+tpara(::Type{AbstractMyType12580{I}}) where {I} = I
 @test tpara(MyType12580{true})
 
 # Issue #18348
-f18348{T<:Any}(::Type{T}, x) = 1
-f18348{T<:Any}(::Type{T}, x::T) = 2
+f18348(::Type{T}, x) where {T<:Any} = 1
+f18348(::Type{T}, x::T) where {T<:Any} = 2
 @test length(methods(f18348, Tuple{Type{Any},Any})) == 1
 
 # Issue #13165
@@ -955,7 +957,7 @@ f18348{T<:Any}(::Type{T}, x::T) = 2
 @test Hermitian{Complex{Float64},Matrix{Complex{Float64}}} <: LinAlg.RealHermSymComplexHerm
 
 # Issue #12721
-f12721{T<:Type{Int}}(::T) = true
+f12721(::T) where {T<:Type{Int}} = true
 @test_throws MethodError f12721(Float64)
 
 # implicit "covariant" type parameters:
@@ -1078,8 +1080,8 @@ end
 
 # issue #20103, OP and comments
 struct TT20103{X,Y} end
-f20103{X,Y}(::Type{TT20103{X,Y}},x::X,y::Y) = 1
-f20103{X}(::Type{TT20103{X,X}},x::X) = 100
+f20103(::Type{TT20103{X,Y}},x::X,y::Y) where {X,Y} = 1
+f20103(::Type{TT20103{X,X}},x::X) where {X} = 100
 @test_broken typeintersect(Type{NTuple{N,E}} where E where N, Type{NTuple{N,E} where N} where E) == Union{} # use @testintersect once fixed
 let ints = (Int, Int32, UInt, UInt32)
     const Ints = Union{ints...}
@@ -1090,8 +1092,8 @@ let ints = (Int, Int32, UInt, UInt32)
     const Vecs = Union{vecs...}
     T = Type{Tuple{V, I}} where V <: Vecs where I <: Ints
     @testintersect(T, T, T)
-    test{V <: Vecs, I <: Ints}(a::Type{Tuple{V, I}}) = I
-    test{V <: Vecs, I <: Ints}(a::Type{Tuple{V, I}}) = I
+    test(a::Type{Tuple{V, I}}) where {V <: Vecs, I <: Ints} = I
+    test(a::Type{Tuple{V, I}}) where {V <: Vecs, I <: Ints} = I
 end
 
 # issue #21191

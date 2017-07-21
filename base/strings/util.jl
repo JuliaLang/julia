@@ -359,7 +359,10 @@ _replace(io, repl, str, r, pattern) = print(io, repl)
 _replace(io, repl::Function, str, r, pattern) =
     print(io, repl(SubString(str, first(r), last(r))))
 
-function replace(str::String, pattern, repl, limit::Integer)
+# TODO: rename to `replace` when `replace` is removed from deprecated.jl
+function replace_new(str::String, pattern, repl, count::Integer)
+    count == 0 && return str
+    count < 0 && throw(DomainError(count, "`count` must be non-negative."))
     n = 1
     e = endof(str)
     i = a = start(str)
@@ -384,7 +387,7 @@ function replace(str::String, pattern, repl, limit::Integer)
         end
         r = search(str,pattern,k)
         j, k = first(r), last(r)
-        n == limit && break
+        n == count && break
         n += 1
     end
     write(out, SubString(str,i))
@@ -392,17 +395,21 @@ function replace(str::String, pattern, repl, limit::Integer)
 end
 
 """
-    replace(string::AbstractString, pat, r[, n::Integer=0])
+    replace(s::AbstractString, pat, r, [count::Integer])
 
-Search for the given pattern `pat`, and replace each occurrence with `r`. If `n` is
-provided, replace at most `n` occurrences. As with search, the second argument may be a
+Search for the given pattern `pat` in `s`, and replace each occurrence with `r`.
+If `count` is provided, replace at most `count` occurrences.
+As with [`search`](@ref), the second argument may be a
 single character, a vector or a set of characters, a string, or a regular expression. If `r`
 is a function, each occurrence is replaced with `r(s)` where `s` is the matched substring.
 If `pat` is a regular expression and `r` is a `SubstitutionString`, then capture group
 references in `r` are replaced with the corresponding matched text.
 """
-replace(s::AbstractString, pat, f, n::Integer) = replace(String(s), pat, f, n)
-replace(s::AbstractString, pat, r) = replace(s, pat, r, 0)
+replace(s::AbstractString, pat, f) = replace_new(String(s), pat, f, typemax(Int))
+# TODO: change this to the following when `replace` is removed from deprecated.jl:
+# replace(s::AbstractString, pat, f, count::Integer=typemax(Int)) =
+#     replace(String(s), pat, f, count)
+
 
 # hex <-> bytes conversion
 

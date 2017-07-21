@@ -95,7 +95,7 @@ let msg_cases = :(assert(false))
     for i = length(msgtypes):-1:1
         mti = msgtypes[i]
         msg_cases = :(if idx == $i
-                          return $(Expr(:call, QuoteNode(mti), fill(:(deserialize(s)), nfields(mti))...))
+                          return $(Expr(:call, QuoteNode(mti), fill(:(deserialize(s)), fieldcount(mti))...))
                       else
                           $msg_cases
                       end)
@@ -167,7 +167,7 @@ function serialize_hdr_raw(io, hdr)
 end
 
 function deserialize_hdr_raw(io)
-    data = read(io, Ref{NTuple{4,Int}}())[]
+    data = read!(io, Ref{NTuple{4,Int}}())[]
     return MsgHeader(RRID(data[1], data[2]), RRID(data[3], data[4]))
 end
 

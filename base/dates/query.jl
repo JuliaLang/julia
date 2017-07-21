@@ -129,7 +129,7 @@ dayname(day::Integer; locale::AbstractString="english") = dayname(day, LOCALES[l
 dayabbr(day::Integer; locale::AbstractString="english") = dayabbr(day, LOCALES[locale])
 
 """
-    dayname(dt::TimeType; locale="english") -> AbstractString
+    dayname(dt::TimeType; locale="english") -> String
 
 Return the full day name corresponding to the day of the week of the `Date` or `DateTime` in
 the given `locale`.
@@ -145,7 +145,7 @@ function dayname(dt::TimeType;locale::AbstractString="english")
 end
 
 """
-    dayabbr(dt::TimeType; locale="english") -> AbstractString
+    dayabbr(dt::TimeType; locale="english") -> String
 
 Return the abbreviated name corresponding to the day of the week of the `Date` or `DateTime`
 in the given `locale`.
@@ -236,7 +236,7 @@ monthname(month::Integer; locale::AbstractString="english") = monthname(month, L
 monthabbr(month::Integer; locale::AbstractString="english") = monthabbr(month, LOCALES[locale])
 
 """
-    monthname(dt::TimeType; locale="english") -> AbstractString
+    monthname(dt::TimeType; locale="english") -> String
 
 Return the full name of the month of the `Date` or `DateTime` in the given `locale`.
 
@@ -251,7 +251,7 @@ function monthname(dt::TimeType; locale::AbstractString="english")
 end
 
 """
-    monthabbr(dt::TimeType; locale="english") -> AbstractString
+    monthabbr(dt::TimeType; locale="english") -> String
 
 Return the abbreviated month name of the `Date` or `DateTime` in the given `locale`.
 

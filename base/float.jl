@@ -443,17 +443,18 @@ for op in (:<, :<=, :isless)
 end
 
 function cmp(x::AbstractFloat, y::AbstractFloat)
-    (isnan(x) || isnan(y)) && throw(DomainError())
+    isnan(x) && throw(DomainError(x, "`x` cannot be NaN."))
+    isnan(y) && throw(DomainError(y, "`y` cannot be NaN."))
     ifelse(x<y, -1, ifelse(x>y, 1, 0))
 end
 
 function cmp(x::Real, y::AbstractFloat)
-    isnan(y) && throw(DomainError())
+    isnan(y) && throw(DomainError(y, "`y` cannot be NaN."))
     ifelse(x<y, -1, ifelse(x>y, 1, 0))
 end
 
 function cmp(x::AbstractFloat, y::Real)
-    isnan(x) && throw(DomainError())
+    isnan(x) && throw(DomainError(x, "`x` cannot be NaN."))
     ifelse(x<y, -1, ifelse(x>y, 1, 0))
 end
 
@@ -649,14 +650,14 @@ for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UIn
                     if $(Tf(typemin(Ti))-one(Tf)) < x < $(Tf(typemax(Ti))+one(Tf))
                         return unsafe_trunc($Ti,x)
                     else
-                        throw(InexactError())
+                        throw(InexactError(:trunc, $Ti, x))
                     end
                 end
                 function convert(::Type{$Ti}, x::$Tf)
                     if ($(Tf(typemin(Ti))) <= x <= $(Tf(typemax(Ti)))) && (trunc(x) == x)
                         return unsafe_trunc($Ti,x)
                     else
-                        throw(InexactError())
+                        throw(InexactError(:convert, $Ti, x))
                     end
                 end
             end
@@ -670,14 +671,14 @@ for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UIn
                     if $(Tf(typemin(Ti))) <= x < $(Tf(typemax(Ti)))
                         return unsafe_trunc($Ti,x)
                     else
-                        throw(InexactError())
+                        throw(InexactError(:trunc, $Ti, x))
                     end
                 end
                 function convert(::Type{$Ti}, x::$Tf)
                     if ($(Tf(typemin(Ti))) <= x < $(Tf(typemax(Ti)))) && (trunc(x) == x)
                         return unsafe_trunc($Ti,x)
                     else
-                        throw(InexactError())
+                        throw(InexactError(:convert, $Ti, x))
                     end
                 end
             end
@@ -704,6 +705,13 @@ end
     realmax(::Type{Float16}) = $(bitcast(Float16, 0x7bff))
     realmax(::Type{Float32}) = $(bitcast(Float32, 0x7f7fffff))
     realmax(::Type{Float64}) = $(bitcast(Float64, 0x7fefffffffffffff))
+
+    """
+        realmin(T)
+
+    The smallest in absolute value non-subnormal value representable by the given
+    floating-point DataType `T`.
+    """
     realmin(x::T) where {T<:AbstractFloat} = realmin(T)
     realmax(x::T) where {T<:AbstractFloat} = realmax(T)
     realmin() = realmin(Float64)

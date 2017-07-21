@@ -37,10 +37,10 @@ The `hello` is the output of the `echo` command, sent to [`STDOUT`](@ref). The r
 returns `nothing`, and throws an [`ErrorException`](@ref) if the external command fails to run
 successfully.
 
-If you want to read the output of the external command, [`readstring()`](@ref) can be used instead:
+If you want to read the output of the external command, [`read`](@ref) can be used instead:
 
 ```jldoctest
-julia> a = readstring(`echo hello`)
+julia> a = read(`echo hello`, String)
 "hello\n"
 
 julia> chomp(a) == "hello"
@@ -306,15 +306,15 @@ pipeline(`do_work`, stdout=pipeline(`sort`, "out.txt"), stderr="errs.txt")
 When reading and writing to both ends of a pipeline from a single process, it is important to
 avoid forcing the kernel to buffer all of the data.
 
-For example, when reading all of the output from a command, call `readstring(out)`, not `wait(process)`,
+For example, when reading all of the output from a command, call `read(out, String)`, not `wait(process)`,
 since the former will actively consume all of the data written by the process, whereas the latter
 will attempt to store the data in the kernel's buffers while waiting for a reader to be connected.
 
 Another common solution is to separate the reader and writer of the pipeline into separate Tasks:
 
 ```julia
-writer = @async writeall(process, "data")
-reader = @async do_compute(readstring(process))
+writer = @async write(process, "data")
+reader = @async do_compute(read(process, String))
 wait(process)
 fetch(reader)
 ```

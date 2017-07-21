@@ -244,33 +244,30 @@ JL_CALLABLE(jl_f_sizeof)
 {
     JL_NARGS(sizeof, 1, 1);
     jl_value_t *x = args[0];
-    if (jl_is_unionall(x)) {
+    if (jl_is_unionall(x) || jl_is_uniontype(x)) {
         x = jl_unwrap_unionall(x);
         if (!jl_is_datatype(x))
             jl_error("argument is an abstract type; size is indeterminate");
     }
     if (jl_is_datatype(x)) {
         jl_datatype_t *dx = (jl_datatype_t*)x;
-        if (dx->layout && jl_is_layout_opaque(dx->layout))
-            jl_error("type does not have a canonical binary representation");
-        if (!(dx->name->names == jl_emptysvec && jl_datatype_size(dx) > 0)) {
-            // names===() and size > 0  =>  bitstype, size always known
-            if (dx->abstract || !jl_is_leaf_type(x))
-                jl_error("argument is an abstract type; size is indeterminate");
-        }
+        if (dx->layout == NULL)
+            jl_error("argument is an abstract type; size is indeterminate");
+        if (jl_is_layout_opaque(dx->layout))
+            jl_error("type does not have a fixed size");
         return jl_box_long(jl_datatype_size(x));
     }
     if (jl_is_array(x))
         return jl_box_long(jl_array_len(x) * ((jl_array_t*)x)->elsize);
     if (jl_is_string(x))
         return jl_box_long(jl_string_len(x));
+    if (jl_is_symbol(x))
+        return jl_box_long(strlen(jl_symbol_name((jl_sym_t*)x)));
+    if (jl_is_svec(x))
+        return jl_box_long((1+jl_svec_len(x))*sizeof(void*));
     jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(x);
     assert(jl_is_datatype(dt));
     assert(!dt->abstract);
-    if (dt == jl_symbol_type)
-        jl_error("value does not have a canonical binary representation");
-    if (dt == jl_simplevector_type)
-        return jl_box_long((1+jl_svec_len(x))*sizeof(void*));
     return jl_box_long(jl_datatype_size(dt));
 }
 
@@ -531,9 +528,7 @@ JL_CALLABLE(jl_f_isdefined)
     else {
         if (!jl_is_module(args[0])) {
             jl_datatype_t *vt = (jl_datatype_t*)jl_typeof(args[0]);
-            if (!jl_is_datatype(vt)) {
-                jl_type_error("isdefined", (jl_value_t*)jl_datatype_type, args[0]);
-            }
+            assert(jl_is_datatype(vt));
             size_t idx;
             if (jl_is_long(args[1])) {
                 idx = jl_unbox_long(args[1])-1;
@@ -698,7 +693,10 @@ JL_CALLABLE(jl_f_nfields)
 {
     JL_NARGS(nfields, 1, 1);
     jl_value_t *x = args[0];
-    if (!jl_is_datatype(x))
+    if (jl_is_datatype(x))
+        jl_depwarn("`nfields(::DataType)` is deprecated, use `fieldcount` instead",
+                   (jl_value_t*)jl_symbol("nfields"));
+    else
         x = jl_typeof(x);
     return jl_box_long(jl_field_count(x));
 }

@@ -3,8 +3,20 @@
 ## array.jl: Dense arrays
 
 ## Type aliases for convenience ##
+"""
+    AbstractVector{T}
 
+Supertype for one-dimensional arrays (or array-like types) with
+elements of type `T`. Alias for [`AbstractArray{T,1}`](@ref).
+"""
 const AbstractVector{T} = AbstractArray{T,1}
+
+"""
+    AbstractMatrix{T}
+
+Supertype for two-dimensional arrays (or array-like types) with
+elements of type `T`. Alias for [`AbstractArray{T,2}`](@ref).
+"""
 const AbstractMatrix{T} = AbstractArray{T,2}
 const AbstractVecOrMat{T} = Union{AbstractVector{T}, AbstractMatrix{T}}
 const RangeIndex = Union{Int, Range{Int}, AbstractUnitRange{Int}}
@@ -13,7 +25,27 @@ const IntOrInd = Union{Int, AbstractUnitRange}
 const DimsOrInds{N} = NTuple{N,DimOrInd}
 const NeedsShaping = Union{Tuple{Integer,Vararg{Integer}}, Tuple{OneTo,Vararg{OneTo}}}
 
+"""
+    Array{T,N} <: AbstractArray{T,N}
+
+`N`-dimensional dense array with elements of type `T`.
+"""
+Array
+
+"""
+    Vector{T} <: AbstractVector{T}
+
+One-dimensional dense array with elements of type `T`, often used to represent
+a mathematical vector. Alias for [`Array{T,1}`](@ref).
+"""
 const Vector{T} = Array{T,1}
+
+"""
+    Matrix{T} <: AbstractMatrix{T}
+
+Two-dimensional dense array with elements of type `T`, often used to represent
+a mathematical matrix. Alias for [`Array{T,2}`](@ref).
+"""
 const Matrix{T} = Array{T,2}
 const VecOrMat{T} = Union{Vector{T}, Matrix{T}}
 
@@ -49,29 +81,6 @@ eltype(x) = eltype(typeof(x))
 
 import Core: arraysize, arrayset, arrayref
 
-"""
-    Array{T}(dims)
-    Array{T,N}(dims)
-
-Construct an uninitialized `N`-dimensional dense array with element type `T`,
-where `N` is determined from the length or number of `dims`. `dims` may
-be a tuple or a series of integer arguments corresponding to the lengths in each dimension.
-If the rank `N` is supplied explicitly as in `Array{T,N}(dims)`, then it must
-match the length or number of `dims`.
-
-# Examples
-```jldoctest
-julia> A = Array{Float64, 2}(2, 2);
-
-julia> ndims(A)
-2
-
-julia> eltype(A)
-Float64
-```
-"""
-Array
-
 vect() = Array{Any,1}(0)
 vect(X::T...) where {T} = T[ X[i] for i = 1:length(X) ]
 
@@ -85,7 +94,7 @@ end
 size(a::Array, d) = arraysize(a, d)
 size(a::Vector) = (arraysize(a,1),)
 size(a::Matrix) = (arraysize(a,1), arraysize(a,2))
-size(a::Array{<:Any,N}) where {N} = (@_inline_meta; ntuple(M -> size(a, M), Val{N}))
+size(a::Array{<:Any,N}) where {N} = (@_inline_meta; ntuple(M -> size(a, M), Val(N)))
 
 asize_from(a::Array, n) = n > ndims(a) ? () : (arraysize(a,n), asize_from(a, n+1)...)
 
@@ -147,15 +156,15 @@ function reinterpret(::Type{T}, a::Array{S}) where T where S
 end
 
 function reinterpret(::Type{T}, a::Array{S}, dims::NTuple{N,Int}) where T where S where N
-    if !isbits(T)
-        throw(ArgumentError("cannot reinterpret Array{$(S)} to ::Type{Array{$(T)}}, type $(T) is not a bits type"))
+    function throwbits(::Type{S}, ::Type{T}, ::Type{U}) where {S,T,U}
+        @_noinline_meta
+        throw(ArgumentError("cannot reinterpret Array{$(S)} to ::Type{Array{$(T)}}, type $(U) is not a bits type"))
     end
-    if !isbits(S)
-        throw(ArgumentError("cannot reinterpret Array{$(S)} to ::Type{Array{$(T)}}, type $(S) is not a bits type"))
-    end
+    isbits(T) || throwbits(S, T, T)
+    isbits(S) || throwbits(S, T, S)
     nel = div(length(a)*sizeof(S),sizeof(T))
     if prod(dims) != nel
-        throw(DimensionMismatch("new dimensions $(dims) must be consistent with array size $(nel)"))
+        _throw_dmrsa(dims, nel)
     end
     ccall(:jl_reshape_array, Array{T,N}, (Any, Any, Any), Array{T,N}, a, dims)
 end
@@ -163,7 +172,7 @@ end
 # reshaping to same # of dimensions
 function reshape(a::Array{T,N}, dims::NTuple{N,Int}) where T where N
     if prod(dims) != length(a)
-        throw(DimensionMismatch("new dimensions $(dims) must be consistent with array size $(length(a))"))
+        _throw_dmrsa(dims, length(a))
     end
     if dims == size(a)
         return a
@@ -174,9 +183,14 @@ end
 # reshaping to different # of dimensions
 function reshape(a::Array{T}, dims::NTuple{N,Int}) where T where N
     if prod(dims) != length(a)
-        throw(DimensionMismatch("new dimensions $(dims) must be consistent with array size $(length(a))"))
+        _throw_dmrsa(dims, length(a))
     end
     ccall(:jl_reshape_array, Array{T,N}, (Any, Any, Any), Array{T,N}, a, dims)
+end
+
+function _throw_dmrsa(dims, len)
+    @_noinline_meta
+    throw(DimensionMismatch("new dimensions $(dims) must be consistent with array size $len"))
 end
 
 ## Constructors ##
@@ -224,7 +238,7 @@ getindex(::Type{T}, x) where {T} = (@_inline_meta; a = Array{T,1}(1); @inbounds 
 getindex(::Type{T}, x, y) where {T} = (@_inline_meta; a = Array{T,1}(2); @inbounds (a[1] = x; a[2] = y); a)
 getindex(::Type{T}, x, y, z) where {T} = (@_inline_meta; a = Array{T,1}(3); @inbounds (a[1] = x; a[2] = y; a[3] = z); a)
 
-function getindex(::Type{Any}, vals::ANY...)
+function getindex(::Type{Any}, @nospecialize vals...)
     a = Array{Any,1}(length(vals))
     @inbounds for i = 1:length(vals)
         a[i] = vals[i]
@@ -472,9 +486,9 @@ function _collect_indices(indsA, A)
 end
 
 if isdefined(Core, :Inference)
-    _default_eltype(itrt::ANY) = Core.Inference.return_type(first, Tuple{itrt})
+    _default_eltype(@nospecialize itrt) = Core.Inference.return_type(first, Tuple{itrt})
 else
-    _default_eltype(itr::ANY) = Any
+    _default_eltype(@nospecialize itr) = Any
 end
 
 _array_for(::Type{T}, itr, ::HasLength) where {T} = Array{T,1}(Int(length(itr)::Integer))
@@ -680,7 +694,7 @@ function push!(a::Array{T,1}, item) where T
     return a
 end
 
-function push!(a::Array{Any,1}, item::ANY)
+function push!(a::Array{Any,1}, @nospecialize item)
     _growend!(a, 1)
     arrayset(a, item, length(a))
     return a
@@ -1119,17 +1133,18 @@ function lexcmp(a::Array{UInt8,1}, b::Array{UInt8,1})
     return c < 0 ? -1 : c > 0 ? +1 : cmp(length(a),length(b))
 end
 
+const BitIntegerArray{N} = Union{map(T->Array{T,N}, BitInteger_types)...} where N
 # use memcmp for == on bit integer types
-function ==(a::Array{T,N}, b::Array{T,N}) where T<:BitInteger where N
+function ==(a::Arr, b::Arr) where Arr <: BitIntegerArray
     size(a) == size(b) && 0 == ccall(
-        :memcmp, Int32, (Ptr{T}, Ptr{T}, UInt), a, b, sizeof(T) * length(a))
+        :memcmp, Int32, (Ptr{Void}, Ptr{Void}, UInt), a, b, sizeof(eltype(Arr)) * length(a))
 end
 
 # this is ~20% faster than the generic implementation above for very small arrays
-function ==(a::Array{T,1}, b::Array{T,1}) where T<:BitInteger
+function ==(a::Arr, b::Arr) where Arr <: BitIntegerArray{1}
     len = length(a)
     len == length(b) && 0 == ccall(
-        :memcmp, Int32, (Ptr{T}, Ptr{T}, UInt), a, b, sizeof(T) * len)
+        :memcmp, Int32, (Ptr{Void}, Ptr{Void}, UInt), a, b, sizeof(eltype(Arr)) * len)
 end
 
 function reverse(A::AbstractVector, s=first(linearindices(A)), n=last(linearindices(A)))

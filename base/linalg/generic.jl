@@ -678,7 +678,8 @@ dot(x::Number, y::Number) = vecdot(x, y)
     dot(x, y)
     ⋅(x,y)
 
-Compute the dot product. For complex vectors, the first vector is conjugated.
+Compute the dot product between two vectors. For complex vectors, the first vector is conjugated.
+When the vectors have equal lengths, calling `dot` is semantically equivalent to `sum(vx'vy for (vx,vy) in zip(x, y))`.
 
 # Example
 
@@ -690,7 +691,29 @@ julia> dot([im; im], [1; 1])
 0 - 2im
 ```
 """
-dot(x::AbstractVector, y::AbstractVector) = vecdot(x, y)
+function dot(x::AbstractVector, y::AbstractVector)
+    if length(x) != length(y)
+        throw(DimensionMismatch("dot product arguments have lengths $(length(x)) and $(length(y))"))
+    end
+    ix = start(x)
+    if done(x, ix)
+        # we only need to check the first vector, since equal lengths have been asserted
+        return zero(eltype(x))'zero(eltype(y))
+    end
+    @inbounds (vx, ix) = next(x, ix)
+    @inbounds (vy, iy) = next(y, start(y))
+    s = vx'vy
+    while !done(x, ix)
+        @inbounds (vx, ix) = next(x, ix)
+        @inbounds (vy, iy) = next(y, iy)
+        s += vx'vy
+    end
+    return s
+end
+
+# Call optimized BLAS methods for vectors of numbers
+dot(x::AbstractVector{<:Number}, y::AbstractVector{<:Number}) = vecdot(x, y)
+
 
 ###########################################################################################
 
@@ -831,7 +854,7 @@ function (\)(A::AbstractMatrix, B::AbstractVecOrMat)
         end
         return lufact(A) \ B
     end
-    return qrfact(A,Val{true}) \ B
+    return qrfact(A,Val(true)) \ B
 end
 
 (\)(a::AbstractVector, b::AbstractArray) = reshape(a, length(a), 1) \ b
@@ -1260,6 +1283,8 @@ function logdet(A::AbstractMatrix)
     d,s = logabsdet(A)
     return d + log(s)
 end
+
+logdet(A) = log(det(A))
 
 const NumberArray{T<:Number} = AbstractArray{T}
 

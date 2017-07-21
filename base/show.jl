@@ -107,8 +107,8 @@ get(io::IO, key, default) = default
 
 displaysize(io::IOContext) = haskey(io, :displaysize) ? io[:displaysize] : displaysize(io.io)
 
-show_circular(io::IO, x::ANY) = false
-function show_circular(io::IOContext, x::ANY)
+show_circular(io::IO, @nospecialize(x)) = false
+function show_circular(io::IOContext, @nospecialize(x))
     d = 1
     for (k, v) in io.dict
         if k === :SHOWN_SET
@@ -122,12 +122,12 @@ function show_circular(io::IOContext, x::ANY)
     return false
 end
 
-show(io::IO, x::ANY) = show_default(io, x)
-function show_default(io::IO, x::ANY)
+show(io::IO, @nospecialize(x)) = show_default(io, x)
+function show_default(io::IO, @nospecialize(x))
     t = typeof(x)::DataType
     show(io, t)
     print(io, '(')
-    nf = nfields(t)
+    nf = nfields(x)
     nb = sizeof(x)
     if nf != 0 || nb == 0
         if !show_circular(io, x)
@@ -191,7 +191,7 @@ function show(io::IO, x::Union)
     show_comma_array(io, sorted_types, '{', '}')
 end
 
-function print_without_params(x::ANY)
+function print_without_params(@nospecialize(x))
     if isa(x,UnionAll)
         b = unwrap_unionall(x)
         return isa(b,DataType) && b.name.wrapper === x
@@ -320,7 +320,7 @@ end
 function show(io::IO, l::Core.MethodInstance)
     def = l.def
     if isa(def, Method)
-        if def.isstaged && l === def.generator
+        if isdefined(def, :generator) && l === def.generator
             print(io, "MethodInstance generator for ")
             show(io, def)
         else
@@ -520,7 +520,7 @@ typeemphasize(io::IO) = get(io, :TYPEEMPHASIZE, false) === true
 
 const indent_width = 4
 
-function show_expr_type(io::IO, ty::ANY, emph::Bool)
+function show_expr_type(io::IO, @nospecialize(ty), emph::Bool)
     if ty === Function
         print(io, "::F")
     elseif ty === Core.IntrinsicFunction
@@ -573,9 +573,13 @@ function show_list(io::IO, items, sep, indent::Int, prec::Int=0, enclose_operato
     first = true
     for item in items
         !first && print(io, sep)
-        parens = enclose_operators && isa(item,Symbol) && isoperator(item)
+        parens = !is_quoted(item) &&
+            (first && prec >= prec_power &&
+             ((item isa Expr && item.head === :call && item.args[1] in uni_ops) ||
+              (item isa Real && item < 0))) ||
+              (enclose_operators && item isa Symbol && isoperator(item))
         parens && print(io, '(')
-        show_unquoted(io, item, indent, prec)
+        show_unquoted(io, item, indent, parens ? 0 : prec)
         parens && print(io, ')')
         first = false
     end
@@ -719,15 +723,9 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     end
     # dot (i.e. "x.y"), but not compact broadcast exps
     if head === :(.) && !is_expr(args[2], :tuple)
-        show_unquoted(io, args[1], indent + indent_width)
-        print(io, '.')
-        if is_quoted(args[2])
-            show_unquoted(io, unquoted(args[2]), indent + indent_width)
-        else
-            print(io, '(')
-            show_unquoted(io, args[2], indent + indent_width)
-            print(io, ')')
-        end
+        func_prec = operator_precedence(head)
+        args_ = (args[1], (is_quoted(arg) && !is_quoted(unquoted(arg)) ? unquoted(arg) : arg for arg in args[2:end])...)
+        show_list(io, args_, head, indent, func_prec)
 
     # infix (i.e. "x <: y" or "x = y")
     elseif (head in expr_infix_any && nargs==2) || (head === :(:) && nargs==3)
@@ -793,7 +791,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
             if isa(func_args[1], Expr) || func_args[1] in all_ops
                 show_enclosed_list(io, '(', func_args, ", ", ')', indent, func_prec)
             else
-                show_unquoted(io, func_args[1])
+                show_unquoted(io, func_args[1], indent, func_prec)
             end
 
         # binary operator (i.e. "x + y")
@@ -802,6 +800,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
             if (na == 2 || (na > 2 && func in (:+, :++, :*))) &&
                     all(!isa(a, Expr) || a.head !== :... for a in func_args)
                 sep = " $func "
+
                 if func_prec <= prec
                     show_enclosed_list(io, '(', func_args, sep, ')', indent, func_prec, true)
                 else
@@ -1099,7 +1098,7 @@ function show_tuple_as_call(io::IO, name::Symbol, sig::Type)
     nothing
 end
 
-resolvebinding(ex::ANY) = ex
+resolvebinding(@nospecialize(ex)) = ex
 resolvebinding(ex::QuoteNode) = ex.value
 resolvebinding(ex::Symbol) = resolvebinding(GlobalRef(Main, ex))
 function resolvebinding(ex::Expr)
@@ -1132,7 +1131,7 @@ function show(io::IO, tv::TypeVar)
     # Otherwise, the lower bound should be printed if it is not `Bottom`
     # and the upper bound should be printed if it is not `Any`.
     in_env = (:unionall_env => tv) in io
-    function show_bound(io::IO, b::ANY)
+    function show_bound(io::IO, @nospecialize(b))
         parens = isa(b,UnionAll) && !print_without_params(b)
         parens && print(io, "(")
         show(io, b)
@@ -1179,14 +1178,14 @@ function dump(io::IO, x::SimpleVector, n::Int, indent)
     nothing
 end
 
-function dump(io::IO, x::ANY, n::Int, indent)
+function dump(io::IO, @nospecialize(x), n::Int, indent)
     T = typeof(x)
     if isa(x, Function)
         print(io, x, " (function of type ", T, ")")
     else
         print(io, T)
     end
-    if nfields(T) > 0
+    if nfields(x) > 0
         if n > 0
             for field in (isa(x,Tuple) ? (1:length(x)) : fieldnames(T))
                 println(io)
@@ -1250,7 +1249,7 @@ function dump(io::IO, x::DataType, n::Int, indent)
     if x !== Any
         print(io, " <: ", supertype(x))
     end
-    if n > 0 && !(x <: Tuple)
+    if n > 0 && !(x <: Tuple) && !x.abstract
         tvar_io::IOContext = io
         for tparam in x.parameters
             # approximately recapture the list of tvar parameterization
@@ -1272,7 +1271,7 @@ end
 
 # dumptype is for displaying abstract type hierarchies,
 # based on Jameson Nash's examples/typetree.jl
-function dumptype(io::IO, x::ANY, n::Int, indent)
+function dumptype(io::IO, @nospecialize(x), n::Int, indent)
     print(io, x)
     n == 0 && return  # too deeply nested
     isa(x, DataType) && x.abstract && dumpsubtypes(io, x, Main, n, indent)
@@ -1755,15 +1754,6 @@ function showarray(io::IO, X::AbstractArray, repr::Bool = true; header = true)
         end
     elseif repr
         repremptyarray(io, X)
-    end
-end
-
-showall(x) = showall(STDOUT, x)
-function showall(io::IO, x)
-    if !get(io, :limit, false)
-        show(io, x)
-    else
-        show(IOContext(io, :limit => false), x)
     end
 end
 

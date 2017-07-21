@@ -32,7 +32,7 @@ function lookup_object_number(s::ClusterSerializer, n::UInt64)
     return get(known_object_data, n, nothing)
 end
 
-function remember_object(s::ClusterSerializer, o::ANY, n::UInt64)
+function remember_object(s::ClusterSerializer, @nospecialize(o), n::UInt64)
     known_object_data[n] = o
     if isa(o, TypeName) && !haskey(object_numbers, o)
         # set up reverse mapping for serialize
@@ -88,8 +88,9 @@ function serialize(s::ClusterSerializer, g::GlobalRef)
     # Record if required and then invoke the default GlobalRef serializer.
     sym = g.name
     if g.mod === Main && isdefined(g.mod, sym)
-        v = getfield(Main, sym)
-         if (binding_module(Main, sym) === Main) && (s.anonfunc_id != 0)
+        if (binding_module(Main, sym) === Main) && (s.anonfunc_id != 0) &&
+            !startswith(string(sym), "#") # Anonymous functions are handled via FULL_GLOBALREF_TAG
+
             push!(get!(s.glbs_in_tnobj, s.anonfunc_id, []), sym)
         end
     end

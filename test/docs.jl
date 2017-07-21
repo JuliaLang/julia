@@ -135,7 +135,7 @@ const K = :K
 
 t(x::AbstractString) = x
 t(x::Int, y) = y
-t{S <: Integer}(x::S) = x
+t(x::S) where {S <: Integer} = x
 
 "t-1"
 t(::AbstractString)
@@ -613,7 +613,7 @@ module I12515
 struct EmptyType{T} end
 
 "A new method"
-Base.collect{T}(::Type{EmptyType{T}}) = "borked"
+Base.collect(::Type{EmptyType{T}}) where {T} = "borked"
 
 end
 

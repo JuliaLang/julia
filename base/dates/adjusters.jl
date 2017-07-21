@@ -186,7 +186,7 @@ lastdayofquarter(dt::DateTime) = DateTime(lastdayofquarter(Date(dt)))
 struct DateFunction
     f::Function
     # validate boolean, single-arg inner constructor
-    function DateFunction(f::ANY, dt::TimeType)
+    function DateFunction(@nospecialize(f), dt::TimeType)
         isa(f(dt), Bool) || throw(ArgumentError("Provided function must take a single TimeType argument and return true or false"))
         return new(f)
     end

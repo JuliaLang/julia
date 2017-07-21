@@ -378,6 +378,11 @@
 
 (define (keywords-method-def-expr name sparams argl body isstaged rett)
   (let* ((kargl (cdar argl))  ;; keyword expressions (= k v)
+         (annotations (map (lambda (a) `(meta nospecialize ,(arg-name (cadr (caddr a)))))
+                           (filter nospecialize-meta? kargl)))
+         (kargl (map (lambda (a)
+                       (if (nospecialize-meta? a) (caddr a) a))
+                     kargl))
          (pargl (cdr argl))   ;; positional args
          (body  (if (and (pair? body) (eq? (car body) 'block))
                     body
@@ -463,8 +468,10 @@
                      (decl-var (car not-optional)))
                  (car not-optional))
             ,@(cdr not-optional) ,@vararg)
-          `(block
-            ,@stmts) isstaged rett)
+          (insert-after-meta `(block
+                               ,@stmts)
+                             annotations)
+          isstaged rett)
 
         ;; call with unsorted keyword args. this sorts and re-dispatches.
         ,(method-def-expr-
@@ -536,9 +543,10 @@
                                            (list `(... ,(arg-name (car vararg))))))
                               ;; otherwise add to rest keywords
                               `(foreigncall 'jl_array_ptr_1d_push (core Void) (call (core svec) Any Any)
-                                            ,rkw 0 (tuple ,elt
-                                                          (call (core arrayref) ,kw
-                                                                (call (top +) ,ii 1))) 0))
+                                            'ccall 2
+                                            ,rkw (tuple ,elt
+                                                        (call (core arrayref) ,kw
+                                                              (call (top +) ,ii 1)))))
                           (map list vars vals flags))))
             ;; set keywords that weren't present to their default values
             ,@(apply append
@@ -621,8 +629,9 @@
       argl))
 
 (define (check-kw-args kw)
-  (let ((invalid (filter (lambda (x) (not (or (kwarg? x)
-                                              (vararg? x))))
+  (let ((invalid (filter (lambda (x) (not (or (kwarg? x) (vararg? x)
+                                              (and (nospecialize-meta? x)
+                                                   (or (kwarg? (caddr x)) (vararg? (caddr x)))))))
                          kw)))
     (if (pair? invalid)
         (if (and (pair? (car invalid)) (eq? 'parameters (caar invalid)))
@@ -955,29 +964,31 @@
   (let loop ((F atypes)  ;; formals
              (A args)    ;; actuals
              (stmts '()) ;; initializers
-             (C '()))    ;; converted
+             (C '())     ;; converted
+             (GC '()))   ;; GC roots
     (if (and (null? F) (not (null? A))) (error "more arguments than types for ccall"))
     (if (and (null? A) (not (or (null? F) (and (pair? F) (vararg? (car F)) (null? (cdr F)))))) (error "more types than arguments for ccall"))
     (if (null? A)
         `(block
           ,.(reverse! stmts)
           (foreigncall ,name ,RT (call (core svec) ,@(dots->vararg atypes))
-                ,.(reverse! C)
-                ,@A
-                ,@cconv))
+                       ',cconv
+                       ,(length C)
+                       ,.(reverse! C)
+                       ,@GC)) ; GC root ordering is arbitrary
         (let* ((a     (car A))
                (isseq (and (vararg? (car F))))
                (ty    (if isseq (cadar F) (car F))))
           (if (and isseq (not (null? (cdr F)))) (error "only the trailing ccall argument type should have '...'"))
           (if (eq? ty 'Any)
-              (loop (if isseq F (cdr F)) (cdr A) stmts (list* 0 a C))
+              (loop (if isseq F (cdr F)) (cdr A) stmts (list* a C) GC)
               (let* ((g (make-ssavalue))
                      (isamp (and (pair? a) (eq? (car a) '&)))
                      (a (if isamp (cadr a) a))
                      (stmts (cons `(= ,g (call (top ,(if isamp 'ptr_arg_cconvert 'cconvert)) ,ty ,a)) stmts))
                      (ca `(call (top ,(if isamp 'ptr_arg_unsafe_convert 'unsafe_convert)) ,ty ,g)))
                 (loop (if isseq F (cdr F)) (cdr A) stmts
-                      (list* g (if isamp `(& ,ca) ca) C))))))))
+                      (list* (if isamp `(& ,ca) ca) C) (list* g GC))))))))
 
 (define (expand-function-def e)   ;; handle function or stagedfunction
   (define (just-arglist? ex)
@@ -1026,6 +1037,12 @@
                                                 (string "function Base.broadcast(::typeof(" (deparse op_) "), ...)")))
                         op_))
                   (name (if op '(|.| Base (inert broadcast)) name))
+                  (annotations (map (lambda (a) `(meta nospecialize ,(arg-name a)))
+                                    (filter nospecialize-meta? argl)))
+                  (body (insert-after-meta (caddr e) annotations))
+                  (argl (map (lambda (a)
+                               (if (nospecialize-meta? a) (caddr a) a))
+                             argl))
                   (argl (if op (cons `(|::| (call (core Typeof) ,op)) argl) argl))
                   (sparams (map analyze-typevar (cond (has-sp (cddr head))
                                                       (where  where)
@@ -1046,7 +1063,7 @@
                   (name    (if (or (decl? name) (and (pair? name) (eq? (car name) 'curly)))
                                #f name)))
              (expand-forms
-              (method-def-expr name sparams argl (caddr e) isstaged rett))))
+              (method-def-expr name sparams argl body isstaged rett))))
           (else
            (error (string "invalid assignment location \"" (deparse name) "\""))))))
 
@@ -1108,6 +1125,18 @@
                    (eq? (caar binds) '=))
               ;; some kind of assignment
               (cond
+               ((eventually-call (cadar binds))
+                ;; f()=c
+                (let ((asgn (butlast (expand-forms (car binds))))
+                      (name (assigned-name (cadar binds))))
+                  (if (not (symbol? name))
+                      (error "invalid let syntax"))
+                  (loop (cdr binds)
+                        `(scope-block
+                          (block
+                           (local-def ,name)
+                           ,asgn
+                           ,blk)))))
                ((or (symbol? (cadar binds))
                     (decl?   (cadar binds)))
                 (let ((vname (decl-var (cadar binds))))
@@ -1127,23 +1156,6 @@
                                (local-def ,(cadar binds))
                                (= ,vname ,(caddar binds))
                                ,blk))))))
-               ((and (pair? (cadar binds))
-                     (or (eq? (caadar binds) 'call)
-                         (and (eq? (caadar binds) 'comparison)
-                              (length= (cadar binds) 4))))
-                ;; f()=c
-                (let* ((asgn (butlast (expand-forms (car binds))))
-                       (name (cadr (cadar binds)))
-                       (name (cond ((symbol? name) name)
-                                   ((and (pair? name) (eq? (car name) 'curly))
-                                    (cadr name))
-                                   (else (error "invalid let syntax")))))
-                  (loop (cdr binds)
-                        `(scope-block
-                          (block
-                           (local-def ,name)
-                           ,asgn
-                           ,blk)))))
                ;; (a, b, c, ...) = rhs
                ((and (pair? (cadar binds))
                      (eq? (caadar binds) 'tuple))
@@ -1170,7 +1182,7 @@
                              (|::| __module__ (core Module))
                              ,@(map (lambda (v)
                                       (if (symbol? v)
-                                          `(|::| ,v (core ANY))
+                                          `(meta nospecialize ,v)
                                           v))
                                     anames))
                        ,@(cddr e)))))
@@ -1280,7 +1292,8 @@
                         (= ,err true)))
                   (= ,finally-exception (the_exception))
                   ,finalb
-                  (if ,err (foreigncall 'jl_rethrow_other (core Void) (call (core svec) Any) ,finally-exception 0))
+                  (if ,err (foreigncall 'jl_rethrow_other (core Void) (call (core svec) Any)
+                                        'ccall 1 ,finally-exception))
                   ,(if hasret
                        (if ret
                            `(if ,ret (return ,retval) ,val)
@@ -1510,9 +1523,10 @@
                              (loop (cdr kw) (list* (caddr arg) `(quote ,(cadr arg)) initial-kw) stmts #t)
                              (loop (cdr kw) initial-kw
                                    (cons `(foreigncall 'jl_array_ptr_1d_push2 (core Void) (call (core svec) Any Any Any)
-                                                       ,container 0
-                                                       (|::| (quote ,(cadr arg)) (core Symbol)) 0
-                                                       ,(caddr arg) 0)
+                                                       'ccall 3
+                                                       ,container
+                                                       (|::| (quote ,(cadr arg)) (core Symbol))
+                                                       ,(caddr arg))
                                          stmts)
                                    #t)))
                         (else
@@ -1520,9 +1534,10 @@
                                (cons (let* ((k (make-ssavalue))
                                             (v (make-ssavalue))
                                             (push-expr `(foreigncall 'jl_array_ptr_1d_push2 (core Void) (call (core svec) Any Any Any)
-                                                                     ,container 0
-                                                                     (|::| ,k (core Symbol)) 0
-                                                                     ,v 0)))
+                                                                     'ccall 3
+                                                                     ,container
+                                                                     (|::| ,k (core Symbol))
+                                                                     ,v)))
                                        (if (vararg? arg)
                                            `(for (= (tuple ,k ,v) ,(cadr arg))
                                                  ,push-expr)
@@ -2102,7 +2117,7 @@
                                   (error "ccall argument types must be a tuple; try \"(T,)\"")))
                           (expand-forms
                            (lower-ccall name RT (cdr argtypes) args
-                            (if have-cconv (list (list cconv)) '()))))))
+                                        (if have-cconv cconv 'ccall))))))
                  ((and (pair? (caddr e))
                        (eq? (car (caddr e)) 'parameters))
                   ;; (call f (parameters . kwargs) ...)
@@ -2143,7 +2158,7 @@
 
                  ((and (eq? f '^) (length= e 4) (integer? (cadddr e)))
                   (expand-forms
-                   `(call (top literal_pow) ^ ,(caddr e) (call (core apply_type) (top Val) ,(cadddr e)))))
+                   `(call (top literal_pow) ^ ,(caddr e) (call (call (core apply_type) (top Val) ,(cadddr e))))))
 
                  ((and (eq? f '*) (length= e 4))
                   (expand-transposed-op
@@ -2898,13 +2913,15 @@ f(x) = yt(x)
 
 ;; return `body` with `stmts` inserted after any meta nodes
 (define (insert-after-meta body stmts)
-  (let ((meta (take-while (lambda (x) (and (pair? x)
-                                           (memq (car x) '(line meta))))
-                          (cdr body))))
-    `(,(car body)
-      ,@meta
-      ,@stmts
-      ,@(list-tail body (+ 1 (length meta))))))
+  (if (null? stmts)
+      body
+      (let ((meta (take-while (lambda (x) (and (pair? x)
+                                               (memq (car x) '(line meta))))
+                              (cdr body))))
+        `(,(car body)
+          ,@meta
+          ,@stmts
+          ,@(list-tail body (+ 1 (length meta)))))))
 
 (define (add-box-inits-to-body lam body)
   (let ((args (map arg-name (lam:args lam)))
@@ -3397,13 +3414,13 @@ f(x) = yt(x)
           (case (car e)
             ((call new foreigncall)
              (let* ((args (if (eq? (car e) 'foreigncall)
-                              ;; NOTE: 2nd and 3rd arguments of ccall must be left in place
+                              ;; NOTE: 2nd to 5th arguments of ccall must be left in place
                               ;;       the 1st should be compiled if an atom.
                               (append (list)
                                       (cond (atom? (cadr e) (compile-args (list (cadr e)) break-labels linearize-args))
                                             (else (cadr e)))
-                                      (list-head (cddr e) 2)
-                                      (compile-args (list-tail e 4) break-labels linearize-args))
+                                      (list-head (cddr e) 4)
+                                      (compile-args (list-tail e 6) break-labels linearize-args))
                               (compile-args (cdr e) break-labels linearize-args)))
                     (callex (cons (car e) args)))
                (cond (tail (emit-return callex))
@@ -3582,7 +3599,8 @@ f(x) = yt(x)
                    (emit temp))))
 
             ((&)
-             (assert (and value (not tail)))
+             (if (or (not value) tail)
+                 (error "misplaced \"&\" expression"))
              `(& ,(compile (cadr e) break-labels value tail)))
 
             ((newvar)
@@ -3780,6 +3798,9 @@ f(x) = yt(x)
           ((and (pair? e) (eq? (car e) 'outerref))
            (let ((idx (get sp-table (cadr e) #f)))
                 (if idx `(static_parameter ,idx) (cadr e))))
+          ((nospecialize-meta? e)
+           ;; convert nospecialize vars to slot numbers
+           `(meta nospecialize ,@(map renumber-slots (cddr e))))
           ((or (atom? e) (quoted? e)) e)
           ((ssavalue? e)
            (let ((idx (or (get ssavalue-table (cadr e) #f)

@@ -35,6 +35,28 @@ mean(iterable) = mean(identity, iterable)
 mean(f::Callable, A::AbstractArray) = sum(f, A) / _length(A)
 mean(A::AbstractArray) = sum(A) / _length(A)
 
+"""
+    mean!(r, v)
+
+Compute the mean of `v` over the singleton dimensions of `r`, and write results to `r`.
+
+# Examples
+```jldoctest
+julia> v = [1 2; 3 4]
+2×2 Array{Int64,2}:
+ 1  2
+ 3  4
+
+julia> mean!([1., 1.], v)
+2-element Array{Float64,1}:
+ 1.5
+ 3.5
+
+julia> mean!([1. 1.], v)
+1×2 Array{Float64,2}:
+ 2.0  3.0
+```
+"""
 function mean!(R::AbstractArray, A::AbstractArray)
     sum!(R, A; init=true)
     scale!(R, _length(R) / _length(A))
@@ -210,22 +232,24 @@ varm(iterable, m::Number; corrected::Bool=true) =
 ## variances over ranges
 
 function varm(v::Range, m::Number)
-    f = first(v) - m
-    s = step(v)
-    l = length(v)
+    f  = first(v) - m
+    s  = step(v)
+    l  = length(v)
+    vv = f^2 * l / (l - 1) + f * s * l + s^2 * l * (2 * l - 1) / 6
     if l == 0 || l == 1
-           return NaN
+        return typeof(vv)(NaN)
     end
-    return f^2 * l / (l - 1) + f * s * l + s^2 * l * (2 * l - 1) / 6
+    return vv
 end
 
 function var(v::Range)
-    s = step(v)
-    l = length(v)
+    s  = step(v)
+    l  = length(v)
+    vv = abs2(s) * (l + 1) * l / 12
     if l == 0 || l == 1
-        return NaN
+        return typeof(vv)(NaN)
     end
-    return abs2(s) * (l + 1) * l / 12
+    return vv
 end
 
 
@@ -361,7 +385,7 @@ cov(X::AbstractMatrix, vardim::Int=1; corrected::Bool=true) =
 Compute the covariance between the vectors `x` and `y`. If `corrected` is `true` (the
 default), computes ``\\frac{1}{n-1}\\sum_{i=1}^n (x_i-\\bar x) (y_i-\\bar y)^*`` where
 ``*`` denotes the complex conjugate and `n = length(x) = length(y)`. If `corrected` is
-`false`, computes ``\frac{1}{n}\sum_{i=1}^n (x_i-\\bar x) (y_i-\\bar y)^*``.
+`false`, computes ``\\frac{1}{n}\\sum_{i=1}^n (x_i-\\bar x) (y_i-\\bar y)^*``.
 """
 cov(x::AbstractVector, y::AbstractVector; corrected::Bool=true) =
     covm(x, Base.mean(x), y, Base.mean(y); corrected=corrected)

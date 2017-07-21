@@ -398,7 +398,7 @@ static uintptr_t _backref_id(jl_serializer_state *s, jl_value_t *v)
 static void write_pointerfield(jl_serializer_state *s, jl_value_t *fld)
 {
     if (fld != NULL) {
-        arraylist_push(&s->relocs_list, (void*)ios_pos(s->s));
+        arraylist_push(&s->relocs_list, (void*)(uintptr_t)ios_pos(s->s));
         arraylist_push(&s->relocs_list, (void*)backref_id(s, fld));
     }
     write_pointer(s->s);
@@ -406,7 +406,7 @@ static void write_pointerfield(jl_serializer_state *s, jl_value_t *fld)
 
 static void write_gctaggedfield(jl_serializer_state *s, uintptr_t ref)
 {
-    arraylist_push(&s->gctags_list, (void*)ios_pos(s->s));
+    arraylist_push(&s->gctags_list, (void*)(uintptr_t)ios_pos(s->s));
     arraylist_push(&s->gctags_list, (void*)ref);
     write_pointer(s->s);
 }

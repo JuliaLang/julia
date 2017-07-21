@@ -653,7 +653,7 @@ function inv(A::StridedMatrix{T}) where T
         Ai = inv(LowerTriangular(AA))
         Ai = convert(typeof(parent(Ai)), Ai)
     else
-        Ai = inv(lufact(AA))
+        Ai = inv!(lufact(AA))
         Ai = convert(typeof(parent(Ai)), Ai)
     end
     return Ai
@@ -688,7 +688,7 @@ will return a Cholesky factorization.
 # Example
 
 ```jldoctest
-julia> A = Array(Bidiagonal(ones(5, 5), true))
+julia> A = Array(Bidiagonal(ones(5, 5), :U))
 5×5 Array{Float64,2}:
  1.0  1.0  0.0  0.0  0.0
  0.0  1.0  1.0  0.0  0.0
@@ -748,12 +748,12 @@ function factorize(A::StridedMatrix{T}) where T
                     return Diagonal(A)
                 end
                 if utri1
-                    return Bidiagonal(diag(A), diag(A, -1), false)
+                    return Bidiagonal(diag(A), diag(A, -1), :L)
                 end
                 return LowerTriangular(A)
             end
             if utri
-                return Bidiagonal(diag(A), diag(A, 1), true)
+                return Bidiagonal(diag(A), diag(A, 1), :U)
             end
             if utri1
                 if (herm & (T <: Complex)) | sym
@@ -780,7 +780,7 @@ function factorize(A::StridedMatrix{T}) where T
         end
         return lufact(A)
     end
-    qrfact(A, Val{true})
+    qrfact(A, Val(true))
 end
 
 ## Moore-Penrose pseudoinverse

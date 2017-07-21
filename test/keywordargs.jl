@@ -110,18 +110,18 @@ f18845() = 2
 @test_throws BoundsError extravagant_args(1; Any[[]]...)
 
 # keyword args with static parmeters
-kwf6{T}(x; k::T=1) = T
+kwf6(x; k::T=1) where {T} = T
 @test kwf6(1) === Int
 @test kwf6(1;k=2.5) === Float64
 
-kwf7{T}(x::T; k::T=1) = T
+kwf7(x::T; k::T=1) where {T} = T
 @test kwf7(2) === Int
 @test kwf7(1.5;k=2.5) === Float64
 @test_throws MethodError kwf7(1.5)
 @test_throws TypeError kwf7(1.5;k=2)
 
 # try to confuse it with quoted symbol
-kwf8{T}(x::MIME{:T};k::T=0) = 0
+kwf8(x::MIME{:T};k::T=0) where {T} = 0
 @test kwf8(MIME{:T}()) === 0
 
 # issue #4538
@@ -272,7 +272,7 @@ end
 @test g21147(((1,),), 2) === Int
 
 # issue #21510
-f21510(; a::ANY = 2) = a
+f21510(; Base.@nospecialize a = 2) = a
 @test f21510(a=:b) == :b
 @test f21510() == 2
 

@@ -2916,7 +2916,7 @@ struct PR20889; x; end
 ^(::PR20530, p::Int) = 1
 ^(t::PR20889, b) = t.x + b
 ^(t::PR20889, b::Integer) = t.x + b
-Base.literal_pow{p}(::typeof(^), ::PR20530, ::Type{Val{p}}) = 2
+Base.literal_pow(::typeof(^), ::PR20530, ::Val{p}) where {p} = 2
 @testset "literal powers" begin
     x = PR20530()
     p = 2
@@ -2976,3 +2976,5 @@ f20065(B, i) = UInt8(B[i])
         end
     end
 end
+
+@test inv(3//4) === 4//3 === 1 / (3//4) === 1 // (3//4)

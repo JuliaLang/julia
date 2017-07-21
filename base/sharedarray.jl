@@ -579,9 +579,9 @@ end
 
 function print_shmem_limits(slen)
     try
-        if is_linux()
+        if Sys.islinux()
             pfx = "kernel"
-        elseif is_apple()
+        elseif Sys.isapple()
             pfx = "kern.sysv"
         elseif Sys.KERNEL == :FreeBSD || Sys.KERNEL == :DragonFly
             pfx = "kern.ipc"
@@ -592,9 +592,9 @@ function print_shmem_limits(slen)
             return
         end
 
-        shmmax_MB = div(parse(Int, split(readstring(`sysctl $(pfx).shmmax`))[end]), 1024*1024)
-        page_size = parse(Int, split(readstring(`getconf PAGE_SIZE`))[end])
-        shmall_MB = div(parse(Int, split(readstring(`sysctl $(pfx).shmall`))[end]) * page_size, 1024*1024)
+        shmmax_MB = div(parse(Int, split(read(`sysctl $(pfx).shmmax`, String))[end]), 1024*1024)
+        page_size = parse(Int, split(read(`getconf PAGE_SIZE`, String))[end])
+        shmall_MB = div(parse(Int, split(read(`sysctl $(pfx).shmall`, String))[end]) * page_size, 1024*1024)
 
         println("System max size of single shmem segment(MB) : ", shmmax_MB,
             "\nSystem max size of all shmem segments(MB) : ", shmall_MB,
@@ -633,7 +633,7 @@ end
 
 # platform-specific code
 
-if is_windows()
+if Sys.iswindows()
 function _shm_mmap_array(T, dims, shm_seg_name, mode)
     readonly = !((mode & JL_O_RDWR) == JL_O_RDWR)
     create = (mode & JL_O_CREAT) == JL_O_CREAT

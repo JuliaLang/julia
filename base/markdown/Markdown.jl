@@ -24,7 +24,7 @@ include(joinpath("render", "terminal", "render.jl"))
 export readme, license, @md_str, @doc_str
 
 parse(markdown::AbstractString; flavor = julia) = parse(IOBuffer(markdown), flavor = flavor)
-parse_file(file::AbstractString; flavor = julia) = parse(readstring(file), flavor = flavor)
+parse_file(file::AbstractString; flavor = julia) = parse(read(file, String), flavor = flavor)
 
 readme(pkg::AbstractString; flavor = github) = parse_file(Pkg.dir(pkg, "README.md"), flavor = flavor)
 readme(pkg::Module; flavor = github) = readme(string(pkg), flavor = flavor)

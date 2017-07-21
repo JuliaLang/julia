@@ -4,8 +4,19 @@
 @test true
 @test 1 == 1
 @test 1 != 2
+@test ==(1, 1)
+@test ==((1, 1)...)
+@test 1 ≈ 2 atol=1
 @test strip("\t  hi   \n") == "hi"
 @test strip("\t  this should fail   \n") != "hi"
+@test isequal(1, 1)
+@test isapprox(1, 1, atol=0.1)
+@test isapprox(1, 1; atol=0.1)
+@test isapprox(1, 1; [(:atol, 0)]...)
+
+# @test keyword precedence: post-semicolon keyword, suffix keyword, pre-semicolon keyword
+@test isapprox(1, 2, atol=0) atol=1
+@test isapprox(1, 3, atol=0; atol=2) atol=1
 
 # @test should only evaluate the arguments once
 let g = Int[], f = (x) -> (push!(g, x); x)
@@ -531,7 +542,7 @@ let io = IOBuffer()
     @test !contains(str, "backtrace()")
 end
 
-msg = readstring(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no -e '
+msg = read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no -e '
 using Base.Test
 
 foo(x) = length(x)^2
@@ -549,7 +560,7 @@ foo(x) = length(x)^2
         @test foo(zeros(2)) == 4
         @test foo(ones(4)) == 15
     end
-end'`), stderr=DevNull))
+end'`), stderr=DevNull), String)
 
 @test contains(msg,
 """
@@ -562,7 +573,7 @@ Foo Tests     |    2     2      4
 """)
 
 # 20489
-msg = split(readstring(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no -e '
-Test.print_test_results(Test.DefaultTestSet(""))'`), stderr=DevNull)), "\n")[1]
+msg = split(read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no -e '
+Test.print_test_results(Test.DefaultTestSet(""))'`), stderr=DevNull), String), "\n")[1]
 
 @test msg == rstrip(msg)

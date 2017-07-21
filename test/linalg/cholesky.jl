@@ -101,7 +101,7 @@ using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted, PosDefException
 
         # test chol of 2x2 Strang matrix
         S = convert(AbstractMatrix{eltya},full(SymTridiagonal([2,2],[-1])))
-        U = Bidiagonal([2,sqrt(eltya(3))],[-1],true) / sqrt(eltya(2))
+        U = Bidiagonal([2,sqrt(eltya(3))],[-1],:U) / sqrt(eltya(2))
         @test full(chol(S)) ≈ full(U)
 
         # test extraction of factor and re-creating original matrix
@@ -133,9 +133,9 @@ using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted, PosDefException
 
         #pivoted upper Cholesky
         if eltya != BigFloat
-            cz = cholfact(Hermitian(zeros(eltya,n,n)), Val{true})
+            cz = cholfact(Hermitian(zeros(eltya,n,n)), Val(true))
             @test_throws Base.LinAlg.RankDeficientException Base.LinAlg.chkfullrank(cz)
-            cpapd = cholfact(apdh, Val{true})
+            cpapd = cholfact(apdh, Val(true))
             @test rank(cpapd) == n
             @test all(diff(diag(real(cpapd.factors))).<=0.) # diagonal should be non-increasing
             if isreal(apd)
@@ -176,11 +176,11 @@ using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted, PosDefException
 
                 if eltya != BigFloat && eltyb != BigFloat # Note! Need to implement pivoted Cholesky decomposition in julia
 
-                    cpapd = cholfact(apdh, Val{true})
+                    cpapd = cholfact(apdh, Val(true))
                     @test norm(apd * (cpapd\b) - b)/norm(b) <= ε*κ*n # Ad hoc, revisit
                     @test norm(apd * (cpapd\b[1:n]) - b[1:n])/norm(b[1:n]) <= ε*κ*n
 
-                    lpapd = cholfact(apdhL, Val{true})
+                    lpapd = cholfact(apdhL, Val(true))
                     @test norm(apd * (lpapd\b) - b)/norm(b) <= ε*κ*n # Ad hoc, revisit
                     @test norm(apd * (lpapd\b[1:n]) - b[1:n])/norm(b[1:n]) <= ε*κ*n
 
@@ -252,7 +252,7 @@ end
         0.25336108035924787 + 0.975317836492159im 0.0628393808469436 - 0.1253397353973715im
         0.11192755545114 - 0.1603741874112385im 0.8439562576196216 + 1.0850814110398734im
         -1.0568488936791578 - 0.06025820467086475im 0.12696236014017806 - 0.09853584666755086im]
-    cholfact(Hermitian(apd, :L), Val{true}) \ b
+    cholfact(Hermitian(apd, :L), Val(true)) \ b
     r = factorize(apd)[:U]
     E = abs.(apd - r'*r)
     ε = eps(abs(float(one(Complex64))))
@@ -274,7 +274,7 @@ end
 end
 
 @testset "fail for non-BLAS element types" begin
-    @test_throws ArgumentError cholfact!(Hermitian(rand(Float16, 5,5)), Val{true})
+    @test_throws ArgumentError cholfact!(Hermitian(rand(Float16, 5,5)), Val(true))
 end
 
 @testset "throw for non positive definite matrix" begin

@@ -49,8 +49,8 @@ void* jl_get_globalvar(GlobalVariable *gv);
 GlobalVariable *jl_get_global_for(const char *cname, void *addr, Module *M);
 void jl_add_to_shadow(Module *m);
 void jl_init_function(Function *f);
-bool jl_can_finalize_function(Function *F);
-void jl_finalize_function(Function *F);
+bool jl_can_finalize_function(StringRef F);
+void jl_finalize_function(StringRef F);
 void jl_finalize_module(Module *m, bool shadow);
 
 // Connect Modules via prototypes, each owned by module `M`
@@ -69,39 +69,7 @@ static inline GlobalVariable *global_proto(GlobalVariable *G, Module *M = NULL)
     return proto;
 }
 
-static inline Function *function_proto(Function *F, Module *M = NULL)
-{
-    // Copy the declaration characteristics of the Function (not the body)
-    Function *NewF = Function::Create(F->getFunctionType(),
-                                      Function::ExternalLinkage,
-                                      F->getName(), M);
-
-    // Declarations are not allowed to have personality routines, but
-    // copyAttributesFrom sets them anyway. Temporarily unset the personality
-    // routine from `F`, since copying it and then resetting is more expensive
-    // as well as introducing an extra use from this unowned function, which
-    // can cause crashes in the LLVMContext's global destructor.
-    llvm::Constant *OldPersonalityFn = nullptr;
-    if (F->hasPersonalityFn()) {
-        OldPersonalityFn = F->getPersonalityFn();
-        F->setPersonalityFn(nullptr);
-    }
-
-     // FunctionType does not include any attributes. Copy them over manually
-     // as codegen may make decisions based on the presence of certain attributes
-     NewF->copyAttributesFrom(F);
-
-    if (OldPersonalityFn)
-        F->setPersonalityFn(OldPersonalityFn);
-
-    // DLLImport only needs to be set for the shadow module
-    // it just gets annoying in the JIT
-    NewF->setDLLStorageClass(GlobalValue::DefaultStorageClass);
-
-    return NewF;
-}
-
-static inline GlobalVariable *prepare_global(GlobalVariable *G, Module *M)
+static inline GlobalVariable *prepare_global_in(Module *M, GlobalVariable *G)
 {
     if (G->getParent() == M)
         return G;
@@ -202,6 +170,7 @@ extern JuliaOJIT *jl_ExecutionEngine;
 JL_DLLEXPORT extern LLVMContext jl_LLVMContext;
 
 Pass *createLowerPTLSPass(bool imaging_mode);
+Pass *createCombineMulAddPass();
 Pass *createLateLowerGCFramePass();
 Pass *createLowerExcHandlersPass();
 Pass *createGCInvariantVerifierPass(bool Strong);

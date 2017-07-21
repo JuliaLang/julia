@@ -64,7 +64,7 @@ mutable struct PromptState <: ModeState
     indent::Int
 end
 
-input_string(s::PromptState) = String(s.input_buffer)
+input_string(s::PromptState) = String(take!(copy(s.input_buffer)))
 
 input_string_newlines(s::PromptState) = count(c->(c == '\n'), input_string(s))
 function input_string_newlines_aftercursor(s::PromptState)
@@ -201,7 +201,7 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
     write_prompt(termbuf, prompt)
     prompt = prompt_string(prompt)
     # Count the '\n' at the end of the line if the terminal emulator does (specific to DOS cmd prompt)
-    miscountnl = @static is_windows() ? (isa(Terminals.pipe_reader(terminal), Base.TTY) && !Base.ispty(Terminals.pipe_reader(terminal))) : false
+    miscountnl = @static Sys.iswindows() ? (isa(Terminals.pipe_reader(terminal), Base.TTY) && !Base.ispty(Terminals.pipe_reader(terminal))) : false
     lindent = strwidth(prompt)
 
     # Now go through the buffer line by line
@@ -960,7 +960,7 @@ function write_response_buffer(s::PromptState, data)
     offset = s.input_buffer.ptr
     ptr = data.response_buffer.ptr
     seek(data.response_buffer, 0)
-    write(s.input_buffer, readstring(data.response_buffer))
+    write(s.input_buffer, read(data.response_buffer, String))
     s.input_buffer.ptr = offset + ptr - 2
     data.response_buffer.ptr = ptr
     refresh_line(s)
@@ -1045,7 +1045,7 @@ refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal,
     s::Union{PromptState,PrefixSearchState}) = s.ias =
     refresh_multi_line(termbuf, terminal, buffer(s), s.ias, s, indent = s.indent)
 
-input_string(s::PrefixSearchState) = String(s.response_buffer)
+input_string(s::PrefixSearchState) = String(take!(copy(s.response_buffer)))
 
 # a meta-prompt that presents itself as parent_prompt, but which has an independent keymap
 # for prefix searching
@@ -1101,7 +1101,7 @@ function refresh_multi_line(termbuf::TerminalBuffer, s::SearchState)
     offset = buf.ptr
     ptr = s.response_buffer.ptr
     seek(s.response_buffer, 0)
-    write(buf, readstring(s.response_buffer))
+    write(buf, read(s.response_buffer, String))
     buf.ptr = offset + ptr - 1
     s.response_buffer.ptr = ptr
     s.ias = refresh_multi_line(termbuf, s.terminal, buf, s.ias, s.backward ? "(reverse-i-search)`" : "(forward-i-search)`")
@@ -1574,7 +1574,7 @@ function run_interface(terminal, m::ModalInterface)
     while !s.aborted
         buf, ok, suspend = prompt!(terminal, m, s)
         while suspend
-            @static if is_unix(); ccall(:jl_repl_raise_sigtstp, Cint, ()); end
+            @static if Sys.isunix(); ccall(:jl_repl_raise_sigtstp, Cint, ()); end
             buf, ok, suspend = prompt!(terminal, m, s)
         end
         eval(Main,
@@ -1626,7 +1626,7 @@ function prompt!(term, prompt, s = init_state(term, prompt))
             elseif state === :done
                 return buffer(s), true, false
             elseif state === :suspend
-                if is_unix()
+                if Sys.isunix()
                     return buffer(s), true, true
                 end
             else

@@ -5,17 +5,25 @@
 # Assumes that row values in rowval for each column are sorted
 #      issorted(rowval[colptr[i]:(colptr[i+1]-1)]) == true
 
+"""
+    SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}
+
+Matrix type for storing sparse matrices in the
+[Compressed Sparse Column](@ref man-csc) format.
+"""
 struct SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}
     m::Int                  # Number of rows
     n::Int                  # Number of columns
     colptr::Vector{Ti}      # Column i is in colptr[i]:(colptr[i+1]-1)
-    rowval::Vector{Ti}      # Row values of nonzeros
-    nzval::Vector{Tv}       # Nonzero values
+    rowval::Vector{Ti}      # Row indices of stored values
+    nzval::Vector{Tv}       # Stored values, typically nonzeros
 
     function SparseMatrixCSC{Tv,Ti}(m::Integer, n::Integer, colptr::Vector{Ti}, rowval::Vector{Ti},
                                     nzval::Vector{Tv}) where {Tv,Ti<:Integer}
-        m < 0 && throw(ArgumentError("number of rows (m) must be ≥ 0, got $m"))
-        n < 0 && throw(ArgumentError("number of columns (n) must be ≥ 0, got $n"))
+        @noinline throwsz(str, lbl, k) =
+            throw(ArgumentError("number of $str ($lbl) must be ≥ 0, got $k"))
+        m < 0 && throwsz("rows", 'm', m)
+        n < 0 && throwsz("columns", 'n', n)
         new(Int(m), Int(n), colptr, rowval, nzval)
     end
 end
@@ -26,6 +34,24 @@ function SparseMatrixCSC(m::Integer, n::Integer, colptr::Vector, rowval::Vector,
 end
 
 size(S::SparseMatrixCSC) = (S.m, S.n)
+
+# Define an alias for views of a SparseMatrixCSC which include all rows and a unit range of the columns.
+# Also define a union of SparseMatrixCSC and this view since many methods can be defined efficiently for
+# this union by extracting the fields via the get function: getcolptr, getrowval, and getnzval. The key
+# insight is that getcolptr on a SparseMatrixCSCView returns an offset view of the colptr of the
+# underlying SparseMatrixCSC
+const SparseMatrixCSCView{Tv,Ti} =
+    SubArray{Tv,2,SparseMatrixCSC{Tv,Ti},
+        Tuple{Base.Slice{Base.OneTo{Int}},I}} where {I<:AbstractUnitRange}
+const SparseMatrixCSCUnion{Tv,Ti} = Union{SparseMatrixCSC{Tv,Ti}, SparseMatrixCSCView{Tv,Ti}}
+
+getcolptr(S::SparseMatrixCSC)     = S.colptr
+getcolptr(S::SparseMatrixCSCView) = view(S.parent.colptr, first(indices(S, 2)):(last(indices(S, 2)) + 1))
+getrowval(S::SparseMatrixCSC)     = S.rowval
+getrowval(S::SparseMatrixCSCView) = S.parent.rowval
+getnzval( S::SparseMatrixCSC)     = S.nzval
+getnzval( S::SparseMatrixCSCView) = S.parent.nzval
+
 
 """
     nnz(A)
@@ -149,7 +175,7 @@ function Base.show(io::IOContext, S::SparseMatrixCSC)
 
     function _format_line(r, col)
         pad = ndigits(max(S.m, S.n))
-        print(ioc, "  ", '[', rpad(S.rowval[r], pad), ", ", lpad(col, pad), "]  =  ")
+        print(ioc, "  [", rpad(S.rowval[r], pad), ", ", lpad(col, pad), "]  =  ")
         if isassigned(S.nzval, Int(r))
             show(ioc, S.nzval[r])
         else
@@ -171,19 +197,17 @@ function Base.show(io::IOContext, S::SparseMatrixCSC)
         count == print_count && break
     end
 
-    lines_bottom = String[]
     if !will_fit
-        count = 0
-        for col = reverse(1:S.n), r = reverse(nzrange(S, col))
-            count += 1
-            push!(lines_bottom, _format_line(r, col))
-            count == print_count && break
+        print(io, "\n  \u22ee")
+        # find the column to start printing in for the last print_count elements
+        nextcol = searchsortedfirst(S.colptr, nnz(S) - print_count + 1)
+        for r = (nnz(S) - print_count + 1) : (S.colptr[nextcol] - 1)
+            print(io, "\n", _format_line(r, nextcol - 1))
         end
-    end
-
-    if !will_fit
-        print(io, "\n  ", '\u22ee', "\n")
-        print(io, join(reverse(lines_bottom), '\n'))
+        # print all of the remaining columns
+        for col = nextcol:S.n, r = nzrange(S, col)
+            print(io, "\n", _format_line(r, col))
+        end
     end
 end
 
@@ -554,8 +578,8 @@ Parent of and expert driver for [`sparse`](@ref);
 see [`sparse`](@ref) for basic usage. This method
 allows the user to provide preallocated storage for `sparse`'s intermediate objects and
 result as described below. This capability enables more efficient successive construction
-of `SparseMatrixCSC`s from coordinate representations, and also enables extraction of an
-unsorted-column representation of the result's transpose at no additional cost.
+of [`SparseMatrixCSC`](@ref)s from coordinate representations, and also enables extraction
+of an unsorted-column representation of the result's transpose at no additional cost.
 
 This method consists of three major steps: (1) Counting-sort the provided coordinate
 representation into an unsorted-row CSR form including repeated entries. (2) Sweep through
@@ -736,7 +760,7 @@ end
 
 function sparse(B::Bidiagonal)
     m = length(B.dv)
-    B.isupper || return sparse([1:m;2:m],[1:m;1:m-1],[B.dv;B.ev], Int(m), Int(m)) # lower bidiagonal
+    B.uplo == 'U' || return sparse([1:m;2:m],[1:m;1:m-1],[B.dv;B.ev], Int(m), Int(m)) # lower bidiagonal
     return sparse([1:m;1:m-1],[1:m;2:m],[B.dv;B.ev], Int(m), Int(m)) # upper bidiagonal
 end
 
@@ -755,8 +779,8 @@ and  `length(X.nzval) >= nnz(A)`). Column-permutation `q`'s length must match `A
 count (`length(q) == A.n`).
 
 This method is the parent of several methods performing transposition and permutation
-operations on `SparseMatrixCSC`s. As this method performs no argument checking, prefer
-the safer child methods (`[c]transpose[!]`, `permute[!]`) to direct use.
+operations on [`SparseMatrixCSC`](@ref)s. As this method performs no argument checking,
+prefer the safer child methods (`[c]transpose[!]`, `permute[!]`) to direct use.
 
 This method implements the `HALFPERM` algorithm described in F. Gustavson, "Two fast
 algorithms for sparse matrices: multiplication and permuted transposition," ACM TOMS 4(3),
@@ -794,7 +818,7 @@ position forward in `X.colptr`, computes `map(f, transpose(A[:,q]))` by appropri
 distributing `A.rowval` and `f`-transformed `A.nzval` into `X.rowval` and `X.nzval`
 respectively. Simultaneously fixes the one-position-forward shift in `X.colptr`.
 """
-function _distributevals_halfperm!(X::SparseMatrixCSC{Tv,Ti},
+@noinline function _distributevals_halfperm!(X::SparseMatrixCSC{Tv,Ti},
         A::SparseMatrixCSC{Tv,Ti}, q::AbstractVector{<:Integer}, f::Function) where {Tv,Ti}
     @inbounds for Xi in 1:A.n
         Aj = q[Xi]
@@ -874,8 +898,8 @@ end
         C::SparseMatrixCSC{Tv,Ti}, workcolptr::Vector{Ti}) where {Tv,Ti}
 
 See [`permute!`](@ref) for basic usage. Parent of `permute!`
-methods operating on `SparseMatrixCSC`s where the source and destination matrices are the
-same. See `unchecked_noalias_permute!`
+methods operating on [`SparseMatrixCSC`](@ref)s where the source and destination matrices
+are the same. See `unchecked_noalias_permute!`
 for additional information; these methods are identical but for this method's requirement of
 the additional `workcolptr`, `length(workcolptr) >= A.n + 1`, which enables efficient
 handling of the source-destination aliasing.

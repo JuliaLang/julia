@@ -29,11 +29,6 @@ $(SRCDIR)/srccache/$(MBEDTLS_SRC)/source-extracted: $(SRCDIR)/srccache/$(MBEDTLS
 	touch -c $(SRCDIR)/srccache/$(MBEDTLS_SRC)/CMakeLists.txt # old target
 	echo 1 > $@
 
-$(SRCDIR)/srccache/$(MBEDTLS_SRC)/mbedtls-ssl.h.patch-applied: $(SRCDIR)/srccache/$(MBEDTLS_SRC)/source-extracted
-	cd $(SRCDIR)/srccache/$(MBEDTLS_SRC)/include/mbedtls && patch -p0 -f < $(SRCDIR)/patches/mbedtls-ssl.h.patch
-	echo 1 > $@
-$(BUILDDIR)/$(MBEDTLS_SRC)/build-configured: $(SRCDIR)/srccache/$(MBEDTLS_SRC)/mbedtls-ssl.h.patch-applied
-
 $(BUILDDIR)/$(MBEDTLS_SRC)/build-configured: $(SRCDIR)/srccache/$(MBEDTLS_SRC)/source-extracted
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \

@@ -701,7 +701,7 @@ let m_error, error_out, filename = Base.source_path()
     @test error_out == "syntax: keyword argument \"B\" needs a default value"
 
     # issue #20614
-    m_error = try @eval foo{N}(types::NTuple{N}, values::Vararg{Any,N}, c) = nothing; catch e; e; end
+    m_error = try @eval foo(types::NTuple{N}, values::Vararg{Any,N}, c) where {N} = nothing; catch e; e; end
     error_out = sprint(showerror, m_error)
     @test startswith(error_out, "ArgumentError: Vararg on non-final argument")
 end
@@ -808,7 +808,7 @@ for op in ["+", "-", "\$", "|", ".+", ".-", "*", ".*"]
 end
 
 # issue #17701
-@test expand(Main, :(i==3 && i+=1)) == Expr(:error, "invalid assignment location \"==(i,3)&&i\"")
+@test expand(Main, :(i==3 && i+=1)) == Expr(:error, "invalid assignment location \"==(i,3) && i\"")
 
 # issue #18667
 @test expand(Main, :(true = 1)) == Expr(:error, "invalid assignment location \"true\"")
@@ -1220,6 +1220,37 @@ let f(x) =
     @test functionloc(f(1))[2] > functionloc(f)[2]
 end
 
+# let-bound functions with `where` and static parameters
+@test let f()::Int = 2.0
+    f()
+end === 2
+@test let (f(x::T)::Tuple{Int,Any}) where {T} = (3.0, T)
+    f("")
+end === (3, String)
+
 # issue #19351
 # adding return type decl should not affect parse of function body
 @test :(t(abc) = 3).args[2] == :(t(abc)::Int = 3).args[2]
+
+# issue #7314
+@test parse("local x, y = 1, 2") == Expr(:local, Expr(:(=),
+                                                      Expr(:tuple, :x, :y),
+                                                      Expr(:tuple, 1, 2)))
+
+@test_throws ParseError parse("[2for i=1:10]")
+@test_throws ParseError parse("[1 for i in 1:2for j in 2]")
+@test_throws ParseError parse("(1 for i in 1:2for j in 2)")
+# issue #20441
+@test_throws ParseError parse("[x.2]")
+@test_throws ParseError parse("x.2")
+@test parse("[x;.2]") == Expr(:vcat, :x, 0.2)
+
+# issue #22840
+@test parse("[:a :b]") == Expr(:hcat, QuoteNode(:a), QuoteNode(:b))
+
+# issue #22868
+@test_throws ParseError parse("x@time 2")
+@test_throws ParseError parse("@ time")
+
+# issue #7479
+@test expand(Main, parse("(true &&& false)")) == Expr(:error, "misplaced \"&\" expression")
