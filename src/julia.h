@@ -1,7 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#ifndef JL_JULIA_H
-#define JL_JULIA_H
+#ifndef JULIA_H
+#define JULIA_H
 
 //** Configuration options that affect the Julia ABI **//
 // if this is not defined, only individual dimension sizes are

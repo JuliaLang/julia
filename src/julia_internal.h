@@ -1,7 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#ifndef JL_JULIA_INTERNAL_H
-#define JL_JULIA_INTERNAL_H
+#ifndef JL_INTERNAL_H
+#define JL_INTERNAL_H
 
 #include "options.h"
 #include <uv.h>
