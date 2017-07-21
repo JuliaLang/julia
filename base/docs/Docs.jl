@@ -379,7 +379,7 @@ function summarize(io::IO, λ::Function, binding)
 end
 
 function summarize(io::IO, T::DataType, binding)
-    println(io, "**Summary:**")
+    println(io, "# Summary")
     println(io, "```")
     println(io,
             T.abstract ? "abstract type" :
@@ -389,7 +389,7 @@ function summarize(io::IO, T::DataType, binding)
             )
     println(io, "```")
     if !T.abstract && T.name !== Tuple.name && !isempty(fieldnames(T))
-        println(io, "**Fields:**")
+        println(io, "# Fields")
         println(io, "```")
         pad = maximum(length(string(f)) for f in fieldnames(T))
         for (f, t) in zip(fieldnames(T), T.types)
@@ -398,7 +398,7 @@ function summarize(io::IO, T::DataType, binding)
         println(io, "```")
     end
     if !isempty(subtypes(T))
-        println(io, "**Subtypes:**")
+        println(io, "# Subtypes")
         println(io, "```")
         for t in subtypes(T)
             println(io, t)
@@ -406,7 +406,7 @@ function summarize(io::IO, T::DataType, binding)
         println(io, "```")
     end
     if supertype(T) != Any
-        println(io, "**Supertype Hierarchy:**")
+        println(io, "# Supertype Hierarchy")
         println(io, "```")
         Base.show_supertypes(io, T)
         println(io)
