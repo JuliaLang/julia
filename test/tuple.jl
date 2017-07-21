@@ -258,3 +258,7 @@ end
 for n = 0:15
     @test ntuple(identity, Val{n}) == ntuple(identity, n)
 end
+
+# https://github.com/JuliaLang/julia/issues/21026#issuecomment-317113307
+const VecTuple21026{T} = Tuple{VecElement{T}}
+@test convert(VecTuple21026, (1,)) === (VecElement(1),)
