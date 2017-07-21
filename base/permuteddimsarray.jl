@@ -25,8 +25,7 @@ that no copying occurs (`B` shares storage with `A`).
 
 See also: [`permutedims`](@ref).
 
-# Example
-
+# Examples
 ```jldoctest
 julia> A = rand(3,5,4);
 
@@ -86,7 +85,7 @@ equivalent to `permutedims(A, [2,1])`.
 
 See also: [`PermutedDimsArray`](@ref).
 
-# Example
+# Examples
 ```jldoctest
 julia> A = reshape(collect(1:8), (2,2,2))
 2×2×2 Array{Int64,3}:

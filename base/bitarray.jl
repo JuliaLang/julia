@@ -368,6 +368,7 @@ end
 
 Create a `BitArray` with all values set to `false`.
 
+# Examples
 ```jldoctest
 julia> falses(2,3)
 2×3 BitArray{2}:
@@ -382,6 +383,7 @@ falses(dims::Integer...) = falses(map(Int,dims))
 
 Create a `BitArray` with all values set to `false` of the same shape as `A`.
 
+# Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
 2×2 Array{Int64,2}:
@@ -401,6 +403,7 @@ falses(A::AbstractArray) = falses(size(A))
 
 Create a `BitArray` with all values set to `true`.
 
+# Examples
 ```jldoctest
 julia> trues(2,3)
 2×3 BitArray{2}:
@@ -415,6 +418,7 @@ trues(dims::Integer...) = trues(map(Int,dims))
 
 Create a `BitArray` with all values set to `true` of the same shape as `A`.
 
+# Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
 2×2 Array{Int64,2}:
@@ -1152,7 +1156,7 @@ end
 
 Performs a bitwise not operation on `B`. See [`~`](@ref).
 
-# Example
+# Examples
 ```jldoctest
 julia> A = trues(2,2)
 2×2 BitArray{2}:
@@ -1395,8 +1399,7 @@ with elements shifted `n` positions forward, filling with `false`
 values. If `n < 0`, elements are shifted backwards. Equivalent to
 `B << -n`.
 
-## Example
-
+# Examples
 ```jldoctest
 julia> B = BitVector([true, false, true, false, false])
 5-element BitArray{1}:
@@ -1434,8 +1437,7 @@ with elements shifted `n` positions backwards, filling with `false`
 values. If `n < 0`, elements are shifted forwards. Equivalent to
 `B >> -n`.
 
-## Examples
-
+# Examples
 ```jldoctest
 julia> B = BitVector([true, false, true, false, false])
 5-element BitArray{1}:

@@ -82,7 +82,7 @@ Subtraction operator.
 
 A string giving the literal bit representation of a number.
 
-# Example
+# Examples
 ```jldoctest
 julia> bits(4)
 "0000000000000000000000000000000000000000000000000000000000000100"
@@ -99,7 +99,7 @@ bits
 Retrieve the value(s) stored at the given key or index within a collection. The syntax
 `a[i,j,...]` is converted by the compiler to `getindex(a, i, j, ...)`.
 
-# Example
+# Examples
 ```jldoctest
 julia> A = Dict("a" => 1, "b" => 2)
 Dict{String,Int64} with 2 entries:
@@ -301,7 +301,7 @@ oftype
 
 Insert one or more `items` at the end of `collection`.
 
-# Example
+# Examples
 ```jldoctest
 julia> push!([1, 2, 3], 4, 5, 6)
 6-element Array{Int64,1}:
@@ -324,7 +324,7 @@ push!
 
 Convert all arguments to their common promotion type (if any), and return them all (as a tuple).
 
-# Example
+# Examples
 ```jldoctest
 julia> promote(Int8(1), Float16(4.5), Float32(4.1))
 (1.0f0, 4.5f0, 4.1f0)
@@ -411,7 +411,7 @@ dump
 
 Construct a tuple of the given objects.
 
-# Example
+# Examples
 ```jldoctest
 julia> tuple(1, 'a', pi)
 (1, 'a', π = 3.1415926535897...)
@@ -433,7 +433,7 @@ eachmatch
 
 Get a hexadecimal string of the binary representation of a floating point number.
 
-# Example
+# Examples
 ```jldoctest
 julia> num2hex(2.2)
 "400199999999999a"
@@ -624,7 +624,7 @@ copysign
 Extract a named field from a `value` of composite type. The syntax `a.b` calls
 `getfield(a, :b)`.
 
-# Example
+# Examples
 ```jldoctest
 julia> a = 1//2
 1//2
@@ -646,7 +646,6 @@ values at those indices is returned. Note that `select!` does not fully sort the
 array.
 
 # Examples
-
 ```jldoctest
 julia> a = [1, 2, 4, 3, 4]
 5-element Array{Int64,1}:
@@ -848,7 +847,7 @@ cglobal
 
 Returns the last index of the collection.
 
-# Example
+# Examples
 ```jldoctest
 julia> endof([1,2,4])
 3
@@ -1082,7 +1081,7 @@ bswap
 
 Delete the mapping for the given key in a collection, and return the collection.
 
-# Example
+# Examples
 ```jldoctest
 julia> d = Dict("a"=>1, "b"=>2)
 Dict{String,Int64} with 2 entries:
@@ -1095,7 +1094,6 @@ Dict{String,Int64} with 1 entry:
 ```
 """
 delete!
-
 
 """
     big(x)
@@ -1200,7 +1198,7 @@ read(stream, t)
 
 Remove the first `item` from `collection`.
 
-# Example
+# Examples
 ```jldoctest
 julia> A = [1, 2, 3, 4, 5, 6]
 6-element Array{Int64,1}:
@@ -1344,7 +1342,7 @@ DomainError
 Create a `Task` (i.e. coroutine) to execute the given function (which must be
 callable with no arguments). The task exits when this function returns.
 
-# Example
+# Examples
 ```jldoctest
 julia> a() = det(rand(1000, 1000));
 
@@ -1732,13 +1730,15 @@ type automatically.
 
 For example:
 
-    function foo()
-        # body
+```julia
+function foo()
+    # body
 
-        retval::Float64
-    end
+    retval::Float64
+end
 
-    bar = cfunction(foo, Float64, ())
+bar = cfunction(foo, Float64, ())
+```
 """
 cfunction
 

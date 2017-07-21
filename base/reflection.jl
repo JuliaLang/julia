@@ -990,7 +990,7 @@ defined, this returns `false`.
 
 For parametric types, the `ambiguous_bottom` keyword argument controls whether
 `Union{}` counts as an ambiguous intersection of type parameters – when `true`,
-it is considered ambiguous, when `false` it is not. For example:
+it is considered ambiguous, when `false` it is not.
 
 # Examples
 ```jldoctest

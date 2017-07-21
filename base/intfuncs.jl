@@ -831,7 +831,7 @@ end
 
 Number of ways to choose `k` out of `n` items.
 
-# Example
+# Examples
 ```jldoctest
 julia> binomial(5, 3)
 10

@@ -691,8 +691,7 @@ fldmod1(x::T, y::T) where {T<:Integer} = (fld1(x,y), mod1(x,y))
 
 The conjugate transposition operator (`'`).
 
-# Example
-
+# Examples
 ```jldoctest
 julia> A =  [3+2im 9+2im; 8+7im  4+6im]
 2×2 Array{Complex{Int64},2}:
@@ -904,8 +903,9 @@ julia> map(uppercase∘hex, 250:255)
     !f::Function
 
 Predicate function negation: when the argument of `!` is a function, it returns a
-function which computes the boolean negation of `f`. Example:
+function which computes the boolean negation of `f`.
 
+# Examples
 ```jldoctest
 julia> str = "∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε"
 "∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε"

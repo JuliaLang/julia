@@ -10,7 +10,7 @@ import Base.LinAlg: SingularException
 Generically sized uniform scaling operator defined as a scalar times the
 identity operator, `λ*I`. See also [`I`](@ref).
 
-# Example
+# Examples
 ```jldoctest
 julia> J = UniformScaling(2.)
 UniformScaling{Float64}
@@ -36,8 +36,7 @@ end
 
 An object of type [`UniformScaling`](@ref), representing an identity matrix of any size.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> ones(5, 6) * I == ones(5, 6)
 true
