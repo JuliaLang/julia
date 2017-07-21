@@ -4685,7 +4685,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Core.tuple",
     "category": "Function",
-    "text": "tuple(xs...)\n\nConstruct a tuple of the given objects.\n\nExample\n\njulia> tuple(1, 'a', pi)\n(1, 'a', π = 3.1415926535897...)\n\n\n\n"
+    "text": "tuple(xs...)\n\nConstruct a tuple of the given objects.\n\nExamples\n\njulia> tuple(1, 'a', pi)\n(1, 'a', π = 3.1415926535897...)\n\n\n\n"
 },
 
 {
@@ -4773,7 +4773,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.promote",
     "category": "Function",
-    "text": "promote(xs...)\n\nConvert all arguments to their common promotion type (if any), and return them all (as a tuple).\n\nExample\n\njulia> promote(Int8(1), Float16(4.5), Float32(4.1))\n(1.0f0, 4.5f0, 4.1f0)\n\n\n\n"
+    "text": "promote(xs...)\n\nConvert all arguments to their common promotion type (if any), and return them all (as a tuple).\n\nExamples\n\njulia> promote(Int8(1), Float16(4.5), Float32(4.1))\n(1.0f0, 4.5f0, 4.1f0)\n\n\n\n"
 },
 
 {
@@ -4933,7 +4933,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Core.getfield",
     "category": "Function",
-    "text": "getfield(value, name::Symbol)\n\nExtract a named field from a value of composite type. The syntax a.b calls getfield(a, :b).\n\nExample\n\njulia> a = 1//2\n1//2\n\njulia> getfield(a, :num)\n1\n\n\n\n"
+    "text": "getfield(value, name::Symbol)\n\nExtract a named field from a value of composite type. The syntax a.b calls getfield(a, :b).\n\nExamples\n\njulia> a = 1//2\n1//2\n\njulia> getfield(a, :num)\n1\n\n\n\n"
 },
 
 {
@@ -5013,7 +5013,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Essentials",
     "title": "Base.Enums.@enum",
     "category": "Macro",
-    "text": "@enum EnumName[::BaseType] EnumValue1[=x] EnumValue2[=y]\n\nCreate an Enum{BaseType} subtype with name EnumName and enum member values of EnumValue1 and EnumValue2 with optional assigned values of x and y, respectively. EnumName can be used just like other types and enum member values as regular values, such as\n\njulia> @enum Fruit apple=1 orange=2 kiwi=3\n\njulia> f(x::Fruit) = \"I'm a Fruit with value: $(Int(x))\"\nf (generic function with 1 method)\n\njulia> f(apple)\n\"I'm a Fruit with value: 1\"\n\nBaseType, which defaults to Int32, must be a primitive subtype of Integer. Member values can be converted between the enum type and BaseType. read and write perform these conversions automatically.\n\n\n\n"
+    "text": "@enum EnumName[::BaseType] EnumValue1[=x] EnumValue2[=y]\n\nCreate an Enum{BaseType} subtype with name EnumName and enum member values of EnumValue1 and EnumValue2 with optional assigned values of x and y, respectively. EnumName can be used just like other types and enum member values as regular values, such as\n\nExamples\n\njulia> @enum Fruit apple=1 orange=2 kiwi=3\n\njulia> f(x::Fruit) = \"I'm a Fruit with value: $(Int(x))\"\nf (generic function with 1 method)\n\njulia> f(apple)\n\"I'm a Fruit with value: 1\"\n\nBaseType, which defaults to Int32, must be a primitive subtype of Integer. Member values can be converted between the enum type and BaseType. read and write perform these conversions automatically.\n\n\n\n"
 },
 
 {
@@ -6317,7 +6317,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.unique",
     "category": "Function",
-    "text": "unique(itr)\n\nReturn an array containing only the unique elements of collection itr, as determined by isequal, in the order that the first of each set of equivalent elements originally appears.\n\nExample\n\njulia> unique([1, 2, 6, 2])\n3-element Array{Int64,1}:\n 1\n 2\n 6\n\n\n\nunique(f, itr)\n\nReturns an array containing one value from itr for each unique value produced by f applied to elements of itr.\n\nExample\n\njulia> unique(x -> x^2, [1, -1, 3, -3, 4])\n3-element Array{Int64,1}:\n 1\n 3\n 4\n\n\n\nunique(A::AbstractArray, dim::Int)\n\nReturn unique regions of A along dimension dim.\n\nExamples\n\njulia> A = map(isodd, reshape(collect(1:8), (2,2,2)))\n2×2×2 Array{Bool,3}:\n[:, :, 1] =\n  true   true\n false  false\n\n[:, :, 2] =\n  true   true\n false  false\n\njulia> unique(A)\n2-element Array{Bool,1}:\n  true\n false\n\njulia> unique(A, 2)\n2×1×2 Array{Bool,3}:\n[:, :, 1] =\n  true\n false\n\n[:, :, 2] =\n  true\n false\n\njulia> unique(A, 3)\n2×2×1 Array{Bool,3}:\n[:, :, 1] =\n  true   true\n false  false\n\n\n\n"
+    "text": "unique(itr)\n\nReturn an array containing only the unique elements of collection itr, as determined by isequal, in the order that the first of each set of equivalent elements originally appears.\n\nExamples\n\njulia> unique([1, 2, 6, 2])\n3-element Array{Int64,1}:\n 1\n 2\n 6\n\n\n\nunique(f, itr)\n\nReturns an array containing one value from itr for each unique value produced by f applied to elements of itr.\n\nExamples\n\njulia> unique(x -> x^2, [1, -1, 3, -3, 4])\n3-element Array{Int64,1}:\n 1\n 3\n 4\n\n\n\nunique(A::AbstractArray, dim::Int)\n\nReturn unique regions of A along dimension dim.\n\nExamples\n\njulia> A = map(isodd, reshape(collect(1:8), (2,2,2)))\n2×2×2 Array{Bool,3}:\n[:, :, 1] =\n  true   true\n false  false\n\n[:, :, 2] =\n  true   true\n false  false\n\njulia> unique(A)\n2-element Array{Bool,1}:\n  true\n false\n\njulia> unique(A, 2)\n2×1×2 Array{Bool,3}:\n[:, :, 1] =\n  true\n false\n\n[:, :, 2] =\n  true\n false\n\njulia> unique(A, 3)\n2×2×1 Array{Bool,3}:\n[:, :, 1] =\n  true   true\n false  false\n\n\n\n"
 },
 
 {
@@ -6445,7 +6445,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.extrema",
     "category": "Method",
-    "text": "extrema(A, dims) -> Array{Tuple}\n\nCompute the minimum and maximum elements of an array over the given dimensions.\n\nExample\n\njulia> A = reshape(collect(1:2:16), (2,2,2))\n2×2×2 Array{Int64,3}:\n[:, :, 1] =\n 1  5\n 3  7\n\n[:, :, 2] =\n  9  13\n 11  15\n\njulia> extrema(A, (1,2))\n1×1×2 Array{Tuple{Int64,Int64},3}:\n[:, :, 1] =\n (1, 7)\n\n[:, :, 2] =\n (9, 15)\n\n\n\n"
+    "text": "extrema(A, dims) -> Array{Tuple}\n\nCompute the minimum and maximum elements of an array over the given dimensions.\n\nExamples\n\njulia> A = reshape(collect(1:2:16), (2,2,2))\n2×2×2 Array{Int64,3}:\n[:, :, 1] =\n 1  5\n 3  7\n\n[:, :, 2] =\n  9  13\n 11  15\n\njulia> extrema(A, (1,2))\n1×1×2 Array{Tuple{Int64,Int64},3}:\n[:, :, 1] =\n (1, 7)\n\n[:, :, 2] =\n (9, 15)\n\n\n\n"
 },
 
 {
@@ -6621,7 +6621,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.foreach",
     "category": "Function",
-    "text": "foreach(f, c...) -> Void\n\nCall function f on each element of iterable c. For multiple iterable arguments, f is called elementwise. foreach should be used instead of map when the results of f are not needed, for example in foreach(println, array).\n\nExample\n\njulia> a = 1:3:7;\n\njulia> foreach(x -> println(x^2), a)\n1\n16\n49\n\n\n\n"
+    "text": "foreach(f, c...) -> Void\n\nCall function f on each element of iterable c. For multiple iterable arguments, f is called elementwise. foreach should be used instead of map when the results of f are not needed, for example in foreach(println, array).\n\nExamples\n\njulia> a = 1:3:7;\n\njulia> foreach(x -> println(x^2), a)\n1\n16\n49\n\n\n\n"
 },
 
 {
@@ -6637,7 +6637,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.map!",
     "category": "Function",
-    "text": "map!(function, destination, collection...)\n\nLike map, but stores the result in destination rather than a new collection. destination must be at least as large as the first collection.\n\nExample\n\njulia> x = zeros(3);\n\njulia> map!(x -> x * 2, x, [1, 2, 3]);\n\njulia> x\n3-element Array{Float64,1}:\n 2.0\n 4.0\n 6.0\n\n\n\n"
+    "text": "map!(function, destination, collection...)\n\nLike map, but stores the result in destination rather than a new collection. destination must be at least as large as the first collection.\n\nExamples\n\njulia> x = zeros(3);\n\njulia> map!(x -> x * 2, x, [1, 2, 3]);\n\njulia> x\n3-element Array{Float64,1}:\n 2.0\n 4.0\n 6.0\n\n\n\n"
 },
 
 {
@@ -6693,7 +6693,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.first",
     "category": "Function",
-    "text": "first(coll)\n\nGet the first element of an iterable collection. Returns the start point of a Range even if it is empty.\n\njulia> first(2:2:10)\n2\n\njulia> first([1; 2; 3; 4])\n1\n\n\n\n"
+    "text": "first(coll)\n\nGet the first element of an iterable collection. Returns the start point of a Range even if it is empty.\n\nExamples\n\njulia> first(2:2:10)\n2\n\njulia> first([1; 2; 3; 4])\n1\n\n\n\n"
 },
 
 {
@@ -6701,7 +6701,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.last",
     "category": "Function",
-    "text": "last(coll)\n\nGet the last element of an ordered collection, if it can be computed in O(1) time. This is accomplished by calling endof to get the last index. Returns the end point of a Range even if it is empty.\n\njulia> last(1:2:10)\n9\n\njulia> last([1; 2; 3; 4])\n4\n\n\n\n"
+    "text": "last(coll)\n\nGet the last element of an ordered collection, if it can be computed in O(1) time. This is accomplished by calling endof to get the last index. Returns the end point of a Range even if it is empty.\n\nExamples\n\njulia> last(1:2:10)\n9\n\njulia> last([1; 2; 3; 4])\n4\n\n\n\n"
 },
 
 {
@@ -6765,7 +6765,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.getindex",
     "category": "Method",
-    "text": "getindex(collection, key...)\n\nRetrieve the value(s) stored at the given key or index within a collection. The syntax a[i,j,...] is converted by the compiler to getindex(a, i, j, ...).\n\nExample\n\njulia> A = Dict(\"a\" => 1, \"b\" => 2)\nDict{String,Int64} with 2 entries:\n  \"b\" => 2\n  \"a\" => 1\n\njulia> getindex(A, \"a\")\n1\n\n\n\n"
+    "text": "getindex(collection, key...)\n\nRetrieve the value(s) stored at the given key or index within a collection. The syntax a[i,j,...] is converted by the compiler to getindex(a, i, j, ...).\n\nExamples\n\njulia> A = Dict(\"a\" => 1, \"b\" => 2)\nDict{String,Int64} with 2 entries:\n  \"b\" => 2\n  \"a\" => 1\n\njulia> getindex(A, \"a\")\n1\n\n\n\n"
 },
 
 {
@@ -6781,7 +6781,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.endof",
     "category": "Function",
-    "text": "endof(collection) -> Integer\n\nReturns the last index of the collection.\n\nExample\n\njulia> endof([1,2,4])\n3\n\n\n\n"
+    "text": "endof(collection) -> Integer\n\nReturns the last index of the collection.\n\nExamples\n\njulia> endof([1,2,4])\n3\n\n\n\n"
 },
 
 {
@@ -6869,7 +6869,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.delete!",
     "category": "Function",
-    "text": "delete!(collection, key)\n\nDelete the mapping for the given key in a collection, and return the collection.\n\nExample\n\njulia> d = Dict(\"a\"=>1, \"b\"=>2)\nDict{String,Int64} with 2 entries:\n  \"b\" => 2\n  \"a\" => 1\n\njulia> delete!(d, \"b\")\nDict{String,Int64} with 1 entry:\n  \"a\" => 1\n\n\n\n"
+    "text": "delete!(collection, key)\n\nDelete the mapping for the given key in a collection, and return the collection.\n\nExamples\n\njulia> d = Dict(\"a\"=>1, \"b\"=>2)\nDict{String,Int64} with 2 entries:\n  \"b\" => 2\n  \"a\" => 1\n\njulia> delete!(d, \"b\")\nDict{String,Int64} with 1 entry:\n  \"a\" => 1\n\n\n\n"
 },
 
 {
@@ -6885,7 +6885,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.keys",
     "category": "Function",
-    "text": "keys(a::Associative)\n\nReturn an iterator over all keys in a collection. collect(keys(a)) returns an array of keys. Since the keys are stored internally in a hash table, the order in which they are returned may vary. But keys(a) and values(a) both iterate a and return the elements in the same order.\n\njulia> a = Dict('a'=>2, 'b'=>3)\nDict{Char,Int64} with 2 entries:\n  'b' => 3\n  'a' => 2\n\njulia> collect(keys(a))\n2-element Array{Char,1}:\n 'b'\n 'a'\n\n\n\n"
+    "text": "keys(a::Associative)\n\nReturn an iterator over all keys in a collection. collect(keys(a)) returns an array of keys. Since the keys are stored internally in a hash table, the order in which they are returned may vary. But keys(a) and values(a) both iterate a and return the elements in the same order.\n\nExamples\n\njulia> a = Dict('a'=>2, 'b'=>3)\nDict{Char,Int64} with 2 entries:\n  'b' => 3\n  'a' => 2\n\njulia> collect(keys(a))\n2-element Array{Char,1}:\n 'b'\n 'a'\n\n\n\n"
 },
 
 {
@@ -6893,7 +6893,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.values",
     "category": "Function",
-    "text": "values(a::Associative)\n\nReturn an iterator over all values in a collection. collect(values(a)) returns an array of values. Since the values are stored internally in a hash table, the order in which they are returned may vary. But keys(a) and values(a) both iterate a and return the elements in the same order.\n\njulia> a = Dict('a'=>2, 'b'=>3)\nDict{Char,Int64} with 2 entries:\n  'b' => 3\n  'a' => 2\n\njulia> collect(values(a))\n2-element Array{Int64,1}:\n 3\n 2\n\n\n\n"
+    "text": "values(a::Associative)\n\nReturn an iterator over all values in a collection. collect(values(a)) returns an array of values. Since the values are stored internally in a hash table, the order in which they are returned may vary. But keys(a) and values(a) both iterate a and return the elements in the same order.\n\nExamples\n\njulia> a = Dict('a'=>2, 'b'=>3)\nDict{Char,Int64} with 2 entries:\n  'b' => 3\n  'a' => 2\n\njulia> collect(values(a))\n2-element Array{Int64,1}:\n 3\n 2\n\n\n\n"
 },
 
 {
@@ -6901,7 +6901,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.merge",
     "category": "Function",
-    "text": "merge(d::Associative, others::Associative...)\n\nConstruct a merged collection from the given collections. If necessary, the types of the resulting collection will be promoted to accommodate the types of the merged collections. If the same key is present in another collection, the value for that key will be the value it has in the last collection listed.\n\njulia> a = Dict(\"foo\" => 0.0, \"bar\" => 42.0)\nDict{String,Float64} with 2 entries:\n  \"bar\" => 42.0\n  \"foo\" => 0.0\n\njulia> b = Dict(\"baz\" => 17, \"bar\" => 4711)\nDict{String,Int64} with 2 entries:\n  \"bar\" => 4711\n  \"baz\" => 17\n\njulia> merge(a, b)\nDict{String,Float64} with 3 entries:\n  \"bar\" => 4711.0\n  \"baz\" => 17.0\n  \"foo\" => 0.0\n\njulia> merge(b, a)\nDict{String,Float64} with 3 entries:\n  \"bar\" => 42.0\n  \"baz\" => 17.0\n  \"foo\" => 0.0\n\n\n\nmerge(combine, d::Associative, others::Associative...)\n\nConstruct a merged collection from the given collections. If necessary, the types of the resulting collection will be promoted to accommodate the types of the merged collections. Values with the same key will be combined using the combiner function.\n\njulia> a = Dict(\"foo\" => 0.0, \"bar\" => 42.0)\nDict{String,Float64} with 2 entries:\n  \"bar\" => 42.0\n  \"foo\" => 0.0\n\njulia> b = Dict(\"baz\" => 17, \"bar\" => 4711)\nDict{String,Int64} with 2 entries:\n  \"bar\" => 4711\n  \"baz\" => 17\n\njulia> merge(+, a, b)\nDict{String,Float64} with 3 entries:\n  \"bar\" => 4753.0\n  \"baz\" => 17.0\n  \"foo\" => 0.0\n\n\n\n"
+    "text": "merge(d::Associative, others::Associative...)\n\nConstruct a merged collection from the given collections. If necessary, the types of the resulting collection will be promoted to accommodate the types of the merged collections. If the same key is present in another collection, the value for that key will be the value it has in the last collection listed.\n\nExamples\n\njulia> a = Dict(\"foo\" => 0.0, \"bar\" => 42.0)\nDict{String,Float64} with 2 entries:\n  \"bar\" => 42.0\n  \"foo\" => 0.0\n\njulia> b = Dict(\"baz\" => 17, \"bar\" => 4711)\nDict{String,Int64} with 2 entries:\n  \"bar\" => 4711\n  \"baz\" => 17\n\njulia> merge(a, b)\nDict{String,Float64} with 3 entries:\n  \"bar\" => 4711.0\n  \"baz\" => 17.0\n  \"foo\" => 0.0\n\njulia> merge(b, a)\nDict{String,Float64} with 3 entries:\n  \"bar\" => 42.0\n  \"baz\" => 17.0\n  \"foo\" => 0.0\n\n\n\nmerge(combine, d::Associative, others::Associative...)\n\nConstruct a merged collection from the given collections. If necessary, the types of the resulting collection will be promoted to accommodate the types of the merged collections. Values with the same key will be combined using the combiner function.\n\nExamples\n\njulia> a = Dict(\"foo\" => 0.0, \"bar\" => 42.0)\nDict{String,Float64} with 2 entries:\n  \"bar\" => 42.0\n  \"foo\" => 0.0\n\njulia> b = Dict(\"baz\" => 17, \"bar\" => 4711)\nDict{String,Int64} with 2 entries:\n  \"bar\" => 4711\n  \"baz\" => 17\n\njulia> merge(+, a, b)\nDict{String,Float64} with 3 entries:\n  \"bar\" => 4753.0\n  \"baz\" => 17.0\n  \"foo\" => 0.0\n\n\n\n"
 },
 
 {
@@ -6909,7 +6909,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.merge!",
     "category": "Method",
-    "text": "merge!(d::Associative, others::Associative...)\n\nUpdate collection with pairs from the other collections. See also merge.\n\njulia> d1 = Dict(1 => 2, 3 => 4);\n\njulia> d2 = Dict(1 => 4, 4 => 5);\n\njulia> merge!(d1, d2);\n\njulia> d1\nDict{Int64,Int64} with 3 entries:\n  4 => 5\n  3 => 4\n  1 => 4\n\n\n\n"
+    "text": "merge!(d::Associative, others::Associative...)\n\nUpdate collection with pairs from the other collections. See also merge.\n\nExamples\n\njulia> d1 = Dict(1 => 2, 3 => 4);\n\njulia> d2 = Dict(1 => 4, 4 => 5);\n\njulia> merge!(d1, d2);\n\njulia> d1\nDict{Int64,Int64} with 3 entries:\n  4 => 5\n  3 => 4\n  1 => 4\n\n\n\n"
 },
 
 {
@@ -6917,7 +6917,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.merge!",
     "category": "Method",
-    "text": "merge!(combine, d::Associative, others::Associative...)\n\nUpdate collection with pairs from the other collections. Values with the same key will be combined using the combiner function.\n\njulia> d1 = Dict(1 => 2, 3 => 4);\n\njulia> d2 = Dict(1 => 4, 4 => 5);\n\njulia> merge!(+, d1, d2);\n\njulia> d1\nDict{Int64,Int64} with 3 entries:\n  4 => 5\n  3 => 4\n  1 => 6\n\njulia> merge!(-, d1, d1);\n\njulia> d1\nDict{Int64,Int64} with 3 entries:\n  4 => 0\n  3 => 0\n  1 => 0\n\n\n\n"
+    "text": "merge!(combine, d::Associative, others::Associative...)\n\nUpdate collection with pairs from the other collections. Values with the same key will be combined using the combiner function.\n\nExamples\n\njulia> d1 = Dict(1 => 2, 3 => 4);\n\njulia> d2 = Dict(1 => 4, 4 => 5);\n\njulia> merge!(+, d1, d2);\n\njulia> d1\nDict{Int64,Int64} with 3 entries:\n  4 => 5\n  3 => 4\n  1 => 6\n\njulia> merge!(-, d1, d1);\n\njulia> d1\nDict{Int64,Int64} with 3 entries:\n  4 => 0\n  3 => 0\n  1 => 0\n\n\n\n"
 },
 
 {
@@ -6933,7 +6933,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.keytype",
     "category": "Function",
-    "text": "keytype(type)\n\nGet the key type of an associative collection type. Behaves similarly to eltype.\n\njulia> keytype(Dict(Int32(1) => \"foo\"))\nInt32\n\n\n\n"
+    "text": "keytype(type)\n\nGet the key type of an associative collection type. Behaves similarly to eltype.\n\nExamples\n\njulia> keytype(Dict(Int32(1) => \"foo\"))\nInt32\n\n\n\n"
 },
 
 {
@@ -6941,7 +6941,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.valtype",
     "category": "Function",
-    "text": "valtype(type)\n\nGet the value type of an associative collection type. Behaves similarly to eltype.\n\njulia> valtype(Dict(Int32(1) => \"foo\"))\nString\n\n\n\n"
+    "text": "valtype(type)\n\nGet the value type of an associative collection type. Behaves similarly to eltype.\n\nExamples\n\njulia> valtype(Dict(Int32(1) => \"foo\"))\nString\n\n\n\n"
 },
 
 {
@@ -7069,7 +7069,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.push!",
     "category": "Function",
-    "text": "push!(collection, items...) -> collection\n\nInsert one or more items at the end of collection.\n\nExample\n\njulia> push!([1, 2, 3], 4, 5, 6)\n6-element Array{Int64,1}:\n 1\n 2\n 3\n 4\n 5\n 6\n\nUse append! to add all the elements of another collection to collection. The result of the preceding example is equivalent to append!([1, 2, 3], [4, 5, 6]).\n\n\n\n"
+    "text": "push!(collection, items...) -> collection\n\nInsert one or more items at the end of collection.\n\nExamples\n\njulia> push!([1, 2, 3], 4, 5, 6)\n6-element Array{Int64,1}:\n 1\n 2\n 3\n 4\n 5\n 6\n\nUse append! to add all the elements of another collection to collection. The result of the preceding example is equivalent to append!([1, 2, 3], [4, 5, 6]).\n\n\n\n"
 },
 
 {
@@ -7093,7 +7093,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Collections and Data Structures",
     "title": "Base.shift!",
     "category": "Function",
-    "text": "shift!(collection) -> item\n\nRemove the first item from collection.\n\nExample\n\njulia> A = [1, 2, 3, 4, 5, 6]\n6-element Array{Int64,1}:\n 1\n 2\n 3\n 4\n 5\n 6\n\njulia> shift!(A)\n1\n\njulia> A\n5-element Array{Int64,1}:\n 2\n 3\n 4\n 5\n 6\n\n\n\n"
+    "text": "shift!(collection) -> item\n\nRemove the first item from collection.\n\nExamples\n\njulia> A = [1, 2, 3, 4, 5, 6]\n6-element Array{Int64,1}:\n 1\n 2\n 3\n 4\n 5\n 6\n\njulia> shift!(A)\n1\n\njulia> A\n5-element Array{Int64,1}:\n 2\n 3\n 4\n 5\n 6\n\n\n\n"
 },
 
 {
@@ -7237,7 +7237,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.muladd",
     "category": "Function",
-    "text": "muladd(x, y, z)\n\nCombined multiply-add, computes x*y+z allowing the add and multiply to be contracted with each other or ones from other muladd and @fastmath to form fma if the transformation can improve performance. The result can be different on different machines and can also be different on the same machine due to constant propagation or other optimizations. See fma.\n\nExample\n\njulia> muladd(3, 2, 1)\n7\n\njulia> 3 * 2 + 1\n7\n\n\n\n"
+    "text": "muladd(x, y, z)\n\nCombined multiply-add, computes x*y+z allowing the add and multiply to be contracted with each other or ones from other muladd and @fastmath to form fma if the transformation can improve performance. The result can be different on different machines and can also be different on the same machine due to constant propagation or other optimizations. See fma.\n\nExamples\n\njulia> muladd(3, 2, 1)\n7\n\njulia> 3 * 2 + 1\n7\n\n\n\n"
 },
 
 {
@@ -7293,7 +7293,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.Math.rem2pi",
     "category": "Function",
-    "text": "rem2pi(x, r::RoundingMode)\n\nCompute the remainder of x after integer division by 2π, with the quotient rounded according to the rounding mode r. In other words, the quantity\n\nx - 2π*round(x/(2π),r)\n\nwithout any intermediate rounding. This internally uses a high precision approximation of 2π, and so will give a more accurate result than rem(x,2π,r)\n\nif r == RoundNearest, then the result is in the interval - . This will generally be the most accurate result.\nif r == RoundToZero, then the result is in the interval 0 2 if x is positive,. or -2 0 otherwise.\nif r == RoundDown, then the result is in the interval 0 2.\nif r == RoundUp, then the result is in the interval -2 0.\n\nExample\n\njulia> rem2pi(7pi/4, RoundNearest)\n-0.7853981633974485\n\njulia> rem2pi(7pi/4, RoundDown)\n5.497787143782138\n\n\n\n"
+    "text": "rem2pi(x, r::RoundingMode)\n\nCompute the remainder of x after integer division by 2π, with the quotient rounded according to the rounding mode r. In other words, the quantity\n\nx - 2π*round(x/(2π),r)\n\nwithout any intermediate rounding. This internally uses a high precision approximation of 2π, and so will give a more accurate result than rem(x,2π,r)\n\nif r == RoundNearest, then the result is in the interval - . This will generally be the most accurate result.\nif r == RoundToZero, then the result is in the interval 0 2 if x is positive,. or -2 0 otherwise.\nif r == RoundDown, then the result is in the interval 0 2.\nif r == RoundUp, then the result is in the interval -2 0.\n\nExamples\n\njulia> rem2pi(7pi/4, RoundNearest)\n-0.7853981633974485\n\njulia> rem2pi(7pi/4, RoundDown)\n5.497787143782138\n\n\n\n"
 },
 
 {
@@ -7301,7 +7301,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.Math.mod2pi",
     "category": "Function",
-    "text": "mod2pi(x)\n\nModulus after division by 2π, returning in the range 02).\n\nThis function computes a floating point representation of the modulus after division by numerically exact 2π, and is therefore not exactly the same as mod(x,2π), which would compute the modulus of x relative to division by the floating-point number 2π.\n\nExample\n\njulia> mod2pi(9*pi/4)\n0.7853981633974481\n\n\n\n"
+    "text": "mod2pi(x)\n\nModulus after division by 2π, returning in the range 02).\n\nThis function computes a floating point representation of the modulus after division by numerically exact 2π, and is therefore not exactly the same as mod(x,2π), which would compute the modulus of x relative to division by the floating-point number 2π.\n\nExamples\n\njulia> mod2pi(9*pi/4)\n0.7853981633974481\n\n\n\n"
 },
 
 {
@@ -7389,7 +7389,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:>>",
     "category": "Function",
-    "text": ">>(x, n)\n\nRight bit shift operator, x >> n. For n >= 0, the result is x shifted right by n bits, where n >= 0, filling with 0s if x >= 0, 1s if x < 0, preserving the sign of x. This is equivalent to fld(x, 2^n). For n < 0, this is equivalent to x << -n.\n\njulia> Int8(13) >> 2\n3\n\njulia> bits(Int8(13))\n\"00001101\"\n\njulia> bits(Int8(3))\n\"00000011\"\n\njulia> Int8(-14) >> 2\n-4\n\njulia> bits(Int8(-14))\n\"11110010\"\n\njulia> bits(Int8(-4))\n\"11111100\"\n\nSee also >>>, <<.\n\n\n\n>>(B::BitVector, n) -> BitVector\n\nRight bit shift operator, B >> n. For n >= 0, the result is B with elements shifted n positions forward, filling with false values. If n < 0, elements are shifted backwards. Equivalent to B << -n.\n\nExample\n\njulia> B = BitVector([true, false, true, false, false])\n5-element BitArray{1}:\n  true\n false\n  true\n false\n false\n\njulia> B >> 1\n5-element BitArray{1}:\n false\n  true\n false\n  true\n false\n\njulia> B >> -1\n5-element BitArray{1}:\n false\n  true\n false\n false\n false\n\n\n\n"
+    "text": ">>(x, n)\n\nRight bit shift operator, x >> n. For n >= 0, the result is x shifted right by n bits, where n >= 0, filling with 0s if x >= 0, 1s if x < 0, preserving the sign of x. This is equivalent to fld(x, 2^n). For n < 0, this is equivalent to x << -n.\n\njulia> Int8(13) >> 2\n3\n\njulia> bits(Int8(13))\n\"00001101\"\n\njulia> bits(Int8(3))\n\"00000011\"\n\njulia> Int8(-14) >> 2\n-4\n\njulia> bits(Int8(-14))\n\"11110010\"\n\njulia> bits(Int8(-4))\n\"11111100\"\n\nSee also >>>, <<.\n\n\n\n>>(B::BitVector, n) -> BitVector\n\nRight bit shift operator, B >> n. For n >= 0, the result is B with elements shifted n positions forward, filling with false values. If n < 0, elements are shifted backwards. Equivalent to B << -n.\n\nExamples\n\njulia> B = BitVector([true, false, true, false, false])\n5-element BitArray{1}:\n  true\n false\n  true\n false\n false\n\njulia> B >> 1\n5-element BitArray{1}:\n false\n  true\n false\n  true\n false\n\njulia> B >> -1\n5-element BitArray{1}:\n false\n  true\n false\n false\n false\n\n\n\n"
 },
 
 {
@@ -7525,7 +7525,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.xor",
     "category": "Function",
-    "text": "xor(x, y)\n⊻(x, y)\n\nBitwise exclusive or of x and y.  The infix operation a ⊻ b is a synonym for xor(a,b), and ⊻ can be typed by tab-completing \\xor or \\veebar in the Julia REPL.\n\njulia> [true; true; false] .⊻ [true; false; false]\n3-element BitArray{1}:\n false\n  true\n false\n\n\n\n"
+    "text": "xor(x, y)\n⊻(x, y)\n\nBitwise exclusive or of x and y.  The infix operation a ⊻ b is a synonym for xor(a,b), and ⊻ can be typed by tab-completing \\xor or \\veebar in the Julia REPL.\n\nExamples\n\njulia> [true; true; false] .⊻ [true; false; false]\n3-element BitArray{1}:\n false\n  true\n false\n\n\n\n"
 },
 
 {
@@ -7533,7 +7533,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.:!",
     "category": "Function",
-    "text": "!(x)\n\nBoolean not.\n\njulia> !true\nfalse\n\njulia> !false\ntrue\n\njulia> .![true false true]\n1×3 BitArray{2}:\n false  true  false\n\n\n\n!f::Function\n\nPredicate function negation: when the argument of ! is a function, it returns a function which computes the boolean negation of f. Example:\n\njulia> str = \"∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε\"\n\"∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε\"\n\njulia> filter(isalpha, str)\n\"εδxyδfxfyε\"\n\njulia> filter(!isalpha, str)\n\"∀  > 0, ∃  > 0: |-| <  ⇒ |()-()| < \"\n\n\n\n"
+    "text": "!(x)\n\nBoolean not.\n\nExamples\n\njulia> !true\nfalse\n\njulia> !false\ntrue\n\njulia> .![true false true]\n1×3 BitArray{2}:\n false  true  false\n\n\n\n!f::Function\n\nPredicate function negation: when the argument of ! is a function, it returns a function which computes the boolean negation of f.\n\nExamples\n\njulia> str = \"∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε\"\n\"∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε\"\n\njulia> filter(isalpha, str)\n\"εδxyδfxfyε\"\n\njulia> filter(!isalpha, str)\n\"∀  > 0, ∃  > 0: |-| <  ⇒ |()-()| < \"\n\n\n\n"
 },
 
 {
@@ -7949,7 +7949,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.log2",
     "category": "Function",
-    "text": "log2(x)\n\nCompute the logarithm of x to base 2. Throws DomainError for negative Real arguments.\n\nExample\n\njulia> log2(4)\n2.0\n\njulia> log2(10)\n3.321928094887362\n\n\n\n"
+    "text": "log2(x)\n\nCompute the logarithm of x to base 2. Throws DomainError for negative Real arguments.\n\nExamples\n\njulia> log2(4)\n2.0\n\njulia> log2(10)\n3.321928094887362\n\n\n\n"
 },
 
 {
@@ -7957,7 +7957,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.log10",
     "category": "Function",
-    "text": "log10(x)\n\nCompute the logarithm of x to base 10. Throws DomainError for negative Real arguments.\n\nExample\n\njulia> log10(100)\n2.0\n\njulia> log10(2)\n0.3010299956639812\n\n\n\n"
+    "text": "log10(x)\n\nCompute the logarithm of x to base 10. Throws DomainError for negative Real arguments.\n\nExamples\n\njulia> log10(100)\n2.0\n\njulia> log10(2)\n0.3010299956639812\n\n\n\n"
 },
 
 {
@@ -8005,7 +8005,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.Math.ldexp",
     "category": "Function",
-    "text": "ldexp(x, n)\n\nCompute x times 2^n.\n\nExample\n\njulia> ldexp(5., 2)\n20.0\n\n\n\n"
+    "text": "ldexp(x, n)\n\nCompute x times 2^n.\n\nExamples\n\njulia> ldexp(5., 2)\n20.0\n\n\n\n"
 },
 
 {
@@ -8013,7 +8013,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.Math.modf",
     "category": "Function",
-    "text": "modf(x)\n\nReturn a tuple (fpart,ipart) of the fractional and integral parts of a number. Both parts have the same sign as the argument.\n\nExample\n\njulia> modf(3.5)\n(0.5, 3.0)\n\n\n\n"
+    "text": "modf(x)\n\nReturn a tuple (fpart,ipart) of the fractional and integral parts of a number. Both parts have the same sign as the argument.\n\nExamples\n\njulia> modf(3.5)\n(0.5, 3.0)\n\n\n\n"
 },
 
 {
@@ -8381,7 +8381,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.conj",
     "category": "Function",
-    "text": "conj(v::RowVector)\n\nReturns a ConjArray lazy view of the input, where each element is conjugated.\n\nExample\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\nconj(z)\n\nCompute the complex conjugate of a complex number z.\n\nExamples\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\n"
+    "text": "conj(v::RowVector)\n\nReturns a ConjArray lazy view of the input, where each element is conjugated.\n\nExamples\n\njulia> v = [1+im, 1-im].'\n1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:\n 1+1im  1-1im\n\njulia> conj(v)\n1×2 RowVector{Complex{Int64},ConjArray{Complex{Int64},1,Array{Complex{Int64},1}}}:\n 1-1im  1+1im\n\n\n\nconj(z)\n\nCompute the complex conjugate of a complex number z.\n\nExamples\n\njulia> conj(1 + 3im)\n1 - 3im\n\n\n\n"
 },
 
 {
@@ -8405,7 +8405,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.binomial",
     "category": "Function",
-    "text": "binomial(n, k)\n\nNumber of ways to choose k out of n items.\n\nExample\n\njulia> binomial(5, 3)\n10\n\njulia> factorial(5) ÷ (factorial(5-3) * factorial(3))\n10\n\n\n\n"
+    "text": "binomial(n, k)\n\nNumber of ways to choose k out of n items.\n\nExamples\n\njulia> binomial(5, 3)\n10\n\njulia> factorial(5) ÷ (factorial(5-3) * factorial(3))\n10\n\n\n\n"
 },
 
 {
@@ -8485,7 +8485,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Mathematics",
     "title": "Base.nextprod",
     "category": "Function",
-    "text": "nextprod([k_1, k_2,...], n)\n\nNext integer greater than or equal to n that can be written as prod k_i^p_i for integers p_1, p_2, etc.\n\nExample\n\njulia> nextprod([2, 3], 105)\n108\n\njulia> 2^2 * 3^3\n108\n\n\n\n"
+    "text": "nextprod([k_1, k_2,...], n)\n\nNext integer greater than or equal to n that can be written as prod k_i^p_i for integers p_1, p_2, etc.\n\nExamples\n\njulia> nextprod([2, 3], 105)\n108\n\njulia> 2^2 * 3^3\n108\n\n\n\n"
 },
 
 {
@@ -8997,7 +8997,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Numbers",
     "title": "Base.bits",
     "category": "Function",
-    "text": "bits(n)\n\nA string giving the literal bit representation of a number.\n\nExample\n\njulia> bits(4)\n\"0000000000000000000000000000000000000000000000000000000000000100\"\n\njulia> bits(2.2)\n\"0100000000000001100110011001100110011001100110011001100110011010\"\n\n\n\n"
+    "text": "bits(n)\n\nA string giving the literal bit representation of a number.\n\nExamples\n\njulia> bits(4)\n\"0000000000000000000000000000000000000000000000000000000000000100\"\n\njulia> bits(2.2)\n\"0100000000000001100110011001100110011001100110011001100110011010\"\n\n\n\n"
 },
 
 {
@@ -9085,7 +9085,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Numbers",
     "title": "Base.num2hex",
     "category": "Function",
-    "text": "num2hex(f)\n\nGet a hexadecimal string of the binary representation of a floating point number.\n\nExample\n\njulia> num2hex(2.2)\n\"400199999999999a\"\n\n\n\n"
+    "text": "num2hex(f)\n\nGet a hexadecimal string of the binary representation of a floating point number.\n\nExamples\n\njulia> num2hex(2.2)\n\"400199999999999a\"\n\n\n\n"
 },
 
 {
@@ -9101,7 +9101,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Numbers",
     "title": "Base.hex2bytes",
     "category": "Function",
-    "text": "hex2bytes(s::AbstractString)\n\nConvert an arbitrarily long hexadecimal string to its binary representation. Returns an Array{UInt8,1}, i.e. an array of bytes.\n\njulia> a = hex(12345)\n\"3039\"\n\njulia> hex2bytes(a)\n2-element Array{UInt8,1}:\n 0x30\n 0x39\n\n\n\n"
+    "text": "hex2bytes(s::AbstractString)\n\nConvert an arbitrarily long hexadecimal string to its binary representation. Returns an Array{UInt8,1}, i.e. an array of bytes.\n\nExamples\n\njulia> a = hex(12345)\n\"3039\"\n\njulia> hex2bytes(a)\n2-element Array{UInt8,1}:\n 0x30\n 0x39\n\n\n\n"
 },
 
 {
@@ -9109,7 +9109,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Numbers",
     "title": "Base.bytes2hex",
     "category": "Function",
-    "text": "bytes2hex(bin_arr::Array{UInt8, 1}) -> String\n\nConvert an array of bytes to its hexadecimal representation. All characters are in lower-case.\n\njulia> a = hex(12345)\n\"3039\"\n\njulia> b = hex2bytes(a)\n2-element Array{UInt8,1}:\n 0x30\n 0x39\n\njulia> bytes2hex(b)\n\"3039\"\n\n\n\n"
+    "text": "bytes2hex(bin_arr::Array{UInt8, 1}) -> String\n\nConvert an array of bytes to its hexadecimal representation. All characters are in lower-case.\n\nExamples\n\njulia> a = hex(12345)\n\"3039\"\n\njulia> b = hex2bytes(a)\n2-element Array{UInt8,1}:\n 0x30\n 0x39\n\njulia> bytes2hex(b)\n\"3039\"\n\n\n\n"
 },
 
 {
@@ -9565,7 +9565,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Numbers",
     "title": "Base.Random.rand!",
     "category": "Function",
-    "text": "rand!([rng=GLOBAL_RNG], A, [S=eltype(A)])\n\nPopulate the array A with random values. If S is specified (S can be a type or a collection, cf. rand for details), the values are picked randomly from S. This is equivalent to copy!(A, rand(rng, S, size(A))) but without allocating a new array.\n\nExample\n\njulia> rng = MersenneTwister(1234);\n\njulia> rand!(rng, zeros(5))\n5-element Array{Float64,1}:\n 0.590845\n 0.766797\n 0.566237\n 0.460085\n 0.794026\n\n\n\n"
+    "text": "rand!([rng=GLOBAL_RNG], A, [S=eltype(A)])\n\nPopulate the array A with random values. If S is specified (S can be a type or a collection, cf. rand for details), the values are picked randomly from S. This is equivalent to copy!(A, rand(rng, S, size(A))) but without allocating a new array.\n\nExamples\n\njulia> rng = MersenneTwister(1234);\n\njulia> rand!(rng, zeros(5))\n5-element Array{Float64,1}:\n 0.590845\n 0.766797\n 0.566237\n 0.460085\n 0.794026\n\n\n\n"
 },
 
 {
@@ -9573,7 +9573,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Numbers",
     "title": "Base.Random.bitrand",
     "category": "Function",
-    "text": "bitrand([rng=GLOBAL_RNG], [dims...])\n\nGenerate a BitArray of random boolean values.\n\nExample\n\njulia> rng = MersenneTwister(1234);\n\njulia> bitrand(rng, 10)\n10-element BitArray{1}:\n  true\n  true\n  true\n false\n  true\n false\n false\n  true\n false\n  true\n\n\n\n"
+    "text": "bitrand([rng=GLOBAL_RNG], [dims...])\n\nGenerate a BitArray of random boolean values.\n\nExamples\n\njulia> rng = MersenneTwister(1234);\n\njulia> bitrand(rng, 10)\n10-element BitArray{1}:\n  true\n  true\n  true\n false\n  true\n false\n false\n  true\n false\n  true\n\n\n\n"
 },
 
 {
@@ -9605,7 +9605,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Numbers",
     "title": "Base.Random.randexp!",
     "category": "Function",
-    "text": "randexp!([rng=GLOBAL_RNG], A::AbstractArray) -> A\n\nFill the array A with random numbers following the exponential distribution (with scale 1).\n\nExample\n\njulia> rng = MersenneTwister(1234);\n\njulia> randexp!(rng, zeros(5))\n5-element Array{Float64,1}:\n 2.48351\n 1.5167\n 0.604436\n 0.695867\n 1.30652\n\n\n\n"
+    "text": "randexp!([rng=GLOBAL_RNG], A::AbstractArray) -> A\n\nFill the array A with random numbers following the exponential distribution (with scale 1).\n\nExamples\n\njulia> rng = MersenneTwister(1234);\n\njulia> randexp!(rng, zeros(5))\n5-element Array{Float64,1}:\n 2.48351\n 1.5167\n 0.604436\n 0.695867\n 1.30652\n\n\n\n"
 },
 
 {
@@ -9637,7 +9637,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.length",
     "category": "Method",
-    "text": "length(s::AbstractString)\n\nThe number of characters in string s.\n\nExample\n\njulia> length(\"jμΛIα\")\n5\n\n\n\n"
+    "text": "length(s::AbstractString)\n\nThe number of characters in string s.\n\nExamples\n\njulia> length(\"jμΛIα\")\n5\n\n\n\n"
 },
 
 {
@@ -9645,7 +9645,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.sizeof",
     "category": "Method",
-    "text": "sizeof(s::AbstractString)\n\nThe number of bytes in string s.\n\nExample\n\njulia> sizeof(\"❤\")\n3\n\n\n\n"
+    "text": "sizeof(s::AbstractString)\n\nThe number of bytes in string s.\n\nExamples\n\njulia> sizeof(\"❤\")\n3\n\n\n\n"
 },
 
 {
@@ -9669,7 +9669,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.string",
     "category": "Function",
-    "text": "string(xs...)\n\nCreate a string from any values using the print function.\n\njulia> string(\"a\", 1, true)\n\"a1true\"\n\n\n\n"
+    "text": "string(xs...)\n\nCreate a string from any values using the print function.\n\nExamples\n\njulia> string(\"a\", 1, true)\n\"a1true\"\n\n\n\n"
 },
 
 {
@@ -9733,7 +9733,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.ascii",
     "category": "Function",
-    "text": "ascii(s::AbstractString)\n\nConvert a string to String type and check that it contains only ASCII data, otherwise throwing an ArgumentError indicating the position of the first non-ASCII byte.\n\njulia> ascii(\"abcdeγfgh\")\nERROR: ArgumentError: invalid ASCII at index 6 in \"abcdeγfgh\"\nStacktrace:\n [1] ascii(::String) at ./strings/util.jl:479\n\njulia> ascii(\"abcdefgh\")\n\"abcdefgh\"\n\n\n\n"
+    "text": "ascii(s::AbstractString)\n\nConvert a string to String type and check that it contains only ASCII data, otherwise throwing an ArgumentError indicating the position of the first non-ASCII byte.\n\nExamples\n\njulia> ascii(\"abcdeγfgh\")\nERROR: ArgumentError: invalid ASCII at index 6 in \"abcdeγfgh\"\nStacktrace:\n [1] ascii(::String) at ./strings/util.jl:479\n\njulia> ascii(\"abcdefgh\")\n\"abcdefgh\"\n\n\n\n"
 },
 
 {
@@ -9845,7 +9845,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.lpad",
     "category": "Function",
-    "text": "lpad(s, n::Integer, p::AbstractString=\" \")\n\nMake a string at least n columns wide when printed by padding s on the left with copies of p.\n\njulia> lpad(\"March\",10)\n\"     March\"\n\n\n\n"
+    "text": "lpad(s, n::Integer, p::AbstractString=\" \")\n\nMake a string at least n columns wide when printed by padding s on the left with copies of p.\n\nExamples\n\njulia> lpad(\"March\",10)\n\"     March\"\n\n\n\n"
 },
 
 {
@@ -9853,7 +9853,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.rpad",
     "category": "Function",
-    "text": "rpad(s, n::Integer, p::AbstractString=\" \")\n\nMake a string at least n columns wide when printed by padding s on the right with copies of p.\n\njulia> rpad(\"March\",20)\n\"March               \"\n\n\n\n"
+    "text": "rpad(s, n::Integer, p::AbstractString=\" \")\n\nMake a string at least n columns wide when printed by padding s on the right with copies of p.\n\nExamples\n\njulia> rpad(\"March\",20)\n\"March               \"\n\n\n\n"
 },
 
 {
@@ -9861,7 +9861,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.search",
     "category": "Function",
-    "text": "search(string::AbstractString, chars::Chars, [start::Integer])\n\nSearch for the first occurrence of the given characters within the given string. The second argument may be a single character, a vector or a set of characters, a string, or a regular expression (though regular expressions are only allowed on contiguous strings, such as ASCII or UTF-8 strings). The third argument optionally specifies a starting index. The return value is a range of indexes where the matching sequence is found, such that s[search(s,x)] == x:\n\nsearch(string, \"substring\") = start:end such that string[start:end] == \"substring\", or 0:-1 if unmatched.\n\nsearch(string, 'c') = index such that string[index] == 'c', or 0 if unmatched.\n\njulia> search(\"Hello to the world\", \"z\")\n0:-1\n\njulia> search(\"JuliaLang\",\"Julia\")\n1:5\n\n\n\n"
+    "text": "search(string::AbstractString, chars::Chars, [start::Integer])\n\nSearch for the first occurrence of the given characters within the given string. The second argument may be a single character, a vector or a set of characters, a string, or a regular expression (though regular expressions are only allowed on contiguous strings, such as ASCII or UTF-8 strings). The third argument optionally specifies a starting index. The return value is a range of indexes where the matching sequence is found, such that s[search(s,x)] == x:\n\nsearch(string, \"substring\") = start:end such that string[start:end] == \"substring\", or 0:-1 if unmatched.\n\nsearch(string, 'c') = index such that string[index] == 'c', or 0 if unmatched.\n\nExamples\n\njulia> search(\"Hello to the world\", \"z\")\n0:-1\n\njulia> search(\"JuliaLang\",\"Julia\")\n1:5\n\n\n\n"
 },
 
 {
@@ -9869,7 +9869,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.rsearch",
     "category": "Function",
-    "text": "rsearch(s::AbstractString, chars::Chars, [start::Integer])\n\nSimilar to search, but returning the last occurrence of the given characters within the given string, searching in reverse from start.\n\njulia> rsearch(\"aaabbb\",\"b\")\n6:6\n\n\n\n"
+    "text": "rsearch(s::AbstractString, chars::Chars, [start::Integer])\n\nSimilar to search, but returning the last occurrence of the given characters within the given string, searching in reverse from start.\n\nExamples\n\njulia> rsearch(\"aaabbb\",\"b\")\n6:6\n\n\n\n"
 },
 
 {
@@ -9877,7 +9877,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.searchindex",
     "category": "Function",
-    "text": "searchindex(s::AbstractString, substring, [start::Integer])\n\nSimilar to search, but return only the start index at which the substring is found, or 0 if it is not.\n\njulia> searchindex(\"Hello to the world\", \"z\")\n0\n\njulia> searchindex(\"JuliaLang\",\"Julia\")\n1\n\njulia> searchindex(\"JuliaLang\",\"Lang\")\n6\n\n\n\n"
+    "text": "searchindex(s::AbstractString, substring, [start::Integer])\n\nSimilar to search, but return only the start index at which the substring is found, or 0 if it is not.\n\nExamples\n\njulia> searchindex(\"Hello to the world\", \"z\")\n0\n\njulia> searchindex(\"JuliaLang\",\"Julia\")\n1\n\njulia> searchindex(\"JuliaLang\",\"Lang\")\n6\n\n\n\n"
 },
 
 {
@@ -9885,7 +9885,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.rsearchindex",
     "category": "Function",
-    "text": "rsearchindex(s::AbstractString, substring, [start::Integer])\n\nSimilar to rsearch, but return only the start index at which the substring is found, or 0 if it is not.\n\njulia> rsearchindex(\"aaabbb\",\"b\")\n6\n\njulia> rsearchindex(\"aaabbb\",\"a\")\n3\n\n\n\n"
+    "text": "rsearchindex(s::AbstractString, substring, [start::Integer])\n\nSimilar to rsearch, but return only the start index at which the substring is found, or 0 if it is not.\n\nExamples\n\njulia> rsearchindex(\"aaabbb\",\"b\")\n6\n\njulia> rsearchindex(\"aaabbb\",\"a\")\n3\n\n\n\n"
 },
 
 {
@@ -9893,7 +9893,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.contains",
     "category": "Method",
-    "text": "contains(haystack::AbstractString, needle::Union{AbstractString,Char})\n\nDetermine whether the second argument is a substring of the first.\n\njulia> contains(\"JuliaLang is pretty cool!\", \"Julia\")\ntrue\n\n\n\n"
+    "text": "contains(haystack::AbstractString, needle::Union{AbstractString,Char})\n\nDetermine whether the second argument is a substring of the first.\n\nExamples\n\njulia> contains(\"JuliaLang is pretty cool!\", \"Julia\")\ntrue\n\n\n\n"
 },
 
 {
@@ -9917,7 +9917,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.split",
     "category": "Function",
-    "text": "split(s::AbstractString, [chars]; limit::Integer=0, keep::Bool=true)\n\nReturn an array of substrings by splitting the given string on occurrences of the given character delimiters, which may be specified in any of the formats allowed by search's second argument (i.e. a single character, collection of characters, string, or regular expression). If chars is omitted, it defaults to the set of all space characters, and keep is taken to be false. The two keyword arguments are optional: they are a maximum size for the result and a flag determining whether empty fields should be kept in the result.\n\njulia> a = \"Ma.rch\"\n\"Ma.rch\"\n\njulia> split(a,\".\")\n2-element Array{SubString{String},1}:\n \"Ma\"\n \"rch\"\n\n\n\n"
+    "text": "split(s::AbstractString, [chars]; limit::Integer=0, keep::Bool=true)\n\nReturn an array of substrings by splitting the given string on occurrences of the given character delimiters, which may be specified in any of the formats allowed by search's second argument (i.e. a single character, collection of characters, string, or regular expression). If chars is omitted, it defaults to the set of all space characters, and keep is taken to be false. The two keyword arguments are optional: they are a maximum size for the result and a flag determining whether empty fields should be kept in the result.\n\nExamples\n\njulia> a = \"Ma.rch\"\n\"Ma.rch\"\n\njulia> split(a,\".\")\n2-element Array{SubString{String},1}:\n \"Ma\"\n \"rch\"\n\n\n\n"
 },
 
 {
@@ -9925,7 +9925,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.rsplit",
     "category": "Function",
-    "text": "rsplit(s::AbstractString, [chars]; limit::Integer=0, keep::Bool=true)\n\nSimilar to split, but starting from the end of the string.\n\njulia> a = \"M.a.r.c.h\"\n\"M.a.r.c.h\"\n\njulia> rsplit(a,\".\")\n5-element Array{SubString{String},1}:\n \"M\"\n \"a\"\n \"r\"\n \"c\"\n \"h\"\n\njulia> rsplit(a,\".\";limit=1)\n1-element Array{SubString{String},1}:\n \"M.a.r.c.h\"\n\njulia> rsplit(a,\".\";limit=2)\n2-element Array{SubString{String},1}:\n \"M.a.r.c\"\n \"h\"\n\n\n\n"
+    "text": "rsplit(s::AbstractString, [chars]; limit::Integer=0, keep::Bool=true)\n\nSimilar to split, but starting from the end of the string.\n\nExamples\n\njulia> a = \"M.a.r.c.h\"\n\"M.a.r.c.h\"\n\njulia> rsplit(a,\".\")\n5-element Array{SubString{String},1}:\n \"M\"\n \"a\"\n \"r\"\n \"c\"\n \"h\"\n\njulia> rsplit(a,\".\";limit=1)\n1-element Array{SubString{String},1}:\n \"M.a.r.c.h\"\n\njulia> rsplit(a,\".\";limit=2)\n2-element Array{SubString{String},1}:\n \"M.a.r.c\"\n \"h\"\n\n\n\n"
 },
 
 {
@@ -9933,7 +9933,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.strip",
     "category": "Function",
-    "text": "strip(s::AbstractString, [chars::Chars])\n\nReturn s with any leading and trailing whitespace removed. If chars (a character, or vector or set of characters) is provided, instead remove characters contained in it.\n\njulia> strip(\"{3, 5}\\n\", ['{', '}', '\\n'])\n\"3, 5\"\n\n\n\n"
+    "text": "strip(s::AbstractString, [chars::Chars])\n\nReturn s with any leading and trailing whitespace removed. If chars (a character, or vector or set of characters) is provided, instead remove characters contained in it.\n\nExamples\n\njulia> strip(\"{3, 5}\\n\", ['{', '}', '\\n'])\n\"3, 5\"\n\n\n\n"
 },
 
 {
@@ -9941,7 +9941,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.lstrip",
     "category": "Function",
-    "text": "lstrip(s::AbstractString[, chars::Chars])\n\nReturn s with any leading whitespace and delimiters removed. The default delimiters to remove are ' ', \\t, \\n, \\v, \\f, and \\r. If chars (a character, or vector or set of characters) is provided, instead remove characters contained in it.\n\njulia> a = lpad(\"March\", 20)\n\"               March\"\n\njulia> lstrip(a)\n\"March\"\n\n\n\n"
+    "text": "lstrip(s::AbstractString[, chars::Chars])\n\nReturn s with any leading whitespace and delimiters removed. The default delimiters to remove are ' ', \\t, \\n, \\v, \\f, and \\r. If chars (a character, or vector or set of characters) is provided, instead remove characters contained in it.\n\nExamples\n\njulia> a = lpad(\"March\", 20)\n\"               March\"\n\njulia> lstrip(a)\n\"March\"\n\n\n\n"
 },
 
 {
@@ -9949,7 +9949,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.rstrip",
     "category": "Function",
-    "text": "rstrip(s::AbstractString[, chars::Chars])\n\nReturn s with any trailing whitespace and delimiters removed. The default delimiters to remove are ' ', \\t, \\n, \\v, \\f, and \\r. If chars (a character, or vector or set of characters) is provided, instead remove characters contained in it.\n\njulia> a = rpad(\"March\", 20)\n\"March               \"\n\njulia> rstrip(a)\n\"March\"\n\n\n\n"
+    "text": "rstrip(s::AbstractString[, chars::Chars])\n\nReturn s with any trailing whitespace and delimiters removed. The default delimiters to remove are ' ', \\t, \\n, \\v, \\f, and \\r. If chars (a character, or vector or set of characters) is provided, instead remove characters contained in it.\n\nExamples\n\njulia> a = rpad(\"March\", 20)\n\"March               \"\n\njulia> rstrip(a)\n\"March\"\n\n\n\n"
 },
 
 {
@@ -9957,7 +9957,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.startswith",
     "category": "Function",
-    "text": "startswith(s::AbstractString, prefix::AbstractString)\n\nReturns true if s starts with prefix. If prefix is a vector or set of characters, tests whether the first character of s belongs to that set.\n\nSee also endswith.\n\njulia> startswith(\"JuliaLang\", \"Julia\")\ntrue\n\n\n\n"
+    "text": "startswith(s::AbstractString, prefix::AbstractString)\n\nReturns true if s starts with prefix. If prefix is a vector or set of characters, tests whether the first character of s belongs to that set.\n\nSee also endswith.\n\nExamples\n\njulia> startswith(\"JuliaLang\", \"Julia\")\ntrue\n\n\n\n"
 },
 
 {
@@ -9965,7 +9965,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.endswith",
     "category": "Function",
-    "text": "endswith(s::AbstractString, suffix::AbstractString)\n\nReturns true if s ends with suffix. If suffix is a vector or set of characters, tests whether the last character of s belongs to that set.\n\nSee also startswith.\n\njulia> endswith(\"Sunday\", \"day\")\ntrue\n\n\n\n"
+    "text": "endswith(s::AbstractString, suffix::AbstractString)\n\nReturns true if s ends with suffix. If suffix is a vector or set of characters, tests whether the last character of s belongs to that set.\n\nSee also startswith.\n\nExamples\n\njulia> endswith(\"Sunday\", \"day\")\ntrue\n\n\n\n"
 },
 
 {
@@ -9973,7 +9973,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.uppercase",
     "category": "Function",
-    "text": "uppercase(s::AbstractString)\n\nReturns s with all characters converted to uppercase.\n\nExample\n\njulia> uppercase(\"Julia\")\n\"JULIA\"\n\n\n\n"
+    "text": "uppercase(s::AbstractString)\n\nReturns s with all characters converted to uppercase.\n\nExamples\n\njulia> uppercase(\"Julia\")\n\"JULIA\"\n\n\n\n"
 },
 
 {
@@ -9981,7 +9981,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.lowercase",
     "category": "Function",
-    "text": "lowercase(s::AbstractString)\n\nReturns s with all characters converted to lowercase.\n\nExample\n\njulia> lowercase(\"STRINGS AND THINGS\")\n\"strings and things\"\n\n\n\n"
+    "text": "lowercase(s::AbstractString)\n\nReturns s with all characters converted to lowercase.\n\nExamples\n\njulia> lowercase(\"STRINGS AND THINGS\")\n\"strings and things\"\n\n\n\n"
 },
 
 {
@@ -9989,7 +9989,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.titlecase",
     "category": "Function",
-    "text": "titlecase(s::AbstractString)\n\nCapitalizes the first character of each word in s. See also ucfirst to capitalize only the first character in s.\n\nExample\n\njulia> titlecase(\"the julia programming language\")\n\"The Julia Programming Language\"\n\n\n\n"
+    "text": "titlecase(s::AbstractString)\n\nCapitalizes the first character of each word in s. See also ucfirst to capitalize only the first character in s.\n\nExamples\n\njulia> titlecase(\"the julia programming language\")\n\"The Julia Programming Language\"\n\n\n\n"
 },
 
 {
@@ -9997,7 +9997,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.ucfirst",
     "category": "Function",
-    "text": "ucfirst(s::AbstractString)\n\nReturns string with the first character converted to uppercase (technically \"title case\" for Unicode). See also titlecase to capitalize the first character of every word in s.\n\nExample\n\njulia> ucfirst(\"python\")\n\"Python\"\n\n\n\n"
+    "text": "ucfirst(s::AbstractString)\n\nReturns string with the first character converted to uppercase (technically \"title case\" for Unicode). See also titlecase to capitalize the first character of every word in s.\n\nExamples\n\njulia> ucfirst(\"python\")\n\"Python\"\n\n\n\n"
 },
 
 {
@@ -10005,7 +10005,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.lcfirst",
     "category": "Function",
-    "text": "lcfirst(s::AbstractString)\n\nReturns string with the first character converted to lowercase.\n\nExample\n\njulia> lcfirst(\"Julia\")\n\"julia\"\n\n\n\n"
+    "text": "lcfirst(s::AbstractString)\n\nReturns string with the first character converted to lowercase.\n\nExamples\n\njulia> lcfirst(\"Julia\")\n\"julia\"\n\n\n\n"
 },
 
 {
@@ -10013,7 +10013,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.join",
     "category": "Function",
-    "text": "join(io::IO, strings, delim, [last])\n\nJoin an array of strings into a single string, inserting the given delimiter between adjacent strings. If last is given, it will be used instead of delim between the last two strings. For example,\n\njulia> join([\"apples\", \"bananas\", \"pineapples\"], \", \", \" and \")\n\"apples, bananas and pineapples\"\n\nstrings can be any iterable over elements x which are convertible to strings via print(io::IOBuffer, x). strings will be printed to io.\n\n\n\n"
+    "text": "join(io::IO, strings, delim, [last])\n\nJoin an array of strings into a single string, inserting the given delimiter between adjacent strings. If last is given, it will be used instead of delim between the last two strings. For example,\n\nExamples\n\njulia> join([\"apples\", \"bananas\", \"pineapples\"], \", \", \" and \")\n\"apples, bananas and pineapples\"\n\nstrings can be any iterable over elements x which are convertible to strings via print(io::IOBuffer, x). strings will be printed to io.\n\n\n\n"
 },
 
 {
@@ -10021,7 +10021,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.chop",
     "category": "Function",
-    "text": "chop(s::AbstractString)\n\nRemove the last character from s.\n\njulia> a = \"March\"\n\"March\"\n\njulia> chop(a)\n\"Marc\"\n\n\n\n"
+    "text": "chop(s::AbstractString)\n\nRemove the last character from s.\n\nExamples\n\njulia> a = \"March\"\n\"March\"\n\njulia> chop(a)\n\"Marc\"\n\n\n\n"
 },
 
 {
@@ -10029,7 +10029,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.chomp",
     "category": "Function",
-    "text": "chomp(s::AbstractString)\n\nRemove a single trailing newline from a string.\n\njulia> chomp(\"Hello\\n\")\n\"Hello\"\n\n\n\n"
+    "text": "chomp(s::AbstractString)\n\nRemove a single trailing newline from a string.\n\nExamples\n\njulia> chomp(\"Hello\\n\")\n\"Hello\"\n\n\n\n"
 },
 
 {
@@ -10037,7 +10037,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.ind2chr",
     "category": "Function",
-    "text": "ind2chr(s::AbstractString, i::Integer)\n\nConvert a byte index i to a character index with respect to string s.\n\nSee also chr2ind.\n\nExample\n\njulia> str = \"αβγdef\";\n\njulia> ind2chr(str, 3)\n2\n\njulia> chr2ind(str, 2)\n3\n\n\n\n"
+    "text": "ind2chr(s::AbstractString, i::Integer)\n\nConvert a byte index i to a character index with respect to string s.\n\nSee also chr2ind.\n\nExamples\n\njulia> str = \"αβγdef\";\n\njulia> ind2chr(str, 3)\n2\n\njulia> chr2ind(str, 2)\n3\n\n\n\n"
 },
 
 {
@@ -10045,7 +10045,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.chr2ind",
     "category": "Function",
-    "text": "chr2ind(s::AbstractString, i::Integer)\n\nConvert a character index i to a byte index.\n\nSee also ind2chr.\n\nExample\n\njulia> str = \"αβγdef\";\n\njulia> chr2ind(str, 2)\n3\n\njulia> ind2chr(str, 3)\n2\n\n\n\n"
+    "text": "chr2ind(s::AbstractString, i::Integer)\n\nConvert a character index i to a byte index.\n\nSee also ind2chr.\n\nExamples\n\njulia> str = \"αβγdef\";\n\njulia> chr2ind(str, 2)\n3\n\njulia> ind2chr(str, 3)\n2\n\n\n\n"
 },
 
 {
@@ -10085,7 +10085,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.strwidth",
     "category": "Function",
-    "text": "strwidth(s::AbstractString)\n\nGives the number of columns needed to print a string.\n\nExample\n\njulia> strwidth(\"March\")\n5\n\n\n\n"
+    "text": "strwidth(s::AbstractString)\n\nGives the number of columns needed to print a string.\n\nExamples\n\njulia> strwidth(\"March\")\n5\n\n\n\n"
 },
 
 {
@@ -10189,7 +10189,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Strings",
     "title": "Base.isxdigit",
     "category": "Function",
-    "text": "isxdigit(c::Char) -> Bool\n\nTests whether a character is a valid hexadecimal digit. Note that this does not include x (as in the standard 0x prefix).\n\nExample\n\njulia> isxdigit('a')\ntrue\n\njulia> isxdigit('x')\nfalse\n\n\n\n"
+    "text": "isxdigit(c::Char) -> Bool\n\nTests whether a character is a valid hexadecimal digit. Note that this does not include x (as in the standard 0x prefix).\n\nExamples\n\njulia> isxdigit('a')\ntrue\n\njulia> isxdigit('x')\nfalse\n\n\n\n"
 },
 
 {
@@ -10317,7 +10317,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.getindex",
     "category": "Method",
-    "text": "getindex(type[, elements...])\n\nConstruct a 1-d array of the specified type. This is usually called with the syntax Type[]. Element values can be specified using Type[a,b,c,...].\n\nExamples\n\njulia> Int8[1, 2, 3]\n3-element Array{Int8,1}:\n 1\n 2\n 3\n\njulia> getindex(Int8, 1, 2, 3)\n3-element Array{Int8,1}:\n 1\n 2\n 3\n\n\n\ngetindex(collection, key...)\n\nRetrieve the value(s) stored at the given key or index within a collection. The syntax a[i,j,...] is converted by the compiler to getindex(a, i, j, ...).\n\nExample\n\njulia> A = Dict(\"a\" => 1, \"b\" => 2)\nDict{String,Int64} with 2 entries:\n  \"b\" => 2\n  \"a\" => 1\n\njulia> getindex(A, \"a\")\n1\n\n\n\n"
+    "text": "getindex(type[, elements...])\n\nConstruct a 1-d array of the specified type. This is usually called with the syntax Type[]. Element values can be specified using Type[a,b,c,...].\n\nExamples\n\njulia> Int8[1, 2, 3]\n3-element Array{Int8,1}:\n 1\n 2\n 3\n\njulia> getindex(Int8, 1, 2, 3)\n3-element Array{Int8,1}:\n 1\n 2\n 3\n\n\n\ngetindex(collection, key...)\n\nRetrieve the value(s) stored at the given key or index within a collection. The syntax a[i,j,...] is converted by the compiler to getindex(a, i, j, ...).\n\nExamples\n\njulia> A = Dict(\"a\" => 1, \"b\" => 2)\nDict{String,Int64} with 2 entries:\n  \"b\" => 2\n  \"a\" => 1\n\njulia> getindex(A, \"a\")\n1\n\n\n\n"
 },
 
 {
@@ -10365,7 +10365,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.trues",
     "category": "Function",
-    "text": "trues(dims)\n\nCreate a BitArray with all values set to true.\n\njulia> trues(2,3)\n2×3 BitArray{2}:\n true  true  true\n true  true  true\n\n\n\ntrues(A)\n\nCreate a BitArray with all values set to true of the same shape as A.\n\njulia> A = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> trues(A)\n2×2 BitArray{2}:\n true  true\n true  true\n\n\n\n"
+    "text": "trues(dims)\n\nCreate a BitArray with all values set to true.\n\nExamples\n\njulia> trues(2,3)\n2×3 BitArray{2}:\n true  true  true\n true  true  true\n\n\n\ntrues(A)\n\nCreate a BitArray with all values set to true of the same shape as A.\n\nExamples\n\njulia> A = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> trues(A)\n2×2 BitArray{2}:\n true  true\n true  true\n\n\n\n"
 },
 
 {
@@ -10373,7 +10373,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.falses",
     "category": "Function",
-    "text": "falses(dims)\n\nCreate a BitArray with all values set to false.\n\njulia> falses(2,3)\n2×3 BitArray{2}:\n false  false  false\n false  false  false\n\n\n\nfalses(A)\n\nCreate a BitArray with all values set to false of the same shape as A.\n\njulia> A = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> falses(A)\n2×2 BitArray{2}:\n false  false\n false  false\n\n\n\n"
+    "text": "falses(dims)\n\nCreate a BitArray with all values set to false.\n\nExamples\n\njulia> falses(2,3)\n2×3 BitArray{2}:\n false  false  false\n false  false  false\n\n\n\nfalses(A)\n\nCreate a BitArray with all values set to false of the same shape as A.\n\nExamples\n\njulia> A = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> falses(A)\n2×2 BitArray{2}:\n false  false\n false  false\n\n\n\n"
 },
 
 {
@@ -10461,7 +10461,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.ndims",
     "category": "Function",
-    "text": "ndims(A::AbstractArray) -> Integer\n\nReturns the number of dimensions of A.\n\njulia> A = ones(3,4,5);\n\njulia> ndims(A)\n3\n\n\n\n"
+    "text": "ndims(A::AbstractArray) -> Integer\n\nReturns the number of dimensions of A.\n\nExamples\n\njulia> A = ones(3,4,5);\n\njulia> ndims(A)\n3\n\n\n\n"
 },
 
 {
@@ -10469,7 +10469,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.size",
     "category": "Function",
-    "text": "size(A::AbstractArray, [dim...])\n\nReturns a tuple containing the dimensions of A. Optionally you can specify the dimension(s) you want the length of, and get the length of that dimension, or a tuple of the lengths of dimensions you asked for.\n\njulia> A = ones(2,3,4);\n\njulia> size(A, 2)\n3\n\njulia> size(A,3,2)\n(4, 3)\n\n\n\n"
+    "text": "size(A::AbstractArray, [dim...])\n\nReturns a tuple containing the dimensions of A. Optionally you can specify the dimension(s) you want the length of, and get the length of that dimension, or a tuple of the lengths of dimensions you asked for.\n\nExamples\n\njulia> A = ones(2,3,4);\n\njulia> size(A, 2)\n3\n\njulia> size(A,3,2)\n(4, 3)\n\n\n\n"
 },
 
 {
@@ -10477,7 +10477,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.indices",
     "category": "Method",
-    "text": "indices(A)\n\nReturns the tuple of valid indices for array A.\n\njulia> A = ones(5,6,7);\n\njulia> indices(A)\n(Base.OneTo(5), Base.OneTo(6), Base.OneTo(7))\n\n\n\n"
+    "text": "indices(A)\n\nReturns the tuple of valid indices for array A.\n\nExamples\n\njulia> A = ones(5,6,7);\n\njulia> indices(A)\n(Base.OneTo(5), Base.OneTo(6), Base.OneTo(7))\n\n\n\n"
 },
 
 {
@@ -10485,7 +10485,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.indices",
     "category": "Method",
-    "text": "indices(A, d)\n\nReturns the valid range of indices for array A along dimension d.\n\njulia> A = ones(5,6,7);\n\njulia> indices(A,2)\nBase.OneTo(6)\n\n\n\n"
+    "text": "indices(A, d)\n\nReturns the valid range of indices for array A along dimension d.\n\nExamples\n\njulia> A = ones(5,6,7);\n\njulia> indices(A,2)\nBase.OneTo(6)\n\n\n\n"
 },
 
 {
@@ -10493,7 +10493,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.length",
     "category": "Method",
-    "text": "length(A::AbstractArray) -> Integer\n\nReturns the number of elements in A.\n\njulia> A = ones(3,4,5);\n\njulia> length(A)\n60\n\n\n\n"
+    "text": "length(A::AbstractArray) -> Integer\n\nReturns the number of elements in A.\n\nExamples\n\njulia> A = ones(3,4,5);\n\njulia> length(A)\n60\n\n\n\n"
 },
 
 {
@@ -10509,7 +10509,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.linearindices",
     "category": "Function",
-    "text": "linearindices(A)\n\nReturns a UnitRange specifying the valid range of indices for A[i] where i is an Int. For arrays with conventional indexing (indices start at 1), or any multidimensional array, this is 1:length(A); however, for one-dimensional arrays with unconventional indices, this is indices(A, 1).\n\nCalling this function is the \"safe\" way to write algorithms that exploit linear indexing.\n\njulia> A = ones(5,6,7);\n\njulia> b = linearindices(A);\n\njulia> extrema(b)\n(1, 210)\n\n\n\n"
+    "text": "linearindices(A)\n\nReturns a UnitRange specifying the valid range of indices for A[i] where i is an Int. For arrays with conventional indexing (indices start at 1), or any multidimensional array, this is 1:length(A); however, for one-dimensional arrays with unconventional indices, this is indices(A, 1).\n\nCalling this function is the \"safe\" way to write algorithms that exploit linear indexing.\n\nExamples\n\njulia> A = ones(5,6,7);\n\njulia> b = linearindices(A);\n\njulia> extrema(b)\n(1, 210)\n\n\n\n"
 },
 
 {
@@ -10533,7 +10533,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.conj!",
     "category": "Function",
-    "text": "conj!(A)\n\nTransform an array to its complex conjugate in-place.\n\nSee also conj.\n\nExample\n\njulia> A = [1+im 2-im; 2+2im 3+im]\n2×2 Array{Complex{Int64},2}:\n 1+1im  2-1im\n 2+2im  3+1im\n\njulia> conj!(A);\n\njulia> A\n2×2 Array{Complex{Int64},2}:\n 1-1im  2+1im\n 2-2im  3-1im\n\n\n\n"
+    "text": "conj!(A)\n\nTransform an array to its complex conjugate in-place.\n\nSee also conj.\n\nExamples\n\njulia> A = [1+im 2-im; 2+2im 3+im]\n2×2 Array{Complex{Int64},2}:\n 1+1im  2-1im\n 2+2im  3+1im\n\njulia> conj!(A);\n\njulia> A\n2×2 Array{Complex{Int64},2}:\n 1-1im  2+1im\n 2-2im  3-1im\n\n\n\n"
 },
 
 {
@@ -10541,7 +10541,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.stride",
     "category": "Function",
-    "text": "stride(A, k::Integer)\n\nReturns the distance in memory (in number of elements) between adjacent elements in dimension k.\n\njulia> A = ones(3,4,5);\n\njulia> stride(A,2)\n3\n\njulia> stride(A,3)\n12\n\n\n\n"
+    "text": "stride(A, k::Integer)\n\nReturns the distance in memory (in number of elements) between adjacent elements in dimension k.\n\nExamples\n\njulia> A = ones(3,4,5);\n\njulia> stride(A,2)\n3\n\njulia> stride(A,3)\n12\n\n\n\n"
 },
 
 {
@@ -10549,7 +10549,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.strides",
     "category": "Function",
-    "text": "strides(A)\n\nReturns a tuple of the memory strides in each dimension.\n\njulia> A = ones(3,4,5);\n\njulia> strides(A)\n(1, 3, 12)\n\n\n\n"
+    "text": "strides(A)\n\nReturns a tuple of the memory strides in each dimension.\n\nExamples\n\njulia> A = ones(3,4,5);\n\njulia> strides(A)\n(1, 3, 12)\n\n\n\n"
 },
 
 {
@@ -10557,7 +10557,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.ind2sub",
     "category": "Function",
-    "text": "ind2sub(a, index) -> subscripts\n\nReturns a tuple of subscripts into array a corresponding to the linear index index.\n\nExamples\n\njulia> A = ones(5,6,7);\n\njulia> ind2sub(A,35)\n(5, 1, 2)\n\njulia> ind2sub(A,70)\n(5, 2, 3)\n\n\n\nind2sub(dims, index) -> subscripts\n\nReturns a tuple of subscripts into an array with dimensions dims, corresponding to the linear index index.\n\nExample:\n\ni, j, ... = ind2sub(size(A), indmax(A))\n\nprovides the indices of the maximum element.\n\nExamples\n\njulia> ind2sub((3,4),2)\n(2, 1)\n\njulia> ind2sub((3,4),3)\n(3, 1)\n\njulia> ind2sub((3,4),4)\n(1, 2)\n\n\n\n"
+    "text": "ind2sub(a, index) -> subscripts\n\nReturns a tuple of subscripts into array a corresponding to the linear index index.\n\nExamples\n\njulia> A = ones(5,6,7);\n\njulia> ind2sub(A,35)\n(5, 1, 2)\n\njulia> ind2sub(A,70)\n(5, 2, 3)\n\n\n\nind2sub(dims, index) -> subscripts\n\nReturns a tuple of subscripts into an array with dimensions dims, corresponding to the linear index index.\n\nExamples\n\ni, j, ... = ind2sub(size(A), indmax(A))\n\nprovides the indices of the maximum element.\n\nExamples\n\njulia> ind2sub((3,4),2)\n(2, 1)\n\njulia> ind2sub((3,4),3)\n(3, 1)\n\njulia> ind2sub((3,4),4)\n(1, 2)\n\n\n\n"
 },
 
 {
@@ -10573,7 +10573,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.LinAlg.checksquare",
     "category": "Function",
-    "text": "LinAlg.checksquare(A)\n\nCheck that a matrix is square, then return its common dimension. For multiple arguments, return a vector.\n\nExample\n\njulia> A = ones(4,4); B = zeros(5,5);\n\njulia> LinAlg.checksquare(A, B)\n2-element Array{Int64,1}:\n 4\n 5\n\n\n\n"
+    "text": "LinAlg.checksquare(A)\n\nCheck that a matrix is square, then return its common dimension. For multiple arguments, return a vector.\n\nExamples\n\njulia> A = ones(4,4); B = zeros(5,5);\n\njulia> LinAlg.checksquare(A, B)\n2-element Array{Int64,1}:\n 4\n 5\n\n\n\n"
 },
 
 {
@@ -10589,7 +10589,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.broadcast",
     "category": "Function",
-    "text": "broadcast(f, As...)\n\nBroadcasts the arrays, tuples, Refs, nullables, and/or scalars As to a container of the appropriate type and dimensions. In this context, anything that is not a subtype of AbstractArray, Ref (except for Ptrs), Tuple, or Nullable is considered a scalar. The resulting container is established by the following rules:\n\nIf all the arguments are scalars, it returns a scalar.\nIf the arguments are tuples and zero or more scalars, it returns a tuple.\nIf the arguments contain at least one array or Ref, it returns an array (expanding singleton dimensions), and treats Refs as 0-dimensional arrays, and tuples as 1-dimensional arrays.\n\nThe following additional rule applies to Nullable arguments: If there is at least one Nullable, and all the arguments are scalars or Nullable, it returns a Nullable treating Nullables as \"containers\".\n\nA special syntax exists for broadcasting: f.(args...) is equivalent to broadcast(f, args...), and nested f.(g.(args...)) calls are fused into a single broadcast loop.\n\njulia> A = [1, 2, 3, 4, 5]\n5-element Array{Int64,1}:\n 1\n 2\n 3\n 4\n 5\n\njulia> B = [1 2; 3 4; 5 6; 7 8; 9 10]\n5×2 Array{Int64,2}:\n 1   2\n 3   4\n 5   6\n 7   8\n 9  10\n\njulia> broadcast(+, A, B)\n5×2 Array{Int64,2}:\n  2   3\n  5   6\n  8   9\n 11  12\n 14  15\n\njulia> parse.(Int, [\"1\", \"2\"])\n2-element Array{Int64,1}:\n 1\n 2\n\njulia> abs.((1, -2))\n(1, 2)\n\njulia> broadcast(+, 1.0, (0, -2.0))\n(1.0, -1.0)\n\njulia> broadcast(+, 1.0, (0, -2.0), Ref(1))\n2-element Array{Float64,1}:\n 2.0\n 0.0\n\njulia> (+).([[0,2], [1,3]], Ref{Vector{Int}}([1,-1]))\n2-element Array{Array{Int64,1},1}:\n [1, 1]\n [2, 2]\n\njulia> string.((\"one\",\"two\",\"three\",\"four\"), \": \", 1:4)\n4-element Array{String,1}:\n \"one: 1\"\n \"two: 2\"\n \"three: 3\"\n \"four: 4\"\n\njulia> Nullable(\"X\") .* \"Y\"\nNullable{String}(\"XY\")\n\njulia> broadcast(/, 1.0, Nullable(2.0))\nNullable{Float64}(0.5)\n\njulia> (1 + im) ./ Nullable{Int}()\nNullable{Complex{Float64}}()\n\n\n\n"
+    "text": "broadcast(f, As...)\n\nBroadcasts the arrays, tuples, Refs, nullables, and/or scalars As to a container of the appropriate type and dimensions. In this context, anything that is not a subtype of AbstractArray, Ref (except for Ptrs), Tuple, or Nullable is considered a scalar. The resulting container is established by the following rules:\n\nIf all the arguments are scalars, it returns a scalar.\nIf the arguments are tuples and zero or more scalars, it returns a tuple.\nIf the arguments contain at least one array or Ref, it returns an array (expanding singleton dimensions), and treats Refs as 0-dimensional arrays, and tuples as 1-dimensional arrays.\n\nThe following additional rule applies to Nullable arguments: If there is at least one Nullable, and all the arguments are scalars or Nullable, it returns a Nullable treating Nullables as \"containers\".\n\nA special syntax exists for broadcasting: f.(args...) is equivalent to broadcast(f, args...), and nested f.(g.(args...)) calls are fused into a single broadcast loop.\n\nExamples\n\njulia> A = [1, 2, 3, 4, 5]\n5-element Array{Int64,1}:\n 1\n 2\n 3\n 4\n 5\n\njulia> B = [1 2; 3 4; 5 6; 7 8; 9 10]\n5×2 Array{Int64,2}:\n 1   2\n 3   4\n 5   6\n 7   8\n 9  10\n\njulia> broadcast(+, A, B)\n5×2 Array{Int64,2}:\n  2   3\n  5   6\n  8   9\n 11  12\n 14  15\n\njulia> parse.(Int, [\"1\", \"2\"])\n2-element Array{Int64,1}:\n 1\n 2\n\njulia> abs.((1, -2))\n(1, 2)\n\njulia> broadcast(+, 1.0, (0, -2.0))\n(1.0, -1.0)\n\njulia> broadcast(+, 1.0, (0, -2.0), Ref(1))\n2-element Array{Float64,1}:\n 2.0\n 0.0\n\njulia> (+).([[0,2], [1,3]], Ref{Vector{Int}}([1,-1]))\n2-element Array{Array{Int64,1},1}:\n [1, 1]\n [2, 2]\n\njulia> string.((\"one\",\"two\",\"three\",\"four\"), \": \", 1:4)\n4-element Array{String,1}:\n \"one: 1\"\n \"two: 2\"\n \"three: 3\"\n \"four: 4\"\n\njulia> Nullable(\"X\") .* \"Y\"\nNullable{String}(\"XY\")\n\njulia> broadcast(/, 1.0, Nullable(2.0))\nNullable{Float64}(0.5)\n\njulia> (1 + im) ./ Nullable{Int}()\nNullable{Complex{Float64}}()\n\n\n\n"
 },
 
 {
@@ -10605,7 +10605,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.Broadcast.@__dot__",
     "category": "Macro",
-    "text": "@. expr\n\nConvert every function call or operator in expr into a \"dot call\" (e.g. convert f(x) to f.(x)), and convert every assignment in expr to a \"dot assignment\" (e.g. convert += to .+=).\n\nIf you want to avoid adding dots for selected function calls in expr, splice those function calls in with $.  For example, @. sqrt(abs($sort(x))) is equivalent to sqrt.(abs.(sort(x))) (no dot for sort).\n\n(@. is equivalent to a call to @__dot__.)\n\njulia> x = 1.0:3.0; y = similar(x);\n\njulia> @. y = x + 3 * sin(x)\n3-element Array{Float64,1}:\n 3.52441\n 4.72789\n 3.42336\n\n\n\n"
+    "text": "@. expr\n\nConvert every function call or operator in expr into a \"dot call\" (e.g. convert f(x) to f.(x)), and convert every assignment in expr to a \"dot assignment\" (e.g. convert += to .+=).\n\nIf you want to avoid adding dots for selected function calls in expr, splice those function calls in with $.  For example, @. sqrt(abs($sort(x))) is equivalent to sqrt.(abs.(sort(x))) (no dot for sort).\n\n(@. is equivalent to a call to @__dot__.)\n\nExamples\n\njulia> x = 1.0:3.0; y = similar(x);\n\njulia> @. y = x + 3 * sin(x)\n3-element Array{Float64,1}:\n 3.52441\n 4.72789\n 3.42336\n\n\n\n"
 },
 
 {
@@ -10613,7 +10613,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.Broadcast.broadcast_getindex",
     "category": "Function",
-    "text": "broadcast_getindex(A, inds...)\n\nBroadcasts the inds arrays to a common size like broadcast and returns an array of the results A[ks...], where ks goes over the positions in the broadcast result A.\n\njulia> A = [1, 2, 3, 4, 5]\n5-element Array{Int64,1}:\n 1\n 2\n 3\n 4\n 5\n\njulia> B = [1 2; 3 4; 5 6; 7 8; 9 10]\n5×2 Array{Int64,2}:\n 1   2\n 3   4\n 5   6\n 7   8\n 9  10\n\njulia> C = broadcast(+,A,B)\n5×2 Array{Int64,2}:\n  2   3\n  5   6\n  8   9\n 11  12\n 14  15\n\njulia> broadcast_getindex(C,[1,2,10])\n3-element Array{Int64,1}:\n  2\n  5\n 15\n\n\n\n"
+    "text": "broadcast_getindex(A, inds...)\n\nBroadcasts the inds arrays to a common size like broadcast and returns an array of the results A[ks...], where ks goes over the positions in the broadcast result A.\n\nExamples\n\njulia> A = [1, 2, 3, 4, 5]\n5-element Array{Int64,1}:\n 1\n 2\n 3\n 4\n 5\n\njulia> B = [1 2; 3 4; 5 6; 7 8; 9 10]\n5×2 Array{Int64,2}:\n 1   2\n 3   4\n 5   6\n 7   8\n 9  10\n\njulia> C = broadcast(+,A,B)\n5×2 Array{Int64,2}:\n  2   3\n  5   6\n  8   9\n 11  12\n 14  15\n\njulia> broadcast_getindex(C,[1,2,10])\n3-element Array{Int64,1}:\n  2\n  5\n 15\n\n\n\n"
 },
 
 {
@@ -10677,7 +10677,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.IteratorsMD.CartesianIndex",
     "category": "Type",
-    "text": "CartesianIndex(i, j, k...)   -> I\nCartesianIndex((i, j, k...)) -> I\n\nCreate a multidimensional index I, which can be used for indexing a multidimensional array A.  In particular, A[I] is equivalent to A[i,j,k...].  One can freely mix integer and CartesianIndex indices; for example, A[Ipre, i, Ipost] (where Ipre and Ipost are CartesianIndex indices and i is an Int) can be a useful expression when writing algorithms that work along a single dimension of an array of arbitrary dimensionality.\n\nA CartesianIndex is sometimes produced by eachindex, and always when iterating with an explicit CartesianRange.\n\nExample\n\njulia> A = reshape(collect(1:16), (2, 2, 2, 2))\n2×2×2×2 Array{Int64,4}:\n[:, :, 1, 1] =\n 1  3\n 2  4\n\n[:, :, 2, 1] =\n 5  7\n 6  8\n\n[:, :, 1, 2] =\n  9  11\n 10  12\n\n[:, :, 2, 2] =\n 13  15\n 14  16\n\njulia> A[CartesianIndex((1, 1, 1, 1))]\n1\n\njulia> A[CartesianIndex((1, 1, 1, 2))]\n9\n\njulia> A[CartesianIndex((1, 1, 2, 1))]\n5\n\n\n\n"
+    "text": "CartesianIndex(i, j, k...)   -> I\nCartesianIndex((i, j, k...)) -> I\n\nCreate a multidimensional index I, which can be used for indexing a multidimensional array A.  In particular, A[I] is equivalent to A[i,j,k...].  One can freely mix integer and CartesianIndex indices; for example, A[Ipre, i, Ipost] (where Ipre and Ipost are CartesianIndex indices and i is an Int) can be a useful expression when writing algorithms that work along a single dimension of an array of arbitrary dimensionality.\n\nA CartesianIndex is sometimes produced by eachindex, and always when iterating with an explicit CartesianRange.\n\nExamples\n\njulia> A = reshape(collect(1:16), (2, 2, 2, 2))\n2×2×2×2 Array{Int64,4}:\n[:, :, 1, 1] =\n 1  3\n 2  4\n\n[:, :, 2, 1] =\n 5  7\n 6  8\n\n[:, :, 1, 2] =\n  9  11\n 10  12\n\n[:, :, 2, 2] =\n 13  15\n 14  16\n\njulia> A[CartesianIndex((1, 1, 1, 1))]\n1\n\njulia> A[CartesianIndex((1, 1, 1, 2))]\n9\n\njulia> A[CartesianIndex((1, 1, 2, 1))]\n5\n\n\n\n"
 },
 
 {
@@ -10685,7 +10685,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.IteratorsMD.CartesianRange",
     "category": "Type",
-    "text": "CartesianRange(sz::Dims) -> R\nCartesianRange(istart:istop, jstart:jstop, ...) -> R\n\nDefine a region R spanning a multidimensional rectangular range of integer indices. These are most commonly encountered in the context of iteration, where for I in R ... end will return CartesianIndex indices I equivalent to the nested loops\n\nfor j = jstart:jstop\n    for i = istart:istop\n        ...\n    end\nend\n\nConsequently these can be useful for writing algorithms that work in arbitrary dimensions.\n\nExample\n\njulia> foreach(println, CartesianRange((2, 2, 2)))\nCartesianIndex{3}((1, 1, 1))\nCartesianIndex{3}((2, 1, 1))\nCartesianIndex{3}((1, 2, 1))\nCartesianIndex{3}((2, 2, 1))\nCartesianIndex{3}((1, 1, 2))\nCartesianIndex{3}((2, 1, 2))\nCartesianIndex{3}((1, 2, 2))\nCartesianIndex{3}((2, 2, 2))\n\n\n\n"
+    "text": "CartesianRange(sz::Dims) -> R\nCartesianRange(istart:istop, jstart:jstop, ...) -> R\n\nDefine a region R spanning a multidimensional rectangular range of integer indices. These are most commonly encountered in the context of iteration, where for I in R ... end will return CartesianIndex indices I equivalent to the nested loops\n\nfor j = jstart:jstop\n    for i = istart:istop\n        ...\n    end\nend\n\nConsequently these can be useful for writing algorithms that work in arbitrary dimensions.\n\nExamples\n\njulia> foreach(println, CartesianRange((2, 2, 2)))\nCartesianIndex{3}((1, 1, 1))\nCartesianIndex{3}((2, 1, 1))\nCartesianIndex{3}((1, 2, 1))\nCartesianIndex{3}((2, 2, 1))\nCartesianIndex{3}((1, 1, 2))\nCartesianIndex{3}((2, 1, 2))\nCartesianIndex{3}((1, 2, 2))\nCartesianIndex{3}((2, 2, 2))\n\n\n\n"
 },
 
 {
@@ -10701,7 +10701,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.checkbounds",
     "category": "Function",
-    "text": "checkbounds(Bool, A, I...)\n\nReturn true if the specified indices I are in bounds for the given array A. Subtypes of AbstractArray should specialize this method if they need to provide custom bounds checking behaviors; however, in many cases one can rely on A's indices and checkindex.\n\nSee also checkindex.\n\njulia> A = rand(3, 3);\n\njulia> checkbounds(Bool, A, 2)\ntrue\n\njulia> checkbounds(Bool, A, 3, 4)\nfalse\n\njulia> checkbounds(Bool, A, 1:3)\ntrue\n\njulia> checkbounds(Bool, A, 1:3, 2:4)\nfalse\n\n\n\ncheckbounds(A, I...)\n\nThrow an error if the specified indices I are not in bounds for the given array A.\n\n\n\n"
+    "text": "checkbounds(Bool, A, I...)\n\nReturn true if the specified indices I are in bounds for the given array A. Subtypes of AbstractArray should specialize this method if they need to provide custom bounds checking behaviors; however, in many cases one can rely on A's indices and checkindex.\n\nSee also checkindex.\n\nExamples\n\njulia> A = rand(3, 3);\n\njulia> checkbounds(Bool, A, 2)\ntrue\n\njulia> checkbounds(Bool, A, 3, 4)\nfalse\n\njulia> checkbounds(Bool, A, 1:3)\ntrue\n\njulia> checkbounds(Bool, A, 1:3, 2:4)\nfalse\n\n\n\ncheckbounds(A, I...)\n\nThrow an error if the specified indices I are not in bounds for the given array A.\n\n\n\n"
 },
 
 {
@@ -10709,7 +10709,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.checkindex",
     "category": "Function",
-    "text": "checkindex(Bool, inds::AbstractUnitRange, index)\n\nReturn true if the given index is within the bounds of inds. Custom types that would like to behave as indices for all arrays can extend this method in order to provide a specialized bounds checking implementation.\n\njulia> checkindex(Bool,1:20,8)\ntrue\n\njulia> checkindex(Bool,1:20,21)\nfalse\n\n\n\n"
+    "text": "checkindex(Bool, inds::AbstractUnitRange, index)\n\nReturn true if the given index is within the bounds of inds. Custom types that would like to behave as indices for all arrays can extend this method in order to provide a specialized bounds checking implementation.\n\nExamples\n\njulia> checkindex(Bool, 1:20, 8)\ntrue\n\njulia> checkindex(Bool, 1:20, 21)\nfalse\n\n\n\n"
 },
 
 {
@@ -10765,7 +10765,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.slicedim",
     "category": "Function",
-    "text": "slicedim(A, d::Integer, i)\n\nReturn all the data of A where the index for dimension d equals i. Equivalent to A[:,:,...,i,:,:,...] where i is in position d.\n\nExample\n\njulia> A = [1 2 3 4; 5 6 7 8]\n2×4 Array{Int64,2}:\n 1  2  3  4\n 5  6  7  8\n\njulia> slicedim(A,2,3)\n2-element Array{Int64,1}:\n 3\n 7\n\n\n\n"
+    "text": "slicedim(A, d::Integer, i)\n\nReturn all the data of A where the index for dimension d equals i. Equivalent to A[:,:,...,i,:,:,...] where i is in position d.\n\nExamples\n\njulia> A = [1 2 3 4; 5 6 7 8]\n2×4 Array{Int64,2}:\n 1  2  3  4\n 5  6  7  8\n\njulia> slicedim(A,2,3)\n2-element Array{Int64,1}:\n 3\n 7\n\n\n\n"
 },
 
 {
@@ -10789,7 +10789,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.squeeze",
     "category": "Function",
-    "text": "squeeze(A, dims)\n\nRemove the dimensions specified by dims from array A. Elements of dims must be unique and within the range 1:ndims(A). size(A,i) must equal 1 for all i in dims.\n\nExample\n\njulia> a = reshape(collect(1:4),(2,2,1,1))\n2×2×1×1 Array{Int64,4}:\n[:, :, 1, 1] =\n 1  3\n 2  4\n\njulia> squeeze(a,3)\n2×2×1 Array{Int64,3}:\n[:, :, 1] =\n 1  3\n 2  4\n\n\n\n"
+    "text": "squeeze(A, dims)\n\nRemove the dimensions specified by dims from array A. Elements of dims must be unique and within the range 1:ndims(A). size(A,i) must equal 1 for all i in dims.\n\nExamples\n\njulia> a = reshape(collect(1:4),(2,2,1,1))\n2×2×1×1 Array{Int64,4}:\n[:, :, 1, 1] =\n 1  3\n 2  4\n\njulia> squeeze(a,3)\n2×2×1 Array{Int64,3}:\n[:, :, 1] =\n 1  3\n 2  4\n\n\n\n"
 },
 
 {
@@ -10797,7 +10797,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.vec",
     "category": "Function",
-    "text": "vec(a::AbstractArray) -> Vector\n\nReshape the array a as a one-dimensional column vector. The resulting array shares the same underlying data as a, so modifying one will also modify the other.\n\nExample\n\njulia> a = [1 2 3; 4 5 6]\n2×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n\njulia> vec(a)\n6-element Array{Int64,1}:\n 1\n 4\n 2\n 5\n 3\n 6\n\nSee also reshape.\n\n\n\n"
+    "text": "vec(a::AbstractArray) -> Vector\n\nReshape the array a as a one-dimensional column vector. The resulting array shares the same underlying data as a, so modifying one will also modify the other.\n\nExamples\n\njulia> a = [1 2 3; 4 5 6]\n2×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n\njulia> vec(a)\n6-element Array{Int64,1}:\n 1\n 4\n 2\n 5\n 3\n 6\n\nSee also reshape.\n\n\n\n"
 },
 
 {
@@ -10845,7 +10845,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.flipdim",
     "category": "Function",
-    "text": "flipdim(A, d::Integer)\n\nReverse A in dimension d.\n\nExample\n\njulia> b = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> flipdim(b,2)\n2×2 Array{Int64,2}:\n 2  1\n 4  3\n\n\n\n"
+    "text": "flipdim(A, d::Integer)\n\nReverse A in dimension d.\n\nExamples\n\njulia> b = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> flipdim(b,2)\n2×2 Array{Int64,2}:\n 2  1\n 4  3\n\n\n\n"
 },
 
 {
@@ -10853,7 +10853,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.circshift",
     "category": "Function",
-    "text": "circshift(A, shifts)\n\nCircularly shift the data in an array. The second argument is a vector giving the amount to shift in each dimension.\n\nExample\n\njulia> b = reshape(collect(1:16), (4,4))\n4×4 Array{Int64,2}:\n 1  5   9  13\n 2  6  10  14\n 3  7  11  15\n 4  8  12  16\n\njulia> circshift(b, (0,2))\n4×4 Array{Int64,2}:\n  9  13  1  5\n 10  14  2  6\n 11  15  3  7\n 12  16  4  8\n\njulia> circshift(b, (-1,0))\n4×4 Array{Int64,2}:\n 2  6  10  14\n 3  7  11  15\n 4  8  12  16\n 1  5   9  13\n\nSee also circshift!.\n\n\n\n"
+    "text": "circshift(A, shifts)\n\nCircularly shift the data in an array. The second argument is a vector giving the amount to shift in each dimension.\n\nExamples\n\njulia> b = reshape(collect(1:16), (4,4))\n4×4 Array{Int64,2}:\n 1  5   9  13\n 2  6  10  14\n 3  7  11  15\n 4  8  12  16\n\njulia> circshift(b, (0,2))\n4×4 Array{Int64,2}:\n  9  13  1  5\n 10  14  2  6\n 11  15  3  7\n 12  16  4  8\n\njulia> circshift(b, (-1,0))\n4×4 Array{Int64,2}:\n 2  6  10  14\n 3  7  11  15\n 4  8  12  16\n 1  5   9  13\n\nSee also circshift!.\n\n\n\n"
 },
 
 {
@@ -10869,7 +10869,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.circcopy!",
     "category": "Function",
-    "text": "circcopy!(dest, src)\n\nCopy src to dest, indexing each dimension modulo its length. src and dest must have the same size, but can be offset in their indices; any offset results in a (circular) wraparound. If the arrays have overlapping indices, then on the domain of the overlap dest agrees with src.\n\nExample\n\njulia> src = reshape(collect(1:16), (4,4))\n4×4 Array{Int64,2}:\n 1  5   9  13\n 2  6  10  14\n 3  7  11  15\n 4  8  12  16\n\njulia> dest = OffsetArray{Int}((0:3,2:5))\n\njulia> circcopy!(dest, src)\nOffsetArrays.OffsetArray{Int64,2,Array{Int64,2}} with indices 0:3×2:5:\n 8  12  16  4\n 5   9  13  1\n 6  10  14  2\n 7  11  15  3\n\njulia> dest[1:3,2:4] == src[1:3,2:4]\ntrue\n\n\n\n"
+    "text": "circcopy!(dest, src)\n\nCopy src to dest, indexing each dimension modulo its length. src and dest must have the same size, but can be offset in their indices; any offset results in a (circular) wraparound. If the arrays have overlapping indices, then on the domain of the overlap dest agrees with src.\n\nExamples\n\njulia> src = reshape(collect(1:16), (4,4))\n4×4 Array{Int64,2}:\n 1  5   9  13\n 2  6  10  14\n 3  7  11  15\n 4  8  12  16\n\njulia> dest = OffsetArray{Int}((0:3,2:5))\n\njulia> circcopy!(dest, src)\nOffsetArrays.OffsetArray{Int64,2,Array{Int64,2}} with indices 0:3×2:5:\n 8  12  16  4\n 5   9  13  1\n 6  10  14  2\n 7  11  15  3\n\njulia> dest[1:3,2:4] == src[1:3,2:4]\ntrue\n\n\n\n"
 },
 
 {
@@ -11013,7 +11013,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.permutedims",
     "category": "Function",
-    "text": "permutedims(A, perm)\n\nPermute the dimensions of array A. perm is a vector specifying a permutation of length ndims(A). This is a generalization of transpose for multi-dimensional arrays. Transpose is equivalent to permutedims(A, [2,1]).\n\nSee also: PermutedDimsArray.\n\nExample\n\njulia> A = reshape(collect(1:8), (2,2,2))\n2×2×2 Array{Int64,3}:\n[:, :, 1] =\n 1  3\n 2  4\n\n[:, :, 2] =\n 5  7\n 6  8\n\njulia> permutedims(A, [3, 2, 1])\n2×2×2 Array{Int64,3}:\n[:, :, 1] =\n 1  3\n 5  7\n\n[:, :, 2] =\n 2  4\n 6  8\n\n\n\n"
+    "text": "permutedims(A, perm)\n\nPermute the dimensions of array A. perm is a vector specifying a permutation of length ndims(A). This is a generalization of transpose for multi-dimensional arrays. Transpose is equivalent to permutedims(A, [2,1]).\n\nSee also: PermutedDimsArray.\n\nExamples\n\njulia> A = reshape(collect(1:8), (2,2,2))\n2×2×2 Array{Int64,3}:\n[:, :, 1] =\n 1  3\n 2  4\n\n[:, :, 2] =\n 5  7\n 6  8\n\njulia> permutedims(A, [3, 2, 1])\n2×2×2 Array{Int64,3}:\n[:, :, 1] =\n 1  3\n 5  7\n\n[:, :, 2] =\n 2  4\n 6  8\n\n\n\n"
 },
 
 {
@@ -11029,7 +11029,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.PermutedDimsArrays.PermutedDimsArray",
     "category": "Type",
-    "text": "PermutedDimsArray(A, perm) -> B\n\nGiven an AbstractArray A, create a view B such that the dimensions appear to be permuted. Similar to permutedims, except that no copying occurs (B shares storage with A).\n\nSee also: permutedims.\n\nExample\n\njulia> A = rand(3,5,4);\n\njulia> B = PermutedDimsArray(A, (3,1,2));\n\njulia> size(B)\n(4, 3, 5)\n\njulia> B[3,1,2] == A[1,2,3]\ntrue\n\n\n\n"
+    "text": "PermutedDimsArray(A, perm) -> B\n\nGiven an AbstractArray A, create a view B such that the dimensions appear to be permuted. Similar to permutedims, except that no copying occurs (B shares storage with A).\n\nSee also: permutedims.\n\nExamples\n\njulia> A = rand(3,5,4);\n\njulia> B = PermutedDimsArray(A, (3,1,2));\n\njulia> size(B)\n(4, 3, 5)\n\njulia> B[3,1,2] == A[1,2,3]\ntrue\n\n\n\n"
 },
 
 {
@@ -11053,7 +11053,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.accumulate",
     "category": "Method",
-    "text": "accumulate(op, A, dim=1)\n\nCumulative operation op along a dimension dim (defaults to 1). See also accumulate! to use a preallocated output array, both for performance and to control the precision of the output (e.g. to avoid overflow). For common operations there are specialized variants of accumulate, see: cumsum, cumprod\n\njulia> accumulate(+, [1,2,3])\n3-element Array{Int64,1}:\n 1\n 3\n 6\n\njulia> accumulate(*, [1,2,3])\n3-element Array{Int64,1}:\n 1\n 2\n 6\n\n\n\naccumulate(op, v0, A)\n\nLike accumulate, but using a starting element v0. The first entry of the result will be op(v0, first(A)). For example:\n\njulia> accumulate(+, 100, [1,2,3])\n3-element Array{Int64,1}:\n 101\n 103\n 106\n\njulia> accumulate(min, 0, [1,2,-1])\n3-element Array{Int64,1}:\n  0\n  0\n -1\n\n\n\n"
+    "text": "accumulate(op, A, dim=1)\n\nCumulative operation op along a dimension dim (defaults to 1). See also accumulate! to use a preallocated output array, both for performance and to control the precision of the output (e.g. to avoid overflow). For common operations there are specialized variants of accumulate, see: cumsum, cumprod\n\njulia> accumulate(+, [1,2,3])\n3-element Array{Int64,1}:\n 1\n 3\n 6\n\njulia> accumulate(*, [1,2,3])\n3-element Array{Int64,1}:\n 1\n 2\n 6\n\n\n\naccumulate(op, v0, A)\n\nLike accumulate, but using a starting element v0. The first entry of the result will be op(v0, first(A)).\n\nExamples\n\njulia> accumulate(+, 100, [1,2,3])\n3-element Array{Int64,1}:\n 101\n 103\n 106\n\njulia> accumulate(min, 0, [1,2,-1])\n3-element Array{Int64,1}:\n  0\n  0\n -1\n\n\n\n"
 },
 
 {
@@ -11117,7 +11117,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.LinAlg.diff",
     "category": "Function",
-    "text": "diff(A, [dim::Integer=1])\n\nFinite difference operator of matrix or vector A. If A is a matrix, compute the finite difference over a dimension dim (default 1).\n\nExample\n\njulia> a = [2 4; 6 16]\n2×2 Array{Int64,2}:\n 2   4\n 6  16\n\njulia> diff(a,2)\n2×1 Array{Int64,2}:\n  2\n 10\n\n\n\n"
+    "text": "diff(A, [dim::Integer=1])\n\nFinite difference operator of matrix or vector A. If A is a matrix, compute the finite difference over a dimension dim (default 1).\n\nExamples\n\njulia> a = [2 4; 6 16]\n2×2 Array{Int64,2}:\n 2   4\n 6  16\n\njulia> diff(a,2)\n2×1 Array{Int64,2}:\n  2\n 10\n\n\n\n"
 },
 
 {
@@ -11125,7 +11125,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.LinAlg.gradient",
     "category": "Function",
-    "text": "gradient(F::AbstractVector, [h::Real])\n\nCompute differences along vector F, using h as the spacing between points. The default spacing is one.\n\nExample\n\njulia> a = [2,4,6,8];\n\njulia> gradient(a)\n4-element Array{Float64,1}:\n 2.0\n 2.0\n 2.0\n 2.0\n\n\n\n"
+    "text": "gradient(F::AbstractVector, [h::Real])\n\nCompute differences along vector F, using h as the spacing between points. The default spacing is one.\n\nExamples\n\njulia> a = [2,4,6,8];\n\njulia> gradient(a)\n4-element Array{Float64,1}:\n 2.0\n 2.0\n 2.0\n 2.0\n\n\n\n"
 },
 
 {
@@ -11141,7 +11141,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.rot180",
     "category": "Function",
-    "text": "rot180(A)\n\nRotate matrix A 180 degrees.\n\nExample\n\njulia> a = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> rot180(a)\n2×2 Array{Int64,2}:\n 4  3\n 2  1\n\n\n\nrot180(A, k)\n\nRotate matrix A 180 degrees an integer k number of times. If k is even, this is equivalent to a copy.\n\nExamples\n\njulia> a = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> rot180(a,1)\n2×2 Array{Int64,2}:\n 4  3\n 2  1\n\njulia> rot180(a,2)\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\n\n\n"
+    "text": "rot180(A)\n\nRotate matrix A 180 degrees.\n\nExamples\n\njulia> a = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> rot180(a)\n2×2 Array{Int64,2}:\n 4  3\n 2  1\n\n\n\nrot180(A, k)\n\nRotate matrix A 180 degrees an integer k number of times. If k is even, this is equivalent to a copy.\n\nExamples\n\njulia> a = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> rot180(a,1)\n2×2 Array{Int64,2}:\n 4  3\n 2  1\n\njulia> rot180(a,2)\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\n\n\n"
 },
 
 {
@@ -11149,7 +11149,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.rotl90",
     "category": "Function",
-    "text": "rotl90(A)\n\nRotate matrix A left 90 degrees.\n\nExample\n\njulia> a = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> rotl90(a)\n2×2 Array{Int64,2}:\n 2  4\n 1  3\n\n\n\nrotl90(A, k)\n\nRotate matrix A left 90 degrees an integer k number of times. If k is zero or a multiple of four, this is equivalent to a copy.\n\nExamples\n\njulia> a = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> rotl90(a,1)\n2×2 Array{Int64,2}:\n 2  4\n 1  3\n\njulia> rotl90(a,2)\n2×2 Array{Int64,2}:\n 4  3\n 2  1\n\njulia> rotl90(a,3)\n2×2 Array{Int64,2}:\n 3  1\n 4  2\n\njulia> rotl90(a,4)\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\n\n\n"
+    "text": "rotl90(A)\n\nRotate matrix A left 90 degrees.\n\nExamples\n\njulia> a = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> rotl90(a)\n2×2 Array{Int64,2}:\n 2  4\n 1  3\n\n\n\nrotl90(A, k)\n\nRotate matrix A left 90 degrees an integer k number of times. If k is zero or a multiple of four, this is equivalent to a copy.\n\nExamples\n\njulia> a = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> rotl90(a,1)\n2×2 Array{Int64,2}:\n 2  4\n 1  3\n\njulia> rotl90(a,2)\n2×2 Array{Int64,2}:\n 4  3\n 2  1\n\njulia> rotl90(a,3)\n2×2 Array{Int64,2}:\n 3  1\n 4  2\n\njulia> rotl90(a,4)\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\n\n\n"
 },
 
 {
@@ -11157,7 +11157,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.rotr90",
     "category": "Function",
-    "text": "rotr90(A)\n\nRotate matrix A right 90 degrees.\n\nExample\n\njulia> a = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> rotr90(a)\n2×2 Array{Int64,2}:\n 3  1\n 4  2\n\n\n\nrotr90(A, k)\n\nRotate matrix A right 90 degrees an integer k number of times. If k is zero or a multiple of four, this is equivalent to a copy.\n\nExamples\n\njulia> a = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> rotr90(a,1)\n2×2 Array{Int64,2}:\n 3  1\n 4  2\n\njulia> rotr90(a,2)\n2×2 Array{Int64,2}:\n 4  3\n 2  1\n\njulia> rotr90(a,3)\n2×2 Array{Int64,2}:\n 2  4\n 1  3\n\njulia> rotr90(a,4)\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\n\n\n"
+    "text": "rotr90(A)\n\nRotate matrix A right 90 degrees.\n\nExamples\n\njulia> a = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> rotr90(a)\n2×2 Array{Int64,2}:\n 3  1\n 4  2\n\n\n\nrotr90(A, k)\n\nRotate matrix A right 90 degrees an integer k number of times. If k is zero or a multiple of four, this is equivalent to a copy.\n\nExamples\n\njulia> a = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> rotr90(a,1)\n2×2 Array{Int64,2}:\n 3  1\n 4  2\n\njulia> rotr90(a,2)\n2×2 Array{Int64,2}:\n 4  3\n 2  1\n\njulia> rotr90(a,3)\n2×2 Array{Int64,2}:\n 2  4\n 1  3\n\njulia> rotr90(a,4)\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\n\n\n"
 },
 
 {
@@ -11205,7 +11205,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.Random.randperm",
     "category": "Function",
-    "text": "randperm([rng=GLOBAL_RNG,] n::Integer)\n\nConstruct a random permutation of length n. The optional rng argument specifies a random number generator (see Random Numbers). To randomly permute a arbitrary vector, see shuffle or shuffle!.\n\nExample\n\njulia> rng = MersenneTwister(1234);\n\njulia> randperm(rng, 4)\n4-element Array{Int64,1}:\n 2\n 1\n 4\n 3\n\n\n\n"
+    "text": "randperm([rng=GLOBAL_RNG,] n::Integer)\n\nConstruct a random permutation of length n. The optional rng argument specifies a random number generator (see Random Numbers). To randomly permute a arbitrary vector, see shuffle or shuffle!.\n\nExamples\n\njulia> rng = MersenneTwister(1234);\n\njulia> randperm(rng, 4)\n4-element Array{Int64,1}:\n 2\n 1\n 4\n 3\n\n\n\n"
 },
 
 {
@@ -11213,7 +11213,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.invperm",
     "category": "Function",
-    "text": "invperm(v)\n\nReturn the inverse permutation of v. If B = A[v], then A == B[invperm(v)].\n\nExample\n\njulia> v = [2; 4; 3; 1];\n\njulia> invperm(v)\n4-element Array{Int64,1}:\n 4\n 1\n 3\n 2\n\njulia> A = ['a','b','c','d'];\n\njulia> B = A[v]\n4-element Array{Char,1}:\n 'b'\n 'd'\n 'c'\n 'a'\n\njulia> B[invperm(v)]\n4-element Array{Char,1}:\n 'a'\n 'b'\n 'c'\n 'd'\n\n\n\n"
+    "text": "invperm(v)\n\nReturn the inverse permutation of v. If B = A[v], then A == B[invperm(v)].\n\nExamples\n\njulia> v = [2; 4; 3; 1];\n\njulia> invperm(v)\n4-element Array{Int64,1}:\n 4\n 1\n 3\n 2\n\njulia> A = ['a','b','c','d'];\n\njulia> B = A[v]\n4-element Array{Char,1}:\n 'b'\n 'd'\n 'c'\n 'a'\n\njulia> B[invperm(v)]\n4-element Array{Char,1}:\n 'a'\n 'b'\n 'c'\n 'd'\n\n\n\n"
 },
 
 {
@@ -11229,7 +11229,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.permute!",
     "category": "Method",
-    "text": "permute!(v, p)\n\nPermute vector v in-place, according to permutation p. No checking is done to verify that p is a permutation.\n\nTo return a new permutation, use v[p]. Note that this is generally faster than permute!(v,p) for large vectors.\n\nSee also ipermute!.\n\nExample\n\njulia> A = [1, 1, 3, 4];\n\njulia> perm = [2, 4, 3, 1];\n\njulia> permute!(A, perm);\n\njulia> A\n4-element Array{Int64,1}:\n 1\n 4\n 3\n 1\n\n\n\n"
+    "text": "permute!(v, p)\n\nPermute vector v in-place, according to permutation p. No checking is done to verify that p is a permutation.\n\nTo return a new permutation, use v[p]. Note that this is generally faster than permute!(v,p) for large vectors.\n\nSee also ipermute!.\n\nExamples\n\njulia> A = [1, 1, 3, 4];\n\njulia> perm = [2, 4, 3, 1];\n\njulia> permute!(A, perm);\n\njulia> A\n4-element Array{Int64,1}:\n 1\n 4\n 3\n 1\n\n\n\n"
 },
 
 {
@@ -11237,7 +11237,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.ipermute!",
     "category": "Function",
-    "text": "ipermute!(v, p)\n\nLike permute!, but the inverse of the given permutation is applied.\n\nExample\n\njulia> A = [1, 1, 3, 4];\n\njulia> perm = [2, 4, 3, 1];\n\njulia> ipermute!(A, perm);\n\njulia> A\n4-element Array{Int64,1}:\n 4\n 1\n 3\n 1\n\n\n\n"
+    "text": "ipermute!(v, p)\n\nLike permute!, but the inverse of the given permutation is applied.\n\nExamples\n\njulia> A = [1, 1, 3, 4];\n\njulia> perm = [2, 4, 3, 1];\n\njulia> ipermute!(A, perm);\n\njulia> A\n4-element Array{Int64,1}:\n 4\n 1\n 3\n 1\n\n\n\n"
 },
 
 {
@@ -11245,7 +11245,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.Random.randcycle",
     "category": "Function",
-    "text": "randcycle([rng=GLOBAL_RNG,] n::Integer)\n\nConstruct a random cyclic permutation of length n. The optional rng argument specifies a random number generator, see Random Numbers.\n\nExample\n\njulia> rng = MersenneTwister(1234);\n\njulia> randcycle(rng, 6)\n6-element Array{Int64,1}:\n 3\n 5\n 4\n 6\n 1\n 2\n\n\n\n"
+    "text": "randcycle([rng=GLOBAL_RNG,] n::Integer)\n\nConstruct a random cyclic permutation of length n. The optional rng argument specifies a random number generator, see Random Numbers.\n\nExamples\n\njulia> rng = MersenneTwister(1234);\n\njulia> randcycle(rng, 6)\n6-element Array{Int64,1}:\n 3\n 5\n 4\n 6\n 1\n 2\n\n\n\n"
 },
 
 {
@@ -11253,7 +11253,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.Random.shuffle",
     "category": "Function",
-    "text": "shuffle([rng=GLOBAL_RNG,] v::AbstractArray)\n\nReturn a randomly permuted copy of v. The optional rng argument specifies a random number generator (see Random Numbers). To permute v in-place, see shuffle!. To obtain randomly permuted indices, see randperm.\n\nExample\n\njulia> rng = MersenneTwister(1234);\n\njulia> shuffle(rng, collect(1:10))\n10-element Array{Int64,1}:\n  6\n  1\n 10\n  2\n  3\n  9\n  5\n  7\n  4\n  8\n\n\n\n"
+    "text": "shuffle([rng=GLOBAL_RNG,] v::AbstractArray)\n\nReturn a randomly permuted copy of v. The optional rng argument specifies a random number generator (see Random Numbers). To permute v in-place, see shuffle!. To obtain randomly permuted indices, see randperm.\n\nExamples\n\njulia> rng = MersenneTwister(1234);\n\njulia> shuffle(rng, collect(1:10))\n10-element Array{Int64,1}:\n  6\n  1\n 10\n  2\n  3\n  9\n  5\n  7\n  4\n  8\n\n\n\n"
 },
 
 {
@@ -11261,7 +11261,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.Random.shuffle!",
     "category": "Function",
-    "text": "shuffle!([rng=GLOBAL_RNG,] v::AbstractArray)\n\nIn-place version of shuffle: randomly permute v in-place, optionally supplying the random-number generator rng.\n\nExample\n\njulia> rng = MersenneTwister(1234);\n\njulia> shuffle!(rng, collect(1:16))\n16-element Array{Int64,1}:\n  2\n 15\n  5\n 14\n  1\n  9\n 10\n  6\n 11\n  3\n 16\n  7\n  4\n 12\n  8\n 13\n\n\n\n"
+    "text": "shuffle!([rng=GLOBAL_RNG,] v::AbstractArray)\n\nIn-place version of shuffle: randomly permute v in-place, optionally supplying the random-number generator rng.\n\nExamples\n\njulia> rng = MersenneTwister(1234);\n\njulia> shuffle!(rng, collect(1:16))\n16-element Array{Int64,1}:\n  2\n 15\n  5\n 14\n  1\n  9\n 10\n  6\n 11\n  3\n 16\n  7\n  4\n 12\n  8\n 13\n\n\n\n"
 },
 
 {
@@ -11301,7 +11301,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.flipbits!",
     "category": "Function",
-    "text": "flipbits!(B::BitArray{N}) -> BitArray{N}\n\nPerforms a bitwise not operation on B. See ~.\n\nExample\n\njulia> A = trues(2,2)\n2×2 BitArray{2}:\n true  true\n true  true\n\njulia> flipbits!(A)\n2×2 BitArray{2}:\n false  false\n false  false\n\n\n\n"
+    "text": "flipbits!(B::BitArray{N}) -> BitArray{N}\n\nPerforms a bitwise not operation on B. See ~.\n\nExamples\n\njulia> A = trues(2,2)\n2×2 BitArray{2}:\n true  true\n true  true\n\njulia> flipbits!(A)\n2×2 BitArray{2}:\n false  false\n false  false\n\n\n\n"
 },
 
 {
@@ -11365,7 +11365,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.SparseArrays.sparse",
     "category": "Function",
-    "text": "sparse(A)\n\nConvert an AbstractMatrix A into a sparse matrix.\n\nExample\n\njulia> A = eye(3)\n3×3 Array{Float64,2}:\n 1.0  0.0  0.0\n 0.0  1.0  0.0\n 0.0  0.0  1.0\n\njulia> sparse(A)\n3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:\n  [1, 1]  =  1.0\n  [2, 2]  =  1.0\n  [3, 3]  =  1.0\n\n\n\nsparse(I, J, V,[ m, n, combine])\n\nCreate a sparse matrix S of dimensions m x n such that S[I[k], J[k]] = V[k]. The combine function is used to combine duplicates. If m and n are not specified, they are set to maximum(I) and maximum(J) respectively. If the combine function is not supplied, combine defaults to + unless the elements of V are Booleans in which case combine defaults to |. All elements of I must satisfy 1 <= I[k] <= m, and all elements of J must satisfy 1 <= J[k] <= n. Numerical zeros in (I, J, V) are retained as structural nonzeros; to drop numerical zeros, use dropzeros!.\n\nFor additional documentation and an expert driver, see Base.SparseArrays.sparse!.\n\nExample\n\njulia> Is = [1; 2; 3];\n\njulia> Js = [1; 2; 3];\n\njulia> Vs = [1; 2; 3];\n\njulia> sparse(Is, Js, Vs)\n3×3 SparseMatrixCSC{Int64,Int64} with 3 stored entries:\n  [1, 1]  =  1\n  [2, 2]  =  2\n  [3, 3]  =  3\n\n\n\n"
+    "text": "sparse(A)\n\nConvert an AbstractMatrix A into a sparse matrix.\n\nExamples\n\njulia> A = eye(3)\n3×3 Array{Float64,2}:\n 1.0  0.0  0.0\n 0.0  1.0  0.0\n 0.0  0.0  1.0\n\njulia> sparse(A)\n3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:\n  [1, 1]  =  1.0\n  [2, 2]  =  1.0\n  [3, 3]  =  1.0\n\n\n\nsparse(I, J, V,[ m, n, combine])\n\nCreate a sparse matrix S of dimensions m x n such that S[I[k], J[k]] = V[k]. The combine function is used to combine duplicates. If m and n are not specified, they are set to maximum(I) and maximum(J) respectively. If the combine function is not supplied, combine defaults to + unless the elements of V are Booleans in which case combine defaults to |. All elements of I must satisfy 1 <= I[k] <= m, and all elements of J must satisfy 1 <= J[k] <= n. Numerical zeros in (I, J, V) are retained as structural nonzeros; to drop numerical zeros, use dropzeros!.\n\nFor additional documentation and an expert driver, see Base.SparseArrays.sparse!.\n\nExamples\n\njulia> Is = [1; 2; 3];\n\njulia> Js = [1; 2; 3];\n\njulia> Vs = [1; 2; 3];\n\njulia> sparse(Is, Js, Vs)\n3×3 SparseMatrixCSC{Int64,Int64} with 3 stored entries:\n  [1, 1]  =  1\n  [2, 2]  =  2\n  [3, 3]  =  3\n\n\n\n"
 },
 
 {
@@ -11373,7 +11373,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.SparseArrays.sparsevec",
     "category": "Function",
-    "text": "sparsevec(I, V, [m, combine])\n\nCreate a sparse vector S of length m such that S[I[k]] = V[k]. Duplicates are combined using the combine function, which defaults to + if no combine argument is provided, unless the elements of V are Booleans in which case combine defaults to |.\n\nExamples\n\njulia> II = [1, 3, 3, 5]; V = [0.1, 0.2, 0.3, 0.2];\n\njulia> sparsevec(II, V)\n5-element SparseVector{Float64,Int64} with 3 stored entries:\n  [1]  =  0.1\n  [3]  =  0.5\n  [5]  =  0.2\n\njulia> sparsevec(II, V, 8, -)\n8-element SparseVector{Float64,Int64} with 3 stored entries:\n  [1]  =  0.1\n  [3]  =  -0.1\n  [5]  =  0.2\n\njulia> sparsevec([1, 3, 1, 2, 2], [true, true, false, false, false])\n3-element SparseVector{Bool,Int64} with 3 stored entries:\n  [1]  =  true\n  [2]  =  false\n  [3]  =  true\n\n\n\nsparsevec(d::Dict, [m])\n\nCreate a sparse vector of length m where the nonzero indices are keys from the dictionary, and the nonzero values are the values from the dictionary.\n\nExamples\n\njulia> sparsevec(Dict(1 => 3, 2 => 2))\n2-element SparseVector{Int64,Int64} with 2 stored entries:\n  [1]  =  3\n  [2]  =  2\n\n\n\nsparsevec(A)\n\nConvert a vector A into a sparse vector of length m.\n\nExample\n\njulia> sparsevec([1.0, 2.0, 0.0, 0.0, 3.0, 0.0])\n6-element SparseVector{Float64,Int64} with 3 stored entries:\n  [1]  =  1.0\n  [2]  =  2.0\n  [5]  =  3.0\n\n\n\n"
+    "text": "sparsevec(I, V, [m, combine])\n\nCreate a sparse vector S of length m such that S[I[k]] = V[k]. Duplicates are combined using the combine function, which defaults to + if no combine argument is provided, unless the elements of V are Booleans in which case combine defaults to |.\n\nExamples\n\njulia> II = [1, 3, 3, 5]; V = [0.1, 0.2, 0.3, 0.2];\n\njulia> sparsevec(II, V)\n5-element SparseVector{Float64,Int64} with 3 stored entries:\n  [1]  =  0.1\n  [3]  =  0.5\n  [5]  =  0.2\n\njulia> sparsevec(II, V, 8, -)\n8-element SparseVector{Float64,Int64} with 3 stored entries:\n  [1]  =  0.1\n  [3]  =  -0.1\n  [5]  =  0.2\n\njulia> sparsevec([1, 3, 1, 2, 2], [true, true, false, false, false])\n3-element SparseVector{Bool,Int64} with 3 stored entries:\n  [1]  =  true\n  [2]  =  false\n  [3]  =  true\n\n\n\nsparsevec(d::Dict, [m])\n\nCreate a sparse vector of length m where the nonzero indices are keys from the dictionary, and the nonzero values are the values from the dictionary.\n\nExamples\n\njulia> sparsevec(Dict(1 => 3, 2 => 2))\n2-element SparseVector{Int64,Int64} with 2 stored entries:\n  [1]  =  3\n  [2]  =  2\n\n\n\nsparsevec(A)\n\nConvert a vector A into a sparse vector of length m.\n\nExamples\n\njulia> sparsevec([1.0, 2.0, 0.0, 0.0, 3.0, 0.0])\n6-element SparseVector{Float64,Int64} with 3 stored entries:\n  [1]  =  1.0\n  [2]  =  2.0\n  [5]  =  3.0\n\n\n\n"
 },
 
 {
@@ -11389,7 +11389,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.full",
     "category": "Function",
-    "text": "full(S)\n\nConvert a sparse matrix or vector S into a dense matrix or vector.\n\nExample\n\njulia> A = speye(3)\n3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:\n  [1, 1]  =  1.0\n  [2, 2]  =  1.0\n  [3, 3]  =  1.0\n\njulia> full(A)\n3×3 Array{Float64,2}:\n 1.0  0.0  0.0\n 0.0  1.0  0.0\n 0.0  0.0  1.0\n\n\n\n"
+    "text": "full(S)\n\nConvert a sparse matrix or vector S into a dense matrix or vector.\n\nExamples\n\njulia> A = speye(3)\n3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:\n  [1, 1]  =  1.0\n  [2, 2]  =  1.0\n  [3, 3]  =  1.0\n\njulia> full(A)\n3×3 Array{Float64,2}:\n 1.0  0.0  0.0\n 0.0  1.0  0.0\n 0.0  0.0  1.0\n\n\n\n"
 },
 
 {
@@ -11397,7 +11397,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.SparseArrays.nnz",
     "category": "Function",
-    "text": "nnz(A)\n\nReturns the number of stored (filled) elements in a sparse array.\n\nExample\n\njulia> A = speye(3)\n3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:\n  [1, 1]  =  1.0\n  [2, 2]  =  1.0\n  [3, 3]  =  1.0\n\njulia> nnz(A)\n3\n\n\n\n"
+    "text": "nnz(A)\n\nReturns the number of stored (filled) elements in a sparse array.\n\nExamples\n\njulia> A = speye(3)\n3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:\n  [1, 1]  =  1.0\n  [2, 2]  =  1.0\n  [3, 3]  =  1.0\n\njulia> nnz(A)\n3\n\n\n\n"
 },
 
 {
@@ -11413,7 +11413,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.SparseArrays.spones",
     "category": "Function",
-    "text": "spones(S)\n\nCreate a sparse array with the same structure as that of S, but with every nonzero element having the value 1.0.\n\nExample\n\njulia> A = sparse([1,2,3,4],[2,4,3,1],[5.,4.,3.,2.])\n4×4 SparseMatrixCSC{Float64,Int64} with 4 stored entries:\n  [4, 1]  =  2.0\n  [1, 2]  =  5.0\n  [3, 3]  =  3.0\n  [2, 4]  =  4.0\n\njulia> spones(A)\n4×4 SparseMatrixCSC{Float64,Int64} with 4 stored entries:\n  [4, 1]  =  1.0\n  [1, 2]  =  1.0\n  [3, 3]  =  1.0\n  [2, 4]  =  1.0\n\nNote the difference from speye.\n\n\n\n"
+    "text": "spones(S)\n\nCreate a sparse array with the same structure as that of S, but with every nonzero element having the value 1.0.\n\nExamples\n\njulia> A = sparse([1,2,3,4],[2,4,3,1],[5.,4.,3.,2.])\n4×4 SparseMatrixCSC{Float64,Int64} with 4 stored entries:\n  [4, 1]  =  2.0\n  [1, 2]  =  5.0\n  [3, 3]  =  3.0\n  [2, 4]  =  4.0\n\njulia> spones(A)\n4×4 SparseMatrixCSC{Float64,Int64} with 4 stored entries:\n  [4, 1]  =  1.0\n  [1, 2]  =  1.0\n  [3, 3]  =  1.0\n  [2, 4]  =  1.0\n\nNote the difference from speye.\n\n\n\n"
 },
 
 {
@@ -11429,7 +11429,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.SparseArrays.speye",
     "category": "Method",
-    "text": "speye(S)\n\nCreate a sparse identity matrix with the same size as S.\n\nExample\n\njulia> A = sparse([1,2,3,4],[2,4,3,1],[5.,4.,3.,2.])\n4×4 SparseMatrixCSC{Float64,Int64} with 4 stored entries:\n  [4, 1]  =  2.0\n  [1, 2]  =  5.0\n  [3, 3]  =  3.0\n  [2, 4]  =  4.0\n\njulia> speye(A)\n4×4 SparseMatrixCSC{Float64,Int64} with 4 stored entries:\n  [1, 1]  =  1.0\n  [2, 2]  =  1.0\n  [3, 3]  =  1.0\n  [4, 4]  =  1.0\n\nNote the difference from spones.\n\n\n\nspeye([type,]m[,n])\n\nCreate a sparse identity matrix of size m x m. When n is supplied, create a sparse identity matrix of size m x n. The type defaults to Float64 if not specified.\n\nsparse(I, m, n) is equivalent to speye(Int, m, n), and sparse(α*I, m, n) can be used to efficiently create a sparse multiple α of the identity matrix.\n\n\n\n"
+    "text": "speye(S)\n\nCreate a sparse identity matrix with the same size as S.\n\nExamples\n\njulia> A = sparse([1,2,3,4],[2,4,3,1],[5.,4.,3.,2.])\n4×4 SparseMatrixCSC{Float64,Int64} with 4 stored entries:\n  [4, 1]  =  2.0\n  [1, 2]  =  5.0\n  [3, 3]  =  3.0\n  [2, 4]  =  4.0\n\njulia> speye(A)\n4×4 SparseMatrixCSC{Float64,Int64} with 4 stored entries:\n  [1, 1]  =  1.0\n  [2, 2]  =  1.0\n  [3, 3]  =  1.0\n  [4, 4]  =  1.0\n\nNote the difference from spones.\n\n\n\nspeye([type,]m[,n])\n\nCreate a sparse identity matrix of size m x m. When n is supplied, create a sparse identity matrix of size m x n. The type defaults to Float64 if not specified.\n\nsparse(I, m, n) is equivalent to speye(Int, m, n), and sparse(α*I, m, n) can be used to efficiently create a sparse multiple α of the identity matrix.\n\n\n\n"
 },
 
 {
@@ -11437,7 +11437,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.SparseArrays.spdiagm",
     "category": "Function",
-    "text": "spdiagm(B, d[, m, n])\n\nConstruct a sparse diagonal matrix. B is a tuple of vectors containing the diagonals and d is a tuple containing the positions of the diagonals. In the case the input contains only one diagonal, B can be a vector (instead of a tuple) and d can be the diagonal position (instead of a tuple), defaulting to 0 (diagonal). Optionally, m and n specify the size of the resulting sparse matrix.\n\nExample\n\njulia> spdiagm(([1,2,3,4],[4,3,2,1]),(-1,1))\n5×5 SparseMatrixCSC{Int64,Int64} with 8 stored entries:\n  [2, 1]  =  1\n  [1, 2]  =  4\n  [3, 2]  =  2\n  [2, 3]  =  3\n  [4, 3]  =  3\n  [3, 4]  =  2\n  [5, 4]  =  4\n  [4, 5]  =  1\n\n\n\n"
+    "text": "spdiagm(B, d[, m, n])\n\nConstruct a sparse diagonal matrix. B is a tuple of vectors containing the diagonals and d is a tuple containing the positions of the diagonals. In the case the input contains only one diagonal, B can be a vector (instead of a tuple) and d can be the diagonal position (instead of a tuple), defaulting to 0 (diagonal). Optionally, m and n specify the size of the resulting sparse matrix.\n\nExamples\n\njulia> spdiagm(([1,2,3,4],[4,3,2,1]),(-1,1))\n5×5 SparseMatrixCSC{Int64,Int64} with 8 stored entries:\n  [2, 1]  =  1\n  [1, 2]  =  4\n  [3, 2]  =  2\n  [2, 3]  =  3\n  [4, 3]  =  3\n  [3, 4]  =  2\n  [5, 4]  =  4\n  [4, 5]  =  1\n\n\n\n"
 },
 
 {
@@ -11445,7 +11445,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.SparseArrays.sprand",
     "category": "Function",
-    "text": "sprand([rng],[type],m,[n],p::AbstractFloat,[rfn])\n\nCreate a random length m sparse vector or m by n sparse matrix, in which the probability of any element being nonzero is independently given by p (and hence the mean density of nonzeros is also exactly p). Nonzero values are sampled from the distribution specified by rfn and have the type type. The uniform distribution is used in case rfn is not specified. The optional rng argument specifies a random number generator, see Random Numbers.\n\nExample\n\njulia> rng = MersenneTwister(1234);\n\njulia> sprand(rng, Bool, 2, 2, 0.5)\n2×2 SparseMatrixCSC{Bool,Int64} with 2 stored entries:\n  [1, 1]  =  true\n  [2, 1]  =  true\n\njulia> sprand(rng, Float64, 3, 0.75)\n3-element SparseVector{Float64,Int64} with 1 stored entry:\n  [3]  =  0.298614\n\n\n\n"
+    "text": "sprand([rng],[type],m,[n],p::AbstractFloat,[rfn])\n\nCreate a random length m sparse vector or m by n sparse matrix, in which the probability of any element being nonzero is independently given by p (and hence the mean density of nonzeros is also exactly p). Nonzero values are sampled from the distribution specified by rfn and have the type type. The uniform distribution is used in case rfn is not specified. The optional rng argument specifies a random number generator, see Random Numbers.\n\nExamples\n\njulia> rng = MersenneTwister(1234);\n\njulia> sprand(rng, Bool, 2, 2, 0.5)\n2×2 SparseMatrixCSC{Bool,Int64} with 2 stored entries:\n  [1, 1]  =  true\n  [2, 1]  =  true\n\njulia> sprand(rng, Float64, 3, 0.75)\n3-element SparseVector{Float64,Int64} with 1 stored entry:\n  [3]  =  0.298614\n\n\n\n"
 },
 
 {
@@ -11453,7 +11453,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.SparseArrays.sprandn",
     "category": "Function",
-    "text": "sprandn([rng], m[,n],p::AbstractFloat)\n\nCreate a random sparse vector of length m or sparse matrix of size m by n with the specified (independent) probability p of any entry being nonzero, where nonzero values are sampled from the normal distribution. The optional rng argument specifies a random number generator, see Random Numbers.\n\nExample\n\njulia> rng = MersenneTwister(1234);\n\njulia> sprandn(rng, 2, 2, 0.75)\n2×2 SparseMatrixCSC{Float64,Int64} with 3 stored entries:\n  [1, 1]  =  0.532813\n  [2, 1]  =  -0.271735\n  [2, 2]  =  0.502334\n\n\n\n"
+    "text": "sprandn([rng], m[,n],p::AbstractFloat)\n\nCreate a random sparse vector of length m or sparse matrix of size m by n with the specified (independent) probability p of any entry being nonzero, where nonzero values are sampled from the normal distribution. The optional rng argument specifies a random number generator, see Random Numbers.\n\nExamples\n\njulia> rng = MersenneTwister(1234);\n\njulia> sprandn(rng, 2, 2, 0.75)\n2×2 SparseMatrixCSC{Float64,Int64} with 3 stored entries:\n  [1, 1]  =  0.532813\n  [2, 1]  =  -0.271735\n  [2, 2]  =  0.502334\n\n\n\n"
 },
 
 {
@@ -11461,7 +11461,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.SparseArrays.nonzeros",
     "category": "Function",
-    "text": "nonzeros(A)\n\nReturn a vector of the structural nonzero values in sparse array A. This includes zeros that are explicitly stored in the sparse array. The returned vector points directly to the internal nonzero storage of A, and any modifications to the returned vector will mutate A as well. See rowvals and nzrange.\n\nExample\n\njulia> A = speye(3)\n3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:\n  [1, 1]  =  1.0\n  [2, 2]  =  1.0\n  [3, 3]  =  1.0\n\njulia> nonzeros(A)\n3-element Array{Float64,1}:\n 1.0\n 1.0\n 1.0\n\n\n\n"
+    "text": "nonzeros(A)\n\nReturn a vector of the structural nonzero values in sparse array A. This includes zeros that are explicitly stored in the sparse array. The returned vector points directly to the internal nonzero storage of A, and any modifications to the returned vector will mutate A as well. See rowvals and nzrange.\n\nExamples\n\njulia> A = speye(3)\n3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:\n  [1, 1]  =  1.0\n  [2, 2]  =  1.0\n  [3, 3]  =  1.0\n\njulia> nonzeros(A)\n3-element Array{Float64,1}:\n 1.0\n 1.0\n 1.0\n\n\n\n"
 },
 
 {
@@ -11469,7 +11469,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.SparseArrays.rowvals",
     "category": "Function",
-    "text": "rowvals(A::SparseMatrixCSC)\n\nReturn a vector of the row indices of A. Any modifications to the returned vector will mutate A as well. Providing access to how the row indices are stored internally can be useful in conjunction with iterating over structural nonzero values. See also nonzeros and nzrange.\n\nExample\n\njulia> A = speye(3)\n3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:\n  [1, 1]  =  1.0\n  [2, 2]  =  1.0\n  [3, 3]  =  1.0\n\njulia> rowvals(A)\n3-element Array{Int64,1}:\n 1\n 2\n 3\n\n\n\n"
+    "text": "rowvals(A::SparseMatrixCSC)\n\nReturn a vector of the row indices of A. Any modifications to the returned vector will mutate A as well. Providing access to how the row indices are stored internally can be useful in conjunction with iterating over structural nonzero values. See also nonzeros and nzrange.\n\nExamples\n\njulia> A = speye(3)\n3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:\n  [1, 1]  =  1.0\n  [2, 2]  =  1.0\n  [3, 3]  =  1.0\n\njulia> rowvals(A)\n3-element Array{Int64,1}:\n 1\n 2\n 3\n\n\n\n"
 },
 
 {
@@ -11493,7 +11493,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.SparseArrays.dropzeros",
     "category": "Method",
-    "text": "dropzeros(A::SparseMatrixCSC, trim::Bool = true)\n\nGenerates a copy of A and removes stored numerical zeros from that copy, optionally trimming excess space from the result's rowval and nzval arrays when trim is true.\n\nFor an in-place version and algorithmic information, see dropzeros!.\n\nExample\n\njulia> A = sparse([1, 2, 3], [1, 2, 3], [1.0, 0.0, 1.0])\n3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:\n  [1, 1]  =  1.0\n  [2, 2]  =  0.0\n  [3, 3]  =  1.0\n\njulia> dropzeros(A)\n3×3 SparseMatrixCSC{Float64,Int64} with 2 stored entries:\n  [1, 1]  =  1.0\n  [3, 3]  =  1.0\n\n\n\n"
+    "text": "dropzeros(A::SparseMatrixCSC, trim::Bool = true)\n\nGenerates a copy of A and removes stored numerical zeros from that copy, optionally trimming excess space from the result's rowval and nzval arrays when trim is true.\n\nFor an in-place version and algorithmic information, see dropzeros!.\n\nExamples\n\njulia> A = sparse([1, 2, 3], [1, 2, 3], [1.0, 0.0, 1.0])\n3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:\n  [1, 1]  =  1.0\n  [2, 2]  =  0.0\n  [3, 3]  =  1.0\n\njulia> dropzeros(A)\n3×3 SparseMatrixCSC{Float64,Int64} with 2 stored entries:\n  [1, 1]  =  1.0\n  [3, 3]  =  1.0\n\n\n\n"
 },
 
 {
@@ -11509,7 +11509,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.SparseArrays.dropzeros",
     "category": "Method",
-    "text": "dropzeros(x::SparseVector, trim::Bool = true)\n\nGenerates a copy of x and removes numerical zeros from that copy, optionally trimming excess space from the result's nzind and nzval arrays when trim is true.\n\nFor an in-place version and algorithmic information, see dropzeros!.\n\nExample\n\njulia> A = sparsevec([1, 2, 3], [1.0, 0.0, 1.0])\n3-element SparseVector{Float64,Int64} with 3 stored entries:\n  [1]  =  1.0\n  [2]  =  0.0\n  [3]  =  1.0\n\njulia> dropzeros(A)\n3-element SparseVector{Float64,Int64} with 2 stored entries:\n  [1]  =  1.0\n  [3]  =  1.0\n\n\n\n"
+    "text": "dropzeros(x::SparseVector, trim::Bool = true)\n\nGenerates a copy of x and removes numerical zeros from that copy, optionally trimming excess space from the result's nzind and nzval arrays when trim is true.\n\nFor an in-place version and algorithmic information, see dropzeros!.\n\nExamples\n\njulia> A = sparsevec([1, 2, 3], [1.0, 0.0, 1.0])\n3-element SparseVector{Float64,Int64} with 3 stored entries:\n  [1]  =  1.0\n  [2]  =  0.0\n  [3]  =  1.0\n\njulia> dropzeros(A)\n3-element SparseVector{Float64,Int64} with 2 stored entries:\n  [1]  =  1.0\n  [3]  =  1.0\n\n\n\n"
 },
 
 {
@@ -11517,7 +11517,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Arrays",
     "title": "Base.SparseArrays.permute",
     "category": "Function",
-    "text": "permute(A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{<:Integer},\n        q::AbstractVector{<:Integer}) where {Tv,Ti}\n\nBilaterally permute A, returning PAQ (A[p,q]). Column-permutation q's length must match A's column count (length(q) == A.n). Row-permutation p's length must match A's row count (length(p) == A.m).\n\nFor expert drivers and additional information, see permute!.\n\nExample\n\njulia> A = spdiagm([1, 2, 3, 4], 0, 4, 4) + spdiagm([5, 6, 7], 1, 4, 4)\n4×4 SparseMatrixCSC{Int64,Int64} with 7 stored entries:\n  [1, 1]  =  1\n  [1, 2]  =  5\n  [2, 2]  =  2\n  [2, 3]  =  6\n  [3, 3]  =  3\n  [3, 4]  =  7\n  [4, 4]  =  4\n\njulia> permute(A, [4, 3, 2, 1], [1, 2, 3, 4])\n4×4 SparseMatrixCSC{Int64,Int64} with 7 stored entries:\n  [4, 1]  =  1\n  [3, 2]  =  2\n  [4, 2]  =  5\n  [2, 3]  =  3\n  [3, 3]  =  6\n  [1, 4]  =  4\n  [2, 4]  =  7\n\njulia> permute(A, [1, 2, 3, 4], [4, 3, 2, 1])\n4×4 SparseMatrixCSC{Int64,Int64} with 7 stored entries:\n  [3, 1]  =  7\n  [4, 1]  =  4\n  [2, 2]  =  6\n  [3, 2]  =  3\n  [1, 3]  =  5\n  [2, 3]  =  2\n  [1, 4]  =  1\n\n\n\n"
+    "text": "permute(A::SparseMatrixCSC{Tv,Ti}, p::AbstractVector{<:Integer},\n        q::AbstractVector{<:Integer}) where {Tv,Ti}\n\nBilaterally permute A, returning PAQ (A[p,q]). Column-permutation q's length must match A's column count (length(q) == A.n). Row-permutation p's length must match A's row count (length(p) == A.m).\n\nFor expert drivers and additional information, see permute!.\n\nExamples\n\njulia> A = spdiagm([1, 2, 3, 4], 0, 4, 4) + spdiagm([5, 6, 7], 1, 4, 4)\n4×4 SparseMatrixCSC{Int64,Int64} with 7 stored entries:\n  [1, 1]  =  1\n  [1, 2]  =  5\n  [2, 2]  =  2\n  [2, 3]  =  6\n  [3, 3]  =  3\n  [3, 4]  =  7\n  [4, 4]  =  4\n\njulia> permute(A, [4, 3, 2, 1], [1, 2, 3, 4])\n4×4 SparseMatrixCSC{Int64,Int64} with 7 stored entries:\n  [4, 1]  =  1\n  [3, 2]  =  2\n  [4, 2]  =  5\n  [2, 3]  =  3\n  [3, 3]  =  6\n  [1, 4]  =  4\n  [2, 4]  =  7\n\njulia> permute(A, [1, 2, 3, 4], [4, 3, 2, 1])\n4×4 SparseMatrixCSC{Int64,Int64} with 7 stored entries:\n  [3, 1]  =  7\n  [4, 1]  =  4\n  [2, 2]  =  6\n  [3, 2]  =  3\n  [1, 3]  =  5\n  [2, 3]  =  2\n  [1, 4]  =  1\n\n\n\n"
 },
 
 {
@@ -11557,7 +11557,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Tasks and Parallel Computing",
     "title": "Core.Task",
     "category": "Type",
-    "text": "Task(func)\n\nCreate a Task (i.e. coroutine) to execute the given function (which must be callable with no arguments). The task exits when this function returns.\n\nExample\n\njulia> a() = det(rand(1000, 1000));\n\njulia> b = Task(a);\n\nIn this example, b is a runnable Task that hasn't started yet.\n\n\n\n"
+    "text": "Task(func)\n\nCreate a Task (i.e. coroutine) to execute the given function (which must be callable with no arguments). The task exits when this function returns.\n\nExamples\n\njulia> a() = det(rand(1000, 1000));\n\njulia> b = Task(a);\n\nIn this example, b is a runnable Task that hasn't started yet.\n\n\n\n"
 },
 
 {
@@ -11725,7 +11725,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Tasks and Parallel Computing",
     "title": "Base.bind",
     "category": "Method",
-    "text": "bind(chnl::Channel, task::Task)\n\nAssociates the lifetime of chnl with a task. Channel chnl is automatically closed when the task terminates. Any uncaught exception in the task is propagated to all waiters on chnl.\n\nThe chnl object can be explicitly closed independent of task termination. Terminating tasks have no effect on already closed Channel objects.\n\nWhen a channel is bound to multiple tasks, the first task to terminate will close the channel. When multiple channels are bound to the same task, termination of the task will close all of the bound channels.\n\njulia> c = Channel(0);\n\njulia> task = @schedule foreach(i->put!(c, i), 1:4);\n\njulia> bind(c,task);\n\njulia> for i in c\n           @show i\n       end;\ni = 1\ni = 2\ni = 3\ni = 4\n\njulia> isopen(c)\nfalse\n\njulia> c = Channel(0);\n\njulia> task = @schedule (put!(c,1);error(\"foo\"));\n\njulia> bind(c,task);\n\njulia> take!(c)\n1\n\njulia> put!(c,1);\nERROR: foo\nStacktrace:\n [1] check_channel_state(::Channel{Any}) at ./channels.jl:131\n [2] put!(::Channel{Any}, ::Int64) at ./channels.jl:261\n\n\n\n"
+    "text": "bind(chnl::Channel, task::Task)\n\nAssociates the lifetime of chnl with a task. Channel chnl is automatically closed when the task terminates. Any uncaught exception in the task is propagated to all waiters on chnl.\n\nThe chnl object can be explicitly closed independent of task termination. Terminating tasks have no effect on already closed Channel objects.\n\nWhen a channel is bound to multiple tasks, the first task to terminate will close the channel. When multiple channels are bound to the same task, termination of the task will close all of the bound channels.\n\nExamples\n\njulia> c = Channel(0);\n\njulia> task = @schedule foreach(i->put!(c, i), 1:4);\n\njulia> bind(c,task);\n\njulia> for i in c\n           @show i\n       end;\ni = 1\ni = 2\ni = 3\ni = 4\n\njulia> isopen(c)\nfalse\n\njulia> c = Channel(0);\n\njulia> task = @schedule (put!(c,1);error(\"foo\"));\n\njulia> bind(c,task);\n\njulia> take!(c)\n1\n\njulia> put!(c,1);\nERROR: foo\nStacktrace:\n [1] check_channel_state(::Channel{Any}) at ./channels.jl:131\n [2] put!(::Channel{Any}, ::Int64) at ./channels.jl:261\n\n\n\n"
 },
 
 {
@@ -11965,7 +11965,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Tasks and Parallel Computing",
     "title": "Base.Distributed.CachingPool",
     "category": "Type",
-    "text": "CachingPool(workers::Vector{Int})\n\nAn implementation of an AbstractWorkerPool. remote, remotecall_fetch, pmap (and other remote calls which execute functions remotely) benefit from caching the serialized/deserialized functions on the worker nodes, especially closures (which may capture large amounts of data).\n\nThe remote cache is maintained for the lifetime of the returned CachingPool object. To clear the cache earlier, use clear!(pool).\n\nFor global variables, only the bindings are captured in a closure, not the data. let blocks can be used to capture global data.\n\nFor example:\n\nconst foo=rand(10^8);\nwp=CachingPool(workers())\nlet foo=foo\n    pmap(wp, i->sum(foo)+i, 1:100);\nend\n\nThe above would transfer foo only once to each worker.\n\n\n\n"
+    "text": "CachingPool(workers::Vector{Int})\n\nAn implementation of an AbstractWorkerPool. remote, remotecall_fetch, pmap (and other remote calls which execute functions remotely) benefit from caching the serialized/deserialized functions on the worker nodes, especially closures (which may capture large amounts of data).\n\nThe remote cache is maintained for the lifetime of the returned CachingPool object. To clear the cache earlier, use clear!(pool).\n\nFor global variables, only the bindings are captured in a closure, not the data. let blocks can be used to capture global data.\n\nExamples\n\nconst foo = rand(10^8);\nwp = CachingPool(workers())\nlet foo = foo\n    pmap(wp, i -> sum(foo) + i, 1:100);\nend\n\nThe above would transfer foo only once to each worker.\n\n\n\n"
 },
 
 {
@@ -12229,7 +12229,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Tasks and Parallel Computing",
     "title": "Base.Threads.Atomic",
     "category": "Type",
-    "text": "Threads.Atomic{T}\n\nHolds a reference to an object of type T, ensuring that it is only accessed atomically, i.e. in a thread-safe manner.\n\nOnly certain \"simple\" types can be used atomically, namely the primitive integer and float-point types. These are Int8...Int128, UInt8...UInt128, and Float16...Float64.\n\nNew atomic objects can be created from a non-atomic values; if none is specified, the atomic object is initialized with zero.\n\nAtomic objects can be accessed using the [] notation:\n\njulia> x = Threads.Atomic{Int}(3)\nBase.Threads.Atomic{Int64}(3)\n\njulia> x[] = 1\n1\n\njulia> x[]\n1\n\nAtomic operations use an atomic_ prefix, such as atomic_add!, atomic_xchg!, etc.\n\n\n\n"
+    "text": "Threads.Atomic{T}\n\nHolds a reference to an object of type T, ensuring that it is only accessed atomically, i.e. in a thread-safe manner.\n\nOnly certain \"simple\" types can be used atomically, namely the primitive integer and float-point types. These are Int8...Int128, UInt8...UInt128, and Float16...Float64.\n\nNew atomic objects can be created from a non-atomic values; if none is specified, the atomic object is initialized with zero.\n\nAtomic objects can be accessed using the [] notation:\n\nExamples\n\njulia> x = Threads.Atomic{Int}(3)\nBase.Threads.Atomic{Int64}(3)\n\njulia> x[] = 1\n1\n\njulia> x[]\n1\n\nAtomic operations use an atomic_ prefix, such as atomic_add!, atomic_xchg!, etc.\n\n\n\n"
 },
 
 {
@@ -12237,7 +12237,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Tasks and Parallel Computing",
     "title": "Base.Threads.atomic_cas!",
     "category": "Function",
-    "text": "Threads.atomic_cas!(x::Atomic{T}, cmp::T, newval::T) where T\n\nAtomically compare-and-set x\n\nAtomically compares the value in x with cmp. If equal, write newval to x. Otherwise, leaves x unmodified. Returns the old value in x. By comparing the returned value to cmp (via ===) one knows whether x was modified and now holds the new value newval.\n\nFor further details, see LLVM's cmpxchg instruction.\n\nThis function can be used to implement transactional semantics. Before the transaction, one records the value in x. After the transaction, the new value is stored only if x has not been modified in the mean time.\n\njulia> x = Threads.Atomic{Int}(3)\nBase.Threads.Atomic{Int64}(3)\n\njulia> Threads.atomic_cas!(x, 4, 2);\n\njulia> x\nBase.Threads.Atomic{Int64}(3)\n\njulia> Threads.atomic_cas!(x, 3, 2);\n\njulia> x\nBase.Threads.Atomic{Int64}(2)\n\n\n\n"
+    "text": "Threads.atomic_cas!(x::Atomic{T}, cmp::T, newval::T) where T\n\nAtomically compare-and-set x\n\nAtomically compares the value in x with cmp. If equal, write newval to x. Otherwise, leaves x unmodified. Returns the old value in x. By comparing the returned value to cmp (via ===) one knows whether x was modified and now holds the new value newval.\n\nFor further details, see LLVM's cmpxchg instruction.\n\nThis function can be used to implement transactional semantics. Before the transaction, one records the value in x. After the transaction, the new value is stored only if x has not been modified in the mean time.\n\nExamples\n\njulia> x = Threads.Atomic{Int}(3)\nBase.Threads.Atomic{Int64}(3)\n\njulia> Threads.atomic_cas!(x, 4, 2);\n\njulia> x\nBase.Threads.Atomic{Int64}(3)\n\njulia> Threads.atomic_cas!(x, 3, 2);\n\njulia> x\nBase.Threads.Atomic{Int64}(2)\n\n\n\n"
 },
 
 {
@@ -12245,7 +12245,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Tasks and Parallel Computing",
     "title": "Base.Threads.atomic_xchg!",
     "category": "Function",
-    "text": "Threads.atomic_xchg!(x::Atomic{T}, newval::T) where T\n\nAtomically exchange the value in x\n\nAtomically exchanges the value in x with newval. Returns the old value.\n\nFor further details, see LLVM's atomicrmw xchg instruction.\n\njulia> x = Threads.Atomic{Int}(3)\nBase.Threads.Atomic{Int64}(3)\n\njulia> Threads.atomic_xchg!(x, 2)\n3\n\njulia> x[]\n2\n\n\n\n"
+    "text": "Threads.atomic_xchg!(x::Atomic{T}, newval::T) where T\n\nAtomically exchange the value in x\n\nAtomically exchanges the value in x with newval. Returns the old value.\n\nFor further details, see LLVM's atomicrmw xchg instruction.\n\nExamples\n\njulia> x = Threads.Atomic{Int}(3)\nBase.Threads.Atomic{Int64}(3)\n\njulia> Threads.atomic_xchg!(x, 2)\n3\n\njulia> x[]\n2\n\n\n\n"
 },
 
 {
@@ -12253,7 +12253,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Tasks and Parallel Computing",
     "title": "Base.Threads.atomic_add!",
     "category": "Function",
-    "text": "Threads.atomic_add!(x::Atomic{T}, val::T) where T\n\nAtomically add val to x\n\nPerforms x[] += val atomically. Returns the old value.\n\nFor further details, see LLVM's atomicrmw add instruction.\n\njulia> x = Threads.Atomic{Int}(3)\nBase.Threads.Atomic{Int64}(3)\n\njulia> Threads.atomic_add!(x, 2)\n3\n\njulia> x[]\n5\n\n\n\n"
+    "text": "Threads.atomic_add!(x::Atomic{T}, val::T) where T\n\nAtomically add val to x\n\nPerforms x[] += val atomically. Returns the old value.\n\nFor further details, see LLVM's atomicrmw add instruction.\n\nExamples\n\njulia> x = Threads.Atomic{Int}(3)\nBase.Threads.Atomic{Int64}(3)\n\njulia> Threads.atomic_add!(x, 2)\n3\n\njulia> x[]\n5\n\n\n\n"
 },
 
 {
@@ -12261,7 +12261,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Tasks and Parallel Computing",
     "title": "Base.Threads.atomic_sub!",
     "category": "Function",
-    "text": "Threads.atomic_sub!(x::Atomic{T}, val::T) where T\n\nAtomically subtract val from x\n\nPerforms x[] -= val atomically. Returns the old value.\n\nFor further details, see LLVM's atomicrmw sub instruction.\n\njulia> x = Threads.Atomic{Int}(3)\nBase.Threads.Atomic{Int64}(3)\n\njulia> Threads.atomic_sub!(x, 2)\n3\n\njulia> x[]\n1\n\n\n\n"
+    "text": "Threads.atomic_sub!(x::Atomic{T}, val::T) where T\n\nAtomically subtract val from x\n\nPerforms x[] -= val atomically. Returns the old value.\n\nFor further details, see LLVM's atomicrmw sub instruction.\n\nExamples\n\njulia> x = Threads.Atomic{Int}(3)\nBase.Threads.Atomic{Int64}(3)\n\njulia> Threads.atomic_sub!(x, 2)\n3\n\njulia> x[]\n1\n\n\n\n"
 },
 
 {
@@ -12269,7 +12269,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Tasks and Parallel Computing",
     "title": "Base.Threads.atomic_and!",
     "category": "Function",
-    "text": "Threads.atomic_and!(x::Atomic{T}, val::T) where T\n\nAtomically bitwise-and x with val\n\nPerforms x[] &= val atomically. Returns the old value.\n\nFor further details, see LLVM's atomicrmw and instruction.\n\njulia> x = Threads.Atomic{Int}(3)\nBase.Threads.Atomic{Int64}(3)\n\njulia> Threads.atomic_and!(x, 2)\n3\n\njulia> x[]\n2\n\n\n\n"
+    "text": "Threads.atomic_and!(x::Atomic{T}, val::T) where T\n\nAtomically bitwise-and x with val\n\nPerforms x[] &= val atomically. Returns the old value.\n\nFor further details, see LLVM's atomicrmw and instruction.\n\nExamples\n\njulia> x = Threads.Atomic{Int}(3)\nBase.Threads.Atomic{Int64}(3)\n\njulia> Threads.atomic_and!(x, 2)\n3\n\njulia> x[]\n2\n\n\n\n"
 },
 
 {
@@ -12277,7 +12277,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Tasks and Parallel Computing",
     "title": "Base.Threads.atomic_nand!",
     "category": "Function",
-    "text": "Threads.atomic_nand!(x::Atomic{T}, val::T) where T\n\nAtomically bitwise-nand (not-and) x with val\n\nPerforms x[] = ~(x[] & val) atomically. Returns the old value.\n\nFor further details, see LLVM's atomicrmw nand instruction.\n\njulia> x = Threads.Atomic{Int}(3)\nBase.Threads.Atomic{Int64}(3)\n\njulia> Threads.atomic_nand!(x, 2)\n3\n\njulia> x[]\n-3\n\n\n\n"
+    "text": "Threads.atomic_nand!(x::Atomic{T}, val::T) where T\n\nAtomically bitwise-nand (not-and) x with val\n\nPerforms x[] = ~(x[] & val) atomically. Returns the old value.\n\nFor further details, see LLVM's atomicrmw nand instruction.\n\nExamples\n\njulia> x = Threads.Atomic{Int}(3)\nBase.Threads.Atomic{Int64}(3)\n\njulia> Threads.atomic_nand!(x, 2)\n3\n\njulia> x[]\n-3\n\n\n\n"
 },
 
 {
@@ -12285,7 +12285,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Tasks and Parallel Computing",
     "title": "Base.Threads.atomic_or!",
     "category": "Function",
-    "text": "Threads.atomic_or!(x::Atomic{T}, val::T) where T\n\nAtomically bitwise-or x with val\n\nPerforms x[] |= val atomically. Returns the old value.\n\nFor further details, see LLVM's atomicrmw or instruction.\n\njulia> x = Threads.Atomic{Int}(5)\nBase.Threads.Atomic{Int64}(5)\n\njulia> Threads.atomic_or!(x, 7)\n5\n\njulia> x[]\n7\n\n\n\n"
+    "text": "Threads.atomic_or!(x::Atomic{T}, val::T) where T\n\nAtomically bitwise-or x with val\n\nPerforms x[] |= val atomically. Returns the old value.\n\nFor further details, see LLVM's atomicrmw or instruction.\n\nExamples\n\njulia> x = Threads.Atomic{Int}(5)\nBase.Threads.Atomic{Int64}(5)\n\njulia> Threads.atomic_or!(x, 7)\n5\n\njulia> x[]\n7\n\n\n\n"
 },
 
 {
@@ -12293,7 +12293,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Tasks and Parallel Computing",
     "title": "Base.Threads.atomic_xor!",
     "category": "Function",
-    "text": "Threads.atomic_xor!(x::Atomic{T}, val::T) where T\n\nAtomically bitwise-xor (exclusive-or) x with val\n\nPerforms x[] $= val atomically. Returns the old value.\n\nFor further details, see LLVM's atomicrmw xor instruction.\n\njulia> x = Threads.Atomic{Int}(5)\nBase.Threads.Atomic{Int64}(5)\n\njulia> Threads.atomic_xor!(x, 7)\n5\n\njulia> x[]\n2\n\n\n\n"
+    "text": "Threads.atomic_xor!(x::Atomic{T}, val::T) where T\n\nAtomically bitwise-xor (exclusive-or) x with val\n\nPerforms x[] $= val atomically. Returns the old value.\n\nFor further details, see LLVM's atomicrmw xor instruction.\n\nExamples\n\njulia> x = Threads.Atomic{Int}(5)\nBase.Threads.Atomic{Int64}(5)\n\njulia> Threads.atomic_xor!(x, 7)\n5\n\njulia> x[]\n2\n\n\n\n"
 },
 
 {
@@ -12301,7 +12301,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Tasks and Parallel Computing",
     "title": "Base.Threads.atomic_max!",
     "category": "Function",
-    "text": "Threads.atomic_max!(x::Atomic{T}, val::T) where T\n\nAtomically store the maximum of x and val in x\n\nPerforms x[] = max(x[], val) atomically. Returns the old value.\n\nFor further details, see LLVM's atomicrmw max instruction.\n\njulia> x = Threads.Atomic{Int}(5)\nBase.Threads.Atomic{Int64}(5)\n\njulia> Threads.atomic_max!(x, 7)\n5\n\njulia> x[]\n7\n\n\n\n"
+    "text": "Threads.atomic_max!(x::Atomic{T}, val::T) where T\n\nAtomically store the maximum of x and val in x\n\nPerforms x[] = max(x[], val) atomically. Returns the old value.\n\nFor further details, see LLVM's atomicrmw max instruction.\n\nExamples\n\njulia> x = Threads.Atomic{Int}(5)\nBase.Threads.Atomic{Int64}(5)\n\njulia> Threads.atomic_max!(x, 7)\n5\n\njulia> x[]\n7\n\n\n\n"
 },
 
 {
@@ -12309,7 +12309,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Tasks and Parallel Computing",
     "title": "Base.Threads.atomic_min!",
     "category": "Function",
-    "text": "Threads.atomic_min!(x::Atomic{T}, val::T) where T\n\nAtomically store the minimum of x and val in x\n\nPerforms x[] = min(x[], val) atomically. Returns the old value.\n\nFor further details, see LLVM's atomicrmw min instruction.\n\njulia> x = Threads.Atomic{Int}(7)\nBase.Threads.Atomic{Int64}(7)\n\njulia> Threads.atomic_min!(x, 5)\n7\n\njulia> x[]\n5\n\n\n\n"
+    "text": "Threads.atomic_min!(x::Atomic{T}, val::T) where T\n\nAtomically store the minimum of x and val in x\n\nPerforms x[] = min(x[], val) atomically. Returns the old value.\n\nFor further details, see LLVM's atomicrmw min instruction.\n\nExamples\n\njulia> x = Threads.Atomic{Int}(7)\nBase.Threads.Atomic{Int64}(7)\n\njulia> Threads.atomic_min!(x, 5)\n7\n\njulia> x[]\n5\n\n\n\n"
 },
 
 {
@@ -12549,7 +12549,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.dot",
     "category": "Function",
-    "text": "dot(x, y)\n⋅(x,y)\n\nCompute the dot product between two vectors. For complex vectors, the first vector is conjugated. When the vectors have equal lengths, calling dot is semantically equivalent to sum(vx'vy for (vx,vy) in zip(x, y)).\n\nExample\n\njulia> dot([1; 1], [2; 3])\n5\n\njulia> dot([im; im], [1; 1])\n0 - 2im\n\n\n\n"
+    "text": "dot(x, y)\n⋅(x,y)\n\nCompute the dot product between two vectors. For complex vectors, the first vector is conjugated. When the vectors have equal lengths, calling dot is semantically equivalent to sum(vx'vy for (vx,vy) in zip(x, y)).\n\nExamples\n\njulia> dot([1; 1], [2; 3])\n5\n\njulia> dot([im; im], [1; 1])\n0 - 2im\n\n\n\n"
 },
 
 {
@@ -12565,7 +12565,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.cross",
     "category": "Function",
-    "text": "cross(x, y)\n×(x,y)\n\nCompute the cross product of two 3-vectors.\n\nExample\n\njulia> a = [0;1;0]\n3-element Array{Int64,1}:\n 0\n 1\n 0\n\njulia> b = [0;0;1]\n3-element Array{Int64,1}:\n 0\n 0\n 1\n\njulia> cross(a,b)\n3-element Array{Int64,1}:\n 1\n 0\n 0\n\n\n\n"
+    "text": "cross(x, y)\n×(x,y)\n\nCompute the cross product of two 3-vectors.\n\nExamples\n\njulia> a = [0;1;0]\n3-element Array{Int64,1}:\n 0\n 1\n 0\n\njulia> b = [0;0;1]\n3-element Array{Int64,1}:\n 0\n 0\n 1\n\njulia> cross(a,b)\n3-element Array{Int64,1}:\n 1\n 0\n 0\n\n\n\n"
 },
 
 {
@@ -12573,7 +12573,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.factorize",
     "category": "Function",
-    "text": "factorize(A)\n\nCompute a convenient factorization of A, based upon the type of the input matrix. factorize checks A to see if it is symmetric/triangular/etc. if A is passed as a generic matrix. factorize checks every element of A to verify/rule out each property. It will short-circuit as soon as it can rule out symmetry/triangular structure. The return value can be reused for efficient solving of multiple systems. For example: A=factorize(A); x=A\\b; y=A\\C.\n\nProperties of A type of factorization\nPositive-definite Cholesky (see cholfact)\nDense Symmetric/Hermitian Bunch-Kaufman (see bkfact)\nSparse Symmetric/Hermitian LDLt (see ldltfact)\nTriangular Triangular\nDiagonal Diagonal\nBidiagonal Bidiagonal\nTridiagonal LU (see lufact)\nSymmetric real tridiagonal LDLt (see ldltfact)\nGeneral square LU (see lufact)\nGeneral non-square QR (see qrfact)\n\nIf factorize is called on a Hermitian positive-definite matrix, for instance, then factorize will return a Cholesky factorization.\n\nExample\n\njulia> A = Array(Bidiagonal(ones(5, 5), :U))\n5×5 Array{Float64,2}:\n 1.0  1.0  0.0  0.0  0.0\n 0.0  1.0  1.0  0.0  0.0\n 0.0  0.0  1.0  1.0  0.0\n 0.0  0.0  0.0  1.0  1.0\n 0.0  0.0  0.0  0.0  1.0\n\njulia> factorize(A) # factorize will check to see that A is already factorized\n5×5 Bidiagonal{Float64}:\n 1.0  1.0   ⋅    ⋅    ⋅\n  ⋅   1.0  1.0   ⋅    ⋅\n  ⋅    ⋅   1.0  1.0   ⋅\n  ⋅    ⋅    ⋅   1.0  1.0\n  ⋅    ⋅    ⋅    ⋅   1.0\n\nThis returns a 5×5 Bidiagonal{Float64}, which can now be passed to other linear algebra functions (e.g. eigensolvers) which will use specialized methods for Bidiagonal types.\n\n\n\n"
+    "text": "factorize(A)\n\nCompute a convenient factorization of A, based upon the type of the input matrix. factorize checks A to see if it is symmetric/triangular/etc. if A is passed as a generic matrix. factorize checks every element of A to verify/rule out each property. It will short-circuit as soon as it can rule out symmetry/triangular structure. The return value can be reused for efficient solving of multiple systems. For example: A=factorize(A); x=A\\b; y=A\\C.\n\nProperties of A type of factorization\nPositive-definite Cholesky (see cholfact)\nDense Symmetric/Hermitian Bunch-Kaufman (see bkfact)\nSparse Symmetric/Hermitian LDLt (see ldltfact)\nTriangular Triangular\nDiagonal Diagonal\nBidiagonal Bidiagonal\nTridiagonal LU (see lufact)\nSymmetric real tridiagonal LDLt (see ldltfact)\nGeneral square LU (see lufact)\nGeneral non-square QR (see qrfact)\n\nIf factorize is called on a Hermitian positive-definite matrix, for instance, then factorize will return a Cholesky factorization.\n\nExamples\n\njulia> A = Array(Bidiagonal(ones(5, 5), :U))\n5×5 Array{Float64,2}:\n 1.0  1.0  0.0  0.0  0.0\n 0.0  1.0  1.0  0.0  0.0\n 0.0  0.0  1.0  1.0  0.0\n 0.0  0.0  0.0  1.0  1.0\n 0.0  0.0  0.0  0.0  1.0\n\njulia> factorize(A) # factorize will check to see that A is already factorized\n5×5 Bidiagonal{Float64}:\n 1.0  1.0   ⋅    ⋅    ⋅\n  ⋅   1.0  1.0   ⋅    ⋅\n  ⋅    ⋅   1.0  1.0   ⋅\n  ⋅    ⋅    ⋅   1.0  1.0\n  ⋅    ⋅    ⋅    ⋅   1.0\n\nThis returns a 5×5 Bidiagonal{Float64}, which can now be passed to other linear algebra functions (e.g. eigensolvers) which will use specialized methods for Bidiagonal types.\n\n\n\n"
 },
 
 {
@@ -12597,7 +12597,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.SymTridiagonal",
     "category": "Type",
-    "text": "SymTridiagonal(dv, ev)\n\nConstruct a symmetric tridiagonal matrix from the diagonal and first sub/super-diagonal, respectively. The result is of type SymTridiagonal and provides efficient specialized eigensolvers, but may be converted into a regular matrix with convert(Array, _) (or Array(_) for short).\n\nExample\n\njulia> dv = [1; 2; 3; 4]\n4-element Array{Int64,1}:\n 1\n 2\n 3\n 4\n\njulia> ev = [7; 8; 9]\n3-element Array{Int64,1}:\n 7\n 8\n 9\n\njulia> SymTridiagonal(dv, ev)\n4×4 SymTridiagonal{Int64}:\n 1  7  ⋅  ⋅\n 7  2  8  ⋅\n ⋅  8  3  9\n ⋅  ⋅  9  4\n\n\n\n"
+    "text": "SymTridiagonal(dv, ev)\n\nConstruct a symmetric tridiagonal matrix from the diagonal and first sub/super-diagonal, respectively. The result is of type SymTridiagonal and provides efficient specialized eigensolvers, but may be converted into a regular matrix with convert(Array, _) (or Array(_) for short).\n\nExamples\n\njulia> dv = [1; 2; 3; 4]\n4-element Array{Int64,1}:\n 1\n 2\n 3\n 4\n\njulia> ev = [7; 8; 9]\n3-element Array{Int64,1}:\n 7\n 8\n 9\n\njulia> SymTridiagonal(dv, ev)\n4×4 SymTridiagonal{Int64}:\n 1  7  ⋅  ⋅\n 7  2  8  ⋅\n ⋅  8  3  9\n ⋅  ⋅  9  4\n\n\n\n"
 },
 
 {
@@ -12605,7 +12605,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.Tridiagonal",
     "category": "Type",
-    "text": "Tridiagonal(dl, d, du)\n\nConstruct a tridiagonal matrix from the first subdiagonal, diagonal, and first superdiagonal, respectively.  The result is of type Tridiagonal and provides efficient specialized linear solvers, but may be converted into a regular matrix with convert(Array, _) (or Array(_) for short). The lengths of dl and du must be one less than the length of d.\n\nExample\n\njulia> dl = [1; 2; 3]\n3-element Array{Int64,1}:\n 1\n 2\n 3\n\njulia> du = [4; 5; 6]\n3-element Array{Int64,1}:\n 4\n 5\n 6\n\njulia> d = [7; 8; 9; 0]\n4-element Array{Int64,1}:\n 7\n 8\n 9\n 0\n\njulia> Tridiagonal(dl, d, du)\n4×4 Tridiagonal{Int64}:\n 7  4  ⋅  ⋅\n 1  8  5  ⋅\n ⋅  2  9  6\n ⋅  ⋅  3  0\n\n\n\nTridiagonal(A)\n\nreturns a Tridiagonal array based on (abstract) matrix A, using its first lower diagonal, main diagonal, and first upper diagonal.\n\nExample\n\njulia> A = [1 2 3 4; 1 2 3 4; 1 2 3 4; 1 2 3 4]\n4×4 Array{Int64,2}:\n 1  2  3  4\n 1  2  3  4\n 1  2  3  4\n 1  2  3  4\n\njulia> Tridiagonal(A)\n4×4 Tridiagonal{Int64}:\n 1  2  ⋅  ⋅\n 1  2  3  ⋅\n ⋅  2  3  4\n ⋅  ⋅  3  4\n\n\n\n"
+    "text": "Tridiagonal(dl, d, du)\n\nConstruct a tridiagonal matrix from the first subdiagonal, diagonal, and first superdiagonal, respectively.  The result is of type Tridiagonal and provides efficient specialized linear solvers, but may be converted into a regular matrix with convert(Array, _) (or Array(_) for short). The lengths of dl and du must be one less than the length of d.\n\nExamples\n\njulia> dl = [1; 2; 3]\n3-element Array{Int64,1}:\n 1\n 2\n 3\n\njulia> du = [4; 5; 6]\n3-element Array{Int64,1}:\n 4\n 5\n 6\n\njulia> d = [7; 8; 9; 0]\n4-element Array{Int64,1}:\n 7\n 8\n 9\n 0\n\njulia> Tridiagonal(dl, d, du)\n4×4 Tridiagonal{Int64}:\n 7  4  ⋅  ⋅\n 1  8  5  ⋅\n ⋅  2  9  6\n ⋅  ⋅  3  0\n\n\n\nTridiagonal(A)\n\nreturns a Tridiagonal array based on (abstract) matrix A, using its first lower diagonal, main diagonal, and first upper diagonal.\n\nExamples\n\njulia> A = [1 2 3 4; 1 2 3 4; 1 2 3 4; 1 2 3 4]\n4×4 Array{Int64,2}:\n 1  2  3  4\n 1  2  3  4\n 1  2  3  4\n 1  2  3  4\n\njulia> Tridiagonal(A)\n4×4 Tridiagonal{Int64}:\n 1  2  ⋅  ⋅\n 1  2  3  ⋅\n ⋅  2  3  4\n ⋅  ⋅  3  4\n\n\n\n"
 },
 
 {
@@ -12613,7 +12613,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.Symmetric",
     "category": "Type",
-    "text": "Symmetric(A, uplo=:U)\n\nConstruct a Symmetric view of the upper (if uplo = :U) or lower (if uplo = :L) triangle of the matrix A.\n\nExample\n\njulia> A = [1 0 2 0 3; 0 4 0 5 0; 6 0 7 0 8; 0 9 0 1 0; 2 0 3 0 4]\n5×5 Array{Int64,2}:\n 1  0  2  0  3\n 0  4  0  5  0\n 6  0  7  0  8\n 0  9  0  1  0\n 2  0  3  0  4\n\njulia> Supper = Symmetric(A)\n5×5 Symmetric{Int64,Array{Int64,2}}:\n 1  0  2  0  3\n 0  4  0  5  0\n 2  0  7  0  8\n 0  5  0  1  0\n 3  0  8  0  4\n\njulia> Slower = Symmetric(A, :L)\n5×5 Symmetric{Int64,Array{Int64,2}}:\n 1  0  6  0  2\n 0  4  0  9  0\n 6  0  7  0  3\n 0  9  0  1  0\n 2  0  3  0  4\n\nNote that Supper will not be equal to Slower unless A is itself symmetric (e.g. if A == A.').\n\n\n\n"
+    "text": "Symmetric(A, uplo=:U)\n\nConstruct a Symmetric view of the upper (if uplo = :U) or lower (if uplo = :L) triangle of the matrix A.\n\nExamples\n\njulia> A = [1 0 2 0 3; 0 4 0 5 0; 6 0 7 0 8; 0 9 0 1 0; 2 0 3 0 4]\n5×5 Array{Int64,2}:\n 1  0  2  0  3\n 0  4  0  5  0\n 6  0  7  0  8\n 0  9  0  1  0\n 2  0  3  0  4\n\njulia> Supper = Symmetric(A)\n5×5 Symmetric{Int64,Array{Int64,2}}:\n 1  0  2  0  3\n 0  4  0  5  0\n 2  0  7  0  8\n 0  5  0  1  0\n 3  0  8  0  4\n\njulia> Slower = Symmetric(A, :L)\n5×5 Symmetric{Int64,Array{Int64,2}}:\n 1  0  6  0  2\n 0  4  0  9  0\n 6  0  7  0  3\n 0  9  0  1  0\n 2  0  3  0  4\n\nNote that Supper will not be equal to Slower unless A is itself symmetric (e.g. if A == A.').\n\n\n\n"
 },
 
 {
@@ -12621,7 +12621,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.Hermitian",
     "category": "Type",
-    "text": "Hermitian(A, uplo=:U)\n\nConstruct a Hermitian view of the upper (if uplo = :U) or lower (if uplo = :L) triangle of the matrix A.\n\nExample\n\njulia> A = [1 0 2+2im 0 3-3im; 0 4 0 5 0; 6-6im 0 7 0 8+8im; 0 9 0 1 0; 2+2im 0 3-3im 0 4];\n\njulia> Hupper = Hermitian(A)\n5×5 Hermitian{Complex{Int64},Array{Complex{Int64},2}}:\n 1+0im  0+0im  2+2im  0+0im  3-3im\n 0+0im  4+0im  0+0im  5+0im  0+0im\n 2-2im  0+0im  7+0im  0+0im  8+8im\n 0+0im  5+0im  0+0im  1+0im  0+0im\n 3+3im  0+0im  8-8im  0+0im  4+0im\n\njulia> Hlower = Hermitian(A, :L)\n5×5 Hermitian{Complex{Int64},Array{Complex{Int64},2}}:\n 1+0im  0+0im  6+6im  0+0im  2-2im\n 0+0im  4+0im  0+0im  9+0im  0+0im\n 6-6im  0+0im  7+0im  0+0im  3+3im\n 0+0im  9+0im  0+0im  1+0im  0+0im\n 2+2im  0+0im  3-3im  0+0im  4+0im\n\nNote that Hupper will not be equal to Hlower unless A is itself Hermitian (e.g. if A == A').\n\n\n\n"
+    "text": "Hermitian(A, uplo=:U)\n\nConstruct a Hermitian view of the upper (if uplo = :U) or lower (if uplo = :L) triangle of the matrix A.\n\nExamples\n\njulia> A = [1 0 2+2im 0 3-3im; 0 4 0 5 0; 6-6im 0 7 0 8+8im; 0 9 0 1 0; 2+2im 0 3-3im 0 4];\n\njulia> Hupper = Hermitian(A)\n5×5 Hermitian{Complex{Int64},Array{Complex{Int64},2}}:\n 1+0im  0+0im  2+2im  0+0im  3-3im\n 0+0im  4+0im  0+0im  5+0im  0+0im\n 2-2im  0+0im  7+0im  0+0im  8+8im\n 0+0im  5+0im  0+0im  1+0im  0+0im\n 3+3im  0+0im  8-8im  0+0im  4+0im\n\njulia> Hlower = Hermitian(A, :L)\n5×5 Hermitian{Complex{Int64},Array{Complex{Int64},2}}:\n 1+0im  0+0im  6+6im  0+0im  2-2im\n 0+0im  4+0im  0+0im  9+0im  0+0im\n 6-6im  0+0im  7+0im  0+0im  3+3im\n 0+0im  9+0im  0+0im  1+0im  0+0im\n 2+2im  0+0im  3-3im  0+0im  4+0im\n\nNote that Hupper will not be equal to Hlower unless A is itself Hermitian (e.g. if A == A').\n\n\n\n"
 },
 
 {
@@ -12629,7 +12629,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.LowerTriangular",
     "category": "Type",
-    "text": "LowerTriangular(A::AbstractMatrix)\n\nConstruct a LowerTriangular view of the the matrix A.\n\nExample\n\njulia> A = [1.0 2.0 3.0; 4.0 5.0 6.0; 7.0 8.0 9.0]\n3×3 Array{Float64,2}:\n 1.0  2.0  3.0\n 4.0  5.0  6.0\n 7.0  8.0  9.0\n\njulia> LowerTriangular(A)\n3×3 LowerTriangular{Float64,Array{Float64,2}}:\n 1.0   ⋅    ⋅\n 4.0  5.0   ⋅\n 7.0  8.0  9.0\n\n\n\n"
+    "text": "LowerTriangular(A::AbstractMatrix)\n\nConstruct a LowerTriangular view of the the matrix A.\n\nExamples\n\njulia> A = [1.0 2.0 3.0; 4.0 5.0 6.0; 7.0 8.0 9.0]\n3×3 Array{Float64,2}:\n 1.0  2.0  3.0\n 4.0  5.0  6.0\n 7.0  8.0  9.0\n\njulia> LowerTriangular(A)\n3×3 LowerTriangular{Float64,Array{Float64,2}}:\n 1.0   ⋅    ⋅\n 4.0  5.0   ⋅\n 7.0  8.0  9.0\n\n\n\n"
 },
 
 {
@@ -12637,7 +12637,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.UpperTriangular",
     "category": "Type",
-    "text": "UpperTriangular(A::AbstractMatrix)\n\nConstruct an UpperTriangular view of the the matrix A.\n\nExample\n\njulia> A = [1.0 2.0 3.0; 4.0 5.0 6.0; 7.0 8.0 9.0]\n3×3 Array{Float64,2}:\n 1.0  2.0  3.0\n 4.0  5.0  6.0\n 7.0  8.0  9.0\n\njulia> UpperTriangular(A)\n3×3 UpperTriangular{Float64,Array{Float64,2}}:\n 1.0  2.0  3.0\n  ⋅   5.0  6.0\n  ⋅    ⋅   9.0\n\n\n\n"
+    "text": "UpperTriangular(A::AbstractMatrix)\n\nConstruct an UpperTriangular view of the the matrix A.\n\nExamples\n\njulia> A = [1.0 2.0 3.0; 4.0 5.0 6.0; 7.0 8.0 9.0]\n3×3 Array{Float64,2}:\n 1.0  2.0  3.0\n 4.0  5.0  6.0\n 7.0  8.0  9.0\n\njulia> UpperTriangular(A)\n3×3 UpperTriangular{Float64,Array{Float64,2}}:\n 1.0  2.0  3.0\n  ⋅   5.0  6.0\n  ⋅    ⋅   9.0\n\n\n\n"
 },
 
 {
@@ -12645,7 +12645,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.UniformScaling",
     "category": "Type",
-    "text": "UniformScaling{T<:Number}\n\nGenerically sized uniform scaling operator defined as a scalar times the identity operator, λ*I. See also I.\n\nExample\n\njulia> J = UniformScaling(2.)\nUniformScaling{Float64}\n2.0*I\n\njulia> A = [1. 2.; 3. 4.]\n2×2 Array{Float64,2}:\n 1.0  2.0\n 3.0  4.0\n\njulia> J*A\n2×2 Array{Float64,2}:\n 2.0  4.0\n 6.0  8.0\n\n\n\n"
+    "text": "UniformScaling{T<:Number}\n\nGenerically sized uniform scaling operator defined as a scalar times the identity operator, λ*I. See also I.\n\nExamples\n\njulia> J = UniformScaling(2.)\nUniformScaling{Float64}\n2.0*I\n\njulia> A = [1. 2.; 3. 4.]\n2×2 Array{Float64,2}:\n 1.0  2.0\n 3.0  4.0\n\njulia> J*A\n2×2 Array{Float64,2}:\n 2.0  4.0\n 6.0  8.0\n\n\n\n"
 },
 
 {
@@ -12653,7 +12653,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.lu",
     "category": "Function",
-    "text": "lu(A, pivot=Val(true)) -> L, U, p\n\nCompute the LU factorization of A, such that A[p,:] = L*U. By default, pivoting is used. This can be overridden by passing Val(false) for the second argument.\n\nSee also lufact.\n\nExample\n\njulia> A = [4. 3.; 6. 3.]\n2×2 Array{Float64,2}:\n 4.0  3.0\n 6.0  3.0\n\njulia> L, U, p = lu(A)\n([1.0 0.0; 0.666667 1.0], [6.0 3.0; 0.0 1.0], [2, 1])\n\njulia> A[p, :] == L * U\ntrue\n\n\n\n"
+    "text": "lu(A, pivot=Val(true)) -> L, U, p\n\nCompute the LU factorization of A, such that A[p,:] = L*U. By default, pivoting is used. This can be overridden by passing Val(false) for the second argument.\n\nSee also lufact.\n\nExamples\n\njulia> A = [4. 3.; 6. 3.]\n2×2 Array{Float64,2}:\n 4.0  3.0\n 6.0  3.0\n\njulia> L, U, p = lu(A)\n([1.0 0.0; 0.666667 1.0], [6.0 3.0; 0.0 1.0], [2, 1])\n\njulia> A[p, :] == L * U\ntrue\n\n\n\n"
 },
 
 {
@@ -12661,7 +12661,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.lufact",
     "category": "Function",
-    "text": "lufact(A::SparseMatrixCSC) -> F::UmfpackLU\n\nCompute the LU factorization of a sparse matrix A.\n\nFor sparse A with real or complex element type, the return type of F is UmfpackLU{Tv, Ti}, with Tv = Float64 or Complex128 respectively and Ti is an integer type (Int32 or Int64).\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] right permutation Vector\nF[:q] left permutation Vector\nF[:Rs] Vector of scaling factors\nF[:(:)] (L,U,p,q,Rs) components\n\nThe relation between F and A is\n\nF[:L]*F[:U] == (F[:Rs] .* A)[F[:p], F[:q]]\n\nF further supports the following functions:\n\n\\\ncond\ndet\n\nnote: Note\nlufact(A::SparseMatrixCSC) uses the UMFPACK library that is part of SuiteSparse. As this library only supports sparse matrices with Float64 or Complex128 elements, lufact converts A into a copy that is of type SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\nlufact(A [,pivot=Val(true)]) -> F::LU\n\nCompute the LU factorization of A.\n\nIn most cases, if A is a subtype S of AbstractMatrix{T} with an element type T supporting +, -, * and /, the return type is LU{T,S{T}}. If pivoting is chosen (default) the element type should also support abs and <.\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] (right) permutation Vector\nF[:P] (right) permutation Matrix\n\nThe relationship between F and A is\n\nF[:L]*F[:U] == A[F[:p], :]\n\nF further supports the following functions:\n\nSupported function LU LU{T,Tridiagonal{T}}\n/ ✓ \n\\ ✓ ✓\ninv ✓ ✓\ndet ✓ ✓\nlogdet ✓ ✓\nlogabsdet ✓ ✓\nsize ✓ ✓\n\nExample\n\njulia> A = [4 3; 6 3]\n2×2 Array{Int64,2}:\n 4  3\n 6  3\n\njulia> F = lufact(A)\nBase.LinAlg.LU{Float64,Array{Float64,2}} with factors L and U:\n[1.0 0.0; 1.5 1.0]\n[4.0 3.0; 0.0 -1.5]\n\njulia> F[:L] * F[:U] == A[F[:p], :]\ntrue\n\n\n\n"
+    "text": "lufact(A [,pivot=Val(true)]) -> F::LU\n\nCompute the LU factorization of A.\n\nIn most cases, if A is a subtype S of AbstractMatrix{T} with an element type T supporting +, -, * and /, the return type is LU{T,S{T}}. If pivoting is chosen (default) the element type should also support abs and <.\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] (right) permutation Vector\nF[:P] (right) permutation Matrix\n\nThe relationship between F and A is\n\nF[:L]*F[:U] == A[F[:p], :]\n\nF further supports the following functions:\n\nSupported function LU LU{T,Tridiagonal{T}}\n/ ✓ \n\\ ✓ ✓\ninv ✓ ✓\ndet ✓ ✓\nlogdet ✓ ✓\nlogabsdet ✓ ✓\nsize ✓ ✓\n\nExamples\n\njulia> A = [4 3; 6 3]\n2×2 Array{Int64,2}:\n 4  3\n 6  3\n\njulia> F = lufact(A)\nBase.LinAlg.LU{Float64,Array{Float64,2}} with factors L and U:\n[1.0 0.0; 1.5 1.0]\n[4.0 3.0; 0.0 -1.5]\n\njulia> F[:L] * F[:U] == A[F[:p], :]\ntrue\n\n\n\nlufact(A::SparseMatrixCSC) -> F::UmfpackLU\n\nCompute the LU factorization of a sparse matrix A.\n\nFor sparse A with real or complex element type, the return type of F is UmfpackLU{Tv, Ti}, with Tv = Float64 or Complex128 respectively and Ti is an integer type (Int32 or Int64).\n\nThe individual components of the factorization F can be accessed by indexing:\n\nComponent Description\nF[:L] L (lower triangular) part of LU\nF[:U] U (upper triangular) part of LU\nF[:p] right permutation Vector\nF[:q] left permutation Vector\nF[:Rs] Vector of scaling factors\nF[:(:)] (L,U,p,q,Rs) components\n\nThe relation between F and A is\n\nF[:L]*F[:U] == (F[:Rs] .* A)[F[:p], F[:q]]\n\nF further supports the following functions:\n\n\\\ncond\ndet\n\nnote: Note\nlufact(A::SparseMatrixCSC) uses the UMFPACK library that is part of SuiteSparse. As this library only supports sparse matrices with Float64 or Complex128 elements, lufact converts A into a copy that is of type SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\n"
 },
 
 {
@@ -12677,7 +12677,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.chol",
     "category": "Function",
-    "text": "chol(A) -> U\n\nCompute the Cholesky factorization of a positive definite matrix A and return the UpperTriangular matrix U such that A = U'U.\n\nExample\n\njulia> A = [1. 2.; 2. 50.]\n2×2 Array{Float64,2}:\n 1.0   2.0\n 2.0  50.0\n\njulia> U = chol(A)\n2×2 UpperTriangular{Float64,Array{Float64,2}}:\n 1.0  2.0\n  ⋅   6.78233\n\njulia> U'U\n2×2 Array{Float64,2}:\n 1.0   2.0\n 2.0  50.0\n\n\n\nchol(x::Number) -> y\n\nCompute the square root of a non-negative number x.\n\nExample\n\njulia> chol(16)\n4.0\n\n\n\nchol(J::UniformScaling) -> C\n\nCompute the square root of a non-negative UniformScaling J.\n\nExamples\n\njulia> chol(16I)\nUniformScaling{Float64}\n4.0*I\n\n\n\n"
+    "text": "chol(A) -> U\n\nCompute the Cholesky factorization of a positive definite matrix A and return the UpperTriangular matrix U such that A = U'U.\n\nExamples\n\njulia> A = [1. 2.; 2. 50.]\n2×2 Array{Float64,2}:\n 1.0   2.0\n 2.0  50.0\n\njulia> U = chol(A)\n2×2 UpperTriangular{Float64,Array{Float64,2}}:\n 1.0  2.0\n  ⋅   6.78233\n\njulia> U'U\n2×2 Array{Float64,2}:\n 1.0   2.0\n 2.0  50.0\n\n\n\nchol(x::Number) -> y\n\nCompute the square root of a non-negative number x.\n\nExamples\n\njulia> chol(16)\n4.0\n\n\n\nchol(J::UniformScaling) -> C\n\nCompute the square root of a non-negative UniformScaling J.\n\nExamples\n\njulia> chol(16I)\nUniformScaling{Float64}\n4.0*I\n\n\n\n"
 },
 
 {
@@ -12685,7 +12685,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.cholfact",
     "category": "Function",
-    "text": "cholfact(A, Val(false)) -> Cholesky\n\nCompute the Cholesky factorization of a dense symmetric positive definite matrix A and return a Cholesky factorization. The matrix A can either be a Symmetric or Hermitian StridedMatrix or a perfectly symmetric or Hermitian StridedMatrix. The triangular Cholesky factor can be obtained from the factorization F with: F[:L] and F[:U]. The following functions are available for Cholesky objects: size, \\, inv, det, logdet and isposdef.\n\nExample\n\njulia> A = [4. 12. -16.; 12. 37. -43.; -16. -43. 98.]\n3×3 Array{Float64,2}:\n   4.0   12.0  -16.0\n  12.0   37.0  -43.0\n -16.0  -43.0   98.0\n\njulia> C = cholfact(A)\nBase.LinAlg.Cholesky{Float64,Array{Float64,2}} with factor:\n[2.0 6.0 -8.0; 0.0 1.0 5.0; 0.0 0.0 3.0]\n\njulia> C[:U]\n3×3 UpperTriangular{Float64,Array{Float64,2}}:\n 2.0  6.0  -8.0\n  ⋅   1.0   5.0\n  ⋅    ⋅    3.0\n\njulia> C[:L]\n3×3 LowerTriangular{Float64,Array{Float64,2}}:\n  2.0   ⋅    ⋅\n  6.0  1.0   ⋅\n -8.0  5.0  3.0\n\njulia> C[:L] * C[:U] == A\ntrue\n\n\n\ncholfact(A, Val(true); tol = 0.0) -> CholeskyPivoted\n\nCompute the pivoted Cholesky factorization of a dense symmetric positive semi-definite matrix A and return a CholeskyPivoted factorization. The matrix A can either be a Symmetric or Hermitian StridedMatrix or a perfectly symmetric or Hermitian StridedMatrix. The triangular Cholesky factor can be obtained from the factorization F with: F[:L] and F[:U]. The following functions are available for PivotedCholesky objects: size, \\, inv, det, and rank. The argument tol determines the tolerance for determining the rank. For negative values, the tolerance is the machine precision.\n\n\n\ncholfact(A; shift = 0.0, perm = Int[]) -> CHOLMOD.Factor\n\nCompute the Cholesky factorization of a sparse positive definite matrix A. A must be a SparseMatrixCSC or a Symmetric/Hermitian view of a SparseMatrixCSC. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian. A fill-reducing permutation is used. F = cholfact(A) is most frequently used to solve systems of equations with F\\b, but also the methods diag, det, and logdet are defined for F. You can also extract individual factors from F, using F[:L]. However, since pivoting is on by default, the factorization is internally represented as A == P'*L*L'*P with a permutation matrix P; using just L without accounting for P will give incorrect answers. To include the effects of permutation, it's typically preferable to extract \"combined\" factors like PtL = F[:PtL] (the equivalent of P'*L) and LtP = F[:UP] (the equivalent of L'*P).\n\nSetting the optional shift keyword argument computes the factorization of A+shift*I instead of A. If the perm argument is nonempty, it should be a permutation of 1:size(A,1) giving the ordering to use (instead of CHOLMOD's default AMD ordering).\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.Many other functions from CHOLMOD are wrapped but not exported from the Base.SparseArrays.CHOLMOD module.\n\n\n\n"
+    "text": "cholfact(A; shift = 0.0, perm = Int[]) -> CHOLMOD.Factor\n\nCompute the Cholesky factorization of a sparse positive definite matrix A. A must be a SparseMatrixCSC or a Symmetric/Hermitian view of a SparseMatrixCSC. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian. A fill-reducing permutation is used. F = cholfact(A) is most frequently used to solve systems of equations with F\\b, but also the methods diag, det, and logdet are defined for F. You can also extract individual factors from F, using F[:L]. However, since pivoting is on by default, the factorization is internally represented as A == P'*L*L'*P with a permutation matrix P; using just L without accounting for P will give incorrect answers. To include the effects of permutation, it's typically preferable to extract \"combined\" factors like PtL = F[:PtL] (the equivalent of P'*L) and LtP = F[:UP] (the equivalent of L'*P).\n\nSetting the optional shift keyword argument computes the factorization of A+shift*I instead of A. If the perm argument is nonempty, it should be a permutation of 1:size(A,1) giving the ordering to use (instead of CHOLMOD's default AMD ordering).\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.Many other functions from CHOLMOD are wrapped but not exported from the Base.SparseArrays.CHOLMOD module.\n\n\n\ncholfact(A, Val(false)) -> Cholesky\n\nCompute the Cholesky factorization of a dense symmetric positive definite matrix A and return a Cholesky factorization. The matrix A can either be a Symmetric or Hermitian StridedMatrix or a perfectly symmetric or Hermitian StridedMatrix. The triangular Cholesky factor can be obtained from the factorization F with: F[:L] and F[:U]. The following functions are available for Cholesky objects: size, \\, inv, det, logdet and isposdef.\n\nExamples\n\njulia> A = [4. 12. -16.; 12. 37. -43.; -16. -43. 98.]\n3×3 Array{Float64,2}:\n   4.0   12.0  -16.0\n  12.0   37.0  -43.0\n -16.0  -43.0   98.0\n\njulia> C = cholfact(A)\nBase.LinAlg.Cholesky{Float64,Array{Float64,2}} with factor:\n[2.0 6.0 -8.0; 0.0 1.0 5.0; 0.0 0.0 3.0]\n\njulia> C[:U]\n3×3 UpperTriangular{Float64,Array{Float64,2}}:\n 2.0  6.0  -8.0\n  ⋅   1.0   5.0\n  ⋅    ⋅    3.0\n\njulia> C[:L]\n3×3 LowerTriangular{Float64,Array{Float64,2}}:\n  2.0   ⋅    ⋅\n  6.0  1.0   ⋅\n -8.0  5.0  3.0\n\njulia> C[:L] * C[:U] == A\ntrue\n\n\n\ncholfact(A, Val(true); tol = 0.0) -> CholeskyPivoted\n\nCompute the pivoted Cholesky factorization of a dense symmetric positive semi-definite matrix A and return a CholeskyPivoted factorization. The matrix A can either be a Symmetric or Hermitian StridedMatrix or a perfectly symmetric or Hermitian StridedMatrix. The triangular Cholesky factor can be obtained from the factorization F with: F[:L] and F[:U]. The following functions are available for PivotedCholesky objects: size, \\, inv, det, and rank. The argument tol determines the tolerance for determining the rank. For negative values, the tolerance is the machine precision.\n\n\n\n"
 },
 
 {
@@ -12693,7 +12693,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.cholfact!",
     "category": "Function",
-    "text": "cholfact!(A, Val(false)) -> Cholesky\n\nThe same as cholfact, but saves space by overwriting the input A, instead of creating a copy. An InexactError exception is thrown if the factorization produces a number not representable by the element type of A, e.g. for integer types.\n\nExample\n\njulia> A = [1 2; 2 50]\n2×2 Array{Int64,2}:\n 1   2\n 2  50\n\njulia> cholfact!(A)\nERROR: InexactError: convert(Int64, 6.782329983125268)\n\n\n\ncholfact!(A, Val(true); tol = 0.0) -> CholeskyPivoted\n\nThe same as cholfact, but saves space by overwriting the input A, instead of creating a copy. An InexactError exception is thrown if the factorization produces a number not representable by the element type of A, e.g. for integer types.\n\n\n\ncholfact!(F::Factor, A; shift = 0.0) -> CHOLMOD.Factor\n\nCompute the Cholesky (LL) factorization of A, reusing the symbolic factorization F. A must be a SparseMatrixCSC or a Symmetric/ Hermitian view of a SparseMatrixCSC. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian.\n\nSee also cholfact.\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\n"
+    "text": "cholfact!(F::Factor, A; shift = 0.0) -> CHOLMOD.Factor\n\nCompute the Cholesky (LL) factorization of A, reusing the symbolic factorization F. A must be a SparseMatrixCSC or a Symmetric/ Hermitian view of a SparseMatrixCSC. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian.\n\nSee also cholfact.\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\ncholfact!(A, Val(false)) -> Cholesky\n\nThe same as cholfact, but saves space by overwriting the input A, instead of creating a copy. An InexactError exception is thrown if the factorization produces a number not representable by the element type of A, e.g. for integer types.\n\nExamples\n\njulia> A = [1 2; 2 50]\n2×2 Array{Int64,2}:\n 1   2\n 2  50\n\njulia> cholfact!(A)\nERROR: InexactError: convert(Int64, 6.782329983125268)\n\n\n\ncholfact!(A, Val(true); tol = 0.0) -> CholeskyPivoted\n\nThe same as cholfact, but saves space by overwriting the input A, instead of creating a copy. An InexactError exception is thrown if the factorization produces a number not representable by the element type of A, e.g. for integer types.\n\n\n\n"
 },
 
 {
@@ -12733,7 +12733,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.ldltfact",
     "category": "Function",
-    "text": "ldltfact(S::SymTridiagonal) -> LDLt\n\nCompute an LDLt factorization of a real symmetric tridiagonal matrix such that A = L*Diagonal(d)*L' where L is a unit lower triangular matrix and d is a vector. The main use of an LDLt factorization F = ldltfact(A) is to solve the linear system of equations Ax = b with F\\b.\n\n\n\nldltfact(A; shift = 0.0, perm=Int[]) -> CHOLMOD.Factor\n\nCompute the LDL factorization of a sparse matrix A. A must be a SparseMatrixCSC or a Symmetric/Hermitian view of a SparseMatrixCSC. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian. A fill-reducing permutation is used. F = ldltfact(A) is most frequently used to solve systems of equations A*x = b with F\\b. The returned factorization object F also supports the methods diag, det, logdet, and inv. You can extract individual factors from F using F[:L]. However, since pivoting is on by default, the factorization is internally represented as A == P'*L*D*L'*P with a permutation matrix P; using just L without accounting for P will give incorrect answers. To include the effects of permutation, it is typically preferable to extract \"combined\" factors like PtL = F[:PtL] (the equivalent of P'*L) and LtP = F[:UP] (the equivalent of L'*P). The complete list of supported factors is :L, :PtL, :D, :UP, :U, :LD, :DU, :PtLD, :DUP.\n\nSetting the optional shift keyword argument computes the factorization of A+shift*I instead of A. If the perm argument is nonempty, it should be a permutation of 1:size(A,1) giving the ordering to use (instead of CHOLMOD's default AMD ordering).\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.Many other functions from CHOLMOD are wrapped but not exported from the Base.SparseArrays.CHOLMOD module.\n\n\n\n"
+    "text": "ldltfact(A; shift = 0.0, perm=Int[]) -> CHOLMOD.Factor\n\nCompute the LDL factorization of a sparse matrix A. A must be a SparseMatrixCSC or a Symmetric/Hermitian view of a SparseMatrixCSC. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian. A fill-reducing permutation is used. F = ldltfact(A) is most frequently used to solve systems of equations A*x = b with F\\b. The returned factorization object F also supports the methods diag, det, logdet, and inv. You can extract individual factors from F using F[:L]. However, since pivoting is on by default, the factorization is internally represented as A == P'*L*D*L'*P with a permutation matrix P; using just L without accounting for P will give incorrect answers. To include the effects of permutation, it is typically preferable to extract \"combined\" factors like PtL = F[:PtL] (the equivalent of P'*L) and LtP = F[:UP] (the equivalent of L'*P). The complete list of supported factors is :L, :PtL, :D, :UP, :U, :LD, :DU, :PtLD, :DUP.\n\nSetting the optional shift keyword argument computes the factorization of A+shift*I instead of A. If the perm argument is nonempty, it should be a permutation of 1:size(A,1) giving the ordering to use (instead of CHOLMOD's default AMD ordering).\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.Many other functions from CHOLMOD are wrapped but not exported from the Base.SparseArrays.CHOLMOD module.\n\n\n\nldltfact(S::SymTridiagonal) -> LDLt\n\nCompute an LDLt factorization of a real symmetric tridiagonal matrix such that A = L*Diagonal(d)*L' where L is a unit lower triangular matrix and d is a vector. The main use of an LDLt factorization F = ldltfact(A) is to solve the linear system of equations Ax = b with F\\b.\n\n\n\n"
 },
 
 {
@@ -12741,7 +12741,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.ldltfact!",
     "category": "Function",
-    "text": "ldltfact!(S::SymTridiagonal) -> LDLt\n\nSame as ldltfact, but saves space by overwriting the input A, instead of creating a copy.\n\n\n\nldltfact!(F::Factor, A; shift = 0.0) -> CHOLMOD.Factor\n\nCompute the LDL factorization of A, reusing the symbolic factorization F. A must be a SparseMatrixCSC or a Symmetric/Hermitian view of a SparseMatrixCSC. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian.\n\nSee also ldltfact.\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\n"
+    "text": "ldltfact!(F::Factor, A; shift = 0.0) -> CHOLMOD.Factor\n\nCompute the LDL factorization of A, reusing the symbolic factorization F. A must be a SparseMatrixCSC or a Symmetric/Hermitian view of a SparseMatrixCSC. Note that even if A doesn't have the type tag, it must still be symmetric or Hermitian.\n\nSee also ldltfact.\n\nnote: Note\nThis method uses the CHOLMOD library from SuiteSparse, which only supports doubles or complex doubles. Input matrices not of those element types will be converted to SparseMatrixCSC{Float64} or SparseMatrixCSC{Complex128} as appropriate.\n\n\n\nldltfact!(S::SymTridiagonal) -> LDLt\n\nSame as ldltfact, but saves space by overwriting the input A, instead of creating a copy.\n\n\n\n"
 },
 
 {
@@ -12749,7 +12749,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.qr",
     "category": "Function",
-    "text": "qr(A, pivot=Val(false); thin::Bool=true) -> Q, R, [p]\n\nCompute the (pivoted) QR factorization of A such that either A = Q*R or A[:,p] = Q*R. Also see qrfact. The default is to compute a thin factorization. Note that R is not extended with zeros when the full Q is requested.\n\n\n\nqr(v::AbstractVector) -> w, r\n\nComputes the polar decomposition of a vector. Returns w, a unit vector in the direction of v, and r, the norm of v.\n\nSee also normalize, normalize!, and LinAlg.qr!.\n\nExample\n\njulia> v = [1; 2]\n2-element Array{Int64,1}:\n 1\n 2\n\njulia> w, r = qr(v)\n([0.447214, 0.894427], 2.23606797749979)\n\njulia> w*r == v\ntrue\n\n\n\n"
+    "text": "qr(A, pivot=Val(false); thin::Bool=true) -> Q, R, [p]\n\nCompute the (pivoted) QR factorization of A such that either A = Q*R or A[:,p] = Q*R. Also see qrfact. The default is to compute a thin factorization. Note that R is not extended with zeros when the full Q is requested.\n\n\n\nqr(v::AbstractVector) -> w, r\n\nComputes the polar decomposition of a vector. Returns w, a unit vector in the direction of v, and r, the norm of v.\n\nSee also normalize, normalize!, and LinAlg.qr!.\n\nExamples\n\njulia> v = [1; 2]\n2-element Array{Int64,1}:\n 1\n 2\n\njulia> w, r = qr(v)\n([0.447214, 0.894427], 2.23606797749979)\n\njulia> w*r == v\ntrue\n\n\n\n"
 },
 
 {
@@ -12765,7 +12765,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.qrfact",
     "category": "Function",
-    "text": "qrfact(A, pivot=Val(false)) -> F\n\nCompute the QR factorization of the matrix A: an orthogonal (or unitary if A is complex-valued) matrix Q, and an upper triangular matrix R such that\n\nA = Q R\n\nThe returned object F stores the factorization in a packed format:\n\nif pivot == Val(true) then F is a QRPivoted object,\notherwise if the element type of A is a BLAS type (Float32, Float64, Complex64 or Complex128), then F is a QRCompactWY object,\notherwise F is a QR object.\n\nThe individual components of the factorization F can be accessed by indexing with a symbol:\n\nF[:Q]: the orthogonal/unitary matrix Q\nF[:R]: the upper triangular matrix R\nF[:p]: the permutation vector of the pivot (QRPivoted only)\nF[:P]: the permutation matrix of the pivot (QRPivoted only)\n\nThe following functions are available for the QR objects: inv, size, and \\. When A is rectangular, \\ will return a least squares solution and if the solution is not unique, the one with smallest norm is returned.\n\nMultiplication with respect to either thin or full Q is allowed, i.e. both F[:Q]*F[:R] and F[:Q]*A are supported. A Q matrix can be converted into a regular matrix with full which has a named argument thin.\n\nExample\n\njulia> A = [3.0 -6.0; 4.0 -8.0; 0.0 1.0]\n3×2 Array{Float64,2}:\n 3.0  -6.0\n 4.0  -8.0\n 0.0   1.0\n\njulia> F = qrfact(A)\nBase.LinAlg.QRCompactWY{Float64,Array{Float64,2}} with factors Q and R:\n[-0.6 0.0 0.8; -0.8 0.0 -0.6; 0.0 -1.0 0.0]\n[-5.0 10.0; 0.0 -1.0]\n\njulia> F[:Q] * F[:R] == A\ntrue\n\nnote: Note\nqrfact returns multiple types because LAPACK uses several representations that minimize the memory storage requirements of products of Householder elementary reflectors, so that the Q and R matrices can be stored compactly rather as two separate dense matrices.\n\n\n\nqrfact(A) -> QRSparse\n\nCompute the QR factorization of a sparse matrix A. Fill-reducing row and column permutations are used such that F[:R] = F[:Q]'*A[F[:prow],F[:pcol]]. The main application of this type is to solve least squares or underdetermined problems with \\. The function calls the C library SPQR.\n\nExamples\n\njulia> A = sparse([1,2,3,4], [1,1,2,2], ones(4))\n4×2 SparseMatrixCSC{Float64,Int64} with 4 stored entries:\n  [1, 1]  =  1.0\n  [2, 1]  =  1.0\n  [3, 2]  =  1.0\n  [4, 2]  =  1.0\n\njulia> qrfact(A)\nBase.SparseArrays.SPQR.QRSparse{Float64,Int64}\nQ factor:\n4×4 Base.SparseArrays.SPQR.QRSparseQ{Float64,Int64}:\n -0.707107   0.0        0.0       -0.707107\n  0.0       -0.707107  -0.707107   0.0\n  0.0       -0.707107   0.707107   0.0\n -0.707107   0.0        0.0        0.707107\nR factor:\n2×2 SparseMatrixCSC{Float64,Int64} with 2 stored entries:\n  [1, 1]  =  -1.41421\n  [2, 2]  =  -1.41421\nRow permutation:\n4-element Array{Int64,1}:\n 1\n 3\n 4\n 2\nColumns permutation:\n2-element Array{Int64,1}:\n 1\n 2\n\n\n\n"
+    "text": "qrfact(A, pivot=Val(false)) -> F\n\nCompute the QR factorization of the matrix A: an orthogonal (or unitary if A is complex-valued) matrix Q, and an upper triangular matrix R such that\n\nA = Q R\n\nThe returned object F stores the factorization in a packed format:\n\nif pivot == Val(true) then F is a QRPivoted object,\notherwise if the element type of A is a BLAS type (Float32, Float64, Complex64 or Complex128), then F is a QRCompactWY object,\notherwise F is a QR object.\n\nThe individual components of the factorization F can be accessed by indexing with a symbol:\n\nF[:Q]: the orthogonal/unitary matrix Q\nF[:R]: the upper triangular matrix R\nF[:p]: the permutation vector of the pivot (QRPivoted only)\nF[:P]: the permutation matrix of the pivot (QRPivoted only)\n\nThe following functions are available for the QR objects: inv, size, and \\. When A is rectangular, \\ will return a least squares solution and if the solution is not unique, the one with smallest norm is returned.\n\nMultiplication with respect to either thin or full Q is allowed, i.e. both F[:Q]*F[:R] and F[:Q]*A are supported. A Q matrix can be converted into a regular matrix with full which has a named argument thin.\n\nExamples\n\njulia> A = [3.0 -6.0; 4.0 -8.0; 0.0 1.0]\n3×2 Array{Float64,2}:\n 3.0  -6.0\n 4.0  -8.0\n 0.0   1.0\n\njulia> F = qrfact(A)\nBase.LinAlg.QRCompactWY{Float64,Array{Float64,2}} with factors Q and R:\n[-0.6 0.0 0.8; -0.8 0.0 -0.6; 0.0 -1.0 0.0]\n[-5.0 10.0; 0.0 -1.0]\n\njulia> F[:Q] * F[:R] == A\ntrue\n\nnote: Note\nqrfact returns multiple types because LAPACK uses several representations that minimize the memory storage requirements of products of Householder elementary reflectors, so that the Q and R matrices can be stored compactly rather as two separate dense matrices.\n\n\n\nqrfact(A) -> QRSparse\n\nCompute the QR factorization of a sparse matrix A. Fill-reducing row and column permutations are used such that F[:R] = F[:Q]'*A[F[:prow],F[:pcol]]. The main application of this type is to solve least squares or underdetermined problems with \\. The function calls the C library SPQR.\n\nExamples\n\njulia> A = sparse([1,2,3,4], [1,1,2,2], ones(4))\n4×2 SparseMatrixCSC{Float64,Int64} with 4 stored entries:\n  [1, 1]  =  1.0\n  [2, 1]  =  1.0\n  [3, 2]  =  1.0\n  [4, 2]  =  1.0\n\njulia> qrfact(A)\nBase.SparseArrays.SPQR.QRSparse{Float64,Int64}\nQ factor:\n4×4 Base.SparseArrays.SPQR.QRSparseQ{Float64,Int64}:\n -0.707107   0.0        0.0       -0.707107\n  0.0       -0.707107  -0.707107   0.0\n  0.0       -0.707107   0.707107   0.0\n -0.707107   0.0        0.0        0.707107\nR factor:\n2×2 SparseMatrixCSC{Float64,Int64} with 2 stored entries:\n  [1, 1]  =  -1.41421\n  [2, 2]  =  -1.41421\nRow permutation:\n4-element Array{Int64,1}:\n 1\n 3\n 4\n 2\nColumns permutation:\n2-element Array{Int64,1}:\n 1\n 2\n\n\n\n"
 },
 
 {
@@ -12845,7 +12845,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.eig",
     "category": "Function",
-    "text": "eig(A::Union{SymTridiagonal, Hermitian, Symmetric}, irange::UnitRange) -> D, V\neig(A::Union{SymTridiagonal, Hermitian, Symmetric}, vl::Real, vu::Real) -> D, V\neig(A, permute::Bool=true, scale::Bool=true) -> D, V\n\nComputes eigenvalues (D) and eigenvectors (V) of A. See eigfact for details on the irange, vl, and vu arguments (for SymTridiagonal, Hermitian, and Symmetric matrices) and the permute and scale keyword arguments. The eigenvectors are returned columnwise.\n\nExample\n\njulia> eig([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])\n([1.0, 3.0, 18.0], [1.0 0.0 0.0; 0.0 1.0 0.0; 0.0 0.0 1.0])\n\neig is a wrapper around eigfact, extracting all parts of the factorization to a tuple; where possible, using eigfact is recommended.\n\n\n\neig(A, B) -> D, V\n\nComputes generalized eigenvalues (D) and vectors (V) of A with respect to B.\n\neig is a wrapper around eigfact, extracting all parts of the factorization to a tuple; where possible, using eigfact is recommended.\n\nExample\n\njulia> A = [1 0; 0 -1]\n2×2 Array{Int64,2}:\n 1   0\n 0  -1\n\njulia> B = [0 1; 1 0]\n2×2 Array{Int64,2}:\n 0  1\n 1  0\n\njulia> eig(A, B)\n(Complex{Float64}[0.0+1.0im, 0.0-1.0im], Complex{Float64}[0.0-1.0im 0.0+1.0im; -1.0-0.0im -1.0+0.0im])\n\n\n\n"
+    "text": "eig(A::Union{SymTridiagonal, Hermitian, Symmetric}, irange::UnitRange) -> D, V\neig(A::Union{SymTridiagonal, Hermitian, Symmetric}, vl::Real, vu::Real) -> D, V\neig(A, permute::Bool=true, scale::Bool=true) -> D, V\n\nComputes eigenvalues (D) and eigenvectors (V) of A. See eigfact for details on the irange, vl, and vu arguments (for SymTridiagonal, Hermitian, and Symmetric matrices) and the permute and scale keyword arguments. The eigenvectors are returned columnwise.\n\nExamples\n\njulia> eig([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])\n([1.0, 3.0, 18.0], [1.0 0.0 0.0; 0.0 1.0 0.0; 0.0 0.0 1.0])\n\neig is a wrapper around eigfact, extracting all parts of the factorization to a tuple; where possible, using eigfact is recommended.\n\n\n\neig(A, B) -> D, V\n\nComputes generalized eigenvalues (D) and vectors (V) of A with respect to B.\n\neig is a wrapper around eigfact, extracting all parts of the factorization to a tuple; where possible, using eigfact is recommended.\n\nExamples\n\njulia> A = [1 0; 0 -1]\n2×2 Array{Int64,2}:\n 1   0\n 0  -1\n\njulia> B = [0 1; 1 0]\n2×2 Array{Int64,2}:\n 0  1\n 1  0\n\njulia> eig(A, B)\n(Complex{Float64}[0.0+1.0im, 0.0-1.0im], Complex{Float64}[0.0-1.0im 0.0+1.0im; -1.0-0.0im -1.0+0.0im])\n\n\n\n"
 },
 
 {
@@ -12853,7 +12853,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.eigvals",
     "category": "Function",
-    "text": "eigvals(A; permute::Bool=true, scale::Bool=true) -> values\n\nReturns the eigenvalues of A.\n\nFor general non-symmetric matrices it is possible to specify how the matrix is balanced before the eigenvalue calculation. The option permute=true permutes the matrix to become closer to upper triangular, and scale=true scales the matrix by its diagonal elements to make rows and columns more equal in norm. The default is true for both options.\n\n\n\neigvals(A, B) -> values\n\nComputes the generalized eigenvalues of A and B.\n\nExample\n\njulia> A = [1 0; 0 -1]\n2×2 Array{Int64,2}:\n 1   0\n 0  -1\n\njulia> B = [0 1; 1 0]\n2×2 Array{Int64,2}:\n 0  1\n 1  0\n\njulia> eigvals(A,B)\n2-element Array{Complex{Float64},1}:\n 0.0+1.0im\n 0.0-1.0im\n\n\n\neigvals(A::Union{SymTridiagonal, Hermitian, Symmetric}, irange::UnitRange) -> values\n\nReturns the eigenvalues of A. It is possible to calculate only a subset of the eigenvalues by specifying a UnitRange irange covering indices of the sorted eigenvalues, e.g. the 2nd to 8th eigenvalues.\n\njulia> A = SymTridiagonal([1.; 2.; 1.], [2.; 3.])\n3×3 SymTridiagonal{Float64}:\n 1.0  2.0   ⋅\n 2.0  2.0  3.0\n  ⋅   3.0  1.0\n\njulia> eigvals(A, 2:2)\n1-element Array{Float64,1}:\n 1.0\n\njulia> eigvals(A)\n3-element Array{Float64,1}:\n -2.14005\n  1.0\n  5.14005\n\n\n\neigvals(A::Union{SymTridiagonal, Hermitian, Symmetric}, vl::Real, vu::Real) -> values\n\nReturns the eigenvalues of A. It is possible to calculate only a subset of the eigenvalues by specifying a pair vl and vu for the lower and upper boundaries of the eigenvalues.\n\njulia> A = SymTridiagonal([1.; 2.; 1.], [2.; 3.])\n3×3 SymTridiagonal{Float64}:\n 1.0  2.0   ⋅\n 2.0  2.0  3.0\n  ⋅   3.0  1.0\n\njulia> eigvals(A, -1, 2)\n1-element Array{Float64,1}:\n 1.0\n\njulia> eigvals(A)\n3-element Array{Float64,1}:\n -2.14005\n  1.0\n  5.14005\n\n\n\n"
+    "text": "eigvals(A; permute::Bool=true, scale::Bool=true) -> values\n\nReturns the eigenvalues of A.\n\nFor general non-symmetric matrices it is possible to specify how the matrix is balanced before the eigenvalue calculation. The option permute=true permutes the matrix to become closer to upper triangular, and scale=true scales the matrix by its diagonal elements to make rows and columns more equal in norm. The default is true for both options.\n\n\n\neigvals(A, B) -> values\n\nComputes the generalized eigenvalues of A and B.\n\nExamples\n\njulia> A = [1 0; 0 -1]\n2×2 Array{Int64,2}:\n 1   0\n 0  -1\n\njulia> B = [0 1; 1 0]\n2×2 Array{Int64,2}:\n 0  1\n 1  0\n\njulia> eigvals(A,B)\n2-element Array{Complex{Float64},1}:\n 0.0+1.0im\n 0.0-1.0im\n\n\n\neigvals(A::Union{SymTridiagonal, Hermitian, Symmetric}, irange::UnitRange) -> values\n\nReturns the eigenvalues of A. It is possible to calculate only a subset of the eigenvalues by specifying a UnitRange irange covering indices of the sorted eigenvalues, e.g. the 2nd to 8th eigenvalues.\n\njulia> A = SymTridiagonal([1.; 2.; 1.], [2.; 3.])\n3×3 SymTridiagonal{Float64}:\n 1.0  2.0   ⋅\n 2.0  2.0  3.0\n  ⋅   3.0  1.0\n\njulia> eigvals(A, 2:2)\n1-element Array{Float64,1}:\n 1.0\n\njulia> eigvals(A)\n3-element Array{Float64,1}:\n -2.14005\n  1.0\n  5.14005\n\n\n\neigvals(A::Union{SymTridiagonal, Hermitian, Symmetric}, vl::Real, vu::Real) -> values\n\nReturns the eigenvalues of A. It is possible to calculate only a subset of the eigenvalues by specifying a pair vl and vu for the lower and upper boundaries of the eigenvalues.\n\njulia> A = SymTridiagonal([1.; 2.; 1.], [2.; 3.])\n3×3 SymTridiagonal{Float64}:\n 1.0  2.0   ⋅\n 2.0  2.0  3.0\n  ⋅   3.0  1.0\n\njulia> eigvals(A, -1, 2)\n1-element Array{Float64,1}:\n 1.0\n\njulia> eigvals(A)\n3-element Array{Float64,1}:\n -2.14005\n  1.0\n  5.14005\n\n\n\n"
 },
 
 {
@@ -12869,7 +12869,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.eigmax",
     "category": "Function",
-    "text": "eigmax(A; permute::Bool=true, scale::Bool=true)\n\nReturns the largest eigenvalue of A. The option permute=true permutes the matrix to become closer to upper triangular, and scale=true scales the matrix by its diagonal elements to make rows and columns more equal in norm. Note that if the eigenvalues of A are complex, this method will fail, since complex numbers cannot be sorted.\n\nExample\n\njulia> A = [0 im; -im 0]\n2×2 Array{Complex{Int64},2}:\n 0+0im  0+1im\n 0-1im  0+0im\n\njulia> eigmax(A)\n1.0\n\njulia> A = [0 im; -1 0]\n2×2 Array{Complex{Int64},2}:\n  0+0im  0+1im\n -1+0im  0+0im\n\njulia> eigmax(A)\nERROR: DomainError with Complex{Int64}[0+0im 0+1im; -1+0im 0+0im]:\n`A` cannot have complex eigenvalues.\nStacktrace:\n [1] #eigmax#52(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:238\n [2] eigmax(::Array{Complex{Int64},2}) at ./linalg/eigen.jl:236\n\n\n\n"
+    "text": "eigmax(A; permute::Bool=true, scale::Bool=true)\n\nReturns the largest eigenvalue of A. The option permute=true permutes the matrix to become closer to upper triangular, and scale=true scales the matrix by its diagonal elements to make rows and columns more equal in norm. Note that if the eigenvalues of A are complex, this method will fail, since complex numbers cannot be sorted.\n\nExamples\n\njulia> A = [0 im; -im 0]\n2×2 Array{Complex{Int64},2}:\n 0+0im  0+1im\n 0-1im  0+0im\n\njulia> eigmax(A)\n1.0\n\njulia> A = [0 im; -1 0]\n2×2 Array{Complex{Int64},2}:\n  0+0im  0+1im\n -1+0im  0+0im\n\njulia> eigmax(A)\nERROR: DomainError with Complex{Int64}[0+0im 0+1im; -1+0im 0+0im]:\n`A` cannot have complex eigenvalues.\nStacktrace:\n [1] #eigmax#52(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:238\n [2] eigmax(::Array{Complex{Int64},2}) at ./linalg/eigen.jl:236\n\n\n\n"
 },
 
 {
@@ -12877,7 +12877,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.eigmin",
     "category": "Function",
-    "text": "eigmin(A; permute::Bool=true, scale::Bool=true)\n\nReturns the smallest eigenvalue of A. The option permute=true permutes the matrix to become closer to upper triangular, and scale=true scales the matrix by its diagonal elements to make rows and columns more equal in norm. Note that if the eigenvalues of A are complex, this method will fail, since complex numbers cannot be sorted.\n\nExample\n\njulia> A = [0 im; -im 0]\n2×2 Array{Complex{Int64},2}:\n 0+0im  0+1im\n 0-1im  0+0im\n\njulia> eigmin(A)\n-1.0\n\njulia> A = [0 im; -1 0]\n2×2 Array{Complex{Int64},2}:\n  0+0im  0+1im\n -1+0im  0+0im\n\njulia> eigmin(A)\nERROR: DomainError with Complex{Int64}[0+0im 0+1im; -1+0im 0+0im]:\n`A` cannot have complex eigenvalues.\nStacktrace:\n [1] #eigmin#53(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:280\n [2] eigmin(::Array{Complex{Int64},2}) at ./linalg/eigen.jl:278\n\n\n\n"
+    "text": "eigmin(A; permute::Bool=true, scale::Bool=true)\n\nReturns the smallest eigenvalue of A. The option permute=true permutes the matrix to become closer to upper triangular, and scale=true scales the matrix by its diagonal elements to make rows and columns more equal in norm. Note that if the eigenvalues of A are complex, this method will fail, since complex numbers cannot be sorted.\n\nExamples\n\njulia> A = [0 im; -im 0]\n2×2 Array{Complex{Int64},2}:\n 0+0im  0+1im\n 0-1im  0+0im\n\njulia> eigmin(A)\n-1.0\n\njulia> A = [0 im; -1 0]\n2×2 Array{Complex{Int64},2}:\n  0+0im  0+1im\n -1+0im  0+0im\n\njulia> eigmin(A)\nERROR: DomainError with Complex{Int64}[0+0im 0+1im; -1+0im 0+0im]:\n`A` cannot have complex eigenvalues.\nStacktrace:\n [1] #eigmin#53(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:280\n [2] eigmin(::Array{Complex{Int64},2}) at ./linalg/eigen.jl:278\n\n\n\n"
 },
 
 {
@@ -12885,7 +12885,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.eigvecs",
     "category": "Function",
-    "text": "eigvecs(A::SymTridiagonal[, eigvals]) -> Matrix\n\nReturns a matrix M whose columns are the eigenvectors of A. (The kth eigenvector can be obtained from the slice M[:, k].)\n\nIf the optional vector of eigenvalues eigvals is specified, eigvecs returns the specific corresponding eigenvectors.\n\nExample\n\njulia> A = SymTridiagonal([1.; 2.; 1.], [2.; 3.])\n3×3 SymTridiagonal{Float64}:\n 1.0  2.0   ⋅\n 2.0  2.0  3.0\n  ⋅   3.0  1.0\n\njulia> eigvals(A)\n3-element Array{Float64,1}:\n -2.14005\n  1.0\n  5.14005\n\njulia> eigvecs(A)\n3×3 Array{Float64,2}:\n  0.418304  -0.83205      0.364299\n -0.656749  -7.39009e-16  0.754109\n  0.627457   0.5547       0.546448\n\njulia> eigvecs(A, [1.])\n3×1 Array{Float64,2}:\n  0.83205\n  4.26351e-17\n -0.5547\n\n\n\neigvecs(A; permute::Bool=true, scale::Bool=true) -> Matrix\n\nReturns a matrix M whose columns are the eigenvectors of A. (The kth eigenvector can be obtained from the slice M[:, k].) The permute and scale keywords are the same as for eigfact.\n\nExample\n\njulia> eigvecs([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])\n3×3 Array{Float64,2}:\n 1.0  0.0  0.0\n 0.0  1.0  0.0\n 0.0  0.0  1.0\n\n\n\neigvecs(A, B) -> Matrix\n\nReturns a matrix M whose columns are the generalized eigenvectors of A and B. (The kth eigenvector can be obtained from the slice M[:, k].)\n\nExample\n\njulia> A = [1 0; 0 -1]\n2×2 Array{Int64,2}:\n 1   0\n 0  -1\n\njulia> B = [0 1; 1 0]\n2×2 Array{Int64,2}:\n 0  1\n 1  0\n\njulia> eigvecs(A, B)\n2×2 Array{Complex{Float64},2}:\n  0.0-1.0im   0.0+1.0im\n -1.0-0.0im  -1.0+0.0im\n\n\n\n"
+    "text": "eigvecs(A::SymTridiagonal[, eigvals]) -> Matrix\n\nReturns a matrix M whose columns are the eigenvectors of A. (The kth eigenvector can be obtained from the slice M[:, k].)\n\nIf the optional vector of eigenvalues eigvals is specified, eigvecs returns the specific corresponding eigenvectors.\n\nExamples\n\njulia> A = SymTridiagonal([1.; 2.; 1.], [2.; 3.])\n3×3 SymTridiagonal{Float64}:\n 1.0  2.0   ⋅\n 2.0  2.0  3.0\n  ⋅   3.0  1.0\n\njulia> eigvals(A)\n3-element Array{Float64,1}:\n -2.14005\n  1.0\n  5.14005\n\njulia> eigvecs(A)\n3×3 Array{Float64,2}:\n  0.418304  -0.83205      0.364299\n -0.656749  -7.39009e-16  0.754109\n  0.627457   0.5547       0.546448\n\njulia> eigvecs(A, [1.])\n3×1 Array{Float64,2}:\n  0.83205\n  4.26351e-17\n -0.5547\n\n\n\neigvecs(A; permute::Bool=true, scale::Bool=true) -> Matrix\n\nReturns a matrix M whose columns are the eigenvectors of A. (The kth eigenvector can be obtained from the slice M[:, k].) The permute and scale keywords are the same as for eigfact.\n\nExamples\n\njulia> eigvecs([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])\n3×3 Array{Float64,2}:\n 1.0  0.0  0.0\n 0.0  1.0  0.0\n 0.0  0.0  1.0\n\n\n\neigvecs(A, B) -> Matrix\n\nReturns a matrix M whose columns are the generalized eigenvectors of A and B. (The kth eigenvector can be obtained from the slice M[:, k].)\n\nExamples\n\njulia> A = [1 0; 0 -1]\n2×2 Array{Int64,2}:\n 1   0\n 0  -1\n\njulia> B = [0 1; 1 0]\n2×2 Array{Int64,2}:\n 0  1\n 1  0\n\njulia> eigvecs(A, B)\n2×2 Array{Complex{Float64},2}:\n  0.0-1.0im   0.0+1.0im\n -1.0-0.0im  -1.0+0.0im\n\n\n\n"
 },
 
 {
@@ -12893,7 +12893,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.eigfact",
     "category": "Function",
-    "text": "eigfact(A; permute::Bool=true, scale::Bool=true) -> Eigen\n\nComputes the eigenvalue decomposition of A, returning an Eigen factorization object F which contains the eigenvalues in F[:values] and the eigenvectors in the columns of the matrix F[:vectors]. (The kth eigenvector can be obtained from the slice F[:vectors][:, k].)\n\nThe following functions are available for Eigen objects: inv, det, and isposdef.\n\nFor general nonsymmetric matrices it is possible to specify how the matrix is balanced before the eigenvector calculation. The option permute=true permutes the matrix to become closer to upper triangular, and scale=true scales the matrix by its diagonal elements to make rows and columns more equal in norm. The default is true for both options.\n\nExample\n\njulia> F = eigfact([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])\nBase.LinAlg.Eigen{Float64,Float64,Array{Float64,2},Array{Float64,1}}([1.0, 3.0, 18.0], [1.0 0.0 0.0; 0.0 1.0 0.0; 0.0 0.0 1.0])\n\njulia> F[:values]\n3-element Array{Float64,1}:\n  1.0\n  3.0\n 18.0\n\njulia> F[:vectors]\n3×3 Array{Float64,2}:\n 1.0  0.0  0.0\n 0.0  1.0  0.0\n 0.0  0.0  1.0\n\n\n\neigfact(A, B) -> GeneralizedEigen\n\nComputes the generalized eigenvalue decomposition of A and B, returning a GeneralizedEigen factorization object F which contains the generalized eigenvalues in F[:values] and the generalized eigenvectors in the columns of the matrix F[:vectors]. (The kth generalized eigenvector can be obtained from the slice F[:vectors][:, k].)\n\n\n\neigfact(A::Union{SymTridiagonal, Hermitian, Symmetric}, irange::UnitRange) -> Eigen\n\nComputes the eigenvalue decomposition of A, returning an Eigen factorization object F which contains the eigenvalues in F[:values] and the eigenvectors in the columns of the matrix F[:vectors]. (The kth eigenvector can be obtained from the slice F[:vectors][:, k].)\n\nThe following functions are available for Eigen objects: inv, det, and isposdef.\n\nThe UnitRange irange specifies indices of the sorted eigenvalues to search for.\n\nnote: Note\nIf irange is not 1:n, where n is the dimension of A, then the returned factorization will be a truncated factorization.\n\n\n\neigfact(A::Union{SymTridiagonal, Hermitian, Symmetric}, vl::Real, vu::Real) -> Eigen\n\nComputes the eigenvalue decomposition of A, returning an Eigen factorization object F which contains the eigenvalues in F[:values] and the eigenvectors in the columns of the matrix F[:vectors]. (The kth eigenvector can be obtained from the slice F[:vectors][:, k].)\n\nThe following functions are available for Eigen objects: inv, det, and isposdef.\n\nvl is the lower bound of the window of eigenvalues to search for, and vu is the upper bound.\n\nnote: Note\nIf [vl, vu] does not contain all eigenvalues of A, then the returned factorization will be a truncated factorization.\n\n\n\n"
+    "text": "eigfact(A; permute::Bool=true, scale::Bool=true) -> Eigen\n\nComputes the eigenvalue decomposition of A, returning an Eigen factorization object F which contains the eigenvalues in F[:values] and the eigenvectors in the columns of the matrix F[:vectors]. (The kth eigenvector can be obtained from the slice F[:vectors][:, k].)\n\nThe following functions are available for Eigen objects: inv, det, and isposdef.\n\nFor general nonsymmetric matrices it is possible to specify how the matrix is balanced before the eigenvector calculation. The option permute=true permutes the matrix to become closer to upper triangular, and scale=true scales the matrix by its diagonal elements to make rows and columns more equal in norm. The default is true for both options.\n\nExamples\n\njulia> F = eigfact([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])\nBase.LinAlg.Eigen{Float64,Float64,Array{Float64,2},Array{Float64,1}}([1.0, 3.0, 18.0], [1.0 0.0 0.0; 0.0 1.0 0.0; 0.0 0.0 1.0])\n\njulia> F[:values]\n3-element Array{Float64,1}:\n  1.0\n  3.0\n 18.0\n\njulia> F[:vectors]\n3×3 Array{Float64,2}:\n 1.0  0.0  0.0\n 0.0  1.0  0.0\n 0.0  0.0  1.0\n\n\n\neigfact(A, B) -> GeneralizedEigen\n\nComputes the generalized eigenvalue decomposition of A and B, returning a GeneralizedEigen factorization object F which contains the generalized eigenvalues in F[:values] and the generalized eigenvectors in the columns of the matrix F[:vectors]. (The kth generalized eigenvector can be obtained from the slice F[:vectors][:, k].)\n\n\n\neigfact(A::Union{SymTridiagonal, Hermitian, Symmetric}, irange::UnitRange) -> Eigen\n\nComputes the eigenvalue decomposition of A, returning an Eigen factorization object F which contains the eigenvalues in F[:values] and the eigenvectors in the columns of the matrix F[:vectors]. (The kth eigenvector can be obtained from the slice F[:vectors][:, k].)\n\nThe following functions are available for Eigen objects: inv, det, and isposdef.\n\nThe UnitRange irange specifies indices of the sorted eigenvalues to search for.\n\nnote: Note\nIf irange is not 1:n, where n is the dimension of A, then the returned factorization will be a truncated factorization.\n\n\n\neigfact(A::Union{SymTridiagonal, Hermitian, Symmetric}, vl::Real, vu::Real) -> Eigen\n\nComputes the eigenvalue decomposition of A, returning an Eigen factorization object F which contains the eigenvalues in F[:values] and the eigenvectors in the columns of the matrix F[:vectors]. (The kth eigenvector can be obtained from the slice F[:vectors][:, k].)\n\nThe following functions are available for Eigen objects: inv, det, and isposdef.\n\nvl is the lower bound of the window of eigenvalues to search for, and vu is the upper bound.\n\nnote: Note\nIf [vl, vu] does not contain all eigenvalues of A, then the returned factorization will be a truncated factorization.\n\n\n\n"
 },
 
 {
@@ -12909,7 +12909,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.hessfact",
     "category": "Function",
-    "text": "hessfact(A) -> Hessenberg\n\nCompute the Hessenberg decomposition of A and return a Hessenberg object. If F is the factorization object, the unitary matrix can be accessed with F[:Q] and the Hessenberg matrix with F[:H]. When Q is extracted, the resulting type is the HessenbergQ object, and may be converted to a regular matrix with convert(Array, _)  (or Array(_) for short).\n\nExample\n\njulia> A = [4. 9. 7.; 4. 4. 1.; 4. 3. 2.]\n3×3 Array{Float64,2}:\n 4.0  9.0  7.0\n 4.0  4.0  1.0\n 4.0  3.0  2.0\n\njulia> F = hessfact(A);\n\njulia> F[:Q] * F[:H] * F[:Q]'\n3×3 Array{Float64,2}:\n 4.0  9.0  7.0\n 4.0  4.0  1.0\n 4.0  3.0  2.0\n\n\n\n"
+    "text": "hessfact(A) -> Hessenberg\n\nCompute the Hessenberg decomposition of A and return a Hessenberg object. If F is the factorization object, the unitary matrix can be accessed with F[:Q] and the Hessenberg matrix with F[:H]. When Q is extracted, the resulting type is the HessenbergQ object, and may be converted to a regular matrix with convert(Array, _)  (or Array(_) for short).\n\nExamples\n\njulia> A = [4. 9. 7.; 4. 4. 1.; 4. 3. 2.]\n3×3 Array{Float64,2}:\n 4.0  9.0  7.0\n 4.0  4.0  1.0\n 4.0  3.0  2.0\n\njulia> F = hessfact(A);\n\njulia> F[:Q] * F[:H] * F[:Q]'\n3×3 Array{Float64,2}:\n 4.0  9.0  7.0\n 4.0  4.0  1.0\n 4.0  3.0  2.0\n\n\n\n"
 },
 
 {
@@ -12925,7 +12925,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.schurfact",
     "category": "Function",
-    "text": "schurfact(A::StridedMatrix) -> F::Schur\n\nComputes the Schur factorization of the matrix A. The (quasi) triangular Schur factor can be obtained from the Schur object F with either F[:Schur] or F[:T] and the orthogonal/unitary Schur vectors can be obtained with F[:vectors] or F[:Z] such that A = F[:vectors]*F[:Schur]*F[:vectors]'. The eigenvalues of A can be obtained with F[:values].\n\nExample\n\njulia> A = [-2. 1. 3.; 2. 1. -1.; -7. 2. 7.]\n3×3 Array{Float64,2}:\n -2.0  1.0   3.0\n  2.0  1.0  -1.0\n -7.0  2.0   7.0\n\njulia> F = schurfact(A)\nBase.LinAlg.Schur{Float64,Array{Float64,2}} with factors T and Z:\n[2.0 0.801792 6.63509; -8.55988e-11 2.0 8.08286; 0.0 0.0 1.99999]\n[0.577351 0.154299 -0.801784; 0.577346 -0.77152 0.267262; 0.577354 0.617211 0.534522]\nand values:\nComplex{Float64}[2.0+8.28447e-6im, 2.0-8.28447e-6im, 1.99999+0.0im]\n\njulia> F[:vectors] * F[:Schur] * F[:vectors]'\n3×3 Array{Float64,2}:\n -2.0  1.0   3.0\n  2.0  1.0  -1.0\n -7.0  2.0   7.0\n\n\n\nschurfact(A::StridedMatrix, B::StridedMatrix) -> F::GeneralizedSchur\n\nComputes the Generalized Schur (or QZ) factorization of the matrices A and B. The (quasi) triangular Schur factors can be obtained from the Schur object F with F[:S] and F[:T], the left unitary/orthogonal Schur vectors can be obtained with F[:left] or F[:Q] and the right unitary/orthogonal Schur vectors can be obtained with F[:right] or F[:Z] such that A=F[:left]*F[:S]*F[:right]' and B=F[:left]*F[:T]*F[:right]'. The generalized eigenvalues of A and B can be obtained with F[:alpha]./F[:beta].\n\n\n\n"
+    "text": "schurfact(A::StridedMatrix) -> F::Schur\n\nComputes the Schur factorization of the matrix A. The (quasi) triangular Schur factor can be obtained from the Schur object F with either F[:Schur] or F[:T] and the orthogonal/unitary Schur vectors can be obtained with F[:vectors] or F[:Z] such that A = F[:vectors]*F[:Schur]*F[:vectors]'. The eigenvalues of A can be obtained with F[:values].\n\nExamples\n\njulia> A = [-2. 1. 3.; 2. 1. -1.; -7. 2. 7.]\n3×3 Array{Float64,2}:\n -2.0  1.0   3.0\n  2.0  1.0  -1.0\n -7.0  2.0   7.0\n\njulia> F = schurfact(A)\nBase.LinAlg.Schur{Float64,Array{Float64,2}} with factors T and Z:\n[2.0 0.801792 6.63509; -8.55988e-11 2.0 8.08286; 0.0 0.0 1.99999]\n[0.577351 0.154299 -0.801784; 0.577346 -0.77152 0.267262; 0.577354 0.617211 0.534522]\nand values:\nComplex{Float64}[2.0+8.28447e-6im, 2.0-8.28447e-6im, 1.99999+0.0im]\n\njulia> F[:vectors] * F[:Schur] * F[:vectors]'\n3×3 Array{Float64,2}:\n -2.0  1.0   3.0\n  2.0  1.0  -1.0\n -7.0  2.0   7.0\n\n\n\nschurfact(A::StridedMatrix, B::StridedMatrix) -> F::GeneralizedSchur\n\nComputes the Generalized Schur (or QZ) factorization of the matrices A and B. The (quasi) triangular Schur factors can be obtained from the Schur object F with F[:S] and F[:T], the left unitary/orthogonal Schur vectors can be obtained with F[:left] or F[:Q] and the right unitary/orthogonal Schur vectors can be obtained with F[:right] or F[:Z] such that A=F[:left]*F[:S]*F[:right]' and B=F[:left]*F[:T]*F[:right]'. The generalized eigenvalues of A and B can be obtained with F[:alpha]./F[:beta].\n\n\n\n"
 },
 
 {
@@ -12941,7 +12941,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.schur",
     "category": "Function",
-    "text": "schur(A::StridedMatrix) -> T::Matrix, Z::Matrix, λ::Vector\n\nComputes the Schur factorization of the matrix A. The methods return the (quasi) triangular Schur factor T and the orthogonal/unitary Schur vectors Z such that A = Z*T*Z'. The eigenvalues of A are returned in the vector λ.\n\nSee schurfact.\n\nExample\n\njulia> A = [-2. 1. 3.; 2. 1. -1.; -7. 2. 7.]\n3×3 Array{Float64,2}:\n -2.0  1.0   3.0\n  2.0  1.0  -1.0\n -7.0  2.0   7.0\n\njulia> T, Z, lambda = schur(A)\n([2.0 0.801792 6.63509; -8.55988e-11 2.0 8.08286; 0.0 0.0 1.99999], [0.577351 0.154299 -0.801784; 0.577346 -0.77152 0.267262; 0.577354 0.617211 0.534522], Complex{Float64}[2.0+8.28447e-6im, 2.0-8.28447e-6im, 1.99999+0.0im])\n\njulia> Z * T * Z'\n3×3 Array{Float64,2}:\n -2.0  1.0   3.0\n  2.0  1.0  -1.0\n -7.0  2.0   7.0\n\n\n\nschur(A::StridedMatrix, B::StridedMatrix) -> S::StridedMatrix, T::StridedMatrix, Q::StridedMatrix, Z::StridedMatrix, α::Vector, β::Vector\n\nSee schurfact.\n\n\n\n"
+    "text": "schur(A::StridedMatrix) -> T::Matrix, Z::Matrix, λ::Vector\n\nComputes the Schur factorization of the matrix A. The methods return the (quasi) triangular Schur factor T and the orthogonal/unitary Schur vectors Z such that A = Z*T*Z'. The eigenvalues of A are returned in the vector λ.\n\nSee schurfact.\n\nExamples\n\njulia> A = [-2. 1. 3.; 2. 1. -1.; -7. 2. 7.]\n3×3 Array{Float64,2}:\n -2.0  1.0   3.0\n  2.0  1.0  -1.0\n -7.0  2.0   7.0\n\njulia> T, Z, lambda = schur(A)\n([2.0 0.801792 6.63509; -8.55988e-11 2.0 8.08286; 0.0 0.0 1.99999], [0.577351 0.154299 -0.801784; 0.577346 -0.77152 0.267262; 0.577354 0.617211 0.534522], Complex{Float64}[2.0+8.28447e-6im, 2.0-8.28447e-6im, 1.99999+0.0im])\n\njulia> Z * T * Z'\n3×3 Array{Float64,2}:\n -2.0  1.0   3.0\n  2.0  1.0  -1.0\n -7.0  2.0   7.0\n\n\n\nschur(A::StridedMatrix, B::StridedMatrix) -> S::StridedMatrix, T::StridedMatrix, Q::StridedMatrix, Z::StridedMatrix, α::Vector, β::Vector\n\nSee schurfact.\n\n\n\n"
 },
 
 {
@@ -12965,7 +12965,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.svdfact",
     "category": "Function",
-    "text": "svdfact(A, thin::Bool=true) -> SVD\n\nCompute the singular value decomposition (SVD) of A and return an SVD object.\n\nU, S, V and Vt can be obtained from the factorization F with F[:U], F[:S], F[:V] and F[:Vt], such that A = U*diagm(S)*Vt. The algorithm produces Vt and hence Vt is more efficient to extract than V. The singular values in S are sorted in descending order.\n\nIf thin=true (default), a thin SVD is returned. For a M times N matrix A, U is M times M for a full SVD (thin=false) and M times min(M N) for a thin SVD.\n\nExample\n\njulia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]\n4×5 Array{Float64,2}:\n 1.0  0.0  0.0  0.0  2.0\n 0.0  0.0  3.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0\n 0.0  2.0  0.0  0.0  0.0\n\njulia> F = svdfact(A)\nBase.LinAlg.SVD{Float64,Float64,Array{Float64,2}}([0.0 1.0 0.0 0.0; 1.0 0.0 0.0 0.0; 0.0 0.0 0.0 -1.0; 0.0 0.0 1.0 0.0], [3.0, 2.23607, 2.0, 0.0], [-0.0 0.0 … -0.0 0.0; 0.447214 0.0 … 0.0 0.894427; -0.0 1.0 … -0.0 0.0; 0.0 0.0 … 1.0 0.0])\n\njulia> F[:U] * diagm(F[:S]) * F[:Vt]\n4×5 Array{Float64,2}:\n 1.0  0.0  0.0  0.0  2.0\n 0.0  0.0  3.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0\n 0.0  2.0  0.0  0.0  0.0\n\n\n\nsvdfact(A, B) -> GeneralizedSVD\n\nCompute the generalized SVD of A and B, returning a GeneralizedSVD factorization object F, such that A = F[:U]*F[:D1]*F[:R0]*F[:Q]' and B = F[:V]*F[:D2]*F[:R0]*F[:Q]'.\n\nFor an M-by-N matrix A and P-by-N matrix B,\n\nF[:U] is a M-by-M orthogonal matrix,\nF[:V] is a P-by-P orthogonal matrix,\nF[:Q] is a N-by-N orthogonal matrix,\nF[:R0] is a (K+L)-by-N matrix whose rightmost (K+L)-by-(K+L) block is          nonsingular upper block triangular,\nF[:D1] is a M-by-(K+L) diagonal matrix with 1s in the first K entries,\nF[:D2] is a P-by-(K+L) matrix whose top right L-by-L block is diagonal,\n\nK+L is the effective numerical rank of the matrix [A; B].\n\nThe entries of F[:D1] and F[:D2] are related, as explained in the LAPACK documentation for the generalized SVD and the xGGSVD3 routine which is called underneath (in LAPACK 3.6.0 and newer).\n\n\n\n"
+    "text": "svdfact(A, thin::Bool=true) -> SVD\n\nCompute the singular value decomposition (SVD) of A and return an SVD object.\n\nU, S, V and Vt can be obtained from the factorization F with F[:U], F[:S], F[:V] and F[:Vt], such that A = U*diagm(S)*Vt. The algorithm produces Vt and hence Vt is more efficient to extract than V. The singular values in S are sorted in descending order.\n\nIf thin=true (default), a thin SVD is returned. For a M times N matrix A, U is M times M for a full SVD (thin=false) and M times min(M N) for a thin SVD.\n\nExamples\n\njulia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]\n4×5 Array{Float64,2}:\n 1.0  0.0  0.0  0.0  2.0\n 0.0  0.0  3.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0\n 0.0  2.0  0.0  0.0  0.0\n\njulia> F = svdfact(A)\nBase.LinAlg.SVD{Float64,Float64,Array{Float64,2}}([0.0 1.0 0.0 0.0; 1.0 0.0 0.0 0.0; 0.0 0.0 0.0 -1.0; 0.0 0.0 1.0 0.0], [3.0, 2.23607, 2.0, 0.0], [-0.0 0.0 … -0.0 0.0; 0.447214 0.0 … 0.0 0.894427; -0.0 1.0 … -0.0 0.0; 0.0 0.0 … 1.0 0.0])\n\njulia> F[:U] * diagm(F[:S]) * F[:Vt]\n4×5 Array{Float64,2}:\n 1.0  0.0  0.0  0.0  2.0\n 0.0  0.0  3.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0\n 0.0  2.0  0.0  0.0  0.0\n\n\n\nsvdfact(A, B) -> GeneralizedSVD\n\nCompute the generalized SVD of A and B, returning a GeneralizedSVD factorization object F, such that A = F[:U]*F[:D1]*F[:R0]*F[:Q]' and B = F[:V]*F[:D2]*F[:R0]*F[:Q]'.\n\nFor an M-by-N matrix A and P-by-N matrix B,\n\nF[:U] is a M-by-M orthogonal matrix,\nF[:V] is a P-by-P orthogonal matrix,\nF[:Q] is a N-by-N orthogonal matrix,\nF[:R0] is a (K+L)-by-N matrix whose rightmost (K+L)-by-(K+L) block is          nonsingular upper block triangular,\nF[:D1] is a M-by-(K+L) diagonal matrix with 1s in the first K entries,\nF[:D2] is a P-by-(K+L) matrix whose top right L-by-L block is diagonal,\n\nK+L is the effective numerical rank of the matrix [A; B].\n\nThe entries of F[:D1] and F[:D2] are related, as explained in the LAPACK documentation for the generalized SVD and the xGGSVD3 routine which is called underneath (in LAPACK 3.6.0 and newer).\n\n\n\n"
 },
 
 {
@@ -12981,7 +12981,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.svd",
     "category": "Function",
-    "text": "svd(A, thin::Bool=true) -> U, S, V\n\nComputes the SVD of A, returning U, vector S, and V such that A == U*diagm(S)*V'. The singular values in S are sorted in descending order.\n\nIf thin=true (default), a thin SVD is returned. For a M times N matrix A, U is M times M for a full SVD (thin=false) and M times min(M N) for a thin SVD.\n\nsvd is a wrapper around svdfact, extracting all parts of the SVD factorization to a tuple. Direct use of svdfact is therefore more efficient.\n\nExample\n\njulia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]\n4×5 Array{Float64,2}:\n 1.0  0.0  0.0  0.0  2.0\n 0.0  0.0  3.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0\n 0.0  2.0  0.0  0.0  0.0\n\njulia> U, S, V = svd(A)\n([0.0 1.0 0.0 0.0; 1.0 0.0 0.0 0.0; 0.0 0.0 0.0 -1.0; 0.0 0.0 1.0 0.0], [3.0, 2.23607, 2.0, 0.0], [-0.0 0.447214 -0.0 0.0; 0.0 0.0 1.0 0.0; … ; -0.0 0.0 -0.0 1.0; 0.0 0.894427 0.0 0.0])\n\njulia> U*diagm(S)*V'\n4×5 Array{Float64,2}:\n 1.0  0.0  0.0  0.0  2.0\n 0.0  0.0  3.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0\n 0.0  2.0  0.0  0.0  0.0\n\n\n\nsvd(A, B) -> U, V, Q, D1, D2, R0\n\nWrapper around svdfact extracting all parts of the factorization to a tuple. Direct use of svdfact is therefore generally more efficient. The function returns the generalized SVD of A and B, returning U, V, Q, D1, D2, and R0 such that A = U*D1*R0*Q' and B = V*D2*R0*Q'.\n\n\n\n"
+    "text": "svd(A, thin::Bool=true) -> U, S, V\n\nComputes the SVD of A, returning U, vector S, and V such that A == U*diagm(S)*V'. The singular values in S are sorted in descending order.\n\nIf thin=true (default), a thin SVD is returned. For a M times N matrix A, U is M times M for a full SVD (thin=false) and M times min(M N) for a thin SVD.\n\nsvd is a wrapper around svdfact, extracting all parts of the SVD factorization to a tuple. Direct use of svdfact is therefore more efficient.\n\nExamples\n\njulia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]\n4×5 Array{Float64,2}:\n 1.0  0.0  0.0  0.0  2.0\n 0.0  0.0  3.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0\n 0.0  2.0  0.0  0.0  0.0\n\njulia> U, S, V = svd(A)\n([0.0 1.0 0.0 0.0; 1.0 0.0 0.0 0.0; 0.0 0.0 0.0 -1.0; 0.0 0.0 1.0 0.0], [3.0, 2.23607, 2.0, 0.0], [-0.0 0.447214 -0.0 0.0; 0.0 0.0 1.0 0.0; … ; -0.0 0.0 -0.0 1.0; 0.0 0.894427 0.0 0.0])\n\njulia> U*diagm(S)*V'\n4×5 Array{Float64,2}:\n 1.0  0.0  0.0  0.0  2.0\n 0.0  0.0  3.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0\n 0.0  2.0  0.0  0.0  0.0\n\n\n\nsvd(A, B) -> U, V, Q, D1, D2, R0\n\nWrapper around svdfact extracting all parts of the factorization to a tuple. Direct use of svdfact is therefore generally more efficient. The function returns the generalized SVD of A and B, returning U, V, Q, D1, D2, and R0 such that A = U*D1*R0*Q' and B = V*D2*R0*Q'.\n\n\n\n"
 },
 
 {
@@ -12989,7 +12989,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.svdvals",
     "category": "Function",
-    "text": "svdvals(A)\n\nReturns the singular values of A in descending order.\n\nExample\n\njulia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]\n4×5 Array{Float64,2}:\n 1.0  0.0  0.0  0.0  2.0\n 0.0  0.0  3.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0\n 0.0  2.0  0.0  0.0  0.0\n\njulia> svdvals(A)\n4-element Array{Float64,1}:\n 3.0\n 2.23607\n 2.0\n 0.0\n\n\n\nsvdvals(A, B)\n\nReturn the generalized singular values from the generalized singular value decomposition of A and B. See also svdfact.\n\n\n\n"
+    "text": "svdvals(A)\n\nReturns the singular values of A in descending order.\n\nExamples\n\njulia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]\n4×5 Array{Float64,2}:\n 1.0  0.0  0.0  0.0  2.0\n 0.0  0.0  3.0  0.0  0.0\n 0.0  0.0  0.0  0.0  0.0\n 0.0  2.0  0.0  0.0  0.0\n\njulia> svdvals(A)\n4-element Array{Float64,1}:\n 3.0\n 2.23607\n 2.0\n 0.0\n\n\n\nsvdvals(A, B)\n\nReturn the generalized singular values from the generalized singular value decomposition of A and B. See also svdfact.\n\n\n\n"
 },
 
 {
@@ -13013,7 +13013,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.triu",
     "category": "Function",
-    "text": "triu(M)\n\nUpper triangle of a matrix.\n\nExample\n\njulia> a = ones(4,4)\n4×4 Array{Float64,2}:\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n\njulia> triu(a)\n4×4 Array{Float64,2}:\n 1.0  1.0  1.0  1.0\n 0.0  1.0  1.0  1.0\n 0.0  0.0  1.0  1.0\n 0.0  0.0  0.0  1.0\n\n\n\ntriu(M, k::Integer)\n\nReturns the upper triangle of M starting from the kth superdiagonal.\n\nExample\n\njulia> a = ones(4,4)\n4×4 Array{Float64,2}:\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n\njulia> triu(a,3)\n4×4 Array{Float64,2}:\n 0.0  0.0  0.0  1.0\n 0.0  0.0  0.0  0.0\n 0.0  0.0  0.0  0.0\n 0.0  0.0  0.0  0.0\n\njulia> triu(a,-3)\n4×4 Array{Float64,2}:\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n\n\n\n"
+    "text": "triu(M)\n\nUpper triangle of a matrix.\n\nExamples\n\njulia> a = ones(4,4)\n4×4 Array{Float64,2}:\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n\njulia> triu(a)\n4×4 Array{Float64,2}:\n 1.0  1.0  1.0  1.0\n 0.0  1.0  1.0  1.0\n 0.0  0.0  1.0  1.0\n 0.0  0.0  0.0  1.0\n\n\n\ntriu(M, k::Integer)\n\nReturns the upper triangle of M starting from the kth superdiagonal.\n\nExamples\n\njulia> a = ones(4,4)\n4×4 Array{Float64,2}:\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n\njulia> triu(a,3)\n4×4 Array{Float64,2}:\n 0.0  0.0  0.0  1.0\n 0.0  0.0  0.0  0.0\n 0.0  0.0  0.0  0.0\n 0.0  0.0  0.0  0.0\n\njulia> triu(a,-3)\n4×4 Array{Float64,2}:\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n\n\n\n"
 },
 
 {
@@ -13021,7 +13021,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.triu!",
     "category": "Function",
-    "text": "triu!(M)\n\nUpper triangle of a matrix, overwriting M in the process. See also triu.\n\n\n\ntriu!(M, k::Integer)\n\nReturns the upper triangle of M starting from the kth superdiagonal, overwriting M in the process.\n\nExample\n\njulia> M = [1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5]\n5×5 Array{Int64,2}:\n 1  2  3  4  5\n 1  2  3  4  5\n 1  2  3  4  5\n 1  2  3  4  5\n 1  2  3  4  5\n\njulia> triu!(M, 1)\n5×5 Array{Int64,2}:\n 0  2  3  4  5\n 0  0  3  4  5\n 0  0  0  4  5\n 0  0  0  0  5\n 0  0  0  0  0\n\n\n\n"
+    "text": "triu!(M)\n\nUpper triangle of a matrix, overwriting M in the process. See also triu.\n\n\n\ntriu!(M, k::Integer)\n\nReturns the upper triangle of M starting from the kth superdiagonal, overwriting M in the process.\n\nExamples\n\njulia> M = [1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5]\n5×5 Array{Int64,2}:\n 1  2  3  4  5\n 1  2  3  4  5\n 1  2  3  4  5\n 1  2  3  4  5\n 1  2  3  4  5\n\njulia> triu!(M, 1)\n5×5 Array{Int64,2}:\n 0  2  3  4  5\n 0  0  3  4  5\n 0  0  0  4  5\n 0  0  0  0  5\n 0  0  0  0  0\n\n\n\n"
 },
 
 {
@@ -13029,7 +13029,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.tril",
     "category": "Function",
-    "text": "tril(M)\n\nLower triangle of a matrix.\n\nExample\n\njulia> a = ones(4,4)\n4×4 Array{Float64,2}:\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n\njulia> tril(a)\n4×4 Array{Float64,2}:\n 1.0  0.0  0.0  0.0\n 1.0  1.0  0.0  0.0\n 1.0  1.0  1.0  0.0\n 1.0  1.0  1.0  1.0\n\n\n\ntril(M, k::Integer)\n\nReturns the lower triangle of M starting from the kth superdiagonal.\n\nExample\n\njulia> a = ones(4,4)\n4×4 Array{Float64,2}:\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n\njulia> tril(a,3)\n4×4 Array{Float64,2}:\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n\njulia> tril(a,-3)\n4×4 Array{Float64,2}:\n 0.0  0.0  0.0  0.0\n 0.0  0.0  0.0  0.0\n 0.0  0.0  0.0  0.0\n 1.0  0.0  0.0  0.0\n\n\n\n"
+    "text": "tril(M)\n\nLower triangle of a matrix.\n\nExamples\n\njulia> a = ones(4,4)\n4×4 Array{Float64,2}:\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n\njulia> tril(a)\n4×4 Array{Float64,2}:\n 1.0  0.0  0.0  0.0\n 1.0  1.0  0.0  0.0\n 1.0  1.0  1.0  0.0\n 1.0  1.0  1.0  1.0\n\n\n\ntril(M, k::Integer)\n\nReturns the lower triangle of M starting from the kth superdiagonal.\n\nExamples\n\njulia> a = ones(4,4)\n4×4 Array{Float64,2}:\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n\njulia> tril(a,3)\n4×4 Array{Float64,2}:\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n 1.0  1.0  1.0  1.0\n\njulia> tril(a,-3)\n4×4 Array{Float64,2}:\n 0.0  0.0  0.0  0.0\n 0.0  0.0  0.0  0.0\n 0.0  0.0  0.0  0.0\n 1.0  0.0  0.0  0.0\n\n\n\n"
 },
 
 {
@@ -13037,7 +13037,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.tril!",
     "category": "Function",
-    "text": "tril!(M)\n\nLower triangle of a matrix, overwriting M in the process. See also tril.\n\n\n\ntril!(M, k::Integer)\n\nReturns the lower triangle of M starting from the kth superdiagonal, overwriting M in the process.\n\nExample\n\njulia> M = [1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5]\n5×5 Array{Int64,2}:\n 1  2  3  4  5\n 1  2  3  4  5\n 1  2  3  4  5\n 1  2  3  4  5\n 1  2  3  4  5\n\njulia> tril!(M, 2)\n5×5 Array{Int64,2}:\n 1  2  3  0  0\n 1  2  3  4  0\n 1  2  3  4  5\n 1  2  3  4  5\n 1  2  3  4  5\n\n\n\n"
+    "text": "tril!(M)\n\nLower triangle of a matrix, overwriting M in the process. See also tril.\n\n\n\ntril!(M, k::Integer)\n\nReturns the lower triangle of M starting from the kth superdiagonal, overwriting M in the process.\n\nExamples\n\njulia> M = [1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5; 1 2 3 4 5]\n5×5 Array{Int64,2}:\n 1  2  3  4  5\n 1  2  3  4  5\n 1  2  3  4  5\n 1  2  3  4  5\n 1  2  3  4  5\n\njulia> tril!(M, 2)\n5×5 Array{Int64,2}:\n 1  2  3  0  0\n 1  2  3  4  0\n 1  2  3  4  5\n 1  2  3  4  5\n 1  2  3  4  5\n\n\n\n"
 },
 
 {
@@ -13045,7 +13045,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.diagind",
     "category": "Function",
-    "text": "diagind(M, k::Integer=0)\n\nA Range giving the indices of the kth diagonal of the matrix M.\n\nExample\n\njulia> A = [1 2 3; 4 5 6; 7 8 9]\n3×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n 7  8  9\n\njulia> diagind(A,-1)\n2:4:6\n\n\n\n"
+    "text": "diagind(M, k::Integer=0)\n\nA Range giving the indices of the kth diagonal of the matrix M.\n\nExamples\n\njulia> A = [1 2 3; 4 5 6; 7 8 9]\n3×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n 7  8  9\n\njulia> diagind(A,-1)\n2:4:6\n\n\n\n"
 },
 
 {
@@ -13053,7 +13053,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.diag",
     "category": "Function",
-    "text": "diag(M, k::Integer=0)\n\nThe kth diagonal of a matrix, as a vector. Use diagm to construct a diagonal matrix.\n\nExample\n\njulia> A = [1 2 3; 4 5 6; 7 8 9]\n3×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n 7  8  9\n\njulia> diag(A,1)\n2-element Array{Int64,1}:\n 2\n 6\n\n\n\n"
+    "text": "diag(M, k::Integer=0)\n\nThe kth diagonal of a matrix, as a vector. Use diagm to construct a diagonal matrix.\n\nExamples\n\njulia> A = [1 2 3; 4 5 6; 7 8 9]\n3×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n 7  8  9\n\njulia> diag(A,1)\n2-element Array{Int64,1}:\n 2\n 6\n\n\n\n"
 },
 
 {
@@ -13061,7 +13061,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.diagm",
     "category": "Function",
-    "text": "diagm(v, k::Integer=0)\n\nConstruct a matrix by placing v on the kth diagonal. This constructs a full matrix; if you want a storage-efficient version with fast arithmetic, use Diagonal instead.\n\nExample\n\njulia> diagm([1,2,3],1)\n4×4 Array{Int64,2}:\n 0  1  0  0\n 0  0  2  0\n 0  0  0  3\n 0  0  0  0\n\n\n\n"
+    "text": "diagm(v, k::Integer=0)\n\nConstruct a matrix by placing v on the kth diagonal. This constructs a full matrix; if you want a storage-efficient version with fast arithmetic, use Diagonal instead.\n\nExamples\n\njulia> diagm([1,2,3],1)\n4×4 Array{Int64,2}:\n 0  1  0  0\n 0  0  2  0\n 0  0  0  3\n 0  0  0  0\n\n\n\n"
 },
 
 {
@@ -13069,7 +13069,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.scale!",
     "category": "Function",
-    "text": "scale!(A, b)\nscale!(b, A)\n\nScale an array A by a scalar b overwriting A in-place.\n\nIf A is a matrix and b is a vector, then scale!(A,b) scales each column i of A by b[i] (similar to A*Diagonal(b)), while scale!(b,A) scales each row i of A by b[i] (similar to Diagonal(b)*A), again operating in-place on A. An InexactError exception is thrown if the scaling produces a number not representable by the element type of A, e.g. for integer types.\n\nExample\n\njulia> a = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> b = [1; 2]\n2-element Array{Int64,1}:\n 1\n 2\n\njulia> scale!(a,b)\n2×2 Array{Int64,2}:\n 1  4\n 3  8\n\njulia> a = [1 2; 3 4];\n\njulia> b = [1; 2];\n\njulia> scale!(b,a)\n2×2 Array{Int64,2}:\n 1  2\n 6  8\n\n\n\n"
+    "text": "scale!(A, b)\nscale!(b, A)\n\nScale an array A by a scalar b overwriting A in-place.\n\nIf A is a matrix and b is a vector, then scale!(A,b) scales each column i of A by b[i] (similar to A*Diagonal(b)), while scale!(b,A) scales each row i of A by b[i] (similar to Diagonal(b)*A), again operating in-place on A. An InexactError exception is thrown if the scaling produces a number not representable by the element type of A, e.g. for integer types.\n\nExamples\n\njulia> a = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> b = [1; 2]\n2-element Array{Int64,1}:\n 1\n 2\n\njulia> scale!(a,b)\n2×2 Array{Int64,2}:\n 1  4\n 3  8\n\njulia> a = [1 2; 3 4];\n\njulia> b = [1; 2];\n\njulia> scale!(b,a)\n2×2 Array{Int64,2}:\n 1  2\n 6  8\n\n\n\n"
 },
 
 {
@@ -13077,7 +13077,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.rank",
     "category": "Function",
-    "text": "rank(M[, tol::Real])\n\nCompute the rank of a matrix by counting how many singular values of M have magnitude greater than tol. By default, the value of tol is the largest dimension of M multiplied by the eps of the eltype of M.\n\nExample\n\njulia> rank(eye(3))\n3\n\njulia> rank(diagm([1, 0, 2]))\n2\n\njulia> rank(diagm([1, 0.001, 2]), 0.1)\n2\n\njulia> rank(diagm([1, 0.001, 2]), 0.00001)\n3\n\n\n\n"
+    "text": "rank(M[, tol::Real])\n\nCompute the rank of a matrix by counting how many singular values of M have magnitude greater than tol. By default, the value of tol is the largest dimension of M multiplied by the eps of the eltype of M.\n\nExamples\n\njulia> rank(eye(3))\n3\n\njulia> rank(diagm([1, 0, 2]))\n2\n\njulia> rank(diagm([1, 0.001, 2]), 0.1)\n2\n\njulia> rank(diagm([1, 0.001, 2]), 0.00001)\n3\n\n\n\n"
 },
 
 {
@@ -13085,7 +13085,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.norm",
     "category": "Function",
-    "text": "norm(A::AbstractArray, p::Real=2)\n\nCompute the p-norm of a vector or the operator norm of a matrix A, defaulting to the 2-norm.\n\nnorm(A::AbstractVector, p::Real=2)\n\nFor vectors, this is equivalent to vecnorm and equal to:\n\nA_p = left( sum_i=1^n  a_i  ^p right)^1p\n\nwith a_i the entries of A and n its length.\n\np can assume any numeric value (even though not all values produce a mathematically valid vector norm). In particular, norm(A, Inf) returns the largest value in abs(A), whereas norm(A, -Inf) returns the smallest.\n\nExample\n\njulia> v = [3, -2, 6]\n3-element Array{Int64,1}:\n  3\n -2\n  6\n\njulia> norm(v)\n7.0\n\njulia> norm(v, Inf)\n6.0\n\n\n\nnorm(A::AbstractMatrix, p::Real=2)\n\nFor matrices, the matrix norm induced by the vector p-norm is used, where valid values of p are 1, 2, or Inf. (Note that for sparse matrices, p=2 is currently not implemented.) Use vecnorm to compute the Frobenius norm.\n\nWhen p=1, the matrix norm is the maximum absolute column sum of A:\n\nA_1 = max_1  j  n sum_i=1^m  a_ij \n\nwith a_ij the entries of A, and m and n its dimensions.\n\nWhen p=2, the matrix norm is the spectral norm, equal to the largest singular value of A.\n\nWhen p=Inf, the matrix norm is the maximum absolute row sum of A:\n\nA_infty = max_1  i  m sum _j=1^n  a_ij \n\nExample\n\njulia> A = [1 -2 -3; 2 3 -1]\n2×3 Array{Int64,2}:\n 1  -2  -3\n 2   3  -1\n\njulia> norm(A, Inf)\n6.0\n\n\n\nnorm(x::Number, p::Real=2)\n\nFor numbers, return left( x^p right)^1p. This is equivalent to vecnorm.\n\n\n\nnorm(A::RowVector, q::Real=2)\n\nFor row vectors, return the q-norm of A, which is equivalent to the p-norm with value p = q/(q-1). They coincide at p = q = 2.\n\nThe difference in norm between a vector space and its dual arises to preserve the relationship between duality and the inner product, and the result is consistent with the p-norm of 1 × n matrix.\n\n\n\n"
+    "text": "norm(A::AbstractArray, p::Real=2)\n\nCompute the p-norm of a vector or the operator norm of a matrix A, defaulting to the 2-norm.\n\nnorm(A::AbstractVector, p::Real=2)\n\nFor vectors, this is equivalent to vecnorm and equal to:\n\nA_p = left( sum_i=1^n  a_i  ^p right)^1p\n\nwith a_i the entries of A and n its length.\n\np can assume any numeric value (even though not all values produce a mathematically valid vector norm). In particular, norm(A, Inf) returns the largest value in abs(A), whereas norm(A, -Inf) returns the smallest.\n\nExamples\n\njulia> v = [3, -2, 6]\n3-element Array{Int64,1}:\n  3\n -2\n  6\n\njulia> norm(v)\n7.0\n\njulia> norm(v, Inf)\n6.0\n\n\n\nnorm(A::AbstractMatrix, p::Real=2)\n\nFor matrices, the matrix norm induced by the vector p-norm is used, where valid values of p are 1, 2, or Inf. (Note that for sparse matrices, p=2 is currently not implemented.) Use vecnorm to compute the Frobenius norm.\n\nWhen p=1, the matrix norm is the maximum absolute column sum of A:\n\nA_1 = max_1  j  n sum_i=1^m  a_ij \n\nwith a_ij the entries of A, and m and n its dimensions.\n\nWhen p=2, the matrix norm is the spectral norm, equal to the largest singular value of A.\n\nWhen p=Inf, the matrix norm is the maximum absolute row sum of A:\n\nA_infty = max_1  i  m sum _j=1^n  a_ij \n\nExamples\n\njulia> A = [1 -2 -3; 2 3 -1]\n2×3 Array{Int64,2}:\n 1  -2  -3\n 2   3  -1\n\njulia> norm(A, Inf)\n6.0\n\n\n\nnorm(x::Number, p::Real=2)\n\nFor numbers, return left( x^p right)^1p. This is equivalent to vecnorm.\n\n\n\nnorm(A::RowVector, q::Real=2)\n\nFor row vectors, return the q-norm of A, which is equivalent to the p-norm with value p = q/(q-1). They coincide at p = q = 2.\n\nThe difference in norm between a vector space and its dual arises to preserve the relationship between duality and the inner product, and the result is consistent with the p-norm of 1 × n matrix.\n\n\n\n"
 },
 
 {
@@ -13093,7 +13093,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.vecnorm",
     "category": "Function",
-    "text": "vecnorm(A, p::Real=2)\n\nFor any iterable container A (including arrays of any dimension) of numbers (or any element type for which norm is defined), compute the p-norm (defaulting to p=2) as if A were a vector of the corresponding length.\n\nThe p-norm is defined as:\n\nA_p = left( sum_i=1^n  a_i  ^p right)^1p\n\nwith a_i the entries of A and n its length.\n\np can assume any numeric value (even though not all values produce a mathematically valid vector norm). In particular, vecnorm(A, Inf) returns the largest value in abs(A), whereas vecnorm(A, -Inf) returns the smallest. If A is a matrix and p=2, then this is equivalent to the Frobenius norm.\n\nExample\n\njulia> vecnorm([1 2 3; 4 5 6; 7 8 9])\n16.881943016134134\n\njulia> vecnorm([1 2 3 4 5 6 7 8 9])\n16.881943016134134\n\n\n\nvecnorm(x::Number, p::Real=2)\n\nFor numbers, return left( x^p right) ^1p.\n\n\n\n"
+    "text": "vecnorm(A, p::Real=2)\n\nFor any iterable container A (including arrays of any dimension) of numbers (or any element type for which norm is defined), compute the p-norm (defaulting to p=2) as if A were a vector of the corresponding length.\n\nThe p-norm is defined as:\n\nA_p = left( sum_i=1^n  a_i  ^p right)^1p\n\nwith a_i the entries of A and n its length.\n\np can assume any numeric value (even though not all values produce a mathematically valid vector norm). In particular, vecnorm(A, Inf) returns the largest value in abs(A), whereas vecnorm(A, -Inf) returns the smallest. If A is a matrix and p=2, then this is equivalent to the Frobenius norm.\n\nExamples\n\njulia> vecnorm([1 2 3; 4 5 6; 7 8 9])\n16.881943016134134\n\njulia> vecnorm([1 2 3 4 5 6 7 8 9])\n16.881943016134134\n\n\n\nvecnorm(x::Number, p::Real=2)\n\nFor numbers, return left( x^p right) ^1p.\n\n\n\n"
 },
 
 {
@@ -13133,7 +13133,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.trace",
     "category": "Function",
-    "text": "trace(M)\n\nMatrix trace. Sums the diagonal elements of M.\n\nExample\n\njulia> A = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> trace(A)\n5\n\n\n\n"
+    "text": "trace(M)\n\nMatrix trace. Sums the diagonal elements of M.\n\nExamples\n\njulia> A = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> trace(A)\n5\n\n\n\n"
 },
 
 {
@@ -13141,7 +13141,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.det",
     "category": "Function",
-    "text": "det(M)\n\nMatrix determinant.\n\nExample\n\njulia> M = [1 0; 2 2]\n2×2 Array{Int64,2}:\n 1  0\n 2  2\n\njulia> det(M)\n2.0\n\n\n\n"
+    "text": "det(M)\n\nMatrix determinant.\n\nExamples\n\njulia> M = [1 0; 2 2]\n2×2 Array{Int64,2}:\n 1  0\n 2  2\n\njulia> det(M)\n2.0\n\n\n\n"
 },
 
 {
@@ -13165,7 +13165,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.inv",
     "category": "Method",
-    "text": "inv(M)\n\nMatrix inverse. Computes matrix N such that M * N = I, where I is the identity matrix. Computed by solving the left-division N = M \\ I.\n\nExample\n\njulia> M = [2 5; 1 3]\n2×2 Array{Int64,2}:\n 2  5\n 1  3\n\njulia> N = inv(M)\n2×2 Array{Float64,2}:\n  3.0  -5.0\n -1.0   2.0\n\njulia> M*N == N*M == eye(2)\ntrue\n\n\n\n"
+    "text": "inv(M)\n\nMatrix inverse. Computes matrix N such that M * N = I, where I is the identity matrix. Computed by solving the left-division N = M \\ I.\n\nExamples\n\njulia> M = [2 5; 1 3]\n2×2 Array{Int64,2}:\n 2  5\n 1  3\n\njulia> N = inv(M)\n2×2 Array{Float64,2}:\n  3.0  -5.0\n -1.0   2.0\n\njulia> M*N == N*M == eye(2)\ntrue\n\n\n\n"
 },
 
 {
@@ -13173,7 +13173,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.pinv",
     "category": "Function",
-    "text": "pinv(M[, tol::Real])\n\nComputes the Moore-Penrose pseudoinverse.\n\nFor matrices M with floating point elements, it is convenient to compute the pseudoinverse by inverting only singular values above a given threshold, tol.\n\nThe optimal choice of tol varies both with the value of M and the intended application of the pseudoinverse. The default value of tol is eps(real(float(one(eltype(M)))))*maximum(size(A)), which is essentially machine epsilon for the real part of a matrix element multiplied by the larger matrix dimension. For inverting dense ill-conditioned matrices in a least-squares sense, tol = sqrt(eps(real(float(one(eltype(M)))))) is recommended.\n\nFor more information, see [issue8859], [B96], [S84], [KY88].\n\nExample\n\njulia> M = [1.5 1.3; 1.2 1.9]\n2×2 Array{Float64,2}:\n 1.5  1.3\n 1.2  1.9\n\njulia> N = pinv(M)\n2×2 Array{Float64,2}:\n  1.47287   -1.00775\n -0.930233   1.16279\n\njulia> M * N\n2×2 Array{Float64,2}:\n 1.0          -2.22045e-16\n 4.44089e-16   1.0\n\n[issue8859]: Issue 8859, \"Fix least squares\", https://github.com/JuliaLang/julia/pull/8859\n\n[B96]: Åke Björck, \"Numerical Methods for Least Squares Problems\",  SIAM Press, Philadelphia, 1996, \"Other Titles in Applied Mathematics\", Vol. 51. doi:10.1137/1.9781611971484\n\n[S84]: G. W. Stewart, \"Rank Degeneracy\", SIAM Journal on Scientific and Statistical Computing, 5(2), 1984, 403-413. doi:10.1137/0905030\n\n[KY88]: Konstantinos Konstantinides and Kung Yao, \"Statistical analysis of effective singular values in matrix rank determination\", IEEE Transactions on Acoustics, Speech and Signal Processing, 36(5), 1988, 757-763. doi:10.1109/29.1585\n\n\n\n"
+    "text": "pinv(M[, tol::Real])\n\nComputes the Moore-Penrose pseudoinverse.\n\nFor matrices M with floating point elements, it is convenient to compute the pseudoinverse by inverting only singular values above a given threshold, tol.\n\nThe optimal choice of tol varies both with the value of M and the intended application of the pseudoinverse. The default value of tol is eps(real(float(one(eltype(M)))))*maximum(size(A)), which is essentially machine epsilon for the real part of a matrix element multiplied by the larger matrix dimension. For inverting dense ill-conditioned matrices in a least-squares sense, tol = sqrt(eps(real(float(one(eltype(M)))))) is recommended.\n\nFor more information, see [issue8859], [B96], [S84], [KY88].\n\nExamples\n\njulia> M = [1.5 1.3; 1.2 1.9]\n2×2 Array{Float64,2}:\n 1.5  1.3\n 1.2  1.9\n\njulia> N = pinv(M)\n2×2 Array{Float64,2}:\n  1.47287   -1.00775\n -0.930233   1.16279\n\njulia> M * N\n2×2 Array{Float64,2}:\n 1.0          -2.22045e-16\n 4.44089e-16   1.0\n\n[issue8859]: Issue 8859, \"Fix least squares\", https://github.com/JuliaLang/julia/pull/8859\n\n[B96]: Åke Björck, \"Numerical Methods for Least Squares Problems\",  SIAM Press, Philadelphia, 1996, \"Other Titles in Applied Mathematics\", Vol. 51. doi:10.1137/1.9781611971484\n\n[S84]: G. W. Stewart, \"Rank Degeneracy\", SIAM Journal on Scientific and Statistical Computing, 5(2), 1984, 403-413. doi:10.1137/0905030\n\n[KY88]: Konstantinos Konstantinides and Kung Yao, \"Statistical analysis of effective singular values in matrix rank determination\", IEEE Transactions on Acoustics, Speech and Signal Processing, 36(5), 1988, 757-763. doi:10.1109/29.1585\n\n\n\n"
 },
 
 {
@@ -13181,7 +13181,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.nullspace",
     "category": "Function",
-    "text": "nullspace(M)\n\nBasis for nullspace of M.\n\nExample\n\njulia> M = [1 0 0; 0 1 0; 0 0 0]\n3×3 Array{Int64,2}:\n 1  0  0\n 0  1  0\n 0  0  0\n\njulia> nullspace(M)\n3×1 Array{Float64,2}:\n 0.0\n 0.0\n 1.0\n\n\n\n"
+    "text": "nullspace(M)\n\nBasis for nullspace of M.\n\nExamples\n\njulia> M = [1 0 0; 0 1 0; 0 0 0]\n3×3 Array{Int64,2}:\n 1  0  0\n 0  1  0\n 0  0  0\n\njulia> nullspace(M)\n3×1 Array{Float64,2}:\n 0.0\n 0.0\n 1.0\n\n\n\n"
 },
 
 {
@@ -13197,7 +13197,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.kron",
     "category": "Function",
-    "text": "kron(A, B)\n\nKronecker tensor product of two vectors or two matrices.\n\nExample\n\njulia> A = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> B = [im 1; 1 -im]\n2×2 Array{Complex{Int64},2}:\n 0+1im  1+0im\n 1+0im  0-1im\n\njulia> kron(A, B)\n4×4 Array{Complex{Int64},2}:\n 0+1im  1+0im  0+2im  2+0im\n 1+0im  0-1im  2+0im  0-2im\n 0+3im  3+0im  0+4im  4+0im\n 3+0im  0-3im  4+0im  0-4im\n\n\n\n"
+    "text": "kron(A, B)\n\nKronecker tensor product of two vectors or two matrices.\n\nExamples\n\njulia> A = [1 2; 3 4]\n2×2 Array{Int64,2}:\n 1  2\n 3  4\n\njulia> B = [im 1; 1 -im]\n2×2 Array{Complex{Int64},2}:\n 0+1im  1+0im\n 1+0im  0-1im\n\njulia> kron(A, B)\n4×4 Array{Complex{Int64},2}:\n 0+1im  1+0im  0+2im  2+0im\n 1+0im  0-1im  2+0im  0-2im\n 0+3im  3+0im  0+4im  4+0im\n 3+0im  0-3im  4+0im  0-4im\n\n\n\n"
 },
 
 {
@@ -13205,7 +13205,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.SparseArrays.blkdiag",
     "category": "Function",
-    "text": "blkdiag(A...)\n\nConcatenate matrices block-diagonally. Currently only implemented for sparse matrices.\n\nExample\n\njulia> blkdiag(speye(3), 2*speye(2))\n5×5 SparseMatrixCSC{Float64,Int64} with 5 stored entries:\n  [1, 1]  =  1.0\n  [2, 2]  =  1.0\n  [3, 3]  =  1.0\n  [4, 4]  =  2.0\n  [5, 5]  =  2.0\n\n\n\n"
+    "text": "blkdiag(A...)\n\nConcatenate matrices block-diagonally. Currently only implemented for sparse matrices.\n\nExamples\n\njulia> blkdiag(speye(3), 2*speye(2))\n5×5 SparseMatrixCSC{Float64,Int64} with 5 stored entries:\n  [1, 1]  =  1.0\n  [2, 2]  =  1.0\n  [3, 3]  =  1.0\n  [4, 4]  =  2.0\n  [5, 5]  =  2.0\n\n\n\n"
 },
 
 {
@@ -13213,7 +13213,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.linreg",
     "category": "Function",
-    "text": "linreg(x, y)\n\nPerform simple linear regression using Ordinary Least Squares. Returns a and b such that a + b*x is the closest straight line to the given points (x, y), i.e., such that the squared error between y and a + b*x is minimized.\n\nExamples:\n\nusing PyPlot\nx = 1.0:12.0\ny = [5.5, 6.3, 7.6, 8.8, 10.9, 11.79, 13.48, 15.02, 17.77, 20.81, 22.0, 22.99]\na, b = linreg(x, y)          # Linear regression\nplot(x, y, \"o\")              # Plot (x, y) points\nplot(x, a + b*x)             # Plot line determined by linear regression\n\nSee also:\n\n\\, cov, std, mean.\n\n\n\n"
+    "text": "linreg(x, y)\n\nPerform simple linear regression using Ordinary Least Squares. Returns a and b such that a + b*x is the closest straight line to the given points (x, y), i.e., such that the squared error between y and a + b*x is minimized.\n\nExamples\n\nusing PyPlot\nx = 1.0:12.0\ny = [5.5, 6.3, 7.6, 8.8, 10.9, 11.79, 13.48, 15.02, 17.77, 20.81, 22.0, 22.99]\na, b = linreg(x, y)          # Linear regression\nplot(x, y, \"o\")              # Plot (x, y) points\nplot(x, a + b*x)             # Plot line determined by linear regression\n\nSee also:\n\n\\, cov, std, mean.\n\n\n\n"
 },
 
 {
@@ -13221,7 +13221,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.expm",
     "category": "Function",
-    "text": "expm(A)\n\nCompute the matrix exponential of A, defined by\n\ne^A = sum_n=0^infty fracA^nn\n\nFor symmetric or Hermitian A, an eigendecomposition (eigfact) is used, otherwise the scaling and squaring algorithm (see [H05]) is chosen.\n\n[H05]: Nicholas J. Higham, \"The squaring and scaling method for the matrix exponential revisited\", SIAM Journal on Matrix Analysis and Applications, 26(4), 2005, 1179-1193. doi:10.1137/090768539\n\nExample\n\njulia> A = eye(2, 2)\n2×2 Array{Float64,2}:\n 1.0  0.0\n 0.0  1.0\n\njulia> expm(A)\n2×2 Array{Float64,2}:\n 2.71828  0.0\n 0.0      2.71828\n\n\n\n"
+    "text": "expm(A)\n\nCompute the matrix exponential of A, defined by\n\ne^A = sum_n=0^infty fracA^nn\n\nFor symmetric or Hermitian A, an eigendecomposition (eigfact) is used, otherwise the scaling and squaring algorithm (see [H05]) is chosen.\n\n[H05]: Nicholas J. Higham, \"The squaring and scaling method for the matrix exponential revisited\", SIAM Journal on Matrix Analysis and Applications, 26(4), 2005, 1179-1193. doi:10.1137/090768539\n\nExamples\n\njulia> A = eye(2, 2)\n2×2 Array{Float64,2}:\n 1.0  0.0\n 0.0  1.0\n\njulia> expm(A)\n2×2 Array{Float64,2}:\n 2.71828  0.0\n 0.0      2.71828\n\n\n\n"
 },
 
 {
@@ -13229,7 +13229,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.logm",
     "category": "Function",
-    "text": "logm(A{T}::StridedMatrix{T})\n\nIf A has no negative real eigenvalue, compute the principal matrix logarithm of A, i.e. the unique matrix X such that e^X = A and -pi  Im(lambda)  pi for all the eigenvalues lambda of X. If A has nonpositive eigenvalues, a nonprincipal matrix function is returned whenever possible.\n\nIf A is symmetric or Hermitian, its eigendecomposition (eigfact) is used, if A is triangular an improved version of the inverse scaling and squaring method is employed (see [AH12] and [AHR13]). For general matrices, the complex Schur form (schur) is computed and the triangular algorithm is used on the triangular factor.\n\n[AH12]: Awad H. Al-Mohy and Nicholas J. Higham, \"Improved inverse  scaling and squaring algorithms for the matrix logarithm\", SIAM Journal on Scientific Computing, 34(4), 2012, C153-C169. doi:10.1137/110852553\n\n[AHR13]: Awad H. Al-Mohy, Nicholas J. Higham and Samuel D. Relton, \"Computing the Fréchet derivative of the matrix logarithm and estimating the condition number\", SIAM Journal on Scientific Computing, 35(4), 2013, C394-C410. doi:10.1137/120885991\n\nExample\n\njulia> A = 2.7182818 * eye(2)\n2×2 Array{Float64,2}:\n 2.71828  0.0\n 0.0      2.71828\n\njulia> logm(A)\n2×2 Symmetric{Float64,Array{Float64,2}}:\n 1.0  0.0\n 0.0  1.0\n\n\n\n"
+    "text": "logm(A{T}::StridedMatrix{T})\n\nIf A has no negative real eigenvalue, compute the principal matrix logarithm of A, i.e. the unique matrix X such that e^X = A and -pi  Im(lambda)  pi for all the eigenvalues lambda of X. If A has nonpositive eigenvalues, a nonprincipal matrix function is returned whenever possible.\n\nIf A is symmetric or Hermitian, its eigendecomposition (eigfact) is used, if A is triangular an improved version of the inverse scaling and squaring method is employed (see [AH12] and [AHR13]). For general matrices, the complex Schur form (schur) is computed and the triangular algorithm is used on the triangular factor.\n\n[AH12]: Awad H. Al-Mohy and Nicholas J. Higham, \"Improved inverse  scaling and squaring algorithms for the matrix logarithm\", SIAM Journal on Scientific Computing, 34(4), 2012, C153-C169. doi:10.1137/110852553\n\n[AHR13]: Awad H. Al-Mohy, Nicholas J. Higham and Samuel D. Relton, \"Computing the Fréchet derivative of the matrix logarithm and estimating the condition number\", SIAM Journal on Scientific Computing, 35(4), 2013, C394-C410. doi:10.1137/120885991\n\nExamples\n\njulia> A = 2.7182818 * eye(2)\n2×2 Array{Float64,2}:\n 2.71828  0.0\n 0.0      2.71828\n\njulia> logm(A)\n2×2 Symmetric{Float64,Array{Float64,2}}:\n 1.0  0.0\n 0.0  1.0\n\n\n\n"
 },
 
 {
@@ -13237,7 +13237,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.sqrtm",
     "category": "Function",
-    "text": "sqrtm(A)\n\nIf A has no negative real eigenvalues, compute the principal matrix square root of A, that is the unique matrix X with eigenvalues having positive real part such that X^2 = A. Otherwise, a nonprincipal square root is returned.\n\nIf A is symmetric or Hermitian, its eigendecomposition (eigfact) is used to compute the square root. Otherwise, the square root is determined by means of the Björck-Hammarling method [BH83], which computes the complex Schur form (schur) and then the complex square root of the triangular factor.\n\n[BH83]: Åke Björck and Sven Hammarling, \"A Schur method for the square root of a matrix\", Linear Algebra and its Applications, 52-53, 1983, 127-140. doi:10.1016/0024-3795(83)80010-X\n\nExample\n\njulia> A = [4 0; 0 4]\n2×2 Array{Int64,2}:\n 4  0\n 0  4\n\njulia> sqrtm(A)\n2×2 Array{Float64,2}:\n 2.0  0.0\n 0.0  2.0\n\n\n\n"
+    "text": "sqrtm(A)\n\nIf A has no negative real eigenvalues, compute the principal matrix square root of A, that is the unique matrix X with eigenvalues having positive real part such that X^2 = A. Otherwise, a nonprincipal square root is returned.\n\nIf A is symmetric or Hermitian, its eigendecomposition (eigfact) is used to compute the square root. Otherwise, the square root is determined by means of the Björck-Hammarling method [BH83], which computes the complex Schur form (schur) and then the complex square root of the triangular factor.\n\n[BH83]: Åke Björck and Sven Hammarling, \"A Schur method for the square root of a matrix\", Linear Algebra and its Applications, 52-53, 1983, 127-140. doi:10.1016/0024-3795(83)80010-X\n\nExamples\n\njulia> A = [4 0; 0 4]\n2×2 Array{Int64,2}:\n 4  0\n 0  4\n\njulia> sqrtm(A)\n2×2 Array{Float64,2}:\n 2.0  0.0\n 0.0  2.0\n\n\n\n"
 },
 
 {
@@ -13277,7 +13277,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.isposdef",
     "category": "Function",
-    "text": "isposdef(A) -> Bool\n\nTest whether a matrix is positive definite by trying to perform a Cholesky factorization of A. See also isposdef!\n\nExample\n\njulia> A = [1 2; 2 50]\n2×2 Array{Int64,2}:\n 1   2\n 2  50\n\njulia> isposdef(A)\ntrue\n\n\n\n"
+    "text": "isposdef(A) -> Bool\n\nTest whether a matrix is positive definite by trying to perform a Cholesky factorization of A. See also isposdef!\n\nExamples\n\njulia> A = [1 2; 2 50]\n2×2 Array{Int64,2}:\n 1   2\n 2  50\n\njulia> isposdef(A)\ntrue\n\n\n\n"
 },
 
 {
@@ -13285,7 +13285,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.isposdef!",
     "category": "Function",
-    "text": "isposdef!(A) -> Bool\n\nTest whether a matrix is positive definite by trying to perform a Cholesky factorization of A, overwriting A in the process. See also isposdef.\n\nExample\n\njulia> A = [1. 2.; 2. 50.];\n\njulia> isposdef!(A)\ntrue\n\njulia> A\n2×2 Array{Float64,2}:\n 1.0  2.0\n 2.0  6.78233\n\n\n\n"
+    "text": "isposdef!(A) -> Bool\n\nTest whether a matrix is positive definite by trying to perform a Cholesky factorization of A, overwriting A in the process. See also isposdef.\n\nExamples\n\njulia> A = [1. 2.; 2. 50.];\n\njulia> isposdef!(A)\ntrue\n\njulia> A\n2×2 Array{Float64,2}:\n 1.0  2.0\n 2.0  6.78233\n\n\n\n"
 },
 
 {
@@ -13341,7 +13341,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.transpose",
     "category": "Function",
-    "text": "transpose(A::AbstractMatrix)\n\nThe transposition operator (.').\n\nExample\n\njulia> A = [1 2 3; 4 5 6; 7 8 9]\n3×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n 7  8  9\n\njulia> transpose(A)\n3×3 Array{Int64,2}:\n 1  4  7\n 2  5  8\n 3  6  9\n\n\n\ntranspose(v::AbstractVector)\n\nThe transposition operator (.').\n\nExample\n\njulia> v = [1,2,3]\n3-element Array{Int64,1}:\n 1\n 2\n 3\n\njulia> transpose(v)\n1×3 RowVector{Int64,Array{Int64,1}}:\n 1  2  3\n\n\n\n"
+    "text": "transpose(A::AbstractMatrix)\n\nThe transposition operator (.').\n\nExamples\n\njulia> A = [1 2 3; 4 5 6; 7 8 9]\n3×3 Array{Int64,2}:\n 1  2  3\n 4  5  6\n 7  8  9\n\njulia> transpose(A)\n3×3 Array{Int64,2}:\n 1  4  7\n 2  5  8\n 3  6  9\n\n\n\ntranspose(v::AbstractVector)\n\nThe transposition operator (.').\n\nExamples\n\njulia> v = [1,2,3]\n3-element Array{Int64,1}:\n 1\n 2\n 3\n\njulia> transpose(v)\n1×3 RowVector{Int64,Array{Int64,1}}:\n 1  2  3\n\n\n\n"
 },
 
 {
@@ -13357,7 +13357,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.ctranspose",
     "category": "Function",
-    "text": "ctranspose(A)\n\nThe conjugate transposition operator (').\n\nExample\n\njulia> A =  [3+2im 9+2im; 8+7im  4+6im]\n2×2 Array{Complex{Int64},2}:\n 3+2im  9+2im\n 8+7im  4+6im\n\njulia> ctranspose(A)\n2×2 Array{Complex{Int64},2}:\n 3-2im  8-7im\n 9-2im  4-6im\n\n\n\n"
+    "text": "ctranspose(A)\n\nThe conjugate transposition operator (').\n\nExamples\n\njulia> A =  [3+2im 9+2im; 8+7im  4+6im]\n2×2 Array{Complex{Int64},2}:\n 3+2im  9+2im\n 8+7im  4+6im\n\njulia> ctranspose(A)\n2×2 Array{Complex{Int64},2}:\n 3-2im  8-7im\n 9-2im  4-6im\n\n\n\n"
 },
 
 {
@@ -13373,7 +13373,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.eigs",
     "category": "Method",
-    "text": "eigs(A; nev=6, ncv=max(20,2*nev+1), which=:LM, tol=0.0, maxiter=300, sigma=nothing, ritzvec=true, v0=zeros((0,))) -> (d,[v,],nconv,niter,nmult,resid)\n\nComputes eigenvalues d of A using implicitly restarted Lanczos or Arnoldi iterations for real symmetric or general nonsymmetric matrices respectively.\n\nThe following keyword arguments are supported:\n\nnev: Number of eigenvalues\nncv: Number of Krylov vectors used in the computation; should satisfy nev+1 <= ncv <= n for real symmetric problems and nev+2 <= ncv <= n for other problems, where n is the size of the input matrix A. The default is ncv = max(20,2*nev+1). Note that these restrictions limit the input matrix A to be of dimension at least 2.\nwhich: type of eigenvalues to compute. See the note below.\n\nwhich type of eigenvalues\n:LM eigenvalues of largest magnitude (default)\n:SM eigenvalues of smallest magnitude\n:LR eigenvalues of largest real part\n:SR eigenvalues of smallest real part\n:LI eigenvalues of largest imaginary part (nonsymmetric or complex A only)\n:SI eigenvalues of smallest imaginary part (nonsymmetric or complex A only)\n:BE compute half of the eigenvalues from each end of the spectrum, biased in favor of the high end. (real symmetric A only)\n\ntol: parameter defining the relative tolerance for convergence of Ritz values (eigenvalue estimates).    A Ritz value  is considered converged when its associated residual    is less than or equal to the product of tol and max(^23 ),    where ɛ = eps(real(eltype(A)))/2 is LAPACK's machine epsilon.    The residual associated with  and its corresponding Ritz vector v    is defined as the norm Av - v.    The specified value of tol should be positive; otherwise, it is ignored    and  is used instead.    Default: .\nmaxiter: Maximum number of iterations (default = 300)\nsigma: Specifies the level shift used in inverse iteration. If nothing (default), defaults to ordinary (forward) iterations. Otherwise, find eigenvalues close to sigma using shift and invert iterations.\nritzvec: Returns the Ritz vectors v (eigenvectors) if true\nv0: starting vector from which to start the iterations\n\neigs returns the nev requested eigenvalues in d, the corresponding Ritz vectors v (only if ritzvec=true), the number of converged eigenvalues nconv, the number of iterations niter and the number of matrix vector multiplications nmult, as well as the final residual vector resid.\n\nExample\n\njulia> A = spdiagm(1:4);\n\njulia> λ, ϕ = eigs(A, nev = 2);\n\njulia> λ\n2-element Array{Float64,1}:\n 4.0\n 3.0\n\nnote: Note\nThe sigma and which keywords interact: the description of eigenvalues searched for by which do not necessarily refer to the eigenvalues of A, but rather the linear operator constructed by the specification of the iteration mode implied by sigma.sigma iteration mode which refers to eigenvalues of\nnothing ordinary (forward) A\nreal or complex inverse with level shift sigma (A - sigma I )^-1\n\nnote: Note\nAlthough tol has a default value, the best choice depends strongly on the matrix A. We recommend that users _always_ specify a value for tol which suits their specific needs.For details of how the errors in the computed eigenvalues are estimated, see:B. N. Parlett, \"The Symmetric Eigenvalue Problem\", SIAM: Philadelphia, 2/e (1998), Ch. 13.2, \"Accessing Accuracy in Lanczos Problems\", pp. 290-292 ff.\nR. B. Lehoucq and D. C. Sorensen, \"Deflation Techniques for an Implicitly Restarted Arnoldi Iteration\", SIAM Journal on Matrix Analysis and Applications (1996), 17(4), 789–821.  doi:10.1137/S0895479895281484\n\n\n\n"
+    "text": "eigs(A; nev=6, ncv=max(20,2*nev+1), which=:LM, tol=0.0, maxiter=300, sigma=nothing, ritzvec=true, v0=zeros((0,))) -> (d,[v,],nconv,niter,nmult,resid)\n\nComputes eigenvalues d of A using implicitly restarted Lanczos or Arnoldi iterations for real symmetric or general nonsymmetric matrices respectively.\n\nThe following keyword arguments are supported:\n\nnev: Number of eigenvalues\nncv: Number of Krylov vectors used in the computation; should satisfy nev+1 <= ncv <= n for real symmetric problems and nev+2 <= ncv <= n for other problems, where n is the size of the input matrix A. The default is ncv = max(20,2*nev+1). Note that these restrictions limit the input matrix A to be of dimension at least 2.\nwhich: type of eigenvalues to compute. See the note below.\n\nwhich type of eigenvalues\n:LM eigenvalues of largest magnitude (default)\n:SM eigenvalues of smallest magnitude\n:LR eigenvalues of largest real part\n:SR eigenvalues of smallest real part\n:LI eigenvalues of largest imaginary part (nonsymmetric or complex A only)\n:SI eigenvalues of smallest imaginary part (nonsymmetric or complex A only)\n:BE compute half of the eigenvalues from each end of the spectrum, biased in favor of the high end. (real symmetric A only)\n\ntol: parameter defining the relative tolerance for convergence of Ritz values (eigenvalue estimates).    A Ritz value  is considered converged when its associated residual    is less than or equal to the product of tol and max(^23 ),    where ɛ = eps(real(eltype(A)))/2 is LAPACK's machine epsilon.    The residual associated with  and its corresponding Ritz vector v    is defined as the norm Av - v.    The specified value of tol should be positive; otherwise, it is ignored    and  is used instead.    Default: .\nmaxiter: Maximum number of iterations (default = 300)\nsigma: Specifies the level shift used in inverse iteration. If nothing (default), defaults to ordinary (forward) iterations. Otherwise, find eigenvalues close to sigma using shift and invert iterations.\nritzvec: Returns the Ritz vectors v (eigenvectors) if true\nv0: starting vector from which to start the iterations\n\neigs returns the nev requested eigenvalues in d, the corresponding Ritz vectors v (only if ritzvec=true), the number of converged eigenvalues nconv, the number of iterations niter and the number of matrix vector multiplications nmult, as well as the final residual vector resid.\n\nExamples\n\njulia> A = spdiagm(1:4);\n\njulia> λ, ϕ = eigs(A, nev = 2);\n\njulia> λ\n2-element Array{Float64,1}:\n 4.0\n 3.0\n\nnote: Note\nThe sigma and which keywords interact: the description of eigenvalues searched for by which do not necessarily refer to the eigenvalues of A, but rather the linear operator constructed by the specification of the iteration mode implied by sigma.sigma iteration mode which refers to eigenvalues of\nnothing ordinary (forward) A\nreal or complex inverse with level shift sigma (A - sigma I )^-1\n\nnote: Note\nAlthough tol has a default value, the best choice depends strongly on the matrix A. We recommend that users _always_ specify a value for tol which suits their specific needs.For details of how the errors in the computed eigenvalues are estimated, see:B. N. Parlett, \"The Symmetric Eigenvalue Problem\", SIAM: Philadelphia, 2/e (1998), Ch. 13.2, \"Accessing Accuracy in Lanczos Problems\", pp. 290-292 ff.\nR. B. Lehoucq and D. C. Sorensen, \"Deflation Techniques for an Implicitly Restarted Arnoldi Iteration\", SIAM Journal on Matrix Analysis and Applications (1996), 17(4), 789–821.  doi:10.1137/S0895479895281484\n\n\n\n"
 },
 
 {
@@ -13381,7 +13381,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.eigs",
     "category": "Method",
-    "text": "eigs(A, B; nev=6, ncv=max(20,2*nev+1), which=:LM, tol=0.0, maxiter=300, sigma=nothing, ritzvec=true, v0=zeros((0,))) -> (d,[v,],nconv,niter,nmult,resid)\n\nComputes generalized eigenvalues d of A and B using implicitly restarted Lanczos or Arnoldi iterations for real symmetric or general nonsymmetric matrices respectively.\n\nThe following keyword arguments are supported:\n\nnev: Number of eigenvalues\nncv: Number of Krylov vectors used in the computation; should satisfy nev+1 <= ncv <= n for real symmetric problems and nev+2 <= ncv <= n for other problems, where n is the size of the input matrices A and B. The default is ncv = max(20,2*nev+1). Note that these restrictions limit the input matrix A to be of dimension at least 2.\nwhich: type of eigenvalues to compute. See the note below.\n\nwhich type of eigenvalues\n:LM eigenvalues of largest magnitude (default)\n:SM eigenvalues of smallest magnitude\n:LR eigenvalues of largest real part\n:SR eigenvalues of smallest real part\n:LI eigenvalues of largest imaginary part (nonsymmetric or complex A only)\n:SI eigenvalues of smallest imaginary part (nonsymmetric or complex A only)\n:BE compute half of the eigenvalues from each end of the spectrum, biased in favor of the high end. (real symmetric A only)\n\ntol: relative tolerance used in the convergence criterion for eigenvalues, similar to    tol in the eigs(A) method for the ordinary eigenvalue    problem, but effectively for the eigenvalues of B^-1 A instead of A.    See the documentation for the ordinary eigenvalue problem in    eigs(A) and the accompanying note about tol.\nmaxiter: Maximum number of iterations (default = 300)\nsigma: Specifies the level shift used in inverse iteration. If nothing (default), defaults to ordinary (forward) iterations. Otherwise, find eigenvalues close to sigma using shift and invert iterations.\nritzvec: Returns the Ritz vectors v (eigenvectors) if true\nv0: starting vector from which to start the iterations\n\neigs returns the nev requested eigenvalues in d, the corresponding Ritz vectors v (only if ritzvec=true), the number of converged eigenvalues nconv, the number of iterations niter and the number of matrix vector multiplications nmult, as well as the final residual vector resid.\n\nExample\n\njulia> A = speye(4, 4); B = spdiagm(1:4);\n\njulia> λ, ϕ = eigs(A, B, nev = 2);\n\njulia> λ\n2-element Array{Float64,1}:\n 1.0\n 0.5\n\nnote: Note\nThe sigma and which keywords interact: the description of eigenvalues searched for by which do not necessarily refer to the eigenvalue problem Av = Bvlambda, but rather the linear operator constructed by the specification of the iteration mode implied by sigma.sigma iteration mode which refers to the problem\nnothing ordinary (forward) Av = Bvlambda\nreal or complex inverse with level shift sigma (A - sigma B )^-1B = vnu\n\n\n\n"
+    "text": "eigs(A, B; nev=6, ncv=max(20,2*nev+1), which=:LM, tol=0.0, maxiter=300, sigma=nothing, ritzvec=true, v0=zeros((0,))) -> (d,[v,],nconv,niter,nmult,resid)\n\nComputes generalized eigenvalues d of A and B using implicitly restarted Lanczos or Arnoldi iterations for real symmetric or general nonsymmetric matrices respectively.\n\nThe following keyword arguments are supported:\n\nnev: Number of eigenvalues\nncv: Number of Krylov vectors used in the computation; should satisfy nev+1 <= ncv <= n for real symmetric problems and nev+2 <= ncv <= n for other problems, where n is the size of the input matrices A and B. The default is ncv = max(20,2*nev+1). Note that these restrictions limit the input matrix A to be of dimension at least 2.\nwhich: type of eigenvalues to compute. See the note below.\n\nwhich type of eigenvalues\n:LM eigenvalues of largest magnitude (default)\n:SM eigenvalues of smallest magnitude\n:LR eigenvalues of largest real part\n:SR eigenvalues of smallest real part\n:LI eigenvalues of largest imaginary part (nonsymmetric or complex A only)\n:SI eigenvalues of smallest imaginary part (nonsymmetric or complex A only)\n:BE compute half of the eigenvalues from each end of the spectrum, biased in favor of the high end. (real symmetric A only)\n\ntol: relative tolerance used in the convergence criterion for eigenvalues, similar to    tol in the eigs(A) method for the ordinary eigenvalue    problem, but effectively for the eigenvalues of B^-1 A instead of A.    See the documentation for the ordinary eigenvalue problem in    eigs(A) and the accompanying note about tol.\nmaxiter: Maximum number of iterations (default = 300)\nsigma: Specifies the level shift used in inverse iteration. If nothing (default), defaults to ordinary (forward) iterations. Otherwise, find eigenvalues close to sigma using shift and invert iterations.\nritzvec: Returns the Ritz vectors v (eigenvectors) if true\nv0: starting vector from which to start the iterations\n\neigs returns the nev requested eigenvalues in d, the corresponding Ritz vectors v (only if ritzvec=true), the number of converged eigenvalues nconv, the number of iterations niter and the number of matrix vector multiplications nmult, as well as the final residual vector resid.\n\nExamples\n\njulia> A = speye(4, 4); B = spdiagm(1:4);\n\njulia> λ, ϕ = eigs(A, B, nev = 2);\n\njulia> λ\n2-element Array{Float64,1}:\n 1.0\n 0.5\n\nnote: Note\nThe sigma and which keywords interact: the description of eigenvalues searched for by which do not necessarily refer to the eigenvalue problem Av = Bvlambda, but rather the linear operator constructed by the specification of the iteration mode implied by sigma.sigma iteration mode which refers to the problem\nnothing ordinary (forward) Av = Bvlambda\nreal or complex inverse with level shift sigma (A - sigma B )^-1B = vnu\n\n\n\n"
 },
 
 {
@@ -13389,7 +13389,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.svds",
     "category": "Function",
-    "text": "svds(A; nsv=6, ritzvec=true, tol=0.0, maxiter=1000, ncv=2*nsv, v0=zeros((0,))) -> (SVD([left_sv,] s, [right_sv,]), nconv, niter, nmult, resid)\n\nComputes the largest singular values s of A using implicitly restarted Lanczos iterations derived from eigs.\n\nInputs\n\nA: Linear operator whose singular values are desired. A may be represented as a subtype of AbstractArray, e.g., a sparse matrix, or any other type supporting the four methods size(A), eltype(A), A * vector, and A' * vector.\nnsv: Number of singular values. Default: 6.\nritzvec: If true, return the left and right singular vectors left_sv and right_sv.  If false, omit the singular vectors. Default: true.\ntol: tolerance, see eigs.\nmaxiter: Maximum number of iterations, see eigs. Default: 1000.\nncv: Maximum size of the Krylov subspace, see eigs (there called nev). Default: 2*nsv.\nv0: Initial guess for the first Krylov vector. It may have length min(size(A)...), or 0.\n\nOutputs\n\nsvd: An SVD object containing the left singular vectors, the requested values, and the right singular vectors. If ritzvec = false, the left and right singular vectors will be empty.\nnconv: Number of converged singular values.\nniter: Number of iterations.\nnmult: Number of matrix–vector products used.\nresid: Final residual vector.\n\nExample\n\njulia> A = spdiagm(1:4);\n\njulia> s = svds(A, nsv = 2)[1];\n\njulia> s[:S]\n2-element Array{Float64,1}:\n 4.0\n 3.0\n\nnote: Implementation\nsvds(A) is formally equivalent to calling eigs to perform implicitly restarted Lanczos tridiagonalization on the Hermitian matrix A^prime A or AA^prime such that the size is smallest.\n\n\n\n"
+    "text": "svds(A; nsv=6, ritzvec=true, tol=0.0, maxiter=1000, ncv=2*nsv, v0=zeros((0,))) -> (SVD([left_sv,] s, [right_sv,]), nconv, niter, nmult, resid)\n\nComputes the largest singular values s of A using implicitly restarted Lanczos iterations derived from eigs.\n\nInputs\n\nA: Linear operator whose singular values are desired. A may be represented as a subtype of AbstractArray, e.g., a sparse matrix, or any other type supporting the four methods size(A), eltype(A), A * vector, and A' * vector.\nnsv: Number of singular values. Default: 6.\nritzvec: If true, return the left and right singular vectors left_sv and right_sv.  If false, omit the singular vectors. Default: true.\ntol: tolerance, see eigs.\nmaxiter: Maximum number of iterations, see eigs. Default: 1000.\nncv: Maximum size of the Krylov subspace, see eigs (there called nev). Default: 2*nsv.\nv0: Initial guess for the first Krylov vector. It may have length min(size(A)...), or 0.\n\nOutputs\n\nsvd: An SVD object containing the left singular vectors, the requested values, and the right singular vectors. If ritzvec = false, the left and right singular vectors will be empty.\nnconv: Number of converged singular values.\nniter: Number of iterations.\nnmult: Number of matrix–vector products used.\nresid: Final residual vector.\n\nExamples\n\njulia> A = spdiagm(1:4);\n\njulia> s = svds(A, nsv = 2)[1];\n\njulia> s[:S]\n2-element Array{Float64,1}:\n 4.0\n 3.0\n\nnote: Implementation\nsvds(A) is formally equivalent to calling eigs to perform implicitly restarted Lanczos tridiagonalization on the Hermitian matrix A^prime A or AA^prime such that the size is smallest.\n\n\n\n"
 },
 
 {
@@ -13437,7 +13437,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.A_mul_B!",
     "category": "Function",
-    "text": "A_mul_B!(Y, A, B) -> Y\n\nCalculates the matrix-matrix or matrix-vector product AB and stores the result in Y, overwriting the existing value of Y. Note that Y must not be aliased with either A or B.\n\nExample\n\njulia> A=[1.0 2.0; 3.0 4.0]; B=[1.0 1.0; 1.0 1.0]; Y = similar(B); A_mul_B!(Y, A, B);\n\njulia> Y\n2×2 Array{Float64,2}:\n 3.0  3.0\n 7.0  7.0\n\n\n\n"
+    "text": "A_mul_B!(Y, A, B) -> Y\n\nCalculates the matrix-matrix or matrix-vector product AB and stores the result in Y, overwriting the existing value of Y. Note that Y must not be aliased with either A or B.\n\nExamples\n\njulia> A=[1.0 2.0; 3.0 4.0]; B=[1.0 1.0; 1.0 1.0]; Y = similar(B); A_mul_B!(Y, A, B);\n\njulia> Y\n2×2 Array{Float64,2}:\n 3.0  3.0\n 7.0  7.0\n\n\n\n"
 },
 
 {
@@ -13637,7 +13637,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.BLAS.dotu",
     "category": "Function",
-    "text": "dotu(n, X, incx, Y, incy)\n\nDot function for two complex vectors consisting of n elements of array X with stride incx and n elements of array Y with stride incy.\n\nExample:\n\njulia> Base.BLAS.dotu(10, im*ones(10), 1, complex.(ones(20), ones(20)), 2)\n-10.0 + 10.0im\n\n\n\n"
+    "text": "dotu(n, X, incx, Y, incy)\n\nDot function for two complex vectors consisting of n elements of array X with stride incx and n elements of array Y with stride incy.\n\nExamples\n\njulia> Base.BLAS.dotu(10, im*ones(10), 1, complex.(ones(20), ones(20)), 2)\n-10.0 + 10.0im\n\n\n\n"
 },
 
 {
@@ -13645,7 +13645,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.BLAS.dotc",
     "category": "Function",
-    "text": "dotc(n, X, incx, U, incy)\n\nDot function for two complex vectors, consisting of n elements of array X with stride incx and n elements of array U with stride incy, conjugating the first vector.\n\nExample:\n\njulia> Base.BLAS.dotc(10, im*ones(10), 1, complex.(ones(20), ones(20)), 2)\n10.0 - 10.0im\n\n\n\n"
+    "text": "dotc(n, X, incx, U, incy)\n\nDot function for two complex vectors, consisting of n elements of array X with stride incx and n elements of array U with stride incy, conjugating the first vector.\n\nExamples\n\njulia> Base.BLAS.dotc(10, im*ones(10), 1, complex.(ones(20), ones(20)), 2)\n10.0 - 10.0im\n\n\n\n"
 },
 
 {
@@ -13661,7 +13661,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.BLAS.nrm2",
     "category": "Function",
-    "text": "nrm2(n, X, incx)\n\n2-norm of a vector consisting of n elements of array X with stride incx.\n\nExample:\n\njulia> Base.BLAS.nrm2(4, ones(8), 2)\n2.0\n\njulia> Base.BLAS.nrm2(1, ones(8), 2)\n1.0\n\n\n\n"
+    "text": "nrm2(n, X, incx)\n\n2-norm of a vector consisting of n elements of array X with stride incx.\n\nExamples\n\njulia> Base.BLAS.nrm2(4, ones(8), 2)\n2.0\n\njulia> Base.BLAS.nrm2(1, ones(8), 2)\n1.0\n\n\n\n"
 },
 
 {
@@ -13669,7 +13669,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.BLAS.asum",
     "category": "Function",
-    "text": "asum(n, X, incx)\n\nSum of the absolute values of the first n elements of array X with stride incx.\n\nExample:\n\njulia> Base.BLAS.asum(5, im*ones(10), 2)\n5.0\n\njulia> Base.BLAS.asum(2, im*ones(10), 5)\n2.0\n\n\n\n"
+    "text": "asum(n, X, incx)\n\nSum of the absolute values of the first n elements of array X with stride incx.\n\nExamples\n\njulia> Base.BLAS.asum(5, im*ones(10), 2)\n5.0\n\njulia> Base.BLAS.asum(2, im*ones(10), 5)\n2.0\n\n\n\n"
 },
 
 {
@@ -13677,7 +13677,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.axpy!",
     "category": "Function",
-    "text": "axpy!(a, X, Y)\n\nOverwrite Y with a*X + Y, where a is a scalar. Returns Y.\n\nExample:\n\njulia> x = [1; 2; 3];\n\njulia> y = [4; 5; 6];\n\njulia> Base.BLAS.axpy!(2, x, y)\n3-element Array{Int64,1}:\n  6\n  9\n 12\n\n\n\n"
+    "text": "axpy!(a, X, Y)\n\nOverwrite Y with a*X + Y, where a is a scalar. Returns Y.\n\nExamples\n\njulia> x = [1; 2; 3];\n\njulia> y = [4; 5; 6];\n\njulia> Base.BLAS.axpy!(2, x, y)\n3-element Array{Int64,1}:\n  6\n  9\n 12\n\n\n\n"
 },
 
 {
@@ -13965,7 +13965,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Linear Algebra",
     "title": "Base.LinAlg.I",
     "category": "Constant",
-    "text": "I\n\nAn object of type UniformScaling, representing an identity matrix of any size.\n\nExample\n\njulia> ones(5, 6) * I == ones(5, 6)\ntrue\n\njulia> [1 2im 3; 1im 2 3] * I\n2×3 Array{Complex{Int64},2}:\n 1+0im  0+2im  3+0im\n 0+1im  2+0im  3+0im\n\n\n\n"
+    "text": "I\n\nAn object of type UniformScaling, representing an identity matrix of any size.\n\nExamples\n\njulia> ones(5, 6) * I == ones(5, 6)\ntrue\n\njulia> [1 2im 3; 1im 2 3] * I\n2×3 Array{Complex{Int64},2}:\n 1+0im  0+2im  3+0im\n 0+1im  2+0im  3+0im\n\n\n\n"
 },
 
 {
@@ -15301,7 +15301,7 @@ var documenterSearchIndex = {"docs": [
     "page": "I/O and Network",
     "title": "Base.IOBuffer",
     "category": "Type",
-    "text": "IOBuffer([data,],[readable::Bool=true, writable::Bool=true, [maxsize::Int=typemax(Int)]])\n\nCreate an IOBuffer, which may optionally operate on a pre-existing array. If the readable/writable arguments are given, they restrict whether or not the buffer may be read from or written to respectively. By default the buffer is readable but not writable. The last argument optionally specifies a size beyond which the buffer may not be grown.\n\n\n\nIOBuffer() -> IOBuffer\n\nCreate an in-memory I/O stream.\n\n\n\nIOBuffer(size::Int)\n\nCreate a fixed size IOBuffer. The buffer will not grow dynamically.\n\n\n\nIOBuffer(string::String)\n\nCreate a read-only IOBuffer on the data underlying the given string.\n\njulia> io = IOBuffer(\"Haho\");\n\njulia> String(take!(io))\n\"Haho\"\n\njulia> String(take!(io))\n\"Haho\"\n\n\n\n"
+    "text": "IOBuffer([data,],[readable::Bool=true, writable::Bool=true, [maxsize::Int=typemax(Int)]])\n\nCreate an IOBuffer, which may optionally operate on a pre-existing array. If the readable/writable arguments are given, they restrict whether or not the buffer may be read from or written to respectively. By default the buffer is readable but not writable. The last argument optionally specifies a size beyond which the buffer may not be grown.\n\n\n\nIOBuffer() -> IOBuffer\n\nCreate an in-memory I/O stream.\n\n\n\nIOBuffer(size::Int)\n\nCreate a fixed size IOBuffer. The buffer will not grow dynamically.\n\n\n\nIOBuffer(string::String)\n\nCreate a read-only IOBuffer on the data underlying the given string.\n\nExamples\n\njulia> io = IOBuffer(\"Haho\");\n\njulia> String(take!(io))\n\"Haho\"\n\njulia> String(take!(io))\n\"Haho\"\n\n\n\n"
 },
 
 {
@@ -15693,7 +15693,7 @@ var documenterSearchIndex = {"docs": [
     "page": "I/O and Network",
     "title": "Base.print",
     "category": "Function",
-    "text": "print(io::IO, x)\n\nWrite to io (or to the default output stream STDOUT if io is not given) a canonical (un-decorated) text representation of a value if there is one, otherwise call show. The representation used by print includes minimal formatting and tries to avoid Julia-specific details.\n\njulia> print(\"Hello World!\")\nHello World!\njulia> io = IOBuffer();\n\njulia> print(io, \"Hello World!\")\n\njulia> String(take!(io))\n\"Hello World!\"\n\n\n\n"
+    "text": "print(io::IO, x)\n\nWrite to io (or to the default output stream STDOUT if io is not given) a canonical (un-decorated) text representation of a value if there is one, otherwise call show. The representation used by print includes minimal formatting and tries to avoid Julia-specific details.\n\nExamples\n\njulia> print(\"Hello World!\")\nHello World!\njulia> io = IOBuffer();\n\njulia> print(io, \"Hello World!\")\n\njulia> String(take!(io))\n\"Hello World!\"\n\n\n\n"
 },
 
 {
@@ -15757,7 +15757,7 @@ var documenterSearchIndex = {"docs": [
     "page": "I/O and Network",
     "title": "Base.sprint",
     "category": "Function",
-    "text": "sprint(f::Function, args...)\n\nCall the given function with an I/O stream and the supplied extra arguments. Everything written to this I/O stream is returned as a string.\n\njulia> sprint(showcompact, 66.66666)\n\"66.6667\"\n\n\n\n"
+    "text": "sprint(f::Function, args...)\n\nCall the given function with an I/O stream and the supplied extra arguments. Everything written to this I/O stream is returned as a string.\n\nExamples\n\njulia> sprint(showcompact, 66.66666)\n\"66.6667\"\n\n\n\n"
 },
 
 {
@@ -15885,7 +15885,7 @@ var documenterSearchIndex = {"docs": [
     "page": "I/O and Network",
     "title": "Base.Base64.Base64EncodePipe",
     "category": "Type",
-    "text": "Base64EncodePipe(ostream)\n\nReturns a new write-only I/O stream, which converts any bytes written to it into base64-encoded ASCII bytes written to ostream. Calling close on the Base64EncodePipe stream is necessary to complete the encoding (but does not close ostream).\n\njulia> io = IOBuffer();\n\njulia> iob64_encode = Base64EncodePipe(io);\n\njulia> write(iob64_encode, \"Hello!\")\n6\n\njulia> close(iob64_encode);\n\njulia> str = String(take!(io))\n\"SGVsbG8h\"\n\njulia> String(base64decode(str))\n\"Hello!\"\n\n\n\n"
+    "text": "Base64EncodePipe(ostream)\n\nReturns a new write-only I/O stream, which converts any bytes written to it into base64-encoded ASCII bytes written to ostream. Calling close on the Base64EncodePipe stream is necessary to complete the encoding (but does not close ostream).\n\nExamples\n\njulia> io = IOBuffer();\n\njulia> iob64_encode = Base64EncodePipe(io);\n\njulia> write(iob64_encode, \"Hello!\")\n6\n\njulia> close(iob64_encode);\n\njulia> str = String(take!(io))\n\"SGVsbG8h\"\n\njulia> String(base64decode(str))\n\"Hello!\"\n\n\n\n"
 },
 
 {
@@ -15893,7 +15893,7 @@ var documenterSearchIndex = {"docs": [
     "page": "I/O and Network",
     "title": "Base.Base64.Base64DecodePipe",
     "category": "Type",
-    "text": "Base64DecodePipe(istream)\n\nReturns a new read-only I/O stream, which decodes base64-encoded data read from istream.\n\njulia> io = IOBuffer();\n\njulia> iob64_decode = Base64DecodePipe(io);\n\njulia> write(io, \"SGVsbG8h\")\n8\n\njulia> seekstart(io);\n\njulia> String(read(iob64_decode))\n\"Hello!\"\n\n\n\n"
+    "text": "Base64DecodePipe(istream)\n\nReturns a new read-only I/O stream, which decodes base64-encoded data read from istream.\n\nExamples\n\njulia> io = IOBuffer();\n\njulia> iob64_decode = Base64DecodePipe(io);\n\njulia> write(io, \"SGVsbG8h\")\n8\n\njulia> seekstart(io);\n\njulia> String(read(iob64_decode))\n\"Hello!\"\n\n\n\n"
 },
 
 {
@@ -15909,7 +15909,7 @@ var documenterSearchIndex = {"docs": [
     "page": "I/O and Network",
     "title": "Base.Base64.base64decode",
     "category": "Function",
-    "text": "base64decode(string)\n\nDecodes the base64-encoded string and returns a Vector{UInt8} of the decoded bytes.\n\nSee also base64encode\n\njulia> b = base64decode(\"SGVsbG8h\")\n6-element Array{UInt8,1}:\n 0x48\n 0x65\n 0x6c\n 0x6c\n 0x6f\n 0x21\n\njulia> String(b)\n\"Hello!\"\n\n\n\n"
+    "text": "base64decode(string)\n\nDecodes the base64-encoded string and returns a Vector{UInt8} of the decoded bytes.\n\nSee also base64encode\n\nExamples\n\njulia> b = base64decode(\"SGVsbG8h\")\n6-element Array{UInt8,1}:\n 0x48\n 0x65\n 0x6c\n 0x6c\n 0x6f\n 0x21\n\njulia> String(b)\n\"Hello!\"\n\n\n\n"
 },
 
 {
@@ -16189,7 +16189,7 @@ var documenterSearchIndex = {"docs": [
     "page": "I/O and Network",
     "title": "Base.bind",
     "category": "Function",
-    "text": "bind(socket::Union{UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only=false, reuseaddr=false, kws...)\n\nBind socket to the given host:port. Note that 0.0.0.0 will listen on all devices.\n\nThe ipv6only parameter disables dual stack mode. If ipv6only=true, only an IPv6 stack is created.\nIf reuseaddr=true, multiple threads or processes can bind to the same address without error if they all set reuseaddr=true, but only the last to bind will receive any traffic.\n\n\n\nbind(chnl::Channel, task::Task)\n\nAssociates the lifetime of chnl with a task. Channel chnl is automatically closed when the task terminates. Any uncaught exception in the task is propagated to all waiters on chnl.\n\nThe chnl object can be explicitly closed independent of task termination. Terminating tasks have no effect on already closed Channel objects.\n\nWhen a channel is bound to multiple tasks, the first task to terminate will close the channel. When multiple channels are bound to the same task, termination of the task will close all of the bound channels.\n\njulia> c = Channel(0);\n\njulia> task = @schedule foreach(i->put!(c, i), 1:4);\n\njulia> bind(c,task);\n\njulia> for i in c\n           @show i\n       end;\ni = 1\ni = 2\ni = 3\ni = 4\n\njulia> isopen(c)\nfalse\n\njulia> c = Channel(0);\n\njulia> task = @schedule (put!(c,1);error(\"foo\"));\n\njulia> bind(c,task);\n\njulia> take!(c)\n1\n\njulia> put!(c,1);\nERROR: foo\nStacktrace:\n [1] check_channel_state(::Channel{Any}) at ./channels.jl:131\n [2] put!(::Channel{Any}, ::Int64) at ./channels.jl:261\n\n\n\n"
+    "text": "bind(socket::Union{UDPSocket, TCPSocket}, host::IPAddr, port::Integer; ipv6only=false, reuseaddr=false, kws...)\n\nBind socket to the given host:port. Note that 0.0.0.0 will listen on all devices.\n\nThe ipv6only parameter disables dual stack mode. If ipv6only=true, only an IPv6 stack is created.\nIf reuseaddr=true, multiple threads or processes can bind to the same address without error if they all set reuseaddr=true, but only the last to bind will receive any traffic.\n\n\n\nbind(chnl::Channel, task::Task)\n\nAssociates the lifetime of chnl with a task. Channel chnl is automatically closed when the task terminates. Any uncaught exception in the task is propagated to all waiters on chnl.\n\nThe chnl object can be explicitly closed independent of task termination. Terminating tasks have no effect on already closed Channel objects.\n\nWhen a channel is bound to multiple tasks, the first task to terminate will close the channel. When multiple channels are bound to the same task, termination of the task will close all of the bound channels.\n\nExamples\n\njulia> c = Channel(0);\n\njulia> task = @schedule foreach(i->put!(c, i), 1:4);\n\njulia> bind(c,task);\n\njulia> for i in c\n           @show i\n       end;\ni = 1\ni = 2\ni = 3\ni = 4\n\njulia> isopen(c)\nfalse\n\njulia> c = Channel(0);\n\njulia> task = @schedule (put!(c,1);error(\"foo\"));\n\njulia> bind(c,task);\n\njulia> take!(c)\n1\n\njulia> put!(c,1);\nERROR: foo\nStacktrace:\n [1] check_channel_state(::Channel{Any}) at ./channels.jl:131\n [2] put!(::Channel{Any}, ::Int64) at ./channels.jl:261\n\n\n\n"
 },
 
 {
@@ -17069,7 +17069,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Dates and Time",
     "title": "Base.Dates.dayname",
     "category": "Function",
-    "text": "dayname(dt::TimeType; locale=\"english\") -> String\n\nReturn the full day name corresponding to the day of the week of the Date or DateTime in the given locale.\n\nExample\n\njulia> Dates.dayname(Date(\"2000-01-01\"))\n\"Saturday\"\n\n\n\n"
+    "text": "dayname(dt::TimeType; locale=\"english\") -> String\n\nReturn the full day name corresponding to the day of the week of the Date or DateTime in the given locale.\n\nExamples\n\njulia> Dates.dayname(Date(\"2000-01-01\"))\n\"Saturday\"\n\n\n\n"
 },
 
 {
@@ -17077,7 +17077,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Dates and Time",
     "title": "Base.Dates.dayabbr",
     "category": "Function",
-    "text": "dayabbr(dt::TimeType; locale=\"english\") -> String\n\nReturn the abbreviated name corresponding to the day of the week of the Date or DateTime in the given locale.\n\nExample\n\njulia> Dates.dayabbr(Date(\"2000-01-01\"))\n\"Sat\"\n\n\n\n"
+    "text": "dayabbr(dt::TimeType; locale=\"english\") -> String\n\nReturn the abbreviated name corresponding to the day of the week of the Date or DateTime in the given locale.\n\nExamples\n\njulia> Dates.dayabbr(Date(\"2000-01-01\"))\n\"Sat\"\n\n\n\n"
 },
 
 {
@@ -17085,7 +17085,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Dates and Time",
     "title": "Base.Dates.dayofweek",
     "category": "Function",
-    "text": "dayofweek(dt::TimeType) -> Int64\n\nReturns the day of the week as an Int64 with 1 = Monday, 2 = Tuesday, etc..\n\nExample\n\njulia> Dates.dayofweek(Date(\"2000-01-01\"))\n6\n\n\n\n"
+    "text": "dayofweek(dt::TimeType) -> Int64\n\nReturns the day of the week as an Int64 with 1 = Monday, 2 = Tuesday, etc..\n\nExamples\n\njulia> Dates.dayofweek(Date(\"2000-01-01\"))\n6\n\n\n\n"
 },
 
 {
@@ -17117,7 +17117,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Dates and Time",
     "title": "Base.Dates.monthname",
     "category": "Function",
-    "text": "monthname(dt::TimeType; locale=\"english\") -> String\n\nReturn the full name of the month of the Date or DateTime in the given locale.\n\nExample\n\njulia> Dates.monthname(Date(\"2005-01-04\"))\n\"January\"\n\n\n\n"
+    "text": "monthname(dt::TimeType; locale=\"english\") -> String\n\nReturn the full name of the month of the Date or DateTime in the given locale.\n\nExamples\n\njulia> Dates.monthname(Date(\"2005-01-04\"))\n\"January\"\n\n\n\n"
 },
 
 {
@@ -17125,7 +17125,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Dates and Time",
     "title": "Base.Dates.monthabbr",
     "category": "Function",
-    "text": "monthabbr(dt::TimeType; locale=\"english\") -> String\n\nReturn the abbreviated month name of the Date or DateTime in the given locale.\n\nExample\n\njulia> Dates.monthabbr(Date(\"2005-01-04\"))\n\"Jan\"\n\n\n\n"
+    "text": "monthabbr(dt::TimeType; locale=\"english\") -> String\n\nReturn the abbreviated month name of the Date or DateTime in the given locale.\n\nExamples\n\njulia> Dates.monthabbr(Date(\"2005-01-04\"))\n\"Jan\"\n\n\n\n"
 },
 
 {
@@ -17189,7 +17189,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Dates and Time",
     "title": "Base.trunc",
     "category": "Method",
-    "text": "trunc(dt::TimeType, ::Type{Period}) -> TimeType\n\nTruncates the value of dt according to the provided Period type.\n\nExample\n\njulia> trunc(Dates.DateTime(\"1996-01-01T12:30:00\"), Dates.Day)\n1996-01-01T00:00:00\n\n\n\n"
+    "text": "trunc(dt::TimeType, ::Type{Period}) -> TimeType\n\nTruncates the value of dt according to the provided Period type.\n\nExamples\n\njulia> trunc(Dates.DateTime(\"1996-01-01T12:30:00\"), Dates.Day)\n1996-01-01T00:00:00\n\n\n\n"
 },
 
 {
@@ -17197,7 +17197,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Dates and Time",
     "title": "Base.Dates.firstdayofweek",
     "category": "Function",
-    "text": "firstdayofweek(dt::TimeType) -> TimeType\n\nAdjusts dt to the Monday of its week.\n\nExample\n\njulia> Dates.firstdayofweek(DateTime(\"1996-01-05T12:30:00\"))\n1996-01-01T00:00:00\n\n\n\n"
+    "text": "firstdayofweek(dt::TimeType) -> TimeType\n\nAdjusts dt to the Monday of its week.\n\nExamples\n\njulia> Dates.firstdayofweek(DateTime(\"1996-01-05T12:30:00\"))\n1996-01-01T00:00:00\n\n\n\n"
 },
 
 {
@@ -17205,7 +17205,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Dates and Time",
     "title": "Base.Dates.lastdayofweek",
     "category": "Function",
-    "text": "lastdayofweek(dt::TimeType) -> TimeType\n\nAdjusts dt to the Sunday of its week.\n\nExample\n\njulia> Dates.lastdayofweek(DateTime(\"1996-01-05T12:30:00\"))\n1996-01-07T00:00:00\n\n\n\n"
+    "text": "lastdayofweek(dt::TimeType) -> TimeType\n\nAdjusts dt to the Sunday of its week.\n\nExamples\n\njulia> Dates.lastdayofweek(DateTime(\"1996-01-05T12:30:00\"))\n1996-01-07T00:00:00\n\n\n\n"
 },
 
 {
@@ -17213,7 +17213,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Dates and Time",
     "title": "Base.Dates.firstdayofmonth",
     "category": "Function",
-    "text": "firstdayofmonth(dt::TimeType) -> TimeType\n\nAdjusts dt to the first day of its month.\n\nExample\n\njulia> Dates.firstdayofmonth(DateTime(\"1996-05-20\"))\n1996-05-01T00:00:00\n\n\n\n"
+    "text": "firstdayofmonth(dt::TimeType) -> TimeType\n\nAdjusts dt to the first day of its month.\n\nExamples\n\njulia> Dates.firstdayofmonth(DateTime(\"1996-05-20\"))\n1996-05-01T00:00:00\n\n\n\n"
 },
 
 {
@@ -17221,7 +17221,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Dates and Time",
     "title": "Base.Dates.lastdayofmonth",
     "category": "Function",
-    "text": "lastdayofmonth(dt::TimeType) -> TimeType\n\nAdjusts dt to the last day of its month.\n\nExample\n\njulia> Dates.lastdayofmonth(DateTime(\"1996-05-20\"))\n1996-05-31T00:00:00\n\n\n\n"
+    "text": "lastdayofmonth(dt::TimeType) -> TimeType\n\nAdjusts dt to the last day of its month.\n\nExamples\n\njulia> Dates.lastdayofmonth(DateTime(\"1996-05-20\"))\n1996-05-31T00:00:00\n\n\n\n"
 },
 
 {
@@ -17229,7 +17229,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Dates and Time",
     "title": "Base.Dates.firstdayofyear",
     "category": "Function",
-    "text": "firstdayofyear(dt::TimeType) -> TimeType\n\nAdjusts dt to the first day of its year.\n\nExample\n\njulia> Dates.firstdayofyear(DateTime(\"1996-05-20\"))\n1996-01-01T00:00:00\n\n\n\n"
+    "text": "firstdayofyear(dt::TimeType) -> TimeType\n\nAdjusts dt to the first day of its year.\n\nExamples\n\njulia> Dates.firstdayofyear(DateTime(\"1996-05-20\"))\n1996-01-01T00:00:00\n\n\n\n"
 },
 
 {
@@ -17237,7 +17237,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Dates and Time",
     "title": "Base.Dates.lastdayofyear",
     "category": "Function",
-    "text": "lastdayofyear(dt::TimeType) -> TimeType\n\nAdjusts dt to the last day of its year.\n\nExample\n\njulia> Dates.lastdayofyear(DateTime(\"1996-05-20\"))\n1996-12-31T00:00:00\n\n\n\n"
+    "text": "lastdayofyear(dt::TimeType) -> TimeType\n\nAdjusts dt to the last day of its year.\n\nExamples\n\njulia> Dates.lastdayofyear(DateTime(\"1996-05-20\"))\n1996-12-31T00:00:00\n\n\n\n"
 },
 
 {
@@ -17501,7 +17501,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Iteration utilities",
     "title": "Base.Iterators.zip",
     "category": "Function",
-    "text": "zip(iters...)\n\nFor a set of iterable objects, returns an iterable of tuples, where the ith tuple contains the ith component of each input iterable.\n\nNote that zip is its own inverse: collect(zip(zip(a...)...)) == collect(a).\n\nExample\n\njulia> a = 1:5\n1:5\n\njulia> b = [\"e\",\"d\",\"b\",\"c\",\"a\"]\n5-element Array{String,1}:\n \"e\"\n \"d\"\n \"b\"\n \"c\"\n \"a\"\n\njulia> c = zip(a,b)\nBase.Iterators.Zip2{UnitRange{Int64},Array{String,1}}(1:5, String[\"e\", \"d\", \"b\", \"c\", \"a\"])\n\njulia> length(c)\n5\n\njulia> first(c)\n(1, \"e\")\n\n\n\n"
+    "text": "zip(iters...)\n\nFor a set of iterable objects, returns an iterable of tuples, where the ith tuple contains the ith component of each input iterable.\n\nNote that zip is its own inverse: collect(zip(zip(a...)...)) == collect(a).\n\nExamples\n\njulia> a = 1:5\n1:5\n\njulia> b = [\"e\",\"d\",\"b\",\"c\",\"a\"]\n5-element Array{String,1}:\n \"e\"\n \"d\"\n \"b\"\n \"c\"\n \"a\"\n\njulia> c = zip(a,b)\nBase.Iterators.Zip2{UnitRange{Int64},Array{String,1}}(1:5, String[\"e\", \"d\", \"b\", \"c\", \"a\"])\n\njulia> length(c)\n5\n\njulia> first(c)\n(1, \"e\")\n\n\n\n"
 },
 
 {
@@ -17509,7 +17509,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Iteration utilities",
     "title": "Base.Iterators.enumerate",
     "category": "Function",
-    "text": "enumerate(iter)\n\nAn iterator that yields (i, x) where i is a counter starting at 1, and x is the ith value from the given iterator. It's useful when you need not only the values x over which you are iterating, but also the number of iterations so far. Note that i may not be valid for indexing iter; it's also possible that x != iter[i], if iter has indices that do not start at 1. See the enumerate(IndexLinear(), iter) method if you want to ensure that i is an index.\n\nExample\n\njulia> a = [\"a\", \"b\", \"c\"];\n\njulia> for (index, value) in enumerate(a)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n\n\n\nenumerate(IndexLinear(), A)\nenumerate(IndexCartesian(), A)\nenumerate(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning (i, x), where i is the index for the element and x = A[i].  This is similar to enumerate(A), except i will always be a valid index for A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in enumerate(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in enumerate(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex{2}((1, 1)) a\nCartesianIndex{2}((2, 1)) b\nCartesianIndex{2}((1, 2)) d\nCartesianIndex{2}((2, 2)) e\n\nNote that enumerate(A) returns i as a counter (always starting at 1), whereas enumerate(IndexLinear(), A) returns i as an index (starting at the first linear index of A, which may or may not be 1).\n\nSee also: IndexStyle, indices.\n\n\n\n"
+    "text": "enumerate(iter)\n\nAn iterator that yields (i, x) where i is a counter starting at 1, and x is the ith value from the given iterator. It's useful when you need not only the values x over which you are iterating, but also the number of iterations so far. Note that i may not be valid for indexing iter; it's also possible that x != iter[i], if iter has indices that do not start at 1. See the enumerate(IndexLinear(), iter) method if you want to ensure that i is an index.\n\nExamples\n\njulia> a = [\"a\", \"b\", \"c\"];\n\njulia> for (index, value) in enumerate(a)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n\n\n\nenumerate(IndexLinear(), A)\nenumerate(IndexCartesian(), A)\nenumerate(IndexStyle(A), A)\n\nAn iterator that accesses each element of the array A, returning (i, x), where i is the index for the element and x = A[i].  This is similar to enumerate(A), except i will always be a valid index for A.\n\nSpecifying IndexLinear() ensures that i will be an integer; specifying IndexCartesian() ensures that i will be a CartesianIndex; specifying IndexStyle(A) chooses whichever has been defined as the native indexing style for array A.\n\nExamples\n\njulia> A = [\"a\" \"d\"; \"b\" \"e\"; \"c\" \"f\"];\n\njulia> for (index, value) in enumerate(IndexStyle(A), A)\n           println(\"$index $value\")\n       end\n1 a\n2 b\n3 c\n4 d\n5 e\n6 f\n\njulia> S = view(A, 1:2, :);\n\njulia> for (index, value) in enumerate(IndexStyle(S), S)\n           println(\"$index $value\")\n       end\nCartesianIndex{2}((1, 1)) a\nCartesianIndex{2}((2, 1)) b\nCartesianIndex{2}((1, 2)) d\nCartesianIndex{2}((2, 2)) e\n\nNote that enumerate(A) returns i as a counter (always starting at 1), whereas enumerate(IndexLinear(), A) returns i as an index (starting at the first linear index of A, which may or may not be 1).\n\nSee also: IndexStyle, indices.\n\n\n\n"
 },
 
 {
@@ -17533,7 +17533,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Iteration utilities",
     "title": "Base.Iterators.take",
     "category": "Function",
-    "text": "take(iter, n)\n\nAn iterator that generates at most the first n elements of iter.\n\nExample\n\njulia> a = 1:2:11\n1:2:11\n\njulia> collect(a)\n6-element Array{Int64,1}:\n  1\n  3\n  5\n  7\n  9\n 11\n\njulia> collect(Iterators.take(a,3))\n3-element Array{Int64,1}:\n 1\n 3\n 5\n\n\n\n"
+    "text": "take(iter, n)\n\nAn iterator that generates at most the first n elements of iter.\n\nExamples\n\njulia> a = 1:2:11\n1:2:11\n\njulia> collect(a)\n6-element Array{Int64,1}:\n  1\n  3\n  5\n  7\n  9\n 11\n\njulia> collect(Iterators.take(a,3))\n3-element Array{Int64,1}:\n 1\n 3\n 5\n\n\n\n"
 },
 
 {
@@ -17541,7 +17541,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Iteration utilities",
     "title": "Base.Iterators.drop",
     "category": "Function",
-    "text": "drop(iter, n)\n\nAn iterator that generates all but the first n elements of iter.\n\nExample\n\njulia> a = 1:2:11\n1:2:11\n\njulia> collect(a)\n6-element Array{Int64,1}:\n  1\n  3\n  5\n  7\n  9\n 11\n\njulia> collect(Iterators.drop(a,4))\n2-element Array{Int64,1}:\n  9\n 11\n\n\n\n"
+    "text": "drop(iter, n)\n\nAn iterator that generates all but the first n elements of iter.\n\nExamples\n\njulia> a = 1:2:11\n1:2:11\n\njulia> collect(a)\n6-element Array{Int64,1}:\n  1\n  3\n  5\n  7\n  9\n 11\n\njulia> collect(Iterators.drop(a,4))\n2-element Array{Int64,1}:\n  9\n 11\n\n\n\n"
 },
 
 {
@@ -17557,7 +17557,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Iteration utilities",
     "title": "Base.Iterators.repeated",
     "category": "Function",
-    "text": "repeated(x[, n::Int])\n\nAn iterator that generates the value x forever. If n is specified, generates x that many times (equivalent to take(repeated(x), n)).\n\nExample\n\njulia> a = Iterators.repeated([1 2], 4);\n\njulia> collect(a)\n4-element Array{Array{Int64,2},1}:\n [1 2]\n [1 2]\n [1 2]\n [1 2]\n\n\n\n"
+    "text": "repeated(x[, n::Int])\n\nAn iterator that generates the value x forever. If n is specified, generates x that many times (equivalent to take(repeated(x), n)).\n\nExamples\n\njulia> a = Iterators.repeated([1 2], 4);\n\njulia> collect(a)\n4-element Array{Array{Int64,2},1}:\n [1 2]\n [1 2]\n [1 2]\n [1 2]\n\n\n\n"
 },
 
 {
@@ -17565,7 +17565,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Iteration utilities",
     "title": "Base.Iterators.product",
     "category": "Function",
-    "text": "product(iters...)\n\nReturns an iterator over the product of several iterators. Each generated element is a tuple whose ith element comes from the ith argument iterator. The first iterator changes the fastest. Example:\n\nExample\n\njulia> collect(Iterators.product(1:2,3:5))\n2×3 Array{Tuple{Int64,Int64},2}:\n (1, 3)  (1, 4)  (1, 5)\n (2, 3)  (2, 4)  (2, 5)\n\n\n\n"
+    "text": "product(iters...)\n\nReturns an iterator over the product of several iterators. Each generated element is a tuple whose ith element comes from the ith argument iterator. The first iterator changes the fastest.\n\nExamples\n\njulia> collect(Iterators.product(1:2,3:5))\n2×3 Array{Tuple{Int64,Int64},2}:\n (1, 3)  (1, 4)  (1, 5)\n (2, 3)  (2, 4)  (2, 5)\n\n\n\n"
 },
 
 {
@@ -17573,7 +17573,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Iteration utilities",
     "title": "Base.Iterators.flatten",
     "category": "Function",
-    "text": "flatten(iter)\n\nGiven an iterator that yields iterators, return an iterator that yields the elements of those iterators. Put differently, the elements of the argument iterator are concatenated.\n\nExample\n\njulia> collect(Iterators.flatten((1:2, 8:9)))\n4-element Array{Int64,1}:\n 1\n 2\n 8\n 9\n\n\n\n"
+    "text": "flatten(iter)\n\nGiven an iterator that yields iterators, return an iterator that yields the elements of those iterators. Put differently, the elements of the argument iterator are concatenated.\n\nExamples\n\njulia> collect(Iterators.flatten((1:2, 8:9)))\n4-element Array{Int64,1}:\n 1\n 2\n 8\n 9\n\n\n\n"
 },
 
 {
@@ -17581,7 +17581,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Iteration utilities",
     "title": "Base.Iterators.partition",
     "category": "Function",
-    "text": "partition(collection, n)\n\nIterate over a collection n elements at a time.\n\nExample\n\njulia> collect(Iterators.partition([1,2,3,4,5], 2))\n3-element Array{Array{Int64,1},1}:\n [1, 2]\n [3, 4]\n [5]\n\n\n\n"
+    "text": "partition(collection, n)\n\nIterate over a collection n elements at a time.\n\nExamples\n\njulia> collect(Iterators.partition([1,2,3,4,5], 2))\n3-element Array{Array{Int64,1},1}:\n [1, 2]\n [3, 4]\n [5]\n\n\n\n"
 },
 
 {
@@ -19165,7 +19165,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Base.Cartesian",
     "title": "Base.Cartesian.@nref",
     "category": "Macro",
-    "text": "@nref N A indexexpr\n\nGenerate expressions like A[i_1, i_2, ...]. indexexpr can either be an iteration-symbol prefix, or an anonymous-function expression.\n\njulia> @macroexpand Base.Cartesian.@nref 3 A i\n:(A[i_1, i_2, i_3])\n\n\n\n"
+    "text": "@nref N A indexexpr\n\nGenerate expressions like A[i_1, i_2, ...]. indexexpr can either be an iteration-symbol prefix, or an anonymous-function expression.\n\nExamples\n\njulia> @macroexpand Base.Cartesian.@nref 3 A i\n:(A[i_1, i_2, i_3])\n\n\n\n"
 },
 
 {
@@ -19181,7 +19181,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Base.Cartesian",
     "title": "Base.Cartesian.@nexprs",
     "category": "Macro",
-    "text": "@nexprs N expr\n\nGenerate N expressions. expr should be an anonymous-function expression.\n\njulia> @macroexpand Base.Cartesian.@nexprs 4 i -> y[i] = A[i+j]\nquote\n    y[1] = A[1 + j]\n    y[2] = A[2 + j]\n    y[3] = A[3 + j]\n    y[4] = A[4 + j]\nend\n\n\n\n"
+    "text": "@nexprs N expr\n\nGenerate N expressions. expr should be an anonymous-function expression.\n\nExamples\n\njulia> @macroexpand Base.Cartesian.@nexprs 4 i -> y[i] = A[i+j]\nquote\n    y[1] = A[1 + j]\n    y[2] = A[2 + j]\n    y[3] = A[3 + j]\n    y[4] = A[4 + j]\nend\n\n\n\n"
 },
 
 {
@@ -19853,7 +19853,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Base.LibGit2",
     "title": "Base.LibGit2.GitRemote",
     "category": "Type",
-    "text": "GitRemote(repo::GitRepo, rmt_name::AbstractString, rmt_url::AbstractString) -> GitRemote\n\nLook up a remote git repository using its name and URL. Uses the default fetch refspec.\n\nExample\n\nrepo = LibGit2.init(repo_path)\nremote = LibGit2.GitRemote(repo, \"upstream\", repo_url)\n\n\n\nGitRemote(repo::GitRepo, rmt_name::AbstractString, rmt_url::AbstractString, fetch_spec::AbstractString) -> GitRemote\n\nLook up a remote git repository using the repository's name and URL, as well as specifications for how to fetch from the remote (e.g. which remote branch to fetch from).\n\nExample\n\nrepo = LibGit2.init(repo_path)\nrefspec = \"+refs/heads/mybranch:refs/remotes/origin/mybranch\"\nremote = LibGit2.GitRemote(repo, \"upstream\", repo_url, refspec)\n\n\n\n"
+    "text": "GitRemote(repo::GitRepo, rmt_name::AbstractString, rmt_url::AbstractString) -> GitRemote\n\nLook up a remote git repository using its name and URL. Uses the default fetch refspec.\n\nExamples\n\nrepo = LibGit2.init(repo_path)\nremote = LibGit2.GitRemote(repo, \"upstream\", repo_url)\n\n\n\nGitRemote(repo::GitRepo, rmt_name::AbstractString, rmt_url::AbstractString, fetch_spec::AbstractString) -> GitRemote\n\nLook up a remote git repository using the repository's name and URL, as well as specifications for how to fetch from the remote (e.g. which remote branch to fetch from).\n\nExamples\n\nrepo = LibGit2.init(repo_path)\nrefspec = \"+refs/heads/mybranch:refs/remotes/origin/mybranch\"\nremote = LibGit2.GitRemote(repo, \"upstream\", repo_url, refspec)\n\n\n\n"
 },
 
 {
@@ -19861,7 +19861,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Base.LibGit2",
     "title": "Base.LibGit2.GitRemoteAnon",
     "category": "Function",
-    "text": "GitRemoteAnon(repo::GitRepo, url::AbstractString) -> GitRemote\n\nLook up a remote git repository using only its URL, not its name.\n\nExample\n\nrepo = LibGit2.init(repo_path)\nremote = LibGit2.GitRemoteAnon(repo, repo_url)\n\n\n\n"
+    "text": "GitRemoteAnon(repo::GitRepo, url::AbstractString) -> GitRemote\n\nLook up a remote git repository using only its URL, not its name.\n\nExamples\n\nrepo = LibGit2.init(repo_path)\nremote = LibGit2.GitRemoteAnon(repo, repo_url)\n\n\n\n"
 },
 
 {
@@ -20045,7 +20045,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Base.LibGit2",
     "title": "Base.LibGit2.add_fetch!",
     "category": "Function",
-    "text": "add_fetch!(repo::GitRepo, rmt::GitRemote, fetch_spec::String)\n\nAdd a fetch refspec for the specified rmt. This refspec will contain information about which branch(es) to fetch from.\n\nExample\n\njulia> LibGit2.add_fetch!(repo, remote, \"upstream\");\n\njulia> LibGit2.fetch_refspecs(remote)\nString[\"+refs/heads/*:refs/remotes/upstream/*\"]\n\n\n\n"
+    "text": "add_fetch!(repo::GitRepo, rmt::GitRemote, fetch_spec::String)\n\nAdd a fetch refspec for the specified rmt. This refspec will contain information about which branch(es) to fetch from.\n\nExamples\n\njulia> LibGit2.add_fetch!(repo, remote, \"upstream\");\n\njulia> LibGit2.fetch_refspecs(remote)\nString[\"+refs/heads/*:refs/remotes/upstream/*\"]\n\n\n\n"
 },
 
 {
@@ -20053,7 +20053,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Base.LibGit2",
     "title": "Base.LibGit2.add_push!",
     "category": "Function",
-    "text": "add_push!(repo::GitRepo, rmt::GitRemote, push_spec::String)\n\nAdd a push refspec for the specified rmt. This refspec will contain information about which branch(es) to push to.\n\nExample\n\njulia> LibGit2.add_push!(repo, remote, \"refs/heads/master\");\n\njulia> remote = LibGit2.get(LibGit2.GitRemote, repo, branch);\n\njulia> LibGit2.push_refspecs(remote)\nString[\"refs/heads/master\"]\n\nnote: Note\nYou may need to close and reopen the GitRemote in question after updating its push refspecs in order for the change to take effect and for calls to push to work.\n\n\n\n"
+    "text": "add_push!(repo::GitRepo, rmt::GitRemote, push_spec::String)\n\nAdd a push refspec for the specified rmt. This refspec will contain information about which branch(es) to push to.\n\nExamples\n\njulia> LibGit2.add_push!(repo, remote, \"refs/heads/master\");\n\njulia> remote = LibGit2.get(LibGit2.GitRemote, repo, branch);\n\njulia> LibGit2.push_refspecs(remote)\nString[\"refs/heads/master\"]\n\nnote: Note\nYou may need to close and reopen the GitRemote in question after updating its push refspecs in order for the change to take effect and for calls to push to work.\n\n\n\n"
 },
 
 {
@@ -20061,7 +20061,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Base.LibGit2",
     "title": "Base.LibGit2.addblob!",
     "category": "Function",
-    "text": "LibGit2.addblob!(repo::GitRepo, path::AbstractString)\n\nReads the file at path and adds it to the object database of repo as a loose blob. Returns the GitHash of the resulting blob.\n\nExample\n\nhash_str = hex(commit_oid)\nblob_file = joinpath(repo_path, \".git\", \"objects\", hash_str[1:2], hash_str[3:end])\nid = LibGit2.addblob!(repo, blob_file)\n\n\n\n"
+    "text": "LibGit2.addblob!(repo::GitRepo, path::AbstractString)\n\nReads the file at path and adds it to the object database of repo as a loose blob. Returns the GitHash of the resulting blob.\n\nExamples\n\nhash_str = hex(commit_oid)\nblob_file = joinpath(repo_path, \".git\", \"objects\", hash_str[1:2], hash_str[3:end])\nid = LibGit2.addblob!(repo, blob_file)\n\n\n\n"
 },
 
 {
@@ -20069,7 +20069,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Base.LibGit2",
     "title": "Base.LibGit2.authors",
     "category": "Function",
-    "text": "authors(repo::GitRepo) -> Vector{Signature}\n\nReturns all authors of commits to the repo repository.\n\nExample\n\nrepo = LibGit2.GitRepo(repo_path)\nrepo_file = open(joinpath(repo_path, test_file), \"a\")\n\nprintln(repo_file, commit_msg)\nflush(repo_file)\nLibGit2.add!(repo, test_file)\nsig = LibGit2.Signature(\"TEST\", \"TEST@TEST.COM\", round(time(), 0), 0)\ncommit_oid1 = LibGit2.commit(repo, \"commit1\"; author=sig, committer=sig)\nprintln(repo_file, randstring(10))\nflush(repo_file)\nLibGit2.add!(repo, test_file)\ncommit_oid2 = LibGit2.commit(repo, \"commit2\"; author=sig, committer=sig)\n\n# will be a Vector of [sig, sig]\nauths = LibGit2.authors(repo)\n\n\n\n"
+    "text": "authors(repo::GitRepo) -> Vector{Signature}\n\nReturns all authors of commits to the repo repository.\n\nExamples\n\nrepo = LibGit2.GitRepo(repo_path)\nrepo_file = open(joinpath(repo_path, test_file), \"a\")\n\nprintln(repo_file, commit_msg)\nflush(repo_file)\nLibGit2.add!(repo, test_file)\nsig = LibGit2.Signature(\"TEST\", \"TEST@TEST.COM\", round(time(), 0), 0)\ncommit_oid1 = LibGit2.commit(repo, \"commit1\"; author=sig, committer=sig)\nprintln(repo_file, randstring(10))\nflush(repo_file)\nLibGit2.add!(repo, test_file)\ncommit_oid2 = LibGit2.commit(repo, \"commit2\"; author=sig, committer=sig)\n\n# will be a Vector of [sig, sig]\nauths = LibGit2.authors(repo)\n\n\n\n"
 },
 
 {
@@ -20085,7 +20085,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Base.LibGit2",
     "title": "Base.LibGit2.branch!",
     "category": "Function",
-    "text": "branch!(repo::GitRepo, branch_name::AbstractString, commit::AbstractString=\"\"; kwargs...)\n\nCheckout a new git branch in the repo repository. commit is the GitHash, in string form, which will be the start of the new branch. If commit is an empty string, the current HEAD will be used.\n\nThe keyword arguments are:\n\ntrack::AbstractString=\"\": the name of the remote branch this new branch should track, if any. If empty (the default), no remote branch will be tracked.\nforce::Bool=false: if true, branch creation will be forced.\nset_head::Bool=true: if true, after the branch creation finishes the branch head will be set as the HEAD of repo.\n\nEquivalent to git checkout [-b|-B] <branch_name> [<commit>] [--track <track>].\n\nExample\n\nrepo = LibGit2.GitRepo(repo_path)\nLibGit2.branch!(repo, \"new_branch\", set_head=false)\n\n\n\n"
+    "text": "branch!(repo::GitRepo, branch_name::AbstractString, commit::AbstractString=\"\"; kwargs...)\n\nCheckout a new git branch in the repo repository. commit is the GitHash, in string form, which will be the start of the new branch. If commit is an empty string, the current HEAD will be used.\n\nThe keyword arguments are:\n\ntrack::AbstractString=\"\": the name of the remote branch this new branch should track, if any. If empty (the default), no remote branch will be tracked.\nforce::Bool=false: if true, branch creation will be forced.\nset_head::Bool=true: if true, after the branch creation finishes the branch head will be set as the HEAD of repo.\n\nEquivalent to git checkout [-b|-B] <branch_name> [<commit>] [--track <track>].\n\nExamples\n\nrepo = LibGit2.GitRepo(repo_path)\nLibGit2.branch!(repo, \"new_branch\", set_head=false)\n\n\n\n"
 },
 
 {
@@ -20093,7 +20093,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Base.LibGit2",
     "title": "Base.LibGit2.checkout!",
     "category": "Function",
-    "text": "checkout!(repo::GitRepo, commit::AbstractString=\"\"; force::Bool=true)\n\nEquivalent to git checkout [-f] --detach <commit>. Checkout the git commit commit (a GitHash in string form) in repo. If force is true, force the checkout and discard any current changes. Note that this detaches the current HEAD.\n\nExample\n\nrepo = LibGit2.init(repo_path)\nopen(joinpath(LibGit2.path(repo), \"file1\"), \"w\") do f\n    write(f, \"111\n\")\nend\nLibGit2.add!(repo, \"file1\")\ncommit_oid = LibGit2.commit(repo, \"add file1\")\nopen(joinpath(LibGit2.path(repo), \"file1\"), \"w\") do f\n    write(f, \"112\n\")\nend\n# would fail without the force=true\n# since there are modifications to the file\nLibGit2.checkout!(repo, string(commit_oid), force=true)\n\n\n\n"
+    "text": "checkout!(repo::GitRepo, commit::AbstractString=\"\"; force::Bool=true)\n\nEquivalent to git checkout [-f] --detach <commit>. Checkout the git commit commit (a GitHash in string form) in repo. If force is true, force the checkout and discard any current changes. Note that this detaches the current HEAD.\n\nExamples\n\nrepo = LibGit2.init(repo_path)\nopen(joinpath(LibGit2.path(repo), \"file1\"), \"w\") do f\n    write(f, \"111\n\")\nend\nLibGit2.add!(repo, \"file1\")\ncommit_oid = LibGit2.commit(repo, \"add file1\")\nopen(joinpath(LibGit2.path(repo), \"file1\"), \"w\") do f\n    write(f, \"112\n\")\nend\n# would fail without the force=true\n# since there are modifications to the file\nLibGit2.checkout!(repo, string(commit_oid), force=true)\n\n\n\n"
 },
 
 {
@@ -20165,7 +20165,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Base.LibGit2",
     "title": "Base.LibGit2.diff_files",
     "category": "Function",
-    "text": "diff_files(repo::GitRepo, branch1::AbstractString, branch2::AbstractString; kwarg...) -> Vector{AbstractString}\n\nShow which files have changed in the git repository repo between branches branch1 and branch2.\n\nThe keyword argument is:\n\nfilter::Set{Consts.DELTA_STATUS}=Set([Consts.DELTA_ADDED, Consts.DELTA_MODIFIED, Consts.DELTA_DELETED])), and it sets options for the diff. The default is to show files added, modified, or deleted.\n\nReturns only the names of the files which have changed, not their contents.\n\nExample\n\nLibGit2.branch!(repo, \"branch/a\")\nLibGit2.branch!(repo, \"branch/b\")\n# add a file to repo\nopen(joinpath(LibGit2.path(repo),\"file\"),\"w\") do f\n    write(f, \"hello repo\n\")\nend\nLibGit2.add!(repo, \"file\")\nLibGit2.commit(repo, \"add file\")\n# returns [\"file\"]\nfilt = Set([LibGit2.Consts.DELTA_ADDED])\nfiles = LibGit2.diff_files(repo, \"branch/a\", \"branch/b\", filter=filt)\n# returns [] because existing files weren't modified\nfilt = Set([LibGit2.Consts.DELTA_MODIFIED])\nfiles = LibGit2.diff_files(repo, \"branch/a\", \"branch/b\", filter=filt)\n\nEquivalent to git diff --name-only --diff-filter=<filter> <branch1> <branch2>.\n\n\n\n"
+    "text": "diff_files(repo::GitRepo, branch1::AbstractString, branch2::AbstractString; kwarg...) -> Vector{AbstractString}\n\nShow which files have changed in the git repository repo between branches branch1 and branch2.\n\nThe keyword argument is:\n\nfilter::Set{Consts.DELTA_STATUS}=Set([Consts.DELTA_ADDED, Consts.DELTA_MODIFIED, Consts.DELTA_DELETED])), and it sets options for the diff. The default is to show files added, modified, or deleted.\n\nReturns only the names of the files which have changed, not their contents.\n\nExamples\n\nLibGit2.branch!(repo, \"branch/a\")\nLibGit2.branch!(repo, \"branch/b\")\n# add a file to repo\nopen(joinpath(LibGit2.path(repo),\"file\"),\"w\") do f\n    write(f, \"hello repo\n\")\nend\nLibGit2.add!(repo, \"file\")\nLibGit2.commit(repo, \"add file\")\n# returns [\"file\"]\nfilt = Set([LibGit2.Consts.DELTA_ADDED])\nfiles = LibGit2.diff_files(repo, \"branch/a\", \"branch/b\", filter=filt)\n# returns [] because existing files weren't modified\nfilt = Set([LibGit2.Consts.DELTA_MODIFIED])\nfiles = LibGit2.diff_files(repo, \"branch/a\", \"branch/b\", filter=filt)\n\nEquivalent to git diff --name-only --diff-filter=<filter> <branch1> <branch2>.\n\n\n\n"
 },
 
 {
@@ -20277,7 +20277,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Base.LibGit2",
     "title": "Base.LibGit2.is_ancestor_of",
     "category": "Function",
-    "text": "is_ancestor_of(a::AbstractString, b::AbstractString, repo::GitRepo) -> Bool\n\nReturns true if a, a GitHash in string form, is an ancestor of b, a GitHash in string form.\n\nExample\n\njulia> repo = LibGit2.GitRepo(repo_path);\n\njulia> LibGit2.add!(repo, test_file1);\n\njulia> commit_oid1 = LibGit2.commit(repo, \"commit1\");\n\njulia> LibGit2.add!(repo, test_file2);\n\njulia> commit_oid2 = LibGit2.commit(repo, \"commit2\");\n\njulia> LibGit2.is_ancestor_of(string(commit_oid1), string(commit_oid2), repo)\ntrue\n\n\n\n"
+    "text": "is_ancestor_of(a::AbstractString, b::AbstractString, repo::GitRepo) -> Bool\n\nReturns true if a, a GitHash in string form, is an ancestor of b, a GitHash in string form.\n\nExamples\n\njulia> repo = LibGit2.GitRepo(repo_path);\n\njulia> LibGit2.add!(repo, test_file1);\n\njulia> commit_oid1 = LibGit2.commit(repo, \"commit1\");\n\njulia> LibGit2.add!(repo, test_file2);\n\njulia> commit_oid2 = LibGit2.commit(repo, \"commit2\");\n\njulia> LibGit2.is_ancestor_of(string(commit_oid1), string(commit_oid2), repo)\ntrue\n\n\n\n"
 },
 
 {
@@ -20293,7 +20293,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Base.LibGit2",
     "title": "Base.LibGit2.iscommit",
     "category": "Function",
-    "text": "iscommit(id::AbstractString, repo::GitRepo) -> Bool\n\nChecks if commit id (which is a GitHash in string form) is in the repository.\n\nExample\n\njulia> repo = LibGit2.GitRepo(repo_path);\n\njulia> LibGit2.add!(repo, test_file);\n\njulia> commit_oid = LibGit2.commit(repo, \"add test_file\");\n\njulia> LibGit2.iscommit(string(commit_oid), repo)\ntrue\n\n\n\n"
+    "text": "iscommit(id::AbstractString, repo::GitRepo) -> Bool\n\nChecks if commit id (which is a GitHash in string form) is in the repository.\n\nExamples\n\njulia> repo = LibGit2.GitRepo(repo_path);\n\njulia> LibGit2.add!(repo, test_file);\n\njulia> commit_oid = LibGit2.commit(repo, \"add test_file\");\n\njulia> LibGit2.iscommit(string(commit_oid), repo)\ntrue\n\n\n\n"
 },
 
 {
@@ -20301,7 +20301,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Base.LibGit2",
     "title": "Base.LibGit2.isdiff",
     "category": "Function",
-    "text": "LibGit2.isdiff(repo::GitRepo, treeish::AbstractString, pathspecs::AbstractString=\"\"; cached::Bool=false)\n\nChecks if there are any differences between the tree specified by treeish and the tracked files in the working tree (if cached=false) or the index (if cached=true). pathspecs are the specifications for options for the diff.\n\nExample\n\nrepo = LibGit2.GitRepo(repo_path)\nLibGit2.isdiff(repo, \"HEAD\") # should be false\nopen(joinpath(repo_path, new_file), \"a\") do f\n    println(f, \"here's my cool new file\")\nend\nLibGit2.isdiff(repo, \"HEAD\") # now true\n\nEquivalent to git diff-index <treeish> [-- <pathspecs>].\n\n\n\n"
+    "text": "LibGit2.isdiff(repo::GitRepo, treeish::AbstractString, pathspecs::AbstractString=\"\"; cached::Bool=false)\n\nChecks if there are any differences between the tree specified by treeish and the tracked files in the working tree (if cached=false) or the index (if cached=true). pathspecs are the specifications for options for the diff.\n\nExamples\n\nrepo = LibGit2.GitRepo(repo_path)\nLibGit2.isdiff(repo, \"HEAD\") # should be false\nopen(joinpath(repo_path, new_file), \"a\") do f\n    println(f, \"here's my cool new file\")\nend\nLibGit2.isdiff(repo, \"HEAD\") # now true\n\nEquivalent to git diff-index <treeish> [-- <pathspecs>].\n\n\n\n"
 },
 
 {
@@ -20309,7 +20309,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Base.LibGit2",
     "title": "Base.LibGit2.isdirty",
     "category": "Function",
-    "text": "LibGit2.isdirty(repo::GitRepo, pathspecs::AbstractString=\"\"; cached::Bool=false) -> Bool\n\nChecks if there have been any changes to tracked files in the working tree (if cached=false) or the index (if cached=true). pathspecs are the specifications for options for the diff.\n\nExample\n\nrepo = LibGit2.GitRepo(repo_path)\nLibGit2.isdirty(repo) # should be false\nopen(joinpath(repo_path, new_file), \"a\") do f\n    println(f, \"here's my cool new file\")\nend\nLibGit2.isdirty(repo) # now true\nLibGit2.isdirty(repo, new_file) # now true\n\nEquivalent to git diff-index HEAD [-- <pathspecs>].\n\n\n\n"
+    "text": "LibGit2.isdirty(repo::GitRepo, pathspecs::AbstractString=\"\"; cached::Bool=false) -> Bool\n\nChecks if there have been any changes to tracked files in the working tree (if cached=false) or the index (if cached=true). pathspecs are the specifications for options for the diff.\n\nExamples\n\nrepo = LibGit2.GitRepo(repo_path)\nLibGit2.isdirty(repo) # should be false\nopen(joinpath(repo_path, new_file), \"a\") do f\n    println(f, \"here's my cool new file\")\nend\nLibGit2.isdirty(repo) # now true\nLibGit2.isdirty(repo, new_file) # now true\n\nEquivalent to git diff-index HEAD [-- <pathspecs>].\n\n\n\n"
 },
 
 {
@@ -20349,7 +20349,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Base.LibGit2",
     "title": "Base.LibGit2.name",
     "category": "Function",
-    "text": "LibGit2.name(ref::GitReference)\n\nReturn the full name of ref.\n\n\n\nname(rmt::GitRemote)\n\nGet the name of a remote repository, for instance \"origin\". If the remote is anonymous (see GitRemoteAnon) the name will be an empty string \"\".\n\nExample\n\njulia> repo_url = \"https://github.com/JuliaLang/Example.jl\";\n\njulia> repo = LibGit2.clone(cache_repo, \"test_directory\");\n\njulia> remote = LibGit2.GitRemote(repo, \"origin\", repo_url);\n\njulia> name(remote)\n\"origin\"\n\n\n\nLibGit2.name(tag::GitTag)\n\nThe name of tag (e.g. \"v0.5\").\n\n\n\n"
+    "text": "LibGit2.name(ref::GitReference)\n\nReturn the full name of ref.\n\n\n\nname(rmt::GitRemote)\n\nGet the name of a remote repository, for instance \"origin\". If the remote is anonymous (see GitRemoteAnon) the name will be an empty string \"\".\n\nExamples\n\njulia> repo_url = \"https://github.com/JuliaLang/Example.jl\";\n\njulia> repo = LibGit2.clone(cache_repo, \"test_directory\");\n\njulia> remote = LibGit2.GitRemote(repo, \"origin\", repo_url);\n\njulia> name(remote)\n\"origin\"\n\n\n\nLibGit2.name(tag::GitTag)\n\nThe name of tag (e.g. \"v0.5\").\n\n\n\n"
 },
 
 {
@@ -20453,7 +20453,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Base.LibGit2",
     "title": "Base.LibGit2.reset!",
     "category": "Function",
-    "text": "Resets credentials for another use\n\n\n\nUpdates some entries, determined by the pathspecs, in the index from the target commit tree.\n\n\n\nSets the current head to the specified commit oid and optionally resets the index and working tree to match.\n\n\n\ngit reset [<committish>] [–] <pathspecs>... \n\n\n\nreset!(repo::GitRepo, id::GitHash, mode::Cint = Consts.RESET_MIXED)\n\nReset the repository repo to its state at id, using one of three modes set by mode:\n\nConsts.RESET_SOFT - move HEAD to id.\nConsts.RESET_MIXED - default, move HEAD to id and reset the index to id.\nConsts.RESET_HARD - move HEAD to id, reset the index to id, and discard all working changes.\n\nEquivalent to git reset [--soft | --mixed | --hard] <id>.\n\nExample\n\nrepo = LibGit2.GitRepo(repo_path)\nhead_oid = LibGit2.head_oid(repo)\nopen(joinpath(repo_path, \"file1\"), \"w\") do f\n    write(f, \"111\n\")\nend\nLibGit2.add!(repo, \"file1\")\nmode = LibGit2.Consts.RESET_HARD\n# will discard the changes to file1\n# and unstage it\nnew_head = LibGit2.reset!(repo, head_oid, mode)\n\n\n\n"
+    "text": "Resets credentials for another use\n\n\n\nUpdates some entries, determined by the pathspecs, in the index from the target commit tree.\n\n\n\nSets the current head to the specified commit oid and optionally resets the index and working tree to match.\n\n\n\ngit reset [<committish>] [–] <pathspecs>... \n\n\n\nreset!(repo::GitRepo, id::GitHash, mode::Cint = Consts.RESET_MIXED)\n\nReset the repository repo to its state at id, using one of three modes set by mode:\n\nConsts.RESET_SOFT - move HEAD to id.\nConsts.RESET_MIXED - default, move HEAD to id and reset the index to id.\nConsts.RESET_HARD - move HEAD to id, reset the index to id, and discard all working changes.\n\nEquivalent to git reset [--soft | --mixed | --hard] <id>.\n\nExamples\n\nrepo = LibGit2.GitRepo(repo_path)\nhead_oid = LibGit2.head_oid(repo)\nopen(joinpath(repo_path, \"file1\"), \"w\") do f\n    write(f, \"111\n\")\nend\nLibGit2.add!(repo, \"file1\")\nmode = LibGit2.Consts.RESET_HARD\n# will discard the changes to file1\n# and unstage it\nnew_head = LibGit2.reset!(repo, head_oid, mode)\n\n\n\n"
 },
 
 {
@@ -20565,7 +20565,7 @@ var documenterSearchIndex = {"docs": [
     "page": "Base.LibGit2",
     "title": "Base.LibGit2.url",
     "category": "Function",
-    "text": "url(rmt::GitRemote)\n\nGet the fetch URL of a remote git repository.\n\nExample\n\njulia> repo_url = \"https://github.com/JuliaLang/Example.jl\";\n\njulia> repo = LibGit2.init(mktempdir());\n\njulia> remote = LibGit2.GitRemote(repo, \"origin\", repo_url);\n\njulia> LibGit2.url(remote)\n\"https://github.com/JuliaLang/Example.jl\"\n\n\n\n"
+    "text": "url(rmt::GitRemote)\n\nGet the fetch URL of a remote git repository.\n\nExamples\n\njulia> repo_url = \"https://github.com/JuliaLang/Example.jl\";\n\njulia> repo = LibGit2.init(mktempdir());\n\njulia> remote = LibGit2.GitRemote(repo, \"origin\", repo_url);\n\njulia> LibGit2.url(remote)\n\"https://github.com/JuliaLang/Example.jl\"\n\n\n\n"
 },
 
 {
