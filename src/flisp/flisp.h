@@ -1,5 +1,5 @@
-#ifndef FLISP_H
-#define FLISP_H
+#ifndef JL_FLISP_H
+#define JL_FLISP_H
 
 #include <setjmp.h>
 #include <stdint.h>

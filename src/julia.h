@@ -1,7 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#ifndef JULIA_H
-#define JULIA_H
+#ifndef JL_JULIA_H
+#define JL_JULIA_H
 
 //** Configuration options that affect the Julia ABI **//
 // if this is not defined, only individual dimension sizes are
@@ -60,7 +60,7 @@
 
 typedef struct _jl_taggedvalue_t jl_taggedvalue_t;
 
-#include <julia_threads.h>
+#include "julia_threads.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -1798,7 +1798,7 @@ JL_DLLEXPORT int jl_generating_output(void);
 #define JL_OPTIONS_USE_COMPILECACHE_NO 0
 
 // Version information
-#include <julia_version.h>
+#include "julia_version.h"
 
 JL_DLLEXPORT extern int jl_ver_major(void);
 JL_DLLEXPORT extern int jl_ver_minor(void);
