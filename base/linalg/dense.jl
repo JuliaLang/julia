@@ -9,9 +9,11 @@ const DOT_CUTOFF = 128
 const ASUM_CUTOFF = 32
 const NRM2_CUTOFF = 32
 
-# Cache size
-
-const ISONE_CUTOFF = 16384
+# Generic cross-over constant based on benchmarking on a single thread with an i7 CPU @ 2.5GHz
+# L1 cache: 32K, L2 cache: 256K, L3 cache: 6144K
+# The constant below is exactly 2^21 = 2M
+# This constant should ideally be determined by the actual CPU cache size
+const ISONE_CUTOFF = 2097152
 
 function scale!(X::Array{T}, s::T) where T<:BlasFloat
     s == 0 && return fill!(X, zero(T))
@@ -37,10 +39,10 @@ end
 function isone(x::StridedMatrix)
     m, n = size(x)
     m != n && return false # only square matrices can satisfy x == one(x)
-    if m < div(ISONE_CUTOFF * m * m, sizeof(x))
+    if sizeof(x) < ISONE_CUTOFF
         _isone_triacheck(x, m)
     else
-        _isone_fastcache(x, m)
+        _isone_cachefriendly(x, m)
     end
 end
 
@@ -55,8 +57,8 @@ end
     return true
 end
 
-
-@inline function _isone_fastcache(x::StridedMatrix, m::Int)
+# Inner loop over rows to be friendly to the CPU cache
+@inline function _isone_cachefriendly(x::StridedMatrix, m::Int)
     @inbounds for i in 1:m, j in 1:m
         if i == j
             isone(x[i,i]) || return false
