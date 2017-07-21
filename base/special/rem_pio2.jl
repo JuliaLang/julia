@@ -72,7 +72,7 @@ Return positive part of the high word of `x` as a `UInt32`.
     z = muladd(-fn, pio2_1(Float64), x) # x - fn*pio2_1
     y1 = muladd(-fn, pio2_1t(Float64), z) # z - fn*pio2_1t
     y2 = muladd(-fn, pio2_1t(Float64), (z - y1)) # (z - y1) - fn*pio2_1t
-    n, y1, y2
+    n, DoubleFloat64(y1, y2)
 end
 
 @inline function cody_waite_ext_pio2(x::Float64, xhp)
@@ -104,7 +104,7 @@ end
         end
     end
     y2 = (r-y1)-w
-    return unsafe_trunc(Int, fn), y1, y2
+    return unsafe_trunc(Int, fn), DoubleFloat64(y1, y2)
 end
 
 """
@@ -218,7 +218,7 @@ function paynehanek(x::Float64)
     pio2_lo = -1.3909067614167116e-8
     y_hi = (z_hi+z_lo)*pio2
     y_lo = (((z_hi*pio2_hi - y_hi) + z_hi*pio2_lo) + z_lo*pio2_hi) + z_lo*pio2_lo
-    return q, y_hi, y_lo
+    return q, DoubleFloat64(y_hi, y_lo)
 end
 
 """
@@ -229,8 +229,8 @@ such that ``k \mod 3 == K \mod 3`` where ``K*π/2 = x - rem``.
 """
 function rem_pio2(x::Float64)
     # Assumptions: NaN and Infs have been checked
-    if x <= pi/4 # no need for reduction
-        return 0, x, 0.0
+    if abs(x) <= pi/4 # no need for reduction
+        return 0, DoubleFloat64(x, 0.0)
     end
     rem_pio2_kernel(x)
 end

@@ -785,8 +785,8 @@ function rem2pi end
 function rem2pi(x::Float64, ::RoundingMode{:Nearest})
     abs(x) < pi && return x
 
-    n,y1,y2 = rem_pio2_kernel(x)
-
+    n,y = rem_pio2_kernel(x)
+    y1,y2 = y.hi,y.lo
     if iseven(n)
         if n & 2 == 2 # n % 4 == 2: add/subtract pi
             if y1 <= 0
@@ -809,7 +809,8 @@ function rem2pi(x::Float64, ::RoundingMode{:ToZero})
     ax = abs(x)
     ax <= 2*Float64(pi,RoundDown) && return x
 
-    n,y1,y2 = rem_pio2_kernel(ax)
+    n,y = rem_pio2_kernel(x)
+    y1,y2 = y.hi,y.lo
 
     if iseven(n)
         if n & 2 == 2 # n % 4 == 2: add pi
@@ -839,7 +840,8 @@ function rem2pi(x::Float64, ::RoundingMode{:Down})
         end
     end
 
-    n,y1,y2 = rem_pio2_kernel(x)
+    n,y = rem_pio2_kernel(x)
+    y1,y2 = y.hi,y.lo
 
     if iseven(n)
         if n & 2 == 2 # n % 4 == 2: add pi
@@ -868,7 +870,8 @@ function rem2pi(x::Float64, ::RoundingMode{:Up})
         end
     end
 
-    n,y1,y2 = rem_pio2_kernel(x)
+    n,y = rem_pio2_kernel(x)
+    y1,y2 = y.hi,y.lo
 
     if iseven(n)
         if n & 2 == 2 # n % 4 == 2: sub pi
