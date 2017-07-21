@@ -1205,12 +1205,13 @@ function test_approx_eq_modphase(a::StridedVecOrMat{S}, b::StridedVecOrMat{T},
 end
 
 """
-    detect_ambiguities(mod1, mod2...; imported=false, ambiguous_bottom=false)
+    detect_ambiguities(mod1, mod2...; imported=false, recursive=false, ambiguous_bottom=false)
 
 Returns a vector of `(Method,Method)` pairs of ambiguous methods
-defined in the specified modules. Use `imported=true` if you wish to
-also test functions that were imported into these modules from
-elsewhere.
+defined in the specified modules.
+Use `imported=true` if you wish to also test functions that were
+imported into these modules from elsewhere.
+Use `recursive=true` to test in all submodules.
 
 `ambiguous_bottom` controls whether ambiguities triggered only by
 `Union{}` type parameters are included; in most cases you probably
@@ -1218,6 +1219,7 @@ want to set this to `false`. See [`Base.isambiguous`](@ref).
 """
 function detect_ambiguities(mods...;
                             imported::Bool = false,
+                            recursive::Bool = false,
                             ambiguous_bottom::Bool = false,
                             allow_bottom::Union{Bool,Void} = nothing)
     if allow_bottom !== nothing
@@ -1239,8 +1241,12 @@ function detect_ambiguities(mods...;
                 println("Skipping ", mod, '.', n)  # typically stale exports
                 continue
             end
-            f = getfield(mod, n)
-            if isa(f, DataType) && isdefined(f.name, :mt)
+            f = Base.unwrap_unionall(getfield(mod, n))
+            if recursive && isa(f, Module) && f !== mod && module_parent(f) === mod && module_name(f) === n
+                subambs = detect_ambiguities(f,
+                    imported=imported, recursive=recursive, ambiguous_bottom=ambiguous_bottom)
+                union!(ambs, subambs)
+            elseif isa(f, DataType) && isdefined(f.name, :mt)
                 mt = Base.MethodList(f.name.mt)
                 for m in mt
                     if m.ambig !== nothing
