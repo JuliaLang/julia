@@ -1188,7 +1188,7 @@ static void AddInPredLiveOuts(BasicBlock *BB, BitVector &LiveIn, State &S)
         BB = &*WorkList.back();
         WorkList.pop_back();
         for (BasicBlock *Pred : predecessors(BB)) {
-            if (Visited.insert(Pred).second)
+            if (!Visited.insert(Pred).second)
                 continue;
             if (!S.BBStates[Pred].HasSafepoint) {
                 WorkList.push_back(Pred);
