@@ -58,7 +58,7 @@ getnzval( S::SparseMatrixCSCView) = S.parent.nzval
 
 Returns the number of stored (filled) elements in a sparse array.
 
-# Example
+# Examples
 ```jldoctest
 julia> A = speye(3)
 3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:
@@ -83,7 +83,7 @@ vector points directly to the internal nonzero storage of `A`, and any
 modifications to the returned vector will mutate `A` as well. See
 [`rowvals`](@ref) and [`nzrange`](@ref).
 
-# Example
+# Examples
 ```jldoctest
 julia> A = speye(3)
 3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:
@@ -108,7 +108,7 @@ vector will mutate `A` as well. Providing access to how the row indices are
 stored internally can be useful in conjunction with iterating over structural
 nonzero values. See also [`nonzeros`](@ref) and [`nzrange`](@ref).
 
-# Example
+# Examples
 ```jldoctest
 julia> A = speye(3)
 3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:
@@ -400,7 +400,7 @@ full(S::SparseMatrixCSC) = convert(Array, S)
 
 Convert a sparse matrix or vector `S` into a dense matrix or vector.
 
-# Example
+# Examples
 ```jldoctest
 julia> A = speye(3)
 3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:
@@ -431,7 +431,7 @@ vec(S::SparseMatrixCSC) = S[:]
 
 Convert an AbstractMatrix `A` into a sparse matrix.
 
-# Example
+# Examples
 ```jldoctest
 julia> A = eye(3)
 3×3 Array{Float64,2}:
@@ -512,7 +512,7 @@ retained as structural nonzeros; to drop numerical zeros, use [`dropzeros!`](@re
 
 For additional documentation and an expert driver, see `Base.SparseArrays.sparse!`.
 
-# Example
+# Examples
 ```jldoctest
 julia> Is = [1; 2; 3];
 
@@ -1111,7 +1111,7 @@ row count (`length(p) == A.m`).
 
 For expert drivers and additional information, see [`permute!`](@ref).
 
-# Example
+# Examples
 ```jldoctest
 julia> A = spdiagm([1, 2, 3, 4], 0, 4, 4) + spdiagm([5, 6, 7], 1, 4, 4)
 4×4 SparseMatrixCSC{Int64,Int64} with 7 stored entries:
@@ -1168,7 +1168,7 @@ through `A`, requiring `O(A.n, nnz(A))`-time for matrices and `O(nnz(A))`-time f
 and no space beyond that passed in. If `trim` is `true`, this method trims `A.rowval` or `A.nzind` and
 `A.nzval` to length `nnz(A)` after dropping elements.
 
-# Example
+# Examples
 ```jldoctest
 julia> A = spdiagm([1, 2, 3, 4])
 4×4 SparseMatrixCSC{Int64,Int64} with 4 stored entries:
@@ -1258,7 +1258,7 @@ trimming excess space from the result's `rowval` and `nzval` arrays when `trim` 
 
 For an in-place version and algorithmic information, see [`dropzeros!`](@ref).
 
-# Example
+# Examples
 ```jldoctest
 julia> A = sparse([1, 2, 3], [1, 2, 3], [1.0, 0.0, 1.0])
 3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:
@@ -1381,7 +1381,7 @@ values are sampled from the distribution specified by `rfn` and have the type `t
 distribution is used in case `rfn` is not specified. The optional `rng`
 argument specifies a random number generator, see [Random Numbers](@ref).
 
-# Example
+# Examples
 ```jldoctest
 julia> rng = MersenneTwister(1234);
 
@@ -1433,7 +1433,7 @@ with the specified (independent) probability `p` of any entry being nonzero,
 where nonzero values are sampled from the normal distribution. The optional `rng`
 argument specifies a random number generator, see [Random Numbers](@ref).
 
-# Example
+# Examples
 ```jldoctest
 julia> rng = MersenneTwister(1234);
 
@@ -1457,7 +1457,7 @@ entry having the value v that defaults to `one(eltype(A))`.
 **Warning** This function should be used with care as it operates over the
 stored entries, not the non-zero stored entries. See [`spfillnz`](@ref).
 
-# Example
+# Examples
 ```jldoctest
 julia> A = sparse([1,2,3,4],[2,4,3,1],[5.,4.,3.,2.])
 4×4 SparseMatrixCSC{Float64,Int64} with 4 stored entries:
@@ -1646,7 +1646,7 @@ speye(m::Integer, n::Integer) = speye(Float64, m, n)
 
 Create a sparse identity matrix with the same size as `S`.
 
-# Example
+# Examples
 ```jldoctest
 julia> A = sparse([1,2,3,4],[2,4,3,1],[5.,4.,3.,2.])
 4×4 SparseMatrixCSC{Float64,Int64} with 4 stored entries:
@@ -3080,7 +3080,7 @@ stored and otherwise do nothing. Derivative forms:
     dropstored!(A::SparseMatrixCSC, i::Integer, J::AbstractVector{<:Integer})
     dropstored!(A::SparseMatrixCSC, I::AbstractVector{<:Integer}, j::Integer)
 
-# Example
+# Examples
 ```jldoctest
 julia> A = spdiagm([1, 2, 3, 4])
 4×4 SparseMatrixCSC{Int64,Int64} with 4 stored entries:
@@ -3268,7 +3268,7 @@ end
 
 Concatenate matrices block-diagonally. Currently only implemented for sparse matrices.
 
-# Example
+# Examples
 ```jldoctest
 julia> blkdiag(speye(3), 2*speye(2))
 5×5 SparseMatrixCSC{Float64,Int64} with 5 stored entries:
@@ -3477,7 +3477,7 @@ one diagonal, `B` can be a vector (instead of a tuple) and `d` can be the diagon
 (instead of a tuple), defaulting to 0 (diagonal). Optionally, `m` and `n` specify the size
 of the resulting sparse matrix.
 
-# Example
+# Examples
 ```jldoctest
 julia> spdiagm(([1,2,3,4],[4,3,2,1]),(-1,1))
 5×5 SparseMatrixCSC{Int64,Int64} with 8 stored entries:

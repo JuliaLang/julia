@@ -30,8 +30,7 @@ matrix with `F[:H]`. When `Q` is extracted, the resulting type is the `Hessenber
 and may be converted to a regular matrix with [`convert(Array, _)`](@ref)
  (or `Array(_)` for short).
 
-# Example
-
+# Examples
 ```jldoctest
 julia> A = [4. 9. 7.; 4. 4. 1.; 4. 3. 2.]
 3×3 Array{Float64,2}:

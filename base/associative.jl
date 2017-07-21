@@ -70,6 +70,7 @@ the order in which they are returned may vary.
 But `keys(a)` and `values(a)` both iterate `a` and
 return the elements in the same order.
 
+# Examples
 ```jldoctest
 julia> a = Dict('a'=>2, 'b'=>3)
 Dict{Char,Int64} with 2 entries:
@@ -95,6 +96,7 @@ the order in which they are returned may vary.
 But `keys(a)` and `values(a)` both iterate `a` and
 return the elements in the same order.
 
+# Examples
 ```jldoctest
 julia> a = Dict('a'=>2, 'b'=>3)
 Dict{Char,Int64} with 2 entries:
@@ -123,6 +125,7 @@ end
 Update collection with pairs from the other collections.
 See also [`merge`](@ref).
 
+# Examples
 ```jldoctest
 julia> d1 = Dict(1 => 2, 3 => 4);
 
@@ -153,6 +156,7 @@ Update collection with pairs from the other collections.
 Values with the same key will be combined using the
 combiner function.
 
+# Examples
 ```jldoctest
 julia> d1 = Dict(1 => 2, 3 => 4);
 
@@ -198,6 +202,7 @@ end
 
 Get the key type of an associative collection type. Behaves similarly to [`eltype`](@ref).
 
+# Examples
 ```jldoctest
 julia> keytype(Dict(Int32(1) => "foo"))
 Int32
@@ -212,6 +217,7 @@ keytype(::Type{A}) where {A<:Associative} = keytype(supertype(A))
 
 Get the value type of an associative collection type. Behaves similarly to [`eltype`](@ref).
 
+# Examples
 ```jldoctest
 julia> valtype(Dict(Int32(1) => "foo"))
 String
@@ -229,6 +235,7 @@ types of the resulting collection will be promoted to accommodate the types of
 the merged collections. If the same key is present in another collection, the
 value for that key will be the value it has in the last collection listed.
 
+# Examples
 ```jldoctest
 julia> a = Dict("foo" => 0.0, "bar" => 42.0)
 Dict{String,Float64} with 2 entries:
@@ -264,6 +271,7 @@ types of the resulting collection will be promoted to accommodate the types of
 the merged collections. Values with the same key will be combined using the
 combiner function.
 
+# Examples
 ```jldoctest
 julia> a = Dict("foo" => 0.0, "bar" => 42.0)
 Dict{String,Float64} with 2 entries:

@@ -82,7 +82,7 @@ Subtraction operator.
 
 A string giving the literal bit representation of a number.
 
-# Example
+# Examples
 ```jldoctest
 julia> bits(4)
 "0000000000000000000000000000000000000000000000000000000000000100"
@@ -99,7 +99,7 @@ bits
 Retrieve the value(s) stored at the given key or index within a collection. The syntax
 `a[i,j,...]` is converted by the compiler to `getindex(a, i, j, ...)`.
 
-# Example
+# Examples
 ```jldoctest
 julia> A = Dict("a" => 1, "b" => 2)
 Dict{String,Int64} with 2 entries:
@@ -127,14 +127,6 @@ If multiple objects need to be allocated, a tuple of the objects can be used as 
 Neither `convert` nor `cconvert` should take a Julia object and turn it into a `Ptr`.
 """
 cconvert
-
-"""
-    assert(cond)
-
-Throw an [`AssertionError`](@ref) if `cond` is `false`.
-Also available as the macro `@assert expr`.
-"""
-assert
 
 """
     unsafe_copy!(dest::Ptr{T}, src::Ptr{T}, N)
@@ -309,7 +301,7 @@ oftype
 
 Insert one or more `items` at the end of `collection`.
 
-# Example
+# Examples
 ```jldoctest
 julia> push!([1, 2, 3], 4, 5, 6)
 6-element Array{Int64,1}:
@@ -332,7 +324,7 @@ push!
 
 Convert all arguments to their common promotion type (if any), and return them all (as a tuple).
 
-# Example
+# Examples
 ```jldoctest
 julia> promote(Int8(1), Float16(4.5), Float32(4.1))
 (1.0f0, 4.5f0, 4.1f0)
@@ -414,7 +406,6 @@ several times, and the backend may choose to defer the display until
 """
 redisplay
 
-
 """
     /(x, y)
 
@@ -429,13 +420,6 @@ Base.:(/)
 Show every part of the representation of a value.
 """
 dump
-
-"""
-    isinteractive() -> Bool
-
-Determine whether Julia is running an interactive session.
-"""
-isinteractive
 
 """
     display(x)
@@ -458,19 +442,11 @@ application/postscript) or `x::Vector{UInt8}` (for binary MIME types).
 display
 
 """
-    print_shortest(io, x)
-
-Print the shortest possible representation, with the minimum number of consecutive non-zero
-digits, of number `x`, ensuring that it would parse to the exact same number.
-"""
-print_shortest
-
-"""
     tuple(xs...)
 
 Construct a tuple of the given objects.
 
-# Example
+# Examples
 ```jldoctest
 julia> tuple(1, 'a', pi)
 (1, 'a', π = 3.1415926535897...)
@@ -492,7 +468,7 @@ eachmatch
 
 Get a hexadecimal string of the binary representation of a floating point number.
 
-# Example
+# Examples
 ```jldoctest
 julia> num2hex(2.2)
 "400199999999999a"
@@ -678,33 +654,12 @@ julia> copysign(-1, 2)
 copysign
 
 """
-    @show
-
-Show an expression and result, returning the result.
-"""
-:@show
-
-"""
-    showcompact(x)
-
-Show a compact representation of a value.
-
-This is used for printing array elements without repeating type information (which would
-be redundant with that printed once for the whole array), and without line breaks inside
-the representation of an element.
-
-To offer a compact representation different from its standard one, a custom type should
-test `get(io, :compact, false)` in its normal `show` method.
-"""
-showcompact
-
-"""
     getfield(value, name::Symbol)
 
 Extract a named field from a `value` of composite type. The syntax `a.b` calls
 `getfield(a, :b)`.
 
-# Example
+# Examples
 ```jldoctest
 julia> a = 1//2
 1//2
@@ -726,7 +681,6 @@ values at those indices is returned. Note that `select!` does not fully sort the
 array.
 
 # Examples
-
 ```jldoctest
 julia> a = [1, 2, 4, 3, 4]
 5-element Array{Int64,1}:
@@ -937,7 +891,7 @@ cglobal
 
 Returns the last index of the collection.
 
-# Example
+# Examples
 ```jldoctest
 julia> endof([1,2,4])
 3
@@ -1171,7 +1125,7 @@ bswap
 
 Delete the mapping for the given key in a collection, and return the collection.
 
-# Example
+# Examples
 ```jldoctest
 julia> d = Dict("a"=>1, "b"=>2)
 Dict{String,Int64} with 2 entries:
@@ -1185,7 +1139,6 @@ Dict{String,Int64} with 1 entry:
 """
 delete!
 
-
 """
     big(x)
 
@@ -1193,14 +1146,6 @@ Convert a number to a maximum precision representation (typically [`BigInt`](@re
 `BigFloat`). See [`BigFloat`](@ref) for information about some pitfalls with floating-point numbers.
 """
 big
-
-"""
-    quit()
-
-Quit the program indicating that the processes completed successfully. This function calls
-`exit(0)` (see [`exit`](@ref)).
-"""
-quit
 
 """
     typejoin(T, S)
@@ -1297,7 +1242,7 @@ read(stream, t)
 
 Remove the first `item` from `collection`.
 
-# Example
+# Examples
 ```jldoctest
 julia> A = [1, 2, 3, 4, 5, 6]
 6-element Array{Int64,1}:
@@ -1363,14 +1308,6 @@ Often `wait` is called within a `while` loop to ensure a waited-for condition is
 proceeding.
 """
 wait
-
-"""
-    atexit(f)
-
-Register a zero-argument function `f()` to be called at process exit. `atexit()` hooks are
-called in last in first out (LIFO) order and run before object finalizers.
-"""
-atexit
 
 """
     copy(x)
@@ -1449,7 +1386,7 @@ DomainError
 Create a `Task` (i.e. coroutine) to execute the given function (which must be
 callable with no arguments). The task exits when this function returns.
 
-# Example
+# Examples
 ```jldoctest
 julia> a() = det(rand(1000, 1000));
 
@@ -1549,13 +1486,6 @@ should implement this function. Numeric types only need to implement it if they 
 values such as `NaN`.
 """
 isless
-
-"""
-    showerror(io, e)
-
-Show a descriptive representation of an exception object.
-"""
-showerror
 
 """
     error(message::AbstractString)
@@ -1781,21 +1711,6 @@ end
 ```
 """
 get!(f::Function,collection,key)
-
-"""
-    @assert cond [text]
-
-Throw an `AssertionError` if `cond` is `false`. Preferred syntax for writing assertions.
-Message `text` is optionally displayed upon assertion failure.
-
-# Examples
-```jldoctest
-julia> @assert iseven(3) "3 is an odd number!"
-ERROR: AssertionError: 3 is an odd number!
-
-julia> @assert isodd(3) "What even are numbers?"
-```
-"""
 :@assert
 
 """
@@ -1868,13 +1783,15 @@ type automatically.
 
 For example:
 
-    function foo()
-        # body
+```julia
+function foo()
+    # body
 
-        retval::Float64
-    end
+    retval::Float64
+end
 
-    bar = cfunction(foo, Float64, ())
+bar = cfunction(foo, Float64, ())
+```
 """
 cfunction
 

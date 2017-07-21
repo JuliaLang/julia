@@ -40,7 +40,7 @@ If `thin=true` (default), a thin SVD is returned. For a ``M \\times N`` matrix
 `A`, `U` is ``M \\times M`` for a full SVD (`thin=false`) and
 ``M \\times \\min(M, N)`` for a thin SVD.
 
-# Example
+# Examples
 ```jldoctest
 julia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]
 4×5 Array{Float64,2}:
@@ -81,8 +81,7 @@ If `thin=true` (default), a thin SVD is returned. For a ``M \\times N`` matrix
 of the `SVD` factorization to a tuple. Direct use of `svdfact` is therefore more
 efficient.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]
 4×5 Array{Float64,2}:
@@ -136,8 +135,7 @@ svdvals(A::AbstractMatrix{<:BlasFloat}) = svdvals!(copy(A))
 
 Returns the singular values of `A` in descending order.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> A = [1. 0. 0. 0. 2.; 0. 0. 3. 0. 0.; 0. 0. 0. 0. 0.; 0. 2. 0. 0. 0.]
 4×5 Array{Float64,2}:

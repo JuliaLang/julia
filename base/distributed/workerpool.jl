@@ -245,12 +245,12 @@ To clear the cache earlier, use `clear!(pool)`.
 For global variables, only the bindings are captured in a closure, not the data.
 `let` blocks can be used to capture global data.
 
-For example:
-```
-const foo=rand(10^8);
-wp=CachingPool(workers())
-let foo=foo
-    pmap(wp, i->sum(foo)+i, 1:100);
+# Examples
+```julia
+const foo = rand(10^8);
+wp = CachingPool(workers())
+let foo = foo
+    pmap(wp, i -> sum(foo) + i, 1:100);
 end
 ```
 

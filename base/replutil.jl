@@ -168,6 +168,11 @@ end
 
 # showing exception objects as descriptive error messages
 
+"""
+    showerror(io, e)
+
+Show a descriptive representation of an exception object.
+"""
 showerror(io::IO, ex) = show(io, ex)
 
 function showerror(io::IO, ex::BoundsError)

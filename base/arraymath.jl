@@ -9,7 +9,7 @@ Transform an array to its complex conjugate in-place.
 
 See also [`conj`](@ref).
 
-# Example
+# Examples
 ```jldoctest
 julia> A = [1+im 2-im; 2+2im 3+im]
 2×2 Array{Complex{Int64},2}:
@@ -117,7 +117,7 @@ end
 
 Rotate matrix `A` left 90 degrees.
 
-# Example
+# Examples
 ```jldoctest
 julia> a = [1 2; 3 4]
 2×2 Array{Int64,2}:
@@ -145,7 +145,7 @@ end
 
 Rotate matrix `A` right 90 degrees.
 
-# Example
+# Examples
 ```jldoctest
 julia> a = [1 2; 3 4]
 2×2 Array{Int64,2}:
@@ -172,7 +172,7 @@ end
 
 Rotate matrix `A` 180 degrees.
 
-# Example
+# Examples
 ```jldoctest
 julia> a = [1 2; 3 4]
 2×2 Array{Int64,2}:

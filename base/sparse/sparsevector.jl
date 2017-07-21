@@ -354,7 +354,7 @@ convert(::Type{SparseVector}, s::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti} =
 
 Convert a vector `A` into a sparse vector of length `m`.
 
-# Example
+# Examples
 ```jldoctest
 julia> sparsevec([1.0, 2.0, 0.0, 0.0, 3.0, 0.0])
 6-element SparseVector{Float64,Int64} with 3 stored entries:
@@ -1991,7 +1991,7 @@ excess space from the result's `nzind` and `nzval` arrays when `trim` is `true`.
 
 For an in-place version and algorithmic information, see [`dropzeros!`](@ref).
 
-# Example
+# Examples
 ```jldoctest
 julia> A = sparsevec([1, 2, 3], [1.0, 0.0, 1.0])
 3-element SparseVector{Float64,Int64} with 3 stored entries:

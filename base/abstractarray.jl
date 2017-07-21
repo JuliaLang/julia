@@ -18,6 +18,7 @@ Returns a tuple containing the dimensions of `A`. Optionally you can specify the
 dimension(s) you want the length of, and get the length of that dimension, or a tuple of the
 lengths of dimensions you asked for.
 
+# Examples
 ```jldoctest
 julia> A = ones(2,3,4);
 
@@ -37,6 +38,7 @@ size(x, d1::Integer, d2::Integer, dx::Vararg{Integer, N}) where {N} =
 
 Returns the valid range of indices for array `A` along dimension `d`.
 
+# Examples
 ```jldoctest
 julia> A = ones(5,6,7);
 
@@ -54,6 +56,7 @@ end
 
 Returns the tuple of valid indices for array `A`.
 
+# Examples
 ```jldoctest
 julia> A = ones(5,6,7);
 
@@ -88,6 +91,7 @@ is `indices(A, 1)`.
 Calling this function is the "safe" way to write algorithms that
 exploit linear indexing.
 
+# Examples
 ```jldoctest
 julia> A = ones(5,6,7);
 
@@ -107,6 +111,7 @@ elsize(::AbstractArray{T}) where {T} = sizeof(T)
 
 Returns the number of dimensions of `A`.
 
+# Examples
 ```jldoctest
 julia> A = ones(3,4,5);
 
@@ -123,6 +128,7 @@ ndims(::Type{T}) where {T<:AbstractArray} = ndims(supertype(T))
 
 Returns the number of elements in `A`.
 
+# Examples
 ```jldoctest
 julia> A = ones(3,4,5);
 
@@ -142,6 +148,7 @@ first(a::AbstractArray) = a[first(eachindex(a))]
 Get the first element of an iterable collection. Returns the start point of a
 `Range` even if it is empty.
 
+# Examples
 ```jldoctest
 julia> first(2:2:10)
 2
@@ -163,6 +170,7 @@ Get the last element of an ordered collection, if it can be computed in O(1) tim
 accomplished by calling [`endof`](@ref) to get the last index. Returns the end
 point of a `Range` even if it is empty.
 
+# Examples
 ```jldoctest
 julia> last(1:2:10)
 9
@@ -178,6 +186,7 @@ last(a) = a[end]
 
 Returns the distance in memory (in number of elements) between adjacent elements in dimension `k`.
 
+# Examples
 ```jldoctest
 julia> A = ones(3,4,5);
 
@@ -204,6 +213,7 @@ end
 
 Returns a tuple of the memory strides in each dimension.
 
+# Examples
 ```jldoctest
 julia> A = ones(3,4,5);
 
@@ -321,6 +331,7 @@ many cases one can rely on `A`'s indices and [`checkindex`](@ref).
 
 See also [`checkindex`](@ref).
 
+# Examples
 ```jldoctest
 julia> A = rand(3, 3);
 
@@ -441,11 +452,12 @@ Return `true` if the given `index` is within the bounds of
 arrays can extend this method in order to provide a specialized bounds
 checking implementation.
 
+# Examples
 ```jldoctest
-julia> checkindex(Bool,1:20,8)
+julia> checkindex(Bool, 1:20, 8)
 true
 
-julia> checkindex(Bool,1:20,21)
+julia> checkindex(Bool, 1:20, 21)
 false
 ```
 """
@@ -730,6 +742,7 @@ this is equivalent to `copy(a)`, but for other array types it may
 differ depending on the type of `similar(a)`.  For generic iterables
 this is equivalent to `collect(a)`.
 
+# Examples
 ```jldoctest
 julia> tup = (1, 2, 3)
 (1, 2, 3)
@@ -1658,8 +1671,7 @@ ind2sub(::Tuple{}, ind::Integer) = (@_inline_meta; ind == 1 ? () : throw(BoundsE
 Returns a tuple of subscripts into an array with dimensions `dims`,
 corresponding to the linear index `index`.
 
-**Example**:
-
+# Examples
 ```
 i, j, ... = ind2sub(size(A), indmax(A))
 ```
@@ -1766,7 +1778,7 @@ For multiple iterable arguments, `f` is called elementwise.
 `foreach` should be used instead of `map` when the results of `f` are not
 needed, for example in `foreach(println, array)`.
 
-# Example
+# Examples
 ```jldoctest
 julia> a = 1:3:7;
 
@@ -1972,7 +1984,7 @@ end
 Like [`map`](@ref), but stores the result in `destination` rather than a new
 collection. `destination` must be at least as large as the first collection.
 
-# Example
+# Examples
 ```jldoctest
 julia> x = zeros(3);
 

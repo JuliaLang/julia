@@ -143,7 +143,6 @@ Return whether or not `x` is null for [`Nullable`](@ref) `x`; return
 `false` for all other `x`.
 
 # Examples
-
 ```jldoctest
 julia> x = Nullable(1, false)
 Nullable{Int64}()
