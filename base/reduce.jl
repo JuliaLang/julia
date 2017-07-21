@@ -310,7 +310,6 @@ be executed in groups. Future versions of Julia might change the algorithm. Note
 elements are not reordered if you use an ordered collection.
 
 # Examples
-
 ```jldoctest
 julia> reduce(*, 1, [2; 3; 4])
 24

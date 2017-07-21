@@ -16,6 +16,7 @@ value is a range of indexes where the matching sequence is found, such that `s[s
 
 `search(string, 'c')` = `index` such that `string[index] == 'c'`, or `0` if unmatched.
 
+# Examples
 ```jldoctest
 julia> search("Hello to the world", "z")
 0:-1
@@ -154,6 +155,7 @@ searchindex(s::ByteArray, t::ByteArray, i) = _searchindex(s,t,i)
 Similar to [`search`](@ref), but return only the start index at which
 the substring is found, or `0` if it is not.
 
+# Examples
 ```jldoctest
 julia> searchindex("Hello to the world", "z")
 0
@@ -204,6 +206,7 @@ end
 Similar to [`search`](@ref), but returning the last occurrence of the given characters within the
 given string, searching in reverse from `start`.
 
+# Examples
 ```jldoctest
 julia> rsearch("aaabbb","b")
 6:6
@@ -318,6 +321,7 @@ rsearchindex(s::ByteArray, t::ByteArray, i::Integer) = _rsearchindex(s,t,i)
 
 Similar to [`rsearch`](@ref), but return only the start index at which the substring is found, or `0` if it is not.
 
+# Examples
 ```jldoctest
 julia> rsearchindex("aaabbb","b")
 6
@@ -372,6 +376,7 @@ rsearch(s::ByteArray, t::ByteArray, i::Integer=endof(s)) = _rsearch(s, t, i)
 
 Determine whether the second argument is a substring of the first.
 
+# Examples
 ```jldoctest
 julia> contains("JuliaLang is pretty cool!", "Julia")
 true

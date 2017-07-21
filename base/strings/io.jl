@@ -12,6 +12,7 @@ of a value if there is one, otherwise call [`show`](@ref).
 The representation used by `print` includes minimal formatting and tries to
 avoid Julia-specific details.
 
+# Examples
 ```jldoctest
 julia> print("Hello World!")
 Hello World!
@@ -74,6 +75,7 @@ end
 Call the given function with an I/O stream and the supplied extra arguments.
 Everything written to this I/O stream is returned as a string.
 
+# Examples
 ```jldoctest
 julia> sprint(showcompact, 66.66666)
 "66.6667"
@@ -112,6 +114,7 @@ string_with_env(env, xs...) = print_to_string(xs...; env=env)
 
 Create a string from any values using the [`print`](@ref) function.
 
+# Examples
 ```jldoctest
 julia> string("a", 1, true)
 "a1true"
@@ -154,6 +157,7 @@ end
 
 Create a read-only `IOBuffer` on the data underlying the given string.
 
+# Examples
 ```jldoctest
 julia> io = IOBuffer("Haho");
 
@@ -176,6 +180,7 @@ Join an array of `strings` into a single string, inserting the given delimiter b
 adjacent strings. If `last` is given, it will be used instead of `delim` between the last
 two strings. For example,
 
+# Examples
 ```jldoctest
 julia> join(["apples", "bananas", "pineapples"], ", ", " and ")
 "apples, bananas and pineapples"

@@ -117,6 +117,7 @@ end
     reverse(s::AbstractString) -> AbstractString
 
 Reverses a string.
+
 # Examples
 ```jldoctest
 julia> reverse("JuliaLang")

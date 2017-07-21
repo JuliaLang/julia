@@ -202,8 +202,7 @@ end
 Check that a matrix is square, then return its common dimension.
 For multiple arguments, return a vector.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> A = ones(4,4); B = zeros(5,5);
 

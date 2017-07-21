@@ -75,6 +75,7 @@ keyword argument `taskref`.
 
 Returns a Channel.
 
+# Examples
 ```jldoctest
 julia> chnl = Channel(c->foreach(i->put!(c,i), 1:4));
 
@@ -90,7 +91,7 @@ i = 3
 i = 4
 ```
 
-An example of referencing the created task:
+Referencing the created task:
 
 ```jldoctest
 julia> taskref = Ref{Task}();
@@ -162,6 +163,7 @@ When a channel is bound to multiple tasks, the first task to terminate will
 close the channel. When multiple channels are bound to the same task,
 termination of the task will close all of the bound channels.
 
+# Examples
 ```jldoctest
 julia> c = Channel(0);
 
