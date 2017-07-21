@@ -34,6 +34,7 @@ end
         a = eltya == Int ? rand(1:7, n, n) : convert(Matrix{eltya}, eltya <: Complex ? complex.(areal, aimg) : areal)
         asym = a.'+a                 # symmetric indefinite
         aherm = a'+a                 # Hermitian indefinite
+        apos  = a'*a                 # Hermitian positive definite
         ε = εa = eps(abs(float(one(eltya))))
 
         x = randn(n)
@@ -235,16 +236,19 @@ end
                         @test (asym)^-2.0  ≈ real(Array(Symmetric(asym)^-2.0))
                         @test (aherm)^2.0  ≈ real(Array(Hermitian(aherm)^2.0))
                         @test (aherm)^-2.0 ≈ real(Array(Hermitian(aherm)^-2.0))
+                        @test (apos)^2.0   ≈ real(Array(Hermitian(apos)^2.0))
                     elseif eltya <: Real
                         @test (asym)^2.0   ≈ real(Array(Symmetric(asym)^2.0)) rtol=100*n^2*eps(real(eltya))
                         @test (asym)^-2.0  ≈ real(Array(Symmetric(asym)^-2.0)) rtol=100*n^2*eps(real(eltya))
                         @test (aherm)^2.0  ≈ real(Array(Hermitian(aherm)^2.0)) rtol=100*n^2*eps(real(eltya))
                         @test (aherm)^-2.0 ≈ real(Array(Hermitian(aherm)^-2.0)) rtol=100*n^2*eps(real(eltya))
+                        @test (apos)^2.0   ≈ real(Array(Hermitian(apos)^2.0)) rtol=100*n^2*eps(real(eltya))
                     else
                         @test (asym)^2.0   ≈ Array(Symmetric(asym)^2.0) rtol=100*n^2*eps(real(eltya))
                         @test (asym)^-2.0  ≈ Array(Symmetric(asym)^-2.0) rtol=100*n^2*eps(real(eltya))
                         @test (aherm)^2.0  ≈ Array(Hermitian(aherm)^2.0) rtol=100*n^2*eps(real(eltya))
                         @test (aherm)^-2.0 ≈ Array(Hermitian(aherm)^-2.0) rtol=100*n^2*eps(real(eltya))
+                        @test (apos)^2.0   ≈ Array(Hermitian(apos)^2.0) rtol=100*n^2*eps(real(eltya))
                     end
                 end
             end
