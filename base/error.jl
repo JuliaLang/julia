@@ -83,7 +83,7 @@ systemerror(p, b::Bool; extrainfo=nothing) = b ? throw(Main.Base.SystemError(str
     assert(cond)
 
 Throw an [`AssertionError`](@ref) if `cond` is `false`.
-Also available as the macro `@assert expr`.
+Also available as the macro [`@assert`](@ref).
 """
 assert(x) = x ? nothing : throw(Main.Base.AssertionError())
 
