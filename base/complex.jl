@@ -210,6 +210,8 @@ bswap(z::Complex) = Complex(bswap(real(z)), bswap(imag(z)))
 
 isequal(z::Complex, w::Complex) = isequal(real(z),real(w)) & isequal(imag(z),imag(w))
 
+in(x::Complex, r::Range{<:Real}) = isreal(x) && real(x) in r
+
 if UInt === UInt64
     const h_imag = 0x32a7a07f3e7cd1f9
 else

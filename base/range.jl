@@ -875,13 +875,22 @@ end
 
 median(r::Range{<:Real}) = mean(r)
 
-function in(x, r::Range)
-    n = step(r) == 0 ? 1 : round(Integer,(x-first(r))/step(r))+1
-    n >= 1 && n <= length(r) && r[n] == x
+function _in_range(x, r::Range)
+    if step(r) == 0
+        return !isempty(r) && first(r) == x
+    else
+        n = round(Integer, (x - first(r)) / step(r)) + 1
+        return n >= 1 && n <= length(r) && r[n] == x
+    end
 end
+in(x::Real, r::Range{<:Real}) = _in_range(x, r)
+# This method needs to be defined separately since -(::T, ::T) can be implemented
+# even if -(::T, ::Real) is not
+in(x::T, r::Range{T}) where {T} = _in_range(x, r)
 
 in(x::Integer, r::AbstractUnitRange{<:Integer}) = (first(r) <= x) & (x <= last(r))
-in(x, r::Range{T}) where {T<:Integer} =
+
+in(x::Real, r::Range{T}) where {T<:Integer} =
     isinteger(x) && !isempty(r) && x >= minimum(r) && x <= maximum(r) &&
         (mod(convert(T,x),step(r))-mod(first(r),step(r)) == 0)
 in(x::Char, r::Range{Char}) =

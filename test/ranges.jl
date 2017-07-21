@@ -159,6 +159,28 @@ r = (-4*Int64(maxintfloat(Int === Int32 ? Float32 : Float64))):5
 @test !(1 in 1:0)
 @test !(1.0 in 1.0:0.0)
 
+# test that in() works across types, including non-numeric types (#21728)
+@test 1//1 in 1:3
+@test 1//1 in 1.0:3.0
+@test !(5//1 in 1:3)
+@test !(5//1 in 1.0:3.0)
+@test Complex(1, 0) in 1:3
+@test Complex(1, 0) in 1.0:3.0
+@test Complex(1.0, 0.0) in 1:3
+@test Complex(1.0, 0.0) in 1.0:3.0
+@test !(Complex(1, 1) in 1:3)
+@test !(Complex(1, 1) in 1.0:3.0)
+@test !(Complex(1.0, 1.0) in 1:3)
+@test !(Complex(1.0, 1.0) in 1.0:3.0)
+@test !(π in 1:3)
+@test !(π in 1.0:3.0)
+@test !("a" in 1:3)
+@test !("a" in 1.0:3.0)
+@test !(1 in Date(2017, 01, 01):Date(2017, 01, 05))
+@test !(Complex(1, 0) in Date(2017, 01, 01):Date(2017, 01, 05))
+@test !(π in Date(2017, 01, 01):Date(2017, 01, 05))
+@test !("a" in Date(2017, 01, 01):Date(2017, 01, 05))
+
 # indexing range with empty range (#4309)
 @test (3:6)[5:4] == 7:6
 @test_throws BoundsError (3:6)[5:5]
