@@ -1244,78 +1244,6 @@ static Value *julia_bool(jl_codectx_t &ctx, Value *cond)
                                       literal_pointer_val(ctx, jl_false));
 }
 
-// --- get the inferred type of an AST node ---
-
-static inline jl_module_t *topmod(jl_codectx_t &ctx)
-{
-    return jl_base_relative_to(ctx.module);
-}
-
-static jl_value_t *expr_type(jl_codectx_t &ctx, jl_value_t *e)
-{
-    if (jl_is_ssavalue(e)) {
-        if (jl_is_long(ctx.source->ssavaluetypes))
-            return (jl_value_t*)jl_any_type;
-        int idx = ((jl_ssavalue_t*)e)->id;
-        assert(jl_is_array(ctx.source->ssavaluetypes));
-        jl_array_t *ssavalue_types = (jl_array_t*)ctx.source->ssavaluetypes;
-        return jl_array_ptr_ref(ssavalue_types, idx);
-    }
-    if (jl_typeis(e, jl_slotnumber_type)) {
-        jl_array_t *slot_types = (jl_array_t*)ctx.source->slottypes;
-        if (!jl_is_array(slot_types))
-            return (jl_value_t*)jl_any_type;
-        return jl_array_ptr_ref(slot_types, jl_slot_number(e)-1);
-    }
-    if (jl_typeis(e, jl_typedslot_type)) {
-        jl_value_t *typ = jl_typedslot_get_type(e);
-        if (jl_is_typevar(typ))
-            typ = ((jl_tvar_t*)typ)->ub;
-        return typ;
-    }
-    if (jl_is_expr(e)) {
-        if (((jl_expr_t*)e)->head == static_parameter_sym) {
-            size_t idx = jl_unbox_long(jl_exprarg(e,0))-1;
-            if (idx >= jl_svec_len(ctx.linfo->sparam_vals))
-                return (jl_value_t*)jl_any_type;
-            e = jl_svecref(ctx.linfo->sparam_vals, idx);
-            if (jl_is_typevar(e))
-                return (jl_value_t*)jl_any_type;
-            goto type_of_constant;
-        }
-        jl_value_t *typ = ((jl_expr_t*)e)->etype;
-        if (jl_is_typevar(typ))
-            typ = ((jl_tvar_t*)typ)->ub;
-        return typ;
-    }
-    if (jl_is_quotenode(e)) {
-        e = jl_fieldref(e,0);
-        goto type_of_constant;
-    }
-    if (jl_is_globalref(e)) {
-        jl_sym_t *s = (jl_sym_t*)jl_globalref_name(e);
-        jl_binding_t *b = jl_get_binding(jl_globalref_mod(e), s);
-        if (b && b->constp) {
-            e = b->value;
-            goto type_of_constant;
-        }
-        return (jl_value_t*)jl_any_type;
-    }
-    if (jl_is_symbol(e)) {
-        jl_binding_t *b = jl_get_binding(ctx.module, (jl_sym_t*)e);
-        if (!b || !b->value)
-            return (jl_value_t*)jl_any_type;
-        if (b->constp)
-            e = b->value;
-        else
-            return (jl_value_t*)jl_any_type;
-    }
-type_of_constant:
-    if (jl_is_type(e))
-        return (jl_value_t*)jl_wrap_Type(e);
-    return (jl_value_t*)jl_typeof(e);
-}
-
 // --- accessing the representations of built-in data types ---
 
 static Constant *julia_const_to_llvm(jl_value_t *e);
@@ -1684,7 +1612,7 @@ static Value *emit_arraysize_for_unsafe_dim(jl_codectx_t &ctx,
 
 // `nd == -1` means the dimension is unknown.
 static Value *emit_array_nd_index(jl_codectx_t &ctx,
-        const jl_cgval_t &ainfo, jl_value_t *ex, ssize_t nd, jl_value_t **args, size_t nidxs)
+        const jl_cgval_t &ainfo, jl_value_t *ex, ssize_t nd, const jl_cgval_t *argv, size_t nidxs)
 {
     Value *a = boxed(ctx, ainfo);
     Value *i = ConstantInt::get(T_size, 0);
@@ -1701,7 +1629,7 @@ static Value *emit_array_nd_index(jl_codectx_t &ctx,
 #endif
     Value **idxs = (Value**)alloca(sizeof(Value*)*nidxs);
     for (size_t k = 0; k < nidxs; k++) {
-        idxs[k] = emit_unbox(ctx, T_size, emit_expr(ctx, args[k]), NULL);
+        idxs[k] = emit_unbox(ctx, T_size, argv[k], NULL);
     }
     Value *ii;
     for (size_t k = 0; k < nidxs; k++) {
@@ -2262,18 +2190,11 @@ static void emit_setfield(jl_codectx_t &ctx,
     }
 }
 
-static bool might_need_root(jl_value_t *ex)
-{
-    return (!jl_is_symbol(ex) && !jl_is_slot(ex) && !jl_is_ssavalue(ex) &&
-            !jl_is_bool(ex) && !jl_is_quotenode(ex) && !jl_is_string(ex) &&
-            !jl_is_globalref(ex));
-}
-
-static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t nargs, jl_value_t **args)
+static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t nargs, const jl_cgval_t *argv)
 {
     assert(jl_is_datatype(ty));
     assert(jl_is_leaf_type(ty));
-    assert(nargs>0);
+    assert(nargs > 0);
     jl_datatype_t *sty = (jl_datatype_t*)ty;
     size_t nf = jl_datatype_nfields(sty);
     if (nf > 0) {
@@ -2298,12 +2219,12 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
             for (size_t i = 0; i < na; i++) {
                 jl_value_t *jtype = jl_svecref(sty->types, i);
                 Type *fty = julia_type_to_llvm(jtype);
-                jl_cgval_t fval_info = emit_expr(ctx, args[i + 1]);
+                const jl_cgval_t &fval_info = argv[i + 1];
                 emit_typecheck(ctx, fval_info, jtype, "new");
                 if (!type_is_ghost(fty)) {
                     Value *fval = NULL, *dest = NULL;
                     if (!init_as_value) {
-                        // avoid unboxing the argument explicitely
+                        // avoid unboxing the argument explicitly
                         // and use memcpy instead
                         dest = ctx.builder.CreateConstInBoundsGEP2_32(lt, strct, 0, i);
                     }
@@ -2311,11 +2232,11 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
 
                     if (init_as_value) {
                         if (lt->isVectorTy())
-                            strct = ctx.builder.CreateInsertElement(strct, fval, ConstantInt::get(T_int32,idx));
+                            strct = ctx.builder.CreateInsertElement(strct, fval, ConstantInt::get(T_int32, idx));
                         else if (jl_is_vecelement_type(ty))
                             strct = fval;  // VecElement type comes unwrapped in LLVM.
                         else if (lt->isAggregateType())
-                            strct = ctx.builder.CreateInsertValue(strct, fval, ArrayRef<unsigned>(&idx,1));
+                            strct = ctx.builder.CreateInsertValue(strct, fval, ArrayRef<unsigned>(&idx, 1));
                         else
                             assert(false);
                     }
@@ -2343,15 +2264,10 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
         bool need_wb = false;
         // TODO: verify that nargs <= nf (currently handled by front-end)
         for (size_t i = 1; i < nargs; i++) {
-            jl_cgval_t rhs = emit_expr(ctx, args[i]);
-            if (jl_field_isptr(sty, i - 1) && !rhs.isboxed) {
+            const jl_cgval_t &rhs = argv[i];
+            if (jl_field_isptr(sty, i - 1) && !rhs.isboxed)
                 need_wb = true;
-            }
-            if (rhs.isboxed) {
-                emit_typecheck(ctx, rhs, jl_svecref(sty->types, i - 1), "new");
-            }
-            if (might_need_root(args[i])) // TODO: how to remove this?
-                need_wb = true;
+            emit_typecheck(ctx, rhs, jl_svecref(sty->types, i - 1), "new");
             emit_setfield(ctx, sty, strctinfo, i - 1, rhs, false, need_wb);
         }
         return strctinfo;
@@ -2360,8 +2276,6 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
         // 0 fields, ghost or bitstype
         if (jl_datatype_nbits(sty) == 0)
             return ghostValue(sty);
-        if (nargs >= 2)
-            return emit_expr(ctx, args[1]);  // do side effects
         bool isboxed;
         Type *lt = julia_type_to_llvm(ty, &isboxed);
         assert(!isboxed);
