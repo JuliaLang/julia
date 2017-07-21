@@ -328,11 +328,18 @@ for T in (:Symmetric, :Hermitian), op in (:+, :-, :*, :/)
     @eval ($op)(A::$T, x::$S) = ($T)(($op)(A.data, x), Symbol(A.uplo))
 end
 
-factorize(A::HermOrSym) = bkfact(A)
+function factorize(A::HermOrSym{T}) where T
+    TT = typeof(sqrt(one(T)))
+    if TT <: BlasFloat
+        return bkfact(A)
+    else # fallback
+        return lufact(A)
+    end
+end
 
-det(A::RealHermSymComplexHerm) = real(det(bkfact(A)))
-det(A::Symmetric{<:Real}) = det(bkfact(A))
-det(A::Symmetric) = det(bkfact(A))
+det(A::RealHermSymComplexHerm) = real(det(factorize(A)))
+det(A::Symmetric{<:Real}) = det(factorize(A))
+det(A::Symmetric) = det(factorize(A))
 
 \(A::HermOrSym{<:Any,<:StridedMatrix}, B::AbstractVector) = \(bkfact(A), B)
 # Bunch-Kaufman solves can not utilize BLAS-3 for multiple right hand sides
