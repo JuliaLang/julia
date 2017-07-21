@@ -45,10 +45,33 @@ similar(x::SparseVector, ::Type{T}, D::Dims) where {T} = spzeros(T, D...)
 
 spzeros(len::Integer) = spzeros(Float64, len)
 spzeros(::Type{T}, len::Integer) where {T} = SparseVector(len, Int[], T[])
-spzeros(::Type{Tv}, ::Type{Ti}, len::Integer) where {Tv,Ti<:Integer} = SparseVector(len, Ti[], Tv[])
+spzeros(::Type{Tv}, ::Type{Ti}, len::Integer) where {Tv,Ti<:Integer} =
+    SparseVector(len, Ti[], Tv[])
 
-# Construction of same structure, but with all ones
-spones(x::SparseVector{T}) where {T} = SparseVector(x.n, copy(x.nzind), ones(T, length(x.nzval)))
+### Construct dense all ones sparse vector
+
+spones(len::Integer) = spones(Float64, len)
+spones(::Type{T}, len::Integer) where {T} = SparseVector(len, collect(Int, 1:len), ones(T, len))
+spones(::Type{Tv}, ::Type{Ti}, len::Integer) where {Tv,Ti<:Integer} =
+    SparseVector(len, collect(Ti, 1:len), ones(T, len))
+
+### Construction of same structure, but filled with a single entry
+spfill(x::SparseVector{Tv}, v::T = one(Tv)) where {Tv,T} =
+    SparseVector(x.n, copy(x.nzind), fill!(Array{T}(size(x.nzval)), v))
+function spfill!(x::SparseVector{T}, v::T = one(T)) where {T}
+    fill!(x.nzval, v)
+    x
+end
+
+### Construction of same non-zero structure, but filled with a single entry
+spfillnz(x::SparseVector{Tv}, v::T=one(Tv); tol=zero(Tv)) where {Tv,T} =
+    SparseVector(x.n, copy(x.nzind),
+        map!(x -> abs(x) > tol ? v : zero(T),
+            Array{T}(size(x.nzval)),x.nzval))
+function spfillnz!(x::SparseVector{T}, v::T = one(T); tol::T=zero(T)) where {T}
+    map!( x -> abs(x) > tol ? v : zero(T), x.nzval, x.nzval)
+    return x
+end
 
 ### Construction from lists of indices and values
 

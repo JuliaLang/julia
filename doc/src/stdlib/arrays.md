@@ -191,6 +191,10 @@ Base.SparseArrays.speye(::SparseMatrixCSC)
 Base.SparseArrays.spdiagm
 Base.SparseArrays.sprand
 Base.SparseArrays.sprandn
+Base.SparseArrays.spfill
+Base.SparseArrays.spfill!
+Base.SparseArrays.spfillnz
+Base.SparseArrays.spfillnz!
 Base.SparseArrays.nonzeros
 Base.SparseArrays.rowvals
 Base.SparseArrays.nzrange

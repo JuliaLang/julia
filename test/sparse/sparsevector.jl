@@ -124,11 +124,36 @@ let x = spv_x1
     @test exact_equal(sparsevec(d), SparseVector(3, [1, 2, 3], [0.0, 1.0, 2.0]))
 end
 
-# spones - copies structure, but replaces nzvals with ones
+# spfill - copies structure, but replaces stored entries with ones
 let x = SparseVector(8, [2, 3, 6], [12.0, 18.0, 25.0])
-    y = spones(x)
+    y = spfill(x)
     @test (x .!= 0) == (y .!= 0)
     @test y == SparseVector(8, [2, 3, 6], [1.0, 1.0, 1.0])
+    y = spfill(x, -2)
+    @test y == SparseVector(8, [2, 3, 6], [-2, -2, -2])
+end
+
+# spfillnz - copies structure, but replaces non-zero vals with ones
+let x = SparseVector(8, [2, 3, 6, 7], [12.0, 18.0, 25.0, 0.0])
+  y = spfill(x)
+  @test y == SparseVector(8, [2, 3, 6, 7], [1.0, 1.0, 1.0, 1.0])
+  y = spfillnz(x)
+  @test y == SparseVector(8, [2, 3, 6, 7], [1.0, 1.0, 1.0, 0.0])
+  y = spfillnz(x, 2)
+  @test y == SparseVector(8, [2, 3, 6, 7], [2,2,2,0])
+  y = spfillnz(x, 2; tol=12.0)
+  @test y == SparseVector(8, [2, 3, 6, 7], [0,2,2,0])
+end
+
+# spfillnz - copies structure, but replaces non-zero vals with ones
+let x = SparseVector(8, [2, 3, 6, 7], [12.0, 18.0, 25.0, 0.0])
+  z = copy(x)
+  spfillnz!(z)
+  @test z == SparseVector(8, [2, 3, 6, 7], [1.0, 1.0, 1.0, 0.0])
+  spfillnz!(z,3.0)
+  @test z == SparseVector(8, [2, 3, 6, 7], [3.0, 3.0, 3.0, 0.0])
+  spfillnz!(z,3.0;tol=3.0)
+  @test z == SparseVector(8, [2, 3, 6, 7], [0.0, 0.0, 0.0, 0.0])
 end
 
 # sprand & sprandn

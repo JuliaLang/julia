@@ -28,8 +28,9 @@ import Base: @get!, acos, acosd, acot, acotd, acsch, asech, asin, asind, asinh,
 
 export AbstractSparseArray, AbstractSparseMatrix, AbstractSparseVector,
     SparseMatrixCSC, SparseVector, blkdiag, droptol!, dropzeros!, dropzeros,
-    issparse, nonzeros, nzrange, rowvals, sparse, sparsevec, spdiagm, speye, spones,
-    sprand, sprandn, spzeros, nnz, permute
+    issparse, nonzeros, nzrange, rowvals, sparse, sparsevec, spdiagm, speye,
+    spfill, spfill!, spfillnz, spfillnz!,
+    sprand, sprandn, spones, spzeros, nnz, permute
 
 include("abstractsparse.jl")
 include("sparsematrix.jl")

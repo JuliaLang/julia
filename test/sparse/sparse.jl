@@ -1564,9 +1564,55 @@ end
     end
 end
 
+@testset "spfill" begin
+    A = 2.0 * speye(5,5)
+    @test Array(spfill(A)) == eye(Array(A))
+
+    A = speye(2)
+    A[2:2,2:2] = spzeros(1,1)
+    @test Array(spfill(A, 2.0)) == 2.0*eye(2,2)
+
+    @test Array(spfill(spzeros(5,6))) == zeros(5,6)
+    @test Array(spfill(spzeros(0,0))) == zeros(0,0)
+    @test Array(spfill(spzeros(0,0),Int)) == zeros(Int,0,0)
+end
+
+@testset "spfill!" begin
+    @test Array(spfill!(speye(5,5), 2.0)) == 2.0*eye(5,5)
+    A = speye(2)
+    A[2:2,2:2] = spzeros(1,1)
+    @test Array(spfill!(A, 2.0)) == 2.0*eye(2,2)
+    @test Array(A) == 2.0*eye(2,2)
+end
+
 @testset "spones" begin
-    A = 2. * speye(5,5)
-    @test Array(spones(A)) == eye(Array(A))
+    @test spones(5,5) == sparse(ones(5,5))
+    @test spones(0,0) == sparse(ones(0,0))
+    @test spones(6,5) == sparse(ones(6,5))
+    @test spones(5,6) == sparse(ones(5,6))
+    @test spones(1,6) == sparse(ones(1,6))
+    @test spones(5,1) == sparse(ones(5,1))
+    @test spones(5,0) == sparse(ones(5,0))
+    @test spones(0,5) == sparse(ones(0,5))
+
+    @test spones(5) == sparse(ones(5))
+    @test spones(0) == sparse(ones(0))
+end
+
+@testset "spfillnz" begin
+  @test spfillnz(sparse([1,2,3,4],[2,4,3,1],[5.0,4.0,3.0,0.0])) ==
+        sparse([1,2,3,4],[2,4,3,1],[1.0,1.0,1.0,0.0])
+  @test spfillnz(sparse([1,2,3,4],[2,4,3,1],[5.0,4.0,3.0,0.0]), 2) ==
+        sparse([1,2,3,4],[2,4,3,1],[2,2,2,0])
+end
+
+@testset "spfillnz!" begin
+  A = sparse([1,2,3,4],[2,4,3,1],[5.0,4.0,3.0,0.0])
+  spfillnz!(A, 5.0)
+  @test A == sparse([1,2,3,4],[2,4,3,1],[5.0,5.0,5.0,0.0])
+
+  spfillnz!(A, 5.0; tol=5.0)
+  @test A == sparse([1,2,3,4],[2,4,3,1],[0.0,0.0,0.0,0.0])
 end
 
 @testset "factorization" begin
@@ -1820,7 +1866,7 @@ end
     srand(1234)
     A = sprand(5, 5, 1/5)
     A = max.(A, A')
-    A = spones(A)
+    A = spfill(A)
     B = A[5:-1:1, 5:-1:1]
     @test issymmetric(B)
 end

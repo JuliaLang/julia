@@ -1425,10 +1425,13 @@ sprandn(m::Integer, n::Integer, density::AbstractFloat) = sprandn(GLOBAL_RNG,m,n
 
 
 """
-    spones(S)
+    spfill(A, [v = one(T)])
 
-Create a sparse array with the same structure as that of `S`, but with every nonzero
-element having the value `1.0`.
+Create a sparse array with the same structure as that of `A`, but with every stored
+entry having the value v that defaults to `one(eltype(A))`.
+
+**Warning** This function should be used with care as it operates over the
+stored entries, not the non-zero stored entries. See [`spfillnz`](@ref).
 
 # Example
 ```jldoctest
@@ -1439,18 +1442,143 @@ julia> A = sparse([1,2,3,4],[2,4,3,1],[5.,4.,3.,2.])
   [3, 3]  =  3.0
   [2, 4]  =  4.0
 
-julia> spones(A)
+julia> spfill(A)
 4×4 SparseMatrixCSC{Float64,Int64} with 4 stored entries:
   [4, 1]  =  1.0
   [1, 2]  =  1.0
   [3, 3]  =  1.0
   [2, 4]  =  1.0
+
+julia> spfill(A, 0.5)
+4×4 SparseMatrixCSC{Float64,Int64} with 4 stored entries:
+  [4, 1]  =  0.5
+  [1, 2]  =  0.5
+  [3, 3]  =  0.5
+  [2, 4]  =  0.5
 ```
 
-Note the difference from [`speye`](@ref).
+Note the difference from [`speye`](@ref) and [`spfillnz`](@ref).
 """
-spones(S::SparseMatrixCSC{T}) where {T} =
-     SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), ones(T, S.colptr[end]-1))
+spfill(S::SparseMatrixCSC{Tv}, v::T=one(Tv)) where {Tv,T} =
+     SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval),
+     fill!(Array{T}(size(S.nzval)),v))
+
+"""
+    spfill!(A, v = one(T))
+
+Replace all of the values in the stored entries by the value `v`, which
+defaults to the one value for the type.
+
+**Warning** This function should be used with care as it operates over the
+stored entries, not the non-zero stored entries. See [`spfillnz!`](@ref).
+
+# Example
+```jldoctest
+julia> A = speye(3); spfill!(A, 5.0); A
+3×3 SparseMatrixCSC{Float64,Int64} with 3 stored entries:
+  [1, 1]  =  5.0
+  [2, 2]  =  5.0
+  [3, 3]  =  5.0
+```
+"""
+function spfill!(S::SparseMatrixCSC{T}, v::T = one(T)) where {T}
+    fill!(S.nzval, v)
+    S
+end
+
+"""
+    spfillnz(A, [v = one]; [tol = zero])
+
+Replace all of the non-zero values of the matrix, determined by
+testing `abs(A[i,j]) > tol`, with the value v.
+
+A common use case is equivalent to the Matlab `spones` function that replaces
+each non-zero with the value one
+
+# Example
+```jldoctest
+julia> spfillnz(sparse([1,2,3,4],[2,4,3,1],[5.0,4.0,3.0,0.0]))
+4×4 SparseMatrixCSC{Float64,Int64} with 3 stored entries:
+  [1, 2]  =  1.0
+  [3, 3]  =  1.0
+  [2, 4]  =  1.0
+```
+
+See also [`spfill`](@ref), [`spfillnz!`](@ref).
+"""
+spfillnz(S::SparseMatrixCSC{Tv}, v::T=one(Tv); tol=zero(Tv)) where {Tv,T} =
+    SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval),
+        map!(x -> abs(x) > tol ? v : zero(T),
+            Array{T}(size(S.nzval)),S.nzval))
+
+"""
+    spfillnz!(A, [v = one(eltype(A))]; [tol = zero(eltype(A))])
+
+Replace all of the non-zero values of the sparse matrix A, determined by
+testing `abs(A[i,j]) > tol`, with the value `v`; `A` can also be
+a sparse vector.
+
+This operates in place, so v must have the same type as eltype(A).
+
+```jldoctest
+julia> spfillnz!(sparse([1,2,3,4],[2,4,3,1],[5.0,4.0,3.0,0.0]))
+4×4 SparseMatrixCSC{Float64,Int64} with 3 stored entries:
+  [1, 2]  =  1.0
+  [3, 3]  =  1.0
+  [2, 4]  =  1.0
+
+julia> spfillnz!(sparse([1,2,3,4],[2,4,3,1],[5.0,4.0,3.0,0.0]); tol=3.0)
+4×4 SparseMatrixCSC{Float64,Int64} with 3 stored entries:
+  [1, 2]  =  1.0
+  [2, 4]  =  1.0
+```
+
+See also [`spfill`](@ref), [`spfillnz`](@ref).
+"""
+function spfillnz!(S::SparseMatrixCSC{T}, v::T = one(T); tol::T=zero(T)) where {T}
+    map!( x -> abs(x) > tol ? v : zero(T), S.nzval, S.nzval)
+    return S
+end
+
+"""
+    spones([Tv,] [Ti,] m [, n])
+
+Create a sparse vector of length `m` or sparse matrix of size `m x n`
+that is entirely filled with ones. The resulting matrix has a sparse type,
+but has each entry filled.
+
+# Example
+```jldoctest
+julia> A = spones(2,2)
+2×2 SparseMatrixCSC{Float64,Int64} with 4 stored entries:
+  [1, 1]  =  1.0
+  [1, 2]  =  1.0
+  [2, 1]  =  1.0
+  [2, 2]  =  1.0
+
+julia> spones(5,5) == sparse(ones(5,5))
+true
+```
+
+See also [`spzeros`](@ref), [`speye`](@ref), [`spfill`](@ref).
+"""
+spones(m::Integer, n::Integer) = spones(Float64, m, n)
+spones(::Type{Tv}, m::Integer, n::Integer) where {Tv} = spones(Tv, Int, m, n)
+function spones(::Type{Tv}, ::Type{Ti}, m::Integer, n::Integer) where {Tv, Ti}
+    ((m < 0) || (n < 0)) && throw(ArgumentError("invalid Array dimensions"))
+
+    m == 0 && return spzeros(Tv, Ti, m, n)
+
+    SparseMatrixCSC(m, n,
+        collect(Ti, 1:m:(m*n+1)), # need max for n=0 case 1:1:1 gives 1
+        repeat(Ti(1):Ti(m), outer=n),
+        ones(Tv, m*n))
+end
+# de-splatting variant
+function spones(::Type{Tv}, ::Type{Ti}, sz::Tuple{Integer,Integer}) where {Tv, Ti}
+    spones(Tv, Ti, sz[1], sz[2])
+end
+
 
 """
     spzeros([type,]m[,n])
@@ -1505,8 +1633,6 @@ julia> speye(A)
   [3, 3]  =  1.0
   [4, 4]  =  1.0
 ```
-
-Note the difference from [`spones`](@ref).
 """
 speye(S::SparseMatrixCSC{T}) where {T} = speye(T, size(S, 1), size(S, 2))
 eye(S::SparseMatrixCSC) = speye(S)
