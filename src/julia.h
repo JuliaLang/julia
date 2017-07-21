@@ -1734,6 +1734,7 @@ typedef struct {
     const char *bindto;
     const char *outputbc;
     const char *outputunoptbc;
+    const char *outputjitbc;
     const char *outputo;
     const char *outputji;
     int8_t incremental;
@@ -1741,6 +1742,7 @@ typedef struct {
 } jl_options_t;
 
 extern JL_DLLEXPORT jl_options_t jl_options;
+JL_DLLEXPORT ssize_t jl_sizeof_jl_options(void);
 
 // Parse an argc/argv pair to extract general julia options, passing back out
 // any arguments that should be passed on to the script.

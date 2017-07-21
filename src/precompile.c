@@ -24,8 +24,11 @@ void jl_precompile(int all);
 
 void jl_write_compiler_output(void)
 {
-    if (!jl_generating_output())
+    if (!jl_generating_output()) {
+        if (jl_options.outputjitbc)
+            jl_dump_native(NULL, jl_options.outputjitbc, NULL, NULL, 0);
         return;
+    }
 
     if (!jl_options.incremental)
         jl_precompile(jl_options.compile_enabled == JL_OPTIONS_COMPILE_ALL);
@@ -33,6 +36,10 @@ void jl_write_compiler_output(void)
     if (!jl_module_init_order) {
         jl_printf(JL_STDERR, "WARNING: --output requested, but no modules defined during run\n");
         return;
+    }
+
+    if (jl_options.outputjitbc) {
+        jl_printf(JL_STDERR, "WARNING: --output-jit-bc is meaningless with options for dumping sysimage data\n");
     }
 
     jl_array_t *worklist = jl_module_init_order;
