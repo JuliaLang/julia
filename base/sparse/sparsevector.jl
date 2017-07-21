@@ -87,11 +87,13 @@ function spfill!(x::SparseVector{T}, v::T = one(T)) where {T}
 end
 
 ### Construction of same non-zero structure, but filled with a single entry
-spfillnz(x::SparseVector{Tv}, v::T=one(Tv); tol=zero(Tv)) where {Tv,T} =
+spfillnz(x::SparseVector{Tv}, v::T=one(Tv);
+         tol::Ta = zero(typeof(abs(one(Tv))))) where {Tv,T,Ta} =
     SparseVector(x.n, copy(x.nzind),
         map!(x -> abs(x) > tol ? v : zero(T),
             Array{T}(size(x.nzval)),x.nzval))
-function spfillnz!(x::SparseVector{T}, v::T = one(T); tol::T=zero(T)) where {T}
+function spfillnz!(x::SparseVector{T}, v::T = one(T);
+                   tol::Ta = zero(typeof(abs(one(T))))) where {T,Ta}
     map!( x -> abs(x) > tol ? v : zero(T), x.nzval, x.nzval)
     return x
 end
