@@ -1254,3 +1254,13 @@ end === (3, String)
 
 # issue #7479
 @test expand(Main, parse("(true &&& false)")) == Expr(:error, "misplaced \"&\" expression")
+
+# if an indexing expression becomes a cat expression, `end` is not special
+@test_throws ParseError parse("a[end end]")
+@test_throws ParseError parse("a[end;end]")
+#@test_throws ParseError parse("a[end;]")  # this is difficult to fix
+
+# issue #18935
+@test [begin
+          @inbounds for i = 1:10 end
+       end for i = 1:5] == fill(nothing, 5)

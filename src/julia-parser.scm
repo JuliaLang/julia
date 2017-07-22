@@ -160,6 +160,15 @@
                    (where-enabled #t))
                   ,@body))
 
+(define-macro (with-normal-context . body)
+  `(with-bindings ((range-colon-enabled #t)
+                   (space-sensitive #f)
+                   (where-enabled #t)
+                   (inside-vec #f)
+                   (end-symbol #f)
+                   (whitespace-newline #f))
+                  ,@body))
+
 (define-macro (without-range-colon . body)
   `(with-bindings ((range-colon-enabled #f))
                   ,@body))
@@ -1263,8 +1272,8 @@
 (define (parse-resword s word)
   (with-bindings
    ((expect-end-current-line (input-port-line (ts:port s))))
-   (with-normal-ops
-    (without-whitespace-newline
+   (with-normal-context
+    (begin
      (case word
        ((begin quote)
         (let ((loc  (begin (skip-ws-and-comments (ts:port s))
@@ -1734,6 +1743,8 @@
           ((null? (cdr v)) (cons (car v) outer))
           (else            (cons (fix 'row v) outer))))
   (define semicolon (eqv? (peek-token s) #\;))
+  ;; if a [ ] expression is a cat expression, `end` is not special
+  (with-bindings ((end-symbol #f))
   (let loop ((vec   (list first))
              (outer '()))
     (let ((t  (if (or (eqv? (peek-token s) #\newline) gotnewline)
@@ -1767,7 +1778,7 @@
              (if (and (pair? vec) (not (ts:space? s)))
                  (error (string "expected separator between arguments to \"[ ]\"; got \""
                                 (deparse (car vec)) t "\"")))
-             (loop (cons (parse-eq* s) vec) outer)))))))
+             (loop (cons (parse-eq* s) vec) outer))))))))
 
 (define (peek-non-newline-token s)
   (let loop ((t (peek-token s)))
