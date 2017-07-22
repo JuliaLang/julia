@@ -15,14 +15,14 @@ function show(io::IO, ::MIME"text/plain", iter::Union{KeyIterator,ValueIterator}
         rows < 2 && (print(io, " …"); return)
         cols < 4 && (cols = 4)
         cols -= 2 # For prefix "  "
-        rows -= 2 # For summary and final ⋮ continuation lines
+        rows -= 1 # For summary
     else
         rows = cols = 0
     end
 
     for (i, v) in enumerate(iter)
         print(io, "\n  ")
-        limit && i >= rows && (print(io, "⋮"); break)
+        limit && rows <= i < length(iter) && (print(io, "⋮"); break)
 
         if limit
             str = sprint(0, show, v, env=io)
@@ -44,7 +44,7 @@ function show(io::IO, ::MIME"text/plain", t::Associative{K,V}) where {K,V}
 
     print(io, summary(t))
     isempty(t) && return
-    print(io, ":\n  ")
+    print(io, ":")
     show_circular(io, t) && return
     if limit
         sz = displaysize(io)
@@ -52,7 +52,7 @@ function show(io::IO, ::MIME"text/plain", t::Associative{K,V}) where {K,V}
         rows < 2   && (print(io, " …"); return)
         cols < 12  && (cols = 12) # Minimum widths of 2 for key, 4 for value
         cols -= 6 # Subtract the widths of prefix "  " separator " => "
-        rows -= 2 # Subtract the summary and final ⋮ continuation lines
+        rows -= 1 # Subtract the summary
 
         # determine max key width to align the output, caching the strings
         ks = Vector{AbstractString}(min(rows, length(t)))
@@ -73,11 +73,9 @@ function show(io::IO, ::MIME"text/plain", t::Associative{K,V}) where {K,V}
         rows = cols = 0
     end
 
-    first = true
     for (i, (k, v)) in enumerate(t)
-        first || print(io, "\n  ")
-        first = false
-        limit && i > rows && (print(io, rpad("⋮", keylen), " => ⋮"); break)
+        print(io, "\n  ")
+        limit && rows <= i < length(t) && (print(io, rpad("⋮", keylen), " => ⋮"); break)
 
         if limit
             key = rpad(_truncate_at_width_or_chars(ks[i], keylen, "\r\n"), keylen)
