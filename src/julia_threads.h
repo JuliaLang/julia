@@ -1,8 +1,8 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 // Meant to be included in <julia.h>
-#ifndef JULIA_THREADS_H
-#define JULIA_THREADS_H
+#ifndef JL_THREADS_H
+#define JL_THREADS_H
 
 // threading ------------------------------------------------------------------
 
