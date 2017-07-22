@@ -822,4 +822,9 @@ end
 
         @test sprint(show, p) == s
     end
+    # - when the context has :compact=>false, print pair's member non-compactly
+    # - if one member is printed as "Pair{...}(...)", no need to put parens around
+    s = IOBuffer()
+    show(IOContext(s, :compact => false), (1=>2) => Pair{Any,Any}(3,4))
+    @test String(take!(s)) == "(1 => 2) => Pair{Any,Any}(3, 4)"
 end
