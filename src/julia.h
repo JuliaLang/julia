@@ -60,6 +60,8 @@
 
 typedef struct _jl_taggedvalue_t jl_taggedvalue_t;
 
+#include "atomics.h"
+#include "tls.h"
 #include "julia_threads.h"
 
 #ifdef __cplusplus
@@ -1525,39 +1527,7 @@ JL_DLLEXPORT void JL_NORETURN jl_rethrow(void);
 JL_DLLEXPORT void JL_NORETURN jl_rethrow_other(jl_value_t *e);
 JL_DLLEXPORT void JL_NORETURN jl_no_exc_handler(jl_value_t *e);
 
-#ifdef JULIA_ENABLE_THREADING
-static inline void jl_lock_frame_push(jl_mutex_t *lock)
-{
-    jl_ptls_t ptls = jl_get_ptls_states();
-    // For early bootstrap
-    if (__unlikely(!ptls->current_task))
-        return;
-    arraylist_t *locks = &ptls->current_task->locks;
-    size_t len = locks->len;
-    if (__unlikely(len >= locks->max)) {
-        arraylist_grow(locks, 1);
-    }
-    else {
-        locks->len = len + 1;
-    }
-    locks->items[len] = (void*)lock;
-}
-static inline void jl_lock_frame_pop(void)
-{
-    jl_ptls_t ptls = jl_get_ptls_states();
-    if (__likely(ptls->current_task)) {
-        ptls->current_task->locks.len--;
-    }
-}
-#else
-static inline void jl_lock_frame_push(jl_mutex_t *lock)
-{
-    (void)lock;
-}
-static inline void jl_lock_frame_pop(void)
-{
-}
-#endif // ifndef JULIA_ENABLE_THREADING
+#include "locks.h"   // requires jl_task_t definition
 
 STATIC_INLINE void jl_eh_restore_state(jl_handler_t *eh)
 {
