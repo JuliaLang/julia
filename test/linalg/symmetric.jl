@@ -151,6 +151,17 @@ end
                 @test trace(aherm) == trace(Hermitian(aherm))
             end
 
+            @testset "isposdef[!]" begin
+                @test isposdef(Symmetric(asym))  == isposdef(asym)
+                @test isposdef(Hermitian(aherm)) == isposdef(aherm)
+                @test isposdef(Hermitian(apos))  == isposdef(apos) == true
+                if eltya != Int #chol! won't work with Int
+                    @test isposdef!(Symmetric(copy(asym)))  == isposdef(asym)
+                    @test isposdef!(Hermitian(copy(aherm))) == isposdef(aherm)
+                    @test isposdef!(Hermitian(copy(apos)))  == isposdef(apos) == true
+                end
+            end
+
             # Revisit when implemented in julia
             if eltya != BigFloat
                 @testset "cond" begin
@@ -250,15 +261,6 @@ end
                         @test (aherm)^-2.0 ≈ Array(Hermitian(aherm)^-2.0) rtol=100*n^2*eps(real(eltya))
                         @test (apos)^2.0   ≈ Array(Hermitian(apos)^2.0) rtol=100*n^2*eps(real(eltya))
                     end
-                end
-            end
-
-            @testset "isposdef[!]" begin
-                @test isposdef(Symmetric(asym)) == isposdef(full(Symmetric(asym)))
-                @test isposdef(Hermitian(aherm)) == isposdef(full(Hermitian(aherm)))
-                if eltya != Int #chol! won't work with Int
-                    @test isposdef!(Symmetric(copy(asym))) == isposdef(full(Symmetric(asym)))
-                    @test isposdef!(Hermitian(copy(aherm))) == isposdef(full(Hermitian(aherm)))
                 end
             end
         end
