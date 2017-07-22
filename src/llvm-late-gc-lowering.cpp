@@ -1188,7 +1188,7 @@ static void AddInPredLiveOuts(BasicBlock *BB, BitVector &LiveIn, State &S)
         BB = &*WorkList.back();
         WorkList.pop_back();
         for (BasicBlock *Pred : predecessors(BB)) {
-            if (Visited.insert(Pred).second)
+            if (!Visited.insert(Pred).second)
                 continue;
             if (!S.BBStates[Pred].HasSafepoint) {
                 WorkList.push_back(Pred);
@@ -1206,7 +1206,9 @@ static void AddInPredLiveOuts(BasicBlock *BB, BitVector &LiveIn, State &S)
     }
 }
 
-void LateLowerGCFrame::PlaceGCFrameStore(State &S, unsigned R, unsigned MinColorRoot, const std::vector<int> &Colors, Value *GCFrame, Instruction *InsertionPoint) {
+void LateLowerGCFrame::PlaceGCFrameStore(State &S, unsigned R, unsigned MinColorRoot,
+                                         const std::vector<int> &Colors, Value *GCFrame,
+                                         Instruction *InsertionPoint) {
     Value *Val = GetPtrForNumber(S, R, InsertionPoint);
     Value *args[1] = {
         ConstantInt::get(T_int32, Colors[R]+MinColorRoot)
@@ -1222,26 +1224,27 @@ void LateLowerGCFrame::PlaceGCFrameStore(State &S, unsigned R, unsigned MinColor
     new StoreInst(Val, gep, InsertionPoint);
 }
 
-void LateLowerGCFrame::PlaceGCFrameStores(Function &F, State &S, unsigned MinColorRoot, const std::vector<int> &Colors, Value *GCFrame)
+void LateLowerGCFrame::PlaceGCFrameStores(Function &F, State &S, unsigned MinColorRoot,
+                                          const std::vector<int> &Colors, Value *GCFrame)
 {
     for (auto &BB : F) {
-        if (!S.BBStates[&BB].HasSafepoint) {
+        const BBState &BBS = S.BBStates[&BB];
+        if (!BBS.HasSafepoint) {
             continue;
         }
         BitVector LiveIn;
         AddInPredLiveOuts(&BB, LiveIn, S);
-        for(auto rit = S.BBStates[&BB].Safepoints.rbegin();
-              rit != S.BBStates[&BB].Safepoints.rend(); ++rit ) {
-            // Find those that become live, but were not before
-            BitVector NowLive = S.LiveSets[*rit];
-            LiveIn.resize(NowLive.size(), 0);
-            LiveIn.flip();
-            NowLive &= LiveIn;
+        const BitVector *LastLive = &LiveIn;
+        for(auto rit = BBS.Safepoints.rbegin();
+              rit != BBS.Safepoints.rend(); ++rit ) {
+            const BitVector &NowLive = S.LiveSets[*rit];
             for (int Idx = NowLive.find_first(); Idx >= 0; Idx = NowLive.find_next(Idx)) {
-                PlaceGCFrameStore(S, Idx, MinColorRoot, Colors, GCFrame,
-                  S.ReverseSafepointNumbering[*rit]);
+                if (!HasBitSet(*LastLive, Idx)) {
+                    PlaceGCFrameStore(S, Idx, MinColorRoot, Colors, GCFrame,
+                      S.ReverseSafepointNumbering[*rit]);
+                }
             }
-            LiveIn = S.LiveSets[*rit];
+            LastLive = &NowLive;
         }
     }
 }

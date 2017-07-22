@@ -947,7 +947,7 @@ void* jl_get_globalvar(GlobalVariable *gv)
 void jl_add_to_shadow(Module *m)
 {
 #ifndef KEEP_BODIES
-    if (!imaging_mode)
+    if (!imaging_mode && !jl_options.outputjitbc)
         return;
 #endif
     ValueToValueMapTy VMap;
@@ -1064,7 +1064,6 @@ extern "C"
 void jl_dump_native(const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *sysimg_data, size_t sysimg_len)
 {
     JL_TIMING(NATIVE_DUMP);
-    assert(imaging_mode);
     // We don't want to use MCJIT's target machine because
     // it uses the large code model and we may potentially
     // want less optimizations there.
@@ -1161,7 +1160,8 @@ void jl_dump_native(const char *bc_fname, const char *unopt_bc_fname, const char
 #endif
 
     // add metadata information
-    jl_gen_llvm_globaldata(shadow_output, sysimg_data, sysimg_len);
+    if (imaging_mode)
+        jl_gen_llvm_globaldata(shadow_output, sysimg_data, sysimg_len);
 
     // do the actual work
     PM.run(*shadow_output);
