@@ -202,8 +202,8 @@ testModPi()
         rem(big(x), big(pi)/2, RoundNearest)
     end
 
-    n, y1, y2 = Base.Math.rem_pio2_kernel(x)
-    y=y1+y2
+    n, yrem = Base.Math.rem_pio2_kernel(x)
+    y=yrem.hi+yrem.lo
     @test a-y<nextfloat(y)/2
     # The following has easy and hard cases in each interval. A hard case is one
     # where x ≈ k*pi/2 for some integer k.
@@ -242,14 +242,14 @@ testModPi()
 
     for (i, case) in enumerate(cases)
         # negative argument
-        retmf = sum(Base.Math.rem_pio2_kernel(-case)[2:3])
-        @test sum(retmf) == ieee754_rem_pio2_return[1, i]
-        diff = Float64(mod(big(-case), big(pi)/2))-sum(Base.Math.rem_pio2_kernel(-case)[2:3])
+        n, ret = Base.Math.rem_pio2_kernel(-case)
+        @test ret.hi+ret.lo == ieee754_rem_pio2_return[1, i]
+        diff = Float64(mod(big(-case), big(pi)/2))-ret.hi+ret.lo
         @test abs(diff) in (0.0, 1.5707963267948966, 1.5707963267948968)
         # positive argument
-        ret = Base.Math.rem_pio2_kernel(case)[2:3]
-        @test sum(ret) == ieee754_rem_pio2_return[2, i]
-        diff = Float64(mod(big(case), big(pi)/2))-sum(Base.Math.rem_pio2_kernel(case)[2:3])
+        n, ret = Base.Math.rem_pio2_kernel(case)
+        @test ret.hi+ret.lo == ieee754_rem_pio2_return[2, i]
+        diff = Float64(mod(big(case), big(pi)/2))-ret.hi+ret.lo
         @test abs(diff) in (0.0, 1.5707963267948966, 1.5707963267948968)
     end
 end
@@ -258,6 +258,7 @@ end
         bignum = int*big(pi)/2+0.00001
         bigrem = rem(bignum, big(pi)/2, RoundDown)
         fnum = Float64(bignum)
-        @test mod2pi(fnum) == sum(Base.Math.rem_pio2_kernel(fnum)[2:3])
+        n, ret = Base.Math.rem_pio2_kernel(fnum)
+        @test mod2pi(fnum) == ret.hi+ret.lo
     end
 end

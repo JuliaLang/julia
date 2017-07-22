@@ -786,22 +786,22 @@ function rem2pi(x::Float64, ::RoundingMode{:Nearest})
     abs(x) < pi && return x
 
     n,y = rem_pio2_kernel(x)
-    y1,y2 = y.hi,y.lo
+
     if iseven(n)
         if n & 2 == 2 # n % 4 == 2: add/subtract pi
-            if y1 <= 0
-                return add22condh(y1,y2,pi2o2_h,pi2o2_l)
+            if y.hi <= 0
+                return add22condh(y.hi,y.lo,pi2o2_h,pi2o2_l)
             else
-                return add22condh(y1,y2,-pi2o2_h,-pi2o2_l)
+                return add22condh(y.hi,y.lo,-pi2o2_h,-pi2o2_l)
             end
         else          # n % 4 == 0: add 0
-            return y1+y2
+            return y.hi+y.lo
         end
     else
         if n & 2 == 2 # n % 4 == 3: subtract pi/2
-            return add22condh(y1,y2,-pi1o2_h,-pi1o2_l)
+            return add22condh(y.hi,y.lo,-pi1o2_h,-pi1o2_l)
         else          # n % 4 == 1: add pi/2
-            return add22condh(y1,y2,pi1o2_h,pi1o2_l)
+            return add22condh(y.hi,y.lo,pi1o2_h,pi1o2_l)
         end
     end
 end
@@ -810,23 +810,22 @@ function rem2pi(x::Float64, ::RoundingMode{:ToZero})
     ax <= 2*Float64(pi,RoundDown) && return x
 
     n,y = rem_pio2_kernel(x)
-    y1,y2 = y.hi,y.lo
 
     if iseven(n)
         if n & 2 == 2 # n % 4 == 2: add pi
-            z = add22condh(y1,y2,pi2o2_h,pi2o2_l)
+            z = add22condh(y.hi,y.lo,pi2o2_h,pi2o2_l)
         else          # n % 4 == 0: add 0 or 2pi
-            if y1 > 0
-                z = y1+y2
+            if y.hi > 0
+                z = y.hi+y.lo
             else      # negative: add 2pi
-                z = add22condh(y1,y2,pi4o2_h,pi4o2_l)
+                z = add22condh(y.hi,y.lo,pi4o2_h,pi4o2_l)
             end
         end
     else
         if n & 2 == 2 # n % 4 == 3: add 3pi/2
-            z = add22condh(y1,y2,pi3o2_h,pi3o2_l)
+            z = add22condh(y.hi,y.lo,pi3o2_h,pi3o2_l)
         else          # n % 4 == 1: add pi/2
-            z = add22condh(y1,y2,pi1o2_h,pi1o2_l)
+            z = add22condh(y.hi,y.lo,pi1o2_h,pi1o2_l)
         end
     end
     copysign(z,x)
@@ -841,23 +840,22 @@ function rem2pi(x::Float64, ::RoundingMode{:Down})
     end
 
     n,y = rem_pio2_kernel(x)
-    y1,y2 = y.hi,y.lo
 
     if iseven(n)
         if n & 2 == 2 # n % 4 == 2: add pi
-            return add22condh(y1,y2,pi2o2_h,pi2o2_l)
+            return add22condh(y.hi,y.lo,pi2o2_h,pi2o2_l)
         else          # n % 4 == 0: add 0 or 2pi
-            if y1 > 0
-                return y1+y2
+            if y.hi > 0
+                return y.hi+y.lo
             else      # negative: add 2pi
-                return add22condh(y1,y2,pi4o2_h,pi4o2_l)
+                return add22condh(y.hi,y.lo,pi4o2_h,pi4o2_l)
             end
         end
     else
         if n & 2 == 2 # n % 4 == 3: add 3pi/2
-            return add22condh(y1,y2,pi3o2_h,pi3o2_l)
+            return add22condh(y.hi,y.lo,pi3o2_h,pi3o2_l)
         else          # n % 4 == 1: add pi/2
-            return add22condh(y1,y2,pi1o2_h,pi1o2_l)
+            return add22condh(y.hi,y.lo,pi1o2_h,pi1o2_l)
         end
     end
 end
@@ -871,23 +869,22 @@ function rem2pi(x::Float64, ::RoundingMode{:Up})
     end
 
     n,y = rem_pio2_kernel(x)
-    y1,y2 = y.hi,y.lo
 
     if iseven(n)
         if n & 2 == 2 # n % 4 == 2: sub pi
-            return add22condh(y1,y2,-pi2o2_h,-pi2o2_l)
+            return add22condh(y.hi,y.lo,-pi2o2_h,-pi2o2_l)
         else          # n % 4 == 0: sub 0 or 2pi
-            if y1 < 0
-                return y1+y2
+            if y.hi < 0
+                return y.hi+y.lo
             else      # positive: sub 2pi
-                return add22condh(y1,y2,-pi4o2_h,-pi4o2_l)
+                return add22condh(y.hi,y.lo,-pi4o2_h,-pi4o2_l)
             end
         end
     else
         if n & 2 == 2 # n % 4 == 3: sub pi/2
-            return add22condh(y1,y2,-pi1o2_h,-pi1o2_l)
+            return add22condh(y.hi,y.lo,-pi1o2_h,-pi1o2_l)
         else          # n % 4 == 1: sub 3pi/2
-            return add22condh(y1,y2,-pi3o2_h,-pi3o2_l)
+            return add22condh(y.hi,y.lo,-pi3o2_h,-pi3o2_l)
         end
     end
 end
