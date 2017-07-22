@@ -185,10 +185,26 @@ close(d::TextDisplay) = close(d.io)
 # Display that is capable of displaying x (doesn't throw an error)
 
 const displays = Display[]
+
+"""
+    pushdisplay(d::Display)
+
+Pushes a new display `d` on top of the global display-backend stack. Calling `display(x)` or
+`display(mime, x)` will display `x` on the topmost compatible backend in the stack (i.e.,
+the topmost backend that does not throw a [`MethodError`](@ref)).
+"""
 function pushdisplay(d::Display)
     global displays
     push!(displays, d)
 end
+
+"""
+    popdisplay()
+    popdisplay(d::Display)
+
+Pop the topmost backend off of the display-backend stack, or the topmost copy of `d` in the
+second variant.
+"""
 popdisplay() = pop!(displays)
 function popdisplay(d::Display)
     for i = length(displays):-1:1
@@ -205,6 +221,24 @@ end
 
 xdisplayable(D::Display, args...) = applicable(display, D, args...)
 
+"""
+    display(x)
+    display(d::Display, x)
+    display(mime, x)
+    display(d::Display, mime, x)
+
+Display `x` using the topmost applicable display in the display stack, typically using the
+richest supported multimedia output for `x`, with plain-text [`STDOUT`](@ref) output as a fallback.
+The `display(d, x)` variant attempts to display `x` on the given display `d` only, throwing
+a [`MethodError`](@ref) if `d` cannot display objects of this type.
+
+There are also two variants with a `mime` argument (a MIME type string, such as
+`"image/png"`), which attempt to display `x` using the requested MIME type *only*, throwing
+a `MethodError` if this type is not supported by either the display(s) or by `x`. With these
+variants, one can also supply the "raw" data in the requested MIME type by passing
+`x::AbstractString` (for MIME types with text-based storage, such as text/html or
+application/postscript) or `x::Vector{UInt8}` (for binary MIME types).
+"""
 function display(x)
     for i = length(displays):-1:1
         if xdisplayable(displays[i], x)
@@ -251,6 +285,19 @@ end
 # for Matlab/Pylab-like stateful plotting interfaces, where
 # a plot is created and then modified many times (xlabel, title, etc.).
 
+"""
+    redisplay(x)
+    redisplay(d::Display, x)
+    redisplay(mime, x)
+    redisplay(d::Display, mime, x)
+
+By default, the `redisplay` functions simply call [`display`](@ref).
+However, some display backends may override `redisplay` to modify an existing
+display of `x` (if any).
+Using `redisplay` is also a hint to the backend that `x` may be redisplayed
+several times, and the backend may choose to defer the display until
+(for example) the next interactive prompt.
+"""
 function redisplay(x)
     for i = length(displays):-1:1
         if xdisplayable(displays[i], x)

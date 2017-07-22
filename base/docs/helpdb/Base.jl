@@ -392,21 +392,6 @@ Like [`randsubseq`](@ref), but the results are stored in `S`
 randsubseq!
 
 """
-    redisplay(x)
-    redisplay(d::Display, x)
-    redisplay(mime, x)
-    redisplay(d::Display, mime, x)
-
-By default, the `redisplay` functions simply call [`display`](@ref).
-However, some display backends may override `redisplay` to modify an existing
-display of `x` (if any).
-Using `redisplay` is also a hint to the backend that `x` may be redisplayed
-several times, and the backend may choose to defer the display until
-(for example) the next interactive prompt.
-"""
-redisplay
-
-"""
     /(x, y)
 
 Right division operator: multiplication of `x` by the inverse of `y` on the right. Gives
@@ -420,26 +405,6 @@ Base.:(/)
 Show every part of the representation of a value.
 """
 dump
-
-"""
-    display(x)
-    display(d::Display, x)
-    display(mime, x)
-    display(d::Display, mime, x)
-
-Display `x` using the topmost applicable display in the display stack, typically using the
-richest supported multimedia output for `x`, with plain-text [`STDOUT`](@ref) output as a fallback.
-The `display(d, x)` variant attempts to display `x` on the given display `d` only, throwing
-a `MethodError` if `d` cannot display objects of this type.
-
-There are also two variants with a `mime` argument (a MIME type string, such as
-`"image/png"`), which attempt to display `x` using the requested MIME type *only*, throwing
-a `MethodError` if this type is not supported by either the display(s) or by `x`. With these
-variants, one can also supply the "raw" data in the requested MIME type by passing
-`x::AbstractString` (for MIME types with text-based storage, such as text/html or
-application/postscript) or `x::Vector{UInt8}` (for binary MIME types).
-"""
-display
 
 """
     tuple(xs...)
@@ -864,15 +829,6 @@ unsafe_convert
 Seek a stream to the given position.
 """
 seek
-
-"""
-    popdisplay()
-    popdisplay(d::Display)
-
-Pop the topmost backend off of the display-backend stack, or the topmost copy of `d` in the
-second variant.
-"""
-popdisplay
 
 """
     cglobal((symbol, library) [, type=Void])
@@ -1398,15 +1354,6 @@ In this example, `b` is a runnable `Task` that hasn't started yet.
 Task
 
 """
-    pushdisplay(d::Display)
-
-Pushes a new display `d` on top of the global display-backend stack. Calling `display(x)` or
-`display(mime, x)` will display `x` on the topmost compatible backend in the stack (i.e.,
-the topmost backend that does not throw a `MethodError`).
-"""
-pushdisplay
-
-"""
     StackOverflowError()
 
 The function call grew beyond the size of the call stack. This usually happens when a call
@@ -1448,7 +1395,7 @@ nfields
 """
     show(stream, mime, x)
 
-The `display` functions ultimately call `show` in order to write an object `x` as a
+The [`display`](@ref) functions ultimately call `show` in order to write an object `x` as a
 given `mime` type to a given I/O `stream` (usually a memory buffer), if possible. In order
 to provide a rich multimedia representation of a user-defined type `T`, it is only necessary
 to define a new `show` method for `T`, via: `show(stream, ::MIME"mime", x::T) = ...`,
