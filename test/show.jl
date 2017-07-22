@@ -470,13 +470,6 @@ function f13127()
 end
 @test f13127() == "$(curmod_prefix)f"
 
-let a = Pair(1.0,2.0)
-    @test sprint(show,a) == "1.0=>2.0"
-end
-let a = Pair(Pair(1,2),Pair(3,4))
-    @test sprint(show,a) == "(1=>2)=>(3=>4)"
-end
-
 #test methodshow.jl functions
 @test Base.inbase(Base)
 @test Base.inbase(LinAlg)
@@ -817,4 +810,16 @@ end
     @test sprint(show, Val(Float64))  == "Val{Float64}()"  # Val of a type
     @test sprint(show, Val(:Float64)) == "Val{:Float64}()" # Val of a symbol
     @test sprint(show, Val(true))     == "Val{true}()"     # Val of a value
+end
+
+@testset "printing of Pair's" begin
+    for (p, s) in (Pair(1.0,2.0)                          => "1.0 => 2.0",
+                   Pair(Pair(1,2), Pair(3,4))             => "(1=>2) => (3=>4)",
+                   Pair{Integer,Int64}(1, 2)              => "Pair{Integer,Int64}(1, 2)",
+                   (Pair{Integer,Int64}(1, 2) => 3)       => "(1=>2) => 3",
+                   ((1+2im) => (3+4im))                   => "1+2im => 3+4im",
+                   Pair{Any,Any}(Pair{Real,Int}(1, 2), 3) => "Pair{Any,Any}(1=>2, 3)")
+
+        @test sprint(show, p) == s
+    end
 end

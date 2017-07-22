@@ -455,9 +455,8 @@ let d = Dict(1 => 2, 3 => 45)
     @test contains(result, summary(d))
 
     # Is every pair in the string?
-    # Compare by removing spaces
     for el in d
-        @test contains(replace(result, " ", ""), string(el))
+        @test contains(result, string(el))
     end
 end
 
