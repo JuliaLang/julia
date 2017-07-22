@@ -291,3 +291,7 @@ let
 
     test_15703()
 end
+
+# https://github.com/JuliaLang/julia/issues/21026#issuecomment-317113307
+const VecTuple21026{T} = Tuple{VecElement{T}}
+@test convert(VecTuple21026, (1,)) === (VecElement(1),)
