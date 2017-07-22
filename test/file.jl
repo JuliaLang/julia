@@ -1134,3 +1134,25 @@ end
 test_13559()
 end
 @test_throws ArgumentError mkpath("fakepath",-1)
+
+# issue #22566
+if !Sys.iswindows()
+    function test_22566()
+        fn = tempname()
+        run(`mkfifo $fn`)
+
+        script = "x = open(\"$fn\", \"w\"); close(x)"
+        cmd = `$(Base.julia_cmd()) --startup-file=no -e $script`
+        open(pipeline(cmd, stderr=STDERR))
+
+        r = open(fn, "r")
+        close(r)
+
+        rm(fn)
+    end
+
+    # repeat opening/closing fifo file, ensure no EINTR popped out
+    for i ∈ 1:50
+        test_22566()
+    end
+end  # !Sys.iswindows
