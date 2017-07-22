@@ -1772,6 +1772,13 @@ Base.cluster_cookie("foobar") # custom cookie
 npids = addprocs_with_testenv(WorkerArgTester(`--worker=foobar`, false))
 @test remotecall_fetch(myid, npids[1]) == npids[1]
 
+# Issue # 22865
+# Must be run on a new cluster, i.e., all workers must be in the same state.
+rmprocs(workers())
+p1,p2 = addprocs_with_testenv(2)
+@everywhere f22865(p) = remotecall_fetch(x->x.*2, p, ones(2))
+@test ones(2).*2 == remotecall_fetch(f22865, p1, p2)
+
 # Run topology tests last after removing all workers, since a given
 # cluster at any time only supports a single topology.
 rmprocs(workers())
