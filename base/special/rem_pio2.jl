@@ -229,7 +229,7 @@ end
     rem_pio2(x::Float64)
 
 Return the remainder of `x` modulo π/2 as a double-double pair, along with a `k`
-such that ``k \mod 3 == K \mod 3`` where ``K*π/2 = x - rem``.
+such that ``k \\mod 3 == K \\mod 3`` where ``K*π/2 = x - rem``.
 """
 function rem_pio2(x::Float64)
     # Assumptions: NaN and Infs have been checked
@@ -243,7 +243,7 @@ end
     rem_pio2_kernel(x, xhp)
 
 Return the remainder of `x` modulo π/2 as a double-double pair, along with a `k`
-such that ``k \mod 3 == K \mod 3`` where ``K*π/2 = x - rem``. Note, that it is
+such that ``k \\mod 3 == K \\mod 3`` where ``K*π/2 = x - rem``. Note, that it is
 only meant for use when ``|x|>=π/4``, and that ``π/2`` is always subtracted or
 added for ``π/4<|x|<=π/2`` instead of simply returning `x`.
 """
