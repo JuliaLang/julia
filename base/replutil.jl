@@ -17,12 +17,12 @@ function show(io::IO, ::MIME"text/plain", iter::Union{KeyIterator,ValueIterator}
         cols -= 2 # For prefix "  "
         rows -= 1 # For summary
     else
-        rows = cols = 0
+        rows = cols = typemax(Int)
     end
 
     for (i, v) in enumerate(iter)
         print(io, "\n  ")
-        limit && rows <= i < length(iter) && (print(io, "⋮"); break)
+        i == rows < length(iter) && (print(io, "⋮"); break)
 
         if limit
             str = sprint(0, show, v, env=io)
@@ -70,12 +70,12 @@ function show(io::IO, ::MIME"text/plain", t::Associative{K,V}) where {K,V}
             keylen = max(cld(cols, 3), cols - vallen)
         end
     else
-        rows = cols = 0
+        rows = cols = typemax(Int)
     end
 
     for (i, (k, v)) in enumerate(t)
         print(io, "\n  ")
-        limit && rows <= i < length(t) && (print(io, rpad("⋮", keylen), " => ⋮"); break)
+        i == rows < length(t) && (print(io, rpad("⋮", keylen), " => ⋮"); break)
 
         if limit
             key = rpad(_truncate_at_width_or_chars(ks[i], keylen, "\r\n"), keylen)

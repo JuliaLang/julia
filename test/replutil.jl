@@ -614,34 +614,34 @@ end
     io = IOContext(IOContext(buf, :displaysize => (4, 80)), :limit => true)
     d = Dict(1=>2)
     show(io, MIME"text/plain"(), d)
-    @test String(take!(buf)) == "Dict{Int64,Int64} with 1 entry: …"
+    @test String(take!(buf)) == "Dict{$Int,$Int} with 1 entry: …"
     show(io, MIME"text/plain"(), keys(d))
     @test String(take!(buf)) ==
-        "Base.KeyIterator for a Dict{Int64,Int64} with 1 entry. Keys: …"
+        "Base.KeyIterator for a Dict{$Int,$Int} with 1 entry. Keys: …"
 
     io = IOContext(io, :displaysize => (5, 80))
     show(io, MIME"text/plain"(), d)
-    @test String(take!(buf)) == "Dict{Int64,Int64} with 1 entry:\n  1 => 2"
+    @test String(take!(buf)) == "Dict{$Int,$Int} with 1 entry:\n  1 => 2"
     show(io, MIME"text/plain"(), keys(d))
     @test String(take!(buf)) ==
-        "Base.KeyIterator for a Dict{Int64,Int64} with 1 entry. Keys:\n  1"
+        "Base.KeyIterator for a Dict{$Int,$Int} with 1 entry. Keys:\n  1"
     push!(d, 3=>4)
     show(io, MIME"text/plain"(), d)
-    @test String(take!(buf)) == "Dict{Int64,Int64} with 2 entries:\n  ⋮ => ⋮"
+    @test String(take!(buf)) == "Dict{$Int,$Int} with 2 entries:\n  ⋮ => ⋮"
     show(io, MIME"text/plain"(), keys(d))
     @test String(take!(buf)) ==
-        "Base.KeyIterator for a Dict{Int64,Int64} with 2 entries. Keys:\n  ⋮"
+        "Base.KeyIterator for a Dict{$Int,$Int} with 2 entries. Keys:\n  ⋮"
 
     io = IOContext(io, :displaysize => (6, 80))
     show(io, MIME"text/plain"(), d)
-    @test String(take!(buf)) =="Dict{Int64,Int64} with 2 entries:\n  3 => 4\n  1 => 2"
+    @test String(take!(buf)) =="Dict{$Int,$Int} with 2 entries:\n  3 => 4\n  1 => 2"
     show(io, MIME"text/plain"(), keys(d))
     @test String(take!(buf)) ==
-        "Base.KeyIterator for a Dict{Int64,Int64} with 2 entries. Keys:\n  3\n  1"
+        "Base.KeyIterator for a Dict{$Int,$Int} with 2 entries. Keys:\n  3\n  1"
     push!(d, 5=>6)
     show(io, MIME"text/plain"(), d)
-    @test String(take!(buf)) == "Dict{Int64,Int64} with 3 entries:\n  3 => 4\n  ⋮ => ⋮"
+    @test String(take!(buf)) == "Dict{$Int,$Int} with 3 entries:\n  3 => 4\n  ⋮ => ⋮"
     show(io, MIME"text/plain"(), keys(d))
     @test String(take!(buf)) ==
-        "Base.KeyIterator for a Dict{Int64,Int64} with 3 entries. Keys:\n  3\n  ⋮"
+        "Base.KeyIterator for a Dict{$Int,$Int} with 3 entries. Keys:\n  3\n  ⋮"
 end
