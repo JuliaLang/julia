@@ -172,6 +172,12 @@ Currently, the `@compat` macro supports the following syntaxes:
   `Sys.islinux`, `Sys.isunix`, and `Sys.iswindows`, respectively. These are available in the `Compat.Sys`
   submodule. ([#22182])
 
+* `readstring` is replaced by methods of `read`. ([#22864])
+
+    `read(::IO, ::Type{String})`, `read(::AbstractString, ::Type{String})`,
+    and `read(::Cmd, ::Type{String})` are defined for 0.6 and below.
+
+
 ## New macros
 
 * `@__DIR__` has been added ([#18380])
@@ -185,6 +191,8 @@ Currently, the `@compat` macro supports the following syntaxes:
   Packages are expected to use this until all users of the deprecated
   vectorized function have migrated. These macros will be dropped when the
   support for `0.6` is dropped from `Compat`.
+
+* `@nospecialize` has been added ([#22666]).
 
 ## Other changes
 
@@ -309,3 +317,5 @@ includes this fix. Find the minimum version from there.
 [#22475]: https://github.com/JuliaLang/julia/issues/22475
 [#22633]: https://github.com/JuliaLang/julia/issues/22633
 [#22629]: https://github.com/JuliaLang/julia/issues/22629
+[#22666]: https://github.com/JuliaLang/julia/pull/22666
+[#22864]: https://github.com/JuliaLang/julia/pull/22864

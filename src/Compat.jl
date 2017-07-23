@@ -4,6 +4,18 @@ module Compat
 
 using Base.Meta
 
+@static if !isdefined(Base, Symbol("@nospecialize"))
+    # 0.7
+    macro nospecialize(arg)
+        earg = esc(arg)
+        if isa(arg, Symbol)
+            return :($earg::ANY)
+        end
+        return earg
+    end
+    export @nospecialize
+end
+
 """Get just the function part of a function declaration."""
 withincurly(ex) = isexpr(ex, :curly) ? ex.args[1] : ex
 
@@ -11,118 +23,11 @@ if VERSION < v"0.6.0-dev.2043"
     Base.take!(t::Task) = consume(t)
 end
 
-function rewrite_show(ex)
-    if isexpr(ex, :call)
-        Expr(:call, rewrite_show(ex.args[1]), ex.args[2:end]...)
-    elseif isexpr(ex, :curly)
-        Expr(:curly, rewrite_show(ex.args[1]), ex.args[2:end]...)
-    else
-        :(Base.writemime)
-    end
-end
-
-function rewrite_dict(ex)
-    length(ex.args) == 1 && return ex
-
-    f = ex.args[1]
-    if isexpr(f, :curly)
-        newex = Expr(:typed_dict, :($(f.args[2])=>$(f.args[3])))
-    else
-        newex = Expr(:dict)
-    end
-
-    for i = 2:length(ex.args)
-        pair = ex.args[i]
-        !isexpr(pair, :(=>)) && return ex
-        push!(newex.args, pair)
-    end
-    newex
-end
-
-function rewrite_ordereddict(ex)
-    length(ex.args) == 1 && return ex
-
-    f = ex.args[1]
-    newex = Expr(:call, f, :[])
-
-    for i = 2:length(ex.args)
-        pair = ex.args[i]
-        !isexpr(pair, :(=>)) && return ex
-        push!(newex.args[2].args, Expr(:tuple, pair.args...))
-    end
-
-    newex
-end
-
-# rewrites all subexpressions of the form `a => b` to `(a, b)`
-function rewrite_pairs_to_tuples!(expr::Expr)
-    if expr.head == :(=>)
-        expr.head = :tuple
-    end
-    for subexpr in expr.args
-        isa(subexpr, Expr) && rewrite_pairs_to_tuples!(subexpr)
-    end
-    return expr
-end
-
-function is_quote_symbol(ex::ANY, val::Symbol)
-    if isa(ex, QuoteNode)
-        return (ex::QuoteNode).value === val
-    elseif isa(ex, Expr)
-        ex = ex::Expr
-        return ex.head === :quote && length(ex.args) == 1 && ex.args[1] === val
-    end
-    return false
-end
-
 is_index_style(ex::Expr) = ex == :(Compat.IndexStyle) || ex == :(Base.IndexStyle) ||
     (ex.head == :(.) && (ex.args[1] == :Compat || ex.args[1] == :Base) &&
          ex.args[2] == Expr(:quote, :IndexStyle))
 
 is_index_style(arg) = false
-
-# rewrites accesses to IOContext dicts
-function rewrite_iocontext!(expr::Expr)
-    args = expr.args
-    nargs = length(args)
-    if nargs == 4 && expr.head === :call && args[1] === :get && args[4] === false
-        key = args[3]
-        if is_quote_symbol(key, :limit) || is_quote_symbol(key, :compact)
-            if VERSION >= v"0.5.0-dev+1936" && VERSION < v"0.5.0-dev+4305"
-                args[1] = :(Base.limit_output)
-                deleteat!(args, 3:4)
-            elseif VERSION < v"0.5.0-dev+1936"
-                expr.head = :quote
-                args[1] = false
-                deleteat!(args, 3:4)
-            end
-        elseif is_quote_symbol(key, :multiline)
-            if VERSION < v"0.5.0-dev+4305"
-                expr.head = :quote
-                args[1] = false
-                deleteat!(args, 3:4)
-            end
-        end
-    end
-end
-
-# JuliaLang/julia#10543
-if !isdefined(Base, :tryparse)
-    function tryparse{T}(::Type{T}, args...)
-        try
-            Nullable(Base.parse(T, args...))
-        catch
-            Nullable{T}()
-        end
-    end
-end
-
-import Base.unsafe_convert
-
-function new_style_call_overload(ex::Expr)
-    Base.depwarn("new_style_call_overload is deprecated.", :new_style_call_overload)
-    false
-end
 
 istopsymbol(ex, mod, sym) = ex in (sym, Expr(:(.), mod, Expr(:quote, sym)))
 
@@ -145,18 +50,13 @@ function _compat(ex::Expr)
         end
     elseif ex.head === :curly
         f = ex.args[1]
-        if ex == :(Ptr{Void})
-            # Do not change Ptr{Void} to Ptr{Nothing}: 0.4.0-dev+768
-            return ex
-        elseif VERSION < v"0.6.0-dev.2575" #20414
+        if VERSION < v"0.6.0-dev.2575" #20414
             ex = Expr(:curly, map(a -> isexpr(a, :call, 2) && a.args[1] == :(<:) ?
                                   :($TypeVar($(QuoteNode(gensym(:T))), $(a.args[2]), false)) :
                                   isexpr(a, :call, 2) && a.args[1] == :(>:) ?
                                   :($TypeVar($(QuoteNode(gensym(:T))), $(a.args[2]), $Any, false)) : a,
                                   ex.args)...)
         end
-    elseif ex.head === :macrocall
-        f = ex.args[1]
     elseif ex.head === :quote && isa(ex.args[1], Symbol)
         # Passthrough
         return ex
@@ -240,98 +140,7 @@ macro compat(ex...)
     esc(_compat(ex[1]))
 end
 
-export @compat, @inline, @noinline
-
-import Base.@irrational
-
-import Base: remotecall, remotecall_fetch, remotecall_wait, remote_do
-
-import Base.Filesystem
-
-if !isdefined(Base, :istextmime)
-    export istextmime
-    istextmime(m::@compat(Union{MIME,AbstractString})) = istext(m)
-end
-
-function primarytype(t::ANY)
-    tn = t.name
-    if isdefined(tn, :primary)
-        return tn.primary
-    else
-        return tn.wrapper
-    end
-end
-
-if !isdefined(Base, :Threads)
-    @eval module Threads
-        macro threads(expr)
-            return esc(expr)
-        end
-        threadid() = 1
-        nthreads() = 1
-        export @threads, threadid, nthreads
-    end
-    export Threads
-end
-
-if !isdefined(Base, :normalize)
-    function normalize!(v::AbstractVector, p::Real=2)
-        nrm = norm(v, p)
-        __normalize!(v, nrm)
-    end
-
-    @inline function __normalize!(v::AbstractVector, nrm::AbstractFloat)
-        #The largest positive floating point number whose inverse is less than
-        #infinity
-        δ = inv(prevfloat(typemax(nrm)))
-        if nrm ≥ δ #Safe to multiply with inverse
-            invnrm = inv(nrm)
-            scale!(v, invnrm)
-        else # scale elements to avoid overflow
-            εδ = eps(one(nrm))/δ
-            scale!(v, εδ)
-            scale!(v, inv(nrm*εδ))
-        end
-        v
-    end
-
-    copy_oftype{T,N}(A::AbstractArray{T,N}, ::Type{T}) = copy(A)
-    copy_oftype{T,N,S}(A::AbstractArray{T,N}, ::Type{S}) = convert(AbstractArray{S,N}, A)
-
-    function normalize(v::AbstractVector, p::Real = 2)
-        nrm = norm(v, p)
-        if !isempty(v)
-            vv = copy_oftype(v, typeof(v[1]/nrm))
-            return __normalize!(vv, nrm)
-        else
-            T = typeof(zero(eltype(v))/nrm)
-            return T[]
-        end
-    end
-
-    export normalize, normalize!
-end
-
-import Base.AsyncCondition
-import Base: srand, rand, rand!
-
-
-if !isdefined(Base, :pointer_to_string)
-
-    function pointer_to_string(p::Ptr{UInt8}, len::Integer, own::Bool=false)
-        a = ccall(:jl_ptr_to_array_1d, Vector{UInt8},
-                  (Any, Ptr{UInt8}, Csize_t, Cint), Vector{UInt8}, p, len, own)
-        ccall(:jl_array_to_string, Ref{String}, (Any,), a)
-    end
-
-    pointer_to_string(p::Ptr{UInt8}, own::Bool=false) =
-        pointer_to_string(p, ccall(:strlen, Csize_t, (Cstring,), p), own)
-
-end
-
-import Base.promote_eltype_op
-
-import Base.LinAlg.BLAS.@blasfunc
+export @compat
 
 import Base: redirect_stdin, redirect_stdout, redirect_stderr
 if VERSION < v"0.6.0-dev.374"
@@ -344,7 +153,7 @@ if VERSION < v"0.6.0-dev.374"
     end
 end
 
-if VERSION < v"0.6.0-dev.528"
+@static if VERSION < v"0.6.0-dev.528"
     macro __DIR__()
         Base.source_dir()
     end
@@ -403,7 +212,7 @@ else
 end
 
 # julia#18484
-if VERSION < v"0.6.0-dev.848"
+@static if VERSION < v"0.6.0-dev.848"
     unsafe_get(x::Nullable) = x.value
     unsafe_get(x) = x
     export unsafe_get
@@ -412,6 +221,7 @@ end
 
 # julia#18977
 @static if !isdefined(Base, :xor)
+    # 0.6
     const xor = $
     const ⊻ = xor
     export xor, ⊻
@@ -419,13 +229,15 @@ end
 
 # julia#19246
 @static if !isdefined(Base, :numerator)
+    # 0.6
     const numerator = num
     const denominator = den
     export numerator, denominator
 end
 
 # julia #19950
-if !isdefined(Base, :iszero)
+@static if !isdefined(Base, :iszero)
+    # 0.6
     iszero(x) = x == zero(x)
     iszero(x::Number) = x == 0
     iszero(x::AbstractArray) = all(iszero, x)
@@ -434,6 +246,7 @@ end
 
 # julia　#20407
 @static if !isdefined(Base, :(>:))
+    # 0.6
     const >: = let
         _issupertype(a::ANY, b::ANY) = issubtype(b, a)
     end
@@ -446,7 +259,7 @@ if VERSION < v"0.6.0-dev.1256"
 end
 
 # julia #17155 function composition and negation
-if VERSION < v"0.6.0-dev.1883"
+@static if VERSION < v"0.6.0-dev.1883"
     export ∘
     ∘(f, g) = (x...)->f(g(x...))
     @compat Base.:!(f::Function) = (x...)->!f(x...)
@@ -460,7 +273,7 @@ if VERSION < v"0.6.0-dev.1632"
     include_string(".|(xs...) = broadcast(|, xs...)")
 end
 
-if VERSION < v"0.6.0-dev.2093" # Compat.isapprox to allow for NaNs
+@static if VERSION < v"0.6.0-dev.2093" # Compat.isapprox to allow for NaNs
     using Base.rtoldefault
     function isapprox(x::Number, y::Number; rtol::Real=rtoldefault(x,y), atol::Real=0, nans::Bool=false)
         x == y || (isfinite(x) && isfinite(y) && abs(x-y) <= atol + rtol*max(abs(x), abs(y))) || (nans && isnan(x) && isnan(y))
@@ -507,7 +320,7 @@ else
     using Base: Iterators
 end
 
-if VERSION < v"0.6.0-dev.2840"
+@static if VERSION < v"0.6.0-dev.2840"
     export IndexStyle, IndexLinear, IndexCartesian
     eval(Expr(:typealias, :IndexStyle, :(Base.LinearIndexing)))
     eval(Expr(:typealias, :IndexLinear, :(Base.LinearFast)))
@@ -528,7 +341,7 @@ if VERSION < v"0.6.0-dev.1653"
 end
 
 # https://github.com/JuliaLang/julia/pull/20203
-if VERSION < v"0.6.0-dev.2283"
+@static if VERSION < v"0.6.0-dev.2283"
     # not exported
     function readline(s::IO=STDIN; chomp::Bool=true)
         if chomp
@@ -560,14 +373,15 @@ if VERSION < v"0.6.0-pre.beta.102"
 end
 
 # https://github.com/JuliaLang/julia/pull/19449
-if VERSION < v"0.6.0-dev.1988"
+@static if VERSION < v"0.6.0-dev.1988"
     StringVector(n::Integer) = Vector{UInt8}(n)
 else
     using Base: StringVector
 end
 
 # https://github.com/JuliaLang/julia/pull/22064
-if !isdefined(Base, Symbol("@__MODULE__"))
+@static if !isdefined(Base, Symbol("@__MODULE__"))
+    # 0.7
     export @__MODULE__
     macro __MODULE__()
         return current_module()
@@ -581,14 +395,15 @@ if !isdefined(Base, Symbol("@__MODULE__"))
 end
 
 # https://github.com/JuliaLang/julia/pull/19784
-if isdefined(Base, :invokelatest)
+@static if isdefined(Base, :invokelatest)
+    # 0.6
     import Base.invokelatest
 else
     invokelatest(f, args...) = eval(current_module(), Expr(:call, f, map(QuoteNode, args)...))
 end
 
 # https://github.com/JuliaLang/julia/pull/21257
-if VERSION < v"0.6.0-pre.beta.28"
+@static if VERSION < v"0.6.0-pre.beta.28"
     collect(A) = collect_indices(indices(A), A)
     collect_indices(::Tuple{}, A) = copy!(Array{eltype(A)}(), A)
     collect_indices(indsA::Tuple{Vararg{Base.OneTo}}, A) =
@@ -651,7 +466,7 @@ const macros_have_sourceloc = VERSION >= v"0.7-" && length(:(@test).args) == 2
 # https://github.com/JuliaLang/julia/pull/22182
 module Sys
     const KERNEL = Base.Sys.KERNEL
-    if VERSION < v"0.7.0-DEV.914"
+    @static if VERSION < v"0.7.0-DEV.914"
         isapple(k::Symbol=KERNEL)   = k in (:Darwin, :Apple)
         isbsd(k::Symbol=KERNEL)     = isapple(k) || k in (:FreeBSD, :OpenBSD, :NetBSD, :DragonFly)
         islinux(k::Symbol=KERNEL)   = k == :Linux
@@ -662,9 +477,15 @@ module Sys
     end
 end
 
-if VERSION < v"0.7.0-DEV.892"
+@static if VERSION < v"0.7.0-DEV.892"
     fieldcount(t) = nfields(t)
     export fieldcount
+end
+
+if VERSION < v"0.7.0-DEV.1053"
+    Base.read(obj::IO, ::Type{String}) = readstring(obj)
+    Base.read(obj::AbstractString, ::Type{String}) = readstring(obj)
+    Base.read(obj::Cmd, ::Type{String}) = readstring(obj)
 end
 
 include("deprecated.jl")

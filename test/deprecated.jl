@@ -7,45 +7,10 @@ d[1] = 1
 @test Compat.@Dict(1 => 1) == d
 @test Compat.@Dict(1 => v) == d
 
-@test typeof(@compat(Dict(1 => 1))) == Dict{Int,Int}
-@test @compat(Dict(1 => 1)) == d
-@test @compat(Dict(1 => v)) == d
-
 ad = Dict{Any,Any}()
 ad[1] = 1
 @test Compat.@AnyDict(1 => 1) == ad
 @test Compat.@AnyDict(1 => v) == ad
-
-@test typeof(@compat(Dict{Any,Any}(1 => 1))) == Dict{Any,Any}
-@test @compat(Dict{Any,Any}(1 => 1)) == ad
-@test @compat(Dict{Any,Any}(1 => v)) == ad
-
-td = Dict{Int,Float64}()
-td[1] = 1.0
-
-@test typeof(@compat(Dict{Int,Float64}(1 => 1))) == Dict{Int,Float64}
-@test @compat(Dict{Int,Float64}(1 => 1)) == td
-@test @compat(Dict{Int,Float64}(1 => v)) == td
-
-@test @compat(Dict()) == Dict()
-@test @compat(Dict{Any,Any}()) == Dict{Any,Any}()
-@test @compat(Dict([(1, 1)])) == d
-@test @compat(Dict(:Void => :Nothing)) == Dict([(:Void, :Nothing)])
-
-d2 = Dict{Symbol,Dict{Symbol,Int}}()
-d2[:a] = Dict{Symbol,Int}()
-d2[:a][:b] = 1
-@test @compat(Dict(:a => Dict(:b => 1))) == d2
-
-d = Dict(zip([1, 2], [3, 4]))
-@test d == @compat Dict(1=>3, 2=>4)
-
-@compat function f()
-    a = :a
-    b = Dict(:b => 1)
-    Dict(a => b)
-end
-@test f() == d2
 
 module CartesianTest
     using Base.Cartesian, Compat
@@ -64,12 +29,81 @@ end
 
 @test String == @compat(Union{Compat.UTF8String,Compat.ASCIIString})
 
-let x = fill!(StringVector(5), 0x61)
-    @test pointer(x) == pointer(Compat.UTF8String(x))
-end
-
-foostring(::String) = 1
-@test foostring("hello") == 1
-@test foostring("λ") == 1
 @test isa("hello", Compat.ASCIIString)
 @test isa("λ", Compat.UTF8String)
+
+# @functorize
+function checkfunc(Fun, func)
+    @eval @test @functorize($(func)) === Base.$(func)
+end
+
+for (Fun, func) in [(:IdFun,                   :identity),
+                    (:AbsFun,                  :abs),
+                    (:Abs2Fun,                 :abs2),
+                    (:ExpFun,                  :exp),
+                    (:LogFun,                  :log),
+                    (:ConjFun,                 :conj)]
+    begin
+        if isdefined(Base, func)
+            checkfunc(Fun, func)
+            a = rand(1:10, 10)
+            @eval @test mapreduce($(func), +, $(a)) == mapreduce(@functorize($(func)), +, $(a))
+        end
+    end
+end
+
+dotfunctors = [(:DotAddFun,           :.+),
+               (:DotSubFun,           :.-),
+               (:DotMulFun,           :.*),
+               (:DotRDivFun,          :./),
+               (:DotIDivFun,          Symbol(".÷")),
+               (:DotRemFun,           :.%),
+               (:DotLSFun,            :.<<),
+               (:DotRSFun,            :.>>)]
+
+functors    = [(:AndFun,              :&),
+               (:OrFun,               :|),
+               (:XorFun,              :⊻),
+               (:AddFun,              :+),
+               (:SubFun,              :-),
+               (:MulFun,              :*),
+               (:RDivFun,             :/),
+               (:LDivFun,             :\ ),
+               (:IDivFun,             :div),
+               (:ModFun,              :mod),
+               (:RemFun,              :rem),
+               (:PowFun,              :^),
+               (:MaxFun,              :scalarmax),
+               (:MinFun,              :scalarmin),
+               (:LessFun,             :<),
+               (:MoreFun,             :>),
+               (:ElementwiseMaxFun,   :max),
+               (:ElementwiseMinFun,   :min)]
+
+# since #17623, dot functions are no longer function objects
+append!(functors, dotfunctors)
+
+for (Fun, func) in functors
+    begin
+        if isdefined(Base, func)
+            checkfunc(Fun, func)
+            a = rand(1:10, 10)
+            @eval @test mapreduce(identity, Base.$(func), $(a)) == mapreduce(identity, @functorize($(func)), $(a))
+        end
+    end
+end
+
+@test @functorize(complex) === complex
+@test @functorize(dot) === dot
+let a = rand(1:10, 10)
+    @test mapreduce(identity, dot, a) == mapreduce(identity, @functorize(dot), a)
+end
+
+@test isa(@functorize(centralizedabs2fun)(1), @functorize(centralizedabs2fun))
+@test isa(@functorize(centralizedabs2fun)(1.0), @functorize(centralizedabs2fun))
+let a = rand(1:10, 10)
+    @eval @test mapreduce(x -> abs2(x - 1), +, $(a)) == mapreduce(@functorize(centralizedabs2fun)(1), +, $(a))
+end
+
+@test Compat.promote_eltype_op(@functorize(+), ones(2,2), 1) === Float64
+@test Compat.promote_eltype_op(@functorize(*), ones(Int, 2), zeros(Int16,2)) === Int
