@@ -35,6 +35,7 @@ end
         asym = a.'+a                 # symmetric indefinite
         aherm = a'+a                 # Hermitian indefinite
         apos  = a'*a                 # Hermitian positive definite
+        aposs = apos + apos.'        # Symmetric positive definite
         ε = εa = eps(abs(float(one(eltya))))
 
         x = randn(n)
@@ -238,29 +239,27 @@ end
                 end
 
                 @testset "pow" begin
-                    @test (asym)^2     ≈ Array(Symmetric(asym)^2)
-                    @test (asym)^-2    ≈ Array(Symmetric(asym)^-2)
-                    @test (aherm)^2    ≈ Array(Hermitian(aherm)^2)
-                    @test (aherm)^-2   ≈ Array(Hermitian(aherm)^-2)
-                    if eltya == Int
-                        @test (asym)^2.0   ≈ real(Array(Symmetric(asym)^2.0))
-                        @test (asym)^-2.0  ≈ real(Array(Symmetric(asym)^-2.0))
-                        @test (aherm)^2.0  ≈ real(Array(Hermitian(aherm)^2.0))
-                        @test (aherm)^-2.0 ≈ real(Array(Hermitian(aherm)^-2.0))
-                        @test (apos)^2.0   ≈ real(Array(Hermitian(apos)^2.0))
-                    elseif eltya <: Real
-                        @test (asym)^2.0   ≈ real(Array(Symmetric(asym)^2.0)) rtol=100*n^2*eps(real(eltya))
-                        @test (asym)^-2.0  ≈ real(Array(Symmetric(asym)^-2.0)) rtol=100*n^2*eps(real(eltya))
-                        @test (aherm)^2.0  ≈ real(Array(Hermitian(aherm)^2.0)) rtol=100*n^2*eps(real(eltya))
-                        @test (aherm)^-2.0 ≈ real(Array(Hermitian(aherm)^-2.0)) rtol=100*n^2*eps(real(eltya))
-                        @test (apos)^2.0   ≈ real(Array(Hermitian(apos)^2.0)) rtol=100*n^2*eps(real(eltya))
-                    else
-                        @test (asym)^2.0   ≈ Array(Symmetric(asym)^2.0) rtol=100*n^2*eps(real(eltya))
-                        @test (asym)^-2.0  ≈ Array(Symmetric(asym)^-2.0) rtol=100*n^2*eps(real(eltya))
-                        @test (aherm)^2.0  ≈ Array(Hermitian(aherm)^2.0) rtol=100*n^2*eps(real(eltya))
-                        @test (aherm)^-2.0 ≈ Array(Hermitian(aherm)^-2.0) rtol=100*n^2*eps(real(eltya))
-                        @test (apos)^2.0   ≈ Array(Hermitian(apos)^2.0) rtol=100*n^2*eps(real(eltya))
-                    end
+                    # Integer power
+                    @test (asym)^2   ≈ (Symmetric(asym)^2)::Symmetric
+                    @test (asym)^-2  ≈ (Symmetric(asym)^-2)::Symmetric
+                    @test (aposs)^2  ≈ (Symmetric(aposs)^2)::Symmetric
+                    @test (aherm)^2  ≈ (Hermitian(aherm)^2)::Hermitian
+                    @test (aherm)^-2 ≈ (Hermitian(aherm)^-2)::Hermitian
+                    @test (apos)^2   ≈ (Hermitian(apos)^2)::Hermitian
+                    # integer floating point power
+                    @test (asym)^2.0   ≈ (Symmetric(asym)^2.0)::Symmetric
+                    @test (asym)^-2.0  ≈ (Symmetric(asym)^-2.0)::Symmetric
+                    @test (aposs)^2.0  ≈ (Symmetric(aposs)^2.0)::Symmetric
+                    @test (aherm)^2.0  ≈ (Hermitian(aherm)^2.0)::Hermitian
+                    @test (aherm)^-2.0 ≈ (Hermitian(aherm)^-2.0)::Hermitian
+                    @test (apos)^2.0   ≈ (Hermitian(apos)^2.0)::Hermitian
+                    # non-integer floating point power
+                    @test (asym)^2.5   ≈ (Symmetric(asym)^2.5)::Symmetric
+                    @test (asym)^-2.5  ≈ (Symmetric(asym)^-2.5)::Symmetric
+                    @test (aposs)^2.5  ≈ (Symmetric(aposs)^2.5)::Symmetric
+                    @test (aherm)^2.5  ≈ (Hermitian(aherm)^2.5)#::Hermitian
+                    @test (aherm)^-2.5 ≈ (Hermitian(aherm)^-2.5)#::Hermitian
+                    @test (apos)^2.5   ≈ (Hermitian(apos)^2.5)::Hermitian
                 end
             end
         end

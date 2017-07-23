@@ -531,50 +531,54 @@ function svdvals!(A::RealHermSymComplexHerm)
 end
 
 # Matrix functions
-function ^(A::Symmetric{T}, p::Integer) where T<:Real
+^(A::Symmetric{<:Real}, p::Integer) = sympow(A, p)
+^(A::Symmetric{<:Complex}, p::Integer) = sympow(A, p)
+function sympow(A::Symmetric, p::Integer)
     if p < 0
         return Symmetric(Base.power_by_squaring(inv(A), -p))
     else
         return Symmetric(Base.power_by_squaring(A, p))
     end
 end
-function ^(A::Symmetric{T}, p::Real) where T<:Real
+function ^(A::Symmetric{<:Real}, p::Real)
+    isinteger(p) && return integerpow(A, p)
     F = eigfact(A)
     if all(λ -> λ ≥ 0, F.values)
-        retmat = (F.vectors * Diagonal((F.values).^p)) * F.vectors'
+        return Symmetric((F.vectors * Diagonal((F.values).^p)) * F.vectors')
     else
-        retmat = (F.vectors * Diagonal((complex(F.values)).^p)) * F.vectors'
+        return Symmetric((F.vectors * Diagonal((complex(F.values)).^p)) * F.vectors')
     end
-    return Symmetric(retmat)
+end
+function ^(A::Symmetric{<:Complex}, p::Real)
+    isinteger(p) && return integerpow(A, p)
+    return Symmetric(schurpow(A, p))
 end
 function ^(A::Hermitian, p::Integer)
-    n = checksquare(A)
     if p < 0
         retmat = Base.power_by_squaring(inv(A), -p)
     else
         retmat = Base.power_by_squaring(A, p)
     end
-    for i = 1:n
+    for i = 1:size(A,1)
         retmat[i,i] = real(retmat[i,i])
     end
     return Hermitian(retmat)
 end
 function ^(A::Hermitian{T}, p::Real) where T
-    n = checksquare(A)
+    isinteger(p) && return integerpow(A, p)
     F = eigfact(A)
     if all(λ -> λ ≥ 0, F.values)
         retmat = (F.vectors * Diagonal((F.values).^p)) * F.vectors'
         if T <: Real
             return Hermitian(retmat)
         else
-            for i = 1:n
+            for i = 1:size(A,1)
                 retmat[i,i] = real(retmat[i,i])
             end
             return Hermitian(retmat)
         end
     else
-        retmat = (F.vectors * Diagonal((complex(F.values).^p))) * F.vectors'
-        return retmat
+        return (F.vectors * Diagonal((complex(F.values).^p))) * F.vectors'
     end
 end
 
