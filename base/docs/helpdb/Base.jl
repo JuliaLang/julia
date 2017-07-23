@@ -2085,7 +2085,7 @@ julia> S
 Set([1])
 
 julia> pop!(Dict(1=>2))
-1=>2
+1 => 2
 ```
 """
 pop!(collection)
