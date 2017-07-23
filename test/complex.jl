@@ -948,8 +948,12 @@ end
 
 @testset "Complex Irrationals, issue #21204" begin
     for x in (pi, e, catalan) # No need to test all of them
+        w = complex(x)
+        @test typeof(w) === Complex{Real}
+        @test real(w) === x
+        @test imag(w) === 0
         z = Complex(x, x)
-        @test typeof(z) == Complex{typeof(x)}
+        @test typeof(z) === Complex{typeof(x)}
         @test exp(z) ≈ exp(x) * cis(x)
         @test log1p(z) ≈ log(1 + z)
         @test exp2(z) ≈ exp(z * log(2))
