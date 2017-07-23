@@ -244,12 +244,12 @@ testModPi()
         # negative argument
         n, ret = Base.Math.rem_pio2_kernel(-case)
         @test ret.hi+ret.lo == ieee754_rem_pio2_return[1, i]
-        diff = Float64(mod(big(-case), big(pi)/2))-ret.hi+ret.lo
+        diff = Float64(mod(big(-case), big(pi)/2))-(ret.hi+ret.lo)
         @test abs(diff) in (0.0, 1.5707963267948966, 1.5707963267948968)
         # positive argument
         n, ret = Base.Math.rem_pio2_kernel(case)
         @test ret.hi+ret.lo == ieee754_rem_pio2_return[2, i]
-        diff = Float64(mod(big(case), big(pi)/2))-ret.hi+ret.lo
+        diff = Float64(mod(big(case), big(pi)/2))-(ret.hi+ret.lo)
         @test abs(diff) in (0.0, 1.5707963267948966, 1.5707963267948968)
     end
 end
@@ -259,6 +259,6 @@ end
         bigrem = rem(bignum, big(pi)/2, RoundDown)
         fnum = Float64(bignum)
         n, ret = Base.Math.rem_pio2_kernel(fnum)
-        @test mod2pi(fnum) == ret.hi+ret.lo
+        @test mod2pi(fnum) == (ret.hi+ret.lo)
     end
 end
