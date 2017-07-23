@@ -1846,7 +1846,7 @@ end
 
 @testset "optimizing sparse covariance" begin
     n = 10
-    p = 50
+    p = 5
     srand(1)
     x_sparse = sprand(n, p, .50)
     x_dense = convert(Matrix{Float64}, x_sparse)
@@ -1923,9 +1923,9 @@ end
 
     cov_sparse = cov(x_sparse, 2, corrected=true)
     cov_dense = cov(x_dense, 2, true)
-    @test cov_sparse[2:end, 2:end] ≈ cov_dense[2:end, 2:end]
-    @test isequal(cov_sparse[1:end, 1], cov_dense[1:end, 1])
-    @test isequal(cov_sparse[1, 1:end], cov_dense[1, 1:end])
+    @test cov_sparse[3:end, 3:end] ≈ cov_dense[3:end, 3:end]
+    @test isequal(cov_sparse[1:end, 1:2], cov_dense[1:end, 1:2])
+    @test isequal(cov_sparse[1:2, 1:end], cov_dense[1:2, 1:end])
 
     cov_sparse = cov(x_sparse, 1, corrected=false)
     cov_dense = cov(x_dense, 1, false)
@@ -1935,7 +1935,7 @@ end
 
     cov_sparse = cov(x_sparse, 2, corrected=false)
     cov_dense = cov(x_dense, 2, false)
-    @test cov_sparse[2:end, 2:end] ≈ cov_dense[2:end, 2:end]
-    @test isequal(cov_sparse[1:end, 1], cov_dense[1:end, 1])
-    @test isequal(cov_sparse[1, 1:end], cov_dense[1, 1:end])
+    @test cov_sparse[3:end, 3:end] ≈ cov_dense[3:end, 3:end]
+    @test isequal(cov_sparse[1:end, 1:2], cov_dense[1:end, 1:2])
+    @test isequal(cov_sparse[1:2, 1:end], cov_dense[1:2, 1:end])
 end
