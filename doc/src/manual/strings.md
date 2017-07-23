@@ -782,7 +782,7 @@ lets you use string notation to express literal byte arrays -- i.e. arrays of
 [`UInt8`](@ref) values. The rules for byte array literals are the following:
 
   * ASCII characters and ASCII escapes produce a single byte.
-  * `\x` and octal escape sequences produce the *byte* corresponding to the escape value.
+  * `\x` and hexadecimal escape sequence produce the *byte* corresponding to the escape value.
   * Unicode escape sequences produce a sequence of bytes encoding that code point in UTF-8.
 
 There is some overlap between these rules since the behavior of `\x` and octal escapes less than
