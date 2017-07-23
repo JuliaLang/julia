@@ -5075,3 +5075,8 @@ f_isdefined_cl_6() = (local x; () -> @isdefined x)
 @test !f_isdefined_cl_4()
 @test f_isdefined_cl_5()()
 @test !f_isdefined_cl_6()()
+
+# issue #22291
+wrap22291(ind) = (ind...)
+@test @inferred(wrap22291(1)) == (1,)
+@test @inferred(wrap22291((1, 2))) == (1, 2)

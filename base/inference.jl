@@ -1882,6 +1882,8 @@ function precise_container_type(@nospecialize(arg), @nospecialize(typ), vtypes::
         end
     elseif tti0 <: Array
         return Any[Vararg{eltype(tti0)}]
+    elseif tti0 <: corenumtype
+        return Any[tti0]
     else
         return Any[abstract_iteration(typ, vtypes, sv)]
     end
