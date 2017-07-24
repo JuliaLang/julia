@@ -22,17 +22,17 @@ to `true`, it will return the corresponding error code.
 2:  `length(c.slotnames) != nslots`
 3:  `c.inferred && length(c.slottypes) != nslots`
 4:  `c.inferred && length(c.ssavaluetypes) != nssavals`
-5:  `!(c.inferred) && c.slottypes != nothing`
-6:  `!(c.inferred) && c.ssavaluetypes != nssavals`
-7:  `!(in(x.head, Base.Core.VALID_EXPR_HEADS))` for any subexpression `x`
-8:  `length(c.slotnames) < 1 || c.slotnames[1] != Symbol("#self#")`
+5:  `!c.inferred && c.slottypes != nothing`
+6:  `!c.inferred && c.ssavaluetypes != nssavals`
+7:  `!in(x.head, Base.Core.VALID_EXPR_HEADS)` for any subexpression `x`
+8:  `length(c.slotnames) < 1`
 9:  `!(isa(x, SSAValue) || isa(x, SlotNumber) || isa(x, GlobalRef))` where `x` is an assignment LHS
 10: `isa(x, Expr) || x.head == :gotoifnot` where `x` is a function call argument
 11:  A slot has an invalid slotflag setting for bit flag 2 (assignment property)
 """
 function validate_code_info(c::CodeInfo)
-    !(c.inferred) && (c.slottypes != nothing) && return 5
-    (length(c.slotnames) < 1 || c.slotnames[1] != Symbol("#self#")) && return 8
+    !c.inferred && (c.slottypes != nothing) && return 5
+    length(c.slotnames) < 1 && return 8
     slotnums = SlotNumber[]
     ssavals = SSAValue[]
     error_code = 0
@@ -56,16 +56,12 @@ function validate_code_info(c::CodeInfo)
         return false
     end
     error_code != 0 && return error_code
-    in(SlotNumber(1), slotnums) || push!(slotnums, SlotNumber(1))
-    nslots = length(slotnums)
-    nssavals = length(ssavals)
-    length(c.slotflags) != nslots && return 1
-    length(c.slotnames) != nslots && return 2
+    length(c.slotnames) != length(c.slotflags) && return 1
     if c.inferred
-        length(c.slottypes) != nslots  && return 3
-        length(c.ssavaluetypes) != nssavals && return 4
+        length(c.slottypes) != length(c.slotnames)  && return 3
+        length(c.ssavaluetypes) != length(ssavals) && return 4
     else
-        c.ssavaluetypes != nssavals && return 6
+        c.ssavaluetypes != length(ssavals) && return 6
     end
     error_code = 0
     walkast(c.code) do x
@@ -93,6 +89,9 @@ end
 
 is_valid_lhs(lhs) = isa(lhs, SlotNumber) || isa(lhs, SSAValue) || isa(lhs, GlobalRef)
 
-is_valid_call_arg(arg) = !isa(arg, Expr) || arg.head != :gotoifnot
+function is_valid_call_arg(arg)
+    isa(arg, Expr) && return !in(arg.head, (:gotoifnot, :new, :line, :const, :meta))
+    return !isa(arg, GotoNode) && !isa(arg, LabelNode) && !isa(arg, LineNumberNode)
+end
 
 is_flag_set(byte::UInt8, flag::UInt8) = (byte & flag) == flag
