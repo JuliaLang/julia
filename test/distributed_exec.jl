@@ -384,12 +384,8 @@ Atrue = reshape(1:30, sz)
 S = @inferred(SharedArray{Int,2}(fn, sz))
 @test S == Atrue
 @test length(procs(S)) > 1
-@sync begin
-    for p in procs(S)
-        @async remotecall_wait(p, S) do D
-            fill!(D.loc_subarr_1d, myid())
-        end
-    end
+@everywhere procs(S) begin
+    $fill!($S.loc_subarr_1d, $myid())
 end
 check_pids_all(S)
 
@@ -477,9 +473,7 @@ remotecall_fetch(setindex!, pids_d[findfirst(id->(id != myid()), pids_d)], d, 1.
 @test s != d
 copy!(d, s)
 @everywhere setid!(A) = A[localindexes(A)] = myid()
-@sync for p in procs(ds)
-    @async remotecall_wait(setid!, p, ds)
-end
+@everywhere procs(ds) setid!($ds)
 @test d == s
 @test ds != s
 @test first(ds) == first(procs(ds))
@@ -1244,6 +1238,50 @@ end
 LocalBar.bar()
 for p in procs()
     @test p == remotecall_fetch(new_bar, p)
+end
+
+# @everywhere (remotecall_eval) behaviors (#22589)
+let (p, p2) = filter!(p -> p != myid(), procs())
+    @test (myid() + 1) == @everywhere myid() (myid() + 1)
+    @test (p * 2) == @everywhere p (myid() * 2)
+    @test 1 == @everywhere p defined_on_p = 1
+    @test !@isdefined defined_on_p
+    @test !isdefined(Main, :defined_on_p)
+    @test remotecall_fetch(isdefined, p, Main, :defined_on_p)
+    @test !remotecall_fetch(isdefined, p2, Main, :defined_on_p)
+    @test nothing === @everywhere [p, p] defined_on_p += 1
+    @test 3 === @everywhere p defined_on_p
+    let ref = Ref(0)
+        @test nothing ===
+            @everywhere [myid(), p, myid(), myid(), p] begin
+                Test.@test Main === @__MODULE__
+                $ref[] += 1
+            end
+        @test ref[] == 3
+    end
+    function test_throw_on(procs, msg)
+        try
+            @everywhere procs error($msg)
+            error("test failed to throw")
+        catch excpt
+            if procs isa Int
+                ex = Any[excpt]
+            else
+                ex = Any[ (ex::CapturedException).ex for ex in (excpt::CompositeException).exceptions ]
+            end
+            for (p, ex) in zip(procs, ex)
+                if procs isa Int || p != myid()
+                    @test (ex::RemoteException).pid == p
+                    ex = ((ex::RemoteException).captured::CapturedException).ex
+                end
+                @test (ex::ErrorException).msg == msg
+            end
+        end
+    end
+    test_throw_on(p, "everywhere on p")
+    test_throw_on(myid(), "everywhere on myid")
+    test_throw_on([p, myid()], "everywhere on myid and p")
+    test_throw_on([p2, p], "everywhere on p and p2")
 end
 
 # Test addprocs enable_threaded_blas parameter
