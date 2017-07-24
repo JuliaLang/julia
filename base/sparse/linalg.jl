@@ -775,7 +775,7 @@ function kron(a::SparseMatrixCSC{Tv,Ti}, b::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti
             stopB = colptrB[i+1]-1
             lB = stopB - startB + 1
 
-            ptr_range = (1:lB) + (colptr[col]-1)
+            ptr_range = (1:lB) .+ (colptr[col]-1)
 
             colptr[col+1] = colptr[col] + lA * lB
             col += 1
@@ -787,7 +787,7 @@ function kron(a::SparseMatrixCSC{Tv,Ti}, b::SparseMatrixCSC{Tv,Ti}) where {Tv,Ti
                     nzval[ptr] = nzvalA[ptrA] * nzvalB[ptrB]
                     ptrB += 1
                 end
-                ptr_range += lB
+                ptr_range = ptr_range .+ lB
             end
         end
     end

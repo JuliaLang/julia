@@ -259,7 +259,7 @@ end
 end
 
 @testset "isposdef" begin
-    @test isposdef(Diagonal(1.0 + rand(n)))
+    @test isposdef(Diagonal(1.0 .+ rand(n)))
     @test !isposdef(Diagonal(-1.0 * rand(n)))
 end
 

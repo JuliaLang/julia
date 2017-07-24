@@ -811,7 +811,7 @@ end
 function get_perm(F::Factor)
     s = unsafe_load(pointer(F))
     p = unsafe_wrap(Array, s.Perm, s.n, false)
-    p + 1
+    p .+ 1
 end
 get_perm(FC::FactorComponent) = get_perm(Factor(FC))
 

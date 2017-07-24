@@ -216,8 +216,8 @@ let A = [sqrt(i)+j for i = 1:3, j=1:4]
     @test atan2.(log.(A), sum(A,1)) == broadcast(atan2, broadcast(log, A), sum(A, 1))
 end
 let x = sin.(1:10)
-    @test atan2.((x->x+1).(x), (x->x+2).(x)) == broadcast(atan2, x+1, x+2) == broadcast(atan2, x.+1, x.+2)
-    @test sin.(atan2.([x+1,x+2]...)) == sin.(atan2.(x+1,x+2)) == @. sin(atan2(x+1,x+2))
+    @test atan2.((x->x+1).(x), (x->x+2).(x)) == broadcast(atan2, x.+1, x.+2)
+    @test sin.(atan2.([x.+1,x.+2]...)) == sin.(atan2.(x.+1 ,x.+2)) == @. sin(atan2(x+1,x+2))
     @test sin.(atan2.(x, 3.7)) == broadcast(x -> sin(atan2(x,3.7)), x)
     @test atan2.(x, 3.7) == broadcast(x -> atan2(x,3.7), x) == broadcast(atan2, x, 3.7)
 end
@@ -411,7 +411,6 @@ end
 @test (-).(C_NULL, C_NULL)::UInt == 0
 @test (+).(1, Ref(2)) == fill(3)
 @test (+).(Ref(1), Ref(2)) == fill(3)
-@test (+).([[0,2], [1,3]], [1,-1]) == [[1,3], [0,2]]
 @test (+).([[0,2], [1,3]], Ref{Vector{Int}}([1,-1])) == [[1,1], [2,2]]
 
 # Check that broadcast!(f, A) populates A via independent calls to f (#12277, #19722),

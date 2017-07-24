@@ -33,7 +33,7 @@ for region in Any[
     # With init=false
     r2 = similar(r)
     fill!(r, 1)
-    @test sum!(r, Areduc, init=false) ≈ safe_sum(Areduc, region)+1
+    @test sum!(r, Areduc, init=false) ≈ safe_sum(Areduc, region) .+ 1
     fill!(r, 2.2)
     @test prod!(r, Areduc, init=false) ≈ safe_prod(Areduc, region)*2.2
     fill!(r, 1.8)
@@ -41,9 +41,9 @@ for region in Any[
     fill!(r, -0.2)
     @test minimum!(r, Areduc, init=false) ≈ fill!(r2, -0.2)
     fill!(r, 8.1)
-    @test sum!(abs, r, Areduc, init=false) ≈ safe_sumabs(Areduc, region)+8.1
+    @test sum!(abs, r, Areduc, init=false) ≈ safe_sumabs(Areduc, region) .+ 8.1
     fill!(r, 8.1)
-    @test sum!(abs2, r, Areduc, init=false) ≈ safe_sumabs2(Areduc, region)+8.1
+    @test sum!(abs2, r, Areduc, init=false) ≈ safe_sumabs2(Areduc, region) .+ 8.1
     fill!(r, 1.5)
     @test maximum!(abs, r, Areduc, init=false) ≈ fill!(r2, 1.5)
     fill!(r, -1.5)
@@ -71,11 +71,11 @@ r = fill(NaN, map(length, Base.reduced_indices(indices(Breduc), 1)))
 @test sum(abs2, Breduc, 1) ≈ safe_sumabs2(Breduc, 1)
 
 fill!(r, 4.2)
-@test sum!(r, Breduc, init=false) ≈ safe_sum(Breduc, 1)+4.2
+@test sum!(r, Breduc, init=false) ≈ safe_sum(Breduc, 1) .+ 4.2
 fill!(r, -6.3)
-@test sum!(abs, r, Breduc, init=false) ≈ safe_sumabs(Breduc, 1)-6.3
+@test sum!(abs, r, Breduc, init=false) ≈ safe_sumabs(Breduc, 1) .- 6.3
 fill!(r, -1.1)
-@test sum!(abs2, r, Breduc, init=false) ≈ safe_sumabs2(Breduc, 1)-1.1
+@test sum!(abs2, r, Breduc, init=false) ≈ safe_sumabs2(Breduc, 1) .- 1.1
 
 # Small arrays with init=false
 A = reshape(1:15, 3, 5)

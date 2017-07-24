@@ -614,7 +614,7 @@ function shell_completions(string, pos)
         r = first(last_parse):prevind(last_parse, last(last_parse))
         partial = scs[r]
         ret, range = completions(partial, endof(partial))
-        range += first(r) - 1
+        range = range .+ (first(r) - 1)
         return ret, range, true
     end
     return String[], 0:-1, false

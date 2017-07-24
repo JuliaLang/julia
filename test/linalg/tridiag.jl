@@ -28,7 +28,7 @@ let n = 12 #Size of matrix problem to test
             b = rand(1:100, n)
             c = rand(1:100, n-1)
         else
-            d = convert(Vector{elty}, 1. + randn(n))
+            d = convert(Vector{elty}, 1 .+ randn(n))
             dl = convert(Vector{elty}, randn(n - 1))
             du = convert(Vector{elty}, randn(n - 1))
             v = convert(Vector{elty}, randn(n))

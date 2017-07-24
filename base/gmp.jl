@@ -613,7 +613,7 @@ function base(b::Integer, n::BigInt, pad::Integer=1)
     nd  = max(nd1, pad)
     sv  = Base.StringVector(nd + isneg(n))
     MPZ.get_str!(pointer(sv) + nd - nd1, b, n)
-    @inbounds for i = (1:nd-nd1) + isneg(n)
+    @inbounds for i = (1:nd-nd1) .+ isneg(n)
         sv[i] = '0' % UInt8
     end
     isneg(n) && (sv[1] = '-' % UInt8)

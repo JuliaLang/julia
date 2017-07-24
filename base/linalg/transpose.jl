@@ -63,8 +63,8 @@ end
 function transposeblock!(f, B::AbstractMatrix, A::AbstractMatrix, m::Int, n::Int, offseti::Int, offsetj::Int)
     if m*n<=transposebaselength
         @inbounds begin
-            for j = offsetj+(1:n)
-                for i = offseti+(1:m)
+            for j = offsetj .+ (1:n)
+                for i = offseti .+ (1:m)
                     B[j,i] = f(A[i,j])
                 end
             end

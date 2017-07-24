@@ -120,10 +120,10 @@ function kron(a::BitMatrix, b::BitMatrix)
     R = falses(mA*mB, nA*nB)
 
     for i = 1:mA
-        ri = (1:mB)+(i-1)*mB
+        ri = (1:mB) .+ ((i-1)*mB)
         for j = 1:nA
             if a[i,j]
-                rj = (1:nB)+(j-1)*nB
+                rj = (1:nB) .+ ((j-1)*nB)
                 R[ri,rj] = b
             end
         end

@@ -8,13 +8,13 @@ types = Any[
 ]
 vals = vcat(
     typemin(Int64),
-    -Int64(maxintfloat(Float64))+Int64[-4:1;],
+    -Int64(maxintfloat(Float64)) .+ Int64[-4:1;],
     typemin(Int32),
-    -Integer(maxintfloat(Float32))+(-4:1),
+    -Integer(maxintfloat(Float32)) .+ (-4:1),
     -2:2,
-    Integer(maxintfloat(Float32))+(-1:4),
+    Integer(maxintfloat(Float32)) .+ (-1:4),
     typemax(Int32),
-    Int64(maxintfloat(Float64))+Int64[-1:4;],
+    Int64(maxintfloat(Float64)) .+ Int64[-1:4;],
     typemax(Int64),
 )
 

@@ -321,7 +321,7 @@ A_mul_Bt(A::AbstractTriangular, B::RealHermSymComplexSym) = A*B
 Ac_mul_B(A::RealHermSymComplexHerm, B::AbstractTriangular) = A*B
 A_mul_Bc(A::AbstractTriangular, B::RealHermSymComplexHerm) = A*B
 
-for T in (:Symmetric, :Hermitian), op in (:+, :-, :*, :/)
+for T in (:Symmetric, :Hermitian), op in (:*, :/)
     # Deal with an ambiguous case
     @eval ($op)(A::$T, x::Bool) = ($T)(($op)(A.data, x), Symbol(A.uplo))
     S = T == :Hermitian ? :Real : :Number
