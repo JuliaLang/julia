@@ -282,16 +282,14 @@ has_tight_type(p::Pair) =
     typeof(p.first)  == typeof(p).parameters[1] &&
     typeof(p.second) == typeof(p).parameters[2]
 
-print_with_arrow(p::Pair, compact::Bool) = has_tight_type(p) || compact
-
 isdelimited(io::IO, x) = true
 
-isdelimited(io::IO, p::Pair) = !print_with_arrow(p, get(io, :compact, false))
+isdelimited(io::IO, p::Pair) = !has_tight_type(p)
 
 function show(io::IO, p::Pair)
     compact = get(io, :compact, false)
     iocompact = IOContext(io, :compact => get(io, :compact, true))
-    print_with_arrow(p, compact) || return show_default(iocompact, p)
+    has_tight_type(p) || return show_default(iocompact, p)
 
     isdelimited(iocompact, p.first) || print(io, "(")
     show(iocompact, p.first)

@@ -816,9 +816,9 @@ end
     for (p, s) in (Pair(1.0,2.0)                          => "1.0 => 2.0",
                    Pair(Pair(1,2), Pair(3,4))             => "(1=>2) => (3=>4)",
                    Pair{Integer,Int64}(1, 2)              => "Pair{Integer,Int64}(1, 2)",
-                   (Pair{Integer,Int64}(1, 2) => 3)       => "(1=>2) => 3",
+                   (Pair{Integer,Int64}(1, 2) => 3)       => "Pair{Integer,Int64}(1, 2) => 3",
                    ((1+2im) => (3+4im))                   => "1+2im => 3+4im",
-                   Pair{Any,Any}(Pair{Real,Int}(1, 2), 3) => "Pair{Any,Any}(1=>2, 3)")
+                   (1 => 2 => Pair{Real,Int64}(3, 4))     => "1 => (2=>Pair{Real,Int64}(3, 4))")
 
         @test sprint(show, p) == s
     end
