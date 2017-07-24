@@ -4997,6 +4997,20 @@ let a_foo = Foo22256(Bar22256{true}(2))
     @test a_foo.bar.inner == 3
 end
 
+# macro hygiene scope (#22307)
+macro a22307()
+    return esc(:a22307)
+end
+macro b22307()
+    return :(@a22307)
+end
+function c22307()
+    a22307 = 1
+    return @b22307
+end
+a22307 = 2
+@test c22307() == 2
+
 # issue #22026
 module M22026
 
