@@ -26,6 +26,9 @@ Language changes
   * The parsing of `1<<2*3` as `1<<(2*3)` is deprecated, and will change to
     `(1<<2)*3` in a future version ([#13079]).
 
+  * `{ }` expressions now use `braces` and `bracescat` as expression heads instead
+    of `cell1d` and `cell2d`, and parse similarly to `vect` and `vcat` ([#8470]).
+
 Breaking changes
 ----------------
 

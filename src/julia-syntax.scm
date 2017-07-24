@@ -2181,8 +2181,8 @@
      (syntax-deprecation #f "Expr(:(=>), ...)" "Expr(:call, :(=>), ...)")
      `(call => ,(expand-forms (cadr e)) ,(expand-forms (caddr e))))
 
-   'cell1d (lambda (e) (error "{ } vector syntax is discontinued"))
-   'cell2d (lambda (e) (error "{ } matrix syntax is discontinued"))
+   'braces    (lambda (e) (error "{ } vector syntax is discontinued"))
+   'bracescat (lambda (e) (error "{ } matrix syntax is discontinued"))
 
    'string
    (lambda (e) (expand-forms `(call (top string) ,@(cdr e))))

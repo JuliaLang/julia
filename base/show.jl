@@ -473,7 +473,8 @@ const all_ops = union(quoted_syms, uni_ops, expr_infix_any)
 const expr_calls  = Dict(:call => ('(',')'), :calldecl => ('(',')'),
                          :ref => ('[',']'), :curly => ('{','}'), :(.) => ('(',')'))
 const expr_parens = Dict(:tuple=>('(',')'), :vcat=>('[',']'),
-                         :hcat =>('[',']'), :row =>('[',']'), :vect=>('[',']'))
+                         :hcat =>('[',']'), :row =>('[',']'), :vect=>('[',']'),
+                         :braces=>('{','}'), :bracescat=>('{','}'))
 
 ## AST decoding helpers ##
 
@@ -751,7 +752,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     # list (i.e. "(1, 2, 3)" or "[1, 2, 3]")
     elseif haskey(expr_parens, head)               # :tuple/:vcat
         op, cl = expr_parens[head]
-        if head === :vcat
+        if head === :vcat || head === :bracescat
             sep = "; "
         elseif head === :hcat || head === :row
             sep = " "
