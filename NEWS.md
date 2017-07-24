@@ -231,6 +231,9 @@ Deprecated or removed
   * The function `showall` is deprecated. Showing entire values is the default, unless an
     `IOContext` specifying `:limit=>true` is in use ([#22847]).
 
+  * Calling `write` on non-isbits arrays is deprecated in favor of explicit loops or
+    `serialize` ([#6466]).
+
 
 Julia v0.6.0 Release Notes
 ==========================

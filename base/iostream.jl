@@ -169,21 +169,6 @@ function unsafe_write(s::IOStream, p::Ptr{UInt8}, nb::UInt)
     return Int(ccall(:ios_write, Csize_t, (Ptr{Void}, Ptr{Void}, Csize_t), s.ios, p, nb))
 end
 
-function write(s::IOStream, a::SubArray{T,N,<:Array}) where {T,N}
-    if !isbits(T) || stride(a,1)!=1
-        return invoke(write, Tuple{Any, AbstractArray}, s, a)
-    end
-    colsz = size(a,1)*sizeof(T)
-    if N<=1
-        return unsafe_write(s, pointer(a, 1), colsz)
-    else
-        for idxs in CartesianRange((1, size(a)[2:end]...))
-            unsafe_write(s, pointer(a, idxs.I), colsz)
-        end
-        return colsz*trailingsize(a,2)
-    end
-end
-
 # num bytes available without blocking
 nb_available(s::IOStream) = ccall(:jl_nb_available, Int32, (Ptr{Void},), s.ios)
 
