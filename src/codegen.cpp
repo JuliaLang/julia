@@ -2867,7 +2867,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             fieldidx = jl_field_index(stt, sym, 0);
         }
         else if (fld.constant && fld.typ == (jl_value_t*)jl_long_type) {
-            fieldidx = jl_unbox_long(fld.typ) - 1;
+            fieldidx = jl_unbox_long(fld.constant) - 1;
         }
         else {
             return false;
