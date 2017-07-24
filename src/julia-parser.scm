@@ -144,7 +144,8 @@
 (define range-colon-enabled #t)
 ; in space-sensitive mode "x -y" is 2 expressions, not a subtraction
 (define space-sensitive #f)
-(define inside-vec #f)
+; seeing `for` stops parsing macro arguments and makes a generator
+(define for-generator #f)
 ; treat 'end' like a normal symbol instead of a reserved word
 (define end-symbol #f)
 ; treat newline like ordinary whitespace instead of as a potential separator
@@ -164,7 +165,7 @@
   `(with-bindings ((range-colon-enabled #t)
                    (space-sensitive #f)
                    (where-enabled #t)
-                   (inside-vec #f)
+                   (for-generator #f)
                    (end-symbol #f)
                    (whitespace-newline #f))
                   ,@body))
@@ -175,12 +176,6 @@
 
 (define-macro (with-space-sensitive . body)
   `(with-bindings ((space-sensitive #t)
-                   (whitespace-newline #f))
-                  ,@body))
-
-(define-macro (with-inside-vec . body)
-  `(with-bindings ((space-sensitive #t)
-                   (inside-vec #t)
                    (whitespace-newline #f))
                   ,@body))
 
@@ -1129,7 +1124,7 @@
             ((#\( )
              (if (ts:space? s) (disallowed-space ex t))
              (take-token s)
-             (let ((c (let ((al (parse-arglist s #\) )))
+             (let ((c (let ((al (parse-call-arglist s #\) )))
                         (receive
                          (params args) (separate (lambda (x)
                                                    (and (pair? x)
@@ -1172,7 +1167,7 @@
               (cond ((eqv? (peek-token s) #\()
                      (begin
                        (take-token s)
-                       `(|.| ,ex (tuple ,@(parse-arglist s #\) )))))
+                       `(|.| ,ex (tuple ,@(parse-call-arglist s #\) )))))
                     ((eqv? (peek-token s) ':)
                      (begin
                        (take-token s)
@@ -1195,7 +1190,7 @@
             ((#\{ )
              (if (ts:space? s) (disallowed-space ex t))
              (take-token s)
-             (loop (list* 'curly ex (parse-arglist s #\} ))))
+             (loop (list* 'curly ex (parse-call-arglist s #\} ))))
             ((#\" #\`)
              (if (and (or (symbol? ex) (valid-modref? ex))
                       (not (operator? ex))
@@ -1629,7 +1624,7 @@
    (let loop ((exprs '()))
      (if (or (closing-token? (peek-token s))
              (newline? (peek-token s))
-             (and inside-vec (eq? (peek-token s) 'for)))
+             (and for-generator (eq? (peek-token s) 'for)))
          (reverse! exprs)
          (let ((e (parse-eq s)))
            (case (peek-token s)
@@ -1645,13 +1640,20 @@
                        x))
        lst))
 
+;; like parse-arglist, but with `for` parsed as a generator
+(define (parse-call-arglist s closer)
+  (with-bindings ((for-generator #t))
+   (parse-arglist s closer)))
+
 ;; handle function call argument list, or any comma-delimited list.
 ;; . an extra comma at the end is allowed
 ;; . expressions after a ; are enclosed in (parameters ...)
 ;; . an expression followed by ... becomes (... x)
 (define (parse-arglist s closer)
-(with-normal-ops
- (with-whitespace-newline
+(with-bindings ((range-colon-enabled #t)
+                (space-sensitive #f)
+                (where-enabled #t)
+                (whitespace-newline #t))
   (let loop ((lst '()))
     (let ((t (require-token s)))
       (if (eqv? t closer)
@@ -1689,7 +1691,7 @@
                        (error (string "unexpected \"" c "\" in argument list")))
                       (else
                        (error (string "missing comma or " closer
-                                      " in argument list"))))))))))))
+                                      " in argument list")))))))))))
 
 (define (parse-vect s first closer)
   (let loop ((lst '())
@@ -1709,7 +1711,7 @@
             ((#\;)
              (if (eqv? (require-token s) closer)
                  (loop lst nxt)
-                 (let ((params (parse-arglist s closer)))
+                 (let ((params (parse-call-arglist s closer)))
                    `(vcat ,@params ,@(reverse lst) ,nxt))))
             ((#\] #\})
              (error (string "unexpected \"" t "\"")))
@@ -1792,8 +1794,11 @@
       (error (string "expected space before \"" t "\""))))
 
 (define (parse-cat s closer last-end-symbol)
-  (with-normal-ops
-   (with-inside-vec
+  (with-bindings ((range-colon-enabled #t)
+                  (space-sensitive #t)
+                  (where-enabled #t)
+                  (whitespace-newline #f)
+                  (for-generator #t))
     (if (eqv? (require-token s) closer)
         (begin (take-token s)
                '())
@@ -1811,7 +1816,7 @@
                      (parse-vect s first closer)
                      (parse-matrix s first closer #t last-end-symbol)))
                 (else
-                 (parse-matrix s first closer #f last-end-symbol))))))))
+                 (parse-matrix s first closer #f last-end-symbol)))))))
 
 (define (kw-to-= e) (if (kwarg? e) (cons '= (cdr e)) e))
 (define (=-to-kw e) (if (assignment? e) (cons 'kw (cdr e)) e))
