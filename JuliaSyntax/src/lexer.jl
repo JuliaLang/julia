@@ -25,6 +25,7 @@ iswhitespace(c::Char) = Base.UTF8proc.isspace(c)
 
 type Lexer{IO_t <: IO}
     io::IO_t
+    io_startpos::Int
 
     token_start_row::Int
     token_start_col::Int
@@ -39,7 +40,7 @@ type Lexer{IO_t <: IO}
     last_token::Tokens.Kind
 end
 
-Lexer(io) = Lexer(io, 1, 1, -1, 0, 1, 1, 1, Tokens.ERROR)
+Lexer(io) = Lexer(io, position(io), 1, 1, -1, 0, 1, 1, position(io), Tokens.ERROR)
 Lexer(str::AbstractString) = Lexer(IOBuffer(str))
 
 """
@@ -57,13 +58,13 @@ Base.eltype{IO_t}(::Type{Lexer{IO_t}}) = Token
 
 function Base.start(l::Lexer)
     seekstart(l)
-    l.token_startpos = 0
+    l.token_startpos = position(l)
     l.token_start_row = 1
     l.token_start_col = 1
 
     l.current_row = 1
     l.current_col = 1
-    l.current_pos = 1
+    l.current_pos = l.io_startpos
     false
 end
 
@@ -106,7 +107,7 @@ Set the lexer's previous position.
 """
 prevpos!(l::Lexer, i::Integer) = l.prevpos = i
 
-Base.seekstart(l::Lexer) = seekstart(l.io)
+Base.seekstart(l::Lexer) = seek(l.io, l.io_startpos)
 
 """
     seek2startpos!(l::Lexer)
@@ -127,7 +128,7 @@ peekchar(l::Lexer) = peekchar(l.io)
 
 Returns the current position.
 """
-position(l::Lexer) = Base.position(l.io)
+Base.position(l::Lexer) = Base.position(l.io)
 
 """
     eof(l::Lexer)
@@ -688,8 +689,9 @@ end
 function read_string(l::Lexer, kind::Tokens.Kind)
     while true
         c = readchar(l)
-        if c == '\\' && eof(readchar(l))
-            return false
+        if c == '\\'
+            eof(readchar(l)) && return false
+            continue
         end
         if c == '"'
             if kind == Tokens.STRING
