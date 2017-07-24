@@ -38,19 +38,19 @@ function validate_code_info(c::CodeInfo)
     error_code = 0
     walkast(c.code) do x
         if isa(x, Expr)
-            if !(in(x.head, VALID_EXPR_HEADS))
+            if !in(x.head, VALID_EXPR_HEADS)
                 error_code = 7
                 return true
-            elseif x.head == :(=) && !(is_valid_lhs(x.args[1]))
+            elseif x.head == :(=) && !is_valid_lhs(x.args[1])
                 error_code = 9
                 return true
-            elseif x.head == :call && !(all(is_valid_call_arg(i) for i in x.args[2:end]))
+            elseif x.head == :call && !all(is_valid_call_arg(i) for i in x.args[2:end])
                 error_code = 10
                 return true
             end
-        elseif isa(x, SSAValue) && !(in(x, ssavals))
+        elseif isa(x, SSAValue) && !in(x, ssavals)
             push!(ssavals, x)
-        elseif isa(x, SlotNumber) && !(in(x, slotnums))
+        elseif isa(x, SlotNumber) && !in(x, slotnums)
             push!(slotnums, x)
         end
         return false
@@ -71,7 +71,7 @@ function validate_code_info(c::CodeInfo)
     walkast(c.code) do x
         if isa(x, Expr) && x.head == :(=)
             lhs = x.args[1]
-            if isa(lhs, SlotNumber) && !(is_flag_set(c.slotflags[lhs.id], ASSIGNED_FLAG))
+            if isa(lhs, SlotNumber) && !is_flag_set(c.slotflags[lhs.id], ASSIGNED_FLAG)
                 error_code = 11
                 return true
             end
@@ -93,6 +93,6 @@ end
 
 is_valid_lhs(lhs) = isa(lhs, SlotNumber) || isa(lhs, SSAValue) || isa(lhs, GlobalRef)
 
-is_valid_call_arg(arg) = !(isa(arg, Expr)) || arg.head != :gotoifnot
+is_valid_call_arg(arg) = !isa(arg, Expr) || arg.head != :gotoifnot
 
 is_flag_set(byte::UInt8, flag::UInt8) = (byte & flag) == flag
