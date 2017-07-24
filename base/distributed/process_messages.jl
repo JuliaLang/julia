@@ -196,11 +196,14 @@ function message_handler_loop(r_stream::IO, w_stream::IO, incoming::Bool)
         end
     catch e
         # Check again as it may have been set in a message handler but not propagated to the calling block above
-        wpid = worker_id_from_socket(r_stream)
-        if (wpid < 1)
+        if wpid < 1
+            wpid = worker_id_from_socket(r_stream)
+        end
+
+        if wpid < 1
             println(STDERR, e, CapturedException(e, catch_backtrace()))
             println(STDERR, "Process($(myid())) - Unknown remote, closing connection.")
-        else
+        elseif !(wpid in map_del_wrkr)
             werr = worker_from_id(wpid)
             oldstate = werr.state
             set_worker_state(werr, W_TERMINATED)
