@@ -31,8 +31,12 @@ const GMP_BITS_PER_LIMB = gmp_bits_per_limb()
 # be used whenever mp_limb_t is in the signature of ccall'ed GMP functions.
 if GMP_BITS_PER_LIMB == 32
     const Limb = UInt32
+    const SLimbMax = Union{Int8, Int16, Int32}
+    const ULimbMax = Union{UInt8, UInt16, UInt32}
 elseif GMP_BITS_PER_LIMB == 64
     const Limb = UInt64
+    const SLimbMax = Union{Int8, Int16, Int32, Int64}
+    const ULimbMax = Union{UInt8, UInt16, UInt32, UInt64}
 else
     error("GMP: cannot determine the type mp_limb_t (__gmp_bits_per_limb == $GMP_BITS_PER_LIMB)")
 end
@@ -306,13 +310,17 @@ function convert(::Type{BigInt}, x::Integer)
 end
 
 
-rem(x::BigInt, ::Type{Bool}) = ((x&1)!=0)
+rem(x::BigInt, ::Type{Bool}) = !iszero(x) & unsafe_load(x.d) % Bool # never unsafe here
+
+rem(x::BigInt, ::Type{T}) where T<:Union{SLimbMax,ULimbMax} =
+    iszero(x) ? zero(T) : flipsign(unsafe_load(x.d) % T, x.size)
+
 function rem(x::BigInt, ::Type{T}) where T<:Union{Unsigned,Signed}
     u = zero(T)
-    for l = 1:min(abs(x.size), cld(sizeof(T),sizeof(Limb)))
-        u += (unsafe_load(x.d,l)%T) << ((sizeof(Limb)<<3)*(l-1))
+    for l = 1:min(abs(x.size), cld(sizeof(T), sizeof(Limb)))
+        u += (unsafe_load(x.d, l) % T) << ((sizeof(Limb)<<3)*(l-1))
     end
-    flipsign(u, x)
+    flipsign(u, x.size)
 end
 
 rem(x::Integer, ::Type{BigInt}) = convert(BigInt, x)
