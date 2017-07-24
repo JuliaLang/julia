@@ -15,7 +15,7 @@ Below are the possible non-`0` return values and their conditions. As soon as
 `validate_code_info` encounters a case where one of the below conditions evaluates
 to `true`, it will return the corresponding error code.
 
-`nslots` = the number of unique `SlotNumber`s in `c.code`
+`nslots` = the number of unique `SlotNumber`s in `c.code` (as well as `SlotNumber(1)`)
 `nssavals` = the number of unique `SSAValue`s in `c.code`
 
 1:  `length(c.slotflags) != nslots`
