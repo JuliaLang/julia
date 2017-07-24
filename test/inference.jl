@@ -1291,3 +1291,6 @@ let T1 = Array{Float64}, T2 = Array{_1,2} where _1
     rt = Base.return_types(g, (Union{Ref{Array{Float64}}, Ref{Array{Float32}}},))[1]
     @test rt >: Union{Type{Array{Float64}}, Type{Array{Float32}}}
 end
+
+f_23077(x) = (Int8(0), Int16(0), Int32(0), Int64(0))[x]
+@test Base.return_types(f_23077, Tuple{Int})[1] <: Signed

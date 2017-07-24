@@ -2810,9 +2810,12 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
         end
     end
     u = Union{typea, typeb}
-    if unionlen(u) > MAX_TYPEUNION_LEN || type_too_complex(u, MAX_TYPE_DEPTH)
-        # don't let type unions get too big
-        # TODO: something smarter, like a common supertype
+    if unionlen(u) > MAX_TYPEUNION_LEN
+        u = typejoin(typea, typeb)
+    end
+    if type_too_complex(u, MAX_TYPE_DEPTH)
+        # helps convergence speed (large types that are changing value become very slow to
+        # work with very quickly)
         return Any
     end
     return u
