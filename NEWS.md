@@ -652,6 +652,8 @@ Library improvements
     `enumerate(IndexLinear, iterable)` yields linear indices and
     `enumerate(IndexCartesian, iterable)` yields cartesian indices ([#16378]).
 
+  * Jump to first/last history entries via "Alt-<" and "Alt->" ([#22829]).
+
 Compiler/Runtime improvements
 -----------------------------
 
