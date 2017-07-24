@@ -21,9 +21,9 @@ to `true`, it will return the corresponding error code.
 1:  `length(c.slotflags) != nslots`
 2:  `length(c.slotnames) != nslots`
 3:  `c.inferred && length(c.slottypes) != nslots`
-4:  `c.inferred && length(c.ssatypes) != nssavals`
+4:  `c.inferred && length(c.ssavaluetypes) != nssavals`
 5:  `!(c.inferred) && c.slottypes != nothing`
-6:  `!(c.inferred) && c.ssatypes != nssavals`
+6:  `!(c.inferred) && c.ssavaluetypes != nssavals`
 7:  `!(in(x.head, Base.Core.VALID_EXPR_HEADS))` for any subexpression `x`
 8:  `length(c.slotnames) < 1 || c.slotnames[1] != Symbol("#self#")`
 9:  `!(isa(x, SSAValue) || isa(x, SlotNumber) || isa(x, GlobalRef))` where `x` is an assignment LHS
@@ -44,7 +44,7 @@ function validate_code_info(c::CodeInfo)
             elseif x.head == :(=) && !(is_valid_lhs(x.args[1]))
                 error_code = 9
                 return true
-            elseif x.head == :call && !(all(is_valid_call_arg.(x.args[2:end])))
+            elseif x.head == :call && !(all(is_valid_call_arg(i) for i in x.args[2:end]))
                 error_code = 10
                 return true
             end
@@ -56,15 +56,16 @@ function validate_code_info(c::CodeInfo)
         return false
     end
     error_code != 0 && return error_code
+    in(SlotNumber(1), slotnums) || push!(slotnums, SlotNumber(1))
     nslots = length(slotnums)
     nssavals = length(ssavals)
     length(c.slotflags) != nslots && return 1
     length(c.slotnames) != nslots && return 2
     if c.inferred
         length(c.slottypes) != nslots  && return 3
-        length(c.ssatypes) != nssavals && return 4
+        length(c.ssavaluetypes) != nssavals && return 4
     else
-        c.ssatypes != nssavals && return 6
+        c.ssavaluetypes != nssavals && return 6
     end
     error_code = 0
     walkast(c.code) do x
