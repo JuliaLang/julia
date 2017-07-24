@@ -403,7 +403,7 @@ convert(::Type{Array{T,n}}, x::Array{T,n}) where {T,n} = x
 convert(::Type{Array{T}}, x::AbstractArray{S,n}) where {T,n,S} = convert(Array{T,n}, x)
 convert(::Type{Array{T,n}}, x::AbstractArray{S,n}) where {T,n,S} = copy!(Array{T,n}(size(x)), x)
 
-promote_rule(::Type{Array{T,n}}, ::Type{Array{S,n}}) where {T,n,S} = Array{promote_type(T,S),n}
+promote_rule(a::Type{Array{T,n}}, b::Type{Array{S,n}}) where {T,n,S} = el_same(promote_type(T,S), a, b)
 
 ## copying iterators to containers
 

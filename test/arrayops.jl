@@ -2177,3 +2177,10 @@ let TT = Union{UInt8, Int8}
     @test a[1] == b[1] == 0x0
     @test a == b
 end
+
+let a = Vector{Int}[[1]],
+    b = Vector{Float64}[[2.0]],
+    c = Vector{Char}[['a']]
+    @test eltype([a;b]) == Vector{Float64}
+    @test eltype([a;c]) == Vector
+end

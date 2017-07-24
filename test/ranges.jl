@@ -632,6 +632,9 @@ end
 @test convert(LinSpace, 0.0:0.1:0.3) === LinSpace{Float64}(0.0, 0.3, 4)
 @test convert(LinSpace, 0:3) === LinSpace{Int}(0, 3, 4)
 
+@test promote('a':'z', 1:2) === ('a':'z', 1:1:2)
+@test eltype(['a':'z', 1:2]) == (StepRange{T,Int} where T)
+
 @test start(LinSpace(0,3,4)) == 1
 @test 2*LinSpace(0,3,4) == LinSpace(0,6,4)
 @test LinSpace(0,3,4)*2 == LinSpace(0,6,4)
