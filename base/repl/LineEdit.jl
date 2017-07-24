@@ -186,7 +186,7 @@ end
 prompt_string(s::PromptState) = prompt_string(s.p)
 prompt_string(p::Prompt) = prompt_string(p.prompt)
 prompt_string(s::AbstractString) = s
-prompt_string(f::Function) = eval(Expr(:call, f))
+prompt_string(f::Function) = Base.invokelatest(f)
 
 refresh_multi_line(s::ModeState) = refresh_multi_line(terminal(s), s)
 refresh_multi_line(termbuf::TerminalBuffer, s::ModeState) = refresh_multi_line(termbuf, terminal(s), s)
@@ -626,8 +626,8 @@ default_enter_cb(_) = true
 
 write_prompt(terminal, s::PromptState) = write_prompt(terminal, s.p)
 function write_prompt(terminal, p::Prompt)
-    prefix = isa(p.prompt_prefix,Function) ? eval(Expr(:call, p.prompt_prefix)) : p.prompt_prefix
-    suffix = isa(p.prompt_suffix,Function) ? eval(Expr(:call, p.prompt_suffix)) : p.prompt_suffix
+    prefix = prompt_string(p.prompt_prefix)
+    suffix = prompt_string(p.prompt_suffix)
     write(terminal, prefix)
     write(terminal, Base.text_colors[:bold])
     write(terminal, prompt_string(p.prompt))
