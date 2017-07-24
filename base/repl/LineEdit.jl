@@ -478,18 +478,29 @@ function edit_insert(buf::IOBuffer, c)
     end
 end
 
-function edit_backspace(s::PromptState)
-    if edit_backspace(s.input_buffer)
+function edit_backspace(s::PromptState, multispaces::Bool=true)
+    if edit_backspace(s.input_buffer, multispaces)
         refresh_line(s)
     else
         beep(terminal(s))
     end
 end
-function edit_backspace(buf::IOBuffer)
-    if position(buf) > 0
-        oldpos = position(buf)
-        char_move_left(buf)
-        splice_buffer!(buf, position(buf):oldpos-1)
+
+function edit_backspace(buf::IOBuffer, multispaces::Bool=true)
+    oldpos = position(buf)
+    if oldpos > 0
+        c = char_move_left(buf)
+        newpos = position(buf)
+        if multispaces && c == ' ' # maybe delete multiple spaces
+            beg = rsearch(buf.data, '\n', newpos)
+            align = strwidth(String(buf.data[1+beg:newpos])) % 4
+            nonspace = findprev(c -> c != UInt8(' '), buf.data, newpos)
+            if newpos-align >= nonspace
+                newpos = newpos-align
+                seek(buf, newpos)
+            end
+        end
+        splice_buffer!(buf, newpos:oldpos-1)
         return true
     else
         return false
@@ -1337,30 +1348,33 @@ function bracketed_paste(s)
     return replace(input, '\t', " "^tabwidth)
 end
 
+function edit_tab(s)
+    buf = buffer(s)
+    # Yes, we are ignoring the possiblity
+    # the we could be in the middle of a multi-byte
+    # sequence, here but that's ok, since any
+    # whitespace we're interested in is only one byte
+    i = position(buf)
+    if i != 0
+        c = buf.data[i]
+        if c == UInt8('\n') || c == UInt8('\t') ||
+                # hack to allow path completion in cmds
+                # after a space, e.g., `cd <tab>`, while still
+                # allowing multiple indent levels
+                (c == UInt8(' ') && i > 3 && buf.data[i-1] == UInt8(' '))
+            beg = rsearch(buf.data, '\n', i)
+            align = 4 - strwidth(String(buf.data[1+beg:i])) % 4 # align to multiples of 4
+            return edit_insert(s, " "^align)
+        end
+    end
+    complete_line(s)
+    refresh_line(s)
+end
+
 const default_keymap =
 AnyDict(
     # Tab
-    '\t' => (s,o...)->begin
-        buf = buffer(s)
-        # Yes, we are ignoring the possiblity
-        # the we could be in the middle of a multi-byte
-        # sequence, here but that's ok, since any
-        # whitespace we're interested in is only one byte
-        i = position(buf)
-        if i != 0
-            c = buf.data[i]
-            if c == UInt8('\n') || c == UInt8('\t') ||
-               # hack to allow path completion in cmds
-               # after a space, e.g., `cd <tab>`, while still
-               # allowing multiple indent levels
-               (c == UInt8(' ') && i > 3 && buf.data[i-1] == UInt8(' '))
-                edit_insert(s, " "^4)
-                return
-            end
-        end
-        complete_line(s)
-        refresh_line(s)
-    end,
+    '\t' => (s,o...)->edit_tab(s),
     # Enter
     '\r' => (s,o...)->begin
         if on_enter(s) || (eof(buffer(s)) && s.key_repeats > 1)

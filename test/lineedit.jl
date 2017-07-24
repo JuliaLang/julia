@@ -427,3 +427,36 @@ end
         "\r\e[2C    julia = :fun\n" *
         "\r\e[2Cend\r\e[5C"
 end
+
+@testset "tab/backspace alignment feature" begin
+    term = TestHelpers.FakeTerminal(IOBuffer(), IOBuffer(), IOBuffer())
+    s = LineEdit.init_state(term, ModalInterface([Prompt("test> ")]))
+    function bufferdata(s)
+        buf = LineEdit.buffer(s)
+        String(buf.data[1:buf.size])
+    end
+
+    LineEdit.edit_insert(s, "for x=1:10\n")
+    LineEdit.edit_tab(s)
+    @test bufferdata(s) == "for x=1:10\n    "
+    LineEdit.edit_backspace(s)
+    @test bufferdata(s) == "for x=1:10\n"
+    LineEdit.edit_insert(s, "  ")
+    LineEdit.edit_tab(s)
+    @test bufferdata(s) == "for x=1:10\n    "
+    LineEdit.edit_insert(s, "  ")
+    LineEdit.edit_backspace(s)
+    @test bufferdata(s) == "for x=1:10\n    "
+    LineEdit.edit_insert(s, "éé=3   ")
+    LineEdit.edit_tab(s)
+    @test bufferdata(s) == "for x=1:10\n    éé=3    "
+    LineEdit.edit_backspace(s)
+    @test bufferdata(s) == "for x=1:10\n    éé=3"
+    LineEdit.edit_insert(s, "\n    1∉x  ")
+    LineEdit.edit_tab(s)
+    @test bufferdata(s) == "for x=1:10\n    éé=3\n    1∉x     "
+    LineEdit.edit_backspace(s, false)
+    @test bufferdata(s) == "for x=1:10\n    éé=3\n    1∉x    "
+    LineEdit.edit_backspace(s)
+    @test bufferdata(s) == "for x=1:10\n    éé=3\n    1∉x "
+end
