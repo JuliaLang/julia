@@ -12,7 +12,7 @@ tok(str, i = 1) = collect(tokenize(str))[i]
         @test Lexers.readchar(l) == 'a'
         @test Lexers.prevpos(l) == 0
 
-        @test l.current_pos == 1
+        @test l.current_pos == 0
         l_old = l
         @test Lexers.prevchar(l) == 'a'
         @test l == l_old
@@ -21,7 +21,7 @@ tok(str, i = 1) = collect(tokenize(str))[i]
 
         Lexers.backup!(l)
         @test Lexers.prevpos(l) == -1
-        @test l.current_pos == 1
+        @test l.current_pos == 0
     end
 end # testset
 
@@ -420,4 +420,10 @@ end
 
 @testset "where" begin
     @test tok("a where b", 3).kind == T.WHERE
+end
+
+@testset "IO position" begin
+    io = IOBuffer("#1+1")
+    skip(io, 1)
+    @test length(collect(tokenize(io))) == 4
 end
