@@ -63,10 +63,6 @@ function mean!(R::AbstractArray, A::AbstractArray)
     return R
 end
 
-momenttype(::Type{T}) where {T} = typeof((zero(T)*zero(T) + zero(T)*zero(T)) / 2)
-momenttype(::Type{Float32}) = Float32
-momenttype(::Type{<:Union{Float64,Int32,Int64,UInt32,UInt64}}) = Float64
-
 """
     mean(v[, region])
 
@@ -77,8 +73,7 @@ Compute the mean of whole array `v`, or optionally along the dimensions in `regi
     handling of missing data, the `DataArrays.jl` package is recommended.
 """
 mean(A::AbstractArray{T}, region) where {T} =
-    mean!(reducedim_initarray(A, region, 0, momenttype(T)), A)
-
+    mean!(reducedim_init(t -> t/2, +, A, region), A)
 
 ##### variances #####
 
@@ -171,8 +166,7 @@ end
 
 function varm(A::AbstractArray{T}, m::Number; corrected::Bool=true) where T
     n = _length(A)
-    n == 0 && return convert(real(momenttype(T)), NaN)
-    n == 1 && return convert(real(momenttype(T)), abs2(A[1] - m)/(1 - Int(corrected)))
+    n == 0 && return typeof((abs2(zero(T)) + abs2(zero(T)))/2)(NaN)
     return centralize_sumabs2(A, m) / (n - Int(corrected))
 end
 
@@ -200,12 +194,11 @@ whereas the sum is scaled with `n` if `corrected` is `false` where `n = length(x
     `DataArrays.jl` package is recommended.
 """
 varm(A::AbstractArray{T}, m::AbstractArray, region; corrected::Bool=true) where {T} =
-    varm!(reducedim_initarray(A, region, 0, real(momenttype(T))), A, m; corrected=corrected)
+    varm!(reducedim_init(t -> abs2(t)/2, +, A, region), A, m; corrected=corrected)
 
 
 var(A::AbstractArray{T}; corrected::Bool=true, mean=nothing) where {T} =
-    convert(real(momenttype(T)),
-            varm(A, mean === nothing ? Base.mean(A) : mean; corrected=corrected))
+    real(varm(A, mean === nothing ? Base.mean(A) : mean; corrected=corrected))
 
 """
     var(v[, region]; corrected::Bool=true, mean=nothing)
@@ -696,25 +689,25 @@ end
 
 # Core quantile lookup function: assumes `v` sorted
 @inline function _quantile(v::AbstractVector, p::Real)
-    T = float(eltype(v))
-    isnan(p) && return T(NaN)
     0 <= p <= 1 || throw(ArgumentError("input probability out of [0,1] range"))
 
     lv = length(v)
-    f0 = (lv-1)*p # 0-based interpolated index
+    f0 = (lv - 1)*p # 0-based interpolated index
     t0 = trunc(f0)
-    h = f0 - t0
-    i = trunc(Int,t0) + 1
+    h  = f0 - t0
+    i  = trunc(Int,t0) + 1
+
+    T  = promote_type(eltype(v), typeof(v[1]*h))
 
     if h == 0
         return T(v[i])
     else
-        a = T(v[i])
-        b = T(v[i+1])
+        a = v[i]
+        b = v[i+1]
         if isfinite(a) && isfinite(b)
-            return a + h*(b-a)
+            return T(a + h*(b-a))
         else
-            return (1-h)*a + h*b
+            return T((1-h)*a + h*b)
         end
     end
 end
