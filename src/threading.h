@@ -54,6 +54,10 @@ void ti_threadfun(void *arg);
 // helpers for thread function
 jl_value_t *ti_runthread(jl_function_t *f, jl_svec_t *args, size_t nargs);
 
+// UV thread pool related.
+void jl_init_uv_threadpool();
+extern JL_DLLEXPORT int jl_n_uv_threads;  // # threads in the UV threadpool
+
 #ifdef __cplusplus
 }
 #endif

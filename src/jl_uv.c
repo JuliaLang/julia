@@ -34,6 +34,7 @@ extern "C" {
 #endif
 
 static uv_async_t signal_async;
+extern uv_async_t on_main_async;
 
 #ifdef _OS_WINDOWS_
 // uv_async_t is buggy on windows. Initializing one breaks the sysimg build.
@@ -93,6 +94,8 @@ static void jl_uv_closeHandle(uv_handle_t *handle)
         jl_get_ptls_states()->world_age = last_age;
     }
     if (handle == (uv_handle_t*)&signal_async)
+        return;
+    if (handle == (uv_handle_t*)&on_main_async)
         return;
     free(handle);
 }

@@ -623,6 +623,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
 #endif
 
     jl_init_threading();
+    jl_init_uv_threadpool();
 
     jl_gc_init();
     jl_gc_enable(0);

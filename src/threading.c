@@ -22,6 +22,8 @@ TODO:
 #include "julia.h"
 #include "julia_internal.h"
 
+#include "uv.h"
+
 // Ref https://www.uclibc.org/docs/tls.pdf
 // For variant 1 JL_ELF_TLS_INIT_SIZE is the size of the thread control block (TCB)
 // For variant 2 JL_ELF_TLS_INIT_SIZE is 0
@@ -563,7 +565,12 @@ void jl_init_threading(void)
     if (jl_n_threads <= 0)
         jl_n_threads = 1;
 
-    jl_all_tls_states = (jl_ptls_t*)malloc(jl_n_threads * sizeof(void*));
+    char *nuvt = getenv("UV_THREADPOOL_SIZE");
+    if (nuvt) {
+        jl_n_uv_threads = (uint64_t)strtol(nuvt, NULL, 10);
+    }
+
+    jl_all_tls_states = (jl_ptls_t*)malloc((jl_n_threads + jl_n_uv_threads) * sizeof(void*));
 
 #if PROFILE_JL_THREADING
     // set up space for profiling information
