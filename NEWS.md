@@ -46,6 +46,15 @@ Language changes
 
     + `bits_type`      => `primitive_type`
 
+  * The `global` keyword now only introduces a new binding if one doesn't already exist
+    in the module.
+    This means that assignment to a global (`global sin = 3`) may now throw the error:
+    "cannot assign variable Base.sin from module Main", rather than emitting a warning.
+    Additionally, the new bindings are now created before the statement is executed.
+    For example, `f() = (global sin = "gluttony"; nothing)` will now resolve which module
+    contains `sin` eagerly, rather than delaying that decision until `f` is run. ([#22984]).
+
+
 Breaking changes
 ----------------
 

@@ -92,24 +92,22 @@ static jl_binding_t *new_binding(jl_sym_t *name)
 }
 
 // get binding for assignment
-JL_DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m, jl_sym_t *var)
+JL_DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m, jl_sym_t *var, int error)
 {
     jl_binding_t **bp = (jl_binding_t**)ptrhash_bp(&m->bindings, var);
-    jl_binding_t *b;
+    jl_binding_t *b = *bp;
 
-    if (*bp != HT_NOTFOUND) {
-        if ((*bp)->owner == NULL) {
-            (*bp)->owner = m;
-            return *bp;
+    if (b != HT_NOTFOUND) {
+        if (b->owner != m) {
+            if (b->owner == NULL) {
+                b->owner = m;
+            }
+            else if (error) {
+                jl_errorf("cannot assign variable %s.%s from module %s",
+                          jl_symbol_name(b->owner->name), jl_symbol_name(var), jl_symbol_name(m->name));
+            }
         }
-        else if ((*bp)->owner != m) {
-            // TODO: change this to an error soon
-            jl_printf(JL_STDERR,
-                      "WARNING: imported binding for %s overwritten in module %s\n", jl_symbol_name(var), jl_symbol_name(m->name));
-        }
-        else {
-            return *bp;
-        }
+        return *bp;
     }
 
     b = new_binding(var);
@@ -129,26 +127,30 @@ JL_DLLEXPORT jl_module_t *jl_get_module_of_binding(jl_module_t *m, jl_sym_t *var
 }
 
 // get binding for adding a method
-// like jl_get_binding_wr, but uses existing imports instead of warning
-// and overwriting.
+// like jl_get_binding_wr, but has different error paths
 JL_DLLEXPORT jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m, jl_sym_t *var)
 {
     jl_binding_t **bp = (jl_binding_t**)ptrhash_bp(&m->bindings, var);
     jl_binding_t *b = *bp;
 
     if (b != HT_NOTFOUND) {
-        if (b->owner != m && b->owner != NULL) {
-            jl_binding_t *b2 = jl_get_binding(b->owner, var);
-            if (b2 == NULL)
-                jl_errorf("invalid method definition: imported function %s.%s does not exist", jl_symbol_name(b->owner->name), jl_symbol_name(var));
-            // TODO: we might want to require explicitly importing types to add constructors
-            if (!b->imported && (b2->value == NULL || !jl_is_type(b2->value))) {
-                jl_errorf("error in method definition: function %s.%s must be explicitly imported to be extended", jl_symbol_name(b->owner->name),
-                          jl_symbol_name(var));
+        if (b->owner != m) {
+            if (b->owner == NULL) {
+                b->owner = m;
             }
-            return b2;
+            else {
+                jl_binding_t *b2 = jl_get_binding(b->owner, var);
+                if (b2 == NULL || b2->value == NULL)
+                    jl_errorf("invalid method definition: imported function %s.%s does not exist",
+                              jl_symbol_name(b->owner->name), jl_symbol_name(var));
+                // TODO: we might want to require explicitly importing types to add constructors
+                if (!b->imported && !jl_is_type(b2->value)) {
+                    jl_errorf("error in method definition: function %s.%s must be explicitly imported to be extended",
+                              jl_symbol_name(b->owner->name), jl_symbol_name(var));
+                }
+                return b2;
+            }
         }
-        b->owner = m;
         return b;
     }
 
@@ -199,7 +201,7 @@ static jl_binding_t *jl_get_binding_(jl_module_t *m, jl_sym_t *var, modstack_t *
                               jl_symbol_name(imp->name), jl_symbol_name(var),
                               jl_symbol_name(m->name));
                     // mark this binding resolved, to avoid repeating the warning
-                    (void)jl_get_binding_wr(m, var);
+                    (void)jl_get_binding_wr(m, var, 0);
                     return NULL;
                 }
                 if (owner == NULL || !tempb->deprecated) {
@@ -450,7 +452,7 @@ JL_DLLEXPORT jl_value_t *jl_get_global(jl_module_t *m, jl_sym_t *var)
 
 JL_DLLEXPORT void jl_set_global(jl_module_t *m, jl_sym_t *var, jl_value_t *val)
 {
-    jl_binding_t *bp = jl_get_binding_wr(m, var);
+    jl_binding_t *bp = jl_get_binding_wr(m, var, 1);
     if (!bp->constp) {
         bp->value = val;
         jl_gc_wb(m, val);
@@ -459,7 +461,7 @@ JL_DLLEXPORT void jl_set_global(jl_module_t *m, jl_sym_t *var, jl_value_t *val)
 
 JL_DLLEXPORT void jl_set_const(jl_module_t *m, jl_sym_t *var, jl_value_t *val)
 {
-    jl_binding_t *bp = jl_get_binding_wr(m, var);
+    jl_binding_t *bp = jl_get_binding_wr(m, var, 1);
     if (!bp->constp) {
         bp->value = val;
         bp->constp = 1;

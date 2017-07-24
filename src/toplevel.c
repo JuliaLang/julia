@@ -141,7 +141,7 @@ jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex)
     if (!jl_is_symbol(name)) {
         jl_type_error("module", (jl_value_t*)jl_sym_type, (jl_value_t*)name);
     }
-    jl_binding_t *b = jl_get_binding_wr(parent_module, name);
+    jl_binding_t *b = jl_get_binding_wr(parent_module, name, 1);
     jl_declare_constant(b);
     if (b->value != NULL) {
         if (!jl_is_module(b->value)) {
@@ -442,6 +442,7 @@ int jl_is_toplevel_only_expr(jl_value_t *e)
          ((jl_expr_t*)e)->head == using_sym ||
          ((jl_expr_t*)e)->head == export_sym ||
          ((jl_expr_t*)e)->head == thunk_sym ||
+         ((jl_expr_t*)e)->head == global_sym ||
          ((jl_expr_t*)e)->head == toplevel_sym);
 }
 
@@ -530,8 +531,31 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int e
         return jl_nothing;
     }
     else if (ex->head == line_sym) {
-        jl_lineno = jl_unbox_long(jl_exprarg(ex,0));
+        jl_lineno = jl_unbox_long(jl_exprarg(ex, 0));
         return jl_nothing;
+    }
+    else if (ex->head == global_sym) {
+        // create uninitialized mutable binding for "global x" decl
+        size_t i, l = jl_array_len(ex->args);
+        for (i = 0; i < l; i++) {
+            jl_value_t *a = jl_exprarg(ex, i);
+            if (!jl_is_symbol(a) && !jl_is_globalref(a))
+                break;
+        }
+        if (i == l) {
+            for (i = 0; i < l; i++) {
+                jl_sym_t *gs = (jl_sym_t*)jl_exprarg(ex, i);
+                jl_module_t *gm = m;
+                if (jl_is_globalref(gs)) {
+                    gm = jl_globalref_mod(gs);
+                    gs = jl_globalref_name(gs);
+                }
+                assert(jl_is_symbol(gs));
+                jl_get_binding_wr(gm, gs, 0);
+            }
+            return jl_nothing;
+        }
+        // fall-through to expand to normalize the syntax
     }
 
     jl_method_instance_t *li = NULL;

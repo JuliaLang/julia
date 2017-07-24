@@ -1194,10 +1194,7 @@ end
 # comment 298107224 on pull #21607
 module Test21607
     using Base.Test
-
-    @test_warn(
-    "WARNING: imported binding for Any overwritten in module Test21607",
-    @eval const Any = Integer)
+    const Any = Integer
 
     # check that X <: Core.Any, not Integer
     mutable struct X; end

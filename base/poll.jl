@@ -145,8 +145,7 @@ mutable struct _FDWatcher
             end
         end
 
-        global uvfinalize
-        function uvfinalize(t::_FDWatcher)
+        function Base.uvfinalize(t::_FDWatcher)
             if t.handle != C_NULL
                 disassociate_julia_struct(t)
                 ccall(:jl_close_uv, Void, (Ptr{Void},), t.handle)
