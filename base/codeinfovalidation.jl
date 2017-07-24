@@ -6,85 +6,88 @@ const VALID_EXPR_HEADS = Symbol[:call, :invoke, :static_parameter, :line, :gotoi
 
 const ASSIGNED_FLAG = 0x02
 
+struct CodeInfoError <: Exception
+    msg::String
+end
+
 """
     validate_code_info(c::CodeInfo)
 
-Returns `0` if `c` represents valid IR, or returns a positive integer otherwise.
+Returns a `Vector{CodeInfoError}` containing any errors encountered while validating `c`.
 
-Below are the possible non-`0` return values and their conditions. As soon as
-`validate_code_info` encounters a case where one of the below conditions evaluates
-to `true`, it will return the corresponding error code.
+If the returned vector is empty, then the following properties hold true for `c`:
 
-`nslots` = the number of unique `SlotNumber`s in `c.code` (as well as `SlotNumber(1)`)
-`nssavals` = the number of unique `SSAValue`s in `c.code`
-
-1:  `length(c.slotflags) != nslots`
-2:  `length(c.slotnames) != nslots`
-3:  `c.inferred && length(c.slottypes) != nslots`
-4:  `c.inferred && length(c.ssavaluetypes) != nssavals`
-5:  `!c.inferred && c.slottypes != nothing`
-6:  `!c.inferred && c.ssavaluetypes != nssavals`
-7:  `!in(x.head, Base.Core.VALID_EXPR_HEADS)` for any subexpression `x`
-8:  `length(c.slotnames) < 1`
-9:  `!(isa(x, SSAValue) || isa(x, SlotNumber) || isa(x, GlobalRef))` where `x` is an assignment LHS
-10: `isa(x, Expr) || x.head == :gotoifnot` where `x` is a function call argument
-11:  A slot has an invalid slotflag setting for bit flag 2 (assignment property)
+- `in(h, Base.Core.Inference.VALID_EXPR_HEADS)` for each subexpression head `h`
+- `Base.Core.Inference.is_valid_lhs(lhs)` for each encountered LHS value `lhs`
+- `Base.Core.Inference.is_valid_call_arg(arg)` for each call argument `arg`
+- `!isempty(c.slotnames)`
+- `length(c.slotnames) == length(c.slotflags)`
+- if `c.inferred`:
+    - `length(c.slottypes) == length(c.slotnames)`
+    - all SSAValues in AST have a type in `c.ssavaluetypes`
+- if `!c.inferred`:
+    - `c.slottypes == nothing`
+    - `c.ssavaluetypes` should be set to the number of SSAValues in `c.code`
+- all assigned-to slots have bit flag 2 set in their respective slotflags
 """
 function validate_code_info(c::CodeInfo)
-    !c.inferred && (c.slottypes != nothing) && return 5
-    length(c.slotnames) < 1 && return 8
-    slotnums = SlotNumber[]
+    errors = Vector{CodeInfoError}()
     ssavals = SSAValue[]
-    error_code = 0
     walkast(c.code) do x
         if isa(x, Expr)
             if !in(x.head, VALID_EXPR_HEADS)
-                error_code = 7
-                return true
+                push!(errors, CodeInfoError("encountered invalid expression head $(x.head)"))
             elseif x.head == :(=) && !is_valid_lhs(x.args[1])
-                error_code = 9
-                return true
-            elseif x.head == :call && !all(is_valid_call_arg(i) for i in x.args[2:end])
-                error_code = 10
-                return true
+                push!(errors, CodeInfoError("encountered invalid LHS value $(x.args[1])"))
+            elseif x.head == :call
+                for i in 2:length(x.args)
+                    if !is_valid_call_arg(x.args[i])
+                        push!(errors, CodeInfoError("encountered invalid call argument $(x.args[i])"))
+                    end
+                end
             end
         elseif isa(x, SSAValue) && !in(x, ssavals)
             push!(ssavals, x)
-        elseif isa(x, SlotNumber) && !in(x, slotnums)
-            push!(slotnums, x)
         end
-        return false
     end
-    error_code != 0 && return error_code
-    length(c.slotnames) != length(c.slotflags) && return 1
+    if isempty(c.slotnames)
+        push!(errors, CodeInfoError("slotnames field is empty"))
+    end
+    if length(c.slotnames) != length(c.slotflags)
+        push!(errors, CodeInfoError("lengths(slotflags) != length(slotnames); $(length(c.slotflags)) != $(length(c.slotnames))"))
+    end
     if c.inferred
-        length(c.slottypes) != length(c.slotnames)  && return 3
-        length(c.ssavaluetypes) != length(ssavals) && return 4
+        if length(c.slottypes) != length(c.slotnames)
+            push!(errors, CodeInfoError("lengths(slottypes) != length(slotnames); $(length(c.slottypes)) != $(length(c.slotnames))"))
+        end
+        if length(c.ssavaluetypes) < length(ssavals)
+            missing = length(ssavals) - length(c.ssavaluetypes)
+            push!(errors, CodeInfoError("not all SSAValues in AST have a type in ssavaluetypes ($missing SSAValue types are missing)"))
+        end
     else
-        c.ssavaluetypes != length(ssavals) && return 6
+        if c.slottypes != nothing
+            push!(errors, CodeInfoError("uninferred CodeInfo slottypes field should be `nothing`, instead it is $(c.slottypes)"))
+        end
+        if c.ssavaluetypes != length(ssavals)
+            push!(errors, CodeInfoError("uninferred CodeInfo ssavaluetypes field should be $(length(ssavals)), instead it is $(c.ssavaluetypes)"))
+        end
     end
-    error_code = 0
     walkast(c.code) do x
         if isa(x, Expr) && x.head == :(=)
             lhs = x.args[1]
             if isa(lhs, SlotNumber) && !is_flag_set(c.slotflags[lhs.id], ASSIGNED_FLAG)
-                error_code = 11
-                return true
+                push!(errors, CodeInfoError("slot $(lhs.id) has wrong assignment slotflag setting (bit flag 2 is not set, but should be)"))
             end
         end
-        return false
     end
-    return error_code
+    return errors
 end
 
 function walkast(f, stmts::Array)
     for stmt in stmts
-        f(stmt) && return true
-        if isa(stmt, Expr)
-            walkast(f, stmt.args) && return true
-        end
+        f(stmt)
+        isa(stmt, Expr) && walkast(f, stmt.args)
     end
-    return false
 end
 
 is_valid_lhs(lhs) = isa(lhs, SlotNumber) || isa(lhs, SSAValue) || isa(lhs, GlobalRef)
