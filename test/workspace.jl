@@ -48,18 +48,23 @@ mktempdir() do dir
             end
         """)
         write(joinpath(dir, "testdriver.jl"), """
+            using Base.Test
             insert!(LOAD_PATH, 1, $(repr(dir)))
             insert!(Base.LOAD_CACHE_PATH, 1, $(repr(dir)))
-            try
+            @test !isdefined(Main, :f22101)
+            @test !isdefined(Main, :LastMain)
+            begin
                 using Test22101
-                f22101()
-                workspace()
-                using Test22101
-            finally
-                splice!(LOAD_PATH, 1)
-                splice!(Base.LOAD_CACHE_PATH, 1)
+                @test isdefined(Main, :f22101)
+                @test f22101()::Vector{Int} == collect(1:10)
+                @eval workspace() using Test22101
+                @test f22101()::Vector{Int} == collect(1:10)
+                @test isdefined(Main, :f22101)
             end
-            exit(isdefined(Main, :f22101) ? 0 : 1)
+            @test isdefined(Main, :f22101)
+            @test !isdefined(Main, :LastMain)
+            @test isdefined(Core.Main, :f22101)
+            nothing
         """)
         # Ensure that STDIO doesn't get swallowed (helps with debugging)
         cmd = `$(Base.julia_cmd()) --startup-file=no --precompiled=yes --compilecache=yes $(joinpath(dir, "testdriver.jl"))`

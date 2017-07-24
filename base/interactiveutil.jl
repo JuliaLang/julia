@@ -670,7 +670,7 @@ function workspace()
         :(const LastMain = $last),
         :(include(x) = $include($m, x))))
     empty!(package_locks)
-    nothing
+    return m
 end
 
 # testing
