@@ -1344,10 +1344,10 @@ julia> rng = MersenneTwister(1234);
 julia> randn(rng, Complex128)
 0.6133070881429037 - 0.6376291670853887im
 
-julia> randn(rng, Complex64, (2, 4))
-2×4 Array{Complex{Float32},2}:
- -0.349649-0.638457im  0.376756-0.192146im  -0.396334-0.0136413im  -0.585317+0.0778497im
-  0.611224+1.56403im   0.355204-0.365563im  0.0905552+1.31012im    -0.177608+0.261427im
+julia> randn(rng, Complex64, (2, 3))
+2×3 Array{Complex{Float32},2}:
+ -0.349649-0.638457im  0.376756-0.192146im  -0.396334-0.0136413im
+  0.611224+1.56403im   0.355204-0.365563im  0.0905552+1.31012im
 ```
 """
 @inline function randn(rng::AbstractRNG=GLOBAL_RNG)

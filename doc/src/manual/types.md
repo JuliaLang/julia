@@ -343,9 +343,9 @@ must be convertible to `Int`:
 
 ```jldoctest footype
 julia> Foo((), 23.5, 1)
-ERROR: InexactError()
+ERROR: InexactError: convert(Int64, 23.5)
 Stacktrace:
- [1] convert(::Type{Int64}, ::Float64) at ./float.jl:680
+ [1] convert at ./float.jl:681 [inlined]
  [2] Foo(::Tuple{}, ::Float64, ::Int64) at ./none:2
 ```
 
@@ -1318,7 +1318,8 @@ for cases where you don't need a more elaborate hierarchy.
 ```jldoctest valtype
 julia> struct Val{x}
        end
-Base.@pure Val(x) = Val{x}()
+       Base.@pure Val(x) = Val{x}()
+Val
 ```
 
 There is no more to the implementation of `Val` than this.  Some functions in Julia's standard

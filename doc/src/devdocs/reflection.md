@@ -84,7 +84,7 @@ the unquoted and interpolated expression (`Expr`) form for a given macro. To use
 be passed instead!). For example:
 
 ```jldoctest
-julia> macroexpand( :(@edit println("")) )
+julia> macroexpand(@__MODULE__, :(@edit println("")) )
 :((Base.edit)(println, (Base.typesof)("")))
 ```
 
@@ -96,7 +96,7 @@ particular interest for understanding both macros and top-level statements such 
 and variable assignments:
 
 ```jldoctest
-julia> expand( :(f() = 1) )
+julia> expand(@__MODULE__, :(f() = 1) )
 :(begin
         $(Expr(:method, :f))
         $(Expr(:method, :f, :((Core.svec)((Core.svec)((Core.Typeof)(f)), (Core.svec)())), CodeInfo(:(begin

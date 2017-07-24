@@ -400,23 +400,26 @@ julia> Int8(127)
 127
 
 julia> Int8(128)
-ERROR: InexactError()
+ERROR: InexactError: trunc(Int8, 128)
 Stacktrace:
- [1] Int8(::Int64) at ./sysimg.jl:102
+ [1] throw_inexacterror(::Symbol, ::Type{Int8}, ::Int64) at ./int.jl:34
+ [2] checked_trunc_sint at ./int.jl:419 [inlined]
+ [3] convert at ./int.jl:439 [inlined]
+ [4] Int8(::Int64) at ./sysimg.jl:102
 
 julia> Int8(127.0)
 127
 
 julia> Int8(3.14)
-ERROR: InexactError()
+ERROR: InexactError: convert(Int8, 3.14)
 Stacktrace:
- [1] convert(::Type{Int8}, ::Float64) at ./float.jl:659
+ [1] convert at ./float.jl:660 [inlined]
  [2] Int8(::Float64) at ./sysimg.jl:102
 
 julia> Int8(128.0)
-ERROR: InexactError()
+ERROR: InexactError: convert(Int8, 128.0)
 Stacktrace:
- [1] convert(::Type{Int8}, ::Float64) at ./float.jl:659
+ [1] convert at ./float.jl:660 [inlined]
  [2] Int8(::Float64) at ./sysimg.jl:102
 
 julia> 127 % Int8
@@ -429,9 +432,9 @@ julia> round(Int8,127.4)
 127
 
 julia> round(Int8,127.6)
-ERROR: InexactError()
+ERROR: InexactError: trunc(Int8, 128.0)
 Stacktrace:
- [1] trunc(::Type{Int8}, ::Float64) at ./float.jl:652
+ [1] trunc at ./float.jl:653 [inlined]
  [2] round(::Type{Int8}, ::Float64) at ./float.jl:338
 ```
 

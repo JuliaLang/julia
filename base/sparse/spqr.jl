@@ -187,7 +187,7 @@ Row permutation:
  3
  4
  2
-Columns permutation:
+Column permutation:
 2-element Array{Int64,1}:
  1
  2
