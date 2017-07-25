@@ -951,7 +951,7 @@ function Base.cov(X::SparseMatrixCSC, vardim::Int=1; corrected::Bool=true)
 
     # Part1
     # Compute X'X using sparse matrix operations
-    out = Matrix(Base.unscaled_covzm(X,vardim))
+    out = Matrix(Base.unscaled_covzm(X, vardim))
 
     # Part 2
     # Compute X'μ
@@ -970,7 +970,7 @@ function Base.cov(X::SparseMatrixCSC, vardim::Int=1; corrected::Bool=true)
     sums = sum(X, vardim)
     means = sums ./ n
     @inbounds for j in 1:p, i in 1:p
-        part2 = sums[i]*means[j]
+        part2 = sums[i] * means[j]
         out[i,j] -= part2
     end
     return scale!(out, inv(n-Int(corrected)))
