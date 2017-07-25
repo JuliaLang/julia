@@ -425,11 +425,17 @@ function dict_identifier_key(str,tag)
     return (obj, partial_key, begin_of_key)
 end
 
+# This is needed as repr() function can return output with ANSI escape sequences
+# the regex is found in https://stackoverflow.com/questions/14693701/how-can-i-remove-the-ansi-escape-sequences-from-a-string-in-python
+function escape_ansi(line)
+    replace(line, r"(\x9B|\x1B\[)[0-?]*[ -\/]*[@-~]", "")
+end
+
 # This needs to be a separate non-inlined function, see #19441
 @noinline function find_dict_matches(identifier, partial_key)
     matches = []
     for key in keys(identifier)
-        rkey = repr(key)
+        rkey = escape_ansi(repr(key))
         startswith(rkey,partial_key) && push!(matches,rkey)
     end
     return matches

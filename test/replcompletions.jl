@@ -744,6 +744,12 @@ function test_dict_completion(dict_name)
     c, r = test_complete(s)
     @test c == Any[":α]"]
 end
+
+# The test below can only fail when Base.have_color==true
+# Test that the keys returned do not contain ANSI escape sequences
+# This fails after https://github.com/JuliaLang/julia/commit/228a3136fff5917b11fb99f188beec7e70e9449e
+@test Base.REPLCompletions.find_dict_matches(Dict(`ls`=>5),"")[1]=="`ls`"
+
 test_dict_completion("CompletionFoo.test_dict")
 test_dict_completion("CompletionFoo.test_customdict")
 test_dict_completion("test_repl_comp_dict")
