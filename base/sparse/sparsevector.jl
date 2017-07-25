@@ -1083,16 +1083,6 @@ macro unarymap_z2nz(op, TF)
     end)
 end
 
-for op in [:exp, :exp2, :exp10, :log, :log2, :log10,
-           :cos, :csc, :cot, :sec, :cospi,
-           :cosd, :cscd, :cotd, :secd,
-           :acos, :acot, :acosd, :acotd,
-           :cosh, :csch, :coth, :sech,
-           :acsch, :asech]
-    @eval @unarymap_z2nz $(op) Number
-end
-
-
 ### Binary Map
 
 # mode:

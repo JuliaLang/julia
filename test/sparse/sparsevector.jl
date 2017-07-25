@@ -677,20 +677,18 @@ end
 
 ### Non-zero-preserving math functions: sparse -> dense
 
-function check_z2nz(f::Function, x::SparseVector{T}, xf::Vector{T}) where T
-    R = typeof(f(zero(T)))
-    r = f(x)
-    isa(r, Vector) || error("$f(x) is not a dense vector.")
-    eltype(r) == R || error("$f(x) results in eltype = $(eltype(r)), expect $R")
-    r == f.(xf) || error("Incorrect results found in $f(x).")
-end
-
-for f in [exp, exp2, exp10, log, log2, log10,
-          cos, csc, cot, sec, cospi,
-          cosd, cscd, cotd, secd,
-          acos, acot, acosd, acotd,
-          cosh, csch, coth, sech, acsch, asech]
-    check_z2nz(f, rnd_x0, rnd_x0f)
+for op in (exp, exp2, exp10, log, log2, log10,
+        cos, cosd, acos, cosh, cospi,
+        csc, cscd, acot, csch, acsch,
+        cot, cotd, acosd, coth,
+        sec, secd, acotd, sech, asech)
+    spvec = rnd_x0
+    densevec = rnd_x0f
+    spresvec = op.(spvec)
+    @test spresvec == op.(densevec)
+    resvaltype = typeof(op(zero(eltype(spvec))))
+    resindtype = Base.SparseArrays.indtype(spvec)
+    @test isa(spresvec, SparseVector{resvaltype,resindtype})
 end
 
 
