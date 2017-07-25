@@ -4,7 +4,7 @@ module Random
 
 using Base.dSFMT
 using Base.GMP: Limb, MPZ
-import Base: copymutable, copy, copy!, ==
+import Base: copymutable, copy, copy!, ==, hash
 
 export srand,
        rand, rand!,
@@ -134,6 +134,7 @@ copy(src::MersenneTwister) =
 ==(r1::MersenneTwister, r2::MersenneTwister) =
     r1.seed == r2.seed && r1.state == r2.state && isequal(r1.vals, r2.vals) && r1.idx == r2.idx
 
+hash(r::MersenneTwister, h::UInt) = foldr(hash, h, (r.seed, r.state, r.vals, r.idx))
 
 ## Low level API for MersenneTwister
 

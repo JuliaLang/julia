@@ -500,12 +500,14 @@ end
 srand(typemax(UInt))
 srand(typemax(UInt128))
 
-# copy and ==
+# copy, == and hash
 let seed = rand(UInt32, 10)
     r = MersenneTwister(seed)
     @test r == MersenneTwister(seed) # r.vals should be all zeros
+    @test hash(r) == hash(MersenneTwister(seed))
     s = copy(r)
     @test s == r && s !== r
+    @test hash(s) == hash(r)
     skip, len = rand(0:2000, 2)
     for j=1:skip
         rand(r)
@@ -513,6 +515,9 @@ let seed = rand(UInt32, 10)
     end
     @test rand(r, len) == rand(s, len)
     @test s == r
+    @test hash(s) == hash(r)
+    h = rand(UInt)
+    @test hash(s, h) == hash(r, h)
 end
 
 # MersenneTwister initialization with invalid values
