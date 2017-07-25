@@ -175,7 +175,7 @@ function varm!(R::AbstractArray{S}, A::AbstractArray, m::AbstractArray; correcte
         fill!(R, convert(S, NaN))
     else
         rn = div(_length(A), _length(R)) - Int(corrected)
-        scale!(centralize_sumabs2!(R, A, m), convert(S, 1/rn))
+        scale!(centralize_sumabs2!(R, A, m), one(S)/rn)
     end
     return R
 end
