@@ -670,6 +670,7 @@ function workspace()
         :(const LastMain = $last),
         :(include(x) = $include($m, x))))
     empty!(package_locks)
+    JLOptions().startupfile != 2 && load_juliarc()
     nothing
 end
 
