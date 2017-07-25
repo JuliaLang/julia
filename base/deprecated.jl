@@ -20,7 +20,7 @@
 
 macro deprecate(old, new, ex=true)
     meta = Expr(:meta, :noinline)
-    @gensym oldmtname
+    oldmtname = esc(gensym())
     if isa(old, Symbol)
         oldname = Expr(:quote, old)
         newname = Expr(:quote, new)
@@ -232,20 +232,14 @@ end
 
 # For deprecating vectorized functions in favor of compact broadcast syntax
 macro dep_vectorize_1arg(S, f)
-    x = esc(:x) # work around macro hygiene bug
-    T = esc(:T) # work around macro hygiene bug
-    return :( @deprecate $f($x::AbstractArray{$T}) where {$T<:$S} $f.($x) )
+    return esc(:( @deprecate $f(x::AbstractArray{T}) where {T<:$S} $f.(x) ))
 end
 macro dep_vectorize_2arg(S, f)
-    x = esc(:x) # work around macro hygiene bug
-    y = esc(:y) # work around macro hygiene bug
-    T1 = esc(:T1) # work around macro hygiene bug
-    T2 = esc(:T2) # work around macro hygiene bug
-    return quote
-        @deprecate $f($x::$S, $y::AbstractArray{$T1}) where {$T1<:$S} $f.($x, $y)
-        @deprecate $f($x::AbstractArray{$T1}, $y::$S) where {$T1<:$S} $f.($x, $y)
-        @deprecate $f($x::AbstractArray{$T1}, $y::AbstractArray{$T2}) where {$T1<:$S, $T2<:$S} $f.($x, $y)
-    end
+    return esc(quote
+        @deprecate $f(x::$S, y::AbstractArray{T1}) where {T1<:$S} $f.(x, y)
+        @deprecate $f(x::AbstractArray{T1}, y::$S) where {T1<:$S} $f.(x, y)
+        @deprecate $f(x::AbstractArray{T1}, y::AbstractArray{T2}) where {T1<:$S, T2<:$S} $f.(x, y)
+    end)
 end
 
 # Deprecate @vectorize_1arg-vectorized functions from...

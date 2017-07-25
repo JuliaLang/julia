@@ -145,9 +145,13 @@
          (bad-formal-argument v))
         (else
          (case (car v)
+           ((escape)
+            `(escape ,(arg-name (cadr v))))
+           ((hygienic-scope)
+            `(hygienic-scope ,(arg-name (cadr v)) ,(caddr v)))
            ((... kw)
-	    (arg-name (cadr v)) ;; to check for errors
-	    (decl-var (cadr v)))
+            (arg-name (cadr v)) ;; to check for errors
+            (decl-var (cadr v)))
            ((|::|)
             (if (not (symbol? (cadr v)))
                 (bad-formal-argument (cadr v)))
@@ -164,6 +168,10 @@
          (bad-formal-argument v))
         (else
          (case (car v)
+           ((escape)
+            `(escape ,(arg-type (cadr v))))
+           ((hygienic-scope)
+            `(hygienic-scope ,(arg-type (cadr v)) ,(caddr v)))
            ((...) (if (eq? (length v) 3)
                       `(... ,(decl-type (cadr v)) ,(caddr v))
                       `(... ,(decl-type (cadr v)))))
@@ -336,3 +344,31 @@
                         (cdr e))))))
 
 (define (flatten-blocks e) (flatten-ex 'block e))
+
+;; decl-var that also identifies f in f()=...
+(define (decl-var* e)
+  (cond ((not (pair? e))       e)
+        ((eq? (car e) 'escape) '())
+        ((eq? (car e) 'call)   (decl-var* (cadr e)))
+        ((eq? (car e) '=)      (decl-var* (cadr e)))
+        ((eq? (car e) 'curly)  (decl-var* (cadr e)))
+        ((eq? (car e) '|::|)   (decl-var* (cadr e)))
+        ((eq? (car e) 'where)  (decl-var* (cadr e)))
+        (else                  (decl-var e))))
+
+(define (decl-vars* e)
+  (if (and (pair? e) (eq? (car e) 'tuple))
+      (apply append (map decl-vars* (cdr e)))
+      (list (decl-var* e))))
+
+(define (function-def? e)
+  (and (pair? e) (or (eq? (car e) 'function) (eq? (car e) '->)
+                     (and (eq? (car e) '=) (length= e 3)
+                          (eventually-call (cadr e))))))
+
+(define (pair-with-gensyms v)
+  (map (lambda (s)
+         (if (pair? s)
+             s
+             (cons s (named-gensy s))))
+       v))

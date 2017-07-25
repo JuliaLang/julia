@@ -220,9 +220,10 @@
                  (if lb (list lb '(core Any)) '())))))
 
 (define (method-expr-name m)
-  (let ((name (cadr m)))
+  (let ((name (ignore-scope (cadr m))))
        (cond ((not (pair? name)) name)
              ((eq? (car name) 'outerref) (cadr name))
+             ((and (eq? (car name) 'block) (length= name 1)) (ignore-scope (cadr name)))
              ;((eq? (car name) 'globalref) (caddr name))
              (else name))))
 
@@ -238,6 +239,22 @@
                          (and (pair? e) (eq? (car e) '=) (member (cadr e) sp-ssavals)))
                        (cdr type-ex))))
         '())))
+
+;; replace the static parameter names from a (method ...) expression with new-sparams
+(define (rename-method-expr-static-parameters m new-sparams)
+  (let ((type-ex (caddr m)))
+    (if (null? new-sparams)
+        type-ex
+        ;; rewrite ssavalue labels of sparams from the svec-of-sparams argument to `method`
+        (let ((sp-ssavals (cddr (last (last type-ex))))) ; list of (ssavalue)
+          (cons 'block
+                (map (lambda (e)  ;; rewrite T from (= v (call (core TypeVar) (quote T) ...)) to (car new-sparams)
+                       (if (and (pair? e) (eq? (car e) '=) (member (cadr e) sp-ssavals))
+                           (let ((new-sp (car new-sparams)))
+                             (set! new-sparams (cdr new-sparams))
+                             `(= ,(cadr e) (call (core TypeVar) (quote ,new-sp) ,@(cdddr (caddr e)))))
+                           e)) (cdr type-ex)))))))
+
 
 ;; expressions of the form a.b.c... where everything is a symbol
 (define (sym-ref? e)
@@ -283,7 +300,7 @@
 (define (replace-vars e renames)
   (cond ((symbol? e)      (lookup e renames e))
         ((or (not (pair? e)) (quoted? e))  e)
-        ((memq (car e) '(-> function scope-block)) e)
+        ((memq (car e) '(-> function scope-block escape hygienic-scope)) e)
         (else
          (cons (car e)
                (map (lambda (x) (replace-vars x renames))
@@ -292,7 +309,7 @@
 (define (replace-outer-vars e renames)
   (cond ((and (pair? e) (eq? (car e) 'outerref)) (lookup (cadr e) renames e))
         ((or (not (pair? e)) (quoted? e))  e)
-        ((memq (car e) '(-> function scope-block)) e)
+        ((memq (car e) '(-> function scope-block escape hygienic-scope)) e)
         (else
          (cons (car e)
                (map (lambda (x) (replace-outer-vars x renames))
@@ -300,7 +317,7 @@
 
 ;; construct the (method ...) expression for one primitive method definition,
 ;; assuming optional and keyword args are already handled
-(define (method-def-expr- name sparams argl body isstaged (rett '(core Any)))
+(define (method-def-expr- name symname sparams argl body isstaged (rett '(core Any)))
   (if
    (any kwarg? argl)
    ;; has optional positional args
@@ -319,7 +336,7 @@
             (dfl  (map caddr kws)))
         (receive
          (vararg req) (separate vararg? argl)
-         (optional-positional-defs name sparams req opt dfl body isstaged
+         (optional-positional-defs name symname sparams req opt dfl body isstaged
                                    (append req opt vararg) rett)))))
    ;; no optional positional args
    (let ((names (map car sparams)))
@@ -330,8 +347,8 @@
            (error "function static parameter names not unique"))
        (if (any (lambda (x) (and (not (eq? x UNUSED)) (memq x names))) anames)
            (error "function argument and static parameter names must be distinct")))
-     (if (or (and name (not (sym-ref? name))) (eq? name 'true) (eq? name 'false))
-         (error (string "invalid function name \"" (deparse name) "\"")))
+     (if (or (and symname (not (sym-ref? symname))) (eq? symname 'true) (eq? symname 'false))
+         (error (string "invalid function name \"" (deparse symname) "\"")))
      (let* ((types (llist-types argl))
             (body  (method-lambda-expr argl body rett))
             ;; HACK: the typevars need to be bound to ssavalues, since this code
@@ -340,10 +357,13 @@
             (renames (map cons names temps))
             (mdef
              (if (null? sparams)
-                 `(method ,name (call (core svec) (call (core svec) ,@(dots->vararg types)) (call (core svec)))
+                 `(method ,(if symname name #f)
+                          ,(re-scope
+                            `(call (core svec) (call (core svec) ,@(dots->vararg types)) (call (core svec)))
+                            name)
                           ,body ,isstaged)
-                 `(method ,name
-                          (block
+                 `(method ,(if symname name #f)
+                          ,(re-scope `(block
                            ,@(let loop ((n       names)
                                         (t       temps)
                                         (sp      (map bounds-to-TypeVar sparams))
@@ -361,9 +381,9 @@
                                                       (map (lambda (ty)
                                                              (replace-vars ty renames))
                                                            types)))
-                                 (call (core svec) ,@temps)))
+                                 (call (core svec) ,@temps))) name)
                           ,body ,isstaged))))
-       (if (symbol? name)
+       (if (symbol? symname)
            `(block (method ,name) ,mdef (unnecessary ,name))  ;; return the function
            mdef)))))
 
@@ -377,9 +397,9 @@
 
 (define empty-vector-any '(call (core AnyVector) 0))
 
-(define (keywords-method-def-expr name sparams argl body isstaged rett)
+(define (keywords-method-def-expr name symname sparams argl body isstaged rett)
   (let* ((kargl (cdar argl))  ;; keyword expressions (= k v)
-         (annotations (map (lambda (a) `(meta nospecialize ,(arg-name (cadr (caddr a)))))
+         (annotations (map (lambda (a) `(meta nospecialize ,(re-scope (arg-name (cadr (caddr a))) name)))
                            (filter nospecialize-meta? kargl)))
          (kargl (map (lambda (a)
                        (if (nospecialize-meta? a) (caddr a) a))
@@ -407,7 +427,7 @@
          ;; the keyword::Type expressions
          (vars     (map cadr kargl))
          ;; keyword default values
-         (vals     (map caddr kargl))
+         (vals     (map (lambda (kv) (re-scope (caddr kv) name)) kargl))
          ;; just the keyword names
          (keynames (map decl-var vars))
          ;; do some default values depend on other keyword arguments?
@@ -433,13 +453,13 @@
                   sparams)))
     (let ((kw (gensy)) (i (gensy)) (ii (gensy)) (elt (gensy))
           (rkw (if (null? restkw) '() (symbol (string (car restkw) "..."))))
-          (mangled (symbol (string "#" (if name (undot-name name) 'call) "#"
+          (mangled (symbol (string "#" (if symname (undot-name symname) 'call) "#"
                                    (string (current-julia-module-counter)))))
           (tempnames (map (lambda (x) (gensy)) keynames)))
       `(block
         ;; call with no keyword args
         ,(method-def-expr-
-          name positional-sparams (append pargl vararg)
+          name symname positional-sparams (append pargl vararg)
           `(block
             ,@prologue
             ,(let (;; call mangled(vals..., [rest_kw,] pargs..., [vararg]...)
@@ -456,7 +476,7 @@
 
         ;; call with keyword args pre-sorted - original method code goes here
         ,(method-def-expr-
-          mangled sparams
+          (re-scope mangled name) mangled sparams
           `((|::| ,mangled (call (core typeof) ,mangled)) ,@vars ,@restkw
             ;; strip type off function self argument if not needed for a static param.
             ;; then it is ok for cl-convert to move this definition above the original def.
@@ -475,7 +495,7 @@
 
         ;; call with unsorted keyword args. this sorts and re-dispatches.
         ,(method-def-expr-
-          name
+          name symname
           ;; remove sparams that don't occur, to avoid printing the warning twice
           (filter-sparams (cons 'list argl) positional-sparams)
           `((|::|
@@ -556,7 +576,7 @@
                                              (list `(... ,(arg-name (car vararg)))))))))
           #f)
         ;; return primary function
-        ,(if (not (symbol? name))
+        ,(if (not (symbol? symname))
              '(null) name)))))
 
 ;; prologue includes line number node and eventual meta nodes
@@ -580,7 +600,7 @@
           (else
            (loop filtered (cdr params))))))
 
-(define (optional-positional-defs name sparams req opt dfl body isstaged overall-argl rett)
+(define (optional-positional-defs name symname sparams req opt dfl body isstaged overall-argl rett)
   (let ((prologue (extract-method-prologue body)))
     `(block
       ,@(map (lambda (n)
@@ -610,9 +630,9 @@
                            `(block
                              ,@prologue
                              (call ,(arg-name (car req)) ,@(map arg-name (cdr passed)) ,@vals)))))
-                 (method-def-expr- name sp passed body #f)))
+                 (method-def-expr- name symname sp passed body #f)))
              (iota (length opt)))
-      ,(method-def-expr- name sparams overall-argl body isstaged rett))))
+      ,(method-def-expr- name symname sparams overall-argl body isstaged rett))))
 
 ;; strip empty (parameters ...), normalizing `f(x;)` to `f(x)`.
 (define (remove-empty-parameters argl)
@@ -641,14 +661,14 @@
 ;; definitions without keyword arguments are passed to method-def-expr-,
 ;; which handles optional positional arguments by adding the needed small
 ;; boilerplate definitions.
-(define (method-def-expr name sparams argl body isstaged rett)
+(define (method-def-expr name symname sparams argl body isstaged rett)
   (let ((argl (remove-empty-parameters argl)))
     (if (has-parameters? argl)
         ;; has keywords
         (begin (check-kw-args (cdar argl))
-               (keywords-method-def-expr name sparams argl body isstaged rett))
+               (keywords-method-def-expr name symname sparams argl body isstaged rett))
         ;; no keywords
-        (method-def-expr- name sparams argl body isstaged rett))))
+        (method-def-expr- name symname sparams argl body isstaged rett))))
 
 (define (struct-def-expr name params super fields mut)
   (receive
@@ -940,15 +960,20 @@
 
 ;; take apart a type signature, e.g. T{X} <: S{Y}
 (define (analyze-type-sig ex)
-  (or ((pattern-lambda (-- name (-s))
-                       (values name '() '(core Any))) ex)
-      ((pattern-lambda (curly (-- name (-s)) . params)
-                       (values name params '(core Any))) ex)
-      ((pattern-lambda (|<:| (-- name (-s)) super)
-                       (values name '() super)) ex)
-      ((pattern-lambda (|<:| (curly (-- name (-s)) . params) super)
-                       (values name params super)) ex)
-      (error "invalid type signature")))
+  (cond ((symbol? (ignore-scope ex)) ;; (struct T)
+         (values ex '() '(core Any)))
+        ((and (pair? ex) (eq? (car ex) 'curly) ;; (struct (curly T ...))
+              (symbol? (ignore-scope (cadr ex))))
+         (values (cadr ex) (cddr ex) '(core Any)))
+        ((and (pair? ex) (eq? (car ex) '|<:|) ;; (struct (<: T S))
+              (symbol? (ignore-scope (cadr ex))))
+         (values (cadr ex) '() (caddr ex)))
+        ((and (pair? ex) (eq? (car ex) '|<:|) ;; (struct (<: (curly T ...) S))
+              (pair? (cadr ex)) (eq? (caadr ex) 'curly)
+              (symbol? (ignore-scope (cadadr ex))))
+         (values (cadadr ex) (cddadr ex) (caddr ex)))
+        (else
+         (error "invalid type signature"))))
 
 ;; insert calls to convert() in ccall, and pull out expressions that might
 ;; need to be rooted before conversion.
@@ -986,7 +1011,7 @@
   (define (just-arglist? ex)
     (and (pair? ex)
          (or (memq (car ex) '(tuple block))
-             (and (eq? (car ex) 'where)
+             (and (memq (car ex) '(where escape hygienic-scope))
                   (just-arglist? (cadr ex))))))
   (let ((name (cadr e)))
     (if (just-arglist? name)
@@ -1002,7 +1027,7 @@
         `(where ,ex ,.(reverse! vars)))))
 
 (define (expand-function-def- e)
-  (let* ((name  (cadr e))
+  (let* ((name  (ignore-scope (cadr e)))
          (where (if (and (pair? name) (eq? (car name) 'where))
                     (let ((w (flatten-where-expr name)))
                       (begin0 (cddr w)
@@ -1010,31 +1035,34 @@
                                   (error (string "invalid assignment location \"" (deparse name) "\"")))
                               (set! name (cadr w))))
                     #f))
-         (dcl   (and (pair? name) (eq? (car name) '|::|)))
-         (rett  (if dcl (caddr name) '(core Any)))
-         (name  (if dcl (cadr name) name)))
-    (cond ((and (length= e 2) (symbol? name))
-           (if (or (eq? name 'true) (eq? name 'false))
-               (error (string "invalid function name \"" name "\"")))
+         (symname  (ignore-scope name))
+         (dcl   (and (pair? symname) (eq? (car symname) '|::|))) ;; have return type expression?
+         (rett  (if dcl (re-scope (re-scope (caddr symname) name) (cadr e)) '(core Any))) ;; return type expression
+         (name  (re-scope (if dcl (re-scope (cadr symname) name) name) (cadr e))) ;; name expression
+         (symname (if dcl (ignore-scope (cadr symname)) symname))) ;; symbolic name (if found)
+    (cond ((and (length= e 2) (symbol? symname))
+           (if (or (eq? symname 'true) (eq? symname 'false))
+               (error (string "invalid function name \"" symname "\"")))
            `(method ,name))
-          ((not (pair? name))  e)
-          ((eq? (car name) 'call)
-           (let* ((head    (cadr name))
-                  (argl    (cddr name))
+          ((and (pair? symname) (eq? (car symname) 'call))
+           (let* ((head    (cadr symname))
+                  (argl    (cddr symname))
                   (has-sp  (and (not where) (pair? head) (eq? (car head) 'curly)))
-                  (name    (deprecate-dotparen (if has-sp (cadr head) head)))
-                  (op (let ((op_ (maybe-undotop name))) ; handle .op -> broadcast deprecation
+                  (symname (deprecate-dotparen (if has-sp (cadr head) head)))
+                  (name    (re-scope `(block ,symname) name)) ; extra block as placeholder for scope distinction
+                  (op (let ((op_ (maybe-undotop symname))) ; handle .op -> broadcast deprecation
                         (if op_
-                            (syntax-deprecation #f (string "function " (deparse name) "(...)")
+                            (syntax-deprecation #f (string "function " (deparse symname) "(...)")
                                                 (string "function Base.broadcast(::typeof(" (deparse op_) "), ...)")))
                         op_))
-                  (name (if op '(|.| Base (inert broadcast)) name))
-                  (annotations (map (lambda (a) `(meta nospecialize ,(arg-name a)))
+                  (annotations (map (lambda (a) `(meta nospecialize ,(re-scope (arg-name a) name)))
                                     (filter nospecialize-meta? argl)))
                   (body (insert-after-meta (caddr e) annotations))
                   (argl (map (lambda (a)
                                (if (nospecialize-meta? a) (caddr a) a))
                              argl))
+                  (symname (if op '(top broadcast) symname))
+                  (name    (if op (re-scope symname name) name))
                   (argl (if op (cons `(|::| (call (core Typeof) ,op)) argl) argl))
                   (sparams (map analyze-typevar (cond (has-sp (cddr head))
                                                       (where  where)
@@ -1044,18 +1072,19 @@
                                             `(|::| |#self#| ,(cadr n))
                                             n)))
                   ;; fill in first (closure) argument
-                  (farg    (if (decl? name)
-                               (adj-decl name)
-                               `(|::| |#self#| (call (core Typeof) ,name))))
+                  (farg    (if (decl? symname)
+                               (adj-decl symname)
+                               `(|::| |#self#| (call (core Typeof) ,symname))))
                   (argl    (fix-arglist
                             (arglist-unshift argl farg)
                             (and (not (any kwarg? argl)) (not (and (pair? argl)
                                                                    (pair? (car argl))
                                                                    (eq? (caar argl) 'parameters))))))
-                  (name    (if (or (decl? name) (and (pair? name) (eq? (car name) 'curly)))
-                               #f name)))
+                  (symname (ignore-scope symname))
+                  (symname (if (or (decl? symname) (and (pair? symname) (eq? (car symname) 'curly)))
+                               #f symname)))
              (expand-forms
-              (method-def-expr name sparams argl body isstaged rett))))
+              (method-def-expr name symname sparams argl body isstaged rett))))
           (else
            (error (string "invalid assignment location \"" (deparse name) "\""))))))
 
@@ -1321,22 +1350,24 @@
 
 ;; take apart e.g. `const a::Int = 0` into `const a; a::Int = 0`
 (define (expand-const-decl e)
-  (let ((arg (cadr e)))
+  (let ((arg (ignore-scope (cadr e))))
     (if (atom? arg)
-        e
+        (if (eq? arg (cadr e))
+            e
+            (re-scope `(const ,arg) (cadr e)))
         (case (car arg)
           ((global local local-def)
-           (for-each (lambda (b) (if (not (assignment? b))
+           (for-each (lambda (b) (if (not (assignment? (ignore-scope b)))
                                      (error "expected assignment after \"const\"")))
                      (cdr arg))
-           (expand-forms (expand-decls (car arg) (cdr arg) #t)))
+           (expand-forms (re-scope (expand-decls (car arg) (cdr arg) #t) (cadr e))))
           ((= |::|)
            (expand-forms (expand-decls 'const (cdr e) #f)))
           (else e)))))
 
 (define (expand-local-or-global-decl e)
   (if (and (symbol? (cadr e)) (length= e 2))
-      e
+      e ;; already in expanded form
       (expand-forms (expand-decls (car e) (cdr e) #f))))
 
 ;; given a complex assignment LHS, return the symbol that will ultimately be assigned to
@@ -1357,22 +1388,23 @@
     (if (null? b)
         `(block
           ,.(if const?
-                (map (lambda (x) `(const ,x)) vars)
+                (map (lambda (x) (re-scope `(const ,(ignore-scope x)) x)) vars)
                 '())
-          ,.(map (lambda (x) `(,what ,x)) vars)
+          ,.(map (lambda (x) (re-scope `(,what ,(ignore-scope x)) x)) vars)
           ,.(reverse assigns))
-        (let ((x (car b)))
+        (let* ((x-scope (car b))
+               (x (ignore-scope x-scope)))
           (cond ((or (assignment-like? x) (function-def? x))
                  (loop (cdr b)
-                       (append (lhs-decls (assigned-name (cadr x))) vars)
-                       (cons `(,(car x) ,(all-decl-vars (cadr x)) ,(caddr x))
+                       (append (re-scope (lhs-decls (assigned-name (cadr x))) x-scope) vars)
+                       (cons (re-scope `(,(car x) ,(all-decl-vars (cadr x)) ,(caddr x)) x-scope)
                              assigns)))
                 ((and (pair? x) (eq? (car x) '|::|))
                  (loop (cdr b)
-                       (cons (decl-var x) vars)
-                       (cons `(decl ,@(cdr x)) assigns)))
+                       (cons (re-scope (decl-var x) x-scope) vars)
+                       (cons (re-scope `(decl ,@(cdr x)) x-scope) assigns)))
                 ((symbol? x)
-                 (loop (cdr b) (cons x vars) assigns))
+                 (loop (cdr b) (cons x-scope vars) assigns))
                 (else
                  (error (string "invalid syntax in \"" what "\" declaration"))))))))
 
@@ -1646,7 +1678,7 @@
                                 ,(loop (cdr tail)))))))))))
 
 (define (expand-forms e)
-  (if (or (atom? e) (memq (car e) '(quote inert top core globalref outerref line module toplevel ssavalue null meta)))
+  (if (or (atom? e) (memq (car e) '(quote inert top core globalref line module toplevel ssavalue null meta)))
       e
       (let ((ex (get expand-table (car e) #f)))
         (if ex
@@ -1860,6 +1892,12 @@
               (extract (cdr params) (cons p newparams) whereparams)))))
   (extract (cddr e) '() '()))
 
+(define (swap-scope e)
+  (if (symbol? (cadr e)) e
+      (if (and (pair? (cadr e)) (memq (caadr e) '(escape hygienic-scope))) ;; invert (outerref (escape e)) and try again
+          (expand-forms (re-scope `(,(car e) ,(ignore-scope (cadr e))) (cadr e)))
+          (error "invalid expression: expected symbol"))))
+
 ;; table mapping expression head to a function expanding that form
 (define expand-table
   (table
@@ -1908,10 +1946,14 @@
    'local  expand-local-or-global-decl
    'global expand-local-or-global-decl
    'local-def expand-local-or-global-decl
+   'outerref swap-scope
 
    '=
    (lambda (e)
-     (define lhs (cadr e))
+     (define lhs-scope (cadr e))
+     (define lhs (ignore-scope lhs-scope))
+     (define rhs-scope (caddr e))
+     (define rhs (ignore-scope rhs-scope))
      (define (function-lhs? lhs)
        (and (pair? lhs)
             (or (eq? (car lhs) 'call)
@@ -1923,67 +1965,73 @@
        (cons 'function (cdr e)))
      (cond
       ((function-lhs? lhs)
-       (expand-forms (assignment-to-function lhs e)))
+       (expand-forms (assignment-to-function lhs-scope e)))
       ((and (pair? lhs)
             (eq? (car lhs) 'curly))
-       (expand-typealias (cadr e) (caddr e)))
-      ((assignment? (caddr e))
+       (expand-typealias lhs-scope rhs-scope))
+      ((assignment? rhs)
        ;; chain of assignments - convert a=b=c to `b=c; a=c`
-       (let loop ((lhss (list lhs))
-                  (rhs  (caddr e)))
+       ;; TODO: need to handle scope correctly here
+       (let loop ((lhss (list lhs-scope))
+                  (scope  rhs-scope)
+                  (rhs  rhs))
          (if (and (assignment? rhs) (not (function-lhs? (cadr rhs))))
-             (loop (cons (cadr rhs) lhss) (caddr rhs))
-             (let ((rr (if (symbol-like? rhs) rhs (make-ssavalue))))
+             (loop (cons (re-scope (cadr rhs) scope) lhss)
+                   (re-scope scope (caddr rhs)) ;; accumulate nested scope info
+                   (ignore-scope (caddr rhs)))
+             (let ((rr (make-ssavalue)))
                (expand-forms
-                `(block ,.(if (eq? rr rhs) '() `((= ,rr ,(if (assignment? rhs)
-                                                             (assignment-to-function (cadr rhs) rhs)
-                                                             rhs))))
+                `(block (= ,rr ,(re-scope
+                                  (if (assignment? rhs)
+                                      (assignment-to-function (cadr rhs) rhs)
+                                      rhs)
+                                  scope))
                         ,@(map (lambda (l) `(= ,l ,rr))
                                lhss)
                         (unnecessary ,rr)))))))
       ((symbol-like? lhs)
-       `(= ,lhs ,(expand-forms (caddr e))))
+       `(= ,lhs-scope ,(expand-forms rhs-scope)))
       ((atom? lhs)
        (error (string "invalid assignment location \"" (deparse lhs) "\"")))
       (else
        (case (car lhs)
          ((globalref)
           ;; M.b =
-          (let* ((rhs (caddr e))
-                 (rr  (if (or (symbol-like? rhs) (atom? rhs)) rhs (make-ssavalue))))
+          (let* ((rr (if (or (symbol-like? rhs) (atom? rhs)) rhs-scope (make-ssavalue))))
             `(block
-              ,.(if (eq? rr rhs) '() `((= ,rr ,(expand-forms rhs))))
-              (= ,lhs ,rr)
+              ,.(if (eq? rr rhs-scope) '() `((= ,rr ,(expand-forms rhs-scope))))
+              (= ,lhs-scope ,rr)
               (unnecessary ,rr))))
          ((|.|)
           ;; a.b =
-          (let* ((a   (cadr lhs))
-                 (b_  (caddr lhs))
-                 (b   (if (and (length= b_ 2) (eq? (car b_) 'tuple))
-                          (begin
-                            (syntax-deprecation #f
-                             (string (deparse a) ".(" (deparse (cadr b_)) ") = ...")
-                             (string "setfield!(" (deparse a) ", " (deparse (cadr b_)) ", ...)"))
-                            (cadr b_))
-                          b_))
-                 (rhs (caddr e)))
-            (let ((aa (if (symbol-like? a) a (make-ssavalue)))
+          (let* ((a-scope (re-scope (cadr lhs) lhs-scope))
+                 (a (ignore-scope a-scope))
+                 (b-scope (re-scope (caddr lhs) lhs-scope))
+                 (b (ignore-scope b-scope)))
+            (if (and (length= b 2) (eq? (car b) 'tuple))
+                (begin
+                  (syntax-deprecation #f
+                   (string (deparse a) ".(" (deparse (cadr b)) ") = ...")
+                   (string "setfield!(" (deparse a) ", " (deparse (cadr b)) ", ...)"))
+                  (set! b (cadr b))
+                  (set! b-scope (re-scope b b-scope))))
+            (let ((aa (if (symbol-like? a) a-scope (make-ssavalue)))
                   (bb (if (or (atom? b) (symbol-like? b) (and (pair? b) (quoted? b)))
-                          b (make-ssavalue)))
-                  (rr (if (or (symbol-like? rhs) (atom? rhs)) rhs (make-ssavalue))))
+                          b-scope (make-ssavalue)))
+                  (rr (if (or (symbol-like? rhs) (atom? rhs)) rhs-scope (make-ssavalue))))
               `(block
-                ,.(if (eq? aa a)   '() `((= ,aa ,(expand-forms a))))
-                ,.(if (eq? bb b)   '() `((= ,bb ,(expand-forms b))))
-                ,.(if (eq? rr rhs) '() `((= ,rr ,(expand-forms rhs))))
+                ,.(if (eq? aa a-scope)   '() `((= ,aa ,(expand-forms a-scope))))
+                ,.(if (eq? bb b-scope)   '() `((= ,bb ,(expand-forms b-scope))))
+                ,.(if (eq? rr rhs-scope) '() `((= ,rr ,(expand-forms rhs-scope))))
                 (call (core setfield!) ,aa ,bb
                       (call (top convert)
                             (call (core fieldtype) (call (core typeof) ,aa) ,bb)
                             ,rr))
                 (unnecessary ,rr)))))
-         ((tuple)
+         ((tuple) ;; TODO: need to handle scope correctly here
           ;; multiple assignment
           (let ((lhss (cdr lhs))
-                (x    (caddr e)))
+                (x    rhs))
             (if (and (pair? x) (pair? lhss) (eq? (car x) 'tuple)
                      (length= lhss (length (cdr x))))
                 ;; (a, b, ...) = (x, y, ...)
@@ -2037,14 +2085,32 @@
                  (unnecessary ,r))))))
          ((|::|)
           ;; (= (|::| x T) rhs)
-          (let ((x (cadr lhs))
-                (T (caddr lhs))
-                (rhs (caddr e)))
-            (let ((e (remove-argument-side-effects x)))
-              (expand-forms
-               `(block ,@(cdr e)
-                       (decl ,(car e) ,T)
-                       (= ,(car e) ,rhs))))))
+          (let* ((x-scope (cadr lhs))
+                 (x (ignore-scope x-scope))
+                 (T (caddr lhs)))
+            (expand-forms
+              (cond ((and (effect-free? x-scope) (eq? lhs lhs-scope))
+                     `(block (decl ,x-scope ,T)
+                             (= ,x-scope ,rhs)))
+                    ((and (effect-free? x))
+                     (let ((rr (make-ssavalue)))
+                           (x-scope (re-scope x-scope lhs-scope))
+                           (T (re-scope T lhs-scope))
+                       `(block (= ,rr ,rhs)
+                               (decl ,x-scope ,T) ;; TODO: scope of x might be slightly distorted here by hygienic lhs
+                               (= ,x-scope ,rr))))
+                    (else
+                     (let ((rr (make-ssavalue))
+                           (t (make-ssavalue))
+                           (e (remove-argument-side-effects x)))
+                       `(block (= ,rr ,rhs)
+                               (= ,t ,(re-scope T lhs-scope))
+                               ,(re-scope (re-scope
+                                            `(block ,@(cdr e)
+                                                    (|::| ,(car e) ,t) ;; typeassert
+                                                    (= ,(car e) ,rr))
+                                            x-scope) lhs-scope))))))))
+
          ((vcat)
           ;; (= (vcat . args) rhs)
           (error "use \"(a, b) = ...\" to assign multiple values"))
@@ -2190,7 +2256,7 @@
    '|::|
    (lambda (e)
      (if (not (length= e 3))
-         (error "invalid \"::\" syntax"))
+         (error (string "invalid \"::\" syntax, got " (deparse e))))
      (if (not (symbol-like? (cadr e)))
          `(call (core typeassert)
                 ,(expand-forms (cadr e)) ,(expand-forms (caddr e)))
@@ -2448,11 +2514,32 @@
           (check-dups (cdr locals) others)))
   locals)
 
+;; count hygienic / escape pairs
+;; and fold together a list resulting from applying the function to
+;; and block at the same hygienic scope
+(define (resume-on-escape lam e nblocks)
+  (if (or (not (pair? e)) (quoted? e))
+      '()
+      (cond ((memq (car e) '(lambda module toplevel))
+             '())
+            ((eq? (car e) 'hygienic-scope)
+             (resume-on-escape lam (cadr e) (+ nblocks 1)))
+            ((eq? (car e) 'escape)
+             (if (= nblocks 0)
+                 (lam (cadr e))
+                 (resume-on-escape lam (cadr e) (- nblocks 1))))
+            (else
+             (foldl (lambda (a l) (append! l (resume-on-escape lam a nblocks)))
+                    '()
+                    (cdr e))))))
+
 (define (find-assigned-vars e env)
   (if (or (not (pair? e)) (quoted? e))
       '()
       (case (car e)
-        ((lambda scope-block module toplevel)  '())
+        ((lambda scope-block escape module toplevel)  '())
+        ((hygienic-scope)
+         (resume-on-escape (lambda (e) (find-assigned-vars e env)) (cadr e) 0))
         ((method)
          (let ((v (decl-var (method-expr-name e))))
            (append!
@@ -2467,19 +2554,23 @@
                rest
                (cons v rest))))
         (else
-         (apply append! (map (lambda (x) (find-assigned-vars x env))
-                             e))))))
+         (foldl (lambda (a l) (append! l (find-assigned-vars a env)))
+                '()
+                (cdr e))))))
 
 (define (find-decls kind e)
   (if (or (not (pair? e)) (quoted? e))
       '()
-      (cond ((memq (car e) '(lambda scope-block module toplevel))
+      (cond ((memq (car e) '(lambda scope-block escape module toplevel))
              '())
+            ((eq? (car e) 'hygienic-scope)
+             (resume-on-escape (lambda (e) (find-decls kind e)) (cadr e) 0))
             ((eq? (car e) kind)
              (list (decl-var (cadr e))))
             (else
-             (apply append! (map (lambda (x) (find-decls kind x))
-                                 e))))))
+             (foldl (lambda (a l) (append! l (find-decls kind a)))
+                    '()
+                    (cdr e))))))
 
 (define (find-local-decls e) (find-decls 'local e))
 (define (find-local-def-decls e) (find-decls 'local-def e))
@@ -2494,7 +2585,9 @@
   (cond ((or (eq? e 'true) (eq? e 'false) (eq? e UNUSED)) tab)
         ((symbol? e) (if (not (memq e bound)) (put! tab e #t)) tab)
         ((or (not (pair? e)) (quoted? e)) tab)
-        ((memq (car e) '(lambda scope-block module toplevel)) tab)
+        ((memq (car e) '(lambda scope-block escape module toplevel)) tab)
+        ((eq? (car e) 'hygienic-scope)
+         (resume-on-escape (lambda (e) (unbound-vars e bound tab) '()) (cadr e) 0) tab)
         ((eq? (car e) 'break-block) (unbound-vars (caddr e) bound tab))
         ((eq? (car e) 'with-static-parameters) (unbound-vars (cadr e) bound tab))
         (else (for-each (lambda (x) (unbound-vars x bound tab))
@@ -2507,26 +2600,74 @@
 ;; 3. variables assigned inside this scope-block that don't exist in outer
 ;;    scopes
 ;; returns lambdas in the form (lambda (args...) (locals...) body)
-(define (resolve-scopes- e env outerglobals implicitglobals lam renames newlam)
-  (cond ((symbol? e) (let ((r (assq e renames)))
-                       (if r (cdr r) e))) ;; return the renaming for e, or e
-        ((or (not (pair? e)) (quoted? e) (memq (car e) '(toplevel global))) e)
+(define (resolve-scopes- e env outerglobals implicitglobals lam renames newlam modu hygienic-scope)
+  (cond ((eq? e 'true) e)
+        ((eq? e 'false) e)
+        ((symbol? e) (let ((r (assq e renames)))
+                       (if r (cdr r)
+                             (if (null? hygienic-scope) e `(globalref ,modu ,e))))) ;; return the renaming for e, or e
+        ((or (not (pair? e)) (quoted? e) (memq (car e)
+           '(toplevel symbolicgoto symboliclabel null break
+             boundscheck inbounds meta line
+             top core globalref))) e)
+        ((eq? (car e) 'outerref)
+         (if (not (symbol? (cadr e))) (error "invalid outerref"))
+         (if (null? hygienic-scope) e `(globalref ,modu ,(cadr e))))
+        ((memq (car e) '(global const))
+         (if (null? hygienic-scope) e `(,(car e) (globalref ,modu ,(cadr e)))))
         ((eq? (car e) 'local) '(null)) ;; remove local decls
         ((eq? (car e) 'local-def) '(null)) ;; remove local decls
         ((eq? (car e) 'implicit-global) '(null)) ;; remove implicit-global decls
         ((eq? (car e) 'lambda)
          (let* ((lv (lam:vars e))
                 (env (append lv env))
-                (body (resolve-scopes- (lam:body e) env
+                (renames ;; remove renames corresponding to local variables from the environment
+                  (filter (lambda (ren) (not (memq (car ren) lv)))
+                        renames))
+                (args (cadr e))
+                ;; TODO: compute argument renaming more correctly for hygienic args
+                (args (if (null? hygienic-scope) args
+                    (let* ((new-args (map (lambda (a)
+                                            (let ((aa (ignore-scope a)))
+                                              (if (and (pair? a) (eq? (car a) 'escape))
+                                                  aa
+                                                  (let ((r (assq aa renames)))
+                                                    (if (and r (symbol? (cdr r)))
+                                                        (cdr r) ;; already a local? reuse the same gensym name
+                                                        (named-gensy aa))))))
+                                          args)))
+                          (append! renames (map cons args new-args))
+                          new-args)))
+                (body (resolve-scopes- (lam:body e)
+                                       env
                                        ;; don't propagate implicit or outer globals
                                        '()
                                        '()
-                                       e
-                                       ;; remove renames corresponding to local variables from the environment
-                                       (filter (lambda (ren) (not (memq (car ren) lv)))
-                                               renames)
-                                       #t)))
-               `(lambda ,(cadr e) ,(caddr e) ,body)))
+                                       e ;; lam
+                                       renames
+                                       #t ;; newlam
+                                       modu
+                                       hygienic-scope)))
+               `(lambda ,args ,(caddr e) ,body))) ;; locals list was updated in-place
+        ((and (eq? (car e) 'method) (length= e 5)) ; `(method ,name ,type-ex (lambda ,body) ,isgenerated)
+           (let* ((sparams (method-expr-static-parameters e))
+                  (new-sparams (if (null? hygienic-scope) sparams (map named-gensy sparams)))
+                  (type-ex (rename-method-expr-static-parameters e (if (null? hygienic-scope) '() new-sparams)))
+                  (new-renames (append (map (lambda (old new) (cons old `(outerref ,new))) sparams new-sparams)
+                                       (filter (lambda (ren) (not (memq (car ren) new-sparams))) renames)))
+                  (name-ex (cadr e))
+                  (body-ex (cadddr e))
+                  (name-ex (resolve-scopes- name-ex env outerglobals implicitglobals lam renames #f modu hygienic-scope))
+                  (type-ex (resolve-scopes- type-ex env outerglobals implicitglobals lam renames #f modu hygienic-scope))
+                  (body-ex (resolve-scopes- body-ex (append sparams env) outerglobals implicitglobals lam new-renames #f modu hygienic-scope)))
+             `(method ,name-ex ,type-ex ,body-ex ,(last e))))
+        ((eq? (car e) 'hygienic-scope)
+           (resolve-scopes- `(scope-block ,(cadr e)) '() '() '() lam '() #f (caddr e)
+                            (list env outerglobals implicitglobals lam renames newlam modu hygienic-scope)))
+        ((eq? (car e) 'escape)
+         (if (null? hygienic-scope)
+             (error "unexpected escape expression")
+             (apply resolve-scopes- (cadr e) hygienic-scope)))
         ((eq? (car e) 'scope-block)
          (let* ((blok (cadr e)) ;; body of scope-block expression
                 (other-locals (if lam (caddr lam) '())) ;; locals that are explicitly part of containing lambda expression
@@ -2546,12 +2687,14 @@
                  (lambda (vars)
                   ;; compute the set of locals introduced by this scope which
                   ;; have the same name as a variable used in an outer scope
-                  (if (or newlam (not lam))
-                      '()
-                       (filter (lambda (v) (or (memq v env)
-                                               (memq v other-locals)
-                                               (memq v (caddr lam))))
-                               vars))))
+                  (if (null? hygienic-scope)
+                      (if (or newlam (not lam))
+                          '()
+                           (filter (lambda (v) (or (memq v env)
+                                                   (memq v other-locals)
+                                                   (memq v (caddr lam))))
+                                   vars))
+                      vars))) ;; rename all vars when we have an enclosing hygienic-scope
                 (need-rename (need-rename? vars))
                 (need-rename-def (need-rename? vars-def))
                 ;; new gensym names for conflicting variables
@@ -2565,7 +2708,10 @@
                 ;; combine the list of new renamings with the inherited list
                 (new-renames (append (map cons need-rename renamed) ;; map from definition name -> gensym name
                                      (map cons need-rename-def renamed-def)
-                                     (map (lambda (g) (cons g `(outerref ,g))) new-iglo)
+                                     (map (lambda (g) (cons g (if (null? hygienic-scope)
+                                                                  `(outerref ,g)
+                                                                  `(globalref ,modu ,g))))
+                                          new-iglo)
                                      (filter (lambda (ren) ;; old renames list, with anything in vars removed
                                                (let ((var (car ren)))
                                                  (not (or (memq var all-vars) ;; remove anything new
@@ -2573,7 +2719,7 @@
                                                           (memq var glob))))) ;; remove anything that's now global
                                              renames)))
                 (new-oglo (append iglo outerglobals)) ;; list of all outer-globals from outside blok
-                (body (resolve-scopes- blok new-env new-oglo new-iglo lam new-renames #f))
+                (body (resolve-scopes- blok new-env new-oglo new-iglo lam new-renames #f modu hygienic-scope))
                 (real-new-vars (append (diff vars need-rename) renamed))
                 (real-new-vars-def (append (diff vars-def need-rename-def) renamed-def)))
                (for-each (lambda (v)
@@ -2593,18 +2739,35 @@
          (error "module expression not at top level"))
         ((eq? (car e) 'break-block)
          `(break-block ,(cadr e) ;; ignore type symbol of break-block expression
-                       ,(resolve-scopes- (caddr e) env outerglobals implicitglobals lam renames #f))) ;; body of break-block expression
+                       ,(resolve-scopes- (caddr e) env outerglobals implicitglobals lam renames #f modu hygienic-scope))) ;; body of break-block expression
         ((eq? (car e) 'with-static-parameters)
-         `(with-static-parameters ;; ignore list of sparams in break-block expression
-            ,(resolve-scopes- (cadr e) env outerglobals implicitglobals lam renames #f)
+         `(with-static-parameters ;; ignore list of in break-block expression
+            ,(resolve-scopes- (cadr e) env outerglobals implicitglobals lam renames #f modu hygienic-scope)
             ,@(cddr e))) ;; body of break-block expression
         (else
          (cons (car e)
                (map (lambda (x)
-                      (resolve-scopes- x env outerglobals implicitglobals lam renames #f))
+                      (resolve-scopes- x env outerglobals implicitglobals lam renames #f modu hygienic-scope))
                     (cdr e))))))
 
-(define (resolve-scopes e) (resolve-scopes- e '() '() '() #f '() #f))
+(define (resolve-scopes e) (resolve-scopes- e '() '() '() #f '() #f '() '()))
+
+;; drop all knowledge of scope from e
+(define (ignore-scope e)
+  (if (and (pair? e) (memq (car e) '(escape hygienic-scope)))
+      (ignore-scope (cadr e))
+      e))
+
+;; re-wrap e in any scope markers
+(define (re-scope e scope)
+  (cond ((not (pair? scope)) e)
+        ((eq? (car scope) 'escape)
+         `(escape ,(re-scope e (cadr scope))))
+        ((eq? (car scope) 'hygienic-scope)
+         (if (and (pair? e) (eq? (car e) 'escape))
+             (cadr e) ; immediately fold away (hygienic-scope (escape ...))
+             `(hygienic-scope ,(re-scope e (cadr scope)) ,(caddr scope))))
+        (else e)))
 
 ;; pass 3: analyze variables
 
@@ -3129,7 +3292,7 @@ f(x) = yt(x)
                                       lam2
                                       (cl-convert (cadddr lam2) 'anon lam2 (table) #f interp)))
                                   ,(last e))))
-                       (else
+                       (else ;; add `@eval` to expression to close-over variables via splicing
                         (let* ((exprs     (lift-toplevel (convert-lambda lam2 '|#anon| #t '())))
                                (top-stmts (cdr exprs))
                                (newlam    (renumber-slots-and-labels (linearize (car exprs)))))
@@ -3137,7 +3300,7 @@ f(x) = yt(x)
                             ,@top-stmts
                             (block ,@sp-inits
                                    (method ,name ,(cl-convert sig fname lam namemap toplevel interp)
-                                           ,(julia-expand-macros `(quote ,newlam))
+                                           ,(julia-bq-expand-hygienic newlam #t) ;; quote the body
                                            ,(last e)))))))
                  ;; local case - lift to a new type at top level
                  (let* ((exists (get namemap name #f))

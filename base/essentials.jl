@@ -50,7 +50,7 @@ macro nospecialize(var, vars...)
     if isa(var, Expr) && var.head === :(=)
         var.head = :kw
     end
-    Expr(:meta, :nospecialize, var, vars...)
+    Expr(:escape, Expr(:meta, :nospecialize, var, vars...))
 end
 
 macro _pure_meta()

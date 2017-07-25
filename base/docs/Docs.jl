@@ -662,6 +662,9 @@ function docm(source::LineNumberNode, mod::Module, meta, ex, define = true)
     if isa(x, GlobalRef) && (x::GlobalRef).mod == mod
         x = (x::GlobalRef).name
     end
+    while isexpr(x, :escape) || isexpr(x, Symbol("hygienic-scope"))
+        x = x.args[1]
+    end
 
     # Keywords using the `@kw_str` macro in `base/docs/basedocs.jl`.
     #

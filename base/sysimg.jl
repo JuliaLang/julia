@@ -413,7 +413,7 @@ include("loading.jl")
 include("threadcall.jl")
 
 # deprecated functions
-include("deprecated.jl")
+#include("deprecated.jl")
 
 # Some basic documentation
 include("docs/helpdb.jl")
