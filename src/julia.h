@@ -143,7 +143,7 @@ typedef struct {
     uint16_t pooled:1;
     uint16_t ptrarray:1;  // representation is pointer array
     uint16_t isshared:1;  // data is shared by multiple Arrays
-    uint16_t isaligned:1; // data allocated with memalign
+    uint16_t _unused:1;
 } jl_array_flags_t;
 
 JL_EXTENSION typedef struct {
@@ -673,9 +673,10 @@ STATIC_INLINE void jl_gc_wb_back(void *ptr) // ptr isa jl_value_t*
     }
 }
 
-JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz);
-JL_DLLEXPORT void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz,
-                                         int isaligned, jl_value_t *owner);
+void *jl_gc_malloc_aligned(size_t sz, size_t align);
+void *jl_gc_calloc_aligned(size_t nm, size_t sz, size_t align);
+void *jl_gc_realloc_aligned(void *p, size_t sz);
+void jl_gc_free_aligned(void *p);
 
 // object accessors -----------------------------------------------------------
 

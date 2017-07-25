@@ -102,13 +102,13 @@ static jl_array_t *_new_array_(jl_value_t *atype, uint32_t ndims, size_t *dims,
     }
     else {
         tsz = JL_ARRAY_ALIGN(tsz, JL_CACHE_BYTE_ALIGNMENT); // align whole object
-        data = jl_gc_managed_malloc(tot);
+        data = jl_gc_malloc_aligned(tot, JL_CACHE_BYTE_ALIGNMENT);
         // Allocate the Array **after** allocating the data
         // to make sure the array is still young
         a = (jl_array_t*)jl_gc_alloc(ptls, tsz, atype);
         // No allocation or safepoint allowed after this
         a->flags.how = 2;
-        jl_gc_track_malloced_array(ptls, a);
+        jl_gc_track_malloced_array(ptls, a, 1);
         if (!isunboxed)
             memset(data, 0, tot);
     }
@@ -124,7 +124,6 @@ static jl_array_t *_new_array_(jl_value_t *atype, uint32_t ndims, size_t *dims,
     a->flags.ptrarray = !isunboxed;
     a->elsize = elsz;
     a->flags.isshared = 0;
-    a->flags.isaligned = 1;
     a->offset = 0;
     if (ndims == 1) {
         a->nrows = nel;
@@ -187,7 +186,6 @@ JL_DLLEXPORT jl_array_t *jl_reshape_array(jl_value_t *atype, jl_array_t *data,
     a->flags.ndims = ndims;
     a->offset = 0;
     a->data = NULL;
-    a->flags.isaligned = data->flags.isaligned;
     jl_array_t *owner = (jl_array_t*)jl_array_owner(data);
     jl_value_t *el_type = jl_tparam0(atype);
     assert(store_unboxed(el_type) == !data->flags.ptrarray);
@@ -256,7 +254,6 @@ JL_DLLEXPORT jl_array_t *jl_string_to_array(jl_value_t *str)
     a->flags.ndims = 1;
     a->offset = 0;
     a->data = jl_string_data(str);
-    a->flags.isaligned = 0;
     a->elsize = 1;
     a->flags.ptrarray = 0;
     jl_array_data_owner(a) = str;
@@ -305,10 +302,9 @@ JL_DLLEXPORT jl_array_t *jl_ptr_to_array_1d(jl_value_t *atype, void *data,
     a->flags.ptrarray = !isunboxed;
     a->flags.ndims = 1;
     a->flags.isshared = 1;
-    a->flags.isaligned = 0;  // TODO: allow passing memalign'd buffers
     if (own_buffer) {
         a->flags.how = 2;
-        jl_gc_track_malloced_array(ptls, a);
+        jl_gc_track_malloced_array(ptls, a, 0);
         jl_gc_count_allocd(nel*elsz + (elsz == 1 ? 1 : 0));
     }
     else {
@@ -369,10 +365,9 @@ JL_DLLEXPORT jl_array_t *jl_ptr_to_array(jl_value_t *atype, void *data,
     a->flags.ndims = ndims;
     a->offset = 0;
     a->flags.isshared = 1;
-    a->flags.isaligned = 0;
     if (own_buffer) {
         a->flags.how = 2;
-        jl_gc_track_malloced_array(ptls, a);
+        jl_gc_track_malloced_array(ptls, a, 0);
         jl_gc_count_allocd(nel*elsz + (elsz == 1 ? 1 : 0));
     }
     else {
@@ -590,8 +585,7 @@ static int NOINLINE array_resize_buffer(jl_array_t *a, size_t newlen)
     if (a->flags.how == 2) {
         // already malloc'd - use realloc
         char *olddata = (char*)a->data - oldoffsnb;
-        a->data = jl_gc_managed_realloc(olddata, nbytes, oldnbytes,
-                                        a->flags.isaligned, (jl_value_t*)a);
+        a->data = jl_gc_realloc_aligned(olddata, nbytes);
     }
     else if (a->flags.how == 3 && jl_is_string(jl_array_data_owner(a))) {
         // if data is in a String, keep it that way
@@ -616,10 +610,9 @@ static int NOINLINE array_resize_buffer(jl_array_t *a, size_t newlen)
             elsz > 4
 #endif
             ) {
-            a->data = jl_gc_managed_malloc(nbytes);
-            jl_gc_track_malloced_array(ptls, a);
+            a->data = jl_gc_malloc_aligned(nbytes, JL_CACHE_BYTE_ALIGNMENT);
+            jl_gc_track_malloced_array(ptls, a, 1);
             a->flags.how = 2;
-            a->flags.isaligned = 1;
         }
         else {
             a->data = jl_gc_alloc_buf(ptls, nbytes);
