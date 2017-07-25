@@ -1153,7 +1153,8 @@
              ;; ref is syntax, so we can distinguish
              ;; a[i] = x  from
              ;; ref(a,i) = x
-             (let ((al (with-end-symbol (parse-cat s #\]))))
+             (let* ((es end-symbol)
+                    (al (with-end-symbol (parse-cat s #\] es))))
                (if (null? al)
                    (loop (list 'ref ex))
                    (case (car al)
@@ -1735,7 +1736,7 @@
          (take-token s))
      `(comprehension ,gen))))
 
-(define (parse-matrix s first closer gotnewline)
+(define (parse-matrix s first closer gotnewline last-end-symbol)
   (define (fix head v) (cons head (reverse v)))
   (define (update-outer v outer)
     (cond ((null? v)       outer)
@@ -1743,7 +1744,7 @@
           (else            (cons (fix 'row v) outer))))
   (define semicolon (eqv? (peek-token s) #\;))
   ;; if a [ ] expression is a cat expression, `end` is not special
-  (with-bindings ((end-symbol #f))
+  (with-bindings ((end-symbol last-end-symbol))
   (let loop ((vec   (list first))
              (outer '()))
     (let ((t  (if (or (eqv? (peek-token s) #\newline) gotnewline)
@@ -1790,7 +1791,7 @@
   (if (not (ts:space? s))
       (error (string "expected space before \"" t "\""))))
 
-(define (parse-cat s closer)
+(define (parse-cat s closer last-end-symbol)
   (with-normal-ops
    (with-inside-vec
     (if (eqv? (require-token s) closer)
@@ -1808,9 +1809,9 @@
                  (take-token s)
                  (if (memv (peek-token s) (list #\, closer))
                      (parse-vect s first closer)
-                     (parse-matrix s first closer #t)))
+                     (parse-matrix s first closer #t last-end-symbol)))
                 (else
-                 (parse-matrix s first closer #f))))))))
+                 (parse-matrix s first closer #f last-end-symbol))))))))
 
 (define (kw-to-= e) (if (kwarg? e) (cons '= (cdr e)) e))
 (define (=-to-kw e) (if (assignment? e) (cons 'kw (cdr e)) e))
@@ -2182,7 +2183,7 @@
           ;; cat expression
           ((eqv? t #\[ )
            (take-token s)
-           (let ((vex (parse-cat s #\])))
+           (let ((vex (parse-cat s #\] end-symbol)))
              (if (null? vex) '(vect) vex)))
 
           ((eqv? t #\{ )
@@ -2190,7 +2191,7 @@
            (if (eqv? (require-token s) #\})
                (begin (take-token s)
                       '(cell1d))
-               (let ((vex (parse-cat s #\})))
+               (let ((vex (parse-cat s #\} end-symbol)))
                  (if (null? vex)
                      '(cell1d)
                      (case (car vex)
