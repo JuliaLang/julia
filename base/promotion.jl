@@ -34,11 +34,14 @@ function typejoin(@nospecialize(a), @nospecialize(b))
         end
         ap, bp = a.parameters, b.parameters
         lar = length(ap)::Int; lbr = length(bp)::Int
+        if lar == 0
+            return Tuple{Vararg{tailjoin(bp,1)}}
+        end
+        if lbr == 0
+            return Tuple{Vararg{tailjoin(ap,1)}}
+        end
         laf, afixed = full_va_len(ap)
         lbf, bfixed = full_va_len(bp)
-        if lar==0 || lbr==0
-            return Tuple
-        end
         if laf < lbf
             if isvarargtype(ap[lar]) && !afixed
                 c = Vector{Any}(laf)
