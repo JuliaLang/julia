@@ -8,6 +8,16 @@
 @test eltype(GenericString) == Char
 @test start("abc") == 1
 @test cmp("ab","abc") == -1
+@test "abc" === "abc"
+@test "ab"  !== "abc"
+@test string("ab", 'c') === "abc"
+codegen_egal_of_strings(x, y) = (x===y, x!==y)
+@test codegen_egal_of_strings(string("ab", 'c'), "abc") === (true, false)
+let strs = ["", "a", "a b c", "до свидания"]
+    for x in strs, y in strs
+        @test (x === y) == (object_id(x) == object_id(y))
+    end
+end
 
 # {starts,ends}with
 @test startswith("abcd", 'a')
