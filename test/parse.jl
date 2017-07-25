@@ -1264,3 +1264,11 @@ end === (3, String)
 @test [begin
           @inbounds for i = 1:10 end
        end for i = 1:5] == fill(nothing, 5)
+
+# issue #18912
+@test_throws ParseError parse("(::)")
+@test parse(":(::)") == QuoteNode(Symbol("::"))
+@test_throws ParseError parse("f(::) = ::")
+@test parse("(::A)") == Expr(Symbol("::"), :A)
+@test_throws ParseError parse("(::, 1)")
+@test_throws ParseError parse("(1, ::)")

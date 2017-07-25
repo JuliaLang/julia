@@ -978,8 +978,6 @@
 (define (parse-unary s)
   (let* ((op  (require-token s))
          (spc (ts:space? s)))
-    (if (closing-token? op)
-        (error (string "unexpected \"" op "\"")))
     (if (initial-operator? op)
         (begin
           (take-token s)
@@ -1086,8 +1084,9 @@
   (let ((op (peek-token s)))
     (if (syntactic-unary-op? op)
         (begin (take-token s)
-               (cond ((let ((next (peek-token s)))
-                        (or (closing-token? next) (newline? next)))
+               (cond ((and (memq op '(& $))
+                           (let ((next (peek-token s)))
+                             (or (closing-token? next) (newline? next))))
                       op)
                      ((memq op '(& |::|))  (list op (parse-where s parse-call)))
                      (else                 (list op (parse-unary-prefix s)))))
@@ -2116,19 +2115,25 @@
 
           ;; identifier
           ((symbol? t)
-           (if checked (check-identifier t))
+           (if checked
+               (begin (check-identifier t)
+                      (if (closing-token? t)
+                          (error (string "unexpected \"" (take-token s) "\"")))))
            (take-token s))
 
           ;; parens or tuple
           ((eqv? t #\( )
            (take-token s)
-           (with-normal-ops
-            (with-whitespace-newline
+           (with-bindings ((range-colon-enabled #t)
+                           (space-sensitive #f)
+                           (where-enabled #t)
+                           (whitespace-newline #t))
+            (let ((nxt (require-token s)))
              (cond
-              ((eqv? (require-token s) #\) )
+              ((eqv? nxt #\) )
                ;; empty tuple ()
                (begin (take-token s) '(tuple)))
-              ((syntactic-op? (peek-token s))
+              ((syntactic-op? nxt)
                ;; allow (=) etc.
                (let ((tok (take-token s)))
                  (if (not (eqv? (require-token s) #\) ))
@@ -2136,7 +2141,14 @@
                      (take-token s))
                  (if checked (check-identifier tok))
                  tok))
-              ((eqv? (peek-token s) #\;)
+              ;; allow :(::) as a special case
+              ((and (not checked) (eq? nxt '|::|)
+                    (let ((spc (ts:space? s)))
+                      (or (and (take-token s) (eqv? (require-token s) #\) ))
+                          (and (ts:put-back! s '|::| spc) #f))))
+               (take-token s)  ;; take #\)
+               '|::|)
+              ((eqv? nxt #\;)
                (arglist-to-tuple #t #f (parse-arglist s #\) )))
               (else
                ;; here we parse the first subexpression separately, so
@@ -2238,6 +2250,8 @@
            `(macrocall @cmd ,(line-number-node s) ,(parse-raw-literal s #\`)))
 
           ((or (string? t) (number? t) (large-number? t)) (take-token s))
+
+          ((closing-token? t) (error (string "unexpected \"" (take-token s) "\"")))
 
           (else (error (string "invalid syntax: \"" (take-token s) "\""))))))
 
