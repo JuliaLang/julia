@@ -341,7 +341,7 @@ det(A::RealHermSymComplexHerm) = real(det(factorize(A)))
 det(A::Symmetric{<:Real}) = det(factorize(A))
 det(A::Symmetric) = det(factorize(A))
 
-\(A::HermOrSym{<:Any,<:StridedMatrix}, B::AbstractVector) = \(bkfact(A), B)
+\(A::HermOrSym{<:Any,<:StridedMatrix}, B::AbstractVector) = \(factorize(A), B)
 # Bunch-Kaufman solves can not utilize BLAS-3 for multiple right hand sides
 # so using LU is faster for AbstractMatrix right hand side
 \(A::HermOrSym{<:Any,<:StridedMatrix}, B::AbstractMatrix) = \(lufact(A), B)

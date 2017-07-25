@@ -310,11 +310,11 @@ end
                     @test Array(tri_b * Symmetric(asym)') ≈ Array(tri_b) * asym'
                 end
             end
-            if eltya != BigFloat
-                @testset "solver" begin
-                    @test Hermitian(aherm)\x ≈ aherm\x
-                    @test Symmetric(asym)\x  ≈ asym\x
-                end
+            @testset "solver" begin
+                @test Hermitian(aherm)\x ≈ aherm\x
+                @test Hermitian(aherm)\b ≈ aherm\b
+                @test Symmetric(asym)\x  ≈ asym\x
+                @test Symmetric(asym)\b  ≈ asym\b
             end
         end
     end
