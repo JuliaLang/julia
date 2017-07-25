@@ -270,7 +270,8 @@ end
 
 @testset "generic vecnorm for arrays of arrays" begin
     x = Vector{Int}[[1,2], [3,4]]
-    @test norm(x) ≈ sqrt(30)
+    @test @inferred(norm(x)) ≈ sqrt(30)
+    @test norm(x, 0) == length(x)
     @test norm(x, 1) ≈ sqrt(5) + 5
     @test norm(x, 3) ≈ cbrt(sqrt(125)+125)
 end
