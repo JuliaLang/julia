@@ -373,6 +373,9 @@ importall .StackTraces
 # misc useful functions & macros
 include("util.jl")
 
+# limited compile-time arithmetic on Val types
+include("valmath.jl")
+
 # dense linear algebra
 include("linalg/linalg.jl")
 importall .LinAlg
