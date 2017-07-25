@@ -79,6 +79,9 @@ This section lists changes that do not have deprecation warnings.
     the type of `n`). Use the corresponding mutating functions `randperm!` and `randcycle!`
     to control the array type ([#22723]).
 
+  * Worker-worker connections are setup lazily for an `:all_to_all` topology. Use keyword
+    arg `lazy=false` to force all connections to be setup during a `addprocs` call. ([#22814])
+
 Library improvements
 --------------------
 
