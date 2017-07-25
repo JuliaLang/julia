@@ -183,3 +183,11 @@ let was_gced = false
     end
     foo22770()
 end
+
+function egal_svecs()
+    a = Core.svec(:a, :b)
+    b = Core.svec(:a, :b)
+    a === b
+end
+@test egal_svecs()
+@test Core.svec(:a, :b) === Core.svec(:a, :b)
