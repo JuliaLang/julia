@@ -1101,6 +1101,7 @@ let isa_tfunc = Core.Inference.t_ffunc_val[
         @test isa_tfunc(c, Type{Complex}) === Const(false)
         @test isa_tfunc(c, Type{Complex{T}} where T) === Const(false)
     end
+<<<<<<< 57f5aed38a99d5d3f628dac38901446b3b1ae9a6
     @test isa_tfunc(Val{1}, Type{Val{T}} where T) === Bool
     @test isa_tfunc(Val{1}, DataType) === Bool
     @test isa_tfunc(Any, Const(Any)) === Const(true)
@@ -1170,3 +1171,77 @@ g23024(TT::Tuple{DataType}) = f23024(TT[1], v23024)
 @test Base.return_types(f23024, (DataType, Any)) == Any[Int]
 @test Base.return_types(g23024, (Tuple{DataType},)) == Any[Int]
 @test g23024((UInt8,)) === 2
+=======
+end
+
+# test code validation mechanism (#22938) ##################################################
+
+function f22938(a, b, x...)
+    d = 1
+    a = d
+    for i in 1:b
+        d += i
+    end
+    return i * a
+end
+
+m0 = methods(f22938).ms[]
+c0 = Base.uncompressed_ast(m0)
+
+@test isempty(Core.Inference.validate_code(m0))
+@test isempty(Core.Inference.validate_code(c0))
+
+# InvalidCodeError 1: encountered invalid expression head
+
+c = deepcopy(c0)
+insert!(c.code, 4, Expr(:(=), SlotNumber(2), Expr(:invalid, 1)))
+errors = Core.Inference.validate_code(c)
+@test length(errors) == 1
+@test errors[1].errno == 1
+
+# InvalidCodeError 2: encountered invalid LHS value
+
+c = deepcopy(c0)
+insert!(c.code, 4, Expr(:(=), LabelNode(1), 1))
+insert!(c.code, 2, Expr(:(=), :x, 1))
+insert!(c.code, 10, Expr(:(=), 3, 1))
+errors = Core.Inference.validate_code(c)
+@test length(errors) == 3
+@test all(e.errno == 2 for e in errors)
+
+# InvalidCodeError 3: encountered invalid call argument
+# TODO
+
+# InvalidCodeError 4: slotnames field is empty
+# TODO
+
+# InvalidCodeError 5: length(slotflags) != length(slotnames)
+# TODO
+
+# InvalidCodeError 6: (for inferred CodeInfo) length(slottypes) != length(slotnames)
+# TODO
+
+# InvalidCodeError 7: (for inferred CodeInfo) not all SSAValues in AST have a type in ssavaluetypes
+# TODO
+
+# InvalidCodeError 8: (for uninferred CodeInfo) slottypes field is not `nothing`
+# TODO
+
+# InvalidCodeError 9: (for uninferred CodeInfo) ssavaluetypes field is not length(ssavals)
+# TODO
+
+# InvalidCodeError 10: wrong assignment slotflag setting (bit flag 2 is not set, but should be)
+# TODO
+
+# InvalidCodeError 11: number of types in method signature != number of arguments
+# TODO
+
+# InvalidCodeError 12: last type in method signature does not match `isva` field setting
+# TODO
+
+# InvalidCodeError 13: encountered Expr head `:method` in non-top-level code
+# TODO
+
+# InvalidCodeError 14: CodeInfo for method contains fewer slotnames than the number of method arguments
+# TODO
+>>>>>>> get started on a couple tests

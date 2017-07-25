@@ -7,7 +7,9 @@ const VALID_EXPR_HEADS = Symbol[:call, :invoke, :static_parameter, :line, :gotoi
 const ASSIGNED_FLAG = 0x02
 
 struct InvalidCodeError <: Exception
+    errno::Int
     msg::String
+    meta::Any
 end
 
 """
@@ -36,13 +38,13 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo)
     walkast(c.code) do x
         if isa(x, Expr)
             if !in(x.head, VALID_EXPR_HEADS)
-                push!(errors, InvalidCodeError("encountered invalid expression head $(x.head)"))
+                push!(errors, InvalidCodeError(1, "encountered invalid expression head", x.head))
             elseif x.head == :(=) && !is_valid_lhs(x.args[1])
-                push!(errors, InvalidCodeError("encountered invalid LHS value $(x.args[1])"))
+                push!(errors, InvalidCodeError(2, "encountered invalid LHS value", x.args[1]))
             elseif x.head == :call
                 for i in 2:length(x.args)
                     if !is_valid_call_arg(x.args[i])
-                        push!(errors, InvalidCodeError("encountered invalid call argument $(x.args[i])"))
+                        push!(errors, InvalidCodeError(3, "encountered invalid call argument", x.args[i]))
                     end
                 end
             end
@@ -51,32 +53,32 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo)
         end
     end
     if isempty(c.slotnames)
-        push!(errors, InvalidCodeError("slotnames field is empty"))
+        push!(errors, InvalidCodeError(4, "slotnames field is empty"))
     end
     if length(c.slotnames) != length(c.slotflags)
-        push!(errors, InvalidCodeError("length(slotflags) != length(slotnames); $(length(c.slotflags)) != $(length(c.slotnames))"))
+        push!(errors, InvalidCodeError(5, "length(slotflags) != length(slotnames)", (length(c.slotflags), length(c.slotnames))))
     end
     if c.inferred
         if length(c.slottypes) != length(c.slotnames)
-            push!(errors, InvalidCodeError("length(slottypes) != length(slotnames); $(length(c.slottypes)) != $(length(c.slotnames))"))
+            push!(errors, InvalidCodeError(6, "length(slottypes) != length(slotnames)", (length(c.slottypes), length(c.slotnames))))
         end
         if length(c.ssavaluetypes) < length(ssavals)
             missing = length(ssavals) - length(c.ssavaluetypes)
-            push!(errors, InvalidCodeError("not all SSAValues in AST have a type in ssavaluetypes ($missing SSAValue types are missing)"))
+            push!(errors, InvalidCodeError(7, "not all SSAValues in AST have a type in ssavaluetypes", missing))
         end
     else
         if c.slottypes != nothing
-            push!(errors, InvalidCodeError("uninferred CodeInfo slottypes field should be `nothing`, instead it is $(c.slottypes)"))
+            push!(errors, InvalidCodeError(8, "uninferred CodeInfo slottypes field is not `nothing`", c.slottypes))
         end
         if c.ssavaluetypes != length(ssavals)
-            push!(errors, InvalidCodeError("uninferred CodeInfo ssavaluetypes field should be $(length(ssavals)), instead it is $(c.ssavaluetypes)"))
+            push!(errors, InvalidCodeError(9, "uninferred CodeInfo ssavaluetypes field does not equal the number of present SSAValues", (length(ssavals), c.ssavaluetypes)))
         end
     end
     walkast(c.code) do x
         if isa(x, Expr) && x.head == :(=)
             lhs = x.args[1]
             if isa(lhs, SlotNumber) && !is_flag_set(c.slotflags[lhs.id], ASSIGNED_FLAG)
-                push!(errors, InvalidCodeError("slot $(lhs.id) has wrong assignment slotflag setting (bit flag 2 is not set, but should be)"))
+                push!(errors, InvalidCodeError(10, "slot has wrong assignment slotflag setting (bit flag 2 should be set)", lhs.id))
             end
         end
     end
@@ -100,21 +102,21 @@ into `errors` (where `c = uncompress_ast(m)`):
 """
 function validate_code!(errors::Vector{>:InvalidCodeError}, m::Method)
     if length(m.sig.parameters) != m.nargs
-        push!(errors, InvalidCodeError("number of types in method signature ($(length(m.sig.parameters))) does not match number of arguments ($(m.nargs))"))
+        push!(errors, InvalidCodeError(11, "number of types in method signature does not match number of arguments",  (length(m.sig.parameters), m.nargs)))
     end
-    if m.isva != isa(last(m.sig.parameters), Vararg)
-        push!(errors, InvalidCodeError("last type in method signature ($(last(m.sig.parameters))) does not match `isva` field setting ($(m.isva))"))
+    if m.isva != (last(m.sig.parameters) <: Vararg{Any})
+        push!(errors, InvalidCodeError(12, "last type in method signature does not match `isva` field setting", (last(m.sig.parameters), m.isva)))
     end
     c = ccall(:jl_uncompress_ast, Any, (Any, Any), m, m.source)
     if m.nargs > 0
         walkast(c.code) do x
             if isa(x, Expr) && x.head == :method
-                push!(errors, InvalidCodeError("encountered `Expr` head `:method` in non-top-level code (i.e. `nargs` > 0)"))
+                push!(errors, InvalidCodeError(13, "encountered `Expr` head `:method` in non-top-level code (i.e. `nargs` > 0)"))
             end
         end
     end
     if m.nargs > length(c.slotnames)
-        push!(errors, InvalidCodeError("CodeInfo for method does contains fewer slotnames than the number of method arguments"))
+        push!(errors, InvalidCodeError(14, "CodeInfo for method contains fewer slotnames than the number of method arguments"))
     end
     validate_code!(errors, c)
     return errors
