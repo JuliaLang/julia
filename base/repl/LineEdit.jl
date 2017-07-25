@@ -90,9 +90,10 @@ complete_line(c::EmptyCompletionProvider, s) = [], true, true
 terminal(s::IO) = s
 terminal(s::PromptState) = s.terminal
 
-for f in [:terminal, :edit_insert, :on_enter, :add_history, :buffer, :edit_backspace, :(Base.isempty),
-        :replace_line, :refresh_multi_line, :input_string, :edit_move_left, :edit_move_right,
-        :edit_move_word_left, :edit_move_word_right, :update_display_buffer]
+for f in [:terminal, :edit_insert, :edit_insert_newline, :on_enter, :add_history,
+          :buffer, :edit_backspace, :(Base.isempty), :replace_line, :refresh_multi_line,
+          :input_string, :edit_move_left, :edit_move_right,
+          :edit_move_word_left, :edit_move_word_right, :update_display_buffer]
     @eval ($f)(s::MIState, args...) = $(f)(s.mode_state[s.current_mode], args...)
 end
 
@@ -476,6 +477,19 @@ function edit_insert(buf::IOBuffer, c)
         splice_buffer!(buf, position(buf):position(buf)-1, s)
         return sizeof(s)
     end
+end
+
+# align: number of ' ' to insert after '\n'
+# if align < 0: align like line above
+function edit_insert_newline(s::PromptState, align=-1)
+    buf = buffer(s)
+    if align < 0
+        beg = beginofline(buf)
+        align = findnext(_notspace, buf.data[beg+1:buf.size], 1) - 1
+        align < 0 && (align = buf.size-beg)
+    end
+    edit_insert(buf, '\n' * ' '^align)
+    refresh_line(s)
 end
 
 # align: delete up to 4 spaces to align to a multiple of 4 chars
@@ -1416,7 +1430,7 @@ AnyDict(
             commit_line(s)
             return :done
         else
-            edit_insert(s, '\n')
+            edit_insert_newline(s)
         end
     end,
     '\n' => KeyAlias('\r'),
@@ -1450,7 +1464,7 @@ AnyDict(
     # Ctrl-Right Arrow on rxvt
     "\eOc" => "\ef",
     # Meta Enter
-    "\e\r" => (s,o...)->(edit_insert(s, '\n')),
+    "\e\r" => (s,o...)->edit_insert_newline(s),
     "\e\n" => "\e\r",
     # Simply insert it into the buffer by default
     "*" => (s,data,c)->(edit_insert(s, c)),
