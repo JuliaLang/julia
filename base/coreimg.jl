@@ -65,7 +65,7 @@ include("associative.jl")
 include("docs/core.jl")
 
 # compiler
-include("codeinfovalidation.jl")
+include("codevalidation.jl")
 include("inference.jl")
 ccall(:jl_set_typeinf_func, Void, (Any,), typeinf_ext)
 
