@@ -35,6 +35,7 @@ end
         asym = a.'+a                 # symmetric indefinite
         aherm = a'+a                 # Hermitian indefinite
         apos  = a'*a                 # Hermitian positive definite
+        aposs = apos + apos.'        # Symmetric positive definite
         ε = εa = eps(abs(float(one(eltya))))
 
         x = randn(n)
@@ -153,12 +154,25 @@ end
 
             @testset "isposdef[!]" begin
                 @test isposdef(Symmetric(asym))  == isposdef(asym)
+                @test isposdef(Symmetric(aposs)) == isposdef(aposs) == true
                 @test isposdef(Hermitian(aherm)) == isposdef(aherm)
                 @test isposdef(Hermitian(apos))  == isposdef(apos) == true
                 if eltya != Int #chol! won't work with Int
                     @test isposdef!(Symmetric(copy(asym)))  == isposdef(asym)
+                    @test isposdef!(Symmetric(copy(aposs))) == isposdef(aposs) == true
                     @test isposdef!(Hermitian(copy(aherm))) == isposdef(aherm)
                     @test isposdef!(Hermitian(copy(apos)))  == isposdef(apos) == true
+                end
+            end
+
+            @testset "$f" for f in (det, logdet, logabsdet)
+                for uplo in (:U, :L)
+                    @test all(f(apos)  .≈ f(Hermitian(apos, uplo)))
+                    @test all(f(aposs) .≈ f(Symmetric(aposs, uplo)))
+                    if f != logdet
+                        @test all(f(aherm) .≈ f(Hermitian(aherm, uplo)))
+                        @test all(f(asym)  .≈ f(Symmetric(asym, uplo)))
+                    end
                 end
             end
 
@@ -219,13 +233,6 @@ end
                         @test sum(sort(abs.(eigvals(Symmetric(asym))))) == sum(sort(svdvals(Symmetric(asym))))
                     end
                     @test sum(sort(abs.(eigvals(Hermitian(aherm))))) == sum(sort(svdvals(Hermitian(aherm))))
-                end
-
-                @testset "det" begin
-                    @test det(aherm) ≈ det(Hermitian(aherm, :U))
-                    @test det(aherm) ≈ det(Hermitian(aherm, :L))
-                    @test det(asym)  ≈ det(Symmetric(asym, :U))
-                    @test det(asym)  ≈ det(Symmetric(asym, :L))
                 end
 
                 @testset "rank" begin
