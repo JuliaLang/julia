@@ -92,7 +92,7 @@ function __init__()
               (Ptr{Void},Ptr{Void},Ptr{Void}),
               cglobal(:jl_gc_counted_malloc),
               cglobal(:jl_gc_counted_realloc_with_old_size),
-              cglobal(:jl_gc_counted_free))
+              cglobal(:jl_gc_counted_free_with_size))
 
         ZERO.alloc, ZERO.size, ZERO.d = 0, 0, C_NULL
         ONE.alloc, ONE.size, ONE.d = 1, 1, pointer(_ONE)
