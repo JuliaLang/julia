@@ -19,6 +19,10 @@ Language changes
   * Declaring arguments as `x::ANY` to avoid specialization has been replaced
     by `@nospecialize x`. ([#22666]).
 
+  * Keyword argument default values are now evaluated in successive scopes ---
+    the scope for each expression includes only previous keyword arguments, in
+    left-to-right order ([#17240]).
+
   * The parsing of `1<<2*3` as `1<<(2*3)` is deprecated, and will change to
     `(1<<2)*3` in a future version ([#13079]).
 

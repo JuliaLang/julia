@@ -367,12 +367,13 @@
            `(block (method ,name) ,mdef (unnecessary ,name))  ;; return the function
            mdef)))))
 
-;; keyword default values that can be assigned right away. however, this creates
-;; a quasi-bug (part of issue #9535) where it can be hard to predict when a
-;; keyword argument will throw an UndefVarError.
-(define (const-default? x)
-  (or (number? x) (string? x) (char? x) (and (pair? x) (memq (car x) '(quote inert)))
-      (eq? x 'true) (eq? x 'false)))
+;; wrap expr in nested scopes assigning names to vals
+(define (scopenest names vals expr)
+  (if (null? names)
+      expr
+      `(let (block
+             ,(scopenest (cdr names) (cdr vals) expr))
+         (= ,(car names) ,(car vals)))))
 
 (define empty-vector-any '(call (core AnyVector) 0))
 
@@ -434,24 +435,23 @@
           (rkw (if (null? restkw) '() (symbol (string (car restkw) "..."))))
           (mangled (symbol (string "#" (if name (undot-name name) 'call) "#"
                                    (string (current-julia-module-counter)))))
-          (flags (map (lambda (x) (gensy)) vals)))
+          (tempnames (map (lambda (x) (gensy)) keynames)))
       `(block
         ;; call with no keyword args
         ,(method-def-expr-
           name positional-sparams (append pargl vararg)
           `(block
             ,@prologue
-            ,@(if (not ordered-defaults)
-                  '()
-                  (append! (map (lambda (kwname) `(local ,kwname)) keynames)
-                           (map make-assignment keynames vals)))
-            ;; call mangled(vals..., [rest_kw,] pargs..., [vararg]...)
-            (return (call ,mangled
-                          ,@(if ordered-defaults keynames vals)
-                          ,@(if (null? restkw) '() (list empty-vector-any))
-                          ,@(map arg-name pargl)
-                          ,@(if (null? vararg) '()
-                                (list `(... ,(arg-name (car vararg))))))))
+            ,(let (;; call mangled(vals..., [rest_kw,] pargs..., [vararg]...)
+                   (ret `(return (call ,mangled
+                                       ,@(if ordered-defaults keynames vals)
+                                       ,@(if (null? restkw) '() (list empty-vector-any))
+                                       ,@(map arg-name pargl)
+                                       ,@(if (null? vararg) '()
+                                             (list `(... ,(arg-name (car vararg)))))))))
+               (if ordered-defaults
+                   (scopenest keynames vals ret)
+                   ret)))
           #f)
 
         ;; call with keyword args pre-sorted - original method code goes here
@@ -483,14 +483,9 @@
              ,(if (any kwarg? pargl) (gensy) UNUSED)
              (call (core kwftype) ,ftype)) (:: ,kw (core AnyVector)) ,@pargl ,@vararg)
           `(block
-            ;; initialize keyword args to their defaults, or set a flag telling
-            ;; whether this keyword needs to be set.
-            ,@(map (lambda (kwname) `(local ,kwname)) keynames)
-            ,@(map (lambda (name dflt flag)
-                     (if (const-default? dflt)
-                         `(= ,name ,dflt)
-                         `(= ,flag true)))
-                   keynames vals flags)
+            ;; temp variables that will be assigned if their corresponding keywords are passed.
+            ;; `isdefined` is then used to check whether default values should be evaluated.
+            ,@(map (lambda (v) `(local ,v)) tempnames)
             ,@(if (null? restkw) '()
                   `((= ,rkw ,empty-vector-any)))
             ;; for i = 1:(length(kw)>>1)
@@ -499,8 +494,8 @@
                   ;; ii = i*2 - 1
                   (= ,ii (call (top -) (call (top *) ,i 2) 1))
                   (= ,elt (call (core arrayref) ,kw ,ii))
-                  ,(foldl (lambda (kvf else)
-                            (let* ((k     (car kvf))
+                  ,(foldl (lambda (kn else)
+                            (let* ((k     (car kn))
                                    (rval0 `(call (core arrayref) ,kw
                                                  (call (top +) ,ii 1)))
                                    ;; note: if the "declared" type of a KW arg
@@ -528,13 +523,9 @@
                                                                   ,T)
                                                            T)))
                                              rval0)))
-                              ;; if kw[ii] == 'k; k = kw[ii+1]::Type; end
-                              `(if (comparison ,elt === (quote ,(decl-var k)))
-                                   (block
-                                    (= ,(decl-var k) ,rval)
-                                    ,@(if (not (const-default? (cadr kvf)))
-                                          `((= ,(caddr kvf) false))
-                                          '()))
+                              ;; if kw[ii] == 'k; k_temp = kw[ii+1]::Type; end
+                              `(if (comparison ,elt === (quote ,(cdr kn)))
+                                   (= ,(decl-var k) ,rval)
                                    ,else)))
                           (if (null? restkw)
                               ;; if no rest kw, give error for unrecognized
@@ -547,21 +538,22 @@
                                             ,rkw (tuple ,elt
                                                         (call (core arrayref) ,kw
                                                               (call (top +) ,ii 1)))))
-                          (map list vars vals flags))))
+                          (map (lambda (k temp)
+                                 (cons (if (decl? k) `(,(car k) ,temp ,(caddr k)) temp)
+                                       (decl-var k)))
+                               vars tempnames))))
             ;; set keywords that weren't present to their default values
-            ,@(apply append
-                     (map (lambda (name dflt flag)
-                            (if (const-default? dflt)
-                                '()
-                                `((if ,flag (= ,name ,dflt)))))
-                          keynames vals flags))
-            ;; finally, call the core function
-            (return (call ,mangled
-                          ,@keynames
-                          ,@(if (null? restkw) '() (list rkw))
-                          ,@(map arg-name pargl)
-                          ,@(if (null? vararg) '()
-                                (list `(... ,(arg-name (car vararg))))))))
+            ,(scopenest keynames
+                        (map (lambda (v dflt) `(if (isdefined ,v)
+                                                   ,v
+                                                   ,dflt))
+                             tempnames vals)
+                        `(return (call ,mangled  ;; finally, call the core function
+                                       ,@keynames
+                                       ,@(if (null? restkw) '() (list rkw))
+                                       ,@(map arg-name pargl)
+                                       ,@(if (null? vararg) '()
+                                             (list `(... ,(arg-name (car vararg)))))))))
           #f)
         ;; return primary function
         ,(if (not (symbol? name))
@@ -2590,7 +2582,7 @@
                          glob)
                (if lam ;; update in-place the list of local variables in lam
                    (set-car! (cddr lam)
-                             (append! (caddr lam) real-new-vars real-new-vars-def)))
+                             (append real-new-vars real-new-vars-def (caddr lam))))
                (insert-after-meta ;; return the new, expanded scope-block
                 (if (and (pair? body) (eq? (car body) 'block))
                     body
