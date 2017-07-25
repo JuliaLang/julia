@@ -21,7 +21,7 @@ end
 
 function remove_workers_and_test()
     while nworkers() > 0
-        rmprocs(workers()[1]; waitfor=2.0)
+        rmprocs(workers()[1])
         test_worker_counts()
         if nworkers() == nprocs()
             break
