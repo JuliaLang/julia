@@ -1,4 +1,4 @@
-function transform!{T<:Union{SHA2_224_CTX,SHA2_256_CTX}}(context::T)
+function transform!(context::T) where {T<:Union{SHA2_224_CTX,SHA2_256_CTX}}
     pbuf = Ptr{eltype(context.state)}(pointer(context.buffer))
     # Initialize registers with the previous intermediate values (our state)
     a = context.state[1]

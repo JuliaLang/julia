@@ -1,4 +1,4 @@
-function transform!{T<:SHA3_CTX}(context::T)
+function transform!(context::T) where {T<:SHA3_CTX}
     # First, update state with buffer
     pbuf = Ptr{eltype(context.state)}(pointer(context.buffer))
     for idx in 1:div(blocklen(T),8)
@@ -49,7 +49,7 @@ end
 
 
 # Finalize data in the buffer, append total bitlength, and return our precious hash!
-function digest!{T<:SHA3_CTX}(context::T)
+function digest!(context::T) where {T<:SHA3_CTX}
     usedspace = context.bytecount % blocklen(T)
     # If we have anything in the buffer still, pad and transform that data
     if usedspace < blocklen(T) - 1

@@ -37,4 +37,4 @@ sigma0_512(x) =   (S64( 1, UInt64(x)) ⊻ S64( 8, UInt64(x)) ⊻ R( 7,   UInt64(
 sigma1_512(x) =   (S64(19, UInt64(x)) ⊻ S64(61, UInt64(x)) ⊻ R( 6,   UInt64(x)))
 
 # Let's be able to bswap arrays of these types as well
-bswap!{T<:Integer}(x::Vector{T})  = map!(bswap, x, x)
+bswap!(x::Vector{<:Integer}) = map!(bswap, x, x)
