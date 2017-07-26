@@ -947,7 +947,8 @@ function Base.cov(X::SparseMatrixCSC, vardim::Int=1; corrected::Bool=true)
     n, p = vardim == 1 ? (a, b) : (b, a)
 
     # Cov(X) = E[(X-μ)'(X-μ)]
-    # = X'X - X'u - μ'X + μ'μ
+    # = X'X - X'μ - μ'X + μ'μ
+    # = X'X - X'μ
 
     # Part1
     # Compute X'X using sparse matrix operations
@@ -968,9 +969,8 @@ function Base.cov(X::SparseMatrixCSC, vardim::Int=1; corrected::Bool=true)
     #         [k1*k2*n k2*k2*n]
     # but k1*n = a+b, and k2*n = c+d
     sums = sum(X, vardim)
-    means = sums ./ n
     @inbounds for j in 1:p, i in 1:p
-        part2 = sums[i] * means[j]
+        part2 = sums[i] * sums[j] / n
         out[i,j] -= part2
     end
     return scale!(out, inv(n-Int(corrected)))
