@@ -1091,11 +1091,11 @@ bool LateLowerGCFrame::CleanupIR(Function &F) {
     size_t maxframeargs = 0;
     PointerType *T_pprjlvalue = T_prjlvalue->getPointerTo();
     Instruction *StartOff = &*(F.getEntryBlock().begin());
-    AllocaInst *Frame = new AllocaInst(T_prjlvalue, ConstantInt::get(T_int32, maxframeargs),
+    AllocaInst *Frame = new AllocaInst(T_prjlvalue, 
 #if JL_LLVM_VERSION >= 50000
-        0,
+       0,  // llvm::AddressSpace::ADDRESS_SPACE_GENERIC
 #endif
-        "", StartOff);
+        ConstantInt::get(T_int32, maxframeargs),"", StartOff);
     for (BasicBlock &BB : F) {
         for (auto it = BB.begin(); it != BB.end();) {
             auto *CI = dyn_cast<CallInst>(&*it);

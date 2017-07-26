@@ -12,6 +12,9 @@
 #include "llvm/ExecutionEngine/Orc/LazyEmittingLayer.h"
 #if JL_LLVM_VERSION >= 50000
 #  include "llvm/ExecutionEngine/Orc/RTDyldObjectLinkingLayer.h"
+#  include "llvm/ExecutionEngine/JITEventListener.h"
+#  include "llvm/ExecutionEngine/ExecutionEngine.h"
+#  include "llvm/ExecutionEngine/Orc/CompileUtils.h"
 #else
 #  include "llvm/ExecutionEngine/Orc/ObjectLinkingLayer.h"
 #endif
@@ -116,19 +119,19 @@ class JuliaOJIT {
     public:
         DebugObjectRegistrar(JuliaOJIT &JIT);
         template <typename ObjSetT, typename LoadResult>
-        void operator()(RTDyldObjectLinkingLayerBase::ObjSetHandleT H, const ObjSetT &Objects,
+        void operator()(RTDyldObjectLinkingLayerBase::ObjHandleT H, const ObjSetT &Objects,
                         const LoadResult &LOS);
     private:
         void NotifyGDB(object::OwningBinary<object::ObjectFile> &DebugObj);
         std::vector<object::OwningBinary<object::ObjectFile>> SavedObjects;
-        std::unique_ptr<JITEventListener> JuliaListener;
+        std::unique_ptr<llvm::JITEventListener> JuliaListener;
         JuliaOJIT &JIT;
     };
 
 public:
-    typedef RTDyldObjectLinkingLayer<DebugObjectRegistrar> ObjLayerT;
-    typedef orc::IRCompileLayer<ObjLayerT> CompileLayerT;
-    typedef CompileLayerT::ModuleSetHandleT ModuleHandleT;
+    typedef RTDyldObjectLinkingLayer ObjLayerT;
+    typedef orc::IRCompileLayer<ObjLayerT, orc::SimpleCompiler> CompileLayerT;
+    typedef CompileLayerT::ModuleHandleT ModuleHandleT;
     typedef StringMap<void*> SymbolTableT;
     typedef object::OwningBinary<object::ObjectFile> OwningObj;
 

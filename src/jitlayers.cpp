@@ -351,7 +351,7 @@ JL_DLLEXPORT void ORCNotifyObjectEmitted(JITEventListener *Listener,
 
 // TODO: hook up RegisterJITEventListener, instead of hard-coding the GDB and JuliaListener targets
 template <typename ObjSetT, typename LoadResult>
-void JuliaOJIT::DebugObjectRegistrar::operator()(RTDyldObjectLinkingLayerBase::ObjSetHandleT H,
+void JuliaOJIT::DebugObjectRegistrar::operator()(RTDyldObjectLinkingLayerBase::ObjHandleT H,
                 const ObjSetT &Objects, const LoadResult &LOS)
 {
     auto oit = Objects.begin();
@@ -550,7 +550,7 @@ void JuliaOJIT::addModule(std::unique_ptr<Module> M)
                     );
     SmallVector<std::unique_ptr<Module>,1> Ms;
     Ms.push_back(std::move(M));
-    auto modset = CompileLayer.addModuleSet(std::move(Ms), MemMgr,
+    auto modset = CompileLayer.addModule(std::move(Ms), MemMgr,
                                             std::move(Resolver));
     // Force LLVM to emit the module so that we can register the symbols
     // in our lookup table.
@@ -559,7 +559,7 @@ void JuliaOJIT::addModule(std::unique_ptr<Module> M)
 
 void JuliaOJIT::removeModule(ModuleHandleT H)
 {
-    CompileLayer.removeModuleSet(H);
+    CompileLayer.removeModule(H);
 }
 
 JL_JITSymbol JuliaOJIT::findSymbol(const std::string &Name, bool ExportedSymbolsOnly)
@@ -582,12 +582,16 @@ JL_JITSymbol JuliaOJIT::findUnmangledSymbol(const std::string Name)
 
 uint64_t JuliaOJIT::getGlobalValueAddress(const std::string &Name)
 {
-    return findSymbol(getMangledName(Name), false).getAddress();
+    auto expected_addr = findSymbol(getMangledName(Name), false).getAddress();
+    // TODO: Handle error in expected_addr
+    return *expected_addr;
 }
 
 uint64_t JuliaOJIT::getFunctionAddress(const std::string &Name)
 {
-    return findSymbol(getMangledName(Name), false).getAddress();
+    auto expected_addr = findSymbol(getMangledName(Name), false).getAddress();
+    // TODO: Handle error in expected_addr
+    return *expected_addr;
 }
 
 Function *JuliaOJIT::FindFunctionNamed(const std::string &Name)
