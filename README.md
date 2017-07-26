@@ -7,7 +7,7 @@
 [![SHA](http://pkg.julialang.org/badges/SHA_0.4.svg)](http://pkg.julialang.org/?pkg=SHA&ver=0.4)
 
 Usage is very straightforward:
-```
+```julia
 julia> using SHA
 
 julia> bytes2hex(sha256("test"))
@@ -16,7 +16,7 @@ julia> bytes2hex(sha256("test"))
 
 Each exported function (at the time of this writing, SHA-1, SHA-2 224, 256, 384 and 512, and SHA-3 224, 256, 384 and 512 functions are implemented) takes in either an `Array{UInt8}`, a `ByteString` or an `IO` object.  This makes it trivial to checksum a file:
 
-```
+```julia
 shell> cat /tmp/test.txt
 test
 julia> using SHA
