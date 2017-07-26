@@ -1,8 +1,8 @@
 # Type hierarchy to aid in splitting up of SHA2 algorithms
 # as SHA224/256 are similar, and SHA-384/512 are similar
-@compat abstract type SHA_CTX end
-@compat abstract type SHA2_CTX <: SHA_CTX end
-@compat abstract type SHA3_CTX <: SHA_CTX end
+abstract type SHA_CTX end
+abstract type SHA2_CTX <: SHA_CTX end
+abstract type SHA3_CTX <: SHA_CTX end
 import Base: copy
 
 # We derive SHA1_CTX straight from SHA_CTX since it doesn't have a
@@ -102,7 +102,7 @@ blocklen(::Type{SHA3_512_CTX}) = UInt64(25*8 - 2*digestlen(SHA3_512_CTX))
 
 
 # short_blocklen is the size of a block minus the width of bytecount
-short_blocklen{T<:Union{SHA1_CTX,SHA2_CTX}}(::Type{T}) = blocklen(T) - 2*sizeof(state_type(T))
+short_blocklen(::Type{T}) where {T<:Union{SHA1_CTX,SHA2_CTX}} = blocklen(T) - 2*sizeof(state_type(T))
 
 # Once the "blocklen" methods are defined, we can define our outer constructors for SHA types:
 SHA2_224_CTX() = SHA2_224_CTX(copy(SHA2_224_initial_hash_value), 0, zeros(UInt8, blocklen(SHA2_224_CTX)))
@@ -126,9 +126,9 @@ SHA1_CTX() = SHA1_CTX(copy(SHA1_initial_hash_value), 0, zeros(UInt8, blocklen(SH
 
 
 # Copy functions
-copy{T <: SHA1_CTX}(ctx::T) = T(copy(ctx.state), ctx.bytecount, copy(ctx.buffer), copy(ctx.W))
-copy{T <: SHA2_CTX}(ctx::T) = T(copy(ctx.state), ctx.bytecount, copy(ctx.buffer))
-copy{T <: SHA3_CTX}(ctx::T) = T(copy(ctx.state), ctx.bytecount, copy(ctx.buffer))
+copy(ctx::T) where {T<:SHA1_CTX} = T(copy(ctx.state), ctx.bytecount, copy(ctx.buffer), copy(ctx.W))
+copy(ctx::T) where {T<:SHA2_CTX} = T(copy(ctx.state), ctx.bytecount, copy(ctx.buffer))
+copy(ctx::T) where {T<:SHA3_CTX} = T(copy(ctx.state), ctx.bytecount, copy(ctx.buffer))
 
 
 # Make printing these types a little friendlier
