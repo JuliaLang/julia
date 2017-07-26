@@ -7,7 +7,7 @@ import Base: copy
 
 # We derive SHA1_CTX straight from SHA_CTX since it doesn't have a
 # family of types like SHA2 or SHA3 do
-type SHA1_CTX <: SHA_CTX
+mutable struct SHA1_CTX <: SHA_CTX
     state::Array{UInt32,1}
     bytecount::UInt64
     buffer::Array{UInt8,1}
@@ -15,25 +15,25 @@ type SHA1_CTX <: SHA_CTX
 end
 
 # SHA2 224/256/384/512-bit Context Structures
-type SHA2_224_CTX <: SHA2_CTX
+mutable struct SHA2_224_CTX <: SHA2_CTX
     state::Array{UInt32,1}
     bytecount::UInt64
     buffer::Array{UInt8,1}
 end
 
-type SHA2_256_CTX <: SHA2_CTX
+mutable struct SHA2_256_CTX <: SHA2_CTX
     state::Array{UInt32,1}
     bytecount::UInt64
     buffer::Array{UInt8,1}
 end
 
-type SHA2_384_CTX <: SHA2_CTX
+mutable struct SHA2_384_CTX <: SHA2_CTX
     state::Array{UInt64,1}
     bytecount::UInt128
     buffer::Array{UInt8,1}
 end
 
-type SHA2_512_CTX <: SHA2_CTX
+mutable struct SHA2_512_CTX <: SHA2_CTX
     state::Array{UInt64,1}
     bytecount::UInt128
     buffer::Array{UInt8,1}
@@ -47,22 +47,22 @@ const SHA512_CTX = SHA2_512_CTX
 
 
 # SHA3 224/256/384/512-bit context structures
-type SHA3_224_CTX <: SHA3_CTX
+mutable struct SHA3_224_CTX <: SHA3_CTX
     state::Array{UInt64,1}
     bytecount::UInt128
     buffer::Array{UInt8,1}
 end
-type SHA3_256_CTX <: SHA3_CTX
+mutable struct SHA3_256_CTX <: SHA3_CTX
     state::Array{UInt64,1}
     bytecount::UInt128
     buffer::Array{UInt8,1}
 end
-type SHA3_384_CTX <: SHA3_CTX
+mutable struct SHA3_384_CTX <: SHA3_CTX
     state::Array{UInt64,1}
     bytecount::UInt128
     buffer::Array{UInt8,1}
 end
-type SHA3_512_CTX <: SHA3_CTX
+mutable struct SHA3_512_CTX <: SHA3_CTX
     state::Array{UInt64,1}
     bytecount::UInt128
     buffer::Array{UInt8,1}
