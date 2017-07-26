@@ -297,24 +297,22 @@ end
                 Base.LinAlg.A_mul_B!(C,a,Symmetric(asym))
                 @test C ≈ a*asym
 
-                if eltya != BigFloat
-                    tri_b = UpperTriangular(triu(rand(eltya, n, n)))
-                    @test Array(Hermitian(aherm).' * tri_b) ≈ aherm.' * Array(tri_b)
-                    @test Array(tri_b * Hermitian(aherm).') ≈ Array(tri_b) * aherm.'
-                    @test Array(Hermitian(aherm)' * tri_b) ≈ aherm' * Array(tri_b)
-                    @test Array(tri_b * Hermitian(aherm)') ≈ Array(tri_b) * aherm'
+                tri_b = UpperTriangular(triu(b))
+                @test Array(Hermitian(aherm).' * tri_b) ≈ aherm.' * Array(tri_b)
+                @test Array(tri_b * Hermitian(aherm).') ≈ Array(tri_b) * aherm.'
+                @test Array(Hermitian(aherm)' * tri_b) ≈ aherm' * Array(tri_b)
+                @test Array(tri_b * Hermitian(aherm)') ≈ Array(tri_b) * aherm'
 
-                    @test Array(Symmetric(asym).' * tri_b) ≈ asym.' * Array(tri_b)
-                    @test Array(tri_b * Symmetric(asym).') ≈ Array(tri_b) * asym.'
-                    @test Array(Symmetric(asym)' * tri_b) ≈ asym' * Array(tri_b)
-                    @test Array(tri_b * Symmetric(asym)') ≈ Array(tri_b) * asym'
-                end
+                @test Array(Symmetric(asym).' * tri_b) ≈ asym.' * Array(tri_b)
+                @test Array(tri_b * Symmetric(asym).') ≈ Array(tri_b) * asym.'
+                @test Array(Symmetric(asym)' * tri_b) ≈ asym' * Array(tri_b)
+                @test Array(tri_b * Symmetric(asym)') ≈ Array(tri_b) * asym'
             end
-            if eltya != BigFloat
-                @testset "solver" begin
-                    @test Hermitian(aherm)\x ≈ aherm\x
-                    @test Symmetric(asym)\x  ≈ asym\x
-                end
+            @testset "solver" begin
+                @test Hermitian(aherm)\x ≈ aherm\x
+                @test Hermitian(aherm)\b ≈ aherm\b
+                @test Symmetric(asym)\x  ≈ asym\x
+                @test Symmetric(asym)\b  ≈ asym\b
             end
         end
     end
