@@ -1259,8 +1259,19 @@ end === (3, String)
 @test_throws ParseError parse("a[end end]")
 @test_throws ParseError parse("a[end;end]")
 #@test_throws ParseError parse("a[end;]")  # this is difficult to fix
+let a = rand(8), i = 3
+    @test a[[1:i-1; i+1:end]] == a[[1,2,4,5,6,7,8]]
+end
 
 # issue #18935
 @test [begin
           @inbounds for i = 1:10 end
        end for i = 1:5] == fill(nothing, 5)
+
+# issue #18912
+@test_throws ParseError parse("(::)")
+@test parse(":(::)") == QuoteNode(Symbol("::"))
+@test_throws ParseError parse("f(::) = ::")
+@test parse("(::A)") == Expr(Symbol("::"), :A)
+@test_throws ParseError parse("(::, 1)")
+@test_throws ParseError parse("(1, ::)")

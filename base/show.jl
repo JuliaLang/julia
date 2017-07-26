@@ -278,19 +278,26 @@ print(io::IO, n::Unsigned) = print(io, dec(n))
 
 show(io::IO, p::Ptr) = print(io, typeof(p), " @0x$(hex(UInt(p), Sys.WORD_SIZE>>2))")
 
-function show(io::IO, p::Pair)
-    if typeof(p.first) != typeof(p).parameters[1] ||
-       typeof(p.second) != typeof(p).parameters[2]
-        return show_default(io, p)
-    end
+has_tight_type(p::Pair) =
+    typeof(p.first)  == typeof(p).parameters[1] &&
+    typeof(p.second) == typeof(p).parameters[2]
 
-    isa(p.first,Pair) && print(io, "(")
-    show(io, p.first)
-    isa(p.first,Pair) && print(io, ")")
-    print(io, "=>")
-    isa(p.second,Pair) && print(io, "(")
-    show(io, p.second)
-    isa(p.second,Pair) && print(io, ")")
+isdelimited(io::IO, x) = true
+
+isdelimited(io::IO, p::Pair) = !has_tight_type(p)
+
+function show(io::IO, p::Pair)
+    compact = get(io, :compact, false)
+    iocompact = IOContext(io, :compact => get(io, :compact, true))
+    has_tight_type(p) || return show_default(iocompact, p)
+
+    isdelimited(iocompact, p.first) || print(io, "(")
+    show(iocompact, p.first)
+    isdelimited(iocompact, p.first) || print(io, ")")
+    print(io, compact ? "=>" : " => ")
+    isdelimited(iocompact, p.second) || print(io, "(")
+    show(iocompact, p.second)
+    isdelimited(iocompact, p.second) || print(io, ")")
     nothing
 end
 

@@ -281,3 +281,12 @@ end
     @test pop!(s, 100, 0) === 0
     @test pop!(s, 99, 0) === 99
 end
+
+@testset "order" begin
+    a = rand(1:1000, 100)
+    s = IntSet(a)
+    m, M = extrema(s)
+    @test m == first(s) == minimum(s) == minimum(a)
+    @test M == last(s)  == maximum(s) == maximum(a)
+    @test issorted(s)
+end

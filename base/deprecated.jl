@@ -1594,6 +1594,8 @@ end
 # issue #11310
 # remove "parametric method syntax" deprecation in julia-syntax.scm
 
+@deprecate momenttype(::Type{T}) where {T} typeof((zero(T)*zero(T) + zero(T)*zero(T))/2) false
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

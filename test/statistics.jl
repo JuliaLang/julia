@@ -413,3 +413,14 @@ let r = Furlong(1):Furlong(1):Furlong(2), a = collect(r)
     @test var(r) == var(a) == Furlong{2}(0.5)
     @test std(r) == std(a) == Furlong{1}(sqrt(0.5))
 end
+
+# Issue #22901
+@testset "var and quantile of Any arrays" begin
+    x = Any[1, 2, 4, 10]
+    y = Any[1, 2, 4, 10//1]
+    @test var(x) === 16.25
+    @test var(y) === 65//4
+    @test std(x) === sqrt(16.25)
+    @test quantile(x, 0.5)  === 3.0
+    @test quantile(x, 1//2) === 3//1
+end
