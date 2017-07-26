@@ -312,15 +312,15 @@ let a = @doc(DocsTest.multidoc),
     @test docstrings_equal(a, b)
 end
 
-let a = docstrloc(DocsTest.f, Tuple{Any})
+let a = Docs.docstrloc(DocsTest.f, Tuple{Any})
     @test a == [(@__FILE__, DocsTest.F1_LINE_NUMBER)]
 end
 
-let a = docstrloc(DocsTest.f, Tuple{Any, Any})
+let a = Docs.docstrloc(DocsTest.f, Tuple{Any, Any})
     @test a == [(@__FILE__, DocsTest.F2_LINE_NUMBER)]
 end
 
-let a = docstrloc(DocsTest.f)
+let a = Docs.docstrloc(DocsTest.f)
     @test a == [(@__FILE__, DocsTest.F1_LINE_NUMBER),
                 (@__FILE__, DocsTest.F2_LINE_NUMBER)]
 end

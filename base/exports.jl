@@ -1233,7 +1233,6 @@ export
     @html_str,
     @doc,
     @doc_str,
-    docstrloc,
 
     # output
     @show,
