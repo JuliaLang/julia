@@ -11,10 +11,8 @@
 ## software is freely granted, provided that this notice
 ## is preserved.
 
-const invpio2 = 6.36619772367581382433e-01
-
 # Bits of 1/2π
-#   1/2π == sum(x / 0x1p64^i for i,x = enumerate(INV2PI))
+#   1/2π == sum(x / 0x1p64^i for i,x = enumerate(INV_2PI))
 # Can be obtained by:
 #
 #    setprecision(BigFloat, 4096)
@@ -25,7 +23,7 @@ const invpio2 = 6.36619772367581382433e-01
 #        @printf "0x%016x,\n" k
 #        I -= k
 #    end
-const INV2PI = UInt64[
+const INV_2PI = UInt64[
     0x28be_60db_9391_054a,
     0x7f09_d5f4_7d4d_3770,
     0x36d8_a566_4f10_e410,
@@ -80,10 +78,10 @@ end
     pio2_3 = 2.02226624871116645580e-21
     pio2_3t = 8.47842766036889956997e-32
 
-    fn = round(x*invpio2) # round to integer
+    fn = round(x*(2/pi)) # round to integer
     # on older systems, the above could be faster with
     # rf = 1.5/eps(Float64)
-    # fn = (x*invpio2+rf)-rf
+    # fn = (x*(2/pi)+rf)-rf
 
     r  = muladd(-fn, pio2_1, x) # x - fn*pio2_1
     w  = fn*pio2_1t # 1st round good to 85 bit
@@ -182,14 +180,14 @@ function paynehanek(x::Float64)
 
     shift = k - (idx << 6)
     if shift == 0
-        @inbounds a1 = INV2PI[idx+1]
-        @inbounds a2 = INV2PI[idx+2]
-        @inbounds a3 = INV2PI[idx+3]
+        @inbounds a1 = INV_2PI[idx+1]
+        @inbounds a2 = INV_2PI[idx+2]
+        @inbounds a3 = INV_2PI[idx+3]
     else
         # use shifts to extract the relevant 64 bit window
-        @inbounds a1 = (idx < 0 ? zero(UInt64) : INV2PI[idx+1] << shift) | (INV2PI[idx+2] >> (64 - shift))
-        @inbounds a2 = (INV2PI[idx+2] << shift) | (INV2PI[idx+3] >> (64 - shift))
-        @inbounds a3 = (INV2PI[idx+3] << shift) | (INV2PI[idx+4] >> (64 - shift))
+        @inbounds a1 = (idx < 0 ? zero(UInt64) : INV_2PI[idx+1] << shift) | (INV_2PI[idx+2] >> (64 - shift))
+        @inbounds a2 = (INV_2PI[idx+2] << shift) | (INV_2PI[idx+3] >> (64 - shift))
+        @inbounds a3 = (INV_2PI[idx+3] << shift) | (INV_2PI[idx+4] >> (64 - shift))
     end
 
     # 3. Perform the multiplication:
@@ -223,20 +221,6 @@ function paynehanek(x::Float64)
     y_hi = (z_hi+z_lo)*pio2
     y_lo = (((z_hi*pio2_hi - y_hi) + z_hi*pio2_lo) + z_lo*pio2_hi) + z_lo*pio2_lo
     return q, DoubleFloat64(y_hi, y_lo)
-end
-
-"""
-    rem_pio2(x::Float64)
-
-Return the remainder of `x` modulo π/2 as a double-double pair, along with a `k`
-such that ``k \\mod 3 == K \\mod 3`` where ``K*π/2 = x - rem``.
-"""
-function rem_pio2(x::Float64)
-    # Assumptions: NaN and Infs have been checked
-    if abs(x) <= pi/4 # no need for reduction
-        return 0, DoubleFloat64(x, 0.0)
-    end
-    rem_pio2_kernel(x)
 end
 
 """

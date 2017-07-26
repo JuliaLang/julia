@@ -243,12 +243,15 @@ testModPi()
     for (i, case) in enumerate(cases)
         # negative argument
         n, ret = Base.Math.rem_pio2_kernel(-case)
-        @test ret.hi+ret.lo == ieee754_rem_pio2_return[1, i]
+        ret_sum = ret.hi+ret.lo
+        ulp_error = (ret_sum-ieee754_rem_pio2_return[1, i])/abs(ret_sum-nextfloat(ret_sum))
+        @test ulp_error < 0.5
         diff = Float64(mod(big(-case), big(pi)/2))-(ret.hi+ret.lo)
         @test abs(diff) in (0.0, 1.5707963267948966, 1.5707963267948968)
         # positive argument
         n, ret = Base.Math.rem_pio2_kernel(case)
-        @test ret.hi+ret.lo == ieee754_rem_pio2_return[2, i]
+        ulp_error = (ret_sum-ieee754_rem_pio2_return[2, i])/abs(ret_sum-nextfloat(ret_sum))
+        @test ulp_error < 0.5
         diff = Float64(mod(big(case), big(pi)/2))-(ret.hi+ret.lo)
         @test abs(diff) in (0.0, 1.5707963267948966, 1.5707963267948968)
     end
