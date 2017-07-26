@@ -1547,23 +1547,6 @@ by `show` generally includes Julia-specific formatting and type information.
 show(x)
 
 """
-    issubtype(type1, type2)
-
-Return `true` if and only if all values of `type1` are also of `type2`. Can also be written
-using the `<:` infix operator as `type1 <: type2`.
-
-# Examples
-```jldoctest
-julia> issubtype(Int8, Int32)
-false
-
-julia> Int8 <: Integer
-true
-```
-"""
-issubtype(type1, type2)
-
-"""
     finalizer(x, f)
 
 Register a function `f(x)` to be called when there are no program-accessible references to

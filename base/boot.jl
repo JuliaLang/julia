@@ -143,7 +143,7 @@ export
     fieldtype, getfield, setfield!, nfields, throw, tuple, ===, isdefined, eval,
     # sizeof    # not exported, to avoid conflicting with Base.sizeof
     # type reflection
-    issubtype, typeof, isa, typeassert,
+    <:, typeof, isa, typeassert,
     # method reflection
     applicable, invoke,
     # constants

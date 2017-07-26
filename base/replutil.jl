@@ -197,7 +197,6 @@ end
 
 function showerror(io::IO, ex::TypeError)
     print(io, "TypeError: ")
-    ctx = isempty(ex.context) ? "" : "in $(ex.context), "
     if ex.expected === Bool
         print(io, "non-boolean ($(typeof(ex.got))) used in boolean context")
     else
@@ -206,7 +205,12 @@ function showerror(io::IO, ex::TypeError)
         else
             tstr = string(typeof(ex.got))
         end
-        print(io, "$(ex.func): $(ctx)expected $(ex.expected), got $tstr")
+        if isempty(ex.context)
+            ctx = "in $(ex.func)"
+        else
+            ctx = "in $(ex.func), in $(ex.context)"
+        end
+        print(io, ctx, ", expected $(ex.expected), got ", tstr)
     end
 end
 

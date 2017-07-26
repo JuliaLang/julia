@@ -405,7 +405,7 @@ function round(::Type{T}, x::Rational{Tr}, ::RoundingMode{:NearestTiesUp}) where
 end
 
 function round(::Type{T}, x::Rational{Bool}) where T
-    if denominator(x) == false && issubtype(T, Union{Integer, Bool})
+    if denominator(x) == false && (T <: Union{Integer, Bool})
         throw(DivideError())
     end
     convert(T, x)

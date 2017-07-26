@@ -110,7 +110,7 @@ a method table via special arrangement.
 The "builtin" functions, defined in the `Core` module, are:
 
 ```
-=== typeof sizeof issubtype isa typeassert throw tuple getfield setfield! fieldtype
+=== typeof sizeof <: isa typeassert throw tuple getfield setfield! fieldtype
 nfields isdefined arrayref arrayset arraysize applicable invoke apply_type _apply
 _expr svec
 ```

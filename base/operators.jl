@@ -5,7 +5,8 @@
 """
     <:(T1, T2)
 
-Subtype operator, equivalent to `issubtype(T1, T2)`.
+Subtype operator: returns `true` if and only if all values of type `T1` are
+also of type `T2`.
 
 ```jldoctest
 julia> Float64 <: AbstractFloat
@@ -18,14 +19,14 @@ julia> Matrix{Float64} <: Matrix{AbstractFloat}
 false
 ```
 """
-const (<:) = issubtype
+(<:)
 
 """
     >:(T1, T2)
 
-Supertype operator, equivalent to `issubtype(T2, T1)`.
+Supertype operator, equivalent to `T2 <: T1`.
 """
-const (>:)(@nospecialize(a), @nospecialize(b)) = issubtype(b, a)
+const (>:)(@nospecialize(a), @nospecialize(b)) = (b <: a)
 
 """
     supertype(T::DataType)

@@ -7,7 +7,7 @@ macro UnionAll(var, expr)
     Expr(:where, esc(expr), esc(var))
 end
 
-const issub = issubtype
+const issub = (<:)
 issub_strict(@nospecialize(x),@nospecialize(y)) = issub(x,y) && !issub(y,x)
 isequal_type(@nospecialize(x),@nospecialize(y)) = issub(x,y) && issub(y,x)
 notequal_type(@nospecialize(x),@nospecialize(y)) = !isequal_type(x, y)
@@ -501,13 +501,13 @@ function test_old()
 
     # issue #6561
     # TODO: note that NTuple now means "tuples of all the same type"
-    #@test issubtype(Array{Tuple}, Array{NTuple})
+    #@test (Array{Tuple} <: Array{NTuple})
     @test issub_strict(NTuple, Tuple)
     @test issub_strict(NTuple, Tuple{Vararg})
     @test isequal_type(Tuple, Tuple{Vararg})
-    #@test issubtype(Array{Tuple{Vararg{Any}}}, Array{NTuple})
-    #@test issubtype(Array{Tuple{Vararg}}, Array{NTuple})
-    @test !issubtype(Type{Tuple{Void}}, Tuple{Type{Void}})
+    #@test (Array{Tuple{Vararg{Any}}} <: Array{NTuple})
+    #@test (Array{Tuple{Vararg}} <: Array{NTuple})
+    @test !(Type{Tuple{Void}} <: Tuple{Type{Void}})
 end
 
 const menagerie =

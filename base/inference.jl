@@ -732,13 +732,13 @@ add_tfunc(isa, 2, 2,
               # TODO: handle non-leaftype(t) by testing against lower and upper bounds
               return Bool
           end, 0)
-add_tfunc(issubtype, 2, 2,
+add_tfunc(<:, 2, 2,
           function (@nospecialize(a), @nospecialize(b))
               if (isa(a,Const) || isType(a)) && (isa(b,Const) || isType(b))
                   a = instanceof_tfunc(a)
                   b = instanceof_tfunc(b)
                   if !has_free_typevars(a) && !has_free_typevars(b)
-                      return Const(issubtype(a, b))
+                      return Const(a <: b)
                   end
               end
               return Bool
@@ -2218,10 +2218,10 @@ function abstract_call(@nospecialize(f), fargs::Union{Tuple{},Vector{Any}}, argt
         end
         return rty
     elseif length(fargs) == 3 && istopfunction(tm, f, :(>:))
-        # swap T1 and T2 arguments and call issubtype
-        fargs = Any[issubtype, fargs[3], fargs[2]]
-        argtypes = Any[typeof(issubtype), argtypes[3], argtypes[2]]
-        rty = abstract_call(issubtype, fargs, argtypes, vtypes, sv)
+        # swap T1 and T2 arguments and call <:
+        fargs = Any[<:, fargs[3], fargs[2]]
+        argtypes = Any[typeof(<:), argtypes[3], argtypes[2]]
+        rty = abstract_call(<:, fargs, argtypes, vtypes, sv)
         return rty
     end
 
@@ -4204,7 +4204,7 @@ function inlineable(@nospecialize(f), @nospecialize(ft), e::Expr, atypes::Vector
             issubtype_stmts = Any[ Expr(:(=), issubtype_vnew, arg_T1) ]
             arg_T1 = issubtype_vnew
         end
-        issubtype_expr = Expr(:call, GlobalRef(Core, :issubtype), arg_T2, arg_T1)
+        issubtype_expr = Expr(:call, GlobalRef(Core, :(<:)), arg_T2, arg_T1)
         issubtype_expr.typ = Bool
         return (issubtype_expr, issubtype_stmts)
     end
