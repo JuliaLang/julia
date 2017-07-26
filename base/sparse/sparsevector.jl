@@ -852,10 +852,6 @@ function reinterpret(::Type{T}, x::AbstractSparseVector{Tv}) where {T,Tv}
     SparseVector(length(x), copy(nonzeroinds(x)), reinterpret(T, nonzeros(x)))
 end
 
-float(x::AbstractSparseVector{<:AbstractFloat}) = x
-float(x::AbstractSparseVector) =
-    SparseVector(length(x), copy(nonzeroinds(x)), float(nonzeros(x)))
-
 complex(x::AbstractSparseVector{<:Complex}) = x
 complex(x::AbstractSparseVector) =
     SparseVector(length(x), copy(nonzeroinds(x)), complex(nonzeros(x)))

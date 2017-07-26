@@ -850,21 +850,13 @@ truncmask(x, mask) = x
 
 ## Array operations on floating point numbers ##
 
-float(A::AbstractArray{<:AbstractFloat}) = A
-
-function float(A::AbstractArray{T}) where T
-    if !isleaftype(T)
-        error("`float` not defined on abstractly-typed arrays; please convert to a more specific type")
-    end
-    convert(AbstractArray{typeof(float(zero(T)))}, A)
-end
-
-float(r::StepRange) = float(r.start):float(r.step):float(last(r))
-float(r::UnitRange) = float(r.start):float(last(r))
-float(r::StepRangeLen) = StepRangeLen(float(r.ref), float(r.step), length(r), r.offset)
-function float(r::LinSpace)
-    LinSpace(float(r.start), float(r.stop), length(r))
-end
+# Optimizations for broadcasting float()
+broadcast(::typeof(float), A::AbstractArray{<:AbstractFloat}) = A
+# Ranges
+broadcast(::typeof(float), r::StepRange)    = float(r.start):float(r.step):float(last(r))
+broadcast(::typeof(float), r::UnitRange)    = float(r.start):float(last(r))
+broadcast(::typeof(float), r::StepRangeLen) = StepRangeLen(float(r.ref), float(r.step), length(r), r.offset)
+broadcast(::typeof(float), r::LinSpace)     = LinSpace(float(r.start), float(r.stop), length(r))
 
 # big, broadcast over arrays
 # TODO: do the definitions below primarily pertaining to integers belong in float.jl?
