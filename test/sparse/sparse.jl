@@ -1225,9 +1225,9 @@ end
 
 @testset "float" begin
     A = sprand(Bool, 5,5,0.0)
-    @test eltype(float(A)) == Float64  # issue #11658
+    @test eltype(float.(A)) == Float64  # issue #11658
     A = sprand(Bool, 5,5,0.2)
-    @test float(A) == float(Array(A))
+    @test float.(A) == float.(Array(A))
 end
 
 @testset "sparsevec" begin

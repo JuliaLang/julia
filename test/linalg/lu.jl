@@ -198,7 +198,7 @@ Hinv = Rational{BigInt}[(-1)^(i+j)*(i+j-1)*binomial(nHilbert+i-1,nHilbert-j)*
     for i = big(1):nHilbert,j=big(1):nHilbert]
 @test inv(H) == Hinv
 setprecision(2^10) do
-    @test norm(Array{Float64}(inv(float(H)) - float(Hinv))) < 1e-100
+    @test norm(Array{Float64}(inv(float.(H)) - float.(Hinv))) < 1e-100
 end
 
 # Test balancing in eigenvector calculations

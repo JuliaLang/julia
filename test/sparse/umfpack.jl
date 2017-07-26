@@ -27,12 +27,12 @@
 
             b = [8., 45., -3., 3., 19.]
             x = lua\b
-            @test x ≈ float([1:5;])
+            @test x ≈ float.([1:5;])
 
             @test A*x ≈ b
             z = complex.(b,zeros(b))
             x = Base.SparseArrays.A_ldiv_B!(lua, z)
-            @test x ≈ float([1:5;])
+            @test x ≈ float.([1:5;])
             @test z === x
             y = similar(z)
             A_ldiv_B!(y, lua, complex.(b,zeros(b)))
@@ -42,12 +42,12 @@
 
             b = [8., 20., 13., 6., 17.]
             x = lua'\b
-            @test x ≈ float([1:5;])
+            @test x ≈ float.([1:5;])
 
             @test A'*x ≈ b
             z = complex.(b,zeros(b))
             x = Base.SparseArrays.Ac_ldiv_B!(lua, z)
-            @test x ≈ float([1:5;])
+            @test x ≈ float.([1:5;])
             @test x === z
             y = similar(x)
             Base.SparseArrays.Ac_ldiv_B!(y, lua, complex.(b,zeros(b)))
@@ -55,11 +55,11 @@
 
             @test A'*x ≈ b
             x = lua.'\b
-            @test x ≈ float([1:5;])
+            @test x ≈ float.([1:5;])
 
             @test A.'*x ≈ b
             x = Base.SparseArrays.At_ldiv_B!(lua,complex.(b,zeros(b)))
-            @test x ≈ float([1:5;])
+            @test x ≈ float.([1:5;])
             y = similar(x)
             Base.SparseArrays.At_ldiv_B!(y, lua,complex.(b,zeros(b)))
             @test y ≈ x
