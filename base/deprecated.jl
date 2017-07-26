@@ -290,9 +290,7 @@ for f in (
 end
 # base/complex.jl
 @dep_vectorize_1arg Complex round
-# float(A) -> float.(A)
-@dep_vectorize_1arg Number float
-@dep_vectorize_1arg AbstractString float
+@dep_vectorize_1arg Complex float
 # base/dates/*.jl
 for f in (:unix2datetime, :rata2datetime, :julian2datetime)  # base/dates/conversions.jl
     @eval Dates Base.@dep_vectorize_1arg Real $f
@@ -1594,6 +1592,10 @@ end
 @deprecate readstring(cmd::AbstractCmd) read(cmd, String)
 
 @deprecate momenttype(::Type{T}) where {T} typeof((zero(T)*zero(T) + zero(T)*zero(T))/2) false
+
+# PR #22966
+@dep_vectorize_1arg Number float
+@dep_vectorize_1arg AbstractString float
 
 # END 0.7 deprecations
 
