@@ -12,6 +12,8 @@ struct InvalidCodeError <: Exception
     meta::Any
 end
 
+InvalidCodeError(errno, msg) = InvalidCodeError(errno, msg, nothing)
+
 """
     validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo)
 
@@ -42,9 +44,9 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo)
             elseif x.head == :(=) && !is_valid_lhs(x.args[1])
                 push!(errors, InvalidCodeError(2, "encountered invalid LHS value", x.args[1]))
             elseif x.head == :call
-                for i in 2:length(x.args)
-                    if !is_valid_call_arg(x.args[i])
-                        push!(errors, InvalidCodeError(3, "encountered invalid call argument", x.args[i]))
+                for arg in x.args
+                    if !is_valid_call_arg(arg)
+                        push!(errors, InvalidCodeError(3, "encountered invalid call argument", arg))
                     end
                 end
             end
@@ -74,11 +76,13 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, c::CodeInfo)
             push!(errors, InvalidCodeError(9, "uninferred CodeInfo ssavaluetypes field does not equal the number of present SSAValues", (length(ssavals), c.ssavaluetypes)))
         end
     end
+    checked_ids = Int[]
     walkast(c.code) do x
         if isa(x, Expr) && x.head == :(=)
             lhs = x.args[1]
-            if isa(lhs, SlotNumber) && !is_flag_set(c.slotflags[lhs.id], ASSIGNED_FLAG)
+            if isa(lhs, SlotNumber) && !is_flag_set(c.slotflags[lhs.id], ASSIGNED_FLAG) && !in(lhs.id, checked_ids)
                 push!(errors, InvalidCodeError(10, "slot has wrong assignment slotflag setting (bit flag 2 should be set)", lhs.id))
+                push!(checked_ids, lhs.id)
             end
         end
     end
@@ -109,10 +113,14 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, m::Method)
     end
     c = ccall(:jl_uncompress_ast, Any, (Any, Any), m, m.source)
     if m.nargs > 0
+        found_bad_method_head = false
         walkast(c.code) do x
             if isa(x, Expr) && x.head == :method
-                push!(errors, InvalidCodeError(13, "encountered `Expr` head `:method` in non-top-level code (i.e. `nargs` > 0)"))
+                found_bad_method_head = true
             end
+        end
+        if found_bad_method_head
+            push!(errors, InvalidCodeError(13, "encountered `Expr` head `:method` in non-top-level code (i.e. `nargs` > 0)"))
         end
     end
     if m.nargs > length(c.slotnames)
