@@ -66,11 +66,13 @@ const LINE_NUMBER = @__LINE__() + 1
 "DocsTest"
 module DocsTest
 
+const F1_LINE_NUMBER = @__LINE__() + 1
 "f-1"
 function f(x)
     x
 end
 
+const F2_LINE_NUMBER = @__LINE__() + 1
 "f-2"
 f(x, y) = x + y
 
@@ -308,6 +310,19 @@ end
 let a = @doc(DocsTest.multidoc),
     b = @doc(DocsTest.multidoc!)
     @test docstrings_equal(a, b)
+end
+
+let a = docstrloc(DocsTest.f, Tuple{Any})
+    @test a == [(@__FILE__, DocsTest.F1_LINE_NUMBER)]
+end
+
+let a = docstrloc(DocsTest.f, Tuple{Any, Any})
+    @test a == [(@__FILE__, DocsTest.F2_LINE_NUMBER)]
+end
+
+let a = docstrloc(DocsTest.f)
+    @test a == [(@__FILE__, DocsTest.F1_LINE_NUMBER),
+                (@__FILE__, DocsTest.F2_LINE_NUMBER)]
 end
 
 "BareModule"

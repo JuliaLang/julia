@@ -65,7 +65,7 @@ import Base.Meta: quot, isexpr
 import Base: Callable
 import ..CoreDocs: lazy_iterpolate
 
-export doc
+export doc, docstrloc
 
 # Basic API / Storage
 
@@ -270,6 +270,26 @@ getdoc(x, sig) = getdoc(x)
 getdoc(x) = nothing
 
 """
+    Docs.lookupdoc(binding, sig)
+
+Lookup `binding` and `sig` for matches in all modules of the docsystem.
+"""
+function lookupdoc(binding::Binding, sig::Type)
+    results, groups = DocStr[], MultiDoc[]
+    for mod in modules
+        dict = meta(mod)
+        if haskey(dict, binding)
+            multidoc = dict[binding]
+            push!(groups, multidoc)
+            for msig in multidoc.order
+                sig <: msig && push!(results, multidoc.docs[msig])
+            end
+        end
+    end
+    results, groups
+end
+
+"""
     Docs.doc(binding, sig)
 
 Returns all documentation that matches both `binding` and `sig`.
@@ -282,18 +302,7 @@ function doc(binding::Binding, sig::Type = Union{})
         result = getdoc(resolve(binding), sig)
         result === nothing || return result
     end
-    results, groups = DocStr[], MultiDoc[]
-    # Lookup `binding` and `sig` for matches in all modules of the docsystem.
-    for mod in modules
-        dict = meta(mod)
-        if haskey(dict, binding)
-            multidoc = dict[binding]
-            push!(groups, multidoc)
-            for msig in multidoc.order
-                sig <: msig && push!(results, multidoc.docs[msig])
-            end
-        end
-    end
+    results, groups = lookupdoc(binding, sig)
     if isempty(groups)
         # When no `MultiDoc`s are found that match `binding` then we check whether `binding`
         # is an alias of some other `Binding`. When it is we then re-run `doc` with that
@@ -325,6 +334,49 @@ end
 doc(obj::UnionAll) = doc(Base.unwrap_unionall(obj))
 doc(object, sig::Type = Union{}) = doc(aliasof(object, typeof(object)), sig)
 doc(object, sig...)              = doc(object, Tuple{sig...})
+
+"""
+    docstrloc(binding, sig)
+
+Returns an array of `(filename, line)` tuples giving the location of all
+docstrings that match both `binding` and `sig`.
+
+If `getdoc` returns a non-`nothing` result, no locations will be returned.
+"""
+function docstrloc(binding::Binding, sig::Type = Union{})
+    if defined(binding)
+        result = getdoc(resolve(binding), sig)
+        if result !== nothing
+            return Vector{Tuple{String, Int}}()
+        end
+    end
+    results, groups = lookupdoc(binding, sig)
+    if isempty(groups)
+        # There are no matches for `binding`.  Check if `binding` is an alias.
+        # If it is, rerun `docstrloc` on the alias.  Otherwise, there are no
+        # matches.
+        alias = aliasof(binding)
+        if alias == binding
+            Vector{Tuple{String, Int}}()
+        else
+            docstrloc(alias, sig)
+        end
+    elseif isempty(results)
+        # There were matches for `binding`, but none that specifically matched
+        # `sig`.  So there are no matches.
+        Vector{Tuple{String, Int}}()
+    else
+        # There are matches for both `binding` and `sig`, return their
+        # locations.
+        map((r)->(r.data[:path], r.data[:linenumber]), results)
+    end
+end
+
+# Some additional convenience `docstrloc` methods that take objects rather than
+# `Binding`s.
+docstrloc(obj::UnionAll) = docstrloc(Base.unwrap_unionall(obj))
+docstrloc(object, sig::Type = Union{}) = docstrloc(aliasof(object, typeof(object)), sig)
+docstrloc(object, sig...) = docstrloc(object, Tuple{sig...})
 
 """
     Docs.fielddoc(binding, field)
