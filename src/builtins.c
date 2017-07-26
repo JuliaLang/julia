@@ -121,6 +121,12 @@ JL_DLLEXPORT int jl_egal(jl_value_t *a, jl_value_t *b)
         jl_datatype_t *dtb = (jl_datatype_t*)b;
         return dta->name == dtb->name && compare_svec(dta->parameters, dtb->parameters);
     }
+    if (dt == jl_string_type) {
+        size_t l = jl_string_len(a);
+        if (jl_string_len(b) != l)
+            return 0;
+        return !memcmp(jl_string_data(a), jl_string_data(b), l);
+    }
     if (dt->mutabl) return 0;
     size_t sz = jl_datatype_size(dt);
     if (sz == 0) return 1;
@@ -186,6 +192,13 @@ static uintptr_t jl_object_id_(jl_value_t *tv, jl_value_t *v)
 #else
     if (v == jl_ANY_flag) return 0x8ee30bdd;
 #endif
+    if (dt == jl_string_type) {
+#ifdef _P64
+        return memhash_seed(jl_string_data(v), jl_string_len(v), 0xedc3b677);
+#else
+        return memhash32_seed(jl_string_data(v), jl_string_len(v), 0xedc3b677);
+#endif
+    }
     if (dt->mutabl) return inthash((uintptr_t)v);
     size_t sz = jl_datatype_size(tv);
     uintptr_t h = jl_object_id(tv);
