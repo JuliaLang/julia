@@ -1318,7 +1318,8 @@ for cases where you don't need a more elaborate hierarchy.
 ```jldoctest valtype
 julia> struct Val{x}
        end
-       Base.@pure Val(x) = Val{x}()
+
+julia> Base.@pure Val(x) = Val{x}()
 Val
 ```
 
