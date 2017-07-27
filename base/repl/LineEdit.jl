@@ -588,6 +588,8 @@ end
 
 history_prev(::EmptyHistoryProvider) = ("", false)
 history_next(::EmptyHistoryProvider) = ("", false)
+history_first(::EmptyHistoryProvider) = ("", false)
+history_last(::EmptyHistoryProvider) = ("", false)
 history_search(::EmptyHistoryProvider, args...) = false
 add_history(::EmptyHistoryProvider, s) = nothing
 add_history(s::PromptState) = add_history(mode(s).hist, s)
@@ -1443,7 +1445,9 @@ const history_keymap = AnyDict(
     # Page Up
     "\e[5~" => (s,o...)->(history_prev(s, mode(s).hist)),
     # Page Down
-    "\e[6~" => (s,o...)->(history_next(s, mode(s).hist))
+    "\e[6~" => (s,o...)->(history_next(s, mode(s).hist)),
+    "\e<" => (s,o...)->(history_first(s, mode(s).hist)),
+    "\e>" => (s,o...)->(history_last(s, mode(s).hist)),
 )
 
 const prefix_history_keymap = merge!(
