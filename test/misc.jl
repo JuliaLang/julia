@@ -745,13 +745,42 @@ if Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
     end
 end
 
-# invokelatest function for issue #19774
-issue19774(x) = 1
+# Test issue #19774 invokelatest fix.
+
+# we define this in a module to allow rewriting
+# rather than needing an extra eval.
+module Issue19774
+f(x) = 1
+end
+
+# First test the world issue condition.
 let foo() = begin
-        eval(:(issue19774(x::Int) = 2))
-        return Base.invokelatest(issue19774, 0)
+        Issue19774.f(x::Int) = 2
+        return Issue19774.f(0)
     end
-    @test foo() == 2
+    @test foo() == 1    # We should be using the original function.
+end
+
+# Now check that invokelatest fixes that issue.
+let foo() = begin
+        Issue19774.f(x::Int) = 3
+        return Base.invokelatest(Issue19774.f, 0)
+    end
+    @test foo() == 3
+end
+
+# Check that the kwargs conditions also works
+module Kwargs19774
+f(x, y; z=0) = x * y + z
+end
+
+@test Kwargs19774.f(2, 3; z=1) == 7
+
+let foo() = begin
+        Kwargs19774.f(x::Int, y::Int; z=3) = z
+        return Base.invokelatest(Kwargs19774.f, 2, 3; z=1)
+    end
+    @test foo() == 1
 end
 
 # Endian tests
