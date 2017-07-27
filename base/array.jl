@@ -298,6 +298,10 @@ for (fname, felt) in ((:zeros,:zero), (:ones,:one))
     end
 end
 
+function zeros(T::Union{BitIntegerType,Type{Float64},Type{Float32},Type{Float16}}, dims::Tuple)
+    Array{T}(Dims(dims))
+end
+
 """
     eye([T::Type=Float64,] m::Integer, n::Integer)
 

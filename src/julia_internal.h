@@ -306,6 +306,10 @@ jl_svec_t *jl_perm_symsvec(size_t n, ...);
 // pointer fields.
 #define jl_datatype_layout_n_nonptr(layout) ((uint32_t*)(layout))[-1]
 
+JL_DLLEXPORT void *jl_gc_alloc_array_storage(size_t sz);
+JL_DLLEXPORT void *jl_gc_realloc_array_storage(void *d, size_t sz, size_t oldsz, jl_value_t *owner);
+JL_DLLEXPORT void *jl_gc_counted_realloc_with_align(void *d, size_t sz, size_t oldsz,
+                                                    int isaligned, jl_value_t *owner);
 jl_value_t *jl_gc_realloc_string(jl_value_t *s, size_t sz);
 
 jl_code_info_t *jl_type_infer(jl_method_instance_t **li, size_t world, int force);

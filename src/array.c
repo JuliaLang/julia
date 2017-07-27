@@ -97,26 +97,22 @@ static jl_array_t *_new_array_(jl_value_t *atype, uint32_t ndims, size_t *dims,
         // No allocation or safepoint allowed after this
         a->flags.how = 0;
         data = (char*)a + doffs;
-        if (tot > 0 && !isunboxed)
+        if (tot > 0)
             memset(data, 0, tot);
     }
     else {
         tsz = JL_ARRAY_ALIGN(tsz, JL_CACHE_BYTE_ALIGNMENT); // align whole object
-        data = jl_gc_managed_malloc(tot);
+        data = jl_gc_alloc_array_storage(tot);
         // Allocate the Array **after** allocating the data
         // to make sure the array is still young
         a = (jl_array_t*)jl_gc_alloc(ptls, tsz, atype);
         // No allocation or safepoint allowed after this
-        a->flags.how = 2;
+        a->flags.how = 1;
         jl_gc_track_malloced_array(ptls, a);
-        if (!isunboxed)
-            memset(data, 0, tot);
     }
     a->flags.pooled = tsz <= GC_MAX_SZCLASS;
 
     a->data = data;
-    if (JL_ARRAY_IMPL_NUL && elsz == 1)
-        ((char*)data)[tot - 1] = '\0';
 #ifdef STORE_ARRAY_LEN
     a->length = nel;
 #endif
@@ -590,8 +586,9 @@ static int NOINLINE array_resize_buffer(jl_array_t *a, size_t newlen)
     if (a->flags.how == 2) {
         // already malloc'd - use realloc
         char *olddata = (char*)a->data - oldoffsnb;
-        a->data = jl_gc_managed_realloc(olddata, nbytes, oldnbytes,
-                                        a->flags.isaligned, (jl_value_t*)a);
+        a->data = jl_gc_counted_realloc_with_align(olddata, nbytes, oldnbytes,
+                                                   a->flags.isaligned, (jl_value_t*)a);
+        memset((char*)a->data + oldnbytes, 0, nbytes - oldnbytes);
     }
     else if (a->flags.how == 3 && jl_is_string(jl_array_data_owner(a))) {
         // if data is in a String, keep it that way
@@ -599,36 +596,27 @@ static int NOINLINE array_resize_buffer(jl_array_t *a, size_t newlen)
         if (a->flags.isshared) {
             s = jl_alloc_string(nbytes);
             newbuf = 1;
+            memset(jl_string_data(s), 0, nbytes);
         }
         else {
             s = jl_gc_realloc_string(jl_array_data_owner(a), nbytes);
+            memset(jl_string_data(s) + oldnbytes, 0, nbytes - oldnbytes);
         }
         jl_array_data_owner(a) = s;
         jl_gc_wb(a, s);
         a->data = jl_string_data(s);
     }
+    else if (a->flags.how == 1) {
+        char *olddata = (char*)a->data - oldoffsnb;
+        a->data = jl_gc_realloc_array_storage(olddata, nbytes, oldnbytes, (jl_value_t*)a);
+    }
     else {
         newbuf = 1;
-        if (
-#ifdef _P64
-            nbytes >= MALLOC_THRESH
-#else
-            elsz > 4
-#endif
-            ) {
-            a->data = jl_gc_managed_malloc(nbytes);
-            jl_gc_track_malloced_array(ptls, a);
-            a->flags.how = 2;
-            a->flags.isaligned = 1;
-        }
-        else {
-            a->data = jl_gc_alloc_buf(ptls, nbytes);
-            a->flags.how = 1;
-            jl_gc_wb_buf(a, a->data, nbytes);
-        }
+        a->data = jl_gc_alloc_array_storage(nbytes);
+        jl_gc_track_malloced_array(ptls, a);
+        a->flags.how = 1;
+        a->flags.isaligned = 1;
     }
-    if (JL_ARRAY_IMPL_NUL && elsz == 1)
-        memset((char*)a->data + oldnbytes - 1, 0, nbytes - oldnbytes + 1);
     (void)oldlen;
     assert(oldlen == a->nrows &&
            "Race condition detected: recursive resizing on the same array.");
@@ -734,6 +722,7 @@ STATIC_INLINE void jl_array_grow_at_beg(jl_array_t *a, size_t idx, size_t inc,
     a->nrows = newnrows;
     a->data = newdata;
     if (a->flags.ptrarray) {
+        // TODO: avoid when possible
         memset(newdata + idx * elsz, 0, nbinc);
     }
 }
@@ -788,6 +777,7 @@ STATIC_INLINE void jl_array_grow_at_end(jl_array_t *a, size_t idx,
 #endif
     a->nrows = newnrows;
     if (a->flags.ptrarray) {
+        // TODO: avoid when possible
         memset(data + idx * elsz, 0, inc * elsz);
     }
 }

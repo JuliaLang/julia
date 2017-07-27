@@ -134,7 +134,7 @@ typedef struct {
     /*
       how - allocation style
       0 = data is inlined, or a foreign pointer we don't manage
-      1 = julia-allocated buffer that needs to be marked
+      1 = allocated by jl_gc_alloc_array_storage
       2 = malloc-allocated pointer this array object manages
       3 = has a pointer to the object that owns the data
     */
@@ -672,10 +672,6 @@ STATIC_INLINE void jl_gc_wb_back(void *ptr) // ptr isa jl_value_t*
         jl_gc_queue_root((jl_value_t*)ptr);
     }
 }
-
-JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz);
-JL_DLLEXPORT void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz,
-                                         int isaligned, jl_value_t *owner);
 
 // object accessors -----------------------------------------------------------
 

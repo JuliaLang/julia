@@ -862,8 +862,13 @@ static size_t array_nbytes(jl_array_t *a)
 
 static void jl_gc_free_array(jl_array_t *a)
 {
-    if (a->flags.how == 2) {
-        char *d = (char*)a->data - a->offset*a->elsize;
+    char *d = (char*)a->data - a->offset*a->elsize;
+    if (a->flags.how == 1) {
+        void *p = ((void**)d)[-1];
+        free(p);
+        gc_num.freed += array_nbytes(a);
+    }
+    else if (a->flags.how == 2) {
         if (a->flags.isaligned)
             jl_free_aligned(d);
         else
@@ -887,7 +892,6 @@ static void sweep_malloced_arrays(void)
             }
             else {
                 *pma = nxt;
-                assert(ma->a->flags.how == 2);
                 jl_gc_free_array(ma->a);
                 ma->next = ptls2->heap.mafreelist;
                 ptls2->heap.mafreelist = ma;
@@ -2048,14 +2052,7 @@ mark: {
             }
             else if (foreign_alloc)
                 objprofile_count(vt, bits == GC_OLD_MARKED, sizeof(jl_array_t));
-            if (flags.how == 1) {
-                void *val_buf = jl_astaggedvalue((char*)a->data - a->offset * a->elsize);
-                verify_parent1("array", new_obj, &val_buf, "buffer ('loc' addr is meaningless)");
-                (void)val_buf;
-                gc_setmark_buf_(ptls, (char*)a->data - a->offset * a->elsize,
-                                bits, array_nbytes(a));
-            }
-            else if (flags.how == 2) {
+            if (flags.how == 2) {
                 if (update_meta || foreign_alloc) {
                     objprofile_count(jl_malloc_tag, bits == GC_OLD_MARKED,
                                      array_nbytes(a));
@@ -2813,19 +2810,22 @@ JL_DLLEXPORT void *jl_realloc(void *p, size_t sz)
 
 // allocating blocks for Arrays and Strings
 
-JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz)
+JL_DLLEXPORT void *jl_gc_alloc_array_storage(size_t sz)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     maybe_collect(ptls);
-    size_t allocsz = LLT_ALIGN(sz, JL_CACHE_BYTE_ALIGNMENT);
+    size_t allocsz = sz + sizeof(void*) + JL_CACHE_BYTE_ALIGNMENT - 1;
+    allocsz = LLT_ALIGN(allocsz, JL_CACHE_BYTE_ALIGNMENT);
     if (allocsz < sz)  // overflow in adding offs, size was "negative"
         jl_throw(jl_memory_exception);
     gc_num.allocd += allocsz;
     gc_num.malloc++;
-    void *b = malloc_cache_align(allocsz);
+    void *b = calloc(allocsz, 1);
     if (b == NULL)
         jl_throw(jl_memory_exception);
-    return b;
+    void *p = (void*)(((uintptr_t)b + sizeof(void*) + JL_CACHE_BYTE_ALIGNMENT - 1) & -JL_CACHE_BYTE_ALIGNMENT);
+    ((void**)p)[-1] = b;
+    return p;
 }
 
 static void *gc_managed_realloc_(jl_ptls_t ptls, void *d, size_t sz, size_t oldsz,
@@ -2859,8 +2859,33 @@ static void *gc_managed_realloc_(jl_ptls_t ptls, void *d, size_t sz, size_t olds
     return b;
 }
 
-JL_DLLEXPORT void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz,
-                                         int isaligned, jl_value_t *owner)
+JL_DLLEXPORT void *jl_gc_realloc_array_storage(void *d, size_t sz, size_t oldsz0, jl_value_t *owner)
+{
+    size_t algn = JL_CACHE_BYTE_ALIGNMENT;
+    jl_ptls_t ptls = jl_get_ptls_states();
+
+    size_t allocsz = sz + sizeof(void*) + algn - 1;
+    if (allocsz < sz)  // overflow in adding offs, size was "negative"
+        jl_throw(jl_memory_exception);
+
+    size_t oldsz = oldsz0 + sizeof(void*) + algn - 1;
+    oldsz = LLT_ALIGN(oldsz, algn);
+
+    void *b = ((void**)d)[-1];
+    void *bnew = gc_managed_realloc_(ptls, b, allocsz, oldsz, 0, owner, 1);
+
+    if (allocsz > oldsz)
+        memset((char*)bnew + oldsz, 0, allocsz - oldsz);
+    void *p = (void*)(((uintptr_t)bnew + sizeof(void*) + algn - 1) & -algn);
+    if ((char*)p - (char*)bnew != (char*)d - (char*)b)  // buffer moved to different alignment
+        memmove(p, (char*)bnew + ((char*)d - (char*)b), oldsz0);
+
+    ((void**)p)[-1] = bnew;
+    return p;
+}
+
+JL_DLLEXPORT void *jl_gc_counted_realloc_with_align(void *d, size_t sz, size_t oldsz,
+                                                    int isaligned, jl_value_t *owner)
 {
     jl_ptls_t ptls = jl_get_ptls_states();
     return gc_managed_realloc_(ptls, d, sz, oldsz, isaligned, owner, 1);
