@@ -151,7 +151,7 @@ This section lists changes that do not have deprecation warnings.
     arg `lazy=false` to force all connections to be setup during a `addprocs` call. ([#22814])
 
   * `joinpath` now returns the second path instead of throwing an `ArgumentError` if the
-    drives of the two arguments do not match. ([#20912]).
+    drives of the two arguments do not match. (Windows only) ([#20912]).
 
 Library improvements
 --------------------
