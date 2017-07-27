@@ -478,7 +478,7 @@ function edit_insert(buf::IOBuffer, c)
     end
 end
 
-function edit_backspace(s::PromptState, multispaces::Bool=true)
+function edit_backspace(s::PromptState, multispaces::Bool=false)
     if edit_backspace(s.input_buffer, multispaces)
         refresh_line(s)
     else
@@ -486,7 +486,7 @@ function edit_backspace(s::PromptState, multispaces::Bool=true)
     end
 end
 
-function edit_backspace(buf::IOBuffer, multispaces::Bool=true)
+function edit_backspace(buf::IOBuffer, multispaces::Bool=false)
     oldpos = position(buf)
     if oldpos > 0
         c = char_move_left(buf)
@@ -1386,7 +1386,7 @@ AnyDict(
     end,
     '\n' => KeyAlias('\r'),
     # Backspace/^H
-    '\b' => (s,o...)->edit_backspace(s),
+    '\b' => (s,o...)->edit_backspace(s, true),
     127 => KeyAlias('\b'),
     # Meta Backspace
     "\e\b" => (s,o...)->edit_delete_prev_word(s),

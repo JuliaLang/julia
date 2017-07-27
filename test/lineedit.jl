@@ -439,24 +439,24 @@ end
     LineEdit.edit_insert(s, "for x=1:10\n")
     LineEdit.edit_tab(s)
     @test bufferdata(s) == "for x=1:10\n    "
-    LineEdit.edit_backspace(s)
+    LineEdit.edit_backspace(s, true)
     @test bufferdata(s) == "for x=1:10\n"
     LineEdit.edit_insert(s, "  ")
     LineEdit.edit_tab(s)
     @test bufferdata(s) == "for x=1:10\n    "
     LineEdit.edit_insert(s, "  ")
-    LineEdit.edit_backspace(s)
+    LineEdit.edit_backspace(s, true)
     @test bufferdata(s) == "for x=1:10\n    "
     LineEdit.edit_insert(s, "éé=3   ")
     LineEdit.edit_tab(s)
     @test bufferdata(s) == "for x=1:10\n    éé=3    "
-    LineEdit.edit_backspace(s)
+    LineEdit.edit_backspace(s, true)
     @test bufferdata(s) == "for x=1:10\n    éé=3"
     LineEdit.edit_insert(s, "\n    1∉x  ")
     LineEdit.edit_tab(s)
     @test bufferdata(s) == "for x=1:10\n    éé=3\n    1∉x     "
     LineEdit.edit_backspace(s, false)
     @test bufferdata(s) == "for x=1:10\n    éé=3\n    1∉x    "
-    LineEdit.edit_backspace(s)
+    LineEdit.edit_backspace(s, true)
     @test bufferdata(s) == "for x=1:10\n    éé=3\n    1∉x "
 end
