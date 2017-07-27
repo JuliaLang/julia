@@ -4,7 +4,7 @@ module Random
 
 using Base.dSFMT
 using Base.GMP: Limb, MPZ
-import Base: copymutable, copy, copy!, ==
+import Base: copymutable, copy, copy!, ==, hash
 
 export srand,
        rand, rand!,
@@ -12,9 +12,10 @@ export srand,
        randexp, randexp!,
        bitrand,
        randstring,
-       randsubseq,randsubseq!,
-       shuffle,shuffle!,
-       randperm, randcycle,
+       randsubseq, randsubseq!,
+       shuffle, shuffle!,
+       randperm, randperm!,
+       randcycle, randcycle!,
        AbstractRNG, MersenneTwister, RandomDevice,
        GLOBAL_RNG, randjump
 
@@ -133,6 +134,7 @@ copy(src::MersenneTwister) =
 ==(r1::MersenneTwister, r2::MersenneTwister) =
     r1.seed == r2.seed && r1.state == r2.state && isequal(r1.vals, r2.vals) && r1.idx == r2.idx
 
+hash(r::MersenneTwister, h::UInt) = foldr(hash, h, (r.seed, r.state, r.vals, r.idx))
 
 ## Low level API for MersenneTwister
 
@@ -1789,14 +1791,12 @@ shuffle(a::AbstractArray) = shuffle(GLOBAL_RNG, a)
 
 Construct a random permutation of length `n`. The optional `rng` argument specifies a random
 number generator (see [Random Numbers](@ref)).
-To randomly permute a arbitrary vector, see [`shuffle`](@ref)
+To randomly permute an arbitrary vector, see [`shuffle`](@ref)
 or [`shuffle!`](@ref).
 
 # Examples
 ```jldoctest
-julia> rng = MersenneTwister(1234);
-
-julia> randperm(rng, 4)
+julia> randperm(MersenneTwister(1234), 4)
 4-element Array{Int64,1}:
  2
  1
@@ -1804,15 +1804,34 @@ julia> randperm(rng, 4)
  3
 ```
 """
-function randperm(r::AbstractRNG, n::Integer)
-    a = Vector{typeof(n)}(n)
+randperm(r::AbstractRNG, n::Integer) = randperm!(r, Vector{Int}(n))
+randperm(n::Integer) = randperm(GLOBAL_RNG, n)
+
+"""
+    randperm!([rng=GLOBAL_RNG,] A::Array{<:Integer})
+
+Construct in `A` a random permutation of length `length(A)`. The
+optional `rng` argument specifies a random number generator (see
+[Random Numbers](@ref)). To randomly permute an arbitrary vector, see
+[`shuffle`](@ref) or [`shuffle!`](@ref).
+
+# Examples
+```jldoctest
+julia> randperm!(MersenneTwister(1234), Vector{Int}(4))
+4-element Array{Int64,1}:
+ 2
+ 1
+ 4
+ 3
+```
+"""
+function randperm!(r::AbstractRNG, a::Array{<:Integer})
+    n = length(a)
     @assert n <= Int64(2)^52
-    if n == 0
-       return a
-    end
+    n == 0 && return a
     a[1] = 1
     mask = 3
-    @inbounds for i = 2:Int(n)
+    @inbounds for i = 2:n
         j = 1 + rand_lt(r, i, mask)
         if i != j # a[i] is uninitialized (and could be #undef)
             a[i] = a[j]
@@ -1822,7 +1841,9 @@ function randperm(r::AbstractRNG, n::Integer)
     end
     return a
 end
-randperm(n::Integer) = randperm(GLOBAL_RNG, n)
+
+randperm!(a::Array{<:Integer}) = randperm!(GLOBAL_RNG, a)
+
 
 """
     randcycle([rng=GLOBAL_RNG,] n::Integer)
@@ -1832,9 +1853,7 @@ argument specifies a random number generator, see [Random Numbers](@ref).
 
 # Examples
 ```jldoctest
-julia> rng = MersenneTwister(1234);
-
-julia> randcycle(rng, 6)
+julia> randcycle(MersenneTwister(1234), 6)
 6-element Array{Int64,1}:
  3
  5
@@ -1844,13 +1863,35 @@ julia> randcycle(rng, 6)
  2
 ```
 """
-function randcycle(r::AbstractRNG, n::Integer)
-    a = Vector{typeof(n)}(n)
+randcycle(r::AbstractRNG, n::Integer) = randcycle!(r, Vector{Int}(n))
+randcycle(n::Integer) = randcycle(GLOBAL_RNG, n)
+
+"""
+    randcycle!([rng=GLOBAL_RNG,] A::Array{<:Integer})
+
+Construct in `A` a random cyclic permutation of length `length(A)`.
+The optional `rng` argument specifies a random number generator, see
+[Random Numbers](@ref).
+
+# Examples
+```jldoctest
+julia> randcycle!(MersenneTwister(1234), Vector{Int}(6))
+6-element Array{Int64,1}:
+ 3
+ 5
+ 4
+ 6
+ 1
+ 2
+```
+"""
+function randcycle!(r::AbstractRNG, a::Array{<:Integer})
+    n = length(a)
     n == 0 && return a
     @assert n <= Int64(2)^52
     a[1] = 1
     mask = 3
-    @inbounds for i = 2:Int(n)
+    @inbounds for i = 2:n
         j = 1 + rand_lt(r, i-1, mask)
         a[i] = a[j]
         a[j] = i
@@ -1858,6 +1899,7 @@ function randcycle(r::AbstractRNG, n::Integer)
     end
     return a
 end
-randcycle(n::Integer) = randcycle(GLOBAL_RNG, n)
+
+randcycle!(a::Array{<:Integer}) = randcycle!(GLOBAL_RNG, a)
 
 end # module

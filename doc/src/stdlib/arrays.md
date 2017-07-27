@@ -157,11 +157,13 @@ Base.sum_kbn
 
 ```@docs
 Base.Random.randperm
+Base.Random.randperm!
 Base.invperm
 Base.isperm
 Base.permute!(::Any, ::AbstractVector)
 Base.ipermute!
 Base.Random.randcycle
+Base.Random.randcycle!
 Base.Random.shuffle
 Base.Random.shuffle!
 Base.reverse

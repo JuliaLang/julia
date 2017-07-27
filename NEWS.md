@@ -19,6 +19,10 @@ Language changes
   * Declaring arguments as `x::ANY` to avoid specialization has been replaced
     by `@nospecialize x`. ([#22666]).
 
+  * Keyword argument default values are now evaluated in successive scopes ---
+    the scope for each expression includes only previous keyword arguments, in
+    left-to-right order ([#17240]).
+
   * The parsing of `1<<2*3` as `1<<(2*3)` is deprecated, and will change to
     `(1<<2)*3` in a future version ([#13079]).
 
@@ -75,6 +79,13 @@ This section lists changes that do not have deprecation warnings.
     `@everywhere include_string(Main, $(read("filename", String)), "filename")`.
     Improving upon this API is left as an opportunity for packages.
 
+  * `randperm(n)` and `randcycle(n)` now always return a `Vector{Int}` (independent of
+    the type of `n`). Use the corresponding mutating functions `randperm!` and `randcycle!`
+    to control the array type ([#22723]).
+
+  * Worker-worker connections are setup lazily for an `:all_to_all` topology. Use keyword
+    arg `lazy=false` to force all connections to be setup during a `addprocs` call. ([#22814])
+
 Library improvements
 --------------------
 
@@ -127,6 +138,9 @@ Library improvements
 
   * `Diagonal` is now parameterized on the type of the wrapped vector. This allows
     for `Diagonal` matrices with arbitrary `AbstractVector`s ([#22718]).
+
+  * Mutating versions of `randperm` and `randcycle` have been added:
+    `randperm!` and `randcycle!` ([#22723]).
 
 Compiler/Runtime improvements
 -----------------------------
@@ -637,6 +651,8 @@ Library improvements
     This form allows specification of the returned indices' style. For example,
     `enumerate(IndexLinear, iterable)` yields linear indices and
     `enumerate(IndexCartesian, iterable)` yields cartesian indices ([#16378]).
+
+  * Jump to first/last history entries in the REPL via "Alt-<" and "Alt->" ([#22829]).
 
 Compiler/Runtime improvements
 -----------------------------

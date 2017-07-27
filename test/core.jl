@@ -5075,3 +5075,17 @@ f_isdefined_cl_6() = (local x; () -> @isdefined x)
 @test !f_isdefined_cl_4()
 @test f_isdefined_cl_5()()
 @test !f_isdefined_cl_6()()
+
+mutable struct MyStruct22929
+    x::MyStruct22929
+    MyStruct22929() = new()
+end
+isdefined_22929_1(x) = isdefined(x, 1)
+isdefined_22929_x(x) = isdefined(x, :x)
+m22929_1 = MyStruct22929()
+m22929_2 = MyStruct22929()
+m22929_2.x = m22929_1
+@test !isdefined_22929_1(m22929_1)
+@test !isdefined_22929_x(m22929_1)
+@test isdefined_22929_1(m22929_2)
+@test isdefined_22929_x(m22929_2)

@@ -59,6 +59,7 @@ mutable struct Worker
     state::WorkerState
     c_state::Condition      # wait for state changes
     ct_time::Float64        # creation time
+    conn_func::Nullable{Function}     # Used to setup connections lazily
 
     r_stream::IO
     w_stream::IO
@@ -82,12 +83,13 @@ mutable struct Worker
         w
     end
 
-    function Worker(id::Int)
+    Worker(id::Int) = Worker(id, Nullable{Function}())
+    function Worker(id::Int, conn_func)
         @assert id > 0
         if haskey(map_pid_wrkr, id)
             return map_pid_wrkr[id]
         end
-        w=new(id, [], [], false, W_CREATED, Condition(), time())
+        w=new(id, [], [], false, W_CREATED, Condition(), time(), conn_func)
         register_worker(w)
         w
     end
@@ -102,19 +104,54 @@ end
 
 function check_worker_state(w::Worker)
     if w.state == W_CREATED
-        if PGRP.topology == :all_to_all
-            # Since higher pids connect with lower pids, the remote worker
-            # may not have connected to us yet. Wait for some time.
-            timeout =  worker_timeout() - (time() - w.ct_time)
-            timeout <= 0 && error("peer $(w.id) has not connected to $(myid())")
-
-            @schedule (sleep(timeout); notify(w.c_state; all=true))
-            wait(w.c_state)
-            w.state == W_CREATED && error("peer $(w.id) didn't connect to $(myid()) within $timeout seconds")
+        if !isclusterlazy()
+            if PGRP.topology == :all_to_all
+                # Since higher pids connect with lower pids, the remote worker
+                # may not have connected to us yet. Wait for some time.
+                wait_for_conn(w)
+            else
+                error("peer $(w.id) is not connected to $(myid()). Topology : " * string(PGRP.topology))
+            end
         else
-            error("peer $(w.id) is not connected to $(myid()). Topology : " * string(PGRP.topology))
+            w.ct_time = time()
+            if myid() > w.id
+                @schedule exec_conn_func(w)
+            else
+                # route request via node 1
+                @schedule remotecall_fetch((p,to_id) -> remotecall_fetch(exec_conn_func, p, to_id), 1, w.id, myid())
+            end
+            wait_for_conn(w)
         end
     end
+end
+
+exec_conn_func(id::Int) = exec_conn_func(worker_from_id(id))
+function exec_conn_func(w::Worker)
+    if isnull(w.conn_func)
+        return wait_for_conn(w) # Some other task may be trying to connect at the same time.
+    end
+
+    try
+        f = get(w.conn_func)
+        w.conn_func = Nullable{Function}()
+        f()
+    catch e
+        w.conn_func = () -> throw(e)
+        rethrow(e)
+    end
+    nothing
+end
+
+function wait_for_conn(w)
+    if w.state == W_CREATED
+        timeout =  worker_timeout() - (time() - w.ct_time)
+        timeout <= 0 && error("peer $(w.id) has not connected to $(myid())")
+
+        @schedule (sleep(timeout); notify(w.c_state; all=true))
+        wait(w.c_state)
+        w.state == W_CREATED && error("peer $(w.id) didn't connect to $(myid()) within $timeout seconds")
+    end
+    nothing
 end
 
 ## process group creation ##
@@ -340,6 +377,17 @@ function addprocs_locked(manager::ClusterManager; kwargs...)
     params = merge(default_addprocs_params(), AnyDict(kwargs))
     topology(Symbol(params[:topology]))
 
+    if PGRP.topology != :all_to_all
+        params[:lazy] = false
+    end
+
+    if isnull(PGRP.lazy) || nprocs() == 1
+        PGRP.lazy = Nullable{Bool}(params[:lazy])
+    elseif isclusterlazy() != params[:lazy]
+        throw(ArgumentError(string("Active workers with lazy=", isclusterlazy(),
+                                    ". Cannot set lazy=", params[:lazy])))
+    end
+
     # References to launched workers, filled when each worker is fully initialized and
     # has connected to all nodes.
     launched_q = Int[]   # Asynchronously filled by the launch method
@@ -396,7 +444,8 @@ default_addprocs_params() = AnyDict(
     :dir      => pwd(),
     :exename  => joinpath(JULIA_HOME, julia_exename()),
     :exeflags => ``,
-    :enable_threaded_blas => false)
+    :enable_threaded_blas => false,
+    :lazy => true)
 
 
 function setup_launched_worker(manager, wconfig, launched_q)
@@ -517,7 +566,7 @@ function create_worker(manager, wconfig)
 
     all_locs = map(x -> isa(x, Worker) ? (get(x.config.connect_at, ()), x.id) : ((), x.id, true), join_list)
     send_connection_hdr(w, true)
-    join_message = JoinPGRPMsg(w.id, all_locs, PGRP.topology, get(wconfig.enable_threaded_blas, false))
+    join_message = JoinPGRPMsg(w.id, all_locs, PGRP.topology, get(wconfig.enable_threaded_blas, false), isclusterlazy())
     send_msg_now(w, MsgHeader(RRID(0,0), ntfy_oid), join_message)
 
     @schedule manage(w.manager, w.id, w.config, :register)
@@ -619,8 +668,9 @@ mutable struct ProcessGroup
     workers::Array{Any,1}
     refs::Dict                  # global references
     topology::Symbol
+    lazy::Nullable{Bool}
 
-    ProcessGroup(w::Array{Any,1}) = new("pg-default", w, Dict(), :all_to_all)
+    ProcessGroup(w::Array{Any,1}) = new("pg-default", w, Dict(), :all_to_all, Nullable{Bool}())
 end
 const PGRP = ProcessGroup([])
 
@@ -632,6 +682,14 @@ function topology(t)
         error("Workers with Topology $(PGRP.topology) already exist. Requested Topology $(t) cannot be set.")
     end
     t
+end
+
+function isclusterlazy()
+    if isnull(PGRP.lazy)
+        return false
+    else
+        return get(PGRP.lazy)
+    end
 end
 
 get_bind_addr(pid::Integer) = get_bind_addr(worker_from_id(pid))
@@ -667,7 +725,7 @@ myid() = LPROC.id
 Get the number of available processes.
 """
 function nprocs()
-    if myid() == 1 || PGRP.topology == :all_to_all
+    if myid() == 1 || (PGRP.topology == :all_to_all && !isclusterlazy())
         n = length(PGRP.workers)
         # filter out workers in the process of being setup/shutdown.
         for jw in PGRP.workers
@@ -698,7 +756,7 @@ end
 Returns a list of all process identifiers.
 """
 function procs()
-    if myid() == 1 || PGRP.topology == :all_to_all
+    if myid() == 1 || (PGRP.topology == :all_to_all  && !isclusterlazy())
         # filter out workers in the process of being setup/shutdown.
         return Int[x.id for x in PGRP.workers if isa(x, LocalProcess) || (x.state == W_CONNECTED)]
     else
@@ -707,7 +765,7 @@ function procs()
 end
 
 function id_in_procs(id)  # faster version of `id in procs()`
-    if myid() == 1 || PGRP.topology == :all_to_all
+    if myid() == 1 || (PGRP.topology == :all_to_all  && !isclusterlazy())
         for x in PGRP.workers
             if (x.id::Int) == id && (isa(x, LocalProcess) || (x::Worker).state == W_CONNECTED)
                 return true
@@ -903,7 +961,7 @@ function deregister_worker(pg, pid)
         if myid() == 1 && isdefined(w, :config)
             # Notify the cluster manager of this workers death
             manage(w.manager, w.id, w.config, :deregister)
-            if PGRP.topology != :all_to_all
+            if PGRP.topology != :all_to_all || isclusterlazy()
                 for rpid in workers()
                     try
                         remote_do(deregister_worker, rpid, pid)

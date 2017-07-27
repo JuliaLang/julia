@@ -472,9 +472,8 @@ this example, `width` is certain to have the value `2`.
 
 ## Evaluation Scope of Default Values
 
-Optional and keyword arguments differ slightly in how their default values are evaluated. When
-optional argument default expressions are evaluated, only *previous* arguments are in scope. In
-contrast, *all* the arguments are in scope when keyword arguments default expressions are evaluated.
+When optional and keyword argument default expressions are evaluated, only *previous* arguments are in
+scope.
 For example, given this definition:
 
 ```julia
@@ -483,11 +482,7 @@ function f(x, a=b, b=1)
 end
 ```
 
-the `b` in `a=b` refers to a `b` in an outer scope, not the subsequent argument `b`. However,
-if `a` and `b` were keyword arguments instead, then both would be created in the same scope and
-the `b` in `a=b` would refer to the subsequent argument `b` (shadowing any `b` in an outer scope),
-which would result in an undefined variable error (since the default expressions are evaluated
-left-to-right, and `b` has not been assigned yet).
+the `b` in `a=b` refers to a `b` in an outer scope, not the subsequent argument `b`.
 
 ## Do-Block Syntax for Function Arguments
 

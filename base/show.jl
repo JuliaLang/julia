@@ -278,19 +278,26 @@ print(io::IO, n::Unsigned) = print(io, dec(n))
 
 show(io::IO, p::Ptr) = print(io, typeof(p), " @0x$(hex(UInt(p), Sys.WORD_SIZE>>2))")
 
-function show(io::IO, p::Pair)
-    if typeof(p.first) != typeof(p).parameters[1] ||
-       typeof(p.second) != typeof(p).parameters[2]
-        return show_default(io, p)
-    end
+has_tight_type(p::Pair) =
+    typeof(p.first)  == typeof(p).parameters[1] &&
+    typeof(p.second) == typeof(p).parameters[2]
 
-    isa(p.first,Pair) && print(io, "(")
-    show(io, p.first)
-    isa(p.first,Pair) && print(io, ")")
-    print(io, "=>")
-    isa(p.second,Pair) && print(io, "(")
-    show(io, p.second)
-    isa(p.second,Pair) && print(io, ")")
+isdelimited(io::IO, x) = true
+
+isdelimited(io::IO, p::Pair) = !has_tight_type(p)
+
+function show(io::IO, p::Pair)
+    compact = get(io, :compact, false)
+    iocompact = IOContext(io, :compact => get(io, :compact, true))
+    has_tight_type(p) || return show_default(iocompact, p)
+
+    isdelimited(iocompact, p.first) || print(io, "(")
+    show(iocompact, p.first)
+    isdelimited(iocompact, p.first) || print(io, ")")
+    print(io, compact ? "=>" : " => ")
+    isdelimited(iocompact, p.second) || print(io, "(")
+    show(iocompact, p.second)
+    isdelimited(iocompact, p.second) || print(io, ")")
     nothing
 end
 
@@ -1374,6 +1381,16 @@ function alignment(io::IO, x::Rational)
     m = match(r"^(.*?/)(/.*)$", sprint(0, show, x, env=io))
     m === nothing ? (length(sprint(0, show, x, env=io)), 0) :
                    (length(m.captures[1]), length(m.captures[2]))
+end
+
+function alignment(io::IO, x::Pair)
+    s = sprint(0, show, x, env=io)
+    if has_tight_type(x) # i.e. use "=>" for display
+        left = length(sprint(0, show, x.first, env=io)) + 2isa(x.first, Pair) # 2 for parens
+        (left+1, length(s)-left-1) # +1 for the "=" part of "=>"
+    else
+        (0, length(s)) # as for x::Any
+    end
 end
 
 const undef_ref_str = "#undef"

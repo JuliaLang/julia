@@ -219,10 +219,10 @@ f9948, getx9948 = let
     getx() = x
     h, getx
 end
-@test_throws UndefVarError f9948()
+@test f9948() == 3
 @test getx9948() == 3
 @test f9948(x=5) == 5
-@test_throws UndefVarError f9948()
+@test f9948() == 3
 @test getx9948() == 3
 
 # issue #17785 - handle all sources of kwargs left-to-right
@@ -284,4 +284,13 @@ let a = 0
     @test a == 1
     g21518()(; :kw=>1)
     @test a == 2
+end
+
+# issue #17240 - evaluate default expressions in nested scopes
+let a = 10
+    f17240(;a=a-1, b=2a) = (a, b)
+    @test f17240() == (9, 18)
+    @test f17240(a=2) == (2, 4)
+    @test f17240(b=3) == (9, 3)
+    @test f17240(a=2, b=1) == (2, 1)
 end

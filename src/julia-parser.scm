@@ -160,6 +160,15 @@
                    (where-enabled #t))
                   ,@body))
 
+(define-macro (with-normal-context . body)
+  `(with-bindings ((range-colon-enabled #t)
+                   (space-sensitive #f)
+                   (where-enabled #t)
+                   (inside-vec #f)
+                   (end-symbol #f)
+                   (whitespace-newline #f))
+                  ,@body))
+
 (define-macro (without-range-colon . body)
   `(with-bindings ((range-colon-enabled #f))
                   ,@body))
@@ -969,8 +978,6 @@
 (define (parse-unary s)
   (let* ((op  (require-token s))
          (spc (ts:space? s)))
-    (if (closing-token? op)
-        (error (string "unexpected \"" op "\"")))
     (if (initial-operator? op)
         (begin
           (take-token s)
@@ -1077,8 +1084,9 @@
   (let ((op (peek-token s)))
     (if (syntactic-unary-op? op)
         (begin (take-token s)
-               (cond ((let ((next (peek-token s)))
-                        (or (closing-token? next) (newline? next)))
+               (cond ((and (memq op '(& $))
+                           (let ((next (peek-token s)))
+                             (or (closing-token? next) (newline? next))))
                       op)
                      ((memq op '(& |::|))  (list op (parse-where s parse-call)))
                      (else                 (list op (parse-unary-prefix s)))))
@@ -1145,7 +1153,8 @@
              ;; ref is syntax, so we can distinguish
              ;; a[i] = x  from
              ;; ref(a,i) = x
-             (let ((al (with-end-symbol (parse-cat s #\]))))
+             (let* ((es end-symbol)
+                    (al (with-end-symbol (parse-cat s #\] es))))
                (if (null? al)
                    (loop (list 'ref ex))
                    (case (car al)
@@ -1263,8 +1272,8 @@
 (define (parse-resword s word)
   (with-bindings
    ((expect-end-current-line (input-port-line (ts:port s))))
-   (with-normal-ops
-    (without-whitespace-newline
+   (with-normal-context
+    (begin
      (case word
        ((begin quote)
         (let ((loc  (begin (skip-ws-and-comments (ts:port s))
@@ -1727,13 +1736,15 @@
          (take-token s))
      `(comprehension ,gen))))
 
-(define (parse-matrix s first closer gotnewline)
+(define (parse-matrix s first closer gotnewline last-end-symbol)
   (define (fix head v) (cons head (reverse v)))
   (define (update-outer v outer)
     (cond ((null? v)       outer)
           ((null? (cdr v)) (cons (car v) outer))
           (else            (cons (fix 'row v) outer))))
   (define semicolon (eqv? (peek-token s) #\;))
+  ;; if a [ ] expression is a cat expression, `end` is not special
+  (with-bindings ((end-symbol last-end-symbol))
   (let loop ((vec   (list first))
              (outer '()))
     (let ((t  (if (or (eqv? (peek-token s) #\newline) gotnewline)
@@ -1767,7 +1778,7 @@
              (if (and (pair? vec) (not (ts:space? s)))
                  (error (string "expected separator between arguments to \"[ ]\"; got \""
                                 (deparse (car vec)) t "\"")))
-             (loop (cons (parse-eq* s) vec) outer)))))))
+             (loop (cons (parse-eq* s) vec) outer))))))))
 
 (define (peek-non-newline-token s)
   (let loop ((t (peek-token s)))
@@ -1780,7 +1791,7 @@
   (if (not (ts:space? s))
       (error (string "expected space before \"" t "\""))))
 
-(define (parse-cat s closer)
+(define (parse-cat s closer last-end-symbol)
   (with-normal-ops
    (with-inside-vec
     (if (eqv? (require-token s) closer)
@@ -1798,9 +1809,9 @@
                  (take-token s)
                  (if (memv (peek-token s) (list #\, closer))
                      (parse-vect s first closer)
-                     (parse-matrix s first closer #t)))
+                     (parse-matrix s first closer #t last-end-symbol)))
                 (else
-                 (parse-matrix s first closer #f))))))))
+                 (parse-matrix s first closer #f last-end-symbol))))))))
 
 (define (kw-to-= e) (if (kwarg? e) (cons '= (cdr e)) e))
 (define (=-to-kw e) (if (assignment? e) (cons 'kw (cdr e)) e))
@@ -2105,19 +2116,25 @@
 
           ;; identifier
           ((symbol? t)
-           (if checked (check-identifier t))
+           (if checked
+               (begin (check-identifier t)
+                      (if (closing-token? t)
+                          (error (string "unexpected \"" (take-token s) "\"")))))
            (take-token s))
 
           ;; parens or tuple
           ((eqv? t #\( )
            (take-token s)
-           (with-normal-ops
-            (with-whitespace-newline
+           (with-bindings ((range-colon-enabled #t)
+                           (space-sensitive #f)
+                           (where-enabled #t)
+                           (whitespace-newline #t))
+            (let ((nxt (require-token s)))
              (cond
-              ((eqv? (require-token s) #\) )
+              ((eqv? nxt #\) )
                ;; empty tuple ()
                (begin (take-token s) '(tuple)))
-              ((syntactic-op? (peek-token s))
+              ((syntactic-op? nxt)
                ;; allow (=) etc.
                (let ((tok (take-token s)))
                  (if (not (eqv? (require-token s) #\) ))
@@ -2125,7 +2142,14 @@
                      (take-token s))
                  (if checked (check-identifier tok))
                  tok))
-              ((eqv? (peek-token s) #\;)
+              ;; allow :(::) as a special case
+              ((and (not checked) (eq? nxt '|::|)
+                    (let ((spc (ts:space? s)))
+                      (or (and (take-token s) (eqv? (require-token s) #\) ))
+                          (and (ts:put-back! s '|::| spc) #f))))
+               (take-token s)  ;; take #\)
+               '|::|)
+              ((eqv? nxt #\;)
                (arglist-to-tuple #t #f (parse-arglist s #\) )))
               (else
                ;; here we parse the first subexpression separately, so
@@ -2159,7 +2183,7 @@
           ;; cat expression
           ((eqv? t #\[ )
            (take-token s)
-           (let ((vex (parse-cat s #\])))
+           (let ((vex (parse-cat s #\] end-symbol)))
              (if (null? vex) '(vect) vex)))
 
           ((eqv? t #\{ )
@@ -2167,7 +2191,7 @@
            (if (eqv? (require-token s) #\})
                (begin (take-token s)
                       '(cell1d))
-               (let ((vex (parse-cat s #\})))
+               (let ((vex (parse-cat s #\} end-symbol)))
                  (if (null? vex)
                      '(cell1d)
                      (case (car vex)
@@ -2227,6 +2251,8 @@
            `(macrocall @cmd ,(line-number-node s) ,(parse-raw-literal s #\`)))
 
           ((or (string? t) (number? t) (large-number? t)) (take-token s))
+
+          ((closing-token? t) (error (string "unexpected \"" (take-token s) "\"")))
 
           (else (error (string "invalid syntax: \"" (take-token s) "\""))))))
 
