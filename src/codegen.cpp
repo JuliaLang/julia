@@ -99,7 +99,7 @@ namespace llvm {
 #include "julia.h"
 #include "julia_internal.h"
 #include "jitlayers.h"
-#include "codegen_internal.h"
+#include "codegen_shared.h"
 
 // LLVM version compatibility macros
 legacy::PassManager *jl_globalPM;
@@ -1582,168 +1582,20 @@ void *jl_get_llvmf_decl(jl_method_instance_t *linfo, size_t world, bool getwrapp
     }
 }
 
-
-// print an llvm IR acquired from jl_get_llvmf
-// warning: this takes ownership of, and destroys, f->getParent()
-extern "C" JL_DLLEXPORT
-const jl_value_t *jl_dump_function_ir(void *f, bool strip_ir_metadata, bool dump_module)
-{
-    std::string code;
-    llvm::raw_string_ostream stream(code);
-
-    Function *llvmf = dyn_cast_or_null<Function>((Function*)f);
-    if (!llvmf || (!llvmf->isDeclaration() && !llvmf->getParent()))
-        jl_error("jl_dump_function_ir: Expected Function* in a temporary Module");
-
-    JL_LOCK(&codegen_lock); // Might GC
-    if (!llvmf->getParent()) {
-        // print the function declaration as-is
-        llvmf->print(stream);
-        delete llvmf;
-    }
-    else {
-        Module *m = llvmf->getParent();
-        if (strip_ir_metadata) {
-            // strip metadata from all instructions in the module
-            for (Module::iterator I = m->begin(), E = m->end(); I != E; ++I) {
-                Function *f2 = &*I;
-                Function::BasicBlockListType::iterator f2_bb = f2->getBasicBlockList().begin();
-                // iterate over all basic blocks in the function
-                for (; f2_bb != f2->getBasicBlockList().end(); ++f2_bb) {
-                    BasicBlock::InstListType::iterator f2_il = (*f2_bb).getInstList().begin();
-                    // iterate over instructions in basic block
-                    for (; f2_il != (*f2_bb).getInstList().end(); ) {
-                        Instruction *inst = &*f2_il++;
-                        // remove dbg.declare and dbg.value calls
-                        if (isa<DbgDeclareInst>(inst) || isa<DbgValueInst>(inst)) {
-                            inst->eraseFromParent();
-                            continue;
-                        }
-
-                        SmallVector<std::pair<unsigned, MDNode*>, 4> MDForInst;
-                        inst->getAllMetadata(MDForInst);
-                        SmallVector<std::pair<unsigned, MDNode*>, 4>::iterator md_iter = MDForInst.begin();
-
-                        // iterate over all metadata kinds and set to NULL to remove
-                        for (; md_iter != MDForInst.end(); ++md_iter) {
-                            inst->setMetadata((*md_iter).first, NULL);
-                        }
-                    }
-                }
-            }
-        }
-        if (dump_module) {
-            m->print(stream, NULL);
-        }
-        else {
-            llvmf->print(stream);
-        }
-        delete m;
-    }
-    JL_UNLOCK(&codegen_lock); // Might GC
-
-    return jl_pchar_to_string(stream.str().data(), stream.str().size());
-}
-
-// This isn't particularly fast, but it's only used for interactive mode
-static uint64_t compute_obj_symsize(const object::ObjectFile *obj, uint64_t offset)
-{
-    // Scan the object file for the closest symbols above and below offset in the .text section
-    uint64_t lo = 0;
-    uint64_t hi = 0;
-    bool setlo = false;
-    for (const object::SectionRef &Section : obj->sections()) {
-        uint64_t SAddr, SSize;
-        if (!Section.isText()) continue;
-        SAddr = Section.getAddress();
-        SSize = Section.getSize();
-        if (offset < SAddr || offset >= SAddr + SSize) continue;
-        assert(hi == 0);
-
-        // test for lower and upper symbol bounds relative to other symbols
-        hi = SAddr + SSize;
-        object::section_iterator ESection = obj->section_end();
-        for (const object::SymbolRef &Sym : obj->symbols()) {
-            uint64_t Addr;
-            object::section_iterator Sect = ESection;
-            auto SectOrError = Sym.getSection();
-            assert(SectOrError);
-            Sect = SectOrError.get();
-            if (Sect == ESection) continue;
-            if (Sect != Section) continue;
-            auto AddrOrError = Sym.getAddress();
-            assert(AddrOrError);
-            Addr = AddrOrError.get();
-            if (Addr <= offset && Addr >= lo) {
-                // test for lower bound on symbol
-                lo = Addr;
-                setlo = true;
-            }
-            if (Addr > offset && Addr < hi) {
-                // test for upper bound on symbol
-                hi = Addr;
-            }
-        }
-    }
-    if (setlo)
-        return hi - lo;
-    return 0;
-}
-
-// print a native disassembly for f (an LLVM function)
+// get a native disassembly for f (an LLVM function)
 // warning: this takes ownership of, and destroys, f
 extern "C" JL_DLLEXPORT
-const jl_value_t *jl_dump_function_asm(void *f, int raw_mc, const char* asm_variant="att")
+const jl_value_t *jl_dump_function_asm(void *f, int raw_mc, const char* asm_variant)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
-    std::string code;
-    llvm::raw_string_ostream stream(code);
-
     Function *llvmf = dyn_cast_or_null<Function>((Function*)f);
     if (!llvmf)
         jl_error("jl_dump_function_asm: Expected Function*");
-
-    // Dump assembly code
-    uint64_t symsize = 0;
-    int64_t slide = 0, section_slide = 0;
     uint64_t fptr = getAddressForFunction(llvmf->getName());
     // Look in the system image as well
     if (fptr == 0)
         fptr = (uintptr_t)jl_ExecutionEngine->getPointerToGlobalIfAvailable(llvmf);
     delete llvmf;
-
-    llvm::DIContext *context = NULL;
-    llvm::DIContext *&objcontext = context;
-    const object::ObjectFile *object = NULL;
-    assert(fptr != 0);
-    if (!jl_DI_for_fptr(fptr, &symsize, &slide, &section_slide, &object, &context)) {
-        if (!jl_dylib_DI_for_fptr(fptr, &object, &objcontext, &slide, &section_slide, false,
-            NULL, NULL, NULL, NULL)) {
-                jl_printf(JL_STDERR, "WARNING: Unable to find function pointer\n");
-                return jl_pchar_to_string("", 0);
-        }
-    }
-    if (symsize == 0 && object != NULL)
-        symsize = compute_obj_symsize(object, fptr + slide + section_slide);
-    if (symsize == 0) {
-        jl_printf(JL_STDERR, "WARNING: Could not determine size of symbol\n");
-        return jl_pchar_to_string("", 0);
-    }
-
-    if (raw_mc) {
-        return (jl_value_t*)jl_pchar_to_array((char*)fptr, symsize);
-    }
-
-    int8_t gc_state = jl_gc_safe_enter(ptls);
-    jl_dump_asm_internal(fptr, symsize, slide,
-            object, objcontext,
-            stream,
-            asm_variant
-            );
-
-    jl_gc_safe_leave(ptls, gc_state);
-
-    return jl_pchar_to_string(stream.str().data(), stream.str().size());
+    return jl_dump_fptr_asm(fptr, raw_mc, asm_variant);
 }
 
 // Logging for code coverage and memory allocation
@@ -6850,7 +6702,6 @@ extern "C" void *jl_init_llvm(void)
     EngineBuilder eb((std::unique_ptr<Module>(engine_module)));
     std::string ErrorStr;
     eb  .setEngineKind(EngineKind::JIT)
-        .setMCJITMemoryManager(std::unique_ptr<RTDyldMemoryManager>{createRTDyldMemoryManager()})
         .setTargetOptions(options)
         // Generate simpler code for JIT
         .setRelocationModel(Reloc::Static)
