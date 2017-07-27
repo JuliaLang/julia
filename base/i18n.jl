@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module I18n
 
@@ -15,7 +15,7 @@ function locale()
     LOCALE
 end
 
-function locale(s::ByteString)
+function locale(s::String)
     global LOCALE = s
     # XXX:TBD call setlocale
     for cb in CALLBACKS

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Peter Norvig's Spelling Corrector
 # based off of the python implementation at http://norvig.com/spell-correct.html
@@ -28,7 +28,7 @@ end
 if !isfile("big.txt")
     download("http://norvig.com/big.txt", "big.txt")
 end
-const NWORDS = train(words(readall("big.txt")))
+const NWORDS = train(words(read("big.txt", String)))
 
 const alphabet = "abcdefghijklmnopqrstuvwxyz"
 
@@ -83,7 +83,7 @@ function spelltest(tests; bias=0, verbose=false)
             w = correct(wrong)
             if w!=target
                 bad += 1
-                unknown += !(target in NWORDS)
+                unknown += !(target in keys(NWORDS))
                 if verbose
                     @printf("correct(%s) => %s (%d); expected %s (%d)\n",
                             wrong, w, NWORDS[w], target, NWORDS[target])
@@ -92,7 +92,7 @@ function spelltest(tests; bias=0, verbose=false)
         end
     end
 
-    return Dict("bad"=>bad, "n"=>n, "bias"=>bias, "pct"=>round(Int, 100. - 100.*bad/n),
+    return Dict("bad"=>bad, "n"=>n, "bias"=>bias, "pct"=>round(Int, 100. - 100. * bad/n),
                 "unknown"=>unknown, "secs"=>toc())
 end
 

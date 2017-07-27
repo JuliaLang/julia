@@ -1,20 +1,25 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ioslength(io::IOBuffer) = (io.seekable ? io.size : nb_available(io))
+
+bufcontents(io::Base.GenericIOBuffer) = unsafe_string(pointer(io.data), io.size)
 
 let io = IOBuffer()
 @test eof(io)
 @test_throws EOFError read(io,UInt8)
-@test write(io,"abc") == 3
+@test write(io,"abc") === 3
+@test isreadable(io)
+@test iswritable(io)
+@test isopen(io)
 @test ioslength(io) == 3
 @test position(io) == 3
 @test eof(io)
 seek(io, 0)
 @test read(io,UInt8) == convert(UInt8, 'a')
-a = Array(UInt8, 2)
+a = Array{UInt8}(2)
 @test read!(io, a) == a
 @test a == UInt8['b','c']
-@test bytestring(io) == "abc"
+@test bufcontents(io) == "abc"
 seek(io, 1)
 truncate(io, 2)
 @test position(io) == 1
@@ -26,7 +31,7 @@ truncate(io, 0)
 truncate(io, 10)
 @test position(io) == 0
 @test all(io.data .== 0)
-@test write(io,Int16[1,2,3,4,5,6]) == 12
+@test write(io,Int16[1,2,3,4,5,6]) === 12
 seek(io, 2)
 truncate(io, 10)
 @test ioslength(io) == 10
@@ -34,8 +39,10 @@ io.readable = false
 @test_throws ArgumentError read!(io,UInt8[0])
 truncate(io, 0)
 @test write(io,"boston\ncambridge\n") > 0
-@test takebuf_string(io) == "boston\ncambridge\n"
-@test takebuf_string(io) == ""
+@test String(take!(io)) == "boston\ncambridge\n"
+@test String(take!(io)) == ""
+@test write(io, Complex{Float64}(0)) === 16
+@test write(io, Rational{Int64}(1//2)) === 16
 close(io)
 @test_throws ArgumentError write(io,UInt8[0])
 @test_throws ArgumentError seek(io,0)
@@ -44,16 +51,16 @@ end
 
 let io = IOBuffer("hamster\nguinea pig\nturtle")
 @test position(io) == 0
-@test readline(io) == "hamster\n"
-@test readall(io) == "guinea pig\nturtle"
+@test readline(io) == "hamster"
+@test read(io, String) == "guinea pig\nturtle"
 @test_throws EOFError read(io,UInt8)
 seek(io,0)
 @test read(io,UInt8) == convert(UInt8, 'h')
 @test_throws ArgumentError truncate(io,0)
 @test_throws ArgumentError write(io,UInt8(0))
 @test_throws ArgumentError write(io,UInt8[0])
-@test takebuf_string(io) == "hamster\nguinea pig\nturtle"
-@test takebuf_string(io) == "hamster\nguinea pig\nturtle" #should be unchanged
+@test String(take!(io)) == "hamster\nguinea pig\nturtle"
+@test String(take!(io)) == "hamster\nguinea pig\nturtle" #should be unchanged
 close(io)
 end
 
@@ -61,14 +68,28 @@ let io = PipeBuffer()
 @test_throws EOFError read(io,UInt8)
 @test write(io,"pancakes\nwaffles\nblueberries\n") > 0
 @test position(io) == 0
-@test readline(io) == "pancakes\n"
+@test readline(io) == "pancakes"
 Base.compact(io)
-@test readline(io) == "waffles\n"
+@test readline(io) == "waffles"
 @test write(io,"whipped cream\n") > 0
-@test readline(io) == "blueberries\n"
+@test readline(io) == "blueberries"
 @test_throws ArgumentError seek(io,0)
 @test_throws ArgumentError truncate(io,0)
-@test readline(io) == "whipped cream\n"
+@test readline(io) == "whipped cream"
+@test write(io,"pancakes\nwaffles\nblueberries\n") > 0
+@test readlines(io) == String["pancakes", "waffles", "blueberries"]
+write(io,"\n\r\n\n\r \n") > 0
+@test readlines(io, chomp=false) == String["\n", "\r\n", "\n", "\r \n"]
+write(io,"\n\r\n\n\r \n") > 0
+@test readlines(io, chomp=true) == String["", "", "", "\r "]
+@test write(io,"α\nβ\nγ\nδ") > 0
+@test readlines(io, chomp=false) == String["α\n","β\n","γ\n","δ"]
+@test write(io,"α\nβ\nγ\nδ") > 0
+@test readlines(io, chomp=true) == String["α", "β", "γ", "δ"]
+@test readlines(IOBuffer(""), chomp=false) == []
+@test readlines(IOBuffer(""), chomp=true) == []
+@test readlines(IOBuffer("first\nsecond"), chomp=false) == String["first\n", "second"]
+@test readlines(IOBuffer("first\nsecond"), chomp=true) == String["first", "second"]
 Base.compact(io)
 @test position(io) == 0
 @test ioslength(io) == 0
@@ -96,12 +117,12 @@ write(io,[1,2,3])
 @test ioslength(io) == 75
 @test length(io.data) == 75
 skip(io,1)
-@test write(io,UInt8(104)) == 1
+@test write(io,UInt8(104)) === 1
 skip(io,3)
-@test write(io,"apples".data) == 3
+@test write(io,b"apples") === 3
 skip(io,71)
-@test write(io,'y') == 1
-@test readall(io) == "happy"
+@test write(io,'y') === 1
+@test read(io, String) == "happy"
 @test eof(io)
 write(io,zeros(UInt8,73))
 write(io,'a')
@@ -113,8 +134,8 @@ write(io,'e')
 @test length(io.data) == 75
 @test position(io) == 0
 skip(io,72)
-@test takebuf_string(io) == "\0ab"
-@test takebuf_string(io) == ""
+@test String(take!(io)) == "\0ab"
+@test String(take!(io)) == ""
 
 # issues 4021
 print(io, true)
@@ -123,12 +144,12 @@ end
 
 # issue 5453
 let io=IOBuffer("abcdef")
-a = Array(UInt8,1024)
+a = Array{UInt8}(1024)
 @test_throws EOFError read!(io,a)
 @test eof(io)
 end
 
-@test isempty(readlines(IOBuffer()))
+@test isempty(readlines(IOBuffer(), chomp=false))
 
 # issue #8193
 let io=IOBuffer("asdf")
@@ -145,4 +166,97 @@ let io=IOBuffer("hello")
     @test position(skip(io, -2)) == 3
     @test position(skip(io, -3)) == 0
     @test position(skip(io, -3)) == 0
+end
+
+# pr #11554
+let io=IOBuffer(SubString("***αhelloworldω***",4,16)), io2 = IOBuffer(b"goodnightmoon", true, true)
+    @test read(io, Char) == 'α'
+    @test_throws ArgumentError write(io,"!")
+    @test_throws ArgumentError write(io,'β')
+    a = Array{UInt8}(10)
+    @test read!(io, a) === a
+    @test String(a) == "helloworld"
+    @test read(io, Char) == 'ω'
+    @test_throws EOFError read(io,UInt8)
+    skip(io, -3)
+    @test read(io, String) == "dω"
+    @test bufcontents(io) == "αhelloworldω"
+    @test_throws ArgumentError write(io,"!")
+    @test take!(io) == b"αhelloworldω"
+    seek(io, 2)
+    seekend(io2)
+    write(io2, io)
+    @test read(io, String) == ""
+    @test read(io2, String) == ""
+    @test String(take!(io)) == "αhelloworldω"
+    seek(io2, 0)
+    truncate(io2, io2.size - 2)
+    @test read(io2, String) == "goodnightmoonhelloworld"
+    seek(io2, 0)
+    write(io2, io2)
+    @test read(io2, String) == ""
+    @test bufcontents(io2) == "goodnightmoonhelloworld"
+end
+
+# issue #11917
+# (previous tests triggered this sometimes, but this should trigger nearly all the time)
+let io = IOBuffer(0)
+   write(io, ones(UInt8, 1048577))
+end
+
+let bstream = BufferStream()
+    @test isopen(bstream)
+    @test isreadable(bstream)
+    @test iswritable(bstream)
+    @test nb_available(bstream) == 0
+    @test sprint(show, bstream) == "BufferStream() bytes waiting:$(nb_available(bstream.buffer)), isopen:true"
+    a = rand(UInt8,10)
+    write(bstream,a)
+    @test !eof(bstream)
+    @test flush(bstream) === nothing
+    b = read(bstream,UInt8)
+    @test a[1] == b
+    b = read(bstream,UInt8)
+    @test a[2] == b
+    c = zeros(UInt8,8)
+    @test nb_available(bstream) == 8
+    @test !eof(bstream)
+    read!(bstream,c)
+    @test c == a[3:10]
+    @test close(bstream) === nothing
+    @test eof(bstream)
+    @test nb_available(bstream) == 0
+end
+
+@test flush(IOBuffer()) === nothing # should be a no-op
+
+# pr #19461
+let io = IOBuffer()
+    @test Base.buffer_writes(io) === io
+end
+
+# skipchars
+let
+    io = IOBuffer("")
+    @test eof(skipchars(io, isspace))
+
+    io = IOBuffer("   ")
+    @test eof(skipchars(io, isspace))
+
+    io = IOBuffer("#    \n     ")
+    @test eof(skipchars(io, isspace, linecomment='#'))
+
+    io = IOBuffer("      text")
+    skipchars(io, isspace)
+    @test String(readavailable(io)) == "text"
+
+    io = IOBuffer("   # comment \n    text")
+    skipchars(io, isspace, linecomment='#')
+    @test String(readavailable(io)) == "text"
+
+    for char in ['@','߷','࿊','𐋺']
+        io = IOBuffer("alphabeticalstuff$char")
+        @test !eof(skipchars(io, isalpha))
+        @test read(io, Char) == char
+    end
 end

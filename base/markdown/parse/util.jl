@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 import Base: peek
 
@@ -16,7 +16,7 @@ const whitespace = " \t\r"
 Skip any leading whitespace. Returns io.
 """
 function skipwhitespace(io::IO; newlines = true)
-    while !eof(io) && (peek(io) in whitespace || (newlines && peek(io) == '\n'))
+    while !eof(io) && (Char(peek(io)) in whitespace || (newlines && peek(io) == UInt8('\n')))
         read(io, Char)
     end
     return io
@@ -31,6 +31,7 @@ function skipblank(io::IO)
     while !eof(io)
         c = read(io, Char)
         c == '\n' && (start = position(io); i+=1; continue)
+        c == '\r' && (start = position(io); i+=1; continue)
         c in whitespace || break
     end
     seek(io, start)
@@ -45,7 +46,7 @@ function linecontains(io::IO, chars; allow_whitespace = true,
                                      eat = true,
                                      allowempty = false)
     start = position(io)
-    l = readline(io) |> chomp
+    l = readline(io)
     length(l) == 0 && return allowempty
 
     result = allowempty
@@ -69,7 +70,7 @@ Test if the stream starts with the given string.
 `eat` specifies whether to advance on success (true by default).
 `padding` specifies whether leading whitespace should be ignored.
 """
-function startswith(stream::IO, s::String; eat = true, padding = false, newlines = true)
+function startswith(stream::IO, s::AbstractString; eat = true, padding = false, newlines = true)
     start = position(stream)
     padding && skipwhitespace(stream, newlines = newlines)
     result = true
@@ -82,7 +83,7 @@ function startswith(stream::IO, s::String; eat = true, padding = false, newlines
 end
 
 function startswith(stream::IO, c::Char; eat = true)
-    if !eof(stream) && peek(stream) == c
+    if !eof(stream) && peek(stream) == UInt8(c)
         eat && read(stream, Char)
         return true
     else
@@ -90,7 +91,7 @@ function startswith(stream::IO, c::Char; eat = true)
     end
 end
 
-function startswith{T<:String}(stream::IO, ss::Vector{T}; kws...)
+function startswith(stream::IO, ss::Vector{<:AbstractString}; kws...)
     any(s->startswith(stream, s; kws...), ss)
 end
 
@@ -98,10 +99,10 @@ function startswith(stream::IO, r::Regex; eat = true, padding = false)
     @assert Base.startswith(r.pattern, "^")
     start = position(stream)
     padding && skipwhitespace(stream)
-    line = chomp(readline(stream))
+    line = readline(stream)
     seek(stream, start)
     m = match(r, line)
-    m == nothing && return ""
+    m === nothing && return ""
     eat && @dotimes length(m.match) read(stream, Char)
     return m.match
 end
@@ -143,7 +144,7 @@ function readuntil(stream::IO, delimiter; newlines = false, match = nothing)
         while !eof(stream)
             if startswith(stream, delimiter)
                 if count == 0
-                    return takebuf_string(buffer)
+                    return String(take!(buffer))
                 else
                     count -= 1
                     write(buffer, delimiter)
@@ -159,7 +160,7 @@ function readuntil(stream::IO, delimiter; newlines = false, match = nothing)
 end
 
 # TODO: refactor this. If we're going to assume
-# the delimiter is a single character + a minimum
+# the delimiter is a single character + a minimum
 # repeat we may as well just pass that into the
 # function.
 
@@ -169,7 +170,7 @@ i.e. `*word word*` but not `*word * word`.
 `repeat` specifies whether the delimiter can be repeated.
 Escaped delimiters are not yet supported.
 """
-function parse_inline_wrapper(stream::IO, delimiter::String; rep = false)
+function parse_inline_wrapper(stream::IO, delimiter::AbstractString; rep = false)
     delimiter, nmin = string(delimiter[1]), length(delimiter)
     withstream(stream) do
         if position(stream) >= 1
@@ -181,7 +182,7 @@ function parse_inline_wrapper(stream::IO, delimiter::String; rep = false)
         startswith(stream, delimiter^n) || return nothing
         while startswith(stream, delimiter); n += 1; end
         !rep && n > nmin && return nothing
-        !eof(stream) && peek(stream) in whitespace && return nothing
+        !eof(stream) && Char(peek(stream)) in whitespace && return nothing
 
         buffer = IOBuffer()
         while !eof(stream)
@@ -190,7 +191,7 @@ function parse_inline_wrapper(stream::IO, delimiter::String; rep = false)
             if !(char in whitespace || char == '\n' || char in delimiter) && startswith(stream, delimiter^n)
                 trailing = 0
                 while startswith(stream, delimiter); trailing += 1; end
-                trailing == 0 && return takebuf_string(buffer)
+                trailing == 0 && return String(take!(buffer))
                 write(buffer, delimiter ^ (n + trailing))
             end
         end
@@ -199,7 +200,7 @@ end
 
 function showrest(io::IO)
     start = position(io)
-    show(readall(io))
+    show(read(io, String))
     println()
     seek(io, start)
 end

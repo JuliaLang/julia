@@ -1,21 +1,27 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
-immutable LDLt{T,S<:AbstractMatrix} <: Factorization{T}
+struct LDLt{T,S<:AbstractMatrix} <: Factorization{T}
     data::S
 end
 
 size(S::LDLt) = size(S.data)
 size(S::LDLt, i::Integer) = size(S.data, i)
 
-convert{T,S}(::Type{LDLt{T,S}}, F::LDLt) = LDLt{T,S}(convert(S, F.data))
+convert(::Type{LDLt{T,S}}, F::LDLt) where {T,S} = LDLt{T,S}(convert(S, F.data))
 # NOTE: the annotaion <:AbstractMatrix shouldn't be necessary, it is introduced
 #       to avoid an ambiguity warning (see issue #6383)
-convert{T,S,U<:AbstractMatrix}(::Type{LDLt{T}}, F::LDLt{S,U}) = convert(LDLt{T,U}, F)
+convert(::Type{LDLt{T}}, F::LDLt{S,U}) where {T,S,U<:AbstractMatrix} = convert(LDLt{T,U}, F)
 
-convert{T,S,U}(::Type{Factorization{T}}, F::LDLt{S,U}) = convert(LDLt{T,U}, F)
+convert(::Type{Factorization{T}}, F::LDLt{T}) where {T} = F
+convert(::Type{Factorization{T}}, F::LDLt{S,U}) where {T,S,U} = convert(LDLt{T,U}, F)
 
 # SymTridiagonal
-function ldltfact!{T<:Real}(S::SymTridiagonal{T})
+"""
+    ldltfact!(S::SymTridiagonal) -> LDLt
+
+Same as [`ldltfact`](@ref), but saves space by overwriting the input `A`, instead of creating a copy.
+"""
+function ldltfact!(S::SymTridiagonal{T}) where T<:Real
     n = size(S,1)
     d = S.dv
     e = S.ev
@@ -25,14 +31,22 @@ function ldltfact!{T<:Real}(S::SymTridiagonal{T})
     end
     return LDLt{T,SymTridiagonal{T}}(S)
 end
-function ldltfact{T}(M::SymTridiagonal{T})
+
+"""
+    ldltfact(S::SymTridiagonal) -> LDLt
+
+Compute an `LDLt` factorization of a real symmetric tridiagonal matrix such that `A = L*Diagonal(d)*L'`
+where `L` is a unit lower triangular matrix and `d` is a vector. The main use of an `LDLt`
+factorization `F = ldltfact(A)` is to solve the linear system of equations `Ax = b` with `F\\b`.
+"""
+function ldltfact(M::SymTridiagonal{T}) where T
     S = typeof(zero(T)/one(T))
     return S == T ? ldltfact!(copy(M)) : ldltfact!(convert(SymTridiagonal{S}, M))
 end
 
 factorize(S::SymTridiagonal) = ldltfact(S)
 
-function A_ldiv_B!{T}(S::LDLt{T,SymTridiagonal{T}}, B::AbstractVecOrMat{T})
+function A_ldiv_B!(S::LDLt{T,SymTridiagonal{T}}, B::AbstractVecOrMat{T}) where T
     n, nrhs = size(B, 1), size(B, 2)
     if size(S,1) != n
         throw(DimensionMismatch("Matrix has dimensions $(size(S)) but right hand side has first dimension $n"))
@@ -62,11 +76,16 @@ function A_ldiv_B!{T}(S::LDLt{T,SymTridiagonal{T}}, B::AbstractVecOrMat{T})
     return B
 end
 
-## reconstruct the original matrix, which is tridiagonal
-function full(F::LDLt)
+# Conversion methods
+function convert(::Type{SymTridiagonal}, F::LDLt)
     e = copy(F.data.ev)
     d = copy(F.data.dv)
     e .*= d[1:end-1]
     d[2:end] += e .* F.data.ev
     SymTridiagonal(d, e)
 end
+convert(::Type{AbstractMatrix}, F::LDLt) = convert(SymTridiagonal, F)
+convert(::Type{AbstractArray}, F::LDLt) = convert(AbstractMatrix, F)
+convert(::Type{Matrix}, F::LDLt) = convert(Array, convert(AbstractArray, F))
+convert(::Type{Array}, F::LDLt) = convert(Matrix, F)
+full(F::LDLt) = convert(AbstractArray, F)

@@ -1,4 +1,5 @@
 #include <winver.h>
+#include <winuser.h>
 1 VERSIONINFO
 FILEVERSION     JLVER
 PRODUCTVERSION  JLVER
@@ -14,7 +15,7 @@ BEGIN
     BLOCK "040904E4"
     BEGIN
       VALUE "CompanyName", "JuliaLang"
-      VALUE "FileDescription", "The Julia Programming Language"
+      VALUE "FileDescription", "Julia Programming Language"
       VALUE "FileVersion", JLVER_STR
       VALUE "InternalName", "julia"
       VALUE "LegalCopyright", "MIT Licensed"
@@ -31,3 +32,4 @@ BEGIN
   END
 END
 2 ICON "julia.ico"
+1 RT_MANIFEST "julia-manifest.xml"

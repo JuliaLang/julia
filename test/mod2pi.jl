@@ -1,11 +1,11 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # NOTES on range reduction
 # [1] compute numbers near pi: http://www.cs.berkeley.edu/~wkahan/testpi/nearpi.c
 # [2] range reduction: http://hal-ujm.ccsd.cnrs.fr/docs/00/08/69/04/PDF/RangeReductionIEEETC0305.pdf
 # [3] precise addition, see Add22: http://ftp.nluug.nl/pub/os/BSD/FreeBSD/distfiles/crlibm/crlibm-1.0beta3.pdf
 
-# Examples:
+# Examples
 # ΓΓ = 6411027962775774 / 2^45  # see [2] above, section 1.2
 # julia> mod(ΓΓ, 2pi)    # "naive" way - easily wrong
 # 7.105427357601002e-15
@@ -155,7 +155,7 @@ function testModPi()
     numTestCases = size(testCases,1)
     modFns = [mod2pi]
     xDivisors = [2pi]
-    errsNew, errsOld = Array(Float64,0), Array(Float64,0)
+    errsNew, errsOld = Array{Float64}(0), Array{Float64}(0)
     for rowIdx in 1:numTestCases
         xExact = testCases[rowIdx,1]
         for colIdx in 1:1
@@ -181,16 +181,16 @@ function testModPi()
     sort!(errsOld)
     totalErrNew = sum(errsNew)
     totalErrOld = sum(errsOld)
-    @test_approx_eq totalErrNew 0.0
+    @test totalErrNew ≈ 0.0
 end
 testModPi()
 
 # 2pi
-@test_approx_eq mod2pi(10)          mod(10,2pi)
-@test_approx_eq mod2pi(-10)         mod(-10,2pi)
-@test_approx_eq mod2pi(355)         3.1416227979431572
-@test_approx_eq mod2pi(Int32(355))  3.1416227979431572
-@test_approx_eq mod2pi(355.0)       3.1416227979431572
-@test_approx_eq mod2pi(355.0f0)     3.1416228f0
+@test mod2pi(10) ≈ mod(10,2pi)
+@test mod2pi(-10) ≈ mod(-10,2pi)
+@test mod2pi(355) ≈ 3.1416227979431572
+@test mod2pi(Int32(355)) ≈ 3.1416227979431572
+@test mod2pi(355.0) ≈ 3.1416227979431572
+@test mod2pi(355.0f0) ≈ 3.1416228f0
 @test mod2pi(Int64(2)^60) == mod2pi(2.0^60)
 @test_throws ArgumentError mod2pi(Int64(2)^60-1)

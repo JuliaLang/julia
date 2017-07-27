@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # raytracer.jl
 # This is a translation from Java/C++ of the raytracer located at
@@ -11,11 +11,12 @@
 
 const delta = sqrt(eps(Float64))
 
-immutable Vec
+struct Vec
     x::Float64
     y::Float64
     z::Float64
 end
+import Base: +, -, *
 +(a::Vec, b::Vec) = Vec(a.x+b.x, a.y+b.y, a.z+b.z)
 -(a::Vec, b::Vec) = Vec(a.x-b.x, a.y-b.y, a.z-b.z)
 *(a::Float64, b::Vec) = Vec(a*b.x, a*b.y, a*b.z)
@@ -24,19 +25,19 @@ end
 dot(a::Vec, b::Vec) = (a.x*b.x + a.y*b.y + a.z*b.z)
 unitize(a::Vec) = (1. / sqrt(dot(a, a)) * a)
 
-type Ray
+mutable struct Ray
     orig::Vec
     dir::Vec
 end
 
-type Hit
+mutable struct Hit
     lambda::Float64
     normal::Vec
 end
 
-abstract Scene
+abstract type Scene end
 
-immutable Sphere <: Scene
+struct Sphere <: Scene
     center::Vec
     radius::Float64
 end
@@ -66,7 +67,7 @@ function intersect(s::Sphere, i::Hit, ray::Ray)
     end
 end
 
-immutable Group <: Scene
+struct Group <: Scene
     bound::Sphere
     objs::Array{Scene}
 end
@@ -128,9 +129,9 @@ function Raytracer(levels, n, ss)
             g = 0.
             for dx in 0:1:(ss-1)
                 for dy in 0:1:(ss-1)
-                    d = Vec(x+dx*1./ss-n/2., y+dy*1./ss-n/2., n*1.0)
+                    d = Vec(x+dx*1.0/ss-n/2.0, y+dy*1.0/ss-n/2.0, n*1.0)
                     ray = Ray(Vec(0., 0., -4.0), unitize(d))
-                    g += ray_trace(light, ray, scene);
+                    g += ray_trace(light, ray, scene)
                 end
             end
             # write(f, trunc(UInt8, 0.5 + 255. * g / (ss*ss)))

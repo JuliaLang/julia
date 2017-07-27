@@ -21,7 +21,7 @@
 #include <wctype.h>
 
 #include "utf8proc.h"
-#undef DLLEXPORT /* avoid conflicting definition */
+#undef JL_DLLEXPORT /* avoid conflicting definition */
 
 #include "dtypes.h"
 
@@ -78,18 +78,6 @@ size_t u8_charlen(uint32_t ch)
     return 0;
 }
 
-size_t u8_codingsize(uint32_t *wcstr, size_t n)
-{
-    size_t i, c=0;
-
-    for(i=0; i < n; i++) {
-        size_t cl = u8_charlen(wcstr[i]);
-        if (cl == 0) cl = 3;  // invalid: encoded as replacement char
-        c += cl;
-    }
-    return c;
-}
-
 /* conversions without error checking
    only works for valid UTF-8, i.e. no 5- or 6-byte sequences
    srcsz = source size in bytes
@@ -121,11 +109,11 @@ size_t u8_toucs(uint32_t *dest, size_t sz, const char *src, size_t srcsz)
         ch = 0;
         switch (nb) {
             /* these fall through deliberately */
-        case 5: ch += (unsigned char)*src++; ch <<= 6;
-        case 4: ch += (unsigned char)*src++; ch <<= 6;
-        case 3: ch += (unsigned char)*src++; ch <<= 6;
-        case 2: ch += (unsigned char)*src++; ch <<= 6;
-        case 1: ch += (unsigned char)*src++; ch <<= 6;
+        case 5: ch += (unsigned char)*src++; ch <<= 6; JL_FALLTHROUGH;
+        case 4: ch += (unsigned char)*src++; ch <<= 6; JL_FALLTHROUGH;
+        case 3: ch += (unsigned char)*src++; ch <<= 6; JL_FALLTHROUGH;
+        case 2: ch += (unsigned char)*src++; ch <<= 6; JL_FALLTHROUGH;
+        case 1: ch += (unsigned char)*src++; ch <<= 6; JL_FALLTHROUGH;
         case 0: ch += (unsigned char)*src++;
         }
         ch -= offsetsFromUTF8[nb];
@@ -179,9 +167,9 @@ size_t u8_toutf8(char *dest, size_t sz, const uint32_t *src, size_t srcsz)
             if (dest >= dest_end-2)
                 break;
             // invalid: use replacement char \ufffd
-            *dest++ = 0xef;
-            *dest++ = 0xbf;
-            *dest++ = 0xbd;
+            *dest++ = (char)0xef;
+            *dest++ = (char)0xbf;
+            *dest++ = (char)0xbd;
         }
         i++;
     }
@@ -212,9 +200,9 @@ size_t u8_wc_toutf8(char *dest, uint32_t ch)
         dest[3] = (ch & 0x3F) | 0x80;
         return 4;
     }
-    dest[0] = 0xef;
-    dest[1] = 0xbf;
-    dest[2] = 0xbd;
+    dest[0] = (char)0xef;
+    dest[1] = (char)0xbf;
+    dest[2] = (char)0xbd;
     return 3;
 }
 
@@ -264,11 +252,11 @@ size_t u8_strwidth(const char *s)
             ch = 0;
             switch (nb) {
                 /* these fall through deliberately */
-            case 5: ch += (unsigned char)*s++; ch <<= 6;
-            case 4: ch += (unsigned char)*s++; ch <<= 6;
-            case 3: ch += (unsigned char)*s++; ch <<= 6;
-            case 2: ch += (unsigned char)*s++; ch <<= 6;
-            case 1: ch += (unsigned char)*s++; ch <<= 6;
+            case 5: ch += (unsigned char)*s++; ch <<= 6; JL_FALLTHROUGH;
+            case 4: ch += (unsigned char)*s++; ch <<= 6; JL_FALLTHROUGH;
+            case 3: ch += (unsigned char)*s++; ch <<= 6; JL_FALLTHROUGH;
+            case 2: ch += (unsigned char)*s++; ch <<= 6; JL_FALLTHROUGH;
+            case 1: ch += (unsigned char)*s++; ch <<= 6; JL_FALLTHROUGH;
             case 0: ch += (unsigned char)*s++;
             }
             ch -= offsetsFromUTF8[nb];
@@ -380,36 +368,6 @@ size_t u8_read_escape_sequence(const char *str, size_t ssz, uint32_t *dest)
     return i;
 }
 
-/* convert a string with literal \uxxxx or \Uxxxxxxxx characters to UTF-8
-   example: u8_unescape(mybuf, 256, "hello\\u220e")
-   note the double backslash is needed if called on a C string literal */
-size_t u8_unescape(char *buf, size_t sz, const char *src)
-{
-    size_t c=0, amt;
-    uint32_t ch = 0;
-    char temp[4];
-
-    while (*src && c < sz) {
-        if (*src == '\\') {
-            src++;
-            amt = u8_read_escape_sequence(src, 1000, &ch);
-        }
-        else {
-            ch = (uint32_t)*src;
-            amt = 1;
-        }
-        src += amt;
-        amt = u8_wc_toutf8(temp, ch);
-        if (amt > sz-c)
-            break;
-        memcpy(&buf[c], temp, amt);
-        c += amt;
-    }
-    if (c < sz)
-        buf[c] = '\0';
-    return c;
-}
-
 static inline int buf_put2c(char *buf, const char *src)
 {
     buf[0] = src[0];
@@ -489,24 +447,6 @@ size_t u8_escape(char *buf, size_t sz, const char *src, size_t *pi, size_t end,
     return (buf-start);
 }
 
-char *u8_strchr(const char *s, uint32_t ch, size_t *charn)
-{
-    size_t i = 0, lasti=0;
-    uint32_t c;
-
-    *charn = 0;
-    while (s[i]) {
-        c = u8_nextchar(s, &i);
-        if (c == ch) {
-            /* it's const for us, but not necessarily the caller */
-            return (char*)&s[lasti];
-        }
-        lasti = i;
-        (*charn)++;
-    }
-    return NULL;
-}
-
 char *u8_memchr(const char *s, uint32_t ch, size_t sz, size_t *charn)
 {
     size_t i = 0, lasti=0;
@@ -555,27 +495,6 @@ char *u8_memrchr(const char *s, uint32_t ch, size_t sz)
             break;
     }
     return NULL;
-}
-
-int u8_is_locale_utf8(const char *locale)
-{
-    if (locale == NULL) return 0;
-
-    /* this code based on libutf8 */
-    const char *cp = locale;
-
-    for (; *cp != '\0' && *cp != '@' && *cp != '+' && *cp != ',' && *cp != ';'; cp++) {
-        if (*cp == '.') {
-            const char *encoding = ++cp;
-            for (; *cp != '\0' && *cp != '@' && *cp != '+' && *cp != ',' && *cp != ';'; cp++)
-                ;
-            if ((cp-encoding == 5 && !strncmp(encoding, "UTF-8", 5))
-                || (cp-encoding == 4 && !strncmp(encoding, "utf8", 4)))
-                return 1; /* it's UTF-8 */
-            break;
-        }
-    }
-    return 0;
 }
 
 size_t u8_vprintf(const char *fmt, va_list ap)
@@ -673,47 +592,6 @@ chkutf8:
     }
     return 2;   // Valid UTF-8
 }
-
-int u8_reverse(char *dest, char *src, size_t len)
-{
-    size_t si=0, di=len;
-    unsigned char c;
-
-    dest[di] = '\0';
-    while (si < len) {
-        c = (unsigned char)src[si];
-        if ((~c) & 0x80) {
-            di--;
-            dest[di] = c;
-            si++;
-        }
-        else {
-            switch (c>>4) {
-            case 0xC:
-            case 0xD:
-                di -= 2;
-                *((int16_t*)&dest[di]) = *((int16_t*)&src[si]);
-                si += 2;
-                break;
-            case 0xE:
-                di -= 3;
-                dest[di] = src[si];
-                *((int16_t*)&dest[di+1]) = *((int16_t*)&src[si+1]);
-                si += 3;
-                break;
-            case 0xF:
-                di -= 4;
-                *((int32_t*)&dest[di]) = *((int32_t*)&src[si]);
-                si += 4;
-                break;
-            default:
-                return 1;
-            }
-        }
-    }
-    return 0;
-}
-
 #ifdef __cplusplus
 }
 #endif

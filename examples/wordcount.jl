@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # wordcount.jl
 #
@@ -75,9 +75,7 @@ end
 function wordcount_files(result_file,inputs...)
     text = ""
     for file in inputs
-        open(file) do f
-            text *= readall(f)
-        end
+        text *= read(file, String)
     end
     wc = parallel_wordcount(text)
     open(result_file,"w") do f

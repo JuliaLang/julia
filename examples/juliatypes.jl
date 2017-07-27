@@ -1,10 +1,10 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 import Base: convert, show
 
-abstract Ty
+abstract type Ty end
 
-type TypeName
+mutable struct TypeName
     name::Symbol
     abs::Bool
     super::Ty    # actually TagT
@@ -17,7 +17,7 @@ end
 
 show(io::IO, x::TypeName) = print(io, x.name)
 
-type TagT <: Ty
+mutable struct TagT <: Ty
     name::TypeName
     params
     vararg::Bool
@@ -40,12 +40,12 @@ function show(io::IO, t::TagT)
     print(io, '}')
 end
 
-type BottomTy <: Ty
+mutable struct BottomTy <: Ty
 end
 
 show(io::IO, ::BottomTy) = print(io, "BottomT")
 
-type UnionT <: Ty
+mutable struct UnionT <: Ty
     a
     b
     UnionT() = BottomT
@@ -69,7 +69,7 @@ function show(io::IO, t::UnionT)
     print(io, ')')
 end
 
-type Var
+mutable struct Var
     name::Symbol
     lb
     ub
@@ -96,11 +96,11 @@ end
 
 show(io::IO, v::Var) = print(io, v.name)
 
-type UnionAllT <: Ty
+mutable struct UnionAllT <: Ty
     var::Var
     T
     UnionAllT(v::Var, t) = new(v, t)
-    UnionAllT(v::Var, t::Union(Type,Tuple)) = new(v, convert(Ty, t))
+    UnionAllT(v::Var, t::Union{Type,Tuple}) = new(v, convert(Ty, t))
 end
 
 function show(io::IO, x::UnionAllT)
@@ -134,7 +134,7 @@ inst(t::TagT) = t
 inst(t::UnionAllT, param) = subst(t.T, Dict{Any,Any}(t.var => param))
 inst(t::UnionAllT, param, rest...) = inst(inst(t,param), rest...)
 
-super(t::TagT) = t.name===TupleName ? AnyT : inst(t.name.super, t.params...)
+supertype(t::TagT) = t.name===TupleName ? AnyT : inst(t.name.super, t.params...)
 
 extend(d::Dict, k, v) = (x = copy(d); x[k]=v; x)
 
@@ -151,93 +151,93 @@ subst(t, env) = t
 
 isequal_type(x, y) = issub(x, y) && issub(y, x)
 
-type Bounds
+mutable struct Bounds
     # record current lower and upper bounds of a Var
     # right: whether this Var is on the right-hand side of A <: B
     lb
     ub
     right::Bool
-    concrete::Bool
-    Bounds(l,u,r) = new(l,u,r,false)
 end
 
-type UnionState
+mutable struct UnionState
     depth::Int           # number of union decision points we're inside
     more::Bool           # new union found; need to grow stack
     stack::Vector{Bool}  # stack of decisions
     UnionState() = new(1,0,Bool[])
 end
 
-type Env
+mutable struct Env
     vars::Dict{Var,Bounds}
     Lunions::UnionState
     Runions::UnionState
-    Env() = new(Dict{Var,Bounds}(), UnionState(), UnionState())
+    outer::Bool
+    Env() = new(Dict{Var,Bounds}(), UnionState(), UnionState(), true)
 end
 
-issub(x, y) = forall_exists_issub(x, y, Env(), false)
+function issub_env(x, y)
+    e = Env()
+    ans = forall_exists_issub(x, y, e)
+    ans, e.vars
+end
+issub(x, y) = issub_env(x, y)[1]
 issub(x, y, env) = (x === y)
 issub(x::Ty, y::Ty, env) = (x === y) || x === BottomT
 
-function forall_exists_issub(x, y, env, anyunions::Bool)
+function forall_exists_issub(x, y, env)
     # for all combinations of elements from Unions on the left, there must
     # exist a combination of elements from Unions on the right that makes
     # issub() true. Unions in invariant position are on both the left and
     # the right in this formula.
-    for forall in false:anyunions
-        if !isempty(env.Lunions.stack)
-            env.Lunions.stack[end] = forall
-        end
+    sub = exists_issub(x, y, env)
 
-        !exists_issub(x, y, env, false) && return false
-
-        if env.Lunions.more
-            push!(env.Lunions.stack, false)
-            sub = forall_exists_issub(x, y, env, true)
-            pop!(env.Lunions.stack)
-            !sub && return false
+    if sub && env.Lunions.more
+        push!(env.Lunions.stack, false)
+        sub = forall_exists_issub(x, y, env)
+        if sub
+            env.Lunions.stack[end] = true
+            sub = forall_exists_issub(x, y, env)
         end
+        pop!(env.Lunions.stack)
     end
-    return true
+    return sub
 end
 
-function exists_issub(x, y, env, anyunions::Bool)
-    for exists in false:anyunions
-        if !isempty(env.Runions.stack)
-            env.Runions.stack[end] = exists
-        end
-        env.Lunions.depth = env.Runions.depth = 1
-        env.Lunions.more = env.Runions.more = false
+function exists_issub(x, y, env)
+    env.Lunions.depth = env.Runions.depth = 1
+    env.Lunions.more = env.Runions.more = false
 
-        found = issub(x, y, env)
+    found = issub(x, y, env)
 
-        if env.Lunions.more
-            # return up to forall_exists_issub. the recursion must have this shape:
-            # ∀₁         ∀₁
-            #   ∃₁  =>     ∀₂
-            #                ...
-            #                ∃₁
-            #                  ∃₂
-            return true
-        end
-        if env.Runions.more
-            push!(env.Runions.stack, false)
-            found = exists_issub(x, y, env, true)
-            pop!(env.Runions.stack)
-        end
-        found && return true
+    if env.Lunions.more
+        # return up to forall_exists_issub. the recursion must have this shape:
+        # ∀₁         ∀₁
+        #   ∃₁  =>     ∀₂
+        #                ...
+        #                ∃₁
+        #                  ∃₂
+        return true
     end
-    return false
+    if env.Runions.more
+        push!(env.Runions.stack, false)
+        found = exists_issub(x, y, env)
+        if !found
+            env.Runions.stack[end] = true
+            found = exists_issub(x, y, env)
+        end
+        pop!(env.Runions.stack)
+    end
+    return found
 end
 
 function issub_union(t, u::UnionT, env, R, state::UnionState)
+    env.outer = false
     if state.depth > length(state.stack)
         # indicate that stack needs to grow
         state.more = true
         return true
     end
     ui = state.stack[state.depth]; state.depth += 1
-    choice = u.(1+ui)
+    choice = getfield(u, 1+ui)
     return R ? issub(t, choice, env) : issub(choice, t, env)
 end
 
@@ -245,76 +245,30 @@ issub(a::UnionT, b::UnionT, env) = a === b || issub_union(a, b, env, true, env.R
 issub(a::UnionT, b::Ty, env) = b===AnyT || issub_union(b, a, env, false, env.Lunions)
 issub(a::Ty, b::UnionT, env) =
     a===BottomT || a===b.a || a===b.b || issub_union(a, b, env, true, env.Runions)
-# take apart unions before handling vars
-issub(a::UnionT, b::Var, env) = issub_union(b, a, env, false, env.Lunions)
-issub(a::Var, b::UnionT, env) = a===b.a || a===b.b || issub_union(a, b, env, true, env.Runions)
 
-function isconcrete(t::TagT, env)
-    if t.name === TupleName
-        t.vararg && return false
-        for x in t.params
-            !isconcrete(x, env) && return false
-        end
-    end
-    return !t.name.abs
-end
-
-isconcrete(t::BottomTy, env) = true
-isconcrete(x, env) = true
-
-function isconcrete(t::UnionT, env)
-    t.a === BottomT && return isconcrete(t.b, env)
-    return isconcrete(t.a, env) && issub(t.b, t.a, env)
-end
-
-function isconcrete(v::Var, env)
-    b = env.vars[v]
-    #return issub(b.ub, b.lb, env)
-    return b.concrete || isconcrete(b.ub, env)  # ???
-end
-
-function isconcrete(t::UnionAllT, env)
-    #if isconcrete(t.var.ub, env)
-    # TODO: maybe true if var is only in covariant position
-    #    return isconcrete(inst(t, t.var.ub), env)
-    #end
-
-    #if issub(t.var.ub, t.var.lb, env)
-    # TODO this seems to require more nondeterminism
-    #    return isconcrete(inst(t, t.var.ub), env)
-    #end
-    return false
-end
+# handle vars before unions
+issub(a::UnionT, b::Var, env) = var_gt(b, a, env)
+issub(a::Var, b::UnionT, env) = var_lt(a, b, env)
 
 function issub(a::TagT, b::TagT, env)
+    env.outer = false
     a === b && return true
     b === AnyT && return true
     a === AnyT && return false
     if a.name !== b.name
-        return issub(super(a), b, env)
+        return issub(supertype(a), b, env)
     end
     if a.name === TupleName
         va, vb = a.vararg, b.vararg
         la, lb = length(a.params), length(b.params)
-        ai = bi = 0
-        while ai < la
+        ai = bi = 1
+        while ai <= la
+            bi > lb && return false
+            !issub(a.params[ai], b.params[bi], env) && return false
             ai += 1
-            ap = a.params[ai]
             if bi < lb || !vb
                 bi += 1
-                bi > lb && return false
-                bp = b.params[bi]
             end
-            if isa(bp,Var) && env.vars[bp].right
-                if !isconcrete(env.vars[bp].lb, env)
-                    return false
-                end
-                env.vars[bp].concrete = true
-                if isa(ap, Var)
-                    env.vars[ap].concrete = true
-                end
-            end
-            !issub(ap, bp, env) && return false
         end
         return (la==lb && va==vb) || (vb && (la >= (va ? lb : lb-1)))
     end
@@ -328,7 +282,7 @@ function issub(a::TagT, b::TagT, env)
     return true
 end
 
-function join(a,b,env)
+function join(a,b)
     (a===BottomT || b===AnyT || a === b) && return b
     (b===BottomT || a===AnyT) && return a
     UnionT(a,b)
@@ -337,6 +291,7 @@ end
 issub(a::Ty, b::Var, env) = var_gt(b, a, env)
 issub(a::Var, b::Ty, env) = var_lt(a, b, env)
 function issub(a::Var, b::Var, env)
+    env.outer = false
     a === b && return true
     aa = env.vars[a]; bb = env.vars[b]
     if aa.right
@@ -354,14 +309,17 @@ function issub(a::Var, b::Var, env)
     end
 end
 
-function var_lt(b::Var, a::Union(Ty,Var), env)
+# issub, but taking apart unions before handling vars
+issub_ufirst(a::UnionT, b::Var, env) = issub_union(b, a, env, false, env.Lunions)
+issub_ufirst(a::Var, b::UnionT, env) = a===b.a || a===b.b || issub_union(a, b, env, true, env.Runions)
+issub_ufirst(a, b, env) = issub(a, b, env)
+
+function var_lt(b::Var, a::Union{Ty,Var}, env)
+    env.outer = false
     bb = env.vars[b]
     #println("$b($(bb.lb),$(bb.ub)) <: $a")
-    !bb.right && return issub(bb.ub, a, env)  # check ∀b . b<:a
-    !issub(bb.lb, a, env) && return false
-    if bb.concrete
-        !issub(a, bb.ub, env) && return false
-    end
+    !bb.right && return issub_ufirst(bb.ub, a, env)  # check ∀b . b<:a
+    !issub_ufirst(bb.lb, a, env) && return false
     # for contravariance we would need to compute a meet here, but
     # because of invariance bb.ub ⊓ a == a here always. however for this
     # to work we need to compute issub(left,right) before issub(right,left),
@@ -370,15 +328,13 @@ function var_lt(b::Var, a::Union(Ty,Var), env)
     return true
 end
 
-function var_gt(b::Var, a::Union(Ty,Var), env)
+function var_gt(b::Var, a::Union{Ty,Var}, env)
+    env.outer = false
     bb = env.vars[b]
     #println("$b($(bb.lb),$(bb.ub)) >: $a")
-    !bb.right && return issub(a, bb.lb, env)  # check ∀b . b>:a
-    !issub(a, bb.ub, env) && return false
-    if bb.concrete
-        !issub(bb.lb, a, env) && return false
-    end
-    bb.lb = join(bb.lb, a, env)
+    !bb.right && return issub_ufirst(a, bb.lb, env)  # check ∀b . b>:a
+    !issub_ufirst(a, bb.ub, env) && return false
+    bb.lb = join(bb.lb, a)
     return true
 end
 
@@ -388,10 +344,11 @@ function rename(t::UnionAllT)
 end
 
 function issub_unionall(t::Ty, u::UnionAllT, env, R)
+    outer = env.outer
     haskey(env.vars, u.var) && (u = rename(u))
     env.vars[u.var] = Bounds(u.var.lb, u.var.ub, R)
     ans = R ? issub(t, u.T, env) : issub(u.T, t, env)
-    delete!(env.vars, u.var)
+    !outer && delete!(env.vars, u.var)
     return ans
 end
 
@@ -428,6 +385,12 @@ macro UnionAll(var, expr)
         else
             error("invalid bounds in UnionAll")
         end
+    elseif isa(var,Expr) && var.head === :(<:)
+        v = var.args[1]
+        ub = esc(var.args[2])
+    elseif isa(var,Expr) && var.head === :(>:)
+        v = var.args[1]
+        lb = esc(var.args[2])
     elseif !isa(var,Symbol)
         error("invalid variable in UnionAll")
     else
@@ -449,8 +412,8 @@ xlate(t) = xlate(t, ObjectIdDict())
 
 xlate(t, env) = t
 
-function xlate(t::UnionType, env)
-    if t === Union()
+function xlate(t::Union, env)
+    if t === Union{}
         return BottomT
     end
     UnionT(map(x->xlate(x,env), t.types)...)
@@ -479,8 +442,9 @@ end
 function xlate(t::DataType, env)
     if t === Any
         return AnyT
-    end
-    if !haskey(tndict,t.name)
+    elseif t <: Tuple
+        return xlate((t.parameters...,), env)
+    elseif !haskey(tndict,t.name)
         para = map(x->xlate(x,env), t.name.primary.parameters)  # adds tvars to env
         sup = xlate(t.name.primary.super, env)
         for i = length(para):-1:1
@@ -494,13 +458,18 @@ function xlate(t::DataType, env)
     inst(tn, map(x->xlate(x,env), t.parameters)...)
 end
 
-convert(::Type{Ty}, t::Union(Type,Tuple)) = xlate(t)
+convert(::Type{Ty}, t::Union{Type,Tuple}) = xlate(t)
 convert(::Type{Ty}, t::TypeVar) = xlate(t)
 
-issub(a::Type, b::Type) = issub(xlate(a), xlate(b))
-issub(a::Ty  , b::Type) = issub(a       , xlate(b))
-issub(a::Type, b::Ty  ) = issub(xlate(a), b)
+issub(a::Union{Type,Tuple}, b::Union{Type,Tuple}) = issub(xlate(a), xlate(b))
+issub(a::Ty  , b::Union{Type,Tuple})              = issub(a       , xlate(b))
+issub(a::Union{Type,Tuple}, b::Ty  )              = issub(xlate(a), b)
+issub_env(a::Union{Type,Tuple}, b::Union{Type,Tuple}) = issub_env(xlate(a), xlate(b))
+issub_env(a::Ty  , b::Union{Type,Tuple})              = issub_env(a       , xlate(b))
+issub_env(a::Union{Type,Tuple}, b::Ty  )              = issub_env(xlate(a), b)
 
+tt(ts...) = Tuple{ts...}
+vt(ts...) = Tuple{ts[1:end-1]..., Vararg{ts[end]}}
 
 # tests
 
@@ -530,32 +499,6 @@ using Base.Test
 
 issub_strict(x,y) = issub(x,y) && !issub(y,x)
 
-function test_diagonal()
-    @test !issub(Ty((Integer,Integer)), @UnionAll T tupletype(T,T))
-    @test !issub(Ty((Integer,Int)), (@UnionAll T @UnionAll S<:T tupletype(T,S)))
-    @test !issub(Ty((Integer,Int)), (@UnionAll T @UnionAll T<:S<:T tupletype(T,S)))
-
-    @test issub((@UnionAll R tupletype(R,R)),
-                (@UnionAll T @UnionAll S tupletype(T,S)) )
-    @test issub((@UnionAll R tupletype(R,R)),
-                (@UnionAll T @UnionAll S<:T tupletype(T,S)) )
-    @test issub((@UnionAll R tupletype(R,R)),
-                (@UnionAll T @UnionAll T<:S<:T tupletype(T,S)) )
-    @test issub((@UnionAll R tupletype(R,R)),
-                (@UnionAll T @UnionAll S>:T tupletype(T,S)) )
-
-    @test !issub((@UnionAll T @UnionAll S tupletype(T,S)),
-                 (@UnionAll R tupletype(R,R)))
-
-    @test issub((@UnionAll T @UnionAll S<:T tupletype(T,S)),
-                (@UnionAll R tupletype(R,R)))
-
-    @test issub((@UnionAll T @UnionAll T<:S<:T tupletype(T,S)),
-                (@UnionAll R tupletype(R,R)))
-
-end
-
-
 # level 1: no varags, union, UnionAll
 function test_1()
     @test issub_strict(Int, Integer)
@@ -577,23 +520,23 @@ end
 
 # level 2: varargs
 function test_2()
-    @test issub_strict((Int,Int), (Int...,))
-    @test issub_strict((Int,Int), (Int,Int...,))
-    @test issub_strict((Int,Int), (Int,Integer...,))
-    @test issub_strict((Int,Int), (Int,Int,Integer...,))
-    @test issub_strict((Int,Int...), (Int...,))
-    @test issub_strict((Int,Int,Int...), (Int...,))
-    @test issub_strict((Int,Int,Int...), (Integer,Int...,))
-    @test issub_strict((Int...,), (Any...,))
-    @test issub_strict((), (Any...,))
+    @test issub_strict((Int,Int), vt(Int,))
+    @test issub_strict((Int,Int), vt(Int,Int,))
+    @test issub_strict((Int,Int), vt(Int,Integer,))
+    @test issub_strict((Int,Int), vt(Int,Int,Integer,))
+    @test issub_strict(vt(Int,Int), vt(Int,))
+    @test issub_strict(vt(Int,Int,Int), vt(Int,))
+    @test issub_strict(vt(Int,Int,Int), vt(Integer,Int,))
+    @test issub_strict(vt(Int,), vt(Any,))
+    @test issub_strict((), vt(Any,))
 
-    @test isequal_type((Int...,), (Int...,))
-    @test isequal_type((Integer...,), (Integer...,))
+    @test isequal_type(vt(Int,), vt(Int,))
+    @test isequal_type(vt(Integer,), vt(Integer,))
 
-    @test !issub((), (Int, Int...))
-    @test !issub((Int,), (Int, Int, Int...))
+    @test !issub((), vt(Int, Int))
+    @test !issub((Int,), vt(Int, Int, Int))
 
-    @test !issub((Int, (Real, Integer)), (Int...))
+    @test !issub((Int, (Real, Integer)), vt(Int))
 end
 
 function test_no_diagonal()
@@ -605,7 +548,7 @@ function test_no_diagonal()
     @test issub(tupletype(inst(ArrayT,Ty(Integer),1), Ty(Int)),
                 (@UnionAll T<:Ty(Integer) tupletype(inst(ArrayT,T,1),T)))
 
-    @test issub(Ty((Int,String,Vector{Any})),
+    @test issub(Ty((Int,AbstractString,Vector{Any})),
                 @UnionAll T tupletype(T, T, inst(ArrayT,T,1)))
 
     @test isequal_type(Ty(Array{Tuple{Integer,Integer},1}),
@@ -619,7 +562,7 @@ function test_no_diagonal()
     @test isequal_type((@UnionAll T tupletype(inst(RefT,T), T)),
                        (@UnionAll T @UnionAll S<:T @UnionAll R<:S tupletype(inst(RefT,T),R)))
 
-    @test  issub((@UnionAll S<:Ty(Int) (@UnionAll R<:Ty(String) tupletype(S,R,Ty(Vector{Any})))),
+    @test  issub((@UnionAll S<:Ty(Int) (@UnionAll R<:Ty(AbstractString) tupletype(S,R,Ty(Vector{Any})))),
                  (@UnionAll T tupletype(T, T, inst(ArrayT,T,1))))
 end
 
@@ -632,9 +575,12 @@ function test_3()
 
     @test !issub((@UnionAll T<:Ty(Real) T), (@UnionAll T<:Ty(Integer) T))
 
-    @test issub_strict((@UnionAll T tupletype(T,T)), (@UnionAll T @UnionAll S tupletype(T,S)))
+    # diagonal
+    #@test issub_strict((@UnionAll T tupletype(T,T)), (@UnionAll T @UnionAll S tupletype(T,S)))
+    @test issub((@UnionAll T tupletype(T,T)), (@UnionAll T @UnionAll S tupletype(T,S)))
     @test isequal_type((@UnionAll T tupletype(T,T)), (@UnionAll R tupletype(R,R)))
-    @test !issub(tupletype(Ty(Real),Ty(Real)), @UnionAll T<:Ty(Real) tupletype(T,T))
+    # diagonal
+    #@test !issub(tupletype(Ty(Real),Ty(Real)), @UnionAll T<:Ty(Real) tupletype(T,T))
 
     @test !issub((@UnionAll T<:Ty(Integer) @UnionAll S<:Ty(Number) (T,S)),
                  (@UnionAll T<:Ty(Integer) @UnionAll S<:Ty(Number) (S,T)))
@@ -657,23 +603,23 @@ function test_3()
     @test isequal_type((@UnionAll T tupletype(T)), tupletype(AnyT))
     @test isequal_type((@UnionAll T<:Ty(Real) tupletype(T)), tupletype(Ty(Real)))
 
-    @test !issub(tupletype(inst(ArrayT,Ty(Integer),1), Ty(Int)),
-                 (@UnionAll T<:Ty(Integer) tupletype(inst(ArrayT,T,1),T)))
+    #@test !issub(tupletype(inst(ArrayT,Ty(Integer),1), Ty(Int)),
+    #             (@UnionAll T<:Ty(Integer) tupletype(inst(ArrayT,T,1),T)))
     @test  issub(tupletype(inst(ArrayT,Ty(Integer),1), Ty(Int)),
                  (@UnionAll T<:Ty(Integer) @UnionAll S<:T tupletype(inst(ArrayT,T,1),S)))
 
     @test !issub(tupletype(inst(ArrayT,Ty(Integer),1), Ty(Real)),
                  (@UnionAll T<:Ty(Integer) tupletype(inst(ArrayT,T,1),T)))
 
-    @test !issub(Ty((Int,String,Vector{Integer})),
+    @test !issub(Ty((Int,AbstractString,Vector{Integer})),
                  @UnionAll T tupletype(T, T, inst(ArrayT,T,1)))
-    @test !issub(Ty((String,Int,Vector{Integer})),
+    @test !issub(Ty((AbstractString,Int,Vector{Integer})),
                  @UnionAll T tupletype(T, T, inst(ArrayT,T,1)))
-    @test !issub(Ty((Int,String,Vector{Tuple{Integer}})),
+    @test !issub(Ty((Int,AbstractString,Vector{Tuple{Integer}})),
                  @UnionAll T tupletype(T,T,inst(ArrayT,tupletype(T),1)))
 
-    @test !issub(Ty((Int,String,Vector{Any})),
-                 @UnionAll T tupletype(T, T, inst(ArrayT,T,1)))
+    #@test !issub(Ty((Int,AbstractString,Vector{Any})),
+    #             @UnionAll T tupletype(T, T, inst(ArrayT,T,1)))
 
     @test isequal_type(Ty(Array{Int,1}), inst(ArrayT, (@UnionAll T<:Ty(Int) T), 1))
     @test isequal_type(Ty(Array{Tuple{Any},1}), inst(ArrayT, (@UnionAll T tupletype(T)), 1))
@@ -700,7 +646,7 @@ function test_3()
 
     @test  issub(Ty((Integer,Int)), @UnionAll T<:Ty(Integer) @UnionAll S<:T tupletype(T,S))
     @test !issub(Ty((Integer,Int)), @UnionAll T<:Ty(Int) @UnionAll S<:T tupletype(T,S))
-    @test !issub(Ty((Integer,Int)), @UnionAll T<:Ty(String) @UnionAll S<:T tupletype(T,S))
+    @test !issub(Ty((Integer,Int)), @UnionAll T<:Ty(AbstractString) @UnionAll S<:T tupletype(T,S))
 
     @test issub(Ty((Float32,Array{Float32,1})),
                 @UnionAll T<:Ty(Real) @UnionAll S<:inst(AbstractArrayT,T,1) tupletype(T,S))
@@ -708,8 +654,8 @@ function test_3()
     @test !issub(Ty((Float32,Array{Float64,1})),
                  @UnionAll T<:Ty(Real) @UnionAll S<:inst(AbstractArrayT,T,1) tupletype(T,S))
 
-    @test !issub(Ty((Float32,Array{Real,1})),
-                 @UnionAll T<:Ty(Real) @UnionAll S<:inst(AbstractArrayT,T,1) tupletype(T,S))
+    #@test !issub(Ty((Float32,Array{Real,1})),
+    #             @UnionAll T<:Ty(Real) @UnionAll S<:inst(AbstractArrayT,T,1) tupletype(T,S))
 
     @test !issub(Ty((Number,Array{Real,1})),
                  @UnionAll T<:Ty(Real) @UnionAll S<:inst(AbstractArrayT,T,1) tupletype(T,S))
@@ -734,10 +680,10 @@ function test_3()
     @test issub_strict((@UnionAll T @UnionAll S>:T inst(PairT,T,S)),
                        (@UnionAll T @UnionAll S    inst(PairT,T,S)))
 
-    @test issub_strict((@UnionAll T tupletype(inst(RefT,T), T)),
-                       (@UnionAll T @UnionAll S<:T tupletype(inst(RefT,T),S)))
-    @test issub_strict((@UnionAll T tupletype(inst(RefT,T), T)),
-                       (@UnionAll T @UnionAll S<:T @UnionAll R<:S tupletype(inst(RefT,T),R)))
+    #@test issub_strict((@UnionAll T tupletype(inst(RefT,T), T)),
+    #                   (@UnionAll T @UnionAll S<:T tupletype(inst(RefT,T),S)))
+    #@test issub_strict((@UnionAll T tupletype(inst(RefT,T), T)),
+    #                   (@UnionAll T @UnionAll S<:T @UnionAll R<:S tupletype(inst(RefT,T),R)))
     @test isequal_type((@UnionAll T tupletype(inst(RefT,T), T)),
                        (@UnionAll T @UnionAll T<:S<:T tupletype(inst(RefT,T),S)))
     @test issub_strict((@UnionAll T tupletype(inst(RefT,T), T)),
@@ -748,17 +694,17 @@ end
 function test_4()
     @test isequal_type(UnionT(BottomT,BottomT), BottomT)
 
-    @test issub_strict(Int, Union(Int,String))
-    @test issub_strict(Union(Int,Int8), Integer)
+    @test issub_strict(Int, Union{Int,AbstractString})
+    @test issub_strict(Union{Int,Int8}, Integer)
 
-    @test isequal_type(Union(Int,Int8), Union(Int,Int8))
+    @test isequal_type(Union{Int,Int8}, Union{Int,Int8})
 
     @test isequal_type(UnionT(Ty(Int),Ty(Integer)), Ty(Integer))
 
-    @test isequal_type((Union(Int,Int8),Int16), Union((Int,Int16),(Int8,Int16)))
+    @test isequal_type(tt(Union{Int,Int8},Int16), Union{tt(Int,Int16),tt(Int8,Int16)})
 
-    @test issub_strict((Int,Int8,Int), (Union(Int,Int8)...,))
-    @test issub_strict((Int,Int8,Int), (Union(Int,Int8,Int16)...,))
+    @test issub_strict((Int,Int8,Int), vt(Union{Int,Int8},))
+    @test issub_strict((Int,Int8,Int), vt(Union{Int,Int8,Int16},))
 
     # nested unions
     @test !issub(UnionT(Ty(Int),inst(RefT,UnionT(Ty(Int),Ty(Int8)))),
@@ -790,24 +736,24 @@ end
 
 # level 5: union and UnionAll
 function test_5()
-    u = Ty(Union(Int8,Int))
+    u = Ty(Union{Int8,Int})
 
-    @test issub(Ty((String,Array{Int,1})),
+    @test issub(Ty((AbstractString,Array{Int,1})),
                 (@UnionAll T UnionT(tupletype(T,inst(ArrayT,T,1)),
                                     tupletype(T,inst(ArrayT,Ty(Int),1)))))
 
-    @test issub(Ty((Union(Vector{Int},Vector{Int8}),)),
+    @test issub(Ty((Union{Vector{Int},Vector{Int8}},)),
                 @UnionAll T tupletype(inst(ArrayT,T,1),))
 
-    @test !issub(Ty((Union(Vector{Int},Vector{Int8}),Vector{Int})),
+    @test !issub(Ty((Union{Vector{Int},Vector{Int8}},Vector{Int})),
                  @UnionAll T tupletype(inst(ArrayT,T,1), inst(ArrayT,T,1)))
 
-    @test !issub(Ty((Union(Vector{Int},Vector{Int8}),Vector{Int8})),
+    @test !issub(Ty((Union{Vector{Int},Vector{Int8}},Vector{Int8})),
                  @UnionAll T tupletype(inst(ArrayT,T,1), inst(ArrayT,T,1)))
 
     @test !issub(Ty(Vector{Int}), @UnionAll T>:u inst(ArrayT,T,1))
     @test  issub(Ty(Vector{Integer}), @UnionAll T>:u inst(ArrayT,T,1))
-    @test  issub(Ty(Vector{Union(Int,Int8)}), @UnionAll T>:u inst(ArrayT,T,1))
+    @test  issub(Ty(Vector{Union{Int,Int8}}), @UnionAll T>:u inst(ArrayT,T,1))
 
     @test issub((@UnionAll Ty(Int)<:T<:u inst(ArrayT,T,1)),
                 (@UnionAll Ty(Int)<:T<:u inst(ArrayT,T,1)))
@@ -829,23 +775,33 @@ function test_5()
     # these tests require renaming in issub_unionall
     @test  issub((@UnionAll T<:B tupletype(Ty(Int8), T, inst(RefT,Ty(Int8)))), B)
     @test !issub((@UnionAll T<:B tupletype(Ty(Int8), T, inst(RefT,T))),        B)
+
+    # the `convert(Type{T},T)` pattern, where T is a Union
+    # required changing priority of unions and vars
+    @test issub(tupletype(inst(ArrayT,u,1),Ty(Int)),
+                @UnionAll T tupletype(inst(ArrayT,T,1), T))
+    @test issub(tupletype(inst(ArrayT,u,1),Ty(Int)),
+                @UnionAll T @UnionAll S<:T tupletype(inst(ArrayT,T,1), S))
 end
 
 # tricky type variable lower bounds
 function test_6()
-    @test !issub((@UnionAll S<:Ty(Int) (@UnionAll R<:Ty(String) tupletype(S,R,Ty(Vector{Any})))),
-                 (@UnionAll T tupletype(T, T, inst(ArrayT,T,1))))
+    # diagonal
+    #@test !issub((@UnionAll S<:Ty(Int) (@UnionAll R<:Ty(AbstractString) tupletype(S,R,Ty(Vector{Any})))),
+    #             (@UnionAll T tupletype(T, T, inst(ArrayT,T,1))))
+    @test issub((@UnionAll S<:Ty(Int) (@UnionAll R<:Ty(AbstractString) tupletype(S,R,Ty(Vector{Any})))),
+                (@UnionAll T tupletype(T, T, inst(ArrayT,T,1))))
 
-    @test !issub((@UnionAll S<:Ty(Int) (@UnionAll R<:Ty(String) tupletype(S,R,Ty(Vector{Integer})))),
+    @test !issub((@UnionAll S<:Ty(Int) (@UnionAll R<:Ty(AbstractString) tupletype(S,R,Ty(Vector{Integer})))),
                  (@UnionAll T tupletype(T, T, inst(ArrayT,T,1))))
 
     t = @UnionAll T tupletype(T,T,inst(RefT,T))
     @test isequal_type(t, rename(t))
 
-    @test !issub((@UnionAll T tupletype(T,Ty(String),inst(RefT,T))),
+    @test !issub((@UnionAll T tupletype(T,Ty(AbstractString),inst(RefT,T))),
                  (@UnionAll T tupletype(T,T,inst(RefT,T))))
 
-    @test !issub((@UnionAll T tupletype(T,inst(RefT,T),Ty(String))),
+    @test !issub((@UnionAll T tupletype(T,inst(RefT,T),Ty(AbstractString))),
                  (@UnionAll T tupletype(T,inst(RefT,T),T)))
 
     i = Ty(Int); ai = Ty(Integer)
@@ -890,7 +846,7 @@ function test_6()
     @test !issub((@UnionAll i<:T<:i inst(RefT,inst(RefT,T))),
                  inst(RefT,@UnionAll T<:i inst(RefT,T)))
 
-    u = Ty(Union(Int8,Int64))
+    u = Ty(Union{Int8,Int64})
     A = inst(RefT,BottomT)
     B = @UnionAll S<:u inst(RefT,S)
     @test issub(inst(RefT,B), @UnionAll A<:T<:B inst(RefT,T))
@@ -910,6 +866,7 @@ end
 function test_all()
     test_1()
     test_2()
+    test_no_diagonal()
     test_3()
     test_4()
     test_5()
@@ -920,8 +877,8 @@ end
 const menagerie =
     Any[BottomT, AnyT, Ty(Int), Ty(Int8), Ty(Integer), Ty(Real),
         Ty(Array{Int,1}), Ty(AbstractArray{Int,1}),
-        Ty((Int,Integer...,)), Ty((Integer,Int...,)), Ty(()),
-        Ty(Union(Int,Int8)),
+        Ty(vt(Int,Integer,)), Ty(vt(Integer,Int,)), Ty(()),
+        Ty(Union{Int,Int8}),
         (@UnionAll T inst(ArrayT, T, 1)),
         (@UnionAll T inst(PairT,T,T)),
         (@UnionAll T @UnionAll S inst(PairT,T,S)),

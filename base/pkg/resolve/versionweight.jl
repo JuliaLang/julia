@@ -1,23 +1,23 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module VersionWeights
 
 export VersionWeight
 
-immutable HierarchicalValue{T}
+struct HierarchicalValue{T}
     v::Vector{T}
     rest::T
 end
 
-HierarchicalValue{T}(v::Vector{T}, rest::T = zero(T)) = HierarchicalValue{T}(v, rest)
+HierarchicalValue(v::Vector{T}) where {T} = HierarchicalValue{T}(v, zero(T))
 HierarchicalValue(T::Type) = HierarchicalValue(T[])
 
-Base.zero{T}(::Type{HierarchicalValue{T}}) = HierarchicalValue(T)
+Base.zero(::Type{HierarchicalValue{T}}) where {T} = HierarchicalValue(T)
 
-Base.typemin{T}(::Type{HierarchicalValue{T}}) = HierarchicalValue(T[], typemin(T))
+Base.typemin(::Type{HierarchicalValue{T}}) where {T} = HierarchicalValue(T[], typemin(T))
 
-for (bf,f) in ((:(:-), :-), (:(:+),:+))
-    @eval function Base.($bf){T}(a::HierarchicalValue{T}, b::HierarchicalValue{T})
+for f in (:-, :+)
+    @eval function Base.$f(a::HierarchicalValue{T}, b::HierarchicalValue{T}) where T
         av = a.v
         bv = b.v
         la = length(a.v)
@@ -25,7 +25,7 @@ for (bf,f) in ((:(:-), :-), (:(:+),:+))
         l0 = min(la, lb)
         l1 = max(la, lb)
         ld = la - lb
-        rv = Array(T, l1)
+        rv = Vector{T}(l1)
         rf = ($f)(a.rest, b.rest)
         @inbounds for i = 1:l0
             rv[i] = ($f)(av[i], bv[i])
@@ -40,9 +40,9 @@ for (bf,f) in ((:(:-), :-), (:(:+),:+))
     end
 end
 
-Base.(:-){T}(a::HierarchicalValue{T}) = HierarchicalValue(-a.v, -a.rest)
+Base.:-(a::HierarchicalValue) = HierarchicalValue(-a.v, -a.rest)
 
-function Base.cmp{T}(a::HierarchicalValue{T}, b::HierarchicalValue{T})
+function Base.cmp(a::HierarchicalValue{T}, b::HierarchicalValue{T}) where T
     av = a.v
     bv = b.v
     la = length(a.v)
@@ -61,28 +61,30 @@ function Base.cmp{T}(a::HierarchicalValue{T}, b::HierarchicalValue{T})
     end
     return cmp(a.rest, b.rest)
 end
-Base.isless{T}(a::HierarchicalValue{T}, b::HierarchicalValue{T}) = cmp(a,b) < 0
-=={T}(a::HierarchicalValue{T}, b::HierarchicalValue{T}) = cmp(a,b) == 0
+Base.isless(a::HierarchicalValue{T}, b::HierarchicalValue{T}) where {T} = cmp(a,b) < 0
+Base.:(==)(a::HierarchicalValue{T}, b::HierarchicalValue{T}) where {T} = cmp(a,b) == 0
 
-Base.abs{T}(a::HierarchicalValue{T}) = HierarchicalValue(T[abs(x) for x in a.v], abs(a.rest))
+Base.abs(a::HierarchicalValue{T}) where {T} = HierarchicalValue(T[abs(x) for x in a.v], abs(a.rest))
 
-immutable VWPreBuildItem
+Base.copy(a::HierarchicalValue{T}) where {T} = HierarchicalValue(T[copy(x) for x in a.v], copy(a.rest))
+
+struct VWPreBuildItem
     nonempty::Int
     s::HierarchicalValue{Int}
     i::Int
 end
 VWPreBuildItem() = VWPreBuildItem(0, HierarchicalValue(Int), 0)
 VWPreBuildItem(i::Int) = VWPreBuildItem(1, HierarchicalValue(Int), i)
-VWPreBuildItem(s::ASCIIString) = VWPreBuildItem(1, HierarchicalValue(Int[s...]), 0)
+VWPreBuildItem(s::String) = VWPreBuildItem(1, HierarchicalValue(Int[s...]), 0)
 
 Base.zero(::Type{VWPreBuildItem}) = VWPreBuildItem()
 
 Base.typemin(::Type{VWPreBuildItem}) = (x=typemin(Int); VWPreBuildItem(x, typemin(HierarchicalValue{Int}), x))
 
-Base.(:-)(a::VWPreBuildItem, b::VWPreBuildItem) = VWPreBuildItem(a.nonempty-b.nonempty, a.s-b.s, a.i-b.i)
-Base.(:+)(a::VWPreBuildItem, b::VWPreBuildItem) = VWPreBuildItem(a.nonempty+b.nonempty, a.s+b.s, a.i+b.i)
+Base.:-(a::VWPreBuildItem, b::VWPreBuildItem) = VWPreBuildItem(a.nonempty-b.nonempty, a.s-b.s, a.i-b.i)
+Base.:+(a::VWPreBuildItem, b::VWPreBuildItem) = VWPreBuildItem(a.nonempty+b.nonempty, a.s+b.s, a.i+b.i)
 
-Base.(:-)(a::VWPreBuildItem) = VWPreBuildItem(-a.nonempty, -a.s, -a.i)
+Base.:-(a::VWPreBuildItem) = VWPreBuildItem(-a.nonempty, -a.s, -a.i)
 
 function Base.cmp(a::VWPreBuildItem, b::VWPreBuildItem)
     c = cmp(a.nonempty, b.nonempty); c != 0 && return c
@@ -90,22 +92,24 @@ function Base.cmp(a::VWPreBuildItem, b::VWPreBuildItem)
     return cmp(a.i, b.i)
 end
 Base.isless(a::VWPreBuildItem, b::VWPreBuildItem) = cmp(a,b) < 0
-==(a::VWPreBuildItem, b::VWPreBuildItem) = cmp(a,b) == 0
+Base.:(==)(a::VWPreBuildItem, b::VWPreBuildItem) = cmp(a,b) == 0
 
 Base.abs(a::VWPreBuildItem) = VWPreBuildItem(abs(a.nonempty), abs(a.s), abs(a.i))
 
-immutable VWPreBuild
+Base.copy(a::VWPreBuildItem) = VWPreBuildItem(a.nonempty, copy(a.s), a.i)
+
+struct VWPreBuild
     nonempty::Int
     w::HierarchicalValue{VWPreBuildItem}
 end
 
 const _vwprebuild_zero = VWPreBuild(0, HierarchicalValue(VWPreBuildItem))
 
-function VWPreBuild(ispre::Bool, desc::Tuple{Vararg{Union(Int,ASCIIString)}})
+function VWPreBuild(ispre::Bool, desc::Tuple{Vararg{Union{Int,String}}})
     isempty(desc) && return _vwprebuild_zero
     desc == ("",) && return VWPreBuild(ispre ? -1 : 1, HierarchicalValue(VWPreBuildItem[]))
     nonempty = ispre ? -1 : 0
-    w = Array(VWPreBuildItem, length(desc))
+    w = Vector{VWPreBuildItem}(length(desc))
     i = 1
     @inbounds for item in desc
         w[i] = VWPreBuildItem(item)
@@ -120,18 +124,18 @@ Base.zero(::Type{VWPreBuild}) = VWPreBuild()
 const _vwprebuild_min = VWPreBuild(typemin(Int), typemin(HierarchicalValue{VWPreBuildItem}))
 Base.typemin(::Type{VWPreBuild}) = _vwprebuild_min
 
-function Base.(:-)(a::VWPreBuild, b::VWPreBuild)
+function Base.:(-)(a::VWPreBuild, b::VWPreBuild)
     b === _vwprebuild_zero && return a
     a === _vwprebuild_zero && return -b
     VWPreBuild(a.nonempty-b.nonempty, a.w-b.w)
 end
-function Base.(:+)(a::VWPreBuild, b::VWPreBuild)
+function Base.:(+)(a::VWPreBuild, b::VWPreBuild)
     b === _vwprebuild_zero && return a
     a === _vwprebuild_zero && return b
     VWPreBuild(a.nonempty+b.nonempty, a.w+b.w)
 end
 
-function Base.(:-)(a::VWPreBuild)
+function Base.:(-)(a::VWPreBuild)
     a === _vwprebuild_zero && return a
     VWPreBuild(-a.nonempty, -a.w)
 end
@@ -142,68 +146,76 @@ end
     return cmp(a.w, b.w)
 end
 Base.isless(a::VWPreBuild, b::VWPreBuild) = cmp(a,b) < 0
-==(a::VWPreBuild, b::VWPreBuild) = cmp(a,b) == 0
+Base.:(==)(a::VWPreBuild, b::VWPreBuild) = cmp(a,b) == 0
 
 function Base.abs(a::VWPreBuild)
     a === _vwprebuild_zero && return a
     VWPreBuild(abs(a.nonempty), abs(a.w))
 end
 
+function Base.copy(a::VWPreBuild)
+    a === _vwprebuild_zero && return a
+    VWPreBuild(a.nonempty, copy(a.w))
+end
+
+function Base.deepcopy_internal(a::VWPreBuild, dict::ObjectIdDict)
+    haskey(dict, a) && return dict[a]
+    b = (a === _vwprebuild_zero) ? _vwprebuild_zero : VWPreBuild(a.nonempty, Base.deepcopy_internal(a.w, dict))
+    dict[a] = b
+    return b
+end
+
 # The numeric type used to determine how the different
 # versions of a package should be weighed
-immutable VersionWeight
+struct VersionWeight
     major::Int
     minor::Int
     patch::Int
     prerelease::VWPreBuild
     build::VWPreBuild
-    uninstall::Int
 end
-VersionWeight(major::Int,minor::Int,patch::Int,prerelease::VWPreBuild,build::VWPreBuild) = VersionWeight(major, minor, patch, prerelease, build, 0)
-VersionWeight(major::Int,minor::Int,patch::Int,prerelease::VWPreBuild) = VersionWeight(major, minor, patch, prerelease, zero(VWPreBuild))
-VersionWeight(major::Int,minor::Int,patch::Int) = VersionWeight(major, minor, patch, zero(VWPreBuild))
-VersionWeight(major::Int,minor::Int) = VersionWeight(major, minor, 0)
+VersionWeight(major::Int, minor::Int, patch::Int, prerelease::VWPreBuild) = VersionWeight(major, minor, patch, prerelease, zero(VWPreBuild))
+VersionWeight(major::Int, minor::Int, patch::Int) = VersionWeight(major, minor, patch, zero(VWPreBuild))
+VersionWeight(major::Int, minor::Int) = VersionWeight(major, minor, 0)
 VersionWeight(major::Int) = VersionWeight(major, 0)
 VersionWeight() = VersionWeight(0)
 
-VersionWeight(vn::VersionNumber, uninstall=false) =
+VersionWeight(vn::VersionNumber) =
     VersionWeight(vn.major, vn.minor, vn.patch,
-                  VWPreBuild(true, vn.prerelease), VWPreBuild(false, vn.build),
-                  Int(uninstall))
+                  VWPreBuild(true, vn.prerelease), VWPreBuild(false, vn.build))
 
 Base.zero(::Type{VersionWeight}) = VersionWeight()
 
-Base.typemin(::Type{VersionWeight}) = (x=typemin(Int); y=typemin(VWPreBuild); VersionWeight(x,x,x,y,y,x))
+Base.typemin(::Type{VersionWeight}) = (x=typemin(Int); y=typemin(VWPreBuild); VersionWeight(x, x, x, y, y))
 
-Base.(:-)(a::VersionWeight, b::VersionWeight) =
+Base.:(-)(a::VersionWeight, b::VersionWeight) =
     VersionWeight(a.major-b.major, a.minor-b.minor, a.patch-b.patch,
-                  a.prerelease-b.prerelease, a.build-b.build,
-                  a.uninstall-b.uninstall)
+                  a.prerelease-b.prerelease, a.build-b.build)
 
-Base.(:+)(a::VersionWeight, b::VersionWeight) =
+Base.:(+)(a::VersionWeight, b::VersionWeight) =
     VersionWeight(a.major+b.major, a.minor+b.minor, a.patch+b.patch,
-                  a.prerelease+b.prerelease, a.build+b.build,
-                  a.uninstall+b.uninstall)
+                  a.prerelease+b.prerelease, a.build+b.build)
 
-Base.(:-)(a::VersionWeight) =
+Base.:(-)(a::VersionWeight) =
     VersionWeight(-a.major, -a.minor, -a.patch,
-                  -a.prerelease, -a.build,
-                  -a.uninstall)
+                  -a.prerelease, -a.build)
 
 function Base.cmp(a::VersionWeight, b::VersionWeight)
     c = cmp(a.major, b.major); c != 0 && return c
     c = cmp(a.minor, b.minor); c != 0 && return c
     c = cmp(a.patch, b.patch); c != 0 && return c
     c = cmp(a.prerelease, b.prerelease); c != 0 && return c
-    c = cmp(a.build, b.build); c != 0 && return c
-    return cmp(a.uninstall, b.uninstall)
+    return cmp(a.build, b.build)
 end
 Base.isless(a::VersionWeight, b::VersionWeight) = cmp(a,b) < 0
-==(a::VersionWeight, b::VersionWeight) = cmp(a,b) == 0
+Base.:(==)(a::VersionWeight, b::VersionWeight) = cmp(a,b) == 0
 
 Base.abs(a::VersionWeight) =
     VersionWeight(abs(a.major), abs(a.minor), abs(a.patch),
-                  abs(a.prerelease), abs(a.build),
-                  abs(a.uninstall))
+                  abs(a.prerelease), abs(a.build))
+
+Base.copy(a::VersionWeight) =
+    VersionWeight(a.major, a.minor, a.patch,
+                  copy(a.prerelease), copy(a.build))
 
 end

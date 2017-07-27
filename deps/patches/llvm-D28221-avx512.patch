@@ -1,0 +1,22 @@
+Index: lib/Support/Host.cpp
+===================================================================
+--- a/lib/Support/Host.cpp
++++ b/lib/Support/Host.cpp
+@@ -475,13 +475,14 @@
+ 
+     // Skylake:
+     case 0x4e:
+-      *Type = INTEL_COREI7; // "skylake-avx512"
+-      *Subtype = INTEL_COREI7_SKYLAKE_AVX512;
+-      break;
+     case 0x5e:
+       *Type = INTEL_COREI7; // "skylake"
+       *Subtype = INTEL_COREI7_SKYLAKE;
+       break;
++    case 0x55:
++      *Type = INTEL_COREI7; // "skylake-avx512"
++      *Subtype = INTEL_COREI7_SKYLAKE_AVX512;
++      break;
+ 
+     case 0x1c: // Most 45 nm Intel Atom processors
+     case 0x26: // 45 nm Atom Lincroft

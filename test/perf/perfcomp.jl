@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # usage: perfcomp.jl <baseline file> [<suite>]
 # This will run the specified suite (default "all") and compare it to stored
@@ -7,7 +7,7 @@
 # The file format is the output of running `make` in this directory.
 
 function readperf(f)
-    [ rstrip(l[1:19])=>[parse(Float64,l[20:27]),parse(Float64,l[29:36]),parse(Float64,l[38:45]),parse(Float64,l[47:54])] for l in eachline(f) ]
+    Dict(rstrip(l[1:19])=>[parse(Float64,l[20:27]),parse(Float64,l[29:36]),parse(Float64,l[38:45]),parse(Float64,l[47:54])] for l in eachline(f))
 end
 
 function main()

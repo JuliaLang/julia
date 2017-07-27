@@ -1,7 +1,0 @@
-To build the Julia.app OS X application bundle:
-
-1. First install Winston, and compile all the relevant libraries with Pkg.add("Winston"). The libraries are copied from ~/.julia/{Cairo,Tk} in here.
-2. Make sure Platypus is installed with its command line tool (from Platypus Preferences)
-3. Run `make` here to create a self-sufficient julia distribution with Cairo and Tk.
-
-The `julia.icns` file provides the Julia icon, and the `script` file launches julia in a terminal.

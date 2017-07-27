@@ -472,18 +472,6 @@
 
 (define (iota n) (map-int identity n))
 
-(define (for-each f l . lsts)
-  (define (for-each-n f lsts)
-    (if (pair? (car lsts))
-	(begin (apply f (map car lsts))
-	       (for-each-n f (map cdr lsts)))))
-  (if (null? lsts)
-      (while (pair? l)
-	     (begin (f (car l))
-		    (set! l (cdr l))))
-      (for-each-n f (cons l lsts)))
-  #t)
-
 (define-macro (with-bindings binds . body)
   (let ((vars (map car binds))
 	(vals (map cadr binds))
@@ -639,11 +627,6 @@
 ; string functions ------------------------------------------------------------
 
 (define (string.tail s n) (string.sub s (string.inc s 0 n)))
-
-(define *whitespace*
-  (string.encode #array(wchar 9 10 11 12 13 32 133 160 5760 6158 8192
-			      8193 8194 8195 8196 8197 8198 8199 8200
-			      8201 8202 8232 8233 8239 8287 12288)))
 
 #;(define (string.trim s at-start at-end)
   (define (trim-start s chars i L)

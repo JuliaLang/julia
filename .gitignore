@@ -12,6 +12,7 @@
 
 *.exe
 *.dll
+*.dwo
 *.do
 *.o
 *.obj
@@ -19,6 +20,7 @@
 *.dylib
 *.dSYM
 *.jl.cov
+*.jl.*.cov
 *.jl.mem
 *.ji
 

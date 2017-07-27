@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 function dot(x::BitVector, y::BitVector)
     # simplest way to mimic Array dot behavior
@@ -6,7 +6,7 @@ function dot(x::BitVector, y::BitVector)
     s = 0
     xc = x.chunks
     yc = y.chunks
-    @inbounds for i = 1 : length(xc)
+    @inbounds for i = 1:length(xc)
         s += count_ones(xc[i] & yc[i])
     end
     s
@@ -40,7 +40,7 @@ end
     #C
 #end
 
-#aCb{T, S}(A::BitMatrix{T}, B::BitMatrix{S}) = aTb(A, B)
+#aCb(A::BitMatrix{T}, B::BitMatrix{S}) where {T,S} = aTb(A, B)
 
 function triu(B::BitMatrix, k::Integer=0)
     m,n = size(B)
@@ -69,11 +69,11 @@ end
 ## diff and gradient
 
 # TODO: this could be improved (is it worth it?)
-gradient(F::BitVector) = gradient(bitunpack(F))
-gradient(F::BitVector, h::Real) = gradient(bitunpack(F), h)
-gradient(F::Vector, h::BitVector) = gradient(F, bitunpack(h))
-gradient(F::BitVector, h::Vector) = gradient(bitunpack(F), h)
-gradient(F::BitVector, h::BitVector) = gradient(bitunpack(F), bitunpack(h))
+gradient(F::BitVector) = gradient(Array(F))
+gradient(F::BitVector, h::Real) = gradient(Array(F), h)
+gradient(F::Vector, h::BitVector) = gradient(F, Array(h))
+gradient(F::BitVector, h::Vector) = gradient(Array(F), h)
+gradient(F::BitVector, h::BitVector) = gradient(Array(F), Array(h))
 
 ## diag and related
 
@@ -86,7 +86,7 @@ function diag(B::BitMatrix)
     v
 end
 
-function diagm(v::Union(BitVector,BitMatrix))
+function diagm(v::Union{BitVector,BitMatrix})
     isa(v, BitMatrix) && size(v,1)==1 || size(v,2)==1 || throw(DimensionMismatch())
     n = length(v)
     a = falses(n, n)
@@ -134,8 +134,8 @@ end
 
 ## Structure query functions
 
-issym(A::BitMatrix) = size(A, 1)==size(A, 2) && countnz(A - A.')==0
-ishermitian(A::BitMatrix) = issym(A)
+issymmetric(A::BitMatrix) = size(A, 1)==size(A, 2) && countnz(A - A.')==0
+ishermitian(A::BitMatrix) = issymmetric(A)
 
 function nonzero_chunks(chunks::Vector{UInt64}, pos0::Int, pos1::Int)
     k0, l0 = Base.get_chunks_id(pos0)
@@ -166,7 +166,7 @@ end
 function istriu(A::BitMatrix)
     m, n = size(A)
     for j = 1:min(n,m-1)
-        stride = (j-1)*m
+        stride = (j-1) * m
         nonzero_chunks(A.chunks, stride+j+1, stride+m) && return false
     end
     return true
@@ -176,7 +176,7 @@ function istril(A::BitMatrix)
     m, n = size(A)
     (m == 0 || n == 0) && return true
     for j = 2:n
-        stride = (j-1)*m
+        stride = (j-1) * m
         nonzero_chunks(A.chunks, stride+1, stride+min(j-1,m)) && return false
     end
     return true
@@ -187,10 +187,10 @@ function findmax(a::BitArray)
     m, mi = false, 1
     ti = 1
     ac = a.chunks
-    for i=1:length(ac)
+    for i = 1:length(ac)
         @inbounds k = trailing_zeros(ac[i])
         ti += k
-        k==64 || return (true, ti)
+        k == 64 || return (true, ti)
     end
     return m, mi
 end
@@ -203,11 +203,96 @@ function findmin(a::BitArray)
     for i = 1:length(ac)-1
         @inbounds k = trailing_ones(ac[i])
         ti += k
-        k==64 || return (false, ti)
+        k == 64 || return (false, ti)
     end
     l = Base._mod64(length(a)-1) + 1
     @inbounds k = trailing_ones(ac[end] & Base._msk_end(l))
     ti += k
-    k==l || return (false, ti)
+    k == l || return (false, ti)
     return m, mi
 end
+
+# fast 8x8 bit transpose from Henry S. Warrens's "Hacker's Delight"
+# http://www.hackersdelight.org/hdcodetxt/transpose8.c.txt
+function transpose8x8(x::UInt64)
+    y = x
+    t = xor(y, y >>> 7) & 0x00aa00aa00aa00aa
+    y = xor(y, t, t << 7)
+    t = xor(y, y >>> 14) & 0x0000cccc0000cccc
+    y = xor(y, t, t << 14)
+    t = xor(y, y >>> 28) & 0x00000000f0f0f0f0
+    return xor(y, t, t << 28)
+end
+
+function form_8x8_chunk(Bc::Vector{UInt64}, i1::Int, i2::Int, m::Int, cgap::Int, cinc::Int, nc::Int, msk8::UInt64)
+    x = UInt64(0)
+
+    k, l = Base.get_chunks_id(i1 + (i2 - 1) * m)
+    r = 0
+    for j = 1:8
+        k > nc && break
+        x |= ((Bc[k] >>> l) & msk8) << r
+        if l + 8 >= 64 && nc > k
+            r0 = 8 - Base._mod64(l + 8)
+            x |= (Bc[k + 1] & (msk8 >>> r0)) << (r + r0)
+        end
+        k += cgap + (l + cinc >= 64 ? 1 : 0)
+        l = Base._mod64(l + cinc)
+        r += 8
+    end
+    return x
+end
+
+# note: assumes B is filled with 0's
+function put_8x8_chunk(Bc::Vector{UInt64}, i1::Int, i2::Int, x::UInt64, m::Int, cgap::Int, cinc::Int, nc::Int, msk8::UInt64)
+    k, l = Base.get_chunks_id(i1 + (i2 - 1) * m)
+    r = 0
+    for j = 1:8
+        k > nc && break
+        Bc[k] |= ((x >>> r) & msk8) << l
+        if l + 8 >= 64 && nc > k
+            r0 = 8 - Base._mod64(l + 8)
+            Bc[k + 1] |= ((x >>> (r + r0)) & (msk8 >>> r0))
+        end
+        k += cgap + (l + cinc >= 64 ? 1 : 0)
+        l = Base._mod64(l + cinc)
+        r += 8
+    end
+    return
+end
+
+function transpose(B::BitMatrix)
+    l1 = size(B, 1)
+    l2 = size(B, 2)
+    Bt = falses(l2, l1)
+
+    cgap1, cinc1 = Base._div64(l1), Base._mod64(l1)
+    cgap2, cinc2 = Base._div64(l2), Base._mod64(l2)
+
+    Bc = B.chunks
+    Btc = Bt.chunks
+
+    nc = length(Bc)
+
+    for i = 1:8:l1
+        msk8_1 = UInt64(0xff)
+        if (l1 < i + 7)
+            msk8_1 >>>= i + 7 - l1
+        end
+
+        for j = 1:8:l2
+            x = form_8x8_chunk(Bc, i, j, l1, cgap1, cinc1, nc, msk8_1)
+            x = transpose8x8(x)
+
+            msk8_2 = UInt64(0xff)
+            if (l2 < j + 7)
+                msk8_2 >>>= j + 7 - l2
+            end
+
+            put_8x8_chunk(Btc, j, i, x, l2, cgap2, cinc2, nc, msk8_2)
+        end
+    end
+    return Bt
+end
+
+ctranspose(B::Union{BitMatrix,BitVector}) = transpose(B)

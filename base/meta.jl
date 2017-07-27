@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Meta
 #
@@ -12,8 +12,7 @@ export quot,
 quot(ex) = Expr(:quote, ex)
 
 isexpr(ex::Expr, head)          = ex.head === head
-isexpr(ex::Expr, heads::Set)    = in(ex.head, heads)
-isexpr(ex::Expr, heads::Vector) = in(ex.head, heads)
+isexpr(ex::Expr, heads::Union{Set,Vector,Tuple}) = in(ex.head, heads)
 isexpr(ex,       head)          = false
 
 isexpr(ex,       head, n::Int)  = isexpr(ex, head) && length(ex.args) == n
@@ -41,7 +40,7 @@ function show_sexpr(io::IO, ex::Expr, indent::Int)
         print(io, ex.head === :block ? ",\n"*" "^inner : ", ")
         show_sexpr(io, arg, inner)
     end
-    if length(ex.args) == 0; print(io, ",)")
+    if isempty(ex.args); print(io, ",)")
     else print(io, (ex.head === :block ? "\n"*" "^indent : ""), ')')
     end
 end

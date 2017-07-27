@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 include("table.jl")
 
@@ -20,13 +20,17 @@ function fencedcode(stream::IO, block::MD)
             line_start = position(stream)
             if startswith(stream, string(ch) ^ n)
                 if !startswith(stream, string(ch))
-                    push!(block, Code(flavor, takebuf_string(buffer) |> chomp))
+                    if flavor == "math"
+                        push!(block, LaTeX(String(take!(buffer)) |> chomp))
+                    else
+                        push!(block, Code(flavor, String(take!(buffer)) |> chomp))
+                    end
                     return true
                 else
                     seek(stream, line_start)
                 end
             end
-            write(buffer, readline(stream))
+            write(buffer, readline(stream, chomp=false))
         end
         return false
     end
@@ -54,8 +58,9 @@ function github_paragraph(stream::IO, md::MD)
     return true
 end
 
-@flavor github [list, indentcode, blockquote, fencedcode, hashheader,
+@flavor github [list, indentcode, blockquote, admonition, footnote, fencedcode, hashheader,
                 github_table, github_paragraph,
 
                 linebreak, escapes, en_dash, inline_code, asterisk_bold,
-                asterisk_italic, image, link]
+                asterisk_italic, image, footnote_link, link, autolink]
+

@@ -1,8 +1,8 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
-typealias InnerConfig Dict{Char, Vector{Function}}
+const InnerConfig = Dict{Char, Vector{Function}}
 
-type Config
+mutable struct Config
     breaking::Vector{Function}
     regular::Vector{Function}
     inner::InnerConfig
@@ -25,9 +25,9 @@ triggers(f) = get(meta(f), :triggers, Set{Char}())
 # Macros
 
 isexpr(x::Expr, ts...) = x.head in ts
-isexpr{T}(x::T, ts...) = T in ts
+isexpr(x::T, ts...) where {T} = T in ts
 
-macro breaking (ex)
+macro breaking(ex)
     isexpr(ex, :->) || error("invalid @breaking form, use ->")
     b, def = ex.args
     if b
@@ -41,7 +41,7 @@ macro breaking (ex)
     end
 end
 
-macro trigger (ex)
+macro trigger(ex)
     isexpr(ex, :->) || error("invalid @triggers form, use ->")
     ts, def = ex.args
     quote
@@ -74,7 +74,7 @@ end
 
 const flavors = Dict{Symbol, Config}()
 
-macro flavor (name, features)
+macro flavor(name, features)
     quote
         const $(esc(name)) = config($(map(esc,features.args)...))
         flavors[$(Expr(:quote, name))] = $(esc(name))

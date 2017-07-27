@@ -1,0 +1,143 @@
+From 6b6d4b1ce3dcfdc87a84ee276947d473e84cd39e Mon Sep 17 00:00:00 2001
+From: Yichao Yu <yyc1992@gmail.com>
+Date: Sat, 1 Oct 2016 16:55:40 +0000
+Subject: [PATCH 3/3] Prefer EXTBL unwinding on ARM since it seems to be more
+ reliable
+
+---
+ include/tdep-arm/libunwind_i.h |  4 ++++
+ src/arm/Gex_tables.c           | 18 ++++++++++++++----
+ src/arm/Gstep.c                | 29 ++++++++++++++++++-----------
+ 3 files changed, 36 insertions(+), 15 deletions(-)
+
+diff --git a/include/tdep-arm/libunwind_i.h b/include/tdep-arm/libunwind_i.h
+index d3a279c..89a0b72 100644
+--- a/include/tdep-arm/libunwind_i.h
++++ b/include/tdep-arm/libunwind_i.h
+@@ -250,6 +250,7 @@ dwarf_put (struct dwarf_cursor *c, dwarf_loc_t loc, unw_word_t val)
+ #define tdep_init_done                  UNW_OBJ(init_done)
+ #define tdep_init                       UNW_OBJ(init)
+ #define arm_find_proc_info              UNW_OBJ(find_proc_info)
++#define arm_find_proc_info2             UNW_OBJ(find_proc_info2)
+ #define arm_put_unwind_info             UNW_OBJ(put_unwind_info)
+ /* Platforms that support UNW_INFO_FORMAT_TABLE need to define
+    tdep_search_unwind_table.  */
+@@ -290,6 +291,9 @@ extern void tdep_init (void);
+ extern int arm_find_proc_info (unw_addr_space_t as, unw_word_t ip,
+                                unw_proc_info_t *pi, int need_unwind_info,
+                                void *arg);
++extern int arm_find_proc_info2 (unw_addr_space_t as, unw_word_t ip,
++                                unw_proc_info_t *pi, int need_unwind_info,
++                                void *arg, int methods);
+ extern void arm_put_unwind_info (unw_addr_space_t as,
+                                   unw_proc_info_t *pi, void *arg);
+ extern int tdep_search_unwind_table (unw_addr_space_t as, unw_word_t ip,
+diff --git a/src/arm/Gex_tables.c b/src/arm/Gex_tables.c
+index 34706cf..379859a 100644
+--- a/src/arm/Gex_tables.c
++++ b/src/arm/Gex_tables.c
+@@ -500,15 +500,16 @@ arm_phdr_cb (struct dl_phdr_info *info, size_t size, void *data)
+ }
+ 
+ HIDDEN int
+-arm_find_proc_info (unw_addr_space_t as, unw_word_t ip,
+-                    unw_proc_info_t *pi, int need_unwind_info, void *arg)
++arm_find_proc_info2 (unw_addr_space_t as, unw_word_t ip,
++                     unw_proc_info_t *pi, int need_unwind_info, void *arg,
++                     int methods)
+ {
+   int ret = -1;
+   intrmask_t saved_mask;
+ 
+   Debug (14, "looking for IP=0x%lx\n", (long) ip);
+ 
+-  if (UNW_TRY_METHOD(UNW_ARM_METHOD_DWARF))
++  if (UNW_TRY_METHOD(UNW_ARM_METHOD_DWARF) && (methods & UNW_ARM_METHOD_DWARF))
+     {
+       struct dwarf_callback_data cb_data;
+ 
+@@ -534,7 +535,8 @@ arm_find_proc_info (unw_addr_space_t as, unw_word_t ip,
+         ret = -UNW_ENOINFO;
+     }
+ 
+-  if (ret < 0 && UNW_TRY_METHOD (UNW_ARM_METHOD_EXIDX))
++  if (ret < 0 && UNW_TRY_METHOD (UNW_ARM_METHOD_EXIDX) &&
++      (methods & UNW_ARM_METHOD_EXIDX))
+     {
+       struct arm_cb_data cb_data;
+ 
+@@ -560,6 +562,14 @@ arm_find_proc_info (unw_addr_space_t as, unw_word_t ip,
+   return ret;
+ }
+ 
++HIDDEN int
++arm_find_proc_info (unw_addr_space_t as, unw_word_t ip,
++                    unw_proc_info_t *pi, int need_unwind_info, void *arg)
++{
++    return arm_find_proc_info2 (as, ip, pi, need_unwind_info, arg,
++                                UNW_ARM_METHOD_ALL);
++}
++
+ HIDDEN void
+ arm_put_unwind_info (unw_addr_space_t as, unw_proc_info_t *proc_info, void *arg)
+ {
+diff --git a/src/arm/Gstep.c b/src/arm/Gstep.c
+index 5b2b329..449419b 100644
+--- a/src/arm/Gstep.c
++++ b/src/arm/Gstep.c
+@@ -50,8 +50,15 @@ arm_exidx_step (struct cursor *c)
+                                      c->dwarf.as_arg);
+   if (ret == -UNW_ENOINFO)
+     {
++#ifdef UNW_LOCAL_ONLY
++        if ((ret = arm_find_proc_info2 (c->dwarf.as, c->dwarf.ip, &c->dwarf.pi,
++                                        1, c->dwarf.as_arg,
++                                        UNW_ARM_METHOD_EXIDX)) < 0)
++        return ret;
++#else
+       if ((ret = tdep_find_proc_info (&c->dwarf, c->dwarf.ip, 1)) < 0)
+         return ret;
++#endif
+     }
+ 
+   if (c->dwarf.pi.format != UNW_INFO_FORMAT_ARM_EXIDX)
+@@ -184,8 +191,18 @@ unw_step (unw_cursor_t *cursor)
+   if (unw_is_signal_frame (cursor))
+      return unw_handle_signal_frame (cursor);
+ 
++  /* First, try extbl-based unwinding. */
++  if (UNW_TRY_METHOD (UNW_ARM_METHOD_EXIDX))
++    {
++      ret = arm_exidx_step (c);
++      if (ret > 0)
++        return 1;
++      if (ret == -UNW_ESTOPUNWIND || ret == 0)
++        return ret;
++    }
++
+ #ifdef CONFIG_DEBUG_FRAME
+-  /* First, try DWARF-based unwinding. */
++  /* Second, try DWARF-based unwinding. */
+   if (UNW_TRY_METHOD(UNW_ARM_METHOD_DWARF))
+     {
+       ret = dwarf_step (&c->dwarf);
+@@ -204,16 +221,6 @@ unw_step (unw_cursor_t *cursor)
+     }
+ #endif /* CONFIG_DEBUG_FRAME */
+ 
+-  /* Next, try extbl-based unwinding. */
+-  if (UNW_TRY_METHOD (UNW_ARM_METHOD_EXIDX))
+-    {
+-      ret = arm_exidx_step (c);
+-      if (ret > 0)
+-        return 1;
+-      if (ret == -UNW_ESTOPUNWIND || ret == 0)
+-        return ret;
+-    }
+-
+   /* Fall back on APCS frame parsing.
+      Note: This won't work in case the ARM EABI is used. */
+   if (unlikely (ret < 0))
+-- 
+2.10.0
+

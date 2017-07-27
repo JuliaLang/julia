@@ -1,16 +1,18 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 module Reqs
 
+import Base: ==
+import ...Pkg.PkgError
 using ..Types
 
 # representing lines of REQUIRE files
 
-abstract Line
-immutable Comment <: Line
+abstract type Line end
+struct Comment <: Line
     content::AbstractString
 end
-immutable Requirement <: Line
+struct Requirement <: Line
     content::AbstractString
     package::AbstractString
     versions::VersionSet
@@ -22,12 +24,12 @@ immutable Requirement <: Line
         while !isempty(fields) && fields[1][1] == '@'
             push!(system,shift!(fields)[2:end])
         end
-        isempty(fields) && error("invalid requires entry: $content")
+        isempty(fields) && throw(PkgError("invalid requires entry: $content"))
         package = shift!(fields)
         all(field->ismatch(Base.VERSION_REGEX, field), fields) ||
-            error("invalid requires entry for $package: $content")
+            throw(PkgError("invalid requires entry for $package: $content"))
         versions = VersionNumber[fields...]
-        issorted(versions) || error("invalid requires entry for $package: $content")
+        issorted(versions) || throw(PkgError("invalid requires entry for $package: $content"))
         new(content, package, VersionSet(versions), system)
     end
     function Requirement(package::AbstractString, versions::VersionSet, system::Vector{AbstractString}=AbstractString[])
@@ -47,15 +49,23 @@ immutable Requirement <: Line
     end
 end
 
-# TODO: shouldn't be neccessary #4648
 ==(a::Line, b::Line) = a.content == b.content
+hash(s::Line, h::UInt) = hash(s.content, h + (0x3f5a631add21cb1a % UInt))
 
 # general machinery for parsing REQUIRE files
 
-function read(readable::Union(IO,Base.AbstractCmd))
+function read(readable::Vector{<:AbstractString})
+    lines = Line[]
+    for line in readable
+        line = chomp(line)
+        push!(lines, ismatch(r"^\s*(?:#|$)", line) ? Comment(line) : Requirement(line))
+    end
+    return lines
+end
+
+function read(readable::Union{IO,Base.AbstractCmd})
     lines = Line[]
     for line in eachline(readable)
-        line = chomp(line)
         push!(lines, ismatch(r"^\s*(?:#|$)", line) ? Comment(line) : Requirement(line))
     end
     return lines
@@ -72,7 +82,7 @@ function write(io::IO, reqs::Requires)
         println(io, Requirement(pkg, reqs[pkg]).content)
     end
 end
-write(file::AbstractString, r::Union(Vector{Line},Requires)) = open(io->write(io,r), file, "w")
+write(file::AbstractString, r::Union{Vector{Line},Requires}) = open(io->write(io,r), file, "w")
 
 function parse(lines::Vector{Line})
     reqs = Requires()
@@ -80,14 +90,16 @@ function parse(lines::Vector{Line})
         if isa(line,Requirement)
             if !isempty(line.system)
                 applies = false
-                @windows_only applies |=  ("windows"  in line.system)
-                @unix_only    applies |=  ("unix"     in line.system)
-                @osx_only     applies |=  ("osx"      in line.system)
-                @linux_only   applies |=  ("linux"    in line.system)
-                @windows_only applies &= !("!windows" in line.system)
-                @unix_only    applies &= !("!unix"    in line.system)
-                @osx_only     applies &= !("!osx"     in line.system)
-                @linux_only   applies &= !("!linux"   in line.system)
+                if Sys.iswindows(); applies |=  ("windows"  in line.system); end
+                if Sys.isunix();    applies |=  ("unix"     in line.system); end
+                if Sys.isapple();   applies |=  ("osx"      in line.system); end
+                if Sys.islinux();   applies |=  ("linux"    in line.system); end
+                if Sys.isbsd();     applies |=  ("bsd"      in line.system); end
+                if Sys.iswindows(); applies &= !("!windows" in line.system); end
+                if Sys.isunix();    applies &= !("!unix"    in line.system); end
+                if Sys.isapple();   applies &= !("!osx"     in line.system); end
+                if Sys.islinux();   applies &= !("!linux"   in line.system); end
+                if Sys.isbsd();     applies &= !("!bsd"     in line.system); end
                 applies || continue
             end
             reqs[line.package] = haskey(reqs, line.package) ?
@@ -110,7 +122,7 @@ function dependents(packagename::AbstractString)
     pkgs
 end
 
-# add & rm – edit the content a requires file
+# add & rm – edit the content a requires file
 
 function add(lines::Vector{Line}, pkg::AbstractString, versions::VersionSet=VersionSet())
     v = VersionSet[]

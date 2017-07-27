@@ -1,21 +1,29 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Set tests
+isdefined(Main, :TestHelpers) || @eval Main include("TestHelpers.jl")
+using TestHelpers.OAs
 
 # Construction, collect
-@test is(typeof(Set([1,2,3])), Set{Int})
-@test is(typeof(Set{Int}([3])), Set{Int})
+@test ===(typeof(Set([1,2,3])), Set{Int})
+@test ===(typeof(Set{Int}([3])), Set{Int})
 data_in = (1,"banana", ())
 s = Set(data_in)
 data_out = collect(s)
-@test is(typeof(data_out), Array{Any,1})
+@test ===(typeof(data_out), Array{Any,1})
 @test all(map(d->in(d,data_out), data_in))
 @test length(data_out) == length(data_in)
+let f17741 = x -> x < 0 ? false : 1
+    @test isa(Set(x for x = 1:3), Set{Int})
+    @test isa(Set(sin(x) for x = 1:3), Set{Float64})
+    @test isa(Set(f17741(x) for x = 1:3), Set{Int})
+    @test isa(Set(f17741(x) for x = -1:1), Set{Integer})
+end
 
 # hash
-s1 = Set{ASCIIString}(["bar", "foo"])
-s2 = Set{ASCIIString}(["foo", "bar"])
-s3 = Set{ASCIIString}(["baz"])
+s1 = Set(["bar", "foo"])
+s2 = Set(["foo", "bar"])
+s3 = Set(["baz"])
 @test hash(s1) == hash(s2)
 @test hash(s1) != hash(s3)
 
@@ -39,10 +47,13 @@ s3 = Set{ASCIIString}(["baz"])
 # eltype, similar
 s1 = similar(Set([1,"hello"]))
 @test isequal(s1, Set())
-@test is(eltype(s1), Any)
+@test ===(eltype(s1), Any)
 s2 = similar(Set{Float32}([2.0f0,3.0f0,4.0f0]))
 @test isequal(s2, Set())
-@test is(eltype(s2), Float32)
+@test ===(eltype(s2), Float32)
+s3 = similar(Set([1,"hello"]),Float32)
+@test isequal(s3, Set())
+@test ===(eltype(s3), Float32)
 
 # show
 @test sprint(show, Set()) == "Set{Any}()"
@@ -69,6 +80,7 @@ push!(s,1); push!(s,2); push!(s,3)
 @test pop!(s) == 3
 @test length(s) == 0
 @test isempty(s)
+@test_throws ArgumentError pop!(s)
 
 # copy
 data_in = (1,2,9,8,4)
@@ -87,7 +99,25 @@ push!(c,200)
 s = Set([1])
 @test isequal(sizehint!(s, 10), Set([1]))
 @test isequal(empty!(s), Set())
-# TODO: rehash
+
+# rehash!
+let
+    # Use a pointer type to have defined behavior for uninitialized
+    # array element
+    s = Set(["a", "b", "c"])
+    Base.rehash!(s)
+    k = s.dict.keys
+    Base.rehash!(s)
+    @test length(k) == length(s.dict.keys)
+    for i in 1:length(k)
+        if isassigned(k, i)
+            @test k[i] == s.dict.keys[i]
+        else
+            @test !isassigned(s.dict.keys, i)
+        end
+    end
+    s == Set(["a", "b", "c"])
+end
 
 # start, done, next
 for data_in in ((7,8,4,5),
@@ -176,13 +206,72 @@ end
 @test ⊊(Set([1]), Set([1,2]))
 @test !⊊(Set([1]), Set([1]))
 @test ⊈(Set([1]), Set([2]))
-@test symdiff(Set([1,2,3,4]), Set([2,4,5,6])) == Set([1,3,5, 6])
+@test ⊇(Set([1,2]), Set([1]))
+@test ⊋(Set([1,2]), Set([1]))
+@test !⊋(Set([1]), Set([1]))
+@test ⊉(Set([1]), Set([2]))
+@test symdiff(Set([1,2,3,4]), Set([2,4,5,6])) == Set([1,3,5,6])
 
 # unique
 u = unique([1,1,2])
 @test in(1,u)
 @test in(2,u)
 @test length(u) == 2
+@test unique(iseven, [5,1,8,9,3,4,10,7,2,6]) == [5,8]
+@test unique(n->n % 3, [5,1,8,9,3,4,10,7,2,6]) == [5,1,9]
+# issue 20105
+@test @inferred(unique(x for x in 1:1)) == [1]
+@test unique(x for x in Any[1,1.0])::Vector{Real} == [1]
+
+# unique!
+@testset "unique!" begin
+    u = [1,1,3,2,1]
+    unique!(u)
+    @test u == [1,3,2]
+    @test unique!([]) == []
+    @test unique!(Float64[]) == Float64[]
+    u = [1,2,2,3,5,5]
+    @test unique!(u) === u
+    @test u == [1,2,3,5]
+    u = [6,5,5,3,3,2,1]
+    @test unique!(u) === u
+    @test u == [6,5,3,2,1]
+    u = OffsetArray([1,2,2,3,5,5], -1)
+    @test unique!(u) === u
+    @test u == OffsetArray([1,2,3,5], -1)
+    u = OffsetArray([5,5,4,4,2,2,0,-1,-1], -1)
+    @test unique!(u) === u
+    @test u == OffsetArray([5,4,2,0,-1], -1)
+    u = OffsetArray(["w","we","w",5,"r",5,5], -1)
+    @test unique!(u) === u
+    @test u == OffsetArray(["w","we",5,"r"], -1)
+    u = [0.0,-0.0,1.0,2]
+    @test unique!(u) === u
+    @test u == [0.0,-0.0,1.0,2.0]
+    u = [1,NaN,NaN,3]
+    @test unique!(u) === u
+    @test u[1] == 1
+    @test isnan(u[2])
+    @test u[3] == 3
+    u = [5,"w","we","w","r",5,"w"]
+    unique!(u)
+    @test u == [5,"w","we","r"]
+    u = [1,2,5,1,3,2]
+end
+
+# allunique
+@test allunique([])
+@test allunique(Set())
+@test allunique([1,2,3])
+@test allunique([:a,:b,:c])
+@test allunique(Set([1,2,3]))
+@test !allunique([1,1,2])
+@test !allunique([:a,:b,:c,:a])
+@test allunique(4:7)
+@test allunique(1:1)
+@test allunique(4.0:0.3:7.0)
+@test allunique(4:-1:5)       # empty range
+@test allunique(7:-1:1)       # negative step
 
 # filter
 s = Set([1,2,3,4])
@@ -194,63 +283,34 @@ filter!(isodd, s)
 @test_throws ArgumentError first(Set())
 @test first(Set(2)) == 2
 
-# ########## end of set tests ##########
+# pop!
+let s = Set(1:5)
+    @test 2 in s
+    @test pop!(s, 2) == 2
+    @test !(2 in s)
+    @test_throws KeyError pop!(s, 2)
+    @test pop!(s, 2, ()) == ()
+    @test 3 in s
+    @test pop!(s, 3, ()) == 3
+    @test !(3 in s)
+end
 
-## IntSet
+@test pop!(Set(1:2), 2, nothing) == 2
 
-# Construction, collect
-data_in = (1,5,100)
-s = IntSet(data_in)
-data_out = collect(s)
-@test all(map(d->in(d,data_out), data_in))
-@test length(data_out) == length(data_in)
+@test length(Set(['x',120])) == 2
 
-# eltype, similar
-@test is(eltype(IntSet()), Int64)
-@test isequal(similar(IntSet([1,2,3])), IntSet())
-
-# show
-@test sprint(show, IntSet()) == "IntSet([])"
-@test sprint(show, IntSet([1,2,3])) == "IntSet([1, 2, 3])"
-@test contains(sprint(show, complement(IntSet())), "...,")
-
-
-s = IntSet([0,1,10,20,200,300,1000,10000,10002])
-@test last(s) == 10002
-@test first(s) == 0
-@test length(s) == 9
-@test pop!(s) == 10002
-@test length(s) == 8
-@test shift!(s) == 0
-@test length(s) == 7
-@test !in(0,s)
-@test !in(10002,s)
-@test in(10000,s)
-@test_throws ArgumentError first(IntSet())
-@test_throws ArgumentError last(IntSet())
-t = copy(s)
-sizehint!(t, 20000) #check that hash does not depend on size of internal Array{UInt32, 1}
-@test hash(s) == hash(t)
-@test hash(complement(s)) == hash(complement(t))
-
-@test setdiff(IntSet([1, 2, 3, 4]), IntSet([2, 4, 5, 6])) == IntSet([1, 3])
-@test symdiff(IntSet([1, 2, 3, 4]), IntSet([2, 4, 5, 6])) == IntSet([1, 3, 5, 6])
-
-s2 = IntSet([1, 2, 3, 4])
-setdiff!(s2, IntSet([2, 4, 5, 6]))
-
-@test s2 == IntSet([1, 3])
-
-# == with last-bit set (groups.google.com/forum/#!topic/julia-users/vZNjiIEG_sY)
-s = IntSet(255)
-@test s == s
-
-# issue #7851
-@test_throws ArgumentError IntSet(-1)
-@test !(-1 in IntSet(0:10))
-
-# # issue #8570
-# This requires 2^29 bytes of storage, which is too much for a simple test
-# s = IntSet(2^32)
-# @test length(s) == 1
-# for b in s; b; end
+# convert
+let
+    iset = Set([17, 4711])
+    cfset = convert(Set{Float64}, iset)
+    @test typeof(cfset) == Set{Float64}
+    @test cfset == iset
+    fset = Set([17.0, 4711.0])
+    ciset = convert(Set{Int}, fset)
+    @test typeof(ciset) == Set{Int}
+    @test ciset == fset
+    ssset = Set(split("foo bar"))
+    cssset = convert(Set{String}, ssset)
+    @test typeof(cssset) == Set{String}
+    @test cssset == Set(["foo", "bar"])
+end

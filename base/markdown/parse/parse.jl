@@ -1,6 +1,6 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
-type MD
+mutable struct MD
     content::Vector{Any}
     meta::Dict{Any, Any}
 
@@ -29,16 +29,16 @@ Base.isempty(md::MD) = isempty(md.content)
 
 ==(a::MD, b::MD) = (html(a) == html(b))
 
-# Parser functions:
-#   md – should be modified appropriately
-#   return – basically, true if parse was successful
-#     false uses the next parser in the queue, true
-#     goes back to the beginning
-# 
-# Inner parsers:
-#   return – element to use or nothing
+# Parser functions:
+#   md – should be modified appropriately
+#   return – basically, true if parse was successful
+#     false uses the next parser in the queue, true
+#     goes back to the beginning
+#
+# Inner parsers:
+#   return – element to use or nothing
 
-# Inner parsing
+# Inner parsing
 
 function parseinline(stream::IO, md::MD, parsers::Vector{Function})
     for parser in parsers
@@ -51,10 +51,12 @@ function parseinline(stream::IO, md::MD, config::Config)
     content = []
     buffer = IOBuffer()
     while !eof(stream)
-        char = peek(stream)
+        # FIXME: this is broken if we're looking for non-ASCII
+        # characters because peek only returns a single byte.
+        char = Char(peek(stream))
         if haskey(config.inner, char) &&
-                (inner = parseinline(stream, md, config.inner[char])) != nothing
-            c = takebuf_string(buffer)
+                (inner = parseinline(stream, md, config.inner[char])) !== nothing
+            c = String(take!(buffer))
             !isempty(c) && push!(content, c)
             buffer = IOBuffer()
             push!(content, inner)
@@ -62,17 +64,13 @@ function parseinline(stream::IO, md::MD, config::Config)
             write(buffer, read(stream, Char))
         end
     end
-    c = takebuf_string(buffer)
+    c = String(take!(buffer))
     !isempty(c) && push!(content, c)
     return content
 end
 
-parseinline(s::String, md::MD, c::Config) =
+parseinline(s::AbstractString, md::MD, c::Config) =
     parseinline(IOBuffer(s), md, c)
-
-# TODO remove once GH #9888 is fixed
-parseinline{T}(s::SubString{T}, md::MD, c::Config) =
-    parseinline(convert(T, s), md, c)
 
 parseinline(s, md::MD) = parseinline(s, md, config(md))
 

@@ -1,26 +1,40 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ## number-theoretic functions ##
 
-function gcd{T<:Integer}(a::T, b::T)
+"""
+    gcd(x,y)
+
+Greatest common (positive) divisor (or zero if `x` and `y` are both zero).
+
+# Examples
+```jldoctest
+julia> gcd(6,9)
+3
+
+julia> gcd(6,-9)
+3
+```
+"""
+function gcd(a::T, b::T) where T<:Integer
     while b != 0
         t = b
         b = rem(a, b)
         a = t
     end
-    abs(a)
+    checked_abs(a)
 end
 
 # binary GCD (aka Stein's) algorithm
 # about 1.7x (2.1x) faster for random Int64s (Int128s)
-function gcd{T<:Union(Int64,UInt64,Int128,UInt128)}(a::T, b::T)
+function gcd(a::T, b::T) where T<:Union{Int64,UInt64,Int128,UInt128}
     a == 0 && return abs(b)
     b == 0 && return abs(a)
     za = trailing_zeros(a)
     zb = trailing_zeros(b)
     k = min(za, zb)
-    u = abs(a >> za)
-    v = abs(b >> zb)
+    u = unsigned(abs(a >> za))
+    v = unsigned(abs(b >> zb))
     while u != v
         if u > v
             u, v = v, u
@@ -28,11 +42,34 @@ function gcd{T<:Union(Int64,UInt64,Int128,UInt128)}(a::T, b::T)
         v -= u
         v >>= trailing_zeros(v)
     end
-    u << k
+    r = u << k
+    # T(r) would throw InexactError; we want OverflowError instead
+    r > typemax(T) && throw(OverflowError())
+    r % T
 end
 
-# explicit a==0 test is to handle case of lcm(0,0) correctly
-lcm{T<:Integer}(a::T, b::T) = a == 0 ? a : abs(a * div(b, gcd(b,a)))
+"""
+    lcm(x,y)
+
+Least common (non-negative) multiple.
+
+# Examples
+```jldoctest
+julia> lcm(2,3)
+6
+
+julia> lcm(-2,3)
+6
+```
+"""
+function lcm(a::T, b::T) where T<:Integer
+    # explicit a==0 test is to handle case of lcm(0,0) correctly
+    if a == 0
+        return a
+    else
+        return checked_abs(a * div(b, gcd(b,a)))
+    end
+end
 
 gcd(a::Integer) = a
 lcm(a::Integer) = a
@@ -41,13 +78,42 @@ lcm(a::Integer, b::Integer) = lcm(promote(a,b)...)
 gcd(a::Integer, b::Integer...) = gcd(a, gcd(b...))
 lcm(a::Integer, b::Integer...) = lcm(a, lcm(b...))
 
-gcd{T<:Integer}(abc::AbstractArray{T}) = reduce(gcd,abc)
-lcm{T<:Integer}(abc::AbstractArray{T}) = reduce(lcm,abc)
+gcd(abc::AbstractArray{<:Integer}) = reduce(gcd,abc)
+lcm(abc::AbstractArray{<:Integer}) = reduce(lcm,abc)
 
 # return (gcd(a,b),x,y) such that ax+by == gcd(a,b)
-function gcdx{T<:Integer}(a::T, b::T)
-    s0, s1 = one(T), zero(T)
+"""
+    gcdx(x,y)
+
+Computes the greatest common (positive) divisor of `x` and `y` and their Bézout
+coefficients, i.e. the integer coefficients `u` and `v` that satisfy
+``ux+vy = d = gcd(x,y)``. ``gcdx(x,y)`` returns ``(d,u,v)``.
+
+# Examples
+```jldoctest
+julia> gcdx(12, 42)
+(6, -3, 1)
+
+julia> gcdx(240, 46)
+(2, -9, 47)
+```
+
+!!! note
+    Bézout coefficients are *not* uniquely defined. `gcdx` returns the minimal
+    Bézout coefficients that are computed by the extended Euclidean algorithm.
+    (Ref: D. Knuth, TAoCP, 2/e, p. 325, Algorithm X.)
+    For signed integers, these coefficients `u` and `v` are minimal in
+    the sense that ``|u| < |y/d|`` and ``|v| < |x/d|``. Furthermore,
+    the signs of `u` and `v` are chosen so that `d` is positive.
+    For unsigned integers, the coefficients `u` and `v` might be near
+    their `typemax`, and the identity then holds only via the unsigned
+    integers' modulo arithmetic.
+"""
+function gcdx(a::T, b::T) where T<:Integer
+    # a0, b0 = a, b
+    s0, s1 = oneunit(T), zero(T)
     t0, t1 = s1, s0
+    # The loop invariant is: s0*a0 + t0*b0 == a
     while b != 0
         q = div(a, b)
         a, b = b, rem(a, b)
@@ -59,17 +125,45 @@ end
 gcdx(a::Integer, b::Integer) = gcdx(promote(a,b)...)
 
 # multiplicative inverse of n mod m, error if none
-function invmod(n, m)
+
+"""
+    invmod(x,m)
+
+Take the inverse of `x` modulo `m`: `y` such that ``x y = 1 \\pmod m``,
+with ``div(x,y) = 0``. This is undefined for ``m = 0``, or if
+``gcd(x,m) \\neq 1``.
+
+# Examples
+```jldoctest
+julia> invmod(2,5)
+3
+
+julia> invmod(2,3)
+2
+
+julia> invmod(5,6)
+5
+```
+"""
+function invmod(n::T, m::T) where T<:Integer
     g, x, y = gcdx(n, m)
-    if g != 1 || m == 0
-        error("no inverse exists")
-    end
-    x < 0 ? abs(m) + x : x
+    g != 1 && throw(DomainError((n, m), "Greatest common divisor is $g."))
+    m == 0 && throw(DomainError(m, "`m` must not be 0."))
+    # Note that m might be negative here.
+    # For unsigned T, x might be close to typemax; add m to force a wrap-around.
+    r = mod(x + m, m)
+    # The postcondition is: mod(r * n, m) == mod(T(1), m) && div(r, m) == 0
+    r
 end
+invmod(n::Integer, m::Integer) = invmod(promote(n,m)...)
 
 # ^ for any x supporting *
 to_power_type(x::Number) = oftype(x*x, x)
 to_power_type(x) = x
+@noinline throw_domerr_powbysq(p) = throw(DomainError(p,
+    string("Cannot raise an integer x to a negative power ", p, '.',
+           "\nMake x a float by adding a zero decimal (e.g., 2.0^$p instead ",
+           "of 2^$p), or write 1/x^$(-p), float(x)^$p, or (x//1)^$p")))
 function power_by_squaring(x_, p::Integer)
     x = to_power_type(x_)
     if p == 1
@@ -79,7 +173,9 @@ function power_by_squaring(x_, p::Integer)
     elseif p == 2
         return x*x
     elseif p < 0
-        throw(DomainError())
+        x == 1 && return copy(x)
+        x == -1 && return iseven(p) ? one(x) : copy(x)
+        throw_domerr_powbysq(p)
     end
     t = trailing_zeros(p) + 1
     p >>= t
@@ -99,20 +195,67 @@ function power_by_squaring(x_, p::Integer)
 end
 power_by_squaring(x::Bool, p::Unsigned) = ((p==0) | x)
 function power_by_squaring(x::Bool, p::Integer)
-    p < 0 && throw(DomainError())
+    p < 0 && !x && throw_domerr_powbysq(p)
     return (p==0) | x
 end
 
-^{T<:Integer}(x::T, p::T) = power_by_squaring(x,p)
+^(x::T, p::T) where {T<:Integer} = power_by_squaring(x,p)
 ^(x::Number, p::Integer)  = power_by_squaring(x,p)
 ^(x, p::Integer)          = power_by_squaring(x,p)
 
+# x^p for any literal integer p is lowered to Base.literal_pow(^, x, Val(p))
+# to enable compile-time optimizations specialized to p.
+# However, we still need a fallback that calls the function ^ which may either
+# mean Base.^ or something else, depending on context.
+# We mark these @inline since if the target is marked @inline,
+# we want to make sure that gets propagated,
+# even if it is over the inlining threshold.
+@inline literal_pow(f, x, ::Val{p}) where {p} = f(x,p)
+
+# Restrict inlining to hardware-supported arithmetic types, which
+# are fast enough to benefit from inlining.
+const HWReal = Union{Int8,Int16,Int32,Int64,UInt8,UInt16,UInt32,UInt64,Float32,Float64}
+const HWNumber = Union{HWReal, Complex{<:HWReal}, Rational{<:HWReal}}
+
+# inference.jl has complicated logic to inline x^2 and x^3 for
+# numeric types.  In terms of Val we can do it much more simply.
+# (The first argument prevents unexpected behavior if a function ^
+# is defined that is not equal to Base.^)
+@inline literal_pow(::typeof(^), x::HWNumber, ::Val{0}) = one(x)
+@inline literal_pow(::typeof(^), x::HWNumber, ::Val{1}) = x
+@inline literal_pow(::typeof(^), x::HWNumber, ::Val{2}) = x*x
+@inline literal_pow(::typeof(^), x::HWNumber, ::Val{3}) = x*x*x
+
 # b^p mod m
-function powermod{T}(b::Integer, p::Integer, m::T)
-    p < 0 && throw(DomainError())
-    b = oftype(m,mod(b,m))  # this also checks for divide by zero
-    p == 0 && return mod(one(b),m)
+
+"""
+    powermod(x::Integer, p::Integer, m)
+
+Compute ``x^p \\pmod m``.
+
+# Examples
+```jldoctest
+julia> powermod(2, 6, 5)
+4
+
+julia> mod(2^6, 5)
+4
+
+julia> powermod(5, 2, 20)
+5
+
+julia> powermod(5, 2, 19)
+6
+
+julia> powermod(5, 3, 19)
+11
+```
+"""
+function powermod(x::Integer, p::Integer, m::T) where T<:Integer
+    p < 0 && return powermod(invmod(x, m), -p, m)
+    p == 0 && return mod(one(m),m)
     (m == 1 || m == -1) && return zero(m)
+    b = oftype(m,mod(x,m))  # this also checks for divide by zero
 
     t = prevpow2(p)
     local r::T
@@ -129,31 +272,127 @@ function powermod{T}(b::Integer, p::Integer, m::T)
     return r
 end
 
+# optimization: promote the modulus m to BigInt only once (cf. widemul in generic powermod above)
+powermod(x::Integer, p::Integer, m::Union{Int128,UInt128}) = oftype(m, powermod(x, p, big(m)))
+
 # smallest power of 2 >= x
-nextpow2(x::Unsigned) = one(x)<<((sizeof(x)<<3)-leading_zeros(x-1))
+
+"""
+    nextpow2(n::Integer)
+
+The smallest power of two not less than `n`. Returns 0 for `n==0`, and returns
+`-nextpow2(-n)` for negative arguments.
+
+# Examples
+```jldoctest
+julia> nextpow2(16)
+16
+
+julia> nextpow2(17)
+32
+```
+"""
+nextpow2(x::Unsigned) = oneunit(x)<<((sizeof(x)<<3)-leading_zeros(x-oneunit(x)))
 nextpow2(x::Integer) = reinterpret(typeof(x),x < 0 ? -nextpow2(unsigned(-x)) : nextpow2(unsigned(x)))
 
-prevpow2(x::Unsigned) = (one(x)>>(x==0)) << ((sizeof(x)<<3)-leading_zeros(x)-1)
+"""
+    prevpow2(n::Integer)
+
+The largest power of two not greater than `n`. Returns 0 for `n==0`, and returns
+`-prevpow2(-n)` for negative arguments.
+
+# Examples
+```jldoctest
+julia> prevpow2(5)
+4
+
+julia> prevpow2(0)
+0
+```
+"""
+prevpow2(x::Unsigned) = one(x) << unsigned((sizeof(x)<<3)-leading_zeros(x)-1)
 prevpow2(x::Integer) = reinterpret(typeof(x),x < 0 ? -prevpow2(unsigned(-x)) : prevpow2(unsigned(x)))
 
-ispow2(x::Integer) = count_ones(x)==1
+"""
+    ispow2(n::Integer) -> Bool
 
-# smallest a^n >= x, with integer n
+Test whether `n` is a power of two.
+
+# Examples
+```jldoctest
+julia> ispow2(4)
+true
+
+julia> ispow2(5)
+false
+```
+"""
+ispow2(x::Integer) = x > 0 && count_ones(x) == 1
+
+"""
+    nextpow(a, x)
+
+The smallest `a^n` not less than `x`, where `n` is a non-negative integer. `a` must be
+greater than 1, and `x` must be greater than 0.
+
+# Examples
+```jldoctest
+julia> nextpow(2, 7)
+8
+
+julia> nextpow(2, 9)
+16
+
+julia> nextpow(5, 20)
+25
+
+julia> nextpow(4, 16)
+16
+```
+
+See also [`prevpow`](@ref).
+"""
 function nextpow(a::Real, x::Real)
-    (a <= 1 || x <= 0) && throw(DomainError())
+    a <= 1 && throw(DomainError(a, "`a` must be greater than 1."))
+    x <= 0 && throw(DomainError(x, "`x` must be positive."))
     x <= 1 && return one(a)
     n = ceil(Integer,log(a, x))
     p = a^(n-1)
     # guard against roundoff error, e.g., with a=5 and x=125
     p >= x ? p : a^n
 end
-# largest a^n <= x, with integer n
+
+"""
+    prevpow(a, x)
+
+The largest `a^n` not greater than `x`, where `n` is a non-negative integer.
+`a` must be greater than 1, and `x` must not be less than 1.
+
+# Examples
+```jldoctest
+julia> prevpow(2, 7)
+4
+
+julia> prevpow(2, 9)
+8
+
+julia> prevpow(5, 20)
+5
+
+julia> prevpow(4, 16)
+16
+```
+See also [`nextpow`](@ref).
+"""
 function prevpow(a::Real, x::Real)
-    (a <= 1 || x < 1) && throw(DomainError())
+    a <= 1 && throw(DomainError(a, "`a` must be greater than 1."))
+    x < 1 && throw(DomainError(x, "`x` must be ≥ 1."))
     n = floor(Integer,log(a, x))
     p = a^(n+1)
     p <= x ? p : a^n
 end
+
+## ndigits (number of digits) in base 10 ##
 
 # decimal digits in an unsigned integer
 const powers_of_ten = [
@@ -163,7 +402,7 @@ const powers_of_ten = [
     0x000000e8d4a51000, 0x000009184e72a000, 0x00005af3107a4000, 0x00038d7ea4c68000,
     0x002386f26fc10000, 0x016345785d8a0000, 0x0de0b6b3a7640000, 0x8ac7230489e80000,
 ]
-function ndigits0z(x::Union(UInt8,UInt16,UInt32,UInt64))
+function ndigits0z(x::Base.BitUnsigned64)
     lz = (sizeof(x)<<3)-leading_zeros(x)
     nd = (1233*lz)>>12+1
     nd -= x < powers_of_ten[nd]
@@ -176,91 +415,164 @@ function ndigits0z(x::UInt128)
     end
     return n + ndigits0z(UInt64(x))
 end
-ndigits0z(x::Integer) = ndigits0z(unsigned(abs(x)))
 
-const ndigits_max_mul = WORD_SIZE==32 ? 69000000 : 290000000000000000
+ndigits0z(x::Signed) = ndigits0z(unsigned(abs(x)))
 
-function ndigits0znb(n::Int, b::Int)
+ndigits0z(x::Integer) = ndigits0zpb(x, 10)
+
+# TODO (when keywords args are fast): rename to ndigits and make pad a keyword
+ndigits10(x::Integer, pad::Int=1) = max(pad, ndigits0z(x))
+ndigits(x::Integer) = iszero(x) ? 1 : ndigits0z(x)
+
+## ndigits with specified base ##
+
+# The suffix "nb" stands for "negative base"
+function ndigits0znb(x::Integer, b::Integer)
+    # precondition: b < -1 && !(typeof(x) <: Unsigned)
     d = 0
-    while n != 0
-        n = cld(n,b)
+    while x != 0
+        x = cld(x,b)
         d += 1
     end
     return d
 end
 
-function ndigits0z(n::Unsigned, b::Int)
+ndigits0znb(x::Unsigned, b::Integer) = ndigits0znb(signed(x), b)
+ndigits0znb(x::Bool, b::Integer) = x % Int
+
+# The suffix "pb" stands for "positive base"
+# TODO: allow b::Integer
+function ndigits0zpb(x::Base.BitUnsigned, b::Int)
+    # precondition: b > 1
+    x == 0 && return 0
+    b < 0   && return ndigits0znb(signed(x), b)
+    b == 2  && return sizeof(x)<<3 - leading_zeros(x)
+    b == 8  && return (sizeof(x)<<3 - leading_zeros(x) + 2) ÷ 3
+    b == 16 && return sizeof(x)<<1 - leading_zeros(x)>>2
+    b == 10 && return ndigits0z(x)
+
     d = 0
-    if b < 0
-        d = ndigits0znb(signed(n), b)
-    else
-        b == 2  && return (sizeof(n)<<3-leading_zeros(n))
-        b == 8  && return div((sizeof(n)<<3)-leading_zeros(n)+2,3)
-        b == 16 && return (sizeof(n)<<1)-(leading_zeros(n)>>2)
-        b == 10 && return ndigits0z(n)
-        while ndigits_max_mul < n
-            n = div(n,b)
-            d += 1
-        end
-        m = 1
-        while m <= n
-            m *= b
-            d += 1
-        end
+    while x > typemax(Int)
+        x = div(x,b)
+        d += 1
+    end
+    x = div(x,b)
+    d += 1
+
+    m = 1
+    while m <= x
+        m *= b
+        d += 1
     end
     return d
 end
-ndigits0z(x::Integer, b::Integer) = ndigits0z(unsigned(abs(x)),Int(b))
 
-ndigitsnb(x::Integer, b::Integer) = x==0 ? 1 : ndigits0znb(x, b)
+ndigits0zpb(x::Base.BitSigned, b::Integer) = ndigits0zpb(unsigned(abs(x)), Int(b))
+ndigits0zpb(x::Base.BitUnsigned, b::Integer) = ndigits0zpb(x, Int(b))
+ndigits0zpb(x::Bool, b::Integer) = x % Int
 
-ndigits(x::Unsigned, b::Integer) = x==0 ? 1 : ndigits0z(x,Int(b))
-ndigits(x::Unsigned)             = x==0 ? 1 : ndigits0z(x)
+# The suffix "0z" means that the output is 0 on input zero (cf. #16841)
+"""
+    ndigits0z(n::Integer, b::Integer=10)
 
-ndigits(x::Integer, b::Integer) = b >= 0 ? ndigits(unsigned(abs(x)),Int(b)) : ndigitsnb(x, b)
-ndigits(x::Integer) = ndigits(unsigned(abs(x)))
+Return 0 if `n == 0`, otherwise compute the number of digits in
+integer `n` written in base `b` (i.e. equal to `ndigits(n, b)`
+in this case).
+The base `b` must not be in `[-1, 0, 1]`.
+
+# Examples
+```jldoctest
+julia> Base.ndigits0z(0, 16)
+0
+
+julia> Base.ndigits(0, 16)
+1
+
+julia> Base.ndigits0z(0)
+0
+
+julia> Base.ndigits0z(10, 2)
+4
+
+julia> Base.ndigits0z(10)
+2
+```
+
+See also [`ndigits`](@ref).
+"""
+function ndigits0z(x::Integer, b::Integer)
+    if b < -1
+        ndigits0znb(x, b)
+    elseif b > 1
+        ndigits0zpb(x, b)
+    else
+        throw(DomainError(b, "The base `b` must not be in `[-1, 0, 1]`."))
+    end
+end
+
+"""
+    ndigits(n::Integer, b::Integer=10)
+
+Compute the number of digits in integer `n` written in base `b`.
+The base `b` must not be in `[-1, 0, 1]`.
+
+# Examples
+```jldoctest
+julia> ndigits(12345)
+5
+
+julia> ndigits(1022, 16)
+3
+
+julia> base(16, 1022)
+"3fe"
+```
+"""
+ndigits(x::Integer, b::Integer, pad::Int=1) = max(pad, ndigits0z(x, b))
 
 ## integer to string functions ##
 
+string(x::Union{Int8,Int16,Int32,Int64,Int128}) = dec(x)
+
 function bin(x::Unsigned, pad::Int, neg::Bool)
     i = neg + max(pad,sizeof(x)<<3-leading_zeros(x))
-    a = Array(UInt8,i)
+    a = StringVector(i)
     while i > neg
         a[i] = '0'+(x&0x1)
         x >>= 1
         i -= 1
     end
     if neg; a[1]='-'; end
-    ASCIIString(a)
+    String(a)
 end
 
 function oct(x::Unsigned, pad::Int, neg::Bool)
     i = neg + max(pad,div((sizeof(x)<<3)-leading_zeros(x)+2,3))
-    a = Array(UInt8,i)
+    a = StringVector(i)
     while i > neg
         a[i] = '0'+(x&0x7)
         x >>= 3
         i -= 1
     end
     if neg; a[1]='-'; end
-    ASCIIString(a)
+    String(a)
 end
 
 function dec(x::Unsigned, pad::Int, neg::Bool)
-    i = neg + max(pad,ndigits0z(x))
-    a = Array(UInt8,i)
+    i = neg + ndigits10(x, pad)
+    a = StringVector(i)
     while i > neg
         a[i] = '0'+rem(x,10)
         x = oftype(x,div(x,10))
         i -= 1
     end
     if neg; a[1]='-'; end
-    ASCIIString(a)
+    String(a)
 end
 
 function hex(x::Unsigned, pad::Int, neg::Bool)
     i = neg + max(pad,(sizeof(x)<<1)-(leading_zeros(x)>>2))
-    a = Array(UInt8,i)
+    a = StringVector(i)
     while i > neg
         d = x & 0xf
         a[i] = '0'+d+39*(d>9)
@@ -268,7 +580,7 @@ function hex(x::Unsigned, pad::Int, neg::Bool)
         i -= 1
     end
     if neg; a[1]='-'; end
-    ASCIIString(a)
+    String(a)
 end
 
 num2hex(n::Integer) = hex(n, sizeof(n)*2)
@@ -276,20 +588,43 @@ num2hex(n::Integer) = hex(n, sizeof(n)*2)
 const base36digits = ['0':'9';'a':'z']
 const base62digits = ['0':'9';'A':'Z';'a':'z']
 
-function base(b::Int, x::Unsigned, pad::Int, neg::Bool)
-    2 <= b <= 62 || throw(ArgumentError("base must be 2 ≤ base ≤ 62, got $b"))
-    digits = b <= 36 ? base36digits : base62digits
-    i = neg + max(pad,ndigits0z(x,b))
-    a = Array(UInt8,i)
-    while i > neg
-        a[i] = digits[1+rem(x,b)]
-        x = div(x,b)
+
+function base(b::Int, x::Integer, pad::Int, neg::Bool)
+    (x >= 0) | (b < 0) || throw(DomainError(x, "For negative `x`, `b` must be negative."))
+    2 <= abs(b) <= 62 || throw(ArgumentError("base must satisfy 2 ≤ abs(base) ≤ 62, got $b"))
+    digits = abs(b) <= 36 ? base36digits : base62digits
+    i = neg + ndigits(x, b, pad)
+    a = StringVector(i)
+    @inbounds while i > neg
+        if b > 0
+            a[i] = digits[1+rem(x,b)]
+            x = div(x,b)
+        else
+            a[i] = digits[1+mod(x,-b)]
+            x = cld(x,b)
+        end
         i -= 1
     end
     if neg; a[1]='-'; end
-    ASCIIString(a)
+    String(a)
 end
-base(b::Integer, n::Integer, pad::Integer=1) = base(Int(b), unsigned(abs(n)), pad, n<0)
+
+"""
+    base(base::Integer, n::Integer, pad::Integer=1)
+
+Convert an integer `n` to a string in the given `base`,
+optionally specifying a number of digits to pad to.
+
+```jldoctest
+julia> base(13,5,4)
+"0005"
+
+julia> base(5,13,4)
+"0023"
+```
+"""
+base(b::Integer, n::Integer, pad::Integer=1) =
+    base(Int(b), b > 0 ? unsigned(abs(n)) : convert(Signed, n), Int(pad), (b>0) & (n<0))
 
 for sym in (:bin, :oct, :dec, :hex)
     @eval begin
@@ -302,32 +637,177 @@ for sym in (:bin, :oct, :dec, :hex)
     end
 end
 
-bits(x::Union(Bool,Int8,UInt8))           = bin(reinterpret(UInt8,x),8)
-bits(x::Union(Int16,UInt16,Float16))      = bin(reinterpret(UInt16,x),16)
-bits(x::Union(Char,Int32,UInt32,Float32)) = bin(reinterpret(UInt32,x),32)
-bits(x::Union(Int64,UInt64,Float64))      = bin(reinterpret(UInt64,x),64)
-bits(x::Union(Int128,UInt128))            = bin(reinterpret(UInt128,x),128)
+"""
+    bin(n, pad::Int=1)
 
-function digits{T<:Integer}(n::Integer, base::T=10, pad::Integer=1)
-    2 <= base || throw(ArgumentError("base must be ≥ 2, got $base"))
-    m = max(pad,ndigits0z(n,base))
-    a = zeros(T,m)
-    digits!(a, n, base)
-    return a
+Convert an integer to a binary string, optionally specifying a number of digits to pad to.
+
+```jldoctest
+julia> bin(10,2)
+"1010"
+
+julia> bin(10,8)
+"00001010"
+```
+"""
+bin
+
+"""
+    hex(n, pad::Int=1)
+
+Convert an integer to a hexadecimal string, optionally specifying a number of
+digits to pad to.
+
+```jldoctest
+julia> hex(20)
+"14"
+
+julia> hex(20, 3)
+"014"
+```
+"""
+hex
+
+"""
+    oct(n, pad::Int=1)
+
+Convert an integer to an octal string, optionally specifying a number of digits
+to pad to.
+
+```jldoctest
+julia> oct(20)
+"24"
+
+julia> oct(20, 3)
+"024"
+```
+"""
+oct
+
+"""
+    dec(n, pad::Int=1)
+
+Convert an integer to a decimal string, optionally specifying a number of digits
+to pad to.
+
+# Examples
+```jldoctest
+julia> dec(20)
+"20"
+
+julia> dec(20, 3)
+"020"
+```
+"""
+dec
+
+bits(x::Union{Bool,Int8,UInt8})           = bin(reinterpret(UInt8,x),8)
+bits(x::Union{Int16,UInt16,Float16})      = bin(reinterpret(UInt16,x),16)
+bits(x::Union{Char,Int32,UInt32,Float32}) = bin(reinterpret(UInt32,x),32)
+bits(x::Union{Int64,UInt64,Float64})      = bin(reinterpret(UInt64,x),64)
+bits(x::Union{Int128,UInt128})            = bin(reinterpret(UInt128,x),128)
+
+"""
+    digits([T<:Integer], n::Integer, base::T=10, pad::Integer=1)
+
+Returns an array with element type `T` (default `Int`) of the digits of `n` in the given
+base, optionally padded with zeros to a specified size. More significant digits are at
+higher indexes, such that `n == sum([digits[k]*base^(k-1) for k=1:length(digits)])`.
+
+# Examples
+```jldoctest
+julia> digits(10, 10)
+2-element Array{Int64,1}:
+ 0
+ 1
+
+julia> digits(10, 2)
+4-element Array{Int64,1}:
+ 0
+ 1
+ 0
+ 1
+
+julia> digits(10, 2, 6)
+6-element Array{Int64,1}:
+ 0
+ 1
+ 0
+ 1
+ 0
+ 0
+```
+"""
+digits(n::Integer, base::T=10, pad::Integer=1) where {T<:Integer} = digits(T, n, base, pad)
+
+function digits(T::Type{<:Integer}, n::Integer, base::Integer=10, pad::Integer=1)
+    digits!(zeros(T, ndigits(n, base, pad)), n, base)
 end
 
-function digits!{T<:Integer}(a::AbstractArray{T,1}, n::Integer, base::T=10)
-    2 <= base || throw(ArgumentError("base must be ≥ 2, got $base"))
-    for i = 1:length(a)
-        a[i] = rem(n, base)
-        n = div(n, base)
+"""
+    hastypemax(T::Type) -> Bool
+
+Return `true` if and only if `typemax(T)` is defined.
+"""
+hastypemax(::Base.BitIntegerType) = true
+hastypemax(::Type{T}) where {T} = applicable(typemax, T)
+
+"""
+    digits!(array, n::Integer, base::Integer=10)
+
+Fills an array of the digits of `n` in the given base. More significant digits are at higher
+indexes. If the array length is insufficient, the least significant digits are filled up to
+the array length. If the array length is excessive, the excess portion is filled with zeros.
+
+# Examples
+```jldoctest
+julia> digits!([2,2,2,2], 10, 2)
+4-element Array{Int64,1}:
+ 0
+ 1
+ 0
+ 1
+
+julia> digits!([2,2,2,2,2,2], 10, 2)
+6-element Array{Int64,1}:
+ 0
+ 1
+ 0
+ 1
+ 0
+ 0
+```
+"""
+function digits!(a::AbstractVector{T}, n::Integer, base::Integer=10) where T<:Integer
+    base < 0 && isa(n, Unsigned) && return digits!(a, convert(Signed, n), base)
+    2 <= abs(base) || throw(ArgumentError("base must be ≥ 2 or ≤ -2, got $base"))
+    hastypemax(T) && abs(base) - 1 > typemax(T) &&
+        throw(ArgumentError("type $T too small for base $base"))
+    for i in eachindex(a)
+        if base > 0
+            a[i] = rem(n, base)
+            n = div(n, base)
+        else
+            a[i] = mod(n, -base)
+            n = cld(n, base)
+        end
     end
     return a
 end
 
+"""
+    isqrt(n::Integer)
+
+Integer square root: the largest integer `m` such that `m*m <= n`.
+
+```jldoctest
+julia> isqrt(5)
+2
+```
+"""
 isqrt(x::Integer) = oftype(x, trunc(sqrt(x)))
 
-function isqrt(x::Union(Int64,UInt64,Int128,UInt128))
+function isqrt(x::Union{Int64,UInt64,Int128,UInt128})
     x==0 && return x
     s = oftype(x, trunc(sqrt(x)))
     # fix with a Newton iteration, since conversion to float discards
@@ -337,7 +817,7 @@ function isqrt(x::Union(Int64,UInt64,Int128,UInt128))
 end
 
 function factorial(n::Integer)
-    n < 0 && throw(DomainError())
+    n < 0 && throw(DomainError(n, "`n` must be nonnegative."))
     local f::typeof(n*n), i::typeof(n*n)
     f = 1
     for i = 2:n
@@ -346,7 +826,21 @@ function factorial(n::Integer)
     return f
 end
 
-function binomial{T<:Integer}(n::T, k::T)
+"""
+    binomial(n, k)
+
+Number of ways to choose `k` out of `n` items.
+
+# Examples
+```jldoctest
+julia> binomial(5, 3)
+10
+
+julia> factorial(5) ÷ (factorial(5-3) * factorial(3))
+10
+```
+"""
+function binomial(n::T, k::T) where T<:Integer
     k < 0 && return zero(T)
     sgn = one(T)
     if n < 0

@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #
 # The Computer Language Benchmarks Game
@@ -15,7 +15,7 @@ const solar_mass = 4 * pi * pi
 const days_per_year = 365.24
 
 # A heavenly body in the system
-type Body
+mutable struct Body
     x::Float64
     y::Float64
     z::Float64

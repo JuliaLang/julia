@@ -1,13 +1,13 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 include("../perfutil.jl")
 
-abstract List{T}
+abstract type List{T} end
 
-type Nil{T} <: List{T}
+mutable struct Nil{T} <: List{T}
 end
 
-type Cons{T} <: List{T}
+mutable struct Cons{T} <: List{T}
     head::T
     tail::List{T}
 end
@@ -25,7 +25,7 @@ gc()
 
 # issue #1211
 include("ziggurat.jl")
-a = Array(Float64, 1000000)
+a = Array{Float64}(1000000)
 @timeit randn_zig!(a) "randn_zig" "Ziggurat gaussian number generator"
 
 # issue #950
@@ -33,13 +33,13 @@ include("gk.jl")
 @timeit gk(350,[0.1]) "gk" "Grigoriadis Khachiyan matrix games"
 
 # issue #942
-s = sparse(ones(280,280));
+s = sparse(ones(280,280))
 @timeit s*s "sparsemul" "Sparse matrix - sparse matrix multiplication"
-s2 = sparse(rand(1:2000,10^5), kron([1:10^4;],ones(Int,10)), ones(Int,10^5), 2000, 10^4);
+s2 = sparse(rand(1:2000,10^5), kron([1:10^4;],ones(Int,10)), ones(Int,10^5), 2000, 10^4)
 @timeit s2*s2' "sparsemul2" "Sparse matrix - matrix multiplication with fill-in"
 
 # issue #938
-x = 1:600000;
+x = 1:600000
 @timeit sparse(x,x,x) "sparserange" "Construction of a sparse array from ranges"
 
 # issue 4707
@@ -102,12 +102,10 @@ d = randn(len)
 
 @timeit (for n in 1:10; a = arith_vectorized(b,c,d); end) "vectorize" "Vectorized arithmetic"
 
-open("random.csv","w") do io
-    writecsv(io, rand(100000,4))
-end
+writecsv("random.csv", rand(100000,4))
 
 function parsecsv()
-    for line in EachLine(open("random.csv"))
+    for line in eachline("random.csv")
         split(line, ',')
     end
 end

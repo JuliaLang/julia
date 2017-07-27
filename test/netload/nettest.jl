@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Run various networking tests checking to see how we perform under large loads
 addprocs(1)
@@ -7,9 +7,9 @@ function test_connect_disconnect(exp)
     print("Testing 10^$exp connect/disconnects:\n")
 
     (port, server) = listenany(8000)
-    server_started = RemoteRef()
-    server_exited = RemoteRef()
-    client_exited = RemoteRef()
+    server_started = RemoteChannel()
+    server_exited = RemoteChannel()
+    client_exited = RemoteChannel()
 
     @async begin
         clients_served = 0
@@ -44,8 +44,6 @@ end
 test_connect_disconnect(5)
 
 
-
-
 function test_send(exp)
     (port, server) = listenany(8000)
 
@@ -55,9 +53,9 @@ function test_send(exp)
 
     print("Testing open, send of 10^$exp bytes and closing:\n")
 
-    server_started = RemoteRef()
-    server_exited = RemoteRef()
-    client_exited = RemoteRef()
+    server_started = RemoteChannel()
+    server_exited = RemoteChannel()
+    client_exited = RemoteChannel()
 
     @async begin
         print("\t\t\t[SERVER] Started on port $(port)\n")
@@ -105,7 +103,6 @@ end
 test_send(9)
 
 
-
 # Utility function for test_bidirectional() that simultaneously transmits and
 # receives 10^exp bits of data over s
 @everywhere function xfer(s, exp)
@@ -148,9 +145,9 @@ function test_bidirectional(exp)
     (port, server) = listenany(8000)
 
     # For both the server and the client, we will transfer/receive 10^exp bytes
-    server_started = RemoteRef()
-    server_exited = RemoteRef()
-    client_exited = RemoteRef()
+    server_started = RemoteChannel()
+    server_exited = RemoteChannel()
+    client_exited = RemoteChannel()
 
     @async begin
         print("\t\t\t[SERVER] Started on port $(port)\n")
@@ -184,5 +181,5 @@ function test_bidirectional(exp)
     end
 end
 
-# Test 1GB of bidirectional data....
+# Test 1GB of bidirectional data
 test_bidirectional(9)

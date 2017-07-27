@@ -1,6 +1,5 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
-
-#/bin/sh
+#!/bin/sh
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # This script will attempt to download and build GTK+-3,
 # including dependencies, in ~/gtk (also puts stuff in

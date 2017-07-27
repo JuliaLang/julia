@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 @generated function staged_t1(a,b)
     if a == Int
@@ -31,42 +31,42 @@ end
 
 const intstr = @sprintf("%s", Int)
 splat2(1)
-@test takebuf_string(stagediobuf) == "($intstr,)"
-splat2(1,3)
-@test takebuf_string(stagediobuf) == "($intstr,$intstr)"
-splat2(5,2)
-@test takebuf_string(stagediobuf) == ""
-splat2(1:3,5.2)
-@test takebuf_string(stagediobuf) == "(UnitRange{$intstr},Float64)"
-splat2(3,5:2:7)
-@test takebuf_string(stagediobuf) == "($intstr,StepRange{$intstr,$intstr})"
-splat2(1,2,3,4)
-@test takebuf_string(stagediobuf) == "($intstr,$intstr,$intstr,$intstr)"
-splat2(1,2,3)
-@test takebuf_string(stagediobuf) == "($intstr,$intstr,$intstr)"
+@test String(take!(stagediobuf)) == "($intstr,)"
+splat2(1, 3)
+@test String(take!(stagediobuf)) == "($intstr, $intstr)"
+splat2(5, 2)
+@test String(take!(stagediobuf)) == ""
+splat2(1:3, 5.2)
+@test String(take!(stagediobuf)) == "(UnitRange{$intstr}, Float64)"
+splat2(3, 5:2:7)
+@test String(take!(stagediobuf)) == "($intstr, StepRange{$intstr,$intstr})"
+splat2(1, 2, 3, 4)
+@test String(take!(stagediobuf)) == "($intstr, $intstr, $intstr, $intstr)"
+splat2(1, 2, 3)
+@test String(take!(stagediobuf)) == "($intstr, $intstr, $intstr)"
 splat2(1:5, 3, 3:3)
-@test takebuf_string(stagediobuf) == "(UnitRange{$intstr},$intstr,UnitRange{$intstr})"
+@test String(take!(stagediobuf)) == "(UnitRange{$intstr}, $intstr, UnitRange{$intstr})"
 splat2(1:5, 3, 3:3)
-@test takebuf_string(stagediobuf) == ""
+@test String(take!(stagediobuf)) == ""
 splat2(1:5, 3:3, 3)
-@test takebuf_string(stagediobuf) == "(UnitRange{$intstr},UnitRange{$intstr},$intstr)"
+@test String(take!(stagediobuf)) == "(UnitRange{$intstr}, UnitRange{$intstr}, $intstr)"
 splat2(1:5, 3:3)
-@test takebuf_string(stagediobuf) == "(UnitRange{$intstr},UnitRange{$intstr})"
+@test String(take!(stagediobuf)) == "(UnitRange{$intstr}, UnitRange{$intstr})"
 splat2(3, 3:5)
-@test takebuf_string(stagediobuf) == "($intstr,UnitRange{$intstr})"
+@test String(take!(stagediobuf)) == "($intstr, UnitRange{$intstr})"
 
 # varargs specialization with parametric @generated functions (issue #8944)
-@generated function splat3{T,N}(A::AbstractArray{T,N}, indx::RangeIndex...)
+@generated function splat3(A::AbstractArray{T,N}, indx::RangeIndex...) where {T,N}
     print(stagediobuf, indx)
     :(nothing)
 end
-A = rand(5,5,3);
+A = rand(5,5,3)
 splat3(A, 1:2, 1:2, 1)
-@test takebuf_string(stagediobuf) == "(UnitRange{$intstr},UnitRange{$intstr},$intstr)"
+@test String(take!(stagediobuf)) == "(UnitRange{$intstr}, UnitRange{$intstr}, $intstr)"
 splat3(A, 1:2, 1, 1:2)
-@test takebuf_string(stagediobuf) == "(UnitRange{$intstr},$intstr,UnitRange{$intstr})"
+@test String(take!(stagediobuf)) == "(UnitRange{$intstr}, $intstr, UnitRange{$intstr})"
 
-B = slice(A, 1:3, 2, 1:3);
+B = view(A, 1:3, 2, 1:3)
 @generated function mygetindex(S::SubArray, indexes::Real...)
     T, N, A, I = S.parameters
     if N != length(indexes)
@@ -74,7 +74,7 @@ B = slice(A, 1:3, 2, 1:3);
     end
     Ip = I.parameters
     NP = length(Ip)
-    indexexprs = Array(Expr, NP)
+    indexexprs = Array{Expr}(NP)
     j = 1
     for i = 1:NP
         if Ip[i] == Int
@@ -101,10 +101,10 @@ end
 @test MyTest8497.h(3) == 4
 
 # static parameters (issue #8505)
-@generated function foo1{N,T}(a::Array{T,N})
+@generated function foo1(a::Array{T,N}) where {N,T}
     "N = $N, T = $T"
 end
-@generated function foo2{T,N}(a::Array{T,N})
+@generated function foo2(a::Array{T,N}) where {T,N}
     "N = $N, T = $T"
 end
 @test foo1(randn(3,3)) == "N = 2, T = Float64"
@@ -128,3 +128,103 @@ f10502() = ()
 # One-line @generated functions
 @generated oneliner(x,y) = :($x, x, $y, y)
 @test oneliner(1, 2.) == (Int, 1, Float64, 2.)
+
+# issue #11982
+@generated function f11982(T)
+    string(T.parameters[1])
+end
+@test f11982(Float32) == "Float32"
+@test f11982(Int32) == "Int32"
+
+# @generated functions that throw (shouldn't segfault or throw)
+module TestGeneratedThrow
+    using Base.Test
+
+    @generated function bar(x)
+        error("I'm not happy with type $x")
+    end
+
+    foo() = (bar(rand() > 0.5 ? 1 : 1.0); error("foo"))
+    function __init__()
+        code_typed(foo,(); optimize = false)
+        cfunction(foo,Void,())
+    end
+end
+
+# @generated functions including inner functions
+@generated function _g_f_with_inner(x)
+    return :(y -> y)
+end
+@test_throws ErrorException _g_f_with_inner(1)
+
+@generated function _g_f_with_inner2(x)
+    return y -> y
+end
+@test _g_f_with_inner2(1)(2) == 2
+
+# @generated functions errors
+global gf_err_ref = Ref{Int}()
+
+gf_err_ref[] = 0
+let gf_err, tsk = @async nothing # create a Task for yield to try to run
+    @generated function gf_err()
+        gf_err_ref[] += 1
+        yield()
+        gf_err_ref[] += 1000
+    end
+    @test_throws ErrorException gf_err()
+    @test_throws ErrorException gf_err()
+    @test gf_err_ref[] == 4
+end
+
+gf_err_ref[] = 0
+let gf_err2
+    @generated function gf_err2(::f) where {f}
+        gf_err_ref[] += 1
+        reflect = f.instance
+        gf_err_ref[] += 1
+        reflect(+, (Int,Int))
+        gf_err_ref[] += 1000
+        return nothing
+    end
+    @test_throws ErrorException gf_err2(code_typed)
+    @test_throws ErrorException gf_err2(code_llvm)
+    @test_throws ErrorException gf_err2(code_native)
+    @test gf_err_ref[] == 12
+    @test gf_err2(code_lowered) === nothing
+end
+
+# issue #15043
+decorated = Set{DataType}()
+let
+    @generated function decorate(t)
+        push!(decorated, t)
+    end
+
+    foo() = return nothing
+    decorate(foo)
+    @test in(typeof(foo), decorated)
+
+    bar() = return 1
+    decorate(bar)
+    @test in(typeof(bar), decorated)
+end
+
+# issue #19897
+@test code_lowered(staged_t1, (Int,Int)) isa Array  # check no error thrown
+
+# issue #10178
+@generated function f10178(x::X) where X
+    :(x)
+end
+g10178(x) = f10178(x)
+@test g10178(5) == 5
+@generated function f10178(x::X) where X
+    :(2x)
+end
+g10178(x) = f10178(x)
+@test g10178(5) == 10
+
+# issue #22135
+@generated f22135(x::T) where T = x
+@test f22135(1) === Int

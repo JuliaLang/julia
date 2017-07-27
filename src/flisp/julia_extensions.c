@@ -4,7 +4,7 @@
 #include <assert.h>
 
 #include "utf8proc.h"
-#undef DLLEXPORT /* avoid conflicting definition */
+#undef JL_DLLEXPORT /* avoid conflicting definition */
 
 #include "flisp.h"
 
@@ -26,22 +26,22 @@ static int is_bom(uint32_t wc)
     return wc == 0xFEFF;
 }
 
-value_t fl_skipws(value_t *args, u_int32_t nargs)
+value_t fl_skipws(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
-    argcount("skip-ws", nargs, 2);
-    ios_t *s = fl_toiostream(args[0], "skip-ws");
-    int newlines = (args[1]!=FL_F);
+    argcount(fl_ctx, "skip-ws", nargs, 2);
+    ios_t *s = fl_toiostream(fl_ctx, args[0], "skip-ws");
+    int newlines = (args[1]!=fl_ctx->F);
     uint32_t wc=0;
-    value_t skipped = FL_F;
+    value_t skipped = fl_ctx->F;
     while (1) {
         if (ios_peekutf8(s, &wc) == IOS_EOF) {
             ios_getutf8(s, &wc);  // to set EOF flag if this is a true EOF
             if (!ios_eof(s))
-                lerror(symbol("error"), "incomplete character");
-            return FL_EOF;
+                lerror(fl_ctx, symbol(fl_ctx, "error"), "incomplete character");
+            return fl_ctx->FL_EOF;
         }
         if (!ios_eof(s) && (is_uws(wc) || is_bom(wc)) && (newlines || wc!=10)) {
-            skipped = FL_T;
+            skipped = fl_ctx->T;
             ios_getutf8(s, &wc);
         }
         else {
@@ -51,7 +51,7 @@ value_t fl_skipws(value_t *args, u_int32_t nargs)
     return skipped;
 }
 
-static int is_wc_cat_id_start(uint32_t wc, utf8proc_propval_t cat)
+static int is_wc_cat_id_start(uint32_t wc, utf8proc_category_t cat)
 {
     return (cat == UTF8PROC_CATEGORY_LU || cat == UTF8PROC_CATEGORY_LL ||
             cat == UTF8PROC_CATEGORY_LT || cat == UTF8PROC_CATEGORY_LM ||
@@ -104,25 +104,23 @@ static int is_wc_cat_id_start(uint32_t wc, utf8proc_propval_t cat)
             (wc >= 0x309B && wc <= 0x309C)); // katakana-hiragana sound marks
 }
 
-DLLEXPORT int jl_id_start_char(uint32_t wc)
+JL_DLLEXPORT int jl_id_start_char(uint32_t wc)
 {
     if ((wc >= 'A' && wc <= 'Z') || (wc >= 'a' && wc <= 'z') || wc == '_')
         return 1;
     if (wc < 0xA1 || wc > 0x10ffff)
         return 0;
-    const utf8proc_property_t *prop = utf8proc_get_property(wc);
-    return is_wc_cat_id_start(wc, prop->category);
+    return is_wc_cat_id_start(wc, utf8proc_category((utf8proc_int32_t) wc));
 }
 
-DLLEXPORT int jl_id_char(uint32_t wc)
+JL_DLLEXPORT int jl_id_char(uint32_t wc)
 {
     if ((wc >= 'A' && wc <= 'Z') || (wc >= 'a' && wc <= 'z') || wc == '_' ||
         (wc >= '0' && wc <= '9') || wc == '!')
         return 1;
     if (wc < 0xA1 || wc > 0x10ffff)
         return 0;
-    const utf8proc_property_t *prop = utf8proc_get_property(wc);
-    utf8proc_propval_t cat = prop->category;
+    utf8proc_category_t cat = utf8proc_category((utf8proc_int32_t) wc);
     if (is_wc_cat_id_start(wc, cat)) return 1;
     if (cat == UTF8PROC_CATEGORY_MN || cat == UTF8PROC_CATEGORY_MC ||
         cat == UTF8PROC_CATEGORY_ND || cat == UTF8PROC_CATEGORY_PC ||
@@ -136,61 +134,94 @@ DLLEXPORT int jl_id_char(uint32_t wc)
     return 0;
 }
 
-value_t fl_julia_identifier_char(value_t *args, u_int32_t nargs)
+value_t fl_julia_identifier_char(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
-    argcount("identifier-char?", nargs, 1);
-    if (!iscprim(args[0]) || ((cprim_t*)ptr(args[0]))->type != wchartype)
-        type_error("identifier-char?", "wchar", args[0]);
+    argcount(fl_ctx, "identifier-char?", nargs, 1);
+    if (!iscprim(args[0]) || ((cprim_t*)ptr(args[0]))->type != fl_ctx->wchartype)
+        type_error(fl_ctx, "identifier-char?", "wchar", args[0]);
     uint32_t wc = *(uint32_t*)cp_data((cprim_t*)ptr(args[0]));
-    return jl_id_char(wc) ? FL_T : FL_F;
+    return jl_id_char(wc) ? fl_ctx->T : fl_ctx->F;
 }
 
-value_t fl_julia_identifier_start_char(value_t *args, u_int32_t nargs)
+value_t fl_julia_identifier_start_char(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
-    argcount("identifier-start-char?", nargs, 1);
-    if (!iscprim(args[0]) || ((cprim_t*)ptr(args[0]))->type != wchartype)
-        type_error("identifier-start-char?", "wchar", args[0]);
+    argcount(fl_ctx, "identifier-start-char?", nargs, 1);
+    if (!iscprim(args[0]) || ((cprim_t*)ptr(args[0]))->type != fl_ctx->wchartype)
+        type_error(fl_ctx, "identifier-start-char?", "wchar", args[0]);
     uint32_t wc = *(uint32_t*)cp_data((cprim_t*)ptr(args[0]));
-    return jl_id_start_char(wc) ? FL_T : FL_F;
+    return jl_id_start_char(wc) ? fl_ctx->T : fl_ctx->F;
 }
 
-// return NFC-normalized UTF8-encoded version of s
-static char *normalize(char *s)
+#include "julia_charmap.h"
+#define _equal_wchar_(x, y, ctx) ((x) == (y))
+#define _hash_wchar_(x, ctx) inthash((uint32_t) ((uintptr_t) (x)))
+#include "htable.inc"
+HTIMPL_R(wcharhash, _hash_wchar_, _equal_wchar_)
+
+void jl_charmap_init(fl_context_t *fl_ctx)
 {
-    static size_t buflen = 0;
-    static void *buf = NULL; // persistent buffer (avoid repeated malloc/free)
+    size_t charmap_len = sizeof(charmap) / (2*sizeof(uint32_t));
+    size_t i;
+    htable_t *h = htable_new(&fl_ctx->jl_charmap, charmap_len);
+    assert(sizeof(uint32_t) <= sizeof(void*));
+    for (i = 0; i < charmap_len; ++i) {
+        /* Store charmap in a hash table.  Typecasting codepoints
+           directly to pointer keys works because pointers are at
+           least 32 bits on all Julia-supported systems, and because
+           we never map anything to U+0001 (since HT_NOTFOUND is (void*)1). */
+        assert((void*)(uintptr_t)charmap[i][1] != HT_NOTFOUND);
+        wcharhash_put_r(h, (void*)((uintptr_t)charmap[i][0]),
+                           (void*)((uintptr_t)charmap[i][1]), (void*)fl_ctx);
+    }
+}
+utf8proc_int32_t jl_charmap_map(utf8proc_int32_t c, void *fl_ctx_)
+{
+    fl_context_t *fl_ctx = (fl_context_t *) fl_ctx_;
+    htable_t *h = &fl_ctx->jl_charmap;
+    void *v = wcharhash_get_r(h, (void*)((uintptr_t)c), (void*) fl_ctx);
+    return v == HT_NOTFOUND ? c : (utf8proc_int32_t) ((uintptr_t) v);
+}
+
+// return NFC-normalized UTF8-encoded version of s, with
+// additional custom normalizations defined by jl_charmap above.
+static char *normalize(fl_context_t *fl_ctx, char *s)
+{
     // options equivalent to utf8proc_NFC:
     const int options = UTF8PROC_NULLTERM|UTF8PROC_STABLE|UTF8PROC_COMPOSE;
     ssize_t result;
     size_t newlen;
-    result = utf8proc_decompose((uint8_t*) s, 0, NULL, 0, (utf8proc_option_t)options);
+    result = utf8proc_decompose_custom((uint8_t*) s, 0, NULL, 0, (utf8proc_option_t)options,
+                                       jl_charmap_map, (void*) fl_ctx);
     if (result < 0) goto error;
     newlen = result * sizeof(int32_t) + 1;
-    if (newlen > buflen) {
-        buflen = newlen * 2;
-        buf = realloc(buf, buflen);
-        if (!buf) lerror(OutOfMemoryError, "error allocating UTF8 buffer");
+    if (newlen > fl_ctx->jlbuflen) {
+        fl_ctx->jlbuflen = newlen * 2;
+        fl_ctx->jlbuf = realloc(fl_ctx->jlbuf, fl_ctx->jlbuflen);
+        if (!fl_ctx->jlbuf) lerror(fl_ctx, fl_ctx->OutOfMemoryError, "error allocating UTF8 buffer");
     }
-    result = utf8proc_decompose((uint8_t*)s,0, (int32_t*)buf,result, (utf8proc_option_t)options);
+    result = utf8proc_decompose_custom((uint8_t*)s,0, (int32_t*)fl_ctx->jlbuf,result, (utf8proc_option_t)options,
+                                       jl_charmap_map, (void*) fl_ctx);
     if (result < 0) goto error;
-    result = utf8proc_reencode((int32_t*)buf,result, (utf8proc_option_t)options);
+    result = utf8proc_reencode((int32_t*)fl_ctx->jlbuf,result, (utf8proc_option_t)options);
     if (result < 0) goto error;
-    return (char*) buf;
+    return (char*) fl_ctx->jlbuf;
 error:
-    lerrorf(symbol("error"), "error normalizing identifier %s: %s", s,
+    lerrorf(fl_ctx, symbol(fl_ctx, "error"), "error normalizing identifier %s: %s", s,
             utf8proc_errmsg(result));
 }
 
-value_t fl_accum_julia_symbol(value_t *args, u_int32_t nargs)
+value_t fl_accum_julia_symbol(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
 {
-    argcount("accum-julia-symbol", nargs, 2);
-    ios_t *s = fl_toiostream(args[1], "accum-julia-symbol");
-    if (!iscprim(args[0]) || ((cprim_t*)ptr(args[0]))->type != wchartype)
-        type_error("accum-julia-symbol", "wchar", args[0]);
+    argcount(fl_ctx, "accum-julia-symbol", nargs, 2);
+    ios_t *s = fl_toiostream(fl_ctx, args[1], "accum-julia-symbol");
+    if (!iscprim(args[0]) || ((cprim_t*)ptr(args[0]))->type != fl_ctx->wchartype)
+        type_error(fl_ctx, "accum-julia-symbol", "wchar", args[0]);
     uint32_t wc = *(uint32_t*)cp_data((cprim_t*)ptr(args[0]));
     ios_t str;
+    int allascii=1;
     ios_mem(&str, 0);
-    while (jl_id_char(wc)) {
+    do {
+        allascii &= (wc <= 0x7f);
         ios_getutf8(s, &wc);
         if (wc == '!') {
             uint32_t nwc;
@@ -204,12 +235,12 @@ value_t fl_accum_julia_symbol(value_t *args, u_int32_t nargs)
         ios_pututf8(&str, wc);
         if (ios_peekutf8(s, &wc) == IOS_EOF)
             break;
-    }
+    } while (jl_id_char(wc));
     ios_pututf8(&str, 0);
-    return symbol(normalize(str.buf));
+    return symbol(fl_ctx, allascii ? str.buf : normalize(fl_ctx, str.buf));
 }
 
-static builtinspec_t julia_flisp_func_info[] = {
+static const builtinspec_t julia_flisp_func_info[] = {
     { "skip-ws", fl_skipws },
     { "accum-julia-symbol", fl_accum_julia_symbol },
     { "identifier-char?", fl_julia_identifier_char },
@@ -217,9 +248,9 @@ static builtinspec_t julia_flisp_func_info[] = {
     { NULL, NULL }
 };
 
-void fl_init_julia_extensions(void)
+void fl_init_julia_extensions(fl_context_t *fl_ctx)
 {
-    assign_global_builtins(julia_flisp_func_info);
+    assign_global_builtins(fl_ctx, julia_flisp_func_info);
 }
 
 #ifdef __cplusplus

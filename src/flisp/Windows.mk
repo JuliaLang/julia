@@ -10,8 +10,7 @@ SOURCES = \
 	equalhash.c \
 	table.c \
 	iostream.c \
-	julia_extensions.c \
-	dirname.c
+	julia_extensions.c
 
 HEADERS = \
 	flisp.h \
@@ -25,8 +24,7 @@ OBJECTS = \
 	equalhash.obj \
 	table.obj \
 	iostream.obj \
-	julia_extensions.obj \
-	dirname.obj
+	julia_extensions.obj
 
 LIBUV = $(MAKEDIR)\..\..\deps\libuv\libuv.lib
 LIBUTF8PROC = $(MAKEDIR)\..\..\deps\libutf8proc\libutf8proc.lib

@@ -1,32 +1,34 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 Main.Core.eval(Main.Core, :(baremodule Inference
-using Core: Intrinsics, arraylen, arrayref, arrayset, arraysize, _expr,
-            kwcall, _apply, typeassert, apply_type, svec
-ccall(:jl_set_istopmod, Void, (Bool,), false)
+using Core.Intrinsics
+import Core: print, println, show, write, unsafe_write, STDOUT, STDERR
 
-eval(x) = Core.eval(Inference,x)
-eval(m,x) = Core.eval(m,x)
+ccall(:jl_set_istopmod, Void, (Any, Bool), Inference, false)
 
-include = Core.include
+eval(x) = Core.eval(Inference, x)
+eval(m, x) = Core.eval(m, x)
 
-# simple print definitions for debugging.
-show(x::ANY) = ccall(:jl_static_show, Void, (Ptr{Void}, Any),
-                     Intrinsics.pointerref(Intrinsics.cglobal(:jl_uv_stdout,Ptr{Void}),1), x)
-print(x::ANY) = show(x)
-println(x::ANY) = ccall(:jl_, Void, (Any,), x) # includes a newline
-print(a::ANY...) = for x=a; print(x); end
+include(x) = Core.include(Inference, x)
+include(mod, x) = Core.include(mod, x)
+
+# conditional to allow redefining Core.Inference after base exists
+isdefined(Main, :Base) || ((::Type{T})(arg) where {T} = convert(T, arg)::T)
+
+function return_type end
 
 ## Load essential files and libraries
 include("essentials.jl")
+include("ctypes.jl")
+include("generator.jl")
 include("reflection.jl")
 include("options.jl")
 
 # core operations & types
-typealias Cint Int32
-typealias Csize_t UInt
 include("promotion.jl")
 include("tuple.jl")
+include("pair.jl")
+include("traits.jl")
 include("range.jl")
 include("expr.jl")
 include("error.jl")
@@ -37,14 +39,14 @@ include("number.jl")
 include("int.jl")
 include("operators.jl")
 include("pointer.jl")
+const checked_add = +
+const checked_sub = -
 
 # core array operations
-include("abstractarray.jl")
-include("subarray.jl")
+include("indices.jl")
 include("array.jl")
-include("subarray2.jl")
+include("abstractarray.jl")
 
-#TODO: eliminate Dict from inference
 include("hashing.jl")
 include("nofloat_hashing.jl")
 
@@ -52,30 +54,19 @@ include("nofloat_hashing.jl")
 macro simd(forloop)
     esc(forloop)
 end
-include("functors.jl")
 include("reduce.jl")
 
 ## core structures
+include("bitarray.jl")
 include("intset.jl")
-include("dict.jl")
-include("iterator.jl")
+include("associative.jl")
+
+# core docsystem
+include("docs/core.jl")
 
 # compiler
 include("inference.jl")
-
-precompile(CallStack, (Expr, Module, (Void,), EmptyCallStack))
-precompile(_ieval, (Symbol,))
-precompile(abstract_eval, (LambdaStaticData, ObjectIdDict, StaticVarInfo))
-precompile(abstract_interpret, (Bool, ObjectIdDict, StaticVarInfo))
-precompile(delete_var!, (Expr, Symbol))
-precompile(eval_annotate, (LambdaStaticData, ObjectIdDict, StaticVarInfo, ObjectIdDict, Array{Any,1}))
-precompile(is_var_assigned, (Expr, Symbol))
-precompile(isconstantfunc, (SymbolNode, StaticVarInfo))
-precompile(occurs_more, (Bool, Function, Int))
-precompile(occurs_more, (UInt8, Function, Int))
-precompile(occurs_undef, (Symbol, Expr))
-precompile(sym_replace, (UInt8, Array{Any,1}, Array{Any,1}, Array{Any,1}, Array{Any,1}))
-precompile(symequal, (Symbol, Symbol))
+ccall(:jl_set_typeinf_func, Void, (Any,), typeinf_ext)
 
 end # baremodule Inference
 ))

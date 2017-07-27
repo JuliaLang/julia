@@ -1,28 +1,28 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 import Base.MPFR
 # constructors
-with_bigfloat_precision(53) do
+setprecision(53) do
     x = BigFloat()
     x = BigFloat(12)
 end
 x = BigFloat(12)
 y = BigFloat(x)
-@test_approx_eq x y
+@test x ≈ y
 y = BigFloat(0xc)
-@test_approx_eq x y
+@test x ≈ y
 y = BigFloat(12.)
-@test_approx_eq x y
+@test x ≈ y
 y = BigFloat(BigInt(12))
-@test_approx_eq x y
+@test x ≈ y
 y = BigFloat(BigFloat(12))
-@test_approx_eq x y
+@test x ≈ y
 y = parse(BigFloat,"12")
-@test_approx_eq x y
+@test x ≈ y
 y = BigFloat(Float32(12.))
-@test_approx_eq x y
+@test x ≈ y
 y = BigFloat(12//1)
-@test_approx_eq x y
+@test x ≈ y
 
 # +
 x = BigFloat(12)
@@ -90,16 +90,16 @@ z = BigFloat(30)
 @test !(y <= z)
 
 # rounding modes
-with_bigfloat_precision(4) do
+setprecision(4) do
     # default mode is round to nearest
-    down, up =  with_rounding(BigFloat,RoundNearest) do
+    down, up =  setrounding(BigFloat,RoundNearest) do
         parse(BigFloat,"0.0938"), parse(BigFloat,"0.102")
     end
-    with_rounding(BigFloat,RoundDown) do
+    setrounding(BigFloat,RoundDown) do
         @test BigFloat(0.1) == down
         @test BigFloat(0.1) != up
     end
-    with_rounding(BigFloat,RoundUp) do
+    setrounding(BigFloat,RoundUp) do
         @test BigFloat(0.1) != down
         @test BigFloat(0.1) == up
     end
@@ -145,13 +145,16 @@ y = BigFloat(1)
 @test typeof(convert(BigFloat, Float32(0.5))) == BigFloat
 @test convert(BigFloat, parse(BigInt,"9223372036854775808")) == parse(BigFloat,"9223372036854775808")
 @test typeof(convert(BigFloat, parse(BigInt,"9223372036854775808"))) == BigFloat
-@test convert(FloatingPoint, parse(BigInt,"9223372036854775808")) == parse(BigFloat,"9223372036854775808")
-@test typeof(convert(FloatingPoint, parse(BigInt,"9223372036854775808"))) == BigFloat
+@test convert(AbstractFloat, parse(BigInt,"9223372036854775808")) == parse(BigFloat,"9223372036854775808")
+@test typeof(convert(AbstractFloat, parse(BigInt,"9223372036854775808"))) == BigFloat
 
 # convert from
 @test convert(Float64, BigFloat(0.5)) == 0.5
 @test convert(Float32, BigFloat(0.5)) == Float32(0.5)
 @test convert(Float16, BigFloat(0.5)) == Float16(0.5)
+@test convert(Bool, BigFloat(0.0)) == false
+@test convert(Bool, BigFloat(1.0)) == true
+@test_throws InexactError convert(Bool, BigFloat(0.1))
 
 # exponent
 x = BigFloat(0)
@@ -185,14 +188,14 @@ prevfloat(y)
 @test_throws DomainError sqrt(BigFloat(-1))
 
 # precision
-old_precision = get_bigfloat_precision()
+old_precision = precision(BigFloat)
 x = BigFloat(0)
 @test precision(x) == old_precision
-set_bigfloat_precision(256)
+setprecision(256)
 x = BigFloat(0)
 @test precision(x) == 256
-set_bigfloat_precision(old_precision)
-z = with_bigfloat_precision(240) do
+setprecision(old_precision)
+z = setprecision(240) do
     z = x + 20
     return z
 end
@@ -200,14 +203,23 @@ end
 @test precision(z) == 240
 x = BigFloat(12)
 @test precision(x) == old_precision
-@test_throws DomainError set_bigfloat_precision(1)
+@test_throws DomainError setprecision(1)
 
 # isinteger
+@test !isinteger(BigFloat(1.2))
 @test isinteger(BigFloat(12))
-@test !isinteger(BigFloat(12.12))
+@test isinteger(zero(BigFloat))
+@test isinteger(-zero(BigFloat))
+@test !isinteger(nextfloat(zero(BigFloat)))
+@test !isinteger(prevfloat(zero(BigFloat)))
+@test isinteger(maxintfloat(BigFloat))
+@test isinteger(-maxintfloat(BigFloat))
+@test !isinteger(BigFloat(Inf))
+@test !isinteger(-BigFloat(Inf))
+@test !isinteger(BigFloat(NaN))
 
 # nextfloat / prevfloat
-with_bigfloat_precision(53) do
+setprecision(53) do
     x = BigFloat(12.12)
     @test BigFloat(nextfloat(12.12)) == nextfloat(x)
     @test BigFloat(prevfloat(12.12)) == prevfloat(x)
@@ -271,7 +283,7 @@ y = modf(x)
 @test (isnan(y[1]), isinf(y[2])) == (true, true)
 
 # rem
-with_bigfloat_precision(53) do
+setprecision(53) do
     x = BigFloat(2)
     y = BigFloat(1.67)
     @test rem(x,y) == rem(2, 1.67)
@@ -289,8 +301,8 @@ y = BigFloat(2)
 @test max(x,y) == x
 @test min(x,y) == y
 y = BigFloat(NaN)
-@test max(x,y) == x
-@test min(x,y) == x
+@test isnan(max(x,y))
+@test isnan(min(x,y))
 @test isnan(max(y,y))
 @test isnan(min(y,y))
 
@@ -307,13 +319,13 @@ big_array = ones(BigFloat, 100)
 # promotion
 # the array converts everyone to the DEFAULT_PRECISION!
 x = BigFloat(12)
-y = with_bigfloat_precision(60) do
+y = setprecision(60) do
     BigFloat(42)
 end
 @test [x,y] == [BigFloat(12), BigFloat(42)]
 
 # log / log2 / log10
-with_bigfloat_precision(53) do
+setprecision(53) do
 x = BigFloat(42)
     @test log(x) == log(42)
     @test isinf(log(BigFloat(0)))
@@ -327,7 +339,7 @@ x = BigFloat(42)
 end
 
 # exp / exp2 / exp10
-with_bigfloat_precision(53) do
+setprecision(53) do
     x = BigFloat(10)
     @test exp(x) == exp(10)
     @test exp2(x) == 1024
@@ -350,7 +362,7 @@ y = BigFloat(42)
 
 # round
 x = BigFloat(42.42)
-y = with_bigfloat_precision(256) do
+y = setprecision(256) do
     parse(BigFloat,"9223372036854775809.2324")
 end
 z = parse(BigInt,"9223372036854775809")
@@ -366,8 +378,23 @@ z = parse(BigInt,"9223372036854775809")
 
 # string representation
 str = "1.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000012"
-with_bigfloat_precision(406) do
+setprecision(406) do
     @test string(nextfloat(BigFloat(1))) == str
+end
+setprecision(21) do
+    @test string(zero(BigFloat)) == "0.0000000"
+    @test string(parse(BigFloat, "0.1")) == "1.0000002e-01"
+    @test string(parse(BigFloat, "-9.9")) == "-9.9000015"
+end
+setprecision(40) do
+    @test string(zero(BigFloat)) == "0.0000000000000"
+    @test string(parse(BigFloat, "0.1")) == "1.0000000000002e-01"
+    @test string(parse(BigFloat, "-9.9")) == "-9.8999999999942"
+end
+setprecision(123) do
+    @test string(zero(BigFloat)) == "0.00000000000000000000000000000000000000"
+    @test string(parse(BigFloat, "0.1")) == "9.99999999999999999999999999999999999953e-02"
+    @test string(parse(BigFloat, "-9.9")) == "-9.8999999999999999999999999999999999997"
 end
 
 # eps
@@ -384,7 +411,7 @@ x = realmax(BigFloat)
 @test isinf(nextfloat(x))
 
 # factorial
-with_bigfloat_precision(256) do
+setprecision(256) do
     x = BigFloat(42)
     @test factorial(x) == factorial(BigInt(42))
     x = BigFloat(10)
@@ -393,23 +420,13 @@ with_bigfloat_precision(256) do
     @test_throws DomainError factorial(BigFloat(331.3))
 end
 
-# bessel functions
-with_bigfloat_precision(53) do
-    @test_approx_eq besselj(4, BigFloat(2)) besselj(4, 2.)
-    @test_approx_eq besselj0(BigFloat(2))  besselj0(2.)
-    @test_approx_eq besselj1(BigFloat(2))  besselj1(2.)
-    @test_approx_eq bessely(4, BigFloat(2))  bessely(4, 2.)
-    @test_approx_eq bessely0(BigFloat(2))  bessely0(2.)
-    @test_approx_eq bessely1(BigFloat(2))  bessely1(2.)
-end
-
 # trigonometric functions
-with_bigfloat_precision(53) do
+setprecision(53) do
     for f in (:sin,:cos,:tan,:sec,:csc,:cot,:acos,:asin,:atan,
             :cosh,:sinh,:tanh,:sech,:csch,:coth,:asinh),
         j in (-1., -0.5, -0.25, .25, .5, 1.)
         @eval begin
-            @test_approx_eq ($f)(BigFloat($j)) ($f)($j)
+            @test ($f)(BigFloat($j)) ≈ ($f)($j)
         end
     end
     for f in (:acos,:asin,:acosh,:atanh),
@@ -422,11 +439,11 @@ with_bigfloat_precision(53) do
               :sech,:csch,:coth,:acosh,:asinh),
         j in (1., 1.5, 1.9)
         @eval begin
-            @test_approx_eq ($f)(BigFloat($j)) ($f)($j)
+            @test ($f)(BigFloat($j)) ≈ ($f)($j)
         end
     end
     for j in (.25, .5)
-        @test_approx_eq atanh(BigFloat(j)) atanh(j)
+        @test atanh(BigFloat(j)) ≈ atanh(j)
     end
 end
 
@@ -434,12 +451,12 @@ end
 @test hypot(BigFloat(3), BigFloat(4)) == 5
 
 # atan2
-with_bigfloat_precision(53) do
+setprecision(53) do
     @test atan2(12,2) == atan2(BigFloat(12), BigFloat(2))
 end
 
 # ldexp
-with_bigfloat_precision(53) do
+setprecision(53) do
     @test ldexp(BigFloat(24.5), 72) == ldexp(24.5, 72)
     @test ldexp(BigFloat(24.5), Int16(72)) == ldexp(24.5, 72)
     @test ldexp(BigFloat(24.5), -72) == ldexp(24.5, -72)
@@ -714,13 +731,22 @@ f = parse(BigFloat,"6.2230152778611417071440640537801242405902521687211671331011
 # BigInt division
 @test a / BigInt(2) == c
 
+# div
+@test div(big"1.0",big"0.1") == 9
+@test div(1,big"0.1") == 9
+@test div(1.0,big"0.1") == 9
+@test div(big"1.0",0.1) == 9
+@test div(big"1",big"0.1") == 9
+@test div(big"1",0.1) == 9
+
+
 # old tests
 tol = 1e-12
 
 a = parse(BigFloat,"12.34567890121")
 b = parse(BigFloat,"12.34567890122")
 
-@test_approx_eq_eps a+1e-11 b tol
+@test a+1e-11 ≈ b atol=tol
 @test !(b == a)
 @test b > a
 @test b >= a
@@ -729,15 +755,15 @@ b = parse(BigFloat,"12.34567890122")
 
 c = parse(BigFloat,"24.69135780242")
 @test typeof(a * 2) == BigFloat
-@test_approx_eq_eps a*2 c tol
-@test_approx_eq_eps (c-a) a tol
+@test a*2 ≈ c atol=tol
+@test (c-a) ≈ a atol=tol
 
 
 d = parse(BigFloat,"-24.69135780242")
 @test typeof(d) == BigFloat
-@test_approx_eq_eps d+c 0 tol
+@test d+c ≈ 0 atol=tol
 
-@test_approx_eq_eps (BigFloat(3)/BigFloat(2)) BigFloat(1.5) tol
+@test (BigFloat(3)/BigFloat(2)) ≈ BigFloat(1.5) atol=tol
 
 @test typeof(BigFloat(typemax(Int8))) == BigFloat
 @test typeof(BigFloat(typemax(Int16))) == BigFloat
@@ -766,29 +792,29 @@ g = parse(BigFloat,"1234567891.123")
 
 tol = 1e-3
 
-@test_approx_eq_eps f+Int8(1) g tol
-@test_approx_eq_eps f+Int16(1) g tol
-@test_approx_eq_eps f+Int32(1) g tol
-@test_approx_eq_eps f+Int64(1) g tol
-@test_approx_eq_eps f+Int128(1) g tol
+@test f+Int8(1) ≈ g atol=tol
+@test f+Int16(1) ≈ g atol=tol
+@test f+Int32(1) ≈ g atol=tol
+@test f+Int64(1) ≈ g atol=tol
+@test f+Int128(1) ≈ g atol=tol
 
-@test_approx_eq_eps f+true g tol
-@test_approx_eq_eps f+UInt8(1) g tol
-@test_approx_eq_eps f+UInt16(1) g tol
-@test_approx_eq_eps f+UInt32(1) g tol
-@test_approx_eq_eps f+UInt64(1) g tol
-@test_approx_eq_eps f+UInt128(1) g tol
+@test f+true ≈ g atol=tol
+@test f+UInt8(1) ≈ g atol=tol
+@test f+UInt16(1) ≈ g atol=tol
+@test f+UInt32(1) ≈ g atol=tol
+@test f+UInt64(1) ≈ g atol=tol
+@test f+UInt128(1) ≈ g atol=tol
 
-@test_approx_eq_eps f+BigInt(1) g tol
+@test f+BigInt(1) ≈ g atol=tol
 
-@test_approx_eq_eps f+1f0 g tol
-@test_approx_eq_eps f+1e0 g tol
+@test f+1f0 ≈ g atol=tol
+@test f+1e0 ≈ g atol=tol
 
-@test_approx_eq_eps f+BigFloat(1) g tol
+@test f+BigFloat(1) ≈ g atol=tol
 
-@test_approx_eq_eps f+(1//1) g tol
+@test f+(1//1) ≈ g atol=tol
 
-@test_approx_eq_eps f+one(Rational{BigInt}) g tol
+@test f+one(Rational{BigInt}) ≈ g atol=tol
 
 # issue #5963
 @test typemax(Int128) == convert(BigFloat, typemax(Int128))
@@ -812,10 +838,6 @@ i3 = trunc(Integer,f)
 @test i3+1 > f
 @test i3+1 >= f
 
-err(z, x) = abs(z - x) / abs(x)
-@test 1e-60 > err(eta(parse(BigFloat,"1.005")), parse(BigFloat,"0.693945708117842473436705502427198307157819636785324430166786"))
-@test 1e-60 > err(exp(eta(big(1.0))), 2.0)
-
 # issue #8318
 @test convert(Int64,big(500_000_000_000_000.)) == 500_000_000_000_000
 
@@ -826,3 +848,47 @@ err(z, x) = abs(z - x) / abs(x)
 
 # issue #10994: handle embedded NUL chars for string parsing
 @test_throws ArgumentError parse(BigFloat, "1\0")
+
+# serialization (issue #12386)
+let b = IOBuffer()
+    x = 2.1*big(pi)
+    serialize(b, x)
+    seekstart(b)
+    @test deserialize(b) == x
+end
+
+@test isnan(sqrt(BigFloat(NaN)))
+
+# PR 17217 -- BigFloat constructors with given precision and rounding mode
+# test constructors and `big` with additional precision and rounding mode:
+for prec in (10, 100, 1000)
+    for val in ("3.1", pi, "-1.3", 3.1)
+        let
+            a = BigFloat(val)
+            b = BigFloat(val, prec)
+            c = BigFloat(val, RoundUp)
+            d = BigFloat(val, prec, RoundDown)
+            e = BigFloat(val, prec, RoundUp)
+
+            @test precision(a) == precision(BigFloat)
+            @test precision(b) == prec
+            @test precision(c) == precision(BigFloat)
+            @test precision(d) == prec
+            @test precision(e) == prec
+            (val != 3.1) && @test e > d     # rounding has no effect when constructing from Float64
+        end
+    end
+end
+
+setprecision(256) do
+    @test string(big(Inf)) == "BigFloat(Inf, 256)"
+    @test string(big(-Inf)) == "BigFloat(-Inf, 256)"
+    @test string(big(NaN)) == "BigFloat(NaN, 256)"
+end
+
+# issue #22758
+if MPFR.get_version() > v"3.1.5" || "r11590" in MPFR.get_patches()
+    setprecision(2_000_000) do
+        @test abs(sin(big(pi)/6) - 0.5) < ldexp(big(1.0),-1_999_000)
+    end
+end

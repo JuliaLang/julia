@@ -1,4 +1,4 @@
-# This file is a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #
 # The Computer Language Benchmarks Game
@@ -8,7 +8,7 @@
 # Based on the Javascript program
 #
 function fannkuch(n)
-    p = Array(Int32,n)
+    p = Array{Int32}(n)
     for i = 1:n
         p[i] = i
     end
