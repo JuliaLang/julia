@@ -1383,6 +1383,16 @@ function alignment(io::IO, x::Rational)
                    (length(m.captures[1]), length(m.captures[2]))
 end
 
+function alignment(io::IO, x::Pair)
+    s = sprint(0, show, x, env=io)
+    if has_tight_type(x) # i.e. use "=>" for display
+        left = length(sprint(0, show, x.first, env=io)) + 2isa(x.first, Pair) # 2 for parens
+        (left+1, length(s)-left-1) # +1 for the "=" part of "=>"
+    else
+        (0, length(s)) # as for x::Any
+    end
+end
+
 const undef_ref_str = "#undef"
 const undef_ref_alignment = (3,3)
 
