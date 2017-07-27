@@ -1357,17 +1357,12 @@ dump(io::IO, arg; maxdepth=8) = (dump(io, arg, maxdepth, ""); println(io))
 dump(arg; maxdepth=8) = dump(IOContext(STDOUT::IO, :limit => true), arg; maxdepth=maxdepth)
 
 """
-    @dump
+    @dumpexpr
 
-Show an expression and the `dump` of the expression.
+Show every part of the representation of the given expression.
 """
-macro dump(exs...)
-    blk = Expr(:block)
-    for ex in exs
-        push!(blk.args, :(print($(sprint(show_unquoted, ex) * " = "))))
-        push!(blk.args, :(print($(sprint(dump, ex)))))
-    end
-    return blk
+macro dumpexpr(ex)
+    dump(ex)
 end
 
 
