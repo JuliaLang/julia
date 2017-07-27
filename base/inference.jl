@@ -2798,17 +2798,6 @@ function tmerge(@nospecialize(typea), @nospecialize(typeb))
     if !(isa(typea,Type) || isa(typea,TypeVar)) || !(isa(typeb,Type) || isa(typeb,TypeVar))
         return Any
     end
-    if (typea <: Tuple) && (typeb <: Tuple)
-        if isa(typea, DataType) && isa(typeb, DataType) && length(typea.parameters) == length(typeb.parameters) && !isvatuple(typea) && !isvatuple(typeb)
-            return typejoin(typea, typeb)
-        end
-        if isa(typea, Union) || isa(typeb, Union) || (isa(typea,DataType) && length(typea.parameters)>3) ||
-            (isa(typeb,DataType) && length(typeb.parameters)>3)
-            # widen tuples faster (see #6704), but not too much, to make sure we can infer
-            # e.g. (t::Union{Tuple{Bool},Tuple{Bool,Int}})[1]
-            return Tuple
-        end
-    end
     u = Union{typea, typeb}
     if unionlen(u) > MAX_TYPEUNION_LEN
         u = typejoin(typea, typeb)

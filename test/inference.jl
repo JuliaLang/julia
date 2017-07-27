@@ -1294,3 +1294,5 @@ end
 
 f_23077(x) = (Int8(0), Int16(0), Int32(0), Int64(0))[x]
 @test Base.return_types(f_23077, Tuple{Int})[1] <: Signed
+g_23077(x,y,z) = x ? y ? z ? (1,) : (1,1.0) : (1,1) : (1,1.0,1)
+@test Base.return_types(g_23077, Tuple{Bool,Bool,Bool})[1] <: Tuple{Int,Vararg{Real}}
