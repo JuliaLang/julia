@@ -11,9 +11,8 @@ const NRM2_CUTOFF = 32
 
 # Generic cross-over constant based on benchmarking on a single thread with an i7 CPU @ 2.5GHz
 # L1 cache: 32K, L2 cache: 256K, L3 cache: 6144K
-# The constant below is exactly 2^21 = 2M
 # This constant should ideally be determined by the actual CPU cache size
-const ISONE_CUTOFF = 2097152
+const ISONE_CUTOFF = 2^21 # 2M
 
 function scale!(X::Array{T}, s::T) where T<:BlasFloat
     s == 0 && return fill!(X, zero(T))
@@ -36,34 +35,34 @@ function scale!(X::Array{T}, s::Real) where T<:BlasComplex
 end
 
 
-function isone(x::StridedMatrix)
-    m, n = size(x)
+function isone(A::StridedMatrix)
+    m, n = size(A)
     m != n && return false # only square matrices can satisfy x == one(x)
-    if sizeof(x) < ISONE_CUTOFF
-        _isone_triacheck(x, m)
+    if sizeof(A) < ISONE_CUTOFF
+        _isone_triacheck(A, m)
     else
-        _isone_cachefriendly(x, m)
+        _isone_cachefriendly(A, m)
     end
 end
 
-@inline function _isone_triacheck(x::StridedMatrix, m::Int)
+@inline function _isone_triacheck(A::StridedMatrix, m::Int)
     @inbounds for i in 1:m, j in i:m
         if i == j
-            isone(x[i,i]) || return false
+            isone(A[i,i]) || return false
         else
-            iszero(x[i,j]) && iszero(x[j,i]) || return false
+            iszero(A[i,j]) && iszero(A[j,i]) || return false
         end
     end
     return true
 end
 
 # Inner loop over rows to be friendly to the CPU cache
-@inline function _isone_cachefriendly(x::StridedMatrix, m::Int)
+@inline function _isone_cachefriendly(A::StridedMatrix, m::Int)
     @inbounds for i in 1:m, j in 1:m
         if i == j
-            isone(x[i,i]) || return false
+            isone(A[i,i]) || return false
         else
-            iszero(x[j,i]) || return false
+            iszero(A[j,i]) || return false
         end
     end
     return true

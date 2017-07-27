@@ -9,7 +9,8 @@ import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor,
              ndigits, promote_rule, rem, show, isqrt, string, powermod,
              sum, trailing_zeros, trailing_ones, count_ones, base, tryparse_internal,
              bin, oct, dec, hex, isequal, invmod, prevpow2, nextpow2, ndigits0zpb,
-             widen, signed, unsafe_trunc, trunc, iszero, big, flipsign, signbit, hastypemax
+             widen, signed, unsafe_trunc, trunc, iszero, isone, big, flipsign, signbit,
+             hastypemax
 
 if Clong == Int32
     const ClongMax = Union{Int8, Int16, Int32}
@@ -553,6 +554,7 @@ binomial(n::BigInt, k::Integer) = k < 0 ? BigInt(0) : binomial(n, UInt(k))
 ==(x::BigInt, f::CdoubleMax) = isnan(f) ? false : cmp(x,f) == 0
 ==(f::CdoubleMax, x::BigInt) = isnan(f) ? false : cmp(x,f) == 0
 iszero(x::BigInt) = x.size == 0
+isone(x::BigInt) = x == ONE
 
 <=(x::BigInt, y::BigInt) = cmp(x,y) <= 0
 <=(x::BigInt, i::Integer) = cmp(x,i) <= 0
