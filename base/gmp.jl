@@ -554,7 +554,7 @@ binomial(n::BigInt, k::Integer) = k < 0 ? BigInt(0) : binomial(n, UInt(k))
 ==(x::BigInt, f::CdoubleMax) = isnan(f) ? false : cmp(x,f) == 0
 ==(f::CdoubleMax, x::BigInt) = isnan(f) ? false : cmp(x,f) == 0
 iszero(x::BigInt) = x.size == 0
-isone(x::BigInt) = x == ONE
+isone(x::BigInt) = x == Culong(1)
 
 <=(x::BigInt, y::BigInt) = cmp(x,y) <= 0
 <=(x::BigInt, i::Integer) = cmp(x,i) <= 0
