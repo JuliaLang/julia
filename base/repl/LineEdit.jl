@@ -996,7 +996,7 @@ function history_set_backward(s::SearchState, backward)
     s.backward = backward
 end
 
-input_string(s::SearchState) = String(s.query_buffer)
+input_string(s::SearchState) = String(take!(copy(s.query_buffer)))
 
 function reset_state(s::SearchState)
     if s.query_buffer.size != 0
