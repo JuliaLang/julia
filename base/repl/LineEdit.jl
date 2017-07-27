@@ -274,7 +274,7 @@ end
 
 
 # Edit functionality
-is_non_word_char(c) = c in " \t\n\"\\'`@\$><=:;|&{}()[].,+-*/?%^~"
+is_non_word_char(c) = c in """ \t\n\"\\'`@\$><=:;|&{}()[].,+-*/?%^~"""
 
 function reset_key_repeats(f::Function, s::MIState)
     key_repeats_sav = s.key_repeats
@@ -1564,7 +1564,7 @@ run_interface(::Prompt) = nothing
 
 init_state(terminal, prompt::Prompt) =
     PromptState(terminal, prompt, IOBuffer(), InputAreaState(1, 1),
-    #=indent(spaces)=# strwidth(prompt_string(prompt.prompt)))
+    #=indent(spaces)=# strwidth(prompt_string(prompt)))
 
 function init_state(terminal, m::ModalInterface)
     s = MIState(m, m.modes[1], false, Dict{Any,Any}())
