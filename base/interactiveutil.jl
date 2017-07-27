@@ -442,9 +442,11 @@ macro which(ex0::Symbol)
 end
 
 for fname in [:code_typed, :code_lowered]
+    add_arg_expr = fname == :code_lowered ? :(push!(thecall.args, true)) : nothing
     @eval begin
         macro ($fname)(ex0)
             thecall = gen_call_with_extracted_types(__module__, $(Expr(:quote, fname)), ex0)
+            $(add_arg_expr)
             quote
                 results = $thecall
                 length(results) == 1 ? results[1] : results
