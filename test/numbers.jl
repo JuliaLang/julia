@@ -2974,6 +2974,7 @@ end
     @test !isone(triu(ones(Int, 5, 5)))
     @test !isone(zeros(Int, 5, 5))
     @test isone(eye(Int, 5, 5))
+    @test isone(eye(Int, 1000, 1000)) # sizeof(X) > 2M == ISONE_CUTOFF
 end
 
 f20065(B, i) = UInt8(B[i])
