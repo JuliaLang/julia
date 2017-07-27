@@ -830,13 +830,37 @@ end
 end
 
 @testset "alignment for pairs" begin  # (#22899)
-    @test replstr([1=>22,33=>4]) == "2-element Array{Pair{$Int,$Int},1}:\n  1=>22\n 33=>4 "
+    @test replstr([1=>22,33=>4]) == "2-element Array{Pair{$Int,$Int},1}:\n  1 => 22\n 33 => 4 "
     # first field may have "=>" in its representation
     @test replstr(Pair[(1=>2)=>3, 4=>5]) ==
-        "2-element Array{Pair,1}:\n (1=>2)=>3\n      4=>5"
+        "2-element Array{Pair,1}:\n (1=>2) => 3\n      4 => 5"
     @test replstr(Any[Dict(1=>2)=> (3=>4), 1=>2]) ==
-        "2-element Array{Any,1}:\n Dict(1=>2)=>(3=>4)\n          1=>2     "
+        "2-element Array{Any,1}:\n Dict(1=>2) => (3=>4)\n          1 => 2     "
     # left-alignment when not using the "=>" symbol
     @test replstr(Pair{Integer,Int64}[1=>2, 33=>4]) ==
         "2-element Array{Pair{Integer,Int64},1}:\n Pair{Integer,Int64}(1, 2) \n Pair{Integer,Int64}(33, 4)"
+end
+
+@testset "display arrays non-compactly when size(⋅, 2) == 1" begin
+    # 0-dim
+    @test replstr(zeros(Complex{Int})) == "0-dimensional Array{Complex{$Int},0}:\n0 + 0im"
+    A = Array{Pair}(); A[] = 1=>2
+    @test replstr(A) == "0-dimensional Array{Pair,0}:\n1 => 2"
+    # 1-dim
+    @test replstr(zeros(Complex{Int}, 2)) ==
+        "2-element Array{Complex{$Int},1}:\n 0 + 0im\n 0 + 0im"
+    @test replstr([1=>2, 3=>4]) == "2-element Array{Pair{$Int,$Int},1}:\n 1 => 2\n 3 => 4"
+    # 2-dim
+    @test replstr(zeros(Complex{Int}, 2, 1)) ==
+        "2×1 Array{Complex{$Int},2}:\n 0 + 0im\n 0 + 0im"
+    @test replstr(zeros(Complex{Int}, 1, 2)) ==
+        "1×2 Array{Complex{$Int},2}:\n 0+0im  0+0im"
+    @test replstr([1=>2 3=>4]) == "1×2 Array{Pair{$Int,$Int},2}:\n 1=>2  3=>4"
+    @test replstr([1=>2 for x in 1:2, y in 1:1]) ==
+        "2×1 Array{Pair{$Int,$Int},2}:\n 1 => 2\n 1 => 2"
+    # 3-dim
+    @test replstr(zeros(Complex{Int}, 1, 1, 1)) ==
+        "1×1×1 Array{Complex{$Int},3}:\n[:, :, 1] =\n 0 + 0im"
+    @test replstr(zeros(Complex{Int}, 1, 2, 1)) ==
+        "1×2×1 Array{Complex{$Int},3}:\n[:, :, 1] =\n 0+0im  0+0im"
 end
