@@ -662,6 +662,11 @@ module Sys
     end
 end
 
+if VERSION < v"0.7.0-DEV.892"
+    fieldcount(t) = nfields(t)
+    export fieldcount
+end
+
 include("deprecated.jl")
 
 end # module Compat

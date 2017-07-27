@@ -156,6 +156,9 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `logdet` for `Number`s ([#22629]).
 
+* `fieldcount` is equivalent to `nfields` for Julia versions 0.6 and below and is used to
+  determine the number of fields in a data type ([#22350]).
+
 ## Renamed functions
 
 
@@ -302,6 +305,7 @@ includes this fix. Find the minimum version from there.
 [#21346]: https://github.com/JuliaLang/julia/issues/21346
 [#22064]: https://github.com/JuliaLang/julia/issues/22064
 [#22182]: https://github.com/JuliaLang/julia/issues/22182
+[#22350]: https://github.com/JuliaLang/julia/issues/22350
 [#22475]: https://github.com/JuliaLang/julia/issues/22475
 [#22633]: https://github.com/JuliaLang/julia/issues/22633
 [#22629]: https://github.com/JuliaLang/julia/issues/22629

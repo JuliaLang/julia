@@ -1917,6 +1917,11 @@ if VERSION < v"0.7.0-DEV.880"
     end
 end
 
+# PR 22350
+eval(Expr(:type, false, :TestType, Expr(:block, :(a::Int), :b)))
+@test fieldcount(TestType) == 2
+@test fieldcount(Int) == 0
+
 include("deprecated.jl")
 
 nothing
