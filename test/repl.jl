@@ -341,6 +341,12 @@ begin
     LineEdit.history_prev(s, hp, 2)
     @test LineEdit.mode(s) == shell_mode
     @test buffercontents(LineEdit.buffer(s)) == "ls"
+    LineEdit.history_prev(s, hp, -2) # equivalent to history_next(s, hp, 2)
+    @test LineEdit.mode(s) == repl_mode
+    @test buffercontents(LineEdit.buffer(s)) == "2 + 2"
+    LineEdit.history_next(s, hp, -2) # equivalent to history_prev(s, hp, 2)
+    @test LineEdit.mode(s) == shell_mode
+    @test buffercontents(LineEdit.buffer(s)) == "ls"
     LineEdit.history_first(s, hp)
     @test LineEdit.mode(s) == repl_mode
     @test buffercontents(LineEdit.buffer(s)) == "é"

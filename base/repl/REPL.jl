@@ -466,7 +466,7 @@ end
 
 function history_prev(s::LineEdit.MIState, hist::REPLHistoryProvider,
                       num::Int=1, save_idx::Int = hist.cur_idx)
-    num <= 0 && history_next(s, hist, -num, save_idx)
+    num <= 0 && return history_next(s, hist, -num, save_idx)
     hist.last_idx = -1
     m = history_move(s, hist, hist.cur_idx-num, save_idx)
     if m === :ok
@@ -488,7 +488,7 @@ function history_next(s::LineEdit.MIState, hist::REPLHistoryProvider,
         Terminals.beep(LineEdit.terminal(s))
         return
     end
-    num < 0 && history_prev(s, hist, -num, save_idx)
+    num < 0 && return history_prev(s, hist, -num, save_idx)
     cur_idx = hist.cur_idx
     max_idx = length(hist.history) + 1
     if cur_idx == max_idx && 0 < hist.last_idx
