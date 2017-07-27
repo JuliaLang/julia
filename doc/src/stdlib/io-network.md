@@ -71,6 +71,7 @@ Base.Printf.@sprintf
 Base.sprint
 Base.showerror
 Base.dump
+Base.@dump
 Base.readline
 Base.readuntil
 Base.readlines

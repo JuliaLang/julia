@@ -1356,6 +1356,15 @@ dump(io::IO, x::DataType; maxdepth=8) = ((x.abstract ? dumptype : dump)(io, x, m
 dump(io::IO, arg; maxdepth=8) = (dump(io, arg, maxdepth, ""); println(io))
 dump(arg; maxdepth=8) = dump(IOContext(STDOUT::IO, :limit => true), arg; maxdepth=maxdepth)
 
+"""
+    @dump(ex)
+
+Show every part of the representation of a expression.
+"""
+macro dump(ex)
+    dump(ex)
+end
+
 
 """
 `alignment(X)` returns a tuple (left,right) showing how many characters are

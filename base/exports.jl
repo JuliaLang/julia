@@ -1235,6 +1235,7 @@ export
     @doc_str,
 
     # output
+    @dump,
     @show,
     @printf,
     @sprintf,
