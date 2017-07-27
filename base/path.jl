@@ -215,7 +215,7 @@ function joinpath(a::String, b::String)
     isabspath(b) && return b
     A, a = splitdrive(a)
     B, b = splitdrive(b)
-    !isempty(B) && A != B && throw(ArgumentError("drive mismatch: $A$a $B$b"))
+    !isempty(B) && A != B && return B
     C = isempty(B) ? A : B
     isempty(a)                             ? string(C,b) :
     ismatch(path_separator_re, a[end:end]) ? string(C,a,b) :

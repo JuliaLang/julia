@@ -150,6 +150,9 @@ This section lists changes that do not have deprecation warnings.
   * Worker-worker connections are setup lazily for an `:all_to_all` topology. Use keyword
     arg `lazy=false` to force all connections to be setup during a `addprocs` call. ([#22814])
 
+  * `joinpath` now returns the second path instead of throwing an `ArgumentError` if the
+    drives of the two arguments do not match. ([#20912]).
+
 Library improvements
 --------------------
 
