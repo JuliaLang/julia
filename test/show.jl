@@ -409,7 +409,7 @@ let oldout = STDOUT, olderr = STDERR
         redirect_stderr(olderr)
         close(wrout)
         close(wrerr)
-        @test wait(out) == "Int64 <: Signed\nSymbol x\nTESTA\nTESTB\nΑ1Β2\"A\"\nA\n123\"C\"\n"
+        @test wait(out) == "Int64 <: Signed\nx = Symbol x\nTESTA\nTESTB\nΑ1Β2\"A\"\nA\n123\"C\"\n"
         @test wait(err) == "TESTA\nTESTB\nΑ1Β2\"A\"\n"
     finally
         redirect_stdout(oldout)
