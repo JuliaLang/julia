@@ -79,11 +79,13 @@ end
 @test_throws ArgumentError gensym("ab\0")
 
 # issue #6949
-let f =IOBuffer(),
+let f = IOBuffer(),
     x = split("1 2 3")
-    @test write(f, x) == 3
-    @test String(take!(f)) == "123"
-    @test invoke(write, Tuple{IO, AbstractArray}, f, x) == 3
+    local nb = 0
+    for c in x
+        nb += write(f, c)
+    end
+    @test nb == 3
     @test String(take!(f)) == "123"
 end
 

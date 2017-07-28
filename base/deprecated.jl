@@ -1596,6 +1596,9 @@ end
 
 @deprecate momenttype(::Type{T}) where {T} typeof((zero(T)*zero(T) + zero(T)*zero(T))/2) false
 
+# issue #6466
+# `write` on non-isbits arrays is deprecated in io.jl.
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations
