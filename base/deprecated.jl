@@ -1599,12 +1599,8 @@ end
 # Part of resolving issue #7054
 @eval Pkg begin
     function rm(pkg::AbstractString)
-        Base.depwarn("Pkg.rm is deprecated, use Pkg.remove instead.",:recur)
-        if negate
-            filter(x -> !fun(x), dr)
-        else
-            filter(fun, dr)
-        end
+        Base.depwarn("Pkg.rm is deprecated, use Pkg.remove instead.",:rm)
+        
         remove(pkg)
      end
 end
