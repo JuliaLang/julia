@@ -1743,7 +1743,7 @@ function showarray(io::IO, X::AbstractArray, repr::Bool = true; header = true)
     if repr && ndims(X) == 1
         return show_vector(io, X, "[", "]")
     end
-    if !haskey(io, :compact) && size(X, 2) != 1
+    if !haskey(io, :compact) && length(indices(X, 2)) > 1
         io = IOContext(io, :compact => true)
     end
     if !repr && get(io, :limit, false) && eltype(X) === Method
