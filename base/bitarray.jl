@@ -347,7 +347,7 @@ similar(B::BitArray, dims::Dims) = BitArray(dims...)
 
 similar(B::BitArray, T::Type{Bool}, dims::Dims) = BitArray(dims)
 # changing type to a non-Bool returns an Array
-# (this triggers conversions like float(bitvector) etc.)
+# (this triggers conversions like float.(bitvector) etc.)
 similar(B::BitArray, T::Type, dims::Dims) = Array{T}(dims)
 
 function fill!(B::BitArray, x)

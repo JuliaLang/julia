@@ -230,7 +230,7 @@ for n in [0:10; 100; 101; 1000; 1001]
     for rev in [false,true]
         # insertion sort (stable) as reference
         pi = sortperm(v, alg=InsertionSort, rev=rev)
-        @test pi == sortperm(float(v), alg=InsertionSort, rev=rev)
+        @test pi == sortperm(float.(v), alg=InsertionSort, rev=rev)
         @test isperm(pi)
         si = v[pi]
         @test [sum(si .== x) for x in r] == h
@@ -245,7 +245,7 @@ for n in [0:10; 100; 101; 1000; 1001]
         # stable algorithms
         for alg in [MergeSort]
             p = sortperm(v, alg=alg, rev=rev)
-            @test p == sortperm(float(v), alg=alg, rev=rev)
+            @test p == sortperm(float.(v), alg=alg, rev=rev)
             @test p == pi
             s = copy(v)
             permute!(s, p)
@@ -257,7 +257,7 @@ for n in [0:10; 100; 101; 1000; 1001]
         # unstable algorithms
         for alg in [QuickSort, PartialQuickSort(n)]
             p = sortperm(v, alg=alg, rev=rev)
-            @test p == sortperm(float(v), alg=alg, rev=rev)
+            @test p == sortperm(float.(v), alg=alg, rev=rev)
             @test isperm(p)
             @test v[p] == si
             s = copy(v)

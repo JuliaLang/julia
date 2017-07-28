@@ -213,8 +213,6 @@ end
 
 float(x::AbstractString) = parse(Float64,x)
 
-float(a::AbstractArray{<:AbstractString}) = map!(float, similar(a,typeof(float(0))), a)
-
 ## interface to parser ##
 
 function parse(str::AbstractString, pos::Int; greedy::Bool=true, raise::Bool=true)
