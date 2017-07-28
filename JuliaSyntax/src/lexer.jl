@@ -40,7 +40,7 @@ type Lexer{IO_t <: IO}
     last_token::Tokens.Kind
 end
 
-Lexer(io) = Lexer(io, position(io), 1, 1, -1, 0, 1, 1, position(io), Tokens.ERROR)
+Lexer(io) = Lexer(io, position(io), 1, 1, -1, position(io), 1, 1, position(io), Tokens.ERROR)
 Lexer(str::AbstractString) = Lexer(IOBuffer(str))
 
 """
