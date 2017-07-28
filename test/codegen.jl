@@ -146,6 +146,25 @@ Base.unsafe_convert(::Type{Ptr{BadRef}}, ar::BadRef) = Ptr{BadRef}(pointer_from_
 
 breakpoint_badref(a::MutableStruct) = ccall(:jl_breakpoint, Void, (Ptr{BadRef},), a)
 
+struct PtrStruct
+    a::Ptr{Void}
+    b::Int
+end
+
+mutable struct RealStruct
+    a::Float64
+    b::Int
+end
+
+function Base.cconvert(::Type{Ref{PtrStruct}}, a::RealStruct)
+    (a, Ref(PtrStruct(pointer_from_objref(a), a.b)))
+end
+Base.unsafe_convert(::Type{Ref{PtrStruct}}, at::Tuple) =
+    Base.unsafe_convert(Ref{PtrStruct}, at[2])
+
+breakpoint_ptrstruct(a::RealStruct) =
+    ccall(:jl_breakpoint, Void, (Ref{PtrStruct},), a)
+
 if opt_level > 0
     @test !contains(get_llvm(isequal, Tuple{Nullable{BigFloat}, Nullable{BigFloat}}), "%gcframe")
     @test !contains(get_llvm(pointer_not_safepoint, Tuple{}), "%gcframe")
@@ -161,6 +180,27 @@ if opt_level > 0
     breakpoint_badref_ir = get_llvm(breakpoint_badref, Tuple{MutableStruct})
     @test !contains(breakpoint_badref_ir, "%gcframe")
     @test !contains(breakpoint_badref_ir, "jl_gc_pool_alloc")
+
+    breakpoint_ptrstruct_ir = get_llvm(breakpoint_ptrstruct, Tuple{RealStruct})
+    @test !contains(breakpoint_ptrstruct_ir, "%gcframe")
+    @test !contains(breakpoint_ptrstruct_ir, "jl_gc_pool_alloc")
+end
+
+function two_breakpoint(a::Float64)
+    ccall(:jl_breakpoint, Void, (Ref{Float64},), a)
+    ccall(:jl_breakpoint, Void, (Ref{Float64},), a)
+end
+
+if opt_level > 0
+    breakpoint_f64_ir = get_llvm((a)->ccall(:jl_breakpoint, Void, (Ref{Float64},), a),
+                                 Tuple{Float64})
+    @test !contains(breakpoint_f64_ir, "jl_gc_pool_alloc")
+    breakpoint_any_ir = get_llvm((a)->ccall(:jl_breakpoint, Void, (Ref{Any},), a),
+                                 Tuple{Float64})
+    @test contains(breakpoint_any_ir, "jl_gc_pool_alloc")
+    two_breakpoint_ir = get_llvm(two_breakpoint, Tuple{Float64})
+    @test !contains(two_breakpoint_ir, "jl_gc_pool_alloc")
+    @test contains(two_breakpoint_ir, "llvm.lifetime.end")
 end
 
 # Issue 22770

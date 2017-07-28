@@ -724,16 +724,16 @@ julia> modf(3.5)
 """
 modf(x) = rem(x,one(x)), trunc(x)
 
-const _modff_temp = Ref{Float32}()
 function modf(x::Float32)
-    f = ccall((:modff,libm), Float32, (Float32,Ptr{Float32}), x, _modff_temp)
-    f, _modff_temp[]
+    temp = Ref{Float32}()
+    f = ccall((:modff, libm), Float32, (Float32, Ptr{Float32}), x, temp)
+    f, temp[]
 end
 
-const _modf_temp = Ref{Float64}()
 function modf(x::Float64)
-    f = ccall((:modf,libm), Float64, (Float64,Ptr{Float64}), x, _modf_temp)
-    f, _modf_temp[]
+    temp = Ref{Float64}()
+    f = ccall((:modf, libm), Float64, (Float64, Ptr{Float64}), x, temp)
+    f, temp[]
 end
 
 @inline function ^(x::Float64, y::Float64)
@@ -781,7 +781,7 @@ function add22condh(xh::Float64, xl::Float64, yh::Float64, yl::Float64)
     return zh
 end
 
-function ieee754_rem_pio2(x::Float64)
+@inline function ieee754_rem_pio2(x::Float64)
     # rem_pio2 essentially computes x mod pi/2 (ie within a quarter circle)
     # and returns the result as
     # y between + and - pi/4 (for maximal accuracy (as the sign bit is exploited)), and
@@ -795,9 +795,9 @@ function ieee754_rem_pio2(x::Float64)
     # this is just wrapping up
     # https://github.com/JuliaLang/openspecfun/blob/master/rem_pio2/e_rem_pio2.c
 
-    y = [0.0,0.0]
-    n = ccall((:__ieee754_rem_pio2, openspecfun), Cint, (Float64,Ptr{Float64}), x, y)
-    return (n,y)
+    y = Ref{NTuple{2,Float64}}()
+    n = ccall((:__ieee754_rem_pio2, openspecfun), Cint, (Float64, Ptr{Void}), x, y)
+    return (n, y[])
 end
 
 # multiples of pi/2, as double-double (ie with "tail")

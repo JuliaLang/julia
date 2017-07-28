@@ -20,6 +20,7 @@
 #include "llvm-version.h"
 #include "codegen_shared.h"
 #include "julia.h"
+#include "julia_internal.h"
 
 #define DEBUG_TYPE "late_lower_gcroot"
 
@@ -292,6 +293,10 @@ struct LateLowerGCFrame: public FunctionPass {
     {
         llvm::initializeDominatorTreeWrapperPassPass(*PassRegistry::getPassRegistry());
         tbaa_gcframe = tbaa_make_child("jtbaa_gcframe").first;
+        MDNode *tbaa_data;
+        MDNode *tbaa_data_scalar;
+        std::tie(tbaa_data, tbaa_data_scalar) = tbaa_make_child("jtbaa_data");
+        tbaa_tag = tbaa_make_child("jtbaa_tag", tbaa_data_scalar).first;
     }
 
 protected:
@@ -306,11 +311,19 @@ private:
     Type *T_prjlvalue;
     Type *T_ppjlvalue;
     Type *T_size;
+    Type *T_int8;
     Type *T_int32;
+    Type *T_pint8;
+    Type *T_pjlvalue_der;
+    Type *T_ppjlvalue_der;
     MDNode *tbaa_gcframe;
+    MDNode *tbaa_tag;
     Function *ptls_getter;
     Function *gc_flush_func;
     Function *pointer_from_objref_func;
+    Function *alloc_obj_func;
+    Function *pool_alloc_func;
+    Function *big_alloc_func;
     CallInst *ptlsStates;
 
     void MaybeNoteDef(State &S, BBState &BBS, Value *Def, const std::vector<int> &SafepointsSoFar, int RefinedPtr = -2);
@@ -1083,19 +1096,38 @@ void LateLowerGCFrame::PopGCFrame(AllocaInst *gcframe, Instruction *InsertBefore
     inst->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_gcframe);
 }
 
+static void copyMetadata(Instruction *dest, const Instruction *src)
+{
+#if JL_LLVM_VERSION < 40000
+    if (!src->hasMetadata())
+        return;
+    SmallVector<std::pair<unsigned,MDNode*>,4> TheMDs;
+    src->getAllMetadataOtherThanDebugLoc(TheMDs);
+    for (const auto &MD : TheMDs)
+        dest->setMetadata(MD.first, MD.second);
+    dest->setDebugLoc(src->getDebugLoc());
+#else
+    dest->copyMetadata(*src);
+#endif
+}
+
 bool LateLowerGCFrame::CleanupIR(Function &F) {
     bool ChangesMade = false;
     // We create one alloca for all the jlcall frames that haven't been processed
     // yet. LLVM would merge them anyway later, so might as well save it a bit
     // of work
     size_t maxframeargs = 0;
-    PointerType *T_pprjlvalue = T_prjlvalue->getPointerTo();
     Instruction *StartOff = &*(F.getEntryBlock().begin());
-    AllocaInst *Frame = new AllocaInst(T_prjlvalue, ConstantInt::get(T_int32, maxframeargs),
+    PointerType *T_pprjlvalue = nullptr;
+    AllocaInst *Frame = nullptr;
+    if (T_prjlvalue) {
+        T_pprjlvalue = T_prjlvalue->getPointerTo();
+        Frame = new AllocaInst(T_prjlvalue, ConstantInt::get(T_int32, maxframeargs),
 #if JL_LLVM_VERSION >= 50000
         0,
 #endif
         "", StartOff);
+    }
     for (BasicBlock &BB : F) {
         for (auto it = BB.begin(); it != BB.end();) {
             auto *CI = dyn_cast<CallInst>(&*it);
@@ -1104,16 +1136,47 @@ bool LateLowerGCFrame::CleanupIR(Function &F) {
                 continue;
             }
             CallingConv::ID CC = CI->getCallingConv();
-            if (gc_flush_func != nullptr && CI->getCalledFunction() == gc_flush_func) {
+            auto callee = CI->getCalledValue();
+            if (gc_flush_func != nullptr && callee == gc_flush_func) {
                 /* No replacement */
-            } else if (pointer_from_objref_func != nullptr &&
-                CI->getCalledFunction() == pointer_from_objref_func) {
+            } else if (pointer_from_objref_func != nullptr && callee == pointer_from_objref_func) {
                 auto *ASCI = new AddrSpaceCastInst(CI->getOperand(0),
                     CI->getType(), "", CI);
                 ASCI->takeName(CI);
                 CI->replaceAllUsesWith(ASCI);
+            } else if (alloc_obj_func && callee == alloc_obj_func) {
+                assert(CI->getNumArgOperands() == 3);
+                auto sz = (size_t)cast<ConstantInt>(CI->getArgOperand(1))->getZExtValue();
+                // This is strongly architecture and OS dependent
+                int osize;
+                int offset = jl_gc_classify_pools(sz, &osize);
+                IRBuilder<> builder(CI);
+                builder.SetCurrentDebugLocation(CI->getDebugLoc());
+                auto ptls = CI->getArgOperand(0);
+                CallInst *newI;
+                if (offset < 0) {
+                    newI = builder.CreateCall(big_alloc_func,
+                                              {ptls, ConstantInt::get(T_size,
+                                                                      sz + sizeof(void*))});
+                }
+                else {
+                    auto pool_offs = ConstantInt::get(T_int32, offset);
+                    auto pool_osize = ConstantInt::get(T_int32, osize);
+                    newI = builder.CreateCall(pool_alloc_func, {ptls, pool_offs, pool_osize});
+                }
+                newI->setAttributes(CI->getAttributes());
+                newI->takeName(CI);
+                copyMetadata(newI, CI);
+                auto derived = builder.CreateAddrSpaceCast(newI, T_pjlvalue_der);
+                auto cast = builder.CreateBitCast(derived, T_ppjlvalue_der);
+                auto tagaddr = builder.CreateGEP(T_prjlvalue, cast,
+                                                 {ConstantInt::get(T_size, -1)});
+                auto store = builder.CreateStore(CI->getArgOperand(2), tagaddr);
+                store->setMetadata(LLVMContext::MD_tbaa, tbaa_tag);
+                CI->replaceAllUsesWith(newI);
             } else if (CC == JLCALL_CC ||
                        CC == JLCALL_F_CC) {
+                assert(T_prjlvalue);
                 size_t nframeargs = CI->getNumArgOperands() - (CC == JLCALL_F_CC);
                 SmallVector<Value *, 3> ReplacementArgs;
                 auto it = CI->arg_begin();
@@ -1135,8 +1198,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F) {
                         T_pprjlvalue, T_int32}, false) :
                     FunctionType::get(T_prjlvalue,
                         {T_pprjlvalue, T_int32}, false);
-                Value *newFptr = Builder.CreateBitCast(CI->getCalledValue(),
-                    FTy->getPointerTo());
+                Value *newFptr = Builder.CreateBitCast(callee, FTy->getPointerTo());
                 CallInst *NewCall = CallInst::Create(newFptr, ReplacementArgs, "", CI);
                 NewCall->setTailCallKind(CI->getTailCallKind());
                 NewCall->setAttributes(CI->getAttributes());
@@ -1155,10 +1217,12 @@ bool LateLowerGCFrame::CleanupIR(Function &F) {
             ChangesMade = true;
         }
     }
-    if (maxframeargs == 0)
+    if (maxframeargs == 0 && Frame) {
         Frame->eraseFromParent();
-    else
+    }
+    else if (Frame) {
         Frame->setOperand(0, ConstantInt::get(T_int32, maxframeargs));
+    }
     return ChangesMade;
 }
 
@@ -1316,26 +1380,71 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(Function &F, std::vector<int> &C
     }
 }
 
+static void addRetNoAlias(Function *F)
+{
+#if JL_LLVM_VERSION >= 50000
+    F->addAttribute(AttributeList::ReturnIndex, Attribute::NoAlias);
+#else
+    F->addAttribute(AttributeSet::ReturnIndex, Attribute::NoAlias);
+#endif
+}
+
 bool LateLowerGCFrame::doInitialization(Module &M) {
     ptls_getter = M.getFunction("jl_get_ptls_states");
     gc_flush_func = M.getFunction("julia.gcroot_flush");
     pointer_from_objref_func = M.getFunction("julia.pointer_from_objref");
+    auto &ctx = M.getContext();
+    T_size = M.getDataLayout().getIntPtrType(ctx);
+    T_int8 = Type::getInt8Ty(ctx);
+    T_pint8 = PointerType::get(T_int8, 0);
+    T_int32 = Type::getInt32Ty(ctx);
+    if ((alloc_obj_func = M.getFunction("julia.gc_alloc_obj"))) {
+        T_prjlvalue = alloc_obj_func->getReturnType();
+        if (!(pool_alloc_func = M.getFunction("jl_gc_pool_alloc"))) {
+            std::vector<Type*> args(0);
+            args.push_back(T_pint8);
+            args.push_back(T_int32);
+            args.push_back(T_int32);
+            pool_alloc_func = Function::Create(FunctionType::get(T_prjlvalue, args, false),
+                                               Function::ExternalLinkage, "jl_gc_pool_alloc", &M);
+            addRetNoAlias(pool_alloc_func);
+        }
+        if (!(big_alloc_func = M.getFunction("jl_gc_big_alloc"))) {
+            std::vector<Type*> args(0);
+            args.push_back(T_pint8);
+            args.push_back(T_size);
+            big_alloc_func = Function::Create(FunctionType::get(T_prjlvalue, args, false),
+                                         Function::ExternalLinkage, "jl_gc_big_alloc", &M);
+            addRetNoAlias(big_alloc_func);
+        }
+        auto T_jlvalue = cast<PointerType>(T_prjlvalue)->getElementType();
+        auto T_pjlvalue = PointerType::get(T_jlvalue, 0);
+        T_ppjlvalue = PointerType::get(T_pjlvalue, 0);
+        T_pjlvalue_der = PointerType::get(T_jlvalue, AddressSpace::Derived);
+        T_ppjlvalue_der = PointerType::get(T_prjlvalue, AddressSpace::Derived);
+    }
+    else if (ptls_getter) {
+        auto functype = ptls_getter->getFunctionType();
+        T_ppjlvalue = cast<PointerType>(functype->getReturnType())->getElementType();
+        auto T_pjlvalue = cast<PointerType>(T_ppjlvalue)->getElementType();
+        auto T_jlvalue = cast<PointerType>(T_pjlvalue)->getElementType();
+        T_prjlvalue = PointerType::get(T_jlvalue, AddressSpace::Tracked);
+        T_pjlvalue_der = PointerType::get(T_jlvalue, AddressSpace::Derived);
+        T_ppjlvalue_der = PointerType::get(T_prjlvalue, AddressSpace::Derived);
+    }
+    else {
+        T_ppjlvalue = nullptr;
+        T_prjlvalue = nullptr;
+        T_pjlvalue_der = nullptr;
+        T_ppjlvalue_der = nullptr;
+    }
     return false;
 }
 
 bool LateLowerGCFrame::runOnFunction(Function &F) {
     DEBUG(dbgs() << "GC ROOT PLACEMENT: Processing function " << F.getName() << "\n");
-    if (ptls_getter) {
-        auto functype = ptls_getter->getFunctionType();
-        T_ppjlvalue =
-            cast<PointerType>(functype->getReturnType())->getElementType();
-        auto T_pjlvalue = cast<PointerType>(T_ppjlvalue)->getElementType();
-        T_prjlvalue = PointerType::get(cast<PointerType>(T_pjlvalue)->getElementType(), AddressSpace::Tracked);
-    } else {
+    if (!ptls_getter)
         return CleanupIR(F);
-    }
-    T_size = F.getParent()->getDataLayout().getIntPtrType(F.getContext());
-    T_int32 = Type::getInt32Ty(F.getContext());
     ptlsStates = nullptr;
     for (auto I = F.getEntryBlock().begin(), E = F.getEntryBlock().end();
          ptls_getter && I != E; ++I) {
