@@ -591,6 +591,22 @@ test_mt(show_f5, "show_f5(A::AbstractArray{T,N}, indexes::Vararg{$Int,N})")
 @test_repr "[a;]"
 @test_repr "[a; b]"
 
+# other brackets and braces
+@test_repr "[a]"
+@test_repr "[a,b]"
+@test_repr "[a;b;c]"
+@test_repr "[a b]"
+@test_repr "[a b;]"
+@test_repr "[a b c]"
+@test_repr "[a b; c d]"
+@test_repr "{a}"
+@test_repr "{a,b}"
+@test_repr "{a;b;c}"
+@test_repr "{a b}"
+@test_repr "{a b;}"
+@test_repr "{a b c}"
+@test_repr "{a b; c d}"
+
 # Printing of :(function f end)
 @test sprint(show, :(function f end)) == ":(function f end)"
 @test_repr "function g end"

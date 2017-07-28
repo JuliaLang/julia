@@ -945,7 +945,7 @@
      (if (eq? t 'where)
          (begin (take-token s)
                 (let ((var (parse-comparison s)))
-                  (loop (if (and (pair? var) (eq? (car var) 'cell1d))
+                  (loop (if (and (pair? var) (eq? (car var) 'braces))
                             (list* 'where ex (cdr var))  ;; form `x where {T,S}`
                             (list 'where ex var))
                         (peek-token s))))
@@ -2190,25 +2190,15 @@
            (take-token s)
            (if (eqv? (require-token s) #\})
                (begin (take-token s)
-                      '(cell1d))
+                      '(braces))
                (let ((vex (parse-cat s #\} end-symbol)))
                  (if (null? vex)
-                     '(cell1d)
+                     '(braces)
                      (case (car vex)
-                       ((vect) `(cell1d ,@(cdr vex)))
-                       ((hcat) `(cell2d 1 ,(length (cdr vex)) ,@(cdr vex)))
-                       ((comprehension)      (error "{a for a in b} syntax is discontinued"))
-                       (else
-                        (if (and (pair? (cadr vex)) (eq? (caadr vex) 'row))
-                            (let ((nr (length (cdr vex)))
-                                  (nc (length (cdadr vex))))
-                              (begin
-                                `(cell2d ,nr ,nc
-                                         ,@(apply append
-                                                  ;; transpose to storage order
-                                                  (apply map list
-                                                         (map cdr (cdr vex)))))))
-                            `(cell1d ,@(cdr vex)))))))))
+                       ((vect) `(braces ,@(cdr vex)))
+                       ((hcat) `(bracescat (row ,@(cdr vex))))
+                       ((comprehension) `(braces ,@(cdr vex)))
+                       (else   `(bracescat ,@(cdr vex))))))))
 
           ;; string literal
           ((eqv? t #\")
