@@ -150,6 +150,7 @@ function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
             rethrow()
         end
     else
+        println(path)
         if recursive
             for p in readdir(path)
                 rm(joinpath(path, p), force=force, recursive=true)
