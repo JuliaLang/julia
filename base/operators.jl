@@ -414,9 +414,6 @@ identity(x) = x
 
 +(x::Number) = x
 *(x::Number) = x
-(&)(x::Integer) = x
-(|)(x::Integer) = x
-xor(x::Integer) = x
 
 const ⊻ = xor
 
@@ -432,7 +429,7 @@ function afoldl(op,a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,qs...)
     y
 end
 
-for op in (:+, :*, :&, :|, :xor, :min, :max, :kron)
+for op in (:+, :*, :min, :max, :kron)
     @eval begin
         # note: these definitions must not cause a dispatch loop when +(a,b) is
         # not defined, and must only try to call 2-argument definitions, so

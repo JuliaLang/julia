@@ -1593,6 +1593,14 @@ end
 
 @deprecate momenttype(::Type{T}) where {T} typeof((zero(T)*zero(T) + zero(T)*zero(T))/2) false
 
+@deprecate (&)(x::Integer) x
+@deprecate (|)(x::Integer) x
+@deprecate xor(x::Integer) x
+
+@deprecate (&)(a, b, c, xs...) foldl(&, (a, b, c, xs...))
+@deprecate (|)(a, b, c, xs...) foldl(|, (a, b, c, xs...))
+@deprecate xor(a, b, c, xs...) foldl(xor, (a, b, c, xs...))
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations

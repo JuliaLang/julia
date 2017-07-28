@@ -212,6 +212,8 @@ Deprecated or removed
     [msg])` prints as `ERROR: DomainError with val:\nmsg`. ([#20005],
     [#22751])
 
+  * The functions `&`, `|`, and `xor` now only accept 2 arguments.
+
   * The operating system identification functions: `is_linux`, `is_bsd`, `is_apple`, `is_unix`,
     and `is_windows`, have been deprecated in favor of `Sys.islinux`, `Sys.isbsd`, `Sys.isapple`,
     `Sys.isunix`, and `Sys.iswindows`, respectively ([#22182]).
