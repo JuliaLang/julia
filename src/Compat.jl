@@ -411,14 +411,14 @@ if VERSION < v"0.6.0-dev.848"
 end
 
 # julia#18977
-if !isdefined(Base, :xor)
+@static if !isdefined(Base, :xor)
     const xor = $
     const ⊻ = xor
     export xor, ⊻
 end
 
 # julia#19246
-if !isdefined(Base, :numerator)
+@static if !isdefined(Base, :numerator)
     const numerator = num
     const denominator = den
     export numerator, denominator
@@ -433,7 +433,7 @@ if !isdefined(Base, :iszero)
 end
 
 # julia　#20407
-if !isdefined(Base, :(>:))
+@static if !isdefined(Base, :(>:))
     const >: = let
         _issupertype(a::ANY, b::ANY) = issubtype(b, a)
     end

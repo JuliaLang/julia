@@ -383,6 +383,7 @@ end
 @test fma(3,4,5) == 3*4+5 == muladd(3,4,5)
 
 if VERSION < v"0.5.0-dev+5271"
+    local s
     # is_valid_utf32
     s = utf32("abc")
     @test isvalid(s)
