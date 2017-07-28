@@ -636,7 +636,7 @@ bool AllocOpt::runOnFunction(Function &F)
             ptr = cast<Instruction>(prolog_builder.CreateConstGEP1_32(T_int8, ptr, align));
             auto casti = prolog_builder.CreateBitCast(ptr, T_pprjlvalue);
             auto tagaddr = prolog_builder.CreateGEP(T_prjlvalue, casti,
-                                                    {ConstantInt::get(T_size, -1)});
+                                                    ConstantInt::get(T_size, -1));
             // Store should be created at the callsite and not in the prolog
             auto store = new StoreInst(orig->getArgOperand(2), tagaddr, orig);
             store->setMetadata(LLVMContext::MD_tbaa, tbaa_tag);

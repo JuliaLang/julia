@@ -1170,7 +1170,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F) {
                 auto derived = builder.CreateAddrSpaceCast(newI, T_pjlvalue_der);
                 auto cast = builder.CreateBitCast(derived, T_ppjlvalue_der);
                 auto tagaddr = builder.CreateGEP(T_prjlvalue, cast,
-                                                 {ConstantInt::get(T_size, -1)});
+                                                 ConstantInt::get(T_size, -1));
                 auto store = builder.CreateStore(CI->getArgOperand(2), tagaddr);
                 store->setMetadata(LLVMContext::MD_tbaa, tbaa_tag);
                 CI->replaceAllUsesWith(newI);
