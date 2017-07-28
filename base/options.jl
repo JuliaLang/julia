@@ -23,6 +23,7 @@ struct JLOptions
     debug_level::Int8
     check_bounds::Int8
     depwarn::Int8
+    overwritewarn::Int8
     can_inline::Int8
     polly::Int8
     fast_math::Int8
