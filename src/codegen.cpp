@@ -5694,10 +5694,15 @@ static std::unique_ptr<Module> emit_function(
                 }
             }
             if (!have_real_use) {
+                Instruction *use = NULL;
                 for (Use &U : root->uses()) {
+                    if (use) // erase after the iterator moves on
+                        use->eraseFromParent();
                     User *RU = U.getUser();
-                    cast<Instruction>(RU)->eraseFromParent();
+                    use = cast<Instruction>(RU);
                 }
+                if (use)
+                    use->eraseFromParent();
                 root->eraseFromParent();
                 if (store_value)
                     store_value->eraseFromParent();
