@@ -96,6 +96,7 @@
                  (deparse-block (string (car e) " " (deparse (cadr e)))
                                 (block-stmts (caddr e))))
                 ((copyast) (deparse (cadr e)))
+                ((kw) (string (deparse (cadr e)) " = " (deparse (caddr e))))
                 (else
                  (string e))))))
 
