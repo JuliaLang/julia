@@ -78,7 +78,7 @@ end
 add(pkg::AbstractString, vers::VersionNumber...) = add(pkg,VersionSet(vers...))
 
 function remove(pkg::AbstractString)
-    edit(Reqs.rm,pkg) && return
+    edit(Reqs.remove,pkg) && return
     ispath(pkg) || return info("Package $pkg is not installed")
     info("Removing $pkg (unregistered)")
     Write.remove(pkg)
