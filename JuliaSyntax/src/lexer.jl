@@ -17,7 +17,7 @@ import ..Tokens: FUNCTION, ABSTRACT, IDENTIFIER, BAREMODULE, BEGIN, BITSTYPE, BR
 
 export tokenize
 
-ishex(c::Char) = isdigit(c) || ('a' <= c <= 'f') || ('A' <= c <= 'F') || c == 
+ishex(c::Char) = isdigit(c) || ('a' <= c <= 'f') || ('A' <= c <= 'F') || c ==
 '_'
 isbinary(c::Char) = c == '0' || c == '1' || c == '_'
 isoctal(c::Char) =  '0' ≤ c ≤ '7' || c == '_'
@@ -325,13 +325,13 @@ function lex_whitespace(l::Lexer)
     return emit(l, Tokens.WHITESPACE)
 end
 
-function lex_comment(l::Lexer)
+function lex_comment(l::Lexer, doemit=true)
     if peekchar(l) != '='
         while true
             c = readchar(l)
             if c == '\n' || eof(c)
                 backup!(l)
-                return emit(l, Tokens.COMMENT)
+                return doemit ? emit(l, Tokens.COMMENT) : EMPTY_TOKEN
             end
         end
     else
@@ -339,7 +339,7 @@ function lex_comment(l::Lexer)
         n_start, n_end = 1, 0
         while true
             if eof(c)
-                return emit_error(l, Tokens.EOF_MULTICOMMENT)
+                return doemit ? emit_error(l, Tokens.EOF_MULTICOMMENT) : EMPTY_TOKEN
             end
             nc = readchar(l)
             if c == '#' && nc == '='
@@ -348,7 +348,7 @@ function lex_comment(l::Lexer)
                 n_end += 1
             end
             if n_start == n_end
-                return emit(l, Tokens.COMMENT)
+                return doemit ? emit(l, Tokens.COMMENT) : EMPTY_TOKEN
             end
             c = nc
         end
@@ -626,8 +626,8 @@ function lex_prime(l)
     if l.last_token == Tokens.IDENTIFIER ||
         l.last_token == Tokens.DOT ||
         l.last_token ==  Tokens.RPAREN ||
-        l.last_token ==  Tokens.RSQUARE || 
-        l.last_token ==  Tokens.RBRACE || 
+        l.last_token ==  Tokens.RSQUARE ||
+        l.last_token ==  Tokens.RBRACE ||
         l.last_token == Tokens.PRIME || isliteral(l.last_token)
         return emit(l, Tokens.PRIME)
     else
@@ -685,7 +685,28 @@ function lex_quote(l::Lexer, doemit=true)
     end
 end
 
-# We just consumed a " or a """
+function string_terminated(l, c, kind::Tokens.Kind)
+    if (kind == Tokens.STRING || kind == Tokens.TRIPLE_STRING) && c == '"'
+        if kind == Tokens.STRING
+            return true
+        else
+            if accept(l, "\"") && accept(l, "\"")
+                return true
+            end
+        end
+    elseif (kind == Tokens.CMD || kind == Tokens.TRIPLE_CMD) && c == '`'
+        if kind == Tokens.CMD
+            return true
+        else
+            if accept(l, "\`") && accept(l, "\`")
+                return true
+            end
+        end
+    end
+    return false
+end
+
+# We just consumed a ", """, `, or ```
 function read_string(l::Lexer, kind::Tokens.Kind)
     while true
         c = readchar(l)
@@ -693,27 +714,17 @@ function read_string(l::Lexer, kind::Tokens.Kind)
             eof(readchar(l)) && return false
             continue
         end
-        if c == '"'
-            if kind == Tokens.STRING
-                return true
-            else
-                if accept(l, "\"") && accept(l, "\"")
-                    return true
-                end
-            end
+        if string_terminated(l, c, kind)
+            return true
         elseif eof(c)
             return false
         end
         if c == '$'
             c = readchar(l)
-            if c == '"'
-                if kind == Tokens.STRING
-                    return true
-                else
-                    if accept(l, "\"") && accept(l, "\"")
-                        return true
-                    end
-                end
+            if string_terminated(l, c, kind)
+                return true
+            elseif eof(c)
+                return false
             elseif c == '('
                 o = 1
                 while o > 0
@@ -725,6 +736,10 @@ function read_string(l::Lexer, kind::Tokens.Kind)
                         o -= 1
                     elseif c == '"'
                         lex_quote(l, false)
+                    elseif c == '`'
+                        lex_cmd(l, false)
+                    elseif c == '#'
+                        lex_comment(l, false)
                     end
                 end
             end
@@ -771,39 +786,22 @@ function lex_dot(l::Lexer)
 end
 
 # A ` has been consumed
-function lex_cmd(l::Lexer)
-    if accept(l, '`')
-        if accept(l, '`') # TRIPLE_CMD
-            while true
-                c = readchar(l)
-                if c == '`'
-                    c = readchar(l)
-                    if c == '`'
-                        c = readchar(l)
-                        if c == '`'
-                            return emit(l, Tokens.TRIPLE_CMD)
-                        end
-                    end
-                end
-                if eof(c)
-                    return emit_error(l, Tokens.EOF_CMD)
-                end
-            end
-        else # empty CMD
-            return emit(l, Tokens.CMD) 
-        end
-    else # CMD
-        while true
-            c = readchar(l)
-            if c == '`'
-                return emit(l, Tokens.CMD)
-            elseif eof(c)
-                return emit_error(l, Tokens.EOF_CMD)
-            end
+# N.B.: cmds do not currently have special parser interpolation support
+function lex_cmd(l::Lexer, doemit=true)
+    kind = Tokens.CMD
+    if accept(l, '`') # ``
+        if accept(l, '`') # ```
+            kind = Tokens.TRIPLE_CMD
+        else # empty cmd
+            return doemit ? emit(l, Tokens.CMD) : EMPTY_TOKEN
         end
     end
+    while true
+        c = readchar(l)
+        eof(c) && return (doemit ? emit_error(l, Tokens.EOF_CMD) : EMPTY_TOKEN)
+        string_terminated(l, c, kind) && return (doemit ? emit(l, kind) : EMPTY_TOKEN)
+    end
 end
-
 
 function tryread(l, str, k, c)
     for s in str
