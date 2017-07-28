@@ -1156,3 +1156,35 @@ if !Sys.iswindows()
         test_22566()
     end
 end  # !Sys.iswindows
+
+function test_22922()
+    mktempdir() do tmpdir
+        (_, dirname) = splitdir(tmpdir)
+        @test dirname[1:3] == "jl_"
+    end
+    mktempdir(;prefix="ABC") do tmpdir
+        (_, dirname) = splitdir(tmpdir)
+        @test dirname[1:3] == "ABC"
+    end
+    mktemp() do tmp,io
+        (_, filename) = splitdir(tmp)
+        @test filename[1:3] == "jl_"
+    end
+    mktemp(;prefix="ABC") do tmp,io
+        (path, filename) = splitdir(tmp)
+        @test filename[1:3] == "ABC"
+    end
+    tmp = tempname()
+    (_,filename) = splitdir(tmp)
+    @test filename[1:3]=="jl_"
+
+    tmp = tempname(;prefix = "0123456789")
+    (_,filename) = splitdir(tmp)
+    @test filename[1:3] == "012"
+    if !Sys.iswindows()
+        #Unix like OS have prefix size limit of 5 chars
+        @test filename[1:5] == "01234"
+    end
+end
+
+test_22922()
