@@ -105,7 +105,7 @@ edit() = cd(Entry.edit)
 
 Remove all requirement entries for `pkg` from `Pkg.dir("REQUIRE")` and call `Pkg.resolve()`.
 """
-remove(pkg::AbstractString) = cd(Entry.rm,splitjl(pkg))
+remove(pkg::AbstractString) = cd(Entry.remove,splitjl(pkg))
 
 """
     add(pkg, vers...)
