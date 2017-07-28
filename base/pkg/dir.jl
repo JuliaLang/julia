@@ -63,10 +63,10 @@ function init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRA
         Base.mv(joinpath(temp_dir,"METADATA"), metadata_dir)
         Base.mv(joinpath(temp_dir,"REQUIRE"), joinpath(dir,"REQUIRE"))
         Base.mv(joinpath(temp_dir,"META_BRANCH"), joinpath(dir,"META_BRANCH"))
-        remove(temp_dir, recursive=true)
+        rm(temp_dir, recursive=true)
     catch err
-        ispath(metadata_dir) && remove(metadata_dir, recursive=true)
-        ispath(temp_dir) && remove(temp_dir, recursive=true)
+        ispath(metadata_dir) && rm(metadata_dir, recursive=true)
+        ispath(temp_dir) && rm(temp_dir, recursive=true)
         rethrow(err)
     end
 end
