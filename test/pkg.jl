@@ -112,11 +112,11 @@ temp_pkg_dir() do
     Pkg.status("Example", iob)
     str = chomp(String(take!(iob)))
     @test endswith(str, string(Pkg.installed("Example")))
-    Pkg.rm("Example")
+    Pkg.remove("Example")
     @test isempty(Pkg.installed())
     @test !isempty(Pkg.available("Example"))
     @test !in("Example", keys(Pkg.installed()))
-    Pkg.rm("Example")
+    Pkg.remove("Example")
     @test isempty(Pkg.installed())
     @test !isempty(Pkg.available("Example"))
     @test !in("Example", keys(Pkg.installed()))
@@ -423,7 +423,7 @@ temp_pkg_dir() do
 
     # issue #15948
     let package = "Example"
-        Pkg.rm(package)  # Remove package if installed
+        Pkg.remove(package)  # Remove package if installed
         @test Pkg.installed(package) === nothing  # Registered with METADATA but not installed
         msg = read(ignorestatus(`$(Base.julia_cmd()) --startup-file=no -e "redirect_stderr(STDOUT); Pkg.build(\"$package\")"`), String)
         @test contains(msg, "$package is not an installed package")
@@ -453,14 +453,14 @@ temp_pkg_dir() do
         nothingtodomsg = "INFO: No packages to install, update or remove"
 
         @test_warn "INFO: Installing Example v" begin
-            Pkg.rm("Example")
+            Pkg.remove("Example")
             Pkg.add("Example")
         end
 
         @test_warn nothingtodomsg Pkg.update("Example")
 
         @test_warn "INFO: Installing Example v0.4.0" begin
-            Pkg.rm("Example")
+            Pkg.remove("Example")
             Pkg.add("Example", v"0", v"0.4.1-") # force version to be < 0.4.1
         end
 
@@ -469,7 +469,7 @@ temp_pkg_dir() do
                     nothingtodomsg) Pkg.update("Example")
 
         @test_warn "INFO: Installing Example" begin
-            Pkg.rm("Example")
+            Pkg.remove("Example")
             Pkg.add("Example")
             Pkg.pin("Example", v"0.4.0")
         end
@@ -522,7 +522,7 @@ temp_pkg_dir() do
     # issue #18239
     let package = "Example"
         Pkg.free(package)
-        Pkg.rm(package)  # Remove package if installed
+        Pkg.remove(package)  # Remove package if installed
 
         metadata_dir = Pkg.dir("METADATA")
         const old_commit = "83ff7116e51fc9cdbd7e67affbd344b9f5c9dbf2"
@@ -602,11 +602,11 @@ end
         Pkg.status("Example.jl", iob)
         str = chomp(String(take!(iob)))
         @test endswith(str, string(Pkg.installed("Example.jl")))
-        Pkg.rm("Example.jl")
+        Pkg.remove("Example.jl")
         @test isempty(Pkg.installed())
         @test !isempty(Pkg.available("Example.jl"))
         @test !in("Example", keys(Pkg.installed()))
-        Pkg.rm("Example.jl")
+        Pkg.remove("Example.jl")
         @test isempty(Pkg.installed())
         @test !isempty(Pkg.available("Example.jl"))
         @test !in("Example", keys(Pkg.installed()))
