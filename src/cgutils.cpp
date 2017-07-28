@@ -2306,7 +2306,7 @@ static void emit_signal_fence(jl_codectx_t &ctx)
     ctx.builder.CreateCall(InlineAsm::get(FunctionType::get(T_void, false), "",
                                       "~{memory}", true));
 #else
-    ctx.builder.CreateFence(AtomicOrdering::SequentiallyConsistent, SingleThread);
+    ctx.builder.CreateFence(AtomicOrdering::SequentiallyConsistent, SyncScope::SingleThread);
 #endif
 }
 

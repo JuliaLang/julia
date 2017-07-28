@@ -1289,8 +1289,11 @@ uint64_t jl_get_llvm_fptr(void *function)
 {
     Function *F = (Function*)function;
     uint64_t addr = getAddressForFunction(F->getName());
-    if (!addr)
-        addr = jl_ExecutionEngine->findUnmangledSymbol(F->getName()).getAddress();
+    if (!addr) {
+	auto expected_addr = jl_ExecutionEngine->findUnmangledSymbol(F->getName()).getAddress();
+        // TODO : Handle error in expected_addr
+        addr = *expected_addr;
+    }
     return addr;
 }
 
@@ -6699,7 +6702,7 @@ extern "C" void *jl_init_llvm(void)
     // to ensure compatibility with GCC codes
     options.StackAlignmentOverride = 16;
 #endif
-    EngineBuilder eb((std::unique_ptr<Module>(engine_module)));
+    llvm::EngineBuilder eb((std::unique_ptr<Module>(engine_module)));
     std::string ErrorStr;
     eb  .setEngineKind(EngineKind::JIT)
         .setTargetOptions(options)
