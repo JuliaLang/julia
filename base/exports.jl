@@ -355,6 +355,7 @@ export
     isreal,
     issubnormal,
     iszero,
+    isone,
     lcm,
     ldexp,
     leading_ones,

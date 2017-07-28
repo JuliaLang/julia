@@ -9,6 +9,11 @@ const DOT_CUTOFF = 128
 const ASUM_CUTOFF = 32
 const NRM2_CUTOFF = 32
 
+# Generic cross-over constant based on benchmarking on a single thread with an i7 CPU @ 2.5GHz
+# L1 cache: 32K, L2 cache: 256K, L3 cache: 6144K
+# This constant should ideally be determined by the actual CPU cache size
+const ISONE_CUTOFF = 2^21 # 2M
+
 function scale!(X::Array{T}, s::T) where T<:BlasFloat
     s == 0 && return fill!(X, zero(T))
     s == 1 && return X
@@ -28,6 +33,41 @@ function scale!(X::Array{T}, s::Real) where T<:BlasComplex
     BLAS.scal!(2*length(X), convert(R,s), convert(Ptr{R},pointer(X)), 1)
     X
 end
+
+
+function isone(A::StridedMatrix)
+    m, n = size(A)
+    m != n && return false # only square matrices can satisfy x == one(x)
+    if sizeof(A) < ISONE_CUTOFF
+        _isone_triacheck(A, m)
+    else
+        _isone_cachefriendly(A, m)
+    end
+end
+
+@inline function _isone_triacheck(A::StridedMatrix, m::Int)
+    @inbounds for i in 1:m, j in i:m
+        if i == j
+            isone(A[i,i]) || return false
+        else
+            iszero(A[i,j]) && iszero(A[j,i]) || return false
+        end
+    end
+    return true
+end
+
+# Inner loop over rows to be friendly to the CPU cache
+@inline function _isone_cachefriendly(A::StridedMatrix, m::Int)
+    @inbounds for i in 1:m, j in 1:m
+        if i == j
+            isone(A[i,i]) || return false
+        else
+            iszero(A[j,i]) || return false
+        end
+    end
+    return true
+end
+
 
 """
     isposdef!(A) -> Bool

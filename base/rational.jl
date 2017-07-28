@@ -435,6 +435,7 @@ function ^(z::Complex{<:Rational}, n::Integer)
 end
 
 iszero(x::Rational) = iszero(numerator(x))
+isone(x::Rational) = isone(numerator(x)) & isone(denominator(x))
 
 function lerpi(j::Integer, d::Integer, a::Rational, b::Rational)
     ((d-j)*a)/d + (j*b)/d
