@@ -1605,8 +1605,8 @@ end
         else
             filter(fun, dr)
         end
+        remove(pkg)
      end
-     Pkg.remove(pkg)
 end
 
 # END 1.0 deprecations
