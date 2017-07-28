@@ -170,7 +170,7 @@ let oldout = STDOUT
         rdout, wrout = redirect_stdout()
         out = @async read(rdout, String)
 
-        @test eval(:(@dump x + 1)) === nothing
+        @test eval(:(@dump x + y)) === nothing
 
         redirect_stdout(oldout)
         close(wrout)
@@ -181,7 +181,7 @@ let oldout = STDOUT
               args: Array{Any}((3,))
                 1: Symbol +
                 2: Symbol x
-                3: Int64 1
+                3: Symbol y
               typ: Any
             """
     finally
