@@ -156,7 +156,7 @@ macro functorize(f)
     end
 end
 
-if VERSION >= v"0.6.0"
+@static if VERSION >= v"0.6.0"
     Base.@deprecate_binding KERNEL Sys.KERNEL
     Base.@deprecate_binding UTF8String Core.String
     Base.@deprecate_binding ASCIIString Core.String
