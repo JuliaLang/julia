@@ -15,8 +15,7 @@ module Pkg
 
 export Dir, Types, Reqs, Cache, Read, Query, Resolve, Write, Entry
 export dir, init, rm, add, available, installed, status, clone, checkout,
-       update, resolve, test, build, free, pin, PkgError, setprotocol!,
-       clean
+       update, resolve, test, build, free, pin, PkgError, setprotocol!
 
 const DEFAULT_META = "https://github.com/JuliaLang/METADATA.jl"
 const META_BRANCH = "metadata-v2"
@@ -290,18 +289,6 @@ Set the protocol used to access GitHub-hosted packages. Defaults to 'https', wit
 `proto` delegating the choice to the package developer.
 """
 setprotocol!(proto::AbstractString) = Cache.setprotocol!(proto)
-
-"""
-    clean(pkg)
-
-Convencience function that calls rm(pkg) then add(pkg). For "cleaning" packages marked as "dirty";
-that is, reverting them to the upstream version.
-"""
-function clean(pkg::AbstractString)
-    rm(pkg)
-    add(pkg)
-    return nothing
-end
 
 # point users to PkgDev
 register(args...) =
