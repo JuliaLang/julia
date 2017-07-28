@@ -321,7 +321,7 @@ end
 
 @testset "inferred" begin
     l = tokenize("abc")
-    Base.Test.@inferred Tokenize.Lexers.next_token(l)
+    @test Base.Test.@inferred Tokenize.Lexers.next_token(l).kind == T.IDENTIFIER
 end
 
 @testset "modifying function names (!) followed by operator" begin
@@ -426,4 +426,15 @@ end
     io = IOBuffer("#1+1")
     skip(io, 1)
     @test length(collect(tokenize(io))) == 4
+end
+
+@testset "complicated interpolations" begin
+    @test length(collect(tokenize("\"\$(())\""))) == 2
+    @test length(collect(tokenize("\"\$(#=inline ) comment=#\"\")\""))) == 2
+    @test length(collect(tokenize("\"\$(string(`inline ')' cmd`)\"\")\""))) == 2
+    # These would require special interpolation support in the parse (Base issue #3150).
+    # If that gets implemented, thses should all be adjust to `== 2`
+    @test length(collect(tokenize("`\$((``))`"))) == 3
+    @test length(collect(tokenize("`\$(#=inline ) comment=#``)`"))) == 3
+    @test length(collect(tokenize("`\$(\"inline ) string\"*string(``))`"))) == 3
 end
