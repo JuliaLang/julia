@@ -776,11 +776,13 @@ JL_DLLEXPORT size_t jl_maxrss(void)
     GetProcessMemoryInfo( GetCurrentProcess( ), &counter, sizeof(counter) );
     return (size_t)counter.PeakWorkingSetSize;
 
+// FIXME: `rusage` is available on OpenBSD, DragonFlyBSD and NetBSD as well.
+//        All of them return `ru_maxrss` in kilobytes.
 #elif defined(_OS_LINUX_) || defined(_OS_DARWIN_) || defined (_OS_FREEBSD_)
     struct rusage rusage;
     getrusage( RUSAGE_SELF, &rusage );
 
-#if defined(_OS_LINUX_)
+#if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
     return (size_t)(rusage.ru_maxrss * 1024);
 #else
     return (size_t)rusage.ru_maxrss;
