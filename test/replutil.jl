@@ -455,9 +455,8 @@ let d = Dict(1 => 2, 3 => 45)
     @test contains(result, summary(d))
 
     # Is every pair in the string?
-    # Compare by removing spaces
     for el in d
-        @test contains(replace(result, " ", ""), string(el))
+        @test contains(result, string(el))
     end
 end
 
@@ -607,4 +606,43 @@ end
 let buf = IOBuffer()
     show(buf, methods(f22798))
     @test contains(String(take!(buf)), "f22798(x::Integer, y)")
+end
+
+@testset "Dict printing with limited rows" begin
+    buf = IOBuffer()
+    io = IOContext(IOContext(buf, :displaysize => (4, 80)), :limit => true)
+    d = Base.ImmutableDict(1=>2)
+    show(io, MIME"text/plain"(), d)
+    @test String(take!(buf)) == "Base.ImmutableDict{$Int,$Int} with 1 entry: …"
+    show(io, MIME"text/plain"(), keys(d))
+    @test String(take!(buf)) ==
+        "Base.KeyIterator for a Base.ImmutableDict{$Int,$Int} with 1 entry. Keys: …"
+
+    io = IOContext(io, :displaysize => (5, 80))
+    show(io, MIME"text/plain"(), d)
+    @test String(take!(buf)) == "Base.ImmutableDict{$Int,$Int} with 1 entry:\n  1 => 2"
+    show(io, MIME"text/plain"(), keys(d))
+    @test String(take!(buf)) ==
+        "Base.KeyIterator for a Base.ImmutableDict{$Int,$Int} with 1 entry. Keys:\n  1"
+    d = Base.ImmutableDict(d, 3=>4)
+    show(io, MIME"text/plain"(), d)
+    @test String(take!(buf)) == "Base.ImmutableDict{$Int,$Int} with 2 entries:\n  ⋮ => ⋮"
+    show(io, MIME"text/plain"(), keys(d))
+    @test String(take!(buf)) ==
+        "Base.KeyIterator for a Base.ImmutableDict{$Int,$Int} with 2 entries. Keys:\n  ⋮"
+
+    io = IOContext(io, :displaysize => (6, 80))
+    show(io, MIME"text/plain"(), d)
+    @test String(take!(buf)) ==
+        "Base.ImmutableDict{$Int,$Int} with 2 entries:\n  3 => 4\n  1 => 2"
+    show(io, MIME"text/plain"(), keys(d))
+    @test String(take!(buf)) ==
+        "Base.KeyIterator for a Base.ImmutableDict{$Int,$Int} with 2 entries. Keys:\n  3\n  1"
+    d = Base.ImmutableDict(d, 5=>6)
+    show(io, MIME"text/plain"(), d)
+    @test String(take!(buf)) ==
+        "Base.ImmutableDict{$Int,$Int} with 3 entries:\n  5 => 6\n  ⋮ => ⋮"
+    show(io, MIME"text/plain"(), keys(d))
+    @test String(take!(buf)) ==
+        "Base.KeyIterator for a Base.ImmutableDict{$Int,$Int} with 3 entries. Keys:\n  5\n  ⋮"
 end

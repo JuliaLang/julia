@@ -13,47 +13,6 @@ include("testenv.jl")
 addprocs_with_testenv(4)
 @test nprocs() == 5
 
-function reuseport_tests()
-    # Run the test on all processes.
-    results = asyncmap(procs()) do p
-        remotecall_fetch(p) do
-            ports_lower = []        # ports of pids lower than myid()
-            ports_higher = []       # ports of pids higher than myid()
-            for w in Base.Distributed.PGRP.workers
-                w.id == myid() && continue
-                port = Base._sockname(w.r_stream, true)[2]
-                if (w.id == 1)
-                    # master connects to workers
-                    push!(ports_higher, port)
-                elseif w.id < myid()
-                    push!(ports_lower, port)
-                elseif w.id > myid()
-                    push!(ports_higher, port)
-                end
-            end
-            @assert (length(ports_lower) + length(ports_higher)) == nworkers()
-            for portset in [ports_lower, ports_higher]
-                if (length(portset) > 0) && (length(unique(portset)) != 1)
-                    warn("SO_REUSEPORT TESTS FAILED. UNSUPPORTED/OLDER UNIX VERSION?")
-                    return 0
-                end
-            end
-            return myid()
-        end
-    end
-
-    # Ensure that the code has indeed been successfully executed everywhere
-    @test all(p -> p in results, procs())
-end
-
-# Test that the client port is reused. SO_REUSEPORT may not be supported on
-# all UNIX platforms, Linux kernels prior to 3.9 and older versions of OSX
-if ccall(:jl_has_so_reuseport, Int32, ()) == 1
-    reuseport_tests()
-else
-    info("SO_REUSEPORT is unsupported, skipping reuseport tests.")
-end
-
 id_me = myid()
 id_other = filter(x -> x != id_me, procs())[rand(1:(nprocs()-1))]
 
@@ -384,12 +343,8 @@ Atrue = reshape(1:30, sz)
 S = @inferred(SharedArray{Int,2}(fn, sz))
 @test S == Atrue
 @test length(procs(S)) > 1
-@sync begin
-    for p in procs(S)
-        @async remotecall_wait(p, S) do D
-            fill!(D.loc_subarr_1d, myid())
-        end
-    end
+@everywhere procs(S) begin
+    $fill!($S.loc_subarr_1d, $myid())
 end
 check_pids_all(S)
 
@@ -477,9 +432,7 @@ remotecall_fetch(setindex!, pids_d[findfirst(id->(id != myid()), pids_d)], d, 1.
 @test s != d
 copy!(d, s)
 @everywhere setid!(A) = A[localindexes(A)] = myid()
-@sync for p in procs(ds)
-    @async remotecall_wait(setid!, p, ds)
-end
+@everywhere procs(ds) setid!($ds)
 @test d == s
 @test ds != s
 @test first(ds) == first(procs(ds))
@@ -1246,6 +1199,50 @@ for p in procs()
     @test p == remotecall_fetch(new_bar, p)
 end
 
+# @everywhere (remotecall_eval) behaviors (#22589)
+let (p, p2) = filter!(p -> p != myid(), procs())
+    @test (myid() + 1) == @everywhere myid() (myid() + 1)
+    @test (p * 2) == @everywhere p (myid() * 2)
+    @test 1 == @everywhere p defined_on_p = 1
+    @test !@isdefined defined_on_p
+    @test !isdefined(Main, :defined_on_p)
+    @test remotecall_fetch(isdefined, p, Main, :defined_on_p)
+    @test !remotecall_fetch(isdefined, p2, Main, :defined_on_p)
+    @test nothing === @everywhere [p, p] defined_on_p += 1
+    @test 3 === @everywhere p defined_on_p
+    let ref = Ref(0)
+        @test nothing ===
+            @everywhere [myid(), p, myid(), myid(), p] begin
+                Test.@test Main === @__MODULE__
+                $ref[] += 1
+            end
+        @test ref[] == 3
+    end
+    function test_throw_on(procs, msg)
+        try
+            @everywhere procs error($msg)
+            error("test failed to throw")
+        catch excpt
+            if procs isa Int
+                ex = Any[excpt]
+            else
+                ex = Any[ (ex::CapturedException).ex for ex in (excpt::CompositeException).exceptions ]
+            end
+            for (p, ex) in zip(procs, ex)
+                if procs isa Int || p != myid()
+                    @test (ex::RemoteException).pid == p
+                    ex = ((ex::RemoteException).captured::CapturedException).ex
+                end
+                @test (ex::ErrorException).msg == msg
+            end
+        end
+    end
+    test_throw_on(p, "everywhere on p")
+    test_throw_on(myid(), "everywhere on myid")
+    test_throw_on([p, myid()], "everywhere on myid and p")
+    test_throw_on([p2, p], "everywhere on p and p2")
+end
+
 # Test addprocs enable_threaded_blas parameter
 
 const get_num_threads = function() # anonymous so it will be serialized when called
@@ -1778,6 +1775,49 @@ rmprocs(workers())
 p1,p2 = addprocs_with_testenv(2)
 @everywhere f22865(p) = remotecall_fetch(x->x.*2, p, ones(2))
 @test ones(2).*2 == remotecall_fetch(f22865, p1, p2)
+
+function reuseport_tests()
+    # Run the test on all processes.
+    results = asyncmap(procs()) do p
+        remotecall_fetch(p) do
+            ports_lower = []        # ports of pids lower than myid()
+            ports_higher = []       # ports of pids higher than myid()
+            for w in Base.Distributed.PGRP.workers
+                w.id == myid() && continue
+                port = Base._sockname(w.r_stream, true)[2]
+                if (w.id == 1)
+                    # master connects to workers
+                    push!(ports_higher, port)
+                elseif w.id < myid()
+                    push!(ports_lower, port)
+                elseif w.id > myid()
+                    push!(ports_higher, port)
+                end
+            end
+            @assert (length(ports_lower) + length(ports_higher)) == nworkers()
+            for portset in [ports_lower, ports_higher]
+                if (length(portset) > 0) && (length(unique(portset)) != 1)
+                    warn("SO_REUSEPORT TESTS FAILED. UNSUPPORTED/OLDER UNIX VERSION?")
+                    return 0
+                end
+            end
+            return myid()
+        end
+    end
+
+    # Ensure that the code has indeed been successfully executed everywhere
+    @test all(p -> p in results, procs())
+end
+
+# Test that the client port is reused. SO_REUSEPORT may not be supported on
+# all UNIX platforms, Linux kernels prior to 3.9 and older versions of OSX
+if ccall(:jl_has_so_reuseport, Int32, ()) == 1
+    rmprocs(workers())
+    addprocs_with_testenv(4; lazy=false)
+    reuseport_tests()
+else
+    info("SO_REUSEPORT is unsupported, skipping reuseport tests.")
+end
 
 # Run topology tests last after removing all workers, since a given
 # cluster at any time only supports a single topology.

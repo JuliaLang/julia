@@ -488,7 +488,7 @@ let d = ImmutableDict{String, String}(),
     @test (k1 => v2) in d3
     @test (k1 => v1) in d4
     @test (k1 => v2) in d4
-    @test !in(k2 => "value2", d4, ===)
+    @test in(k2 => "value2", d4, ===)
     @test in(k2 => v2, d4, ===)
     @test in(k2 => NaN, dnan, isequal)
     @test in(k2 => NaN, dnan, ===)

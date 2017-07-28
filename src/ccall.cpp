@@ -2106,7 +2106,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
                 size_t rtsz = jl_datatype_size(rt);
                 assert(rtsz > 0);
                 Value *strct = emit_allocobj(ctx, rtsz, runtime_bt);
-                int boxalign = jl_gc_alignment(rtsz);
+                int boxalign = jl_datatype_align(rt);
 #ifndef JL_NDEBUG
 #if JL_LLVM_VERSION >= 40000
                 const DataLayout &DL = jl_data_layout;

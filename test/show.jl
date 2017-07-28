@@ -470,13 +470,6 @@ function f13127()
 end
 @test f13127() == "$(curmod_prefix)f"
 
-let a = Pair(1.0,2.0)
-    @test sprint(show,a) == "1.0=>2.0"
-end
-let a = Pair(Pair(1,2),Pair(3,4))
-    @test sprint(show,a) == "(1=>2)=>(3=>4)"
-end
-
 #test methodshow.jl functions
 @test Base.inbase(Base)
 @test Base.inbase(LinAlg)
@@ -597,6 +590,22 @@ test_mt(show_f5, "show_f5(A::AbstractArray{T,N}, indexes::Vararg{$Int,N})")
 @test sprint(show, :([a; b])) == ":([a; b])"
 @test_repr "[a;]"
 @test_repr "[a; b]"
+
+# other brackets and braces
+@test_repr "[a]"
+@test_repr "[a,b]"
+@test_repr "[a;b;c]"
+@test_repr "[a b]"
+@test_repr "[a b;]"
+@test_repr "[a b c]"
+@test_repr "[a b; c d]"
+@test_repr "{a}"
+@test_repr "{a,b}"
+@test_repr "{a;b;c}"
+@test_repr "{a b}"
+@test_repr "{a b;}"
+@test_repr "{a b c}"
+@test_repr "{a b; c d}"
 
 # Printing of :(function f end)
 @test sprint(show, :(function f end)) == ":(function f end)"
@@ -817,4 +826,33 @@ end
     @test sprint(show, Val(Float64))  == "Val{Float64}()"  # Val of a type
     @test sprint(show, Val(:Float64)) == "Val{:Float64}()" # Val of a symbol
     @test sprint(show, Val(true))     == "Val{true}()"     # Val of a value
+end
+
+@testset "printing of Pair's" begin
+    for (p, s) in (Pair(1.0,2.0)                          => "1.0 => 2.0",
+                   Pair(Pair(1,2), Pair(3,4))             => "(1=>2) => (3=>4)",
+                   Pair{Integer,Int64}(1, 2)              => "Pair{Integer,Int64}(1, 2)",
+                   (Pair{Integer,Int64}(1, 2) => 3)       => "Pair{Integer,Int64}(1, 2) => 3",
+                   ((1+2im) => (3+4im))                   => "1+2im => 3+4im",
+                   (1 => 2 => Pair{Real,Int64}(3, 4))     => "1 => (2=>Pair{Real,Int64}(3, 4))")
+
+        @test sprint(show, p) == s
+    end
+    # - when the context has :compact=>false, print pair's member non-compactly
+    # - if one member is printed as "Pair{...}(...)", no need to put parens around
+    s = IOBuffer()
+    show(IOContext(s, :compact => false), (1=>2) => Pair{Any,Any}(3,4))
+    @test String(take!(s)) == "(1 => 2) => Pair{Any,Any}(3, 4)"
+end
+
+@testset "alignment for pairs" begin  # (#22899)
+    @test replstr([1=>22,33=>4]) == "2-element Array{Pair{$Int,$Int},1}:\n  1=>22\n 33=>4 "
+    # first field may have "=>" in its representation
+    @test replstr(Pair[(1=>2)=>3, 4=>5]) ==
+        "2-element Array{Pair,1}:\n (1=>2)=>3\n      4=>5"
+    @test replstr(Any[Dict(1=>2)=> (3=>4), 1=>2]) ==
+        "2-element Array{Any,1}:\n Dict(1=>2)=>(3=>4)\n          1=>2     "
+    # left-alignment when not using the "=>" symbol
+    @test replstr(Pair{Integer,Int64}[1=>2, 33=>4]) ==
+        "2-element Array{Pair{Integer,Int64},1}:\n Pair{Integer,Int64}(1, 2) \n Pair{Integer,Int64}(33, 4)"
 end

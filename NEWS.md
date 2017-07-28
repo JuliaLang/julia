@@ -10,6 +10,9 @@ New language features
 Language changes
 ----------------
 
+  * The syntax for parametric methods, `function f{T}(x::T)`, has been
+    changed to `function f(x::T) where {T}` ([#11310]).
+
   * The syntax `1.+2` is deprecated, since it is ambiguous: it could mean either
     `1 .+ 2` (the current meaning) or `1. + 2` ([#19089]).
 
@@ -19,8 +22,15 @@ Language changes
   * Declaring arguments as `x::ANY` to avoid specialization has been replaced
     by `@nospecialize x`. ([#22666]).
 
+  * Keyword argument default values are now evaluated in successive scopes ---
+    the scope for each expression includes only previous keyword arguments, in
+    left-to-right order ([#17240]).
+
   * The parsing of `1<<2*3` as `1<<(2*3)` is deprecated, and will change to
     `(1<<2)*3` in a future version ([#13079]).
+
+  * `{ }` expressions now use `braces` and `bracescat` as expression heads instead
+    of `cell1d` and `cell2d`, and parse similarly to `vect` and `vcat` ([#8470]).
 
 Breaking changes
 ----------------
@@ -75,6 +85,13 @@ This section lists changes that do not have deprecation warnings.
     `@everywhere include_string(Main, $(read("filename", String)), "filename")`.
     Improving upon this API is left as an opportunity for packages.
 
+  * `randperm(n)` and `randcycle(n)` now always return a `Vector{Int}` (independent of
+    the type of `n`). Use the corresponding mutating functions `randperm!` and `randcycle!`
+    to control the array type ([#22723]).
+
+  * Worker-worker connections are setup lazily for an `:all_to_all` topology. Use keyword
+    arg `lazy=false` to force all connections to be setup during a `addprocs` call. ([#22814])
+
 Library improvements
 --------------------
 
@@ -127,6 +144,9 @@ Library improvements
 
   * `Diagonal` is now parameterized on the type of the wrapped vector. This allows
     for `Diagonal` matrices with arbitrary `AbstractVector`s ([#22718]).
+
+  * Mutating versions of `randperm` and `randcycle` have been added:
+    `randperm!` and `randcycle!` ([#22723]).
 
 Compiler/Runtime improvements
 -----------------------------
@@ -213,6 +233,9 @@ Deprecated or removed
 
   * The function `showall` is deprecated. Showing entire values is the default, unless an
     `IOContext` specifying `:limit=>true` is in use ([#22847]).
+
+  * Calling `write` on non-isbits arrays is deprecated in favor of explicit loops or
+    `serialize` ([#6466]).
 
   * The default `juliarc.jl` file on Windows has been removed. Now must explicitly include the
     full path if you need access to executables or libraries in the `JULIA_HOME` directory, e.g.
@@ -640,6 +663,8 @@ Library improvements
     This form allows specification of the returned indices' style. For example,
     `enumerate(IndexLinear, iterable)` yields linear indices and
     `enumerate(IndexCartesian, iterable)` yields cartesian indices ([#16378]).
+
+  * Jump to first/last history entries in the REPL via "Alt-<" and "Alt->" ([#22829]).
 
 Compiler/Runtime improvements
 -----------------------------

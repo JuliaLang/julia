@@ -8,6 +8,16 @@
 @test eltype(GenericString) == Char
 @test start("abc") == 1
 @test cmp("ab","abc") == -1
+@test "abc" === "abc"
+@test "ab"  !== "abc"
+@test string("ab", 'c') === "abc"
+codegen_egal_of_strings(x, y) = (x===y, x!==y)
+@test codegen_egal_of_strings(string("ab", 'c'), "abc") === (true, false)
+let strs = ["", "a", "a b c", "до свидания"]
+    for x in strs, y in strs
+        @test (x === y) == (object_id(x) == object_id(y))
+    end
+end
 
 # {starts,ends}with
 @test startswith("abcd", 'a')
@@ -69,11 +79,13 @@ end
 @test_throws ArgumentError gensym("ab\0")
 
 # issue #6949
-let f =IOBuffer(),
+let f = IOBuffer(),
     x = split("1 2 3")
-    @test write(f, x) == 3
-    @test String(take!(f)) == "123"
-    @test invoke(write, Tuple{IO, AbstractArray}, f, x) == 3
+    local nb = 0
+    for c in x
+        nb += write(f, c)
+    end
+    @test nb == 3
     @test String(take!(f)) == "123"
 end
 

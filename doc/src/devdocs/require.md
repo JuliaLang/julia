@@ -1,6 +1,6 @@
 # Module loading
 
-`Base.require`[@ref] is responsible for loading modules and it also manages the
+[`Base.require`](@ref) is responsible for loading modules and it also manages the
 precompilation cache. It is the implementation of the `import` statement.
 
 ## Experimental features

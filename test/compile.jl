@@ -578,27 +578,23 @@ let
             end
             """)
 
-        @sync for wid in test_workers
-            @async remotecall_fetch(Core.eval, wid, Base, quote
-                unshift!(LOAD_PATH, $load_path)
-                unshift!(LOAD_CACHE_PATH, $load_cache_path)
-            end)
+        @everywhere test_workers begin
+            unshift!(LOAD_PATH, $load_path)
+            unshift!(Base.LOAD_CACHE_PATH, $load_cache_path)
         end
         try
             @eval using $ModuleB
             uuid = Base.module_uuid(getfield(Main, ModuleB))
             for wid in test_workers
-                @test remotecall_fetch(Core.eval, wid, Main, :( Base.module_uuid($ModuleB) )) == uuid
+                @test Base.Distributed.remotecall_eval(Main, wid, :( Base.module_uuid($ModuleB) )) == uuid
                 if wid != myid() # avoid world-age errors on the local proc
                     @test remotecall_fetch(g, wid) == wid
                 end
             end
         finally
-            @sync for wid in test_workers
-                @async remotecall_fetch(Core.eval, wid, Base, quote
-                    shift!(LOAD_PATH)
-                    shift!(LOAD_CACHE_PATH)
-                end)
+            @everywhere test_workers begin
+                shift!(LOAD_PATH)
+                shift!(Base.LOAD_CACHE_PATH)
             end
         end
     finally

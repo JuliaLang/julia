@@ -619,14 +619,15 @@ end
 @test_throws ParseError parse("--x")
 @test_throws ParseError parse("stagedfunction foo(x); end")
 
-#@test_throws ParseError parse("{1,2,3}")
-#@test_throws ParseError parse("{1 2 3 4}")
-#@test_throws ParseError parse("{1,2; 3,4}")
-@test_throws ParseError parse("{x for x in 1:10}")
-@test_throws ParseError parse("{x=>y for (x,y) in zip([1,2,3],[4,5,6])}")
-#@test_throws ParseError parse("{:a=>1, :b=>2}")
-
 @test parse("A=>B") == Expr(:call, :(=>), :A, :B)
+
+@test parse("{1,2,3}") == Expr(:braces, 1, 2, 3)
+@test parse("{1 2 3 4}") == Expr(:bracescat, Expr(:row, 1, 2, 3, 4))
+@test parse("{1 2; 3 4}") == Expr(:bracescat, Expr(:row, 1, 2), Expr(:row, 3, 4))
+@test parse("{x for x in 1:10}") == Expr(:braces, :(x for x in 1:10))
+@test parse("{x=>y for (x,y) in zip([1,2,3],[4,5,6])}") == Expr(:braces, :(x=>y for (x,y) in zip([1,2,3],[4,5,6])))
+@test parse("{:a=>1, :b=>2}") == Expr(:braces, Expr(:call, :(=>), QuoteNode(:a), 1),
+                                      Expr(:call, :(=>), QuoteNode(:b), 2))
 
 # this now is parsed as getindex(Pair{Any,Any}, ...)
 @test_throws MethodError eval(parse("(Any=>Any)[]"))
@@ -1254,3 +1255,24 @@ end === (3, String)
 
 # issue #7479
 @test expand(Main, parse("(true &&& false)")) == Expr(:error, "misplaced \"&\" expression")
+
+# if an indexing expression becomes a cat expression, `end` is not special
+@test_throws ParseError parse("a[end end]")
+@test_throws ParseError parse("a[end;end]")
+#@test_throws ParseError parse("a[end;]")  # this is difficult to fix
+let a = rand(8), i = 3
+    @test a[[1:i-1; i+1:end]] == a[[1,2,4,5,6,7,8]]
+end
+
+# issue #18935
+@test [begin
+          @inbounds for i = 1:10 end
+       end for i = 1:5] == fill(nothing, 5)
+
+# issue #18912
+@test_throws ParseError parse("(::)")
+@test parse(":(::)") == QuoteNode(Symbol("::"))
+@test_throws ParseError parse("f(::) = ::")
+@test parse("(::A)") == Expr(Symbol("::"), :A)
+@test_throws ParseError parse("(::, 1)")
+@test_throws ParseError parse("(1, ::)")

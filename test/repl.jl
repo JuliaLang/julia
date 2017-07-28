@@ -214,9 +214,9 @@ function buffercontents(buf::IOBuffer)
     c
 end
 
-function AddCustomMode(repl)
+function AddCustomMode(repl, prompt)
     # Custom REPL mode tests
-    foobar_mode = LineEdit.Prompt("TestΠ";
+    foobar_mode = LineEdit.Prompt(prompt;
         prompt_prefix="\e[38;5;166m",
         prompt_suffix=Base.text_colors[:white],
         on_enter = s->true,
@@ -289,7 +289,7 @@ fakehistory = """
 """
 
 # Test various history related issues
-begin
+for prompt = ["TestΠ", () -> randstring(rand(1:10))]
     stdin_write, stdout_read, stdout_read, repl = fake_repl()
     # In the future if we want we can add a test that the right object
     # gets displayed by intercepting the display
@@ -334,6 +334,26 @@ begin
     @test buffercontents(LineEdit.buffer(s)) == "2 + 2"
     LineEdit.history_next(s, hp)
     @test LineEdit.mode(s) == repl_mode
+    @test buffercontents(LineEdit.buffer(s)) == "wip"
+    @test position(LineEdit.buffer(s)) == 3
+    LineEdit.history_next(s, hp)
+    @test buffercontents(LineEdit.buffer(s)) == "wip"
+    LineEdit.history_prev(s, hp, 2)
+    @test LineEdit.mode(s) == shell_mode
+    @test buffercontents(LineEdit.buffer(s)) == "ls"
+    LineEdit.history_prev(s, hp, -2) # equivalent to history_next(s, hp, 2)
+    @test LineEdit.mode(s) == repl_mode
+    @test buffercontents(LineEdit.buffer(s)) == "2 + 2"
+    LineEdit.history_next(s, hp, -2) # equivalent to history_prev(s, hp, 2)
+    @test LineEdit.mode(s) == shell_mode
+    @test buffercontents(LineEdit.buffer(s)) == "ls"
+    LineEdit.history_first(s, hp)
+    @test LineEdit.mode(s) == repl_mode
+    @test buffercontents(LineEdit.buffer(s)) == "é"
+    LineEdit.history_next(s, hp, 6)
+    @test LineEdit.mode(s) == shell_mode
+    @test buffercontents(LineEdit.buffer(s)) == "ls"
+    LineEdit.history_last(s, hp)
     @test buffercontents(LineEdit.buffer(s)) == "wip"
     @test position(LineEdit.buffer(s)) == 3
     LineEdit.move_line_start(s)
@@ -438,7 +458,7 @@ begin
 
     # Test that new modes can be dynamically added to the REPL and will
     # integrate nicely
-    foobar_mode, custom_histp = AddCustomMode(repl)
+    foobar_mode, custom_histp = AddCustomMode(repl, prompt)
 
     # ^R l, should now find `ls` in foobar mode
     LineEdit.enter_search(s, histp, true)
@@ -713,14 +733,15 @@ const altkeys = [Dict{Any,Any}("\e[A" => (s,o...)->(LineEdit.edit_move_up(s) || 
 
 
 if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
-    for keys = [altkeys, merge(altkeys...)]
+    for keys = [altkeys, merge(altkeys...)],
+            altprompt = ["julia-$(VERSION.major).$(VERSION.minor)> ",
+                         () -> "julia-$(Base.GIT_VERSION_INFO.commit_short)"]
         histfile = tempname()
         try
             stdin_write, stdout_read, stderr_read, repl = fake_repl()
 
             repl.specialdisplay = Base.REPL.REPLDisplay(repl)
             repl.history_file = true
-            altprompt = "julia-$(VERSION.major).$(VERSION.minor)> "
             withenv("JULIA_HISTORY" => histfile) do
                 repl.interface = REPL.setup_interface(repl, extra_repl_keymap = altkeys)
             end
@@ -747,7 +768,7 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
 
             # Check that the correct prompt was displayed
             output = readuntil(stdout_read, "1 * 1;")
-            @test !isempty(search(output, altprompt))
+            @test !isempty(search(output, LineEdit.prompt_string(altprompt)))
             @test isempty(search(output, "julia> "))
 
             # Check the history file

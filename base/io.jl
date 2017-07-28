@@ -314,6 +314,9 @@ write(s::IO, x::Bool) = write(s, UInt8(x))
 write(to::IO, p::Ptr) = write(to, convert(UInt, p))
 
 function write(s::IO, A::AbstractArray)
+    if !isbits(eltype(A))
+        depwarn("Calling `write` on non-isbits arrays is deprecated. Use a loop or `serialize` instead.", :write)
+    end
     nb = 0
     for a in A
         nb += write(s, a)
@@ -321,19 +324,37 @@ function write(s::IO, A::AbstractArray)
     return nb
 end
 
-@noinline function write(s::IO, a::Array{UInt8}) # mark noinline to ensure the array is gc-rooted somewhere (by the caller)
-    return unsafe_write(s, pointer(a), sizeof(a))
-end
-
-@noinline function write(s::IO, a::Array{T}) where T # mark noinline to ensure the array is gc-rooted somewhere (by the caller)
-    if isbits(T)
+@noinline function write(s::IO, a::Array)  # mark noinline to ensure the array is gc-rooted somewhere (by the caller)
+    if isbits(eltype(a))
         return unsafe_write(s, pointer(a), sizeof(a))
     else
+        depwarn("Calling `write` on non-isbits arrays is deprecated. Use a loop or `serialize` instead.", :write)
         nb = 0
         for b in a
             nb += write(s, b)
         end
         return nb
+    end
+end
+
+function write(s::IO, a::SubArray{T,N,<:Array}) where {T,N}
+    if !isbits(T)
+        return invoke(write, Tuple{IO, AbstractArray}, s, a)
+    end
+    elsz = sizeof(T)
+    colsz = size(a,1) * elsz
+    if stride(a,1) != 1
+        for idxs in CartesianRange(size(a))
+            unsafe_write(s, pointer(a, idxs.I), elsz)
+        end
+        return elsz * length(a)
+    elseif N <= 1
+        return unsafe_write(s, pointer(a, 1), colsz)
+    else
+        for idxs in CartesianRange((1, size(a)[2:end]...))
+            unsafe_write(s, pointer(a, idxs.I), colsz)
+        end
+        return colsz * trailingsize(a,2)
     end
 end
 

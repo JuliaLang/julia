@@ -34,7 +34,7 @@ using llvm_file_magic = sys::fs::file_magic;
 
 #include "julia.h"
 #include "julia_internal.h"
-#include "codegen_internal.h"
+#include "debuginfo.h"
 #if defined(_OS_LINUX_)
 #  include <link.h>
 #endif
@@ -88,6 +88,13 @@ void jl_add_linfo_in_flight(StringRef name, jl_method_instance_t *linfo, const D
 {
     linfo_in_flight[mangle(name, DL)] = linfo;
 }
+
+
+#ifdef _OS_WINDOWS_
+#if defined(_CPU_X86_64_)
+void *lookupWriteAddressFor(RTDyldMemoryManager *memmgr, void *rt_addr);
+#endif
+#endif
 
 #if defined(_OS_WINDOWS_)
 static void create_PRUNTIME_FUNCTION(uint8_t *Code, size_t Size, StringRef fnname,
