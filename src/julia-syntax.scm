@@ -1038,9 +1038,10 @@
                                (if (nospecialize-meta? a) (caddr a) a))
                              argl))
                   (argl (if op (cons `(|::| (call (core Typeof) ,op)) argl) argl))
-                  (sparams (map analyze-typevar (cond (has-sp (cddr head))
-                                                      (where  where)
-                                                      (else   '()))))
+                  (raw-typevars (cond (has-sp (cddr head))
+                                      (where  where)
+                                      (else   '())))
+                  (sparams (map analyze-typevar raw-typevars))
                   (isstaged (eq? (car e) 'stagedfunction))
                   (adj-decl (lambda (n) (if (and (decl? n) (length= n 2))
                                             `(|::| |#self#| ,(cadr n))
@@ -1060,7 +1061,10 @@
                  (syntax-deprecation #f
                                      (string "parametric method syntax " (deparse (cadr e))
                                              (linenode-string (function-body-lineno body)))
-                                     (deparse `(where (call ,name ,@(cdr argl)) ,@(map car sparams)))))
+                                     (deparse `(where (call ,name ,@(if (has-parameters? argl)
+                                                                        (cons (car argl) (cddr argl))
+                                                                        (cdr argl)))
+                                                      ,@raw-typevars))))
              (expand-forms
               (method-def-expr name sparams argl body isstaged rett))))
           (else
