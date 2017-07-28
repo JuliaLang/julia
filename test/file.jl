@@ -1159,27 +1159,27 @@ end  # !Sys.iswindows
 
 function test_22922()
     mktempdir() do tmpdir
-        dirname = rsplit(tmpdir,"/";limit=2)[2]
+        (_, dirname) = splitdir(tmpdir)
         @test dirname[1:3] == "jl_"
     end
     mktempdir(;prefix="ABC") do tmpdir
-        dirname = rsplit(tmpdir,"/";limit=2)[2]
+        (_, dirname) = splitdir(tmpdir)
         @test dirname[1:3] == "ABC"
     end
     mktemp() do tmp,io
-        filename = rsplit(tmp,"/";limit=2)[2]
+        (_, filename) = splitdir(tmp)
         @test filename[1:3] == "jl_"
     end
     mktemp(;prefix="ABC") do tmp,io
-        filename = rsplit(tmp,"/";limit=2)[2]
+        (path, filename) = splitdir(tmp)
         @test filename[1:3] == "ABC"
     end
     tmp = tempname()
-    filename = rsplit(tmp,"/";limit=2)[2]
+    (_,filename) = splitdir(tmp)
     @test filename[1:3]=="jl_"
 
     tmp = tempname(;prefix = "0123456789")
-    filename = rsplit(tmp,"/";limit=2)[2]
+    (_,filename) = splitdir(tmp)
     @test filename[1:3] == "012"
     if !Sys.iswindows()
         #Unix like OS have prefix size limit of 5 chars
