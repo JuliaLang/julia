@@ -387,7 +387,6 @@ let oldout = STDOUT, olderr = STDERR
         @test wrerr === STDERR
         err = @async read(rderr, String)
         @test dump(Int64) === nothing
-        @test eval(:(@dumpexpr x)) === nothing
         if !Sys.iswindows()
             close(wrout)
             close(wrerr)
@@ -409,7 +408,7 @@ let oldout = STDOUT, olderr = STDERR
         redirect_stderr(olderr)
         close(wrout)
         close(wrerr)
-        @test wait(out) == "Int64 <: Signed\nSymbol x\nTESTA\nTESTB\nΑ1Β2\"A\"\nA\n123\"C\"\n"
+        @test wait(out) == "Int64 <: Signed\nTESTA\nTESTB\nΑ1Β2\"A\"\nA\n123\"C\"\n"
         @test wait(err) == "TESTA\nTESTB\nΑ1Β2\"A\"\n"
     finally
         redirect_stdout(oldout)
