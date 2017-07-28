@@ -57,7 +57,7 @@ end
 
 function remove(pkg::AbstractString)
     isdir(".trash") || mkdir(".trash")
-    ispath(".trash/$pkg") && rm(".trash/$pkg", recursive=true)
+    ispath(".trash/$pkg") && remove(".trash/$pkg", recursive=true)
     mv(pkg, ".trash/$pkg")
 end
 
