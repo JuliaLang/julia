@@ -232,7 +232,7 @@ Adds a new docstring `str` to the docsystem of `__module__` for `binding` and si
 function doc!(__module__::Module, b::Binding, str::DocStr, @nospecialize sig = Union{})
     initmeta(__module__)
     m = get!(meta(__module__), b, MultiDoc())
-    if haskey(m.docs, sig)
+    if haskey(m.docs, sig) && __module__ != Main
         # We allow for docstrings to be updated, but print a warning since it is possible
         # that over-writing a docstring *may* have been accidental.
         warn("replacing docs for '$b :: $sig' in module '$(__module__)'.")
