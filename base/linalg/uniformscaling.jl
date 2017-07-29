@@ -206,7 +206,7 @@ function isapprox(J::UniformScaling,A::AbstractMatrix;
                   nans::Bool=false, norm::Function=vecnorm)
     n = checksquare(A)
     Jnorm = norm === vecnorm ? abs(J.λ)*sqrt(n) : (norm === Base.norm ? abs(J.λ) : norm(diagm(fill(J.λ, n))))
-    return norm(A - J) <= atol + rtol*max(norm(A), Jnorm)
+    return norm(A - J) <= max(atol, rtol*max(norm(A), Jnorm))
 end
 isapprox(A::AbstractMatrix,J::UniformScaling;kwargs...) = isapprox(J,A;kwargs...)
 
