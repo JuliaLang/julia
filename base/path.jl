@@ -201,7 +201,7 @@ joinpath(a::AbstractString) = a
     joinpath(parts...) -> AbstractString
 
 Join path components into a full path. If some argument is an absolute path, then prior
-components are dropped. On Windows, if the drives of the parts don't match, the second path
+components are dropped. On Windows, if the drives of the parts don't match, the last path
 is returned.
 
 # Examples
