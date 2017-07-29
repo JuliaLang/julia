@@ -362,8 +362,13 @@ end
     for t in (Float64, Complex{Float64})
         D = Diagonal(randn(t, 5, 5))
         B = Diagonal(randn(t, 5, 5))
+        DD = Diagonal([randn(t, 2, 2), rand(t, 2, 2)])
+        BB = Diagonal([randn(t, 2, 2), rand(t, 2, 2)])
+        fullDD = copy!(Matrix{Matrix{t}}(2, 2), DD)
+        fullBB = copy!(Matrix{Matrix{t}}(2, 2), BB)
         for f in (*, Ac_mul_B, A_mul_Bc, Ac_mul_Bc, At_mul_B, A_mul_Bt, At_mul_Bt)
-            @test f(D, B)::Diagonal{t} == f(Matrix(D), Matrix(B))
+            @test f(D , B )::Diagonal{t} == f(Matrix(D), Matrix(B))
+            @test f(DD, BB)::Diagonal{t} == f(fullDD, fullBB)
         end
     end
 end
