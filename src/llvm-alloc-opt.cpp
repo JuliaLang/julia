@@ -236,17 +236,10 @@ void AllocOpt::LifetimeMarker::insert(Instruction *ptr, Constant *sz, Instructio
         if (DT.dominates(orig, bb))
             continue;
         auto F = bb->getParent();
-#if JL_LLVM_VERSION >= 50000
-        F->print(llvm::dbgs(), nullptr, false, true);
-        orig->print(llvm::dbgs(), true);
+        llvm_dump(F);
+        llvm_dump(orig);
         jl_safe_printf("Does not dominate BB:\n");
-        bb->print(llvm::dbgs(), true);
-#else
-        F->dump();
-        orig->dump();
-        jl_safe_printf("Does not dominate BB:\n");
-        bb->dump();
-#endif
+        llvm_dump(bb);
         abort();
     }
 #endif
@@ -622,7 +615,7 @@ bool AllocOpt::runOnFunction(Function &F)
         AllocaInst *buff;
         Instruction *ptr;
         if (sz == 0) {
-            buff = prolog_builder.CreateAlloca(T_int8, 0);
+            buff = prolog_builder.CreateAlloca(T_int8, ConstantInt::get(T_int64, 0));
             ptr = buff;
         }
         else {

@@ -16,6 +16,7 @@
 #  include "llvm/ExecutionEngine/Orc/ObjectLinkingLayer.h"
 #endif
 #include "llvm/ExecutionEngine/ObjectMemoryBuffer.h"
+#include "llvm/ExecutionEngine/JITEventListener.h"
 
 #include "llvm/IR/LegacyPassManager.h"
 extern legacy::PassManager *jl_globalPM;
@@ -101,12 +102,9 @@ typedef orc::JITSymbol JL_JITSymbol;
 typedef RuntimeDyld::SymbolInfo JL_SymbolInfo;
 #endif
 #if JL_LLVM_VERSION >= 50000
-using orc::RTDyldObjectLinkingLayerBase;
-using orc::RTDyldObjectLinkingLayer;
+using RTDyldObjHandleT = orc::RTDyldObjectLinkingLayerBase::ObjHandleT;
 #else
-using RTDyldObjectLinkingLayerBase = orc::ObjectLinkingLayerBase;
-template <typename NotifyLoadedFtor>
-using RTDyldObjectLinkingLayer = orc::ObjectLinkingLayer<NotifyLoadedFtor>;
+using RTDyldObjHandleT = orc::ObjectLinkingLayerBase::ObjSetHandleT;
 #endif
 
 class JuliaOJIT {
@@ -116,19 +114,35 @@ class JuliaOJIT {
     public:
         DebugObjectRegistrar(JuliaOJIT &JIT);
         template <typename ObjSetT, typename LoadResult>
-        void operator()(RTDyldObjectLinkingLayerBase::ObjSetHandleT H, const ObjSetT &Objects,
-                        const LoadResult &LOS);
+        void operator()(RTDyldObjHandleT H, const ObjSetT &Objects, const LoadResult &LOS);
     private:
+        template <typename ObjT, typename LoadResult>
+        void registerObject(RTDyldObjHandleT H, const ObjT &Object, const LoadResult &LO);
         void NotifyGDB(object::OwningBinary<object::ObjectFile> &DebugObj);
         std::vector<object::OwningBinary<object::ObjectFile>> SavedObjects;
         std::unique_ptr<JITEventListener> JuliaListener;
         JuliaOJIT &JIT;
     };
 
+    struct CompilerT {
+        CompilerT(JuliaOJIT *pjit)
+            : jit(*pjit)
+        {}
+        object::OwningBinary<object::ObjectFile> operator()(Module &M);
+    private:
+        JuliaOJIT &jit;
+    };
+
 public:
-    typedef RTDyldObjectLinkingLayer<DebugObjectRegistrar> ObjLayerT;
+#if JL_LLVM_VERSION >= 50000
+    typedef orc::RTDyldObjectLinkingLayer ObjLayerT;
+    typedef orc::IRCompileLayer<ObjLayerT,CompilerT> CompileLayerT;
+    typedef CompileLayerT::ModuleHandleT ModuleHandleT;
+#else
+    typedef orc::ObjectLinkingLayer<std::reference_wrapper<DebugObjectRegistrar>> ObjLayerT;
     typedef orc::IRCompileLayer<ObjLayerT> CompileLayerT;
     typedef CompileLayerT::ModuleSetHandleT ModuleHandleT;
+#endif
     typedef StringMap<void*> SymbolTableT;
     typedef object::OwningBinary<object::ObjectFile> OwningObj;
 
@@ -160,7 +174,8 @@ private:
     raw_svector_ostream ObjStream;
     legacy::PassManager PM;
     MCContext *Ctx;
-    RTDyldMemoryManager *MemMgr;
+    std::shared_ptr<RTDyldMemoryManager> MemMgr;
+    DebugObjectRegistrar registrar;
     ObjLayerT ObjectLayer;
     CompileLayerT CompileLayer;
     SymbolTableT GlobalSymbolTable;

@@ -653,8 +653,8 @@ void RecursivelyVisit(callback f, Value *V) {
             RecursivelyVisit<VisitInst, callback>(f, TheUser);
             continue;
         }
-        V->dump();
-        TheUser->dump();
+        llvm_dump(V);
+        llvm_dump(TheUser);
         assert(false && "Unexpected instruction");
     }
 }
@@ -1122,11 +1122,11 @@ bool LateLowerGCFrame::CleanupIR(Function &F) {
     AllocaInst *Frame = nullptr;
     if (T_prjlvalue) {
         T_pprjlvalue = T_prjlvalue->getPointerTo();
-        Frame = new AllocaInst(T_prjlvalue, ConstantInt::get(T_int32, maxframeargs),
+        Frame = new AllocaInst(T_prjlvalue,
 #if JL_LLVM_VERSION >= 50000
         0,
 #endif
-        "", StartOff);
+        ConstantInt::get(T_int32, maxframeargs), "", StartOff);
     }
     for (BasicBlock &BB : F) {
         for (auto it = BB.begin(); it != BB.end();) {

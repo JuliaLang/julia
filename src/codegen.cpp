@@ -85,6 +85,7 @@
 #include <polly/RegisterPasses.h>
 #include <polly/ScopDetection.h>
 #endif
+#include <llvm/ExecutionEngine/ExecutionEngine.h>
 #include "fix_llvm_assert.h"
 
 using namespace llvm;
@@ -1288,8 +1289,15 @@ uint64_t jl_get_llvm_fptr(void *function)
 {
     Function *F = (Function*)function;
     uint64_t addr = getAddressForFunction(F->getName());
-    if (!addr)
+    if (!addr) {
+#if JL_LLVM_VERSION >= 50000
+        if (auto exp_addr = jl_ExecutionEngine->findUnmangledSymbol(F->getName()).getAddress()) {
+            addr = exp_addr.get();
+        }
+#else
         addr = jl_ExecutionEngine->findUnmangledSymbol(F->getName()).getAddress();
+#endif
+    }
     return addr;
 }
 
@@ -5182,7 +5190,11 @@ static std::unique_ptr<Module> emit_function(
                     if (ctx.debug_enabled && vi.dinfo && !vi.boxroot && !vi.value.V) {
                         SmallVector<uint64_t, 8> addr;
                         addr.push_back(llvm::dwarf::DW_OP_deref);
+#if JL_LLVM_VERSION >= 50000
+                        addr.push_back(llvm::dwarf::DW_OP_plus_uconst);
+#else
                         addr.push_back(llvm::dwarf::DW_OP_plus);
+#endif
                         addr.push_back((i - 1) * sizeof(void*));
                         if ((Metadata*)vi.dinfo->getType() != jl_pvalue_dillvmt)
                             addr.push_back(llvm::dwarf::DW_OP_deref);
@@ -6795,28 +6807,28 @@ extern "C" void jl_init_codegen(void)
 // for debugging from gdb
 extern "C" void jl_dump_llvm_value(void *v)
 {
-#if JL_LLVM_VERSION >= 50000
-    ((Value*)v)->print(llvm::dbgs(), true);
-#else
-    ((Value*)v)->dump();
-#endif
+    llvm_dump((Value*)v);
 }
+
 extern "C" void jl_dump_llvm_inst_function(void *v)
 {
-#if JL_LLVM_VERSION >= 50000
-    cast<Instruction>(((Value*)v))->getParent()->getParent()->print(llvm::dbgs(), nullptr, true);
-#else
-    cast<Instruction>(((Value*)v))->getParent()->getParent()->dump();
-#endif
+    llvm_dump(cast<Instruction>(((Value*)v))->getParent()->getParent());
 }
+
 extern "C" void jl_dump_llvm_type(void *v)
 {
-#if JL_LLVM_VERSION >= 50000
-    ((Type*)v)->print(llvm::dbgs(), true);
-#else
-    ((Type*)v)->dump();
-#endif
+    llvm_dump((Type*)v);
     putchar('\n');
+}
+
+extern "C" void jl_dump_llvm_module(void *v)
+{
+    llvm_dump((Module*)v);
+}
+
+extern "C" void jl_dump_llvm_metadata(void *v)
+{
+    llvm_dump((Metadata*)v);
 }
 
 extern void jl_write_bitcode_func(void *F, char *fname) {

@@ -2292,6 +2292,8 @@ static void emit_signal_fence(jl_codectx_t &ctx)
     // https://llvm.org/bugs/show_bug.cgi?id=27545
     ctx.builder.CreateCall(InlineAsm::get(FunctionType::get(T_void, false), "",
                                       "~{memory}", true));
+#elif JL_LLVM_VERSION >= 50000
+    ctx.builder.CreateFence(AtomicOrdering::SequentiallyConsistent, SyncScope::SingleThread);
 #else
     ctx.builder.CreateFence(AtomicOrdering::SequentiallyConsistent, SingleThread);
 #endif

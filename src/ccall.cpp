@@ -1102,11 +1102,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
         //f->dump();
         llvm::raw_fd_ostream out(1,false);
         if (verifyFunction(*f,&out)) {
-#if JL_LLVM_VERSION >= 50000
-            f->print(llvm::dbgs(), nullptr, false, true);
-#else
-            f->dump();
-#endif
+            llvm_dump(f);
             jl_error("Malformed LLVM Function");
         }
     }
