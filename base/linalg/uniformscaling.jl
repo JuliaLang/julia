@@ -197,12 +197,13 @@ broadcast(::typeof(/), J::UniformScaling,x::Number) = UniformScaling(J.λ/x)
 ==(J1::UniformScaling,J2::UniformScaling) = (J1.λ == J2.λ)
 
 function isapprox(J1::UniformScaling{T}, J2::UniformScaling{S};
-            rtol::Real=Base.rtoldefault(T,S), atol::Real=0, nans::Bool=false) where {T<:Number,S<:Number}
+            atol::Real=0, rtol::Real=Base.rtoldefault(T,S,atol), nans::Bool=false) where {T<:Number,S<:Number}
     isapprox(J1.λ, J2.λ, rtol=rtol, atol=atol, nans=nans)
 end
 function isapprox(J::UniformScaling,A::AbstractMatrix;
-                  rtol::Real=rtoldefault(promote_leaf_eltypes(A),eltype(J)),
-                  atol::Real=0, nans::Bool=false, norm::Function=vecnorm)
+                  atol::Real=0,
+                  rtol::Real=rtoldefault(promote_leaf_eltypes(A),eltype(J),atol),
+                  nans::Bool=false, norm::Function=vecnorm)
     n = checksquare(A)
     Jnorm = norm === vecnorm ? abs(J.λ)*sqrt(n) : (norm === Base.norm ? abs(J.λ) : norm(diagm(fill(J.λ, n))))
     return norm(A - J) <= atol + rtol*max(norm(A), Jnorm)
@@ -335,4 +336,3 @@ UniformScaling{Float64}
 ```
 """
 chol(J::UniformScaling, args...) = ((C, info) = _chol!(J, nothing); @assertposdef C info)
-

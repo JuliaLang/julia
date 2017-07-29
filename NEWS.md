@@ -121,7 +121,8 @@ This section lists changes that do not have deprecation warnings.
     respectively ([#22718], [#22925], [#23035]).
 
   * `isapprox(x,y)` now tests `norm(x-y) <= max(atol, rtol*max(norm(x), norm(y)))`
-    rather than `norm(x-y) <= atol + ...` ([#22742]).
+    rather than `norm(x-y) <= atol + ...`, and `rtol` defaults to zero
+    if an `atol > 0` is specified ([#22742]).
 
   * Spaces are no longer allowed between `@` and the name of a macro in a macro call ([#22868]).
 
