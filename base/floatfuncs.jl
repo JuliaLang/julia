@@ -222,7 +222,6 @@ true
 ```
 """
 function isapprox(x::Number, y::Number; atol::Real=0, rtol::Real=rtoldefault(x,y,atol), nans::Bool=false)
-    rtol < 0 && (rtol = atol > 0 ? -rtol : zero(rtol))
     x == y || (isfinite(x) && isfinite(y) && abs(x-y) <= max(atol, rtol*max(abs(x), abs(y)))) || (nans && isnan(x) && isnan(y))
 end
 
