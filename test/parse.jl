@@ -809,7 +809,7 @@ for op in ["+", "-", "\$", "|", ".+", ".-", "*", ".*"]
 end
 
 # issue #17701
-@test expand(Main, :(i==3 && i+=1)) == Expr(:error, "invalid assignment location \"==(i,3) && i\"")
+@test expand(Main, :(i==3 && i+=1)) == Expr(:error, "invalid assignment location \"==(i, 3) && i\"")
 
 # issue #18667
 @test expand(Main, :(true = 1)) == Expr(:error, "invalid assignment location \"true\"")
