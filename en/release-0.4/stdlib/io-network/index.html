@@ -979,10 +979,10 @@ Throws an error if the stream is not marked.</p>
 <dt id="Base.&#64;sprintf">
 <code class="descname">&#64;sprintf</code><span class="sig-paren">(</span><em>&quot;%Fmt&quot;</em>, <em>args...</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.@sprintf" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return <code class="docutils literal"><span class="pre">&#64;printf</span></code> formatted output as string.</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">s</span> <span class="o">=</span> <span class="p">@</span><span class="n">sprintf</span> <span class="s">&quot;this is a </span><span class="si">%s</span><span class="s"> </span><span class="si">%15.1f</span><span class="s">&quot;</span> <span class="s">&quot;test&quot;</span> <span class="mf">34.567</span><span class="p">;</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">s</span> <span class="o">=</span> <span class="nd">@sprintf</span> <span class="s">&quot;this is a </span><span class="si">%s</span><span class="s"> </span><span class="si">%15.1f</span><span class="s">&quot;</span> <span class="s">&quot;test&quot;</span> <span class="mf">34.567</span><span class="p">;</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">println</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
-<span class="n">this</span> <span class="nb">is</span> <span class="n">a</span> <span class="n">test</span>            <span class="mf">34.6</span>
+<span class="n">this</span> <span class="n">is</span> <span class="n">a</span> <span class="n">test</span>            <span class="mf">34.6</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1290,7 +1290,7 @@ stack with:</p>
 <p>For example, the following code:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="c"># Create a file for mmapping</span>
 <span class="c"># (you could alternatively use mmap to do this step, too)</span>
-<span class="n">A</span> <span class="o">=</span> <span class="n">rand</span><span class="p">(</span><span class="mi">1</span><span class="p">:</span><span class="mi">20</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">30</span><span class="p">)</span>
+<span class="n">A</span> <span class="o">=</span> <span class="n">rand</span><span class="p">(</span><span class="mi">1</span><span class="o">:</span><span class="mi">20</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">30</span><span class="p">)</span>
 <span class="n">s</span> <span class="o">=</span> <span class="n">open</span><span class="p">(</span><span class="s">&quot;/tmp/mmap.bin&quot;</span><span class="p">,</span> <span class="s">&quot;w+&quot;</span><span class="p">)</span>
 <span class="c"># We&#39;ll write the dimensions of the array as the first two Ints in the file</span>
 <span class="n">write</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="n">size</span><span class="p">(</span><span class="n">A</span><span class="p">,</span><span class="mi">1</span><span class="p">))</span>
@@ -1303,7 +1303,7 @@ stack with:</p>
 <span class="n">s</span> <span class="o">=</span> <span class="n">open</span><span class="p">(</span><span class="s">&quot;/tmp/mmap.bin&quot;</span><span class="p">)</span>   <span class="c"># default is read-only</span>
 <span class="n">m</span> <span class="o">=</span> <span class="n">read</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="kt">Int</span><span class="p">)</span>
 <span class="n">n</span> <span class="o">=</span> <span class="n">read</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="kt">Int</span><span class="p">)</span>
-<span class="n">A2</span> <span class="o">=</span> <span class="n">Mmap</span><span class="o">.</span><span class="n">mmap</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="n">Matrix</span><span class="p">{</span><span class="kt">Int</span><span class="p">},</span> <span class="p">(</span><span class="n">m</span><span class="p">,</span><span class="n">n</span><span class="p">))</span>
+<span class="n">A2</span> <span class="o">=</span> <span class="n">Mmap</span><span class="o">.</span><span class="n">mmap</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="kt">Matrix</span><span class="p">{</span><span class="kt">Int</span><span class="p">},</span> <span class="p">(</span><span class="n">m</span><span class="p">,</span><span class="n">n</span><span class="p">))</span>
 </pre></div>
 </div>
 <p>creates a <code class="docutils literal"><span class="pre">m</span></code>-by-<code class="docutils literal"><span class="pre">n</span></code> <code class="docutils literal"><span class="pre">Matrix{Int}</span></code>, linked to the file associated with stream <code class="docutils literal"><span class="pre">s</span></code>.</p>
@@ -1389,7 +1389,7 @@ stack with:</p>
 
 <dl class="function">
 <dt id="Base.listenany">
-<code class="descname">listenany</code><span class="sig-paren">(</span><em>port_hint) -&gt; (UInt16</em>, <em>TCPServer</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.listenany" title="Permalink to this definition">¶</a></dt>
+<code class="descname">listenany</code><span class="sig-paren">(</span><em>port_hint</em><span class="sig-paren">)</span> &rarr; (UInt16,TCPServer)<a class="headerlink" href="#Base.listenany" title="Permalink to this definition">¶</a></dt>
 <dd><p>Create a <code class="docutils literal"><span class="pre">TCPServer</span></code> on any port, using hint as a starting point. Returns a tuple of the actual port that the server was created on and the server itself.</p>
 </dd></dl>
 
@@ -1403,7 +1403,7 @@ stack with:</p>
 
 <dl class="function">
 <dt id="Base.poll_file">
-<code class="descname">poll_file</code><span class="sig-paren">(</span><em>path</em>, <em>interval_s::Real</em>, <em>timeout_s::Real) -&gt; (previous::StatStruct</em>, <em>current::StatStruct</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.poll_file" title="Permalink to this definition">¶</a></dt>
+<code class="descname">poll_file</code><span class="sig-paren">(</span><em>path</em>, <em>interval_s::Real</em>, <em>timeout_s::Real</em><span class="sig-paren">)</span> &rarr; (previous::StatStruct, current::StatStruct)<a class="headerlink" href="#Base.poll_file" title="Permalink to this definition">¶</a></dt>
 <dd><p>Monitor a file for changes by polling every <code class="docutils literal"><span class="pre">interval_s</span></code> seconds until a change occurs or <code class="docutils literal"><span class="pre">timeout_s</span></code> seconds have elapsed. The <code class="docutils literal"><span class="pre">interval_s</span></code> should be a long period; the default is 5.007 seconds.</p>
 <p>Returns a pair of <code class="docutils literal"><span class="pre">StatStruct</span></code> objects <code class="docutils literal"><span class="pre">(previous,</span> <span class="pre">current)</span></code> when a change is detected.</p>
 <p>To determine when a file was modified, compare <code class="docutils literal"><span class="pre">mtime(prev)</span> <span class="pre">!=</span> <span class="pre">mtime(current)</span></code> to detect notification of changes. However, using <code class="docutils literal"><span class="pre">watch_file</span></code> for this operation is preferred, since it is more reliable and efficient, although in some situations it may not be available.</p>
@@ -1437,7 +1437,7 @@ stack with:</p>
 
 <dl class="function">
 <dt id="Base.recvfrom">
-<code class="descname">recvfrom</code><span class="sig-paren">(</span><em>socket::UDPSocket) -&gt; (address</em>, <em>data</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.recvfrom" title="Permalink to this definition">¶</a></dt>
+<code class="descname">recvfrom</code><span class="sig-paren">(</span><em>socket::UDPSocket</em><span class="sig-paren">)</span> &rarr; (address, data)<a class="headerlink" href="#Base.recvfrom" title="Permalink to this definition">¶</a></dt>
 <dd><p>Read a UDP packet from the specified socket, returning a tuple of (address, data), where address will be either IPv4 or IPv6 as appropriate.</p>
 </dd></dl>
 

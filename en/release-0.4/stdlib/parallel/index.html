@@ -859,8 +859,8 @@ If <code class="docutils literal"><span class="pre">err_stop</span></code> is <c
 <code class="descname">isready</code><span class="sig-paren">(</span><em>r::RemoteRef</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.isready" title="Permalink to this definition">¶</a></dt>
 <dd><p>Determine whether a <code class="docutils literal"><span class="pre">RemoteRef</span></code> has a value stored to it. Note that this function can cause race conditions, since by the time you receive its result it may no longer be true. It is recommended that this function only be used on a <code class="docutils literal"><span class="pre">RemoteRef</span></code> that is assigned once.</p>
 <p>If the argument <code class="docutils literal"><span class="pre">RemoteRef</span></code> is owned by a different node, this call will block to wait for the answer. It is recommended to wait for <code class="docutils literal"><span class="pre">r</span></code> in a separate task instead, or to use a local <code class="docutils literal"><span class="pre">RemoteRef</span></code> as a proxy:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">rr</span> <span class="o">=</span> <span class="n">RemoteRef</span><span class="p">()</span>
-<span class="p">@</span><span class="n">async</span> <span class="n">put!</span><span class="p">(</span><span class="n">rr</span><span class="p">,</span> <span class="n">remotecall_fetch</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">long_computation</span><span class="p">))</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">rr</span> <span class="o">=</span> <span class="kt">RemoteRef</span><span class="p">()</span>
+<span class="nd">@async</span> <span class="n">put!</span><span class="p">(</span><span class="n">rr</span><span class="p">,</span> <span class="n">remotecall_fetch</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">long_computation</span><span class="p">))</span>
 <span class="n">isready</span><span class="p">(</span><span class="n">rr</span><span class="p">)</span>  <span class="c"># will not block</span>
 </pre></div>
 </div>
@@ -934,14 +934,14 @@ If <code class="docutils literal"><span class="pre">err_stop</span></code> is <c
 <dt id="Base.&#64;parallel">
 <code class="descname">&#64;parallel</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#Base.@parallel" title="Permalink to this definition">¶</a></dt>
 <dd><p>A parallel for loop of the form :</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="p">@</span><span class="n">parallel</span> <span class="p">[</span><span class="n">reducer</span><span class="p">]</span> <span class="k">for</span> <span class="n">var</span> <span class="o">=</span> <span class="n">range</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="nd">@parallel</span> <span class="p">[</span><span class="n">reducer</span><span class="p">]</span> <span class="k">for</span> <span class="n">var</span> <span class="o">=</span> <span class="n">range</span>
     <span class="n">body</span>
 <span class="k">end</span>
 </pre></div>
 </div>
 <p>The specified range is partitioned and locally executed across all workers. In case an optional reducer function is specified, <code class="docutils literal"><span class="pre">&#64;parallel</span></code> performs local reductions on each worker with a final reduction on the calling process.</p>
 <p>Note that without a reducer function, <code class="docutils literal"><span class="pre">&#64;parallel</span></code> executes asynchronously, i.e. it spawns independent tasks on all available workers and returns immediately without waiting for completion. To wait for completion, prefix the call with <code class="docutils literal"><span class="pre">&#64;sync</span></code>, like :</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="p">@</span><span class="n">sync</span> <span class="p">@</span><span class="n">parallel</span> <span class="k">for</span> <span class="n">var</span> <span class="o">=</span> <span class="n">range</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="nd">@sync</span> <span class="nd">@parallel</span> <span class="k">for</span> <span class="n">var</span> <span class="o">=</span> <span class="n">range</span>
     <span class="n">body</span>
 <span class="k">end</span>
 </pre></div>
@@ -1045,7 +1045,7 @@ interrupt signal.</li>
 
 <dl class="function">
 <dt id="Base.connect">
-<code class="descname">connect</code><span class="sig-paren">(</span><em>manager::FooManager</em>, <em>pid::Int</em>, <em>config::WorkerConfig) -&gt; (instrm::AsyncStream</em>, <em>outstrm::AsyncStream</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.connect" title="Permalink to this definition">¶</a></dt>
+<code class="descname">connect</code><span class="sig-paren">(</span><em>manager::FooManager</em>, <em>pid::Int</em>, <em>config::WorkerConfig</em><span class="sig-paren">)</span> &rarr; (instrm::AsyncStream, outstrm::AsyncStream)<a class="headerlink" href="#Base.connect" title="Permalink to this definition">¶</a></dt>
 <dd><p>Implemented by cluster managers using custom transports. It should establish a logical connection to worker with id <code class="docutils literal"><span class="pre">pid</span></code>, specified by <code class="docutils literal"><span class="pre">config</span></code> and return a pair of <code class="docutils literal"><span class="pre">AsyncStream</span></code> objects. Messages from <code class="docutils literal"><span class="pre">pid</span></code> to current process will be read off <code class="docutils literal"><span class="pre">instrm</span></code>, while messages to be sent to <code class="docutils literal"><span class="pre">pid</span></code> will be written to <code class="docutils literal"><span class="pre">outstrm</span></code>. The custom transport implementation must ensure that messages are delivered and received completely and in order. <code class="docutils literal"><span class="pre">Base.connect(manager::ClusterManager.....)</span></code> sets up TCP/IP socket connections in-between workers.</p>
 </dd></dl>
 

@@ -890,14 +890,14 @@
 </dd></dl>
 
 <dl class="function">
-<dt>
-<code class="descname">&#64;__FILE__ -&gt; AbstractString</code></dt>
+<dt id="Base.&#64;__FILE__">
+<code class="descname">&#64;__FILE__</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &rarr; AbstractString<a class="headerlink" href="#Base.@__FILE__" title="Permalink to this definition">¶</a></dt>
 <dd><p><code class="docutils literal"><span class="pre">&#64;__FILE__</span></code> expands to a string with the absolute path and file name of the script being run. Returns <code class="docutils literal"><span class="pre">nothing</span></code> if run from a REPL or an empty string if evaluated by <code class="docutils literal"><span class="pre">julia</span> <span class="pre">-e</span> <span class="pre">&lt;expr&gt;</span></code>.</p>
 </dd></dl>
 
 <dl class="function">
-<dt>
-<code class="descname">&#64;__LINE__ -&gt; Int</code></dt>
+<dt id="Base.&#64;__LINE__">
+<code class="descname">&#64;__LINE__</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &rarr; Int<a class="headerlink" href="#Base.@__LINE__" title="Permalink to this definition">¶</a></dt>
 <dd><p><code class="docutils literal"><span class="pre">&#64;__LINE__</span></code> expands to the line number of the call-site.</p>
 </dd></dl>
 
@@ -951,19 +951,19 @@
 
 <dl class="function">
 <dt id="Base.splitdir">
-<code class="descname">splitdir</code><span class="sig-paren">(</span><em>path::AbstractString) -&gt; (AbstractString</em>, <em>AbstractString</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.splitdir" title="Permalink to this definition">¶</a></dt>
+<code class="descname">splitdir</code><span class="sig-paren">(</span><em>path::AbstractString</em><span class="sig-paren">)</span> &rarr; (AbstractString,AbstractString)<a class="headerlink" href="#Base.splitdir" title="Permalink to this definition">¶</a></dt>
 <dd><p>Split a path into a tuple of the directory name and file name.</p>
 </dd></dl>
 
 <dl class="function">
 <dt id="Base.splitdrive">
-<code class="descname">splitdrive</code><span class="sig-paren">(</span><em>path::AbstractString) -&gt; (AbstractString</em>, <em>AbstractString</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.splitdrive" title="Permalink to this definition">¶</a></dt>
+<code class="descname">splitdrive</code><span class="sig-paren">(</span><em>path::AbstractString</em><span class="sig-paren">)</span> &rarr; (AbstractString,AbstractString)<a class="headerlink" href="#Base.splitdrive" title="Permalink to this definition">¶</a></dt>
 <dd><p>On Windows, split a path into the drive letter part and the path part. On Unix systems, the first component is always the empty string.</p>
 </dd></dl>
 
 <dl class="function">
 <dt id="Base.splitext">
-<code class="descname">splitext</code><span class="sig-paren">(</span><em>path::AbstractString) -&gt; (AbstractString</em>, <em>AbstractString</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.splitext" title="Permalink to this definition">¶</a></dt>
+<code class="descname">splitext</code><span class="sig-paren">(</span><em>path::AbstractString</em><span class="sig-paren">)</span> &rarr; (AbstractString,AbstractString)<a class="headerlink" href="#Base.splitext" title="Permalink to this definition">¶</a></dt>
 <dd><p>If the last component of a path contains a dot, split the path into everything before the dot and everything including and after the dot. Otherwise, return a tuple of the argument unmodified and the empty string.</p>
 </dd></dl>
 

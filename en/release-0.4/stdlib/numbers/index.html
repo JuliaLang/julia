@@ -846,10 +846,10 @@
 <dt id="Base.Float32">
 <code class="descname">Float32</code><span class="sig-paren">(</span><em>x</em><span class="optional">[</span>, <em>mode::RoundingMode</em><span class="optional">]</span><span class="sig-paren">)</span><a class="headerlink" href="#Base.Float32" title="Permalink to this definition">¶</a></dt>
 <dd><p>Create a Float32 from <code class="docutils literal"><span class="pre">x</span></code>. If <code class="docutils literal"><span class="pre">x</span></code> is not exactly representable then <code class="docutils literal"><span class="pre">mode</span></code> determines how <code class="docutils literal"><span class="pre">x</span></code> is rounded.</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="kt">Float32</span><span class="p">(</span><span class="mi">1</span><span class="o">/</span><span class="mi">3</span><span class="p">,</span> <span class="n">RoundDown</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="kt">Float32</span><span class="p">(</span><span class="mi">1</span><span class="o">/</span><span class="mi">3</span><span class="p">,</span> <span class="nb">RoundDown</span><span class="p">)</span>
 <span class="mf">0.3333333f0</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="kt">Float32</span><span class="p">(</span><span class="mi">1</span><span class="o">/</span><span class="mi">3</span><span class="p">,</span> <span class="n">RoundUp</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="kt">Float32</span><span class="p">(</span><span class="mi">1</span><span class="o">/</span><span class="mi">3</span><span class="p">,</span> <span class="nb">RoundUp</span><span class="p">)</span>
 <span class="mf">0.33333334f0</span>
 </pre></div>
 </div>
@@ -860,10 +860,10 @@
 <dt id="Base.Float64">
 <code class="descname">Float64</code><span class="sig-paren">(</span><em>x</em><span class="optional">[</span>, <em>mode::RoundingMode</em><span class="optional">]</span><span class="sig-paren">)</span><a class="headerlink" href="#Base.Float64" title="Permalink to this definition">¶</a></dt>
 <dd><p>Create a Float64 from <code class="docutils literal"><span class="pre">x</span></code>. If <code class="docutils literal"><span class="pre">x</span></code> is not exactly representable then <code class="docutils literal"><span class="pre">mode</span></code> determines how <code class="docutils literal"><span class="pre">x</span></code> is rounded.</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="kt">Float64</span><span class="p">(</span><span class="nb">pi</span><span class="p">,</span> <span class="n">RoundDown</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="kt">Float64</span><span class="p">(</span><span class="nb">pi</span><span class="p">,</span> <span class="nb">RoundDown</span><span class="p">)</span>
 <span class="mf">3.141592653589793</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="kt">Float64</span><span class="p">(</span><span class="nb">pi</span><span class="p">,</span> <span class="n">RoundUp</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="kt">Float64</span><span class="p">(</span><span class="nb">pi</span><span class="p">,</span> <span class="nb">RoundUp</span><span class="p">)</span>
 <span class="mf">3.1415926535897936</span>
 </pre></div>
 </div>
@@ -891,7 +891,7 @@ are promoted to a <code class="docutils literal"><span class="pre">BigFloat</spa
 when parsed, <code class="docutils literal"><span class="pre">BigFloat(2.1)</span></code> may not yield what you expect. You may instead
 prefer to initialize constants from strings via <a class="reference internal" href="#Base.parse" title="Base.parse"><code class="xref jl jl-func docutils literal"><span class="pre">parse()</span></code></a>, or using the
 <code class="docutils literal"><span class="pre">big</span></code> string literal.</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">BigFloat</span><span class="p">(</span><span class="mf">2.1</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="kt">BigFloat</span><span class="p">(</span><span class="mf">2.1</span><span class="p">)</span>
 <span class="mf">2.100000000000000088817841970012523233890533447265625000000000000000000000000000</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">big</span><span class="s">&quot;2.1&quot;</span>
@@ -983,7 +983,7 @@ mode of <code class="docutils literal"><span class="pre">Float64</span></code> w
 <dt id="Base.leading_ones">
 <code class="descname">leading_ones</code><span class="sig-paren">(</span><em>x::Integer</em><span class="sig-paren">)</span> &rarr; Integer<a class="headerlink" href="#Base.leading_ones" title="Permalink to this definition">¶</a></dt>
 <dd><p>Number of ones leading the binary representation of <code class="docutils literal"><span class="pre">x</span></code>.</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">leading_ones</span><span class="p">(</span><span class="n">UInt32</span><span class="p">(</span><span class="mi">2</span> <span class="o">^</span> <span class="mi">32</span> <span class="o">-</span> <span class="mi">2</span><span class="p">))</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">leading_ones</span><span class="p">(</span><span class="kt">UInt32</span><span class="p">(</span><span class="mi">2</span> <span class="o">^</span> <span class="mi">32</span> <span class="o">-</span> <span class="mi">2</span><span class="p">))</span>
 <span class="mi">31</span>
 </pre></div>
 </div>
@@ -1014,7 +1014,7 @@ mode of <code class="docutils literal"><span class="pre">Float64</span></code> w
 <code class="descname">isprime</code><span class="sig-paren">(</span><em>x::Integer</em><span class="sig-paren">)</span> &rarr; Bool<a class="headerlink" href="#Base.isprime" title="Permalink to this definition">¶</a></dt>
 <dd><p>Returns <code class="docutils literal"><span class="pre">true</span></code> if <code class="docutils literal"><span class="pre">x</span></code> is prime, and <code class="docutils literal"><span class="pre">false</span></code> otherwise.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">isprime</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
-<span class="n">true</span>
+<span class="kc">true</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1024,7 +1024,7 @@ mode of <code class="docutils literal"><span class="pre">Float64</span></code> w
 <code class="descname">isprime</code><span class="sig-paren">(</span><em>x::BigInt</em><span class="optional">[</span>, <em>reps = 25</em><span class="optional">]</span><span class="sig-paren">)</span> &rarr; Bool</dt>
 <dd><p>Probabilistic primality test. Returns <code class="docutils literal"><span class="pre">true</span></code> if <code class="docutils literal"><span class="pre">x</span></code> is prime; and <code class="docutils literal"><span class="pre">false</span></code> if <code class="docutils literal"><span class="pre">x</span></code> is not prime with high probability. The false positive rate is about <code class="docutils literal"><span class="pre">0.25^reps</span></code>. <code class="docutils literal"><span class="pre">reps</span> <span class="pre">=</span> <span class="pre">25</span></code> is considered safe for cryptographic applications (Knuth, Seminumerical Algorithms).</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">isprime</span><span class="p">(</span><span class="n">big</span><span class="p">(</span><span class="mi">3</span><span class="p">))</span>
-<span class="n">true</span>
+<span class="kc">true</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1046,10 +1046,10 @@ mode of <code class="docutils literal"><span class="pre">Float64</span></code> w
 <code class="descname">isodd</code><span class="sig-paren">(</span><em>x::Integer</em><span class="sig-paren">)</span> &rarr; Bool<a class="headerlink" href="#Base.isodd" title="Permalink to this definition">¶</a></dt>
 <dd><p>Returns <code class="docutils literal"><span class="pre">true</span></code> if <code class="docutils literal"><span class="pre">x</span></code> is odd (that is, not divisible by 2), and <code class="docutils literal"><span class="pre">false</span></code> otherwise.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">isodd</span><span class="p">(</span><span class="mi">9</span><span class="p">)</span>
-<span class="n">true</span>
+<span class="kc">true</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">isodd</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span>
-<span class="n">false</span>
+<span class="kc">false</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1059,10 +1059,10 @@ mode of <code class="docutils literal"><span class="pre">Float64</span></code> w
 <code class="descname">iseven</code><span class="sig-paren">(</span><em>x::Integer</em><span class="sig-paren">)</span> &rarr; Bool<a class="headerlink" href="#Base.iseven" title="Permalink to this definition">¶</a></dt>
 <dd><p>Returns <code class="docutils literal"><span class="pre">true</span></code> is <code class="docutils literal"><span class="pre">x</span></code> is even (that is, divisible by 2), and <code class="docutils literal"><span class="pre">false</span></code> otherwise.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">iseven</span><span class="p">(</span><span class="mi">9</span><span class="p">)</span>
-<span class="n">false</span>
+<span class="kc">false</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">iseven</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span>
-<span class="n">true</span>
+<span class="kc">true</span>
 </pre></div>
 </div>
 </dd></dl>

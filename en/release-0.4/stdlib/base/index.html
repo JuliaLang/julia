@@ -881,12 +881,12 @@ interactive prompt.</p>
 <p>If <code class="docutils literal"><span class="pre">T</span></code> is an <code class="docutils literal"><span class="pre">Integer</span></code> type, an <a class="reference internal" href="#Base.InexactError" title="Base.InexactError"><code class="xref jl jl-exc docutils literal"><span class="pre">InexactError</span></code></a> will be raised if
 <code class="docutils literal"><span class="pre">x</span></code> is not representable by <code class="docutils literal"><span class="pre">T</span></code>, for example if <code class="docutils literal"><span class="pre">x</span></code> is not
 integer-valued, or is outside the range supported by <code class="docutils literal"><span class="pre">T</span></code>.</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nb">convert</span><span class="p">(</span><span class="kt">Int</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">convert</span><span class="p">(</span><span class="kt">Int</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">)</span>
 <span class="mi">3</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">convert</span><span class="p">(</span><span class="kt">Int</span><span class="p">,</span> <span class="mf">3.5</span><span class="p">)</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">InexactError</span><span class="p">()</span>
- <span class="k">in</span> <span class="nb">convert</span> <span class="n">at</span> <span class="n">int</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">209</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">convert</span><span class="p">(</span><span class="kt">Int</span><span class="p">,</span> <span class="mf">3.5</span><span class="p">)</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="kt">InexactError</span><span class="p">()</span>
+ <span class="kp">in</span> <span class="n">convert</span> <span class="n">at</span> <span class="n">int</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">209</span>
 </pre></div>
 </div>
 <p>If <code class="docutils literal"><span class="pre">T</span></code> is a <code class="xref jl jl-obj docutils literal"><span class="pre">AbstractFloat</span></code> or <code class="xref jl jl-obj docutils literal"><span class="pre">Rational</span></code> type, then it will return
@@ -894,13 +894,13 @@ the closest value to <code class="docutils literal"><span class="pre">x</span></
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">x</span> <span class="o">=</span> <span class="mi">1</span><span class="o">/</span><span class="mi">3</span>
 <span class="mf">0.3333333333333333</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">convert</span><span class="p">(</span><span class="kt">Float32</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">convert</span><span class="p">(</span><span class="kt">Float32</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>
 <span class="mf">0.33333334f0</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">convert</span><span class="p">(</span><span class="n">Rational</span><span class="p">{</span><span class="kt">Int32</span><span class="p">},</span> <span class="n">x</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">convert</span><span class="p">(</span><span class="kt">Rational</span><span class="p">{</span><span class="kt">Int32</span><span class="p">},</span> <span class="n">x</span><span class="p">)</span>
 <span class="mi">1</span><span class="o">//</span><span class="mi">3</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">convert</span><span class="p">(</span><span class="n">Rational</span><span class="p">{</span><span class="kt">Int64</span><span class="p">},</span> <span class="n">x</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">convert</span><span class="p">(</span><span class="kt">Rational</span><span class="p">{</span><span class="kt">Int64</span><span class="p">},</span> <span class="n">x</span><span class="p">)</span>
 <span class="mi">6004799503160661</span><span class="o">//</span><span class="mi">18014398509481984</span>
 </pre></div>
 </div>
@@ -1048,20 +1048,20 @@ the closest value to <code class="docutils literal"><span class="pre">x</span></
 <dd><p>The byte offset of each field of a type relative to the data start. For example, we could use it in the following manner to summarize information about a struct type:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">structinfo</span><span class="p">(</span><span class="n">T</span><span class="p">)</span> <span class="o">=</span> <span class="p">[</span><span class="n">zip</span><span class="p">(</span><span class="n">fieldoffsets</span><span class="p">(</span><span class="n">T</span><span class="p">),</span><span class="n">fieldnames</span><span class="p">(</span><span class="n">T</span><span class="p">),</span><span class="n">T</span><span class="o">.</span><span class="n">types</span><span class="p">)</span><span class="o">...</span><span class="p">];</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">structinfo</span><span class="p">(</span><span class="n">StatStruct</span><span class="p">)</span>
-<span class="mi">12</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="n">Tuple</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="n">Symbol</span><span class="p">,</span><span class="n">DataType</span><span class="p">},</span><span class="mi">1</span><span class="p">}:</span>
- <span class="p">(</span><span class="mi">0</span><span class="p">,:</span><span class="n">device</span><span class="p">,</span><span class="n">UInt64</span><span class="p">)</span>
- <span class="p">(</span><span class="mi">8</span><span class="p">,:</span><span class="n">inode</span><span class="p">,</span><span class="n">UInt64</span><span class="p">)</span>
- <span class="p">(</span><span class="mi">16</span><span class="p">,:</span><span class="n">mode</span><span class="p">,</span><span class="n">UInt64</span><span class="p">)</span>
- <span class="p">(</span><span class="mi">24</span><span class="p">,:</span><span class="n">nlink</span><span class="p">,</span><span class="kt">Int64</span><span class="p">)</span>
- <span class="p">(</span><span class="mi">32</span><span class="p">,:</span><span class="nb">uid</span><span class="p">,</span><span class="n">UInt64</span><span class="p">)</span>
- <span class="p">(</span><span class="mi">40</span><span class="p">,:</span><span class="n">gid</span><span class="p">,</span><span class="n">UInt64</span><span class="p">)</span>
- <span class="p">(</span><span class="mi">48</span><span class="p">,:</span><span class="n">rdev</span><span class="p">,</span><span class="n">UInt64</span><span class="p">)</span>
- <span class="p">(</span><span class="mi">56</span><span class="p">,:</span><span class="n">size</span><span class="p">,</span><span class="kt">Int64</span><span class="p">)</span>
- <span class="p">(</span><span class="mi">64</span><span class="p">,:</span><span class="n">blksize</span><span class="p">,</span><span class="kt">Int64</span><span class="p">)</span>
- <span class="p">(</span><span class="mi">72</span><span class="p">,:</span><span class="n">blocks</span><span class="p">,</span><span class="kt">Int64</span><span class="p">)</span>
- <span class="p">(</span><span class="mi">80</span><span class="p">,:</span><span class="n">mtime</span><span class="p">,</span><span class="kt">Float64</span><span class="p">)</span>
- <span class="p">(</span><span class="mi">88</span><span class="p">,:</span><span class="n">ctime</span><span class="p">,</span><span class="kt">Float64</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">structinfo</span><span class="p">(</span><span class="kt">StatStruct</span><span class="p">)</span>
+<span class="mi">12</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Tuple</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="kt">Symbol</span><span class="p">,</span><span class="kt">DataType</span><span class="p">},</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
+ <span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="o">:</span><span class="n">device</span><span class="p">,</span><span class="kt">UInt64</span><span class="p">)</span>
+ <span class="p">(</span><span class="mi">8</span><span class="p">,</span><span class="o">:</span><span class="n">inode</span><span class="p">,</span><span class="kt">UInt64</span><span class="p">)</span>
+ <span class="p">(</span><span class="mi">16</span><span class="p">,</span><span class="o">:</span><span class="n">mode</span><span class="p">,</span><span class="kt">UInt64</span><span class="p">)</span>
+ <span class="p">(</span><span class="mi">24</span><span class="p">,</span><span class="o">:</span><span class="n">nlink</span><span class="p">,</span><span class="kt">Int64</span><span class="p">)</span>
+ <span class="p">(</span><span class="mi">32</span><span class="p">,</span><span class="o">:</span><span class="n">uid</span><span class="p">,</span><span class="kt">UInt64</span><span class="p">)</span>
+ <span class="p">(</span><span class="mi">40</span><span class="p">,</span><span class="o">:</span><span class="n">gid</span><span class="p">,</span><span class="kt">UInt64</span><span class="p">)</span>
+ <span class="p">(</span><span class="mi">48</span><span class="p">,</span><span class="o">:</span><span class="n">rdev</span><span class="p">,</span><span class="kt">UInt64</span><span class="p">)</span>
+ <span class="p">(</span><span class="mi">56</span><span class="p">,</span><span class="o">:</span><span class="n">size</span><span class="p">,</span><span class="kt">Int64</span><span class="p">)</span>
+ <span class="p">(</span><span class="mi">64</span><span class="p">,</span><span class="o">:</span><span class="n">blksize</span><span class="p">,</span><span class="kt">Int64</span><span class="p">)</span>
+ <span class="p">(</span><span class="mi">72</span><span class="p">,</span><span class="o">:</span><span class="n">blocks</span><span class="p">,</span><span class="kt">Int64</span><span class="p">)</span>
+ <span class="p">(</span><span class="mi">80</span><span class="p">,</span><span class="o">:</span><span class="n">mtime</span><span class="p">,</span><span class="kt">Float64</span><span class="p">)</span>
+ <span class="p">(</span><span class="mi">88</span><span class="p">,</span><span class="o">:</span><span class="n">ctime</span><span class="p">,</span><span class="kt">Float64</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1083,11 +1083,11 @@ Note that this function works on values, so if you give it a type, it will tell 
 <dt id="Base.isbits">
 <code class="descname">isbits</code><span class="sig-paren">(</span><em>T</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.isbits" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return <code class="docutils literal"><span class="pre">true</span></code> if <code class="docutils literal"><span class="pre">T</span></code> is a &#8220;plain data&#8221; type, meaning it is immutable and contains no references to other values. Typical examples are numeric types such as <code class="docutils literal"><span class="pre">UInt8</span></code>, <code class="docutils literal"><span class="pre">Float64</span></code>, and <code class="docutils literal"><span class="pre">Complex{Float64}</span></code>.</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">isbits</span><span class="p">(</span><span class="n">Complex</span><span class="p">{</span><span class="kt">Float64</span><span class="p">})</span>
-<span class="n">true</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">isbits</span><span class="p">(</span><span class="kt">Complex</span><span class="p">{</span><span class="kt">Float64</span><span class="p">})</span>
+<span class="kc">true</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">isbits</span><span class="p">(</span><span class="n">Complex</span><span class="p">)</span>
-<span class="n">false</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">isbits</span><span class="p">(</span><span class="kt">Complex</span><span class="p">)</span>
+<span class="kc">false</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1120,10 +1120,10 @@ Note that this function works on values, so if you give it a type, it will tell 
 <dt>
 <code class="descname">&#64;enum EnumName EnumValue1[=x] EnumValue2[=y]</code></dt>
 <dd><p>Create an <code class="xref jl jl-obj docutils literal"><span class="pre">Enum</span></code> type with name <code class="docutils literal"><span class="pre">EnumName</span></code> and enum member values of <code class="docutils literal"><span class="pre">EnumValue1</span></code> and <code class="docutils literal"><span class="pre">EnumValue2</span></code> with optional assigned values of <code class="docutils literal"><span class="pre">x</span></code> and <code class="docutils literal"><span class="pre">y</span></code>, respectively. <code class="docutils literal"><span class="pre">EnumName</span></code> can be used just like other types and enum member values as regular values, such as</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">enum</span> <span class="n">FRUIT</span> <span class="n">apple</span><span class="o">=</span><span class="mi">1</span> <span class="n">orange</span><span class="o">=</span><span class="mi">2</span> <span class="n">kiwi</span><span class="o">=</span><span class="mi">3</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nd">@enum</span> <span class="n">FRUIT</span> <span class="n">apple</span><span class="o">=</span><span class="mi">1</span> <span class="n">orange</span><span class="o">=</span><span class="mi">2</span> <span class="n">kiwi</span><span class="o">=</span><span class="mi">3</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">f</span><span class="p">(</span><span class="n">x</span><span class="p">::</span><span class="n">FRUIT</span><span class="p">)</span> <span class="o">=</span> <span class="s">&quot;I&#39;m a FRUIT with value: </span><span class="si">$(Int(x))</span><span class="s">&quot;</span>
-<span class="n">f</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span><span class="nf"> with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">f</span><span class="p">(</span><span class="n">x</span><span class="o">::</span><span class="n">FRUIT</span><span class="p">)</span> <span class="o">=</span> <span class="s">&quot;I&#39;m a FRUIT with value: </span><span class="si">$</span><span class="p">(</span><span class="kt">Int</span><span class="p">(</span><span class="n">x</span><span class="p">))</span><span class="s">&quot;</span>
+<span class="n">f</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span> <span class="n">with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">f</span><span class="p">(</span><span class="n">apple</span><span class="p">)</span>
 <span class="s">&quot;I&#39;m a FRUIT with value: 1&quot;</span>
@@ -1144,8 +1144,8 @@ Note that this function works on values, so if you give it a type, it will tell 
 <dt id="Base.method_exists">
 <code class="descname">method_exists</code><span class="sig-paren">(</span><em>f</em>, <em>Tuple type</em><span class="sig-paren">)</span> &rarr; Bool<a class="headerlink" href="#Base.method_exists" title="Permalink to this definition">¶</a></dt>
 <dd><p>Determine whether the given generic function has a method matching the given <code class="xref jl jl-obj docutils literal"><span class="pre">Tuple</span></code> of argument types.</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nb">method_exists</span><span class="p">(</span><span class="n">length</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">{</span><span class="n">Array</span><span class="p">})</span>
-<span class="n">true</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">method_exists</span><span class="p">(</span><span class="n">length</span><span class="p">,</span> <span class="kt">Tuple</span><span class="p">{</span><span class="kt">Array</span><span class="p">})</span>
+<span class="kc">true</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1154,15 +1154,15 @@ Note that this function works on values, so if you give it a type, it will tell 
 <dt id="Base.applicable">
 <code class="descname">applicable</code><span class="sig-paren">(</span><em>f</em>, <em>args...</em><span class="sig-paren">)</span> &rarr; Bool<a class="headerlink" href="#Base.applicable" title="Permalink to this definition">¶</a></dt>
 <dd><p>Determine whether the given generic function has a method applicable to the given arguments.</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">function</span><span class="nf"> f</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">function</span> <span class="n">f</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
            <span class="n">x</span> <span class="o">+</span> <span class="n">y</span>
        <span class="k">end</span><span class="p">;</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">applicable</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
-<span class="n">false</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">applicable</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="kc">false</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">applicable</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
-<span class="n">true</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">applicable</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+<span class="kc">true</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1177,7 +1177,7 @@ Note that this function works on values, so if you give it a type, it will tell 
 <dt id="Base.|&gt;">
 <code class="descname">|&gt;</code><span class="sig-paren">(</span><em>x</em>, <em>f</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.|>" title="Permalink to this definition">¶</a></dt>
 <dd><p>Applies a function to the preceding argument. This allows for easy function chaining.</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">[</span><span class="mi">1</span><span class="p">:</span><span class="mi">5</span><span class="p">;]</span> <span class="o">|&gt;</span> <span class="n">x</span><span class="o">-&gt;</span><span class="n">x</span><span class="o">.^</span><span class="mi">2</span> <span class="o">|&gt;</span> <span class="n">sum</span> <span class="o">|&gt;</span> <span class="n">inv</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">[</span><span class="mi">1</span><span class="o">:</span><span class="mi">5</span><span class="p">;]</span> <span class="o">|&gt;</span> <span class="n">x</span><span class="o">-&gt;</span><span class="n">x</span><span class="o">.^</span><span class="mi">2</span> <span class="o">|&gt;</span> <span class="n">sum</span> <span class="o">|&gt;</span> <span class="n">inv</span>
 <span class="mf">0.01818181818181818</span>
 </pre></div>
 </div>

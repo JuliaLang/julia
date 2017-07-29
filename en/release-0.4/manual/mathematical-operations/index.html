@@ -690,10 +690,10 @@ are supported on all primitive integer types:</p>
 <span class="n">julia</span><span class="o">&gt;</span> <span class="mi">123</span> <span class="o">$</span> <span class="mi">234</span>
 <span class="mi">145</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="o">~</span><span class="n">UInt32</span><span class="p">(</span><span class="mi">123</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="o">~</span><span class="kt">UInt32</span><span class="p">(</span><span class="mi">123</span><span class="p">)</span>
 <span class="mh">0xffffff84</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="o">~</span><span class="n">UInt8</span><span class="p">(</span><span class="mi">123</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="o">~</span><span class="kt">UInt8</span><span class="p">(</span><span class="mi">123</span><span class="p">)</span>
 <span class="mh">0x84</span>
 </pre></div>
 </div>
@@ -717,21 +717,21 @@ equivalent to writing <code class="docutils literal"><span class="pre">x</span> 
 </div>
 <p>The updating versions of all the binary arithmetic and bitwise operators
 are:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="o">+=</span>  <span class="o">-=</span>  <span class="o">*=</span>  <span class="o">/=</span>  \<span class="o">=</span>  <span class="n">÷</span><span class="o">=</span>  <span class="o">%=</span>  <span class="o">^=</span>  <span class="o">&amp;=</span>  <span class="o">|=</span>  <span class="o">$=</span>  <span class="o">&gt;&gt;&gt;=</span>  <span class="o">&gt;&gt;=</span>  <span class="o">&lt;&lt;=</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="o">+=</span>  <span class="o">-=</span>  <span class="o">*=</span>  <span class="o">/=</span>  <span class="o">\=</span>  <span class="o">÷=</span>  <span class="o">%=</span>  <span class="o">^=</span>  <span class="o">&amp;=</span>  <span class="o">|=</span>  <span class="o">$=</span>  <span class="o">&gt;&gt;&gt;=</span>  <span class="o">&gt;&gt;=</span>  <span class="o">&lt;&lt;=</span>
 </pre></div>
 </div>
 <div class="admonition note">
 <p class="first admonition-title">Note</p>
 <p>An updating operator rebinds the variable on the left-hand side.
 As a result, the type of the variable may change.</p>
-<div class="last highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">x</span> <span class="o">=</span> <span class="mh">0x01</span><span class="p">;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
-<span class="n">UInt8</span>
+<div class="last highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">x</span> <span class="o">=</span> <span class="mh">0x01</span><span class="p">;</span> <span class="n">typeof</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<span class="kt">UInt8</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">x</span> <span class="o">*=</span> <span class="mi">2</span> <span class="c">#Same as x = x * 2</span>
 <span class="mi">2</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">isa</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="kt">Int</span><span class="p">)</span>
-<span class="n">true</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">isa</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="kt">Int</span><span class="p">)</span>
+<span class="kc">true</span>
 </pre></div>
 </div>
 </div>
@@ -773,37 +773,37 @@ types:</p>
 </table>
 <p>Here are some simple examples:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="mi">1</span> <span class="o">==</span> <span class="mi">1</span>
-<span class="n">true</span>
+<span class="kc">true</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="mi">1</span> <span class="o">==</span> <span class="mi">2</span>
-<span class="n">false</span>
+<span class="kc">false</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="mi">1</span> <span class="o">!=</span> <span class="mi">2</span>
-<span class="n">true</span>
+<span class="kc">true</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="mi">1</span> <span class="o">==</span> <span class="mf">1.0</span>
-<span class="n">true</span>
+<span class="kc">true</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="mi">1</span> <span class="o">&lt;</span> <span class="mi">2</span>
-<span class="n">true</span>
+<span class="kc">true</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="mf">1.0</span> <span class="o">&gt;</span> <span class="mi">3</span>
-<span class="n">false</span>
+<span class="kc">false</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="mi">1</span> <span class="o">&gt;=</span> <span class="mf">1.0</span>
-<span class="n">true</span>
+<span class="kc">true</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="o">-</span><span class="mi">1</span> <span class="o">&lt;=</span> <span class="mi">1</span>
-<span class="n">true</span>
+<span class="kc">true</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="o">-</span><span class="mi">1</span> <span class="o">&lt;=</span> <span class="o">-</span><span class="mi">1</span>
-<span class="n">true</span>
+<span class="kc">true</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="o">-</span><span class="mi">1</span> <span class="o">&lt;=</span> <span class="o">-</span><span class="mi">2</span>
-<span class="n">false</span>
+<span class="kc">false</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="mi">3</span> <span class="o">&lt;</span> <span class="o">-</span><span class="mf">0.5</span>
-<span class="n">false</span>
+<span class="kc">false</span>
 </pre></div>
 </div>
 <p>Integers are compared in the standard manner — by comparison of bits.
@@ -818,22 +818,22 @@ standard</a>:</p>
 including itself.</li>
 </ul>
 <p>The last point is potentially surprising and thus worth noting:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">NaN</span> <span class="o">==</span> <span class="n">NaN</span>
-<span class="n">false</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nb">NaN</span> <span class="o">==</span> <span class="nb">NaN</span>
+<span class="kc">false</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">NaN</span> <span class="o">!=</span> <span class="n">NaN</span>
-<span class="n">true</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">NaN</span> <span class="o">!=</span> <span class="nb">NaN</span>
+<span class="kc">true</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">NaN</span> <span class="o">&lt;</span> <span class="n">NaN</span>
-<span class="n">false</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">NaN</span> <span class="o">&lt;</span> <span class="nb">NaN</span>
+<span class="kc">false</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">NaN</span> <span class="o">&gt;</span> <span class="n">NaN</span>
-<span class="n">false</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">NaN</span> <span class="o">&gt;</span> <span class="nb">NaN</span>
+<span class="kc">false</span>
 </pre></div>
 </div>
 <p>and can cause especial headaches with <a class="reference internal" href="../arrays/#man-arrays"><span class="std std-ref">Arrays</span></a>:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">[</span><span class="mi">1</span> <span class="n">NaN</span><span class="p">]</span> <span class="o">==</span> <span class="p">[</span><span class="mi">1</span> <span class="n">NaN</span><span class="p">]</span>
-<span class="n">false</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">[</span><span class="mi">1</span> <span class="nb">NaN</span><span class="p">]</span> <span class="o">==</span> <span class="p">[</span><span class="mi">1</span> <span class="nb">NaN</span><span class="p">]</span>
+<span class="kc">false</span>
 </pre></div>
 </div>
 <p>Julia provides additional functions to test numbers for special values,
@@ -864,22 +864,22 @@ which can be useful in situations like hash key comparisons:</p>
 </tbody>
 </table>
 <p><a class="reference internal" href="../../stdlib/base/#Base.isequal" title="Base.isequal"><code class="xref jl jl-func docutils literal"><span class="pre">isequal()</span></code></a> considers <code class="docutils literal"><span class="pre">NaN</span></code>s equal to each other:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nb">isequal</span><span class="p">(</span><span class="n">NaN</span><span class="p">,</span><span class="n">NaN</span><span class="p">)</span>
-<span class="n">true</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">isequal</span><span class="p">(</span><span class="nb">NaN</span><span class="p">,</span><span class="nb">NaN</span><span class="p">)</span>
+<span class="kc">true</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">isequal</span><span class="p">([</span><span class="mi">1</span> <span class="n">NaN</span><span class="p">],</span> <span class="p">[</span><span class="mi">1</span> <span class="n">NaN</span><span class="p">])</span>
-<span class="n">true</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">isequal</span><span class="p">([</span><span class="mi">1</span> <span class="nb">NaN</span><span class="p">],</span> <span class="p">[</span><span class="mi">1</span> <span class="nb">NaN</span><span class="p">])</span>
+<span class="kc">true</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">isequal</span><span class="p">(</span><span class="n">NaN</span><span class="p">,</span><span class="n">NaN32</span><span class="p">)</span>
-<span class="n">true</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">isequal</span><span class="p">(</span><span class="nb">NaN</span><span class="p">,</span><span class="nb">NaN32</span><span class="p">)</span>
+<span class="kc">true</span>
 </pre></div>
 </div>
 <p><a class="reference internal" href="../../stdlib/base/#Base.isequal" title="Base.isequal"><code class="xref jl jl-func docutils literal"><span class="pre">isequal()</span></code></a> can also be used to distinguish signed zeros:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="o">-</span><span class="mf">0.0</span> <span class="o">==</span> <span class="mf">0.0</span>
-<span class="n">true</span>
+<span class="kc">true</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">isequal</span><span class="p">(</span><span class="o">-</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">)</span>
-<span class="n">false</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">isequal</span><span class="p">(</span><span class="o">-</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">)</span>
+<span class="kc">false</span>
 </pre></div>
 </div>
 <p>Mixed-type comparisons between signed integers, unsigned integers, and
@@ -896,7 +896,7 @@ implies <code class="docutils literal"><span class="pre">hash(x)</span> <span cl
 Python</a>,
 comparisons can be arbitrarily chained:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="mi">1</span> <span class="o">&lt;</span> <span class="mi">2</span> <span class="o">&lt;=</span> <span class="mi">2</span> <span class="o">&lt;</span> <span class="mi">3</span> <span class="o">==</span> <span class="mi">3</span> <span class="o">&gt;</span> <span class="mi">2</span> <span class="o">&gt;=</span> <span class="mi">1</span> <span class="o">==</span> <span class="mi">1</span> <span class="o">&lt;</span> <span class="mi">3</span> <span class="o">!=</span> <span class="mi">5</span>
-<span class="n">true</span>
+<span class="kc">true</span>
 </pre></div>
 </div>
 <p>Chaining comparisons is often quite convenient in numerical code.
@@ -921,12 +921,12 @@ the array.</p>
 <span class="mi">2</span>
 <span class="mi">1</span>
 <span class="mi">3</span>
-<span class="n">true</span>
+<span class="kc">true</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">v</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span> <span class="o">&gt;</span> <span class="n">v</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="n">v</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
 <span class="mi">2</span>
 <span class="mi">1</span>
-<span class="n">false</span>
+<span class="kc">false</span>
 </pre></div>
 </div>
 <p>The middle expression is only evaluated once, rather than twice as it
@@ -1017,19 +1017,19 @@ For example, <code class="docutils literal"><span class="pre">round(Int,x)</span
 <span class="mi">127</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="kt">Int8</span><span class="p">(</span><span class="mi">128</span><span class="p">)</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">InexactError</span><span class="p">()</span>
- <span class="k">in</span> <span class="n">call</span> <span class="n">at</span> <span class="n">essentials</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">56</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="kt">InexactError</span><span class="p">()</span>
+ <span class="kp">in</span> <span class="n">call</span> <span class="n">at</span> <span class="n">essentials</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">56</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="kt">Int8</span><span class="p">(</span><span class="mf">127.0</span><span class="p">)</span>
 <span class="mi">127</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="kt">Int8</span><span class="p">(</span><span class="mf">3.14</span><span class="p">)</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">InexactError</span><span class="p">()</span>
- <span class="k">in</span> <span class="n">call</span> <span class="n">at</span> <span class="n">essentials</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">56</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="kt">InexactError</span><span class="p">()</span>
+ <span class="kp">in</span> <span class="n">call</span> <span class="n">at</span> <span class="n">essentials</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">56</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="kt">Int8</span><span class="p">(</span><span class="mf">128.0</span><span class="p">)</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">InexactError</span><span class="p">()</span>
- <span class="k">in</span> <span class="n">call</span> <span class="n">at</span> <span class="n">essentials</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">56</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="kt">InexactError</span><span class="p">()</span>
+ <span class="kp">in</span> <span class="n">call</span> <span class="n">at</span> <span class="n">essentials</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">56</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="mi">127</span> <span class="o">%</span> <span class="kt">Int8</span>
 <span class="mi">127</span>
@@ -1041,9 +1041,9 @@ For example, <code class="docutils literal"><span class="pre">round(Int,x)</span
 <span class="mi">127</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">round</span><span class="p">(</span><span class="kt">Int8</span><span class="p">,</span><span class="mf">127.6</span><span class="p">)</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">InexactError</span><span class="p">()</span>
- <span class="k">in</span> <span class="n">trunc</span> <span class="n">at</span> <span class="n">float</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">374</span>
- <span class="k">in</span> <span class="n">round</span> <span class="n">at</span> <span class="n">float</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">181</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="kt">InexactError</span><span class="p">()</span>
+ <span class="kp">in</span> <span class="n">trunc</span> <span class="n">at</span> <span class="n">float</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">374</span>
+ <span class="kp">in</span> <span class="n">round</span> <span class="n">at</span> <span class="n">float</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">181</span>
 </pre></div>
 </div>
 <p>See <a class="reference internal" href="../conversion-and-promotion/#man-conversion-and-promotion"><span class="std std-ref">Conversion and Promotion</span></a> for how to define your own

@@ -555,17 +555,17 @@
 <div class="section" id="version-environment-info">
 <span id="version-info"></span><h2>Version/Environment info<a class="headerlink" href="#version-environment-info" title="Permalink to this headline">¶</a></h2>
 <p>No matter the error, we will always need to know what version of Julia you are running. When Julia first starts up, a header is printed out with a version number and date.  If your version is <code class="docutils literal"><span class="pre">0.2.0</span></code> or higher, please include the output of <code class="docutils literal"><span class="pre">versioninfo()</span></code> in any report you create:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">versioninfo</span><span class="p">()</span>
-<span class="n">Julia</span> <span class="n">Version</span> <span class="mf">0.3</span><span class="o">.</span><span class="mi">3</span><span class="o">-</span><span class="n">pre</span><span class="o">+</span><span class="mi">25</span>
-<span class="n">Commit</span> <span class="mi">417</span><span class="n">b50a</span><span class="o">*</span> <span class="p">(</span><span class="mi">2014</span><span class="o">-</span><span class="mi">11</span><span class="o">-</span><span class="mi">03</span> <span class="mi">11</span><span class="p">:</span><span class="mi">32</span> <span class="n">UTC</span><span class="p">)</span>
-<span class="n">Platform</span> <span class="n">Info</span><span class="p">:</span>
-  <span class="n">System</span><span class="p">:</span> <span class="n">Linux</span> <span class="p">(</span><span class="n">x86_64</span><span class="o">-</span><span class="n">linux</span><span class="o">-</span><span class="n">gnu</span><span class="p">)</span>
-  <span class="n">CPU</span><span class="p">:</span> <span class="n">Intel</span><span class="p">(</span><span class="n">R</span><span class="p">)</span> <span class="n">Core</span><span class="p">(</span><span class="n">TM</span><span class="p">)</span> <span class="n">i7</span> <span class="n">CPU</span>       <span class="n">L</span> <span class="mi">640</span>  <span class="p">@</span> <span class="mf">2.13</span><span class="n">GHz</span>
-  <span class="n">WORD_SIZE</span><span class="p">:</span> <span class="mi">64</span>
-  <span class="n">BLAS</span><span class="p">:</span> <span class="n">libopenblas</span> <span class="p">(</span><span class="n">USE64BITINT</span> <span class="n">DYNAMIC_ARCH</span> <span class="n">NO_AFFINITY</span> <span class="n">Nehalem</span><span class="p">)</span>
-  <span class="n">LAPACK</span><span class="p">:</span> <span class="n">libopenblas</span>
-  <span class="n">LIBM</span><span class="p">:</span> <span class="n">libopenlibm</span>
-  <span class="n">LLVM</span><span class="p">:</span> <span class="n">libLLVM</span><span class="o">-</span><span class="mf">3.3</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span>julia&gt; versioninfo()
+Julia Version 0.3.3-pre+25
+Commit 417b50a* (2014-11-03 11:32 UTC)
+Platform Info:
+  System: Linux (x86_64-linux-gnu)
+  CPU: Intel(R) Core(TM) i7 CPU       L 640  @ 2.13GHz
+  WORD_SIZE: 64
+  BLAS: libopenblas (USE64BITINT DYNAMIC_ARCH NO_AFFINITY Nehalem)
+  LAPACK: libopenblas
+  LIBM: libopenlibm
+  LLVM: libLLVM-3.3
 </pre></div>
 </div>
 </div>
@@ -594,7 +594,7 @@
 </div>
 <p>Note that <code class="docutils literal"><span class="pre">gdb</span></code> will sit there, waiting for instructions.  Type <code class="docutils literal"><span class="pre">r</span></code> to run the process, and <code class="docutils literal"><span class="pre">bt</span></code> to generate a backtrace once it segfaults:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="p">(</span><span class="n">gdb</span><span class="p">)</span> <span class="n">r</span>
-<span class="n">Starting</span> <span class="n">program</span><span class="p">:</span> <span class="o">/</span><span class="n">home</span><span class="o">/</span><span class="n">sabae</span><span class="o">/</span><span class="n">src</span><span class="o">/</span><span class="n">julia</span><span class="o">/</span><span class="n">usr</span><span class="o">/</span><span class="n">bin</span><span class="o">/</span><span class="n">julia</span><span class="o">-</span><span class="n">debug</span> <span class="o">./</span><span class="n">test</span><span class="o">.</span><span class="n">jl</span>
+<span class="n">Starting</span> <span class="n">program</span><span class="o">:</span> <span class="o">/</span><span class="n">home</span><span class="o">/</span><span class="n">sabae</span><span class="o">/</span><span class="n">src</span><span class="o">/</span><span class="n">julia</span><span class="o">/</span><span class="n">usr</span><span class="o">/</span><span class="n">bin</span><span class="o">/</span><span class="n">julia</span><span class="o">-</span><span class="n">debug</span> <span class="o">./</span><span class="n">test</span><span class="o">.</span><span class="n">jl</span>
 <span class="o">...</span>
 <span class="p">(</span><span class="n">gdb</span><span class="p">)</span> <span class="n">bt</span>
 </pre></div>
@@ -605,7 +605,7 @@
 <span id="id3"></span><h2>Errors during Julia startup<a class="headerlink" href="#errors-during-julia-startup" title="Permalink to this headline">¶</a></h2>
 <p>Occasionally errors occur during Julia&#8217;s startup process (especially when using binary distributions, as opposed to compiling from source) such as the following:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="o">$</span> <span class="n">julia</span>
-<span class="n">exec</span><span class="p">:</span> <span class="nb">error</span> <span class="o">-</span><span class="mi">5</span>
+<span class="n">exec</span><span class="o">:</span> <span class="n">error</span> <span class="o">-</span><span class="mi">5</span>
 </pre></div>
 </div>
 <p>These errors typically indicate something is not getting loaded properly very early on in the bootup phase, and our best bet in determining what&#8217;s going wrong is to use external tools to audit the disk activity of the <code class="docutils literal"><span class="pre">julia</span></code> process:</p>

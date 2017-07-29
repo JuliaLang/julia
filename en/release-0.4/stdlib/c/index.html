@@ -561,10 +561,10 @@
 <code class="descname">cfunction</code><span class="sig-paren">(</span><em>function::Function</em>, <em>ReturnType::Type</em>, <em>(ArgumentTypes...)</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.cfunction" title="Permalink to this definition">¶</a></dt>
 <dd><p>Generate C-callable function pointer from Julia function. Type annotation of the return value in the callback function is a must for situations where Julia cannot infer the return type automatically.</p>
 <p>For example:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> foo</span><span class="p">()</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">foo</span><span class="p">()</span>
     <span class="c"># body</span>
 
-    <span class="n">retval</span><span class="p">::</span><span class="kt">Float64</span>
+    <span class="n">retval</span><span class="o">::</span><span class="kt">Float64</span>
 <span class="k">end</span>
 
 <span class="n">bar</span> <span class="o">=</span> <span class="n">cfunction</span><span class="p">(</span><span class="n">foo</span><span class="p">,</span> <span class="kt">Float64</span><span class="p">,</span> <span class="p">())</span>

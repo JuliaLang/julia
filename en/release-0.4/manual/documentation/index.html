@@ -554,7 +554,7 @@ the documentation for that package for more details.</p>
 before an object (function, macro, type or instance) will be interpreted as
 documenting it (these are called <em>docstrings</em>). Here is a very simple example:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="s">&quot;Tell whether there are too foo items in the array.&quot;</span>
-<span class="n">foo</span><span class="p">(</span><span class="n">xs</span><span class="p">::</span><span class="n">Array</span><span class="p">)</span> <span class="o">=</span> <span class="o">...</span>
+<span class="n">foo</span><span class="p">(</span><span class="n">xs</span><span class="o">::</span><span class="kt">Array</span><span class="p">)</span> <span class="o">=</span> <span class="o">...</span>
 </pre></div>
 </div>
 <p>Documentation is interpreted as <a class="reference external" href="https://en.wikipedia.org/wiki/Markdown">Markdown</a>,
@@ -682,8 +682,8 @@ should apply. It it advised to add line breaks after 92 characters.</div></block
 followed by the name of a function or macro, and pressing <code class="docutils literal"><span class="pre">Enter</span></code>. For
 example,</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="o">?</span><span class="n">fft</span>
-<span class="o">?</span><span class="p">@</span><span class="n">time</span>
-<span class="o">?</span><span class="n">r</span><span class="s">&quot;&quot;</span>
+<span class="o">?</span><span class="nd">@time</span>
+<span class="o">?</span><span class="sr">r&quot;&quot;</span>
 </pre></div>
 </div>
 <p>will bring up docs for the relevant function, macro or string macro
@@ -704,18 +704,18 @@ repeat the information provided elsewhere. For example:</p>
 <span class="s">Multiplication operator. `x*y*z*...` calls this function with multiple</span>
 <span class="s">arguments, i.e. `*(x,y,z...)`.</span>
 <span class="s">&quot;&quot;&quot;</span>
-<span class="k">function</span><span class="nf"> </span><span class="o">*(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+<span class="k">function</span> <span class="o">*</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
   <span class="c"># ... [implementation sold separately] ...</span>
 <span class="k">end</span>
 
 <span class="s">&quot;When applied to strings, concatenates them.&quot;</span>
-<span class="k">function</span><span class="nf"> </span><span class="o">*(</span><span class="n">x</span><span class="p">::</span><span class="n">AbstractString</span><span class="p">,</span> <span class="n">y</span><span class="p">::</span><span class="n">AbstractString</span><span class="p">)</span>
+<span class="k">function</span> <span class="o">*</span><span class="p">(</span><span class="n">x</span><span class="o">::</span><span class="kt">AbstractString</span><span class="p">,</span> <span class="n">y</span><span class="o">::</span><span class="kt">AbstractString</span><span class="p">)</span>
   <span class="c"># ... [insert secret sauce here] ...</span>
 <span class="k">end</span>
 
 <span class="n">help</span><span class="o">?&gt;*</span>
-<span class="n">Multiplication</span> <span class="n">operator</span><span class="o">.</span> <span class="sb">`x*y*z*...`</span> <span class="n">calls</span> <span class="n">this</span> <span class="k">function</span><span class="nf"> with</span> <span class="n">multiple</span>
-<span class="n">arguments</span><span class="p">,</span> <span class="n">i</span><span class="o">.</span><span class="n">e</span><span class="o">.</span> <span class="sb">`*(x,y,z...)`</span><span class="o">.</span>
+<span class="n">Multiplication</span> <span class="n">operator</span><span class="o">.</span> <span class="sb">`x*y*z*...`</span> <span class="n">calls</span> <span class="n">this</span> <span class="k">function</span> <span class="n">with</span> <span class="n">multiple</span>
+<span class="n">arguments</span><span class="p">,</span> <span class="n">i</span><span class="o">.</span><span class="nb">e</span><span class="o">.</span> <span class="sb">`*(x,y,z...)`</span><span class="o">.</span>
 
 <span class="n">When</span> <span class="n">applied</span> <span class="n">to</span> <span class="n">strings</span><span class="p">,</span> <span class="n">concatenates</span> <span class="n">them</span><span class="o">.</span>
 </pre></div>
@@ -739,24 +739,24 @@ Markdown content, for example) will by default display itself
 intelligently. This design also makes it easy to use the doc system in a
 programmatic way; for example, to re-use documentation between different
 versions of a function:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="p">@</span><span class="n">doc</span> <span class="s">&quot;...&quot;</span> <span class="n">foo!</span>
-<span class="p">@</span><span class="n">doc</span> <span class="p">(@</span><span class="n">doc</span> <span class="n">foo!</span><span class="p">)</span> <span class="n">foo</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="nd">@doc</span> <span class="s">&quot;...&quot;</span> <span class="n">foo!</span>
+<span class="nd">@doc</span> <span class="p">(</span><span class="nd">@doc</span> <span class="n">foo!</span><span class="p">)</span> <span class="n">foo</span>
 </pre></div>
 </div>
 <p>Or for use with Julia&#8217;s metaprogramming functionality:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">op</span><span class="p">)</span> <span class="k">in</span> <span class="p">((:</span><span class="n">add</span><span class="p">,</span> <span class="p">:</span><span class="o">+</span><span class="p">),</span> <span class="p">(:</span><span class="n">subtract</span><span class="p">,</span> <span class="p">:</span><span class="o">-</span><span class="p">),</span> <span class="p">(:</span><span class="n">multiply</span><span class="p">,</span> <span class="p">:</span><span class="o">*</span><span class="p">),</span> <span class="p">(:</span><span class="n">divide</span><span class="p">,</span> <span class="p">:</span><span class="o">/</span><span class="p">))</span>
-    <span class="p">@</span><span class="n">eval</span> <span class="k">begin</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">op</span><span class="p">)</span> <span class="kp">in</span> <span class="p">((</span><span class="o">:</span><span class="n">add</span><span class="p">,</span> <span class="o">:+</span><span class="p">),</span> <span class="p">(</span><span class="o">:</span><span class="n">subtract</span><span class="p">,</span> <span class="o">:-</span><span class="p">),</span> <span class="p">(</span><span class="o">:</span><span class="n">multiply</span><span class="p">,</span> <span class="o">:*</span><span class="p">),</span> <span class="p">(</span><span class="o">:</span><span class="n">divide</span><span class="p">,</span> <span class="o">:/</span><span class="p">))</span>
+    <span class="nd">@eval</span> <span class="k">begin</span>
         <span class="o">$</span><span class="n">f</span><span class="p">(</span><span class="n">a</span><span class="p">,</span><span class="n">b</span><span class="p">)</span> <span class="o">=</span> <span class="o">$</span><span class="n">op</span><span class="p">(</span><span class="n">a</span><span class="p">,</span><span class="n">b</span><span class="p">)</span>
     <span class="k">end</span>
 <span class="k">end</span>
-<span class="p">@</span><span class="n">doc</span> <span class="s">&quot;`add(a,b)` adds `a` and `b` together&quot;</span> <span class="n">add</span>
-<span class="p">@</span><span class="n">doc</span> <span class="s">&quot;`subtract(a,b)` subtracts `b` from `a`&quot;</span> <span class="n">subtract</span>
+<span class="nd">@doc</span> <span class="s">&quot;`add(a,b)` adds `a` and `b` together&quot;</span> <span class="n">add</span>
+<span class="nd">@doc</span> <span class="s">&quot;`subtract(a,b)` subtracts `b` from `a`&quot;</span> <span class="n">subtract</span>
 </pre></div>
 </div>
 <p>Documentation written in non-toplevel blocks, such as <code class="docutils literal"><span class="pre">if</span></code>, <code class="docutils literal"><span class="pre">for</span></code>, and <code class="docutils literal"><span class="pre">let</span></code>, are not
 automatically added to the documentation system. <code class="docutils literal"><span class="pre">&#64;doc</span></code> must be used in these cases. For
 example:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">if</span> <span class="n">VERSION</span> <span class="o">&gt;</span> <span class="n">v</span><span class="s">&quot;0.4&quot;</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">if</span> <span class="nb">VERSION</span> <span class="o">&gt;</span> <span class="n">v</span><span class="s">&quot;0.4&quot;</span>
     <span class="s">&quot;...&quot;</span>
     <span class="n">f</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">=</span> <span class="n">x</span>
 <span class="k">end</span>
@@ -764,8 +764,8 @@ example:</p>
 </div>
 <p>will not add any documentation to <code class="docutils literal"><span class="pre">f</span></code> even when the condition is <code class="docutils literal"><span class="pre">true</span></code> and must instead
 be written as:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">if</span> <span class="n">VERSION</span> <span class="o">&gt;</span> <span class="n">v</span><span class="s">&quot;0.4&quot;</span>
-    <span class="p">@</span><span class="n">doc</span> <span class="s">&quot;...&quot;</span> <span class="o">-&gt;</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">if</span> <span class="nb">VERSION</span> <span class="o">&gt;</span> <span class="n">v</span><span class="s">&quot;0.4&quot;</span>
+    <span class="nd">@doc</span> <span class="s">&quot;...&quot;</span> <span class="o">-&gt;</span>
     <span class="n">f</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">=</span> <span class="n">x</span>
 <span class="k">end</span>
 </pre></div>
@@ -795,7 +795,7 @@ interpolation.</p>
 <div class="section" id="functions-and-methods">
 <h3>Functions and Methods<a class="headerlink" href="#functions-and-methods" title="Permalink to this headline">¶</a></h3>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="s">&quot;...&quot;</span>
-<span class="k">function</span><span class="nf"> f</span> <span class="k">end</span>
+<span class="k">function</span> <span class="n">f</span> <span class="k">end</span>
 
 <span class="s">&quot;...&quot;</span>
 <span class="n">f</span>
@@ -807,7 +807,7 @@ however both are equivalent.</p>
 <span class="n">f</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">=</span> <span class="n">x</span>
 
 <span class="s">&quot;...&quot;</span>
-<span class="k">function</span><span class="nf"> f</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<span class="k">function</span> <span class="n">f</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
     <span class="n">x</span>
 <span class="k">end</span>
 
@@ -825,10 +825,10 @@ however both are equivalent.</p>
 <div class="section" id="types">
 <h3>Types<a class="headerlink" href="#types" title="Permalink to this headline">¶</a></h3>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="s">&quot;...&quot;</span>
-<span class="k">abstract</span><span class="nc"> T</span>
+<span class="k">abstract</span> <span class="n">T</span>
 
 <span class="s">&quot;...&quot;</span>
-<span class="k">type</span><span class="nc"> T</span> <span class="k">end</span>
+<span class="k">type</span> <span class="n">T</span> <span class="k">end</span>
 
 <span class="s">&quot;...&quot;</span>
 <span class="k">immutable</span> <span class="n">T</span> <span class="k">end</span>
@@ -836,7 +836,7 @@ however both are equivalent.</p>
 </div>
 <p>Adds the docstring <code class="docutils literal"><span class="pre">&quot;...&quot;</span></code> to type <code class="docutils literal"><span class="pre">T</span></code>.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="s">&quot;...&quot;</span>
-<span class="k">type</span><span class="nc"> T</span>
+<span class="k">type</span> <span class="n">T</span>
     <span class="s">&quot;x&quot;</span>
     <span class="n">x</span>
     <span class="s">&quot;y&quot;</span>
@@ -847,7 +847,7 @@ however both are equivalent.</p>
 <p>Adds docstring <code class="docutils literal"><span class="pre">&quot;...&quot;</span></code> to type <code class="docutils literal"><span class="pre">T</span></code>, <code class="docutils literal"><span class="pre">&quot;x&quot;</span></code> to field <code class="docutils literal"><span class="pre">T.x</span></code> and <code class="docutils literal"><span class="pre">&quot;y&quot;</span></code> to field
 <code class="docutils literal"><span class="pre">T.y</span></code>. Also applicable to <code class="docutils literal"><span class="pre">immutable</span></code> types.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="s">&quot;...&quot;</span>
-<span class="k">typealias</span><span class="nc"> A</span> <span class="n">T</span>
+<span class="k">typealias</span> <span class="n">A</span> <span class="n">T</span>
 </pre></div>
 </div>
 <p>Adds docstring <code class="docutils literal"><span class="pre">&quot;...&quot;</span></code> to the <code class="docutils literal"><span class="pre">Binding</span></code> <code class="docutils literal"><span class="pre">A</span></code>.</p>
@@ -860,7 +860,7 @@ without storing the referenced value itself.</p>
 <span class="k">macro</span> <span class="n">m</span><span class="p">()</span> <span class="k">end</span>
 
 <span class="s">&quot;...&quot;</span>
-<span class="p">:(@</span><span class="n">m</span><span class="p">)</span>
+<span class="o">:</span><span class="p">(</span><span class="nd">@m</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>Adds docstring <code class="docutils literal"><span class="pre">&quot;...&quot;</span></code> to the <code class="docutils literal"><span class="pre">Binding</span></code> <code class="docutils literal"><span class="pre">&#64;m</span></code>. Adding documentation at the definition
@@ -888,7 +888,7 @@ is the preferred syntax, however both are equivalent.</p>
 
 <span class="k">baremodule</span> <span class="n">M</span>
 
-<span class="k">import</span> <span class="n">Base</span><span class="p">:</span> <span class="n">call</span><span class="p">,</span> <span class="p">@</span><span class="n">doc</span>
+<span class="k">import</span> <span class="n">Base</span><span class="o">:</span> <span class="n">call</span><span class="p">,</span> <span class="nd">@doc</span>
 
 <span class="s">&quot;...&quot;</span>
 <span class="n">f</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">=</span> <span class="n">x</span>
@@ -941,7 +941,7 @@ when two functions are related, such as non-mutating and mutating versions <code
 <div class="section" id="macro-generated-code">
 <h3>Macro-generated code<a class="headerlink" href="#macro-generated-code" title="Permalink to this headline">¶</a></h3>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="s">&quot;...&quot;</span>
-<span class="p">@</span><span class="n">m</span> <span class="n">expression</span>
+<span class="nd">@m</span> <span class="n">expression</span>
 </pre></div>
 </div>
 <p>Adds docstring <code class="docutils literal"><span class="pre">&quot;...&quot;</span></code> to expression generated by expanding <code class="docutils literal"><span class="pre">&#64;m</span> <span class="pre">expression</span></code>. This allows
@@ -960,7 +960,7 @@ Examining it&#8217;s definition should serve as an example of how to use <code c
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">macro</span> <span class="n">example</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
     <span class="k">quote</span>
         <span class="o">$</span><span class="p">(</span><span class="n">f</span><span class="p">)()</span> <span class="o">=</span> <span class="mi">0</span>
-        <span class="p">@</span><span class="n">__doc__</span> <span class="o">$</span><span class="p">(</span><span class="n">f</span><span class="p">)(</span><span class="n">x</span><span class="p">)</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="nd">@__doc__</span> <span class="o">$</span><span class="p">(</span><span class="n">f</span><span class="p">)(</span><span class="n">x</span><span class="p">)</span> <span class="o">=</span> <span class="mi">1</span>
         <span class="o">$</span><span class="p">(</span><span class="n">f</span><span class="p">)(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span> <span class="o">=</span> <span class="mi">2</span>
     <span class="k">end</span> <span class="o">|&gt;</span> <span class="n">esc</span>
 <span class="k">end</span>

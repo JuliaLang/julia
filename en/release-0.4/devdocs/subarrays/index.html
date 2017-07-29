@@ -585,8 +585,8 @@ linear, indexing.</p>
 <div class="section" id="index-replacement">
 <h2>Index replacement<a class="headerlink" href="#index-replacement" title="Permalink to this headline">¶</a></h2>
 <p>Consider making 2d slices of a 3d array:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">S1</span> <span class="o">=</span> <span class="n">slice</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="p">:,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">2</span><span class="p">:</span><span class="mi">6</span><span class="p">)</span>
-<span class="n">S2</span> <span class="o">=</span> <span class="n">slice</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="p">:,</span> <span class="mi">2</span><span class="p">:</span><span class="mi">6</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">S1</span> <span class="o">=</span> <span class="n">slice</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="o">:</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">2</span><span class="o">:</span><span class="mi">6</span><span class="p">)</span>
+<span class="n">S2</span> <span class="o">=</span> <span class="n">slice</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="o">:</span><span class="p">,</span> <span class="mi">2</span><span class="o">:</span><span class="mi">6</span><span class="p">)</span>
 </pre></div>
 </div>
 <p><code class="docutils literal"><span class="pre">slice</span></code> drops &#8220;singleton&#8221; dimensions (ones that are specified by an
@@ -604,12 +604,12 @@ replacement can be performed without any runtime overhead.</p>
 <h3>Type parameters and fields<a class="headerlink" href="#type-parameters-and-fields" title="Permalink to this headline">¶</a></h3>
 <p>The strategy adopted is first and foremost expressed in the definition
 of the type:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span><span class="nc"> SubArray</span><span class="p">{</span><span class="n">T</span><span class="p">,</span><span class="n">N</span><span class="p">,</span><span class="n">P</span><span class="o">&lt;:</span><span class="n">AbstractArray</span><span class="p">,</span><span class="n">I</span><span class="o">&lt;:</span><span class="p">(</span><span class="n">ViewIndex</span><span class="o">...</span><span class="p">),</span><span class="n">LD</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">AbstractArray</span><span class="p">{</span><span class="n">T</span><span class="p">,</span><span class="n">N</span><span class="p">}</span>
-    <span class="n">parent</span><span class="p">::</span><span class="n">P</span>
-    <span class="n">indexes</span><span class="p">::</span><span class="n">I</span>
-    <span class="n">dims</span><span class="p">::</span><span class="n">NTuple</span><span class="p">{</span><span class="n">N</span><span class="p">,</span><span class="kt">Int</span><span class="p">}</span>
-    <span class="n">first_index</span><span class="p">::</span><span class="kt">Int</span>   <span class="c"># for linear indexing and pointer</span>
-    <span class="n">stride1</span><span class="p">::</span><span class="kt">Int</span>       <span class="c"># used only for linear indexing</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span> <span class="kt">SubArray</span><span class="p">{</span><span class="n">T</span><span class="p">,</span><span class="n">N</span><span class="p">,</span><span class="n">P</span><span class="o">&lt;:</span><span class="kt">AbstractArray</span><span class="p">,</span><span class="nb">I</span><span class="o">&lt;:</span><span class="p">(</span><span class="n">ViewIndex</span><span class="o">...</span><span class="p">),</span><span class="n">LD</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="kt">AbstractArray</span><span class="p">{</span><span class="n">T</span><span class="p">,</span><span class="n">N</span><span class="p">}</span>
+    <span class="n">parent</span><span class="o">::</span><span class="n">P</span>
+    <span class="n">indexes</span><span class="o">::</span><span class="nb">I</span>
+    <span class="n">dims</span><span class="o">::</span><span class="kt">NTuple</span><span class="p">{</span><span class="n">N</span><span class="p">,</span><span class="kt">Int</span><span class="p">}</span>
+    <span class="n">first_index</span><span class="o">::</span><span class="kt">Int</span>   <span class="c"># for linear indexing and pointer</span>
+    <span class="n">stride1</span><span class="o">::</span><span class="kt">Int</span>       <span class="c"># used only for linear indexing</span>
 <span class="k">end</span>
 </pre></div>
 </div>
@@ -626,7 +626,7 @@ case above would be a
 Note in particular the tuple parameter, which stores the types of
 the indexes used to create <code class="docutils literal"><span class="pre">S1</span></code>.  Likewise,</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">S1</span><span class="o">.</span><span class="n">indexes</span>
-<span class="p">(</span><span class="n">Colon</span><span class="p">(),</span><span class="mi">5</span><span class="p">,</span><span class="mi">2</span><span class="p">:</span><span class="mi">6</span><span class="p">)</span>
+<span class="p">(</span><span class="kt">Colon</span><span class="p">(),</span><span class="mi">5</span><span class="p">,</span><span class="mi">2</span><span class="o">:</span><span class="mi">6</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>Storing these values allows index replacement, and having the types
@@ -635,10 +635,10 @@ encoded as parameters allows one to dispatch to efficient algorithms.</p>
 be dropped.  The distinction between the <code class="docutils literal"><span class="pre">sub</span></code> and <code class="docutils literal"><span class="pre">slice</span></code>
 commands is that <code class="docutils literal"><span class="pre">sub</span></code> converts <em>interior</em> <code class="docutils literal"><span class="pre">Int</span></code> indices into
 ranges at the time of construction.  For example:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">S3</span> <span class="o">=</span> <span class="n">sub</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="p">:,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">2</span><span class="p">:</span><span class="mi">6</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">S3</span> <span class="o">=</span> <span class="n">sub</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="o">:</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">2</span><span class="o">:</span><span class="mi">6</span><span class="p">)</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">S3</span><span class="o">.</span><span class="n">indexes</span>
-<span class="p">(</span><span class="n">Colon</span><span class="p">(),</span><span class="mi">5</span><span class="p">:</span><span class="mi">5</span><span class="p">,</span><span class="mi">2</span><span class="p">:</span><span class="mi">6</span><span class="p">)</span>
+<span class="p">(</span><span class="kt">Colon</span><span class="p">(),</span><span class="mi">5</span><span class="o">:</span><span class="mi">5</span><span class="p">,</span><span class="mi">2</span><span class="o">:</span><span class="mi">6</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>Because of this conversion, <code class="docutils literal"><span class="pre">S3</span></code> is three-dimensional.</p>
@@ -651,10 +651,10 @@ to apply the <code class="docutils literal"><span class="pre">i,j</span></code> 
 parent array, whereas for <code class="docutils literal"><span class="pre">S2</span></code> one needs to apply them to the
 second and third.  The simplest approach to indexing would be to do
 the type-analysis at runtime:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">parentindexes</span> <span class="o">=</span> <span class="n">Array</span><span class="p">(</span><span class="kt">Any</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
-<span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="n">ndims</span><span class="p">(</span><span class="n">S</span><span class="o">.</span><span class="n">parent</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">parentindexes</span> <span class="o">=</span> <span class="kt">Array</span><span class="p">(</span><span class="kt">Any</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="o">:</span><span class="n">ndims</span><span class="p">(</span><span class="n">S</span><span class="o">.</span><span class="n">parent</span><span class="p">)</span>
     <span class="o">...</span>
-    <span class="k">if</span> <span class="nb">isa</span><span class="p">(</span><span class="n">thisindex</span><span class="p">,</span> <span class="kt">Int</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">isa</span><span class="p">(</span><span class="n">thisindex</span><span class="p">,</span> <span class="kt">Int</span><span class="p">)</span>
         <span class="c"># Don&#39;t consume one of the input indexes</span>
         <span class="n">push!</span><span class="p">(</span><span class="n">parentindexes</span><span class="p">,</span> <span class="n">thisindex</span><span class="p">)</span>
     <span class="k">else</span>
@@ -679,7 +679,7 @@ code looks quite a lot like the runtime approach above, but all of the
 type analysis is performed at the time of method instantiation.  For a
 <code class="docutils literal"><span class="pre">SubArray</span></code> of the type of <code class="docutils literal"><span class="pre">S1</span></code>, the method executed at runtime is
 literally</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">getindex</span><span class="p">(</span><span class="n">S</span><span class="p">::</span><span class="o">&lt;</span><span class="k">type</span><span class="nc"> of</span> <span class="n">S1</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">)</span> <span class="o">=</span> <span class="n">S</span><span class="o">.</span><span class="n">parent</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">S</span><span class="o">.</span><span class="n">indexes</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">S</span><span class="o">.</span><span class="n">indexes</span><span class="p">[</span><span class="mi">3</span><span class="p">][</span><span class="n">j</span><span class="p">]]</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">getindex</span><span class="p">(</span><span class="n">S</span><span class="o">::&lt;</span><span class="k">type</span> <span class="n">of</span> <span class="n">S1</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">)</span> <span class="o">=</span> <span class="n">S</span><span class="o">.</span><span class="n">parent</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">S</span><span class="o">.</span><span class="n">indexes</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">S</span><span class="o">.</span><span class="n">indexes</span><span class="p">[</span><span class="mi">3</span><span class="p">][</span><span class="n">j</span><span class="p">]]</span>
 </pre></div>
 </div>
 </div>
@@ -691,15 +691,15 @@ has a single stride that separates successive elements.  For
 purely on the types of the indexes, and does not depend on values like
 the size of the array.  It therefore can miss some cases in which the
 stride happens to be uniform:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">A</span> <span class="o">=</span> <span class="n">reshape</span><span class="p">(</span><span class="mi">1</span><span class="p">:</span><span class="mi">4</span><span class="o">*</span><span class="mi">2</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
-<span class="mi">4</span><span class="n">x2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">A</span> <span class="o">=</span> <span class="n">reshape</span><span class="p">(</span><span class="mi">1</span><span class="o">:</span><span class="mi">4</span><span class="o">*</span><span class="mi">2</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+<span class="mi">4</span><span class="n">x2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>  <span class="mi">5</span>
  <span class="mi">2</span>  <span class="mi">6</span>
  <span class="mi">3</span>  <span class="mi">7</span>
  <span class="mi">4</span>  <span class="mi">8</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">diff</span><span class="p">(</span><span class="n">A</span><span class="p">[</span><span class="mi">2</span><span class="p">:</span><span class="mi">2</span><span class="p">:</span><span class="mi">4</span><span class="p">,:][:])</span>
-<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">diff</span><span class="p">(</span><span class="n">A</span><span class="p">[</span><span class="mi">2</span><span class="o">:</span><span class="mi">2</span><span class="o">:</span><span class="mi">4</span><span class="p">,</span><span class="o">:</span><span class="p">][</span><span class="o">:</span><span class="p">])</span>
+<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">2</span>
  <span class="mi">2</span>
  <span class="mi">2</span>
@@ -709,16 +709,16 @@ stride happens to be uniform:</p>
 stride, and therefore linear indexing indeed could be performed
 efficiently.  However, success in this case depends on the size of the
 array: if the first dimension instead were odd,</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">A</span> <span class="o">=</span> <span class="n">reshape</span><span class="p">(</span><span class="mi">1</span><span class="p">:</span><span class="mi">5</span><span class="o">*</span><span class="mi">2</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
-<span class="mi">5</span><span class="n">x2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">A</span> <span class="o">=</span> <span class="n">reshape</span><span class="p">(</span><span class="mi">1</span><span class="o">:</span><span class="mi">5</span><span class="o">*</span><span class="mi">2</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+<span class="mi">5</span><span class="n">x2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>   <span class="mi">6</span>
  <span class="mi">2</span>   <span class="mi">7</span>
  <span class="mi">3</span>   <span class="mi">8</span>
  <span class="mi">4</span>   <span class="mi">9</span>
  <span class="mi">5</span>  <span class="mi">10</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">diff</span><span class="p">(</span><span class="n">A</span><span class="p">[</span><span class="mi">2</span><span class="p">:</span><span class="mi">2</span><span class="p">:</span><span class="mi">4</span><span class="p">,:][:])</span>
-<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">diff</span><span class="p">(</span><span class="n">A</span><span class="p">[</span><span class="mi">2</span><span class="o">:</span><span class="mi">2</span><span class="o">:</span><span class="mi">4</span><span class="p">,</span><span class="o">:</span><span class="p">][</span><span class="o">:</span><span class="p">])</span>
+<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">2</span>
  <span class="mi">3</span>
  <span class="mi">2</span>
@@ -777,10 +777,10 @@ parent array, and the third element in the <code class="docutils literal"><span 
 <p>What might be less obvious is that the dimensionality of the parent
 array may not be equal to the length of the <code class="docutils literal"><span class="pre">indexes</span></code> tuple.  Some
 examples:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">A</span> <span class="o">=</span> <span class="n">reshape</span><span class="p">(</span><span class="mi">1</span><span class="p">:</span><span class="mi">35</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">7</span><span class="p">)</span> <span class="c"># A 2d parent Array</span>
-<span class="n">S</span> <span class="o">=</span> <span class="n">sub</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="mi">2</span><span class="p">:</span><span class="mi">7</span><span class="p">)</span>         <span class="c"># A 1d view created by linear indexing</span>
-<span class="n">S</span> <span class="o">=</span> <span class="n">sub</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="p">:,</span> <span class="p">:,</span> <span class="mi">1</span><span class="p">)</span>     <span class="c"># Appending extra indexes is supported</span>
-<span class="n">S</span> <span class="o">=</span> <span class="n">sub</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="p">:,</span> <span class="p">:,</span> <span class="mi">1</span><span class="p">:</span><span class="mi">1</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">A</span> <span class="o">=</span> <span class="n">reshape</span><span class="p">(</span><span class="mi">1</span><span class="o">:</span><span class="mi">35</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">7</span><span class="p">)</span> <span class="c"># A 2d parent Array</span>
+<span class="n">S</span> <span class="o">=</span> <span class="n">sub</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="mi">2</span><span class="o">:</span><span class="mi">7</span><span class="p">)</span>         <span class="c"># A 1d view created by linear indexing</span>
+<span class="n">S</span> <span class="o">=</span> <span class="n">sub</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="o">:</span><span class="p">,</span> <span class="o">:</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>     <span class="c"># Appending extra indexes is supported</span>
+<span class="n">S</span> <span class="o">=</span> <span class="n">sub</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="o">:</span><span class="p">,</span> <span class="o">:</span><span class="p">,</span> <span class="mi">1</span><span class="o">:</span><span class="mi">1</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>Consequently, internal <code class="docutils literal"><span class="pre">SubArray</span></code> code needs to be fairly careful

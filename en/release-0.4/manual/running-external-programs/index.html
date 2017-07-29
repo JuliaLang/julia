@@ -579,13 +579,13 @@ can be used instead:</p>
 <span class="s">&quot;hello</span><span class="se">\n</span><span class="s">&quot;</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="p">(</span><span class="n">chomp</span><span class="p">(</span><span class="n">a</span><span class="p">))</span> <span class="o">==</span> <span class="s">&quot;hello&quot;</span>
-<span class="n">true</span>
+<span class="kc">true</span>
 </pre></div>
 </div>
 <p>More generally, you can use <a class="reference internal" href="../../stdlib/io-network/#Base.open" title="Base.open"><code class="xref jl jl-func docutils literal"><span class="pre">open()</span></code></a> to read from or write to an external
 command.</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">open</span><span class="p">(</span><span class="sb">`less`</span><span class="p">,</span> <span class="s">&quot;w&quot;</span><span class="p">,</span> <span class="n">STDOUT</span><span class="p">)</span> <span class="k">do</span> <span class="n">io</span>
-           <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="mi">3</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">open</span><span class="p">(</span><span class="sb">`less`</span><span class="p">,</span> <span class="s">&quot;w&quot;</span><span class="p">,</span> <span class="nb">STDOUT</span><span class="p">)</span> <span class="k">do</span> <span class="n">io</span>
+           <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="o">:</span><span class="mi">3</span>
                <span class="n">println</span><span class="p">(</span><span class="n">io</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span>
            <span class="k">end</span>
        <span class="k">end</span>
@@ -603,7 +603,7 @@ use <code class="docutils literal"><span class="pre">$</span></code> for interpo
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">file</span> <span class="o">=</span> <span class="s">&quot;/etc/passwd&quot;</span>
 <span class="s">&quot;/etc/passwd&quot;</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="sb">`sort $file`</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="sb">`sort </span><span class="si">$file</span><span class="sb">`</span>
 <span class="sb">`sort /etc/passwd`</span>
 </pre></div>
 </div>
@@ -615,7 +615,7 @@ cause undesirable behavior. Suppose, for example, rather than
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">file</span> <span class="o">=</span> <span class="s">&quot;/Volumes/External HD/data.csv&quot;</span>
 <span class="s">&quot;/Volumes/External HD/data.csv&quot;</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="sb">`sort $file`</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="sb">`sort </span><span class="si">$file</span><span class="sb">`</span>
 <span class="sb">`sort &#39;/Volumes/External HD/data.csv&#39;`</span>
 </pre></div>
 </div>
@@ -634,7 +634,7 @@ work if you interpolate a value as part of a shell word:</p>
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">ext</span> <span class="o">=</span> <span class="s">&quot;csv&quot;</span>
 <span class="s">&quot;csv&quot;</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="sb">`sort $path/$name.$ext`</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="sb">`sort </span><span class="si">$path</span><span class="sb">/</span><span class="si">$name</span><span class="sb">.</span><span class="si">$ext</span><span class="sb">`</span>
 <span class="sb">`sort &#39;/Volumes/External HD/data.csv&#39;`</span>
 </pre></div>
 </div>
@@ -642,41 +642,41 @@ work if you interpolate a value as part of a shell word:</p>
 escaped. But what if you <em>want</em> to interpolate multiple words? In that
 case, just use an array (or any other iterable container):</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">files</span> <span class="o">=</span> <span class="p">[</span><span class="s">&quot;/etc/passwd&quot;</span><span class="p">,</span><span class="s">&quot;/Volumes/External HD/data.csv&quot;</span><span class="p">]</span>
-<span class="mi">2</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="n">ASCIIString</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">2</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">ASCIIString</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="s">&quot;/etc/passwd&quot;</span>
  <span class="s">&quot;/Volumes/External HD/data.csv&quot;</span>
 
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="sb">`grep foo $files`</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="sb">`grep foo </span><span class="si">$files</span><span class="sb">`</span>
 <span class="sb">`grep foo /etc/passwd &#39;/Volumes/External HD/data.csv&#39;`</span>
 </pre></div>
 </div>
 <p>If you interpolate an array as part of a shell word, Julia emulates the
 shell&#8217;s <code class="docutils literal"><span class="pre">{a,b,c}</span></code> argument generation:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">names</span> <span class="o">=</span> <span class="p">[</span><span class="s">&quot;foo&quot;</span><span class="p">,</span><span class="s">&quot;bar&quot;</span><span class="p">,</span><span class="s">&quot;baz&quot;</span><span class="p">]</span>
-<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="n">ASCIIString</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">ASCIIString</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="s">&quot;foo&quot;</span>
  <span class="s">&quot;bar&quot;</span>
  <span class="s">&quot;baz&quot;</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="sb">`grep xylophone $names.txt`</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="sb">`grep xylophone </span><span class="si">$names</span><span class="sb">.txt`</span>
 <span class="sb">`grep xylophone foo.txt bar.txt baz.txt`</span>
 </pre></div>
 </div>
 <p>Moreover, if you interpolate multiple arrays into the same word, the
 shell&#8217;s Cartesian product generation behavior is emulated:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">names</span> <span class="o">=</span> <span class="p">[</span><span class="s">&quot;foo&quot;</span><span class="p">,</span><span class="s">&quot;bar&quot;</span><span class="p">,</span><span class="s">&quot;baz&quot;</span><span class="p">]</span>
-<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="n">ASCIIString</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">ASCIIString</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="s">&quot;foo&quot;</span>
  <span class="s">&quot;bar&quot;</span>
  <span class="s">&quot;baz&quot;</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">exts</span> <span class="o">=</span> <span class="p">[</span><span class="s">&quot;aux&quot;</span><span class="p">,</span><span class="s">&quot;log&quot;</span><span class="p">]</span>
-<span class="mi">2</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="n">ASCIIString</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">2</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">ASCIIString</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="s">&quot;aux&quot;</span>
  <span class="s">&quot;log&quot;</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="sb">`rm -f $names.$exts`</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="sb">`rm -f </span><span class="si">$names</span><span class="sb">.</span><span class="si">$exts</span><span class="sb">`</span>
 <span class="sb">`rm -f foo.aux foo.log bar.aux bar.log baz.aux baz.log`</span>
 </pre></div>
 </div>
@@ -693,10 +693,10 @@ functionality without needing to create temporary array objects first:</p>
 it becomes necessary to use quotes. Here&#8217;s a simple example of a Perl
 one-liner at a shell prompt:</p>
 <div class="highlight-sh"><div class="highlight"><pre><span></span>sh$ perl -le <span class="s1">&#39;$|=1; for (0..3) { print }&#39;</span>
-0
-1
-2
-3
+<span class="m">0</span>
+<span class="m">1</span>
+<span class="m">2</span>
+<span class="m">3</span>
 </pre></div>
 </div>
 <p>The Perl expression needs to be in single quotes for two reasons: so
@@ -707,8 +707,8 @@ may want to use double quotes so that interpolation <em>does</em> occur:</p>
 <div class="highlight-sh"><div class="highlight"><pre><span></span>sh$ <span class="nv">first</span><span class="o">=</span><span class="s2">&quot;A&quot;</span>
 sh$ <span class="nv">second</span><span class="o">=</span><span class="s2">&quot;B&quot;</span>
 sh$ perl -le <span class="s1">&#39;$|=1; print for @ARGV&#39;</span> <span class="s2">&quot;1: </span><span class="nv">$first</span><span class="s2">&quot;</span> <span class="s2">&quot;2: </span><span class="nv">$second</span><span class="s2">&quot;</span>
-1: A
-2: B
+<span class="m">1</span>: A
+<span class="m">2</span>: B
 </pre></div>
 </div>
 <p>In general, the Julia backtick syntax is carefully designed so that you
@@ -729,12 +729,12 @@ Julia:</p>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">first</span> <span class="o">=</span> <span class="s">&quot;A&quot;</span><span class="p">;</span> <span class="n">second</span> <span class="o">=</span> <span class="s">&quot;B&quot;</span><span class="p">;</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="sb">`perl -le &#39;print for @ARGV&#39; &quot;1: $first&quot; &quot;2: $second&quot;`</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="sb">`perl -le &#39;print for @ARGV&#39; &quot;1: </span><span class="si">$first</span><span class="sb">&quot; &quot;2: </span><span class="si">$second</span><span class="sb">&quot;`</span>
 <span class="sb">`perl -le &#39;print for @ARGV&#39; &#39;1: A&#39; &#39;2: B&#39;`</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">run</span><span class="p">(</span><span class="n">ans</span><span class="p">)</span>
-<span class="mi">1</span><span class="p">:</span> <span class="n">A</span>
-<span class="mi">2</span><span class="p">:</span> <span class="n">B</span>
+<span class="mi">1</span><span class="o">:</span> <span class="n">A</span>
+<span class="mi">2</span><span class="o">:</span> <span class="n">B</span>
 </pre></div>
 </div>
 <p>The results are identical, and Julia&#8217;s interpolation behavior mimics the
@@ -815,8 +815,8 @@ whereas the latter will attempt to store the data in the kernel&#8217;s
 buffers while waiting for a reader to be connected.</p>
 <p>Another common solution is to separate the reader and writer
 of the pipeline into separate Tasks:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">writer</span> <span class="o">=</span> <span class="p">@</span><span class="n">async</span> <span class="n">writeall</span><span class="p">(</span><span class="n">process</span><span class="p">,</span> <span class="s">&quot;data&quot;</span><span class="p">)</span>
-<span class="n">reader</span> <span class="o">=</span> <span class="p">@</span><span class="n">async</span> <span class="n">do_compute</span><span class="p">(</span><span class="n">readall</span><span class="p">(</span><span class="n">process</span><span class="p">))</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">writer</span> <span class="o">=</span> <span class="nd">@async</span> <span class="n">writeall</span><span class="p">(</span><span class="n">process</span><span class="p">,</span> <span class="s">&quot;data&quot;</span><span class="p">)</span>
+<span class="n">reader</span> <span class="o">=</span> <span class="nd">@async</span> <span class="n">do_compute</span><span class="p">(</span><span class="n">readall</span><span class="p">(</span><span class="n">process</span><span class="p">))</span>
 <span class="n">wait</span><span class="p">(</span><span class="n">process</span><span class="p">)</span>
 <span class="n">fetch</span><span class="p">(</span><span class="n">reader</span><span class="p">)</span>
 </pre></div>
@@ -829,7 +829,7 @@ command abstraction, and automatic setup of pipes between processes is a
 powerful one. To give some sense of the complex pipelines that can be
 created easily, here are some more sophisticated examples, with
 apologies for the excessive use of Perl one-liners:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">prefixer</span><span class="p">(</span><span class="n">prefix</span><span class="p">,</span> <span class="n">sleep</span><span class="p">)</span> <span class="o">=</span> <span class="sb">`perl -nle &#39;$|=1; print &quot;&#39;$prefix&#39; &quot;, $_; sleep &#39;$sleep&#39;;&#39;`</span><span class="p">;</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">prefixer</span><span class="p">(</span><span class="n">prefix</span><span class="p">,</span> <span class="n">sleep</span><span class="p">)</span> <span class="o">=</span> <span class="sb">`perl -nle &#39;$|=1; print &quot;&#39;</span><span class="si">$prefix</span><span class="sb">&#39; &quot;, </span><span class="si">$_</span><span class="sb">; sleep &#39;</span><span class="si">$sleep</span><span class="sb">&#39;;&#39;`</span><span class="p">;</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">run</span><span class="p">(</span><span class="n">pipeline</span><span class="p">(</span><span class="sb">`perl -le &#39;$|=1; for(0..9){ print; sleep 1 }&#39;`</span><span class="p">,</span> <span class="n">prefixer</span><span class="p">(</span><span class="s">&quot;A&quot;</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span> <span class="o">&amp;</span> <span class="n">prefixer</span><span class="p">(</span><span class="s">&quot;B&quot;</span><span class="p">,</span><span class="mi">2</span><span class="p">)))</span>
 <span class="n">A</span> <span class="mi">0</span>

@@ -635,8 +635,8 @@
 </dd></dl>
 
 <dl class="function">
-<dt>
-<code class="descname">&#64;r_str -&gt; Regex</code></dt>
+<dt id="Base.&#64;r_str">
+<code class="descname">&#64;r_str</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &rarr; Regex<a class="headerlink" href="#Base.@r_str" title="Permalink to this definition">¶</a></dt>
 <dd><p>Construct a regex, such as <code class="docutils literal"><span class="pre">r&quot;^[a-z]*$&quot;</span></code>. The regex also accepts one or more flags, listed after the ending quote, to change its behaviour:</p>
 <ul class="simple">
 <li><code class="docutils literal"><span class="pre">i</span></code> enables case-insensitive matching</li>
@@ -645,21 +645,21 @@
 <li><code class="docutils literal"><span class="pre">x</span></code> enables &#8220;comment mode&#8221;: whitespace is enabled except when   escaped with <code class="docutils literal"><span class="pre">\</span></code>, and <code class="docutils literal"><span class="pre">#</span></code> is treated as starting a comment.</li>
 </ul>
 <p>For example, this regex has all three flags enabled:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">match</span><span class="p">(</span><span class="n">r</span><span class="s">&quot;a+.*b+.*?d$&quot;</span><span class="n">ism</span><span class="p">,</span> <span class="s">&quot;Goodbye,</span><span class="se">\n</span><span class="s">Oh, angry,</span><span class="se">\n</span><span class="s">Bad world</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">)</span>
-<span class="n">RegexMatch</span><span class="p">(</span><span class="s">&quot;angry,</span><span class="se">\n</span><span class="s">Bad world&quot;</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">match</span><span class="p">(</span><span class="sr">r&quot;a+.*b+.*?d$&quot;</span><span class="n">ism</span><span class="p">,</span> <span class="s">&quot;Goodbye,</span><span class="se">\n</span><span class="s">Oh, angry,</span><span class="se">\n</span><span class="s">Bad world</span><span class="se">\n</span><span class="s">&quot;</span><span class="p">)</span>
+<span class="kt">RegexMatch</span><span class="p">(</span><span class="s">&quot;angry,</span><span class="se">\n</span><span class="s">Bad world&quot;</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>
 
 <dl class="function">
-<dt>
-<code class="descname">&#64;html_str -&gt; Docs.HTML</code></dt>
+<dt id="Base.&#64;html_str">
+<code class="descname">&#64;html_str</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &rarr; Docs.HTML<a class="headerlink" href="#Base.@html_str" title="Permalink to this definition">¶</a></dt>
 <dd><p>Create an <code class="docutils literal"><span class="pre">HTML</span></code> object from a literal string.</p>
 </dd></dl>
 
 <dl class="function">
-<dt>
-<code class="descname">&#64;text_str -&gt; Docs.Text</code></dt>
+<dt id="Base.&#64;text_str">
+<code class="descname">&#64;text_str</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &rarr; Docs.Text<a class="headerlink" href="#Base.@text_str" title="Permalink to this definition">¶</a></dt>
 <dd><p>Create a <code class="docutils literal"><span class="pre">Text</span></code> object from a literal string.</p>
 </dd></dl>
 

@@ -1002,7 +1002,7 @@ so not all numbers are represented directly as scheme numbers in the AST.</p>
     <span class="n">b</span>
 <span class="k">elseif</span> <span class="n">c</span>
     <span class="n">d</span>
-<span class="k">else</span> <span class="n">e</span>
+<span class="k">else</span> <span class="nb">e</span>
     <span class="n">f</span>
 <span class="k">end</span>
 </pre></div>
@@ -1010,7 +1010,7 @@ so not all numbers are represented directly as scheme numbers in the AST.</p>
 <p>parses as:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="p">(</span><span class="k">if</span> <span class="n">a</span> <span class="p">(</span><span class="n">block</span> <span class="p">(</span><span class="n">line</span> <span class="mi">2</span><span class="p">)</span> <span class="n">b</span><span class="p">)</span>
     <span class="p">(</span><span class="n">block</span> <span class="p">(</span><span class="n">line</span> <span class="mi">3</span><span class="p">)</span> <span class="p">(</span><span class="k">if</span> <span class="n">c</span> <span class="p">(</span><span class="n">block</span> <span class="p">(</span><span class="n">line</span> <span class="mi">4</span><span class="p">)</span> <span class="n">d</span><span class="p">)</span>
-                        <span class="p">(</span><span class="n">block</span> <span class="p">(</span><span class="n">line</span> <span class="mi">5</span><span class="p">)</span> <span class="n">e</span> <span class="p">(</span><span class="n">line</span> <span class="mi">6</span><span class="p">)</span> <span class="n">f</span><span class="p">))))</span>
+                        <span class="p">(</span><span class="n">block</span> <span class="p">(</span><span class="n">line</span> <span class="mi">5</span><span class="p">)</span> <span class="nb">e</span> <span class="p">(</span><span class="n">line</span> <span class="mi">6</span><span class="p">)</span> <span class="n">f</span><span class="p">))))</span>
 </pre></div>
 </div>
 <p>A <code class="docutils literal"><span class="pre">while</span></code> loop parses as <code class="docutils literal"><span class="pre">(while</span> <span class="pre">condition</span> <span class="pre">body)</span></code>.</p>
@@ -1022,26 +1022,26 @@ If there is more than one iteration specification, they are parsed as a block:
 <p><code class="docutils literal"><span class="pre">let</span></code> is parsed as <code class="docutils literal"><span class="pre">(let</span> <span class="pre">body</span> <span class="pre">(=</span> <span class="pre">var1</span> <span class="pre">val1)</span> <span class="pre">(=</span> <span class="pre">var2</span> <span class="pre">val2)</span> <span class="pre">...)</span></code>.</p>
 <p>A basic function definition is parsed as <code class="docutils literal"><span class="pre">(function</span> <span class="pre">(call</span> <span class="pre">f</span> <span class="pre">x)</span> <span class="pre">body)</span></code>.
 A more complex example:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> f</span><span class="p">{</span><span class="n">T</span><span class="p">}(</span><span class="n">x</span><span class="p">::</span><span class="n">T</span><span class="p">;</span> <span class="n">k</span> <span class="o">=</span> <span class="mi">1</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">f</span><span class="p">{</span><span class="n">T</span><span class="p">}(</span><span class="n">x</span><span class="o">::</span><span class="n">T</span><span class="p">;</span> <span class="n">k</span> <span class="o">=</span> <span class="mi">1</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">x</span><span class="o">+</span><span class="mi">1</span>
 <span class="k">end</span>
 </pre></div>
 </div>
 <p>parses as:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="p">(</span><span class="k">function</span><span class="nf"> </span><span class="o">(</span><span class="n">call</span> <span class="p">(</span><span class="n">curly</span> <span class="n">f</span> <span class="n">T</span><span class="p">)</span> <span class="p">(</span><span class="n">parameters</span> <span class="p">(</span><span class="n">kw</span> <span class="n">k</span> <span class="mi">1</span><span class="p">))</span>
-                <span class="p">(::</span> <span class="n">x</span> <span class="n">T</span><span class="p">))</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="p">(</span><span class="k">function</span> <span class="p">(</span><span class="n">call</span> <span class="p">(</span><span class="n">curly</span> <span class="n">f</span> <span class="n">T</span><span class="p">)</span> <span class="p">(</span><span class="n">parameters</span> <span class="p">(</span><span class="n">kw</span> <span class="n">k</span> <span class="mi">1</span><span class="p">))</span>
+                <span class="p">(</span><span class="o">::</span> <span class="n">x</span> <span class="n">T</span><span class="p">))</span>
           <span class="p">(</span><span class="n">block</span> <span class="p">(</span><span class="n">line</span> <span class="mi">2</span> <span class="n">file</span><span class="o">.</span><span class="n">jl</span><span class="p">)</span> <span class="p">(</span><span class="k">return</span> <span class="p">(</span><span class="n">call</span> <span class="o">+</span> <span class="n">x</span> <span class="mi">1</span><span class="p">))))</span>
 </pre></div>
 </div>
 <p>Type definition:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span><span class="nc"> Foo</span><span class="p">{</span><span class="n">T</span><span class="o">&lt;:</span><span class="n">S</span><span class="p">}</span>
-    <span class="n">x</span><span class="p">::</span><span class="n">T</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span> <span class="n">Foo</span><span class="p">{</span><span class="n">T</span><span class="o">&lt;:</span><span class="n">S</span><span class="p">}</span>
+    <span class="n">x</span><span class="o">::</span><span class="n">T</span>
 <span class="k">end</span>
 </pre></div>
 </div>
 <p>parses as:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span>(type #t (curly Foo (&lt;: T S))
-      (block (line 2 none) (:: x T)))
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="p">(</span><span class="k">type</span> <span class="c">#t (curly Foo (&lt;: T S))</span>
+      <span class="p">(</span><span class="n">block</span> <span class="p">(</span><span class="n">line</span> <span class="mi">2</span> <span class="n">none</span><span class="p">)</span> <span class="p">(</span><span class="o">::</span> <span class="n">x</span> <span class="n">T</span><span class="p">)))</span>
 </pre></div>
 </div>
 <p>The first argument is a boolean telling whether the type is mutable.</p>

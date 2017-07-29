@@ -569,10 +569,10 @@ just like any other data.</p>
 each string into an object called an expression, represented by the Julia type
 <code class="xref jl jl-obj docutils literal"><span class="pre">Expr</span></code>:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">ex1</span> <span class="o">=</span> <span class="n">parse</span><span class="p">(</span><span class="n">prog</span><span class="p">)</span>
-<span class="p">:(</span><span class="mi">1</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+<span class="o">:</span><span class="p">(</span><span class="mi">1</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">ex1</span><span class="p">)</span>
-<span class="n">Expr</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">typeof</span><span class="p">(</span><span class="n">ex1</span><span class="p">)</span>
+<span class="kt">Expr</span>
 </pre></div>
 </div>
 <p><code class="xref jl jl-obj docutils literal"><span class="pre">Expr</span></code> objects contain three parts:</p>
@@ -582,15 +582,15 @@ each string into an object called an expression, represented by the Julia type
 identifier (more discussion below).</li>
 </ul>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">ex1</span><span class="o">.</span><span class="n">head</span>
-<span class="p">:</span><span class="n">call</span>
+<span class="o">:</span><span class="n">call</span>
 </pre></div>
 </div>
 <ul class="simple">
 <li>the expression arguments, which may be symbols, other expressions, or literal values:</li>
 </ul>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">ex1</span><span class="o">.</span><span class="n">args</span>
-<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Any</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
-  <span class="p">:</span><span class="o">+</span>
+<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Any</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
+  <span class="o">:+</span>
  <span class="mi">1</span>
  <span class="mi">1</span>
 </pre></div>
@@ -605,14 +605,14 @@ by the compiler (and may be ignored completely for the purposes of this chapter)
 </div>
 <p>Expressions may also be constructed directly in
 <a class="reference external" href="https://en.wikipedia.org/wiki/Polish_notation">prefix notation</a>:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">ex2</span> <span class="o">=</span> <span class="n">Expr</span><span class="p">(:</span><span class="n">call</span><span class="p">,</span> <span class="p">:</span><span class="o">+</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
-<span class="p">:(</span><span class="mi">1</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">ex2</span> <span class="o">=</span> <span class="kt">Expr</span><span class="p">(</span><span class="o">:</span><span class="n">call</span><span class="p">,</span> <span class="o">:+</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="o">:</span><span class="p">(</span><span class="mi">1</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>The two expressions constructed above &#8211; by parsing and by direct
 construction &#8211; are equivalent:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">ex1</span> <span class="o">==</span> <span class="n">ex2</span>
-<span class="n">true</span>
+<span class="kc">true</span>
 </pre></div>
 </div>
 <p><strong>The key point here is that Julia code is internally represented
@@ -620,18 +620,18 @@ as a data structure that is accessible from the language itself.</strong></p>
 <p>The <a class="reference internal" href="../../stdlib/io-network/#Base.dump" title="Base.dump"><code class="xref jl jl-func docutils literal"><span class="pre">dump()</span></code></a> function provides indented and annotated display of <code class="xref jl jl-obj docutils literal"><span class="pre">Expr</span></code>
 objects:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">dump</span><span class="p">(</span><span class="n">ex2</span><span class="p">)</span>
-<span class="n">Expr</span>
-  <span class="n">head</span><span class="p">:</span> <span class="n">Symbol</span> <span class="n">call</span>
-  <span class="n">args</span><span class="p">:</span> <span class="n">Array</span><span class="p">(</span><span class="kt">Any</span><span class="p">,(</span><span class="mi">3</span><span class="p">,))</span>
-    <span class="mi">1</span><span class="p">:</span> <span class="n">Symbol</span> <span class="o">+</span>
-    <span class="mi">2</span><span class="p">:</span> <span class="kt">Int64</span> <span class="mi">1</span>
-    <span class="mi">3</span><span class="p">:</span> <span class="kt">Int64</span> <span class="mi">1</span>
-  <span class="n">typ</span><span class="p">:</span> <span class="kt">Any</span>
+<span class="kt">Expr</span>
+  <span class="n">head</span><span class="o">:</span> <span class="kt">Symbol</span> <span class="n">call</span>
+  <span class="n">args</span><span class="o">:</span> <span class="kt">Array</span><span class="p">(</span><span class="kt">Any</span><span class="p">,(</span><span class="mi">3</span><span class="p">,))</span>
+    <span class="mi">1</span><span class="o">:</span> <span class="kt">Symbol</span> <span class="o">+</span>
+    <span class="mi">2</span><span class="o">:</span> <span class="kt">Int64</span> <span class="mi">1</span>
+    <span class="mi">3</span><span class="o">:</span> <span class="kt">Int64</span> <span class="mi">1</span>
+  <span class="n">typ</span><span class="o">:</span> <span class="kt">Any</span>
 </pre></div>
 </div>
 <p><code class="xref jl jl-obj docutils literal"><span class="pre">Expr</span></code> objects may also be nested:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">ex3</span> <span class="o">=</span> <span class="n">parse</span><span class="p">(</span><span class="s">&quot;(4 + 4) / 2&quot;</span><span class="p">)</span>
-<span class="p">:((</span><span class="mi">4</span> <span class="o">+</span> <span class="mi">4</span><span class="p">)</span> <span class="o">/</span> <span class="mi">2</span><span class="p">)</span>
+<span class="o">:</span><span class="p">((</span><span class="mi">4</span> <span class="o">+</span> <span class="mi">4</span><span class="p">)</span> <span class="o">/</span> <span class="mi">2</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>Another way to view expressions is with Meta.show_sexpr, which displays the
@@ -639,7 +639,7 @@ objects:</p>
 <code class="xref jl jl-obj docutils literal"><span class="pre">Expr</span></code>, which may look very familiar to users of Lisp. Here&#8217;s an example
 illustrating the display on a nested <code class="xref jl jl-obj docutils literal"><span class="pre">Expr</span></code>:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Meta</span><span class="o">.</span><span class="n">show_sexpr</span><span class="p">(</span><span class="n">ex3</span><span class="p">)</span>
-<span class="p">(:</span><span class="n">call</span><span class="p">,</span> <span class="p">:</span><span class="o">/</span><span class="p">,</span> <span class="p">(:</span><span class="n">call</span><span class="p">,</span> <span class="p">:</span><span class="o">+</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">4</span><span class="p">),</span> <span class="mi">2</span><span class="p">)</span>
+<span class="p">(</span><span class="o">:</span><span class="n">call</span><span class="p">,</span> <span class="o">:/</span><span class="p">,</span> <span class="p">(</span><span class="o">:</span><span class="n">call</span><span class="p">,</span> <span class="o">:+</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">4</span><span class="p">),</span> <span class="mi">2</span><span class="p">)</span>
 </pre></div>
 </div>
 <div class="section" id="symbols">
@@ -647,24 +647,24 @@ illustrating the display on a nested <code class="xref jl jl-obj docutils litera
 <p>The <code class="docutils literal"><span class="pre">:</span></code> character has two syntactic purposes in Julia. The first form creates a
 <code class="xref jl jl-obj docutils literal"><span class="pre">Symbol</span></code>, an <a class="reference external" href="https://en.wikipedia.org/wiki/String_interning">interned string</a>
 used as one building-block of expressions:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">:</span><span class="n">foo</span>
-<span class="p">:</span><span class="n">foo</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="o">:</span><span class="n">foo</span>
+<span class="o">:</span><span class="n">foo</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">ans</span><span class="p">)</span>
-<span class="n">Symbol</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">typeof</span><span class="p">(</span><span class="n">ans</span><span class="p">)</span>
+<span class="kt">Symbol</span>
 </pre></div>
 </div>
 <p><code class="xref jl jl-obj docutils literal"><span class="pre">Symbol</span></code>s can also be created using <a class="reference internal" href="../../stdlib/strings/#Base.symbol" title="Base.symbol"><code class="xref jl jl-func docutils literal"><span class="pre">symbol()</span></code></a>, which takes any
 number of arguments and creates a new symbol by concatenating their string
 representations together:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">:</span><span class="n">foo</span> <span class="o">==</span> <span class="n">symbol</span><span class="p">(</span><span class="s">&quot;foo&quot;</span><span class="p">)</span>
-<span class="n">true</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="o">:</span><span class="n">foo</span> <span class="o">==</span> <span class="n">symbol</span><span class="p">(</span><span class="s">&quot;foo&quot;</span><span class="p">)</span>
+<span class="kc">true</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">symbol</span><span class="p">(</span><span class="s">&quot;func&quot;</span><span class="p">,</span><span class="mi">10</span><span class="p">)</span>
-<span class="p">:</span><span class="n">func10</span>
+<span class="o">:</span><span class="n">func10</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">symbol</span><span class="p">(:</span><span class="n">var</span><span class="p">,</span><span class="sc">&#39;_&#39;</span><span class="p">,</span><span class="s">&quot;sym&quot;</span><span class="p">)</span>
-<span class="p">:</span><span class="n">var_sym</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">symbol</span><span class="p">(</span><span class="o">:</span><span class="n">var</span><span class="p">,</span><span class="sc">&#39;_&#39;</span><span class="p">,</span><span class="s">&quot;sym&quot;</span><span class="p">)</span>
+<span class="o">:</span><span class="n">var_sym</span>
 </pre></div>
 </div>
 <p>In the context of an expression, symbols are used to indicate access to
@@ -672,11 +672,11 @@ variables; when an expression is evaluated, a symbol is replaced with
 the value bound to that symbol in the appropriate <a class="reference internal" href="../variables-and-scoping/#man-variables-and-scoping"><span class="std std-ref">scope</span></a>.</p>
 <p>Sometimes extra parentheses around the argument to <code class="docutils literal"><span class="pre">:</span></code> are needed to avoid
 ambiguity in parsing.:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">:(:)</span>
-<span class="p">:(:)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="o">:</span><span class="p">(</span><span class="o">:</span><span class="p">)</span>
+<span class="o">:</span><span class="p">(</span><span class="o">:</span><span class="p">)</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="p">:(::)</span>
-<span class="p">:(::)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="o">:</span><span class="p">(</span><span class="o">::</span><span class="p">)</span>
+<span class="o">:</span><span class="p">(</span><span class="o">::</span><span class="p">)</span>
 </pre></div>
 </div>
 </div>
@@ -691,21 +691,21 @@ to as <em>quoting</em>. The <code class="docutils literal"><span class="pre">:</
 a single statement of Julia code, produces an <code class="xref jl jl-obj docutils literal"><span class="pre">Expr</span></code> object based on the
 enclosed code. Here is example of the short form used to quote an arithmetic
 expression:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">ex</span> <span class="o">=</span> <span class="p">:(</span><span class="n">a</span><span class="o">+</span><span class="n">b</span><span class="o">*</span><span class="n">c</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span>
-<span class="p">:(</span><span class="n">a</span> <span class="o">+</span> <span class="n">b</span> <span class="o">*</span> <span class="n">c</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">ex</span> <span class="o">=</span> <span class="o">:</span><span class="p">(</span><span class="n">a</span><span class="o">+</span><span class="n">b</span><span class="o">*</span><span class="n">c</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span>
+<span class="o">:</span><span class="p">(</span><span class="n">a</span> <span class="o">+</span> <span class="n">b</span> <span class="o">*</span> <span class="n">c</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">ex</span><span class="p">)</span>
-<span class="n">Expr</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">typeof</span><span class="p">(</span><span class="n">ex</span><span class="p">)</span>
+<span class="kt">Expr</span>
 </pre></div>
 </div>
 <p>(to view the structure of this expression, try <code class="docutils literal"><span class="pre">ex.head</span></code> and <code class="docutils literal"><span class="pre">ex.args</span></code>,
 or use <a class="reference internal" href="../../stdlib/io-network/#Base.dump" title="Base.dump"><code class="xref jl jl-func docutils literal"><span class="pre">dump()</span></code></a> as above)</p>
 <p>Note that equivalent expressions may be constructed using <a class="reference internal" href="../../stdlib/numbers/#Base.parse" title="Base.parse"><code class="xref jl jl-func docutils literal"><span class="pre">parse()</span></code></a> or
 the direct <code class="xref jl jl-obj docutils literal"><span class="pre">Expr</span></code> form:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span>      <span class="p">:(</span><span class="n">a</span> <span class="o">+</span> <span class="n">b</span><span class="o">*</span><span class="n">c</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>  <span class="o">==</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span>      <span class="o">:</span><span class="p">(</span><span class="n">a</span> <span class="o">+</span> <span class="n">b</span><span class="o">*</span><span class="n">c</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>  <span class="o">==</span>
        <span class="n">parse</span><span class="p">(</span><span class="s">&quot;a + b*c + 1&quot;</span><span class="p">)</span> <span class="o">==</span>
-       <span class="n">Expr</span><span class="p">(:</span><span class="n">call</span><span class="p">,</span> <span class="p">:</span><span class="o">+</span><span class="p">,</span> <span class="p">:</span><span class="n">a</span><span class="p">,</span> <span class="n">Expr</span><span class="p">(:</span><span class="n">call</span><span class="p">,</span> <span class="p">:</span><span class="o">*</span><span class="p">,</span> <span class="p">:</span><span class="n">b</span><span class="p">,</span> <span class="p">:</span><span class="n">c</span><span class="p">),</span> <span class="mi">1</span><span class="p">)</span>
-<span class="n">true</span>
+       <span class="kt">Expr</span><span class="p">(</span><span class="o">:</span><span class="n">call</span><span class="p">,</span> <span class="o">:+</span><span class="p">,</span> <span class="o">:</span><span class="n">a</span><span class="p">,</span> <span class="kt">Expr</span><span class="p">(</span><span class="o">:</span><span class="n">call</span><span class="p">,</span> <span class="o">:*</span><span class="p">,</span> <span class="o">:</span><span class="n">b</span><span class="p">,</span> <span class="o">:</span><span class="n">c</span><span class="p">),</span> <span class="mi">1</span><span class="p">)</span>
+<span class="kc">true</span>
 </pre></div>
 </div>
 <p>Expressions provided by the parser generally only have symbols, other
@@ -731,8 +731,8 @@ and <code class="docutils literal"><span class="pre">quote</span> <span class="p
     <span class="n">x</span> <span class="o">+</span> <span class="n">y</span>
 <span class="k">end</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">ex</span><span class="p">)</span>
-<span class="n">Expr</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">typeof</span><span class="p">(</span><span class="n">ex</span><span class="p">)</span>
+<span class="kt">Expr</span>
 </pre></div>
 </div>
 </div>
@@ -746,25 +746,25 @@ indicated by the <code class="docutils literal"><span class="pre">$</span></code
 <p>In this example, the literal value of <code class="docutils literal"><span class="pre">a</span></code> is interpolated:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">a</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">ex</span> <span class="o">=</span> <span class="p">:(</span><span class="o">$</span><span class="n">a</span> <span class="o">+</span> <span class="n">b</span><span class="p">)</span>
-<span class="p">:(</span><span class="mi">1</span> <span class="o">+</span> <span class="n">b</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">ex</span> <span class="o">=</span> <span class="o">:</span><span class="p">(</span><span class="o">$</span><span class="n">a</span> <span class="o">+</span> <span class="n">b</span><span class="p">)</span>
+<span class="o">:</span><span class="p">(</span><span class="mi">1</span> <span class="o">+</span> <span class="n">b</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>Interpolating into an unquoted expression is not supported and will
 cause a compile-time error:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="o">$</span><span class="n">a</span> <span class="o">+</span> <span class="n">b</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">unsupported</span> <span class="n">or</span> <span class="n">misplaced</span> <span class="n">expression</span> <span class="o">$</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="n">unsupported</span> <span class="n">or</span> <span class="n">misplaced</span> <span class="n">expression</span> <span class="o">$</span>
 </pre></div>
 </div>
 <p>In this example, the tuple <code class="docutils literal"><span class="pre">(1,2,3)</span></code> is interpolated as an
 expression into a conditional test:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">ex</span> <span class="o">=</span> <span class="p">:(</span><span class="n">a</span> <span class="k">in</span> <span class="o">$</span><span class="p">:((</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">))</span> <span class="p">)</span>
-<span class="p">:(</span><span class="o">$</span><span class="p">(</span><span class="n">Expr</span><span class="p">(:</span><span class="k">in</span><span class="p">,</span> <span class="p">:</span><span class="n">a</span><span class="p">,</span> <span class="p">:((</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">)))))</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">ex</span> <span class="o">=</span> <span class="o">:</span><span class="p">(</span><span class="n">a</span> <span class="kp">in</span> <span class="o">$:</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">))</span> <span class="p">)</span>
+<span class="o">:</span><span class="p">(</span><span class="o">$</span><span class="p">(</span><span class="kt">Expr</span><span class="p">(</span><span class="o">:</span><span class="kp">in</span><span class="p">,</span> <span class="o">:</span><span class="n">a</span><span class="p">,</span> <span class="o">:</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">)))))</span>
 </pre></div>
 </div>
 <p>Interpolating symbols into a nested expression requires enclosing each
 symbol in an enclosing quote block:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">:(</span> <span class="p">:</span><span class="n">a</span> <span class="k">in</span> <span class="o">$</span><span class="p">(</span> <span class="p">:(:</span><span class="n">a</span> <span class="o">+</span> <span class="p">:</span><span class="n">b</span><span class="p">)</span> <span class="p">)</span> <span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="o">:</span><span class="p">(</span> <span class="o">:</span><span class="n">a</span> <span class="kp">in</span> <span class="o">$</span><span class="p">(</span> <span class="o">:</span><span class="p">(</span><span class="o">:</span><span class="n">a</span> <span class="o">+</span> <span class="o">:</span><span class="n">b</span><span class="p">)</span> <span class="p">)</span> <span class="p">)</span>
                    <span class="o">^^^^^^^^^^</span>
                    <span class="n">quoted</span> <span class="n">inner</span> <span class="n">expression</span>
 </pre></div>
@@ -778,17 +778,17 @@ convenient, readable programmatic construction of complex Julia expressions.</p>
 <h3><a class="reference internal" href="../../stdlib/base/#Base.eval" title="Base.eval"><code class="xref jl jl-func docutils literal"><span class="pre">eval()</span></code></a> and effects<a class="headerlink" href="#eval-and-effects" title="Permalink to this headline">¶</a></h3>
 <p>Given an expression object, one can cause Julia to evaluate (execute) it
 at global scope using <a class="reference internal" href="../../stdlib/base/#Base.eval" title="Base.eval"><code class="xref jl jl-func docutils literal"><span class="pre">eval()</span></code></a>:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">:(</span><span class="mi">1</span> <span class="o">+</span> <span class="mi">2</span><span class="p">)</span>
-<span class="p">:(</span><span class="mi">1</span> <span class="o">+</span> <span class="mi">2</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="o">:</span><span class="p">(</span><span class="mi">1</span> <span class="o">+</span> <span class="mi">2</span><span class="p">)</span>
+<span class="o">:</span><span class="p">(</span><span class="mi">1</span> <span class="o">+</span> <span class="mi">2</span><span class="p">)</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">eval</span><span class="p">(</span><span class="n">ans</span><span class="p">)</span>
 <span class="mi">3</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">ex</span> <span class="o">=</span> <span class="p">:(</span><span class="n">a</span> <span class="o">+</span> <span class="n">b</span><span class="p">)</span>
-<span class="p">:(</span><span class="n">a</span> <span class="o">+</span> <span class="n">b</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">ex</span> <span class="o">=</span> <span class="o">:</span><span class="p">(</span><span class="n">a</span> <span class="o">+</span> <span class="n">b</span><span class="p">)</span>
+<span class="o">:</span><span class="p">(</span><span class="n">a</span> <span class="o">+</span> <span class="n">b</span><span class="p">)</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">eval</span><span class="p">(</span><span class="n">ex</span><span class="p">)</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">UndefVarError</span><span class="p">:</span> <span class="n">b</span> <span class="n">not</span> <span class="n">defined</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="kt">UndefVarError</span><span class="o">:</span> <span class="n">b</span> <span class="n">not</span> <span class="n">defined</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">a</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span> <span class="n">b</span> <span class="o">=</span> <span class="mi">2</span><span class="p">;</span>
 
@@ -801,11 +801,11 @@ evaluates expressions in its global scope.
 Expressions passed to <a class="reference internal" href="../../stdlib/base/#Base.eval" title="Base.eval"><code class="xref jl jl-func docutils literal"><span class="pre">eval()</span></code></a> are not limited to returning values
 — they can also have side-effects that alter the state of the enclosing
 module&#8217;s environment:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">ex</span> <span class="o">=</span> <span class="p">:(</span><span class="n">x</span> <span class="o">=</span> <span class="mi">1</span><span class="p">)</span>
-<span class="p">:(</span><span class="n">x</span> <span class="o">=</span> <span class="mi">1</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">ex</span> <span class="o">=</span> <span class="o">:</span><span class="p">(</span><span class="n">x</span> <span class="o">=</span> <span class="mi">1</span><span class="p">)</span>
+<span class="o">:</span><span class="p">(</span><span class="n">x</span> <span class="o">=</span> <span class="mi">1</span><span class="p">)</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">x</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">UndefVarError</span><span class="p">:</span> <span class="n">x</span> <span class="n">not</span> <span class="n">defined</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="kt">UndefVarError</span><span class="o">:</span> <span class="n">x</span> <span class="n">not</span> <span class="n">defined</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">eval</span><span class="p">(</span><span class="n">ex</span><span class="p">)</span>
 <span class="mi">1</span>
@@ -821,8 +821,8 @@ programmatically and then evaluated, it is possible to dynamically generate
 arbitrary code which can then be run using <a class="reference internal" href="../../stdlib/base/#Base.eval" title="Base.eval"><code class="xref jl jl-func docutils literal"><span class="pre">eval()</span></code></a>. Here is a simple example:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">a</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">ex</span> <span class="o">=</span> <span class="n">Expr</span><span class="p">(:</span><span class="n">call</span><span class="p">,</span> <span class="p">:</span><span class="o">+</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="p">:</span><span class="n">b</span><span class="p">)</span>
-<span class="p">:(</span><span class="mi">1</span> <span class="o">+</span> <span class="n">b</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">ex</span> <span class="o">=</span> <span class="kt">Expr</span><span class="p">(</span><span class="o">:</span><span class="n">call</span><span class="p">,</span> <span class="o">:+</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="o">:</span><span class="n">b</span><span class="p">)</span>
+<span class="o">:</span><span class="p">(</span><span class="mi">1</span> <span class="o">+</span> <span class="n">b</span><span class="p">)</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">a</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">b</span> <span class="o">=</span> <span class="mi">2</span><span class="p">;</span>
 
@@ -855,13 +855,13 @@ seen one example of a function returning <code class="xref jl jl-obj docutils li
 function, which takes a string of Julia code and returns the corresponding
 <code class="xref jl jl-obj docutils literal"><span class="pre">Expr</span></code>. A function can also take one or more <code class="xref jl jl-obj docutils literal"><span class="pre">Expr</span></code> objects as
 arguments, and return another <code class="xref jl jl-obj docutils literal"><span class="pre">Expr</span></code>. Here is a simple, motivating example:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">function</span><span class="nf"> math_expr</span><span class="p">(</span><span class="n">op</span><span class="p">,</span> <span class="n">op1</span><span class="p">,</span> <span class="n">op2</span><span class="p">)</span>
-         <span class="n">expr</span> <span class="o">=</span> <span class="n">Expr</span><span class="p">(:</span><span class="n">call</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">op1</span><span class="p">,</span> <span class="n">op2</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">function</span> <span class="n">math_expr</span><span class="p">(</span><span class="n">op</span><span class="p">,</span> <span class="n">op1</span><span class="p">,</span> <span class="n">op2</span><span class="p">)</span>
+         <span class="n">expr</span> <span class="o">=</span> <span class="kt">Expr</span><span class="p">(</span><span class="o">:</span><span class="n">call</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">op1</span><span class="p">,</span> <span class="n">op2</span><span class="p">)</span>
          <span class="k">return</span> <span class="n">expr</span>
        <span class="k">end</span>
 
- <span class="n">julia</span><span class="o">&gt;</span>  <span class="n">ex</span> <span class="o">=</span> <span class="n">math_expr</span><span class="p">(:</span><span class="o">+</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">Expr</span><span class="p">(:</span><span class="n">call</span><span class="p">,</span> <span class="p">:</span><span class="o">*</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">5</span><span class="p">))</span>
- <span class="p">:(</span><span class="mi">1</span> <span class="o">+</span> <span class="mi">4</span><span class="o">*</span><span class="mi">5</span><span class="p">)</span>
+ <span class="n">julia</span><span class="o">&gt;</span>  <span class="n">ex</span> <span class="o">=</span> <span class="n">math_expr</span><span class="p">(</span><span class="o">:+</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="kt">Expr</span><span class="p">(</span><span class="o">:</span><span class="n">call</span><span class="p">,</span> <span class="o">:*</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">5</span><span class="p">))</span>
+ <span class="o">:</span><span class="p">(</span><span class="mi">1</span> <span class="o">+</span> <span class="mi">4</span><span class="o">*</span><span class="mi">5</span><span class="p">)</span>
 
  <span class="n">julia</span><span class="o">&gt;</span> <span class="n">eval</span><span class="p">(</span><span class="n">ex</span><span class="p">)</span>
  <span class="mi">21</span>
@@ -869,19 +869,19 @@ arguments, and return another <code class="xref jl jl-obj docutils literal"><spa
 </div>
 <p>As another example, here is a function that doubles any numeric argument,
 but leaves expressions alone:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">function</span><span class="nf"> make_expr2</span><span class="p">(</span><span class="n">op</span><span class="p">,</span> <span class="n">opr1</span><span class="p">,</span> <span class="n">opr2</span><span class="p">)</span>
-         <span class="n">opr1f</span><span class="p">,</span> <span class="n">opr2f</span> <span class="o">=</span> <span class="n">map</span><span class="p">(</span><span class="n">x</span> <span class="o">-&gt;</span> <span class="nb">isa</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">Number</span><span class="p">)</span> <span class="o">?</span> <span class="mi">2</span><span class="o">*</span><span class="n">x</span> <span class="p">:</span> <span class="n">x</span><span class="p">,</span> <span class="p">(</span><span class="n">opr1</span><span class="p">,</span> <span class="n">opr2</span><span class="p">))</span>
-         <span class="n">retexpr</span> <span class="o">=</span> <span class="n">Expr</span><span class="p">(:</span><span class="n">call</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">opr1f</span><span class="p">,</span> <span class="n">opr2f</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">function</span> <span class="n">make_expr2</span><span class="p">(</span><span class="n">op</span><span class="p">,</span> <span class="n">opr1</span><span class="p">,</span> <span class="n">opr2</span><span class="p">)</span>
+         <span class="n">opr1f</span><span class="p">,</span> <span class="n">opr2f</span> <span class="o">=</span> <span class="n">map</span><span class="p">(</span><span class="n">x</span> <span class="o">-&gt;</span> <span class="n">isa</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="kt">Number</span><span class="p">)</span> <span class="o">?</span> <span class="mi">2</span><span class="o">*</span><span class="n">x</span> <span class="o">:</span> <span class="n">x</span><span class="p">,</span> <span class="p">(</span><span class="n">opr1</span><span class="p">,</span> <span class="n">opr2</span><span class="p">))</span>
+         <span class="n">retexpr</span> <span class="o">=</span> <span class="kt">Expr</span><span class="p">(</span><span class="o">:</span><span class="n">call</span><span class="p">,</span> <span class="n">op</span><span class="p">,</span> <span class="n">opr1f</span><span class="p">,</span> <span class="n">opr2f</span><span class="p">)</span>
 
          <span class="k">return</span> <span class="n">retexpr</span>
    <span class="k">end</span>
-<span class="n">make_expr2</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span><span class="nf"> with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+<span class="n">make_expr2</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span> <span class="n">with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">make_expr2</span><span class="p">(:</span><span class="o">+</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
-<span class="p">:(</span><span class="mi">2</span> <span class="o">+</span> <span class="mi">4</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">make_expr2</span><span class="p">(</span><span class="o">:+</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+<span class="o">:</span><span class="p">(</span><span class="mi">2</span> <span class="o">+</span> <span class="mi">4</span><span class="p">)</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">ex</span> <span class="o">=</span> <span class="n">make_expr2</span><span class="p">(:</span><span class="o">+</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">Expr</span><span class="p">(:</span><span class="n">call</span><span class="p">,</span> <span class="p">:</span><span class="o">*</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">8</span><span class="p">))</span>
-<span class="p">:(</span><span class="mi">2</span> <span class="o">+</span> <span class="mi">5</span> <span class="o">*</span> <span class="mi">8</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">ex</span> <span class="o">=</span> <span class="n">make_expr2</span><span class="p">(</span><span class="o">:+</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="kt">Expr</span><span class="p">(</span><span class="o">:</span><span class="n">call</span><span class="p">,</span> <span class="o">:*</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">8</span><span class="p">))</span>
+<span class="o">:</span><span class="p">(</span><span class="mi">2</span> <span class="o">+</span> <span class="mi">5</span> <span class="o">*</span> <span class="mi">8</span><span class="p">)</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">eval</span><span class="p">(</span><span class="n">ex</span><span class="p">)</span>
 <span class="mi">42</span>
@@ -900,7 +900,7 @@ expressions, literal values, and symbols.</p>
 <h3>Basics<a class="headerlink" href="#basics" title="Permalink to this headline">¶</a></h3>
 <p>Here is an extraordinarily simple macro:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">macro</span> <span class="n">sayhello</span><span class="p">()</span>
-           <span class="k">return</span> <span class="p">:(</span> <span class="n">println</span><span class="p">(</span><span class="s">&quot;Hello, world!&quot;</span><span class="p">)</span> <span class="p">)</span>
+           <span class="k">return</span> <span class="o">:</span><span class="p">(</span> <span class="n">println</span><span class="p">(</span><span class="s">&quot;Hello, world!&quot;</span><span class="p">)</span> <span class="p">)</span>
        <span class="k">end</span>
 </pre></div>
 </div>
@@ -908,37 +908,37 @@ expressions, literal values, and symbols.</p>
 followed by the unique name declared in a <code class="docutils literal"><span class="pre">macro</span> <span class="pre">NAME</span> <span class="pre">...</span> <span class="pre">end</span></code> block.
 In this example, the compiler will replace all instances of <code class="docutils literal"><span class="pre">&#64;sayhello</span></code>
 with:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="p">:(</span> <span class="n">println</span><span class="p">(</span><span class="s">&quot;Hello, world!&quot;</span><span class="p">)</span> <span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="o">:</span><span class="p">(</span> <span class="n">println</span><span class="p">(</span><span class="s">&quot;Hello, world!&quot;</span><span class="p">)</span> <span class="p">)</span>
 </pre></div>
 </div>
 <p>When <code class="docutils literal"><span class="pre">&#64;sayhello</span></code> is given at the REPL, the expression executes
 immediately, thus we only see the evaluation result:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">sayhello</span><span class="p">()</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nd">@sayhello</span><span class="p">()</span>
 <span class="s">&quot;Hello, world!&quot;</span>
 </pre></div>
 </div>
 <p>Now, consider a slightly more complex macro:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">macro</span> <span class="n">sayhello</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
-           <span class="k">return</span> <span class="p">:(</span> <span class="n">println</span><span class="p">(</span><span class="s">&quot;Hello, &quot;</span><span class="p">,</span> <span class="o">$</span><span class="n">name</span><span class="p">)</span> <span class="p">)</span>
+           <span class="k">return</span> <span class="o">:</span><span class="p">(</span> <span class="n">println</span><span class="p">(</span><span class="s">&quot;Hello, &quot;</span><span class="p">,</span> <span class="o">$</span><span class="n">name</span><span class="p">)</span> <span class="p">)</span>
        <span class="k">end</span>
 </pre></div>
 </div>
 <p>This macro takes one argument: <code class="docutils literal"><span class="pre">name</span></code>. When <code class="docutils literal"><span class="pre">&#64;sayhello</span></code> is
 encountered, the quoted expression is <em>expanded</em> to interpolate
 the value of the argument into the final expression:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">sayhello</span><span class="p">(</span><span class="s">&quot;human&quot;</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nd">@sayhello</span><span class="p">(</span><span class="s">&quot;human&quot;</span><span class="p">)</span>
 <span class="n">Hello</span><span class="p">,</span> <span class="n">human</span>
 </pre></div>
 </div>
 <p>We can view the quoted return expression using the function <a class="reference internal" href="../../stdlib/base/#Base.macroexpand" title="Base.macroexpand"><code class="xref jl jl-func docutils literal"><span class="pre">macroexpand()</span></code></a>
 (<strong>important note:</strong> this is an extremely useful tool for debugging macros):</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">ex</span> <span class="o">=</span> <span class="n">macroexpand</span><span class="p">(</span> <span class="p">:(@</span><span class="n">sayhello</span><span class="p">(</span><span class="s">&quot;human&quot;</span><span class="p">))</span> <span class="p">)</span>
-<span class="p">:(</span><span class="n">println</span><span class="p">(</span><span class="s">&quot;Hello, &quot;</span><span class="p">,</span><span class="s">&quot;human&quot;</span><span class="p">))</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">ex</span> <span class="o">=</span> <span class="n">macroexpand</span><span class="p">(</span> <span class="o">:</span><span class="p">(</span><span class="nd">@sayhello</span><span class="p">(</span><span class="s">&quot;human&quot;</span><span class="p">))</span> <span class="p">)</span>
+<span class="o">:</span><span class="p">(</span><span class="n">println</span><span class="p">(</span><span class="s">&quot;Hello, &quot;</span><span class="p">,</span><span class="s">&quot;human&quot;</span><span class="p">))</span>
                     <span class="o">^^^^^^^</span>
-                    <span class="n">interpolated</span><span class="p">:</span> <span class="n">now</span> <span class="n">a</span> <span class="n">literal</span> <span class="n">string</span>
+                    <span class="n">interpolated</span><span class="o">:</span> <span class="n">now</span> <span class="n">a</span> <span class="n">literal</span> <span class="n">string</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">ex</span><span class="p">)</span>
-<span class="n">Expr</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">typeof</span><span class="p">(</span><span class="n">ex</span><span class="p">)</span>
+<span class="kt">Expr</span>
 </pre></div>
 </div>
 </div>
@@ -954,31 +954,31 @@ consider the following example:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">macro</span> <span class="n">twostep</span><span class="p">(</span><span class="n">arg</span><span class="p">)</span>
            <span class="n">println</span><span class="p">(</span><span class="s">&quot;I execute at parse time. The argument is: &quot;</span><span class="p">,</span> <span class="n">arg</span><span class="p">)</span>
 
-           <span class="k">return</span> <span class="p">:(</span><span class="n">println</span><span class="p">(</span><span class="s">&quot;I execute at runtime. The argument is: &quot;</span><span class="p">,</span> <span class="o">$</span><span class="n">arg</span><span class="p">))</span>
+           <span class="k">return</span> <span class="o">:</span><span class="p">(</span><span class="n">println</span><span class="p">(</span><span class="s">&quot;I execute at runtime. The argument is: &quot;</span><span class="p">,</span> <span class="o">$</span><span class="n">arg</span><span class="p">))</span>
        <span class="k">end</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">ex</span> <span class="o">=</span> <span class="n">macroexpand</span><span class="p">(</span> <span class="p">:(@</span><span class="n">twostep</span> <span class="p">:(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span> <span class="p">);</span>
-<span class="n">I</span> <span class="n">execute</span> <span class="n">at</span> <span class="n">parse</span> <span class="n">time</span><span class="o">.</span> <span class="n">The</span> <span class="n">argument</span> <span class="nb">is</span><span class="p">:</span> <span class="p">:((</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">))</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">ex</span> <span class="o">=</span> <span class="n">macroexpand</span><span class="p">(</span> <span class="o">:</span><span class="p">(</span><span class="nd">@twostep</span> <span class="o">:</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span> <span class="p">);</span>
+<span class="nb">I</span> <span class="n">execute</span> <span class="n">at</span> <span class="n">parse</span> <span class="n">time</span><span class="o">.</span> <span class="n">The</span> <span class="n">argument</span> <span class="n">is</span><span class="o">:</span> <span class="o">:</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">))</span>
 </pre></div>
 </div>
 <p>The first call to <a class="reference internal" href="../../stdlib/io-network/#Base.println" title="Base.println"><code class="xref jl jl-func docutils literal"><span class="pre">println()</span></code></a> is executed when <a class="reference internal" href="../../stdlib/base/#Base.macroexpand" title="Base.macroexpand"><code class="xref jl jl-func docutils literal"><span class="pre">macroexpand()</span></code></a>
 is called. The resulting expression contains <em>only</em> the second <code class="docutils literal"><span class="pre">println</span></code>:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">ex</span><span class="p">)</span>
-<span class="n">Expr</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">typeof</span><span class="p">(</span><span class="n">ex</span><span class="p">)</span>
+<span class="kt">Expr</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">ex</span>
-<span class="p">:(</span><span class="n">println</span><span class="p">(</span><span class="s">&quot;I execute at runtime. The argument is: &quot;</span><span class="p">,</span><span class="o">$</span><span class="p">(</span><span class="n">Expr</span><span class="p">(:</span><span class="n">copyast</span><span class="p">,</span> <span class="p">:(:((</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">)))))))</span>
+<span class="o">:</span><span class="p">(</span><span class="n">println</span><span class="p">(</span><span class="s">&quot;I execute at runtime. The argument is: &quot;</span><span class="p">,</span><span class="o">$</span><span class="p">(</span><span class="kt">Expr</span><span class="p">(</span><span class="o">:</span><span class="n">copyast</span><span class="p">,</span> <span class="o">:</span><span class="p">(</span><span class="o">:</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">)))))))</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">eval</span><span class="p">(</span><span class="n">ex</span><span class="p">)</span>
-<span class="n">I</span> <span class="n">execute</span> <span class="n">at</span> <span class="n">runtime</span><span class="o">.</span> <span class="n">The</span> <span class="n">argument</span> <span class="nb">is</span><span class="p">:</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">)</span>
+<span class="nb">I</span> <span class="n">execute</span> <span class="n">at</span> <span class="n">runtime</span><span class="o">.</span> <span class="n">The</span> <span class="n">argument</span> <span class="n">is</span><span class="o">:</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">)</span>
 </pre></div>
 </div>
 </div>
 <div class="section" id="macro-invocation">
 <h3>Macro invocation<a class="headerlink" href="#macro-invocation" title="Permalink to this headline">¶</a></h3>
 <p>Macros are invoked with the following general syntax:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="p">@</span><span class="n">name</span> <span class="n">expr1</span> <span class="n">expr2</span> <span class="o">...</span>
-<span class="p">@</span><span class="n">name</span><span class="p">(</span><span class="n">expr1</span><span class="p">,</span> <span class="n">expr2</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="nd">@name</span> <span class="n">expr1</span> <span class="n">expr2</span> <span class="o">...</span>
+<span class="nd">@name</span><span class="p">(</span><span class="n">expr1</span><span class="p">,</span> <span class="n">expr2</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>Note the distinguishing <code class="docutils literal"><span class="pre">&#64;</span></code> before the macro name and the lack of
@@ -987,7 +987,7 @@ lack of whitespace after <code class="docutils literal"><span class="pre">&#64;n
 should not be mixed. For example, the following syntax is different
 from the examples above; it passes the tuple <code class="docutils literal"><span class="pre">(expr1,</span> <span class="pre">expr2,</span> <span class="pre">...)</span></code> as
 one argument to the macro:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="p">@</span><span class="n">name</span> <span class="p">(</span><span class="n">expr1</span><span class="p">,</span> <span class="n">expr2</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="nd">@name</span> <span class="p">(</span><span class="n">expr1</span><span class="p">,</span> <span class="n">expr2</span><span class="p">,</span> <span class="o">...</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>It is important to emphasize that macros receive their arguments as
@@ -999,36 +999,36 @@ is to call the <a class="reference internal" href="../../stdlib/io-network/#Base
 <span class="k">end</span>
 
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">showarg</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
-<span class="p">(:</span><span class="n">a</span><span class="p">,)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nd">@showarg</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+<span class="p">(</span><span class="o">:</span><span class="n">a</span><span class="p">,)</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">showarg</span><span class="p">(</span><span class="mi">1</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span>
-<span class="p">:(</span><span class="mi">1</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nd">@showarg</span><span class="p">(</span><span class="mi">1</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span>
+<span class="o">:</span><span class="p">(</span><span class="mi">1</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">showarg</span><span class="p">(</span><span class="n">println</span><span class="p">(</span><span class="s">&quot;Yo!&quot;</span><span class="p">))</span>
-<span class="p">:(</span><span class="n">println</span><span class="p">(</span><span class="s">&quot;Yo!&quot;</span><span class="p">))</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nd">@showarg</span><span class="p">(</span><span class="n">println</span><span class="p">(</span><span class="s">&quot;Yo!&quot;</span><span class="p">))</span>
+<span class="o">:</span><span class="p">(</span><span class="n">println</span><span class="p">(</span><span class="s">&quot;Yo!&quot;</span><span class="p">))</span>
 </pre></div>
 </div>
 </div>
 <div class="section" id="building-an-advanced-macro">
 <h3>Building an advanced macro<a class="headerlink" href="#building-an-advanced-macro" title="Permalink to this headline">¶</a></h3>
 <p>Here is a simplified definition of Julia&#8217;s <code class="xref jl jl-obj docutils literal"><span class="pre">&#64;assert</span></code> macro:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">macro</span> <span class="nb">assert</span><span class="p">(</span><span class="n">ex</span><span class="p">)</span>
-    <span class="k">return</span> <span class="p">:(</span> <span class="o">$</span><span class="n">ex</span> <span class="o">?</span> <span class="n">nothing</span> <span class="p">:</span> <span class="nb">throw</span><span class="p">(</span><span class="n">AssertionError</span><span class="p">(</span><span class="o">$</span><span class="p">(</span><span class="n">string</span><span class="p">(</span><span class="n">ex</span><span class="p">))))</span> <span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">macro</span> <span class="n">assert</span><span class="p">(</span><span class="n">ex</span><span class="p">)</span>
+    <span class="k">return</span> <span class="o">:</span><span class="p">(</span> <span class="o">$</span><span class="n">ex</span> <span class="o">?</span> <span class="nb">nothing</span> <span class="o">:</span> <span class="n">throw</span><span class="p">(</span><span class="kt">AssertionError</span><span class="p">(</span><span class="o">$</span><span class="p">(</span><span class="n">string</span><span class="p">(</span><span class="n">ex</span><span class="p">))))</span> <span class="p">)</span>
 <span class="k">end</span>
 </pre></div>
 </div>
 <p>This macro can be used like this:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="nb">assert</span> <span class="mi">1</span><span class="o">==</span><span class="mf">1.0</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nd">@assert</span> <span class="mi">1</span><span class="o">==</span><span class="mf">1.0</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="nb">assert</span> <span class="mi">1</span><span class="o">==</span><span class="mi">0</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">AssertionError</span><span class="p">:</span> <span class="mi">1</span> <span class="o">==</span> <span class="mi">0</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nd">@assert</span> <span class="mi">1</span><span class="o">==</span><span class="mi">0</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="kt">AssertionError</span><span class="o">:</span> <span class="mi">1</span> <span class="o">==</span> <span class="mi">0</span>
 </pre></div>
 </div>
 <p>In place of the written syntax, the macro call is expanded at parse time to
 its returned result. This is equivalent to writing:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="mi">1</span><span class="o">==</span><span class="mf">1.0</span> <span class="o">?</span> <span class="n">nothing</span> <span class="p">:</span> <span class="nb">throw</span><span class="p">(</span><span class="n">AssertionError</span><span class="p">(</span><span class="s">&quot;1==1.0&quot;</span><span class="p">))</span>
-<span class="mi">1</span><span class="o">==</span><span class="mi">0</span> <span class="o">?</span> <span class="n">nothing</span> <span class="p">:</span> <span class="nb">throw</span><span class="p">(</span><span class="n">AssertionError</span><span class="p">(</span><span class="s">&quot;1==0&quot;</span><span class="p">))</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="mi">1</span><span class="o">==</span><span class="mf">1.0</span> <span class="o">?</span> <span class="nb">nothing</span> <span class="o">:</span> <span class="n">throw</span><span class="p">(</span><span class="kt">AssertionError</span><span class="p">(</span><span class="s">&quot;1==1.0&quot;</span><span class="p">))</span>
+<span class="mi">1</span><span class="o">==</span><span class="mi">0</span> <span class="o">?</span> <span class="nb">nothing</span> <span class="o">:</span> <span class="n">throw</span><span class="p">(</span><span class="kt">AssertionError</span><span class="p">(</span><span class="s">&quot;1==0&quot;</span><span class="p">))</span>
 </pre></div>
 </div>
 <p>That is, in the first call, the expression <code class="docutils literal"><span class="pre">:(1==1.0)</span></code> is spliced into
@@ -1046,10 +1046,10 @@ complicated. It allows the user to optionally specify their own error
 message, instead of just printing the failed expression. Just like in
 functions with a variable number of arguments, this is specified with an
 ellipses following the last argument:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">macro</span> <span class="nb">assert</span><span class="p">(</span><span class="n">ex</span><span class="p">,</span> <span class="n">msgs</span><span class="o">...</span><span class="p">)</span>
-    <span class="n">msg_body</span> <span class="o">=</span> <span class="n">isempty</span><span class="p">(</span><span class="n">msgs</span><span class="p">)</span> <span class="o">?</span> <span class="n">ex</span> <span class="p">:</span> <span class="n">msgs</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">macro</span> <span class="n">assert</span><span class="p">(</span><span class="n">ex</span><span class="p">,</span> <span class="n">msgs</span><span class="o">...</span><span class="p">)</span>
+    <span class="n">msg_body</span> <span class="o">=</span> <span class="n">isempty</span><span class="p">(</span><span class="n">msgs</span><span class="p">)</span> <span class="o">?</span> <span class="n">ex</span> <span class="o">:</span> <span class="n">msgs</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
     <span class="n">msg</span> <span class="o">=</span> <span class="n">string</span><span class="p">(</span><span class="n">msg_body</span><span class="p">)</span>
-    <span class="k">return</span> <span class="p">:(</span><span class="o">$</span><span class="n">ex</span> <span class="o">?</span> <span class="n">nothing</span> <span class="p">:</span> <span class="nb">throw</span><span class="p">(</span><span class="n">AssertionError</span><span class="p">(</span><span class="o">$</span><span class="n">msg</span><span class="p">)))</span>
+    <span class="k">return</span> <span class="o">:</span><span class="p">(</span><span class="o">$</span><span class="n">ex</span> <span class="o">?</span> <span class="nb">nothing</span> <span class="o">:</span> <span class="n">throw</span><span class="p">(</span><span class="kt">AssertionError</span><span class="p">(</span><span class="o">$</span><span class="n">msg</span><span class="p">)))</span>
 <span class="k">end</span>
 </pre></div>
 </div>
@@ -1060,18 +1060,18 @@ definition above. But now if the user specifies a second argument, it is
 printed in the message body instead of the failing expression. You can inspect
 the result of a macro expansion with the aptly named <a class="reference internal" href="../../stdlib/base/#Base.macroexpand" title="Base.macroexpand"><code class="xref jl jl-func docutils literal"><span class="pre">macroexpand()</span></code></a>
 function:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">macroexpand</span><span class="p">(:(@</span><span class="nb">assert</span> <span class="n">a</span><span class="o">==</span><span class="n">b</span><span class="p">))</span>
-<span class="p">:(</span><span class="k">if</span> <span class="n">a</span> <span class="o">==</span> <span class="n">b</span>
-        <span class="n">nothing</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">macroexpand</span><span class="p">(</span><span class="o">:</span><span class="p">(</span><span class="nd">@assert</span> <span class="n">a</span><span class="o">==</span><span class="n">b</span><span class="p">))</span>
+<span class="o">:</span><span class="p">(</span><span class="k">if</span> <span class="n">a</span> <span class="o">==</span> <span class="n">b</span>
+        <span class="nb">nothing</span>
     <span class="k">else</span>
-        <span class="n">Base</span><span class="o">.</span><span class="nb">throw</span><span class="p">(</span><span class="n">Base</span><span class="o">.</span><span class="n">Main</span><span class="o">.</span><span class="n">Base</span><span class="o">.</span><span class="n">AssertionError</span><span class="p">(</span><span class="s">&quot;a == b&quot;</span><span class="p">))</span>
+        <span class="n">Base</span><span class="o">.</span><span class="n">throw</span><span class="p">(</span><span class="n">Base</span><span class="o">.</span><span class="n">Main</span><span class="o">.</span><span class="n">Base</span><span class="o">.</span><span class="kt">AssertionError</span><span class="p">(</span><span class="s">&quot;a == b&quot;</span><span class="p">))</span>
     <span class="k">end</span><span class="p">)</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">macroexpand</span><span class="p">(:(@</span><span class="nb">assert</span> <span class="n">a</span><span class="o">==</span><span class="n">b</span> <span class="s">&quot;a should equal b!&quot;</span><span class="p">))</span>
-<span class="p">:(</span><span class="k">if</span> <span class="n">a</span> <span class="o">==</span> <span class="n">b</span>
-        <span class="n">nothing</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">macroexpand</span><span class="p">(</span><span class="o">:</span><span class="p">(</span><span class="nd">@assert</span> <span class="n">a</span><span class="o">==</span><span class="n">b</span> <span class="s">&quot;a should equal b!&quot;</span><span class="p">))</span>
+<span class="o">:</span><span class="p">(</span><span class="k">if</span> <span class="n">a</span> <span class="o">==</span> <span class="n">b</span>
+        <span class="nb">nothing</span>
     <span class="k">else</span>
-        <span class="n">Base</span><span class="o">.</span><span class="nb">throw</span><span class="p">(</span><span class="n">Base</span><span class="o">.</span><span class="n">Main</span><span class="o">.</span><span class="n">Base</span><span class="o">.</span><span class="n">AssertionError</span><span class="p">(</span><span class="s">&quot;a should equal b!&quot;</span><span class="p">))</span>
+        <span class="n">Base</span><span class="o">.</span><span class="n">throw</span><span class="p">(</span><span class="n">Base</span><span class="o">.</span><span class="n">Main</span><span class="o">.</span><span class="n">Base</span><span class="o">.</span><span class="kt">AssertionError</span><span class="p">(</span><span class="s">&quot;a should equal b!&quot;</span><span class="p">))</span>
     <span class="k">end</span><span class="p">)</span>
 </pre></div>
 </div>
@@ -1083,22 +1083,22 @@ won&#8217;t work as expected with the above macro. Can you see why? Recall
 from <a class="reference internal" href="../strings/#man-string-interpolation"><span class="std std-ref">string interpolation</span></a> that an
 interpolated string is rewritten to a call to <a class="reference internal" href="../../stdlib/strings/#Base.string" title="Base.string"><code class="xref jl jl-func docutils literal"><span class="pre">string()</span></code></a>.
 Compare:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(:(</span><span class="s">&quot;a should equal b&quot;</span><span class="p">))</span>
-<span class="n">ASCIIString</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">typeof</span><span class="p">(</span><span class="o">:</span><span class="p">(</span><span class="s">&quot;a should equal b&quot;</span><span class="p">))</span>
+<span class="kt">ASCIIString</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(:(</span><span class="s">&quot;a (</span><span class="si">$a</span><span class="s">) should equal b (</span><span class="si">$b</span><span class="s">)!&quot;</span><span class="p">))</span>
-<span class="n">Expr</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">typeof</span><span class="p">(</span><span class="o">:</span><span class="p">(</span><span class="s">&quot;a (</span><span class="si">$a</span><span class="s">) should equal b (</span><span class="si">$b</span><span class="s">)!&quot;</span><span class="p">))</span>
+<span class="kt">Expr</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">dump</span><span class="p">(:(</span><span class="s">&quot;a (</span><span class="si">$a</span><span class="s">) should equal b (</span><span class="si">$b</span><span class="s">)!&quot;</span><span class="p">))</span>
-<span class="n">Expr</span>
-  <span class="n">head</span><span class="p">:</span> <span class="n">Symbol</span> <span class="n">string</span>
-  <span class="n">args</span><span class="p">:</span> <span class="n">Array</span><span class="p">(</span><span class="kt">Any</span><span class="p">,(</span><span class="mi">5</span><span class="p">,))</span>
-    <span class="mi">1</span><span class="p">:</span> <span class="n">ASCIIString</span> <span class="s">&quot;a (&quot;</span>
-    <span class="mi">2</span><span class="p">:</span> <span class="n">Symbol</span> <span class="n">a</span>
-    <span class="mi">3</span><span class="p">:</span> <span class="n">ASCIIString</span> <span class="s">&quot;) should equal b (&quot;</span>
-    <span class="mi">4</span><span class="p">:</span> <span class="n">Symbol</span> <span class="n">b</span>
-    <span class="mi">5</span><span class="p">:</span> <span class="n">ASCIIString</span> <span class="s">&quot;)!&quot;</span>
-  <span class="n">typ</span><span class="p">:</span> <span class="kt">Any</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">dump</span><span class="p">(</span><span class="o">:</span><span class="p">(</span><span class="s">&quot;a (</span><span class="si">$a</span><span class="s">) should equal b (</span><span class="si">$b</span><span class="s">)!&quot;</span><span class="p">))</span>
+<span class="kt">Expr</span>
+  <span class="n">head</span><span class="o">:</span> <span class="kt">Symbol</span> <span class="n">string</span>
+  <span class="n">args</span><span class="o">:</span> <span class="kt">Array</span><span class="p">(</span><span class="kt">Any</span><span class="p">,(</span><span class="mi">5</span><span class="p">,))</span>
+    <span class="mi">1</span><span class="o">:</span> <span class="kt">ASCIIString</span> <span class="s">&quot;a (&quot;</span>
+    <span class="mi">2</span><span class="o">:</span> <span class="kt">Symbol</span> <span class="n">a</span>
+    <span class="mi">3</span><span class="o">:</span> <span class="kt">ASCIIString</span> <span class="s">&quot;) should equal b (&quot;</span>
+    <span class="mi">4</span><span class="o">:</span> <span class="kt">Symbol</span> <span class="n">b</span>
+    <span class="mi">5</span><span class="o">:</span> <span class="kt">ASCIIString</span> <span class="s">&quot;)!&quot;</span>
+  <span class="n">typ</span><span class="o">:</span> <span class="kt">Any</span>
 </pre></div>
 </div>
 <p>So now instead of getting a plain string in <code class="docutils literal"><span class="pre">msg_body</span></code>, the macro is
@@ -1160,11 +1160,11 @@ with any user variables, and <code class="docutils literal"><span class="pre">ti
 standard library definitions.</p>
 <p>One problem remains however. Consider the following use of this macro:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">module</span> <span class="n">MyModule</span>
-<span class="k">import</span> <span class="n">Base</span><span class="o">.</span><span class="p">@</span><span class="n">time</span>
+<span class="k">import</span> <span class="n">Base</span><span class="o">.</span><span class="nd">@time</span>
 
 <span class="n">time</span><span class="p">()</span> <span class="o">=</span> <span class="o">...</span> <span class="c"># compute something</span>
 
-<span class="p">@</span><span class="n">time</span> <span class="n">time</span><span class="p">()</span>
+<span class="nd">@time</span> <span class="n">time</span><span class="p">()</span>
 <span class="k">end</span>
 </pre></div>
 </div>
@@ -1187,12 +1187,12 @@ resolved in the macro call environment.</p>
 in order to introduce or manipulate user variables. For example, the
 following macro sets <code class="docutils literal"><span class="pre">x</span></code> to zero in the call environment:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">macro</span> <span class="n">zerox</span><span class="p">()</span>
-  <span class="k">return</span> <span class="n">esc</span><span class="p">(:(</span><span class="n">x</span> <span class="o">=</span> <span class="mi">0</span><span class="p">))</span>
+  <span class="k">return</span> <span class="n">esc</span><span class="p">(</span><span class="o">:</span><span class="p">(</span><span class="n">x</span> <span class="o">=</span> <span class="mi">0</span><span class="p">))</span>
 <span class="k">end</span>
 
-<span class="k">function</span><span class="nf"> foo</span><span class="p">()</span>
+<span class="k">function</span> <span class="n">foo</span><span class="p">()</span>
   <span class="n">x</span> <span class="o">=</span> <span class="mi">1</span>
-  <span class="p">@</span><span class="n">zerox</span>
+  <span class="nd">@zerox</span>
   <span class="n">x</span>  <span class="c"># is zero</span>
 <span class="k">end</span>
 </pre></div>
@@ -1210,7 +1210,7 @@ generate the repetitive code. In Julia, expression interpolation and
 <a class="reference internal" href="../../stdlib/base/#Base.eval" title="Base.eval"><code class="xref jl jl-func docutils literal"><span class="pre">eval()</span></code></a> allow such code generation to take place in the normal course of
 program execution. For example, the following code defines a series of
 operators on three arguments in terms of their 2-argument forms:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">op</span> <span class="o">=</span> <span class="p">(:</span><span class="o">+</span><span class="p">,</span> <span class="p">:</span><span class="o">*</span><span class="p">,</span> <span class="p">:</span><span class="o">&amp;</span><span class="p">,</span> <span class="p">:</span><span class="o">|</span><span class="p">,</span> <span class="p">:</span><span class="o">$</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">op</span> <span class="o">=</span> <span class="p">(</span><span class="o">:+</span><span class="p">,</span> <span class="o">:*</span><span class="p">,</span> <span class="o">:&amp;</span><span class="p">,</span> <span class="o">:|</span><span class="p">,</span> <span class="o">:$</span><span class="p">)</span>
   <span class="n">eval</span><span class="p">(</span><span class="k">quote</span>
     <span class="p">(</span><span class="o">$</span><span class="n">op</span><span class="p">)(</span><span class="n">a</span><span class="p">,</span><span class="n">b</span><span class="p">,</span><span class="n">c</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="o">$</span><span class="n">op</span><span class="p">)((</span><span class="o">$</span><span class="n">op</span><span class="p">)(</span><span class="n">a</span><span class="p">,</span><span class="n">b</span><span class="p">),</span><span class="n">c</span><span class="p">)</span>
   <span class="k">end</span><span class="p">)</span>
@@ -1220,23 +1220,23 @@ operators on three arguments in terms of their 2-argument forms:</p>
 <p>In this manner, Julia acts as its own <a class="reference external" href="https://en.wikipedia.org/wiki/Preprocessor">preprocessor</a>, and allows code
 generation from inside the language. The above code could be written
 slightly more tersely using the <code class="docutils literal"><span class="pre">:</span></code> prefix quoting form:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">op</span> <span class="o">=</span> <span class="p">(:</span><span class="o">+</span><span class="p">,</span> <span class="p">:</span><span class="o">*</span><span class="p">,</span> <span class="p">:</span><span class="o">&amp;</span><span class="p">,</span> <span class="p">:</span><span class="o">|</span><span class="p">,</span> <span class="p">:</span><span class="o">$</span><span class="p">)</span>
-  <span class="n">eval</span><span class="p">(:((</span><span class="o">$</span><span class="n">op</span><span class="p">)(</span><span class="n">a</span><span class="p">,</span><span class="n">b</span><span class="p">,</span><span class="n">c</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="o">$</span><span class="n">op</span><span class="p">)((</span><span class="o">$</span><span class="n">op</span><span class="p">)(</span><span class="n">a</span><span class="p">,</span><span class="n">b</span><span class="p">),</span><span class="n">c</span><span class="p">)))</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">op</span> <span class="o">=</span> <span class="p">(</span><span class="o">:+</span><span class="p">,</span> <span class="o">:*</span><span class="p">,</span> <span class="o">:&amp;</span><span class="p">,</span> <span class="o">:|</span><span class="p">,</span> <span class="o">:$</span><span class="p">)</span>
+  <span class="n">eval</span><span class="p">(</span><span class="o">:</span><span class="p">((</span><span class="o">$</span><span class="n">op</span><span class="p">)(</span><span class="n">a</span><span class="p">,</span><span class="n">b</span><span class="p">,</span><span class="n">c</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="o">$</span><span class="n">op</span><span class="p">)((</span><span class="o">$</span><span class="n">op</span><span class="p">)(</span><span class="n">a</span><span class="p">,</span><span class="n">b</span><span class="p">),</span><span class="n">c</span><span class="p">)))</span>
 <span class="k">end</span>
 </pre></div>
 </div>
 <p>This sort of in-language code generation, however, using the
 <code class="docutils literal"><span class="pre">eval(quote(...))</span></code> pattern, is common enough that Julia comes with a
 macro to abbreviate this pattern:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">op</span> <span class="o">=</span> <span class="p">(:</span><span class="o">+</span><span class="p">,</span> <span class="p">:</span><span class="o">*</span><span class="p">,</span> <span class="p">:</span><span class="o">&amp;</span><span class="p">,</span> <span class="p">:</span><span class="o">|</span><span class="p">,</span> <span class="p">:</span><span class="o">$</span><span class="p">)</span>
-  <span class="p">@</span><span class="n">eval</span> <span class="p">(</span><span class="o">$</span><span class="n">op</span><span class="p">)(</span><span class="n">a</span><span class="p">,</span><span class="n">b</span><span class="p">,</span><span class="n">c</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="o">$</span><span class="n">op</span><span class="p">)((</span><span class="o">$</span><span class="n">op</span><span class="p">)(</span><span class="n">a</span><span class="p">,</span><span class="n">b</span><span class="p">),</span><span class="n">c</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">op</span> <span class="o">=</span> <span class="p">(</span><span class="o">:+</span><span class="p">,</span> <span class="o">:*</span><span class="p">,</span> <span class="o">:&amp;</span><span class="p">,</span> <span class="o">:|</span><span class="p">,</span> <span class="o">:$</span><span class="p">)</span>
+  <span class="nd">@eval</span> <span class="p">(</span><span class="o">$</span><span class="n">op</span><span class="p">)(</span><span class="n">a</span><span class="p">,</span><span class="n">b</span><span class="p">,</span><span class="n">c</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="o">$</span><span class="n">op</span><span class="p">)((</span><span class="o">$</span><span class="n">op</span><span class="p">)(</span><span class="n">a</span><span class="p">,</span><span class="n">b</span><span class="p">),</span><span class="n">c</span><span class="p">)</span>
 <span class="k">end</span>
 </pre></div>
 </div>
 <p>The <a class="reference internal" href="../../stdlib/base/#Base.&#64;eval" title="Base.&#64;eval"><code class="xref jl jl-obj docutils literal"><span class="pre">&#64;eval</span></code></a> macro rewrites this call to be precisely equivalent to the
 above longer versions. For longer blocks of generated code, the
 expression argument given to <a class="reference internal" href="../../stdlib/base/#Base.&#64;eval" title="Base.&#64;eval"><code class="xref jl jl-obj docutils literal"><span class="pre">&#64;eval</span></code></a> can be a block:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="p">@</span><span class="n">eval</span> <span class="k">begin</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="nd">@eval</span> <span class="k">begin</span>
   <span class="c"># multiple lines</span>
 <span class="k">end</span>
 </pre></div>
@@ -1260,7 +1260,7 @@ general mechanism that anyone can use: prefixed string literals are
 parsed as calls to specially-named macros. For example, the regular
 expression macro is just the following:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">macro</span> <span class="n">r_str</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
-  <span class="n">Regex</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
+  <span class="kt">Regex</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
 <span class="k">end</span>
 </pre></div>
 </div>
@@ -1270,7 +1270,7 @@ the result of that expansion should be placed in the syntax tree where
 the string literal occurs. In other words, the expression
 <code class="docutils literal"><span class="pre">r&quot;^\s*(?:#|$)&quot;</span></code> is equivalent to placing the following object
 directly into the syntax tree:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">Regex</span><span class="p">(</span><span class="s">&quot;^</span><span class="se">\\</span><span class="s">s*(?:#|\$)&quot;</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="kt">Regex</span><span class="p">(</span><span class="s">&quot;^</span><span class="se">\\</span><span class="s">s*(?:#|</span><span class="se">\$</span><span class="s">)&quot;</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>Not only is the string literal form shorter and far more convenient, but
@@ -1279,8 +1279,8 @@ the <code class="xref jl jl-obj docutils literal"><span class="pre">Regex</span>
 the compilation occurs only once, rather than every time the code is
 executed. Consider if the regular expression occurs in a loop:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">line</span> <span class="o">=</span> <span class="n">lines</span>
-  <span class="n">m</span> <span class="o">=</span> <span class="n">match</span><span class="p">(</span><span class="n">r</span><span class="s">&quot;^\s*(?:#|$)&quot;</span><span class="p">,</span> <span class="n">line</span><span class="p">)</span>
-  <span class="k">if</span> <span class="n">m</span> <span class="o">==</span> <span class="n">nothing</span>
+  <span class="n">m</span> <span class="o">=</span> <span class="n">match</span><span class="p">(</span><span class="sr">r&quot;^\s*(?:#|$)&quot;</span><span class="p">,</span> <span class="n">line</span><span class="p">)</span>
+  <span class="k">if</span> <span class="n">m</span> <span class="o">==</span> <span class="nb">nothing</span>
     <span class="c"># non-comment</span>
   <span class="k">else</span>
     <span class="c"># comment</span>
@@ -1293,10 +1293,10 @@ into the syntax tree when this code is parsed, the expression is only
 compiled once instead of each time the loop is executed. In order to
 accomplish this without macros, one would have to write this loop like
 this:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">re</span> <span class="o">=</span> <span class="n">Regex</span><span class="p">(</span><span class="s">&quot;^</span><span class="se">\\</span><span class="s">s*(?:#|\$)&quot;</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">re</span> <span class="o">=</span> <span class="kt">Regex</span><span class="p">(</span><span class="s">&quot;^</span><span class="se">\\</span><span class="s">s*(?:#|</span><span class="se">\$</span><span class="s">)&quot;</span><span class="p">)</span>
 <span class="k">for</span> <span class="n">line</span> <span class="o">=</span> <span class="n">lines</span>
   <span class="n">m</span> <span class="o">=</span> <span class="n">match</span><span class="p">(</span><span class="n">re</span><span class="p">,</span> <span class="n">line</span><span class="p">)</span>
-  <span class="k">if</span> <span class="n">m</span> <span class="o">==</span> <span class="n">nothing</span>
+  <span class="k">if</span> <span class="n">m</span> <span class="o">==</span> <span class="nb">nothing</span>
     <span class="c"># non-comment</span>
   <span class="k">else</span>
     <span class="c"># comment</span>
@@ -1321,7 +1321,7 @@ powerful. Not only are Julia&#8217;s non-standard literals implemented using
 it, but also the command literal syntax (<code class="docutils literal"><span class="pre">`echo</span> <span class="pre">&quot;Hello,</span> <span class="pre">$person&quot;`</span></code>)
 is implemented with the following innocuous-looking macro:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">macro</span> <span class="n">cmd</span><span class="p">(</span><span class="n">str</span><span class="p">)</span>
-  <span class="p">:(</span><span class="n">cmd_gen</span><span class="p">(</span><span class="o">$</span><span class="n">shell_parse</span><span class="p">(</span><span class="n">str</span><span class="p">)))</span>
+  <span class="o">:</span><span class="p">(</span><span class="n">cmd_gen</span><span class="p">(</span><span class="o">$</span><span class="n">shell_parse</span><span class="p">(</span><span class="n">str</span><span class="p">)))</span>
 <span class="k">end</span>
 </pre></div>
 </div>
@@ -1360,11 +1360,11 @@ a <em>quoted expression</em> which, when evaluated, does what you want.</li>
 </ol>
 <p>It&#8217;s easiest to illustrate this with an example. We can declare a generated
 function <code class="docutils literal"><span class="pre">foo</span></code> as</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">generated</span> <span class="k">function</span><span class="nf"> foo</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nd">@generated</span> <span class="k">function</span> <span class="n">foo</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
            <span class="n">println</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
-           <span class="k">return</span> <span class="p">:(</span><span class="n">x</span><span class="o">*</span><span class="n">x</span><span class="p">)</span>
+           <span class="k">return</span> <span class="o">:</span><span class="p">(</span><span class="n">x</span><span class="o">*</span><span class="n">x</span><span class="p">)</span>
        <span class="k">end</span>
-<span class="n">foo</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span><span class="nf"> with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+<span class="n">foo</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span> <span class="n">with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>Note that the body returns a quoted expression, namely <code class="docutils literal"><span class="pre">:(x*x)</span></code>, rather
@@ -1381,7 +1381,7 @@ Let&#8217;s see how <code class="docutils literal"><span class="pre">foo</span><
 <span class="mi">4</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">y</span> <span class="o">=</span> <span class="n">foo</span><span class="p">(</span><span class="s">&quot;bar&quot;</span><span class="p">);</span>
-<span class="n">ASCIIString</span>
+<span class="kt">ASCIIString</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">y</span>
 <span class="s">&quot;barbar&quot;</span>
@@ -1414,14 +1414,14 @@ function <code class="docutils literal"><span class="pre">foo(x)=x*x</span></cod
 first invocation (and incurring a higher compile-time cost). However, the
 power of a generated function lies in its ability to compute different quoted
 expression depending on the types passed to it:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">generated</span> <span class="k">function</span><span class="nf"> bar</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
-           <span class="k">if</span> <span class="n">x</span> <span class="o">&lt;:</span> <span class="n">Integer</span>
-               <span class="k">return</span> <span class="p">:(</span><span class="n">x</span><span class="o">^</span><span class="mi">2</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nd">@generated</span> <span class="k">function</span> <span class="n">bar</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+           <span class="k">if</span> <span class="n">x</span> <span class="o">&lt;:</span> <span class="kt">Integer</span>
+               <span class="k">return</span> <span class="o">:</span><span class="p">(</span><span class="n">x</span><span class="o">^</span><span class="mi">2</span><span class="p">)</span>
            <span class="k">else</span>
-               <span class="k">return</span> <span class="p">:(</span><span class="n">x</span><span class="p">)</span>
+               <span class="k">return</span> <span class="o">:</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
            <span class="k">end</span>
        <span class="k">end</span>
-<span class="n">bar</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span><span class="nf"> with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+<span class="n">bar</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span> <span class="n">with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">bar</span><span class="p">(</span><span class="mi">4</span><span class="p">)</span>
 <span class="mi">16</span>
@@ -1432,14 +1432,14 @@ expression depending on the types passed to it:</p>
 <p>(although of course this contrived example is easily implemented using
 multiple dispatch...)</p>
 <p>We can, of course, abuse this to produce some interesting behavior:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">generated</span> <span class="k">function</span><span class="nf"> baz</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nd">@generated</span> <span class="k">function</span> <span class="n">baz</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
            <span class="k">if</span> <span class="n">rand</span><span class="p">()</span> <span class="o">&lt;</span> <span class="o">.</span><span class="mi">9</span>
-               <span class="k">return</span> <span class="p">:(</span><span class="n">x</span><span class="o">^</span><span class="mi">2</span><span class="p">)</span>
+               <span class="k">return</span> <span class="o">:</span><span class="p">(</span><span class="n">x</span><span class="o">^</span><span class="mi">2</span><span class="p">)</span>
            <span class="k">else</span>
-               <span class="k">return</span> <span class="p">:(</span><span class="s">&quot;boo!&quot;</span><span class="p">)</span>
+               <span class="k">return</span> <span class="o">:</span><span class="p">(</span><span class="s">&quot;boo!&quot;</span><span class="p">)</span>
            <span class="k">end</span>
        <span class="k">end</span>
-<span class="n">baz</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span><span class="nf"> with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+<span class="n">baz</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span> <span class="n">with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>Since the body of the generated function is non-deterministic, its behavior
@@ -1470,22 +1470,22 @@ linear index into an n-dimensional array, based on a set of n multilinear
 indices - in other words, to calculate the index <code class="docutils literal"><span class="pre">i</span></code> that can be used to
 index into an array <code class="docutils literal"><span class="pre">A</span></code> using <code class="docutils literal"><span class="pre">A[i]</span></code>, instead of <code class="docutils literal"><span class="pre">A[x,y,z,...]</span></code>. One
 possible implementation is the following:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> sub2ind_loop</span><span class="p">{</span><span class="n">N</span><span class="p">}(</span><span class="n">dims</span><span class="p">::</span><span class="n">NTuple</span><span class="p">{</span><span class="n">N</span><span class="p">},</span> <span class="n">I</span><span class="p">::</span><span class="n">Integer</span><span class="o">...</span><span class="p">)</span>
-    <span class="n">ind</span> <span class="o">=</span> <span class="n">I</span><span class="p">[</span><span class="n">N</span><span class="p">]</span> <span class="o">-</span> <span class="mi">1</span>
-    <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="n">N</span><span class="o">-</span><span class="mi">1</span><span class="p">:</span><span class="o">-</span><span class="mi">1</span><span class="p">:</span><span class="mi">1</span>
-        <span class="n">ind</span> <span class="o">=</span> <span class="n">I</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">-</span><span class="mi">1</span> <span class="o">+</span> <span class="n">dims</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">*</span><span class="n">ind</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">sub2ind_loop</span><span class="p">{</span><span class="n">N</span><span class="p">}(</span><span class="n">dims</span><span class="o">::</span><span class="kt">NTuple</span><span class="p">{</span><span class="n">N</span><span class="p">},</span> <span class="nb">I</span><span class="o">::</span><span class="kt">Integer</span><span class="o">...</span><span class="p">)</span>
+    <span class="n">ind</span> <span class="o">=</span> <span class="nb">I</span><span class="p">[</span><span class="n">N</span><span class="p">]</span> <span class="o">-</span> <span class="mi">1</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="n">N</span><span class="o">-</span><span class="mi">1</span><span class="o">:-</span><span class="mi">1</span><span class="o">:</span><span class="mi">1</span>
+        <span class="n">ind</span> <span class="o">=</span> <span class="nb">I</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">-</span><span class="mi">1</span> <span class="o">+</span> <span class="n">dims</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">*</span><span class="n">ind</span>
     <span class="k">end</span>
     <span class="k">return</span> <span class="n">ind</span> <span class="o">+</span> <span class="mi">1</span>
 <span class="k">end</span>
 </pre></div>
 </div>
 <p>The same thing can be done using recursion:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">sub2ind_rec</span><span class="p">(</span><span class="n">dims</span><span class="p">::</span><span class="n">Tuple</span><span class="p">{})</span> <span class="o">=</span> <span class="mi">1</span>
-<span class="n">sub2ind_rec</span><span class="p">(</span><span class="n">dims</span><span class="p">::</span><span class="n">Tuple</span><span class="p">{},</span><span class="n">i1</span><span class="p">::</span><span class="n">Integer</span><span class="p">,</span> <span class="n">I</span><span class="p">::</span><span class="n">Integer</span><span class="o">...</span><span class="p">)</span> <span class="o">=</span>
-    <span class="n">i1</span><span class="o">==</span><span class="mi">1</span> <span class="o">?</span> <span class="n">sub2ind_rec</span><span class="p">(</span><span class="n">dims</span><span class="p">,</span><span class="n">I</span><span class="o">...</span><span class="p">)</span> <span class="p">:</span> <span class="nb">throw</span><span class="p">(</span><span class="n">BoundsError</span><span class="p">())</span>
-<span class="n">sub2ind_rec</span><span class="p">(</span><span class="n">dims</span><span class="p">::</span><span class="n">Tuple</span><span class="p">{</span><span class="n">Integer</span><span class="p">,</span><span class="n">Vararg</span><span class="p">{</span><span class="n">Integer</span><span class="p">}},</span> <span class="n">i1</span><span class="p">::</span><span class="n">Integer</span><span class="p">)</span> <span class="o">=</span> <span class="n">i1</span>
-<span class="n">sub2ind_rec</span><span class="p">(</span><span class="n">dims</span><span class="p">::</span><span class="n">Tuple</span><span class="p">{</span><span class="n">Integer</span><span class="p">,</span><span class="n">Vararg</span><span class="p">{</span><span class="n">Integer</span><span class="p">}},</span> <span class="n">i1</span><span class="p">::</span><span class="n">Integer</span><span class="p">,</span> <span class="n">I</span><span class="p">::</span><span class="n">Integer</span><span class="o">...</span><span class="p">)</span> <span class="o">=</span>
-    <span class="n">i1</span> <span class="o">+</span> <span class="n">dims</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">*</span><span class="p">(</span><span class="n">sub2ind_rec</span><span class="p">(</span><span class="n">tail</span><span class="p">(</span><span class="n">dims</span><span class="p">),</span><span class="n">I</span><span class="o">...</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">sub2ind_rec</span><span class="p">(</span><span class="n">dims</span><span class="o">::</span><span class="kt">Tuple</span><span class="p">{})</span> <span class="o">=</span> <span class="mi">1</span>
+<span class="n">sub2ind_rec</span><span class="p">(</span><span class="n">dims</span><span class="o">::</span><span class="kt">Tuple</span><span class="p">{},</span><span class="n">i1</span><span class="o">::</span><span class="kt">Integer</span><span class="p">,</span> <span class="nb">I</span><span class="o">::</span><span class="kt">Integer</span><span class="o">...</span><span class="p">)</span> <span class="o">=</span>
+    <span class="n">i1</span><span class="o">==</span><span class="mi">1</span> <span class="o">?</span> <span class="n">sub2ind_rec</span><span class="p">(</span><span class="n">dims</span><span class="p">,</span><span class="nb">I</span><span class="o">...</span><span class="p">)</span> <span class="o">:</span> <span class="n">throw</span><span class="p">(</span><span class="kt">BoundsError</span><span class="p">())</span>
+<span class="n">sub2ind_rec</span><span class="p">(</span><span class="n">dims</span><span class="o">::</span><span class="kt">Tuple</span><span class="p">{</span><span class="kt">Integer</span><span class="p">,</span><span class="kt">Vararg</span><span class="p">{</span><span class="kt">Integer</span><span class="p">}},</span> <span class="n">i1</span><span class="o">::</span><span class="kt">Integer</span><span class="p">)</span> <span class="o">=</span> <span class="n">i1</span>
+<span class="n">sub2ind_rec</span><span class="p">(</span><span class="n">dims</span><span class="o">::</span><span class="kt">Tuple</span><span class="p">{</span><span class="kt">Integer</span><span class="p">,</span><span class="kt">Vararg</span><span class="p">{</span><span class="kt">Integer</span><span class="p">}},</span> <span class="n">i1</span><span class="o">::</span><span class="kt">Integer</span><span class="p">,</span> <span class="nb">I</span><span class="o">::</span><span class="kt">Integer</span><span class="o">...</span><span class="p">)</span> <span class="o">=</span>
+    <span class="n">i1</span> <span class="o">+</span> <span class="n">dims</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">*</span><span class="p">(</span><span class="n">sub2ind_rec</span><span class="p">(</span><span class="n">tail</span><span class="p">(</span><span class="n">dims</span><span class="p">),</span><span class="nb">I</span><span class="o">...</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>Both these implementations, although different, do essentially the same
@@ -1497,38 +1497,38 @@ move the iteration to compile-time; in compiler parlance, we use generated
 functions to manually unroll the loop. The body becomes almost identical,
 but instead of calculating the linear index, we build up an <em>expression</em>
 that calculates the index:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="p">@</span><span class="n">generated</span> <span class="k">function</span><span class="nf"> sub2ind_gen</span><span class="p">{</span><span class="n">N</span><span class="p">}(</span><span class="n">dims</span><span class="p">::</span><span class="n">NTuple</span><span class="p">{</span><span class="n">N</span><span class="p">},</span> <span class="n">I</span><span class="p">::</span><span class="n">Integer</span><span class="o">...</span><span class="p">)</span>
-    <span class="n">ex</span> <span class="o">=</span> <span class="p">:(</span><span class="n">I</span><span class="p">[</span><span class="o">$</span><span class="n">N</span><span class="p">]</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
-    <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="n">N</span><span class="o">-</span><span class="mi">1</span><span class="p">:</span><span class="o">-</span><span class="mi">1</span><span class="p">:</span><span class="mi">1</span>
-        <span class="n">ex</span> <span class="o">=</span> <span class="p">:(</span><span class="n">I</span><span class="p">[</span><span class="o">$</span><span class="n">i</span><span class="p">]</span> <span class="o">-</span> <span class="mi">1</span> <span class="o">+</span> <span class="n">dims</span><span class="p">[</span><span class="o">$</span><span class="n">i</span><span class="p">]</span><span class="o">*$</span><span class="n">ex</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="nd">@generated</span> <span class="k">function</span> <span class="n">sub2ind_gen</span><span class="p">{</span><span class="n">N</span><span class="p">}(</span><span class="n">dims</span><span class="o">::</span><span class="kt">NTuple</span><span class="p">{</span><span class="n">N</span><span class="p">},</span> <span class="nb">I</span><span class="o">::</span><span class="kt">Integer</span><span class="o">...</span><span class="p">)</span>
+    <span class="n">ex</span> <span class="o">=</span> <span class="o">:</span><span class="p">(</span><span class="nb">I</span><span class="p">[</span><span class="o">$</span><span class="n">N</span><span class="p">]</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="n">N</span><span class="o">-</span><span class="mi">1</span><span class="o">:-</span><span class="mi">1</span><span class="o">:</span><span class="mi">1</span>
+        <span class="n">ex</span> <span class="o">=</span> <span class="o">:</span><span class="p">(</span><span class="nb">I</span><span class="p">[</span><span class="o">$</span><span class="n">i</span><span class="p">]</span> <span class="o">-</span> <span class="mi">1</span> <span class="o">+</span> <span class="n">dims</span><span class="p">[</span><span class="o">$</span><span class="n">i</span><span class="p">]</span><span class="o">*$</span><span class="n">ex</span><span class="p">)</span>
     <span class="k">end</span>
-    <span class="k">return</span> <span class="p">:(</span><span class="o">$</span><span class="n">ex</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="k">return</span> <span class="o">:</span><span class="p">(</span><span class="o">$</span><span class="n">ex</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
 <span class="k">end</span>
 </pre></div>
 </div>
 <p><strong>What code will this generate?</strong></p>
 <p>An easy way to find out, is to extract the body into another (regular)
 function:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">generated</span> <span class="k">function</span><span class="nf"> sub2ind_gen</span><span class="p">{</span><span class="n">N</span><span class="p">}(</span><span class="n">dims</span><span class="p">::</span><span class="n">NTuple</span><span class="p">{</span><span class="n">N</span><span class="p">},</span> <span class="n">I</span><span class="p">::</span><span class="n">Integer</span><span class="o">...</span><span class="p">)</span>
-           <span class="n">sub2ind_gen_impl</span><span class="p">(</span><span class="n">dims</span><span class="p">,</span> <span class="n">I</span><span class="o">...</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nd">@generated</span> <span class="k">function</span> <span class="n">sub2ind_gen</span><span class="p">{</span><span class="n">N</span><span class="p">}(</span><span class="n">dims</span><span class="o">::</span><span class="kt">NTuple</span><span class="p">{</span><span class="n">N</span><span class="p">},</span> <span class="nb">I</span><span class="o">::</span><span class="kt">Integer</span><span class="o">...</span><span class="p">)</span>
+           <span class="n">sub2ind_gen_impl</span><span class="p">(</span><span class="n">dims</span><span class="p">,</span> <span class="nb">I</span><span class="o">...</span><span class="p">)</span>
        <span class="k">end</span>
-<span class="n">sub2ind_gen</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span><span class="nf"> with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+<span class="n">sub2ind_gen</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span> <span class="n">with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="k">function</span><span class="nf"> sub2ind_gen_impl</span><span class="p">{</span><span class="n">N</span><span class="p">}(</span><span class="n">dims</span><span class="p">::</span><span class="n">Type</span><span class="p">{</span><span class="n">NTuple</span><span class="p">{</span><span class="n">N</span><span class="p">}},</span> <span class="n">I</span><span class="o">...</span><span class="p">)</span>
-           <span class="n">length</span><span class="p">(</span><span class="n">I</span><span class="p">)</span> <span class="o">==</span> <span class="n">N</span> <span class="o">||</span> <span class="k">return</span> <span class="p">:(</span><span class="nb">error</span><span class="p">(</span><span class="s">&quot;partial indexing is unsupported&quot;</span><span class="p">))</span>
-           <span class="n">ex</span> <span class="o">=</span> <span class="p">:(</span><span class="n">I</span><span class="p">[</span><span class="o">$</span><span class="n">N</span><span class="p">]</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
-           <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="n">N</span><span class="o">-</span><span class="mi">1</span><span class="p">:</span><span class="o">-</span><span class="mi">1</span><span class="p">:</span><span class="mi">1</span>
-               <span class="n">ex</span> <span class="o">=</span> <span class="p">:(</span><span class="n">I</span><span class="p">[</span><span class="o">$</span><span class="n">i</span><span class="p">]</span> <span class="o">-</span> <span class="mi">1</span> <span class="o">+</span> <span class="n">dims</span><span class="p">[</span><span class="o">$</span><span class="n">i</span><span class="p">]</span><span class="o">*$</span><span class="n">ex</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="k">function</span> <span class="n">sub2ind_gen_impl</span><span class="p">{</span><span class="n">N</span><span class="p">}(</span><span class="n">dims</span><span class="o">::</span><span class="kt">Type</span><span class="p">{</span><span class="kt">NTuple</span><span class="p">{</span><span class="n">N</span><span class="p">}},</span> <span class="nb">I</span><span class="o">...</span><span class="p">)</span>
+           <span class="n">length</span><span class="p">(</span><span class="nb">I</span><span class="p">)</span> <span class="o">==</span> <span class="n">N</span> <span class="o">||</span> <span class="k">return</span> <span class="o">:</span><span class="p">(</span><span class="n">error</span><span class="p">(</span><span class="s">&quot;partial indexing is unsupported&quot;</span><span class="p">))</span>
+           <span class="n">ex</span> <span class="o">=</span> <span class="o">:</span><span class="p">(</span><span class="nb">I</span><span class="p">[</span><span class="o">$</span><span class="n">N</span><span class="p">]</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+           <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="n">N</span><span class="o">-</span><span class="mi">1</span><span class="o">:-</span><span class="mi">1</span><span class="o">:</span><span class="mi">1</span>
+               <span class="n">ex</span> <span class="o">=</span> <span class="o">:</span><span class="p">(</span><span class="nb">I</span><span class="p">[</span><span class="o">$</span><span class="n">i</span><span class="p">]</span> <span class="o">-</span> <span class="mi">1</span> <span class="o">+</span> <span class="n">dims</span><span class="p">[</span><span class="o">$</span><span class="n">i</span><span class="p">]</span><span class="o">*$</span><span class="n">ex</span><span class="p">)</span>
            <span class="k">end</span>
-           <span class="k">return</span> <span class="p">:(</span><span class="o">$</span><span class="n">ex</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+           <span class="k">return</span> <span class="o">:</span><span class="p">(</span><span class="o">$</span><span class="n">ex</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
        <span class="k">end</span>
-<span class="n">sub2ind_gen_impl</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span><span class="nf"> with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+<span class="n">sub2ind_gen_impl</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span> <span class="n">with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>We can now execute <code class="docutils literal"><span class="pre">sub2ind_gen_impl</span></code> and examine the expression it
 returns:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">sub2ind_gen_impl</span><span class="p">(</span><span class="n">Tuple</span><span class="p">{</span><span class="kt">Int</span><span class="p">,</span><span class="kt">Int</span><span class="p">},</span> <span class="kt">Int</span><span class="p">,</span> <span class="kt">Int</span><span class="p">)</span>
-<span class="p">:(((</span><span class="n">I</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">+</span> <span class="n">dims</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="p">(</span><span class="n">I</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">-</span> <span class="mi">1</span><span class="p">))</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">sub2ind_gen_impl</span><span class="p">(</span><span class="kt">Tuple</span><span class="p">{</span><span class="kt">Int</span><span class="p">,</span><span class="kt">Int</span><span class="p">},</span> <span class="kt">Int</span><span class="p">,</span> <span class="kt">Int</span><span class="p">)</span>
+<span class="o">:</span><span class="p">(((</span><span class="nb">I</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">+</span> <span class="n">dims</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="p">(</span><span class="nb">I</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">-</span> <span class="mi">1</span><span class="p">))</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>So, the method body that will be used here doesn&#8217;t include a loop at all

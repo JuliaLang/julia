@@ -558,21 +558,21 @@ the implementation of the <code class="docutils literal"><span class="pre">&#64;
     <span class="n">esc</span><span class="p">(</span><span class="n">_inline</span><span class="p">(</span><span class="n">ex</span><span class="p">))</span>
 <span class="k">end</span>
 
-<span class="n">_inline</span><span class="p">(</span><span class="n">ex</span><span class="p">::</span><span class="n">Expr</span><span class="p">)</span> <span class="o">=</span> <span class="n">pushmeta!</span><span class="p">(</span><span class="n">ex</span><span class="p">,</span> <span class="p">:</span><span class="n">inline</span><span class="p">)</span>
+<span class="n">_inline</span><span class="p">(</span><span class="n">ex</span><span class="o">::</span><span class="kt">Expr</span><span class="p">)</span> <span class="o">=</span> <span class="n">pushmeta!</span><span class="p">(</span><span class="n">ex</span><span class="p">,</span> <span class="o">:</span><span class="n">inline</span><span class="p">)</span>
 <span class="n">_inline</span><span class="p">(</span><span class="n">arg</span><span class="p">)</span> <span class="o">=</span> <span class="n">arg</span>
 </pre></div>
 </div>
 <p>Here, <code class="docutils literal"><span class="pre">ex</span></code> is expected to be an expression defining a function.
 A statement like this:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="p">@</span><span class="n">inline</span> <span class="k">function</span><span class="nf"> myfunction</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="nd">@inline</span> <span class="k">function</span> <span class="n">myfunction</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
     <span class="n">x</span><span class="o">*</span><span class="p">(</span><span class="n">x</span><span class="o">+</span><span class="mi">3</span><span class="p">)</span>
 <span class="k">end</span>
 </pre></div>
 </div>
 <p>gets turned into an expression like this:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">quote</span>
-    <span class="k">function</span><span class="nf"> myfunction</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
-        <span class="n">Expr</span><span class="p">(:</span><span class="n">meta</span><span class="p">,</span> <span class="p">:</span><span class="n">inline</span><span class="p">)</span>
+    <span class="k">function</span> <span class="n">myfunction</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="kt">Expr</span><span class="p">(</span><span class="o">:</span><span class="n">meta</span><span class="p">,</span> <span class="o">:</span><span class="n">inline</span><span class="p">)</span>
         <span class="n">x</span><span class="o">*</span><span class="p">(</span><span class="n">x</span><span class="o">+</span><span class="mi">3</span><span class="p">)</span>
     <span class="k">end</span>
 <span class="k">end</span>

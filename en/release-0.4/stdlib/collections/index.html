@@ -546,15 +546,15 @@
 <span id="stdlib-collections-iteration"></span><h2>Iteration<a class="headerlink" href="#iteration" title="Permalink to this headline">¶</a></h2>
 <p>Sequential iteration is implemented by the methods <a class="reference internal" href="#Base.start" title="Base.start"><code class="xref jl jl-func docutils literal"><span class="pre">start()</span></code></a>, <a class="reference internal" href="#Base.done" title="Base.done"><code class="xref jl jl-func docutils literal"><span class="pre">done()</span></code></a>, and
 <a class="reference internal" href="#Base.next" title="Base.next"><code class="xref jl jl-func docutils literal"><span class="pre">next()</span></code></a>. The general <code class="docutils literal"><span class="pre">for</span></code> loop:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="n">I</span>   <span class="c"># or  &quot;for i in I&quot;</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="nb">I</span>   <span class="c"># or  &quot;for i in I&quot;</span>
     <span class="c"># body</span>
 <span class="k">end</span>
 </pre></div>
 </div>
 <p>is translated into:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">state</span> <span class="o">=</span> <span class="n">start</span><span class="p">(</span><span class="n">I</span><span class="p">)</span>
-<span class="k">while</span> <span class="o">!</span><span class="n">done</span><span class="p">(</span><span class="n">I</span><span class="p">,</span> <span class="n">state</span><span class="p">)</span>
-    <span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">state</span><span class="p">)</span> <span class="o">=</span> <span class="n">next</span><span class="p">(</span><span class="n">I</span><span class="p">,</span> <span class="n">state</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">state</span> <span class="o">=</span> <span class="n">start</span><span class="p">(</span><span class="nb">I</span><span class="p">)</span>
+<span class="k">while</span> <span class="o">!</span><span class="n">done</span><span class="p">(</span><span class="nb">I</span><span class="p">,</span> <span class="n">state</span><span class="p">)</span>
+    <span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">state</span><span class="p">)</span> <span class="o">=</span> <span class="n">next</span><span class="p">(</span><span class="nb">I</span><span class="p">,</span> <span class="n">state</span><span class="p">)</span>
     <span class="c"># body</span>
 <span class="k">end</span>
 </pre></div>
@@ -593,7 +593,7 @@ type.</p>
 <dd><p>An iterator that yields <code class="docutils literal"><span class="pre">(i,</span> <span class="pre">x)</span></code> where <code class="docutils literal"><span class="pre">i</span></code> is an index starting at 1, and <code class="docutils literal"><span class="pre">x</span></code> is the <code class="docutils literal"><span class="pre">i</span></code>th value from the given iterator. It&#8217;s useful when you need not only the values <code class="docutils literal"><span class="pre">x</span></code> over which you are iterating, but also the index <code class="docutils literal"><span class="pre">i</span></code> of the iterations.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">a</span> <span class="o">=</span> <span class="p">[</span><span class="s">&quot;a&quot;</span><span class="p">,</span> <span class="s">&quot;b&quot;</span><span class="p">,</span> <span class="s">&quot;c&quot;</span><span class="p">];</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="k">for</span> <span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span> <span class="k">in</span> <span class="n">enumerate</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="k">for</span> <span class="p">(</span><span class="n">index</span><span class="p">,</span> <span class="n">value</span><span class="p">)</span> <span class="kp">in</span> <span class="n">enumerate</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
            <span class="n">println</span><span class="p">(</span><span class="s">&quot;</span><span class="si">$index</span><span class="s"> </span><span class="si">$value</span><span class="s">&quot;</span><span class="p">)</span>
        <span class="k">end</span>
 <span class="mi">1</span> <span class="n">a</span>
@@ -664,10 +664,10 @@ type.</p>
 <code class="descname">isempty</code><span class="sig-paren">(</span><em>collection</em><span class="sig-paren">)</span> &rarr; Bool<a class="headerlink" href="#Base.isempty" title="Permalink to this definition">¶</a></dt>
 <dd><p>Determine whether a collection is empty (has no elements).</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">isempty</span><span class="p">([])</span>
-<span class="n">true</span>
+<span class="kc">true</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">isempty</span><span class="p">([</span><span class="mi">1</span> <span class="mi">2</span> <span class="mi">3</span><span class="p">])</span>
-<span class="n">false</span>
+<span class="kc">false</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -855,37 +855,37 @@ as <code class="docutils literal"><span class="pre">v0</span></code>. In general
 
 <dl class="function">
 <dt id="Base.findmax">
-<code class="descname">findmax</code><span class="sig-paren">(</span><em>itr) -&gt; (x</em>, <em>index</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.findmax" title="Permalink to this definition">¶</a></dt>
+<code class="descname">findmax</code><span class="sig-paren">(</span><em>itr</em><span class="sig-paren">)</span> &rarr; (x, index)<a class="headerlink" href="#Base.findmax" title="Permalink to this definition">¶</a></dt>
 <dd><p>Returns the maximum element and its index.</p>
 </dd></dl>
 
 <dl class="function">
 <dt>
-<code class="descname">findmax</code><span class="sig-paren">(</span><em>A</em>, <em>dims) -&gt; (maxval</em>, <em>index</em><span class="sig-paren">)</span></dt>
+<code class="descname">findmax</code><span class="sig-paren">(</span><em>A</em>, <em>dims</em><span class="sig-paren">)</span> &rarr; (maxval, index)</dt>
 <dd><p>For an array input, returns the value and index of the maximum over the given dimensions.</p>
 </dd></dl>
 
 <dl class="function">
 <dt id="Base.findmin">
-<code class="descname">findmin</code><span class="sig-paren">(</span><em>itr) -&gt; (x</em>, <em>index</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.findmin" title="Permalink to this definition">¶</a></dt>
+<code class="descname">findmin</code><span class="sig-paren">(</span><em>itr</em><span class="sig-paren">)</span> &rarr; (x, index)<a class="headerlink" href="#Base.findmin" title="Permalink to this definition">¶</a></dt>
 <dd><p>Returns the minimum element and its index.</p>
 </dd></dl>
 
 <dl class="function">
 <dt>
-<code class="descname">findmin</code><span class="sig-paren">(</span><em>A</em>, <em>dims) -&gt; (minval</em>, <em>index</em><span class="sig-paren">)</span></dt>
+<code class="descname">findmin</code><span class="sig-paren">(</span><em>A</em>, <em>dims</em><span class="sig-paren">)</span> &rarr; (minval, index)</dt>
 <dd><p>For an array input, returns the value and index of the minimum over the given dimensions.</p>
 </dd></dl>
 
 <dl class="function">
 <dt id="Base.findmax!">
-<code class="descname">findmax!</code><span class="sig-paren">(</span><em>rval, rind, A, [init=true]) -&gt; (maxval, index</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.findmax!" title="Permalink to this definition">¶</a></dt>
+<code class="descname">findmax!</code><span class="sig-paren">(</span><em>rval</em>, <em>rind</em>, <em>A</em><span class="optional">[</span>, <em>init=true</em><span class="optional">]</span><span class="sig-paren">)</span> &rarr; (maxval, index)<a class="headerlink" href="#Base.findmax!" title="Permalink to this definition">¶</a></dt>
 <dd><p>Find the maximum of <code class="docutils literal"><span class="pre">A</span></code> and the corresponding linear index along singleton dimensions of <code class="docutils literal"><span class="pre">rval</span></code> and <code class="docutils literal"><span class="pre">rind</span></code>, and store the results in <code class="docutils literal"><span class="pre">rval</span></code> and <code class="docutils literal"><span class="pre">rind</span></code>.</p>
 </dd></dl>
 
 <dl class="function">
 <dt id="Base.findmin!">
-<code class="descname">findmin!</code><span class="sig-paren">(</span><em>rval, rind, A, [init=true]) -&gt; (minval, index</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.findmin!" title="Permalink to this definition">¶</a></dt>
+<code class="descname">findmin!</code><span class="sig-paren">(</span><em>rval</em>, <em>rind</em>, <em>A</em><span class="optional">[</span>, <em>init=true</em><span class="optional">]</span><span class="sig-paren">)</span> &rarr; (minval, index)<a class="headerlink" href="#Base.findmin!" title="Permalink to this definition">¶</a></dt>
 <dd><p>Find the minimum of <code class="docutils literal"><span class="pre">A</span></code> and the corresponding linear index along singleton dimensions of <code class="docutils literal"><span class="pre">rval</span></code> and <code class="docutils literal"><span class="pre">rind</span></code>, and store the results in <code class="docutils literal"><span class="pre">rval</span></code> and <code class="docutils literal"><span class="pre">rind</span></code>.</p>
 </dd></dl>
 
@@ -1056,7 +1056,7 @@ as <code class="docutils literal"><span class="pre">v0</span></code>. In general
 <code class="descname">all</code><span class="sig-paren">(</span><em>p</em>, <em>itr</em><span class="sig-paren">)</span> &rarr; Bool</dt>
 <dd><p>Determine whether predicate <code class="docutils literal"><span class="pre">p</span></code> returns <code class="docutils literal"><span class="pre">true</span></code> for all elements of <code class="docutils literal"><span class="pre">itr</span></code>.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">all</span><span class="p">(</span><span class="n">i</span><span class="o">-&gt;</span><span class="p">(</span><span class="mi">4</span><span class="o">&lt;=</span><span class="n">i</span><span class="o">&lt;=</span><span class="mi">6</span><span class="p">),</span> <span class="p">[</span><span class="mi">4</span><span class="p">,</span><span class="mi">5</span><span class="p">,</span><span class="mi">6</span><span class="p">])</span>
-<span class="n">true</span>
+<span class="kc">true</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1066,13 +1066,13 @@ as <code class="docutils literal"><span class="pre">v0</span></code>. In general
 <code class="descname">map</code><span class="sig-paren">(</span><em>f</em>, <em>c...</em><span class="sig-paren">)</span> &rarr; collection<a class="headerlink" href="#Base.map" title="Permalink to this definition">¶</a></dt>
 <dd><p>Transform collection <code class="docutils literal"><span class="pre">c</span></code> by applying <code class="docutils literal"><span class="pre">f</span></code> to each element. For multiple collection arguments, apply <code class="docutils literal"><span class="pre">f</span></code> elementwise.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">map</span><span class="p">((</span><span class="n">x</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">x</span> <span class="o">*</span> <span class="mi">2</span><span class="p">,</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">])</span>
-<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">2</span>
  <span class="mi">4</span>
  <span class="mi">6</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">map</span><span class="p">(</span><span class="o">+</span><span class="p">,</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">],</span> <span class="p">[</span><span class="mi">10</span><span class="p">,</span> <span class="mi">20</span><span class="p">,</span> <span class="mi">30</span><span class="p">])</span>
-<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">11</span>
  <span class="mi">22</span>
  <span class="mi">33</span>
@@ -1106,7 +1106,7 @@ collections.</p>
 <span class="pre">v0,</span> <span class="pre">map(f,</span> <span class="pre">itr))</span></code>, but will in general execute faster since no
 intermediate collection needs to be created. See documentation for
 <a class="reference internal" href="#Base.reduce" title="Base.reduce"><code class="xref jl jl-func docutils literal"><span class="pre">reduce()</span></code></a> and <a class="reference internal" href="#Base.map" title="Base.map"><code class="xref jl jl-func docutils literal"><span class="pre">map()</span></code></a>.</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">mapreduce</span><span class="p">(</span><span class="n">x</span><span class="o">-&gt;</span><span class="n">x</span><span class="o">^</span><span class="mi">2</span><span class="p">,</span> <span class="o">+</span><span class="p">,</span> <span class="p">[</span><span class="mi">1</span><span class="p">:</span><span class="mi">3</span><span class="p">;])</span> <span class="c"># == 1 + 4 + 9</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">mapreduce</span><span class="p">(</span><span class="n">x</span><span class="o">-&gt;</span><span class="n">x</span><span class="o">^</span><span class="mi">2</span><span class="p">,</span> <span class="o">+</span><span class="p">,</span> <span class="p">[</span><span class="mi">1</span><span class="o">:</span><span class="mi">3</span><span class="p">;])</span> <span class="c"># == 1 + 4 + 9</span>
 <span class="mi">14</span>
 </pre></div>
 </div>
@@ -1263,15 +1263,15 @@ For example, <code class="docutils literal"><span class="pre">Dict{ASCIIString,I
 <dd><p><code class="docutils literal"><span class="pre">Dict{K,V}()</span></code> constructs a hash table with keys of type <code class="docutils literal"><span class="pre">K</span></code> and values of type <code class="docutils literal"><span class="pre">V</span></code>.</p>
 <p>Given a single iterable argument, constructs a <a class="reference internal" href="#Base.Dict" title="Base.Dict"><code class="xref jl jl-obj docutils literal"><span class="pre">Dict</span></code></a> whose key-value pairs
 are taken from 2-tuples <code class="docutils literal"><span class="pre">(key,value)</span></code> generated by the argument.</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Dict</span><span class="p">([(</span><span class="s">&quot;A&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="p">(</span><span class="s">&quot;B&quot;</span><span class="p">,</span> <span class="mi">2</span><span class="p">)])</span>
-<span class="n">Dict</span><span class="p">{</span><span class="n">ASCIIString</span><span class="p">,</span><span class="kt">Int64</span><span class="p">}</span> <span class="n">with</span> <span class="mi">2</span> <span class="n">entries</span><span class="p">:</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="kt">Dict</span><span class="p">([(</span><span class="s">&quot;A&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="p">(</span><span class="s">&quot;B&quot;</span><span class="p">,</span> <span class="mi">2</span><span class="p">)])</span>
+<span class="kt">Dict</span><span class="p">{</span><span class="kt">ASCIIString</span><span class="p">,</span><span class="kt">Int64</span><span class="p">}</span> <span class="n">with</span> <span class="mi">2</span> <span class="n">entries</span><span class="o">:</span>
   <span class="s">&quot;B&quot;</span> <span class="o">=&gt;</span> <span class="mi">2</span>
   <span class="s">&quot;A&quot;</span> <span class="o">=&gt;</span> <span class="mi">1</span>
 </pre></div>
 </div>
 <p>Alternatively, a sequence of pair arguments may be passed.</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Dict</span><span class="p">(</span><span class="s">&quot;A&quot;</span><span class="o">=&gt;</span><span class="mi">1</span><span class="p">,</span> <span class="s">&quot;B&quot;</span><span class="o">=&gt;</span><span class="mi">2</span><span class="p">)</span>
-<span class="n">Dict</span><span class="p">{</span><span class="n">ASCIIString</span><span class="p">,</span><span class="kt">Int64</span><span class="p">}</span> <span class="n">with</span> <span class="mi">2</span> <span class="n">entries</span><span class="p">:</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="kt">Dict</span><span class="p">(</span><span class="s">&quot;A&quot;</span><span class="o">=&gt;</span><span class="mi">1</span><span class="p">,</span> <span class="s">&quot;B&quot;</span><span class="o">=&gt;</span><span class="mi">2</span><span class="p">)</span>
+<span class="kt">Dict</span><span class="p">{</span><span class="kt">ASCIIString</span><span class="p">,</span><span class="kt">Int64</span><span class="p">}</span> <span class="n">with</span> <span class="mi">2</span> <span class="n">entries</span><span class="o">:</span>
   <span class="s">&quot;B&quot;</span> <span class="o">=&gt;</span> <span class="mi">2</span>
   <span class="s">&quot;A&quot;</span> <span class="o">=&gt;</span> <span class="mi">1</span>
 </pre></div>
@@ -1356,24 +1356,24 @@ are taken from 2-tuples <code class="docutils literal"><span class="pre">(key,va
 <dt id="Base.merge">
 <code class="descname">merge</code><span class="sig-paren">(</span><em>collection</em>, <em>others...</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.merge" title="Permalink to this definition">¶</a></dt>
 <dd><p>Construct a merged collection from the given collections. If necessary, the types of the resulting collection will be promoted to accommodate the types of the merged collections. If the same key is present in another collection, the value for that key will be the value it has in the last collection listed.</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">a</span> <span class="o">=</span> <span class="n">Dict</span><span class="p">(</span><span class="s">&quot;foo&quot;</span> <span class="o">=&gt;</span> <span class="mf">0.0</span><span class="p">,</span> <span class="s">&quot;bar&quot;</span> <span class="o">=&gt;</span> <span class="mf">42.0</span><span class="p">)</span>
-<span class="n">Dict</span><span class="p">{</span><span class="n">ASCIIString</span><span class="p">,</span><span class="kt">Float64</span><span class="p">}</span> <span class="n">with</span> <span class="mi">2</span> <span class="n">entries</span><span class="p">:</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">a</span> <span class="o">=</span> <span class="kt">Dict</span><span class="p">(</span><span class="s">&quot;foo&quot;</span> <span class="o">=&gt;</span> <span class="mf">0.0</span><span class="p">,</span> <span class="s">&quot;bar&quot;</span> <span class="o">=&gt;</span> <span class="mf">42.0</span><span class="p">)</span>
+<span class="kt">Dict</span><span class="p">{</span><span class="kt">ASCIIString</span><span class="p">,</span><span class="kt">Float64</span><span class="p">}</span> <span class="n">with</span> <span class="mi">2</span> <span class="n">entries</span><span class="o">:</span>
   <span class="s">&quot;bar&quot;</span> <span class="o">=&gt;</span> <span class="mf">42.0</span>
   <span class="s">&quot;foo&quot;</span> <span class="o">=&gt;</span> <span class="mf">0.0</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">b</span> <span class="o">=</span> <span class="n">Dict</span><span class="p">(</span><span class="n">utf8</span><span class="p">(</span><span class="s">&quot;baz&quot;</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="mi">17</span><span class="p">,</span> <span class="n">utf8</span><span class="p">(</span><span class="s">&quot;bar&quot;</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="mi">4711</span><span class="p">)</span>
-<span class="n">Dict</span><span class="p">{</span><span class="n">UTF8String</span><span class="p">,</span><span class="kt">Int64</span><span class="p">}</span> <span class="n">with</span> <span class="mi">2</span> <span class="n">entries</span><span class="p">:</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">b</span> <span class="o">=</span> <span class="kt">Dict</span><span class="p">(</span><span class="n">utf8</span><span class="p">(</span><span class="s">&quot;baz&quot;</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="mi">17</span><span class="p">,</span> <span class="n">utf8</span><span class="p">(</span><span class="s">&quot;bar&quot;</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="mi">4711</span><span class="p">)</span>
+<span class="kt">Dict</span><span class="p">{</span><span class="kt">UTF8String</span><span class="p">,</span><span class="kt">Int64</span><span class="p">}</span> <span class="n">with</span> <span class="mi">2</span> <span class="n">entries</span><span class="o">:</span>
   <span class="s">&quot;bar&quot;</span> <span class="o">=&gt;</span> <span class="mi">4711</span>
   <span class="s">&quot;baz&quot;</span> <span class="o">=&gt;</span> <span class="mi">17</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">merge</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
-<span class="n">Dict</span><span class="p">{</span><span class="n">UTF8String</span><span class="p">,</span><span class="kt">Float64</span><span class="p">}</span> <span class="n">with</span> <span class="mi">3</span> <span class="n">entries</span><span class="p">:</span>
+<span class="kt">Dict</span><span class="p">{</span><span class="kt">UTF8String</span><span class="p">,</span><span class="kt">Float64</span><span class="p">}</span> <span class="n">with</span> <span class="mi">3</span> <span class="n">entries</span><span class="o">:</span>
   <span class="s">&quot;bar&quot;</span> <span class="o">=&gt;</span> <span class="mf">4711.0</span>
   <span class="s">&quot;baz&quot;</span> <span class="o">=&gt;</span> <span class="mf">17.0</span>
   <span class="s">&quot;foo&quot;</span> <span class="o">=&gt;</span> <span class="mf">0.0</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">merge</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="n">a</span><span class="p">)</span>
-<span class="n">Dict</span><span class="p">{</span><span class="n">UTF8String</span><span class="p">,</span><span class="kt">Float64</span><span class="p">}</span> <span class="n">with</span> <span class="mi">3</span> <span class="n">entries</span><span class="p">:</span>
+<span class="kt">Dict</span><span class="p">{</span><span class="kt">UTF8String</span><span class="p">,</span><span class="kt">Float64</span><span class="p">}</span> <span class="n">with</span> <span class="mi">3</span> <span class="n">entries</span><span class="o">:</span>
   <span class="s">&quot;bar&quot;</span> <span class="o">=&gt;</span> <span class="mf">42.0</span>
   <span class="s">&quot;baz&quot;</span> <span class="o">=&gt;</span> <span class="mf">17.0</span>
   <span class="s">&quot;foo&quot;</span> <span class="o">=&gt;</span> <span class="mf">0.0</span>
@@ -1540,7 +1540,7 @@ set will be sparse (for example holding a few very large integers), use
 <code class="descname">push!</code><span class="sig-paren">(</span><em>collection</em>, <em>items...</em><span class="sig-paren">)</span> &rarr; collection<a class="headerlink" href="#Base.push!" title="Permalink to this definition">¶</a></dt>
 <dd><p>Insert one or more <code class="docutils literal"><span class="pre">items</span></code> at the end of <code class="docutils literal"><span class="pre">collection</span></code>.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">push!</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">],</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">6</span><span class="p">)</span>
-<span class="mi">6</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">6</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>
  <span class="mi">2</span>
  <span class="mi">3</span>
@@ -1560,7 +1560,7 @@ The result of the preceding example is equivalent to
 <code class="descname">pop!</code><span class="sig-paren">(</span><em>collection</em><span class="sig-paren">)</span> &rarr; item</dt>
 <dd><p>Remove the last item in <code class="docutils literal"><span class="pre">collection</span></code> and return it.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">A</span><span class="o">=</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">6</span><span class="p">]</span>
-<span class="mi">6</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">6</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>
  <span class="mi">2</span>
  <span class="mi">3</span>
@@ -1572,7 +1572,7 @@ The result of the preceding example is equivalent to
 <span class="mi">6</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">A</span>
-<span class="mi">5</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">5</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>
  <span class="mi">2</span>
  <span class="mi">3</span>
@@ -1587,7 +1587,7 @@ The result of the preceding example is equivalent to
 <code class="descname">unshift!</code><span class="sig-paren">(</span><em>collection</em>, <em>items...</em><span class="sig-paren">)</span> &rarr; collection<a class="headerlink" href="#Base.unshift!" title="Permalink to this definition">¶</a></dt>
 <dd><p>Insert one or more <code class="docutils literal"><span class="pre">items</span></code> at the beginning of <code class="docutils literal"><span class="pre">collection</span></code>.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">unshift!</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">],</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">6</span><span class="p">)</span>
-<span class="mi">6</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">6</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">5</span>
  <span class="mi">6</span>
  <span class="mi">1</span>
@@ -1603,7 +1603,7 @@ The result of the preceding example is equivalent to
 <code class="descname">shift!</code><span class="sig-paren">(</span><em>collection</em><span class="sig-paren">)</span> &rarr; item<a class="headerlink" href="#Base.shift!" title="Permalink to this definition">¶</a></dt>
 <dd><p>Remove the first <code class="docutils literal"><span class="pre">item</span></code> from <code class="docutils literal"><span class="pre">collection</span></code>.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">A</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">6</span><span class="p">]</span>
-<span class="mi">6</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">6</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>
  <span class="mi">2</span>
  <span class="mi">3</span>
@@ -1615,7 +1615,7 @@ The result of the preceding example is equivalent to
 <span class="mi">1</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">A</span>
-<span class="mi">5</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">5</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">2</span>
  <span class="mi">3</span>
  <span class="mi">4</span>
@@ -1630,7 +1630,7 @@ The result of the preceding example is equivalent to
 <code class="descname">insert!</code><span class="sig-paren">(</span><em>collection</em>, <em>index</em>, <em>item</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.insert!" title="Permalink to this definition">¶</a></dt>
 <dd><p>Insert an <code class="docutils literal"><span class="pre">item</span></code> into <code class="docutils literal"><span class="pre">collection</span></code> at the given <code class="docutils literal"><span class="pre">index</span></code>. <code class="docutils literal"><span class="pre">index</span></code> is the index of <code class="docutils literal"><span class="pre">item</span></code> in the resulting <code class="docutils literal"><span class="pre">collection</span></code>.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">insert!</span><span class="p">([</span><span class="mi">6</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
-<span class="mi">6</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">6</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">6</span>
  <span class="mi">5</span>
  <span class="mi">4</span>
@@ -1646,7 +1646,7 @@ The result of the preceding example is equivalent to
 <code class="descname">deleteat!</code><span class="sig-paren">(</span><em>collection</em>, <em>index</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.deleteat!" title="Permalink to this definition">¶</a></dt>
 <dd><p>Remove the item at the given <code class="docutils literal"><span class="pre">index</span></code> and return the modified <code class="docutils literal"><span class="pre">collection</span></code>. Subsequent items are shifted to fill the resulting gap.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">deleteat!</span><span class="p">([</span><span class="mi">6</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="mi">2</span><span class="p">)</span>
-<span class="mi">5</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">5</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">6</span>
  <span class="mi">4</span>
  <span class="mi">3</span>
@@ -1660,15 +1660,15 @@ The result of the preceding example is equivalent to
 <dt>
 <code class="descname">deleteat!</code><span class="sig-paren">(</span><em>collection</em>, <em>itr</em><span class="sig-paren">)</span></dt>
 <dd><p>Remove the items at the indices given by <code class="docutils literal"><span class="pre">itr</span></code>, and return the modified <code class="docutils literal"><span class="pre">collection</span></code>. Subsequent items are shifted to fill the resulting gap. <code class="docutils literal"><span class="pre">itr</span></code> must be sorted and unique.</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">deleteat!</span><span class="p">([</span><span class="mi">6</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="mi">1</span><span class="p">:</span><span class="mi">2</span><span class="p">:</span><span class="mi">5</span><span class="p">)</span>
-<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">deleteat!</span><span class="p">([</span><span class="mi">6</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="mi">1</span><span class="o">:</span><span class="mi">2</span><span class="o">:</span><span class="mi">5</span><span class="p">)</span>
+<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">5</span>
  <span class="mi">3</span>
  <span class="mi">1</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">deleteat!</span><span class="p">([</span><span class="mi">6</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">ArgumentError</span><span class="p">:</span> <span class="n">indices</span> <span class="n">must</span> <span class="n">be</span> <span class="n">unique</span> <span class="n">and</span> <span class="n">sorted</span>
- <span class="k">in</span> <span class="n">deleteat!</span> <span class="n">at</span> <span class="n">array</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">547</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="kt">ArgumentError</span><span class="o">:</span> <span class="n">indices</span> <span class="n">must</span> <span class="n">be</span> <span class="n">unique</span> <span class="n">and</span> <span class="n">sorted</span>
+ <span class="kp">in</span> <span class="n">deleteat!</span> <span class="n">at</span> <span class="n">array</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">547</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1681,7 +1681,7 @@ The result of the preceding example is equivalent to
 <span class="mi">2</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">A</span>
-<span class="mi">5</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">5</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">6</span>
  <span class="mi">5</span>
  <span class="mi">4</span>
@@ -1692,7 +1692,7 @@ The result of the preceding example is equivalent to
 <span class="mi">1</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">A</span>
-<span class="mi">5</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">5</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
   <span class="mi">6</span>
   <span class="mi">5</span>
   <span class="mi">4</span>
@@ -1703,7 +1703,7 @@ The result of the preceding example is equivalent to
 <span class="mi">6</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">A</span>
-<span class="mi">7</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">7</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="o">-</span><span class="mi">1</span>
  <span class="o">-</span><span class="mi">2</span>
  <span class="o">-</span><span class="mi">3</span>
@@ -1721,11 +1721,11 @@ The result of the preceding example is equivalent to
 <code class="descname">splice!</code><span class="sig-paren">(</span><em>collection</em>, <em>range</em><span class="optional">[</span>, <em>replacement</em><span class="optional">]</span><span class="sig-paren">)</span> &rarr; items</dt>
 <dd><p>Remove items in the specified index range, and return a collection containing the removed items. Subsequent items are shifted down to fill the resulting gap. If specified, replacement values from an ordered collection will be spliced in place of the removed items.</p>
 <p>To insert <code class="docutils literal"><span class="pre">replacement</span></code> before an index <code class="docutils literal"><span class="pre">n</span></code> without removing any items, use <code class="docutils literal"><span class="pre">splice!(collection,</span> <span class="pre">n:n-1,</span> <span class="pre">replacement)</span></code>.</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">splice!</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="mi">4</span><span class="p">:</span><span class="mi">3</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
-<span class="mi">0</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">splice!</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="mi">4</span><span class="o">:</span><span class="mi">3</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+<span class="mi">0</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">A</span>
-<span class="mi">8</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">8</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="o">-</span><span class="mi">1</span>
  <span class="o">-</span><span class="mi">2</span>
  <span class="o">-</span><span class="mi">3</span>
@@ -1743,14 +1743,14 @@ The result of the preceding example is equivalent to
 <code class="descname">resize!</code><span class="sig-paren">(</span><em>collection</em>, <em>n</em><span class="sig-paren">)</span> &rarr; collection<a class="headerlink" href="#Base.resize!" title="Permalink to this definition">¶</a></dt>
 <dd><p>Resize <code class="docutils literal"><span class="pre">collection</span></code> to contain <code class="docutils literal"><span class="pre">n</span></code> elements. If <code class="docutils literal"><span class="pre">n</span></code> is smaller than the current collection length, the first <code class="docutils literal"><span class="pre">n</span></code> elements will be retained. If <code class="docutils literal"><span class="pre">n</span></code> is larger, the new elements are not guaranteed to be initialized.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">resize!</span><span class="p">([</span><span class="mi">6</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="mi">3</span><span class="p">)</span>
-<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">6</span>
  <span class="mi">5</span>
  <span class="mi">4</span>
 </pre></div>
 </div>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">resize!</span><span class="p">([</span><span class="mi">6</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="mi">8</span><span class="p">)</span>
-<span class="mi">8</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">8</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">6</span>
  <span class="mi">5</span>
  <span class="mi">4</span>
@@ -1768,14 +1768,14 @@ The result of the preceding example is equivalent to
 <code class="descname">append!</code><span class="sig-paren">(</span><em>collection</em>, <em>collection2</em><span class="sig-paren">)</span> &rarr; collection.<a class="headerlink" href="#Base.append!" title="Permalink to this definition">¶</a></dt>
 <dd><p>Add the elements of <code class="docutils literal"><span class="pre">collection2</span></code> to the end of <code class="docutils literal"><span class="pre">collection</span></code>.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">append!</span><span class="p">([</span><span class="mi">1</span><span class="p">],[</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">])</span>
-<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>
  <span class="mi">2</span>
  <span class="mi">3</span>
 </pre></div>
 </div>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">append!</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">],</span> <span class="p">[</span><span class="mi">4</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">6</span><span class="p">])</span>
-<span class="mi">6</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">6</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>
  <span class="mi">2</span>
  <span class="mi">3</span>
@@ -1795,7 +1795,7 @@ The result is of the preceding example is equivalent to
 <code class="descname">prepend!</code><span class="sig-paren">(</span><em>collection</em>, <em>items</em><span class="sig-paren">)</span> &rarr; collection<a class="headerlink" href="#Base.prepend!" title="Permalink to this definition">¶</a></dt>
 <dd><p>Insert the elements of <code class="docutils literal"><span class="pre">items</span></code> to the beginning of <code class="docutils literal"><span class="pre">collection</span></code>.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">prepend!</span><span class="p">([</span><span class="mi">3</span><span class="p">],[</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">])</span>
-<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>
  <span class="mi">2</span>
  <span class="mi">3</span>
@@ -1848,14 +1848,14 @@ inserted and priorities accessed or changed using indexing notation.</p>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="c"># Insert keys with associated priorities</span>
        <span class="n">pq</span><span class="p">[</span><span class="s">&quot;a&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">10</span><span class="p">;</span> <span class="n">pq</span><span class="p">[</span><span class="s">&quot;b&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">5</span><span class="p">;</span> <span class="n">pq</span><span class="p">[</span><span class="s">&quot;c&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">15</span><span class="p">;</span> <span class="n">pq</span>
-<span class="n">Base</span><span class="o">.</span><span class="n">Collections</span><span class="o">.</span><span class="n">PriorityQueue</span><span class="p">{</span><span class="kt">Any</span><span class="p">,</span><span class="kt">Any</span><span class="p">,</span><span class="n">Base</span><span class="o">.</span><span class="n">Order</span><span class="o">.</span><span class="n">ForwardOrdering</span><span class="p">}</span> <span class="n">with</span> <span class="mi">3</span> <span class="n">entries</span><span class="p">:</span>
+<span class="n">Base</span><span class="o">.</span><span class="n">Collections</span><span class="o">.</span><span class="n">PriorityQueue</span><span class="p">{</span><span class="kt">Any</span><span class="p">,</span><span class="kt">Any</span><span class="p">,</span><span class="n">Base</span><span class="o">.</span><span class="n">Order</span><span class="o">.</span><span class="n">ForwardOrdering</span><span class="p">}</span> <span class="n">with</span> <span class="mi">3</span> <span class="n">entries</span><span class="o">:</span>
   <span class="s">&quot;c&quot;</span> <span class="o">=&gt;</span> <span class="mi">15</span>
   <span class="s">&quot;b&quot;</span> <span class="o">=&gt;</span> <span class="mi">5</span>
   <span class="s">&quot;a&quot;</span> <span class="o">=&gt;</span> <span class="mi">10</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="c"># Change the priority of an existing key</span>
        <span class="n">pq</span><span class="p">[</span><span class="s">&quot;a&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">pq</span>
-<span class="n">Base</span><span class="o">.</span><span class="n">Collections</span><span class="o">.</span><span class="n">PriorityQueue</span><span class="p">{</span><span class="kt">Any</span><span class="p">,</span><span class="kt">Any</span><span class="p">,</span><span class="n">Base</span><span class="o">.</span><span class="n">Order</span><span class="o">.</span><span class="n">ForwardOrdering</span><span class="p">}</span> <span class="n">with</span> <span class="mi">3</span> <span class="n">entries</span><span class="p">:</span>
+<span class="n">Base</span><span class="o">.</span><span class="n">Collections</span><span class="o">.</span><span class="n">PriorityQueue</span><span class="p">{</span><span class="kt">Any</span><span class="p">,</span><span class="kt">Any</span><span class="p">,</span><span class="n">Base</span><span class="o">.</span><span class="n">Order</span><span class="o">.</span><span class="n">ForwardOrdering</span><span class="p">}</span> <span class="n">with</span> <span class="mi">3</span> <span class="n">entries</span><span class="o">:</span>
   <span class="s">&quot;c&quot;</span> <span class="o">=&gt;</span> <span class="mi">15</span>
   <span class="s">&quot;b&quot;</span> <span class="o">=&gt;</span> <span class="mi">5</span>
   <span class="s">&quot;a&quot;</span> <span class="o">=&gt;</span> <span class="mi">0</span>

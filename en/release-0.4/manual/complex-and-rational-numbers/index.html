@@ -673,9 +673,9 @@ to real numbers and complex values when applied to complex numbers.
 For example, <a class="reference internal" href="../../stdlib/math/#Base.sqrt" title="Base.sqrt"><code class="xref jl jl-func docutils literal"><span class="pre">sqrt()</span></code></a> behaves differently when applied to <code class="docutils literal"><span class="pre">-1</span></code>
 versus <code class="docutils literal"><span class="pre">-1</span> <span class="pre">+</span> <span class="pre">0im</span></code> even though <code class="docutils literal"><span class="pre">-1</span> <span class="pre">==</span> <span class="pre">-1</span> <span class="pre">+</span> <span class="pre">0im</span></code>:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">sqrt</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">DomainError</span><span class="p">:</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="kt">DomainError</span><span class="o">:</span>
 <span class="n">sqrt</span> <span class="n">will</span> <span class="n">only</span> <span class="k">return</span> <span class="n">a</span> <span class="n">complex</span> <span class="n">result</span> <span class="k">if</span> <span class="n">called</span> <span class="n">with</span> <span class="n">a</span> <span class="n">complex</span> <span class="n">argument</span><span class="o">.</span> <span class="n">Try</span> <span class="n">sqrt</span><span class="p">(</span><span class="n">complex</span><span class="p">(</span><span class="n">x</span><span class="p">))</span><span class="o">.</span>
- <span class="k">in</span> <span class="n">sqrt</span> <span class="n">at</span> <span class="n">math</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">146</span>
+ <span class="kp">in</span> <span class="n">sqrt</span> <span class="n">at</span> <span class="n">math</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">146</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">sqrt</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span> <span class="o">+</span> <span class="mi">0</span><span class="nb">im</span><span class="p">)</span>
 <span class="mf">0.0</span> <span class="o">+</span> <span class="mf">1.0</span><span class="nb">im</span>
@@ -701,8 +701,8 @@ and imaginary parts of a complex number as described in the
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="mi">1</span> <span class="o">+</span> <span class="nb">Inf</span><span class="o">*</span><span class="nb">im</span>
 <span class="mf">1.0</span> <span class="o">+</span> <span class="nb">Inf</span><span class="o">*</span><span class="nb">im</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="mi">1</span> <span class="o">+</span> <span class="n">NaN</span><span class="o">*</span><span class="nb">im</span>
-<span class="mf">1.0</span> <span class="o">+</span> <span class="n">NaN</span><span class="o">*</span><span class="nb">im</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="mi">1</span> <span class="o">+</span> <span class="nb">NaN</span><span class="o">*</span><span class="nb">im</span>
+<span class="mf">1.0</span> <span class="o">+</span> <span class="nb">NaN</span><span class="o">*</span><span class="nb">im</span>
 </pre></div>
 </div>
 </div>
@@ -744,16 +744,16 @@ rational value can be extracted using the <a class="reference internal" href="..
 necessary, since the standard arithmetic and comparison operations are
 defined for rational values:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="mi">2</span><span class="o">//</span><span class="mi">3</span> <span class="o">==</span> <span class="mi">6</span><span class="o">//</span><span class="mi">9</span>
-<span class="n">true</span>
+<span class="kc">true</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="mi">2</span><span class="o">//</span><span class="mi">3</span> <span class="o">==</span> <span class="mi">9</span><span class="o">//</span><span class="mi">27</span>
-<span class="n">false</span>
+<span class="kc">false</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="mi">3</span><span class="o">//</span><span class="mi">7</span> <span class="o">&lt;</span> <span class="mi">1</span><span class="o">//</span><span class="mi">2</span>
-<span class="n">true</span>
+<span class="kc">true</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="mi">3</span><span class="o">//</span><span class="mi">4</span> <span class="o">&gt;</span> <span class="mi">2</span><span class="o">//</span><span class="mi">3</span>
-<span class="n">true</span>
+<span class="kc">true</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="mi">2</span><span class="o">//</span><span class="mi">4</span> <span class="o">+</span> <span class="mi">1</span><span class="o">//</span><span class="mi">6</span>
 <span class="mi">2</span><span class="o">//</span><span class="mi">3</span>
@@ -776,8 +776,8 @@ defined for rational values:</p>
 <p>Conversion from rational to floating-point respects the following
 identity for any integral values of <code class="docutils literal"><span class="pre">a</span></code> and <code class="docutils literal"><span class="pre">b</span></code>, with the exception
 of the case <code class="docutils literal"><span class="pre">a</span> <span class="pre">==</span> <span class="pre">0</span></code> and <code class="docutils literal"><span class="pre">b</span> <span class="pre">==</span> <span class="pre">0</span></code>:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nb">isequal</span><span class="p">(</span><span class="n">float</span><span class="p">(</span><span class="n">a</span><span class="o">//</span><span class="n">b</span><span class="p">),</span> <span class="n">a</span><span class="o">/</span><span class="n">b</span><span class="p">)</span>
-<span class="n">true</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">isequal</span><span class="p">(</span><span class="n">float</span><span class="p">(</span><span class="n">a</span><span class="o">//</span><span class="n">b</span><span class="p">),</span> <span class="n">a</span><span class="o">/</span><span class="n">b</span><span class="p">)</span>
+<span class="kc">true</span>
 </pre></div>
 </div>
 <p>Constructing infinite rational values is acceptable:</p>
@@ -787,15 +787,15 @@ of the case <code class="docutils literal"><span class="pre">a</span> <span clas
 <span class="n">julia</span><span class="o">&gt;</span> <span class="o">-</span><span class="mi">3</span><span class="o">//</span><span class="mi">0</span>
 <span class="o">-</span><span class="mi">1</span><span class="o">//</span><span class="mi">0</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">ans</span><span class="p">)</span>
-<span class="n">Rational</span><span class="p">{</span><span class="kt">Int64</span><span class="p">}</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">typeof</span><span class="p">(</span><span class="n">ans</span><span class="p">)</span>
+<span class="kt">Rational</span><span class="p">{</span><span class="kt">Int64</span><span class="p">}</span>
 </pre></div>
 </div>
 <p>Trying to construct a <a class="reference internal" href="../../stdlib/numbers/#Base.NaN" title="Base.NaN"><code class="xref jl jl-const docutils literal"><span class="pre">NaN</span></code></a> rational value, however, is not:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="mi">0</span><span class="o">//</span><span class="mi">0</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">ArgumentError</span><span class="p">:</span> <span class="n">invalid</span> <span class="n">rational</span><span class="p">:</span> <span class="n">zero</span><span class="p">(</span><span class="kt">Int64</span><span class="p">)</span><span class="o">//</span><span class="n">zero</span><span class="p">(</span><span class="kt">Int64</span><span class="p">)</span>
- <span class="k">in</span> <span class="n">call</span> <span class="n">at</span> <span class="n">rational</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">8</span>
- <span class="k">in</span> <span class="o">//</span> <span class="n">at</span> <span class="n">rational</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">22</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="kt">ArgumentError</span><span class="o">:</span> <span class="n">invalid</span> <span class="n">rational</span><span class="o">:</span> <span class="n">zero</span><span class="p">(</span><span class="kt">Int64</span><span class="p">)</span><span class="o">//</span><span class="n">zero</span><span class="p">(</span><span class="kt">Int64</span><span class="p">)</span>
+ <span class="kp">in</span> <span class="n">call</span> <span class="n">at</span> <span class="n">rational</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">8</span>
+ <span class="kp">in</span> <span class="o">//</span> <span class="n">at</span> <span class="n">rational</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">22</span>
 </pre></div>
 </div>
 <p>As usual, the promotion system makes interactions with other numeric
@@ -822,13 +822,13 @@ types effortless:</p>
 <span class="mi">1</span><span class="o">//</span><span class="mi">1</span> <span class="o">-</span> <span class="mi">2</span><span class="o">//</span><span class="mi">3</span><span class="o">*</span><span class="nb">im</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="mf">0.5</span> <span class="o">==</span> <span class="mi">1</span><span class="o">//</span><span class="mi">2</span>
-<span class="n">true</span>
+<span class="kc">true</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="mf">0.33</span> <span class="o">==</span> <span class="mi">1</span><span class="o">//</span><span class="mi">3</span>
-<span class="n">false</span>
+<span class="kc">false</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="mf">0.33</span> <span class="o">&lt;</span> <span class="mi">1</span><span class="o">//</span><span class="mi">3</span>
-<span class="n">true</span>
+<span class="kc">true</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="mi">1</span><span class="o">//</span><span class="mi">3</span> <span class="o">-</span> <span class="mf">0.33</span>
 <span class="mf">0.0033333333333332993</span>

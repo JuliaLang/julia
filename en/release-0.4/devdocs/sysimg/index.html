@@ -555,7 +555,7 @@
 <li>Include a <code class="docutils literal"><span class="pre">userimg.jl</span></code> file that includes packages into the system image, thereby creating a system image that has packages embedded into the startup environment.</li>
 </ul>
 <p>Julia now ships with a script that automates the tasks of building the system image, wittingly named <code class="docutils literal"><span class="pre">build_sysimg.jl</span></code> that lives in <code class="docutils literal"><span class="pre">DATAROOTDIR/julia/</span></code>.  That is, to include it into a current Julia session, type:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">include</span><span class="p">(</span><span class="n">joinpath</span><span class="p">(</span><span class="n">JULIA_HOME</span><span class="p">,</span> <span class="n">Base</span><span class="o">.</span><span class="n">DATAROOTDIR</span><span class="p">,</span> <span class="s">&quot;julia&quot;</span><span class="p">,</span> <span class="s">&quot;build_sysimg.jl&quot;</span><span class="p">))</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">include</span><span class="p">(</span><span class="n">joinpath</span><span class="p">(</span><span class="nb">JULIA_HOME</span><span class="p">,</span> <span class="n">Base</span><span class="o">.</span><span class="n">DATAROOTDIR</span><span class="p">,</span> <span class="s">&quot;julia&quot;</span><span class="p">,</span> <span class="s">&quot;build_sysimg.jl&quot;</span><span class="p">))</span>
 </pre></div>
 </div>
 <p>This will include a <code class="docutils literal"><span class="pre">build_sysimg()</span></code> function:</p>

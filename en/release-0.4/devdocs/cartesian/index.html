@@ -552,15 +552,15 @@ the few ways to write compact and performant multidimensional code.</p>
 <div class="section" id="principles-of-usage">
 <h2>Principles of usage<a class="headerlink" href="#principles-of-usage" title="Permalink to this headline">¶</a></h2>
 <p>A simple example of usage is:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="p">@</span><span class="n">nloops</span> <span class="mi">3</span> <span class="n">i</span> <span class="n">A</span> <span class="k">begin</span>
-    <span class="n">s</span> <span class="o">+=</span> <span class="p">@</span><span class="n">nref</span> <span class="mi">3</span> <span class="n">A</span> <span class="n">i</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="nd">@nloops</span> <span class="mi">3</span> <span class="n">i</span> <span class="n">A</span> <span class="k">begin</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nd">@nref</span> <span class="mi">3</span> <span class="n">A</span> <span class="n">i</span>
 <span class="k">end</span>
 </pre></div>
 </div>
 <p>which generates the following code:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">i_3</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="n">size</span><span class="p">(</span><span class="n">A</span><span class="p">,</span><span class="mi">3</span><span class="p">)</span>
-    <span class="k">for</span> <span class="n">i_2</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="n">size</span><span class="p">(</span><span class="n">A</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span>
-        <span class="k">for</span> <span class="n">i_1</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="n">size</span><span class="p">(</span><span class="n">A</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">i_3</span> <span class="o">=</span> <span class="mi">1</span><span class="o">:</span><span class="n">size</span><span class="p">(</span><span class="n">A</span><span class="p">,</span><span class="mi">3</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i_2</span> <span class="o">=</span> <span class="mi">1</span><span class="o">:</span><span class="n">size</span><span class="p">(</span><span class="n">A</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">i_1</span> <span class="o">=</span> <span class="mi">1</span><span class="o">:</span><span class="n">size</span><span class="p">(</span><span class="n">A</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span>
             <span class="n">s</span> <span class="o">+=</span> <span class="n">A</span><span class="p">[</span><span class="n">i_1</span><span class="p">,</span><span class="n">i_2</span><span class="p">,</span><span class="n">i_3</span><span class="p">]</span>
         <span class="k">end</span>
     <span class="k">end</span>
@@ -599,8 +599,8 @@ to the right) whereas <code class="docutils literal"><span class="pre">&#64;nref
 <code class="docutils literal"><span class="pre">A[i_1,i_2,i_3]</span></code>, where the array comes first).</p>
 <p>If you&#8217;re developing code with Cartesian, you may find that debugging is
 easier when you examine the generated code, using <code class="docutils literal"><span class="pre">macroexpand</span></code>:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">macroexpand</span><span class="p">(:(@</span><span class="n">nref</span> <span class="mi">2</span> <span class="n">A</span> <span class="n">i</span><span class="p">))</span>
-<span class="p">:(</span><span class="n">A</span><span class="p">[</span><span class="n">i_1</span><span class="p">,</span><span class="n">i_2</span><span class="p">])</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">macroexpand</span><span class="p">(</span><span class="o">:</span><span class="p">(</span><span class="nd">@nref</span> <span class="mi">2</span> <span class="n">A</span> <span class="n">i</span><span class="p">))</span>
+<span class="o">:</span><span class="p">(</span><span class="n">A</span><span class="p">[</span><span class="n">i_1</span><span class="p">,</span><span class="n">i_2</span><span class="p">])</span>
 </pre></div>
 </div>
 <div class="section" id="supplying-the-number-of-expressions">
@@ -613,11 +613,11 @@ you need to work with older Julia versions, currently you
 should use the <code class="docutils literal"><span class="pre">&#64;ngenerate</span></code> macro described in <a class="reference external" href="http://docs.julialang.org/en/release-0.3/devdocs/cartesian/#supplying-the-number-of-expressions">an older version of this documentation</a>.</p>
 <p>Starting in Julia 0.4-pre, the recommended approach is to use
 a <code class="docutils literal"><span class="pre">&#64;generated</span> <span class="pre">function</span></code>.  Here&#8217;s an example:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="p">@</span><span class="n">generated</span> <span class="k">function</span><span class="nf"> mysum</span><span class="p">{</span><span class="n">T</span><span class="p">,</span><span class="n">N</span><span class="p">}(</span><span class="n">A</span><span class="p">::</span><span class="n">Array</span><span class="p">{</span><span class="n">T</span><span class="p">,</span><span class="n">N</span><span class="p">})</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="nd">@generated</span> <span class="k">function</span> <span class="n">mysum</span><span class="p">{</span><span class="n">T</span><span class="p">,</span><span class="n">N</span><span class="p">}(</span><span class="n">A</span><span class="o">::</span><span class="kt">Array</span><span class="p">{</span><span class="n">T</span><span class="p">,</span><span class="n">N</span><span class="p">})</span>
     <span class="k">quote</span>
         <span class="n">s</span> <span class="o">=</span> <span class="n">zero</span><span class="p">(</span><span class="n">T</span><span class="p">)</span>
-        <span class="p">@</span><span class="n">nloops</span> <span class="o">$</span><span class="n">N</span> <span class="n">i</span> <span class="n">A</span> <span class="k">begin</span>
-            <span class="n">s</span> <span class="o">+=</span> <span class="p">@</span><span class="n">nref</span> <span class="o">$</span><span class="n">N</span> <span class="n">A</span> <span class="n">i</span>
+        <span class="nd">@nloops</span> <span class="o">$</span><span class="n">N</span> <span class="n">i</span> <span class="n">A</span> <span class="k">begin</span>
+            <span class="n">s</span> <span class="o">+=</span> <span class="nd">@nref</span> <span class="o">$</span><span class="n">N</span> <span class="n">A</span> <span class="n">i</span>
         <span class="k">end</span>
         <span class="n">s</span>
     <span class="k">end</span>
@@ -632,7 +632,7 @@ before the <code class="docutils literal"><span class="pre">quote</span></code> 
 <p>Perhaps the single most powerful feature in <code class="docutils literal"><span class="pre">Cartesian</span></code> is the
 ability to supply anonymous-function expressions that get evaluated at
 parsing time.  Let&#8217;s consider a simple example:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="p">@</span><span class="n">nexprs</span> <span class="mi">2</span> <span class="n">j</span><span class="o">-&gt;</span><span class="p">(</span><span class="n">i_j</span> <span class="o">=</span> <span class="mi">1</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="nd">@nexprs</span> <span class="mi">2</span> <span class="n">j</span><span class="o">-&gt;</span><span class="p">(</span><span class="n">i_j</span> <span class="o">=</span> <span class="mi">1</span><span class="p">)</span>
 </pre></div>
 </div>
 <p><code class="docutils literal"><span class="pre">&#64;nexprs</span></code> generates <code class="docutils literal"><span class="pre">n</span></code> expressions that follow a pattern. This
@@ -647,7 +647,7 @@ Generally speaking, Cartesian employs a LaTeX-like syntax.  This
 allows you to do math on the index <code class="docutils literal"><span class="pre">j</span></code>.  Here&#8217;s an example computing
 the strides of an array:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">s_1</span> <span class="o">=</span> <span class="mi">1</span>
-<span class="p">@</span><span class="n">nexprs</span> <span class="mi">3</span> <span class="n">j</span><span class="o">-&gt;</span><span class="p">(</span><span class="n">s_</span><span class="p">{</span><span class="n">j</span><span class="o">+</span><span class="mi">1</span><span class="p">}</span> <span class="o">=</span> <span class="n">s_j</span> <span class="o">*</span> <span class="n">size</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">j</span><span class="p">))</span>
+<span class="nd">@nexprs</span> <span class="mi">3</span> <span class="n">j</span><span class="o">-&gt;</span><span class="p">(</span><span class="n">s_</span><span class="p">{</span><span class="n">j</span><span class="o">+</span><span class="mi">1</span><span class="p">}</span> <span class="o">=</span> <span class="n">s_j</span> <span class="o">*</span> <span class="n">size</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">j</span><span class="p">))</span>
 </pre></div>
 </div>
 <p>would generate expressions</p>
@@ -669,15 +669,15 @@ the strides of an array:</p>
 <code class="descname">&#64;nloops N itersym rangeexpr preexpr postexpr bodyexpr</code></dt>
 <dd><p>Generate <code class="docutils literal"><span class="pre">N</span></code> nested loops, using <code class="docutils literal"><span class="pre">itersym</span></code> as the prefix for the iteration variables. <code class="docutils literal"><span class="pre">rangeexpr</span></code> may be an anonymous-function expression, or a simple symbol <code class="docutils literal"><span class="pre">var</span></code> in which case the range is <code class="docutils literal"><span class="pre">1:size(var,d)</span></code> for dimension <code class="docutils literal"><span class="pre">d</span></code>.</p>
 <p>Optionally, you can provide &#8220;pre&#8221; and &#8220;post&#8221; expressions. These get executed first and last, respectively, in the body of each loop. For example, :</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="p">@</span><span class="n">nloops</span> <span class="mi">2</span> <span class="n">i</span> <span class="n">A</span> <span class="n">d</span><span class="o">-&gt;</span><span class="n">j_d</span><span class="o">=</span><span class="n">min</span><span class="p">(</span><span class="n">i_d</span><span class="p">,</span><span class="mi">5</span><span class="p">)</span> <span class="k">begin</span>
-    <span class="n">s</span> <span class="o">+=</span> <span class="p">@</span><span class="n">nref</span> <span class="mi">2</span> <span class="n">A</span> <span class="n">j</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="nd">@nloops</span> <span class="mi">2</span> <span class="n">i</span> <span class="n">A</span> <span class="n">d</span><span class="o">-&gt;</span><span class="n">j_d</span><span class="o">=</span><span class="n">min</span><span class="p">(</span><span class="n">i_d</span><span class="p">,</span><span class="mi">5</span><span class="p">)</span> <span class="k">begin</span>
+    <span class="n">s</span> <span class="o">+=</span> <span class="nd">@nref</span> <span class="mi">2</span> <span class="n">A</span> <span class="n">j</span>
 <span class="k">end</span>
 </pre></div>
 </div>
 <p>would generate :</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">i_2</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="n">size</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">i_2</span> <span class="o">=</span> <span class="mi">1</span><span class="o">:</span><span class="n">size</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
     <span class="n">j_2</span> <span class="o">=</span> <span class="n">min</span><span class="p">(</span><span class="n">i_2</span><span class="p">,</span> <span class="mi">5</span><span class="p">)</span>
-    <span class="k">for</span> <span class="n">i_1</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="n">size</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i_1</span> <span class="o">=</span> <span class="mi">1</span><span class="o">:</span><span class="n">size</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
         <span class="n">j_1</span> <span class="o">=</span> <span class="n">min</span><span class="p">(</span><span class="n">i_1</span><span class="p">,</span> <span class="mi">5</span><span class="p">)</span>
         <span class="n">s</span> <span class="o">+=</span> <span class="n">A</span><span class="p">[</span><span class="n">j_1</span><span class="p">,</span><span class="n">j_2</span><span class="p">]</span>
     <span class="k">end</span>
@@ -717,14 +717,14 @@ the strides of an array:</p>
 <dt>
 <code class="descname">&#64;nif N conditionexpr expr elseexpr</code></dt>
 <dd><p>Generates a sequence of <code class="docutils literal"><span class="pre">if</span> <span class="pre">...</span> <span class="pre">elseif</span> <span class="pre">...</span> <span class="pre">else</span> <span class="pre">...</span> <span class="pre">end</span></code> statements. For example:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="p">@</span><span class="n">nif</span> <span class="mi">3</span> <span class="n">d</span><span class="o">-&gt;</span><span class="p">(</span><span class="n">i_d</span> <span class="o">&gt;=</span> <span class="n">size</span><span class="p">(</span><span class="n">A</span><span class="p">,</span><span class="n">d</span><span class="p">))</span> <span class="n">d</span><span class="o">-&gt;</span><span class="p">(</span><span class="nb">error</span><span class="p">(</span><span class="s">&quot;Dimension &quot;</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="s">&quot; too big&quot;</span><span class="p">))</span> <span class="n">d</span><span class="o">-&gt;</span><span class="n">println</span><span class="p">(</span><span class="s">&quot;All OK&quot;</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="nd">@nif</span> <span class="mi">3</span> <span class="n">d</span><span class="o">-&gt;</span><span class="p">(</span><span class="n">i_d</span> <span class="o">&gt;=</span> <span class="n">size</span><span class="p">(</span><span class="n">A</span><span class="p">,</span><span class="n">d</span><span class="p">))</span> <span class="n">d</span><span class="o">-&gt;</span><span class="p">(</span><span class="n">error</span><span class="p">(</span><span class="s">&quot;Dimension &quot;</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="s">&quot; too big&quot;</span><span class="p">))</span> <span class="n">d</span><span class="o">-&gt;</span><span class="n">println</span><span class="p">(</span><span class="s">&quot;All OK&quot;</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>would generate:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">if</span> <span class="n">i_1</span> <span class="o">&gt;</span> <span class="n">size</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
-    <span class="nb">error</span><span class="p">(</span><span class="s">&quot;Dimension &quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="s">&quot; too big&quot;</span><span class="p">)</span>
+    <span class="n">error</span><span class="p">(</span><span class="s">&quot;Dimension &quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="s">&quot; too big&quot;</span><span class="p">)</span>
 <span class="k">elseif</span> <span class="n">i_2</span> <span class="o">&gt;</span> <span class="n">size</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
-    <span class="nb">error</span><span class="p">(</span><span class="s">&quot;Dimension &quot;</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="s">&quot; too big&quot;</span><span class="p">)</span>
+    <span class="n">error</span><span class="p">(</span><span class="s">&quot;Dimension &quot;</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="s">&quot; too big&quot;</span><span class="p">)</span>
 <span class="k">else</span>
     <span class="n">println</span><span class="p">(</span><span class="s">&quot;All OK&quot;</span><span class="p">)</span>
 <span class="k">end</span>

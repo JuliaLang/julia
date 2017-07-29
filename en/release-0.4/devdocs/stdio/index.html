@@ -585,7 +585,7 @@ stream, e.g.:</p>
 <div class="highlight-sh"><div class="highlight"><pre><span></span>$ julia -e <span class="s1">&#39;typeof((STDIN, STDOUT, STDERR))&#39;</span>
 <span class="o">(</span>TTY,TTY,TTY<span class="o">)</span>
 
-$ julia -e <span class="s1">&#39;println(typeof((STDIN, STDOUT, STDERR)))&#39;</span> &lt; /dev/null 2&gt;/dev/null
+$ julia -e <span class="s1">&#39;println(typeof((STDIN, STDOUT, STDERR)))&#39;</span> &lt; /dev/null <span class="m">2</span>&gt;/dev/null
 <span class="o">(</span>Base.FS.File,TTY,Base.FS.File<span class="o">)</span>
 
 $ <span class="nb">echo</span> hello <span class="p">|</span> julia -e <span class="s1">&#39;println(typeof((STDIN, STDOUT, STDERR)))&#39;</span> <span class="p">|</span> cat
