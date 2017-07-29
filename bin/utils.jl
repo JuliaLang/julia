@@ -60,3 +60,46 @@ versions_string(a::NTuple{m,Int}, b::NTuple{n,Int}) where {m,n} =
 versions_repr(x) = repr(versions_string(x))
 versions_repr(v::Vector) = length(v) == 1 ? repr(versions_string(v[1])) :
     "[" * join(map(repr∘versions_string, v), ", ") * "]"
+
+## compress per-version data ##
+
+function compress_versions_data(
+    d::Dict{VersionNumber,Dict{String,String}},
+    versions::Vector{VersionNumber},
+)
+    kvs = Dict{Pair{String,String},Vector{VersionNumber}}()
+    for (ver, x) in d, (k, v) in x
+        push!(get!(kvs, k => v, VersionNumber[]), ver)
+    end
+    tx = Tuple{Any,String,String}[]
+    for (kv, vs) in kvs
+        for v in compress_versions(sort!(vs), versions)
+            push!(tx, (v, kv...))
+        end
+    end
+    sort!(tx, by=t->(t[1][1], t[1][2], t[2], t[3]))
+    return Tuple{String,String,String}[
+        (versions_string(t[1]), t[2], t[3]) for t in tx
+    ]
+end
+
+## dict utility functions ##
+
+function invert_map(fwd::Dict{K,V}) where {K,V}
+    rev = Dict{V,Vector{K}}()
+    for (k, v) in fwd
+        push!(get!(rev, v, K[]), k)
+    end
+    return rev
+end
+
+function invert_map(fwd::Dict{Vector{K},V}) where {K,V}
+    rev = Dict{V,Vector{K}}()
+    for (k, v) in fwd
+        append!(get!(rev, v, K[]), k)
+    end
+    return rev
+end
+
+flatten_keys(d::Dict{Vector{K},V}) where {K,V} =
+    isempty(d) ? Dict{K,V}() : Dict{K,V}(k => v for (ks, v) in d for k in ks)

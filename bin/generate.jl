@@ -46,33 +46,64 @@ include("utils.jl")
 include("sha1map.jl")
 const trees = sha1map(pkgs)
 
-for (bucket, b_pkgs) in buckets
-    for (pkg, p) in b_pkgs
-        url = p.url
-        uuid = string(p.uuid)
-        startswith(url, "git://github.com") && (url = "https"*url[4:end])
-        write_toml(prefix, bucket, pkg, "package") do io
-            println(io, "name = ", repr(pkg))
-            println(io, "uuid = ", repr(uuid))
-            println(io, "repo = ", repr(url))
+for (bucket, b_pkgs) in buckets, (pkg, p) in b_pkgs
+    url = p.url
+    uuid = string(p.uuid)
+    startswith(url, "git://github.com") && (url = "https"*url[4:end])
+
+    # package.toml
+    write_toml(prefix, bucket, pkg, "package") do io
+        println(io, "name = ", repr(pkg))
+        println(io, "uuid = ", repr(uuid))
+        println(io, "repo = ", repr(url))
+    end
+
+    # versions.toml
+    write_toml(prefix, bucket, pkg, "versions") do io
+        for (i, (ver, v)) in enumerate(sort!(collect(p.versions), by=first))
+            i > 1 && println(io)
+            println(io, "[", toml_key(string(ver)), "]")
+            println(io, "hash-sha1 = ", repr(trees[uuid][v.sha1]))
         end
-        write_toml(prefix, bucket, pkg, "versions") do io
-            for (i, (ver, v)) in enumerate(sort!(collect(p.versions), by=first))
-                i > 1 && println(io)
-                println(io, "[", toml_key(string(ver)), "]")
-                println(io, "hash-sha1 = ", repr(trees[uuid][v.sha1]))
-            end
+    end
+    versions = sort!(collect(keys(p.versions)))
+
+    function write_versions_data(f::Function, name::String; lt::Function=isless)
+        data = Dict{VersionNumber,Dict{String,String}}()
+        for (ver, v) in p.versions, (dep, d) in v.requires
+            val = f(dep, d)
+            val == nothing && continue
+            haskey(data, ver) || (data[ver] = Dict{String,String}())
+            data[ver][dep] = val
         end
-        verv = filter(vv->!isempty(vv[end].requires), collect(p.versions))
-        !isempty(verv) && write_toml(prefix, bucket, pkg, "requirements") do io
-            for (i, (ver, v)) in enumerate(sort!(verv, by=first))
+        compressed = compress_versions_data(data, versions)
+        !isempty(compressed) && write_toml(prefix, bucket, pkg, name) do io
+            vers = unique(getindex.(compressed, 1))
+            keys = sort!(unique(getindex.(compressed, 2)), lt=lt)
+            what = (vers, keys)
+            ord = (1, 2)
+            for (i, x) in enumerate(what[ord[1]])
                 i > 1 && println(io)
-                println(io, "[", toml_key(string(ver)), "]")
-                for (req, r) in sort!(collect(v.requires), by=first, lt=packagelt)
-                    vers = compress_versions(r.versions, collect(keys(pkgs[req].versions)))
-                    println(io, toml_key(req), " = ", versions_repr(vers))
+                println(io, "[", toml_key(x), "]")
+                for y in what[ord[2]]
+                    for t in compressed
+                        t[ord[1]] == x && t[ord[2]] == y || continue
+                        println(io, toml_key(y), " = ", t[3])
+                    end
                 end
             end
         end
+    end
+
+    # dependencies.toml
+    write_versions_data("dependencies") do dep, d
+        dep != "julia" ? repr(string(pkgs[dep].uuid)) : nothing
+    end
+
+    # compatibility.toml
+    write_versions_data("compatibility", lt=packagelt) do dep, d
+        versions_repr(compress_versions(
+            d.versions, collect(keys(pkgs[dep].versions))
+        ))
     end
 end
