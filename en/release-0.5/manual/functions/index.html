@@ -7,7 +7,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Functions &mdash; Julia Language 0.5.1-pre documentation</title>
+  <title>Functions &mdash; Julia Language 0.5.3-pre documentation</title>
   
 
   
@@ -30,7 +30,7 @@
   
     <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
   
-    <link rel="top" title="Julia Language 0.5.1-pre documentation" href="../../"/>
+    <link rel="top" title="Julia Language 0.5.3-pre documentation" href="../../"/>
         <link rel="next" title="Control Flow" href="../control-flow/"/>
         <link rel="prev" title="Strings" href="../strings/"/> 
 
@@ -107,7 +107,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../strings/#version-number-literals">Version Number Literals</a></li>
 </ul>
 </li>
-<li class="toctree-l1 current"><a class="current reference internal" href="">Functions</a><ul>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Functions</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#argument-passing-behavior">Argument Passing Behavior</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#the-return-keyword">The <code class="docutils literal"><span class="pre">return</span></code> Keyword</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#operators-are-functions">Operators Are Functions</a></li>
@@ -149,6 +149,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../types/#man-parametric-types">Parametric Types</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../types/#type-aliases">Type Aliases</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../types/#operations-on-types">Operations on Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#custom-pretty-printing">Custom pretty-printing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../types/#value-types">&#8220;Value types&#8221;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../types/#nullable-types-representing-missing-values">Nullable Types: Representing Missing Values</a></li>
 </ul>
@@ -580,7 +581,7 @@ to a return value. Julia functions are not pure mathematical functions,
 in the sense that functions can alter and be affected by the global
 state of the program. The basic syntax for defining functions in Julia
 is:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> f</span><span class="p">(</span><span class="n">x</span><span class="p">,</span><span class="n">y</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">f</span><span class="p">(</span><span class="n">x</span><span class="p">,</span><span class="n">y</span><span class="p">)</span>
   <span class="n">x</span> <span class="o">+</span> <span class="n">y</span>
 <span class="k">end</span>
 </pre></div>
@@ -593,7 +594,7 @@ equivalent to the following compact &#8220;assignment form&#8221;:</p>
 </div>
 <p>In the assignment form, the body of the function must be a single
 expression, although it can be a compound expression (see
-<a class="reference internal" href="../control-flow/#man-compound-expressions"><span>Compound Expressions</span></a>). Short, simple
+<a class="reference internal" href="../control-flow/#man-compound-expressions"><span class="std std-ref">Compound Expressions</span></a>). Short, simple
 function definitions are common in Julia. The short function syntax is
 accordingly quite idiomatic, considerably reducing both typing and
 visual noise.</p>
@@ -612,7 +613,7 @@ and can be passed around like any value:</p>
 </div>
 <p>As with variables, Unicode can also be used for function names:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">∑</span><span class="p">(</span><span class="n">x</span><span class="p">,</span><span class="n">y</span><span class="p">)</span> <span class="o">=</span> <span class="n">x</span> <span class="o">+</span> <span class="n">y</span>
-<span class="n">∑</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span><span class="nf"> with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+<span class="n">∑</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span> <span class="n">with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
 </pre></div>
 </div>
 <div class="section" id="argument-passing-behavior">
@@ -634,7 +635,7 @@ section this is the value of the expression <code class="docutils literal"><span
 other imperative or functional languages, the <code class="docutils literal"><span class="pre">return</span></code> keyword causes
 a function to return immediately, providing an expression whose value is
 returned:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> g</span><span class="p">(</span><span class="n">x</span><span class="p">,</span><span class="n">y</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">g</span><span class="p">(</span><span class="n">x</span><span class="p">,</span><span class="n">y</span><span class="p">)</span>
   <span class="k">return</span> <span class="n">x</span> <span class="o">*</span> <span class="n">y</span>
   <span class="n">x</span> <span class="o">+</span> <span class="n">y</span>
 <span class="k">end</span>
@@ -644,7 +645,7 @@ returned:</p>
 is easy to compare these definitions:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">f</span><span class="p">(</span><span class="n">x</span><span class="p">,</span><span class="n">y</span><span class="p">)</span> <span class="o">=</span> <span class="n">x</span> <span class="o">+</span> <span class="n">y</span>
 
-<span class="k">function</span><span class="nf"> g</span><span class="p">(</span><span class="n">x</span><span class="p">,</span><span class="n">y</span><span class="p">)</span>
+<span class="k">function</span> <span class="n">g</span><span class="p">(</span><span class="n">x</span><span class="p">,</span><span class="n">y</span><span class="p">)</span>
   <span class="k">return</span> <span class="n">x</span> <span class="o">*</span> <span class="n">y</span>
   <span class="n">x</span> <span class="o">+</span> <span class="n">y</span>
 <span class="k">end</span>
@@ -663,7 +664,7 @@ function and omit the <code class="docutils literal"><span class="pre">return</s
 flow, however, <code class="docutils literal"><span class="pre">return</span></code> is of real use. Here, for example, is a
 function that computes the hypotenuse length of a right triangle with
 sides of length <em>x</em> and <em>y</em>, avoiding overflow:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> hypot</span><span class="p">(</span><span class="n">x</span><span class="p">,</span><span class="n">y</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">hypot</span><span class="p">(</span><span class="n">x</span><span class="p">,</span><span class="n">y</span><span class="p">)</span>
   <span class="n">x</span> <span class="o">=</span> <span class="n">abs</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
   <span class="n">y</span> <span class="o">=</span> <span class="n">abs</span><span class="p">(</span><span class="n">y</span><span class="p">)</span>
   <span class="k">if</span> <span class="n">x</span> <span class="o">&gt;</span> <span class="n">y</span>
@@ -688,7 +689,7 @@ is the last expression.</p>
 <p>In Julia, most operators are just functions with support for special
 syntax. (The exceptions are operators with special evaluation semantics
 like <code class="docutils literal"><span class="pre">&amp;&amp;</span></code> and <code class="docutils literal"><span class="pre">||</span></code>. These operators cannot be functions since
-<a class="reference internal" href="../control-flow/#man-short-circuit-evaluation"><span>short-circuit evaluation</span></a> requires that
+<a class="reference internal" href="../control-flow/#man-short-circuit-evaluation"><span class="std std-ref">short-circuit evaluation</span></a> requires that
 their operands are not evaluated before evaluation of the operator.)
 Accordingly, you can also apply them using parenthesized argument lists,
 just as you would any other function:</p>
@@ -764,12 +765,12 @@ variable they have been assigned to. They can be used as arguments, and
 they can be returned as values. They can also be created anonymously,
 without being given a name, using either of these syntaxes:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">x</span> <span class="o">-&gt;</span> <span class="n">x</span><span class="o">^</span><span class="mi">2</span> <span class="o">+</span> <span class="mi">2</span><span class="n">x</span> <span class="o">-</span> <span class="mi">1</span>
-<span class="p">(::</span><span class="c">#1) (generic function with 1 method)</span>
+<span class="p">(</span><span class="o">::</span><span class="c">#1) (generic function with 1 method)</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="k">function</span><span class="nf"> </span><span class="o">(</span><span class="n">x</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="k">function</span> <span class="p">(</span><span class="n">x</span><span class="p">)</span>
            <span class="n">x</span><span class="o">^</span><span class="mi">2</span> <span class="o">+</span> <span class="mi">2</span><span class="n">x</span> <span class="o">-</span> <span class="mi">1</span>
        <span class="k">end</span>
-<span class="p">(::</span><span class="c">#3) (generic function with 1 method)</span>
+<span class="p">(</span><span class="o">::</span><span class="c">#3) (generic function with 1 method)</span>
 </pre></div>
 </div>
 <p>This creates a function taking one argument <em>x</em> and returning the
@@ -781,7 +782,7 @@ other functions as arguments. A classic example is <a class="reference internal"
 which applies a function to each value of an array and returns a new
 array containing the resulting values:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">map</span><span class="p">(</span><span class="n">round</span><span class="p">,</span> <span class="p">[</span><span class="mf">1.2</span><span class="p">,</span><span class="mf">3.5</span><span class="p">,</span><span class="mf">1.7</span><span class="p">])</span>
-<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mf">1.0</span>
  <span class="mf">4.0</span>
  <span class="mf">2.0</span>
@@ -793,7 +794,7 @@ a ready-to-use, named function does not exist. In these situations, the
 anonymous function construct allows easy creation of a single-use
 function object without needing a name:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">map</span><span class="p">(</span><span class="n">x</span> <span class="o">-&gt;</span> <span class="n">x</span><span class="o">^</span><span class="mi">2</span> <span class="o">+</span> <span class="mi">2</span><span class="n">x</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
-<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
   <span class="mi">2</span>
  <span class="mi">14</span>
  <span class="o">-</span><span class="mi">2</span>
@@ -813,7 +814,7 @@ values. However, tuples can be created and destructured without needing
 parentheses, thereby providing an illusion that multiple values are
 being returned, rather than a single tuple value. For example, the
 following function returns a pair of values:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">function</span><span class="nf"> foo</span><span class="p">(</span><span class="n">a</span><span class="p">,</span><span class="n">b</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">function</span> <span class="n">foo</span><span class="p">(</span><span class="n">a</span><span class="p">,</span><span class="n">b</span><span class="p">)</span>
          <span class="n">a</span><span class="o">+</span><span class="n">b</span><span class="p">,</span> <span class="n">a</span><span class="o">*</span><span class="n">b</span>
        <span class="k">end</span><span class="p">;</span>
 </pre></div>
@@ -838,7 +839,7 @@ facilitates this:</p>
 </div>
 <p>You can also return multiple values via an explicit usage of the
 <code class="docutils literal"><span class="pre">return</span></code> keyword:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> foo</span><span class="p">(</span><span class="n">a</span><span class="p">,</span><span class="n">b</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">foo</span><span class="p">(</span><span class="n">a</span><span class="p">,</span><span class="n">b</span><span class="p">)</span>
   <span class="k">return</span> <span class="n">a</span><span class="o">+</span><span class="n">b</span><span class="p">,</span> <span class="n">a</span><span class="o">*</span><span class="n">b</span>
 <span class="k">end</span>
 </pre></div>
@@ -853,7 +854,7 @@ functions, which is short for &#8220;variable number of arguments&#8221;. You ca
 define a varargs function by following the last argument with an
 ellipsis:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">bar</span><span class="p">(</span><span class="n">a</span><span class="p">,</span><span class="n">b</span><span class="p">,</span><span class="n">x</span><span class="o">...</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="n">a</span><span class="p">,</span><span class="n">b</span><span class="p">,</span><span class="n">x</span><span class="p">)</span>
-<span class="n">bar</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span><span class="nf"> with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+<span class="n">bar</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span> <span class="n">with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>The variables <code class="docutils literal"><span class="pre">a</span></code> and <code class="docutils literal"><span class="pre">b</span></code> are bound to the first two argument values
@@ -874,7 +875,7 @@ the zero or more values passed to <code class="docutils literal"><span class="pr
 </div>
 <p>In all these cases, <code class="docutils literal"><span class="pre">x</span></code> is bound to a tuple of the trailing values
 passed to <code class="docutils literal"><span class="pre">bar</span></code>.</p>
-<p>It is possible to constrain the number of values passed as a variable argument; this will be discussed later in <a class="reference internal" href="../methods/#man-vararg-fixedlen"><span>Parametrically-constrained Varargs methods</span></a>.</p>
+<p>It is possible to constrain the number of values passed as a variable argument; this will be discussed later in <a class="reference internal" href="../methods/#man-vararg-fixedlen"><span class="std std-ref">Parametrically-constrained Varargs methods</span></a>.</p>
 <p>On the flip side, it is often handy to &#8220;splice&#8221; the values contained in
 an iterable collection into a function call as individual arguments. To
 do this, one also uses <code class="docutils literal"><span class="pre">...</span></code> but in the function call instead:</p>
@@ -904,7 +905,7 @@ however:</p>
 <p>Furthermore, the iterable object spliced into a function call need not
 be a tuple:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">x</span> <span class="o">=</span> <span class="p">[</span><span class="mi">3</span><span class="p">,</span><span class="mi">4</span><span class="p">]</span>
-<span class="mi">2</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">2</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">3</span>
  <span class="mi">4</span>
 
@@ -912,7 +913,7 @@ be a tuple:</p>
 <span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,(</span><span class="mi">3</span><span class="p">,</span><span class="mi">4</span><span class="p">))</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">x</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="mi">4</span><span class="p">]</span>
-<span class="mi">4</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">4</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>
  <span class="mi">2</span>
  <span class="mi">3</span>
@@ -927,7 +928,7 @@ function (although it often is):</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">baz</span><span class="p">(</span><span class="n">a</span><span class="p">,</span><span class="n">b</span><span class="p">)</span> <span class="o">=</span> <span class="n">a</span> <span class="o">+</span> <span class="n">b</span><span class="p">;</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">args</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">]</span>
-<span class="mi">2</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">2</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>
  <span class="mi">2</span>
 
@@ -935,15 +936,15 @@ function (although it often is):</p>
 <span class="mi">3</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">args</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">]</span>
-<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>
  <span class="mi">2</span>
  <span class="mi">3</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">baz</span><span class="p">(</span><span class="n">args</span><span class="o">...</span><span class="p">)</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">MethodError</span><span class="p">:</span> <span class="n">no</span> <span class="n">method</span> <span class="n">matching</span> <span class="n">baz</span><span class="p">(::</span><span class="kt">Int64</span><span class="p">,</span> <span class="p">::</span><span class="kt">Int64</span><span class="p">,</span> <span class="p">::</span><span class="kt">Int64</span><span class="p">)</span>
-<span class="n">Closest</span> <span class="n">candidates</span> <span class="n">are</span><span class="p">:</span>
-  <span class="n">baz</span><span class="p">(::</span><span class="kt">Any</span><span class="p">,</span> <span class="p">::</span><span class="kt">Any</span><span class="p">)</span> <span class="n">at</span> <span class="n">none</span><span class="p">:</span><span class="mi">1</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="kt">MethodError</span><span class="o">:</span> <span class="n">no</span> <span class="n">method</span> <span class="n">matching</span> <span class="n">baz</span><span class="p">(</span><span class="o">::</span><span class="kt">Int64</span><span class="p">,</span> <span class="o">::</span><span class="kt">Int64</span><span class="p">,</span> <span class="o">::</span><span class="kt">Int64</span><span class="p">)</span>
+<span class="n">Closest</span> <span class="n">candidates</span> <span class="n">are</span><span class="o">:</span>
+  <span class="n">baz</span><span class="p">(</span><span class="o">::</span><span class="kt">Any</span><span class="p">,</span> <span class="o">::</span><span class="kt">Any</span><span class="p">)</span> <span class="n">at</span> <span class="n">none</span><span class="o">:</span><span class="mi">1</span>
 <span class="o">...</span>
 </pre></div>
 </div>
@@ -958,7 +959,7 @@ might not need to be passed explicitly in every call. For example, the
 library function <a class="reference internal" href="../../stdlib/numbers/#Base.parse" title="Base.parse"><code class="xref jl jl-func docutils literal"><span class="pre">parse(type,num,base)</span></code></a> interprets a string as a number
 in some base. The <code class="docutils literal"><span class="pre">base</span></code> argument defaults to <code class="docutils literal"><span class="pre">10</span></code>. This behavior can be
 expressed concisely as:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> parse</span><span class="p">(</span><span class="n">type</span><span class="p">,</span> <span class="n">num</span><span class="p">,</span> <span class="n">base</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">parse</span><span class="p">(</span><span class="k">type</span><span class="p">,</span> <span class="n">num</span><span class="p">,</span> <span class="n">base</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
     <span class="c">###</span>
 <span class="k">end</span>
 </pre></div>
@@ -978,7 +979,7 @@ specified:</p>
 </div>
 <p>Optional arguments are actually just a convenient syntax for writing
 multiple method definitions with different numbers of arguments
-(see <a class="reference internal" href="../methods/#man-note-on-optional-and-keyword-arguments"><span>Note on Optional and keyword Arguments</span></a>).</p>
+(see <a class="reference internal" href="../methods/#man-note-on-optional-and-keyword-arguments"><span class="std std-ref">Note on Optional and keyword Arguments</span></a>).</p>
 </div>
 <div class="section" id="keyword-arguments">
 <h2>Keyword Arguments<a class="headerlink" href="#keyword-arguments" title="Permalink to this headline">¶</a></h2>
@@ -996,7 +997,7 @@ becomes possible to pass any subset of a large number of arguments, in
 any order.</p>
 <p>Functions with keyword arguments are defined using a semicolon in the
 signature:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> plot</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">;</span> <span class="n">style</span><span class="o">=</span><span class="s">&quot;solid&quot;</span><span class="p">,</span> <span class="n">width</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s">&quot;black&quot;</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">plot</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">;</span> <span class="n">style</span><span class="o">=</span><span class="s">&quot;solid&quot;</span><span class="p">,</span> <span class="n">width</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">color</span><span class="o">=</span><span class="s">&quot;black&quot;</span><span class="p">)</span>
     <span class="c">###</span>
 <span class="k">end</span>
 </pre></div>
@@ -1010,14 +1011,14 @@ for passing varargs or computed keywords as described below.</p>
 left-to-right order. Therefore default expressions may refer to
 prior keyword arguments.</p>
 <p>The types of keyword arguments can be made explicit as follows:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> f</span><span class="p">(;</span><span class="n">x</span><span class="p">::</span><span class="kt">Int64</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">f</span><span class="p">(;</span><span class="n">x</span><span class="o">::</span><span class="kt">Int64</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
     <span class="c">###</span>
 <span class="k">end</span>
 </pre></div>
 </div>
 <p>Extra keyword arguments can be collected using <code class="docutils literal"><span class="pre">...</span></code>, as in varargs
 functions:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> f</span><span class="p">(</span><span class="n">x</span><span class="p">;</span> <span class="n">y</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">kwargs</span><span class="o">...</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">f</span><span class="p">(</span><span class="n">x</span><span class="p">;</span> <span class="n">y</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">kwargs</span><span class="o">...</span><span class="p">)</span>
     <span class="c">###</span>
 <span class="k">end</span>
 </pre></div>
@@ -1040,7 +1041,7 @@ values are evaluated. When optional argument default expressions are
 evaluated, only <em>previous</em> arguments are in scope. In contrast, <em>all</em>
 the arguments are in scope when keyword arguments default expressions
 are evaluated. For example, given this definition:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> f</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">a</span><span class="o">=</span><span class="n">b</span><span class="p">,</span> <span class="n">b</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">f</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">a</span><span class="o">=</span><span class="n">b</span><span class="p">,</span> <span class="n">b</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
     <span class="c">###</span>
 <span class="k">end</span>
 </pre></div>
@@ -1103,11 +1104,11 @@ ensuring that the opened file is eventually closed:</p>
 </pre></div>
 </div>
 <p>This is accomplished by the following definition:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> open</span><span class="p">(</span><span class="n">f</span><span class="p">::</span><span class="n">Function</span><span class="p">,</span> <span class="n">args</span><span class="o">...</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">open</span><span class="p">(</span><span class="n">f</span><span class="o">::</span><span class="kt">Function</span><span class="p">,</span> <span class="n">args</span><span class="o">...</span><span class="p">)</span>
     <span class="n">io</span> <span class="o">=</span> <span class="n">open</span><span class="p">(</span><span class="n">args</span><span class="o">...</span><span class="p">)</span>
     <span class="k">try</span>
         <span class="n">f</span><span class="p">(</span><span class="n">io</span><span class="p">)</span>
-    <span class="n">finally</span>
+    <span class="k">finally</span>
         <span class="n">close</span><span class="p">(</span><span class="n">io</span><span class="p">)</span>
     <span class="k">end</span>
 <span class="k">end</span>
@@ -1119,7 +1120,7 @@ in the <code class="docutils literal"><span class="pre">do</span> <span class="p
 will make sure that the stream is properly closed, regardless of
 whether your function exited normally or threw an exception.
 (The <code class="docutils literal"><span class="pre">try/finally</span></code> construct will be described in
-<a class="reference internal" href="../control-flow/#man-control-flow"><span>Control Flow</span></a>.)</p>
+<a class="reference internal" href="../control-flow/#man-control-flow"><span class="std std-ref">Control Flow</span></a>.)</p>
 <p>With the <code class="docutils literal"><span class="pre">do</span></code> block syntax, it helps to check the documentation or
 implementation to know how the arguments of the user function are
 initialized.</p>
@@ -1133,7 +1134,7 @@ convenient for data processing, but in other languages vectorization is also
 often required for performance: if loops are slow, the &#8220;vectorized&#8221; version of a
 function can call fast library code written in a low-level language.   In Julia,
 vectorized functions are <em>not</em> required for performance, and indeed it is often
-beneficial to write your own loops (see <a class="reference internal" href="../performance-tips/#man-performance-tips"><span>Performance Tips</span></a>), but they
+beneficial to write your own loops (see <a class="reference internal" href="../performance-tips/#man-performance-tips"><span class="std std-ref">Performance Tips</span></a>), but they
 can still be convenient.  Therefore, <em>any</em> Julia function <code class="docutils literal"><span class="pre">f</span></code> can be applied
 elementwise to any array (or other collection) with the syntax <code class="docutils literal"><span class="pre">f.(A)</span></code>.</p>
 <p>Of course, you can omit the dot if you write a specialized &#8220;vector&#8221; method
@@ -1143,7 +1144,7 @@ which functions you want to vectorize.</p>
 <p>More generally, <code class="docutils literal"><span class="pre">f.(args...)</span></code> is actually equivalent to
 <code class="docutils literal"><span class="pre">broadcast(f,</span> <span class="pre">args...)</span></code>, which allows you to operate on multiple
 arrays (even of different shapes), or a mix of arrays and scalars
-(see <a class="reference internal" href="../arrays/#man-broadcasting"><span>Broadcasting</span></a>).  For example, if you have <code class="docutils literal"><span class="pre">f(x,y)</span> <span class="pre">=</span> <span class="pre">3x</span> <span class="pre">+</span> <span class="pre">4y</span></code>,
+(see <a class="reference internal" href="../arrays/#man-broadcasting"><span class="std std-ref">Broadcasting</span></a>).  For example, if you have <code class="docutils literal"><span class="pre">f(x,y)</span> <span class="pre">=</span> <span class="pre">3x</span> <span class="pre">+</span> <span class="pre">4y</span></code>,
 then <code class="docutils literal"><span class="pre">f.(pi,A)</span></code> will return a new array consisting of <code class="docutils literal"><span class="pre">f(pi,a)</span></code> for each
 <code class="docutils literal"><span class="pre">a</span></code> in <code class="docutils literal"><span class="pre">A</span></code>, and <code class="docutils literal"><span class="pre">f.(vector1,vector2)</span></code> will return a new vector
 consisting of <code class="docutils literal"><span class="pre">f(vector1[i],vector2[i])</span></code> for each index <code class="docutils literal"><span class="pre">i</span></code>
@@ -1162,7 +1163,7 @@ because of the intervening <code class="docutils literal"><span class="pre">sort
 <p>Finally, the maximum efficiency is typically achieved when the output
 array of a vectorized operation is <em>pre-allocated</em>, so that repeated
 calls do not allocate new arrays over and over again for the results
-(<a class="reference internal" href="../performance-tips/#man-preallocation"><span>Pre-allocating outputs</span></a>:).   A convenient syntax for this is
+(<a class="reference internal" href="../performance-tips/#man-preallocation"><span class="std std-ref">Pre-allocating outputs</span></a>:).   A convenient syntax for this is
 <code class="docutils literal"><span class="pre">X</span> <span class="pre">.=</span> <span class="pre">...</span></code>, which is equivalent to <code class="docutils literal"><span class="pre">broadcast!(identity,</span> <span class="pre">X,</span> <span class="pre">...)</span></code>
 except that, as above, the <code class="docutils literal"><span class="pre">broadcast!</span></code> loop is fused with any nested
 &#8220;dot&#8221; calls.  For example, <code class="docutils literal"><span class="pre">X</span> <span class="pre">.=</span> <span class="pre">sin.(Y)</span></code> is equivalent to
@@ -1184,9 +1185,9 @@ defining functions. Julia has a sophisticated type system and allows
 multiple dispatch on argument types. None of the examples given here
 provide any type annotations on their arguments, meaning that they are
 applicable to all types of arguments. The type system is described in
-<a class="reference internal" href="../types/#man-types"><span>Types</span></a> and defining a function in terms of methods chosen
+<a class="reference internal" href="../types/#man-types"><span class="std std-ref">Types</span></a> and defining a function in terms of methods chosen
 by multiple dispatch on run-time argument types is described in
-<a class="reference internal" href="../methods/#man-methods"><span>Methods</span></a>.</p>
+<a class="reference internal" href="../methods/#man-methods"><span class="std std-ref">Methods</span></a>.</p>
 </div>
 </div>
 
@@ -1226,7 +1227,7 @@ by multiple dispatch on run-time argument types is described in
     <script type="text/javascript">
         var DOCUMENTATION_OPTIONS = {
             URL_ROOT:'../../',
-            VERSION:'0.5.1-pre',
+            VERSION:'0.5.3-pre',
             COLLAPSE_INDEX:false,
             FILE_SUFFIX:'',
             HAS_SOURCE:  true

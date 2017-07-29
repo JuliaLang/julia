@@ -7,7 +7,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Embedding Julia &mdash; Julia Language 0.5.1-pre documentation</title>
+  <title>Embedding Julia &mdash; Julia Language 0.5.3-pre documentation</title>
   
 
   
@@ -30,7 +30,7 @@
   
     <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
   
-    <link rel="top" title="Julia Language 0.5.1-pre documentation" href="../../"/>
+    <link rel="top" title="Julia Language 0.5.3-pre documentation" href="../../"/>
         <link rel="next" title="Packages" href="../packages/"/>
         <link rel="prev" title="Interacting With Julia" href="../interacting-with-julia/"/> 
 
@@ -149,6 +149,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../types/#man-parametric-types">Parametric Types</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../types/#type-aliases">Type Aliases</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../types/#operations-on-types">Operations on Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#custom-pretty-printing">Custom pretty-printing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../types/#value-types">&#8220;Value types&#8221;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../types/#nullable-types-representing-missing-values">Nullable Types: Representing Missing Values</a></li>
 </ul>
@@ -286,7 +287,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../interacting-with-julia/#customizing-colors">Customizing Colors</a></li>
 </ul>
 </li>
-<li class="toctree-l1 current"><a class="current reference internal" href="">Embedding Julia</a><ul>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Embedding Julia</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#high-level-embedding">High-Level Embedding</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#converting-types">Converting Types</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#calling-julia-functions">Calling Julia Functions</a></li>
@@ -575,7 +576,7 @@
             
   <div class="section" id="embedding-julia">
 <span id="man-embedding"></span><h1>Embedding Julia<a class="headerlink" href="#embedding-julia" title="Permalink to this headline">¶</a></h1>
-<p>As we have seen in <a class="reference internal" href="../calling-c-and-fortran-code/#man-calling-c-and-fortran-code"><span>Calling C and Fortran Code</span></a>, Julia has a simple and efficient way to call functions written in C. But there are situations where the opposite is needed: calling Julia function from C code. This can be used to integrate Julia code into a larger C/C++ project, without the need to rewrite everything in C/C++. Julia has a C API to make this possible. As almost all programming languages have some way to call C functions, the Julia C API can also be used to build further language bridges (e.g. calling Julia from Python or C#).</p>
+<p>As we have seen in <a class="reference internal" href="../calling-c-and-fortran-code/#man-calling-c-and-fortran-code"><span class="std std-ref">Calling C and Fortran Code</span></a>, Julia has a simple and efficient way to call functions written in C. But there are situations where the opposite is needed: calling Julia function from C code. This can be used to integrate Julia code into a larger C/C++ project, without the need to rewrite everything in C/C++. Julia has a C API to make this possible. As almost all programming languages have some way to call C functions, the Julia C API can also be used to build further language bridges (e.g. calling Julia from Python or C#).</p>
 <div class="section" id="high-level-embedding">
 <h2>High-Level Embedding<a class="headerlink" href="#high-level-embedding" title="Permalink to this headline">¶</a></h2>
 <p>We start with a simple C program that initializes Julia and calls some Julia code:</p>
@@ -910,7 +911,7 @@ As always, be sure to keep a reference to the array while it is in use.</p>
     <script type="text/javascript">
         var DOCUMENTATION_OPTIONS = {
             URL_ROOT:'../../',
-            VERSION:'0.5.1-pre',
+            VERSION:'0.5.3-pre',
             COLLAPSE_INDEX:false,
             FILE_SUFFIX:'',
             HAS_SOURCE:  true

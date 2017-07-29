@@ -7,7 +7,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Mathematics &mdash; Julia Language 0.5.1-pre documentation</title>
+  <title>Mathematics &mdash; Julia Language 0.5.3-pre documentation</title>
   
 
   
@@ -30,7 +30,7 @@
   
     <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
   
-    <link rel="top" title="Julia Language 0.5.1-pre documentation" href="../../"/>
+    <link rel="top" title="Julia Language 0.5.3-pre documentation" href="../../"/>
         <link rel="next" title="Numbers" href="../numbers/"/>
         <link rel="prev" title="Collections and Data Structures" href="../collections/"/> 
 
@@ -149,6 +149,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#man-parametric-types">Parametric Types</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#type-aliases">Type Aliases</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#operations-on-types">Operations on Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/types/#custom-pretty-printing">Custom pretty-printing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#value-types">&#8220;Value types&#8221;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#nullable-types-representing-missing-values">Nullable Types: Representing Missing Values</a></li>
 </ul>
@@ -426,7 +427,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../collections/#heap-functions">Heap Functions</a></li>
 </ul>
 </li>
-<li class="toctree-l1 current"><a class="current reference internal" href="">Mathematics</a><ul>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Mathematics</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#mathematical-operators">Mathematical Operators</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#mathematical-functions">Mathematical Functions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#statistics">Statistics</a></li>
@@ -761,11 +762,11 @@
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">rationalize</span><span class="p">(</span><span class="mf">5.6</span><span class="p">)</span>
 <span class="mi">28</span><span class="o">//</span><span class="mi">5</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">a</span> <span class="o">=</span> <span class="n">rationalize</span><span class="p">(</span><span class="n">BigInt</span><span class="p">,</span> <span class="mf">10.3</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">a</span> <span class="o">=</span> <span class="n">rationalize</span><span class="p">(</span><span class="kt">BigInt</span><span class="p">,</span> <span class="mf">10.3</span><span class="p">)</span>
 <span class="mi">103</span><span class="o">//</span><span class="mi">10</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">num</span><span class="p">(</span><span class="n">a</span><span class="p">))</span>
-<span class="n">BigInt</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">typeof</span><span class="p">(</span><span class="n">num</span><span class="p">(</span><span class="n">a</span><span class="p">))</span>
+<span class="kt">BigInt</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1423,11 +1424,11 @@
 <div class="last highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">x</span> <span class="o">=</span> <span class="mf">1.15</span>
 <span class="mf">1.15</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">sprintf</span> <span class="s">&quot;</span><span class="si">%.20f</span><span class="s">&quot;</span> <span class="n">x</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nd">@sprintf</span> <span class="s">&quot;</span><span class="si">%.20f</span><span class="s">&quot;</span> <span class="n">x</span>
 <span class="s">&quot;1.14999999999999991118&quot;</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">x</span> <span class="o">&lt;</span> <span class="mi">115</span><span class="o">//</span><span class="mi">100</span>
-<span class="n">true</span>
+<span class="kc">true</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">round</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
 <span class="mf">1.2</span>
@@ -1557,7 +1558,7 @@
 <code class="descname">clamp</code><span class="sig-paren">(</span><em>x</em>, <em>lo</em>, <em>hi</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.clamp" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return <code class="docutils literal"><span class="pre">x</span></code> if <code class="docutils literal"><span class="pre">lo</span> <span class="pre">&lt;=</span> <span class="pre">x</span> <span class="pre">&lt;=</span> <span class="pre">hi</span></code>. If <code class="docutils literal"><span class="pre">x</span> <span class="pre">&lt;</span> <span class="pre">lo</span></code>, return <code class="docutils literal"><span class="pre">lo</span></code>. If <code class="docutils literal"><span class="pre">x</span> <span class="pre">&gt;</span> <span class="pre">hi</span></code>, return <code class="docutils literal"><span class="pre">hi</span></code>. Arguments are promoted to a common type. Operates elementwise over <code class="docutils literal"><span class="pre">x</span></code> if <code class="docutils literal"><span class="pre">x</span></code> is an array.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">clamp</span><span class="p">([</span><span class="nb">pi</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="n">big</span><span class="p">(</span><span class="mf">10.</span><span class="p">)],</span> <span class="mf">2.</span><span class="p">,</span> <span class="mf">9.</span><span class="p">)</span>
-<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="n">BigFloat</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">BigFloat</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mf">3.141592653589793238462643383279502884197169399375105820974944592307816406286198</span>
  <span class="mf">2.000000000000000000000000000000000000000000000000000000000000000000000000000000</span>
  <span class="mf">9.000000000000000000000000000000000000000000000000000000000000000000000000000000</span>
@@ -2182,7 +2183,7 @@
 <dt>
 <code class="descname">middle</code><span class="sig-paren">(</span><em>range</em><span class="sig-paren">)</span></dt>
 <dd><p>Compute the middle of a range, which consists of computing the mean of its extrema. Since a range is sorted, the mean is performed with the first and last element.</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">middle</span><span class="p">(</span><span class="mi">1</span><span class="p">:</span><span class="mi">10</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">middle</span><span class="p">(</span><span class="mi">1</span><span class="o">:</span><span class="mi">10</span><span class="p">)</span>
 <span class="mf">5.5</span>
 </pre></div>
 </div>
@@ -2193,7 +2194,7 @@
 <code class="descname">middle</code><span class="sig-paren">(</span><em>a</em><span class="sig-paren">)</span></dt>
 <dd><p>Compute the middle of an array <code class="docutils literal"><span class="pre">a</span></code>, which consists of finding its extrema and then computing their mean.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">a</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mf">3.6</span><span class="p">,</span><span class="mf">10.9</span><span class="p">]</span>
-<span class="mi">4</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">4</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
   <span class="mf">1.0</span>
   <span class="mf">2.0</span>
   <span class="mf">3.6</span>
@@ -2325,7 +2326,7 @@ implemented by calling functions from <a class="reference external" href="http:/
 <p class="first admonition-title">Note</p>
 <ul class="last simple">
 <li>Julia starts FFTW up with 1 thread by default. Higher performance is usually possible by increasing number of threads. Use <code class="docutils literal"><span class="pre">FFTW.set_num_threads(Sys.CPU_CORES)</span></code> to use as many threads as cores on your system.</li>
-<li>This performs a multidimensional FFT by default. FFT libraries in other languages such as Python and Octave perform a one-dimensional FFT along the first non-singleton dimension of the array. This is worth noting while performing comparisons. For more details, refer to the <a class="reference internal" href="../../manual/noteworthy-differences/#man-noteworthy-differences"><span>Noteworthy Differences from other Languages</span></a> section of the manual.</li>
+<li>This performs a multidimensional FFT by default. FFT libraries in other languages such as Python and Octave perform a one-dimensional FFT along the first non-singleton dimension of the array. This is worth noting while performing comparisons. For more details, refer to the <a class="reference internal" href="../../manual/noteworthy-differences/#man-noteworthy-differences"><span class="std std-ref">Noteworthy Differences from other Languages</span></a> section of the manual.</li>
 </ul>
 </div>
 </dd></dl>
@@ -2646,7 +2647,7 @@ some built-in integration support in Julia.</p>
     <script type="text/javascript">
         var DOCUMENTATION_OPTIONS = {
             URL_ROOT:'../../',
-            VERSION:'0.5.1-pre',
+            VERSION:'0.5.3-pre',
             COLLAPSE_INDEX:false,
             FILE_SUFFIX:'',
             HAS_SOURCE:  true

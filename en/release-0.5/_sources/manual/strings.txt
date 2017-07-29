@@ -290,14 +290,14 @@ such an invalid byte index, an error is thrown:
     julia> s[2]
     ERROR: UnicodeError: invalid character index
      in slow_utf8_next(::Array{UInt8,1}, ::UInt8, ::Int64) at ./strings/string.jl:67
-     in next at ./strings/string.jl:92 [inlined]
+     in next at ./strings/string.jl:96 [inlined]
      in getindex(::String, ::Int64) at ./strings/basic.jl:70
      ...
 
     julia> s[3]
     ERROR: UnicodeError: invalid character index
      in slow_utf8_next(::Array{UInt8,1}, ::UInt8, ::Int64) at ./strings/string.jl:67
-     in next at ./strings/string.jl:92 [inlined]
+     in next at ./strings/string.jl:96 [inlined]
      in getindex(::String, ::Int64) at ./strings/basic.jl:70
      ...
 
@@ -554,7 +554,7 @@ contained in a string:
     julia> contains("Xylophon", 'o')
     ERROR: MethodError: no method matching contains(::String, ::Char)
     Closest candidates are:
-      contains(!Matched::Function, ::Any, !Matched::Any) at reduce.jl:489
+      contains(!Matched::Function, ::Any, !Matched::Any) at reduce.jl:504
       contains(::AbstractString, !Matched::AbstractString) at strings/search.jl:310
      ...
 
@@ -911,9 +911,9 @@ specific continuation bytes — do not form valid UTF-8 data, whereas the
 latter escapes all represent Unicode code points with two-byte
 encodings.
 
-If this is all extremely confusing, try reading `"The Absolute Minimum
-Every Software Developer Absolutely, Positively Must Know About Unicode
-and Character Sets" <http://www.joelonsoftware.com/articles/Unicode.html>`_.
+If this is all extremely confusing, try reading `"The Absolute Minimum Every
+Software Developer Absolutely, Positively Must Know About Unicode and Character Sets"
+<https://www.joelonsoftware.com/2003/10/08/the-absolute-minimum-every-software-developer-absolutely-positively-must-know-about-unicode-and-character-sets-no-excuses/>`_.
 It's an excellent introduction to Unicode and UTF-8, and may help alleviate
 some confusion regarding the matter.
 

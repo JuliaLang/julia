@@ -7,7 +7,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Scope of Variables &mdash; Julia Language 0.5.1-pre documentation</title>
+  <title>Scope of Variables &mdash; Julia Language 0.5.3-pre documentation</title>
   
 
   
@@ -30,7 +30,7 @@
   
     <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
   
-    <link rel="top" title="Julia Language 0.5.1-pre documentation" href="../../"/>
+    <link rel="top" title="Julia Language 0.5.3-pre documentation" href="../../"/>
         <link rel="next" title="Types" href="../types/"/>
         <link rel="prev" title="Control Flow" href="../control-flow/"/> 
 
@@ -132,7 +132,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../control-flow/#tasks-aka-coroutines">Tasks (aka Coroutines)</a></li>
 </ul>
 </li>
-<li class="toctree-l1 current"><a class="current reference internal" href="">Scope of Variables</a><ul>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Scope of Variables</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#global-scope">Global Scope</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#local-scope">Local Scope</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#constants">Constants</a></li>
@@ -149,6 +149,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../types/#man-parametric-types">Parametric Types</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../types/#type-aliases">Type Aliases</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../types/#operations-on-types">Operations on Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#custom-pretty-printing">Custom pretty-printing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../types/#value-types">&#8220;Value types&#8221;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../types/#nullable-types-representing-missing-values">Nullable Types: Representing Missing Values</a></li>
 </ul>
@@ -603,21 +604,21 @@ introducing scope blocks are:</p>
 </tr>
 </thead>
 <tbody valign="top">
-<tr class="row-even"><td><a class="reference internal" href="#man-global"><span>global</span></a></td>
+<tr class="row-even"><td><a class="reference internal" href="#man-global"><span class="std std-ref">global</span></a></td>
 <td colspan="2">module, baremodule, at interactive prompt (REPL)</td>
 </tr>
-<tr class="row-odd"><td rowspan="2"><a class="reference internal" href="#man-local-scope"><span>local</span></a></td>
-<td><a class="reference internal" href="#man-soft-scope"><span>soft</span></a></td>
+<tr class="row-odd"><td rowspan="2"><a class="reference internal" href="#man-local-scope"><span class="std std-ref">local</span></a></td>
+<td><a class="reference internal" href="#man-soft-scope"><span class="std std-ref">soft</span></a></td>
 <td>for, while, comprehensions,
 try-catch-finally, let</td>
 </tr>
-<tr class="row-even"><td><a class="reference internal" href="#man-hard-scope"><span>hard</span></a></td>
+<tr class="row-even"><td><a class="reference internal" href="#man-hard-scope"><span class="std std-ref">hard</span></a></td>
 <td>functions (either syntax, anonymous &amp; do-blocks),
 type, immutable, macro</td>
 </tr>
 </tbody>
 </table>
-<p>Notably missing from this table are <a class="reference internal" href="../control-flow/#man-compound-expressions"><span>begin blocks</span></a> and <a class="reference internal" href="../control-flow/#man-conditional-evaluation"><span>if blocks</span></a>, which do <em>not</em> introduce new scope
+<p>Notably missing from this table are <a class="reference internal" href="../control-flow/#man-compound-expressions"><span class="std std-ref">begin blocks</span></a> and <a class="reference internal" href="../control-flow/#man-conditional-evaluation"><span class="std std-ref">if blocks</span></a>, which do <em>not</em> introduce new scope
 blocks.  All three types of scopes follow somewhat different rules
 which will be explained below as well as some extra rules for
 certain blocks.</p>
@@ -648,7 +649,7 @@ from the source code alone.</p>
 <p><em>Each module introduces a new global scope</em>, separate from the global
 scope of all other modules; there is no all-encompassing global scope.
 Modules can introduce variables of other modules into their scope
-through the <a class="reference internal" href="../modules/#man-modules"><span>using or import</span></a> statements or through
+through the <a class="reference internal" href="../modules/#man-modules"><span class="std std-ref">using or import</span></a> statements or through
 qualified access using the dot-notation, i.e. each module is a
 so-called <em>namespace</em>.  Note that variable bindings can only be
 changed within their global scope and not from an outside module.</p>
@@ -675,7 +676,7 @@ the module <code class="docutils literal"><span class="pre">Main</span></code>.<
 <div class="section" id="local-scope">
 <span id="man-local-scope"></span><h2>Local Scope<a class="headerlink" href="#local-scope" title="Permalink to this headline">¶</a></h2>
 <p>A new local scope is introduced by most code-blocks, see above
-<a class="reference internal" href="#man-scope-table"><span>table</span></a> for a complete list.  A local scope
+<a class="reference internal" href="#man-scope-table"><span class="std std-ref">table</span></a> for a complete list.  A local scope
 <em>usually</em> inherits all the variables from its parent scope, both for
 reading and writing.  There are two subtypes of local scopes, hard and
 soft, with slightly different rules concerning what variables are
@@ -686,12 +687,12 @@ scope through some sort of qualified access.</p>
 scopes.  A newly introduced variable in a local scope does not
 back-propagate to its parent scope.  For example, here the <code class="docutils literal"><span class="pre">z</span></code> is not
 introduced into the top-level scope:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="mi">10</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="o">:</span><span class="mi">10</span>
     <span class="n">z</span> <span class="o">=</span> <span class="n">i</span>
 <span class="k">end</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">z</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">UndefVarError</span><span class="p">:</span> <span class="n">z</span> <span class="n">not</span> <span class="n">defined</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="kt">UndefVarError</span><span class="o">:</span> <span class="n">z</span> <span class="n">not</span> <span class="n">defined</span>
 </pre></div>
 </div>
 <p>(Note, in this and all following examples it is assumed that their
@@ -700,7 +701,7 @@ newly started REPL.)</p>
 <p>Inside a local scope a variable can be forced to be a local variable
 using the <code class="docutils literal"><span class="pre">local</span></code> keyword:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">x</span> <span class="o">=</span> <span class="mi">0</span>
-<span class="k">for</span> <span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="mi">10</span>
+<span class="k">for</span> <span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="o">:</span><span class="mi">10</span>
     <span class="kd">local</span> <span class="n">x</span>
     <span class="n">x</span> <span class="o">=</span> <span class="n">i</span> <span class="o">+</span> <span class="mi">1</span>
 <span class="k">end</span>
@@ -711,7 +712,7 @@ using the <code class="docutils literal"><span class="pre">local</span></code> k
 </div>
 <p>Inside a local scope a new global variable can be defined using the
 keyword <code class="docutils literal"><span class="pre">global</span></code>:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="mi">10</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="o">:</span><span class="mi">10</span>
     <span class="kd">global</span> <span class="n">z</span>
     <span class="n">z</span> <span class="o">=</span> <span class="n">i</span>
 <span class="k">end</span>
@@ -723,7 +724,7 @@ keyword <code class="docutils literal"><span class="pre">global</span></code>:</
 <p>The location of both the <code class="docutils literal"><span class="pre">local</span></code> and <code class="docutils literal"><span class="pre">global</span></code> keywords within the
 scope block is irrelevant.  The following is equivalent to the last
 example (although stylistically worse):</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="mi">10</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="o">:</span><span class="mi">10</span>
     <span class="n">z</span> <span class="o">=</span> <span class="n">i</span>
     <span class="kd">global</span> <span class="n">z</span>
 <span class="k">end</span>
@@ -734,7 +735,7 @@ example (although stylistically worse):</p>
 </div>
 <p>Multiple global or local definitions can be on one line and can also
 be paired with assignments:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="mi">10</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="o">:</span><span class="mi">10</span>
     <span class="kd">global</span> <span class="n">x</span><span class="o">=</span><span class="n">i</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="n">z</span>
     <span class="kd">local</span> <span class="n">a</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">b</span> <span class="p">,</span> <span class="n">c</span><span class="o">=</span><span class="mi">1</span>
 <span class="k">end</span>
@@ -748,13 +749,13 @@ scope unless a variable is specifically marked with the keyword
 <code class="docutils literal"><span class="pre">local</span></code>.</div></blockquote>
 <p>Soft local scopes are introduced by for-loops, while-loops,
 comprehensions, try-catch-finally-blocks, and let-blocks.  There
-are some extra rules for <a class="reference internal" href="#man-let-blocks"><span>let-blocks</span></a> and for
-<a class="reference internal" href="#man-for-loops-scope"><span>for-loops and comprehensions</span></a>.</p>
+are some extra rules for <a class="reference internal" href="#man-let-blocks"><span class="std std-ref">let-blocks</span></a> and for
+<a class="reference internal" href="#man-for-loops-scope"><span class="std std-ref">for-loops and comprehensions</span></a>.</p>
 <p>In the following example the <code class="docutils literal"><span class="pre">x</span></code> and <code class="docutils literal"><span class="pre">y</span></code> refer always to the same
 variables as the soft local scope inherits both read and write
 variables:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">x</span><span class="p">,</span><span class="n">y</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span>
-<span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="mi">10</span>
+<span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="o">:</span><span class="mi">10</span>
     <span class="n">x</span> <span class="o">=</span> <span class="n">i</span> <span class="o">+</span> <span class="n">y</span> <span class="o">+</span> <span class="mi">1</span>
 <span class="k">end</span>
 
@@ -791,7 +792,7 @@ scope unless:</p>
 <p>Thus global variables are only inherited for reading but not for
 writing:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">x</span><span class="p">,</span><span class="n">y</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span><span class="mi">2</span>
-<span class="k">function</span><span class="nf"> foo</span><span class="p">()</span>
+<span class="k">function</span> <span class="n">foo</span><span class="p">()</span>
     <span class="n">x</span> <span class="o">=</span> <span class="mi">2</span> <span class="c"># assignment introduces a new local</span>
     <span class="k">return</span> <span class="n">x</span> <span class="o">+</span> <span class="n">y</span> <span class="c"># y refers to the global</span>
 <span class="k">end</span>
@@ -805,7 +806,7 @@ writing:</p>
 </div>
 <p>An explicit <code class="docutils literal"><span class="pre">global</span></code> is needed to assign to a global variable:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">x</span> <span class="o">=</span> <span class="mi">1</span>
-<span class="k">function</span><span class="nf"> foo</span><span class="p">()</span>
+<span class="k">function</span> <span class="n">foo</span><span class="p">()</span>
     <span class="kd">global</span> <span class="n">x</span> <span class="o">=</span> <span class="mi">2</span>
 <span class="k">end</span>
 <span class="n">foo</span><span class="p">()</span>
@@ -818,9 +819,9 @@ writing:</p>
 defined in the global scope as they can modify their parent scope&#8217;s
 <em>local</em> variables:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">x</span><span class="p">,</span><span class="n">y</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span><span class="mi">2</span>
-<span class="k">function</span><span class="nf"> foo</span><span class="p">()</span>
+<span class="k">function</span> <span class="n">foo</span><span class="p">()</span>
     <span class="n">x</span> <span class="o">=</span> <span class="mi">2</span> <span class="c"># introduces a new local</span>
-    <span class="k">function</span><span class="nf"> bar</span><span class="p">()</span>
+    <span class="k">function</span> <span class="n">bar</span><span class="p">()</span>
         <span class="n">x</span> <span class="o">=</span> <span class="mi">10</span> <span class="c"># modifies the parent&#39;s x</span>
         <span class="k">return</span> <span class="n">x</span><span class="o">+</span><span class="n">y</span> <span class="c"># y is global</span>
     <span class="k">end</span>
@@ -836,11 +837,11 @@ assignment can lead to some slight differences between functions
 defined in local vs. global scopes.  Consider the modification of the
 last example by moving <code class="docutils literal"><span class="pre">bar</span></code> to the global scope:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">x</span><span class="p">,</span><span class="n">y</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span><span class="mi">2</span>
-<span class="k">function</span><span class="nf"> bar</span><span class="p">()</span>
+<span class="k">function</span> <span class="n">bar</span><span class="p">()</span>
     <span class="n">x</span> <span class="o">=</span> <span class="mi">10</span> <span class="c"># local</span>
     <span class="k">return</span> <span class="n">x</span><span class="o">+</span><span class="n">y</span>
 <span class="k">end</span>
-<span class="k">function</span><span class="nf"> foo</span><span class="p">()</span>
+<span class="k">function</span> <span class="n">foo</span><span class="p">()</span>
     <span class="n">x</span> <span class="o">=</span> <span class="mi">2</span> <span class="c"># local</span>
     <span class="k">return</span> <span class="n">bar</span><span class="p">()</span> <span class="o">+</span> <span class="n">x</span> <span class="c"># 12 + 2 (x is not modified)</span>
 <span class="k">end</span>
@@ -854,15 +855,15 @@ last example by moving <code class="docutils literal"><span class="pre">bar</spa
 definitions as they can only appear at the global scope.
 There are special scoping rules concerning the evaluation of default
 and keyword function arguments which are described in the
-<a class="reference internal" href="../functions/#man-evaluation-scope-default-values"><span>Function section</span></a>.</p>
+<a class="reference internal" href="../functions/#man-evaluation-scope-default-values"><span class="std std-ref">Function section</span></a>.</p>
 <p>An assignment introducing a variable used inside a function, type or
 macro definition need not come before its inner usage:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">f</span> <span class="o">=</span> <span class="n">y</span> <span class="o">-&gt;</span> <span class="n">x</span> <span class="o">+</span> <span class="n">y</span>
-<span class="p">(::</span><span class="c">#1) (generic function with 1 method)</span>
+<span class="p">(</span><span class="o">::</span><span class="c">#1) (generic function with 1 method)</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">f</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">UndefVarError</span><span class="p">:</span> <span class="n">x</span> <span class="n">not</span> <span class="n">defined</span>
- <span class="k">in</span> <span class="p">(::</span><span class="c">##1#2)(::Int64) at ./none:1</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="kt">UndefVarError</span><span class="o">:</span> <span class="n">x</span> <span class="n">not</span> <span class="n">defined</span>
+ <span class="kp">in</span> <span class="p">(</span><span class="o">::</span><span class="c">##1#2)(::Int64) at ./none:1</span>
  <span class="o">...</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">x</span> <span class="o">=</span> <span class="mi">1</span>
@@ -880,14 +881,14 @@ forcing bottom up ordering or requiring forward declarations, as long
 as they are defined by the time they are actually called.  As an
 example, here is an inefficient, mutually recursive way to test if
 positive integers are even or odd:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">even</span><span class="p">(</span><span class="n">n</span><span class="p">)</span> <span class="o">=</span> <span class="n">n</span> <span class="o">==</span> <span class="mi">0</span> <span class="o">?</span> <span class="n">true</span>  <span class="p">:</span>  <span class="n">odd</span><span class="p">(</span><span class="n">n</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
-<span class="n">odd</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>  <span class="o">=</span> <span class="n">n</span> <span class="o">==</span> <span class="mi">0</span> <span class="o">?</span> <span class="n">false</span> <span class="p">:</span> <span class="n">even</span><span class="p">(</span><span class="n">n</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">even</span><span class="p">(</span><span class="n">n</span><span class="p">)</span> <span class="o">=</span> <span class="n">n</span> <span class="o">==</span> <span class="mi">0</span> <span class="o">?</span> <span class="kc">true</span>  <span class="o">:</span>  <span class="n">odd</span><span class="p">(</span><span class="n">n</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">odd</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>  <span class="o">=</span> <span class="n">n</span> <span class="o">==</span> <span class="mi">0</span> <span class="o">?</span> <span class="kc">false</span> <span class="o">:</span> <span class="n">even</span><span class="p">(</span><span class="n">n</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">even</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
-<span class="n">false</span>
+<span class="kc">false</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">odd</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
-<span class="n">true</span>
+<span class="kc">true</span>
 </pre></div>
 </div>
 <p>Julia provides built-in, efficient functions to test for oddness and evenness
@@ -943,7 +944,7 @@ evaluated in the scope before the new variable on the left-hand side
 has been introduced. Therefore it makes sense to write something like
 <code class="docutils literal"><span class="pre">let</span> <span class="pre">x</span> <span class="pre">=</span> <span class="pre">x</span></code> since the two <code class="docutils literal"><span class="pre">x</span></code> variables are distinct and have separate
 storage. Here is an example where the behavior of <code class="docutils literal"><span class="pre">let</span></code> is needed:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">Fs</span> <span class="o">=</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Any</span><span class="p">}(</span><span class="mi">2</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">Fs</span> <span class="o">=</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Any</span><span class="p">}(</span><span class="mi">2</span><span class="p">)</span>
 <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span>
 <span class="k">while</span> <span class="n">i</span> <span class="o">&lt;=</span> <span class="mi">2</span>
     <span class="n">Fs</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="p">()</span><span class="o">-&gt;</span><span class="n">i</span>
@@ -961,7 +962,7 @@ storage. Here is an example where the behavior of <code class="docutils literal"
 However, it is always the same variable <code class="docutils literal"><span class="pre">i</span></code>, so the two closures
 behave identically. We can use <code class="docutils literal"><span class="pre">let</span></code> to create a new binding for
 <code class="docutils literal"><span class="pre">i</span></code>:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">Fs</span> <span class="o">=</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Any</span><span class="p">}(</span><span class="mi">2</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">Fs</span> <span class="o">=</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Any</span><span class="p">}(</span><span class="mi">2</span><span class="p">)</span>
 <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span>
 <span class="k">while</span> <span class="n">i</span> <span class="o">&lt;=</span> <span class="mi">2</span>
     <span class="k">let</span> <span class="n">i</span> <span class="o">=</span> <span class="n">i</span>
@@ -995,14 +996,14 @@ is a different variable than the outer local <code class="docutils literal"><spa
 </div>
 <div class="section" id="for-loops-and-comprehensions">
 <span id="man-for-loops-scope"></span><h3>For Loops and Comprehensions<a class="headerlink" href="#for-loops-and-comprehensions" title="Permalink to this headline">¶</a></h3>
-<p><code class="docutils literal"><span class="pre">for</span></code> loops and <a class="reference internal" href="../arrays/#comprehensions"><span>comprehensions</span></a> have the
+<p><code class="docutils literal"><span class="pre">for</span></code> loops and <a class="reference internal" href="../arrays/#comprehensions"><span class="std std-ref">comprehensions</span></a> have the
 following behavior: any new variables introduced in their body scopes
 are freshly allocated for each loop iteration.  This is in contrast to
 <code class="docutils literal"><span class="pre">while</span></code> loops which reuse the variables for all
 iterations. Therefore these constructs are similar to <code class="docutils literal"><span class="pre">while</span></code> loops
 with <code class="docutils literal"><span class="pre">let</span></code> blocks inside:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">Fs</span> <span class="o">=</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Any</span><span class="p">}(</span><span class="mi">2</span><span class="p">)</span>
-<span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="mi">2</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">Fs</span> <span class="o">=</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Any</span><span class="p">}(</span><span class="mi">2</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="o">:</span><span class="mi">2</span>
     <span class="n">Fs</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="p">()</span><span class="o">-&gt;</span><span class="n">i</span>
 <span class="k">end</span>
 
@@ -1015,7 +1016,7 @@ with <code class="docutils literal"><span class="pre">let</span></code> blocks i
 </div>
 <p><code class="docutils literal"><span class="pre">for</span></code> loops will reuse existing variables for its iteration variable:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">i</span> <span class="o">=</span> <span class="mi">0</span>
-<span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="mi">3</span>
+<span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="o">:</span><span class="mi">3</span>
 <span class="k">end</span>
 <span class="n">i</span>  <span class="c"># here equal to 3</span>
 </pre></div>
@@ -1023,7 +1024,7 @@ with <code class="docutils literal"><span class="pre">let</span></code> blocks i
 <p>However, comprehensions do not do this, and always freshly allocate their
 iteration variables:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">x</span> <span class="o">=</span> <span class="mi">0</span>
-<span class="p">[</span> <span class="n">x</span> <span class="k">for</span> <span class="n">x</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="mi">3</span> <span class="p">]</span>
+<span class="p">[</span> <span class="n">x</span> <span class="k">for</span> <span class="n">x</span><span class="o">=</span><span class="mi">1</span><span class="o">:</span><span class="mi">3</span> <span class="p">]</span>
 <span class="n">x</span>  <span class="c"># here still equal to 0</span>
 </pre></div>
 </div>
@@ -1034,7 +1035,7 @@ iteration variables:</p>
 <p>A common use of variables is giving names to specific, unchanging
 values. Such variables are only assigned once. This intent can be
 conveyed to the compiler using the <code class="docutils literal"><span class="pre">const</span></code> keyword:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="kd">const</span> <span class="n">e</span>  <span class="o">=</span> <span class="mf">2.71828182845904523536</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="kd">const</span> <span class="nb">e</span>  <span class="o">=</span> <span class="mf">2.71828182845904523536</span>
 <span class="kd">const</span> <span class="nb">pi</span> <span class="o">=</span> <span class="mf">3.14159265358979323846</span>
 </pre></div>
 </div>
@@ -1091,7 +1092,7 @@ still be modified.</p>
     <script type="text/javascript">
         var DOCUMENTATION_OPTIONS = {
             URL_ROOT:'../../',
-            VERSION:'0.5.1-pre',
+            VERSION:'0.5.3-pre',
             COLLAPSE_INDEX:false,
             FILE_SUFFIX:'',
             HAS_SOURCE:  true

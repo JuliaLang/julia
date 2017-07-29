@@ -7,7 +7,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>I/O and Network &mdash; Julia Language 0.5.1-pre documentation</title>
+  <title>I/O and Network &mdash; Julia Language 0.5.3-pre documentation</title>
   
 
   
@@ -30,7 +30,7 @@
   
     <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
   
-    <link rel="top" title="Julia Language 0.5.1-pre documentation" href="../../"/>
+    <link rel="top" title="Julia Language 0.5.3-pre documentation" href="../../"/>
         <link rel="next" title="Punctuation" href="../punctuation/"/>
         <link rel="prev" title="Filesystem" href="../file/"/> 
 
@@ -149,6 +149,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#man-parametric-types">Parametric Types</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#type-aliases">Type Aliases</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#operations-on-types">Operations on Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/types/#custom-pretty-printing">Custom pretty-printing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#value-types">&#8220;Value types&#8221;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#nullable-types-representing-missing-values">Nullable Types: Representing Missing Values</a></li>
 </ul>
@@ -473,7 +474,7 @@
 </li>
 <li class="toctree-l1"><a class="reference internal" href="../constants/">Constants</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../file/">Filesystem</a></li>
-<li class="toctree-l1 current"><a class="current reference internal" href="">I/O and Network</a><ul>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">I/O and Network</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#general-i-o">General I/O</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#text-i-o">Text I/O</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#multimedia-i-o">Multimedia I/O</a></li>
@@ -1086,10 +1087,10 @@
 <dt id="Base.&#64;sprintf">
 <code class="descname">&#64;sprintf</code><span class="sig-paren">(</span><em>&quot;%Fmt&quot;</em>, <em>args...</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.@sprintf" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return <code class="docutils literal"><span class="pre">&#64;printf</span></code> formatted output as string.</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">s</span> <span class="o">=</span> <span class="p">@</span><span class="n">sprintf</span> <span class="s">&quot;this is a </span><span class="si">%s</span><span class="s"> </span><span class="si">%15.1f</span><span class="s">&quot;</span> <span class="s">&quot;test&quot;</span> <span class="mf">34.567</span><span class="p">;</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">s</span> <span class="o">=</span> <span class="nd">@sprintf</span> <span class="s">&quot;this is a </span><span class="si">%s</span><span class="s"> </span><span class="si">%15.1f</span><span class="s">&quot;</span> <span class="s">&quot;test&quot;</span> <span class="mf">34.567</span><span class="p">;</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">println</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
-<span class="n">this</span> <span class="nb">is</span> <span class="n">a</span> <span class="n">test</span>            <span class="mf">34.6</span>
+<span class="n">this</span> <span class="n">is</span> <span class="n">a</span> <span class="n">test</span>            <span class="mf">34.6</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1247,7 +1248,7 @@
 
 </div>
 <div class="section" id="multimedia-i-o">
-<h2>Multimedia I/O<a class="headerlink" href="#multimedia-i-o" title="Permalink to this headline">¶</a></h2>
+<span id="man-multimedia-io"></span><h2>Multimedia I/O<a class="headerlink" href="#multimedia-i-o" title="Permalink to this headline">¶</a></h2>
 <p>Just as text output is performed by <code class="docutils literal"><span class="pre">print</span></code> and user-defined types
 can indicate their textual representation by overloading <code class="docutils literal"><span class="pre">show</span></code>,
 Julia provides a standardized mechanism for rich multimedia output
@@ -1402,7 +1403,7 @@ stack with:</p>
 <p>For example, the following code</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="c"># Create a file for mmapping</span>
 <span class="c"># (you could alternatively use mmap to do this step, too)</span>
-<span class="n">A</span> <span class="o">=</span> <span class="n">rand</span><span class="p">(</span><span class="mi">1</span><span class="p">:</span><span class="mi">20</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">30</span><span class="p">)</span>
+<span class="n">A</span> <span class="o">=</span> <span class="n">rand</span><span class="p">(</span><span class="mi">1</span><span class="o">:</span><span class="mi">20</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">30</span><span class="p">)</span>
 <span class="n">s</span> <span class="o">=</span> <span class="n">open</span><span class="p">(</span><span class="s">&quot;/tmp/mmap.bin&quot;</span><span class="p">,</span> <span class="s">&quot;w+&quot;</span><span class="p">)</span>
 <span class="c"># We&#39;ll write the dimensions of the array as the first two Ints in the file</span>
 <span class="n">write</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="n">size</span><span class="p">(</span><span class="n">A</span><span class="p">,</span><span class="mi">1</span><span class="p">))</span>
@@ -1415,7 +1416,7 @@ stack with:</p>
 <span class="n">s</span> <span class="o">=</span> <span class="n">open</span><span class="p">(</span><span class="s">&quot;/tmp/mmap.bin&quot;</span><span class="p">)</span>   <span class="c"># default is read-only</span>
 <span class="n">m</span> <span class="o">=</span> <span class="n">read</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="kt">Int</span><span class="p">)</span>
 <span class="n">n</span> <span class="o">=</span> <span class="n">read</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="kt">Int</span><span class="p">)</span>
-<span class="n">A2</span> <span class="o">=</span> <span class="n">Mmap</span><span class="o">.</span><span class="n">mmap</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="n">Matrix</span><span class="p">{</span><span class="kt">Int</span><span class="p">},</span> <span class="p">(</span><span class="n">m</span><span class="p">,</span><span class="n">n</span><span class="p">))</span>
+<span class="n">A2</span> <span class="o">=</span> <span class="n">Mmap</span><span class="o">.</span><span class="n">mmap</span><span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="kt">Matrix</span><span class="p">{</span><span class="kt">Int</span><span class="p">},</span> <span class="p">(</span><span class="n">m</span><span class="p">,</span><span class="n">n</span><span class="p">))</span>
 </pre></div>
 </div>
 <p>creates a <code class="docutils literal"><span class="pre">m</span></code>-by-<code class="docutils literal"><span class="pre">n</span></code> <code class="docutils literal"><span class="pre">Matrix{Int}</span></code>, linked to the file associated with stream <code class="docutils literal"><span class="pre">s</span></code>.</p>
@@ -1628,7 +1629,7 @@ stack with:</p>
     <script type="text/javascript">
         var DOCUMENTATION_OPTIONS = {
             URL_ROOT:'../../',
-            VERSION:'0.5.1-pre',
+            VERSION:'0.5.3-pre',
             COLLAPSE_INDEX:false,
             FILE_SUFFIX:'',
             HAS_SOURCE:  true

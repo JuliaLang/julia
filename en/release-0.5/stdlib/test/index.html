@@ -7,7 +7,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Unit Testing &mdash; Julia Language 0.5.1-pre documentation</title>
+  <title>Unit Testing &mdash; Julia Language 0.5.3-pre documentation</title>
   
 
   
@@ -30,7 +30,7 @@
   
     <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
   
-    <link rel="top" title="Julia Language 0.5.1-pre documentation" href="../../"/>
+    <link rel="top" title="Julia Language 0.5.3-pre documentation" href="../../"/>
         <link rel="next" title="C Interface" href="../c/"/>
         <link rel="prev" title="Dates and Time" href="../dates/"/> 
 
@@ -149,6 +149,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#man-parametric-types">Parametric Types</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#type-aliases">Type Aliases</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#operations-on-types">Operations on Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/types/#custom-pretty-printing">Custom pretty-printing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#value-types">&#8220;Value types&#8221;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#nullable-types-representing-missing-values">Nullable Types: Representing Missing Values</a></li>
 </ul>
@@ -494,7 +495,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../dates/#dates-functions">Dates Functions</a></li>
 </ul>
 </li>
-<li class="toctree-l1 current"><a class="current reference internal" href="">Unit Testing</a><ul>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Unit Testing</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#testing-base-julia">Testing Base Julia</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#basic-unit-tests">Basic Unit Tests</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#working-with-test-sets">Working with Test Sets</a></li>
@@ -614,54 +615,54 @@ as expected:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">using</span> <span class="n">Base</span><span class="o">.</span><span class="n">Test</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">foo</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">=</span> <span class="n">length</span><span class="p">(</span><span class="n">x</span><span class="p">)</span><span class="o">^</span><span class="mi">2</span>
-<span class="n">foo</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span><span class="nf"> with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+<span class="n">foo</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span> <span class="n">with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>If the condition is true, a <code class="docutils literal"><span class="pre">Pass</span></code> is returned:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">test</span> <span class="n">foo</span><span class="p">(</span><span class="s">&quot;bar&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="mi">9</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nd">@test</span> <span class="n">foo</span><span class="p">(</span><span class="s">&quot;bar&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="mi">9</span>
 <span class="n">Test</span> <span class="n">Passed</span>
-  <span class="n">Expression</span><span class="p">:</span> <span class="n">foo</span><span class="p">(</span><span class="s">&quot;bar&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="mi">9</span>
-   <span class="n">Evaluated</span><span class="p">:</span> <span class="mi">9</span> <span class="o">==</span> <span class="mi">9</span>
+  <span class="n">Expression</span><span class="o">:</span> <span class="n">foo</span><span class="p">(</span><span class="s">&quot;bar&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="mi">9</span>
+   <span class="n">Evaluated</span><span class="o">:</span> <span class="mi">9</span> <span class="o">==</span> <span class="mi">9</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">test</span> <span class="n">foo</span><span class="p">(</span><span class="s">&quot;fizz&quot;</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="mi">10</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nd">@test</span> <span class="n">foo</span><span class="p">(</span><span class="s">&quot;fizz&quot;</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="mi">10</span>
 <span class="n">Test</span> <span class="n">Passed</span>
-  <span class="n">Expression</span><span class="p">:</span> <span class="n">foo</span><span class="p">(</span><span class="s">&quot;fizz&quot;</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="mi">10</span>
-   <span class="n">Evaluated</span><span class="p">:</span> <span class="mi">16</span> <span class="o">&gt;=</span> <span class="mi">10</span>
+  <span class="n">Expression</span><span class="o">:</span> <span class="n">foo</span><span class="p">(</span><span class="s">&quot;fizz&quot;</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="mi">10</span>
+   <span class="n">Evaluated</span><span class="o">:</span> <span class="mi">16</span> <span class="o">&gt;=</span> <span class="mi">10</span>
 </pre></div>
 </div>
 <p>If the condition is false, then a <code class="docutils literal"><span class="pre">Fail</span></code> is returned and an
 exception is thrown:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">test</span> <span class="n">foo</span><span class="p">(</span><span class="s">&quot;f&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="mi">20</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nd">@test</span> <span class="n">foo</span><span class="p">(</span><span class="s">&quot;f&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="mi">20</span>
 <span class="n">Test</span> <span class="n">Failed</span>
-  <span class="n">Expression</span><span class="p">:</span> <span class="n">foo</span><span class="p">(</span><span class="s">&quot;f&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="mi">20</span>
-   <span class="n">Evaluated</span><span class="p">:</span> <span class="mi">1</span> <span class="o">==</span> <span class="mi">20</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">There</span> <span class="n">was</span> <span class="n">an</span> <span class="nb">error</span> <span class="n">during</span> <span class="n">testing</span>
- <span class="k">in</span> <span class="n">record</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">268</span>
- <span class="k">in</span> <span class="n">do_test</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">191</span>
+  <span class="n">Expression</span><span class="o">:</span> <span class="n">foo</span><span class="p">(</span><span class="s">&quot;f&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="mi">20</span>
+   <span class="n">Evaluated</span><span class="o">:</span> <span class="mi">1</span> <span class="o">==</span> <span class="mi">20</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="n">There</span> <span class="n">was</span> <span class="n">an</span> <span class="n">error</span> <span class="n">during</span> <span class="n">testing</span>
+ <span class="kp">in</span> <span class="n">record</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">268</span>
+ <span class="kp">in</span> <span class="n">do_test</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">191</span>
 </pre></div>
 </div>
 <p>If the condition could not be evaluated because an exception was thrown,
 which occurs in this case because <code class="xref jl jl-func docutils literal"><span class="pre">length()</span></code> is not defined for
 symbols, an <code class="docutils literal"><span class="pre">Error</span></code> object is returned and an exception is thrown:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">test</span> <span class="n">foo</span><span class="p">(:</span><span class="n">cat</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nd">@test</span> <span class="n">foo</span><span class="p">(</span><span class="o">:</span><span class="n">cat</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span>
 <span class="n">Error</span> <span class="n">During</span> <span class="n">Test</span>
-  <span class="n">Test</span> <span class="n">threw</span> <span class="n">an</span> <span class="n">exception</span> <span class="n">of</span> <span class="k">type</span><span class="nc"> MethodError</span>
-  <span class="n">Expression</span><span class="p">:</span> <span class="n">foo</span><span class="p">(:</span><span class="n">cat</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span>
-  <span class="n">MethodError</span><span class="p">:</span> <span class="sb">`length`</span> <span class="n">has</span> <span class="n">no</span> <span class="n">method</span> <span class="n">matching</span> <span class="n">length</span><span class="p">(::</span><span class="n">Symbol</span><span class="p">)</span>
-   <span class="k">in</span> <span class="n">foo</span> <span class="n">at</span> <span class="n">none</span><span class="p">:</span><span class="mi">1</span>
-   <span class="k">in</span> <span class="n">anonymous</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">159</span>
-   <span class="k">in</span> <span class="n">do_test</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">180</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">There</span> <span class="n">was</span> <span class="n">an</span> <span class="nb">error</span> <span class="n">during</span> <span class="n">testing</span>
- <span class="k">in</span> <span class="n">record</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">268</span>
- <span class="k">in</span> <span class="n">do_test</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">191</span>
+  <span class="n">Test</span> <span class="n">threw</span> <span class="n">an</span> <span class="n">exception</span> <span class="n">of</span> <span class="k">type</span> <span class="kt">MethodError</span>
+  <span class="n">Expression</span><span class="o">:</span> <span class="n">foo</span><span class="p">(</span><span class="o">:</span><span class="n">cat</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span>
+  <span class="kt">MethodError</span><span class="o">:</span> <span class="sb">`length`</span> <span class="n">has</span> <span class="n">no</span> <span class="n">method</span> <span class="n">matching</span> <span class="n">length</span><span class="p">(</span><span class="o">::</span><span class="kt">Symbol</span><span class="p">)</span>
+   <span class="kp">in</span> <span class="n">foo</span> <span class="n">at</span> <span class="n">none</span><span class="o">:</span><span class="mi">1</span>
+   <span class="kp">in</span> <span class="n">anonymous</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">159</span>
+   <span class="kp">in</span> <span class="n">do_test</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">180</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="n">There</span> <span class="n">was</span> <span class="n">an</span> <span class="n">error</span> <span class="n">during</span> <span class="n">testing</span>
+ <span class="kp">in</span> <span class="n">record</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">268</span>
+ <span class="kp">in</span> <span class="n">do_test</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">191</span>
 </pre></div>
 </div>
 <p>If we expect that evaluating an expression <em>should</em> throw an exception,
 then we can use <code class="xref jl jl-func docutils literal"><span class="pre">&#64;test_throws()</span></code> to check that this occurs:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">test_throws</span> <span class="n">MethodError</span> <span class="n">foo</span><span class="p">(:</span><span class="n">cat</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nd">@test_throws</span> <span class="kt">MethodError</span> <span class="n">foo</span><span class="p">(</span><span class="o">:</span><span class="n">cat</span><span class="p">)</span>
 <span class="n">Test</span> <span class="n">Passed</span>
-  <span class="n">Expression</span><span class="p">:</span> <span class="n">foo</span><span class="p">(:</span><span class="n">cat</span><span class="p">)</span>
-   <span class="n">Evaluated</span><span class="p">:</span> <span class="n">MethodError</span>
+  <span class="n">Expression</span><span class="o">:</span> <span class="n">foo</span><span class="p">(</span><span class="o">:</span><span class="n">cat</span><span class="p">)</span>
+   <span class="n">Evaluated</span><span class="o">:</span> <span class="kt">MethodError</span>
 </pre></div>
 </div>
 </div>
@@ -691,59 +692,59 @@ evaluated due to an error, the test set will then throw a <code class="docutils 
 </dd></dl>
 
 <p>We can put our tests for the <code class="docutils literal"><span class="pre">foo(x)</span></code> function in a test set:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">testset</span> <span class="s">&quot;Foo Tests&quot;</span> <span class="k">begin</span>
-           <span class="p">@</span><span class="n">test</span> <span class="n">foo</span><span class="p">(</span><span class="s">&quot;a&quot;</span><span class="p">)</span>   <span class="o">==</span> <span class="mi">1</span>
-           <span class="p">@</span><span class="n">test</span> <span class="n">foo</span><span class="p">(</span><span class="s">&quot;ab&quot;</span><span class="p">)</span>  <span class="o">==</span> <span class="mi">4</span>
-           <span class="p">@</span><span class="n">test</span> <span class="n">foo</span><span class="p">(</span><span class="s">&quot;abc&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="mi">9</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nd">@testset</span> <span class="s">&quot;Foo Tests&quot;</span> <span class="k">begin</span>
+           <span class="nd">@test</span> <span class="n">foo</span><span class="p">(</span><span class="s">&quot;a&quot;</span><span class="p">)</span>   <span class="o">==</span> <span class="mi">1</span>
+           <span class="nd">@test</span> <span class="n">foo</span><span class="p">(</span><span class="s">&quot;ab&quot;</span><span class="p">)</span>  <span class="o">==</span> <span class="mi">4</span>
+           <span class="nd">@test</span> <span class="n">foo</span><span class="p">(</span><span class="s">&quot;abc&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="mi">9</span>
        <span class="k">end</span>
-<span class="n">Test</span> <span class="n">Summary</span><span class="p">:</span> <span class="o">|</span> <span class="n">Pass</span>  <span class="n">Total</span>
+<span class="n">Test</span> <span class="n">Summary</span><span class="o">:</span> <span class="o">|</span> <span class="n">Pass</span>  <span class="n">Total</span>
 <span class="n">Foo</span> <span class="n">Tests</span>     <span class="o">|</span>    <span class="mi">3</span>      <span class="mi">3</span>
 </pre></div>
 </div>
 <p>Test sets can also be nested:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">testset</span> <span class="s">&quot;Foo Tests&quot;</span> <span class="k">begin</span>
-           <span class="p">@</span><span class="n">testset</span> <span class="s">&quot;Animals&quot;</span> <span class="k">begin</span>
-               <span class="p">@</span><span class="n">test</span> <span class="n">foo</span><span class="p">(</span><span class="s">&quot;cat&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="mi">9</span>
-               <span class="p">@</span><span class="n">test</span> <span class="n">foo</span><span class="p">(</span><span class="s">&quot;dog&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="n">foo</span><span class="p">(</span><span class="s">&quot;cat&quot;</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nd">@testset</span> <span class="s">&quot;Foo Tests&quot;</span> <span class="k">begin</span>
+           <span class="nd">@testset</span> <span class="s">&quot;Animals&quot;</span> <span class="k">begin</span>
+               <span class="nd">@test</span> <span class="n">foo</span><span class="p">(</span><span class="s">&quot;cat&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="mi">9</span>
+               <span class="nd">@test</span> <span class="n">foo</span><span class="p">(</span><span class="s">&quot;dog&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="n">foo</span><span class="p">(</span><span class="s">&quot;cat&quot;</span><span class="p">)</span>
            <span class="k">end</span>
-           <span class="p">@</span><span class="n">testset</span> <span class="s">&quot;Arrays </span><span class="si">$i</span><span class="s">&quot;</span> <span class="k">for</span> <span class="n">i</span> <span class="k">in</span> <span class="mi">1</span><span class="p">:</span><span class="mi">3</span>
-               <span class="p">@</span><span class="n">test</span> <span class="n">foo</span><span class="p">(</span><span class="n">zeros</span><span class="p">(</span><span class="n">i</span><span class="p">))</span> <span class="o">==</span> <span class="n">i</span><span class="o">^</span><span class="mi">2</span>
-               <span class="p">@</span><span class="n">test</span> <span class="n">foo</span><span class="p">(</span><span class="n">ones</span><span class="p">(</span><span class="n">i</span><span class="p">))</span> <span class="o">==</span> <span class="n">i</span><span class="o">^</span><span class="mi">2</span>
+           <span class="nd">@testset</span> <span class="s">&quot;Arrays </span><span class="si">$i</span><span class="s">&quot;</span> <span class="k">for</span> <span class="n">i</span> <span class="kp">in</span> <span class="mi">1</span><span class="o">:</span><span class="mi">3</span>
+               <span class="nd">@test</span> <span class="n">foo</span><span class="p">(</span><span class="n">zeros</span><span class="p">(</span><span class="n">i</span><span class="p">))</span> <span class="o">==</span> <span class="n">i</span><span class="o">^</span><span class="mi">2</span>
+               <span class="nd">@test</span> <span class="n">foo</span><span class="p">(</span><span class="n">ones</span><span class="p">(</span><span class="n">i</span><span class="p">))</span> <span class="o">==</span> <span class="n">i</span><span class="o">^</span><span class="mi">2</span>
            <span class="k">end</span>
        <span class="k">end</span>
-<span class="n">Test</span> <span class="n">Summary</span><span class="p">:</span> <span class="o">|</span> <span class="n">Pass</span>  <span class="n">Total</span>
+<span class="n">Test</span> <span class="n">Summary</span><span class="o">:</span> <span class="o">|</span> <span class="n">Pass</span>  <span class="n">Total</span>
 <span class="n">Foo</span> <span class="n">Tests</span>     <span class="o">|</span>    <span class="mi">8</span>      <span class="mi">8</span>
 </pre></div>
 </div>
 <p>In the event that a nested test set has no failures, as happened here,
 it will be hidden in the summary. If we do have a test failure, only
 the details for the failed test sets will be shown:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">testset</span> <span class="s">&quot;Foo Tests&quot;</span> <span class="k">begin</span>
-           <span class="p">@</span><span class="n">testset</span> <span class="s">&quot;Animals&quot;</span> <span class="k">begin</span>
-               <span class="p">@</span><span class="n">testset</span> <span class="s">&quot;Felines&quot;</span> <span class="k">begin</span>
-                   <span class="p">@</span><span class="n">test</span> <span class="n">foo</span><span class="p">(</span><span class="s">&quot;cat&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="mi">9</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nd">@testset</span> <span class="s">&quot;Foo Tests&quot;</span> <span class="k">begin</span>
+           <span class="nd">@testset</span> <span class="s">&quot;Animals&quot;</span> <span class="k">begin</span>
+               <span class="nd">@testset</span> <span class="s">&quot;Felines&quot;</span> <span class="k">begin</span>
+                   <span class="nd">@test</span> <span class="n">foo</span><span class="p">(</span><span class="s">&quot;cat&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="mi">9</span>
                <span class="k">end</span>
-               <span class="p">@</span><span class="n">testset</span> <span class="s">&quot;Canines&quot;</span> <span class="k">begin</span>
-                   <span class="p">@</span><span class="n">test</span> <span class="n">foo</span><span class="p">(</span><span class="s">&quot;dog&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="mi">9</span>
+               <span class="nd">@testset</span> <span class="s">&quot;Canines&quot;</span> <span class="k">begin</span>
+                   <span class="nd">@test</span> <span class="n">foo</span><span class="p">(</span><span class="s">&quot;dog&quot;</span><span class="p">)</span> <span class="o">==</span> <span class="mi">9</span>
                <span class="k">end</span>
            <span class="k">end</span>
-           <span class="p">@</span><span class="n">testset</span> <span class="s">&quot;Arrays&quot;</span> <span class="k">begin</span>
-               <span class="p">@</span><span class="n">test</span> <span class="n">foo</span><span class="p">(</span><span class="n">zeros</span><span class="p">(</span><span class="mi">2</span><span class="p">))</span> <span class="o">==</span> <span class="mi">4</span>
-               <span class="p">@</span><span class="n">test</span> <span class="n">foo</span><span class="p">(</span><span class="n">ones</span><span class="p">(</span><span class="mi">4</span><span class="p">))</span> <span class="o">==</span> <span class="mi">15</span>
+           <span class="nd">@testset</span> <span class="s">&quot;Arrays&quot;</span> <span class="k">begin</span>
+               <span class="nd">@test</span> <span class="n">foo</span><span class="p">(</span><span class="n">zeros</span><span class="p">(</span><span class="mi">2</span><span class="p">))</span> <span class="o">==</span> <span class="mi">4</span>
+               <span class="nd">@test</span> <span class="n">foo</span><span class="p">(</span><span class="n">ones</span><span class="p">(</span><span class="mi">4</span><span class="p">))</span> <span class="o">==</span> <span class="mi">15</span>
            <span class="k">end</span>
        <span class="k">end</span>
 
-<span class="n">Arrays</span><span class="p">:</span> <span class="n">Test</span> <span class="n">Failed</span>
-  <span class="n">Expression</span><span class="p">:</span> <span class="n">foo</span><span class="p">(</span><span class="n">ones</span><span class="p">(</span><span class="mi">4</span><span class="p">))</span> <span class="o">==</span> <span class="mi">15</span>
-   <span class="n">Evaluated</span><span class="p">:</span> <span class="mi">16</span> <span class="o">==</span> <span class="mi">15</span>
- <span class="k">in</span> <span class="n">record</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">297</span>
- <span class="k">in</span> <span class="n">do_test</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">191</span>
-<span class="n">Test</span> <span class="n">Summary</span><span class="p">:</span> <span class="o">|</span> <span class="n">Pass</span>  <span class="n">Fail</span>  <span class="n">Total</span>
+<span class="n">Arrays</span><span class="o">:</span> <span class="n">Test</span> <span class="n">Failed</span>
+  <span class="n">Expression</span><span class="o">:</span> <span class="n">foo</span><span class="p">(</span><span class="n">ones</span><span class="p">(</span><span class="mi">4</span><span class="p">))</span> <span class="o">==</span> <span class="mi">15</span>
+   <span class="n">Evaluated</span><span class="o">:</span> <span class="mi">16</span> <span class="o">==</span> <span class="mi">15</span>
+ <span class="kp">in</span> <span class="n">record</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">297</span>
+ <span class="kp">in</span> <span class="n">do_test</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">191</span>
+<span class="n">Test</span> <span class="n">Summary</span><span class="o">:</span> <span class="o">|</span> <span class="n">Pass</span>  <span class="n">Fail</span>  <span class="n">Total</span>
 <span class="n">Foo</span> <span class="n">Tests</span>     <span class="o">|</span>    <span class="mi">3</span>     <span class="mi">1</span>      <span class="mi">4</span>
   <span class="n">Animals</span>     <span class="o">|</span>    <span class="mi">2</span>            <span class="mi">2</span>
   <span class="n">Arrays</span>      <span class="o">|</span>    <span class="mi">1</span>     <span class="mi">1</span>      <span class="mi">2</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">Some</span> <span class="n">tests</span> <span class="n">did</span> <span class="n">not</span> <span class="n">pass</span><span class="p">:</span> <span class="mi">3</span> <span class="n">passed</span><span class="p">,</span> <span class="mi">1</span> <span class="n">failed</span><span class="p">,</span> <span class="mi">0</span> <span class="n">errored</span><span class="p">,</span> <span class="mi">0</span> <span class="n">broken</span><span class="o">.</span>
- <span class="k">in</span> <span class="n">finish</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">362</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="n">Some</span> <span class="n">tests</span> <span class="n">did</span> <span class="n">not</span> <span class="n">pass</span><span class="o">:</span> <span class="mi">3</span> <span class="n">passed</span><span class="p">,</span> <span class="mi">1</span> <span class="n">failed</span><span class="p">,</span> <span class="mi">0</span> <span class="n">errored</span><span class="p">,</span> <span class="mi">0</span> <span class="n">broken</span><span class="o">.</span>
+ <span class="kp">in</span> <span class="n">finish</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">362</span>
 </pre></div>
 </div>
 </div>
@@ -757,33 +758,33 @@ is the <code class="xref jl jl-func docutils literal"><span class="pre">isapprox
 <code class="docutils literal"><span class="pre">isapprox</span></code> in that it treats NaN values as equal and has a smaller
 default tolerance) or <code class="docutils literal"><span class="pre">&#64;test_approx_eq_eps</span></code> (which takes an extra
 argument indicating the relative tolerance):</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">test</span> <span class="mi">1</span> <span class="n">≈</span> <span class="mf">0.999999999</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nd">@test</span> <span class="mi">1</span> <span class="n">≈</span> <span class="mf">0.999999999</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">test</span> <span class="mi">1</span> <span class="n">≈</span> <span class="mf">0.999999</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">test</span> <span class="n">failed</span><span class="p">:</span> <span class="mi">1</span> <span class="n">isapprox</span> <span class="mf">0.999999</span>
- <span class="k">in</span> <span class="n">expression</span><span class="p">:</span> <span class="mi">1</span> <span class="n">≈</span> <span class="mf">0.999999</span>
- <span class="k">in</span> <span class="nb">error</span> <span class="n">at</span> <span class="nb">error</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">21</span>
- <span class="k">in</span> <span class="n">default_handler</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">30</span>
- <span class="k">in</span> <span class="n">do_test</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">53</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nd">@test</span> <span class="mi">1</span> <span class="n">≈</span> <span class="mf">0.999999</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="n">test</span> <span class="n">failed</span><span class="o">:</span> <span class="mi">1</span> <span class="n">isapprox</span> <span class="mf">0.999999</span>
+ <span class="kp">in</span> <span class="n">expression</span><span class="o">:</span> <span class="mi">1</span> <span class="n">≈</span> <span class="mf">0.999999</span>
+ <span class="kp">in</span> <span class="n">error</span> <span class="n">at</span> <span class="n">error</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">21</span>
+ <span class="kp">in</span> <span class="n">default_handler</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">30</span>
+ <span class="kp">in</span> <span class="n">do_test</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">53</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">test_approx_eq</span> <span class="mf">1.</span> <span class="mf">0.999999999</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">assertion</span> <span class="n">failed</span><span class="p">:</span> <span class="o">|</span><span class="mf">1.0</span> <span class="o">-</span> <span class="mf">0.999999999</span><span class="o">|</span> <span class="o">&lt;</span> <span class="mf">2.220446049250313e-12</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nd">@test_approx_eq</span> <span class="mf">1.</span> <span class="mf">0.999999999</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="n">assertion</span> <span class="n">failed</span><span class="o">:</span> <span class="o">|</span><span class="mf">1.0</span> <span class="o">-</span> <span class="mf">0.999999999</span><span class="o">|</span> <span class="o">&lt;</span> <span class="mf">2.220446049250313e-12</span>
   <span class="mf">1.0</span> <span class="o">=</span> <span class="mf">1.0</span>
   <span class="mf">0.999999999</span> <span class="o">=</span> <span class="mf">0.999999999</span>
- <span class="k">in</span> <span class="n">test_approx_eq</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">75</span>
- <span class="k">in</span> <span class="n">test_approx_eq</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">80</span>
+ <span class="kp">in</span> <span class="n">test_approx_eq</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">75</span>
+ <span class="kp">in</span> <span class="n">test_approx_eq</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">80</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">test_approx_eq</span> <span class="mf">1.</span> <span class="mf">0.9999999999999</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nd">@test_approx_eq</span> <span class="mf">1.</span> <span class="mf">0.9999999999999</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">test_approx_eq_eps</span> <span class="mf">1.</span> <span class="mf">0.999</span> <span class="mf">1e-2</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nd">@test_approx_eq_eps</span> <span class="mf">1.</span> <span class="mf">0.999</span> <span class="mf">1e-2</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">test_approx_eq_eps</span> <span class="mf">1.</span> <span class="mf">0.999</span> <span class="mf">1e-3</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">assertion</span> <span class="n">failed</span><span class="p">:</span> <span class="o">|</span><span class="mf">1.0</span> <span class="o">-</span> <span class="mf">0.999</span><span class="o">|</span> <span class="o">&lt;=</span> <span class="mf">0.001</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nd">@test_approx_eq_eps</span> <span class="mf">1.</span> <span class="mf">0.999</span> <span class="mf">1e-3</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="n">assertion</span> <span class="n">failed</span><span class="o">:</span> <span class="o">|</span><span class="mf">1.0</span> <span class="o">-</span> <span class="mf">0.999</span><span class="o">|</span> <span class="o">&lt;=</span> <span class="mf">0.001</span>
   <span class="mf">1.0</span> <span class="o">=</span> <span class="mf">1.0</span>
   <span class="mf">0.999</span> <span class="o">=</span> <span class="mf">0.999</span>
   <span class="n">difference</span> <span class="o">=</span> <span class="mf">0.0010000000000000009</span> <span class="o">&gt;</span> <span class="mf">0.001</span>
- <span class="k">in</span> <span class="nb">error</span> <span class="n">at</span> <span class="nb">error</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">22</span>
- <span class="k">in</span> <span class="n">test_approx_eq</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">68</span>
+ <span class="kp">in</span> <span class="n">error</span> <span class="n">at</span> <span class="n">error</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">22</span>
+ <span class="kp">in</span> <span class="n">test_approx_eq</span> <span class="n">at</span> <span class="n">test</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">68</span>
 </pre></div>
 </div>
 <p>Note that these macros will fail immediately, and are not compatible
@@ -808,28 +809,28 @@ writing new tests.</p>
 <p><code class="docutils literal"><span class="pre">f(x)</span></code> can be any call expression. Returns the result of <code class="docutils literal"><span class="pre">f(x)</span></code> if the types match, and an <code class="docutils literal"><span class="pre">Error</span></code> <code class="docutils literal"><span class="pre">Result</span></code> if it finds different types.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">using</span> <span class="n">Base</span><span class="o">.</span><span class="n">Test</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">f</span><span class="p">(</span><span class="n">a</span><span class="p">,</span><span class="n">b</span><span class="p">,</span><span class="n">c</span><span class="p">)</span> <span class="o">=</span> <span class="n">b</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="o">?</span> <span class="mi">1</span> <span class="p">:</span> <span class="mf">1.0</span>
-<span class="n">f</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span><span class="nf"> with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">f</span><span class="p">(</span><span class="n">a</span><span class="p">,</span><span class="n">b</span><span class="p">,</span><span class="n">c</span><span class="p">)</span> <span class="o">=</span> <span class="n">b</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="o">?</span> <span class="mi">1</span> <span class="o">:</span> <span class="mf">1.0</span>
+<span class="n">f</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span> <span class="n">with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">f</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">))</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">typeof</span><span class="p">(</span><span class="n">f</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">))</span>
 <span class="kt">Int64</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">code_warntype</span> <span class="n">f</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nd">@code_warntype</span> <span class="n">f</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">)</span>
 <span class="o">...</span>
-<span class="n">Body</span><span class="p">:</span>
+<span class="n">Body</span><span class="o">:</span>
   <span class="k">begin</span>
-      <span class="n">unless</span> <span class="p">(</span><span class="n">Base</span><span class="o">.</span><span class="n">slt_int</span><span class="p">)(</span><span class="mi">1</span><span class="p">,</span><span class="n">b</span><span class="p">::</span><span class="kt">Int64</span><span class="p">)::</span><span class="kt">Bool</span> <span class="n">goto</span> <span class="mi">3</span>
+      <span class="n">unless</span> <span class="p">(</span><span class="n">Base</span><span class="o">.</span><span class="n">slt_int</span><span class="p">)(</span><span class="mi">1</span><span class="p">,</span><span class="n">b</span><span class="o">::</span><span class="kt">Int64</span><span class="p">)</span><span class="o">::</span><span class="kt">Bool</span> <span class="n">goto</span> <span class="mi">3</span>
       <span class="k">return</span> <span class="mi">1</span>
-      <span class="mi">3</span><span class="p">:</span>
+      <span class="mi">3</span><span class="o">:</span>
       <span class="k">return</span> <span class="mf">1.0</span>
-  <span class="k">end</span><span class="p">::</span><span class="n">UNION</span><span class="p">{</span><span class="n">FLOAT64</span><span class="p">,</span><span class="n">INT64</span><span class="p">}</span>
+  <span class="k">end</span><span class="o">::</span><span class="n">UNION</span><span class="p">{</span><span class="n">FLOAT64</span><span class="p">,</span><span class="n">INT64</span><span class="p">}</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">inferred</span> <span class="n">f</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">)</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="k">return</span> <span class="k">type</span><span class="nc"> Int64</span> <span class="n">does</span> <span class="n">not</span> <span class="n">match</span> <span class="n">inferred</span> <span class="k">return</span> <span class="k">type</span><span class="nc"> Union</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="kt">Int64</span><span class="p">}</span>
- <span class="k">in</span> <span class="nb">error</span><span class="p">(::</span><span class="n">String</span><span class="p">)</span> <span class="n">at</span> <span class="o">./</span><span class="nb">error</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">21</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nd">@inferred</span> <span class="n">f</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">)</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="k">return</span> <span class="k">type</span> <span class="kt">Int64</span> <span class="n">does</span> <span class="n">not</span> <span class="n">match</span> <span class="n">inferred</span> <span class="k">return</span> <span class="k">type</span> <span class="kt">Union</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="kt">Int64</span><span class="p">}</span>
+ <span class="kp">in</span> <span class="n">error</span><span class="p">(</span><span class="o">::</span><span class="n">String</span><span class="p">)</span> <span class="n">at</span> <span class="o">./</span><span class="n">error</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">21</span>
  <span class="o">...</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">inferred</span> <span class="n">max</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nd">@inferred</span> <span class="n">max</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span>
 <span class="mi">2</span>
 </pre></div>
 </div>
@@ -897,20 +898,20 @@ not propagate any properties of the testset. Option inheritance behavior can be
 implemented by packages using the stack infrastructure that <code class="docutils literal"><span class="pre">Base.Test</span></code>
 provides.</p>
 <p>Defining a basic <code class="docutils literal"><span class="pre">AbstractTestSet</span></code> subtype might look like:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">import</span> <span class="n">Base</span><span class="o">.</span><span class="n">Test</span><span class="p">:</span> <span class="n">record</span><span class="p">,</span> <span class="n">finish</span>
-<span class="k">using</span> <span class="n">Base</span><span class="o">.</span><span class="n">Test</span><span class="p">:</span> <span class="n">AbstractTestSet</span><span class="p">,</span> <span class="n">Result</span><span class="p">,</span> <span class="n">Pass</span><span class="p">,</span> <span class="n">Fail</span><span class="p">,</span> <span class="n">Error</span>
-<span class="k">using</span> <span class="n">Base</span><span class="o">.</span><span class="n">Test</span><span class="p">:</span> <span class="n">get_testset_depth</span><span class="p">,</span> <span class="n">get_testset</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">import</span> <span class="n">Base</span><span class="o">.</span><span class="n">Test</span><span class="o">:</span> <span class="n">record</span><span class="p">,</span> <span class="n">finish</span>
+<span class="k">using</span> <span class="n">Base</span><span class="o">.</span><span class="n">Test</span><span class="o">:</span> <span class="n">AbstractTestSet</span><span class="p">,</span> <span class="n">Result</span><span class="p">,</span> <span class="n">Pass</span><span class="p">,</span> <span class="n">Fail</span><span class="p">,</span> <span class="n">Error</span>
+<span class="k">using</span> <span class="n">Base</span><span class="o">.</span><span class="n">Test</span><span class="o">:</span> <span class="n">get_testset_depth</span><span class="p">,</span> <span class="n">get_testset</span>
 <span class="k">immutable</span> <span class="n">CustomTestSet</span> <span class="o">&lt;:</span> <span class="n">Base</span><span class="o">.</span><span class="n">Test</span><span class="o">.</span><span class="n">AbstractTestSet</span>
-    <span class="n">description</span><span class="p">::</span><span class="n">AbstractString</span>
-    <span class="n">foo</span><span class="p">::</span><span class="kt">Int</span>
-    <span class="n">results</span><span class="p">::</span><span class="n">Vector</span>
+    <span class="n">description</span><span class="o">::</span><span class="kt">AbstractString</span>
+    <span class="n">foo</span><span class="o">::</span><span class="kt">Int</span>
+    <span class="n">results</span><span class="o">::</span><span class="kt">Vector</span>
     <span class="c"># constructor takes a description string and options keyword arguments</span>
-    <span class="n">CustomTestSet</span><span class="p">(</span><span class="n">desc</span><span class="p">;</span> <span class="n">foo</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span> <span class="o">=</span> <span class="nb">new</span><span class="p">(</span><span class="n">desc</span><span class="p">,</span> <span class="n">foo</span><span class="p">,</span> <span class="p">[])</span>
+    <span class="n">CustomTestSet</span><span class="p">(</span><span class="n">desc</span><span class="p">;</span> <span class="n">foo</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span> <span class="o">=</span> <span class="n">new</span><span class="p">(</span><span class="n">desc</span><span class="p">,</span> <span class="n">foo</span><span class="p">,</span> <span class="p">[])</span>
 <span class="k">end</span>
 
-<span class="n">record</span><span class="p">(</span><span class="n">ts</span><span class="p">::</span><span class="n">CustomTestSet</span><span class="p">,</span> <span class="n">child</span><span class="p">::</span><span class="n">AbstractTestSet</span><span class="p">)</span> <span class="o">=</span> <span class="n">push!</span><span class="p">(</span><span class="n">ts</span><span class="o">.</span><span class="n">results</span><span class="p">,</span> <span class="n">child</span><span class="p">)</span>
-<span class="n">record</span><span class="p">(</span><span class="n">ts</span><span class="p">::</span><span class="n">CustomTestSet</span><span class="p">,</span> <span class="n">res</span><span class="p">::</span><span class="n">Result</span><span class="p">)</span> <span class="o">=</span> <span class="n">push!</span><span class="p">(</span><span class="n">ts</span><span class="o">.</span><span class="n">results</span><span class="p">,</span> <span class="n">res</span><span class="p">)</span>
-<span class="k">function</span><span class="nf"> finish</span><span class="p">(</span><span class="n">ts</span><span class="p">::</span><span class="n">CustomTestSet</span><span class="p">)</span>
+<span class="n">record</span><span class="p">(</span><span class="n">ts</span><span class="o">::</span><span class="n">CustomTestSet</span><span class="p">,</span> <span class="n">child</span><span class="o">::</span><span class="n">AbstractTestSet</span><span class="p">)</span> <span class="o">=</span> <span class="n">push!</span><span class="p">(</span><span class="n">ts</span><span class="o">.</span><span class="n">results</span><span class="p">,</span> <span class="n">child</span><span class="p">)</span>
+<span class="n">record</span><span class="p">(</span><span class="n">ts</span><span class="o">::</span><span class="n">CustomTestSet</span><span class="p">,</span> <span class="n">res</span><span class="o">::</span><span class="n">Result</span><span class="p">)</span> <span class="o">=</span> <span class="n">push!</span><span class="p">(</span><span class="n">ts</span><span class="o">.</span><span class="n">results</span><span class="p">,</span> <span class="n">res</span><span class="p">)</span>
+<span class="k">function</span> <span class="n">finish</span><span class="p">(</span><span class="n">ts</span><span class="o">::</span><span class="n">CustomTestSet</span><span class="p">)</span>
     <span class="c"># just record if we&#39;re not the top-level parent</span>
     <span class="k">if</span> <span class="n">get_testset_depth</span><span class="p">()</span> <span class="o">&gt;</span> <span class="mi">0</span>
         <span class="n">record</span><span class="p">(</span><span class="n">get_testset</span><span class="p">(),</span> <span class="n">ts</span><span class="p">)</span>
@@ -920,10 +921,10 @@ provides.</p>
 </pre></div>
 </div>
 <p>And using that testset looks like:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="p">@</span><span class="n">testset</span> <span class="n">CustomTestSet</span> <span class="n">foo</span><span class="o">=</span><span class="mi">4</span> <span class="s">&quot;custom testset inner 2&quot;</span> <span class="k">begin</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="nd">@testset</span> <span class="n">CustomTestSet</span> <span class="n">foo</span><span class="o">=</span><span class="mi">4</span> <span class="s">&quot;custom testset inner 2&quot;</span> <span class="k">begin</span>
     <span class="c"># this testset should inherit the type, but not the argument.</span>
-    <span class="p">@</span><span class="n">testset</span> <span class="s">&quot;custom testset inner&quot;</span> <span class="k">begin</span>
-        <span class="p">@</span><span class="n">test</span> <span class="n">true</span>
+    <span class="nd">@testset</span> <span class="s">&quot;custom testset inner&quot;</span> <span class="k">begin</span>
+        <span class="nd">@test</span> <span class="kc">true</span>
     <span class="k">end</span>
 <span class="k">end</span>
 </pre></div>
@@ -967,7 +968,7 @@ provides.</p>
     <script type="text/javascript">
         var DOCUMENTATION_OPTIONS = {
             URL_ROOT:'../../',
-            VERSION:'0.5.1-pre',
+            VERSION:'0.5.3-pre',
             COLLAPSE_INDEX:false,
             FILE_SUFFIX:'',
             HAS_SOURCE:  true

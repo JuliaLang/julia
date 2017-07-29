@@ -7,7 +7,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Essentials &mdash; Julia Language 0.5.1-pre documentation</title>
+  <title>Essentials &mdash; Julia Language 0.5.3-pre documentation</title>
   
 
   
@@ -30,7 +30,7 @@
   
     <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
   
-    <link rel="top" title="Julia Language 0.5.1-pre documentation" href="../../"/>
+    <link rel="top" title="Julia Language 0.5.3-pre documentation" href="../../"/>
         <link rel="next" title="Collections and Data Structures" href="../collections/"/>
         <link rel="prev" title="Unicode Input" href="../../manual/unicode-input/"/> 
 
@@ -149,6 +149,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#man-parametric-types">Parametric Types</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#type-aliases">Type Aliases</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#operations-on-types">Operations on Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/types/#custom-pretty-printing">Custom pretty-printing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#value-types">&#8220;Value types&#8221;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#nullable-types-representing-missing-values">Nullable Types: Representing Missing Values</a></li>
 </ul>
@@ -399,7 +400,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../manual/unicode-input/">Unicode Input</a></li>
 </ul>
 <ul class="current">
-<li class="toctree-l1 current"><a class="current reference internal" href="">Essentials</a><ul>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Essentials</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#introduction">Introduction</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#getting-around">Getting Around</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#all-objects">All Objects</a></li>
@@ -697,7 +698,7 @@
 <dl class="function">
 <dt id="Base.Base.compilecache">
 <code class="descclassname">Base.</code><code class="descname">compilecache</code><span class="sig-paren">(</span><em>module::String</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.Base.compilecache" title="Permalink to this definition">¶</a></dt>
-<dd><p>Creates a precompiled cache file for module (see help for <code class="docutils literal"><span class="pre">require</span></code>) and all of its dependencies. This can be used to reduce package load times. Cache files are stored in <code class="docutils literal"><span class="pre">LOAD_CACHE_PATH[1]</span></code>, which defaults to <code class="docutils literal"><span class="pre">~/.julia/lib/VERSION</span></code>. See <a class="reference internal" href="../../manual/modules/#man-modules-initialization-precompilation"><span>Module initialization and precompilation</span></a> for important notes.</p>
+<dd><p>Creates a precompiled cache file for module (see help for <code class="docutils literal"><span class="pre">require</span></code>) and all of its dependencies. This can be used to reduce package load times. Cache files are stored in <code class="docutils literal"><span class="pre">LOAD_CACHE_PATH[1]</span></code>, which defaults to <code class="docutils literal"><span class="pre">~/.julia/lib/VERSION</span></code>. See <a class="reference internal" href="../../manual/modules/#man-modules-initialization-precompilation"><span class="std std-ref">Module initialization and precompilation</span></a> for important notes.</p>
 </dd></dl>
 
 <dl class="function">
@@ -919,12 +920,12 @@
 <code class="descname">convert</code><span class="sig-paren">(</span><em>T</em>, <em>x</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.convert" title="Permalink to this definition">¶</a></dt>
 <dd><p>Convert <code class="docutils literal"><span class="pre">x</span></code> to a value of type <code class="docutils literal"><span class="pre">T</span></code>.</p>
 <p>If <code class="docutils literal"><span class="pre">T</span></code> is an <code class="docutils literal"><span class="pre">Integer</span></code> type, an <a class="reference internal" href="#Base.InexactError" title="Base.InexactError"><code class="xref jl jl-exc docutils literal"><span class="pre">InexactError</span></code></a> will be raised if <code class="docutils literal"><span class="pre">x</span></code> is not representable by <code class="docutils literal"><span class="pre">T</span></code>, for example if <code class="docutils literal"><span class="pre">x</span></code> is not integer-valued, or is outside the range supported by <code class="docutils literal"><span class="pre">T</span></code>.</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nb">convert</span><span class="p">(</span><span class="kt">Int</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">convert</span><span class="p">(</span><span class="kt">Int</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">)</span>
 <span class="mi">3</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">convert</span><span class="p">(</span><span class="kt">Int</span><span class="p">,</span> <span class="mf">3.5</span><span class="p">)</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">InexactError</span><span class="p">()</span>
- <span class="k">in</span> <span class="nb">convert</span><span class="p">(::</span><span class="n">Type</span><span class="p">{</span><span class="kt">Int64</span><span class="p">},</span> <span class="p">::</span><span class="kt">Float64</span><span class="p">)</span> <span class="n">at</span> <span class="o">./</span><span class="n">int</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">239</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">convert</span><span class="p">(</span><span class="kt">Int</span><span class="p">,</span> <span class="mf">3.5</span><span class="p">)</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="kt">InexactError</span><span class="p">()</span>
+ <span class="kp">in</span> <span class="n">convert</span><span class="p">(</span><span class="o">::</span><span class="kt">Type</span><span class="p">{</span><span class="kt">Int64</span><span class="p">},</span> <span class="o">::</span><span class="kt">Float64</span><span class="p">)</span> <span class="n">at</span> <span class="o">./</span><span class="n">int</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">239</span>
  <span class="o">...</span>
 </pre></div>
 </div>
@@ -932,43 +933,43 @@
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">x</span> <span class="o">=</span> <span class="mi">1</span><span class="o">/</span><span class="mi">3</span>
 <span class="mf">0.3333333333333333</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">convert</span><span class="p">(</span><span class="kt">Float32</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">convert</span><span class="p">(</span><span class="kt">Float32</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span>
 <span class="mf">0.33333334f0</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">convert</span><span class="p">(</span><span class="n">Rational</span><span class="p">{</span><span class="kt">Int32</span><span class="p">},</span> <span class="n">x</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">convert</span><span class="p">(</span><span class="kt">Rational</span><span class="p">{</span><span class="kt">Int32</span><span class="p">},</span> <span class="n">x</span><span class="p">)</span>
 <span class="mi">1</span><span class="o">//</span><span class="mi">3</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">convert</span><span class="p">(</span><span class="n">Rational</span><span class="p">{</span><span class="kt">Int64</span><span class="p">},</span> <span class="n">x</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">convert</span><span class="p">(</span><span class="kt">Rational</span><span class="p">{</span><span class="kt">Int64</span><span class="p">},</span> <span class="n">x</span><span class="p">)</span>
 <span class="mi">6004799503160661</span><span class="o">//</span><span class="mi">18014398509481984</span>
 </pre></div>
 </div>
 <p>If <code class="docutils literal"><span class="pre">T</span></code> is a collection type and <code class="docutils literal"><span class="pre">x</span></code> a collection, the result of <code class="docutils literal"><span class="pre">convert(T,</span> <span class="pre">x)</span></code> may alias <code class="docutils literal"><span class="pre">x</span></code>.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">x</span> <span class="o">=</span> <span class="kt">Int</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">];</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">y</span> <span class="o">=</span> <span class="nb">convert</span><span class="p">(</span><span class="n">Vector</span><span class="p">{</span><span class="kt">Int</span><span class="p">},</span> <span class="n">x</span><span class="p">);</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">y</span> <span class="o">=</span> <span class="n">convert</span><span class="p">(</span><span class="kt">Vector</span><span class="p">{</span><span class="kt">Int</span><span class="p">},</span> <span class="n">x</span><span class="p">);</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">y</span> <span class="o">===</span> <span class="n">x</span>
-<span class="n">true</span>
+<span class="kc">true</span>
 </pre></div>
 </div>
 <p>Similarly, if <code class="docutils literal"><span class="pre">T</span></code> is a composite type and <code class="docutils literal"><span class="pre">x</span></code> a related instance, the result of <code class="docutils literal"><span class="pre">convert(T,</span> <span class="pre">x)</span></code> may alias part or all of <code class="docutils literal"><span class="pre">x</span></code>.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">x</span> <span class="o">=</span> <span class="n">speye</span><span class="p">(</span><span class="mi">5</span><span class="p">);</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
-<span class="n">SparseMatrixCSC</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="kt">Int64</span><span class="p">}</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">typeof</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<span class="kt">SparseMatrixCSC</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="kt">Int64</span><span class="p">}</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">y</span> <span class="o">=</span> <span class="nb">convert</span><span class="p">(</span><span class="n">SparseMatrixCSC</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="kt">Int64</span><span class="p">},</span> <span class="n">x</span><span class="p">);</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">y</span> <span class="o">=</span> <span class="n">convert</span><span class="p">(</span><span class="kt">SparseMatrixCSC</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="kt">Int64</span><span class="p">},</span> <span class="n">x</span><span class="p">);</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">z</span> <span class="o">=</span> <span class="nb">convert</span><span class="p">(</span><span class="n">SparseMatrixCSC</span><span class="p">{</span><span class="kt">Float32</span><span class="p">,</span><span class="kt">Int64</span><span class="p">},</span> <span class="n">y</span><span class="p">);</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">z</span> <span class="o">=</span> <span class="n">convert</span><span class="p">(</span><span class="kt">SparseMatrixCSC</span><span class="p">{</span><span class="kt">Float32</span><span class="p">,</span><span class="kt">Int64</span><span class="p">},</span> <span class="n">y</span><span class="p">);</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">y</span> <span class="o">===</span> <span class="n">x</span>
-<span class="n">true</span>
+<span class="kc">true</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">z</span> <span class="o">===</span> <span class="n">x</span>
-<span class="n">false</span>
+<span class="kc">false</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">z</span><span class="o">.</span><span class="n">colptr</span> <span class="o">===</span> <span class="n">x</span><span class="o">.</span><span class="n">colptr</span>
-<span class="n">true</span>
+<span class="kc">true</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1113,22 +1114,22 @@
 <dt id="Base.fieldoffset">
 <code class="descname">fieldoffset</code><span class="sig-paren">(</span><em>type</em>, <em>i</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.fieldoffset" title="Permalink to this definition">¶</a></dt>
 <dd><p>The byte offset of field <code class="docutils literal"><span class="pre">i</span></code> of a type relative to the data start. For example, we could use it in the following manner to summarize information about a struct type:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">structinfo</span><span class="p">(</span><span class="n">T</span><span class="p">)</span> <span class="o">=</span> <span class="p">[(</span><span class="n">fieldoffset</span><span class="p">(</span><span class="n">T</span><span class="p">,</span><span class="n">i</span><span class="p">),</span> <span class="n">fieldname</span><span class="p">(</span><span class="n">T</span><span class="p">,</span><span class="n">i</span><span class="p">),</span> <span class="n">fieldtype</span><span class="p">(</span><span class="n">T</span><span class="p">,</span><span class="n">i</span><span class="p">))</span> <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="n">nfields</span><span class="p">(</span><span class="n">T</span><span class="p">)];</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">structinfo</span><span class="p">(</span><span class="n">T</span><span class="p">)</span> <span class="o">=</span> <span class="p">[(</span><span class="n">fieldoffset</span><span class="p">(</span><span class="n">T</span><span class="p">,</span><span class="n">i</span><span class="p">),</span> <span class="n">fieldname</span><span class="p">(</span><span class="n">T</span><span class="p">,</span><span class="n">i</span><span class="p">),</span> <span class="n">fieldtype</span><span class="p">(</span><span class="n">T</span><span class="p">,</span><span class="n">i</span><span class="p">))</span> <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="o">:</span><span class="n">nfields</span><span class="p">(</span><span class="n">T</span><span class="p">)];</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">structinfo</span><span class="p">(</span><span class="n">Base</span><span class="o">.</span><span class="n">Filesystem</span><span class="o">.</span><span class="n">StatStruct</span><span class="p">)</span>
-<span class="mi">12</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="n">Tuple</span><span class="p">{</span><span class="n">UInt64</span><span class="p">,</span><span class="n">Symbol</span><span class="p">,</span><span class="n">DataType</span><span class="p">},</span><span class="mi">1</span><span class="p">}:</span>
- <span class="p">(</span><span class="mh">0x0000000000000000</span><span class="p">,:</span><span class="n">device</span><span class="p">,</span><span class="n">UInt64</span><span class="p">)</span>
- <span class="p">(</span><span class="mh">0x0000000000000008</span><span class="p">,:</span><span class="n">inode</span><span class="p">,</span><span class="n">UInt64</span><span class="p">)</span>
- <span class="p">(</span><span class="mh">0x0000000000000010</span><span class="p">,:</span><span class="n">mode</span><span class="p">,</span><span class="n">UInt64</span><span class="p">)</span>
- <span class="p">(</span><span class="mh">0x0000000000000018</span><span class="p">,:</span><span class="n">nlink</span><span class="p">,</span><span class="kt">Int64</span><span class="p">)</span>
- <span class="p">(</span><span class="mh">0x0000000000000020</span><span class="p">,:</span><span class="nb">uid</span><span class="p">,</span><span class="n">UInt64</span><span class="p">)</span>
- <span class="p">(</span><span class="mh">0x0000000000000028</span><span class="p">,:</span><span class="n">gid</span><span class="p">,</span><span class="n">UInt64</span><span class="p">)</span>
- <span class="p">(</span><span class="mh">0x0000000000000030</span><span class="p">,:</span><span class="n">rdev</span><span class="p">,</span><span class="n">UInt64</span><span class="p">)</span>
- <span class="p">(</span><span class="mh">0x0000000000000038</span><span class="p">,:</span><span class="n">size</span><span class="p">,</span><span class="kt">Int64</span><span class="p">)</span>
- <span class="p">(</span><span class="mh">0x0000000000000040</span><span class="p">,:</span><span class="n">blksize</span><span class="p">,</span><span class="kt">Int64</span><span class="p">)</span>
- <span class="p">(</span><span class="mh">0x0000000000000048</span><span class="p">,:</span><span class="n">blocks</span><span class="p">,</span><span class="kt">Int64</span><span class="p">)</span>
- <span class="p">(</span><span class="mh">0x0000000000000050</span><span class="p">,:</span><span class="n">mtime</span><span class="p">,</span><span class="kt">Float64</span><span class="p">)</span>
- <span class="p">(</span><span class="mh">0x0000000000000058</span><span class="p">,:</span><span class="n">ctime</span><span class="p">,</span><span class="kt">Float64</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">structinfo</span><span class="p">(</span><span class="n">Base</span><span class="o">.</span><span class="n">Filesystem</span><span class="o">.</span><span class="kt">StatStruct</span><span class="p">)</span>
+<span class="mi">12</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Tuple</span><span class="p">{</span><span class="kt">UInt64</span><span class="p">,</span><span class="kt">Symbol</span><span class="p">,</span><span class="kt">DataType</span><span class="p">},</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
+ <span class="p">(</span><span class="mh">0x0000000000000000</span><span class="p">,</span><span class="o">:</span><span class="n">device</span><span class="p">,</span><span class="kt">UInt64</span><span class="p">)</span>
+ <span class="p">(</span><span class="mh">0x0000000000000008</span><span class="p">,</span><span class="o">:</span><span class="n">inode</span><span class="p">,</span><span class="kt">UInt64</span><span class="p">)</span>
+ <span class="p">(</span><span class="mh">0x0000000000000010</span><span class="p">,</span><span class="o">:</span><span class="n">mode</span><span class="p">,</span><span class="kt">UInt64</span><span class="p">)</span>
+ <span class="p">(</span><span class="mh">0x0000000000000018</span><span class="p">,</span><span class="o">:</span><span class="n">nlink</span><span class="p">,</span><span class="kt">Int64</span><span class="p">)</span>
+ <span class="p">(</span><span class="mh">0x0000000000000020</span><span class="p">,</span><span class="o">:</span><span class="n">uid</span><span class="p">,</span><span class="kt">UInt64</span><span class="p">)</span>
+ <span class="p">(</span><span class="mh">0x0000000000000028</span><span class="p">,</span><span class="o">:</span><span class="n">gid</span><span class="p">,</span><span class="kt">UInt64</span><span class="p">)</span>
+ <span class="p">(</span><span class="mh">0x0000000000000030</span><span class="p">,</span><span class="o">:</span><span class="n">rdev</span><span class="p">,</span><span class="kt">UInt64</span><span class="p">)</span>
+ <span class="p">(</span><span class="mh">0x0000000000000038</span><span class="p">,</span><span class="o">:</span><span class="n">size</span><span class="p">,</span><span class="kt">Int64</span><span class="p">)</span>
+ <span class="p">(</span><span class="mh">0x0000000000000040</span><span class="p">,</span><span class="o">:</span><span class="n">blksize</span><span class="p">,</span><span class="kt">Int64</span><span class="p">)</span>
+ <span class="p">(</span><span class="mh">0x0000000000000048</span><span class="p">,</span><span class="o">:</span><span class="n">blocks</span><span class="p">,</span><span class="kt">Int64</span><span class="p">)</span>
+ <span class="p">(</span><span class="mh">0x0000000000000050</span><span class="p">,</span><span class="o">:</span><span class="n">mtime</span><span class="p">,</span><span class="kt">Float64</span><span class="p">)</span>
+ <span class="p">(</span><span class="mh">0x0000000000000058</span><span class="p">,</span><span class="o">:</span><span class="n">ctime</span><span class="p">,</span><span class="kt">Float64</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1142,18 +1143,18 @@
 <dl class="function">
 <dt id="Base.isimmutable">
 <code class="descname">isimmutable</code><span class="sig-paren">(</span><em>v</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.isimmutable" title="Permalink to this definition">¶</a></dt>
-<dd><p>Return <code class="docutils literal"><span class="pre">true</span></code> iff value <code class="docutils literal"><span class="pre">v</span></code> is immutable.  See <a class="reference internal" href="../../manual/types/#man-immutable-composite-types"><span>Immutable Composite Types</span></a> for a discussion of immutability. Note that this function works on values, so if you give it a type, it will tell you that a value of <code class="docutils literal"><span class="pre">DataType</span></code> is mutable.</p>
+<dd><p>Return <code class="docutils literal"><span class="pre">true</span></code> iff value <code class="docutils literal"><span class="pre">v</span></code> is immutable.  See <a class="reference internal" href="../../manual/types/#man-immutable-composite-types"><span class="std std-ref">Immutable Composite Types</span></a> for a discussion of immutability. Note that this function works on values, so if you give it a type, it will tell you that a value of <code class="docutils literal"><span class="pre">DataType</span></code> is mutable.</p>
 </dd></dl>
 
 <dl class="function">
 <dt id="Base.isbits">
 <code class="descname">isbits</code><span class="sig-paren">(</span><em>T</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.isbits" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return <code class="docutils literal"><span class="pre">true</span></code> if <code class="docutils literal"><span class="pre">T</span></code> is a &#8220;plain data&#8221; type, meaning it is immutable and contains no references to other values. Typical examples are numeric types such as <code class="docutils literal"><span class="pre">UInt8</span></code>, <code class="docutils literal"><span class="pre">Float64</span></code>, and <code class="docutils literal"><span class="pre">Complex{Float64}</span></code>.</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">isbits</span><span class="p">(</span><span class="n">Complex</span><span class="p">{</span><span class="kt">Float64</span><span class="p">})</span>
-<span class="n">true</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">isbits</span><span class="p">(</span><span class="kt">Complex</span><span class="p">{</span><span class="kt">Float64</span><span class="p">})</span>
+<span class="kc">true</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">isbits</span><span class="p">(</span><span class="n">Complex</span><span class="p">)</span>
-<span class="n">false</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">isbits</span><span class="p">(</span><span class="kt">Complex</span><span class="p">)</span>
+<span class="kc">false</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1186,10 +1187,10 @@
 <dt>
 <code class="descname">&#64;enum EnumName EnumValue1[=x] EnumValue2[=y]</code></dt>
 <dd><p>Create an <code class="xref jl jl-obj docutils literal"><span class="pre">Enum</span></code> type with name <code class="docutils literal"><span class="pre">EnumName</span></code> and enum member values of <code class="docutils literal"><span class="pre">EnumValue1</span></code> and <code class="docutils literal"><span class="pre">EnumValue2</span></code> with optional assigned values of <code class="docutils literal"><span class="pre">x</span></code> and <code class="docutils literal"><span class="pre">y</span></code>, respectively. <code class="docutils literal"><span class="pre">EnumName</span></code> can be used just like other types and enum member values as regular values, such as</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">enum</span> <span class="n">FRUIT</span> <span class="n">apple</span><span class="o">=</span><span class="mi">1</span> <span class="n">orange</span><span class="o">=</span><span class="mi">2</span> <span class="n">kiwi</span><span class="o">=</span><span class="mi">3</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nd">@enum</span> <span class="n">FRUIT</span> <span class="n">apple</span><span class="o">=</span><span class="mi">1</span> <span class="n">orange</span><span class="o">=</span><span class="mi">2</span> <span class="n">kiwi</span><span class="o">=</span><span class="mi">3</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">f</span><span class="p">(</span><span class="n">x</span><span class="p">::</span><span class="n">FRUIT</span><span class="p">)</span> <span class="o">=</span> <span class="s">&quot;I&#39;m a FRUIT with value: </span><span class="si">$(Int(x))</span><span class="s">&quot;</span>
-<span class="n">f</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span><span class="nf"> with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">f</span><span class="p">(</span><span class="n">x</span><span class="o">::</span><span class="n">FRUIT</span><span class="p">)</span> <span class="o">=</span> <span class="s">&quot;I&#39;m a FRUIT with value: </span><span class="si">$</span><span class="p">(</span><span class="kt">Int</span><span class="p">(</span><span class="n">x</span><span class="p">))</span><span class="s">&quot;</span>
+<span class="n">f</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span> <span class="n">with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">f</span><span class="p">(</span><span class="n">apple</span><span class="p">)</span>
 <span class="s">&quot;I&#39;m a FRUIT with value: 1&quot;</span>
@@ -1206,12 +1207,28 @@
 </div>
 <div class="section" id="generic-functions">
 <h2>Generic Functions<a class="headerlink" href="#generic-functions" title="Permalink to this headline">¶</a></h2>
+<dl class="data">
+<dt id="Base.Function">
+<code class="descname">Function</code><a class="headerlink" href="#Base.Function" title="Permalink to this definition">¶</a></dt>
+<dd><p>Abstract type of all functions.</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">isa</span><span class="p">(</span><span class="o">+</span><span class="p">,</span> <span class="kt">Function</span><span class="p">)</span>
+<span class="kc">true</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">typeof</span><span class="p">(</span><span class="n">sin</span><span class="p">)</span>
+<span class="n">Base</span><span class="o">.</span><span class="c">#sin</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">ans</span> <span class="o">&lt;:</span> <span class="kt">Function</span>
+<span class="kc">true</span>
+</pre></div>
+</div>
+</dd></dl>
+
 <dl class="function">
 <dt id="Base.method_exists">
 <code class="descname">method_exists</code><span class="sig-paren">(</span><em>f</em>, <em>Tuple type</em><span class="sig-paren">)</span> &rarr; Bool<a class="headerlink" href="#Base.method_exists" title="Permalink to this definition">¶</a></dt>
 <dd><p>Determine whether the given generic function has a method matching the given <code class="xref jl jl-obj docutils literal"><span class="pre">Tuple</span></code> of argument types.</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nb">method_exists</span><span class="p">(</span><span class="n">length</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">{</span><span class="n">Array</span><span class="p">})</span>
-<span class="n">true</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">method_exists</span><span class="p">(</span><span class="n">length</span><span class="p">,</span> <span class="kt">Tuple</span><span class="p">{</span><span class="kt">Array</span><span class="p">})</span>
+<span class="kc">true</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1220,15 +1237,15 @@
 <dt id="Base.applicable">
 <code class="descname">applicable</code><span class="sig-paren">(</span><em>f</em>, <em>args...</em><span class="sig-paren">)</span> &rarr; Bool<a class="headerlink" href="#Base.applicable" title="Permalink to this definition">¶</a></dt>
 <dd><p>Determine whether the given generic function has a method applicable to the given arguments.</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">function</span><span class="nf"> f</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">function</span> <span class="n">f</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
            <span class="n">x</span> <span class="o">+</span> <span class="n">y</span>
        <span class="k">end</span><span class="p">;</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">applicable</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
-<span class="n">false</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">applicable</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="kc">false</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">applicable</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
-<span class="n">true</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">applicable</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+<span class="kc">true</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1243,7 +1260,7 @@
 <dt id="Base.|&gt;">
 <code class="descname">|&gt;</code><span class="sig-paren">(</span><em>x</em>, <em>f</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.|>" title="Permalink to this definition">¶</a></dt>
 <dd><p>Applies a function to the preceding argument. This allows for easy function chaining.</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">[</span><span class="mi">1</span><span class="p">:</span><span class="mi">5</span><span class="p">;]</span> <span class="o">|&gt;</span> <span class="n">x</span><span class="o">-&gt;</span><span class="n">x</span><span class="o">.^</span><span class="mi">2</span> <span class="o">|&gt;</span> <span class="n">sum</span> <span class="o">|&gt;</span> <span class="n">inv</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">[</span><span class="mi">1</span><span class="o">:</span><span class="mi">5</span><span class="p">;]</span> <span class="o">|&gt;</span> <span class="n">x</span><span class="o">-&gt;</span><span class="n">x</span><span class="o">.^</span><span class="mi">2</span> <span class="o">|&gt;</span> <span class="n">sum</span> <span class="o">|&gt;</span> <span class="n">inv</span>
 <span class="mf">0.01818181818181818</span>
 </pre></div>
 </div>
@@ -1273,7 +1290,7 @@
 <dl class="function">
 <dt id="Base.esc">
 <code class="descname">esc</code><span class="sig-paren">(</span><em>e::ANY</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.esc" title="Permalink to this definition">¶</a></dt>
-<dd><p>Only valid in the context of an <code class="docutils literal"><span class="pre">Expr</span></code> returned from a macro. Prevents the macro hygiene pass from turning embedded variables into gensym variables. See the <a class="reference internal" href="../../manual/metaprogramming/#man-macros"><span>Macros</span></a> section of the Metaprogramming chapter of the manual for more details and examples.</p>
+<dd><p>Only valid in the context of an <code class="docutils literal"><span class="pre">Expr</span></code> returned from a macro. Prevents the macro hygiene pass from turning embedded variables into gensym variables. See the <a class="reference internal" href="../../manual/metaprogramming/#man-macros"><span class="std std-ref">Macros</span></a> section of the Metaprogramming chapter of the manual for more details and examples.</p>
 </dd></dl>
 
 <dl class="function">
@@ -1340,7 +1357,7 @@
 <dt id="Base.DevNull">
 <code class="descname">DevNull</code><a class="headerlink" href="#Base.DevNull" title="Permalink to this definition">¶</a></dt>
 <dd><p>Used in a stream redirect to discard all data written to it. Essentially equivalent to /dev/null on Unix or NUL on Windows. Usage:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">run</span><span class="p">(</span><span class="n">pipeline</span><span class="p">(</span><span class="sb">`cat test.txt`</span><span class="p">,</span> <span class="n">DevNull</span><span class="p">))</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">run</span><span class="p">(</span><span class="n">pipeline</span><span class="p">(</span><span class="sb">`cat test.txt`</span><span class="p">,</span> <span class="nb">DevNull</span><span class="p">))</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1414,7 +1431,7 @@
 <li><code class="docutils literal"><span class="pre">dir::AbstractString</span></code>: Specify a working directory for the command (instead of the current directory).</li>
 </ul>
 <p>For any keywords that are not specified, the current settings from <code class="docutils literal"><span class="pre">cmd</span></code> are used.   Normally, to create a <code class="docutils literal"><span class="pre">Cmd</span></code> object in the first place, one uses backticks, e.g.</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">Cmd</span><span class="p">(</span><span class="sb">`echo &quot;Hello world&quot;`</span><span class="p">,</span> <span class="n">ignorestatus</span><span class="o">=</span><span class="n">true</span><span class="p">,</span> <span class="n">detach</span><span class="o">=</span><span class="n">false</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="kt">Cmd</span><span class="p">(</span><span class="sb">`echo &quot;Hello world&quot;`</span><span class="p">,</span> <span class="n">ignorestatus</span><span class="o">=</span><span class="kc">true</span><span class="p">,</span> <span class="n">detach</span><span class="o">=</span><span class="kc">false</span><span class="p">)</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1450,7 +1467,7 @@
 <dd><p>Redirect I/O to or from the given <code class="docutils literal"><span class="pre">command</span></code>. Keyword arguments specify which of the command&#8217;s streams should be redirected. <code class="docutils literal"><span class="pre">append</span></code> controls whether file output appends to the file. This is a more general version of the 2-argument <code class="docutils literal"><span class="pre">pipeline</span></code> function. <code class="docutils literal"><span class="pre">pipeline(from,</span> <span class="pre">to)</span></code> is equivalent to <code class="docutils literal"><span class="pre">pipeline(from,</span> <span class="pre">stdout=to)</span></code> when <code class="docutils literal"><span class="pre">from</span></code> is a command, and to <code class="docutils literal"><span class="pre">pipeline(to,</span> <span class="pre">stdin=from)</span></code> when <code class="docutils literal"><span class="pre">from</span></code> is another kind of data source.</p>
 <p><strong>Examples</strong>:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">run</span><span class="p">(</span><span class="n">pipeline</span><span class="p">(</span><span class="sb">`dothings`</span><span class="p">,</span> <span class="n">stdout</span><span class="o">=</span><span class="s">&quot;out.txt&quot;</span><span class="p">,</span> <span class="n">stderr</span><span class="o">=</span><span class="s">&quot;errs.txt&quot;</span><span class="p">))</span>
-<span class="n">run</span><span class="p">(</span><span class="n">pipeline</span><span class="p">(</span><span class="sb">`update`</span><span class="p">,</span> <span class="n">stdout</span><span class="o">=</span><span class="s">&quot;log.txt&quot;</span><span class="p">,</span> <span class="n">append</span><span class="o">=</span><span class="n">true</span><span class="p">))</span>
+<span class="n">run</span><span class="p">(</span><span class="n">pipeline</span><span class="p">(</span><span class="sb">`update`</span><span class="p">,</span> <span class="n">stdout</span><span class="o">=</span><span class="s">&quot;log.txt&quot;</span><span class="p">,</span> <span class="n">append</span><span class="o">=</span><span class="kc">true</span><span class="p">))</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1553,31 +1570,31 @@
 <dl class="function">
 <dt id="Base.is_unix">
 <code class="descname">is_unix</code><span class="sig-paren">(</span><span class="optional">[</span><em>os</em><span class="optional">]</span><span class="sig-paren">)</span><a class="headerlink" href="#Base.is_unix" title="Permalink to this definition">¶</a></dt>
-<dd><p>Predicate for testing if the OS provides a Unix-like interface. See documentation in <a class="reference internal" href="../../manual/handling-operating-system-variation/#man-handling-operating-system-variation"><span>Handling Operating System Variation</span></a>.</p>
+<dd><p>Predicate for testing if the OS provides a Unix-like interface. See documentation in <a class="reference internal" href="../../manual/handling-operating-system-variation/#man-handling-operating-system-variation"><span class="std std-ref">Handling Operating System Variation</span></a>.</p>
 </dd></dl>
 
 <dl class="function">
 <dt id="Base.is_apple">
 <code class="descname">is_apple</code><span class="sig-paren">(</span><span class="optional">[</span><em>os</em><span class="optional">]</span><span class="sig-paren">)</span><a class="headerlink" href="#Base.is_apple" title="Permalink to this definition">¶</a></dt>
-<dd><p>Predicate for testing if the OS is a derivative of Apple Macintosh OS X or Darwin. See documentation in <a class="reference internal" href="../../manual/handling-operating-system-variation/#man-handling-operating-system-variation"><span>Handling Operating System Variation</span></a>.</p>
+<dd><p>Predicate for testing if the OS is a derivative of Apple Macintosh OS X or Darwin. See documentation in <a class="reference internal" href="../../manual/handling-operating-system-variation/#man-handling-operating-system-variation"><span class="std std-ref">Handling Operating System Variation</span></a>.</p>
 </dd></dl>
 
 <dl class="function">
 <dt id="Base.is_linux">
 <code class="descname">is_linux</code><span class="sig-paren">(</span><span class="optional">[</span><em>os</em><span class="optional">]</span><span class="sig-paren">)</span><a class="headerlink" href="#Base.is_linux" title="Permalink to this definition">¶</a></dt>
-<dd><p>Predicate for testing if the OS is a derivative of Linux. See documentation in <a class="reference internal" href="../../manual/handling-operating-system-variation/#man-handling-operating-system-variation"><span>Handling Operating System Variation</span></a>.</p>
+<dd><p>Predicate for testing if the OS is a derivative of Linux. See documentation in <a class="reference internal" href="../../manual/handling-operating-system-variation/#man-handling-operating-system-variation"><span class="std std-ref">Handling Operating System Variation</span></a>.</p>
 </dd></dl>
 
 <dl class="function">
 <dt id="Base.is_bsd">
 <code class="descname">is_bsd</code><span class="sig-paren">(</span><span class="optional">[</span><em>os</em><span class="optional">]</span><span class="sig-paren">)</span><a class="headerlink" href="#Base.is_bsd" title="Permalink to this definition">¶</a></dt>
-<dd><p>Predicate for testing if the OS is a derivative of BSD. See documentation in <a class="reference internal" href="../../manual/handling-operating-system-variation/#man-handling-operating-system-variation"><span>Handling Operating System Variation</span></a>.</p>
+<dd><p>Predicate for testing if the OS is a derivative of BSD. See documentation in <a class="reference internal" href="../../manual/handling-operating-system-variation/#man-handling-operating-system-variation"><span class="std std-ref">Handling Operating System Variation</span></a>.</p>
 </dd></dl>
 
 <dl class="function">
 <dt id="Base.is_windows">
 <code class="descname">is_windows</code><span class="sig-paren">(</span><span class="optional">[</span><em>os</em><span class="optional">]</span><span class="sig-paren">)</span><a class="headerlink" href="#Base.is_windows" title="Permalink to this definition">¶</a></dt>
-<dd><p>Predicate for testing if the OS is a derivative of Microsoft Windows NT. See documentation in <a class="reference internal" href="../../manual/handling-operating-system-variation/#man-handling-operating-system-variation"><span>Handling Operating System Variation</span></a>.</p>
+<dd><p>Predicate for testing if the OS is a derivative of Microsoft Windows NT. See documentation in <a class="reference internal" href="../../manual/handling-operating-system-variation/#man-handling-operating-system-variation"><span class="std std-ref">Handling Operating System Variation</span></a>.</p>
 </dd></dl>
 
 <dl class="function">
@@ -1794,7 +1811,7 @@
 <dd><p>Returns a lambda that retries function <code class="docutils literal"><span class="pre">f</span></code> up to <code class="docutils literal"><span class="pre">n</span></code> times in the event of an exception. If <code class="docutils literal"><span class="pre">retry_on</span></code> is a <code class="docutils literal"><span class="pre">Type</span></code> then retry only for exceptions of that type. If <code class="docutils literal"><span class="pre">retry_on</span></code> is a function <code class="docutils literal"><span class="pre">test_error(::Exception)</span> <span class="pre">-&gt;</span> <span class="pre">Bool</span></code> then retry only if it is true.</p>
 <p>The first retry happens after a gap of 50 milliseconds or <code class="docutils literal"><span class="pre">max_delay</span></code>, whichever is lower. Subsequently, the delays between retries are exponentially increased with a random factor up to <code class="docutils literal"><span class="pre">max_delay</span></code>.</p>
 <p><strong>Examples</strong></p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">retry</span><span class="p">(</span><span class="n">http_get</span><span class="p">,</span> <span class="n">e</span> <span class="o">-&gt;</span> <span class="n">e</span><span class="o">.</span><span class="n">status</span> <span class="o">==</span> <span class="s">&quot;503&quot;</span><span class="p">)(</span><span class="n">url</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">retry</span><span class="p">(</span><span class="n">http_get</span><span class="p">,</span> <span class="nb">e</span> <span class="o">-&gt;</span> <span class="nb">e</span><span class="o">.</span><span class="n">status</span> <span class="o">==</span> <span class="s">&quot;503&quot;</span><span class="p">)(</span><span class="n">url</span><span class="p">)</span>
 <span class="n">retry</span><span class="p">(</span><span class="n">read</span><span class="p">,</span> <span class="n">UVError</span><span class="p">)(</span><span class="n">io</span><span class="p">)</span>
 </pre></div>
 </div>
@@ -1980,7 +1997,7 @@
 <dl class="function">
 <dt id="Base.code_warntype">
 <code class="descname">code_warntype</code><span class="sig-paren">(</span><span class="optional">[</span><em>io</em>, <span class="optional">]</span><em>f</em>, <em>types</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.code_warntype" title="Permalink to this definition">¶</a></dt>
-<dd><p>Prints lowered and type-inferred ASTs for the methods matching the given generic function and type signature to <code class="docutils literal"><span class="pre">io</span></code> which defaults to <code class="docutils literal"><span class="pre">STDOUT</span></code>. The ASTs are annotated in such a way as to cause &#8220;non-leaf&#8221; types to be emphasized (if color is available, displayed in red). This serves as a warning of potential type instability. Not all non-leaf types are particularly problematic for performance, so the results need to be used judiciously. See <a class="reference internal" href="../../manual/performance-tips/#man-code-warntype"><span>&#64;code_warntype</span></a> for more information.</p>
+<dd><p>Prints lowered and type-inferred ASTs for the methods matching the given generic function and type signature to <code class="docutils literal"><span class="pre">io</span></code> which defaults to <code class="docutils literal"><span class="pre">STDOUT</span></code>. The ASTs are annotated in such a way as to cause &#8220;non-leaf&#8221; types to be emphasized (if color is available, displayed in red). This serves as a warning of potential type instability. Not all non-leaf types are particularly problematic for performance, so the results need to be used judiciously. See <a class="reference internal" href="../../manual/performance-tips/#man-code-warntype"><span class="std std-ref">&#64;code_warntype</span></a> for more information.</p>
 </dd></dl>
 
 <dl class="function">
@@ -2059,7 +2076,7 @@
     <script type="text/javascript">
         var DOCUMENTATION_OPTIONS = {
             URL_ROOT:'../../',
-            VERSION:'0.5.1-pre',
+            VERSION:'0.5.3-pre',
             COLLAPSE_INDEX:false,
             FILE_SUFFIX:'',
             HAS_SOURCE:  true

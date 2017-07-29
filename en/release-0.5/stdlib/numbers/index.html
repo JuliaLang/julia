@@ -7,7 +7,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Numbers &mdash; Julia Language 0.5.1-pre documentation</title>
+  <title>Numbers &mdash; Julia Language 0.5.3-pre documentation</title>
   
 
   
@@ -30,7 +30,7 @@
   
     <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
   
-    <link rel="top" title="Julia Language 0.5.1-pre documentation" href="../../"/>
+    <link rel="top" title="Julia Language 0.5.3-pre documentation" href="../../"/>
         <link rel="next" title="Strings" href="../strings/"/>
         <link rel="prev" title="Mathematics" href="../math/"/> 
 
@@ -149,6 +149,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#man-parametric-types">Parametric Types</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#type-aliases">Type Aliases</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#operations-on-types">Operations on Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/types/#custom-pretty-printing">Custom pretty-printing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#value-types">&#8220;Value types&#8221;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#nullable-types-representing-missing-values">Nullable Types: Representing Missing Values</a></li>
 </ul>
@@ -434,7 +435,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../math/#numerical-integration">Numerical Integration</a></li>
 </ul>
 </li>
-<li class="toctree-l1 current"><a class="current reference internal" href="">Numbers</a><ul>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Numbers</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#standard-numeric-types">Standard Numeric Types</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#data-formats">Data Formats</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#general-number-functions-and-constants">General Number Functions and Constants</a></li>
@@ -879,10 +880,10 @@
 <dt id="Base.Float32">
 <code class="descname">Float32</code><span class="sig-paren">(</span><em>x</em><span class="optional">[</span>, <em>mode::RoundingMode</em><span class="optional">]</span><span class="sig-paren">)</span><a class="headerlink" href="#Base.Float32" title="Permalink to this definition">¶</a></dt>
 <dd><p>Create a Float32 from <code class="docutils literal"><span class="pre">x</span></code>. If <code class="docutils literal"><span class="pre">x</span></code> is not exactly representable then <code class="docutils literal"><span class="pre">mode</span></code> determines how <code class="docutils literal"><span class="pre">x</span></code> is rounded.</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="kt">Float32</span><span class="p">(</span><span class="mi">1</span><span class="o">/</span><span class="mi">3</span><span class="p">,</span> <span class="n">RoundDown</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="kt">Float32</span><span class="p">(</span><span class="mi">1</span><span class="o">/</span><span class="mi">3</span><span class="p">,</span> <span class="nb">RoundDown</span><span class="p">)</span>
 <span class="mf">0.3333333f0</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="kt">Float32</span><span class="p">(</span><span class="mi">1</span><span class="o">/</span><span class="mi">3</span><span class="p">,</span> <span class="n">RoundUp</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="kt">Float32</span><span class="p">(</span><span class="mi">1</span><span class="o">/</span><span class="mi">3</span><span class="p">,</span> <span class="nb">RoundUp</span><span class="p">)</span>
 <span class="mf">0.33333334f0</span>
 </pre></div>
 </div>
@@ -893,10 +894,10 @@
 <dt id="Base.Float64">
 <code class="descname">Float64</code><span class="sig-paren">(</span><em>x</em><span class="optional">[</span>, <em>mode::RoundingMode</em><span class="optional">]</span><span class="sig-paren">)</span><a class="headerlink" href="#Base.Float64" title="Permalink to this definition">¶</a></dt>
 <dd><p>Create a Float64 from <code class="docutils literal"><span class="pre">x</span></code>. If <code class="docutils literal"><span class="pre">x</span></code> is not exactly representable then <code class="docutils literal"><span class="pre">mode</span></code> determines how <code class="docutils literal"><span class="pre">x</span></code> is rounded.</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="kt">Float64</span><span class="p">(</span><span class="nb">pi</span><span class="p">,</span> <span class="n">RoundDown</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="kt">Float64</span><span class="p">(</span><span class="nb">pi</span><span class="p">,</span> <span class="nb">RoundDown</span><span class="p">)</span>
 <span class="mf">3.141592653589793</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="kt">Float64</span><span class="p">(</span><span class="nb">pi</span><span class="p">,</span> <span class="n">RoundUp</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="kt">Float64</span><span class="p">(</span><span class="nb">pi</span><span class="p">,</span> <span class="nb">RoundUp</span><span class="p">)</span>
 <span class="mf">3.1415926535897936</span>
 </pre></div>
 </div>
@@ -915,7 +916,7 @@
 <code class="descname">BigFloat</code><span class="sig-paren">(</span><em>x</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.BigFloat" title="Permalink to this definition">¶</a></dt>
 <dd><p>Create an arbitrary precision floating point number. <code class="docutils literal"><span class="pre">x</span></code> may be an <code class="docutils literal"><span class="pre">Integer</span></code>, a <code class="docutils literal"><span class="pre">Float64</span></code> or a <code class="docutils literal"><span class="pre">BigInt</span></code>. The usual mathematical operators are defined for this type, and results are promoted to a <code class="docutils literal"><span class="pre">BigFloat</span></code>.</p>
 <p>Note that because decimal literals are converted to floating point numbers when parsed, <code class="docutils literal"><span class="pre">BigFloat(2.1)</span></code> may not yield what you expect. You may instead prefer to initialize constants from strings via <a class="reference internal" href="#Base.parse" title="Base.parse"><code class="xref jl jl-func docutils literal"><span class="pre">parse()</span></code></a>, or using the <code class="docutils literal"><span class="pre">big</span></code> string literal.</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">BigFloat</span><span class="p">(</span><span class="mf">2.1</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="kt">BigFloat</span><span class="p">(</span><span class="mf">2.1</span><span class="p">)</span>
 <span class="mf">2.100000000000000088817841970012523233890533447265625000000000000000000000000000</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">big</span><span class="s">&quot;2.1&quot;</span>
@@ -956,7 +957,7 @@
 <div class="admonition warning">
 <p class="first admonition-title">Warning</p>
 <p>This feature is still experimental, and may give unexpected or incorrect values. A known problem is the interaction with compiler optimisations, e.g.</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">setrounding</span><span class="p">(</span><span class="kt">Float64</span><span class="p">,</span><span class="n">RoundDown</span><span class="p">)</span> <span class="k">do</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">setrounding</span><span class="p">(</span><span class="kt">Float64</span><span class="p">,</span><span class="nb">RoundDown</span><span class="p">)</span> <span class="k">do</span>
     <span class="mf">1.1</span> <span class="o">+</span> <span class="mf">0.1</span>
 <span class="k">end</span>
 <span class="mf">1.2000000000000002</span>
@@ -965,7 +966,7 @@
 <p>Here the compiler is <em>constant folding</em>, that is evaluating a known constant expression at compile time, however the rounding mode is only changed at runtime, so this is not reflected in the function result. This can be avoided by moving constants outside the expression, e.g.</p>
 <div class="last highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">x</span> <span class="o">=</span> <span class="mf">1.1</span><span class="p">;</span> <span class="n">y</span> <span class="o">=</span> <span class="mf">0.1</span><span class="p">;</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">setrounding</span><span class="p">(</span><span class="kt">Float64</span><span class="p">,</span><span class="n">RoundDown</span><span class="p">)</span> <span class="k">do</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">setrounding</span><span class="p">(</span><span class="kt">Float64</span><span class="p">,</span><span class="nb">RoundDown</span><span class="p">)</span> <span class="k">do</span>
     <span class="n">x</span> <span class="o">+</span> <span class="n">y</span>
 <span class="k">end</span>
 <span class="mf">1.2</span>
@@ -1023,7 +1024,7 @@
 <dt id="Base.leading_ones">
 <code class="descname">leading_ones</code><span class="sig-paren">(</span><em>x::Integer</em><span class="sig-paren">)</span> &rarr; Integer<a class="headerlink" href="#Base.leading_ones" title="Permalink to this definition">¶</a></dt>
 <dd><p>Number of ones leading the binary representation of <code class="docutils literal"><span class="pre">x</span></code>.</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">leading_ones</span><span class="p">(</span><span class="n">UInt32</span><span class="p">(</span><span class="mi">2</span> <span class="o">^</span> <span class="mi">32</span> <span class="o">-</span> <span class="mi">2</span><span class="p">))</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">leading_ones</span><span class="p">(</span><span class="kt">UInt32</span><span class="p">(</span><span class="mi">2</span> <span class="o">^</span> <span class="mi">32</span> <span class="o">-</span> <span class="mi">2</span><span class="p">))</span>
 <span class="mi">31</span>
 </pre></div>
 </div>
@@ -1054,10 +1055,10 @@
 <code class="descname">isodd</code><span class="sig-paren">(</span><em>x::Integer</em><span class="sig-paren">)</span> &rarr; Bool<a class="headerlink" href="#Base.isodd" title="Permalink to this definition">¶</a></dt>
 <dd><p>Returns <code class="docutils literal"><span class="pre">true</span></code> if <code class="docutils literal"><span class="pre">x</span></code> is odd (that is, not divisible by 2), and <code class="docutils literal"><span class="pre">false</span></code> otherwise.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">isodd</span><span class="p">(</span><span class="mi">9</span><span class="p">)</span>
-<span class="n">true</span>
+<span class="kc">true</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">isodd</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span>
-<span class="n">false</span>
+<span class="kc">false</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1067,10 +1068,10 @@
 <code class="descname">iseven</code><span class="sig-paren">(</span><em>x::Integer</em><span class="sig-paren">)</span> &rarr; Bool<a class="headerlink" href="#Base.iseven" title="Permalink to this definition">¶</a></dt>
 <dd><p>Returns <code class="docutils literal"><span class="pre">true</span></code> is <code class="docutils literal"><span class="pre">x</span></code> is even (that is, divisible by 2), and <code class="docutils literal"><span class="pre">false</span></code> otherwise.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">iseven</span><span class="p">(</span><span class="mi">9</span><span class="p">)</span>
-<span class="n">false</span>
+<span class="kc">false</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">iseven</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span>
-<span class="n">true</span>
+<span class="kc">true</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1102,10 +1103,10 @@
 <dt>
 <code class="descname">setprecision</code><span class="sig-paren">(</span><em>f::Function</em>, <span class="optional">[</span><em>T=BigFloat</em>, <span class="optional">]</span><em>precision::Integer</em><span class="sig-paren">)</span></dt>
 <dd><p>Change the <code class="docutils literal"><span class="pre">T</span></code> arithmetic precision (in bits) for the duration of <code class="docutils literal"><span class="pre">f</span></code>. It is logically equivalent to:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">old</span> <span class="o">=</span> <span class="n">precision</span><span class="p">(</span><span class="n">BigFloat</span><span class="p">)</span>
-<span class="n">setprecision</span><span class="p">(</span><span class="n">BigFloat</span><span class="p">,</span> <span class="n">precision</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">old</span> <span class="o">=</span> <span class="n">precision</span><span class="p">(</span><span class="kt">BigFloat</span><span class="p">)</span>
+<span class="n">setprecision</span><span class="p">(</span><span class="kt">BigFloat</span><span class="p">,</span> <span class="n">precision</span><span class="p">)</span>
 <span class="n">f</span><span class="p">()</span>
-<span class="n">setprecision</span><span class="p">(</span><span class="n">BigFloat</span><span class="p">,</span> <span class="n">old</span><span class="p">)</span>
+<span class="n">setprecision</span><span class="p">(</span><span class="kt">BigFloat</span><span class="p">,</span> <span class="n">old</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>Often used as <code class="docutils literal"><span class="pre">setprecision(T,</span> <span class="pre">precision)</span> <span class="pre">do</span> <span class="pre">...</span> <span class="pre">end</span></code></p>
@@ -1236,7 +1237,7 @@ As <code class="docutils literal"><span class="pre">BigInt</span></code> represe
     <script type="text/javascript">
         var DOCUMENTATION_OPTIONS = {
             URL_ROOT:'../../',
-            VERSION:'0.5.1-pre',
+            VERSION:'0.5.3-pre',
             COLLAPSE_INDEX:false,
             FILE_SUFFIX:'',
             HAS_SOURCE:  true

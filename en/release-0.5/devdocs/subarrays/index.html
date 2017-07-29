@@ -7,7 +7,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>SubArrays &mdash; Julia Language 0.5.1-pre documentation</title>
+  <title>SubArrays &mdash; Julia Language 0.5.3-pre documentation</title>
   
 
   
@@ -30,7 +30,7 @@
   
     <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
   
-    <link rel="top" title="Julia Language 0.5.1-pre documentation" href="../../"/>
+    <link rel="top" title="Julia Language 0.5.3-pre documentation" href="../../"/>
         <link rel="up" title="Documentation of Julia’s Internals" href="../julia/"/>
         <link rel="next" title="System Image Building" href="../sysimg/"/>
         <link rel="prev" title="Talking to the compiler (the :meta mechanism)" href="../meta/"/> 
@@ -150,6 +150,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#man-parametric-types">Parametric Types</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#type-aliases">Type Aliases</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#operations-on-types">Operations on Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/types/#custom-pretty-printing">Custom pretty-printing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#value-types">&#8220;Value types&#8221;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#nullable-types-representing-missing-values">Nullable Types: Representing Missing Values</a></li>
 </ul>
@@ -524,7 +525,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../callconv/">Calling Conventions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../cartesian/">Base.Cartesian</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../meta/">Talking to the compiler (the <code class="docutils literal"><span class="pre">:meta</span></code> mechanism)</a></li>
-<li class="toctree-l2 current"><a class="current reference internal" href="">SubArrays</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">SubArrays</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../sysimg/">System Image Building</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../llvm/">Working with LLVM</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../stdio/">printf() and stdio in the Julia runtime</a></li>
@@ -618,11 +619,11 @@ linear, indexing.</p>
 <div class="section" id="index-replacement">
 <h2>Index replacement<a class="headerlink" href="#index-replacement" title="Permalink to this headline">¶</a></h2>
 <p>Consider making 2d slices of a 3d array:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">S1</span> <span class="o">=</span> <span class="n">slice</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="p">:,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">2</span><span class="p">:</span><span class="mi">6</span><span class="p">)</span>
-<span class="n">S2</span> <span class="o">=</span> <span class="n">slice</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="p">:,</span> <span class="mi">2</span><span class="p">:</span><span class="mi">6</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">S1</span> <span class="o">=</span> <span class="n">view</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="o">:</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">2</span><span class="o">:</span><span class="mi">6</span><span class="p">)</span>
+<span class="n">S2</span> <span class="o">=</span> <span class="n">view</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="o">:</span><span class="p">,</span> <span class="mi">2</span><span class="o">:</span><span class="mi">6</span><span class="p">)</span>
 </pre></div>
 </div>
-<p><code class="docutils literal"><span class="pre">slice</span></code> drops &#8220;singleton&#8221; dimensions (ones that are specified by an
+<p><code class="docutils literal"><span class="pre">view</span></code> drops &#8220;singleton&#8221; dimensions (ones that are specified by an
 <code class="docutils literal"><span class="pre">Int</span></code>), so both <code class="docutils literal"><span class="pre">S1</span></code> and <code class="docutils literal"><span class="pre">S2</span></code> are two-dimensional <code class="docutils literal"><span class="pre">SubArray</span></code>s.
 Consequently, the natural way to index these is with <code class="docutils literal"><span class="pre">S1[i,j]</span></code>.  To
 extract the value from the parent array <code class="docutils literal"><span class="pre">A</span></code>, the natural approach is
@@ -637,64 +638,57 @@ replacement can be performed without any runtime overhead.</p>
 <h3>Type parameters and fields<a class="headerlink" href="#type-parameters-and-fields" title="Permalink to this headline">¶</a></h3>
 <p>The strategy adopted is first and foremost expressed in the definition
 of the type:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span><span class="nc"> SubArray</span><span class="p">{</span><span class="n">T</span><span class="p">,</span><span class="n">N</span><span class="p">,</span><span class="n">P</span><span class="o">&lt;:</span><span class="n">AbstractArray</span><span class="p">,</span><span class="n">I</span><span class="o">&lt;:</span><span class="p">(</span><span class="n">ViewIndex</span><span class="o">...</span><span class="p">),</span><span class="n">LD</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">AbstractArray</span><span class="p">{</span><span class="n">T</span><span class="p">,</span><span class="n">N</span><span class="p">}</span>
-    <span class="n">parent</span><span class="p">::</span><span class="n">P</span>
-    <span class="n">indexes</span><span class="p">::</span><span class="n">I</span>
-    <span class="n">dims</span><span class="p">::</span><span class="n">NTuple</span><span class="p">{</span><span class="n">N</span><span class="p">,</span><span class="kt">Int</span><span class="p">}</span>
-    <span class="n">first_index</span><span class="p">::</span><span class="kt">Int</span>   <span class="c"># for linear indexing and pointer</span>
-    <span class="n">stride1</span><span class="p">::</span><span class="kt">Int</span>       <span class="c"># used only for linear indexing</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">immutable</span> <span class="kt">SubArray</span><span class="p">{</span><span class="n">T</span><span class="p">,</span><span class="n">N</span><span class="p">,</span><span class="n">P</span><span class="p">,</span><span class="nb">I</span><span class="p">,</span><span class="n">L</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="kt">AbstractArray</span><span class="p">{</span><span class="n">T</span><span class="p">,</span><span class="n">N</span><span class="p">}</span>
+    <span class="n">parent</span><span class="o">::</span><span class="n">P</span>
+    <span class="n">indexes</span><span class="o">::</span><span class="nb">I</span>
+    <span class="n">offset1</span><span class="o">::</span><span class="kt">Int</span>       <span class="c"># for linear indexing and pointer, only valid when L==true</span>
+    <span class="n">stride1</span><span class="o">::</span><span class="kt">Int</span>       <span class="c"># used only for linear indexing</span>
+    <span class="o">...</span>
 <span class="k">end</span>
 </pre></div>
 </div>
 <p><code class="docutils literal"><span class="pre">SubArray</span></code> has 5 type parameters.  The first two are the
 standard element type and dimensionality.  The next is the type of the
 parent <code class="docutils literal"><span class="pre">AbstractArray</span></code>.  The most heavily-used is the fourth
-parameter, a <code class="docutils literal"><span class="pre">tuple</span></code> of the types of the indexes for each dimension.
-The final one, <code class="docutils literal"><span class="pre">LD</span></code>, is used only in special circumstances, to
-implement efficient linear indexing for those types that can support
-it.</p>
+parameter, a <code class="docutils literal"><span class="pre">Tuple</span></code> of the types of the indices for each dimension.
+The final one, <code class="docutils literal"><span class="pre">L</span></code>, is only provided as a convenience for dispatch;
+it&#8217;s a boolean that represents whether the index types support fast
+linear indexing. More on that later.</p>
 <p>If in our example above <code class="docutils literal"><span class="pre">A</span></code> is a <code class="docutils literal"><span class="pre">Array{Float64,</span> <span class="pre">3}</span></code>, our <code class="docutils literal"><span class="pre">S1</span></code>
 case above would be a
-<code class="docutils literal"><span class="pre">SubArray{Float64,2,Array{Float64,3},(Colon,Int64,UnitRange{Int64}),2}</span></code>.
+<code class="docutils literal"><span class="pre">SubArray{Int64,2,Array{Int64,3},Tuple{Colon,Int64,UnitRange{Int64}},false}</span></code>.
 Note in particular the tuple parameter, which stores the types of
-the indexes used to create <code class="docutils literal"><span class="pre">S1</span></code>.  Likewise,</p>
+the indices used to create <code class="docutils literal"><span class="pre">S1</span></code>.  Likewise,</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">S1</span><span class="o">.</span><span class="n">indexes</span>
-<span class="p">(</span><span class="n">Colon</span><span class="p">(),</span><span class="mi">5</span><span class="p">,</span><span class="mi">2</span><span class="p">:</span><span class="mi">6</span><span class="p">)</span>
+<span class="p">(</span><span class="kt">Colon</span><span class="p">(),</span><span class="mi">5</span><span class="p">,</span><span class="mi">2</span><span class="o">:</span><span class="mi">6</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>Storing these values allows index replacement, and having the types
 encoded as parameters allows one to dispatch to efficient algorithms.</p>
-<p>An <code class="docutils literal"><span class="pre">Int</span></code> index is used to represent a parent dimension that should
-be dropped.  The distinction between the <code class="docutils literal"><span class="pre">sub</span></code> and <code class="docutils literal"><span class="pre">slice</span></code>
-commands is that <code class="docutils literal"><span class="pre">sub</span></code> converts <em>interior</em> <code class="docutils literal"><span class="pre">Int</span></code> indices into
-ranges at the time of construction.  For example:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">S3</span> <span class="o">=</span> <span class="n">sub</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="p">:,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">2</span><span class="p">:</span><span class="mi">6</span><span class="p">)</span>
-
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">S3</span><span class="o">.</span><span class="n">indexes</span>
-<span class="p">(</span><span class="n">Colon</span><span class="p">(),</span><span class="mi">5</span><span class="p">:</span><span class="mi">5</span><span class="p">,</span><span class="mi">2</span><span class="p">:</span><span class="mi">6</span><span class="p">)</span>
-</pre></div>
 </div>
-<p>Because of this conversion, <code class="docutils literal"><span class="pre">S3</span></code> is three-dimensional.</p>
-</div>
-<div class="section" id="getindex-and-setindex-index-translation">
-<h3><code class="docutils literal"><span class="pre">getindex</span></code> and <code class="docutils literal"><span class="pre">setindex!</span></code> (index translation)<a class="headerlink" href="#getindex-and-setindex-index-translation" title="Permalink to this headline">¶</a></h3>
+<div class="section" id="index-translation">
+<h3>Index translation<a class="headerlink" href="#index-translation" title="Permalink to this headline">¶</a></h3>
 <p>Performing index translation requires that you do different things for
 different concrete <code class="docutils literal"><span class="pre">SubArray</span></code> types.  For example, for <code class="docutils literal"><span class="pre">S1</span></code>, one needs
-to apply the <code class="docutils literal"><span class="pre">i,j</span></code> indexes to the first and third dimensions of the
+to apply the <code class="docutils literal"><span class="pre">i,j</span></code> indices to the first and third dimensions of the
 parent array, whereas for <code class="docutils literal"><span class="pre">S2</span></code> one needs to apply them to the
 second and third.  The simplest approach to indexing would be to do
 the type-analysis at runtime:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">parentindexes</span> <span class="o">=</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Any</span><span class="p">}(</span><span class="mi">0</span><span class="p">)</span>
-<span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="n">ndims</span><span class="p">(</span><span class="n">S</span><span class="o">.</span><span class="n">parent</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">parentindexes</span> <span class="o">=</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Any</span><span class="p">}(</span><span class="mi">0</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">thisindex</span> <span class="kp">in</span> <span class="n">S</span><span class="o">.</span><span class="n">indexes</span>
     <span class="o">...</span>
-    <span class="k">if</span> <span class="nb">isa</span><span class="p">(</span><span class="n">thisindex</span><span class="p">,</span> <span class="kt">Int</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">isa</span><span class="p">(</span><span class="n">thisindex</span><span class="p">,</span> <span class="kt">Int</span><span class="p">)</span>
         <span class="c"># Don&#39;t consume one of the input indexes</span>
         <span class="n">push!</span><span class="p">(</span><span class="n">parentindexes</span><span class="p">,</span> <span class="n">thisindex</span><span class="p">)</span>
-    <span class="k">else</span>
+    <span class="k">elseif</span> <span class="n">isa</span><span class="p">(</span><span class="n">thisindex</span><span class="p">,</span> <span class="kt">AbstractVector</span><span class="p">)</span>
         <span class="c"># Consume an input index</span>
         <span class="n">push!</span><span class="p">(</span><span class="n">parentindexes</span><span class="p">,</span> <span class="n">thisindex</span><span class="p">[</span><span class="n">inputindex</span><span class="p">[</span><span class="n">j</span><span class="p">]])</span>
         <span class="n">j</span> <span class="o">+=</span> <span class="mi">1</span>
-    <span class="k">end</span>
+    <span class="k">elseif</span> <span class="n">isa</span><span class="p">(</span><span class="n">thisindex</span><span class="p">,</span> <span class="kt">AbstractMatrix</span><span class="p">)</span>
+        <span class="c"># Consume two input indices</span>
+        <span class="n">push!</span><span class="p">(</span><span class="n">parentindexes</span><span class="p">,</span> <span class="n">thisindex</span><span class="p">[</span><span class="n">inputindex</span><span class="p">[</span><span class="n">j</span><span class="p">],</span> <span class="n">inputindex</span><span class="p">[</span><span class="n">j</span><span class="o">+</span><span class="mi">1</span><span class="p">]])</span>
+        <span class="n">j</span> <span class="o">+=</span> <span class="mi">2</span>
+    <span class="k">elseif</span> <span class="o">...</span>
 <span class="k">end</span>
 <span class="n">S</span><span class="o">.</span><span class="n">parent</span><span class="p">[</span><span class="n">parentindexes</span><span class="o">...</span><span class="p">]</span>
 </pre></div>
@@ -702,56 +696,73 @@ the type-analysis at runtime:</p>
 <p>Unfortunately, this would be disastrous in terms of performance: each
 element access would allocate memory, and involves the running of a
 lot of poorly-typed code.</p>
-<p>The better approach is to dispatch to specific methods to handle each
-type of input.  Note, however, that the number of distinct methods
-needed grows exponentially in the number of dimensions, and since
-Julia supports arrays of any dimension the number of methods required
-is in fact infinite.  Fortunately, <code class="docutils literal"><span class="pre">&#64;generated</span> <span class="pre">function</span></code>s allow one to
-generate the necessary methods quite straightforwardly.  The resulting
-code looks quite a lot like the runtime approach above, but all of the
-type analysis is performed at the time of method instantiation.  For a
-<code class="docutils literal"><span class="pre">SubArray</span></code> of the type of <code class="docutils literal"><span class="pre">S1</span></code>, the method executed at runtime is
-literally</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">getindex</span><span class="p">(</span><span class="n">S</span><span class="p">::</span><span class="o">&lt;</span><span class="k">type</span><span class="nc"> of</span> <span class="n">S1</span><span class="o">&gt;</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">)</span> <span class="o">=</span> <span class="n">S</span><span class="o">.</span><span class="n">parent</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">S</span><span class="o">.</span><span class="n">indexes</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">S</span><span class="o">.</span><span class="n">indexes</span><span class="p">[</span><span class="mi">3</span><span class="p">][</span><span class="n">j</span><span class="p">]]</span>
+<p>The better approach is to dispatch to specific methods to handle each type of
+stored index. That&#8217;s what <code class="docutils literal"><span class="pre">reindex</span></code> does: it dispatches on the type of the
+first stored index and consumes the appropriate number of input indices, and
+then it recurses on the remaining indices. In the case of <code class="docutils literal"><span class="pre">S1</span></code>, this expands
+to</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">Base</span><span class="o">.</span><span class="n">reindex</span><span class="p">(</span><span class="n">S1</span><span class="p">,</span> <span class="n">S1</span><span class="o">.</span><span class="n">indexes</span><span class="p">,</span> <span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">))</span> <span class="o">==</span> <span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">S1</span><span class="o">.</span><span class="n">indexes</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">S1</span><span class="o">.</span><span class="n">indexes</span><span class="p">[</span><span class="mi">3</span><span class="p">][</span><span class="n">j</span><span class="p">])</span>
 </pre></div>
 </div>
+<p>for any pair of indices <code class="docutils literal"><span class="pre">(i,j)</span></code> (except <code class="docutils literal"><span class="pre">CartesianIndex</span></code>s and
+arrays thereof, see below).</p>
+<p>This is the core of a <code class="docutils literal"><span class="pre">SubArray</span></code>; indexing methods depend upon <code class="docutils literal"><span class="pre">reindex</span></code>
+to do this index translation. Sometimes, though, we can avoid the indirection
+and make it even faster.</p>
 </div>
 <div class="section" id="linear-indexing">
 <h3>Linear indexing<a class="headerlink" href="#linear-indexing" title="Permalink to this headline">¶</a></h3>
-<p>Linear indexing can be implemented efficiently when the entire array
-has a single stride that separates successive elements.  For
-<code class="docutils literal"><span class="pre">SubArray</span></code> types, the availability of efficient linear indexing is based
-purely on the types of the indexes, and does not depend on values like
-the size of the array.  It therefore can miss some cases in which the
-stride happens to be uniform:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">A</span> <span class="o">=</span> <span class="n">reshape</span><span class="p">(</span><span class="mi">1</span><span class="p">:</span><span class="mi">4</span><span class="o">*</span><span class="mi">2</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
-<span class="mi">4</span><span class="n">×2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<p>Linear indexing can be implemented efficiently when the entire array has a
+single stride that separates successive elements, starting from some offset.
+This means that we can pre-compute these values and represent linear indexing
+simply as an addition and multiplication, avoiding the indirection of
+<code class="docutils literal"><span class="pre">reindex</span></code> and (more importantly) the slow computation of the cartesian
+coordinates entirely.</p>
+<p>For <code class="docutils literal"><span class="pre">SubArray</span></code> types, the availability of efficient linear indexing is based
+purely on the types of the indices, and does not depend on values like the size
+of the parent array. You can ask whether a given set of indices supports fast
+linear indexing with the internal <code class="docutils literal"><span class="pre">Base.viewindexing</span></code> function:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Base</span><span class="o">.</span><span class="n">viewindexing</span><span class="p">(</span><span class="n">S1</span><span class="o">.</span><span class="n">indexes</span><span class="p">)</span>
+<span class="n">Base</span><span class="o">.</span><span class="n">LinearSlow</span><span class="p">()</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Base</span><span class="o">.</span><span class="n">viewindexing</span><span class="p">(</span><span class="n">S2</span><span class="o">.</span><span class="n">indexes</span><span class="p">)</span>
+<span class="n">Base</span><span class="o">.</span><span class="n">LinearFast</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>This is computed during construction of the <code class="docutils literal"><span class="pre">SubArray</span></code> and stored in the
+<code class="docutils literal"><span class="pre">L</span></code> type parameter as a boolean that encodes fast linear indexing support.
+While not strictly necessary, it means that we can define dispatch directly on
+<code class="docutils literal"><span class="pre">SubArray{T,N,A,I,true}</span></code> without any intermediaries.</p>
+<p>Since this computation doesn&#8217;t depend on runtime values, it can miss some cases
+in which the stride happens to be uniform:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">A</span> <span class="o">=</span> <span class="n">reshape</span><span class="p">(</span><span class="mi">1</span><span class="o">:</span><span class="mi">4</span><span class="o">*</span><span class="mi">2</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+<span class="mi">4</span><span class="n">×2</span> <span class="n">Base</span><span class="o">.</span><span class="n">ReshapedArray</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="kt">UnitRange</span><span class="p">{</span><span class="kt">Int64</span><span class="p">},</span><span class="kt">Tuple</span><span class="p">{}}</span><span class="o">:</span>
  <span class="mi">1</span>  <span class="mi">5</span>
  <span class="mi">2</span>  <span class="mi">6</span>
  <span class="mi">3</span>  <span class="mi">7</span>
  <span class="mi">4</span>  <span class="mi">8</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">diff</span><span class="p">(</span><span class="n">A</span><span class="p">[</span><span class="mi">2</span><span class="p">:</span><span class="mi">2</span><span class="p">:</span><span class="mi">4</span><span class="p">,:][:])</span>
-<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">diff</span><span class="p">(</span><span class="n">A</span><span class="p">[</span><span class="mi">2</span><span class="o">:</span><span class="mi">2</span><span class="o">:</span><span class="mi">4</span><span class="p">,</span><span class="o">:</span><span class="p">][</span><span class="o">:</span><span class="p">])</span>
+<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">2</span>
  <span class="mi">2</span>
  <span class="mi">2</span>
 </pre></div>
 </div>
-<p>A view constructed as <code class="docutils literal"><span class="pre">sub(A,</span> <span class="pre">2:2:4,</span> <span class="pre">:)</span></code> happens to have uniform
+<p>A view constructed as <code class="docutils literal"><span class="pre">view(A,</span> <span class="pre">2:2:4,</span> <span class="pre">:)</span></code> happens to have uniform
 stride, and therefore linear indexing indeed could be performed
 efficiently.  However, success in this case depends on the size of the
 array: if the first dimension instead were odd,</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">A</span> <span class="o">=</span> <span class="n">reshape</span><span class="p">(</span><span class="mi">1</span><span class="p">:</span><span class="mi">5</span><span class="o">*</span><span class="mi">2</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
-<span class="mi">5</span><span class="n">×2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">A</span> <span class="o">=</span> <span class="n">reshape</span><span class="p">(</span><span class="mi">1</span><span class="o">:</span><span class="mi">5</span><span class="o">*</span><span class="mi">2</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+<span class="mi">5</span><span class="n">×2</span> <span class="n">Base</span><span class="o">.</span><span class="n">ReshapedArray</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="kt">UnitRange</span><span class="p">{</span><span class="kt">Int64</span><span class="p">},</span><span class="kt">Tuple</span><span class="p">{}}</span><span class="o">:</span>
  <span class="mi">1</span>   <span class="mi">6</span>
  <span class="mi">2</span>   <span class="mi">7</span>
  <span class="mi">3</span>   <span class="mi">8</span>
  <span class="mi">4</span>   <span class="mi">9</span>
  <span class="mi">5</span>  <span class="mi">10</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">diff</span><span class="p">(</span><span class="n">A</span><span class="p">[</span><span class="mi">2</span><span class="p">:</span><span class="mi">2</span><span class="p">:</span><span class="mi">4</span><span class="p">,:][:])</span>
-<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">diff</span><span class="p">(</span><span class="n">A</span><span class="p">[</span><span class="mi">2</span><span class="o">:</span><span class="mi">2</span><span class="o">:</span><span class="mi">4</span><span class="p">,</span><span class="o">:</span><span class="p">][</span><span class="o">:</span><span class="p">])</span>
+<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">2</span>
  <span class="mi">3</span>
  <span class="mi">2</span>
@@ -760,74 +771,73 @@ array: if the first dimension instead were odd,</p>
 <p>then <code class="docutils literal"><span class="pre">A[2:2:4,:]</span></code> does not have uniform stride, so we cannot
 guarantee efficient linear indexing.  Since we have to base this
 decision based purely on types encoded in the parameters of the
-<code class="docutils literal"><span class="pre">SubArray</span></code>, <code class="docutils literal"><span class="pre">S</span> <span class="pre">=</span> <span class="pre">sub(A,</span> <span class="pre">2:2:4,</span> <span class="pre">:)</span></code> cannot implement efficient
+<code class="docutils literal"><span class="pre">SubArray</span></code>, <code class="docutils literal"><span class="pre">S</span> <span class="pre">=</span> <span class="pre">view(A,</span> <span class="pre">2:2:4,</span> <span class="pre">:)</span></code> cannot implement efficient
 linear indexing.</p>
-<p>The last parameter of <code class="docutils literal"><span class="pre">SubArray</span></code>, <code class="docutils literal"><span class="pre">LD</span></code>, encodes the highest
-dimension up to which elements are guaranteed to have uniform stride.
-When <code class="docutils literal"><span class="pre">LD</span> <span class="pre">==</span> <span class="pre">length(I)</span></code>, the length of the <code class="docutils literal"><span class="pre">indexes</span></code> tuple,
-efficient linear indexing becomes possible.</p>
-<p>An example might help clarify what this means:</p>
-<ul class="simple">
-<li>For <code class="docutils literal"><span class="pre">S1</span></code> above, the <code class="docutils literal"><span class="pre">Colon</span></code> along the first dimension is
-uniformly spaced (all elements are displaced by 1 from the previous
-value), so this dimension does not &#8220;break&#8221; linear indexing.
-Consequently <code class="docutils literal"><span class="pre">LD</span></code> has a value of at least 1.</li>
-<li>The second dimension of the parent, sliced out as <code class="docutils literal"><span class="pre">5</span></code>, does not
-not by itself break linear indexing:  if all of the remaining
-indexes were <code class="docutils literal"><span class="pre">Int</span></code>, the entire <code class="docutils literal"><span class="pre">SubArray</span></code> would have efficient
-linear indexing.  Consequently, <code class="docutils literal"><span class="pre">LD</span></code> is at least 2.</li>
-<li>The last dimension is a <code class="docutils literal"><span class="pre">Range</span></code>.  This would by itself break
-linear indexing (even though it is a <code class="docutils literal"><span class="pre">UnitRange</span></code>, the fact that it
-might not start at 1 means that there might be gaps).  Additionally,
-given the preceding indexes any choice other than <code class="docutils literal"><span class="pre">Int</span></code> would
-also have truncated <code class="docutils literal"><span class="pre">LD</span></code> at 2.</li>
-</ul>
-<p>Consequently, as a whole <code class="docutils literal"><span class="pre">S1</span></code> does not have efficient linear
-indexing.</p>
-<p>However, if we were to later say <code class="docutils literal"><span class="pre">S1a</span> <span class="pre">=</span> <span class="pre">slice(S1,</span> <span class="pre">2:2:7,</span> <span class="pre">3)</span></code>,
-<code class="docutils literal"><span class="pre">S1a</span></code> would have an <code class="docutils literal"><span class="pre">LD</span></code> of 3 (its indexes tuple has type
-<code class="docutils literal"><span class="pre">(Colon,</span> <span class="pre">Int,</span> <span class="pre">Int)</span></code>) and would have efficient linear indexing.  This
-ability to re-slice is the main motivation to use an integer <code class="docutils literal"><span class="pre">LD</span></code>
-rather than a boolean flag to encode the applicability of linear
-indexing.</p>
-<p>The main reason <code class="docutils literal"><span class="pre">LD</span></code> cannot always be inferred from the <code class="docutils literal"><span class="pre">indexes</span></code> tuple
-is because <code class="docutils literal"><span class="pre">sub</span></code> converts internal <code class="docutils literal"><span class="pre">Int</span></code> indexes into
-<code class="docutils literal"><span class="pre">UnitRange</span></code>s.  Consequently it is important to encode &#8220;safe&#8221;
-dimensions of size 1 prior to conversion.  Up to the <code class="docutils literal"><span class="pre">LD</span></code>th entry,
-we can be sure that any <code class="docutils literal"><span class="pre">UnitRange</span></code> was, in fact, an <code class="docutils literal"><span class="pre">Integer</span></code>
-prior to conversion.</p>
 </div>
 <div class="section" id="a-few-details">
 <h3>A few details<a class="headerlink" href="#a-few-details" title="Permalink to this headline">¶</a></h3>
 <ul>
+<li><p class="first">Note that the <code class="docutils literal"><span class="pre">Base.reindex</span></code> function is agnostic to the types of the input
+indices; it simply determines how and where the stored indices should be
+reindexed. It not only supports integer indices, but it supports non-scalar
+indexing, too. This means that views of views don&#8217;t need two levels of
+indirection; they can simply re-compute the indices into the original parent
+array!</p>
+</li>
 <li><p class="first">Hopefully by now it&#8217;s fairly clear that supporting slices means that
 the dimensionality, given by the parameter <code class="docutils literal"><span class="pre">N</span></code>, is not necessarily
 equal to the dimensionality of the parent array or the length of the
-<code class="docutils literal"><span class="pre">indexes</span></code> tuple.  Neither do user-supplied indexes necessarily
+<code class="docutils literal"><span class="pre">indexes</span></code> tuple.  Neither do user-supplied indices necessarily
 line up with entries in the <code class="docutils literal"><span class="pre">indexes</span></code> tuple (e.g., the second
 user-supplied index might correspond to the third dimension of the
 parent array, and the third element in the <code class="docutils literal"><span class="pre">indexes</span></code> tuple).</p>
-<p>What might be less obvious is that the dimensionality of the parent
-array may not be equal to the length of the <code class="docutils literal"><span class="pre">indexes</span></code> tuple.  Some
-examples:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">A</span> <span class="o">=</span> <span class="n">reshape</span><span class="p">(</span><span class="mi">1</span><span class="p">:</span><span class="mi">35</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">7</span><span class="p">)</span> <span class="c"># A 2d parent Array</span>
-<span class="n">S</span> <span class="o">=</span> <span class="n">sub</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="mi">2</span><span class="p">:</span><span class="mi">7</span><span class="p">)</span>         <span class="c"># A 1d view created by linear indexing</span>
-<span class="n">S</span> <span class="o">=</span> <span class="n">sub</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="p">:,</span> <span class="p">:,</span> <span class="mi">1</span><span class="p">)</span>     <span class="c"># Appending extra indexes is supported</span>
-<span class="n">S</span> <span class="o">=</span> <span class="n">sub</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="p">:,</span> <span class="p">:,</span> <span class="mi">1</span><span class="p">:</span><span class="mi">1</span><span class="p">)</span>
+<p>What might be less obvious is that the dimensionality of the stored
+parent array must be equal to the number of effective indices in the
+<code class="docutils literal"><span class="pre">indexes</span></code> tuple. Some examples:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">A</span> <span class="o">=</span> <span class="n">reshape</span><span class="p">(</span><span class="mi">1</span><span class="o">:</span><span class="mi">35</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">7</span><span class="p">)</span> <span class="c"># A 2d parent Array</span>
+<span class="n">S</span> <span class="o">=</span> <span class="n">view</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="mi">2</span><span class="o">:</span><span class="mi">7</span><span class="p">)</span>         <span class="c"># A 1d view created by linear indexing</span>
+<span class="n">S</span> <span class="o">=</span> <span class="n">view</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="o">:</span><span class="p">,</span> <span class="o">:</span><span class="p">,</span> <span class="mi">1</span><span class="o">:</span><span class="mi">1</span><span class="p">)</span>   <span class="c"># Appending extra indices is supported</span>
 </pre></div>
 </div>
-<p>Consequently, internal <code class="docutils literal"><span class="pre">SubArray</span></code> code needs to be fairly careful
-about which of these three notions of dimensionality is relevant in
-each circumstance.</p>
+<p>Naively, you&#8217;d think you could just set <code class="docutils literal"><span class="pre">S.parent</span> <span class="pre">=</span> <span class="pre">A</span></code> and
+<code class="docutils literal"><span class="pre">S.indexes</span> <span class="pre">=</span> <span class="pre">(:,:,1:1)</span></code>, but supporting this dramatically complicates the
+reindexing process, especially for views of views. Not only do you need to
+dispatch on the types of the stored indices, but you need to examine whether
+a given index is the final one and &#8220;merge&#8221; any remaining stored indices
+together. This is not an easy task, and even worse: it&#8217;s slow since it
+implicitly depends upon linear indexing.</p>
+<p>Fortunately, this is precisely the computation that <code class="docutils literal"><span class="pre">ReshapedArray</span></code>
+performs, and it does so linearly if possible. Consequently, <code class="docutils literal"><span class="pre">view</span></code> ensures
+that the parent array is the appropriate dimensionality for the given indices
+by reshaping it if needed. The inner <code class="docutils literal"><span class="pre">SubArray</span></code> constructor ensures that
+this invariant is satisfied.</p>
 </li>
-<li><p class="first">Because the processing needed to implement all of the <code class="docutils literal"><span class="pre">&#64;generated</span></code>
-expressions isn&#8217;t readily available at the time <code class="docutils literal"><span class="pre">subarray.jl</span></code>
-appears in the bootstrap process, <code class="docutils literal"><span class="pre">SubArray</span></code> functionality is
-split into two files, the second being <code class="docutils literal"><span class="pre">subarray2.jl</span></code>.</p>
-</li>
-<li><p class="first">Bounds-checking has currently not been tackled. There are two
-relevant notions of bounds-checking, one at construction time and
-one during element access.  This is an important outstanding issue.</p>
+<li><p class="first"><code class="docutils literal"><span class="pre">CartesianIndex</span></code> and arrays thereof throw a nasty wrench into the
+<code class="docutils literal"><span class="pre">reindex</span></code> scheme. Recall that <code class="docutils literal"><span class="pre">reindex</span></code> simply dispatches on the type of
+the stored indices in order to determine how many passed indices should be
+used and where they should go. But with <code class="docutils literal"><span class="pre">CartesianIndex</span></code>, there&#8217;s no longer
+a one-to-one correspondence between the number of passed arguments and the
+number of dimensions that they index into. If we return to the above example
+of <code class="docutils literal"><span class="pre">Base.reindex(S1,</span> <span class="pre">S1.indexes,</span> <span class="pre">(i,</span> <span class="pre">j))</span></code>, you can see that the expansion
+is incorrect for <code class="docutils literal"><span class="pre">i,</span> <span class="pre">j</span> <span class="pre">=</span> <span class="pre">CartesianIndex(),</span> <span class="pre">CartesianIndex(2,1)</span></code>. It should
+<em>skip</em> the <code class="docutils literal"><span class="pre">CartesianIndex()</span></code> entirely and return:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="p">(</span><span class="kt">CartesianIndex</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="mi">1</span><span class="p">)[</span><span class="mi">1</span><span class="p">],</span> <span class="n">S1</span><span class="o">.</span><span class="n">indexes</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">S1</span><span class="o">.</span><span class="n">indexes</span><span class="p">[</span><span class="mi">3</span><span class="p">][</span><span class="kt">CartesianIndex</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="mi">1</span><span class="p">)[</span><span class="mi">2</span><span class="p">]])</span>
+</pre></div>
+</div>
+<p>Instead, though, we get:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="p">(</span><span class="kt">CartesianIndex</span><span class="p">(),</span> <span class="n">S1</span><span class="o">.</span><span class="n">indexes</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">S1</span><span class="o">.</span><span class="n">indexes</span><span class="p">[</span><span class="mi">3</span><span class="p">][</span><span class="kt">CartesianIndex</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="mi">1</span><span class="p">)])</span>
+</pre></div>
+</div>
+<p>Doing this correctly would require <em>combined</em> dispatch on both the stored and
+passed indices across all combinations of dimensionalities in an intractable
+manner. As such, <code class="docutils literal"><span class="pre">reindex</span></code> must never be called with <code class="docutils literal"><span class="pre">CartesianIndex</span></code>
+indices. Fortunately, the scalar case is easily handled by first flattening
+the <code class="docutils literal"><span class="pre">CartesianIndex</span></code> arguments to plain integers. Arrays of
+<code class="docutils literal"><span class="pre">CartesianIndex</span></code>, however, cannot be split apart into orthogonal pieces so
+easily. Before attempting to use <code class="docutils literal"><span class="pre">reindex</span></code>, <code class="docutils literal"><span class="pre">view</span></code> must ensure that there
+are no arrays of <code class="docutils literal"><span class="pre">CartesianIndex</span></code> in the argument list. If there are, it
+can simply &#8220;punt&#8221; by avoiding the <code class="docutils literal"><span class="pre">reindex</span></code> calculation entirely,
+constructing a nested <code class="docutils literal"><span class="pre">SubArray</span></code> with two levels of indirection instead.</p>
 </li>
 </ul>
 </div>
@@ -870,7 +880,7 @@ one during element access.  This is an important outstanding issue.</p>
     <script type="text/javascript">
         var DOCUMENTATION_OPTIONS = {
             URL_ROOT:'../../',
-            VERSION:'0.5.1-pre',
+            VERSION:'0.5.3-pre',
             COLLAPSE_INDEX:false,
             FILE_SUFFIX:'',
             HAS_SOURCE:  true

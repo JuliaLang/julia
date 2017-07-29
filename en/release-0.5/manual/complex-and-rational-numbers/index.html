@@ -7,7 +7,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Complex and Rational Numbers &mdash; Julia Language 0.5.1-pre documentation</title>
+  <title>Complex and Rational Numbers &mdash; Julia Language 0.5.3-pre documentation</title>
   
 
   
@@ -30,7 +30,7 @@
   
     <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
   
-    <link rel="top" title="Julia Language 0.5.1-pre documentation" href="../../"/>
+    <link rel="top" title="Julia Language 0.5.3-pre documentation" href="../../"/>
         <link rel="next" title="Strings" href="../strings/"/>
         <link rel="prev" title="Mathematical Operations and Elementary Functions" href="../mathematical-operations/"/> 
 
@@ -89,7 +89,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../mathematical-operations/#numerical-conversions">Numerical Conversions</a></li>
 </ul>
 </li>
-<li class="toctree-l1 current"><a class="current reference internal" href="">Complex and Rational Numbers</a><ul>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Complex and Rational Numbers</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#complex-numbers">Complex Numbers</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#rational-numbers">Rational Numbers</a></li>
 </ul>
@@ -149,6 +149,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../types/#man-parametric-types">Parametric Types</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../types/#type-aliases">Type Aliases</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../types/#operations-on-types">Operations on Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#custom-pretty-printing">Custom pretty-printing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../types/#value-types">&#8220;Value types&#8221;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../types/#nullable-types-representing-missing-values">Nullable Types: Representing Missing Values</a></li>
 </ul>
@@ -576,7 +577,7 @@
   <div class="section" id="complex-and-rational-numbers">
 <span id="man-complex-and-rational-numbers"></span><h1>Complex and Rational Numbers<a class="headerlink" href="#complex-and-rational-numbers" title="Permalink to this headline">¶</a></h1>
 <p>Julia ships with predefined types representing both complex and rational
-numbers, and supports all <a class="reference internal" href="../mathematical-operations/#man-mathematical-operations"><span>standard mathematical operations</span></a> on them. <a class="reference internal" href="../conversion-and-promotion/#man-conversion-and-promotion"><span>Conversion and Promotion</span></a>
+numbers, and supports all <a class="reference internal" href="../mathematical-operations/#man-mathematical-operations"><span class="std std-ref">standard mathematical operations</span></a> on them. <a class="reference internal" href="../conversion-and-promotion/#man-conversion-and-promotion"><span class="std std-ref">Conversion and Promotion</span></a>
 are defined so that operations on any combination of
 predefined numeric types, whether primitive or composite, behave as
 expected.</p>
@@ -586,7 +587,7 @@ expected.</p>
 representing the principal square root of -1. It was deemed harmful to
 co-opt the name <code class="docutils literal"><span class="pre">i</span></code> for a global constant, since it is such a popular
 index variable name. Since Julia allows numeric literals to be
-<a class="reference internal" href="../integers-and-floating-point-numbers/#man-numeric-literal-coefficients"><span>juxtaposed with identifiers as coefficients</span></a>,
+<a class="reference internal" href="../integers-and-floating-point-numbers/#man-numeric-literal-coefficients"><span class="std std-ref">juxtaposed with identifiers as coefficients</span></a>,
 this binding suffices to provide convenient syntax for complex numbers,
 similar to the traditional mathematical notation:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="mi">1</span> <span class="o">+</span> <span class="mi">2</span><span class="nb">im</span>
@@ -683,7 +684,7 @@ distance from zero. <a class="reference internal" href="../../stdlib/math/#Base.
 absolute value, and is of particular use for complex numbers where it
 avoids taking a square root. <a class="reference internal" href="../../stdlib/math/#Base.angle" title="Base.angle"><code class="xref jl jl-func docutils literal"><span class="pre">angle()</span></code></a> returns the phase
 angle in radians (also known as the <em>argument</em> or <em>arg</em> function). The
-full gamut of other <a class="reference internal" href="../mathematical-operations/#man-elementary-functions"><span>Elementary Functions</span></a> is also defined
+full gamut of other <a class="reference internal" href="../mathematical-operations/#man-elementary-functions"><span class="std std-ref">Elementary Functions</span></a> is also defined
 for complex numbers:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">sqrt</span><span class="p">(</span><span class="mi">1</span><span class="nb">im</span><span class="p">)</span>
 <span class="mf">0.7071067811865476</span> <span class="o">+</span> <span class="mf">0.7071067811865475</span><span class="nb">im</span>
@@ -706,16 +707,16 @@ to real numbers and complex values when applied to complex numbers.
 For example, <a class="reference internal" href="../../stdlib/math/#Base.sqrt" title="Base.sqrt"><code class="xref jl jl-func docutils literal"><span class="pre">sqrt()</span></code></a> behaves differently when applied to <code class="docutils literal"><span class="pre">-1</span></code>
 versus <code class="docutils literal"><span class="pre">-1</span> <span class="pre">+</span> <span class="pre">0im</span></code> even though <code class="docutils literal"><span class="pre">-1</span> <span class="pre">==</span> <span class="pre">-1</span> <span class="pre">+</span> <span class="pre">0im</span></code>:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">sqrt</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">DomainError</span><span class="p">:</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="kt">DomainError</span><span class="o">:</span>
 <span class="n">sqrt</span> <span class="n">will</span> <span class="n">only</span> <span class="k">return</span> <span class="n">a</span> <span class="n">complex</span> <span class="n">result</span> <span class="k">if</span> <span class="n">called</span> <span class="n">with</span> <span class="n">a</span> <span class="n">complex</span> <span class="n">argument</span><span class="o">.</span> <span class="n">Try</span> <span class="n">sqrt</span><span class="p">(</span><span class="n">complex</span><span class="p">(</span><span class="n">x</span><span class="p">))</span><span class="o">.</span>
- <span class="k">in</span> <span class="n">sqrt</span><span class="p">(::</span><span class="kt">Int64</span><span class="p">)</span> <span class="n">at</span> <span class="o">./</span><span class="n">math</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">211</span>
+ <span class="kp">in</span> <span class="n">sqrt</span><span class="p">(</span><span class="o">::</span><span class="kt">Int64</span><span class="p">)</span> <span class="n">at</span> <span class="o">./</span><span class="n">math</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">211</span>
  <span class="o">...</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">sqrt</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span> <span class="o">+</span> <span class="mi">0</span><span class="nb">im</span><span class="p">)</span>
 <span class="mf">0.0</span> <span class="o">+</span> <span class="mf">1.0</span><span class="nb">im</span>
 </pre></div>
 </div>
-<p>The <a class="reference internal" href="../integers-and-floating-point-numbers/#man-numeric-literal-coefficients"><span>literal numeric coefficient notation</span></a>
+<p>The <a class="reference internal" href="../integers-and-floating-point-numbers/#man-numeric-literal-coefficients"><span class="std std-ref">literal numeric coefficient notation</span></a>
 does not work when constructing complex number from variables. Instead, the
 multiplication must be explicitly written out:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">a</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span> <span class="n">b</span> <span class="o">=</span> <span class="mi">2</span><span class="p">;</span> <span class="n">a</span> <span class="o">+</span> <span class="n">b</span><span class="o">*</span><span class="nb">im</span>
@@ -731,12 +732,12 @@ construct a complex value directly from its real and imaginary parts.:</p>
 <p>This construction avoids the multiplication and addition operations.</p>
 <p><a class="reference internal" href="../../stdlib/numbers/#Base.Inf" title="Base.Inf"><code class="xref jl jl-const docutils literal"><span class="pre">Inf</span></code></a> and <a class="reference internal" href="../../stdlib/numbers/#Base.NaN" title="Base.NaN"><code class="xref jl jl-const docutils literal"><span class="pre">NaN</span></code></a> propagate through complex numbers in the real
 and imaginary parts of a complex number as described in the
-<a class="reference internal" href="../integers-and-floating-point-numbers/#man-special-floats"><span>Special floating-point values</span></a> section:</p>
+<a class="reference internal" href="../integers-and-floating-point-numbers/#man-special-floats"><span class="std std-ref">Special floating-point values</span></a> section:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="mi">1</span> <span class="o">+</span> <span class="nb">Inf</span><span class="o">*</span><span class="nb">im</span>
 <span class="mf">1.0</span> <span class="o">+</span> <span class="nb">Inf</span><span class="o">*</span><span class="nb">im</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="mi">1</span> <span class="o">+</span> <span class="n">NaN</span><span class="o">*</span><span class="nb">im</span>
-<span class="mf">1.0</span> <span class="o">+</span> <span class="n">NaN</span><span class="o">*</span><span class="nb">im</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="mi">1</span> <span class="o">+</span> <span class="nb">NaN</span><span class="o">*</span><span class="nb">im</span>
+<span class="mf">1.0</span> <span class="o">+</span> <span class="nb">NaN</span><span class="o">*</span><span class="nb">im</span>
 </pre></div>
 </div>
 </div>
@@ -778,16 +779,16 @@ rational value can be extracted using the <a class="reference internal" href="..
 necessary, since the standard arithmetic and comparison operations are
 defined for rational values:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="mi">2</span><span class="o">//</span><span class="mi">3</span> <span class="o">==</span> <span class="mi">6</span><span class="o">//</span><span class="mi">9</span>
-<span class="n">true</span>
+<span class="kc">true</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="mi">2</span><span class="o">//</span><span class="mi">3</span> <span class="o">==</span> <span class="mi">9</span><span class="o">//</span><span class="mi">27</span>
-<span class="n">false</span>
+<span class="kc">false</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="mi">3</span><span class="o">//</span><span class="mi">7</span> <span class="o">&lt;</span> <span class="mi">1</span><span class="o">//</span><span class="mi">2</span>
-<span class="n">true</span>
+<span class="kc">true</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="mi">3</span><span class="o">//</span><span class="mi">4</span> <span class="o">&gt;</span> <span class="mi">2</span><span class="o">//</span><span class="mi">3</span>
-<span class="n">true</span>
+<span class="kc">true</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="mi">2</span><span class="o">//</span><span class="mi">4</span> <span class="o">+</span> <span class="mi">1</span><span class="o">//</span><span class="mi">6</span>
 <span class="mi">2</span><span class="o">//</span><span class="mi">3</span>
@@ -810,8 +811,8 @@ defined for rational values:</p>
 <p>Conversion from rational to floating-point respects the following
 identity for any integral values of <code class="docutils literal"><span class="pre">a</span></code> and <code class="docutils literal"><span class="pre">b</span></code>, with the exception
 of the case <code class="docutils literal"><span class="pre">a</span> <span class="pre">==</span> <span class="pre">0</span></code> and <code class="docutils literal"><span class="pre">b</span> <span class="pre">==</span> <span class="pre">0</span></code>:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nb">isequal</span><span class="p">(</span><span class="n">float</span><span class="p">(</span><span class="n">a</span><span class="o">//</span><span class="n">b</span><span class="p">),</span> <span class="n">a</span><span class="o">/</span><span class="n">b</span><span class="p">)</span>
-<span class="n">true</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">isequal</span><span class="p">(</span><span class="n">float</span><span class="p">(</span><span class="n">a</span><span class="o">//</span><span class="n">b</span><span class="p">),</span> <span class="n">a</span><span class="o">/</span><span class="n">b</span><span class="p">)</span>
+<span class="kc">true</span>
 </pre></div>
 </div>
 <p>Constructing infinite rational values is acceptable:</p>
@@ -821,15 +822,15 @@ of the case <code class="docutils literal"><span class="pre">a</span> <span clas
 <span class="n">julia</span><span class="o">&gt;</span> <span class="o">-</span><span class="mi">3</span><span class="o">//</span><span class="mi">0</span>
 <span class="o">-</span><span class="mi">1</span><span class="o">//</span><span class="mi">0</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">ans</span><span class="p">)</span>
-<span class="n">Rational</span><span class="p">{</span><span class="kt">Int64</span><span class="p">}</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">typeof</span><span class="p">(</span><span class="n">ans</span><span class="p">)</span>
+<span class="kt">Rational</span><span class="p">{</span><span class="kt">Int64</span><span class="p">}</span>
 </pre></div>
 </div>
 <p>Trying to construct a <a class="reference internal" href="../../stdlib/numbers/#Base.NaN" title="Base.NaN"><code class="xref jl jl-const docutils literal"><span class="pre">NaN</span></code></a> rational value, however, is not:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="mi">0</span><span class="o">//</span><span class="mi">0</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">ArgumentError</span><span class="p">:</span> <span class="n">invalid</span> <span class="n">rational</span><span class="p">:</span> <span class="n">zero</span><span class="p">(</span><span class="kt">Int64</span><span class="p">)</span><span class="o">//</span><span class="n">zero</span><span class="p">(</span><span class="kt">Int64</span><span class="p">)</span>
- <span class="k">in</span> <span class="n">Rational</span><span class="p">{</span><span class="kt">Int64</span><span class="p">}(::</span><span class="kt">Int64</span><span class="p">,</span> <span class="p">::</span><span class="kt">Int64</span><span class="p">)</span> <span class="n">at</span> <span class="o">./</span><span class="n">rational</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">8</span>
- <span class="k">in</span> <span class="o">//</span><span class="p">(::</span><span class="kt">Int64</span><span class="p">,</span> <span class="p">::</span><span class="kt">Int64</span><span class="p">)</span> <span class="n">at</span> <span class="o">./</span><span class="n">rational</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">22</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="kt">ArgumentError</span><span class="o">:</span> <span class="n">invalid</span> <span class="n">rational</span><span class="o">:</span> <span class="n">zero</span><span class="p">(</span><span class="kt">Int64</span><span class="p">)</span><span class="o">//</span><span class="n">zero</span><span class="p">(</span><span class="kt">Int64</span><span class="p">)</span>
+ <span class="kp">in</span> <span class="kt">Rational</span><span class="p">{</span><span class="kt">Int64</span><span class="p">}(</span><span class="o">::</span><span class="kt">Int64</span><span class="p">,</span> <span class="o">::</span><span class="kt">Int64</span><span class="p">)</span> <span class="n">at</span> <span class="o">./</span><span class="n">rational</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">8</span>
+ <span class="kp">in</span> <span class="o">//</span><span class="p">(</span><span class="o">::</span><span class="kt">Int64</span><span class="p">,</span> <span class="o">::</span><span class="kt">Int64</span><span class="p">)</span> <span class="n">at</span> <span class="o">./</span><span class="n">rational</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">22</span>
  <span class="o">...</span>
 </pre></div>
 </div>
@@ -857,13 +858,13 @@ types effortless:</p>
 <span class="mi">1</span><span class="o">//</span><span class="mi">1</span> <span class="o">-</span> <span class="mi">2</span><span class="o">//</span><span class="mi">3</span><span class="o">*</span><span class="nb">im</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="mf">0.5</span> <span class="o">==</span> <span class="mi">1</span><span class="o">//</span><span class="mi">2</span>
-<span class="n">true</span>
+<span class="kc">true</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="mf">0.33</span> <span class="o">==</span> <span class="mi">1</span><span class="o">//</span><span class="mi">3</span>
-<span class="n">false</span>
+<span class="kc">false</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="mf">0.33</span> <span class="o">&lt;</span> <span class="mi">1</span><span class="o">//</span><span class="mi">3</span>
-<span class="n">true</span>
+<span class="kc">true</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="mi">1</span><span class="o">//</span><span class="mi">3</span> <span class="o">-</span> <span class="mf">0.33</span>
 <span class="mf">0.0033333333333332993</span>
@@ -908,7 +909,7 @@ types effortless:</p>
     <script type="text/javascript">
         var DOCUMENTATION_OPTIONS = {
             URL_ROOT:'../../',
-            VERSION:'0.5.1-pre',
+            VERSION:'0.5.3-pre',
             COLLAPSE_INDEX:false,
             FILE_SUFFIX:'',
             HAS_SOURCE:  true

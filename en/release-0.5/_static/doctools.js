@@ -4,7 +4,7 @@
  *
  * Sphinx JavaScript utilities for all documentation.
  *
- * :copyright: Copyright 2007-2015 by the Sphinx team, see AUTHORS.
+ * :copyright: Copyright 2007-2016 by the Sphinx team, see AUTHORS.
  * :license: BSD, see LICENSE for details.
  *
  */
@@ -124,6 +124,7 @@ var Documentation = {
     this.fixFirefoxAnchorBug();
     this.highlightSearchWords();
     this.initIndexTable();
+    
   },
 
   /**
@@ -252,6 +253,29 @@ var Documentation = {
     });
     var url = parts.join('/');
     return path.substring(url.lastIndexOf('/') + 1, path.length - 1);
+  },
+
+  initOnKeyListeners: function() {
+    $(document).keyup(function(event) {
+      var activeElementType = document.activeElement.tagName;
+      // don't navigate when in search box or textarea
+      if (activeElementType !== 'TEXTAREA' && activeElementType !== 'INPUT' && activeElementType !== 'SELECT') {
+        switch (event.keyCode) {
+          case 37: // left
+            var prevHref = $('link[rel="prev"]').prop('href');
+            if (prevHref) {
+              window.location.href = prevHref;
+              return false;
+            }
+          case 39: // right
+            var nextHref = $('link[rel="next"]').prop('href');
+            if (nextHref) {
+              window.location.href = nextHref;
+              return false;
+            }
+        }
+      }
+    });
   }
 };
 

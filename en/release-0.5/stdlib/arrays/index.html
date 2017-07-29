@@ -7,7 +7,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Arrays &mdash; Julia Language 0.5.1-pre documentation</title>
+  <title>Arrays &mdash; Julia Language 0.5.3-pre documentation</title>
   
 
   
@@ -30,7 +30,7 @@
   
     <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
   
-    <link rel="top" title="Julia Language 0.5.1-pre documentation" href="../../"/>
+    <link rel="top" title="Julia Language 0.5.3-pre documentation" href="../../"/>
         <link rel="next" title="Tasks and Parallel Computing" href="../parallel/"/>
         <link rel="prev" title="Strings" href="../strings/"/> 
 
@@ -149,6 +149,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#man-parametric-types">Parametric Types</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#type-aliases">Type Aliases</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#operations-on-types">Operations on Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/types/#custom-pretty-printing">Custom pretty-printing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#value-types">&#8220;Value types&#8221;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#nullable-types-representing-missing-values">Nullable Types: Representing Missing Values</a></li>
 </ul>
@@ -443,7 +444,7 @@
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="../strings/">Strings</a></li>
-<li class="toctree-l1 current"><a class="current reference internal" href="">Arrays</a><ul>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Arrays</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#basic-functions">Basic functions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#constructors">Constructors</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#mathematical-operators-and-functions">Mathematical operators and functions</a></li>
@@ -634,26 +635,26 @@
 <dd><p>Creates an iterable object for visiting each index of an AbstractArray <code class="docutils literal"><span class="pre">A</span></code> in an efficient manner. For array types that have opted into fast linear indexing (like <code class="docutils literal"><span class="pre">Array</span></code>), this is simply the range <code class="docutils literal"><span class="pre">1:length(A)</span></code>. For other array types, this returns a specialized Cartesian range to efficiently index into the array with indices specified for every dimension. For other iterables, including strings and dictionaries, this returns an iterator object supporting arbitrary index types (e.g. unevenly spaced or non-integer indices).</p>
 <p>Example for a sparse 2-d array:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">A</span> <span class="o">=</span> <span class="n">sparse</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">],</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">1</span><span class="p">],</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="o">-</span><span class="mi">5</span><span class="p">])</span>
-<span class="mi">2</span><span class="n">×3</span> <span class="n">sparse</span> <span class="n">matrix</span> <span class="n">with</span> <span class="mi">3</span> <span class="kt">Int64</span> <span class="n">nonzero</span> <span class="n">entries</span><span class="p">:</span>
+<span class="mi">2</span><span class="n">×3</span> <span class="n">sparse</span> <span class="n">matrix</span> <span class="n">with</span> <span class="mi">3</span> <span class="kt">Int64</span> <span class="n">nonzero</span> <span class="n">entries</span><span class="o">:</span>
         <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span>  <span class="o">=</span>  <span class="mi">1</span>
         <span class="p">[</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span>  <span class="o">=</span>  <span class="o">-</span><span class="mi">5</span>
         <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">]</span>  <span class="o">=</span>  <span class="mi">2</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="k">for</span> <span class="n">iter</span> <span class="k">in</span> <span class="n">eachindex</span><span class="p">(</span><span class="n">A</span><span class="p">)</span>
-           <span class="p">@</span><span class="n">show</span> <span class="n">iter</span><span class="o">.</span><span class="n">I</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">iter</span><span class="o">.</span><span class="n">I</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
-           <span class="p">@</span><span class="n">show</span> <span class="n">A</span><span class="p">[</span><span class="n">iter</span><span class="p">]</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="k">for</span> <span class="n">iter</span> <span class="kp">in</span> <span class="n">eachindex</span><span class="p">(</span><span class="n">A</span><span class="p">)</span>
+           <span class="nd">@show</span> <span class="n">iter</span><span class="o">.</span><span class="nb">I</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">iter</span><span class="o">.</span><span class="nb">I</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
+           <span class="nd">@show</span> <span class="n">A</span><span class="p">[</span><span class="n">iter</span><span class="p">]</span>
        <span class="k">end</span>
-<span class="p">(</span><span class="n">iter</span><span class="o">.</span><span class="n">I</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span><span class="n">iter</span><span class="o">.</span><span class="n">I</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span>
+<span class="p">(</span><span class="n">iter</span><span class="o">.</span><span class="nb">I</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span><span class="n">iter</span><span class="o">.</span><span class="nb">I</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span>
 <span class="n">A</span><span class="p">[</span><span class="n">iter</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
-<span class="p">(</span><span class="n">iter</span><span class="o">.</span><span class="n">I</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span><span class="n">iter</span><span class="o">.</span><span class="n">I</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span> <span class="o">=</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span>
+<span class="p">(</span><span class="n">iter</span><span class="o">.</span><span class="nb">I</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span><span class="n">iter</span><span class="o">.</span><span class="nb">I</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span> <span class="o">=</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span>
 <span class="n">A</span><span class="p">[</span><span class="n">iter</span><span class="p">]</span> <span class="o">=</span> <span class="o">-</span><span class="mi">5</span>
-<span class="p">(</span><span class="n">iter</span><span class="o">.</span><span class="n">I</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span><span class="n">iter</span><span class="o">.</span><span class="n">I</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span>
+<span class="p">(</span><span class="n">iter</span><span class="o">.</span><span class="nb">I</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span><span class="n">iter</span><span class="o">.</span><span class="nb">I</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span>
 <span class="n">A</span><span class="p">[</span><span class="n">iter</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
-<span class="p">(</span><span class="n">iter</span><span class="o">.</span><span class="n">I</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span><span class="n">iter</span><span class="o">.</span><span class="n">I</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span> <span class="o">=</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span>
+<span class="p">(</span><span class="n">iter</span><span class="o">.</span><span class="nb">I</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span><span class="n">iter</span><span class="o">.</span><span class="nb">I</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span> <span class="o">=</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span>
 <span class="n">A</span><span class="p">[</span><span class="n">iter</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
-<span class="p">(</span><span class="n">iter</span><span class="o">.</span><span class="n">I</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span><span class="n">iter</span><span class="o">.</span><span class="n">I</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">3</span><span class="p">)</span>
+<span class="p">(</span><span class="n">iter</span><span class="o">.</span><span class="nb">I</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span><span class="n">iter</span><span class="o">.</span><span class="nb">I</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">3</span><span class="p">)</span>
 <span class="n">A</span><span class="p">[</span><span class="n">iter</span><span class="p">]</span> <span class="o">=</span> <span class="mi">2</span>
-<span class="p">(</span><span class="n">iter</span><span class="o">.</span><span class="n">I</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span><span class="n">iter</span><span class="o">.</span><span class="n">I</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span> <span class="o">=</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">)</span>
+<span class="p">(</span><span class="n">iter</span><span class="o">.</span><span class="nb">I</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span><span class="n">iter</span><span class="o">.</span><span class="nb">I</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span> <span class="o">=</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">)</span>
 <span class="n">A</span><span class="p">[</span><span class="n">iter</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
 </pre></div>
 </div>
@@ -672,7 +673,7 @@
 <code class="descclassname">Base.</code><code class="descname">linearindexing</code><span class="sig-paren">(</span><em>A</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.Base.linearindexing" title="Permalink to this definition">¶</a></dt>
 <dd><p><code class="docutils literal"><span class="pre">linearindexing</span></code> defines how an AbstractArray most efficiently accesses its elements. If <code class="docutils literal"><span class="pre">Base.linearindexing(A)</span></code> returns <code class="docutils literal"><span class="pre">Base.LinearFast()</span></code>, this means that linear indexing with only one index is an efficient operation. If it instead returns <code class="docutils literal"><span class="pre">Base.LinearSlow()</span></code> (by default), this means that the array intrinsically accesses its elements with indices specified for every dimension. Since converting a linear index to multiple indexing subscripts is typically very expensive, this provides a traits-based mechanism to enable efficient generic code for all array types.</p>
 <p>An abstract array subtype <code class="docutils literal"><span class="pre">MyArray</span></code> that wishes to opt into fast linear indexing behaviors should define <code class="docutils literal"><span class="pre">linearindexing</span></code> in the type-domain:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">Base</span><span class="o">.</span><span class="n">linearindexing</span><span class="p">{</span><span class="n">T</span><span class="o">&lt;:</span><span class="n">MyArray</span><span class="p">}(::</span><span class="n">Type</span><span class="p">{</span><span class="n">T</span><span class="p">})</span> <span class="o">=</span> <span class="n">Base</span><span class="o">.</span><span class="n">LinearFast</span><span class="p">()</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">Base</span><span class="o">.</span><span class="n">linearindexing</span><span class="p">{</span><span class="n">T</span><span class="o">&lt;:</span><span class="n">MyArray</span><span class="p">}(</span><span class="o">::</span><span class="kt">Type</span><span class="p">{</span><span class="n">T</span><span class="p">})</span> <span class="o">=</span> <span class="n">Base</span><span class="o">.</span><span class="n">LinearFast</span><span class="p">()</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -833,21 +834,21 @@
 <dd><p>Create an uninitialized mutable array with the given element type and size, based upon the given source array. The second and third arguments are both optional, defaulting to the given array&#8217;s <code class="docutils literal"><span class="pre">eltype</span></code> and <code class="docutils literal"><span class="pre">size</span></code>. The dimensions may be specified either as a single tuple argument or as a series of integer arguments.</p>
 <p>Custom AbstractArray subtypes may choose which specific array type is best-suited to return for the given element type and dimensionality. If they do not specialize this method, the default is an <code class="docutils literal"><span class="pre">Array{element_type}(dims...)</span></code>.</p>
 <p>For example, <code class="docutils literal"><span class="pre">similar(1:10,</span> <span class="pre">1,</span> <span class="pre">4)</span></code> returns an uninitialized <code class="docutils literal"><span class="pre">Array{Int,2}</span></code> since ranges are neither mutable nor support 2 dimensions:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">similar</span><span class="p">(</span><span class="mi">1</span><span class="p">:</span><span class="mi">10</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">4</span><span class="p">)</span>
-<span class="mi">1</span><span class="n">×4</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">similar</span><span class="p">(</span><span class="mi">1</span><span class="o">:</span><span class="mi">10</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">4</span><span class="p">)</span>
+<span class="mi">1</span><span class="n">×4</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">4419743872</span>  <span class="mi">4374413872</span>  <span class="mi">4419743888</span>  <span class="mi">0</span>
 </pre></div>
 </div>
 <p>Conversely, <code class="docutils literal"><span class="pre">similar(trues(10,10),</span> <span class="pre">2)</span></code> returns an uninitialized <code class="docutils literal"><span class="pre">BitVector</span></code> with two elements since <code class="docutils literal"><span class="pre">BitArray</span></code>s are both mutable and can support 1-dimensional arrays:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">similar</span><span class="p">(</span><span class="n">trues</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span><span class="mi">10</span><span class="p">),</span> <span class="mi">2</span><span class="p">)</span>
-<span class="mi">2</span><span class="o">-</span><span class="n">element</span> <span class="n">BitArray</span><span class="p">{</span><span class="mi">1</span><span class="p">}:</span>
- <span class="n">false</span>
- <span class="n">false</span>
+<span class="mi">2</span><span class="o">-</span><span class="n">element</span> <span class="kt">BitArray</span><span class="p">{</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
+ <span class="kc">false</span>
+ <span class="kc">false</span>
 </pre></div>
 </div>
 <p>Since <code class="docutils literal"><span class="pre">BitArray</span></code>s can only store elements of type <code class="docutils literal"><span class="pre">Bool</span></code>, however, if you request a different element type it will create a regular <code class="docutils literal"><span class="pre">Array</span></code> instead:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">similar</span><span class="p">(</span><span class="n">falses</span><span class="p">(</span><span class="mi">10</span><span class="p">),</span> <span class="kt">Float64</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">4</span><span class="p">)</span>
-<span class="mi">2</span><span class="n">×4</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">×4</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mf">2.18425e-314</span>  <span class="mf">2.18425e-314</span>  <span class="mf">2.18425e-314</span>  <span class="mf">2.18425e-314</span>
  <span class="mf">2.18425e-314</span>  <span class="mf">2.18425e-314</span>  <span class="mf">2.18425e-314</span>  <span class="mf">2.18425e-314</span>
 </pre></div>
@@ -859,11 +860,11 @@
 <code class="descname">similar</code><span class="sig-paren">(</span><em>storagetype</em>, <em>indices</em><span class="sig-paren">)</span></dt>
 <dd><p>Create an uninitialized mutable array analogous to that specified by <code class="docutils literal"><span class="pre">storagetype</span></code>, but with <code class="docutils literal"><span class="pre">indices</span></code> specified by the last argument. <code class="docutils literal"><span class="pre">storagetype</span></code> might be a type or a function.</p>
 <p><strong>Examples</strong>:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">similar</span><span class="p">(</span><span class="n">Array</span><span class="p">{</span><span class="kt">Int</span><span class="p">},</span> <span class="n">indices</span><span class="p">(</span><span class="n">A</span><span class="p">))</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">similar</span><span class="p">(</span><span class="kt">Array</span><span class="p">{</span><span class="kt">Int</span><span class="p">},</span> <span class="n">indices</span><span class="p">(</span><span class="n">A</span><span class="p">))</span>
 </pre></div>
 </div>
 <p>creates an array that &#8220;acts like&#8221; an <code class="docutils literal"><span class="pre">Array{Int}</span></code> (and might indeed be backed by one), but which is indexed identically to <code class="docutils literal"><span class="pre">A</span></code>. If <code class="docutils literal"><span class="pre">A</span></code> has conventional indexing, this will be identical to <code class="docutils literal"><span class="pre">Array{Int}(size(A))</span></code>, but if <code class="docutils literal"><span class="pre">A</span></code> has unconventional indexing then the indices of the result will match <code class="docutils literal"><span class="pre">A</span></code>.</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">similar</span><span class="p">(</span><span class="n">BitArray</span><span class="p">,</span> <span class="p">(</span><span class="n">indices</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="mi">2</span><span class="p">),))</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">similar</span><span class="p">(</span><span class="kt">BitArray</span><span class="p">,</span> <span class="p">(</span><span class="n">indices</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="mi">2</span><span class="p">),))</span>
 </pre></div>
 </div>
 <p>would create a 1-dimensional logical array whose indices match those of the columns of <code class="docutils literal"><span class="pre">A</span></code>.</p>
@@ -896,13 +897,13 @@
 <code class="descname">eye</code><span class="sig-paren">(</span><em>A</em><span class="sig-paren">)</span></dt>
 <dd><p>Constructs an identity matrix of the same dimensions and type as <code class="docutils literal"><span class="pre">A</span></code>.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">A</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span> <span class="mi">2</span> <span class="mi">3</span><span class="p">;</span> <span class="mi">4</span> <span class="mi">5</span> <span class="mi">6</span><span class="p">;</span> <span class="mi">7</span> <span class="mi">8</span> <span class="mi">9</span><span class="p">]</span>
-<span class="mi">3</span><span class="n">×3</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">3</span><span class="n">×3</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>  <span class="mi">2</span>  <span class="mi">3</span>
  <span class="mi">4</span>  <span class="mi">5</span>  <span class="mi">6</span>
  <span class="mi">7</span>  <span class="mi">8</span>  <span class="mi">9</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">eye</span><span class="p">(</span><span class="n">A</span><span class="p">)</span>
-<span class="mi">3</span><span class="n">×3</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">3</span><span class="n">×3</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>  <span class="mi">0</span>  <span class="mi">0</span>
  <span class="mi">0</span>  <span class="mi">1</span>  <span class="mi">0</span>
  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">1</span>
@@ -951,7 +952,7 @@
 <dl class="function">
 <dt>
 <code class="descname">getindex</code><span class="sig-paren">(</span><em>A</em>, <em>inds...</em><span class="sig-paren">)</span></dt>
-<dd><p>Returns a subset of array <code class="docutils literal"><span class="pre">A</span></code> as specified by <code class="docutils literal"><span class="pre">inds</span></code>, where each <code class="docutils literal"><span class="pre">ind</span></code> may be an <code class="docutils literal"><span class="pre">Int</span></code>, a <code class="docutils literal"><span class="pre">Range</span></code>, or a <code class="docutils literal"><span class="pre">Vector</span></code>. See the manual section on <a class="reference internal" href="../../manual/arrays/#man-array-indexing"><span>array indexing</span></a> for details.</p>
+<dd><p>Returns a subset of array <code class="docutils literal"><span class="pre">A</span></code> as specified by <code class="docutils literal"><span class="pre">inds</span></code>, where each <code class="docutils literal"><span class="pre">ind</span></code> may be an <code class="docutils literal"><span class="pre">Int</span></code>, a <code class="docutils literal"><span class="pre">Range</span></code>, or a <code class="docutils literal"><span class="pre">Vector</span></code>. See the manual section on <a class="reference internal" href="../../manual/arrays/#man-array-indexing"><span class="std std-ref">array indexing</span></a> for details.</p>
 </dd></dl>
 
 <dl class="function">
@@ -1019,16 +1020,16 @@
 <code class="descname">vcat</code><span class="sig-paren">(</span><em>A...</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.vcat" title="Permalink to this definition">¶</a></dt>
 <dd><p>Concatenate along dimension 1.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">a</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span> <span class="mi">2</span> <span class="mi">3</span> <span class="mi">4</span> <span class="mi">5</span><span class="p">]</span>
-<span class="mi">1</span><span class="n">×5</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">1</span><span class="n">×5</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>  <span class="mi">2</span>  <span class="mi">3</span>  <span class="mi">4</span>  <span class="mi">5</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">b</span> <span class="o">=</span> <span class="p">[</span><span class="mi">6</span> <span class="mi">7</span> <span class="mi">8</span> <span class="mi">9</span> <span class="mi">10</span><span class="p">;</span> <span class="mi">11</span> <span class="mi">12</span> <span class="mi">13</span> <span class="mi">14</span> <span class="mi">15</span><span class="p">]</span>
-<span class="mi">2</span><span class="n">×5</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">×5</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
   <span class="mi">6</span>   <span class="mi">7</span>   <span class="mi">8</span>   <span class="mi">9</span>  <span class="mi">10</span>
  <span class="mi">11</span>  <span class="mi">12</span>  <span class="mi">13</span>  <span class="mi">14</span>  <span class="mi">15</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">vcat</span><span class="p">(</span><span class="n">a</span><span class="p">,</span><span class="n">b</span><span class="p">)</span>
-<span class="mi">3</span><span class="n">×5</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">3</span><span class="n">×5</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
   <span class="mi">1</span>   <span class="mi">2</span>   <span class="mi">3</span>   <span class="mi">4</span>   <span class="mi">5</span>
   <span class="mi">6</span>   <span class="mi">7</span>   <span class="mi">8</span>   <span class="mi">9</span>  <span class="mi">10</span>
  <span class="mi">11</span>  <span class="mi">12</span>  <span class="mi">13</span>  <span class="mi">14</span>  <span class="mi">15</span>
@@ -1040,7 +1041,7 @@
 <span class="p">[</span><span class="mi">4</span> <span class="mi">5</span> <span class="mi">6</span><span class="p">])</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">vcat</span><span class="p">(</span><span class="n">c</span><span class="o">...</span><span class="p">)</span>
-<span class="mi">2</span><span class="n">×3</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">×3</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>  <span class="mi">2</span>  <span class="mi">3</span>
  <span class="mi">4</span>  <span class="mi">5</span>  <span class="mi">6</span>
 </pre></div>
@@ -1052,7 +1053,7 @@
 <code class="descname">hcat</code><span class="sig-paren">(</span><em>A...</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.hcat" title="Permalink to this definition">¶</a></dt>
 <dd><p>Concatenate along dimension 2.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">a</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span><span class="p">;</span> <span class="mi">2</span><span class="p">;</span> <span class="mi">3</span><span class="p">;</span> <span class="mi">4</span><span class="p">;</span> <span class="mi">5</span><span class="p">]</span>
-<span class="mi">5</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">5</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>
  <span class="mi">2</span>
  <span class="mi">3</span>
@@ -1060,7 +1061,7 @@
  <span class="mi">5</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">b</span> <span class="o">=</span> <span class="p">[</span><span class="mi">6</span> <span class="mi">7</span><span class="p">;</span> <span class="mi">8</span> <span class="mi">9</span><span class="p">;</span> <span class="mi">10</span> <span class="mi">11</span><span class="p">;</span> <span class="mi">12</span> <span class="mi">13</span><span class="p">;</span> <span class="mi">14</span> <span class="mi">15</span><span class="p">]</span>
-<span class="mi">5</span><span class="n">×2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">5</span><span class="n">×2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
   <span class="mi">6</span>   <span class="mi">7</span>
   <span class="mi">8</span>   <span class="mi">9</span>
  <span class="mi">10</span>  <span class="mi">11</span>
@@ -1068,7 +1069,7 @@
  <span class="mi">14</span>  <span class="mi">15</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">hcat</span><span class="p">(</span><span class="n">a</span><span class="p">,</span><span class="n">b</span><span class="p">)</span>
-<span class="mi">5</span><span class="n">×3</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">5</span><span class="n">×3</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>   <span class="mi">6</span>   <span class="mi">7</span>
  <span class="mi">2</span>   <span class="mi">8</span>   <span class="mi">9</span>
  <span class="mi">3</span>  <span class="mi">10</span>  <span class="mi">11</span>
@@ -1079,7 +1080,7 @@
 <span class="p">([</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">],[</span><span class="mi">4</span><span class="p">,</span><span class="mi">5</span><span class="p">,</span><span class="mi">6</span><span class="p">])</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">hcat</span><span class="p">(</span><span class="n">c</span><span class="o">...</span><span class="p">)</span>
-<span class="mi">3</span><span class="n">×2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">3</span><span class="n">×2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>  <span class="mi">4</span>
  <span class="mi">2</span>  <span class="mi">5</span>
  <span class="mi">3</span>  <span class="mi">6</span>
@@ -1091,27 +1092,27 @@
 <dt id="Base.hvcat">
 <code class="descname">hvcat</code><span class="sig-paren">(</span><em>rows::Tuple{Vararg{Int}}</em>, <em>values...</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.hvcat" title="Permalink to this definition">¶</a></dt>
 <dd><p>Horizontal and vertical concatenation in one call. This function is called for block matrix syntax. The first argument specifies the number of arguments to concatenate in each block row.</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">c</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="n">e</span><span class="p">,</span> <span class="n">f</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">6</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">c</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="nb">e</span><span class="p">,</span> <span class="n">f</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">6</span>
 <span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="mi">4</span><span class="p">,</span><span class="mi">5</span><span class="p">,</span><span class="mi">6</span><span class="p">)</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="p">[</span><span class="n">a</span> <span class="n">b</span> <span class="n">c</span><span class="p">;</span> <span class="n">d</span> <span class="n">e</span> <span class="n">f</span><span class="p">]</span>
-<span class="mi">2</span><span class="n">×3</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="p">[</span><span class="n">a</span> <span class="n">b</span> <span class="n">c</span><span class="p">;</span> <span class="n">d</span> <span class="nb">e</span> <span class="n">f</span><span class="p">]</span>
+<span class="mi">2</span><span class="n">×3</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>  <span class="mi">2</span>  <span class="mi">3</span>
  <span class="mi">4</span>  <span class="mi">5</span>  <span class="mi">6</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">hvcat</span><span class="p">((</span><span class="mi">3</span><span class="p">,</span><span class="mi">3</span><span class="p">),</span> <span class="n">a</span><span class="p">,</span><span class="n">b</span><span class="p">,</span><span class="n">c</span><span class="p">,</span><span class="n">d</span><span class="p">,</span><span class="n">e</span><span class="p">,</span><span class="n">f</span><span class="p">)</span>
-<span class="mi">2</span><span class="n">×3</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">hvcat</span><span class="p">((</span><span class="mi">3</span><span class="p">,</span><span class="mi">3</span><span class="p">),</span> <span class="n">a</span><span class="p">,</span><span class="n">b</span><span class="p">,</span><span class="n">c</span><span class="p">,</span><span class="n">d</span><span class="p">,</span><span class="nb">e</span><span class="p">,</span><span class="n">f</span><span class="p">)</span>
+<span class="mi">2</span><span class="n">×3</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>  <span class="mi">2</span>  <span class="mi">3</span>
  <span class="mi">4</span>  <span class="mi">5</span>  <span class="mi">6</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="p">[</span><span class="n">a</span> <span class="n">b</span><span class="p">;</span><span class="n">c</span> <span class="n">d</span><span class="p">;</span> <span class="n">e</span> <span class="n">f</span><span class="p">]</span>
-<span class="mi">3</span><span class="n">×2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="p">[</span><span class="n">a</span> <span class="n">b</span><span class="p">;</span><span class="n">c</span> <span class="n">d</span><span class="p">;</span> <span class="nb">e</span> <span class="n">f</span><span class="p">]</span>
+<span class="mi">3</span><span class="n">×2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>  <span class="mi">2</span>
  <span class="mi">3</span>  <span class="mi">4</span>
  <span class="mi">5</span>  <span class="mi">6</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">hvcat</span><span class="p">((</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="p">),</span> <span class="n">a</span><span class="p">,</span><span class="n">b</span><span class="p">,</span><span class="n">c</span><span class="p">,</span><span class="n">d</span><span class="p">,</span><span class="n">e</span><span class="p">,</span><span class="n">f</span><span class="p">)</span>
-<span class="mi">3</span><span class="n">×2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">hvcat</span><span class="p">((</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="p">),</span> <span class="n">a</span><span class="p">,</span><span class="n">b</span><span class="p">,</span><span class="n">c</span><span class="p">,</span><span class="n">d</span><span class="p">,</span><span class="nb">e</span><span class="p">,</span><span class="n">f</span><span class="p">)</span>
+<span class="mi">3</span><span class="n">×2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>  <span class="mi">2</span>
  <span class="mi">3</span>  <span class="mi">4</span>
  <span class="mi">5</span>  <span class="mi">6</span>
@@ -1125,12 +1126,12 @@
 <code class="descname">flipdim</code><span class="sig-paren">(</span><em>A</em>, <em>d</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.flipdim" title="Permalink to this definition">¶</a></dt>
 <dd><p>Reverse <code class="docutils literal"><span class="pre">A</span></code> in dimension <code class="docutils literal"><span class="pre">d</span></code>.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">b</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span> <span class="mi">2</span><span class="p">;</span> <span class="mi">3</span> <span class="mi">4</span><span class="p">]</span>
-<span class="mi">2</span><span class="n">×2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">×2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>  <span class="mi">2</span>
  <span class="mi">3</span>  <span class="mi">4</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">flipdim</span><span class="p">(</span><span class="n">b</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span>
-<span class="mi">2</span><span class="n">×2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">×2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">2</span>  <span class="mi">1</span>
  <span class="mi">4</span>  <span class="mi">3</span>
 </pre></div>
@@ -1141,22 +1142,22 @@
 <dt id="Base.circshift">
 <code class="descname">circshift</code><span class="sig-paren">(</span><em>A</em>, <em>shifts</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.circshift" title="Permalink to this definition">¶</a></dt>
 <dd><p>Circularly shift the data in an array. The second argument is a vector giving the amount to shift in each dimension.</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">b</span> <span class="o">=</span> <span class="n">reshape</span><span class="p">(</span><span class="n">collect</span><span class="p">(</span><span class="mi">1</span><span class="p">:</span><span class="mi">16</span><span class="p">),</span> <span class="p">(</span><span class="mi">4</span><span class="p">,</span><span class="mi">4</span><span class="p">))</span>
-<span class="mi">4</span><span class="n">×4</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">b</span> <span class="o">=</span> <span class="n">reshape</span><span class="p">(</span><span class="n">collect</span><span class="p">(</span><span class="mi">1</span><span class="o">:</span><span class="mi">16</span><span class="p">),</span> <span class="p">(</span><span class="mi">4</span><span class="p">,</span><span class="mi">4</span><span class="p">))</span>
+<span class="mi">4</span><span class="n">×4</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>  <span class="mi">5</span>   <span class="mi">9</span>  <span class="mi">13</span>
  <span class="mi">2</span>  <span class="mi">6</span>  <span class="mi">10</span>  <span class="mi">14</span>
  <span class="mi">3</span>  <span class="mi">7</span>  <span class="mi">11</span>  <span class="mi">15</span>
  <span class="mi">4</span>  <span class="mi">8</span>  <span class="mi">12</span>  <span class="mi">16</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">circshift</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">2</span><span class="p">))</span>
-<span class="mi">4</span><span class="n">×4</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">4</span><span class="n">×4</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
   <span class="mi">9</span>  <span class="mi">13</span>  <span class="mi">1</span>  <span class="mi">5</span>
  <span class="mi">10</span>  <span class="mi">14</span>  <span class="mi">2</span>  <span class="mi">6</span>
  <span class="mi">11</span>  <span class="mi">15</span>  <span class="mi">3</span>  <span class="mi">7</span>
  <span class="mi">12</span>  <span class="mi">16</span>  <span class="mi">4</span>  <span class="mi">8</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">circshift</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="mi">0</span><span class="p">))</span>
-<span class="mi">4</span><span class="n">×4</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">4</span><span class="n">×4</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">2</span>  <span class="mi">6</span>  <span class="mi">10</span>  <span class="mi">14</span>
  <span class="mi">3</span>  <span class="mi">7</span>  <span class="mi">11</span>  <span class="mi">15</span>
  <span class="mi">4</span>  <span class="mi">8</span>  <span class="mi">12</span>  <span class="mi">16</span>
@@ -1169,13 +1170,13 @@
 <dt id="Base.find">
 <code class="descname">find</code><span class="sig-paren">(</span><em>A</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.find" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return a vector of the linear indexes of the non-zeros in <code class="docutils literal"><span class="pre">A</span></code> (determined by <code class="docutils literal"><span class="pre">A[i]!=0</span></code>). A common use of this is to convert a boolean array to an array of indexes of the <code class="docutils literal"><span class="pre">true</span></code> elements. If there are no non-zero elements of <code class="docutils literal"><span class="pre">A</span></code>, <code class="docutils literal"><span class="pre">find</span></code> returns an empty array.</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">A</span> <span class="o">=</span> <span class="p">[</span><span class="n">true</span> <span class="n">false</span><span class="p">;</span> <span class="n">false</span> <span class="n">true</span><span class="p">]</span>
-<span class="mi">2</span><span class="n">×2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Bool</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
-  <span class="n">true</span>  <span class="n">false</span>
- <span class="n">false</span>   <span class="n">true</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">A</span> <span class="o">=</span> <span class="p">[</span><span class="kc">true</span> <span class="kc">false</span><span class="p">;</span> <span class="kc">false</span> <span class="kc">true</span><span class="p">]</span>
+<span class="mi">2</span><span class="n">×2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Bool</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
+  <span class="kc">true</span>  <span class="kc">false</span>
+ <span class="kc">false</span>   <span class="kc">true</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">find</span><span class="p">(</span><span class="n">A</span><span class="p">)</span>
-<span class="mi">2</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">2</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>
  <span class="mi">4</span>
 </pre></div>
@@ -1187,12 +1188,12 @@
 <code class="descname">find</code><span class="sig-paren">(</span><em>f::Function</em>, <em>A</em><span class="sig-paren">)</span></dt>
 <dd><p>Return a vector <code class="docutils literal"><span class="pre">I</span></code> of the linear indexes of <code class="docutils literal"><span class="pre">A</span></code> where <code class="docutils literal"><span class="pre">f(A[I])</span></code> returns <code class="docutils literal"><span class="pre">true</span></code>. If there are no such elements of <code class="docutils literal"><span class="pre">A</span></code>, find returns an empty array.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">A</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span> <span class="mi">2</span><span class="p">;</span> <span class="mi">3</span> <span class="mi">4</span><span class="p">]</span>
-<span class="mi">2</span><span class="n">×2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">×2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>  <span class="mi">2</span>
  <span class="mi">3</span>  <span class="mi">4</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">find</span><span class="p">(</span><span class="n">isodd</span><span class="p">,</span><span class="n">A</span><span class="p">)</span>
-<span class="mi">2</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">2</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>
  <span class="mi">2</span>
 </pre></div>
@@ -1204,7 +1205,7 @@
 <code class="descname">findn</code><span class="sig-paren">(</span><em>A</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.findn" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return a vector of indexes for each dimension giving the locations of the non-zeros in <code class="docutils literal"><span class="pre">A</span></code> (determined by <code class="docutils literal"><span class="pre">A[i]!=0</span></code>). If there are no non-zero elements of <code class="docutils literal"><span class="pre">A</span></code>, <code class="docutils literal"><span class="pre">findn</span></code> returns a 2-tuple of empty arrays.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">A</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span> <span class="mi">2</span> <span class="mi">0</span><span class="p">;</span> <span class="mi">0</span> <span class="mi">0</span> <span class="mi">3</span><span class="p">;</span> <span class="mi">0</span> <span class="mi">4</span> <span class="mi">0</span><span class="p">]</span>
-<span class="mi">3</span><span class="n">×3</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">3</span><span class="n">×3</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>  <span class="mi">2</span>  <span class="mi">0</span>
  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">3</span>
  <span class="mi">0</span>  <span class="mi">4</span>  <span class="mi">0</span>
@@ -1213,7 +1214,7 @@
 <span class="p">([</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="mi">2</span><span class="p">],[</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">])</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">A</span> <span class="o">=</span> <span class="n">zeros</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span>
-<span class="mi">2</span><span class="n">×2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">×2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mf">0.0</span>  <span class="mf">0.0</span>
  <span class="mf">0.0</span>  <span class="mf">0.0</span>
 
@@ -1228,7 +1229,7 @@
 <code class="descname">findnz</code><span class="sig-paren">(</span><em>A</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.findnz" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return a tuple <code class="docutils literal"><span class="pre">(I,</span> <span class="pre">J,</span> <span class="pre">V)</span></code> where <code class="docutils literal"><span class="pre">I</span></code> and <code class="docutils literal"><span class="pre">J</span></code> are the row and column indexes of the non-zero values in matrix <code class="docutils literal"><span class="pre">A</span></code>, and <code class="docutils literal"><span class="pre">V</span></code> is a vector of the non-zero values.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">A</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span> <span class="mi">2</span> <span class="mi">0</span><span class="p">;</span> <span class="mi">0</span> <span class="mi">0</span> <span class="mi">3</span><span class="p">;</span> <span class="mi">0</span> <span class="mi">4</span> <span class="mi">0</span><span class="p">]</span>
-<span class="mi">3</span><span class="n">×3</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">3</span><span class="n">×3</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>  <span class="mi">2</span>  <span class="mi">0</span>
  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">3</span>
  <span class="mi">0</span>  <span class="mi">4</span>  <span class="mi">0</span>
@@ -1244,7 +1245,7 @@
 <code class="descname">findfirst</code><span class="sig-paren">(</span><em>A</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.findfirst" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return the linear index of the first non-zero value in <code class="docutils literal"><span class="pre">A</span></code> (determined by <code class="docutils literal"><span class="pre">A[i]!=0</span></code>). Returns <code class="docutils literal"><span class="pre">0</span></code> if no such value is found.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">A</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span> <span class="mi">0</span><span class="p">;</span> <span class="mi">1</span> <span class="mi">0</span><span class="p">]</span>
-<span class="mi">2</span><span class="n">×2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">×2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">0</span>  <span class="mi">0</span>
  <span class="mi">1</span>  <span class="mi">0</span>
 
@@ -1259,7 +1260,7 @@
 <code class="descname">findfirst</code><span class="sig-paren">(</span><em>A</em>, <em>v</em><span class="sig-paren">)</span></dt>
 <dd><p>Return the linear index of the first element equal to <code class="docutils literal"><span class="pre">v</span></code> in <code class="docutils literal"><span class="pre">A</span></code>. Returns <code class="docutils literal"><span class="pre">0</span></code> if <code class="docutils literal"><span class="pre">v</span></code> is not found.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">A</span> <span class="o">=</span> <span class="p">[</span><span class="mi">4</span> <span class="mi">6</span><span class="p">;</span> <span class="mi">2</span> <span class="mi">2</span><span class="p">]</span>
-<span class="mi">2</span><span class="n">×2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">×2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">4</span>  <span class="mi">6</span>
  <span class="mi">2</span>  <span class="mi">2</span>
 
@@ -1277,7 +1278,7 @@
 <code class="descname">findfirst</code><span class="sig-paren">(</span><em>predicate::Function</em>, <em>A</em><span class="sig-paren">)</span></dt>
 <dd><p>Return the linear index of the first element of <code class="docutils literal"><span class="pre">A</span></code> for which <code class="docutils literal"><span class="pre">predicate</span></code> returns <code class="docutils literal"><span class="pre">true</span></code>. Returns <code class="docutils literal"><span class="pre">0</span></code> if there is no such element.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">A</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span> <span class="mi">4</span><span class="p">;</span> <span class="mi">2</span> <span class="mi">2</span><span class="p">]</span>
-<span class="mi">2</span><span class="n">×2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">×2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>  <span class="mi">4</span>
  <span class="mi">2</span>  <span class="mi">2</span>
 
@@ -1295,7 +1296,7 @@
 <code class="descname">findlast</code><span class="sig-paren">(</span><em>A</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.findlast" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return the linear index of the last non-zero value in <code class="docutils literal"><span class="pre">A</span></code> (determined by <code class="docutils literal"><span class="pre">A[i]!=0</span></code>). Returns <code class="docutils literal"><span class="pre">0</span></code> if there is no non-zero value in <code class="docutils literal"><span class="pre">A</span></code>.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">A</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span> <span class="mi">0</span><span class="p">;</span> <span class="mi">1</span> <span class="mi">0</span><span class="p">]</span>
-<span class="mi">2</span><span class="n">×2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">×2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>  <span class="mi">0</span>
  <span class="mi">1</span>  <span class="mi">0</span>
 
@@ -1303,7 +1304,7 @@
 <span class="mi">2</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">A</span> <span class="o">=</span> <span class="n">zeros</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span>
-<span class="mi">2</span><span class="n">×2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">×2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mf">0.0</span>  <span class="mf">0.0</span>
  <span class="mf">0.0</span>  <span class="mf">0.0</span>
 
@@ -1318,7 +1319,7 @@
 <code class="descname">findlast</code><span class="sig-paren">(</span><em>A</em>, <em>v</em><span class="sig-paren">)</span></dt>
 <dd><p>Return the linear index of the last element equal to <code class="docutils literal"><span class="pre">v</span></code> in <code class="docutils literal"><span class="pre">A</span></code>. Returns <code class="docutils literal"><span class="pre">0</span></code> if there is no element of <code class="docutils literal"><span class="pre">A</span></code> equal to <code class="docutils literal"><span class="pre">v</span></code>.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">A</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span> <span class="mi">2</span><span class="p">;</span> <span class="mi">2</span> <span class="mi">1</span><span class="p">]</span>
-<span class="mi">2</span><span class="n">×2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">×2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>  <span class="mi">2</span>
  <span class="mi">2</span>  <span class="mi">1</span>
 
@@ -1339,7 +1340,7 @@
 <code class="descname">findlast</code><span class="sig-paren">(</span><em>predicate::Function</em>, <em>A</em><span class="sig-paren">)</span></dt>
 <dd><p>Return the linear index of the last element of <code class="docutils literal"><span class="pre">A</span></code> for which <code class="docutils literal"><span class="pre">predicate</span></code> returns <code class="docutils literal"><span class="pre">true</span></code>. Returns <code class="docutils literal"><span class="pre">0</span></code> if there is no such element.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">A</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span> <span class="mi">2</span><span class="p">;</span> <span class="mi">3</span> <span class="mi">4</span><span class="p">]</span>
-<span class="mi">2</span><span class="n">×2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">×2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>  <span class="mi">2</span>
  <span class="mi">3</span>  <span class="mi">4</span>
 
@@ -1357,7 +1358,7 @@
 <code class="descname">findnext</code><span class="sig-paren">(</span><em>A</em>, <em>i::Integer</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.findnext" title="Permalink to this definition">¶</a></dt>
 <dd><p>Find the next linear index &gt;= <code class="docutils literal"><span class="pre">i</span></code> of a non-zero element of <code class="docutils literal"><span class="pre">A</span></code>, or <code class="docutils literal"><span class="pre">0</span></code> if not found.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">A</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span> <span class="mi">0</span><span class="p">;</span> <span class="mi">1</span> <span class="mi">0</span><span class="p">]</span>
-<span class="mi">2</span><span class="n">×2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">×2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">0</span>  <span class="mi">0</span>
  <span class="mi">1</span>  <span class="mi">0</span>
 
@@ -1375,7 +1376,7 @@
 <code class="descname">findnext</code><span class="sig-paren">(</span><em>predicate::Function</em>, <em>A</em>, <em>i::Integer</em><span class="sig-paren">)</span></dt>
 <dd><p>Find the next linear index &gt;= <code class="docutils literal"><span class="pre">i</span></code> of an element of <code class="docutils literal"><span class="pre">A</span></code> for which <code class="docutils literal"><span class="pre">predicate</span></code> returns <code class="docutils literal"><span class="pre">true</span></code>, or <code class="docutils literal"><span class="pre">0</span></code> if not found.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">A</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span> <span class="mi">4</span><span class="p">;</span> <span class="mi">2</span> <span class="mi">2</span><span class="p">]</span>
-<span class="mi">2</span><span class="n">×2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">×2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>  <span class="mi">4</span>
  <span class="mi">2</span>  <span class="mi">2</span>
 
@@ -1393,7 +1394,7 @@
 <code class="descname">findnext</code><span class="sig-paren">(</span><em>A</em>, <em>v</em>, <em>i::Integer</em><span class="sig-paren">)</span></dt>
 <dd><p>Find the next linear index &gt;= <code class="docutils literal"><span class="pre">i</span></code> of an element of <code class="docutils literal"><span class="pre">A</span></code> equal to <code class="docutils literal"><span class="pre">v</span></code> (using <code class="docutils literal"><span class="pre">==</span></code>), or <code class="docutils literal"><span class="pre">0</span></code> if not found.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">A</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span> <span class="mi">4</span><span class="p">;</span> <span class="mi">2</span> <span class="mi">2</span><span class="p">]</span>
-<span class="mi">2</span><span class="n">×2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">×2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>  <span class="mi">4</span>
  <span class="mi">2</span>  <span class="mi">2</span>
 
@@ -1411,7 +1412,7 @@
 <code class="descname">findprev</code><span class="sig-paren">(</span><em>A</em>, <em>i::Integer</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.findprev" title="Permalink to this definition">¶</a></dt>
 <dd><p>Find the previous linear index &lt;= <code class="docutils literal"><span class="pre">i</span></code> of a non-zero element of <code class="docutils literal"><span class="pre">A</span></code>, or <code class="docutils literal"><span class="pre">0</span></code> if not found.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">A</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span> <span class="mi">0</span><span class="p">;</span> <span class="mi">1</span> <span class="mi">2</span><span class="p">]</span>
-<span class="mi">2</span><span class="n">×2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">×2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">0</span>  <span class="mi">0</span>
  <span class="mi">1</span>  <span class="mi">2</span>
 
@@ -1429,7 +1430,7 @@
 <code class="descname">findprev</code><span class="sig-paren">(</span><em>predicate::Function</em>, <em>A</em>, <em>i::Integer</em><span class="sig-paren">)</span></dt>
 <dd><p>Find the previous linear index &lt;= <code class="docutils literal"><span class="pre">i</span></code> of an element of <code class="docutils literal"><span class="pre">A</span></code> for which <code class="docutils literal"><span class="pre">predicate</span></code> returns <code class="docutils literal"><span class="pre">true</span></code>, or <code class="docutils literal"><span class="pre">0</span></code> if not found.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">A</span> <span class="o">=</span> <span class="p">[</span><span class="mi">4</span> <span class="mi">6</span><span class="p">;</span> <span class="mi">1</span> <span class="mi">2</span><span class="p">]</span>
-<span class="mi">2</span><span class="n">×2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">×2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">4</span>  <span class="mi">6</span>
  <span class="mi">1</span>  <span class="mi">2</span>
 
@@ -1447,7 +1448,7 @@
 <code class="descname">findprev</code><span class="sig-paren">(</span><em>A</em>, <em>v</em>, <em>i::Integer</em><span class="sig-paren">)</span></dt>
 <dd><p>Find the previous linear index &lt;= <code class="docutils literal"><span class="pre">i</span></code> of an element of <code class="docutils literal"><span class="pre">A</span></code> equal to <code class="docutils literal"><span class="pre">v</span></code> (using <code class="docutils literal"><span class="pre">==</span></code>), or <code class="docutils literal"><span class="pre">0</span></code> if not found.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">A</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span> <span class="mi">0</span><span class="p">;</span> <span class="mi">1</span> <span class="mi">2</span><span class="p">]</span>
-<span class="mi">2</span><span class="n">×2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">×2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">0</span>  <span class="mi">0</span>
  <span class="mi">1</span>  <span class="mi">2</span>
 
@@ -1482,15 +1483,15 @@
 <dt id="Base.squeeze">
 <code class="descname">squeeze</code><span class="sig-paren">(</span><em>A</em>, <em>dims</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.squeeze" title="Permalink to this definition">¶</a></dt>
 <dd><p>Remove the dimensions specified by <code class="docutils literal"><span class="pre">dims</span></code> from array <code class="docutils literal"><span class="pre">A</span></code>. Elements of <code class="docutils literal"><span class="pre">dims</span></code> must be unique and within the range <code class="docutils literal"><span class="pre">1:ndims(A)</span></code>. <code class="docutils literal"><span class="pre">size(A,i)</span></code> must equal 1 for all <code class="docutils literal"><span class="pre">i</span></code> in <code class="docutils literal"><span class="pre">dims</span></code>.</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">a</span> <span class="o">=</span> <span class="n">reshape</span><span class="p">(</span><span class="n">collect</span><span class="p">(</span><span class="mi">1</span><span class="p">:</span><span class="mi">4</span><span class="p">),(</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">))</span>
-<span class="mi">2</span><span class="n">×2×1×1</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">4</span><span class="p">}:</span>
-<span class="p">[:,</span> <span class="p">:,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">=</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">a</span> <span class="o">=</span> <span class="n">reshape</span><span class="p">(</span><span class="n">collect</span><span class="p">(</span><span class="mi">1</span><span class="o">:</span><span class="mi">4</span><span class="p">),(</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">))</span>
+<span class="mi">2</span><span class="n">×2×1×1</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">4</span><span class="p">}</span><span class="o">:</span>
+<span class="p">[</span><span class="o">:</span><span class="p">,</span> <span class="o">:</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">=</span>
  <span class="mi">1</span>  <span class="mi">3</span>
  <span class="mi">2</span>  <span class="mi">4</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">squeeze</span><span class="p">(</span><span class="n">a</span><span class="p">,</span><span class="mi">3</span><span class="p">)</span>
-<span class="mi">2</span><span class="n">×2×1</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">3</span><span class="p">}:</span>
-<span class="p">[:,</span> <span class="p">:,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">=</span>
+<span class="mi">2</span><span class="n">×2×1</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">3</span><span class="p">}</span><span class="o">:</span>
+<span class="p">[</span><span class="o">:</span><span class="p">,</span> <span class="o">:</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">=</span>
  <span class="mi">1</span>  <span class="mi">3</span>
  <span class="mi">2</span>  <span class="mi">4</span>
 </pre></div>
@@ -1502,12 +1503,12 @@
 <code class="descname">vec</code><span class="sig-paren">(</span><em>a::AbstractArray</em><span class="sig-paren">)</span> &rarr; Vector<a class="headerlink" href="#Base.vec" title="Permalink to this definition">¶</a></dt>
 <dd><p>Reshape array <code class="docutils literal"><span class="pre">a</span></code> as a one-dimensional column vector.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">a</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span> <span class="mi">2</span> <span class="mi">3</span><span class="p">;</span> <span class="mi">4</span> <span class="mi">5</span> <span class="mi">6</span><span class="p">]</span>
-<span class="mi">2</span><span class="n">×3</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">×3</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>  <span class="mi">2</span>  <span class="mi">3</span>
  <span class="mi">4</span>  <span class="mi">5</span>  <span class="mi">6</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">vec</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
-<span class="mi">6</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">6</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>
  <span class="mi">4</span>
  <span class="mi">2</span>
@@ -1563,17 +1564,17 @@
 <code class="descname">cumprod</code><span class="sig-paren">(</span><em>A</em>, <em>dim=1</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.cumprod" title="Permalink to this definition">¶</a></dt>
 <dd><p>Cumulative product along a dimension <code class="docutils literal"><span class="pre">dim</span></code> (defaults to 1). See also <a class="reference internal" href="#Base.cumprod!" title="Base.cumprod!"><code class="xref jl jl-func docutils literal"><span class="pre">cumprod!()</span></code></a> to use a preallocated output array, both for performance and to control the precision of the output (e.g. to avoid overflow).</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">a</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span> <span class="mi">2</span> <span class="mi">3</span><span class="p">;</span> <span class="mi">4</span> <span class="mi">5</span> <span class="mi">6</span><span class="p">]</span>
-<span class="mi">2</span><span class="n">×3</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">×3</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>  <span class="mi">2</span>  <span class="mi">3</span>
  <span class="mi">4</span>  <span class="mi">5</span>  <span class="mi">6</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">cumprod</span><span class="p">(</span><span class="n">a</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span>
-<span class="mi">2</span><span class="n">×3</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">×3</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>   <span class="mi">2</span>   <span class="mi">3</span>
  <span class="mi">4</span>  <span class="mi">10</span>  <span class="mi">18</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">cumprod</span><span class="p">(</span><span class="n">a</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span>
-<span class="mi">2</span><span class="n">×3</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">×3</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>   <span class="mi">2</span>    <span class="mi">6</span>
  <span class="mi">4</span>  <span class="mi">20</span>  <span class="mi">120</span>
 </pre></div>
@@ -1591,17 +1592,17 @@
 <code class="descname">cumsum</code><span class="sig-paren">(</span><em>A</em>, <em>dim=1</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.cumsum" title="Permalink to this definition">¶</a></dt>
 <dd><p>Cumulative sum along a dimension <code class="docutils literal"><span class="pre">dim</span></code> (defaults to 1). See also <a class="reference internal" href="#Base.cumsum!" title="Base.cumsum!"><code class="xref jl jl-func docutils literal"><span class="pre">cumsum!()</span></code></a> to use a preallocated output array, both for performance and to control the precision of the output (e.g. to avoid overflow).</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">a</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span> <span class="mi">2</span> <span class="mi">3</span><span class="p">;</span> <span class="mi">4</span> <span class="mi">5</span> <span class="mi">6</span><span class="p">]</span>
-<span class="mi">2</span><span class="n">×3</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">×3</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>  <span class="mi">2</span>  <span class="mi">3</span>
  <span class="mi">4</span>  <span class="mi">5</span>  <span class="mi">6</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">cumsum</span><span class="p">(</span><span class="n">a</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span>
-<span class="mi">2</span><span class="n">×3</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">×3</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>  <span class="mi">2</span>  <span class="mi">3</span>
  <span class="mi">5</span>  <span class="mi">7</span>  <span class="mi">9</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">cumsum</span><span class="p">(</span><span class="n">a</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span>
-<span class="mi">2</span><span class="n">×3</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">×3</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>  <span class="mi">3</span>   <span class="mi">6</span>
  <span class="mi">4</span>  <span class="mi">9</span>  <span class="mi">15</span>
 </pre></div>
@@ -1649,12 +1650,12 @@
 <code class="descname">rot180</code><span class="sig-paren">(</span><em>A</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.rot180" title="Permalink to this definition">¶</a></dt>
 <dd><p>Rotate matrix <code class="docutils literal"><span class="pre">A</span></code> 180 degrees.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">a</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span> <span class="mi">2</span><span class="p">;</span> <span class="mi">3</span> <span class="mi">4</span><span class="p">]</span>
-<span class="mi">2</span><span class="n">×2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">×2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>  <span class="mi">2</span>
  <span class="mi">3</span>  <span class="mi">4</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">rot180</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
-<span class="mi">2</span><span class="n">×2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">×2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">4</span>  <span class="mi">3</span>
  <span class="mi">2</span>  <span class="mi">1</span>
 </pre></div>
@@ -1666,17 +1667,17 @@
 <code class="descname">rot180</code><span class="sig-paren">(</span><em>A</em>, <em>k</em><span class="sig-paren">)</span></dt>
 <dd><p>Rotate matrix <code class="docutils literal"><span class="pre">A</span></code> 180 degrees an integer <code class="docutils literal"><span class="pre">k</span></code> number of times. If <code class="docutils literal"><span class="pre">k</span></code> is even, this is equivalent to a <code class="docutils literal"><span class="pre">copy</span></code>.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">a</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span> <span class="mi">2</span><span class="p">;</span> <span class="mi">3</span> <span class="mi">4</span><span class="p">]</span>
-<span class="mi">2</span><span class="n">×2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">×2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>  <span class="mi">2</span>
  <span class="mi">3</span>  <span class="mi">4</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">rot180</span><span class="p">(</span><span class="n">a</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span>
-<span class="mi">2</span><span class="n">×2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">×2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">4</span>  <span class="mi">3</span>
  <span class="mi">2</span>  <span class="mi">1</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">rot180</span><span class="p">(</span><span class="n">a</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span>
-<span class="mi">2</span><span class="n">×2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">×2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>  <span class="mi">2</span>
  <span class="mi">3</span>  <span class="mi">4</span>
 </pre></div>
@@ -1688,12 +1689,12 @@
 <code class="descname">rotl90</code><span class="sig-paren">(</span><em>A</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.rotl90" title="Permalink to this definition">¶</a></dt>
 <dd><p>Rotate matrix <code class="docutils literal"><span class="pre">A</span></code> left 90 degrees.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">a</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span> <span class="mi">2</span><span class="p">;</span> <span class="mi">3</span> <span class="mi">4</span><span class="p">]</span>
-<span class="mi">2</span><span class="n">×2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">×2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>  <span class="mi">2</span>
  <span class="mi">3</span>  <span class="mi">4</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">rotl90</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
-<span class="mi">2</span><span class="n">×2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">×2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">2</span>  <span class="mi">4</span>
  <span class="mi">1</span>  <span class="mi">3</span>
 </pre></div>
@@ -1705,27 +1706,27 @@
 <code class="descname">rotl90</code><span class="sig-paren">(</span><em>A</em>, <em>k</em><span class="sig-paren">)</span></dt>
 <dd><p>Rotate matrix <code class="docutils literal"><span class="pre">A</span></code> left 90 degrees an integer <code class="docutils literal"><span class="pre">k</span></code> number of times. If <code class="docutils literal"><span class="pre">k</span></code> is zero or a multiple of four, this is equivalent to a <code class="docutils literal"><span class="pre">copy</span></code>.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">a</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span> <span class="mi">2</span><span class="p">;</span> <span class="mi">3</span> <span class="mi">4</span><span class="p">]</span>
-<span class="mi">2</span><span class="n">×2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">×2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>  <span class="mi">2</span>
  <span class="mi">3</span>  <span class="mi">4</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">rotl90</span><span class="p">(</span><span class="n">a</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span>
-<span class="mi">2</span><span class="n">×2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">×2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">2</span>  <span class="mi">4</span>
  <span class="mi">1</span>  <span class="mi">3</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">rotl90</span><span class="p">(</span><span class="n">a</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span>
-<span class="mi">2</span><span class="n">×2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">×2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">4</span>  <span class="mi">3</span>
  <span class="mi">2</span>  <span class="mi">1</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">rotl90</span><span class="p">(</span><span class="n">a</span><span class="p">,</span><span class="mi">3</span><span class="p">)</span>
-<span class="mi">2</span><span class="n">×2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">×2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">3</span>  <span class="mi">1</span>
  <span class="mi">4</span>  <span class="mi">2</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">rotl90</span><span class="p">(</span><span class="n">a</span><span class="p">,</span><span class="mi">4</span><span class="p">)</span>
-<span class="mi">2</span><span class="n">×2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">×2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>  <span class="mi">2</span>
  <span class="mi">3</span>  <span class="mi">4</span>
 </pre></div>
@@ -1737,12 +1738,12 @@
 <code class="descname">rotr90</code><span class="sig-paren">(</span><em>A</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.rotr90" title="Permalink to this definition">¶</a></dt>
 <dd><p>Rotate matrix <code class="docutils literal"><span class="pre">A</span></code> right 90 degrees.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">a</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span> <span class="mi">2</span><span class="p">;</span> <span class="mi">3</span> <span class="mi">4</span><span class="p">]</span>
-<span class="mi">2</span><span class="n">×2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">×2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>  <span class="mi">2</span>
  <span class="mi">3</span>  <span class="mi">4</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">rotr90</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
-<span class="mi">2</span><span class="n">×2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">×2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">3</span>  <span class="mi">1</span>
  <span class="mi">4</span>  <span class="mi">2</span>
 </pre></div>
@@ -1754,27 +1755,27 @@
 <code class="descname">rotr90</code><span class="sig-paren">(</span><em>A</em>, <em>k</em><span class="sig-paren">)</span></dt>
 <dd><p>Rotate matrix <code class="docutils literal"><span class="pre">A</span></code> right 90 degrees an integer <code class="docutils literal"><span class="pre">k</span></code> number of times. If <code class="docutils literal"><span class="pre">k</span></code> is zero or a multiple of four, this is equivalent to a <code class="docutils literal"><span class="pre">copy</span></code>.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">a</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span> <span class="mi">2</span><span class="p">;</span> <span class="mi">3</span> <span class="mi">4</span><span class="p">]</span>
-<span class="mi">2</span><span class="n">×2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">×2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>  <span class="mi">2</span>
  <span class="mi">3</span>  <span class="mi">4</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">rotr90</span><span class="p">(</span><span class="n">a</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span>
-<span class="mi">2</span><span class="n">×2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">×2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">3</span>  <span class="mi">1</span>
  <span class="mi">4</span>  <span class="mi">2</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">rotr90</span><span class="p">(</span><span class="n">a</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span>
-<span class="mi">2</span><span class="n">×2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">×2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">4</span>  <span class="mi">3</span>
  <span class="mi">2</span>  <span class="mi">1</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">rotr90</span><span class="p">(</span><span class="n">a</span><span class="p">,</span><span class="mi">3</span><span class="p">)</span>
-<span class="mi">2</span><span class="n">×2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">×2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">2</span>  <span class="mi">4</span>
  <span class="mi">1</span>  <span class="mi">3</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">rotr90</span><span class="p">(</span><span class="n">a</span><span class="p">,</span><span class="mi">4</span><span class="p">)</span>
-<span class="mi">2</span><span class="n">×2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">×2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>  <span class="mi">2</span>
  <span class="mi">3</span>  <span class="mi">4</span>
 </pre></div>
@@ -1786,22 +1787,22 @@
 <code class="descname">reducedim</code><span class="sig-paren">(</span><em>f</em>, <em>A</em>, <em>region</em><span class="optional">[</span>, <em>v0</em><span class="optional">]</span><span class="sig-paren">)</span><a class="headerlink" href="#Base.reducedim" title="Permalink to this definition">¶</a></dt>
 <dd><p>Reduce 2-argument function <code class="docutils literal"><span class="pre">f</span></code> along dimensions of <code class="docutils literal"><span class="pre">A</span></code>. <code class="docutils literal"><span class="pre">region</span></code> is a vector specifying the dimensions to reduce, and <code class="docutils literal"><span class="pre">v0</span></code> is the initial value to use in the reductions. For <code class="docutils literal"><span class="pre">+</span></code>, <code class="docutils literal"><span class="pre">*</span></code>, <code class="docutils literal"><span class="pre">max</span></code> and <code class="docutils literal"><span class="pre">min</span></code> the <code class="docutils literal"><span class="pre">v0</span></code> argument is optional.</p>
 <p>The associativity of the reduction is implementation-dependent; if you need a particular associativity, e.g. left-to-right, you should write your own loop. See documentation for <a class="reference internal" href="../collections/#Base.reduce" title="Base.reduce"><code class="xref jl jl-func docutils literal"><span class="pre">reduce()</span></code></a>.</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">a</span> <span class="o">=</span> <span class="n">reshape</span><span class="p">(</span><span class="n">collect</span><span class="p">(</span><span class="mi">1</span><span class="p">:</span><span class="mi">16</span><span class="p">),</span> <span class="p">(</span><span class="mi">4</span><span class="p">,</span><span class="mi">4</span><span class="p">))</span>
-<span class="mi">4</span><span class="n">×4</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">a</span> <span class="o">=</span> <span class="n">reshape</span><span class="p">(</span><span class="n">collect</span><span class="p">(</span><span class="mi">1</span><span class="o">:</span><span class="mi">16</span><span class="p">),</span> <span class="p">(</span><span class="mi">4</span><span class="p">,</span><span class="mi">4</span><span class="p">))</span>
+<span class="mi">4</span><span class="n">×4</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>  <span class="mi">5</span>   <span class="mi">9</span>  <span class="mi">13</span>
  <span class="mi">2</span>  <span class="mi">6</span>  <span class="mi">10</span>  <span class="mi">14</span>
  <span class="mi">3</span>  <span class="mi">7</span>  <span class="mi">11</span>  <span class="mi">15</span>
  <span class="mi">4</span>  <span class="mi">8</span>  <span class="mi">12</span>  <span class="mi">16</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">reducedim</span><span class="p">(</span><span class="n">max</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
-<span class="mi">4</span><span class="n">×1</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">4</span><span class="n">×1</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">13</span>
  <span class="mi">14</span>
  <span class="mi">15</span>
  <span class="mi">16</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">reducedim</span><span class="p">(</span><span class="n">max</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
-<span class="mi">1</span><span class="n">×4</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">1</span><span class="n">×4</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">4</span>  <span class="mi">8</span>  <span class="mi">12</span>  <span class="mi">16</span>
 </pre></div>
 </div>
@@ -1811,20 +1812,20 @@
 <dt id="Base.mapreducedim">
 <code class="descname">mapreducedim</code><span class="sig-paren">(</span><em>f</em>, <em>op</em>, <em>A</em>, <em>region</em><span class="optional">[</span>, <em>v0</em><span class="optional">]</span><span class="sig-paren">)</span><a class="headerlink" href="#Base.mapreducedim" title="Permalink to this definition">¶</a></dt>
 <dd><p>Evaluates to the same as <code class="docutils literal"><span class="pre">reducedim(op,</span> <span class="pre">map(f,</span> <span class="pre">A),</span> <span class="pre">region,</span> <span class="pre">f(v0))</span></code>, but is generally faster because the intermediate array is avoided.</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">a</span> <span class="o">=</span> <span class="n">reshape</span><span class="p">(</span><span class="n">collect</span><span class="p">(</span><span class="mi">1</span><span class="p">:</span><span class="mi">16</span><span class="p">),</span> <span class="p">(</span><span class="mi">4</span><span class="p">,</span><span class="mi">4</span><span class="p">))</span>
-<span class="mi">4</span><span class="n">×4</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">a</span> <span class="o">=</span> <span class="n">reshape</span><span class="p">(</span><span class="n">collect</span><span class="p">(</span><span class="mi">1</span><span class="o">:</span><span class="mi">16</span><span class="p">),</span> <span class="p">(</span><span class="mi">4</span><span class="p">,</span><span class="mi">4</span><span class="p">))</span>
+<span class="mi">4</span><span class="n">×4</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>  <span class="mi">5</span>   <span class="mi">9</span>  <span class="mi">13</span>
  <span class="mi">2</span>  <span class="mi">6</span>  <span class="mi">10</span>  <span class="mi">14</span>
  <span class="mi">3</span>  <span class="mi">7</span>  <span class="mi">11</span>  <span class="mi">15</span>
  <span class="mi">4</span>  <span class="mi">8</span>  <span class="mi">12</span>  <span class="mi">16</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">mapreducedim</span><span class="p">(</span><span class="n">isodd</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
-<span class="mi">1</span><span class="n">×4</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Bool</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
- <span class="n">false</span>  <span class="n">false</span>  <span class="n">false</span>  <span class="n">false</span>
+<span class="mi">1</span><span class="n">×4</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Bool</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
+ <span class="kc">false</span>  <span class="kc">false</span>  <span class="kc">false</span>  <span class="kc">false</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">mapreducedim</span><span class="p">(</span><span class="n">isodd</span><span class="p">,</span> <span class="o">|</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">true</span><span class="p">)</span>
-<span class="mi">1</span><span class="n">×4</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Bool</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
- <span class="n">true</span>  <span class="n">true</span>  <span class="n">true</span>  <span class="n">true</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">mapreducedim</span><span class="p">(</span><span class="n">isodd</span><span class="p">,</span> <span class="o">|</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="kc">true</span><span class="p">)</span>
+<span class="mi">1</span><span class="n">×4</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Bool</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
+ <span class="kc">true</span>  <span class="kc">true</span>  <span class="kc">true</span>  <span class="kc">true</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1833,36 +1834,36 @@
 <dt id="Base.mapslices">
 <code class="descname">mapslices</code><span class="sig-paren">(</span><em>f</em>, <em>A</em>, <em>dims</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.mapslices" title="Permalink to this definition">¶</a></dt>
 <dd><p>Transform the given dimensions of array <code class="docutils literal"><span class="pre">A</span></code> using function <code class="docutils literal"><span class="pre">f</span></code>. <code class="docutils literal"><span class="pre">f</span></code> is called on each slice of <code class="docutils literal"><span class="pre">A</span></code> of the form <code class="docutils literal"><span class="pre">A[...,:,...,:,...]</span></code>. <code class="docutils literal"><span class="pre">dims</span></code> is an integer vector specifying where the colons go in this expression. The results are concatenated along the remaining dimensions. For example, if <code class="docutils literal"><span class="pre">dims</span></code> is <code class="docutils literal"><span class="pre">[1,2]</span></code> and <code class="docutils literal"><span class="pre">A</span></code> is 4-dimensional, <code class="docutils literal"><span class="pre">f</span></code> is called on <code class="docutils literal"><span class="pre">A[:,:,i,j]</span></code> for all <code class="docutils literal"><span class="pre">i</span></code> and <code class="docutils literal"><span class="pre">j</span></code>.</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">a</span> <span class="o">=</span> <span class="n">reshape</span><span class="p">(</span><span class="n">collect</span><span class="p">(</span><span class="mi">1</span><span class="p">:</span><span class="mi">16</span><span class="p">),(</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="p">))</span>
-<span class="mi">2</span><span class="n">×2×2×2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">4</span><span class="p">}:</span>
-<span class="p">[:,</span> <span class="p">:,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">=</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">a</span> <span class="o">=</span> <span class="n">reshape</span><span class="p">(</span><span class="n">collect</span><span class="p">(</span><span class="mi">1</span><span class="o">:</span><span class="mi">16</span><span class="p">),(</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="p">))</span>
+<span class="mi">2</span><span class="n">×2×2×2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">4</span><span class="p">}</span><span class="o">:</span>
+<span class="p">[</span><span class="o">:</span><span class="p">,</span> <span class="o">:</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">=</span>
  <span class="mi">1</span>  <span class="mi">3</span>
  <span class="mi">2</span>  <span class="mi">4</span>
 
-<span class="p">[:,</span> <span class="p">:,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">=</span>
+<span class="p">[</span><span class="o">:</span><span class="p">,</span> <span class="o">:</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">=</span>
  <span class="mi">5</span>  <span class="mi">7</span>
  <span class="mi">6</span>  <span class="mi">8</span>
 
-<span class="p">[:,</span> <span class="p">:,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">]</span> <span class="o">=</span>
+<span class="p">[</span><span class="o">:</span><span class="p">,</span> <span class="o">:</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">]</span> <span class="o">=</span>
   <span class="mi">9</span>  <span class="mi">11</span>
  <span class="mi">10</span>  <span class="mi">12</span>
 
-<span class="p">[:,</span> <span class="p">:,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">]</span> <span class="o">=</span>
+<span class="p">[</span><span class="o">:</span><span class="p">,</span> <span class="o">:</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">]</span> <span class="o">=</span>
  <span class="mi">13</span>  <span class="mi">15</span>
  <span class="mi">14</span>  <span class="mi">16</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">mapslices</span><span class="p">(</span><span class="n">sum</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">])</span>
-<span class="mi">1</span><span class="n">×1×2×2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">4</span><span class="p">}:</span>
-<span class="p">[:,</span> <span class="p">:,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">=</span>
+<span class="mi">1</span><span class="n">×1×2×2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">4</span><span class="p">}</span><span class="o">:</span>
+<span class="p">[</span><span class="o">:</span><span class="p">,</span> <span class="o">:</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">=</span>
  <span class="mi">10</span>
 
-<span class="p">[:,</span> <span class="p">:,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">=</span>
+<span class="p">[</span><span class="o">:</span><span class="p">,</span> <span class="o">:</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span> <span class="o">=</span>
  <span class="mi">26</span>
 
-<span class="p">[:,</span> <span class="p">:,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">]</span> <span class="o">=</span>
+<span class="p">[</span><span class="o">:</span><span class="p">,</span> <span class="o">:</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">]</span> <span class="o">=</span>
  <span class="mi">42</span>
 
-<span class="p">[:,</span> <span class="p">:,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">]</span> <span class="o">=</span>
+<span class="p">[</span><span class="o">:</span><span class="p">,</span> <span class="o">:</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">]</span> <span class="o">=</span>
  <span class="mi">58</span>
 </pre></div>
 </div>
@@ -1880,7 +1881,7 @@
 <dl class="function">
 <dt id="Base.randperm">
 <code class="descname">randperm</code><span class="sig-paren">(</span><span class="optional">[</span><em>rng</em>, <span class="optional">]</span><em>n</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.randperm" title="Permalink to this definition">¶</a></dt>
-<dd><p>Construct a random permutation of length <code class="docutils literal"><span class="pre">n</span></code>. The optional <code class="docutils literal"><span class="pre">rng</span></code> argument specifies a random number generator (see <a class="reference internal" href="../numbers/#random-numbers"><span>Random Numbers</span></a>). To randomly permute a arbitrary vector, see <a class="reference internal" href="#Base.shuffle" title="Base.shuffle"><code class="xref jl jl-func docutils literal"><span class="pre">shuffle()</span></code></a> or <a class="reference internal" href="#Base.shuffle!" title="Base.shuffle!"><code class="xref jl jl-func docutils literal"><span class="pre">shuffle!()</span></code></a>.</p>
+<dd><p>Construct a random permutation of length <code class="docutils literal"><span class="pre">n</span></code>. The optional <code class="docutils literal"><span class="pre">rng</span></code> argument specifies a random number generator (see <a class="reference internal" href="../numbers/#random-numbers"><span class="std std-ref">Random Numbers</span></a>). To randomly permute a arbitrary vector, see <a class="reference internal" href="#Base.shuffle" title="Base.shuffle"><code class="xref jl jl-func docutils literal"><span class="pre">shuffle()</span></code></a> or <a class="reference internal" href="#Base.shuffle!" title="Base.shuffle!"><code class="xref jl jl-func docutils literal"><span class="pre">shuffle!()</span></code></a>.</p>
 </dd></dl>
 
 <dl class="function">
@@ -1911,13 +1912,13 @@
 <dl class="function">
 <dt id="Base.randcycle">
 <code class="descname">randcycle</code><span class="sig-paren">(</span><span class="optional">[</span><em>rng</em>, <span class="optional">]</span><em>n</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.randcycle" title="Permalink to this definition">¶</a></dt>
-<dd><p>Construct a random cyclic permutation of length <code class="docutils literal"><span class="pre">n</span></code>. The optional <code class="docutils literal"><span class="pre">rng</span></code> argument specifies a random number generator, see <a class="reference internal" href="../numbers/#random-numbers"><span>Random Numbers</span></a>.</p>
+<dd><p>Construct a random cyclic permutation of length <code class="docutils literal"><span class="pre">n</span></code>. The optional <code class="docutils literal"><span class="pre">rng</span></code> argument specifies a random number generator, see <a class="reference internal" href="../numbers/#random-numbers"><span class="std std-ref">Random Numbers</span></a>.</p>
 </dd></dl>
 
 <dl class="function">
 <dt id="Base.shuffle">
 <code class="descname">shuffle</code><span class="sig-paren">(</span><span class="optional">[</span><em>rng</em>, <span class="optional">]</span><em>v</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.shuffle" title="Permalink to this definition">¶</a></dt>
-<dd><p>Return a randomly permuted copy of <code class="docutils literal"><span class="pre">v</span></code>. The optional <code class="docutils literal"><span class="pre">rng</span></code> argument specifies a random number generator (see <a class="reference internal" href="../numbers/#random-numbers"><span>Random Numbers</span></a>). To permute <code class="docutils literal"><span class="pre">v</span></code> in-place, see <a class="reference internal" href="#Base.shuffle!" title="Base.shuffle!"><code class="xref jl jl-func docutils literal"><span class="pre">shuffle!()</span></code></a>.  To obtain randomly permuted indices, see <a class="reference internal" href="#Base.randperm" title="Base.randperm"><code class="xref jl jl-func docutils literal"><span class="pre">randperm()</span></code></a>.</p>
+<dd><p>Return a randomly permuted copy of <code class="docutils literal"><span class="pre">v</span></code>. The optional <code class="docutils literal"><span class="pre">rng</span></code> argument specifies a random number generator (see <a class="reference internal" href="../numbers/#random-numbers"><span class="std std-ref">Random Numbers</span></a>). To permute <code class="docutils literal"><span class="pre">v</span></code> in-place, see <a class="reference internal" href="#Base.shuffle!" title="Base.shuffle!"><code class="xref jl jl-func docutils literal"><span class="pre">shuffle!()</span></code></a>.  To obtain randomly permuted indices, see <a class="reference internal" href="#Base.randperm" title="Base.randperm"><code class="xref jl jl-func docutils literal"><span class="pre">randperm()</span></code></a>.</p>
 </dd></dl>
 
 <dl class="function">
@@ -1954,16 +1955,16 @@ to/from the latter via <code class="docutils literal"><span class="pre">Array(bi
 <dl class="function">
 <dt id="Base.flipbits!">
 <code class="descname">flipbits!</code><span class="sig-paren">(</span><em>B::BitArray{N}</em><span class="sig-paren">)</span> &rarr; BitArray{N}<a class="headerlink" href="#Base.flipbits!" title="Permalink to this definition">¶</a></dt>
-<dd><p>Performs a bitwise not operation on <code class="docutils literal"><span class="pre">B</span></code>. See <a class="reference internal" href="../math/#id33"><span>~ operator</span></a>.</p>
+<dd><p>Performs a bitwise not operation on <code class="docutils literal"><span class="pre">B</span></code>. See <a class="reference internal" href="../math/#id33"><span class="std std-ref">~ operator</span></a>.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">A</span> <span class="o">=</span> <span class="n">trues</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span>
-<span class="mi">2</span><span class="n">×2</span> <span class="n">BitArray</span><span class="p">{</span><span class="mi">2</span><span class="p">}:</span>
- <span class="n">true</span>  <span class="n">true</span>
- <span class="n">true</span>  <span class="n">true</span>
+<span class="mi">2</span><span class="n">×2</span> <span class="kt">BitArray</span><span class="p">{</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
+ <span class="kc">true</span>  <span class="kc">true</span>
+ <span class="kc">true</span>  <span class="kc">true</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">flipbits!</span><span class="p">(</span><span class="n">A</span><span class="p">)</span>
-<span class="mi">2</span><span class="n">×2</span> <span class="n">BitArray</span><span class="p">{</span><span class="mi">2</span><span class="p">}:</span>
- <span class="n">false</span>  <span class="n">false</span>
- <span class="n">false</span>  <span class="n">false</span>
+<span class="mi">2</span><span class="n">×2</span> <span class="kt">BitArray</span><span class="p">{</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
+ <span class="kc">false</span>  <span class="kc">false</span>
+ <span class="kc">false</span>  <span class="kc">false</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1984,37 +1985,37 @@ to/from the latter via <code class="docutils literal"><span class="pre">Array(bi
 <dt id="Base.rol">
 <code class="descname">rol</code><span class="sig-paren">(</span><em>B::BitVector</em>, <em>i::Integer</em><span class="sig-paren">)</span> &rarr; BitVector<a class="headerlink" href="#Base.rol" title="Permalink to this definition">¶</a></dt>
 <dd><p>Performs a left rotation operation, returning a new <code class="docutils literal"><span class="pre">BitVector</span></code>. <code class="docutils literal"><span class="pre">i</span></code> controls how far to rotate the bits. See also <a class="reference internal" href="#Base.rol!" title="Base.rol!"><code class="xref jl jl-func docutils literal"><span class="pre">rol!()</span></code></a>.</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">A</span> <span class="o">=</span> <span class="n">BitArray</span><span class="p">([</span><span class="n">true</span><span class="p">,</span> <span class="n">true</span><span class="p">,</span> <span class="n">false</span><span class="p">,</span> <span class="n">false</span><span class="p">,</span> <span class="n">true</span><span class="p">])</span>
-<span class="mi">5</span><span class="o">-</span><span class="n">element</span> <span class="n">BitArray</span><span class="p">{</span><span class="mi">1</span><span class="p">}:</span>
-  <span class="n">true</span>
-  <span class="n">true</span>
- <span class="n">false</span>
- <span class="n">false</span>
-  <span class="n">true</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">A</span> <span class="o">=</span> <span class="kt">BitArray</span><span class="p">([</span><span class="kc">true</span><span class="p">,</span> <span class="kc">true</span><span class="p">,</span> <span class="kc">false</span><span class="p">,</span> <span class="kc">false</span><span class="p">,</span> <span class="kc">true</span><span class="p">])</span>
+<span class="mi">5</span><span class="o">-</span><span class="n">element</span> <span class="kt">BitArray</span><span class="p">{</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
+  <span class="kc">true</span>
+  <span class="kc">true</span>
+ <span class="kc">false</span>
+ <span class="kc">false</span>
+  <span class="kc">true</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">rol</span><span class="p">(</span><span class="n">A</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span>
-<span class="mi">5</span><span class="o">-</span><span class="n">element</span> <span class="n">BitArray</span><span class="p">{</span><span class="mi">1</span><span class="p">}:</span>
-  <span class="n">true</span>
- <span class="n">false</span>
- <span class="n">false</span>
-  <span class="n">true</span>
-  <span class="n">true</span>
+<span class="mi">5</span><span class="o">-</span><span class="n">element</span> <span class="kt">BitArray</span><span class="p">{</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
+  <span class="kc">true</span>
+ <span class="kc">false</span>
+ <span class="kc">false</span>
+  <span class="kc">true</span>
+  <span class="kc">true</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">rol</span><span class="p">(</span><span class="n">A</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span>
-<span class="mi">5</span><span class="o">-</span><span class="n">element</span> <span class="n">BitArray</span><span class="p">{</span><span class="mi">1</span><span class="p">}:</span>
- <span class="n">false</span>
- <span class="n">false</span>
-  <span class="n">true</span>
-  <span class="n">true</span>
-  <span class="n">true</span>
+<span class="mi">5</span><span class="o">-</span><span class="n">element</span> <span class="kt">BitArray</span><span class="p">{</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
+ <span class="kc">false</span>
+ <span class="kc">false</span>
+  <span class="kc">true</span>
+  <span class="kc">true</span>
+  <span class="kc">true</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">rol</span><span class="p">(</span><span class="n">A</span><span class="p">,</span><span class="mi">5</span><span class="p">)</span>
-<span class="mi">5</span><span class="o">-</span><span class="n">element</span> <span class="n">BitArray</span><span class="p">{</span><span class="mi">1</span><span class="p">}:</span>
-  <span class="n">true</span>
-  <span class="n">true</span>
- <span class="n">false</span>
- <span class="n">false</span>
-  <span class="n">true</span>
+<span class="mi">5</span><span class="o">-</span><span class="n">element</span> <span class="kt">BitArray</span><span class="p">{</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
+  <span class="kc">true</span>
+  <span class="kc">true</span>
+ <span class="kc">false</span>
+ <span class="kc">false</span>
+  <span class="kc">true</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -2035,37 +2036,37 @@ to/from the latter via <code class="docutils literal"><span class="pre">Array(bi
 <dt id="Base.ror">
 <code class="descname">ror</code><span class="sig-paren">(</span><em>B::BitVector</em>, <em>i::Integer</em><span class="sig-paren">)</span> &rarr; BitVector<a class="headerlink" href="#Base.ror" title="Permalink to this definition">¶</a></dt>
 <dd><p>Performs a right rotation operation on <code class="docutils literal"><span class="pre">B</span></code>, returning a new <code class="docutils literal"><span class="pre">BitVector</span></code>. <code class="docutils literal"><span class="pre">i</span></code> controls how far to rotate the bits. See also <a class="reference internal" href="#Base.ror!" title="Base.ror!"><code class="xref jl jl-func docutils literal"><span class="pre">ror!()</span></code></a>.</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">A</span> <span class="o">=</span> <span class="n">BitArray</span><span class="p">([</span><span class="n">true</span><span class="p">,</span> <span class="n">true</span><span class="p">,</span> <span class="n">false</span><span class="p">,</span> <span class="n">false</span><span class="p">,</span> <span class="n">true</span><span class="p">])</span>
-<span class="mi">5</span><span class="o">-</span><span class="n">element</span> <span class="n">BitArray</span><span class="p">{</span><span class="mi">1</span><span class="p">}:</span>
-  <span class="n">true</span>
-  <span class="n">true</span>
- <span class="n">false</span>
- <span class="n">false</span>
-  <span class="n">true</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">A</span> <span class="o">=</span> <span class="kt">BitArray</span><span class="p">([</span><span class="kc">true</span><span class="p">,</span> <span class="kc">true</span><span class="p">,</span> <span class="kc">false</span><span class="p">,</span> <span class="kc">false</span><span class="p">,</span> <span class="kc">true</span><span class="p">])</span>
+<span class="mi">5</span><span class="o">-</span><span class="n">element</span> <span class="kt">BitArray</span><span class="p">{</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
+  <span class="kc">true</span>
+  <span class="kc">true</span>
+ <span class="kc">false</span>
+ <span class="kc">false</span>
+  <span class="kc">true</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">ror</span><span class="p">(</span><span class="n">A</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span>
-<span class="mi">5</span><span class="o">-</span><span class="n">element</span> <span class="n">BitArray</span><span class="p">{</span><span class="mi">1</span><span class="p">}:</span>
-  <span class="n">true</span>
-  <span class="n">true</span>
-  <span class="n">true</span>
- <span class="n">false</span>
- <span class="n">false</span>
+<span class="mi">5</span><span class="o">-</span><span class="n">element</span> <span class="kt">BitArray</span><span class="p">{</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
+  <span class="kc">true</span>
+  <span class="kc">true</span>
+  <span class="kc">true</span>
+ <span class="kc">false</span>
+ <span class="kc">false</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">ror</span><span class="p">(</span><span class="n">A</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span>
-<span class="mi">5</span><span class="o">-</span><span class="n">element</span> <span class="n">BitArray</span><span class="p">{</span><span class="mi">1</span><span class="p">}:</span>
- <span class="n">false</span>
-  <span class="n">true</span>
-  <span class="n">true</span>
-  <span class="n">true</span>
- <span class="n">false</span>
+<span class="mi">5</span><span class="o">-</span><span class="n">element</span> <span class="kt">BitArray</span><span class="p">{</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
+ <span class="kc">false</span>
+  <span class="kc">true</span>
+  <span class="kc">true</span>
+  <span class="kc">true</span>
+ <span class="kc">false</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">ror</span><span class="p">(</span><span class="n">A</span><span class="p">,</span><span class="mi">5</span><span class="p">)</span>
-<span class="mi">5</span><span class="o">-</span><span class="n">element</span> <span class="n">BitArray</span><span class="p">{</span><span class="mi">1</span><span class="p">}:</span>
-  <span class="n">true</span>
-  <span class="n">true</span>
- <span class="n">false</span>
- <span class="n">false</span>
-  <span class="n">true</span>
+<span class="mi">5</span><span class="o">-</span><span class="n">element</span> <span class="kt">BitArray</span><span class="p">{</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
+  <span class="kc">true</span>
+  <span class="kc">true</span>
+ <span class="kc">false</span>
+ <span class="kc">false</span>
+  <span class="kc">true</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -2135,14 +2136,14 @@ dense counterparts. The following functions are specific to sparse arrays.</p>
 <code class="descname">spones</code><span class="sig-paren">(</span><em>S</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.spones" title="Permalink to this definition">¶</a></dt>
 <dd><p>Create a sparse array with the same structure as that of <code class="docutils literal"><span class="pre">S</span></code>, but with every nonzero element having the value <code class="docutils literal"><span class="pre">1.0</span></code>.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">A</span> <span class="o">=</span> <span class="n">sparse</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="mi">4</span><span class="p">],[</span><span class="mi">2</span><span class="p">,</span><span class="mi">4</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="mi">1</span><span class="p">],[</span><span class="mf">5.</span><span class="p">,</span><span class="mf">4.</span><span class="p">,</span><span class="mf">3.</span><span class="p">,</span><span class="mf">2.</span><span class="p">])</span>
-<span class="mi">4</span><span class="n">×4</span> <span class="n">sparse</span> <span class="n">matrix</span> <span class="n">with</span> <span class="mi">4</span> <span class="kt">Float64</span> <span class="n">nonzero</span> <span class="n">entries</span><span class="p">:</span>
+<span class="mi">4</span><span class="n">×4</span> <span class="n">sparse</span> <span class="n">matrix</span> <span class="n">with</span> <span class="mi">4</span> <span class="kt">Float64</span> <span class="n">nonzero</span> <span class="n">entries</span><span class="o">:</span>
         <span class="p">[</span><span class="mi">4</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span>  <span class="o">=</span>  <span class="mf">2.0</span>
         <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">]</span>  <span class="o">=</span>  <span class="mf">5.0</span>
         <span class="p">[</span><span class="mi">3</span><span class="p">,</span> <span class="mi">3</span><span class="p">]</span>  <span class="o">=</span>  <span class="mf">3.0</span>
         <span class="p">[</span><span class="mi">2</span><span class="p">,</span> <span class="mi">4</span><span class="p">]</span>  <span class="o">=</span>  <span class="mf">4.0</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">spones</span><span class="p">(</span><span class="n">A</span><span class="p">)</span>
-<span class="mi">4</span><span class="n">×4</span> <span class="n">sparse</span> <span class="n">matrix</span> <span class="n">with</span> <span class="mi">4</span> <span class="kt">Float64</span> <span class="n">nonzero</span> <span class="n">entries</span><span class="p">:</span>
+<span class="mi">4</span><span class="n">×4</span> <span class="n">sparse</span> <span class="n">matrix</span> <span class="n">with</span> <span class="mi">4</span> <span class="kt">Float64</span> <span class="n">nonzero</span> <span class="n">entries</span><span class="o">:</span>
         <span class="p">[</span><span class="mi">4</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span>  <span class="o">=</span>  <span class="mf">1.0</span>
         <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">]</span>  <span class="o">=</span>  <span class="mf">1.0</span>
         <span class="p">[</span><span class="mi">3</span><span class="p">,</span> <span class="mi">3</span><span class="p">]</span>  <span class="o">=</span>  <span class="mf">1.0</span>
@@ -2163,14 +2164,14 @@ dense counterparts. The following functions are specific to sparse arrays.</p>
 <code class="descname">speye</code><span class="sig-paren">(</span><em>S</em><span class="sig-paren">)</span></dt>
 <dd><p>Create a sparse identity matrix with the same size as <code class="docutils literal"><span class="pre">S</span></code>.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">A</span> <span class="o">=</span> <span class="n">sparse</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="mi">4</span><span class="p">],[</span><span class="mi">2</span><span class="p">,</span><span class="mi">4</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="mi">1</span><span class="p">],[</span><span class="mf">5.</span><span class="p">,</span><span class="mf">4.</span><span class="p">,</span><span class="mf">3.</span><span class="p">,</span><span class="mf">2.</span><span class="p">])</span>
-<span class="mi">4</span><span class="n">×4</span> <span class="n">sparse</span> <span class="n">matrix</span> <span class="n">with</span> <span class="mi">4</span> <span class="kt">Float64</span> <span class="n">nonzero</span> <span class="n">entries</span><span class="p">:</span>
+<span class="mi">4</span><span class="n">×4</span> <span class="n">sparse</span> <span class="n">matrix</span> <span class="n">with</span> <span class="mi">4</span> <span class="kt">Float64</span> <span class="n">nonzero</span> <span class="n">entries</span><span class="o">:</span>
         <span class="p">[</span><span class="mi">4</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span>  <span class="o">=</span>  <span class="mf">2.0</span>
         <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">]</span>  <span class="o">=</span>  <span class="mf">5.0</span>
         <span class="p">[</span><span class="mi">3</span><span class="p">,</span> <span class="mi">3</span><span class="p">]</span>  <span class="o">=</span>  <span class="mf">3.0</span>
         <span class="p">[</span><span class="mi">2</span><span class="p">,</span> <span class="mi">4</span><span class="p">]</span>  <span class="o">=</span>  <span class="mf">4.0</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">speye</span><span class="p">(</span><span class="n">A</span><span class="p">)</span>
-<span class="mi">4</span><span class="n">×4</span> <span class="n">sparse</span> <span class="n">matrix</span> <span class="n">with</span> <span class="mi">4</span> <span class="kt">Float64</span> <span class="n">nonzero</span> <span class="n">entries</span><span class="p">:</span>
+<span class="mi">4</span><span class="n">×4</span> <span class="n">sparse</span> <span class="n">matrix</span> <span class="n">with</span> <span class="mi">4</span> <span class="kt">Float64</span> <span class="n">nonzero</span> <span class="n">entries</span><span class="o">:</span>
         <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span>  <span class="o">=</span>  <span class="mf">1.0</span>
         <span class="p">[</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">]</span>  <span class="o">=</span>  <span class="mf">1.0</span>
         <span class="p">[</span><span class="mi">3</span><span class="p">,</span> <span class="mi">3</span><span class="p">]</span>  <span class="o">=</span>  <span class="mf">1.0</span>
@@ -2185,7 +2186,7 @@ dense counterparts. The following functions are specific to sparse arrays.</p>
 <code class="descname">spdiagm</code><span class="sig-paren">(</span><em>B</em>, <em>d</em><span class="optional">[</span>, <em>m</em>, <em>n</em><span class="optional">]</span><span class="sig-paren">)</span><a class="headerlink" href="#Base.spdiagm" title="Permalink to this definition">¶</a></dt>
 <dd><p>Construct a sparse diagonal matrix. <code class="docutils literal"><span class="pre">B</span></code> is a tuple of vectors containing the diagonals and <code class="docutils literal"><span class="pre">d</span></code> is a tuple containing the positions of the diagonals. In the case the input contains only one diagonal, <code class="docutils literal"><span class="pre">B</span></code> can be a vector (instead of a tuple) and <code class="docutils literal"><span class="pre">d</span></code> can be the diagonal position (instead of a tuple), defaulting to 0 (diagonal). Optionally, <code class="docutils literal"><span class="pre">m</span></code> and <code class="docutils literal"><span class="pre">n</span></code> specify the size of the resulting sparse matrix.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">spdiagm</span><span class="p">(([</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="mi">4</span><span class="p">],[</span><span class="mi">4</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">1</span><span class="p">]),(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">))</span>
-<span class="mi">5</span><span class="n">×5</span> <span class="n">sparse</span> <span class="n">matrix</span> <span class="n">with</span> <span class="mi">8</span> <span class="kt">Int64</span> <span class="n">nonzero</span> <span class="n">entries</span><span class="p">:</span>
+<span class="mi">5</span><span class="n">×5</span> <span class="n">sparse</span> <span class="n">matrix</span> <span class="n">with</span> <span class="mi">8</span> <span class="kt">Int64</span> <span class="n">nonzero</span> <span class="n">entries</span><span class="o">:</span>
         <span class="p">[</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span>  <span class="o">=</span>  <span class="mi">1</span>
         <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">]</span>  <span class="o">=</span>  <span class="mi">4</span>
         <span class="p">[</span><span class="mi">3</span><span class="p">,</span> <span class="mi">2</span><span class="p">]</span>  <span class="o">=</span>  <span class="mi">2</span>
@@ -2201,13 +2202,13 @@ dense counterparts. The following functions are specific to sparse arrays.</p>
 <dl class="function">
 <dt id="Base.sprand">
 <code class="descname">sprand</code><span class="sig-paren">(</span><span class="optional">[</span><em>rng</em>, <span class="optional">]</span><span class="optional">[</span><em>type</em>, <span class="optional">]</span><em>m</em>, <span class="optional">[</span><em>n</em>, <span class="optional">]</span><em>p::AbstractFloat</em><span class="optional">[</span>, <em>rfn</em><span class="optional">]</span><span class="sig-paren">)</span><a class="headerlink" href="#Base.sprand" title="Permalink to this definition">¶</a></dt>
-<dd><p>Create a random length <code class="docutils literal"><span class="pre">m</span></code> sparse vector or <code class="docutils literal"><span class="pre">m</span></code> by <code class="docutils literal"><span class="pre">n</span></code> sparse matrix, in which the probability of any element being nonzero is independently given by <code class="docutils literal"><span class="pre">p</span></code> (and hence the mean density of nonzeros is also exactly <code class="docutils literal"><span class="pre">p</span></code>). Nonzero values are sampled from the distribution specified by <code class="docutils literal"><span class="pre">rfn</span></code> and have the type <code class="docutils literal"><span class="pre">type</span></code>. The uniform distribution is used in case <code class="docutils literal"><span class="pre">rfn</span></code> is not specified. The optional <code class="docutils literal"><span class="pre">rng</span></code> argument specifies a random number generator, see <a class="reference internal" href="../numbers/#random-numbers"><span>Random Numbers</span></a>.</p>
+<dd><p>Create a random length <code class="docutils literal"><span class="pre">m</span></code> sparse vector or <code class="docutils literal"><span class="pre">m</span></code> by <code class="docutils literal"><span class="pre">n</span></code> sparse matrix, in which the probability of any element being nonzero is independently given by <code class="docutils literal"><span class="pre">p</span></code> (and hence the mean density of nonzeros is also exactly <code class="docutils literal"><span class="pre">p</span></code>). Nonzero values are sampled from the distribution specified by <code class="docutils literal"><span class="pre">rfn</span></code> and have the type <code class="docutils literal"><span class="pre">type</span></code>. The uniform distribution is used in case <code class="docutils literal"><span class="pre">rfn</span></code> is not specified. The optional <code class="docutils literal"><span class="pre">rng</span></code> argument specifies a random number generator, see <a class="reference internal" href="../numbers/#random-numbers"><span class="std std-ref">Random Numbers</span></a>.</p>
 </dd></dl>
 
 <dl class="function">
 <dt id="Base.sprandn">
 <code class="descname">sprandn</code><span class="sig-paren">(</span><span class="optional">[</span><em>rng</em>, <span class="optional">]</span><em>m</em>, <span class="optional">[</span><em>n</em>, <span class="optional">]</span><em>p::AbstractFloat</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.sprandn" title="Permalink to this definition">¶</a></dt>
-<dd><p>Create a random sparse vector of length <code class="docutils literal"><span class="pre">m</span></code> or sparse matrix of size <code class="docutils literal"><span class="pre">m</span></code> by <code class="docutils literal"><span class="pre">n</span></code> with the specified (independent) probability <code class="docutils literal"><span class="pre">p</span></code> of any entry being nonzero, where nonzero values are sampled from the normal distribution. The optional <code class="docutils literal"><span class="pre">rng</span></code> argument specifies a random number generator, see <a class="reference internal" href="../numbers/#random-numbers"><span>Random Numbers</span></a>.</p>
+<dd><p>Create a random sparse vector of length <code class="docutils literal"><span class="pre">m</span></code> or sparse matrix of size <code class="docutils literal"><span class="pre">m</span></code> by <code class="docutils literal"><span class="pre">n</span></code> with the specified (independent) probability <code class="docutils literal"><span class="pre">p</span></code> of any entry being nonzero, where nonzero values are sampled from the normal distribution. The optional <code class="docutils literal"><span class="pre">rng</span></code> argument specifies a random number generator, see <a class="reference internal" href="../numbers/#random-numbers"><span class="std std-ref">Random Numbers</span></a>.</p>
 </dd></dl>
 
 <dl class="function">
@@ -2226,12 +2227,12 @@ dense counterparts. The following functions are specific to sparse arrays.</p>
 <dt id="Base.nzrange">
 <code class="descname">nzrange</code><span class="sig-paren">(</span><em>A::SparseMatrixCSC</em>, <em>col</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.nzrange" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return the range of indices to the structural nonzero values of a sparse matrix column. In conjunction with <a class="reference internal" href="#Base.nonzeros" title="Base.nonzeros"><code class="xref jl jl-func docutils literal"><span class="pre">nonzeros()</span></code></a> and <a class="reference internal" href="#Base.rowvals" title="Base.rowvals"><code class="xref jl jl-func docutils literal"><span class="pre">rowvals()</span></code></a>, this allows for convenient iterating over a sparse matrix :</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">A</span> <span class="o">=</span> <span class="n">sparse</span><span class="p">(</span><span class="n">I</span><span class="p">,</span><span class="n">J</span><span class="p">,</span><span class="n">V</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">A</span> <span class="o">=</span> <span class="n">sparse</span><span class="p">(</span><span class="nb">I</span><span class="p">,</span><span class="n">J</span><span class="p">,</span><span class="n">V</span><span class="p">)</span>
 <span class="n">rows</span> <span class="o">=</span> <span class="n">rowvals</span><span class="p">(</span><span class="n">A</span><span class="p">)</span>
 <span class="n">vals</span> <span class="o">=</span> <span class="n">nonzeros</span><span class="p">(</span><span class="n">A</span><span class="p">)</span>
 <span class="n">m</span><span class="p">,</span> <span class="n">n</span> <span class="o">=</span> <span class="n">size</span><span class="p">(</span><span class="n">A</span><span class="p">)</span>
-<span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="n">n</span>
-   <span class="k">for</span> <span class="n">j</span> <span class="k">in</span> <span class="n">nzrange</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="o">:</span><span class="n">n</span>
+   <span class="k">for</span> <span class="n">j</span> <span class="kp">in</span> <span class="n">nzrange</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span>
       <span class="n">row</span> <span class="o">=</span> <span class="n">rows</span><span class="p">[</span><span class="n">j</span><span class="p">]</span>
       <span class="n">val</span> <span class="o">=</span> <span class="n">vals</span><span class="p">[</span><span class="n">j</span><span class="p">]</span>
       <span class="c"># perform sparse wizardry...</span>
@@ -2284,8 +2285,8 @@ dense counterparts. The following functions are specific to sparse arrays.</p>
 <dt>
 <code class="descname">p::AbstractVector{Tp}, q::AbstractVector{Tq}[, C::SparseMatrixCSC{Tv,Ti}])</code></dt>
 <dd><p>Bilaterally permute <code class="docutils literal"><span class="pre">A</span></code>, storing result <code class="docutils literal"><span class="pre">PAQ</span></code> (<code class="docutils literal"><span class="pre">A[p,q]</span></code>) in <code class="docutils literal"><span class="pre">X</span></code>. Stores intermediate result <code class="docutils literal"><span class="pre">(AQ)^T</span></code> (<code class="docutils literal"><span class="pre">transpose(A[:,q])</span></code>) in optional argument <code class="docutils literal"><span class="pre">C</span></code> if present. Requires that none of <code class="docutils literal"><span class="pre">X</span></code>, <code class="docutils literal"><span class="pre">A</span></code>, and, if present, <code class="docutils literal"><span class="pre">C</span></code> alias each other; to store result <code class="docutils literal"><span class="pre">PAQ</span></code> back into <code class="docutils literal"><span class="pre">A</span></code>, use the following method lacking <code class="docutils literal"><span class="pre">X</span></code>:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">permute!</span><span class="p">{</span><span class="n">Tv</span><span class="p">,</span><span class="n">Ti</span><span class="p">,</span><span class="n">Tp</span><span class="o">&lt;:</span><span class="n">Integer</span><span class="p">,</span><span class="n">Tq</span><span class="o">&lt;:</span><span class="n">Integer</span><span class="p">}(</span><span class="n">A</span><span class="p">::</span><span class="n">SparseMatrixCSC</span><span class="p">{</span><span class="n">Tv</span><span class="p">,</span><span class="n">Ti</span><span class="p">},</span> <span class="n">p</span><span class="p">::</span><span class="n">AbstractVector</span><span class="p">{</span><span class="n">Tp</span><span class="p">},</span>
-    <span class="n">q</span><span class="p">::</span><span class="n">AbstractVector</span><span class="p">{</span><span class="n">Tq</span><span class="p">}[,</span> <span class="n">C</span><span class="p">::</span><span class="n">SparseMatrixCSC</span><span class="p">{</span><span class="n">Tv</span><span class="p">,</span><span class="n">Ti</span><span class="p">}[,</span> <span class="n">workcolptr</span><span class="p">::</span><span class="n">Vector</span><span class="p">{</span><span class="n">Ti</span><span class="p">}]])</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">permute!</span><span class="p">{</span><span class="n">Tv</span><span class="p">,</span><span class="n">Ti</span><span class="p">,</span><span class="n">Tp</span><span class="o">&lt;:</span><span class="kt">Integer</span><span class="p">,</span><span class="n">Tq</span><span class="o">&lt;:</span><span class="kt">Integer</span><span class="p">}(</span><span class="n">A</span><span class="o">::</span><span class="kt">SparseMatrixCSC</span><span class="p">{</span><span class="n">Tv</span><span class="p">,</span><span class="n">Ti</span><span class="p">},</span> <span class="n">p</span><span class="o">::</span><span class="kt">AbstractVector</span><span class="p">{</span><span class="n">Tp</span><span class="p">},</span>
+    <span class="n">q</span><span class="o">::</span><span class="kt">AbstractVector</span><span class="p">{</span><span class="n">Tq</span><span class="p">}[,</span> <span class="n">C</span><span class="o">::</span><span class="kt">SparseMatrixCSC</span><span class="p">{</span><span class="n">Tv</span><span class="p">,</span><span class="n">Ti</span><span class="p">}[,</span> <span class="n">workcolptr</span><span class="o">::</span><span class="kt">Vector</span><span class="p">{</span><span class="n">Ti</span><span class="p">}]])</span>
 </pre></div>
 </div>
 <p><code class="docutils literal"><span class="pre">X</span></code>&#8216;s dimensions must match those of <code class="docutils literal"><span class="pre">A</span></code> (<code class="docutils literal"><span class="pre">X.m</span> <span class="pre">==</span> <span class="pre">A.m</span></code> and <code class="docutils literal"><span class="pre">X.n</span> <span class="pre">==</span> <span class="pre">A.n</span></code>), and <code class="docutils literal"><span class="pre">X</span></code> must have enough storage to accommodate all allocated entries in <code class="docutils literal"><span class="pre">A</span></code> (<code class="docutils literal"><span class="pre">length(X.rowval)</span> <span class="pre">&gt;=</span> <span class="pre">nnz(A)</span></code> and <code class="docutils literal"><span class="pre">length(X.nzval)</span> <span class="pre">&gt;=</span> <span class="pre">nnz(A)</span></code>). Column-permutation <code class="docutils literal"><span class="pre">q</span></code>&#8216;s length must match <code class="docutils literal"><span class="pre">A</span></code>&#8216;s column count (<code class="docutils literal"><span class="pre">length(q)</span> <span class="pre">==</span> <span class="pre">A.n</span></code>). Row-permutation <code class="docutils literal"><span class="pre">p</span></code>&#8216;s length must match <code class="docutils literal"><span class="pre">A</span></code>&#8216;s row count (<code class="docutils literal"><span class="pre">length(p)</span> <span class="pre">==</span> <span class="pre">A.m</span></code>).</p>
@@ -2333,7 +2334,7 @@ dense counterparts. The following functions are specific to sparse arrays.</p>
     <script type="text/javascript">
         var DOCUMENTATION_OPTIONS = {
             URL_ROOT:'../../',
-            VERSION:'0.5.1-pre',
+            VERSION:'0.5.3-pre',
             COLLAPSE_INDEX:false,
             FILE_SUFFIX:'',
             HAS_SOURCE:  true

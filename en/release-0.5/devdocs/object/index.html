@@ -7,7 +7,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Memory layout of Julia Objects &mdash; Julia Language 0.5.1-pre documentation</title>
+  <title>Memory layout of Julia Objects &mdash; Julia Language 0.5.3-pre documentation</title>
   
 
   
@@ -30,7 +30,7 @@
   
     <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
   
-    <link rel="top" title="Julia Language 0.5.1-pre documentation" href="../../"/>
+    <link rel="top" title="Julia Language 0.5.3-pre documentation" href="../../"/>
         <link rel="up" title="Documentation of Julia’s Internals" href="../julia/"/>
         <link rel="next" title="Julia Functions" href="../functions/"/>
         <link rel="prev" title="More about types" href="../types/"/> 
@@ -150,6 +150,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#man-parametric-types">Parametric Types</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#type-aliases">Type Aliases</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#operations-on-types">Operations on Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/types/#custom-pretty-printing">Custom pretty-printing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#value-types">&#8220;Value types&#8221;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#nullable-types-representing-missing-values">Nullable Types: Representing Missing Values</a></li>
 </ul>
@@ -519,7 +520,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../eval/">Eval of Julia code</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../ast/">Julia ASTs</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../types/">More about types</a></li>
-<li class="toctree-l2 current"><a class="current reference internal" href="">Memory layout of Julia Objects</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Memory layout of Julia Objects</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../functions/">Julia Functions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../callconv/">Calling Conventions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../cartesian/">Base.Cartesian</a></li>
@@ -643,17 +644,17 @@ The mutability property of a value can be queried for with:</p>
 <div class="highlight-c"><div class="highlight"><pre><span></span><span class="kt">void</span> <span class="nf">jl_gc_wb</span><span class="p">(</span><span class="n">jl_value_t</span> <span class="o">*</span><span class="n">parent</span><span class="p">,</span> <span class="n">jl_value_t</span> <span class="o">*</span><span class="n">ptr</span><span class="p">);</span>
 </pre></div>
 </div>
-<p>However, the <a class="reference internal" href="../../manual/embedding/#man-embedding"><span>Embedding Julia</span></a> section of the manual is also required reading at this point,</p>
+<p>However, the <a class="reference internal" href="../../manual/embedding/#man-embedding"><span class="std std-ref">Embedding Julia</span></a> section of the manual is also required reading at this point,</p>
 <p>for covering other details of boxing and unboxing various types,
 and understanding the gc interactions.</p>
-<p>Mirror structs for some of the built-in types are <a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/julia.h">defined in julia.h</a>.
-The corresponding global <code class="xref c c-type docutils literal"><span class="pre">jl_datatype_t</span></code> objects are created by <a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/jltypes.c">jl_init_types in jltypes.c</a>.</p>
+<p>Mirror structs for some of the built-in types are <a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/julia.h">defined in julia.h</a>.
+The corresponding global <code class="xref c c-type docutils literal"><span class="pre">jl_datatype_t</span></code> objects are created by <a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/jltypes.c">jl_init_types in jltypes.c</a>.</p>
 </div>
 <div class="section" id="garbage-collector-mark-bits">
 <h2>Garbage collector mark bits<a class="headerlink" href="#garbage-collector-mark-bits" title="Permalink to this headline">¶</a></h2>
 <p>The garbage collector uses several bits from the metadata portion of the <code class="xref c c-type docutils literal"><span class="pre">jl_typetag_t</span></code>
 to track each object in the system.
-Further details about this algorithm can be found in the comments of the <a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/gc.c">garbage collector implementation in gc.c</a>.</p>
+Further details about this algorithm can be found in the comments of the <a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/gc.c">garbage collector implementation in gc.c</a>.</p>
 </div>
 <div class="section" id="object-allocation">
 <h2>Object allocation<a class="headerlink" href="#object-allocation" title="Permalink to this headline">¶</a></h2>
@@ -674,7 +675,7 @@ Further details about this algorithm can be found in the comments of the <a clas
 </pre></div>
 </div>
 <p>While these are the most commonly used options, there are more low-level constructors too,
-which you can find declared in <a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/julia.h">julia.h</a>.
+which you can find declared in <a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/julia.h">julia.h</a>.
 These are used in <code class="xref c c-func docutils literal"><span class="pre">jl_init_types()</span></code> to create the initial types needed to bootstrap the creation of the Julia system image.</p>
 <p>Tuples:</p>
 <div class="highlight-c"><div class="highlight"><pre><span></span><span class="n">jl_tuple_t</span> <span class="o">*</span><span class="nf">jl_tuple</span><span class="p">(</span><span class="kt">size_t</span> <span class="n">n</span><span class="p">,</span> <span class="p">...);</span>
@@ -712,7 +713,7 @@ and stored unboxed, or it may not stored at all (if it is not being used in a ge
 </pre></div>
 </div>
 <p>Note that many of these have alternative allocation functions for various special-purposes.
-The list here reflects the more common usages, but a more complete list can be found by reading the <a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/julia.h">julia.h header file</a>.</p>
+The list here reflects the more common usages, but a more complete list can be found by reading the <a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/julia.h">julia.h header file</a>.</p>
 <p>Internal to Julia, storage is typically allocated by <code class="xref c c-func docutils literal"><span class="pre">newstruct()</span></code> (or <code class="xref jl jl-func docutils literal"><span class="pre">newobj()</span></code> for the special types):</p>
 <div class="highlight-c"><div class="highlight"><pre><span></span><span class="n">jl_value_t</span> <span class="o">*</span><span class="nf">newstruct</span><span class="p">(</span><span class="n">jl_value_t</span> <span class="o">*</span><span class="n">type</span><span class="p">);</span>
 <span class="n">jl_value_t</span> <span class="o">*</span><span class="nf">newobj</span><span class="p">(</span><span class="n">jl_value_t</span> <span class="o">*</span><span class="n">type</span><span class="p">,</span> <span class="kt">size_t</span> <span class="n">nfields</span><span class="p">);</span>
@@ -727,12 +728,12 @@ then tagged with its type:</p>
 <p>Note that all objects are allocated in multiples of 4 bytes and aligned to the platform pointer size.
 Memory is allocated from a pool for smaller objects, or directly with <code class="xref c c-func docutils literal"><span class="pre">malloc()</span></code> for large objects.</p>
 <div class="sidebar">
-<p class="first sidebar-title"><a class="reference internal" href="../../manual/types/#man-singleton-types"><span>Singleton Types</span></a></p>
+<p class="first sidebar-title"><a class="reference internal" href="../../manual/types/#man-singleton-types"><span class="std std-ref">Singleton Types</span></a></p>
 <p>Singleton types have only one instance and no data fields.
 Singleton instances have a size of 0 bytes,
 and consist only of their metadata.
 e.g. <code class="xref jl jl-data docutils literal"><span class="pre">nothing::Void</span></code>.</p>
-<p class="last">See <a class="reference internal" href="../../manual/types/#man-singleton-types"><span>Singleton Types</span></a> and <a class="reference internal" href="../../manual/faq/#man-nothing"><span>Nothingness and missing values</span></a></p>
+<p class="last">See <a class="reference internal" href="../../manual/types/#man-singleton-types"><span class="std std-ref">Singleton Types</span></a> and <a class="reference internal" href="../../manual/faq/#man-nothing"><span class="std std-ref">Nothingness and missing values</span></a></p>
 </div>
 </div>
 </div>
@@ -773,7 +774,7 @@ e.g. <code class="xref jl jl-data docutils literal"><span class="pre">nothing::V
     <script type="text/javascript">
         var DOCUMENTATION_OPTIONS = {
             URL_ROOT:'../../',
-            VERSION:'0.5.1-pre',
+            VERSION:'0.5.3-pre',
             COLLAPSE_INDEX:false,
             FILE_SUFFIX:'',
             HAS_SOURCE:  true

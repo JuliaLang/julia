@@ -7,7 +7,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Proper maintenance and care of multi-threading locks &mdash; Julia Language 0.5.1-pre documentation</title>
+  <title>Proper maintenance and care of multi-threading locks &mdash; Julia Language 0.5.3-pre documentation</title>
   
 
   
@@ -30,7 +30,7 @@
   
     <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
   
-    <link rel="top" title="Julia Language 0.5.1-pre documentation" href="../../"/>
+    <link rel="top" title="Julia Language 0.5.3-pre documentation" href="../../"/>
         <link rel="up" title="Documentation of Julia’s Internals" href="../julia/"/>
         <link rel="next" title="Arrays with custom indices" href="../offset-arrays/"/>
         <link rel="prev" title="Bounds checking" href="../boundscheck/"/> 
@@ -150,6 +150,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#man-parametric-types">Parametric Types</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#type-aliases">Type Aliases</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#operations-on-types">Operations on Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/types/#custom-pretty-printing">Custom pretty-printing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#value-types">&#8220;Value types&#8221;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#nullable-types-representing-missing-values">Nullable Types: Representing Missing Values</a></li>
 </ul>
@@ -529,7 +530,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../llvm/">Working with LLVM</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../stdio/">printf() and stdio in the Julia runtime</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../boundscheck/">Bounds checking</a></li>
-<li class="toctree-l2 current"><a class="current reference internal" href="">Proper maintenance and care of multi-threading locks</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Proper maintenance and care of multi-threading locks</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../offset-arrays/">Arrays with custom indices</a></li>
 </ul>
 </li>
@@ -727,8 +728,8 @@ This list does not include level 1 leaf resources due to their simplicity.</p>
 <p>JIT : codegen lock</p>
 <p>LLVMContext : codegen lock</p>
 <dl class="docutils">
-<dt>Method <span class="classifier-delimiter">:</span> <span class="classifier">Method-&gt;writelock</span></dt>
-<dd><ul class="first last simple">
+<dt>Method</dt>
+ <span class="classifier-delimiter">:</span> <span class="classifier">Method-&gt;writelock</span><dd><ul class="first last simple">
 <li>roots array (serializer and codegen)</li>
 <li>invoke / specializations / tfunc modifications</li>
 </ul>
@@ -773,7 +774,7 @@ This list does not include level 1 leaf resources due to their simplicity.</p>
     <script type="text/javascript">
         var DOCUMENTATION_OPTIONS = {
             URL_ROOT:'../../',
-            VERSION:'0.5.1-pre',
+            VERSION:'0.5.3-pre',
             COLLAPSE_INDEX:false,
             FILE_SUFFIX:'',
             HAS_SOURCE:  true

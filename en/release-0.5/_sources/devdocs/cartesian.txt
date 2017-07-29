@@ -78,7 +78,7 @@ expressions, which must be an integer. When you're writing a function
 that you intend to work in multiple dimensions, this may not be
 something you want to hard-code. If you're writing code that
 you need to work with older Julia versions, currently you
-should use the ``@ngenerate`` macro described in `an older version of this documentation <http://docs.julialang.org/en/release-0.3/devdocs/cartesian/#supplying-the-number-of-expressions>`_.
+should use the ``@ngenerate`` macro described in `an older version of this documentation <https://docs.julialang.org/en/release-0.3/devdocs/cartesian/#supplying-the-number-of-expressions>`_.
 
 Starting in Julia 0.4-pre, the recommended approach is to use
 a ``@generated function``.  Here's an example::

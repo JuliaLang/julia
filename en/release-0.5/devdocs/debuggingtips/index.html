@@ -7,7 +7,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>gdb debugging tips &mdash; Julia Language 0.5.1-pre documentation</title>
+  <title>gdb debugging tips &mdash; Julia Language 0.5.3-pre documentation</title>
   
 
   
@@ -30,7 +30,7 @@
   
     <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
   
-    <link rel="top" title="Julia Language 0.5.1-pre documentation" href="../../"/>
+    <link rel="top" title="Julia Language 0.5.3-pre documentation" href="../../"/>
         <link rel="up" title="Developing/debugging Julia’s C code" href="../C/"/>
         <link rel="next" title="Using Valgrind with Julia" href="../valgrind/"/>
         <link rel="prev" title="Reporting and analyzing crashes (segfaults)" href="../backtraces/"/> 
@@ -150,6 +150,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#man-parametric-types">Parametric Types</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#type-aliases">Type Aliases</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#operations-on-types">Operations on Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/types/#custom-pretty-printing">Custom pretty-printing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#value-types">&#8220;Value types&#8221;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#nullable-types-representing-missing-values">Nullable Types: Representing Missing Values</a></li>
 </ul>
@@ -535,7 +536,7 @@
 </li>
 <li class="toctree-l1 current"><a class="reference internal" href="../C/">Developing/debugging Julia&#8217;s C code</a><ul class="current">
 <li class="toctree-l2"><a class="reference internal" href="../backtraces/">Reporting and analyzing crashes (segfaults)</a></li>
-<li class="toctree-l2 current"><a class="current reference internal" href="">gdb debugging tips</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">gdb debugging tips</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../valgrind/">Using Valgrind with Julia</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../sanitizers/">Sanitizer support</a></li>
 </ul>
@@ -589,7 +590,7 @@ This is a useful way to discover the types and values of objects being
 manipulated by Julia&#8217;s C code.</p>
 <p>Similarly, if you&#8217;re debugging some of Julia&#8217;s internals (e.g.,
 <code class="docutils literal"><span class="pre">inference.jl</span></code>), you can print <code class="docutils literal"><span class="pre">obj</span></code> using</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">ccall</span><span class="p">(:</span><span class="n">jl_</span><span class="p">,</span> <span class="n">Void</span><span class="p">,</span> <span class="p">(</span><span class="kt">Any</span><span class="p">,),</span> <span class="n">obj</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">ccall</span><span class="p">(</span><span class="o">:</span><span class="n">jl_</span><span class="p">,</span> <span class="kt">Void</span><span class="p">,</span> <span class="p">(</span><span class="kt">Any</span><span class="p">,),</span> <span class="n">obj</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>This is a good way to circumvent problems that arise from the order in which julia&#8217;s output streams are initialized.</p>
@@ -626,7 +627,7 @@ there are a number of additional variables (see julia.h for a complete list) tha
 </pre></div>
 </div>
 <p>Then within your Julia code, insert a call to <code class="docutils literal"><span class="pre">jl_breakpoint</span></code> by adding</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">ccall</span><span class="p">(:</span><span class="n">jl_breakpoint</span><span class="p">,</span> <span class="n">Void</span><span class="p">,</span> <span class="p">(</span><span class="kt">Any</span><span class="p">,),</span> <span class="n">obj</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">ccall</span><span class="p">(</span><span class="o">:</span><span class="n">jl_breakpoint</span><span class="p">,</span> <span class="kt">Void</span><span class="p">,</span> <span class="p">(</span><span class="kt">Any</span><span class="p">,),</span> <span class="n">obj</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>where <code class="docutils literal"><span class="pre">obj</span></code> can be any variable or tuple you want to be accessible in the breakpoint.</p>
@@ -671,7 +672,7 @@ want to ignore):</p>
 </pre></div>
 </div>
 <p>The corresponding LLDB command is (after the process is started):</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="p">(</span><span class="n">lldb</span><span class="p">)</span> <span class="n">pro</span> <span class="n">hand</span> <span class="o">-</span><span class="n">p</span> <span class="n">true</span> <span class="o">-</span><span class="n">s</span> <span class="n">false</span> <span class="o">-</span><span class="n">n</span> <span class="n">false</span> <span class="n">SIGSEGV</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="p">(</span><span class="n">lldb</span><span class="p">)</span> <span class="n">pro</span> <span class="n">hand</span> <span class="o">-</span><span class="n">p</span> <span class="kc">true</span> <span class="o">-</span><span class="n">s</span> <span class="kc">false</span> <span class="o">-</span><span class="n">n</span> <span class="kc">false</span> <span class="n">SIGSEGV</span>
 </pre></div>
 </div>
 <p>If you are debugging a segfault with threaded code, you can set a breakpoint on
@@ -697,15 +698,15 @@ in <code class="docutils literal"><span class="pre">jl_error</span></code> (ther
 <code class="docutils literal"><span class="pre">jl_too_many_args</span></code>, and <code class="docutils literal"><span class="pre">jl_throw</span></code>).</p>
 <p>Once an error is caught, a useful technique is to walk up the stack and examine the function by inspecting
 the related call to <code class="docutils literal"><span class="pre">jl_apply</span></code>. To take a real-world example:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">Breakpoint</span> <span class="mi">1</span><span class="p">,</span> <span class="n">jl_throw</span> <span class="p">(</span><span class="n">e</span><span class="o">=</span><span class="mh">0x7ffdf42de400</span><span class="p">)</span> <span class="n">at</span> <span class="n">task</span><span class="o">.</span><span class="n">c</span><span class="p">:</span><span class="mi">802</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">Breakpoint</span> <span class="mi">1</span><span class="p">,</span> <span class="n">jl_throw</span> <span class="p">(</span><span class="nb">e</span><span class="o">=</span><span class="mh">0x7ffdf42de400</span><span class="p">)</span> <span class="n">at</span> <span class="n">task</span><span class="o">.</span><span class="n">c</span><span class="o">:</span><span class="mi">802</span>
 <span class="mi">802</span> <span class="p">{</span>
-<span class="p">(</span><span class="n">gdb</span><span class="p">)</span> <span class="n">p</span> <span class="n">jl_</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
-<span class="n">ErrorException</span><span class="p">(</span><span class="s">&quot;auto_unbox: unable to determine argument type&quot;</span><span class="p">)</span>
+<span class="p">(</span><span class="n">gdb</span><span class="p">)</span> <span class="n">p</span> <span class="n">jl_</span><span class="p">(</span><span class="nb">e</span><span class="p">)</span>
+<span class="kt">ErrorException</span><span class="p">(</span><span class="s">&quot;auto_unbox: unable to determine argument type&quot;</span><span class="p">)</span>
 <span class="o">$</span><span class="mi">2</span> <span class="o">=</span> <span class="n">void</span>
 <span class="p">(</span><span class="n">gdb</span><span class="p">)</span> <span class="n">bt</span> <span class="mi">10</span>
 <span class="c">#0  jl_throw (e=0x7ffdf42de400) at task.c:802</span>
 <span class="c">#1  0x00007ffff65412fe in jl_error (str=0x7ffde56be000 &lt;_j_str267&gt; &quot;auto_unbox:</span>
-   <span class="n">unable</span> <span class="n">to</span> <span class="n">determine</span> <span class="n">argument</span> <span class="n">type</span><span class="s">&quot;)</span>
+   <span class="n">unable</span> <span class="n">to</span> <span class="n">determine</span> <span class="n">argument</span> <span class="k">type</span><span class="s">&quot;)</span>
 <span class="s">   at builtins.c:39</span>
 <span class="s">#2  0x00007ffde56bd01a in julia_convert_16886 ()</span>
 <span class="s">#3  0x00007ffff6541154 in jl_apply (f=0x7ffdf367f630, args=0x7fffffffc2b0, nargs=2) at julia.h:1281</span>
@@ -721,14 +722,14 @@ the related call to <code class="docutils literal"><span class="pre">jl_apply</s
 <span class="p">(</span><span class="n">gdb</span><span class="p">)</span> <span class="n">p</span> <span class="n">f</span><span class="o">-&gt;</span><span class="n">linfo</span><span class="o">-&gt;</span><span class="n">specTypes</span>
 <span class="o">$</span><span class="mi">4</span> <span class="o">=</span> <span class="p">(</span><span class="n">jl_tupletype_t</span> <span class="o">*</span><span class="p">)</span> <span class="mh">0x7ffdf39b1030</span>
 <span class="p">(</span><span class="n">gdb</span><span class="p">)</span> <span class="n">p</span> <span class="n">jl_</span><span class="p">(</span> <span class="n">f</span><span class="o">-&gt;</span><span class="n">linfo</span><span class="o">-&gt;</span><span class="n">specTypes</span> <span class="p">)</span>
-<span class="n">Tuple</span><span class="p">{</span><span class="n">Type</span><span class="p">{</span><span class="kt">Float32</span><span class="p">},</span> <span class="kt">Float64</span><span class="p">}</span>           <span class="c"># &lt;-- type signature for julia_convert_16886</span>
+<span class="kt">Tuple</span><span class="p">{</span><span class="kt">Type</span><span class="p">{</span><span class="kt">Float32</span><span class="p">},</span> <span class="kt">Float64</span><span class="p">}</span>           <span class="c"># &lt;-- type signature for julia_convert_16886</span>
 </pre></div>
 </div>
 <p>Then, we can look at the AST for this function:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="p">(</span><span class="n">gdb</span><span class="p">)</span> <span class="n">p</span> <span class="n">jl_</span><span class="p">(</span> <span class="n">jl_uncompress_ast</span><span class="p">(</span><span class="n">f</span><span class="o">-&gt;</span><span class="n">linfo</span><span class="p">,</span> <span class="n">f</span><span class="o">-&gt;</span><span class="n">linfo</span><span class="o">-&gt;</span><span class="n">ast</span><span class="p">)</span> <span class="p">)</span>
-<span class="n">Expr</span><span class="p">(:</span><span class="n">lambda</span><span class="p">,</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Any</span><span class="p">,</span> <span class="mi">1</span><span class="p">}[:</span><span class="c">#s29, :x], Array{Any, 1}[Array{Any, 1}[], Array{Any, 1}[Array{Any, 1}[:#s29, :Any, 0], Array{Any, 1}[:x, :Any, 0]], Array{Any, 1}[], 0], Expr(:body,</span>
-<span class="n">Expr</span><span class="p">(:</span><span class="n">line</span><span class="p">,</span> <span class="mi">90</span><span class="p">,</span> <span class="p">:</span><span class="n">float</span><span class="o">.</span><span class="n">jl</span><span class="p">)::</span><span class="kt">Any</span><span class="p">,</span>
-<span class="n">Expr</span><span class="p">(:</span><span class="k">return</span><span class="p">,</span> <span class="n">Expr</span><span class="p">(:</span><span class="n">call</span><span class="p">,</span> <span class="p">:</span><span class="n">box</span><span class="p">,</span> <span class="p">:</span><span class="kt">Float32</span><span class="p">,</span> <span class="n">Expr</span><span class="p">(:</span><span class="n">call</span><span class="p">,</span> <span class="p">:</span><span class="n">fptrunc</span><span class="p">,</span> <span class="p">:</span><span class="kt">Float32</span><span class="p">,</span> <span class="p">:</span><span class="n">x</span><span class="p">)::</span><span class="kt">Any</span><span class="p">)::</span><span class="kt">Any</span><span class="p">)::</span><span class="kt">Any</span><span class="p">)::</span><span class="kt">Any</span><span class="p">)::</span><span class="kt">Any</span>
+<span class="kt">Expr</span><span class="p">(</span><span class="o">:</span><span class="n">lambda</span><span class="p">,</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Any</span><span class="p">,</span> <span class="mi">1</span><span class="p">}[</span><span class="o">:</span><span class="c">#s29, :x], Array{Any, 1}[Array{Any, 1}[], Array{Any, 1}[Array{Any, 1}[:#s29, :Any, 0], Array{Any, 1}[:x, :Any, 0]], Array{Any, 1}[], 0], Expr(:body,</span>
+<span class="kt">Expr</span><span class="p">(</span><span class="o">:</span><span class="n">line</span><span class="p">,</span> <span class="mi">90</span><span class="p">,</span> <span class="o">:</span><span class="n">float</span><span class="o">.</span><span class="n">jl</span><span class="p">)</span><span class="o">::</span><span class="kt">Any</span><span class="p">,</span>
+<span class="kt">Expr</span><span class="p">(</span><span class="o">:</span><span class="k">return</span><span class="p">,</span> <span class="kt">Expr</span><span class="p">(</span><span class="o">:</span><span class="n">call</span><span class="p">,</span> <span class="o">:</span><span class="n">box</span><span class="p">,</span> <span class="o">:</span><span class="kt">Float32</span><span class="p">,</span> <span class="kt">Expr</span><span class="p">(</span><span class="o">:</span><span class="n">call</span><span class="p">,</span> <span class="o">:</span><span class="n">fptrunc</span><span class="p">,</span> <span class="o">:</span><span class="kt">Float32</span><span class="p">,</span> <span class="o">:</span><span class="n">x</span><span class="p">)</span><span class="o">::</span><span class="kt">Any</span><span class="p">)</span><span class="o">::</span><span class="kt">Any</span><span class="p">)</span><span class="o">::</span><span class="kt">Any</span><span class="p">)</span><span class="o">::</span><span class="kt">Any</span><span class="p">)</span><span class="o">::</span><span class="kt">Any</span>
 </pre></div>
 </div>
 <p>Finally, and perhaps most usefully, we can force the function to be recompiled in order to step through the
@@ -808,7 +809,7 @@ are exactly the same in every run.</p>
     <script type="text/javascript">
         var DOCUMENTATION_OPTIONS = {
             URL_ROOT:'../../',
-            VERSION:'0.5.1-pre',
+            VERSION:'0.5.3-pre',
             COLLAPSE_INDEX:false,
             FILE_SUFFIX:'',
             HAS_SOURCE:  true

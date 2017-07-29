@@ -7,7 +7,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>StackTraces &mdash; Julia Language 0.5.1-pre documentation</title>
+  <title>StackTraces &mdash; Julia Language 0.5.3-pre documentation</title>
   
 
   
@@ -30,7 +30,7 @@
   
     <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
   
-    <link rel="top" title="Julia Language 0.5.1-pre documentation" href="../../"/>
+    <link rel="top" title="Julia Language 0.5.3-pre documentation" href="../../"/>
         <link rel="next" title="SIMD Support" href="../simd-types/"/>
         <link rel="prev" title="Profiling" href="../profile/"/> 
 
@@ -149,6 +149,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#man-parametric-types">Parametric Types</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#type-aliases">Type Aliases</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#operations-on-types">Operations on Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/types/#custom-pretty-printing">Custom pretty-printing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#value-types">&#8220;Value types&#8221;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#nullable-types-representing-missing-values">Nullable Types: Representing Missing Values</a></li>
 </ul>
@@ -508,7 +509,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../libc/">C Standard Library</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../libdl/">Dynamic Linker</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../profile/">Profiling</a></li>
-<li class="toctree-l1 current"><a class="current reference internal" href="">StackTraces</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">StackTraces</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../simd-types/">SIMD Support</a></li>
 </ul>
 <ul>
@@ -598,7 +599,7 @@
 <li><p class="first"><code class="docutils literal"><span class="pre">inlined::Bool</span></code></p>
 <p>True if the code is from an inlined frame.</p>
 </li>
-<li><p class="first"><code class="docutils literal"><span class="pre">pointer::Int64</span></code></p>
+<li><p class="first"><code class="docutils literal"><span class="pre">pointer::UInt64</span></code></p>
 <p>Representation of the pointer to the execution context as returned by <code class="docutils literal"><span class="pre">backtrace</span></code>.</p>
 </li>
 </ul>
@@ -673,7 +674,7 @@
     <script type="text/javascript">
         var DOCUMENTATION_OPTIONS = {
             URL_ROOT:'../../',
-            VERSION:'0.5.1-pre',
+            VERSION:'0.5.3-pre',
             COLLAPSE_INDEX:false,
             FILE_SUFFIX:'',
             HAS_SOURCE:  true

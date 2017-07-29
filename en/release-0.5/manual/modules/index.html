@@ -7,7 +7,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Modules &mdash; Julia Language 0.5.1-pre documentation</title>
+  <title>Modules &mdash; Julia Language 0.5.3-pre documentation</title>
   
 
   
@@ -30,7 +30,7 @@
   
     <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
   
-    <link rel="top" title="Julia Language 0.5.1-pre documentation" href="../../"/>
+    <link rel="top" title="Julia Language 0.5.3-pre documentation" href="../../"/>
         <link rel="next" title="Documentation" href="../documentation/"/>
         <link rel="prev" title="Interfaces" href="../interfaces/"/> 
 
@@ -149,6 +149,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../types/#man-parametric-types">Parametric Types</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../types/#type-aliases">Type Aliases</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../types/#operations-on-types">Operations on Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#custom-pretty-printing">Custom pretty-printing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../types/#value-types">&#8220;Value types&#8221;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../types/#nullable-types-representing-missing-values">Nullable Types: Representing Missing Values</a></li>
 </ul>
@@ -184,7 +185,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../interfaces/#abstract-arrays">Abstract Arrays</a></li>
 </ul>
 </li>
-<li class="toctree-l1 current"><a class="current reference internal" href="">Modules</a><ul>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Modules</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#summary-of-module-usage">Summary of module usage</a></li>
 </ul>
 </li>
@@ -588,7 +589,7 @@ not meant to be run, but is shown for illustrative purposes:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">module</span> <span class="n">MyModule</span>
 <span class="k">using</span> <span class="n">Lib</span>
 
-<span class="k">using</span> <span class="n">BigLib</span><span class="p">:</span> <span class="n">thing1</span><span class="p">,</span> <span class="n">thing2</span>
+<span class="k">using</span> <span class="n">BigLib</span><span class="o">:</span> <span class="n">thing1</span><span class="p">,</span> <span class="n">thing2</span>
 
 <span class="k">import</span> <span class="n">Base</span><span class="o">.</span><span class="n">show</span>
 
@@ -596,14 +597,14 @@ not meant to be run, but is shown for illustrative purposes:</p>
 
 <span class="k">export</span> <span class="n">MyType</span><span class="p">,</span> <span class="n">foo</span>
 
-<span class="k">type</span><span class="nc"> MyType</span>
+<span class="k">type</span> <span class="n">MyType</span>
     <span class="n">x</span>
 <span class="k">end</span>
 
 <span class="n">bar</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">=</span> <span class="mi">2</span><span class="n">x</span>
-<span class="n">foo</span><span class="p">(</span><span class="n">a</span><span class="p">::</span><span class="n">MyType</span><span class="p">)</span> <span class="o">=</span> <span class="n">bar</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">x</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span>
+<span class="n">foo</span><span class="p">(</span><span class="n">a</span><span class="o">::</span><span class="n">MyType</span><span class="p">)</span> <span class="o">=</span> <span class="n">bar</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">x</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span>
 
-<span class="n">show</span><span class="p">(</span><span class="n">io</span><span class="p">::</span><span class="n">IO</span><span class="p">,</span> <span class="n">a</span><span class="p">::</span><span class="n">MyType</span><span class="p">)</span> <span class="o">=</span> <span class="n">print</span><span class="p">(</span><span class="n">io</span><span class="p">,</span> <span class="s">&quot;MyType </span><span class="si">$(a.x)</span><span class="s">&quot;</span><span class="p">)</span>
+<span class="n">show</span><span class="p">(</span><span class="n">io</span><span class="o">::</span><span class="kt">IO</span><span class="p">,</span> <span class="n">a</span><span class="o">::</span><span class="n">MyType</span><span class="p">)</span> <span class="o">=</span> <span class="n">print</span><span class="p">(</span><span class="n">io</span><span class="p">,</span> <span class="s">&quot;MyType </span><span class="si">$</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">x</span><span class="p">)</span><span class="s">&quot;</span><span class="p">)</span>
 <span class="k">end</span>
 </pre></div>
 </div>
@@ -791,7 +792,7 @@ module rather than in <code class="docutils literal"><span class="pre">Parent</s
 <h3>Module file paths<a class="headerlink" href="#module-file-paths" title="Permalink to this headline">¶</a></h3>
 <p>The global variable LOAD_PATH contains the directories Julia searches for
 modules when calling <code class="docutils literal"><span class="pre">require</span></code>. It can be extended using <code class="docutils literal"><span class="pre">push!</span></code>:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">push!</span><span class="p">(</span><span class="n">LOAD_PATH</span><span class="p">,</span> <span class="s">&quot;/Path/To/My/Module/&quot;</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">push!</span><span class="p">(</span><span class="nb">LOAD_PATH</span><span class="p">,</span> <span class="s">&quot;/Path/To/My/Module/&quot;</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>Putting this statement in the file <code class="docutils literal"><span class="pre">~/.juliarc.jl</span></code> will extend LOAD_PATH
@@ -883,10 +884,10 @@ holds the return value of a <code class="docutils literal"><span class="pre">voi
 time) because the pointer address will change from run to run.  You
 could accomplish this by defining the following <code class="docutils literal"><span class="pre">__init__</span></code> function
 in your module:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="kd">const</span> <span class="n">foo_data_ptr</span> <span class="o">=</span> <span class="n">Ref</span><span class="p">{</span><span class="n">Ptr</span><span class="p">{</span><span class="n">Void</span><span class="p">}}(</span><span class="mi">0</span><span class="p">)</span>
-<span class="k">function</span><span class="nf"> __init__</span><span class="p">()</span>
-    <span class="k">ccall</span><span class="p">((:</span><span class="n">foo_init</span><span class="p">,</span> <span class="p">:</span><span class="n">libfoo</span><span class="p">),</span> <span class="n">Void</span><span class="p">,</span> <span class="p">())</span>
-    <span class="n">foo_data_ptr</span><span class="p">[]</span> <span class="o">=</span> <span class="k">ccall</span><span class="p">((:</span><span class="n">foo_data</span><span class="p">,</span> <span class="p">:</span><span class="n">libfoo</span><span class="p">),</span> <span class="n">Ptr</span><span class="p">{</span><span class="n">Void</span><span class="p">},</span> <span class="p">())</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="kd">const</span> <span class="n">foo_data_ptr</span> <span class="o">=</span> <span class="kt">Ref</span><span class="p">{</span><span class="kt">Ptr</span><span class="p">{</span><span class="kt">Void</span><span class="p">}}(</span><span class="mi">0</span><span class="p">)</span>
+<span class="k">function</span> <span class="n">__init__</span><span class="p">()</span>
+    <span class="k">ccall</span><span class="p">((</span><span class="o">:</span><span class="n">foo_init</span><span class="p">,</span> <span class="o">:</span><span class="n">libfoo</span><span class="p">),</span> <span class="kt">Void</span><span class="p">,</span> <span class="p">())</span>
+    <span class="n">foo_data_ptr</span><span class="p">[]</span> <span class="o">=</span> <span class="k">ccall</span><span class="p">((</span><span class="o">:</span><span class="n">foo_data</span><span class="p">,</span> <span class="o">:</span><span class="n">libfoo</span><span class="p">),</span> <span class="kt">Ptr</span><span class="p">{</span><span class="kt">Void</span><span class="p">},</span> <span class="p">())</span>
 <span class="k">end</span>
 </pre></div>
 </div>
@@ -929,10 +930,10 @@ not a standalone interpreter that also generates compiled code.</p>
 <ol class="arabic">
 <li><p class="first">Global counters (for example, for attempting to uniquely identify objects)
 Consider the following code snippet:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span><span class="nc"> UniquedById</span>
-    <span class="n">myid</span><span class="p">::</span><span class="kt">Int</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span> <span class="n">UniquedById</span>
+    <span class="n">myid</span><span class="o">::</span><span class="kt">Int</span>
     <span class="k">let</span> <span class="n">counter</span> <span class="o">=</span> <span class="mi">0</span>
-        <span class="n">UniquedById</span><span class="p">()</span> <span class="o">=</span> <span class="nb">new</span><span class="p">(</span><span class="n">counter</span> <span class="o">+=</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="n">UniquedById</span><span class="p">()</span> <span class="o">=</span> <span class="n">new</span><span class="p">(</span><span class="n">counter</span> <span class="o">+=</span> <span class="mi">1</span><span class="p">)</span>
     <span class="k">end</span>
 <span class="k">end</span>
 </pre></div>
@@ -960,9 +961,9 @@ by referencing it directly instead of via its lookup path.
 For example, (in global scope):</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="c">#mystdout = Base.STDOUT #= will not work correctly, since this will copy Base.STDOUT into this module =#</span>
 <span class="c"># instead use accessor functions:</span>
-<span class="n">getstdout</span><span class="p">()</span> <span class="o">=</span> <span class="n">Base</span><span class="o">.</span><span class="n">STDOUT</span> <span class="cm">#= best option =#</span>
+<span class="n">getstdout</span><span class="p">()</span> <span class="o">=</span> <span class="n">Base</span><span class="o">.</span><span class="nb">STDOUT</span> <span class="cm">#= best option =#</span>
 <span class="c"># or move the assignment into the runtime:</span>
-<span class="n">__init__</span><span class="p">()</span> <span class="o">=</span> <span class="kd">global</span> <span class="n">mystdout</span> <span class="o">=</span> <span class="n">Base</span><span class="o">.</span><span class="n">STDOUT</span> <span class="cm">#= also works =#</span>
+<span class="n">__init__</span><span class="p">()</span> <span class="o">=</span> <span class="kd">global</span> <span class="n">mystdout</span> <span class="o">=</span> <span class="n">Base</span><span class="o">.</span><span class="nb">STDOUT</span> <span class="cm">#= also works =#</span>
 </pre></div>
 </div>
 </li>
@@ -1040,7 +1041,7 @@ The state of this command line flag is passed to <code class="docutils literal">
     <script type="text/javascript">
         var DOCUMENTATION_OPTIONS = {
             URL_ROOT:'../../',
-            VERSION:'0.5.1-pre',
+            VERSION:'0.5.3-pre',
             COLLAPSE_INDEX:false,
             FILE_SUFFIX:'',
             HAS_SOURCE:  true

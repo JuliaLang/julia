@@ -7,7 +7,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Noteworthy Differences from other Languages &mdash; Julia Language 0.5.1-pre documentation</title>
+  <title>Noteworthy Differences from other Languages &mdash; Julia Language 0.5.3-pre documentation</title>
   
 
   
@@ -30,7 +30,7 @@
   
     <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
   
-    <link rel="top" title="Julia Language 0.5.1-pre documentation" href="../../"/>
+    <link rel="top" title="Julia Language 0.5.3-pre documentation" href="../../"/>
         <link rel="next" title="Unicode Input" href="../unicode-input/"/>
         <link rel="prev" title="Frequently Asked Questions" href="../faq/"/> 
 
@@ -149,6 +149,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../types/#man-parametric-types">Parametric Types</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../types/#type-aliases">Type Aliases</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../types/#operations-on-types">Operations on Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#custom-pretty-printing">Custom pretty-printing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../types/#value-types">&#8220;Value types&#8221;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../types/#nullable-types-representing-missing-values">Nullable Types: Representing Missing Values</a></li>
 </ul>
@@ -389,7 +390,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../faq/#julia-releases">Julia Releases</a></li>
 </ul>
 </li>
-<li class="toctree-l1 current"><a class="current reference internal" href="">Noteworthy Differences from other Languages</a><ul>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Noteworthy Differences from other Languages</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#noteworthy-differences-from-matlab">Noteworthy differences from MATLAB</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#noteworthy-differences-from-r">Noteworthy differences from R</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#noteworthy-differences-from-python">Noteworthy differences from Python</a></li>
@@ -599,7 +600,7 @@ much more efficiently than MATLAB&#8217;s <code class="docutils literal"><span c
 integers instead of floating point numbers. Arbitrarily large integer
 literals are supported. As a result, some operations such as <code class="docutils literal"><span class="pre">2^-1</span></code> will
 throw a domain error as the result is not an integer (see
-<a class="reference internal" href="../faq/#man-domain-error"><span>the FAQ entry on domain errors</span></a> for details).</li>
+<a class="reference internal" href="../faq/#man-domain-error"><span class="std std-ref">the FAQ entry on domain errors</span></a> for details).</li>
 <li>In Julia, multiple values are returned and assigned as tuples, e.g.
 <code class="docutils literal"><span class="pre">(a,</span> <span class="pre">b)</span> <span class="pre">=</span> <span class="pre">(1,</span> <span class="pre">2)</span></code> or <code class="docutils literal"><span class="pre">a,</span> <span class="pre">b</span> <span class="pre">=</span> <span class="pre">1,</span> <span class="pre">2</span></code>. MATLAB&#8217;s <code class="docutils literal"><span class="pre">nargout</span></code>, which is
 often used in MATLAB to do optional work based on the number of returned
@@ -623,7 +624,7 @@ is used frequently, and is also seen in functions such as <a class="reference in
 normal arrays.</li>
 <li>Functions in Julia return values from their last expression or the <code class="docutils literal"><span class="pre">return</span></code>
 keyword instead of listing the names of variables to return in the function
-definition (see <a class="reference internal" href="../functions/#man-return-keyword"><span>The return Keyword</span></a> for details).</li>
+definition (see <a class="reference internal" href="../functions/#man-return-keyword"><span class="std std-ref">The return Keyword</span></a> for details).</li>
 <li>A Julia script may contain any number of functions, and all definitions will
 be externally visible when the file is loaded. Function definitions can be
 loaded from files outside the current working directory.</li>
@@ -808,16 +809,6 @@ corresponding transliterations <code class="docutils literal"><span class="pre">
 <div class="section" id="noteworthy-differences-from-python">
 <h2>Noteworthy differences from Python<a class="headerlink" href="#noteworthy-differences-from-python" title="Permalink to this headline">¶</a></h2>
 <ul class="simple">
-<li>In Julia, a vector of vectors can automatically concatenate into a
-one-dimensional vector <em>if</em> no explicit element type is specified. For example:<ul>
-<li>In Julia, <code class="docutils literal"><span class="pre">[1,</span> <span class="pre">[2,</span> <span class="pre">3]]</span></code> concatenates into <code class="docutils literal"><span class="pre">[1,</span> <span class="pre">2,</span> <span class="pre">3]</span></code>, like in R.</li>
-<li>In Julia, <code class="docutils literal"><span class="pre">Int[1,</span> <span class="pre">Int[2,</span> <span class="pre">3]]</span></code> will <em>not</em> concatenate, but instead throw an error.</li>
-<li>In Julia, <code class="docutils literal"><span class="pre">Any[1,</span> <span class="pre">[2,3]]</span></code> will <em>not</em> concatenate.</li>
-<li>In Julia, <code class="docutils literal"><span class="pre">Vector{Int}[[1,</span> <span class="pre">2],</span> <span class="pre">[3,</span> <span class="pre">4]]</span></code> will <em>not</em> concatenate, but
-produces an object similar to Python&#8217;s list of lists. This object is
-<em>different</em> from a two-dimensional <a class="reference internal" href="../../stdlib/arrays/#Base.Array" title="Base.Array"><code class="xref jl jl-obj docutils literal"><span class="pre">Array</span></code></a> of <code class="xref jl jl-obj docutils literal"><span class="pre">Int</span></code>s.</li>
-</ul>
-</li>
 <li>Julia requires <code class="docutils literal"><span class="pre">end</span></code> to end a block. Unlike Python, Julia has no <code class="docutils literal"><span class="pre">pass</span></code>
 keyword.</li>
 <li>In Julia, indexing of arrays, strings, etc. is 1-based not 0-based.</li>
@@ -825,8 +816,6 @@ keyword.</li>
 <code class="docutils literal"><span class="pre">a[2:3]</span></code> in Julia is <code class="docutils literal"><span class="pre">a[1:3]</span></code> in Python.</li>
 <li>Julia does not support negative indexes. In particular, the last element of a
 list or array is indexed with <code class="xref jl jl-obj docutils literal"><span class="pre">end</span></code> in Julia, not <code class="docutils literal"><span class="pre">-1</span></code> as in Python.</li>
-<li>Julia&#8217;s list comprehensions do not support the optional <code class="docutils literal"><span class="pre">if</span></code> clause that
-Python has.</li>
 <li>Julia&#8217;s <code class="docutils literal"><span class="pre">for</span></code>, <code class="docutils literal"><span class="pre">if</span></code>, <code class="docutils literal"><span class="pre">while</span></code>, etc. blocks are terminated by the
 <code class="docutils literal"><span class="pre">end</span></code> keyword. Indentation level is not significant as it is in Python.</li>
 <li>Julia has no line continuation syntax: if, at the end of a line, the input so
@@ -836,7 +825,7 @@ parentheses.</li>
 <li>Julia arrays are column major (Fortran ordered) whereas NumPy arrays are row
 major (C-ordered) by default. To get optimal performance when looping over
 arrays, the order of the loops should be reversed in Julia relative to NumPy
-(see relevant section of <a class="reference internal" href="../performance-tips/#man-performance-tips"><span>Performance Tips</span></a>).</li>
+(see relevant section of <a class="reference internal" href="../performance-tips/#man-performance-tips"><span class="std std-ref">Performance Tips</span></a>).</li>
 <li>Julia&#8217;s updating operators (e.g. <code class="docutils literal"><span class="pre">+=</span></code>, <code class="docutils literal"><span class="pre">-=</span></code>, ...) are <em>not in-place</em>
 whereas NumPy&#8217;s are. This means <code class="docutils literal"><span class="pre">A</span> <span class="pre">=</span> <span class="pre">ones(4);</span> <span class="pre">B</span> <span class="pre">=</span> <span class="pre">A;</span> <span class="pre">B</span> <span class="pre">+=</span> <span class="pre">3</span></code> doesn&#8217;t change
 values in <code class="docutils literal"><span class="pre">A</span></code>, it rather rebinds the name <code class="docutils literal"><span class="pre">B</span></code> to the result of the right-
@@ -866,7 +855,7 @@ side to the result of the right-hand side expression.</li>
 <li>Julia arrays are column major (Fortran ordered) whereas C/C++ arrays are row
 major ordered by default. To get optimal performance when looping over
 arrays, the order of the loops should be reversed in Julia relative to C/C++
-(see relevant section of <a class="reference internal" href="../performance-tips/#man-performance-tips"><span>Performance Tips</span></a>).</li>
+(see relevant section of <a class="reference internal" href="../performance-tips/#man-performance-tips"><span class="std std-ref">Performance Tips</span></a>).</li>
 <li>Julia values are passed and assigned by reference. If a function modifies an
 array, the changes will be visible in the caller.</li>
 <li>In Julia, whitespace is significant, unlike C/C++, so care must be taken when adding/removing
@@ -989,7 +978,7 @@ since methods are dispatched on every argument type, not only <code class="docut
     <script type="text/javascript">
         var DOCUMENTATION_OPTIONS = {
             URL_ROOT:'../../',
-            VERSION:'0.5.1-pre',
+            VERSION:'0.5.3-pre',
             COLLAPSE_INDEX:false,
             FILE_SUFFIX:'',
             HAS_SOURCE:  true

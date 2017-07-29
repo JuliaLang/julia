@@ -7,7 +7,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Parallel Computing &mdash; Julia Language 0.5.1-pre documentation</title>
+  <title>Parallel Computing &mdash; Julia Language 0.5.3-pre documentation</title>
   
 
   
@@ -30,7 +30,7 @@
   
     <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
   
-    <link rel="top" title="Julia Language 0.5.1-pre documentation" href="../../"/>
+    <link rel="top" title="Julia Language 0.5.3-pre documentation" href="../../"/>
         <link rel="next" title="Date and DateTime" href="../dates/"/>
         <link rel="prev" title="Networking and Streams" href="../networking-and-streams/"/> 
 
@@ -149,6 +149,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../types/#man-parametric-types">Parametric Types</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../types/#type-aliases">Type Aliases</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../types/#operations-on-types">Operations on Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#custom-pretty-printing">Custom pretty-printing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../types/#value-types">&#8220;Value types&#8221;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../types/#nullable-types-representing-missing-values">Nullable Types: Representing Missing Values</a></li>
 </ul>
@@ -225,7 +226,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../networking-and-streams/#resolving-ip-addresses">Resolving IP Addresses</a></li>
 </ul>
 </li>
-<li class="toctree-l1 current"><a class="current reference internal" href="">Parallel Computing</a><ul>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Parallel Computing</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#code-availability-and-loading-packages">Code Availability and Loading Packages</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#data-movement">Data Movement</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#parallel-map-and-loops">Parallel Map and Loops</a></li>
@@ -616,13 +617,13 @@ equal the number of CPU cores on the machine.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="o">$</span> <span class="o">./</span><span class="n">julia</span> <span class="o">-</span><span class="n">p</span> <span class="mi">2</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">r</span> <span class="o">=</span> <span class="n">remotecall</span><span class="p">(</span><span class="n">rand</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
-<span class="n">Future</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="n">Nullable</span><span class="p">{</span><span class="kt">Any</span><span class="p">}())</span>
+<span class="n">Future</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="kt">Nullable</span><span class="p">{</span><span class="kt">Any</span><span class="p">}())</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">s</span> <span class="o">=</span> <span class="p">@</span><span class="n">spawnat</span> <span class="mi">2</span> <span class="mi">1</span> <span class="o">.+</span> <span class="n">fetch</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
-<span class="n">Future</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">6</span><span class="p">,</span><span class="n">Nullable</span><span class="p">{</span><span class="kt">Any</span><span class="p">}())</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">s</span> <span class="o">=</span> <span class="nd">@spawnat</span> <span class="mi">2</span> <span class="mi">1</span> <span class="o">.+</span> <span class="n">fetch</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
+<span class="n">Future</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">6</span><span class="p">,</span><span class="kt">Nullable</span><span class="p">{</span><span class="kt">Any</span><span class="p">}())</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">fetch</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
-<span class="mi">2</span><span class="n">×2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">×2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mf">1.60401</span>  <span class="mf">1.50111</span>
  <span class="mf">1.17457</span>  <span class="mf">1.15741</span>
 </pre></div>
@@ -649,16 +650,16 @@ but is more efficient.</p>
 <span class="mf">0.10824216411304866</span>
 </pre></div>
 </div>
-<p>Remember that <a class="reference internal" href="../../stdlib/collections/#Base.getindex" title="Base.getindex"><code class="xref jl jl-func docutils literal"><span class="pre">getindex(r,1,1)</span></code></a> is <a class="reference internal" href="../arrays/#man-array-indexing"><span>equivalent</span></a> to
+<p>Remember that <a class="reference internal" href="../../stdlib/collections/#Base.getindex" title="Base.getindex"><code class="xref jl jl-func docutils literal"><span class="pre">getindex(r,1,1)</span></code></a> is <a class="reference internal" href="../arrays/#man-array-indexing"><span class="std std-ref">equivalent</span></a> to
 <code class="docutils literal"><span class="pre">r[1,1]</span></code>, so this call fetches the first element of the future <code class="docutils literal"><span class="pre">r</span></code>.</p>
 <p>The syntax of <a class="reference internal" href="../../stdlib/parallel/#Base.remotecall" title="Base.remotecall"><code class="xref jl jl-func docutils literal"><span class="pre">remotecall()</span></code></a> is not especially convenient. The macro
 <a class="reference internal" href="../../stdlib/parallel/#Base.&#64;spawn" title="Base.&#64;spawn"><code class="xref jl jl-obj docutils literal"><span class="pre">&#64;spawn</span></code></a> makes things easier. It operates on an expression rather than
 a function, and picks where to do the operation for you:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">r</span> <span class="o">=</span> <span class="p">@</span><span class="n">spawn</span> <span class="n">rand</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span>
-<span class="n">Future</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">4</span><span class="p">,</span><span class="n">Nullable</span><span class="p">{</span><span class="kt">Any</span><span class="p">}())</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">r</span> <span class="o">=</span> <span class="nd">@spawn</span> <span class="n">rand</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span>
+<span class="n">Future</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">4</span><span class="p">,</span><span class="kt">Nullable</span><span class="p">{</span><span class="kt">Any</span><span class="p">}())</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">s</span> <span class="o">=</span> <span class="p">@</span><span class="n">spawn</span> <span class="mi">1</span> <span class="o">.+</span> <span class="n">fetch</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
-<span class="n">Future</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">5</span><span class="p">,</span><span class="n">Nullable</span><span class="p">{</span><span class="kt">Any</span><span class="p">}())</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">s</span> <span class="o">=</span> <span class="nd">@spawn</span> <span class="mi">1</span> <span class="o">.+</span> <span class="n">fetch</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
+<span class="n">Future</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">5</span><span class="p">,</span><span class="kt">Nullable</span><span class="p">{</span><span class="kt">Any</span><span class="p">}())</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">fetch</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
 <span class="mf">1.10824216411304866</span> <span class="mf">1.13798233877923116</span>
@@ -671,7 +672,7 @@ required to move <code class="docutils literal"><span class="pre">r</span></code
 case, <a class="reference internal" href="../../stdlib/parallel/#Base.&#64;spawn" title="Base.&#64;spawn"><code class="xref jl jl-obj docutils literal"><span class="pre">&#64;spawn</span></code></a> is smart enough to perform the computation on the
 process that owns <code class="docutils literal"><span class="pre">r</span></code>, so the <a class="reference internal" href="../../stdlib/parallel/#Base.fetch" title="Base.fetch"><code class="xref jl jl-func docutils literal"><span class="pre">fetch()</span></code></a> will be a no-op (no work is done).</p>
 <p>(It is worth noting that <a class="reference internal" href="../../stdlib/parallel/#Base.&#64;spawn" title="Base.&#64;spawn"><code class="xref jl jl-obj docutils literal"><span class="pre">&#64;spawn</span></code></a> is not built-in but defined in Julia
-as a <a class="reference internal" href="../metaprogramming/#man-macros"><span>macro</span></a>. It is possible to define your
+as a <a class="reference internal" href="../metaprogramming/#man-macros"><span class="std std-ref">macro</span></a>. It is possible to define your
 own such constructs.)</p>
 <p>An important thing to remember is that, once fetched, a <a class="reference internal" href="../../stdlib/parallel/#Base.Future" title="Base.Future"><code class="xref jl jl-class docutils literal"><span class="pre">Future</span></code></a> will cache its value
 locally. Further <a class="reference internal" href="../../stdlib/parallel/#Base.fetch" title="Base.fetch"><code class="xref jl jl-func docutils literal"><span class="pre">fetch()</span></code></a> calls do not entail a network hop. Once all referencing
@@ -680,18 +681,18 @@ locally. Further <a class="reference internal" href="../../stdlib/parallel/#Base
 <span id="man-parallel-computing-code-availability"></span><h2>Code Availability and Loading Packages<a class="headerlink" href="#code-availability-and-loading-packages" title="Permalink to this headline">¶</a></h2>
 <p>Your code must be available on any process that runs it. For example,
 type the following into the Julia prompt:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">function</span><span class="nf"> rand2</span><span class="p">(</span><span class="n">dims</span><span class="o">...</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">function</span> <span class="n">rand2</span><span class="p">(</span><span class="n">dims</span><span class="o">...</span><span class="p">)</span>
          <span class="k">return</span> <span class="mi">2</span><span class="o">*</span><span class="n">rand</span><span class="p">(</span><span class="n">dims</span><span class="o">...</span><span class="p">)</span>
        <span class="k">end</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">rand2</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span>
-<span class="mi">2</span><span class="n">×2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">×2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mf">0.153756</span>  <span class="mf">0.368514</span>
  <span class="mf">1.15119</span>   <span class="mf">0.918912</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">fetch</span><span class="p">(@</span><span class="n">spawn</span> <span class="n">rand2</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="p">))</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">On</span> <span class="n">worker</span> <span class="mi">2</span><span class="p">:</span>
-<span class="k">function</span><span class="nf"> rand2</span> <span class="n">not</span> <span class="n">defined</span> <span class="n">on</span> <span class="n">process</span> <span class="mi">2</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">fetch</span><span class="p">(</span><span class="nd">@spawn</span> <span class="n">rand2</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="mi">2</span><span class="p">))</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="n">On</span> <span class="n">worker</span> <span class="mi">2</span><span class="o">:</span>
+<span class="k">function</span> <span class="n">rand2</span> <span class="n">not</span> <span class="n">defined</span> <span class="n">on</span> <span class="n">process</span> <span class="mi">2</span>
 </pre></div>
 </div>
 <p>Process 1 knew about the function <code class="docutils literal"><span class="pre">rand2</span></code>, but process 2 did not.</p>
@@ -703,8 +704,8 @@ the following code:</p>
 
 <span class="k">export</span> <span class="n">MyType</span><span class="p">,</span> <span class="n">f</span>
 
-<span class="k">type</span><span class="nc"> MyType</span>
-    <span class="n">a</span><span class="p">::</span><span class="kt">Int</span>
+<span class="k">type</span> <span class="n">MyType</span>
+    <span class="n">a</span><span class="o">::</span><span class="kt">Int</span>
 <span class="k">end</span>
 
 <span class="n">f</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">=</span> <span class="n">x</span><span class="o">^</span><span class="mi">2</span><span class="o">+</span><span class="mi">1</span>
@@ -728,9 +729,9 @@ the following code:</p>
 <p>allow you to store an object of type <code class="docutils literal"><span class="pre">MyType</span></code> on process 2 even if <code class="docutils literal"><span class="pre">DummyModule</span></code> is not in scope on process 2.</p>
 </li>
 </ul>
-<p>You can force a command to run on all processes using the <a class="reference internal" href="../../stdlib/parallel/#Base.&#64;everywhere" title="Base.&#64;everywhere"><code class="xref jl jl-obj docutils literal"><span class="pre">&#64;everywhere</span></code></a> macro.
-For example, <a class="reference internal" href="../../stdlib/parallel/#Base.&#64;everywhere" title="Base.&#64;everywhere"><code class="xref jl jl-obj docutils literal"><span class="pre">&#64;everywhere</span></code></a> can also be used to directly define a function on all processes:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">everywhere</span> <span class="n">id</span> <span class="o">=</span> <span class="n">myid</span><span class="p">()</span>
+<p>You can force a command to run on all processes using the <code class="xref jl jl-obj docutils literal"><span class="pre">&#64;everywhere</span></code> macro.
+For example, <code class="xref jl jl-obj docutils literal"><span class="pre">&#64;everywhere</span></code> can also be used to directly define a function on all processes:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nd">@everywhere</span> <span class="n">id</span> <span class="o">=</span> <span class="n">myid</span><span class="p">()</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">remotecall_fetch</span><span class="p">(()</span><span class="o">-&gt;</span><span class="n">id</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
 <span class="mi">2</span>
@@ -758,7 +759,7 @@ adding, removing and querying the processes in a cluster.</p>
 <p>Note that workers do not run a <code class="docutils literal"><span class="pre">.juliarc.jl</span></code> startup script, nor do they synchronize their global state
 (such as global variables, new method definitions, and loaded modules) with any of the other running processes.</p>
 <p>Other types of clusters can be supported by writing your own custom
-<code class="xref jl jl-class docutils literal"><span class="pre">ClusterManager</span></code>, as described below in the <a class="reference internal" href="#man-clustermanagers"><span>ClusterManagers</span></a>
+<code class="xref jl jl-class docutils literal"><span class="pre">ClusterManager</span></code>, as described below in the <a class="reference internal" href="#man-clustermanagers"><span class="std std-ref">ClusterManagers</span></a>
 section.</p>
 </div>
 <div class="section" id="data-movement">
@@ -776,12 +777,12 @@ operation. Consider these two approaches to constructing and squaring a
 random matrix:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="c"># method 1</span>
 <span class="n">A</span> <span class="o">=</span> <span class="n">rand</span><span class="p">(</span><span class="mi">1000</span><span class="p">,</span><span class="mi">1000</span><span class="p">)</span>
-<span class="n">Bref</span> <span class="o">=</span> <span class="p">@</span><span class="n">spawn</span> <span class="n">A</span><span class="o">^</span><span class="mi">2</span>
+<span class="n">Bref</span> <span class="o">=</span> <span class="nd">@spawn</span> <span class="n">A</span><span class="o">^</span><span class="mi">2</span>
 <span class="o">...</span>
 <span class="n">fetch</span><span class="p">(</span><span class="n">Bref</span><span class="p">)</span>
 
 <span class="c"># method 2</span>
-<span class="n">Bref</span> <span class="o">=</span> <span class="p">@</span><span class="n">spawn</span> <span class="n">rand</span><span class="p">(</span><span class="mi">1000</span><span class="p">,</span><span class="mi">1000</span><span class="p">)</span><span class="o">^</span><span class="mi">2</span>
+<span class="n">Bref</span> <span class="o">=</span> <span class="nd">@spawn</span> <span class="n">rand</span><span class="p">(</span><span class="mi">1000</span><span class="p">,</span><span class="mi">1000</span><span class="p">)</span><span class="o">^</span><span class="mi">2</span>
 <span class="o">...</span>
 <span class="n">fetch</span><span class="p">(</span><span class="n">Bref</span><span class="p">)</span>
 </pre></div>
@@ -811,9 +812,9 @@ movement. A common example is a Monte Carlo simulation, where multiple
 processes can handle independent simulation trials simultaneously. We
 can use <a class="reference internal" href="../../stdlib/parallel/#Base.&#64;spawn" title="Base.&#64;spawn"><code class="xref jl jl-obj docutils literal"><span class="pre">&#64;spawn</span></code></a> to flip coins on two processes. First, write the
 following function in <code class="docutils literal"><span class="pre">count_heads.jl</span></code>:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> count_heads</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
-    <span class="n">c</span><span class="p">::</span><span class="kt">Int</span> <span class="o">=</span> <span class="mi">0</span>
-    <span class="k">for</span> <span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">n</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">count_heads</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
+    <span class="n">c</span><span class="o">::</span><span class="kt">Int</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">for</span> <span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="o">:</span><span class="n">n</span>
         <span class="n">c</span> <span class="o">+=</span> <span class="n">rand</span><span class="p">(</span><span class="kt">Bool</span><span class="p">)</span>
     <span class="k">end</span>
     <span class="n">c</span>
@@ -823,10 +824,10 @@ following function in <code class="docutils literal"><span class="pre">count_hea
 <p>The function <code class="docutils literal"><span class="pre">count_heads</span></code> simply adds together <code class="docutils literal"><span class="pre">n</span></code> random bits.
 Here is how we can perform some trials on two machines, and add together the
 results:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="p">@</span><span class="n">everywhere</span> <span class="n">include</span><span class="p">(</span><span class="s">&quot;count_heads.jl&quot;</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="nd">@everywhere</span> <span class="n">include</span><span class="p">(</span><span class="s">&quot;count_heads.jl&quot;</span><span class="p">)</span>
 
-<span class="n">a</span> <span class="o">=</span> <span class="p">@</span><span class="n">spawn</span> <span class="n">count_heads</span><span class="p">(</span><span class="mi">100000000</span><span class="p">)</span>
-<span class="n">b</span> <span class="o">=</span> <span class="p">@</span><span class="n">spawn</span> <span class="n">count_heads</span><span class="p">(</span><span class="mi">100000000</span><span class="p">)</span>
+<span class="n">a</span> <span class="o">=</span> <span class="nd">@spawn</span> <span class="n">count_heads</span><span class="p">(</span><span class="mi">100000000</span><span class="p">)</span>
+<span class="n">b</span> <span class="o">=</span> <span class="nd">@spawn</span> <span class="n">count_heads</span><span class="p">(</span><span class="mi">100000000</span><span class="p">)</span>
 <span class="n">fetch</span><span class="p">(</span><span class="n">a</span><span class="p">)</span><span class="o">+</span><span class="n">fetch</span><span class="p">(</span><span class="n">b</span><span class="p">)</span>
 </pre></div>
 </div>
@@ -846,7 +847,7 @@ generalized. We used two explicit <a class="reference internal" href="../../stdl
 the parallelism to two processes. To run on any number of processes,
 we can use a <em>parallel for loop</em>, which can be written in Julia like
 this:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">nheads</span> <span class="o">=</span> <span class="p">@</span><span class="n">parallel</span> <span class="p">(</span><span class="o">+</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="mi">200000000</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">nheads</span> <span class="o">=</span> <span class="nd">@parallel</span> <span class="p">(</span><span class="o">+</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="o">:</span><span class="mi">200000000</span>
   <span class="kt">Int</span><span class="p">(</span><span class="n">rand</span><span class="p">(</span><span class="kt">Bool</span><span class="p">))</span>
 <span class="k">end</span>
 </pre></div>
@@ -864,7 +865,7 @@ variables used inside the parallel loop will be copied and broadcast to
 each process.</p>
 <p>For example, the following code will not work as intended:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">a</span> <span class="o">=</span> <span class="n">zeros</span><span class="p">(</span><span class="mi">100000</span><span class="p">)</span>
-<span class="p">@</span><span class="n">parallel</span> <span class="k">for</span> <span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="mi">100000</span>
+<span class="nd">@parallel</span> <span class="k">for</span> <span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="o">:</span><span class="mi">100000</span>
   <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">i</span>
 <span class="k">end</span>
 </pre></div>
@@ -873,8 +874,8 @@ each process.</p>
 process will have a separate copy of it. Parallel for loops like these
 must be avoided. Fortunately,  <a class="reference external" href="#shared-arrays">Shared Arrays</a>
 can be used to get around this limitation:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">a</span> <span class="o">=</span> <span class="n">SharedArray</span><span class="p">(</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">10</span><span class="p">)</span>
-<span class="p">@</span><span class="n">parallel</span> <span class="k">for</span> <span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="mi">10</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">a</span> <span class="o">=</span> <span class="kt">SharedArray</span><span class="p">(</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">10</span><span class="p">)</span>
+<span class="nd">@parallel</span> <span class="k">for</span> <span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="o">:</span><span class="mi">10</span>
   <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">i</span>
 <span class="k">end</span>
 </pre></div>
@@ -882,8 +883,8 @@ can be used to get around this limitation:</p>
 <p>Using &#8220;outside&#8221; variables in parallel loops is perfectly reasonable if
 the variables are read-only:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">a</span> <span class="o">=</span> <span class="n">randn</span><span class="p">(</span><span class="mi">1000</span><span class="p">)</span>
-<span class="p">@</span><span class="n">parallel</span> <span class="p">(</span><span class="o">+</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="mi">100000</span>
-  <span class="n">f</span><span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="n">rand</span><span class="p">(</span><span class="mi">1</span><span class="p">:</span><span class="k">end</span><span class="p">)])</span>
+<span class="nd">@parallel</span> <span class="p">(</span><span class="o">+</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="o">:</span><span class="mi">100000</span>
+  <span class="n">f</span><span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="n">rand</span><span class="p">(</span><span class="mi">1</span><span class="o">:</span><span class="k">end</span><span class="p">)])</span>
 <span class="k">end</span>
 </pre></div>
 </div>
@@ -902,7 +903,7 @@ all elements in some collection). This is another useful operation
 called <em>parallel map</em>, implemented in Julia as the <a class="reference internal" href="../../stdlib/parallel/#Base.pmap" title="Base.pmap"><code class="xref jl jl-func docutils literal"><span class="pre">pmap()</span></code></a> function.
 For example, we could compute the singular values of several large
 random matrices in parallel as follows:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">M</span> <span class="o">=</span> <span class="n">Matrix</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}[</span><span class="n">rand</span><span class="p">(</span><span class="mi">1000</span><span class="p">,</span><span class="mi">1000</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="mi">10</span><span class="p">]</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">M</span> <span class="o">=</span> <span class="kt">Matrix</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}[</span><span class="n">rand</span><span class="p">(</span><span class="mi">1000</span><span class="p">,</span><span class="mi">1000</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="o">:</span><span class="mi">10</span><span class="p">]</span>
 <span class="n">pmap</span><span class="p">(</span><span class="n">svd</span><span class="p">,</span> <span class="n">M</span><span class="p">)</span>
 </pre></div>
 </div>
@@ -919,7 +920,7 @@ is done on the calling process.</p>
 <div class="section" id="scheduling">
 <h2>Scheduling<a class="headerlink" href="#scheduling" title="Permalink to this headline">¶</a></h2>
 <p>Julia&#8217;s parallel programming platform uses
-<a class="reference internal" href="../control-flow/#man-tasks"><span>Tasks (aka Coroutines)</span></a> to switch among
+<a class="reference internal" href="../control-flow/#man-tasks"><span class="std std-ref">Tasks (aka Coroutines)</span></a> to switch among
 multiple computations. Whenever code performs a communication operation
 like <a class="reference internal" href="../../stdlib/parallel/#Base.fetch" title="Base.fetch"><code class="xref jl jl-func docutils literal"><span class="pre">fetch()</span></code></a> or <a class="reference internal" href="../../stdlib/parallel/#Base.wait" title="Base.wait"><code class="xref jl jl-func docutils literal"><span class="pre">wait()</span></code></a>, the current task is suspended and a
 scheduler picks another task to run. A task is restarted when the event
@@ -933,7 +934,7 @@ workloads, where we want to assign more work to processes only when
 they finish their current tasks.</p>
 <p>As an example, consider computing the singular values of matrices of
 different sizes:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">M</span> <span class="o">=</span> <span class="n">Matrix</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}[</span><span class="n">rand</span><span class="p">(</span><span class="mi">800</span><span class="p">,</span><span class="mi">800</span><span class="p">),</span> <span class="n">rand</span><span class="p">(</span><span class="mi">600</span><span class="p">,</span><span class="mi">600</span><span class="p">),</span> <span class="n">rand</span><span class="p">(</span><span class="mi">800</span><span class="p">,</span><span class="mi">800</span><span class="p">),</span> <span class="n">rand</span><span class="p">(</span><span class="mi">600</span><span class="p">,</span><span class="mi">600</span><span class="p">)]</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">M</span> <span class="o">=</span> <span class="kt">Matrix</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}[</span><span class="n">rand</span><span class="p">(</span><span class="mi">800</span><span class="p">,</span><span class="mi">800</span><span class="p">),</span> <span class="n">rand</span><span class="p">(</span><span class="mi">600</span><span class="p">,</span><span class="mi">600</span><span class="p">),</span> <span class="n">rand</span><span class="p">(</span><span class="mi">800</span><span class="p">,</span><span class="mi">800</span><span class="p">),</span> <span class="n">rand</span><span class="p">(</span><span class="mi">600</span><span class="p">,</span><span class="mi">600</span><span class="p">)]</span>
 <span class="n">pmap</span><span class="p">(</span><span class="n">svd</span><span class="p">,</span> <span class="n">M</span><span class="p">)</span>
 </pre></div>
 </div>
@@ -942,19 +943,19 @@ different sizes:</p>
 solution is to make a local task to &#8220;feed&#8221; work to each process when
 it completes its current task. For example, consider a simple <a class="reference internal" href="../../stdlib/parallel/#Base.pmap" title="Base.pmap"><code class="xref jl jl-func docutils literal"><span class="pre">pmap()</span></code></a>
 implementation:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> pmap</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">lst</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">pmap</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">lst</span><span class="p">)</span>
     <span class="n">np</span> <span class="o">=</span> <span class="n">nprocs</span><span class="p">()</span>  <span class="c"># determine the number of processes available</span>
     <span class="n">n</span> <span class="o">=</span> <span class="n">length</span><span class="p">(</span><span class="n">lst</span><span class="p">)</span>
-    <span class="n">results</span> <span class="o">=</span> <span class="n">Vector</span><span class="p">{</span><span class="kt">Any</span><span class="p">}(</span><span class="n">n</span><span class="p">)</span>
+    <span class="n">results</span> <span class="o">=</span> <span class="kt">Vector</span><span class="p">{</span><span class="kt">Any</span><span class="p">}(</span><span class="n">n</span><span class="p">)</span>
     <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span>
     <span class="c"># function to produce the next work item from the queue.</span>
     <span class="c"># in this case it&#39;s just an index.</span>
     <span class="n">nextidx</span><span class="p">()</span> <span class="o">=</span> <span class="p">(</span><span class="n">idx</span><span class="o">=</span><span class="n">i</span><span class="p">;</span> <span class="n">i</span><span class="o">+=</span><span class="mi">1</span><span class="p">;</span> <span class="n">idx</span><span class="p">)</span>
-    <span class="p">@</span><span class="n">sync</span> <span class="k">begin</span>
-        <span class="k">for</span> <span class="n">p</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">np</span>
+    <span class="nd">@sync</span> <span class="k">begin</span>
+        <span class="k">for</span> <span class="n">p</span><span class="o">=</span><span class="mi">1</span><span class="o">:</span><span class="n">np</span>
             <span class="k">if</span> <span class="n">p</span> <span class="o">!=</span> <span class="n">myid</span><span class="p">()</span> <span class="o">||</span> <span class="n">np</span> <span class="o">==</span> <span class="mi">1</span>
-                <span class="p">@</span><span class="n">async</span> <span class="k">begin</span>
-                    <span class="k">while</span> <span class="n">true</span>
+                <span class="nd">@async</span> <span class="k">begin</span>
+                    <span class="k">while</span> <span class="kc">true</span>
                         <span class="n">idx</span> <span class="o">=</span> <span class="n">nextidx</span><span class="p">()</span>
                         <span class="k">if</span> <span class="n">idx</span> <span class="o">&gt;</span> <span class="n">n</span>
                             <span class="k">break</span>
@@ -1062,7 +1063,7 @@ array can be retrieved from a <a class="reference internal" href="../../stdlib/p
 For other <code class="xref jl jl-class docutils literal"><span class="pre">AbstractArray</span></code> types, <a class="reference internal" href="../../stdlib/parallel/#Base.sdata" title="Base.sdata"><code class="xref jl jl-func docutils literal"><span class="pre">sdata()</span></code></a> just returns the object
 itself, so it&#8217;s safe to use <a class="reference internal" href="../../stdlib/parallel/#Base.sdata" title="Base.sdata"><code class="xref jl jl-func docutils literal"><span class="pre">sdata()</span></code></a> on any <code class="docutils literal"><span class="pre">Array</span></code>-type object.</p>
 <p>The constructor for a shared array is of the form:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">SharedArray</span><span class="p">(</span><span class="n">T</span><span class="p">::</span><span class="n">Type</span><span class="p">,</span> <span class="n">dims</span><span class="p">::</span><span class="n">NTuple</span><span class="p">;</span> <span class="n">init</span><span class="o">=</span><span class="n">false</span><span class="p">,</span> <span class="n">pids</span><span class="o">=</span><span class="kt">Int</span><span class="p">[])</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="kt">SharedArray</span><span class="p">(</span><span class="n">T</span><span class="o">::</span><span class="kt">Type</span><span class="p">,</span> <span class="n">dims</span><span class="o">::</span><span class="kt">NTuple</span><span class="p">;</span> <span class="n">init</span><span class="o">=</span><span class="kc">false</span><span class="p">,</span> <span class="n">pids</span><span class="o">=</span><span class="kt">Int</span><span class="p">[])</span>
 </pre></div>
 </div>
 <p>which creates a shared array of a bits type <code class="docutils literal"><span class="pre">T</span></code> and size <code class="docutils literal"><span class="pre">dims</span></code>
@@ -1076,13 +1077,13 @@ specify that each worker runs the <code class="docutils literal"><span class="pr
 distinct portion of the array, thereby parallelizing initialization.</p>
 <p>Here&#8217;s a brief example:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">addprocs</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
-<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">2</span>
  <span class="mi">3</span>
  <span class="mi">4</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">S</span> <span class="o">=</span> <span class="n">SharedArray</span><span class="p">(</span><span class="kt">Int</span><span class="p">,</span> <span class="p">(</span><span class="mi">3</span><span class="p">,</span><span class="mi">4</span><span class="p">),</span> <span class="n">init</span> <span class="o">=</span> <span class="n">S</span> <span class="o">-&gt;</span> <span class="n">S</span><span class="p">[</span><span class="n">Base</span><span class="o">.</span><span class="n">localindexes</span><span class="p">(</span><span class="n">S</span><span class="p">)]</span> <span class="o">=</span> <span class="n">myid</span><span class="p">())</span>
-<span class="mi">3</span><span class="n">×4</span> <span class="n">SharedArray</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">S</span> <span class="o">=</span> <span class="kt">SharedArray</span><span class="p">(</span><span class="kt">Int</span><span class="p">,</span> <span class="p">(</span><span class="mi">3</span><span class="p">,</span><span class="mi">4</span><span class="p">),</span> <span class="n">init</span> <span class="o">=</span> <span class="n">S</span> <span class="o">-&gt;</span> <span class="n">S</span><span class="p">[</span><span class="n">Base</span><span class="o">.</span><span class="n">localindexes</span><span class="p">(</span><span class="n">S</span><span class="p">)]</span> <span class="o">=</span> <span class="n">myid</span><span class="p">())</span>
+<span class="mi">3</span><span class="n">×4</span> <span class="kt">SharedArray</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">2</span>  <span class="mi">2</span>  <span class="mi">3</span>  <span class="mi">4</span>
  <span class="mi">2</span>  <span class="mi">3</span>  <span class="mi">3</span>  <span class="mi">4</span>
  <span class="mi">2</span>  <span class="mi">3</span>  <span class="mi">4</span>  <span class="mi">4</span>
@@ -1091,7 +1092,7 @@ distinct portion of the array, thereby parallelizing initialization.</p>
 <span class="mi">7</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">S</span>
-<span class="mi">3</span><span class="n">×4</span> <span class="n">SharedArray</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">3</span><span class="n">×4</span> <span class="kt">SharedArray</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">2</span>  <span class="mi">2</span>  <span class="mi">3</span>  <span class="mi">4</span>
  <span class="mi">2</span>  <span class="mi">3</span>  <span class="mi">3</span>  <span class="mi">4</span>
  <span class="mi">2</span>  <span class="mi">7</span>  <span class="mi">4</span>  <span class="mi">4</span>
@@ -1100,8 +1101,8 @@ distinct portion of the array, thereby parallelizing initialization.</p>
 <p><a class="reference internal" href="../../stdlib/parallel/#Base.localindexes" title="Base.localindexes"><code class="xref jl jl-func docutils literal"><span class="pre">Base.localindexes()</span></code></a> provides disjoint one-dimensional ranges of indexes,
 and is sometimes convenient for splitting up tasks among processes.
 You can, of course, divide the work any way you wish:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">S</span> <span class="o">=</span> <span class="n">SharedArray</span><span class="p">(</span><span class="kt">Int</span><span class="p">,</span> <span class="p">(</span><span class="mi">3</span><span class="p">,</span><span class="mi">4</span><span class="p">),</span> <span class="n">init</span> <span class="o">=</span> <span class="n">S</span> <span class="o">-&gt;</span> <span class="n">S</span><span class="p">[</span><span class="n">indexpids</span><span class="p">(</span><span class="n">S</span><span class="p">):</span><span class="n">length</span><span class="p">(</span><span class="n">procs</span><span class="p">(</span><span class="n">S</span><span class="p">)):</span><span class="n">length</span><span class="p">(</span><span class="n">S</span><span class="p">)]</span> <span class="o">=</span> <span class="n">myid</span><span class="p">())</span>
-<span class="mi">3</span><span class="n">×4</span> <span class="n">SharedArray</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">S</span> <span class="o">=</span> <span class="kt">SharedArray</span><span class="p">(</span><span class="kt">Int</span><span class="p">,</span> <span class="p">(</span><span class="mi">3</span><span class="p">,</span><span class="mi">4</span><span class="p">),</span> <span class="n">init</span> <span class="o">=</span> <span class="n">S</span> <span class="o">-&gt;</span> <span class="n">S</span><span class="p">[</span><span class="n">indexpids</span><span class="p">(</span><span class="n">S</span><span class="p">)</span><span class="o">:</span><span class="n">length</span><span class="p">(</span><span class="n">procs</span><span class="p">(</span><span class="n">S</span><span class="p">))</span><span class="o">:</span><span class="n">length</span><span class="p">(</span><span class="n">S</span><span class="p">)]</span> <span class="o">=</span> <span class="n">myid</span><span class="p">())</span>
+<span class="mi">3</span><span class="n">×4</span> <span class="kt">SharedArray</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">2</span>  <span class="mi">2</span>  <span class="mi">2</span>  <span class="mi">2</span>
  <span class="mi">3</span>  <span class="mi">3</span>  <span class="mi">3</span>  <span class="mi">3</span>
  <span class="mi">4</span>  <span class="mi">4</span>  <span class="mi">4</span>  <span class="mi">4</span>
@@ -1109,9 +1110,9 @@ You can, of course, divide the work any way you wish:</p>
 </div>
 <p>Since all processes have access to the underlying data, you do have to
 be careful not to set up conflicts.  For example:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="p">@</span><span class="n">sync</span> <span class="k">begin</span>
-    <span class="k">for</span> <span class="n">p</span> <span class="k">in</span> <span class="n">procs</span><span class="p">(</span><span class="n">S</span><span class="p">)</span>
-        <span class="p">@</span><span class="n">async</span> <span class="k">begin</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="nd">@sync</span> <span class="k">begin</span>
+    <span class="k">for</span> <span class="n">p</span> <span class="kp">in</span> <span class="n">procs</span><span class="p">(</span><span class="n">S</span><span class="p">)</span>
+        <span class="nd">@async</span> <span class="k">begin</span>
             <span class="n">remotecall_wait</span><span class="p">(</span><span class="n">fill!</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">S</span><span class="p">,</span> <span class="n">p</span><span class="p">)</span>
         <span class="k">end</span>
     <span class="k">end</span>
@@ -1135,39 +1136,39 @@ beginning of the block assigned to another, it&#8217;s very likely that
 <code class="docutils literal"><span class="pre">q[i,j,t+1]</span></code>.  In such cases, one is better off chunking the array
 manually.  Let&#8217;s split along the second dimension:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="c"># This function retuns the (irange,jrange) indexes assigned to this worker</span>
-<span class="p">@</span><span class="n">everywhere</span> <span class="k">function</span><span class="nf"> myrange</span><span class="p">(</span><span class="n">q</span><span class="p">::</span><span class="n">SharedArray</span><span class="p">)</span>
+<span class="nd">@everywhere</span> <span class="k">function</span> <span class="n">myrange</span><span class="p">(</span><span class="n">q</span><span class="o">::</span><span class="kt">SharedArray</span><span class="p">)</span>
     <span class="n">idx</span> <span class="o">=</span> <span class="n">indexpids</span><span class="p">(</span><span class="n">q</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">idx</span> <span class="o">==</span> <span class="mi">0</span>
         <span class="c"># This worker is not assigned a piece</span>
-        <span class="k">return</span> <span class="mi">1</span><span class="p">:</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">:</span><span class="mi">0</span>
+        <span class="k">return</span> <span class="mi">1</span><span class="o">:</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="o">:</span><span class="mi">0</span>
     <span class="k">end</span>
     <span class="n">nchunks</span> <span class="o">=</span> <span class="n">length</span><span class="p">(</span><span class="n">procs</span><span class="p">(</span><span class="n">q</span><span class="p">))</span>
-    <span class="n">splits</span> <span class="o">=</span> <span class="p">[</span><span class="n">round</span><span class="p">(</span><span class="kt">Int</span><span class="p">,</span> <span class="n">s</span><span class="p">)</span> <span class="k">for</span> <span class="n">s</span> <span class="k">in</span> <span class="n">linspace</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="n">size</span><span class="p">(</span><span class="n">q</span><span class="p">,</span><span class="mi">2</span><span class="p">),</span><span class="n">nchunks</span><span class="o">+</span><span class="mi">1</span><span class="p">)]</span>
-    <span class="mi">1</span><span class="p">:</span><span class="n">size</span><span class="p">(</span><span class="n">q</span><span class="p">,</span><span class="mi">1</span><span class="p">),</span> <span class="n">splits</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span><span class="o">+</span><span class="mi">1</span><span class="p">:</span><span class="n">splits</span><span class="p">[</span><span class="n">idx</span><span class="o">+</span><span class="mi">1</span><span class="p">]</span>
+    <span class="n">splits</span> <span class="o">=</span> <span class="p">[</span><span class="n">round</span><span class="p">(</span><span class="kt">Int</span><span class="p">,</span> <span class="n">s</span><span class="p">)</span> <span class="k">for</span> <span class="n">s</span> <span class="kp">in</span> <span class="n">linspace</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="n">size</span><span class="p">(</span><span class="n">q</span><span class="p">,</span><span class="mi">2</span><span class="p">),</span><span class="n">nchunks</span><span class="o">+</span><span class="mi">1</span><span class="p">)]</span>
+    <span class="mi">1</span><span class="o">:</span><span class="n">size</span><span class="p">(</span><span class="n">q</span><span class="p">,</span><span class="mi">1</span><span class="p">),</span> <span class="n">splits</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span><span class="o">+</span><span class="mi">1</span><span class="o">:</span><span class="n">splits</span><span class="p">[</span><span class="n">idx</span><span class="o">+</span><span class="mi">1</span><span class="p">]</span>
 <span class="k">end</span>
 
 <span class="c"># Here&#39;s the kernel</span>
-<span class="p">@</span><span class="n">everywhere</span> <span class="k">function</span><span class="nf"> advection_chunk</span><span class="o">!</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">u</span><span class="p">,</span> <span class="n">irange</span><span class="p">,</span> <span class="n">jrange</span><span class="p">,</span> <span class="n">trange</span><span class="p">)</span>
-    <span class="p">@</span><span class="n">show</span> <span class="p">(</span><span class="n">irange</span><span class="p">,</span> <span class="n">jrange</span><span class="p">,</span> <span class="n">trange</span><span class="p">)</span>  <span class="c"># display so we can see what&#39;s happening</span>
-    <span class="k">for</span> <span class="n">t</span> <span class="k">in</span> <span class="n">trange</span><span class="p">,</span> <span class="n">j</span> <span class="k">in</span> <span class="n">jrange</span><span class="p">,</span> <span class="n">i</span> <span class="k">in</span> <span class="n">irange</span>
+<span class="nd">@everywhere</span> <span class="k">function</span> <span class="n">advection_chunk!</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">u</span><span class="p">,</span> <span class="n">irange</span><span class="p">,</span> <span class="n">jrange</span><span class="p">,</span> <span class="n">trange</span><span class="p">)</span>
+    <span class="nd">@show</span> <span class="p">(</span><span class="n">irange</span><span class="p">,</span> <span class="n">jrange</span><span class="p">,</span> <span class="n">trange</span><span class="p">)</span>  <span class="c"># display so we can see what&#39;s happening</span>
+    <span class="k">for</span> <span class="n">t</span> <span class="kp">in</span> <span class="n">trange</span><span class="p">,</span> <span class="n">j</span> <span class="kp">in</span> <span class="n">jrange</span><span class="p">,</span> <span class="n">i</span> <span class="kp">in</span> <span class="n">irange</span>
         <span class="n">q</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">,</span><span class="n">t</span><span class="o">+</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="n">q</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">,</span><span class="n">t</span><span class="p">]</span> <span class="o">+</span>  <span class="n">u</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">,</span><span class="n">t</span><span class="p">]</span>
     <span class="k">end</span>
     <span class="n">q</span>
 <span class="k">end</span>
 
 <span class="c"># Here&#39;s a convenience wrapper for a SharedArray implementation</span>
-<span class="p">@</span><span class="n">everywhere</span> <span class="n">advection_shared_chunk!</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">u</span><span class="p">)</span> <span class="o">=</span> <span class="n">advection_chunk!</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">u</span><span class="p">,</span> <span class="n">myrange</span><span class="p">(</span><span class="n">q</span><span class="p">)</span><span class="o">...</span><span class="p">,</span> <span class="mi">1</span><span class="p">:</span><span class="n">size</span><span class="p">(</span><span class="n">q</span><span class="p">,</span><span class="mi">3</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+<span class="nd">@everywhere</span> <span class="n">advection_shared_chunk!</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">u</span><span class="p">)</span> <span class="o">=</span> <span class="n">advection_chunk!</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">u</span><span class="p">,</span> <span class="n">myrange</span><span class="p">(</span><span class="n">q</span><span class="p">)</span><span class="o">...</span><span class="p">,</span> <span class="mi">1</span><span class="o">:</span><span class="n">size</span><span class="p">(</span><span class="n">q</span><span class="p">,</span><span class="mi">3</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>Now let&#8217;s compare three different versions, one that runs in a single process:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">advection_serial!</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">u</span><span class="p">)</span> <span class="o">=</span> <span class="n">advection_chunk!</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">u</span><span class="p">,</span> <span class="mi">1</span><span class="p">:</span><span class="n">size</span><span class="p">(</span><span class="n">q</span><span class="p">,</span><span class="mi">1</span><span class="p">),</span> <span class="mi">1</span><span class="p">:</span><span class="n">size</span><span class="p">(</span><span class="n">q</span><span class="p">,</span><span class="mi">2</span><span class="p">),</span> <span class="mi">1</span><span class="p">:</span><span class="n">size</span><span class="p">(</span><span class="n">q</span><span class="p">,</span><span class="mi">3</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">advection_serial!</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">u</span><span class="p">)</span> <span class="o">=</span> <span class="n">advection_chunk!</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">u</span><span class="p">,</span> <span class="mi">1</span><span class="o">:</span><span class="n">size</span><span class="p">(</span><span class="n">q</span><span class="p">,</span><span class="mi">1</span><span class="p">),</span> <span class="mi">1</span><span class="o">:</span><span class="n">size</span><span class="p">(</span><span class="n">q</span><span class="p">,</span><span class="mi">2</span><span class="p">),</span> <span class="mi">1</span><span class="o">:</span><span class="n">size</span><span class="p">(</span><span class="n">q</span><span class="p">,</span><span class="mi">3</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>one that uses <code class="docutils literal"><span class="pre">&#64;parallel</span></code>:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> advection_parallel</span><span class="o">!</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">u</span><span class="p">)</span>
-    <span class="k">for</span> <span class="n">t</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="n">size</span><span class="p">(</span><span class="n">q</span><span class="p">,</span><span class="mi">3</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span>
-        <span class="p">@</span><span class="n">sync</span> <span class="p">@</span><span class="n">parallel</span> <span class="k">for</span> <span class="n">j</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="n">size</span><span class="p">(</span><span class="n">q</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span>
-            <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="n">size</span><span class="p">(</span><span class="n">q</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">advection_parallel!</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">u</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">t</span> <span class="o">=</span> <span class="mi">1</span><span class="o">:</span><span class="n">size</span><span class="p">(</span><span class="n">q</span><span class="p">,</span><span class="mi">3</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span>
+        <span class="nd">@sync</span> <span class="nd">@parallel</span> <span class="k">for</span> <span class="n">j</span> <span class="o">=</span> <span class="mi">1</span><span class="o">:</span><span class="n">size</span><span class="p">(</span><span class="n">q</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="o">:</span><span class="n">size</span><span class="p">(</span><span class="n">q</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span>
                 <span class="n">q</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">,</span><span class="n">t</span><span class="o">+</span><span class="mi">1</span><span class="p">]</span><span class="o">=</span> <span class="n">q</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">,</span><span class="n">t</span><span class="p">]</span> <span class="o">+</span> <span class="n">u</span><span class="p">[</span><span class="n">i</span><span class="p">,</span><span class="n">j</span><span class="p">,</span><span class="n">t</span><span class="p">]</span>
             <span class="k">end</span>
         <span class="k">end</span>
@@ -1177,10 +1178,10 @@ manually.  Let&#8217;s split along the second dimension:</p>
 </pre></div>
 </div>
 <p>and one that delegates in chunks:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> advection_shared</span><span class="o">!</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">u</span><span class="p">)</span>
-    <span class="p">@</span><span class="n">sync</span> <span class="k">begin</span>
-        <span class="k">for</span> <span class="n">p</span> <span class="k">in</span> <span class="n">procs</span><span class="p">(</span><span class="n">q</span><span class="p">)</span>
-            <span class="p">@</span><span class="n">async</span> <span class="n">remotecall_wait</span><span class="p">(</span><span class="n">advection_shared_chunk!</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">q</span><span class="p">,</span> <span class="n">u</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">advection_shared!</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">u</span><span class="p">)</span>
+    <span class="nd">@sync</span> <span class="k">begin</span>
+        <span class="k">for</span> <span class="n">p</span> <span class="kp">in</span> <span class="n">procs</span><span class="p">(</span><span class="n">q</span><span class="p">)</span>
+            <span class="nd">@async</span> <span class="n">remotecall_wait</span><span class="p">(</span><span class="n">advection_shared_chunk!</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="n">q</span><span class="p">,</span> <span class="n">u</span><span class="p">)</span>
         <span class="k">end</span>
     <span class="k">end</span>
     <span class="n">q</span>
@@ -1188,8 +1189,8 @@ manually.  Let&#8217;s split along the second dimension:</p>
 </pre></div>
 </div>
 <p>If we create SharedArrays and time these functions, we get the following results (with <code class="docutils literal"><span class="pre">julia</span> <span class="pre">-p</span> <span class="pre">4</span></code>):</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">q</span> <span class="o">=</span> <span class="n">SharedArray</span><span class="p">(</span><span class="kt">Float64</span><span class="p">,</span> <span class="p">(</span><span class="mi">500</span><span class="p">,</span><span class="mi">500</span><span class="p">,</span><span class="mi">500</span><span class="p">))</span>
-<span class="n">u</span> <span class="o">=</span> <span class="n">SharedArray</span><span class="p">(</span><span class="kt">Float64</span><span class="p">,</span> <span class="p">(</span><span class="mi">500</span><span class="p">,</span><span class="mi">500</span><span class="p">,</span><span class="mi">500</span><span class="p">))</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">q</span> <span class="o">=</span> <span class="kt">SharedArray</span><span class="p">(</span><span class="kt">Float64</span><span class="p">,</span> <span class="p">(</span><span class="mi">500</span><span class="p">,</span><span class="mi">500</span><span class="p">,</span><span class="mi">500</span><span class="p">))</span>
+<span class="n">u</span> <span class="o">=</span> <span class="kt">SharedArray</span><span class="p">(</span><span class="kt">Float64</span><span class="p">,</span> <span class="p">(</span><span class="mi">500</span><span class="p">,</span><span class="mi">500</span><span class="p">,</span><span class="mi">500</span><span class="p">))</span>
 
 <span class="c"># Run once to JIT-compile</span>
 <span class="n">advection_serial!</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">u</span><span class="p">)</span>
@@ -1197,19 +1198,19 @@ manually.  Let&#8217;s split along the second dimension:</p>
 <span class="n">advection_shared!</span><span class="p">(</span><span class="n">q</span><span class="p">,</span><span class="n">u</span><span class="p">)</span>
 
 <span class="c"># Now the real results:</span>
-<span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">time</span> <span class="n">advection_serial!</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">u</span><span class="p">);</span>
-<span class="p">(</span><span class="n">irange</span><span class="p">,</span><span class="n">jrange</span><span class="p">,</span><span class="n">trange</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span><span class="p">:</span><span class="mi">500</span><span class="p">,</span><span class="mi">1</span><span class="p">:</span><span class="mi">500</span><span class="p">,</span><span class="mi">1</span><span class="p">:</span><span class="mi">499</span><span class="p">)</span>
- <span class="mf">830.220</span> <span class="n">milliseconds</span> <span class="p">(</span><span class="mi">216</span> <span class="n">allocations</span><span class="p">:</span> <span class="mi">13820</span> <span class="n">bytes</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nd">@time</span> <span class="n">advection_serial!</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">u</span><span class="p">);</span>
+<span class="p">(</span><span class="n">irange</span><span class="p">,</span><span class="n">jrange</span><span class="p">,</span><span class="n">trange</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span><span class="o">:</span><span class="mi">500</span><span class="p">,</span><span class="mi">1</span><span class="o">:</span><span class="mi">500</span><span class="p">,</span><span class="mi">1</span><span class="o">:</span><span class="mi">499</span><span class="p">)</span>
+ <span class="mf">830.220</span> <span class="n">milliseconds</span> <span class="p">(</span><span class="mi">216</span> <span class="n">allocations</span><span class="o">:</span> <span class="mi">13820</span> <span class="n">bytes</span><span class="p">)</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">time</span> <span class="n">advection_parallel!</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">u</span><span class="p">);</span>
-   <span class="mf">2.495</span> <span class="n">seconds</span>      <span class="p">(</span><span class="mi">3999</span> <span class="n">k</span> <span class="n">allocations</span><span class="p">:</span> <span class="mi">289</span> <span class="n">MB</span><span class="p">,</span> <span class="mf">2.09</span><span class="o">%</span> <span class="n">gc</span> <span class="n">time</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nd">@time</span> <span class="n">advection_parallel!</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">u</span><span class="p">);</span>
+   <span class="mf">2.495</span> <span class="n">seconds</span>      <span class="p">(</span><span class="mi">3999</span> <span class="n">k</span> <span class="n">allocations</span><span class="o">:</span> <span class="mi">289</span> <span class="n">MB</span><span class="p">,</span> <span class="mf">2.09</span><span class="o">%</span> <span class="n">gc</span> <span class="n">time</span><span class="p">)</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">time</span> <span class="n">advection_shared!</span><span class="p">(</span><span class="n">q</span><span class="p">,</span><span class="n">u</span><span class="p">);</span>
-        <span class="n">From</span> <span class="n">worker</span> <span class="mi">2</span><span class="p">:</span>       <span class="p">(</span><span class="n">irange</span><span class="p">,</span><span class="n">jrange</span><span class="p">,</span><span class="n">trange</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span><span class="p">:</span><span class="mi">500</span><span class="p">,</span><span class="mi">1</span><span class="p">:</span><span class="mi">125</span><span class="p">,</span><span class="mi">1</span><span class="p">:</span><span class="mi">499</span><span class="p">)</span>
-        <span class="n">From</span> <span class="n">worker</span> <span class="mi">4</span><span class="p">:</span>       <span class="p">(</span><span class="n">irange</span><span class="p">,</span><span class="n">jrange</span><span class="p">,</span><span class="n">trange</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span><span class="p">:</span><span class="mi">500</span><span class="p">,</span><span class="mi">251</span><span class="p">:</span><span class="mi">375</span><span class="p">,</span><span class="mi">1</span><span class="p">:</span><span class="mi">499</span><span class="p">)</span>
-        <span class="n">From</span> <span class="n">worker</span> <span class="mi">3</span><span class="p">:</span>       <span class="p">(</span><span class="n">irange</span><span class="p">,</span><span class="n">jrange</span><span class="p">,</span><span class="n">trange</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span><span class="p">:</span><span class="mi">500</span><span class="p">,</span><span class="mi">126</span><span class="p">:</span><span class="mi">250</span><span class="p">,</span><span class="mi">1</span><span class="p">:</span><span class="mi">499</span><span class="p">)</span>
-        <span class="n">From</span> <span class="n">worker</span> <span class="mi">5</span><span class="p">:</span>       <span class="p">(</span><span class="n">irange</span><span class="p">,</span><span class="n">jrange</span><span class="p">,</span><span class="n">trange</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span><span class="p">:</span><span class="mi">500</span><span class="p">,</span><span class="mi">376</span><span class="p">:</span><span class="mi">500</span><span class="p">,</span><span class="mi">1</span><span class="p">:</span><span class="mi">499</span><span class="p">)</span>
- <span class="mf">238.119</span> <span class="n">milliseconds</span> <span class="p">(</span><span class="mi">2264</span> <span class="n">allocations</span><span class="p">:</span> <span class="mi">169</span> <span class="n">KB</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="nd">@time</span> <span class="n">advection_shared!</span><span class="p">(</span><span class="n">q</span><span class="p">,</span><span class="n">u</span><span class="p">);</span>
+        <span class="n">From</span> <span class="n">worker</span> <span class="mi">2</span><span class="o">:</span>       <span class="p">(</span><span class="n">irange</span><span class="p">,</span><span class="n">jrange</span><span class="p">,</span><span class="n">trange</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span><span class="o">:</span><span class="mi">500</span><span class="p">,</span><span class="mi">1</span><span class="o">:</span><span class="mi">125</span><span class="p">,</span><span class="mi">1</span><span class="o">:</span><span class="mi">499</span><span class="p">)</span>
+        <span class="n">From</span> <span class="n">worker</span> <span class="mi">4</span><span class="o">:</span>       <span class="p">(</span><span class="n">irange</span><span class="p">,</span><span class="n">jrange</span><span class="p">,</span><span class="n">trange</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span><span class="o">:</span><span class="mi">500</span><span class="p">,</span><span class="mi">251</span><span class="o">:</span><span class="mi">375</span><span class="p">,</span><span class="mi">1</span><span class="o">:</span><span class="mi">499</span><span class="p">)</span>
+        <span class="n">From</span> <span class="n">worker</span> <span class="mi">3</span><span class="o">:</span>       <span class="p">(</span><span class="n">irange</span><span class="p">,</span><span class="n">jrange</span><span class="p">,</span><span class="n">trange</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span><span class="o">:</span><span class="mi">500</span><span class="p">,</span><span class="mi">126</span><span class="o">:</span><span class="mi">250</span><span class="p">,</span><span class="mi">1</span><span class="o">:</span><span class="mi">499</span><span class="p">)</span>
+        <span class="n">From</span> <span class="n">worker</span> <span class="mi">5</span><span class="o">:</span>       <span class="p">(</span><span class="n">irange</span><span class="p">,</span><span class="n">jrange</span><span class="p">,</span><span class="n">trange</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="mi">1</span><span class="o">:</span><span class="mi">500</span><span class="p">,</span><span class="mi">376</span><span class="o">:</span><span class="mi">500</span><span class="p">,</span><span class="mi">1</span><span class="o">:</span><span class="mi">499</span><span class="p">)</span>
+ <span class="mf">238.119</span> <span class="n">milliseconds</span> <span class="p">(</span><span class="mi">2264</span> <span class="n">allocations</span><span class="o">:</span> <span class="mi">169</span> <span class="n">KB</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>The biggest advantage of <code class="docutils literal"><span class="pre">advection_shared!</span></code> is that it minimizes traffic
@@ -1267,26 +1268,26 @@ and multi-processor hardware.</p>
 <li>implement <a class="reference internal" href="../../stdlib/parallel/#Base.manage" title="Base.manage"><code class="xref jl jl-func docutils literal"><span class="pre">manage()</span></code></a>, which is called at various events during a worker&#8217;s lifetime (for example, sending an interrupt signal)</li>
 </ul>
 <p><a class="reference internal" href="../../stdlib/parallel/#Base.addprocs" title="Base.addprocs"><code class="xref jl jl-func docutils literal"><span class="pre">addprocs(manager::FooManager)</span></code></a> requires <code class="docutils literal"><span class="pre">FooManager</span></code> to implement:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> launch</span><span class="p">(</span><span class="n">manager</span><span class="p">::</span><span class="n">FooManager</span><span class="p">,</span> <span class="n">params</span><span class="p">::</span><span class="n">Dict</span><span class="p">,</span> <span class="n">launched</span><span class="p">::</span><span class="n">Array</span><span class="p">,</span> <span class="n">c</span><span class="p">::</span><span class="n">Condition</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">launch</span><span class="p">(</span><span class="n">manager</span><span class="o">::</span><span class="n">FooManager</span><span class="p">,</span> <span class="n">params</span><span class="o">::</span><span class="kt">Dict</span><span class="p">,</span> <span class="n">launched</span><span class="o">::</span><span class="kt">Array</span><span class="p">,</span> <span class="n">c</span><span class="o">::</span><span class="kt">Condition</span><span class="p">)</span>
     <span class="o">...</span>
 <span class="k">end</span>
 
-<span class="k">function</span><span class="nf"> manage</span><span class="p">(</span><span class="n">manager</span><span class="p">::</span><span class="n">FooManager</span><span class="p">,</span> <span class="n">id</span><span class="p">::</span><span class="n">Integer</span><span class="p">,</span> <span class="n">config</span><span class="p">::</span><span class="n">WorkerConfig</span><span class="p">,</span> <span class="n">op</span><span class="p">::</span><span class="n">Symbol</span><span class="p">)</span>
+<span class="k">function</span> <span class="n">manage</span><span class="p">(</span><span class="n">manager</span><span class="o">::</span><span class="n">FooManager</span><span class="p">,</span> <span class="n">id</span><span class="o">::</span><span class="kt">Integer</span><span class="p">,</span> <span class="n">config</span><span class="o">::</span><span class="kt">WorkerConfig</span><span class="p">,</span> <span class="n">op</span><span class="o">::</span><span class="kt">Symbol</span><span class="p">)</span>
     <span class="o">...</span>
 <span class="k">end</span>
 </pre></div>
 </div>
 <p>As an example let us see how the <code class="xref jl jl-class docutils literal"><span class="pre">LocalManager</span></code>, the manager responsible for
 starting workers on the same host, is implemented:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">immutable</span> <span class="n">LocalManager</span> <span class="o">&lt;:</span> <span class="n">ClusterManager</span>
-    <span class="n">np</span><span class="p">::</span><span class="n">Integer</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">immutable</span> <span class="n">LocalManager</span> <span class="o">&lt;:</span> <span class="kt">ClusterManager</span>
+    <span class="n">np</span><span class="o">::</span><span class="kt">Integer</span>
 <span class="k">end</span>
 
-<span class="k">function</span><span class="nf"> launch</span><span class="p">(</span><span class="n">manager</span><span class="p">::</span><span class="n">LocalManager</span><span class="p">,</span> <span class="n">params</span><span class="p">::</span><span class="n">Dict</span><span class="p">,</span> <span class="n">launched</span><span class="p">::</span><span class="n">Array</span><span class="p">,</span> <span class="n">c</span><span class="p">::</span><span class="n">Condition</span><span class="p">)</span>
+<span class="k">function</span> <span class="n">launch</span><span class="p">(</span><span class="n">manager</span><span class="o">::</span><span class="n">LocalManager</span><span class="p">,</span> <span class="n">params</span><span class="o">::</span><span class="kt">Dict</span><span class="p">,</span> <span class="n">launched</span><span class="o">::</span><span class="kt">Array</span><span class="p">,</span> <span class="n">c</span><span class="o">::</span><span class="kt">Condition</span><span class="p">)</span>
     <span class="o">...</span>
 <span class="k">end</span>
 
-<span class="k">function</span><span class="nf"> manage</span><span class="p">(</span><span class="n">manager</span><span class="p">::</span><span class="n">LocalManager</span><span class="p">,</span> <span class="n">id</span><span class="p">::</span><span class="n">Integer</span><span class="p">,</span> <span class="n">config</span><span class="p">::</span><span class="n">WorkerConfig</span><span class="p">,</span> <span class="n">op</span><span class="p">::</span><span class="n">Symbol</span><span class="p">)</span>
+<span class="k">function</span> <span class="n">manage</span><span class="p">(</span><span class="n">manager</span><span class="o">::</span><span class="n">LocalManager</span><span class="p">,</span> <span class="n">id</span><span class="o">::</span><span class="kt">Integer</span><span class="p">,</span> <span class="n">config</span><span class="o">::</span><span class="kt">WorkerConfig</span><span class="p">,</span> <span class="n">op</span><span class="o">::</span><span class="kt">Symbol</span><span class="p">)</span>
     <span class="o">...</span>
 <span class="k">end</span>
 </pre></div>
@@ -1311,28 +1312,28 @@ This is useful for multi-homed hosts.</p>
 before using any of the parallel constructs.</p>
 <p>For every worker launched, the <a class="reference internal" href="../../stdlib/parallel/#Base.launch" title="Base.launch"><code class="xref jl jl-func docutils literal"><span class="pre">launch()</span></code></a> method must add a <code class="xref jl jl-class docutils literal"><span class="pre">WorkerConfig</span></code>
 object (with appropriate fields initialized) to <code class="docutils literal"><span class="pre">launched</span></code></p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span><span class="nc"> WorkerConfig</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span> <span class="kt">WorkerConfig</span>
     <span class="c"># Common fields relevant to all cluster managers</span>
-    <span class="n">io</span><span class="p">::</span><span class="n">Nullable</span><span class="p">{</span><span class="n">IO</span><span class="p">}</span>
-    <span class="n">host</span><span class="p">::</span><span class="n">Nullable</span><span class="p">{</span><span class="n">AbstractString</span><span class="p">}</span>
-    <span class="n">port</span><span class="p">::</span><span class="n">Nullable</span><span class="p">{</span><span class="n">Integer</span><span class="p">}</span>
+    <span class="n">io</span><span class="o">::</span><span class="kt">Nullable</span><span class="p">{</span><span class="kt">IO</span><span class="p">}</span>
+    <span class="n">host</span><span class="o">::</span><span class="kt">Nullable</span><span class="p">{</span><span class="kt">AbstractString</span><span class="p">}</span>
+    <span class="n">port</span><span class="o">::</span><span class="kt">Nullable</span><span class="p">{</span><span class="kt">Integer</span><span class="p">}</span>
 
     <span class="c"># Used when launching additional workers at a host</span>
-    <span class="n">count</span><span class="p">::</span><span class="n">Nullable</span><span class="p">{</span><span class="n">Union</span><span class="p">{</span><span class="kt">Int</span><span class="p">,</span> <span class="n">Symbol</span><span class="p">}}</span>
-    <span class="n">exename</span><span class="p">::</span><span class="n">Nullable</span><span class="p">{</span><span class="n">AbstractString</span><span class="p">}</span>
-    <span class="n">exeflags</span><span class="p">::</span><span class="n">Nullable</span><span class="p">{</span><span class="n">Cmd</span><span class="p">}</span>
+    <span class="n">count</span><span class="o">::</span><span class="kt">Nullable</span><span class="p">{</span><span class="kt">Union</span><span class="p">{</span><span class="kt">Int</span><span class="p">,</span> <span class="kt">Symbol</span><span class="p">}}</span>
+    <span class="n">exename</span><span class="o">::</span><span class="kt">Nullable</span><span class="p">{</span><span class="kt">AbstractString</span><span class="p">}</span>
+    <span class="n">exeflags</span><span class="o">::</span><span class="kt">Nullable</span><span class="p">{</span><span class="kt">Cmd</span><span class="p">}</span>
 
     <span class="c"># External cluster managers can use this to store information at a per-worker level</span>
     <span class="c"># Can be a dict if multiple fields need to be stored.</span>
-    <span class="n">userdata</span><span class="p">::</span><span class="n">Nullable</span><span class="p">{</span><span class="kt">Any</span><span class="p">}</span>
+    <span class="n">userdata</span><span class="o">::</span><span class="kt">Nullable</span><span class="p">{</span><span class="kt">Any</span><span class="p">}</span>
 
     <span class="c"># SSHManager / SSH tunnel connections to workers</span>
-    <span class="n">tunnel</span><span class="p">::</span><span class="n">Nullable</span><span class="p">{</span><span class="kt">Bool</span><span class="p">}</span>
-    <span class="n">bind_addr</span><span class="p">::</span><span class="n">Nullable</span><span class="p">{</span><span class="n">AbstractString</span><span class="p">}</span>
-    <span class="n">sshflags</span><span class="p">::</span><span class="n">Nullable</span><span class="p">{</span><span class="n">Cmd</span><span class="p">}</span>
-    <span class="n">max_parallel</span><span class="p">::</span><span class="n">Nullable</span><span class="p">{</span><span class="n">Integer</span><span class="p">}</span>
+    <span class="n">tunnel</span><span class="o">::</span><span class="kt">Nullable</span><span class="p">{</span><span class="kt">Bool</span><span class="p">}</span>
+    <span class="n">bind_addr</span><span class="o">::</span><span class="kt">Nullable</span><span class="p">{</span><span class="kt">AbstractString</span><span class="p">}</span>
+    <span class="n">sshflags</span><span class="o">::</span><span class="kt">Nullable</span><span class="p">{</span><span class="kt">Cmd</span><span class="p">}</span>
+    <span class="n">max_parallel</span><span class="o">::</span><span class="kt">Nullable</span><span class="p">{</span><span class="kt">Integer</span><span class="p">}</span>
 
-    <span class="n">connect_at</span><span class="p">::</span><span class="n">Nullable</span><span class="p">{</span><span class="kt">Any</span><span class="p">}</span>
+    <span class="n">connect_at</span><span class="o">::</span><span class="kt">Nullable</span><span class="p">{</span><span class="kt">Any</span><span class="p">}</span>
 
     <span class="o">.....</span>
 <span class="k">end</span>
@@ -1385,8 +1386,8 @@ message, processes it and waits for the next one</li>
 </ul>
 <p>Replacing the default transport involves the new implementation to setup connections to remote workers, and to provide appropriate
 <code class="xref jl jl-class docutils literal"><span class="pre">IO</span></code> objects that the message processing loops can wait on. The manager specific callbacks to be implemented are:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">connect</span><span class="p">(</span><span class="n">manager</span><span class="p">::</span><span class="n">FooManager</span><span class="p">,</span> <span class="n">pid</span><span class="p">::</span><span class="n">Integer</span><span class="p">,</span> <span class="n">config</span><span class="p">::</span><span class="n">WorkerConfig</span><span class="p">)</span>
-<span class="n">kill</span><span class="p">(</span><span class="n">manager</span><span class="p">::</span><span class="n">FooManager</span><span class="p">,</span> <span class="n">pid</span><span class="p">::</span><span class="kt">Int</span><span class="p">,</span> <span class="n">config</span><span class="p">::</span><span class="n">WorkerConfig</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">connect</span><span class="p">(</span><span class="n">manager</span><span class="o">::</span><span class="n">FooManager</span><span class="p">,</span> <span class="n">pid</span><span class="o">::</span><span class="kt">Integer</span><span class="p">,</span> <span class="n">config</span><span class="o">::</span><span class="kt">WorkerConfig</span><span class="p">)</span>
+<span class="n">kill</span><span class="p">(</span><span class="n">manager</span><span class="o">::</span><span class="n">FooManager</span><span class="p">,</span> <span class="n">pid</span><span class="o">::</span><span class="kt">Int</span><span class="p">,</span> <span class="n">config</span><span class="o">::</span><span class="kt">WorkerConfig</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>The default implementation (which uses TCP/IP sockets) is implemented as <code class="docutils literal"><span class="pre">connect(manager::ClusterManager,</span> <span class="pre">pid::Integer,</span> <span class="pre">config::WorkerConfig)</span></code>.</p>
@@ -1514,7 +1515,7 @@ use <code class="docutils literal"><span class="pre">set</span></code> instead o
 <h3>The <code class="docutils literal"><span class="pre">&#64;threads</span></code> Macro<a class="headerlink" href="#the-threads-macro" title="Permalink to this headline">¶</a></h3>
 <p>Let&#8217;s work a simple example using our native threads. Let us create an array of zeros:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">a</span> <span class="o">=</span> <span class="n">zeros</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span>
-<span class="mi">10</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">10</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mf">0.0</span>
  <span class="mf">0.0</span>
  <span class="mf">0.0</span>
@@ -1531,14 +1532,14 @@ use <code class="docutils literal"><span class="pre">set</span></code> instead o
 its thread ID into each location.</p>
 <p>Julia supports parallel loops using the <a class="reference internal" href="../../stdlib/parallel/#Base.Threads.&#64;threads" title="Base.Threads.&#64;threads"><code class="xref jl jl-obj docutils literal"><span class="pre">Threads.&#64;threads</span></code></a> macro. This macro is affixed in front
 of a <code class="docutils literal"><span class="pre">for</span></code> loop to indicate to Julia that the loop is a multi-threaded region.</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">Threads</span><span class="o">.</span><span class="p">@</span><span class="n">threads</span> <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="mi">10</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">Threads</span><span class="o">.</span><span class="nd">@threads</span> <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="o">:</span><span class="mi">10</span>
     <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">Threads</span><span class="o">.</span><span class="n">threadid</span><span class="p">()</span>
 <span class="k">end</span>
 </pre></div>
 </div>
 <p>The iteration space is split amongst the threads, after which each thread writes its thread ID to its assigned locations.:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">a</span>
-<span class="mi">10</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">10</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mf">1.0</span>
  <span class="mf">1.0</span>
  <span class="mf">1.0</span>
@@ -1577,7 +1578,7 @@ view, it is therefore a blocking call like other Julia APIs.</p>
 <table class="docutils footnote" frame="void" id="mpi2rma" rules="none">
 <colgroup><col class="label" /><col /></colgroup>
 <tbody valign="top">
-<tr><td class="label"><a class="fn-backref" href="#id1">[1]</a></td><td>In this context, MPI refers to the MPI-1 standard. Beginning with MPI-2, the MPI standards committee introduced a new set of communication mechanisms, collectively referred to as Remote Memory Access (RMA). The motivation for adding RMA to the MPI standard was to facilitate one-sided communication patterns. For additional information on the latest MPI standard, see <a class="reference external" href="http://www.mpi-forum.org/docs">http://www.mpi-forum.org/docs</a>.</td></tr>
+<tr><td class="label"><a class="fn-backref" href="#id1">[1]</a></td><td>In this context, MPI refers to the MPI-1 standard. Beginning with MPI-2, the MPI standards committee introduced a new set of communication mechanisms, collectively referred to as Remote Memory Access (RMA). The motivation for adding RMA to the MPI standard was to facilitate one-sided communication patterns. For additional information on the latest MPI standard, see <a class="reference external" href="http://mpi-forum.org/docs">http://mpi-forum.org/docs</a>.</td></tr>
 </tbody>
 </table>
 </div>
@@ -1619,7 +1620,7 @@ view, it is therefore a blocking call like other Julia APIs.</p>
     <script type="text/javascript">
         var DOCUMENTATION_OPTIONS = {
             URL_ROOT:'../../',
-            VERSION:'0.5.1-pre',
+            VERSION:'0.5.3-pre',
             COLLAPSE_INDEX:false,
             FILE_SUFFIX:'',
             HAS_SOURCE:  true

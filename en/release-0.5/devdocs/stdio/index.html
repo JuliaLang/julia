@@ -7,7 +7,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>printf() and stdio in the Julia runtime &mdash; Julia Language 0.5.1-pre documentation</title>
+  <title>printf() and stdio in the Julia runtime &mdash; Julia Language 0.5.3-pre documentation</title>
   
 
   
@@ -30,7 +30,7 @@
   
     <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
   
-    <link rel="top" title="Julia Language 0.5.1-pre documentation" href="../../"/>
+    <link rel="top" title="Julia Language 0.5.3-pre documentation" href="../../"/>
         <link rel="up" title="Documentation of Julia’s Internals" href="../julia/"/>
         <link rel="next" title="Bounds checking" href="../boundscheck/"/>
         <link rel="prev" title="Working with LLVM" href="../llvm/"/> 
@@ -150,6 +150,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#man-parametric-types">Parametric Types</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#type-aliases">Type Aliases</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#operations-on-types">Operations on Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/types/#custom-pretty-printing">Custom pretty-printing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#value-types">&#8220;Value types&#8221;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#nullable-types-representing-missing-values">Nullable Types: Representing Missing Values</a></li>
 </ul>
@@ -527,7 +528,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../subarrays/">SubArrays</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../sysimg/">System Image Building</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../llvm/">Working with LLVM</a></li>
-<li class="toctree-l2 current"><a class="current reference internal" href="">printf() and stdio in the Julia runtime</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">printf() and stdio in the Julia runtime</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../boundscheck/">Bounds checking</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../locks/">Proper maintenance and care of multi-threading locks</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../offset-arrays/">Arrays with custom indices</a></li>
@@ -618,7 +619,7 @@ stream, e.g.:</p>
 <div class="highlight-sh"><div class="highlight"><pre><span></span>$ julia -e <span class="s1">&#39;println(typeof((STDIN, STDOUT, STDERR)))&#39;</span>
 Tuple<span class="o">{</span>Base.TTY,Base.TTY,Base.TTY<span class="o">}</span>
 
-$ julia -e <span class="s1">&#39;println(typeof((STDIN, STDOUT, STDERR)))&#39;</span> &lt; /dev/null 2&gt;/dev/null
+$ julia -e <span class="s1">&#39;println(typeof((STDIN, STDOUT, STDERR)))&#39;</span> &lt; /dev/null <span class="m">2</span>&gt;/dev/null
 Tuple<span class="o">{</span>IOStream,Base.TTY,IOStream<span class="o">}</span>
 
 $ <span class="nb">echo</span> hello <span class="p">|</span> julia -e <span class="s1">&#39;println(typeof((STDIN, STDOUT, STDERR)))&#39;</span> <span class="p">|</span> cat
@@ -661,7 +662,7 @@ It provides cross-platform buffered file IO and in-memory temporary buffers.</p>
 <li><code class="code docutils literal"><span class="pre">base/iostream.jl</span></code> &#8211; for file IO (see <code class="code docutils literal"><span class="pre">base/fs.jl</span></code> for <code class="docutils literal"><span class="pre">libuv</span></code> equivalent).</li>
 </ul>
 <p>Use of <code class="code docutils literal"><span class="pre">ios.c</span></code> in these modules is mostly self-contained and
-separated from the <code class="docutils literal"><span class="pre">libuv</span></code> I/O system. However, there is <a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/flisp/print.c#L654">one place</a>
+separated from the <code class="docutils literal"><span class="pre">libuv</span></code> I/O system. However, there is <a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/flisp/print.c#L654">one place</a>
 where femtolisp calls through to <code class="xref c c-func docutils literal"><span class="pre">jl_printf()</span></code> with a legacy <code class="xref c c-type docutils literal"><span class="pre">ios_t</span></code> stream.</p>
 <p>There is a hack in <code class="code docutils literal"><span class="pre">ios.h</span></code> that makes the <code class="xref c c-member docutils literal"><span class="pre">ios_t.bm</span></code>
 field line up with the <code class="code docutils literal"><span class="pre">uv_stream_t.type</span></code> and ensures that
@@ -715,7 +716,7 @@ Julia&#8217;s <code class="xref c c-func docutils literal"><span class="pre">jl_
     <script type="text/javascript">
         var DOCUMENTATION_OPTIONS = {
             URL_ROOT:'../../',
-            VERSION:'0.5.1-pre',
+            VERSION:'0.5.3-pre',
             COLLAPSE_INDEX:false,
             FILE_SUFFIX:'',
             HAS_SOURCE:  true

@@ -7,7 +7,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Tasks and Parallel Computing &mdash; Julia Language 0.5.1-pre documentation</title>
+  <title>Tasks and Parallel Computing &mdash; Julia Language 0.5.3-pre documentation</title>
   
 
   
@@ -30,7 +30,7 @@
   
     <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
   
-    <link rel="top" title="Julia Language 0.5.1-pre documentation" href="../../"/>
+    <link rel="top" title="Julia Language 0.5.3-pre documentation" href="../../"/>
         <link rel="next" title="Linear Algebra" href="../linalg/"/>
         <link rel="prev" title="Arrays" href="../arrays/"/> 
 
@@ -149,6 +149,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#man-parametric-types">Parametric Types</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#type-aliases">Type Aliases</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#operations-on-types">Operations on Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/types/#custom-pretty-printing">Custom pretty-printing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#value-types">&#8220;Value types&#8221;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#nullable-types-representing-missing-values">Nullable Types: Representing Missing Values</a></li>
 </ul>
@@ -454,7 +455,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../arrays/#sparse-vectors-and-matrices">Sparse Vectors and Matrices</a></li>
 </ul>
 </li>
-<li class="toctree-l1 current"><a class="current reference internal" href="">Tasks and Parallel Computing</a><ul>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Tasks and Parallel Computing</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#tasks">Tasks</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#general-parallel-computing-support">General Parallel Computing Support</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#shared-arrays">Shared Arrays</a></li>
@@ -808,7 +809,7 @@
 <code class="descname">pmap</code><span class="sig-paren">(</span><span class="optional">[</span><em>::AbstractWorkerPool</em>, <span class="optional">]</span><em>f</em>, <em>c...; distributed=true</em>, <em>batch_size=1</em>, <em>on_error=nothing</em>, <em>retry_n=0</em>, <em>retry_max_delay=DEFAULT_RETRY_MAX_DELAY</em>, <em>retry_on=DEFAULT_RETRY_ON</em><span class="sig-paren">)</span> &rarr; collection<a class="headerlink" href="#Base.pmap" title="Permalink to this definition">¶</a></dt>
 <dd><p>Transform collection <code class="docutils literal"><span class="pre">c</span></code> by applying <code class="docutils literal"><span class="pre">f</span></code> to each element using available workers and tasks.</p>
 <p>For multiple collection arguments, apply f elementwise.</p>
-<p>Note that <code class="docutils literal"><span class="pre">f</span></code> must be made available to all worker processes; see <a class="reference internal" href="../../manual/parallel-computing/#man-parallel-computing-code-availability"><span>Code Availability and Loading Packages</span></a> for details.</p>
+<p>Note that <code class="docutils literal"><span class="pre">f</span></code> must be made available to all worker processes; see <a class="reference internal" href="../../manual/parallel-computing/#man-parallel-computing-code-availability"><span class="std std-ref">Code Availability and Loading Packages</span></a> for details.</p>
 <p>If a worker pool is not specified, all available workers, i.e., the default worker pool is used.</p>
 <p>By default, <code class="docutils literal"><span class="pre">pmap</span></code> distributes the computation over all specified workers. To use only the local process and distribute over tasks, specify <code class="docutils literal"><span class="pre">distributed=false</span></code>. This is equivalent to <code class="docutils literal"><span class="pre">asyncmap</span></code>.</p>
 <p><code class="docutils literal"><span class="pre">pmap</span></code> can also use a mix of processes and tasks via the <code class="docutils literal"><span class="pre">batch_size</span></code> argument. For batch sizes greater than 1, the collection is split into multiple batches, which are distributed across workers. Each such batch is processed in parallel via tasks in each worker. The specified <code class="docutils literal"><span class="pre">batch_size</span></code> is an upper limit, the actual size of batches may be smaller and is calculated depending on the number of workers available and length of the collection.</p>
@@ -947,8 +948,8 @@
 <code class="descname">isready</code><span class="sig-paren">(</span><em>rr::Future</em><span class="sig-paren">)</span></dt>
 <dd><p>Determine whether a <code class="docutils literal"><span class="pre">Future</span></code> has a value stored to it.</p>
 <p>If the argument <code class="docutils literal"><span class="pre">Future</span></code> is owned by a different node, this call will block to wait for the answer. It is recommended to wait for <code class="docutils literal"><span class="pre">rr</span></code> in a separate task instead or to use a local <code class="docutils literal"><span class="pre">Channel</span></code> as a proxy:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">c</span> <span class="o">=</span> <span class="n">Channel</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
-<span class="p">@</span><span class="n">async</span> <span class="n">put!</span><span class="p">(</span><span class="n">c</span><span class="p">,</span> <span class="n">remotecall_fetch</span><span class="p">(</span><span class="n">long_computation</span><span class="p">,</span> <span class="n">p</span><span class="p">))</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">c</span> <span class="o">=</span> <span class="kt">Channel</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<span class="nd">@async</span> <span class="n">put!</span><span class="p">(</span><span class="n">c</span><span class="p">,</span> <span class="n">remotecall_fetch</span><span class="p">(</span><span class="n">long_computation</span><span class="p">,</span> <span class="n">p</span><span class="p">))</span>
 <span class="n">isready</span><span class="p">(</span><span class="n">c</span><span class="p">)</span>  <span class="c"># will not block</span>
 </pre></div>
 </div>
@@ -980,7 +981,7 @@
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="kd">const</span> <span class="n">foo</span><span class="o">=</span><span class="n">rand</span><span class="p">(</span><span class="mi">10</span><span class="o">^</span><span class="mi">8</span><span class="p">);</span>
 <span class="n">wp</span><span class="o">=</span><span class="n">CachingPool</span><span class="p">(</span><span class="n">workers</span><span class="p">())</span>
 <span class="k">let</span> <span class="n">foo</span><span class="o">=</span><span class="n">foo</span>
-    <span class="n">pmap</span><span class="p">(</span><span class="n">wp</span><span class="p">,</span> <span class="n">i</span><span class="o">-&gt;</span><span class="n">sum</span><span class="p">(</span><span class="n">foo</span><span class="p">)</span><span class="o">+</span><span class="n">i</span><span class="p">,</span> <span class="mi">1</span><span class="p">:</span><span class="mi">100</span><span class="p">);</span>
+    <span class="n">pmap</span><span class="p">(</span><span class="n">wp</span><span class="p">,</span> <span class="n">i</span><span class="o">-&gt;</span><span class="n">sum</span><span class="p">(</span><span class="n">foo</span><span class="p">)</span><span class="o">+</span><span class="n">i</span><span class="p">,</span> <span class="mi">1</span><span class="o">:</span><span class="mi">100</span><span class="p">);</span>
 <span class="k">end</span>
 </pre></div>
 </div>
@@ -1063,14 +1064,14 @@
 <dt id="Base.&#64;parallel">
 <code class="descname">&#64;parallel</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#Base.@parallel" title="Permalink to this definition">¶</a></dt>
 <dd><p>A parallel for loop of the form :</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="p">@</span><span class="n">parallel</span> <span class="p">[</span><span class="n">reducer</span><span class="p">]</span> <span class="k">for</span> <span class="n">var</span> <span class="o">=</span> <span class="n">range</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="nd">@parallel</span> <span class="p">[</span><span class="n">reducer</span><span class="p">]</span> <span class="k">for</span> <span class="n">var</span> <span class="o">=</span> <span class="n">range</span>
     <span class="n">body</span>
 <span class="k">end</span>
 </pre></div>
 </div>
 <p>The specified range is partitioned and locally executed across all workers. In case an optional reducer function is specified, <code class="docutils literal"><span class="pre">&#64;parallel</span></code> performs local reductions on each worker with a final reduction on the calling process.</p>
 <p>Note that without a reducer function, <code class="docutils literal"><span class="pre">&#64;parallel</span></code> executes asynchronously, i.e. it spawns independent tasks on all available workers and returns immediately without waiting for completion. To wait for completion, prefix the call with <code class="docutils literal"><span class="pre">&#64;sync</span></code>, like :</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="p">@</span><span class="n">sync</span> <span class="p">@</span><span class="n">parallel</span> <span class="k">for</span> <span class="n">var</span> <span class="o">=</span> <span class="n">range</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="nd">@sync</span> <span class="nd">@parallel</span> <span class="k">for</span> <span class="n">var</span> <span class="o">=</span> <span class="n">range</span>
     <span class="n">body</span>
 <span class="k">end</span>
 </pre></div>
@@ -1078,18 +1079,26 @@
 </dd></dl>
 
 <dl class="function">
-<dt id="Base.&#64;everywhere">
-<code class="descname">&#64;everywhere</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#Base.@everywhere" title="Permalink to this definition">¶</a></dt>
-<dd><p>Execute an expression on all processes. Errors on any of the processes are collected into a <code class="docutils literal"><span class="pre">CompositeException</span></code> and thrown. For example :</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="p">@</span><span class="n">everywhere</span> <span class="n">bar</span><span class="o">=</span><span class="mi">1</span>
+<dt>
+<code class="descname">&#64;everywhere expr</code></dt>
+<dd><p>Execute an expression under Main everywhere. Equivalent to calling <code class="docutils literal"><span class="pre">eval(Main,</span> <span class="pre">expr)</span></code> on all processes. Errors on any of the processes are collected into a <code class="docutils literal"><span class="pre">CompositeException</span></code> and thrown. For example :</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="nd">@everywhere</span> <span class="n">bar</span><span class="o">=</span><span class="mi">1</span>
 </pre></div>
 </div>
-<p>will define <code class="docutils literal"><span class="pre">bar</span></code> under module <code class="docutils literal"><span class="pre">Main</span></code> on all processes.</p>
+<p>will define <code class="docutils literal"><span class="pre">Main.bar</span></code> on all processes.</p>
 <p>Unlike <code class="docutils literal"><span class="pre">&#64;spawn</span></code> and <code class="docutils literal"><span class="pre">&#64;spawnat</span></code>, <code class="docutils literal"><span class="pre">&#64;everywhere</span></code> does not capture any local variables. Prefixing <code class="docutils literal"><span class="pre">&#64;everywhere</span></code> with <code class="docutils literal"><span class="pre">&#64;eval</span></code> allows us to broadcast local variables using interpolation :</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">foo</span> <span class="o">=</span> <span class="mi">1</span>
-<span class="p">@</span><span class="n">eval</span> <span class="p">@</span><span class="n">everywhere</span> <span class="n">bar</span><span class="o">=$</span><span class="n">foo</span>
+<span class="nd">@eval</span> <span class="nd">@everywhere</span> <span class="n">bar</span><span class="o">=$</span><span class="n">foo</span>
 </pre></div>
 </div>
+<p>The expression is evaluated under <code class="docutils literal"><span class="pre">Main</span></code> irrespective of where <code class="docutils literal"><span class="pre">&#64;everywhere</span></code> is called from. For example :</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">module</span> <span class="n">FooBar</span>
+    <span class="n">foo</span><span class="p">()</span> <span class="o">=</span> <span class="nd">@everywhere</span> <span class="n">bar</span><span class="p">()</span><span class="o">=</span><span class="n">myid</span><span class="p">()</span>
+<span class="k">end</span>
+<span class="n">FooBar</span><span class="o">.</span><span class="n">foo</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>will result in <code class="docutils literal"><span class="pre">Main.bar</span></code> being defined on all processes and not <code class="docutils literal"><span class="pre">FooBar.bar</span></code>.</p>
 </dd></dl>
 
 <dl class="function">
@@ -1213,7 +1222,7 @@ will) change in the future.</p>
 <p>Only certain &#8220;simple&#8221; types can be used atomically, namely the bitstypes integer and float-point types. These are <code class="docutils literal"><span class="pre">Int8</span></code>...``Int128``, <code class="docutils literal"><span class="pre">UInt8</span></code>...``UInt128``, and <code class="docutils literal"><span class="pre">Float16</span></code>...``Float64``.</p>
 <p>New atomic objects can be created from a non-atomic values; if none is specified, the atomic object is initialized with zero.</p>
 <p>Atomic objects can be accessed using the <code class="docutils literal"><span class="pre">[]</span></code> notation:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">x</span><span class="p">::</span><span class="n">Atomic</span><span class="p">{</span><span class="kt">Int</span><span class="p">}</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">x</span><span class="o">::</span><span class="n">Atomic</span><span class="p">{</span><span class="kt">Int</span><span class="p">}</span>
 <span class="n">x</span><span class="p">[]</span> <span class="o">=</span> <span class="mi">1</span>
 <span class="n">val</span> <span class="o">=</span> <span class="n">x</span><span class="p">[]</span>
 </pre></div>
@@ -1489,7 +1498,7 @@ between processes. It is possible for Cluster Managers to provide a different tr
     <script type="text/javascript">
         var DOCUMENTATION_OPTIONS = {
             URL_ROOT:'../../',
-            VERSION:'0.5.1-pre',
+            VERSION:'0.5.3-pre',
             COLLAPSE_INDEX:false,
             FILE_SUFFIX:'',
             HAS_SOURCE:  true

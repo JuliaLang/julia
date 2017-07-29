@@ -7,7 +7,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Initialization of the Julia runtime &mdash; Julia Language 0.5.1-pre documentation</title>
+  <title>Initialization of the Julia runtime &mdash; Julia Language 0.5.3-pre documentation</title>
   
 
   
@@ -30,7 +30,7 @@
   
     <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
   
-    <link rel="top" title="Julia Language 0.5.1-pre documentation" href="../../"/>
+    <link rel="top" title="Julia Language 0.5.3-pre documentation" href="../../"/>
         <link rel="up" title="Documentation of Julia’s Internals" href="../julia/"/>
         <link rel="next" title="Eval of Julia code" href="../eval/"/>
         <link rel="prev" title="Documentation of Julia’s Internals" href="../julia/"/> 
@@ -150,6 +150,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#man-parametric-types">Parametric Types</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#type-aliases">Type Aliases</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#operations-on-types">Operations on Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/types/#custom-pretty-printing">Custom pretty-printing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#value-types">&#8220;Value types&#8221;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#nullable-types-representing-missing-values">Nullable Types: Representing Missing Values</a></li>
 </ul>
@@ -515,7 +516,7 @@
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="../reflection/">Reflection and introspection</a></li>
 <li class="toctree-l1 current"><a class="reference internal" href="../julia/">Documentation of Julia&#8217;s Internals</a><ul class="current">
-<li class="toctree-l2 current"><a class="current reference internal" href="">Initialization of the Julia runtime</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Initialization of the Julia runtime</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../eval/">Eval of Julia code</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../ast/">Julia ASTs</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../types/">More about types</a></li>
@@ -581,36 +582,36 @@
 <p>How does the Julia runtime execute <code class="code docutils literal"><span class="pre">julia</span> <span class="pre">-e</span> <span class="pre">'println(&quot;Hello</span> <span class="pre">World!&quot;)'</span></code> ?</p>
 <div class="section" id="main">
 <h2>main()<a class="headerlink" href="#main" title="Permalink to this headline">¶</a></h2>
-<p>Execution starts at <a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/ui/repl.c">main() in julia/ui/repl.c</a>.</p>
-<p>main() calls <a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/support/libsupportinit.c">libsupport_init()</a>
+<p>Execution starts at <a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/ui/repl.c">main() in julia/ui/repl.c</a>.</p>
+<p>main() calls <a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/support/libsupportinit.c">libsupport_init()</a>
 to set the C library locale and to initialise the &#8220;ios&#8221; library
-(see <a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/support/ios.c">ios_init_stdstreams()</a>
-and <a class="reference internal" href="../stdio/#dev-ios"><span>Legacy ios.c library</span></a>).</p>
-<p>Next <a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/ui/repl.c">parse_opts()</a>
+(see <a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/support/ios.c">ios_init_stdstreams()</a>
+and <a class="reference internal" href="../stdio/#dev-ios"><span class="std std-ref">Legacy ios.c library</span></a>).</p>
+<p>Next <a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/ui/repl.c">parse_opts()</a>
 is called to process command line options. Note that <code class="xref c c-func docutils literal"><span class="pre">parse_opts()</span></code>
 only deals with options that affect code generation or early initialisation. Other
-options are handled later by <a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/base/client.jl">process_options() in base/client.jl</a>.</p>
-<p><code class="xref c c-func docutils literal"><span class="pre">parse_opts()</span></code> stores command line options in the <a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/julia.h">global jl_options
+options are handled later by <a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/base/client.jl">process_options() in base/client.jl</a>.</p>
+<p><code class="xref c c-func docutils literal"><span class="pre">parse_opts()</span></code> stores command line options in the <a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/julia.h">global jl_options
 struct</a>.</p>
 </div>
 <div class="section" id="julia-init">
 <h2>julia_init()<a class="headerlink" href="#julia-init" title="Permalink to this headline">¶</a></h2>
-<p><a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/task.c">julia_init() in task.c</a> is
-called by main() and calls <a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/init.c">_julia_init() in init.c</a>.</p>
+<p><a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/task.c">julia_init() in task.c</a> is
+called by main() and calls <a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/init.c">_julia_init() in init.c</a>.</p>
 <p><code class="xref c c-func docutils literal"><span class="pre">_julia_init()</span></code> begins by calling <code class="xref c c-func docutils literal"><span class="pre">libsupport_init()</span></code> again (it does
 nothing the second time).</p>
-<p><a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/signals-unix.c">restore_signals()</a> is
+<p><a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/signals-unix.c">restore_signals()</a> is
 called to zero the signal handler mask.</p>
-<p><a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/init.c">jl_resolve_sysimg_location()</a> searches
-configured paths for the base system image. See <a class="reference internal" href="../sysimg/#dev-sysimg"><span>Building the Julia system image</span></a>.</p>
-<p><a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/gc.c">jl_gc_init()</a>
+<p><a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/init.c">jl_resolve_sysimg_location()</a> searches
+configured paths for the base system image. See <a class="reference internal" href="../sysimg/#dev-sysimg"><span class="std std-ref">Building the Julia system image</span></a>.</p>
+<p><a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/gc.c">jl_gc_init()</a>
 sets up allocation pools and lists for: weak refs, preserved values
 and finalization.</p>
-<p><a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/ast.c">jl_init_frontend()</a>
+<p><a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/ast.c">jl_init_frontend()</a>
 loads and initialises a pre-compiled femtolisp image containing
 the scanner/parser;</p>
-<p><a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/jltypes.c">jl_init_types()</a>
-creates <code class="xref c c-type docutils literal"><span class="pre">jl_datatype_t</span></code> type description objects for the <a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/julia.h">built-in
+<p><a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/jltypes.c">jl_init_types()</a>
+creates <code class="xref c c-type docutils literal"><span class="pre">jl_datatype_t</span></code> type description objects for the <a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/julia.h">built-in
 types defined in julia.h</a>. e.g.</p>
 <div class="highlight-c"><div class="highlight"><pre><span></span><span class="n">jl_any_type</span> <span class="o">=</span> <span class="n">jl_new_abstracttype</span><span class="p">(</span><span class="n">jl_symbol</span><span class="p">(</span><span class="s">&quot;Any&quot;</span><span class="p">),</span> <span class="nb">NULL</span><span class="p">,</span> <span class="n">jl_null</span><span class="p">);</span>
 <span class="n">jl_any_type</span><span class="o">-&gt;</span><span class="n">super</span> <span class="o">=</span> <span class="n">jl_any_type</span><span class="p">;</span>
@@ -621,13 +622,13 @@ types defined in julia.h</a>. e.g.</p>
                                 <span class="n">jl_any_type</span><span class="p">,</span> <span class="n">jl_null</span><span class="p">,</span> <span class="mi">32</span><span class="p">);</span>
 </pre></div>
 </div>
-<p><a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/task.c">jl_init_tasks()</a> creates
+<p><a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/task.c">jl_init_tasks()</a> creates
 the <code class="docutils literal"><span class="pre">jl_datatype_t*</span> <span class="pre">jl_task_type</span></code> object; initialises the global
 <code class="docutils literal"><span class="pre">jl_root_task</span></code> struct; and
 sets <code class="docutils literal"><span class="pre">jl_current_task</span></code> to the root task.</p>
-<p><a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/codegen.cpp">jl_init_codegen()</a>
+<p><a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/codegen.cpp">jl_init_codegen()</a>
 initialises the <a class="reference external" href="http://llvm.org">LLVM library</a>.</p>
-<p><a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/dump.c">jl_init_serializer()</a>
+<p><a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/dump.c">jl_init_serializer()</a>
 initialises 8-bit serialisation tags for 256 frequently used
 <code class="docutils literal"><span class="pre">jl_value_t</span></code> values. The serialisation mechanism uses these tags as
 shorthand (in lieu of storing whole objects) to save storage space.</p>
@@ -635,62 +636,62 @@ shorthand (in lieu of storing whole objects) to save storage space.</p>
 then <code class="xref jl jl-mod docutils literal"><span class="pre">Core</span></code> and <code class="xref jl jl-mod docutils literal"><span class="pre">Main</span></code> modules are created and <code class="docutils literal"><span class="pre">boot.jl</span></code> is evaluated:</p>
 <p><code class="code docutils literal"><span class="pre">jl_core_module</span> <span class="pre">=</span> <span class="pre">jl_new_module(jl_symbol(&quot;Core&quot;))</span></code> creates
 the Julia <code class="xref jl jl-mod docutils literal"><span class="pre">Core</span></code> module.</p>
-<p><a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/intrinsics.cpp">jl_init_intrinsic_functions()</a>
+<p><a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/intrinsics.cpp">jl_init_intrinsic_functions()</a>
 creates a new Julia module &#8220;Intrinsics&#8221; containing constant
 jl_intrinsic_type symbols. These define an integer code for
-each <a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/intrinsics.cpp">intrinsic function</a>.
-<a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/intrinsics.cpp">emit_intrinsic()</a>
+each <a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/intrinsics.cpp">intrinsic function</a>.
+<a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/intrinsics.cpp">emit_intrinsic()</a>
 translates these symbols into LLVM instructions during code generation.</p>
-<p><a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/builtins.c">jl_init_primitives()</a>
+<p><a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/builtins.c">jl_init_primitives()</a>
 hooks C functions up to Julia function symbols. e.g. the symbol
 <a class="reference internal" href="../../stdlib/base/#Base.is" title="Base.is"><code class="xref jl jl-func docutils literal"><span class="pre">Base.is()</span></code></a> is bound to C function pointer <code class="xref c c-func docutils literal"><span class="pre">jl_f_is()</span></code>
 by calling <code class="code docutils literal"><span class="pre">add_builtin_func(&quot;eval&quot;,</span> <span class="pre">jl_f_top_eval)</span></code>.</p>
-<p><a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/toplevel.c">jl_new_main_module()</a>
+<p><a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/toplevel.c">jl_new_main_module()</a>
 creates the global &#8220;Main&#8221; module and sets
 <code class="code docutils literal"><span class="pre">jl_current_task-&gt;current_module</span> <span class="pre">=</span> <span class="pre">jl_main_module</span></code>.</p>
-<p>Note: _julia_init() <a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/init.c">then sets</a> <code class="code docutils literal"><span class="pre">jl_root_task-&gt;current_module</span> <span class="pre">=</span> <span class="pre">jl_core_module</span></code>. <code class="code docutils literal"><span class="pre">jl_root_task</span></code> is an alias of <code class="code docutils literal"><span class="pre">jl_current_task</span></code> at this point, so the current_module set by <code class="xref c c-func docutils literal"><span class="pre">jl_new_main_module()</span></code> above is overwritten.</p>
-<p><a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/init.c">jl_load(&#8220;boot.jl&#8221;, sizeof(&#8220;boot.jl&#8221;))</a> calls <a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/ast.c">jl_parse_eval_all</a> which repeatedly calls <a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/toplevel.c">jl_toplevel_eval_flex()</a> to execute <a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/base/boot.jl">boot.jl</a>. TODO &#8211; drill down into eval?</p>
-<p><a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/init.c">jl_get_builtin_hooks()</a> initialises global C pointers to Julia globals defined in <code class="docutils literal"><span class="pre">boot.jl</span></code>.</p>
-<p><a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/alloc.c">jl_init_box_caches()</a> pre-allocates global boxed integer value objects for values up to 1024. This speeds up allocation of boxed ints later on. e.g.:</p>
+<p>Note: _julia_init() <a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/init.c">then sets</a> <code class="code docutils literal"><span class="pre">jl_root_task-&gt;current_module</span> <span class="pre">=</span> <span class="pre">jl_core_module</span></code>. <code class="code docutils literal"><span class="pre">jl_root_task</span></code> is an alias of <code class="code docutils literal"><span class="pre">jl_current_task</span></code> at this point, so the current_module set by <code class="xref c c-func docutils literal"><span class="pre">jl_new_main_module()</span></code> above is overwritten.</p>
+<p><a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/init.c">jl_load(&#8220;boot.jl&#8221;, sizeof(&#8220;boot.jl&#8221;))</a> calls <a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/ast.c">jl_parse_eval_all</a> which repeatedly calls <a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/toplevel.c">jl_toplevel_eval_flex()</a> to execute <a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/base/boot.jl">boot.jl</a>. TODO &#8211; drill down into eval?</p>
+<p><a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/init.c">jl_get_builtin_hooks()</a> initialises global C pointers to Julia globals defined in <code class="docutils literal"><span class="pre">boot.jl</span></code>.</p>
+<p><a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/alloc.c">jl_init_box_caches()</a> pre-allocates global boxed integer value objects for values up to 1024. This speeds up allocation of boxed ints later on. e.g.:</p>
 <div class="highlight-c"><div class="highlight"><pre><span></span><span class="n">jl_value_t</span> <span class="o">*</span><span class="nf">jl_box_uint8</span><span class="p">(</span><span class="kt">uint32_t</span> <span class="n">x</span><span class="p">)</span>
 <span class="p">{</span>
     <span class="k">return</span> <span class="n">boxed_uint8_cache</span><span class="p">[(</span><span class="kt">uint8_t</span><span class="p">)</span><span class="n">x</span><span class="p">];</span>
 <span class="p">}</span>
 </pre></div>
 </div>
-<p><a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/init.c">_julia_init() iterates</a> over the <code class="code docutils literal"><span class="pre">jl_core_module-&gt;bindings.table</span></code> looking for <code class="code docutils literal"><span class="pre">jl_datatype_t</span></code> values and sets the type name&#8217;s module prefix to <code class="code docutils literal"><span class="pre">jl_core_module</span></code>.</p>
-<p><a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/toplevel.c">jl_add_standard_imports(jl_main_module)</a> does &#8220;using Base&#8221; in the &#8220;Main&#8221; module.</p>
+<p><a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/init.c">_julia_init() iterates</a> over the <code class="code docutils literal"><span class="pre">jl_core_module-&gt;bindings.table</span></code> looking for <code class="code docutils literal"><span class="pre">jl_datatype_t</span></code> values and sets the type name&#8217;s module prefix to <code class="code docutils literal"><span class="pre">jl_core_module</span></code>.</p>
+<p><a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/toplevel.c">jl_add_standard_imports(jl_main_module)</a> does &#8220;using Base&#8221; in the &#8220;Main&#8221; module.</p>
 <p>Note: <code class="xref c c-func docutils literal"><span class="pre">_julia_init()</span></code> now reverts to <code class="code docutils literal"><span class="pre">jl_root_task-&gt;current_module</span> <span class="pre">=</span> <span class="pre">jl_main_module</span></code> as it was before being set to <code class="docutils literal"><span class="pre">jl_core_module</span></code> above.</p>
 <p>Platform specific signal handlers are initialised for <code class="docutils literal"><span class="pre">SIGSEGV</span></code> (OSX, Linux), and <code class="docutils literal"><span class="pre">SIGFPE</span></code> (Windows).</p>
-<p>Other signals (<code class="docutils literal"><span class="pre">SIGINFO,</span> <span class="pre">SIGBUS,</span> <span class="pre">SIGILL,</span> <span class="pre">SIGTERM,</span> <span class="pre">SIGABRT,</span> <span class="pre">SIGQUIT,</span> <span class="pre">SIGSYS</span></code> and <code class="docutils literal"><span class="pre">SIGPIPE</span></code>) are hooked up to <a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/signals-unix.c">sigdie_handler()</a> which prints a backtrace.</p>
-<p><a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/dump.c">jl_init_restored_modules()</a> calls <a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/module.c">jl_module_run_initializer()</a> for each deserialised module to run the <code class="xref c c-func docutils literal"><span class="pre">__init__()</span></code> function.</p>
-<p>Finally <a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/signals-unix.c">sigint_handler()</a> is hooked up to <code class="docutils literal"><span class="pre">SIGINT</span></code> and calls <code class="code docutils literal"><span class="pre">jl_throw(jl_interrupt_exception)</span></code>.</p>
-<p><code class="xref c c-func docutils literal"><span class="pre">_julia_init()</span></code> then returns <a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/ui/repl.c">back to main() in julia/ui/repl.c</a> and main() calls <code class="code docutils literal"><span class="pre">true_main(argc,</span> <span class="pre">(char**)argv)</span></code>.</p>
+<p>Other signals (<code class="docutils literal"><span class="pre">SIGINFO,</span> <span class="pre">SIGBUS,</span> <span class="pre">SIGILL,</span> <span class="pre">SIGTERM,</span> <span class="pre">SIGABRT,</span> <span class="pre">SIGQUIT,</span> <span class="pre">SIGSYS</span></code> and <code class="docutils literal"><span class="pre">SIGPIPE</span></code>) are hooked up to <a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/signals-unix.c">sigdie_handler()</a> which prints a backtrace.</p>
+<p><a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/dump.c">jl_init_restored_modules()</a> calls <a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/module.c">jl_module_run_initializer()</a> for each deserialised module to run the <code class="xref c c-func docutils literal"><span class="pre">__init__()</span></code> function.</p>
+<p>Finally <a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/signals-unix.c">sigint_handler()</a> is hooked up to <code class="docutils literal"><span class="pre">SIGINT</span></code> and calls <code class="code docutils literal"><span class="pre">jl_throw(jl_interrupt_exception)</span></code>.</p>
+<p><code class="xref c c-func docutils literal"><span class="pre">_julia_init()</span></code> then returns <a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/ui/repl.c">back to main() in julia/ui/repl.c</a> and main() calls <code class="code docutils literal"><span class="pre">true_main(argc,</span> <span class="pre">(char**)argv)</span></code>.</p>
 <div class="sidebar">
 <p class="first sidebar-title">sysimg</p>
-<p>If there is a sysimg file, it contains a pre-cooked image of the <code class="xref jl jl-mod docutils literal"><span class="pre">Core</span></code> and <code class="xref jl jl-mod docutils literal"><span class="pre">Main</span></code> modules (and whatever else is created by <code class="docutils literal"><span class="pre">boot.jl</span></code>). See <a class="reference internal" href="../sysimg/#dev-sysimg"><span>Building the Julia system image</span></a>.</p>
-<p><a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/dump.c">jl_restore_system_image()</a> de-serialises the saved sysimg into the current Julia runtime environment and initialisation continues after <code class="xref c c-func docutils literal"><span class="pre">jl_init_box_caches()</span></code> below...</p>
-<p class="last">Note: <a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/dump.c">jl_restore_system_image() (and dump.c in general)</a> uses the <a class="reference internal" href="../stdio/#dev-ios"><span>Legacy ios.c library</span></a>.</p>
+<p>If there is a sysimg file, it contains a pre-cooked image of the <code class="xref jl jl-mod docutils literal"><span class="pre">Core</span></code> and <code class="xref jl jl-mod docutils literal"><span class="pre">Main</span></code> modules (and whatever else is created by <code class="docutils literal"><span class="pre">boot.jl</span></code>). See <a class="reference internal" href="../sysimg/#dev-sysimg"><span class="std std-ref">Building the Julia system image</span></a>.</p>
+<p><a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/dump.c">jl_restore_system_image()</a> de-serialises the saved sysimg into the current Julia runtime environment and initialisation continues after <code class="xref c c-func docutils literal"><span class="pre">jl_init_box_caches()</span></code> below...</p>
+<p class="last">Note: <a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/dump.c">jl_restore_system_image() (and dump.c in general)</a> uses the <a class="reference internal" href="../stdio/#dev-ios"><span class="std std-ref">Legacy ios.c library</span></a>.</p>
 </div>
 </div>
 <div class="section" id="true-main">
 <h2>true_main()<a class="headerlink" href="#true-main" title="Permalink to this headline">¶</a></h2>
-<p><a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/ui/repl.c">true_main()</a> loads the contents of <code class="code docutils literal"><span class="pre">argv[]</span></code> into <a class="reference internal" href="../../stdlib/constants/#Base.ARGS" title="Base.ARGS"><code class="xref jl jl-data docutils literal"><span class="pre">Base.ARGS</span></code></a>.</p>
-<p>If a .jl &#8220;program&#8221; file was supplied on the command line, then <a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/ui/repl.c">exec_program()</a> calls <a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/toplevel.c">jl_load(program,len)</a> which calls <a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/ast.c">jl_parse_eval_all</a> which repeatedly calls <a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/toplevel.c">jl_toplevel_eval_flex()</a> to execute the program.</p>
-<p>However, in our example (<code class="code docutils literal"><span class="pre">julia</span> <span class="pre">-e</span> <span class="pre">'println(&quot;Hello</span> <span class="pre">World!&quot;)'</span></code>), <a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/module.c">jl_get_global(jl_base_module, jl_symbol(&#8220;_start&#8221;))</a> looks up <a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/base/client.jl">Base._start</a> and <a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/julia.h">jl_apply()</a> executes it.</p>
+<p><a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/ui/repl.c">true_main()</a> loads the contents of <code class="code docutils literal"><span class="pre">argv[]</span></code> into <a class="reference internal" href="../../stdlib/constants/#Base.ARGS" title="Base.ARGS"><code class="xref jl jl-data docutils literal"><span class="pre">Base.ARGS</span></code></a>.</p>
+<p>If a .jl &#8220;program&#8221; file was supplied on the command line, then <a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/ui/repl.c">exec_program()</a> calls <a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/toplevel.c">jl_load(program,len)</a> which calls <a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/ast.c">jl_parse_eval_all</a> which repeatedly calls <a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/toplevel.c">jl_toplevel_eval_flex()</a> to execute the program.</p>
+<p>However, in our example (<code class="code docutils literal"><span class="pre">julia</span> <span class="pre">-e</span> <span class="pre">'println(&quot;Hello</span> <span class="pre">World!&quot;)'</span></code>), <a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/module.c">jl_get_global(jl_base_module, jl_symbol(&#8220;_start&#8221;))</a> looks up <a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/base/client.jl">Base._start</a> and <a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/julia.h">jl_apply()</a> executes it.</p>
 </div>
 <div class="section" id="id4">
 <h2>Base._start<a class="headerlink" href="#id4" title="Permalink to this headline">¶</a></h2>
-<p><a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/base/client.jl">Base._start</a> calls <a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/base/client.jl">Base.process_options</a> which calls <a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/ast.c">jl_parse_input_line(&#8220;println(&#8220;Hello World!&#8221;)&#8221;)</a> to create an expression object and <a class="reference internal" href="../../stdlib/base/#Base.eval" title="Base.eval"><code class="xref jl jl-func docutils literal"><span class="pre">Base.eval()</span></code></a> to execute it.</p>
+<p><a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/base/client.jl">Base._start</a> calls <a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/base/client.jl">Base.process_options</a> which calls <a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/ast.c">jl_parse_input_line(&#8220;println(&#8220;Hello World!&#8221;)&#8221;)</a> to create an expression object and <a class="reference internal" href="../../stdlib/base/#Base.eval" title="Base.eval"><code class="xref jl jl-func docutils literal"><span class="pre">Base.eval()</span></code></a> to execute it.</p>
 </div>
 <div class="section" id="base-eval">
 <h2>Base.eval<a class="headerlink" href="#base-eval" title="Permalink to this headline">¶</a></h2>
-<p><a class="reference internal" href="../../stdlib/base/#Base.eval" title="Base.eval"><code class="xref jl jl-func docutils literal"><span class="pre">Base.eval()</span></code></a> was <a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/builtins.c">mapped to jl_f_top_eval</a> by <code class="xref c c-func docutils literal"><span class="pre">jl_init_primitives()</span></code>.</p>
-<p><a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/builtins.c">jl_f_top_eval()</a> calls <a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/builtins.c">jl_toplevel_eval_in(jl_main_module, ex)</a>, where &#8220;ex&#8221; is the parsed expression <code class="code docutils literal"><span class="pre">println(&quot;Hello</span> <span class="pre">World!&quot;)</span></code>.</p>
-<p><a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/builtins.c">jl_toplevel_eval_in()</a> calls <a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/toplevel.c">jl_toplevel_eval_flex()</a> which calls <a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/interpreter.c">eval() in interpreter.c</a>.</p>
-<p>The stack dump below shows how the interpreter works its way through various methods of <a class="reference internal" href="../../stdlib/io-network/#Base.println" title="Base.println"><code class="xref jl jl-func docutils literal"><span class="pre">Base.println()</span></code></a> and <a class="reference internal" href="../../stdlib/io-network/#Base.print" title="Base.print"><code class="xref jl jl-func docutils literal"><span class="pre">Base.print()</span></code></a> before arriving at <a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/base/stream.jl">write{T}(s::IO, a::Array{T})</a>  which does <code class="code docutils literal"><span class="pre">ccall(jl_uv_write())</span></code>.</p>
-<p><a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/jl_uv.c">jl_uv_write()</a>
-calls <code class="xref c c-func docutils literal"><span class="pre">uv_write()</span></code> to write &#8220;Hello World!&#8221; to <code class="xref c c-macro docutils literal"><span class="pre">JL_STDOUT</span></code>. See <a class="reference internal" href="../stdio/#dev-libuv"><span>Libuv wrappers for stdio</span></a>.:</p>
+<p><a class="reference internal" href="../../stdlib/base/#Base.eval" title="Base.eval"><code class="xref jl jl-func docutils literal"><span class="pre">Base.eval()</span></code></a> was <a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/builtins.c">mapped to jl_f_top_eval</a> by <code class="xref c c-func docutils literal"><span class="pre">jl_init_primitives()</span></code>.</p>
+<p><a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/builtins.c">jl_f_top_eval()</a> calls <a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/builtins.c">jl_toplevel_eval_in(jl_main_module, ex)</a>, where &#8220;ex&#8221; is the parsed expression <code class="code docutils literal"><span class="pre">println(&quot;Hello</span> <span class="pre">World!&quot;)</span></code>.</p>
+<p><a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/builtins.c">jl_toplevel_eval_in()</a> calls <a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/toplevel.c">jl_toplevel_eval_flex()</a> which calls <a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/interpreter.c">eval() in interpreter.c</a>.</p>
+<p>The stack dump below shows how the interpreter works its way through various methods of <a class="reference internal" href="../../stdlib/io-network/#Base.println" title="Base.println"><code class="xref jl jl-func docutils literal"><span class="pre">Base.println()</span></code></a> and <a class="reference internal" href="../../stdlib/io-network/#Base.print" title="Base.print"><code class="xref jl jl-func docutils literal"><span class="pre">Base.print()</span></code></a> before arriving at <a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/base/stream.jl">write{T}(s::IO, a::Array{T})</a>  which does <code class="code docutils literal"><span class="pre">ccall(jl_uv_write())</span></code>.</p>
+<p><a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/jl_uv.c">jl_uv_write()</a>
+calls <code class="xref c c-func docutils literal"><span class="pre">uv_write()</span></code> to write &#8220;Hello World!&#8221; to <code class="xref c c-macro docutils literal"><span class="pre">JL_STDOUT</span></code>. See <a class="reference internal" href="../stdio/#dev-libuv"><span class="std std-ref">Libuv wrappers for stdio</span></a>.:</p>
 <div class="highlight-c"><div class="highlight"><pre><span></span><span class="n">Hello</span> <span class="n">World</span><span class="o">!</span>
 </pre></div>
 </div>
@@ -834,13 +835,13 @@ job of printing &#8220;Hello World!&#8221;, the stack now rapidly unwinds back t
 </div>
 <div class="section" id="jl-atexit-hook">
 <h2>jl_atexit_hook()<a class="headerlink" href="#jl-atexit-hook" title="Permalink to this headline">¶</a></h2>
-<p><code class="xref c c-func docutils literal"><span class="pre">main()</span></code> calls <a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/init.c">jl_atexit_hook()</a>. This
-calls _atexit for each module, then calls <a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/gc.c">jl_gc_run_all_finalizers()</a>
+<p><code class="xref c c-func docutils literal"><span class="pre">main()</span></code> calls <a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/init.c">jl_atexit_hook()</a>. This
+calls _atexit for each module, then calls <a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/gc.c">jl_gc_run_all_finalizers()</a>
 and cleans up libuv handles.</p>
 </div>
 <div class="section" id="julia-save">
 <h2>julia_save()<a class="headerlink" href="#julia-save" title="Permalink to this headline">¶</a></h2>
-<p>Finally, <code class="xref c c-func docutils literal"><span class="pre">main()</span></code> calls <a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/init.c">julia_save()</a>, which if requested on the command line, saves the runtime state to a new system image. See <a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/gf.c">jl_compile_all()</a> and <a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/src/dump.c">jl_save_system_image()</a>.</p>
+<p>Finally, <code class="xref c c-func docutils literal"><span class="pre">main()</span></code> calls <a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/init.c">julia_save()</a>, which if requested on the command line, saves the runtime state to a new system image. See <a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/gf.c">jl_compile_all()</a> and <a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/src/dump.c">jl_save_system_image()</a>.</p>
 </div>
 </div>
 
@@ -880,7 +881,7 @@ and cleans up libuv handles.</p>
     <script type="text/javascript">
         var DOCUMENTATION_OPTIONS = {
             URL_ROOT:'../../',
-            VERSION:'0.5.1-pre',
+            VERSION:'0.5.3-pre',
             COLLAPSE_INDEX:false,
             FILE_SUFFIX:'',
             HAS_SOURCE:  true

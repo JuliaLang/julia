@@ -7,7 +7,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Dates and Time &mdash; Julia Language 0.5.1-pre documentation</title>
+  <title>Dates and Time &mdash; Julia Language 0.5.3-pre documentation</title>
   
 
   
@@ -30,7 +30,7 @@
   
     <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
   
-    <link rel="top" title="Julia Language 0.5.1-pre documentation" href="../../"/>
+    <link rel="top" title="Julia Language 0.5.3-pre documentation" href="../../"/>
         <link rel="next" title="Unit Testing" href="../test/"/>
         <link rel="prev" title="Package Manager Functions" href="../pkg/"/> 
 
@@ -149,6 +149,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#man-parametric-types">Parametric Types</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#type-aliases">Type Aliases</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#operations-on-types">Operations on Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/types/#custom-pretty-printing">Custom pretty-printing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#value-types">&#8220;Value types&#8221;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#nullable-types-representing-missing-values">Nullable Types: Representing Missing Values</a></li>
 </ul>
@@ -489,7 +490,7 @@
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="../pkg/">Package Manager Functions</a></li>
-<li class="toctree-l1 current"><a class="current reference internal" href="">Dates and Time</a><ul>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Dates and Time</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#dates-and-time-types">Dates and Time Types</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#dates-functions">Dates Functions</a></li>
 </ul>
@@ -813,7 +814,7 @@ Alternatively, you can write <code class="docutils literal"><span class="pre">us
 <dl class="function">
 <dt id="Dates.DateFormat">
 <code class="descname">DateFormat</code><span class="sig-paren">(</span><em>format::AbstractString</em>, <em>locale::AbstractString=&quot;english&quot;</em><span class="sig-paren">)</span> &rarr; DateFormat<a class="headerlink" href="#Dates.DateFormat" title="Permalink to this definition">¶</a></dt>
-<dd><p>Construct a date formatting object that can be used for parsing date strings or formatting a date object as a string. For details on the syntax for <code class="docutils literal"><span class="pre">format</span></code> see <a class="reference internal" href="#man-date-parsing"><span>parsing</span></a> and <a class="reference internal" href="#man-date-formatting"><span>formatting</span></a>.</p>
+<dd><p>Construct a date formatting object that can be used for parsing date strings or formatting a date object as a string. For details on the syntax for <code class="docutils literal"><span class="pre">format</span></code> see <a class="reference internal" href="#man-date-parsing"><span class="std std-ref">parsing</span></a> and <a class="reference internal" href="#man-date-formatting"><span class="std std-ref">formatting</span></a>.</p>
 </dd></dl>
 
 <dl class="function">
@@ -1245,14 +1246,14 @@ or 15 minutes) with <code class="docutils literal"><span class="pre">floor</span
 <code class="descname">floor</code><span class="sig-paren">(</span><em>dt::TimeType</em>, <em>p::Period</em><span class="sig-paren">)</span> &rarr; TimeType<a class="headerlink" href="#Dates.floor" title="Permalink to this definition">¶</a></dt>
 <dd><p>Returns the nearest <code class="docutils literal"><span class="pre">Date</span></code> or <code class="docutils literal"><span class="pre">DateTime</span></code> less than or equal to <code class="docutils literal"><span class="pre">dt</span></code> at resolution <code class="docutils literal"><span class="pre">p</span></code>.</p>
 <p>For convenience, <code class="docutils literal"><span class="pre">p</span></code> may be a type instead of a value: <code class="docutils literal"><span class="pre">floor(dt,</span> <span class="pre">Dates.Hour)</span></code> is a shortcut for <code class="docutils literal"><span class="pre">floor(dt,</span> <span class="pre">Dates.Hour(1))</span></code>.</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">floor</span><span class="p">(</span><span class="n">Date</span><span class="p">(</span><span class="mi">1985</span><span class="p">,</span> <span class="mi">8</span><span class="p">,</span> <span class="mi">16</span><span class="p">),</span> <span class="n">Dates</span><span class="o">.</span><span class="n">Month</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">floor</span><span class="p">(</span><span class="kt">Date</span><span class="p">(</span><span class="mi">1985</span><span class="p">,</span> <span class="mi">8</span><span class="p">,</span> <span class="mi">16</span><span class="p">),</span> <span class="n">Dates</span><span class="o">.</span><span class="n">Month</span><span class="p">)</span>
 <span class="mi">1985</span><span class="o">-</span><span class="mi">08</span><span class="o">-</span><span class="mi">01</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">floor</span><span class="p">(</span><span class="n">DateTime</span><span class="p">(</span><span class="mi">2013</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">13</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">31</span><span class="p">,</span> <span class="mi">20</span><span class="p">),</span> <span class="n">Dates</span><span class="o">.</span><span class="n">Minute</span><span class="p">(</span><span class="mi">15</span><span class="p">))</span>
-<span class="mi">2013</span><span class="o">-</span><span class="mi">02</span><span class="o">-</span><span class="mi">13</span><span class="n">T00</span><span class="p">:</span><span class="mi">30</span><span class="p">:</span><span class="mi">00</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">floor</span><span class="p">(</span><span class="kt">DateTime</span><span class="p">(</span><span class="mi">2013</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">13</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">31</span><span class="p">,</span> <span class="mi">20</span><span class="p">),</span> <span class="n">Dates</span><span class="o">.</span><span class="n">Minute</span><span class="p">(</span><span class="mi">15</span><span class="p">))</span>
+<span class="mi">2013</span><span class="o">-</span><span class="mi">02</span><span class="o">-</span><span class="mi">13</span><span class="n">T00</span><span class="o">:</span><span class="mi">30</span><span class="o">:</span><span class="mi">00</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">floor</span><span class="p">(</span><span class="n">DateTime</span><span class="p">(</span><span class="mi">2016</span><span class="p">,</span> <span class="mi">8</span><span class="p">,</span> <span class="mi">6</span><span class="p">,</span> <span class="mi">12</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="n">Dates</span><span class="o">.</span><span class="n">Day</span><span class="p">)</span>
-<span class="mi">2016</span><span class="o">-</span><span class="mi">08</span><span class="o">-</span><span class="mi">06</span><span class="n">T00</span><span class="p">:</span><span class="mi">00</span><span class="p">:</span><span class="mi">00</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">floor</span><span class="p">(</span><span class="kt">DateTime</span><span class="p">(</span><span class="mi">2016</span><span class="p">,</span> <span class="mi">8</span><span class="p">,</span> <span class="mi">6</span><span class="p">,</span> <span class="mi">12</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="n">Dates</span><span class="o">.</span><span class="n">Day</span><span class="p">)</span>
+<span class="mi">2016</span><span class="o">-</span><span class="mi">08</span><span class="o">-</span><span class="mi">06</span><span class="n">T00</span><span class="o">:</span><span class="mi">00</span><span class="o">:</span><span class="mi">00</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1262,14 +1263,14 @@ or 15 minutes) with <code class="docutils literal"><span class="pre">floor</span
 <code class="descname">ceil</code><span class="sig-paren">(</span><em>dt::TimeType</em>, <em>p::Period</em><span class="sig-paren">)</span> &rarr; TimeType<a class="headerlink" href="#Dates.ceil" title="Permalink to this definition">¶</a></dt>
 <dd><p>Returns the nearest <code class="docutils literal"><span class="pre">Date</span></code> or <code class="docutils literal"><span class="pre">DateTime</span></code> greater than or equal to <code class="docutils literal"><span class="pre">dt</span></code> at resolution <code class="docutils literal"><span class="pre">p</span></code>.</p>
 <p>For convenience, <code class="docutils literal"><span class="pre">p</span></code> may be a type instead of a value: <code class="docutils literal"><span class="pre">ceil(dt,</span> <span class="pre">Dates.Hour)</span></code> is a shortcut for <code class="docutils literal"><span class="pre">ceil(dt,</span> <span class="pre">Dates.Hour(1))</span></code>.</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">ceil</span><span class="p">(</span><span class="n">Date</span><span class="p">(</span><span class="mi">1985</span><span class="p">,</span> <span class="mi">8</span><span class="p">,</span> <span class="mi">16</span><span class="p">),</span> <span class="n">Dates</span><span class="o">.</span><span class="n">Month</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">ceil</span><span class="p">(</span><span class="kt">Date</span><span class="p">(</span><span class="mi">1985</span><span class="p">,</span> <span class="mi">8</span><span class="p">,</span> <span class="mi">16</span><span class="p">),</span> <span class="n">Dates</span><span class="o">.</span><span class="n">Month</span><span class="p">)</span>
 <span class="mi">1985</span><span class="o">-</span><span class="mi">09</span><span class="o">-</span><span class="mi">01</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">ceil</span><span class="p">(</span><span class="n">DateTime</span><span class="p">(</span><span class="mi">2013</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">13</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">31</span><span class="p">,</span> <span class="mi">20</span><span class="p">),</span> <span class="n">Dates</span><span class="o">.</span><span class="n">Minute</span><span class="p">(</span><span class="mi">15</span><span class="p">))</span>
-<span class="mi">2013</span><span class="o">-</span><span class="mi">02</span><span class="o">-</span><span class="mi">13</span><span class="n">T00</span><span class="p">:</span><span class="mi">45</span><span class="p">:</span><span class="mi">00</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">ceil</span><span class="p">(</span><span class="kt">DateTime</span><span class="p">(</span><span class="mi">2013</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">13</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">31</span><span class="p">,</span> <span class="mi">20</span><span class="p">),</span> <span class="n">Dates</span><span class="o">.</span><span class="n">Minute</span><span class="p">(</span><span class="mi">15</span><span class="p">))</span>
+<span class="mi">2013</span><span class="o">-</span><span class="mi">02</span><span class="o">-</span><span class="mi">13</span><span class="n">T00</span><span class="o">:</span><span class="mi">45</span><span class="o">:</span><span class="mi">00</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">ceil</span><span class="p">(</span><span class="n">DateTime</span><span class="p">(</span><span class="mi">2016</span><span class="p">,</span> <span class="mi">8</span><span class="p">,</span> <span class="mi">6</span><span class="p">,</span> <span class="mi">12</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="n">Dates</span><span class="o">.</span><span class="n">Day</span><span class="p">)</span>
-<span class="mi">2016</span><span class="o">-</span><span class="mi">08</span><span class="o">-</span><span class="mi">07</span><span class="n">T00</span><span class="p">:</span><span class="mi">00</span><span class="p">:</span><span class="mi">00</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">ceil</span><span class="p">(</span><span class="kt">DateTime</span><span class="p">(</span><span class="mi">2016</span><span class="p">,</span> <span class="mi">8</span><span class="p">,</span> <span class="mi">6</span><span class="p">,</span> <span class="mi">12</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="n">Dates</span><span class="o">.</span><span class="n">Day</span><span class="p">)</span>
+<span class="mi">2016</span><span class="o">-</span><span class="mi">08</span><span class="o">-</span><span class="mi">07</span><span class="n">T00</span><span class="o">:</span><span class="mi">00</span><span class="o">:</span><span class="mi">00</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1279,14 +1280,14 @@ or 15 minutes) with <code class="docutils literal"><span class="pre">floor</span
 <code class="descname">round</code><span class="sig-paren">(</span><em>dt::TimeType</em>, <em>p::Period</em><span class="optional">[</span>, <em>r::RoundingMode</em><span class="optional">]</span><span class="sig-paren">)</span> &rarr; TimeType<a class="headerlink" href="#Dates.round" title="Permalink to this definition">¶</a></dt>
 <dd><p>Returns the <code class="docutils literal"><span class="pre">Date</span></code> or <code class="docutils literal"><span class="pre">DateTime</span></code> nearest to <code class="docutils literal"><span class="pre">dt</span></code> at resolution <code class="docutils literal"><span class="pre">p</span></code>. By default (<code class="docutils literal"><span class="pre">RoundNearestTiesUp</span></code>), ties (e.g., rounding 9:30 to the nearest hour) will be rounded up.</p>
 <p>For convenience, <code class="docutils literal"><span class="pre">p</span></code> may be a type instead of a value: <code class="docutils literal"><span class="pre">round(dt,</span> <span class="pre">Dates.Hour)</span></code> is a shortcut for <code class="docutils literal"><span class="pre">round(dt,</span> <span class="pre">Dates.Hour(1))</span></code>.</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">round</span><span class="p">(</span><span class="n">Date</span><span class="p">(</span><span class="mi">1985</span><span class="p">,</span> <span class="mi">8</span><span class="p">,</span> <span class="mi">16</span><span class="p">),</span> <span class="n">Dates</span><span class="o">.</span><span class="n">Month</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">round</span><span class="p">(</span><span class="kt">Date</span><span class="p">(</span><span class="mi">1985</span><span class="p">,</span> <span class="mi">8</span><span class="p">,</span> <span class="mi">16</span><span class="p">),</span> <span class="n">Dates</span><span class="o">.</span><span class="n">Month</span><span class="p">)</span>
 <span class="mi">1985</span><span class="o">-</span><span class="mi">08</span><span class="o">-</span><span class="mi">01</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">round</span><span class="p">(</span><span class="n">DateTime</span><span class="p">(</span><span class="mi">2013</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">13</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">31</span><span class="p">,</span> <span class="mi">20</span><span class="p">),</span> <span class="n">Dates</span><span class="o">.</span><span class="n">Minute</span><span class="p">(</span><span class="mi">15</span><span class="p">))</span>
-<span class="mi">2013</span><span class="o">-</span><span class="mi">02</span><span class="o">-</span><span class="mi">13</span><span class="n">T00</span><span class="p">:</span><span class="mi">30</span><span class="p">:</span><span class="mi">00</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">round</span><span class="p">(</span><span class="kt">DateTime</span><span class="p">(</span><span class="mi">2013</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">13</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">31</span><span class="p">,</span> <span class="mi">20</span><span class="p">),</span> <span class="n">Dates</span><span class="o">.</span><span class="n">Minute</span><span class="p">(</span><span class="mi">15</span><span class="p">))</span>
+<span class="mi">2013</span><span class="o">-</span><span class="mi">02</span><span class="o">-</span><span class="mi">13</span><span class="n">T00</span><span class="o">:</span><span class="mi">30</span><span class="o">:</span><span class="mi">00</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">round</span><span class="p">(</span><span class="n">DateTime</span><span class="p">(</span><span class="mi">2016</span><span class="p">,</span> <span class="mi">8</span><span class="p">,</span> <span class="mi">6</span><span class="p">,</span> <span class="mi">12</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="n">Dates</span><span class="o">.</span><span class="n">Day</span><span class="p">)</span>
-<span class="mi">2016</span><span class="o">-</span><span class="mi">08</span><span class="o">-</span><span class="mi">07</span><span class="n">T00</span><span class="p">:</span><span class="mi">00</span><span class="p">:</span><span class="mi">00</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">round</span><span class="p">(</span><span class="kt">DateTime</span><span class="p">(</span><span class="mi">2016</span><span class="p">,</span> <span class="mi">8</span><span class="p">,</span> <span class="mi">6</span><span class="p">,</span> <span class="mi">12</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="n">Dates</span><span class="o">.</span><span class="n">Day</span><span class="p">)</span>
+<span class="mi">2016</span><span class="o">-</span><span class="mi">08</span><span class="o">-</span><span class="mi">07</span><span class="n">T00</span><span class="o">:</span><span class="mi">00</span><span class="o">:</span><span class="mi">00</span>
 </pre></div>
 </div>
 <p>Valid rounding modes for <code class="docutils literal"><span class="pre">round(::TimeType,</span> <span class="pre">::Period,</span> <span class="pre">::RoundingMode)</span></code> are <code class="docutils literal"><span class="pre">RoundNearestTiesUp</span></code> (default), <code class="docutils literal"><span class="pre">RoundDown</span></code> (<code class="docutils literal"><span class="pre">floor</span></code>), and <code class="docutils literal"><span class="pre">RoundUp</span></code> (<code class="docutils literal"><span class="pre">ceil</span></code>).</p>
@@ -1519,7 +1520,7 @@ or 15 minutes) with <code class="docutils literal"><span class="pre">floor</span
     <script type="text/javascript">
         var DOCUMENTATION_OPTIONS = {
             URL_ROOT:'../../',
-            VERSION:'0.5.1-pre',
+            VERSION:'0.5.3-pre',
             COLLAPSE_INDEX:false,
             FILE_SUFFIX:'',
             HAS_SOURCE:  true

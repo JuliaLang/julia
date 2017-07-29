@@ -109,7 +109,7 @@ especially important since C and Fortran APIs are notoriously
 inconsistent about how they indicate error conditions. For example, the
 ``getenv`` C library function is wrapped in the following Julia function,
 which is a simplified version of the actual definition from
-`env.jl <https://github.com/JuliaLang/julia/blob/master/base/env.jl>`_::
+`env.jl <https://github.com/JuliaLang/julia/blob/release-0.5/base/env.jl>`_::
 
     function getenv(var::AbstractString)
       val = ccall((:getenv, "libc"),
@@ -1016,7 +1016,7 @@ the variable::
     Ptr{Int32} @0x00007f418d0816b8
 
 The result is a pointer giving the address of the value. The value can be
-manipulated through this pointer using :func:`unsafe_load` and :func:`unsafe_store`.
+manipulated through this pointer using :func:`unsafe_load` and :func:`unsafe_store!`.
 
 
 Accessing Data through a Pointer
@@ -1094,7 +1094,7 @@ More About Callbacks
 --------------------
 
 For more details on how to pass callbacks to C libraries, see this
-`blog post <http://julialang.org/blog/2013/05/callback>`_.
+`blog post <https://julialang.org/blog/2013/05/callback>`_.
 
 C++
 ---

@@ -7,7 +7,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>SIMD Support &mdash; Julia Language 0.5.1-pre documentation</title>
+  <title>SIMD Support &mdash; Julia Language 0.5.3-pre documentation</title>
   
 
   
@@ -30,7 +30,7 @@
   
     <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
   
-    <link rel="top" title="Julia Language 0.5.1-pre documentation" href="../../"/>
+    <link rel="top" title="Julia Language 0.5.3-pre documentation" href="../../"/>
         <link rel="next" title="Reflection and introspection" href="../../devdocs/reflection/"/>
         <link rel="prev" title="StackTraces" href="../stacktraces/"/> 
 
@@ -149,6 +149,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#man-parametric-types">Parametric Types</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#type-aliases">Type Aliases</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#operations-on-types">Operations on Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/types/#custom-pretty-printing">Custom pretty-printing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#value-types">&#8220;Value types&#8221;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#nullable-types-representing-missing-values">Nullable Types: Representing Missing Values</a></li>
 </ul>
@@ -509,7 +510,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../libdl/">Dynamic Linker</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../profile/">Profiling</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../stacktraces/">StackTraces</a></li>
-<li class="toctree-l1 current"><a class="current reference internal" href="">SIMD Support</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">SIMD Support</a></li>
 </ul>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="../../devdocs/reflection/">Reflection and introspection</a></li>
@@ -578,7 +579,7 @@
 <p>Type <code class="docutils literal"><span class="pre">VecElement{T}</span></code> is intended for building libraries of SIMD operations.
 Practical use of it requires using <code class="docutils literal"><span class="pre">llvmcall</span></code>. The type is defined as:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">immutable</span> <span class="n">VecElement</span><span class="p">{</span><span class="n">T</span><span class="p">}</span>
-    <span class="n">value</span><span class="p">::</span><span class="n">T</span>
+    <span class="n">value</span><span class="o">::</span><span class="n">T</span>
 <span class="k">end</span>
 </pre></div>
 </div>
@@ -589,16 +590,16 @@ length is in the set {2-6,8-10,16}.</p>
 on such tuples. For example, the following program, when compiled
 with <code class="docutils literal"><span class="pre">julia</span> <span class="pre">-O3</span></code> generates two SIMD addition instructions (<code class="docutils literal"><span class="pre">addps</span></code>)
 on x86 systems:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">typealias</span><span class="nc"> m128</span> <span class="n">NTuple</span><span class="p">{</span><span class="mi">4</span><span class="p">,</span><span class="n">VecElement</span><span class="p">{</span><span class="kt">Float32</span><span class="p">}}</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">typealias</span> <span class="n">m128</span> <span class="kt">NTuple</span><span class="p">{</span><span class="mi">4</span><span class="p">,</span><span class="n">VecElement</span><span class="p">{</span><span class="kt">Float32</span><span class="p">}}</span>
 
-<span class="k">function</span><span class="nf"> add</span><span class="p">(</span><span class="n">a</span><span class="p">::</span><span class="n">m128</span><span class="p">,</span> <span class="n">b</span><span class="p">::</span><span class="n">m128</span><span class="p">)</span>
+<span class="k">function</span> <span class="n">add</span><span class="p">(</span><span class="n">a</span><span class="o">::</span><span class="n">m128</span><span class="p">,</span> <span class="n">b</span><span class="o">::</span><span class="n">m128</span><span class="p">)</span>
     <span class="p">(</span><span class="n">VecElement</span><span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">value</span><span class="o">+</span><span class="n">b</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">value</span><span class="p">),</span>
      <span class="n">VecElement</span><span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">value</span><span class="o">+</span><span class="n">b</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">value</span><span class="p">),</span>
      <span class="n">VecElement</span><span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span><span class="o">.</span><span class="n">value</span><span class="o">+</span><span class="n">b</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span><span class="o">.</span><span class="n">value</span><span class="p">),</span>
      <span class="n">VecElement</span><span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span><span class="o">.</span><span class="n">value</span><span class="o">+</span><span class="n">b</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span><span class="o">.</span><span class="n">value</span><span class="p">))</span>
 <span class="k">end</span>
 
-<span class="n">triple</span><span class="p">(</span><span class="n">c</span><span class="p">::</span><span class="n">m128</span><span class="p">)</span> <span class="o">=</span> <span class="n">add</span><span class="p">(</span><span class="n">add</span><span class="p">(</span><span class="n">c</span><span class="p">,</span><span class="n">c</span><span class="p">),</span><span class="n">c</span><span class="p">)</span>
+<span class="n">triple</span><span class="p">(</span><span class="n">c</span><span class="o">::</span><span class="n">m128</span><span class="p">)</span> <span class="o">=</span> <span class="n">add</span><span class="p">(</span><span class="n">add</span><span class="p">(</span><span class="n">c</span><span class="p">,</span><span class="n">c</span><span class="p">),</span><span class="n">c</span><span class="p">)</span>
 
 <span class="n">code_native</span><span class="p">(</span><span class="n">triple</span><span class="p">,(</span><span class="n">m128</span><span class="p">,))</span>
 </pre></div>
@@ -643,7 +644,7 @@ future use will mostly be via libraries that use <code class="docutils literal">
     <script type="text/javascript">
         var DOCUMENTATION_OPTIONS = {
             URL_ROOT:'../../',
-            VERSION:'0.5.1-pre',
+            VERSION:'0.5.3-pre',
             COLLAPSE_INDEX:false,
             FILE_SUFFIX:'',
             HAS_SOURCE:  true

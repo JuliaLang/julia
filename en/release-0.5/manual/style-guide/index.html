@@ -7,7 +7,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Style Guide &mdash; Julia Language 0.5.1-pre documentation</title>
+  <title>Style Guide &mdash; Julia Language 0.5.3-pre documentation</title>
   
 
   
@@ -30,7 +30,7 @@
   
     <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
   
-    <link rel="top" title="Julia Language 0.5.1-pre documentation" href="../../"/>
+    <link rel="top" title="Julia Language 0.5.3-pre documentation" href="../../"/>
         <link rel="next" title="Frequently Asked Questions" href="../faq/"/>
         <link rel="prev" title="Workflow Tips" href="../workflow-tips/"/> 
 
@@ -149,6 +149,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../types/#man-parametric-types">Parametric Types</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../types/#type-aliases">Type Aliases</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../types/#operations-on-types">Operations on Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#custom-pretty-printing">Custom pretty-printing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../types/#value-types">&#8220;Value types&#8221;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../types/#nullable-types-representing-missing-values">Nullable Types: Representing Missing Values</a></li>
 </ul>
@@ -356,7 +357,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../workflow-tips/#browser-based-workflow">Browser-based workflow</a></li>
 </ul>
 </li>
-<li class="toctree-l1 current"><a class="current reference internal" href="">Style Guide</a><ul>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Style Guide</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#write-functions-not-just-scripts">Write functions, not just scripts</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#avoid-writing-overly-specific-types">Avoid writing overly-specific types</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#handle-excess-argument-diversity-in-the-caller">Handle excess argument diversity in the caller</a></li>
@@ -592,7 +593,7 @@ of operating directly on global variables (aside from constants like <a class="r
 <div class="section" id="avoid-writing-overly-specific-types">
 <h2>Avoid writing overly-specific types<a class="headerlink" href="#avoid-writing-overly-specific-types" title="Permalink to this headline">¶</a></h2>
 <p>Code should be as generic as possible. Instead of writing:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="nb">convert</span><span class="p">(</span><span class="n">Complex</span><span class="p">{</span><span class="kt">Float64</span><span class="p">},</span> <span class="n">x</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">convert</span><span class="p">(</span><span class="kt">Complex</span><span class="p">{</span><span class="kt">Float64</span><span class="p">},</span> <span class="n">x</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>it&#8217;s better to use available generic functions:</p>
@@ -611,9 +612,9 @@ is passed that does not support any of the requisite operations.
 (This is known as <a class="reference external" href="https://en.wikipedia.org/wiki/Duck_typing">duck typing</a>.)</p>
 <p>For example, consider the following definitions of a function
 <code class="docutils literal"><span class="pre">addone</span></code> that returns one plus its argument:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">addone</span><span class="p">(</span><span class="n">x</span><span class="p">::</span><span class="kt">Int</span><span class="p">)</span> <span class="o">=</span> <span class="n">x</span> <span class="o">+</span> <span class="mi">1</span>             <span class="c"># works only for Int</span>
-<span class="n">addone</span><span class="p">(</span><span class="n">x</span><span class="p">::</span><span class="n">Integer</span><span class="p">)</span> <span class="o">=</span> <span class="n">x</span> <span class="o">+</span> <span class="n">one</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>    <span class="c"># any integer type</span>
-<span class="n">addone</span><span class="p">(</span><span class="n">x</span><span class="p">::</span><span class="n">Number</span><span class="p">)</span> <span class="o">=</span> <span class="n">x</span> <span class="o">+</span> <span class="n">one</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>     <span class="c"># any numeric type</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">addone</span><span class="p">(</span><span class="n">x</span><span class="o">::</span><span class="kt">Int</span><span class="p">)</span> <span class="o">=</span> <span class="n">x</span> <span class="o">+</span> <span class="mi">1</span>             <span class="c"># works only for Int</span>
+<span class="n">addone</span><span class="p">(</span><span class="n">x</span><span class="o">::</span><span class="kt">Integer</span><span class="p">)</span> <span class="o">=</span> <span class="n">x</span> <span class="o">+</span> <span class="n">one</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>    <span class="c"># any integer type</span>
+<span class="n">addone</span><span class="p">(</span><span class="n">x</span><span class="o">::</span><span class="kt">Number</span><span class="p">)</span> <span class="o">=</span> <span class="n">x</span> <span class="o">+</span> <span class="n">one</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>     <span class="c"># any numeric type</span>
 <span class="n">addone</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">=</span> <span class="n">x</span> <span class="o">+</span> <span class="n">one</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>             <span class="c"># any type supporting + and one</span>
 </pre></div>
 </div>
@@ -632,7 +633,7 @@ above are completely redundant.</p>
 <div class="section" id="handle-excess-argument-diversity-in-the-caller">
 <h2>Handle excess argument diversity in the caller<a class="headerlink" href="#handle-excess-argument-diversity-in-the-caller" title="Permalink to this headline">¶</a></h2>
 <p>Instead of:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> foo</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">foo</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
     <span class="n">x</span> <span class="o">=</span> <span class="kt">Int</span><span class="p">(</span><span class="n">x</span><span class="p">);</span> <span class="n">y</span> <span class="o">=</span> <span class="kt">Int</span><span class="p">(</span><span class="n">y</span><span class="p">)</span>
     <span class="o">...</span>
 <span class="k">end</span>
@@ -640,7 +641,7 @@ above are completely redundant.</p>
 </pre></div>
 </div>
 <p>use:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> foo</span><span class="p">(</span><span class="n">x</span><span class="p">::</span><span class="kt">Int</span><span class="p">,</span> <span class="n">y</span><span class="p">::</span><span class="kt">Int</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">foo</span><span class="p">(</span><span class="n">x</span><span class="o">::</span><span class="kt">Int</span><span class="p">,</span> <span class="n">y</span><span class="o">::</span><span class="kt">Int</span><span class="p">)</span>
     <span class="o">...</span>
 <span class="k">end</span>
 <span class="n">foo</span><span class="p">(</span><span class="kt">Int</span><span class="p">(</span><span class="n">x</span><span class="p">),</span> <span class="kt">Int</span><span class="p">(</span><span class="n">y</span><span class="p">))</span>
@@ -656,15 +657,15 @@ more specific types leaves more &#8220;space&#8221; for future method definition
 <div class="section" id="append-to-names-of-functions-that-modify-their-arguments">
 <h2>Append <code class="docutils literal"><span class="pre">!</span></code> to names of functions that modify their arguments<a class="headerlink" href="#append-to-names-of-functions-that-modify-their-arguments" title="Permalink to this headline">¶</a></h2>
 <p>Instead of:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> double</span><span class="p">{</span><span class="n">T</span><span class="o">&lt;:</span><span class="n">Number</span><span class="p">}(</span><span class="n">a</span><span class="p">::</span><span class="n">AbstractArray</span><span class="p">{</span><span class="n">T</span><span class="p">})</span>
-    <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="n">endof</span><span class="p">(</span><span class="n">a</span><span class="p">);</span> <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*=</span> <span class="mi">2</span><span class="p">;</span> <span class="k">end</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">double</span><span class="p">{</span><span class="n">T</span><span class="o">&lt;:</span><span class="kt">Number</span><span class="p">}(</span><span class="n">a</span><span class="o">::</span><span class="kt">AbstractArray</span><span class="p">{</span><span class="n">T</span><span class="p">})</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="o">:</span><span class="n">endof</span><span class="p">(</span><span class="n">a</span><span class="p">);</span> <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*=</span> <span class="mi">2</span><span class="p">;</span> <span class="k">end</span>
     <span class="n">a</span>
 <span class="k">end</span>
 </pre></div>
 </div>
 <p>use:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> double</span><span class="o">!</span><span class="p">{</span><span class="n">T</span><span class="o">&lt;:</span><span class="n">Number</span><span class="p">}(</span><span class="n">a</span><span class="p">::</span><span class="n">AbstractArray</span><span class="p">{</span><span class="n">T</span><span class="p">})</span>
-    <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="n">endof</span><span class="p">(</span><span class="n">a</span><span class="p">);</span> <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*=</span> <span class="mi">2</span><span class="p">;</span> <span class="k">end</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">double!</span><span class="p">{</span><span class="n">T</span><span class="o">&lt;:</span><span class="kt">Number</span><span class="p">}(</span><span class="n">a</span><span class="o">::</span><span class="kt">AbstractArray</span><span class="p">{</span><span class="n">T</span><span class="p">})</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="o">:</span><span class="n">endof</span><span class="p">(</span><span class="n">a</span><span class="p">);</span> <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">*=</span> <span class="mi">2</span><span class="p">;</span> <span class="k">end</span>
     <span class="n">a</span>
 <span class="k">end</span>
 </pre></div>
@@ -683,9 +684,9 @@ could be cleaner.</p>
 <div class="section" id="avoid-type-unions-in-fields">
 <h2>Avoid type Unions in fields<a class="headerlink" href="#avoid-type-unions-in-fields" title="Permalink to this headline">¶</a></h2>
 <p>When creating a type such as:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span><span class="nc"> MyType</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span> <span class="n">MyType</span>
     <span class="o">...</span>
-    <span class="n">x</span><span class="p">::</span><span class="n">Union</span><span class="p">{</span><span class="n">Void</span><span class="p">,</span><span class="n">T</span><span class="p">}</span>
+    <span class="n">x</span><span class="o">::</span><span class="kt">Union</span><span class="p">{</span><span class="kt">Void</span><span class="p">,</span><span class="n">T</span><span class="p">}</span>
 <span class="k">end</span>
 </pre></div>
 </div>
@@ -700,13 +701,13 @@ For example, often the field will start as <code class="docutils literal"><span 
 some well-defined point. In that case, consider leaving it undefined at first.</li>
 <li>If <code class="docutils literal"><span class="pre">x</span></code> really needs to hold no value at some times, define it as
 <code class="docutils literal"><span class="pre">::Nullable{T}</span></code> instead, as this guarantees type-stability in the code
-accessing this field (see <a class="reference internal" href="../types/#man-nullable-types"><span>Nullable types</span></a>)</li>
+accessing this field (see <a class="reference internal" href="../types/#man-nullable-types"><span class="std std-ref">Nullable types</span></a>)</li>
 </ul>
 </div>
 <div class="section" id="avoid-elaborate-container-types">
 <h2>Avoid elaborate container types<a class="headerlink" href="#avoid-elaborate-container-types" title="Permalink to this headline">¶</a></h2>
 <p>It is usually not much help to construct arrays like the following:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">a</span> <span class="o">=</span> <span class="n">Array</span><span class="p">{</span><span class="n">Union</span><span class="p">{</span><span class="kt">Int</span><span class="p">,</span><span class="n">AbstractString</span><span class="p">,</span><span class="n">Tuple</span><span class="p">,</span><span class="n">Array</span><span class="p">}}(</span><span class="n">n</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">a</span> <span class="o">=</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Union</span><span class="p">{</span><span class="kt">Int</span><span class="p">,</span><span class="kt">AbstractString</span><span class="p">,</span><span class="kt">Tuple</span><span class="p">,</span><span class="kt">Array</span><span class="p">}}(</span><span class="n">n</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>In this case <code class="docutils literal"><span class="pre">Array{Any}(n)</span></code> is better. It is also more helpful to the compiler
@@ -757,11 +758,11 @@ it is often even better to leave it alone, and not convert it to an array.</p>
 <div class="section" id="don-t-use-unnecessary-static-parameters">
 <h2>Don&#8217;t use unnecessary static parameters<a class="headerlink" href="#don-t-use-unnecessary-static-parameters" title="Permalink to this headline">¶</a></h2>
 <p>A function signature:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">foo</span><span class="p">{</span><span class="n">T</span><span class="o">&lt;:</span><span class="n">Real</span><span class="p">}(</span><span class="n">x</span><span class="p">::</span><span class="n">T</span><span class="p">)</span> <span class="o">=</span> <span class="o">...</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">foo</span><span class="p">{</span><span class="n">T</span><span class="o">&lt;:</span><span class="kt">Real</span><span class="p">}(</span><span class="n">x</span><span class="o">::</span><span class="n">T</span><span class="p">)</span> <span class="o">=</span> <span class="o">...</span>
 </pre></div>
 </div>
 <p>should be written as:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">foo</span><span class="p">(</span><span class="n">x</span><span class="p">::</span><span class="n">Real</span><span class="p">)</span> <span class="o">=</span> <span class="o">...</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">foo</span><span class="p">(</span><span class="n">x</span><span class="o">::</span><span class="kt">Real</span><span class="p">)</span> <span class="o">=</span> <span class="o">...</span>
 </pre></div>
 </div>
 <p>instead, especially if <code class="docutils literal"><span class="pre">T</span></code> is not used in the function body.
@@ -770,14 +771,14 @@ There is no performance difference.
 Note that this is not a general caution against static parameters, just
 against uses where they are not needed.</p>
 <p>Note also that container types, specifically may need type parameters in
-function calls. See the FAQ <a class="reference internal" href="../performance-tips/#man-abstract-container-type"><span>Avoid fields with abstract containers</span></a>
+function calls. See the FAQ <a class="reference internal" href="../performance-tips/#man-abstract-container-type"><span class="std std-ref">Avoid fields with abstract containers</span></a>
 for more information.</p>
 </div>
 <div class="section" id="avoid-confusion-about-whether-something-is-an-instance-or-a-type">
 <h2>Avoid confusion about whether something is an instance or a type<a class="headerlink" href="#avoid-confusion-about-whether-something-is-an-instance-or-a-type" title="Permalink to this headline">¶</a></h2>
 <p>Sets of definitions like the following are confusing:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">foo</span><span class="p">(::</span><span class="n">Type</span><span class="p">{</span><span class="n">MyType</span><span class="p">})</span> <span class="o">=</span> <span class="o">...</span>
-<span class="n">foo</span><span class="p">(::</span><span class="n">MyType</span><span class="p">)</span> <span class="o">=</span> <span class="n">foo</span><span class="p">(</span><span class="n">MyType</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">foo</span><span class="p">(</span><span class="o">::</span><span class="kt">Type</span><span class="p">{</span><span class="n">MyType</span><span class="p">})</span> <span class="o">=</span> <span class="o">...</span>
+<span class="n">foo</span><span class="p">(</span><span class="o">::</span><span class="n">MyType</span><span class="p">)</span> <span class="o">=</span> <span class="n">foo</span><span class="p">(</span><span class="n">MyType</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>Decide whether the concept in question will be written as <code class="docutils literal"><span class="pre">MyType</span></code> or
@@ -802,14 +803,14 @@ to the run-time values it needs.</p>
 <div class="section" id="don-t-expose-unsafe-operations-at-the-interface-level">
 <h2>Don&#8217;t expose unsafe operations at the interface level<a class="headerlink" href="#don-t-expose-unsafe-operations-at-the-interface-level" title="Permalink to this headline">¶</a></h2>
 <p>If you have a type that uses a native pointer:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span><span class="nc"> NativeType</span>
-    <span class="n">p</span><span class="p">::</span><span class="n">Ptr</span><span class="p">{</span><span class="n">UInt8</span><span class="p">}</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span> <span class="n">NativeType</span>
+    <span class="n">p</span><span class="o">::</span><span class="kt">Ptr</span><span class="p">{</span><span class="kt">UInt8</span><span class="p">}</span>
     <span class="o">...</span>
 <span class="k">end</span>
 </pre></div>
 </div>
 <p>don&#8217;t write definitions like the following:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">getindex</span><span class="p">(</span><span class="n">x</span><span class="p">::</span><span class="n">NativeType</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span> <span class="o">=</span> <span class="n">unsafe_load</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">p</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">getindex</span><span class="p">(</span><span class="n">x</span><span class="o">::</span><span class="n">NativeType</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span> <span class="o">=</span> <span class="n">unsafe_load</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">p</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>The problem is that users of this type can write <code class="docutils literal"><span class="pre">x[i]</span></code> without realizing
@@ -820,7 +821,7 @@ have <code class="docutils literal"><span class="pre">unsafe</span></code> somew
 <div class="section" id="don-t-overload-methods-of-base-container-types">
 <h2>Don&#8217;t overload methods of base container types<a class="headerlink" href="#don-t-overload-methods-of-base-container-types" title="Permalink to this headline">¶</a></h2>
 <p>It is possible to write definitions like the following:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">show</span><span class="p">(</span><span class="n">io</span><span class="p">::</span><span class="n">IO</span><span class="p">,</span> <span class="n">v</span><span class="p">::</span><span class="n">Vector</span><span class="p">{</span><span class="n">MyType</span><span class="p">})</span> <span class="o">=</span> <span class="o">...</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">show</span><span class="p">(</span><span class="n">io</span><span class="o">::</span><span class="kt">IO</span><span class="p">,</span> <span class="n">v</span><span class="o">::</span><span class="kt">Vector</span><span class="p">{</span><span class="n">MyType</span><span class="p">})</span> <span class="o">=</span> <span class="o">...</span>
 </pre></div>
 </div>
 <p>This would provide custom showing of vectors with a specific new element type.
@@ -850,7 +851,7 @@ run with many different numeric type arguments, try using literals of a numeric
 type that will affect the arguments as little as possible through promotion.</p>
 <p>For example,</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">f</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">=</span> <span class="mf">2.0</span> <span class="o">*</span> <span class="n">x</span>
-<span class="n">f</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span><span class="nf"> with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+<span class="n">f</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span> <span class="n">with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">f</span><span class="p">(</span><span class="mi">1</span><span class="o">//</span><span class="mi">2</span><span class="p">)</span>
 <span class="mf">1.0</span>
@@ -864,7 +865,7 @@ type that will affect the arguments as little as possible through promotion.</p>
 </div>
 <p>while</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">g</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">x</span>
-<span class="n">g</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span><span class="nf"> with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+<span class="n">g</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span> <span class="n">with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">g</span><span class="p">(</span><span class="mi">1</span><span class="o">//</span><span class="mi">2</span><span class="p">)</span>
 <span class="mi">1</span><span class="o">//</span><span class="mi">1</span>
@@ -882,7 +883,7 @@ the type of the input argument, while the first didn&#8217;t. This is because e.
 multiplication. Similarly, <code class="xref jl jl-obj docutils literal"><span class="pre">Rational</span></code> literals are less type disruptive than
 <a class="reference internal" href="../../stdlib/numbers/#Base.Float64" title="Base.Float64"><code class="xref jl jl-obj docutils literal"><span class="pre">Float64</span></code></a> literals, but more disruptive than <code class="xref jl jl-obj docutils literal"><span class="pre">Int</span></code>s:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">h</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">=</span> <span class="mi">2</span><span class="o">//</span><span class="mi">1</span> <span class="o">*</span> <span class="n">x</span>
-<span class="n">h</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span><span class="nf"> with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+<span class="n">h</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span> <span class="n">with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">h</span><span class="p">(</span><span class="mi">1</span><span class="o">//</span><span class="mi">2</span><span class="p">)</span>
 <span class="mi">1</span><span class="o">//</span><span class="mi">1</span>
@@ -935,7 +936,7 @@ non-integer numbers, in order to make it easier to use your code.</p>
     <script type="text/javascript">
         var DOCUMENTATION_OPTIONS = {
             URL_ROOT:'../../',
-            VERSION:'0.5.1-pre',
+            VERSION:'0.5.3-pre',
             COLLAPSE_INDEX:false,
             FILE_SUFFIX:'',
             HAS_SOURCE:  true

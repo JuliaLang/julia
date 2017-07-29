@@ -7,7 +7,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Linear Algebra &mdash; Julia Language 0.5.1-pre documentation</title>
+  <title>Linear Algebra &mdash; Julia Language 0.5.3-pre documentation</title>
   
 
   
@@ -30,7 +30,7 @@
   
     <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
   
-    <link rel="top" title="Julia Language 0.5.1-pre documentation" href="../../"/>
+    <link rel="top" title="Julia Language 0.5.3-pre documentation" href="../../"/>
         <link rel="next" title="Constants" href="../constants/"/>
         <link rel="prev" title="Tasks and Parallel Computing" href="../parallel/"/> 
 
@@ -149,6 +149,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#man-parametric-types">Parametric Types</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#type-aliases">Type Aliases</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#operations-on-types">Operations on Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/types/#custom-pretty-printing">Custom pretty-printing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#value-types">&#8220;Value types&#8221;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#nullable-types-representing-missing-values">Nullable Types: Representing Missing Values</a></li>
 </ul>
@@ -464,7 +465,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../parallel/#cluster-manager-interface">Cluster Manager Interface</a></li>
 </ul>
 </li>
-<li class="toctree-l1 current"><a class="current reference internal" href="">Linear Algebra</a><ul>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Linear Algebra</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#module-Base.LinAlg">Standard Functions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#low-level-matrix-operations">Low-level matrix operations</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#module-Base.LinAlg.BLAS">BLAS Functions</a></li>
@@ -695,8 +696,8 @@
 <p><strong>Example</strong></p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">dv</span> <span class="o">=</span> <span class="n">rand</span><span class="p">(</span><span class="mi">5</span><span class="p">)</span>
 <span class="n">ev</span> <span class="o">=</span> <span class="n">rand</span><span class="p">(</span><span class="mi">4</span><span class="p">)</span>
-<span class="n">Bu</span> <span class="o">=</span> <span class="n">Bidiagonal</span><span class="p">(</span><span class="n">dv</span><span class="p">,</span> <span class="n">ev</span><span class="p">,</span> <span class="n">true</span><span class="p">)</span> <span class="c">#e is on the first superdiagonal</span>
-<span class="n">Bl</span> <span class="o">=</span> <span class="n">Bidiagonal</span><span class="p">(</span><span class="n">dv</span><span class="p">,</span> <span class="n">ev</span><span class="p">,</span> <span class="n">false</span><span class="p">)</span> <span class="c">#e is on the first subdiagonal</span>
+<span class="n">Bu</span> <span class="o">=</span> <span class="kt">Bidiagonal</span><span class="p">(</span><span class="n">dv</span><span class="p">,</span> <span class="n">ev</span><span class="p">,</span> <span class="kc">true</span><span class="p">)</span> <span class="c">#e is on the first superdiagonal</span>
+<span class="n">Bl</span> <span class="o">=</span> <span class="kt">Bidiagonal</span><span class="p">(</span><span class="n">dv</span><span class="p">,</span> <span class="n">ev</span><span class="p">,</span> <span class="kc">false</span><span class="p">)</span> <span class="c">#e is on the first subdiagonal</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -708,8 +709,8 @@
 <p><strong>Example</strong></p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">dv</span> <span class="o">=</span> <span class="n">rand</span><span class="p">(</span><span class="mi">5</span><span class="p">)</span>
 <span class="n">ev</span> <span class="o">=</span> <span class="n">rand</span><span class="p">(</span><span class="mi">4</span><span class="p">)</span>
-<span class="n">Bu</span> <span class="o">=</span> <span class="n">Bidiagonal</span><span class="p">(</span><span class="n">dv</span><span class="p">,</span> <span class="n">ev</span><span class="p">,</span> <span class="sc">&#39;U&#39;</span><span class="p">)</span> <span class="c">#e is on the first superdiagonal</span>
-<span class="n">Bl</span> <span class="o">=</span> <span class="n">Bidiagonal</span><span class="p">(</span><span class="n">dv</span><span class="p">,</span> <span class="n">ev</span><span class="p">,</span> <span class="sc">&#39;L&#39;</span><span class="p">)</span> <span class="c">#e is on the first subdiagonal</span>
+<span class="n">Bu</span> <span class="o">=</span> <span class="kt">Bidiagonal</span><span class="p">(</span><span class="n">dv</span><span class="p">,</span> <span class="n">ev</span><span class="p">,</span> <span class="sc">&#39;U&#39;</span><span class="p">)</span> <span class="c">#e is on the first superdiagonal</span>
+<span class="n">Bl</span> <span class="o">=</span> <span class="kt">Bidiagonal</span><span class="p">(</span><span class="n">dv</span><span class="p">,</span> <span class="n">ev</span><span class="p">,</span> <span class="sc">&#39;L&#39;</span><span class="p">)</span> <span class="c">#e is on the first subdiagonal</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -720,8 +721,8 @@
 <dd><p>Construct a <code class="docutils literal"><span class="pre">Bidiagonal</span></code> matrix from the main diagonal of <code class="docutils literal"><span class="pre">A</span></code> and its first super- (if <code class="docutils literal"><span class="pre">isupper=true</span></code>) or sub-diagonal (if <code class="docutils literal"><span class="pre">isupper=false</span></code>).</p>
 <p><strong>Example</strong></p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">A</span> <span class="o">=</span> <span class="n">rand</span><span class="p">(</span><span class="mi">5</span><span class="p">,</span><span class="mi">5</span><span class="p">)</span>
-<span class="n">Bu</span> <span class="o">=</span> <span class="n">Bidiagonal</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">true</span><span class="p">)</span> <span class="c">#contains the main diagonal and first superdiagonal of A</span>
-<span class="n">Bl</span> <span class="o">=</span> <span class="n">Bidiagonal</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">false</span><span class="p">)</span> <span class="c">#contains the main diagonal and first subdiagonal of A</span>
+<span class="n">Bu</span> <span class="o">=</span> <span class="kt">Bidiagonal</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="kc">true</span><span class="p">)</span> <span class="c">#contains the main diagonal and first superdiagonal of A</span>
+<span class="n">Bl</span> <span class="o">=</span> <span class="kt">Bidiagonal</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="kc">false</span><span class="p">)</span> <span class="c">#contains the main diagonal and first subdiagonal of A</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -744,8 +745,8 @@
 <dd><p>Construct a <code class="docutils literal"><span class="pre">Symmetric</span></code> matrix from the upper (if <code class="docutils literal"><span class="pre">uplo</span> <span class="pre">=</span> <span class="pre">:U</span></code>) or lower (if <code class="docutils literal"><span class="pre">uplo</span> <span class="pre">=</span> <span class="pre">:L</span></code>) triangle of <code class="docutils literal"><span class="pre">A</span></code>.</p>
 <p><strong>Example</strong></p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">A</span> <span class="o">=</span> <span class="n">randn</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span><span class="mi">10</span><span class="p">)</span>
-<span class="n">Supper</span> <span class="o">=</span> <span class="n">Symmetric</span><span class="p">(</span><span class="n">A</span><span class="p">)</span>
-<span class="n">Slower</span> <span class="o">=</span> <span class="n">Symmetric</span><span class="p">(</span><span class="n">A</span><span class="p">,:</span><span class="n">L</span><span class="p">)</span>
+<span class="n">Supper</span> <span class="o">=</span> <span class="kt">Symmetric</span><span class="p">(</span><span class="n">A</span><span class="p">)</span>
+<span class="n">Slower</span> <span class="o">=</span> <span class="kt">Symmetric</span><span class="p">(</span><span class="n">A</span><span class="p">,</span><span class="o">:</span><span class="n">L</span><span class="p">)</span>
 <span class="n">eigfact</span><span class="p">(</span><span class="n">Supper</span><span class="p">)</span>
 </pre></div>
 </div>
@@ -758,8 +759,8 @@
 <dd><p>Construct a <code class="docutils literal"><span class="pre">Hermitian</span></code> matrix from the upper (if <code class="docutils literal"><span class="pre">uplo</span> <span class="pre">=</span> <span class="pre">:U</span></code>) or lower (if <code class="docutils literal"><span class="pre">uplo</span> <span class="pre">=</span> <span class="pre">:L</span></code>) triangle of <code class="docutils literal"><span class="pre">A</span></code>.</p>
 <p><strong>Example</strong></p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">A</span> <span class="o">=</span> <span class="n">randn</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span><span class="mi">10</span><span class="p">)</span>
-<span class="n">Hupper</span> <span class="o">=</span> <span class="n">Hermitian</span><span class="p">(</span><span class="n">A</span><span class="p">)</span>
-<span class="n">Hlower</span> <span class="o">=</span> <span class="n">Hermitian</span><span class="p">(</span><span class="n">A</span><span class="p">,:</span><span class="n">L</span><span class="p">)</span>
+<span class="n">Hupper</span> <span class="o">=</span> <span class="kt">Hermitian</span><span class="p">(</span><span class="n">A</span><span class="p">)</span>
+<span class="n">Hlower</span> <span class="o">=</span> <span class="kt">Hermitian</span><span class="p">(</span><span class="n">A</span><span class="p">,</span><span class="o">:</span><span class="n">L</span><span class="p">)</span>
 <span class="n">eigfact</span><span class="p">(</span><span class="n">Hupper</span><span class="p">)</span>
 </pre></div>
 </div>
@@ -1244,18 +1245,18 @@
 <dd><p>Computes generalized eigenvalues (<code class="docutils literal"><span class="pre">D</span></code>) and vectors (<code class="docutils literal"><span class="pre">V</span></code>) of <code class="docutils literal"><span class="pre">A</span></code> with respect to <code class="docutils literal"><span class="pre">B</span></code>.</p>
 <p><code class="docutils literal"><span class="pre">eig</span></code> is a wrapper around <a class="reference internal" href="#Base.eigfact" title="Base.eigfact"><code class="xref jl jl-func docutils literal"><span class="pre">eigfact()</span></code></a>, extracting all parts of the factorization to a tuple; where possible, using <a class="reference internal" href="#Base.eigfact" title="Base.eigfact"><code class="xref jl jl-func docutils literal"><span class="pre">eigfact()</span></code></a> is recommended.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">A</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span> <span class="mi">0</span><span class="p">;</span> <span class="mi">0</span> <span class="o">-</span><span class="mi">1</span><span class="p">]</span>
-<span class="mi">2</span><span class="n">×2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">×2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>   <span class="mi">0</span>
  <span class="mi">0</span>  <span class="o">-</span><span class="mi">1</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">B</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span> <span class="mi">1</span><span class="p">;</span> <span class="mi">1</span> <span class="mi">0</span><span class="p">]</span>
-<span class="mi">2</span><span class="n">×2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">×2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">0</span>  <span class="mi">1</span>
  <span class="mi">1</span>  <span class="mi">0</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">eig</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">B</span><span class="p">)</span>
-<span class="p">(</span><span class="n">Complex</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}[</span><span class="mf">0.0</span><span class="o">+</span><span class="mf">1.0</span><span class="nb">im</span><span class="p">,</span><span class="mf">0.0</span><span class="o">-</span><span class="mf">1.0</span><span class="nb">im</span><span class="p">],</span>
-<span class="n">Complex</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}[</span><span class="mf">0.0</span><span class="o">-</span><span class="mf">1.0</span><span class="nb">im</span> <span class="mf">0.0</span><span class="o">+</span><span class="mf">1.0</span><span class="nb">im</span><span class="p">;</span> <span class="o">-</span><span class="mf">1.0</span><span class="o">-</span><span class="mf">0.0</span><span class="nb">im</span> <span class="o">-</span><span class="mf">1.0</span><span class="o">+</span><span class="mf">0.0</span><span class="nb">im</span><span class="p">])</span>
+<span class="p">(</span><span class="kt">Complex</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}[</span><span class="mf">0.0</span><span class="o">+</span><span class="mf">1.0</span><span class="nb">im</span><span class="p">,</span><span class="mf">0.0</span><span class="o">-</span><span class="mf">1.0</span><span class="nb">im</span><span class="p">],</span>
+<span class="kt">Complex</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}[</span><span class="mf">0.0</span><span class="o">-</span><span class="mf">1.0</span><span class="nb">im</span> <span class="mf">0.0</span><span class="o">+</span><span class="mf">1.0</span><span class="nb">im</span><span class="p">;</span> <span class="o">-</span><span class="mf">1.0</span><span class="o">-</span><span class="mf">0.0</span><span class="nb">im</span> <span class="o">-</span><span class="mf">1.0</span><span class="o">+</span><span class="mf">0.0</span><span class="nb">im</span><span class="p">])</span>
 </pre></div>
 </div>
 </dd></dl>
@@ -1278,7 +1279,7 @@
 <code class="descname">eigmax</code><span class="sig-paren">(</span><em>A; permute::Bool=true</em>, <em>scale::Bool=true</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.eigmax" title="Permalink to this definition">¶</a></dt>
 <dd><p>Returns the largest eigenvalue of <code class="docutils literal"><span class="pre">A</span></code>. The option <code class="docutils literal"><span class="pre">permute=true</span></code> permutes the matrix to become closer to upper triangular, and <code class="docutils literal"><span class="pre">scale=true</span></code> scales the matrix by its diagonal elements to make rows and columns more equal in norm. Note that if the eigenvalues of <code class="docutils literal"><span class="pre">A</span></code> are complex, this method will fail, since complex numbers cannot be sorted.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">A</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span> <span class="nb">im</span><span class="p">;</span> <span class="o">-</span><span class="nb">im</span> <span class="mi">0</span><span class="p">]</span>
-<span class="mi">2</span><span class="n">×2</span> <span class="n">Array</span><span class="p">{</span><span class="n">Complex</span><span class="p">{</span><span class="kt">Int64</span><span class="p">},</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">×2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Complex</span><span class="p">{</span><span class="kt">Int64</span><span class="p">},</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">0</span><span class="o">+</span><span class="mi">0</span><span class="nb">im</span>  <span class="mi">0</span><span class="o">+</span><span class="mi">1</span><span class="nb">im</span>
  <span class="mi">0</span><span class="o">-</span><span class="mi">1</span><span class="nb">im</span>  <span class="mi">0</span><span class="o">+</span><span class="mi">0</span><span class="nb">im</span>
 
@@ -1286,14 +1287,14 @@
 <span class="mf">1.0</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">A</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span> <span class="nb">im</span><span class="p">;</span> <span class="o">-</span><span class="mi">1</span> <span class="mi">0</span><span class="p">]</span>
-<span class="mi">2</span><span class="n">×2</span> <span class="n">Array</span><span class="p">{</span><span class="n">Complex</span><span class="p">{</span><span class="kt">Int64</span><span class="p">},</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">×2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Complex</span><span class="p">{</span><span class="kt">Int64</span><span class="p">},</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
   <span class="mi">0</span><span class="o">+</span><span class="mi">0</span><span class="nb">im</span>  <span class="mi">0</span><span class="o">+</span><span class="mi">1</span><span class="nb">im</span>
  <span class="o">-</span><span class="mi">1</span><span class="o">+</span><span class="mi">0</span><span class="nb">im</span>  <span class="mi">0</span><span class="o">+</span><span class="mi">0</span><span class="nb">im</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">eigmax</span><span class="p">(</span><span class="n">A</span><span class="p">)</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">DomainError</span><span class="p">:</span>
- <span class="k">in</span> <span class="c">#eigmax#30(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:186</span>
- <span class="k">in</span> <span class="n">eigmax</span><span class="p">(::</span><span class="n">Array</span><span class="p">{</span><span class="n">Complex</span><span class="p">{</span><span class="kt">Int64</span><span class="p">},</span><span class="mi">2</span><span class="p">})</span> <span class="n">at</span> <span class="o">./</span><span class="n">linalg</span><span class="o">/</span><span class="n">eigen</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">184</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="kt">DomainError</span><span class="o">:</span>
+ <span class="kp">in</span> <span class="c">#eigmax#30(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:186</span>
+ <span class="kp">in</span> <span class="n">eigmax</span><span class="p">(</span><span class="o">::</span><span class="kt">Array</span><span class="p">{</span><span class="kt">Complex</span><span class="p">{</span><span class="kt">Int64</span><span class="p">},</span><span class="mi">2</span><span class="p">})</span> <span class="n">at</span> <span class="o">./</span><span class="n">linalg</span><span class="o">/</span><span class="n">eigen</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">184</span>
  <span class="o">...</span>
 </pre></div>
 </div>
@@ -1304,7 +1305,7 @@
 <code class="descname">eigmin</code><span class="sig-paren">(</span><em>A; permute::Bool=true</em>, <em>scale::Bool=true</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.eigmin" title="Permalink to this definition">¶</a></dt>
 <dd><p>Returns the smallest eigenvalue of <code class="docutils literal"><span class="pre">A</span></code>. The option <code class="docutils literal"><span class="pre">permute=true</span></code> permutes the matrix to become closer to upper triangular, and <code class="docutils literal"><span class="pre">scale=true</span></code> scales the matrix by its diagonal elements to make rows and columns more equal in norm. Note that if the eigenvalues of <code class="docutils literal"><span class="pre">A</span></code> are complex, this method will fail, since complex numbers cannot be sorted.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">A</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span> <span class="nb">im</span><span class="p">;</span> <span class="o">-</span><span class="nb">im</span> <span class="mi">0</span><span class="p">]</span>
-<span class="mi">2</span><span class="n">×2</span> <span class="n">Array</span><span class="p">{</span><span class="n">Complex</span><span class="p">{</span><span class="kt">Int64</span><span class="p">},</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">×2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Complex</span><span class="p">{</span><span class="kt">Int64</span><span class="p">},</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">0</span><span class="o">+</span><span class="mi">0</span><span class="nb">im</span>  <span class="mi">0</span><span class="o">+</span><span class="mi">1</span><span class="nb">im</span>
  <span class="mi">0</span><span class="o">-</span><span class="mi">1</span><span class="nb">im</span>  <span class="mi">0</span><span class="o">+</span><span class="mi">0</span><span class="nb">im</span>
 
@@ -1312,14 +1313,14 @@
 <span class="o">-</span><span class="mf">1.0</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">A</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span> <span class="nb">im</span><span class="p">;</span> <span class="o">-</span><span class="mi">1</span> <span class="mi">0</span><span class="p">]</span>
-<span class="mi">2</span><span class="n">×2</span> <span class="n">Array</span><span class="p">{</span><span class="n">Complex</span><span class="p">{</span><span class="kt">Int64</span><span class="p">},</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">×2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Complex</span><span class="p">{</span><span class="kt">Int64</span><span class="p">},</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
   <span class="mi">0</span><span class="o">+</span><span class="mi">0</span><span class="nb">im</span>  <span class="mi">0</span><span class="o">+</span><span class="mi">1</span><span class="nb">im</span>
  <span class="o">-</span><span class="mi">1</span><span class="o">+</span><span class="mi">0</span><span class="nb">im</span>  <span class="mi">0</span><span class="o">+</span><span class="mi">0</span><span class="nb">im</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">eigmin</span><span class="p">(</span><span class="n">A</span><span class="p">)</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">DomainError</span><span class="p">:</span>
- <span class="k">in</span> <span class="c">#eigmin#31(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:226</span>
- <span class="k">in</span> <span class="n">eigmin</span><span class="p">(::</span><span class="n">Array</span><span class="p">{</span><span class="n">Complex</span><span class="p">{</span><span class="kt">Int64</span><span class="p">},</span><span class="mi">2</span><span class="p">})</span> <span class="n">at</span> <span class="o">./</span><span class="n">linalg</span><span class="o">/</span><span class="n">eigen</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">224</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="kt">DomainError</span><span class="o">:</span>
+ <span class="kp">in</span> <span class="c">#eigmin#31(::Bool, ::Bool, ::Function, ::Array{Complex{Int64},2}) at ./linalg/eigen.jl:226</span>
+ <span class="kp">in</span> <span class="n">eigmin</span><span class="p">(</span><span class="o">::</span><span class="kt">Array</span><span class="p">{</span><span class="kt">Complex</span><span class="p">{</span><span class="kt">Int64</span><span class="p">},</span><span class="mi">2</span><span class="p">})</span> <span class="n">at</span> <span class="o">./</span><span class="n">linalg</span><span class="o">/</span><span class="n">eigen</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">224</span>
  <span class="o">...</span>
 </pre></div>
 </div>
@@ -1808,22 +1809,22 @@
 <dt id="Base.repeat">
 <code class="descname">repeat</code><span class="sig-paren">(</span><em>A::AbstractArray; inner=ntuple(x-&gt;1</em>, <em>ndims(A))</em>, <em>outer=ntuple(x-&gt;1</em>, <em>ndims(A))</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.repeat" title="Permalink to this definition">¶</a></dt>
 <dd><p>Construct an array by repeating the entries of <code class="docutils literal"><span class="pre">A</span></code>. The i-th element of <code class="docutils literal"><span class="pre">inner</span></code> specifies the number of times that the individual entries of the i-th dimension of <code class="docutils literal"><span class="pre">A</span></code> should be repeated. The i-th element of <code class="docutils literal"><span class="pre">outer</span></code> specifies the number of times that a slice along the i-th dimension of <code class="docutils literal"><span class="pre">A</span></code> should be repeated. If <code class="docutils literal"><span class="pre">inner</span></code> or <code class="docutils literal"><span class="pre">outer</span></code> are omitted, no repetition is performed.</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">repeat</span><span class="p">(</span><span class="mi">1</span><span class="p">:</span><span class="mi">2</span><span class="p">,</span> <span class="n">inner</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
-<span class="mi">4</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">repeat</span><span class="p">(</span><span class="mi">1</span><span class="o">:</span><span class="mi">2</span><span class="p">,</span> <span class="n">inner</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+<span class="mi">4</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>
  <span class="mi">1</span>
  <span class="mi">2</span>
  <span class="mi">2</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">repeat</span><span class="p">(</span><span class="mi">1</span><span class="p">:</span><span class="mi">2</span><span class="p">,</span> <span class="n">outer</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
-<span class="mi">4</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">repeat</span><span class="p">(</span><span class="mi">1</span><span class="o">:</span><span class="mi">2</span><span class="p">,</span> <span class="n">outer</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+<span class="mi">4</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>
  <span class="mi">2</span>
  <span class="mi">1</span>
  <span class="mi">2</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">repeat</span><span class="p">([</span><span class="mi">1</span> <span class="mi">2</span><span class="p">;</span> <span class="mi">3</span> <span class="mi">4</span><span class="p">],</span> <span class="n">inner</span><span class="o">=</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">outer</span><span class="o">=</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">))</span>
-<span class="mi">4</span><span class="n">×6</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">4</span><span class="n">×6</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>  <span class="mi">2</span>  <span class="mi">1</span>  <span class="mi">2</span>  <span class="mi">1</span>  <span class="mi">2</span>
  <span class="mi">1</span>  <span class="mi">2</span>  <span class="mi">1</span>  <span class="mi">2</span>  <span class="mi">1</span>  <span class="mi">2</span>
  <span class="mi">3</span>  <span class="mi">4</span>  <span class="mi">3</span>  <span class="mi">4</span>  <span class="mi">3</span>  <span class="mi">4</span>
@@ -1850,7 +1851,7 @@
 <dd><p>Perform simple linear regression using Ordinary Least Squares. Returns <code class="docutils literal"><span class="pre">a</span></code> and <code class="docutils literal"><span class="pre">b</span></code> such that <code class="docutils literal"><span class="pre">a</span> <span class="pre">+</span> <span class="pre">b*x</span></code> is the closest straight line to the given points <code class="docutils literal"><span class="pre">(x,</span> <span class="pre">y)</span></code>, i.e., such that the squared error between <code class="docutils literal"><span class="pre">y</span></code> and <code class="docutils literal"><span class="pre">a</span> <span class="pre">+</span> <span class="pre">b*x</span></code> is minimized.</p>
 <p>Examples:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">using</span> <span class="n">PyPlot</span>
-<span class="n">x</span> <span class="o">=</span> <span class="mf">1.0</span><span class="p">:</span><span class="mf">12.0</span>
+<span class="n">x</span> <span class="o">=</span> <span class="mf">1.0</span><span class="o">:</span><span class="mf">12.0</span>
 <span class="n">y</span> <span class="o">=</span> <span class="p">[</span><span class="mf">5.5</span><span class="p">,</span> <span class="mf">6.3</span><span class="p">,</span> <span class="mf">7.6</span><span class="p">,</span> <span class="mf">8.8</span><span class="p">,</span> <span class="mf">10.9</span><span class="p">,</span> <span class="mf">11.79</span><span class="p">,</span> <span class="mf">13.48</span><span class="p">,</span> <span class="mf">15.02</span><span class="p">,</span> <span class="mf">17.77</span><span class="p">,</span> <span class="mf">20.81</span><span class="p">,</span> <span class="mf">22.0</span><span class="p">,</span> <span class="mf">22.99</span><span class="p">]</span>
 <span class="n">a</span><span class="p">,</span> <span class="n">b</span> <span class="o">=</span> <span class="n">linreg</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>          <span class="c"># Linear regression</span>
 <span class="n">plot</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">,</span> <span class="s">&quot;o&quot;</span><span class="p">)</span>              <span class="c"># Plot (x, y) points</span>
@@ -2251,7 +2252,7 @@ according to the usual Julia convention.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">A</span><span class="o">=</span><span class="p">[</span><span class="mf">1.0</span> <span class="mf">2.0</span><span class="p">;</span> <span class="mf">3.0</span> <span class="mf">4.0</span><span class="p">];</span> <span class="n">B</span><span class="o">=</span><span class="p">[</span><span class="mf">1.0</span> <span class="mf">1.0</span><span class="p">;</span> <span class="mf">1.0</span> <span class="mf">1.0</span><span class="p">];</span> <span class="n">Y</span> <span class="o">=</span> <span class="n">similar</span><span class="p">(</span><span class="n">B</span><span class="p">);</span> <span class="n">A_mul_B!</span><span class="p">(</span><span class="n">Y</span><span class="p">,</span> <span class="n">A</span><span class="p">,</span> <span class="n">B</span><span class="p">);</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">Y</span>
-<span class="mi">2</span><span class="n">×2</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">2</span><span class="p">}:</span>
+<span class="mi">2</span><span class="n">×2</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span><span class="o">:</span>
  <span class="mf">3.0</span>  <span class="mf">3.0</span>
  <span class="mf">7.0</span>  <span class="mf">7.0</span>
 </pre></div>
@@ -3272,7 +3273,7 @@ set of functions in future releases.</p>
     <script type="text/javascript">
         var DOCUMENTATION_OPTIONS = {
             URL_ROOT:'../../',
-            VERSION:'0.5.1-pre',
+            VERSION:'0.5.3-pre',
             COLLAPSE_INDEX:false,
             FILE_SUFFIX:'',
             HAS_SOURCE:  true

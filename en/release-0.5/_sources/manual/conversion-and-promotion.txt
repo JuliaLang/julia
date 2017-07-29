@@ -177,7 +177,7 @@ Case Study: Rational Conversions
 
 To continue our case study of Julia's ``Rational`` type, here are the
 conversions declared in
-`rational.jl <https://github.com/JuliaLang/julia/blob/master/base/rational.jl>`_,
+`rational.jl <https://github.com/JuliaLang/julia/blob/release-0.5/base/rational.jl>`_,
 right after the declaration of the type and its constructors::
 
     convert{T<:Integer}(::Type{Rational{T}}, x::Rational) = Rational(convert(T,x.num),convert(T,x.den))
@@ -277,7 +277,7 @@ matter of clever application, the most typical "clever" application
 being the definition of catch-all methods for numeric operations like
 the arithmetic operators ``+``, ``-``, ``*`` and ``/``. Here are some of
 the catch-all method definitions given in
-`promotion.jl <https://github.com/JuliaLang/julia/blob/master/base/promotion.jl>`_::
+`promotion.jl <https://github.com/JuliaLang/julia/blob/release-0.5/base/promotion.jl>`_::
 
     +(x::Number, y::Number) = +(promote(x,y)...)
     -(x::Number, y::Number) = -(promote(x,y)...)
@@ -291,13 +291,13 @@ all there is to it: nowhere else does one ever need to worry about
 promotion to a common numeric type for arithmetic operations — it just
 happens automatically. There are definitions of catch-all promotion
 methods for a number of other arithmetic and mathematical functions in
-`promotion.jl <https://github.com/JuliaLang/julia/blob/master/base/promotion.jl>`_,
+`promotion.jl <https://github.com/JuliaLang/julia/blob/release-0.5/base/promotion.jl>`_,
 but beyond that, there are hardly any calls to ``promote`` required in
 the Julia standard library. The most common usages of ``promote`` occur
 in outer constructors methods, provided for convenience, to allow
 constructor calls with mixed types to delegate to an inner type with
 fields promoted to an appropriate common type. For example, recall that
-`rational.jl <https://github.com/JuliaLang/julia/blob/master/base/rational.jl>`_
+`rational.jl <https://github.com/JuliaLang/julia/blob/release-0.5/base/rational.jl>`_
 provides the following outer constructor method::
 
     Rational(n::Integer, d::Integer) = Rational(promote(n,d)...)
@@ -364,7 +364,7 @@ Internally, ``promote_type`` is used inside of ``promote`` to determine
 what type argument values should be converted to for promotion. It can,
 however, be useful in its own right. The curious reader can read the
 code in
-`promotion.jl <https://github.com/JuliaLang/julia/blob/master/base/promotion.jl>`_,
+`promotion.jl <https://github.com/JuliaLang/julia/blob/release-0.5/base/promotion.jl>`_,
 which defines the complete promotion mechanism in about 35 lines.
 
 Case Study: Rational Promotions

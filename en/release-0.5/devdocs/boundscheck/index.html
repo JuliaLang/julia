@@ -7,7 +7,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Bounds checking &mdash; Julia Language 0.5.1-pre documentation</title>
+  <title>Bounds checking &mdash; Julia Language 0.5.3-pre documentation</title>
   
 
   
@@ -30,7 +30,7 @@
   
     <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
   
-    <link rel="top" title="Julia Language 0.5.1-pre documentation" href="../../"/>
+    <link rel="top" title="Julia Language 0.5.3-pre documentation" href="../../"/>
         <link rel="up" title="Documentation of Julia’s Internals" href="../julia/"/>
         <link rel="next" title="Proper maintenance and care of multi-threading locks" href="../locks/"/>
         <link rel="prev" title="printf() and stdio in the Julia runtime" href="../stdio/"/> 
@@ -150,6 +150,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#man-parametric-types">Parametric Types</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#type-aliases">Type Aliases</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#operations-on-types">Operations on Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/types/#custom-pretty-printing">Custom pretty-printing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#value-types">&#8220;Value types&#8221;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#nullable-types-representing-missing-values">Nullable Types: Representing Missing Values</a></li>
 </ul>
@@ -528,7 +529,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../sysimg/">System Image Building</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../llvm/">Working with LLVM</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../stdio/">printf() and stdio in the Julia runtime</a></li>
-<li class="toctree-l2 current"><a class="current reference internal" href="">Bounds checking</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Bounds checking</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../locks/">Proper maintenance and care of multi-threading locks</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../offset-arrays/">Arrays with custom indices</a></li>
 </ul>
@@ -596,17 +597,17 @@ compiler removes these blocks. When the <code class="docutils literal"><span cla
 of a calling function containing an <code class="docutils literal"><span class="pre">&#64;inbounds(...)</span></code>, the compiler will remove
 the <code class="docutils literal"><span class="pre">&#64;boundscheck</span></code> block <em>only if it is inlined</em> into the calling function.
 For example, you might write the method <code class="docutils literal"><span class="pre">sum</span></code> as:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> sum</span><span class="p">(</span><span class="n">A</span><span class="p">::</span><span class="n">AbstractArray</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">sum</span><span class="p">(</span><span class="n">A</span><span class="o">::</span><span class="kt">AbstractArray</span><span class="p">)</span>
     <span class="n">r</span> <span class="o">=</span> <span class="n">zero</span><span class="p">(</span><span class="n">eltype</span><span class="p">(</span><span class="n">A</span><span class="p">))</span>
-    <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="n">length</span><span class="p">(</span><span class="n">A</span><span class="p">)</span>
-        <span class="p">@</span><span class="n">inbounds</span> <span class="n">r</span> <span class="o">+=</span> <span class="n">A</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="o">:</span><span class="n">length</span><span class="p">(</span><span class="n">A</span><span class="p">)</span>
+        <span class="nd">@inbounds</span> <span class="n">r</span> <span class="o">+=</span> <span class="n">A</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
     <span class="k">end</span>
     <span class="k">return</span> <span class="n">r</span>
 <span class="k">end</span>
 </pre></div>
 </div>
 <p>With a custom array-like type <code class="docutils literal"><span class="pre">MyArray</span></code> having:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="p">@</span><span class="n">inline</span> <span class="n">getindex</span><span class="p">(</span><span class="n">A</span><span class="p">::</span><span class="n">MyArray</span><span class="p">,</span> <span class="n">i</span><span class="p">::</span><span class="n">Real</span><span class="p">)</span> <span class="o">=</span> <span class="p">(@</span><span class="n">boundscheck</span> <span class="n">checkbounds</span><span class="p">(</span><span class="n">A</span><span class="p">,</span><span class="n">i</span><span class="p">);</span> <span class="n">A</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="n">to_index</span><span class="p">(</span><span class="n">i</span><span class="p">)])</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="nd">@inline</span> <span class="n">getindex</span><span class="p">(</span><span class="n">A</span><span class="o">::</span><span class="n">MyArray</span><span class="p">,</span> <span class="n">i</span><span class="o">::</span><span class="kt">Real</span><span class="p">)</span> <span class="o">=</span> <span class="p">(</span><span class="nd">@boundscheck</span> <span class="n">checkbounds</span><span class="p">(</span><span class="n">A</span><span class="p">,</span><span class="n">i</span><span class="p">);</span> <span class="n">A</span><span class="o">.</span><span class="n">data</span><span class="p">[</span><span class="n">to_index</span><span class="p">(</span><span class="n">i</span><span class="p">)])</span>
 </pre></div>
 </div>
 <p>Then when <code class="docutils literal"><span class="pre">getindex</span></code> is inlined into <code class="docutils literal"><span class="pre">sum</span></code>, the call to <code class="docutils literal"><span class="pre">checkbounds(A,i)</span></code>
@@ -652,8 +653,8 @@ methods to serve a huge variety of array types. Indices are specified
 as tuples, and are usually compared in a 1-1 fashion with individual
 dimensions handled by calling another important function,
 <code class="docutils literal"><span class="pre">checkindex</span></code>: typically,</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">checkbounds_indices</span><span class="p">(</span><span class="kt">Bool</span><span class="p">,</span> <span class="p">(</span><span class="n">IA1</span><span class="p">,</span> <span class="n">IA</span><span class="o">...</span><span class="p">),</span> <span class="p">(</span><span class="n">I1</span><span class="p">,</span> <span class="n">I</span><span class="o">...</span><span class="p">))</span> <span class="o">=</span> <span class="n">checkindex</span><span class="p">(</span><span class="kt">Bool</span><span class="p">,</span> <span class="n">IA1</span><span class="p">,</span> <span class="n">I1</span><span class="p">)</span> <span class="o">&amp;</span>
-                                                      <span class="n">checkbounds_indices</span><span class="p">(</span><span class="kt">Bool</span><span class="p">,</span> <span class="n">IA</span><span class="p">,</span> <span class="n">I</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">checkbounds_indices</span><span class="p">(</span><span class="kt">Bool</span><span class="p">,</span> <span class="p">(</span><span class="n">IA1</span><span class="p">,</span> <span class="n">IA</span><span class="o">...</span><span class="p">),</span> <span class="p">(</span><span class="n">I1</span><span class="p">,</span> <span class="nb">I</span><span class="o">...</span><span class="p">))</span> <span class="o">=</span> <span class="n">checkindex</span><span class="p">(</span><span class="kt">Bool</span><span class="p">,</span> <span class="n">IA1</span><span class="p">,</span> <span class="n">I1</span><span class="p">)</span> <span class="o">&amp;</span>
+                                                      <span class="n">checkbounds_indices</span><span class="p">(</span><span class="kt">Bool</span><span class="p">,</span> <span class="n">IA</span><span class="p">,</span> <span class="nb">I</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>so <code class="docutils literal"><span class="pre">checkindex</span></code> checks a single dimension.  All of these functions,
@@ -712,7 +713,7 @@ on index type (especially, the last argument).</p>
     <script type="text/javascript">
         var DOCUMENTATION_OPTIONS = {
             URL_ROOT:'../../',
-            VERSION:'0.5.1-pre',
+            VERSION:'0.5.3-pre',
             COLLAPSE_INDEX:false,
             FILE_SUFFIX:'',
             HAS_SOURCE:  true

@@ -509,9 +509,9 @@ Function                             Description
 For an overview of why functions like :func:`hypot`, :func:`expm1`, and :func:`log1p`
 are necessary and useful, see John D. Cook's excellent pair
 of blog posts on the subject: `expm1, log1p,
-erfc <http://www.johndcook.com/blog/2010/06/07/math-library-functions-that-seem-unnecessary/>`_,
+erfc <https://www.johndcook.com/blog/2010/06/07/math-library-functions-that-seem-unnecessary/>`_,
 and
-`hypot <http://www.johndcook.com/blog/2010/06/02/whats-so-hard-about-finding-a-hypotenuse/>`_.
+`hypot <https://www.johndcook.com/blog/2010/06/02/whats-so-hard-about-finding-a-hypotenuse/>`_.
 
 Trigonometric and hyperbolic functions
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

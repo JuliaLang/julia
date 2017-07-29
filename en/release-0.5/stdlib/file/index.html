@@ -7,7 +7,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Filesystem &mdash; Julia Language 0.5.1-pre documentation</title>
+  <title>Filesystem &mdash; Julia Language 0.5.3-pre documentation</title>
   
 
   
@@ -30,7 +30,7 @@
   
     <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
   
-    <link rel="top" title="Julia Language 0.5.1-pre documentation" href="../../"/>
+    <link rel="top" title="Julia Language 0.5.3-pre documentation" href="../../"/>
         <link rel="next" title="I/O and Network" href="../io-network/"/>
         <link rel="prev" title="Constants" href="../constants/"/> 
 
@@ -149,6 +149,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#man-parametric-types">Parametric Types</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#type-aliases">Type Aliases</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#operations-on-types">Operations on Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/types/#custom-pretty-printing">Custom pretty-printing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#value-types">&#8220;Value types&#8221;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#nullable-types-representing-missing-values">Nullable Types: Representing Missing Values</a></li>
 </ul>
@@ -472,7 +473,7 @@
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="../constants/">Constants</a></li>
-<li class="toctree-l1 current"><a class="current reference internal" href="">Filesystem</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Filesystem</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../io-network/">I/O and Network</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="../io-network/#general-i-o">General I/O</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../io-network/#text-i-o">Text I/O</a></li>
@@ -603,13 +604,13 @@
 <dt id="Base.walkdir">
 <code class="descname">walkdir</code><span class="sig-paren">(</span><em>dir; topdown=true</em>, <em>follow_symlinks=false</em>, <em>onerror=throw</em><span class="sig-paren">)</span><a class="headerlink" href="#Base.walkdir" title="Permalink to this definition">¶</a></dt>
 <dd><p>The walkdir method return an iterator that walks the directory tree of a directory. The iterator returns a tuple containing <code class="docutils literal"><span class="pre">(rootpath,</span> <span class="pre">dirs,</span> <span class="pre">files)</span></code>. The directory tree can be traversed top-down or bottom-up. If walkdir encounters a SystemError it will raise the error. A custom error handling function can be provided through <code class="docutils literal"><span class="pre">onerror</span></code> keyword argument, the function is called with a SystemError as argument.</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="n">dirs</span><span class="p">,</span> <span class="n">files</span><span class="p">)</span> <span class="k">in</span> <span class="n">walkdir</span><span class="p">(</span><span class="s">&quot;.&quot;</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">for</span> <span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="n">dirs</span><span class="p">,</span> <span class="n">files</span><span class="p">)</span> <span class="kp">in</span> <span class="n">walkdir</span><span class="p">(</span><span class="s">&quot;.&quot;</span><span class="p">)</span>
     <span class="n">println</span><span class="p">(</span><span class="s">&quot;Directories in </span><span class="si">$root</span><span class="s">&quot;</span><span class="p">)</span>
-    <span class="k">for</span> <span class="n">dir</span> <span class="k">in</span> <span class="n">dirs</span>
+    <span class="k">for</span> <span class="n">dir</span> <span class="kp">in</span> <span class="n">dirs</span>
         <span class="n">println</span><span class="p">(</span><span class="n">joinpath</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="n">dir</span><span class="p">))</span> <span class="c"># path to directories</span>
     <span class="k">end</span>
     <span class="n">println</span><span class="p">(</span><span class="s">&quot;Files in </span><span class="si">$root</span><span class="s">&quot;</span><span class="p">)</span>
-    <span class="k">for</span> <span class="n">file</span> <span class="k">in</span> <span class="n">files</span>
+    <span class="k">for</span> <span class="n">file</span> <span class="kp">in</span> <span class="n">files</span>
         <span class="n">println</span><span class="p">(</span><span class="n">joinpath</span><span class="p">(</span><span class="n">root</span><span class="p">,</span> <span class="n">file</span><span class="p">))</span> <span class="c"># path to files</span>
     <span class="k">end</span>
 <span class="k">end</span>
@@ -1056,7 +1057,7 @@
     <script type="text/javascript">
         var DOCUMENTATION_OPTIONS = {
             URL_ROOT:'../../',
-            VERSION:'0.5.1-pre',
+            VERSION:'0.5.3-pre',
             COLLAPSE_INDEX:false,
             FILE_SUFFIX:'',
             HAS_SOURCE:  true

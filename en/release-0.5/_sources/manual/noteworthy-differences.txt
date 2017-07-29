@@ -244,16 +244,6 @@ noteworthy differences:
 Noteworthy differences from Python
 ----------------------------------
 
-- In Julia, a vector of vectors can automatically concatenate into a
-  one-dimensional vector *if* no explicit element type is specified. For example:
-
-  - In Julia, ``[1, [2, 3]]`` concatenates into ``[1, 2, 3]``, like in R.
-  - In Julia, ``Int[1, Int[2, 3]]`` will *not* concatenate, but instead throw an error.
-  - In Julia, ``Any[1, [2,3]]`` will *not* concatenate.
-  - In Julia, ``Vector{Int}[[1, 2], [3, 4]]`` will *not* concatenate, but
-    produces an object similar to Python's list of lists. This object is
-    *different* from a two-dimensional :obj:`Array` of :obj:`Int`\ s.
-
 - Julia requires ``end`` to end a block. Unlike Python, Julia has no ``pass``
   keyword.
 - In Julia, indexing of arrays, strings, etc. is 1-based not 0-based.
@@ -261,8 +251,6 @@ Noteworthy differences from Python
   ``a[2:3]`` in Julia is ``a[1:3]`` in Python.
 - Julia does not support negative indexes. In particular, the last element of a
   list or array is indexed with :obj:`end` in Julia, not ``-1`` as in Python.
-- Julia's list comprehensions do not support the optional ``if`` clause that
-  Python has.
 - Julia's ``for``, ``if``, ``while``, etc. blocks are terminated by the
   ``end`` keyword. Indentation level is not significant as it is in Python.
 - Julia has no line continuation syntax: if, at the end of a line, the input so

@@ -7,7 +7,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Talking to the compiler (the :meta mechanism) &mdash; Julia Language 0.5.1-pre documentation</title>
+  <title>Talking to the compiler (the :meta mechanism) &mdash; Julia Language 0.5.3-pre documentation</title>
   
 
   
@@ -30,7 +30,7 @@
   
     <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
   
-    <link rel="top" title="Julia Language 0.5.1-pre documentation" href="../../"/>
+    <link rel="top" title="Julia Language 0.5.3-pre documentation" href="../../"/>
         <link rel="up" title="Documentation of Julia’s Internals" href="../julia/"/>
         <link rel="next" title="SubArrays" href="../subarrays/"/>
         <link rel="prev" title="Base.Cartesian" href="../cartesian/"/> 
@@ -150,6 +150,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#man-parametric-types">Parametric Types</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#type-aliases">Type Aliases</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#operations-on-types">Operations on Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/types/#custom-pretty-printing">Custom pretty-printing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#value-types">&#8220;Value types&#8221;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#nullable-types-representing-missing-values">Nullable Types: Representing Missing Values</a></li>
 </ul>
@@ -523,7 +524,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../functions/">Julia Functions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../callconv/">Calling Conventions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../cartesian/">Base.Cartesian</a></li>
-<li class="toctree-l2 current"><a class="current reference internal" href="">Talking to the compiler (the <code class="docutils literal"><span class="pre">:meta</span></code> mechanism)</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Talking to the compiler (the <code class="docutils literal"><span class="pre">:meta</span></code> mechanism)</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../subarrays/">SubArrays</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../sysimg/">System Image Building</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../llvm/">Working with LLVM</a></li>
@@ -588,21 +589,21 @@ expression in the body of a function.</p>
 <p><code class="docutils literal"><span class="pre">:meta</span></code> expressions are created with macros. As an example, consider
 the implementation of the <code class="docutils literal"><span class="pre">&#64;inline</span></code> macro:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">macro</span> <span class="n">inline</span><span class="p">(</span><span class="n">ex</span><span class="p">)</span>
-    <span class="n">esc</span><span class="p">(</span><span class="nb">isa</span><span class="p">(</span><span class="n">ex</span><span class="p">,</span> <span class="n">Expr</span><span class="p">)</span> <span class="o">?</span> <span class="n">pushmeta!</span><span class="p">(</span><span class="n">ex</span><span class="p">,</span> <span class="p">:</span><span class="n">inline</span><span class="p">)</span> <span class="p">:</span> <span class="n">ex</span><span class="p">)</span>
+    <span class="n">esc</span><span class="p">(</span><span class="n">isa</span><span class="p">(</span><span class="n">ex</span><span class="p">,</span> <span class="kt">Expr</span><span class="p">)</span> <span class="o">?</span> <span class="n">pushmeta!</span><span class="p">(</span><span class="n">ex</span><span class="p">,</span> <span class="o">:</span><span class="n">inline</span><span class="p">)</span> <span class="o">:</span> <span class="n">ex</span><span class="p">)</span>
 <span class="k">end</span>
 </pre></div>
 </div>
 <p>Here, <code class="docutils literal"><span class="pre">ex</span></code> is expected to be an expression defining a function.
 A statement like this:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="p">@</span><span class="n">inline</span> <span class="k">function</span><span class="nf"> myfunction</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="nd">@inline</span> <span class="k">function</span> <span class="n">myfunction</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
     <span class="n">x</span><span class="o">*</span><span class="p">(</span><span class="n">x</span><span class="o">+</span><span class="mi">3</span><span class="p">)</span>
 <span class="k">end</span>
 </pre></div>
 </div>
 <p>gets turned into an expression like this:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">quote</span>
-    <span class="k">function</span><span class="nf"> myfunction</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
-        <span class="n">Expr</span><span class="p">(:</span><span class="n">meta</span><span class="p">,</span> <span class="p">:</span><span class="n">inline</span><span class="p">)</span>
+    <span class="k">function</span> <span class="n">myfunction</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="kt">Expr</span><span class="p">(</span><span class="o">:</span><span class="n">meta</span><span class="p">,</span> <span class="o">:</span><span class="n">inline</span><span class="p">)</span>
         <span class="n">x</span><span class="o">*</span><span class="p">(</span><span class="n">x</span><span class="o">+</span><span class="mi">3</span><span class="p">)</span>
     <span class="k">end</span>
 <span class="k">end</span>
@@ -660,7 +661,7 @@ expressions from C++.</p>
     <script type="text/javascript">
         var DOCUMENTATION_OPTIONS = {
             URL_ROOT:'../../',
-            VERSION:'0.5.1-pre',
+            VERSION:'0.5.3-pre',
             COLLAPSE_INDEX:false,
             FILE_SUFFIX:'',
             HAS_SOURCE:  true

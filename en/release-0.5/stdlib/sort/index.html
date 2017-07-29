@@ -7,7 +7,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Sorting and Related Functions &mdash; Julia Language 0.5.1-pre documentation</title>
+  <title>Sorting and Related Functions &mdash; Julia Language 0.5.3-pre documentation</title>
   
 
   
@@ -30,7 +30,7 @@
   
     <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
   
-    <link rel="top" title="Julia Language 0.5.1-pre documentation" href="../../"/>
+    <link rel="top" title="Julia Language 0.5.3-pre documentation" href="../../"/>
         <link rel="next" title="Package Manager Functions" href="../pkg/"/>
         <link rel="prev" title="Punctuation" href="../punctuation/"/> 
 
@@ -149,6 +149,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#man-parametric-types">Parametric Types</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#type-aliases">Type Aliases</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#operations-on-types">Operations on Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/types/#custom-pretty-printing">Custom pretty-printing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#value-types">&#8220;Value types&#8221;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#nullable-types-representing-missing-values">Nullable Types: Representing Missing Values</a></li>
 </ul>
@@ -482,7 +483,7 @@
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="../punctuation/">Punctuation</a></li>
-<li class="toctree-l1 current"><a class="current reference internal" href="">Sorting and Related Functions</a><ul>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Sorting and Related Functions</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#sorting-functions">Sorting Functions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#order-related-functions">Order-Related Functions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#sorting-algorithms">Sorting Algorithms</a></li>
@@ -579,15 +580,15 @@
 already-sorted arrays of values. By default, Julia picks reasonable
 algorithms and sorts in standard ascending order:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">sort</span><span class="p">([</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="mi">1</span><span class="p">])</span>
-<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>
  <span class="mi">2</span>
  <span class="mi">3</span>
 </pre></div>
 </div>
 <p>You can easily sort in reverse order as well:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">sort</span><span class="p">([</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="mi">1</span><span class="p">],</span> <span class="n">rev</span><span class="o">=</span><span class="n">true</span><span class="p">)</span>
-<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">sort</span><span class="p">([</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="mi">1</span><span class="p">],</span> <span class="n">rev</span><span class="o">=</span><span class="kc">true</span><span class="p">)</span>
+<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">3</span>
  <span class="mi">2</span>
  <span class="mi">1</span>
@@ -599,7 +600,7 @@ algorithms and sorts in standard ascending order:</p>
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">sort!</span><span class="p">(</span><span class="n">a</span><span class="p">);</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">a</span>
-<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">1</span>
  <span class="mi">2</span>
  <span class="mi">3</span>
@@ -607,7 +608,7 @@ algorithms and sorts in standard ascending order:</p>
 </div>
 <p>Instead of directly sorting an array, you can compute a permutation of the array&#8217;s indices that puts the array into sorted order:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">v</span> <span class="o">=</span> <span class="n">randn</span><span class="p">(</span><span class="mi">5</span><span class="p">)</span>
-<span class="mi">5</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">5</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
   <span class="mf">0.297288</span>
   <span class="mf">0.382396</span>
  <span class="o">-</span><span class="mf">0.597634</span>
@@ -615,7 +616,7 @@ algorithms and sorts in standard ascending order:</p>
  <span class="o">-</span><span class="mf">0.839027</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">p</span> <span class="o">=</span> <span class="n">sortperm</span><span class="p">(</span><span class="n">v</span><span class="p">)</span>
-<span class="mi">5</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">5</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="mi">5</span>
  <span class="mi">3</span>
  <span class="mi">4</span>
@@ -623,7 +624,7 @@ algorithms and sorts in standard ascending order:</p>
  <span class="mi">2</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">v</span><span class="p">[</span><span class="n">p</span><span class="p">]</span>
-<span class="mi">5</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">5</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="o">-</span><span class="mf">0.839027</span>
  <span class="o">-</span><span class="mf">0.597634</span>
  <span class="o">-</span><span class="mf">0.0104452</span>
@@ -633,7 +634,7 @@ algorithms and sorts in standard ascending order:</p>
 </div>
 <p>Arrays can easily be sorted according to an arbitrary transformation of their values:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">sort</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">by</span><span class="o">=</span><span class="n">abs</span><span class="p">)</span>
-<span class="mi">5</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<span class="mi">5</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="o">-</span><span class="mf">0.0104452</span>
   <span class="mf">0.297288</span>
   <span class="mf">0.382396</span>
@@ -642,8 +643,8 @@ algorithms and sorts in standard ascending order:</p>
 </pre></div>
 </div>
 <p>Or in reverse order by a transformation:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">sort</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">by</span><span class="o">=</span><span class="n">abs</span><span class="p">,</span> <span class="n">rev</span><span class="o">=</span><span class="n">true</span><span class="p">)</span>
-<span class="mi">5</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">sort</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">by</span><span class="o">=</span><span class="n">abs</span><span class="p">,</span> <span class="n">rev</span><span class="o">=</span><span class="kc">true</span><span class="p">)</span>
+<span class="mi">5</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="o">-</span><span class="mf">0.839027</span>
  <span class="o">-</span><span class="mf">0.597634</span>
   <span class="mf">0.382396</span>
@@ -652,8 +653,8 @@ algorithms and sorts in standard ascending order:</p>
 </pre></div>
 </div>
 <p>If needed, the sorting algorithm can be chosen:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">sort</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">alg</span><span class="o">=</span><span class="n">InsertionSort</span><span class="p">)</span>
-<span class="mi">5</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">sort</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">alg</span><span class="o">=</span><span class="nb">InsertionSort</span><span class="p">)</span>
+<span class="mi">5</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
  <span class="o">-</span><span class="mf">0.839027</span>
  <span class="o">-</span><span class="mf">0.597634</span>
  <span class="o">-</span><span class="mf">0.0104452</span>
@@ -782,16 +783,16 @@ algorithm for numeric values, including integers and floats.</p>
 <p><code class="docutils literal"><span class="pre">PartialQuickSort(k)</span></code> is similar to <code class="docutils literal"><span class="pre">QuickSort</span></code>, but the output array
 is only sorted up to index <code class="docutils literal"><span class="pre">k</span></code> if <code class="docutils literal"><span class="pre">k</span></code> is an integer, or in the range
 of <code class="docutils literal"><span class="pre">k</span></code> if <code class="docutils literal"><span class="pre">k</span></code> is an <code class="docutils literal"><span class="pre">OrdinalRange</span></code>. For example:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">x</span> <span class="o">=</span> <span class="n">rand</span><span class="p">(</span><span class="mi">1</span><span class="p">:</span><span class="mi">500</span><span class="p">,</span> <span class="mi">100</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">x</span> <span class="o">=</span> <span class="n">rand</span><span class="p">(</span><span class="mi">1</span><span class="o">:</span><span class="mi">500</span><span class="p">,</span> <span class="mi">100</span><span class="p">)</span>
 <span class="n">k</span> <span class="o">=</span> <span class="mi">50</span>
-<span class="n">k2</span> <span class="o">=</span> <span class="mi">50</span><span class="p">:</span><span class="mi">100</span>
-<span class="n">s</span> <span class="o">=</span> <span class="n">sort</span><span class="p">(</span><span class="n">x</span><span class="p">;</span> <span class="n">alg</span><span class="o">=</span><span class="n">QuickSort</span><span class="p">)</span>
-<span class="n">ps</span> <span class="o">=</span> <span class="n">sort</span><span class="p">(</span><span class="n">x</span><span class="p">;</span> <span class="n">alg</span><span class="o">=</span><span class="n">PartialQuickSort</span><span class="p">(</span><span class="n">k</span><span class="p">))</span>
-<span class="n">qs</span> <span class="o">=</span> <span class="n">sort</span><span class="p">(</span><span class="n">x</span><span class="p">;</span> <span class="n">alg</span><span class="o">=</span><span class="n">PartialQuickSort</span><span class="p">(</span><span class="n">k2</span><span class="p">))</span>
+<span class="n">k2</span> <span class="o">=</span> <span class="mi">50</span><span class="o">:</span><span class="mi">100</span>
+<span class="n">s</span> <span class="o">=</span> <span class="n">sort</span><span class="p">(</span><span class="n">x</span><span class="p">;</span> <span class="n">alg</span><span class="o">=</span><span class="nb">QuickSort</span><span class="p">)</span>
+<span class="n">ps</span> <span class="o">=</span> <span class="n">sort</span><span class="p">(</span><span class="n">x</span><span class="p">;</span> <span class="n">alg</span><span class="o">=</span><span class="kt">PartialQuickSort</span><span class="p">(</span><span class="n">k</span><span class="p">))</span>
+<span class="n">qs</span> <span class="o">=</span> <span class="n">sort</span><span class="p">(</span><span class="n">x</span><span class="p">;</span> <span class="n">alg</span><span class="o">=</span><span class="kt">PartialQuickSort</span><span class="p">(</span><span class="n">k2</span><span class="p">))</span>
 <span class="n">map</span><span class="p">(</span><span class="n">issorted</span><span class="p">,</span> <span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="n">ps</span><span class="p">,</span> <span class="n">qs</span><span class="p">))</span>             <span class="c"># =&gt; (true, false, false)</span>
-<span class="n">map</span><span class="p">(</span><span class="n">x</span><span class="o">-&gt;</span><span class="n">issorted</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">:</span><span class="n">k</span><span class="p">]),</span> <span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="n">ps</span><span class="p">,</span> <span class="n">qs</span><span class="p">))</span>  <span class="c"># =&gt; (true, true, false)</span>
+<span class="n">map</span><span class="p">(</span><span class="n">x</span><span class="o">-&gt;</span><span class="n">issorted</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="o">:</span><span class="n">k</span><span class="p">]),</span> <span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="n">ps</span><span class="p">,</span> <span class="n">qs</span><span class="p">))</span>  <span class="c"># =&gt; (true, true, false)</span>
 <span class="n">map</span><span class="p">(</span><span class="n">x</span><span class="o">-&gt;</span><span class="n">issorted</span><span class="p">(</span><span class="n">x</span><span class="p">[</span><span class="n">k2</span><span class="p">]),</span> <span class="p">(</span><span class="n">s</span><span class="p">,</span> <span class="n">ps</span><span class="p">,</span> <span class="n">qs</span><span class="p">))</span>   <span class="c"># =&gt; (true, false, true)</span>
-<span class="n">s</span><span class="p">[</span><span class="mi">1</span><span class="p">:</span><span class="n">k</span><span class="p">]</span> <span class="o">==</span> <span class="n">ps</span><span class="p">[</span><span class="mi">1</span><span class="p">:</span><span class="n">k</span><span class="p">]</span>                      <span class="c"># =&gt; true</span>
+<span class="n">s</span><span class="p">[</span><span class="mi">1</span><span class="o">:</span><span class="n">k</span><span class="p">]</span> <span class="o">==</span> <span class="n">ps</span><span class="p">[</span><span class="mi">1</span><span class="o">:</span><span class="n">k</span><span class="p">]</span>                      <span class="c"># =&gt; true</span>
 <span class="n">s</span><span class="p">[</span><span class="n">k2</span><span class="p">]</span> <span class="o">==</span> <span class="n">qs</span><span class="p">[</span><span class="n">k2</span><span class="p">]</span>                        <span class="c"># =&gt; true</span>
 </pre></div>
 </div>
@@ -810,9 +811,9 @@ preferred algorithm, e.g. <code class="docutils literal"><span class="pre">sort!
 implemented via the <code class="docutils literal"><span class="pre">Base.Sort.defalg</span></code> function. It allows a
 particular algorithm to be registered as the default in all sorting
 functions for specific arrays. For example, here are the two default
-methods from <a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/base/sort.jl">sort.jl</a>:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">defalg</span><span class="p">(</span><span class="n">v</span><span class="p">::</span><span class="n">AbstractArray</span><span class="p">)</span> <span class="o">=</span> <span class="n">MergeSort</span>
-<span class="n">defalg</span><span class="p">{</span><span class="n">T</span><span class="o">&lt;:</span><span class="n">Number</span><span class="p">}(</span><span class="n">v</span><span class="p">::</span><span class="n">AbstractArray</span><span class="p">{</span><span class="n">T</span><span class="p">})</span> <span class="o">=</span> <span class="n">QuickSort</span>
+methods from <a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/base/sort.jl">sort.jl</a>:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">defalg</span><span class="p">(</span><span class="n">v</span><span class="o">::</span><span class="kt">AbstractArray</span><span class="p">)</span> <span class="o">=</span> <span class="nb">MergeSort</span>
+<span class="n">defalg</span><span class="p">{</span><span class="n">T</span><span class="o">&lt;:</span><span class="kt">Number</span><span class="p">}(</span><span class="n">v</span><span class="o">::</span><span class="kt">AbstractArray</span><span class="p">{</span><span class="n">T</span><span class="p">})</span> <span class="o">=</span> <span class="nb">QuickSort</span>
 </pre></div>
 </div>
 <p>As for numeric arrays, choosing a non-stable default algorithm for
@@ -858,7 +859,7 @@ sense.</p>
     <script type="text/javascript">
         var DOCUMENTATION_OPTIONS = {
             URL_ROOT:'../../',
-            VERSION:'0.5.1-pre',
+            VERSION:'0.5.3-pre',
             COLLAPSE_INDEX:false,
             FILE_SUFFIX:'',
             HAS_SOURCE:  true

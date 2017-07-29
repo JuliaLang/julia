@@ -7,7 +7,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Reflection and introspection &mdash; Julia Language 0.5.1-pre documentation</title>
+  <title>Reflection and introspection &mdash; Julia Language 0.5.3-pre documentation</title>
   
 
   
@@ -30,7 +30,7 @@
   
     <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
   
-    <link rel="top" title="Julia Language 0.5.1-pre documentation" href="../../"/>
+    <link rel="top" title="Julia Language 0.5.3-pre documentation" href="../../"/>
         <link rel="next" title="Documentation of Julia’s Internals" href="../julia/"/>
         <link rel="prev" title="SIMD Support" href="../../stdlib/simd-types/"/> 
 
@@ -149,6 +149,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#man-parametric-types">Parametric Types</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#type-aliases">Type Aliases</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#operations-on-types">Operations on Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/types/#custom-pretty-printing">Custom pretty-printing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#value-types">&#8220;Value types&#8221;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#nullable-types-representing-missing-values">Nullable Types: Representing Missing Values</a></li>
 </ul>
@@ -512,7 +513,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../stdlib/simd-types/">SIMD Support</a></li>
 </ul>
 <ul class="current">
-<li class="toctree-l1 current"><a class="current reference internal" href="">Reflection and introspection</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Reflection and introspection</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../julia/">Documentation of Julia&#8217;s Internals</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="../init/">Initialization of the Julia runtime</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../eval/">Eval of Julia code</a></li>
@@ -584,15 +585,15 @@ an array of <a class="reference internal" href="../../stdlib/strings/#Base.Symbo
 <p>The names of <code class="xref jl jl-obj docutils literal"><span class="pre">DataType</span></code> fields may be interrogated
 using <a class="reference internal" href="../../stdlib/base/#Base.fieldnames" title="Base.fieldnames"><code class="xref jl jl-func docutils literal"><span class="pre">fieldnames()</span></code></a>. For example, given the following type, <code class="docutils literal"><span class="pre">fieldnames(Point)</span></code> returns an arrays of <a class="reference internal" href="../../stdlib/strings/#Base.Symbol" title="Base.Symbol"><code class="xref jl jl-obj docutils literal"><span class="pre">Symbol</span></code></a>
 elements representing the field names:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">type</span><span class="nc"> Point</span>
-           <span class="n">x</span><span class="p">::</span><span class="kt">Int</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">type</span> <span class="n">Point</span>
+           <span class="n">x</span><span class="o">::</span><span class="kt">Int</span>
            <span class="n">y</span>
        <span class="k">end</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">fieldnames</span><span class="p">(</span><span class="n">Point</span><span class="p">)</span>
-<span class="mi">2</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="n">Symbol</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
- <span class="p">:</span><span class="n">x</span>
- <span class="p">:</span><span class="n">y</span>
+<span class="mi">2</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Symbol</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
+ <span class="o">:</span><span class="n">x</span>
+ <span class="o">:</span><span class="n">y</span>
 </pre></div>
 </div>
 <p>The type of each field in a <code class="docutils literal"><span class="pre">Point</span></code> object is stored in the <code class="docutils literal"><span class="pre">types</span></code> field of the <code class="docutils literal"><span class="pre">Point</span></code> variable itself:</p>
@@ -602,8 +603,8 @@ elements representing the field names:</p>
 </div>
 <p>While <code class="docutils literal"><span class="pre">x</span></code> is annotated as an <code class="docutils literal"><span class="pre">Int</span></code>, <code class="docutils literal"><span class="pre">y</span></code> was unannotated in the type definition, therefore <code class="docutils literal"><span class="pre">y</span></code> defaults to the <code class="docutils literal"><span class="pre">Any</span></code> type.</p>
 <p>Types are themselves represented as a structure called <code class="xref jl jl-obj docutils literal"><span class="pre">DataType</span></code>:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">Point</span><span class="p">)</span>
-<span class="n">DataType</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">typeof</span><span class="p">(</span><span class="n">Point</span><span class="p">)</span>
+<span class="kt">DataType</span>
 </pre></div>
 </div>
 <p>Note that <code class="docutils literal"><span class="pre">fieldnames(DataType)</span></code> gives the names for each field of <code class="xref jl jl-obj docutils literal"><span class="pre">DataType</span></code> itself, and
@@ -612,10 +613,10 @@ one of these fields is the <code class="docutils literal"><span class="pre">type
 <p>The <em>direct</em> subtypes of any <code class="xref jl jl-obj docutils literal"><span class="pre">DataType</span></code> may be listed using
 <a class="reference internal" href="../../stdlib/base/#Base.subtypes" title="Base.subtypes"><code class="xref jl jl-func docutils literal"><span class="pre">subtypes()</span></code></a>. For example, the abstract <code class="xref jl jl-obj docutils literal"><span class="pre">DataType</span></code> <code class="xref jl jl-obj docutils literal"><span class="pre">AbstractFloat</span></code>
 has four (concrete) subtypes:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">subtypes</span><span class="p">(</span><span class="n">AbstractFloat</span><span class="p">)</span>
-<span class="mi">4</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Any</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
- <span class="n">BigFloat</span>
- <span class="n">Float16</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">subtypes</span><span class="p">(</span><span class="kt">AbstractFloat</span><span class="p">)</span>
+<span class="mi">4</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Any</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
+ <span class="kt">BigFloat</span>
+ <span class="kt">Float16</span>
  <span class="kt">Float32</span>
  <span class="kt">Float64</span>
 </pre></div>
@@ -634,12 +635,12 @@ field <cite>i</cite> relative to the start of the type.</p>
 <p>The methods of any generic function may be listed using <a class="reference internal" href="../../stdlib/base/#Base.methods" title="Base.methods"><code class="xref jl jl-func docutils literal"><span class="pre">methods()</span></code></a>. The method dispatch
 table may be searched for methods accepting a given type using <a class="reference internal" href="../../stdlib/base/#Base.methodswith" title="Base.methodswith"><code class="xref jl jl-func docutils literal"><span class="pre">methodswith()</span></code></a>.</p>
 <p class="rubric">Expansion and lowering</p>
-<p>As discussed in the <a class="reference internal" href="../../manual/metaprogramming/#man-metaprogramming"><span>Metaprogramming</span></a> section, the
+<p>As discussed in the <a class="reference internal" href="../../manual/metaprogramming/#man-metaprogramming"><span class="std std-ref">Metaprogramming</span></a> section, the
 <a class="reference internal" href="../../stdlib/base/#Base.macroexpand" title="Base.macroexpand"><code class="xref jl jl-func docutils literal"><span class="pre">macroexpand()</span></code></a> function gives the unquoted and interpolated expression (<code class="docutils literal"><span class="pre">Expr</span></code>) form
 for a given macro. To use <code class="docutils literal"><span class="pre">macroexpand</span></code>, <code class="docutils literal"><span class="pre">quote</span></code> the expression block itself (otherwise,
 the macro will be evaluated and the result will be passed instead!). For example:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">macroexpand</span><span class="p">(</span> <span class="p">:(@</span><span class="nb">edit</span> <span class="n">println</span><span class="p">(</span><span class="s">&quot;&quot;</span><span class="p">))</span> <span class="p">)</span>
-<span class="p">:((</span><span class="n">Base</span><span class="o">.</span><span class="nb">edit</span><span class="p">)(</span><span class="n">println</span><span class="p">,(</span><span class="n">Base</span><span class="o">.</span><span class="n">typesof</span><span class="p">)(</span><span class="s">&quot;&quot;</span><span class="p">)))</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">macroexpand</span><span class="p">(</span> <span class="o">:</span><span class="p">(</span><span class="nd">@edit</span> <span class="n">println</span><span class="p">(</span><span class="s">&quot;&quot;</span><span class="p">))</span> <span class="p">)</span>
+<span class="o">:</span><span class="p">((</span><span class="n">Base</span><span class="o">.</span><span class="n">edit</span><span class="p">)(</span><span class="n">println</span><span class="p">,(</span><span class="n">Base</span><span class="o">.</span><span class="n">typesof</span><span class="p">)(</span><span class="s">&quot;&quot;</span><span class="p">)))</span>
 </pre></div>
 </div>
 <p>The functions <code class="xref jl jl-func docutils literal"><span class="pre">Base.Meta.show_sexpr()</span></code> and <a class="reference internal" href="../../stdlib/io-network/#Base.dump" title="Base.dump"><code class="xref jl jl-func docutils literal"><span class="pre">dump()</span></code></a> are used to display S-expr style views
@@ -647,10 +648,10 @@ and depth-nested detail views for any expression.</p>
 <p>Finally, the <a class="reference internal" href="../../stdlib/base/#Base.expand" title="Base.expand"><code class="xref jl jl-func docutils literal"><span class="pre">expand()</span></code></a> function gives the <code class="docutils literal"><span class="pre">lowered</span></code> form of any expression and is of particular
 interest for understanding both macros and top-level statements such as function declarations and
 variable assignments:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">expand</span><span class="p">(</span> <span class="p">:(</span><span class="n">f</span><span class="p">()</span> <span class="o">=</span> <span class="mi">1</span><span class="p">)</span> <span class="p">)</span>
-<span class="p">:(</span><span class="k">begin</span>
-        <span class="o">$</span><span class="p">(</span><span class="n">Expr</span><span class="p">(:</span><span class="n">method</span><span class="p">,</span> <span class="p">:</span><span class="n">f</span><span class="p">))</span>
-        <span class="o">$</span><span class="p">(</span><span class="n">Expr</span><span class="p">(:</span><span class="n">method</span><span class="p">,</span> <span class="p">:</span><span class="n">f</span><span class="p">,</span> <span class="p">:((</span><span class="n">Core</span><span class="o">.</span><span class="n">svec</span><span class="p">)((</span><span class="n">Core</span><span class="o">.</span><span class="n">apply_type</span><span class="p">)(</span><span class="n">Tuple</span><span class="p">,(</span><span class="n">Core</span><span class="o">.</span><span class="n">Typeof</span><span class="p">)(</span><span class="n">f</span><span class="p">)),(</span><span class="n">Core</span><span class="o">.</span><span class="n">svec</span><span class="p">)())),</span> <span class="n">Toplevel</span> <span class="n">LambdaInfo</span> <span class="n">thunk</span><span class="p">,</span> <span class="n">false</span><span class="p">))</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">expand</span><span class="p">(</span> <span class="o">:</span><span class="p">(</span><span class="n">f</span><span class="p">()</span> <span class="o">=</span> <span class="mi">1</span><span class="p">)</span> <span class="p">)</span>
+<span class="o">:</span><span class="p">(</span><span class="k">begin</span>
+        <span class="o">$</span><span class="p">(</span><span class="kt">Expr</span><span class="p">(</span><span class="o">:</span><span class="n">method</span><span class="p">,</span> <span class="o">:</span><span class="n">f</span><span class="p">))</span>
+        <span class="o">$</span><span class="p">(</span><span class="kt">Expr</span><span class="p">(</span><span class="o">:</span><span class="n">method</span><span class="p">,</span> <span class="o">:</span><span class="n">f</span><span class="p">,</span> <span class="o">:</span><span class="p">((</span><span class="n">Core</span><span class="o">.</span><span class="n">svec</span><span class="p">)((</span><span class="n">Core</span><span class="o">.</span><span class="n">apply_type</span><span class="p">)(</span><span class="kt">Tuple</span><span class="p">,(</span><span class="n">Core</span><span class="o">.</span><span class="n">Typeof</span><span class="p">)(</span><span class="n">f</span><span class="p">)),(</span><span class="n">Core</span><span class="o">.</span><span class="n">svec</span><span class="p">)())),</span> <span class="n">Toplevel</span> <span class="n">LambdaInfo</span> <span class="n">thunk</span><span class="p">,</span> <span class="kc">false</span><span class="p">))</span>
         <span class="k">return</span> <span class="n">f</span>
     <span class="k">end</span><span class="p">)</span>
 </pre></div>
@@ -661,21 +662,21 @@ because generic functions may have many methods with different type signatures. 
 method-specific code-lowering is available using <a class="reference internal" href="../../stdlib/base/#Base.code_lowered" title="Base.code_lowered"><code class="xref jl jl-func docutils literal"><span class="pre">code_lowered(f::Function,</span> <span class="pre">(Argtypes...))</span></code></a>,
 and the type-inferred form is available using <a class="reference internal" href="../../stdlib/base/#Base.code_typed" title="Base.code_typed"><code class="xref jl jl-func docutils literal"><span class="pre">code_typed(f::Function,</span> <span class="pre">(Argtypes...))</span></code></a>.
 <a class="reference internal" href="../../stdlib/base/#Base.code_warntype" title="Base.code_warntype"><code class="xref jl jl-func docutils literal"><span class="pre">code_warntype(f::Function,</span> <span class="pre">(Argtypes...))</span></code></a> adds
-highlighting to the output of <a class="reference internal" href="../../stdlib/base/#Base.code_typed" title="Base.code_typed"><code class="xref jl jl-func docutils literal"><span class="pre">code_typed()</span></code></a> (see <a class="reference internal" href="../../manual/performance-tips/#man-code-warntype"><span>&#64;code_warntype</span></a>).</p>
+highlighting to the output of <a class="reference internal" href="../../stdlib/base/#Base.code_typed" title="Base.code_typed"><code class="xref jl jl-func docutils literal"><span class="pre">code_typed()</span></code></a> (see <a class="reference internal" href="../../manual/performance-tips/#man-code-warntype"><span class="std std-ref">&#64;code_warntype</span></a>).</p>
 <p>Closer to the machine, the LLVM intermediate representation of a function may be printed using by
 <a class="reference internal" href="../../stdlib/base/#Base.code_llvm" title="Base.code_llvm"><code class="xref jl jl-func docutils literal"><span class="pre">code_llvm(f::Function,</span> <span class="pre">(Argtypes...))</span></code></a>, and finally the compiled machine code is
 available using <a class="reference internal" href="../../stdlib/base/#Base.code_native" title="Base.code_native"><code class="xref jl jl-func docutils literal"><span class="pre">code_native(f::Function,</span> <span class="pre">(Argtypes...))</span></code></a> (this will trigger JIT
 compilation/code generation for any function which has not previously been called).</p>
 <p>For convenience, there are macro versions of the above functions which take standard function calls
 and expand argument types automatically:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">@</span><span class="n">code_llvm</span> <span class="o">+</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span>julia&gt; @code_llvm +(1,1)
 
-<span class="p">;</span> <span class="n">Function</span> <span class="n">Attrs</span><span class="p">:</span> <span class="n">sspreq</span>
-<span class="n">define</span> <span class="n">i64</span> <span class="p">@</span><span class="s">&quot;julia_+_130862&quot;</span><span class="p">(</span><span class="n">i64</span><span class="p">,</span> <span class="n">i64</span><span class="p">)</span> <span class="c">#0 {</span>
-<span class="n">top</span><span class="p">:</span>
-    <span class="o">%</span><span class="mi">2</span> <span class="o">=</span> <span class="n">add</span> <span class="n">i64</span> <span class="o">%</span><span class="mi">1</span><span class="p">,</span> <span class="o">%</span><span class="mi">0</span><span class="p">,</span> <span class="o">!</span><span class="n">dbg</span> <span class="o">!</span><span class="mi">8</span>
-    <span class="n">ret</span> <span class="n">i64</span> <span class="o">%</span><span class="mi">2</span><span class="p">,</span> <span class="o">!</span><span class="n">dbg</span> <span class="o">!</span><span class="mi">8</span>
-<span class="p">}</span>
+; Function Attrs: sspreq
+define i64 @&quot;julia_+_130862&quot;(i64, i64) #0 {
+top:
+    %2 = add i64 %1, %0, !dbg !8
+    ret i64 %2, !dbg !8
+}
 </pre></div>
 </div>
 <p>(likewise <code class="docutils literal"><span class="pre">&#64;code_typed</span></code>, <code class="docutils literal"><span class="pre">&#64;code_warntype</span></code>, <code class="docutils literal"><span class="pre">&#64;code_lowered</span></code>, and <code class="docutils literal"><span class="pre">&#64;code_native</span></code>)</p>
@@ -717,7 +718,7 @@ and expand argument types automatically:</p>
     <script type="text/javascript">
         var DOCUMENTATION_OPTIONS = {
             URL_ROOT:'../../',
-            VERSION:'0.5.1-pre',
+            VERSION:'0.5.3-pre',
             COLLAPSE_INDEX:false,
             FILE_SUFFIX:'',
             HAS_SOURCE:  true

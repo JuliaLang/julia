@@ -7,7 +7,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Arrays with custom indices &mdash; Julia Language 0.5.1-pre documentation</title>
+  <title>Arrays with custom indices &mdash; Julia Language 0.5.3-pre documentation</title>
   
 
   
@@ -30,7 +30,7 @@
   
     <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
   
-    <link rel="top" title="Julia Language 0.5.1-pre documentation" href="../../"/>
+    <link rel="top" title="Julia Language 0.5.3-pre documentation" href="../../"/>
         <link rel="up" title="Documentation of Julia’s Internals" href="../julia/"/>
         <link rel="next" title="Developing/debugging Julia’s C code" href="../C/"/>
         <link rel="prev" title="Proper maintenance and care of multi-threading locks" href="../locks/"/> 
@@ -150,6 +150,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#man-parametric-types">Parametric Types</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#type-aliases">Type Aliases</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#operations-on-types">Operations on Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/types/#custom-pretty-printing">Custom pretty-printing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#value-types">&#8220;Value types&#8221;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#nullable-types-representing-missing-values">Nullable Types: Representing Missing Values</a></li>
 </ul>
@@ -530,7 +531,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../stdio/">printf() and stdio in the Julia runtime</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../boundscheck/">Bounds checking</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../locks/">Proper maintenance and care of multi-threading locks</a></li>
-<li class="toctree-l2 current"><a class="current reference internal" href="">Arrays with custom indices</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Arrays with custom indices</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="../C/">Developing/debugging Julia&#8217;s C code</a><ul>
@@ -609,11 +610,11 @@ throughout the Julia ecosystem, early adopters running code that has
 not been updated are likely to experience errors.  The most
 frustrating bugs would be incorrect results or segfaults (total
 crashes of Julia).  For example, consider the following function:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> mycopy</span><span class="o">!</span><span class="p">(</span><span class="n">dest</span><span class="p">::</span><span class="n">AbstractVector</span><span class="p">,</span> <span class="n">src</span><span class="p">::</span><span class="n">AbstractVector</span><span class="p">)</span>
-    <span class="n">length</span><span class="p">(</span><span class="n">dest</span><span class="p">)</span> <span class="o">==</span> <span class="n">length</span><span class="p">(</span><span class="n">src</span><span class="p">)</span> <span class="o">||</span> <span class="nb">throw</span><span class="p">(</span><span class="n">DimensionMismatch</span><span class="p">(</span><span class="s">&quot;vectors must match&quot;</span><span class="p">))</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">mycopy!</span><span class="p">(</span><span class="n">dest</span><span class="o">::</span><span class="kt">AbstractVector</span><span class="p">,</span> <span class="n">src</span><span class="o">::</span><span class="kt">AbstractVector</span><span class="p">)</span>
+    <span class="n">length</span><span class="p">(</span><span class="n">dest</span><span class="p">)</span> <span class="o">==</span> <span class="n">length</span><span class="p">(</span><span class="n">src</span><span class="p">)</span> <span class="o">||</span> <span class="n">throw</span><span class="p">(</span><span class="kt">DimensionMismatch</span><span class="p">(</span><span class="s">&quot;vectors must match&quot;</span><span class="p">))</span>
     <span class="c"># OK, now we&#39;re safe to use @inbounds, right? (not anymore!)</span>
-    <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="p">:</span><span class="n">length</span><span class="p">(</span><span class="n">src</span><span class="p">)</span>
-        <span class="p">@</span><span class="n">inbounds</span> <span class="n">dest</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">src</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="o">:</span><span class="n">length</span><span class="p">(</span><span class="n">src</span><span class="p">)</span>
+        <span class="nd">@inbounds</span> <span class="n">dest</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">src</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
     <span class="k">end</span>
     <span class="n">dest</span>
 <span class="k">end</span>
@@ -645,7 +646,7 @@ type, this is the default returned by <code class="docutils literal"><span class
 that this array type uses &#8220;conventional&#8221; 1-based indexing.  Note that
 if you don&#8217;t want to be bothered supporting arrays with non-1
 indexing, you can add the following line:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="p">@</span><span class="nb">assert</span> <span class="n">all</span><span class="p">(</span><span class="n">x</span><span class="o">-&gt;</span><span class="nb">isa</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">Base</span><span class="o">.</span><span class="n">OneTo</span><span class="p">),</span> <span class="n">indices</span><span class="p">(</span><span class="n">A</span><span class="p">))</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="nd">@assert</span> <span class="n">all</span><span class="p">(</span><span class="n">x</span><span class="o">-&gt;</span><span class="n">isa</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">Base</span><span class="o">.</span><span class="n">OneTo</span><span class="p">),</span> <span class="n">indices</span><span class="p">(</span><span class="n">A</span><span class="p">))</span>
 </pre></div>
 </div>
 <p>at the top of any function.</p>
@@ -675,10 +676,10 @@ indexing (i.e., is a <code class="docutils literal"><span class="pre">Tuple{Unit
 continue to work the same as always.</p>
 <p>Using <code class="docutils literal"><span class="pre">indices</span></code> and <code class="docutils literal"><span class="pre">linearindices</span></code>, here is one way you could
 rewrite <code class="docutils literal"><span class="pre">mycopy!</span></code>:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> mycopy</span><span class="o">!</span><span class="p">(</span><span class="n">dest</span><span class="p">::</span><span class="n">AbstractVector</span><span class="p">,</span> <span class="n">src</span><span class="p">::</span><span class="n">AbstractVector</span><span class="p">)</span>
-    <span class="n">indices</span><span class="p">(</span><span class="n">dest</span><span class="p">)</span> <span class="o">==</span> <span class="n">indices</span><span class="p">(</span><span class="n">src</span><span class="p">)</span> <span class="o">||</span> <span class="nb">throw</span><span class="p">(</span><span class="n">DimensionMismatch</span><span class="p">(</span><span class="s">&quot;vectors must match&quot;</span><span class="p">))</span>
-    <span class="k">for</span> <span class="n">i</span> <span class="k">in</span> <span class="n">linearindices</span><span class="p">(</span><span class="n">src</span><span class="p">)</span>
-        <span class="p">@</span><span class="n">inbounds</span> <span class="n">dest</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">src</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">mycopy!</span><span class="p">(</span><span class="n">dest</span><span class="o">::</span><span class="kt">AbstractVector</span><span class="p">,</span> <span class="n">src</span><span class="o">::</span><span class="kt">AbstractVector</span><span class="p">)</span>
+    <span class="n">indices</span><span class="p">(</span><span class="n">dest</span><span class="p">)</span> <span class="o">==</span> <span class="n">indices</span><span class="p">(</span><span class="n">src</span><span class="p">)</span> <span class="o">||</span> <span class="n">throw</span><span class="p">(</span><span class="kt">DimensionMismatch</span><span class="p">(</span><span class="s">&quot;vectors must match&quot;</span><span class="p">))</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="kp">in</span> <span class="n">linearindices</span><span class="p">(</span><span class="n">src</span><span class="p">)</span>
+        <span class="nd">@inbounds</span> <span class="n">dest</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">src</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
     <span class="k">end</span>
     <span class="n">dest</span>
 <span class="k">end</span>
@@ -720,8 +721,8 @@ depends on what you are doing and might need to know more about the
 array. However, it appears that many uses of <code class="docutils literal"><span class="pre">first(::Colon)</span></code> are
 really about computing an index offset; when that is the case, a
 candidate replacement is:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">indexoffset</span><span class="p">(</span><span class="n">r</span><span class="p">::</span><span class="n">AbstractVector</span><span class="p">)</span> <span class="o">=</span> <span class="n">first</span><span class="p">(</span><span class="n">r</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span>
-<span class="n">indexoffset</span><span class="p">(::</span><span class="n">Colon</span><span class="p">)</span> <span class="o">=</span> <span class="mi">0</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">indexoffset</span><span class="p">(</span><span class="n">r</span><span class="o">::</span><span class="kt">AbstractVector</span><span class="p">)</span> <span class="o">=</span> <span class="n">first</span><span class="p">(</span><span class="n">r</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span>
+<span class="n">indexoffset</span><span class="p">(</span><span class="o">::</span><span class="kt">Colon</span><span class="p">)</span> <span class="o">=</span> <span class="mi">0</span>
 </pre></div>
 </div>
 <p>In other words, while <code class="docutils literal"><span class="pre">first(:)</span></code> does not itself make sense, in
@@ -732,7 +733,7 @@ zero.</p>
 <div class="section" id="writing-custom-array-types-with-non-1-indexing">
 <h2>Writing custom array types with non-1 indexing<a class="headerlink" href="#writing-custom-array-types-with-non-1-indexing" title="Permalink to this headline">¶</a></h2>
 <p>Most of the methods you&#8217;ll need to define are standard for any
-<code class="docutils literal"><span class="pre">AbstractArray</span></code> type, see <a class="reference internal" href="../../manual/interfaces/#man-interfaces-abstractarray"><span>Abstract Arrays</span></a>.
+<code class="docutils literal"><span class="pre">AbstractArray</span></code> type, see <a class="reference internal" href="../../manual/interfaces/#man-interfaces-abstractarray"><span class="std std-ref">Abstract Arrays</span></a>.
 This page focuses on the steps needed to define unconventional
 indexing.</p>
 <div class="section" id="do-not-implement-size-or-length">
@@ -774,13 +775,13 @@ avoid the need to write your own <code class="docutils literal"><span class="pre
 <div class="section" id="specializing-indices">
 <h3>Specializing <code class="docutils literal"><span class="pre">indices</span></code><a class="headerlink" href="#specializing-indices" title="Permalink to this headline">¶</a></h3>
 <p>Once you have your <code class="docutils literal"><span class="pre">AbstractUnitRange</span></code> type, then specialize <code class="docutils literal"><span class="pre">indices</span></code>:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">Base</span><span class="o">.</span><span class="n">indices</span><span class="p">(</span><span class="n">A</span><span class="p">::</span><span class="n">ZeroArray</span><span class="p">)</span> <span class="o">=</span> <span class="n">map</span><span class="p">(</span><span class="n">n</span><span class="o">-&gt;</span><span class="n">ZeroRange</span><span class="p">(</span><span class="n">n</span><span class="p">),</span> <span class="n">A</span><span class="o">.</span><span class="n">size</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">Base</span><span class="o">.</span><span class="n">indices</span><span class="p">(</span><span class="n">A</span><span class="o">::</span><span class="n">ZeroArray</span><span class="p">)</span> <span class="o">=</span> <span class="n">map</span><span class="p">(</span><span class="n">n</span><span class="o">-&gt;</span><span class="n">ZeroRange</span><span class="p">(</span><span class="n">n</span><span class="p">),</span> <span class="n">A</span><span class="o">.</span><span class="n">size</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>where here we imagine that <code class="docutils literal"><span class="pre">ZeroArray</span></code> has a field called <code class="docutils literal"><span class="pre">size</span></code>
 (there would be other ways to implement this).</p>
 <p>In some cases, the fallback definition for <code class="docutils literal"><span class="pre">indices(A,</span> <span class="pre">d)</span></code>:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">indices</span><span class="p">{</span><span class="n">T</span><span class="p">,</span><span class="n">N</span><span class="p">}(</span><span class="n">A</span><span class="p">::</span><span class="n">AbstractArray</span><span class="p">{</span><span class="n">T</span><span class="p">,</span><span class="n">N</span><span class="p">},</span> <span class="n">d</span><span class="p">)</span> <span class="o">=</span> <span class="n">d</span> <span class="o">&lt;=</span> <span class="n">N</span> <span class="o">?</span> <span class="n">indices</span><span class="p">(</span><span class="n">A</span><span class="p">)[</span><span class="n">d</span><span class="p">]</span> <span class="p">:</span> <span class="n">OneTo</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">indices</span><span class="p">{</span><span class="n">T</span><span class="p">,</span><span class="n">N</span><span class="p">}(</span><span class="n">A</span><span class="o">::</span><span class="kt">AbstractArray</span><span class="p">{</span><span class="n">T</span><span class="p">,</span><span class="n">N</span><span class="p">},</span> <span class="n">d</span><span class="p">)</span> <span class="o">=</span> <span class="n">d</span> <span class="o">&lt;=</span> <span class="n">N</span> <span class="o">?</span> <span class="n">indices</span><span class="p">(</span><span class="n">A</span><span class="p">)[</span><span class="n">d</span><span class="p">]</span> <span class="o">:</span> <span class="n">OneTo</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>may not be what you want: you may need to specialize it to return
@@ -789,8 +790,8 @@ something other than <code class="docutils literal"><span class="pre">OneTo(1)</
 equivalent to <code class="docutils literal"><span class="pre">indices(A,</span> <span class="pre">1)</span></code> but which avoids checking (at
 runtime) whether <code class="docutils literal"><span class="pre">ndims(A)</span> <span class="pre">&gt;</span> <span class="pre">0</span></code>. (This is purely a performance
 optimization.)  It is defined as:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">indices1</span><span class="p">{</span><span class="n">T</span><span class="p">}(</span><span class="n">A</span><span class="p">::</span><span class="n">AbstractArray</span><span class="p">{</span><span class="n">T</span><span class="p">,</span><span class="mi">0</span><span class="p">})</span> <span class="o">=</span> <span class="n">OneTo</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
-<span class="n">indices1</span><span class="p">{</span><span class="n">T</span><span class="p">}(</span><span class="n">A</span><span class="p">::</span><span class="n">AbstractArray</span><span class="p">{</span><span class="n">T</span><span class="p">})</span>   <span class="o">=</span> <span class="n">indices</span><span class="p">(</span><span class="n">A</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">indices1</span><span class="p">{</span><span class="n">T</span><span class="p">}(</span><span class="n">A</span><span class="o">::</span><span class="kt">AbstractArray</span><span class="p">{</span><span class="n">T</span><span class="p">,</span><span class="mi">0</span><span class="p">})</span> <span class="o">=</span> <span class="n">OneTo</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">indices1</span><span class="p">{</span><span class="n">T</span><span class="p">}(</span><span class="n">A</span><span class="o">::</span><span class="kt">AbstractArray</span><span class="p">{</span><span class="n">T</span><span class="p">})</span>   <span class="o">=</span> <span class="n">indices</span><span class="p">(</span><span class="n">A</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span>
 </pre></div>
 </div>
 <p>If the first of these (the zero-dimensional case) is problematic for
@@ -799,11 +800,11 @@ your custom array type, be sure to specialize it appropriately.</p>
 <div class="section" id="specializing-similar">
 <h3>Specializing <code class="docutils literal"><span class="pre">similar</span></code><a class="headerlink" href="#specializing-similar" title="Permalink to this headline">¶</a></h3>
 <p>Given your custom <code class="docutils literal"><span class="pre">ZeroRange</span></code> type, then you should also add the following two specializations for <code class="docutils literal"><span class="pre">similar</span></code>:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> Base</span><span class="o">.</span><span class="n">similar</span><span class="p">(</span><span class="n">A</span><span class="p">::</span><span class="n">AbstractArray</span><span class="p">,</span> <span class="n">T</span><span class="p">::</span><span class="n">Type</span><span class="p">,</span> <span class="n">shape</span><span class="p">::</span><span class="n">Tuple</span><span class="p">{</span><span class="n">ZeroRange</span><span class="p">,</span><span class="n">Vararg</span><span class="p">{</span><span class="n">ZeroRange</span><span class="p">}})</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">Base</span><span class="o">.</span><span class="n">similar</span><span class="p">(</span><span class="n">A</span><span class="o">::</span><span class="kt">AbstractArray</span><span class="p">,</span> <span class="n">T</span><span class="o">::</span><span class="kt">Type</span><span class="p">,</span> <span class="n">shape</span><span class="o">::</span><span class="kt">Tuple</span><span class="p">{</span><span class="n">ZeroRange</span><span class="p">,</span><span class="kt">Vararg</span><span class="p">{</span><span class="n">ZeroRange</span><span class="p">}})</span>
     <span class="c"># body</span>
 <span class="k">end</span>
 
-<span class="k">function</span><span class="nf"> Base</span><span class="o">.</span><span class="n">similar</span><span class="p">(</span><span class="n">f</span><span class="p">::</span><span class="n">Union</span><span class="p">{</span><span class="n">Function</span><span class="p">,</span><span class="n">DataType</span><span class="p">},</span> <span class="n">shape</span><span class="p">::</span><span class="n">Tuple</span><span class="p">{</span><span class="n">ZeroRange</span><span class="p">,</span><span class="n">Vararg</span><span class="p">{</span><span class="n">ZeroRange</span><span class="p">}})</span>
+<span class="k">function</span> <span class="n">Base</span><span class="o">.</span><span class="n">similar</span><span class="p">(</span><span class="n">f</span><span class="o">::</span><span class="kt">Union</span><span class="p">{</span><span class="kt">Function</span><span class="p">,</span><span class="kt">DataType</span><span class="p">},</span> <span class="n">shape</span><span class="o">::</span><span class="kt">Tuple</span><span class="p">{</span><span class="n">ZeroRange</span><span class="p">,</span><span class="kt">Vararg</span><span class="p">{</span><span class="n">ZeroRange</span><span class="p">}})</span>
     <span class="c"># body</span>
 <span class="k">end</span>
 </pre></div>
@@ -813,7 +814,7 @@ your custom array type, be sure to specialize it appropriately.</p>
 <div class="section" id="specializing-reshape">
 <h3>Specializing <code class="docutils literal"><span class="pre">reshape</span></code><a class="headerlink" href="#specializing-reshape" title="Permalink to this headline">¶</a></h3>
 <p>Optionally, define a method</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">Base</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">A</span><span class="p">::</span><span class="n">AbstractArray</span><span class="p">,</span> <span class="n">shape</span><span class="p">::</span><span class="n">Tuple</span><span class="p">{</span><span class="n">ZeroRange</span><span class="p">,</span><span class="n">Vararg</span><span class="p">{</span><span class="n">ZeroRange</span><span class="p">}})</span> <span class="o">=</span> <span class="o">...</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">Base</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">A</span><span class="o">::</span><span class="kt">AbstractArray</span><span class="p">,</span> <span class="n">shape</span><span class="o">::</span><span class="kt">Tuple</span><span class="p">{</span><span class="n">ZeroRange</span><span class="p">,</span><span class="kt">Vararg</span><span class="p">{</span><span class="n">ZeroRange</span><span class="p">}})</span> <span class="o">=</span> <span class="o">...</span>
 </pre></div>
 </div>
 <p>and you can <code class="docutils literal"><span class="pre">reshape</span></code> an array so that the result has custom indices.</p>
@@ -873,7 +874,7 @@ ownership for putting it through its paces.</p>
     <script type="text/javascript">
         var DOCUMENTATION_OPTIONS = {
             URL_ROOT:'../../',
-            VERSION:'0.5.1-pre',
+            VERSION:'0.5.3-pre',
             COLLAPSE_INDEX:false,
             FILE_SUFFIX:'',
             HAS_SOURCE:  true

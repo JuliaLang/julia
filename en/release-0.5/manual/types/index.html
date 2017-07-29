@@ -7,7 +7,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Types &mdash; Julia Language 0.5.1-pre documentation</title>
+  <title>Types &mdash; Julia Language 0.5.3-pre documentation</title>
   
 
   
@@ -30,7 +30,7 @@
   
     <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
   
-    <link rel="top" title="Julia Language 0.5.1-pre documentation" href="../../"/>
+    <link rel="top" title="Julia Language 0.5.3-pre documentation" href="../../"/>
         <link rel="next" title="Methods" href="../methods/"/>
         <link rel="prev" title="Scope of Variables" href="../variables-and-scoping/"/> 
 
@@ -138,7 +138,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../variables-and-scoping/#constants">Constants</a></li>
 </ul>
 </li>
-<li class="toctree-l1 current"><a class="current reference internal" href="">Types</a><ul>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Types</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#type-declarations">Type Declarations</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#abstract-types">Abstract Types</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#bits-types">Bits Types</a></li>
@@ -149,6 +149,7 @@
 <li class="toctree-l2"><a class="reference internal" href="#man-parametric-types">Parametric Types</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#type-aliases">Type Aliases</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#operations-on-types">Operations on Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#custom-pretty-printing">Custom pretty-printing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#value-types">&#8220;Value types&#8221;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#nullable-types-representing-missing-values">Nullable Types: Representing Missing Values</a></li>
 </ul>
@@ -593,7 +594,7 @@ values are of specific types. This can be of great assistance in
 generating efficient code, but even more significantly, it allows method
 dispatch on the types of function arguments to be deeply integrated with
 the language. Method dispatch is explored in detail in
-<a class="reference internal" href="../methods/#man-methods"><span>Methods</span></a>, but is rooted in the type system presented
+<a class="reference internal" href="../methods/#man-methods"><span class="std std-ref">Methods</span></a>, but is rooted in the type system presented
 here.</p>
 <p>The default behavior in Julia when types are omitted is to allow values
 to be of any type. Thus, one can write many useful Julia programs
@@ -661,11 +662,11 @@ implementation is a subtype of any other. When the type is abstract, it
 suffices for the value to be implemented by a concrete type that is a
 subtype of the abstract type. If the type assertion is not true, an
 exception is thrown, otherwise, the left-hand value is returned:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">(</span><span class="mi">1</span><span class="o">+</span><span class="mi">2</span><span class="p">)::</span><span class="n">AbstractFloat</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">TypeError</span><span class="p">:</span> <span class="n">typeassert</span><span class="p">:</span> <span class="n">expected</span> <span class="n">AbstractFloat</span><span class="p">,</span> <span class="n">got</span> <span class="kt">Int64</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">(</span><span class="mi">1</span><span class="o">+</span><span class="mi">2</span><span class="p">)</span><span class="o">::</span><span class="kt">AbstractFloat</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="kt">TypeError</span><span class="o">:</span> <span class="n">typeassert</span><span class="o">:</span> <span class="n">expected</span> <span class="kt">AbstractFloat</span><span class="p">,</span> <span class="n">got</span> <span class="kt">Int64</span>
  <span class="o">...</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="p">(</span><span class="mi">1</span><span class="o">+</span><span class="mi">2</span><span class="p">)::</span><span class="kt">Int</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="p">(</span><span class="mi">1</span><span class="o">+</span><span class="mi">2</span><span class="p">)</span><span class="o">::</span><span class="kt">Int</span>
 <span class="mi">3</span>
 </pre></div>
 </div>
@@ -677,16 +678,16 @@ a bit different: it declares the variable to always have the specified type,
 like a type declaration in a statically-typed language such as C. Every
 value assigned to the variable will be converted to the declared type
 using <a class="reference internal" href="../../stdlib/base/#Base.convert" title="Base.convert"><code class="xref jl jl-func docutils literal"><span class="pre">convert()</span></code></a>:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">function</span><span class="nf"> foo</span><span class="p">()</span>
-           <span class="n">x</span><span class="p">::</span><span class="kt">Int8</span> <span class="o">=</span> <span class="mi">100</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">function</span> <span class="n">foo</span><span class="p">()</span>
+           <span class="n">x</span><span class="o">::</span><span class="kt">Int8</span> <span class="o">=</span> <span class="mi">100</span>
            <span class="n">x</span>
        <span class="k">end</span>
-<span class="n">foo</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span><span class="nf"> with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
+<span class="n">foo</span> <span class="p">(</span><span class="n">generic</span> <span class="k">function</span> <span class="n">with</span> <span class="mi">1</span> <span class="n">method</span><span class="p">)</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">foo</span><span class="p">()</span>
 <span class="mi">100</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">ans</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">typeof</span><span class="p">(</span><span class="n">ans</span><span class="p">)</span>
 <span class="kt">Int8</span>
 </pre></div>
 </div>
@@ -694,15 +695,15 @@ using <a class="reference internal" href="../../stdlib/base/#Base.convert" title
 occur if one of the assignments to a variable changed its type
 unexpectedly.</p>
 <p>This &#8220;declaration&#8221; behavior only occurs in specific contexts:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="kd">local</span> <span class="n">x</span><span class="p">::</span><span class="kt">Int8</span>  <span class="c"># in a local declaration</span>
-<span class="n">x</span><span class="p">::</span><span class="kt">Int8</span> <span class="o">=</span> <span class="mi">10</span>   <span class="c"># as the left-hand side of an assignment</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="kd">local</span> <span class="n">x</span><span class="o">::</span><span class="kt">Int8</span>  <span class="c"># in a local declaration</span>
+<span class="n">x</span><span class="o">::</span><span class="kt">Int8</span> <span class="o">=</span> <span class="mi">10</span>   <span class="c"># as the left-hand side of an assignment</span>
 </pre></div>
 </div>
 <p>and applies to the whole current scope, even before the declaration.
 Currently, type declarations cannot be used in global scope, e.g. in
 the REPL, since Julia does not yet have constant-type globals.</p>
 <p>Declarations can also be attached to function definitions:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> sinc</span><span class="p">(</span><span class="n">x</span><span class="p">)::</span><span class="kt">Float64</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">sinc</span><span class="p">(</span><span class="n">x</span><span class="p">)</span><span class="o">::</span><span class="kt">Float64</span>
     <span class="k">if</span> <span class="n">x</span> <span class="o">==</span> <span class="mi">0</span>
         <span class="k">return</span> <span class="mi">1</span>
     <span class="k">end</span>
@@ -722,7 +723,7 @@ concrete types which are their descendants. We begin with abstract types
 even though they have no instantiation because they are the backbone of
 the type system: they form the conceptual hierarchy which makes Julia&#8217;s
 type system more than just a collection of object implementations.</p>
-<p>Recall that in <a class="reference internal" href="../integers-and-floating-point-numbers/#man-integers-and-floating-point-numbers"><span>Integers and Floating-Point Numbers</span></a>, we
+<p>Recall that in <a class="reference internal" href="../integers-and-floating-point-numbers/#man-integers-and-floating-point-numbers"><span class="std std-ref">Integers and Floating-Point Numbers</span></a>, we
 introduced a variety of concrete types of numeric values: <code class="xref jl jl-class docutils literal"><span class="pre">Int8</span></code>,
 <code class="xref jl jl-class docutils literal"><span class="pre">UInt8</span></code>, <code class="xref jl jl-class docutils literal"><span class="pre">Int16</span></code>, <code class="xref jl jl-class docutils literal"><span class="pre">UInt16</span></code>, <code class="xref jl jl-class docutils literal"><span class="pre">Int32</span></code>, <code class="xref jl jl-class docutils literal"><span class="pre">UInt32</span></code>, <code class="xref jl jl-class docutils literal"><span class="pre">Int64</span></code>,
 <code class="xref jl jl-class docutils literal"><span class="pre">UInt64</span></code>, <code class="xref jl jl-class docutils literal"><span class="pre">Int128</span></code>, <code class="xref jl jl-class docutils literal"><span class="pre">UInt128</span></code>, <code class="xref jl jl-class docutils literal"><span class="pre">Float16</span></code>, <a class="reference internal" href="../../stdlib/numbers/#Base.Float32" title="Base.Float32"><code class="xref jl jl-class docutils literal"><span class="pre">Float32</span></code></a>, and
@@ -742,8 +743,8 @@ any type that is an integer, without restricting an algorithm to a specific
 type of integer.</p>
 <p>Abstract types are declared using the <code class="docutils literal"><span class="pre">abstract</span></code> keyword. The general
 syntaxes for declaring an abstract type are:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span>abstract «name»
-abstract «name» &lt;: «supertype»
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">abstract</span> <span class="n">«name»</span>
+<span class="k">abstract</span> <span class="n">«name»</span> <span class="o">&lt;:</span> <span class="n">«supertype»</span>
 </pre></div>
 </div>
 <p>The <code class="docutils literal"><span class="pre">abstract</span></code> keyword introduces a new abstract type, whose name is
@@ -759,12 +760,12 @@ abstract &#8220;bottom&#8221; type, at the nadir of the type graph, which is wri
 of <code class="docutils literal"><span class="pre">Union{}</span></code> and all types are supertypes of <code class="docutils literal"><span class="pre">Union{}</span></code>.</p>
 <p>Let&#8217;s consider some of the abstract types that make up Julia&#8217;s numerical
 hierarchy:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">abstract</span><span class="nc"> Number</span>
-<span class="k">abstract</span><span class="nc"> Real</span>     <span class="o">&lt;:</span> <span class="n">Number</span>
-<span class="k">abstract</span><span class="nc"> AbstractFloat</span> <span class="o">&lt;:</span> <span class="n">Real</span>
-<span class="k">abstract</span><span class="nc"> Integer</span>  <span class="o">&lt;:</span> <span class="n">Real</span>
-<span class="k">abstract</span><span class="nc"> Signed</span>   <span class="o">&lt;:</span> <span class="n">Integer</span>
-<span class="k">abstract</span><span class="nc"> Unsigned</span> <span class="o">&lt;:</span> <span class="n">Integer</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">abstract</span> <span class="kt">Number</span>
+<span class="k">abstract</span> <span class="kt">Real</span>     <span class="o">&lt;:</span> <span class="kt">Number</span>
+<span class="k">abstract</span> <span class="kt">AbstractFloat</span> <span class="o">&lt;:</span> <span class="kt">Real</span>
+<span class="k">abstract</span> <span class="kt">Integer</span>  <span class="o">&lt;:</span> <span class="kt">Real</span>
+<span class="k">abstract</span> <span class="kt">Signed</span>   <span class="o">&lt;:</span> <span class="kt">Integer</span>
+<span class="k">abstract</span> <span class="kt">Unsigned</span> <span class="o">&lt;:</span> <span class="kt">Integer</span>
 </pre></div>
 </div>
 <p>The <code class="xref jl jl-obj docutils literal"><span class="pre">Number</span></code> type is a direct child type of <code class="xref jl jl-obj docutils literal"><span class="pre">Any</span></code>, and <code class="xref jl jl-obj docutils literal"><span class="pre">Real</span></code> is
@@ -782,16 +783,16 @@ declarations like this, declares the right-hand type to be an immediate
 supertype of the newly declared type. It can also be used in expressions
 as a subtype operator which returns <code class="docutils literal"><span class="pre">true</span></code> when its left operand is a
 subtype of its right operand:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Integer</span> <span class="o">&lt;:</span> <span class="n">Number</span>
-<span class="n">true</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="kt">Integer</span> <span class="o">&lt;:</span> <span class="kt">Number</span>
+<span class="kc">true</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Integer</span> <span class="o">&lt;:</span> <span class="n">AbstractFloat</span>
-<span class="n">false</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="kt">Integer</span> <span class="o">&lt;:</span> <span class="kt">AbstractFloat</span>
+<span class="kc">false</span>
 </pre></div>
 </div>
 <p>An important use of abstract types is to provide default implementations for
 concrete types. To give a simple example, consider:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> myplus</span><span class="p">(</span><span class="n">x</span><span class="p">,</span><span class="n">y</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">myplus</span><span class="p">(</span><span class="n">x</span><span class="p">,</span><span class="n">y</span><span class="p">)</span>
     <span class="n">x</span><span class="o">+</span><span class="n">y</span>
 <span class="k">end</span>
 </pre></div>
@@ -799,13 +800,13 @@ concrete types. To give a simple example, consider:</p>
 <p>The first thing to note is that the above argument declarations are equivalent
 to <code class="docutils literal"><span class="pre">x::Any</span></code> and <code class="docutils literal"><span class="pre">y::Any</span></code>. When this function is invoked, say as
 <code class="docutils literal"><span class="pre">myplus(2,5)</span></code>, the dispatcher chooses the most specific method named
-<code class="docutils literal"><span class="pre">myplus</span></code> that matches the given arguments. (See <a class="reference internal" href="../methods/#man-methods"><span>Methods</span></a> for more
+<code class="docutils literal"><span class="pre">myplus</span></code> that matches the given arguments. (See <a class="reference internal" href="../methods/#man-methods"><span class="std std-ref">Methods</span></a> for more
 information on multiple dispatch.)</p>
 <p>Assuming no method more specific than the above is found, Julia next internally
 defines and compiles a method called <code class="docutils literal"><span class="pre">myplus</span></code> specifically for two <code class="xref jl jl-class docutils literal"><span class="pre">Int</span></code>
 arguments based on the generic function given above, i.e., it implicitly
 defines and compiles:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> myplus</span><span class="p">(</span><span class="n">x</span><span class="p">::</span><span class="kt">Int</span><span class="p">,</span><span class="n">y</span><span class="p">::</span><span class="kt">Int</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">myplus</span><span class="p">(</span><span class="n">x</span><span class="o">::</span><span class="kt">Int</span><span class="p">,</span><span class="n">y</span><span class="o">::</span><span class="kt">Int</span><span class="p">)</span>
     <span class="n">x</span><span class="o">+</span><span class="n">y</span>
 <span class="k">end</span>
 </pre></div>
@@ -819,7 +820,7 @@ default or more specific method is used.</p>
 programmer relies on a function whose arguments are abstract types, because it
 is recompiled for each tuple of argument concrete types with which it is
 invoked. (There may be a performance issue, however, in the case of function
-arguments that are containers of abstract types; see <a class="reference internal" href="../performance-tips/#man-performance-tips"><span>Performance Tips</span></a>.)</p>
+arguments that are containers of abstract types; see <a class="reference internal" href="../performance-tips/#man-performance-tips"><span class="std std-ref">Performance Tips</span></a>.)</p>
 </div>
 <div class="section" id="bits-types">
 <h2>Bits Types<a class="headerlink" href="#bits-types" title="Permalink to this headline">¶</a></h2>
@@ -828,23 +829,23 @@ Classic examples of bits types are integers and floating-point values.
 Unlike most languages, Julia lets you declare your own bits types,
 rather than providing only a fixed set of built-in bits types. In fact,
 the standard bits types are all defined in the language itself:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">bitstype</span> <span class="mi">16</span> <span class="n">Float16</span> <span class="o">&lt;:</span> <span class="n">AbstractFloat</span>
-<span class="k">bitstype</span> <span class="mi">32</span> <span class="kt">Float32</span> <span class="o">&lt;:</span> <span class="n">AbstractFloat</span>
-<span class="k">bitstype</span> <span class="mi">64</span> <span class="kt">Float64</span> <span class="o">&lt;:</span> <span class="n">AbstractFloat</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">bitstype</span> <span class="mi">16</span> <span class="kt">Float16</span> <span class="o">&lt;:</span> <span class="kt">AbstractFloat</span>
+<span class="k">bitstype</span> <span class="mi">32</span> <span class="kt">Float32</span> <span class="o">&lt;:</span> <span class="kt">AbstractFloat</span>
+<span class="k">bitstype</span> <span class="mi">64</span> <span class="kt">Float64</span> <span class="o">&lt;:</span> <span class="kt">AbstractFloat</span>
 
-<span class="k">bitstype</span> <span class="mi">8</span>  <span class="kt">Bool</span> <span class="o">&lt;:</span> <span class="n">Integer</span>
-<span class="k">bitstype</span> <span class="mi">32</span> <span class="n">Char</span>
+<span class="k">bitstype</span> <span class="mi">8</span>  <span class="kt">Bool</span> <span class="o">&lt;:</span> <span class="kt">Integer</span>
+<span class="k">bitstype</span> <span class="mi">32</span> <span class="kt">Char</span>
 
-<span class="k">bitstype</span> <span class="mi">8</span>  <span class="kt">Int8</span>     <span class="o">&lt;:</span> <span class="n">Signed</span>
-<span class="k">bitstype</span> <span class="mi">8</span>  <span class="n">UInt8</span>    <span class="o">&lt;:</span> <span class="n">Unsigned</span>
-<span class="k">bitstype</span> <span class="mi">16</span> <span class="kt">Int16</span>    <span class="o">&lt;:</span> <span class="n">Signed</span>
-<span class="k">bitstype</span> <span class="mi">16</span> <span class="n">UInt16</span>   <span class="o">&lt;:</span> <span class="n">Unsigned</span>
-<span class="k">bitstype</span> <span class="mi">32</span> <span class="kt">Int32</span>    <span class="o">&lt;:</span> <span class="n">Signed</span>
-<span class="k">bitstype</span> <span class="mi">32</span> <span class="n">UInt32</span>   <span class="o">&lt;:</span> <span class="n">Unsigned</span>
-<span class="k">bitstype</span> <span class="mi">64</span> <span class="kt">Int64</span>    <span class="o">&lt;:</span> <span class="n">Signed</span>
-<span class="k">bitstype</span> <span class="mi">64</span> <span class="n">UInt64</span>   <span class="o">&lt;:</span> <span class="n">Unsigned</span>
-<span class="k">bitstype</span> <span class="mi">128</span> <span class="n">Int128</span>  <span class="o">&lt;:</span> <span class="n">Signed</span>
-<span class="k">bitstype</span> <span class="mi">128</span> <span class="n">UInt128</span> <span class="o">&lt;:</span> <span class="n">Unsigned</span>
+<span class="k">bitstype</span> <span class="mi">8</span>  <span class="kt">Int8</span>     <span class="o">&lt;:</span> <span class="kt">Signed</span>
+<span class="k">bitstype</span> <span class="mi">8</span>  <span class="kt">UInt8</span>    <span class="o">&lt;:</span> <span class="kt">Unsigned</span>
+<span class="k">bitstype</span> <span class="mi">16</span> <span class="kt">Int16</span>    <span class="o">&lt;:</span> <span class="kt">Signed</span>
+<span class="k">bitstype</span> <span class="mi">16</span> <span class="kt">UInt16</span>   <span class="o">&lt;:</span> <span class="kt">Unsigned</span>
+<span class="k">bitstype</span> <span class="mi">32</span> <span class="kt">Int32</span>    <span class="o">&lt;:</span> <span class="kt">Signed</span>
+<span class="k">bitstype</span> <span class="mi">32</span> <span class="kt">UInt32</span>   <span class="o">&lt;:</span> <span class="kt">Unsigned</span>
+<span class="k">bitstype</span> <span class="mi">64</span> <span class="kt">Int64</span>    <span class="o">&lt;:</span> <span class="kt">Signed</span>
+<span class="k">bitstype</span> <span class="mi">64</span> <span class="kt">UInt64</span>   <span class="o">&lt;:</span> <span class="kt">Unsigned</span>
+<span class="k">bitstype</span> <span class="mi">128</span> <span class="kt">Int128</span>  <span class="o">&lt;:</span> <span class="kt">Signed</span>
+<span class="k">bitstype</span> <span class="mi">128</span> <span class="kt">UInt128</span> <span class="o">&lt;:</span> <span class="kt">Unsigned</span>
 </pre></div>
 </div>
 <p>The general syntaxes for declaration of a <code class="docutils literal"><span class="pre">bitstype</span></code> are:</p>
@@ -895,7 +896,7 @@ but functions are not bundled with the objects they
 operate on. This is necessary since Julia chooses which method of a
 function to use by multiple dispatch, meaning that the types of <em>all</em> of
 a function&#8217;s arguments are considered when selecting a method, rather
-than just the first one (see <a class="reference internal" href="../methods/#man-methods"><span>Methods</span></a> for more
+than just the first one (see <a class="reference internal" href="../methods/#man-methods"><span class="std std-ref">Methods</span></a> for more
 information on methods and dispatch). Thus, it would be inappropriate
 for functions to &#8220;belong&#8221; to only their first argument. Organizing
 methods into function objects rather than having
@@ -905,10 +906,10 @@ beneficial aspect of the language design.</p>
 type, they are simply introduced with the <code class="docutils literal"><span class="pre">type</span></code> keyword followed by a
 block of field names, optionally annotated with types using the <code class="docutils literal"><span class="pre">::</span></code>
 operator:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">type</span><span class="nc"> Foo</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="k">type</span> <span class="n">Foo</span>
            <span class="n">bar</span>
-           <span class="n">baz</span><span class="p">::</span><span class="kt">Int</span>
-           <span class="n">qux</span><span class="p">::</span><span class="kt">Float64</span>
+           <span class="n">baz</span><span class="o">::</span><span class="kt">Int</span>
+           <span class="n">qux</span><span class="o">::</span><span class="kt">Float64</span>
        <span class="k">end</span>
 </pre></div>
 </div>
@@ -919,7 +920,7 @@ hold any type of value.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">foo</span> <span class="o">=</span> <span class="n">Foo</span><span class="p">(</span><span class="s">&quot;Hello, world.&quot;</span><span class="p">,</span> <span class="mi">23</span><span class="p">,</span> <span class="mf">1.5</span><span class="p">)</span>
 <span class="n">Foo</span><span class="p">(</span><span class="s">&quot;Hello, world.&quot;</span><span class="p">,</span><span class="mi">23</span><span class="p">,</span><span class="mf">1.5</span><span class="p">)</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">foo</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">typeof</span><span class="p">(</span><span class="n">foo</span><span class="p">)</span>
 <span class="n">Foo</span>
 </pre></div>
 </div>
@@ -933,17 +934,17 @@ replacing a default constructor.</p>
 <p>Since the <code class="docutils literal"><span class="pre">bar</span></code> field is unconstrained in type, any value will do.
 However, the value for <code class="docutils literal"><span class="pre">baz</span></code> must be convertible to <code class="xref jl jl-class docutils literal"><span class="pre">Int</span></code>:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Foo</span><span class="p">((),</span> <span class="mf">23.5</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">InexactError</span><span class="p">()</span>
- <span class="k">in</span> <span class="n">Foo</span><span class="p">(::</span><span class="n">Tuple</span><span class="p">{},</span> <span class="p">::</span><span class="kt">Float64</span><span class="p">,</span> <span class="p">::</span><span class="kt">Int64</span><span class="p">)</span> <span class="n">at</span> <span class="o">./</span><span class="n">none</span><span class="p">:</span><span class="mi">2</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="kt">InexactError</span><span class="p">()</span>
+ <span class="kp">in</span> <span class="n">Foo</span><span class="p">(</span><span class="o">::</span><span class="kt">Tuple</span><span class="p">{},</span> <span class="o">::</span><span class="kt">Float64</span><span class="p">,</span> <span class="o">::</span><span class="kt">Int64</span><span class="p">)</span> <span class="n">at</span> <span class="o">./</span><span class="n">none</span><span class="o">:</span><span class="mi">2</span>
  <span class="o">...</span>
 </pre></div>
 </div>
 <p>You may find a list of field names using the <code class="docutils literal"><span class="pre">fieldnames</span></code> function.</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">fieldnames</span><span class="p">(</span><span class="n">foo</span><span class="p">)</span>
-<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="n">Array</span><span class="p">{</span><span class="n">Symbol</span><span class="p">,</span><span class="mi">1</span><span class="p">}:</span>
- <span class="p">:</span><span class="n">bar</span>
- <span class="p">:</span><span class="n">baz</span>
- <span class="p">:</span><span class="n">qux</span>
+<span class="mi">3</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Symbol</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
+ <span class="o">:</span><span class="n">bar</span>
+ <span class="o">:</span><span class="n">baz</span>
+ <span class="o">:</span><span class="n">qux</span>
 </pre></div>
 </div>
 <p>You can access the field values of a composite object using the
@@ -968,11 +969,11 @@ traditional <code class="docutils literal"><span class="pre">foo.bar</span></cod
 </div>
 <p>Composite types with no fields are singletons; there can be only one
 instance of such types:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span><span class="nc"> NoFields</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span> <span class="n">NoFields</span>
 <span class="k">end</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">is</span><span class="p">(</span><span class="n">NoFields</span><span class="p">(),</span> <span class="n">NoFields</span><span class="p">())</span>
-<span class="n">true</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">is</span><span class="p">(</span><span class="n">NoFields</span><span class="p">(),</span> <span class="n">NoFields</span><span class="p">())</span>
+<span class="kc">true</span>
 </pre></div>
 </div>
 <p>The <code class="docutils literal"><span class="pre">is</span></code> function confirms that the &#8220;two&#8221; constructed instances of
@@ -980,17 +981,17 @@ instance of such types:</p>
 described in further detail <a class="reference external" href="#man-singleton-types">below</a>.</p>
 <p>There is much more to say about how instances of composite types are
 created, but that discussion depends on both <a class="reference external" href="#man-parametric-types">Parametric
-Types</a> and on <a class="reference internal" href="../methods/#man-methods"><span>Methods</span></a>, and is
+Types</a> and on <a class="reference internal" href="../methods/#man-methods"><span class="std std-ref">Methods</span></a>, and is
 sufficiently important to be addressed in its own section:
-<a class="reference internal" href="../constructors/#man-constructors"><span>Constructors</span></a>.</p>
+<a class="reference internal" href="../constructors/#man-constructors"><span class="std std-ref">Constructors</span></a>.</p>
 </div>
 <div class="section" id="immutable-composite-types">
 <span id="man-immutable-composite-types"></span><h2>Immutable Composite Types<a class="headerlink" href="#immutable-composite-types" title="Permalink to this headline">¶</a></h2>
 <p>It is also possible to define <em>immutable</em> composite types by using
 the keyword <code class="docutils literal"><span class="pre">immutable</span></code> instead of <code class="docutils literal"><span class="pre">type</span></code>:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">immutable</span> <span class="n">Complex</span>
-    <span class="n">real</span><span class="p">::</span><span class="kt">Float64</span>
-    <span class="n">imag</span><span class="p">::</span><span class="kt">Float64</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">immutable</span> <span class="kt">Complex</span>
+    <span class="n">real</span><span class="o">::</span><span class="kt">Float64</span>
+    <span class="n">imag</span><span class="o">::</span><span class="kt">Float64</span>
 <span class="k">end</span>
 </pre></div>
 </div>
@@ -1051,11 +1052,11 @@ are actually all closely related. They share the same key properties:</p>
 <p>Because of these shared properties, these types are internally
 represented as instances of the same concept, <code class="xref jl jl-obj docutils literal"><span class="pre">DataType</span></code>, which
 is the type of any of these types:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">Real</span><span class="p">)</span>
-<span class="n">DataType</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">typeof</span><span class="p">(</span><span class="kt">Real</span><span class="p">)</span>
+<span class="kt">DataType</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="kt">Int</span><span class="p">)</span>
-<span class="n">DataType</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">typeof</span><span class="p">(</span><span class="kt">Int</span><span class="p">)</span>
+<span class="kt">DataType</span>
 </pre></div>
 </div>
 <p>A <code class="xref jl jl-obj docutils literal"><span class="pre">DataType</span></code> may be abstract or concrete. If it is concrete, it
@@ -1070,17 +1071,17 @@ is empty (zero size).</p>
 <p>A type union is a special abstract type which includes as objects all
 instances of any of its argument types, constructed using the special
 <code class="docutils literal"><span class="pre">Union</span></code> function:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">IntOrString</span> <span class="o">=</span> <span class="n">Union</span><span class="p">{</span><span class="kt">Int</span><span class="p">,</span><span class="n">AbstractString</span><span class="p">}</span>
-<span class="n">Union</span><span class="p">{</span><span class="n">AbstractString</span><span class="p">,</span><span class="kt">Int64</span><span class="p">}</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">IntOrString</span> <span class="o">=</span> <span class="kt">Union</span><span class="p">{</span><span class="kt">Int</span><span class="p">,</span><span class="kt">AbstractString</span><span class="p">}</span>
+<span class="kt">Union</span><span class="p">{</span><span class="kt">AbstractString</span><span class="p">,</span><span class="kt">Int64</span><span class="p">}</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="mi">1</span> <span class="p">::</span> <span class="n">IntOrString</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="mi">1</span> <span class="o">::</span> <span class="n">IntOrString</span>
 <span class="mi">1</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="s">&quot;Hello!&quot;</span> <span class="p">::</span> <span class="n">IntOrString</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="s">&quot;Hello!&quot;</span> <span class="o">::</span> <span class="n">IntOrString</span>
 <span class="s">&quot;Hello!&quot;</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="mf">1.0</span> <span class="p">::</span> <span class="n">IntOrString</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">type</span><span class="p">:</span> <span class="n">typeassert</span><span class="p">:</span> <span class="n">expected</span> <span class="n">Union</span><span class="p">{</span><span class="n">AbstractString</span><span class="p">,</span><span class="kt">Int64</span><span class="p">},</span> <span class="n">got</span> <span class="kt">Float64</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="mf">1.0</span> <span class="o">::</span> <span class="n">IntOrString</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="k">type</span><span class="o">:</span> <span class="n">typeassert</span><span class="o">:</span> <span class="n">expected</span> <span class="kt">Union</span><span class="p">{</span><span class="kt">AbstractString</span><span class="p">,</span><span class="kt">Int64</span><span class="p">},</span> <span class="n">got</span> <span class="kt">Float64</span>
 </pre></div>
 </div>
 <p>The compilers for many languages have an internal union construct for
@@ -1116,9 +1117,9 @@ types, and finally parametric bits types.</p>
 <h3>Parametric Composite Types<a class="headerlink" href="#parametric-composite-types" title="Permalink to this headline">¶</a></h3>
 <p>Type parameters are introduced immediately after the type name,
 surrounded by curly braces:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span><span class="nc"> Point</span><span class="p">{</span><span class="n">T</span><span class="p">}</span>
-    <span class="n">x</span><span class="p">::</span><span class="n">T</span>
-    <span class="n">y</span><span class="p">::</span><span class="n">T</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span> <span class="n">Point</span><span class="p">{</span><span class="n">T</span><span class="p">}</span>
+    <span class="n">x</span><span class="o">::</span><span class="n">T</span>
+    <span class="n">y</span><span class="o">::</span><span class="n">T</span>
 <span class="k">end</span>
 </pre></div>
 </div>
@@ -1134,13 +1135,13 @@ unlimited number of types: <code class="docutils literal"><span class="pre">Poin
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}</span>
 <span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">{</span><span class="n">AbstractString</span><span class="p">}</span>
-<span class="n">Point</span><span class="p">{</span><span class="n">AbstractString</span><span class="p">}</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">{</span><span class="kt">AbstractString</span><span class="p">}</span>
+<span class="n">Point</span><span class="p">{</span><span class="kt">AbstractString</span><span class="p">}</span>
 </pre></div>
 </div>
 <p>The type <code class="docutils literal"><span class="pre">Point{Float64}</span></code> is a point whose coordinates are 64-bit
 floating-point values, while the type <code class="docutils literal"><span class="pre">Point{AbstractString}</span></code> is a &#8220;point&#8221;
-whose &#8220;coordinates&#8221; are string objects (see <a class="reference internal" href="../strings/#man-strings"><span>Strings</span></a>).
+whose &#8220;coordinates&#8221; are string objects (see <a class="reference internal" href="../strings/#man-strings"><span class="std std-ref">Strings</span></a>).
 However, <code class="docutils literal"><span class="pre">Point</span></code> itself is also a valid type object:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span>
 <span class="n">Point</span><span class="p">{</span><span class="n">T</span><span class="p">}</span>
@@ -1151,27 +1152,27 @@ of <code class="docutils literal"><span class="pre">Point</span></code>. What do
 that contains all the specific instances <code class="docutils literal"><span class="pre">Point{Float64}</span></code>,
 <code class="docutils literal"><span class="pre">Point{AbstractString}</span></code>, etc.:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">Point</span>
-<span class="n">true</span>
+<span class="kc">true</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">{</span><span class="n">AbstractString</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">Point</span>
-<span class="n">true</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">{</span><span class="kt">AbstractString</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">Point</span>
+<span class="kc">true</span>
 </pre></div>
 </div>
 <p>Other types, of course, are not subtypes of it:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="kt">Float64</span> <span class="o">&lt;:</span> <span class="n">Point</span>
-<span class="n">false</span>
+<span class="kc">false</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">AbstractString</span> <span class="o">&lt;:</span> <span class="n">Point</span>
-<span class="n">false</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="kt">AbstractString</span> <span class="o">&lt;:</span> <span class="n">Point</span>
+<span class="kc">false</span>
 </pre></div>
 </div>
 <p>Concrete <code class="docutils literal"><span class="pre">Point</span></code> types with different values of <code class="docutils literal"><span class="pre">T</span></code> are never
 subtypes of each other:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">Point</span><span class="p">{</span><span class="kt">Int64</span><span class="p">}</span>
-<span class="n">false</span>
+<span class="kc">false</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">Point</span><span class="p">{</span><span class="n">Real</span><span class="p">}</span>
-<span class="n">false</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">Point</span><span class="p">{</span><span class="kt">Real</span><span class="p">}</span>
+<span class="kc">false</span>
 </pre></div>
 </div>
 <p>This last point is very important:</p>
@@ -1203,21 +1204,21 @@ pointers to individually allocated <code class="xref jl jl-obj docutils literal"
 complex objects, which are declared to be implementations of the
 <code class="xref jl jl-obj docutils literal"><span class="pre">Real</span></code> abstract type.</p>
 <p>Since <code class="docutils literal"><span class="pre">Point{Float64}</span></code> is not a subtype of <code class="docutils literal"><span class="pre">Point{Real}</span></code>, the following method can&#8217;t be applied to arguments of type <code class="docutils literal"><span class="pre">Point{Float64}</span></code>:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> norm</span><span class="p">(</span><span class="n">p</span><span class="p">::</span><span class="n">Point</span><span class="p">{</span><span class="n">Real</span><span class="p">})</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">norm</span><span class="p">(</span><span class="n">p</span><span class="o">::</span><span class="n">Point</span><span class="p">{</span><span class="kt">Real</span><span class="p">})</span>
    <span class="n">sqrt</span><span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">x</span><span class="o">^</span><span class="mi">2</span> <span class="o">+</span> <span class="n">p</span><span class="o">.</span><span class="n">y</span><span class="o">^</span><span class="mi">2</span><span class="p">)</span>
 <span class="k">end</span>
 </pre></div>
 </div>
 <p>The correct way to define a method that accepts all arguments of type <code class="docutils literal"><span class="pre">Point{T}</span></code> where <code class="docutils literal"><span class="pre">T</span></code> is a subtype of <code class="docutils literal"><span class="pre">Real</span></code> is:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> norm</span><span class="p">{</span><span class="n">T</span><span class="o">&lt;:</span><span class="n">Real</span><span class="p">}(</span><span class="n">p</span><span class="p">::</span><span class="n">Point</span><span class="p">{</span><span class="n">T</span><span class="p">})</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">norm</span><span class="p">{</span><span class="n">T</span><span class="o">&lt;:</span><span class="kt">Real</span><span class="p">}(</span><span class="n">p</span><span class="o">::</span><span class="n">Point</span><span class="p">{</span><span class="n">T</span><span class="p">})</span>
    <span class="n">sqrt</span><span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">x</span><span class="o">^</span><span class="mi">2</span> <span class="o">+</span> <span class="n">p</span><span class="o">.</span><span class="n">y</span><span class="o">^</span><span class="mi">2</span><span class="p">)</span>
 <span class="k">end</span>
 </pre></div>
 </div>
-<p>More examples will be discussed later in <a class="reference internal" href="../methods/#man-methods"><span>Methods</span></a>.</p>
+<p>More examples will be discussed later in <a class="reference internal" href="../methods/#man-methods"><span class="std std-ref">Methods</span></a>.</p>
 <p>How does one construct a <code class="docutils literal"><span class="pre">Point</span></code> object? It is possible to define
 custom constructors for composite types, which will be discussed in
-detail in <a class="reference internal" href="../constructors/#man-constructors"><span>Constructors</span></a>, but in the absence of any
+detail in <a class="reference internal" href="../constructors/#man-constructors"><span class="std std-ref">Constructors</span></a>, but in the absence of any
 special constructor declarations, there are two default ways of creating
 new composite objects, one in which the type parameters are explicitly
 given and the other in which they are implied by the arguments to the
@@ -1228,24 +1229,24 @@ as a constructor accordingly:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}(</span><span class="mf">1.0</span><span class="p">,</span><span class="mf">2.0</span><span class="p">)</span>
 <span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}(</span><span class="mf">1.0</span><span class="p">,</span><span class="mf">2.0</span><span class="p">)</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">ans</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">typeof</span><span class="p">(</span><span class="n">ans</span><span class="p">)</span>
 <span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}</span>
 </pre></div>
 </div>
 <p>For the default constructor, exactly one argument must be supplied for
 each field:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}(</span><span class="mf">1.0</span><span class="p">)</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">MethodError</span><span class="p">:</span> <span class="n">Cannot</span> <span class="sb">`convert`</span> <span class="n">an</span> <span class="n">object</span> <span class="n">of</span> <span class="k">type</span><span class="nc"> Float64</span> <span class="n">to</span> <span class="n">an</span> <span class="n">object</span> <span class="n">of</span> <span class="k">type</span><span class="nc"> Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="kt">MethodError</span><span class="o">:</span> <span class="n">Cannot</span> <span class="sb">`convert`</span> <span class="n">an</span> <span class="n">object</span> <span class="n">of</span> <span class="k">type</span> <span class="kt">Float64</span> <span class="n">to</span> <span class="n">an</span> <span class="n">object</span> <span class="n">of</span> <span class="k">type</span> <span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}</span>
 <span class="n">This</span> <span class="n">may</span> <span class="n">have</span> <span class="n">arisen</span> <span class="n">from</span> <span class="n">a</span> <span class="n">call</span> <span class="n">to</span> <span class="n">the</span> <span class="n">constructor</span> <span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}(</span><span class="o">...</span><span class="p">),</span>
-<span class="n">since</span> <span class="k">type</span><span class="nc"> constructors</span> <span class="n">fall</span> <span class="n">back</span> <span class="n">to</span> <span class="nb">convert</span> <span class="n">methods</span><span class="o">.</span>
- <span class="k">in</span> <span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}(::</span><span class="kt">Float64</span><span class="p">)</span> <span class="n">at</span> <span class="o">./</span><span class="n">sysimg</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">53</span>
+<span class="n">since</span> <span class="k">type</span> <span class="n">constructors</span> <span class="n">fall</span> <span class="n">back</span> <span class="n">to</span> <span class="n">convert</span> <span class="n">methods</span><span class="o">.</span>
+ <span class="kp">in</span> <span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}(</span><span class="o">::</span><span class="kt">Float64</span><span class="p">)</span> <span class="n">at</span> <span class="o">./</span><span class="n">sysimg</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">53</span>
  <span class="o">...</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}(</span><span class="mf">1.0</span><span class="p">,</span><span class="mf">2.0</span><span class="p">,</span><span class="mf">3.0</span><span class="p">)</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">MethodError</span><span class="p">:</span> <span class="n">no</span> <span class="n">method</span> <span class="n">matching</span> <span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}(::</span><span class="kt">Float64</span><span class="p">,</span> <span class="p">::</span><span class="kt">Float64</span><span class="p">,</span> <span class="p">::</span><span class="kt">Float64</span><span class="p">)</span>
-<span class="n">Closest</span> <span class="n">candidates</span> <span class="n">are</span><span class="p">:</span>
-  <span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}{</span><span class="n">T</span><span class="p">}(::</span><span class="kt">Any</span><span class="p">,</span> <span class="p">::</span><span class="kt">Any</span><span class="p">)</span> <span class="n">at</span> <span class="n">none</span><span class="p">:</span><span class="mi">3</span>
-  <span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}{</span><span class="n">T</span><span class="p">}(::</span><span class="kt">Any</span><span class="p">)</span> <span class="n">at</span> <span class="n">sysimg</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">53</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="kt">MethodError</span><span class="o">:</span> <span class="n">no</span> <span class="n">method</span> <span class="n">matching</span> <span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}(</span><span class="o">::</span><span class="kt">Float64</span><span class="p">,</span> <span class="o">::</span><span class="kt">Float64</span><span class="p">,</span> <span class="o">::</span><span class="kt">Float64</span><span class="p">)</span>
+<span class="n">Closest</span> <span class="n">candidates</span> <span class="n">are</span><span class="o">:</span>
+  <span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}{</span><span class="n">T</span><span class="p">}(</span><span class="o">::</span><span class="kt">Any</span><span class="p">,</span> <span class="o">::</span><span class="kt">Any</span><span class="p">)</span> <span class="n">at</span> <span class="n">none</span><span class="o">:</span><span class="mi">3</span>
+  <span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}{</span><span class="n">T</span><span class="p">}(</span><span class="o">::</span><span class="kt">Any</span><span class="p">)</span> <span class="n">at</span> <span class="n">sysimg</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">53</span>
  <span class="o">...</span>
 </pre></div>
 </div>
@@ -1260,13 +1261,13 @@ implied value of the parameter type <code class="docutils literal"><span class="
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">(</span><span class="mf">1.0</span><span class="p">,</span><span class="mf">2.0</span><span class="p">)</span>
 <span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}(</span><span class="mf">1.0</span><span class="p">,</span><span class="mf">2.0</span><span class="p">)</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">ans</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">typeof</span><span class="p">(</span><span class="n">ans</span><span class="p">)</span>
 <span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span>
 <span class="n">Point</span><span class="p">{</span><span class="kt">Int64</span><span class="p">}(</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">ans</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">typeof</span><span class="p">(</span><span class="n">ans</span><span class="p">)</span>
 <span class="n">Point</span><span class="p">{</span><span class="kt">Int64</span><span class="p">}</span>
 </pre></div>
 </div>
@@ -1274,38 +1275,38 @@ implied value of the parameter type <code class="docutils literal"><span class="
 and only if the two arguments to <code class="docutils literal"><span class="pre">Point</span></code> have the same type. When this
 isn&#8217;t the case, the constructor will fail with a <a class="reference internal" href="../../stdlib/base/#Base.MethodError" title="Base.MethodError"><code class="xref jl jl-exc docutils literal"><span class="pre">MethodError</span></code></a>:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mf">2.5</span><span class="p">)</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">MethodError</span><span class="p">:</span> <span class="n">no</span> <span class="n">method</span> <span class="n">matching</span> <span class="n">Point</span><span class="p">{</span><span class="n">T</span><span class="p">}(::</span><span class="kt">Int64</span><span class="p">,</span> <span class="p">::</span><span class="kt">Float64</span><span class="p">)</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="kt">MethodError</span><span class="o">:</span> <span class="n">no</span> <span class="n">method</span> <span class="n">matching</span> <span class="n">Point</span><span class="p">{</span><span class="n">T</span><span class="p">}(</span><span class="o">::</span><span class="kt">Int64</span><span class="p">,</span> <span class="o">::</span><span class="kt">Float64</span><span class="p">)</span>
 <span class="o">...</span>
 </pre></div>
 </div>
 <p>Constructor methods to appropriately handle such mixed cases can be
 defined, but that will not be discussed until later on in
-<a class="reference internal" href="../constructors/#man-constructors"><span>Constructors</span></a>.</p>
+<a class="reference internal" href="../constructors/#man-constructors"><span class="std std-ref">Constructors</span></a>.</p>
 </div>
 <div class="section" id="parametric-abstract-types">
 <h3>Parametric Abstract Types<a class="headerlink" href="#parametric-abstract-types" title="Permalink to this headline">¶</a></h3>
 <p>Parametric abstract type declarations declare a collection of abstract
 types, in much the same way:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">abstract</span><span class="nc"> Pointy</span><span class="p">{</span><span class="n">T</span><span class="p">}</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">abstract</span> <span class="n">Pointy</span><span class="p">{</span><span class="n">T</span><span class="p">}</span>
 </pre></div>
 </div>
 <p>With this declaration, <code class="docutils literal"><span class="pre">Pointy{T}</span></code> is a distinct abstract type for
 each type or integer value of <code class="docutils literal"><span class="pre">T</span></code>. As with parametric composite types,
 each such instance is a subtype of <code class="docutils literal"><span class="pre">Pointy</span></code>:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Pointy</span><span class="p">{</span><span class="kt">Int64</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">Pointy</span>
-<span class="n">true</span>
+<span class="kc">true</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">Pointy</span><span class="p">{</span><span class="mi">1</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">Pointy</span>
-<span class="n">true</span>
+<span class="kc">true</span>
 </pre></div>
 </div>
 <p>Parametric abstract types are invariant, much as parametric composite
 types are:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Pointy</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">Pointy</span><span class="p">{</span><span class="n">Real</span><span class="p">}</span>
-<span class="n">false</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Pointy</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">Pointy</span><span class="p">{</span><span class="kt">Real</span><span class="p">}</span>
+<span class="kc">false</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Pointy</span><span class="p">{</span><span class="n">Real</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">Pointy</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}</span>
-<span class="n">false</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Pointy</span><span class="p">{</span><span class="kt">Real</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">Pointy</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}</span>
+<span class="kc">false</span>
 </pre></div>
 </div>
 <p>Much as plain old abstract types serve to create a useful hierarchy of
@@ -1313,34 +1314,34 @@ types over concrete types, parametric abstract types serve the same
 purpose with respect to parametric composite types. We could, for
 example, have declared <code class="docutils literal"><span class="pre">Point{T}</span></code> to be a subtype of <code class="docutils literal"><span class="pre">Pointy{T}</span></code> as
 follows:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span><span class="nc"> Point</span><span class="p">{</span><span class="n">T</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">Pointy</span><span class="p">{</span><span class="n">T</span><span class="p">}</span>
-    <span class="n">x</span><span class="p">::</span><span class="n">T</span>
-    <span class="n">y</span><span class="p">::</span><span class="n">T</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span> <span class="n">Point</span><span class="p">{</span><span class="n">T</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">Pointy</span><span class="p">{</span><span class="n">T</span><span class="p">}</span>
+    <span class="n">x</span><span class="o">::</span><span class="n">T</span>
+    <span class="n">y</span><span class="o">::</span><span class="n">T</span>
 <span class="k">end</span>
 </pre></div>
 </div>
 <p>Given such a declaration, for each choice of <code class="docutils literal"><span class="pre">T</span></code>, we have <code class="docutils literal"><span class="pre">Point{T}</span></code>
 as a subtype of <code class="docutils literal"><span class="pre">Pointy{T}</span></code>:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">Pointy</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}</span>
-<span class="n">true</span>
+<span class="kc">true</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">{</span><span class="n">Real</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">Pointy</span><span class="p">{</span><span class="n">Real</span><span class="p">}</span>
-<span class="n">true</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">{</span><span class="kt">Real</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">Pointy</span><span class="p">{</span><span class="kt">Real</span><span class="p">}</span>
+<span class="kc">true</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">{</span><span class="n">AbstractString</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">Pointy</span><span class="p">{</span><span class="n">AbstractString</span><span class="p">}</span>
-<span class="n">true</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">{</span><span class="kt">AbstractString</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">Pointy</span><span class="p">{</span><span class="kt">AbstractString</span><span class="p">}</span>
+<span class="kc">true</span>
 </pre></div>
 </div>
 <p>This relationship is also invariant:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">Pointy</span><span class="p">{</span><span class="n">Real</span><span class="p">}</span>
-<span class="n">false</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Point</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">Pointy</span><span class="p">{</span><span class="kt">Real</span><span class="p">}</span>
+<span class="kc">false</span>
 </pre></div>
 </div>
 <p>What purpose do parametric abstract types like <code class="docutils literal"><span class="pre">Pointy</span></code> serve?
 Consider if we create a point-like implementation that only requires a
 single coordinate because the point is on the diagonal line <em>x = y</em>:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span><span class="nc"> DiagPoint</span><span class="p">{</span><span class="n">T</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">Pointy</span><span class="p">{</span><span class="n">T</span><span class="p">}</span>
-    <span class="n">x</span><span class="p">::</span><span class="n">T</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span> <span class="n">DiagPoint</span><span class="p">{</span><span class="n">T</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">Pointy</span><span class="p">{</span><span class="n">T</span><span class="p">}</span>
+    <span class="n">x</span><span class="o">::</span><span class="n">T</span>
 <span class="k">end</span>
 </pre></div>
 </div>
@@ -1350,11 +1351,11 @@ for every other possible choice of type <code class="docutils literal"><span cla
 to a common interface shared by all <code class="docutils literal"><span class="pre">Pointy</span></code> objects, implemented for
 both <code class="docutils literal"><span class="pre">Point</span></code> and <code class="docutils literal"><span class="pre">DiagPoint</span></code>. This cannot be fully demonstrated,
 however, until we have introduced methods and dispatch in the next
-section, <a class="reference internal" href="../methods/#man-methods"><span>Methods</span></a>.</p>
+section, <a class="reference internal" href="../methods/#man-methods"><span class="std std-ref">Methods</span></a>.</p>
 <p>There are situations where it may not make sense for type parameters to
 range freely over all possible types. In such situations, one can
 constrain the range of <code class="docutils literal"><span class="pre">T</span></code> like so:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">abstract</span><span class="nc"> Pointy</span><span class="p">{</span><span class="n">T</span><span class="o">&lt;:</span><span class="n">Real</span><span class="p">}</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">abstract</span> <span class="n">Pointy</span><span class="p">{</span><span class="n">T</span><span class="o">&lt;:</span><span class="kt">Real</span><span class="p">}</span>
 </pre></div>
 </div>
 <p>With such a declaration, it is acceptable to use any type that is a
@@ -1363,23 +1364,23 @@ subtypes of <code class="xref jl jl-obj docutils literal"><span class="pre">Real
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Pointy</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}</span>
 <span class="n">Pointy</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Pointy</span><span class="p">{</span><span class="n">Real</span><span class="p">}</span>
-<span class="n">Pointy</span><span class="p">{</span><span class="n">Real</span><span class="p">}</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Pointy</span><span class="p">{</span><span class="kt">Real</span><span class="p">}</span>
+<span class="n">Pointy</span><span class="p">{</span><span class="kt">Real</span><span class="p">}</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Pointy</span><span class="p">{</span><span class="n">AbstractString</span><span class="p">}</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">TypeError</span><span class="p">:</span> <span class="n">Pointy</span><span class="p">:</span> <span class="k">in</span> <span class="n">T</span><span class="p">,</span> <span class="n">expected</span> <span class="n">T</span><span class="o">&lt;:</span><span class="n">Real</span><span class="p">,</span> <span class="n">got</span> <span class="n">Type</span><span class="p">{</span><span class="n">AbstractString</span><span class="p">}</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Pointy</span><span class="p">{</span><span class="kt">AbstractString</span><span class="p">}</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="kt">TypeError</span><span class="o">:</span> <span class="n">Pointy</span><span class="o">:</span> <span class="kp">in</span> <span class="n">T</span><span class="p">,</span> <span class="n">expected</span> <span class="n">T</span><span class="o">&lt;:</span><span class="kt">Real</span><span class="p">,</span> <span class="n">got</span> <span class="kt">Type</span><span class="p">{</span><span class="kt">AbstractString</span><span class="p">}</span>
  <span class="o">...</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">Pointy</span><span class="p">{</span><span class="mi">1</span><span class="p">}</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">TypeError</span><span class="p">:</span> <span class="n">Pointy</span><span class="p">:</span> <span class="k">in</span> <span class="n">T</span><span class="p">,</span> <span class="n">expected</span> <span class="n">T</span><span class="o">&lt;:</span><span class="n">Real</span><span class="p">,</span> <span class="n">got</span> <span class="kt">Int64</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="kt">TypeError</span><span class="o">:</span> <span class="n">Pointy</span><span class="o">:</span> <span class="kp">in</span> <span class="n">T</span><span class="p">,</span> <span class="n">expected</span> <span class="n">T</span><span class="o">&lt;:</span><span class="kt">Real</span><span class="p">,</span> <span class="n">got</span> <span class="kt">Int64</span>
  <span class="o">...</span>
 </pre></div>
 </div>
 <p>Type parameters for parametric composite types can be restricted in the
 same manner:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span><span class="nc"> Point</span><span class="p">{</span><span class="n">T</span><span class="o">&lt;:</span><span class="n">Real</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">Pointy</span><span class="p">{</span><span class="n">T</span><span class="p">}</span>
-    <span class="n">x</span><span class="p">::</span><span class="n">T</span>
-    <span class="n">y</span><span class="p">::</span><span class="n">T</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span> <span class="n">Point</span><span class="p">{</span><span class="n">T</span><span class="o">&lt;:</span><span class="kt">Real</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">Pointy</span><span class="p">{</span><span class="n">T</span><span class="p">}</span>
+    <span class="n">x</span><span class="o">::</span><span class="n">T</span>
+    <span class="n">y</span><span class="o">::</span><span class="n">T</span>
 <span class="k">end</span>
 </pre></div>
 </div>
@@ -1387,9 +1388,9 @@ same manner:</p>
 machinery can be useful, here is the actual definition of Julia&#8217;s
 <code class="xref jl jl-obj docutils literal"><span class="pre">Rational</span></code> immutable type (except that we omit the constructor here
 for simplicity), representing an exact ratio of integers:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">immutable</span> <span class="n">Rational</span><span class="p">{</span><span class="n">T</span><span class="o">&lt;:</span><span class="n">Integer</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">Real</span>
-    <span class="n">num</span><span class="p">::</span><span class="n">T</span>
-    <span class="n">den</span><span class="p">::</span><span class="n">T</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">immutable</span> <span class="kt">Rational</span><span class="p">{</span><span class="n">T</span><span class="o">&lt;:</span><span class="kt">Integer</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="kt">Real</span>
+    <span class="n">num</span><span class="o">::</span><span class="n">T</span>
+    <span class="n">den</span><span class="o">::</span><span class="n">T</span>
 <span class="k">end</span>
 </pre></div>
 </div>
@@ -1407,8 +1408,8 @@ parameterized immutable type where each parameter is the type
 of one field. For example, a 2-element tuple type resembles the following
 immutable type:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">immutable</span> <span class="n">Tuple2</span><span class="p">{</span><span class="n">A</span><span class="p">,</span><span class="n">B</span><span class="p">}</span>
-    <span class="n">a</span><span class="p">::</span><span class="n">A</span>
-    <span class="n">b</span><span class="p">::</span><span class="n">B</span>
+    <span class="n">a</span><span class="o">::</span><span class="n">A</span>
+    <span class="n">b</span><span class="o">::</span><span class="n">B</span>
 <span class="k">end</span>
 </pre></div>
 </div>
@@ -1422,19 +1423,19 @@ and tuple types are only concrete if their parameters are.</li>
 </ul>
 <p>Tuple values are written with parentheses and commas. When a tuple is constructed,
 an appropriate tuple type is generated on demand:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span><span class="s">&quot;foo&quot;</span><span class="p">,</span><span class="mf">2.5</span><span class="p">))</span>
-<span class="n">Tuple</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="n">String</span><span class="p">,</span><span class="kt">Float64</span><span class="p">}</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">typeof</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span><span class="s">&quot;foo&quot;</span><span class="p">,</span><span class="mf">2.5</span><span class="p">))</span>
+<span class="kt">Tuple</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="n">String</span><span class="p">,</span><span class="kt">Float64</span><span class="p">}</span>
 </pre></div>
 </div>
 <p>Note the implications of covariance:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Tuple</span><span class="p">{</span><span class="kt">Int</span><span class="p">,</span><span class="n">AbstractString</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">Tuple</span><span class="p">{</span><span class="n">Real</span><span class="p">,</span><span class="kt">Any</span><span class="p">}</span>
-<span class="n">true</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="kt">Tuple</span><span class="p">{</span><span class="kt">Int</span><span class="p">,</span><span class="kt">AbstractString</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="kt">Tuple</span><span class="p">{</span><span class="kt">Real</span><span class="p">,</span><span class="kt">Any</span><span class="p">}</span>
+<span class="kc">true</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Tuple</span><span class="p">{</span><span class="kt">Int</span><span class="p">,</span><span class="n">AbstractString</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">Tuple</span><span class="p">{</span><span class="n">Real</span><span class="p">,</span><span class="n">Real</span><span class="p">}</span>
-<span class="n">false</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="kt">Tuple</span><span class="p">{</span><span class="kt">Int</span><span class="p">,</span><span class="kt">AbstractString</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="kt">Tuple</span><span class="p">{</span><span class="kt">Real</span><span class="p">,</span><span class="kt">Real</span><span class="p">}</span>
+<span class="kc">false</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Tuple</span><span class="p">{</span><span class="kt">Int</span><span class="p">,</span><span class="n">AbstractString</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">Tuple</span><span class="p">{</span><span class="n">Real</span><span class="p">,}</span>
-<span class="n">false</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="kt">Tuple</span><span class="p">{</span><span class="kt">Int</span><span class="p">,</span><span class="kt">AbstractString</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="kt">Tuple</span><span class="p">{</span><span class="kt">Real</span><span class="p">,}</span>
+<span class="kc">false</span>
 </pre></div>
 </div>
 <p>Intuitively, this corresponds to the type of a function&#8217;s arguments
@@ -1444,22 +1445,22 @@ being a subtype of the function&#8217;s signature (when the signature matches).<
 <h3>Vararg Tuple Types<a class="headerlink" href="#vararg-tuple-types" title="Permalink to this headline">¶</a></h3>
 <p>The last parameter of a tuple type can be the special type <code class="docutils literal"><span class="pre">Vararg</span></code>,
 which denotes any number of trailing elements:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nb">isa</span><span class="p">((</span><span class="s">&quot;1&quot;</span><span class="p">,),</span> <span class="n">Tuple</span><span class="p">{</span><span class="n">AbstractString</span><span class="p">,</span><span class="n">Vararg</span><span class="p">{</span><span class="kt">Int</span><span class="p">}})</span>
-<span class="n">true</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">isa</span><span class="p">((</span><span class="s">&quot;1&quot;</span><span class="p">,),</span> <span class="kt">Tuple</span><span class="p">{</span><span class="kt">AbstractString</span><span class="p">,</span><span class="kt">Vararg</span><span class="p">{</span><span class="kt">Int</span><span class="p">}})</span>
+<span class="kc">true</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">isa</span><span class="p">((</span><span class="s">&quot;1&quot;</span><span class="p">,</span><span class="mi">1</span><span class="p">),</span> <span class="n">Tuple</span><span class="p">{</span><span class="n">AbstractString</span><span class="p">,</span><span class="n">Vararg</span><span class="p">{</span><span class="kt">Int</span><span class="p">}})</span>
-<span class="n">true</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">isa</span><span class="p">((</span><span class="s">&quot;1&quot;</span><span class="p">,</span><span class="mi">1</span><span class="p">),</span> <span class="kt">Tuple</span><span class="p">{</span><span class="kt">AbstractString</span><span class="p">,</span><span class="kt">Vararg</span><span class="p">{</span><span class="kt">Int</span><span class="p">}})</span>
+<span class="kc">true</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">isa</span><span class="p">((</span><span class="s">&quot;1&quot;</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">),</span> <span class="n">Tuple</span><span class="p">{</span><span class="n">AbstractString</span><span class="p">,</span><span class="n">Vararg</span><span class="p">{</span><span class="kt">Int</span><span class="p">}})</span>
-<span class="n">true</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">isa</span><span class="p">((</span><span class="s">&quot;1&quot;</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">),</span> <span class="kt">Tuple</span><span class="p">{</span><span class="kt">AbstractString</span><span class="p">,</span><span class="kt">Vararg</span><span class="p">{</span><span class="kt">Int</span><span class="p">}})</span>
+<span class="kc">true</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">isa</span><span class="p">((</span><span class="s">&quot;1&quot;</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mf">3.0</span><span class="p">),</span> <span class="n">Tuple</span><span class="p">{</span><span class="n">AbstractString</span><span class="p">,</span><span class="n">Vararg</span><span class="p">{</span><span class="kt">Int</span><span class="p">}})</span>
-<span class="n">false</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">isa</span><span class="p">((</span><span class="s">&quot;1&quot;</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mf">3.0</span><span class="p">),</span> <span class="kt">Tuple</span><span class="p">{</span><span class="kt">AbstractString</span><span class="p">,</span><span class="kt">Vararg</span><span class="p">{</span><span class="kt">Int</span><span class="p">}})</span>
+<span class="kc">false</span>
 </pre></div>
 </div>
 <p>Notice that <code class="docutils literal"><span class="pre">Vararg{T}</span></code> corresponds to zero or more elements of type <code class="docutils literal"><span class="pre">T</span></code>.
 Vararg tuple types are used to represent the arguments accepted by varargs
-methods (see <a class="reference internal" href="../functions/#man-varargs-functions"><span>Varargs Functions</span></a>).</p>
+methods (see <a class="reference internal" href="../functions/#man-varargs-functions"><span class="std std-ref">Varargs Functions</span></a>).</p>
 <p>The type <code class="docutils literal"><span class="pre">Vararg{T,N}</span></code> corresponds to exactly <code class="docutils literal"><span class="pre">N</span></code> elements of type <code class="docutils literal"><span class="pre">T</span></code>.  <code class="docutils literal"><span class="pre">NTuple{N,T}</span></code> is
 a convenient alias for <code class="docutils literal"><span class="pre">Tuple{Vararg{T,N}}</span></code>, i.e. a tuple type containing exactly
 <code class="docutils literal"><span class="pre">N</span></code> elements of type <code class="docutils literal"><span class="pre">T</span></code>.</p>
@@ -1470,43 +1471,43 @@ mentioned here: singleton types. For each type, <code class="docutils literal"><
 type&#8221; <code class="docutils literal"><span class="pre">Type{T}</span></code> is an abstract type whose only instance is the object
 <code class="docutils literal"><span class="pre">T</span></code>. Since the definition is a little difficult to parse, let&#8217;s look
 at some examples:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nb">isa</span><span class="p">(</span><span class="kt">Float64</span><span class="p">,</span> <span class="n">Type</span><span class="p">{</span><span class="kt">Float64</span><span class="p">})</span>
-<span class="n">true</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">isa</span><span class="p">(</span><span class="kt">Float64</span><span class="p">,</span> <span class="kt">Type</span><span class="p">{</span><span class="kt">Float64</span><span class="p">})</span>
+<span class="kc">true</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">isa</span><span class="p">(</span><span class="n">Real</span><span class="p">,</span> <span class="n">Type</span><span class="p">{</span><span class="kt">Float64</span><span class="p">})</span>
-<span class="n">false</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">isa</span><span class="p">(</span><span class="kt">Real</span><span class="p">,</span> <span class="kt">Type</span><span class="p">{</span><span class="kt">Float64</span><span class="p">})</span>
+<span class="kc">false</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">isa</span><span class="p">(</span><span class="n">Real</span><span class="p">,</span> <span class="n">Type</span><span class="p">{</span><span class="n">Real</span><span class="p">})</span>
-<span class="n">true</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">isa</span><span class="p">(</span><span class="kt">Real</span><span class="p">,</span> <span class="kt">Type</span><span class="p">{</span><span class="kt">Real</span><span class="p">})</span>
+<span class="kc">true</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">isa</span><span class="p">(</span><span class="kt">Float64</span><span class="p">,</span> <span class="n">Type</span><span class="p">{</span><span class="n">Real</span><span class="p">})</span>
-<span class="n">false</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">isa</span><span class="p">(</span><span class="kt">Float64</span><span class="p">,</span> <span class="kt">Type</span><span class="p">{</span><span class="kt">Real</span><span class="p">})</span>
+<span class="kc">false</span>
 </pre></div>
 </div>
 <p>In other words, <a class="reference internal" href="../../stdlib/base/#Base.isa" title="Base.isa"><code class="xref jl jl-func docutils literal"><span class="pre">isa(A,Type{B})</span></code></a> is true if and only if <code class="docutils literal"><span class="pre">A</span></code> and
 <code class="docutils literal"><span class="pre">B</span></code> are the same object and that object is a type. Without the
 parameter, <code class="xref jl jl-obj docutils literal"><span class="pre">Type</span></code> is simply an abstract type which has all type
 objects as its instances, including, of course, singleton types:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nb">isa</span><span class="p">(</span><span class="n">Type</span><span class="p">{</span><span class="kt">Float64</span><span class="p">},</span><span class="n">Type</span><span class="p">)</span>
-<span class="n">true</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">isa</span><span class="p">(</span><span class="kt">Type</span><span class="p">{</span><span class="kt">Float64</span><span class="p">},</span><span class="kt">Type</span><span class="p">)</span>
+<span class="kc">true</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">isa</span><span class="p">(</span><span class="kt">Float64</span><span class="p">,</span><span class="n">Type</span><span class="p">)</span>
-<span class="n">true</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">isa</span><span class="p">(</span><span class="kt">Float64</span><span class="p">,</span><span class="kt">Type</span><span class="p">)</span>
+<span class="kc">true</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">isa</span><span class="p">(</span><span class="n">Real</span><span class="p">,</span><span class="n">Type</span><span class="p">)</span>
-<span class="n">true</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">isa</span><span class="p">(</span><span class="kt">Real</span><span class="p">,</span><span class="kt">Type</span><span class="p">)</span>
+<span class="kc">true</span>
 </pre></div>
 </div>
 <p>Any object that is not a type is not an instance of <code class="docutils literal"><span class="pre">Type</span></code>:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nb">isa</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="n">Type</span><span class="p">)</span>
-<span class="n">false</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">isa</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="kt">Type</span><span class="p">)</span>
+<span class="kc">false</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">isa</span><span class="p">(</span><span class="s">&quot;foo&quot;</span><span class="p">,</span><span class="n">Type</span><span class="p">)</span>
-<span class="n">false</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">isa</span><span class="p">(</span><span class="s">&quot;foo&quot;</span><span class="p">,</span><span class="kt">Type</span><span class="p">)</span>
+<span class="kc">false</span>
 </pre></div>
 </div>
-<p>Until we discuss <a class="reference internal" href="../methods/#man-parametric-methods"><span>Parametric Methods</span></a>
-and <a class="reference internal" href="../conversion-and-promotion/#man-conversion"><span>conversions</span></a>, it is
+<p>Until we discuss <a class="reference internal" href="../methods/#man-parametric-methods"><span class="std std-ref">Parametric Methods</span></a>
+and <a class="reference internal" href="../conversion-and-promotion/#man-conversion"><span class="std std-ref">conversions</span></a>, it is
 difficult to explain the utility of the singleton type construct, but in
 short, it allows one to specialize function behavior on specific type
 <em>values</em>. This is useful for writing
@@ -1526,10 +1527,10 @@ singleton types.</p>
 are represented as boxed bits types which would be declared in Julia
 like this:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="c"># 32-bit system:</span>
-<span class="k">bitstype</span> <span class="mi">32</span> <span class="n">Ptr</span><span class="p">{</span><span class="n">T</span><span class="p">}</span>
+<span class="k">bitstype</span> <span class="mi">32</span> <span class="kt">Ptr</span><span class="p">{</span><span class="n">T</span><span class="p">}</span>
 
 <span class="c"># 64-bit system:</span>
-<span class="k">bitstype</span> <span class="mi">64</span> <span class="n">Ptr</span><span class="p">{</span><span class="n">T</span><span class="p">}</span>
+<span class="k">bitstype</span> <span class="mi">64</span> <span class="kt">Ptr</span><span class="p">{</span><span class="n">T</span><span class="p">}</span>
 </pre></div>
 </div>
 <p>The slightly odd feature of these declarations as compared to typical
@@ -1540,11 +1541,11 @@ differentiated only by their type parameter. Thus, <code class="docutils literal
 <code class="docutils literal"><span class="pre">Ptr{Int64}</span></code> are distinct types, even though they have identical
 representations. And of course, all specific pointer types are subtype
 of the umbrella <code class="docutils literal"><span class="pre">Ptr</span></code> type:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Ptr</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">Ptr</span>
-<span class="n">true</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="kt">Ptr</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="kt">Ptr</span>
+<span class="kc">true</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">Ptr</span><span class="p">{</span><span class="kt">Int64</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">Ptr</span>
-<span class="n">true</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="kt">Ptr</span><span class="p">{</span><span class="kt">Int64</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="kt">Ptr</span>
+<span class="kc">true</span>
 </pre></div>
 </div>
 </div>
@@ -1556,19 +1557,19 @@ expressible type. For such occasions, Julia provides the <code class="docutils l
 mechanism. For example, <code class="xref jl jl-class docutils literal"><span class="pre">UInt</span></code> is type aliased to either <code class="xref jl jl-class docutils literal"><span class="pre">UInt32</span></code> or
 <code class="xref jl jl-class docutils literal"><span class="pre">UInt64</span></code> as is appropriate for the size of pointers on the system:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="c"># 32-bit system:</span>
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">UInt</span>
-<span class="n">UInt32</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="kt">UInt</span>
+<span class="kt">UInt32</span>
 
 <span class="c"># 64-bit system:</span>
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">UInt</span>
-<span class="n">UInt64</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="kt">UInt</span>
+<span class="kt">UInt64</span>
 </pre></div>
 </div>
 <p>This is accomplished via the following code in <code class="docutils literal"><span class="pre">base/boot.jl</span></code>:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">if</span> <span class="nb">is</span><span class="p">(</span><span class="kt">Int</span><span class="p">,</span><span class="kt">Int64</span><span class="p">)</span>
-    <span class="k">typealias</span><span class="nc"> UInt</span> <span class="n">UInt64</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">if</span> <span class="n">is</span><span class="p">(</span><span class="kt">Int</span><span class="p">,</span><span class="kt">Int64</span><span class="p">)</span>
+    <span class="k">typealias</span> <span class="kt">UInt</span> <span class="kt">UInt64</span>
 <span class="k">else</span>
-    <span class="k">typealias</span><span class="nc"> UInt</span> <span class="n">UInt32</span>
+    <span class="k">typealias</span> <span class="kt">UInt</span> <span class="kt">UInt32</span>
 <span class="k">end</span>
 </pre></div>
 </div>
@@ -1580,16 +1581,16 @@ Julia&#8217;s arrays have type <code class="docutils literal"><span class="pre">
 and <code class="docutils literal"><span class="pre">N</span></code> is the number of array dimensions. For convenience, writing
 <code class="docutils literal"><span class="pre">Array{Float64}</span></code> allows one to specify the element type without
 specifying the dimension:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">Array</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="n">Array</span>
-<span class="n">true</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="kt">Array</span>
+<span class="kc">true</span>
 </pre></div>
 </div>
 <p>However, there is no way to equally simply restrict just the dimension
 but not the element type. Yet, one often needs to ensure an object
 is a vector or a matrix (imposing restrictions on the number of dimensions).
 For that reason, the following type aliases are provided:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">typealias</span><span class="nc"> Vector</span><span class="p">{</span><span class="n">T</span><span class="p">}</span> <span class="n">Array</span><span class="p">{</span><span class="n">T</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span>
-<span class="k">typealias</span><span class="nc"> Matrix</span><span class="p">{</span><span class="n">T</span><span class="p">}</span> <span class="n">Array</span><span class="p">{</span><span class="n">T</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">typealias</span> <span class="kt">Vector</span><span class="p">{</span><span class="n">T</span><span class="p">}</span> <span class="kt">Array</span><span class="p">{</span><span class="n">T</span><span class="p">,</span><span class="mi">1</span><span class="p">}</span>
+<span class="k">typealias</span> <span class="kt">Matrix</span><span class="p">{</span><span class="n">T</span><span class="p">}</span> <span class="kt">Array</span><span class="p">{</span><span class="n">T</span><span class="p">,</span><span class="mi">2</span><span class="p">}</span>
 </pre></div>
 </div>
 <p>Writing <code class="docutils literal"><span class="pre">Vector{Float64}</span></code> is equivalent to writing
@@ -1603,7 +1604,7 @@ arrays of any element type.</p>
 <p>This declaration of <code class="docutils literal"><span class="pre">Vector</span></code> creates a subtype relation
 <code class="docutils literal"><span class="pre">Vector{Int}</span> <span class="pre">&lt;:</span> <span class="pre">Vector</span></code>.  However, it is not always the case that a parametric
 <code class="docutils literal"><span class="pre">typealias</span></code> statement creates such a relation; for example, the statement:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">typealias</span><span class="nc"> AA</span><span class="p">{</span><span class="n">T</span><span class="p">}</span> <span class="n">Array</span><span class="p">{</span><span class="n">Array</span><span class="p">{</span><span class="n">T</span><span class="p">,</span><span class="mi">1</span><span class="p">},</span><span class="mi">1</span><span class="p">}</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">typealias</span> <span class="n">AA</span><span class="p">{</span><span class="n">T</span><span class="p">}</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Array</span><span class="p">{</span><span class="n">T</span><span class="p">,</span><span class="mi">1</span><span class="p">},</span><span class="mi">1</span><span class="p">}</span>
 </pre></div>
 </div>
 <p>does not create the relation <code class="docutils literal"><span class="pre">AA{Int}</span> <span class="pre">&lt;:</span> <span class="pre">AA</span></code>.  The reason is that <code class="docutils literal"><span class="pre">Array{Array{T,1},1}</span></code> is not
@@ -1620,34 +1621,34 @@ operator, which indicates whether its left hand operand is a subtype of
 its right hand operand.</p>
 <p>The <code class="docutils literal"><span class="pre">isa</span></code> function tests if an object is of a given type and returns
 true or false:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nb">isa</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="kt">Int</span><span class="p">)</span>
-<span class="n">true</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">isa</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="kt">Int</span><span class="p">)</span>
+<span class="kc">true</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">isa</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="n">AbstractFloat</span><span class="p">)</span>
-<span class="n">false</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">isa</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="kt">AbstractFloat</span><span class="p">)</span>
+<span class="kc">false</span>
 </pre></div>
 </div>
 <p>The <a class="reference internal" href="../../stdlib/base/#Base.typeof" title="Base.typeof"><code class="xref jl jl-func docutils literal"><span class="pre">typeof()</span></code></a> function, already used throughout the manual in examples,
 returns the type of its argument. Since, as noted above, types are
 objects, they also have types, and we can ask what their types are:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">Rational</span><span class="p">)</span>
-<span class="n">DataType</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">typeof</span><span class="p">(</span><span class="kt">Rational</span><span class="p">)</span>
+<span class="kt">DataType</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">Union</span><span class="p">{</span><span class="n">Real</span><span class="p">,</span><span class="kt">Float64</span><span class="p">,</span><span class="n">Rational</span><span class="p">})</span>
-<span class="n">DataType</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">typeof</span><span class="p">(</span><span class="kt">Union</span><span class="p">{</span><span class="kt">Real</span><span class="p">,</span><span class="kt">Float64</span><span class="p">,</span><span class="kt">Rational</span><span class="p">})</span>
+<span class="kt">DataType</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">Union</span><span class="p">{</span><span class="n">Real</span><span class="p">,</span><span class="n">String</span><span class="p">})</span>
-<span class="n">Union</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">typeof</span><span class="p">(</span><span class="kt">Union</span><span class="p">{</span><span class="kt">Real</span><span class="p">,</span><span class="n">String</span><span class="p">})</span>
+<span class="kt">Union</span>
 </pre></div>
 </div>
 <p>What if we repeat the process? What is the type of a type of a type?
 As it happens, types are all composite values and thus all have a type of
 <code class="xref jl jl-obj docutils literal"><span class="pre">DataType</span></code>:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">DataType</span><span class="p">)</span>
-<span class="n">DataType</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">typeof</span><span class="p">(</span><span class="kt">DataType</span><span class="p">)</span>
+<span class="kt">DataType</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">Union</span><span class="p">)</span>
-<span class="n">DataType</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">typeof</span><span class="p">(</span><span class="kt">Union</span><span class="p">)</span>
+<span class="kt">DataType</span>
 </pre></div>
 </div>
 <p><code class="xref jl jl-obj docutils literal"><span class="pre">DataType</span></code> is its own type.</p>
@@ -1655,12 +1656,12 @@ As it happens, types are all composite values and thus all have a type of
 reveals a type&#8217;s supertype.
 Only declared types (<code class="xref jl jl-obj docutils literal"><span class="pre">DataType</span></code>) have unambiguous supertypes:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">supertype</span><span class="p">(</span><span class="kt">Float64</span><span class="p">)</span>
-<span class="n">AbstractFloat</span>
+<span class="kt">AbstractFloat</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">supertype</span><span class="p">(</span><span class="n">Number</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">supertype</span><span class="p">(</span><span class="kt">Number</span><span class="p">)</span>
 <span class="kt">Any</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">supertype</span><span class="p">(</span><span class="n">AbstractString</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">supertype</span><span class="p">(</span><span class="kt">AbstractString</span><span class="p">)</span>
 <span class="kt">Any</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">supertype</span><span class="p">(</span><span class="kt">Any</span><span class="p">)</span>
@@ -1669,11 +1670,85 @@ Only declared types (<code class="xref jl jl-obj docutils literal"><span class="
 </div>
 <p>If you apply <a class="reference internal" href="../../stdlib/base/#Base.supertype" title="Base.supertype"><code class="xref jl jl-func docutils literal"><span class="pre">supertype()</span></code></a> to other type objects (or non-type objects), a
 <a class="reference internal" href="../../stdlib/base/#Base.MethodError" title="Base.MethodError"><code class="xref jl jl-exc docutils literal"><span class="pre">MethodError</span></code></a> is raised:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">supertype</span><span class="p">(</span><span class="n">Union</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="kt">Int64</span><span class="p">})</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="sb">`supertype`</span> <span class="n">has</span> <span class="n">no</span> <span class="n">method</span> <span class="n">matching</span> <span class="n">supertype</span><span class="p">(::</span><span class="n">Type</span><span class="p">{</span><span class="n">Union</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="kt">Int64</span><span class="p">}})</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">supertype</span><span class="p">(</span><span class="kt">Union</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="kt">Int64</span><span class="p">})</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="sb">`supertype`</span> <span class="n">has</span> <span class="n">no</span> <span class="n">method</span> <span class="n">matching</span> <span class="n">supertype</span><span class="p">(</span><span class="o">::</span><span class="kt">Type</span><span class="p">{</span><span class="kt">Union</span><span class="p">{</span><span class="kt">Float64</span><span class="p">,</span><span class="kt">Int64</span><span class="p">}})</span>
 </pre></div>
 </div>
 </div>
+<div class="section" id="custom-pretty-printing">
+<h2>Custom pretty-printing<a class="headerlink" href="#custom-pretty-printing" title="Permalink to this headline">¶</a></h2>
+<p>Often, one wants to customize how instances of a type are displayed.  This
+is accomplished by overloading the <a class="reference internal" href="../../stdlib/io-network/#Base.show" title="Base.show"><code class="xref jl jl-func docutils literal"><span class="pre">show()</span></code></a> function.  For example,
+suppose we define a type to represent complex numbers in polar form:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span> <span class="n">Polar</span><span class="p">{</span><span class="n">T</span><span class="o">&lt;:</span><span class="kt">Real</span><span class="p">}</span> <span class="o">&lt;:</span> <span class="kt">Number</span>
+    <span class="n">r</span><span class="o">::</span><span class="n">T</span>
+    <span class="n">Θ</span><span class="o">::</span><span class="n">T</span>
+<span class="k">end</span>
+<span class="n">Polar</span><span class="p">(</span><span class="n">r</span><span class="o">::</span><span class="kt">Real</span><span class="p">,</span><span class="n">Θ</span><span class="o">::</span><span class="kt">Real</span><span class="p">)</span> <span class="o">=</span> <span class="n">Polar</span><span class="p">(</span><span class="n">promote</span><span class="p">(</span><span class="n">r</span><span class="p">,</span><span class="n">Θ</span><span class="p">)</span><span class="o">...</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Here, we&#8217;ve added a custom constructor function so that it can take arguments of
+different <code class="docutils literal"><span class="pre">Real</span></code> types and promote them to a commmon type (see
+<a class="reference internal" href="../constructors/#man-constructors"><span class="std std-ref">Constructors</span></a> and <a class="reference internal" href="../conversion-and-promotion/#man-conversion-and-promotion"><span class="std std-ref">Conversion and Promotion</span></a>). (Of course, we
+would have to define lots of other methods, too, to make it act like a
+<code class="docutils literal"><span class="pre">Number</span></code>, e.g. <code class="docutils literal"><span class="pre">+</span></code>, <code class="docutils literal"><span class="pre">*</span></code>, <code class="docutils literal"><span class="pre">one</span></code>, <code class="docutils literal"><span class="pre">zero</span></code>, promotion rules and so on.) By
+default, instances of this type display rather simply, with information about
+the type name and the field values, as e.g. <code class="docutils literal"><span class="pre">Polar{Float64}(3.0,4.0)</span></code>.</p>
+<p>If we want it to display instead as <code class="docutils literal"><span class="pre">3.0</span> <span class="pre">*</span> <span class="pre">exp(4.0im)</span></code>, we would
+define the following method to print the object to a given output
+object <code class="docutils literal"><span class="pre">io</span></code> (representing a file, terminal, buffer, etcetera; see
+<a class="reference internal" href="../networking-and-streams/#man-networking-and-streams"><span class="std std-ref">Networking and Streams</span></a>):</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">Base</span><span class="o">.</span><span class="n">show</span><span class="p">(</span><span class="n">io</span><span class="o">::</span><span class="kt">IO</span><span class="p">,</span> <span class="n">z</span><span class="o">::</span><span class="n">Polar</span><span class="p">)</span> <span class="o">=</span> <span class="n">print</span><span class="p">(</span><span class="n">io</span><span class="p">,</span> <span class="n">z</span><span class="o">.</span><span class="n">r</span><span class="p">,</span> <span class="s">&quot; * exp(&quot;</span><span class="p">,</span> <span class="n">z</span><span class="o">.</span><span class="n">Θ</span><span class="p">,</span> <span class="s">&quot;im)&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>More fine-grained control over display of <code class="docutils literal"><span class="pre">Polar</span></code> objects is possible.
+In particular, sometimes one wants both a verbose multi-line printing
+format, used for displaying a single object in the REPL and other interactive
+environments, and also a more compact single-line format used for <a class="reference internal" href="../../stdlib/io-network/#Base.print" title="Base.print"><code class="xref jl jl-func docutils literal"><span class="pre">print()</span></code></a>
+or for displaying the object as part of another object (e.g. in an array).
+Although by default the <code class="docutils literal"><span class="pre">show(io,</span> <span class="pre">z)</span></code> function is called in both cases,
+you can define a <em>different</em> multi-line format for displaying an object
+by overloading a three-argument form of <code class="docutils literal"><span class="pre">show</span></code> that takes the <code class="docutils literal"><span class="pre">text/plain</span></code>
+MIME type as its second argument (see <a class="reference internal" href="../../stdlib/io-network/#man-multimedia-io"><span class="std std-ref">Multimedia I/O</span></a>), for example:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">Base</span><span class="o">.</span><span class="n">show</span><span class="p">{</span><span class="n">T</span><span class="p">}(</span><span class="n">io</span><span class="o">::</span><span class="kt">IO</span><span class="p">,</span> <span class="o">::</span><span class="kt">MIME</span><span class="s">&quot;text/plain&quot;</span><span class="p">,</span> <span class="n">z</span><span class="o">::</span><span class="n">Polar</span><span class="p">{</span><span class="n">T</span><span class="p">})</span> <span class="o">=</span>
+    <span class="n">print</span><span class="p">(</span><span class="n">io</span><span class="p">,</span> <span class="s">&quot;Polar{</span><span class="si">$T</span><span class="s">} complex number:</span><span class="se">\n</span><span class="s">   &quot;</span><span class="p">,</span> <span class="n">z</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>(Note that <code class="docutils literal"><span class="pre">print(...,</span> <span class="pre">z)</span></code> here will call the 2-argument <code class="docutils literal"><span class="pre">show(io,</span> <span class="pre">z)</span></code> method.)
+This results in:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">Polar</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mf">4.0</span><span class="p">)</span>
+<span class="n">Polar</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}</span> <span class="n">complex</span> <span class="n">number</span><span class="o">:</span>
+   <span class="mf">3.0</span> <span class="o">*</span> <span class="n">exp</span><span class="p">(</span><span class="mf">4.0</span><span class="nb">im</span><span class="p">)</span>
+
+<span class="n">julia</span><span class="o">&gt;</span> <span class="p">[</span><span class="n">Polar</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mf">4.0</span><span class="p">),</span> <span class="n">Polar</span><span class="p">(</span><span class="mf">4.0</span><span class="p">,</span><span class="mf">5.3</span><span class="p">)]</span>
+<span class="mi">2</span><span class="o">-</span><span class="n">element</span> <span class="kt">Array</span><span class="p">{</span><span class="n">Polar</span><span class="p">{</span><span class="kt">Float64</span><span class="p">},</span><span class="mi">1</span><span class="p">}</span><span class="o">:</span>
+ <span class="mf">3.0</span> <span class="o">*</span> <span class="n">exp</span><span class="p">(</span><span class="mf">4.0</span><span class="nb">im</span><span class="p">)</span>
+ <span class="mf">4.0</span> <span class="o">*</span> <span class="n">exp</span><span class="p">(</span><span class="mf">5.3</span><span class="nb">im</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>where the single-line <code class="docutils literal"><span class="pre">show(io,</span> <span class="pre">z)</span></code> form is still used for an array of <code class="docutils literal"><span class="pre">Polar</span></code>
+values.   Technically, the REPL calls <code class="docutils literal"><span class="pre">display(z)</span></code> to display the result of
+executing a line, which defaults to <code class="docutils literal"><span class="pre">show(STDOUT,</span> <span class="pre">MIME(&quot;text/plain&quot;),</span> <span class="pre">z)</span></code>, which
+in turn defaults to <code class="docutils literal"><span class="pre">show(STDOUT,</span> <span class="pre">z)</span></code>, but you should <em>not</em> define new <a class="reference internal" href="../../stdlib/io-network/#Base.display" title="Base.display"><code class="xref jl jl-func docutils literal"><span class="pre">display()</span></code></a>
+methods unless you are defining a new multimedia display handler
+(see <a class="reference internal" href="../../stdlib/io-network/#man-multimedia-io"><span class="std std-ref">Multimedia I/O</span></a>).</p>
+<p>Moreover, you can also define <code class="docutils literal"><span class="pre">show</span></code> methods for other MIME types in order
+to enable richer display (HTML, images, etcetera) of objects in environments
+that support this (e.g. IJulia).   For example, we can define formatted
+HTML display of <code class="docutils literal"><span class="pre">Polar</span></code> objects, with superscripts and italics, via:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">Base</span><span class="o">.</span><span class="n">show</span><span class="p">{</span><span class="n">T</span><span class="p">}(</span><span class="n">io</span><span class="o">::</span><span class="kt">IO</span><span class="p">,</span> <span class="o">::</span><span class="kt">MIME</span><span class="s">&quot;text/html&quot;</span><span class="p">,</span> <span class="n">z</span><span class="o">::</span><span class="n">Polar</span><span class="p">{</span><span class="n">T</span><span class="p">})</span> <span class="o">=</span>
+    <span class="n">println</span><span class="p">(</span><span class="n">io</span><span class="p">,</span> <span class="s">&quot;&lt;code&gt;Polar{</span><span class="si">$T</span><span class="s">}&lt;/code&gt; complex number: &quot;</span><span class="p">,</span>
+            <span class="n">z</span><span class="o">.</span><span class="n">r</span><span class="p">,</span> <span class="s">&quot; &lt;i&gt;e&lt;/i&gt;&lt;sup&gt;&quot;</span><span class="p">,</span> <span class="n">z</span><span class="o">.</span><span class="n">Θ</span><span class="p">,</span> <span class="s">&quot; &lt;i&gt;i&lt;/i&gt;&lt;/sup&gt;&quot;</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>A <code class="docutils literal"><span class="pre">Polar</span></code> object will then display automatically using HTML in an environment
+that supports HTML display, but you can call <code class="docutils literal"><span class="pre">show</span></code> manually to get HTML
+output if you want:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">show</span><span class="p">(</span><span class="nb">STDOUT</span><span class="p">,</span> <span class="s">&quot;text/html&quot;</span><span class="p">,</span> <span class="n">Polar</span><span class="p">(</span><span class="mf">3.0</span><span class="p">,</span><span class="mf">4.0</span><span class="p">))</span>
+<span class="o">&lt;</span><span class="n">code</span><span class="o">&gt;</span><span class="n">Polar</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}</span><span class="o">&lt;/</span><span class="n">code</span><span class="o">&gt;</span> <span class="n">complex</span> <span class="n">number</span><span class="o">:</span> <span class="mf">3.0</span> <span class="o">&lt;</span><span class="n">i</span><span class="o">&gt;</span><span class="nb">e</span><span class="o">&lt;/</span><span class="n">i</span><span class="o">&gt;&lt;</span><span class="n">sup</span><span class="o">&gt;</span><span class="mf">4.0</span> <span class="o">&lt;</span><span class="n">i</span><span class="o">&gt;</span><span class="n">i</span><span class="o">&lt;/</span><span class="n">i</span><span class="o">&gt;&lt;/</span><span class="n">sup</span><span class="o">&gt;</span>
+</pre></div>
+</div>
+<p>An HTML renderer would display this as: <code>Polar{Float64}</code> complex number: 3.0 <i>e</i><sup>4.0 <i>i</i></sup></p></div>
 <div class="section" id="value-types">
 <span id="man-val-trick"></span><h2>&#8220;Value types&#8221;<a class="headerlink" href="#value-types" title="Permalink to this headline">¶</a></h2>
 <p>In Julia, you can&#8217;t dispatch on a <em>value</em> such as <code class="docutils literal"><span class="pre">true</span></code> or
@@ -1689,7 +1764,7 @@ illustration of this idea, let&#8217;s introduce a parametric type,
 <code class="docutils literal"><span class="pre">Val{T}</span></code>, which serves as a customary way to exploit this technique
 for cases where you don&#8217;t need a more elaborate hierarchy.</p>
 <p><code class="docutils literal"><span class="pre">Val</span></code> is defined as:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">immutable</span> <span class="n">Val</span><span class="p">{</span><span class="n">T</span><span class="p">}</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">immutable</span> <span class="kt">Val</span><span class="p">{</span><span class="n">T</span><span class="p">}</span>
 <span class="k">end</span>
 </pre></div>
 </div>
@@ -1697,13 +1772,13 @@ for cases where you don&#8217;t need a more elaborate hierarchy.</p>
 functions in Julia&#8217;s standard library accept <code class="docutils literal"><span class="pre">Val</span></code> types as
 arguments, and you can also use it to write your own functions.  For
 example:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">firstlast</span><span class="p">(::</span><span class="n">Type</span><span class="p">{</span><span class="n">Val</span><span class="p">{</span><span class="n">true</span><span class="p">}})</span> <span class="o">=</span> <span class="s">&quot;First&quot;</span>
-<span class="n">firstlast</span><span class="p">(::</span><span class="n">Type</span><span class="p">{</span><span class="n">Val</span><span class="p">{</span><span class="n">false</span><span class="p">}})</span> <span class="o">=</span> <span class="s">&quot;Last&quot;</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">firstlast</span><span class="p">(</span><span class="o">::</span><span class="kt">Type</span><span class="p">{</span><span class="kt">Val</span><span class="p">{</span><span class="kc">true</span><span class="p">}})</span> <span class="o">=</span> <span class="s">&quot;First&quot;</span>
+<span class="n">firstlast</span><span class="p">(</span><span class="o">::</span><span class="kt">Type</span><span class="p">{</span><span class="kt">Val</span><span class="p">{</span><span class="kc">false</span><span class="p">}})</span> <span class="o">=</span> <span class="s">&quot;Last&quot;</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">firstlast</span><span class="p">(</span><span class="n">Val</span><span class="p">{</span><span class="n">true</span><span class="p">})</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">firstlast</span><span class="p">(</span><span class="kt">Val</span><span class="p">{</span><span class="kc">true</span><span class="p">})</span>
 <span class="s">&quot;First&quot;</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">firstlast</span><span class="p">(</span><span class="n">Val</span><span class="p">{</span><span class="n">false</span><span class="p">})</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">firstlast</span><span class="p">(</span><span class="kt">Val</span><span class="p">{</span><span class="kc">false</span><span class="p">})</span>
 <span class="s">&quot;Last&quot;</span>
 </pre></div>
 </div>
@@ -1715,7 +1790,7 @@ example:</p>
 end up making the performance of your code much <em>worse</em>.  In
 particular, you would never want to write actual code as illustrated
 above.  For more information about the proper (and improper) uses of
-<code class="docutils literal"><span class="pre">Val</span></code>, please read the more extensive discussion in <a class="reference internal" href="../performance-tips/#man-performance-val"><span>the
+<code class="docutils literal"><span class="pre">Val</span></code>, please read the more extensive discussion in <a class="reference internal" href="../performance-tips/#man-performance-val"><span class="std std-ref">the
 performance tips</span></a>.</p>
 </div>
 <div class="section" id="nullable-types-representing-missing-values">
@@ -1738,26 +1813,26 @@ value of type <code class="docutils literal"><span class="pre">T</span></code> w
 <h3>Constructing <a class="reference internal" href="../../stdlib/base/#Base.Nullable" title="Base.Nullable"><code class="xref jl jl-obj docutils literal"><span class="pre">Nullable</span></code></a> objects<a class="headerlink" href="#constructing-nullable-objects" title="Permalink to this headline">¶</a></h3>
 <p>To construct an object representing a missing value of type <code class="docutils literal"><span class="pre">T</span></code>, use the
 <code class="docutils literal"><span class="pre">Nullable{T}()</span></code> function:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">x1</span> <span class="o">=</span> <span class="n">Nullable</span><span class="p">{</span><span class="kt">Int64</span><span class="p">}()</span>
-<span class="n">Nullable</span><span class="p">{</span><span class="kt">Int64</span><span class="p">}()</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">x1</span> <span class="o">=</span> <span class="kt">Nullable</span><span class="p">{</span><span class="kt">Int64</span><span class="p">}()</span>
+<span class="kt">Nullable</span><span class="p">{</span><span class="kt">Int64</span><span class="p">}()</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">x2</span> <span class="o">=</span> <span class="n">Nullable</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}()</span>
-<span class="n">Nullable</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}()</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">x2</span> <span class="o">=</span> <span class="kt">Nullable</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}()</span>
+<span class="kt">Nullable</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}()</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">x3</span> <span class="o">=</span> <span class="n">Nullable</span><span class="p">{</span><span class="n">Vector</span><span class="p">{</span><span class="kt">Int64</span><span class="p">}}()</span>
-<span class="n">Nullable</span><span class="p">{</span><span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}}()</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">x3</span> <span class="o">=</span> <span class="kt">Nullable</span><span class="p">{</span><span class="kt">Vector</span><span class="p">{</span><span class="kt">Int64</span><span class="p">}}()</span>
+<span class="kt">Nullable</span><span class="p">{</span><span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}}()</span>
 </pre></div>
 </div>
 <p>To construct an object representing a non-missing value of type <code class="docutils literal"><span class="pre">T</span></code>, use the
 <code class="docutils literal"><span class="pre">Nullable(x::T)</span></code> function:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">x1</span> <span class="o">=</span> <span class="n">Nullable</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
-<span class="n">Nullable</span><span class="p">{</span><span class="kt">Int64</span><span class="p">}(</span><span class="mi">1</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">x1</span> <span class="o">=</span> <span class="kt">Nullable</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<span class="kt">Nullable</span><span class="p">{</span><span class="kt">Int64</span><span class="p">}(</span><span class="mi">1</span><span class="p">)</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">x2</span> <span class="o">=</span> <span class="n">Nullable</span><span class="p">(</span><span class="mf">1.0</span><span class="p">)</span>
-<span class="n">Nullable</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}(</span><span class="mf">1.0</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">x2</span> <span class="o">=</span> <span class="kt">Nullable</span><span class="p">(</span><span class="mf">1.0</span><span class="p">)</span>
+<span class="kt">Nullable</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}(</span><span class="mf">1.0</span><span class="p">)</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">x3</span> <span class="o">=</span> <span class="n">Nullable</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">])</span>
-<span class="n">Nullable</span><span class="p">{</span><span class="n">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}}([</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">])</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">x3</span> <span class="o">=</span> <span class="kt">Nullable</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">])</span>
+<span class="kt">Nullable</span><span class="p">{</span><span class="kt">Array</span><span class="p">{</span><span class="kt">Int64</span><span class="p">,</span><span class="mi">1</span><span class="p">}}([</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">])</span>
 </pre></div>
 </div>
 <p>Note the core distinction between these two ways of constructing a <a class="reference internal" href="../../stdlib/base/#Base.Nullable" title="Base.Nullable"><code class="xref jl jl-obj docutils literal"><span class="pre">Nullable</span></code></a>
@@ -1767,23 +1842,23 @@ the other style, you provide a single value of type <code class="docutils litera
 <div class="section" id="checking-if-a-nullable-object-has-a-value">
 <h3>Checking if a <a class="reference internal" href="../../stdlib/base/#Base.Nullable" title="Base.Nullable"><code class="xref jl jl-obj docutils literal"><span class="pre">Nullable</span></code></a> object has a value<a class="headerlink" href="#checking-if-a-nullable-object-has-a-value" title="Permalink to this headline">¶</a></h3>
 <p>You can check if a <a class="reference internal" href="../../stdlib/base/#Base.Nullable" title="Base.Nullable"><code class="xref jl jl-obj docutils literal"><span class="pre">Nullable</span></code></a> object has any value using <a class="reference internal" href="../../stdlib/base/#Base.isnull" title="Base.isnull"><code class="xref jl jl-func docutils literal"><span class="pre">isnull()</span></code></a>:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">isnull</span><span class="p">(</span><span class="n">Nullable</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}())</span>
-<span class="n">true</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">isnull</span><span class="p">(</span><span class="kt">Nullable</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}())</span>
+<span class="kc">true</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">isnull</span><span class="p">(</span><span class="n">Nullable</span><span class="p">(</span><span class="mf">0.0</span><span class="p">))</span>
-<span class="n">false</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">isnull</span><span class="p">(</span><span class="kt">Nullable</span><span class="p">(</span><span class="mf">0.0</span><span class="p">))</span>
+<span class="kc">false</span>
 </pre></div>
 </div>
 </div>
 <div class="section" id="safely-accessing-the-value-of-a-nullable-object">
 <h3>Safely accessing the value of a <a class="reference internal" href="../../stdlib/base/#Base.Nullable" title="Base.Nullable"><code class="xref jl jl-obj docutils literal"><span class="pre">Nullable</span></code></a> object<a class="headerlink" href="#safely-accessing-the-value-of-a-nullable-object" title="Permalink to this headline">¶</a></h3>
 <p>You can safely access the value of a <a class="reference internal" href="../../stdlib/base/#Base.Nullable" title="Base.Nullable"><code class="xref jl jl-obj docutils literal"><span class="pre">Nullable</span></code></a> object using <a class="reference internal" href="../../stdlib/collections/#Base.get" title="Base.get"><code class="xref jl jl-func docutils literal"><span class="pre">get()</span></code></a>:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">get</span><span class="p">(</span><span class="n">Nullable</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}())</span>
-<span class="n">ERROR</span><span class="p">:</span> <span class="n">NullException</span><span class="p">()</span>
- <span class="k">in</span> <span class="n">get</span><span class="p">(::</span><span class="n">Nullable</span><span class="p">{</span><span class="kt">Float64</span><span class="p">})</span> <span class="n">at</span> <span class="o">./</span><span class="n">nullable</span><span class="o">.</span><span class="n">jl</span><span class="p">:</span><span class="mi">62</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">get</span><span class="p">(</span><span class="kt">Nullable</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}())</span>
+<span class="n">ERROR</span><span class="o">:</span> <span class="kt">NullException</span><span class="p">()</span>
+ <span class="kp">in</span> <span class="n">get</span><span class="p">(</span><span class="o">::</span><span class="kt">Nullable</span><span class="p">{</span><span class="kt">Float64</span><span class="p">})</span> <span class="n">at</span> <span class="o">./</span><span class="n">nullable</span><span class="o">.</span><span class="n">jl</span><span class="o">:</span><span class="mi">62</span>
  <span class="o">...</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">get</span><span class="p">(</span><span class="n">Nullable</span><span class="p">(</span><span class="mf">1.0</span><span class="p">))</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">get</span><span class="p">(</span><span class="kt">Nullable</span><span class="p">(</span><span class="mf">1.0</span><span class="p">))</span>
 <span class="mf">1.0</span>
 </pre></div>
 </div>
@@ -1794,19 +1869,19 @@ fails.</p>
 <p>In cases for which a reasonable default value exists that could be used
 when a <a class="reference internal" href="../../stdlib/base/#Base.Nullable" title="Base.Nullable"><code class="xref jl jl-obj docutils literal"><span class="pre">Nullable</span></code></a> object&#8217;s value turns out to be missing, you can provide this
 default value as a second argument to <a class="reference internal" href="../../stdlib/collections/#Base.get" title="Base.get"><code class="xref jl jl-func docutils literal"><span class="pre">get()</span></code></a>:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">get</span><span class="p">(</span><span class="n">Nullable</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}(),</span> <span class="mf">0.0</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">get</span><span class="p">(</span><span class="kt">Nullable</span><span class="p">{</span><span class="kt">Float64</span><span class="p">}(),</span> <span class="mf">0.0</span><span class="p">)</span>
 <span class="mf">0.0</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">get</span><span class="p">(</span><span class="n">Nullable</span><span class="p">(</span><span class="mf">1.0</span><span class="p">),</span> <span class="mf">0.0</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">get</span><span class="p">(</span><span class="kt">Nullable</span><span class="p">(</span><span class="mf">1.0</span><span class="p">),</span> <span class="mf">0.0</span><span class="p">)</span>
 <span class="mf">1.0</span>
 </pre></div>
 </div>
-<p>Note that this default value will automatically be converted to the type of
-the <a class="reference internal" href="../../stdlib/base/#Base.Nullable" title="Base.Nullable"><code class="xref jl jl-obj docutils literal"><span class="pre">Nullable</span></code></a> object that you attempt to access using the <a class="reference internal" href="../../stdlib/collections/#Base.get" title="Base.get"><code class="xref jl jl-func docutils literal"><span class="pre">get()</span></code></a> function.
-For example, in the code shown above the value <code class="docutils literal"><span class="pre">0</span></code> would be automatically
-converted to a <a class="reference internal" href="../../stdlib/numbers/#Base.Float64" title="Base.Float64"><code class="xref jl jl-class docutils literal"><span class="pre">Float64</span></code></a> value before being returned. The presence of default
-replacement values makes it easy to use the <a class="reference internal" href="../../stdlib/collections/#Base.get" title="Base.get"><code class="xref jl jl-func docutils literal"><span class="pre">get()</span></code></a> function to write
-type-stable code that interacts with sources of potentially missing values.</p>
+<div class="admonition tip">
+<p class="first admonition-title">Tip</p>
+<p class="last">Make sure the type of the default value passed to <a class="reference internal" href="../../stdlib/collections/#Base.get" title="Base.get"><code class="xref jl jl-func docutils literal"><span class="pre">get()</span></code></a> and that of the
+<a class="reference internal" href="../../stdlib/base/#Base.Nullable" title="Base.Nullable"><code class="xref jl jl-obj docutils literal"><span class="pre">Nullable</span></code></a> object match to avoid type instability, which could hurt
+performance. Use <a class="reference internal" href="../../stdlib/base/#Base.convert" title="Base.convert"><code class="xref jl jl-func docutils literal"><span class="pre">convert()</span></code></a> manually if needed.</p>
+</div>
 </div>
 </div>
 </div>
@@ -1847,7 +1922,7 @@ type-stable code that interacts with sources of potentially missing values.</p>
     <script type="text/javascript">
         var DOCUMENTATION_OPTIONS = {
             URL_ROOT:'../../',
-            VERSION:'0.5.1-pre',
+            VERSION:'0.5.3-pre',
             COLLAPSE_INDEX:false,
             FILE_SUFFIX:'',
             HAS_SOURCE:  true

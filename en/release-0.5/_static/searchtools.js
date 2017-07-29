@@ -2,14 +2,15 @@
  * searchtools.js_t
  * ~~~~~~~~~~~~~~~~
  *
- * Sphinx JavaScript utilties for the full-text search.
+ * Sphinx JavaScript utilities for the full-text search.
  *
- * :copyright: Copyright 2007-2015 by the Sphinx team, see AUTHORS.
+ * :copyright: Copyright 2007-2016 by the Sphinx team, see AUTHORS.
  * :license: BSD, see LICENSE for details.
  *
  */
 
 
+/* Non-minified version JS is _stemmer.js if file is provided */ 
 /**
  * Porter Stemmer
  */
@@ -373,8 +374,7 @@ var Search = {
     }
 
     // lookup as search terms in fulltext
-    results = results.concat(this.performTermsSearch(searchterms, excluded, terms, Scorer.term))
-                     .concat(this.performTermsSearch(searchterms, excluded, titleterms, Scorer.title));
+    results = results.concat(this.performTermsSearch(searchterms, excluded, terms, titleterms));
 
     // let the scorer override scores with a custom scoring function
     if (Scorer.score) {
@@ -538,23 +538,47 @@ var Search = {
   /**
    * search for full-text terms in the index
    */
-  performTermsSearch : function(searchterms, excluded, terms, score) {
+  performTermsSearch : function(searchterms, excluded, terms, titleterms) {
     var filenames = this._index.filenames;
     var titles = this._index.titles;
 
-    var i, j, file, files;
+    var i, j, file;
     var fileMap = {};
+    var scoreMap = {};
     var results = [];
 
     // perform the search on the required terms
     for (i = 0; i < searchterms.length; i++) {
       var word = searchterms[i];
+      var files = [];
+      var _o = [
+        {files: terms[word], score: Scorer.term},
+        {files: titleterms[word], score: Scorer.title}
+      ];
+
       // no match but word was a required one
-      if ((files = terms[word]) === undefined)
+      if ($u.every(_o, function(o){return o.files === undefined;})) {
         break;
-      if (files.length === undefined) {
-        files = [files];
       }
+      // found search word in contents
+      $u.each(_o, function(o) {
+        var _files = o.files;
+        if (_files === undefined)
+          return
+
+        if (_files.length === undefined)
+          _files = [_files];
+        files = files.concat(_files);
+
+        // set score for the word in each file to Scorer.term
+        for (j = 0; j < _files.length; j++) {
+          file = _files[j];
+          if (!(file in scoreMap))
+            scoreMap[file] = {}
+          scoreMap[file][word] = o.score;
+        }
+      });
+
       // create the mapping
       for (j = 0; j < files.length; j++) {
         file = files[j];
@@ -576,7 +600,9 @@ var Search = {
       // ensure that none of the excluded terms is in the search result
       for (i = 0; i < excluded.length; i++) {
         if (terms[excluded[i]] == file ||
-          $u.contains(terms[excluded[i]] || [], file)) {
+            titleterms[excluded[i]] == file ||
+            $u.contains(terms[excluded[i]] || [], file) ||
+            $u.contains(titleterms[excluded[i]] || [], file)) {
           valid = false;
           break;
         }
@@ -584,6 +610,9 @@ var Search = {
 
       // if we have still a valid result we can add it to the result list
       if (valid) {
+        // select one (max) score for the file.
+        // for better ranking, we should calculate ranking by using words statistics like basic tf-idf...
+        var score = $u.max($u.map(fileMap[file], function(w){return scoreMap[file][w]}));
         results.push([filenames[file], titles[file], '', null, score]);
       }
     }
@@ -594,7 +623,7 @@ var Search = {
    * helper function to return a node containing the
    * search summary for a given text. keywords is a list
    * of stemmed words, hlwords is the list of normal, unstemmed
-   * words. the first one is used to find the occurance, the
+   * words. the first one is used to find the occurrence, the
    * latter for highlighting it.
    */
   makeSearchSummary : function(text, keywords, hlwords) {

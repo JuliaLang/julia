@@ -7,7 +7,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Calling C and Fortran Code &mdash; Julia Language 0.5.1-pre documentation</title>
+  <title>Calling C and Fortran Code &mdash; Julia Language 0.5.3-pre documentation</title>
   
 
   
@@ -30,7 +30,7 @@
   
     <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
   
-    <link rel="top" title="Julia Language 0.5.1-pre documentation" href="../../"/>
+    <link rel="top" title="Julia Language 0.5.3-pre documentation" href="../../"/>
         <link rel="next" title="Handling Operating System Variation" href="../handling-operating-system-variation/"/>
         <link rel="prev" title="Running External Programs" href="../running-external-programs/"/> 
 
@@ -149,6 +149,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../types/#man-parametric-types">Parametric Types</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../types/#type-aliases">Type Aliases</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../types/#operations-on-types">Operations on Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#custom-pretty-printing">Custom pretty-printing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../types/#value-types">&#8220;Value types&#8221;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../types/#nullable-types-representing-missing-values">Nullable Types: Representing Missing Values</a></li>
 </ul>
@@ -262,7 +263,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../running-external-programs/#pipelines">Pipelines</a></li>
 </ul>
 </li>
-<li class="toctree-l1 current"><a class="current reference internal" href="">Calling C and Fortran Code</a><ul>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Calling C and Fortran Code</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#creating-c-compatible-julia-function-pointers">Creating C-Compatible Julia Function Pointers</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#mapping-c-types-to-julia">Mapping C Types to Julia</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#mapping-c-functions-to-julia">Mapping C Functions to Julia</a></li>
@@ -629,13 +630,13 @@ passed to the function.</li>
 </ol>
 <p>As a complete but simple example, the following calls the <code class="docutils literal"><span class="pre">clock</span></code>
 function from the standard C library:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">t</span> <span class="o">=</span> <span class="k">ccall</span><span class="p">(</span> <span class="p">(:</span><span class="n">clock</span><span class="p">,</span> <span class="s">&quot;libc&quot;</span><span class="p">),</span> <span class="kt">Int32</span><span class="p">,</span> <span class="p">())</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">t</span> <span class="o">=</span> <span class="k">ccall</span><span class="p">(</span> <span class="p">(</span><span class="o">:</span><span class="n">clock</span><span class="p">,</span> <span class="s">&quot;libc&quot;</span><span class="p">),</span> <span class="kt">Int32</span><span class="p">,</span> <span class="p">())</span>
 <span class="mi">2292761</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">t</span>
 <span class="mi">2292761</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="nb">typeof</span><span class="p">(</span><span class="n">ans</span><span class="p">)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="n">typeof</span><span class="p">(</span><span class="n">ans</span><span class="p">)</span>
 <span class="kt">Int32</span>
 </pre></div>
 </div>
@@ -643,22 +644,22 @@ function from the standard C library:</p>
 is that a 1-tuple must be written with a trailing comma. For
 example, to call the <code class="docutils literal"><span class="pre">getenv</span></code> function to get a pointer to the value
 of an environment variable, one makes a call like this:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">path</span> <span class="o">=</span> <span class="k">ccall</span><span class="p">((:</span><span class="n">getenv</span><span class="p">,</span> <span class="s">&quot;libc&quot;</span><span class="p">),</span> <span class="n">Cstring</span><span class="p">,</span> <span class="p">(</span><span class="n">Cstring</span><span class="p">,),</span> <span class="s">&quot;SHELL&quot;</span><span class="p">)</span>
-<span class="n">Cstring</span><span class="p">(@</span><span class="mh">0x00007fff5fbffc45</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span>julia&gt; path = ccall((:getenv, &quot;libc&quot;), Cstring, (Cstring,), &quot;SHELL&quot;)
+Cstring(@0x00007fff5fbffc45)
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="n">unsafe_string</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
-<span class="s">&quot;/bin/bash&quot;</span>
+julia&gt; unsafe_string(path)
+&quot;/bin/bash&quot;
 </pre></div>
 </div>
 <p>Note that the argument type tuple must be written as <code class="docutils literal"><span class="pre">(Cstring,)</span></code>,
 rather than <code class="docutils literal"><span class="pre">(Cstring)</span></code>. This is because <code class="docutils literal"><span class="pre">(Cstring)</span></code> is just
 the expression <code class="docutils literal"><span class="pre">Cstring</span></code> surrounded by parentheses, rather than
 a 1-tuple containing <code class="docutils literal"><span class="pre">Cstring</span></code>:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">(</span><span class="n">Cstring</span><span class="p">)</span>
-<span class="n">Cstring</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="p">(</span><span class="kt">Cstring</span><span class="p">)</span>
+<span class="kt">Cstring</span>
 
-<span class="n">julia</span><span class="o">&gt;</span> <span class="p">(</span><span class="n">Cstring</span><span class="p">,)</span>
-<span class="p">(</span><span class="n">Cstring</span><span class="p">,)</span>
+<span class="n">julia</span><span class="o">&gt;</span> <span class="p">(</span><span class="kt">Cstring</span><span class="p">,)</span>
+<span class="p">(</span><span class="kt">Cstring</span><span class="p">,)</span>
 </pre></div>
 </div>
 <p>In practice, especially when providing reusable functionality, one
@@ -669,12 +670,12 @@ especially important since C and Fortran APIs are notoriously
 inconsistent about how they indicate error conditions. For example, the
 <code class="docutils literal"><span class="pre">getenv</span></code> C library function is wrapped in the following Julia function,
 which is a simplified version of the actual definition from
-<a class="reference external" href="https://github.com/JuliaLang/julia/blob/master/base/env.jl">env.jl</a>:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> getenv</span><span class="p">(</span><span class="n">var</span><span class="p">::</span><span class="n">AbstractString</span><span class="p">)</span>
-  <span class="n">val</span> <span class="o">=</span> <span class="k">ccall</span><span class="p">((:</span><span class="n">getenv</span><span class="p">,</span> <span class="s">&quot;libc&quot;</span><span class="p">),</span>
-              <span class="n">Cstring</span><span class="p">,</span> <span class="p">(</span><span class="n">Cstring</span><span class="p">,),</span> <span class="n">var</span><span class="p">)</span>
-  <span class="k">if</span> <span class="n">val</span> <span class="o">==</span> <span class="n">C_NULL</span>
-    <span class="nb">error</span><span class="p">(</span><span class="s">&quot;getenv: undefined variable: &quot;</span><span class="p">,</span> <span class="n">var</span><span class="p">)</span>
+<a class="reference external" href="https://github.com/JuliaLang/julia/blob/release-0.5/base/env.jl">env.jl</a>:</p>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">getenv</span><span class="p">(</span><span class="n">var</span><span class="o">::</span><span class="kt">AbstractString</span><span class="p">)</span>
+  <span class="n">val</span> <span class="o">=</span> <span class="k">ccall</span><span class="p">((</span><span class="o">:</span><span class="n">getenv</span><span class="p">,</span> <span class="s">&quot;libc&quot;</span><span class="p">),</span>
+              <span class="kt">Cstring</span><span class="p">,</span> <span class="p">(</span><span class="kt">Cstring</span><span class="p">,),</span> <span class="n">var</span><span class="p">)</span>
+  <span class="k">if</span> <span class="n">val</span> <span class="o">==</span> <span class="nb">C_NULL</span>
+    <span class="n">error</span><span class="p">(</span><span class="s">&quot;getenv: undefined variable: &quot;</span><span class="p">,</span> <span class="n">var</span><span class="p">)</span>
   <span class="k">end</span>
   <span class="n">unsafe_string</span><span class="p">(</span><span class="n">val</span><span class="p">)</span>
 <span class="k">end</span>
@@ -689,16 +690,16 @@ to get a non-existent environment variable:</p>
 <span class="s">&quot;/bin/bash&quot;</span>
 
 <span class="n">julia</span><span class="o">&gt;</span> <span class="n">getenv</span><span class="p">(</span><span class="s">&quot;FOOBAR&quot;</span><span class="p">)</span>
-<span class="n">getenv</span><span class="p">:</span> <span class="n">undefined</span> <span class="n">variable</span><span class="p">:</span> <span class="n">FOOBAR</span>
+<span class="n">getenv</span><span class="o">:</span> <span class="n">undefined</span> <span class="n">variable</span><span class="o">:</span> <span class="n">FOOBAR</span>
 </pre></div>
 </div>
 <p>Here is a slightly more complex example that discovers the local
 machine&#8217;s hostname:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> gethostname</span><span class="p">()</span>
-  <span class="n">hostname</span> <span class="o">=</span> <span class="n">Array</span><span class="p">{</span><span class="n">UInt8</span><span class="p">}(</span><span class="mi">128</span><span class="p">)</span>
-  <span class="k">ccall</span><span class="p">((:</span><span class="n">gethostname</span><span class="p">,</span> <span class="s">&quot;libc&quot;</span><span class="p">),</span> <span class="kt">Int32</span><span class="p">,</span>
-        <span class="p">(</span><span class="n">Ptr</span><span class="p">{</span><span class="n">UInt8</span><span class="p">},</span> <span class="n">Csize_t</span><span class="p">),</span>
-        <span class="n">hostname</span><span class="p">,</span> <span class="nb">sizeof</span><span class="p">(</span><span class="n">hostname</span><span class="p">))</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">gethostname</span><span class="p">()</span>
+  <span class="n">hostname</span> <span class="o">=</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">UInt8</span><span class="p">}(</span><span class="mi">128</span><span class="p">)</span>
+  <span class="k">ccall</span><span class="p">((</span><span class="o">:</span><span class="n">gethostname</span><span class="p">,</span> <span class="s">&quot;libc&quot;</span><span class="p">),</span> <span class="kt">Int32</span><span class="p">,</span>
+        <span class="p">(</span><span class="kt">Ptr</span><span class="p">{</span><span class="kt">UInt8</span><span class="p">},</span> <span class="kt">Csize_t</span><span class="p">),</span>
+        <span class="n">hostname</span><span class="p">,</span> <span class="n">sizeof</span><span class="p">(</span><span class="n">hostname</span><span class="p">))</span>
   <span class="n">hostname</span><span class="p">[</span><span class="k">end</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="c"># ensure null-termination</span>
   <span class="k">return</span> <span class="n">unsafe_string</span><span class="p">(</span><span class="n">pointer</span><span class="p">(</span><span class="n">hostname</span><span class="p">))</span>
 <span class="k">end</span>
@@ -745,8 +746,8 @@ have a 1d array <code class="docutils literal"><span class="pre">A</span></code>
 function (rather than Julia&#8217;s built-in <code class="docutils literal"><span class="pre">sort</span></code> function). Before we worry about calling
 <code class="docutils literal"><span class="pre">qsort</span></code> and passing arguments, we need to write a comparison function that works for
 some arbitrary type T:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> mycompare</span><span class="p">{</span><span class="n">T</span><span class="p">}(</span><span class="n">a</span><span class="p">::</span><span class="n">T</span><span class="p">,</span> <span class="n">b</span><span class="p">::</span><span class="n">T</span><span class="p">)</span>
-    <span class="k">return</span> <span class="nb">convert</span><span class="p">(</span><span class="n">Cint</span><span class="p">,</span> <span class="n">a</span> <span class="o">&lt;</span> <span class="n">b</span> <span class="o">?</span> <span class="o">-</span><span class="mi">1</span> <span class="p">:</span> <span class="n">a</span> <span class="o">&gt;</span> <span class="n">b</span> <span class="o">?</span> <span class="o">+</span><span class="mi">1</span> <span class="p">:</span> <span class="mi">0</span><span class="p">)::</span><span class="n">Cint</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">mycompare</span><span class="p">{</span><span class="n">T</span><span class="p">}(</span><span class="n">a</span><span class="o">::</span><span class="n">T</span><span class="p">,</span> <span class="n">b</span><span class="o">::</span><span class="n">T</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">convert</span><span class="p">(</span><span class="kt">Cint</span><span class="p">,</span> <span class="n">a</span> <span class="o">&lt;</span> <span class="n">b</span> <span class="o">?</span> <span class="o">-</span><span class="mi">1</span> <span class="o">:</span> <span class="n">a</span> <span class="o">&gt;</span> <span class="n">b</span> <span class="o">?</span> <span class="o">+</span><span class="mi">1</span> <span class="o">:</span> <span class="mi">0</span><span class="p">)</span><span class="o">::</span><span class="kt">Cint</span>
 <span class="k">end</span>
 </pre></div>
 </div>
@@ -754,7 +755,7 @@ some arbitrary type T:</p>
 returning a C <code class="docutils literal"><span class="pre">int</span></code>, so we must be sure to return <code class="docutils literal"><span class="pre">Cint</span></code> via a call to <code class="docutils literal"><span class="pre">convert</span></code>
 and a <code class="docutils literal"><span class="pre">typeassert</span></code>.</p>
 <p>In order to pass this function to C, we obtain its address using the function <code class="docutils literal"><span class="pre">cfunction</span></code>:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="kd">const</span> <span class="n">mycompare_c</span> <span class="o">=</span> <span class="n">cfunction</span><span class="p">(</span><span class="n">mycompare</span><span class="p">,</span> <span class="n">Cint</span><span class="p">,</span> <span class="p">(</span><span class="n">Ref</span><span class="p">{</span><span class="n">Cdouble</span><span class="p">},</span> <span class="n">Ref</span><span class="p">{</span><span class="n">Cdouble</span><span class="p">}))</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="kd">const</span> <span class="n">mycompare_c</span> <span class="o">=</span> <span class="n">cfunction</span><span class="p">(</span><span class="n">mycompare</span><span class="p">,</span> <span class="kt">Cint</span><span class="p">,</span> <span class="p">(</span><span class="kt">Ref</span><span class="p">{</span><span class="kt">Cdouble</span><span class="p">},</span> <span class="kt">Ref</span><span class="p">{</span><span class="kt">Cdouble</span><span class="p">}))</span>
 </pre></div>
 </div>
 <p><a class="reference internal" href="../../stdlib/c/#Base.cfunction" title="Base.cfunction"><code class="xref jl jl-func docutils literal"><span class="pre">cfunction()</span></code></a> accepts three arguments: the Julia function (<code class="docutils literal"><span class="pre">mycompare</span></code>),
@@ -762,8 +763,8 @@ the return type (<code class="docutils literal"><span class="pre">Cint</span></c
 sort an array of <code class="docutils literal"><span class="pre">Cdouble</span></code> (<code class="docutils literal"><span class="pre">Float64</span></code>) elements.</p>
 <p>The final call to <code class="docutils literal"><span class="pre">qsort</span></code> looks like this:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">A</span> <span class="o">=</span> <span class="p">[</span><span class="mf">1.3</span><span class="p">,</span> <span class="o">-</span><span class="mf">2.7</span><span class="p">,</span> <span class="mf">4.4</span><span class="p">,</span> <span class="mf">3.1</span><span class="p">]</span>
-<span class="k">ccall</span><span class="p">(:</span><span class="n">qsort</span><span class="p">,</span> <span class="n">Void</span><span class="p">,</span> <span class="p">(</span><span class="n">Ptr</span><span class="p">{</span><span class="n">Cdouble</span><span class="p">},</span> <span class="n">Csize_t</span><span class="p">,</span> <span class="n">Csize_t</span><span class="p">,</span> <span class="n">Ptr</span><span class="p">{</span><span class="n">Void</span><span class="p">}),</span>
-      <span class="n">A</span><span class="p">,</span> <span class="n">length</span><span class="p">(</span><span class="n">A</span><span class="p">),</span> <span class="nb">sizeof</span><span class="p">(</span><span class="n">eltype</span><span class="p">(</span><span class="n">A</span><span class="p">)),</span> <span class="n">mycompare_c</span><span class="p">)</span>
+<span class="k">ccall</span><span class="p">(</span><span class="o">:</span><span class="n">qsort</span><span class="p">,</span> <span class="kt">Void</span><span class="p">,</span> <span class="p">(</span><span class="kt">Ptr</span><span class="p">{</span><span class="kt">Cdouble</span><span class="p">},</span> <span class="kt">Csize_t</span><span class="p">,</span> <span class="kt">Csize_t</span><span class="p">,</span> <span class="kt">Ptr</span><span class="p">{</span><span class="kt">Void</span><span class="p">}),</span>
+      <span class="n">A</span><span class="p">,</span> <span class="n">length</span><span class="p">(</span><span class="n">A</span><span class="p">),</span> <span class="n">sizeof</span><span class="p">(</span><span class="n">eltype</span><span class="p">(</span><span class="n">A</span><span class="p">)),</span> <span class="n">mycompare_c</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>After this executes, <code class="docutils literal"><span class="pre">A</span></code> is changed to the sorted array <code class="docutils literal"><span class="pre">[-2.7,</span> <span class="pre">1.3,</span> <span class="pre">3.1,</span> <span class="pre">4.4]</span></code>.
@@ -787,11 +788,11 @@ Julia code from a C header file.)</p>
 <h3>Auto-conversion:<a class="headerlink" href="#auto-conversion" title="Permalink to this headline">¶</a></h3>
 <p>Julia automatically inserts calls to the <a class="reference internal" href="../../stdlib/c/#Base.cconvert" title="Base.cconvert"><code class="xref jl jl-func docutils literal"><span class="pre">cconvert()</span></code></a> function to convert
 each argument to the specified type. For example, the following call:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">ccall</span><span class="p">((:</span><span class="n">foo</span><span class="p">,</span> <span class="s">&quot;libfoo&quot;</span><span class="p">),</span> <span class="n">Void</span><span class="p">,</span> <span class="p">(</span><span class="kt">Int32</span><span class="p">,</span> <span class="kt">Float64</span><span class="p">),</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">ccall</span><span class="p">((</span><span class="o">:</span><span class="n">foo</span><span class="p">,</span> <span class="s">&quot;libfoo&quot;</span><span class="p">),</span> <span class="kt">Void</span><span class="p">,</span> <span class="p">(</span><span class="kt">Int32</span><span class="p">,</span> <span class="kt">Float64</span><span class="p">),</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>will behave as if the following were written:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">ccall</span><span class="p">((:</span><span class="n">foo</span><span class="p">,</span> <span class="s">&quot;libfoo&quot;</span><span class="p">),</span> <span class="n">Void</span><span class="p">,</span> <span class="p">(</span><span class="kt">Int32</span><span class="p">,</span> <span class="kt">Float64</span><span class="p">),</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">ccall</span><span class="p">((</span><span class="o">:</span><span class="n">foo</span><span class="p">,</span> <span class="s">&quot;libfoo&quot;</span><span class="p">),</span> <span class="kt">Void</span><span class="p">,</span> <span class="p">(</span><span class="kt">Int32</span><span class="p">,</span> <span class="kt">Float64</span><span class="p">),</span>
       <span class="n">Base</span><span class="o">.</span><span class="n">unsafe_convert</span><span class="p">(</span><span class="kt">Int32</span><span class="p">,</span> <span class="n">Base</span><span class="o">.</span><span class="n">cconvert</span><span class="p">(</span><span class="kt">Int32</span><span class="p">,</span> <span class="n">x</span><span class="p">)),</span>
       <span class="n">Base</span><span class="o">.</span><span class="n">unsafe_convert</span><span class="p">(</span><span class="kt">Float64</span><span class="p">,</span> <span class="n">Base</span><span class="o">.</span><span class="n">cconvert</span><span class="p">(</span><span class="kt">Float64</span><span class="p">,</span> <span class="n">y</span><span class="p">)))</span>
 </pre></div>
@@ -1178,7 +1179,7 @@ form:</p>
 </div>
 <p>can be called via the following Julia code:</p>
 <div class="last highlight-julia"><div class="highlight"><pre><span></span><span class="n">argv</span> <span class="o">=</span> <span class="p">[</span> <span class="s">&quot;a.out&quot;</span><span class="p">,</span> <span class="s">&quot;arg1&quot;</span><span class="p">,</span> <span class="s">&quot;arg2&quot;</span> <span class="p">]</span>
-<span class="k">ccall</span><span class="p">(:</span><span class="n">main</span><span class="p">,</span> <span class="kt">Int32</span><span class="p">,</span> <span class="p">(</span><span class="kt">Int32</span><span class="p">,</span> <span class="n">Ptr</span><span class="p">{</span><span class="n">Ptr</span><span class="p">{</span><span class="n">UInt8</span><span class="p">}}),</span> <span class="n">length</span><span class="p">(</span><span class="n">argv</span><span class="p">),</span> <span class="n">argv</span><span class="p">)</span>
+<span class="k">ccall</span><span class="p">(</span><span class="o">:</span><span class="n">main</span><span class="p">,</span> <span class="kt">Int32</span><span class="p">,</span> <span class="p">(</span><span class="kt">Int32</span><span class="p">,</span> <span class="kt">Ptr</span><span class="p">{</span><span class="kt">Ptr</span><span class="p">{</span><span class="kt">UInt8</span><span class="p">}}),</span> <span class="n">length</span><span class="p">(</span><span class="n">argv</span><span class="p">),</span> <span class="n">argv</span><span class="p">)</span>
 </pre></div>
 </div>
 </div>
@@ -1208,20 +1209,20 @@ When translating your fields to Julia, declare the Julia field to be only
 of that type.</p>
 <p>Arrays of parameters must be expanded manually, currently
 (either inline, or in an immutable helper type). For example:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">in</span> <span class="n">C</span><span class="p">:</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="kp">in</span> <span class="n">C</span><span class="o">:</span>
 <span class="n">struct</span> <span class="n">B</span> <span class="p">{</span>
     <span class="n">int</span> <span class="n">A</span><span class="p">[</span><span class="mi">3</span><span class="p">];</span>
 <span class="p">};</span>
 <span class="n">b_a_2</span> <span class="o">=</span> <span class="n">B</span><span class="o">.</span><span class="n">A</span><span class="p">[</span><span class="mi">2</span><span class="p">];</span>
 
-<span class="k">in</span> <span class="n">Julia</span><span class="p">:</span>
+<span class="kp">in</span> <span class="n">Julia</span><span class="o">:</span>
 <span class="k">immutable</span> <span class="n">B_A</span>
-    <span class="n">A_1</span><span class="p">::</span><span class="n">Cint</span>
-    <span class="n">A_2</span><span class="p">::</span><span class="n">Cint</span>
-    <span class="n">A_3</span><span class="p">::</span><span class="n">Cint</span>
+    <span class="n">A_1</span><span class="o">::</span><span class="kt">Cint</span>
+    <span class="n">A_2</span><span class="o">::</span><span class="kt">Cint</span>
+    <span class="n">A_3</span><span class="o">::</span><span class="kt">Cint</span>
 <span class="k">end</span>
-<span class="k">type</span><span class="nc"> B</span>
-    <span class="n">A</span><span class="p">::</span><span class="n">B_A</span>
+<span class="k">type</span> <span class="n">B</span>
+    <span class="n">A</span><span class="o">::</span><span class="n">B_A</span>
 <span class="k">end</span>
 <span class="n">b_a_2</span> <span class="o">=</span> <span class="n">B</span><span class="o">.</span><span class="n">A</span><span class="o">.</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
 </pre></div>
@@ -1255,13 +1256,13 @@ where <code class="docutils literal"><span class="pre">T</span></code> is a bits
 </pre></div>
 </div>
 <p>The following Julia code calls <code class="docutils literal"><span class="pre">dist</span></code> using <code class="docutils literal"><span class="pre">ccall</span></code>:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">typealias</span><span class="nc"> m256</span> <span class="n">NTuple</span><span class="p">{</span><span class="mi">8</span><span class="p">,</span><span class="n">VecElement</span><span class="p">{</span><span class="kt">Float32</span><span class="p">}}</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">typealias</span> <span class="n">m256</span> <span class="kt">NTuple</span><span class="p">{</span><span class="mi">8</span><span class="p">,</span><span class="n">VecElement</span><span class="p">{</span><span class="kt">Float32</span><span class="p">}}</span>
 
-<span class="n">a</span> <span class="o">=</span> <span class="n">m256</span><span class="p">(</span><span class="nb">ntuple</span><span class="p">(</span><span class="n">i</span><span class="o">-&gt;</span><span class="n">VecElement</span><span class="p">(</span><span class="n">sin</span><span class="p">(</span><span class="kt">Float32</span><span class="p">(</span><span class="n">i</span><span class="p">))),</span><span class="mi">8</span><span class="p">))</span>
-<span class="n">b</span> <span class="o">=</span> <span class="n">m256</span><span class="p">(</span><span class="nb">ntuple</span><span class="p">(</span><span class="n">i</span><span class="o">-&gt;</span><span class="n">VecElement</span><span class="p">(</span><span class="n">cos</span><span class="p">(</span><span class="kt">Float32</span><span class="p">(</span><span class="n">i</span><span class="p">))),</span><span class="mi">8</span><span class="p">))</span>
+<span class="n">a</span> <span class="o">=</span> <span class="n">m256</span><span class="p">(</span><span class="n">ntuple</span><span class="p">(</span><span class="n">i</span><span class="o">-&gt;</span><span class="n">VecElement</span><span class="p">(</span><span class="n">sin</span><span class="p">(</span><span class="kt">Float32</span><span class="p">(</span><span class="n">i</span><span class="p">))),</span><span class="mi">8</span><span class="p">))</span>
+<span class="n">b</span> <span class="o">=</span> <span class="n">m256</span><span class="p">(</span><span class="n">ntuple</span><span class="p">(</span><span class="n">i</span><span class="o">-&gt;</span><span class="n">VecElement</span><span class="p">(</span><span class="n">cos</span><span class="p">(</span><span class="kt">Float32</span><span class="p">(</span><span class="n">i</span><span class="p">))),</span><span class="mi">8</span><span class="p">))</span>
 
-<span class="k">function</span><span class="nf"> call_dist</span><span class="p">(</span><span class="n">a</span><span class="p">::</span><span class="n">m256</span><span class="p">,</span> <span class="n">b</span><span class="p">::</span><span class="n">m256</span><span class="p">)</span>
-    <span class="k">ccall</span><span class="p">((:</span><span class="n">dist</span><span class="p">,</span> <span class="s">&quot;libdist&quot;</span><span class="p">),</span> <span class="n">m256</span><span class="p">,</span> <span class="p">(</span><span class="n">m256</span><span class="p">,</span> <span class="n">m256</span><span class="p">),</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
+<span class="k">function</span> <span class="n">call_dist</span><span class="p">(</span><span class="n">a</span><span class="o">::</span><span class="n">m256</span><span class="p">,</span> <span class="n">b</span><span class="o">::</span><span class="n">m256</span><span class="p">)</span>
+    <span class="k">ccall</span><span class="p">((</span><span class="o">:</span><span class="n">dist</span><span class="p">,</span> <span class="s">&quot;libdist&quot;</span><span class="p">),</span> <span class="n">m256</span><span class="p">,</span> <span class="p">(</span><span class="n">m256</span><span class="p">,</span> <span class="n">m256</span><span class="p">),</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
 <span class="k">end</span>
 
 <span class="n">println</span><span class="p">(</span><span class="n">call_dist</span><span class="p">(</span><span class="n">a</span><span class="p">,</span><span class="n">b</span><span class="p">))</span>
@@ -1422,9 +1423,9 @@ To accomplish this within a <a class="reference internal" href="../../stdlib/c/#
 you need to first encapsulate the value inside an <code class="docutils literal"><span class="pre">Ref{T}</span></code> of the appropriate type.
 When you pass this <code class="docutils literal"><span class="pre">Ref</span></code> object as an argument,
 Julia will automatically pass a C pointer to the encapsulated data:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">width</span> <span class="o">=</span> <span class="n">Ref</span><span class="p">{</span><span class="n">Cint</span><span class="p">}(</span><span class="mi">0</span><span class="p">)</span>
-<span class="n">range</span> <span class="o">=</span> <span class="n">Ref</span><span class="p">{</span><span class="n">Cfloat</span><span class="p">}(</span><span class="mi">0</span><span class="p">)</span>
-<span class="k">ccall</span><span class="p">(:</span><span class="n">foo</span><span class="p">,</span> <span class="n">Void</span><span class="p">,</span> <span class="p">(</span><span class="n">Ref</span><span class="p">{</span><span class="n">Cint</span><span class="p">},</span> <span class="n">Ref</span><span class="p">{</span><span class="n">Cfloat</span><span class="p">}),</span> <span class="n">width</span><span class="p">,</span> <span class="n">range</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">width</span> <span class="o">=</span> <span class="kt">Ref</span><span class="p">{</span><span class="kt">Cint</span><span class="p">}(</span><span class="mi">0</span><span class="p">)</span>
+<span class="n">range</span> <span class="o">=</span> <span class="kt">Ref</span><span class="p">{</span><span class="kt">Cfloat</span><span class="p">}(</span><span class="mi">0</span><span class="p">)</span>
+<span class="k">ccall</span><span class="p">(</span><span class="o">:</span><span class="n">foo</span><span class="p">,</span> <span class="kt">Void</span><span class="p">,</span> <span class="p">(</span><span class="kt">Ref</span><span class="p">{</span><span class="kt">Cint</span><span class="p">},</span> <span class="kt">Ref</span><span class="p">{</span><span class="kt">Cfloat</span><span class="p">}),</span> <span class="n">width</span><span class="p">,</span> <span class="n">range</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>Upon return, the contents of <code class="docutils literal"><span class="pre">width</span></code> and <code class="docutils literal"><span class="pre">range</span></code> can be retrieved
@@ -1438,13 +1439,13 @@ they act like zero-dimensional arrays.</p>
 to a scalar argument should be passed instead of the scalar value itself
 (required for all Fortran function arguments, as noted above). The following
 example computes a dot product using a BLAS function.</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> compute_dot</span><span class="p">(</span><span class="n">DX</span><span class="p">::</span><span class="n">Vector</span><span class="p">{</span><span class="kt">Float64</span><span class="p">},</span> <span class="n">DY</span><span class="p">::</span><span class="n">Vector</span><span class="p">{</span><span class="kt">Float64</span><span class="p">})</span>
-  <span class="nb">assert</span><span class="p">(</span><span class="n">length</span><span class="p">(</span><span class="n">DX</span><span class="p">)</span> <span class="o">==</span> <span class="n">length</span><span class="p">(</span><span class="n">DY</span><span class="p">))</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">compute_dot</span><span class="p">(</span><span class="n">DX</span><span class="o">::</span><span class="kt">Vector</span><span class="p">{</span><span class="kt">Float64</span><span class="p">},</span> <span class="n">DY</span><span class="o">::</span><span class="kt">Vector</span><span class="p">{</span><span class="kt">Float64</span><span class="p">})</span>
+  <span class="n">assert</span><span class="p">(</span><span class="n">length</span><span class="p">(</span><span class="n">DX</span><span class="p">)</span> <span class="o">==</span> <span class="n">length</span><span class="p">(</span><span class="n">DY</span><span class="p">))</span>
   <span class="n">n</span> <span class="o">=</span> <span class="n">length</span><span class="p">(</span><span class="n">DX</span><span class="p">)</span>
   <span class="n">incx</span> <span class="o">=</span> <span class="n">incy</span> <span class="o">=</span> <span class="mi">1</span>
-  <span class="n">product</span> <span class="o">=</span> <span class="k">ccall</span><span class="p">((:</span><span class="n">ddot_</span><span class="p">,</span> <span class="s">&quot;libLAPACK&quot;</span><span class="p">),</span>
+  <span class="n">product</span> <span class="o">=</span> <span class="k">ccall</span><span class="p">((</span><span class="o">:</span><span class="n">ddot_</span><span class="p">,</span> <span class="s">&quot;libLAPACK&quot;</span><span class="p">),</span>
                   <span class="kt">Float64</span><span class="p">,</span>
-                  <span class="p">(</span><span class="n">Ptr</span><span class="p">{</span><span class="kt">Int32</span><span class="p">},</span> <span class="n">Ptr</span><span class="p">{</span><span class="kt">Float64</span><span class="p">},</span> <span class="n">Ptr</span><span class="p">{</span><span class="kt">Int32</span><span class="p">},</span> <span class="n">Ptr</span><span class="p">{</span><span class="kt">Float64</span><span class="p">},</span> <span class="n">Ptr</span><span class="p">{</span><span class="kt">Int32</span><span class="p">}),</span>
+                  <span class="p">(</span><span class="kt">Ptr</span><span class="p">{</span><span class="kt">Int32</span><span class="p">},</span> <span class="kt">Ptr</span><span class="p">{</span><span class="kt">Float64</span><span class="p">},</span> <span class="kt">Ptr</span><span class="p">{</span><span class="kt">Int32</span><span class="p">},</span> <span class="kt">Ptr</span><span class="p">{</span><span class="kt">Float64</span><span class="p">},</span> <span class="kt">Ptr</span><span class="p">{</span><span class="kt">Int32</span><span class="p">}),</span>
                   <span class="o">&amp;</span><span class="n">n</span><span class="p">,</span> <span class="n">DX</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">incx</span><span class="p">,</span> <span class="n">DY</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">incy</span><span class="p">)</span>
   <span class="k">return</span> <span class="n">product</span>
 <span class="k">end</span>
@@ -1464,20 +1465,20 @@ any expression, such as <code class="docutils literal"><span class="pre">&amp;0<
 <div class="section" id="some-examples-of-c-wrappers">
 <h2>Some Examples of C Wrappers<a class="headerlink" href="#some-examples-of-c-wrappers" title="Permalink to this headline">¶</a></h2>
 <p>Here is a simple example of a C wrapper that returns a <code class="docutils literal"><span class="pre">Ptr</span></code> type:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span><span class="nc"> gsl_permutation</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">type</span> <span class="n">gsl_permutation</span>
 <span class="k">end</span>
 
 <span class="c"># The corresponding C signature is</span>
 <span class="c">#     gsl_permutation * gsl_permutation_alloc (size_t n);</span>
-<span class="k">function</span><span class="nf"> permutation_alloc</span><span class="p">(</span><span class="n">n</span><span class="p">::</span><span class="n">Integer</span><span class="p">)</span>
+<span class="k">function</span> <span class="n">permutation_alloc</span><span class="p">(</span><span class="n">n</span><span class="o">::</span><span class="kt">Integer</span><span class="p">)</span>
     <span class="n">output_ptr</span> <span class="o">=</span> <span class="k">ccall</span><span class="p">(</span>
-        <span class="p">(:</span><span class="n">gsl_permutation_alloc</span><span class="p">,</span> <span class="p">:</span><span class="n">libgsl</span><span class="p">),</span> <span class="c">#name of C function and library</span>
-        <span class="n">Ptr</span><span class="p">{</span><span class="n">gsl_permutation</span><span class="p">},</span>              <span class="c">#output type</span>
-        <span class="p">(</span><span class="n">Csize_t</span><span class="p">,),</span>                        <span class="c">#tuple of input types</span>
+        <span class="p">(</span><span class="o">:</span><span class="n">gsl_permutation_alloc</span><span class="p">,</span> <span class="o">:</span><span class="n">libgsl</span><span class="p">),</span> <span class="c">#name of C function and library</span>
+        <span class="kt">Ptr</span><span class="p">{</span><span class="n">gsl_permutation</span><span class="p">},</span>              <span class="c">#output type</span>
+        <span class="p">(</span><span class="kt">Csize_t</span><span class="p">,),</span>                        <span class="c">#tuple of input types</span>
         <span class="n">n</span>                                  <span class="c">#name of Julia variable to pass in</span>
     <span class="p">)</span>
-    <span class="k">if</span> <span class="n">output_ptr</span><span class="o">==</span><span class="n">C_NULL</span> <span class="c"># Could not allocate memory</span>
-        <span class="nb">throw</span><span class="p">(</span><span class="n">OutOfMemoryError</span><span class="p">())</span>
+    <span class="k">if</span> <span class="n">output_ptr</span><span class="o">==</span><span class="nb">C_NULL</span> <span class="c"># Could not allocate memory</span>
+        <span class="n">throw</span><span class="p">(</span><span class="kt">OutOfMemoryError</span><span class="p">())</span>
     <span class="k">end</span>
     <span class="k">return</span> <span class="n">output_ptr</span>
 <span class="k">end</span>
@@ -1503,11 +1504,11 @@ convertable to a <code class="docutils literal"><span class="pre">Csize_t</span>
 <p>Here is a second example wrapping the corresponding destructor:</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="c"># The corresponding C signature is</span>
 <span class="c">#     void gsl_permutation_free (gsl_permutation * p);</span>
-<span class="k">function</span><span class="nf"> permutation_free</span><span class="p">(</span><span class="n">p</span><span class="p">::</span><span class="n">Ref</span><span class="p">{</span><span class="n">gsl_permutation</span><span class="p">})</span>
+<span class="k">function</span> <span class="n">permutation_free</span><span class="p">(</span><span class="n">p</span><span class="o">::</span><span class="kt">Ref</span><span class="p">{</span><span class="n">gsl_permutation</span><span class="p">})</span>
     <span class="k">ccall</span><span class="p">(</span>
-        <span class="p">(:</span><span class="n">gsl_permutation_free</span><span class="p">,</span> <span class="p">:</span><span class="n">libgsl</span><span class="p">),</span> <span class="c">#name of C function and library</span>
-        <span class="n">Void</span><span class="p">,</span>                             <span class="c">#output type</span>
-        <span class="p">(</span><span class="n">Ref</span><span class="p">{</span><span class="n">gsl_permutation</span><span class="p">},),</span>          <span class="c">#tuple of input types</span>
+        <span class="p">(</span><span class="o">:</span><span class="n">gsl_permutation_free</span><span class="p">,</span> <span class="o">:</span><span class="n">libgsl</span><span class="p">),</span> <span class="c">#name of C function and library</span>
+        <span class="kt">Void</span><span class="p">,</span>                             <span class="c">#output type</span>
+        <span class="p">(</span><span class="kt">Ref</span><span class="p">{</span><span class="n">gsl_permutation</span><span class="p">},),</span>          <span class="c">#tuple of input types</span>
         <span class="n">p</span>                                 <span class="c">#name of Julia variable to pass in</span>
     <span class="p">)</span>
 <span class="k">end</span>
@@ -1530,16 +1531,16 @@ wrapper and similarly in the <a class="reference internal" href="../../stdlib/c/
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="c"># The corresponding C signature is</span>
 <span class="c">#    int gsl_sf_bessel_Jn_array (int nmin, int nmax, double x,</span>
 <span class="c">#                                double result_array[])</span>
-<span class="k">function</span><span class="nf"> sf_bessel_Jn_array</span><span class="p">(</span><span class="n">nmin</span><span class="p">::</span><span class="n">Integer</span><span class="p">,</span> <span class="n">nmax</span><span class="p">::</span><span class="n">Integer</span><span class="p">,</span> <span class="n">x</span><span class="p">::</span><span class="n">Real</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">nmax</span><span class="o">&lt;</span><span class="n">nmin</span> <span class="nb">throw</span><span class="p">(</span><span class="n">DomainError</span><span class="p">())</span> <span class="k">end</span>
-    <span class="n">result_array</span> <span class="o">=</span> <span class="n">Array</span><span class="p">{</span><span class="n">Cdouble</span><span class="p">}(</span><span class="n">nmax</span><span class="o">-</span><span class="n">nmin</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span>
+<span class="k">function</span> <span class="n">sf_bessel_Jn_array</span><span class="p">(</span><span class="n">nmin</span><span class="o">::</span><span class="kt">Integer</span><span class="p">,</span> <span class="n">nmax</span><span class="o">::</span><span class="kt">Integer</span><span class="p">,</span> <span class="n">x</span><span class="o">::</span><span class="kt">Real</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">nmax</span><span class="o">&lt;</span><span class="n">nmin</span> <span class="n">throw</span><span class="p">(</span><span class="kt">DomainError</span><span class="p">())</span> <span class="k">end</span>
+    <span class="n">result_array</span> <span class="o">=</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">Cdouble</span><span class="p">}(</span><span class="n">nmax</span><span class="o">-</span><span class="n">nmin</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span>
     <span class="n">errorcode</span> <span class="o">=</span> <span class="k">ccall</span><span class="p">(</span>
-        <span class="p">(:</span><span class="n">gsl_sf_bessel_Jn_array</span><span class="p">,</span> <span class="p">:</span><span class="n">libgsl</span><span class="p">),</span> <span class="c">#name of C function and library</span>
-        <span class="n">Cint</span><span class="p">,</span>                               <span class="c">#output type</span>
-        <span class="p">(</span><span class="n">Cint</span><span class="p">,</span> <span class="n">Cint</span><span class="p">,</span> <span class="n">Cdouble</span><span class="p">,</span> <span class="n">Ref</span><span class="p">{</span><span class="n">Cdouble</span><span class="p">}),</span><span class="c">#tuple of input types</span>
+        <span class="p">(</span><span class="o">:</span><span class="n">gsl_sf_bessel_Jn_array</span><span class="p">,</span> <span class="o">:</span><span class="n">libgsl</span><span class="p">),</span> <span class="c">#name of C function and library</span>
+        <span class="kt">Cint</span><span class="p">,</span>                               <span class="c">#output type</span>
+        <span class="p">(</span><span class="kt">Cint</span><span class="p">,</span> <span class="kt">Cint</span><span class="p">,</span> <span class="kt">Cdouble</span><span class="p">,</span> <span class="kt">Ref</span><span class="p">{</span><span class="kt">Cdouble</span><span class="p">}),</span><span class="c">#tuple of input types</span>
         <span class="n">nmin</span><span class="p">,</span> <span class="n">nmax</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">result_array</span>         <span class="c">#names of Julia variables to pass in</span>
     <span class="p">)</span>
-    <span class="k">if</span> <span class="n">errorcode!</span><span class="o">=</span> <span class="mi">0</span> <span class="nb">error</span><span class="p">(</span><span class="s">&quot;GSL error code </span><span class="si">$errorcode</span><span class="s">&quot;</span><span class="p">)</span> <span class="k">end</span>
+    <span class="k">if</span> <span class="n">errorcode!</span><span class="o">=</span> <span class="mi">0</span> <span class="n">error</span><span class="p">(</span><span class="s">&quot;GSL error code </span><span class="si">$errorcode</span><span class="s">&quot;</span><span class="p">)</span> <span class="k">end</span>
     <span class="k">return</span> <span class="n">result_array</span>
 <span class="k">end</span>
 </pre></div>
@@ -1591,7 +1592,7 @@ other ways.</p>
 <p>A <code class="docutils literal"><span class="pre">(name,</span> <span class="pre">library)</span></code> function specification must be a constant expression.
 However, it is possible to use computed values as function names by staging
 through <code class="docutils literal"><span class="pre">eval</span></code> as follows:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="p">@</span><span class="n">eval</span> <span class="k">ccall</span><span class="p">((</span><span class="o">$</span><span class="p">(</span><span class="n">string</span><span class="p">(</span><span class="s">&quot;a&quot;</span><span class="p">,</span><span class="s">&quot;b&quot;</span><span class="p">)),</span><span class="s">&quot;lib&quot;</span><span class="p">),</span> <span class="o">...</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="nd">@eval</span> <span class="k">ccall</span><span class="p">((</span><span class="o">$</span><span class="p">(</span><span class="n">string</span><span class="p">(</span><span class="s">&quot;a&quot;</span><span class="p">,</span><span class="s">&quot;b&quot;</span><span class="p">)),</span><span class="s">&quot;lib&quot;</span><span class="p">),</span> <span class="o">...</span>
 </pre></div>
 </div>
 <p>This expression constructs a name using <code class="docutils literal"><span class="pre">string</span></code>, then substitutes this
@@ -1612,14 +1613,14 @@ This behavior occurs when the first <a class="reference internal" href="../../st
 such as local variables, function arguments, or non-constant globals.</p>
 <p>For example, you might lookup the function via <code class="docutils literal"><span class="pre">dlsym</span></code>,
 then cache it in a global variable for that session. For example:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">macro</span> <span class="nb">dlsym</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">lib</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">macro</span> <span class="n">dlsym</span><span class="p">(</span><span class="n">func</span><span class="p">,</span> <span class="n">lib</span><span class="p">)</span>
     <span class="n">z</span><span class="p">,</span> <span class="n">zlocal</span> <span class="o">=</span> <span class="n">gensym</span><span class="p">(</span><span class="n">string</span><span class="p">(</span><span class="n">func</span><span class="p">)),</span> <span class="n">gensym</span><span class="p">()</span>
-    <span class="n">eval</span><span class="p">(</span><span class="n">current_module</span><span class="p">(),:(</span><span class="kd">global</span> <span class="o">$</span><span class="n">z</span> <span class="o">=</span> <span class="n">C_NULL</span><span class="p">))</span>
+    <span class="n">eval</span><span class="p">(</span><span class="n">current_module</span><span class="p">(),</span><span class="o">:</span><span class="p">(</span><span class="kd">global</span> <span class="o">$</span><span class="n">z</span> <span class="o">=</span> <span class="nb">C_NULL</span><span class="p">))</span>
     <span class="n">z</span> <span class="o">=</span> <span class="n">esc</span><span class="p">(</span><span class="n">z</span><span class="p">)</span>
     <span class="k">quote</span>
-        <span class="k">let</span> <span class="o">$</span><span class="n">zlocal</span><span class="p">::</span><span class="n">Ptr</span><span class="p">{</span><span class="n">Void</span><span class="p">}</span> <span class="o">=</span> <span class="o">$</span><span class="n">z</span><span class="p">::</span><span class="n">Ptr</span><span class="p">{</span><span class="n">Void</span><span class="p">}</span>
-            <span class="k">if</span> <span class="o">$</span><span class="n">zlocal</span> <span class="o">==</span> <span class="n">C_NULL</span>
-               <span class="o">$</span><span class="n">zlocal</span> <span class="o">=</span> <span class="nb">dlsym</span><span class="p">(</span><span class="o">$</span><span class="p">(</span><span class="n">esc</span><span class="p">(</span><span class="n">lib</span><span class="p">))::</span><span class="n">Ptr</span><span class="p">{</span><span class="n">Void</span><span class="p">},</span> <span class="o">$</span><span class="p">(</span><span class="n">esc</span><span class="p">(</span><span class="n">func</span><span class="p">)))</span>
+        <span class="k">let</span> <span class="o">$</span><span class="n">zlocal</span><span class="o">::</span><span class="kt">Ptr</span><span class="p">{</span><span class="kt">Void</span><span class="p">}</span> <span class="o">=</span> <span class="o">$</span><span class="n">z</span><span class="o">::</span><span class="kt">Ptr</span><span class="p">{</span><span class="kt">Void</span><span class="p">}</span>
+            <span class="k">if</span> <span class="o">$</span><span class="n">zlocal</span> <span class="o">==</span> <span class="nb">C_NULL</span>
+               <span class="o">$</span><span class="n">zlocal</span> <span class="o">=</span> <span class="n">dlsym</span><span class="p">(</span><span class="o">$</span><span class="p">(</span><span class="n">esc</span><span class="p">(</span><span class="n">lib</span><span class="p">))</span><span class="o">::</span><span class="kt">Ptr</span><span class="p">{</span><span class="kt">Void</span><span class="p">},</span> <span class="o">$</span><span class="p">(</span><span class="n">esc</span><span class="p">(</span><span class="n">func</span><span class="p">)))</span>
                <span class="kd">global</span> <span class="o">$</span><span class="n">z</span> <span class="o">=</span> <span class="o">$</span><span class="n">zlocal</span>
             <span class="k">end</span>
             <span class="o">$</span><span class="n">zlocal</span>
@@ -1627,8 +1628,8 @@ then cache it in a global variable for that session. For example:</p>
     <span class="k">end</span>
 <span class="k">end</span>
 
-<span class="n">mylibvar</span> <span class="o">=</span> <span class="nb">dlopen</span><span class="p">(</span><span class="s">&quot;mylib&quot;</span><span class="p">)</span>
-<span class="k">ccall</span><span class="p">(@</span><span class="nb">dlsym</span><span class="p">(</span><span class="s">&quot;myfunc&quot;</span><span class="p">,</span> <span class="n">mylibvar</span><span class="p">),</span> <span class="n">Void</span><span class="p">,</span> <span class="p">())</span>
+<span class="n">mylibvar</span> <span class="o">=</span> <span class="n">dlopen</span><span class="p">(</span><span class="s">&quot;mylib&quot;</span><span class="p">)</span>
+<span class="k">ccall</span><span class="p">(</span><span class="nd">@dlsym</span><span class="p">(</span><span class="s">&quot;myfunc&quot;</span><span class="p">,</span> <span class="n">mylibvar</span><span class="p">),</span> <span class="kt">Void</span><span class="p">,</span> <span class="p">())</span>
 </pre></div>
 </div>
 </div>
@@ -1640,8 +1641,8 @@ the platform-default C calling convention is used. Other supported
 conventions are: <code class="docutils literal"><span class="pre">stdcall</span></code>, <code class="docutils literal"><span class="pre">cdecl</span></code>, <code class="docutils literal"><span class="pre">fastcall</span></code>, and <code class="docutils literal"><span class="pre">thiscall</span></code>.
 For example (from <code class="docutils literal"><span class="pre">base/libc.jl</span></code>) we see the same <code class="docutils literal"><span class="pre">gethostname</span></code> <a class="reference internal" href="../../stdlib/c/#Base.ccall" title="Base.ccall"><code class="xref jl jl-func docutils literal"><span class="pre">ccall()</span></code></a> as above,
 but with the correct signature for Windows:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">hn</span> <span class="o">=</span> <span class="n">Array</span><span class="p">{</span><span class="n">UInt8</span><span class="p">}(</span><span class="mi">256</span><span class="p">)</span>
-<span class="n">err</span> <span class="o">=</span> <span class="k">ccall</span><span class="p">(:</span><span class="n">gethostname</span><span class="p">,</span> <span class="n">stdcall</span><span class="p">,</span> <span class="kt">Int32</span><span class="p">,</span> <span class="p">(</span><span class="n">Ptr</span><span class="p">{</span><span class="n">UInt8</span><span class="p">},</span> <span class="n">UInt32</span><span class="p">),</span> <span class="n">hn</span><span class="p">,</span> <span class="n">length</span><span class="p">(</span><span class="n">hn</span><span class="p">))</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">hn</span> <span class="o">=</span> <span class="kt">Array</span><span class="p">{</span><span class="kt">UInt8</span><span class="p">}(</span><span class="mi">256</span><span class="p">)</span>
+<span class="n">err</span> <span class="o">=</span> <span class="k">ccall</span><span class="p">(</span><span class="o">:</span><span class="n">gethostname</span><span class="p">,</span> <span class="n">stdcall</span><span class="p">,</span> <span class="kt">Int32</span><span class="p">,</span> <span class="p">(</span><span class="kt">Ptr</span><span class="p">{</span><span class="kt">UInt8</span><span class="p">},</span> <span class="kt">UInt32</span><span class="p">),</span> <span class="n">hn</span><span class="p">,</span> <span class="n">length</span><span class="p">(</span><span class="n">hn</span><span class="p">))</span>
 </pre></div>
 </div>
 <p>For more information, please see the <a class="reference external" href="http://llvm.org/docs/LangRef.html#calling-conventions">LLVM Language Reference</a>.</p>
@@ -1652,12 +1653,12 @@ but with the correct signature for Windows:</p>
 <a class="reference internal" href="../../stdlib/c/#Base.cglobal" title="Base.cglobal"><code class="xref jl jl-func docutils literal"><span class="pre">cglobal()</span></code></a> function. The arguments to <a class="reference internal" href="../../stdlib/c/#Base.cglobal" title="Base.cglobal"><code class="xref jl jl-func docutils literal"><span class="pre">cglobal()</span></code></a> are a symbol specification
 identical to that used by <a class="reference internal" href="../../stdlib/c/#Base.ccall" title="Base.ccall"><code class="xref jl jl-func docutils literal"><span class="pre">ccall()</span></code></a>, and a type describing the value stored in
 the variable:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">julia</span><span class="o">&gt;</span> <span class="n">cglobal</span><span class="p">((:</span><span class="n">errno</span><span class="p">,:</span><span class="n">libc</span><span class="p">),</span> <span class="kt">Int32</span><span class="p">)</span>
-<span class="n">Ptr</span><span class="p">{</span><span class="kt">Int32</span><span class="p">}</span> <span class="p">@</span><span class="mh">0x00007f418d0816b8</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span>julia&gt; cglobal((:errno,:libc), Int32)
+Ptr{Int32} @0x00007f418d0816b8
 </pre></div>
 </div>
 <p>The result is a pointer giving the address of the value. The value can be
-manipulated through this pointer using <a class="reference internal" href="../../stdlib/c/#Base.unsafe_load" title="Base.unsafe_load"><code class="xref jl jl-func docutils literal"><span class="pre">unsafe_load()</span></code></a> and <code class="xref jl jl-func docutils literal"><span class="pre">unsafe_store()</span></code>.</p>
+manipulated through this pointer using <a class="reference internal" href="../../stdlib/c/#Base.unsafe_load" title="Base.unsafe_load"><code class="xref jl jl-func docutils literal"><span class="pre">unsafe_load()</span></code></a> and <a class="reference internal" href="../../stdlib/c/#Base.unsafe_store!" title="Base.unsafe_store!"><code class="xref jl jl-func docutils literal"><span class="pre">unsafe_store!()</span></code></a>.</p>
 </div>
 <div class="section" id="accessing-data-through-a-pointer">
 <h2>Accessing Data through a Pointer<a class="headerlink" href="#accessing-data-through-a-pointer" title="Permalink to this headline">¶</a></h2>
@@ -1722,7 +1723,7 @@ may result in a single wakeup notification to the condition.</p>
 <div class="section" id="more-about-callbacks">
 <h2>More About Callbacks<a class="headerlink" href="#more-about-callbacks" title="Permalink to this headline">¶</a></h2>
 <p>For more details on how to pass callbacks to C libraries, see this
-<a class="reference external" href="http://julialang.org/blog/2013/05/callback">blog post</a>.</p>
+<a class="reference external" href="https://julialang.org/blog/2013/05/callback">blog post</a>.</p>
 </div>
 <div class="section" id="c">
 <h2>C++<a class="headerlink" href="#c" title="Permalink to this headline">¶</a></h2>
@@ -1767,7 +1768,7 @@ may result in a single wakeup notification to the condition.</p>
     <script type="text/javascript">
         var DOCUMENTATION_OPTIONS = {
             URL_ROOT:'../../',
-            VERSION:'0.5.1-pre',
+            VERSION:'0.5.3-pre',
             COLLAPSE_INDEX:false,
             FILE_SUFFIX:'',
             HAS_SOURCE:  true

@@ -7,7 +7,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Julia Functions &mdash; Julia Language 0.5.1-pre documentation</title>
+  <title>Julia Functions &mdash; Julia Language 0.5.3-pre documentation</title>
   
 
   
@@ -30,7 +30,7 @@
   
     <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
   
-    <link rel="top" title="Julia Language 0.5.1-pre documentation" href="../../"/>
+    <link rel="top" title="Julia Language 0.5.3-pre documentation" href="../../"/>
         <link rel="up" title="Documentation of Julia’s Internals" href="../julia/"/>
         <link rel="next" title="Calling Conventions" href="../callconv/"/>
         <link rel="prev" title="Memory layout of Julia Objects" href="../object/"/> 
@@ -150,6 +150,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#man-parametric-types">Parametric Types</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#type-aliases">Type Aliases</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#operations-on-types">Operations on Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/types/#custom-pretty-printing">Custom pretty-printing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#value-types">&#8220;Value types&#8221;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#nullable-types-representing-missing-values">Nullable Types: Representing Missing Values</a></li>
 </ul>
@@ -520,7 +521,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../ast/">Julia ASTs</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../types/">More about types</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../object/">Memory layout of Julia Objects</a></li>
-<li class="toctree-l2 current"><a class="current reference internal" href="">Julia Functions</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Julia Functions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../callconv/">Calling Conventions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../cartesian/">Base.Cartesian</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../meta/">Talking to the compiler (the <code class="docutils literal"><span class="pre">:meta</span></code> mechanism)</a></li>
@@ -625,7 +626,7 @@ method is (1) a tuple type, and (2) code for the body of the method.
 from what would be the type of the first argument. This is much more complicated
 than the corresponding procedure during dispatch, since the argument tuple
 type might be abstract. For example, we can define:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="p">(::</span><span class="n">Union</span><span class="p">{</span><span class="n">Foo</span><span class="p">{</span><span class="kt">Int</span><span class="p">},</span><span class="n">Foo</span><span class="p">{</span><span class="kt">Int8</span><span class="p">}})(</span><span class="n">x</span><span class="p">)</span> <span class="o">=</span> <span class="mi">0</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="p">(</span><span class="o">::</span><span class="kt">Union</span><span class="p">{</span><span class="n">Foo</span><span class="p">{</span><span class="kt">Int</span><span class="p">},</span><span class="n">Foo</span><span class="p">{</span><span class="kt">Int8</span><span class="p">}})(</span><span class="n">x</span><span class="p">)</span> <span class="o">=</span> <span class="mi">0</span>
 </pre></div>
 </div>
 <p>which works since all possible matching methods would belong to the same method
@@ -645,19 +646,19 @@ with a <code class="docutils literal"><span class="pre">#</span></code> prepende
 <h2>Closures<a class="headerlink" href="#closures" title="Permalink to this headline">¶</a></h2>
 <p>A closure is simply a callable object with field names corresponding to
 captured variables. For example, the following code:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> adder</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">adder</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">y</span><span class="o">-&gt;</span><span class="n">x</span><span class="o">+</span><span class="n">y</span>
 <span class="k">end</span>
 </pre></div>
 </div>
 <p>is lowered to (roughly):</p>
 <div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">immutable</span> <span class="c">##1{T}</span>
-    <span class="n">x</span><span class="p">::</span><span class="n">T</span>
+    <span class="n">x</span><span class="o">::</span><span class="n">T</span>
 <span class="k">end</span>
 
-<span class="p">(</span><span class="n">_</span><span class="p">::</span><span class="c">##1)(y) = _.x + y</span>
+<span class="p">(</span><span class="n">_</span><span class="o">::</span><span class="c">##1)(y) = _.x + y</span>
 
-<span class="k">function</span><span class="nf"> adder</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<span class="k">function</span> <span class="n">adder</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
     <span class="k">return</span> <span class="c">##1(x)</span>
 <span class="k">end</span>
 </pre></div>
@@ -668,7 +669,7 @@ captured variables. For example, the following code:</p>
 <p>A constructor call is just a call to a type. The type of most types is <code class="docutils literal"><span class="pre">DataType</span></code>,
 so the method table for <code class="docutils literal"><span class="pre">DataType</span></code> contains most constructor definitions.
 One wrinkle is the fallback definition that makes all types callable via <code class="docutils literal"><span class="pre">convert</span></code>:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="p">(::</span><span class="n">Type</span><span class="p">{</span><span class="n">T</span><span class="p">}){</span><span class="n">T</span><span class="p">}(</span><span class="n">args</span><span class="o">...</span><span class="p">)</span> <span class="o">=</span> <span class="nb">convert</span><span class="p">(</span><span class="n">T</span><span class="p">,</span> <span class="n">args</span><span class="o">...</span><span class="p">)::</span><span class="n">T</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="p">(</span><span class="o">::</span><span class="kt">Type</span><span class="p">{</span><span class="n">T</span><span class="p">}){</span><span class="n">T</span><span class="p">}(</span><span class="n">args</span><span class="o">...</span><span class="p">)</span> <span class="o">=</span> <span class="n">convert</span><span class="p">(</span><span class="n">T</span><span class="p">,</span> <span class="n">args</span><span class="o">...</span><span class="p">)</span><span class="o">::</span><span class="n">T</span>
 </pre></div>
 </div>
 <p>In this definition the function type is abstract, which is not normally supported.
@@ -678,8 +679,8 @@ To make this work, all subtypes of <code class="docutils literal"><span class="p
 <div class="section" id="builtins">
 <h2>Builtins<a class="headerlink" href="#builtins" title="Permalink to this headline">¶</a></h2>
 <p>The &#8220;builtin&#8221; functions, defined in the <code class="docutils literal"><span class="pre">Core</span></code> module, are:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="nb">is</span> <span class="nb">typeof</span> <span class="nb">sizeof</span> <span class="n">issubtype</span> <span class="nb">isa</span> <span class="n">typeassert</span> <span class="nb">throw</span> <span class="nb">tuple</span> <span class="n">getfield</span> <span class="n">setfield!</span> <span class="n">fieldtype</span>
-<span class="n">nfields</span> <span class="n">isdefined</span> <span class="n">arrayref</span> <span class="n">arrayset</span> <span class="n">arraysize</span> <span class="nb">applicable</span> <span class="nb">invoke</span> <span class="n">apply_type</span> <span class="n">_apply</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">is</span> <span class="n">typeof</span> <span class="n">sizeof</span> <span class="n">issubtype</span> <span class="n">isa</span> <span class="n">typeassert</span> <span class="n">throw</span> <span class="n">tuple</span> <span class="n">getfield</span> <span class="n">setfield!</span> <span class="n">fieldtype</span>
+<span class="n">nfields</span> <span class="n">isdefined</span> <span class="n">arrayref</span> <span class="n">arrayset</span> <span class="n">arraysize</span> <span class="n">applicable</span> <span class="n">invoke</span> <span class="n">apply_type</span> <span class="n">_apply</span>
 <span class="n">_expr</span> <span class="n">svec</span>
 </pre></div>
 </div>
@@ -710,7 +711,7 @@ function.</p>
 <p>The easiest way to understand the process is to look at how a keyword argument
 method definition is lowered.
 The code:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> circle</span><span class="p">(</span><span class="n">center</span><span class="p">,</span> <span class="n">radius</span><span class="p">;</span> <span class="n">color</span> <span class="o">=</span> <span class="n">black</span><span class="p">,</span> <span class="n">fill</span><span class="p">::</span><span class="kt">Bool</span> <span class="o">=</span> <span class="n">true</span><span class="p">,</span> <span class="n">options</span><span class="o">...</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">circle</span><span class="p">(</span><span class="n">center</span><span class="p">,</span> <span class="n">radius</span><span class="p">;</span> <span class="n">color</span> <span class="o">=</span> <span class="n">black</span><span class="p">,</span> <span class="n">fill</span><span class="o">::</span><span class="kt">Bool</span> <span class="o">=</span> <span class="kc">true</span><span class="p">,</span> <span class="n">options</span><span class="o">...</span><span class="p">)</span>
     <span class="c"># draw</span>
 <span class="k">end</span>
 </pre></div>
@@ -719,24 +720,24 @@ The code:</p>
 The first is a function that accepts all arguments (including keywords) as
 positional arguments, and includes the code for the method body.
 It has an auto-generated name:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> </span><span class="o">#</span><span class="n">circle</span><span class="c">#1(color, fill::Bool, options, circle, center, radius)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="c">#circle#1(color, fill::Bool, options, circle, center, radius)</span>
     <span class="c"># draw</span>
 <span class="k">end</span>
 </pre></div>
 </div>
 <p>The second method is an ordinary definition for the original <code class="docutils literal"><span class="pre">circle</span></code> function,
 which handles the case where no keyword arguments are passed:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> circle</span><span class="p">(</span><span class="n">center</span><span class="p">,</span> <span class="n">radius</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">circle</span><span class="p">(</span><span class="n">center</span><span class="p">,</span> <span class="n">radius</span><span class="p">)</span>
     <span class="c">#circle#1(black, true, Any[], circle, center, radius)</span>
 <span class="k">end</span>
 </pre></div>
 </div>
 <p>This simply dispatches to the first method, passing along default values.
 Finally there is the kwsorter definition:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> </span><span class="o">(:</span><span class="p">:</span><span class="n">Core</span><span class="o">.</span><span class="n">kwftype</span><span class="p">(</span><span class="nb">typeof</span><span class="p">(</span><span class="n">circle</span><span class="p">)))(</span><span class="n">kw</span><span class="p">::</span><span class="n">Array</span><span class="p">,</span> <span class="n">circle</span><span class="p">,</span> <span class="n">center</span><span class="p">,</span> <span class="n">radius</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="p">(</span><span class="o">::</span><span class="n">Core</span><span class="o">.</span><span class="n">kwftype</span><span class="p">(</span><span class="n">typeof</span><span class="p">(</span><span class="n">circle</span><span class="p">)))(</span><span class="n">kw</span><span class="o">::</span><span class="kt">Array</span><span class="p">,</span> <span class="n">circle</span><span class="p">,</span> <span class="n">center</span><span class="p">,</span> <span class="n">radius</span><span class="p">)</span>
     <span class="n">options</span> <span class="o">=</span> <span class="kt">Any</span><span class="p">[]</span>
-    <span class="n">color</span> <span class="o">=</span> <span class="n">arg</span> <span class="n">associated</span> <span class="n">with</span> <span class="p">:</span><span class="n">color</span><span class="p">,</span> <span class="n">or</span> <span class="n">black</span> <span class="k">if</span> <span class="n">not</span> <span class="n">found</span>
-    <span class="n">fill</span> <span class="o">=</span> <span class="n">arg</span> <span class="n">associated</span> <span class="n">with</span> <span class="p">:</span><span class="n">fill</span><span class="p">,</span> <span class="n">or</span> <span class="n">true</span> <span class="k">if</span> <span class="n">not</span> <span class="n">found</span>
+    <span class="n">color</span> <span class="o">=</span> <span class="n">arg</span> <span class="n">associated</span> <span class="n">with</span> <span class="o">:</span><span class="n">color</span><span class="p">,</span> <span class="n">or</span> <span class="n">black</span> <span class="k">if</span> <span class="n">not</span> <span class="n">found</span>
+    <span class="n">fill</span> <span class="o">=</span> <span class="n">arg</span> <span class="n">associated</span> <span class="n">with</span> <span class="o">:</span><span class="n">fill</span><span class="p">,</span> <span class="n">or</span> <span class="kc">true</span> <span class="k">if</span> <span class="n">not</span> <span class="n">found</span>
     <span class="c"># push remaining elements of kw into options array</span>
     <span class="c">#circle#1(color, fill, options, circle, center, radius)</span>
 <span class="k">end</span>
@@ -757,7 +758,7 @@ For example the call:</p>
 </pre></div>
 </div>
 <p>is lowered to:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">kwfunc</span><span class="p">(</span><span class="n">circle</span><span class="p">)(</span><span class="kt">Any</span><span class="p">[:</span><span class="n">color</span><span class="p">,</span><span class="n">red</span><span class="p">,</span><span class="n">other</span><span class="o">...</span><span class="p">],</span> <span class="n">circle</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">),</span> <span class="mf">1.0</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="n">kwfunc</span><span class="p">(</span><span class="n">circle</span><span class="p">)(</span><span class="kt">Any</span><span class="p">[</span><span class="o">:</span><span class="n">color</span><span class="p">,</span><span class="n">red</span><span class="p">,</span><span class="n">other</span><span class="o">...</span><span class="p">],</span> <span class="n">circle</span><span class="p">,</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">),</span> <span class="mf">1.0</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>The unpacking procedure represented here as <code class="docutils literal"><span class="pre">other...</span></code> actually
@@ -852,17 +853,17 @@ A &#8220;replaced module&#8221; is one that satisfies the condition
 has taken its name and place.</p>
 <p>Another type inference worst case was triggered by the following code from
 quadgk.jl:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span><span class="nf"> do_quadgk</span><span class="p">{</span><span class="n">Tw</span><span class="p">}(</span><span class="n">f</span><span class="p">,</span> <span class="n">s</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="p">::</span><span class="n">Type</span><span class="p">{</span><span class="n">Tw</span><span class="p">},</span> <span class="n">abstol</span><span class="p">,</span> <span class="n">reltol</span><span class="p">,</span> <span class="n">maxevals</span><span class="p">,</span> <span class="n">nrm</span><span class="p">)</span>
-    <span class="k">if</span> <span class="n">eltype</span><span class="p">(</span><span class="n">s</span><span class="p">)</span> <span class="o">&lt;:</span> <span class="n">Real</span> <span class="c"># check for infinite or semi-infinite intervals</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">function</span> <span class="n">do_quadgk</span><span class="p">{</span><span class="n">Tw</span><span class="p">}(</span><span class="n">f</span><span class="p">,</span> <span class="n">s</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="o">::</span><span class="kt">Type</span><span class="p">{</span><span class="n">Tw</span><span class="p">},</span> <span class="n">abstol</span><span class="p">,</span> <span class="n">reltol</span><span class="p">,</span> <span class="n">maxevals</span><span class="p">,</span> <span class="n">nrm</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">eltype</span><span class="p">(</span><span class="n">s</span><span class="p">)</span> <span class="o">&lt;:</span> <span class="kt">Real</span> <span class="c"># check for infinite or semi-infinite intervals</span>
         <span class="n">s1</span> <span class="o">=</span> <span class="n">s</span><span class="p">[</span><span class="mi">1</span><span class="p">];</span> <span class="n">s2</span> <span class="o">=</span> <span class="n">s</span><span class="p">[</span><span class="k">end</span><span class="p">];</span> <span class="n">inf1</span> <span class="o">=</span> <span class="n">isinf</span><span class="p">(</span><span class="n">s1</span><span class="p">);</span> <span class="n">inf2</span> <span class="o">=</span> <span class="n">isinf</span><span class="p">(</span><span class="n">s2</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">inf1</span> <span class="o">||</span> <span class="n">inf2</span>
             <span class="k">if</span> <span class="n">inf1</span> <span class="o">&amp;&amp;</span> <span class="n">inf2</span> <span class="c"># x = t/(1-t^2) coordinate transformation</span>
                 <span class="k">return</span> <span class="n">do_quadgk</span><span class="p">(</span><span class="n">t</span> <span class="o">-&gt;</span> <span class="k">begin</span> <span class="n">t2</span> <span class="o">=</span> <span class="n">t</span><span class="o">*</span><span class="n">t</span><span class="p">;</span> <span class="n">den</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">/</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">t2</span><span class="p">);</span>
                                             <span class="n">f</span><span class="p">(</span><span class="n">t</span><span class="o">*</span><span class="n">den</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="mi">1</span><span class="o">+</span><span class="n">t2</span><span class="p">)</span><span class="o">*</span><span class="n">den</span><span class="o">*</span><span class="n">den</span><span class="p">;</span> <span class="k">end</span><span class="p">,</span>
-                                 <span class="n">map</span><span class="p">(</span><span class="n">x</span> <span class="o">-&gt;</span> <span class="n">isinf</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">?</span> <span class="n">copysign</span><span class="p">(</span><span class="n">one</span><span class="p">(</span><span class="n">x</span><span class="p">),</span> <span class="n">x</span><span class="p">)</span> <span class="p">:</span> <span class="mi">2</span><span class="n">x</span> <span class="o">/</span> <span class="p">(</span><span class="mi">1</span><span class="o">+</span><span class="n">hypot</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="n">x</span><span class="p">)),</span> <span class="n">s</span><span class="p">),</span>
+                                 <span class="n">map</span><span class="p">(</span><span class="n">x</span> <span class="o">-&gt;</span> <span class="n">isinf</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="o">?</span> <span class="n">copysign</span><span class="p">(</span><span class="n">one</span><span class="p">(</span><span class="n">x</span><span class="p">),</span> <span class="n">x</span><span class="p">)</span> <span class="o">:</span> <span class="mi">2</span><span class="n">x</span> <span class="o">/</span> <span class="p">(</span><span class="mi">1</span><span class="o">+</span><span class="n">hypot</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="n">x</span><span class="p">)),</span> <span class="n">s</span><span class="p">),</span>
                                  <span class="n">n</span><span class="p">,</span> <span class="n">Tw</span><span class="p">,</span> <span class="n">abstol</span><span class="p">,</span> <span class="n">reltol</span><span class="p">,</span> <span class="n">maxevals</span><span class="p">,</span> <span class="n">nrm</span><span class="p">)</span>
             <span class="k">end</span>
-            <span class="n">s0</span><span class="p">,</span><span class="n">si</span> <span class="o">=</span> <span class="n">inf1</span> <span class="o">?</span> <span class="p">(</span><span class="n">s2</span><span class="p">,</span><span class="n">s1</span><span class="p">)</span> <span class="p">:</span> <span class="p">(</span><span class="n">s1</span><span class="p">,</span><span class="n">s2</span><span class="p">)</span>
+            <span class="n">s0</span><span class="p">,</span><span class="n">si</span> <span class="o">=</span> <span class="n">inf1</span> <span class="o">?</span> <span class="p">(</span><span class="n">s2</span><span class="p">,</span><span class="n">s1</span><span class="p">)</span> <span class="o">:</span> <span class="p">(</span><span class="n">s1</span><span class="p">,</span><span class="n">s2</span><span class="p">)</span>
             <span class="k">if</span> <span class="n">si</span> <span class="o">&lt;</span> <span class="mi">0</span> <span class="c"># x = s0 - t/(1-t)</span>
                 <span class="k">return</span> <span class="n">do_quadgk</span><span class="p">(</span><span class="n">t</span> <span class="o">-&gt;</span> <span class="k">begin</span> <span class="n">den</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">/</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">t</span><span class="p">);</span>
                                             <span class="n">f</span><span class="p">(</span><span class="n">s0</span> <span class="o">-</span> <span class="n">t</span><span class="o">*</span><span class="n">den</span><span class="p">)</span> <span class="o">*</span> <span class="n">den</span><span class="o">*</span><span class="n">den</span><span class="p">;</span> <span class="k">end</span><span class="p">,</span>
@@ -923,7 +924,7 @@ in depth down the stack.</p>
     <script type="text/javascript">
         var DOCUMENTATION_OPTIONS = {
             URL_ROOT:'../../',
-            VERSION:'0.5.1-pre',
+            VERSION:'0.5.3-pre',
             COLLAPSE_INDEX:false,
             FILE_SUFFIX:'',
             HAS_SOURCE:  true

@@ -675,6 +675,8 @@ Text I/O
 
    Return the nominal size of the screen that may be used for rendering output to this io object
 
+.. _man-multimedia-io:
+
 Multimedia I/O
 --------------
 

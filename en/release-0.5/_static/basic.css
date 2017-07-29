@@ -4,7 +4,7 @@
  *
  * Sphinx stylesheet -- basic theme.
  *
- * :copyright: Copyright 2007-2015 by the Sphinx team, see AUTHORS.
+ * :copyright: Copyright 2007-2016 by the Sphinx team, see AUTHORS.
  * :license: BSD, see LICENSE for details.
  *
  */
@@ -52,6 +52,8 @@ div.sphinxsidebar {
     width: 230px;
     margin-left: -100%;
     font-size: 90%;
+    word-wrap: break-word;
+    overflow-wrap : break-word;
 }
 
 div.sphinxsidebar ul {
@@ -81,10 +83,6 @@ div.sphinxsidebar input {
 
 div.sphinxsidebar #searchbox input[type="text"] {
     width: 170px;
-}
-
-div.sphinxsidebar #searchbox input[type="submit"] {
-    width: 30px;
 }
 
 img {
@@ -186,6 +184,13 @@ div.genindex-jumpbox {
 }
 
 /* -- general body styles --------------------------------------------------- */
+
+div.body p, div.body dd, div.body li, div.body blockquote {
+    -moz-hyphens: auto;
+    -ms-hyphens: auto;
+    -webkit-hyphens: auto;
+    hyphens: auto;
+}
 
 a.headerlink {
     visibility: hidden;

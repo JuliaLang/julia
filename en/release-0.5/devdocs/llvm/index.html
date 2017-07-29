@@ -7,7 +7,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Working with LLVM &mdash; Julia Language 0.5.1-pre documentation</title>
+  <title>Working with LLVM &mdash; Julia Language 0.5.3-pre documentation</title>
   
 
   
@@ -30,7 +30,7 @@
   
     <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
   
-    <link rel="top" title="Julia Language 0.5.1-pre documentation" href="../../"/>
+    <link rel="top" title="Julia Language 0.5.3-pre documentation" href="../../"/>
         <link rel="up" title="Documentation of Julia’s Internals" href="../julia/"/>
         <link rel="next" title="printf() and stdio in the Julia runtime" href="../stdio/"/>
         <link rel="prev" title="System Image Building" href="../sysimg/"/> 
@@ -150,6 +150,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#man-parametric-types">Parametric Types</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#type-aliases">Type Aliases</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#operations-on-types">Operations on Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../manual/types/#custom-pretty-printing">Custom pretty-printing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#value-types">&#8220;Value types&#8221;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../manual/types/#nullable-types-representing-missing-values">Nullable Types: Representing Missing Values</a></li>
 </ul>
@@ -526,7 +527,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../meta/">Talking to the compiler (the <code class="docutils literal"><span class="pre">:meta</span></code> mechanism)</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../subarrays/">SubArrays</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../sysimg/">System Image Building</a></li>
-<li class="toctree-l2 current"><a class="current reference internal" href="">Working with LLVM</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Working with LLVM</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../stdio/">printf() and stdio in the Julia runtime</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../boundscheck/">Bounds checking</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../locks/">Proper maintenance and care of multi-threading locks</a></li>
@@ -640,7 +641,7 @@ in <code class="docutils literal"><span class="pre">src/codegen.cpp</span></code
 <h2>Building Julia with a different version of LLVM<a class="headerlink" href="#building-julia-with-a-different-version-of-llvm" title="Permalink to this headline">¶</a></h2>
 <p>The default version of LLVM is specified in <code class="docutils literal"><span class="pre">deps/Versions.make</span></code>.
 You can override it by creating a file called <code class="docutils literal"><span class="pre">Make.user</span></code> in the top-level directory and adding a line to it such as:</p>
-<div class="highlight-make"><div class="highlight"><pre><span></span><span class="nv">LLVM_VER</span> <span class="o">=</span> 3.5.0
+<div class="highlight-make"><div class="highlight"><pre><span></span><span class="nv">LLVM_VER</span> <span class="o">=</span> <span class="m">3</span>.5.0
 </pre></div>
 </div>
 <p>Besides the LLVM release numerals, you can
@@ -716,7 +717,7 @@ The best strategy is to create a code example in a form where you can use LLVM&#
     <script type="text/javascript">
         var DOCUMENTATION_OPTIONS = {
             URL_ROOT:'../../',
-            VERSION:'0.5.1-pre',
+            VERSION:'0.5.3-pre',
             COLLAPSE_INDEX:false,
             FILE_SUFFIX:'',
             HAS_SOURCE:  true

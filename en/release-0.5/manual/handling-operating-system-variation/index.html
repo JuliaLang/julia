@@ -7,7 +7,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Handling Operating System Variation &mdash; Julia Language 0.5.1-pre documentation</title>
+  <title>Handling Operating System Variation &mdash; Julia Language 0.5.3-pre documentation</title>
   
 
   
@@ -30,7 +30,7 @@
   
     <link rel="stylesheet" href="../../_static/julia.css" type="text/css" />
   
-    <link rel="top" title="Julia Language 0.5.1-pre documentation" href="../../"/>
+    <link rel="top" title="Julia Language 0.5.3-pre documentation" href="../../"/>
         <link rel="next" title="Interacting With Julia" href="../interacting-with-julia/"/>
         <link rel="prev" title="Calling C and Fortran Code" href="../calling-c-and-fortran-code/"/> 
 
@@ -149,6 +149,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../types/#man-parametric-types">Parametric Types</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../types/#type-aliases">Type Aliases</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../types/#operations-on-types">Operations on Types</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../types/#custom-pretty-printing">Custom pretty-printing</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../types/#value-types">&#8220;Value types&#8221;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../types/#nullable-types-representing-missing-values">Nullable Types: Representing Missing Values</a></li>
 </ul>
@@ -278,7 +279,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../calling-c-and-fortran-code/#c">C++</a></li>
 </ul>
 </li>
-<li class="toctree-l1 current"><a class="current reference internal" href="">Handling Operating System Variation</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Handling Operating System Variation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../interacting-with-julia/">Interacting With Julia</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="../interacting-with-julia/#the-different-prompt-modes">The different prompt modes</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../interacting-with-julia/#key-bindings">Key bindings</a></li>
@@ -588,11 +589,11 @@ cases. There are several functions intended to make this easier:
 Additionally, there is a macro <code class="docutils literal"><span class="pre">&#64;static</span></code> which makes it possible to
 use these functions to conditionally hide invalid code, as demonstrated in the following examples.</p>
 <p>Simple blocks:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">ccall</span><span class="p">(</span> <span class="p">(@</span><span class="n">static</span> <span class="n">is_windows</span><span class="p">()</span> <span class="o">?</span> <span class="p">:</span><span class="n">_fopen</span> <span class="p">:</span> <span class="p">:</span><span class="n">fopen</span><span class="p">),</span> <span class="o">...</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="k">ccall</span><span class="p">(</span> <span class="p">(</span><span class="nd">@static</span> <span class="n">is_windows</span><span class="p">()</span> <span class="o">?</span> <span class="o">:</span><span class="n">_fopen</span> <span class="o">:</span> <span class="o">:</span><span class="n">fopen</span><span class="p">),</span> <span class="o">...</span><span class="p">)</span>
 </pre></div>
 </div>
 <p>Complex blocks:</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="p">@</span><span class="n">static</span> <span class="k">if</span> <span class="n">is_linux</span><span class="p">()</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="nd">@static</span> <span class="k">if</span> <span class="n">is_linux</span><span class="p">()</span>
     <span class="n">some_complicated_thing</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
 <span class="k">else</span>
     <span class="n">some_different_thing</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
@@ -602,7 +603,7 @@ use these functions to conditionally hide invalid code, as demonstrated in the f
 <p>When chaining conditionals (including if/elseif/end),
 the <code class="docutils literal"><span class="pre">&#64;static</span></code> must be repeated for each level
 (parentheses optional, but recommended for readability):</p>
-<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="p">@</span><span class="n">static</span> <span class="n">is_windows</span><span class="p">()</span> <span class="o">?</span> <span class="p">:</span><span class="n">a</span> <span class="p">:</span> <span class="p">(@</span><span class="n">static</span> <span class="n">is_apple</span><span class="p">()</span> <span class="o">?</span> <span class="p">:</span><span class="n">b</span> <span class="p">:</span> <span class="p">:</span><span class="n">c</span><span class="p">)</span>
+<div class="highlight-julia"><div class="highlight"><pre><span></span><span class="nd">@static</span> <span class="n">is_windows</span><span class="p">()</span> <span class="o">?</span> <span class="o">:</span><span class="n">a</span> <span class="o">:</span> <span class="p">(</span><span class="nd">@static</span> <span class="n">is_apple</span><span class="p">()</span> <span class="o">?</span> <span class="o">:</span><span class="n">b</span> <span class="o">:</span> <span class="o">:</span><span class="n">c</span><span class="p">)</span>
 </pre></div>
 </div>
 </div>
@@ -643,7 +644,7 @@ the <code class="docutils literal"><span class="pre">&#64;static</span></code> m
     <script type="text/javascript">
         var DOCUMENTATION_OPTIONS = {
             URL_ROOT:'../../',
-            VERSION:'0.5.1-pre',
+            VERSION:'0.5.3-pre',
             COLLAPSE_INDEX:false,
             FILE_SUFFIX:'',
             HAS_SOURCE:  true
