@@ -238,10 +238,6 @@ function is_ancestor_of(a::AbstractString, b::AbstractString, repo::GitRepo)
     merge_base(repo, a, b) == A
 end
 
-function make_payload(payload::Nullable{<:AbstractCredentials})
-    Ref{Nullable{AbstractCredentials}}(payload)
-end
-
 """
     fetch(repo::GitRepo; kwargs...)
 
@@ -269,7 +265,6 @@ function fetch(repo::GitRepo; remote::AbstractString="origin",
         GitRemoteAnon(repo, remoteurl)
     end
     try
-        payload = make_payload(payload)
         fo = FetchOptions(callbacks=RemoteCallbacks(credentials_cb(), payload))
         fetch(rmt, refspecs, msg="from $(url(rmt))", options = fo)
     finally
@@ -304,7 +299,6 @@ function push(repo::GitRepo; remote::AbstractString="origin",
         GitRemoteAnon(repo, remoteurl)
     end
     try
-        payload = make_payload(payload)
         push_opts=PushOptions(callbacks=RemoteCallbacks(credentials_cb(), payload))
         push(rmt, refspecs, force=force, options=push_opts)
     finally
@@ -510,7 +504,6 @@ function clone(repo_url::AbstractString, repo_path::AbstractString;
                payload::Nullable{<:AbstractCredentials}=Nullable{AbstractCredentials}())
     # setup clone options
     lbranch = Base.cconvert(Cstring, branch)
-    payload = make_payload(payload)
     fetch_opts=FetchOptions(callbacks = RemoteCallbacks(credentials_cb(), payload))
     clone_opts = CloneOptions(
                 bare = Cint(isbare),

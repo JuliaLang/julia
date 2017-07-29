@@ -187,6 +187,10 @@ function RemoteCallbacks(credentials::Ptr{Void}, payload::Ref{Nullable{AbstractC
     RemoteCallbacks(credentials=credentials, payload=pointer_from_objref(payload))
 end
 
+function RemoteCallbacks(credentials::Ptr{Void}, payload::Nullable{<:AbstractCredentials})
+    RemoteCallbacks(credentials, Ref{Nullable{AbstractCredentials}}(payload))
+end
+
 """
     LibGit2.ProxyOptions
 
