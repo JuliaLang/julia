@@ -234,6 +234,8 @@ Deprecated or removed
   * The function `showall` is deprecated. Showing entire values is the default, unless an
     `IOContext` specifying `:limit=>true` is in use ([#22847]).
 
+  * `issubtype` has been deprecated in favor of `<:` (which used to be an alias for `issubtype`).
+
   * Calling `write` on non-isbits arrays is deprecated in favor of explicit loops or
     `serialize` ([#6466]).
 

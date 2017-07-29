@@ -88,8 +88,7 @@ Base.identity
 
 ```@docs
 Base.supertype
-Core.issubtype
-Base.:(<:)
+Core.:(<:)
 Base.:(>:)
 Base.subtypes
 Base.typemin

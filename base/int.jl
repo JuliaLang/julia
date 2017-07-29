@@ -431,8 +431,8 @@ end
 for to in BitInteger_types, from in (BitInteger_types..., Bool)
     if !(to === from)
         if to.size < from.size
-            if issubtype(to, Signed)
-                if issubtype(from, Unsigned)
+            if to <: Signed
+                if from <: Unsigned
                     @eval convert(::Type{$to}, x::($from)) =
                         checked_trunc_sint($to, check_top_bit(x))
                 else
@@ -449,8 +449,8 @@ for to in BitInteger_types, from in (BitInteger_types..., Bool)
             @eval convert(::Type{$to}, x::($from)) = zext_int($to, x) & $to(1)
             @eval rem(x::($from), ::Type{$to}) = convert($to, x)
         elseif from.size < to.size
-            if issubtype(from, Signed)
-                if issubtype(to, Unsigned)
+            if from <: Signed
+                if to <: Unsigned
                     @eval convert(::Type{$to}, x::($from)) =
                         sext_int($to, check_top_bit(x))
                 else
@@ -463,7 +463,7 @@ for to in BitInteger_types, from in (BitInteger_types..., Bool)
                 @eval rem(x::($from), ::Type{$to}) = convert($to, x)
             end
         else
-            if !(issubtype(from, Signed) === issubtype(to, Signed))
+            if !((from <: Signed) === (to <: Signed))
                 # raise InexactError if x's top bit is set
                 @eval convert(::Type{$to}, x::($from)) = bitcast($to, check_top_bit(x))
             else

@@ -1983,8 +1983,8 @@ mutable struct A7652
 end
 a7652 = A7652(0)
 t_a7652 = A7652
-f7652() = issubtype(fieldtype(t_a7652, :a), Int)
-@test f7652() == issubtype(fieldtype(A7652, :a), Int) == true
+f7652() = fieldtype(t_a7652, :a) <: Int
+@test f7652() == (fieldtype(A7652, :a) <: Int) == true
 g7652() = fieldtype(DataType, :types)
 @test g7652() == fieldtype(DataType, :types) == SimpleVector
 @test fieldtype(t_a7652, 1) == Int

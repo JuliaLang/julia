@@ -277,17 +277,17 @@ let undefvar
     err_str = @except_str 0::Bool TypeError
     @test err_str == "TypeError: non-boolean ($Int) used in boolean context"
     err_str = @except_str 0::AbstractFloat TypeError
-    @test err_str == "TypeError: typeassert: expected AbstractFloat, got $Int"
+    @test err_str == "TypeError: in typeassert, expected AbstractFloat, got $Int"
     err_str = @except_str 0::7 TypeError
-    @test err_str == "TypeError: typeassert: expected Type, got $Int"
+    @test err_str == "TypeError: in typeassert, expected Type, got $Int"
     err_str = @except_str "" <: AbstractString TypeError
-    @test err_str == "TypeError: issubtype: expected Type, got String"
+    @test err_str == "TypeError: in <:, expected Type, got String"
     err_str = @except_str AbstractString <: "" TypeError
-    @test err_str == "TypeError: issubtype: expected Type, got String"
+    @test err_str == "TypeError: in <:, expected Type, got String"
     err_str = @except_str Type{""} TypeError
-    @test err_str == "TypeError: Type: in parameter, expected Type, got String"
+    @test err_str == "TypeError: in Type, in parameter, expected Type, got String"
     err_str = @except_str TypeWithIntParam{Any} TypeError
-    @test err_str == "TypeError: TypeWithIntParam: in T, expected T<:Integer, got Type{Any}"
+    @test err_str == "TypeError: in TypeWithIntParam, in T, expected T<:Integer, got Type{Any}"
 
     err_str = @except_str mod(1,0) DivideError
     @test err_str == "DivideError: integer division error"

@@ -286,12 +286,12 @@ JL_CALLABLE(jl_f_sizeof)
 
 JL_CALLABLE(jl_f_issubtype)
 {
-    JL_NARGS(issubtype, 2, 2);
+    JL_NARGS(<:, 2, 2);
     jl_value_t *a = args[0], *b = args[1];
     if (jl_is_typevar(a)) a = ((jl_tvar_t*)a)->ub; // TODO should we still allow this?
     if (jl_is_typevar(b)) b = ((jl_tvar_t*)b)->ub;
-    JL_TYPECHK(issubtype, type, a);
-    JL_TYPECHK(issubtype, type, b);
+    JL_TYPECHK(<:, type, a);
+    JL_TYPECHK(<:, type, b);
     return (jl_subtype(a,b) ? jl_true : jl_false);
 }
 
@@ -1083,7 +1083,7 @@ void jl_init_primitives(void)
     add_builtin_func("===", jl_f_is);
     add_builtin_func("typeof", jl_f_typeof);
     add_builtin_func("sizeof", jl_f_sizeof);
-    add_builtin_func("issubtype", jl_f_issubtype);
+    add_builtin_func("<:", jl_f_issubtype);
     add_builtin_func("isa", jl_f_isa);
     add_builtin_func("typeassert", jl_f_typeassert);
     add_builtin_func("throw", jl_f_throw);
