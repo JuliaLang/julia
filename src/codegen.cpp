@@ -1290,7 +1290,7 @@ uint64_t jl_get_llvm_fptr(void *function)
     Function *F = (Function*)function;
     uint64_t addr = getAddressForFunction(F->getName());
     if (!addr) {
-	auto expected_addr = jl_ExecutionEngine->findUnmangledSymbol(F->getName()).getAddress();
+        auto expected_addr = jl_ExecutionEngine->findUnmangledSymbol(F->getName()).getAddress();
         // TODO : Handle error in expected_addr
         addr = *expected_addr;
     }
