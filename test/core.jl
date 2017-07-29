@@ -4678,21 +4678,33 @@ end
 @test f14893() == 14893
 @test M14893.f14893() == 14893
 
-# issue #18725
-@test_nowarn @eval Main begin
-    f18725(x) = 1
-    f18725(x) = 2
-end
-@test Main.f18725(0) == 2
+let exename = `$(Base.julia_cmd()) --startup-file=no -i`
+    str = """
+    using Base.Test
+    try
+        # issue #18725
+        @test_nowarn @eval Main begin
+            f18725(x) = 1
+            f18725(x) = 2
+        end
+        @test Main.f18725(0) == 2
 
-# PR #23030
-@test_nowarn @eval Main module Module23030
-    f23030(x) = 1
-    f23030(x) = 2
-end
-@test_warn "WARNING: Method definition f23030(Any) in module Module23030" @eval Main begin
-    using Module23030
-    Module23030.f23030(x) = 2
+        # PR #23030
+        @test_nowarn @eval Main module Module23030
+            f23030(x) = 1
+            f23030(x) = 2
+        end
+        @test_warn "WARNING: Method definition f23030(Any) in module Module23030" @eval Main begin
+            using Module23030
+            Module23030.f23030(x) = 2
+        end
+    catch
+        exit(-1)
+    end
+
+    exit(0)
+    """
+    @test success(`$exename -e $str`)
 end
 
 # issue #19599
