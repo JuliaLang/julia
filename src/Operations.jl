@@ -1,10 +1,12 @@
 module Operations
 
-using TOML
 using Base.Random: UUID
 using Base: LibGit2
 using Base: Pkg
-using Base.Pkg.Types: VersionSet
+
+using TOML
+using TerminalMenus
+
 using Pkg3.Types
 
 function parse_toml(path::String...; fakeit::Bool=false)
@@ -35,8 +37,8 @@ const line_re = r"""
 
 function find_registered(names::Vector{String})
     # name --> uuid --> paths
-    where = Dict{String,Dict{UUID,Vector{String}}}()
-    isempty(names) && return where
+    paths = Dict{String,Dict{UUID,Vector{String}}}()
+    isempty(names) && return paths
     names_re = let p = "\\bname\\s*=\\s*\"(?:$(names[1])"
         for i in 2:length(names)
             p *= "|$(names[i])"
@@ -57,17 +59,17 @@ function find_registered(names::Vector{String})
                 uuid = UUID(m.captures[1])
                 name = Base.unescape_string(m.captures[2])
                 path = Base.unescape_string(m.captures[3])
-                if !haskey(where, name)
-                    where[name] = Dict{UUID,Vector{String}}()
+                if !haskey(paths, name)
+                    paths[name] = Dict{UUID,Vector{String}}()
                 end
-                if !haskey(where[name], uuid)
-                    where[name][uuid] = String[]
+                if !haskey(paths[name], uuid)
+                    paths[name][uuid] = String[]
                 end
-                push!(where[name][uuid], abspath(registry, path))
+                push!(paths[name][uuid], abspath(registry, path))
             end
         end
     end
-    return where
+    return paths
 end
 find_registered(name::String) = find_registered([name])[name]
 
@@ -162,28 +164,40 @@ function find_manifest(env::Union{Void,String}=default_env())
     return joinpath(dir, names[end])
 end
 
+load_config(env::Union{Void,String}=default_env()) =
+    parse_toml(find_config(env), fakeit=true)
+
 function load_manifest(env::Union{Void,String}=default_env())
-    manifest = find_manifest(env)
-    T = Dict{String,Dict{String,String}}
-    return isfile(manifest) ? convert(T, parse_toml(manifest)) : T()
+    manifest = parse_toml(find_manifest(env), fakeit=true)
+    for (name, infos) in manifest, info in infos
+        haskey(info, "deps") || continue
+        info["deps"] isa AbstractVector || continue
+        for dep in info["deps"]
+            length(manifest[dep]) == 1 ||
+                error("ambiguious dependency for $name: $dep")
+        end
+        info["deps"] = Dict(d => manifest[d][1]["uuid"] for d in info["deps"])
+    end
+    return manifest
 end
 
-inspec(v::VersionNumber, s::VersionSpec) = v in s
-inspec(v::VersionNumber, s::VersionNumber) = v == s
-
-function parse_version_set(s::String)
-    parts = split(s, '-')
-    length(parts) == 1 && return VersionSet(VersionSpec(parts[1]))
-    length(parts) != 2 && error("invalid version spec: ", repr(s))
-    lower = VersionSet(VersionSpec(parts[1])).intervals[1].lower
-    upper = VersionSet(VersionSpec(parts[2])).intervals[1].upper
-    return VersionSet(lower, upper)
+function write_manifest(manifest_file::String, manifest::Dict)
+    uniques = sort!(collect(keys(manifest)), by=lowercase)
+    filter!(p->length(manifest[p]) == 1, uniques)
+    for (name, infos) in manifest, info in infos
+        haskey(info, "deps") || continue
+        all(d in uniques for d in keys(info["deps"])) || continue
+        info["deps"] = sort!(collect(keys(info["deps"])))
+    end
+    open(manifest_file, "w") do io
+        TOML.print(io, manifest, sorted=true)
+    end
 end
 
 function add(names...; kwargs...)
-    pkgs = Dict{String,Union{VersionNumber,VersionSpec}}()
+    pkgs = Dict{String,Union{VersionNumber,VersionRange}}()
     for name in names
-        pkgs[string(name)] = vs"*"
+        pkgs[string(name)] = vr"*"
     end
     for (key, val) in kwargs
         pkgs[string(key)] = val
@@ -191,140 +205,174 @@ function add(names...; kwargs...)
     return add(pkgs)
 end
 
+get_or_make(::Type{T}, d::Dict{K}, k::K) where {T,K} =
+    haskey(d, k) ? convert(T, d[k]) : T()
+
+function load_versions(path::String)
+    toml = parse_toml(path, "versions.toml")
+    Dict(VersionNumber(ver) => SHA1(info["hash-sha1"]) for (ver, info) in toml)
+end
+
+function load_package_data(f::Base.Callable, path::String, versions)
+    toml = parse_toml(path, fakeit=true)
+    data = Dict{VersionNumber,Dict{String,Any}}()
+    for ver in versions
+        ver::VersionNumber
+        for (v, d) in toml, (key, value) in d
+            vr = VersionRange(v)
+            ver in vr || continue
+            dict = get!(data, ver, Dict{String,Any}())
+            haskey(dict, key) && error("$ver/$key is duplicated in $path")
+            dict[key] = f(value)
+        end
+    end
+    return data
+end
+
+load_package_data(f::Base.Callable, path::String, version::VersionNumber) =
+    get(load_package_data(f, path, [version]), version, nothing)
+
 function add(pkgs::Dict{String})
     orig_pkgs = copy(pkgs)
     names = sort!(collect(keys(pkgs)))
     regs = find_registered(names)
-    manifest = load_manifest()
-    uuids = Dict{String,UUID}(name => info["uuid"] for (name, info) in manifest)
+    config = load_config()
+    uuids = get_or_make(Dict{String,UUID}, config, "deps")
+
     # disambiguate package names
     info("Resolving package UUIDs")
-    let ambig = false
-        for name in names
-            if haskey(uuids, name)
-                uuid = uuids[name]
-                if haskey(regs, name)
-                    for uuid′ in collect(keys(regs[name]))
-                        uuid′ == uuid || delete!(regs[name], uuid)
-                    end
+    for name in names
+        if haskey(uuids, name)
+            uuid = uuids[name]
+            if haskey(regs, name)
+                for uuid′ in collect(keys(regs[name]))
+                    uuid′ == uuid || delete!(regs[name], uuid)
                 end
-                haskey(regs, name) && !isempty(regs[name]) && continue
-                error("""
-                $name/$uuid found in manifest but not in registries;
-                To install a different $name package `pkg rm $name` and then do `pkg add $name` again.
-                """)
-            elseif length(regs[name]) == 1
-                uuids[name] = first(first(regs[name]))
-            else
-                msg = "$name is ambiguous, it could refer to:\n"
-                for (i, (uuid, paths)) in enumerate(sort!(collect(regs[name]), by=first))
-                    msg *= " [$i] $uuid"
-                    for path in paths
-                        info = parse_toml(path, "package.toml")
-                        msg *= " – $(info["repo"])"
-                        break
-                    end
-                    msg *= "\n"
-                end
-                info(msg)
-                ambig = true
             end
+            haskey(regs, name) && !isempty(regs[name]) && continue
+            error("""
+            $name/$uuid found in config but not in registries;
+            To install a different $name package `pkg rm $name` and then do `pkg add $name` again.
+            """)
+        elseif !haskey(regs, name) || length(regs[name]) == 0
+            error("No registered package named $(repr(name)) found")
+        elseif length(regs[name]) == 1
+            uuids[name] = first(first(regs[name]))
+        else
+            uuids′ = UUID[]
+            options = String[]
+            for (i, (uuid, paths)) in enumerate(sort!(collect(regs[name]), by=first))
+                option = "$uuid"
+                for path in paths
+                    info = parse_toml(path, "package.toml")
+                    option *= " – $(info["repo"])"
+                    break
+                end
+                push!(uuids′, uuid)
+                push!(options, option)
+            end
+            menu = RadioMenu(options)
+            choice = request("Which $name package do you want to add:", menu)
+            choice == -1 && return warn("Package add aborted")
+            uuids[name] = uuids′[choice]
         end
-        ambig && error("interactive package choice not yet implemented")
     end
     merge!(regs, find_registered(setdiff(keys(uuids), names)))
-    where = isempty(regs) ? Dict{String,Vector{String}}() :
-        Dict(name => paths for (name, info) in regs for (uuid, paths) in info)
+    names = sort!(collect(keys(uuids)))
+    paths = isempty(regs) ? Dict{UUID,Vector{String}}() :
+        Dict(uuids[name] => info[uuids[name]] for (name, info) in regs)
 
     # copy manifest versions to pkgs
     # if already in specified version set, leave as installed
-    for (name, info) in manifest
+    manifest = load_manifest()
+    for (name, infos) in manifest, info in infos
+        info["uuid"] == get(uuids, name, "") || continue
         ver = VersionNumber(info["version"])
-        if !haskey(pkgs, name) || inspec(ver, pkgs[name])
+        if !haskey(pkgs, name) || ver in pkgs[name]
             pkgs[name] = ver
         end
     end
 
-    # compute reqs & deps for Pkg.Resolve.resolve
-    #  - reqs: what we need to choose versions for
-    #  - deps: relevant portion of dependency graph
-
-    # reqs :: String --> VersionSet
-    reqs = convert(Pkg.Types.Requires, pkgs)
-
     info("Resolving package versions")
-    # deps :: String --> VersionNumber --> (SHA1, String --> VersionSet)
-    deps = Dict{String,Dict{VersionNumber,Pkg.Types.Available}}()
-    names = sort!(collect(keys(uuids)))
-    for name in names
-        spec = get(pkgs, name, VersionSpec())
-        uuid, paths = uuids[name], where[name]
-        deps[name] = Dict{VersionNumber,Pkg.Types.Available}()
-        for path in paths
-            versions = parse_toml(path, "versions.toml")
-            requires = parse_toml(path, "requirements.toml", fakeit=true)
-            for (v, d) in versions
-                ver = VersionNumber(v)
-                inspec(ver, spec) || continue
-                r = haskey(requires, v) ?
-                    Dict(dep => parse_version_set(r) for (dep, r) in requires[v]) :
-                    Pkg.Types.Requires()
-                if haskey(r, "julia")
-                    VERSION in r["julia"] || continue
-                    delete!(r, "julia")
-                end
-                x = deps[name][ver] = Pkg.Types.Available(SHA1(d["hash-sha1"]), r)
-                for dep in keys(x.requires)
-                    (dep in names || dep == "julia") && continue
-                    found = find_registered(dep)
-                    @assert length(found) == 1 # TODO: use UUIDs to disambiguate
-                    uuids[dep] = first(found)[1]
-                    where[dep] = first(found)[2]
-                    push!(names, dep)
+    # compute reqs & deps for Pkg.Resolve.resolve
+    #   reqs: what we need to choose versions for
+    #     UUID --> VersionSet
+    #   deps: relevant portion of dependency graph
+    #     UUID --> VersionNumber --> (SHA1, String --> VersionSet)
+    reqs = Dict{UUID,VersionSet}(uuids[name] => vers for (name, vers) in pkgs)
+    deps = Dict{UUID,Dict{VersionNumber,Tuple{SHA1,Dict{UUID,VersionSet}}}}()
+    ruuids = collect(map(reverse, uuids))
+    for (uuid, name) in ruuids
+        deps[uuid] = valtype(deps)()
+        for path in paths[uuid]
+            versions = load_versions(path)
+            vs = sort!(collect(keys(versions)))
+            dependencies = load_package_data(UUID, joinpath(path, "dependencies.toml"), vs)
+            compatibility = load_package_data(VersionSet, joinpath(path, "compatibility.toml"), vs)
+            for (v, h) in versions
+                d = get_or_make(Dict{String,UUID}, dependencies, v)
+                r = get_or_make(Dict{String,VersionSet}, compatibility, v)
+                q = Dict(u => get_or_make(VersionSet, r, p) for (p, u) in d)
+                VERSION in get_or_make(VersionSet, r, "julia") || continue
+                deps[uuid][v] = (h, q)
+                for (p, u) in d
+                    u in first.(ruuids) && continue
+                    reg = find_registered(p)
+                    haskey(reg, u) ||
+                        error("$p = $u found in $name's dependencies but not in registries.")
+                    push!(ruuids, u => p)
+                    paths[u] = reg[u]
                 end
             end
         end
     end
-    deps = Pkg.Query.prune_dependencies(reqs, deps)
-    vers = Pkg.Resolve.resolve(reqs, deps)
+
+    # actually do the version resloution
+    vers = let reqs = convert(Dict{String,Pkg.Types.VersionSet}, reqs),
+        deps = convert(Dict{String,Dict{VersionNumber,Pkg.Types.Available}}, deps)
+        deps = Pkg.Query.prune_dependencies(reqs, deps)
+        vers = Pkg.Resolve.resolve(reqs, deps)
+        convert(Dict{UUID,VersionNumber}, vers)
+    end
 
     # find repos and hashes for each package & version
-    repos = Dict{String,Vector{String}}()
-    hashes = Dict{String,SHA1}()
-    for (name, ver) in vers
-        repos[name] = String[]
-        v = string(ver)
-        for path in where[name]
+    rud = Dict(ruuids)
+    repos = Dict{UUID,Vector{String}}()
+    hashes = Dict{UUID,SHA1}()
+    for (uuid, ver) in vers
+        repos[uuid] = String[]
+        for path in paths[uuid]
             package = parse_toml(path, "package.toml")
             repo = package["repo"]
-            repo in repos[name] || push!(repos[name], repo)
-            versions = parse_toml(path, "versions.toml")
-            if haskey(versions, v)
-                sha1 = SHA1(versions[v]["hash-sha1"])
-                if haskey(hashes, name)
-                    sha1 == hashes[name] || warn("$name: hash mismatch for version $v!")
+            repo in repos[uuid] || push!(repos[uuid], repo)
+            versions = load_versions(path)
+            if haskey(versions, ver)
+                h = versions[ver]
+                if haskey(hashes, uuid)
+                    h == hashes[uuid] ||
+                        warn("$(rud[uuid]): hash mismatch for version $ver!")
                 else
-                    hashes[name] = sha1
+                    hashes[uuid] = h
                 end
             end
         end
-        @assert haskey(hashes, name)
+        @assert haskey(hashes, uuid)
     end
     foreach(sort!, values(repos))
 
     # clone or update repos and find or create source trees
-    for (name, sha1) in hashes
-        uuid = uuids[name]
-        version_path = find_installed(uuid, sha1)
+    refspecs = ["+refs/*:refs/remotes/cache/*"]
+    for (uuid, hash) in hashes
+        name = rud[uuid]
+        version_path = find_installed(uuid, hash)
         ispath(version_path) && continue
         repo_path = joinpath(user_depot(), "upstream", string(uuid))
-        urls = copy(repos[name])
-        git_hash = LibGit2.GitHash(sha1.bytes)
+        urls = copy(repos[uuid])
+        git_hash = LibGit2.GitHash(hash.bytes)
         repo = ispath(repo_path) ? LibGit2.GitRepo(repo_path) : begin
             info("Cloning [$uuid] $name")
             LibGit2.clone(shift!(urls), repo_path, isbare=true)
         end
-        refspecs = ["+refs/*:refs/remotes/cache/*"]
         while !isempty(urls)
             try
                 LibGit2.GitObject(repo, git_hash)
@@ -335,19 +383,20 @@ function add(pkgs::Dict{String})
             info("Updating $name from $(urls[1])")
             LibGit2.fetch(repo, remoteurl=shift!(urls), refspecs=refspecs)
         end
-        tree = try LibGit2.GitObject(repo, git_hash)
+        tree = try
+            LibGit2.GitObject(repo, git_hash)
         catch err
             err isa LibGit2.GitError && err.code == LibGit2.Error.ENOTFOUND || rethrow(err)
-            error("$name: git object $(string(sha1)) could not be found")
+            error("$name: git object $(string(hash)) could not be found")
         end
         tree isa LibGit2.GitTree ||
-            error("$name: git object $(string(sha1)) should be a tree, not $(typeof(tree))")
+            error("$name: git object $(string(hash)) should be a tree, not $(typeof(tree))")
         mkpath(version_path)
         opts = LibGit2.CheckoutOptions(
             checkout_strategy = LibGit2.Consts.CHECKOUT_FORCE,
             target_directory = Base.unsafe_convert(Cstring, version_path)
         )
-        info("Installing $name at $(string(sha1))")
+        info("Installing $name at $(string(hash))")
         LibGit2.checkout_tree(repo, tree, options=opts)
     end
 
@@ -357,17 +406,33 @@ function add(pkgs::Dict{String})
     if !haskey(config, "deps")
         config["deps"] = Dict{String,String}()
     end
-    for (name, sha1) in hashes
-        uuid = string(uuids[name])
-        version = string(vers[name])
-        config["deps"][name] = uuid
-        manifest[name] = Dict{String,String}(
-            "uuid"      => uuid,
-            "hash-sha1" => sha1,
-            "version"   => version,
-        )
+    for (name, uuid) in uuids
+        config["deps"][name] = string(uuid)
     end
     isempty(config["deps"]) && delete!(config, "deps")
+
+    for (uuid, ver) in vers
+        name = rud[uuid]
+        info = nothing
+        a = get!(manifest, name, Dict{String,Any}[])
+        for i in a
+            UUID(i["uuid"]) == uuid || continue
+            info = i
+            break
+        end
+        if info == nothing
+            info = Dict{String,Any}("uuid" => string(uuid))
+            push!(a, info)
+        end
+        info["version"] = string(vers[uuid])
+        info["hash-sha1"] = string(hashes[uuid])
+        for path in paths[uuid]
+            d = load_package_data(UUID, joinpath(path, "dependencies.toml"), ver)
+            d == nothing && continue
+            info["deps"] = convert(Dict{String,String}, d)
+            break
+        end
+    end
 
     if !isempty(config) || ispath(config_file)
         mkpath(dirname(config_file))
@@ -379,9 +444,7 @@ function add(pkgs::Dict{String})
     manifest_file = find_manifest()
     if !isempty(manifest) || ispath(manifest_file)
         info("Updating manifest file $manifest_file")
-        open(manifest_file, "w") do io
-            TOML.print(io, manifest, sorted=true)
-        end
+        write_manifest(manifest_file, manifest)
     end
 end
 
