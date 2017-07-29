@@ -14,7 +14,7 @@ Please see the manual section on packages for more information.
 module Pkg
 
 export Dir, Types, Reqs, Cache, Read, Query, Resolve, Write, Entry
-export dir, init, rm, add, available, installed, status, clone, checkout,
+export dir, init, remove, add, available, installed, status, clone, checkout,
        update, resolve, test, build, free, pin, PkgError, setprotocol!
 
 const DEFAULT_META = "https://github.com/JuliaLang/METADATA.jl"
@@ -101,11 +101,11 @@ a new optimal set of installed package versions.
 edit() = cd(Entry.edit)
 
 """
-    rm(pkg)
+    remove(pkg)
 
 Remove all requirement entries for `pkg` from `Pkg.dir("REQUIRE")` and call `Pkg.resolve()`.
 """
-rm(pkg::AbstractString) = cd(Entry.rm,splitjl(pkg))
+remove(pkg::AbstractString) = cd(Entry.remove,splitjl(pkg))
 
 """
     add(pkg, vers...)
@@ -289,7 +289,6 @@ Set the protocol used to access GitHub-hosted packages. Defaults to 'https', wit
 `proto` delegating the choice to the package developer.
 """
 setprotocol!(proto::AbstractString) = Cache.setprotocol!(proto)
-
 
 # point users to PkgDev
 register(args...) =

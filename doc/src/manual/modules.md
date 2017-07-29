@@ -366,7 +366,7 @@ code to help the user avoid other wrong-behavior situations:
 A few other points to be aware of:
 
 1. No code reload / cache invalidation is performed after changes are made to the source files themselves,
-   (including by [`Pkg.update`](@ref)), and no cleanup is done after [`Pkg.rm`](@ref)
+   (including by [`Pkg.update`](@ref)), and no cleanup is done after [`Pkg.remove`](@ref)
 2. The memory sharing behavior of a reshaped array is disregarded by precompilation (each view gets
    its own copy)
 3. Expecting the filesystem to be unchanged between compile-time and runtime e.g. [`@__FILE__`](@ref)/`source_path()`

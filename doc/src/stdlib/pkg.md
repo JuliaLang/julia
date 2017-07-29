@@ -14,7 +14,7 @@ Base.Pkg.init
 Base.Pkg.resolve
 Base.Pkg.edit
 Base.Pkg.add
-Base.Pkg.rm
+Base.Pkg.remove
 Base.Pkg.clone
 Base.Pkg.setprotocol!
 Base.Pkg.available

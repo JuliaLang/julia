@@ -1604,5 +1604,13 @@ end
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations
+# Part of resolving issue #7054
+@eval Pkg begin
+    function rm(pkg::AbstractString)
+        Base.depwarn("Pkg.rm is deprecated, use Pkg.remove instead.",:rm)
+        
+        remove(pkg)
+     end
+end
 
 # END 1.0 deprecations

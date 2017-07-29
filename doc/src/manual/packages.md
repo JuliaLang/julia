@@ -67,7 +67,7 @@ and then call [`Pkg.resolve()`](@ref) to install, upgrade or remove packages to 
 the requirements, or you can do [`Pkg.edit()`](@ref), which will open `REQUIRE` in your editor
 (configured via the `EDITOR` or `VISUAL` environment variables), and then automatically call
 [`Pkg.resolve()`](@ref) afterwards if necessary. If you only want to add or remove the requirement
-for a single package, you can also use the non-interactive [`Pkg.add()`](@ref) and [`Pkg.rm()`](@ref)
+for a single package, you can also use the non-interactive [`Pkg.add()`](@ref) and [`Pkg.remove()`](@ref)
 commands, which add or remove a single requirement to `REQUIRE` and then call [`Pkg.resolve()`](@ref).
 
 You can add a package to the list of requirements with the [`Pkg.add()`](@ref) function, and the
@@ -128,11 +128,11 @@ doesn't change `REQUIRE` until *after* installation has completed, so if there a
 file is described in [Requirements Specification](@ref); it allows, among other things, requiring
 specific ranges of versions of packages.
 
-When you decide that you don't want to have a package around any more, you can use [`Pkg.rm()`](@ref)
+When you decide that you don't want to have a package around any more, you can use [`Pkg.remove()`](@ref)
 to remove the requirement for it from the `REQUIRE` file:
 
 ```julia-repl
-julia> Pkg.rm("Distributions")
+julia> Pkg.remove("Distributions")
 INFO: Removing Distributions v0.2.7
 INFO: Removing Stats v0.2.6
 INFO: Removing NumericExtensions v0.2.17
@@ -142,7 +142,7 @@ julia> Pkg.status()
 Required packages:
  - SHA                           0.3.2
 
-julia> Pkg.rm("SHA")
+julia> Pkg.remove("SHA")
 INFO: Removing SHA v0.3.2
 INFO: REQUIRE updated.
 
@@ -152,7 +152,7 @@ No packages installed.
 
 Once again, this is equivalent to editing the `REQUIRE` file to remove the line with each package
 name on it then running [`Pkg.resolve()`](@ref) to update the set of installed packages to match.
-While [`Pkg.add()`](@ref) and [`Pkg.rm()`](@ref) are convenient for adding and removing requirements
+While [`Pkg.add()`](@ref) and [`Pkg.remove()`](@ref) are convenient for adding and removing requirements
 for a single package, when you want to add or remove multiple packages, you can call [`Pkg.edit()`](@ref)
 to manually change the contents of `REQUIRE` and then update your packages accordingly. [`Pkg.edit()`](@ref)
 does not roll back the contents of `REQUIRE` if [`Pkg.resolve()`](@ref) fails – rather, you
@@ -177,7 +177,7 @@ However, this change will be system-wide and thus the use of [`Pkg.setprotocol!(
 
     ```julia
     Pkg.add("Distributions.jl")
-    Pkg.rm("Distributions.jl")
+    Pkg.remove("Distributions.jl")
     ```
 
 ## Offline Installation of Packages
@@ -202,7 +202,7 @@ directory (given by [`Pkg.dir()`](@ref)) from a machine with the same operating 
 Julia packages are simply git repositories, clonable via any of the [protocols](https://www.kernel.org/pub/software/scm/git/docs/git-clone.html#URLS)
 that git supports, and containing Julia code that follows certain layout conventions. Official
 Julia packages are registered in the [METADATA.jl](https://github.com/JuliaLang/METADATA.jl) repository,
-available at a well-known location [^1]. The [`Pkg.add()`](@ref) and [`Pkg.rm()`](@ref) commands
+available at a well-known location [^1]. The [`Pkg.add()`](@ref) and [`Pkg.remove()`](@ref) commands
 in the previous section interact with registered packages, but the package manager can install
 and work with unregistered packages too. To install an unregistered package, use [`Pkg.clone(url)`](@ref),
 where `url` is a git URL from which the package can be cloned:

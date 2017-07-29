@@ -138,7 +138,7 @@ function add(lines::Vector{Line}, pkg::AbstractString, versions::VersionSet=Vers
     push!(filtered, Requirement(pkg, versions))
 end
 
-rm(lines::Vector{Line}, pkg::AbstractString) = filter(lines) do line
+remove(lines::Vector{Line}, pkg::AbstractString) = filter(lines) do line
     isa(line,Comment) || line.package != pkg
 end
 
