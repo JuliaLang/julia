@@ -4684,9 +4684,15 @@ end
     f18725(x) = 2
 end
 @test Main.f18725(0) == 2
-@test_warn "WARNING: Method definition f18725(Any) in module Module18725" @eval Main module Module18725
-    f18725(x) = 1
-    f18725(x) = 2
+
+# PR #23030
+@test_nowarn @eval Main module Module23030
+    f23030(x) = 1
+    f23030(x) = 2
+end
+@test_warn "WARNING: Method definition f23030(Any) in module Module23030" @eval Main begin
+    using Module23030
+    Module23030.f23030(x) = 2
 end
 
 # issue #19599
