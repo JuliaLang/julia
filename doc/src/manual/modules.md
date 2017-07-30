@@ -199,8 +199,9 @@ If a name is qualified (e.g. `Base.sin`), then it can be accessed even if it is 
 This is often useful when debugging. It can also have methods added to it by using the qualified
 name as the function name. However, due to syntactic ambiguities that arise, if you wish to add
 methods to a function in a different module whose name contains only symbols, such as an operator,
-`Base.+` for example, you must use `Base.:+` to refer to it. If the operator is more than one
-character in length you must surround it in brackets, such as: `Base.:(==)`.
+`Base.+` for example, you must use `Base.:+` to refer to it. In general, referring to any operator
+qualified with its module requires representing the operator as a symbol, e.g. `:+` for `+` and
+`:==` for `==`.
 
 Macro names are written with `@` in import and export statements, e.g. `import Mod.@mac`. Macros
 in other modules can be invoked as `Mod.@mac` or `@Mod.mac`.

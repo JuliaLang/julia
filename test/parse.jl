@@ -1382,3 +1382,10 @@ macro m24289()
     :(global $(esc(:x24289)) = 1)
 end
 @test (@macroexpand @m24289) == :(global x24289 = 1)
+
+# issue #23014
+@test parse("Base.:==") == parse("Base.:(==)")
+let
+    thrown = @test_throws ParseError parse(":=")
+    @test thrown.value.msg == "unexpected \"=\""
+end
