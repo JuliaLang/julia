@@ -5,7 +5,7 @@
 dlls = Libdl.dllist()
 @test !isempty(dlls)
 @test length(dlls) > 3 # at a bare minimum, probably have some version of libstdc, libgcc, libjulia, ...
-if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
+if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     for dl in dlls
         if isfile(dl) && (Libdl.dlopen_e(dl) != C_NULL)
             @test Base.samefile(Libdl.dlpath(dl), dl)
@@ -13,7 +13,7 @@ if !is_windows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     end
 end
 @test length(filter(dlls) do dl
-        return ismatch(Regex("^libjulia(?:.*)\.$(Libdl.dlext)(?:\..+)?\$"), basename(dl))
+        return ismatch(Regex("^libjulia(?:.*)\\.$(Libdl.dlext)(?:\\..+)?\$"), basename(dl))
     end) == 1 # look for something libjulia-like (but only one)
 
 # library handle pointer must not be NULL

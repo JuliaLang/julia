@@ -80,6 +80,12 @@ cc -shared -o sys.so sys.o
 ```
 This system image can then be loaded by `julia` as usual.
 
+Alternatively, you can
+use `--output-jit-bc jit.bc` to obtain a trace of all IR passed to the JIT.
+This is useful for code that cannot be run as part of the sysimg generation
+process (e.g. because it creates unserializable state). However, the resulting
+`jit.bc` does not include sysimage data, and can thus not be used as such.
+
 It is also possible to dump an LLVM IR module for just one Julia function,
 using:
 ```julia
@@ -260,7 +266,7 @@ pointer which drops the reference to the array value. However, we of course
 need to make sure that the array does stay alive while we're doing the `ccall`.
 To understand how this is done, first recall the lowering of the above code:
 ```julia
-return $(Expr(:foreigncall, :(:foo), Void, svec(Ptr{Float64}), :($(Expr(:foreigncall, :(:jl_array_ptr), Ptr{Float64}, svec(Any), :(A), 0))), :(A)))
+return $(Expr(:foreigncall, :(:foo), Void, svec(Ptr{Float64}), :(:ccall), 1, :($(Expr(:foreigncall, :(:jl_array_ptr), Ptr{Float64}, svec(Any), :(:ccall), 1, :(A)))), :(A)))
 ```
 The last `:(A)`, is an extra argument list inserted during lowering that informs
 the code generator which Julia level values need to be kept alive for the

@@ -197,7 +197,6 @@
     <context id="builtin-function" style-ref="builtin-function">
       <keyword>is</keyword>
       <keyword>typeof</keyword>
-      <keyword>issubtype</keyword>
       <keyword>isa</keyword>
       <keyword>typeassert</keyword>
       <keyword>apply</keyword>

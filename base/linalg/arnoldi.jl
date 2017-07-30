@@ -50,8 +50,7 @@ The following keyword arguments are supported:
 iterations `niter` and the number of matrix vector multiplications `nmult`, as well as the
 final residual vector `resid`.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> A = spdiagm(1:4);
 
@@ -144,8 +143,7 @@ The following keyword arguments are supported:
 iterations `niter` and the number of matrix vector multiplications `nmult`, as well as the
 final residual vector `resid`.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> A = speye(4, 4); B = spdiagm(1:4);
 
@@ -339,7 +337,7 @@ function A_mul_B!(y::StridedVector{T}, A::AtA_or_AAt{T}, x::StridedVector{T}) wh
         return A_mul_B!(y, A.A, A.buffer)
     end
 end
-size(A::AtA_or_AAt) = ntuple(i -> min(size(A.A)...), Val{2})
+size(A::AtA_or_AAt) = ntuple(i -> min(size(A.A)...), Val(2))
 ishermitian(s::AtA_or_AAt) = true
 
 
@@ -379,8 +377,7 @@ iterations derived from [`eigs`](@ref).
 * `nmult`: Number of matrix--vector products used.
 * `resid`: Final residual vector.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> A = spdiagm(1:4);
 

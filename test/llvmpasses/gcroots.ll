@@ -5,6 +5,7 @@
 declare void @boxed_simple(%jl_value_t addrspace(10)*, %jl_value_t addrspace(10)*)
 declare %jl_value_t addrspace(10)* @jl_box_int64(i64)
 declare %jl_value_t*** @jl_get_ptls_states()
+declare void @jl_safepoint()
 declare %jl_value_t addrspace(10)* @jl_apply_generic(%jl_value_t addrspace(10)*, %jl_value_t addrspace(10)**, i32)
 
 define void @simple(i64 %a, i64 %b) {
@@ -183,4 +184,26 @@ define void @global_ref() {
 ; CHECK: store %jl_value_t addrspace(10)* %loaded, %jl_value_t addrspace(10)**
     call void @one_arg_boxed(%jl_value_t addrspace(10)* %loaded)
     ret void
+}
+
+define %jl_value_t addrspace(10)* @no_redundant_rerooting(i64 %a, i1 %cond) {
+; CHECK-LABEL: @no_redundant_rerooting
+; CHECK: %gcframe = alloca %jl_value_t addrspace(10)*, i32 3
+top:
+    %ptls = call %jl_value_t*** @jl_get_ptls_states()
+    %aboxed = call %jl_value_t addrspace(10)* @jl_box_int64(i64 signext %a)
+; CHECK: store %jl_value_t addrspace(10)* %aboxed 
+; CHECK-NEXT: call void @jl_safepoint()
+    call void @jl_safepoint()
+    br i1 %cond, label %blocka, label %blockb
+blocka:
+; CHECK-NOT: call void @jl_safepoint()
+; CHECK: call void @jl_safepoint()
+    call void @jl_safepoint()
+    ret %jl_value_t addrspace(10)* %aboxed
+blockb:
+; CHECK-NOT: call void @jl_safepoint()
+; CHECK: call void @jl_safepoint()
+    call void @jl_safepoint()
+    ret %jl_value_t addrspace(10)* %aboxed
 }

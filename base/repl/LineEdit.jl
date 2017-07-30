@@ -19,7 +19,8 @@ struct ModalInterface <: TextInterface
 end
 
 mutable struct Prompt <: TextInterface
-    prompt::String
+    # A string or function to be printed as the prompt.
+    prompt::Union{String,Function}
     # A string or function to be printed before the prompt. May not change the length of the prompt.
     # This may be used for changing the color, issuing other terminal escape codes, etc.
     prompt_prefix::Union{String,Function}
@@ -34,7 +35,7 @@ mutable struct Prompt <: TextInterface
     sticky::Bool
 end
 
-show(io::IO, x::Prompt) = show(io, string("Prompt(\"", x.prompt, "\",...)"))
+show(io::IO, x::Prompt) = show(io, string("Prompt(\"", prompt_string(x.prompt), "\",...)"))
 
 mutable struct MIState
     interface::ModalInterface
@@ -64,7 +65,7 @@ mutable struct PromptState <: ModeState
     indent::Int
 end
 
-input_string(s::PromptState) = String(s.input_buffer)
+input_string(s::PromptState) = String(take!(copy(s.input_buffer)))
 
 input_string_newlines(s::PromptState) = count(c->(c == '\n'), input_string(s))
 function input_string_newlines_aftercursor(s::PromptState)
@@ -182,8 +183,10 @@ function _clear_input_area(terminal, state::InputAreaState)
     clear_line(terminal)
 end
 
-prompt_string(s::PromptState) = s.p.prompt
+prompt_string(s::PromptState) = prompt_string(s.p)
+prompt_string(p::Prompt) = prompt_string(p.prompt)
 prompt_string(s::AbstractString) = s
+prompt_string(f::Function) = Base.invokelatest(f)
 
 refresh_multi_line(s::ModeState) = refresh_multi_line(terminal(s), s)
 refresh_multi_line(termbuf::TerminalBuffer, s::ModeState) = refresh_multi_line(termbuf, terminal(s), s)
@@ -201,7 +204,7 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
     write_prompt(termbuf, prompt)
     prompt = prompt_string(prompt)
     # Count the '\n' at the end of the line if the terminal emulator does (specific to DOS cmd prompt)
-    miscountnl = @static is_windows() ? (isa(Terminals.pipe_reader(terminal), Base.TTY) && !Base.ispty(Terminals.pipe_reader(terminal))) : false
+    miscountnl = @static Sys.iswindows() ? (isa(Terminals.pipe_reader(terminal), Base.TTY) && !Base.ispty(Terminals.pipe_reader(terminal))) : false
     lindent = strwidth(prompt)
 
     # Now go through the buffer line by line
@@ -271,7 +274,7 @@ end
 
 
 # Edit functionality
-is_non_word_char(c) = c in " \t\n\"\\'`@\$><=:;|&{}()[].,+-*/?%^~"
+is_non_word_char(c) = c in """ \t\n\"\\'`@\$><=:;|&{}()[].,+-*/?%^~"""
 
 function reset_key_repeats(f::Function, s::MIState)
     key_repeats_sav = s.key_repeats
@@ -454,7 +457,7 @@ function edit_insert(s::PromptState, c)
     end
     str = string(c)
     edit_insert(buf, str)
-    offset = s.ias.curs_row == 1 ? sizeof(s.p.prompt) : s.indent
+    offset = s.ias.curs_row == 1 ? sizeof(prompt_string(s.p.prompt)) : s.indent
     if !('\n' in str) && eof(buf) &&
         ((line_size() + offset + sizeof(str) - 1) < width(terminal(s)))
         # Avoid full update when appending characters to the end
@@ -588,6 +591,8 @@ end
 
 history_prev(::EmptyHistoryProvider) = ("", false)
 history_next(::EmptyHistoryProvider) = ("", false)
+history_first(::EmptyHistoryProvider) = ("", false)
+history_last(::EmptyHistoryProvider) = ("", false)
 history_search(::EmptyHistoryProvider, args...) = false
 add_history(::EmptyHistoryProvider, s) = nothing
 add_history(s::PromptState) = add_history(mode(s).hist, s)
@@ -623,15 +628,15 @@ default_enter_cb(_) = true
 
 write_prompt(terminal, s::PromptState) = write_prompt(terminal, s.p)
 function write_prompt(terminal, p::Prompt)
-    prefix = isa(p.prompt_prefix,Function) ? eval(Expr(:call, p.prompt_prefix)) : p.prompt_prefix
-    suffix = isa(p.prompt_suffix,Function) ? eval(Expr(:call, p.prompt_suffix)) : p.prompt_suffix
+    prefix = prompt_string(p.prompt_prefix)
+    suffix = prompt_string(p.prompt_suffix)
     write(terminal, prefix)
     write(terminal, Base.text_colors[:bold])
-    write(terminal, p.prompt)
+    write(terminal, prompt_string(p.prompt))
     write(terminal, Base.text_colors[:normal])
     write(terminal, suffix)
 end
-write_prompt(terminal, s::String) = write(terminal, s)
+write_prompt(terminal, s::Union{AbstractString,Function}) = write(terminal, prompt_string(s))
 
 ### Keymap Support
 
@@ -960,7 +965,7 @@ function write_response_buffer(s::PromptState, data)
     offset = s.input_buffer.ptr
     ptr = data.response_buffer.ptr
     seek(data.response_buffer, 0)
-    write(s.input_buffer, readstring(data.response_buffer))
+    write(s.input_buffer, read(data.response_buffer, String))
     s.input_buffer.ptr = offset + ptr - 2
     data.response_buffer.ptr = ptr
     refresh_line(s)
@@ -996,7 +1001,7 @@ function history_set_backward(s::SearchState, backward)
     s.backward = backward
 end
 
-input_string(s::SearchState) = String(s.query_buffer)
+input_string(s::SearchState) = String(take!(copy(s.query_buffer)))
 
 function reset_state(s::SearchState)
     if s.query_buffer.size != 0
@@ -1045,7 +1050,7 @@ refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal,
     s::Union{PromptState,PrefixSearchState}) = s.ias =
     refresh_multi_line(termbuf, terminal, buffer(s), s.ias, s, indent = s.indent)
 
-input_string(s::PrefixSearchState) = String(s.response_buffer)
+input_string(s::PrefixSearchState) = String(take!(copy(s.response_buffer)))
 
 # a meta-prompt that presents itself as parent_prompt, but which has an independent keymap
 # for prefix searching
@@ -1062,7 +1067,7 @@ PrefixHistoryPrompt(hp::T, parent_prompt) where T<:HistoryProvider = PrefixHisto
 init_state(terminal, p::PrefixHistoryPrompt) = PrefixSearchState(terminal, p, "", IOBuffer())
 
 write_prompt(terminal, s::PrefixSearchState) = write_prompt(terminal, s.histprompt.parent_prompt)
-prompt_string(s::PrefixSearchState) = s.histprompt.parent_prompt.prompt
+prompt_string(s::PrefixSearchState) = prompt_string(s.histprompt.parent_prompt.prompt)
 
 terminal(s::PrefixSearchState) = s.terminal
 
@@ -1101,7 +1106,7 @@ function refresh_multi_line(termbuf::TerminalBuffer, s::SearchState)
     offset = buf.ptr
     ptr = s.response_buffer.ptr
     seek(s.response_buffer, 0)
-    write(buf, readstring(s.response_buffer))
+    write(buf, read(s.response_buffer, String))
     buf.ptr = offset + ptr - 1
     s.response_buffer.ptr = ptr
     s.ias = refresh_multi_line(termbuf, s.terminal, buf, s.ias, s.backward ? "(reverse-i-search)`" : "(forward-i-search)`")
@@ -1443,7 +1448,9 @@ const history_keymap = AnyDict(
     # Page Up
     "\e[5~" => (s,o...)->(history_prev(s, mode(s).hist)),
     # Page Down
-    "\e[6~" => (s,o...)->(history_next(s, mode(s).hist))
+    "\e[6~" => (s,o...)->(history_next(s, mode(s).hist)),
+    "\e<" => (s,o...)->(history_first(s, mode(s).hist)),
+    "\e>" => (s,o...)->(history_last(s, mode(s).hist)),
 )
 
 const prefix_history_keymap = merge!(
@@ -1559,7 +1566,9 @@ end
 
 run_interface(::Prompt) = nothing
 
-init_state(terminal, prompt::Prompt) = PromptState(terminal, prompt, IOBuffer(), InputAreaState(1, 1), #=indent(spaces)=#strwidth(prompt.prompt))
+init_state(terminal, prompt::Prompt) =
+    PromptState(terminal, prompt, IOBuffer(), InputAreaState(1, 1),
+    #=indent(spaces)=# strwidth(prompt_string(prompt)))
 
 function init_state(terminal, m::ModalInterface)
     s = MIState(m, m.modes[1], false, Dict{Any,Any}())
@@ -1574,7 +1583,7 @@ function run_interface(terminal, m::ModalInterface)
     while !s.aborted
         buf, ok, suspend = prompt!(terminal, m, s)
         while suspend
-            @static if is_unix(); ccall(:jl_repl_raise_sigtstp, Cint, ()); end
+            @static if Sys.isunix(); ccall(:jl_repl_raise_sigtstp, Cint, ()); end
             buf, ok, suspend = prompt!(terminal, m, s)
         end
         eval(Main,
@@ -1626,7 +1635,7 @@ function prompt!(term, prompt, s = init_state(term, prompt))
             elseif state === :done
                 return buffer(s), true, false
             elseif state === :suspend
-                if is_unix()
+                if Sys.isunix()
                     return buffer(s), true, true
                 end
             else

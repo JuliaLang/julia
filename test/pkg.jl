@@ -10,7 +10,7 @@ function capture_stdout(f::Function)
                     f()
                 end
             end
-            return readstring(fname)
+            return read(fname, String)
         finally
             rm(fname, force=true)
         end
@@ -69,7 +69,7 @@ temp_pkg_dir() do
     # (done here since it calls Pkg.status which might error or clone metadata)
     buf = PipeBuffer()
     versioninfo(buf, verbose=true)
-    ver = readstring(buf)
+    ver = read(buf, String)
     @test startswith(ver, "Julia Version $VERSION")
     @test contains(ver, "Environment:")
 
@@ -322,7 +322,7 @@ temp_pkg_dir() do
         include(Pkg.dir("Example","src","Example.jl"))
         meth = first(methods(Example.domath))
         fname = string(meth.file)
-        @test ('\\' in fname) == is_windows()
+        @test ('\\' in fname) == Sys.iswindows()
         @test startswith(Base.url(meth), "https://github.com/JuliaLang/Example.jl/tree")
     end
 
@@ -408,13 +408,13 @@ temp_pkg_dir() do
         touch(depsbuild)
         # Pkg.build works without the src directory now
         # but it's probably fine to require it.
-        msg = readstring(`$(Base.julia_cmd()) --startup-file=no -e 'redirect_stderr(STDOUT); Pkg.build("BuildFail")'`)
+        msg = read(`$(Base.julia_cmd()) --startup-file=no -e 'redirect_stderr(STDOUT); Pkg.build("BuildFail")'`, String)
         @test contains(msg, "Building BuildFail")
         @test !contains(msg, "ERROR")
         open(depsbuild, "w") do fd
             println(fd, "error(\"Throw build error\")")
         end
-        msg = readstring(`$(Base.julia_cmd()) --startup-file=no -e 'redirect_stderr(STDOUT); Pkg.build("BuildFail")'`)
+        msg = read(`$(Base.julia_cmd()) --startup-file=no -e 'redirect_stderr(STDOUT); Pkg.build("BuildFail")'`, String)
         @test contains(msg, "Building BuildFail")
         @test contains(msg, "ERROR")
         @test contains(msg, "Pkg.build(\"BuildFail\")")
@@ -425,7 +425,7 @@ temp_pkg_dir() do
     let package = "Example"
         Pkg.rm(package)  # Remove package if installed
         @test Pkg.installed(package) === nothing  # Registered with METADATA but not installed
-        msg = readstring(ignorestatus(`$(Base.julia_cmd()) --startup-file=no -e "redirect_stderr(STDOUT); Pkg.build(\"$package\")"`))
+        msg = read(ignorestatus(`$(Base.julia_cmd()) --startup-file=no -e "redirect_stderr(STDOUT); Pkg.build(\"$package\")"`), String)
         @test contains(msg, "$package is not an installed package")
         @test !contains(msg, "signal (15)")
     end
@@ -533,8 +533,8 @@ temp_pkg_dir() do
         end
 
         Pkg.add(package)
-        msg = readstring(ignorestatus(`$(Base.julia_cmd()) --startup-file=no -e
-            "redirect_stderr(STDOUT); using Example; Pkg.update(\"$package\")"`))
+        msg = read(ignorestatus(`$(Base.julia_cmd()) --startup-file=no -e
+            "redirect_stderr(STDOUT); using Example; Pkg.update(\"$package\")"`), String)
         @test contains(msg, "- $package\nRestart Julia to use the updated versions.")
     end
 
@@ -556,26 +556,26 @@ temp_pkg_dir() do
         mkdir(home)
         write(joinpath(home, ".juliarc.jl"), "const JULIA_RC_LOADED = true")
 
-        withenv((is_windows() ? "USERPROFILE" : "HOME") => home) do
+        withenv((Sys.iswindows() ? "USERPROFILE" : "HOME") => home) do
             code = "redirect_stderr(STDOUT); Pkg.build(\"$package\")"
 
-            msg = readstring(`$(Base.julia_cmd()) --startup-file=no -e $code`)
+            msg = read(`$(Base.julia_cmd()) --startup-file=no -e $code`, String)
             @test contains(msg, "INFO: JULIA_RC_LOADED defined false")
             @test contains(msg, "INFO: Main.JULIA_RC_LOADED defined false")
 
-            msg = readstring(`$(Base.julia_cmd()) --startup-file=yes -e $code`)
+            msg = read(`$(Base.julia_cmd()) --startup-file=yes -e $code`, String)
             @test contains(msg, "INFO: JULIA_RC_LOADED defined false")
             @test contains(msg, "INFO: Main.JULIA_RC_LOADED defined true")
 
             code = "redirect_stderr(STDOUT); Pkg.test(\"$package\")"
 
-            msg = readstring(`$(Base.julia_cmd()) --startup-file=no -e $code`)
+            msg = read(`$(Base.julia_cmd()) --startup-file=no -e $code`, String)
             @test contains(msg, "INFO: JULIA_RC_LOADED defined false")
             @test contains(msg, "INFO: Main.JULIA_RC_LOADED defined false")
 
             # Note: Since both the startup-file and "runtests.jl" are run in the Main
             # module any global variables created in the .juliarc.jl can be referenced.
-            msg = readstring(`$(Base.julia_cmd()) --startup-file=yes -e $code`)
+            msg = read(`$(Base.julia_cmd()) --startup-file=yes -e $code`, String)
             @test contains(msg, "INFO: JULIA_RC_LOADED defined true")
             @test contains(msg, "INFO: Main.JULIA_RC_LOADED defined true")
         end

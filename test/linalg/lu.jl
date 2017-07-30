@@ -64,6 +64,7 @@ debug && println("(Automatic) Square LU decomposition. eltya: $eltya, eltyb: $el
         @test l*u ≈ a[p,:]
         @test (l*u)[invperm(p),:] ≈ a
         @test a * inv(lua) ≈ eye(n)
+        @test copy(lua) == lua
 
         lstring = sprint(show,l)
         ustring = sprint(show,u)

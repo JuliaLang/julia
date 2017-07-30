@@ -74,8 +74,7 @@ end
 Checks if commit `id` (which is a [`GitHash`](@ref) in string form)
 is in the repository.
 
-# Example
-
+# Examples
 ```julia-repl
 julia> repo = LibGit2.GitRepo(repo_path);
 
@@ -109,7 +108,7 @@ Checks if there have been any changes to tracked files in the working tree (if
 `cached=false`) or the index (if `cached=true`).
 `pathspecs` are the specifications for options for the diff.
 
-# Example
+# Examples
 ```julia
 repo = LibGit2.GitRepo(repo_path)
 LibGit2.isdirty(repo) # should be false
@@ -132,7 +131,7 @@ Checks if there are any differences between the tree specified by `treeish` and 
 tracked files in the working tree (if `cached=false`) or the index (if `cached=true`).
 `pathspecs` are the specifications for options for the diff.
 
-# Example
+# Examples
 ```julia
 repo = LibGit2.GitRepo(repo_path)
 LibGit2.isdiff(repo, "HEAD") # should be false
@@ -168,8 +167,7 @@ The keyword argument is:
 
 Returns only the *names* of the files which have changed, *not* their contents.
 
-# Example
-
+# Examples
 ```julia
 LibGit2.branch!(repo, "branch/a")
 LibGit2.branch!(repo, "branch/b")
@@ -219,8 +217,7 @@ end
 Returns `true` if `a`, a [`GitHash`](@ref) in string form, is an ancestor of
 `b`, a [`GitHash`](@ref) in string form.
 
-# Example
-
+# Examples
 ```julia-repl
 julia> repo = LibGit2.GitRepo(repo_path);
 
@@ -349,8 +346,7 @@ The keyword arguments are:
 
 Equivalent to `git checkout [-b|-B] <branch_name> [<commit>] [--track <track>]`.
 
-# Example
-
+# Examples
 ```julia
 repo = LibGit2.GitRepo(repo_path)
 LibGit2.branch!(repo, "new_branch", set_head=false)
@@ -430,8 +426,7 @@ Checkout the git commit `commit` (a [`GitHash`](@ref) in string form)
 in `repo`. If `force` is `true`, force the checkout and discard any
 current changes. Note that this detaches the current HEAD.
 
-# Example
-
+# Examples
 ```julia
 repo = LibGit2.init(repo_path)
 open(joinpath(LibGit2.path(repo), "file1"), "w") do f
@@ -500,7 +495,6 @@ The keyword arguments are:
 Equivalent to `git clone [-b <branch>] [--bare] <repo_url> <repo_path>`.
 
 # Examples
-
 ```julia
 repo_url = "https://github.com/JuliaLang/Example.jl"
 repo1 = LibGit2.clone(repo_url, "test_path")
@@ -545,8 +539,7 @@ set by `mode`:
 
 Equivalent to `git reset [--soft | --mixed | --hard] <id>`.
 
-# Example
-
+# Examples
 ```julia
 repo = LibGit2.GitRepo(repo_path)
 head_oid = LibGit2.head_oid(repo)
@@ -573,6 +566,23 @@ commits, respectively. A left (or right) commit refers to which side of a symmet
 difference in a tree the commit is reachable from.
 
 Equivalent to `git rev-list --left-right --count <commit1> <commit2>`.
+
+# Examples
+```julia
+repo = LibGit2.GitRepo(repo_path)
+repo_file = open(joinpath(repo_path, test_file), "a")
+println(repo_file, "hello world")
+flush(repo_file)
+LibGit2.add!(repo, test_file)
+commit_oid1 = LibGit2.commit(repo, "commit 1")
+println(repo_file, "hello world again")
+flush(repo_file)
+LibGit2.add!(repo, test_file)
+commit_oid2 = LibGit2.commit(repo, "commit 2")
+LibGit2.revcount(repo, string(commit_oid1), string(commit_oid2))
+```
+
+This will return `(-1, 0)`.
 """
 function revcount(repo::GitRepo, commit1::AbstractString, commit2::AbstractString)
     commit1_id = revparseid(repo, commit1)
@@ -763,8 +773,7 @@ end
 
 Returns all authors of commits to the `repo` repository.
 
-# Example
-
+# Examples
 ```julia
 repo = LibGit2.GitRepo(repo_path)
 repo_file = open(joinpath(repo_path, test_file), "a")
@@ -856,33 +865,13 @@ function set_ssl_cert_locations(cert_loc)
     cert_file = isfile(cert_loc) ? cert_loc : Cstring(C_NULL)
     cert_dir  = isdir(cert_loc) ? cert_loc : Cstring(C_NULL)
     cert_file == C_NULL && cert_dir == C_NULL && return
-    # TODO FIX https://github.com/libgit2/libgit2/pull/3935#issuecomment-253910017
-    #ccall((:git_libgit2_opts, :libgit2), Cint,
-    #      (Cint, Cstring, Cstring),
-    #      Cint(Consts.SET_SSL_CERT_LOCATIONS), cert_file, cert_dir)
-    ENV["SSL_CERT_FILE"] = cert_file
-    ENV["SSL_CERT_DIR"] = cert_dir
+    @check ccall((:git_libgit2_opts, :libgit2), Cint,
+          (Cint, Cstring, Cstring),
+          Cint(Consts.SET_SSL_CERT_LOCATIONS), cert_file, cert_dir)
 end
 
 function __init__()
-    # Look for OpenSSL env variable for CA bundle (linux only)
-    # windows and macOS use the OS native security backends
-    old_ssl_cert_dir = Base.get(ENV, "SSL_CERT_DIR", nothing)
-    old_ssl_cert_file = Base.get(ENV, "SSL_CERT_FILE", nothing)
-    @static if is_linux()
-        cert_loc = if "SSL_CERT_DIR" in keys(ENV)
-            ENV["SSL_CERT_DIR"]
-        elseif "SSL_CERT_FILE" in keys(ENV)
-            ENV["SSL_CERT_FILE"]
-        else
-            # If we have a bundled ca cert file, point libgit2 at that so SSL connections work.
-            abspath(ccall(:jl_get_julia_home, Any, ()),Base.DATAROOTDIR,"julia","cert.pem")
-        end
-        set_ssl_cert_locations(cert_loc)
-    end
-
-    err = ccall((:git_libgit2_init, :libgit2), Cint, ())
-    err > 0 || throw(ErrorException("error initializing LibGit2 module"))
+    @check ccall((:git_libgit2_init, :libgit2), Cint, ())
     REFCOUNT[] = 1
 
     atexit() do
@@ -892,21 +881,18 @@ function __init__()
         end
     end
 
-    @static if is_linux()
-        if old_ssl_cert_dir != Base.get(ENV, "SSL_CERT_DIR", "")
-            if old_ssl_cert_dir === nothing
-                delete!(ENV, "SSL_CERT_DIR")
-            else
-                ENV["SSL_CERT_DIR"] = old_ssl_cert_dir
-            end
+    # Look for OpenSSL env variable for CA bundle (linux only)
+    # windows and macOS use the OS native security backends
+    @static if Sys.islinux()
+        cert_loc = if "SSL_CERT_DIR" in keys(ENV)
+            ENV["SSL_CERT_DIR"]
+        elseif "SSL_CERT_FILE" in keys(ENV)
+            ENV["SSL_CERT_FILE"]
+        else
+            # If we have a bundled ca cert file, point libgit2 at that so SSL connections work.
+            abspath(ccall(:jl_get_julia_home, Any, ()), Base.DATAROOTDIR, "julia", "cert.pem")
         end
-        if old_ssl_cert_file != Base.get(ENV, "SSL_CERT_FILE", "")
-            if old_ssl_cert_file === nothing
-                delete!(ENV, "SSL_CERT_FILE")
-            else
-                ENV["SSL_CERT_FILE"] = old_ssl_cert_file
-            end
-        end
+        set_ssl_cert_locations(cert_loc)
     end
 end
 

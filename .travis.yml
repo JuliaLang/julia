@@ -1,40 +1,33 @@
 language: cpp
 sudo: false
+dist: trusty
 matrix:
   include:
     - os: linux
       env: ARCH="i686"
-      compiler: "g++-5 -m32"
+      compiler: "g++ -m32"
       addons:
         apt:
-          sources:
-            - ubuntu-toolchain-r-test
           packages:
             - libssl1.0.0
             - bar
             - time
-            - binutils
-            - gcc-5
-            - g++-5
-            - gcc-5-multilib
-            - g++-5-multilib
+            - gcc-multilib
+            - g++-multilib
             - make:i386
             - libssl-dev:i386
-            - gfortran-5
-            - gfortran-5-multilib
+            - gfortran
+            - gfortran-multilib
     - os: linux
       env: ARCH="x86_64"
-      compiler: "g++-5 -m64"
+      compiler: "g++ -m64"
       addons:
         apt:
-          sources:
-            - ubuntu-toolchain-r-test
           packages:
             - libssl1.0.0
             - bar
             - time
-            - g++-5
-            - gfortran-5
+            - gfortran
     - os: osx
       env: ARCH="x86_64"
       osx_image: xcode8
@@ -63,12 +56,6 @@ before_install:
     - make check-whitespace
     - if [ `uname` = "Linux" ]; then
         contrib/travis_fastfail.sh || exit 1;
-        mkdir -p $HOME/bin;
-        ln -s /usr/bin/gcc-5 $HOME/bin/gcc;
-        ln -s /usr/bin/g++-5 $HOME/bin/g++;
-        ln -s /usr/bin/gfortran-5 $HOME/bin/gfortran;
-        ln -s /usr/bin/gcc-5 $HOME/bin/x86_64-linux-gnu-gcc;
-        ln -s /usr/bin/g++-5 $HOME/bin/x86_64-linux-gnu-g++;
         gcc --version;
         BAR="bar -i 30";
         BUILDOPTS="-j3 VERBOSE=1 FORCE_ASSERTIONS=1 LLVM_ASSERTIONS=1";

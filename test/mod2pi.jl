@@ -5,7 +5,7 @@
 # [2] range reduction: http://hal-ujm.ccsd.cnrs.fr/docs/00/08/69/04/PDF/RangeReductionIEEETC0305.pdf
 # [3] precise addition, see Add22: http://ftp.nluug.nl/pub/os/BSD/FreeBSD/distfiles/crlibm/crlibm-1.0beta3.pdf
 
-# Examples:
+# Examples
 # ΓΓ = 6411027962775774 / 2^45  # see [2] above, section 1.2
 # julia> mod(ΓΓ, 2pi)    # "naive" way - easily wrong
 # 7.105427357601002e-15

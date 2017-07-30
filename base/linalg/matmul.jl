@@ -132,8 +132,7 @@ Ac_mul_B!(y::AbstractVector, A::AbstractVecOrMat, x::AbstractVector) = generic_m
 
 Matrix multiplication.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> [1 1; 0 1] * [1 0; 1 1]
 2×2 Array{Int64,2}:
@@ -164,8 +163,7 @@ Calculates the matrix-matrix or matrix-vector product ``A⋅B`` and stores the r
 overwriting the existing value of `Y`. Note that `Y` must not be aliased with either `A` or
 `B`.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> A=[1.0 2.0; 3.0 4.0]; B=[1.0 1.0; 1.0 1.0]; Y = similar(B); A_mul_B!(Y, A, B);
 
@@ -372,7 +370,7 @@ end
 # blas.jl defines matmul for floats; other integer and mixed precision
 # cases are handled here
 
-lapack_size(t::Char, M::AbstractVecOrMat) = (size(M, t=='N' ? 1:2), size(M, t=='N' ? 2:1))
+lapack_size(t::Char, M::AbstractVecOrMat) = (size(M, t=='N' ? 1 : 2), size(M, t=='N' ? 2 : 1))
 
 function copy!(B::AbstractVecOrMat, ir_dest::UnitRange{Int}, jr_dest::UnitRange{Int}, tM::Char, M::AbstractVecOrMat, ir_src::UnitRange{Int}, jr_src::UnitRange{Int})
     if tM == 'N'

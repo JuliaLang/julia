@@ -15,14 +15,14 @@ function show(io::IO, ::MIME"text/plain", iter::Union{KeyIterator,ValueIterator}
         rows < 2 && (print(io, " …"); return)
         cols < 4 && (cols = 4)
         cols -= 2 # For prefix "  "
-        rows -= 2 # For summary and final ⋮ continuation lines
+        rows -= 1 # For summary
     else
-        rows = cols = 0
+        rows = cols = typemax(Int)
     end
 
     for (i, v) in enumerate(iter)
         print(io, "\n  ")
-        limit && i >= rows && (print(io, "⋮"); break)
+        i == rows < length(iter) && (print(io, "⋮"); break)
 
         if limit
             str = sprint(0, show, v, env=io)
@@ -44,7 +44,7 @@ function show(io::IO, ::MIME"text/plain", t::Associative{K,V}) where {K,V}
 
     print(io, summary(t))
     isempty(t) && return
-    print(io, ":\n  ")
+    print(io, ":")
     show_circular(io, t) && return
     if limit
         sz = displaysize(io)
@@ -52,7 +52,7 @@ function show(io::IO, ::MIME"text/plain", t::Associative{K,V}) where {K,V}
         rows < 2   && (print(io, " …"); return)
         cols < 12  && (cols = 12) # Minimum widths of 2 for key, 4 for value
         cols -= 6 # Subtract the widths of prefix "  " separator " => "
-        rows -= 2 # Subtract the summary and final ⋮ continuation lines
+        rows -= 1 # Subtract the summary
 
         # determine max key width to align the output, caching the strings
         ks = Vector{AbstractString}(min(rows, length(t)))
@@ -70,14 +70,12 @@ function show(io::IO, ::MIME"text/plain", t::Associative{K,V}) where {K,V}
             keylen = max(cld(cols, 3), cols - vallen)
         end
     else
-        rows = cols = 0
+        rows = cols = typemax(Int)
     end
 
-    first = true
     for (i, (k, v)) in enumerate(t)
-        first || print(io, "\n  ")
-        first = false
-        limit && i > rows && (print(io, rpad("⋮", keylen), " => ⋮"); break)
+        print(io, "\n  ")
+        i == rows < length(t) && (print(io, rpad("⋮", keylen), " => ⋮"); break)
 
         if limit
             key = rpad(_truncate_at_width_or_chars(ks[i], keylen, "\r\n"), keylen)
@@ -153,7 +151,7 @@ end
 
 function show(io::IO, ::MIME"text/plain", opt::JLOptions)
     println(io, "JLOptions(")
-    fields = fieldnames(opt)
+    fields = fieldnames(JLOptions)
     nfields = length(fields)
     for (i, f) in enumerate(fields)
         v = getfield(opt, i)
@@ -168,6 +166,11 @@ end
 
 # showing exception objects as descriptive error messages
 
+"""
+    showerror(io, e)
+
+Show a descriptive representation of an exception object.
+"""
 showerror(io::IO, ex) = show(io, ex)
 
 function showerror(io::IO, ex::BoundsError)
@@ -194,7 +197,6 @@ end
 
 function showerror(io::IO, ex::TypeError)
     print(io, "TypeError: ")
-    ctx = isempty(ex.context) ? "" : "in $(ex.context), "
     if ex.expected === Bool
         print(io, "non-boolean ($(typeof(ex.got))) used in boolean context")
     else
@@ -203,7 +205,12 @@ function showerror(io::IO, ex::TypeError)
         else
             tstr = string(typeof(ex.got))
         end
-        print(io, "$(ex.func): $(ctx)expected $(ex.expected), got $tstr")
+        if isempty(ex.context)
+            ctx = "in $(ex.func)"
+        else
+            ctx = "in $(ex.func), in $(ex.context)"
+        end
+        print(io, ctx, ", expected $(ex.expected), got ", tstr)
     end
 end
 
@@ -232,31 +239,16 @@ end
 showerror(io::IO, ex::InitError) = showerror(io, ex, [])
 
 function showerror(io::IO, ex::DomainError, bt; backtrace=true)
-    print(io, "DomainError:")
-    for b in bt
-        for code in StackTraces.lookup(b)
-            if code.from_c
-                continue
-            elseif code.func === :nan_dom_err
-                continue
-            elseif code.func in (:log, :log2, :log10, :sqrt)
-                print(io, "\n$(code.func) will only return a complex result if called ",
-                    "with a complex argument. Try $(string(code.func))(complex(x)).")
-            elseif (code.func === :^ &&
-                    (code.file === Symbol("intfuncs.jl") || code.file === Symbol(joinpath(".", "intfuncs.jl")))) ||
-                   code.func === :power_by_squaring #3024
-                print(io, "\nCannot raise an integer x to a negative power -n. ",
-                    "\nMake x a float by adding a zero decimal (e.g. 2.0^-n instead ",
-                    "of 2^-n), or write 1/x^n, float(x)^-n, or (x//1)^-n.")
-            elseif code.func === :^ &&
-                    (code.file === Symbol("math.jl") || code.file === Symbol(joinpath(".", "math.jl")))
-                print(io, "\nExponentiation yielding a complex result requires a complex ",
-                    "argument.\nReplace x^y with (x+0im)^y, Complex(x)^y, or similar.")
-            end
-            @goto showbacktrace
-        end
+    if isa(ex.val, AbstractArray)
+        compact = get(io, :compact, true)
+        limit = get(io, :limit, true)
+        print(IOContext(io, compact=compact, limit=limit), "DomainError with ", ex.val)
+    else
+        print(io, "DomainError with ", ex.val)
     end
-    @label showbacktrace
+    if isdefined(ex, :msg)
+        print(io, ":\n", ex.msg)
+    end
     backtrace && show_backtrace(io, bt)
     nothing
 end
@@ -293,6 +285,10 @@ function showerror(io::IO, ex::UndefVarError)
         """))
     end
     print(io, "UndefVarError: $(ex.var) not defined")
+end
+
+function showerror(io::IO, ex::InexactError)
+    print(io, "InexactError: ", ex.func, '(', ex.T, ", ", ex.val, ')')
 end
 
 function showerror(io::IO, ex::MethodError)

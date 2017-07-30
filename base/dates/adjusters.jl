@@ -25,7 +25,7 @@ Base.trunc(t::Time, p::Type{Nanosecond})  = t
 
 Truncates the value of `dt` according to the provided `Period` type.
 
-# Example
+# Examples
 ```jldoctest
 julia> trunc(Dates.DateTime("1996-01-01T12:30:00"), Dates.Day)
 1996-01-01T00:00:00
@@ -39,7 +39,7 @@ Dates.trunc(::Dates.TimeType, ::Type{Dates.Period})
 
 Adjusts `dt` to the Monday of its week.
 
-# Example
+# Examples
 ```jldoctest
 julia> Dates.firstdayofweek(DateTime("1996-01-05T12:30:00"))
 1996-01-01T00:00:00
@@ -55,7 +55,7 @@ firstdayofweek(dt::DateTime) = DateTime(firstdayofweek(Date(dt)))
 
 Adjusts `dt` to the Sunday of its week.
 
-# Example
+# Examples
 ```jldoctest
 julia> Dates.lastdayofweek(DateTime("1996-01-05T12:30:00"))
 1996-01-07T00:00:00
@@ -71,7 +71,7 @@ lastdayofweek(dt::DateTime) = DateTime(lastdayofweek(Date(dt)))
 
 Adjusts `dt` to the first day of its month.
 
-# Example
+# Examples
 ```jldoctest
 julia> Dates.firstdayofmonth(DateTime("1996-05-20"))
 1996-05-01T00:00:00
@@ -87,7 +87,7 @@ firstdayofmonth(dt::DateTime) = DateTime(firstdayofmonth(Date(dt)))
 
 Adjusts `dt` to the last day of its month.
 
-# Example
+# Examples
 ```jldoctest
 julia> Dates.lastdayofmonth(DateTime("1996-05-20"))
 1996-05-31T00:00:00
@@ -106,7 +106,7 @@ lastdayofmonth(dt::DateTime) = DateTime(lastdayofmonth(Date(dt)))
 
 Adjusts `dt` to the first day of its year.
 
-# Example
+# Examples
 ```jldoctest
 julia> Dates.firstdayofyear(DateTime("1996-05-20"))
 1996-01-01T00:00:00
@@ -122,7 +122,7 @@ firstdayofyear(dt::DateTime) = DateTime(firstdayofyear(Date(dt)))
 
 Adjusts `dt` to the last day of its year.
 
-# Example
+# Examples
 ```jldoctest
 julia> Dates.lastdayofyear(DateTime("1996-05-20"))
 1996-12-31T00:00:00
@@ -186,7 +186,7 @@ lastdayofquarter(dt::DateTime) = DateTime(lastdayofquarter(Date(dt)))
 struct DateFunction
     f::Function
     # validate boolean, single-arg inner constructor
-    function DateFunction(f::ANY, dt::TimeType)
+    function DateFunction(@nospecialize(f), dt::TimeType)
         isa(f(dt), Bool) || throw(ArgumentError("Provided function must take a single TimeType argument and return true or false"))
         return new(f)
     end

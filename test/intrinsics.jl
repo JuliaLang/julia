@@ -69,7 +69,7 @@ compiled_addf(x, y) = Core.Intrinsics.add_float(x, y)
 @test_throws ErrorException compiled_addf(im, im)
 @test_throws ErrorException compiled_addf(true, true)
 
-function compiled_conv{T}(::Type{T}, x)
+function compiled_conv(::Type{T}, x) where T
     t = Core.Intrinsics.trunc_int(T, x)
     z = Core.Intrinsics.zext_int(typeof(x), t)
     s = Core.Intrinsics.sext_int(typeof(x), t)

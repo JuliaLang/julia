@@ -355,6 +355,7 @@ export
     isreal,
     issubnormal,
     iszero,
+    isone,
     lcm,
     ldexp,
     leading_ones,
@@ -508,7 +509,9 @@ export
     prod,
     promote_shape,
     randcycle,
+    randcycle!,
     randperm,
+    randperm!,
     randsubseq!,
     randsubseq,
     range,
@@ -809,7 +812,6 @@ export
     search,
     searchindex,
     show,
-    showall,
     showcompact,
     showerror,
     split,
@@ -946,6 +948,7 @@ export
     fieldoffset,
     fieldname,
     fieldnames,
+    fieldcount,
     isleaftype,
     oftype,
     promote,
@@ -963,6 +966,7 @@ export
     expand,
     gensym,
     macroexpand,
+    @macroexpand1,
     @macroexpand,
     parse,
 
@@ -994,7 +998,6 @@ export
 # loading source files
     __precompile__,
     evalfile,
-    include,
     include_string,
     include_dependency,
     reload,
@@ -1069,7 +1072,6 @@ export
     readdlm,
     readline,
     readlines,
-    readstring,
     readuntil,
     redirect_stderr,
     redirect_stdin,
@@ -1257,14 +1259,6 @@ export
     @code_llvm,
     @code_native,
 
-    # platform-conditional code
-    @static,
-    is_windows,
-    is_linux,
-    is_apple,
-    is_bsd,
-    is_unix,
-
     # tasks
     @schedule,
     @sync,
@@ -1285,6 +1279,7 @@ export
     @simd,
     @inline,
     @noinline,
+    @nospecialize,
     @polly,
 
     @assert,
@@ -1294,6 +1289,7 @@ export
     @goto,
     @view,
     @views,
+    @static,
 
 # SparseArrays module re-exports
     SparseArrays,

@@ -54,9 +54,9 @@ mutable struct MethodError <: Exception
     f
     args
     world::UInt
-    MethodError(f::ANY, args::ANY, world::UInt) = new(f, args, world)
+    MethodError(@nospecialize(f), @nospecialize(args), world::UInt) = new(f, args, world)
 end
-MethodError(f::ANY, args::ANY) = MethodError(f, args, typemax(UInt))
+MethodError(@nospecialize(f), @nospecialize(args)) = MethodError(f, args, typemax(UInt))
 
 """
     EOFError()
@@ -122,7 +122,7 @@ ccall(:jl_get_system_hooks, Void, ())
 ==(w::WeakRef, v) = isequal(w.value, v)
 ==(w, v::WeakRef) = isequal(w, v.value)
 
-function finalizer(o::ANY, f::ANY)
+function finalizer(@nospecialize(o), @nospecialize(f))
     if isimmutable(o)
         error("objects of type ", typeof(o), " cannot be finalized")
     end
@@ -138,8 +138,8 @@ function finalizer(o::T, f::Ptr{Void}) where T
           Core.getptls(), o, f)
 end
 
-finalize(o::ANY) = ccall(:jl_finalize_th, Void, (Ptr{Void}, Any,),
-                         Core.getptls(), o)
+finalize(@nospecialize(o)) = ccall(:jl_finalize_th, Void, (Ptr{Void}, Any,),
+                                   Core.getptls(), o)
 
 gc(full::Bool=true) = ccall(:jl_gc_collect, Void, (Int32,), full)
 gc_enable(on::Bool) = ccall(:jl_gc_enable, Int32, (Int32,), on) != 0

@@ -36,15 +36,12 @@ else
 LIBGIT2_OPTS += -DCURL_INCLUDE_DIRS=$(build_includedir) -DCURL_LIBRARIES="-L$(build_shlibdir) -lcurl"
 endif
 
-ifeq ($(OS),Linux)
-LIBGIT2_OPTS += -DUSE_OPENSSL=OFF -DUSE_MBEDTLS=ON -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
-endif
-ifeq ($(OS),FreeBSD)
-LIBGIT2_OPTS += -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
+ifneq (,$(findstring $(OS),Linux FreeBSD))
+LIBGIT2_OPTS += -DUSE_HTTPS=ON -DTLS_BACKEND="mbedTLS" -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
 endif
 
 # We need to bundle ca certs on linux now that we're using libgit2 with ssl
-ifeq ($(OS),Linux)
+ifneq (,$(findstring $(OS),Linux FreeBSD))
 OPENSSL_DIR=$(shell openssl version -d | cut -d '"' -f 2)
 # This certfile location observed on Ubuntu 16.04
 ifeq ($(shell [ -e $(OPENSSL_DIR)/certs/ca-certificates.crt ] && echo exists),exists)
@@ -52,14 +49,14 @@ CERTFILE=$(OPENSSL_DIR)/certs/ca-certificates.crt
 # This certfile location observed on openSUSE Leap 42.1
 else ifeq ($(shell [ -e $(OPENSSL_DIR)/ca-bundle.pem ] && echo exists),exists)
 CERTFILE=$(OPENSSL_DIR)/ca-bundle.pem
-# This certfile location observed on Ubuntu 14.04
+# This certfile location observed on Ubuntu 14.04 and FreeBSD
 else ifeq ($(shell [ -e $(OPENSSL_DIR)/cert.pem ] && echo exists),exists)
 CERTFILE=$(OPENSSL_DIR)/cert.pem
 # This certfile location observed on Debian 7
 else ifeq ($(shell [ -e $(OPENSSL_DIR)/certs/ca.pem ] && echo exists),exists)
 CERTFILE=$(OPENSSL_DIR)/certs/ca.pem
 endif
-endif # Linux
+endif # Linux and FreeBSD
 
 LIBGIT2_SRC_PATH := $(SRCDIR)/srccache/$(LIBGIT2_SRC_DIR)
 
@@ -78,29 +75,14 @@ $(LIBGIT2_SRC_PATH)/libgit2-agent-nonfatal.patch-applied: $(LIBGIT2_SRC_PATH)/so
 		patch -p1 -f < $(SRCDIR)/patches/libgit2-agent-nonfatal.patch
 	echo 1 > $@
 
-$(LIBGIT2_SRC_PATH)/libgit2-mbedtls-writer-fix.patch-applied: $(LIBGIT2_SRC_PATH)/source-extracted | $(LIBGIT2_SRC_PATH)/libgit2-mbedtls.patch-applied
-	cd $(LIBGIT2_SRC_PATH) && \
-		patch -p1 -f < $(SRCDIR)/patches/libgit2-mbedtls-writer-fix.patch
-	echo 1 > $@
-
-$(LIBGIT2_SRC_PATH)/libgit2-mbedtls-verify.patch-applied: $(LIBGIT2_SRC_PATH)/source-extracted | $(LIBGIT2_SRC_PATH)/libgit2-mbedtls-writer-fix.patch-applied
+$(LIBGIT2_SRC_PATH)/libgit2-mbedtls-verify.patch-applied: $(LIBGIT2_SRC_PATH)/source-extracted | $(LIBGIT2_SRC_PATH)/libgit2-agent-nonfatal.patch-applied
 	cd $(LIBGIT2_SRC_PATH) && \
 		patch -p1 -f < $(SRCDIR)/patches/libgit2-mbedtls-verify.patch
 	echo 1 > $@
 
-$(LIBGIT2_SRC_PATH)/libgit2-gitconfig-symlink.patch-applied: $(LIBGIT2_SRC_PATH)/source-extracted | $(LIBGIT2_SRC_PATH)/libgit2-mbedtls-verify.patch-applied
+$(LIBGIT2_SRC_PATH)/libgit2-mbedtls-fixup.patch-applied: $(LIBGIT2_SRC_PATH)/source-extracted | $(LIBGIT2_SRC_PATH)/libgit2-mbedtls-verify.patch-applied
 	cd $(LIBGIT2_SRC_PATH) && \
-		patch -p1 -f < $(SRCDIR)/patches/libgit2-gitconfig-symlink.patch
-	echo 1 > $@
-
-$(LIBGIT2_SRC_PATH)/libgit2-free-config.patch-applied: $(LIBGIT2_SRC_PATH)/source-extracted | $(LIBGIT2_SRC_PATH)/libgit2-gitconfig-symlink.patch-applied
-	cd $(LIBGIT2_SRC_PATH) && \
-		patch -p1 -f < $(SRCDIR)/patches/libgit2-free-config.patch
-	echo 1 > $@
-
-$(LIBGIT2_SRC_PATH)/libgit2-remote-push-NULL.patch-applied: $(LIBGIT2_SRC_PATH)/source-extracted | $(LIBGIT2_SRC_PATH)/libgit2-free-config.patch-applied
-	cd $(LIBGIT2_SRC_PATH) && \
-		patch -p1 -f < $(SRCDIR)/patches/libgit2-remote-push-NULL.patch
+		patch -p1 -f < $(SRCDIR)/patches/libgit2-mbedtls-fixup.patch
 	echo 1 > $@
 
 $(build_datarootdir)/julia/cert.pem: $(CERTFILE)
@@ -111,11 +93,8 @@ $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: \
 	$(LIBGIT2_SRC_PATH)/libgit2-mbedtls.patch-applied \
 	$(LIBGIT2_SRC_PATH)/libgit2-ssh.patch-applied \
 	$(LIBGIT2_SRC_PATH)/libgit2-agent-nonfatal.patch-applied \
-	$(LIBGIT2_SRC_PATH)/libgit2-mbedtls-writer-fix.patch-applied \
 	$(LIBGIT2_SRC_PATH)/libgit2-mbedtls-verify.patch-applied \
-	$(LIBGIT2_SRC_PATH)/libgit2-gitconfig-symlink.patch-applied \
-	$(LIBGIT2_SRC_PATH)/libgit2-free-config.patch-applied \
-	$(LIBGIT2_SRC_PATH)/libgit2-remote-push-NULL.patch-applied
+	$(LIBGIT2_SRC_PATH)/libgit2-mbedtls-fixup.patch-applied
 
 ifneq ($(CERTFILE),)
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: $(build_datarootdir)/julia/cert.pem

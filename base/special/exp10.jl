@@ -67,16 +67,6 @@ MIN_EXP10(::Type{Float32}) = -45.15449934959718f0         # log10 2^-150
 @eval exp10_small_thres(::Type{Float64}) = $(2.0^-29)
 @eval exp10_small_thres(::Type{Float32}) = $(2.0f0^-14)
 
-"""
-    exp10(x)
-
-Compute the base `10` exponential of `x`, in other words ``10^x``.
-
-```jldoctest
-julia> exp10(1.0)
-10.0
-```
-"""
 function exp10(x::T) where T<:Union{Float32,Float64}
     xa = reinterpret(Unsigned, x) & ~sign_mask(T)
     xsb = signbit(x)

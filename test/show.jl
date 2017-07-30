@@ -94,6 +94,21 @@ end
 @test_repr "(a / b) / (c / d / e)"
 @test_repr "(a == b == c) != (c == d < e)"
 
+# Exponentiation (>= operator_precedence(:^)) and unary operators
+@test_repr "(-1)^a"
+@test_repr "(-2.1)^-1"
+@test_repr "(-x)^a"
+@test_repr "(-a)^-1"
+@test_repr "(!x)↑!a"
+@test_repr "(!x).a"
+@test_repr "(!x)::a"
+
+# Complex
+
+# parse(repr(:(...))) returns a double-quoted block, so we need to eval twice to unquote it
+@test iszero(eval(eval(parse(repr(:($(1 + 2im) - $(1 + 2im)))))))
+
+
 # control structures (shamelessly stolen from base/bitarray.jl)
 @test_repr """mutable struct BitArray{N} <: AbstractArray{Bool, N}
     # line meta
@@ -367,12 +382,12 @@ let oldout = STDOUT, olderr = STDERR
         # pr 16917
         rdout, wrout = redirect_stdout()
         @test wrout === STDOUT
-        out = @async readstring(rdout)
+        out = @async read(rdout, String)
         rderr, wrerr = redirect_stderr()
         @test wrerr === STDERR
-        err = @async readstring(rderr)
+        err = @async read(rderr, String)
         @test dump(Int64) === nothing
-        if !is_windows()
+        if !Sys.iswindows()
             close(wrout)
             close(wrerr)
         end
@@ -409,7 +424,7 @@ let filename = tempname()
         end
     end
     @test ret == [1,3]
-    @test chomp(readstring(filename)) == "hello"
+    @test chomp(read(filename, String)) == "hello"
     ret = open(filename, "w") do f
         redirect_stderr(f) do
             warn("hello")
@@ -417,12 +432,19 @@ let filename = tempname()
         end
     end
     @test ret == [2]
-    @test contains(readstring(filename), "WARNING: hello")
-    ret = open(filename) do f
-        redirect_stdin(f) do
-            readline()
+
+    # STDIN is unavailable on the workers. Run test on master.
+    @test contains(read(filename, String), "WARNING: hello")
+    ret = eval(Main, quote
+        remotecall_fetch(1, $filename) do fname
+            open(fname) do f
+                redirect_stdin(f) do
+                    readline()
+                end
+            end
         end
-    end
+    end)
+
     @test contains(ret, "WARNING: hello")
     rm(filename)
 end
@@ -447,13 +469,6 @@ function f13127()
     String(take!(buf))
 end
 @test f13127() == "$(curmod_prefix)f"
-
-let a = Pair(1.0,2.0)
-    @test sprint(show,a) == "1.0=>2.0"
-end
-let a = Pair(Pair(1,2),Pair(3,4))
-    @test sprint(show,a) == "(1=>2)=>(3=>4)"
-end
 
 #test methodshow.jl functions
 @test Base.inbase(Base)
@@ -540,9 +555,9 @@ end
 
 # test structured zero matrix printing for select structured types
 A = reshape(1:16,4,4)
-@test replstr(Diagonal(A)) == "4×4 Diagonal{$Int}:\n 1  ⋅   ⋅   ⋅\n ⋅  6   ⋅   ⋅\n ⋅  ⋅  11   ⋅\n ⋅  ⋅   ⋅  16"
-@test replstr(Bidiagonal(A,true)) == "4×4 Bidiagonal{$Int}:\n 1  5   ⋅   ⋅\n ⋅  6  10   ⋅\n ⋅  ⋅  11  15\n ⋅  ⋅   ⋅  16"
-@test replstr(Bidiagonal(A,false)) == "4×4 Bidiagonal{$Int}:\n 1  ⋅   ⋅   ⋅\n 2  6   ⋅   ⋅\n ⋅  7  11   ⋅\n ⋅  ⋅  12  16"
+@test replstr(Diagonal(A)) == "4×4 Diagonal{$(Int),Array{$(Int),1}}:\n 1  ⋅   ⋅   ⋅\n ⋅  6   ⋅   ⋅\n ⋅  ⋅  11   ⋅\n ⋅  ⋅   ⋅  16"
+@test replstr(Bidiagonal(A,:U)) == "4×4 Bidiagonal{$Int}:\n 1  5   ⋅   ⋅\n ⋅  6  10   ⋅\n ⋅  ⋅  11  15\n ⋅  ⋅   ⋅  16"
+@test replstr(Bidiagonal(A,:L)) == "4×4 Bidiagonal{$Int}:\n 1  ⋅   ⋅   ⋅\n 2  6   ⋅   ⋅\n ⋅  7  11   ⋅\n ⋅  ⋅  12  16"
 @test replstr(SymTridiagonal(A+A')) == "4×4 SymTridiagonal{$Int}:\n 2   7   ⋅   ⋅\n 7  12  17   ⋅\n ⋅  17  22  27\n ⋅   ⋅  27  32"
 @test replstr(Tridiagonal(diag(A,-1),diag(A),diag(A,+1))) == "4×4 Tridiagonal{$Int}:\n 1  5   ⋅   ⋅\n 2  6  10   ⋅\n ⋅  7  11  15\n ⋅  ⋅  12  16"
 @test replstr(UpperTriangular(copy(A))) == "4×4 UpperTriangular{$Int,Array{$Int,2}}:\n 1  5   9  13\n ⋅  6  10  14\n ⋅  ⋅  11  15\n ⋅  ⋅   ⋅  16"
@@ -563,7 +578,7 @@ show_f1(x...) = [x...]
 show_f2(x::Vararg{Any}) = [x...]
 show_f3(x::Vararg) = [x...]
 show_f4(x::Vararg{Any,3}) = [x...]
-show_f5{T, N}(A::AbstractArray{T,N}, indexes::Vararg{Int,N}) = [indexes...]
+show_f5(A::AbstractArray{T, N}, indexes::Vararg{Int,N}) where {T, N} = [indexes...]
 test_mt(show_f1, "show_f1(x...)")
 test_mt(show_f2, "show_f2(x...)")
 test_mt(show_f3, "show_f3(x...)")
@@ -575,6 +590,22 @@ test_mt(show_f5, "show_f5(A::AbstractArray{T,N}, indexes::Vararg{$Int,N})")
 @test sprint(show, :([a; b])) == ":([a; b])"
 @test_repr "[a;]"
 @test_repr "[a; b]"
+
+# other brackets and braces
+@test_repr "[a]"
+@test_repr "[a,b]"
+@test_repr "[a;b;c]"
+@test_repr "[a b]"
+@test_repr "[a b;]"
+@test_repr "[a b c]"
+@test_repr "[a b; c d]"
+@test_repr "{a}"
+@test_repr "{a,b}"
+@test_repr "{a;b;c}"
+@test_repr "{a b}"
+@test_repr "{a b;}"
+@test_repr "{a b c}"
+@test_repr "{a b; c d}"
 
 # Printing of :(function f end)
 @test sprint(show, :(function f end)) == ":(function f end)"
@@ -750,7 +781,7 @@ function static_shown(x)
     Base.link_pipe(p; julia_only_read=true, julia_only_write=true)
     ccall(:jl_static_show, Void, (Ptr{Void}, Any), p.in, x)
     @async close(p.in)
-    return readstring(p.out)
+    return read(p.out, String)
 end
 
 # Test for PR 17803
@@ -765,6 +796,7 @@ end
 @test static_shown(Symbol("a/b")) == "Symbol(\"a/b\")"
 @test static_shown(Symbol("a-b")) == "Symbol(\"a-b\")"
 
+@test static_shown(QuoteNode(:x)) == ":(:x)"
 
 # Test @show
 let fname = tempname()
@@ -774,8 +806,53 @@ let fname = tempname()
                 @show zeros(2, 2)
             end
         end
-        @test readstring(fname) == "zeros(2, 2) = 2×2 Array{Float64,2}:\n 0.0  0.0\n 0.0  0.0\n"
+        @test read(fname, String) == "zeros(2, 2) = 2×2 Array{Float64,2}:\n 0.0  0.0\n 0.0  0.0\n"
     finally
         rm(fname, force=true)
     end
+end
+
+struct f_with_params{t} <: Function
+end
+
+(::f_with_params)(x) = 2x
+
+let io = IOBuffer()
+    show(io, MIME"text/html"(), f_with_params.body.name.mt)
+    @test contains(String(take!(io)), "f_with_params")
+end
+
+@testset "printing of Val's" begin
+    @test sprint(show, Val(Float64))  == "Val{Float64}()"  # Val of a type
+    @test sprint(show, Val(:Float64)) == "Val{:Float64}()" # Val of a symbol
+    @test sprint(show, Val(true))     == "Val{true}()"     # Val of a value
+end
+
+@testset "printing of Pair's" begin
+    for (p, s) in (Pair(1.0,2.0)                          => "1.0 => 2.0",
+                   Pair(Pair(1,2), Pair(3,4))             => "(1=>2) => (3=>4)",
+                   Pair{Integer,Int64}(1, 2)              => "Pair{Integer,Int64}(1, 2)",
+                   (Pair{Integer,Int64}(1, 2) => 3)       => "Pair{Integer,Int64}(1, 2) => 3",
+                   ((1+2im) => (3+4im))                   => "1+2im => 3+4im",
+                   (1 => 2 => Pair{Real,Int64}(3, 4))     => "1 => (2=>Pair{Real,Int64}(3, 4))")
+
+        @test sprint(show, p) == s
+    end
+    # - when the context has :compact=>false, print pair's member non-compactly
+    # - if one member is printed as "Pair{...}(...)", no need to put parens around
+    s = IOBuffer()
+    show(IOContext(s, :compact => false), (1=>2) => Pair{Any,Any}(3,4))
+    @test String(take!(s)) == "(1 => 2) => Pair{Any,Any}(3, 4)"
+end
+
+@testset "alignment for pairs" begin  # (#22899)
+    @test replstr([1=>22,33=>4]) == "2-element Array{Pair{$Int,$Int},1}:\n  1=>22\n 33=>4 "
+    # first field may have "=>" in its representation
+    @test replstr(Pair[(1=>2)=>3, 4=>5]) ==
+        "2-element Array{Pair,1}:\n (1=>2)=>3\n      4=>5"
+    @test replstr(Any[Dict(1=>2)=> (3=>4), 1=>2]) ==
+        "2-element Array{Any,1}:\n Dict(1=>2)=>(3=>4)\n          1=>2     "
+    # left-alignment when not using the "=>" symbol
+    @test replstr(Pair{Integer,Int64}[1=>2, 33=>4]) ==
+        "2-element Array{Pair{Integer,Int64},1}:\n Pair{Integer,Int64}(1, 2) \n Pair{Integer,Int64}(33, 4)"
 end

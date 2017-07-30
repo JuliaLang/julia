@@ -47,6 +47,7 @@ specified, the atomic object is initialized with zero.
 
 Atomic objects can be accessed using the `[]` notation:
 
+# Examples
 ```jldoctest
 julia> x = Threads.Atomic{Int}(3)
 Base.Threads.Atomic{Int64}(3)
@@ -86,6 +87,7 @@ the transaction, one records the value in `x`. After the transaction,
 the new value is stored only if `x` has not been modified in the mean
 time.
 
+# Examples
 ```jldoctest
 julia> x = Threads.Atomic{Int}(3)
 Base.Threads.Atomic{Int64}(3)
@@ -113,6 +115,7 @@ value.
 
 For further details, see LLVM's `atomicrmw xchg` instruction.
 
+# Examples
 ```jldoctest
 julia> x = Threads.Atomic{Int}(3)
 Base.Threads.Atomic{Int64}(3)
@@ -135,6 +138,7 @@ Performs `x[] += val` atomically. Returns the **old** value.
 
 For further details, see LLVM's `atomicrmw add` instruction.
 
+# Examples
 ```jldoctest
 julia> x = Threads.Atomic{Int}(3)
 Base.Threads.Atomic{Int64}(3)
@@ -157,6 +161,7 @@ Performs `x[] -= val` atomically. Returns the **old** value.
 
 For further details, see LLVM's `atomicrmw sub` instruction.
 
+# Examples
 ```jldoctest
 julia> x = Threads.Atomic{Int}(3)
 Base.Threads.Atomic{Int64}(3)
@@ -179,6 +184,7 @@ Performs `x[] &= val` atomically. Returns the **old** value.
 
 For further details, see LLVM's `atomicrmw and` instruction.
 
+# Examples
 ```jldoctest
 julia> x = Threads.Atomic{Int}(3)
 Base.Threads.Atomic{Int64}(3)
@@ -201,6 +207,7 @@ Performs `x[] = ~(x[] & val)` atomically. Returns the **old** value.
 
 For further details, see LLVM's `atomicrmw nand` instruction.
 
+# Examples
 ```jldoctest
 julia> x = Threads.Atomic{Int}(3)
 Base.Threads.Atomic{Int64}(3)
@@ -223,6 +230,7 @@ Performs `x[] |= val` atomically. Returns the **old** value.
 
 For further details, see LLVM's `atomicrmw or` instruction.
 
+# Examples
 ```jldoctest
 julia> x = Threads.Atomic{Int}(5)
 Base.Threads.Atomic{Int64}(5)
@@ -245,6 +253,7 @@ Performs `x[] \$= val` atomically. Returns the **old** value.
 
 For further details, see LLVM's `atomicrmw xor` instruction.
 
+# Examples
 ```jldoctest
 julia> x = Threads.Atomic{Int}(5)
 Base.Threads.Atomic{Int64}(5)
@@ -267,6 +276,7 @@ Performs `x[] = max(x[], val)` atomically. Returns the **old** value.
 
 For further details, see LLVM's `atomicrmw max` instruction.
 
+# Examples
 ```jldoctest
 julia> x = Threads.Atomic{Int}(5)
 Base.Threads.Atomic{Int64}(5)
@@ -289,6 +299,7 @@ Performs `x[] = min(x[], val)` atomically. Returns the **old** value.
 
 For further details, see LLVM's `atomicrmw min` instruction.
 
+# Examples
 ```jldoctest
 julia> x = Threads.Atomic{Int}(7)
 Base.Threads.Atomic{Int64}(7)

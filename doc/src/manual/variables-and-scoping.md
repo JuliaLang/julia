@@ -149,6 +149,9 @@ julia> z
 10
 ```
 
+The `local` and `global` keywords can also be applied to destructuring assignments, e.g.
+`local x, y = 1, 2`. In this case the keyword affects all listed variables.
+
 ### Soft Local Scope
 
 > In a soft local scope, all variables are inherited from its parent scope unless a variable is

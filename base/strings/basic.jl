@@ -47,8 +47,7 @@ Symbol(s::AbstractString) = Symbol(String(s))
 
 The number of bytes in string `s`.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> sizeof("❤")
 3
@@ -59,20 +58,21 @@ sizeof(s::AbstractString) = error("type $(typeof(s)) has no canonical binary rep
 eltype(::Type{<:AbstractString}) = Char
 
 """
-```
-*(s::AbstractString, t::AbstractString)
-```
+    *(s::Union{AbstractString, Char}, t::Union{AbstractString, Char}...)
 
-Concatenate strings. The `*` operator is an alias to this function.
+Concatenate strings and/or characters, producing a [`String`](@ref). This is equivalent
+to calling the [`string`](@ref) function on the arguments.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> "Hello " * "world"
 "Hello world"
+
+julia> 'j' * "ulia"
+"julia"
 ```
 """
-(*)(s1::AbstractString, ss::AbstractString...) = string(s1, ss...)
+(*)(s1::Union{Char, AbstractString}, ss::Union{Char, AbstractString}...) = string(s1, ss...)
 
 one(::Union{T,Type{T}}) where {T<:AbstractString} = convert(T, "")
 
@@ -83,8 +83,7 @@ length(s::DirectIndexString) = endof(s)
 
 The number of characters in string `s`.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> length("jμΛIα")
 5
@@ -146,7 +145,6 @@ isvalid(s::DirectIndexString, i::Integer) = (start(s) <= i <= endof(s))
 Tells whether index `i` is valid for the given string.
 
 # Examples
-
 ```jldoctest
 julia> str = "αβγdef";
 
@@ -189,7 +187,6 @@ Get the previous valid string index before `i`.
 Returns a value less than `1` at the beginning of the string.
 
 # Examples
-
 ```jldoctest
 julia> prevind("αβγdef", 3)
 1
@@ -220,7 +217,6 @@ Get the next valid string index after `i`.
 Returns a value greater than `endof(str)` at or after the end of the string.
 
 # Examples
-
 ```jldoctest
 julia> str = "αβγdef";
 
@@ -268,8 +264,7 @@ respect to string `s`.
 
 See also [`chr2ind`](@ref).
 
-# Example
-
+# Examples
 ```jldoctest
 julia> str = "αβγdef";
 
@@ -301,8 +296,7 @@ Convert a character index `i` to a byte index.
 
 See also [`ind2chr`](@ref).
 
-# Example
-
+# Examples
 ```jldoctest
 julia> str = "αβγdef";
 
@@ -345,8 +339,7 @@ eltype(::Type{EachStringIndex}) = Int
 
 Gives the number of columns needed to print a string.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> strwidth("March")
 5
@@ -373,8 +366,7 @@ promote_rule(::Type{<:AbstractString}, ::Type{<:AbstractString}) = String
 Tests whether a character is a valid hexadecimal digit. Note that this does not
 include `x` (as in the standard `0x` prefix).
 
-# Example
-
+# Examples
 ```jldoctest
 julia> isxdigit('a')
 true
@@ -392,8 +384,7 @@ isxdigit(c::Char) = '0'<=c<='9' || 'a'<=c<='f' || 'A'<=c<='F'
 
 Returns `s` with all characters converted to uppercase.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> uppercase("Julia")
 "JULIA"
@@ -406,8 +397,7 @@ uppercase(s::AbstractString) = map(uppercase, s)
 
 Returns `s` with all characters converted to lowercase.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> lowercase("STRINGS AND THINGS")
 "strings and things"
@@ -422,8 +412,7 @@ Capitalizes the first character of each word in `s`.
 See also [`ucfirst`](@ref) to capitalize only the first
 character in `s`.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> titlecase("the julia programming language")
 "The Julia Programming Language"
@@ -452,8 +441,7 @@ Returns `string` with the first character converted to uppercase
 See also [`titlecase`](@ref) to capitalize the first character of
 every word in `s`.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> ucfirst("python")
 "Python"
@@ -471,8 +459,7 @@ end
 
 Returns `string` with the first character converted to lowercase.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> lcfirst("Julia")
 "julia"

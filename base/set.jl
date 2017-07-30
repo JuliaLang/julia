@@ -27,14 +27,14 @@ similar(s::Set{T}) where {T} = Set{T}()
 similar(s::Set, T::Type) = Set{T}()
 
 function show(io::IO, s::Set)
-    print(io,"Set")
+    print(io, "Set")
     if isempty(s)
-        print(io,"{",eltype(s),"}()")
+        print(io, "{", eltype(s), "}()")
         return
     end
-    print(io,"(")
-    show_vector(io,s,"[","]")
-    print(io,")")
+    print(io, "(")
+    show_vector(io, s, "[", "]")
+    print(io, ")")
 end
 
 isempty(s::Set) = isempty(s.dict)
@@ -63,21 +63,44 @@ rehash!(s::Set) = (rehash!(s.dict); s)
 start(s::Set)       = start(s.dict)
 done(s::Set, state) = done(s.dict, state)
 # NOTE: manually optimized to take advantage of Dict representation
-next(s::Set, i)     = (s.dict.keys[i], skip_deleted(s.dict,i+1))
+next(s::Set, i)     = (s.dict.keys[i], skip_deleted(s.dict, i+1))
 
 union() = Set()
 union(s::Set) = copy(s)
 function union(s::Set, sets::Set...)
     u = Set{join_eltype(s, sets...)}()
-    union!(u,s)
+    union!(u, s)
     for t in sets
-        union!(u,t)
+        union!(u, t)
     end
     return u
 end
 const ∪ = union
-union!(s::Set, xs) = (for x=xs; push!(s,x); end; s)
-union!(s::Set, xs::AbstractArray) = (sizehint!(s,length(xs));for x=xs; push!(s,x); end; s)
+
+"""
+    union!(s, iterable)
+
+Union each element of `iterable` into set `s` in-place.
+
+# Examples
+```jldoctest
+julia> a = Set([1, 3, 4, 5]);
+
+julia> union!(a, 1:2:8);
+
+julia> a
+Set([7, 4, 3, 5, 1])
+```
+"""
+function union!(s::Set{T}, xs) where T
+    haslength(xs) && sizehint!(s, length(xs))
+    for x=xs
+        push!(s, x)
+        length(s) == max_values(T) && break
+    end
+    s
+end
+
 join_eltype() = Bottom
 join_eltype(v1, vs...) = typejoin(eltype(v1), join_eltype(vs...))
 
@@ -87,7 +110,7 @@ function intersect(s::Set, sets::Set...)
     for x in s
         inall = true
         for t in sets
-            if !in(x,t)
+            if !in(x, t)
                 inall = false
                 break
             end
@@ -107,12 +130,45 @@ function setdiff(a::Set, b::Set)
     end
     d
 end
-setdiff!(s::Set, xs) = (for x=xs; delete!(s,x); end; s)
+
+"""
+    setdiff!(s, iterable)
+
+Remove each element of `iterable` from set `s` in-place.
+
+# Examples
+```jldoctest
+julia> a = Set([1, 3, 4, 5]);
+
+julia> setdiff!(a, 1:2:6);
+
+julia> a
+Set([4])
+```
+"""
+setdiff!(s::Set, xs) = (for x=xs; delete!(s, x); end; s)
 
 ==(l::Set, r::Set) = (length(l) == length(r)) && (l <= r)
 <( l::Set, r::Set) = (length(l) < length(r)) && (l <= r)
 <=(l::Set, r::Set) = issubset(l, r)
 
+"""
+    issubset(a, b)
+    ⊆(a,b) -> Bool
+    ⊈(a,b) -> Bool
+    ⊊(a,b) -> Bool
+
+Determine whether every element of `a` is also in `b`, using [`in`](@ref).
+
+# Examples
+```jldoctest
+julia> issubset([1, 2], [1, 2, 3])
+true
+
+julia> issubset([1, 2, 3], [1, 2])
+false
+```
+"""
 function issubset(l, r)
     for elt in l
         if !in(elt, r)
@@ -135,8 +191,7 @@ Return an array containing only the unique elements of collection `itr`,
 as determined by [`isequal`](@ref), in the order that the first of each
 set of equivalent elements originally appears.
 
-# Example
-
+# Examples
 ```jldoctest
 julia> unique([1, 2, 6, 2])
 3-element Array{Int64,1}:
@@ -192,13 +247,13 @@ end
 Returns an array containing one value from `itr` for each unique value produced by `f`
 applied to elements of `itr`.
 
-# Example
-
+# Examples
 ```jldoctest
-julia> unique(isodd, [1, 2, 6, 2])
-2-element Array{Int64,1}:
+julia> unique(x -> x^2, [1, -1, 3, -3, 4])
+3-element Array{Int64,1}:
  1
- 2
+ 3
+ 4
 ```
 """
 function unique(f::Callable, C)
@@ -257,6 +312,7 @@ Remove duplicate items as determined by [`isequal`](@ref), then return the modif
 about the order of the returned data, then calling `(sort!(A); unique!(A))` will be much
 more efficient as long as the elements of `A` can be sorted.
 
+# Examples
 ```jldoctest
 julia> unique!([1, 1, 1])
 1-element Array{Int64,1}:
@@ -307,6 +363,7 @@ end
 
 Return `true` if all values from `itr` are distinct when compared with [`isequal`](@ref).
 
+# Examples
 ```jldoctest
 julia> a = [1; 2; 3]
 3-element Array{Int64,1}:

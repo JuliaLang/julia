@@ -24,15 +24,15 @@ srand(1)
     end
 
     @testset "Constructors" begin
-        @test Bidiagonal(dv,ev,'U') == Bidiagonal(dv,ev,true)
-        @test_throws ArgumentError Bidiagonal(dv,ev,'R')
-        @test_throws DimensionMismatch Bidiagonal(dv,ones(elty,n),true)
-        @test_throws ArgumentError Bidiagonal(dv,ev)
+        @test Bidiagonal(dv,ev,:U) != Bidiagonal(dv,ev,:L)
+        @test_throws ArgumentError Bidiagonal(dv,ev,:R)
+        @test_throws DimensionMismatch Bidiagonal(dv,ones(elty,n),:U)
+        @test_throws MethodError Bidiagonal(dv,ev)
     end
 
     @testset "getindex, setindex!, size, and similar" begin
-        ubd = Bidiagonal(dv, ev, true)
-        lbd = Bidiagonal(dv, ev, false)
+        ubd = Bidiagonal(dv, ev, :U)
+        lbd = Bidiagonal(dv, ev, :L)
         # bidiagonal getindex / upper & lower
         @test_throws BoundsError ubd[n + 1, 1]
         @test_throws BoundsError ubd[1, n + 1]
@@ -69,58 +69,57 @@ srand(1)
         @test isa(similar(ubd, Int, (3, 2)), Matrix{Int})
     end
 
-    BD = Bidiagonal(dv, ev, true)
     @testset "show" begin
+        BD = Bidiagonal(dv, ev, :U)
         dstring = sprint(Base.print_matrix,BD.dv')
         estring = sprint(Base.print_matrix,BD.ev')
         @test sprint(show,BD) == "$(summary(BD)):\n diag:$dstring\n super:$estring"
-        BD = Bidiagonal(dv,ev,false)
+        BD = Bidiagonal(dv,ev,:L)
         @test sprint(show,BD) == "$(summary(BD)):\n diag:$dstring\n sub:$estring"
     end
 
-    @testset for isupper in (true, false)
-        T = Bidiagonal(dv, ev, isupper)
+    @testset for uplo in (:U, :L)
+        T = Bidiagonal(dv, ev, uplo)
 
         @testset "Constructor and basic properties" begin
             @test size(T, 1) == size(T, 2) == n
             @test size(T) == (n, n)
-            @test Array(T) == diagm(dv) + diagm(ev, isupper?1:-1)
-            @test Bidiagonal(Array(T), isupper) == T
+            @test Array(T) == diagm(dv) + diagm(ev, uplo == :U ? 1 : -1)
+            @test Bidiagonal(Array(T), uplo) == T
             @test big.(T) == T
-            @test Array(abs.(T)) == abs.(diagm(dv)) + abs.(diagm(ev, isupper?1:-1))
-            @test Array(real(T)) == real(diagm(dv)) + real(diagm(ev, isupper?1:-1))
-            @test Array(imag(T)) == imag(diagm(dv)) + imag(diagm(ev, isupper?1:-1))
+            @test Array(abs.(T)) == abs.(diagm(dv)) + abs.(diagm(ev, uplo == :U ? 1 : -1))
+            @test Array(real(T)) == real(diagm(dv)) + real(diagm(ev, uplo == :U ? 1 : -1))
+            @test Array(imag(T)) == imag(diagm(dv)) + imag(diagm(ev, uplo == :U ? 1 : -1))
         end
-        z = zeros(elty, n)
 
         @testset for func in (conj, transpose, ctranspose)
             @test func(func(T)) == T
         end
 
         @testset "triu and tril" begin
-            @test istril(Bidiagonal(dv,ev,'L'))
-            @test !istril(Bidiagonal(dv,ev,'U'))
-            @test tril!(Bidiagonal(dv,ev,'U'),-1) == Bidiagonal(zeros(dv),zeros(ev),'U')
-            @test tril!(Bidiagonal(dv,ev,'L'),-1) == Bidiagonal(zeros(dv),ev,'L')
-            @test tril!(Bidiagonal(dv,ev,'U'),-2) == Bidiagonal(zeros(dv),zeros(ev),'U')
-            @test tril!(Bidiagonal(dv,ev,'L'),-2) == Bidiagonal(zeros(dv),zeros(ev),'L')
-            @test tril!(Bidiagonal(dv,ev,'U'),1)  == Bidiagonal(dv,ev,'U')
-            @test tril!(Bidiagonal(dv,ev,'L'),1)  == Bidiagonal(dv,ev,'L')
-            @test tril!(Bidiagonal(dv,ev,'U'))    == Bidiagonal(dv,zeros(ev),'U')
-            @test tril!(Bidiagonal(dv,ev,'L'))    == Bidiagonal(dv,ev,'L')
-            @test_throws ArgumentError tril!(Bidiagonal(dv,ev,'U'),n+1)
+            @test istril(Bidiagonal(dv,ev,:L))
+            @test !istril(Bidiagonal(dv,ev,:U))
+            @test tril!(Bidiagonal(dv,ev,:U),-1) == Bidiagonal(zeros(dv),zeros(ev),:U)
+            @test tril!(Bidiagonal(dv,ev,:L),-1) == Bidiagonal(zeros(dv),ev,:L)
+            @test tril!(Bidiagonal(dv,ev,:U),-2) == Bidiagonal(zeros(dv),zeros(ev),:U)
+            @test tril!(Bidiagonal(dv,ev,:L),-2) == Bidiagonal(zeros(dv),zeros(ev),:L)
+            @test tril!(Bidiagonal(dv,ev,:U),1)  == Bidiagonal(dv,ev,:U)
+            @test tril!(Bidiagonal(dv,ev,:L),1)  == Bidiagonal(dv,ev,:L)
+            @test tril!(Bidiagonal(dv,ev,:U))    == Bidiagonal(dv,zeros(ev),:U)
+            @test tril!(Bidiagonal(dv,ev,:L))    == Bidiagonal(dv,ev,:L)
+            @test_throws ArgumentError tril!(Bidiagonal(dv,ev,:U),n+1)
 
-            @test istriu(Bidiagonal(dv,ev,'U'))
-            @test !istriu(Bidiagonal(dv,ev,'L'))
-            @test triu!(Bidiagonal(dv,ev,'L'),1)  == Bidiagonal(zeros(dv),zeros(ev),'L')
-            @test triu!(Bidiagonal(dv,ev,'U'),1)  == Bidiagonal(zeros(dv),ev,'U')
-            @test triu!(Bidiagonal(dv,ev,'U'),2)  == Bidiagonal(zeros(dv),zeros(ev),'U')
-            @test triu!(Bidiagonal(dv,ev,'L'),2)  == Bidiagonal(zeros(dv),zeros(ev),'L')
-            @test triu!(Bidiagonal(dv,ev,'U'),-1) == Bidiagonal(dv,ev,'U')
-            @test triu!(Bidiagonal(dv,ev,'L'),-1) == Bidiagonal(dv,ev,'L')
-            @test triu!(Bidiagonal(dv,ev,'L'))    == Bidiagonal(dv,zeros(ev),'L')
-            @test triu!(Bidiagonal(dv,ev,'U'))    == Bidiagonal(dv,ev,'U')
-            @test_throws ArgumentError triu!(Bidiagonal(dv,ev,'U'),n+1)
+            @test istriu(Bidiagonal(dv,ev,:U))
+            @test !istriu(Bidiagonal(dv,ev,:L))
+            @test triu!(Bidiagonal(dv,ev,:L),1)  == Bidiagonal(zeros(dv),zeros(ev),:L)
+            @test triu!(Bidiagonal(dv,ev,:U),1)  == Bidiagonal(zeros(dv),ev,:U)
+            @test triu!(Bidiagonal(dv,ev,:U),2)  == Bidiagonal(zeros(dv),zeros(ev),:U)
+            @test triu!(Bidiagonal(dv,ev,:L),2)  == Bidiagonal(zeros(dv),zeros(ev),:L)
+            @test triu!(Bidiagonal(dv,ev,:U),-1) == Bidiagonal(dv,ev,:U)
+            @test triu!(Bidiagonal(dv,ev,:L),-1) == Bidiagonal(dv,ev,:L)
+            @test triu!(Bidiagonal(dv,ev,:L))    == Bidiagonal(dv,zeros(ev),:L)
+            @test triu!(Bidiagonal(dv,ev,:U))    == Bidiagonal(dv,ev,:U)
+            @test_throws ArgumentError triu!(Bidiagonal(dv,ev,:U),n+1)
         end
 
         Tfull = Array(T)
@@ -184,27 +183,17 @@ srand(1)
                         @test T/b' ≈ Tfull/b'
                     end
                 end
+                # test DimensionMismatch for RowVectors
+                @test_throws DimensionMismatch T \ b'
+                @test_throws DimensionMismatch T.' \ b'
+                @test_throws DimensionMismatch T' \ b'
             end
         end
 
-        @testset "Round,float,trunc,ceil" begin
-            if elty <: BlasReal
-                @test floor.(Int, T) == Bidiagonal(floor.(Int, T.dv), floor.(Int, T.ev), T.isupper)
-                @test isa(floor.(Int, T), Bidiagonal)
-                @test trunc.(Int,T) == Bidiagonal(trunc.(Int, T.dv), trunc.(Int, T.ev), T.isupper)
-                @test isa(trunc.(Int,T), Bidiagonal)
-                @test round.(Int, T) == Bidiagonal(round.(Int, T.dv), round.(Int, T.ev), T.isupper)
-                @test isa(round.(Int, T), Bidiagonal)
-                @test ceil.(Int,T) == Bidiagonal(ceil.(Int,T.dv), ceil.(Int,T.ev), T.isupper)
-                @test isa(ceil.(Int,T), Bidiagonal)
-                @test floor.(T) == Bidiagonal(floor.(T.dv), floor.(T.ev), T.isupper)
-                @test isa(floor.(T), Bidiagonal)
-                @test trunc.(T) == Bidiagonal(trunc.(T.dv), trunc.(T.ev), T.isupper)
-                @test isa(trunc.(T), Bidiagonal)
-                @test round.(T) == Bidiagonal(round.(T.dv), round.(T.ev), T.isupper)
-                @test isa(round.(T), Bidiagonal)
-                @test ceil.(T) == Bidiagonal(ceil.(T.dv), ceil.(T.ev), T.isupper)
-                @test isa(ceil.(T), Bidiagonal)
+        if elty <: BlasReal
+            @testset "$f" for f in (floor, trunc, round, ceil)
+                @test (f.(Int, T))::Bidiagonal == Bidiagonal(f.(Int, T.dv), f.(Int, T.ev), T.uplo)
+                @test (f.(T))::Bidiagonal == Bidiagonal(f.(T.dv), f.(T.ev), T.uplo)
             end
         end
 
@@ -217,9 +206,9 @@ srand(1)
             if relty <: AbstractFloat
                 d1, v1 = eig(T)
                 d2, v2 = eig(map(elty<:Complex ? Complex128 : Float64,Tfull))
-                @test (isupper ? d1 : reverse(d1)) ≈ d2
+                @test (uplo == :U ? d1 : reverse(d1)) ≈ d2
                 if elty <: Real
-                    Test.test_approx_eq_modphase(v1, isupper ? v2 : v2[:,n:-1:1])
+                    Test.test_approx_eq_modphase(v1, uplo == :U ? v2 : v2[:,n:-1:1])
                 end
             end
         end
@@ -242,38 +231,44 @@ srand(1)
         end
 
         @testset "Binary operations" begin
-            @test -T == Bidiagonal(-T.dv,-T.ev,T.isupper)
-            @test convert(elty,-1.0) * T == Bidiagonal(-T.dv,-T.ev,T.isupper)
-            @test T * convert(elty,-1.0) == Bidiagonal(-T.dv,-T.ev,T.isupper)
-            @testset for isupper2 in (true, false)
+            @test -T == Bidiagonal(-T.dv,-T.ev,T.uplo)
+            @test convert(elty,-1.0) * T == Bidiagonal(-T.dv,-T.ev,T.uplo)
+            @test T * convert(elty,-1.0) == Bidiagonal(-T.dv,-T.ev,T.uplo)
+            @testset for uplo2 in (:U, :L)
                 dv = convert(Vector{elty}, relty <: AbstractFloat ? randn(n) : rand(1:10, n))
                 ev = convert(Vector{elty}, relty <: AbstractFloat ? randn(n-1) : rand(1:10, n-1))
-                T2 = Bidiagonal(dv, ev, isupper2)
+                T2 = Bidiagonal(dv, ev, uplo2)
                 Tfull2 = Array(T2)
                 for op in (+, -, *)
                     @test Array(op(T, T2)) ≈ op(Tfull, Tfull2)
                 end
             end
+            # test pass-through of A_mul_B! for SymTridiagonal*Bidiagonal
+            TriSym = SymTridiagonal(T.dv, T.ev)
+            @test Array(TriSym*T) ≈ Array(TriSym)*Array(T)
+            # test pass-through of A_mul_B! for AbstractTriangular*Bidiagonal
+            Tri = UpperTriangular(diagm(T.ev, 1))
+            @test Array(Tri*T) ≈ Array(Tri)*Array(T)
         end
 
         @test inv(T)*Tfull ≈ eye(elty,n)
     end
-
+    BD = Bidiagonal(dv, ev, :U)
     @test Matrix{Complex{Float64}}(BD) == BD
 
 end
 
 # Issue 10742 and similar
-let A = Bidiagonal([1,2,3], [0,0], true)
+let A = Bidiagonal([1,2,3], [0,0], :U)
     @test istril(A)
     @test isdiag(A)
 end
 
 # test construct from range
-@test Bidiagonal(1:3, 1:2, true) == [1 1 0; 0 2 2; 0 0 3]
+@test Bidiagonal(1:3, 1:2, :U) == [1 1 0; 0 2 2; 0 0 3]
 
 @testset "promote_rule" begin
-    A = Bidiagonal(ones(Float32,10),ones(Float32,9),true)
+    A = Bidiagonal(ones(Float32,10),ones(Float32,9),:U)
     B = rand(Float64,10,10)
     C = Tridiagonal(rand(Float64,9),rand(Float64,10),rand(Float64,9))
     @test promote_rule(Matrix{Float64}, Bidiagonal{Float64}) == Matrix{Float64}
@@ -287,8 +282,8 @@ import Base.LinAlg: fillslots!, UnitLowerTriangular
         let # fillslots!
             A = Tridiagonal(randn(2), randn(3), randn(2))
             @test fillslots!(A, 3) == Tridiagonal([3, 3.], [3, 3, 3.], [3, 3.])
-            B = Bidiagonal(randn(3), randn(2), true)
-            @test fillslots!(B, 2) == Bidiagonal([2.,2,2], [2,2.], true)
+            B = Bidiagonal(randn(3), randn(2), :U)
+            @test fillslots!(B, 2) == Bidiagonal([2.,2,2], [2,2.], :U)
             S = SymTridiagonal(randn(3), randn(2))
             @test fillslots!(S, 1) == SymTridiagonal([1,1,1.], [1,1.])
             Ult = UnitLowerTriangular(randn(3,3))
@@ -296,7 +291,7 @@ import Base.LinAlg: fillslots!, UnitLowerTriangular
         end
         let # fill!(exotic, 0)
             exotic_arrays = Any[Tridiagonal(randn(3), randn(4), randn(3)),
-            Bidiagonal(randn(3), randn(2), rand(Bool)),
+            Bidiagonal(randn(3), randn(2), rand([:U,:L])),
             SymTridiagonal(randn(3), randn(2)),
             sparse(randn(3,4)),
             Diagonal(randn(5)),
@@ -313,12 +308,12 @@ import Base.LinAlg: fillslots!, UnitLowerTriangular
         end
         let # fill!(small, x)
             val = randn()
-            b = Bidiagonal(randn(1,1), true)
+            b = Bidiagonal(randn(1,1), :U)
             st = SymTridiagonal(randn(1,1))
             for x in (b, st)
                 @test Array(fill!(x, val)) == fill!(Array(x), val)
             end
-            b = Bidiagonal(randn(2,2), true)
+            b = Bidiagonal(randn(2,2), :U)
             st = SymTridiagonal(randn(3), randn(2))
             t = Tridiagonal(randn(3,3))
             for x in (b, t, st)

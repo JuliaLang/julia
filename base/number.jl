@@ -18,8 +18,26 @@ isinteger(x::Integer) = true
 
 Return `true` if `x == zero(x)`; if `x` is an array, this checks whether
 all of the elements of `x` are zero.
+
+```jldoctest
+julia> iszero(0.0)
+true
+```
 """
 iszero(x) = x == zero(x) # fallback method
+
+"""
+    isone(x)
+
+Return `true` if `x == one(x)`; if `x` is an array, this checks whether
+`x` is an identity matrix.
+
+```jldoctest
+julia> isone(1.0)
+true
+```
+"""
+isone(x) = x == one(x) # fallback method
 
 size(x::Number) = ()
 size(x::Number,d) = convert(Int,d)<1 ? throw(BoundsError()) : 1
@@ -69,6 +87,27 @@ divrem(x,y) = (div(x,y),rem(x,y))
 The floored quotient and modulus after division. Equivalent to `(fld(x,y), mod(x,y))`.
 """
 fldmod(x,y) = (fld(x,y),mod(x,y))
+
+"""
+    signbit(x)
+
+Returns `true` if the value of the sign of `x` is negative, otherwise `false`.
+
+# Examples
+```jldoctest
+julia> signbit(-4)
+true
+
+julia> signbit(5)
+false
+
+julia> signbit(5.5)
+false
+
+julia> signbit(-4.1)
+true
+```
+"""
 signbit(x::Real) = x < 0
 
 """
@@ -112,8 +151,34 @@ copysign(x::Real, y::Real) = ifelse(signbit(x)!=signbit(y), -x, +x)
 conj(x::Real) = x
 transpose(x::Number) = x
 ctranspose(x::Number) = conj(x)
-inv(x::Number) = one(x)/x
 angle(z::Real) = atan2(zero(z), z)
+
+"""
+    inv(x)
+
+Return the multiplicative inverse of `x`, such that `x*inv(x)` or `inv(x)*x`
+yields [`one(x)`](@ref) (the multiplicative identity) up to roundoff errors.
+
+If `x` is a number, this is essentially the same as `one(x)/x`, but for
+some types `inv(x)` may be slightly more efficient.
+
+# Examples
+```jldoctest
+julia> inv(2)
+0.5
+
+julia> inv(1 + 2im)
+0.2 - 0.4im
+
+julia> inv(1 + 2im) * (1 + 2im)
+1.0 + 0.0im
+
+julia> inv(2//3)
+3//2
+```
+"""
+inv(x::Number) = one(x)/x
+
 
 """
     widemul(x, y)

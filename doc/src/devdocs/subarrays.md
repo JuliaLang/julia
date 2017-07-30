@@ -17,9 +17,10 @@ allows you to combine these styles of indexing: for example, a 3d array `A3` can
 For `Array`s, linear indexing appeals to the underlying storage format: an array is laid out as
 a contiguous block of memory, and hence the linear index is just the offset (+1) of the corresponding
 entry relative to the beginning of the array.  However, this is not true for many other `AbstractArray`
-types: examples include `SparseMatrixCSC`, arrays that require some kind of computation (such
-as interpolation), and the type under discussion here, `SubArray`.  For these types, the underlying
-information is more naturally described in terms of cartesian indexes.
+types: examples include [`SparseMatrixCSC`](@ref), arrays that require some kind of
+computation (such as interpolation), and the type under discussion here, `SubArray`.
+For these types, the underlying information is more naturally described in terms of
+cartesian indexes.
 
 You can manually convert from a cartesian index to a linear index with `sub2ind`, and vice versa
 using `ind2sub`.  `getindex` and `setindex!` functions for `AbstractArray` types may include similar

@@ -6,11 +6,11 @@ import Base: transcode
 
 export FILE, TmStruct, strftime, strptime, getpid, gethostname, free, malloc, calloc, realloc,
     errno, strerror, flush_cstdio, systemsleep, time, transcode
-if is_windows()
+if Sys.iswindows()
     export GetLastError, FormatMessage
 end
 
-include(string(length(Core.ARGS)>=2?Core.ARGS[2]:"","errno_h.jl"))  # include($BUILDROOT/base/errno_h.jl)
+include(string(length(Core.ARGS) >= 2 ? Core.ARGS[2] : "", "errno_h.jl"))  # include($BUILDROOT/base/errno_h.jl)
 
 ## RawFD ##
 
@@ -23,13 +23,13 @@ end
 
 Base.cconvert(::Type{Int32}, fd::RawFD) = fd.fd
 
-dup(x::RawFD) = RawFD(ccall((@static is_windows() ? :_dup : :dup), Int32, (Int32,), x.fd))
+dup(x::RawFD) = RawFD(ccall((@static Sys.iswindows() ? :_dup : :dup), Int32, (Int32,), x.fd))
 dup(src::RawFD, target::RawFD) = systemerror("dup", -1 ==
-    ccall((@static is_windows() ? :_dup2 : :dup2), Int32,
+    ccall((@static Sys.iswindows() ? :_dup2 : :dup2), Int32,
                 (Int32, Int32), src.fd, target.fd))
 
 # Wrapper for an OS file descriptor (for Windows)
-if is_windows()
+if Sys.iswindows()
     struct WindowsRawSocket
         handle::Ptr{Void}   # On Windows file descriptors are HANDLE's and 64-bit on 64-bit Windows
     end
@@ -67,7 +67,7 @@ modestr(s::IO) = modestr(isreadable(s), iswritable(s))
 modestr(r::Bool, w::Bool) = r ? (w ? "r+" : "r") : (w ? "w" : throw(ArgumentError("neither readable nor writable")))
 
 function FILE(fd::RawFD, mode)
-    FILEp = ccall((@static is_windows() ? :_fdopen : :fdopen), Ptr{Void}, (Cint, Cstring), fd, mode)
+    FILEp = ccall((@static Sys.iswindows() ? :_fdopen : :fdopen), Ptr{Void}, (Cint, Cstring), fd, mode)
     systemerror("fdopen", FILEp == C_NULL)
     FILE(FILEp)
 end
@@ -102,9 +102,9 @@ flush_cstdio() = ccall(:jl_flush_cstdio, Void, ())
 ## time-related functions ##
 
 # TODO: check for usleep errors?
-if is_unix()
+if Sys.isunix()
     systemsleep(s::Real) = ccall(:usleep, Int32, (UInt32,), round(UInt32, s*1e6))
-elseif is_windows()
+elseif Sys.iswindows()
     function systemsleep(s::Real)
         ccall(:Sleep, stdcall, Void, (UInt32,), round(UInt32, s * 1e3))
         return Int32(0)
@@ -202,7 +202,7 @@ function strptime(fmt::AbstractString, timestr::AbstractString)
         # TODO: better error message
         throw(ArgumentError("invalid arguments"))
     end
-    @static if is_apple()
+    @static if Sys.isapple()
         # if we didn't explicitly parse the weekday or year day, use mktime
         # to fill them in automatically.
         if !ismatch(r"([^%]|^)%(a|A|j|w|Ow)", fmt)
@@ -240,7 +240,7 @@ Get the local machine's host name.
 """
 function gethostname()
     hn = Vector{UInt8}(256)
-    err = @static if is_windows()
+    err = @static if Sys.iswindows()
         ccall(:gethostname, stdcall, Int32, (Ptr{UInt8}, UInt32), hn, length(hn))
     else
         ccall(:gethostname, Int32, (Ptr{UInt8}, UInt), hn, length(hn))
@@ -286,7 +286,7 @@ Convert a Win32 system call error code to a descriptive string [only available o
 """
 function FormatMessage end
 
-if is_windows()
+if Sys.iswindows()
     GetLastError() = ccall(:GetLastError, stdcall, UInt32, ())
 
     function FormatMessage(e=GetLastError())

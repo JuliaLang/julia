@@ -128,10 +128,10 @@ function _ntuple(f, n)
 end
 
 # inferrable ntuple (enough for bootstrapping)
-ntuple(f, ::Type{Val{0}}) = ()
-ntuple(f, ::Type{Val{1}}) = (@_inline_meta; (f(1),))
-ntuple(f, ::Type{Val{2}}) = (@_inline_meta; (f(1), f(2)))
-ntuple(f, ::Type{Val{3}}) = (@_inline_meta; (f(1), f(2), f(3)))
+ntuple(f, ::Val{0}) = ()
+ntuple(f, ::Val{1}) = (@_inline_meta; (f(1),))
+ntuple(f, ::Val{2}) = (@_inline_meta; (f(1), f(2)))
+ntuple(f, ::Val{3}) = (@_inline_meta; (f(1), f(2), f(3)))
 
 # 1 argument function
 map(f, t::Tuple{})              = ()
@@ -187,11 +187,11 @@ end
 
 
 # type-stable padding
-fill_to_length(t::NTuple{N,Any}, val, ::Type{Val{N}}) where {N} = t
-fill_to_length(t::Tuple{}, val, ::Type{Val{1}}) = (val,)
-fill_to_length(t::Tuple{Any}, val, ::Type{Val{2}}) = (t..., val)
-fill_to_length(t::Tuple{}, val, ::Type{Val{2}}) = (val, val)
-#function fill_to_length(t::Tuple, val, ::Type{Val{N}}) where {N}
+fill_to_length(t::NTuple{N,Any}, val, ::Val{N}) where {N} = t
+fill_to_length(t::Tuple{}, val, ::Val{1}) = (val,)
+fill_to_length(t::Tuple{Any}, val, ::Val{2}) = (t..., val)
+fill_to_length(t::Tuple{}, val, ::Val{2}) = (val, val)
+#function fill_to_length(t::Tuple, val, ::Val{N}) where {N}
 #    @_inline_meta
 #    return (t..., ntuple(i -> val, N - length(t))...)
 #end
@@ -219,7 +219,7 @@ end
 
 _totuple(::Type{Tuple{}}, itr, s) = ()
 
-function _totuple_err(T::ANY)
+function _totuple_err(@nospecialize T)
     @_noinline_meta
     throw(ArgumentError("too few elements for tuple type $T"))
 end

@@ -77,7 +77,7 @@ can sometimes simplify such tests.
 
 Some algorithms are most conveniently (or efficiently) written in terms of a single linear index,
 `A[i]` even if `A` is multi-dimensional.  In "true" linear indexing, the indices always range
-from `1:length(A)`. However, this raises an ambiguity for one-dimensional arrays (a.k.a., `AbstractVector`):
+from `1:length(A)`. However, this raises an ambiguity for one-dimensional arrays (a.k.a., [`AbstractVector`](@ref)):
 does `v[i]` mean linear indexing, or Cartesian indexing with the array's native indices?
 
 For this reason, if you want to use linear indexing in an algorithm, your best option is to get

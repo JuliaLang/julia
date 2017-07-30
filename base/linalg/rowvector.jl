@@ -3,7 +3,7 @@
 """
     RowVector(vector)
 
-A lazy-view wrapper of an `AbstractVector`, which turns a length-`n` vector into a `1×n`
+A lazy-view wrapper of an [`AbstractVector`](@ref), which turns a length-`n` vector into a `1×n`
 shaped row vector and represents the transpose of a vector (the elements are also transposed
 recursively). This type is usually constructed (and unwrapped) via the [`transpose`](@ref)
 function or `.'` operator (or related [`ctranspose`](@ref) or `'` operator).
@@ -61,8 +61,7 @@ convert(::Type{RowVector{T,V}}, rowvec::RowVector) where {T,V<:AbstractVector} =
 
 The transposition operator (`.'`).
 
-# Example
-
+# Examples
 ```jldoctest
 julia> v = [1,2,3]
 3-element Array{Int64,1}:
@@ -90,8 +89,7 @@ parent(rowvec::RowVector) = rowvec.vec
 
 Returns a [`ConjArray`](@ref) lazy view of the input, where each element is conjugated.
 
-### Example
-
+# Examples
 ```jldoctest
 julia> v = [1+im, 1-im].'
 1×2 RowVector{Complex{Int64},Array{Complex{Int64},1}}:

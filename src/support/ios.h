@@ -1,7 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#ifndef IOS_H
-#define IOS_H
+#ifndef JL_IOS_H
+#define JL_IOS_H
 
 #include <stdarg.h>
 #include "uv.h"

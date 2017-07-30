@@ -8,7 +8,7 @@ Base.STDERR
 Base.STDIN
 Base.open
 Base.IOBuffer
-Base.take!(::Base.AbstractIOBuffer)
+Base.take!(::Base.GenericIOBuffer)
 Base.fdio
 Base.flush
 Base.close
@@ -59,7 +59,6 @@ Base.IOContext(::IO, ::IOContext)
 ```@docs
 Base.show(::Any)
 Base.showcompact
-Base.showall
 Base.summary
 Base.print
 Base.println
@@ -72,7 +71,6 @@ Base.Printf.@sprintf
 Base.sprint
 Base.showerror
 Base.dump
-Base.readstring
 Base.readline
 Base.readuntil
 Base.readlines

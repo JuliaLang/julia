@@ -399,7 +399,7 @@ const FixedPeriod = Union{Week, Day, Hour, Minute, Second, Millisecond, Microsec
 # like div but throw an error if remainder is nonzero
 function divexact(x, y)
     q, r = divrem(x, y)
-    r == 0 || throw(InexactError())
+    r == 0 || throw(InexactError(:divexact, Int, x/y))
     return q
 end
 
@@ -414,7 +414,7 @@ for i = 1:length(fixedperiod_conversions)
         vmax = typemax(Int64) ÷ N
         vmin = typemin(Int64) ÷ N
         @eval function Base.convert(::Type{$T}, x::$Tc)
-            $vmin ≤ value(x) ≤ $vmax || throw(InexactError())
+            $vmin ≤ value(x) ≤ $vmax || throw(InexactError(:convert, $T, x))
             return $T(value(x) * $N)
         end
     end
@@ -431,7 +431,7 @@ end
 const OtherPeriod = Union{Month, Year}
 let vmax = typemax(Int64) ÷ 12, vmin = typemin(Int64) ÷ 12
     @eval function Base.convert(::Type{Month}, x::Year)
-        $vmin ≤ value(x) ≤ $vmax || throw(InexactError())
+        $vmin ≤ value(x) ≤ $vmax || throw(InexactError(:convert, Month, x))
         Month(value(x) * 12)
     end
 end

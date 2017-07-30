@@ -5,8 +5,7 @@
 
 Look up a remote git repository using its name and URL. Uses the default fetch refspec.
 
-# Example
-
+# Examples
 ```julia
 repo = LibGit2.init(repo_path)
 remote = LibGit2.GitRemote(repo, "upstream", repo_url)
@@ -27,8 +26,7 @@ Look up a remote git repository using the repository's name and URL,
 as well as specifications for how to fetch from the remote
 (e.g. which remote branch to fetch from).
 
-# Example
-
+# Examples
 ```julia
 repo = LibGit2.init(repo_path)
 refspec = "+refs/heads/mybranch:refs/remotes/origin/mybranch"
@@ -48,8 +46,7 @@ end
 
 Look up a remote git repository using only its URL, not its name.
 
-# Example
-
+# Examples
 ```julia
 repo = LibGit2.init(repo_path)
 remote = LibGit2.GitRemoteAnon(repo, repo_url)
@@ -104,8 +101,7 @@ end
 
 Get the fetch URL of a remote git repository.
 
-# Example
-
+# Examples
 ```julia-repl
 julia> repo_url = "https://github.com/JuliaLang/Example.jl";
 
@@ -128,8 +124,7 @@ end
 
 Get the push URL of a remote git repository.
 
-# Example
-
+# Examples
 ```julia-repl
 julia> repo_url = "https://github.com/JuliaLang/Example.jl";
 
@@ -154,8 +149,7 @@ Get the name of a remote repository, for instance `"origin"`.
 If the remote is anonymous (see [`GitRemoteAnon`](@ref))
 the name will be an empty string `""`.
 
-# Example
-
+# Examples
 ```julia-repl
 julia> repo_url = "https://github.com/JuliaLang/Example.jl";
 
@@ -233,7 +227,7 @@ end
 Add a *fetch* refspec for the specified `rmt`. This refspec will contain
 information about which branch(es) to fetch from.
 
-# Example
+# Examples
 ```julia-repl
 julia> LibGit2.add_fetch!(repo, remote, "upstream");
 
@@ -253,7 +247,7 @@ end
 Add a *push* refspec for the specified `rmt`. This refspec will contain
 information about which branch(es) to push to.
 
-# Example
+# Examples
 ```julia-repl
 julia> LibGit2.add_push!(repo, remote, "refs/heads/master");
 
@@ -382,7 +376,6 @@ Set both the fetch and push `url` for `remote_name` for the GitRepo or the git r
 located at `path`. Typically git repos use "origin" as the remote name.
 
 # Examples
-
 ```julia
 repo_path = joinpath(tempdir(), "Example")
 repo = LibGit2.init(repo_path)

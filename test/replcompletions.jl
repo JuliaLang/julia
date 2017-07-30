@@ -29,9 +29,9 @@ ex = quote
     Base.keys(d::CustomDict) = collect(keys(d.mydict))
     Base.length(d::CustomDict) = length(d.mydict)
 
-    test{T<:Real}(x::T, y::T) = pass
+    test(x::T, y::T) where {T<:Real} = pass
     test(x::Real, y::Real) = pass
-    test{T<:Real}(x::AbstractArray{T}, y) = pass
+    test(x::AbstractArray{T}, y) where {T<:Real} = pass
     test(args...) = pass
 
     test1(x::Type{Float64}) = pass
@@ -471,7 +471,7 @@ c, r, res = test_scomplete(s)
 # which would raise an error in the repl code.
 @test (String[], 0:-1, false) == test_scomplete("\$a")
 
-if is_unix()
+if Sys.isunix()
     #Assume that we can rely on the existence and accessibility of /tmp
 
     # Tests path in Julia code and closing " if it's a file
@@ -622,12 +622,12 @@ let #test that it can auto complete with spaces in file/path
     mkdir(dir)
     cd(path) do
         open(joinpath(space_folder, "space .file"),"w") do f
-            s = is_windows() ? "rm $dir_space\\\\space" : "cd $dir_space/space"
+            s = Sys.iswindows() ? "rm $dir_space\\\\space" : "cd $dir_space/space"
             c,r = test_scomplete(s)
             @test r == endof(s)-4:endof(s)
             @test "space\\ .file" in c
 
-            s = is_windows() ? "cd(\"β $dir_space\\\\space" : "cd(\"β $dir_space/space"
+            s = Sys.iswindows() ? "cd(\"β $dir_space\\\\space" : "cd(\"β $dir_space/space"
             c,r = test_complete(s)
             @test r == endof(s)-4:endof(s)
             @test "space\\ .file\"" in c
@@ -645,7 +645,7 @@ end
 c,r = test_complete("cd(\"folder_do_not_exist_77/file")
 @test length(c) == 0
 
-if is_windows()
+if Sys.iswindows()
     tmp = tempname()
     path = dirname(tmp)
     file = basename(tmp)

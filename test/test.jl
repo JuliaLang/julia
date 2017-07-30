@@ -4,8 +4,19 @@
 @test true
 @test 1 == 1
 @test 1 != 2
+@test ==(1, 1)
+@test ==((1, 1)...)
+@test 1 ≈ 2 atol=1
 @test strip("\t  hi   \n") == "hi"
 @test strip("\t  this should fail   \n") != "hi"
+@test isequal(1, 1)
+@test isapprox(1, 1, atol=0.1)
+@test isapprox(1, 1; atol=0.1)
+@test isapprox(1, 1; [(:atol, 0)]...)
+
+# @test keyword precedence: post-semicolon keyword, suffix keyword, pre-semicolon keyword
+@test isapprox(1, 2, atol=0) atol=1
+@test isapprox(1, 3, atol=0; atol=2) atol=1
 
 # @test should only evaluate the arguments once
 let g = Int[], f = (x) -> (push!(g, x); x)
@@ -78,14 +89,26 @@ fails = @testset NoThrowTestSet begin
     @test 1+0 == 2+0 == 3+0
     # Fail - comparison call
     @test ==(1 - 2, 2 - 1)
+    # Fail - splatting
+    @test ==(1:2...)
     # Fail - isequal
     @test isequal(0 / 0, 1 / 0)
+    # Fail - function splatting
+    @test isequal(1:2...)
     # Fail - isapprox
     @test isapprox(0 / 1, -1 / 0)
+    # Fail - function with keyword
+    @test isapprox(1 / 2, 2 / 1, atol=1 / 1)
+    @test isapprox(1 - 2, 2 - 1; atol=1 - 1)
+    # Fail - function keyword splatting
+    k = [(:atol, 0), (:nans, true)]
+    @test isapprox(1, 2; k...)
     # Error - unexpected pass
     @test_broken true
+    # Error - converting a call into a comparison
+    @test ==(1, 1:2...)
 end
-for i in 1:length(fails) - 1
+for i in 1:length(fails) - 2
     @test isa(fails[i], Base.Test.Fail)
 end
 
@@ -114,16 +137,41 @@ str = sprint(show, fails[6])
 @test contains(str, "Evaluated: -1 == 1")
 
 str = sprint(show, fails[7])
+@test contains(str, "Expression: (==)(1:2...)")
+@test !contains(str, "Evaluated")
+
+str = sprint(show, fails[8])
 @test contains(str, "Expression: isequal(0 / 0, 1 / 0)")
 @test contains(str, "Evaluated: isequal(NaN, Inf)")
 
-str = sprint(show, fails[8])
+str = sprint(show, fails[9])
+@test contains(str, "Expression: isequal(1:2...)")
+@test contains(str, "Evaluated: isequal(1, 2)")
+
+str = sprint(show, fails[10])
 @test contains(str, "Expression: isapprox(0 / 1, -1 / 0)")
 @test contains(str, "Evaluated: isapprox(0.0, -Inf)")
 
-str = sprint(show, fails[9])
+str = sprint(show, fails[11])
+@test contains(str, "Expression: isapprox(1 / 2, 2 / 1, atol=1 / 1)")
+@test contains(str, "Evaluated: isapprox(0.5, 2.0; atol=1.0)")
+
+str = sprint(show, fails[12])
+@test contains(str, "Expression: isapprox(1 - 2, 2 - 1; atol=1 - 1)")
+@test contains(str, "Evaluated: isapprox(-1, 1; atol=0)")
+
+str = sprint(show, fails[13])
+@test contains(str, "Expression: isapprox(1, 2; k...)")
+@test contains(str, "Evaluated: isapprox(1, 2; atol=0, nans=true)")
+
+str = sprint(show, fails[14])
 @test contains(str, "Unexpected Pass")
 @test contains(str, "Expression: true")
+
+str = sprint(show, fails[15])
+@test contains(str, "Expression: ==(1, 1:2...)")
+@test contains(str, "MethodError: no method matching ==(::$Int, ::$Int, ::$Int)")
+
 
 # Test printing of a TestSetException
 tse_str = sprint(show, Test.TestSetException(1,2,3,4,Vector{Union{Base.Test.Error, Base.Test.Fail}}()))
@@ -494,7 +542,7 @@ let io = IOBuffer()
     @test !contains(str, "backtrace()")
 end
 
-msg = readstring(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no -e '
+msg = read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no -e '
 using Base.Test
 
 foo(x) = length(x)^2
@@ -512,7 +560,7 @@ foo(x) = length(x)^2
         @test foo(zeros(2)) == 4
         @test foo(ones(4)) == 15
     end
-end'`), stderr=DevNull))
+end'`), stderr=DevNull), String)
 
 @test contains(msg,
 """
@@ -525,7 +573,7 @@ Foo Tests     |    2     2      4
 """)
 
 # 20489
-msg = split(readstring(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no -e '
-Test.print_test_results(Test.DefaultTestSet(""))'`), stderr=DevNull)), "\n")[1]
+msg = split(read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no -e '
+Test.print_test_results(Test.DefaultTestSet(""))'`), stderr=DevNull), String), "\n")[1]
 
 @test msg == rstrip(msg)

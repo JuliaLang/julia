@@ -20,6 +20,7 @@
 #include "llvm-version.h"
 #include "codegen_shared.h"
 #include "julia.h"
+#include "julia_internal.h"
 
 #define DEBUG_TYPE "late_lower_gcroot"
 
@@ -261,6 +262,9 @@ struct State {
     // are indices into the next three maps which store safepoint properties
     std::map<Instruction *, int> SafepointNumbering;
 
+    // Reverse mapping index -> safepoint
+    std::vector<Instruction *> ReverseSafepointNumbering;
+
     // Instructions that can return twice. For now, all values live at these
     // instructions will get their own, dedicated GC frame slots, because they
     // have unobservable control flow, so we can't be sure where they're
@@ -269,9 +273,6 @@ struct State {
 
     // The set of values live at a particular safepoint
     std::vector<BitVector> LiveSets;
-    // The set of values for which this is the first safepoint along some
-    // relevant path - i.e. the value needs to be rooted at this safepoint
-    std::vector<std::set<int>> Rootings;
     // Those values that - if live out from our parent basic block - are live
     // at this safepoint.
     std::vector<std::vector<int>> LiveIfLiveOut;
@@ -292,6 +293,10 @@ struct LateLowerGCFrame: public FunctionPass {
     {
         llvm::initializeDominatorTreeWrapperPassPass(*PassRegistry::getPassRegistry());
         tbaa_gcframe = tbaa_make_child("jtbaa_gcframe").first;
+        MDNode *tbaa_data;
+        MDNode *tbaa_data_scalar;
+        std::tie(tbaa_data, tbaa_data_scalar) = tbaa_make_child("jtbaa_data");
+        tbaa_tag = tbaa_make_child("jtbaa_tag", tbaa_data_scalar).first;
     }
 
 protected:
@@ -306,11 +311,19 @@ private:
     Type *T_prjlvalue;
     Type *T_ppjlvalue;
     Type *T_size;
+    Type *T_int8;
     Type *T_int32;
+    Type *T_pint8;
+    Type *T_pjlvalue_der;
+    Type *T_ppjlvalue_der;
     MDNode *tbaa_gcframe;
+    MDNode *tbaa_tag;
     Function *ptls_getter;
     Function *gc_flush_func;
     Function *pointer_from_objref_func;
+    Function *alloc_obj_func;
+    Function *pool_alloc_func;
+    Function *big_alloc_func;
     CallInst *ptlsStates;
 
     void MaybeNoteDef(State &S, BBState &BBS, Value *Def, const std::vector<int> &SafepointsSoFar, int RefinedPtr = -2);
@@ -331,6 +344,8 @@ private:
     void PushGCFrame(AllocaInst *gcframe, unsigned NRoots, Instruction *InsertAfter);
     void PopGCFrame(AllocaInst *gcframe, Instruction *InsertBefore);
     std::vector<int> ColorRoots(const State &S);
+    void PlaceGCFrameStore(State &S, unsigned R, unsigned MinColorRoot, const std::vector<int> &Colors, Value *GCFrame, Instruction *InsertionPoint);
+    void PlaceGCFrameStores(Function &F, State &S, unsigned MinColorRoot, const std::vector<int> &Colors, Value *GCFrame);
     void PlaceRootsAndUpdateCalls(Function &F, std::vector<int> &Colors, State &S, std::map<Value *, std::pair<int, int>>);
     bool doInitialization(Module &M) override;
     bool runOnFunction(Function &F) override;
@@ -418,8 +433,10 @@ static int LiftSelect(State &S, SelectInst *SI) {
     FalseBase = MaybeExtractUnion(FalseBase, SI);
     if (getValueAddrSpace(TrueBase) != AddressSpace::Tracked)
         TrueBase = ConstantPointerNull::get(cast<PointerType>(FalseBase->getType()));
-    else if (getValueAddrSpace(FalseBase) != AddressSpace::Tracked)
+    if (getValueAddrSpace(FalseBase) != AddressSpace::Tracked)
         FalseBase = ConstantPointerNull::get(cast<PointerType>(TrueBase->getType()));
+    if (getValueAddrSpace(TrueBase) != AddressSpace::Tracked)
+        return -1;
     Value *SelectBase = SelectInst::Create(SI->getCondition(),
         TrueBase, FalseBase, "gclift", SI);
     int Number = ++S.MaxPtrNumber;
@@ -541,9 +558,6 @@ static void NoteDef(State &S, BBState &BBS, int Num, const std::vector<int> &Saf
     BBS.UpExposedUsesUnrooted[Num] = 0;
     if (!BBS.HasSafepoint)
         BBS.DownExposedUnrooted[Num] = 1;
-    else if (HasBitSet(S.LiveSets[BBS.TopmostSafepoint], Num)) {
-        S.Rootings[BBS.TopmostSafepoint].insert(Num);
-    }
     // This value could potentially be live at any following safe point
     // if it ends up live out, so add it to the LiveIfLiveOut lists for all
     // following safepoints.
@@ -584,6 +598,7 @@ void LateLowerGCFrame::MaybeNoteDef(State &S, BBState &BBS, Value *Def, const st
 static int NoteSafepoint(State &S, BBState &BBS, CallInst *CI) {
     int Number = ++S.MaxSafepointNumber;
     S.SafepointNumbering[CI] = Number;
+    S.ReverseSafepointNumbering.push_back(CI);
     // Note which pointers are upward exposed live here. They need to be
     // considered live at this safepoint even when they have a def earlier
     // in this BB (i.e. even when they don't participate in the dataflow
@@ -591,7 +606,6 @@ static int NoteSafepoint(State &S, BBState &BBS, CallInst *CI) {
     BBS.UpExposedUses |= BBS.UpExposedUsesUnrooted;
     BBS.UpExposedUsesUnrooted.reset();
     S.LiveSets.push_back(BBS.UpExposedUses);
-    S.Rootings.push_back(std::set<int>{});
     S.LiveIfLiveOut.push_back(std::vector<int>{});
     return Number;
 }
@@ -718,7 +732,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     continue;
                 }
                 MaybeNoteDef(S, BBS, CI, BBS.Safepoints);
-                NoteOperandUses(S, BBS, I);
+                NoteOperandUses(S, BBS, I, BBS.UpExposedUses);
                 for (Use &U : CI->operands()) {
                     Value *V = U;
                     if (isUnionRep(V->getType())) {
@@ -728,6 +742,12 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                 }
                 if (CI->canReturnTwice()) {
                     S.ReturnsTwice.push_back(CI);
+                }
+                if (auto callee = CI->getCalledFunction()) {
+                    // Known functions emitted in codegen that are not safepoints
+                    if (callee == pointer_from_objref_func || callee->getName() == "memcmp") {
+                        continue;
+                    }
                 }
                 int SafepointNumber = NoteSafepoint(S, BBS, CI);
                 BBS.HasSafepoint = true;
@@ -860,6 +880,21 @@ void LateLowerGCFrame::ComputeLiveness(Function &F, State &S) {
     ComputeLiveSets(F, S);
 }
 
+// For debugging
+JL_USED_FUNC static void dumpSafepointsForBBName(Function &F, State &S, const char *BBName) {
+    for (auto it : S.SafepointNumbering) {
+        if (it.first->getParent()->getName() == BBName) {
+            dbgs() << "Live at " << *it.first << "\n";
+            BitVector &LS = S.LiveSets[it.second];
+            for (int Idx = LS.find_first(); Idx >= 0; Idx = LS.find_next(Idx)) {
+                dbgs() << "\t";
+                S.ReversePtrNumbering[Idx]->printAsOperand(dbgs());
+                dbgs() << "\n";
+            }
+        }
+    }
+}
+
 void LateLowerGCFrame::ComputeLiveSets(Function &F, State &S) {
     // Iterate over all safe points. Add to live sets all those variables that
     // are now live across their parent block.
@@ -902,41 +937,6 @@ void LateLowerGCFrame::ComputeLiveSets(Function &F, State &S) {
             Neighbors.insert(Idx);
         }
         S.Neighbors.push_back(Neighbors);
-    }
-    // Compute Rooting Locations
-    for (auto &BB : F) {
-        BBState &BBS = S.BBStates[&BB];
-        if (BBS.HasSafepoint) {
-            BitVector UnrootedIn = BBS.UnrootedIn;
-            // Only those values that have uses after a safepoint or are live
-            // across need to be rooted. N.B. We're explicitly not or-ing in
-            // UpExposedUsesUnrooted
-            BitVector Mask = BBS.UpExposedUses;
-            Mask |= BBS.LiveOut;
-            Mask &= BBS.LiveIn;
-            UnrootedIn &= Mask;
-            for (int Idx = UnrootedIn.find_first(); Idx >= 0; Idx = UnrootedIn.find_next(Idx)) {
-                S.Rootings[BBS.TopmostSafepoint].insert(Idx);
-            }
-            // Backfill any interior rootings
-            BitVector Interior = BBS.UnrootedOut;
-            Interior.flip();
-            Interior &= BBS.LiveOut;
-            Interior &= BBS.Defs;
-            for (int Idx = Interior.find_first(); Idx >= 0; Idx = Interior.find_next(Idx)) {
-                // Needs to be rooted at the first safepoint after the def
-                Instruction *Def = cast<Instruction>(S.ReversePtrNumbering[Idx]);
-                auto it = ++BasicBlock::iterator(Def);
-                while (true) {
-                    auto sit = S.SafepointNumbering.find(&*it++);
-                    if (sit != S.SafepointNumbering.end()) {
-                        S.Rootings[sit->second].insert(Idx);
-                        break;
-                    }
-                    assert(it != Def->getParent()->end());
-                }
-            }
-        }
     }
 }
 
@@ -1001,6 +1001,17 @@ struct PEOIterator {
         return NextElement;
     }
 };
+
+JL_USED_FUNC static void dumpColorAssignments(const State &S, std::vector<int> &Colors)
+{
+    for (unsigned i = 0; i < Colors.size(); ++i) {
+        if (Colors[i] == -1)
+            continue;
+        dbgs() << "\tValue ";
+        S.ReversePtrNumbering.at(i)->printAsOperand(dbgs());
+        dbgs() << " assigned color " << Colors[i] << "\n";
+    }
+}
 
 std::vector<int> LateLowerGCFrame::ColorRoots(const State &S) {
     std::vector<int> Colors;
@@ -1085,19 +1096,38 @@ void LateLowerGCFrame::PopGCFrame(AllocaInst *gcframe, Instruction *InsertBefore
     inst->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_gcframe);
 }
 
+static void copyMetadata(Instruction *dest, const Instruction *src)
+{
+#if JL_LLVM_VERSION < 40000
+    if (!src->hasMetadata())
+        return;
+    SmallVector<std::pair<unsigned,MDNode*>,4> TheMDs;
+    src->getAllMetadataOtherThanDebugLoc(TheMDs);
+    for (const auto &MD : TheMDs)
+        dest->setMetadata(MD.first, MD.second);
+    dest->setDebugLoc(src->getDebugLoc());
+#else
+    dest->copyMetadata(*src);
+#endif
+}
+
 bool LateLowerGCFrame::CleanupIR(Function &F) {
     bool ChangesMade = false;
     // We create one alloca for all the jlcall frames that haven't been processed
     // yet. LLVM would merge them anyway later, so might as well save it a bit
     // of work
     size_t maxframeargs = 0;
-    PointerType *T_pprjlvalue = T_prjlvalue->getPointerTo();
     Instruction *StartOff = &*(F.getEntryBlock().begin());
-    AllocaInst *Frame = new AllocaInst(T_prjlvalue, ConstantInt::get(T_int32, maxframeargs),
+    PointerType *T_pprjlvalue = nullptr;
+    AllocaInst *Frame = nullptr;
+    if (T_prjlvalue) {
+        T_pprjlvalue = T_prjlvalue->getPointerTo();
+        Frame = new AllocaInst(T_prjlvalue, ConstantInt::get(T_int32, maxframeargs),
 #if JL_LLVM_VERSION >= 50000
         0,
 #endif
         "", StartOff);
+    }
     for (BasicBlock &BB : F) {
         for (auto it = BB.begin(); it != BB.end();) {
             auto *CI = dyn_cast<CallInst>(&*it);
@@ -1106,16 +1136,47 @@ bool LateLowerGCFrame::CleanupIR(Function &F) {
                 continue;
             }
             CallingConv::ID CC = CI->getCallingConv();
-            if (gc_flush_func != nullptr && CI->getCalledFunction() == gc_flush_func) {
+            auto callee = CI->getCalledValue();
+            if (gc_flush_func != nullptr && callee == gc_flush_func) {
                 /* No replacement */
-            } else if (pointer_from_objref_func != nullptr &&
-                CI->getCalledFunction() == pointer_from_objref_func) {
+            } else if (pointer_from_objref_func != nullptr && callee == pointer_from_objref_func) {
                 auto *ASCI = new AddrSpaceCastInst(CI->getOperand(0),
                     CI->getType(), "", CI);
                 ASCI->takeName(CI);
                 CI->replaceAllUsesWith(ASCI);
+            } else if (alloc_obj_func && callee == alloc_obj_func) {
+                assert(CI->getNumArgOperands() == 3);
+                auto sz = (size_t)cast<ConstantInt>(CI->getArgOperand(1))->getZExtValue();
+                // This is strongly architecture and OS dependent
+                int osize;
+                int offset = jl_gc_classify_pools(sz, &osize);
+                IRBuilder<> builder(CI);
+                builder.SetCurrentDebugLocation(CI->getDebugLoc());
+                auto ptls = CI->getArgOperand(0);
+                CallInst *newI;
+                if (offset < 0) {
+                    newI = builder.CreateCall(big_alloc_func,
+                                              {ptls, ConstantInt::get(T_size,
+                                                                      sz + sizeof(void*))});
+                }
+                else {
+                    auto pool_offs = ConstantInt::get(T_int32, offset);
+                    auto pool_osize = ConstantInt::get(T_int32, osize);
+                    newI = builder.CreateCall(pool_alloc_func, {ptls, pool_offs, pool_osize});
+                }
+                newI->setAttributes(CI->getAttributes());
+                newI->takeName(CI);
+                copyMetadata(newI, CI);
+                auto derived = builder.CreateAddrSpaceCast(newI, T_pjlvalue_der);
+                auto cast = builder.CreateBitCast(derived, T_ppjlvalue_der);
+                auto tagaddr = builder.CreateGEP(T_prjlvalue, cast,
+                                                 ConstantInt::get(T_size, -1));
+                auto store = builder.CreateStore(CI->getArgOperand(2), tagaddr);
+                store->setMetadata(LLVMContext::MD_tbaa, tbaa_tag);
+                CI->replaceAllUsesWith(newI);
             } else if (CC == JLCALL_CC ||
                        CC == JLCALL_F_CC) {
+                assert(T_prjlvalue);
                 size_t nframeargs = CI->getNumArgOperands() - (CC == JLCALL_F_CC);
                 SmallVector<Value *, 3> ReplacementArgs;
                 auto it = CI->arg_begin();
@@ -1137,8 +1198,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F) {
                         T_pprjlvalue, T_int32}, false) :
                     FunctionType::get(T_prjlvalue,
                         {T_pprjlvalue, T_int32}, false);
-                Value *newFptr = Builder.CreateBitCast(CI->getCalledValue(),
-                    FTy->getPointerTo());
+                Value *newFptr = Builder.CreateBitCast(callee, FTy->getPointerTo());
                 CallInst *NewCall = CallInst::Create(newFptr, ReplacementArgs, "", CI);
                 NewCall->setTailCallKind(CI->getTailCallKind());
                 NewCall->setAttributes(CI->getAttributes());
@@ -1157,10 +1217,12 @@ bool LateLowerGCFrame::CleanupIR(Function &F) {
             ChangesMade = true;
         }
     }
-    if (maxframeargs == 0)
+    if (maxframeargs == 0 && Frame) {
         Frame->eraseFromParent();
-    else
+    }
+    else if (Frame) {
         Frame->setOperand(0, ConstantInt::get(T_int32, maxframeargs));
+    }
     return ChangesMade;
 }
 
@@ -1180,8 +1242,78 @@ static Value *GetPtrForNumber(State &S, unsigned Num, Instruction *InsertionPoin
     return Val;
 }
 
+static void AddInPredLiveOuts(BasicBlock *BB, BitVector &LiveIn, State &S)
+{
+    bool First = true;
+    std::set<BasicBlock *> Visited;
+    std::vector<BasicBlock *> WorkList;
+    WorkList.push_back(BB);
+    while (!WorkList.empty()) {
+        BB = &*WorkList.back();
+        WorkList.pop_back();
+        for (BasicBlock *Pred : predecessors(BB)) {
+            if (!Visited.insert(Pred).second)
+                continue;
+            if (!S.BBStates[Pred].HasSafepoint) {
+                WorkList.push_back(Pred);
+                continue;
+            } else {
+                int LastSP = S.BBStates[Pred].Safepoints.front();
+                if (First) {
+                    LiveIn |= S.LiveSets[LastSP];
+                    First = false;
+                } else {
+                    LiveIn &= S.LiveSets[LastSP];
+                }
+            }
+        }
+    }
+}
+
+void LateLowerGCFrame::PlaceGCFrameStore(State &S, unsigned R, unsigned MinColorRoot,
+                                         const std::vector<int> &Colors, Value *GCFrame,
+                                         Instruction *InsertionPoint) {
+    Value *Val = GetPtrForNumber(S, R, InsertionPoint);
+    Value *args[1] = {
+        ConstantInt::get(T_int32, Colors[R]+MinColorRoot)
+    };
+    GetElementPtrInst *gep = GetElementPtrInst::Create(T_prjlvalue, GCFrame, makeArrayRef(args));
+    gep->insertBefore(InsertionPoint);
+    Val = MaybeExtractUnion(Val, InsertionPoint);
+    // Pointee types don't have semantics, so the optimizer is
+    // free to rewrite them if convenient. We need to change
+    // it back here for the store.
+    if (Val->getType() != T_prjlvalue)
+        Val = new BitCastInst(Val, T_prjlvalue, "", InsertionPoint);
+    new StoreInst(Val, gep, InsertionPoint);
+}
+
+void LateLowerGCFrame::PlaceGCFrameStores(Function &F, State &S, unsigned MinColorRoot,
+                                          const std::vector<int> &Colors, Value *GCFrame)
+{
+    for (auto &BB : F) {
+        const BBState &BBS = S.BBStates[&BB];
+        if (!BBS.HasSafepoint) {
+            continue;
+        }
+        BitVector LiveIn;
+        AddInPredLiveOuts(&BB, LiveIn, S);
+        const BitVector *LastLive = &LiveIn;
+        for(auto rit = BBS.Safepoints.rbegin();
+              rit != BBS.Safepoints.rend(); ++rit ) {
+            const BitVector &NowLive = S.LiveSets[*rit];
+            for (int Idx = NowLive.find_first(); Idx >= 0; Idx = NowLive.find_next(Idx)) {
+                if (!HasBitSet(*LastLive, Idx)) {
+                    PlaceGCFrameStore(S, Idx, MinColorRoot, Colors, GCFrame,
+                      S.ReverseSafepointNumbering[*rit]);
+                }
+            }
+            LastLive = &NowLive;
+        }
+    }
+}
+
 void LateLowerGCFrame::PlaceRootsAndUpdateCalls(Function &F, std::vector<int> &Colors, State &S, std::map<Value *, std::pair<int, int>>) {
-    auto &DT = getAnalysis<DominatorTreeWrapperPass>().getDomTree();
     int MaxColor = -1;
     for (auto C : Colors)
         if (C > MaxColor)
@@ -1238,40 +1370,7 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(Function &F, std::vector<int> &C
         }
         unsigned MinColorRoot = AllocaSlot;
         // Insert GC frame stores
-        for (auto it : S.SafepointNumbering) {
-            const std::set<int> &Rooting = S.Rootings[it.second];
-            for (int R : Rooting) {
-                if (Colors[R] != -1) {
-                    Instruction *InsertionPoint = it.first;
-                    Value *Val = S.ReversePtrNumbering[R];
-                    /*
-                     * Generally we like doing the rooting late, because it lets
-                     * us avoid doing so on paths that have no safe points.
-                     * However, it is possible for the first safepoint to not
-                     * be dominated by the definition. In that case, just start
-                     * rooting it right after the definition.
-                     */
-                    if (isa<Instruction>(Val) && !DT.dominates(cast<Instruction>(Val), InsertionPoint)) {
-                        InsertionPoint = &*(++(cast<Instruction>(Val)->getIterator()));
-                        // No need to root this anywhere else any more
-                        Colors[R] = -1;
-                    }
-                    Val = GetPtrForNumber(S, R, InsertionPoint);
-                    Value *args[1] = {
-                        ConstantInt::get(T_int32, Colors[R]+MinColorRoot)
-                    };
-                    GetElementPtrInst *gep = GetElementPtrInst::Create(T_prjlvalue, gcframe, makeArrayRef(args));
-                    gep->insertBefore(InsertionPoint);
-                    Val = MaybeExtractUnion(Val, InsertionPoint);
-                    // Pointee types don't have semantics, so the optimizer is
-                    // free to rewrite them if convenient. We need to change
-                    // it back here for the store.
-                    if (Val->getType() != T_prjlvalue)
-                        Val = new BitCastInst(Val, T_prjlvalue, "", InsertionPoint);
-                    new StoreInst(Val, gep, InsertionPoint);
-                }
-            }
-        }
+        PlaceGCFrameStores(F, S, MinColorRoot, Colors, gcframe);
         // Insert GCFrame pops
         for(Function::iterator I = F.begin(), E = F.end(); I != E; ++I) {
             if (isa<ReturnInst>(I->getTerminator())) {
@@ -1281,26 +1380,71 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(Function &F, std::vector<int> &C
     }
 }
 
+static void addRetNoAlias(Function *F)
+{
+#if JL_LLVM_VERSION >= 50000
+    F->addAttribute(AttributeList::ReturnIndex, Attribute::NoAlias);
+#else
+    F->addAttribute(AttributeSet::ReturnIndex, Attribute::NoAlias);
+#endif
+}
+
 bool LateLowerGCFrame::doInitialization(Module &M) {
     ptls_getter = M.getFunction("jl_get_ptls_states");
     gc_flush_func = M.getFunction("julia.gcroot_flush");
     pointer_from_objref_func = M.getFunction("julia.pointer_from_objref");
+    auto &ctx = M.getContext();
+    T_size = M.getDataLayout().getIntPtrType(ctx);
+    T_int8 = Type::getInt8Ty(ctx);
+    T_pint8 = PointerType::get(T_int8, 0);
+    T_int32 = Type::getInt32Ty(ctx);
+    if ((alloc_obj_func = M.getFunction("julia.gc_alloc_obj"))) {
+        T_prjlvalue = alloc_obj_func->getReturnType();
+        if (!(pool_alloc_func = M.getFunction("jl_gc_pool_alloc"))) {
+            std::vector<Type*> args(0);
+            args.push_back(T_pint8);
+            args.push_back(T_int32);
+            args.push_back(T_int32);
+            pool_alloc_func = Function::Create(FunctionType::get(T_prjlvalue, args, false),
+                                               Function::ExternalLinkage, "jl_gc_pool_alloc", &M);
+            addRetNoAlias(pool_alloc_func);
+        }
+        if (!(big_alloc_func = M.getFunction("jl_gc_big_alloc"))) {
+            std::vector<Type*> args(0);
+            args.push_back(T_pint8);
+            args.push_back(T_size);
+            big_alloc_func = Function::Create(FunctionType::get(T_prjlvalue, args, false),
+                                         Function::ExternalLinkage, "jl_gc_big_alloc", &M);
+            addRetNoAlias(big_alloc_func);
+        }
+        auto T_jlvalue = cast<PointerType>(T_prjlvalue)->getElementType();
+        auto T_pjlvalue = PointerType::get(T_jlvalue, 0);
+        T_ppjlvalue = PointerType::get(T_pjlvalue, 0);
+        T_pjlvalue_der = PointerType::get(T_jlvalue, AddressSpace::Derived);
+        T_ppjlvalue_der = PointerType::get(T_prjlvalue, AddressSpace::Derived);
+    }
+    else if (ptls_getter) {
+        auto functype = ptls_getter->getFunctionType();
+        T_ppjlvalue = cast<PointerType>(functype->getReturnType())->getElementType();
+        auto T_pjlvalue = cast<PointerType>(T_ppjlvalue)->getElementType();
+        auto T_jlvalue = cast<PointerType>(T_pjlvalue)->getElementType();
+        T_prjlvalue = PointerType::get(T_jlvalue, AddressSpace::Tracked);
+        T_pjlvalue_der = PointerType::get(T_jlvalue, AddressSpace::Derived);
+        T_ppjlvalue_der = PointerType::get(T_prjlvalue, AddressSpace::Derived);
+    }
+    else {
+        T_ppjlvalue = nullptr;
+        T_prjlvalue = nullptr;
+        T_pjlvalue_der = nullptr;
+        T_ppjlvalue_der = nullptr;
+    }
     return false;
 }
 
 bool LateLowerGCFrame::runOnFunction(Function &F) {
     DEBUG(dbgs() << "GC ROOT PLACEMENT: Processing function " << F.getName() << "\n");
-    if (ptls_getter) {
-        auto functype = ptls_getter->getFunctionType();
-        T_ppjlvalue =
-            cast<PointerType>(functype->getReturnType())->getElementType();
-        auto T_pjlvalue = cast<PointerType>(T_ppjlvalue)->getElementType();
-        T_prjlvalue = PointerType::get(cast<PointerType>(T_pjlvalue)->getElementType(), AddressSpace::Tracked);
-    } else {
+    if (!ptls_getter)
         return CleanupIR(F);
-    }
-    T_size = F.getParent()->getDataLayout().getIntPtrType(F.getContext());
-    T_int32 = Type::getInt32Ty(F.getContext());
     ptlsStates = nullptr;
     for (auto I = F.getEntryBlock().begin(), E = F.getEntryBlock().end();
          ptls_getter && I != E; ++I) {

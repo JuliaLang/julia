@@ -31,7 +31,7 @@ Compute the logarithmic factorial of a nonnegative integer `x`.
 Equivalent to [`lgamma`](@ref) of `x + 1`, but `lgamma` extends this function
 to non-integer `x`.
 """
-lfact(x::Integer) = x < 0 ? throw(DomainError()) : lgamma(x + oneunit(x))
+lfact(x::Integer) = x < 0 ? throw(DomainError(x, "`x` must be non-negative.")) : lgamma(x + oneunit(x))
 
 """
     lgamma(x)

@@ -106,7 +106,7 @@ Compute ``\\sin(\\pi x)`` more accurately than `sin(pi*x)`, especially for large
 function sinpi(x::T) where T<:AbstractFloat
     if !isfinite(x)
         isnan(x) && return x
-        throw(DomainError())
+        throw(DomainError(x, "`x` cannot be infinite."))
     end
 
     ax = abs(x)
@@ -136,7 +136,7 @@ end
 function sinpi(x::T) where T<:Union{Integer,Rational}
     Tf = float(T)
     if !isfinite(x)
-        throw(DomainError())
+        throw(DomainError(x, "`x` must be finite."))
     end
 
     # until we get an IEEE remainder function (#9283)
@@ -169,7 +169,7 @@ Compute ``\\cos(\\pi x)`` more accurately than `cos(pi*x)`, especially for large
 function cospi(x::T) where T<:AbstractFloat
     if !isfinite(x)
         isnan(x) && return x
-        throw(DomainError())
+        throw(DomainError(x, "`x` cannot be infinite."))
     end
 
     ax = abs(x)
@@ -194,7 +194,7 @@ end
 # Integers and Rationals
 function cospi(x::T) where T<:Union{Integer,Rational}
     if !isfinite(x)
-        throw(DomainError())
+        throw(DomainError(x, "`x` must be finite."))
     end
 
     ax = abs(x)
@@ -310,11 +310,28 @@ cosc(x::Complex{<:AbstractFloat}) = x==0 ? zero(x) : oftype(x,(cospi(x)-sinpi(x)
 cosc(x::Complex) = cosc(float(x))
 cosc(x::Real) = x==0 || isinf(x) ? zero(x) : (cospi(x)-sinpi(x)/(pi*x))/x
 
-for (finv, f) in ((:sec, :cos), (:csc, :sin), (:cot, :tan),
-                  (:sech, :cosh), (:csch, :sinh), (:coth, :tanh),
-                  (:secd, :cosd), (:cscd, :sind), (:cotd, :tand))
+for (finv, f, finvh, fh, finvd, fd, fn) in ((:sec, :cos, :sech, :cosh, :secd, :cosd, "secant"),
+                                            (:csc, :sin, :csch, :sinh, :cscd, :sind, "cosecant"),
+                                            (:cot, :tan, :coth, :tanh, :cotd, :tand, "cotangent"))
+    name = string(finv)
+    hname = string(finvh)
+    dname = string(finvd)
     @eval begin
-        ($finv)(z::T) where {T<:Number} = one(T) / (($f)(z))
+        @doc """
+            $($name)(x)
+
+        Compute the $($fn) of `x`, where `x` is in radians.
+        """ ($finv)(z::T) where {T<:Number} = one(T) / (($f)(z))
+        @doc """
+            $($hname)(x)
+
+        Compute the hyperbolic $($fn) of `x`.
+        """ ($finvh)(z::T) where {T<:Number} = one(T) / (($fh)(z))
+        @doc """
+            $($dname)(x)
+
+        Compute the $($fn) of `x`, where `x` is in degrees.
+        """ ($finvd)(z::T) where {T<:Number} = one(T) / (($fd)(z))
     end
 end
 
@@ -354,7 +371,7 @@ deg2rad_ext(x::Real) = deg2rad(x) # Fallback
 
 function sind(x::Real)
     if isinf(x)
-        return throw(DomainError())
+        return throw(DomainError(x, "`x` cannot be infinite."))
     elseif isnan(x)
         return oftype(x,NaN)
     end
@@ -385,7 +402,7 @@ end
 
 function cosd(x::Real)
     if isinf(x)
-        return throw(DomainError())
+        return throw(DomainError(x, "`x` cannot be infinite."))
     elseif isnan(x)
         return oftype(x,NaN)
     end

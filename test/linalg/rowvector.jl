@@ -73,7 +73,7 @@ end
 end
 
 @testset "Bidiagonal ambiguity methods" begin
-    bd = Bidiagonal([1,2,3], [0,0], true)
+    bd = Bidiagonal([1,2,3], [0,0], :U)
     v = [2,3,4]
     rv = v.'
 
@@ -234,6 +234,14 @@ end
     @test (rv/ut')::RowVector ≈ [2/1  3/2  4/3]
 
     @test_throws DimensionMismatch ut\rv
+end
+
+@testset "Symmetric/Hermitian ambiguity methods" begin
+    S = Symmetric(rand(3, 3))
+    H = Hermitian(rand(3, 3))
+    v = (rand(3)')::RowVector
+    @test_throws DimensionMismatch S\v
+    @test_throws DimensionMismatch H\v
 end
 
 # issue #20389

@@ -352,7 +352,7 @@ Stacktrace:
 You may find a list of field names using the `fieldnames` function.
 
 ```jldoctest footype
-julia> fieldnames(foo)
+julia> fieldnames(Foo)
 3-element Array{Symbol,1}:
  :bar
  :baz
@@ -1252,6 +1252,55 @@ julia> show(STDOUT, "text/html", Polar(3.0,4.0))
 <p>An HTML renderer would display this as: <code>Polar{Float64}</code> complex number: 3.0 <i>e</i><sup>4.0 <i>i</i></sup></p>
 ```
 
+As a rule of thumb, the single-line `show` method should print a valid Julia expression for creating
+the shown object.  When this `show` method contains infix operators, such as the multiplication
+operator (`*`) in our single-line `show` method for `Polar` above, it may not parse correctly when
+printed as part of another object.  To see this, consider the expression object (see [Program
+representation](@ref)) which takes the square of a specific instance of our `Polar` type:
+
+```jldoctest polartype
+julia> a = Polar(3, 4.0)
+Polar{Float64} complex number:
+   3.0 * exp(4.0im)
+
+julia> print(:($a^2))
+3.0 * exp(4.0im) ^ 2
+```
+
+Because the operator `^` has higher precedence than `*` (see [Operator Precedence](@ref)), this
+output does not faithfully represent the expression `a ^ 2` which should be equal to `(3.0 *
+exp(4.0im)) ^ 2`.  To solve this issue, we must make a custom method for `Base.show_unquoted(io::IO,
+z::Polar, indent::Int, precedence::Int)`, which is called internally by the expression object when
+printing:
+
+```jldoctest polartype
+julia> function Base.show_unquoted(io::IO, z::Polar, ::Int, precedence::Int)
+           if Base.operator_precedence(:*) <= precedence
+               print(io, "(")
+               show(io, z)
+               print(io, ")")
+           else
+               show(io, z)
+           end
+       end
+
+julia> :($a^2)
+:((3.0 * exp(4.0im)) ^ 2)
+```
+
+The method defined above adds parentheses around the call to `show` when the precedence of the
+calling operator is higher than or equal to the precedence of multiplication.  This check allows
+expressions which parse correctly without the parentheses (such as `:($a + 2)` and `:($a == 2)`) to
+omit them when printing:
+
+```jldoctest polartype
+julia> :($a + 2)
+:(3.0 * exp(4.0im) + 2)
+
+julia> :($a == 2)
+:(3.0 * exp(4.0im) == 2)
+```
+
 ## "Value types"
 
 In Julia, you can't dispatch on a *value* such as `true` or `false`. However, you can dispatch
@@ -1260,37 +1309,38 @@ floating-point numbers, tuples, etc.) as type parameters.  A common example is t
 parameter in `Array{T,N}`, where `T` is a type (e.g., [`Float64`](@ref)) but `N` is just an `Int`.
 
 You can create your own custom types that take values as parameters, and use them to control dispatch
-of custom types. By way of illustration of this idea, let's introduce a parametric type, `Val{T}`,
-which serves as a customary way to exploit this technique for cases where you don't need a more
-elaborate hierarchy.
+of custom types. By way of illustration of this idea, let's introduce a parametric type, `Val{x}`,
+and a constructor `Val(x) = Val{x}()`, which serves as a customary way to exploit this technique
+for cases where you don't need a more elaborate hierarchy.
 
 `Val` is defined as:
 
 ```jldoctest valtype
-julia> struct Val{T}
+julia> struct Val{x}
        end
+Base.@pure Val(x) = Val{x}()
 ```
 
 There is no more to the implementation of `Val` than this.  Some functions in Julia's standard
-library accept `Val` types as arguments, and you can also use it to write your own functions.
+library accept `Val` instances as arguments, and you can also use it to write your own functions.
  For example:
 
 ```jldoctest valtype
-julia> firstlast(::Type{Val{true}}) = "First"
+julia> firstlast(::Val{true}) = "First"
 firstlast (generic function with 1 method)
 
-julia> firstlast(::Type{Val{false}}) = "Last"
+julia> firstlast(::Val{false}) = "Last"
 firstlast (generic function with 2 methods)
 
-julia> firstlast(Val{true})
+julia> firstlast(Val(true))
 "First"
 
-julia> firstlast(Val{false})
+julia> firstlast(Val(false))
 "Last"
 ```
 
-For consistency across Julia, the call site should always pass a `Val`*type* rather than creating
-an *instance*, i.e., use `foo(Val{:bar})` rather than `foo(Val{:bar}())`.
+For consistency across Julia, the call site should always pass a `Val`*instance* rather than using
+a *type*, i.e., use `foo(Val(:bar))` rather than `foo(Val{:bar})`.
 
 It's worth noting that it's extremely easy to mis-use parametric "value" types, including `Val`;
 in unfavorable cases, you can easily end up making the performance of your code much *worse*.

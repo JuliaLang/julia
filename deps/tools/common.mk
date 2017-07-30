@@ -1,5 +1,9 @@
 ## Some shared configuration options ##
 
+# NOTE: Do not make RPATH changes in CMAKE_COMMON on platforms other than FreeBSD, since
+# it will make its way into the LLVM build flags, and LLVM is picky about RPATH (though
+# apparently not on FreeBSD). Ref PR #22352
+
 CONFIGURE_COMMON := --prefix=$(abspath $(build_prefix)) --build=$(BUILD_MACHINE) --libdir=$(abspath $(build_libdir)) --bindir=$(abspath $(build_depsbindir)) $(CUSTOM_LD_LIBRARY_PATH)
 ifneq ($(XC_HOST),)
 CONFIGURE_COMMON += --host=$(XC_HOST)
@@ -37,15 +41,6 @@ ifeq ($(OS),WINNT)
 CMAKE_COMMON += -DCMAKE_SYSTEM_NAME=Windows
 ifneq ($(BUILD_OS),WINNT)
 CMAKE_COMMON += -DCMAKE_RC_COMPILER="$$(which $(CROSS_COMPILE)windres)"
-endif
-endif
-
-# NOTE: Do not make RPATH changes in CMAKE_COMMON on platforms other than FreeBSD, since
-# it will make its way into the LLVM build flags, and LLVM is picky about RPATH (though
-# apparently not on FreeBSD). Ref PR #22352
-ifeq ($(OS),FreeBSD)
-ifneq ($(GCCPATH),)
-CMAKE_COMMON += -DCMAKE_INSTALL_RPATH="\$$ORIGIN:$(GCCPATH)"
 endif
 endif
 

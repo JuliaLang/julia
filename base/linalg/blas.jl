@@ -105,7 +105,7 @@ function set_num_threads(n::Integer)
     end
 
     # OSX BLAS looks at an environment variable
-    @static if is_apple()
+    @static if Sys.isapple()
         ENV["VECLIB_MAXIMUM_THREADS"] = n
     end
 
@@ -218,7 +218,7 @@ scal(n, DA, DX, incx) = scal!(n, DA, copy(DX), incx)
 Dot product of two vectors consisting of `n` elements of array `X` with stride `incx` and
 `n` elements of array `Y` with stride `incy`.
 
-# Example:
+# Examples
 ```jldoctest
 julia> dot(10, ones(10), 1, ones(20), 2)
 10.0
@@ -233,7 +233,7 @@ Dot function for two complex vectors, consisting of `n` elements of array `X`
 with stride `incx` and `n` elements of array `U` with stride `incy`,
 conjugating the first vector.
 
-# Example:
+# Examples
 ```jldoctest
 julia> Base.BLAS.dotc(10, im*ones(10), 1, complex.(ones(20), ones(20)), 2)
 10.0 - 10.0im
@@ -247,7 +247,7 @@ function dotc end
 Dot function for two complex vectors consisting of `n` elements of array `X`
 with stride `incx` and `n` elements of array `Y` with stride `incy`.
 
-# Example:
+# Examples
 ```jldoctest
 julia> Base.BLAS.dotu(10, im*ones(10), 1, complex.(ones(20), ones(20)), 2)
 -10.0 + 10.0im
@@ -339,7 +339,7 @@ stride1(x::Array) = 1
 
 2-norm of a vector consisting of `n` elements of array `X` with stride `incx`.
 
-# Example:
+# Examples
 ```jldoctest
 julia> Base.BLAS.nrm2(4, ones(8), 2)
 2.0
@@ -372,7 +372,7 @@ nrm2(x::Union{StridedVector,Array}) = nrm2(length(x), pointer(x), stride1(x))
 
 Sum of the absolute values of the first `n` elements of array `X` with stride `incx`.
 
-# Example:
+# Examples
 ```jldoctest
 julia> Base.BLAS.asum(5, im*ones(10), 2)
 5.0
@@ -405,7 +405,7 @@ asum(x::Union{StridedVector,Array}) = asum(length(x), pointer(x), stride1(x))
 
 Overwrite `Y` with `a*X + Y`, where `a` is a scalar. Returns `Y`.
 
-# Example:
+# Examples
 ```jldoctest
 julia> x = [1; 2; 3];
 

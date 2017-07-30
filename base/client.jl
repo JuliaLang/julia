@@ -102,7 +102,7 @@ function repl_cmd(cmd, out)
                 end
                 cd(ENV["OLDPWD"])
             else
-                cd(@static is_windows() ? dir : readchomp(`$shell -c "echo $(shell_escape(dir))"`))
+                cd(@static Sys.iswindows() ? dir : readchomp(`$shell -c "echo $(shell_escape(dir))"`))
             end
         else
             cd()
@@ -110,7 +110,7 @@ function repl_cmd(cmd, out)
         ENV["OLDPWD"] = new_oldpwd
         println(out, pwd())
     else
-        run(ignorestatus(@static is_windows() ? cmd : (isa(STDIN, TTY) ? `$shell -i -c "$(shell_wrap_true(shell_name, cmd))"` : `$shell -c "$(shell_wrap_true(shell_name, cmd))"`)))
+        run(ignorestatus(@static Sys.iswindows() ? cmd : (isa(STDIN, TTY) ? `$shell -i -c "$(shell_wrap_true(shell_name, cmd))"` : `$shell -c "$(shell_wrap_true(shell_name, cmd))"`)))
     end
     nothing
 end
@@ -142,7 +142,7 @@ end
 display_error(er, bt) = display_error(STDERR, er, bt)
 display_error(er) = display_error(er, [])
 
-function eval_user_input(ast::ANY, show_value)
+function eval_user_input(@nospecialize(ast), show_value)
     errcount, lasterr, bt = 0, (), nothing
     while true
         try
@@ -260,13 +260,18 @@ function process_options(opts::JLOptions)
 
     # remove filename from ARGS
     arg_is_program = opts.eval == C_NULL && opts.print == C_NULL && !isempty(ARGS)
-    global const PROGRAM_FILE = arg_is_program ? shift!(ARGS) : ""
+    global PROGRAM_FILE = arg_is_program ? shift!(ARGS) : ""
 
     while true
         # startup worker.
         # opts.startupfile, opts.load, etc should should not be processed for workers.
-        if opts.worker != C_NULL
-            start_worker(unsafe_string(opts.worker)) # does not return
+        if opts.worker == 1
+            # does not return
+            if opts.cookie != C_NULL
+                start_worker(unsafe_string(opts.cookie))
+            else
+                start_worker()
+            end
         end
 
         # add processors
@@ -329,7 +334,7 @@ end
 
 function load_machine_file(path::AbstractString)
     machines = []
-    for line in split(readstring(path),'\n'; keep=false)
+    for line in split(read(path, String),'\n'; keep=false)
         s = split(line, '*'; keep = false)
         map!(strip, s, s)
         if length(s) > 1
@@ -385,7 +390,7 @@ function _start()
                 global is_interactive |= !isa(STDIN, Union{File, IOStream})
                 color_set || (global have_color = false)
             else
-                term = Terminals.TTYTerminal(get(ENV, "TERM", @static is_windows() ? "" : "dumb"), STDIN, STDOUT, STDERR)
+                term = Terminals.TTYTerminal(get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb"), STDIN, STDOUT, STDERR)
                 global is_interactive = true
                 color_set || (global have_color = Terminals.hascolor(term))
                 quiet || REPL.banner(term,term)
@@ -408,7 +413,7 @@ function _start()
                 # note: currently IOStream is used for file STDIN
                 if isa(STDIN,File) || isa(STDIN,IOStream)
                     # reading from a file, behave like include
-                    eval(Main,parse_input_line(readstring(STDIN)))
+                    eval(Main,parse_input_line(read(STDIN, String)))
                 else
                     # otherwise behave repl-like
                     while !eof(STDIN)
